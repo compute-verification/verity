@@ -1,8 +1,9 @@
 """Run ids and the local run registry.
 
 A run is one recorded execution attempt.  Its directory is the telemetry attempt dir (job.json, status.json, events.jsonl,
-resources.jsonl, failure.json, stdout.log, stderr.log) and nothing else is needed to describe it; the registry is just the
-directory that holds them, so reading an old run needs no service and no credentials.
+resources.jsonl, failure.json, stdout.log, stderr.log, and the workload's result.json) and nothing else is needed to describe
+it.  The registry is the directory that holds run directories: an index, not a second source of truth.  Reading a run needs no
+service and no credentials.  Everything derived (result validity, cost estimate) is computed from the files at read time.
 """
 from __future__ import annotations
 
@@ -14,7 +15,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import record, result
+
 DEFAULT_ROOT = Path.home() / ".research" / "runs"
+TERMINAL = ("done", "failed", "cancelled")
+ACTIVE = ("submitted", "admitted", "running", "preserving")
 
 
 def runs_root(explicit: str | os.PathLike[str] | None = None) -> Path:
@@ -24,49 +29,71 @@ def runs_root(explicit: str | os.PathLike[str] | None = None) -> Path:
 
 
 def new_run_id(now: float | None = None) -> str:
-    """Sortable, human-typable: r20260921-171502-3f9a."""
+    """Sortable, human-typable: r20260921-171502-3f9a.  Identifies this attempt; two identical repetitions get two ids."""
     t = datetime.fromtimestamp(time.time() if now is None else now, tz=timezone.utc)
     return f"r{t:%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
 
 
 def _read(path: Path) -> dict[str, Any] | None:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        doc = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+    return doc if isinstance(doc, dict) else None
 
 
 def summarize(run_dir: Path) -> dict[str, Any]:
-    """One flat record per run for listings.  Missing files are reported, not raised: a run that died before
-    writing status.json is still a run."""
-    job = _read(run_dir / "job.json") or {}
+    """One flat record per run for listings and inspect.  Missing files are reported, not raised: a run that died before
+    writing status.json is still a run.  Sections a v0.1 record lacks are None (unknown)."""
+    job = record.read_job(run_dir)
+    raw_job = job or (_read(run_dir / "job.json") or {})
     status = _read(run_dir / "status.json") or {}
     failure = _read(run_dir / "failure.json") or {}
-    own = job.get("ownership", {})
-    comp = job.get("computation", {})
-    exe = job.get("execution", {})
-    transitions = status.get("transitions", [])
+    own = raw_job.get("ownership") or {}
+    comp = raw_job.get("computation") or {}
+    exe = raw_job.get("execution") or {}
+    run_sec = (job or {}).get("run") or {}
+    transitions = status.get("transitions") or []
     started = next((t.get("t_utc") for t in transitions if t.get("state") == "running"), None)
-    ended = transitions[-1].get("t_utc") if transitions and transitions[-1].get("state") in ("done", "failed", "cancelled") else None
+    ended = transitions[-1].get("t_utc") if transitions and transitions[-1].get("state") in TERMINAL else None
+    run_id = run_sec.get("id") or own.get("job") or run_dir.name
+    res = result.check(run_dir, run_id)
+    manifest = _read(run_dir / "preserved.json")
     return {
         "id": run_dir.name,
+        "run_id": run_id,
         "dir": str(run_dir),
+        "schema": raw_job.get("schema"),
+        "readable": job is not None or not raw_job,
         "project": own.get("project"),
         "job": own.get("job"),
         "lane": own.get("lane"),
         "stage": comp.get("stage"),
         "tree_sha": comp.get("tree_sha"),
         "workload_digest": comp.get("workload_digest"),
-        "state": status.get("state", "unknown" if not job else "submitted"),
+        "state": status.get("state", "unknown" if not raw_job else "submitted"),
         "rc": status.get("rc"),
         "signal": status.get("signal"),
+        "wall_s": status.get("wall_s"),
         "class": failure.get("class"),
         "certainty": failure.get("certainty"),
         "why": failure.get("why"),
         "started_utc": started,
         "ended_utc": ended,
         "command": exe.get("command"),
-        "has_job": bool(job),
+        "remote": run_sec.get("remote"),
+        "tool": (job or {}).get("tool"),
+        "fingerprint_expected": ((job or {}).get("workload_fingerprint") or {}).get("expected") if job else None,
+        "fingerprint_observed": res.fingerprint,
+        "result": res.summary(),
+        "result_present": res.present,
+        "result_valid": res.valid,
+        "result_errors": res.errors,
+        "validation": res.validation_status,
+        "measurements": (res.doc or {}).get("measurements") if res.valid else None,
+        "cost": record.cost_estimate(job, status),
+        "preserved": manifest,
+        "has_job": bool(raw_job),
         "has_status": bool(status),
         "has_failure": bool(failure),
     }
