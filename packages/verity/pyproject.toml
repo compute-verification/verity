@@ -1,7 +1,7 @@
 [project]
-name = "verity-ir"
+name = "verity"
 version = "0.1.0"
-description = "The Verity IR core: representation types, primitive and composite definitions, canonical layout, evaluator, descriptor codec."
+description = "Verity core: IR (computation representation), exact ML/hardware semantics, verification obligations, commitments, resource accounting."
 requires-python = ">=3.11"
 dependencies = []
 

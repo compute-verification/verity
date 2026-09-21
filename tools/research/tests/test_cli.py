@@ -66,7 +66,8 @@ def test_resolve_prefix_and_ambiguity(tmp_path):
 
 
 def test_no_packages_import():
-    """`research` must not depend on Verity's packages/; it runs commands and records outputs."""
+    """`research` must not depend on the Verity library, frontends, backends, or integrations (README: it treats
+    the workload as opaque). Covers `verity` and any `verity_*` extension distribution."""
     import pathlib
     import re
 
@@ -74,6 +75,6 @@ def test_no_packages_import():
     offenders = []
     for p in src.rglob("*.py"):
         for line in p.read_text(encoding="utf-8").splitlines():
-            if re.match(r"^\s*(from|import)\s+(verity|packages|veritor|verity_ir|verity_vllm)\b", line):
+            if re.match(r"^\s*(from|import)\s+(verity\w*|packages|veritor|backends|frontends|integrations)\b", line):
                 offenders.append(f"{p.relative_to(src)}: {line.strip()}")
     assert not offenders, offenders

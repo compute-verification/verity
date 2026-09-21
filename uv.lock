@@ -10,8 +10,7 @@ resolution-markers = [
 members = [
     "research",
     "verity",
-    "verity-ir",
-    "verity-ml",
+    "verity-workspace",
 ]
 
 [[package]]
@@ -82,12 +81,16 @@ source = { editable = "tools/research" }
 
 [[package]]
 name = "verity"
+version = "0.1.0"
+source = { editable = "packages/verity" }
+
+[[package]]
+name = "verity-workspace"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "research" },
-    { name = "verity-ir" },
-    { name = "verity-ml" },
+    { name = "verity" },
 ]
 
 [package.dev-dependencies]
@@ -98,25 +101,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "research", editable = "tools/research" },
-    { name = "verity-ir", editable = "packages/ir" },
-    { name = "verity-ml", editable = "packages/ml" },
+    { name = "verity", editable = "packages/verity" },
 ]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8" }]
-
-[[package]]
-name = "verity-ir"
-version = "0.1.0"
-source = { editable = "packages/ir" }
-
-[[package]]
-name = "verity-ml"
-version = "0.1.0"
-source = { editable = "packages/ml" }
-dependencies = [
-    { name = "verity-ir" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity-ir", editable = "packages/ir" }]
