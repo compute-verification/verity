@@ -3,20 +3,21 @@ name = "verity-workspace"
 version = "0.0.0"
 description = "Verity monorepo root; a uv workspace, not a package."
 requires-python = ">=3.12"
-dependencies = ["research", "verity"]
+dependencies = ["research", "verity", "verity-sp1"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["tools/research", "packages/verity"]
+members = ["tools/research", "packages/verity", "backends/sp1"]
 
 [tool.uv.sources]
 research = { workspace = true }
 verity = { workspace = true }
+verity-sp1 = { workspace = true }
 
 [dependency-groups]
 dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
-testpaths = ["tools/research/tests", "packages/verity/tests"]
+testpaths = ["tools/research/tests", "packages/verity/tests", "backends/sp1/tests"]

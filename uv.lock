@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 members = [
     "research",
     "verity",
+    "verity-sp1",
     "verity-workspace",
 ]
 
@@ -81,12 +82,24 @@ version = "0.1.0"
 source = { editable = "packages/verity" }
 
 [[package]]
+name = "verity-sp1"
+version = "0.1.0"
+source = { editable = "backends/sp1" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "packages/verity" }]
+
+[[package]]
 name = "verity-workspace"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "research" },
     { name = "verity" },
+    { name = "verity-sp1" },
 ]
 
 [package.dev-dependencies]
@@ -98,6 +111,7 @@ dev = [
 requires-dist = [
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "packages/verity" },
+    { name = "verity-sp1", editable = "backends/sp1" },
 ]
 
 [package.metadata.requires-dev]
