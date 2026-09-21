@@ -1,6 +1,6 @@
-"""Errors of the tensor-core semantics (promoted from veritor.core.errors; only the class the step raises)."""
+"""Errors of the tensor-core semantics: the step raises ``InvalidArtifact`` (the shared class in ``verity.errors``)."""
 from __future__ import annotations
 
+from verity.errors import InvalidArtifact
 
-class InvalidArtifact(ValueError):
-    """An encoding outside the modelled domain, or a shape the pipeline does not take."""
+__all__ = ["InvalidArtifact"]

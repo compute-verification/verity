@@ -1,4 +1,7 @@
-"""Annotations, verification plans and obligations (IR §1, §D, §E), plus the one lowering adapter.
+"""Annotations, verification plans and obligations over IR programs (IR §1, §D, §E), plus the one lowering adapter.
+
+Moved from ``verity.ir.plan``: a plan selects and rates gates of a Program for checking; it is verification
+policy, not computation (README "Verification is separate from computation semantics").
 
 Prescribed inputs are sampled gates (IR §E): `Input[k] : () -> Value<w_k>` is an ordinary one-output gate of
 the fault model. It belongs to a verification unit under the selected plan and is sampled at that plan's
@@ -17,8 +20,8 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Sequence
 
-from .layout import Circuit, FunctionCall, Gate, Subcircuit
-from .program import Program
+from verity.ir.layout import Circuit, FunctionCall, Gate, Subcircuit
+from verity.ir.program import Program
 
 
 @dataclass

@@ -2,7 +2,7 @@
 name = "verity"
 version = "0.1.0"
 description = "Verity core: IR (computation representation), exact ML/hardware semantics, verification obligations, commitments, resource accounting."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = []
 
 [build-system]

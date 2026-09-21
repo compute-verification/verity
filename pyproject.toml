@@ -2,7 +2,7 @@
 name = "verity-workspace"
 version = "0.0.0"
 description = "Verity monorepo root; a uv workspace, not a package."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = ["research", "verity"]
 
 [tool.uv]
