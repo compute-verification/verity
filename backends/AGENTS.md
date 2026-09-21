@@ -41,7 +41,13 @@ K=1536 GemmCoordinate   the architecture decision (handoff section 9.5)
 
 Nothing is selected as the winner on the small cases. The decision is the
 lowest complete numerical-proving cost at matched soundness, privacy and
-domain on the K=1536 VU. Report the six timing buckets (witness,
+domain on the K=1536 VU. A batch may be split into independently committed
+sub-batches; the reported soundness error is then the union bound over them
+(`verity_numerical.security.accounting`) and the per-VU cost includes every
+sub-batch. Security parameters are stated per run (`security.target` in the
+result fingerprint); the protocol documents are `backends/gkr/PROTOCOL.md` and
+`backends/direct/PROTOCOL.md`, and the red team reviews their transcripts
+before any implementation claims a proof class above diagnostic. Report the six timing buckets (witness,
 encoding/commitment, arithmetic, lookup, ZK-additional, serialization), peak
 memory, bytes moved, transcript bytes, rounds, verifier work.
 
