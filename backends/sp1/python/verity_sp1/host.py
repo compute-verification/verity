@@ -193,16 +193,19 @@ class Host:
             raise SP1Unavailable(f"{HOST_BINARY} {args[0]} timed out after {self.timeout}s") from error
         if result.returncode != 0:
             raise ProtocolError(f"{HOST_BINARY} {args[0]} failed ({result.returncode}):\n{result.stderr[-4000:]}")
-        lines = [line for line in result.stdout.splitlines() if line.strip()]
-        if not lines:
-            raise ProtocolError(f"{HOST_BINARY} {args[0]} printed no result")
-        try:
-            document = json.loads(lines[-1])
-        except json.JSONDecodeError as error:
-            raise ProtocolError(f"{HOST_BINARY} {args[0]} printed no JSON result") from error
-        if type(document) is not dict:
-            raise ProtocolError(f"{HOST_BINARY} result is not an object")
-        return document
+        # The result is the last JSON object on stdout; with RUST_LOG set, tracing lines may surround it.
+        for line in reversed(result.stdout.splitlines()):
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                document = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if type(document) is not dict:
+                raise ProtocolError(f"{HOST_BINARY} result is not an object")
+            return document
+        raise ProtocolError(f"{HOST_BINARY} {args[0]} printed no JSON result:\n{result.stdout[-2000:]}")
 
     def info(self) -> GuestIdentity:
         """The embedded guest's identity (derives the verifying key: tens of CPU-seconds)."""
