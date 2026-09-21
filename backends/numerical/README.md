@@ -59,10 +59,16 @@ uv run pytest backends/numerical/tests/reference                    # fast; the 
 uv run research run --on vy-sp1 --project verity --source . --exclusive --stage wp1.exhaustive --require-result \
   -- bash backends/numerical/tests/reference/exhaustive_pod.sh
 uv run research run --on vy-sp1 --project verity --source . --exclusive --stage wp1.probe.4090 --require-result \
-  --env PYTHONPATH=packages/verity/src:backends/numerical/python \
-  -- /root/.local/bin/uv run --no-project --with numpy --python 3.12 python tools/tc_probe/tc_probe.py --arch sm_89 \
-     --out /workspace/research/runs/<run-id> --replay-golden packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json --sweep
+  -- bash -c 'export PYTHONPATH=packages/verity/src:backends/numerical/python PATH=/usr/local/cuda/bin:$PATH; \
+     /root/.local/bin/uv run --no-project --with numpy --python 3.12 python tools/tc_probe/tc_probe.py --arch sm_89 \
+       --out "$RESEARCH_RUN_DIR" --procs 48 --replay-golden packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json --sweep'
 ~~~
+
+Recorded runs (`research inspect <id>`): `r20260921-230852-4f1e` (wp1.exhaustive, SUCCESS, result valid: every counter zero over
+1,076,644 transition-unit cases, 65,536 encodings, 131,072 products, 28 boundary groups, 3,170,304 + 88,602 D3 triples,
+18,337,790 adapter pairs, the compiled simulator on all 1,076,644 lines); `r20260921-231618-ea24` (wp1.probe.4090, SUCCESS,
+result valid: 360/360 golden records, 25,698,304 sweep elements of which 12,065,535 with a nonzero accumulator, 0 mismatches
+against `silicon.tc_dot`).
 
 ## WP1: the adapter and the wrapper's finalisation (D7)
 
