@@ -33,6 +33,8 @@ __all__ = [
     "hash_collision_bound", "ligero_error", "ligero_queries_for", "log2", "logup_gkr_error", "logup_identity_error",
     "per_proof_target", "random_combination_error", "schwartz_zippel_error", "security_bits", "sumcheck_error",
     "union_over_proofs",
+    "DepthOptions", "RTTS_MS", "census_estimate_a", "census_estimate_b", "e2e_sweep", "first_configuration",
+    "hm_commitment_hiding", "redraw_terms", "rounds_and_depth_a", "rounds_and_depth_b",
 ]
 
 GOLDILOCKS = 2**64 - 2**32 + 1
@@ -236,29 +238,63 @@ def fractional_gkr_error(n: int, F: Field) -> Fraction:
     return Fraction(batching + sumchecks, F.size)
 
 
-def logup_identity_error(num_lookups: int, table_rows: int, F: Field, exclude_poles: bool = True,
-                         repetitions: int = 1, columns: int = 1) -> Fraction:
-    """Haboeck Theorem 4, first term, in the ``N`` lookups / ``|T|`` rows form: the cleared rational identity is a
-    nonzero polynomial of degree at most ``N + |T| - 1``; a uniform challenge outside the table's poles hits a
-    root with probability at most ``(N + |T| - 1)/(|F| - |T|)``.  (With ``M`` columns of length ``|H|`` and a
-    table of length ``|H|``: ``((M+1)|H| - 1)/(|F| - |H|)``, the paper's form.)  Requires ``char(F) > N`` so that
-    multiplicities are nonzero field elements (Haboeck Lemma 5).  ``repetitions`` independent challenges raise the
-    term to that power (the prover must satisfy every repetition).
+def logup_identity_error(num_lookups: int, table_rows: int, F: Field, challenge_space: str = "conditioned",
+                         repetitions: int = 1, columns: int = 1, exclude_poles: bool | None = None) -> Fraction:
+    """Haboeck Theorem 4, first term, in the ``N`` lookups / ``|T|`` rows form.  The cleared rational identity is a
+    nonzero polynomial ``P(X)`` of degree at most ``d = N + |T| - 1`` whenever the multisets differ (Lemma 5; needs
+    ``char(F) > N`` so multiplicities are nonzero field elements).
+
+    ``challenge_space``:
+      * ``"conditioned"`` (the protocols' public pole-redraw rule, PROTOCOL.md section 4.2 / 8): ``z`` is uniform over
+        ``F`` minus the public table image ``{t_v(beta)}`` (at most ``|T|`` points).  ``P`` has at most ``d`` roots
+        there, so the error is ``d / (|F| - |T|)``.  This is also the sampling set of Haboeck's Protocol 2 (his
+        condition ``x not in -t(H)``, Remark 3), so Theorem 4's ``((M+1)|H|-1)/(|F|-|H|)`` is the same bound.
+      * ``"whole_field"``: ``z`` uniform over all of ``F`` (Remark 3's overwhelmingly-complete variant): ``d / |F|``.
+    The two differ by the factor ``|F|/(|F|-|T|) = 1 + |T|/(|F|-|T|)``; ``test_conditioned_vs_whole_field`` shows it.
 
     ``columns > 1`` (vector-valued lookup, Haboeck 3.4): rows are compressed with powers of a second challenge
-    ``beta``; the cleared numerator has ``beta``-degree at most ``(N + |T| - 1)(columns - 1)``.  *Derivation*:
-    conditioning on ``beta`` and union-bounding adds ``(N + |T| - 1)(columns - 1)/|F|`` to the term."""
+    ``beta``; the cleared numerator has ``beta``-degree at most ``d (columns - 1)``.  *Derivation*: conditioning on
+    ``beta`` and union-bounding adds ``d (columns - 1)/|F|``.  ``repetitions`` independent challenges raise the term
+    to that power (the prover must satisfy every repetition)."""
+    if exclude_poles is not None:                       # backward-compatible alias
+        challenge_space = "conditioned" if exclude_poles else "whole_field"
     if num_lookups < 1 or table_rows < 1 or columns < 1:
         raise AccountingError("need at least one lookup, one table row and one column")
     if F.characteristic <= num_lookups:
         raise AccountingError(
             f"logUp needs char(F) > total lookups: char={F.characteristic}, lookups={num_lookups} (Haboeck Lemma 5)")
-    denom = F.size - table_rows if exclude_poles else F.size
+    if challenge_space == "conditioned":
+        denom = F.size - table_rows
+    elif challenge_space == "whole_field":
+        denom = F.size
+    else:
+        raise AccountingError(f"unknown challenge_space {challenge_space!r}")
     if denom <= 0:
         raise AccountingError("table larger than the challenge field")
     d = num_lookups + table_rows - 1
     term = Fraction(d, denom) + Fraction(d * (columns - 1), F.size)
     return term ** repetitions
+
+
+def redraw_terms(table_rows: int, F: Field, slots: int = 2) -> dict[str, Fraction]:
+    """The public pole-redraw rule with ``slots`` pre-issued challenge values per table: ``redraw`` is the probability
+    the first value lies in the table image (at most ``|T|/|F|``; a redraw costs no round trip because every slot is
+    sent together); ``abort`` is the probability all ``slots`` values do (the session ends publicly).  Neither is a
+    soundness term; neither depends on the witness."""
+    if slots < 1:
+        raise AccountingError("need at least one challenge slot")
+    q = Fraction(table_rows, F.size)
+    return {"redraw": q, "abort": q**slots}
+
+
+def hm_commitment_hiding(n_commitments: int, k_bits: int) -> Fraction:
+    """Halevi-Micali (CRYPTO 1996) Theorem 1: the commit strings of two messages are within statistical distance
+    ``2^-k``; ``n_commitments`` independent commitments are within ``n 2^-k`` (union bound).  Used for the verifier's
+    coin commitments (a *soundness* term: what a prover may learn about coins) and, when leaves are HM commitments to
+    columns, for the hiding of unopened columns (a *zk* term)."""
+    if n_commitments < 0 or k_bits < 1:
+        raise AccountingError("bad commitment parameters")
+    return Fraction(n_commitments, 2**k_bits)
 
 
 def logup_gkr_error(num_lookups: int, table_rows: int, F: Field, repetitions: int = 1,
@@ -348,7 +384,9 @@ class LigeroParams:
             raise AccountingError("opened columns t must be in [1, n]")
 
 
-def ligero_error(p: LigeroParams, F_code: Field, F_challenge: Field, analysis: str = "appendix_c") -> dict[str, Fraction]:
+def ligero_error(p: LigeroParams, F_code: Field, F_challenge: Field, analysis: str = "appendix_c",
+                 combination: str = "uniform", n_linear: int | None = None, n_quadratic_rows: int | None = None,
+                 ) -> dict[str, Fraction]:
     """Soundness terms of the Ligero ZKIPCP, decomposed.
 
     ``appendix_c`` (the analysis the authors use for parameters, Longfellow 2.2 'Improvement'): for ``e < d/2``
@@ -358,19 +396,35 @@ def ligero_error(p: LigeroParams, F_code: Field, F_challenge: Field, analysis: s
     quadratic ``1/|F|^sigma``.
     ``theorem_4_7``: for ``e < (n-k)/4``: ``(d+2)/|F|^sigma + (1-e/n)^t + 2((e+2k)/n)^t``.
 
+    ``combination``: how the verifier's combination vectors for the *linear* and *quadratic* tests are drawn.
+    ``"uniform"``: independent uniform coefficients (the paper).  ``"powers"``: ``1, rho, rho^2, ...`` of one uniform
+    ``rho`` per test, so the challenge is one field element (needed when the constraint count is in the 10^8 range,
+    Candidate B); *derivation*: a failing constraint makes the combined polynomial in ``rho`` nonzero of degree below
+    the count, so the field terms become ``(n_linear - 1)/|F|^sigma`` and ``(n_quadratic_rows - 1)/|F|^sigma``
+    (Schwartz-Zippel).  The IRS test keeps uniform row coefficients in both modes (no geometric-sequence proximity
+    statement is relied on).
+
     Field terms use the *challenge* field (the field the random combinations are drawn from); the proximity-gap
     statement for a subfield code combined over an extension is an assumption recorded in PROTOCOL.md."""
     p.validate(F_code)
     n, k, l, t, e, s = p.n, p.k, p.l, p.t, p.proximity, p.sigma
     Fs = Fraction(F_challenge.size) ** s
+    if combination == "uniform":
+        lin_num, quad_num = 1, 1
+    elif combination == "powers":
+        if n_linear is None or n_quadratic_rows is None:
+            raise AccountingError("combination='powers' needs n_linear and n_quadratic_rows")
+        lin_num, quad_num = max(1, n_linear - 1), max(1, n_quadratic_rows - 1)
+    else:
+        raise AccountingError(f"unknown combination {combination!r}")
     if analysis == "appendix_c":
         return {
             "irs_query": (Fraction(n - e, n)) ** t,
             "linear_query": Fraction(k + l, n) ** t,
             "quadratic_query": Fraction(2 * k, n) ** t,
             "irs_field": Fraction(n + 1) / Fs,
-            "linear_field": Fraction(1) / Fs,
-            "quadratic_field": Fraction(1) / Fs,
+            "linear_field": Fraction(lin_num) / Fs,
+            "quadratic_field": Fraction(quad_num) / Fs,
         }
     if analysis == "theorem_4_7":
         if not 4 * e < n - k:
@@ -379,7 +433,7 @@ def ligero_error(p: LigeroParams, F_code: Field, F_challenge: Field, analysis: s
             "irs_query": (Fraction(n - e, n)) ** t,
             "linear_query": Fraction(e + 2 * k, n) ** t,
             "quadratic_query": Fraction(e + 2 * k, n) ** t,
-            "field": Fraction(p.distance + 2) / Fs,
+            "field": Fraction(p.distance + lin_num + quad_num) / Fs,
         }
     raise AccountingError(f"unknown analysis {analysis!r}")
 
@@ -448,6 +502,36 @@ DEFAULT_LAYERS_A: tuple[CheckerLayer, ...] = (
 
 
 @dataclass(frozen=True)
+class DepthOptions:
+    """Round-trip reductions applied when counting the sequential challenge depth (PROTOCOL.md A section 5.4).
+
+    Known / immediate (always applied): independent sumchecks run in parallel (all tables' fractional GKRs; the
+    checker GKR beside them), all challenges a verifier can issue at once travel in one message, one prover message
+    carries every prover response due at that point.
+
+    Proposals (default off):
+    * ``variables_per_round`` = c: bind ``c`` sumcheck variables per verifier message (the prover sends the c-variate
+      round polynomial, ``(d+1)^c - 1`` values); round count ``ceil(v/c)``, Schwartz-Zippel error per message
+      ``c d/|F|`` (unchanged total); prover work in those rounds grows ~``(d+1)^c/((d+1) c)``.
+    * ``table_shard_bits`` = s: split each table's queries into ``2^s`` independent fractional GKRs with their own
+      multiplicity vectors (all challenge-independent), hypercube dimension ``ceil(log2(N/2^s + |T|))``; costs
+      ``(2^s - 1)|T|`` extra committed multiplicities per table; the identity error is charged per shard.
+      A table is sharded only while ``N/2^s > |T|``.
+    * ``queries_on_inputs``: every lookup query is an input-layer (committed) value, so leaf claims are Ligero linear
+      constraints and the lookups never wait for the checker (layout rule, PROTOCOL.md A 4.3).  When False the
+      queries sit on the last computed layer and that layer's sumcheck follows the lookups on the critical path.
+    """
+
+    variables_per_round: int = 1
+    table_shard_bits: int = 0
+    queries_on_inputs: bool = True
+
+    def validate(self) -> None:
+        if self.variables_per_round < 1 or self.table_shard_bits < 0:
+            raise AccountingError("bad depth options")
+
+
+@dataclass(frozen=True)
 class CandidateA:
     """Data-parallel GKR + logUp-GKR + Longfellow-style deferred Ligero (PROTOCOL.md A)."""
 
@@ -463,6 +547,10 @@ class CandidateA:
     hash_bits: int = 256
     hash_queries: int = 2**64
     challenge_field_elements_per_pad: int | None = None   # trace-field elements per pad; default = extension degree
+    redraw_slots: int = 2               # pre-issued z_T values per table (public pole-redraw rule)
+    leaf_commitment_bits: int | None = 160   # HM96 commitment per column (None: unsalted leaf hash, extra assumption)
+    coin_commitment_bits: int | None = None  # step 0 (malicious-verifier ZK) with HM96 parameter k; None = HVZK only
+    depth: DepthOptions = DepthOptions()
 
     @property
     def units(self) -> int:
@@ -489,10 +577,17 @@ class CandidateB:
     # quadratic test needs x, y, z of each product in the same column) + <= 74 values that occur only in linear or
     # lookup predicates.  ASSUMPTION until the WP3 layout lands.
     witness_per_unit: int = 512
+    linear_per_unit: int = 104 + 292 + 14     # census lin + alignment equalities + per-table sums (ASSUMPTION)
+    quadratic_per_unit: int = 146             # census mul (helper products are added per lookup)
     lookup_mode: str = "helper_columns"  # helper_columns (second commitment round) | gkr (fractional sumcheck)
     lookup_repetitions: int = 1
     hash_bits: int = 256
     hash_queries: int = 2**64
+    combination: str = "powers"          # Ligero linear/quadratic combination coefficients: powers of one element
+    redraw_slots: int = 2
+    leaf_commitment_bits: int | None = 160
+    coin_commitment_bits: int | None = None
+    depth: DepthOptions = DepthOptions()
 
     @property
     def units(self) -> int:
@@ -508,13 +603,56 @@ def _extension_degree(trace: Field, challenge: Field) -> int:
     return d
 
 
-def _pad_and_hash(budget: Budget, p: CandidateA | CandidateB) -> None:
-    budget.add("commitment_hash", f"Merkle/commitment collisions, generic q^2/2^h with q=2^{int(math.log2(p.hash_queries))}, h={p.hash_bits}",
-               hash_collision_bound(p.hash_bits, p.hash_queries), kind="computational",
-               note="reduction to collision resistance; not a probability over verifier coins")
+def _shards(p: CandidateA | CandidateB, tbl: LookupTable) -> tuple[int, int, int]:
+    """(number of shards, lookups per shard, hypercube dimension per shard) for one table under the depth options."""
+    N = tbl.queries_per_unit * p.units
+    s = p.depth.table_shard_bits
+    while s > 0 and N // 2**s <= tbl.rows:
+        s -= 1
+    shards = 2**s
+    per = -(-N // shards)
+    return shards, per, max(1, math.ceil(math.log2(per + tbl.rows)))
+
+
+def _lookup_terms(B: Budget, p: CandidateA | CandidateB, tbl: LookupTable, gkr: bool) -> tuple[int, int, int]:
+    """Adds the lookup terms of one table; returns (shards, hypercube dim per shard, fractional-GKR rounds per shard)."""
+    Fc = p.challenge_field
+    shards, per, n_dim = _shards(p, tbl)
+    tag = f"{tbl.name}" + (f" x{shards} shards" if shards > 1 else "")
+    ident = logup_identity_error(per, tbl.rows, Fc, repetitions=p.lookup_repetitions, columns=tbl.columns)
+    B.add("lookup", f"{tag}: rational identity, N={per}, |T|={tbl.rows}, cols={tbl.columns}, conditioned on z not in image",
+          shards * ident)
+    rounds = 0
+    if gkr:
+        B.add("lookup", f"{tag}: fractional GKR over 2^{n_dim}",
+              shards * p.lookup_repetitions * fractional_gkr_error(n_dim, Fc))
+        rounds = p.lookup_repetitions * (n_dim * (n_dim - 1) // 2 + (n_dim - 1))
+    rd = redraw_terms(tbl.rows, Fc, p.redraw_slots)
+    B.add("completeness", f"{tbl.name}: z in public table image, first slot (redraw, no round trip)", rd["redraw"],
+          kind="completeness")
+    B.add("completeness", f"{tbl.name}: all {p.redraw_slots} slots in the image (public abort)", rd["abort"],
+          kind="completeness")
+    return shards, n_dim, rounds
+
+
+def _commitment_terms(B: Budget, p: CandidateA | CandidateB, n_coins: int) -> None:
+    B.add("commitment_hash", f"Merkle/commitment collisions, generic q^2/2^h with q=2^{int(math.log2(p.hash_queries))}, h={p.hash_bits}",
+          hash_collision_bound(p.hash_bits, p.hash_queries), kind="computational",
+          note="reduction to collision resistance; not a probability over verifier coins")
+    if p.coin_commitment_bits is not None:
+        B.add("commitment_hash", f"verifier coin commitments: HM96 hiding, {n_coins} coins x 2^-{p.coin_commitment_bits}",
+              hm_commitment_hiding(n_coins, p.coin_commitment_bits), kind="statistical",
+              note="what a prover may learn about committed coins; binding is a ZK-side (computational) requirement")
+    if p.leaf_commitment_bits is not None:
+        B.add("zk", f"column commitments: HM96 hiding, {p.ligero.n} leaves x 2^-{p.leaf_commitment_bits}",
+              hm_commitment_hiding(p.ligero.n, p.leaf_commitment_bits), kind="zk")
+    else:
+        B.add("zk", "unsalted leaf hashes: hiding is an assumption on H beyond collision resistance (not quantified)",
+              0, kind="zk")
 
 
 def account_candidate_a(p: CandidateA) -> Budget:
+    p.depth.validate()
     Fc, Ft = p.challenge_field, p.trace_field
     ext = _extension_degree(Ft, Fc)
     per_pad = p.challenge_field_elements_per_pad or ext
@@ -539,28 +677,23 @@ def account_candidate_a(p: CandidateA) -> Budget:
     B.add("batching", "final input claims: gamma (two evaluation claims -> one Ligero linear constraint)",
           random_combination_error(Fc, 2))
 
-    # ---- lookups: logUp-GKR per table, claims merged into the checker layer holding the query block -----------------
-    abort = Fraction(0)          # probability a uniform challenge lands in the table image
+    # ---- lookups: logUp-GKR per table (per shard), claims merged into the checker or the input constraints ---------
+    extra_mult = 0
     for tbl in p.tables:
-        N = tbl.queries_per_unit * units
-        lk = logup_gkr_error(N, tbl.rows, Fc, repetitions=p.lookup_repetitions, columns=tbl.columns)
-        B.add("lookup", f"{tbl.name}: rational identity, N={N}, |T|={tbl.rows}, cols={tbl.columns}, x{p.lookup_repetitions}", lk["identity"])
-        B.add("lookup", f"{tbl.name}: fractional GKR over 2^{int(lk['hypercube_dim'])}", lk["fractional_gkr"])
-        B.add("batching", f"{tbl.name}: merge table-side/witness-side claims into the layer claim",
-              random_combination_error(Fc, 2))
-        n_dim = int(lk["hypercube_dim"])
-        rounds += p.lookup_repetitions * (n_dim * (n_dim - 1) // 2 + (n_dim - 1))
-        pads += p.lookup_repetitions * (3 * (n_dim * (n_dim - 1) // 2) + 4 * n_dim)
-        abort += Fraction(tbl.rows, Fc.size)
-    B.add("completeness", "logUp challenge in a public table image: rejected publicly and redrawn (no witness pole for "
-          "an honest prover, whose query values lie in the table)", abort, kind="completeness")
+        shards, n_dim, r_sh = _lookup_terms(B, p, tbl, gkr=True)
+        B.add("batching", f"{tbl.name}: merge table-side/witness-side claims into the layer / input claim",
+              shards * random_combination_error(Fc, 2))
+        rounds += shards * r_sh
+        pads += shards * p.lookup_repetitions * (3 * (n_dim * (n_dim - 1) // 2) + 4 * n_dim)
+        extra_mult += (shards - 1) * tbl.rows
 
     # ---- encoding / opening: Ligero over the committed inputs, multiplicities and pads --------------------------------
-    committed = units * p.inputs_per_unit + sum(t.rows for t in p.tables) + pads * per_pad
+    committed = units * p.inputs_per_unit + sum(t.rows for t in p.tables) + extra_mult + pads * per_pad
     lig = ligero_error(p.ligero, Ft, Fc)
     for name, val in lig.items():
         B.add("encoding_opening", f"Ligero {name} (n={p.ligero.n}, k={p.ligero.k}, l={p.ligero.l}, t={p.ligero.t}, e={p.ligero.proximity})", val)
-    _pad_and_hash(B, p)
+    depth = rounds_and_depth_a(p)
+    _commitment_terms(B, p, depth["coins"])
 
     rows = math.ceil(committed / p.ligero.l) + 3
     B.parameters.update({
@@ -570,40 +703,42 @@ def account_candidate_a(p: CandidateA) -> Budget:
         "committed_trace_elements": committed, "ligero_rows": rows,
         "opened_trace_elements": rows * p.ligero.t,
         "merkle_leaves": p.ligero.n,
+        "zk_class": "COMPLETE_ZK_BACKEND (proposed step 0)" if p.coin_commitment_bits else "COMPLETE_HVZK_BACKEND",
+        **{k: v for k, v in depth.items() if k.startswith("rounds.")},
     })
     return B
 
 
 def account_candidate_b(p: CandidateB) -> Budget:
+    p.depth.validate()
     Fc, Ft = p.challenge_field, p.trace_field
     ext = _extension_degree(Ft, Fc)
     B = Budget("B: direct constraints in interactive ZK Ligero + logUp (interactive)")
     units = p.units
     committed = units * p.witness_per_unit + sum(t.rows for t in p.tables)
-    abort = Fraction(0)          # probability a uniform challenge lands in the table image
     rounds = 0
+    n_linear = units * p.linear_per_unit + sum(t.rows for t in p.tables)
+    n_quadratic = units * p.quadratic_per_unit
     for tbl in p.tables:
         N = tbl.queries_per_unit * units
         if p.lookup_mode == "helper_columns":
-            B.add("lookup", f"{tbl.name}: rational identity, N={N}, |T|={tbl.rows}, cols={tbl.columns}, x{p.lookup_repetitions}",
-                  logup_identity_error(N, tbl.rows, Fc, repetitions=p.lookup_repetitions, columns=tbl.columns))
-            committed += p.lookup_repetitions * (N + tbl.rows) * ext     # inverse columns h = 1/(alpha - f) in F_c
+            shards, _, _ = _lookup_terms(B, p, tbl, gkr=False)
+            committed += p.lookup_repetitions * (N + shards * tbl.rows) * ext     # inverse columns h in F_c
+            n_quadratic += p.lookup_repetitions * N
+            n_linear += shards * tbl.rows
         elif p.lookup_mode == "gkr":
-            lk = logup_gkr_error(N, tbl.rows, Fc, repetitions=p.lookup_repetitions, columns=tbl.columns)
-            B.add("lookup", f"{tbl.name}: rational identity, N={N}, |T|={tbl.rows}, cols={tbl.columns}, x{p.lookup_repetitions}", lk["identity"])
-            B.add("lookup", f"{tbl.name}: fractional GKR over 2^{int(lk['hypercube_dim'])}", lk["fractional_gkr"])
-            n_dim = int(lk["hypercube_dim"])
-            rounds += p.lookup_repetitions * (n_dim * (n_dim - 1) // 2 + (n_dim - 1))
-            committed += p.lookup_repetitions * (3 * (n_dim * (n_dim - 1) // 2) + 4 * n_dim) * ext
+            shards, n_dim, r_sh = _lookup_terms(B, p, tbl, gkr=True)
+            rounds += shards * r_sh
+            committed += shards * p.lookup_repetitions * (3 * (n_dim * (n_dim - 1) // 2) + 4 * n_dim) * ext
+            committed += (shards - 1) * tbl.rows
         else:
             raise AccountingError(f"unknown lookup_mode {p.lookup_mode!r}")
-        abort += Fraction(tbl.rows, Fc.size)
-    B.add("completeness", "logUp challenge in a public table image: rejected publicly and redrawn (no witness pole for "
-          "an honest prover, whose query values lie in the table)", abort, kind="completeness")
-    lig = ligero_error(p.ligero, Ft, Fc)
+    lig = ligero_error(p.ligero, Ft, Fc, combination=p.combination, n_linear=n_linear,
+                       n_quadratic_rows=-(-n_quadratic // p.ligero.l))
     for name, val in lig.items():
-        B.add("encoding_opening", f"Ligero {name} (n={p.ligero.n}, k={p.ligero.k}, l={p.ligero.l}, t={p.ligero.t}, e={p.ligero.proximity})", val)
-    _pad_and_hash(B, p)
+        B.add("encoding_opening", f"Ligero {name} (n={p.ligero.n}, k={p.ligero.k}, l={p.ligero.l}, t={p.ligero.t}, e={p.ligero.proximity}, {p.combination})", val)
+    depth = rounds_and_depth_b(p)
+    _commitment_terms(B, p, depth["coins"])
     rows = math.ceil(committed / p.ligero.l) + 3
     B.parameters.update({
         "K": p.K, "B": p.B, "units": units, "trace_field": Ft.name, "challenge_field": Fc.name,
@@ -611,6 +746,238 @@ def account_candidate_b(p: CandidateB) -> Budget:
         "committed_trace_elements": committed, "ligero_rows": rows,
         "opened_trace_elements": rows * p.ligero.t,
         "commitment_rounds": 2 if p.lookup_mode == "helper_columns" else 1,
-        "merkle_leaves": p.ligero.n,
+        "merkle_leaves": p.ligero.n, "linear_constraints": n_linear, "quadratic_constraints": n_quadratic,
+        "zk_class": "COMPLETE_ZK_BACKEND (proposed step 0)" if p.coin_commitment_bits else "COMPLETE_HVZK_BACKEND",
+        **{k: v for k, v in depth.items() if k.startswith("rounds.")},
     })
     return B
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Latency: protocol rounds vs sequential challenge depth (contract names rounds.protocol / rounds.sequential_depth)
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _fractional_chain(n_dim: int, c: int) -> tuple[int, int]:
+    """(protocol challenge slots, sequential depth) of one fractional GKR of dimension ``n_dim`` after its ``z``:
+    layer 0 -> 1 needs one (mu, lambda) message; layer k = 1..n-1 needs ``k`` sumcheck challenges (``ceil(k/c)`` with
+    ``c`` variables per message) followed by one (mu, lambda) message that must come *after* the four claims."""
+    slots = 1 + sum(k + 1 for k in range(1, n_dim))
+    depth = 1 + sum(-(-k // c) + 1 for k in range(1, n_dim))
+    return slots, depth
+
+
+def rounds_and_depth_a(p: CandidateA) -> dict[str, int]:
+    """Protocol rounds and sequential challenge depth of Candidate A (PROTOCOL.md A 5.4).
+
+    depth = [1 step-0 message] + 1 (all z_T, beta_T, z_0 in one message)
+            + max(longest fractional-GKR chain, checker chain)  [+ last checker layer + gamma if queries are not
+              on the input layer] + 2 (Ligero r, Q).
+    Each checker layer contributes ``ceil(rounds_i/c) + 1`` (the alpha/beta/merge message after v_l, v_r)."""
+    p.depth.validate()
+    c = p.depth.variables_per_round
+    slots_lookup = depth_lookup = 0
+    for tbl in p.tables:
+        shards, _, n_dim = _shards(p, tbl)
+        sl, dp = _fractional_chain(n_dim, c)
+        slots_lookup += shards * (1 + sl) * p.lookup_repetitions      # + 1: the z_T slot itself
+        depth_lookup = max(depth_lookup, dp)
+    layer_rounds = [layer.s_out + p.b + 2 * layer.s_in for layer in p.layers]
+    checker_slots = 1 + sum(r + 1 for r in layer_rounds) + 1          # z_0, per-layer challenges + alpha, gamma
+    checker_depth = [-(-r // c) + 1 for r in layer_rounds]
+    if p.depth.queries_on_inputs:
+        parallel = max(depth_lookup, sum(checker_depth) + 1)
+        tail = 0
+    else:
+        parallel = max(depth_lookup, sum(checker_depth[:-1]))
+        tail = checker_depth[-1] + 1
+    step0 = 1 if p.coin_commitment_bits is not None else 0
+    depth = step0 + 1 + parallel + tail + 2
+    slots = slots_lookup + checker_slots + 2
+    return {"rounds.protocol": slots + step0, "rounds.sequential_depth": depth, "coins": slots,
+            "depth.lookup_chain": depth_lookup, "depth.checker_chain": sum(checker_depth) + 1, "depth.tail": tail}
+
+
+def rounds_and_depth_b(p: CandidateB) -> dict[str, int]:
+    """Candidate B: ``helper_columns``: z (one message for all tables), r, Q -> depth 3; ``gkr``: 1 + longest
+    fractional chain + 2.  Plus one for step 0."""
+    p.depth.validate()
+    step0 = 1 if p.coin_commitment_bits is not None else 0
+    if p.lookup_mode == "helper_columns":
+        slots = len(p.tables) + 2
+        return {"rounds.protocol": slots + step0, "rounds.sequential_depth": 3 + step0, "coins": slots,
+                "depth.lookup_chain": 0, "depth.checker_chain": 0, "depth.tail": 0}
+    c = p.depth.variables_per_round
+    slots = depth_lookup = 0
+    for tbl in p.tables:
+        shards, _, n_dim = _shards(p, tbl)
+        sl, dp = _fractional_chain(n_dim, c)
+        slots += shards * (1 + sl) * p.lookup_repetitions
+        depth_lookup = max(depth_lookup, dp)
+    return {"rounds.protocol": slots + 2 + step0, "rounds.sequential_depth": step0 + 1 + depth_lookup + 2,
+            "coins": slots + 2, "depth.lookup_chain": depth_lookup, "depth.checker_chain": 0, "depth.tail": 0}
+
+
+RTTS_MS: tuple[str, ...] = ("0", "0.1", "1", "10", "50")
+
+
+def e2e_sweep(depth: int, prover_seconds: float = 0.0, verifier_seconds: float = 0.0,
+              bytes_total: int = 0, bandwidth_bytes_per_s: float | None = None) -> dict[str, float]:
+    """``t.e2e.rtt_<x>ms`` = prover + verifier compute (given) + depth x RTT [+ bytes / bandwidth].  The network
+    floor is ``depth x RTT``; compute is an input, never estimated here."""
+    out = {}
+    for r in RTTS_MS:
+        t = prover_seconds + verifier_seconds + depth * float(r) / 1000.0
+        if bandwidth_bytes_per_s:
+            t += bytes_total / bandwidth_bytes_per_s
+        out[f"t.e2e.rtt_{r}ms"] = t
+    return out
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Census estimates (contract names census.*; every figure here is an ESTIMATE from an explicit cost model)
+# ---------------------------------------------------------------------------------------------------------------------
+
+#: F_t-multiplication equivalents of one multiplication in the degree-d extension (Karatsuba-style): 1, 3, 6, 9.
+EXT_MULT_COST = {1: 1, 2: 3, 3: 6, 4: 9, 5: 13, 6: 17}
+HM_LEAF_BYTES = 144          # HM96 O(k)-bit commitment string, k = 128 (9k bits); decommit adds x: 6k+4 bits
+HM_DECOMMIT_BYTES = 100
+DIGEST_BYTES = 32
+
+
+def _ntt_ops(rows: int, n: int, k: int) -> int:
+    """Encoding one row: inverse NTT of size k (interpolate) + forward NTT of size n; butterflies as mult-equivalents."""
+    return rows * ((k // 2) * max(1, int(math.log2(k))) + (n // 2) * max(1, int(math.log2(n))))
+
+
+def census_estimate_a(p: CandidateA, prover_seconds: float = 0.0) -> dict[str, float]:
+    """Cost model (ESTIMATES):
+    * witness_elements: per unit inputs + every internal wire (all layer outputs) + all fractional-GKR nodes
+      (2 F_c values per node, ~2 nodes per leaf) as F_t equivalents;
+    * committed_elements / bytes_encoded / hash_bytes: from the budget: rows x n symbols x 8 B, hashed once, plus HM
+      leaf strings and the Merkle tree;
+    * field_ops (F_t mult-equivalents): NTT encoding; checker GKR 12 F_c mults per (wire, copy, layer); fractional
+      GKRs 15 F_c mults per leaf-equivalent; Ligero tests 3 x rows x n x ext;
+    * memory_passes / bytes_moved: 3 passes over the committed matrix (read witness, write codewords, hash) + 2
+      passes per sumcheck table (checker layers and fractional trees);
+    * communication: opened columns + decommitments + Merkle paths + padded transcript + Ligero responses +
+      challenges (+ coin commitments/openings);
+    * peak memory (retained policy): codeword matrix + witness + largest live sumcheck table."""
+    bud = account_candidate_a(p)
+    prm = bud.parameters
+    ext = prm["extension_degree"]
+    ec = EXT_MULT_COST[ext]
+    units, n, k, t = p.units, p.ligero.n, p.ligero.k, p.ligero.t
+    rows = prm["ligero_rows"]
+    wires = sum(2**layer.s_out for layer in p.layers)
+    frac_leaves = sum(sum(2**_shards(p, tb)[2] for _ in range(_shards(p, tb)[0])) for tb in p.tables)
+    witness_elements = units * (p.inputs_per_unit + wires) + 4 * frac_leaves * ext
+    bytes_encoded = rows * n * 8
+    hash_bytes = bytes_encoded + (n * HM_LEAF_BYTES if p.leaf_commitment_bits else 0) + 2 * n * DIGEST_BYTES
+    gkr_ops = 12 * ec * units * sum(2**layer.s_in for layer in p.layers)
+    frac_ops = 15 * ec * frac_leaves
+    ligero_ops = 3 * rows * n * ext
+    field_ops = _ntt_ops(rows, n, k) + gkr_ops + frac_ops + ligero_ops
+    layer_tables = [units * 2**layer.s_in * ext * 8 for layer in p.layers]
+    bytes_moved = 3 * bytes_encoded + prm["committed_trace_elements"] * 8 + 2 * sum(layer_tables) + 2 * (2 * frac_leaves * ext * 8)
+    memory_passes = 3 + 2 * len(p.layers) + 2 * len(p.tables)
+    depth = rounds_and_depth_a(p)
+    coins = depth["coins"]
+    p2v = (rows * t * 8 + t * (HM_DECOMMIT_BYTES + int(math.log2(n)) * DIGEST_BYTES)
+           + prm["pad_elements"] * ext * 8 + (n + (k + p.ligero.l) + 2 * k) * ext * 8 + 2 * DIGEST_BYTES)
+    v2p = coins * ext * 8 + rows * ext * 8
+    if p.coin_commitment_bits:
+        v2p += coins * (HM_LEAF_BYTES + HM_DECOMMIT_BYTES)
+    peak = bytes_encoded + prm["committed_trace_elements"] * 8 + max(layer_tables)
+    return {
+        "census.witness_elements": witness_elements,
+        "census.committed_elements": prm["committed_trace_elements"],
+        "census.bytes_encoded": bytes_encoded,
+        "census.hash_bytes": hash_bytes,
+        "census.field_ops": field_ops,
+        "census.memory_passes": memory_passes,
+        "census.bytes_moved": bytes_moved,
+        "rounds.protocol": depth["rounds.protocol"],
+        "rounds.sequential_depth": depth["rounds.sequential_depth"],
+        "transcript.bytes": p2v + v2p,
+        "estimate.transcript_p2v_bytes": p2v,
+        "estimate.transcript_v2p_bytes": v2p,
+        "estimate.peak_bytes": peak,
+        **e2e_sweep(depth["rounds.sequential_depth"], prover_seconds),
+    }
+
+
+def census_estimate_b(p: CandidateB, prover_seconds: float = 0.0) -> dict[str, float]:
+    """Cost model (ESTIMATES), same conventions as :func:`census_estimate_a`.  Helper columns: batch inversion
+    3 F_c mults per helper (Haboeck section 5) plus 2 passes over the helper columns; no sumcheck tables in
+    ``helper_columns`` mode."""
+    bud = account_candidate_b(p)
+    prm = bud.parameters
+    ext = prm["extension_degree"]
+    ec = EXT_MULT_COST[ext]
+    units, n, k, t = p.units, p.ligero.n, p.ligero.k, p.ligero.t
+    rows = prm["ligero_rows"]
+    helpers = sum(tb.queries_per_unit * units + tb.rows for tb in p.tables)
+    witness_elements = units * p.witness_per_unit + sum(tb.rows for tb in p.tables) + helpers * ext
+    bytes_encoded = rows * n * 8
+    hash_bytes = 2 * (n * HM_LEAF_BYTES if p.leaf_commitment_bits else 0) + bytes_encoded + 4 * n * DIGEST_BYTES
+    helper_ops = 3 * ec * helpers
+    ligero_ops = 3 * rows * n * ext + 4 * prm["linear_constraints"] * ext
+    field_ops = _ntt_ops(rows, n, k) + helper_ops + ligero_ops
+    bytes_moved = 3 * bytes_encoded + prm["committed_trace_elements"] * 8 + 2 * helpers * ext * 8
+    memory_passes = 3 + 2
+    depth = rounds_and_depth_b(p)
+    coins = depth["coins"]
+    p2v = (rows * t * 8 + 2 * t * (HM_DECOMMIT_BYTES + int(math.log2(n)) * DIGEST_BYTES)
+           + (n + (k + p.ligero.l) + 2 * k) * ext * 8 + 4 * DIGEST_BYTES)
+    v2p = coins * ext * 8 + rows * ext * 8
+    if p.coin_commitment_bits:
+        v2p += coins * (HM_LEAF_BYTES + HM_DECOMMIT_BYTES)
+    peak = bytes_encoded + prm["committed_trace_elements"] * 8
+    return {
+        "census.witness_elements": witness_elements,
+        "census.committed_elements": prm["committed_trace_elements"],
+        "census.bytes_encoded": bytes_encoded,
+        "census.hash_bytes": hash_bytes,
+        "census.field_ops": field_ops,
+        "census.memory_passes": memory_passes,
+        "census.bytes_moved": bytes_moved,
+        "rounds.protocol": depth["rounds.protocol"],
+        "rounds.sequential_depth": depth["rounds.sequential_depth"],
+        "transcript.bytes": p2v + v2p,
+        "estimate.transcript_p2v_bytes": p2v,
+        "estimate.transcript_v2p_bytes": v2p,
+        "estimate.peak_bytes": peak,
+        **e2e_sweep(depth["rounds.sequential_depth"], prover_seconds),
+    }
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Operating points: the first configuration (extension degree, opened columns) that meets a target
+# ---------------------------------------------------------------------------------------------------------------------
+
+def first_configuration(target_log2: int, make, trace_field: Field, n: int, k: int, l: int,
+                        extension_degrees: Sequence[int] = (2, 3, 4), hash_queries: int = 2**60,
+                        **kwargs) -> tuple[int, int, Budget]:
+    """Smallest extension degree, then smallest ``t``, such that ``make(trace_field, challenge_field, ligero,
+    hash_queries=..., **kwargs)``'s budget meets ``2**target_log2``.  ``make`` builds a ``CandidateA``/``CandidateB``
+    and returns its Budget.  Raises when no configuration in the sweep meets the target (the reason is in the
+    message: which component floors above the target)."""
+    reasons = []
+    for d in extension_degrees:
+        Fc = trace_field.extension(d)
+        try:
+            t0 = ligero_queries_for(target_log2 - 1, n, k, l)
+        except AccountingError:
+            continue
+        probe = make(trace_field, Fc, LigeroParams(n=n, k=k, l=l, t=t0), hash_queries=hash_queries, **kwargs)
+        others = probe.total() - probe.by_component()["encoding_opening"]
+        if others >= Fraction(2) ** target_log2:
+            comps = {c: round(log2(v), 1) for c, v in probe.by_component().items() if c != "encoding_opening" and v}
+            reasons.append(f"degree {d}: non-encoding terms alone 2^{log2(others):.1f} {comps}")
+            continue
+        for t in range(t0, k - l):
+            bud = make(trace_field, Fc, LigeroParams(n=n, k=k, l=l, t=t), hash_queries=hash_queries, **kwargs)
+            if bud.meets(target_log2):
+                return d, t, bud
+        reasons.append(f"degree {d}: no t < k - l = {k - l} meets the target")
+    raise AccountingError(f"no configuration meets 2^{target_log2}: " + "; ".join(reasons))

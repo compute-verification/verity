@@ -7,7 +7,7 @@ from fractions import Fraction
 import pytest
 
 from verity_numerical.security.accounting import (
-    BABYBEAR, GOLDILOCKS, MERSENNE61, AccountingError, Budget, CandidateA, CandidateB, CheckerLayer, Field,
+    BABYBEAR, GOLDILOCKS, MERSENNE61, AccountingError, CandidateA, CandidateB, CheckerLayer, Field,
     LigeroParams, account_candidate_a, account_candidate_b, data_parallel_layer_error, fractional_gkr_error,
     hash_collision_bound, ligero_error, ligero_queries_for, log2, logup_gkr_error, logup_identity_error,
     per_proof_target, random_combination_error, schwartz_zippel_error, security_bits, sumcheck_error,
@@ -155,7 +155,8 @@ def test_two_to_minus_128_reference_decomposition_b4096():
     assert -187 < log2(ca["batching"]) < -186
     assert -184 < log2(ca["sumcheck"]) < -183
     assert -166 < log2(ca["lookup"]) < -164 and -166 < log2(cb["lookup"]) < -164
-    assert -131 < log2(ca["encoding_opening"]) < -130 and ca["encoding_opening"] == cb["encoding_opening"]
+    assert -131 < log2(ca["encoding_opening"]) < -130 and -131 < log2(cb["encoding_opening"]) < -130
+    assert ca["encoding_opening"] < cb["encoding_opening"]      # B combines constraints by powers (Schwartz-Zippel)
     assert log2(ca["commitment_hash"]) == -136
     assert -131 < log2(a.total()) <= -128 and -131 < log2(b.total()) <= -128
     assert cb["batching"] == 0 and cb["sumcheck"] == 0        # no sumcheck in B's helper-column lookups
@@ -237,3 +238,141 @@ def test_per_proof_target_is_derived_from_the_application_budget():
     assert per_proof_target(-128, 2, other_errors=Fraction(1, 2**129)) == pytest.approx(-130)
     with pytest.raises(AccountingError):
         per_proof_target(-128, 4, other_errors=Fraction(1, 2**127))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Coordinator decisions 2026-09-21: conditioned challenge space, depth, census, operating points, step 0
+# ---------------------------------------------------------------------------------------------------------------------
+
+from verity_numerical.bench import contract
+from verity_numerical.security.accounting import (
+    DepthOptions, census_estimate_a, census_estimate_b, e2e_sweep, first_configuration, hm_commitment_hiding,
+    redraw_terms, rounds_and_depth_a, rounds_and_depth_b,
+)
+
+Fc3 = GL.extension(3)
+
+
+def _a(B=4096, **kw):
+    return CandidateA(K=1536, B=B, trace_field=GL, challenge_field=Fc3, ligero=LIGERO_128, hash_queries=2**60, **kw)
+
+
+def _b(B=4096, **kw):
+    return CandidateB(K=1536, B=B, trace_field=GL, challenge_field=Fc3, ligero=LIGERO_128, hash_queries=2**60, **kw)
+
+
+def test_conditioned_challenge_space_vs_whole_field_theorem():
+    """T_range16 at B = 4096: N = 18,087,936 lookups, |T| = 65,536, F_c = Goldilocks^3.  The conditioned bound
+    d/(|F| - |T|) exceeds the whole-field d/|F| by exactly d|T|/(|F|(|F| - |T|)) ~ 2^-344, a relative 2^-176."""
+    N, T = 46 * 393216, 65536
+    cond = logup_identity_error(N, T, Fc3, "conditioned")
+    whole = logup_identity_error(N, T, Fc3, "whole_field")
+    d = N + T - 1
+    assert cond == Fraction(d, Fc3.size - T) and whole == Fraction(d, Fc3.size)
+    assert cond - whole == Fraction(d * T, Fc3.size * (Fc3.size - T))
+    assert -344 < log2(cond - whole) < -343
+    assert cond / whole - 1 == Fraction(T, Fc3.size - T) and -177 < log2(cond / whole - 1) < -175
+    assert logup_identity_error(N, T, Fc3, exclude_poles=False) == whole      # alias kept
+    with pytest.raises(AccountingError, match="challenge_space"):
+        logup_identity_error(N, T, Fc3, "other")
+
+
+def test_redraw_terms_are_public_and_not_soundness():
+    rd = redraw_terms(65536, Fc3, slots=2)
+    assert rd["redraw"] == Fraction(65536, Fc3.size) and rd["abort"] == Fraction(65536, Fc3.size) ** 2
+    bud = account_candidate_a(_a())
+    assert bud.completeness_total() > 0 and all(t.kind == "completeness" for t in bud.terms if t.component == "completeness")
+    # the redraw terms never enter the soundness total
+    assert bud.total() == sum(t.error for t in bud.soundness_terms())
+    assert -175 < log2(bud.completeness_total()) < -174
+
+
+def test_sequential_depth_candidate_a_b4096():
+    """Baseline (known techniques only): 1 (all z) + 325 (T_range16 chain: 1 + sum_{k=1}^{24} (k + 1)) + 2 (Ligero)."""
+    d = rounds_and_depth_a(_a())
+    assert d["depth.lookup_chain"] == 1 + sum(k + 1 for k in range(1, 25)) == 325
+    assert d["depth.checker_chain"] == sum(r + 1 for r in (41, 38, 35, 40)) + 1 == 159
+    assert d["rounds.sequential_depth"] == 328 and d["rounds.protocol"] == 3607
+    # queries on the last computed layer put that layer (40 rounds + alpha) and gamma after the lookups
+    assert rounds_and_depth_a(_a(depth=DepthOptions(queries_on_inputs=False)))["rounds.sequential_depth"] == 370
+    # proposals
+    assert rounds_and_depth_a(_a(depth=DepthOptions(variables_per_round=2)))["rounds.sequential_depth"] == 184
+    assert rounds_and_depth_a(_a(depth=DepthOptions(table_shard_bits=5)))["rounds.sequential_depth"] == 213
+    assert rounds_and_depth_a(_a(depth=DepthOptions(variables_per_round=2, table_shard_bits=5)))["rounds.sequential_depth"] == 123
+    assert rounds_and_depth_a(_a(depth=DepthOptions(variables_per_round=3, table_shard_bits=5)))["rounds.sequential_depth"] == 93
+    # step 0 adds one verifier message before com_1
+    assert rounds_and_depth_a(_a(coin_commitment_bits=160))["rounds.sequential_depth"] == 329
+    # the sharded budget still meets the target and pays (2^s - 1)|T| multiplicities per sharded table
+    sh = account_candidate_a(_a(depth=DepthOptions(table_shard_bits=5)))
+    assert sh.meets(-128) and sh.parameters["committed_trace_elements"] - account_candidate_a(_a()).parameters["committed_trace_elements"] == 5_616_742
+
+
+def test_sequential_depth_candidate_b():
+    assert rounds_and_depth_b(_b())["rounds.sequential_depth"] == 3
+    assert rounds_and_depth_b(_b(coin_commitment_bits=160))["rounds.sequential_depth"] == 4
+    assert rounds_and_depth_b(_b(lookup_mode="gkr"))["rounds.sequential_depth"] == 328
+    for B in (1, 64):
+        assert rounds_and_depth_b(_b(B=B))["rounds.sequential_depth"] == 3
+
+
+def test_e2e_sweep_is_depth_times_rtt_plus_given_compute():
+    s = e2e_sweep(328, prover_seconds=0.0)
+    assert s["t.e2e.rtt_0ms"] == 0 and s["t.e2e.rtt_1ms"] == pytest.approx(0.328) and s["t.e2e.rtt_50ms"] == pytest.approx(16.4)
+    assert e2e_sweep(3, prover_seconds=2.0)["t.e2e.rtt_10ms"] == pytest.approx(2.03)
+    assert set(s) == {f"t.e2e.rtt_{r}ms" for r in ("0", "0.1", "1", "10", "50")}
+
+
+def test_census_estimates_use_contract_names():
+    for est in (census_estimate_a(_a()), census_estimate_b(_b())):
+        for name in est:
+            if name.startswith("estimate."):
+                continue
+            assert name in contract.UNITS, name
+    a, b = census_estimate_a(_a()), census_estimate_b(_b())
+    assert a["census.committed_elements"] == 100_858_462 and b["census.committed_elements"] == 404_874_820
+    assert a["census.bytes_encoded"] == 26_269 * 2**14 * 8 and b["census.bytes_encoded"] == 105_440 * 2**14 * 8
+    assert a["rounds.sequential_depth"] == 328 and b["rounds.sequential_depth"] == 3
+    assert b["census.committed_elements"] / a["census.committed_elements"] == pytest.approx(4.01, abs=0.01)
+
+
+@pytest.mark.parametrize("target,ext,t", [(-80, 2, 120), (-96, 2, 144), (-112, 3, 167), (-128, 3, 191)])
+def test_first_configuration_per_operating_point(target, ext, t):
+    """Which configuration first meets each operating point (Goldilocks trace field, n = 2^14, k = 2^12, l = 3840,
+    adversary 2^60 hash evaluations): quadratic extension up to 2^-96, cubic from 2^-112; B in {1, 64, 4096}."""
+    def mk_a(Ft, Fc, lig, hash_queries, B):
+        return account_candidate_a(CandidateA(K=1536, B=B, trace_field=Ft, challenge_field=Fc, ligero=lig, hash_queries=hash_queries))
+
+    def mk_b(Ft, Fc, lig, hash_queries, B):
+        return account_candidate_b(CandidateB(K=1536, B=B, trace_field=Ft, challenge_field=Fc, ligero=lig, hash_queries=hash_queries))
+
+    for B in (1, 64, 4096):
+        for mk in (mk_a, mk_b):
+            d, tt, bud = first_configuration(target, mk, GL, 2**14, 2**12, 3840, B=B)
+            assert (d, tt) == (ext, t), (target, B, d, tt)
+            assert bud.meets(target)
+    if ext == 3:
+        with pytest.raises(AccountingError, match="lookup"):
+            first_configuration(target, mk_a, GL, 2**14, 2**12, 3840, extension_degrees=(2,), B=4096)
+
+
+def test_coin_commitment_step0_terms_and_label():
+    hv = account_candidate_a(_a())
+    zk = account_candidate_a(_a(coin_commitment_bits=160))
+    assert hv.parameters["zk_class"].startswith("COMPLETE_HVZK") and zk.parameters["zk_class"].startswith("COMPLETE_ZK")
+    hm = [t for t in zk.terms if "coin commitments" in t.name]
+    assert len(hm) == 1 and hm[0].kind == "statistical" and hm[0].error == hm_commitment_hiding(3607, 160)
+    assert zk.meets(-128) and zk.total() - hv.total() == hm[0].error
+    assert -149 < log2(hm[0].error) < -148
+    leaf = [t for t in zk.terms if "column commitments" in t.name][0]
+    assert leaf.kind == "zk" and leaf.error == Fraction(2**14, 2**160)
+
+
+def test_candidate_b_powers_combination_terms():
+    b = account_candidate_b(_b())
+    terms = {t.name.split()[1]: t.error for t in b.terms if t.component == "encoding_opening"}
+    n_lin, n_quad = b.parameters["linear_constraints"], b.parameters["quadratic_constraints"]
+    assert terms["linear_field"] == Fraction(n_lin - 1, Fc3.size)
+    assert terms["quadratic_field"] == Fraction(-(-n_quad // 3840) - 1, Fc3.size)
+    assert -166 < log2(terms["linear_field"]) < -164
+    with pytest.raises(AccountingError, match="n_linear"):
+        ligero_error(LIGERO_128, GL, Fc3, combination="powers")
