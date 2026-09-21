@@ -1,0 +1,190 @@
+---
+name: authoring-skills
+description: >
+  Conventions for creating or modifying agent skills in .agents/skills/:
+  SKILL.md structure, frontmatter, writing descriptions that activate
+  reliably, naming, supplementary files, and routing from AGENTS.md. Use
+  when adding a skill, editing an existing SKILL.md, or deciding whether
+  guidance belongs in a skill, in AGENTS.md, or in code.
+---
+
+# Authoring Skills
+
+Use this skill when creating or modifying agent skills in `.agents/skills/`.
+
+## When to Create a Skill
+
+Create a skill when the guidance is:
+
+- too detailed for `AGENTS.md`, such as a multi-step workflow, diagnostic
+  procedure, or reusable implementation pattern;
+- relevant only to a particular class of work rather than every agent
+  session;
+- coherent enough to load and follow on its own.
+
+Keep guidance in `AGENTS.md` when it is:
+
+- a short rule or invariant that agents should always have in context;
+- a broadly applicable gotcha that agents working in that scope are likely
+  to encounter.
+
+Prefer code, tests, schemas, or linting when the requirement can be enforced
+mechanically.
+
+## Where a Skill Lives
+
+Put a skill at the narrowest scope to which it genuinely applies.
+
+- Applies only to one package or subsystem: `<package>/.agents/skills/`,
+  routed from that package's `AGENTS.md`.
+- Applies to work anywhere in the repository: `.agents/skills/` at the
+  root, routed from the root `AGENTS.md`.
+
+Cursor scopes a nested `.agents/skills/` directory to the subtree it sits
+in, so package-local skills need no path configuration.
+
+For example, `research` (how an agent anywhere in Verity runs, inspects, and
+preserves substantial computational work) is repo-level. `proof-benchmark`
+(what counts as a valid, comparable proof experiment) belongs under
+`packages/backend/`, because only backend work needs it.
+
+## File Structure
+
+~~~text
+.agents/skills/
+└── my-skill/
+    ├── SKILL.md        # Required: frontmatter + workflow
+    ├── workflow.md     # Optional: detailed procedure
+    └── examples.md     # Optional: examples referenced by SKILL.md
+~~~
+
+Add supplementary files only when they make the main skill materially easier
+to use.
+
+## Frontmatter
+
+A skill requires at least:
+
+~~~yaml
+---
+name: my-skill
+description: >
+  What the skill covers and when it should be used.
+---
+~~~
+
+Useful optional fields supported by some agent runtimes include:
+
+~~~yaml
+argument-hint: '<argument>'
+user-invocable: false
+disable-model-invocation: true
+allowed-tools: [Bash, Read]
+model: opus
+context: fork
+agent: Explore
+~~~
+
+Use optional runtime-specific fields only when there is a concrete reason.
+Keep ordinary Verity skills portable when possible.
+
+The skill name should match its directory name.
+
+## Writing Descriptions
+
+The description is the primary surface agents use to decide whether a skill
+is relevant.
+
+Include:
+
+1. what the skill covers;
+2. when it should be used;
+3. important file names, commands, or concepts that help match relevant
+   work;
+4. terms an engineer or agent is likely to use when asking for the task.
+
+Avoid descriptions that merely restate the skill name.
+
+For example:
+
+~~~yaml
+# Too vague
+description: Helps with proof benchmarks.
+
+# Better
+description: >
+  Runs and compares Verity proof-backend benchmarks for exact relations.
+  Use when benchmarking SP1 or another proof backend, changing prover
+  performance, comparing authenticated versus relation-only costs, or
+  editing the proof benchmark harness.
+~~~
+
+## Content Conventions
+
+### Structure for Action
+
+A skill should tell the agent how to perform the work, not merely provide
+background.
+
+Prefer:
+
+- a clear workflow;
+- concrete defaults;
+- commands or templates that can be adapted directly;
+- important edge cases and gotchas;
+- explicit validation at the end.
+
+If the skill becomes large, keep `SKILL.md` as the working entry point and
+move optional detail into linked supplementary files.
+
+### Relationship to AGENTS.md
+
+`AGENTS.md` is always-loaded guidance. Skills are task-specific guidance
+loaded when needed.
+
+| `AGENTS.md`                        | Skills                                  |
+|------------------------------------|-----------------------------------------|
+| Short invariants and guardrails    | Detailed procedures                     |
+| Repository or package-wide gotchas | Task-specific patterns and edge cases   |
+| Pointers to relevant skills        | The workflow itself                     |
+
+When adding a skill that agents working in a particular scope should know
+exists, add a short reference to it in the relevant `AGENTS.md`.
+
+The `AGENTS.md` entry should route to the skill, not duplicate it.
+
+## Naming
+
+Use names that are:
+
+- short;
+- descriptive;
+- scoped to the task or concept;
+- lowercase and hyphenated when multiple words are needed.
+
+Examples:
+
+~~~text
+proof-benchmark
+memory-diagnosis
+vllm-capture
+~~~
+
+Do not add a `verity-` prefix; the repository already provides that scope.
+
+## Supplementary Files
+
+For more complex skills, use a hub-and-detail structure:
+
+~~~text
+proof-benchmark/
+├── SKILL.md
+├── authentication.md
+└── profiling.md
+~~~
+
+`SKILL.md` should explain the main workflow and link directly to
+supplementary files at the point where they become useful.
+
+Do not create supporting documents merely to record how the skill was
+designed.

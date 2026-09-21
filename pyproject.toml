@@ -1,0 +1,21 @@
+[project]
+name = "verity"
+version = "0.0.0"
+description = "Verity monorepo root; a uv workspace, not a package."
+requires-python = ">=3.11"
+dependencies = ["research"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["tools/*"]
+
+[tool.uv.sources]
+research = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tools/research/tests"]
