@@ -59,6 +59,12 @@ def summarize(run_dir: Path) -> dict[str, Any]:
     run_id = run_sec.get("id") or own.get("job") or run_dir.name
     res = result.check(run_dir, run_id)
     manifest = _read(run_dir / "preserved.json")
+    remote_rec = _read(run_dir / "remote.json")
+    if remote_rec and not status:
+        phase = remote_rec.get("phase")
+        state = {"launched": "submitted", "refused": "failed", "unknown": "unknown"}.get(phase, "submitted")
+    else:
+        state = status.get("state", "unknown" if not raw_job else "submitted")
     return {
         "id": run_dir.name,
         "run_id": run_id,
@@ -71,7 +77,7 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         "stage": comp.get("stage"),
         "tree_sha": comp.get("tree_sha"),
         "workload_digest": comp.get("workload_digest"),
-        "state": status.get("state", "unknown" if not raw_job else "submitted"),
+        "state": state,
         "rc": status.get("rc"),
         "signal": status.get("signal"),
         "wall_s": status.get("wall_s"),
@@ -81,7 +87,9 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         "started_utc": started,
         "ended_utc": ended,
         "command": exe.get("command"),
-        "remote": run_sec.get("remote"),
+        "remote": run_sec.get("remote") or ({"machine": remote_rec.get("machine"), "pod_id": remote_rec.get("pod_id"), "root": remote_rec.get("root"),
+                                              "tool": remote_rec.get("tool"), "source_sha": remote_rec.get("source_sha")} if remote_rec else None),
+        "remote_rec": remote_rec,
         "tool": (job or {}).get("tool"),
         "fingerprint_expected": ((job or {}).get("workload_fingerprint") or {}).get("expected") if job else None,
         "fingerprint_observed": res.fingerprint,
@@ -102,7 +110,7 @@ def summarize(run_dir: Path) -> dict[str, Any]:
 def list_runs(root: Path) -> list[dict[str, Any]]:
     if not root.is_dir():
         return []
-    dirs = [p for p in root.iterdir() if p.is_dir() and (p / "job.json").exists()]
+    dirs = [p for p in root.iterdir() if p.is_dir() and ((p / "job.json").exists() or (p / "remote.json").exists())]
     return [summarize(p) for p in sorted(dirs, key=lambda p: p.name)]
 
 

@@ -1,15 +1,19 @@
 """`research` command line.
 
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
+  research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [...] -- CMD...
+  research fetch <run-id> [--all]                # copy the machine's records (or every file, verified) into the local run dir
   research status [--runs-dir D] [--all] [--json]
   research inspect <run-id|prefix|path> [--runs-dir D] [--json]
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
+  research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  It exits with the workload's status; with
 --require-result, a zero exit and a missing or invalid result.json exits 65 instead.  Harness flags pass through unchanged
 (--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).
-`--on <machine>` (remote execution) is not implemented yet and says so.
+`--on <machine>` ships the tool (and, with --source, a clean git HEAD), stages the request, and has the machine claim the run id
+and start the same runner detached; see remote.py.  A machine must be listed in ~/.research/machines.toml for the project.
 """
 from __future__ import annotations
 
@@ -19,7 +23,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import record, result
+from . import record, remote, result
 from . import runs as R
 
 EX_DATAERR = 65
@@ -78,19 +82,29 @@ def cmd_run(argv: list[str]) -> int:
         return 2
     ap = argparse.ArgumentParser(prog="research run", add_help=True, allow_abbrev=False, description=__doc__.split("\n\n")[1])
     ap.add_argument("--runs-dir", default=None, help="registry root (default $RESEARCH_RUNS or ~/.research/runs)")
-    ap.add_argument("--on", default=None, metavar="MACHINE", help="run on an existing authorized machine (not implemented yet)")
+    ap.add_argument("--on", default=None, metavar="MACHINE", help="run on an existing authorized machine listed in the machines file")
+    ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
+    ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes cwd and tree_sha")
+    ap.add_argument("--send", action="append", default=[], metavar="FILE", help="with --on: ship this file to $RESEARCH_RUN_DIR/inputs/")
+    ap.add_argument("--env", action="append", default=[], metavar="K=V", help="with --on: environment for the workload on the machine")
+    ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
+    ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
+    ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--remote-json", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--exclusive-lock", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--expect", action="append", default=[], metavar="K=V", help="expected workload fingerprint entry (recorded separately from what the workload observes)")
     ap.add_argument("--require-result", action="store_true", help="a zero exit without a valid result.json exits 65")
     ap.add_argument("--stage", default="run", help="stage name recorded in the job (default: run)")
     ns, harness_opts = ap.parse_known_args(opts)
-    if ns.on:
-        print(f"research run --on {ns.on}: remote execution is not implemented yet (tools/research/README.md)", file=sys.stderr)
-        return 2
+    if ns.project:
+        harness_opts = ["--project", ns.project, *harness_opts]
     root = R.runs_root(ns.runs_dir)
     run_id = ns.id or R.new_run_id()
     run_dir = root / run_id
-    if run_dir.exists():
+    if ns.on:
+        return _run_remote(ns, run_id, run_dir, harness_opts, command)
+    if run_dir.exists() and ((run_dir / "job.json").exists() or not ns.claimed):
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
     hp = _harness_parser("research run")
@@ -98,15 +112,22 @@ def cmd_run(argv: list[str]) -> int:
         a = hp.parse_args(["--attempt-dir", str(run_dir), "--stage", ns.stage, "--job", run_id, *harness_opts])
     except SystemExit:
         return 2
-    run_dir.mkdir(parents=True)
-    job = record.extend_job(build_job_from(a, command), run_id=run_id, runs_root=root, expected_fingerprint=_parse_expect(ns.expect))
+    run_dir.mkdir(parents=True, exist_ok=ns.claimed)
+    cost = json.loads(ns.cost_json) if ns.cost_json else None
+    remote_info = json.loads(ns.remote_json) if ns.remote_json else None
+    job = record.extend_job(build_job_from(a, command), run_id=run_id, runs_root=root, expected_fingerprint=_parse_expect(ns.expect),
+                            cost=cost, remote=remote_info)
     from .telemetry.job import write_json_atomic
     from .telemetry.run import run as harness_run
 
     write_json_atomic(run_dir / "job.json", job)
     os.environ.update(result.env_for(run_id, run_dir))
     print(f"research: run {run_id} -> {run_dir}", file=sys.stderr)
-    rc = harness_run(a, command)
+    try:
+        rc = harness_run(a, command)
+    finally:
+        if ns.exclusive_lock:
+            remote.release_exclusive(Path(ns.exclusive_lock).parent, run_id)
     s = R.summarize(run_dir)
     line = f"research: run {run_id} {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
     if s["validation"]:
@@ -116,6 +137,78 @@ def cmd_run(argv: list[str]) -> int:
         print(f"research: --require-result: the workload exited 0 but result.json is {s['result']}; exiting {EX_DATAERR}", file=sys.stderr)
         return EX_DATAERR
     return rc
+
+
+def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str]) -> int:
+    if not ns.project:
+        print("research run --on: --project is required (the machine is bound to a project)", file=sys.stderr)
+        return 2
+    if run_dir.exists():
+        print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
+        return 2
+    env = {}
+    for kv in ns.env:
+        k, sep, v = kv.partition("=")
+        if not sep or not k:
+            print(f"research run: --env wants K=V, got {kv!r}", file=sys.stderr)
+            return 2
+        env[k] = v
+    harness_args = ["--stage", ns.stage, *harness_opts]
+    for e in ns.expect:
+        harness_args += ["--expect", e]
+    if ns.require_result:
+        harness_args.append("--require-result")
+    try:
+        rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
+                            source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
+                            cwd=None, env=env, exclusive=ns.exclusive)
+    except remote.Refused as e:
+        print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
+        return 3
+    launch = rec.get("launch") or {}
+    if rec["phase"] == "refused":
+        print(f"research: run {run_id} refused on {ns.on}: {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)
+        return 3
+    print(f"research: run {run_id} launched on {ns.on} ({rec['pod_id']}) pid={launch.get('runner_pid')} -> {rec['remote_run_dir']}", file=sys.stderr)
+    print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
+    return 0
+
+
+def cmd_fetch(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="research fetch")
+    ap.add_argument("ref")
+    ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--all", action="store_true", help="every file, verified by sha256; writes preserved.json last")
+    ns = ap.parse_args(argv)
+    root = R.runs_root(ns.runs_dir)
+    try:
+        run_dir = R.resolve(root, ns.ref)
+        rec = remote.fetch(run_dir, everything=ns.all)
+    except (FileNotFoundError, LookupError, remote.Refused) as e:
+        print(f"research fetch: {e}", file=sys.stderr)
+        return 1
+    if rec.get("last_fetch_error"):
+        lo = rec.get("last_observed") or {}
+        print(f"research fetch: machine unreachable ({rec['last_fetch_error']['stderr'].strip() or 'rc ' + str(rec['last_fetch_error']['rc'])}); "
+              f"last observed {lo.get('state')} at {lo.get('at_utc')}; current status unknown", file=sys.stderr)
+        return 4
+    s = R.summarize(run_dir)
+    print(f"research: {s['run_id']} observed {rec['observed_utc']}: {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
+          + (f"  preserved={'yes' if rec.get('preserved') else 'NO: ' + json.dumps(rec.get('preserve_error'))}" if ns.all else ""))
+    return 0
+
+
+def cmd_launch_request(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="research launch-request")
+    ap.add_argument("request")
+    ns = ap.parse_args(argv)
+    try:
+        out = remote.launch_request(Path(ns.request))
+    except remote.Refused as e:
+        print(json.dumps({"claimed": False, "refused": str(e)}))
+        return 3
+    print(json.dumps(out))
+    return 0
 
 
 def _fmt(s: dict) -> str:
@@ -201,7 +294,14 @@ def cmd_inspect(argv: list[str]) -> int:
     print(f"time      started={s['started_utc']}  ended={s['ended_utc']}")
     print(f"command   {' '.join(s['command']) if s['command'] else '?'}")
     if s["remote"]:
-        print(f"remote    {json.dumps(s['remote'], sort_keys=True)}")
+        r = s["remote"]
+        print(f"remote    {r.get('machine')} ({r.get('pod_id')}) {r.get('root')}  tool={str(r.get('tool')).rsplit('/', 1)[-1]}  source={r.get('source_sha')}")
+    if s.get("remote_rec"):
+        rr = s["remote_rec"]
+        lo = rr.get("last_observed") or {}
+        print(f"observed  phase={rr.get('phase')} at={rr.get('observed_utc')} state={lo.get('state')}"
+              + (f"  ERROR={rr.get('error')}" if rr.get("error") else "")
+              + ("  (records shown are a cached copy; `research fetch` refreshes)" if rr.get("observed_utc") else "  (nothing fetched yet)"))
     files = sorted(p.name for p in Path(s["dir"]).iterdir() if p.is_file())
     print(f"files     {', '.join(files)}")
     missing = [n for n, ok in (("job.json", s["has_job"]), ("status.json", s["has_status"])) if not ok]
@@ -227,6 +327,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_status(rest)
     if cmd == "inspect":
         return cmd_inspect(rest)
+    if cmd == "fetch":
+        return cmd_fetch(rest)
+    if cmd == "launch-request":
+        return cmd_launch_request(rest)
     if cmd == "tele":
         from .telemetry.cli import main as tele_main
 

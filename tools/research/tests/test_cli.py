@@ -39,10 +39,19 @@ def test_run_requires_separator_and_command(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
-def test_remote_not_implemented_is_explicit(tmp_path, capsys):
-    assert main(["run", "--runs-dir", str(tmp_path), "--on", "pod-x", "--", "true"]) == 2
-    assert "not implemented" in capsys.readouterr().err
-    assert not list(tmp_path.iterdir()), "no run directory is created for a refused run"
+def test_remote_requires_project_and_listed_machine(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "pod-x", "--", "true"]) == 2
+    assert "--project is required" in capsys.readouterr().err
+    rc = main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "pod-x", "--project", "verity", "--", "true"])
+    err = capsys.readouterr().err
+    assert rc == 3 and "not in" in err and "refused" in err
+    (tmp_path / "machines.toml").write_text('[machines.pod-x]\nprovider = "runpod"\npod_id = "p1"\nproject = "veritor"\n')
+    rc = main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "pod-x", "--project", "verity", "--", "true"])
+    err = capsys.readouterr().err
+    assert rc == 3 and "belongs to project(s) ['veritor']" in err, "a foreign pod is refused before any contact"
+    runs = list((tmp_path / "runs").iterdir())
+    assert len(runs) == 2 and all((r / "remote.json").exists() for r in runs), "refused launches are still recorded runs"
 
 
 def test_resolve_prefix_and_ambiguity(tmp_path):
