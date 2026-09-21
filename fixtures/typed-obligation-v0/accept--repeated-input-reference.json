@@ -1,0 +1,292 @@
+{
+ "authenticatable": true,
+ "authenticity_reasons": [],
+ "binding": {
+  "object_digest": "20da4ed7f1379c4aa8305ce20fd2ba2e62be0582a28d2295efa754edd1d8f97b",
+  "public_values": "20da4ed7f1379c4aa8305ce20fd2ba2e62be0582a28d2295efa754edd1d8f97b35cb974f96514381ea655ac400c0f91ffb93df6d3082778d62bc8a806b082dc101",
+  "statement_digest": "35cb974f96514381ea655ac400c0f91ffb93df6d3082778d62bc8a806b082dc1"
+ },
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"v\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"boundary\"},{\"id\":\"y\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"ru0\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[\"v\"],\"out\":[\"y\"]},\"declared_interface\":{\"args\":[\"v\",\"v\"],\"returns\":[\"y\",\"v\"]},\"roots\":[\"boundary\",\"ru0\"],\"subcircuit\":\"6e4413b1f4eb5f335fff31f2984bf2744dbedda8d87951c2c78c7a031ee0841e\",\"target\":{\"encoding\":\"call\",\"id\":\"Square[0]\"}}],\"references\":[{\"leaf\":\"v\",\"offset\":[],\"ref\":\"v\"},{\"leaf\":\"y\",\"offset\":[],\"ref\":\"y\"}],\"roots\":[{\"count\":1,\"domain\":\"34d6185b558e01df177683490408a16c0bb8a2179383d9521ad2f14ab76ac8cf\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"boundary\",\"owner\":-1,\"root\":\"19e0b0576347e6f00cf0aa0e1d3d3ace0557aa3203976d565396ac258a1c910d\"},{\"count\":1,\"domain\":\"53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"3c1c0bd72fa354d2710e1677aba985ed8d2616d7dc4cd98a6f0629e1ef3febe9\"}],\"subcircuits\":[{\"definition\":{\"name\":\"q7/square\"},\"digest\":\"6e4413b1f4eb5f335fff31f2984bf2744dbedda8d87951c2c78c7a031ee0841e\",\"gates\":[{\"args\":[[\"in\",0],[\"in\",0]],\"op\":\"mul8\"},{\"args\":[[\"gate\",0]],\"op\":\"requant_s8\"}],\"in\":[8],\"out\":[1]}]}",
+ "description": "F(v, v) returning (y, v): the declared interface keeps signature order and repeated references (args = [v, v], returns = [y, v]); the graph boundary is the distinct values (in = [v], out = [y]) -- a repeated argument is not a duplicate circuit value, an echoed argument is not a produced one (IR \u00a7D.2).",
+ "digest": "20da4ed7f1379c4aa8305ce20fd2ba2e62be0582a28d2295efa754edd1d8f97b",
+ "lowered_v3": {
+  "note": "derived by veritor.interface.lowering.lower_v3(): the format-2 lowering with maximal runs of consecutive packed words of one leaf merged into ranges (merge_ranges); expands to `lowering`",
+  "obligations": [
+   {
+    "entries": [
+     {
+      "ref": "v",
+      "schema": "u8"
+     },
+     {
+      "ref": "y",
+      "schema": "u8"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "8cde35df8920ef153f45c9122a3fce350de43c09efe0068fc965c350fef6943e",
+    "outputs": [
+     1
+    ],
+    "ranges": 0,
+    "slots": 2
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        0
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "local",
+        0
+       ]
+      ],
+      "op": "requant_s8"
+     }
+    ],
+    "kind": "8cde35df8920ef153f45c9122a3fce350de43c09efe0068fc965c350fef6943e",
+    "outputs": [
+     1
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     }
+    ],
+    "subcircuit": "6e4413b1f4eb5f335fff31f2984bf2744dbedda8d87951c2c78c7a031ee0841e"
+   }
+  ]
+ },
+ "lowering": {
+  "note": "derived by veritor.interface.lowering.lower(); legacy backend data, not part of the Verity ontology",
+  "obligations": [
+   {
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "8cde35df8920ef153f45c9122a3fce350de43c09efe0068fc965c350fef6943e",
+    "outputs": [
+     1
+    ],
+    "positions": [
+     "v",
+     "y"
+    ]
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        0
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "local",
+        0
+       ]
+      ],
+      "op": "requant_s8"
+     }
+    ],
+    "kind": "8cde35df8920ef153f45c9122a3fce350de43c09efe0068fc965c350fef6943e",
+    "outputs": [
+     1
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     }
+    ],
+    "subcircuit": "6e4413b1f4eb5f335fff31f2984bf2744dbedda8d87951c2c78c7a031ee0841e"
+   }
+  ]
+ },
+ "name": "accept/repeated-input-reference",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "v",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "boundary"
+   },
+   {
+    "id": "y",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [
+      "v"
+     ],
+     "out": [
+      "y"
+     ]
+    },
+    "declared_interface": {
+     "args": [
+      "v",
+      "v"
+     ],
+     "returns": [
+      "y",
+      "v"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "ru0"
+    ],
+    "subcircuit": "6e4413b1f4eb5f335fff31f2984bf2744dbedda8d87951c2c78c7a031ee0841e",
+    "target": {
+     "encoding": "call",
+     "id": "Square[0]"
+    }
+   }
+  ],
+  "references": [
+   {
+    "leaf": "v",
+    "offset": [],
+    "ref": "v"
+   },
+   {
+    "leaf": "y",
+    "offset": [],
+    "ref": "y"
+   }
+  ],
+  "roots": [
+   {
+    "count": 1,
+    "domain": "34d6185b558e01df177683490408a16c0bb8a2179383d9521ad2f14ab76ac8cf",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "boundary",
+    "owner": -1,
+    "root": "19e0b0576347e6f00cf0aa0e1d3d3ace0557aa3203976d565396ac258a1c910d"
+   },
+   {
+    "count": 1,
+    "domain": "53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "3c1c0bd72fa354d2710e1677aba985ed8d2616d7dc4cd98a6f0629e1ef3febe9"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "q7/square"
+    },
+    "digest": "6e4413b1f4eb5f335fff31f2984bf2744dbedda8d87951c2c78c7a031ee0841e",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "in",
+        0
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "gate",
+        0
+       ]
+      ],
+      "op": "requant_s8"
+     }
+    ],
+    "in": [
+     8
+    ],
+    "out": [
+     1
+    ]
+   }
+  ]
+ },
+ "relations": "accept",
+ "statement": "76657269746f722f70726f6f66732f73746174656d656e742f7632000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c600000020000000018cde35df8920ef153f45c9122a3fce350de43c09efe0068fc965c350fef6943e00000002000000010000000000000002000000046d756c3800000002000000000000000000000000000a72657175616e745f733800000001010000000000000001000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000000000000000000008cde35df8920ef153f45c9122a3fce350de43c09efe0068fc965c350fef6943e00000002000000000000000134d6185b558e01df177683490408a16c0bb8a2179383d9521ad2f14ab76ac8cf19e0b0576347e6f00cf0aa0e1d3d3ace0557aa3203976d565396ac258a1c910d0000000000000001000000000000000253c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e03c1c0bd72fa354d2710e1677aba985ed8d2616d7dc4cd98a6f0629e1ef3febe900000000000000010000000200000000000000000000000000000000000000000000000275380000000001000000000000000000000000000000000000000275380000000001000000000000000100000001",
+ "statement_digest": "35cb974f96514381ea655ac400c0f91ffb93df6d3082778d62bc8a806b082dc1",
+ "statement_v3": "76657269746f722f70726f6f66732f73746174656d656e742f7633000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c600000020000000018cde35df8920ef153f45c9122a3fce350de43c09efe0068fc965c350fef6943e00000002000000010000000000000002000000046d756c3800000002000000000000000000000000000a72657175616e745f733800000001010000000000000001000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000000000000000000008cde35df8920ef153f45c9122a3fce350de43c09efe0068fc965c350fef6943e00000002000000000000000134d6185b558e01df177683490408a16c0bb8a2179383d9521ad2f14ab76ac8cf19e0b0576347e6f00cf0aa0e1d3d3ace0557aa3203976d565396ac258a1c910d0000000000000001000000000000000253c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e03c1c0bd72fa354d2710e1677aba985ed8d2616d7dc4cd98a6f0629e1ef3febe9000000000000000100000002000000000000000000000000000000000000000000000000027538000000000001000000000000000000000000000000000000000275380000000001000000000000000100000001",
+ "statement_v3_digest": "31ea2e080d7009939e2a5ac70e2bef5aba077c3f8804b04ff4f6044cce37706c",
+ "subcircuits_well_formed": [
+  true
+ ],
+ "tags": [
+  "stage-1",
+  "witness",
+  "ir-references"
+ ],
+ "values": [
+  [
+   11,
+   0
+  ]
+ ],
+ "verdict": "accept",
+ "witness": "76657269746f722f70726f6f66732f7769746e6573732f7632000000000100000002000000010b00000000000000010000000000",
+ "witness_verdict": "accept"
+}
