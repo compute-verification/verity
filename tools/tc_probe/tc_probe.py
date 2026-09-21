@@ -27,6 +27,7 @@ import json
 import multiprocessing as mp
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import time
@@ -46,9 +47,10 @@ MAX_TILES_PER_CALL = 1 << 16
 
 def build(arch: str, out: Path) -> tuple[Path, str]:
     so = out / f"libmma_tiles_{arch}.so"
-    nvcc = subprocess.run(["nvcc", "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
+    nvcc_bin = shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc"  # the CUDA images do not put it on a non-login PATH
+    nvcc = subprocess.run([nvcc_bin, "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
     subprocess.run(
-        ["nvcc", "-O2", f"-arch={arch}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / "mma_tiles.cu")],
+        [nvcc_bin, "-O2", f"-arch={arch}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / "mma_tiles.cu")],
         check=True,
     )
     return so, " / ".join(line.strip() for line in nvcc)

@@ -86,6 +86,6 @@ distinguishes them).
 On finite inputs whose group result leaves the FP32 range (`exponent > 127`) the simulator masks the exponent field
 (`(e + 127) & 0xFF`: an exponent of 128 gives an infinity or NaN word by the mantissa, 129 and above wrap into a small finite
 field) and keeps computing into group 2, where the value can come back into range; `silicon` saturates to an infinity of the
-sign and keeps it through the remaining group, and every measured case agrees with `silicon` (2,181 A100 + 2,181 RTX 4090 special
+sign and keeps it through the remaining group, and every measured case agrees with `silicon` (2,197 A100 + 2,197 RTX 4090 special
 cases and 114 golden records saturate; 18 of them cancel to zero in group 2 under the simulator's arithmetic and one golden
 record returns to a finite value). Log entry D8.

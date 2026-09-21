@@ -142,7 +142,7 @@ def test_transition_unit_reproduces_every_all_finite_hardware_record(source: str
     assert sil_hw == 0, "silicon disagrees with the hardware"
     assert close_sil == 0, "the source-close evaluator disagrees with silicon on a finite result"
     assert wrapper == 0
-    assert saturating == (114 if source == "golden" else 2181 + 16)
+    assert saturating == (114 if source == "golden" else 2197)
     # where the result leaves FP32's range the simulator masks and the hardware saturates; the masked word equals the hardware's
     # infinity exactly when the exponent is 128 and the mantissa bits are zero
     coincide = 0
