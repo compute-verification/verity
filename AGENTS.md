@@ -14,8 +14,10 @@ Code migrates incrementally from `veritor`.
   layout, evaluator, descriptor codec. Stdlib only; knows no semantics package.
 - `packages/ml/` (`verity_ml`): exact hardware semantics of the tensor-core
   accumulator step (`verity_ml.tc`, stdlib only) and their IR registrations
-  (`prims`, `gemm`). Tests replay the A100 / RTX 4090 / H100 captures under
-  `packages/ml/tests/fixtures/` (see its README for provenance).
+  (`prims`, `gemm`). `verity_ml.tc.relation` restates the step as witness
+  columns + mul/linear/lookup predicates and counts them (`census()`): the
+  input to the proof-backend decision. Tests replay the A100 / RTX 4090 / H100
+  captures under `packages/ml/tests/fixtures/` (see its README for provenance).
 - `adapters/`, `benchmarks/`: reserved; nothing lives there yet.
 
 ~~~text

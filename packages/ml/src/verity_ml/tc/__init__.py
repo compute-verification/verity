@@ -3,6 +3,7 @@
     silicon   the finite-domain model (Hawkeye's grouped truncating accumulation, generalised over groups/width/floor)
     total     the total function on every encoding (NaN, infinities, saturation; measured on A100, RTX 4090, H100)
     cast      FP32 <-> BF16 word casts
+    relation  the step as a minimal algebraic relation (witness columns, mul/lin/lookup predicates) and its census
 
 The step is `total.tc_dot_total(pipeline, acc_word, a_words, b_words) -> acc_word'`, with `pipeline` one of
 `silicon.AMPERE_BF16_M16N8K16` or `total.HOPPER_BF16_WGMMA_K16`.  This package imports nothing but the standard library.
