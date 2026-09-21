@@ -13,8 +13,18 @@ a backend and reports what it observed:
 It writes ``$RESEARCH_RUN_DIR/result.json`` (or ``--out``) with the workload fingerprint -- what actually ran:
 the vector's object and statement digests, the family, the backend and mode, the observed guest identity -- the
 validation verdict, named measurements with units, and the artifacts worth preserving (the proof, the host's raw
-documents).  ``research`` records and ships; this file decides what the run means.  A relation-only measurement is
-not offered here on purpose: every vector authenticates its words, so these are *authenticated* numbers.
+documents).  ``research`` records and ships; this file decides what the run means.
+
+Every result carries two labels so numbers are never compared across classes by accident:
+
+    proof_class     ARITHMETIC_DIAGNOSTIC    a guest with authentication skipped (an ``unsound-*`` build): cost of
+                                             the relation and statement machinery alone; never a result
+                    NON_ZK_PROOF             SP1 core/compressed: a sound proof that is not zero-knowledge
+                    (COMPLETE_ZK_BACKEND is reserved for backends that establish privacy; SP1 core is not one)
+    authentication  included | excluded      whether the words were authenticated against the object's roots
+
+``--diagnostic`` is required to run an unsound host: the guest identity then need not be the approved one, the
+proof is verified under the guest's *own* key, and the result says so.  Without it, a diagnostic guest fails.
 
     uv run python benchmarks/dot_product/vector_run.py --vector accept--packed-word-row --backend sp1-prove --out /tmp/k16
     uv run research run --project verity --stage sp1.prove.k16 --require-result -- \\
@@ -87,7 +97,7 @@ def run_reference(rec: dict, out: Path) -> tuple[dict, list[dict], list[str], li
     return validation, [measurement("reference_check_wall", wall, "s")], [], []
 
 
-def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool) -> tuple[dict, list[dict], list[str], list[str], dict]:
+def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, diagnostic: bool) -> tuple[dict, list[dict], list[str], list[str], dict]:
     from verity_sp1.host import APPROVED, Host
     from verity_sp1.typed import execute_object, prove_object, verify_object
 
@@ -95,12 +105,21 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool) ->
     from dataclasses import asdict
 
     identity = {"expected": asdict(APPROVED) | {"guest_features": list(APPROVED.guest_features)}}
-    if want_info:
+    observed = None
+    if want_info or diagnostic:
         started = time.perf_counter()
         observed = host.info()
         identity["observed"] = asdict(observed) | {"guest_features": list(observed.guest_features)}
         identity["info_wall_s"] = time.perf_counter() - started
         identity["approved"] = observed == APPROVED
+    if diagnostic:
+        # an unsound build is the point; verify under its own key and label the result, never accept it as sound
+        if observed is None or not observed.guest_features:
+            raise SystemExit("--diagnostic given but the host's guest is not a diagnostic (unsound-*) build")
+        identity["diagnostic_features"] = list(observed.guest_features)
+        trusted = observed
+    else:
+        trusted = APPROVED
     obj, witness = rec["object"], bytes.fromhex(rec["witness"])
     expected_pv = bound_public_values(obj).hex()
     documents: dict = {}
@@ -117,8 +136,8 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool) ->
         measurements += [measurement(f"cycles.{k}", v, "cycles") for k, v in sorted(report.cycle_tracker.items())]
         if not report.verdict:
             problems.append("the guest rejected the witness")
-        if report.unsound:
-            problems.append("the guest is a diagnostic build")
+        if report.unsound and not diagnostic:
+            problems.append("the guest is a diagnostic build (run with --diagnostic if that is intended)")
         if report.public_values.hex() != expected_pv:
             problems.append("public values are not h_O || h_L || 01 of this object")
         if report.public_values.hex() != rec["binding"]["public_values"]:
@@ -132,7 +151,7 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool) ->
         report = prove_object(host, obj, witness, proof, mode=mode)
         prove_wall = time.perf_counter() - started
         started = time.perf_counter()
-        acceptance = verify_object(host, obj, proof)
+        acceptance = verify_object(host, obj, proof, approved=trusted)
         verify_wall = time.perf_counter() - started
         documents["prove"] = dict(report.document)
         documents["verify"] = dict(acceptance.verify.document)
@@ -150,10 +169,16 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool) ->
         measurements += [measurement(f"cycles.{k}", v, "cycles") for k, v in sorted(report.execution.cycle_tracker.items())]
         if report.execution.public_values.hex() != rec["binding"]["public_values"]:
             problems.append("public values differ from the ones recorded for this vector")
-        if not acceptance.accepted:
-            problems += acceptance.reasons()
+        if diagnostic:
+            # everything but soundness: the proof verifies under the diagnostic guest's key and binds the object
+            if not (acceptance.proof_verifies and acceptance.approved_key and acceptance.binding.ok and acceptance.binding.verdict == 1):
+                problems += [r for r in acceptance.reasons() if "diagnostic" not in r]
+            checker = "DIAGNOSTIC: verity_sp1 prove + verify_object under the unsound guest's own key (binding, verdict); not a sound proof"
+        else:
+            if not acceptance.accepted:
+                problems += acceptance.reasons()
+            checker = "verity_sp1 prove + verify_object (approved key, binding, verdict)"
         artifacts.append("proof.bin")
-        checker = "verity_sp1 prove + verify_object (approved key, binding, verdict)"
     (out / "host.json").write_text(json.dumps(documents, indent=1, sort_keys=True) + "\n")
     artifacts.append("host.json")
     validation = {"status": "passed" if not problems else "failed", "checker": checker, "detail": "; ".join(problems) or "accepted", "evidence": ["host.json"]}
@@ -167,7 +192,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mode", default="core", choices=("core", "compressed"), help="sp1-prove: proof mode")
     ap.add_argument("--no-info", action="store_true", help="sp1: do not observe the guest identity (saves ~10 s; the fingerprint then carries only the expected one)")
     ap.add_argument("--out", default=None, help="output directory (default $RESEARCH_RUN_DIR)")
+    ap.add_argument("--diagnostic", action="store_true",
+                    help="sp1: the host is an unsound-* build (authentication skipped); label ARITHMETIC_DIAGNOSTIC, verify under its own key")
     a = ap.parse_args(argv)
+    if a.diagnostic and a.backend == "reference":
+        ap.error("--diagnostic applies to the sp1 backends")
 
     out = Path(a.out or os.environ.get("RESEARCH_RUN_DIR") or ".").resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -188,12 +217,17 @@ def main(argv: list[str] | None = None) -> int:
         "backend": a.backend,
         "source_sha": source_sha(),
         "python": sys.version.split()[0],
+        # the two labels every campaign number carries (module docstring)
+        "proof_class": ("ARITHMETIC_DIAGNOSTIC" if a.diagnostic else "NON_ZK_PROOF") if a.backend == "sp1-prove" else "NO_PROOF",
+        "authentication": "excluded" if a.diagnostic else "included",
     }
     started = time.perf_counter()
     if a.backend == "reference":
         validation, measurements, artifacts, _ = run_reference(rec, out)
     else:
-        validation, measurements, artifacts, _, identity = run_sp1(rec, out, prove=a.backend == "sp1-prove", mode=a.mode, want_info=not a.no_info)
+        validation, measurements, artifacts, _, identity = run_sp1(
+            rec, out, prove=a.backend == "sp1-prove", mode=a.mode, want_info=not a.no_info, diagnostic=a.diagnostic
+        )
         fingerprint["guest"] = identity
         if a.backend == "sp1-prove":
             fingerprint["mode"] = a.mode

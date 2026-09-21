@@ -12,13 +12,19 @@
 #
 # Adapted from veritor's zk/campaign pod_bootstrap.sh (tools/research/src/research/pods/sh/); no credentials are placed
 # on the pod and the repository is shipped as a snapshot, never cloned.
+#
+# SP1_HOST_FEATURES (default `cuda`) selects the host's cargo features; a DIAGNOSTIC build is e.g.
+# SP1_HOST_FEATURES=cuda,unsound-skip-authentication, installed as veritor-zk-host-cuda-unsound-skip-authentication
+# from its own target dir.  Such a guest is never the approved prover; vector_run.py needs --diagnostic to use it.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export PATH="$HOME/.sp1/bin:$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"          # backends/sp1 of the shipped checkout
 WORK=/workspace
 BIN=$WORK/bin
-export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$WORK/sp1-target}"
+FEATURES="${SP1_HOST_FEATURES:-cuda}"
+SUFFIX="$(echo "$FEATURES" | tr ',' '-')"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$WORK/sp1-target$([ "$FEATURES" = cuda ] || echo "-$SUFFIX")}"
 mkdir -p "$BIN" "$CARGO_TARGET_DIR"
 
 stage() { echo; echo "=== [$(date -u +%H:%M:%S)] $*"; }
@@ -55,14 +61,14 @@ fi
 uv python install 3.12 >/dev/null
 uv python find 3.12
 
-stage "build host: cuda  (source: $HERE, target: $CARGO_TARGET_DIR)"
+stage "build host: $FEATURES  (source: $HERE, target: $CARGO_TARGET_DIR)"
 cd "$HERE"
-cargo build --release -p veritor-zk-host --features cuda 2>&1 | grep -v -E "^\s+(Compiling|Downloaded|Downloading) "
-install -m 0755 "$CARGO_TARGET_DIR/release/veritor-zk-host" "$BIN/veritor-zk-host-cuda"
-sha256sum "$BIN/veritor-zk-host-cuda"
+cargo build --release -p veritor-zk-host --features "$FEATURES" 2>&1 | grep -v -E "^\s+(Compiling|Downloaded|Downloading) "
+install -m 0755 "$CARGO_TARGET_DIR/release/veritor-zk-host" "$BIN/veritor-zk-host-$SUFFIX"
+sha256sum "$BIN/veritor-zk-host-$SUFFIX"
 
 stage "guest identity"
-"$BIN/veritor-zk-host-cuda" info
+"$BIN/veritor-zk-host-$SUFFIX" info
 
 stage "done"
-echo "VERITY_SP1_HOST=$BIN/veritor-zk-host-cuda"
+echo "VERITY_SP1_HOST=$BIN/veritor-zk-host-$SUFFIX"

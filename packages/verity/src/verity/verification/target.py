@@ -36,6 +36,32 @@ one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive multiple of 16.
   Merkle roots (``verity.verification.packed``, ``verity.commitments.leaves``).  The guest's public values are
   ``h_O || h_L || verdict`` and are accepted only under the approved verifying key (``verity_sp1.host.APPROVED``).
 
+Transition unit versus verification unit
+========================================
+
+Two objects, deliberately distinct (closed 2026-09-21):
+
+* The **backend transition unit** is one 16-product update with an *arbitrary* finite incoming accumulator ``c``:
+  ``tc_dot16(c, x[16s:16s+16], W[16s:16s+16])`` -- two grouped sums, ``c`` joining the first.  A numerical proof
+  backend may take, expose and check these transitions and their intermediate accumulators internally in any
+  layout it likes; those states are proof-internal auxiliary witness, never new runtime boundaries.
+* The **Verity verification unit** (what the outer sampler selects and what a proof must establish in full) is
+  ``GemmCoordinate<K>``: the chain of ``K/16`` transitions from ``c_0 = +0`` followed by the epilogue cast.
+
+Candidate backends must agree on the profile, the input/output bitstrings, the supported domain, the exact
+function and the VU endpoints; they need not agree on auxiliary witness layouts.
+
+References and the log of disagreements
+=======================================
+
+* :data:`HAWKEYE_PIN` pins the source-close reference (Hawkeye's simulator, commit ``30703fcb``); the
+  parameters above are the ones it recovers on the A100, re-measured bit-exactly on the RTX 4090 (Ada) over
+  24.9 M elements and confirmed on the A100 on 31,290 structured cases (7,456 all-finite, 4,565 with a nonzero
+  accumulator) -- the large finite sweep on sm_80 itself is still owed (log entry D2).
+* :data:`DISCREPANCY_LOG` records every place where the paper, the simulator, Verity's reference and the hardware
+  disagree or are silent, with an owner and what would resolve it.  Nothing in it is resolved by editing a
+  reference implementation.
+
 Reference instances
 ===================
 
@@ -71,7 +97,20 @@ from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, Pipeline
 
 from .families import TC_AMPERE_BF16_NAME, TC_AMPERE_BF16_VERSION
 
-__all__ = ["FAMILY", "FAMILY_DIGEST", "FIRST", "K16_VECTOR", "K1536_VECTOR", "Target"]
+__all__ = [
+    "DISCREPANCY_LOG",
+    "FAMILY",
+    "FAMILY_DIGEST",
+    "FIRST",
+    "HAWKEYE_PIN",
+    "K16_VECTOR",
+    "K1536_VECTOR",
+    "Target",
+]
+
+#: Repository-relative paths of the pinned source-close reference and of the discrepancy log.
+HAWKEYE_PIN = "fixtures/hawkeye/PIN.json"
+DISCREPANCY_LOG = "fixtures/discrepancy_log.json"
 
 #: The gate family every campaign obligation is lowered in.
 FAMILY = f"{TC_AMPERE_BF16_NAME}@{TC_AMPERE_BF16_VERSION}"
@@ -91,6 +130,7 @@ class Target:
     family_digest: str
     pipeline: Pipeline
     program: str
+    transition_unit: str
     statement_format: int
     domain: str
     epilogue: str
@@ -103,6 +143,7 @@ FIRST = Target(
     family_digest=FAMILY_DIGEST,
     pipeline=AMPERE_BF16_M16N8K16,
     program="GemmCoordinate<K>: tc_dot16_0, then (K/16 - 1) x tc_dot16 chained in ascending k, then f32_to_bf16",
+    transition_unit="tc_dot16(c, a[0:16], b[0:16]) with any finite FP32 c: the backend's unit; its states are proof-internal",
     statement_format=2,
     domain="finite BF16 operands and finite FP32 accumulators at every step; anything else is rejected, not computed",
     epilogue="f32_to_bf16: RN-even, overflow -> +-inf, NaN -> 0x7FC0 (software canonical word; @2 has the hardware 0x7FFF)",

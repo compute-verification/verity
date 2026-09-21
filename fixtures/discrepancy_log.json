@@ -1,0 +1,119 @@
+{
+ "schema": "verity/discrepancy-log/v0",
+ "what": "Where the paper, the pinned simulator, Verity's reference and the hardware disagree or are silent about the frozen target. An entry leaves `open` only with an explicit `resolution` and `evidence_refs`; editing the reference implementation never resolves an entry by itself (tests/verification/test_discrepancy_log.py).",
+ "statuses": {
+  "open": "unresolved; a lane owns it",
+  "resolved": "settled with evidence; the resolution says what the target does",
+  "excluded": "outside the frozen target's supported domain; the resolution says why and what the evidence says anyway"
+ },
+ "entries": [
+  {
+   "id": "D1",
+   "profile": "first-campaign-target/2026-09-21",
+   "issue": "NaN and infinity operands/accumulators; overflow saturation",
+   "hawkeye_paper": "discusses hardware saturation qualitatively (sections 5-7); no bit-level rule for NaN payloads",
+   "hawkeye_simulator": "multiply_bfloat16_to_gfloat has no NaN/infinity branch; Gfloat::operator float masks exponent bits rather than saturating",
+   "verity_reference": "verity.ml.tc.silicon rejects any non-finite operand or accumulator (InvalidArtifact); verity.ml.tc.total defines the total step (NaN -> 0x7FFFFFFF, +-inf, saturation to inf when a group leaves the FP32 range)",
+   "hardware_evidence": "A100 (sm_80) and RTX 4090 (sm_89), mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32: 31,290 special-value cases x 3 reps per device, 0 nondeterministic, every case reproduced by verity.ml.tc.total",
+   "status": "excluded",
+   "resolution": "FIRST is the finite-domain relation: a non-finite input is rejected, not computed. The measured total semantics exist (family veritor.tensor-core.ampere_bf16_m16n8k16@3, unbound) and declaring them is a later protocol decision.",
+   "evidence_refs": [
+    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz",
+    "packages/verity/src/verity/ml/tc/total.py"
+   ],
+   "owner": "coordinator"
+  },
+  {
+   "id": "D2",
+   "profile": "first-campaign-target/2026-09-21",
+   "issue": "Ampere (sm_80) evidence for the finite-domain pipeline parameters (groups (8,8), 25-bit truncating adder, floor -132) with arbitrary incoming accumulators",
+   "hawkeye_paper": "Ampere structure recovered on A100 by targeted tests (accumulator + 8 products, normalize, + 8 products)",
+   "hawkeye_simulator": "Ampere_simulator.cpp; the matrix wrapper initialises the accumulator to zero",
+   "verity_reference": "silicon.AMPERE_BF16_M16N8K16 carries validated='Hawkeye (A100), not re-measured here'; silicon.ADA_BF16_M16N8K16 (identical parameters) was measured bit-exact on the RTX 4090 over 24,898,304 elements / 194,518 tiles incl. nonzero accumulators",
+   "hardware_evidence": "A100: the exact instruction, 31,290 structured cases of which 7,456 are all-finite and 4,565 all-finite with a nonzero accumulator (same case list as the 4090); no large finite sweep on sm_80",
+   "status": "open",
+   "resolution": null,
+   "evidence_refs": [
+    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+    "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json"
+   ],
+   "owner": "WP1",
+   "to_resolve": "Run the Ada finite-sweep families (random, subnormal, cancellation, mixed-magnitude, near-overflow, nonzero accumulators) on an A100 with arbitrary accumulators and record the capture as a recorded research run; the resolution names the run id and the mismatch count."
+  },
+  {
+   "id": "D3",
+   "profile": "first-campaign-target/2026-09-21",
+   "issue": "Closed-form normalisation e' = max(E + l - 25, -126), M' = floor(v * 2^(E - e' - 1)) (handoff section 4.4) versus the simulator's successive shifts",
+   "hawkeye_paper": "not stated in this form",
+   "hawkeye_simulator": "group_sum normalises by successive shifts; the formula was derived from that code, not quoted",
+   "verity_reference": "silicon.group_sum rescales to the adder width, truncates and repacks; whether it is the successive-shift form or the closed form is to be checked",
+   "hardware_evidence": "indirect: every recorded finite case agrees with silicon.tc_dot",
+   "status": "open",
+   "resolution": null,
+   "evidence_refs": ["packages/verity/src/verity/ml/tc/silicon.py"],
+   "owner": "WP1",
+   "to_resolve": "Prove (exhaustively at the real widths over the reachable |S| < 2^30, E range, or formally) that the source-close evaluator, the closed form and silicon.group_sum agree; record where the proof lives."
+  },
+  {
+   "id": "D4",
+   "profile": "first-campaign-target/2026-09-21",
+   "issue": "Zero results: sign of a cancellation to zero, and a nonzero magnitude truncated to zero",
+   "hawkeye_paper": "not discussed at bit level",
+   "hawkeye_simulator": "S = 0 returns the zero representation; a magnitude truncated to zero resets the exponent to -132 keeping the computed sign internally; Gfloat::operator float returns +0 whenever the significand is zero",
+   "verity_reference": "silicon.pack_fp32 encodes a zero magnitude as +0; total: the result zero is always +0 (-0 accumulators and -0 products never produce -0)",
+   "hardware_evidence": "A100 and 4090 signed_zero / cancellation families agree with +0",
+   "status": "resolved",
+   "resolution": "The FP32 result word of a zero magnitude is +0 (0x00000000) in every case; an internal sign on a zero intermediate never reaches the accumulator word. Both the simulator's final conversion and the hardware agree.",
+   "evidence_refs": [
+    "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
+    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz"
+   ],
+   "owner": "coordinator"
+  },
+  {
+   "id": "D5",
+   "profile": "first-campaign-target/2026-09-21",
+   "issue": "FP32 -> BF16 epilogue NaN word: software canonical 0x7FC0 (family @1) versus hardware cvt.rn.bf16.f32 0x7FFF (family @2)",
+   "hawkeye_paper": "not covered (the paper is about the mma step)",
+   "hawkeye_simulator": "not covered",
+   "verity_reference": "verity.ml.tc.cast: f32_to_bf16_word -> 0x7FC0, f32_to_bf16_hw_word -> 0x7FFF; the two agree on every non-NaN word",
+   "hardware_evidence": "cvt.rn.bf16.f32 measured on A100 and 4090: 4,403 words per device, 84 NaN inputs, all -> 0x7FFF",
+   "status": "excluded",
+   "resolution": "FIRST fixes family @1 and a finite domain, so a NaN never reaches the epilogue. The production epilogue is the hardware word (@2); re-versioning the target to @2 changes the family digest and is a protocol decision.",
+   "evidence_refs": [
+    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/cvt_special.json",
+    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/4090/cvt_special.json"
+   ],
+   "owner": "coordinator"
+  },
+  {
+   "id": "D6",
+   "profile": "first-campaign-target/2026-09-21",
+   "issue": "Kernel-level accumulation order: does a real GEMM launch (split-K, stream-K, tile order) realise the ascending-k single-accumulator chain the relation checks?",
+   "hawkeye_paper": "section 8: evidence concerns tested low-level configurations, not arbitrary cuBLAS scheduling",
+   "hawkeye_simulator": "matrix wrapper: zero-initialised accumulator, fixed k order",
+   "verity_reference": "GemmCoordinate<K> chains tc_dot16 in ascending k from acc = 0",
+   "hardware_evidence": "30 authenticated GEMM coordinates from the RTX 4090 vLLM eager port (K = 1536 / 8960) reproduce under the chain; the K=1536 conformance vector is one of them",
+   "status": "open",
+   "resolution": null,
+   "evidence_refs": ["packages/verity/tests/ml/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"],
+   "owner": "integration (not this campaign)",
+   "to_resolve": "A frontend/integration binding question: which kernels, on which shapes, realise this chain. The numerical backend proves the chain as stated."
+  },
+  {
+   "id": "D7",
+   "profile": "first-campaign-target/2026-09-21",
+   "issue": "Arbitrary incoming accumulator c in the transition unit: the pinned wrapper only ever passes c = 0 and has finalisation logic",
+   "hawkeye_paper": "the recovered structure takes the accumulator into the first group",
+   "hawkeye_simulator": "group_sum accepts any accumulator triple; the matrix wrapper zero-initialises and finalises",
+   "verity_reference": "silicon.tc_dot takes any finite FP32 accumulator word into group 1",
+   "hardware_evidence": "A100: 4,565 all-finite nonzero-accumulator cases; 4090: 280 golden records with nonzero accumulators plus the finite sweep",
+   "status": "open",
+   "resolution": null,
+   "evidence_refs": ["packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz"],
+   "owner": "WP1",
+   "to_resolve": "The source-close evaluator needs an explicit arbitrary-c adapter around group_sum (bypassing the wrapper) with tests against the A100 nonzero-accumulator cases; state what the wrapper's finalisation does and whether the adapter preserves or provably omits it."
+  }
+ ]
+}
