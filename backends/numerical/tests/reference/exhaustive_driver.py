@@ -218,7 +218,9 @@ def step_e(lines: list[str], harness: str, out: Path) -> dict:
     with open(inputs) as f:
         proc = subprocess.run([harness], stdin=f, capture_output=True, text=True, check=True)
     got = proc.stdout.splitlines()
-    c = Counter(lines=len(got), seconds=round(time.time() - t0, 1))
+    c = Counter(lines=len(got), seconds=round(time.time() - t0, 1), cpp_matmul_checked=0, cpp_adapter_ne_close=0,
+                cpp_finalised_ne_cpp_adapter=0, cpp_matmul_ne_cpp_adapter=0, cpp_matmul_ne_python_wrapper=0,
+                cpp_adapter_ne_silicon_on_finite_result=0)  # zeros written out explicitly so the record says so
     if len(got) != len(lines):
         c["line_count_mismatch"] = 1
     for line, cpp in zip(lines, got):
