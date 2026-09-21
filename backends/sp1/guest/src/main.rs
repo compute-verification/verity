@@ -51,7 +51,7 @@ sp1_zkvm::entrypoint!(main);
 
 use veritor_zk_common::DIAGNOSTIC_BANNER;
 
-fn main() {
+#[cfg(not(feature = "unsound-relation-only"))] fn main() { // (same line: the sound ELF's panic locations stay put)
     if let Some(banner) = DIAGNOSTIC_BANNER {
         println!("{banner}");
     }
@@ -77,5 +77,31 @@ fn main() {
     // kernel forgets the parsed statement, witness and plan before returning
     // (target_os = "zkvm").  L3 measured those frees at 25.6 M cycles (8.5 %
     // of the stock guest) with no effect on the public values.
+    sp1_zkvm::syscalls::syscall_halt(0);
+}
+
+/// RELATION-ONLY DIAGNOSTIC BUILD (`--features unsound-relation-only`; never sound, never a result).
+///
+/// Nothing of the checker runs: one `read_vec` buffer, the **compact input**
+/// `K: u32 LE || x[0..K]: u16 LE || W[0..K]: u16 LE` of one `GemmCoordinate<K>` obligation in
+/// `veritor.tc-ampere-bf16@1`, goes to `veritor_zk_common::relation_only::decide`, which evaluates
+/// the bare gate chain (`tc_dot16_0`, chained `tc_dot16`, `f32_to_bf16`, through the kernel's own
+/// `GateSet::evaluate`) and lays out `sha256(input) || sha256(output word) || 0xEE` -- the 65-byte
+/// shape of `h_O || h_L || verdict`, so the host is unchanged in shape.  The host's `--witness` is
+/// the compact input; the statement is ignored.  Cycle scopes: `relation_only.io` here, then
+/// `relation_only.parse`, `gates` and `relation_only.digest` inside `decide`.  This is the
+/// arithmetic baseline of the zkVM path; it authenticates nothing and verifies no statement.
+/// Declared after the sound `main` so the sound build's source lines (its ELF) are untouched.
+#[cfg(feature = "unsound-relation-only")]
+fn main() {
+    println!("{}", DIAGNOSTIC_BANNER.expect("a relation-only build is a diagnostic build"));
+
+    println!("cycle-tracker-report-start: relation_only.io");
+    let input = sp1_zkvm::io::read_vec();
+    println!("cycle-tracker-report-end: relation_only.io");
+
+    let public_values = veritor_zk_common::relation_only::decide(&input);
+    sp1_zkvm::io::commit_slice(&public_values);
+    // halt right after the commit, as the sound guest does (the input buffer is never dropped)
     sp1_zkvm::syscalls::syscall_halt(0);
 }
