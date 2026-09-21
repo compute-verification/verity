@@ -106,7 +106,9 @@
    "hardware_evidence": "30 authenticated GEMM coordinates from the RTX 4090 vLLM eager port (K = 1536 / 8960) reproduce under the chain; the K=1536 conformance vector is one of them",
    "status": "open",
    "resolution": null,
-   "evidence_refs": ["packages/verity/tests/ml/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"],
+   "evidence_refs": [
+    "packages/verity/tests/ml/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"
+   ],
    "owner": "integration (not this campaign)",
    "to_resolve": "A frontend/integration binding question: which kernels, on which shapes, realise this chain. The numerical backend proves the chain as stated."
   },
@@ -139,16 +141,15 @@
    "hawkeye_simulator": "Gfloat::operator float writes (exponent + 127 - [bit 23 clear]) & 0xFF into the exponent field: an exponent of 128 gives an infinity or a NaN word depending on the mantissa, 129 and above wrap into a small finite field; group_sum has no range check, so an overflowed group-1 result enters group 2 as an ordinary Gfloat and can return into range",
    "verity_reference": "silicon.pack_fp32 returns +-inf for exponent > 127 and silicon.tc_dot returns a group's infinity at once, sticky through the remaining group (its operands are not examined); total.py: the same as a saturated infinity",
    "hardware_evidence": "every measured case agrees with silicon: 2,197 all-finite A100 cases, the same 2,197 on the RTX 4090 and 114 golden records have an infinite result word; under the simulator's arithmetic 18 of the A100/4090 cases cancel to +0 in group 2 and one golden record returns to a finite value, where the hardware word is the infinity (test_hawkeye_close.py::test_saturation_is_where_the_simulator_and_the_hardware_part); hawkeye_close.tc_dot16 differs from the hardware on 2,161 of the 2,197 (the other 36 are exponent-128, zero-mantissa coincidences) and on all 114 golden records",
-   "status": "open",
-   "resolution": null,
+   "status": "resolved",
+   "resolution": "FIRST's transition is silicon.tc_dot, including saturation: a finite input whose group result leaves the FP32 range yields +-inf at once, sticky through the remaining group -- the hardware's word on every measured case (2,197 A100, 2,197 RTX 4090, 114 golden records). That infinite word is a valid output of a transition and, through the epilogue, of the VU (+-inf BF16), but it is not a finite accumulator: a chain whose intermediate transition saturates is rejected at the next step (domain rule). The pinned simulator's exponent masking is outside the paper's tested magnitudes and is not the reference on these cases; hawkeye_close.tc_dot16 documents where it parts from the hardware. Coordinator decision 2026-09-21.",
    "evidence_refs": [
     "backends/numerical/tests/reference/test_hawkeye_close.py",
     "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
     "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
     "r20260921-230852-4f1e"
    ],
-   "owner": "WP1",
-   "to_resolve": "A finite-input step whose result leaves the FP32 range is inside FIRST's domain as written (the domain statement constrains operands and incoming accumulators, and silicon.tc_dot computes +-inf for it); the coordinator states whether the relation includes these transitions (silicon = hardware, the source-close evaluator is not a reference there) or excludes them, and D1's wording (\"overflow saturation\") is made to say which."
+   "owner": "coordinator"
   },
   {
    "id": "D9",

@@ -31,7 +31,8 @@ __all__ = [
     "Term",
     "account_candidate_a", "account_candidate_b", "data_parallel_layer_error", "fractional_gkr_error",
     "hash_collision_bound", "ligero_error", "ligero_queries_for", "log2", "logup_gkr_error", "logup_identity_error",
-    "random_combination_error", "schwartz_zippel_error", "security_bits", "sumcheck_error",
+    "per_proof_target", "random_combination_error", "schwartz_zippel_error", "security_bits", "sumcheck_error",
+    "union_over_proofs",
 ]
 
 GOLDILOCKS = 2**64 - 2**32 + 1
@@ -152,6 +153,34 @@ class Budget:
         rows.append(f"{'= zk':18} {'(statistical ZK loss, not soundness)':58} {log2(self.zk_total()):9.2f}")
         rows.append(f"{'= completeness':18} {'(honest redraw / rejection, not soundness)':58} {log2(self.completeness_total()):9.2f}")
         return "\n".join(rows)
+
+
+def union_over_proofs(budget: Budget, n_proofs: int) -> Budget:
+    """The soundness budget of ``n_proofs`` independent proofs (sub-batches, or the batches of one application run),
+    each with ``budget``'s error: every soundness term is multiplied by ``n_proofs`` (the union bound), ZK and
+    completeness terms are multiplied likewise, and the parameters record the count.  This is the only way a result
+    that reports ``N_subbatches > 1`` may state its error: the per-proof budget is never quoted for a chopped batch."""
+
+    if not isinstance(n_proofs, int) or n_proofs < 1:
+        raise AccountingError(f"n_proofs must be a positive int, got {n_proofs!r}")
+    out = Budget(budget.candidate, {**budget.parameters, "n_proofs": n_proofs})
+    for t in budget.terms:
+        out.terms.append(Term(t.component, t.name, t.error * n_proofs, t.kind, (t.note + f" x{n_proofs} proofs").strip()))
+    return out
+
+
+def per_proof_target(application_log2: float, n_proofs: int, other_errors: Fraction | int = 0) -> float:
+    """The log2 error each of ``n_proofs`` proofs may have so that the union bound plus ``other_errors`` (the rest of
+    the protocol's error, exact) stays within ``2**application_log2``.  Soundness is a parameter derived from the
+    application budget, not a constant of the protocol."""
+
+    if not isinstance(n_proofs, int) or n_proofs < 1:
+        raise AccountingError(f"n_proofs must be a positive int, got {n_proofs!r}")
+    total = Fraction(2) ** int(application_log2) if float(application_log2).is_integer() else Fraction(2.0 ** application_log2)
+    remaining = total - Fraction(other_errors)
+    if remaining <= 0:
+        raise AccountingError("the other protocol errors alone exceed the application budget")
+    return log2(remaining / n_proofs)
 
 
 def security_bits(budget: object) -> float:

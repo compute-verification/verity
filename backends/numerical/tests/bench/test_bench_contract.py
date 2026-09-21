@@ -295,3 +295,35 @@ def test_reference_run_writes_a_conforming_result(tmp_path) -> None:
     assert fp["software"]["backend"]["name"] == "verity.verification.transparent"
     assert {m["name"] for m in result["measurements"]} >= {"reference_check_wall", "vu.count", "workload_wall"}
     assert json.loads(proc.stdout)["contract"] == "conforms"
+
+
+def test_hvzk_is_a_zk_class_but_not_the_complete_label(conforming: dict) -> None:
+    """Honest-verifier ZK carries a zk_mode like the complete class, and is a distinct label the judge keeps apart."""
+    fp = conforming["workload_fingerprint"]
+    assert "COMPLETE_HVZK_BACKEND" in contract.PROOF_CLASSES and "COMPLETE_HVZK_BACKEND" in contract.ZK_CLASSES
+    assert contract.validate_fingerprint({**fp, "proof_class": "COMPLETE_HVZK_BACKEND", "zk_mode": "ligero-masked"}) == []
+    assert contract.validate_fingerprint({**fp, "proof_class": "COMPLETE_HVZK_BACKEND", "zk_mode": "none"}) == [
+        "proof_class COMPLETE_HVZK_BACKEND with zk_mode 'none' is a contradiction"
+    ]
+    a = {**fp, "proof_class": "COMPLETE_HVZK_BACKEND", "zk_mode": "m"}
+    b = {**fp, "proof_class": "COMPLETE_ZK_BACKEND", "zk_mode": "m"}
+    assert contract.incomparable(a, b, ()) , "HVZK and malicious-verifier ZK results must never be compared as equals"
+
+
+def test_n_subbatches_is_written_and_validated(conforming: dict) -> None:
+    fp = conforming["workload_fingerprint"]
+    built = contract.fingerprint(**{k: fp[k] for k in contract.REQUIRED_FIELDS})
+    assert built["N_subbatches"] == 1
+    assert contract.fingerprint(**{k: fp[k] for k in contract.REQUIRED_FIELDS}, N_subbatches=16)["N_subbatches"] == 16
+    assert contract.validate_fingerprint({**fp, "N_subbatches": 0}) == ["N_subbatches must be a positive int when present, got 0"]
+
+
+def test_latency_and_census_names_are_defined_with_units() -> None:
+    for name, unit in (("rounds.protocol", "count"), ("rounds.sequential_depth", "count"), ("t.e2e.rtt_0ms", "s"),
+                       ("t.e2e.rtt_0.1ms", "s"), ("t.e2e.rtt_50ms", "s"), ("census.committed_elements", "count"),
+                       ("census.bytes_encoded", "B"), ("census.hash_bytes", "B")):
+        assert contract.unit_of(name) == unit, name
+    # the bare name is not a contract name (protocol rounds and sequential depth are different quantities)
+    assert contract.unit_of("rounds") is None
+    assert contract.validate_measurements([contract.measurement("rounds.made_up", 480, "count")], None), "rounds. is reserved"
+    assert not contract.validate_measurements([contract.measurement("rounds.sequential_depth", 480)], None)

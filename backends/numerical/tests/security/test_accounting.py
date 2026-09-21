@@ -10,7 +10,8 @@ from verity_numerical.security.accounting import (
     BABYBEAR, GOLDILOCKS, MERSENNE61, AccountingError, Budget, CandidateA, CandidateB, CheckerLayer, Field,
     LigeroParams, account_candidate_a, account_candidate_b, data_parallel_layer_error, fractional_gkr_error,
     hash_collision_bound, ligero_error, ligero_queries_for, log2, logup_gkr_error, logup_identity_error,
-    random_combination_error, schwartz_zippel_error, security_bits, sumcheck_error,
+    per_proof_target, random_combination_error, schwartz_zippel_error, security_bits, sumcheck_error,
+    union_over_proofs,
 )
 
 GL = Field.prime("Goldilocks", GOLDILOCKS)
@@ -209,3 +210,30 @@ def test_layer_shape_is_a_parameter_not_a_constant():
     assert depth1.parameters["checker_layers"] == 1 and depth1.meets(-128)
     with pytest.raises(AccountingError, match="extension"):
         account_candidate_a(CandidateA(K=1536, B=64, trace_field=GL, challenge_field=M61, ligero=LIGERO_128))
+
+
+def test_sub_batches_are_union_bounded_mechanically():
+    """A 4096-instance batch proved as 16 sub-batches of 256 does not get to quote the per-proof error: every soundness
+    term is multiplied by 16, so a per-proof 2^-130.2 becomes 2^-126.2 and no longer meets 2^-128; the parameters
+    record the count."""
+    Fc3 = GL.extension(3)
+    one = account_candidate_b(CandidateB(K=1536, B=256, trace_field=GL, challenge_field=Fc3, ligero=LIGERO_128,
+                                         hash_queries=2**60))
+    sixteen = union_over_proofs(one, 16)
+    assert sixteen.parameters["n_proofs"] == 16
+    assert sixteen.total() == 16 * one.total()
+    assert sixteen.zk_total() == 16 * one.zk_total()
+    assert one.meets(-128)
+    assert log2(sixteen.total()) == pytest.approx(log2(one.total()) + 4)
+    with pytest.raises(AccountingError):
+        union_over_proofs(one, 0)
+
+
+def test_per_proof_target_is_derived_from_the_application_budget():
+    """With an application budget of 2^-128 spent over 1024 proofs and no other error, each proof may spend 2^-138;
+    other protocol errors reduce what is left; an over-spent budget is refused."""
+    assert per_proof_target(-128, 1024) == pytest.approx(-138)
+    assert per_proof_target(-128, 1) == pytest.approx(-128)
+    assert per_proof_target(-128, 2, other_errors=Fraction(1, 2**129)) == pytest.approx(-130)
+    with pytest.raises(AccountingError):
+        per_proof_target(-128, 4, other_errors=Fraction(1, 2**127))

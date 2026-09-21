@@ -31,6 +31,11 @@ one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive multiple of 16.
   *outside* the relation: the checker rejects the obligation (``E_...`` verdict ``0``), it does not compute a
   hardware answer.  This is the finite-domain relation of ``silicon``; the total semantics are a separate,
   unbound family (below).
+* **Saturation is inside the relation (log entry D8).** A finite input whose grouped sum leaves the FP32 range
+  yields ``+-inf`` at once, sticky through the remaining group -- the hardware's word on every measured case.  That
+  word is a valid output of a transition and, through the epilogue, of the VU; it is not a finite accumulator, so a
+  chain whose intermediate transition saturates is rejected at the next step.  The pinned simulator masks the
+  exponent instead and is not the reference there.
 * **Statement and binding.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``) whose
   family digest is :data:`FAMILY_DIGEST`; boundary words are authenticated as packed words against the object's
   Merkle roots (``verity.verification.packed``, ``verity.commitments.leaves``).  The guest's public values are

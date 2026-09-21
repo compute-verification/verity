@@ -24,9 +24,12 @@ Fingerprint fields (all required; a sub-field whose value is not known is ``null
     domain          the relation's domain, "finite" for FIRST (a total-semantics backend is another domain)
     K               GemmCoordinate<K>: a positive multiple of 16
     B               batch size: VU instances established by the one proof; B_real (optional) = real instances when padded
-    proof_class     ARITHMETIC_DIAGNOSTIC | NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF | COMPLETE_ZK_BACKEND | NO_PROOF
+    N_subbatches    (optional, default 1) independently committed sub-batches behind the reported numbers; the soundness
+                    error is the union bound over them (security accounting), and the cost includes every one
+    proof_class     ARITHMETIC_DIAGNOSTIC | NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF | COMPLETE_HVZK_BACKEND
+                    | COMPLETE_ZK_BACKEND | NO_PROOF   (HVZK = honest-verifier privacy only: a milestone, not the target)
     authentication  included | excluded          (were the boundary words authenticated against the object's roots)
-    zk_mode         "none" unless proof_class is COMPLETE_ZK_BACKEND, whose mode names how privacy is obtained
+    zk_mode         "none" unless proof_class is a COMPLETE_*ZK_BACKEND, whose mode names how privacy is obtained
     security        {"target": log2 of the target soundness error (-100 means 2^-100) or null, ...backend parameters}
     hardware        {"gpu": {"name", "driver", "cuda"} | null, "cpu": {"model", ...} | null}   (probe_hardware())
     software        {"backend": {"name", "version" and/or "commit", ...}, "toolchain": {...versions}}
@@ -39,8 +42,14 @@ Timing (seconds; the buckets are disjoint and, with the joints, sum to at most `
     t.joint.<a>+<b>[+<c>...]   a fused stage covering those buckets, in canonical bucket order (see joint())
 
 Other measurements: ``vu.count`` (count), ``vu.seconds_per_vu`` (s), ``vu.per_second`` (1/s), ``mem.peak_host_bytes``,
-``mem.peak_device_bytes``, ``bytes.moved``, ``transcript.bytes`` (B), ``rounds`` (count), ``verifier.seconds``,
-``fixed.setup_seconds`` (s).  Names under the contract's prefixes that this file does not define are rejected; a
+``mem.peak_device_bytes``, ``bytes.moved``, ``transcript.bytes`` (B; the total communication), ``verifier.seconds``,
+``fixed.setup_seconds`` (s).  Latency (a first-class axis): ``rounds.protocol`` (count of protocol rounds) and
+``rounds.sequential_depth`` (network round trips on the critical path after all parallelism/batching -- what the
+network floor depth x RTT is made of), and the end-to-end wall time at the RTT sweep ``t.e2e.rtt_0ms``,
+``t.e2e.rtt_0.1ms``, ``t.e2e.rtt_1ms``, ``t.e2e.rtt_10ms``, ``t.e2e.rtt_50ms`` (s; predicted or measured, say which in
+the fingerprint).  Census (same columns for every candidate): ``census.witness_elements``,
+``census.committed_elements`` (count), ``census.bytes_encoded`` (B), ``census.hash_bytes`` (B hashed),
+``census.field_ops`` (count), ``census.memory_passes`` (count), ``census.bytes_moved`` (B).  Names under the contract's prefixes that this file does not define are rejected; a
 workload's own names (``prove_seconds``, ``cycles.parse``) pass through untouched so earlier runs stay comparable.
 """
 
@@ -64,6 +73,7 @@ __all__ = [
     "PROFILE",
     "PROOF_CLASSES",
     "REQUIRED_FIELDS",
+    "ZK_CLASSES",
     "RESULT_SCHEMA",
     "RETENTION",
     "TOLERANCE",
@@ -89,7 +99,11 @@ RESULT_SCHEMA = "research/result/v0.1"
 PROFILE = FIRST.name
 DOMAIN = "finite"
 
-PROOF_CLASSES = ("ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_ZK_BACKEND", "NO_PROOF")
+PROOF_CLASSES = (
+    "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND", "NO_PROOF",
+)
+#: The classes that establish privacy (honest-verifier, or against a malicious verifier); only these carry a zk_mode.
+ZK_CLASSES = ("COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND")
 AUTHENTICATION = ("included", "excluded")
 RETENTION = ("retained", "streamed", "recomputed")
 ZK_NONE = "none"
@@ -119,11 +133,20 @@ UNITS: dict[str, str] = {
     "mem.peak_device_bytes": "B",
     "bytes.moved": "B",
     "transcript.bytes": "B",
-    "rounds": "count",
+    "rounds.protocol": "count",
+    "rounds.sequential_depth": "count",
+    **{f"t.e2e.rtt_{rtt}ms": "s" for rtt in ("0", "0.1", "1", "10", "50")},
+    "census.witness_elements": "count",
+    "census.committed_elements": "count",
+    "census.bytes_encoded": "B",
+    "census.hash_bytes": "B",
+    "census.field_ops": "count",
+    "census.memory_passes": "count",
+    "census.bytes_moved": "B",
     "verifier.seconds": "s",
     "fixed.setup_seconds": "s",
 }
-_RESERVED_PREFIXES = ("t.", "vu.", "mem.", "fixed.", "bytes.", "transcript.", "verifier.")
+_RESERVED_PREFIXES = ("t.", "vu.", "mem.", "fixed.", "bytes.", "transcript.", "verifier.", "rounds.", "census.")
 
 #: Sentinel for an identity field a fingerprint does not carry (distinct from a recorded ``null``).
 MISSING = object()
@@ -205,13 +228,16 @@ def fingerprint(
     preprocessing: str | Mapping[str, Any],
     retention: str,
     B_real: int | None = None,
+    N_subbatches: int = 1,
     **extra: Any,
 ) -> dict[str, Any]:
     """A conforming ``workload_fingerprint``: the required fields, then the workload's own ``extra`` entries.  Raises
-    ``ValueError`` listing every problem rather than emitting a bad one."""
+    ``ValueError`` listing every problem rather than emitting a bad one.  ``N_subbatches`` is always written, so a
+    batch chopped into several proofs is visible beside ``B``."""
 
     fp: dict[str, Any] = {
-        "profile": profile, "domain": domain, "K": K, "B": B, "proof_class": proof_class, "authentication": authentication,
+        "profile": profile, "domain": domain, "K": K, "B": B, "N_subbatches": N_subbatches, "proof_class": proof_class,
+        "authentication": authentication,
         "zk_mode": zk_mode, "security": dict(security), "hardware": dict(hardware), "software": dict(software),
         "preprocessing": preprocessing if isinstance(preprocessing, str) else dict(preprocessing), "retention": retention,
     }
@@ -269,10 +295,14 @@ def validate_fingerprint(fp: Any) -> list[str]:
         zk = present["zk_mode"]
         if not isinstance(zk, str) or not zk:
             p.append(f"zk_mode must be a non-empty string ({ZK_NONE!r} when there is no zero-knowledge), got {zk!r}")
-        elif pc == "COMPLETE_ZK_BACKEND" and zk == ZK_NONE:
-            p.append("proof_class COMPLETE_ZK_BACKEND with zk_mode 'none' is a contradiction")
-        elif pc in PROOF_CLASSES and pc != "COMPLETE_ZK_BACKEND" and zk != ZK_NONE:
+        elif pc in ZK_CLASSES and zk == ZK_NONE:
+            p.append(f"proof_class {pc} with zk_mode 'none' is a contradiction")
+        elif pc in PROOF_CLASSES and pc not in ZK_CLASSES and zk != ZK_NONE:
             p.append(f"proof_class {pc} is not zero-knowledge; zk_mode must be {ZK_NONE!r}, got {zk!r}")
+    if "N_subbatches" in fp:
+        ns = fp["N_subbatches"]
+        if not (_is_int(ns) and ns > 0):
+            p.append(f"N_subbatches must be a positive int when present, got {ns!r}")
     if "security" in present:
         sec = present["security"]
         if not isinstance(sec, Mapping):
@@ -401,7 +431,7 @@ def validate_measurements(measurements: Any, proof_class: str | None = None) -> 
             p.append(f"a {proof_class} result must report t.total")
         if not buckets and not joints:
             p.append(f"a {proof_class} result must report at least one timing bucket or joint stage")
-        if proof_class != "COMPLETE_ZK_BACKEND" and buckets.get("zk_additional", 0) > 0:
+        if proof_class not in ZK_CLASSES and buckets.get("zk_additional", 0) > 0:
             p.append(f"t.zk_additional is {buckets['zk_additional']!r} but proof_class {proof_class} has no zero-knowledge work")
     return p
 

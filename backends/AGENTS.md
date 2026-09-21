@@ -21,15 +21,62 @@ backend and by the campaign-side numerical work under `backends/numerical/`.
 ## Labels every number carries
 
 ~~~text
-proof_class     ARITHMETIC_DIAGNOSTIC | NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF | COMPLETE_ZK_BACKEND | NO_PROOF
+proof_class     ARITHMETIC_DIAGNOSTIC | NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF
+                | COMPLETE_HVZK_BACKEND | COMPLETE_ZK_BACKEND | NO_PROOF
 authentication  included | excluded
 ~~~
 
-Never compare across `proof_class`. A non-ZK kernel is a diagnostic; a
-backend is complete only when its interactive, private, hash-based
-composition is implemented and its soundness accounting is written.
-Guest-cycle shares are not proving-time shares: measure wall time, memory,
+Never compare across `proof_class`. A non-ZK kernel is a diagnostic. An
+implementation whose privacy is honest-verifier zero knowledge is
+`COMPLETE_HVZK_BACKEND`: a valid milestone, not the target.
+`COMPLETE_ZK_BACKEND` is reserved for a construction whose malicious-verifier
+privacy (the verifier-coin-commitment step or another justified mechanism) is
+implemented, with its transcript order, what the verifier commits to, the
+binding requirement, message timing, abort/restart rules, privacy argument and
+extra round/communication/prover cost written down and red-team reviewed. The
+expected path is: arithmetic diagnostic -> complete HVZK -> malicious-verifier
+ZK. Guest-cycle shares are not proving-time shares: measure wall time, memory,
 shards and fixed costs directly.
+
+## Soundness is a parameter
+
+No error target is baked into a protocol. The per-batch error is derived from
+the application budget (sum over proofs plus the other protocol errors), and
+`verity_numerical.security.accounting` union-bounds mechanically over every
+proof and sub-batch. Reported operating points:
+
+~~~text
+2^-80        diagnostic / sensitivity point (never the default production claim)
+2^-96/-112   optional intermediate sweep
+2^-128       primary matched-security comparison point
+~~~
+
+Keep explicit in every table which configuration first meets the operating
+point: for the frozen target the quadratic Goldilocks challenge extension
+cannot reach 2^-128 at any batch size (the lookup identity term floors near
+2^-109 from the 65,536-row tables); the cubic extension is the first that does.
+
+## Latency is a first-class axis
+
+For each backend report, beside prover compute at zero-latency transport:
+verifier compute; **sequential challenge depth** (network round trips on the
+critical path after all available parallelism and batching -- distinct from
+the count of protocol rounds, since independent messages issued before the
+next challenge cost no extra trip); total communication; and predicted or
+measured end-to-end wall time at RTT in {0, 0.1, 1, 10, 50} ms. The network
+floor is depth x RTT. No hard round budget yet: Candidate A may reduce its
+depth and the measurements decide.
+
+## Census, both candidates, same columns
+
+~~~text
+materialized witness elements   committed elements     bytes encoded
+hash/commit work                field operations       memory passes / bytes moved
+sequential challenge depth      communication          peak memory
+~~~
+
+A difference in one column (A commits ~4x fewer elements than B) is an
+explanatory variable, not the verdict.
 
 ## Workloads and the decision
 
@@ -42,14 +89,45 @@ K=1536 GemmCoordinate   the architecture decision (handoff section 9.5)
 Nothing is selected as the winner on the small cases. The decision is the
 lowest complete numerical-proving cost at matched soundness, privacy and
 domain on the K=1536 VU. A batch may be split into independently committed
-sub-batches; the reported soundness error is then the union bound over them
-(`verity_numerical.security.accounting`) and the per-VU cost includes every
-sub-batch. Security parameters are stated per run (`security.target` in the
-result fingerprint); the protocol documents are `backends/gkr/PROTOCOL.md` and
-`backends/direct/PROTOCOL.md`, and the red team reviews their transcripts
-before any implementation claims a proof class above diagnostic. Report the six timing buckets (witness,
+sub-batches; the result then reports both `B` (instances per proof) and
+`N_subbatches`, the soundness error is the union bound over them, and the
+per-VU cost includes every sub-batch -- performance is never improved by
+quoting a per-proof error for a chopped batch. Security parameters are stated
+per run (`security.target` in the result fingerprint); the protocol documents
+are `backends/gkr/PROTOCOL.md` and `backends/direct/PROTOCOL.md`, and the red
+team reviews their transcripts before any implementation claims a proof class
+above diagnostic. Report the six timing buckets (witness,
 encoding/commitment, arithmetic, lookup, ZK-additional, serialization), peak
 memory, bytes moved, transcript bytes, rounds, verifier work.
+
+The public pole-redraw rule of the lookup argument (redraw `z_T` only when it
+lies in the public table image) is provisionally accepted; the red team checks
+that the condition depends only on public data, that the transcript records
+redraws deterministically, that no prover-controlled restart exists, that no
+other zero denominator can induce a witness-dependent abort, and the soundness
+bound is stated for the conditioned challenge space (uniform over the
+complement after rejection), not reused from a whole-field theorem.
+
+## Budget
+
+The campaign's pods (`vy-*`) are under the `verity-campaign` cap: **$120
+total, $5/h ceiling** (2026-09-21). Concurrency is not expanded because budget
+is available; the $5/h ceiling rises only when several validated lanes are
+blocked on independent hardware work. **Hard review point before WP5 GPU
+optimisation**: the evidence then decides whether further GPU spend is
+justified; nothing is pre-authorised. Foreign `r18-*` pods are outside both
+lifecycle control and campaign accounting.
+
+## SP1 is the system-level reference
+
+`3.58 s` core and `4.46 s` compressed for K=1536 (`benchmarks/dot_product/baselines.json`)
+are the end-to-end path a numerical backend is eventually compared against, in
+addition to the isolated relation. Do not describe SP1's cost as
+authentication-dominated: the measured guest is 82% statement parsing and
+opening-table construction, 4.2% relation, 1.3% authentication hashing
+(`r20260921-224405-22dc`). A true relation-only SP1 diagnostic (statement and
+table construction removed too) is wanted for a fair arithmetic baseline; it
+blocks nothing.
 
 ## How work is done
 
