@@ -57,7 +57,7 @@ uv python find 3.12
 
 stage "build host: cuda  (source: $HERE, target: $CARGO_TARGET_DIR)"
 cd "$HERE"
-cargo build --release -p veritor-zk-host --features cuda 2>&1 | tail -3
+cargo build --release -p veritor-zk-host --features cuda 2>&1 | grep -v -E "^\s+(Compiling|Downloaded|Downloading) "
 install -m 0755 "$CARGO_TARGET_DIR/release/veritor-zk-host" "$BIN/veritor-zk-host-cuda"
 sha256sum "$BIN/veritor-zk-host-cuda"
 
