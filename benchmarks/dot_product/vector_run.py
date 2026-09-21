@@ -206,13 +206,23 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, di
             problems.append("the guest rejected the witness")
         if report.unsound and not diagnostic:
             problems.append("the guest is a diagnostic build (run with --diagnostic if that is intended)")
-        if report.public_values.hex() != expected_pv:
-            problems.append("public values are not h_O || h_L || 01 of this object")
-        if report.public_values.hex() != rec["binding"]["public_values"]:
-            problems.append("public values differ from the ones recorded for this vector")
-        if not (binding.ok and binding.verdict == 1):
-            problems.append(f"binding check: {binding.code} {binding.detail}")
-        checker = "verity_sp1 execute + verity.verification.binding.check_binding"
+        recorded = bytes.fromhex(rec["binding"]["public_values"])
+        if diagnostic:
+            if report.public_values[:-1] != recorded[:-1]:
+                problems.append("h_O || h_L differ from the public values recorded for this vector")
+            if report.public_values[-1:] != b"\xee":
+                problems.append(f"diagnostic verdict byte is {report.public_values[-1:].hex()}, not ee (accepted, unsound)")
+            if not binding.ok:
+                problems.append(f"binding check: {binding.code} {binding.detail}")
+            checker = "DIAGNOSTIC: verity_sp1 execute (unsound guest) + binding of h_O || h_L; verdict 0xEE"
+        else:
+            if report.public_values.hex() != expected_pv:
+                problems.append("public values are not h_O || h_L || 01 of this object")
+            if report.public_values != recorded:
+                problems.append("public values differ from the ones recorded for this vector")
+            if not (binding.ok and binding.verdict == 1):
+                problems.append(f"binding check: {binding.code} {binding.detail}")
+            checker = "verity_sp1 execute + verity.verification.binding.check_binding"
     else:
         proof = out / "proof.bin"
         started = time.perf_counter()
@@ -236,14 +246,21 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, di
         ]
         measurements += [measurement(f"cycles.{k}", v, "cycles") for k, v in sorted(report.execution.cycle_tracker.items())]
         measurements += sp1_prove_measurements(report)
-        if report.execution.public_values.hex() != rec["binding"]["public_values"]:
-            problems.append("public values differ from the ones recorded for this vector")
+        recorded = bytes.fromhex(rec["binding"]["public_values"])
+        public_values = report.execution.public_values
         if diagnostic:
-            # everything but soundness: the proof verifies under the diagnostic guest's key and binds the object
-            if not (acceptance.proof_verifies and acceptance.approved_key and acceptance.binding.ok and acceptance.binding.verdict == 1):
-                problems += [r for r in acceptance.reasons() if "diagnostic" not in r]
-            checker = "DIAGNOSTIC: verity_sp1 prove + verify_object under the unsound guest's own key (binding, verdict); not a sound proof"
+            # a diagnostic guest commits h_O || h_L || 0xEE ("accepted, unsound"; VERDICT_ACCEPT in common/src/lib.rs):
+            # the digests must match the record, the verdict byte is 0xEE, and the proof verifies under the guest's own key
+            if public_values[:-1] != recorded[:-1]:
+                problems.append("h_O || h_L differ from the public values recorded for this vector")
+            if public_values[-1:] != b"\xee":
+                problems.append(f"diagnostic verdict byte is {public_values[-1:].hex()}, not ee (accepted, unsound)")
+            if not (acceptance.proof_verifies and acceptance.approved_key and acceptance.binding.ok):
+                problems += [r for r in acceptance.reasons() if "diagnostic" not in r and "verdict byte" not in r]
+            checker = "DIAGNOSTIC: verity_sp1 prove + verify_object under the unsound guest's own key (binding, verdict 0xEE); not a sound proof"
         else:
+            if public_values != recorded:
+                problems.append("public values differ from the ones recorded for this vector")
             if not acceptance.accepted:
                 problems += acceptance.reasons()
             checker = "verity_sp1 prove + verify_object (approved key, binding, verdict)"
