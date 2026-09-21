@@ -176,7 +176,7 @@ class Obligation:
 
 def lower(sub: Subcircuit) -> dict:
     """Lowering adapter: a supported subcircuit -> the legacy backend's local straight-line program (the
-    `typed-obligation/v0` lowering section). This is the ONLY place in `verity_ir` where backend-internal
+    `typed-obligation/v0` lowering section). This is the ONLY place in `verity.ir` where backend-internal
     names appear. Semantics: gates read `port k` (k-th distinct boundary-in value, ascending producing-gate
     index) or `local i` (i-th gate of the subcircuit in canonical order); `outputs` are the local indices of
     the subcircuit's `out` boundary. An `Input` gate inside the subcircuit lowers to a `port` whose expected

@@ -1,17 +1,17 @@
 """A `GemmCoordinate_v2` program round-trips through the descriptor codec, including the on-demand `Const` family that
-`verity_ml.prims` registers with `verity_ir.codec.register_lazy_family` (the IR itself knows no semantics package)."""
+`verity.ml.prims` registers with `verity.ir.codec.register_lazy_family` (the IR itself knows no semantics package)."""
 from __future__ import annotations
 
 import json
 
 import pytest
 
-from verity_ir.codec import _lookup_primitive, decode_program, encode_program, program_digest
-from verity_ir.defs import REGISTRY, Registry, bind
-from verity_ir.evaluate import evaluate_region
-from verity_ir.program import Program
-from verity_ml import gemm as G
-from verity_ml import prims as P
+from verity.ir.codec import _lookup_primitive, decode_program, encode_program, program_digest
+from verity.ir.defs import REGISTRY, Registry, bind
+from verity.ir.evaluate import evaluate_region
+from verity.ir.program import Program
+from verity.ml import gemm as G
+from verity.ml import prims as P
 
 
 def _same_circuit(A: Program, B: Program) -> None:
@@ -43,7 +43,7 @@ def test_the_two_architectures_are_two_programs() -> None:
 
 def test_const_family_is_materialised_from_the_id_by_a_fresh_registry() -> None:
     """Decoding in a process that never built the program: the `Const32[0x..]_v1` gate is not in the registry it is
-    handed, and is materialised by the family hook `verity_ml.prims` registered."""
+    handed, and is materialised by the family hook `verity.ml.prims` registered."""
     fresh = Registry()
     for d in (P.Bf16ToF32, P.F32ToBf16Rn, P.F2fpBf16, P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16):
         fresh.add(d)

@@ -1,4 +1,4 @@
-"""The total step (`verity_ml.tc.total`) against the A100 / RTX 4090 special-value campaign, the H100 campaign, and the vector files.
+"""The total step (`verity.ml.tc.total`) against the A100 / RTX 4090 special-value campaign, the H100 campaign, and the vector files.
 
 Ported from veritor ``tests/veritor/core/test_silicon_total.py``; the gate-set identity assertions became direct calls to
 ``tc_dot_total`` (the gate sets were not ported).  Fixtures under ``fixtures/`` (see its README).
@@ -15,10 +15,10 @@ import struct
 
 import pytest
 
-from verity_ml.tc.cast import f32_to_bf16_word
-from verity_ml.tc.errors import InvalidArtifact
-from verity_ml.tc.silicon import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, tc_dot
-from verity_ml.tc.total import (
+from verity.ml.tc.cast import f32_to_bf16_word
+from verity.ml.tc.errors import InvalidArtifact
+from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, tc_dot
+from verity.ml.tc.total import (
     AMPERE_BF16_DOT16_TOTAL,
     FP32_CANONICAL_NAN,
     HOPPER_BF16_WGMMA_K16,

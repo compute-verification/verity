@@ -1,4 +1,4 @@
-"""verity_ml.tc: the exact, hardware-faithful semantics of one tensor-core accumulator step, as integer arithmetic on encodings.
+"""verity.ml.tc: the exact, hardware-faithful semantics of one tensor-core accumulator step, as integer arithmetic on encodings.
 
     silicon   the finite-domain model (Hawkeye's grouped truncating accumulation, generalised over groups/width/floor)
     total     the total function on every encoding (NaN, infinities, saturation; measured on A100, RTX 4090, H100)

@@ -1,4 +1,4 @@
-# Hardware captures that pin `verity_ml.tc`
+# Hardware captures that pin `verity.ml.tc`
 
 Copied unchanged from `veritor` at commit `eb865ce29` (every file clean at that HEAD). Each file is evidence
 measured on real silicon; the tests replay every record through the model.

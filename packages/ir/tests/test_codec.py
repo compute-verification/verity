@@ -1,7 +1,7 @@
 """Descriptor codec: nested-static dependency discovery (frontend rulings §8.3), identity conflicts (§8.1), and the
 reference normalisation of `concat`.
 
-Ported from veritor ``verity_ir/tests/test_codec.py`` (1-114, 131-224).  The tests over the production registry (B1
+Ported from veritor ``verity.ir/tests/test_codec.py`` (1-114, 131-224).  The tests over the production registry (B1
 attention padding, KV-cache aliasing, the pinned v0 digests) stayed behind; the one `b1.Gemm` reference became a local
 composite."""
 
@@ -11,9 +11,9 @@ import json
 
 import pytest
 
-from verity_ir import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
-from verity_ir.codec import IdentityConflict
-from verity_ir.defs import CompositeDefinition
+from verity.ir import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
+from verity.ir.codec import IdentityConflict
+from verity.ir.defs import CompositeDefinition
 
 from test_running_example import Add16, Dot, Id16, Mul16, Relu16
 
@@ -52,7 +52,7 @@ def TwoLinears(B, S, x, W):
 
 @composite("Stack2", 1, ["M"], lambda S: ((("a", Array(S.M, V16)), ("b", Array(S.M, V16))), Array(2, Array(S.M, V16))))
 def Stack2(B, S, a, b):
-    from verity_ir.refs import array_of
+    from verity.ir.refs import array_of
     return array_of([a, b])
 
 
@@ -133,21 +133,21 @@ def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
     definition is an `IdentityConflict`, never first-wins."""
     da, db = _dot_like(_dot_body_a), _dot_like(_dot_body_b)
     top = CompositeDefinition("TopConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
-                              lambda B, S, x, w: __import__("verity_ir.refs", fromlist=["array_of"]).array_of(
+                              lambda B, S, x, w: __import__("verity.ir.refs", fromlist=["array_of"]).array_of(
                                   [B.call(da, x, w), B.call(db, x, w)]), register=False)
     P = Program(bind(top))
     with pytest.raises(IdentityConflict, match="DotConflict_v1"):
         encode_program(P)
     # ... whichever order the two are met in
     top2 = CompositeDefinition("TopConflict2", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
-                               lambda B, S, x, w: __import__("verity_ir.refs", fromlist=["array_of"]).array_of(
+                               lambda B, S, x, w: __import__("verity.ir.refs", fromlist=["array_of"]).array_of(
                                    [B.call(db, x, w), B.call(da, x, w)]), register=False)
     with pytest.raises(IdentityConflict):
         encode_program(Program(bind(top2)))
     # the same body under two distinct definition objects is one definition, not a conflict
     da2 = _dot_like(_dot_body_a)
     top3 = CompositeDefinition("TopSame", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
-                               lambda B, S, x, w: __import__("verity_ir.refs", fromlist=["array_of"]).array_of(
+                               lambda B, S, x, w: __import__("verity.ir.refs", fromlist=["array_of"]).array_of(
                                    [B.call(da, x, w), B.call(da2, x, w)]), register=False)
     desc = encode_program(Program(bind(top3)))
     assert desc["definitions"]["DotConflict_v1"]["form"] == "composite"
@@ -188,7 +188,7 @@ def test_unbound_composite_as_a_static_value_is_not_encodable():
 # -- zero-stride broadcasts (ruling §8.5): `[z, z, z]` compacts, `[z0, z1, z2]` does not -------------------------
 
 def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_strided():
-    from verity_ir.refs import Affine, Concat, Strided, concat, is_broadcast
+    from verity.ir.refs import Affine, Concat, Strided, concat, is_broadcast
     z = Affine("n", 3, 0, 1)  # one produced value
     r = concat([z] * 64)
     assert isinstance(r, Strided) and (r.outer_stride, r.inner_stride, r.inner, r.count) == (0, 0, 1, 64)

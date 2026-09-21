@@ -1,15 +1,15 @@
-"""The IR-registered primitives of `verity_ml.prims` are exactly the `verity_ml.tc` functions, under their registered ids."""
+"""The IR-registered primitives of `verity.ml.prims` are exactly the `verity.ml.tc` functions, under their registered ids."""
 from __future__ import annotations
 
 import random
 
 import pytest
 
-from verity_ir.defs import REGISTRY
-from verity_ml import prims as P
-from verity_ml.tc.cast import f32_to_bf16_hw_word, f32_to_bf16_word
-from verity_ml.tc.silicon import AMPERE_BF16_M16N8K16, tc_dot
-from verity_ml.tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
+from verity.ir.defs import REGISTRY
+from verity.ml import prims as P
+from verity.ml.tc.cast import f32_to_bf16_hw_word, f32_to_bf16_word
+from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, tc_dot
+from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 
 NAN32, PINF32, NINF32, ONE32 = 0x7FC00000, 0x7F800000, 0xFF800000, 0x3F800000
 NAN16, PINF16, NINF16, ONE16, MAX16 = 0x7FC0, 0x7F80, 0xFF80, 0x3F80, 0x7F7F
@@ -90,7 +90,7 @@ def test_ampere_v2_pins_the_measured_special_values_v1_got_wrong() -> None:
 
 
 def test_const_primitives_are_memoised_and_decodable() -> None:
-    from verity_ir.codec import _lookup_primitive
+    from verity.ir.codec import _lookup_primitive
 
     c = P.const(32, 0x3F800000)
     assert c is P.const(32, 0x3F800000)

@@ -1,4 +1,4 @@
-"""`verity_ml.tc.relation`: the step relation is complete on silicon (every capture satisfies it and yields the measured
+"""`verity.ml.tc.relation`: the step relation is complete on silicon (every capture satisfies it and yields the measured
 word), locally sound (each witness column is constrained), and its census is what the module claims."""
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from verity_ml.tc import relation as R
-from verity_ml.tc.silicon import AMPERE_BF16_M16N8K16 as AMP
-from verity_ml.tc.total import HOPPER_BF16_WGMMA_K16 as HOP, cvt_rn_bf16_f32, fp32_value, pack_value, tc_dot_total
+from verity.ml.tc import relation as R
+from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16 as AMP
+from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16 as HOP, cvt_rn_bf16_f32, fp32_value, pack_value, tc_dot_total
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PIPES = {"ampere": AMP, "hopper": HOP}

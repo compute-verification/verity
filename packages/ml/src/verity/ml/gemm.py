@@ -8,15 +8,15 @@
 `HopperBF16WgmmaDot16_v1`.  A verification unit for the FLOP proof is one `GemmCoordinate_v2{K, DOT}` call: K/16
 transitions of `DOT` followed by one `F2fpBf16`.
 
-Provenance: veritor `verity_ir/registry/b1.py` `DotBf16V2` / `GemmCoordinateV2` / `GemmV2` and the binding records
+Provenance: veritor `verity.ir/registry/b1.py` `DotBf16V2` / `GemmCoordinateV2` / `GemmV2` and the binding records
 `GEMM_AMPERE` (b1.py) / `GEMM_HOPPER` (hopper.py).  The `_v1` forms, which named the Ampere step in their bodies, were not
 carried over: the static form is the definition the proof work targets, and their bodies would now name a different
 primitive id (see `prims.AmpereBF16TcDot16`).
 """
 from __future__ import annotations
 
-from verity_ir.defs import bind, composite
-from verity_ir.types import Array
+from verity.ir.defs import bind, composite
+from verity.ir.types import Array
 
 from . import prims as P
 from .prims import BF16, F32, ZERO32

@@ -1,6 +1,6 @@
-"""The word casts of `verity_ml.tc.cast` against the measured `cvt.rn.bf16.f32` campaign and an exhaustive NaN sweep.
+"""The word casts of `verity.ml.tc.cast` against the measured `cvt.rn.bf16.f32` campaign and an exhaustive NaN sweep.
 
-Ported from veritor ``tests/veritor/core/test_tc_nan.py`` (139-181) and ``verity_ir/tests/test_nan_conversion.py`` (41-64);
+Ported from veritor ``tests/veritor/core/test_tc_nan.py`` (139-181) and ``verity.ir/tests/test_nan_conversion.py`` (41-64);
 the numpy array forms were not carried over, so the sweeps are pure integer loops (the 2^32 sweep stays behind).
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_ml.tc.cast import (
+from verity.ml.tc.cast import (
     BF16_NAN_HARDWARE,
     BF16_NAN_SOFTWARE,
     bf16_is_nan,
@@ -21,7 +21,7 @@ from verity_ml.tc.cast import (
     f32_to_bf16_rn_word,
     f32_to_bf16_word,
 )
-from verity_ml.tc.total import cvt_rn_bf16_f32
+from verity.ml.tc.total import cvt_rn_bf16_f32
 
 MEASURED = sorted((Path(__file__).parent / "fixtures" / "tc-total-2026-09-07").glob("*/cvt_special.json"))
 

@@ -1,6 +1,6 @@
 """Word casts between FP32 and BF16 encodings, as pure integer functions.
 
-Promoted from ``veritor`` ``verity_ir/registry/prims.py`` (``bf16_to_f32_bits``, ``f32_to_bf16_rn_bits``, ``f32_is_nan``)
+Promoted from ``veritor`` ``verity.ir/registry/prims.py`` (``bf16_to_f32_bits``, ``f32_to_bf16_rn_bits``, ``f32_is_nan``)
 and ``src/veritor/core/tc.py`` (the word-level casts); the numpy array forms were left behind.
 """
 from __future__ import annotations

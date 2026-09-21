@@ -1,4 +1,4 @@
-"""The finite-domain step (`verity_ml.tc.silicon`) against the RTX 4090 golden records and known answers.
+"""The finite-domain step (`verity.ml.tc.silicon`) against the RTX 4090 golden records and known answers.
 
 Ported from veritor ``tests/veritor/core/test_silicon.py`` lines 1-208 (the gate-set and Hawkeye-C++ tests were left behind).
 The golden vectors under ``fixtures/golden/`` were measured on an RTX 4090 (sm_89), one ``mma.sync`` per record.
@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from verity_ml.tc.errors import InvalidArtifact
-from verity_ml.tc.silicon import (
+from verity.ml.tc.errors import InvalidArtifact
+from verity.ml.tc.silicon import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
     AMPERE_BF16_M16N8K16,

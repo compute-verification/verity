@@ -333,7 +333,7 @@ def descriptor_size(program_or_desc) -> int:
 # registers only its own `Input<w>`; a semantics package registers its families with `register_lazy_family` (the IR never
 # imports a semantics package).
 _LAZY_PRIMITIVE_FAMILIES: list[tuple[re.Pattern[str], Callable[[re.Match[str]], PrimitiveDefinition]]] = [
-    (re.compile(r"^Input(\d+)_v1$"), lambda m: __import__("verity_ir.program", fromlist=["input_prim"]).input_prim(int(m[1]))),
+    (re.compile(r"^Input(\d+)_v1$"), lambda m: __import__("verity.ir.program", fromlist=["input_prim"]).input_prim(int(m[1]))),
 ]
 
 

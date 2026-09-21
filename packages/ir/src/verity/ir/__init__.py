@@ -1,6 +1,6 @@
-"""verity_ir — a small implementation of the Verity IR core (veritor ``docs/verity-ir-2026-09-07.md``, §B/§C govern).
+"""verity.ir — a small implementation of the Verity IR core (veritor ``docs/verity-ir-2026-09-07.md``, §B/§C govern).
 
-Promoted from ``veritor`` ``verity_ir/`` at commit ``eb865ce29``: ``types``, ``refs``, ``defs``, ``program``, ``layout``,
+Promoted from ``veritor`` ``verity.ir/`` at commit ``eb865ce29``: ``types``, ``refs``, ``defs``, ``program``, ``layout``,
 ``evaluate``, ``query``, ``plan`` byte for byte; ``codec`` with its hard-coded registry families replaced by the
 ``register_lazy_family`` hook.  The registry (``b1``, ``hopper``, ``prims``, ...), frontend, and derive tooling stayed behind;
 semantics packages register their primitives with this core.

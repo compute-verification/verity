@@ -1,11 +1,11 @@
 """IR-registered primitives over the tensor-core semantics: the k16 accumulator steps and the BF16/FP32 casts.
 
 Encodings: bf16 = `Value<16>`, f32 = `Value<32>`.  Every evaluator is total on encodings.  The evaluators are the
-functions of `verity_ml.tc`; nothing is re-derived here.
+functions of `verity.ml.tc`; nothing is re-derived here.
 
 Provenance.  `Bf16ToF32_v1`, `F32ToBf16Rn_v1`, `F2fpBf16_v1` are the definitions registered in veritor
-`verity_ir/registry/prims.py` (same ids, same functions).  `HopperBF16WgmmaDot16_v1` is veritor's
-`verity_ir/registry/hopper.py` definition (it already evaluated through `silicon_total.tc_dot_total`).
+`verity.ir/registry/prims.py` (same ids, same functions).  `HopperBF16WgmmaDot16_v1` is veritor's
+`verity.ir/registry/hopper.py` definition (it already evaluated through `silicon_total.tc_dot_total`).
 `AmpereBF16TcDot16` is registered here as **version 2**: veritor's `_v1` evaluated the finite domain through the same
 model but extended it to NaN/Inf encodings by a hand-written rule ("documented, not measured") that disagrees with the
 A100/RTX 4090 campaign on the NaN word (`0x7FC00000` vs the measured `0x7FFFFFFF`) and on a saturated group followed by
@@ -14,8 +14,8 @@ equal to `_v1` on every finite input.  A registered id denotes one function, so 
 """
 from __future__ import annotations
 
-from verity_ir.defs import PrimitiveDefinition, primitive
-from verity_ir.types import Array, Value
+from verity.ir.defs import PrimitiveDefinition, primitive
+from verity.ir.types import Array, Value
 
 from .tc import cast
 from .tc.silicon import AMPERE_BF16_M16N8K16
@@ -89,7 +89,7 @@ ZERO32 = const(32, 0)
 
 
 def _register_lazy_families() -> None:
-    from verity_ir.codec import register_lazy_family
+    from verity.ir.codec import register_lazy_family
 
     register_lazy_family(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$", lambda m: const(int(m[1]), int(m[2], 16)))
 

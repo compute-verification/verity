@@ -1,6 +1,6 @@
 """Total semantics of one BF16 tensor-core step: ``veritor.tensor-core.ampere_bf16_m16n8k16@3``.
 
-:mod:`verity_ml.tc.silicon` models the *finite* domain of an Ampere
+:mod:`verity.ml.tc.silicon` models the *finite* domain of an Ampere
 ``mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`` step (Hawkeye's
 parameters: two groups of eight exact products, a 25-bit truncating adder,
 exponent floor ``-132``) and raises on any NaN or infinity.  This module
@@ -8,17 +8,17 @@ extends that model to a **total function on every encoding** of the gate's
 signature -- every 16-bit word as a BF16 operand, every 32-bit word as the
 accumulator -- as a mathematical definition, not a lookup of measurements:
 
-* a *value* is a NaN, a signed infinity, or a finite :class:`~verity_ml.tc.silicon.Term`;
+* a *value* is a NaN, a signed infinity, or a finite :class:`~verity.ml.tc.silicon.Term`;
 * the **product** of two BF16 words is NaN if either is a NaN (quiet or
   signalling, any payload, either sign); otherwise, if either is an infinity,
   NaN if the other is a zero (``±0``; a subnormal is *not* a zero) and else an
   infinity with the XOR of the signs; otherwise the exact finite product of
-  :func:`~verity_ml.tc.silicon.bf16_product`;
-* the **accumulator** word decodes likewise (NaN, ``±inf``, or :func:`~verity_ml.tc.silicon.fp32_term`);
+  :func:`~verity.ml.tc.silicon.bf16_product`;
+* the **accumulator** word decodes likewise (NaN, ``±inf``, or :func:`~verity.ml.tc.silicon.fp32_term`);
 * one **group step** takes the incoming value and the group's products: NaN if
   any of them is NaN; NaN if infinities of both signs are present; that
   infinity if infinities of one sign are present (whatever the finite terms);
-  otherwise the finite :func:`~verity_ml.tc.silicon.group_sum` of the finite
+  otherwise the finite :func:`~verity.ml.tc.silicon.group_sum` of the finite
   terms, which *saturates* to an infinity of its sign when it leaves the FP32
   range (exponent above ``127``).  A saturated infinity is an ordinary
   infinity for the following group (``+inf`` from an overflowing group 1 and
@@ -26,10 +26,10 @@ accumulator -- as a mathematical definition, not a lookup of measurements:
 * the **result word** is ``0x7FFFFFFF`` for NaN (one canonical word: positive
   sign, every mantissa bit set, whatever the payloads and signs of the input
   NaNs), ``0x7F800000`` / ``0xFF800000`` for the infinities, and
-  :func:`~verity_ml.tc.silicon.pack_fp32` for a finite value -- whose zero is
+  :func:`~verity.ml.tc.silicon.pack_fp32` for a finite value -- whose zero is
   always ``+0`` (``-0`` accumulators and ``-0`` products never produce ``-0``).
 
-On finite operands this is exactly :func:`verity_ml.tc.silicon.tc_dot`
+On finite operands this is exactly :func:`verity.ml.tc.silicon.tc_dot`
 (``lean/VeritorSpec/TCTotal.lean`` proves the Lean transcription of the two
 agree, ``tcDot_total_eq_of_finite``).  On the special encodings it is a
 *specification*; the evidence that the A100 (sm_80) and the RTX 4090 (sm_89)
@@ -43,7 +43,7 @@ Also here: :func:`cvt_rn_bf16_f32`, the FP32 -> BF16 conversion
 (``cvt.rn.bf16.f32``, SASS ``F2FP.BF16.PACK_AB``) as measured on both devices:
 round to nearest even on finite words, ``±inf`` for ``±inf`` and for finite
 words that round beyond BF16's range, and the canonical ``0x7FFF`` for every
-NaN.  Note that :func:`verity_ml.tc.silicon.f32_to_bf16` maps NaN to ``0x7FC0``
+NaN.  Note that :func:`verity.ml.tc.silicon.f32_to_bf16` maps NaN to ``0x7FC0``
 instead; the difference is only on NaN inputs, which the pinned gate set's
 ``check`` rejects.
 
@@ -59,8 +59,8 @@ over groups x width x floor) and the special-value rules R1-R8 were re-tested
 with L6's case families; the record is ``docs/data/tc-hopper-2026-09-07/``.
 The instruction's ``scale-d = 0`` form (accumulator ignored, CUTLASS
 ``ScaleOut::Zero``) was measured equal to ``acc = +0``.  On finite operands
-the function is :func:`verity_ml.tc.silicon.tc_dot` on
-:data:`~verity_ml.tc.silicon.HOPPER_BF16_M16N8K16` (identical parameters,
+the function is :func:`verity.ml.tc.silicon.tc_dot` on
+:data:`~verity.ml.tc.silicon.HOPPER_BF16_M16N8K16` (identical parameters,
 Hawkeye's H100 numbers, now re-measured).
 
 Promoted verbatim from ``veritor`` ``src/veritor/core/silicon_total.py`` lines
@@ -240,7 +240,7 @@ TOTAL_FAMILY_VERSION = "3"
 
 #: One accumulator coordinate of Hopper's ``wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16``: all
 #: sixteen products and the accumulator in one grouped sum, 26-bit adder, exponent floor ``-133``.  The
-#: parameters are the same as :data:`~verity_ml.tc.silicon.HOPPER_BF16_M16N8K16` (Hawkeye's H100 numbers);
+#: parameters are the same as :data:`~verity.ml.tc.silicon.HOPPER_BF16_M16N8K16` (Hawkeye's H100 numbers);
 #: this pipeline is the one *re-measured* by lane HP's campaign on the instruction the production GEMM and
 #: FA3 execute (``gpu/tc-hopper``).  The value does not depend on N, on the coordinate's position in the
 #: 64 x 128 tile, or on ``scale-d`` (``0`` behaves as ``acc = +0``), so one k16 step is the primitive.

@@ -10,11 +10,14 @@ Code migrates incrementally from `veritor`.
 - `tools/research/`: shared tooling for running, observing, and coordinating
   computational work (`research run | status | inspect`). Imports nothing
   from `packages/`. Developer notes in its `README.md`.
-- `packages/ir/` (`verity_ir`): the IR core — types, definitions, canonical
+- `packages/*` are distributions under the `verity` namespace package (PEP 420):
+  each ships `src/verity/<name>/` and **no `src/verity/__init__.py`** — adding
+  one anywhere breaks the merge. `import verity.ir`, `import verity.ml`.
+- `packages/ir/` (`verity.ir`): the IR core — types, definitions, canonical
   layout, evaluator, descriptor codec. Stdlib only; knows no semantics package.
-- `packages/ml/` (`verity_ml`): exact hardware semantics of the tensor-core
-  accumulator step (`verity_ml.tc`, stdlib only) and their IR registrations
-  (`prims`, `gemm`). `verity_ml.tc.relation` restates the step as witness
+- `packages/ml/` (`verity.ml`): exact hardware semantics of the tensor-core
+  accumulator step (`verity.ml.tc`, stdlib only) and their IR registrations
+  (`prims`, `gemm`). `verity.ml.tc.relation` restates the step as witness
   columns + mul/linear/lookup predicates and counts them (`census()`): the
   input to the proof-backend decision. Tests replay the A100 / RTX 4090 / H100
   captures under `packages/ml/tests/fixtures/` (see its README for provenance).
