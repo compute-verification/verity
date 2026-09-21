@@ -37,7 +37,8 @@ grep -q BAD "$OUT/pin_check.txt" && { echo "pin check failed"; exit 3; }
 # 2. the venv: CPU torch (headers + libtorch for the harness), pytest, z3
 VENV="$WORK/venv"
 if [ ! -x "$VENV/bin/python" ]; then "$UV" venv -q --python "$PY" "$VENV"; fi
-"$UV" pip install -q --python "$VENV/bin/python" --index-url https://download.pytorch.org/whl/cpu torch
+# torch 2.4.1: the newest CPU wheel whose headers compile with the image's g++ 11.4 (2.14's ATen/ExpandUtils.h does not)
+"$UV" pip install -q --python "$VENV/bin/python" --index-url https://download.pytorch.org/whl/cpu "torch==2.4.1"
 "$UV" pip install -q --python "$VENV/bin/python" pytest z3-solver
 TORCH_BASE=$("$VENV/bin/python" -c "import torch, os; print(os.path.dirname(torch.__file__))")
 ABI=$("$VENV/bin/python" -c "import torch; print(int(torch._C._GLIBCXX_USE_CXX11_ABI))")

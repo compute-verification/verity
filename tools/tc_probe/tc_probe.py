@@ -213,6 +213,16 @@ def families(rng, n_random):
     acc = random_finite_fp32_bits(rng, n * 128, 0, 30).reshape(n, 16, 8)
     yield "tiny_acc_zero_products", np.zeros((n, 16, K), np.uint16), np.zeros((n, 8, K), np.uint16), acc
 
+    # 10. (WP1 addition) +-0 accumulators with cancelling products below 2^-145: BF16 subnormal a (30% of lanes), b in
+    # [2^-27, 2^-5].  Decides whether a zero accumulator's exponent enters the alignment maximum (silicon and the simulator's
+    # E_ZERO zero: no; a zero carried at -126/-127 would truncate these sums differently -- see the log).
+    n = max(256, n_random // 16)
+    a = ((rng.integers(0, 2, (n, 16, K)) << 15) | rng.integers(1, 128, (n, 16, K))).astype(np.uint16)
+    a = np.where(rng.random((n, 16, K)) < 0.7, np.uint16(0), a)
+    b = ((rng.integers(0, 2, (n, 8, K)) << 15) | (rng.integers(100, 123, (n, 8, K)) << 7) | rng.integers(0, 128, (n, 8, K))).astype(np.uint16)
+    acc = np.where(rng.random((n, 16, 8)) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
+    yield "zero_acc_tiny_cancellation", a, b, acc
+
 
 # --- the model, per tile, in processes -----------------------------------------------------------------------------------------------
 
@@ -241,12 +251,36 @@ def _eval_tiles(args):
     return out, err
 
 
-def model_eval(pool, A, Bt, C, procs):
+def model_eval(pool, A, Bt, C, procs, worker=_eval_tiles):
     n = A.shape[0]
     chunks = max(1, min(n // 64 + 1, procs * 8))
     idx = np.array_split(np.arange(n), chunks)
-    parts = pool.map(_eval_tiles, [(A[i], Bt[i], C[i]) for i in idx])
+    parts = pool.map(worker, [(A[i], Bt[i], C[i]) for i in idx])
     return np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts])
+
+
+def _eval_zero_alternatives(args):
+    """For zero accumulators: the word the source-close evaluator gives when the zero is carried at exponent -126 / -127 instead of
+    E_ZERO (the two arrays returned).  Elements with a nonzero accumulator get the ordinary result in both."""
+
+    from verity_numerical.reference import hawkeye_close as H
+
+    A, Bt, C = args
+    n = A.shape[0]
+    out = [np.zeros((n, 16, 8), np.uint32) for _ in range(2)]
+    for t in range(n):
+        for i in range(16):
+            for j in range(8):
+                acc_bits = int(C[t, i, j])
+                for k, zero_exp in enumerate((-126, -127)):
+                    if acc_bits & 0x7FFFFFFF:
+                        g = H.fp32_to_gfloat(acc_bits)
+                    else:
+                        g = H.Gfloat(bool(acc_bits >> 31), zero_exp, 0)
+                    for start in (0, 8):
+                        g = H.group_sum([g] + [H.multiply_bfloat16_to_gfloat(int(A[t, i, l]), int(Bt[t, j, l])) for l in range(start, start + 8)])
+                    out[k][t, i, j] = H.gfloat_to_float_bits(g)
+    return out[0], out[1]
 
 
 # --- records ----------------------------------------------------------------------------------------------------------------------
@@ -382,6 +416,14 @@ def main() -> int:
                     rec = hexrec(C[t, i, j], A[t, i], Bt[t, j], D[t, i, j])
                     rec["model"] = "error" if err[t, i, j] else f"{int(model[t, i, j]):08x}"
                     fam["first_mismatches"].append(rec)
+                if name == "zero_acc_tiny_cancellation":
+                    alt126, alt127 = model_eval(pool, A, Bt, C, args.procs, worker=_eval_zero_alternatives)
+                    fam["zero_exponent_probe"] = {
+                        "elements_where_a_zero_at_-126_differs_from_model": int(np.count_nonzero(alt126 != model)),
+                        "hardware_eq_zero_at_-126_where_it_differs": int(np.count_nonzero((alt126 != model) & (alt126 == D))),
+                        "elements_where_a_zero_at_-127_differs_from_model": int(np.count_nonzero(alt127 != model)),
+                        "hardware_eq_zero_at_-127_where_it_differs": int(np.count_nonzero((alt127 != model) & (alt127 == D))),
+                    }
                 np.savez_compressed(out / f"tiles_{name}.npz", A=A, Bt=Bt, C=C, D=D)
                 flat = rng.choice(A.shape[0] * 128, size=min(args.golden_per_family, A.shape[0] * 128), replace=False)
                 for f in sorted(flat.tolist()):
