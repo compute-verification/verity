@@ -315,11 +315,36 @@ def layout_check(probe: Probe) -> None:
         raise RuntimeError("fragment layout check failed: the kernel does not compute C + A.Bt on exact integer tiles")
 
 
-def replay_golden(probe: Probe, path: Path) -> dict:
+def special_all_finite_records(path: Path) -> list[dict]:
+    """The all-finite records (finite acc, finite a and b words) of a ``tc-total-2026-09-07/<device>/mma_special.reduced.json.gz``
+    file, in the golden-record shape: the ``cases`` list and the ``pos`` list (one measured word each)."""
+
+    import gzip
+
+    data = json.loads(gzip.open(path).read())
+    assert data["instruction"] == "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32"
+    out = []
+    for rec in data["cases"]:
+        out.append({"acc": rec["acc"], "a": rec["a"], "b": rec["b"], "d": rec["d"], "family": f"cases/{rec['family']}"})
+    for rec in data["pos"]:
+        assert len(rec["d"]) == 1, rec["name"]
+        out.append({"acc": rec["acc"], "a": rec["a"], "b": rec["b"], "d": rec["d"][0], "family": "pos"})
+    finite = []
+    for rec in out:
+        if (int(rec["acc"], 16) >> 23) & 0xFF == 0xFF:
+            continue
+        if any((w >> 7) & 0xFF == 0xFF for w in (*words(rec["a"]), *words(rec["b"]))):
+            continue
+        finite.append(rec)
+    return finite
+
+
+def replay_golden(probe: Probe, path: Path, records: list[dict] | None = None, pipeline: str | None = None) -> dict:
     """Every record at its own tile position (r % 16, (r // 16) % 8), the rest of the tile zero."""
 
-    data = json.loads(path.read_text())
-    records = data["records"]
+    if records is None:
+        data = json.loads(path.read_text())
+        records, pipeline = data["records"], data["pipeline"]
     n = len(records)
     A = np.zeros((n, 16, K), np.uint16)
     Bt = np.zeros((n, 8, K), np.uint16)
@@ -341,8 +366,9 @@ def replay_golden(probe: Probe, path: Path) -> dict:
         other_nonzero += int(np.count_nonzero(rest))  # zero rows times anything, zero accumulator: every other output is +0
     return {
         "file": str(path),
-        "pipeline": data["pipeline"],
+        "pipeline": pipeline,
         "records": n,
+        "nonzero_accumulators": int(sum(1 for rec in records if int(rec["acc"], 16) & 0x7FFFFFFF)),
         "mismatches": len(mism),
         "first_mismatches": mism[:5],
         "other_positions_nonzero": other_nonzero,
@@ -355,6 +381,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--pipeline", default="ampere_bf16_m16n8k16")
     ap.add_argument("--replay-golden", default=None, metavar="JSON")
+    ap.add_argument("--replay-special", default=None, metavar="JSON.GZ", help="mma_special.reduced.json.gz: its all-finite records")
     ap.add_argument("--sweep", action="store_true")
     ap.add_argument("--n-random", type=int, default=100_000)
     ap.add_argument("--seed", type=int, default=20260902)
@@ -378,6 +405,11 @@ def main() -> int:
     if args.replay_golden:
         results["golden_replay"] = replay_golden(probe, Path(args.replay_golden))
         print("golden_replay", json.dumps({k: v for k, v in results["golden_replay"].items() if k != "first_mismatches"}), flush=True)
+
+    if args.replay_special:
+        path = Path(args.replay_special)
+        results["special_replay"] = replay_golden(probe, path, special_all_finite_records(path), args.pipeline)
+        print("special_replay", json.dumps({k: v for k, v in results["special_replay"].items() if k != "first_mismatches"}), flush=True)
 
     if args.sweep:
         only = set(args.families.split(",")) if args.families else None
@@ -446,8 +478,9 @@ def main() -> int:
 
     results["seconds"] = round(time.time() - t_all, 1)
     failures = []
-    if "golden_replay" in results and (results["golden_replay"]["mismatches"] or results["golden_replay"]["other_positions_nonzero"]):
-        failures.append(f"golden_replay mismatches={results['golden_replay']['mismatches']}")
+    for replay in ("golden_replay", "special_replay"):
+        if replay in results and (results[replay]["mismatches"] or results[replay]["other_positions_nonzero"]):
+            failures.append(f"{replay} mismatches={results[replay]['mismatches']} other_positions_nonzero={results[replay]['other_positions_nonzero']}")
     if "sweep" in results and results["sweep"]["total_mismatches_vs_model"]:
         failures.append(f"sweep mismatches={results['sweep']['total_mismatches_vs_model']}")
     results["failures"] = failures
