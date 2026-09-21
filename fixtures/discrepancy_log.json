@@ -38,11 +38,12 @@
     "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
     "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
     "tools/tc_probe/tc_probe.py",
-    "r20260921-231618-ea24"
+    "r20260921-231618-ea24",
+    "r20260921-232750-56c5"
    ],
    "owner": "WP1",
    "to_resolve": "Run the Ada finite-sweep families (random, subnormal, cancellation, mixed-magnitude, near-overflow, nonzero accumulators) on an A100 with arbitrary accumulators and record the capture as a recorded research run; the resolution names the run id and the mismatch count.",
-   "proposed_resolution": "The probe tools/tc_probe (mma_tiles.cu + tc_probe.py, ported from the Ada probe with provenance in the headers; any FP32 accumulator) reproduces the 360 Ada golden records bit for bit and agrees with silicon.tc_dot on 25,698,304 RTX 4090 (sm_89) elements in 10 families (randn zero/random accumulators, uniform bits, subnormal, cancellation, mixed magnitude, near overflow, signed zero, tiny accumulators x zero products, zero accumulators x tiny cancelling products), 12,065,535 of them with a nonzero accumulator, 0 mismatches (run r20260921-231618-ea24).  Resolving D2 needs the same command with --arch sm_80 on an A100 (vy-a100, provisioned by the coordinator; not run by WP1): the resolution names that run id and its mismatch count.  Until then the sm_80 evidence stays the 7,713 all-finite special cases."
+   "proposed_resolution": "Resolved by measurement on sm_80: recorded run r20260921-232750-56c5 (stage wp1.probe.a100, NVIDIA A100 80GB PCIe, compute capability 8.0, driver 570.133.20, CUDA 12.4) ran tools/tc_probe with --arch sm_80: the 7,713 all-finite records of the A100 special campaign (4,565 with a nonzero accumulator) replayed on the device with 0 mismatches against their recorded words and 0 nonzero words at the other tile positions, and the finite sweep -- the same 10 families and seed 20260902 as the RTX 4090 run r20260921-231618-ea24: randn zero/random accumulators, uniform bits, subnormal, cancellation, mixed magnitude, near overflow, signed zero, tiny accumulators x zero products, zero accumulators x tiny cancelling products -- 25,698,304 elements, 12,065,535 of them with a nonzero accumulator, 0 mismatches against silicon.tc_dot (AMPERE_BF16_M16N8K16 parameters: groups (8,8), 25-bit truncating adder, floor -132) and 0 model-domain errors.  The same inputs gave the same 25,698,304 words on sm_89 (run r20260921-231618-ea24, 360/360 Ada golden records reproduced).  Raw captures: tiles_<family>.npz and capture_sample.json in the run directory."
   },
   {
    "id": "D3",
@@ -163,10 +164,12 @@
    "evidence_refs": [
     "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
     "tools/tc_probe/tc_probe.py",
-    "r20260921-231618-ea24"
+    "r20260921-231618-ea24",
+    "r20260921-232750-56c5"
    ],
    "owner": "WP1",
-   "to_resolve": "The sm_80 run of tc_probe (the D2 sweep includes the family zero_acc_tiny_cancellation) reports the same two counts; 0 hardware words equal to either alternative and 0 mismatches against silicon.tc_dot on the A100 resolves it as 'a zero accumulator does not enter the alignment maximum'."
+   "to_resolve": "The sm_80 run of tc_probe (the D2 sweep includes the family zero_acc_tiny_cancellation) reports the same two counts; 0 hardware words equal to either alternative and 0 mismatches against silicon.tc_dot on the A100 resolves it as 'a zero accumulator does not enter the alignment maximum'.",
+   "proposed_resolution": "Resolved by measurement on both architectures: a zero incoming accumulator does not enter the alignment maximum.  tc_probe family zero_acc_tiny_cancellation (+-0 accumulators, BF16 subnormal x [2^-27, 2^-5] products with random signs, 800,000 elements, seed 20260902): 163,533 elements would differ if the zero carried exponent -126 and 87,058 if it carried -127; the hardware word equals the -126 alternative in 0 of the 163,533 and the -127 alternative in 0 of the 87,058, and equals silicon.tc_dot (zeros skipped in the maximum, the same as the simulator's zero at -132) in all 800,000 -- identical counts on the A100 (sm_80, run r20260921-232750-56c5) and the RTX 4090 (sm_89, run r20260921-231618-ea24).  The 3,148 + 3,148 zero-accumulator all-finite special cases and the 80 golden ones do not distinguish the encodings; these two runs do."
   }
  ]
 }
