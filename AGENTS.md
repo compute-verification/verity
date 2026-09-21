@@ -27,7 +27,10 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   compare`). Separate distribution; must not import `verity`, and a test
   enforces it. Developer notes in its `README.md`.
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
-  component has real code. The first is `backends/sp1`.
+  component has real code. The first is `backends/sp1`; its `README.md` is
+  the how-to (build, identity, Python API, tests, recorded pod runs).
+  **SP1 proving never runs on a laptop or the control pod**: use
+  `research run --on vy-sp1 ...` (`~/.research/machines.toml`).
 
 Dependency direction (README "Development"): `ir <- ml`, `ir <- commitments`,
 `ir + commitments <- verification`, everything else depends inward on the
