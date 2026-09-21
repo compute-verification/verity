@@ -334,7 +334,7 @@ network floor `depth × RTT` in seconds (`e2e_sweep`):**
 | B `gkr` mode | 3 447 | 328 | as A baseline | | | | |
 
 At \(B=1\) and \(B=64\) the A baseline depth is 156 and 193 (`rounds_and_depth_a`; the dominant chain is
-\(n_T=17,20\)). Whether the depth reductions are adopted is a measurement question
+\(n_T=17,19\)). Whether the depth reductions are adopted is a measurement question
 (`backends/AGENTS.md`: "no hard round budget yet").
 
 ### 5.5 Step 0: verifier-coin commitment for malicious-verifier privacy **[proposal]**
