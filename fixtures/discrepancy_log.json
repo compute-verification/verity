@@ -32,8 +32,8 @@
    "hawkeye_simulator": "Ampere_simulator.cpp; the matrix wrapper initialises the accumulator to zero",
    "verity_reference": "silicon.AMPERE_BF16_M16N8K16 carries validated='Hawkeye (A100), not re-measured here'; silicon.ADA_BF16_M16N8K16 (identical parameters) was measured bit-exact on the RTX 4090 over 24,898,304 elements / 194,518 tiles incl. nonzero accumulators",
    "hardware_evidence": "A100: the exact instruction, 31,290 structured cases of which 7,456 are all-finite and 4,565 all-finite with a nonzero accumulator (same case list as the 4090); no large finite sweep on sm_80",
-   "status": "open",
-   "resolution": null,
+   "status": "resolved",
+   "resolution": "Resolved by measurement on sm_80: recorded run r20260921-232750-56c5 (stage wp1.probe.a100, NVIDIA A100 80GB PCIe, compute capability 8.0, driver 570.133.20, CUDA 12.4) ran tools/tc_probe with --arch sm_80: the 7,713 all-finite records of the A100 special campaign (4,565 with a nonzero accumulator) replayed on the device with 0 mismatches against their recorded words and 0 nonzero words at the other tile positions, and the finite sweep -- the same 10 families and seed 20260902 as the RTX 4090 run r20260921-231618-ea24: randn zero/random accumulators, uniform bits, subnormal, cancellation, mixed magnitude, near overflow, signed zero, tiny accumulators x zero products, zero accumulators x tiny cancelling products -- 25,698,304 elements, 12,065,535 of them with a nonzero accumulator, 0 mismatches against silicon.tc_dot (AMPERE_BF16_M16N8K16 parameters: groups (8,8), 25-bit truncating adder, floor -132) and 0 model-domain errors.  The same inputs gave the same 25,698,304 words on sm_89 (run r20260921-231618-ea24, 360/360 Ada golden records reproduced).  Raw captures: tiles_<family>.npz and capture_sample.json in the run directory. Status set by the coordinator 2026-09-21 on this evidence.",
    "evidence_refs": [
     "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
     "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
@@ -41,9 +41,7 @@
     "r20260921-231618-ea24",
     "r20260921-232750-56c5"
    ],
-   "owner": "WP1",
-   "to_resolve": "Run the Ada finite-sweep families (random, subnormal, cancellation, mixed-magnitude, near-overflow, nonzero accumulators) on an A100 with arbitrary accumulators and record the capture as a recorded research run; the resolution names the run id and the mismatch count.",
-   "proposed_resolution": "Resolved by measurement on sm_80: recorded run r20260921-232750-56c5 (stage wp1.probe.a100, NVIDIA A100 80GB PCIe, compute capability 8.0, driver 570.133.20, CUDA 12.4) ran tools/tc_probe with --arch sm_80: the 7,713 all-finite records of the A100 special campaign (4,565 with a nonzero accumulator) replayed on the device with 0 mismatches against their recorded words and 0 nonzero words at the other tile positions, and the finite sweep -- the same 10 families and seed 20260902 as the RTX 4090 run r20260921-231618-ea24: randn zero/random accumulators, uniform bits, subnormal, cancellation, mixed magnitude, near overflow, signed zero, tiny accumulators x zero products, zero accumulators x tiny cancelling products -- 25,698,304 elements, 12,065,535 of them with a nonzero accumulator, 0 mismatches against silicon.tc_dot (AMPERE_BF16_M16N8K16 parameters: groups (8,8), 25-bit truncating adder, floor -132) and 0 model-domain errors.  The same inputs gave the same 25,698,304 words on sm_89 (run r20260921-231618-ea24, 360/360 Ada golden records reproduced).  Raw captures: tiles_<family>.npz and capture_sample.json in the run directory."
+   "owner": "WP1"
   },
   {
    "id": "D3",
@@ -53,17 +51,15 @@
    "hawkeye_simulator": "group_sum normalises by successive shifts; the formula was derived from that code, not quoted",
    "verity_reference": "silicon.group_sum rescales to the adder width, truncates and repacks; whether it is the successive-shift form or the closed form is to be checked",
    "hardware_evidence": "indirect: every recorded finite case agrees with silicon.tc_dot",
-   "status": "open",
-   "resolution": null,
+   "status": "resolved",
+   "resolution": "The successive-shift normalisation -- hawkeye_close.group_sum, which is the simulator's group_sum statement for statement, and silicon.group_sum, the same statement sequence -- equals the closed form e' = max(E + l - 25, -126), M' = floor(v * 2^(E - e' - 1)) on the whole reachable domain E in [-132, 254], |S| < 2^30: an SMT proof over 32-bit bitvectors (z3; test_normalisation_d3.py::test_closed_form_equals_successive_shifts_over_the_whole_reachable_domain_by_smt, unsat in about one second, mutants of the floor or the rescale are sat), the three forms checked through the real group_sum functions exhaustively for every E in [-132, 254] x every |S| < 2^12 x both signs and for every (E, bit length 0..30) with four patterns (recorded run r20260921-230852-4f1e, step f, 0 mismatches), and the composition-of-shifts proof sketch in that test module's docstring.  The closed form is a separate function (hawkeye_close.normalise_closed_form); no reference implementation was changed. Status set by the coordinator 2026-09-21 on this evidence.",
    "evidence_refs": [
     "packages/verity/src/verity/ml/tc/silicon.py",
     "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
     "backends/numerical/tests/reference/test_normalisation_d3.py",
     "r20260921-230852-4f1e"
    ],
-   "owner": "WP1",
-   "to_resolve": "Prove (exhaustively at the real widths over the reachable |S| < 2^30, E range, or formally) that the source-close evaluator, the closed form and silicon.group_sum agree; record where the proof lives.",
-   "proposed_resolution": "The successive-shift normalisation -- hawkeye_close.group_sum, which is the simulator's group_sum statement for statement, and silicon.group_sum, the same statement sequence -- equals the closed form e' = max(E + l - 25, -126), M' = floor(v * 2^(E - e' - 1)) on the whole reachable domain E in [-132, 254], |S| < 2^30: an SMT proof over 32-bit bitvectors (z3; test_normalisation_d3.py::test_closed_form_equals_successive_shifts_over_the_whole_reachable_domain_by_smt, unsat in about one second, mutants of the floor or the rescale are sat), the three forms checked through the real group_sum functions exhaustively for every E in [-132, 254] x every |S| < 2^12 x both signs and for every (E, bit length 0..30) with four patterns (recorded run r20260921-230852-4f1e, step f, 0 mismatches), and the composition-of-shifts proof sketch in that test module's docstring.  The closed form is a separate function (hawkeye_close.normalise_closed_form); no reference implementation was changed."
+   "owner": "WP1"
   },
   {
    "id": "D4",
@@ -121,8 +117,8 @@
    "hawkeye_simulator": "group_sum accepts any accumulator triple; the matrix wrapper zero-initialises and finalises",
    "verity_reference": "silicon.tc_dot takes any finite FP32 accumulator word into group 1",
    "hardware_evidence": "A100: 4,565 all-finite nonzero-accumulator cases; 4090: 280 golden records with nonzero accumulators plus the finite sweep",
-   "status": "open",
-   "resolution": null,
+   "status": "resolved",
+   "resolution": "The adapter is hawkeye_close.fp32_to_gfloat: an FP32 word becomes the Gfloat the simulator's group_sum would have produced for it -- zero (either sign) -> Gfloat(sign, -132, 0), subnormal -> (sign, -126, m), normal -> (sign, e - 127, 2^23 | m) -- and hawkeye_close.tc_dot16 feeds it to group_sum([c, p0..p7]) then group_sum([., p8..p15]) then Gfloat::operator float.  The wrapper's finalisation (Ampere_simulator::matrix_multiply_template) is one more group_sum over the single Gfloat the second group produced, then operator float; group_sum([g]) = g for every reachable g (a 24-bit significand rescales to 25 bits, has width 25 and shifts back; a subnormal is shifted left by 25 - l and right by 24 - l and 1), and fp32_to_gfloat is the left inverse of operator float on every such g (both checked on every subnormal significand and on 3,072 mantissa patterns per exponent, run r20260921-230852-4f1e step g), so the adapter provably omits the identity group_sum and preserves the cast.  Evidence: tc_dot16 equals silicon.tc_dot on every case with a finite result -- 60,858 structured, 1,000,000 random, every all-finite record of the A100 and RTX 4090 special campaigns (7,713 each, 4,565 with a nonzero accumulator) and the 360 golden records -- and equals the compiled pinned simulator bit for bit on the same cases, the compiled wrapper included on the zero-accumulator ones (run r20260921-230852-4f1e steps d and e).  The zero must carry -132 (the C++ maximum ranges over every term); no earlier capture distinguishes that from a zero at -126/-127 -- entry D9. Status set by the coordinator 2026-09-21 on this evidence.",
    "evidence_refs": [
     "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
     "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
@@ -130,9 +126,7 @@
     "backends/numerical/tests/reference/hawkeye_harness.cpp",
     "r20260921-230852-4f1e"
    ],
-   "owner": "WP1",
-   "to_resolve": "The source-close evaluator needs an explicit arbitrary-c adapter around group_sum (bypassing the wrapper) with tests against the A100 nonzero-accumulator cases; state what the wrapper's finalisation does and whether the adapter preserves or provably omits it.",
-   "proposed_resolution": "The adapter is hawkeye_close.fp32_to_gfloat: an FP32 word becomes the Gfloat the simulator's group_sum would have produced for it -- zero (either sign) -> Gfloat(sign, -132, 0), subnormal -> (sign, -126, m), normal -> (sign, e - 127, 2^23 | m) -- and hawkeye_close.tc_dot16 feeds it to group_sum([c, p0..p7]) then group_sum([., p8..p15]) then Gfloat::operator float.  The wrapper's finalisation (Ampere_simulator::matrix_multiply_template) is one more group_sum over the single Gfloat the second group produced, then operator float; group_sum([g]) = g for every reachable g (a 24-bit significand rescales to 25 bits, has width 25 and shifts back; a subnormal is shifted left by 25 - l and right by 24 - l and 1), and fp32_to_gfloat is the left inverse of operator float on every such g (both checked on every subnormal significand and on 3,072 mantissa patterns per exponent, run r20260921-230852-4f1e step g), so the adapter provably omits the identity group_sum and preserves the cast.  Evidence: tc_dot16 equals silicon.tc_dot on every case with a finite result -- 60,858 structured, 1,000,000 random, every all-finite record of the A100 and RTX 4090 special campaigns (7,713 each, 4,565 with a nonzero accumulator) and the 360 golden records -- and equals the compiled pinned simulator bit for bit on the same cases, the compiled wrapper included on the zero-accumulator ones (run r20260921-230852-4f1e steps d and e).  The zero must carry -132 (the C++ maximum ranges over every term); no earlier capture distinguishes that from a zero at -126/-127 -- entry D9."
+   "owner": "WP1"
   },
   {
    "id": "D8",
@@ -160,17 +154,15 @@
    "hawkeye_simulator": "every zero Gfloat carries AMPERE_ZERO_EXPONENT = -132 (multiply_bfloat16_to_gfloat, group_sum, the wrapper's start) and group_sum's maximum ranges over every term, so a zero never raises it; utils.cpp::bfloat16_to_gfloat_tensor (unused by the mma path) would decode a zero at -127",
    "verity_reference": "silicon.group_sum skips zero-magnitude terms in the maximum: the same result as a zero at -132",
    "hardware_evidence": "none among the earlier captures: in the 3,148 zero-accumulator all-finite A100/4090 cases and the 80 golden ones no result changes if the zero is carried at -126 or -127 (the difference needs cancelling products below 2^-145 with a zero accumulator).  RTX 4090 (sm_89), run r20260921-231618-ea24, family zero_acc_tiny_cancellation, 800,000 elements: a zero at -126 would change 163,533 results and a zero at -127 87,058; the hardware word equals the alternative in 0 of them and silicon.tc_dot in all 800,000 -- on sm_89 a zero accumulator does not enter the maximum.  A100: not measured.",
-   "status": "open",
-   "resolution": null,
+   "status": "resolved",
+   "resolution": "Resolved by measurement on both architectures: a zero incoming accumulator does not enter the alignment maximum.  tc_probe family zero_acc_tiny_cancellation (+-0 accumulators, BF16 subnormal x [2^-27, 2^-5] products with random signs, 800,000 elements, seed 20260902): 163,533 elements would differ if the zero carried exponent -126 and 87,058 if it carried -127; the hardware word equals the -126 alternative in 0 of the 163,533 and the -127 alternative in 0 of the 87,058, and equals silicon.tc_dot (zeros skipped in the maximum, the same as the simulator's zero at -132) in all 800,000 -- identical counts on the A100 (sm_80, run r20260921-232750-56c5) and the RTX 4090 (sm_89, run r20260921-231618-ea24).  The 3,148 + 3,148 zero-accumulator all-finite special cases and the 80 golden ones do not distinguish the encodings; these two runs do. Status set by the coordinator 2026-09-21 on this evidence.",
    "evidence_refs": [
     "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
     "tools/tc_probe/tc_probe.py",
     "r20260921-231618-ea24",
     "r20260921-232750-56c5"
    ],
-   "owner": "WP1",
-   "to_resolve": "The sm_80 run of tc_probe (the D2 sweep includes the family zero_acc_tiny_cancellation) reports the same two counts; 0 hardware words equal to either alternative and 0 mismatches against silicon.tc_dot on the A100 resolves it as 'a zero accumulator does not enter the alignment maximum'.",
-   "proposed_resolution": "Resolved by measurement on both architectures: a zero incoming accumulator does not enter the alignment maximum.  tc_probe family zero_acc_tiny_cancellation (+-0 accumulators, BF16 subnormal x [2^-27, 2^-5] products with random signs, 800,000 elements, seed 20260902): 163,533 elements would differ if the zero carried exponent -126 and 87,058 if it carried -127; the hardware word equals the -126 alternative in 0 of the 163,533 and the -127 alternative in 0 of the 87,058, and equals silicon.tc_dot (zeros skipped in the maximum, the same as the simulator's zero at -132) in all 800,000 -- identical counts on the A100 (sm_80, run r20260921-232750-56c5) and the RTX 4090 (sm_89, run r20260921-231618-ea24).  The 3,148 + 3,148 zero-accumulator all-finite special cases and the 80 golden ones do not distinguish the encodings; these two runs do."
+   "owner": "WP1"
   }
  ]
 }

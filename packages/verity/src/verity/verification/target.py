@@ -60,9 +60,10 @@ References and the log of disagreements
 =======================================
 
 * :data:`HAWKEYE_PIN` pins the source-close reference (Hawkeye's simulator, commit ``30703fcb``); the
-  parameters above are the ones it recovers on the A100, re-measured bit-exactly on the RTX 4090 (Ada) over
-  24.9 M elements and confirmed on the A100 on 31,290 structured cases (7,456 all-finite, 4,565 with a nonzero
-  accumulator) -- the large finite sweep on sm_80 itself is still owed (log entry D2).
+  parameters above are the ones it recovers on the A100, re-measured bit-exactly on both the RTX 4090 (sm_89) and
+  the A100 (sm_80) over 25,698,304 finite elements each (12,065,535 with a nonzero accumulator; runs
+  ``r20260921-231618-ea24`` and ``r20260921-232750-56c5``, log entries D2 and D9) and on the 7,713 all-finite
+  structured A100 cases.
 * :data:`DISCREPANCY_LOG` records every place where the paper, the simulator, Verity's reference and the hardware
   disagree or are silent, with an owner and what would resolve it.  Nothing in it is resolved by editing a
   reference implementation.
