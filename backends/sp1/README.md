@@ -29,6 +29,31 @@ The cross-language vectors under `../../fixtures/` (`proof-format-v3`,
 asserted here; they are what ties the kernel's semantics to `verity.ml` and
 to the statement encoding.
 
+## Guest identity
+
+The approved prover is pinned in `python/verity_sp1/host.py` (`APPROVED`):
+
+~~~text
+elf_sha256  cef2b78aef7ae16a3703d972c4cea7ec1cb5fed31797736a77886dc01fa5c567
+vk_hash     0x007d9347080c44a23742498ce3b1fb7ca0df111119f60ac2e094c5cd9c2438ab
+~~~
+
+`host/build.rs` makes the guest build reproducible without Docker: the
+workspace path and the cargo home are remapped to fixed prefixes
+(`--remap-path-prefix`) and the build is `--locked`, so the same source tree,
+`Cargo.lock` and pinned toolchain (`sp1up --version v6.4.0`) give the same
+ELF wherever it is checked out. Verified on 2026-09-21 by building on one
+Linux pod from two unrelated paths into two fresh target directories. A host
+built before that change carries another identity; `verify_object` refuses
+its proofs, and `info` shows which one you have.
+
+## Pods
+
+Proving is heavy and never runs on a laptop or on the small control pod.
+`pod_bootstrap.sh` sets up a fresh GPU pod (toolchain, `uv`, the cuda host at
+`/workspace/bin/veritor-zk-host-cuda`) and is run as a recorded `research`
+run; workloads then set `VERITY_SP1_HOST` to that binary and `SP1_PROVER=cuda`.
+
 ## Provenance
 
 Copied from `veritor` `zk/sp1` at commit `eb865ce2` (`common`, `guest`,

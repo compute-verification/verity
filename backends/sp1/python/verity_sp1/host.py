@@ -80,12 +80,13 @@ class GuestIdentity:
         )
 
 
-#: This repository's sound guest (``cargo build --release -p veritor-zk-host`` at the pinned ``sp1-sdk`` 6.4.0).
-#: The veritor guest at eb865ce2 had another ELF (the trimmed ``guest/src/main.rs`` moves four panic locations),
-#: so this identity is verity's own; see ``backends/sp1/README.md``.
+#: This repository's sound guest: ``cargo build --release -p veritor-zk-host`` at the pinned ``sp1-sdk`` 6.4.0 with
+#: the reproducible ``host/build.rs`` (paths remapped, ``--locked``), built on 2026-09-21 on a Linux pod from two
+#: unrelated paths with identical results.  The veritor guest at eb865ce2 had another ELF (the trimmed
+#: ``guest/src/main.rs`` moves four panic locations), so this identity is verity's own; see ``backends/sp1/README.md``.
 APPROVED = GuestIdentity(
-    elf_sha256="24618e7feb909d87d504652dbdaf68c1868427cbb3ca0b7841617fd6ab310e9b",
-    vk_hash="0x008c5d4feec8b6edc12e5eeb65f517c8467115a399fec4f2f82468ce432fe84f",
+    elf_sha256="cef2b78aef7ae16a3703d972c4cea7ec1cb5fed31797736a77886dc01fa5c567",
+    vk_hash="0x007d9347080c44a23742498ce3b1fb7ca0df111119f60ac2e094c5cd9c2438ab",
     sp1_version="6.4.0",
 )
 
