@@ -26,12 +26,25 @@ Every result carries two labels so numbers are never compared across classes by 
 ``--diagnostic`` is required to run an unsound host: the guest identity then need not be the approved one, the
 proof is verified under the guest's *own* key, and the result says so.  Without it, a diagnostic guest fails.
 
+The fingerprint carries the campaign contract's fields (``verity_numerical.bench.contract``): ``profile`` (the frozen
+target's name when the vector is in its family, else null), ``domain``, ``K`` and ``B`` read off the object,
+``zk_mode``, ``security``, ``hardware`` (nvidia-smi / cpuinfo, when present), ``software``, ``preprocessing``,
+``retention``.  Where a value is not observed it is null, never a guess.  SP1's measurements are reported under the
+host's own names (so the earlier baseline runs stay comparable) *and* under the contract's where they truly fit:
+``setup_seconds`` -> ``fixed.setup_seconds``; ``prove_seconds`` -> the joint stage
+``t.joint.witness+encoding_commitment+arithmetic+lookup`` (the SDK's one prover timer: trace generation,
+commitments, constraint and lookup arguments, FRI -- the host cannot split it) and ``t.total``; the in-process
+``verify_seconds`` -> ``verifier.seconds``; ``proof_bytes`` -> ``transcript.bytes``.  Writing the proof to disk is
+outside the prover timer and untimed, so ``t.serialization`` is absent; peak memory is not measured here (the GPU
+prover is a separate ``sp1-gpu-server`` process; ``research``'s ``resources.jsonl`` samples it).  A contract problem
+is printed to stderr and in the summary; it does not change the exit status, which is the validation verdict.
+
     uv run python benchmarks/dot_product/vector_run.py --vector accept--packed-word-row --backend sp1-prove --out /tmp/k16
     uv run research run --project verity --stage sp1.prove.k16 --require-result -- \\
         uv run python benchmarks/dot_product/vector_run.py --vector accept--packed-word-row --backend sp1-prove
 
-The script runs from a plain checkout: when ``verity`` / ``verity_sp1`` are not installed it adds
-``packages/verity/src`` and ``backends/sp1/python`` to ``sys.path``.
+The script runs from a plain checkout: when ``verity`` / ``verity_sp1`` / ``verity_numerical`` are not installed it
+adds ``packages/verity/src``, ``backends/sp1/python`` and ``backends/numerical/python`` to ``sys.path``.
 """
 
 from __future__ import annotations
@@ -46,7 +59,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURES = REPO / "fixtures" / "typed-obligation-v0"
-for candidate, module in ((REPO / "packages" / "verity" / "src", "verity"), (REPO / "backends" / "sp1" / "python", "verity_sp1")):
+for candidate, module in (
+    (REPO / "packages" / "verity" / "src", "verity"),
+    (REPO / "backends" / "sp1" / "python", "verity_sp1"),
+    (REPO / "backends" / "numerical" / "python", "verity_numerical"),
+):
     try:
         __import__(module)
     except ImportError:
@@ -54,8 +71,10 @@ for candidate, module in ((REPO / "packages" / "verity" / "src", "verity"), (REP
 
 from verity.verification.binding import bound_public_values  # noqa: E402
 from verity.verification.conformance import interpret  # noqa: E402
+from verity.verification.target import FIRST  # noqa: E402
+from verity_numerical.bench import contract  # noqa: E402
 
-RESULT_SCHEMA = "research/result/v0.1"
+RESULT_SCHEMA = contract.RESULT_SCHEMA
 BACKENDS = ("reference", "sp1-execute", "sp1-prove")
 
 
@@ -67,7 +86,36 @@ def source_sha() -> str | None:
 
 
 def measurement(name: str, value: float | int, unit: str) -> dict:
-    return {"name": name, "value": value, "unit": unit}
+    return contract.measurement(name, value, unit)
+
+
+def vector_K(rec: dict) -> int | None:
+    """The one ``K`` of the vector's ``GemmCoordinate`` subcircuits; ``None`` when there is none or they disagree."""
+
+    ks = {s["definition"]["static"]["K"] for s in rec["object"].get("subcircuits", ()) if s.get("definition", {}).get("name") == "GemmCoordinate"}
+    return ks.pop() if len(ks) == 1 else None
+
+
+def campaign_fields(rec: dict, backend: str, diagnostic: bool) -> dict:
+    """The contract's identity and batch fields for one vector through one backend -- what the judge compares before
+    it looks at a number.  Read off the object, not asserted: another family is not the campaign target (``profile``
+    null), a vector without one ``GemmCoordinate`` has no ``K``."""
+
+    obj = rec["object"]
+    fam = obj.get("family") or {}
+    on_target = fam.get("id") == FIRST.family and fam.get("digest") == FIRST.family_digest
+    gemm = {s["digest"] for s in obj.get("subcircuits", ()) if s.get("definition", {}).get("name") == "GemmCoordinate"}
+    return {
+        "profile": contract.PROFILE if on_target else None,
+        # every registered typed-obligation/v0 family is the finite-domain relation (target.py: total semantics bind no family)
+        "domain": contract.DOMAIN,
+        "K": vector_K(rec),
+        # one obligation is one GemmCoordinate verification unit; nothing is padded, so B_real is not reported
+        "B": sum(1 for o in obj.get("obligations", ()) if o.get("subcircuit") in gemm),
+        # the two labels every campaign number carries (module docstring)
+        "proof_class": ("ARITHMETIC_DIAGNOSTIC" if diagnostic else "NON_ZK_PROOF") if backend == "sp1-prove" else "NO_PROOF",
+        "authentication": "excluded" if diagnostic else "included",
+    }
 
 
 def run_reference(rec: dict, out: Path) -> tuple[dict, list[dict], list[str], list[str]]:
@@ -95,6 +143,26 @@ def run_reference(rec: dict, out: Path) -> tuple[dict, list[dict], list[str], li
         "evidence": [],
     }
     return validation, [measurement("reference_check_wall", wall, "s")], [], []
+
+
+#: SP1's one prover timer covers trace generation, commitments, the constraint and lookup arguments and FRI; the host
+#: cannot split it, so it is reported as this one joint stage, never as four buckets.
+SP1_PROVE_STAGE = contract.joint("witness", "encoding_commitment", "arithmetic", "lookup")
+
+
+def sp1_prove_measurements(report) -> list[dict]:
+    """The contract's names for a ``ProofReport``, beside the host's own (which the earlier baseline runs carry alone).
+    No zero-knowledge work exists in core/compressed (``t.zk_additional`` = 0).  Writing the proof to disk happens after
+    the prover timer and is untimed: ``t.serialization`` is absent and ``t.total`` is the prover timer."""
+
+    return [
+        contract.measurement("fixed.setup_seconds", report.setup_seconds),
+        contract.measurement(SP1_PROVE_STAGE, report.prove_seconds),
+        contract.measurement("t.zk_additional", 0.0),
+        contract.measurement(contract.T_TOTAL, report.prove_seconds),
+        contract.measurement("verifier.seconds", report.verify_seconds),
+        contract.measurement("transcript.bytes", report.proof_bytes),
+    ]
 
 
 def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, diagnostic: bool) -> tuple[dict, list[dict], list[str], list[str], dict]:
@@ -167,6 +235,7 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, di
             measurement("shards", report.shards, "count"), measurement("total_cycles", report.execution.total_cycles, "cycles"),
         ]
         measurements += [measurement(f"cycles.{k}", v, "cycles") for k, v in sorted(report.execution.cycle_tracker.items())]
+        measurements += sp1_prove_measurements(report)
         if report.execution.public_values.hex() != rec["binding"]["public_values"]:
             problems.append("public values differ from the ones recorded for this vector")
         if diagnostic:
@@ -206,7 +275,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{a.vector} carries no witness; only the reference backend can run it", file=sys.stderr)
         return 2
 
+    sha = source_sha()
+    python = sys.version.split()[0]
     fingerprint = {
+        **campaign_fields(rec, a.backend, a.diagnostic),
         "workload": "dot-product-vector",
         "vector": a.vector,
         "vector_sha256": __import__("hashlib").sha256(path.read_bytes()).hexdigest(),
@@ -215,25 +287,53 @@ def main(argv: list[str] | None = None) -> int:
         "statement_format": 2,
         "family": rec["object"].get("family"),
         "backend": a.backend,
-        "source_sha": source_sha(),
-        "python": sys.version.split()[0],
-        # the two labels every campaign number carries (module docstring)
-        "proof_class": ("ARITHMETIC_DIAGNOSTIC" if a.diagnostic else "NON_ZK_PROOF") if a.backend == "sp1-prove" else "NO_PROOF",
-        "authentication": "excluded" if a.diagnostic else "included",
+        "source_sha": sha,
+        "python": python,
+        # nothing here establishes privacy: SP1 core/compressed is a plain (non-ZK) proof, the others prove nothing
+        "zk_mode": contract.ZK_NONE,
+        # what the machine has (nvidia-smi, cpuinfo); whether the GPU was used is software.backend.prover
+        "hardware": contract.probe_hardware(),
+        # the guest reads the whole witness (the openings) from stdin into memory; the reference checker holds the record
+        "retention": "retained",
     }
     started = time.perf_counter()
     if a.backend == "reference":
         validation, measurements, artifacts, _ = run_reference(rec, out)
+        fingerprint["security"] = {"target": None, "note": "no proof: the transparent checker's own verdict, nothing established to a verifier"}
+        fingerprint["software"] = {"backend": {"name": "verity.verification.transparent", "version": None, "commit": sha}, "toolchain": {"python": python}}
+        fingerprint["preprocessing"] = "none"
     else:
         validation, measurements, artifacts, _, identity = run_sp1(
             rec, out, prove=a.backend == "sp1-prove", mode=a.mode, want_info=not a.no_info, diagnostic=a.diagnostic
         )
         fingerprint["guest"] = identity
+        guest = identity.get("observed") or identity["expected"]
+        # the rustc that built the installed host binary is not reported by the host's `info`: null, not the channel
+        fingerprint["software"] = {
+            "backend": {"name": "sp1", "version": guest["sp1_version"], "commit": None, "guest_elf_sha256": guest["elf_sha256"],
+                        "vk_hash": guest["vk_hash"], "guest_features": guest["guest_features"], "host_binary": os.environ.get("VERITY_SP1_HOST")},
+            "toolchain": {"python": python, "sp1_sdk": guest["sp1_version"], "rust": None},
+        }
         if a.backend == "sp1-prove":
             fingerprint["mode"] = a.mode
             # which prover ran: SP1_PROVER=cuda (GPU) or the default CPU prover; and which installed host binary
             fingerprint["prover"] = os.environ.get("SP1_PROVER", "cpu")
             fingerprint["host_binary"] = os.environ.get("VERITY_SP1_HOST")
+            fingerprint["software"]["backend"]["prover"] = fingerprint["prover"]
+            # SP1 does not expose its soundness parameters (field, FRI rate, query count) through the host: null, not a guess
+            fingerprint["security"] = {"target": None, "parameters": {"mode": a.mode},
+                                       "note": "SP1 core/compressed: proof-system parameters not exposed here; target soundness not established"}
+            fingerprint["preprocessing"] = ("none offline; SP1 setup (proving and verifying keys from the guest ELF) runs in the host every time "
+                                            "and is reported as fixed.setup_seconds, outside t.total")
+        else:
+            fingerprint["security"] = {"target": None, "note": "no proof: the executor's verdict, nothing established to a verifier"}
+            fingerprint["preprocessing"] = "none"
+    # VU throughput: one obligation is one verification unit; the rate only exists where something was proved
+    B = fingerprint["B"]
+    measurements.append(contract.measurement("vu.count", B))
+    total = next((m["value"] for m in measurements if m["name"] == contract.T_TOTAL), None)
+    if total and B:
+        measurements += [contract.measurement("vu.seconds_per_vu", total / B), contract.measurement("vu.per_second", B / total)]
     measurements.append(measurement("workload_wall", time.perf_counter() - started, "s"))
     (out / "measurements.json").write_text(json.dumps(measurements, indent=1) + "\n")
 
@@ -249,7 +349,12 @@ def main(argv: list[str] | None = None) -> int:
     tmp = out / "result.json.tmp"
     tmp.write_text(json.dumps(result, indent=1, sort_keys=True) + "\n")
     os.replace(tmp, out / "result.json")
+    # the campaign contract: reported, not enforced -- a vector outside the target legitimately fails it
+    problems = contract.validate(result)
+    if problems:
+        print(f"contract: {len(problems)} problem(s): " + "; ".join(problems), file=sys.stderr)
     print(json.dumps({"vector": a.vector, "backend": a.backend, "validation": validation["status"], "detail": validation["detail"],
+                      "contract": problems or "conforms",
                       "measurements": {m["name"]: m["value"] for m in measurements if not m["name"].startswith("cycles.")}}, indent=1))
     return 0 if validation["status"] == "passed" else 1
 

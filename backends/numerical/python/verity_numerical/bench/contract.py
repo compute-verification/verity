@@ -1,0 +1,491 @@
+"""The campaign's result contract: what a campaign number must say about itself, on top of ``research``'s ``result.json``.
+
+``research`` records and ships an opaque workload; the workload owns the meaning of ``$RESEARCH_RUN_DIR/result.json``
+(``tools/research/README.md``).  This module is that meaning for the proof campaign, shared by every backend:
+
+* the ``workload_fingerprint`` fields a campaign number must carry (:data:`REQUIRED_FIELDS`), with the five
+  :data:`IDENTITY_FIELDS` two results must agree on before any of their numbers may be compared
+  (``backends/AGENTS.md``: never compare across ``proof_class``);
+* the measurement names: the six disjoint timing buckets ``t.<bucket>`` (seconds), ``t.total``, joint stages
+  ``t.joint.<a>+<b>`` for a kernel that fuses buckets it cannot split (never double-counted against a standalone
+  bucket or another joint), and the rest of the decision's columns (VU throughput, peak memory, bytes moved,
+  transcript bytes, rounds, verifier work, fixed setup);
+* :func:`validate`, the list of everything a result got wrong (empty means conforming), and the one-call builders
+  :func:`fingerprint` and :func:`measurement` so a backend emits conforming pieces without re-reading this file.
+
+Envelope (``research/result/v0.1``, ``tools/research/src/research/result.py``)::
+
+    {"schema", "run_id", "workload_fingerprint": {...}, "validation": {"status", "checker", "detail", "evidence"},
+     "measurements": [{"name", "value", "unit"}, ...], "measurement_files": [...], "artifacts": [...]}
+
+Fingerprint fields (all required; a sub-field whose value is not known is ``null``, never a guess)::
+
+    profile         the frozen target's name: verity.verification.target.FIRST.name
+    domain          the relation's domain, "finite" for FIRST (a total-semantics backend is another domain)
+    K               GemmCoordinate<K>: a positive multiple of 16
+    B               batch size: VU instances established by the one proof; B_real (optional) = real instances when padded
+    proof_class     ARITHMETIC_DIAGNOSTIC | NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF | COMPLETE_ZK_BACKEND | NO_PROOF
+    authentication  included | excluded          (were the boundary words authenticated against the object's roots)
+    zk_mode         "none" unless proof_class is COMPLETE_ZK_BACKEND, whose mode names how privacy is obtained
+    security        {"target": log2 of the target soundness error (-100 means 2^-100) or null, ...backend parameters}
+    hardware        {"gpu": {"name", "driver", "cuda"} | null, "cpu": {"model", ...} | null}   (probe_hardware())
+    software        {"backend": {"name", "version" and/or "commit", ...}, "toolchain": {...versions}}
+    preprocessing   what was amortised offline and is therefore not in the buckets (a string or an object)
+    retention       retained | streamed | recomputed   (how the witness was held during proving)
+
+Timing (seconds; the buckets are disjoint and, with the joints, sum to at most ``t.total``, tolerance 1%)::
+
+    t.witness  t.encoding_commitment  t.arithmetic  t.lookup  t.zk_additional  t.serialization    t.total
+    t.joint.<a>+<b>[+<c>...]   a fused stage covering those buckets, in canonical bucket order (see joint())
+
+Other measurements: ``vu.count`` (count), ``vu.seconds_per_vu`` (s), ``vu.per_second`` (1/s), ``mem.peak_host_bytes``,
+``mem.peak_device_bytes``, ``bytes.moved``, ``transcript.bytes`` (B), ``rounds`` (count), ``verifier.seconds``,
+``fixed.setup_seconds`` (s).  Names under the contract's prefixes that this file does not define are rejected; a
+workload's own names (``prove_seconds``, ``cycles.parse``) pass through untouched so earlier runs stay comparable.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+from collections.abc import Iterable, Mapping, Sequence
+from pathlib import Path
+from typing import Any
+
+from verity.verification.target import FIRST
+
+__all__ = [
+    "AUTHENTICATION",
+    "BUCKETS",
+    "BUCKET_NAMES",
+    "DOMAIN",
+    "IDENTITY_FIELDS",
+    "MISSING",
+    "PROFILE",
+    "PROOF_CLASSES",
+    "REQUIRED_FIELDS",
+    "RESULT_SCHEMA",
+    "RETENTION",
+    "TOLERANCE",
+    "T_TOTAL",
+    "UNITS",
+    "ZK_NONE",
+    "fingerprint",
+    "identity",
+    "incomparable",
+    "joint",
+    "measurement",
+    "parse_joint",
+    "probe_hardware",
+    "unit_of",
+    "validate",
+    "validate_fingerprint",
+    "validate_measurements",
+]
+
+RESULT_SCHEMA = "research/result/v0.1"
+
+#: The campaign target's profile name and domain label (``backends/AGENTS.md``: the target is fixed).
+PROFILE = FIRST.name
+DOMAIN = "finite"
+
+PROOF_CLASSES = ("ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_ZK_BACKEND", "NO_PROOF")
+AUTHENTICATION = ("included", "excluded")
+RETENTION = ("retained", "streamed", "recomputed")
+ZK_NONE = "none"
+
+#: Two results whose values differ on any of these are never compared; the judge refuses (``benchmarks/judge.py``).
+IDENTITY_FIELDS = ("proof_class", "authentication", "profile", "domain", "K")
+REQUIRED_FIELDS = (
+    "profile", "domain", "K", "B", "proof_class", "authentication", "zk_mode", "security", "hardware", "software",
+    "preprocessing", "retention",
+)
+
+BUCKETS = ("witness", "encoding_commitment", "arithmetic", "lookup", "zk_additional", "serialization")
+BUCKET_NAMES = tuple(f"t.{b}" for b in BUCKETS)
+T_TOTAL = "t.total"
+_JOINT_PREFIX = "t.joint."
+_JOINT_SEP = "+"
+#: Buckets and joints may exceed ``t.total`` by this fraction before it counts as double-counting.
+TOLERANCE = 0.01
+
+UNITS: dict[str, str] = {
+    **{name: "s" for name in BUCKET_NAMES},
+    T_TOTAL: "s",
+    "vu.count": "count",
+    "vu.seconds_per_vu": "s",
+    "vu.per_second": "1/s",
+    "mem.peak_host_bytes": "B",
+    "mem.peak_device_bytes": "B",
+    "bytes.moved": "B",
+    "transcript.bytes": "B",
+    "rounds": "count",
+    "verifier.seconds": "s",
+    "fixed.setup_seconds": "s",
+}
+_RESERVED_PREFIXES = ("t.", "vu.", "mem.", "fixed.", "bytes.", "transcript.", "verifier.")
+
+#: Sentinel for an identity field a fingerprint does not carry (distinct from a recorded ``null``).
+MISSING = object()
+
+
+# --- builders --------------------------------------------------------------------------------------------------------
+
+
+def joint(*buckets: str) -> str:
+    """The measurement name of a stage that fuses ``buckets`` (at least two, distinct): ``t.joint.<a>+<b>`` in canonical
+    bucket order, so the same fusion has the same name in every backend."""
+
+    return _JOINT_PREFIX + _JOINT_SEP.join(_joint_parts(buckets))
+
+
+def parse_joint(name: str) -> tuple[str, ...] | None:
+    """The buckets a joint name covers, or ``None`` when ``name`` is not a joint.  A malformed joint raises."""
+
+    if not name.startswith(_JOINT_PREFIX):
+        return None
+    return _joint_parts(name[len(_JOINT_PREFIX):].split(_JOINT_SEP))
+
+
+def _joint_parts(parts: Iterable[str]) -> tuple[str, ...]:
+    parts = tuple(parts)
+    unknown = [p for p in parts if p not in BUCKETS]
+    if unknown:
+        raise ValueError(f"joint stage names buckets from {BUCKETS}, not {unknown}")
+    if len(parts) < 2:
+        raise ValueError("a joint stage fuses at least two buckets; a single bucket is t.<bucket>")
+    if len(set(parts)) != len(parts):
+        raise ValueError(f"a joint stage lists each bucket once, got {parts}")
+    return tuple(b for b in BUCKETS if b in parts)
+
+
+def unit_of(name: str) -> str | None:
+    """The contract's unit for ``name``; ``None`` for a name the contract does not define."""
+
+    if name in UNITS:
+        return UNITS[name]
+    try:
+        return "s" if parse_joint(name) else None
+    except ValueError:
+        return None
+
+
+def measurement(name: str, value: float | int, unit: str | None = None) -> dict[str, Any]:
+    """One ``{name, value, unit}`` entry.  Contract names get their unit supplied and checked; a workload's own name
+    must state its unit."""
+
+    if not isinstance(name, str) or not name:
+        raise ValueError(f"measurement name must be a non-empty string, got {name!r}")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"measurement {name!r}: value must be a number, got {value!r}")
+    if name.startswith(_JOINT_PREFIX):
+        parse_joint(name)  # a malformed joint raises with the reason
+    expected = unit_of(name)
+    if unit is None:
+        if expected is None:
+            raise ValueError(f"{name!r} is not a contract measurement; give its unit explicitly")
+        unit = expected
+    elif expected is not None and unit != expected:
+        raise ValueError(f"{name!r} is measured in {expected!r}, not {unit!r}")
+    return {"name": name, "value": value, "unit": unit}
+
+
+def fingerprint(
+    *,
+    profile: str,
+    domain: str,
+    K: int,
+    B: int,
+    proof_class: str,
+    authentication: str,
+    zk_mode: str,
+    security: Mapping[str, Any],
+    hardware: Mapping[str, Any],
+    software: Mapping[str, Any],
+    preprocessing: str | Mapping[str, Any],
+    retention: str,
+    B_real: int | None = None,
+    **extra: Any,
+) -> dict[str, Any]:
+    """A conforming ``workload_fingerprint``: the required fields, then the workload's own ``extra`` entries.  Raises
+    ``ValueError`` listing every problem rather than emitting a bad one."""
+
+    fp: dict[str, Any] = {
+        "profile": profile, "domain": domain, "K": K, "B": B, "proof_class": proof_class, "authentication": authentication,
+        "zk_mode": zk_mode, "security": dict(security), "hardware": dict(hardware), "software": dict(software),
+        "preprocessing": preprocessing if isinstance(preprocessing, str) else dict(preprocessing), "retention": retention,
+    }
+    if B_real is not None:
+        fp["B_real"] = B_real
+    fp.update(extra)
+    problems = validate_fingerprint(fp)
+    if problems:
+        raise ValueError("fingerprint does not conform: " + "; ".join(problems))
+    return fp
+
+
+# --- validation -------------------------------------------------------------------------------------------------------
+
+
+def _is_int(v: Any) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _is_number(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def validate_fingerprint(fp: Any) -> list[str]:
+    """Every way ``fp`` fails to be a campaign fingerprint; ``[]`` when it conforms."""
+
+    if not isinstance(fp, Mapping):
+        return ["workload_fingerprint must be an object"]
+    p: list[str] = []
+    for field in REQUIRED_FIELDS:
+        if field not in fp:
+            p.append(f"workload_fingerprint.{field} missing")
+    present = {f: fp[f] for f in REQUIRED_FIELDS if f in fp}
+
+    if "profile" in present and present["profile"] != PROFILE:
+        p.append(f"profile must be the campaign target {PROFILE!r}, got {present['profile']!r}")
+    if "domain" in present and (not isinstance(present["domain"], str) or not present["domain"]):
+        p.append(f"domain must be a non-empty string (FIRST: {DOMAIN!r}), got {present['domain']!r}")
+    if "K" in present and not (_is_int(present["K"]) and present["K"] > 0 and present["K"] % 16 == 0):
+        p.append(f"K must be a positive multiple of 16, got {present['K']!r}")
+    if "B" in present and not (_is_int(present["B"]) and present["B"] > 0):
+        p.append(f"B must be a positive int, got {present['B']!r}")
+    if "B_real" in fp:
+        br = fp["B_real"]
+        if not (_is_int(br) and br > 0):
+            p.append(f"B_real must be a positive int when present, got {br!r}")
+        elif _is_int(present.get("B")) and br > present["B"]:
+            p.append(f"B_real ({br}) exceeds B ({present['B']})")
+    pc = present.get("proof_class")
+    if "proof_class" in present and pc not in PROOF_CLASSES:
+        p.append(f"proof_class must be one of {PROOF_CLASSES}, got {pc!r}")
+    if "authentication" in present and present["authentication"] not in AUTHENTICATION:
+        p.append(f"authentication must be one of {AUTHENTICATION}, got {present['authentication']!r}")
+    if "zk_mode" in present:
+        zk = present["zk_mode"]
+        if not isinstance(zk, str) or not zk:
+            p.append(f"zk_mode must be a non-empty string ({ZK_NONE!r} when there is no zero-knowledge), got {zk!r}")
+        elif pc == "COMPLETE_ZK_BACKEND" and zk == ZK_NONE:
+            p.append("proof_class COMPLETE_ZK_BACKEND with zk_mode 'none' is a contradiction")
+        elif pc in PROOF_CLASSES and pc != "COMPLETE_ZK_BACKEND" and zk != ZK_NONE:
+            p.append(f"proof_class {pc} is not zero-knowledge; zk_mode must be {ZK_NONE!r}, got {zk!r}")
+    if "security" in present:
+        sec = present["security"]
+        if not isinstance(sec, Mapping):
+            p.append(f"security must be an object, got {sec!r}")
+        elif "target" not in sec:
+            p.append("security.target missing (log2 of the target soundness error, or null when not established)")
+        elif sec["target"] is not None and not (_is_int(sec["target"]) and sec["target"] <= 0):
+            p.append(f"security.target is log2 of the soundness error (e.g. -100 for 2^-100): a non-positive int or null, got {sec['target']!r}")
+    if "hardware" in present:
+        p += _validate_hardware(present["hardware"])
+    if "software" in present:
+        p += _validate_software(present["software"])
+    if "preprocessing" in present:
+        pre = present["preprocessing"]
+        if not ((isinstance(pre, str) and pre) or isinstance(pre, Mapping)):
+            p.append(f"preprocessing must be a non-empty string or an object saying what was amortised offline, got {pre!r}")
+    if "retention" in present and present["retention"] not in RETENTION:
+        p.append(f"retention must be one of {RETENTION}, got {present['retention']!r}")
+    return p
+
+
+def _validate_hardware(hw: Any) -> list[str]:
+    if not isinstance(hw, Mapping):
+        return [f"hardware must be an object, got {hw!r}"]
+    p = []
+    for key, name_field in (("gpu", "name"), ("cpu", "model")):
+        if key not in hw:
+            p.append(f"hardware.{key} missing (an object, or null when absent)")
+            continue
+        dev = hw[key]
+        if dev is None:
+            continue
+        if not isinstance(dev, Mapping):
+            p.append(f"hardware.{key} must be an object or null, got {dev!r}")
+        elif not isinstance(dev.get(name_field), str) or not dev.get(name_field):
+            p.append(f"hardware.{key}.{name_field} must be a non-empty string, got {dev.get(name_field)!r}")
+        elif key == "gpu":
+            for sub in ("driver", "cuda"):
+                if sub not in dev:
+                    p.append(f"hardware.gpu.{sub} missing (a string, or null when unknown)")
+    return p
+
+
+def _validate_software(sw: Any) -> list[str]:
+    if not isinstance(sw, Mapping):
+        return [f"software must be an object, got {sw!r}"]
+    p = []
+    be = sw.get("backend")
+    if not isinstance(be, Mapping):
+        p.append("software.backend must be an object {name, version and/or commit}")
+    else:
+        if not isinstance(be.get("name"), str) or not be.get("name"):
+            p.append("software.backend.name must be a non-empty string")
+        if "version" not in be and "commit" not in be:
+            p.append("software.backend needs version and/or commit (null when unknown)")
+    if not isinstance(sw.get("toolchain"), Mapping):
+        p.append("software.toolchain must be an object of toolchain versions")
+    return p
+
+
+def validate_measurements(measurements: Any, proof_class: str | None = None) -> list[str]:
+    """Every way the measurement list breaks the contract: shape, units, reserved names, duplicate names, joint
+    structure, buckets or joints double-counted, buckets exceeding ``t.total``, VU throughput inconsistent with it.
+    With ``proof_class`` given, a proof also needs ``t.total`` and at least one bucket or joint."""
+
+    if not isinstance(measurements, list):
+        return ["measurements must be a list"]
+    p: list[str] = []
+    seen: dict[str, Any] = {}
+    for i, m in enumerate(measurements):
+        if not isinstance(m, Mapping) or not isinstance(m.get("name"), str) or not m.get("name") or "value" not in m or not isinstance(m.get("unit"), str):
+            p.append(f"measurements[{i}] needs name (str), value, unit (str)")
+            continue
+        name, value, unit = m["name"], m["value"], m["unit"]
+        if name in seen:
+            p.append(f"measurement {name!r} appears more than once")
+            continue
+        seen[name] = value
+        if name.startswith(_JOINT_PREFIX):
+            try:
+                parse_joint(name)
+            except ValueError as e:
+                p.append(f"measurement {name!r}: {e}")
+                continue
+        expected = unit_of(name)
+        if expected is None:
+            if name.startswith(_RESERVED_PREFIXES):
+                p.append(f"measurement {name!r} uses a contract prefix but is not a contract name")
+            continue
+        if unit != expected:
+            p.append(f"measurement {name!r} must be in {expected!r}, got {unit!r}")
+        if not _is_number(value):
+            p.append(f"measurement {name!r} must be a number, got {value!r}")
+        elif value < 0:
+            p.append(f"measurement {name!r} must be non-negative, got {value!r}")
+
+    numeric = {n: v for n, v in seen.items() if _is_number(v) and unit_of(n) is not None}
+    buckets = {n[len("t."):]: v for n, v in numeric.items() if n in BUCKET_NAMES}
+    joints: dict[str, tuple[str, ...]] = {}
+    for n in numeric:
+        parts = parse_joint(n) if n.startswith(_JOINT_PREFIX) else None
+        if parts:
+            if n != joint(*parts):
+                p.append(f"joint stage {n!r} must be written in canonical bucket order: {joint(*parts)!r}")
+            joints[n] = parts
+    covered: dict[str, str] = {b: f"t.{b}" for b in buckets}
+    for n, parts in joints.items():
+        for b in parts:
+            if b in covered:
+                p.append(f"bucket {b!r} is counted twice: in {covered[b]!r} and in {n!r}")
+            else:
+                covered[b] = n
+    if T_TOTAL in numeric:
+        total = numeric[T_TOTAL]
+        summed = sum(buckets.values()) + sum(numeric[n] for n in joints)
+        if summed > total * (1 + TOLERANCE):
+            p.append(f"buckets and joints sum to {summed:.6g} s, more than t.total {total:.6g} s by over {TOLERANCE:.0%}: something is double-counted")
+        if "vu.count" in numeric and numeric["vu.count"] > 0:
+            per_vu = total / numeric["vu.count"]
+            if "vu.seconds_per_vu" in numeric and abs(numeric["vu.seconds_per_vu"] - per_vu) > TOLERANCE * per_vu:
+                p.append(f"vu.seconds_per_vu {numeric['vu.seconds_per_vu']:.6g} is not t.total / vu.count = {per_vu:.6g}")
+            if "vu.per_second" in numeric and per_vu > 0 and abs(numeric["vu.per_second"] - 1 / per_vu) > TOLERANCE / per_vu:
+                p.append(f"vu.per_second {numeric['vu.per_second']:.6g} is not vu.count / t.total = {1 / per_vu:.6g}")
+    if proof_class in PROOF_CLASSES and proof_class != "NO_PROOF":
+        if T_TOTAL not in numeric:
+            p.append(f"a {proof_class} result must report t.total")
+        if not buckets and not joints:
+            p.append(f"a {proof_class} result must report at least one timing bucket or joint stage")
+        if proof_class != "COMPLETE_ZK_BACKEND" and buckets.get("zk_additional", 0) > 0:
+            p.append(f"t.zk_additional is {buckets['zk_additional']!r} but proof_class {proof_class} has no zero-knowledge work")
+    return p
+
+
+def validate(result: Any) -> list[str]:
+    """Every way ``result`` (a parsed ``result.json``) fails the campaign contract; ``[]`` means it conforms.
+    The envelope is checked as far as the fingerprint and measurements need; ``research inspect`` owns the rest."""
+
+    if not isinstance(result, Mapping):
+        return ["result must be an object"]
+    p: list[str] = []
+    if result.get("schema") != RESULT_SCHEMA:
+        p.append(f"schema must be {RESULT_SCHEMA!r}, got {result.get('schema')!r}")
+    if not isinstance(result.get("run_id"), str) or not result.get("run_id"):
+        p.append("run_id must be a non-empty string")
+    val = result.get("validation")
+    if not isinstance(val, Mapping) or val.get("status") not in ("passed", "failed", "not_run"):
+        p.append("validation must be an object with status passed | failed | not_run")
+    for key in ("artifacts", "measurement_files"):
+        if key in result and not isinstance(result[key], list):
+            p.append(f"{key} must be a list of relative paths")
+    fp = result.get("workload_fingerprint")
+    p += validate_fingerprint(fp)
+    pc = fp.get("proof_class") if isinstance(fp, Mapping) else None
+    p += validate_measurements(result.get("measurements"), pc if pc in PROOF_CLASSES else None)
+    return p
+
+
+# --- comparability -----------------------------------------------------------------------------------------------------
+
+
+def identity(fp: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The five identity fields of ``fp`` (:data:`MISSING` where it does not carry one)."""
+
+    fp = fp or {}
+    return {f: fp.get(f, MISSING) for f in IDENTITY_FIELDS}
+
+
+def incomparable(baseline: Mapping[str, Any] | None, candidate: Mapping[str, Any] | None, allow: Sequence[str] = ()) -> list[tuple[str, Any, Any]]:
+    """The identity fields on which two fingerprints disagree -- or which either lacks -- other than those in ``allow``.
+    Non-empty means the numbers must not be compared.  Each entry is ``(field, baseline_value, candidate_value)``."""
+
+    bad = sorted(set(allow) - set(IDENTITY_FIELDS))
+    if bad:
+        raise ValueError(f"allow takes identity fields {IDENTITY_FIELDS}, not {bad}")
+    a, b = identity(baseline), identity(candidate)
+    return [(f, a[f], b[f]) for f in IDENTITY_FIELDS if f not in allow and (a[f] is MISSING or b[f] is MISSING or a[f] != b[f])]
+
+
+# --- hardware probe ----------------------------------------------------------------------------------------------------
+
+
+def probe_hardware(timeout: float = 10.0) -> dict[str, Any]:
+    """``{"gpu": {...} | None, "cpu": {...} | None}`` from ``nvidia-smi`` and ``/proc/cpuinfo`` (or ``sysctl`` on
+    macOS) when present.  Whatever cannot be observed is ``None``; nothing is guessed."""
+
+    gpu = None
+    try:
+        q = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader,nounits"],
+                           capture_output=True, text=True, timeout=timeout)
+        rows = [r for r in q.stdout.splitlines() if r.strip()] if q.returncode == 0 else []
+        if rows:
+            name, driver, mem = (s.strip() for s in (rows[0].split(",") + ["", ""])[:3])
+            cuda = None
+            head = subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=timeout)
+            m = re.search(r"CUDA Version:\s*([0-9][0-9.]*)", head.stdout) if head.returncode == 0 else None
+            if m:
+                cuda = m.group(1)
+            gpu = {"name": name, "driver": driver or None, "cuda": cuda, "count": len(rows),
+                   "memory_total_bytes": int(mem) << 20 if mem.isdigit() else None}
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        gpu = None
+    cpu = None
+    try:
+        text = Path("/proc/cpuinfo").read_text()
+        models = re.findall(r"^model name\s*:\s*(.+)$", text, re.M)
+        if models:
+            cpu = {"model": models[0].strip(), "count": len(models)}
+    except OSError:
+        try:
+            q = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string", "hw.logicalcpu"], capture_output=True, text=True, timeout=timeout)
+            lines = q.stdout.splitlines() if q.returncode == 0 else []
+            if lines and lines[0].strip():
+                cpu = {"model": lines[0].strip(), "count": int(lines[1]) if len(lines) > 1 and lines[1].strip().isdigit() else None}
+        except (OSError, subprocess.TimeoutExpired):
+            cpu = None
+    return {"gpu": gpu, "cpu": cpu}
