@@ -218,16 +218,25 @@ def _fmt(s: dict) -> str:
     rc = "" if s["rc"] is None else str(s["rc"])
     res = "-" if not s["result_present"] else ("ok" if s["result_valid"] else "BAD")
     val = s["validation"] or "-"
-    return f"{s['id']:<24} {str(s['state']):<10} {rc:>3}  {(s['class'] or ''):<22} {res:<4} {val:<8} {str(s['project']):<12} {str(s['stage']):<16} {cmd}"
+    where = (s.get("remote") or {}).get("machine") or "local"
+    return f"{s['id']:<24} {str(s['state']):<10} {rc:>3}  {(s['class'] or ''):<22} {res:<4} {val:<8} {str(s['project']):<10} {where:<11} {str(s['stage']):<16} {cmd}"
 
 
 def cmd_status(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research status")
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--all", action="store_true", help="every run, not just the last 20")
+    ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
+    if ns.refresh:
+        for s in R.list_runs(root):
+            if s.get("remote_rec") and s["state"] not in R.TERMINAL and (s["remote_rec"].get("remote_run_dir")):
+                try:
+                    remote.fetch(Path(s["dir"]))
+                except remote.Refused as e:
+                    print(f"research status: {s['id']}: {e}", file=sys.stderr)
     rows = R.list_runs(root)
     if not ns.all:
         rows = rows[-20:]
@@ -237,11 +246,13 @@ def cmd_status(argv: list[str]) -> int:
     if not rows:
         print(f"no runs under {root}")
         return 0
-    print(f"{'run':<24} {'state':<10} {'rc':>3}  {'class':<22} {'res':<4} {'valid':<8} {'project':<12} {'stage':<16} command")
+    print(f"{'run':<24} {'state':<10} {'rc':>3}  {'class':<22} {'res':<4} {'valid':<8} {'project':<10} {'where':<11} {'stage':<16} command")
     for s in rows:
         print(_fmt(s))
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)
-    print(f"\n{len(rows)} shown ({active} active) under {root}   res: result.json ok/BAD/-absent   valid: the workload's own checker")
+    unfetched = sum(1 for s in rows if s.get("remote_rec") and not s["has_job"] and s["state"] != "refused")
+    print(f"\n{len(rows)} shown ({active} active" + (f", {unfetched} remote not yet fetched: `research status --refresh`" if unfetched else "") + f") under {root}"
+          f"   res: result.json ok/BAD/-absent   valid: the workload's own checker")
     return 0
 
 

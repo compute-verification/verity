@@ -62,9 +62,16 @@ def summarize(run_dir: Path) -> dict[str, Any]:
     remote_rec = _read(run_dir / "remote.json")
     if remote_rec and not status:
         phase = remote_rec.get("phase")
-        state = {"launched": "submitted", "refused": "failed", "unknown": "unknown"}.get(phase, "submitted")
+        state = {"launched": "submitted", "refused": "refused", "unknown": "unknown"}.get(phase, "submitted")
     else:
         state = status.get("state", "unknown" if not raw_job else "submitted")
+    if remote_rec and not raw_job:
+        # not fetched yet: what the control side knew at launch
+        own = {"project": remote_rec.get("project")}
+        stage = next((remote_rec["launch_args"][i + 1] for i in range(len(remote_rec.get("launch_args") or []) - 1)
+                      if remote_rec["launch_args"][i] == "--stage"), None)
+        comp = {"stage": stage, "tree_sha": remote_rec.get("source_sha")}
+        exe = {"command": remote_rec.get("command")}
     return {
         "id": run_dir.name,
         "run_id": run_id,
