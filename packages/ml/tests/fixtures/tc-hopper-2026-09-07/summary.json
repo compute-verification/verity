@@ -1,0 +1,460 @@
+{
+ "campaign": "gpu/tc-hopper/campaign.py (L6's case families + Hawkeye's parameter recovery) on the H100",
+ "kernel_identity": {
+  "instruction": "wgmma.mma_async.sync.aligned.m64n128k16.f32.bf16.bf16",
+  "ptx_wgmma_instructions": [
+   "wgmma.mma_async.sync.aligned.m64n128k16.f32.bf16.bf16"
+  ],
+  "ptx_wgmma_count": 1,
+  "ptx_mma_sync_count": 0,
+  "ptx_sha256": "8b3e877f9b4e0a4a0dd14fa7de353c8a2bb002267a9d11716c5ee4cc0410034a",
+  "triton": "3.7.1",
+  "torch": "2.13.0+cu130",
+  "device": "NVIDIA H100 80GB HBM3",
+  "capability": [
+   9,
+   0
+  ],
+  "kernel_hash": "592adf10868075e9dfc16f12096ee648a972d9474da5cf1ae23e4e20b65499db",
+  "cubin_sha256": "123bf0d6c2068699fe374d655937858177f7b066f75f7ed922619400170369c0",
+  "sass_hgmma": [
+   "HGMMA.64x128x16.F32.BF16"
+  ],
+  "sass_hgmma_count": 1,
+  "sass_hmma_count": 0,
+  "sass_sha256": "dce9358dcea74b387d21a66d6d4f0878bd847215ccfccf76d8319ea5a726b89f",
+  "nvidia_smi": "NVIDIA H100 80GB HBM3, 580.178.04, 9.0",
+  "hostname": "e6b9cf3b8e13"
+ },
+ "seed": 7280,
+ "reps": 3,
+ "positions": [
+  [
+   0,
+   0
+  ],
+  [
+   37,
+   101
+  ]
+ ],
+ "families": [
+  {
+   "family": "layout",
+   "tiles": 64,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.01,
+   "inputs_sha256": "a36dea1ef5df6a32a23e684c9afebd82b3957fca8e30c9204e8b03a939a4668b",
+   "outputs_sha256": "ac3800d3ddbc9c7620f016773c96f6a948f9ab982aa17249a7cee8a44c960e5d",
+   "exact_small_integer_mismatches": 0
+  },
+  {
+   "family": "neutral",
+   "tiles": 1024,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.16,
+   "inputs_sha256": "637bf728a5fc0d13d7e1accde5ae69f212e309d5de9a209802b94c31bf8e249b",
+   "outputs_sha256": "d98c6c85db5b691678134436ef2e38587566df0ba9ba08da9d26e048356cad73",
+   "neutral_counts": {
+    "small": 1,
+    "zero": 2
+   }
+  },
+  {
+   "family": "precision",
+   "tiles": 826,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.11,
+   "inputs_sha256": "2c515d895fafb5d0d123b6db427cc340e2f614d211681c85e908d9f0d8309d40",
+   "outputs_sha256": "b411f8bf5a0a93babbaf0e07f653cd326c2786827dc1c445864af735d2dc2ff7",
+   "precision_bits_by_residual_slot": {
+    "2": 25,
+    "3": 25,
+    "4": 25,
+    "5": 25,
+    "6": 25,
+    "7": 25,
+    "8": 25,
+    "9": 25,
+    "10": 25,
+    "11": 25,
+    "12": 25,
+    "13": 25,
+    "14": 25,
+    "15": 25
+   }
+  },
+  {
+   "family": "fit",
+   "tiles": 400,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.02,
+   "inputs_sha256": "dffc40530e843e882d3e7dc3dbe77c3e618677286d3d08a26795ea64a68f73ac",
+   "outputs_sha256": "2250114d203197581e90cc697ed56cdcf7a3b057896f9942175ac66e284b87ff"
+  },
+  {
+   "family": "random_unit",
+   "tiles": 1000,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.14,
+   "inputs_sha256": "c554a6cb317926c1bb40cf4cc6cf98f79bfa10dfb947d6151b7ad599ea116d7b",
+   "outputs_sha256": "c63d997255a851abd5e6fff7ab822574aed6ef8fa3445229516b6b25e7a32dec",
+   "band": "unit"
+  },
+  {
+   "family": "random_wide",
+   "tiles": 1000,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.1,
+   "inputs_sha256": "b23bc484c6eb9d8c98c7a5ae7704d54280e8d5f1929d7bfd8404574930481377",
+   "outputs_sha256": "305114c074914ae6dc11f3dc25d63b74356c06854f309f3efeda97fac1cf0381",
+   "band": "wide"
+  },
+  {
+   "family": "random_tiny",
+   "tiles": 1000,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.07,
+   "inputs_sha256": "9321bb82bc2d6c17cffa3eddcdbede8942da2322d9b83b793256815537b3c59f",
+   "outputs_sha256": "a907050701d5e90af2e32f3df781b725f22d6c95059e3f322dff23de59bdcff6",
+   "band": "tiny"
+  },
+  {
+   "family": "pair",
+   "tiles": 9000,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 1.45,
+   "inputs_sha256": "925bae4aec8127b474a7bdd26cf6920e007c24774830f7529a265e5c8326dfd2",
+   "outputs_sha256": "c4a277082cdb6620d8c637537f2eb3afd775525c5267563cde30f097d6edeaba"
+  },
+  {
+   "family": "acc",
+   "tiles": 1100,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.11,
+   "inputs_sha256": "6c5dffd02bbb57fb4f9e2b0fe12ec23197a2e8a21725305de47990c6f85d2bbb",
+   "outputs_sha256": "4edc2c9b3e10dde8adf9fbff6c212662a126a5b557cfd67697ac94ba10bada9f"
+  },
+  {
+   "family": "struct",
+   "tiles": 338,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.02,
+   "inputs_sha256": "0fb7fb16c5dc16f56d6bdea568ebfb8a0cf413193b02a1e3a76103ccd6e77703",
+   "outputs_sha256": "ba2ab7440093689d167b9bf609aeff3e4740cfd2698689f3616e46a644353c06"
+  },
+  {
+   "family": "ksweep",
+   "tiles": 576,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.03,
+   "inputs_sha256": "474a63dc16faea79016d75f6071da6d09d173302e3786c5475d2ab7c66091e41",
+   "outputs_sha256": "32005160c74f766659cd5d75925ed574c659b2cd90bad108b4025d06eb2dcd2f"
+  },
+  {
+   "family": "payload",
+   "tiles": 276,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.02,
+   "inputs_sha256": "c0fb19c3b0755483b67552ce333efdb314e0542fa626c41311dad4cbd0b1e636",
+   "outputs_sha256": "c8869f59cdfd64b8623485aa60b1979f9130919f1c02389863cb0ce4b0c87231"
+  },
+  {
+   "family": "mixed",
+   "tiles": 20000,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 3.34,
+   "inputs_sha256": "df6602a313e3dbd2fa60d60cfd2c7543b92a83dca2b75859ddda3a9fc8ade50b",
+   "outputs_sha256": "88744454c2431b35f4f5f12444048bf9127b9b63ed1d5b78d3ba1b047d89c233"
+  },
+  {
+   "family": "pos",
+   "tiles": 906,
+   "outputs_per_tile": 8192,
+   "reps": 3,
+   "tiles_differing_between_reps": 0,
+   "seconds": 0.08,
+   "inputs_sha256": "417de30e1711fa6e725cf6cb26c20c37b1b5e444275e5baa32b828d3d5a870b2",
+   "outputs_sha256": "6f66d4a3b078d7f40613adf5fa7a5eb3db2f946b5f469856bbbaae7e216031f1",
+   "distinct_words_per_tile_max": 1,
+   "tiles_with_one_distinct_word": 906
+  }
+ ],
+ "tiles": 37510,
+ "outputs_recorded": 307281920,
+ "tiles_differing_between_reps": 0,
+ "neutral_subgroups": {
+  "acc_small": [
+   [
+    "acc",
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ]
+  ],
+  "acc_zero": [
+   [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   [
+    "acc",
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ]
+  ]
+ },
+ "precision_bits_by_residual_slot": {
+  "2": 25,
+  "3": 25,
+  "4": 25,
+  "5": 25,
+  "6": 25,
+  "7": 25,
+  "8": 25,
+  "9": 25,
+  "10": 25,
+  "11": 25,
+  "12": 25,
+  "13": 25,
+  "14": 25,
+  "15": 25
+ },
+ "recovered_pipeline": {
+  "groups": [
+   16
+  ],
+  "width": 26,
+  "zero_exponent": -133,
+  "note": "precision family reports width-1 (Hawkeye's convention): 25 kept bits below the leading 1"
+ },
+ "fit_grid": {
+  "records": 6000,
+  "candidates": 992,
+  "best": [
+   [
+    "16:26:-133",
+    0
+   ],
+   [
+    "16:26:-150",
+    1
+   ],
+   [
+    "16:26:-149",
+    1
+   ],
+   [
+    "16:26:-148",
+    1
+   ],
+   [
+    "16:26:-147",
+    1
+   ],
+   [
+    "16:26:-146",
+    1
+   ],
+   [
+    "16:26:-145",
+    1
+   ],
+   [
+    "16:26:-144",
+    1
+   ],
+   [
+    "16:26:-143",
+    1
+   ],
+   [
+    "16:26:-142",
+    1
+   ],
+   [
+    "16:26:-141",
+    1
+   ],
+   [
+    "16:26:-140",
+    1
+   ]
+  ],
+  "zero_mismatch": [
+   "16:26:-133"
+  ]
+ },
+ "conformance": {
+  "pipeline": "hopper",
+  "words_compared": 307281920,
+  "mismatches": 0,
+  "families": [
+   {
+    "family": "acc",
+    "tiles": 1100,
+    "words_compared": 9011200,
+    "mismatches": 0,
+    "seconds": 32.6
+   },
+   {
+    "family": "fit",
+    "tiles": 400,
+    "words_compared": 3276800,
+    "mismatches": 0,
+    "seconds": 11.9
+   },
+   {
+    "family": "ksweep",
+    "tiles": 576,
+    "words_compared": 4718592,
+    "mismatches": 0,
+    "seconds": 17.3
+   },
+   {
+    "family": "layout",
+    "tiles": 64,
+    "words_compared": 524288,
+    "mismatches": 0,
+    "seconds": 1.5
+   },
+   {
+    "family": "mixed",
+    "tiles": 20000,
+    "words_compared": 163840000,
+    "mismatches": 0,
+    "seconds": 586.7
+   },
+   {
+    "family": "neutral",
+    "tiles": 1024,
+    "words_compared": 8388608,
+    "mismatches": 0,
+    "seconds": 13.2
+   },
+   {
+    "family": "pair",
+    "tiles": 9000,
+    "words_compared": 73728000,
+    "mismatches": 0,
+    "seconds": 271.0
+   },
+   {
+    "family": "payload",
+    "tiles": 276,
+    "words_compared": 2260992,
+    "mismatches": 0,
+    "seconds": 8.6
+   },
+   {
+    "family": "pos",
+    "tiles": 906,
+    "words_compared": 7421952,
+    "mismatches": 0,
+    "seconds": 10.8
+   },
+   {
+    "family": "precision",
+    "tiles": 826,
+    "words_compared": 6766592,
+    "mismatches": 0,
+    "seconds": 11.3
+   },
+   {
+    "family": "random_tiny",
+    "tiles": 1000,
+    "words_compared": 8192000,
+    "mismatches": 0,
+    "seconds": 29.9
+   },
+   {
+    "family": "random_unit",
+    "tiles": 1000,
+    "words_compared": 8192000,
+    "mismatches": 0,
+    "seconds": 31.0
+   },
+   {
+    "family": "random_wide",
+    "tiles": 1000,
+    "words_compared": 8192000,
+    "mismatches": 0,
+    "seconds": 31.1
+   },
+   {
+    "family": "struct",
+    "tiles": 338,
+    "words_compared": 2768896,
+    "mismatches": 0,
+    "seconds": 10.5
+   }
+  ]
+ }
+}

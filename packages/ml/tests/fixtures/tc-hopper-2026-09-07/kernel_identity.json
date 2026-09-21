@@ -1,0 +1,26 @@
+{
+ "instruction": "wgmma.mma_async.sync.aligned.m64n128k16.f32.bf16.bf16",
+ "ptx_wgmma_instructions": [
+  "wgmma.mma_async.sync.aligned.m64n128k16.f32.bf16.bf16"
+ ],
+ "ptx_wgmma_count": 1,
+ "ptx_mma_sync_count": 0,
+ "ptx_sha256": "8b3e877f9b4e0a4a0dd14fa7de353c8a2bb002267a9d11716c5ee4cc0410034a",
+ "triton": "3.7.1",
+ "torch": "2.13.0+cu130",
+ "device": "NVIDIA H100 80GB HBM3",
+ "capability": [
+  9,
+  0
+ ],
+ "kernel_hash": "592adf10868075e9dfc16f12096ee648a972d9474da5cf1ae23e4e20b65499db",
+ "cubin_sha256": "123bf0d6c2068699fe374d655937858177f7b066f75f7ed922619400170369c0",
+ "sass_hgmma": [
+  "HGMMA.64x128x16.F32.BF16"
+ ],
+ "sass_hgmma_count": 1,
+ "sass_hmma_count": 0,
+ "sass_sha256": "dce9358dcea74b387d21a66d6d4f0878bd847215ccfccf76d8319ea5a726b89f",
+ "nvidia_smi": "NVIDIA H100 80GB HBM3, 580.178.04, 9.0",
+ "hostname": "e6b9cf3b8e13"
+}

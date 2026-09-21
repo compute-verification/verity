@@ -10,7 +10,13 @@ Code migrates incrementally from `veritor`.
 - `tools/research/`: shared tooling for running, observing, and coordinating
   computational work (`research run | status | inspect`). Imports nothing
   from `packages/`. Developer notes in its `README.md`.
-- `packages/`, `adapters/`, `benchmarks/`: reserved; nothing lives there yet.
+- `packages/ir/` (`verity_ir`): the IR core — types, definitions, canonical
+  layout, evaluator, descriptor codec. Stdlib only; knows no semantics package.
+- `packages/ml/` (`verity_ml`): exact hardware semantics of the tensor-core
+  accumulator step (`verity_ml.tc`, stdlib only) and their IR registrations
+  (`prims`, `gemm`). Tests replay the A100 / RTX 4090 / H100 captures under
+  `packages/ml/tests/fixtures/` (see its README for provenance).
+- `adapters/`, `benchmarks/`: reserved; nothing lives there yet.
 
 ~~~text
 uv sync            # workspace root; installs every member editable
