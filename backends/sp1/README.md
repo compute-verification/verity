@@ -69,6 +69,11 @@ that reason). Backends are `reference` (Python re-derivation, runs anywhere),
 `sp1-execute`, `sp1-prove`. Baseline recorded runs (2026-09-21, RTX 4090):
 K=16 core proof `r20260921-215829-9796` -- 271,289 cycles, 2 shards,
 `prove_seconds` 0.89 s after an 18 s one-time key setup, 2.8 MB proof.
+K=1536 (`stage2--qkv-proj-decode-0-k1536`) core proof `r20260921-220722-019b`
+-- 10,128,736 cycles, 4 shards, `prove_seconds` 3.58 s (17 s setup), 5.9 MB
+proof, `verify_wall` 17.5 s; compressed `r20260921-221023-972e` -- 1 shard,
+`prove_seconds` 4.46 s, 1.3 MB proof, `verify_wall` 19.6 s; execute-only
+`r20260921-221253-d23e` -- same 10,128,736 cycles in 1.26 s.
 
 ## Tests
 
