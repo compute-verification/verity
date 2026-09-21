@@ -216,3 +216,32 @@ def test_timeout_kills_the_workload_tree_and_spares_bystanders(tmp_path):
         assert any(e.get("kind") == "cancel_intent" and e.get("actor") == "timeout" for e in events), "kill evidence preserved"
     finally:
         bystander.kill()
+
+
+# ---- compare ---------------------------------------------------------------------------------------------------------------------------
+
+def test_compare_is_descriptive_and_labels_ratios(tmp_path):
+    from research import compare as C
+    fast = WRITES_RESULT.replace('"value": 1.25', '"value": 0.5').replace('"observed-1"', '"observed-2"')
+    _, b = _run(tmp_path, code=WRITES_RESULT, stage="bench", expect=("elf_sha256=expected-1",))
+    _, c = _run(tmp_path, code=fast, stage="bench", expect=("elf_sha256=expected-1",))
+    rep = C.compare(Path(b["dir"]), Path(c["dir"]))
+    assert rep["differences"]["fingerprint_expected"] == []
+    fo = rep["differences"]["fingerprint_observed"]
+    assert fo and fo[0]["field"] == "elf_sha256" and fo[0]["baseline"] == "observed-1" and fo[0]["candidate"] == "observed-2"
+    m = rep["measurements"][0]
+    assert m["name"] == "prove_wall" and m["ratio_candidate_over_baseline"] == 0.4 and m["unit"] == "s"
+    assert any("workload contract" in cv for cv in rep["caveats"]) and any("not a confidence interval" in cv for cv in rep["caveats"])
+    text = C.render(rep)
+    assert "candidate/baseline" in text and "x0.4000" in text and "elf_sha256" in text
+    assert main(["compare", b["id"], c["id"], "--runs-dir", str(tmp_path)]) == 0
+
+
+def test_compare_flags_missing_validation_and_units(tmp_path):
+    from research import compare as C
+    noval = WRITES_RESULT.replace('"status": "passed"', '"status": "not_run"').replace('"unit": "s"', '"unit": "ms"')
+    _, b = _run(tmp_path, code=WRITES_RESULT, stage="bench")
+    _, c = _run(tmp_path, code=noval, stage="bench")
+    rep = C.compare(Path(b["dir"]), Path(c["dir"]))
+    assert rep["measurements"][0]["unit_mismatch"] and "ratio_candidate_over_baseline" not in rep["measurements"][0]
+    assert any("did not report validation passed" in cv for cv in rep["caveats"])

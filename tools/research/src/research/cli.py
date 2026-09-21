@@ -3,8 +3,9 @@
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [...] -- CMD...
   research fetch <run-id> [--all]                # copy the machine's records (or every file, verified) into the local run dir
-  research status [--runs-dir D] [--all] [--json]
+  research status [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--runs-dir D] [--json]
+  research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
 
@@ -23,6 +24,7 @@ import os
 import sys
 from pathlib import Path
 
+from . import compare as C
 from . import record, remote, result
 from . import runs as R
 
@@ -198,6 +200,24 @@ def cmd_fetch(argv: list[str]) -> int:
     return 0
 
 
+def cmd_compare(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="research compare")
+    ap.add_argument("baseline")
+    ap.add_argument("candidate")
+    ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    root = R.runs_root(ns.runs_dir)
+    try:
+        b, c = R.resolve(root, ns.baseline), R.resolve(root, ns.candidate)
+    except (FileNotFoundError, LookupError) as e:
+        print(f"research compare: {e}", file=sys.stderr)
+        return 1
+    rep = C.compare(b, c)
+    print(json.dumps(rep, indent=2, sort_keys=True, default=str) if ns.json else C.render(rep))
+    return 0
+
+
 def cmd_launch_request(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research launch-request")
     ap.add_argument("request")
@@ -227,9 +247,20 @@ def cmd_status(argv: list[str]) -> int:
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--all", action="store_true", help="every run, not just the last 20")
     ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first")
+    ap.add_argument("--balance", action="store_true", help="show the provider's account ledger (balance, spend limit, current $/h) with its observation time")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
+    ledger = None
+    if ns.balance:
+        try:
+            from .pods import runpod
+            from .telemetry.events import utc_now_ms
+
+            data = runpod._graphql("{ myself { clientBalance spendLimit currentSpendPerHr } }")["data"]["myself"]
+            ledger = {"provider": "runpod", "observed_utc": utc_now_ms(), **data}
+        except Exception as e:  # noqa: BLE001
+            ledger = {"provider": "runpod", "error": f"{type(e).__name__}: {e}"}
     if ns.refresh:
         for s in R.list_runs(root):
             if s.get("remote_rec") and s["state"] not in R.TERMINAL and (s["remote_rec"].get("remote_run_dir")):
@@ -241,8 +272,14 @@ def cmd_status(argv: list[str]) -> int:
     if not ns.all:
         rows = rows[-20:]
     if ns.json:
-        print(json.dumps({"runs_root": str(root), "runs": rows}, indent=2, sort_keys=True))
+        print(json.dumps({"runs_root": str(root), "runs": rows, "ledger": ledger}, indent=2, sort_keys=True))
         return 0
+    if ledger:
+        if ledger.get("error"):
+            print(f"ledger    unavailable: {ledger['error']}")
+        else:
+            print(f"ledger    runpod balance ${ledger['clientBalance']:.2f}  spend limit ${ledger['spendLimit']}  now ${ledger['currentSpendPerHr']}/h  (observed {ledger['observed_utc']}; the provider's numbers, not a research counter)")
+        print()
     if not rows:
         print(f"no runs under {root}")
         return 0
@@ -341,6 +378,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_inspect(rest)
     if cmd == "fetch":
         return cmd_fetch(rest)
+    if cmd == "compare":
+        return cmd_compare(rest)
     if cmd == "launch-request":
         return cmd_launch_request(rest)
     if cmd == "tele":
