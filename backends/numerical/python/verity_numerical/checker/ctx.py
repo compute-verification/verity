@@ -1,11 +1,17 @@
 """The four predicate kinds the checker is written in, and two interpreters for them.
 
-Every gadget states its constraints through a context of exactly four predicates:
+Every gadget states its constraints through a context of five predicates:
 
-    rng(name, x, lo, hi)     lo <= x < hi                 (a range check; ``x`` may be a hint or an expression)
-    eq(name, a, b)           a == b                       (a polynomial identity; ``a`` and ``b`` are ring expressions)
-    boolean(name, b)         b in {0, 1}
-    lookup(name, table, k)   the row of a fixed table at key ``k``; returns its columns
+    rng(name, x, lo, hi)          lo <= x < hi            (a range check; ``x`` may be a hint or an expression)
+    eq(name, a, b)                a == b                  (a polynomial identity; ``a`` and ``b`` are ring expressions)
+    boolean(name, b)              b in {0, 1}
+    lookup(name, table, k)        the row of a fixed table at key ``k``; returns its columns
+    lt_pow(name, x, ipow, bits)   0 <= x < 2^bits / ipow  (a range check against a *variable* power of two;
+                                  ``ipow = 2^(bits - k)`` comes from a table row, so this states x < 2^k)
+
+The reference realises ``lt_pow`` as the single range check ``x * ipow in [0, 2^bits)``, which is exact over the
+integers.  It is kept a separate predicate because a field embedding cannot copy that realisation unless
+``2^(2 bits) < p``: the product wraps otherwise (see the package docstring, requirement F2).
 
 Arithmetic between predicates is ordinary ``+ - *`` on the values, so the same gadget code runs on Python ints
 (:class:`IntCtx`, the reference: the first violated predicate raises :class:`Reject`) and on symbolic values
@@ -62,6 +68,9 @@ class IntCtx:
         except KeyError:
             raise Reject(f"{name}: key {key!r} is off table {table.name} [{table.lo}, {table.hi})") from None
 
+    def lt_pow(self, name: str, x: int, ipow: int, bits: int) -> None:
+        self.rng(name, x * ipow, 0, 2**bits)
+
 
 class Z3Ctx:
     """Collects the predicates as z3 integer constraints.  A lookup becomes fresh columns tied to the key by a
@@ -111,3 +120,6 @@ class Z3Ctx:
         ]
         self._add(z3.Or(rows))
         return outs
+
+    def lt_pow(self, name: str, x: object, ipow: object, bits: int) -> None:
+        self.rng(name, x * ipow, 0, 2**bits)

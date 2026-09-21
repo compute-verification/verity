@@ -262,8 +262,8 @@ class AlignState:
         ctx.rng(f"{tag}.r", r, 0, 2**W)
         pow_, ipow = ctx.lookup(f"{tag}.pow", pow_table(p), d)
         ctx.eq(f"{tag}.div", q * pow_ + r, M * 2**p.acc_shift)
-        ctx.rng(f"{tag}.rem", r * ipow, 0, 2**W)
-        ctx.rng(f"{tag}.quot", q * pow_, 0, 2**W)
+        ctx.lt_pow(f"{tag}.rem", r, ipow, W)           # r < 2^min(d, W)
+        ctx.lt_pow(f"{tag}.quot", q, pow_, W)          # q < 2^(W - min(d, W)): the tight bound
         return q
 
 
@@ -304,8 +304,8 @@ class AlignProduct:
         ctx.rng(f"{tag}.r", r, 0, 2**U)
         sl, sr, isr = ctx.lookup(f"{tag}.align", align_table(p), d)
         ctx.eq(f"{tag}.div", q * sr + r, u)
-        ctx.rng(f"{tag}.rem", r * isr, 0, 2**U)
-        ctx.rng(f"{tag}.quot", q * sr, 0, 2**U)
+        ctx.lt_pow(f"{tag}.rem", r, isr, U)            # r < sr
+        ctx.lt_pow(f"{tag}.quot", q, sr, U)            # q < 2^(2 sig) / sr: the tight bound
         return q * sl
 
 
@@ -393,7 +393,7 @@ class LeadingBit:
     def check(ctx, p: Params, v, h: dict, tag: str = "lead"):
         l = h["l"]
         lo, ispan = ctx.lookup(f"{tag}.lead", lead_table(p), l)
-        ctx.rng(f"{tag}.window", (v - lo) * ispan, 0, 2**p.s_bits)
+        ctx.lt_pow(f"{tag}.window", v - lo, ispan, p.s_bits)   # 0 <= v - 2^(l-1) < 2^(l-1)
         return l
 
 
@@ -438,7 +438,7 @@ class Normalise:
         k = E - e1 + p.acc_sig - p.width
         mul, div, idiv = ctx.lookup(f"{tag}.norm", norm_table(p), k)
         ctx.eq(f"{tag}.div", div * M + r, v * mul)
-        ctx.rng(f"{tag}.rem", r * idiv, 0, 2**p.norm_rem_bits)
+        ctx.lt_pow(f"{tag}.rem", r, idiv, p.norm_rem_bits)      # r < div
         return e1, M
 
 
