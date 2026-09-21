@@ -75,6 +75,24 @@ proof, `verify_wall` 17.5 s; compressed `r20260921-221023-972e` -- 1 shard,
 `prove_seconds` 4.46 s, 1.3 MB proof, `verify_wall` 19.6 s; execute-only
 `r20260921-221253-d23e` -- same 10,128,736 cycles in 1.26 s.
 
+`benchmarks/dot_product/baselines.json` freezes these runs with their labels
+(`proof_class`, `authentication`) and peak memory; it is the record to compare
+against.
+
+Arithmetic-only DIAGNOSTIC (2026-09-21, `r20260921-224405-22dc`): the
+`unsound-skip-authentication` guest (built by `SP1_HOST_FEATURES=cuda,unsound-skip-authentication
+bash backends/sp1/pod_bootstrap.sh`, run with `vector_run.py --diagnostic`)
+proves K=1536 in 9,992,112 cycles, 4 shards, `prove_seconds` 3.66 s (sound:
+10,128,736 cycles, 4 shards, 3.58 s; three diagnostic proofs spread 3.48-3.66 s),
+peak GPU memory unchanged at 19.5 GiB. What the skip removes is `merkle.auth`
+(leaf hashing and path folding), 138,164 cycles, 1.3% of the guest. The guest's
+cycles are statement machinery -- `parse.statement` 3.71 M and `merkle.table`
+(building the opening table from the statement; no hashing) 4.56 M, together
+82% -- then `digest` 0.90 M (9%), the relation `gates` 0.43 M (4.2%). The
+relation alone is not isolated by any build, so its proving time is not
+measured; it would be one shard on this prover. A diagnostic guest commits
+`h_O || h_L || 0xEE` and is never accepted as sound.
+
 ## Tests
 
 ~~~sh
