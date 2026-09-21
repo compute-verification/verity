@@ -29,19 +29,13 @@ position that names one rank must agree on it (and on ``position``); the
 index is the position's own.  The statement bytes therefore fix the word: a
 prover cannot choose which word of the leaf stands for the value.
 
-The serving side's framing (``vllm-poc/verity_vllm/hashing.py``, re-implemented
-here so the proof layer does not import the serving package)::
-
-    H(tag, *parts) = sha256( u32be(len(tag)) || tag || (u64be(len(part)) || part)* )
-    leaf = H("verity-vllm/leaf/v1", canonical_id, dtype, shape_text, value)
-    node = H("verity-vllm/node/v1", left, right)
-    lift = H("verity-vllm/lift/v1", child)          # an odd trailing node, never duplicated
-
-Level 0 is the leaf hashes in tree order; neighbours pair up, an odd trailing
-node is lifted.  An authentication path is one step per level: a sibling
-digest, or ``None`` where the node was lifted; the sibling/lift pattern is a
-function of ``(leaf_count, index)`` (:func:`vllm_path_shape`) and a path of
-another shape is rejected before any hash is compared.  The leaf's
+The leaf scheme -- ``H``, the leaf/node/lift hashes, the sibling-or-lift path
+shape -- is :mod:`verity.commitments.leaves` (the Verity protocol's commitment
+to runtime values); this module only reads words out of authenticated leaves.
+An authentication path is one step per level: a sibling digest, or ``None``
+where the node was lifted; the sibling/lift pattern is a function of
+``(leaf_count, index)`` (``path_shape``) and a path of another shape is
+rejected before any hash is compared.  The leaf's
 ``canonical_id``, ``dtype`` and ``shape_text`` are the prover's to supply: the
 hash chain binds them to the committed root, and the statement fixes only
 what the proof is about -- the tree, the rank, the word layout and the index.
@@ -57,15 +51,25 @@ The tree order is the format-2 one (first appearance of ``(domain_id, root,
 count)`` over the obligations and their commitments); a leaf is hashed once
 however many positions read words of it.  :func:`check_packed_openings` is the
 reference opening pass for this format, mirrored by ``check_openings_packed``
-in ``zk/sp1/common/src/check.rs``.
+in ``backends/sp1/common/src/check.rs``.
 """
 
 from __future__ import annotations
 
-import hashlib
-from collections.abc import Sequence
 from dataclasses import dataclass
 
+from verity.commitments.leaves import (
+    H,
+    fold_path,
+    ids_digest,
+    leaf_hash,
+    levels,
+    lift_hash,
+    node_hash,
+    open_path,
+    path_shape,
+    tree_depth,
+)
 from verity.errors import ProtocolError
 
 from .codes import Reject, VerificationCode
@@ -109,10 +113,6 @@ __all__ = [
     "vllm_tree_depth",
 ]
 
-VLLM_NODE_TAG = "verity-vllm/node/v1"
-VLLM_LIFT_TAG = "verity-vllm/lift/v1"
-
-
 def extract_word(schema: PackedSchema, value: bytes) -> int:
     """Word ``schema.index`` of a leaf's ``value`` bytes, or ``ProtocolError``.
 
@@ -133,109 +133,18 @@ def extract_word(schema: PackedSchema, value: bytes) -> int:
     return word
 
 
-# --- the serving side's framing ---------------------------------------------------------
+# --- the leaf scheme (owned by verity.commitments.leaves; the names below are kept for the callers) --------
 
-
-def vllm_hash(tag: str, *parts: bytes) -> bytes:
-    """``verity_vllm.hashing.H``: SHA-256 over the tag and the length-prefixed parts."""
-
-    digest = hashlib.sha256()
-    encoded = tag.encode("utf-8")
-    digest.update(len(encoded).to_bytes(4, "big"))
-    digest.update(encoded)
-    for part in parts:
-        digest.update(len(part).to_bytes(8, "big"))
-        digest.update(part)
-    return digest.digest()
-
-
-def vllm_leaf_hash(canonical_id: str, dtype: str, shape_text: str, value: bytes) -> bytes:
-    """``H("verity-vllm/leaf/v1", canonical_id, dtype, shape_text, value)``; ``shape_text`` is ``[d0,d1]``."""
-
-    return vllm_hash(
-        VLLM_LEAF_FRAMING, canonical_id.encode("utf-8"), dtype.encode("utf-8"), shape_text.encode("utf-8"), value
-    )
-
-
-def vllm_node_hash(left: bytes, right: bytes) -> bytes:
-    return vllm_hash(VLLM_NODE_TAG, left, right)
-
-
-def vllm_lift_hash(child: bytes) -> bytes:
-    return vllm_hash(VLLM_LIFT_TAG, child)
-
-
-def vllm_path_shape(leaf_count: int, index: int) -> list[bool]:
-    """Per level from the leaves up: ``True`` where the node has a sibling, ``False`` where it is lifted."""
-
-    if leaf_count <= 0 or not 0 <= index < leaf_count:
-        raise ProtocolError(f"index {index} out of range for {leaf_count} leaves")
-    shape: list[bool] = []
-    width, cursor = leaf_count, index
-    while width > 1:
-        shape.append(not (cursor == width - 1 and width % 2 == 1))
-        width = (width + 1) // 2
-        cursor //= 2
-    return shape
-
-
-def vllm_tree_depth(leaf_count: int) -> int:
-    return len(vllm_path_shape(leaf_count, 0)) if leaf_count > 0 else 0
-
-
-def vllm_fold_path(leaf: bytes, index: int, path: Sequence[bytes | None]) -> bytes:
-    """Walk from a leaf hash to the root: a sibling pairs by the cursor's parity, ``None`` lifts."""
-
-    digest, cursor = leaf, index
-    for sibling in path:
-        if sibling is None:
-            digest = vllm_lift_hash(digest)
-        elif cursor % 2 == 0:
-            digest = vllm_node_hash(digest, sibling)
-        else:
-            digest = vllm_node_hash(sibling, digest)
-        cursor //= 2
-    return digest
-
-
-def vllm_levels(leaf_hashes: Sequence[bytes]) -> list[list[bytes]]:
-    """The serving side's tree over ``leaf_hashes`` (in tree order): level 0 up to the root.
-
-    Neighbours pair, an odd trailing node is lifted; the root of an empty tree is
-    ``H("verity-vllm/empty/v1")``.  For fixtures and tests; the serving side's own
-    builder is ``verity_vllm.commit.MerkleTree``.
-    """
-
-    if not leaf_hashes:
-        return [[vllm_hash("verity-vllm/empty/v1")]]
-    levels = [list(leaf_hashes)]
-    while len(levels[-1]) > 1:
-        level = levels[-1]
-        nxt = [
-            vllm_node_hash(level[i], level[i + 1]) if i + 1 < len(level) else vllm_lift_hash(level[i])
-            for i in range(0, len(level), 2)
-        ]
-        levels.append(nxt)
-    return levels
-
-
-def vllm_open(levels: Sequence[Sequence[bytes]], index: int) -> tuple[bytes | None, ...]:
-    """The authentication path of leaf ``index`` in a tree built by :func:`vllm_levels`."""
-
-    path: list[bytes | None] = []
-    cursor = index
-    for level in levels[:-1]:
-        sibling = cursor ^ 1
-        path.append(level[sibling] if sibling < len(level) else None)
-        cursor //= 2
-    return tuple(path)
-
-
-def vllm_ids_digest(ids: Sequence[str]) -> bytes:
-    """``H("verity-vllm/ids/v1", id_0, ..., id_{n-1})`` over the sorted canonical ids: the tree's
-    ``ids_digest``, which the interface carries as the root's ``domain``."""
-
-    return vllm_hash("verity-vllm/ids/v1", *(item.encode("utf-8") for item in sorted(ids)))
+vllm_hash = H
+vllm_leaf_hash = leaf_hash
+vllm_node_hash = node_hash
+vllm_lift_hash = lift_hash
+vllm_path_shape = path_shape
+vllm_tree_depth = tree_depth
+vllm_fold_path = fold_path
+vllm_levels = levels
+vllm_open = open_path
+vllm_ids_digest = ids_digest
 
 
 # --- the witness ------------------------------------------------------------------------
