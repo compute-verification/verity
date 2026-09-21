@@ -236,6 +236,22 @@ def take_exclusive(runs_root: Path, run_id: str) -> None:
     raise Refused("could not take the exclusive lock (contended twice)")
 
 
+def exclusive_holder(runs_root: Path) -> str | None:
+    """The run named in a LIVE exclusive lock, else None (a stale lock is removed)."""
+    lock = runs_root / ".exclusive.lock"
+    try:
+        holder = lock.read_text().strip()
+    except FileNotFoundError:
+        return None
+    if holder and _holder_live(runs_root, holder):
+        return holder
+    try:
+        lock.unlink()
+    except FileNotFoundError:
+        pass
+    return None
+
+
 def release_exclusive(runs_root: Path, run_id: str) -> None:
     lock = runs_root / ".exclusive.lock"
     try:
@@ -280,12 +296,18 @@ def launch_request(request_path: Path) -> dict[str, Any]:
         return {"claimed": False, "run_id": run_id, "run_dir": str(run_dir), "existing": True, "state": st.get("state"),
                 "runner_pid": launch.get("runner_pid"), "refused": (refused or {}).get("reason")}
     concurrent = active_runs(runs_root, exclude=run_id)
-    if req.get("exclusive"):
-        try:
+    try:
+        holder = exclusive_holder(runs_root)
+        if holder and holder != run_id:
+            raise Refused(f"machine is exclusively held by run {holder} (still live); not starting {run_id}")
+        if req.get("exclusive"):
             take_exclusive(runs_root, run_id)
-        except Refused as e:
-            write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "at_utc": utc_now_ms()})
-            return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": str(e)}
+            if concurrent:
+                release_exclusive(runs_root, run_id)
+                raise Refused(f"--exclusive: other run(s) are live on this machine: {', '.join(concurrent)}; not starting {run_id}")
+    except Refused as e:
+        write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "at_utc": utc_now_ms()})
+        return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": str(e)}
     staged_inputs = request_path.parent / "inputs"
     if staged_inputs.is_dir():
         os.replace(staged_inputs, run_dir / "inputs")
@@ -303,6 +325,7 @@ def launch_request(request_path: Path) -> dict[str, Any]:
     env.update({k: str(v) for k, v in (req.get("env") or {}).items()})
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
     log = open(run_dir / "launcher.log", "ab")
     proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
     write_json_atomic(run_dir / "launch.json", {"run_id": run_id, "claimed_utc": utc_now_ms(), "runner_pid": proc.pid, "argv": argv,

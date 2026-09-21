@@ -250,7 +250,8 @@ def _tool_line(tool: dict | None) -> str:
         return "unknown (v0.1 record: the harness alone wrote it)"
     sha = tool.get("research_git_sha")
     state = "" if tool.get("research_dirty") is None else (" (dirty)" if tool.get("research_dirty") else " (clean)")
-    return f"research {tool.get('research_version')} @ {(sha or 'no git sha')[:12]}{state}; classifier {tool.get('classifier_version')}"
+    ident = f"git {sha[:12]}{state}" if sha else (f"snapshot {tool['research_snapshot']}" if tool.get("research_snapshot") else "no git sha, no snapshot")
+    return f"research {tool.get('research_version')} @ {ident}; classifier {tool.get('classifier_version')}"
 
 
 def cmd_inspect(argv: list[str]) -> int:

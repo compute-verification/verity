@@ -119,3 +119,30 @@ def test_machines_resolution(tmp_path, monkeypatch):
         remote.resolve_machine("zzz", "verity")
     with pytest.raises(remote.Refused):
         remote.resolve_machine("a", None)
+
+
+def test_exclusive_refuses_when_any_run_is_live_and_vice_versa(tmp_path):
+    plain, runs_root = _request(tmp_path, "plain", [PY, "-c", "import time; time.sleep(3)"])
+    assert remote.launch_request(plain)["started"]
+    time.sleep(0.5)
+    excl, _ = _request(tmp_path, "excl", [PY, "-c", "print(1)"], exclusive=True)
+    out = remote.launch_request(excl)
+    assert out["started"] is False and "other run(s) are live" in out["refused"] and "plain" in out["refused"]
+    assert not (runs_root / ".exclusive.lock").exists(), "a refused exclusive launch leaves no lock behind"
+    _wait_terminal(runs_root / "plain")
+    holder, _ = _request(tmp_path, "holder", [PY, "-c", "import time; time.sleep(3)"], exclusive=True)
+    assert remote.launch_request(holder)["started"]
+    time.sleep(0.5)
+    late, _ = _request(tmp_path, "late", [PY, "-c", "print(1)"])
+    out = remote.launch_request(late)
+    assert out["started"] is False and "exclusively held by run holder" in out["refused"], "a plain launch respects a live exclusive holder"
+    _wait_terminal(runs_root / "holder")
+
+
+def test_snapshot_identity_reaches_the_record(tmp_path):
+    req, runs_root = _request(tmp_path, "snap", [PY, "-c", "pass"])
+    doc = json.loads(req.read_text()); doc["tool"] = str(Path(SRC)); req.write_text(json.dumps(doc))
+    assert remote.launch_request(req)["started"]
+    _wait_terminal(runs_root / "snap")
+    job = json.loads((runs_root / "snap" / "job.json").read_text())
+    assert job["tool"]["research_snapshot"] == Path(SRC).name

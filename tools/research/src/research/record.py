@@ -11,6 +11,7 @@ which means unknown, never a default.  The harness is never modified for this; `
 from __future__ import annotations
 
 import json
+import os
 import socket
 import subprocess
 from pathlib import Path
@@ -40,8 +41,9 @@ def tool_identity() -> dict[str, Any]:
     if sha:
         porcelain = _git(["status", "--porcelain", "--", str(here)], here)
         dirty = None if porcelain is None else bool(porcelain)
-    return {"research_version": __version__, "research_git_sha": sha, "research_git_sha_reason": None if sha else "not a git checkout",
-            "research_dirty": dirty, "telemetry_schema": TELEMETRY_SCHEMA, "job_schema_base": JOB_SCHEMA_V1,
+    snapshot = os.environ.get("RESEARCH_TOOL_SNAPSHOT")
+    return {"research_version": __version__, "research_git_sha": sha, "research_git_sha_reason": None if sha else ("shipped snapshot" if snapshot else "not a git checkout"),
+            "research_dirty": dirty, "research_snapshot": snapshot, "telemetry_schema": TELEMETRY_SCHEMA, "job_schema_base": JOB_SCHEMA_V1,
             "collector_version": COLLECTOR_VERSION, "classifier_version": CLASSIFIER_VERSION}
 
 
