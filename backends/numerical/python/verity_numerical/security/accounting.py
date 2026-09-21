@@ -21,7 +21,7 @@ The calculator never converts a field size into a security level: ``security_bit
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
 
