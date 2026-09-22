@@ -24,7 +24,10 @@ from verity_numerical.checker.step import step_output
 from .chain import Layout
 from .compile import P
 from .hints_torch import hints_torch
-from .protocol import Config, config_for, prove, soundness, verify
+from .protocol import Config, config_for, n_rows, prove, soundness, verify
+
+ZK_MODE = ("Ligero HVZK masking: t_pad=256 uniform coefficients (Z_H s_j) per row, 5D committed mask rows "
+           "(prox/lin/quad x2/chain), evaluation on the coset g<w_n> disjoint from H (PROTOCOL.md 8b)")
 from .unit import compile_unit, public_vectors
 from .witness import hints_tensor, tables
 
@@ -45,12 +48,15 @@ def vu_units(x: list[int], w: list[int], accs: list[int]) -> list[tuple]:
 
 
 class ChainRunner:
-    def __init__(self, device: str, target: float, rate_log2: int = 2, hints: str = "torch"):
+    def __init__(self, device: str, target: float, rate_log2: int = 2, hints: str = "torch", n_proofs: int = 1,
+                 zk: bool = False):
         self.p = REAL
+        self.zk = zk
         self.device = device
         self.hints_mode = hints
         self.target = target
         self.rate_log2 = rate_log2
+        self.n_proofs = n_proofs            # sub-batches the target is union-bounded over (config_for)
         t0 = time.perf_counter()
         self.sys = compile_unit(self.p, chain=True)
         self.tb = tables(self.sys, self.device)
@@ -59,7 +65,7 @@ class ChainRunner:
 
     def cfg(self, l: int) -> Config:
         if l not in self._cfg:
-            self._cfg[l] = config_for(l, self.target, self.rate_log2)
+            self._cfg[l] = config_for(l, self.target, self.rate_log2, self.n_proofs, zk=self.zk)
         return self._cfg[l]
 
     def layout(self, n_vus: int, min_l: int = 256) -> Layout:
@@ -75,10 +81,12 @@ class ChainRunner:
             y16[STEPS * v + STEPS - 1] = y
         while len(units) < lay.l:
             units.append(_pad_unit())
-        a, b = [u[1] for u in units], [u[2] for u in units]
+        # operands as arrays (the loader's marshaling of Python lists is not prover work; everything after t0 is)
+        a = np.asarray([u[1] for u in units], dtype=np.int64)
+        b = np.asarray([u[2] for u in units], dtype=np.int64)
         t0 = time.perf_counter()
         pub = public_vectors(self.p, None, a, b, None, device=self.device)
-        c_in, y_out = [u[0] for u in units], [u[3] for u in units]
+        c_in, y_out = np.asarray([u[0] for u in units], dtype=np.int64), np.asarray([u[3] for u in units], dtype=np.int64)
         if self.hints_mode == "torch":
             hints = hints_torch(self.p, self.sys, c_in, a, b, y_out, self.device)
         else:
@@ -91,7 +99,7 @@ class ChainRunner:
             torch.cuda.synchronize()
         hints_seconds = time.perf_counter() - t0
         proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
-                      chain=(lay, y16))
+                      chain=(lay, y16), words={"a": a, "b": b})
         proof.timings["hints_host"] = hints_seconds
         return proof, (a, b, y16), lay
 
@@ -106,7 +114,7 @@ def _vu_data(vu: instances.VuTier, i: int):
 
 
 def gate_vu(args) -> int:
-    R = ChainRunner(args.device, args.target, args.rate_log2, args.hints)
+    R = ChainRunner(args.device, args.target, args.rate_log2, args.hints, zk=args.zk)
     log = print
     log(f"chain system: {R.sys.summary()} compiled in {R.compile_seconds:.2f}s; device {args.device}")
     root = Path(args.root)
@@ -211,76 +219,108 @@ def gate_vu(args) -> int:
 
 
 def bench_vu(args) -> int:
+    """``--batch`` units per proof (``B_proof = batch // 96`` VUs); ``--total-vus`` (default ``B_proof``) VUs proved as
+    ``N_subbatches = ceil(total / B_proof)`` independently committed proofs whose soundness is union-bounded
+    (``config_for(..., n_proofs)`` raises ``t`` so the union meets the target).  Every sub-batch is proved AND
+    verified in every rep; the reported prover time is the sum over the sub-batches (per_vu = total / total_vus)."""
     from .run import _git_commit
 
-    R = ChainRunner(args.device, args.target, args.rate_log2, args.hints)
     root = Path(args.root)
     vu = instances.load("vu-k1536", root)
-    n_vus = args.batch // STEPS
-    vus = [_vu_data(vu, i % vu.n) for i in range(n_vus)]
-    lay = R.layout(n_vus)
+    per_proof = args.batch // STEPS
+    total_vus = args.total_vus or per_proof
+    n_proofs = -(-total_vus // per_proof)
+    R = ChainRunner(args.device, args.target, args.rate_log2, args.hints, n_proofs=n_proofs, zk=args.zk)
+    subs = [(lo, min(lo + per_proof, total_vus)) for lo in range(0, total_vus, per_proof)]
+    data = {i: _vu_data(vu, i % vu.n) for i in range(total_vus)}
+    lay = R.layout(per_proof)
     l = lay.l
     cfg = R.cfg(l)
-    print(f"config {cfg}; layout {lay}; system {R.sys.summary()}")
+    print(f"config {cfg}; layout {lay}; proof class {'COMPLETE_HVZK_BACKEND' if cfg.zk else 'NON_ZK_PROOF_DIAGNOSTIC'}; system {R.sys.summary()}; {total_vus} VUs as {n_proofs} sub-batches of <= {per_proof}")
     runs = []
     if args.device.startswith("cuda"):
         torch.cuda.reset_peak_memory_stats()
+    keys = None
     for rep in range(args.reps + 1):
-        proof, pubs, lay = R.prove_vus(vus, check=False)
-        t0 = time.perf_counter()
-        ok, why = R.verify_vus(proof, pubs, lay)
-        vsec = time.perf_counter() - t0
-        assert ok, why
+        agg: dict[str, float] = {}
+        vsum = 0.0
+        t_pass = time.perf_counter()
+        for lo, hi in subs:
+            vus = [data[i] for i in range(lo, hi)]
+            proof, pubs, lay_i = R.prove_vus(vus, check=False, min_l=l)
+            t0 = time.perf_counter()
+            ok, why = R.verify_vus(proof, pubs, lay_i)
+            vsum += time.perf_counter() - t0
+            assert ok, f"sub-batch [{lo}, {hi}): {why}"
+            for k, v in proof.timings.items():
+                agg[k] = agg.get(k, 0.0) + v
+            if rep == 0:
+                break                                        # warm-up: one sub-batch (graph capture, compile)
+        wall = time.perf_counter() - t_pass
         if rep == 0:
-            print("warm-up:", {k: round(v, 3) for k, v in proof.timings.items()})
+            print("warm-up (one sub-batch):", {k: round(v, 3) for k, v in agg.items()})
             continue
-        runs.append((proof.timings, vsec))
-        print(f"rep {rep}: prover {proof.timings['total']:.3f}s (+hints {proof.timings['hints_host']:.3f}s) verifier {vsec:.3f}s")
-    keys = runs[0][0].keys()
+        keys = agg.keys()
+        runs.append((agg, vsum))
+        print(f"rep {rep}: prover {agg['total']:.3f}s (+hints {agg['hints_host']:.3f}s) over {n_proofs} proofs; "
+              f"verifier {vsum:.3f}s; pass wall {wall:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)")
     med = {k: statistics.median(r[0][k] for r in runs) for k in keys}
     vmed = statistics.median(r[1] for r in runs)
     peak_dev = torch.cuda.max_memory_allocated() if args.device.startswith("cuda") else 0
     nbytes = proof.n_bytes()
-    snd = soundness(cfg, R.tb.L, R.tb.Q)
+    nbytes = {k: v * n_proofs for k, v in nbytes.items()}
+    snd = soundness(cfg, R.tb.L, R.tb.Q, n_proofs)
     total = med["total"] + med["hints_host"]
+    n_vus = total_vus
     per_vu = total / n_vus
     hw = contract.probe_hardware()
     sw = {"backend": {"name": "b-ligero chain (backends/direct/ligero)", "commit": _git_commit(), "hash": proof.hash_name,
                       "challenge_expander": "SHAKE-256 (placeholder)"},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
+    if cfg.zk:
+        proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE
+        omitted = "external authentication, malicious-verifier ZK (HM96 commitment to the verifier's coins)"
+    else:
+        proof_class, zk_mode, omitted = "NON_ZK_PROOF_DIAGNOSTIC", "none", "external authentication, ZK masking"
     fp = contract.fingerprint(
-        profile=contract.PROFILE, domain=contract.DOMAIN, K=STEP * STEPS, B=n_vus, proof_class="NON_ZK_PROOF_DIAGNOSTIC",
-        authentication="excluded", zk_mode="none",
-        security={"target": round(args.target), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_l": cfg.l,
+        profile=contract.PROFILE, domain=contract.DOMAIN, K=STEP * STEPS, B=n_vus, N_subbatches=n_proofs,
+        proof_class=proof_class, authentication="excluded", zk_mode=zk_mode,
+        security={"target": round(args.target), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_k": cfg.k, "rs_l": cfg.l,
+                  "zk": cfg.zk, "t_pad": cfg.t_pad,
                   "opened_columns": cfg.t, "achieved_log2": snd["total_log2"], "terms_log2": snd["terms_log2"],
-                  "hash_placeholder": True},
+                  "per_proof_target_log2": snd["per_proof_target_log2"], "per_proof_total_log2": snd["per_proof_total_log2"],
+                  "union_over": n_proofs, "hash_placeholder": True},
         hardware=hw, software=sw,
         preprocessing=f"constraint compilation (a function of Params only, {R.compile_seconds:.2f}s)",
         retention="retained",
         instances=contract.instances_ref("vu-k1536", 0, n_vus, instances.manifest_sha256(root)),
-        scope="vu", omitted="external authentication, ZK masking",
-        rows=R.sys.m, linear_constraints=R.tb.L, quadratic_constraints=R.tb.Q,
+        scope="vu", omitted=omitted,
+        rows=R.sys.m, committed_rows=n_rows(cfg, R.sys.m, True), linear_constraints=R.tb.L, quadratic_constraints=R.tb.Q,
         witness_generation=f"{R.hints_mode} hint generator (gen_step semantics) + torch program (derived rows)",
-        note=f"{n_vus} VUs per proof of l = {l} columns ({l - n_vus * STEPS} pad columns)",
+        B_proof=per_proof,
+        note=f"{total_vus} VUs as {n_proofs} independently committed proofs of <= {per_proof} VUs each (l = {l} columns, "
+             f"{l - per_proof * STEPS} pad columns per proof); prover time = sum over the proofs; soundness = union bound",
     )
     meas = [
         contract.measurement("t.witness", med["witness"] + med["hints_host"]),
         contract.measurement("t.encoding_commitment", med["encode"] + med["transfer"] + med["merkle"]),
         contract.measurement("t.arithmetic", med["tests"]),
         contract.measurement("t.lookup", 0.0),
-        contract.measurement("t.zk_additional", 0.0),
-        contract.measurement("t.serialization", med["openings"]),
+        contract.measurement("t.zk_additional", med.get("zk_masks", 0.0)),
+        contract.measurement("t.serialization", med["openings"] + med.get("statement", 0.0)),
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
         contract.measurement("rounds.protocol", 2),
         contract.measurement("rounds.sequential_depth", 2),
         contract.measurement("mem.peak_device_bytes", peak_dev),
-        contract.measurement("census.witness_elements", R.sys.m * l),
-        contract.measurement("census.committed_elements", R.sys.m * cfg.n),
-        contract.measurement("census.bytes_encoded", R.sys.m * cfg.n * 4),
+        contract.measurement("census.witness_elements", R.sys.m * l * n_proofs),
+        contract.measurement("census.committed_elements", R.sys.m * cfg.n * n_proofs),
+        contract.measurement("census.bytes_encoded", R.sys.m * cfg.n * 4 * n_proofs),
         contract.measurement("vu.seconds_per_vu", per_vu, "s"),
         contract.measurement("vu.count", n_vus, "count"),
+        contract.measurement("split.subbatches", n_proofs, "count"),
+        contract.measurement("split.per_proof_vus", per_proof, "count"),
         contract.measurement("split.hints_seconds", med["hints_host"], "s"),
         contract.measurement("split.witness_torch_seconds", med["witness"], "s"),
         contract.measurement("split.encode_seconds", med["encode"], "s"),
@@ -290,18 +330,20 @@ def bench_vu(args) -> int:
         contract.measurement("split.openings_seconds", med["openings"], "s"),
         contract.measurement("proof.opened_columns_bytes", nbytes["opened_columns"], "B"),
         contract.measurement("proof.merkle_paths_bytes", nbytes["merkle_paths"], "B"),
-        contract.measurement("proof.w_h_q_bytes", nbytes["w"] + nbytes["h"] + nbytes["q_chain"], "B"),
+        contract.measurement("proof.w_h_q_bytes", nbytes["w"] + nbytes["h"] + nbytes["q_chain"] + nbytes["v_linear"], "B"),
+        contract.measurement("split.zk_masks_seconds", med.get("zk_masks", 0.0), "s"),
     ]
     result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or f"b-ligero-vu-{int(time.time())}",
               "workload_fingerprint": fp,
               "validation": {"status": "passed", "checker": "backends.direct.ligero.run bench-vu (verifier accepted every rep)",
-                             "detail": f"{args.reps} reps, {n_vus} VUs at l={l}", "evidence": {"soundness": snd}},
+                             "detail": f"{args.reps} reps, {n_vus} VUs as {n_proofs} proofs at l={l}", "evidence": {"soundness": snd}},
               "measurements": meas, "measurement_files": [], "artifacts": []}
     problems = contract.validate(result)
     if problems:
         print("contract problems:", problems)
-    print(json.dumps({"seconds_per_vu": per_vu, "prover_total": total, "verifier": vmed, "bytes": nbytes,
-                      "peak_device_bytes": peak_dev, "soundness_log2": snd["total_log2"], "medians": med}, indent=1))
+    print(json.dumps({"seconds_per_vu": per_vu, "prover_total": total, "verifier": vmed, "bytes": nbytes, "n_proofs": n_proofs,
+                      "per_proof_vus": per_proof, "t": cfg.t, "zk": cfg.zk, "k": cfg.k, "peak_device_bytes": peak_dev, "soundness_log2": snd["total_log2"],
+                      "per_proof_log2": snd["per_proof_total_log2"], "medians": med}, indent=1))
     if args.out:
         Path(args.out).write_text(json.dumps(result, indent=1, default=str))
     return 0

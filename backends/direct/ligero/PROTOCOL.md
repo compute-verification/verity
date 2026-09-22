@@ -1,6 +1,6 @@
 # Ligero-style direct-constraint argument for the transition unit (lane b-ligero, track B)
 
-Status: NON_ZK_PROOF_DIAGNOSTIC. Implemented in this directory (Python/torch); measured on `vy-g3` (NVIDIA L40S).
+Status: NON_ZK_PROOF_DIAGNOSTIC without `--zk`, COMPLETE_HVZK_BACKEND with it (section 8b; lane b-ligero2). Implemented in this directory (Python/torch); measured on `vy-g3` (NVIDIA L40S).
 The relation is the frozen WP2 checker (`verity_numerical.checker`): every predicate of `check_step_expr` at
 `params.REAL` is constrained; nothing is dropped (section 5 lists the two places where a predicate is *restated*
 and argues equivalence).
@@ -108,6 +108,15 @@ message `z`, which a direct-constraint B does not have).
 
 The prover's cost of 2 and 3 is one pass over the sparse constraint tables applied to `U` (index-gather, ~6 000
 terms), one Hadamard on `Q x n`, `D` reductions `Q x n -> n`, one INTT_n. No extension arithmetic.
+*Split form (lane b-ligero2, `witness.quad_p0`)*: the same `P0`, computed as the booleanity part
+`sum_{j bit/sel} rho_j (U_j^2 - U_j)` in one fused pass over those rows (3196 of the 3387 constraints; no `Q x n`
+intermediate) plus the 191 general constraints through the sparse tables of their subset. Bit-equal to the form
+above (it is the same polynomial); 122 -> 29 ms per proof at `n = 65536`, peak memory 13.7 -> 8.5 GB at 170 VUs.
+Under ZK (section 8b) both sides add the mask contributions to `P0` before / after the division by `Z_H`.
+
+Every challenge is `H(statement, transcript prefix)` with the statement digest computed by the verifier from its own
+configuration (lane b-ligero2, `statement_digest`; the pre-fix protocol derived the challenges from the transcript
+alone and was forgeable by choosing the claimed words after the challenges -- README.md "Second pass").
 
 ## 5. Where the checker is restated (relation unchanged)
 
@@ -198,7 +207,43 @@ twiddle passes are int64 elementwise kernels that cost more than the NTT itself;
 kernel (recombination in registers). With the compiled butterfly the NTT is 31 ms = 31% of the 0.10 s prover; the
 two-stage INT8 DFT (8 ms of matmul) would pay only once its recombination is fused into the same kernel.
 
-## 8b. ZK masking cost (not implemented; NON_ZK_PROOF_DIAGNOSTIC)
+## 8b. ZK masking -- implemented (lane b-ligero2; `--zk`; proof class COMPLETE_HVZK_BACKEND)
+
+**As implemented** (`protocol.py`, "ZK masking"): honest-verifier zero knowledge by Ligero's blinding, in the
+*coefficient* form, which keeps `n` where it is.
+
+* Row `j` of the witness is committed as `p_j(x) = interp_H(W[j])(x) + Z_H(x) s_j(x)` with `s_j` uniform of degree
+  `< t_pad = 256`: `k = l + 256` (not a power of two -- the encoder is INTT_l + coefficient padding + NTT_n, so the
+  message length is free), `n = 4 l` unchanged. `p_j` agrees with the payload on `H`; at any `t <= t_pad` points off
+  `H` its values are uniform (the map `s -> (Z_H(eta_c) s(eta_c))_c` is onto, `Z_H != 0` on the coset). The
+  evaluation domain was already the coset `g <w_n>`, disjoint from `H` (red-team F4: no opened column is a payload
+  position; what the unmasked prover leaked was the *interpolant* -- constant rows in the clear at every column, 35%
+  of all opened values were `0`, see `redteam_zk.py`).
+* Per challenge coordinate `d`, five committed mask rows, all of degree `< k` (so the proximity test covers them like
+  any other row; the verifier reconstructs each mask's contribution at the opened columns from the opened mask rows
+  and the public `Z_H(eta_c)`, `eta_c^k` -- a dishonest mask is just another committed row, no unchecked freedom):
+  `s_prox` (degree `< k`), `s_lin` (`< t_pad`), `s_qa` (`< k`), `s_qb` (`< t_pad - 1`), `s_chain` (`< k - 1`).
+* Messages: proximity `w_d = r_d . p + s_prox_d` (`k` coefficients, uniform; `r_d` is zero on the prox rows, which
+  enter with coefficient 1); linear `v_d = alpha_d . p + Z_H s_lin_d` (`k` coefficients; the verifier checks
+  `v_d|_H = beta_d` -- the public right-hand side, folded mod `x^l - 1` and NTT'd -- and `v_d(eta_c)` against the
+  opened rows; uniform given `beta`); quadratic `h_d = P_d / Z_H + s_qa_d + x^k s_qb_d` (`2k - 1 - l` coefficients,
+  every one masked); chain `q_d = Q_d + Z_H s_chain_d` (`l + k - 1` coefficients; `sum_H q = l (q_0 + q_l + q_2l)`).
+* Statement digest absorbs `zk` and `k`; the verifier's shape checks use `k`, `2k - 1 - l`, `l + k - 1`, `M = m + 5D`.
+* Randomness: SHAKE-256 of a fresh `os.urandom(32)` seed, reduced mod `p` (2^-31 statistical bias per symbol; the
+  simulator's distance). Cost: `m t_pad + D (3k + 2 t_pad + ...)` symbols, ~1.5 M per proof at `l = 8192`.
+* Soundness: Appendix C with `k = l + 256`: `t = 199` at `l = 8192` (was 198 for the 49-proof union), `197` at
+  `l = 16384` (was 196); `LigeroParams(zk=True)` validates `k > l + t` (Lemma 4.15).
+* Test: `redteam_zk.py` -- a proof of real VUs against a proof of the trivial VU at the same layout (what a
+  simulator without the witness produces): two-sample chi-square on the opened columns and on `w, v, h, q`
+  indistinguishable (`p > 0.3` typical), opened columns uniform, zero opened values equal to a payload value of
+  their row, zero constant rows in the clear (unmasked control: 1236 of 1236 constant rows in the clear, 233 k of
+  665 k opened values equal to their row's payload).
+* What separates this from `COMPLETE_ZK_BACKEND`: the verifier's coins are Fiat-Shamir of the transcript; against a
+  malicious verifier (interactive setting) the HM96 commitment to the coins before `root` is needed (one more round,
+  depth 3, no arithmetic cost) -- not implemented.
+
+The original cost estimate follows (it assumed `k` rounded to a power of two, hence `n = 32768`; the coefficient
+form above avoids it -- the measured cost is in README.md).
 
 Ligero's honest-verifier ZK: every row is padded with `t` uniformly random message symbols (`k = l + t`, so an opening
 of `t` columns reveals nothing of the row; Lemma 4.15 needs `k > l + t`), and the linear / quadratic / chain test
@@ -227,7 +272,7 @@ a commitment to the verifier's coins before `root` (one more round; depth 3) -- 
   (2.57 ms/VU), 0.195 s per 85 VUs at `l = 8192` (2.30 ms/VU); `results/result_*.json`.
 * The hash and the SHAKE-256 challenge expander remain "placeholders" in the sense of the shared brief (not the
   campaign's final choice of hash).
-* ZK masking: section 8b (design + cost, not implemented).
+* ZK masking: section 8b, implemented by lane b-ligero2 (`--zk`, COMPLETE_HVZK_BACKEND); malicious-verifier ZK (HM96 coin commitment) not implemented.
 
 ## 9. Negative-test expectations
 

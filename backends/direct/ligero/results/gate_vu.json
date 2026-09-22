@@ -18,42 +18,22 @@
    "tier": "vu-k1536",
    "range": [
     0,
-    42
+    8
    ],
-   "l": 4096,
+   "l": 1024,
    "ok": true,
-   "why": "accept (0.053s)",
+   "why": "accept (0.040s)",
    "timings": {
-    "witness": 0.33249999582767487,
-    "self_check": 2.7672967091202736,
-    "encode": 0.7048743180930614,
-    "transfer": 0.0012536607682704926,
-    "merkle": 0.029328439384698868,
-    "tests": 0.21829027123749256,
-    "openings": 0.007751874625682831,
-    "total": 4.061310483142734,
-    "hints_host": 3.2520527597516775
-   }
-  },
-  {
-   "tier": "vu-k1536",
-   "range": [
-    42,
-    64
-   ],
-   "l": 4096,
-   "ok": true,
-   "why": "accept (0.039s)",
-   "timings": {
-    "witness": 0.00849270448088646,
-    "self_check": 0.01978885941207409,
-    "encode": 0.0320701077580452,
-    "transfer": 0.001161692664027214,
-    "merkle": 0.001004774123430252,
-    "tests": 0.04451673664152622,
-    "openings": 0.004018981009721756,
-    "total": 0.11106870695948601,
-    "hints_host": 2.989235082641244
+    "statement": 0.014607768505811691,
+    "witness": 0.4003750439733267,
+    "self_check": 2.9830040838569403,
+    "encode": 0.8016774337738752,
+    "transfer": 0.0006212014704942703,
+    "merkle": 0.03946732170879841,
+    "tests": 0.5658566430211067,
+    "openings": 0.006121048703789711,
+    "total": 4.811746388673782,
+    "hints_host": 1.0966021101921797
    }
   }
  ],
@@ -399,28 +379,28 @@
    "mistake": "sat-intermediate",
    "verdict": "reject",
    "accepted": false,
-   "why": "prover raised Reject; verifier on a foreign proof: linear constraints failed"
+   "why": "prover raised Reject; verifier on a foreign proof: column challenge mismatch"
   },
   {
    "id": 49,
    "mistake": "sat-intermediate",
    "verdict": "reject",
    "accepted": false,
-   "why": "prover raised Reject; verifier on a foreign proof: linear constraints failed"
+   "why": "prover raised Reject; verifier on a foreign proof: column challenge mismatch"
   },
   {
    "id": 50,
    "mistake": "sat-intermediate",
    "verdict": "reject",
    "accepted": false,
-   "why": "prover raised Reject; verifier on a foreign proof: linear constraints failed"
+   "why": "prover raised Reject; verifier on a foreign proof: column challenge mismatch"
   },
   {
    "id": 51,
    "mistake": "sat-intermediate",
    "verdict": "reject",
    "accepted": false,
-   "why": "prover raised Reject; verifier on a foreign proof: linear constraints failed"
+   "why": "prover raised Reject; verifier on a foreign proof: column challenge mismatch"
   }
  ],
  "mutations": [
@@ -2420,7 +2400,7 @@
    "row": "claimed y16 flipped",
    "kind": "chain",
    "accepted": false,
-   "why": "chain constraints failed (sum over H)"
+   "why": "column challenge mismatch"
   },
   {
    "row": "link c.f[40] != y.f[39]",
