@@ -441,7 +441,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
   # [r19-int-13, F-r19-int-14] MATCH_PHASE=cpu resumes the CPU half (resolve -> fold -> gates) over a capture already in $D/match/capture
   # (run_config's own --phase cpu, D87: realized shape from the existing capture, spec kept): #69 olmoe B128's fold died on ENOSPC at its
   # program.json write 2 h 39 min in, with the 74 GB / 188k-file capture complete on disk.  Default all = capture + CPU, unchanged.
-  MATCH_PHASE=${MATCH_PHASE:-all}; case "$MATCH_PHASE" in all|cpu) ;; *) log "MATCH_PHASE=$MATCH_PHASE is not all|cpu"; exit 2;; esac
+  export MATCH_PHASE=${MATCH_PHASE:-all}; case "$MATCH_PHASE" in all|cpu) ;; *) log "MATCH_PHASE=$MATCH_PHASE is not all|cpu"; exit 2;; esac   # exported: the summary's record-freshness rule reads it (r19-int-18)
   [ "$MATCH_PHASE" = cpu ] && { [ -d "$D/match/capture" ] || { verdict match FAIL "MATCH_PHASE=cpu without $D/match/capture"; exit 12; }; log "match: MATCH_PHASE=cpu over the existing capture (no GPU stage)"; }
   CMD_M=($PY312 -m verity_capture.bench.run_config --case "$ROLE" --workload "$WL" --out "$D/match" --checkpoint-dir "$CK" --phase "$MATCH_PHASE"
          --python-gpu "$PY" --python-cpu "$PY312" --max-num-seqs "$B" --snapshot-steps "${MATCH_SNAP_STEPS:-$SNAP_DEF}"
@@ -605,10 +605,20 @@ if os.path.exists(sp):
 # rcm=1. The record's log must be newer than the stage start and the capture/control stages must have rc 0 in stages.json.
 rec_log = f"{d}/match/capture/log.jsonl.gz"
 rec_mtime = os.path.getmtime(rec_log) if os.path.exists(rec_log) else None
-rec_fresh = rec_mtime is not None and rec_mtime >= t0 - 5
-rec_stage_ok = all((stages.get(k) or {}).get("rc") == 0 for k in ("capture", "control"))
+# [r19-int-18, F-r19-int-18] MATCH_PHASE=cpu is an EXPLICIT resume over the preserved capture (F-r19-int-14): the record is older than
+# this stage by construction, so the mtime rule cannot apply -- the resumed record is accepted when it is complete (capture + control
+# tokens.json beside the log) and labelled `resumed` with its mtime; #57's cpu resume reported "record predates this match stage" on a
+# record that was 37 minutes old and whole.  Without the flag the rule of record stands: the log must be newer than the stage start.
+resumed = os.environ.get("MATCH_PHASE") == "cpu"
+rec_complete = rec_mtime is not None and all(os.path.exists(f"{d}/match/{p}/tokens.json") for p in ("capture", "control"))
+rec_fresh = rec_mtime is not None and (rec_mtime >= t0 - 5 or (resumed and rec_complete))
+# the capture/control stage records must say rc 0; when the stage record was set aside after an interrupted save (F-r19-int-17) a resume
+# has none for the GPU stages -- accepted on the completion markers above, labelled stage_record_absent
+rec_stage_absent = resumed and not any(k in stages for k in ("capture", "control"))
+rec_stage_ok = all((stages.get(k) or {}).get("rc") == 0 for k in ("capture", "control")) or (rec_stage_absent and rec_complete)
 record = {"fresh": bool(rec_fresh and rec_stage_ok), "log_mtime_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(rec_mtime)) if rec_mtime else None,
           "stage_start_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t0)),
+          "resumed": resumed, "resumed_record_complete": rec_complete if resumed else None, "stage_record_absent": rec_stage_absent,
           "capture_rc": (stages.get("capture") or {}).get("rc"), "control_rc": (stages.get("control") or {}).get("rc"),
           "reason": None if (rec_fresh and rec_stage_ok) else
                     ("record predates this match stage (stale record from a previous attempt)" if not rec_fresh else

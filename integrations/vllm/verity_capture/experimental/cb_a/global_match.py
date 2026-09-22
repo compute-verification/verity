@@ -1064,10 +1064,22 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
     per_req: dict[str, list[int]] = collections.OrderedDict()
     unattributed = []
+    # [R19, F-r19-int-15] weight-only instances (every node operand a shared weight or an earlier weight-only instance: gemma2's RMSNorm
+    # scale `1 + w`, 11235 on #57 B8 1024/128) carry no request's data.  They are SHARED -- owned by no request, read like a weight --
+    # and belong to the leg of every request with rows in their engine step (BD.shared_legs: the request's own derive computes the node
+    # inside its forward at that step).  The same rule X-09 (BD.decompose) applies, after the meta channel and before the row-count rule,
+    # which at B>1 refused them ("rows=1 != tokens|logits") and at B=1 handed them to the one request by coincidence.
+    shared_nodes: set[int] = set()            # node ids of the weight-only instances (an operand source `is_weight_only` accepts)
+    shared_idx: list[tuple[int, int]] = []    # (instance index, engine step)
+    _compact = getattr(B, "compact", False)
     for i, r in enumerate(B.inst):
         o = meta_of.get(r["k"])
         rid = o.get("request") if o else None
         if rid is None and o is not None:
+            if BD.is_weight_only(r, weights_nodes, shared_nodes, _compact):
+                shared_nodes.add(r["k"])
+                shared_idx.append((i, int(o["step"])))
+                continue
             st = steps.get(o.get("step"))
             if st is not None:
                 rid, _how = BD.attribute(o, {"rows": st["rows"], "logits_rows": st["logits_rows"]})
@@ -1075,6 +1087,9 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
             unattributed.append(i)
         else:
             per_req.setdefault(rid, []).append(i)
+    shared_gi: frozenset[int] = frozenset(i for i, _ in shared_idx)
+    if shared_idx:
+        per_req = collections.OrderedDict(BD.shared_legs(per_req, shared_idx, steps))
     mark("attribution")
 
     # ---------------------------------------------------------------- G2: every declared request executed, nothing extra
@@ -1094,7 +1109,10 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     if unattributed:
         c.fail(f"{len(unattributed)} fold instances attributed to no request")
     c.info.update({"n_instances": len(B.inst), "attributed": sum(len(v) for v in per_req.values()), "unattributed": len(unattributed),
-                   "engine_steps": len(steps)})
+                   "engine_steps": len(steps),
+                   # [F-r19-int-15] weight-only instances: owned by no request, in the leg of every request with rows in their step
+                   "weight_only_shared": len(shared_idx),
+                   "weight_only_specs": dict(collections.Counter(B.inst[i]["spec"].split("{")[0] for i in shared_gi).most_common(6))})
     c.done()
     mark("g2")
 
@@ -1103,6 +1121,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     c4 = _Check(res, "G4", "identity_map: (request, local step, local index) <-> global node is a bijection over the attributed fold")
     c5 = _Check(res, "G5", "shared_state: one weights input for all requests (no overlapping fields); node operands same-request, producer step <= consumer step")
     glob2loc: dict[int, tuple[str, int, int]] = {}
+    shared_loc: dict[int, dict[str, tuple[str, int, int]]] = {}   # [F-r19-int-15] weight-only instance -> {request: its local identity}
     loc_count = 0
     exec_pop = 0
     unexercised = 0
@@ -1369,6 +1388,12 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
                         c4.fail(f"{rid}: fold instance {gi} (local step {s}, emission {pos}) has no structurally identical component instance: no canonical address")
                     j = pos  # emission position: keeps the map total for reporting (the step is already a G3 failure)
                 key = (rid, s, j)
+                if gi in shared_gi:
+                    # [F-r19-int-15] a weight-only instance has one local identity PER request whose leg holds it (never a bijection
+                    # with the global node): kept apart from glob2loc, so G7's owner blocks and G8's layout skip it like an unowned node
+                    shared_loc.setdefault(gi, {})[rid] = key
+                    loc_count += 1
+                    continue
                 if gi in glob2loc:
                     c4.fail(f"global instance {gi} carries two local identities {glob2loc[gi]} and {key}")
                 glob2loc[gi] = key
@@ -1387,9 +1412,11 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     else:
         for k in order:
             apply(leg(k))
-    if len(glob2loc) != sum(len(v) for v in per_req.values()):
-        c4.fail(f"identity map covers {len(glob2loc)} of {sum(len(v) for v in per_req.values())} attributed instances (not total)")
-    c4.info.update({"mapped": len(glob2loc), "attributed": sum(len(v) for v in per_req.values())})
+    n_distinct = len(set().union(*per_req.values())) if per_req else 0   # every attributed fold instance once (a shared one sits in several legs)
+    if len(glob2loc) + len(shared_loc) != n_distinct:
+        c4.fail(f"identity map covers {len(glob2loc) + len(shared_loc)} of {n_distinct} attributed instances (not total)")
+    c4.info.update({"mapped": len(glob2loc), "attributed": sum(len(v) for v in per_req.values()), "distinct": n_distinct,
+                    "weight_only_shared": len(shared_loc), "weight_only_local_identities": sum(len(v) for v in shared_loc.values())})
     c3.done()
     c4.done()
     missing_w = [rid for rid in per_req if rid not in weight_readers]
@@ -1900,7 +1927,8 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
         else:
             A_, P_ = comps[rid], proj[rid]
             for s_ in range(min(len(P_.steps), len(A_.steps))):
-                if any(glob2loc.get(per_req[rid][il], (None, None, None))[2] != pos for pos, il in enumerate(P_.steps[s_])):
+                if any((glob2loc.get(per_req[rid][il]) or shared_loc.get(per_req[rid][il], {}).get(rid) or (None, None, None))[2] != pos
+                       for pos, il in enumerate(P_.steps[s_])):
                     perm_targets.append((ent, rid, s_))
     for ent, rid, s in perm_targets[:32]:
         A, P = comps[rid], proj[rid]

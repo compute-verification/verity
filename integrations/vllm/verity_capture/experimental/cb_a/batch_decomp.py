@@ -95,6 +95,36 @@ def request_params(header: dict) -> tuple[list[dict], dict[str, int], dict[str, 
 # ------------------------------------------------------------------------------------------------ attribution
 
 
+SHARED = "*weight-only*"   # owner sentinel of a weight-only instance (F-r19-int-15); never a request id
+
+
+def is_weight_only(r: dict, weights_nodes: frozenset, shared_nodes: set, compact: bool) -> bool:
+    """[R19, F-r19-int-15] True when every node operand of fold instance `r` is a shared weight or an earlier weight-only instance (node id
+    in `shared_nodes`) and there is at least one: the instance carries no request's data (gemma2's RMSNorm scale `1 + w`).  The rule
+    `decompose` and GM-01 (global_match.check, G2) apply after the meta channel and before the row-count rule -- one definition."""
+    if compact:
+        from .compact import idx_values as _idx_values
+    reads = False
+    for a in r["args"]:
+        for run in a:   # record (space, idx, lo, hi) | compact (space, (idx0, lo, hi), (dI, dL, dH), count): space / idx only
+            if run[0] != "n":
+                continue
+            for idx in (_idx_values(run) if compact else (run[1],)):
+                if idx in weights_nodes or idx in shared_nodes:
+                    reads = True
+                else:
+                    return False
+    return reads
+
+
+def shared_legs(per_req: dict, shared_idx: list, steps: dict) -> dict:
+    """[R19, F-r19-int-15] Each request's instance list with the weight-only instances of every engine step the request has rows in
+    (StepStart / logits rows) merged in, in node order: the request's own derive computes that node inside its forward at that step.
+    A request with no rows in the step does not see it.  Request order is preserved."""
+    present: dict[int, set[str]] = {s: {r for r, _ in st.get("rows", [])} | {r for r, _ in st.get("logits_rows", [])} for s, st in steps.items()}
+    return {rid: sorted(idxs + [i for i, s in shared_idx if rid in present.get(s, ())]) for rid, idxs in per_req.items()}
+
+
 def attribute(meta: dict, st: dict) -> tuple[str | None, str]:
     """(request_id | None, how) for one fold instance meta {step,row,rows} given its engine step's StepStart."""
     row, rows = meta.get("row"), meta.get("rows")
@@ -553,8 +583,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     #               row-count channel refused it ("rows=1 != tokens|logits") and every norm reading it counted as a cross-request read.
     #   rows     -- no request-owned operand at all: the fold's row-count rule (token rows / logits rows).
     # A per-position Attention group (rows=|positions sharing T|) is the case only dataflow gets right on pre-X-09 folds.
-    SHARED = "*weight-only*"                 # owner_of_node sentinel; never a request id
-    shared_idx: list[tuple[int, int]] = []   # (instance index, engine step) of every weight-only instance
+    shared_idx: list[tuple[int, int]] = []   # (instance index, engine step) of every weight-only instance (owner SHARED, module level)
     owners_of_param: dict[int, set[str]] = collections.defaultdict(set)
     for rid, pidx in param_of.items():
         owners_of_param[pidx].add(rid)
@@ -776,9 +805,8 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     if shared_idx:
         # [R19, F-r19-int-15] a weight-only instance of engine step s belongs to the projection of every request with rows in s (the
         # request's own derive computes that node inside its forward at that step); a request with no rows in s does not see it.
-        # Legs stay in request order; each leg's indices stay in node order (producers precede consumers).
-        present: dict[int, set[str]] = {s: {r for r, _ in st.get("rows", [])} | {r for r, _ in st.get("logits_rows", [])} for s, st in steps.items()}
-        items = [(rid, sorted(idxs + [i for i, s in shared_idx if rid in present.get(s, ())])) for rid, idxs in per_req.items()]
+        # Legs stay in request order; each leg's indices stay in node order (producers precede consumers).  GM-01 builds the same legs.
+        items = list(shared_legs(per_req, shared_idx, steps).items())
     else:
         items = list(per_req.items())
     if X09_LEGS is not None:
