@@ -2,7 +2,7 @@
  "lane": "anchor-a100",
  "track": "shared",
  "hardware": "NVIDIA A100 SXM4 80GB",
- "generated": "2026-09-22T07:44:31Z",
+ "generated": "2026-09-22T07:49:45Z",
  "runs": {
   "microbench": "r20260922-063608-a304",
   "hash_gpu": "r20260922-063811-e561",
@@ -10,7 +10,8 @@
   "fused": "r20260922-064953-f9bb",
   "fused_logup": "r20260922-071602-522d",
   "packed": "r20260922-073828-153f",
-  "packed_killed_mislaunch": "r20260922-073540-f5b5"
+  "packed_killed_mislaunch": "r20260922-073540-f5b5",
+  "tensor": "r20260922-074359-964b"
  },
  "labels": {
   "proof_class": "COMPONENT (kernels) / ARITHMETIC_DIAGNOSTIC (re-price)",
@@ -1675,6 +1676,262 @@
    "a100_per_vu_s": 0.0005056042186845797,
    "ratio_ref_over_a100_time": 0.35190103935525996,
    "a100_fit_s_per_elem": 9.278412973624702e-10
+  },
+  {
+   "kernel": "tensor",
+   "t": 2097152,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 4635.647773742676,
+   "a100_us": 4893.983840942383,
+   "ratio_ref_over_a100_time": 0.9472135430774201,
+   "a100_fraction_of_int8_peak_round": 0.007911070728062937,
+   "a100_matmul_us": 1371.5520054101942,
+   "ref_matmul_us": 1049.6000200510025
+  },
+  {
+   "kernel": "tensor",
+   "t": 1048576,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 2220.223903656006,
+   "a100_us": 2625.920057296753,
+   "ratio_ref_over_a100_time": 0.8455032351371771,
+   "a100_fraction_of_int8_peak_round": 0.007372016562368062,
+   "a100_matmul_us": 1043.8399836421013,
+   "ref_matmul_us": 722.5279957056046
+  },
+  {
+   "kernel": "tensor",
+   "t": 524288,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 1050.4000186920166,
+   "a100_us": 1717.2479629516602,
+   "ratio_ref_over_a100_time": 0.6116763806704745,
+   "a100_fraction_of_int8_peak_round": 0.005636438817074632,
+   "a100_matmul_us": 774.9760001897812,
+   "ref_matmul_us": 564.7360011935234
+  },
+  {
+   "kernel": "tensor",
+   "t": 262144,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 601.7600297927856,
+   "a100_us": 1044.2880392074585,
+   "ratio_ref_over_a100_time": 0.5762395117054864,
+   "a100_fraction_of_int8_peak_round": 0.004634335888912835,
+   "a100_matmul_us": 702.8480172157288,
+   "ref_matmul_us": 477.34399139881134
+  },
+  {
+   "kernel": "tensor",
+   "t": 131072,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 383.4559917449951,
+   "a100_us": 712.768018245697,
+   "ratio_ref_over_a100_time": 0.5379814777447193,
+   "a100_fraction_of_int8_peak_round": 0.003394920517318507,
+   "a100_matmul_us": 622.5279867649078,
+   "ref_matmul_us": 449.3120163679123
+  },
+  {
+   "kernel": "tensor",
+   "t": 65536,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 297.8239953517914,
+   "a100_us": 534.496009349823,
+   "ratio_ref_over_a100_time": 0.5572052740189275,
+   "a100_fraction_of_int8_peak_round": 0.0022636191167959095,
+   "a100_matmul_us": 598.1119871139526,
+   "ref_matmul_us": 448.1919854879379
+  },
+  {
+   "kernel": "tensor",
+   "t": 32768,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 278.3359885215759,
+   "a100_us": 454.46398854255676,
+   "ratio_ref_over_a100_time": 0.6124489410353183,
+   "a100_fraction_of_int8_peak_round": 0.0013311234939598386,
+   "a100_matmul_us": 581.4399868249893,
+   "ref_matmul_us": 443.26400756835943
+  },
+  {
+   "kernel": "tensor",
+   "t": 16384,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 254.01601195335385,
+   "a100_us": 403.74401211738586,
+   "ratio_ref_over_a100_time": 0.6291511560040187,
+   "a100_fraction_of_int8_peak_round": 0.0007491723395910176,
+   "a100_matmul_us": 565.6319931149483,
+   "ref_matmul_us": 435.52000075578695
+  },
+  {
+   "kernel": "tensor",
+   "t": 8192,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 259.2639923095703,
+   "a100_us": 391.3919925689697,
+   "ratio_ref_over_a100_time": 0.6624151674842549,
+   "a100_fraction_of_int8_peak_round": 0.0003864078109627463,
+   "a100_matmul_us": 549.792006611824,
+   "ref_matmul_us": 423.32800477743154
+  },
+  {
+   "kernel": "tensor",
+   "t": 4096,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 256.79999589920044,
+   "a100_us": 378.464013338089,
+   "ratio_ref_over_a100_time": 0.6785321373998013,
+   "a100_fraction_of_int8_peak_round": 0.00019980357147169535,
+   "a100_matmul_us": 535.3919938206673,
+   "ref_matmul_us": 414.91200029850006
+  },
+  {
+   "kernel": "tensor",
+   "t": 4194304,
+   "deg": 1,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 3878.848075866699,
+   "a100_us": 3706.399917602539,
+   "ratio_ref_over_a100_time": 1.0465271320143206,
+   "a100_fraction_of_int8_peak_round": 0.0023213092769508157,
+   "a100_matmul_us": 2618.4961050748825,
+   "ref_matmul_us": 2261.3440006971355
+  },
+  {
+   "kernel": "tensor",
+   "t": 1048576,
+   "deg": 1,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 957.1520090103149,
+   "a100_us": 989.3440008163451,
+   "ratio_ref_over_a100_time": 0.967461275573039,
+   "a100_fraction_of_int8_peak_round": 0.002174092253483438,
+   "a100_matmul_us": 1102.655977010727,
+   "ref_matmul_us": 848.4159857034682
+  },
+  {
+   "kernel": "tensor.layers",
+   "key": "total_graphed",
+   "ref_s": 0.09136553478240966,
+   "a100_s": 0.1155804470181465,
+   "ratio_ref_over_a100_time": 0.7904930041329999
+  },
+  {
+   "kernel": "tensor.layers",
+   "key": "total",
+   "ref_s": 0.472353277888149,
+   "a100_s": 0.5196592626459898,
+   "ratio_ref_over_a100_time": 0.9089673019259404
+  },
+  {
+   "kernel": "tensor.layers",
+   "key": "matmul",
+   "ref_s": 0.08054710385203363,
+   "a100_s": 0.09816630462557077,
+   "ratio_ref_over_a100_time": 0.8205168174482997
+  },
+  {
+   "kernel": "tensor.layers",
+   "key": "tensor_bucket",
+   "ref_s": 0.3710038700364531,
+   "a100_s": 0.41466399918869135,
+   "ratio_ref_over_a100_time": 0.894709622157551
+  },
+  {
+   "kernel": "tensor.layers",
+   "key": "kernel.gpu_busy",
+   "ref_s": 0.0874,
+   "a100_s": 0.11553810100000007,
+   "ratio_ref_over_a100_time": 0.7564604164646946
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    8192,
+    8192,
+    8192
+   ],
+   "ref_s": 0.006584991931915283,
+   "a100_s": 0.01453551959991455,
+   "a100_fraction_of_int8_peak": 0.12122290179678197
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    4096,
+    4096,
+    4096
+   ],
+   "ref_s": 0.0008460479974746704,
+   "a100_s": 0.0019396159648895264,
+   "a100_fraction_of_int8_peak": 0.1135558466805825
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    48,
+    32768,
+    96
+   ],
+   "ref_s": 0.0008208640217781067,
+   "a100_s": 0.0015470399856567384,
+   "a100_fraction_of_int8_peak": 0.0003128284713602327
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    48,
+    131072,
+    96
+   ],
+   "ref_s": 0.003204224109649658,
+   "a100_s": 0.006107135772705078,
+   "a100_fraction_of_int8_peak": 0.0003169788076493283
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    2097152,
+    48,
+    48
+   ],
+   "ref_s": 0.0005828160047531128,
+   "a100_s": 0.0007769280076026917,
+   "a100_fraction_of_int8_peak": 0.019933199436152325
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    2097152,
+    48,
+    96
+   ],
+   "ref_s": 0.00106985604763031,
+   "a100_s": 0.0007866560220718383,
+   "a100_fraction_of_int8_peak": 0.03937339952547306
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    24,
+    32768,
+    24
+   ],
+   "ref_s": 0.000819711983203888,
+   "a100_s": 0.0015450559854507447,
+   "a100_fraction_of_int8_peak": 3.915377164350512e-05
   }
  ],
  "reprice": {
@@ -1709,17 +1966,41 @@
     "seconds_per_vu": 4.806615542865304e-05,
     "overhead.vs_native_peak": 4881718.910722574,
     "buckets": {
-     "t.encoding": 0.05740473556518554,
-     "t.hash": 0.053996600896096085,
-     "t.matmul_modelled": 0.010085011463327373,
-     "t.simt_field_modelled": 0.070558234065,
-     "t.hint_gen_modelled": 0.0016131938461538462,
-     "t.prg_modelled": 0.0032211968
+     "encoding": {
+      "seconds": 0.05740473556518554,
+      "basis": "measured: ntt_simt_v2_t1024 0.185 us/row x 310,602 rows",
+      "share": 0.2915737257090808
+     },
+     "hash": {
+      "seconds": 0.053996600896096085,
+      "basis": "measured: blake3 377 GB/s over 20.36 GB",
+      "share": 0.2742629147907676
+     },
+     "row_combination": {
+      "seconds": 0.010085011463327373,
+      "basis": "modelled matmul @0.172",
+      "share": 0.05122442142150554
+     },
+     "linear/quadratic tests + helpers (SIMT)": {
+      "seconds": 0.070558234065,
+      "basis": "modelled SIMT",
+      "share": 0.35838379853564506
+     },
+     "hint_generation": {
+      "seconds": 0.0016131938461538462,
+      "basis": "modelled",
+      "share": 0.008193835149365317
+     },
+     "prg": {
+      "seconds": 0.0032211968,
+      "basis": "modelled",
+      "share": 0.016361304393635753
+     }
     },
-    "measured": {
-     "encoding": true,
-     "hash": true
-    },
+    "measured_buckets": [
+     "encoding",
+     "hash"
+    ],
     "omitted": [
      "witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak)",
      "Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak)",
@@ -1733,32 +2014,57 @@
     "hash_bytes": 20362428416
    },
    "A": {
-    "t.total": 1.0837167146095639,
-    "seconds_per_vu": 0.00026457927602772555,
-    "overhead.vs_native_peak": 26871332.721565876,
+    "t.total": 1.083716714609564,
+    "seconds_per_vu": 0.0002645792760277256,
+    "overhead.vs_native_peak": 26871332.721565884,
     "buckets": {
-     "t.encoding": 0.011010368347167968,
-     "t.hash": 0.009016110685686208,
-     "t.matmul_modelled": 0.5054185853023256,
-     "t.simt_field_modelled": 0.63210258432,
-     "t.hint_gen_modelled": 0.0016131938461538462,
-     "t.prg_modelled": 0.00052189744,
-     "t.gkr_checker_modelled": 0.8501317821046155,
-     "t.logup_modelled": 0.24879016892221825,
-     "t.gkr_checker_measured": 0.47639832419620154,
-     "gkr_checker_candidates": {
-      "fused SIMT layer model x96 (graphed)": 1.1853527069091796,
-      "packed k=3 six-layer batch (padded)": 0.47639832419620154,
-      "plain k=0 six-layer batch (padded)": 1.5777486778364522
+     "encoding": {
+      "seconds": 0.011010368347167968,
+      "basis": "measured: ntt_simt_v2_t1024 0.225 us/row x 48,873 rows",
+      "share": 0.010159821472472838
      },
-     "t.logup_measured_rate": 0.5465576014988622
+     "hash": {
+      "seconds": 0.009016110685686208,
+      "basis": "measured: blake3 356 GB/s over 3.21 GB",
+      "share": 0.008319619476326418
+     },
+     "row_combination": {
+      "seconds": 0.001432442275491913,
+      "basis": "modelled matmul @0.172",
+      "share": 0.0013217866405317797
+     },
+     "other SIMT (logUp tree build, ...)": {
+      "seconds": 0.03716677632000004,
+      "basis": "modelled SIMT",
+      "share": 0.03429565662221081
+     },
+     "gkr_checker_sumcheck": {
+      "seconds": 0.47639832419620154,
+      "basis": "measured: packed k=3 six-layer batch (padded) (model @0.172: 850 ms; alternatives fused SIMT layer model x96 (graphed) 1185 ms, packed k=3 six-layer batch (padded) 476 ms, plain k=0 six-layer batch (padded) 1578 ms)",
+      "share": 0.4395967301914651
+     },
+     "logup_fractional_gkr": {
+      "seconds": 0.5465576014988622,
+      "basis": "measured rate: fused logUp round 1469 us = 3.10x a fused checker round at 2^21, x the fused checker layer model x96 at the model's logUp/checker element ratio (model @0.172: 249 ms)",
+      "share": 0.5043362293214912
+     },
+     "hint_generation": {
+      "seconds": 0.0016131938461538462,
+      "basis": "modelled",
+      "share": 0.001488575219341375
+     },
+     "prg": {
+      "seconds": 0.00052189744,
+      "basis": "modelled",
+      "share": 0.00048158105616007455
+     }
     },
-    "measured": {
-     "encoding": true,
-     "hash": true,
-     "gkr_checker": "packed k=3 six-layer batch (padded)",
-     "logup": "fused logUp round rate (A100) x model element count"
-    },
+    "measured_buckets": [
+     "encoding",
+     "hash",
+     "gkr_checker_sumcheck",
+     "logup_fractional_gkr"
+    ],
     "omitted": [
      "witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak)",
      "Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak)",

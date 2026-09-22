@@ -266,22 +266,31 @@ def sec_tensor(a100: dict, ref: dict) -> tuple[str, list[dict]]:
         ra = next((r for r in a100["rounds"] if r["t"] == r4["t"] and r["deg"] == r4["deg"]), None)
         if not ra or r4["t"] < 4096:
             continue
-        t4, ta = r4["graphed_round_seconds"] * 1e6, ra["graphed_round_seconds"] * 1e6
+        t4, ta = r4["seconds"]["total_graphed"] * 1e6, ra["seconds"]["total_graphed"] * 1e6
+        frac = ra["macs_performed"] / DATASHEET_INT8_MACS / ra["seconds"]["total_graphed"]
         rows.append([f"t=2^{int(math.log2(r4['t']))} deg {r4['deg']} round (graphed)", f"{t4:,.0f} us", f"{ta:,.0f} us", f"{t4/ta:.2f}x",
-                     f"{ra['macs']/DATASHEET_INT8_MACS*1e6:.1f} us TC@312T", f"{ra['macs']/DATASHEET_INT8_MACS/ra['graphed_round_seconds']:.4f}"])
+                     f"{ra['macs_performed']/DATASHEET_INT8_MACS*1e6:.1f} us TC@312T", f"{frac:.4f}"])
         data.append({"kernel": "tensor", "t": r4["t"], "deg": r4["deg"], "ref_gpu": "RTX 4090", "ref_us": t4, "a100_us": ta, "ratio_ref_over_a100_time": t4 / ta,
-                     "a100_fraction_of_int8_peak_round": ra["macs"] / DATASHEET_INT8_MACS / ra["graphed_round_seconds"]})
-    L4, La = ref["measured"]["layer_model_seconds"], a100["layer_model_seconds"]
-    for key, label in (("graphed_wall", "layer model graphed wall (130 rounds)"), ("kernel_total", "layer model kernel time"), ("matmul", "  of which matmul kernels")):
+                     "a100_fraction_of_int8_peak_round": frac, "a100_matmul_us": ra["seconds"]["matmul"] * 1e6, "ref_matmul_us": r4["seconds"]["matmul"] * 1e6})
+    L4, La = ref["measured"]["layer_model_seconds"], a100["layers"]["seconds"]
+    K4, Ka = ref["measured"].get("layer_model_kernel_seconds") or {}, a100["layers"]["kernel_seconds"]
+    for key, label in (("total_graphed", "layer model graphed wall (130 rounds)"), ("total", "layer model, CUDA-event segments (launch gaps included)"),
+                       ("matmul", "  of which matmul kernels (events)"), ("tensor_bucket", "  tensor bucket (events)")):
         if key in L4 and key in La:
             rows.append([label, f"{L4[key]*1e3:.1f} ms", f"{La[key]*1e3:.1f} ms", f"{L4[key]/La[key]:.2f}x", "", ""])
             data.append({"kernel": "tensor.layers", "key": key, "ref_s": L4[key], "a100_s": La[key], "ratio_ref_over_a100_time": L4[key] / La[key]})
+    if "gpu_busy" in Ka:
+        rows.append(["layer model GPU kernel time (profiler)", "87.4 ms (report)", f"{Ka['gpu_busy']*1e3:.1f} ms", f"{87.4e-3/Ka['gpu_busy']:.2f}x", "", ""])
+        data.append({"kernel": "tensor.layers", "key": "kernel.gpu_busy", "ref_s": 87.4e-3, "a100_s": Ka["gpu_busy"], "ratio_ref_over_a100_time": 87.4e-3 / Ka["gpu_busy"]})
     for ca in a100.get("int_mm_ceilings", []):
-        c4 = next((c for c in ref["measured"]["int_mm_ceilings"] if c.get("shape") == ca.get("shape")), None)
+        c4 = next((c for c in ref["measured"]["int_mm_ceilings"] if (c["M"], c["K"], c["N"]) == (ca["M"], ca["K"], ca["N"])), None)
         if c4:
-            rows.append([f"`_int_mm` {ca['shape']}", f"{c4['seconds']*1e6:,.0f} us ({c4['fraction_of_peak']:.3f} of 4090 peak)", f"{ca['seconds']*1e6:,.0f} us ({ca['macs']/DATASHEET_INT8_MACS/ca['seconds']:.3f} of A100 peak)",
-                         f"{c4['seconds']/ca['seconds']:.2f}x", "", ""])
+            rows.append([f"`_int_mm` ({ca['M']}, {ca['K']}, {ca['N']})", f"{c4['seconds']*1e6:,.0f} us ({c4['peak_fraction']:.4f} of 4090 peak)",
+                         f"{ca['seconds']*1e6:,.0f} us ({ca['macs']/DATASHEET_INT8_MACS/ca['seconds']:.4f} of A100 peak)", f"{c4['seconds']/ca['seconds']:.2f}x", "", ""])
+            data.append({"kernel": "tensor.int_mm", "shape": [ca["M"], ca["K"], ca["N"]], "ref_s": c4["seconds"], "a100_s": ca["seconds"], "a100_fraction_of_int8_peak": ca["macs"] / DATASHEET_INT8_MACS / ca["seconds"]})
     txt = md_table(["INT8-limb round (tensor lane)", "RTX 4090 recorded", "A100 measured", "speed ratio A100/4090", "A100 TC floor", "fraction of INT8 peak"], rows)
+    if a100.get("agreement_test_tail"):
+        txt += f"\n\nAgreement test on the A100: {a100['agreement_test_tail']}"
     return txt, data
 
 
@@ -307,20 +316,24 @@ def reprice(meas: dict) -> tuple[str, dict]:
         spr = meas.get(f"encoder_seconds_per_row_{dname}")
         model = p.times(gpu, "A100", UTIL, tx.HASH_RATES["blake3_simt"]["bytes_per_s"], "rs_matrix_ntt", fs)
         tm = p.times(gpu, "A100", UTIL, hr, "rs_matrix_ntt", fs, encoder_seconds_per_row=spr)
-        buckets = {"t.encoding": tm["t.encoding"], "t.hash": tm["t.hash"], "t.matmul_modelled": tm["t.matmul"], "t.simt_field_modelled": tm["t.simt_field"],
-                   "t.hint_gen_modelled": tm["t.hint_gen"], "t.prg_modelled": tm["t.prg"]}
-        measured = {"encoding": spr is not None, "hash": f"hash_rate_{dname}" in meas}
+        simt_rate = fs.simt_mult_vs_goldilocks / gpu.simt_field_mults_per_s
+        buckets = {"encoding": (tm["t.encoding"], f"measured: {meas.get(f'encoder_{dname}_kernel')} {spr*1e6:.3f} us/row x {p.ligero_rows:,} rows" if spr else "modelled"),
+                   "hash": (tm["t.hash"], f"measured: {meas.get(f'hash_{dname}_kernel')} {hr/1e9:.0f} GB/s over {p.hash_bytes/1e9:.2f} GB" if f"hash_rate_{dname}" in meas else "modelled")}
         omitted = ["witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak)",
                    "Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak)", "openings and transcript serialisation (not priced)",
                    "prover randomness (modelled PRG at 100 GB/s)"]
         total = tm["t.total"]
         if dname == "B":
+            buckets["row_combination"] = (tm["t.matmul"], "modelled matmul @0.172")
+            buckets["linear/quadratic tests + helpers (SIMT)"] = (tm["t.simt_field"], "modelled SIMT")
             omitted += ["linear/quadratic tests, constraint combination, helper inversions (modelled SIMT at the A100 rate)"]
         else:
-            t_gkr_model = p.matmul["gkr_checker"] / (gpu.peak_macs_per_s * UTIL) + p.simt_field_mults["gkr_hadamards"] * fs.simt_mult_vs_goldilocks / gpu.simt_field_mults_per_s
-            t_logup_model = p.matmul["logup_fractional_gkr"] / (gpu.peak_macs_per_s * UTIL) + p.simt_field_mults["logup_hadamards"] * fs.simt_mult_vs_goldilocks / gpu.simt_field_mults_per_s
-            buckets["t.gkr_checker_modelled"] = t_gkr_model
-            buckets["t.logup_modelled"] = t_logup_model
+            t_gkr_mm = p.matmul["gkr_checker"] / (gpu.peak_macs_per_s * UTIL)
+            t_gkr_simt = p.simt_field_mults["gkr_hadamards"] * simt_rate
+            t_logup_mm = p.matmul["logup_fractional_gkr"] / (gpu.peak_macs_per_s * UTIL)
+            t_logup_simt = p.simt_field_mults["logup_hadamards"] * simt_rate
+            buckets["row_combination"] = (tm["t.matmul"] - t_gkr_mm - t_logup_mm, "modelled matmul @0.172")
+            buckets["other SIMT (logUp tree build, ...)"] = (tm["t.simt_field"] - t_gkr_simt - t_logup_simt, "modelled SIMT")
             cands = {}
             if "fused_layer_graphed_s" in meas:
                 cands["fused SIMT layer model x96 (graphed)"] = meas["fused_layer_graphed_s"] * tx.UNITS_PER_VU
@@ -331,29 +344,35 @@ def reprice(meas: dict) -> tuple[str, dict]:
             if cands:
                 best_label = min(cands, key=cands.get)
                 t_gkr = cands[best_label]
-                measured["gkr_checker"] = best_label
-                buckets["t.gkr_checker_measured"] = t_gkr
-                buckets["gkr_checker_candidates"] = cands
-                total = total - t_gkr_model + t_gkr
-                # logUp at the fused kernels' measured per-element rates: the logUp round costs (logup_us / checker_us) of a checker round
-                # over the same element count; the model's MAC ratio carries the element count.
+                buckets["gkr_checker_sumcheck"] = (t_gkr, f"measured: {best_label} (model @0.172: {(t_gkr_mm + t_gkr_simt)*1e3:.0f} ms; alternatives "
+                                                   + ", ".join(f"{k} {v*1e3:.0f} ms" for k, v in cands.items()) + ")")
+                total = total - t_gkr_mm - t_gkr_simt + t_gkr
                 if "fused_layer_graphed_s" in meas and "logup_over_checker_round" in meas:
+                    # per element the measured logUp round costs (logup_us / checker_us) of a fused checker round; the model's MAC ratio
+                    # (which carries the 5-vs-3 table factor, hence x3/5) supplies the element count relative to the checker.
                     t_logup = meas["fused_layer_graphed_s"] * tx.UNITS_PER_VU / p.matmul["gkr_checker"] * p.matmul["logup_fractional_gkr"] * meas["logup_over_checker_round"] * 3 / 5
-                    buckets["t.logup_measured_rate"] = t_logup
-                    measured["logup"] = "fused logUp round rate (A100) x model element count"
-                    total = total - t_logup_model + t_logup
+                    buckets["logup_fractional_gkr"] = (t_logup, f"measured rate: fused logUp round {meas['logup_round_2p21_us']:.0f} us = {meas['logup_over_checker_round']:.2f}x a fused checker round "
+                                                        f"at 2^21, x the fused checker layer model x96 at the model's logUp/checker element ratio (model @0.172: {(t_logup_mm + t_logup_simt)*1e3:.0f} ms)")
+                    total = total - t_logup_mm - t_logup_simt + t_logup
                 else:
+                    buckets["logup_fractional_gkr"] = (t_logup_mm + t_logup_simt, "modelled @0.172")
                     omitted.append("logUp fractional GKR (modelled @0.172)")
             else:
+                buckets["gkr_checker_sumcheck"] = (t_gkr_mm + t_gkr_simt, "modelled @0.172")
+                buckets["logup_fractional_gkr"] = (t_logup_mm + t_logup_simt, "modelled @0.172")
                 omitted += ["checker GKR sumcheck (modelled @0.172)", "logUp fractional GKR (modelled @0.172)"]
+        buckets["hint_generation"] = (tm["t.hint_gen"], "modelled")
+        buckets["prg"] = (tm["t.prg"], "modelled")
         per_vu = total / tx.B_TARGET
-        row = {"t.total": total, "seconds_per_vu": per_vu, "overhead.vs_native_peak": contract.overhead(per_vu, tx.K_TARGET), "buckets": buckets, "measured": measured,
+        row = {"t.total": total, "seconds_per_vu": per_vu, "overhead.vs_native_peak": contract.overhead(per_vu, tx.K_TARGET),
+               "buckets": {k: {"seconds": v[0], "basis": v[1], "share": v[0] / total} for k, v in buckets.items()},
+               "measured_buckets": [k for k, v in buckets.items() if v[1].startswith("measured")],
                "omitted": omitted, "model_only_overhead": model["overhead.vs_native_peak"], "model_only_t.total": model["t.total"], "ligero_rows": p.ligero_rows, "hash_bytes": p.hash_bytes}
         out["designs"][dname] = row
-        lines.append(f"| {dname} | {model['overhead.vs_native_peak']:.3g} ({model['t.total']*1e3:.0f} ms) | {row['overhead.vs_native_peak']:.3g} ({total*1e3:.0f} ms) | "
-                     + "; ".join(f"{k.replace('t.', '')} {v*1e3:.1f} ms" for k, v in buckets.items() if isinstance(v, float)) + " | "
-                     + "; ".join(f"{k}: {v}" for k, v in measured.items()) + " |")
-    txt = "| design | model only (A100 peaks @0.172, Blake3 50 GB/s) | **A100-measured buckets** overhead (t.total) | buckets | measured buckets |\n|---|---|---|---|---|\n" + "\n".join(lines)
+        lines.append(f"| **{dname}** | {model['overhead.vs_native_peak']:.3g} ({model['t.total']*1e3:.0f} ms) | **{row['overhead.vs_native_peak']:.3g}** ({total*1e3:.0f} ms; {per_vu*1e6:.0f} us/VU) | "
+                     + "; ".join(f"{k} **{v[0]*1e3:.1f}**" if v[1].startswith("measured") else f"{k} {v[0]*1e3:.1f}" for k, v in buckets.items()) + " |")
+    txt = ("| design | model only (A100 peaks @0.172, Blake3 50 GB/s) | **A100-measured buckets**: overhead (t.total per batch) | buckets, ms (measured in bold) |\n|---|---|---|---|\n"
+           + "\n".join(lines))
     return txt, out
 
 
@@ -488,8 +507,9 @@ def main(argv=None) -> int:
                "Labels: `ARITHMETIC_DIAGNOSTIC`, scope `vu`, hardware NVIDIA A100 SXM4 80GB."), "", txt, "",
                "Measured inputs: " + "; ".join(f"`{k}` = {fmt(v, 4) if isinstance(v, float) else v}" for k, v in meas.items()), ""]
         for dname, row in rp["designs"].items():
-            md += [f"* **{dname}**: overhead **{row['overhead.vs_native_peak']:.3g}** ({row['t.total']*1e3:.0f} ms per batch, {row['seconds_per_vu']*1e6:.0f} us/VU).  Measured: "
-                   + "; ".join(f"{k} = {v}" for k, v in row["measured"].items()) + ".  Omitted (modelled): " + "; ".join(row["omitted"]) + "."]
+            md += [f"* **{dname}**: overhead **{row['overhead.vs_native_peak']:.3g}** ({row['t.total']*1e3:.0f} ms per batch, {row['seconds_per_vu']*1e6:.0f} us/VU).", ""]
+            md += [f"  * {k}: {v['seconds']*1e3:.1f} ms ({v['share']:.0%}) -- {v['basis']}" for k, v in row["buckets"].items()]
+            md += ["", "  Omitted (still modelled): " + "; ".join(row["omitted"]) + ".", ""]
         md.append("")
     a.out.with_suffix(".json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     a.out.with_suffix(".md").write_text("\n".join(md))
