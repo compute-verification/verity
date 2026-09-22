@@ -768,3 +768,88 @@ across two tables (a second \(\beta\)-power keeps the degree at 4) and \(g\) fol
 hints (words, carries, quotients, selectors), which lookups do not touch -- that is a relation-side question
 (section 12.2's per-gadget census); (iii) on the GPU only the encoding term matters and the 3.4x is the number to
 carry to tensor.md.
+
+## 16. B-Ligero at the checker-v2 shape, end to end (b-e2e-v2, 2026-09-22) **[implemented, NON_ZK_PROOF_DIAGNOSTIC]**
+
+Section 15 (lane b-air-v2) is checker v2 as a Plonky3 AIR.  This section is the *Ligero* realisation of the same
+relation (`checker/v2/`: 12 hints + 8 epilogue/pack limb hints per unit, 93 lookups into 13 tables, the
+`(s, e, M, z)` state chain), on the GPU, with a torch-vectorised verifier: the first end-to-end B proof at the v2
+shape.  Code: `backends/direct/ligero/v2/` (`system.py` compiles the `gkr_export.v2` circuit into columns /
+products / asserts / lookups / tables; `protocol.py` prover + verifier; `fc.py` \(F_c = F_p[X]/(X^6 - 31)\);
+`run.py` gate + bench; `tests/test_toy.py` a CPU toy of the whole protocol).  The relation is unchanged; every
+constraint is the a-v2 export's (`derive`d columns included), no predicate was added.
+
+### 16.1 Layout (transposed against V2_SHAPE.md; same content)
+
+The Ligero message is `m x l`: one **column per unit** (`l` = units per proof, `n_vus = l / 96` VUs, the rest pad
+units = the honest zero-state unit with zero operands), one **row per column of the constraint system** across
+units.  Two tableaux, both committed with the same code (rate 1/4, non-systematic domain \(g\langle\omega_n\rangle\),
+so the b-ligero2 HVZK drops in unchanged):
+
+| tableau | rows at l = 16 384 | contents |
+|---|---|---|
+| 1 (before \(\beta, z\)) | 631 | 273 unit columns (state in/out, operands, hints, derived wires), 33 product wires, then per table \(\lceil size/l \rceil\) **multiplicity rows** (entry \(v\) at row \(\lfloor v / l \rfloor\), position \(v \bmod l\): 4 rows T_OP, 216 SHIFT, 64 TNORM, ...) |
+| 2 (after \(\beta, z\)) | 2 508 | per lookup 6 **helper rows** \(h_q = [\text{active}] / (z - w_q(\beta))\) (93 x 6 = 558), then per table 6 x rows **table-side rows** \(h_v = m_v / (z - t_v(\beta))\) (1 950) |
+| public (never committed) | 1 + 13 x rows + 6 x 13 x rows | ACTIVE mask, per table the ACT mask and the coefficient rows \(z - t_v(\beta)\) as position-varying public rows (the "structured" part of the linear test: the verifier encodes them itself) |
+
+Tables are the checker's (`_materialise` from `checker/v2/tables.py` + the range tables R4/R8/R12/R15/R16 for the
+limb hints): T_OP 65 280, ALIGN4 3 120, SSHIFT_HI/LO 2 x 221 184, SHIFT 3 538 944, LEAD 32 768, LEADNORM 12 152,
+TNORM 1 048 576 -- 5.2 M entries, so **the table side dominates the tableau at every l below \(2^{18}\)**
+(1 950 of 3 139 rows at l = 16 384; 2 019 rows total at l = 32 768).  That is the price of realising checker-min's
+packed-key tables as-is; b-air-v2's chunked SHIFT_HI/LO + SSHIFT_2/1/0 (282 k entries, section 15) would cut
+tableau 2 to ~700 rows and is the first thing to port.
+
+### 16.2 Tests (all coefficient vectors uniform in \(F_p\) per \(F_c\) coordinate; \(D = 6\) coordinates)
+
+1. **Proximity** (IRS): \(w = r^\top W\) for \(r \in F_p^{D \times m}\), checked on the \(t\) opened columns.
+2. **Linear** (37 asserts, position-independent): \(\alpha^\top W = \beta\) on the opened columns, \(\alpha\) the
+   \(\rho\)-combination of the assert rows, \(\beta\) the combined constant terms (pads are honest units, so the
+   asserts hold on every column and no mask is needed).
+3. **Quadratic** (591 constraints = 33 products + 93 x 6 helper coordinates + 13 tables x 6 x rows table-side
+   coordinates): \(\sum_q \rho_q\,(A_q(x) B_q(x) - C_q(x)) = h(x) Z_H(x)\) with the helper constraint
+   \(h_q \cdot (z - w_q(\beta)) = \text{ACTIVE}\) written per \(F_c\) coordinate as 6 quadratic constraints over
+   \(F_p\) (the \(F_c\) product is a bilinear form in the 6 x 6 coordinates: `Constraints.quadratic_terms` streams
+   the coordinate products in 96-row chunks), and the table-side constraint \(h_v \cdot (z - t_v(\beta)) = m_v\)
+   with the public coefficient row.  \(h\) of degree \(< l - 1\) is sent (\(D \times (l - 1)\) elements).
+4. **Sums** (LogUp identity, 6 per table): \(\sum_{\text{helpers of } T} h - \sum_{\text{table side of } T} h_v = 0\)
+   per coordinate: the prover sends \(v = s^\top W\) (\(s\) the \(\pm\rho\) pattern), the verifier checks
+   \(\sum_j v_j = 0\) and \(v\) against the opened columns.
+5. **Chain** (position-dependent, section 12's general linear test): \(x_*[j+1] = y_*[j]\) inside a VU, \(x_* =\)
+   zero state at VU starts and pads, `ovf = 0` on non-last units, \(y16[\text{last}] = \) the claimed word; one
+   \(q\) of degree \(< 2l - 1\).
+6. **Openings**: \(t\) columns of both tableaux with Blake3 Merkle paths (GPU Blake3 from `backends/shared/hash_gpu`,
+   bit-exact with the host verifier's).
+
+Statement binding (F1-F3): the digest absorbs the domain tag, the checker params, \((l, n, t, \text{steps}, n_{vus})\),
+the target, the system id (SHA-256 of the compiled constraint system's description) and the claimed words; every
+size the verifier uses comes from the config, never from the proof.  Public pole rule: \(z\) is drawn from two
+slots; a slot in the table image (or the zero tuple) is skipped, both in the image aborts publicly.
+
+### 16.3 Soundness (from `security.accounting`, code constants)
+
+Per proof at l = 16 384, n = 65 536: t = 189 gives \(2^{-128.15}\) (IRS query term \(2^{-128.1}\) binding; linear /
+quadratic query terms \(2^{-189}\); field terms \(2^{-169}\) to \(2^{-185}\); logUp identity terms per table
+\(2^{-162.6}\) (SHIFT) to \(2^{-171.4}\), Haboeck Thm 4 with the conditioned challenge space).  A batch of 4 096 VUs
+is \(N\) sub-batch proofs; the bench targets \(2^{-(128 + \log_2 N)}\) per proof (t = 194 at N = 25) so the union
+bound over the batch meets \(2^{-128}\).  Field: BabyBear\(^6\); hash model as in `accounting` (2^64 queries: the
+collision term alone is \(2^{-128}\), see babybear_rules.md section 8).
+
+### 16.4 What was verified (gate, vy-g2, run r20260922-091001-68f7) and what the label means
+
+Honest `vu-k1536` VUs accepted with the recorded words, every intermediate packed word equal to the recorded
+accumulator (the prover refuses to repair); the prover's own self-check finds every constraint satisfied on the
+honest witness (so the a-v2 circuit + the limb pack/epilogue rows are *complete* on the bench instances).
+`vu-k1536-neg` 52/52 rejected (44 by the linear test on `y16 = claimed`, 8 `reject`-class operands: no witness
+exists, the verifier rejects a foreign proof on the statement digest); 39/39 unit + chain mutations rejected (every
+hint +1, every epilogue limb hint +1, every state link, one lookup output per table, operands set to Inf/NaN,
+hint swap, false overflow flag, chain relink); the BabyBear battery's `epilogue` class (RN-even tie hints
+toggled) 2/2 rejected; the battery's `chain` class (word handed on as c + p) is **vacuous** under v2 -- the state
+is chained as `(s, e, M, z)` elements, never as a 33-bit word, so `M + p` is the same committed element
+(b-air-v2's battery adapter reaches the same verdict).  The `wrap`/`z3` classes of the battery are stated in the
+WP2 (v1) hint layout and were not mapped onto the v2 columns here (open).
+
+Label **NON_ZK_PROOF_DIAGNOSTIC**, with the **INCOMPLETE_CHECKER_DIAGNOSTIC** caveat: the BabyBear word-class
+repair rows (`pack.M_hi8/M_lo16`, the `y_hi` expression, the epilogue on limbs) are a Python port of b-air-v2's
+design, whose *Rust* realisation is z3-UNSAT (`b_air_v2_z3.json`: `pack_epilogue_limbs`, `state_decode_limbs`,
+Z and \(F_{\text{babybear}}\)); the Python column set here was not itself put through z3.  No ZK (systematic-free
+domain but no blinding rows yet).
