@@ -5,6 +5,8 @@
 use crate::field::{self as f, add, mul, mul_acc, neg, sub, Ntt, P};
 use crate::format::{Expr, Proof, Statement, System};
 use crate::hash::{blake2b_256, blake3, shake256};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 pub const STATEMENT_TAG: &[u8] = b"ligero-b/statement|v2";
@@ -32,6 +34,9 @@ const OP_WORD_BITS: u32 = 16;
 
 #[derive(Default, Debug, Clone)]
 pub struct Timing {
+    /// System parse + pinned-digest check + domain tables when they are built for this one verification (`verify`);
+    /// 0 when they come from a `Shared` built once for a batch.
+    pub shared: f64,
     pub parse: f64,
     pub soundness: f64,
     pub statement_hash: f64,
@@ -44,6 +49,7 @@ pub struct Timing {
     pub total: f64,
 }
 
+#[derive(Clone)]
 pub struct Options {
     pub threads: usize,
     pub soundness_bits: f64,
@@ -282,12 +288,60 @@ fn eval_expr(e: &Expr, uo: &[u32], t: usize, c: usize) -> u32 {
     acc as u32
 }
 
+/// The read-only domain tables of one `(l, n)`: NTT twiddles for H and for the coset, the coset scaling `g^i` and the
+/// coset points `eta_c`.  Pure functions of `(l, n)`; built once per `Shared` and read by every verification.
+pub struct Tables {
+    pub ntt_l: Ntt,
+    pub ntt_n: Ntt,
+    pub scale: Vec<u32>,
+    pub pts: Vec<u32>,
+}
+
+impl Tables {
+    fn new(l: usize, n: usize) -> Tables {
+        Tables { ntt_l: Ntt::new(l), ntt_n: Ntt::new(n), scale: f::coset_scale(n), pts: f::coset_points(n) }
+    }
+}
+
+/// What every verification of a batch shares and none of them changes: the parsed system file with its pinned-digest
+/// verdict (computed once; each verification still rejects with the same reason and in the same place as before), and
+/// the domain tables per `(l, n)` -- one instance, built by the first verification that needs it.  Everything else
+/// (statement, proof, challenges, every check) is per verification, so sub-batches stay independent.
+pub struct Shared {
+    sys: Result<System, String>,
+    /// The pinned-system rejection reason, when the system file is not the pinned REAL chain system.
+    sys_gate: Option<String>,
+    tables: Mutex<HashMap<(usize, usize), Arc<Tables>>>,
+}
+
+impl Shared {
+    pub fn new(sys_bytes: &[u8], opt: &Options) -> Shared {
+        let sys = System::parse(sys_bytes).map_err(|e| format!("system file: {e}"));
+        let mut sys_gate = None;
+        if let (Ok(s), false) = (&sys, opt.allow_any_system) {
+            let sid = crate::hash::hex(&s.sys_id);
+            let td = crate::hash::hex(&System::table_digest(sys_bytes));
+            sys_gate = match (PINNED_SYS_ID, PINNED_TABLE_DIGEST) {
+                (Some(a), Some(b)) if a == sid && b == td => None,
+                (Some(_), Some(_)) => Some("system file is not the pinned REAL chain system".to_string()),
+                _ => Some("no pinned system digest in this build; pass --allow-any-system".to_string()),
+            };
+        }
+        Shared { sys, sys_gate, tables: Mutex::new(HashMap::new()) }
+    }
+
+    /// The tables of `(l, n)`, built on first use.  The lock is held while building so a second verification of the
+    /// same shape waits for the one copy instead of building its own; the content is a function of `(l, n)` alone.
+    fn tables(&self, l: usize, n: usize) -> Arc<Tables> {
+        let mut map = self.tables.lock().unwrap_or_else(|e| e.into_inner());
+        map.entry((l, n)).or_insert_with(|| Arc::new(Tables::new(l, n))).clone()
+    }
+}
+
 struct Ctx<'a> {
     st: &'a Statement,
     sys: &'a System,
-    ntt_l: Ntt,
-    ntt_n: Ntt,
-    scale: Vec<u32>,
+    tb: &'a Tables,
     eta: Vec<u32>, // eta_c for the opened columns
     zh: Vec<u32>,  // Z_H(eta_c)
     xk: Vec<u32>,  // eta_c^k
@@ -298,7 +352,7 @@ impl<'a> Ctx<'a> {
     /// eval_on_coset(coefs)[cols] for D coefficient rows (row length `len`), in parallel over the rows.
     fn eval_rows_at_cols(&self, coefs: &[u32], len: usize, rows: usize, cols: &[u32]) -> Vec<Vec<u32>> {
         par_for(rows, self.threads, |d| {
-            let ev = f::eval_on_coset(&coefs[d * len..(d + 1) * len], &self.ntt_n, &self.scale);
+            let ev = f::eval_on_coset(&coefs[d * len..(d + 1) * len], &self.tb.ntt_n, &self.tb.scale);
             cols.iter().map(|&c| ev[c as usize]).collect()
         })
     }
@@ -306,7 +360,7 @@ impl<'a> Ctx<'a> {
     fn encode_rows_at_cols(&self, msgs: &[u32], rows: usize, cols: &[u32]) -> Vec<Vec<u32>> {
         let l = self.st.l;
         par_for(rows, self.threads, |d| {
-            let cw = f::encode(&msgs[d * l..(d + 1) * l], &self.ntt_l, &self.ntt_n, &self.scale);
+            let cw = f::encode(&msgs[d * l..(d + 1) * l], &self.tb.ntt_l, &self.tb.ntt_n, &self.tb.scale);
             cols.iter().map(|&c| cw[c as usize]).collect()
         })
     }
@@ -328,26 +382,74 @@ fn combine(coef: &[u32], uo: &[u32], t: usize, rows: std::ops::Range<usize>) -> 
     out.into_iter().map(|x| x as u32).collect()
 }
 
+/// What the verifier read from the statement file (reported so two verifications can be compared field by field):
+/// the configuration, the chain layout, and the BLAKE2b statement digest once it is computed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StatementInfo {
+    pub l: usize,
+    pub n: usize,
+    pub d: usize,
+    pub t: usize,
+    pub zk: bool,
+    pub interactive: bool,
+    pub n_proofs: usize,
+    pub n_vus: usize,
+    pub steps: usize,
+    pub digest: Option<String>,
+}
+
+impl StatementInfo {
+    fn of(st: &Statement) -> StatementInfo {
+        StatementInfo {
+            l: st.l,
+            n: st.n,
+            d: st.d,
+            t: st.t,
+            zk: st.zk,
+            interactive: st.interactive,
+            n_proofs: st.n_proofs,
+            n_vus: st.n_vus,
+            steps: st.steps,
+            digest: None,
+        }
+    }
+}
+
 pub struct Verdict {
     pub accepted: bool,
     pub reason: String,
     pub timing: Timing,
     pub soundness: Option<Soundness>,
+    /// `None` when the statement file did not parse.
+    pub statement: Option<StatementInfo>,
 }
 
-fn reject(reason: &str, timing: Timing, snd: Option<Soundness>) -> Verdict {
-    Verdict { accepted: false, reason: reason.to_string(), timing, soundness: snd }
+fn reject(reason: &str, timing: Timing, snd: Option<Soundness>, st: Option<StatementInfo>) -> Verdict {
+    Verdict { accepted: false, reason: reason.to_string(), timing, soundness: snd, statement: st }
 }
 
-/// Verify one (system, statement, proof) triple.
+/// Verify one (system, statement, proof) triple on its own: the system is parsed and the tables built for this one
+/// verification (`timing.shared`), inside `timing.total`.
 pub fn verify(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Options) -> Verdict {
     let t_start = Instant::now();
-    let mut v = verify_inner(sys_bytes, st_bytes, pf_bytes, opt);
+    let shared = Shared::new(sys_bytes, opt);
+    let t_shared = t_start.elapsed().as_secs_f64();
+    let mut v = verify_inner(&shared, st_bytes, pf_bytes, opt);
+    v.timing.shared = t_shared + v.timing.shared;
     v.timing.total = t_start.elapsed().as_secs_f64();
     v
 }
 
-fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Options) -> Verdict {
+/// Verify one (statement, proof) pair against a `Shared` built once for the batch.  `timing.total` covers this
+/// verification only; the checks, their order and their reasons are those of `verify`.
+pub fn verify_with(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options) -> Verdict {
+    let t_start = Instant::now();
+    let mut v = verify_inner(shared, st_bytes, pf_bytes, opt);
+    v.timing.total = t_start.elapsed().as_secs_f64();
+    v
+}
+
+fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options) -> Verdict {
     let mut tm = Timing::default();
     let lap = |since: &mut Instant| -> f64 {
         let now = Instant::now();
@@ -358,45 +460,40 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
     let mut clk = Instant::now();
 
     // ---- parse (statement-bounded) ----
-    let sys = match System::parse(sys_bytes) {
+    let sys = match &shared.sys {
         Ok(s) => s,
-        Err(e) => return reject(&format!("system file: {e}"), tm, None),
+        Err(e) => return reject(e, tm, None, None),
     };
-    if !opt.allow_any_system {
-        let sid = crate::hash::hex(&sys.sys_id);
-        let td = crate::hash::hex(&System::table_digest(sys_bytes));
-        match (PINNED_SYS_ID, PINNED_TABLE_DIGEST) {
-            (Some(a), Some(b)) if a == sid && b == td => {}
-            (Some(_), Some(_)) => return reject("system file is not the pinned REAL chain system", tm, None),
-            _ => return reject("no pinned system digest in this build; pass --allow-any-system", tm, None),
-        }
+    if let Some(gate) = &shared.sys_gate {
+        return reject(gate, tm, None, None);
     }
     let chain = match &sys.chain {
         Some(c) => c,
-        None => return reject("system has no chain rows (unit-mode systems are not supported)", tm, None),
+        None => return reject("system has no chain rows (unit-mode systems are not supported)", tm, None, None),
     };
     let st = match Statement::parse(st_bytes) {
         Ok(s) => s,
-        Err(e) => return reject(&format!("statement file: {e}"), tm, None),
+        Err(e) => return reject(&format!("statement file: {e}"), tm, None, None),
     };
+    let mut info = StatementInfo::of(&st);
     let m = sys.m;
     let pf = match Proof::parse(pf_bytes, &st, m) {
         Ok(p) => p,
-        Err(e) => return reject(&format!("proof file: {e}"), tm, None),
+        Err(e) => return reject(&format!("proof file: {e}"), tm, None, Some(info)),
     };
     tm.parse = lap(&mut clk);
 
     // ---- soundness of the parameters the statement fixes ----
     let snd = match soundness(&st) {
         Ok(s) => s,
-        Err(e) => return reject(&e, tm, None),
+        Err(e) => return reject(&e, tm, None, Some(info)),
     };
     if snd.union_log2 > -opt.soundness_bits {
         let r = format!(
             "parameters give 2^{:.2} over {} sub-batches (per proof 2^{:.2}); requested 2^-{}",
             snd.union_log2, st.n_proofs, snd.per_proof_log2, opt.soundness_bits
         );
-        return reject(&r, tm, Some(snd));
+        return reject(&r, tm, Some(snd), Some(info));
     }
     tm.soundness = lap(&mut clk);
 
@@ -409,10 +506,10 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
             blake2b_256(&v)
         };
         if com(&c.r1, &c.s1) != c.c1 {
-            return reject("coin slot 1: opening does not match its commitment", tm, Some(snd));
+            return reject("coin slot 1: opening does not match its commitment", tm, Some(snd), Some(info));
         }
         if com(&c.r2, &c.s2) != c.c2 {
-            return reject("coin slot 2: opening does not match its commitment", tm, Some(snd));
+            return reject("coin slot 2: opening does not match its commitment", tm, Some(snd), Some(info));
         }
         if let Some(own) = &opt.own_coins {
             let mut mine = Vec::with_capacity(128);
@@ -420,20 +517,21 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
                 mine.extend_from_slice(part);
             }
             if mine[..] != own[..] {
-                return reject("coins are not this verifier's step-0 coins", tm, Some(snd));
+                return reject("coins are not this verifier's step-0 coins", tm, Some(snd), Some(info));
             }
         }
     }
 
     // ---- statement: public decodes and digest ----
-    let pins = match public_pins(&st, &sys) {
+    let pins = match public_pins(&st, sys) {
         Ok(p) => p,
-        Err(e) => return reject(&format!("public inputs: {e}"), tm, Some(snd)),
+        Err(e) => return reject(&format!("public inputs: {e}"), tm, Some(snd), Some(info)),
     };
     let stmt = match statement_digest(&st, &sys.sys_id) {
         Ok(d) => d,
-        Err(e) => return reject(&e, tm, Some(snd)),
+        Err(e) => return reject(&e, tm, Some(snd), Some(info)),
     };
+    info.digest = Some(crate::hash::hex(&stmt));
     tm.statement_hash = lap(&mut clk);
 
     // ---- column set: distinct, then the challenge ----
@@ -441,7 +539,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         let mut seen = vec![false; st.n];
         for &c in &pf.cols {
             if seen[c as usize] {
-                return reject("bad column set: repeated column index", tm, Some(snd));
+                return reject("bad column set: repeated column index", tm, Some(snd), Some(info));
             }
             seen[c as usize] = true;
         }
@@ -486,7 +584,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
     }
     let seed2 = blake3(&seed2);
     if column_challenge(&seed2, t, n) != pf.cols {
-        return reject("column challenge mismatch", tm, Some(snd));
+        return reject("column challenge mismatch", tm, Some(snd), Some(info));
     }
     tm.challenge_hash = lap(&mut clk);
 
@@ -516,27 +614,19 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         h != pf.root
     });
     if let Some(j) = bad.iter().position(|b| *b) {
-        return reject(&format!("merkle path {j} invalid"), tm, Some(snd));
+        return reject(&format!("merkle path {j} invalid"), tm, Some(snd), Some(info));
     }
     tm.merkle = lap(&mut clk);
 
-    // ---- domain tables ----
-    let ctx = Ctx {
-        st: &st,
-        sys: &sys,
-        ntt_l: Ntt::new(l),
-        ntt_n: Ntt::new(n),
-        scale: f::coset_scale(n),
-        eta: Vec::new(),
-        zh: Vec::new(),
-        xk: Vec::new(),
-        threads: opt.threads,
-    };
-    let pts = f::coset_points(n);
-    let eta: Vec<u32> = pf.cols.iter().map(|&c| pts[c as usize]).collect();
+    // ---- domain tables (shared across the batch: built once per (l, n)) ----
+    let t_tables = Instant::now();
+    let tables = shared.tables(l, n);
+    let tables_secs = t_tables.elapsed().as_secs_f64(); // ~0 once built; booked under `shared`, not `ntt`
+    tm.shared += tables_secs;
+    let eta: Vec<u32> = pf.cols.iter().map(|&c| tables.pts[c as usize]).collect();
     let zh: Vec<u32> = eta.iter().map(|&e| sub(f::pow(e, l as u64), 1)).collect();
     let xk: Vec<u32> = eta.iter().map(|&e| f::pow(e, k as u64)).collect();
-    let ctx = Ctx { eta, zh, xk, ..ctx };
+    let ctx = Ctx { st: &st, sys, tb: &tables, eta, zh, xk, threads: opt.threads };
     let _ = &ctx.eta;
     let _ = ctx.sys;
     // mask rows (PROTOCOL.md 8b, b-zk-fix): prox, lin, qa, qb, chain_a, chain_b -- D rows each after the m witness rows
@@ -546,7 +636,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
     let row_qb = |dd: usize| m + 3 * d + dd;
     let row_chain_a = |dd: usize| m + 4 * d + dd;
     let row_chain_b = |dd: usize| m + 5 * d + dd;
-    tm.ntt += lap(&mut clk);
+    tm.ntt += lap(&mut clk) - tables_secs;
 
     // ---- (i) proximity ----
     let w_len = st.w_len();
@@ -571,7 +661,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         }
         if rhs != w_at_cols[dd] {
             tm.dfold += lap(&mut clk);
-            return reject("proximity test failed", tm, Some(snd));
+            return reject("proximity test failed", tm, Some(snd), Some(info));
         }
     }
     tm.dfold += lap(&mut clk);
@@ -614,9 +704,9 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
             for j in l..k {
                 fold[j % l] = add(fold[j % l], v[j]);
             }
-            ctx.ntt_l.transform(&mut fold, false);
+            ctx.tb.ntt_l.transform(&mut fold, false);
             if fold != beta[dd * l..(dd + 1) * l] {
-                return reject("linear constraints failed (public values)", tm, Some(snd));
+                return reject("linear constraints failed (public values)", tm, Some(snd), Some(info));
             }
         }
         let v_at = ctx.eval_rows_at_cols(&pf.v, k, d, &pf.cols);
@@ -627,7 +717,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
                 expect[c] = add(expect[c], mul(ctx.zh[c], uo[row_lin(dd) * t + c]));
             }
             if expect != v_at[dd] {
-                return reject("linear constraints failed", tm, Some(snd));
+                return reject("linear constraints failed", tm, Some(snd), Some(info));
             }
         }
     } else {
@@ -636,7 +726,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         for dd in 0..d {
             let expect = combine(&alpha[dd * m..(dd + 1) * m], uo, t, 0..m);
             if expect != beta_at[dd] {
-                return reject("linear constraints failed", tm, Some(snd));
+                return reject("linear constraints failed", tm, Some(snd), Some(info));
             }
         }
     }
@@ -672,7 +762,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
             let rhs = mul(h_at[dd][c], ctx.zh[c]);
             if lhs != rhs {
                 tm.quadratic += lap(&mut clk);
-                return reject("quadratic constraints failed", tm, Some(snd));
+                return reject("quadratic constraints failed", tm, Some(snd), Some(info));
             }
         }
     }
@@ -761,7 +851,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         }
         if mul(l as u32 % P, s) != rhs[dd] {
             tm.chain += lap(&mut clk);
-            return reject("chain constraints failed (sum over H)", tm, Some(snd));
+            return reject("chain constraints failed (sum over H)", tm, Some(snd), Some(info));
         }
     }
     tm.chain += lap(&mut clk);
@@ -786,7 +876,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
             }
             if e != q_at[dd][c] {
                 tm.chain += lap(&mut clk);
-                return reject("chain constraints failed (opened columns)", tm, Some(snd));
+                return reject("chain constraints failed (opened columns)", tm, Some(snd), Some(info));
             }
         }
     }
@@ -798,5 +888,5 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
     } else {
         "accept (interactive: coins replayed from the transcript; sound only if they were the verifier's step-0 coins)".to_string()
     };
-    Verdict { accepted: true, reason, timing: tm, soundness: Some(snd) }
+    Verdict { accepted: true, reason, timing: tm, soundness: Some(snd), statement: Some(info) }
 }

@@ -69,3 +69,32 @@ BENCH_VU = Tool(
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse,
 )
+
+
+def parse_verify(argv: list[str]) -> dict:
+    """`verify_result.py --dir DUMPS --jobs N [--threads T] [--reps R] --verifier BIN [--prover-result R.json]` (lane b-verify-par)."""
+    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    ap.add_argument("--dir", default=None)              # the proof dumps: path-valued key param, replaced by the content identity of the tree
+    ap.add_argument("--jobs", type=int, default=None)
+    ap.add_argument("--threads", type=int, default=1)
+    ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--verifier", default=None)         # where the binary is, not what is computed
+    ap.add_argument("--prover-result", default=None)    # provenance of prove_wall; the dumps carry the derivation
+    ns, unknown = ap.parse_known_args(argv)
+    out = vars(ns)
+    if unknown:
+        out["_unknown"] = unknown
+    return out
+
+
+# The independent verifier's batch timing on a bench-vu proof dump (CPU work: the key condition is the CPU, not the GPU).
+LIGERO_VERIFY_BATCH = Tool(
+    name="ligero_verify_batch", version="1",
+    command=["python", "backends/direct/ligero/verify_result.py"],
+    closure=["backends/direct/ligero/verify_result.py", "backends/ligero-verify/**"],
+    key_params=["dir", "jobs", "threads", "reps"],
+    key_conditions=["hw.cpu"],
+    param_artifacts=["dir"],
+    produces=["bench-result/v1", "run-files/v1"],
+    parse=parse_verify,
+)
