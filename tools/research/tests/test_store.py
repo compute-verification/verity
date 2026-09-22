@@ -996,6 +996,144 @@ def test_s3remote_session_token_is_sent_and_signed(monkeypatch, tmp_path, env):
     assert load_remote(env / "c.toml").session_token == "t2"
 
 
+# ---- temporary credentials ------------------------------------------------------------------------------------------------------------
+
+def test_mint_local_ports_cloudflares_reference_signing():
+    """The JWT is Cloudflare's `createTempCredentials` claim for claim: HS256 with the parent secret, `sub` account, `iss` parent key id,
+    `aud` endpoint host, iat/exp; temp secret = sha256 hex of the JWT; session token = base64("jwt/" + JWT); key id = the parent's.
+    `actions` replaces `scope` (R2 rejects both together)."""
+    import base64
+    import hmac
+
+    from research.store import credentials as C
+
+    ep, acct, ak, sk = "https://1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com", "1d4dfa0a7dc0639e19f5d0125f14a634", "PARENTKEYID", "parent-secret"
+    c = C.mint_local(ep, acct, ak, sk, "verity-dev", "object-read-only", ttl_s=900, now=1_790_000_000)
+    head, claims = C.decode_jwt(c["jwt"])
+    assert head == {"alg": "HS256", "typ": "JWT"}
+    assert claims == {"bucket": "verity-dev", "scope": "object-read-only", "sub": acct, "iss": ak, "aud": "1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com",
+                      "iat": 1_790_000_000, "exp": 1_790_000_900}
+    assert list(claims) == ["bucket", "scope", "sub", "iss", "aud", "iat", "exp"], "claim order as jose emits it"
+    h, p, s = c["jwt"].split(".")
+    assert base64.urlsafe_b64encode(hmac.new(b"parent-secret", f"{h}.{p}".encode(), hashlib.sha256).digest()).rstrip(b"=").decode() == s
+    assert "=" not in c["jwt"] and c["accessKeyId"] == ak
+    assert c["secretAccessKey"] == hashlib.sha256(c["jwt"].encode()).hexdigest()
+    assert base64.b64decode(c["sessionToken"]).decode() == "jwt/" + c["jwt"]
+    assert c["expires_utc"] == "2026-09-21T14:28:20Z"
+    same = C.mint_local(ep, acct, ak, sk, "verity-dev", "object-read-only", ttl_s=900, now=1_790_000_000)
+    assert same == c, "deterministic for a fixed `now`"
+    assert C.mint_local(ep, acct, ak, "other", "verity-dev", "object-read-only", ttl_s=900, now=1_790_000_000)["jwt"] != c["jwt"]
+
+    scoped = C.mint_local(ep, acct, ak, sk, "b", "object-read-write", actions=["PutObject", "HeadObject"], prefixes=["scratch/x/"], now=1)
+    claims = C.decode_jwt(scoped["jwt"])[1]
+    assert "scope" not in claims and claims["actions"] == ["PutObject", "HeadObject"] and claims["paths"] == {"prefixPaths": ["scratch/x/"], "objectPaths": []}
+    assert list(claims)[:3] == ["bucket", "actions", "paths"] and claims["exp"] - claims["iat"] == 3600, "default ttl 1 h"
+    objs = C.mint_local(ep, acct, ak, sk, "b", "object-read-write", objects=["manifests/a.json"], now=1)
+    assert C.decode_jwt(objs["jwt"])[1]["paths"] == {"prefixPaths": [], "objectPaths": ["manifests/a.json"]}
+    assert "paths" not in C.decode_jwt(c["jwt"])[1], "no paths -> no paths claim (whole bucket)"
+    for bad in ({"scope": "root"}, {"scope": "object-read-only", "actions": ["s3:GetObject"]}, {"scope": "object-read-only", "ttl_s": 604801}, {"scope": "object-read-only", "ttl_s": 0}):
+        with pytest.raises(C.MintError):
+            C.mint_local(ep, acct, ak, sk, "b", **bad)
+    assert C.parse_ttl("6h") == 21600 and C.parse_ttl("15m") == 900 and C.parse_ttl("7d") == 604800 and C.parse_ttl(900) == 900 and C.parse_ttl("42") == 42
+    for bad in ("8d", "0", "1w", "", "6 h"):
+        with pytest.raises(C.MintError):
+            C.parse_ttl(bad)
+    assert C.account_id_from_endpoint(ep) == acct and C.account_id_from_endpoint("https://s3.amazonaws.com") is None
+
+
+def test_mint_api_calls_the_temp_access_credentials_endpoint():
+    import io
+    import urllib.error
+
+    from research.store import credentials as C
+
+    calls = []
+
+    class Opener:
+        def __init__(self, status=200, body=None):
+            self.status, self.body = status, body
+
+        def open(self, req, timeout=None):
+            calls.append((req.full_url, req.get_method(), dict(req.header_items()), json.loads(req.data)))
+            if self.status != 200:
+                raise urllib.error.HTTPError(req.full_url, self.status, "Forbidden", {}, io.BytesIO(json.dumps({"errors": [{"code": 10000, "message": "Authentication error"}]}).encode()))
+            r = io.BytesIO(json.dumps(self.body).encode())
+            r.__enter__, r.__exit__ = lambda: r, lambda *a: False
+            return r
+
+    ok = {"success": True, "errors": [], "result": {"accessKeyId": "tmpid", "secretAccessKey": "tmpsecret", "sessionToken": "tok"}}
+    c = C.mint_api("acct123", "cf-token", "verity-dev", "PARENT", "object-read-write", ttl_s=3600, prefixes=["objects/"], opener=Opener(body=ok))
+    url, method, headers, body = calls[0]
+    assert url == "https://api.cloudflare.com/client/v4/accounts/acct123/r2/temp-access-credentials" and method == "POST"
+    assert headers["Authorization"] == "Bearer cf-token" and headers["Content-type"] == "application/json"
+    assert body == {"bucket": "verity-dev", "parentAccessKeyId": "PARENT", "permission": "object-read-write", "ttlSeconds": 3600, "prefixes": ["objects/"]}
+    assert {k: c[k] for k in ("accessKeyId", "secretAccessKey", "sessionToken")} == ok["result"] and c["expires_utc"].endswith("Z")
+    with pytest.raises(C.MintError, match="Authentication error"):
+        C.mint_api("acct123", "bad", "b", "P", "object-read-only", opener=Opener(status=403))
+    with pytest.raises(C.MintError, match="refused"):
+        C.mint_api("acct123", "t", "b", "P", "object-read-only", opener=Opener(body={"success": False, "errors": [{"message": "no"}]}))
+    with pytest.raises(C.MintError, match="lacks sessionToken"):
+        C.mint_api("acct123", "t", "b", "P", "object-read-only", opener=Opener(body={"success": True, "result": {"accessKeyId": "a", "secretAccessKey": "b"}}))
+    with pytest.raises(C.MintError):
+        C.mint_api("acct123", "t", "b", "P", "admin", opener=Opener(body=ok))
+
+
+def test_mint_resolves_inputs_from_config_and_env_and_the_cli_prints_env_lines(env, monkeypatch, capsys):
+    """Inputs: store.toml `[remote]` (endpoint, bucket, the env var NAMES of the parent key) > R2_ENDPOINT / R2_BUCKET / AWS_*; the account id
+    comes from the endpoint host.  `auto` signs locally when the parent key is present, else needs CLOUDFLARE_API_TOKEN.  `--env` prints the
+    three export lines and nothing is written anywhere."""
+    from research.store import credentials as C
+
+    ep = "https://1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com"
+    (env / "store.toml").write_text(f'[remote]\ntype = "s3"\nbucket = "verity-dev"\nendpoint = "{ep}"\naccess_key_id_env = "P_AK"\nsecret_access_key_env = "P_SK"\n')
+    for v in ("P_AK", "P_SK", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "CLOUDFLARE_API_TOKEN", "R2_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID",
+              "R2_ENDPOINT", "R2_BUCKET"):                              # a developer shell that sourced r2.env must not leak into the test
+        monkeypatch.delenv(v, raising=False)
+    with pytest.raises(C.MintError, match="CLOUDFLARE_API_TOKEN"):
+        C.mint()                                                         # no parent key, no API token: says what it needs
+    monkeypatch.setenv("P_AK", "PARENT")
+    monkeypatch.setenv("P_SK", "psecret")
+    c = C.mint(scope="object-read-only", ttl_s=600, prefixes=["manifests/"])
+    assert c["via"] == "local" and c["bucket"] == "verity-dev" and c["account_id"] == "1d4dfa0a7dc0639e19f5d0125f14a634" and c["accessKeyId"] == "PARENT"
+    assert C.decode_jwt(c["jwt"])[1]["aud"] == "1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com" and c["scope"] == "object-read-only"
+    assert C.mint(actions=["GetObject"])["scope"] is None
+    with pytest.raises(C.MintError, match="local signing only"):
+        C.mint(via="api", actions=["GetObject"])
+    with pytest.raises(C.MintError, match="CLOUDFLARE_API_TOKEN"):
+        C.mint(via="api")
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "already-temporary")
+    with pytest.raises(C.MintError, match="cannot mint another"):
+        C.mint()
+    monkeypatch.delenv("AWS_SESSION_TOKEN")
+    # no store.toml: R2_ENDPOINT / R2_BUCKET / AWS_* and an explicit account id
+    (env / "store.toml").unlink()
+    with pytest.raises(C.MintError, match="R2_ENDPOINT"):
+        C.mint()
+    monkeypatch.setenv("R2_ENDPOINT", "https://s3.example.invalid")
+    monkeypatch.setenv("R2_BUCKET", "b2")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AK2")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "SK2")
+    with pytest.raises(C.MintError, match="account id"):
+        C.mint()
+    monkeypatch.setenv("R2_ACCOUNT_ID", "acct")
+    c = C.mint(ttl_s=60)
+    assert c["bucket"] == "b2" and c["account_id"] == "acct" and C.decode_jwt(c["jwt"])[1]["aud"] == "s3.example.invalid" and c["accessKeyId"] == "AK2"
+
+    assert main(["mint-credential", "--ttl", "10m", "--permission", "object-read-only", "--prefix", "manifests/", "--env"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "export AWS_ACCESS_KEY_ID=AK2" and lines[1].startswith("export AWS_SECRET_ACCESS_KEY=") and len(lines[1]) == len("export AWS_SECRET_ACCESS_KEY=") + 64
+    assert lines[2].startswith("export AWS_SESSION_TOKEN=") and lines[3].startswith("# object-read-only on s3://b2 until ") and "prefixes ['manifests/']" in lines[3]
+    tok = lines[2].split("=", 1)[1]
+    assert __import__("base64").b64decode(tok).startswith(b"jwt/")
+    assert main(["mint-credential", "--actions", "PutObject,HeadObject", "--ttl", "6h"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["via"] == "local" and doc["scope"] is None and doc["actions"] == ["PutObject", "HeadObject"] and doc["ttl_s"] == 21600 and "jwt" not in doc
+    assert {"accessKeyId", "secretAccessKey", "sessionToken", "expires_utc"} <= set(doc)
+    assert main(["mint-credential", "--ttl", "8d"]) == 1 and "604800" in capsys.readouterr().err
+    assert main(["mint-credential", "--via", "api"]) == 1 and "CLOUDFLARE_API_TOKEN" in capsys.readouterr().err
+    assert not list(env.rglob("*token*")) and not list(env.rglob("*.env")), "nothing written to disk"
+
+
 def test_s3remote_refuses_oversize_and_conflicts(monkeypatch, tmp_path):
     r = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bucket", "ak", "sk")
     assert r._path("objects/sha256/ab") == "/bucket/objects/sha256/ab" and r._path("") == "/bucket"

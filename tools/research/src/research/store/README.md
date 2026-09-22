@@ -283,6 +283,37 @@ session_token_env = "AWS_SESSION_TOKEN"                # optional (this is the d
 A temporary credential (R2 temp-access credentials, STS-style) is a key pair plus a session token; when the named env var is set
 the token is sent as `x-amz-security-token` inside the SigV4 signed headers on every request, when unset nothing changes.
 
+### 7.1 Temporary credentials for pods — `research data mint-credential`
+
+A GPU pod gets a short-lived, bucket-scoped credential instead of the parent R2 key (`credentials.py`, stdlib):
+
+~~~text
+research data mint-credential [--ttl 6h] [--permission object-read-write|object-read-only|admin-*] [--prefix P]... [--object KEY]...
+                              [--actions PutObject,HeadObject,GetObject] [--via auto|local|api] [--env] [--endpoint U] [--bucket B] [--account-id A]
+~~~
+
+Inputs come from flags > `store.toml [remote]` (endpoint, bucket, the env var *names* of the parent key) > `R2_ENDPOINT` /
+`R2_BUCKET` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`; the account id from `R2_ACCOUNT_ID` / `CLOUDFLARE_ACCOUNT_ID` or the
+`<account>.r2.cloudflarestorage.com` host. Two paths, `auto` preferring the first:
+
+- **local** (no API call): sign a JWT (HS256) with the parent *secret access key* — Cloudflare's documented client-side signing,
+  ported claim for claim from their reference implementation: `{bucket, scope | actions, paths?: {prefixPaths, objectPaths}, sub:
+  account id, iss: parent key id, aud: endpoint host, iat, exp}`; the temporary key id is the parent's, the temporary secret is the
+  sha256 hex of the JWT, the session token is `base64("jwt/" + JWT)`. Checked live against `verity-dev` (2026-09-22): a 10-minute
+  `object-read-only` credential HEADs a manifest (200) and is refused a PUT (403); `--prefix` + `--actions` are enforced (PUT inside
+  the prefix 200, HEAD outside it 403, a GET not in `actions` 403). One deviation from the reference TypeScript: R2 answers 400 to a
+  JWT that carries both `scope` and `actions`, so `--actions` *replaces* `--permission` in the claims. Only this path can scope by
+  action.
+- **api**: `POST /client/v4/accounts/{account}/r2/temp-access-credentials` with `CLOUDFLARE_API_TOKEN` (body `{bucket,
+  parentAccessKeyId, permission, ttlSeconds, prefixes?, objects?}`), used when the parent secret is not in the environment. Unit-tested
+  against a fake transport; not exercised live (no API token in `r2.env`).
+
+TTL <= 7 days. Output is JSON (`accessKeyId`, `secretAccessKey`, `sessionToken`, `expires_utc`, `via`, `bucket`, `scope`, ...) or, with
+`--env`, the three `export AWS_ACCESS_KEY_ID= ... AWS_SECRET_ACCESS_KEY= ... AWS_SESSION_TOKEN=` lines for a pod bootstrap; nothing is
+ever written to disk by the tool. A pod with those three variables and the same `store.toml` pushes through `S3Remote` as usual
+(the token rides in the signed headers, above). A temporary credential cannot mint another (the tool refuses when
+`AWS_SESSION_TOKEN` is set); revoking the parent token kills every child.
+
 No remote configured (no file, or no `[remote]` table) => the local store is the only replica and `where` says so; nothing
 fails, nothing is called PRESERVED (`verify` returns `preserved=False, reason="no remote configured"`; `push` refuses). A
 `[remote]` table that is present but unusable (unknown type, missing field, credential env vars unset) is `ConfigError` from
@@ -364,6 +395,7 @@ research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--r
 research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
 research data reindex [--remote]
 research data sql "SELECT ..." [--json]      power-user escape hatch; read-only connection
+research data mint-credential [--ttl 6h] [--permission P] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]   (§7.1)
 ~~~
 
 No query DSL: flags for common facets + `sql`. Every command takes `--store ROOT`. `--ref name=a,b` or a repeated name makes a

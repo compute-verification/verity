@@ -14,6 +14,8 @@
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
   research data reindex [--remote]
   research data sql "SELECT ..." [--json]          read-only connection
+  research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
+                                                   a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
   (lookup / pull / attempt are provided by cli_prov when present)
 
 Every command takes `--store ROOT` (default `$RESEARCH_STORE` or `~/.research/store`).  `COMMANDS` maps a name to
@@ -428,9 +430,40 @@ def cmd_push(argv: list[str]) -> int:
     return 1 if bad else 0
 
 
+def cmd_mint_credential(argv: list[str]) -> int:
+    """A short-lived, bucket-scoped R2 credential for a pod (`credentials.py`): signed locally with the parent key from the environment
+    (the env vars store.toml names, default AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), or via the Cloudflare API with
+    CLOUDFLARE_API_TOKEN.  Prints JSON, or with `--env` the three `export` lines for a bootstrap; never writes a file."""
+    from . import credentials as C  # noqa: PLC0415
+
+    ap = _ap("mint-credential")
+    ap.add_argument("--ttl", default="1h", help="lifetime: <n>[s|m|h|d], max 7d (default 1h)")
+    ap.add_argument("--permission", default="object-read-write", choices=C.SCOPES, help="scope preset (default object-read-write)")
+    ap.add_argument("--prefix", action="append", default=[], metavar="P", help="restrict to keys under this prefix (repeatable)")
+    ap.add_argument("--object", action="append", default=[], metavar="KEY", help="restrict to this exact key (repeatable)")
+    ap.add_argument("--actions", default=None, metavar="A,B", help="explicit S3 actions, e.g. PutObject,HeadObject,GetObject (local signing only)")
+    ap.add_argument("--via", default="auto", choices=["auto", "local", "api"], help="local = sign a JWT with the parent secret; api = Cloudflare API")
+    ap.add_argument("--endpoint", default=None, help="override store.toml / R2_ENDPOINT")
+    ap.add_argument("--bucket", default=None, help="override store.toml / R2_BUCKET")
+    ap.add_argument("--account-id", default=None, help="override R2_ACCOUNT_ID / the endpoint's <account> host part")
+    ap.add_argument("--env", action="store_true", help="print `export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_SESSION_TOKEN=...`")
+    ap.add_argument("--json", action="store_true", help="(default output) the credential with bucket, scope, expiry, how it was minted")
+    ns = ap.parse_args(argv)
+    actions = [a for a in (ns.actions or "").split(",") if a] or None
+    cred = C.mint(via=ns.via, scope=ns.permission, ttl_s=C.parse_ttl(ns.ttl), prefixes=ns.prefix or None, objects=ns.object or None, actions=actions,
+                  endpoint=ns.endpoint, bucket=ns.bucket, account_id=ns.account_id)
+    if ns.env:
+        print(C.env_lines(cred))
+        print(f"# {cred['scope'] or 'actions-scoped'} on s3://{cred['bucket']} until {cred['expires_utc']} (minted {cred['via']}"
+              + (f", prefixes {cred['prefixes']}" if cred["prefixes"] else "") + (f", actions {cred['actions']}" if cred["actions"] else "") + ")")
+    else:
+        _dump({k: v for k, v in cred.items() if k != "jwt"})
+    return 0
+
+
 COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "select": cmd_select, "snapshot": cmd_snapshot,
-    "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push,
+    "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
 }
 
 
