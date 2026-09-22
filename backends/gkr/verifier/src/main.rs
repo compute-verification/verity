@@ -20,7 +20,7 @@ mod verify;
 use circuit::{layers, read_rows, Circuit, Layer};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use verify::{Chain, Segment, Statement, LIGERO};
+use verify::{Chain, Link, Segment, Statement, LIGERO};
 
 pub struct Loaded { pub circ: Circuit, pub layers: Vec<Layer> }
 
@@ -43,6 +43,28 @@ fn manifest_steps(root: &Path) -> usize {
 
 fn col(c: &Circuit, name: &str) -> usize { c.col_index(name).unwrap_or_else(|| panic!("circuit has no column {name}")) }
 
+/// `"variant": "v2"` in the manifest selects the checker-v2 statement (PROTOCOL 14: `chain.txt` links, implicit tables).
+fn manifest_is_v2(root: &Path) -> bool {
+    let text = std::fs::read_to_string(root.join("manifest.json")).expect("manifest.json");
+    text.split("\"variant\":").nth(1).map(|r| r.trim_start().starts_with("\"v2\"")).unwrap_or(false)
+}
+
+/// `chain.txt` (`gpu/run.py::read_chain`, `main.rs::read_chain`): `link <in|-> <out> <epi> <init> <zero_nonlast>`.
+fn read_chain(path: &Path, uc: &Circuit, ec: &Circuit) -> Result<(Vec<Link>, [u8; 32]), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut links = Vec::new();
+    for line in text.lines() {
+        let t: Vec<&str> = line.split_whitespace().collect();
+        if t.is_empty() { continue; }
+        if t[0] != "link" || t.len() != 6 { return Err(format!("chain.txt: unknown line {line:?}")); }
+        let init: u64 = t[4].parse().map_err(|_| "chain.txt: init".to_string())?;
+        if init >= field::P as u64 { return Err("chain.txt: init is not a canonical BabyBear element (a Goldilocks chain file?)".into()); }
+        let col_c = if t[1] == "-" { None } else { Some(col(uc, t[1])) };
+        links.push(Link { col_c, col_y: col(uc, t[2]), epi: col(ec, t[3]), init: init as u32, zero_nonlast: t[5] == "1" });
+    }
+    Ok((links, sha256::Sha256::digest(text.as_bytes())))
+}
+
 /// The statement of a batch directory: circuits, `vus` (prefix of the public words), steps.  `d` may be a
 /// `neg/<id>` subdirectory sharing its parent's manifest and circuits.
 fn statement<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<usize>) -> Result<Statement<'a>, String> {
@@ -54,13 +76,20 @@ fn statement<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<usize>
     if b > n || b == 0 { return Err(format!("{n} public words, {b} requested")); }
     let uc = &unit.circ;
     let ec = &epi.circ;
-    let chain = Chain {
-        steps,
-        col_c: vec![col(uc, "x.c_lo"), col(uc, "x.c_hi")],
-        col_y: vec![col(uc, "y_lo"), col(uc, "y_hi")],
-        epi_y32: vec![col(ec, "y32_lo"), col(ec, "y32_hi")],
-        epi_y16: col(ec, "y16"),
-        public_y16: pub_words[..b].to_vec(),
+    let chain = if manifest_is_v2(&root) {
+        let (links, spec_hash) = read_chain(&root.join("chain.txt"), uc, ec)?;
+        Chain { steps, col_c: vec![], col_y: vec![], epi_y32: vec![], epi_y16: col(ec, "y16"), public_y16: pub_words[..b].to_vec(), links: Some(links), spec_hash: Some(spec_hash) }
+    } else {
+        Chain {
+            steps,
+            col_c: vec![col(uc, "x.c_lo"), col(uc, "x.c_hi")],
+            col_y: vec![col(uc, "y_lo"), col(uc, "y_hi")],
+            epi_y32: vec![col(ec, "y32_lo"), col(ec, "y32_hi")],
+            epi_y16: col(ec, "y16"),
+            public_y16: pub_words[..b].to_vec(),
+            links: None,
+            spec_hash: None,
+        }
     };
     Ok(Statement {
         segs: vec![

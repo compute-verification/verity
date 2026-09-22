@@ -25,13 +25,46 @@ pub const LIGERO: Params = Params { k: 4096, n: 16384, t: 192 };
 pub struct Segment<'a> { pub name: String, pub circ: &'a Circuit, pub layers: &'a [Layer], pub units: usize }
 impl<'a> Segment<'a> { pub fn ncols(&self) -> usize { self.circ.ncols } }
 
-/// The word chain on limbed words (`gpu/prover.py::Chain`).
-pub struct Chain { pub steps: usize, pub col_c: Vec<usize>, pub col_y: Vec<usize>, pub epi_y32: Vec<usize>, pub epi_y16: usize, pub public_y16: Vec<u32> }
-impl Chain { pub fn limbs(&self) -> usize { self.col_c.len() } }
+/// One linked quantity of the v2 chain (`chain.txt`: `link <in|-> <out> <epi> <init> <zero_nonlast>`,
+/// `gpu/prover.py::Link`, PROTOCOL 14.3).  With `col_c`: `X[(v,0),c] = init`, `X[(v,i),c] = X[(v,i-1),y]`,
+/// `X_epi[v,epi] = X[(v,steps-1),y]`; without: the epilogue link only and, if `zero_nonlast`, `X[(v,i),y] = 0` for
+/// `i < steps-1`.
+#[derive(Clone, Debug)]
+pub struct Link { pub col_c: Option<usize>, pub col_y: usize, pub epi: usize, pub init: u32, pub zero_nonlast: bool }
+impl Link {
+    pub fn constraints_per_vu(&self, steps: usize) -> usize {
+        if self.col_c.is_some() { steps + 1 } else { 1 + if self.zero_nonlast { steps - 1 } else { 0 } }
+    }
+}
+
+/// The VU chain (`gpu/prover.py::Chain`).  v1: the word chain on limbed words (`col_c[j]` <-> `col_y[j]` <->
+/// `epi_y32[j]`, limb-major within a step, `links == None`); v2: the `chain.txt` link list, link by link
+/// (`add_chain_links`), with the file's SHA-256 absorbed in the preamble.
+pub struct Chain {
+    pub steps: usize, pub col_c: Vec<usize>, pub col_y: Vec<usize>, pub epi_y32: Vec<usize>, pub epi_y16: usize, pub public_y16: Vec<u32>,
+    pub links: Option<Vec<Link>>, pub spec_hash: Option<[u8; 32]>,
+}
+impl Chain {
+    pub fn limbs(&self) -> usize { self.col_c.len() }
+    pub fn constraints_per_vu(&self) -> usize {
+        match &self.links {
+            None => (self.steps + 1) * self.limbs() + 1,
+            Some(ls) => 1 + ls.iter().map(|l| l.constraints_per_vu(self.steps)).sum::<usize>(),
+        }
+    }
+}
 
 pub struct Statement<'a> { pub segs: Vec<Segment<'a>>, pub chain: Chain }
 impl<'a> Statement<'a> {
-    pub fn tables(&self) -> &'a [Table] { &self.segs[0].circ.tables }
+    /// Every table any segment queries: segment 0's in order, then the later segments' new ones
+    /// (`gpu/prover.py::union_tables`; a v1 statement's epilogue adds none).
+    pub fn tables(&self) -> Vec<&'a Table> {
+        let mut out: Vec<&'a Table> = Vec::new();
+        for s in &self.segs {
+            for t in &s.circ.tables { if !out.iter().any(|u| u.name == t.name) { out.push(t); } }
+        }
+        out
+    }
     pub fn vus(&self) -> usize { self.chain.public_y16.len() }
 }
 
@@ -60,7 +93,7 @@ fn table_queries<'a>(circ: &'a Circuit, name: &str) -> Vec<&'a Query> { circ.tab
 
 fn hypercube_dim(stmt: &Statement, t: &Table) -> usize {
     let n_wit: usize = stmt.segs.iter().map(|s| s.units * table_queries(s.circ, &t.name).len()).sum();
-    log2ceil(n_wit + t.rows.len())
+    log2ceil(n_wit + t.nrows())
 }
 
 fn x_layout(stmt: &Statement) -> (Vec<usize>, Vec<usize>, usize) {
@@ -68,7 +101,7 @@ fn x_layout(stmt: &Statement) -> (Vec<usize>, Vec<usize>, usize) {
     let mut l = 0;
     for s in &stmt.segs { seg_offs.push(l); l += s.units * s.ncols(); }
     let mut offs = Vec::new();
-    for t in stmt.tables() { offs.push(l); l += t.rows.len(); }
+    for t in stmt.tables() { offs.push(l); l += t.nrows(); }
     (seg_offs, offs, l)
 }
 
@@ -105,6 +138,7 @@ fn start_transcript(stmt: &Statement, root: &[u8; 32]) -> (Transcript, Vec<Table
     let mut buf = Vec::with_capacity(4 * stmt.chain.public_y16.len());
     for y in &stmt.chain.public_y16 { buf.extend_from_slice(&y.to_le_bytes()); }
     tr.absorb(&buf);
+    if let Some(h) = &stmt.chain.spec_hash { tr.absorb(h); }
     let mut chs = Vec::new();
     for t in stmt.tables() {
         let z = tr.challenge();
@@ -256,6 +290,7 @@ impl FillScratch { pub fn new() -> FillScratch { FillScratch { row: Vec::new(), 
 
 struct Functional<'a> {
     stmt: &'a Statement<'a>,
+    tables: Vec<&'a Table>,
     seg_offs: Vec<usize>,
     table_offs: Vec<usize>,
     l: usize,
@@ -340,6 +375,39 @@ impl<'a> Functional<'a> {
         // chain (gpu/prover.py::add_chain ordering: k = i * L + j for the incoming-word constraints, then
         // k = steps * L + j for the epilogue links, then per_vu - 1 for the public word)
         let ch = &self.stmt.chain;
+        if let Some(links) = &ch.links {
+            // v2 (`gpu/prover.py::add_chain_links`): per VU, link by link, the constraint index k runs over
+            // [steps incoming constraints | steps-1 zero_nonlast constraints | -], then the epilogue link; then y16
+            let steps = ch.steps;
+            if si == 0 {
+                let (v_, i) = (u / steps, u % steps);
+                let gv = self.chain_v[v_];
+                let mut o = 0;
+                for lk in links {
+                    if let Some(cc) = lk.col_c {
+                        out[cc] += gv * self.chain_k[o + i];
+                        if i + 1 < steps { out[lk.col_y] -= gv * self.chain_k[o + i + 1]; }
+                        o += steps;
+                    } else if lk.zero_nonlast {
+                        if i + 1 < steps { out[lk.col_y] += gv * self.chain_k[o + i]; }
+                        o += steps - 1;
+                    }
+                    if i + 1 == steps { out[lk.col_y] -= gv * self.chain_k[o]; }
+                    o += 1;
+                }
+                debug_assert_eq!(o + 1, self.per_vu);
+            } else if si == 1 {
+                let gv = self.chain_v[u];
+                let mut o = 0;
+                for lk in links {
+                    o += lk.constraints_per_vu(steps) - 1;
+                    out[lk.epi] += gv * self.chain_k[o];
+                    o += 1;
+                }
+                out[ch.epi_y16] += gv * self.chain_k[self.per_vu - 1];
+            }
+            return;
+        }
         let lim = ch.limbs();
         if si == 0 {
             let (v_, i) = (u / ch.steps, u % ch.steps);
@@ -373,9 +441,9 @@ impl<'a> Functional<'a> {
             }
         }
         for (ti, lp) in self.lookups.iter().enumerate() {
-            let t = &self.stmt.tables()[ti];
+            let t = self.tables[ti];
             let off = self.table_offs[ti];
-            let end = off + t.rows.len();
+            let end = off + t.nrows();
             if hi <= off || lo >= end { continue; }
             let tab_base: usize = lp.segs.iter().zip(&self.stmt.segs).map(|(s, seg)| s.q_t * seg.units).sum();
             for idx in lo.max(off)..hi.min(end) {
@@ -440,7 +508,9 @@ fn lookup_konst(stmt: &Statement, lp: &LookupPlan, t: &Table, ch: &TableCh, c: &
     }
     let tab_base: usize = lp.segs.iter().zip(&stmt.segs).map(|(s, seg)| s.q_t * seg.units).sum();
     let bs = betas(t, ch);
-    for (v, r) in t.rows.iter().enumerate() {
+    let mut r = vec![0u32; t.cols];
+    for v in 0..t.nrows() {
+        t.row(v, &mut r);
         let e = lp.eq.at(tab_base + v);
         let mut comb = Ext::ZERO;
         for (k, x) in r.iter().enumerate() { comb += bs[k].scale(*x); }
@@ -608,8 +678,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     }
     // chain
     let rho_chain = rhos[ri];
-    let lim = ch.limbs();
-    let per_vu = (ch.steps + 1) * lim + 1;
+    let per_vu = ch.constraints_per_vu();
     let mut chain_k = Vec::with_capacity(per_vu);
     let mut g = Ext::ONE;
     for _ in 0..per_vu { chain_k.push(g); g = g * geo; }
@@ -618,8 +687,16 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     let mut cur = rho_chain;
     for _ in 0..stmt.vus() { chain_v.push(cur); cur = cur * g_vu; }
     for (v, y) in ch.public_y16.iter().enumerate() { b += (chain_v[v] * chain_k[per_vu - 1]).scale(*y); }
+    if let Some(links) = &ch.links {
+        // the init constants of the incoming links: b += sum_v rho geo^(v per_vu + o) * init
+        let mut o = 0;
+        for lk in links {
+            if lk.col_c.is_some() && lk.init != 0 { for v in 0..stmt.vus() { b += (chain_v[v] * chain_k[o]).scale(lk.init); } }
+            o += lk.constraints_per_vu(ch.steps);
+        }
+    }
     let v_mats: Vec<PlanarMats> = v_col.iter().map(|v| PlanarMats::new(v)).collect();
-    let func = Functional { stmt, seg_offs, table_offs, l, eq_c, v_col, v_mats, lookups, chain_v, chain_k, per_vu };
+    let func = Functional { stmt, tables: stmt.tables(), seg_offs, table_offs, l, eq_c, v_col, v_mats, lookups, chain_v, chain_k, per_vu };
     st.t_konst = t2.elapsed().as_secs_f64();
 
     // ---- Ligero: r, w, qc, the functional value, the opened set

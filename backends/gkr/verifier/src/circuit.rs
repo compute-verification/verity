@@ -1,12 +1,30 @@
 //! The exported layered circuit as the GPU prover reads it (`gpu/circuit.py`): the text format of
-//! `backends/gkr/src/circuit.rs` with coefficients reduced mod p, row-listed tables, and the implicit `R16` table
-//! (65536 rows) appended last.  Layers follow `gpu/circuit.py::layers` (= the CPU crate's `layers()`).
+//! `backends/gkr/src/circuit.rs` with coefficients reduced mod p, row-listed tables, the v2 implicit tables
+//! (`itable NAME cols rows kind params`, PROTOCOL.md 14.2, materialised on demand) and the implicit range tables
+//! `R<w>` the queries reference (narrowest first; a v1 circuit references `R16` only).  Layers follow
+//! `gpu/circuit.py::layers` (= the CPU crate's `layers()`).
 
 use crate::field::{add, mul, P, P64};
 use crate::sha256::Sha256;
 use std::collections::HashMap;
 
-pub const R16_ROWS: usize = 65536;
+/// Row storage of a public table: listed in the circuit text, or defined (`range_width` / `itable`).
+#[derive(Clone, Debug)]
+pub enum TableRows {
+    Listed(Vec<Vec<u32>>),
+    /// `R<w>`: key = value = row index, `2^w` rows
+    Range(u32),
+    /// `shift <bits> <scale> <R>`: key `x R + 2 d + s` -> `(1 - 2 s) floor(x 2^scale / 2^d)`, `x < 2^bits`
+    Shift { bits: u32, scale: u32, r: usize },
+    /// `tnorm <vb> <k_rows> <k_lo>`: key `v + 2^vb koff` -> `floor(v 2^(koff + k_lo))`, `v < 2^vb`
+    Tnorm { vb: u32, k_rows: usize, k_lo: i64 },
+}
+
+/// `R<w>`, `1 <= w <= 16` (`circuit.rs::range_width`).
+pub fn range_width(name: &str) -> Option<u32> {
+    let w: u32 = name.strip_prefix('R')?.parse().ok()?;
+    (1..=16).contains(&w).then_some(w)
+}
 
 #[derive(Clone, Debug)]
 pub struct Term { pub idx: u32, pub coef: u32 }
@@ -18,7 +36,58 @@ pub struct LinForm { pub terms: Vec<Term>, pub konst: u32 }
 pub enum Wire { Input(u32), Prod { depth: u32, a: LinForm, b: LinForm } }
 
 #[derive(Clone, Debug)]
-pub struct Table { pub name: String, pub cols: usize, pub rows: Vec<Vec<u32>> }
+pub struct Table { pub name: String, pub cols: usize, pub rows: TableRows, nrows: usize }
+
+fn signed(v: u128, neg: bool) -> u32 {
+    let f = (v % P64 as u128) as u32;
+    if neg && f != 0 { P - f } else { f }
+}
+
+impl Table {
+    pub fn listed(name: String, cols: usize, rows: Vec<Vec<u32>>) -> Table { let n = rows.len(); Table { name, cols, rows: TableRows::Listed(rows), nrows: n } }
+    pub fn range(w: u32) -> Table { Table { name: format!("R{w}"), cols: 1, rows: TableRows::Range(w), nrows: 1 << w } }
+    /// `itable` definition (`circuit.rs::materialise`); the rows are computed on access.
+    pub fn implicit(name: String, cols: usize, nrows: usize, kind: &str, params: &[i64]) -> Table {
+        let rows = match kind {
+            "shift" => {
+                let (bits, scale, r) = (params[0] as u32, params[1] as u32, params[2] as usize);
+                assert_eq!(nrows, (1usize << bits) * r, "{name}: shift table row count");
+                TableRows::Shift { bits, scale, r }
+            }
+            "tnorm" => {
+                let (vb, k_rows, k_lo) = (params[0] as u32, params[1] as usize, params[2]);
+                assert_eq!(nrows, (1usize << vb) * k_rows, "{name}: tnorm table row count");
+                TableRows::Tnorm { vb, k_rows, k_lo }
+            }
+            other => panic!("{name}: unknown implicit table kind {other}"),
+        };
+        assert_eq!(cols, 2, "{name}: implicit tables have two columns");
+        Table { name, cols, rows, nrows }
+    }
+    pub fn nrows(&self) -> usize { self.nrows }
+    /// Row `i` (canonical values) into `out[..cols]`.
+    #[inline]
+    pub fn row(&self, i: usize, out: &mut [u32]) {
+        match &self.rows {
+            TableRows::Listed(rows) => out[..self.cols].copy_from_slice(&rows[i]),
+            TableRows::Range(_) => out[0] = i as u32,
+            TableRows::Shift { scale, r, .. } => {
+                let (x, rem) = (i / r, i % r);
+                let (d, s) = (rem / 2, rem % 2);
+                let v = ((x as u128) << scale) >> d;
+                out[0] = i as u32;
+                out[1] = signed(v, s == 1);
+            }
+            TableRows::Tnorm { vb, k_lo, .. } => {
+                let (koff, v) = (i >> vb, i & ((1usize << vb) - 1));
+                let k = koff as i64 + k_lo;
+                let t = if k >= 0 { (v as u128) << k } else { (v as u128) >> (-k) };
+                out[0] = i as u32;
+                out[1] = signed(t, false);
+            }
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Query { pub table: String, pub cols: Vec<LinForm> }
@@ -80,9 +149,24 @@ impl Circuit {
                 "table" => {
                     let name = it.next().unwrap().to_string();
                     let cols: usize = it.next().unwrap().parse().unwrap();
-                    c.tables.push(Table { name, cols, rows: vec![] });
+                    c.tables.push(Table::listed(name, cols, vec![]));
                 }
-                "row" => { let t = c.tables.last_mut().unwrap(); t.rows.push(it.map(|s| fe(s)).collect()); }
+                "itable" => {
+                    let name = it.next().unwrap().to_string();
+                    let cols: usize = it.next().unwrap().parse().unwrap();
+                    let rows: usize = it.next().unwrap().parse().unwrap();
+                    let kind = it.next().unwrap();
+                    let params: Vec<i64> = it.map(|s| s.parse().unwrap()).collect();
+                    c.tables.push(Table::implicit(name, cols, rows, kind, &params));
+                }
+                "row" => {
+                    let t = c.tables.last_mut().unwrap();
+                    let TableRows::Listed(rows) = &mut t.rows else { panic!("{}: row for a defined table", t.name) };
+                    let r: Vec<u32> = it.map(|s| fe(s)).collect();
+                    assert_eq!(r.len(), t.cols, "{}: row width", t.name);
+                    rows.push(r);
+                    t.nrows += 1;
+                }
                 "query" => {
                     let table = it.next().unwrap().to_string();
                     let n: usize = it.next().unwrap().parse().unwrap();
@@ -97,9 +181,14 @@ impl Circuit {
             if let Some(p) = prods.remove(&w) { c.wires.push(p); } else { c.wires.push(Wire::Input(next_col)); next_col += 1; }
         }
         assert_eq!(next_col as usize, c.ncols, "column/wire mismatch");
-        // gpu/circuit.py appends the implicit 16-bit range table unconditionally
-        c.tables.push(Table { name: "R16".into(), cols: 1, rows: (0..R16_ROWS as u32).map(|v| vec![v]).collect() });
-        for t in &c.tables { assert!(t.rows.iter().all(|r| r.len() == t.cols), "{}: row width", t.name); }
+        // the range tables R<w> the queries reference, narrowest first (gpu/circuit.py; a v1 circuit: R16 only)
+        let mut widths: Vec<u32> = c.queries.iter().filter_map(|q| range_width(&q.table)).collect();
+        widths.sort_unstable();
+        widths.dedup();
+        for w in widths { c.tables.push(Table::range(w)); }
+        let names: std::collections::HashSet<&str> = c.tables.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(names.len(), c.tables.len(), "duplicate table name");
+        for q in &c.queries { assert!(names.contains(q.table.as_str()), "query into unknown table {}", q.table); }
         c
     }
 
