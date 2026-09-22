@@ -66,7 +66,7 @@ F384p does (statistically 2^-350; the cap is the computational stack, AES-128 / 
 | B (`b-chain`, BabyBear, 166 queries) | 0.0410 | 4.2e9 | (proof size, not a stream) | 2^-128.6 proven | NON_ZK_PROOF_DIAGNOSTIC |
 | C v1, F384p (8 VUs) | 4.74 | 4.8e11 | 54.4 MB | 2^-128 | COMPLETE_ZK_BACKEND (designated verifier) |
 | **C v2, F384p, 4096 VUs, 1 thread** | **0.307** | **3.1e10** | **5.10 MB** | 2^-128 | COMPLETE_ZK_BACKEND (designated verifier) |
-| C v2, F384p, 4 sVOLE threads | F384P_T4_SPVU | F384P_T4_OVH | same | 2^-128 | |
+| C v2, F384p, 4 sVOLE threads | 0.265 | 2.7e10 | same | 2^-128 | |
 | C v2, F61p (sensitivity point) | 0.0302 | 3.1e9 | 0.865 MB | 2^-27.6 | |
 | C v2, F128p | 0.132 | 1.3e10 | 1.68 MB | 2^-94.6 | |
 
