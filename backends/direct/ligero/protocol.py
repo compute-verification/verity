@@ -208,9 +208,17 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     U = encode(W, n)                                              # (m, n)
     clk.lap("encode")
 
-    U_cols = U.t().contiguous().cpu().numpy().astype(np.uint32)
-    clk.lap("transfer")
-    root, levels = merkle.commit(U_cols)
+    gpu_hash = merkle.gpu_available() and str(device).startswith("cuda")
+    if gpu_hash:
+        U32 = U.to(torch.int32).contiguous()                       # elements < p < 2^31
+        clk.lap("transfer")                                        # nothing leaves the device here
+        root, tree = merkle.commit_device(U32)
+        hash_name = merkle.GPU_HASH_NAME
+    else:
+        U_cols = U.t().contiguous().cpu().numpy().astype(np.uint32)
+        clk.lap("transfer")
+        root, levels = merkle.commit(U_cols)
+        hash_name = merkle.HASH_NAME
     clk.lap("merkle")
 
     r, _rho_lin, rho_quad, rc = _challenge1(root, D, m, tb.L, tb.Q, device, l if chain else 0)
@@ -249,13 +257,18 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     w_np = w.cpu().numpy().astype(np.uint32)
     h_np = h.cpu().numpy().astype(np.uint32)
     cols = _challenge2(root, w_np, h_np, cfg.t, n, q_np)
-    opened = U_cols[cols].T.copy()                                # (m, t)
-    paths = merkle.open_columns(levels, cols)
+    if gpu_hash:
+        cols_t = torch.tensor(cols, dtype=torch.int64, device=device)
+        opened = U32.index_select(1, cols_t).cpu().numpy().astype(np.uint32)   # (m, t): the only U bytes that leave
+        paths = merkle.open_device(tree, cols)
+    else:
+        opened = U_cols[cols].T.copy()                            # (m, t)
+        paths = merkle.open_columns(levels, cols)
     clk.lap("openings")
     total = clk.total()
     timings = dict(clk.marks)
     timings["total"] = total
-    return Proof(root, w_np, h_np, cols, opened, paths, merkle.HASH_NAME, timings, q_np)
+    return Proof(root, w_np, h_np, cols, opened, paths, hash_name, timings, q_np)
 
 
 # ---------------------------------------------------------------------------------------------------------------------

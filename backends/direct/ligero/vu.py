@@ -21,7 +21,6 @@ from verity_numerical.bench import contract, instances
 from verity_numerical.checker.params import REAL
 from verity_numerical.checker.step import step_output
 
-from . import merkle
 from .chain import Layout
 from .compile import P
 from .hints_torch import hints_torch
@@ -246,7 +245,7 @@ def bench_vu(args) -> int:
     total = med["total"] + med["hints_host"]
     per_vu = total / n_vus
     hw = contract.probe_hardware()
-    sw = {"backend": {"name": "b-ligero chain (backends/direct/ligero)", "commit": _git_commit(), "hash": merkle.HASH_NAME,
+    sw = {"backend": {"name": "b-ligero chain (backends/direct/ligero)", "commit": _git_commit(), "hash": proof.hash_name,
                       "challenge_expander": "SHAKE-256 (placeholder)"},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
     fp = contract.fingerprint(

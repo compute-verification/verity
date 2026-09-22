@@ -23,7 +23,49 @@ except ImportError:                                   # pragma: no cover
 
     HASH_NAME = "sha256 (host, placeholder)"
 
-__all__ = ["HASH_NAME", "commit", "hash_bytes", "open_columns", "verify_path"]
+__all__ = ["HASH_NAME", "commit", "commit_device", "gpu_available", "hash_bytes", "open_columns", "open_device", "verify_path"]
+
+# --- GPU Merkle (backends/shared/hash_gpu, the hash-gpu lane): Blake3 leaves and nodes on the device, bit-exact with
+# the host Blake3 above, so ``verify_path`` is unchanged. -----------------------------------------------------------
+try:
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _shared = str(_Path(__file__).resolve().parents[2] / "shared")
+    if _shared not in _sys.path:
+        _sys.path.insert(0, _shared)
+    import cupy as _cp  # noqa: F401
+    from hash_gpu import merkle as _gpu_merkle
+
+    GPU_HASH_NAME = "blake3 (GPU, backends/shared/hash_gpu)"
+except Exception:  # noqa: BLE001 -- no cupy / no hash_gpu: the host path stays
+    _gpu_merkle = None
+    GPU_HASH_NAME = None
+
+
+def gpu_available() -> bool:
+    return _gpu_merkle is not None and HASH_NAME.startswith("blake3")
+
+
+def commit_device(U_int32):
+    """``U_int32``: (m, n) contiguous int32 torch tensor on the device -> (root bytes, Tree)."""
+    tree = _gpu_merkle.commit(U_int32, "blake3")
+    return _gpu_merkle.digest_bytes(tree.root, "blake3"), tree
+
+
+def open_device(tree, cols: list[int]) -> list[list[bytes]]:
+    """Authentication paths as bytes (leaf level first), from the device tree."""
+    import cupy as cp
+
+    paths = []
+    levels = [cp.asnumpy(lvl) for lvl in tree.levels[:-1]]        # (N_k, 8) uint32, LE words
+    for c in cols:
+        path, i = [], int(c)
+        for lvl in levels:
+            path.append(lvl[i ^ 1].astype("<u4").tobytes())
+            i >>= 1
+        paths.append(path)
+    return paths
 
 
 def hash_bytes(data: bytes) -> bytes:
