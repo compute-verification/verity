@@ -138,3 +138,20 @@ F1-F4 thresholds.  What an implementation can still get wrong is the *realisatio
       `forge.thresholds` / `forge.max_products` for the pipeline in use.
 - [ ] `neg_t` when `total = 0` (free column) -- confirm the protocol does not expose it (it is unobservable in the
       relation but would be a distinguishing bit in a transcript).
+
+## Statement and size binding (wave 3: from the red team's B forgeries, 2026-09-22, lane soundness-fixes)
+
+- [ ] **The statement is bound, not inferred from the proof.** Every public value the verifier is asked to accept
+      (claimed output words per VU, bound operands, B, K) is (a) absorbed into the challenger before the first
+      challenge and (b) checked by the verifier against the OPENED trace: a public column is checked at ζ and ζ·g
+      against the barycentric evaluation of the verifier's own copy of it (`direct/src/statement.rs::eval_pair`), or
+      constrained via `AirBuilderWithPublicValues`. "The claimed words are committed cells" is NOT binding: a proof of
+      a different satisfying trace (all-zero VUs) verifies as any statement (`b_zero_batch_as_any_statement`, F1).
+      Pin: `direct/tests/chain.rs::statement_suite` (F1a/F1b), `BoundError::StatementColumn`.
+- [ ] **Degree / size / shape come from the verifier's configuration, never from the proof.** `degree_bits`, the
+      trace height, the number of VUs, the FRI parameters (blowup, queries, PoW bits), the field, the challenge
+      extension degree and the AIR identity (a hash of the constraint program and layout) are fixed by the verifier
+      from `(B, rows per VU, padding)` and its config, absorbed into the challenger, and any value the proof carries
+      is compared, not used. Plonky3 uni-stark 0.4.3 reads `degree_bits` from the proof: a 2-VU (256-row) proof
+      verified as 4096 VUs (`b_degree_bits_unbound`, F2). Pin: `statement_suite` (F2),
+      `BoundError::DegreeBits{expected, got}`; header contents `statement.rs::header` (domain tag `verity-direct/stmt/v1`).
