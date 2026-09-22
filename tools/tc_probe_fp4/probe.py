@@ -53,6 +53,19 @@ Outputs under ``--out``: ``probe_results.json`` (identity, sass counts, replay a
 ``capture_sample.json`` (records sampled per family: acc, a/b codes, scales, d as hex), ``tiles_<family>.npz`` (the full capture),
 ``result.json`` (``kind: tc-evidence/v1``; meta per store README §11: instruction, arch, sku, driver, nvcc, families, counts,
 model, model_agrees, first_mismatches (<= 20), seed, n; validation passes iff every replay and model mismatch count is zero).
+
+Lane tcgen05 -- the datacenter Blackwell backend (``tcgen05_fp4.cu``, ``-arch=sm_100a`` on a B200 / ``sm_103a`` on a B300):
+``--instruction tcgen05_nvf4`` = ``tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X`` (UE4M3, registry id
+``sm100.tcgen05.mma.e2m1.nvf4``), ``tcgen05_mxf4`` = the same mnemonic with ``.scale_vec::2X`` and the UE8M0 instruction
+descriptor (``sm100.tcgen05.mma.e2m1.mxf4``), ``tcgen05_mxf4kind`` = ``kind::mxf4.block_scale.scale_vec::2X`` (CUTLASS's mnemonic
+for the same operands).  Each 16x8x64 tile is one 128x8x64 ``tcgen05.mma`` with the 16 rows replicated into all eight 16-row
+blocks of A and of the TMEM accumulator (rows 16..127 are a consistency check across the four TMEM sub-partitions:
+``replica_disagreements``).  The models compared are the sm_120 ones (``BLACKWELL_SM120_NVF4`` / ``_MXF4``): on sm_100 they are
+the HYPOTHESIS under test, not a validated model.  Two accumulator paths are measured per family: ``enable_input_d`` = 0 for tiles
+whose accumulator is all +0 bits (D = A.B, the accumulator is not read: a GEMM's first k-block) and 1 otherwise (D = A.B + D
+with D preloaded into TMEM by ``tcgen05.st``); ``tmem_path`` forces path 1 for every tile and ``path_disagreements`` counts the
+words the two paths disagree on.  ``--chain2`` pairs a family's tiles into K=128 chains (two MMAs back to back on the same TMEM
+accumulator, the main-loop path) and compares with the models stepped twice.
 """
 from __future__ import annotations
 
@@ -89,17 +102,31 @@ PTX = {
     "mxf4": "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0",
     "f8f6f4": "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32",
     "bf16": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
+    # sm_100 (lane tcgen05): the mnemonic plus the instruction descriptor it is issued with (types, scale format, M, N, K-major)
+    "tcgen05_nvf4": "tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X [idesc: e2m1 x e2m1 -> f32, scale ue4m3, M128 N8 K64, K-major]",
+    "tcgen05_mxf4": "tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::2X [idesc: e2m1 x e2m1 -> f32, scale ue8m0, M128 N8 K64, K-major]",
+    "tcgen05_mxf4kind": "tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X [idesc: e2m1 x e2m1 -> f32, scale ue8m0, M128 N8 K64, K-major]",
 }
 INSTRUCTION_ID = {
     "nvf4": "sm120.mma.m16n8k64.e2m1.nvf4",
     "mxf4": "sm120.mma.m16n8k64.e2m1.mxf4",
     "f8f6f4": "sm120.mma.m16n8k32.e2m1.f8f6f4",
     "bf16": "sm120.mma.m16n8k16.bf16",
+    "tcgen05_nvf4": "sm100.tcgen05.mma.e2m1.nvf4",
+    "tcgen05_mxf4": "sm100.tcgen05.mma.e2m1.mxf4",
+    "tcgen05_mxf4kind": "sm100.tcgen05.mma.e2m1.mxf4",
 }
-KERNEL = {"nvf4": "nvfp4_tiles_kernel", "mxf4": "mxfp4_tiles_kernel", "f8f6f4": "fp4raw_tiles_kernel", "bf16": "bf16_tiles_kernel"}
-K_OF = {"nvf4": 64, "mxf4": 64, "f8f6f4": 32, "bf16": 16}
-NBLK = {"nvf4": 4, "mxf4": 2, "f8f6f4": 0, "bf16": 0}
-SCALE_KIND = {"nvf4": "ue4m3", "mxf4": "ue8m0", "f8f6f4": "none"}
+KERNEL = {"nvf4": "nvfp4_tiles_kernel", "mxf4": "mxfp4_tiles_kernel", "f8f6f4": "fp4raw_tiles_kernel", "bf16": "bf16_tiles_kernel",
+          "tcgen05_nvf4": "tcgen05_nvfp4_tiles_kernel", "tcgen05_mxf4": "tcgen05_mxfp4_tiles_kernel", "tcgen05_mxf4kind": "tcgen05_mxf4kind_tiles_kernel"}
+K_OF = {"nvf4": 64, "mxf4": 64, "f8f6f4": 32, "bf16": 16, "tcgen05_nvf4": 64, "tcgen05_mxf4": 64, "tcgen05_mxf4kind": 64}
+NBLK = {"nvf4": 4, "mxf4": 2, "f8f6f4": 0, "bf16": 0, "tcgen05_nvf4": 4, "tcgen05_mxf4": 2, "tcgen05_mxf4kind": 2}
+SCALE_KIND = {"nvf4": "ue4m3", "mxf4": "ue8m0", "f8f6f4": "none", "tcgen05_nvf4": "ue4m3", "tcgen05_mxf4": "ue8m0", "tcgen05_mxf4kind": "ue8m0"}
+#: sm_100 backend: instruction -> kernel kind (tcgen05_fp4.cu) ; the source file and the default arch per backend
+TCGEN05_KIND = {"tcgen05_nvf4": 0, "tcgen05_mxf4": 1, "tcgen05_mxf4kind": 2}
+SOURCE = {instr: ("tcgen05_fp4.cu" if instr in TCGEN05_KIND else "mma_fp4.cu") for instr in PTX}
+DEFAULT_ARCH = {instr: ("sm_100a" if instr in TCGEN05_KIND else "sm_120a") for instr in PTX}
+#: canonical K-major no-swizzle shared-memory strides (bytes): LBO = the second 16-byte K chunk of an 8-row group, SBO = the next group
+TCGEN05_SMEM = {"lbo_a": 128, "sbo_a": 256, "lbo_b": 128, "sbo_b": 256}
 UE4M3_VALID = np.array([c for c in range(0x80) if c != 0x7F], dtype=np.uint8)  # 127 codes; 0x7F is NaN
 
 
@@ -110,15 +137,16 @@ def nvcc_bin() -> str:
     return shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc"
 
 
-def build(arch: str, out: Path) -> tuple[Path, str]:
-    so = out / f"libmma_fp4_{arch}.so"
+def build(arch: str, out: Path, source: str = "mma_fp4.cu") -> tuple[Path, str]:
+    so = out / f"lib{Path(source).stem}_{arch}.so"
     nvcc = subprocess.run([nvcc_bin(), "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
-    subprocess.run([nvcc_bin(), "-O2", f"-arch={arch}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / "mma_fp4.cu")], check=True)
+    subprocess.run([nvcc_bin(), "-O2", f"-arch={arch}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / source)], check=True)
     return so, " / ".join(line.strip() for line in nvcc)
 
 
 def sass_check(so: Path) -> dict:
-    """MMA instructions per tile kernel from ``cuobjdump -sass``: {kernel: {count, opcodes}}."""
+    """MMA instructions per tile kernel from ``cuobjdump -sass``: {kernel: {count, opcodes}} (sm_120: HMMA/OMMA/QMMA; sm_100: the
+    UTC*MMA family the tcgen05.mma mnemonics lower to)."""
     cuobjdump = str(Path(nvcc_bin()).parent / "cuobjdump")
     text = subprocess.run([cuobjdump, "-sass", str(so)], capture_output=True, text=True, check=True).stdout
     out: dict = {}
@@ -130,12 +158,19 @@ def sass_check(so: Path) -> dict:
             for k in KERNEL.values():
                 if k in fn:
                     fn = k
-            out[fn] = {"mma_count": 0, "opcodes": []}
+            out[fn] = {"mma_count": 0, "opcodes": [], "tcgen05_opcodes": []}
             continue
-        if fn and re.search(r"\b[A-Z]*MMA\b|\bOMMA\.|\bQMMA\.|\bHMMA\.", line):
+        if fn and re.search(r"\b[A-Z]*MMA\b|\bOMMA\.|\bQMMA\.|\bHMMA\.|\bUTC[A-Z]*MMA", line):
             op = line.split("*/")[1].split()[0] if "*/" in line else line.strip()
             out[fn]["mma_count"] += 1
             out[fn]["opcodes"].append(op)
+        elif fn and re.search(r"\bUTC[A-Z]+\b|\bUTMA\b", line):  # the other tensor-memory instructions (alloc, ld/st, commit ...)
+            op = line.split("*/")[1].split()[0] if "*/" in line else line.strip()
+            if op not in out[fn]["tcgen05_opcodes"]:
+                out[fn]["tcgen05_opcodes"].append(op)
+    for rec in out.values():
+        if not rec["tcgen05_opcodes"]:
+            del rec["tcgen05_opcodes"]
     return out
 
 
@@ -143,14 +178,53 @@ class Probe:
     def __init__(self, so: Path):
         self.lib = ctypes.CDLL(str(so))
         P = ctypes.c_void_p
-        for name, argc in (("mma_nvfp4_tiles", 6), ("mma_mxfp4_tiles", 6), ("mma_fp4raw_tiles", 4), ("mma_bf16_tiles", 4)):
-            fn = getattr(self.lib, name)
+        self.tcgen05 = hasattr(self.lib, "tcgen05_tiles")
+        if self.tcgen05:
+            fn = self.lib.tcgen05_tiles
             fn.restype = ctypes.c_int
-            fn.argtypes = [P] * argc + [ctypes.c_int]
+            fn.argtypes = [ctypes.c_int] + [P] * 7 + [ctypes.c_int, ctypes.c_int] + [ctypes.c_uint] * 4
+            self.lib.tcgen05_idesc.restype = ctypes.c_uint
+            self.lib.tcgen05_idesc.argtypes = [ctypes.c_int]
+            self.smem = dict(TCGEN05_SMEM)
+            self.replica_disagreements = 0  # words of TMEM lanes 16..127 that differ from their replica in lanes 0..15 (reset by the caller)
+            self.path_tiles = {"acc_disabled": 0, "acc_tmem": 0}
+        else:
+            for name, argc in (("mma_nvfp4_tiles", 6), ("mma_mxfp4_tiles", 6), ("mma_fp4raw_tiles", 4), ("mma_bf16_tiles", 4)):
+                fn = getattr(self.lib, name)
+                fn.restype = ctypes.c_int
+                fn.argtypes = [P] * argc + [ctypes.c_int]
         self.lib.has_mxf4.restype = ctypes.c_int
         ident = self.lib.device_identity
         ident.restype = ctypes.c_int
         ident.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.c_char_p, ctypes.c_int]
+
+    def tcgen05_tiles(self, instr: str, A, Bt, SFA, SFB, C, steps: int = 1, force_tmem: bool = False) -> np.ndarray:
+        """sm_100 backend: one 128x8x(64 steps) ``tcgen05.mma`` chain per tile.  ``A`` (n,16,64 steps), ``Bt`` (n,8,64 steps),
+        ``SFA`` (n,16,nblk steps), ``SFB`` (n,8,nblk steps), ``C`` (n,16,8) -> ``D`` (n,16,8).  The accumulator path per tile:
+        enable_input_d = 0 when the tile's C is all +0 bits (unless ``force_tmem``), else 1 with C preloaded into TMEM."""
+        n = A.shape[0]
+        kind, nblk = TCGEN05_KIND[instr], NBLK[instr]
+        k = 64 * steps
+        A = np.ascontiguousarray(A, dtype=np.uint8).reshape(n, 16, k)
+        Bt = np.ascontiguousarray(Bt, dtype=np.uint8).reshape(n, 8, k)
+        SFA = np.ascontiguousarray(SFA, dtype=np.uint8).reshape(n, 16, nblk * steps)
+        SFB = np.ascontiguousarray(SFB, dtype=np.uint8).reshape(n, 8, nblk * steps)
+        C = np.ascontiguousarray(C, dtype=np.uint32).reshape(n, 16, 8)
+        enable = np.ones(n, np.uint8) if force_tmem else (C.reshape(n, -1) != 0).any(axis=1).astype(np.uint8)
+        D = np.zeros((n, 16, 8), dtype=np.uint32)
+        for s in range(0, n, MAX_TILES_PER_CALL):
+            e = min(n, s + MAX_TILES_PER_CALL)
+            dall = np.zeros((e - s, 128, 8), dtype=np.uint32)
+            a, b, sa, sb, c, en = A[s:e], Bt[s:e], SFA[s:e], SFB[s:e], C[s:e], np.ascontiguousarray(enable[s:e])
+            rc = self.lib.tcgen05_tiles(kind, a.ctypes.data, b.ctypes.data, sa.ctypes.data, sb.ctypes.data, c.ctypes.data, en.ctypes.data,
+                                        dall.ctypes.data, e - s, steps, self.smem["lbo_a"], self.smem["sbo_a"], self.smem["lbo_b"], self.smem["sbo_b"])
+            if rc != 0:
+                raise RuntimeError(f"CUDA error {rc} in the {instr} tcgen05 tile kernel")
+            D[s:e] = dall[:, :16, :]
+            self.replica_disagreements += int(np.count_nonzero(dall[:, 16:, :] != np.tile(dall[:, :16, :], (1, 7, 1))))
+        self.path_tiles["acc_disabled"] += int(np.count_nonzero(enable == 0))
+        self.path_tiles["acc_tmem"] += int(np.count_nonzero(enable != 0))
+        return D
 
     def identity(self) -> dict:
         major, minor = ctypes.c_int(), ctypes.c_int()
@@ -163,11 +237,13 @@ class Probe:
         return {"device": name.value.decode(), "compute_capability": f"{major.value}.{minor.value}",
                 "nvidia_smi": smi.stdout.strip() if smi.returncode == 0 else None,
                 "driver": fields[1] if len(fields) > 1 else None, "gpu_uuid": fields[3] if len(fields) > 3 else None,
-                "hostname": platform.node(), "has_mxf4": bool(self.lib.has_mxf4())}
+                "hostname": platform.node(), "has_mxf4": bool(self.lib.has_mxf4()), "backend": "tcgen05" if self.tcgen05 else "mma.sync"}
 
-    def tiles(self, instr: str, A, Bt, C, SFA=None, SFB=None) -> np.ndarray:
+    def tiles(self, instr: str, A, Bt, C, SFA=None, SFB=None, **tcgen05_kw) -> np.ndarray:
         """One MMA per tile.  ``A`` (n,16,K) / ``Bt`` (n,8,K) codes (u8; bf16: u16 words), ``SFA`` (n,16,nblk) / ``SFB`` (n,8,nblk) u8,
         ``C`` (n,16,8) FP32 words -> ``D`` (n,16,8)."""
+        if instr in TCGEN05_KIND:
+            return self.tcgen05_tiles(instr, A, Bt, SFA, SFB, C, **tcgen05_kw)
         n = A.shape[0]
         k, nblk = K_OF[instr], NBLK[instr]
         dt = np.uint16 if instr == "bf16" else np.uint8
@@ -264,7 +340,7 @@ def layout_check(probe: Probe, instr: str) -> str:
             # distinct power-of-two scales per (row, block) and (col, block) in 2^-2..2^3: any lane/byte misrouting changes the
             # result, and every exact sum stays below 24 significant bits (|term| < 2^17, lowest bit 2^-4) so FP32 holds it exactly
             # (a wider range made 3/8192 mxf4 elements need > 24 bits: RNE reference vs RZ hardware, a false "layout" failure)
-            if instr == "nvf4":
+            if SCALE_KIND[instr] == "ue4m3":
                 ea = rng.integers(5, 11, (n, 16, nblk))
                 eb = rng.integers(5, 11, (n, 8, nblk))
                 sfa, sfb = (ea << 3).astype(np.uint8), (eb << 3).astype(np.uint8)
@@ -277,6 +353,23 @@ def layout_check(probe: Probe, instr: str) -> str:
             prod = np.einsum("nigk,njgk->nijg", a.reshape(n, 16, nblk, blk), b.reshape(n, 8, nblk, blk)).astype(np.float64)
             want = f32_bits(c + np.einsum("nijg,nig,njg->nij", prod, pa, pb))
             got = probe.tiles(instr, e2m1_encode_ints(a), e2m1_encode_ints(b), f32_bits(c), sfa, sfb)
+            if instr in TCGEN05_KIND:
+                # the accumulator-disabled path (enable_input_d = 0: D = A.B) on the same operands, and the K=128 chain
+                want0 = f32_bits(np.einsum("nijg,nig,njg->nij", prod, pa, pb))
+                got0 = probe.tiles(instr, e2m1_encode_ints(a), e2m1_encode_ints(b), np.zeros((n, 16, 8), np.uint32), sfa, sfb)
+                if not np.array_equal(want0, got0):
+                    bad = int(np.count_nonzero(want0 != got0))
+                    raise RuntimeError(f"layout check (accumulator disabled) failed for {instr}: {bad}/{want0.size} elements differ from A.Bt")
+                h = n // 2
+                a2, b2 = np.concatenate([a[:h], a[h:2 * h]], axis=2), np.concatenate([b[:h], b[h:2 * h]], axis=2)
+                sfa2, sfb2 = np.concatenate([sfa[:h], sfa[h:2 * h]], axis=2), np.concatenate([sfb[:h], sfb[h:2 * h]], axis=2)
+                want2 = f32_bits(c[:h] + np.einsum("nijg,nig,njg->nij", prod[:h], pa[:h], pb[:h]) + np.einsum("nijg,nig,njg->nij", prod[h:2 * h], pa[h:2 * h], pb[h:2 * h]))
+                got2 = probe.tiles(instr, e2m1_encode_ints(a2), e2m1_encode_ints(b2), f32_bits(c[:h]), sfa2, sfb2, steps=2)
+                if not np.array_equal(want2, got2):
+                    bad = int(np.count_nonzero(want2 != got2))
+                    raise RuntimeError(f"layout check (K=128 chain) failed for {instr}: {bad}/{want2.size} elements differ from C + A.Bt")
+                if probe.replica_disagreements:
+                    raise RuntimeError(f"layout check for {instr}: {probe.replica_disagreements} replica words (TMEM lanes 16..127) differ from lanes 0..15")
         else:
             want = f32_bits(c + np.einsum("nik,njk->nij", a, b))
             got = probe.tiles(instr, e2m1_encode_ints(a), e2m1_encode_ints(b), f32_bits(c))
@@ -633,16 +726,18 @@ def families_bf16(rng, n_random: int):
 _CTX: dict = {}
 
 
-PRIMARY_MODEL = {"nvf4": "verity", "mxf4": "verity", "f8f6f4": "verity", "bf16": None}
+PRIMARY_MODEL = {"nvf4": "verity", "mxf4": "verity", "f8f6f4": "verity", "bf16": None,
+                 "tcgen05_nvf4": "verity", "tcgen05_mxf4": "verity", "tcgen05_mxf4kind": "verity"}
 
 
 def verity_models(instr: str) -> dict:
     """The verity ``BlockScaledAlignAdd`` instances evaluated for ``instr``: ``verity`` is the registry's model, the others are
-    named alternatives (mxf4: the sign of an underflowed zero, log entry D13)."""
+    named alternatives (mxf4: the sign of an underflowed zero, log entry D13).  For the sm_100 instructions the sm_120 models
+    are the hypothesis under test."""
     from verity.ml.tc import models as M
-    if instr == "nvf4":
+    if instr in ("nvf4", "tcgen05_nvf4"):
         return {"verity": M.BLACKWELL_SM120_NVF4}
-    if instr == "mxf4":
+    if instr in ("mxf4", "tcgen05_mxf4", "tcgen05_mxf4kind"):
         return {"verity": M.BLACKWELL_SM120_MXF4, "verity_underflow_signed": M.BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED}
     if instr == "f8f6f4":
         return {"verity": M.BlockScaledAlignAdd(
@@ -688,12 +783,22 @@ def _eval_chunk(args):
                         except Exception:  # noqa: BLE001
                             errs[name][t, i, j] = True
         return outs, errs
+    # K may be a multiple of the instruction's K (tcgen05 --chain2): the models are stepped once per k-block, D fed back as C
+    k_mma = K_OF[instr]
+    steps = A.shape[2] // k_mma
+    nblk = NBLK[instr]
     out5 = np.zeros((n, 16, 8), np.uint32)
     err5 = np.zeros((n, 16, 8), np.bool_)
     empty = np.zeros((16, 0), np.uint8)
     for t in range(n):
-        out5[t], err5[t] = model5.tile_eval(A[t], Bt[t], SFA[t] if SFA is not None else empty, SFB[t] if SFB is not None else empty[:8],
-                                            C[t], SCALE_KIND[instr], _CTX["group"])
+        c = C[t]
+        e = np.zeros((16, 8), np.bool_)
+        for s in range(steps):
+            ks, bs = slice(s * k_mma, (s + 1) * k_mma), slice(s * nblk, (s + 1) * nblk)
+            c, e_s = model5.tile_eval(A[t][:, ks], Bt[t][:, ks], SFA[t][:, bs] if SFA is not None else empty,
+                                      SFB[t][:, bs] if SFB is not None else empty[:8], c, SCALE_KIND[instr], _CTX["group"])
+            e |= e_s
+        out5[t], err5[t] = c, e
     outs = {"model5": out5}
     errs = {"model5": err5}
     vm = _CTX["verity"]
@@ -705,12 +810,15 @@ def _eval_chunk(args):
     SBl = SFB.tolist() if SFB is not None else None
     for t in range(n):
         for i in range(16):
-            sa = SAl[t][i] if SAl is not None else ()
             for j in range(8):
-                sb = SBl[t][j] if SBl is not None else ()
                 for name, model in vm.items():
+                    c = Cl[t][i][j]
                     try:
-                        outs[name][t, i, j] = model.step_scaled(Cl[t][i][j], Al[t][i], Bl[t][j], sa, sb)
+                        for s in range(steps):
+                            ks, bs = slice(s * k_mma, (s + 1) * k_mma), slice(s * nblk, (s + 1) * nblk)
+                            c = model.step_scaled(c, Al[t][i][ks], Bl[t][j][ks], SAl[t][i][bs] if SAl is not None else (),
+                                                  SBl[t][j][bs] if SBl is not None else ())
+                        outs[name][t, i, j] = c
                     except Exception:  # noqa: BLE001 - outside the model's domain (non-finite accumulator, sum leaving binary32)
                         errs[name][t, i, j] = True
     return outs, errs
@@ -765,6 +873,11 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
     data = json.loads(path.read_text())
     probe_no = int(data["probe"])
     instr = "nvf4" if probe_no == 3 else "f8f6f4"
+    if probe.tcgen05:
+        if probe_no != 3:
+            return {"file": path.name, "probe": probe_no, "skipped": "the sm_100 backend has no unscaled kind::f8f6f4 e2m1 kernel", "cases": 0,
+                    "matched": 0, "mismatches": 0, "first_mismatches": [], "other_positions_nonzero": 0, "by_k": {}, "gpu_seconds": 0.0}
+        instr = "tcgen05_nvf4"
     k_mma = K_OF[instr]
     cases = data["sample_cases"]
     by_k: dict[int, list[int]] = {}
@@ -825,8 +938,11 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="nvf4", choices=sorted(PTX))
-    ap.add_argument("--arch", default="sm_120a")
+    ap.add_argument("--arch", default=None, help="nvcc -arch (default sm_120a; sm_100a for the tcgen05 instructions, sm_103a on a B300)")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--chain2", action="store_true", help="tcgen05: pair each family's tiles into K=128 chains (two MMAs on one TMEM accumulator)")
+    ap.add_argument("--smem-strides", default=None, metavar="LBO_A,SBO_A,LBO_B,SBO_B",
+                    help="tcgen05: shared-memory descriptor strides in bytes (default 128,256,128,256: canonical K-major no-swizzle)")
     ap.add_argument("--replay-autoproof", action="append", default=[], metavar="JSON")
     ap.add_argument("--sweep", action="store_true")
     ap.add_argument("--n-random", type=int, default=4096, help="tiles of the largest family (128 elements each)")
@@ -843,9 +959,16 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     t_all = time.time()
     instr = args.instruction
+    tcgen05 = instr in TCGEN05_KIND
+    if args.arch is None:
+        args.arch = DEFAULT_ARCH[instr]
+    if args.chain2 and not tcgen05:
+        ap.error("--chain2 is a tcgen05 option")
 
-    so, nvcc = build(args.arch, out)
+    so, nvcc = build(args.arch, out, SOURCE[instr])
     probe = Probe(so)
+    if tcgen05 and args.smem_strides:
+        probe.smem = dict(zip(("lbo_a", "sbo_a", "lbo_b", "sbo_b"), (int(x) for x in args.smem_strides.split(","))))
     identity = probe.identity()
     identity["nvcc"] = nvcc
     identity["arch"] = args.arch
@@ -853,10 +976,19 @@ def main() -> int:
         model_desc, model_src = "verity.ml.tc.silicon.tc_dot", "verity.ml.tc.silicon"
     else:
         model_desc = "verity.ml.tc.models." + {"nvf4": "BLACKWELL_SM120_NVF4", "mxf4": "BLACKWELL_SM120_MXF4",
-                                               "f8f6f4": "BlockScaledAlignAdd(scale=None, k=32)"}[instr] + " (control: autoproof model5)"
+                                               "f8f6f4": "BlockScaledAlignAdd(scale=None, k=32)",
+                                               "tcgen05_nvf4": "BLACKWELL_SM120_NVF4 (the sm_120 model as the hypothesis for sm_100 tcgen05)",
+                                               "tcgen05_mxf4": "BLACKWELL_SM120_MXF4 (the sm_120 model as the hypothesis for sm_100 tcgen05)",
+                                               "tcgen05_mxf4kind": "BLACKWELL_SM120_MXF4 (the sm_120 model as the hypothesis for sm_100 tcgen05)"}[instr] + \
+                     " (control: autoproof model5)"
         model_src = "verity.ml.tc.models + " + str(HERE / "model5.py")
     results: dict = {"schema": "fp4-re/tc-probe-fp4/v1", "instruction": PTX[instr], "instruction_id": INSTRUCTION_ID[instr],
                      "identity": identity, "model": model_desc, "model_source": model_src, "primary_model": PRIMARY_MODEL[instr]}
+    if tcgen05:
+        results["tcgen05"] = {"mma_shape": "128x8x64 (cta_group::1)", "tile_rows_replicated": 8, "smem_strides": probe.smem,
+                              "instruction_descriptor": f"0x{probe.lib.tcgen05_idesc(TCGEN05_KIND[instr]):08x}", "chain2": bool(args.chain2),
+                              "accumulator_paths": "enable_input_d = 0 for all-+0 accumulator tiles, else TMEM preload (tcgen05.st) + enable_input_d = 1; "
+                                                   "tmem_path: every tile through the TMEM preload"}
     print("device", json.dumps(identity), flush=True)
     failures = []
 
@@ -897,8 +1029,26 @@ def main() -> int:
             for name, A, Bt, SFA, SFB, C in gen:
                 if only is not None and name not in only:
                     continue
+                steps = 1
+                if args.chain2:
+                    # pairs of tiles -> one K=128 chain: the second tile's operands are the second k-block, the first tile's C the accumulator
+                    h = A.shape[0] // 2
+                    A, Bt = np.concatenate([A[:h], A[h:2 * h]], axis=2), np.concatenate([Bt[:h], Bt[h:2 * h]], axis=2)
+                    SFA, SFB = np.concatenate([SFA[:h], SFA[h:2 * h]], axis=2), np.concatenate([SFB[:h], SFB[h:2 * h]], axis=2)
+                    C = C[:h]
+                    steps = 2
                 t0 = time.time()
-                D = probe.tiles(instr, A, Bt, C, SFA, SFB)
+                if tcgen05:
+                    probe.replica_disagreements = 0
+                    probe.path_tiles = {"acc_disabled": 0, "acc_tmem": 0}
+                    D = probe.tiles(instr, A, Bt, C, SFA, SFB, steps=steps)
+                    paths = dict(probe.path_tiles)
+                    replica_mixed = probe.replica_disagreements
+                    probe.replica_disagreements = 0
+                    D_tmem = probe.tiles(instr, A, Bt, C, SFA, SFB, steps=steps, force_tmem=True)
+                    replica_tmem = probe.replica_disagreements
+                else:
+                    D = probe.tiles(instr, A, Bt, C, SFA, SFB)
                 t_gpu = time.time() - t0
                 t0 = time.time()
                 models, errs = model_eval(pool, A, Bt, SFA, SFB, C, args.procs)
@@ -907,10 +1057,12 @@ def main() -> int:
                        "nonzero_accumulators": int(np.count_nonzero(C & 0x7FFFFFFF)),
                        "model_domain_errors": {m: int(e.sum()) for m, e in errs.items()},
                        "gpu_seconds": round(t_gpu, 2), "model_seconds": round(t_model, 1), "mismatches_vs_model": {}, "first_mismatches": {}}
-                if SFA is not None and instr == "nvf4":
-                    live = np.zeros((A.shape[0], 16, 8, 4), bool)
-                    a_nz = (model5.E2M1_NUM[A.astype(np.int64)] != 0).reshape(-1, 16, 4, 16)
-                    b_nz = (model5.E2M1_NUM[Bt.astype(np.int64)] != 0).reshape(-1, 8, 4, 16)
+                if steps > 1:
+                    fam["k_per_tile"] = K_OF[instr] * steps
+                if SFA is not None and SCALE_KIND[instr] == "ue4m3":
+                    ng = A.shape[2] // 16
+                    a_nz = (model5.E2M1_NUM[A.astype(np.int64)] != 0).reshape(-1, 16, ng, 16)
+                    b_nz = (model5.E2M1_NUM[Bt.astype(np.int64)] != 0).reshape(-1, 8, ng, 16)
                     live = np.einsum("nigk,njgk->nijg", a_nz.astype(np.int64), b_nz.astype(np.int64)) > 0
                     hot = live & ((SFA.astype(np.int64) & 0x78) == 0x78)[:, :, None, :] & ((SFB.astype(np.int64) & 0x78) == 0x78)[:, None, :, :]
                     fam["hot_firings"] = int(np.count_nonzero(hot.any(-1)))
@@ -933,9 +1085,30 @@ def main() -> int:
                 primary = PRIMARY_MODEL[instr]
                 if primary in errs and errs[primary].any():
                     fam["observed_outside_model_domain"] = observed_summary(D, C, errs[primary])
+                if tcgen05:
+                    # the second accumulator path (every tile through the TMEM preload) against the same model words, and the
+                    # replica lanes: both must agree with path one for the instruction to have ONE semantics
+                    path_dis = int(np.count_nonzero(D != D_tmem))
+                    fam["tcgen05"] = {"acc_path_tiles": paths, "tmem_path_mismatches_vs_model": {m: int(((v != D_tmem) | errs[m]).sum()) for m, v in models.items()},
+                                      "path_disagreements": path_dis, "replica_disagreements": {"mixed_path": replica_mixed, "tmem_path": replica_tmem}}
+                    if path_dis:
+                        first = []
+                        for t, i, j in list(zip(*np.nonzero(D != D_tmem)))[:20]:
+                            rec = hexrec(C[t, i, j], A[t, i], Bt[t, j], D[t, i, j], SFA[t, i], SFB[t, j])
+                            rec["d_tmem_path"] = f"{int(D_tmem[t, i, j]):08x}"
+                            first.append(rec)
+                        fam["tcgen05"]["first_path_disagreements"] = first
+                        failures.append(f"{name}: {path_dis} words differ between the accumulator-disabled and the TMEM-preload paths")
+                    if replica_mixed or replica_tmem:
+                        failures.append(f"{name}: replica lanes disagree (mixed {replica_mixed}, tmem {replica_tmem})")
+                    for m, cnt in fam["tcgen05"]["tmem_path_mismatches_vs_model"].items():
+                        if m == primary and cnt != fam["mismatches_vs_model"][m] and name not in RECORD_ONLY_FAMILIES:
+                            failures.append(f"{name}: tmem path mismatches vs {m} = {cnt} != mixed path {fam['mismatches_vs_model'][m]}")
                 kw = {"A": A, "Bt": Bt, "C": C, "D": D, **{f"model_{m}": v for m, v in models.items()}}
                 if SFA is not None:
                     kw["SFA"], kw["SFB"] = SFA, SFB
+                if tcgen05:
+                    kw["D_tmem_path"] = D_tmem
                 np.savez_compressed(out / f"tiles_{name}.npz", **kw)
                 flat = rng.choice(A.shape[0] * 128, size=min(args.golden_per_family, A.shape[0] * 128), replace=False)
                 for f in sorted(flat.tolist()):
@@ -955,6 +1128,13 @@ def main() -> int:
                             "total_mismatches_vs_model": {m: sum(f["mismatches_vs_model"][m] for f in gated.values()) for m in model_names},
                             "record_only_mismatches_vs_model": {m: sum(f["mismatches_vs_model"][m] for f in fams.values() if f["record_only"])
                                                                 for m in model_names}}
+        if tcgen05:
+            results["sweep"]["tcgen05"] = {
+                "chain2": bool(args.chain2),
+                "acc_path_tiles": {p: sum(f["tcgen05"]["acc_path_tiles"][p] for f in fams.values()) for p in ("acc_disabled", "acc_tmem")},
+                "total_tmem_path_mismatches_vs_model": {m: sum(f["tcgen05"]["tmem_path_mismatches_vs_model"][m] for f in gated.values()) for m in model_names},
+                "total_path_disagreements": sum(f["tcgen05"]["path_disagreements"] for f in fams.values()),
+                "total_replica_disagreements": {p: sum(f["tcgen05"]["replica_disagreements"][p] for f in fams.values()) for p in ("mixed_path", "tmem_path")}}
         (out / "capture_sample.json").write_text(json.dumps(capture, separators=(",", ":")))
         if instr == "bf16":
             agreeing = [m for m, c in results["sweep"]["total_mismatches_vs_model"].items() if c == 0]
@@ -1010,8 +1190,10 @@ def main() -> int:
             "model": results["model"], "primary_model": primary, "model_agrees": model_agrees, "agreement": agree,
             "first_mismatches": first_mism, "seed": args.seed, "n": args.n_random, "group_hypothesis": args.group,
             "bf16_pipeline_finding": results.get("bf16_pipeline_finding"),
+            "backend": identity["backend"], "tcgen05": {**results.get("tcgen05", {}), **results.get("sweep", {}).get("tcgen05", {})} if tcgen05 else None,
+            "sass_opcodes": {k: sorted(set(v["opcodes"])) for k, v in results.get("sass", {}).items()},
             "workload_fingerprint": {"probe": "tools/tc_probe_fp4/probe.py", "instruction": INSTRUCTION_ID[instr], "arch": args.arch,
-                                     "device": identity["device"], "seed": args.seed, "n_random": args.n_random,
+                                     "device": identity["device"], "seed": args.seed, "n_random": args.n_random, "chain2": bool(args.chain2),
                                      "replays": [Path(p).name for p in args.replay_autoproof]},
             "validation": {"status": "passed" if not failures else "failed",
                            "checker": "tc_probe_fp4 vs verity.ml.tc.models (control: model5) / tc_dot / autoproof vectors",
