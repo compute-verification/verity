@@ -240,15 +240,19 @@ def _join_tree(L: list[str], names: list[str], ind: str) -> str:
     return level[0]
 
 
-def _packed_ip_source(half: int) -> str:
+def _packed_ip_source(half: int, linear: bool = False) -> str:
     """Packed round ``i`` (``half = 2^(i-1)``) fused: Hadamard limbs formed in registers, ``tl.dot`` against the eq-weight
-    limbs, INT32 accumulation over a ``b1`` split; nothing is written to HBM but the ``(ROWS 4) x 32`` partial sums."""
-    rows = 3 * half * half
+    limbs, INT32 accumulation over a ``b1`` split; nothing is written to HBM but the ``(ROWS 4) x 32`` partial sums.
+
+    ``linear`` (the logUp leaf level, kernel ``logup_ip_{half}``): per ``x`` the ``half^2`` product rows are followed by
+    ``half`` *linear* rows ``limbs(mmul(g(a, x) + h(a, x), 1))`` = ``(w0 + w1) R^-1``, so that ``sum E . row`` gives
+    ``sum_b eq_b (w0 + w1)(a, x, b)`` with the same ``R``-scaled weights."""
+    rows = 3 * (half * half + (half if linear else 0))
     rows4 = rows * 4
     rows_pad = max(16, triton.next_power_of_2(rows4))
     L: list[str] = []
     L.append("@triton.jit")
-    L.append(f"def packed_ip_{half}(g_ptr, h_ptr, e_ptr, z_ptr, K1, SPLIT_LEN, BLOCK_K: tl.constexpr):")
+    L.append(f"def {'logup' if linear else 'packed'}_ip_{half}(g_ptr, h_ptr, e_ptr, z_ptr, K1, SPLIT_LEN, BLOCK_K: tl.constexpr):")
     L.append("    b2 = tl.program_id(0)")
     L.append("    sp = tl.program_id(1)")
     L.append("    offs_n = tl.arange(0, 32)")
@@ -272,6 +276,10 @@ def _packed_ip_source(half: int) -> str:
                 r = (x * half + a) * half + a2
                 L.append(f"        l{r}_0, l{r}_1, l{r}_2, l{r}_3 = _limbs(mmul(g{x}_{a}, h{x}_{a2}))")
                 names += [f"l{r}_{j}" for j in range(4)]
+        if linear:
+            for a in range(half):
+                L.append(f"        s{x}_{a}_0, s{x}_{a}_1, s{x}_{a}_2, s{x}_{a}_3 = _limbs(mmul(madd(g{x}_{a}, h{x}_{a}), 1))")
+                names += [f"s{x}_{a}_{j}" for j in range(4)]
     names += ["zero8"] * (rows_pad - rows4)
     top = _join_tree(L, names, "        ")
     L.append(f"        A = tl.reshape({top}, (BLOCK_K, {rows_pad}), can_reorder=False)")
@@ -318,6 +326,76 @@ def _ext_ip_source() -> str:
     L.append("    z = z_ptr + ((sp * tl.num_programs(0) + b2).to(tl.int64) * 72) * 24")
     L.append("    tl.store(z + offs_m[:, None] * 24 + offs_n[None, :], acc, mask=(offs_m[:, None] < 72) & (offs_n[None, :] < 24))")
     return "\n".join(L) + "\n"
+
+
+def _logup_ext_ip_source() -> str:
+    """logUp level round on four extension tables ``p0, p1, q0, q1`` (``(t_i, 6)`` each, pairs ``(2b, 2b+1)``): per pair
+    and ``x in {0, 1, 2}`` the two ``F_{p^6}`` Hadamards ``A_x = p0 q1 + p1 q0`` and ``B_x = q0 q1`` (Montgomery, one
+    ``R^-1`` each), 24 limbs each -> rows ``(x, term)`` = ``2 x + term`` (144 limb rows, padded to 256) against the
+    ``R``-scaled eq-weight limbs.  ``lambda`` is applied downstream (``finish_round`` with ``coeff = [1, lambda]``)."""
+    L: list[str] = []
+    L.append("@triton.jit")
+    L.append("def logup_ext_ip(p0_ptr, p1_ptr, q0_ptr, q1_ptr, e_ptr, z_ptr, K1, SPLIT_LEN, BLOCK_K: tl.constexpr):")
+    L.append("    b2 = tl.program_id(0)")
+    L.append("    sp = tl.program_id(1)")
+    L.append("    offs_n = tl.arange(0, 32)")
+    L.append("    acc = tl.zeros((256, 32), dtype=tl.int32)")
+    L.append("    zero8 = tl.zeros((BLOCK_K,), dtype=tl.int8)")
+    L.append("    for c in range(0, SPLIT_LEN, BLOCK_K):")
+    L.append("        b1 = sp * SPLIT_LEN + c + tl.arange(0, BLOCK_K)")
+    L.append("        row = (b2.to(tl.int64) * K1 + b1) * 12")
+    L.append("        E = tl.load(e_ptr + b1[:, None] * 32 + offs_n[None, :])")
+    for nm, ptr in (("a", "p0_ptr"), ("b", "p1_ptr"), ("c", "q0_ptr"), ("d", "q1_ptr")):
+        for s in range(6):
+            L.append(f"        {nm}e{s} = tl.load({ptr} + row + {s})")
+            L.append(f"        {nm}o{s} = tl.load({ptr} + row + {6 + s})")
+            L.append(f"        {nm}2{s} = msub(madd({nm}o{s}, {nm}o{s}), {nm}e{s})")
+    names = []
+    for x, sfx in enumerate(("e", "o", "2")):
+        a = ", ".join(f"a{sfx}{s}" for s in range(6))
+        b = ", ".join(f"b{sfx}{s}" for s in range(6))
+        c = ", ".join(f"c{sfx}{s}" for s in range(6))
+        d = ", ".join(f"d{sfx}{s}" for s in range(6))
+        L.append("        " + ", ".join(f"u{d_}" for d_ in range(6)) + f" = _ext_mmul6({a}, {d})")
+        L.append("        " + ", ".join(f"v{d_}" for d_ in range(6)) + f" = _ext_mmul6({b}, {c})")
+        L.append("        " + ", ".join(f"B{x}_{d_}" for d_ in range(6)) + f" = _ext_mmul6({c}, {d})")
+        for d_ in range(6):
+            L.append(f"        A{x}_{d_} = madd(u{d_}, v{d_})")
+        for term in ("A", "B"):
+            for d_ in range(6):
+                L.append(f"        l{term}{x}_{d_}_0, l{term}{x}_{d_}_1, l{term}{x}_{d_}_2, l{term}{x}_{d_}_3 = _limbs({term}{x}_{d_})")
+                names += [f"l{term}{x}_{d_}_{j}" for j in range(4)]
+    names += ["zero8"] * (256 - 144)
+    top = _join_tree(L, names, "        ")
+    L.append("        A = tl.reshape(" + top + ", (BLOCK_K, 256), can_reorder=False)")
+    L.append("        acc += tl.dot(tl.trans(A), E, out_dtype=tl.int32)")
+    L.append("    offs_m = tl.arange(0, 256)")
+    L.append("    z = z_ptr + ((sp * tl.num_programs(0) + b2).to(tl.int64) * 144) * 24")
+    L.append("    tl.store(z + offs_m[:, None] * 24 + offs_n[None, :], acc, mask=(offs_m[:, None] < 144) & (offs_n[None, :] < 24))")
+    return "\n".join(L) + "\n"
+
+
+def logup_ext_inner_product(T4: torch.Tensor, e_lo32: torch.Tensor, K1: int, K2: int, split: int, BLOCK_K: int = 128,
+                            num_warps: int = 4) -> torch.Tensor:
+    """``T4 (4, t_i, 6) int32`` = ``p0, p1, q0, q1`` -> ``(split, K2 . 144, 24) int32`` partials, rows ``(b2, x, term, s, j)``."""
+    if K1 % (split * BLOCK_K):
+        raise ValueError("K1 must be a multiple of split * BLOCK_K")
+    Z = torch.empty((split, K2 * 144, 24), dtype=torch.int32, device=T4.device)
+    _generated().logup_ext_ip[(K2, split)](T4[0], T4[1], T4[2], T4[3], e_lo32, Z, K1, K1 // split, BLOCK_K=BLOCK_K, num_warps=num_warps)
+    return Z
+
+
+def logup_packed_inner_product(g: torch.Tensor, h: torch.Tensor, e_lo32: torch.Tensor, i: int, K1: int, K2: int, split: int,
+                               BLOCK_K: int = 128, num_warps: int = 4) -> torch.Tensor:
+    """logUp leaf level, packed round ``i``: ``(split, K2 . rows . 4, 24)`` with ``rows = 3 (half^2 + half)`` (products then
+    linear rows per ``x``)."""
+    half = 1 << (i - 1)
+    if not has_fused_packed(i) or K1 % (split * BLOCK_K):
+        raise ValueError("fused logUp packed round covers i <= 3 with K1 a multiple of split * BLOCK_K")
+    rows4 = 3 * (half * half + half) * 4
+    Z = torch.empty((split, K2 * rows4, 24), dtype=torch.int32, device=g.device)
+    getattr(_generated(), f"logup_ip_{half}")[(K2, split)](g, h, e_lo32, Z, K1, K1 // split, BLOCK_K=BLOCK_K, num_warps=num_warps)
+    return Z
 
 
 def ext_inner_product(gE: torch.Tensor, hE: torch.Tensor, e_lo32: torch.Tensor, K1: int, K2: int, split: int,
@@ -453,6 +531,7 @@ def _generated():
         return _MODULE
     src = "\n".join([_HEADER, _ext_mul_helper_source(), _ext_mmul_helper_source(), _ext_hadamard_source(), *[_packed_hadamard_source(1 << e) for e in range(4)],
                      *[_packed_ip_source(1 << e) for e in range(FUSED_MAX_LOG2_HALF + 1)], _ext_ip_source(),
+                     *[_packed_ip_source(1 << e, linear=True) for e in range(FUSED_MAX_LOG2_HALF + 1)], _logup_ext_ip_source(),
                      _reduce_contract_source(1), _reduce_contract_source(6), _finish_round_source()]) + "\n"
     digest = hashlib.sha256(src.encode()).hexdigest()[:16]
     cache = Path(os.environ.get("PACKED_KERNEL_CACHE") or Path(tempfile.gettempdir()) / "packed_kernels")
@@ -609,6 +688,157 @@ def _fold_ext_kernel(gh_ptr, r_ptr, out_ptr, rows, BLOCK_M: tl.constexpr):
     tl.store(o + 3, madd(e3, t3), mask=mask)
     tl.store(o + 4, madd(e4, t4), mask=mask)
     tl.store(o + 5, madd(e5, t5), mask=mask)
+
+
+@triton.jit
+def _fold_ext4_kernel(t_ptr, out_ptr, r_ptr, m, stride_in, stride_out, BLOCK_M: tl.constexpr):
+    """Four ``(., 6)`` tables at ``t_ptr + j stride_in`` (pairs ``(2y, 2y+1)``, ``y < m``) folded by ``r`` (pre-scaled) into
+    ``out_ptr + j stride_out`` rows ``y < m``; rows beyond ``m`` of the output are left as they are (zero-padded buffers)."""
+    j = tl.program_id(1)
+    offs = tl.program_id(0) * BLOCK_M + tl.arange(0, BLOCK_M)
+    mask = offs < m
+    base = t_ptr + j.to(tl.int64) * stride_in + offs.to(tl.int64) * 12
+    e0 = tl.load(base + 0, mask=mask, other=0)
+    e1 = tl.load(base + 1, mask=mask, other=0)
+    e2 = tl.load(base + 2, mask=mask, other=0)
+    e3 = tl.load(base + 3, mask=mask, other=0)
+    e4 = tl.load(base + 4, mask=mask, other=0)
+    e5 = tl.load(base + 5, mask=mask, other=0)
+    d0 = msub(tl.load(base + 6, mask=mask, other=0), e0)
+    d1 = msub(tl.load(base + 7, mask=mask, other=0), e1)
+    d2 = msub(tl.load(base + 8, mask=mask, other=0), e2)
+    d3 = msub(tl.load(base + 9, mask=mask, other=0), e3)
+    d4 = msub(tl.load(base + 10, mask=mask, other=0), e4)
+    d5 = msub(tl.load(base + 11, mask=mask, other=0), e5)
+    r0 = tl.load(r_ptr + 0)
+    r1 = tl.load(r_ptr + 1)
+    r2 = tl.load(r_ptr + 2)
+    r3 = tl.load(r_ptr + 3)
+    r4 = tl.load(r_ptr + 4)
+    r5 = tl.load(r_ptr + 5)
+    t0, t1, t2, t3, t4, t5 = _ext_mmul6_j(r0, r1, r2, r3, r4, r5, d0, d1, d2, d3, d4, d5)
+    o = out_ptr + j.to(tl.int64) * stride_out + offs.to(tl.int64) * 6
+    tl.store(o + 0, madd(e0, t0), mask=mask)
+    tl.store(o + 1, madd(e1, t1), mask=mask)
+    tl.store(o + 2, madd(e2, t2), mask=mask)
+    tl.store(o + 3, madd(e3, t3), mask=mask)
+    tl.store(o + 4, madd(e4, t4), mask=mask)
+    tl.store(o + 5, madd(e5, t5), mask=mask)
+
+
+def fold_ext4(T4: torch.Tensor, m_pairs: int, r_R: torch.Tensor, out: torch.Tensor, BLOCK_M: int = 256) -> torch.Tensor:
+    """``T4 (4, Mp, 6)`` (logical ``2 m_pairs`` rows per table) -> ``out (4, Mp', 6)`` rows ``< m_pairs`` written."""
+    grid = (triton.cdiv(m_pairs, BLOCK_M), 4)
+    _fold_ext4_kernel[grid](T4, out, r_R, m_pairs, T4.stride(0), out.stride(0), BLOCK_M=BLOCK_M, num_warps=4)
+    return out
+
+
+@triton.jit
+def _tree_level_kernel(p_ptr, q_ptr, po_ptr, qo_ptr, m, R2: tl.constexpr, BLOCK: tl.constexpr):
+    """Fraction-tree level: children ``(p, q)`` stored de-interleaved (``[evens | odds]``, ``2 m`` rows each) -> parents
+    ``p' = p0 q1 + p1 q0``, ``q' = q0 q1`` for ``x < m``, written de-interleaved for the next level (``x`` even -> row
+    ``x / 2``, odd -> ``m / 2 + x / 2``).  Plain in, plain out (``mmul(., R^2)`` undoes the Montgomery factor)."""
+    x = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    mask = x < m
+    e = x.to(tl.int64) * 6
+    o = (m + x).to(tl.int64) * 6
+    a0 = tl.load(p_ptr + e + 0, mask=mask, other=0)
+    a1 = tl.load(p_ptr + e + 1, mask=mask, other=0)
+    a2 = tl.load(p_ptr + e + 2, mask=mask, other=0)
+    a3 = tl.load(p_ptr + e + 3, mask=mask, other=0)
+    a4 = tl.load(p_ptr + e + 4, mask=mask, other=0)
+    a5 = tl.load(p_ptr + e + 5, mask=mask, other=0)
+    b0 = tl.load(p_ptr + o + 0, mask=mask, other=0)
+    b1 = tl.load(p_ptr + o + 1, mask=mask, other=0)
+    b2 = tl.load(p_ptr + o + 2, mask=mask, other=0)
+    b3 = tl.load(p_ptr + o + 3, mask=mask, other=0)
+    b4 = tl.load(p_ptr + o + 4, mask=mask, other=0)
+    b5 = tl.load(p_ptr + o + 5, mask=mask, other=0)
+    c0 = tl.load(q_ptr + e + 0, mask=mask, other=0)
+    c1 = tl.load(q_ptr + e + 1, mask=mask, other=0)
+    c2 = tl.load(q_ptr + e + 2, mask=mask, other=0)
+    c3 = tl.load(q_ptr + e + 3, mask=mask, other=0)
+    c4 = tl.load(q_ptr + e + 4, mask=mask, other=0)
+    c5 = tl.load(q_ptr + e + 5, mask=mask, other=0)
+    d0 = tl.load(q_ptr + o + 0, mask=mask, other=0)
+    d1 = tl.load(q_ptr + o + 1, mask=mask, other=0)
+    d2 = tl.load(q_ptr + o + 2, mask=mask, other=0)
+    d3 = tl.load(q_ptr + o + 3, mask=mask, other=0)
+    d4 = tl.load(q_ptr + o + 4, mask=mask, other=0)
+    d5 = tl.load(q_ptr + o + 5, mask=mask, other=0)
+    u0, u1, u2, u3, u4, u5 = _ext_mmul6_j(a0, a1, a2, a3, a4, a5, d0, d1, d2, d3, d4, d5)
+    v0, v1, v2, v3, v4, v5 = _ext_mmul6_j(b0, b1, b2, b3, b4, b5, c0, c1, c2, c3, c4, c5)
+    w0, w1, w2, w3, w4, w5 = _ext_mmul6_j(c0, c1, c2, c3, c4, c5, d0, d1, d2, d3, d4, d5)
+    half = m // 2
+    dst = tl.where((x & 1) == 0, x // 2, half + x // 2).to(tl.int64) * 6
+    tl.store(po_ptr + dst + 0, mmul(madd(u0, v0), R2), mask=mask)
+    tl.store(po_ptr + dst + 1, mmul(madd(u1, v1), R2), mask=mask)
+    tl.store(po_ptr + dst + 2, mmul(madd(u2, v2), R2), mask=mask)
+    tl.store(po_ptr + dst + 3, mmul(madd(u3, v3), R2), mask=mask)
+    tl.store(po_ptr + dst + 4, mmul(madd(u4, v4), R2), mask=mask)
+    tl.store(po_ptr + dst + 5, mmul(madd(u5, v5), R2), mask=mask)
+    tl.store(qo_ptr + dst + 0, mmul(w0, R2), mask=mask)
+    tl.store(qo_ptr + dst + 1, mmul(w1, R2), mask=mask)
+    tl.store(qo_ptr + dst + 2, mmul(w2, R2), mask=mask)
+    tl.store(qo_ptr + dst + 3, mmul(w3, R2), mask=mask)
+    tl.store(qo_ptr + dst + 4, mmul(w4, R2), mask=mask)
+    tl.store(qo_ptr + dst + 5, mmul(w5, R2), mask=mask)
+
+
+def tree_level(pq: torch.Tensor, BLOCK: int = 256) -> torch.Tensor:
+    """``pq (2, 2m, 6)`` = de-interleaved children ``p, q`` -> ``(2, m, 6)`` de-interleaved parents (plain values)."""
+    m = pq.shape[1] // 2
+    out = torch.empty((2, m, 6), dtype=torch.int32, device=pq.device)
+    _tree_level_kernel[(triton.cdiv(m, BLOCK),)](pq[0], pq[1], out[0], out[1], m, R2=R2_MOD_P, BLOCK=BLOCK)
+    return out
+
+
+@triton.jit
+def _leaf_level_kernel(w_ptr, z_ptr, zR_ptr, z2_ptr, po_ptr, qo_ptr, m, half_total, R2: tl.constexpr, BLOCK: tl.constexpr):
+    """Witness leaves ``(1, z - w_j)``, pairs ``(2x, 2x+1)`` of ``w`` -> level ``n-1`` values ``p = 2 z - (w0 + w1)``,
+    ``q = z^2 - z (w0 + w1) + w0 w1`` for ``x < m``, de-interleaved as :func:`tree_level` writes them (odd ``x`` at
+    ``half_total + x / 2``, ``half_total`` = half the whole level).  ``z`` plain, ``zR`` = ``z . R``, ``z2`` = ``z^2`` plain."""
+    x = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    mask = x < m
+    zeros = x * 0
+    w0 = tl.load(w_ptr + x.to(tl.int64) * 2, mask=mask, other=0)
+    w1 = tl.load(w_ptr + x.to(tl.int64) * 2 + 1, mask=mask, other=0)
+    s = madd(w0, w1)
+    prod = mmul(mmul(w0, w1), R2)
+    dst = tl.where((x & 1) == 0, x // 2, half_total + x // 2).to(tl.int64) * 6
+    z0 = tl.load(z_ptr + 0)
+    z1 = tl.load(z_ptr + 1)
+    z2 = tl.load(z_ptr + 2)
+    z3 = tl.load(z_ptr + 3)
+    z4 = tl.load(z_ptr + 4)
+    z5 = tl.load(z_ptr + 5)
+    zr0 = tl.load(zR_ptr + 0)
+    zr1 = tl.load(zR_ptr + 1)
+    zr2 = tl.load(zR_ptr + 2)
+    zr3 = tl.load(zR_ptr + 3)
+    zr4 = tl.load(zR_ptr + 4)
+    zr5 = tl.load(zR_ptr + 5)
+    # p = 2 z - s: coefficient 0 gets -s, the others are the constants 2 z_c
+    tl.store(po_ptr + dst + 0, msub(madd(zeros + z0, zeros + z0), s), mask=mask)
+    tl.store(po_ptr + dst + 1, madd(zeros + z1, zeros + z1), mask=mask)
+    tl.store(po_ptr + dst + 2, madd(zeros + z2, zeros + z2), mask=mask)
+    tl.store(po_ptr + dst + 3, madd(zeros + z3, zeros + z3), mask=mask)
+    tl.store(po_ptr + dst + 4, madd(zeros + z4, zeros + z4), mask=mask)
+    tl.store(po_ptr + dst + 5, madd(zeros + z5, zeros + z5), mask=mask)
+    # q = z^2 - z s + w0 w1
+    tl.store(qo_ptr + dst + 0, madd(msub(zeros + tl.load(z2_ptr + 0), mmul(zeros + zr0, s)), prod), mask=mask)
+    tl.store(qo_ptr + dst + 1, msub(zeros + tl.load(z2_ptr + 1), mmul(zeros + zr1, s)), mask=mask)
+    tl.store(qo_ptr + dst + 2, msub(zeros + tl.load(z2_ptr + 2), mmul(zeros + zr2, s)), mask=mask)
+    tl.store(qo_ptr + dst + 3, msub(zeros + tl.load(z2_ptr + 3), mmul(zeros + zr3, s)), mask=mask)
+    tl.store(qo_ptr + dst + 4, msub(zeros + tl.load(z2_ptr + 4), mmul(zeros + zr4, s)), mask=mask)
+    tl.store(qo_ptr + dst + 5, msub(zeros + tl.load(z2_ptr + 5), mmul(zeros + zr5, s)), mask=mask)
+
+
+def leaf_level(w: torch.Tensor, z: torch.Tensor, zR: torch.Tensor, z2: torch.Tensor, po: torch.Tensor, qo: torch.Tensor,
+               half_total: int, BLOCK: int = 256) -> None:
+    """``w (2m,) int32`` witness queries -> level rows ``x < m`` of the de-interleaved arrays ``po, qo`` (``2 half_total`` rows)."""
+    m = w.numel() // 2
+    _leaf_level_kernel[(triton.cdiv(m, BLOCK),)](w, z, zR, z2, po, qo, m, half_total, R2=R2_MOD_P, BLOCK=BLOCK)
 
 
 def fold_ext(gh: torch.Tensor, r_R: torch.Tensor, BLOCK_M: int = 256) -> torch.Tensor:
