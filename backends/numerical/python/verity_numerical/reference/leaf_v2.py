@@ -12,7 +12,9 @@ A tensor ``T`` (``canonical_id``, ``dtype``, ``shape``, little-endian words) is 
 over BabyBear: every tensor row is split into ``ceil(cols / l)`` payload rows of ``l`` field elements (one 16-bit word
 per element, zero padded), each payload row gets ``k - l`` uniformly random *randomizer* elements from the committer's
 PRG and is Reed-Solomon encoded (degree ``< k`` polynomial interpolating the ``k`` symbols on the order-``k``
-subgroup, evaluated on the order-``n`` subgroup: systematic, payload at positions ``(n/k) j``).  Consecutive
+subgroup ``H_k``, evaluated on the **coset** ``s * H_n`` of the order-``n`` subgroup, ``s = 31`` a generator of
+``F_p^*``, so ``s * H_n`` is disjoint from ``H_k``: the encoding is NOT systematic and no codeword symbol is a
+message symbol).  Consecutive
 tableau rows are grouped into *chunks* of at most ``R`` rows; a chunk is committed by a Merkle tree over its ``n``
 **columns** (column leaf = ``H("verity-vllm/col/v2", chunk, column, bytes)``), and the tensor's *leaf digest* --
 the 32 bytes that take the place of the v1 leaf hash in the unchanged ids/node/lift tree -- is
@@ -42,8 +44,13 @@ tableaus on one verifier-chosen column set ``Q``:
 ``b_irs`` / ``b_lin`` are the proof tableau's two blinding rows (a random codeword; a random degree ``< 2k - 1``
 polynomial summing to zero on the subgroup): the sent polynomials are uniform subject to the checked relation, and
 ``t <= k - l`` opened columns of rows with fresh randomizers are uniform -- the openings reveal nothing about the
-payload (AHIV22 Lemma 4.15).  The toy draws its challenge coefficients from BabyBear itself (soundness ~ 2^-31 per
-term); the campaign's protocols draw them from ``F_{p^6}``.
+payload (AHIV22 Lemma 4.15).  **The lemma needs the opened positions to be disjoint from the message positions**:
+the first version of this reference evaluated on the order-``n`` subgroup itself (systematic: codeword symbol
+``(n/k) j`` *was* message symbol ``j``) and the red team read payload words straight off the openings
+(``redteam_vu.md`` F3, ``redteam.leaf_v2_exhaustion``).  Since 2026-09-22 the codeword lives on the coset
+``31 * H_n``, which contains no point of ``H_k``; ``test_leaf_v2.py::test_no_opened_column_is_a_payload_word``
+opens every column of every chunk and checks that.  The toy draws its challenge coefficients from BabyBear itself
+(soundness ~ 2^-31 per term); the campaign's protocols draw them from ``F_{p^6}``.
 
 This module is a *reference*: readable, slow (pure Python NTTs), and tested on the real captured rows of
 ``fixtures/bench-instances/v1/seeds`` at reduced code parameters (``n = 4096, k = 1024, l = 768``: a 1536-word row
@@ -71,6 +78,7 @@ from verity.errors import InvalidArtifact
 __all__ = [
     "BABYBEAR",
     "COL_TAG",
+    "COSET_SHIFT",
     "LEAF_V2_TAG",
     "Chunk",
     "Claim",
@@ -82,6 +90,9 @@ __all__ = [
     "Session",
     "Verdict",
     "commit_tensor",
+    "coset_intt",
+    "coset_ntt",
+    "decode_row",
     "encode_row",
     "intt",
     "ntt",
@@ -99,6 +110,10 @@ BABYBEAR = 15 * 2**27 + 1
 TWO_ADIC_ROOT = pow(31, 15, BABYBEAR)
 TWO_ADICITY = 27
 ELEMENT_BYTES = 4
+#: The codeword domain is the coset ``COSET_SHIFT * H_n``.  31 generates ``F_p^*`` (order ``p - 1 = 15 * 2^27``), so it
+#: lies in no proper two-adic subgroup: the coset is disjoint from every ``H_m`` (``m <= 2^27``), in particular from the
+#: interpolation domain ``H_k``.  (Plonky3's ``generator()`` for BabyBear is the same 31.)
+COSET_SHIFT = 31
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -156,6 +171,31 @@ def intt(values: Sequence[int]) -> list[int]:
     return ntt(values, inverse=True)
 
 
+def coset_ntt(coeffs: Sequence[int], shift: int = COSET_SHIFT) -> list[int]:
+    """Evaluations of ``sum_i c_i X^i`` on the coset ``shift * H_len`` (``shift * w^i`` ascending): ``P(shift X)`` has
+    coefficients ``c_i shift^i``, so scale then NTT."""
+    p = BABYBEAR
+    scaled = []
+    si = 1
+    for c in coeffs:
+        scaled.append(c * si % p)
+        si = si * shift % p
+    return ntt(scaled)
+
+
+def coset_intt(values: Sequence[int], shift: int = COSET_SHIFT) -> list[int]:
+    """Coefficients of the degree ``< len`` polynomial with the given evaluations on ``shift * H_len``."""
+    p = BABYBEAR
+    inv = pow(shift, p - 2, p)
+    d = intt(values)
+    out = []
+    si = 1
+    for c in d:
+        out.append(c * si % p)
+        si = si * inv % p
+    return out
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Code and layout
 # ---------------------------------------------------------------------------------------------------------------------
@@ -182,9 +222,9 @@ class Code:
             raise ValueError("a word must fit one BabyBear element")
 
     @property
-    def stride(self) -> int:
-        """Codeword index of payload/message symbol ``j`` is ``stride * j`` (systematic encoding)."""
-        return self.n // self.k
+    def shift(self) -> int:
+        """The codeword domain is ``shift * H_n``, disjoint from the message domain ``H_k`` (no systematic positions)."""
+        return COSET_SHIFT
 
     @property
     def randomizers(self) -> int:
@@ -192,7 +232,27 @@ class Code:
 
     @property
     def text(self) -> str:
-        return f"ligero-rs/babybear/n={self.n}/k={self.k}/l={self.l}/R={self.R}/w={self.word_bits}"
+        return f"ligero-rs/babybear/n={self.n}/k={self.k}/l={self.l}/R={self.R}/w={self.word_bits}/coset={self.shift}"
+
+    def domain(self) -> list[int]:
+        """The ``n`` evaluation points ``shift * w_n^i``."""
+        w = root_of_unity(self.n)
+        out = []
+        x = self.shift % BABYBEAR
+        for _ in range(self.n):
+            out.append(x)
+            x = x * w % BABYBEAR
+        return out
+
+    def message_domain(self) -> list[int]:
+        """The ``k`` interpolation points ``w_k^j`` (message symbol ``j`` is the value at ``w_k^j``)."""
+        w = root_of_unity(self.k)
+        out = []
+        x = 1
+        for _ in range(self.k):
+            out.append(x)
+            x = x * w % BABYBEAR
+        return out
 
     def rows_per_tensor_row(self, cols: int) -> int:
         return -(-cols // self.l)
@@ -226,12 +286,25 @@ def position_of_word(code: Code, shape: Sequence[int], word_index: int) -> Posit
 
 
 def encode_row(code: Code, payload: Sequence[int], randomizers: Sequence[int]) -> list[int]:
-    """Systematic RS encoding of ``payload || randomizers`` (``k`` symbols) to ``n`` symbols."""
+    """Non-systematic RS encoding of ``payload || randomizers`` (``k`` symbols on ``H_k``) to ``n`` symbols on the coset
+    ``shift * H_n``.  One INTT (interpolate) + one pointwise scaling + one NTT: the same cost as the systematic form,
+    and no codeword symbol equals a message symbol (``shift * H_n`` and ``H_k`` are disjoint)."""
     if len(payload) != code.l or len(randomizers) != code.randomizers:
         raise ValueError("payload must have l symbols and randomizers k - l")
     message = list(payload) + list(randomizers)
     coeffs = intt(message)
-    return ntt(coeffs + [0] * (code.n - code.k))
+    return coset_ntt(coeffs + [0] * (code.n - code.k), code.shift)
+
+
+def decode_row(code: Code, codeword: Sequence[int]) -> list[int] | None:
+    """The ``k`` message symbols of a codeword (``None`` if the ``n`` values are not a degree ``< k`` polynomial on the
+    coset): what a transparent checker or the committer does; a verifier of the private form never decodes."""
+    if len(codeword) != code.n:
+        return None
+    coeffs = coset_intt(codeword, code.shift)
+    if any(coeffs[code.k:]):
+        return None
+    return ntt(coeffs[:code.k])
 
 
 def _column_bytes(column: Sequence[int]) -> bytes:
@@ -438,12 +511,12 @@ class ProofTableau:
             row = list(w) + [0] * (code.l - len(w))
             payloads.append(row)
             codewords.append(encode_row(code, row, [rng.randrange(p) for _ in range(code.randomizers)]))
-        b_irs = ntt([rng.randrange(p) for _ in range(code.k)] + [0] * (code.n - code.k))
+        b_irs = coset_ntt([rng.randrange(p) for _ in range(code.k)] + [0] * (code.n - code.k), code.shift)
         # b_lin: degree < 2k-1 with sum over the order-k subgroup = 0.  For a polynomial sum_c a_c X^c the subgroup sum
         # is k * sum_{c = 0 mod k} a_c, so pick a_0 = -a_k and everything else free.
         coeffs = [rng.randrange(p) for _ in range(2 * code.k - 1)]
         coeffs[0] = (-coeffs[code.k]) % p
-        b_lin = ntt(coeffs + [0] * (code.n - len(coeffs)))
+        b_lin = coset_ntt(coeffs + [0] * (code.n - len(coeffs)), code.shift)
         codewords += [b_irs, b_lin]
         lv = levels([column_leaf(0, c, [row[c] for row in codewords]) for c in range(code.n)])
         return cls(code, payloads, codewords, lv)
@@ -527,23 +600,23 @@ def prove(session: Session, tensors: dict[str, CommittedTensor], proof: ProofTab
     def codeword(key: tuple[str, int]) -> list[int]:
         return proof.codewords[key[1]] if key[0] == "" else tensors[key[0]].tableau_row(key[1])
 
-    # IRS: v = b_irs + sum r'_i U_i  (all codewords of degree < k: combine evaluations, interpolate on the k-subgroup)
+    # IRS: v = b_irs + sum r'_i U_i  (all codewords of degree < k: combine the coset evaluations, interpolate on the
+    # coset; an honest v has coefficients k.. = 0 -- there is no systematic quarter to read the message off any more)
     v_eval = list(proof.codewords[-2])
     for key, r in session.irs_coeffs.items():
         cw = codeword(key)
         v_eval = [(x + r * y) % p for x, y in zip(v_eval, cw, strict=True)]
-    v_on_k = [v_eval[code.stride * j] for j in range(k)]
-    session.v_coeffs = intt(v_on_k)
-    # linear: q = b_lin + sum_i r_i(X) p_i(X), evaluated on the n-domain then interpolated (degree < 2k-1 <= n)
+    session.v_coeffs = coset_intt(v_eval, code.shift)[:k]
+    # linear: q = b_lin + sum_i r_i(X) p_i(X), evaluated on the coset then interpolated (degree < 2k-1 <= n)
     a = _coefficient_rows(session)
     q_eval = list(proof.codewords[-1])
     for key, a_i in a.items():
-        r_i = ntt(intt(a_i) + [0] * (n - k))
+        r_i = coset_ntt(intt(a_i) + [0] * (n - k), code.shift)
         cw = codeword(key)
         q_eval = [(x + ri * y) % p for x, ri, y in zip(q_eval, r_i, cw, strict=True)]
     # an honest run has coeffs[2k-1:] == 0; a prover holding a non-codeword row can only truncate (and is then caught
     # by the IRS test or at Q), so the truncation is silent here, as a cheater's would be
-    session.q_coeffs = intt(q_eval)[:2 * k - 1]
+    session.q_coeffs = coset_intt(q_eval, code.shift)[:2 * k - 1]
     # openings
     session.tensor_openings = {}
     for tid, tensor in tensors.items():
@@ -598,8 +671,8 @@ def verify(session: Session, descriptors: dict[str, dict], tree: LeafTree, tree_
             pos_chunk, row_in_chunk = divmod(key[1], code.R)
             return session.tensor_openings[key[0]][pos_chunk][qi].values[row_in_chunk]
 
-        # 3. IRS test at Q
-        v_full = ntt(session.v_coeffs + [0] * (n - k))
+        # 3. IRS test at Q (v evaluated on the coset: the opened columns are coset points)
+        v_full = coset_ntt(session.v_coeffs + [0] * (n - k), code.shift)
         for qi, c in enumerate(session.Q):
             lhs = session.proof_openings[qi].values[n_proof_rows - 2]
             for key, r in session.irs_coeffs.items():
@@ -607,11 +680,11 @@ def verify(session: Session, descriptors: dict[str, dict], tree: LeafTree, tree_
             if lhs != v_full[c]:
                 return Verdict(False, f"IRS test fails at column {c}")
         # 4. linear test: q at Q and the subgroup sum
-        q_full = ntt(session.q_coeffs + [0] * (n - (2 * k - 1)))
+        q_full = coset_ntt(session.q_coeffs + [0] * (n - (2 * k - 1)), code.shift)
         a = _coefficient_rows(session)
         r_at_q = {key: None for key in a}
         for key, a_i in a.items():
-            r_at_q[key] = ntt(intt(a_i) + [0] * (n - k))
+            r_at_q[key] = coset_ntt(intt(a_i) + [0] * (n - k), code.shift)
         for qi, c in enumerate(session.Q):
             lhs = session.proof_openings[qi].values[n_proof_rows - 1]
             for key in a:

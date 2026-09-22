@@ -20,6 +20,7 @@ use verity_direct::air::{self, ChainAir, ChainIdx, Layout, UnitAir, VuIo};
 use verity_direct::ctx::{modp, FieldKind};
 use verity_direct::program::{UnitIo, STEPS};
 use verity_direct::stark::{self, BabyBearBackend, Backend, FriParams, GoldilocksBackend, DEFAULT_FRI};
+use verity_direct::statement::Statement;
 
 fn arg(args: &[String], key: &str) -> Option<String> {
     args.iter().position(|a| a == key).and_then(|i| args.get(i + 1).cloned())
@@ -369,7 +370,7 @@ fn manifest_sha256(root: &Path) -> Option<String> {
 
 fn vu_bench<B: Backend>(args: &[String])
 where
-    Val<B::SC>: PrimeField64 + Send + Sync,
+    Val<B::SC>: PrimeField64 + p3_field::TwoAdicField + Send + Sync,
 {
     let kind = B::KIND;
     let root = Path::new(&arg(args, "--root").unwrap_or_else(|| "fixtures/bench-instances/v1".into())).to_path_buf();
@@ -421,21 +422,53 @@ where
     let lqd = stark::log_quotient_degree_of::<Val<B::SC>, _>(&air_);
     assert!(lqd <= fri.log_blowup, "quotient degree 2^{lqd} exceeds blowup 2^{}", fri.log_blowup);
 
-    // --rtt-ms R (or VERITY_RTT_MS): emulate the network; the prover sleeps R ms at every critical-path challenge
+    // the statement (PROTOCOL.md "Statement binding"): every claimed word; the operands too with --bind-operands
+    let bind_operands = args.iter().any(|a| a == "--bind-operands");
+    let words: Vec<u64> = vus.iter().map(|v| v.y16).collect();
+    let stmt = if bind_operands {
+        Statement::with_operands(words, vus.iter().flat_map(|v| v.x.iter().copied()).collect(), vus.iter().flat_map(|v| v.w.iter().copied()).collect())
+    } else {
+        Statement::new(words)
+    };
+    assert_eq!(stmt.degree_bits(), log_n);
+
+    // `--unbound`: the pre-fix path (no header, no statement check, degree_bits from the proof) for a same-machine
+    // A/B timing of the fix ONLY; its result is labelled as such and is not a proof number.
+    let unbound = args.iter().any(|a| a == "--unbound");
+    // --rtt-ms R (or VERITY_RTT_MS): emulate the network; the prover sleeps R ms at every critical-path challenge.
+    // rtt::begin precedes the prover's B::challenger() (inside prove_bound / prove_unbound) so that challenger is
+    // the active (counting) one; the statement header is absorbed into that same challenger.
     let rtt_ms: f64 = arg(args, "--rtt-ms").or_else(|| std::env::var("VERITY_RTT_MS").ok()).map(|s| s.parse().expect("--rtt-ms takes milliseconds")).unwrap_or(0.0);
     let t1 = Instant::now();
     verity_direct::rtt::begin(rtt_ms);
-    let proof = stark::prove_with::<B, _>(&air_, trace, fri);
+    let proof = if unbound { stark::prove_unbound::<B, _>(&air_, trace, fri) } else { stark::prove_bound::<B, _>(&air_, &lay, trace, fri, &stmt) };
     let (trips, slept) = verity_direct::rtt::end();
     let t_prove_wall = t1.elapsed().as_secs_f64();
     let t_prove = t_prove_wall - slept; // compute: the wall time less the emulated waits for the verifier's coins
     let t2 = Instant::now();
-    let bytes = stark::proof_bytes_of(&proof);
+    let proof_bytes = bincode::serialize(&proof).expect("serialise proof");
+    let bytes = proof_bytes.len();
     let t_ser = t2.elapsed().as_secs_f64();
     let t3 = Instant::now();
-    let ok = stark::verify_with::<B, _>(&air_, &proof, log_n, fri);
+    let ok = if unbound {
+        stark::verify_unbound::<B, _>(&air_, &proof, log_n, fri).map_err(stark::BoundError::Inner)
+    } else {
+        stark::verify_bound_bytes::<B, _>(&air_, &lay, &proof_bytes, fri, &stmt)
+    };
     let t_verify = t3.elapsed().as_secs_f64();
     assert!(ok.is_ok(), "verification failed: {:?}", ok.err());
+    // the statement checks fire: a proof of these VUs is not a proof of any other word list or batch size
+    if !unbound {
+        let mut other = stmt.clone();
+        other.words[0] ^= 1;
+        let r = stark::verify_bound_bytes::<B, _>(&air_, &lay, &proof_bytes, fri, &other);
+        assert!(matches!(r, Err(stark::BoundError::StatementColumn { .. })), "wrong-word statement not rejected: {r:?}");
+        let mut bigger = stmt.clone();
+        bigger.words.extend(std::iter::repeat(0).take(n_vus.max(1)));
+        let r = stark::verify_bound_bytes::<B, _>(&air_, &lay, &proof_bytes, fri, &bigger);
+        assert!(matches!(r, Err(stark::BoundError::DegreeBits { .. })), "wrong-B statement not rejected: {r:?}");
+    }
+    let binding = binding_json(unbound, bind_operands, "vu.y16", 1, rows, B::challenge_bits(), &[]);
     write_result(BenchNumbers {
         kind,
         out: &out,
@@ -464,17 +497,53 @@ where
         depth: trips as usize,
         slept,
         t_prove_wall,
+        binding,
     });
+}
+
+/// The `statement_binding` block of a result, its `checker` / `detail` strings: shared by both realisations.
+struct Binding {
+    statement_binding: Value,
+    checker: &'static str,
+    detail_suffix: String,
+    note: &'static str,
+}
+
+fn binding_json(unbound: bool, bind_operands: bool, public_columns: &str, n_public_columns: usize, rows: usize, challenge_bits: usize, header_extra: &[&str]) -> Binding {
+    if unbound {
+        return Binding {
+            statement_binding: json!({"bound": false, "note": "TIMING BASELINE of the pre-fix path (red-team F1/F2 forgeable): not a proof number"}),
+            checker: "verify (UNBOUND baseline) + recorded accumulators",
+            detail_suffix: String::new(),
+            note: "TIMING BASELINE: pre-fix unbound path (no statement); Plonky3 FRI/Keccak diagnostic PCS",
+        };
+    }
+    let mut header: Vec<&str> = vec!["domain tag", "AIR id (sha256 of field, layout, constraint names)", "field prime", "width", "challenge extension degree", "B", "K", "STEPS", "rows", "degree_bits", "FRI log_blowup/num_queries/pow_bits", "every claimed word", if bind_operands { "sha256(x), sha256(w)" } else { "operands: not bound" }];
+    header.extend_from_slice(header_extra);
+    let cols = if bind_operands { n_public_columns + 32 } else { n_public_columns };
+    Binding {
+        statement_binding: json!({
+            "bound": true,
+            "header_absorbed_before_first_challenge": header,
+            "degree_bits": "fixed by the verifier from B; a proof with another degree_bits is rejected (DegreeBitsMismatch)",
+            "public_columns_checked_at_zeta": if bind_operands { format!("{public_columns} + x.a[0..16] + x.b[0..16]") } else { public_columns.to_string() },
+            "extra_soundness_term": format!("<= {cols} columns x n / |challenge field| = 2^{:.1}", (cols as f64 * rows as f64).log2() - challenge_bits as f64),
+            "operands_bound": bind_operands
+        }),
+        checker: "verity_direct statement-bound verify (uni-stark transcript + statement header + public columns at zeta) + recorded accumulators",
+        detail_suffix: " for the statement of the claimed words; wrong-word and wrong-B statements rejected".to_string(),
+        note: "Plonky3 FRI/Keccak is the diagnostic PCS, not Candidate B's Ligero-style interactive PCS (PROTOCOL.md); the claimed output words are the statement: absorbed into the transcript before the first challenge and checked at zeta against the committed `vu.y16` column (PROTOCOL.md 12 'Statement binding', red-team F1-F3 fixed); operands are witness unless --bind-operands (authentication excluded)",
+    }
 }
 
 /// `vu-bench --lookup`: the LogUp realisation (PROTOCOL.md section 14): three commitment rounds.
 fn vu_bench_lookup<B: Backend>(args: &[String])
 where
-    Val<B::SC>: PrimeField64 + Send + Sync + p3_field::TwoAdicField,
+    Val<B::SC>: PrimeField64 + p3_field::TwoAdicField + Send + Sync,
     <<B::SC as StarkGenericConfig>::Pcs as p3_commit::Pcs<<B::SC as StarkGenericConfig>::Challenge, <B::SC as StarkGenericConfig>::Challenger>>::Commitment: PartialEq,
 {
     use verity_direct::lookup::{aux_matrix, lookup_soundness_bits, PRE_WIDTH};
-    use verity_direct::lookup_stark::{proof_bytes_lookup, prove_lookup, verify_lookup};
+    use verity_direct::lookup_stark::{lookup_statement, prove_lookup, prove_lookup_bound, verify_lookup, verify_lookup_bound_bytes};
     let kind = B::KIND;
     let root = Path::new(&arg(args, "--root").unwrap_or_else(|| "fixtures/bench-instances/v1".into())).to_path_buf();
     let out = arg(args, "--out").or_else(|| std::env::var("RESEARCH_RUN_DIR").ok()).unwrap_or_else(|| ".".into());
@@ -522,29 +591,67 @@ where
     let log_n = rows.trailing_zeros() as usize;
     let lqd = p3_util::log2_ceil_usize(verity_direct::program::MAX_DEG - 1);
     assert!(lqd <= fri.log_blowup);
-    let config = B::config(log_n, fri);
     let mult: Vec<Val<B::SC>> = (0..rows).map(|r| main.values[r * width + width - 1]).collect();
     let llay = air_.lay.clone();
-    let pre_for_verify = pre.clone();
+
+    // the statement (PROTOCOL.md 12.5 / 14.7): every claimed word, the trace at least as tall as the tables
+    let bind_operands = args.iter().any(|a| a == "--bind-operands");
+    let words: Vec<u64> = vus.iter().map(|v| v.y16).collect();
+    let stmt = if bind_operands {
+        Statement::with_operands(words, vus.iter().flat_map(|v| v.x.iter().copied()).collect(), vus.iter().flat_map(|v| v.w.iter().copied()).collect())
+    } else {
+        Statement::new(words)
+    };
+    let stmt = lookup_statement(&air_, stmt);
+    assert_eq!(stmt.degree_bits(), log_n);
+    // `--unbound`: the pre-fix path (no header, degree_bits from the proof, no statement check): a same-machine
+    // A/B timing of the fix ONLY; labelled as such in the result
+    let unbound = args.iter().any(|a| a == "--unbound");
 
     // --rtt-ms R (or VERITY_RTT_MS): emulate the network; the prover sleeps R ms at every critical-path challenge.
-    // rtt::begin must precede B::challenger() so the prover's RttChallenger is the active (counting) one.
+    // rtt::begin must precede the prover's B::challenger() so that challenger is the active (counting) one.
     let rtt_ms: f64 = arg(args, "--rtt-ms").or_else(|| std::env::var("VERITY_RTT_MS").ok()).map(|s| s.parse().expect("--rtt-ms takes milliseconds")).unwrap_or(0.0);
     let t1 = Instant::now();
     verity_direct::rtt::begin(rtt_ms);
-    let mut challenger = B::challenger();
-    let (proof, stage) = prove_lookup(&config, &air_, &mut challenger, pre, main, |z, beta| aux_matrix(&llay, &queries, &mult, rows, z, beta, true));
+    let aux_fn = |z, beta| aux_matrix(&llay, &queries, &mult, rows, z, beta, true);
+    let (proof, stage) = if unbound {
+        let config = B::config(log_n, fri);
+        let mut challenger = B::challenger();
+        prove_lookup(&config, &air_, &mut challenger, pre, main, aux_fn)
+    } else {
+        prove_lookup_bound::<B>(&air_, &lay, fri, &stmt, pre, main, aux_fn, true)
+    };
     let (trips, slept) = verity_direct::rtt::end();
     let t_prove_wall = t1.elapsed().as_secs_f64();
     let t_prove = t_prove_wall - slept; // compute: the wall time less the emulated waits for the verifier's coins
     let t2 = Instant::now();
-    let bytes = proof_bytes_lookup(&proof);
+    let proof_bytes = bincode::serialize(&proof).expect("serialise proof");
+    let bytes = proof_bytes.len();
     let t_ser = t2.elapsed().as_secs_f64();
     let t3 = Instant::now();
-    let mut challenger = B::challenger();
-    let ok = verify_lookup(&config, &air_, &mut challenger, &proof, pre_for_verify, proof.degree_bits, &[]);
+    let ok = if unbound {
+        let config = B::config(log_n, fri);
+        let mut challenger = B::challenger();
+        verify_lookup(&config, &air_, &mut challenger, &proof, air_.lay.tables.preprocessed(rows), proof.degree_bits, &[]).map_err(stark::BoundError::Inner)
+    } else {
+        verify_lookup_bound_bytes::<B>(&air_, &lay, &proof_bytes, fri, &stmt)
+    };
     let t_verify = t3.elapsed().as_secs_f64();
     assert!(ok.is_ok(), "verification failed: {:?}", ok.err());
+    // the statement checks fire: not a proof of another word list, another batch size, or another table set
+    if !unbound {
+        let mut other = stmt.clone();
+        other.words[0] ^= 1;
+        let r = verify_lookup_bound_bytes::<B>(&air_, &lay, &proof_bytes, fri, &other);
+        assert!(matches!(r, Err(stark::BoundError::StatementColumn { .. })), "wrong-word statement not rejected: {r:?}");
+        let mut bigger = stmt.clone();
+        bigger.words.extend(std::iter::repeat(0).take((rows / steps + 1).max(1)));
+        let r = verify_lookup_bound_bytes::<B>(&air_, &lay, &proof_bytes, fri, &bigger);
+        assert!(matches!(r, Err(stark::BoundError::DegreeBits { .. })), "wrong-B statement not rejected: {r:?}");
+        let other_air = air::LookupChainAir { width: air_.width, kind: air_.kind, idx: air_.idx.clone(), lay: verity_direct::lookup::substitute_table_row(&air_.lay, 0), ext_degree: air_.ext_degree };
+        let r = verify_lookup_bound_bytes::<B>(&air_, &lay, &proof_bytes, fri, &stmt).and(verify_lookup_bound_bytes::<B>(&other_air, &lay, &proof_bytes, fri, &stmt));
+        assert!(r.is_err(), "substituted-table verifier accepted the proof");
+    }
     let lookup_bits = lookup_soundness_bits(rows, air_.lay.n_queries(), air_.lay.tables.total_rows, B::challenge_bits() as f64);
     println!(
         "lookup stages: commit_pre={:.2}s commit_main={:.2}s aux_build={:.2}s commit_aux={:.2}s quotient={:.2}s commit_quotient={:.2}s open={:.2}s; main_width={width} aux_width={aux_w} pre_width={PRE_WIDTH} helpers={} queries/row={} table_rows={} lookup_bits={lookup_bits:.1}",
@@ -575,6 +682,7 @@ where
         json!({"name": "direct.stage.commit_quotient_s", "value": stage.commit_quotient, "unit": "s"}),
         json!({"name": "direct.stage.open_s", "value": stage.open, "unit": "s"}),
     ];
+    let binding = binding_json(unbound, bind_operands, "vu.y16 (main matrix, round 1)", 1, rows, B::challenge_bits(), &["LogUp tag", "preprocessed width", "aux width", "aux extension degree", "sha256 of the table set (verifier's own)"]);
     write_result(BenchNumbers {
         kind,
         out: &out,
@@ -603,6 +711,7 @@ where
         depth: trips as usize,
         slept,
         t_prove_wall,
+        binding,
     });
 }
 
@@ -639,10 +748,12 @@ struct BenchNumbers<'a> {
     slept: f64,
     /// Prover wall time including the sleeps.
     t_prove_wall: f64,
+    /// Statement binding of this run (PROTOCOL.md 12): bound, or the labelled `--unbound` timing baseline.
+    binding: Binding,
 }
 
 fn write_result(b: BenchNumbers) {
-    let BenchNumbers { kind, out, fri, n_vus, rows, width, committed_width, t_witness, t_prove, t_ser, t_verify, bytes, lqd, tier, root, challenge_name, challenge_bits, rounds_extra, constraints_note, realisation, extra, lookup_bits, ext_deg, rtt_ms, depth, slept, t_prove_wall } = b;
+    let BenchNumbers { kind, out, fri, n_vus, rows, width, committed_width, t_witness, t_prove, t_ser, t_verify, bytes, lqd, tier, root, challenge_name, challenge_bits, rounds_extra, constraints_note, realisation, extra, lookup_bits, ext_deg, rtt_ms, depth, slept, t_prove_wall, binding } = b;
     let steps = STEPS as usize;
     let log_n = rows.trailing_zeros() as usize;
     let t_total = t_witness + t_prove + t_ser;
@@ -757,6 +868,7 @@ fn write_result(b: BenchNumbers) {
             "unit": "vu",
             "constraints": constraints_note,
             "realisation": realisation,
+            "statement_binding": binding.statement_binding,
             "latency": {
                 "protocol": "Fiat-Shamir as run (Plonky3); the interactive reading counts every observe -> sample boundary of the prover's transcript as one verifier message; measured with an emulated RTT: the prover sleeps one RTT at each",
                 "rtt_ms": rtt_ms,
@@ -765,9 +877,9 @@ fn write_result(b: BenchNumbers) {
                 "e2e_model": "t.total + verifier.seconds + rounds.sequential_depth x RTT (bytes / bandwidth not included)",
                 "depth_note": "rounds.sequential_depth is the measured count of observe -> sample boundaries (verity_direct::rtt); direct.depth_formula_legacy is the earlier derived log_n + 5 (+ the realisation's extra commitment rounds)"
             },
-            "note": "Plonky3 FRI/Keccak is the diagnostic PCS, not Candidate B's Ligero-style interactive PCS (PROTOCOL.md); the claimed output words are committed trace cells (the `vu.claim` column) that the last-row constraint binds to the epilogue word -- not bound to any external statement (authentication excluded)"
+            "note": binding.note
         },
-        "validation": {"status": "passed", "checker": "p3_uni_stark::verify + recorded accumulators", "detail": format!("proof verified; {n_vus} VUs x {steps} steps in {rows} rows; every intermediate accumulator and output word equals bench-instances/v1"), "evidence": [], "index_note": tier.index.get("note").cloned().unwrap_or(Value::Null)},
+        "validation": {"status": "passed", "checker": binding.checker, "detail": format!("proof verified{}; {n_vus} VUs x {steps} steps in {rows} rows; every intermediate accumulator and output word equals bench-instances/v1", binding.detail_suffix), "evidence": [], "index_note": tier.index.get("note").cloned().unwrap_or(Value::Null)},
         "measurements": measurements,
         "measurement_files": [],
         "artifacts": []
@@ -858,14 +970,32 @@ where
     let kind = B::KIND;
     let root = Path::new(&arg(args, "--root").unwrap_or_else(|| "fixtures/bench-instances/v1".into())).to_path_buf();
     let out = arg(args, "--out").or_else(|| std::env::var("RESEARCH_RUN_DIR").ok());
+    // --lookup: the LogUp realisation's rows and constraints (row-local, transition, helper / running-sum at
+    // fixed z, beta) instead of the limb realisation's
+    let lookup = args.iter().any(|a| a == "--lookup");
     let tier = load_tier(&root, "vu-k1536-neg");
-    let (air_, lay) = ChainAir::new(kind);
+    let (air_, lay_limbs) = ChainAir::new(kind);
+    let ext_deg = <<B::SC as StarkGenericConfig>::Challenge as p3_field::AbstractExtensionField<Val<B::SC>>>::D;
+    let (air_l, lay_lookup) = air::LookupChainAir::new(kind, ext_deg);
+    let lay = if lookup { &lay_lookup } else { &lay_limbs };
+    let idx = if lookup { &air_l.idx } else { &air_.idx };
+    // (integer violations, failing field constraints) of one VU's honest-generator rows
+    let check = |vu: &VuIo| -> (Vec<String>, Vec<(usize, String)>) {
+        if lookup {
+            let (rows, qs, _accs, viol) = air::chain_rows_lookup(kind, lay.width, idx, &air_l.lay.tables, vu);
+            let field_fail = air::lookup_failing_rows::<Val<B::SC>, <B::SC as StarkGenericConfig>::Challenge>(&air_l, lay, &rows, &qs, true);
+            (viol, field_fail)
+        } else {
+            let (rows, _accs, viol) = air::chain_rows(kind, lay.width, idx, vu);
+            let field_fail = air::chain_failing_rows::<Val<B::SC>>(kind, &air_, lay, &rows, true);
+            (viol, field_fail)
+        }
+    };
     let rows_index = tier.index["rows"].as_array().unwrap().clone();
     let mut report = vec![];
     let mut soundness_bugs = 0usize;
     for (i, vu) in tier.vus.iter().enumerate() {
-        let (rows, _accs, viol) = air::chain_rows(kind, lay.width, &air_.idx, vu);
-        let field_fail = air::chain_failing_rows::<Val<B::SC>>(kind, &air_, &lay, &rows, true);
+        let (viol, field_fail) = check(vu);
         let rejected = !viol.is_empty();
         let unsatisfiable = !field_fail.is_empty();
         if !rejected || !unsatisfiable {
@@ -890,8 +1020,7 @@ where
         if let Some(correct) = row[4].as_u64() {
             let mut vu = tier.vus[0].clone();
             vu.y16 = correct;
-            let (rows, _, viol) = air::chain_rows(kind, lay.width, &air_.idx, &vu);
-            let field_fail = air::chain_failing_rows::<Val<B::SC>>(kind, &air_, &lay, &rows, true);
+            let (viol, field_fail) = check(&vu);
             println!("control: negative 0 with its correct word: integer violations={} field failures={}", viol.len(), field_fail.len());
             assert!(viol.is_empty() && field_fail.is_empty(), "control failed: the correct word is rejected");
             json!({"integer_violations": viol.len(), "failing_field_constraints": field_fail.len()})
@@ -904,6 +1033,7 @@ where
     let summary = json!({
         "schema": "verity-direct/vu-neg/v1",
         "field": format!("{kind:?}"),
+        "realisation": if lookup { "logup" } else { "limbs" },
         "dataset": {"dataset": "bench-instances/v1", "tier": "vu-k1536-neg", "manifest_sha256": manifest_sha256(&root), "n": tier.vus.len()},
         "rejected_all": soundness_bugs == 0,
         "soundness_bugs": soundness_bugs,
@@ -915,7 +1045,7 @@ where
         fs::create_dir_all(&out).unwrap();
         fs::write(format!("{out}/vu_neg.json"), serde_json::to_string_pretty(&summary).unwrap()).unwrap();
     }
-    println!("vu-neg field={kind:?}: {} negatives, {} rejected by witness generation AND unsatisfiable in the field", tier.vus.len(), tier.vus.len() - soundness_bugs);
+    println!("vu-neg field={kind:?} realisation={}: {} negatives, {} rejected by witness generation AND unsatisfiable in the field", if lookup { "logup" } else { "limbs" }, tier.vus.len(), tier.vus.len() - soundness_bugs);
     assert_eq!(soundness_bugs, 0, "SOUNDNESS BUG: {soundness_bugs} negatives produce violation-free rows");
 }
 
@@ -924,7 +1054,6 @@ where
 // ---------------------------------------------------------------------------------------------------------------
 
 use verity_direct::air_v2::{self, V2ChainAir};
-use verity_direct::statement::Statement;
 
 fn ext_arg(args: &[String]) -> usize {
     arg(args, "--ext").map(|s| s.parse().unwrap()).unwrap_or(4)
@@ -1118,6 +1247,7 @@ where
         depth: trips as usize,
         slept,
         t_prove_wall,
+        binding: binding_json(false, bind_operands, "vu.y16 (claim column of the v2 main matrix, round 1)", 1, rows, B::challenge_bits(), &["(v2 domain tag verity-direct/chain-air-v2/statement/v1; tables bound by the verifier's recomputed preprocessed commitment)"]),
     });
 }
 

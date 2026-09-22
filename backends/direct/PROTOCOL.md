@@ -459,12 +459,97 @@ step, not part of this measurement.
   `Fp32Decode` on the next row re-derives sign/exponent/mantissa from that word under its own range checks, so
   the chain never relies on a field element being "the same number" in two encodings.
 - The zero VU's rows satisfy every constraint (checked in `chain_trace`), so padding adds no constraint case.
-- `vu.claim` is a free column on non-`last` rows; a prover may put anything there. Only `last` rows are read.
+- `vu.claim` (`vu.y16`) was a free column on non-`last` rows in the diagnostic (only `last` rows were read); since 12.5 it is a public column equal to the statement's word on every row of the VU.
 - The BabyBear port splits every 32-bit word (`x.c`, `f`, `pack.low`, `pack.y`) into 16-bit limbs with their own
   range checks, realises `LtPow` as a direct range check on \(2^w - 1 - x\) (no product), and adds a bound check
   on the normalised mantissa at \(k = k_{lo}\) so no identity has a term reaching \(p = 2^{31} - 2^{27} + 1\)
   (all constants are kept below \(2^{24}\)); +56 columns over Goldilocks. The 52 `vu-k1536-neg` instances and the
   mutation tests pass identically over both fields (`tests/chain.rs`, `direct-unit vu-neg`). **Section 13 audits
+
+### 12.5 Statement binding (SOUNDNESS FIX, lane `soundness-fixes`, 2026-09-22; red team F1–F3) **[implemented]**
+
+The red team (`backends/numerical/reports/redteam_vu.md`) forged the diagnostic B verifier twice, over both fields:
+**F1** a trace of two zero VUs verified "as" two real VUs (the verifier was handed no public values; the sentence
+"`vu.claim` … not bound to an external statement" above was the accepted forgery), and **F2** a 256-row proof was
+accepted by the verifier configured for \(B=4096\) (uni-stark 0.4.3 reads `degree_bits` from the proof). Both are
+closed by `src/statement.rs` + `stark::prove_bound` / `stark::verify_bound_bytes`; the relation and the AIR are
+unchanged (no new column, no new constraint, no change to `air.rs`).
+
+**The statement.** \(\mathsf{stmt} = (B, K, \text{words}[0..B])\), the claimed 16-bit output word of every VU in
+VU order; optionally the operands \((x, w)\) (`Statement::with_operands`, `vu-bench --bind-operands`). The trace
+height is a *function of the statement*: \(n = 2^{\lceil \log_2 \max(96B, 2)\rceil}\); `degree_bits` \(= \log_2 n\).
+
+**Mechanism 1 — header absorbed before any challenge (F1, F2, F3).** Prover and verifier absorb into the
+Fiat–Shamir challenger, before the trace commitment is observed and before `alpha` is drawn, the header
+(`statement::header`, `DOMAIN_TAG = "verity-direct/chain-air/statement/v1"`): domain tag; the AIR identity
+`air_id` = SHA-256(field name, width, every column name, every constraint name in emission order); the trace
+field's prime; the width; the challenge-extension degree; \(B\); \(K\); 96; \(n\); `degree_bits`; the FRI
+parameters (`log_blowup`, `num_queries`, `proof_of_work_bits`); the \(B\) claimed words (length-prefixed); and
+either `0` or `1 ‖ SHA-256(x) ‖ SHA-256(w)`. Every variable-length block is length-prefixed and every integer is
+split into two 32-bit halves so the encoding is canonical in both fields. **The verifier builds the header from
+its own configuration and statement; nothing in it is read from the proof.** Consequently a proof for another
+AIR, field, extension, batch size, FRI configuration or word list yields different challenges and fails the
+opening argument.
+
+**Mechanism 2 — `degree_bits` fixed by the verifier (F2).** `verify_bound_bytes` computes `degree_bits` from
+\(B\) and rejects a proof whose `degree_bits` differs (`BoundError::DegreeBits{expected, got}`) *before* anything
+else is read; the PCS is configured for exactly that height (`B::config(degree_bits, ·)`), never for an upper
+bound. Pinned by `tests/chain.rs::statement_binding_*` (a 2-VU proof offered to the \(B=4096\) verifier →
+`DegreeBits{expected: 19, got: 8}`) and the battery case `b_degree_bits_unbound`.
+
+**Mechanism 3 — public columns checked at \(\zeta\) (F1).** `vu.y16` is a committed column whose value on every
+row the verifier knows from the statement: \(W(g^i) = \text{words}[\lfloor i/96\rfloor]\) for \(i < 96B\), \(0\)
+on the zero-VU padding. \(W\) is a public polynomial of degree \(< n\) over the natural trace domain
+\(\{g^i\}\). After \(\zeta\) is drawn the verifier evaluates \(W(\zeta)\) and \(W(\zeta g)\) itself
+(`statement::eval_pair`, barycentric with one batch inversion, \(O(n)\) extension operations, the two points
+share the inverse denominators) and requires the opened `trace_local[y16] = W(\zeta)`,
+`trace_next[y16] = W(\zeta g)` (`BoundError::StatementColumn`). The FRI opening argument binds the opened values
+to the committed column polynomial \(C\) of degree \(< n\); \(C \ne W\) agree at \(\zeta\) with probability
+\(\le (n-1)/|F_c|\) (Schwartz–Zippel; \(\zeta\) is sampled after the trace commitment and after the header, so
+the prover commits before knowing it). The existing last-row constraint `vu.out: last·(epilogue − y16) = 0` then
+ties the bound word to the epilogue; the chain constraints tie the epilogue to the operands. With
+`--bind-operands` the 32 operand columns `x.a[j]`, `x.b[j]` are checked the same way (\(W\) from \(x, w\)), which
+removes the "any \(x, w\)" freedom entirely; without it the operands are witness and their binding is the
+authentication layer's job (`auth_integration.md`; `authentication = excluded`).
+
+**Consequence for 12.4.** `vu.y16` is no longer free on non-`last` rows: it must equal the VU's word on every row
+(the battery case `b_claim_free_nonlast` moved from `accept_by_design` to `reject`). Honest traces already had
+this property (`chain_program` writes `io.y16` on every row).
+
+**Soundness accounting.** Added term: (number of public columns) \(\times\, n/|F_c|\) — \(2^{19}/2^{128} =
+2^{-109}\) (Goldilocks²), \(2^{19}/2^{124} = 2^{-105}\) (BabyBear⁴) for \(B = 4096\) with one column; \(\times 33\)
+with operands (\(2^{-104}\) / \(2^{-100}\)). These are the same order as the DEEP/quotient-batching field term
+the proof already carries (`~degree/|F_c|`, 12.2) and, like it, are field terms that the challenge extension —
+not the query count — controls; they do not move the FRI query term that sets \(t\) at the \(2^{-128}\) operating
+point (the accountant's field-term row for B gains this entry).
+
+**Cost.** Prover: none (no column, no constraint; the header is ~100 + 2B field elements hashed once).
+Proof: none. Verifier: one bincode decode (the verifier receives bytes), \(O(n)\) extension operations per
+public column (\(\approx 2^{19}\) inversions batched + \(2^{20}\) multiplications for \(B=4096\)); measured in
+`vu-bench` as `verifier.seconds` (it includes the statement checks).
+
+**F3 (transcript absorption gaps).** In our control and done: public values (the words), `degree_bits`, the AIR
+id and the FRI parameters are absorbed before the first challenge (above). Not done: uni-stark 0.4.3 / p3-fri
+0.4.3 sample the batch-combination `alpha` (`two_adic_pcs.rs:330`) and the query indices without absorbing the
+claimed openings at \(\zeta\) (they are transmitted in the proof, and `pcs.verify` uses them only after `alpha`);
+fixing that requires patching `p3-fri`'s `open` (compute the barycentric `ys` for every matrix first, observe
+them, then sample `alpha`) and `verify` (observe the claimed values before `alpha`) — the prover side cannot be
+done from outside the crate without running `open` twice. Residual, as the red team argued: the claimed values
+enter the reduced FRI openings through two scalars per opening point, so matching a committed fold at all
+\(t=100\) query points is 100 equations in 2 unknowns; a checklist violation, not a known forgery. Tracked in
+`TRANSCRIPT_CHECKLIST.md`; take upstream's fix (observe openings before `alpha`) when Plonky3 is bumped.
+**Closed 2026-09-22 by lane `b-bind`** (14.7, last paragraph): `p3-fri` is vendored at `vendor/p3-fri`
+(`[patch.crates-io]` in this crate and in `redteam/vu-battery-b`); `TwoAdicFriPcs::open` computes every opened
+value first, absorbs them (`observe_ext_element`), then samples `alpha`; `verify` absorbs the claimed openings before
+`alpha`. `alpha`, the FRI betas and the query indices now depend on the openings. **The transcript differs from
+upstream 0.4.3-succinct**: proofs made before the patch do not verify after it (and vice versa); every number in
+this file from 14.7 on is on the patched transcript.
+
+**What this does not do.** The zero-VU padding rows are not part of the statement (they carry word `0`, and
+\(B\) is bound, so a prover cannot smuggle a real VU into the padding without changing \(B\)). Binding the
+operands to the leaf/v2 tableau (the digest in the statement, the chunk roots in the header) is the next step of
+`auth_integration.md`, not this section.
+
   this port against the red team's six embedding rules: one rule was half-implemented (fixed 2026-09-22).**
 
 ## 13. The BabyBear port against the red team's embedding rules (b-lookup, 2026-09-22)
@@ -769,6 +854,100 @@ hints (words, carries, quotients, selectors), which lookups do not touch -- that
 (section 12.2's per-gadget census); (iii) on the GPU only the encoding term matters and the 3.4x is the number to
 carry to tensor.md.
 
+### 14.7 Statement binding of the LogUp realisation (SOUNDNESS FIX, lane `b-bind`, 2026-09-22) **[implemented]**
+
+Section 12.5 bound the limb realisation; the three-round prover/verifier of 14.3 (`lookup_stark.rs`) was written
+in parallel and shipped with the pre-fix behaviour: `verify_lookup` took no statement, read `degree_bits` from the
+proof and built the public table matrix at `1 << proof.degree_bits` -- the red team's F1 and F2 verbatim
+(`redteam-logup-b` cases `zero_batch_as_any_statement`, `degree_bits_from_proof`), and the third lane's own note
+("the lookup path reads degree_bits the same way and will need verify_bound"). `prove_lookup_bound` /
+`verify_lookup_bound_bytes` close it; `vu-bench --lookup` uses them (`--unbound` is the labelled timing baseline,
+as in 12.5). The relation, the AIR and the round structure are unchanged.
+
+**Statement.** The same \(\mathsf{stmt}\) as 12.5 with one difference in the height: the tables live in the trace
+domain (14.3 round 1), so \(n = 2^{\lceil \log_2 \max(96B,\ |P|)\rceil}\) with \(|P| = 116\,722\) table rows --
+\(n = 2^{17}\) for any \(B \le 1365\), \(2^{19}\) at \(B = 4096\) (`Statement::with_min_rows`,
+`lookup_stark::lookup_statement`). `degree_bits` is fixed by the verifier from it (F2); the proof's must equal it
+and the verifier builds \(P\) at its own height.
+
+**Header.** Before \(z, \beta\) (the first challenges) both parties absorb the 12.5 header (domain tag, AIR id of
+the *lookup* layout -- 401 columns, `lookup.m` included, the lookup constraint names -- field, width, extension
+degree, \(B, K\), `STEPS`, rows, `degree_bits`, FRI parameters, every claimed word, operand hashes) followed by a
+LogUp header (`statement::lookup_header`): tag `verity-direct/chain-air/logup/v1`, preprocessed width, aux width,
+the extension degree the aux columns are laid out for, and **the SHA-256 of the verifier's table set**
+(`statement::table_digest`: every table's name, tag, offset, rows, lowest key and every table row's tuple). The
+verifier's challenges thus depend on the table set it holds, independently of the proof; the recomputed
+preprocessed commitment (14.3 round 1) is then compared as before. Both are needed for the stated property "a
+prover cannot substitute a table": the commitment check catches a prover who committed to another \(P\); the
+digest makes a verifier who holds another table set draw other challenges (the two parties never agree on a
+transcript unless they agree on the tables).
+
+**Public column.** `vu.y16` is a column of the main matrix (round 1, committed before any challenge); the verifier
+evaluates the statement's word polynomial at \(\zeta, \zeta\omega\) (`statement::eval_pair`) and requires the
+opened `main_local[col]`, `main_next[col]` to equal it, before `pcs.verify` (same soundness term as 12.5:
+\(+ n / |F_{ext}|\) per public column, \(2^{19-124} = 2^{-105}\) BabyBear^4, \(2^{-136}\) BabyBear^5). With
+`--bind-operands` the 32 operand columns are public too.
+
+**Latency hooks.** `prove_lookup_bound` builds its challenger through `Backend::challenger()` (the
+`RttChallenger`-wrapped one) *after* `rtt::begin`, so the header observes count as part of the first prover message
+and `rounds.sequential_depth` is unchanged by the fix.
+
+**Checks and pins.** `tests/lookup_statement.rs` (`--include-ignored`, 2^17 rows): zero batch claiming the real
+words → `StatementColumn`; one word changed / swapped → `StatementColumn`; other FRI parameters → opening argument
+fails; the 2-VU (17-bit) proof for the 4096-VU (19-bit) verifier → `DegreeBits{19, 17}`; the same words with the
+limb realisation's 8-bit height → `DegreeBits{8, 17}` (the height is the tables', not the words'); a verifier
+holding a table set with one entry changed rejects the honest proof, and a proof made against the changed table set
+fails the honest verifier; operand flip with `--bind-operands` → `StatementColumn`; header sensitivity (digest,
+widths, extension degree). `vu-bench --lookup` asserts the wrong-word, wrong-\(B\) and substituted-table rejections
+on every run. `vu-neg --lookup` (52 negatives, `lookup_failing_rows`), the babybear-rules battery in `--lookup`
+mode and the limb battery (`run_battery.sh`) are in `run_bind_gate.sh`; results in 14.8.
+
+**The F19 residual (openings before \(\alpha\)), closed for both realisations.** 12.5 left the ζ-openings
+unabsorbed before the PCS batching challenge \(\alpha\) and the FRI query indices, because the sampling sits in
+`p3-fri 0.4.3`'s `TwoAdicFriPcs::{open, verify}`. This lane vendors the crate (`backends/direct/vendor/p3-fri`, a
+copy of `0.4.3-succinct` with the two functions changed, each change marked `verity patch`) and points both root
+manifests at it with `[patch.crates-io]`. `open` now runs two passes: the barycentric openings of every matrix at
+every point are computed and absorbed (`observe_ext_element`, one element per opened value: \(2 \times (401 + 6 +
+456) + 4 \times 5\) extension elements for the LogUp proof), *then* \(\alpha\) is sampled and the reduced openings
+are formed; `verify` absorbs the claimed openings from the proof before sampling \(\alpha\). Since \(\alpha\) is
+sampled before `prover::prove` (the FRI commit phase), the betas and the query indices depend on the openings too.
+Cost: \(\approx 1\,750\) extra challenger observes per proof (µs). **The transcript changes**: proofs produced
+before this patch (every `result.json` of 12.5, 14.5, the b-lookup lane) verify only against the unpatched verifier;
+nothing else in the proof (bytes, shape, opened values) changes. The `RttChallenger` counts the observes as part of
+the message before \(\alpha\); since the openings are a prover message the verifier's \(\alpha\) now answers,
+`rounds.sequential_depth` grows by one (measured in `r20260922-094310-af1a` vs `r20260922-091130-525e`: limb 2^13 rows 16 -> 17, LogUp 2^17 rows 21 -> 22, LogUp 2^19 rows 23 -> 24; the legacy count is unchanged) -- the honest interactive count of a transcript in
+which \(\alpha\) depends on the openings.
+
+The `verify_lookup` (unbound) entry point remains for the diagnostic tests and the `--unbound` baseline; it is not a
+proof verifier and its result is labelled `statement_binding.bound = false`.
+
+### 14.8 Gate and timing of the bound LogUp realisation (vy-cpu3, 12 threads, shared with red-team-3)
+
+Gate run `r20260922-091130-525e` (before the p3-fri patch; the same gate is repeated in the timing run below):
+`cargo test --release --tests -- --include-ignored` 42 tests green (unit negatives 24, `chain.rs` 6 incl.
+`statement_suite`, `statement.rs` 4, `lookup.rs` 3 incl. the 2^17 round trip, `lookup_statement.rs` 5); `vu-neg`
+52/52 rejected in all four (field × realisation) modes; `vu-bench` 64 VUs bound in all four modes plus BabyBear^5
+LogUp and `--bind-operands` in both realisations, the wrong-word / wrong-\(B\) / substituted-table rejections
+asserted inline; `run_battery.sh` exit 0 (36 B cases 0 FORGED, A 14/14); the babybear-rules battery in `--lookup`
+mode 83/83 rejected, 87/87 controls, 6/6 extras. Records: `results/b-bind/`.
+
+Run `r20260922-094310-af1a` (the p3-fri patch of 12.6 applied) repeated the whole gate -- identical counts, all green
+-- and then timed the LogUp realisation at 4096 VUs, bound and unbound back to back, twice, on the same box
+(`vu-bench --lookup --vus 4096 [--unbound]`, `--ext 5` for BabyBear^5; 2^19 rows, 401 main + 570 aux columns,
+`RAYON_NUM_THREADS=12`):
+
+| 4096 VUs, prove s | bound #1 | unbound #1 | bound #2 | unbound #2 |
+|---|---|---|---|---|
+| BabyBear^4 | 199.4 | 197.6 | 182.8 | 201.8 |
+| BabyBear^5 | 213.3 | 225.4 | 217.5 | 218.1 |
+
+Binding costs nothing measurable: the extra work is a few field elements absorbed into the challenger and one
+barycentric evaluation of a public column at two points (verifier, ~ms). The pairs differ by less than the box's
+own swing (up to 10% between repeats here; the brief warned of 40%). Verify 1.1 s, proof 2.37 MB, peak RSS 10.7 GB
+in every configuration. vy-cpu3 is ~3.2x slower than vy-cpu2, where the unbound LogUp prover measured 60.1 s / 70.4 s
+(14.5): 197-202 s / 218-225 s here for the same unbound configurations -- the ratio, not the absolute, is the
+comparison. Records: `results/b-bind/lookup4096_*`.
+
 ## 15. Checker v2 as the AIR: state-chained units, tuple lookups, BabyBear limb repairs (b-air-v2, 2026-09-22) **[implemented, diagnostic PCS]**
 
 The relation is unchanged (section 1; `checker/v2/` accepts exactly the reference's set, checker_min.md).  What
@@ -944,6 +1123,20 @@ recomputation in the verifier, the \(2^{19}\)-row floor -- are the items below.
 * Trace height is pinned at \(2^{19}\) by the table set (282 280 rows): batches below 2 731 VUs pay for padding.
   `T16` (65 536) and `T_OP` (65 536) could share a key column; `TNORM10` and `T15` too -- a \(2^{18}\) table set
   (\(\le 262\,144\) rows) would allow 2 048-VU batches at half the rows.
+
+### 15.8 After the `lane/b-bind` merge (2026-09-22)
+
+The v2 path binds through the shared `lookup_stark::verify_lookup(.., expected_degree_bits, public)`, which is now a
+wrapper over the LogUp verifier of 14.7 (`verify_lookup_inner`: the statement's `degree_bits`, the public columns
+checked at \(\zeta, \zeta g\), the preprocessed commitment recomputed and compared -- the table set is bound by that
+commitment; the v1 LogUp path additionally absorbs the table digest of 14.7, the v2 header does not and the v2
+transcript is unchanged by the merge in that respect).  Two things *do* change the v2 transcript relative to the
+runs of 15.3-15.6: the vendored `p3-fri` (12.6) absorbs the \(\zeta\)-openings before \(\alpha\) for every
+realisation, so v2 proofs made with upstream 0.4.3 no longer verify and `rounds.sequential_depth` is one larger; and
+`BabyBear6Backend`'s challenger is the `RttChallenger` wrapper as before (merge kept it).  `vu-bench --v2` reports
+`statement_binding.bound = true` like the other bench paths (`BenchNumbers.binding`).  Gate after the merge:
+`run_bind_gate.sh all` (adds `vu-neg --v2`, `vu-bench --v2 --ext 4|6` at 64 VUs with the wrong-statement rejection
+asserted inline, and the battery in `--v2` mode), run `r20260922-111343-3ed9`.
 
 ## 16. B-Ligero at the checker-v2 shape, end to end (b-e2e-v2, 2026-09-22) **[implemented, NON_ZK_PROOF_DIAGNOSTIC]**
 

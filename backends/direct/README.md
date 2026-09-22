@@ -37,8 +37,15 @@ PCS of `PROTOCOL.md`: it is the fastest complete non-ZK proof of the *right* con
   `tools/battery_adapter.py`, the red team's 83-case battery).  `--lookup` on `chain-layout`, `vu-bench`,
   `check-rows` selects the LogUp realisation (PROTOCOL.md 14; `--ext 5` for BabyBear^5 challenges).
 - `src/lookup.rs`, `src/lookup_stark.rs`: the LogUp range/table lookups (tables, queries, helper columns, the
-  auxiliary round) and the three-round fork of `p3_uni_stark::prove/verify` they need; `air.rs::LookupChainAir`.
-- `src/program_v2.rs`, `src/air_v2.rs`, `src/statement.rs`: checker v2 as the row program (`V2ChainAir`, PROTOCOL.md
+  auxiliary round) and the three-round fork of `p3_uni_stark::prove/verify` they need; `air.rs::LookupChainAir`;
+  `prove_lookup_bound` / `verify_lookup_bound_bytes` (statement-bound, PROTOCOL.md 14.7); `verify_lookup` takes the
+  caller's `degree_bits` and public columns (the v2 AIR binds through it).
+- `src/statement.rs`: the statement, the header (`header_tagged` for the v2 domain tag), the barycentric
+  public-column check, the LogUp header and table digest.
+- `src/rtt.rs`: the latency hooks (`RttChallenger`, `--rtt-ms`).
+- `vendor/p3-fri`: patched `p3-fri` (openings absorbed before α; PROTOCOL.md 12.6 / 14.7; the transcript differs
+  from upstream for every realisation, v2 included).
+- `src/program_v2.rs`, `src/air_v2.rs`: checker v2 as the row program (`V2ChainAir`, PROTOCOL.md
   15), tuple lookups (`lookup::TupleTable`), statement binding (F1-F3: header absorbed before the first challenge,
   `degree_bits` fixed by the statement, the claim column checked at zeta).  `--v2` on `chain-layout`, `vu-neg`,
   `vu-honest`, `vu-bench`, `check-rows` (`--ext 5` for BabyBear^5); `run_v2.sh` is the pod script;
@@ -117,6 +124,29 @@ carries `t.e2e.rtt_Xms` measured plus the other RTTs predicted (`t.total` is com
 `direct.depth_formula_legacy` is the earlier `log_n + 5`). Measured: 2^13 rows (B=64) depth **16** (legacy 18), 2^19 rows
 (B=4096) depth **22** (legacy 24); B=64 e2e at 50 ms RTT 3.98 s = 3.04 compute + 0.14 verify + 16 × 50 ms (model 3.98 s).
 See `backends/numerical/reports/latency.md`.
+
+## Statement binding (lanes soundness-fixes + b-bind, 2026-09-22)
+
+A B proof is a proof *of a statement* (PROTOCOL.md 12.5, 14.7): `Statement { words, operands?, min_rows }` (every
+claimed `y16`, optionally `x`/`w` with `--bind-operands`). Both realisations prove and verify through bound entry points
+-- `stark::{prove_bound, verify_bound_bytes}` (limbs) and `lookup_stark::{prove_lookup_bound, verify_lookup_bound_bytes}`
+(LogUp) -- which absorb a header (domain tag, AIR id, field, widths, extension degree, `B`, `K`, `STEPS`, rows,
+`degree_bits`, FRI parameters, every word, operand hashes; for LogUp also the preprocessed/aux widths and the SHA-256
+of the verifier's table set) before the first challenge, fix `degree_bits` from the statement, and check the `vu.y16`
+column (and the operand columns when bound) at ζ, ζ·g against the verifier's own barycentric evaluation. `vu-bench`
+(both modes) asserts inline that the wrong-word, wrong-`B` (and, for `--lookup`, substituted-table) statements are
+rejected; `--unbound` runs the pre-fix path for a same-box timing baseline and labels the result
+`statement_binding.bound = false`. Pins: `tests/chain.rs::statement_suite`, `tests/lookup_statement.rs` (`--include-ignored`,
+2^17 rows). `vendor/p3-fri`: `p3-fri 0.4.3-succinct` with the ζ-openings absorbed before the PCS batching challenge α
+(`[patch.crates-io]`; the transcript differs from upstream). Gate: `run_bind_gate.sh [check|test|gate|battery|timing|all|full]`
+(`vu-neg --lookup`, both batteries, the 4096-VU bound/unbound timing pairs); records in `results/b-bind/`.
+
+| LogUp, 4096 VUs, 2^19 rows, vy-cpu3 12 threads (`r20260922-094310-af1a`) | bound #1 | unbound #1 | bound #2 | unbound #2 |
+|---|---|---|---|---|
+| BabyBear^4 prove s | 199.4 | 197.6 | 182.8 | 201.8 |
+| BabyBear^5 prove s | 213.3 | 225.4 | 217.5 | 218.1 |
+
+The binding is free to within the box's swing (vy-cpu3 is ~3.2x slower than the vy-cpu2 of PROTOCOL.md 14.5).
 
 ## The K=1536 VU chain: recorded runs (vy-cpu2, AMD EPYC 9654, **12 threads**, release)
 

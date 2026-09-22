@@ -45,17 +45,26 @@ pub struct Statement {
     /// makes the operand columns public too (32 more columns checked at ζ; `authentication = excluded` numbers
     /// leave this `None` and the operand columns are witness).
     pub operands: Option<(Vec<u64>, Vec<u64>)>,
+    /// The trace has at least this many rows before padding to a power of two: `MIN_ROWS` for the limb
+    /// realisation; the preprocessed tables' `total_rows` for the LogUp realisation (PROTOCOL.md 14.3: the tables
+    /// live in the same domain as the trace).  Part of the header (through `rows` / `degree_bits`).
+    pub min_rows: usize,
 }
 
 impl Statement {
     pub fn new(words: Vec<u64>) -> Self {
-        Self { words, operands: None }
+        Self { words, operands: None, min_rows: MIN_ROWS }
     }
     pub fn with_operands(words: Vec<u64>, x: Vec<u64>, w: Vec<u64>) -> Self {
         let k = 16 * STEPS as usize;
         assert_eq!(x.len(), words.len() * k, "x has K words per VU");
         assert_eq!(w.len(), words.len() * k, "w has K words per VU");
-        Self { words, operands: Some((x, w)) }
+        Self { words, operands: Some((x, w)), min_rows: MIN_ROWS }
+    }
+    /// The same statement for a realisation whose trace is at least `min_rows` tall (the LogUp tables).
+    pub fn with_min_rows(mut self, min_rows: usize) -> Self {
+        self.min_rows = min_rows.max(MIN_ROWS);
+        self
     }
     pub fn b(&self) -> usize {
         self.words.len()
@@ -65,7 +74,7 @@ impl Statement {
     }
     /// The trace height the verifier expects: `B * STEPS` rows padded to a power of two (at least `MIN_ROWS`).
     pub fn rows(&self) -> usize {
-        (self.b() * STEPS as usize).max(MIN_ROWS).next_power_of_two()
+        (self.b() * STEPS as usize).max(self.min_rows).next_power_of_two()
     }
     pub fn degree_bits(&self) -> usize {
         self.rows().trailing_zeros() as usize
@@ -173,6 +182,50 @@ pub fn header_tagged<G: PrimeField64>(tag: &[u8], kind: FieldKind, air_id: &[u8;
         }
     }
     out
+}
+
+/// The LogUp realisation's addition to the header (PROTOCOL.md 14.7), absorbed right after `header`: a tag, the
+/// preprocessed and auxiliary widths, the challenge-extension degree the aux columns are laid out for, and the
+/// digest of the table set the verifier holds -- the prover cannot substitute a table without changing the
+/// transcript (the verifier also recomputes the preprocessed commitment and compares it).
+pub const LOOKUP_DOMAIN_TAG: &[u8] = b"verity-direct/chain-air/logup/v1";
+
+pub fn lookup_header<G: PrimeField64>(pre_width: usize, aux_width: usize, ext_degree: usize, table_digest: &[u8; 32]) -> Vec<G> {
+    let mut out: Vec<G> = Vec::with_capacity(48);
+    out.push(G::from_canonical_u64(LOOKUP_DOMAIN_TAG.len() as u64));
+    out.extend(LOOKUP_DOMAIN_TAG.iter().map(|&x| G::from_canonical_u8(x)));
+    for v in [pre_width as u64, aux_width as u64, ext_degree as u64] {
+        out.push(G::from_canonical_u32(v as u32));
+        out.push(G::from_canonical_u32((v >> 32) as u32));
+    }
+    out.push(G::from_canonical_u64(32));
+    out.extend(table_digest.iter().map(|&x| G::from_canonical_u8(x)));
+    out
+}
+
+/// SHA-256 of the table set: every table's name, tag, offset, row count, lowest key and every table row's tuple
+/// (`lookup::TableSet::row`), then `total_rows`.  Two table sets that differ in any entry have different digests.
+pub fn table_digest(tables: &crate::lookup::TableSet) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(b"verity-direct/logup/tables/v1\0");
+    h.update((tables.tables.len() as u64).to_le_bytes());
+    for t in &tables.tables {
+        h.update((t.name.len() as u64).to_le_bytes());
+        h.update(t.name.as_bytes());
+        h.update(t.tag.to_le_bytes());
+        h.update((t.offset as u64).to_le_bytes());
+        h.update((t.rows as u64).to_le_bytes());
+        h.update(t.key_lo.to_le_bytes());
+    }
+    h.update((tables.total_rows as u64).to_le_bytes());
+    for r in 0..tables.total_rows {
+        let (vals, tag) = tables.row(r);
+        for v in vals {
+            h.update(v.to_le_bytes());
+        }
+        h.update(tag.to_le_bytes());
+    }
+    h.finalize().into()
 }
 
 /// `(W(ζ), W(ζ·g))` for the polynomial `W` of degree `< n` that takes `values[i]` at `g^i` (the natural trace

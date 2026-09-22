@@ -93,8 +93,8 @@ def test_layout_and_digest_structure(world):
     assert CODE.rows_per_tensor_row(1536) == 2 and len(x.payload_rows) == 2 * TOKENS
     assert len(x.chunks) == -(-2 * TOKENS // CODE.R)
     assert all(len(cw) == CODE.n for c in x.chunks for cw in c.codewords)
-    # systematic: payload symbol j sits at codeword index stride * j
-    assert [x.chunks[0].codewords[0][CODE.stride * j] for j in range(CODE.l)] == x.payload_rows[0]
+    # non-systematic: the message is recovered only by decoding; no codeword symbol equals a payload symbol
+    assert v2.decode_row(CODE, x.chunks[0].codewords[0])[:CODE.l] == x.payload_rows[0]
     # word addressing is the leaf/v1 row-major index
     pos = x.position(1536 * 3 + 1000)
     assert (pos.tableau_row, pos.payload_index) == (3 * 2 + 1, 1000 - 768)
@@ -122,15 +122,51 @@ def test_randomizers_make_the_root_non_canonical(world):
     assert same.digest == x.digest
 
 
-def test_ntt_roundtrip_and_systematic_encoding():
+def test_ntt_roundtrip_and_coset_encoding():
     rng = random.Random(1)
     coeffs = [rng.randrange(v2.BABYBEAR) for _ in range(64)]
     assert v2.intt(v2.ntt(coeffs)) == coeffs
+    assert v2.coset_intt(v2.coset_ntt(coeffs)) == coeffs
     code = v2.Code(n=64, k=16, l=8, R=2)
     cw = v2.encode_row(code, list(range(8)), [5] * 8)
-    assert [cw[code.stride * j] for j in range(8)] == list(range(8))
-    # a codeword has degree < k
-    assert all(c == 0 for c in v2.intt(cw)[code.k:])
+    # a codeword has degree < k on the coset, and decodes to the message
+    assert all(c == 0 for c in v2.coset_intt(cw)[code.k:])
+    assert v2.decode_row(code, cw) == list(range(8)) + [5] * 8
+    # the codeword domain (31 H_n) is disjoint from the message domain (H_k): no systematic position exists
+    assert not set(code.domain()) & set(code.message_domain())
+    # evaluating the interpolant directly at every coset point reproduces the codeword
+    P = v2.BABYBEAR
+    poly = v2.intt(list(range(8)) + [5] * 8)
+    for x, y in zip(code.domain(), cw, strict=True):
+        assert sum(c * pow(x, i, P) for i, c in enumerate(poly)) % P == y
+    # and on the subgroup itself the polynomial IS systematic -- the domain choice is what removes the leak
+    assert v2.ntt(poly)[:16] == list(range(8)) + [5] * 8
+
+
+def test_no_opened_column_is_a_payload_word(world):
+    """Red-team F3 (redteam_vu.md): with the systematic encoding an opened column ``(n/k) j`` was payload word ``j`` in
+    the clear.  Open EVERY column of every chunk of the activation tensor: no column value equals the payload word of
+    its row at any position that the old systematic map would have exposed, and, stronger, no column is a payload
+    word at all beyond chance (a 16-bit word among 31-bit field elements: expected ``n * 2^16 / p ~ 0.13`` hits/row)."""
+    x = world["x"]
+    stride = CODE.n // CODE.k
+    systematic_hits = 0
+    chance_hits = 0
+    for chunk in x.chunks:
+        for r, cw in enumerate(chunk.codewords):
+            payload = x.payload_rows[chunk.index * CODE.R + r]
+            for j in range(CODE.l):
+                if cw[stride * j] == payload[j]:
+                    systematic_hits += 1
+            pl = set(payload)
+            chance_hits += sum(1 for v in cw if v in pl)
+    rows = len(x.payload_rows)
+    assert systematic_hits <= rows * CODE.l * 2 ** -12, systematic_hits      # was == rows * l before the fix
+    # coincidences only: a column value equal to SOME word of its row happens ~ n * |payload| / p times per row
+    assert chance_hits < rows * CODE.n * CODE.l / v2.BABYBEAR * 8 + 8 * rows, chance_hits
+    # the old encoding (on the subgroup) would have exposed every payload word: the check is not vacuous
+    old = v2.ntt(v2.intt(x.payload_rows[0] + x.randomizer_rows[0]) + [0] * (CODE.n - CODE.k))
+    assert [old[stride * j] for j in range(CODE.l)] == x.payload_rows[0]
 
 
 def test_honest_vu_verifies(world):

@@ -11,7 +11,12 @@ Lane `red-team-vu`; report `backends/numerical/reports/redteam_vu.md` (+ `.json`
   with the constraint evaluator's failing constraints and the Plonky3 verifier's verdict per case. **Two cases are
   `FORGED`** (`b_zero_batch_as_any_statement`, `b_degree_bits_unbound`): the verifier accepts them because no
   public value, batch size or AIR identity is bound. They stay in this fixture as must-reject cases; `run_battery.sh`
-  exits 1 until the `direct` lane fixes the binding.
+  exits 1 until the `direct` lane fixes the binding. **Fixed 2026-09-22** (lane `soundness-fixes`, commit `3fe85aa`,
+  `backends/direct/PROTOCOL.md` 12.5): `vu_battery_b_r20260922-073904-7a6c.json` is the post-fix run -- 36 cases,
+  0 FORGED, `run_battery.sh` exits 0; `b_zero_batch_as_any_statement` -> `StatementColumnMismatch(vu.y16 at zeta)`,
+  `b_degree_bits_unbound` -> `DegreeBitsMismatch(expected 19, proof says 8)`, and `b_claim_free_nonlast` (formerly
+  accepted by design) is rejected as well. `leaf_v2_exhaustion.json` is regenerated after the coset fix
+  (`7232e27`): `payload_words_in_clear` is 0 in every session; the exhaustion oracle stays.
 - `challenger_audit_*.json` -- 10^5 samples of the forked Goldilocks challenger and the BabyBear challenger
   (uniform), and the upstream bug reproduced (1000/1000 zeros).
 - `leaf_v2_exhaustion.json` -- leaf/v2: systematic positions leak payload words in the clear at any `t`; the
