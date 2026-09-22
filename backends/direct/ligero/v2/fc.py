@@ -95,10 +95,16 @@ def fc_inv(a: torch.Tensor) -> torch.Tensor:
 
         shape = a.shape
         flat = a.reshape(-1, D)
+        zero = ~flat.any(dim=1)                                                # a zero breaks a Montgomery chain: mask
+        if bool(zero.any()):
+            flat = flat.clone()
+            flat[zero, 0] = 1
         mont = ((flat * R_MOD_P) % P).t().contiguous().to(torch.int32)        # (D, N) Montgomery form
         out = inv(cp.from_dlpack(mont).view(cp.uint32))
         res = torch.from_dlpack(out.view(cp.int32)).to(torch.int64) & 0xFFFFFFFF   # (D, N) = mont(a^-1)
-        return ((res * R_INV) % P).t().reshape(shape)
+        res = ((res * R_INV) % P).t()
+        res[zero] = 0
+        return res.reshape(shape)
     return _fc_inv_torch(a)
 
 
