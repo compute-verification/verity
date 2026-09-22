@@ -12,7 +12,9 @@ this; it needs numpy and nvcc.
         --sweep --n-random 100000
 
 ``--replay-golden`` re-executes every record of a golden file on the device (each at its own tile position) and requires the
-hardware word to equal the record's ``d``.  ``--sweep`` runs the finite-sweep families (random, random nonzero accumulators, uniform
+hardware word to equal the record's ``d``.  ``--replay-instances DIR`` replays ``bench-instances/v1`` (the ``tu-k16`` tier as one
+launch, ``vu-k1536`` as 96 dependent launches with the hardware's accumulators carried) against the dataset's expected words, after
+checking the arrays' sha256 against the pinned manifest (``--instances-manifest``).  ``--sweep`` runs the finite-sweep families (random, random nonzero accumulators, uniform
 encodings, subnormal, cancellation, mixed magnitude, near overflow, signed zero, tiny accumulators) and compares every output
 element with ``silicon.tc_dot``.  Outputs under ``--out``: ``probe_results.json`` (counts, device identity, first mismatches),
 ``capture_sample.json`` (golden-format records sampled per family), ``tiles_<family>.npz`` (the full capture: A, Bt, C, D per
@@ -375,6 +377,121 @@ def replay_golden(probe: Probe, path: Path, records: list[dict] | None = None, p
     }
 
 
+def _sha256(path: Path) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def replay_instances(probe: Probe, root: Path, manifest_path: Path | None = None) -> dict:
+    """Replay ``bench-instances/v1`` on the device: the ``tu-k16`` tier as one launch (instance ``r`` at tile ``r``, position
+    ``(r % 16, (r // 16) % 8)``, the rest of the tile zero) and the ``vu-k1536`` tier as 96 dependent launches (all instances per
+    launch; the hardware's D of step ``s`` is the C of step ``s + 1``).  Every outgoing accumulator word is compared with the
+    dataset's ``tu-k16.out.u32`` / ``vu-k1536.acc.u32``; the final accumulator, cast FP32 -> BF16 RNE on the CPU (the epilogue is
+    not a tensor-core operation), with ``vu-k1536.y.u16``.  Before anything runs, every array's sha256 is checked against
+    ``manifest_path`` (default ``<root>/manifest.json``): a replay of arrays other than the pinned ones is refused."""
+
+    from verity.ml.tc.cast import f32_to_bf16_word
+    from verity_numerical.bench import instances as I
+
+    manifest_path = manifest_path or root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    digests = {"manifest": str(manifest_path), "manifest_sha256": _sha256(manifest_path), "checked": 0, "mismatched": []}
+    for tier in ("tu-k16", "vu-k1536"):
+        for name, rec in manifest["tiers"][tier]["files"].items():
+            digests["checked"] += 1
+            if _sha256(root / name) != rec["sha256"]:
+                digests["mismatched"].append(name)
+    if digests["mismatched"]:
+        raise RuntimeError(f"instance arrays under {root} differ from {manifest_path}: {digests['mismatched']}")
+
+    report: dict = {"dataset": manifest["dataset"], "root": str(root), "digests": digests}
+
+    # tu-k16: one launch
+    tu = I.load("tu-k16", root)
+    n = tu.n
+    A = np.zeros((n, 16, K), np.uint16)
+    Bt = np.zeros((n, 8, K), np.uint16)
+    C = np.zeros((n, 16, 8), np.uint32)
+    a = np.frombuffer(tu.a.tobytes(), dtype=np.uint16).reshape(n, K)
+    b = np.frombuffer(tu.b.tobytes(), dtype=np.uint16).reshape(n, K)
+    c = np.frombuffer(tu.c.tobytes(), dtype=np.uint32)
+    want = np.frombuffer(tu.out.tobytes(), dtype=np.uint32)
+    rows = np.arange(n) % 16
+    cols = (np.arange(n) // 16) % 8
+    A[np.arange(n), rows] = a
+    Bt[np.arange(n), cols] = b
+    C[np.arange(n), rows, cols] = c
+    t0 = time.time()
+    D = probe.mma_tiles(A, Bt, C)
+    got = D[np.arange(n), rows, cols]
+    rest = D.copy()
+    rest[np.arange(n), rows, cols] = 0
+    bad = np.nonzero(got != want)[0]
+    report["tu-k16"] = {
+        "instances": int(n),
+        "mismatches": int(bad.size),
+        "other_positions_nonzero": int(np.count_nonzero(rest)),
+        "first_mismatches": [{"id": int(r), **hexrec(c[r], a[r], b[r], got[r]), "expected": f"{int(want[r]):08x}"} for r in bad[:5]],
+        "gpu_seconds": round(time.time() - t0, 2),
+    }
+    print("replay tu-k16", json.dumps({k: v for k, v in report["tu-k16"].items() if k != "first_mismatches"}), flush=True)
+
+    # vu-k1536: 96 dependent launches
+    vu = I.load("vu-k1536", root)
+    n, steps = vu.n, vu.K // K
+    x = np.frombuffer(vu.x.tobytes(), dtype=np.uint16).reshape(n, steps, K)
+    w = np.frombuffer(vu.w.tobytes(), dtype=np.uint16).reshape(n, steps, K)
+    acc = np.frombuffer(vu.acc.tobytes(), dtype=np.uint32).reshape(n, steps)
+    y = np.frombuffer(vu.y.tobytes(), dtype=np.uint16)
+    rows = np.arange(n) % 16
+    cols = (np.arange(n) // 16) % 8
+    carried = np.zeros(n, np.uint32)  # c_0 = +0
+    per_step = []
+    first = []
+    other_nonzero = 0
+    t0 = time.time()
+    for s in range(steps):
+        A = np.zeros((n, 16, K), np.uint16)
+        Bt = np.zeros((n, 8, K), np.uint16)
+        C = np.zeros((n, 16, 8), np.uint32)
+        A[np.arange(n), rows] = x[:, s]
+        Bt[np.arange(n), cols] = w[:, s]
+        C[np.arange(n), rows, cols] = carried
+        D = probe.mma_tiles(A, Bt, C)
+        got = D[np.arange(n), rows, cols]
+        rest = D.copy()
+        rest[np.arange(n), rows, cols] = 0
+        other_nonzero += int(np.count_nonzero(rest))
+        bad = np.nonzero(got != acc[:, s])[0]
+        per_step.append(int(bad.size))
+        for r in bad[: max(0, 5 - len(first))]:
+            first.append({"id": int(r), "step": s, **hexrec(carried[r], x[r, s], w[r, s], got[r]), "expected": f"{int(acc[r, s]):08x}"})
+        carried = got.copy()  # the hardware's own accumulator carries on (mismatches propagate, as they would in a real chain)
+    y_hw = np.array([f32_to_bf16_word(int(v)) for v in carried], dtype=np.uint16)
+    y_bad = np.nonzero(y_hw != y)[0]
+    report["vu-k1536"] = {
+        "instances": int(n),
+        "steps": int(steps),
+        "accumulator_words_compared": int(n * steps),
+        "accumulator_mismatches": int(sum(per_step)),
+        "steps_with_mismatches": {str(s): m for s, m in enumerate(per_step) if m},
+        "y_compared": int(n),
+        "y_mismatches": int(y_bad.size),
+        "first_y_mismatches": [{"id": int(r), "hardware": f"{int(y_hw[r]):04x}", "expected": f"{int(y[r]):04x}"} for r in y_bad[:5]],
+        "other_positions_nonzero": other_nonzero,
+        "first_mismatches": first,
+        "epilogue": "f32_to_bf16_word (RNE) applied on the CPU to the hardware's final accumulator",
+        "gpu_seconds": round(time.time() - t0, 2),
+    }
+    print("replay vu-k1536", json.dumps({k: v for k, v in report["vu-k1536"].items() if k not in ("first_mismatches", "first_y_mismatches")}), flush=True)
+    return report
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--arch", required=True, help="sm_80 (A100) or sm_89 (RTX 4090)")
@@ -382,6 +499,8 @@ def main() -> int:
     ap.add_argument("--pipeline", default="ampere_bf16_m16n8k16")
     ap.add_argument("--replay-golden", default=None, metavar="JSON")
     ap.add_argument("--replay-special", default=None, metavar="JSON.GZ", help="mma_special.reduced.json.gz: its all-finite records")
+    ap.add_argument("--replay-instances", default=None, metavar="DIR", help="bench-instances/v1 directory with the built arrays: replay tu-k16 and vu-k1536")
+    ap.add_argument("--instances-manifest", default=None, metavar="JSON", help="the pinned manifest to check the arrays against (default DIR/manifest.json)")
     ap.add_argument("--sweep", action="store_true")
     ap.add_argument("--n-random", type=int, default=100_000)
     ap.add_argument("--seed", type=int, default=20260902)
@@ -410,6 +529,10 @@ def main() -> int:
         path = Path(args.replay_special)
         results["special_replay"] = replay_golden(probe, path, special_all_finite_records(path), args.pipeline)
         print("special_replay", json.dumps({k: v for k, v in results["special_replay"].items() if k != "first_mismatches"}), flush=True)
+
+    if args.replay_instances:
+        results["instances_replay"] = replay_instances(probe, Path(args.replay_instances),
+                                                       Path(args.instances_manifest) if args.instances_manifest else None)
 
     if args.sweep:
         only = set(args.families.split(",")) if args.families else None
@@ -483,15 +606,26 @@ def main() -> int:
             failures.append(f"{replay} mismatches={results[replay]['mismatches']} other_positions_nonzero={results[replay]['other_positions_nonzero']}")
     if "sweep" in results and results["sweep"]["total_mismatches_vs_model"]:
         failures.append(f"sweep mismatches={results['sweep']['total_mismatches_vs_model']}")
+    if "instances_replay" in results:
+        ir = results["instances_replay"]
+        tu, vu = ir["tu-k16"], ir["vu-k1536"]
+        if tu["mismatches"] or tu["other_positions_nonzero"]:
+            failures.append(f"instances tu-k16 mismatches={tu['mismatches']} other_positions_nonzero={tu['other_positions_nonzero']}")
+        if vu["accumulator_mismatches"] or vu["y_mismatches"] or vu["other_positions_nonzero"]:
+            failures.append(f"instances vu-k1536 accumulator_mismatches={vu['accumulator_mismatches']} y_mismatches={vu['y_mismatches']} "
+                            f"other_positions_nonzero={vu['other_positions_nonzero']}")
     results["failures"] = failures
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
     run_id = os.environ.get("RESEARCH_RUN_ID")
     if run_id:
+        fingerprint = {"probe": "tools/tc_probe/tc_probe.py", "arch": args.arch, "device": identity["device"],
+                       "seed": args.seed, "n_random": args.n_random, "pipeline": args.pipeline}
+        if "instances_replay" in results:
+            fingerprint["instances"] = {"dataset": results["instances_replay"]["dataset"], "manifest_sha256": results["instances_replay"]["digests"]["manifest_sha256"]}
         result = {
             "schema": "research/result/v0.1",
             "run_id": run_id,
-            "workload_fingerprint": {"probe": "tools/tc_probe/tc_probe.py", "arch": args.arch, "device": identity["device"],
-                                     "seed": args.seed, "n_random": args.n_random, "pipeline": args.pipeline},
+            "workload_fingerprint": fingerprint,
             "validation": {"status": "passed" if not failures else "failed", "checker": "tc_probe vs silicon.tc_dot",
                            "detail": "; ".join(failures) or "every hardware word reproduced", "evidence": ["probe_results.json"]},
             "measurements": [{"name": "wall", "value": results["seconds"], "unit": "s"}],
