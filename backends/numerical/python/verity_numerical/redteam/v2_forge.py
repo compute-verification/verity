@@ -175,23 +175,21 @@ def build_gkr_chain(out: Path, p: Params = REAL, seed: int = 424242) -> dict:
         _write_rows(urows, d / "units.bin", len(uctx.cols))
         _write_rows(erws, d / "epilogue.bin", len(ectx.cols))
         _write_rows([[y] for y in ys], d / "public.bin", 1)
-        shutil.copy(out / "chain.txt", d / "chain.txt")
+        for f in ("chain.txt", "circuit.txt", "epilogue.txt"):
+            shutil.copy(out / f, d / f)
 
-    # B=1 honest single-VU dir (edge case; must ACCEPT)
-    d1 = neg / "b1_honest"
-    d1.mkdir(parents=True, exist_ok=True)
-    _write_rows(per_vu_rows[0], d1 / "units.bin", len(uctx.cols))
-    _write_rows([erows[0]], d1 / "epilogue.bin", len(ectx.cols))
-    _write_rows([[y16s[0]]], d1 / "public.bin", 1)
-    shutil.copy(out / "chain.txt", d1 / "chain.txt")
+    def _emit_single(name: str, urows, erow, y16):
+        d = neg / name
+        d.mkdir(parents=True, exist_ok=True)
+        _write_rows(urows, d / "units.bin", len(uctx.cols))
+        _write_rows([erow], d / "epilogue.bin", len(ectx.cols))
+        _write_rows([[y16]], d / "public.bin", 1)
+        for f in ("chain.txt", "circuit.txt", "epilogue.txt"):
+            shutil.copy(out / f, d / f)
 
-    # B=1 forgery: single VU, public word flipped
-    d1b = neg / "b1_wrong_word"
-    d1b.mkdir(parents=True, exist_ok=True)
-    _write_rows(per_vu_rows[0], d1b / "units.bin", len(uctx.cols))
-    _write_rows([erows[0]], d1b / "epilogue.bin", len(ectx.cols))
-    _write_rows([[y16s[0] ^ 1]], d1b / "public.bin", 1)
-    shutil.copy(out / "chain.txt", d1b / "chain.txt")
+    # B=1 honest single-VU dir (edge case; must ACCEPT) and its wrong-word forgery
+    _emit_single("b1_honest", per_vu_rows[0], erows[0], y16s[0])
+    _emit_single("b1_wrong_word", per_vu_rows[0], erows[0], y16s[0] ^ 1)
 
     manifest = {
         "vus": vus, "steps": steps, "unit_columns": len(uctx.cols), "epilogue_columns": len(ectx.cols),
