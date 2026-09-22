@@ -73,7 +73,8 @@ class Relation:
     @property
     def hooks(self):
         from .protocol import RelationHooks
-        return RelationHooks(lambda c, a, b, y, device="cpu": self.public_vectors(self.params, c, a, b, y, device=device),
+        # protocol.verify calls hooks.public_vectors(p, c, a, b, y, device=...) with the system's params: the same ``p``
+        return RelationHooks(lambda p, c, a, b, y, device="cpu": self.public_vectors(p, c, a, b, y, device=device),
                              word_dtype=self.word_dtype, y16_dtype=self.y_dtype, y16_bits=self.y_bits, tag=self.tag)
 
 
