@@ -44,9 +44,39 @@ def _bitrev(b: int, device) -> torch.Tensor:
     return _REV[key]
 
 
+try:
+    import triton
+    import triton.language as tl
+
+    @triton.jit
+    def _layout_kernel(a_ptr, rev_ptr, out_ptr, copies, g_n, BC: tl.constexpr, BG: tl.constexpr):
+        """``out[g, j] = a[rev[j], g]`` on ``BC x BG`` tiles: the gather-load is coalesced along ``g``, the store along ``j``."""
+        pj = tl.program_id(0)
+        pg = tl.program_id(1)
+        j = pj * BC + tl.arange(0, BC)
+        g = pg * BG + tl.arange(0, BG)
+        mj = j < copies
+        mg = g < g_n
+        c = tl.load(rev_ptr + j, mask=mj, other=0)
+        v = tl.load(a_ptr + c[:, None] * g_n + g[None, :], mask=mj[:, None] & mg[None, :], other=0)
+        tl.store(out_ptr + g[None, :] * copies + j[:, None], v.to(tl.int32), mask=mj[:, None] & mg[None, :])
+
+    _HAVE_TRITON = True
+except ImportError:  # pragma: no cover
+    _HAVE_TRITON = False
+
+
 def _layout(a: torch.Tensor, b: int) -> torch.Tensor:
     """``(2^b, g_n)`` int64 base -> ``(g_n · 2^b,)`` int32 with ``j = g · 2^b + rev_b(c)``."""
     rev = _bitrev(b, a.device)
+    copies, g_n = a.shape
+    if _HAVE_TRITON and a.is_cuda:
+        a = a.contiguous()
+        out = torch.empty((g_n, copies), dtype=torch.int32, device=a.device)
+        BC, BG = 64, 64
+        grid = ((copies + BC - 1) // BC, (g_n + BG - 1) // BG)
+        _layout_kernel[grid](a, rev, out, copies, g_n, BC=BC, BG=BG, num_warps=4)
+        return out.view(-1)
     return a.to(torch.int32)[rev].t().contiguous().view(-1)
 
 
