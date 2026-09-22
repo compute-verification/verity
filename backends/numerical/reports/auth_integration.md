@@ -213,6 +213,10 @@ what sharing buys.
 
 ## 7. Open risks
 
+- The baselines are `explore.tensor`'s model prices (A 1.055e7, B 1.348e7 non-ZK). The b-encode lane's measured SIMT
+  NTT encoder has since re-priced B to 2.57e6 (4090) / 1.18e6 (H100 scaling): against that smaller base the algebraic
+  option's absolute delta (2.4e6 limb MACs + 12.6 M public-coefficient terms per batch) is still < 1 % -- the
+  option table should be re-run once `DESIGNS` carries the measured encoder.
 - Every prover-side number is a model at the H100 price list; the relative claims (+0.04 %) rest on the algebraic tests
   costing two row combinations, which the tensor model prices the same way as the designs' own combinations.
 - The capture-time cost (45 + 15 ms per decode step) is the only new *measured-rate-derived* wall-clock; it competes
