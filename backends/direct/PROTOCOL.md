@@ -847,3 +847,56 @@ across two tables (a second \(\beta\)-power keeps the degree at 4) and \(g\) fol
 hints (words, carries, quotients, selectors), which lookups do not touch -- that is a relation-side question
 (section 12.2's per-gadget census); (iii) on the GPU only the encoding term matters and the 3.4x is the number to
 carry to tensor.md.
+
+### 14.7 Statement binding of the LogUp realisation (SOUNDNESS FIX, lane `b-bind`, 2026-09-22) **[implemented]**
+
+Section 12.5 bound the limb realisation; the three-round prover/verifier of 14.3 (`lookup_stark.rs`) was written
+in parallel and shipped with the pre-fix behaviour: `verify_lookup` took no statement, read `degree_bits` from the
+proof and built the public table matrix at `1 << proof.degree_bits` -- the red team's F1 and F2 verbatim
+(`redteam-logup-b` cases `zero_batch_as_any_statement`, `degree_bits_from_proof`), and the third lane's own note
+("the lookup path reads degree_bits the same way and will need verify_bound"). `prove_lookup_bound` /
+`verify_lookup_bound_bytes` close it; `vu-bench --lookup` uses them (`--unbound` is the labelled timing baseline,
+as in 12.5). The relation, the AIR and the round structure are unchanged.
+
+**Statement.** The same \(\mathsf{stmt}\) as 12.5 with one difference in the height: the tables live in the trace
+domain (14.3 round 1), so \(n = 2^{\lceil \log_2 \max(96B,\ |P|)\rceil}\) with \(|P| = 116\,722\) table rows --
+\(n = 2^{17}\) for any \(B \le 1365\), \(2^{19}\) at \(B = 4096\) (`Statement::with_min_rows`,
+`lookup_stark::lookup_statement`). `degree_bits` is fixed by the verifier from it (F2); the proof's must equal it
+and the verifier builds \(P\) at its own height.
+
+**Header.** Before \(z, \beta\) (the first challenges) both parties absorb the 12.5 header (domain tag, AIR id of
+the *lookup* layout -- 401 columns, `lookup.m` included, the lookup constraint names -- field, width, extension
+degree, \(B, K\), `STEPS`, rows, `degree_bits`, FRI parameters, every claimed word, operand hashes) followed by a
+LogUp header (`statement::lookup_header`): tag `verity-direct/chain-air/logup/v1`, preprocessed width, aux width,
+the extension degree the aux columns are laid out for, and **the SHA-256 of the verifier's table set**
+(`statement::table_digest`: every table's name, tag, offset, rows, lowest key and every table row's tuple). The
+verifier's challenges thus depend on the table set it holds, independently of the proof; the recomputed
+preprocessed commitment (14.3 round 1) is then compared as before. Both are needed for the stated property "a
+prover cannot substitute a table": the commitment check catches a prover who committed to another \(P\); the
+digest makes a verifier who holds another table set draw other challenges (the two parties never agree on a
+transcript unless they agree on the tables).
+
+**Public column.** `vu.y16` is a column of the main matrix (round 1, committed before any challenge); the verifier
+evaluates the statement's word polynomial at \(\zeta, \zeta\omega\) (`statement::eval_pair`) and requires the
+opened `main_local[col]`, `main_next[col]` to equal it, before `pcs.verify` (same soundness term as 12.5:
+\(+ n / |F_{ext}|\) per public column, \(2^{19-124} = 2^{-105}\) BabyBear^4, \(2^{-136}\) BabyBear^5). With
+`--bind-operands` the 32 operand columns are public too.
+
+**Latency hooks.** `prove_lookup_bound` builds its challenger through `Backend::challenger()` (the
+`RttChallenger`-wrapped one) *after* `rtt::begin`, so the header observes count as part of the first prover message
+and `rounds.sequential_depth` is unchanged by the fix.
+
+**Checks and pins.** `tests/lookup_statement.rs` (`--include-ignored`, 2^17 rows): zero batch claiming the real
+words → `StatementColumn`; one word changed / swapped → `StatementColumn`; other FRI parameters → opening argument
+fails; the 2-VU (17-bit) proof for the 4096-VU (19-bit) verifier → `DegreeBits{19, 17}`; the same words with the
+limb realisation's 8-bit height → `DegreeBits{8, 17}` (the height is the tables', not the words'); a verifier
+holding a table set with one entry changed rejects the honest proof, and a proof made against the changed table set
+fails the honest verifier; operand flip with `--bind-operands` → `StatementColumn`; header sensitivity (digest,
+widths, extension degree). `vu-bench --lookup` asserts the wrong-word, wrong-\(B\) and substituted-table rejections
+on every run. `vu-neg --lookup` (52 negatives, `lookup_failing_rows`), the babybear-rules battery in `--lookup`
+mode and the limb battery (`run_battery.sh`) are in `run_bind_gate.sh`; results in 14.8.
+
+**What stays open.** The F19 residual of 12.5 (openings at \(\zeta\) absorbed before \(\alpha\) / the query indices
+inside `p3-fri 0.4.3::verify_shape_and_sample_challenges`) applies to this path too, through the same `pcs.verify`.
+The `verify_lookup` (unbound) entry point remains for the diagnostic tests and the `--unbound` baseline; it is not a
+proof verifier and its result is labelled `statement_binding.bound = false`.

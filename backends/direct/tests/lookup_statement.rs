@@ -1,4 +1,4 @@
-//! Statement binding of the LogUp realisation (PROTOCOL.md 14.6; the red team's F1-F3 carried from the limb
+//! Statement binding of the LogUp realisation (PROTOCOL.md 14.7; the red team's F1-F3 carried from the limb
 //! path): the zero batch claiming real words, a swapped / changed word, other FRI parameters, `degree_bits` 17
 //! (2 VUs, table-height trace) vs 19 (4096 VUs), a substituted table row.  Pod-sized (the tables make the trace
 //! 2^17 rows): `#[ignore]` locally, `cargo test --release --tests -- --include-ignored` on the pod.

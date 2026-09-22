@@ -243,7 +243,7 @@ impl LookupLayout {
 
 /// The red team's table substitution: the same layout with one entry of the first fixed table's row `row`
 /// changed (its first output column +1).  A verifier holding this table set must reject a proof made against the
-/// honest one (PROTOCOL.md 14.6: the table digest is in the header and the preprocessed commitment is recomputed).
+/// honest one (PROTOCOL.md 14.7: the table digest is in the header and the preprocessed commitment is recomputed).
 pub fn substitute_table_row(lay: &LookupLayout, row: usize) -> LookupLayout {
     let mut tables: TableSet = (*lay.tables).clone();
     let t = tables.tables.iter_mut().find(|t| matches!(t.kind, TableKind::Fixed(_))).expect("a fixed table");

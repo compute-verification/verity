@@ -221,7 +221,7 @@ where
 }
 
 /// The shared verifier: `degree_bits` is the caller's (the statement's in the bound path), `public_columns` are
-/// `(main column, name, (W(ζ), W(ζ·g)))` checks on the opened main-trace values (PROTOCOL.md 12.5, 14.6).
+/// `(main column, name, (W(ζ), W(ζ·g)))` checks on the opened main-trace values (PROTOCOL.md 12.5, 14.7).
 /// `preprocessed` is recomputed by the verifier (the tables are public) and its commitment compared.
 fn verify_lookup_inner<SC, A>(
     config: &SC,
@@ -343,7 +343,7 @@ where
     Ok(())
 }
 
-// --- statement-bound prove/verify (PROTOCOL.md 14.6; red team F1-F3 carried to the LogUp realisation) ------------
+// --- statement-bound prove/verify (PROTOCOL.md 14.7; red team F1-F3 carried to the LogUp realisation) ------------
 
 /// The header of the LogUp realisation: the chain header (`statement::header`, with `rows` / `degree_bits` at the
 /// lookup trace's height) followed by `statement::lookup_header` (widths, extension degree, table digest).

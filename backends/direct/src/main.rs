@@ -584,7 +584,7 @@ where
     let mult: Vec<Val<B::SC>> = (0..rows).map(|r| main.values[r * width + width - 1]).collect();
     let llay = air_.lay.clone();
 
-    // the statement (PROTOCOL.md 12.5 / 14.6): every claimed word, the trace at least as tall as the tables
+    // the statement (PROTOCOL.md 12.5 / 14.7): every claimed word, the trace at least as tall as the tables
     let bind_operands = args.iter().any(|a| a == "--bind-operands");
     let words: Vec<u64> = vus.iter().map(|v| v.y16).collect();
     let stmt = if bind_operands {

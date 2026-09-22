@@ -173,7 +173,7 @@ pub fn header<G: PrimeField64>(kind: FieldKind, air_id: &[u8; 32], lay_width: us
     out
 }
 
-/// The LogUp realisation's addition to the header (PROTOCOL.md 14.6), absorbed right after `header`: a tag, the
+/// The LogUp realisation's addition to the header (PROTOCOL.md 14.7), absorbed right after `header`: a tag, the
 /// preprocessed and auxiliary widths, the challenge-extension degree the aux columns are laid out for, and the
 /// digest of the table set the verifier holds -- the prover cannot substitute a table without changing the
 /// transcript (the verifier also recomputes the preprocessed commitment and compares it).
