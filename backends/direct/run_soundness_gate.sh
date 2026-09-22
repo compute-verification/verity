@@ -41,8 +41,10 @@ BIN="$CARGO_TARGET_DIR/release/direct-unit"
 (cd backends/direct && cargo build --release -j"$RAYON_NUM_THREADS" 2>&1 | tail -1)
 
 if [ "$WHAT" = gate ] || [ "$WHAT" = all ]; then
-    echo "== cargo test --release (unit negatives + chain + statement binding)"
-    (cd backends/direct && cargo test --release -j"$RAYON_NUM_THREADS" 2>&1 | grep -E "^test |test result|FAILED|panicked" | tee "$RUN_DIR/cargo_test.txt" | grep -E "test result|FAILED|panicked")
+    # --tests: the doctest target does not build in release (p3_uni_stark::DebugConstraintBuilder is cfg(debug_assertions);
+    # a bound inherited from main, not this lane) -- unit/integration tests are what the gate needs
+    echo "== cargo test --release --tests (unit negatives + chain + statement binding)"
+    (cd backends/direct && cargo test --release --tests -j"$RAYON_NUM_THREADS" 2>&1 | grep -E "^test |test result|FAILED|panicked" | tee "$RUN_DIR/cargo_test.txt" | grep -E "test result|FAILED|panicked")
     for FIELD in goldilocks babybear; do
         echo "== vu-neg $FIELD (52 vu-k1536-neg)"
         mkdir -p "$RUN_DIR/neg_$FIELD"
