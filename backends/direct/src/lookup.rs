@@ -23,9 +23,10 @@ use p3_maybe_rayon::prelude::*;
 
 use crate::program::Table;
 
-/// Number of tuple columns (key + up to four outputs); the tag is column `N_COLS`.
+/// Number of tuple columns of the v1 table set (key + up to four outputs); the tag is column `N_COLS`.  The v2
+/// AIR's tuple tables widen this per table set (`TableSet::ncols`, PROTOCOL.md 15).
 pub const N_COLS: usize = 5;
-/// Preprocessed width: the tuple and the tag.
+/// Preprocessed width of the v1 table set: the tuple and the tag.
 pub const PRE_WIDTH: usize = N_COLS + 1;
 /// Sum of query degrees a helper column may carry (the helper constraint has degree `1 + sum`, `MAX_DEG = 5`).
 pub const GROUP_DEG: usize = 4;
@@ -40,6 +41,53 @@ pub enum TableKind {
     Range(u32),
     /// A fixed table expanded to contiguous keys (saturating rows repeated up to the slack bound).
     Fixed(Table),
+    /// A multi-key tuple table (v2): the row of `(k_1, .., k_a)` is the mixed-radix index over the key ranges.
+    Tuple(TupleTable),
+}
+
+/// A tuple table `(k_1, .., k_a; o_1, .., o_b)`: every key component ranges over `[lo_i, hi_i)`, the outputs
+/// are a function of the keys (evaluated once per row when the table set is built).  A row whose keys are not in
+/// the function's domain (`None`) is a padding row (tag 0, never a valid query).
+#[derive(Clone)]
+pub struct TupleTable {
+    pub name: &'static str,
+    pub keys: Vec<(i128, i128)>,
+    pub n_out: usize,
+    pub f: Arc<dyn Fn(&[i128]) -> Option<Vec<i128>> + Send + Sync>,
+}
+
+impl std::fmt::Debug for TupleTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TupleTable({}, keys={:?}, n_out={})", self.name, self.keys, self.n_out)
+    }
+}
+
+impl TupleTable {
+    pub fn rows(&self) -> usize {
+        self.keys.iter().map(|&(lo, hi)| (hi - lo) as usize).product()
+    }
+    /// Mixed-radix index of a key tuple (last component fastest), or `None` when a component is out of range.
+    pub fn index_of(&self, keys: &[i128]) -> Option<usize> {
+        assert_eq!(keys.len(), self.keys.len());
+        let mut idx = 0usize;
+        for (k, &(lo, hi)) in keys.iter().zip(&self.keys) {
+            if *k < lo || *k >= hi {
+                return None;
+            }
+            idx = idx * (hi - lo) as usize + (*k - lo) as usize;
+        }
+        Some(idx)
+    }
+    /// The key tuple of row `i`.
+    pub fn keys_of(&self, mut i: usize) -> Vec<i128> {
+        let mut out = vec![0i128; self.keys.len()];
+        for (c, &(lo, hi)) in self.keys.iter().enumerate().rev() {
+            let r = (hi - lo) as usize;
+            out[c] = lo + (i % r) as i128;
+            i /= r;
+        }
+        out
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -53,8 +101,12 @@ pub struct TableSpec {
     pub rows: usize,
     /// Lowest key (row `offset + (key - key_lo)`).
     pub key_lo: i128,
-    /// Output columns per row (`rows x (N_COLS - 1)`, zero-padded); empty for range tables.
+    /// Output columns per row (`rows x n_out`); empty for range tables.
     pub outs: Vec<Vec<i128>>,
+    /// Number of key components (1 for range / fixed tables).
+    pub n_keys: usize,
+    /// Rows of a tuple table whose keys are outside the function's domain (padding: tag 0).
+    pub invalid: Vec<bool>,
 }
 
 impl TableSpec {
@@ -75,6 +127,23 @@ impl TableSpec {
             self.outs[k as usize][c]
         }
     }
+    /// Row index of a key tuple (tuple tables), or `INVALID`.
+    pub fn index_tuple(&self, keys: &[i128]) -> u32 {
+        match &self.kind {
+            TableKind::Tuple(t) => match t.index_of(keys) {
+                Some(i) if !self.invalid[i] => (self.offset + i) as u32,
+                _ => INVALID,
+            },
+            _ => {
+                assert_eq!(keys.len(), 1);
+                self.index(keys[0])
+            }
+        }
+    }
+    /// The outputs of table row `r` (absolute row index).
+    pub fn outs_at(&self, r: u32) -> &[i128] {
+        &self.outs[r as usize - self.offset]
+    }
 }
 
 /// The tables a program needs, discovered by a collecting witness run.
@@ -82,12 +151,15 @@ impl TableSpec {
 pub struct Needs {
     pub ranges: BTreeSet<u32>,
     pub fixed: BTreeMap<String, Table>,
+    pub tuples: BTreeMap<String, TupleTable>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TableSet {
     pub tables: Vec<TableSpec>,
     pub total_rows: usize,
+    /// Tuple columns of the preprocessed matrix (keys then outputs, zero-padded); the tag is column `ncols`.
+    pub ncols: usize,
 }
 
 impl TableSet {
@@ -95,9 +167,11 @@ impl TableSet {
         let mut tables = vec![];
         let mut offset = 0usize;
         let mut tag = 1u32;
+        // the v1 table set keeps its 5-column tuple (PROTOCOL.md 14); tuple tables widen it
+        let mut ncols = if needs.tuples.is_empty() { N_COLS } else { 1 };
         for &w in &needs.ranges {
             let rows = 1usize << w;
-            tables.push(TableSpec { kind: TableKind::Range(w), name: format!("T{w}"), tag, offset, rows, key_lo: 0, outs: vec![] });
+            tables.push(TableSpec { kind: TableKind::Range(w), name: format!("T{w}"), tag, offset, rows, key_lo: 0, outs: vec![], n_keys: 1, invalid: vec![] });
             offset += rows;
             tag += 1;
         }
@@ -110,20 +184,38 @@ impl TableSet {
             let key_hi = if t.saturate { last + t.slack_hi } else { last + 1 }; // exclusive
             let rows = (key_hi - key_lo) as usize;
             let ncol = t.rows[0].len();
-            assert!(ncol <= N_COLS - 1, "{name}: too many outputs");
+            ncols = ncols.max(1 + ncol);
             let outs = (0..rows)
                 .map(|i| {
                     let src = i.min(t.keys.len() - 1);
-                    let mut o = t.rows[src].clone();
-                    o.resize(N_COLS - 1, 0);
-                    o
+                    t.rows[src].clone()
                 })
                 .collect();
-            tables.push(TableSpec { kind: TableKind::Fixed(t.clone()), name: name.clone(), tag, offset, rows, key_lo, outs });
+            tables.push(TableSpec { kind: TableKind::Fixed(t.clone()), name: name.clone(), tag, offset, rows, key_lo, outs, n_keys: 1, invalid: vec![] });
             offset += rows;
             tag += 1;
         }
-        Arc::new(TableSet { tables, total_rows: offset })
+        for (name, t) in &needs.tuples {
+            let rows = t.rows();
+            ncols = ncols.max(t.keys.len() + t.n_out);
+            let f = t.f.clone();
+            let n_out = t.n_out;
+            let tt = t.clone();
+            let computed: Vec<Option<Vec<i128>>> = (0..rows).into_par_iter().map(|i| f(&tt.keys_of(i)).map(|o| { assert_eq!(o.len(), n_out, "{name}: output arity"); o })).collect();
+            let invalid: Vec<bool> = computed.iter().map(|o| o.is_none()).collect();
+            let outs: Vec<Vec<i128>> = computed.into_iter().map(|o| o.unwrap_or_else(|| vec![0; n_out])).collect();
+            tables.push(TableSpec { kind: TableKind::Tuple(t.clone()), name: name.clone(), tag, offset, rows, key_lo: 0, outs, n_keys: t.keys.len(), invalid });
+            offset += rows;
+            tag += 1;
+        }
+        Arc::new(TableSet { tables, total_rows: offset, ncols })
+    }
+    /// Preprocessed width: the tuple columns and the tag.
+    pub fn pre_width(&self) -> usize {
+        self.ncols + 1
+    }
+    pub fn tuple(&self, name: &str) -> &TableSpec {
+        self.tables.iter().find(|t| matches!(t.kind, TableKind::Tuple(_)) && t.name == name).unwrap_or_else(|| panic!("no tuple table {name}"))
     }
     pub fn range(&self, w: u32) -> &TableSpec {
         self.tables.iter().find(|t| matches!(t.kind, TableKind::Range(x) if x == w)).unwrap_or_else(|| panic!("no range table T{w}"))
@@ -131,16 +223,29 @@ impl TableSet {
     pub fn fixed(&self, name: &str) -> &TableSpec {
         self.tables.iter().find(|t| matches!(t.kind, TableKind::Fixed(_)) && t.name == name).unwrap_or_else(|| panic!("no fixed table {name}"))
     }
-    /// The tuple of table row `r` (`N_COLS` values and the tag).
-    pub fn row(&self, r: usize) -> ([i128; N_COLS], u32) {
-        let mut vals = [0i128; N_COLS];
+    /// The tuple of table row `r` (`ncols` values, zero-padded, and the tag; tag 0 for an invalid tuple row).
+    pub fn row(&self, r: usize) -> (Vec<i128>, u32) {
+        let mut vals = vec![0i128; self.ncols];
         for t in &self.tables {
             if r >= t.offset && r < t.offset + t.rows {
-                let k = t.key_lo + (r - t.offset) as i128;
-                vals[0] = k;
-                if let TableKind::Fixed(_) = t.kind {
-                    for c in 0..N_COLS - 1 {
-                        vals[c + 1] = t.outs[r - t.offset][c];
+                let i = r - t.offset;
+                match &t.kind {
+                    TableKind::Range(_) => vals[0] = t.key_lo + i as i128,
+                    TableKind::Fixed(_) => {
+                        vals[0] = t.key_lo + i as i128;
+                        for (c, &o) in t.outs[i].iter().enumerate() {
+                            vals[c + 1] = o;
+                        }
+                    }
+                    TableKind::Tuple(tt) => {
+                        if t.invalid[i] {
+                            return (vals, 0);
+                        }
+                        let keys = tt.keys_of(i);
+                        vals[..keys.len()].copy_from_slice(&keys);
+                        for (c, &o) in t.outs[i].iter().enumerate() {
+                            vals[keys.len() + c] = o;
+                        }
                     }
                 }
                 return (vals, t.tag);
@@ -151,28 +256,30 @@ impl TableSet {
     /// The preprocessed matrix: every table row, then padding rows `(0, .., 0; tag 0)`.
     pub fn preprocessed<G: PrimeField64>(&self, n_rows: usize) -> RowMajorMatrix<G> {
         assert!(n_rows >= self.total_rows, "trace too short for the tables: {} < {}", n_rows, self.total_rows);
-        let mut v = vec![G::zero(); n_rows * PRE_WIDTH];
-        v.par_chunks_mut(PRE_WIDTH).enumerate().take(self.total_rows).for_each(|(r, row)| {
+        let w = self.pre_width();
+        let mut v = vec![G::zero(); n_rows * w];
+        v.par_chunks_mut(w).enumerate().take(self.total_rows).for_each(|(r, row)| {
             let (vals, tag) = self.row(r);
-            for c in 0..N_COLS {
+            for c in 0..self.ncols {
                 row[c] = int_to_field(vals[c]);
             }
-            row[N_COLS] = G::from_canonical_u32(tag);
+            row[self.ncols] = G::from_canonical_u32(tag);
         });
-        RowMajorMatrix::new(v, PRE_WIDTH)
+        RowMajorMatrix::new(v, w)
     }
     /// The combined table values `t_r` for every table row.
     pub fn values<G: PrimeField64, EF: ExtensionField<G>>(&self, beta: EF) -> Vec<EF> {
-        let pows: Vec<EF> = (0..=N_COLS).map(|i| beta.exp_u64(i as u64)).collect();
+        let n = self.ncols;
+        let pows: Vec<EF> = (0..=n).map(|i| beta.exp_u64(i as u64)).collect();
         (0..self.total_rows)
             .into_par_iter()
             .map(|r| {
                 let (vals, tag) = self.row(r);
                 let mut acc = EF::zero();
-                for c in 0..N_COLS {
+                for c in 0..n {
                     acc += pows[c] * int_to_field::<G>(vals[c]);
                 }
-                acc + pows[N_COLS] * G::from_canonical_u32(tag)
+                acc + pows[n] * G::from_canonical_u32(tag)
             })
             .collect()
     }
@@ -362,16 +469,17 @@ fn prod_and_sum<EF: AbstractField + Clone>(terms: &[EF]) -> (EF, Option<EF>) {
 /// sum (first, transition, last).
 pub fn eval_lookup<AB: LookupAirBuilder>(builder: &mut AB, lay: &LookupLayout, queries: &[Query<AB::Expr>], mult: AB::Var, names: &mut Option<Vec<String>>) {
     let d = builder.ext_degree();
+    let n_cols = lay.tables.ncols;
     let (z, beta) = builder.challenges();
     let mut pows: Vec<AB::EF> = vec![AB::EF::one()];
-    for i in 1..=N_COLS {
+    for i in 1..=n_cols {
         pows.push(pows[i - 1].clone() * beta.clone());
     }
     assert_eq!(queries.len(), lay.n_queries(), "query count differs from the layout");
-    // z - beta^N_COLS * tag, once per table (the tags are the constants of the row)
+    // z - beta^ncols * tag, once per table (the tags are the constants of the row)
     let mut z_tag: BTreeMap<u32, AB::EF> = BTreeMap::new();
     for q in queries {
-        z_tag.entry(q.tag).or_insert_with(|| z.clone() - pows[N_COLS].clone() * builder.ext_from_base(AB::Expr::from_canonical_u32(q.tag)));
+        z_tag.entry(q.tag).or_insert_with(|| z.clone() - pows[n_cols].clone() * builder.ext_from_base(AB::Expr::from_canonical_u32(q.tag)));
     }
     // z - q_j = (z - beta^5 tag) - v_0 - sum_{c >= 1} beta^c v_c : extension-by-base operations only
     let terms: Vec<AB::EF> = queries
@@ -409,9 +517,9 @@ pub fn eval_lookup<AB: LookupAirBuilder>(builder: &mut AB, lay: &LookupLayout, q
         row_sum_local += hj;
         row_sum_next += ext_at(builder, &aux_next, j);
     }
-    // table side: g (z - t) - m = 0, t = key + sum beta^c out_c + beta^5 tag from the preprocessed row
+    // table side: g (z - t) - m = 0, t = key + sum beta^c out_c + beta^ncols tag from the preprocessed row
     let mut t = builder.ext_from_base(pre_local[0].into());
-    for c in 1..=N_COLS {
+    for c in 1..=n_cols {
         let v: AB::Expr = pre_local[c].into();
         t += pows[c].clone() * v;
     }
@@ -453,8 +561,13 @@ pub fn lookup_constraint_names(lay: &LookupLayout) -> Vec<String> {
 /// `z` of degree `<= N_queries + N_table`, and the `beta`-combination of `N_COLS + 1` columns is a polynomial of
 /// degree `N_COLS` per tuple: `(N_q + N_t) / |F_ext|  +  N_COLS * N_q / |F_ext|`, in bits.
 pub fn lookup_soundness_bits(n_rows: usize, n_queries_per_row: usize, n_table: usize, ext_bits: f64) -> f64 {
+    lookup_soundness_bits_cols(n_rows, n_queries_per_row, n_table, ext_bits, N_COLS)
+}
+
+/// `lookup_soundness_bits` for a table set with `ncols` tuple columns.
+pub fn lookup_soundness_bits_cols(n_rows: usize, n_queries_per_row: usize, n_table: usize, ext_bits: f64, ncols: usize) -> f64 {
     let nq = n_rows as f64 * n_queries_per_row as f64;
-    let terms = (nq + n_table as f64) + N_COLS as f64 * nq;
+    let terms = (nq + n_table as f64) + ncols as f64 * nq;
     ext_bits - terms.log2()
 }
 

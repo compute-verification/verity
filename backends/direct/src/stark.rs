@@ -53,6 +53,11 @@ pub type ChallengeBb5 = BinomialExtensionField<Val32, 5>;
 type ChallengeMmcs32x5 = ExtensionMmcs<Val32, ChallengeBb5, ValMmcs32>;
 pub type PcsBb5 = TwoAdicFriPcs<Val32, Dft, ValMmcs32, ChallengeMmcs32x5>;
 pub type ConfigBb5 = StarkConfig<PcsBb5, ChallengeBb5, ChallengerBb>;
+/// BabyBear^6 (`vendor/p3-baby-bear`: X^6 - 22), 186-bit challenges: the extension the 2^-128 lookup label needs.
+pub type ChallengeBb6 = BinomialExtensionField<Val32, 6>;
+type ChallengeMmcs32x6 = ExtensionMmcs<Val32, ChallengeBb6, ValMmcs32>;
+pub type PcsBb6 = TwoAdicFriPcs<Val32, Dft, ValMmcs32, ChallengeMmcs32x6>;
+pub type ConfigBb6 = StarkConfig<PcsBb6, ChallengeBb6, ChallengerBb>;
 
 #[derive(Clone, Copy, Debug, serde::Serialize)]
 pub struct FriParams {
@@ -168,6 +173,31 @@ impl Backend for BabyBear5Backend {
     }
     fn challenge_name() -> &'static str {
         "babybear^5"
+    }
+}
+
+pub struct BabyBear6Backend;
+
+impl Backend for BabyBear6Backend {
+    type SC = ConfigBb6;
+    const KIND: FieldKind = FieldKind::BabyBear;
+    fn config(log_n: usize, fri: FriParams) -> ConfigBb6 {
+        let byte_hash = ByteHash {};
+        let field_hash = FieldHash32::new(byte_hash);
+        let compress = MyCompress::new(byte_hash);
+        let val_mmcs = ValMmcs32::new(field_hash, compress);
+        let challenge_mmcs = ChallengeMmcs32x6::new(val_mmcs.clone());
+        let fri_config = FriConfig { log_blowup: fri.log_blowup, num_queries: fri.num_queries, proof_of_work_bits: fri.proof_of_work_bits, mmcs: challenge_mmcs };
+        ConfigBb6::new(PcsBb6::new(log_n, Dft {}, val_mmcs, fri_config))
+    }
+    fn challenger() -> ChallengerBb {
+        ChallengerBb::from_hasher(vec![], ByteHash {})
+    }
+    fn challenge_bits() -> usize {
+        186
+    }
+    fn challenge_name() -> &'static str {
+        "babybear^6"
     }
 }
 

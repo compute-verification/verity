@@ -768,3 +768,179 @@ across two tables (a second \(\beta\)-power keeps the degree at 4) and \(g\) fol
 hints (words, carries, quotients, selectors), which lookups do not touch -- that is a relation-side question
 (section 12.2's per-gadget census); (iii) on the GPU only the encoding term matters and the 3.4x is the number to
 carry to tensor.md.
+
+## 15. Checker v2 as the AIR: state-chained units, tuple lookups, BabyBear limb repairs (b-air-v2, 2026-09-22) **[implemented, diagnostic PCS]**
+
+The relation is unchanged (section 1; `checker/v2/` accepts exactly the reference's set, checker_min.md).  What
+changes is the *program* the row evaluates: checker v2's 15-hint unit instead of v1's, on the LogUp prover of
+section 14.  Design and the per-column derivation: `V2_AIR.md`; code `program_v2.rs` (gadgets and the row program),
+`air_v2.rs` (layout, trace, statement-bound prove/verify, adversarial-row evaluation), `statement.rs` (F1-F3);
+CLI `direct-unit <chain-layout|vu-neg|vu-honest|vu-bench|check-rows> --v2 [--ext 4|5]`; pod script `run_v2.sh`.
+
+### 15.1 What the row is
+
+One row per transition unit, the accumulator carried as the **state** \((s, \hat e, M)\) (three base columns) by a
+transition constraint, not as an FP32 word: `next.st = (sgn_1 (1 - z_1), \hat e_1, (v2_1 2^{10} + v1_1) A1_1 + t_1)`
+on every row with `next.first = 0`, and `first * st = (0, floor, 0)` on the first row of a VU.  The word exists only
+on the Pack columns (`pack.y_hi`, `pack.y_lo`: two 16-bit limbs, the `LIMB16` rule of section 13) and is read once, by
+the epilogue on the last row (`vu.out`).  This is where the 31-bit repairs of checker_min.md 3.2 (`state_decode` and
+`epilogue` SAT on 31-bit fields as stated) are realised: the 33-bit word \(s 2^{31} + fld\, 2^{23} + M\) is never one
+field element -- `M = M_hi8 2^16 + M_lo16` (T8, T16 lookups), `y_hi = s 2^15 + fld 2^7 + M_hi8` is an *expression*
+below \(2^{16}\) on every finite state (no hint), `y_lo = M_lo16`; the infinity blend and the BF16 epilogue run per
+limb.  `state_decode` does not occur in the chained VU (unit 0 starts from the constant zero state); its limb form
+is in the z3 report only.
+
+Every checker-v2 lookup is a **tuple lookup**: LogUp binds each tuple component to its table column (powers of
+\(\beta\)), so the packed linear keys of the Python checker -- and the separate range checks their halves needed on
+31-bit fields -- disappear (`lookup::TupleTable`, `Ctx::lookup_tuple`).  The two big tables are chunked
+(the brief's option (b), exact by `floor((A+B)/2^d) = floor(A/2^d) + floor(B/2^d)` for `A` a multiple of \(2^c\), `B <
+2^c`; z3-checked): SHIFT (3.5 M) becomes `SHIFT_HI`/`SHIFT_LO` on 8-bit chunks (2 x 13 824), SSHIFT becomes three
+8-bit chunk tables, TNORM (1 M) becomes `TNORM10` on the low 10-bit chunk (32 768) with the high chunks multiplied
+by `A1 = 2^{10+k}` from LEADNORM, LEAD becomes `LEAD10` (1 024) with the bit length as a priority combination of
+three chunk lengths.  `attained` is a product identity (\(\prod_i (E - cand_i)(E - floor) = 0\), sound over \(F_p\)
+because every factor is a residue of an integer in \([0, 780)\) bound by ALIGN4/LEADNORM).  Table set: 13 tables,
+**282 280 rows** (v2's 5.2 M), so the trace is \(2^{19}\) rows -- which the 4 096-VU trace is anyway.
+
+### 15.2 Sizes (`direct-unit chain-layout --v2`)
+
+| | v1 + LogUp (section 14) | **v2 + LogUp** |
+|---|---|---|
+| main columns (incl. multiplicity) | 401 | **281** (176 table outputs, 101 words/state/hints/position, 4 materialised) |
+| preprocessed columns | 6 | 8 (7 tuple entries + tag) |
+| lookup queries per row / helpers | 391 / 112 | **105** (104 degree 1, 1 degree 2) / **27** |
+| aux columns (BabyBear\(^4\) / \(^5\)) | 456 / 570 | **116 / 145** |
+| committed width (\(^4\) / \(^5\)) | 863 / 977 | **405 / 453** (2.13x / 2.16x fewer) |
+| program constraints | 402 | **88** (+ 27 helper, table, running sum) |
+| table rows | 116 722 | 282 280 |
+| max constraint degree | 5 | 5 (log quotient degree 2, `log_blowup` 2 unchanged) |
+
+### 15.3 Correctness gate (run r20260922-084854-d988, and the local `tests/air_v2.rs`)
+
+* `tests/air_v2.rs`: layout consistency (\(^4\) and \(^5\) share the columns and constraints); the **exhaustive
+  evaluator** (every program, tail, helper, table-side and running-sum constraint on every row of the committed
+  \(2^{19}\)-row trace, `air_v2::failing_trace`) on two honest VUs: 0 failures; five mutations (claim word, state
+  link, a NaN operand, a multiplicity, the state exponent out of range) each fail a constraint; the pod-sized
+  **statement-bound round trip**: the honest proof verifies, the same proof against a statement with one word
+  flipped or with three VUs is rejected.
+* `vu-neg --v2`: **52/52 `vu-k1536-neg` rejected** by witness generation and by a failing field constraint (44
+  `wrong`: `vu.out` on row 95; 4 `nonfinite-operand`: the T_OP lookup helper; 4 `sat-intermediate`: `g*.finite`);
+  the **44 controls** (each `wrong` negative with its correct word) accepted with no failing constraint or lookup.
+* `vu-honest --v2`: all **4 096 VUs, 393 216 accumulator words** (the row's Pack word per unit, including the
+  \(\pm\infty\) word at unit 95 of 20 VUs) and **4 096 BF16 words** equal bench-instances/v1; the first 64 VUs also
+  evaluated row-locally with every lookup: 0 failures.  Witness 0.9 ms/VU single-threaded-equivalent.
+* Battery (`battery_adapter.py --v2 --extras`, `results/battery_babybear_v2.json`): v2 has its own hint layout, so
+  a case is translated as its operands + the hints with the same meaning imposed by name (`max.E`, `sum.sgn`, the
+  leading bit, the epilogue's `hi2/lsb/carry/rem`, an `acc` decode as the incoming state) + the claimed word bound
+  (step level: the following unit's incoming state is the claimed word's state, `vu.link[*]` checks it; VU level:
+  `vu.out`).  **81/83 rejected, 87/87 honest controls accepted (with v2's honest gadget outputs), 6/6 extras
+  rejected.**  The 2 accepted are `zero_swap` cases that are *vacuous under v2*: they swap the incoming word's zero
+  sign under the hints of \(+0\) and claim the honest word; v2 has no word input, \(-0\) and \(+0\) denote the same
+  zero state (checked: the signed-zero state \((1, floor, 0)\) also yields the same word), and the claimed word is
+  the correct output.  The adapter reports them and does not count them.
+
+### 15.4 Measurement (vy-cpu2, 12 threads, shared; \(B = 4096\), \(K = 1536\), 100 FRI queries, PoW 16)
+
+Runs `r20260922-085312-82a9` (BabyBear\(^4\), 166 queries), `r20260922-085547-05cc` (BabyBear\(^5\), 166 queries),
+`r20260922-090904-cd75` (BabyBear\(^6\), 166 queries),
+`r20260922-084854-d988` / `r20260922-085143-6e87` (the same at 100 queries: 22.88 s / 25.44 s, proofs 1.18 / 1.20 MB,
+FRI \(2^{-83.8}\) proven); `results/vu_v2_*.json`.  \(2^{19}\) rows (393 216 real), `log_blowup` 2, Keccak Merkle,
+authentication excluded, `NON_ZK_PROOF_DIAGNOSTIC`; the pod was shared (load average \(\approx 30\) on 32 vCPUs), so
+every time is an upper bound.  The v1 + LogUp columns are section 14.5's (same queries, same pod, same threads).
+
+| | v1 + LogUp, BabyBear\(^4\) | v1 + LogUp, BabyBear\(^5\) | **v2, BabyBear\(^4\)** | **v2, BabyBear\(^5\)** | **v2, BabyBear\(^6\)** (15.5) |
+|---|---|---|---|---|---|
+| committed width | 863 | 977 | **405** | **453** | 463 |
+| committed bytes / VU | 331 kB | 375 kB | **155.5 kB** (2.13x less) | **174 kB** (2.16x less) | 177.8 kB (1.86x less) |
+| witness s | 5.4 | 5.9 | **2.37** | 2.38 | 2.39 |
+| prove s | 54.7 | 64.5 | **20.55** | 23.05 | 30.41 |
+| total s | 60.1 | 70.4 | **22.92** | 25.43 | 32.80 |
+| s / VU | 0.0147 | 0.0172 | **0.00560** (2.62x) | 0.00621 (2.77x) | 0.00801 (1.83x) |
+| overhead vs native peak | 1.49e9 | 1.75e9 | **5.68e8** | 6.31e8 | 8.13e8 |
+| verify s | 0.44 | 0.51 | 0.455 | 0.557 | 0.731 |
+| proof MB | 2.27 | 2.37 | 1.95 | 1.99 | 2.03 |
+| sequential depth (rounds) | 26 | 26 | 26 | 26 | 26 |
+| peak RSS GB | 9.5 | 10.7 | **4.85** | 5.16 | 5.47 |
+| stages: commit_pre / main / aux_build / aux / quotient / commit_q / open s | 0.31 / 5.46 / 0.56 / 5.87 / 37.07 / 0.58 / 4.08 | 0.33 / 5.35 / 0.66 / 7.35 / 43.98 / 0.70 / 5.27 | 0.36 / 3.87 / 0.18 / 1.76 / **10.76** / 0.57 / 2.60 | 0.38 / 4.03 / 0.23 / 2.20 / 11.46 / 0.67 / 3.72 | 0.37 / 4.07 / 0.33 / 2.47 / 15.19 / 0.76 / 6.68 |
+| soundness: FRI / lookup term | \(2^{-128.6}\) / \(2^{-93.8}\) | \(2^{-128.6}\) / \(2^{-124.8}\) | \(2^{-128.6}\) / **\(2^{-94.9}\)** | \(2^{-128.6}\) / **\(2^{-125.8}\)** | **\(2^{-128.6}\)** / \(2^{-156.7}\) |
+
+Both breakthrough criteria are met (s/VU 2.62x better than 0.0147, > 1.5x; committed bytes/VU 2.13x under 331 kB,
+> 2x).  Where the time went: the quotient pass fell 3.4x (37.1 to 10.8 s: 88 program constraints instead of 402,
+27 helpers instead of 112, 105 query terms per row instead of 391 -- the \(\beta\)-compressed query term is a
+degree-1 expression per tuple entry, so the quotient cost tracks queries x tuple width), the aux round 3.3x
+(116 columns instead of 456), the main commit 1.4x (281 vs 401 columns), the witness 2.3x (no division hints).
+The quotient pass is now 52% of `prove` (was 68%): commits (5.6 s) and the opening (2.6 s) are the next third.  The
+verifier is unchanged (it recomputes 8 preprocessed columns over \(2^{19}\) rows and opens four commitments); the
+proof shrinks less than the width (1.95 vs 2.27 MB) because the 166 FRI queries open \(405 \times 2\) cells per query
+either way and the FRI folds dominate.
+
+### 15.5 Soundness label
+
+The lookup identity term (section 14.2, `security.accounting.logup_identity_error`) with this AIR's actual counts,
+\(N = 2^{19} \cdot 105 = 2^{25.7}\) lookups, 282 280 table rows, 8 \(\beta\)-compressed columns (7 tuple entries +
+tag), `whole_field` sampling: **\(2^{-94.9}\) at BabyBear\(^4\), \(2^{-125.8}\) at BabyBear\(^5\), \(2^{-156.7}\) at
+BabyBear\(^6\)** (the prover's own count with 7 columns: 95.3 / 126.3 bits; v1 + LogUp: 93.4 / 124.3 by the same
+accountant).  The FRI term at 100
+queries / `log_blowup` 2 / PoW 16 is \(2^{-83.8}\) proven (\(2^{-216}\) conjectured); at 166 queries \(2^{-128.6}\).
+The honest label of a v2 proof is the minimum of the two: **\(2^{-94.9}\) at BabyBear\(^4\)** and
+**\(2^{-125.8}\) at BabyBear\(^5\)**, both with 166 queries (at 100 queries the FRI term \(2^{-83.8}\) binds
+instead).  \(2^{-128}\) needs BabyBear\(^6\)
+(not in Plonky3 0.4.3) *and* 166 queries; BabyBear\(^5\) at 166 queries gives \(2^{-125.8}\) -- the same conclusion as
+section 14.2; with 3.7x fewer lookups the v2 term is 1.5 bits better at each degree, not enough to change it.
+**BabyBear\(^6\) is implemented** (the brief's item 6): Plonky3 0.4.3 has binomial extensions of BabyBear of degree
+4 and 5 only, so `vendor/p3-baby-bear` is the registry crate (`[patch.crates-io]`) plus `BinomiallyExtendable<6>` /
+`HasTwoAdicBionmialExtension<6>` over \(X^6 - 22\): 22 is neither a square nor a cube mod \(p\) (the irreducibility
+criterion for \(X^6 - w\) when \(4 \nmid 6\)), \(X^{p^k} \ne X\) for \(k = 1, 2, 3\); the multiplicative generator
+\(6 + X\) has order \(p^6 - 1 = 2^{28} \cdot 3^2 \cdot 5 \cdot 7^3 \cdot 13 \cdot 31 \cdot 1171 \cdot 7459 \cdot 103237
+\cdot 345769 \cdot 32472031 \cdot 3939008426310247\) (checked against every prime factor); 2-adicity 28 with the
+sparse generator \(22^7 X^3\).  `tests/air_v2.rs::babybear6_field` checks the axioms, inverses, \(x^{p^6} = x\) (and
+\(\ne\) for smaller powers), the orders.  `BabyBear6Backend`, `vu-bench --v2 --ext 6`: **32.80 s, 463 committed
+columns, 177.8 kB/VU, label \(2^{-128.6}\)** (FRI binds; lookup \(2^{-156.7}\)) -- the first honest \(2^{-128}\) of
+the B AIR at \(2^{19}\) rows, 1.83x faster and 1.86x smaller than v1 + LogUp at its \(2^{-93.8}\).  The 43% over
+v2\(^4\) is the generic degree-6 extension multiplication (`BinomialExtensionField` specialises D = 2, 3 only):
+quotient 15.2 vs 10.8 s, `open` 6.7 vs 2.6 s -- a Karatsuba/Toom sextic multiplication would recover most of it.
+
+Statement binding (red-team F1-F3): `absorb_header` puts the domain tag, the AIR id (hash of field, layout and
+constraint names), \(B\), \(K\), 96, `degree_bits`, the FRI parameters and every claimed word (and the operands when
+`--bind-operands`) into the challenger before the first challenge; `verify_bound` fixes `degree_bits` from \(B\) and
+the table set and rejects a proof of another height; the claim column is opened at \(\zeta, \zeta g\) and compared to
+the verifier's own evaluation of the statement polynomial.  `vu-bench --v2` verifies the proof, then checks that
+the same proof is rejected against a statement with one word flipped.
+
+### 15.6 Where the time goes (profile, run r20260922-090107-d0d7, `run_profile.sh` with `MODES=v2`)
+
+Busy seconds inside `prove` (12 threads, 166 queries; `results/profile_spans_v2_*.txt`), against section 14.6:
+
+| stage | v1 + LogUp (401 + 6 + 456) | **v2 (281 + 8 + 116)** | |
+|---|---|---|---|
+| quotient evaluation | 36.7 (68%) | **11.2 (53%)** | 88 program + 27 helper + \(g, S\) constraints; 105 query terms per row |
+| commit: coset LDE | 7.3 | **4.2** | 9 LDEs (P, main, aux, quotient chunks) |
+| commit: Merkle (Keccak) | 5.0 | **3.1** | |
+| open (`reduce matrix quotient`) | 3.0 | 1.7 | |
+| FRI (commit phase, 19 folds) | 0.5 | 0.4 | |
+| witness (outside `prove`) | 5.5 | **2.5** | |
+| total prove | 54 | 21 | |
+
+The quotient pass is still the largest item but no longer two thirds: per committed column it costs about the
+same as before (\(\approx\) 27 ms per column), so the 3.3x fall is the width and the constraint count.  Encoding
+(LDE + Merkle, 7.3 s) is now 35% of `prove` -- on the GPU (tensor.md) this is the term that remains, and it fell
+1.7x in time and 2.1x in bytes.  The remaining fixed costs -- the preprocessed round, the 8-column table
+recomputation in the verifier, the \(2^{19}\)-row floor -- are the items below.
+
+### 15.7 Open
+
+* **BabyBear\(^6\) multiplication**: the vendored extension uses Plonky3's generic \(D\)-loop product; the 43%
+  over \(^4\) (section 15.5) is mostly that.  A specialised sextic product (Karatsuba over the cubic split, or
+  Toom-3) in the vendored crate is the obvious next 20%.  The vendored crate is a patch of 0.4.3-succinct only;
+  upstream Plonky3 gained more extension degrees later and the patch should be dropped when the crate is bumped.
+* **Operand authentication**: `--bind-operands` absorbs the operand arrays into the header and checks the 32 operand
+  columns at \(\zeta\); it was implemented and is exercised by `vu-bench --v2 --bind-operands` but not measured
+  in the table (the verifier's statement polynomial then has \(32 \times 2^{19}\) coefficients: a hash-chain
+  commitment to the operands is the practical form).
+* **The 2 vacuous battery cases** (`zero_swap`): a v2-native red-team pass -- mutations of v2's own 15 hints (the
+  chunk hints `u_hi/u_lo`, `M2/M1/M0`, `v2/v1/v0`, the Pack limbs) rather than translations of v1's -- would
+  replace the translated battery.  z3 covers each gadget (7/7 UNSAT); the composed unit is covered by the 52
+  negatives, the 5 mutations and the translated battery only.
+* The preprocessed commitment (0.36 s) and the 8-column table recomputation in the verifier could be cached.
+* Trace height is pinned at \(2^{19}\) by the table set (282 280 rows): batches below 2 731 VUs pay for padding.
+  `T16` (65 536) and `T_OP` (65 536) could share a key column; `TNORM10` and `T15` too -- a \(2^{18}\) table set
+  (\(\le 262\,144\) rows) would allow 2 048-VU batches at half the rows.

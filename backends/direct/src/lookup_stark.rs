@@ -202,12 +202,20 @@ where
 }
 
 /// Verify; `preprocessed` is recomputed by the verifier (the tables are public) and its commitment compared.
-pub fn verify_lookup<SC, A>(config: &SC, air: &A, challenger: &mut SC::Challenger, proof: &LookupProof<SC>, preprocessed: RowMajorMatrix<Val<SC>>) -> Result<(), VerificationError>
+/// Statement binding (`statement.rs`, red-team F1-F3): the caller has absorbed the header into `challenger`;
+/// `expected_degree_bits` is the trace height the verifier derives from its statement (a proof of another
+/// height is rejected before anything is read from it); `public` lists main columns whose values on every row
+/// the verifier knows -- each is checked at `zeta` and `zeta g` against the verifier's own evaluation.
+pub fn verify_lookup<SC, A>(config: &SC, air: &A, challenger: &mut SC::Challenger, proof: &LookupProof<SC>, preprocessed: RowMajorMatrix<Val<SC>>, expected_degree_bits: usize, public: &[(usize, Vec<Val<SC>>)]) -> Result<(), VerificationError>
 where
     SC: StarkGenericConfig,
     A: LookupAir<Val<SC>>,
     Com<SC>: PartialEq,
+    Val<SC>: p3_field::TwoAdicField + p3_field::PrimeField64,
 {
+    if proof.degree_bits != expected_degree_bits {
+        return Err(VerificationError::InvalidProofShape);
+    }
     let degree = 1usize << proof.degree_bits;
     let log_quotient_degree = log_quotient_degree(air.max_degree());
     let quotient_degree = 1 << log_quotient_degree;
@@ -247,6 +255,17 @@ where
     challenger.observe(proof.quotient_commit.clone());
     let zeta: SC::Challenge = challenger.sample();
     let zeta_next = trace_domain.next_point(zeta).unwrap();
+
+    // the statement's public columns at zeta and zeta g
+    for (col, want) in public {
+        if want.len() != degree || *col >= air.width() {
+            return Err(VerificationError::InvalidProofShape);
+        }
+        let (w0, w1) = crate::statement::eval_pair::<Val<SC>, SC::Challenge>(want, zeta);
+        if o.main_local[*col] != w0 || o.main_next[*col] != w1 {
+            return Err(VerificationError::OodEvaluationMismatch);
+        }
+    }
 
     pcs.verify(
         vec![
