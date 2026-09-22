@@ -37,6 +37,18 @@ def _sha256(p: Path) -> str:
     return h.hexdigest()
 
 
+def source_commit(fallback: str | None = None) -> str | None:
+    """The commit of the tree that is running: git when there is one; else `research run --on --source` ships `git archive HEAD`
+    to `<root>/src/<commit sha>/` and makes it the cwd, so the cwd's name is the commit; else `RESEARCH_SOURCE_COMMIT`."""
+    if fallback:
+        return fallback
+    env = os.environ.get("RESEARCH_SOURCE_COMMIT")
+    if env:
+        return env
+    name = Path.cwd().name
+    return name if len(name) == 40 and all(c in "0123456789abcdef" for c in name) else None
+
+
 def _pop(argv: list[str], flag: str, default=None):
     if flag in argv:
         i = argv.index(flag)
@@ -134,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     B = int(meas_in["vu.count"])
     proof_class = PROOF_CLASS[(zk, mode)] if fp_in.get("proof_class") is None else fp_in["proof_class"]
 
-    fp = {"candidate": "B-Ligero", "backend": "backends/direct/ligero (b-zk-fix prover)", "commit": fp_in.get("software", {}).get("backend", {}).get("commit"),
+    fp = {"candidate": "B-Ligero", "backend": "backends/direct/ligero (b-zk-fix prover)", "commit": source_commit(fp_in.get("software", {}).get("backend", {}).get("commit")),
           "protocol": "Ligero direct-constraint chain proof, BabyBear, PROTOCOL.md 3-8c", "mode": mode, "zk": zk, "proof_class": proof_class,
           "checker": "v1 (WP2 checker: bits + one-hot selectors)", "batch": B, "K": 1536, "n_subbatches": n_proofs,
           "per_proof_vus": int(meas_in["split.per_proof_vus"]), "security": sec, "hardware": fp_in.get("hardware"), "software": fp_in.get("software"),

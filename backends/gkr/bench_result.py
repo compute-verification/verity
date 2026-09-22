@@ -43,6 +43,22 @@ def _sha256(p: Path) -> str:
     return h.hexdigest()
 
 
+def source_commit() -> str | None:
+    """git when there is one; else `research run --on --source` ships `git archive HEAD` to `<root>/src/<commit sha>/` and makes it
+    the cwd, so the cwd's name is the commit; else `RESEARCH_SOURCE_COMMIT`."""
+    try:
+        sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5, check=False).stdout.strip()
+        if sha:
+            return sha
+    except (OSError, subprocess.SubprocessError):
+        pass
+    env = os.environ.get("RESEARCH_SOURCE_COMMIT")
+    if env:
+        return env
+    name = Path.cwd().name
+    return name if len(name) == 40 and all(c in "0123456789abcdef" for c in name) else None
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python backends/gkr/bench_result.py")
     ap.add_argument("dir")
@@ -140,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     rust_med = statistics.median(rust_reps) if rust_reps else None
     B = rows[0]["vus"]
     fp = {"candidate": "A", "backend": "backends/gkr/gpu (a-gpu2 prover: packed GKR + graphed LogUp + Ligero, torch/Triton)",
-          "commit": os.environ.get("RESEARCH_SOURCE_COMMIT"), "protocol": "GKR + LogUp + Ligero over BabyBear^6, backends/gkr/PROTOCOL.md (4.2 low-bit-first LogUp)",
+          "commit": source_commit(), "protocol": "GKR + LogUp + Ligero over BabyBear^6, backends/gkr/PROTOCOL.md (4.2 low-bit-first LogUp)",
           "mode": "non-interactive (SHA-256 Fiat-Shamir), non-ZK", "zk": False, "proof_class": "NON_ZK_PROOF_DIAGNOSTIC",
           "checker": args.checker + (" (WP2 checker contracts)" if args.checker == "v1" else " (checker-min gadgets, limb epilogue)"),
           "path": args.path, "field": FIELD, "batch": B, "K": 1536, "steps": man.get("steps"), "export_manifest": {k: man.get(k) for k in ("tier", "range", "variant", "epilogue", "root_manifest_sha256")},
