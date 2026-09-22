@@ -11,10 +11,12 @@ Canonical reference of a produced value = its producing gate's root-scoped index
 Three classes (IR §D.1/§D.2), not synonyms:
 
 * `Subcircuit` — any selected set of gates of the root circuit + the wiring among them + its induced
-  boundary. `S.size`, `S[i]` (i-th selected gate in root canonical order), `S.in_` (distinct references
-  entering from outside), `S.out` (distinct references produced inside and consumed outside or protected).
-  Boundaries are *distinct* by definition; there is no `distinct()` operation. Canonical boundary order:
-  ascending root-scoped producing-gate index.
+  boundary. `S.size`, `S[i]` (i-th selected gate in root canonical order), `S.in_` (the boundary gates
+  entering from outside: distinct gates outside S with a wire into S), `S.out` (the boundary gates leaving:
+  distinct gates inside S with a wire to a gate outside S, or designated root outputs). Boundaries are sets of
+  *gates* — a producer counts once regardless of fan-out; there is no `distinct()` operation. Canonical
+  boundary order: ascending root-scoped producing-gate index. These explicit computations are the oracle for
+  the compact per-part analysis in `boundary` (with the vLLM integration until promoted) (`in_gates` / `out_gates` / `w_out`).
 * `Region` — the contiguous special case `C[i:j]`, efficiently addressable.
 * `FunctionCall` — a hierarchy-defined subcircuit (always a region in this layout) **plus** the declared interface
   `call.args` / `call.returns`, which keep signature order and repeated references. `F(v, v)` returning
@@ -257,7 +259,8 @@ class Subcircuit:
 
     @property
     def in_(self) -> tuple[int, ...]:
-        """Distinct references entering from outside, ascending by producing-gate index."""
+        """Boundary gates entering from outside — distinct gates outside S with a wire into S — ascending by
+        gate index (`in(S)` of `verity/ir/parts.py`)."""
         self.circuit._check_explicit(self.size)
         s: set[int] = set()
         for g in self:
@@ -266,8 +269,9 @@ class Subcircuit:
 
     @property
     def out(self) -> tuple[int, ...]:
-        """Distinct references produced inside and consumed outside or protected (root outputs), ascending
-        by producing-gate index. Requires enumerating consumers: explicit over the whole circuit."""
+        """Boundary gates leaving — distinct gates inside S with a wire to a gate outside S, or designated root
+        outputs — ascending by gate index (`out(S)` of `verity/ir/parts.py`). Requires enumerating consumers:
+        explicit over the whole circuit; the compact equivalent is `boundary.out_gates`."""
         c = self.circuit
         c._check_explicit(c.size)
         used: set[int] = set()
@@ -366,13 +370,18 @@ class FunctionCall(Region):
     """A function-call instance: a hierarchy-defined region plus the declared interface (IR §D.2).
 
     `args` / `returns`: gate indices in signature order, repeats kept (leaf order of the declared types).
-    `in_` / `out`: the graph boundary (IR §D.2) — distinct, ascending by producing gate. For a call, `in_`
-    is derived from `args` (a value referenced by two arguments enters once); `out` is the set of values
-    produced inside the call that are consumed outside it or protected (root outputs). A value produced
-    inside can only leave through the returns, so `out ⊆ distinct_returns`; a declared return nobody reads
-    (a dead gate) is in `returns` and `distinct_returns` but **not** in `out` (frontend rulings §8.6).
+    `in_` / `out`: boundary gates (IR §D.2) — distinct, ascending by gate index. `out` is the set of gates
+    produced inside the call with a wire to a gate outside it or designated as root outputs. A gate inside
+    can only leave through the returns, so `out ⊆ distinct_returns`; a declared return nobody reads (a dead
+    gate) is in `returns` and `distinct_returns` but **not** in `out` (frontend rulings §8.6).
     `distinct_returns` is the cheap declared-interface adapter — a conservative superset of `out` computed
-    without scanning consumers; it is named for what it is and never stands in for `out`."""
+    without scanning consumers; it is named for what it is and never stands in for `out`.
+
+    The interface is not the boundary in either direction. `in_` here is derived from `args` (a gate
+    referenced by two arguments enters once), so it is the declared-interface adapter on the input side: an
+    argument the callee never reads (a dead parameter, e.g. the state `AttnBlock_v3{FIRST=True}` ignores) is
+    in `args` and in this `in_` but is **not** a wire into the call. The exact gate boundary `in(S)` is
+    `boundary.in_gates`, which filters by the callee's used parameter leaves; `in_gates ⊆ in_`."""
 
     def __init__(self, circuit: "Circuit", parent: Scope, node_idx: int, member: int = 0) -> None:
         self.parent, self.node_idx, self.member = parent, node_idx, member

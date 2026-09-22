@@ -268,12 +268,18 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     defs: dict[str, dict] = {}
     seen: dict[str, FunctionDefinition] = {}
     duplicates: list[tuple[str, FunctionDefinition]] = []
+    # One entry per distinct duplicate OBJECT, not per visit: a workload Program composed from request components decoded
+    # separately refers to every shared definition through a re-decoded object from EVERY node that calls it, so the per-visit
+    # list held one entry per node (OLMoE B2: 146,523 visits of 95 distinct objects) and the identity check below re-encoded
+    # the definitions verbatim that many times (compose > 45 min; 8 s with the dedup; same descriptor).  [veritor R15 GP01-DUP]
+    dup_objects: set[tuple[str, int]] = set()
 
     def visit(fn: FunctionDefinition) -> None:
         fid = _spec_id(fn)
         prev = seen.get(fid)
         if prev is not None:
-            if prev is not fn:
+            if prev is not fn and (fid, id(fn)) not in dup_objects:
+                dup_objects.add((fid, id(fn)))
                 duplicates.append((fid, fn))
             return
         seen[fid] = fn
