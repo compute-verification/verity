@@ -66,8 +66,8 @@ def main(argv=None) -> int:
         print(f"{name:6s}: {min(ts) * 1e3:8.1f} ms (min of {args.reps}; median {sorted(ts)[len(ts) // 2] * 1e3:.1f})")
     # the pieces of the split form
     Ub = U.index_select(0, sp["bool_j"])
-    from .witness import _bool_row
     from .field import compiled
+    from .witness import _bool_row
     row = compiled(_bool_row, dev)
     rb = rho.index_select(1, sp["bool_q"])
     row(rb[0], Ub); _sync(dev)
