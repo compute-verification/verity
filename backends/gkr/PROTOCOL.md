@@ -43,27 +43,73 @@ simulator of section 5.5 is written out so that the argument does not rest on th
 | \(U=B\cdot K/16\) | transition units (one 16-product update each); \(K=1536\): \(U=96B\) | yes |
 | \(b=\lceil\log_2 U\rceil\) | copy bits; \(B\in\{1,64,4096\}\Rightarrow b\in\{7,13,19\}\) | yes |
 | \(C\) | fixed per-unit checker, layered quad circuit (libzk 6.3.2), layers \(L_0\) (assertions) … \(L_D\) (inputs), per-unit widths \(2^{s_i}\) | yes |
-| \(x_u\in F_t^{2^{s_D}}\) | per-unit private inputs: 32 decoded operands, incoming state, outgoing state, hints (quotients/remainders, leading-bit positions, exponent, flags) | **no** |
-| \(T_1..T_{14}\) | public lookup tables of the census (below) | yes |
+| \(x_u\in F_t^{2^{s_D}}\) | per-unit private inputs: the 34 words, the 225 hints (decode digits, flags, selectors, quotients/remainders, leading-bit positions, clamp/overflow flags), the 62 looked-up row columns; with `commit_query_wires` (default) also the 140 query wires | **no** |
+| \(T_1..T_5\) | public lookup tables of the census (below): `T_range16`, `ALIGN`, `POW`, `LEAD`, `NORM` | yes |
 | \(m_T\in\mathbb Z_{\ge0}^{|T|}\) | multiplicities of table \(T\) over the whole batch | **no** |
-| census per unit | 146 `mul`, 104 `lin`, 172 lookups (`verity.ml.tc.relation.census`, instance-independent) **[source]** | yes |
+| census per unit (WP2 checker contracts, `verity_numerical.security.census.census_unit`) **[derivation from source]** | 358 `mul` (114 of them booleans), 137 `lin` (115 identities + 22 range-chunk splits), 306 lookups (284 sixteen-bit range chunks + 22 fixed-table rows); committed columns 321 = 34 words (\(c\), 32 operands, \(y\)) + 225 hints + 62 looked-up row columns; 244 products + 100 materialised range expressions as computed wires; multiplicative depth 5; 140 of the 306 lookup queries are on computed wires | yes |
 
-Lookups per unit by table **[source]**: `T_bf16` 32 (65536 rows, 4 columns), `T_range16` 46, `T_range10` 36,
-`T_pow26` 18 (512 rows, 3 cols), `T_pcls` 16 (64 rows, 5 cols), `T_any9` 6, `T_iszero12` 4, and 2 each for
-`T_exp25`, `T_norm30`, `T_range14`, `T_range13`, `T_range8`, `T_range5`, `T_range3`. Total lookups at
-\(K=1536,B=4096\): \(172\cdot 393216 = 67.6\)M, the largest table column `T_range16` has \(N=18.1\)M entries.
+**Census source (2026-09-21).** The counts are taken from the WP2 checker (`verity_numerical.checker`: `step.py`'s
+composed unit executed once on symbolic values through the five predicates `rng`/`eq`/`boolean`/`lookup`/`lt_pow`,
+hint widths from every gadget's `contract()`), **not** from `verity.ml.tc.relation.census`, which is forgeable as
+written (red team: `magW` never range-checked; WP2 F1/F2: remainders and quotient bounds) and counts none of the
+repairs. Conventions (`security.census` docstring): a product of two non-constant expressions is one `mul`;
+`boolean` is one `mul`; a \(w\)-bit range check is \(\lceil w/16\rceil\) lookups into the one 16-bit table (a
+\(w<16\) value is checked as \(x\cdot2^{16-w}\)) plus one `lin` split when \(w>16\); `lt_pow` is the reference
+realisation \(x\cdot\mathrm{ipow}<2^B\) (one `mul` + one \(B\)-bit range; sound over Goldilocks since
+\(p>2^{60}\ge2^{2B}\), checker F1 — a small field needs the direct realisation, not counted). Identical products
+formed twice (`q*sr` in `div` and `quot`) are counted twice (upper count).
 
-**[assumption]** Checker shape used by the calculator until the WP3 census lands: inputs \(2^8\) per unit, three
-computed layers of widths \(2^7,2^6,2^5\), assertion layer \(2^8\) (`DEFAULT_LAYERS_A`). The message shape of every
-protocol step depends only on the public data of this table; no message length or branch depends on a witness.
+Lookups per unit by table: `T_range16` 284 (65 536 rows, 1 column), `ALIGN` 16 (512 rows, 4 columns), `POW` 2
+(512, 3), `LEAD` 2 (31, 3), `NORM` 2 (32, 4). Multiplicity columns \(\sum_T|T|=66\,623\) (relation: 162 715). Range
+checks per unit by width: 7-bit 36, 8-bit 66, 9-bit 26, 16-bit 112, 23-bit 2, 24-bit 5, 25-bit 8, 30-bit 6,
+32-bit 1. Total lookups at \(K=1536,B=4096\): \(306\cdot393216=120.3\)M; `T_range16` has \(N=111.7\)M entries
+(\(n_T=27\)). Hint widths (contract ranges): 114 one-bit (flags, selectors, signs), 2 five-bit, 34 seven-bit,
+33 eight-bit, 2 nine-bit, 32 sixteen-bit, 2 twenty-three-bit, 2 twenty-four-bit, 4 twenty-five-bit.
+
+**Diff against `relation.vu_census` (`census.diff_vs_relation`, `test_census.py`)**, checker − relation:
+
+| | relation `mul`/`lin`/`lookup` | checker `mul`/`lin`/`lookup` | Δ |
+|---|---|---|---|
+| unit (16 products) | 146 / 104 / 172 | 358 / 137 / 306 | +212 / +33 / +134 |
+| VU \(K=1536\) | 14 027 / 9 992 / 16 521 | 34 370 / 13 059 / 29 379 | +20 343 / +3 067 / +12 858 |
+
+Not in the relation's count: the direct range of every remainder (`align_state.r`, `align_product.r`,
+`normalise.r`) and of the normalised magnitude (`normalise.M`, the `magW` repair); the tight quotient bounds
+(`quot` products); the decode of an arbitrary incoming accumulator word in every unit; the pack of the output
+word in every unit; operand decode by hints + range checks (the checker uses no `T_bf16`, `T_pcls`, `T_exp`,
+`T_iszero` tables — those lookups are replaced by 4 hints, 3 range checks, 2 `mul`, 2 `lin` per operand).
+
+**Two unit variants (`census_unit`, `census_vu`).** The backend transition unit takes an arbitrary finite word
+\(c\) (decode + pack inside; the row above). The VU (`check_vu_expr`) is 96 word-chained units from the constant
+\(c_0=0\) plus the epilogue: 30 631 committed columns (A), 34 370 `mul`, 13 059 `lin`, 29 379 lookups, i.e.
+\(96\times\)unit \(+2\) `mul` \(+6\) hints \(+3\) lookups: the variants differ by \(<0.01\%\) because `step.py`
+decodes and packs the word in every unit. A state-chained VU (decode once, pass \((s,e,M)\)) would save
+\(\approx14\) `mul`, 7 hints, 9 `lin`, 10 range chunks per inner unit (\(\approx4\%\)); it is not what `step.py`
+composes and is not counted.
+
+**Checker shape [derivation from the census; widths are estimates]** (`census.layer_shape`, `DEFAULT_LAYERS_A`):
+libzk 6.3 layers are strict, so a value used \(j\) layers later is carried by copy gates; the width of the layer at
+multiplicative depth \(d\) is taken as its products plus every value of lower depth (upper bound).
+
+| layer (output first) | products | carried width per unit | \(2^{s_{out}}\) | reads \(2^{s_{in}}\) | holds lookup queries |
+|---|---|---|---|---|---|
+| assertions (137 `lin`) | 0 | 137 | \(2^8\) | \(2^{10}\) | no |
+| depth 5 | 6 | 679 | \(2^{10}\) | \(2^{10}\) | yes |
+| depth 4 | 4 | 673 | \(2^{10}\) | \(2^{10}\) | yes |
+| depth 3 | 22 | 669 | \(2^{10}\) | \(2^{10}\) | yes |
+| depth 2 | 114 | 647 | \(2^{10}\) | \(2^{10}\) | yes |
+| depth 1 | 212 | 533 | \(2^{10}\) | \(2^9\) (321 inputs) | yes |
+
+The message shape of every protocol step depends only on the public data of this table; no message length or
+branch depends on a witness.
 
 ## 2. Fields
 
 | role | choice | reason |
 |---|---|---|
-| trace field \(F_t\) (inputs, multiplicities, Reed–Solomon code) | Goldilocks \(p=2^{64}-2^{32}+1\) (**64-bit reference first**, handoff 7.2) | \(2^{32}\)-smooth multiplicative group gives RS length up to \(2^{32}\); every integer of the relation (\(|S|<2^{30}\), products \(<2^{16}\cdot2^{16}\), shifted magnitudes \(<2^{35}\)) embeds without wrap **[derivation]** |
-| challenge field \(F_c\) (all sumcheck/logUp/Ligero-combination randomness, pads) | \(F_{p^2}\) (\(\approx2^{128}\)) first meets \(2^{-80}\) and \(2^{-96}\); \(F_{p^3}\) (\(\approx2^{192}\)) first meets \(2^{-112}\) and \(2^{-128}\) | section 9.2: the logUp identity term \((N+|T|-1)/(|F_c|-|T|)\) floors at \(2^{-109.4}\) (\(B=1\)) … \(2^{-100.8}\) (\(B=4096\)) over \(F_{p^2}\) **[derivation]** |
-| small-field study | Baby Bear \(15\cdot2^{27}+1\) / Mersenne-31 trace field, degree-6 extension for \(2^{-128}\) (degree 5 misses: lookup terms \(\approx2^{-127}\)) | \(|S|<2^{30}\) motivates it; logUp's \(\mathrm{char}\,F>N\) (Hab22 Lemma 5) caps total lookups per table at \(<2^{31}\): fine at \(B=4096\) (\(N\le1.8\cdot10^7\)), fails at \(B=2^{20}\) (`test_small_field_study_limits`) |
+| trace field \(F_t\) (inputs, multiplicities, Reed–Solomon code) | Goldilocks \(p=2^{64}-2^{32}+1\) (**64-bit reference first**, handoff 7.2) | \(2^{32}\)-smooth multiplicative group gives RS length up to \(2^{32}\); every integer of the checker (\(|S|<2^{30}\), `lt_pow` products \(<2^{2B}\le2^{60}\), words \(<2^{32}\)) embeds without wrap: checker F1–F4 are satisfied by Goldilocks with the product realisation of `lt_pow` (`checker/__init__.py` section 3) **[source]** |
+| challenge field \(F_c\) (all sumcheck/logUp/Ligero-combination randomness, pads) | \(F_{p^2}\) (\(\approx2^{128}\)) first meets \(2^{-80}\) and \(2^{-96}\); \(F_{p^3}\) (\(\approx2^{192}\)) first meets \(2^{-112}\) and \(2^{-128}\) | section 9.2: the logUp identity term \((N+|T|-1)/(|F_c|-|T|)\) floors at \(2^{-111.3}\) (\(B=1\)) … \(2^{-100.9}\) (\(B=4096\)) over \(F_{p^2}\) **[derivation]** |
+| small-field study | Baby Bear \(15\cdot2^{27}+1\) / Mersenne-31 trace field, degree-6 extension for \(2^{-128}\) (degree 5 misses: lookup terms \(\approx2^{-127}\)) | \(|S|<2^{30}\) motivates it; logUp's \(\mathrm{char}\,F>N\) (Hab22 Lemma 5) caps total lookups per table at \(<2^{31}\): fine at \(B=4096\) (`T_range16` \(N=1.1\cdot10^8\)), fails at \(B=2^{20}\) (`test_small_field_study_limits`) |
 
 Rule: \(F_c\) is an extension of \(F_t\); pads are \(F_c\) elements stored as \(\deg(F_c/F_t)\) trace-field
 coordinates; an \(F_c\)-linear constraint on pads is \(\deg\) \(F_t\)-linear constraints on coordinates, an
@@ -79,7 +125,7 @@ coordinates; an \(F_c\)-linear constraint on pads is \(\deg\) \(F_t\)-linear con
 | proximity \(e\) | \((n-k)/2=6144\) (Appendix C regime \(e<d/2\)) | |
 | blinding rows | one random codeword row per test (LDT row; linear-test row with payload summing to 0; quadratic-test row with zero payload) — libzk `layout_zk_rows` | |
 | leaf \(j\) **[proposal, default]** | HM96 \(O(k)\)-bit commitment to column \(j\): \(s_j=H(T[0][j]\|\cdots\|T[\mathrm{NROW}][j])\), random \(x_j\in\{0,1\}^{6k+4}\), universal \(h_j\) with \(h_j(x_j)=s_j\), leaf \(=(h_j,\,H(x_j))\), \(k=160\); opening \(=\) column \(\|\,x_j\) | hiding of unopened columns is **statistical**, \(n\cdot2^{-160}=2^{-146}\) (HM96 Theorem 1, union over \(n\) leaves; calculator `zk` term); binding by collision resistance of \(H\). Alternative (unsalted \(H(\text{column})\), libzk `commit`) needs a hiding assumption on \(H\) beyond CRH (section 7) |
-| committed elements, \(K=1536,B=4096\) | \(100.9\)M \(F_t\) elements = \(393216\cdot2^8\) inputs \(+\) 162k multiplicities \(+\) 10 991 pads \(\times3\) coordinates → 26 269 rows, \(430\)M encoded symbols | calculator `parameters` |
+| committed elements, \(K=1536,B=4096\) | \(181.4\)M \(F_t\) elements = \(393216\cdot(321+140)\) inputs, hints, row columns and query wires \(+\) 66 623 multiplicities \(+\) 4 674 pads \(\times3\) coordinates → 47 231 rows, \(774\)M encoded symbols; \(126.3\)M without the query wires (`commit_query_wires=False`, depth 630) | calculator `parameters` |
 
 Quadratic constraints are laid out libzk-style as aligned triples of rows (`layout_quadratic_rows`); Candidate A
 has only the deferred products of section 6 (\(\approx4\) per checker layer, 3 per fractional-GKR layer, times
@@ -143,7 +189,7 @@ This is the bound the calculator charges (`logup_identity_error(..., challenge_s
 also the sampling set of Hab22 Protocol 2 (condition \(x\notin -t(H)\), Remark 3), so Theorem 4's
 \(((M+1)|H|-1)/(|F|-|H|)\) is the same statement, not a whole-field theorem reused. The whole-field variant
 (\(z\) uniform over \(F_c\), Hab22 Remark 3's overwhelmingly-complete protocol) gives \(d_T/|F_c|\); the two differ
-by exactly \(d_T|T|/(|F_c|(|F_c|-|T|))\): at \(K=1536,B=4096\), `T_range16`, \(F_c=F_{p^3}\), that is \(2^{-343.9}\)
+by exactly \(d_T|T|/(|F_c|(|F_c|-|T|))\): at \(K=1536,B=4096\), `T_range16` (\(N_T=111.7\)M), \(F_c=F_{p^3}\), that is \(2^{-341.3}\)
 absolute, a relative \(|T|/(|F_c|-|T|)=2^{-176}\) (`test_conditioned_challenge_space_vs_whole_field_theorem`).
 For vector-valued rows the \(\beta\)-degree term \(d_T(\mathrm{cols}-1)/|F_c|\) is added **[derivation]**
 (conditioning on \(\beta_T\), union bound).
@@ -160,14 +206,21 @@ multiplicities (section 6), and (b) a claim
 \(\sum_{g,c}L_T(g,c)\,V_{i(T)}(g,c)=\text{value}\) on the checker layer \(i(T)\) holding all query wires of
 \(T\), where \(L_T\) is public (products of \(\mathrm{eq}\) factors and \(\beta_T\) powers).
 
-**Layout rule [proposal]**: every query wire is an **input-layer value** (operands, states, hints) wherever the
-census allows — in a witness-and-check design (handoff 5.2) the range-checked quantities are hints and the
-decoded operands are inputs — so claim (b) is a Ligero linear constraint on the committed \(x\) and the lookups
-never wait for the checker GKR. Where a query is a computed wire, it is an output wire of a single layer
-\(i(T)\) (identity gates copy where needed) and claim (b) is merged into layer \(i(T)\)'s sumcheck with a fresh
-coefficient (\(1/|F_c|\) each) without changing degrees; that layer then follows the lookups on the critical
-path (section 5.4, fallback row). This mechanism satisfies handoff 6.2's "witnesses must agree on the shared
-query values": the lookup argument never has its own copy of a query value.
+**Where the queries are (census).** Of the 306 queries per unit, 166 are input-layer values (hints such as
+`q`, `r`, `t`, `f`, `M`, `low`, the 33 words) and **140 are computed wires**: the `lt_pow` products
+(\(r\cdot\mathrm{ipow}\), \(q\cdot\mathrm{pow}\), \((v-\mathrm{lo})\cdot\mathrm{ispan}\), \(r\cdot\mathrm{idiv}\)), the
+`checked` expressions (\(t-nz\), \(M+z-1\), \(u+z-1\), \(v\), \(d_i=E-\mathrm{cand}_i\), `clamp_proof`,
+`ovf_proof`) and the table keys \(d\), \(k\). They sit on every computed layer (depths 1–5).
+
+**Layout rule [proposal], default `commit_query_wires`**: each of the 140 computed query wires is *also*
+committed as an input column, bound to its expression by the identity the checker already states (the product
+or linear identity is a gate of its layer either way), so every claim (b) is a Ligero linear constraint on the
+committed \(x\) and the lookups never wait for the checker GKR. Cost: \(+140\) committed elements per unit
+(\(321\to461\), \(+55\)M at \(B=4096\)). This satisfies handoff 6.2's "witnesses must agree on the shared query
+values": the lookup argument reads the committed copy, and the checker binds the copy to the wire.
+**Without it**, claim (b) is merged into the sumcheck of the layer holding the query wire (fresh coefficient,
+\(1/|F_c|\) each, degrees unchanged), and every layer that holds a query — all five computed layers — follows the
+lookups on the critical path (section 5.4: depth 630 instead of 381).
 
 ### 4.4 Every denominator, and why none can abort on witness data
 
@@ -208,7 +261,7 @@ lines instantiated (each \(r_j\), each \(\mu_k,\lambda_k\), …); `rounds.protoc
        W_1 = (x_u)_{u<U} || (m_T)_T || coords(pad) || row randomizers || blinding rows.
        Everything in W_1 is challenge-independent: inputs+hints, ALL multiplicities, ALL pads for steps 2-4,
        Ligero row randomizers and the three blinding rows.  Fixed here: multiplicities, pad count P (public).
- 2  --- lookups: one fractional GKR per table T (14 tables, independent challenges, run in parallel) ---
+ 2  --- lookups: one fractional GKR per table T (5 tables, independent challenges, run in parallel) ---
  2a C  for every T at once: z_T^(1), z_T^(2) (redraw slots, S = 2), beta_T if columns(T) > 1; z_0 of step 3a.
        Public rule: z_T := the first z_T^(i) not in Img_T = { t_v(beta_T) }; if all S lie in Img_T the session
        ends (public abort, probability (|T|/|F_c|)^S per table, calculator `completeness`).  No round trip.
@@ -219,7 +272,7 @@ lines instantiated (each \(r_j\), each \(\mu_k,\lambda_k\), …); `rounds.protoc
          k rounds of degree-3 sumcheck:  M <s_j(0)>, <s_j(2)>, <s_j(3)>  ;  C r_j
  2d    leaf claims at rho_T: (a) m~_T(rho_T|table)  -> deferred linear constraint (step 6)
                              (b) sum_c beta^c w~^{(c)}(rho_T|witness) -> deferred linear constraint on x when
-                                 the queries are inputs (layout rule 4.3); else pending claim on layer i(T)
+                                 the queries are committed (layout rule 4.3); else pending claim on layer i(T)
  3  --- checker GKR, layer by layer (in parallel with step 2 when no pending claim is outstanding) ---
  3a    claim V~_0(z_0) = 0, z_0 in F_c^{s_0+b} (issued in 2a).
  3b    for i = 0 .. D-1:
@@ -261,16 +314,16 @@ the index map is public and fixed by \((K,B,C)\). A pad reused across two elemen
 
 | check | Ligero constraint type | count (\(K=1536,B=4096\)) **[derivation]** |
 |---|---|---|
-| sumcheck round consistency \(s_j(0)+s_j(1)=s_{j-1}(r_{j-1})\) | linear over \(F_c\) → \(\deg\) linear over \(F_t\) | 3 571 |
-| final-round identity per checker layer (\(\widetilde Q\, v_l v_r\)) | 1 quadratic + linear | 4 |
-| final-round identity per fractional-GKR layer (3 products) | 3 quadratic + linear | \(3\sum_T(n_T-1)\approx 900\) |
+| sumcheck round consistency \(s_j(0)+s_j(1)=s_{j-1}(r_{j-1})\) | linear over \(F_c\) → \(\deg\) linear over \(F_t\) | 1 569 |
+| final-round identity per checker layer (\(\widetilde Q\, v_l v_r\)) | 1 quadratic + linear | 6 |
+| final-round identity per fractional-GKR layer (3 products) | 3 quadratic + linear | \(3\sum_T(n_T-1)=315\) |
 | claim merges (\(\alpha,\beta\), lookup coefficients, \(\gamma\), \(\mu,\lambda\)) | linear | one per coefficient |
-| \(\widetilde m_T\) leaf claims | linear on committed \(m_T\) | 14 |
+| \(\widetilde m_T\) leaf claims | linear on committed \(m_T\) | 5 |
 | input-layer claims | linear on committed \(x\) | 2 + input-layer lookups |
-| \(p_{\mathrm{root}}=0\) | folded into layer-0 identity | 14 |
+| \(p_{\mathrm{root}}=0\) | folded into layer-0 identity | 5 |
 
 The verifier's own work: HM96 openings and Merkle paths for \(t\) columns, the IRS/linear/quadratic tests on
-\(t\) columns (\(t\cdot\mathrm{rows}\) = 5.0M \(F_t\) elements opened at \(B=4096\)), evaluation of
+\(t\) columns (\(t\cdot\mathrm{rows}\) = 9.1M \(F_t\) elements opened at \(B=4096\)), evaluation of
 \(\widetilde Q_i\) at the random points, and the public eq/Lagrange coefficient vectors. Proof size and
 verifier time are secondary (handoff 2.1) and are reported, not optimised.
 
@@ -283,7 +336,7 @@ verifier message costs one network round trip only if the next prover message de
 is `depth × RTT`; the final prover message (5d) adds a one-way latency not counted.
 
 **Known techniques, always applied [source / immediate]:**
-1. Independent sumchecks run in parallel: all 14 fractional GKRs and the checker GKR are independent instances
+1. Independent sumchecks run in parallel: all 5 fractional GKRs and the checker GKR are independent instances
    (the lookups touch the checker only through the deferred constraints or a merged claim), so one verifier
    message carries all their round-\(j\) challenges and one prover message all their round-\(j\) polynomials
    (Tha13 §7 / libzk batch the *instances*; running independent protocols in lock-step is the standard
@@ -295,27 +348,29 @@ is `depth × RTT`; the final prover message (5d) adds a one-way latency not coun
    a coin chosen after the claims), \(\alpha_i,\beta_i\) after \(v_l,v_r\), each \(r_j\) after \(s_j\), \(Q\)
    after the Ligero responses.
 
-**Derivation of the baseline depth [derivation]**, \(K=1536,B=4096\), \(c=1\) variable per message, queries on
-the input layer (layout rule 4.3), no step 0:
+**Derivation of the baseline depth [derivation]**, \(K=1536,B=4096\), \(c=1\) variable per message, query wires
+committed (layout rule 4.3), no step 0:
 
 ~~~text
 fractional GKR of dimension n (per table, all tables in parallel):
     1 (mu_1, lambda_1 after the layer-1 claims) + sum_{k=1}^{n-1} (k sumcheck challenges + 1 (mu,lambda))
-    = 1 + n(n-1)/2 + (n-1)                       n = 25 (T_range16, N = 18,087,936 + 65,536 <= 2^25):  325
-checker GKR (4 layers, rounds 41, 38, 35, 40):  sum (rounds_i + 1) + 1 (gamma) = 158 + 1 = 159   (in parallel)
-depth = 1 (message 2a: all z, beta, z_0) + max(325, 159) + 2 (Ligero r, Q) = 328
+    = 1 + n(n-1)/2 + (n-1)                       n = 27 (T_range16, N = 111,673,344 + 65,536 <= 2^27):  378
+checker GKR (6 layers, rounds s_out + 19 + 2 s_in = 47, 49, 49, 49, 49, 47):
+    sum (rounds_i + 1) + 1 (gamma) = 296 + 1 = 297                                             (in parallel)
+depth = 1 (message 2a: all z, beta, z_0) + max(378, 297) + 2 (Ligero r, Q) = 381
 ~~~
 
-Fallback (queries on the last computed layer \(D-1\)): the merged claim makes layer \(D-1\) wait for the lookups:
-depth \(=1+\max(325,\,\text{layers }0..D-2)+(40+1)+1+2=370\).
+Without committed query wires every computed layer holds queries and waits for the lookups: depth
+\(=1+\max(378,\,\text{assertion layer }48)+(5\text{ layers: }49+50+50+50+48)+1+2=630\).
 
 **Proposals [proposal] (calculator `DepthOptions`), each with its cost:**
 
 | reduction | mechanism | depth at \(B=4096\) | cost | status |
 |---|---|---|---|---|
-| \(c\) variables per message | prover sends the \(c\)-variate round polynomial (\((d+1)^c-1\) padded values); verifier binds \(c\) variables per message; per-message Schwartz–Zippel error \(cd/|F_c|\), total unchanged **[derivation]** | \(c=2\): 184; \(c=3\): 136 | pads \(\times(4^c-1)/(3c)\) (\(c=2\): \(2.5\times\), \(+16\)k pads); prover work in the sumcheck rounds \(\times\approx(d+1)^{c}/((d+1)c)\) (\(c=2\): \(\approx2\times\)) | folklore generalisation of the sumcheck round (no source read for it; derivation only) |
-| table sharding \(s\) | split each table's \(N_T\) queries into \(2^s\) independent fractional GKRs with their own committed multiplicity vectors (challenge-independent); dimension \(\lceil\log_2(N_T/2^s+|T|)\rceil\); identity error charged per shard | \(s=5\): 213 | \((2^s-1)|T|\) extra committed multiplicities per sharded table (\(s=5\): \(+5.6\)M elements, \(+5.6\%\)); \(2^s\times\) the (padded) fractional transcript for that table (\(+8.5\) MB communication) | this lane's proposal |
-| both | | \(c=2,s=5\): **123**; \(c=3,s=5\): 93 | sum of the above | |
+| \(c\) variables per message | prover sends the \(c\)-variate round polynomial (\((d+1)^c-1\) padded values); verifier binds \(c\) variables per message; per-message Schwartz–Zippel error \(cd/|F_c|\), total unchanged **[derivation]** | \(c=2\): 212; \(c=3\): 156 | pads \(\times(4^c-1)/(3c)\) (\(c=2\): \(2.5\times\), \(+7\)k pads); prover work in the sumcheck rounds \(\times\approx(d+1)^{c}/((d+1)c)\) (\(c=2\): \(\approx2\times\)) | folklore generalisation of the sumcheck round (no source read for it; derivation only) |
+| table sharding \(s\) | split each table's \(N_T\) queries into \(2^s\) independent fractional GKRs with their own committed multiplicity vectors (challenge-independent); dimension \(\lceil\log_2(N_T/2^s+|T|)\rceil\); identity error charged per shard | \(s=5\): 300 (the checker chain, 297, is now the floor) | \((2^s-1)|T|\) extra committed multiplicities per sharded table (\(s=5\): \(+2.3\)M elements, \(+1.3\%\)); \(2^s\times\) the (padded) fractional transcript for that table (\(+3.3\) MB communication) | this lane's proposal |
+| both | | \(c=2,s=5\): **158**; \(c=3,s=5\): 110 | sum of the above | |
+| commit the 140 query wires (4.3) | default; listed here because it is the depth lever with the largest committed-element cost | 381 vs 630 | \(+55\)M committed elements (\(126.3\)M → \(181.4\)M, \(+44\%\)) | this lane's proposal |
 
 Step 0 adds exactly one verifier message before com_1 (+1 depth) in every row.
 
@@ -324,18 +379,20 @@ network floor `depth × RTT` in seconds (`e2e_sweep`):**
 
 | configuration | `rounds.protocol` | `rounds.sequential_depth` | `t.e2e.rtt_0ms` | `rtt_0.1ms` | `rtt_1ms` | `rtt_10ms` | `rtt_50ms` |
 |---|---|---|---|---|---|---|---|
-| A baseline (known techniques, queries on inputs) | 3 607 | 328 | \(t_c\) | \(t_c+0.033\) | \(t_c+0.33\) | \(t_c+3.28\) | \(t_c+16.4\) |
-| A fallback (queries on layer \(D-1\)) | 3 607 | 370 | \(t_c\) | \(+0.037\) | \(+0.37\) | \(+3.70\) | \(+18.5\) |
-| A + \(c=2\) [proposal] | 3 607 | 184 | \(t_c\) | \(+0.018\) | \(+0.18\) | \(+1.84\) | \(+9.2\) |
-| A + \(c=2\), \(s=5\) [proposal] | 67 074 | 123 | \(t_c\) | \(+0.012\) | \(+0.12\) | \(+1.23\) | \(+6.15\) |
-| A + \(c=3\), \(s=5\) [proposal] | 67 074 | 93 | \(t_c\) | \(+0.009\) | \(+0.09\) | \(+0.93\) | \(+4.65\) |
+| A baseline (known techniques, query wires committed) | 1 589 | 381 | \(t_c\) | \(t_c+0.038\) | \(t_c+0.38\) | \(t_c+3.81\) | \(t_c+19.1\) |
+| A without committed query wires (5 layers after the lookups) | 1 589 | 630 | \(t_c\) | \(+0.063\) | \(+0.63\) | \(+6.30\) | \(+31.5\) |
+| A + \(c=2\) [proposal] | 1 589 | 212 | \(t_c\) | \(+0.021\) | \(+0.21\) | \(+2.12\) | \(+10.6\) |
+| A + \(s=5\) [proposal] | 25 548 | 300 | \(t_c\) | \(+0.030\) | \(+0.30\) | \(+3.00\) | \(+15.0\) |
+| A + \(c=2\), \(s=5\) [proposal] | 25 548 | 158 | \(t_c\) | \(+0.016\) | \(+0.16\) | \(+1.58\) | \(+7.9\) |
+| A + \(c=3\), \(s=5\) [proposal] | 25 548 | 110 | \(t_c\) | \(+0.011\) | \(+0.11\) | \(+1.10\) | \(+5.5\) |
 | A + step 0 (any row) | +1 | +1 | | | | | |
-| B `helper_columns` (for comparison) | 16 | 3 | \(t_c\) | \(+0.0003\) | \(+0.003\) | \(+0.03\) | \(+0.15\) |
-| B `gkr` mode | 3 447 | 328 | as A baseline | | | | |
+| B `helper_columns` (for comparison) | 7 | 3 | \(t_c\) | \(+0.0003\) | \(+0.003\) | \(+0.03\) | \(+0.15\) |
+| B `gkr` mode | 1 569 | 381 | as A baseline | | | | |
 
-At \(B=1\) and \(B=64\) the A baseline depth is 156 and 193 (`rounds_and_depth_a`; the dominant chain is
-\(n_T=17,19\)). Whether the depth reductions are adopted is a measurement question
-(`backends/AGENTS.md`: "no hard round budget yet").
+At \(B=1\) and \(B=64\) the A baseline depth is 228 and 264 (`rounds_and_depth_a`): there the **checker chain**
+(225, 261: six layers whose sumchecks have \(b=7,13\) copy variables) dominates the lookup chain (153, 231;
+\(n_T=17,21\)). At \(B=4096\) the lookup chain dominates (378 vs 297). Whether the depth reductions are adopted is a
+measurement question (`backends/AGENTS.md`: "no hard round budget yet").
 
 ### 5.5 Step 0: verifier-coin commitment for malicious-verifier privacy **[proposal]**
 
@@ -348,7 +405,7 @@ length \(\ell_i\) bits: V draws \(x_i\in\{0,1\}^{L_i}\), \(L_i=4k_V+2\ell_i+4\),
 \(H(x_i)\)). For long coins (the Ligero row-combination vector \(r\in F_c^{\mathrm{rows}}\), 630 KB; the query
 set \(Q\)) the \(O(k)\) variant is used: commit to \(H(\mathrm{coin}_i)\) and open with \((\mathrm{coin}_i,x_i)\)
 (HM96 section 4; 9k-bit commit string, 180 B). Statistically hiding: distance \(<2^{-k_V}\) per commitment
-(HM96 Theorem 1), \(R\cdot2^{-160}=2^{-148.2}\) over the \(R=3607\) slots of the baseline (calculator term
+(HM96 Theorem 1), \(R\cdot2^{-160}=2^{-149.4}\) over the \(R=1589\) slots of the baseline (calculator term
 `commitment_hash / verifier coin commitments`, statistical, **added to the soundness total**: it bounds what a
 prover can learn about the coins). Computationally binding: two openings of one \(c_i\) are a collision of
 \(H\) (HM96 section 3.2). Only collision resistance of \(H\) is used; no new assumption enters.
@@ -367,7 +424,7 @@ slot list is a public function of \((K,B,C)\); its length is `rounds.protocol`.
  i   V -> P   x_i  (opening of slot i, in the order of 5.1)    P checks H(x_i) = y_i, sets coin_i = h_i(x_i);
                                                                on failure P aborts (publicly attributable to V)
      P -> V   the prover message that depends on coin_i        never sent before the opening of coin_i verified
- ... every C line of 5.1 is such an opening; parallel slots (2a; the 14 tables' round-j coins) open together
+ ... every C line of 5.1 is such an opening; parallel slots (2a; the 5 tables' round-j coins) open together
  5d  P -> V   opened columns                                   after the opening of Q verified
 ~~~
 
@@ -413,10 +470,10 @@ Ligero's \(0\) (Lemma 4.15 is perfect for \(k>l+t\)).
 | item | value |
 |---|---|
 | additional verifier messages / depth | +1 (message 0); every other opening rides on the challenge message it replaces |
-| additional communication | \(R\) commit strings + \(R\) openings \(\approx R\cdot(144+100)\) B \(=0.88\) MB for \(R=3607\) (42.2 MB → 43.1 MB, \(+2.1\%\)); long coins (\(r\), \(Q\)) add only their \(x_i\) |
-| additional prover work | verify \(R\) openings: \(R\) hashes of \(\le 900\)-bit strings and \(R\) universal-hash evaluations — \(<10^7\) bit operations, below \(10^{-6}\) of the batch's \(3\cdot10^{10}\) field operations (section 9.4); no change to encoding, GKR or Ligero work |
+| additional communication | \(R\) commit strings + \(R\) openings \(\approx R\cdot(144+100)\) B \(=0.39\) MB for \(R=1589\) (74.7 MB → 75.1 MB, \(+0.5\%\)); long coins (\(r\), \(Q\)) add only their \(x_i\) |
+| additional prover work | verify \(R\) openings: \(R\) hashes of \(\le 900\)-bit strings and \(R\) universal-hash evaluations — \(<10^7\) bit operations, below \(10^{-6}\) of the batch's \(1.2\cdot10^{11}\) field operations (section 9.4); no change to encoding, GKR or Ligero work |
 | additional verifier work | sample coins up front (unchanged total), \(R\) commitments |
-| soundness | \(+R\cdot2^{-160}=2^{-148.2}\), total unchanged at \(2^{-130.2}\) (`test_coin_commitment_step0_terms_and_label`) |
+| soundness | \(+R\cdot2^{-160}=2^{-149.4}\), total unchanged at \(2^{-130.2}\) (`test_coin_commitment_step0_terms_and_label`) |
 
 ## 6. Constraint generation (libzk 6.7 adapted)
 
@@ -424,7 +481,7 @@ Public inputs to constraint generation: all challenges, all padded values, \(\wi
 points, table evaluations \(\widetilde t_v(\beta_T)\) at \(\rho_T\). Output: matrices \(A\) (linear) and triples
 (quadratic) over \(F_c\) on the committed vector \(W_1\), expanded to \(F_t\) coordinates. Both parties compute
 them; the prover needs them only for step 5b. Combination coefficients: \(r\) (IRS test) is an explicit uniform
-vector; \(r_{add}\), \(r_q\) may be explicit (Candidate A has \(\approx15\)k linear and \(\approx1\)k quadratic
+vector; \(r_{add}\), \(r_q\) may be explicit (Candidate A has \(\approx10\)k linear and \(\approx1\)k quadratic
 constraints) or powers of one uniform element each (`ligero_error(combination="powers")`, error
 \((\#\text{constraints}-1)/|F_c|\) by Schwartz–Zippel **[derivation]**; required for Candidate B).
 
@@ -445,7 +502,7 @@ constraints) or powers of one uniform element each (`ligero_error(combination="p
 | branch-dependent message shapes (e.g. shift direction, zero/overflow flags) | every checker branch is fixed-size (selectors + both arms evaluated); number and degree of every sumcheck message is a function of \((K,B,C)\) only |
 | batch partitioning by exponent / group state | forbidden; one batch, one GKR, one commitment; padding instances are public and prescribed (handoff 9.1). Sub-batches, if used, are a public split with `N_subbatches` reported and union-bounded |
 | lookup multiplicities | committed, never sent; only \(\widetilde m_T(\rho)\) padded |
-| logUp pole (\(z_T-w_j=0\)) | honest query values lie in \(T\), so a pole exists iff \(z_T\in\mathrm{Img}_T\): a **public** condition resolved by the pre-issued redraw slots (2a); the transcript records which slot was used deterministically; the prover never aborts on witness data (calculator `completeness`: redraw \(\sum_T|T|/|F_c|\approx2^{-175}\), abort \(\sum_T(|T|/|F_c|)^2\approx2^{-350}\)) |
+| logUp pole (\(z_T-w_j=0\)) | honest query values lie in \(T\), so a pole exists iff \(z_T\in\mathrm{Img}_T\): a **public** condition resolved by the pre-issued redraw slots (2a); the transcript records which slot was used deterministically; the prover never aborts on witness data (calculator `completeness`: redraw \(\sum_T|T|/|F_c|\approx2^{-176}\), abort \(\sum_T(|T|/|F_c|)^2\approx2^{-352}\)) |
 | any other zero denominator | none exists (section 4.4) |
 | restart on a bad challenge | forbidden. A session is aborted, never restarted with the same W_1; a new session recommits with fresh pads and randomizers (and the outer protocol counts sessions, handoff 7.3) |
 | timing / message length | all messages fixed length; prover work per round data-independent (fixed-shape kernels) |
@@ -464,14 +521,18 @@ stated. Tests in `backends/numerical/tests/security/test_accounting.py`.
 
 | component | term | \(2^{-128}\) set: \(F_c=F_{p^3}\), \(t=192\), \(q=2^{60}\) | \(2^{-80}\) set: \(F_c=F_{p^2}\), \(t=121\), \(q=2^{64}\) |
 |---|---|---|---|
-| batching | \(z_0\) Schwartz–Zippel \((s_0+b)/|F_c|\); \(\alpha,\beta\) per layer; \(\gamma\); 14 lookup merges | \(2^{-186.4}\) | \(2^{-122.4}\) |
-| sumcheck | \(\sum_i(2s_i+3b+4s_{i+1})/|F_c|\), 154 rounds | \(2^{-183.4}\) | \(2^{-119.4}\) |
-| lookup | \(\sum_T\big[(N_T+|T|-1)(\tfrac1{|F_c|-|T|}+\tfrac{\mathrm{cols}-1}{|F_c|}) + \tfrac{2(n_T-1)+1+\sum_{k<n_T}3k}{|F_c|}\big]\), conditioned challenge space | \(2^{-164.8}\) | \(2^{-100.8}\) |
+| batching | \(z_0\) Schwartz–Zippel \((s_0+b)/|F_c|\); \(\alpha,\beta\) per layer; \(\gamma\); 5 lookup merges | \(2^{-186.7}\) | \(2^{-122.7}\) |
+| sumcheck | \(\sum_i(2s_i+3b+4s_{i+1})/|F_c|\), 290 rounds (6 census layers) | \(2^{-182.6}\) | \(2^{-118.6}\) |
+| lookup | \(\sum_T\big[(N_T+|T|-1)(\tfrac1{|F_c|-|T|}+\tfrac{\mathrm{cols}-1}{|F_c|}) + \tfrac{2(n_T-1)+1+\sum_{k<n_T}3k}{|F_c|}\big]\), conditioned challenge space; `T_range16` \(N=111.7\)M dominates | \(2^{-164.9}\) | \(2^{-100.9}\) |
 | encoding/opening | \((1-e/n)^t+((k+l)/n)^t+(2k/n)^t+(n+3)/|F_c|\) (AHIV22 App. C, FS24 §2.2) | \(2^{-130.2}\) | \(2^{-82.0}\) |
-| commitment/hash | \(q^2/2^{256}\); with step 0 also \(R\cdot2^{-160}=2^{-148.2}\) | \(2^{-136}\) | \(2^{-128}\) |
+| commitment/hash | \(q^2/2^{256}\); with step 0 also \(R\cdot2^{-160}=2^{-149.4}\) | \(2^{-136}\) | \(2^{-128}\) |
 | **total** | | **\(2^{-130.2}\)** (\(B\in\{1,64,4096\}\) all pass) | **\(2^{-82.0}\)** |
 | zk (not soundness) | HM96 leaves \(n\cdot2^{-160}\) | \(2^{-146}\) | \(2^{-146}\) |
-| completeness (not soundness) | redraw \(\sum_T|T|/|F_c|\); abort \(\sum_T(|T|/|F_c|)^2\) | \(2^{-174.7}\); \(2^{-350}\) | \(2^{-110.7}\); \(2^{-222}\) |
+| completeness (not soundness) | redraw \(\sum_T|T|/|F_c|\); abort \(\sum_T(|T|/|F_c|)^2\) | \(2^{-176.0}\); \(2^{-352}\) | \(2^{-112.0}\); \(2^{-224}\) |
+
+The WP2 census moved the lookup term by \(2^{-0.1}\) (`T_range16` \(N\): 18.1M → 111.7M, but the 13 other
+relation tables are gone) and the sumcheck term by \(2^{+0.8}\) (290 rounds instead of 154); no operating point
+moved (9.2).
 
 ### 9.2 Operating points: which configuration first meets each (`first_configuration`, both candidates identical)
 
@@ -480,12 +541,13 @@ Sweep order: extension degree 2, then 3, then 4; within a degree the smallest \(
 | operating point | first configuration | \(B=1\) | \(B=64\) | \(B=4096\) | why the smaller extension fails |
 |---|---|---|---|---|---|
 | \(2^{-80}\) (diagnostic) | **quadratic** \(F_{p^2}\), \(t=120\) | \(2^{-81.4}\) | \(2^{-81.4}\) | \(2^{-81.4}\) | — |
-| \(2^{-96}\) (sweep) | **quadratic** \(F_{p^2}\), \(t=144\) | \(2^{-97.6}\) | \(2^{-97.6}\) | \(2^{-97.5}\) | — (lookup \(2^{-100.8}\) at \(B=4096\) still below) |
-| \(2^{-112}\) (sweep) | **cubic** \(F_{p^3}\), \(t=167\) | \(2^{-113.2}\) | \(2^{-113.2}\) | \(2^{-113.2}\) | quadratic: lookup identity \(2^{-109.4}\) (\(B=1\)) … \(2^{-100.8}\) (\(B=4096\)) alone exceeds the target |
-| \(2^{-128}\) (primary) | **cubic** \(F_{p^3}\), \(t=191\) (reference set \(t=192\)) | \(2^{-129.5}\) | \(2^{-129.5}\) | \(2^{-129.5}\) | quadratic: same floor, \(2^{-109.4}\) at best |
+| \(2^{-96}\) (sweep) | **quadratic** \(F_{p^2}\), \(t=144\) | \(2^{-97.6}\) | \(2^{-97.6}\) | \(2^{-97.5}\) (A), \(2^{-97.2}\) (B) | — (lookup \(2^{-100.9}\) at \(B=4096\) still below) |
+| \(2^{-112}\) (sweep) | **cubic** \(F_{p^3}\), \(t=167\) | \(2^{-113.2}\) | \(2^{-113.2}\) | \(2^{-113.2}\) | quadratic: lookup identity \(2^{-111.3}\) (\(B=1\)) … \(2^{-100.9}\) (\(B=4096\)) alone exceeds the target |
+| \(2^{-128}\) (primary) | **cubic** \(F_{p^3}\), \(t=191\) (reference set \(t=192\)) | \(2^{-129.5}\) | \(2^{-129.5}\) | \(2^{-129.5}\) | quadratic: same floor, \(2^{-111.3}\) at best |
 
 The quadratic Goldilocks extension cannot reach \(2^{-128}\) at any \(B\): the lookup identity term is set by the
-\(65\,536\)-row tables (\(d_T/(|F_c|-|T|)\ge 2^{16}/2^{128}\)). Rounds and committed elements scale linearly in
+\(65\,536\)-row range table (\(d_T/(|F_c|-|T|)\ge 2^{16}/2^{128}\)). The WP2 census did not move any first
+configuration (`test_first_configuration_per_operating_point`, unchanged parameters). Rounds and committed elements scale linearly in
 \(U\); soundness terms only logarithmically. The hash term is a modelling choice (adversary work \(q\)),
 reported separately as `computational`; `security_bits(field)` is refused.
 
@@ -504,21 +566,33 @@ Ligero tests \(3\cdot\mathrm{rows}\cdot n\cdot\deg\); memory passes: 3 over the 
 write codewords, hash) + 2 per sumcheck table; peak memory under the *retained* policy (codewords + witness +
 largest live sumcheck table). B's rows: helpers by batch inversion, 3 \(F_c\) mults each, 2 passes.
 
+Per-unit inputs to the model (WP2 census, section 1): A commits \(321+140\) elements per unit and computes 344
+wires; B commits 1 064 per unit (3 aligned slots per `mul` + one per other column; layout **estimate**) plus 306
+helper columns per unit in \(F_c\) (helper-column mode), with \(137+2\cdot358=853\) linear and 358 quadratic
+constraints per unit. Primary configuration \(F_c=F_{p^3}\), \(t=192\) (\(2^{-128}\)); the \(2^{-80}\) diagnostic
+(\(F_{p^2}\), \(t=121\)) is the last row group.
+
 | column | A \(B=1\) | B \(B=1\) | A \(B=64\) | B \(B=64\) | A \(B=4096\) | B \(B=4096\) |
 |---|---|---|---|---|---|---|
-| materialized witness elements (est.; A: inputs + all wires + fractional-tree nodes; B: committed + helpers) | 4.12M | 0.75M | 23.2M | 6.96M | 1.46G | 405M |
-| committed elements (`census.committed_elements`) | 198k | 747k | 1.75M | 6.96M | **101M** | **405M** |
-| bytes encoded (`census.bytes_encoded`) | 7.2 MB | 26 MB | 60 MB | 238 MB | 3.44 GB | 13.8 GB |
-| hash/commit work (`census.hash_bytes`, est.) | 10.6 MB | 33 MB | 64 MB | 245 MB | 3.45 GB | 13.8 GB |
-| field operations (`census.field_ops`, \(F_t\) mult-eq., est.) | 49M | 64M | 484M | 577M | 29.9G | 33.4G |
-| memory passes / bytes moved (`census.memory_passes` / `census.bytes_moved`, est.) | 39 / 58 MB | 5 / 92 MB | 39 / 486 MB | 5 / 829 MB | 39 / 29.6 GB | 5 / 48 GB |
-| sequential challenge depth (`rounds.sequential_depth`; `rounds.protocol`) | 156; 1 248 | 3; 16 | 193; 2 011 | 3; 16 | 328; 3 607 | 3; 16 |
-| communication (`transcript.bytes`, est.; P→V / V→P) | 1.09 MB (1.06 / 0.03) | 1.30 MB (1.29 / 0.005) | 1.80 MB (1.74 / 0.06) | 3.83 MB (3.78 / 0.04) | 42.2 MB (41.5 / 0.72) | 165 MB (163 / 2.5) |
-| peak memory (retained, est.) | 9.4 MB | 32 MB | 112 MB | 294 MB | 6.7 GB | 17.1 GB |
+| materialized witness elements (est.; A: inputs + all wires + fractional-tree nodes; B: committed + helpers) | 1.68M | 0.46M | 31.4M | 12.4M | 2.01G | 780M |
+| committed elements (`census.committed_elements`) | 116k | 457k | 2.91M | 12.4M | **181M** | **780M** |
+| bytes encoded (`census.bytes_encoded`) | 4.5 MB | 16 MB | 100 MB | 425 MB | 6.19 GB | 26.6 GB |
+| hash/commit work (`census.hash_bytes`, est.) | 7.9 MB | 23 MB | 103 MB | 432 MB | 6.19 GB | 26.6 GB |
+| field operations (`census.field_ops`, \(F_t\) mult-eq., est.) | 45M | 39M | 1.90G | 1.03G | 121G | 64G |
+| memory passes / bytes moved (`census.memory_passes` / `census.bytes_moved`, est.) | 25 / 43 MB | 5 / 56 MB | 25 / 1.53 GB | 5 / 1.47 GB | 25 / 97 GB | 5 / 92 GB |
+| sequential challenge depth (`rounds.sequential_depth`; `rounds.protocol`) | 228; 579 | 3; 7 | 264; 968 | 3; 7 | 381; 1 589 | 3; 7 |
+| communication (`transcript.bytes`, est.; P→V / V→P) | 0.99 MB (0.98 / 0.015) | 1.18 MB (1.18 / 0.003) | 2.16 MB (2.12 / 0.04) | 6.05 MB (5.97 / 0.08) | 74.7 MB (73.5 / 1.2) | 318 MB (313 / 4.9) |
+| peak memory (retained, est.) | 6.9 MB | 20 MB | 223 MB | 525 MB | 14.0 GB | 32.8 GB |
+| \(2^{-80}\) diagnostic (\(F_{p^2}\), \(t=121\)): committed / bytes encoded / field ops / peak | 114k / 4.3 MB / 25M / 6.3 MB | 361k / 12.7 MB / 26M / 15.6 MB | 2.90M / 100 MB / 1.02G / 190 MB | 10.5M / 359 MB / 0.71G / 443 MB | 181M / 6.19 GB / 65G / 11.9 GB | 659M / 22.5 GB / 45G / 27.8 GB |
 
-The 101M vs 405M committed-elements gap (\(4.0\times\)) is an explanatory variable of the encoding, hashing,
-communication and memory columns; the field-operation column is dominated in A by the \(F_c\) sumcheck work and
-in B by encoding; the depth column separates them in the other direction. No verdict is drawn here.
+Against the relation-based table (101M vs 405M at \(B=4096\)): A's committed elements rose \(1.8\times\) (321 + 140
+query wires per unit instead of the assumed 256), B's \(1.9\times\) (1 064 slots + 306 helpers per unit instead of
+512 + 172). The committed-elements ratio A:B is \(1:4.3\) at \(B=4096\) (\(1:4.0\) before), \(1:6.2\) without the
+committed query wires (126M vs 780M, depth 630); it stays an explanatory variable of the encoding, hashing,
+communication and memory columns. The field-operation column now favours B (A: \(2\times\) B): the checker GKR
+runs over \(\approx3\,300\) carried values per unit per layer under the carry-everything width bound of section 1,
+which is an upper bound a real layout would shrink; the depth column separates them in the other direction
+(381 vs 3). No verdict is drawn here.
 
 ## 10. Unproved obligations (verbatim list for the coordinator)
 
@@ -543,17 +617,25 @@ in B by encoding; the depth column separates them in the other direction. No ver
    equality is a checker obligation (WP2), not established here.
 7. Application-level accounting: the number of sessions/batches an adversary may open multiplies the error
    budget (handoff 7.3); `per_proof_target` computes the per-proof allowance once that number is fixed.
-8. The checker shape (`DEFAULT_LAYERS_A`, \(2^8\) inputs per unit) and the layout rule "all queries on the input
-   layer" (4.3) are assumptions pending the WP3 census; the fallback depth (370) applies if queries are computed wires.
+8. The checker shape (`DEFAULT_LAYERS_A`) is derived from the WP2 census with carry-everything layer widths (an
+   upper bound; the true widths depend on the WP3 layout); the layout rule of 4.3 (commit the 140 query wires) is a
+   proposal with a stated cost, and the depth without it (630) applies if it is not adopted. The census itself
+   counts the checker's *reference* realisation (`lt_pow` as a product, operand decode by hints); a backend that
+   realises `Bf16Decode` by a 65 536-row table or shares the duplicated `q*sr` products changes the counts.
 9. The depth reductions of 5.4 (\(c\) variables per message; table sharding) are this lane's proposals: their
    soundness derivations are in the table, their prover-cost factors are estimates, and neither has been measured.
 10. The census figures of 9.4 marked (est.) come from the stated cost model, not from measurement.
 
 ## 11. Open items (questions, not decisions)
 
-- Sequential depth: baseline 328 at \(B=4096\) (network floor 0.33 s at 1 ms RTT, 16.4 s at 50 ms) against
-  Candidate B's 3; the proposals reach 123 (\(c=2,s=5\)) at \(+5.6\%\) committed elements and \(\approx2\times\)
-  sumcheck-round prover work. The measurements decide; no round budget is set.
-- Whether the WP3 layout can place every lookup query on the input layer (depth 328 vs 370).
+- Sequential depth: baseline 381 at \(B=4096\) (network floor 0.38 s at 1 ms RTT, 19.1 s at 50 ms) against
+  Candidate B's 3; the proposals reach 158 (\(c=2,s=5\)) at \(+1.3\%\) committed elements and \(\approx2\times\)
+  sumcheck-round prover work; the checker chain (297) is the floor of sharding alone. The measurements decide; no
+  round budget is set.
+- Whether to commit the 140 computed query wires per unit (depth 381, 181M committed) or not (depth 630, 126M).
+- Whether the checker should realise `Bf16Decode` by one 65 536-row lookup per operand (the relation's `T_bf16`)
+  instead of 4 hints + 3 range checks + 3 `mul` + 2 `lin`: per unit −96 `mul`, −96 range chunks, −64 `lin`,
+  −32 committed columns, at the cost of a second 65 536-row multiplicity column and 32 more fixed-table
+  lookups — a checker-lane question, not decided here.
 - Whether the first complete backend ships as `COMPLETE_HVZK_BACKEND` (no step 0) with 5.5 as the documented
   path to `COMPLETE_ZK_BACKEND`.

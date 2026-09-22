@@ -33,26 +33,34 @@ Same public data as Candidate A section 1 (profile, \(K\), \(B\), \(U=BK/16\), t
 
 | item | Candidate B |
 |---|---|
-| committed per unit | **every** value of the checker: operands (decoded), state in/out, products, quotients/remainders, leading-bit fields, flags, plus Ligero alignment copies for quadratic operands |
-| constraints per unit **[source, census]** | 104 linear, 146 quadratic (`mul`), 172 lookups into 14 public tables (range checks are lookups into `T_range*`) |
-| alignment copies **[source, libzk 4.3]** | Ligero's quadratic test needs \(x,y,z\) of each product in the same column of three rows: \(3\cdot146=438\) quadratic slots per unit, values reused across products are copied and bound by linear equalities |
-| committed elements per unit **[assumption]** | 512 (438 slots + ≤74 values occurring only in linear/lookup predicates) until the WP3 layout lands (`CandidateB.witness_per_unit`) |
-| linear constraints per unit **[assumption]** | \(104+292+14=410\) (census `lin`, alignment equalities, per-table sums) — `CandidateB.linear_per_unit`; total at \(B=4096\): 161.5M incl. table-side helper equations |
-| quadratic constraints per unit | 146 `mul` + 172 helper products = 318; total at \(B=4096\): 125.0M |
-| lookup helpers (mode `helper_columns`) | one \(F_c\) element per query and per table row, committed **after** the lookup challenge: \(172U+\sum|T|\) elements \(\times\deg(F_c/F_t)\) coordinates |
-| multiplicities \(m_T\) | committed in round 1 (challenge-independent) |
+| committed per unit | **every** value of the checker: the 34 words, the 225 hints, the 62 looked-up row columns, the 244 products and the 100 materialised range expressions (665 columns), plus Ligero alignment copies for quadratic operands |
+| constraints per unit **[derivation from the WP2 contracts, Candidate A section 1]** | 137 linear (115 identities + 22 range-chunk splits), 358 quadratic (`mul`, 114 of them booleans), 306 lookups into 5 public tables (284 into the one 16-bit range table, 22 into `ALIGN`/`POW`/`LEAD`/`NORM`) |
+| alignment copies **[source, libzk 4.3]** | Ligero's quadratic test needs \(x,y,z\) of each product in the same column of three rows: \(3\cdot358=1\,074\) quadratic slots per unit; values reused across products are copied and bound by linear equalities |
+| committed elements per unit **[estimate]** | 1 064 = \(3\cdot358\) slots + 104 columns that are neither a direct operand nor a product (`census.columns_committed_b`, `CandidateB.witness_per_unit`); the layout itself is WP3's |
+| linear constraints per unit **[estimate]** | \(137+2\cdot358=853\) (census `lin` incl. splits, two copy equalities per product) — `CandidateB.linear_per_unit`; total at \(B=4096\): 335.5M incl. table-side helper equations |
+| quadratic constraints per unit | 358 `mul` + 306 helper products = 664; total at \(B=4096\): 261.1M |
+| lookup helpers (mode `helper_columns`) | one \(F_c\) element per query and per table row, committed **after** the lookup challenge: \(306U+\sum|T|\) elements \(\times\deg(F_c/F_t)\) coordinates |
+| multiplicities \(m_T\) | 66 623 (one 16-bit range table + four fixed tables), committed in round 1 (challenge-independent) |
 
-Committed trace-field elements, \(K=1536\), \(F_c=F_{p^3}\) (calculator): \(B=1\): 0.75M; \(B=64\): 7.0M;
-\(B=4096\): **404.9M** = 201.3M witness + 0.16M multiplicities + 203.4M helper coordinates → 105 440 rows of
-\(l=3840\), \(1.73\)G encoded symbols at rate \(1/4\). Candidate A commits 100.9M for the same batch: the
-\(4.0\times\) difference is handoff 6.2's "encoding traffic and auxiliary lookup witness", quantified. It is an
-explanatory variable of the census columns (section 9.4), not a verdict.
+**Census source.** The counts come from the WP2 checker contracts (`verity_numerical.security.census`; Candidate
+A section 1 gives the conventions, the per-width range table, the layered shape, the diff against
+`verity.ml.tc.relation.vu_census` — +212 `mul`, +33 `lin`, +134 lookups per unit — and the two unit variants).
+For Candidate B the relevant difference between the transition unit and the VU is nil (\(<0.01\%\): `step.py`
+decodes and packs the word in every unit).
+
+Committed trace-field elements, \(K=1536\), \(F_c=F_{p^3}\) (calculator): \(B=1\): 0.46M; \(B=64\): 12.4M;
+\(B=4096\): **779.6M** = 418.4M witness + 0.07M multiplicities + 361.2M helper coordinates → 203 030 rows of
+\(l=3840\), \(3.33\)G encoded symbols at rate \(1/4\). Candidate A commits 181.4M for the same batch (126.3M
+without its committed query wires): the \(4.3\times\) (\(6.2\times\)) difference is handoff 6.2's "encoding
+traffic and auxiliary lookup witness", quantified. Against the relation-based figures (404.9M vs 100.9M, 4.0×)
+both candidates roughly doubled (B: \(1.9\times\), A: \(1.8\times\)) and the ratio moved from 1:4.0 to 1:4.3.
+It is an explanatory variable of the census columns (section 9.4), not a verdict.
 
 ## 2. Fields
 
 Identical to Candidate A section 2: Goldilocks trace/code field (64-bit reference first); the quadratic
 extension \(F_{p^2}\) first meets \(2^{-80}\) and \(2^{-96}\), the cubic \(F_{p^3}\) first meets \(2^{-112}\)
-and \(2^{-128}\) (the logUp identity term floors at \(2^{-109.4}\)…\(2^{-100.8}\) over \(F_{p^2}\), section 9.2);
+and \(2^{-128}\) (the logUp identity term floors at \(2^{-111.3}\)…\(2^{-100.9}\) over \(F_{p^2}\), section 9.2);
 small-field study with a degree-6 extension of a 31-bit field, capped by \(\mathrm{char}\,F>N_T\) (Hab22 Lemma
 5). Helper columns live in \(F_c\) and are stored as coordinates; the constraint \(h_j\cdot(z-w_j)=1\) with
 \(w_j\in F_t\) expands to \(\deg\) coordinate products **[derivation]**.
@@ -81,13 +89,16 @@ in rows, AHIV22 4.7 uses \(U\in L^{4m}\) the same way). Row classes:
 
 | predicate | Ligero form | per unit |
 |---|---|---|
-| `lin` (integer linear relations, reconstruction widths, carries) | linear rows of \(A\) over \(F_t\) | 104 |
-| `mul` (products, quotient·divisor, selector products) | quadratic triples \(x\circ y=z\) | 146 |
-| alignment equalities | linear \(w_a-w_b=0\) | ≤ 292 |
-| range \(v<2^r\) | lookup into `T_range r` (below) | in the 172 |
+| `lin` (decompositions, `div` identities, one-hot sums, range-chunk splits) | linear rows of \(A\) over \(F_t\) | 137 |
+| `mul` (booleans, flag proofs, `q*pow`, `r*ipow`, `div*M`, selector products, `lt_pow` products) | quadratic triples \(x\circ y=z\) | 358 |
+| alignment equalities | linear \(w_a-w_b=0\) | ≤ 716 (two per product) |
+| range \(v<2^w\) | \(\lceil w/16\rceil\) lookups into `T_range16` (\(w<16\): \(v\cdot2^{16-w}\)) | 284 of the 306 |
+| table rows (`POW`, `ALIGN`, `LEAD`, `NORM`) | lookup with 3–4 columns | 22 of the 306 |
 
-Every field congruence used as an integer equality carries a range predicate; the width table is a WP2
-obligation (handoff 7.2), not established here.
+Every field congruence used as an integer equality carries a range predicate; the widths are the WP2 contracts'
+(`contract().hints` / `checked`), including the remainder ranges, the tight quotient bounds and RANGE(`M`) that
+`relation.py` lacks (checker F1/F2, red-team `magW`). Over Goldilocks the `lt_pow` products do not wrap
+(\(p>2^{60}\)); a 31/40-bit trace field would need the direct realisation (F1), which changes these counts.
 
 ### 4.2 Lookups, mode `helper_columns` (Hab22 §3–4) **[source]**
 
@@ -105,8 +116,8 @@ values), multiplicities \(m_T\) (round 1), helpers (round 2):
 redraw slots of step 2. The cleared identity is a nonzero polynomial of degree \(\le d_T=N_T+|T|-1\) when the
 multisets differ (Hab22 Lemma 5), hence \(\Pr[\text{accept}\mid\text{differ}]\le d_T/(|F_c|-|T|)\) over the
 conditioned space — Hab22 Theorem 4's own sampling set (Remark 3), not a whole-field theorem reused. Whole-field
-sampling would give \(d_T/|F_c|\); the difference is \(d_T|T|/(|F_c|(|F_c|-|T|))=2^{-343.9}\) for `T_range16` at
-\(B=4096\), \(F_{p^3}\) (relative \(2^{-176}\)). Vector-valued rows add \(d_T(\mathrm{cols}-1)/|F_c|\). The
+sampling would give \(d_T/|F_c|\); the difference is \(d_T|T|/(|F_c|(|F_c|-|T|))=2^{-341.3}\) for `T_range16` at
+\(B=4096\), \(F_{p^3}\) (\(N_T=111.7\)M; relative \(2^{-176}\)). Vector-valued rows add \(d_T(\mathrm{cols}-1)/|F_c|\). The
 constraint-satisfaction part is Ligero's. No sumcheck, no batching term outside Ligero. Prover cost: one batch
 inversion per table (\(3(N_T-1)\) multiplications + 1 inversion, Hab22 §5) plus encoding of the helper rows.
 
@@ -114,9 +125,9 @@ inversion per table (\(3(N_T-1)\) multiplications + 1 inversion, Hab22 §5) plus
 
 The fractional sumcheck of Candidate A 4.2 with **committed** query columns: leaf claims become Ligero linear
 constraints directly (no claim merging), pads for the fractional-GKR transcript are committed in round 1 (their
-number is public), and there is **no second commitment round**. Trades 203M helper coordinates for
-\(\approx3\sum_T n_T(n_T-1)/2+4n_T\) padded messages (\(\approx11\)k \(F_c\) elements) and 3 417 sumcheck rounds
-at \(B=4096\); committed elements drop to 201.5M; sequential depth rises from 3 to 328 (Candidate A 5.4 applies
+number is public), and there is **no second commitment round**. Trades 361M helper coordinates for
+\(\approx3\sum_T n_T(n_T-1)/2+4n_T\) padded messages (\(\approx4\)k \(F_c\) elements) and 1 279 sumcheck rounds
+at \(B=4096\); committed elements drop to 418.5M; sequential depth rises from 3 to 381 (Candidate A 5.4 applies
 verbatim, without the checker chain). Not the default: it re-introduces the padded-transcript machinery of
 Candidate A.
 
@@ -138,17 +149,17 @@ the public rule, and a dishonest zero is caught by the constraint system, never 
 
 ~~~text
  0  C  [proposal, malicious-verifier ZK; section 5.3]  HM96 commitments to all verifier coins of steps 2, 4, 6
-       (R = 16 slots: 14 (z_T^(1), z_T^(2), beta_T) tuples, the step-4 tuple, Q).  Without step 0:
+       (R = 7 slots: 5 (z_T^(1), z_T^(2), beta_T) tuples, the step-4 tuple, Q).  Without step 0:
        COMPLETE_HVZK_BACKEND at most.
  1  M  com_1 = MerkleRoot_H( HM96-leaves( Encode(W_1) ) ),  W_1 = witness rows || quadratic triples || m_T rows
        || row randomizers || blinding rows.  Fixed here: every checker value and every multiplicity;
        W_1 is challenge-independent.
- 2  C  for all 14 tables in one message: z_T^(1), z_T^(2) (redraw slots, S = 2), beta_T.  Public rule:
+ 2  C  for all 5 tables in one message: z_T^(1), z_T^(2) (redraw slots, S = 2), beta_T.  Public rule:
        z_T := first slot not in Img_T = { t_v(beta_T) }; all S in Img_T -> public abort ((|T|/|F_c|)^S).
  3  M  com_2 = MerkleRoot_H( HM96-leaves( Encode(W_2) ) ),  W_2 = helper rows (h_j, h_v as F_t coordinates)
        || randomizers || blinding rows.  The only challenge-dependent auxiliary; committed, never in the clear.
- 4  C  r in F_c^{rows_1+rows_2} (explicit uniform vector, 2.5 MB at B=4096);  rho_add, rho_q in F_c
-       (r_add := (1, rho_add, rho_add^2, ...) over the 161.5M linear constraints, r_q likewise over the
+ 4  C  r in F_c^{rows_1+rows_2} (explicit uniform vector, 4.9 MB at B=4096);  rho_add, rho_q in F_c
+       (r_add := (1, rho_add, rho_add^2, ...) over the 335.5M linear constraints, r_q likewise over the
        quadratic rows: 'powers' combination, error (#-1)/|F_c| each, section 9)
  5  M  v = r^T [W_1;W_2] + u_0 in F_c^n ;  q_add(.) deg < k+l-1 ;  p_0(.) deg < 2k-1     (AHIV22 4.7 step 2)
  6  C  Q subset [n], |Q| = t
@@ -157,17 +168,17 @@ the public rule, and a dishonest zero is caught by the constraint system, never 
        quadratic test (p_0(zeta_c) = 0, column consistency); accept/reject.
 ~~~
 
-Linear constraints in step 4 include: the 104 `lin` per unit, alignment equalities, table-side helper
-equations, the 14 sums, and the integer-width predicates realised as lookups; quadratic constraints: the 146
+Linear constraints in step 4 include: the 137 `lin` per unit, alignment equalities, table-side helper
+equations, the 5 sums, and the integer-width predicates realised as lookups; quadratic constraints: the 358
 `mul` per unit and the \(N_T\) helper products.
 
 ### 5.1 Protocol rounds vs. sequential challenge depth
 
 | quantity | value (any \(B\)) | derivation |
 |---|---|---|
-| `rounds.protocol` (challenge slots) | 16 (17 with step 0) | 14 per-table tuples \((z_T^{(1)},z_T^{(2)},\beta_T)\) + step 4 + step 6 |
-| `rounds.sequential_depth` | **3** (4 with step 0) | step 2 (com_2 depends on it) → step 4 (responses depend on it) → step 6 (openings depend on it); the 14 table tuples are one message (independent coins); the redraw needs no trip |
-| `gkr` mode | 328 at \(B=4096\) (156 at \(B=1\), 193 at \(B=64\)) | Candidate A 5.4 without the checker chain: \(1+325+2\) |
+| `rounds.protocol` (challenge slots) | 7 (8 with step 0) | 5 per-table tuples \((z_T^{(1)},z_T^{(2)},\beta_T)\) + step 4 + step 6 |
+| `rounds.sequential_depth` | **3** (4 with step 0) | step 2 (com_2 depends on it) → step 4 (responses depend on it) → step 6 (openings depend on it); the 5 table tuples are one message (independent coins); the redraw needs no trip |
+| `gkr` mode | 381 at \(B=4096\) (156 at \(B=1\), 234 at \(B=64\)) | Candidate A 5.4 without the checker chain: \(1+378+2\) (`T_range16`, \(n_T=27\)) |
 
 All three depth-1 messages are forced: com_2 must follow \(z_T\) (helpers depend on it), the Ligero responses
 must follow \(r\), the openings must follow \(Q\). No known technique removes any of them without changing the
@@ -177,12 +188,12 @@ argument (a non-interactive Ligero would use Fiat–Shamir, excluded).
 
 | configuration | `rounds.protocol` | `rounds.sequential_depth` | `t.e2e.rtt_0ms` | `rtt_0.1ms` | `rtt_1ms` | `rtt_10ms` | `rtt_50ms` |
 |---|---|---|---|---|---|---|---|
-| B `helper_columns` | 16 | 3 | \(t_c\) | \(t_c+0.0003\) | \(t_c+0.003\) | \(t_c+0.03\) | \(t_c+0.15\) |
-| B `helper_columns` + step 0 | 17 | 4 | \(t_c\) | \(+0.0004\) | \(+0.004\) | \(+0.04\) | \(+0.20\) |
-| B `gkr` mode, \(B=4096\) | 3 447 | 328 | \(t_c\) | \(+0.033\) | \(+0.33\) | \(+3.28\) | \(+16.4\) |
-| A baseline, \(B=4096\) (for comparison) | 3 607 | 328 | \(t_c\) | \(+0.033\) | \(+0.33\) | \(+3.28\) | \(+16.4\) |
+| B `helper_columns` | 7 | 3 | \(t_c\) | \(t_c+0.0003\) | \(t_c+0.003\) | \(t_c+0.03\) | \(t_c+0.15\) |
+| B `helper_columns` + step 0 | 8 | 4 | \(t_c\) | \(+0.0004\) | \(+0.004\) | \(+0.04\) | \(+0.20\) |
+| B `gkr` mode, \(B=4096\) | 1 291 | 381 | \(t_c\) | \(+0.038\) | \(+0.38\) | \(+3.81\) | \(+19.1\) |
+| A baseline, \(B=4096\) (for comparison) | 1 589 | 381 | \(t_c\) | \(+0.038\) | \(+0.38\) | \(+3.81\) | \(+19.1\) |
 
-Transport time for the 165 MB transcript at \(B=4096\) is not in the floor (`e2e_sweep(bandwidth_bytes_per_s=…)`
+Transport time for the 318 MB transcript at \(B=4096\) is not in the floor (`e2e_sweep(bandwidth_bytes_per_s=…)`
 adds it when a bandwidth is given).
 
 ### 5.2 Masked values and how masks are bound
@@ -202,21 +213,21 @@ ever sent; there is no transcript to pad in `helper_columns` mode.
 ### 5.3 Step 0: verifier-coin commitment for malicious-verifier privacy **[proposal]**
 
 An implementation **without** this step is `COMPLETE_HVZK_BACKEND`, never `COMPLETE_ZK_BACKEND`. The
-construction, binding argument, abort rules and simulator are those of Candidate A 5.5 with \(R=16\) slots;
+construction, binding argument, abort rules and simulator are those of Candidate A 5.5 with \(R=7\) slots;
 the differences:
 
 | item | Candidate B |
 |---|---|
-| coins committed (transcript order) | slot 1–14: \((z_T^{(1)},z_T^{(2)},\beta_T)\) per table (HM96 first scheme, \(\ell=3\cdot192\) bits, \(L=4\cdot160+2\ell+4\)); slot 15: \((r,\rho_{add},\rho_q)\) — \(r\) is 105 440 \(F_c\) elements (2.5 MB), committed by the \(O(k)\) variant (commit to \(H(r\|\rho_{add}\|\rho_q)\), open with the vector and \(x_{15}\)); slot 16: \(Q\) (\(t\cdot14\) bits), \(O(k)\) variant |
-| message order | 0: \(c_1..c_{16}\) → 1: com_1 → 2: \(x_1..x_{14}\) (P verifies all, derives \(z_T,\beta_T\)) → 3: com_2 → 4: \(x_{15}\) with \(r,\rho\) → 5: responses → 6: \(x_{16}\) with \(Q\) → 7: openings |
-| prover message timing | com_2 only after all 14 openings verified; responses only after \(x_{15}\) verified; column openings only after \(x_{16}\) verified |
+| coins committed (transcript order) | slot 1–5: \((z_T^{(1)},z_T^{(2)},\beta_T)\) per table (HM96 first scheme, \(\ell=3\cdot192\) bits, \(L=4\cdot160+2\ell+4\)); slot 6: \((r,\rho_{add},\rho_q)\) — \(r\) is 203 030 \(F_c\) elements (4.9 MB), committed by the \(O(k)\) variant (commit to \(H(r\|\rho_{add}\|\rho_q)\), open with the vector and \(x_6\)); slot 7: \(Q\) (\(t\cdot14\) bits), \(O(k)\) variant |
+| message order | 0: \(c_1..c_7\) → 1: com_1 → 2: \(x_1..x_5\) (P verifies all, derives \(z_T,\beta_T\)) → 3: com_2 → 4: \(x_6\) with \(r,\rho\) → 5: responses → 6: \(x_7\) with \(Q\) → 7: openings |
+| prover message timing | com_2 only after all 5 openings verified; responses only after \(x_6\) verified; column openings only after \(x_7\) verified |
 | abort rules | P aborts iff an HM96 opening fails, a coin is out of domain, or all \(S\) redraw slots of a table lie in \(\mathrm{Img}_T\) — public data only; no other prover abort exists (4.4: the helper inversion never branches). V aborts on a failed check. No restart within a session |
 | binding suffices because | the verifier's coins for steps 2, 4, 6 are fixed before com_1 up to an \(H\)-collision; a malicious verifier keeps only the choice to stop, so its view is a prefix of an honest-verifier view on pre-fixed coins |
 | simulator | Candidate A 5.5 steps (1)–(5) with the HVZK simulator of AHIV22 Lemma 4.15 for both tableaux (helper rows are simulated as random rows too; the constraints are never checked by the simulator's verifier since the opened columns are uniform); the round-2 commitment com_2 is simulated like com_1 |
 | additional depth | +1 (message 0); depth 3 → 4 |
-| additional communication | \(16\cdot(144+100)\) B \(=3.9\) KB (165.48 MB → 165.48 MB) |
-| additional prover work | 16 HM96 opening checks: one hash over the 2.5 MB vector \(r\) and 15 hashes of \(<1.4\) kbit strings — \(<10^{-4}\) of the batch's hashing (13.8 GB) |
-| soundness | \(+16\cdot2^{-160}=2^{-156}\); total unchanged at \(2^{-130.2}\) |
+| additional communication | \(7\cdot(144+100)\) B \(=1.7\) KB (317.72 MB → 317.72 MB) |
+| additional prover work | 7 HM96 opening checks: one hash over the 4.9 MB vector \(r\) and 6 hashes of \(<1.4\) kbit strings — \(<10^{-4}\) of the batch's hashing (26.6 GB) |
+| soundness | \(+7\cdot2^{-160}=2^{-157.2}\); total unchanged at \(2^{-130.2}\) |
 
 ## 6. Constraint generation
 
@@ -263,25 +274,29 @@ hash, \(q=2^{60}\) unless stated; `account_candidate_b`.
 |---|---|---|---|
 | batching | none outside Ligero | 0 | 0 |
 | sumcheck | none (`helper_columns`) | 0 | 0 |
-| lookup | \(\sum_T (N_T+|T|-1)\big(\tfrac1{|F_c|-|T|}+\tfrac{\mathrm{cols}-1}{|F_c|}\big)\), conditioned challenge space | \(2^{-164.8}\) | \(2^{-100.8}\) |
-| encoding/opening | \((1-e/n)^t+((k+l)/n)^t+(2k/n)^t+(n+1)/|F_c|+(\#\mathrm{lin}-1)/|F_c|+(\#\mathrm{quad\ rows}-1)/|F_c|\) (powers combination) | \(2^{-130.2}\) | \(2^{-82.0}\) |
-| commitment/hash | \(q^2/2^{256}\) (two roots, same bound); with step 0 also \(16\cdot2^{-160}\) | \(2^{-136}\) | \(2^{-128}\) |
+| lookup | \(\sum_T (N_T+|T|-1)\big(\tfrac1{|F_c|-|T|}+\tfrac{\mathrm{cols}-1}{|F_c|}\big)\), conditioned challenge space; `T_range16` \(N=111.7\)M dominates | \(2^{-164.9}\) | \(2^{-100.9}\) |
+| encoding/opening | \((1-e/n)^t+((k+l)/n)^t+(2k/n)^t+(n+1)/|F_c|+(\#\mathrm{lin}-1)/|F_c|+(\#\mathrm{quad\ rows}-1)/|F_c|\) (powers combination; \(\#\mathrm{lin}=335.5\)M gives \(2^{-163.7}\)) | \(2^{-130.2}\) | \(2^{-82.0}\) |
+| commitment/hash | \(q^2/2^{256}\) (two roots, same bound); with step 0 also \(7\cdot2^{-160}\) | \(2^{-136}\) | \(2^{-128}\) |
 | **total** | | **\(2^{-130.2}\)** (\(B\in\{1,64,4096\}\)) | **\(2^{-82.0}\)** |
 | zk (not soundness) | HM96 leaves, both tableaux | \(2^{-146}\) (one tableau counted by the calculator; \(2^{-145}\) for two) | idem |
-| completeness (not soundness) | redraw \(\sum_T|T|/|F_c|\); abort \(\sum_T(|T|/|F_c|)^2\) | \(2^{-174.7}\); \(2^{-350}\) | \(2^{-110.7}\); \(2^{-222}\) |
+| completeness (not soundness) | redraw \(\sum_T|T|/|F_c|\); abort \(\sum_T(|T|/|F_c|)^2\) | \(2^{-176.0}\); \(2^{-352}\) | \(2^{-112.0}\); \(2^{-224}\) |
+
+The WP2 census moved no term by more than \(2^{\pm0.2}\) (the 16-bit range table's \(N\) grew \(6\times\), the
+13 other relation tables disappeared; the powers-combination linear term rose \(2^{1.1}\) to \(2^{-163.7}\) and is
+still far below the Ligero query term); no operating point moved.
 
 ### 9.2 Operating points (`first_configuration`; identical to Candidate A because the dominant terms are shared)
 
 | operating point | first configuration | total, \(B\in\{1,64,4096\}\) | why the smaller extension fails |
 |---|---|---|---|
 | \(2^{-80}\) (diagnostic) | **quadratic** \(F_{p^2}\), \(t=120\) | \(2^{-81.4}\) | — |
-| \(2^{-96}\) (sweep) | **quadratic** \(F_{p^2}\), \(t=144\) | \(2^{-97.6}\) / \(2^{-97.6}\) / \(2^{-97.3}\) | — |
-| \(2^{-112}\) (sweep) | **cubic** \(F_{p^3}\), \(t=167\) | \(2^{-113.2}\) | quadratic: lookup identity \(2^{-109.4}\)…\(2^{-100.8}\) alone exceeds the target |
+| \(2^{-96}\) (sweep) | **quadratic** \(F_{p^2}\), \(t=144\) | \(2^{-97.6}\) / \(2^{-97.6}\) / \(2^{-97.2}\) | — |
+| \(2^{-112}\) (sweep) | **cubic** \(F_{p^3}\), \(t=167\) | \(2^{-113.2}\) | quadratic: lookup identity \(2^{-111.3}\)…\(2^{-100.9}\) alone exceeds the target |
 | \(2^{-128}\) (primary) | **cubic** \(F_{p^3}\), \(t=191\) (reference \(t=192\)) | \(2^{-129.5}\) | quadratic: same floor |
 
 The dominant term is Ligero's IRS query term \((1-e/n)^t=(5/8)^{192}\); the two candidates have the same
-statistical budget at matched parameters and differ in committed elements (4.0×), sequential depth (3 vs 328),
-and opened elements (20.2M vs 5.0M \(F_t\) at \(B=4096\)). Ligero's amortisation **[source, AHIV22 abstract,
+statistical budget at matched parameters and differ in committed elements (4.3×), sequential depth (3 vs 381),
+and opened elements (39.0M vs 9.1M \(F_t\) at \(B=4096\)). Ligero's amortisation **[source, AHIV22 abstract,
 4.7]**: the three tests and the \(t\) column openings are shared by all rows, so verifier work and proof size grow
 as \(t\cdot\mathrm{rows}+O(n)\) while soundness is independent of the row count.
 
@@ -293,17 +308,27 @@ As Candidate A 9.3: 16 sub-batches of 256 turn \(2^{-130.2}\) into \(2^{-126.2}\
 ### 9.4 Census, \(K=1536\) (`census_estimate_b`; rows marked (est.) are estimates from the cost model of
 Candidate A 9.4)
 
+Per-unit inputs (WP2 census): 1 064 committed slots (est.), 306 helper columns in \(F_c\), 853 linear and 358
+quadratic constraints. Primary \(F_c=F_{p^3}\), \(t=192\); the \(2^{-80}\) diagnostic (\(F_{p^2}\), \(t=121\)) is
+the last row.
+
 | column | B \(B=1\) | B \(B=64\) | B \(B=4096\) | A \(B=4096\) (for reference) |
 |---|---|---|---|---|
-| materialized witness elements (est.; committed + helpers as \(F_t\) coordinates) | 0.75M | 6.96M | 405M | 1.46G |
-| committed elements (`census.committed_elements`) | 747k | 6.96M | **405M** | **101M** |
-| bytes encoded (`census.bytes_encoded`) | 26 MB | 238 MB | 13.8 GB | 3.44 GB |
-| hash/commit work (`census.hash_bytes`, est.) | 33 MB | 245 MB | 13.8 GB | 3.45 GB |
-| field operations (`census.field_ops`, \(F_t\) mult-eq., est.: NTT + 3 mults/helper + Ligero tests) | 64M | 577M | 33.4G | 29.9G |
-| memory passes / bytes moved (`census.memory_passes` / `census.bytes_moved`, est.) | 5 / 92 MB | 5 / 829 MB | 5 / 48 GB | 39 / 29.6 GB |
-| sequential challenge depth (`rounds.sequential_depth`; `rounds.protocol`) | 3; 16 | 3; 16 | 3; 16 | 328; 3 607 |
-| communication (`transcript.bytes`, est.; P→V / V→P) | 1.30 MB (1.29 / 0.005) | 3.83 MB (3.78 / 0.04) | 165 MB (163 / 2.5) | 42.2 MB (41.5 / 0.72) |
-| peak memory (retained, est.) | 32 MB | 294 MB | 17.1 GB | 6.7 GB |
+| materialized witness elements (est.; committed + helpers as \(F_t\) coordinates) | 0.46M | 12.4M | 780M | 2.01G |
+| committed elements (`census.committed_elements`) | 457k | 12.4M | **780M** | **181M** |
+| bytes encoded (`census.bytes_encoded`) | 16 MB | 425 MB | 26.6 GB | 6.19 GB |
+| hash/commit work (`census.hash_bytes`, est.) | 23 MB | 432 MB | 26.6 GB | 6.19 GB |
+| field operations (`census.field_ops`, \(F_t\) mult-eq., est.: NTT + 3 mults/helper + Ligero tests) | 39M | 1.03G | 64G | 121G |
+| memory passes / bytes moved (`census.memory_passes` / `census.bytes_moved`, est.) | 5 / 56 MB | 5 / 1.47 GB | 5 / 92 GB | 25 / 97 GB |
+| sequential challenge depth (`rounds.sequential_depth`; `rounds.protocol`) | 3; 7 | 3; 7 | 3; 7 | 381; 1 589 |
+| communication (`transcript.bytes`, est.; P→V / V→P) | 1.18 MB (1.18 / 0.003) | 6.05 MB (5.97 / 0.08) | 318 MB (313 / 4.9) | 74.7 MB (73.5 / 1.2) |
+| peak memory (retained, est.) | 20 MB | 525 MB | 32.8 GB | 14.0 GB |
+| \(2^{-80}\) diagnostic (\(F_{p^2}\), \(t=121\)): committed / bytes encoded / field ops / peak | 361k / 12.7 MB / 26M / 15.6 MB | 10.5M / 359 MB / 0.71G / 443 MB | 659M / 22.5 GB / 45G / 27.8 GB | 181M / 6.19 GB / 65G / 11.9 GB |
+
+Against the relation-based table (405M at \(B=4096\)): committed elements rose \(1.9\times\) (1 064 + 306·3 per
+unit instead of 512 + 172·3); the A:B ratio is 1:4.3 (1:4.0 before; 1:6.2 against A without committed query
+wires). The field-operation column now favours B by \(\approx2\times\) under A's carry-everything width bound
+(Candidate A 9.4). No verdict is drawn here.
 
 ## 10. Unproved obligations (verbatim list for the coordinator)
 
@@ -324,15 +349,19 @@ Candidate A 9.4)
 6. Integer semantics inside \(F_t\) (handoff 7.2): range widths for every congruence are a WP2 obligation.
 7. Application-level accounting of sessions/batches (handoff 7.3) is not fixed here; `per_proof_target` applies
    once it is.
-8. The layout assumptions (512 committed elements, 410 linear constraints per unit) pending WP3.
+8. The layout estimates (1 064 committed elements, 853 linear constraints per unit, from the census's 3-slots-per-
+   product rule) pending WP3; the census counts the checker's reference realisation (`lt_pow` as a product,
+   operand decode by hints, duplicated `q*sr` products), which a layout may change.
 9. The census figures of 9.4 marked (est.) come from the stated cost model, not from measurement.
 
 ## 11. Open items (questions, not decisions)
 
-- Encoding traffic: \(1.73\)G encoded \(F_t\) symbols (13.8 GB) and 17 GB retained peak per batch of 4096 at
+- Encoding traffic: \(3.33\)G encoded \(F_t\) symbols (26.6 GB) and 33 GB retained peak per batch of 4096 at
   rate \(1/4\); rate \(1/2\) is excluded by the quadratic test (\((2k/n)^t=1\)). Sub-batching is allowed with
   `N_subbatches` and the union bound (9.3); the split point is a measurement question.
-- Helper columns are \(50\%\) of the committed elements; the `gkr` mode removes them at the price of depth 328.
+- Helper columns are \(46\%\) of the committed elements; the `gkr` mode removes them at the price of depth 381.
+- The 284 range-chunk lookups per unit (of 306) are the bulk of the helper columns; a checker realisation with
+  fewer, wider range checks, or `Bf16Decode` by table (Candidate A section 11), moves this row first.
   Which of depth and committed bytes binds for the GPU end state is decided by the RTT sweep and the
   measurements, not here.
 - Whether the first complete backend ships as `COMPLETE_HVZK_BACKEND` (no step 0) with 5.3 as the path to

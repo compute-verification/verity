@@ -26,15 +26,50 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 
 __all__ = [
-    "BABYBEAR", "GOLDILOCKS", "MERSENNE31", "MERSENNE61",
-    "AccountingError", "Budget", "CandidateA", "CandidateB", "CheckerLayer", "Field", "LigeroParams", "LookupTable",
+    "BABYBEAR",
+    "CHECKER_LAYERS_A",
+    "CHECKER_TABLES",
+    "CHECKER_UNIT",
+    "GOLDILOCKS",
+    "MERSENNE31",
+    "MERSENNE61",
+    "RELATION_LAYERS_A",
+    "RELATION_TABLES",
+    "RTTS_MS",
+    "AccountingError",
+    "Budget",
+    "CandidateA",
+    "CandidateB",
+    "CheckerLayer",
+    "DepthOptions",
+    "Field",
+    "LigeroParams",
+    "LookupTable",
     "Term",
-    "account_candidate_a", "account_candidate_b", "data_parallel_layer_error", "fractional_gkr_error",
-    "hash_collision_bound", "ligero_error", "ligero_queries_for", "log2", "logup_gkr_error", "logup_identity_error",
-    "per_proof_target", "random_combination_error", "schwartz_zippel_error", "security_bits", "sumcheck_error",
+    "account_candidate_a",
+    "account_candidate_b",
+    "census_estimate_a",
+    "census_estimate_b",
+    "data_parallel_layer_error",
+    "e2e_sweep",
+    "first_configuration",
+    "fractional_gkr_error",
+    "hash_collision_bound",
+    "hm_commitment_hiding",
+    "ligero_error",
+    "ligero_queries_for",
+    "log2",
+    "logup_gkr_error",
+    "logup_identity_error",
+    "per_proof_target",
+    "random_combination_error",
+    "redraw_terms",
+    "rounds_and_depth_a",
+    "rounds_and_depth_b",
+    "schwartz_zippel_error",
+    "security_bits",
+    "sumcheck_error",
     "union_over_proofs",
-    "DepthOptions", "RTTS_MS", "census_estimate_a", "census_estimate_b", "e2e_sweep", "first_configuration",
-    "hm_commitment_hiding", "redraw_terms", "rounds_and_depth_a", "rounds_and_depth_b",
 ]
 
 GOLDILOCKS = 2**64 - 2**32 + 1
@@ -73,10 +108,10 @@ class Field:
     characteristic: int
 
     @staticmethod
-    def prime(name: str, p: int) -> "Field":
+    def prime(name: str, p: int) -> Field:
         return Field(name, p, p)
 
-    def extension(self, degree: int) -> "Field":
+    def extension(self, degree: int) -> Field:
         return Field(f"{self.name}^{degree}", self.size**degree, self.characteristic)
 
     @property
@@ -475,9 +510,11 @@ class CheckerLayer:
     assertions: bool = True
 
 
-# The census of ``verity.ml.tc.relation`` for AMPERE_BF16_M16N8K16, ALIGN_DIV (total relation; an upper bound for the
-# finite-domain checker): 146 mul, 104 lin, 172 lookups per 16-product update.  Lookups by table:
-CENSUS_TABLES: tuple[LookupTable, ...] = (
+# The census of ``verity.ml.tc.relation`` for AMPERE_BF16_M16N8K16, ALIGN_DIV: 146 mul, 104 lin, 172 lookups per
+# 16-product update.  SUPERSEDED (2026-09-21): relation.py counts none of the red-team / WP2 repairs (RANGE(magW),
+# direct remainder ranges, tight quotient bounds, the decode of an arbitrary incoming accumulator); kept only so the
+# undercount can be shown (``security.census.diff_vs_relation``).
+RELATION_TABLES: tuple[LookupTable, ...] = (
     LookupTable("T_bf16", 65536, 32, 4),
     LookupTable("T_pcls", 64, 16, 5),
     LookupTable("T_pow26", 512, 18, 3),
@@ -493,12 +530,33 @@ CENSUS_TABLES: tuple[LookupTable, ...] = (
     LookupTable("T_range5", 32, 2, 1),
     LookupTable("T_range3", 8, 2, 1),
 )
-
-# Placeholder checker shape for Candidate A (compute variant): ASSUMPTION until the WP3 census lands.  Per unit:
-# inputs 2^8 (operands, states, hints), three computed layers of widths 2^7, 2^6, 2^5, output layer of 2^8 assertions.
-DEFAULT_LAYERS_A: tuple[CheckerLayer, ...] = (
+RELATION_LAYERS_A: tuple[CheckerLayer, ...] = (
     CheckerLayer(8, 7), CheckerLayer(7, 6), CheckerLayer(6, 5), CheckerLayer(5, 8),
 )
+
+
+def _checker_census():
+    """The WP2 checker census (``security.census``), computed once: the source of every per-unit default below."""
+    from verity_numerical.security import census as _c
+    unit = _c.census_unit()
+    tables = tuple(
+        LookupTable(name, _c.fixed_tables()[name][0], q, _c.fixed_tables()[name][1])
+        for name, q in _c.lookups_by_table(unit).items()
+    )
+    shape = tuple(_c.layer_shape(unit))
+    layers = tuple(CheckerLayer(L["s_out"], L["s_in"], assertions=(L["depth"] == "assert")) for L in shape)
+    return unit, tables, layers, shape
+
+
+CHECKER_UNIT, CHECKER_TABLES, CHECKER_LAYERS_A, CHECKER_SHAPE_A = _checker_census()
+#: Per-unit values a GKR layer reads (carried widths, not rounded): the size Thaler's data-parallel prover works on.
+CHECKER_LAYER_WIDTHS_A: tuple[int, ...] = tuple(L["width"] for L in CHECKER_SHAPE_A)
+#: Alias kept for the protocol documents: the tables every candidate's lookups go through (16-bit range table
+#: consolidated: a w-bit check is ``x 2^(16-w)`` in the one table) and the four fixed tables of the checker.
+CENSUS_TABLES = CHECKER_TABLES
+#: Candidate A's layered checker from the census (output layer first): the assertion layer, then one layer per
+#: multiplicative depth with every lower-depth value carried (upper-bound widths; see ``census.layer_shape``).
+DEFAULT_LAYERS_A = CHECKER_LAYERS_A
 
 
 @dataclass(frozen=True)
@@ -517,14 +575,18 @@ class DepthOptions:
       multiplicity vectors (all challenge-independent), hypercube dimension ``ceil(log2(N/2^s + |T|))``; costs
       ``(2^s - 1)|T|`` extra committed multiplicities per table; the identity error is charged per shard.
       A table is sharded only while ``N/2^s > |T|``.
-    * ``queries_on_inputs``: every lookup query is an input-layer (committed) value, so leaf claims are Ligero linear
-      constraints and the lookups never wait for the checker (layout rule, PROTOCOL.md A 4.3).  When False the
-      queries sit on the last computed layer and that layer's sumcheck follows the lookups on the critical path.
+    * ``commit_query_wires``: every lookup query that the census places on a computed wire (a product such as
+      ``r * ipow``, or a linear expression such as ``t - nz``) is *also* committed as an input column bound to its
+      expression, so every leaf claim of the lookup argument lands on the input layer and the lookups never wait for
+      the checker (PROTOCOL.md A 4.3); costs ``CandidateA.query_wires_per_unit`` committed elements per unit.  When
+      False the lookup claims merge into the checker layers that hold the query wires, and every such layer (all
+      layers of depth <= ``census.max_query_depth``; for the WP2 checker that is every computed layer) follows the
+      lookups on the critical path.
     """
 
     variables_per_round: int = 1
     table_shard_bits: int = 0
-    queries_on_inputs: bool = True
+    commit_query_wires: bool = True
 
     def validate(self) -> None:
         if self.variables_per_round < 1 or self.table_shard_bits < 0:
@@ -542,7 +604,11 @@ class CandidateA:
     ligero: LigeroParams
     layers: tuple[CheckerLayer, ...] = DEFAULT_LAYERS_A
     tables: tuple[LookupTable, ...] = CENSUS_TABLES
-    inputs_per_unit: int = 256          # committed private inputs + hints per update (ASSUMPTION, see PROTOCOL.md)
+    # Committed per update (WP2 census): 34 public words (c, 32 operands, y) + 225 hints + 62 looked-up row columns.
+    inputs_per_unit: int = CHECKER_UNIT.columns_committed_a
+    # Lookup queries on computed wires (census ``queries_on_computed_wires``), committed when ``depth.commit_query_wires``.
+    query_wires_per_unit: int = CHECKER_UNIT.queries_on_computed_wires
+    query_layers: int = sum(1 for L in DEFAULT_LAYERS_A if not L.assertions)   # computed layers holding queries
     lookup_repetitions: int = 1
     hash_bits: int = 256
     hash_queries: int = 2**64
@@ -573,12 +639,13 @@ class CandidateB:
     challenge_field: Field
     ligero: LigeroParams
     tables: tuple[LookupTable, ...] = CENSUS_TABLES
-    # Committed witness elements per update before lookup helpers: 3 * 146 = 438 aligned quadratic slots (Ligero's
-    # quadratic test needs x, y, z of each product in the same column) + <= 74 values that occur only in linear or
-    # lookup predicates.  ASSUMPTION until the WP3 layout lands.
-    witness_per_unit: int = 512
-    linear_per_unit: int = 104 + 292 + 14     # census lin + alignment equalities + per-table sums (ASSUMPTION)
-    quadratic_per_unit: int = 146             # census mul (helper products are added per lookup)
+    # Committed witness elements per update before lookup helpers (WP2 census, layout ESTIMATE): 3 aligned slots per
+    # field multiplication (Ligero's quadratic test needs x, y, z in the same column) + one slot per column that is
+    # not a direct operand or product (``census.columns_committed_b``).
+    witness_per_unit: int = CHECKER_UNIT.columns_committed_b
+    # linear identities + range-chunk splits + two copy equalities per product (operand slots bound to their source)
+    linear_per_unit: int = CHECKER_UNIT.lin_total + 2 * CHECKER_UNIT.mul
+    quadratic_per_unit: int = CHECKER_UNIT.mul          # helper products are added per lookup
     lookup_mode: str = "helper_columns"  # helper_columns (second commitment round) | gkr (fractional sumcheck)
     lookup_repetitions: int = 1
     hash_bits: int = 256
@@ -688,7 +755,8 @@ def account_candidate_a(p: CandidateA) -> Budget:
         extra_mult += (shards - 1) * tbl.rows
 
     # ---- encoding / opening: Ligero over the committed inputs, multiplicities and pads --------------------------------
-    committed = units * p.inputs_per_unit + sum(t.rows for t in p.tables) + extra_mult + pads * per_pad
+    per_unit = p.inputs_per_unit + (p.query_wires_per_unit if p.depth.commit_query_wires else 0)
+    committed = units * per_unit + sum(t.rows for t in p.tables) + extra_mult + pads * per_pad
     lig = ligero_error(p.ligero, Ft, Fc)
     for name, val in lig.items():
         B.add("encoding_opening", f"Ligero {name} (n={p.ligero.n}, k={p.ligero.k}, l={p.ligero.l}, t={p.ligero.t}, e={p.ligero.proximity})", val)
@@ -770,8 +838,8 @@ def rounds_and_depth_a(p: CandidateA) -> dict[str, int]:
     """Protocol rounds and sequential challenge depth of Candidate A (PROTOCOL.md A 5.4).
 
     depth = [1 step-0 message] + 1 (all z_T, beta_T, z_0 in one message)
-            + max(longest fractional-GKR chain, checker chain)  [+ last checker layer + gamma if queries are not
-              on the input layer] + 2 (Ligero r, Q).
+            + max(longest fractional-GKR chain, checker chain)  [+ the query-holding checker layers + gamma when
+              the query wires are not committed] + 2 (Ligero r, Q).
     Each checker layer contributes ``ceil(rounds_i/c) + 1`` (the alpha/beta/merge message after v_l, v_r)."""
     p.depth.validate()
     c = p.depth.variables_per_round
@@ -784,12 +852,14 @@ def rounds_and_depth_a(p: CandidateA) -> dict[str, int]:
     layer_rounds = [layer.s_out + p.b + 2 * layer.s_in for layer in p.layers]
     checker_slots = 1 + sum(r + 1 for r in layer_rounds) + 1          # z_0, per-layer challenges + alpha, gamma
     checker_depth = [-(-r // c) + 1 for r in layer_rounds]
-    if p.depth.queries_on_inputs:
+    if p.depth.commit_query_wires:
         parallel = max(depth_lookup, sum(checker_depth) + 1)
         tail = 0
     else:
-        parallel = max(depth_lookup, sum(checker_depth[:-1]))
-        tail = checker_depth[-1] + 1
+        # the ``query_layers`` deepest computed layers hold query wires: their sumchecks follow the lookups
+        head = checker_depth[:len(checker_depth) - p.query_layers]
+        parallel = max(depth_lookup, sum(head))
+        tail = sum(checker_depth[len(checker_depth) - p.query_layers:]) + 1
     step0 = 1 if p.coin_commitment_bits is not None else 0
     depth = step0 + 1 + parallel + tail + 2
     slots = slots_lookup + checker_slots + 2
@@ -868,16 +938,17 @@ def census_estimate_a(p: CandidateA, prover_seconds: float = 0.0) -> dict[str, f
     ec = EXT_MULT_COST[ext]
     units, n, k, t = p.units, p.ligero.n, p.ligero.k, p.ligero.t
     rows = prm["ligero_rows"]
-    wires = sum(2**layer.s_out for layer in p.layers)
+    wires = CHECKER_UNIT.columns_products + CHECKER_UNIT.columns_materialised      # computed wires per unit (census)
     frac_leaves = sum(sum(2**_shards(p, tb)[2] for _ in range(_shards(p, tb)[0])) for tb in p.tables)
     witness_elements = units * (p.inputs_per_unit + wires) + 4 * frac_leaves * ext
     bytes_encoded = rows * n * 8
     hash_bytes = bytes_encoded + (n * HM_LEAF_BYTES if p.leaf_commitment_bits else 0) + 2 * n * DIGEST_BYTES
-    gkr_ops = 12 * ec * units * sum(2**layer.s_in for layer in p.layers)
+    widths = CHECKER_LAYER_WIDTHS_A if p.layers is DEFAULT_LAYERS_A else tuple(2**L.s_in for L in p.layers)
+    gkr_ops = 12 * ec * units * sum(widths)
     frac_ops = 15 * ec * frac_leaves
     ligero_ops = 3 * rows * n * ext
     field_ops = _ntt_ops(rows, n, k) + gkr_ops + frac_ops + ligero_ops
-    layer_tables = [units * 2**layer.s_in * ext * 8 for layer in p.layers]
+    layer_tables = [units * w * ext * 8 for w in widths]
     bytes_moved = 3 * bytes_encoded + prm["committed_trace_elements"] * 8 + 2 * sum(layer_tables) + 2 * (2 * frac_leaves * ext * 8)
     memory_passes = 3 + 2 * len(p.layers) + 2 * len(p.tables)
     depth = rounds_and_depth_a(p)
