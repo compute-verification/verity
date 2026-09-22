@@ -1,0 +1,21 @@
+{
+ "schema": "telemetry/status/v0.1",
+ "transitions": [
+  {"state": "running", "t_utc": "2026-09-22T12:00:01.000Z", "t_mono": 1000.0, "stream": "vy-g5:4242:1000", "pid": 4243, "pgid": 4243, "stage": "bench",
+   "started_utc": "2026-09-22T12:00:01.000Z"},
+  {"state": "done", "t_utc": "2026-09-22T12:00:13.300Z", "t_mono": 1012.3, "stream": "vy-g5:4242:1000", "rc": 0, "signal": null, "timed_out": false,
+   "ended_utc": "2026-09-22T12:00:13.300Z", "wall_s": 12.3, "rc_is_shell_status": true}
+ ],
+ "state": "done",
+ "updated_utc": "2026-09-22T12:00:13.300Z",
+ "pid": 4243,
+ "pgid": 4243,
+ "stage": "bench",
+ "started_utc": "2026-09-22T12:00:01.000Z",
+ "rc": 0,
+ "signal": null,
+ "timed_out": false,
+ "ended_utc": "2026-09-22T12:00:13.300Z",
+ "wall_s": 12.3,
+ "rc_is_shell_status": true
+}
