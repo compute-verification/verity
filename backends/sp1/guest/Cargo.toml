@@ -15,3 +15,4 @@ attribution = ["veritor-zk-common/attribution"]
 # with either is UNSOUND and announces itself (see src/main.rs, zk/sp1/README.md).
 unsound-skip-authentication = ["veritor-zk-common/unsound-skip-authentication"]
 unsound-skip-path-fold = ["veritor-zk-common/unsound-skip-path-fold"]
+unsound-relation-only = ["veritor-zk-common/unsound-relation-only"]

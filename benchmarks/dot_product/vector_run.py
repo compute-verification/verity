@@ -25,6 +25,13 @@ Every result carries two labels so numbers are never compared across classes by 
 
 ``--diagnostic`` is required to run an unsound host: the guest identity then need not be the approved one, the
 proof is verified under the guest's *own* key, and the result says so.  Without it, a diagnostic guest fails.
+A third label, ``statement_machinery`` (``included | excluded``), says whether the guest parsed the statement and
+built the opening table: ``excluded`` only for ``--relation-only`` (with ``--diagnostic``), which needs the
+``unsound-relation-only`` host.  That guest runs nothing but the ``GemmCoordinate<K>`` gate chain on the compact
+input ``K || x || W`` built here from the vector's object and witness (``verity_sp1.relation_only``: the witness is
+authenticated in Python, the words read off it, the Python reference agrees on the output); it is judged by its own
+key and by its public values being exactly ``sha256(compact input) || sha256(committed output word) || 0xEE``.
+It is the arithmetic baseline of the zkVM path -- what the relation alone costs to prove -- and never a result.
 
 The fingerprint carries the campaign contract's fields (``verity_numerical.bench.contract``): ``profile`` (the frozen
 target's name when the vector is in its family, else null), ``domain``, ``K`` and ``B`` read off the object,
@@ -120,7 +127,7 @@ def vector_K(rec: dict) -> int | None:
     return ks.pop() if len(ks) == 1 else None
 
 
-def campaign_fields(rec: dict, backend: str, diagnostic: bool) -> dict:
+def campaign_fields(rec: dict, backend: str, diagnostic: bool, relation_only: bool = False) -> dict:
     """The contract's identity and batch fields for one vector through one backend -- what the judge compares before
     it looks at a number.  Read off the object, not asserted: another family is not the campaign target (``profile``
     null), a vector without one ``GemmCoordinate`` has no ``K``."""
@@ -139,6 +146,9 @@ def campaign_fields(rec: dict, backend: str, diagnostic: bool) -> dict:
         # the two labels every campaign number carries (module docstring)
         "proof_class": ("ARITHMETIC_DIAGNOSTIC" if diagnostic else "NON_ZK_PROOF") if backend == "sp1-prove" else "NO_PROOF",
         "authentication": "excluded" if diagnostic else "included",
+        # whether the guest parsed the statement and built the opening table (the skip-authentication diagnostic
+        # still does; only the relation-only guest does not)
+        "statement_machinery": "excluded" if relation_only else "included",
     }
 
 
@@ -189,8 +199,84 @@ def sp1_prove_measurements(report) -> list[dict]:
     ]
 
 
-def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, diagnostic: bool) -> tuple[dict, list[dict], list[str], list[str], dict]:
+def run_sp1_relation_only(rec: dict, out: Path, host, observed, *, prove: bool, mode: str) -> tuple[dict, list[dict], list[str], dict]:
+    """The relation-only DIAGNOSTIC: the compact input built from the vector, the bare gate chain executed or
+    proved, and the judgment -- the proof verifies under the guest's own key, the public values are exactly
+    ``sha256(compact input) || sha256(committed output word) || 0xEE``.  Returns ``(validation, measurements,
+    artifacts, relation_only fingerprint)``."""
+
+    from verity_sp1.relation_only import compact_input
+
+    compact = compact_input(rec["object"], bytes.fromhex(rec["witness"]))
+    expected = compact.public_values
+    described = {
+        "K": compact.K, "compact_input_bytes": len(compact.data),
+        "compact_input_sha256": __import__("hashlib").sha256(compact.data).hexdigest(),
+        "committed_output_word": f"{compact.output_word:04x}", "expected_public_values": expected.hex(),
+        "what": "K || x || W of the one GemmCoordinate obligation, words authenticated in Python; the guest ran the gate chain only",
+    }
+    documents: dict = {"compact_input": described}
+    measurements: list[dict] = []
+    problems: list[str] = []
+    artifacts: list[str] = []
+
+    def judge_public_values(public_values: bytes, what: str) -> None:
+        if public_values != expected:
+            problems.append(f"{what} public values {public_values.hex()} are not sha256(compact input) || sha256(output word) || ee")
+
+    if not prove:
+        started = time.perf_counter()
+        report = host.execute(b"", compact.data)  # the statement is ignored by this host; the "witness" is the compact input
+        wall = time.perf_counter() - started
+        documents["execute"] = dict(report.document)
+        measurements += [measurement("execute_wall", wall, "s"), measurement("total_cycles", report.total_cycles, "cycles")]
+        measurements += [measurement(f"cycles.{k}", v, "cycles") for k, v in sorted(report.cycle_tracker.items())]
+        judge_public_values(report.public_values, "execute")
+        if not (report.verdict and report.unsound):
+            problems.append("the guest's verdict byte is not the diagnostic accept (0xEE)")
+        checker = "RELATION-ONLY DIAGNOSTIC: verity_sp1 execute (unsound-relation-only guest) on the compact input; public values sha256(input) || sha256(output) || 0xEE"
+    else:
+        proof = out / "proof.bin"
+        started = time.perf_counter()
+        report = host.prove(b"", compact.data, proof, mode=mode)
+        prove_wall = time.perf_counter() - started
+        started = time.perf_counter()
+        verified = host.verify(proof)
+        verify_wall = time.perf_counter() - started
+        documents["prove"] = dict(report.document)
+        documents["verify"] = dict(verified.document)
+        judge_public_values(report.execution.public_values, "prove")
+        if not verified.ok:
+            problems.append("the proof does not verify under the guest's verifying key")
+        elif verified.vk_hash != observed.vk_hash:
+            problems.append(f"the proof's verifying key {verified.vk_hash} is not the guest's own {observed.vk_hash}")
+        else:
+            judge_public_values(verified.public_values, "verified proof")
+            if not (verified.verdict and verified.unsound):
+                problems.append("the verified proof's verdict byte is not the diagnostic accept (0xEE)")
+        documents["acceptance"] = {
+            "accepted_as_sound": False, "proof_verifies": verified.ok, "own_key": verified.ok and verified.vk_hash == observed.vk_hash,
+            "public_values_expected": verified.public_values == expected, "unsound": verified.unsound, "reasons": list(problems),
+        }
+        measurements += [
+            measurement("prove_wall", prove_wall, "s"), measurement("setup_seconds", report.setup_seconds, "s"),
+            measurement("prove_seconds", report.prove_seconds, "s"), measurement("host_verify_seconds", report.verify_seconds, "s"),
+            measurement("verify_wall", verify_wall, "s"), measurement("proof_bytes", report.proof_bytes, "B"),
+            measurement("shards", report.shards, "count"), measurement("total_cycles", report.execution.total_cycles, "cycles"),
+        ]
+        measurements += [measurement(f"cycles.{k}", v, "cycles") for k, v in sorted(report.execution.cycle_tracker.items())]
+        measurements += sp1_prove_measurements(report)
+        checker = "RELATION-ONLY DIAGNOSTIC: verity_sp1 prove + verify under the unsound-relation-only guest's own key; public values sha256(input) || sha256(output) || 0xEE; not a proof of the statement"
+        artifacts.append("proof.bin")
+    (out / "host.json").write_text(json.dumps(documents, indent=1, sort_keys=True) + "\n")
+    artifacts.append("host.json")
+    validation = {"status": "passed" if not problems else "failed", "checker": checker, "detail": "; ".join(problems) or "accepted (diagnostic)", "evidence": ["host.json"]}
+    return validation, measurements, artifacts, described
+
+
+def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, diagnostic: bool, relation_only: bool = False) -> tuple[dict, list[dict], list[str], list[str], dict]:
     from verity_sp1.host import APPROVED, Host
+    from verity_sp1.relation_only import FEATURE as RELATION_ONLY_FEATURE
     from verity_sp1.typed import execute_object, prove_object, verify_object
 
     host = Host(timeout=None)
@@ -210,8 +296,14 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, di
             raise SystemExit("--diagnostic given but the host's guest is not a diagnostic (unsound-*) build")
         identity["diagnostic_features"] = list(observed.guest_features)
         trusted = observed
+        if relation_only != (RELATION_ONLY_FEATURE in observed.guest_features):
+            raise SystemExit(f"--relation-only needs (and only fits) a host whose guest has the {RELATION_ONLY_FEATURE} feature; this one has {list(observed.guest_features)}")
     else:
         trusted = APPROVED
+    if relation_only:
+        validation, measurements, artifacts, described = run_sp1_relation_only(rec, out, host, observed, prove=prove, mode=mode)
+        identity["relation_only"] = described
+        return validation, measurements, artifacts, [], identity
     obj, witness = rec["object"], bytes.fromhex(rec["witness"])
     expected_pv = bound_public_values(obj).hex()
     documents: dict = {}
@@ -304,9 +396,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default=None, help="output directory (default $RESEARCH_RUN_DIR)")
     ap.add_argument("--diagnostic", action="store_true",
                     help="sp1: the host is an unsound-* build (authentication skipped); label ARITHMETIC_DIAGNOSTIC, verify under its own key")
+    ap.add_argument("--relation-only", action="store_true",
+                    help="sp1, with --diagnostic: the host is the unsound-relation-only build; run the bare gate chain on the compact "
+                         "input K || x || W built from the vector (statement_machinery excluded); the arithmetic baseline")
     a = ap.parse_args(argv)
     if a.diagnostic and a.backend == "reference":
         ap.error("--diagnostic applies to the sp1 backends")
+    if a.relation_only and not a.diagnostic:
+        ap.error("--relation-only is a diagnostic: give --diagnostic too")
 
     out = Path(a.out or os.environ.get("RESEARCH_RUN_DIR") or ".").resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -319,7 +416,7 @@ def main(argv: list[str] | None = None) -> int:
     sha = source_sha()
     python = sys.version.split()[0]
     fingerprint = {
-        **campaign_fields(rec, a.backend, a.diagnostic),
+        **campaign_fields(rec, a.backend, a.diagnostic, a.relation_only),
         "workload": "dot-product-vector",
         "vector": a.vector,
         "vector_sha256": __import__("hashlib").sha256(path.read_bytes()).hexdigest(),
@@ -347,7 +444,8 @@ def main(argv: list[str] | None = None) -> int:
         fingerprint["preprocessing"] = "none"
     else:
         validation, measurements, artifacts, _, identity = run_sp1(
-            rec, out, prove=a.backend == "sp1-prove", mode=a.mode, want_info=not a.no_info, diagnostic=a.diagnostic
+            rec, out, prove=a.backend == "sp1-prove", mode=a.mode, want_info=not a.no_info, diagnostic=a.diagnostic,
+            relation_only=a.relation_only,
         )
         fingerprint["guest"] = identity
         guest = identity.get("observed") or identity["expected"]
