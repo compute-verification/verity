@@ -43,13 +43,24 @@ fn prove_for<B: Backend>(air_: &LookupChainAir, lay: &air::Layout, vus: &[VuIo],
 where
     Val<B::SC>: PrimeField64 + Send + Sync,
 {
-    let (main, queries, _): (RowMajorMatrix<Val<B::SC>>, Vec<u32>, _) = air::chain_trace_lookup(air_, vus, 2);
+    prove_with_tables::<B>(air_, air_, lay, vus, stmt)
+}
+
+/// The trace is the honest one for `trace_air`'s tables; the proof (preprocessed matrix, header digest, aux
+/// layout) is made against `proof_air`'s -- equal for an honest prover, different for the table-substitution attempt
+/// (an honest witness for a substituted table does not exist: the integer checker rejects it).
+fn prove_with_tables<B: Backend>(trace_air: &LookupChainAir, proof_air: &LookupChainAir, lay: &air::Layout, vus: &[VuIo], stmt: &Statement) -> LookupProof<B::SC>
+where
+    Val<B::SC>: PrimeField64 + Send + Sync,
+{
+    let (main, queries, _): (RowMajorMatrix<Val<B::SC>>, Vec<u32>, _) = air::chain_trace_lookup(trace_air, vus, 2);
     let rows = main.height();
     let width = main.width();
-    let pre: RowMajorMatrix<Val<B::SC>> = air_.lay.tables.preprocessed(rows);
+    let pre: RowMajorMatrix<Val<B::SC>> = proof_air.lay.tables.preprocessed(rows);
     let mult: Vec<Val<B::SC>> = (0..rows).map(|r| main.values[r * width + width - 1]).collect();
-    let llay = air_.lay.clone();
-    let (proof, _) = prove_lookup_bound::<B>(air_, lay, FRI, stmt, pre, main, |z, beta| aux_matrix(&llay, &queries, &mult, rows, z, beta, true), false);
+    let llay = proof_air.lay.clone();
+    let strict = std::ptr::eq(trace_air, proof_air);
+    let (proof, _) = prove_lookup_bound::<B>(proof_air, lay, FRI, stmt, pre, main, |z, beta| aux_matrix(&llay, &queries, &mult, rows, z, beta, strict), false);
     proof
 }
 
@@ -106,8 +117,9 @@ where
     let other_air = LookupChainAir { width: air_.width, kind: air_.kind, idx: air_.idx.clone(), lay: substitute_table_row(&air_.lay, 3), ext_degree: air_.ext_degree };
     let r = verify_lookup_bound::<B>(&other_air, &lay, &proof, FRI, &real);
     assert!(r.is_err(), "substituted-table verifier accepted the honest proof");
-    // and a prover who proves against the substituted table cannot pass the honest verifier
-    let bad_proof = prove_for::<B>(&other_air, &lay, &vus, &real);
+    // and a prover who commits the substituted table (honest trace, its own P and header) cannot pass the honest
+    // verifier
+    let bad_proof = prove_with_tables::<B>(&air_, &other_air, &lay, &vus, &real);
     let r = verify_lookup_bound::<B>(&air_, &lay, &bad_proof, FRI, &real);
     assert!(r.is_err(), "proof against a substituted table accepted by the honest verifier");
 }
