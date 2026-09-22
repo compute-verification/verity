@@ -894,7 +894,27 @@ the table set and rejects a proof of another height; the claim column is opened 
 the verifier's own evaluation of the statement polynomial.  `vu-bench --v2` verifies the proof, then checks that
 the same proof is rejected against a statement with one word flipped.
 
-### 15.6 Open
+### 15.6 Where the time goes (profile, run r20260922-090107-d0d7, `run_profile.sh` with `MODES=v2`)
+
+Busy seconds inside `prove` (12 threads, 166 queries; `results/profile_spans_v2_*.txt`), against section 14.6:
+
+| stage | v1 + LogUp (401 + 6 + 456) | **v2 (281 + 8 + 116)** | |
+|---|---|---|---|
+| quotient evaluation | 36.7 (68%) | **11.2 (53%)** | 88 program + 27 helper + \(g, S\) constraints; 105 query terms per row |
+| commit: coset LDE | 7.3 | **4.2** | 9 LDEs (P, main, aux, quotient chunks) |
+| commit: Merkle (Keccak) | 5.0 | **3.1** | |
+| open (`reduce matrix quotient`) | 3.0 | 1.7 | |
+| FRI (commit phase, 19 folds) | 0.5 | 0.4 | |
+| witness (outside `prove`) | 5.5 | **2.5** | |
+| total prove | 54 | 21 | |
+
+The quotient pass is still the largest item but no longer two thirds: per committed column it costs about the
+same as before (\(\approx\) 27 ms per column), so the 3.3x fall is the width and the constraint count.  Encoding
+(LDE + Merkle, 7.3 s) is now 35% of `prove` -- on the GPU (tensor.md) this is the term that remains, and it fell
+1.7x in time and 2.1x in bytes.  The remaining fixed costs -- the preprocessed round, the 8-column table
+recomputation in the verifier, the \(2^{19}\)-row floor -- are the items below.
+
+### 15.7 Open
 
 * **BabyBear\(^6\)** (the brief's item 6): not done.  Plonky3 0.4.3's `BinomialExtensionField<BabyBear, D>` is
   implemented for D = 4, 5 only; a degree-6 extension needs a `BinomiallyExtendable<6>` impl (irreducible
