@@ -321,9 +321,10 @@ pub fn aux_matrix<G: PrimeField64, EF: ExtensionField<G>>(lay: &LookupLayout, qu
 // ---------------------------------------------------------------------------------------------------------------
 
 /// An `AirBuilder` with the preprocessed table matrix, the auxiliary matrix, the two lookup challenges and
-/// extension-field arithmetic for the lookup constraints.
+/// extension-field arithmetic for the lookup constraints.  `EF` is an extension of the builder's expression type
+/// (so `EF * Expr`, `EF - Expr` are the cheap extension-by-base operations).
 pub trait LookupAirBuilder: AirBuilder {
-    type EF: AbstractField + Clone;
+    type EF: AbstractExtensionField<Self::Expr> + Clone;
     fn preprocessed(&self) -> Self::M;
     fn aux(&self) -> Self::M;
     /// `(z, beta)`
@@ -333,6 +334,27 @@ pub trait LookupAirBuilder: AirBuilder {
     fn ext_from_cols(&self, cols: &[Self::Var]) -> Self::EF;
     fn assert_zero_ext(&mut self, x: Self::EF);
     fn ext_degree(&self) -> usize;
+}
+
+/// `(prod_j t_j, sum_j prod_{k != j} t_k)` by pairwise combination: `(pA pB, sA pB + sB pA)`; a single term is
+/// `(t, 1)` (the `None` sum), so four degree-1 terms cost 5 extension products instead of 3 + 4 * 2.
+fn prod_and_sum<EF: AbstractField + Clone>(terms: &[EF]) -> (EF, Option<EF>) {
+    match terms.len() {
+        0 => (EF::one(), Some(EF::zero())),
+        1 => (terms[0].clone(), None),
+        n => {
+            let (pa, sa) = prod_and_sum(&terms[..n / 2]);
+            let (pb, sb) = prod_and_sum(&terms[n / 2..]);
+            let prod = pa.clone() * pb.clone();
+            let sum = match (sa, sb) {
+                (None, None) => pa + pb,
+                (Some(sa), None) => sa * pb + pa,
+                (None, Some(sb)) => pb + sb * pa,
+                (Some(sa), Some(sb)) => sa * pb + sb * pa,
+            };
+            (prod, Some(sum))
+        }
+    }
 }
 
 /// Emits the lookup constraints for one row pair.  `queries` are this row's recorded queries (program order),
@@ -346,15 +368,20 @@ pub fn eval_lookup<AB: LookupAirBuilder>(builder: &mut AB, lay: &LookupLayout, q
         pows.push(pows[i - 1].clone() * beta.clone());
     }
     assert_eq!(queries.len(), lay.n_queries(), "query count differs from the layout");
-    // combined query values
-    let vals: Vec<AB::EF> = queries
+    // z - beta^N_COLS * tag, once per table (the tags are the constants of the row)
+    let mut z_tag: BTreeMap<u32, AB::EF> = BTreeMap::new();
+    for q in queries {
+        z_tag.entry(q.tag).or_insert_with(|| z.clone() - pows[N_COLS].clone() * builder.ext_from_base(AB::Expr::from_canonical_u32(q.tag)));
+    }
+    // z - q_j = (z - beta^5 tag) - v_0 - sum_{c >= 1} beta^c v_c : extension-by-base operations only
+    let terms: Vec<AB::EF> = queries
         .iter()
         .map(|q| {
-            let mut acc = AB::EF::zero();
-            for (c, v) in q.vals.iter().enumerate() {
-                acc += pows[c].clone() * builder.ext_from_base(v.clone());
+            let mut acc = z_tag[&q.tag].clone() - q.vals[0].clone();
+            for (c, v) in q.vals.iter().enumerate().skip(1) {
+                acc -= pows[c].clone() * v.clone();
             }
-            acc + pows[N_COLS].clone() * builder.ext_from_base(AB::Expr::from_canonical_u32(q.tag))
+            acc
         })
         .collect();
     let aux = builder.aux();
@@ -369,55 +396,49 @@ pub fn eval_lookup<AB: LookupAirBuilder>(builder: &mut AB, lay: &LookupLayout, q
     for (j, grp) in lay.groups.iter().enumerate() {
         let hj = ext_at(builder, &aux_local, j);
         // h_j * prod_i (z - v_i) - sum_i prod_{k != i} (z - v_k) = 0
-        let terms: Vec<AB::EF> = grp.iter().map(|&i| z.clone() - vals[i].clone()).collect();
-        let mut prod = AB::EF::one();
-        for t in &terms {
-            prod *= t.clone();
-        }
-        let mut sum = AB::EF::zero();
-        for i in 0..terms.len() {
-            let mut p = AB::EF::one();
-            for (k, t) in terms.iter().enumerate() {
-                if k != i {
-                    p *= t.clone();
-                }
-            }
-            sum += p;
-        }
+        let ts: Vec<AB::EF> = grp.iter().map(|&i| terms[i].clone()).collect();
+        let (prod, sum) = prod_and_sum(&ts);
         if let Some(n) = names.as_mut() {
             n.push(format!("lookup.helper[{j}]"));
         }
-        builder.assert_zero_ext(hj.clone() * prod - sum);
+        let c = match sum {
+            Some(sum) => hj.clone() * prod - sum,
+            None => hj.clone() * prod - AB::EF::one(),
+        };
+        builder.assert_zero_ext(c);
         row_sum_local += hj;
         row_sum_next += ext_at(builder, &aux_next, j);
     }
-    // table side: g (z - t) - m = 0
-    let mut t = AB::EF::zero();
-    for c in 0..=N_COLS {
-        t += pows[c].clone() * builder.ext_from_base(pre_local[c].into());
+    // table side: g (z - t) - m = 0, t = key + sum beta^c out_c + beta^5 tag from the preprocessed row
+    let mut t = builder.ext_from_base(pre_local[0].into());
+    for c in 1..=N_COLS {
+        let v: AB::Expr = pre_local[c].into();
+        t += pows[c].clone() * v;
     }
     let g = ext_at(builder, &aux_local, h);
     let g_next = ext_at(builder, &aux_next, h);
     if let Some(n) = names.as_mut() {
         n.push("lookup.table".to_string());
     }
-    builder.assert_zero_ext(g.clone() * (z.clone() - t) - builder.ext_from_base(mult.into()));
+    let m: AB::Expr = mult.into();
+    let table_c = g.clone() * (z.clone() - t) - m;
+    builder.assert_zero_ext(table_c);
     row_sum_local -= g;
     row_sum_next -= g_next;
     // running sum
     let s = ext_at(builder, &aux_local, h + 1);
     let s_next = ext_at(builder, &aux_next, h + 1);
-    let first = builder.ext_from_base(builder.is_first_row());
-    let trans = builder.ext_from_base(builder.is_transition());
-    let last = builder.ext_from_base(builder.is_last_row());
+    let first = builder.is_first_row();
+    let trans = builder.is_transition();
+    let last = builder.is_last_row();
     if let Some(n) = names.as_mut() {
         n.push("lookup.sum_first".to_string());
         n.push("lookup.sum_step".to_string());
         n.push("lookup.sum_last".to_string());
     }
-    builder.assert_zero_ext(first * (s.clone() - row_sum_local));
-    builder.assert_zero_ext(trans * (s_next - s.clone() - row_sum_next));
-    builder.assert_zero_ext(last * s);
+    builder.assert_zero_ext((s.clone() - row_sum_local) * first);
+    builder.assert_zero_ext((s_next - s.clone() - row_sum_next) * trans);
+    builder.assert_zero_ext(s * last);
 }
 
 /// Names of the lookup constraints in emission order.

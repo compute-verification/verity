@@ -122,7 +122,7 @@ where
     let config = B::config(log_n, FRI);
     let llay = air_.lay.clone();
     let mut ch = B::challenger();
-    let (proof, _) = prove_lookup(&config, &air_, &mut ch, pre.clone(), main, |z, beta| aux_matrix(&llay, &queries, &mult, rows, z, beta, true));
+    let (proof, _) = prove_lookup(&config, &air_, &mut ch, pre.clone(), main, |z, beta| aux_matrix(&llay, &queries, &mult, rows, z, beta, false));
     let mut ch = B::challenger();
     verify_lookup(&config, &air_, &mut ch, &proof, pre).is_ok()
 }
