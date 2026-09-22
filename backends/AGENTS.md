@@ -43,6 +43,23 @@ expected path is: arithmetic diagnostic -> complete HVZK -> malicious-verifier
 ZK. Guest-cycle shares are not proving-time shares: measure wall time, memory,
 shards and fixed costs directly.
 
+## Proof model: interactive is fine, transferability is not required
+
+Decided 2026-09-21 (user). The Verity verification is an interactive session
+with one verifier; a proof need not convince a third party afterwards. So
+**designated-verifier** protocols (VOLE/IT-MAC ZK: QuickSilver, Antman-style
+SIMD compression) are in scope and are labelled with
+`zk_mode = "designated-verifier"` in the fingerprint, never mixed with
+publicly verifiable results in one ratio. Their assumption set is: LPN with
+regular noise over a large field (the sVOLE expansion, the only assumption
+beyond symmetric-key), one batch of base oblivious transfers (any public-key
+assumption, post-quantum options exist), and a correlation-robust hash for OT
+extension; no trusted setup, no pairings, no knowledge assumptions; soundness
+of the online phase is statistical given the correlation, and the
+correlation is input-independent (preprocessable). **Pending the user's
+ratification of LPN as an acceptable assumption** before a VOLE build lane
+starts; the earlier "hash-based only" requirement is what excluded it.
+
 ## Soundness is a parameter
 
 No error target is baked into a protocol. The per-batch error is derived from
@@ -71,6 +88,32 @@ next challenge cost no extra trip); total communication; and predicted or
 measured end-to-end wall time at RTT in {0, 0.1, 1, 10, 50} ms. The network
 floor is depth x RTT. No hard round budget yet: Candidate A may reduce its
 depth and the measurements decide.
+
+## Tensor cores are the target machine
+
+Decided 2026-09-21 (coordinator, on the user's direction). The prover runs
+on the same class of hardware as the computation it proves, and its
+first-class consumer is the **tensor core**, not the SIMT core. Consequences:
+
+- Cost models and the census are stated in tensor-core terms: a field
+  multiplication is priced as UINT8/INT8 limb products with INT32 accumulation
+  and deferred reduction (TensorZKP, USENIX Security 2026, is the calibration:
+  sumcheck and linear-time encoding as matrix multiplication), not as 64-bit
+  SIMT multiplies. A 64-bit element is 8 limbs (64 limb products per multiply),
+  a 31/32-bit element is 4 (16). The field question is therefore **reopened**:
+  the 2026-09-21 "Goldilocks stays" conclusion was priced on SIMT cores.
+- A prover design must say which of its inner loops are matrix
+  multiplications (sumcheck rounds, encoding, LPN expansion, batch checks)
+  and which are not (hashing, hint generation), with the non-matmul part's
+  share of the wall time. Anything on the critical path that cannot be a
+  matmul is a cost to justify.
+- Nothing is hashed inside the circuit unless a design shows it must be; the
+  commitment layer is chosen so the Merkle hash runs natively (Blake3/SHA on
+  SIMT at tens of GB/s is fine when there is no recursion).
+- CPU measurements remain valid **diagnostics** of algorithmic scaling
+  (committed elements per VU, depth, constraint counts); the decision
+  hardware is a tensor-core GPU, and `overhead.vs_native_peak` is always
+  against the anchor's tensor-core peak.
 
 ## Census, both candidates, same columns
 
