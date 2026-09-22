@@ -39,7 +39,8 @@ Lane `a-kernel-a100`, branch `lane/a-kernel-a100` (base `main` 181eed9), pod `vy
 | r20260922-111848-dde1 | cache forensics + control | 10 cached `ext_mul_kernel.ptx`: nine from 08:54-09:02 UTC contain `268435390` (W=31), the one from 11:15 (my int32 probe) contains `1879048146` (W=22); 41 stale ptx of `combine_level / ext_mul / fold / logup_round / phase1 / scatter_terms`.  Pre-fix `main` code: default cache -> raise; `TRITON_CACHE_DIR` fresh -> `verified: true` |
 | r20260922-112320-3ceb | **fixed code, default (stale) cache**, v1 `--vus 64` then `--vus 4096 --reps 3 --warmup 1 --proof-out` | 64: verified (112 s, recompiling).  4096: prover **2.998 / 2.979 / 2.978 s, median 2.979 s**, Python verifier 0.82 s, 3/3 accepted, proof 33 871 324 B round-trip verified |
 | r20260922-112813-b2fe | `gpu/v2/tests/test_logup_paths_agree.py` (7 passed, 52 s); `PACKED_DEVICE=cuda pytest packed/tests` (**63 passed**); Rust verifier `cargo build --release` + `verify` on `proof64.bin` and `proof4096.bin` | Rust: **rejected, `LogUp POW level 2: final check`** for both (same message as a-protocol-diff's H100 finding) |
-| r20260922-113301-5012 | v1 negatives (`gpu.run negatives`), and the new regression test run against the pre-fix tree with the stale cache still in place | see the addendum at the end of this file |
+| r20260922-113301-5012 | the new regression test copied into the PRE-FIX tree (7cd9adf) and run with the stale cache still in place | **5 of 7 fail** (the three ext-table path tests and both a-gpu kernel checks; the two R16 tests pass -- no a-gpu kernel on that path): the test would have caught the bug.  Also: `/workspace/bb/neg` does not exist on this pod (only `pos4096`); the v1 negatives were never exported here |
+| r20260922-113632-baa3 | v2 limb-form `/workspace/v2l/pos4096 --vus 64` (fixed code, default cache) and the 52 v2 negatives `/workspace/v2l/neg` | v2 B=64 **verified** (145 s incl. recompiling the v2 shapes); negatives **52/52 rejected** (packed path, fixed code) |
 
 Instrumentation (all committed, none ad hoc): `backends/gkr/gpu/v2/tools/{logup_diff,mmul_probe,extmul_probe,extmul_bisect}.py`.
 
@@ -105,6 +106,8 @@ against torch on int64 AND int32 inputs (separately cached specialisations).  Th
 
 * The B = 64 timing (112 s) includes recompilation of every a-gpu kernel (the FK argument changes every cache key);
   the 4096 row uses `--warmup 1` and is a clean median of 3.
-* v2 (`/workspace/v2l/pos4096`) was not re-run for time; the failing component (`logup._combine_level` for the
-  vector-valued tables) is shared, so it is expected to pass with the fix -- a-gpu-v2 should confirm its 5.73 s row.
+* v2 (`/workspace/v2l/pos4096`) re-run only at B = 64 (verified); the v2 B = 4096 timing on the fixed `main` is
+  a-gpu-v2's to record (its 5.73 s row was measured on the `W = 31` tree).
+* The v1 negatives could not be run: `/workspace/bb/neg` does not exist on `vy-a100b` (a-gpu-v2 exported only
+  `pos4096` here; the v1 negatives live on `vy-g5`).  The 52 v2 limb-form negatives were run instead: 52/52 rejected (r20260922-113632-baa3).
 * The Rust verifier's rejection is reported, not investigated (a-protocol-diff's lane).
