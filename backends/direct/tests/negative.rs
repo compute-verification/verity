@@ -383,3 +383,29 @@ fn mutated_traces_do_not_verify() {
         assert!(res.is_err(), "mutation {:?} verified", overrides);
     }
 }
+
+#[test]
+fn experiment_soundness_shapes() {
+    let fx = Fixture::new();
+    let air_ = UnitAir { width: fx.lay.width };
+    for (label, n_units, mutate) in [("random-2", 2usize, false), ("mut-4", 4, true), ("mut-64", 64, true), ("mut-2-distinct", 2, true)] {
+        let units = verity_direct::random_units(n_units, 7);
+        let mut values: Vec<verity_direct::air::F> = Vec::new();
+        for (i, u) in units.iter().enumerate() {
+            let (row, _) = if mutate && i == 0 {
+                gen_row(u, &[("g0.max.E", fx.value(u, "g0.max.E") + 1)])
+            } else {
+                gen_row(u, &[])
+            };
+            values.extend_from_slice(&row);
+        }
+        if !mutate {
+            for v in values.iter_mut() { *v = to_f(rand::random::<u32>() as i128); }
+        }
+        let trace = p3_matrix::dense::RowMajorMatrix::new(values, fx.lay.width);
+        let log_n = n_units.trailing_zeros() as usize;
+        let proof = stark::prove_trace(&air_, trace, DEFAULT_FRI);
+        let res = stark::verify_proof(&air_, &proof, log_n, DEFAULT_FRI);
+        println!("EXPERIMENT {label}: verify = {:?}", res.is_ok());
+    }
+}
