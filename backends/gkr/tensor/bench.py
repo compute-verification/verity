@@ -524,8 +524,9 @@ def reprice(bench_path: Path, report_stem: Path) -> int:
         for gk, gpu in gpus.items():
             rows[dname][gk] = {}
             for label, util in (("0.172 (TensorZKP assumption)", 0.172),
-                                ("measured tensor_bucket", u["model_equivalent.tensor_bucket"]),
-                                ("measured matmul_only", u["model_equivalent.matmul_only"])):
+                                ("measured: graphed round wall", u["model_equivalent.round_graphed"]),
+                                ("measured: kernel tensor_bucket", u["model_equivalent.kernel.tensor_bucket"]),
+                                ("measured: kernel matmul_only", u["model_equivalent.kernel.matmul_only"])):
                 tm = p.times(gpu, gk if gk in tx.GPUS else "A100", util, hr, "rs_matrix_ntt", fs)
                 rows[dname][gk][label] = {"utilisation": util, "overhead.vs_native_peak": tm["overhead.vs_native_peak"], "t.total": tm["t.total"],
                                           "t.matmul": tm["t.matmul"], "t.simt_field": tm["t.simt_field"], "t.hash": tm["t.hash"],
@@ -556,7 +557,7 @@ def reprice(bench_path: Path, report_stem: Path) -> int:
             if gk == "gkr_checker_line":
                 continue
             for label, v in labels.items():
-                print(f"{dname:22} {gk:8} {label:32} u={v['utilisation']:.4f}  overhead {v['overhead.vs_native_peak']:.3g}  t.total {v['t.total']:.3f} s")
+                print(f"{dname:22} {gk:8} {label:32} u={v['utilisation']:.4f}  overhead {v['overhead.vs_native_peak']:.3g}  t.total {v['t.total']:.3f} s  matmul share {v['matmul_share']:.0%}")
     return 1 if problems else 0
 
 
