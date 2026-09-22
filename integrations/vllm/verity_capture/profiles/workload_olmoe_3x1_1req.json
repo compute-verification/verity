@@ -1,0 +1,35 @@
+{
+ "schema": "verity-vllm/workload/v1",
+ "model": "allenai/OLMoE-1B-7B-0924",
+ "checkpoint_revision": "6d84c48581ece794365f2b8e9cfb043c68ade9c5",
+ "case": "OLMOE",
+ "seed": 0,
+ "variants": {
+  "greedy": {
+   "temperature": 0.0,
+   "top_p": 1.0,
+   "top_k": 0
+  }
+ },
+ "tokenizer_note": "prompt_token_ids = the first three tokens of the 32-token OLMoE prompt (the checkpoint's own tokenizer, no BOS)",
+ "prompt_lengths": [
+  3
+ ],
+ "max_tokens": [
+  1
+ ],
+ "requests": [
+  {
+   "request_id": "29fb61b5-1588-574a-906e-98dd9274f141",
+   "index": 0,
+   "prompt_len": 3,
+   "max_tokens": 1,
+   "prompt_token_ids": [
+    510,
+    3158,
+    8516
+   ]
+  }
+ ],
+ "note": "[GEN moe 2026-09-17] minimal failing configuration, sorted-path variant: 3 prompt tokens, 1 greedy token = one prefill step with M=3 -> M*TOPK*4 = 96 > NUM_EXPERTS = 64, so vLLM takes the `moe_align_block_size` (sorted, padded token blocks) path of fused_experts instead of the naive block assignment that M=1 (and M=2) use; every unsupported MoE kernel of the 32x16 prefill appears once per layer (16 x moe_forward); logprobs=None, NO accepted_token_ids"
+}

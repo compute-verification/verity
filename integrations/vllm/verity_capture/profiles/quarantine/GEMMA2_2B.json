@@ -1,0 +1,9143 @@
+{
+ "schema": "verity-gen/quarantine/v1",
+ "definitions": {
+  "dense/AddScalarBf16@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.add_scalar_bf16_difftest",
+   "semantic_id": "dense/AddScalarBf16@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.024
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.017
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64,
+      "C": 1.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarBf16_v1{N=64,C=1.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64,
+      "C": 1.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarBf16_v1{N=64,C=1.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64,
+      "C": 1.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarBf16_v1{N=64,C=1.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64,
+      "C": 1.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarBf16_v1{N=64,C=1.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64,
+      "C": 1.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarBf16_v1{N=64,C=1.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024,
+      "C": 1.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarBf16_v1{N=1024,C=1.0}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024,
+      "C": 1.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarBf16_v1{N=1024,C=1.0}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024,
+      "C": 1.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarBf16_v1{N=1024,C=1.0}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024,
+      "C": 1.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarBf16_v1{N=1024,C=1.0}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024,
+      "C": 1.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarBf16_v1{N=1024,C=1.0}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64,
+      "C": 1.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarBf16_v1{N=64,C=1.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64,
+      "C": 1.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarBf16_v1{N=64,C=1.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64,
+      "C": 1.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarBf16_v1{N=64,C=1.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64,
+      "C": 1.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarBf16_v1{N=64,C=1.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64,
+      "C": 1.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarBf16_v1{N=64,C=1.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024,
+      "C": 1.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarBf16_v1{N=1024,C=1.0}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024,
+      "C": 1.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarBf16_v1{N=1024,C=1.0}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024,
+      "C": 1.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarBf16_v1{N=1024,C=1.0}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024,
+      "C": 1.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarBf16_v1{N=1024,C=1.0}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024,
+      "C": 1.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarBf16_v1{N=1024,C=1.0}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304,
+      "C": 1.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarBf16_v1{N=2304,C=1.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/AddScalarF32@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.add_scalar_f32_difftest",
+   "semantic_id": "dense/AddScalarF32@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 1,
+      "C": 1e-06
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1e-06}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 1,
+      "C": 1e-06
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1e-06}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 1,
+      "C": 1e-06
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1e-06}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 1,
+      "C": 1e-06
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1e-06}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 1,
+      "C": 1e-06
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1e-06}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64,
+      "C": 1e-06
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarF32_v1{N=64,C=1e-06}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64,
+      "C": 1e-06
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarF32_v1{N=64,C=1e-06}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64,
+      "C": 1e-06
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarF32_v1{N=64,C=1e-06}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64,
+      "C": 1e-06
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarF32_v1{N=64,C=1e-06}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64,
+      "C": 1e-06
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarF32_v1{N=64,C=1e-06}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1,
+      "C": 1.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1.0}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1,
+      "C": 1.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1.0}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1,
+      "C": 1.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1.0}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1,
+      "C": 1.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1.0}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1,
+      "C": 1.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1.0}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304,
+      "C": 1e-06
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarF32_v1{N=2304,C=1e-06}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.01
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304,
+      "C": 1e-06
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarF32_v1{N=2304,C=1e-06}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.01
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304,
+      "C": 1e-06
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarF32_v1{N=2304,C=1e-06}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.01
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304,
+      "C": 1e-06
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarF32_v1{N=2304,C=1e-06}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.01
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304,
+      "C": 1e-06
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarF32_v1{N=2304,C=1e-06}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.01
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 1,
+      "C": 1e-06
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1e-06}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 1,
+      "C": 1e-06
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1e-06}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 1,
+      "C": 1e-06
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1e-06}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 1,
+      "C": 1e-06
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1e-06}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 1,
+      "C": 1e-06
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1e-06}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 64,
+      "C": 1e-06
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarF32_v1{N=64,C=1e-06}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 64,
+      "C": 1e-06
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarF32_v1{N=64,C=1e-06}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 64,
+      "C": 1e-06
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "AddScalarF32_v1{N=64,C=1e-06}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 64,
+      "C": 1e-06
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "AddScalarF32_v1{N=64,C=1e-06}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 64,
+      "C": 1e-06
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "AddScalarF32_v1{N=64,C=1e-06}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 1,
+      "C": 1.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1.0}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 1,
+      "C": 1.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "AddScalarF32_v1{N=1,C=1.0}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/AddWidenedBf16@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.add_widened_bf16_difftest",
+   "semantic_id": "dense/AddWidenedBf16@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.065
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.023
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.024
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.024
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AddWidenedBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AddWidenedBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.023
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.022
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.024
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AddWidenedBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AddWidenedBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "AddWidenedBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/Bf16DivScalar@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.bf16_div_scalar_difftest",
+   "semantic_id": "dense/Bf16DivScalar@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16DivScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.212
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16DivScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.112
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16DivScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.128
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16DivScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.19
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16DivScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.162
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16DivScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16DivScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16DivScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16DivScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16DivScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 64,
+      "C": 7.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=7.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 64,
+      "C": 7.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=7.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 64,
+      "C": 7.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=7.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 64,
+      "C": 7.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=7.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 64,
+      "C": 7.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=7.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16DivScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.302
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16DivScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.441
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16DivScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.49
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16DivScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.207
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16DivScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.126
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16DivScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16DivScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16DivScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/Bf16MulScalar@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.bf16_mul_scalar_difftest",
+   "semantic_id": "dense/Bf16MulScalar@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16MulScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.178
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16MulScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.126
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16MulScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.157
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16MulScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.149
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16MulScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.139
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16MulScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16MulScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16MulScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16MulScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16MulScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 64,
+      "C": 7.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=7.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 64,
+      "C": 7.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=7.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 64,
+      "C": 7.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=7.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 64,
+      "C": 7.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=7.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 64,
+      "C": 7.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=7.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16MulScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.127
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16MulScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.131
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16MulScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.227
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16MulScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.246
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 256000,
+      "C": 30.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16MulScalar_v1{N=256000,C=30.0}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.192
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 64,
+      "C": 30.0
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16MulScalar_v1{N=64,C=30.0}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16MulScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304,
+      "C": 30.0
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16MulScalar_v1{N=2304,C=30.0}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/Bf16MulScalarTensor@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.bf16_mul_scalar_tensor_difftest",
+   "semantic_id": "dense/Bf16MulScalarTensor@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.066
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max",
+      "max"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.022
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.022
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max",
+      "max"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max",
+      "max"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max",
+      "max"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.023
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max",
+      "max"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.01
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.01
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max",
+      "max"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.01
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.01
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "Bf16MulScalarTensor_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/Bf16Tanh@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.bf16_tanh_difftest",
+   "semantic_id": "dense/Bf16Tanh@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.044
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.727
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.854
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.003
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.022
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16Tanh_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16Tanh_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16Tanh_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16Tanh_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16Tanh_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16Tanh_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16Tanh_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16Tanh_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.016
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16Tanh_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.017
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16Tanh_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.037
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.776
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.867
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.92
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.036
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16Tanh_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16Tanh_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16Tanh_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16Tanh_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16Tanh_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16Tanh_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16Tanh_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.016
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "Bf16Tanh_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.016
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "Bf16Tanh_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.017
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "Bf16Tanh_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.05
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 256000
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "Bf16Tanh_v1{N=256000}",
+     "status": "pass",
+     "n_words": 256000,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.729
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/GeluTanhMul@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.gelu_tanh_mul_difftest",
+   "semantic_id": "dense/GeluTanhMul@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.234
+    },
+    {
+     "i": 1,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.177
+    },
+    {
+     "i": 2,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.196
+    },
+    {
+     "i": 3,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.217
+    },
+    {
+     "i": 4,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.222
+    },
+    {
+     "i": 5,
+     "statics": {
+      "I": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluTanhMul_v1{I=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.002
+    },
+    {
+     "i": 6,
+     "statics": {
+      "I": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluTanhMul_v1{I=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "I": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluTanhMul_v1{I=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.002
+    },
+    {
+     "i": 8,
+     "statics": {
+      "I": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluTanhMul_v1{I=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.002
+    },
+    {
+     "i": 9,
+     "statics": {
+      "I": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluTanhMul_v1{I=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.002
+    },
+    {
+     "i": 10,
+     "statics": {
+      "I": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluTanhMul_v1{I=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.026
+    },
+    {
+     "i": 11,
+     "statics": {
+      "I": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluTanhMul_v1{I=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 12,
+     "statics": {
+      "I": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluTanhMul_v1{I=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.022
+    },
+    {
+     "i": 13,
+     "statics": {
+      "I": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluTanhMul_v1{I=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.024
+    },
+    {
+     "i": 14,
+     "statics": {
+      "I": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluTanhMul_v1{I=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.025
+    },
+    {
+     "i": 15,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.227
+    },
+    {
+     "i": 16,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.177
+    },
+    {
+     "i": 17,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.196
+    },
+    {
+     "i": 18,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.222
+    },
+    {
+     "i": 19,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.23
+    },
+    {
+     "i": 20,
+     "statics": {
+      "I": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluTanhMul_v1{I=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.002
+    },
+    {
+     "i": 21,
+     "statics": {
+      "I": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluTanhMul_v1{I=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.002
+    },
+    {
+     "i": 22,
+     "statics": {
+      "I": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluTanhMul_v1{I=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.002
+    },
+    {
+     "i": 23,
+     "statics": {
+      "I": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluTanhMul_v1{I=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.002
+    },
+    {
+     "i": 24,
+     "statics": {
+      "I": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluTanhMul_v1{I=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.002
+    },
+    {
+     "i": 25,
+     "statics": {
+      "I": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluTanhMul_v1{I=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.026
+    },
+    {
+     "i": 26,
+     "statics": {
+      "I": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluTanhMul_v1{I=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 27,
+     "statics": {
+      "I": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "GeluTanhMul_v1{I=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.022
+    },
+    {
+     "i": 28,
+     "statics": {
+      "I": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "GeluTanhMul_v1{I=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.025
+    },
+    {
+     "i": 29,
+     "statics": {
+      "I": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "GeluTanhMul_v1{I=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.025
+    },
+    {
+     "i": 30,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.23
+    },
+    {
+     "i": 31,
+     "statics": {
+      "I": 9216
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "GeluTanhMul_v1{I=9216}",
+     "status": "pass",
+     "n_words": 9216,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.178
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/MeanTriton@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.mean_triton_difftest",
+   "semantic_id": "dense/MeanTriton@v1",
+   "produce": {
+    "seed": 7,
+    "n": 50,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "MeanTriton_v1{N=2304}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.288
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "MeanTriton_v1{N=2304}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 2
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "MeanTriton_v1{N=2}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "MeanTriton_v1{N=2304}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "MeanTriton_v1{N=2304}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "MeanTriton_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "MeanTriton_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 2
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "MeanTriton_v1{N=2}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "MeanTriton_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "MeanTriton_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1280
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "MeanTriton_v1{N=1280}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1280
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "MeanTriton_v1{N=1280}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.013
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 2
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "MeanTriton_v1{N=2}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1280
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "MeanTriton_v1{N=1280}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.013
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1280
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "MeanTriton_v1{N=1280}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2048
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "MeanTriton_v1{N=2048}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2048
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "MeanTriton_v1{N=2048}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "MeanTriton_v1{N=2}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2048
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "MeanTriton_v1{N=2048}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2048
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "MeanTriton_v1{N=2048}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 256
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "MeanTriton_v1{N=256}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 256
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "MeanTriton_v1{N=256}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 2
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "MeanTriton_v1{N=2}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 256
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "MeanTriton_v1{N=256}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 256
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "MeanTriton_v1{N=256}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 4
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "MeanTriton_v1{N=4}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 4
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "MeanTriton_v1{N=4}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 2
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "MeanTriton_v1{N=2}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 4
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "MeanTriton_v1{N=4}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 4
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "MeanTriton_v1{N=4}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 20
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "MeanTriton_v1{N=20}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 20
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "MeanTriton_v1{N=20}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 32,
+     "statics": {
+      "N": 2
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "MeanTriton_v1{N=2}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 33,
+     "statics": {
+      "N": 20
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "MeanTriton_v1{N=20}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 34,
+     "statics": {
+      "N": 20
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "MeanTriton_v1{N=20}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 35,
+     "statics": {
+      "N": 100
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "MeanTriton_v1{N=100}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 36,
+     "statics": {
+      "N": 100
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "MeanTriton_v1{N=100}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 37,
+     "statics": {
+      "N": 2
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "MeanTriton_v1{N=2}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 38,
+     "statics": {
+      "N": 100
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "MeanTriton_v1{N=100}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 39,
+     "statics": {
+      "N": 100
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "MeanTriton_v1{N=100}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 40,
+     "statics": {
+      "N": 1000
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "MeanTriton_v1{N=1000}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 41,
+     "statics": {
+      "N": 1000
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "MeanTriton_v1{N=1000}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 42,
+     "statics": {
+      "N": 2
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "MeanTriton_v1{N=2}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 43,
+     "statics": {
+      "N": 1000
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "MeanTriton_v1{N=1000}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 44,
+     "statics": {
+      "N": 1000
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "MeanTriton_v1{N=1000}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 45,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "MeanTriton_v1{N=2304}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 46,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "MeanTriton_v1{N=2304}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 47,
+     "statics": {
+      "N": 2
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "MeanTriton_v1{N=2}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 48,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "MeanTriton_v1{N=2304}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 49,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "MeanTriton_v1{N=2304}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.021
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 50,
+    "total": 50
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/MulVecF32@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.mul_vec_f32_difftest",
+   "semantic_id": "dense/MulVecF32@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.022
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.014
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.012
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "random"
+     ],
+     "spec": "MulVecF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/NarrowF32ToBf16@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.narrow_f32_bf16_difftest",
+   "semantic_id": "dense/NarrowF32ToBf16@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.05
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.004
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.004
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.003
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "NarrowF32ToBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/RsqrtF32@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.rsqrt_f32_difftest",
+   "semantic_id": "dense/RsqrtF32@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.209
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "RsqrtF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "RsqrtF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "RsqrtF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "RsqrtF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "RsqrtF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "RsqrtF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "RsqrtF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "RsqrtF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "RsqrtF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "RsqrtF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "RsqrtF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "RsqrtF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "RsqrtF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "RsqrtF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "RsqrtF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "RsqrtF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "RsqrtF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "RsqrtF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "RsqrtF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "RsqrtF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.006
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 1
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "RsqrtF32_v1{N=1}",
+     "status": "pass",
+     "n_words": 1,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/ScaleRowBf16@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.scale_row_bf16_difftest",
+   "semantic_id": "dense/ScaleRowBf16@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.026
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.019
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.016
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.016
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.009
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.016
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.016
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.008
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.018
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/ScaleRowF32@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.scale_row_f32_difftest",
+   "semantic_id": "dense/ScaleRowF32@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.071
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random",
+      "random"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros",
+      "zeros"
+     ],
+     "spec": "ScaleRowF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/SquareBf16@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.square_bf16_difftest",
+   "semantic_id": "dense/SquareBf16@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.024
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.001
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareBf16_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareBf16_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.007
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareBf16_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.015
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/SquareF32@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.square_f32_difftest",
+   "semantic_id": "dense/SquareF32@v1",
+   "produce": {
+    "seed": 7,
+    "n": 32,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.02
+    },
+    {
+     "i": 1,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 2,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 3,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 4,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 5,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 6,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 7,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 8,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 9,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 10,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 11,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 12,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 13,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 14,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 15,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 16,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 17,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 18,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 19,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 20,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 21,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 22,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 23,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 24,
+     "statics": {
+      "N": 64
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareF32_v1{N=64}",
+     "status": "pass",
+     "n_words": 64,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.0
+    },
+    {
+     "i": 25,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 26,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 27,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "max"
+     ],
+     "spec": "SquareF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 28,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "subnormal"
+     ],
+     "spec": "SquareF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 29,
+     "statics": {
+      "N": 1024
+     },
+     "kinds": [
+      "alternating"
+     ],
+     "spec": "SquareF32_v1{N=1024}",
+     "status": "pass",
+     "n_words": 1024,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.005
+    },
+    {
+     "i": 30,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "random"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    },
+    {
+     "i": 31,
+     "statics": {
+      "N": 2304
+     },
+     "kinds": [
+      "zeros"
+     ],
+     "spec": "SquareF32_v1{N=2304}",
+     "status": "pass",
+     "n_words": 2304,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.011
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 32,
+    "total": 32
+   },
+   "edge_kinds_missing": []
+  },
+  "dense/AttentionSoftcap@v1": {
+   "schema": "verity-gen/difftest/v1",
+   "adapter": "verity_ir.registry.quarantine.dense.softcap_difftest",
+   "semantic_id": "dense/AttentionSoftcap@v1",
+   "produce": {
+    "seed": 7,
+    "n": 25,
+    "torch": "2.13.0+cu129",
+    "device": "NVIDIA GeForce RTX 4090"
+   },
+   "cases": [
+    {
+     "i": 0,
+     "statics": {
+      "T": 5,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.89
+    },
+    {
+     "i": 1,
+     "statics": {
+      "T": 5,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "zeros",
+      "zeros",
+      "zeros"
+     ],
+     "spec": "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.266
+    },
+    {
+     "i": 2,
+     "statics": {
+      "T": 5,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.272
+    },
+    {
+     "i": 3,
+     "statics": {
+      "T": 5,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "subnormal",
+      "subnormal",
+      "subnormal"
+     ],
+     "spec": "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.298
+    },
+    {
+     "i": 4,
+     "statics": {
+      "T": 5,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.354
+    },
+    {
+     "i": 5,
+     "statics": {
+      "T": 17,
+      "NH": 4,
+      "KVH": 2,
+      "D": 128,
+      "CAP": 30.0
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "AttentionSoftcap_v1{T=17,NH=4,KVH=2,D=128,BN=64,CAP=30.0}",
+     "status": "pass",
+     "n_words": 512,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.176
+    },
+    {
+     "i": 6,
+     "statics": {
+      "T": 17,
+      "NH": 4,
+      "KVH": 2,
+      "D": 128,
+      "CAP": 30.0
+     },
+     "kinds": [
+      "zeros",
+      "zeros",
+      "zeros"
+     ],
+     "spec": "AttentionSoftcap_v1{T=17,NH=4,KVH=2,D=128,BN=64,CAP=30.0}",
+     "status": "pass",
+     "n_words": 512,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.149
+    },
+    {
+     "i": 7,
+     "statics": {
+      "T": 17,
+      "NH": 4,
+      "KVH": 2,
+      "D": 128,
+      "CAP": 30.0
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "AttentionSoftcap_v1{T=17,NH=4,KVH=2,D=128,BN=64,CAP=30.0}",
+     "status": "pass",
+     "n_words": 512,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.155
+    },
+    {
+     "i": 8,
+     "statics": {
+      "T": 17,
+      "NH": 4,
+      "KVH": 2,
+      "D": 128,
+      "CAP": 30.0
+     },
+     "kinds": [
+      "subnormal",
+      "subnormal",
+      "subnormal"
+     ],
+     "spec": "AttentionSoftcap_v1{T=17,NH=4,KVH=2,D=128,BN=64,CAP=30.0}",
+     "status": "pass",
+     "n_words": 512,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.174
+    },
+    {
+     "i": 9,
+     "statics": {
+      "T": 17,
+      "NH": 4,
+      "KVH": 2,
+      "D": 128,
+      "CAP": 30.0
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AttentionSoftcap_v1{T=17,NH=4,KVH=2,D=128,BN=64,CAP=30.0}",
+     "status": "pass",
+     "n_words": 512,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 0.241
+    },
+    {
+     "i": 10,
+     "statics": {
+      "T": 65,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "AttentionSoftcap_v1{T=65,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.54
+    },
+    {
+     "i": 11,
+     "statics": {
+      "T": 65,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "zeros",
+      "zeros",
+      "zeros"
+     ],
+     "spec": "AttentionSoftcap_v1{T=65,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.714
+    },
+    {
+     "i": 12,
+     "statics": {
+      "T": 65,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "AttentionSoftcap_v1{T=65,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.666
+    },
+    {
+     "i": 13,
+     "statics": {
+      "T": 65,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "subnormal",
+      "subnormal",
+      "subnormal"
+     ],
+     "spec": "AttentionSoftcap_v1{T=65,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.043
+    },
+    {
+     "i": 14,
+     "statics": {
+      "T": 65,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AttentionSoftcap_v1{T=65,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 2.151
+    },
+    {
+     "i": 15,
+     "statics": {
+      "T": 64,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "AttentionSoftcap_v1{T=64,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.863
+    },
+    {
+     "i": 16,
+     "statics": {
+      "T": 64,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "zeros",
+      "zeros",
+      "zeros"
+     ],
+     "spec": "AttentionSoftcap_v1{T=64,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.533
+    },
+    {
+     "i": 17,
+     "statics": {
+      "T": 64,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "AttentionSoftcap_v1{T=64,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.49
+    },
+    {
+     "i": 18,
+     "statics": {
+      "T": 64,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "subnormal",
+      "subnormal",
+      "subnormal"
+     ],
+     "spec": "AttentionSoftcap_v1{T=64,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.836
+    },
+    {
+     "i": 19,
+     "statics": {
+      "T": 64,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AttentionSoftcap_v1{T=64,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 1.841
+    },
+    {
+     "i": 20,
+     "statics": {
+      "T": 130,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "random",
+      "random",
+      "random"
+     ],
+     "spec": "AttentionSoftcap_v1{T=130,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 18.345
+    },
+    {
+     "i": 21,
+     "statics": {
+      "T": 130,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "zeros",
+      "zeros",
+      "zeros"
+     ],
+     "spec": "AttentionSoftcap_v1{T=130,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 3.239
+    },
+    {
+     "i": 22,
+     "statics": {
+      "T": 130,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "max",
+      "max",
+      "max"
+     ],
+     "spec": "AttentionSoftcap_v1{T=130,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 3.091
+    },
+    {
+     "i": 23,
+     "statics": {
+      "T": 130,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "subnormal",
+      "subnormal",
+      "subnormal"
+     ],
+     "spec": "AttentionSoftcap_v1{T=130,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 3.89
+    },
+    {
+     "i": 24,
+     "statics": {
+      "T": 130,
+      "NH": 8,
+      "KVH": 4,
+      "D": 256,
+      "CAP": 50.0
+     },
+     "kinds": [
+      "alternating",
+      "alternating",
+      "alternating"
+     ],
+     "spec": "AttentionSoftcap_v1{T=130,NH=8,KVH=4,D=256,BN=64,CAP=50.0}",
+     "status": "pass",
+     "n_words": 2048,
+     "n_diff": 0,
+     "first_diff": [],
+     "seconds": 3.953
+    }
+   ],
+   "status": "pass",
+   "differential": {
+    "passed": 25,
+    "total": 25
+   },
+   "edge_kinds_missing": []
+  }
+ },
+ "differential": {
+  "passed": 555,
+  "total": 555
+ },
+ "status": "pass",
+ "negative_matcher_tests": "pass",
+ "negative_matcher_tests_detail": {
+  "pytest": "pass",
+  "test_gen_files": true,
+  "stamped_by": "r8 lane E-cleanup 2026-09-18 (laptop, torch-free .venv): verity_ir/registry/quarantine/dense/softcap_tests.py 15 passed; verity_capture/tests/test_gen_dense_softcap.py + test_gen_dense2.py 47 passed 1 skipped; quarantine_lint --root quarantine/dense pass 39 files; resolve_log over the archived GEMMA2_2B-cov_gemma2_2b_b1_c256 capture log: unsupported 390 -> 0, 169 AttentionSoftcap_v1 specs",
+  "tests": {
+   "softcap_tests": 15,
+   "gen_dense_softcap+gen_dense2": 47,
+   "skipped": 1,
+   "failures": 0,
+   "errors": 0,
+   "status": "pass"
+  }
+ },
+ "admitted_by": {
+  "run": "GEMMA2_2B-cov_gemma2_2b_b1_c256",
+  "lane": "r8 E-cleanup",
+  "source_records": [
+   {
+    "path": "archive-20260917/GEMMA2_2B-cov_gemma2_2b_b1_c256.small.tgz:quarantine.json",
+    "sha256": "57b36a3e9dc07fa57391c168c37e26b1672202922858ec99280bf533fb1dd426",
+    "definitions": 16,
+    "differential": {
+     "passed": 530,
+     "total": 530
+    },
+    "produced_by": "lane ov-dense / cov-dense (pod difftests, RTX 4090)"
+   },
+   {
+    "path": "out/gen/lanes/gemma/softcap_difftest_n25.quarantine.json",
+    "sha256": "d0857f49a73f05b4f07112a70e3c82614f093c41672c94e8ab6cb1bbadbbff4c",
+    "definitions": 1,
+    "differential": {
+     "passed": 25,
+     "total": 25
+    },
+    "job": "0917T223335-9ad747",
+    "worker": "cp-cov-b",
+    "nvidia_smi": "NVIDIA GeForce RTX 4090, 595.91.07, 8.9, 1 MiB",
+    "vllm": "vllm 0.28.1rc1.dev472+gd9105ea80 torch 2.13.0+cu129",
+    "snapshot_commit": "59a5951bb",
+    "production_call": "vllm.vllm_flash_attn.flash_attn_varlen_func(q[1,NH,D], k/v paged [nblocks,16,KVH,D] bf16, cu_seqlens_q=[0,1], seqused_k=[T], softmax_scale=D**-0.5, causal=True, block_table, softcap=CAP, fa_version=2, num_splits=1) -> flash_fwd_splitkv_kernel<..., Is_softcap=true>"
+   }
+  ],
+  "note": "per-Definition admission record of the Gemma-2-2B quarantine Definitions (16 dense elementwise/norm/GeGLU/softcap-chain Definitions from the ov-dense lane's pod difftests + dense/AttentionSoftcap@v1 from the gemma lane's FA2 difftest, 25/25 bitwise); cov_pod.sh copies it into a GEMMA2_2B run dir that has no quarantine.json of its own and stamps `inherited`.  G4 still re-runs tier-a replay on that run's own instances (MufuTanh from the in-tree sm_89 table).",
+  "utc": "2026-09-18T07:30:37Z"
+ }
+}

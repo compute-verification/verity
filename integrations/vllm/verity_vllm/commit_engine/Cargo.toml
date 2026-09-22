@@ -1,0 +1,20 @@
+[package]
+name = "verity-commit-engine"
+version = "0.0.1"
+edition = "2021"
+description = "C1 pilot: compiled Merkle engine over packed Verity values (production framing, bit-identical roots)"
+
+[[bin]]
+name = "vce"
+path = "src/main.rs"
+
+[dependencies]
+sha2 = "0.10"
+rayon = "1"
+memmap2 = "0.9"
+hex = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

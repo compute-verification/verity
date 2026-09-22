@@ -1,0 +1,58 @@
+--- a/vllm-poc/scripts/rec_p1_obligations.py
++++ b/vllm-poc/scripts/rec_p1_obligations.py
+@@ -148,6 +148,8 @@
+     print(f"[rec_p1_obligations] program {program.gates} gates ({program.input_gates} input) built in {T['program_s']} s; locator {T['locator_s']} s; "
+           f"prompt gates {loc.prompt_range}; {len(loc.w_ranges)} weight collections", flush=True)
+ 
++    from e2e.coverage_v1.builders import BUILDERS, BuildRefusal, LocatedUnit, dispatch  # [A5/6 patch]
++
+     # --- map every selected unit ---
+     t1 = time.perf_counter()
+     units: list[dict[str, Any]] = []
+@@ -167,6 +169,10 @@
+             u["locate"] = loc.locate_gemm_coordinate(lo, hi)
+         elif cls.startswith("input unit"):
+             u["locate"] = loc.locate_input(lo)
++        elif kind in BUILDERS:  # [A5/6 patch] attention body: coverage_v1 locator + BUILDERS dispatch (below)
++            from e2e.coverage_v1.attn_locator import locate_attention
++
++            u["locate"] = locate_attention(loc, lo, hi)
+         else:
+             u["locate"] = None
+         if u.get("locate") and "refused" in u["locate"]:
+@@ -256,6 +262,35 @@
+         b = tensor_bytes[cid]
+         return int.from_bytes(b[2 * offset:2 * offset + 2], "little"), f"checkpoint:model.safetensors@{st_sha[:12]}:{'+'.join(hf[0])}[{offset}]"
+ 
++    # [A5/6 patch] dispatch every located attention unit through BUILDERS[kind].build(located_unit, record): a Built (statement +
++    # witness + expectation) per unit, or a BuildRefusal naming the uncommitted interior word -- recorded per unit, never silent
++    from e2e.coverage_v1.capture_record import CaptureRecord
++
++    record = CaptureRecord(sel_dir, comm, config=C, session=bytes.fromhex(proto["session"]) if "session" in proto else b"\0" * 32,
++                           compiled=bytes.fromhex(maps["program"]["digest"]))
++    built_attention: list[tuple[dict[str, Any], Any]] = []
++    for u in units:
++        if u["kind"] in BUILDERS and u.get("locate") and "refused" not in u["locate"]:
++            L = u["locate"]
++            lu = LocatedUnit(str(u["vu_index"]), u["kind"], u["request_id"], int(L["t"]), layer=int(L["layer"]), head=int(L["head"]), ru_index=int(u["ru"]),
++                             extra={"unit": L.get("unit"), "chain": L.get("chain", [])})
++            try:
++                built_attention.append((u, dispatch(lu, record)))
++            except BuildRefusal as e:
++                u["build_refused"] = e.reason
++                u["missing_words"] = [list(m) for m in e.missing]
++    T["attention_builds"] = len(built_attention)
++    T["attention_refusals"] = sum(1 for u in units if "build_refused" in u)
++    (rec / "mapping.units.jsonl").write_text("".join(json.dumps(u, sort_keys=True) + "\n" for u in units))
++    # each Built is written as its own raw format-3 statement batch (fa2 family; not a typed object -- Q-A56-4) beside the GEMM chunks
++    for k, (u, b) in enumerate(built_attention):
++        from veritor.protocol.proofs.packed import encode_packed_witness
++        from veritor.protocol.proofs.wire import encode_statement_v3
++
++        (odir / f"attn-{k:05d}.statement.bin").write_bytes(encode_statement_v3(b.statement))
++        (odir / f"attn-{k:05d}.witness.bin").write_bytes(encode_packed_witness(b.witness))
++        (odir / f"attn-{k:05d}.json").write_text(json.dumps({"vu_index": u["vu_index"], "kind": b.kind, "notes": b.notes, "programs": b.programs}, indent=1))
++
+     coord_units = []
+     eqs_by_unit: list[tuple[dict[str, Any], list[InputEquation]]] = []
+     checks: list[dict[str, Any]] = []

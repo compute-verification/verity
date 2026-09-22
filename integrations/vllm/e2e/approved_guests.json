@@ -1,0 +1,395 @@
+{
+  "schema": "veritor/approved-guests/v1",
+  "note": "VERIFIER-SIDE policy (GUIDANCE \u00a757.10, S12 caveat): the (ELF, vk) pairs the verifier accepts a proof of. The STRICT certificate refuses any other pair (NOT BOUND, GUEST_NOT_APPROVED) regardless of the record's claimed guest_features / guest_build. approval = 'reproduced' means the ELF was rebuilt on 2026-09-09 from the named zk/sp1 tree with the pinned toolchain (`cargo prove build`, default features) and matched bit for bit -- `reproduction` records the build event and `record_gaps` what the RECORDS themselves did not record (the reproduction supplied it); 'provisional-legacy' means the ELF is pinned by existing records and is listed so those records stay certifiable -- it is NOT build-verified, and `missing` names exactly what its records did not record. Adding an entry is a verifier decision, never a prover action. Procedure: e2e/pod_guest_build.sh + e2e/guest_build.py, results/GUEST-20260909/, reports/GUEST-2026-09-09.md \u00a72/\u00a76.",
+  "toolchain_2026_09_09": {
+    "cargo_prove": "cargo-prove sp1 (f66b4bf 2026-08-12T14:40:11.709680161Z)",
+    "rustc": "rustc 1.94.0-dev (rustup toolchain `succinct`, installed by `sp1up --version v6.4.0`)",
+    "sp1_sdk": "6.4.0",
+    "sp1_zkvm": "6.4.0",
+    "cargo_stable": "cargo 1.98.1 (797e8a9bc 2026-08-05) / rustc 1.98.1 (48a229cea 2026-09-01)",
+    "platform": "Linux-6.8.0-106-generic-x86_64-with-glibc2.35 (runpod pod nsjd5b5pdzdue8, 128 vCPU)",
+    "note": "the single toolchain every `reproduced` entry below was rebuilt with; the ELF does not depend on the host machine (build 1 and build 2 on the pod were bit-identical, results/GUEST-20260909/build-{1,2})"
+  },
+  "guests": [
+    {
+      "elf_sha256": "9fd00e60fb6a74762de987cde211aca9de4576de844569da779acac6bf3863db",
+      "vk_hash": "0x0018b8e4e955ad4c348bcf57271643814dfcd68d575323410841c29289bd5797",
+      "approval": "reproduced",
+      "approved_by": "lane GUEST (built twice from a clean target on the pod, bit-identical; the actual-guest smoke matrix 72/72 and one core proof + verify ran on THIS ELF)",
+      "date": "2026-09-09",
+      "records": [
+        "vllm-poc/results/GUEST-20260909/ (build-1, build-2, smoke/, legacy/) -- no certified composed record uses this ELF yet; it is the guest the lane-guest tree builds"
+      ],
+      "guest_build": {
+        "source_commit": "1d4d48689287dd1e22b41e620d2b1771738770f5",
+        "source_tree_sha": "416482656ffad8a45b4589d933da04e6f9076dff",
+        "toolchain": {
+          "cargo_prove": "cargo-prove sp1 (f66b4bf 2026-08-12T14:40:11.709680161Z)",
+          "rustc": "rustc 1.94.0-dev",
+          "sp1_sdk": "6.4.0",
+          "sp1_zkvm": "6.4.0",
+          "cargo_lock_sha256": "499e8248a1091b68d0dc4dfee9a619669891ca8af3ea9cf95330e7f2c55adbb3"
+        },
+        "features_resolved": [],
+        "features_resolved_detail": {
+          "veritor-zk-common": [
+            "default",
+            "scopes"
+          ],
+          "unsound_features_resolved": [],
+          "resolved_by": "cargo tree -e features (guest crate)"
+        },
+        "elf_sha256": "9fd00e60fb6a74762de987cde211aca9de4576de844569da779acac6bf3863db",
+        "elf_bytes": 550072,
+        "vk_hash": "0x0018b8e4e955ad4c348bcf57271643814dfcd68d575323410841c29289bd5797",
+        "built_by": "root@63995b983e2b (runpod nsjd5b5pdzdue8, lane GUEST)",
+        "built_at": "2026-09-09T20:03:52Z",
+        "build_argv": "cd zk/sp1/guest && cargo prove build",
+        "host_binary": "veritor-zk-host sha256 b571e3c73988b8f054f8b8fce43c0728550d718acaa563a2c374de5f66e80329 (cargo build --release -p veritor-zk-host, same tree)"
+      },
+      "reproduction": {
+        "builds": [
+          "results/GUEST-20260909/build-1/guest_build.json (18.2 s)",
+          "results/GUEST-20260909/build-2/guest_build.json (clean target, 8.1 s)"
+        ],
+        "bit_identical": true,
+        "note": "source_commit is the lane-guest commit whose zk/sp1 tree is 41648265...; every later lane-guest commit leaves that tree unchanged (Python / docs only), so the same ELF is what any of them builds"
+      },
+      "missing": [],
+      "families": {
+        "veritor.toy-isa@1": "1c03b029f55b1f5ed21dfab08f802b83035e474c4a9e3230e07bab590278bf0c",
+        "veritor.word-arithmetic@2": "5701820f0950cdde87e72f0b83a9e7f002bd965931230015223bccb287607ff5",
+        "veritor.int8-q7@1": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+        "veritor.tensor-core.ampere_bf16_m16n8k16@2": "ce525ee5ed107a1005f4fd95765529ac9b90ac27e895bdaf46a4e1d16a849302",
+        "veritor.tc-ampere-bf16@1": "cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307",
+        "veritor.tc-ampere-bf16@2": "ca39ce505c70125046bcc9e7af49f84ac55b111558cff9dd201dd326c6421f0a",
+        "veritor.elem-bf16@1": "061723740a994b6b47148b19a0b5c5a701edcd52398fd10e9a4a41d4575f5b9e",
+        "veritor.reduce-mufu@1": "a348a7bbe15090308af57cb7e5f1dc035263cc9092b853ba7a2dff7b9d462837"
+      },
+      "families_source": "veritor.interface.families.family_table over the families GateSet::resolve admits in zk/sp1/common/src/gateset.rs @ the entry's guest source commit (1d4d4868; A2 conformance-rows R10) and that resolve in this interface at width 32 -- [A3 R13 / A2 R10, 2026-09-10]. veritor.reduce-mufu@1 [CK-ELEM / A2 22:40Z, PROPOSED]: entered when CK-ELEM's expected.diff made it resolve in the interface (SUPPORTED_FAMILIES); digest confirmed by A2 against gateset.rs @ 1d4d4868 (blob 52a782b1 == mainline; REDUCE_MUFU_ID at 32..=32, reduce.rs:603 pin a348a7bb..., `cargo test -p veritor-zk-common` 17/17) -- the approval of that family under this ELF is the user's decision (PROTOCOL-CONFORMANCE R9/R13).",
+      "families_in_guest_source_not_in_interface": [
+        "veritor.pad-serve@1",
+        "veritor.elem-f32@1",
+        "veritor.pad-inactive@1",
+        "veritor.embed-gather@1"
+      ]
+    },
+    {
+      "elf_sha256": "666e937f4691deddc4dab67c8cd1bbd9e84be81b59c1cfb396399e1d937f46d4",
+      "vk_hash": "0x00f89ac75b3c0c603d02c6a2fd58c8c7e53885adaf1b200278a4b9dc0e66b61f",
+      "approval": "reproduced",
+      "approved_by": "E7 (EOD 2026-09-11, proof integration and guest release; sole writer of this file). Consolidated guest = 9fd00e60's zk/sp1 tree + E4's FTZ family (zk/sp1/common/src/ftz.rs, gateset.rs veritor.ftz-f32@1). Approved on: two clean-target builds on the pinned toolchain bit-identical (E10, pod hjf3rojwpfsyrb); the 12-negative suite (9 gate + 3 tamper) on REC-P1-B0 under THIS ELF 12/12 REFUSED; E4's FTZ conformance vectors in protocol form PROVEN + host-verified under THIS ELF (131 positive -> 3 proofs, guest verdict 1, binding ok; 34 negative -> verdict 0; E7 tamper -> verdict 0); regression: f32-smoke 7/7 and E8's CORE first proof 2/2 PROVEN+VERIFIED under THIS ELF. Never on the author's say-so: E4 did not touch this file.",
+      "date": "2026-09-11",
+      "records": [
+        "out/eod/e7/guests/ftz-f32/pod/out/ (build1.sha, build2.sha, guest_build.json, info.json, step1-test.txt: cargo test 57 pass; step7-negatives.txt: 12/12 REFUSED 230 s; timing.txt, timing69.txt; run15.sh, run69.sh, run89.sh = E10's wrappers)",
+        "out/eod/e7/guests/ftz-f32/pod/ftz-f32/proofs/chunk0[0-4].json (+ logs/, costlog.jsonl): E4's vectors in protocol form -- chunk00-02 = 131 positive obligations PROVEN+VERIFIED verdict 1; chunk03 = 34 negative obligations verdict 0; chunk04 = E7 tamper (14) verdict 0; SP1 compressed, RTX 4090 cuda prover, host cpu verify",
+        "out/eod/e7/guests/ftz-f32/pod/f32-smoke-candidate/proofs/ (7/7 PROVEN+VERIFIED, 2,134,625 cycles) and out/eod/e7/guests/ftz-f32/pod/e8-first-proof-candidate/proofs/ (2/2 PROVEN+VERIFIED, 3,318,005 cycles): the existing families (reduce-mufu, elem-bf16) still prove under THIS ELF",
+        "out/eod/e7/guests/ftz-f32/pod/binding-recheck.json: check_binding re-run on the laptop with the family resolvable (the pod's first process lacked ck_ftz.ensure_families -> E_UNSUPPORTED_FAMILY; attempt 5 on the merged tree binds 5/5 on the pod too)",
+        "out/eod/e7/guests/ftz-f32/protocol/ (the statements, witnesses, commitments; ftz_protocol.py that built them; obligations.json) and out/eod/e7/guests/ftz-f32/dossier.md",
+        "out/eod/jobs/e7-guest-build.json (the job as requested and as E10 ran it)"
+      ],
+      "guest_build": {
+        "source_commit": "bc09ee92 (eod/e7) -- the pod built a git archive (no .git): zk/sp1 tree e6915d028902ffad3af202bfb89f2cd5dbb53aee; zk/sp1/{common,guest,host} trees d40469621be87535f053ea750b6f6f40650bc531 / 6bf1b3879b7151affd92bb61453741971e582df5 / 307e44b0a2323c94aa8994a5a81e863b026590d8 are unchanged in every later eod/e7 commit (only programs/select, E5's, joins the zk/sp1 tree)",
+        "source_tree_sha": "e6915d028902ffad3af202bfb89f2cd5dbb53aee",
+        "toolchain": {
+          "cargo_prove": "cargo-prove sp1 (f66b4bf 2026-08-12T14:40:11.709680161Z)",
+          "rustc": "rustc 1.94.0-dev",
+          "sp1_sdk": "6.4.0",
+          "sp1_zkvm": "6.4.0",
+          "cargo_lock_sha256": "499e8248a1091b68d0dc4dfee9a619669891ca8af3ea9cf95330e7f2c55adbb3"
+        },
+        "features_resolved": [],
+        "features_resolved_detail": {
+          "veritor-zk-common": [
+            "default",
+            "scopes"
+          ],
+          "unsound_features_resolved": [],
+          "resolved_by": "cargo tree -e features (guest crate)"
+        },
+        "elf_sha256": "666e937f4691deddc4dab67c8cd1bbd9e84be81b59c1cfb396399e1d937f46d4",
+        "elf_bytes": 561520,
+        "vk_hash": "0x00f89ac75b3c0c603d02c6a2fd58c8c7e53885adaf1b200278a4b9dc0e66b61f",
+        "built_by": "root@ddc656bece48 (runpod hjf3rojwpfsyrb, E8's RTX 4090 secure pod; E10 executed E7's job)",
+        "built_at": "2026-09-11T21:55:46Z (build-1) / 2026-09-11T21:55:52Z (build-2, clean target); pin 2026-09-11T21:57:43Z",
+        "build_argv": "cd zk/sp1/guest && cargo prove build",
+        "host_binary": "veritor-zk-host-ftz-cuda sha256 e88eb50c6297f0456117662c2a141df42e4020b0ab96bafb4234c59a3b757a31 (cargo build --release -p veritor-zk-host --features cuda, same tree, 75 s); public_values_len 33"
+      },
+      "reproduction": {
+        "builds": [
+          "out/eod/e7/guests/ftz-f32/pod/out/build1.sha (7 s)",
+          "out/eod/e7/guests/ftz-f32/pod/out/build2.sha (clean target, 6 s)"
+        ],
+        "bit_identical": true,
+        "note": "same Cargo.lock (sha256 499e8248...) and toolchain (cargo-prove f66b4bf, rustc 1.94.0-dev, sp1 6.4.0) as 9fd00e60; the ELF differs from 9fd00e60 only by the FTZ family's gates (ftz.rs relocated from E4's zk/sp1/programs/ftz/core, gateset.rs Op/Family arms); elf_bytes 561,520 vs 550,072"
+      },
+      "negatives": {
+        "suite": "12-negative suite (9 gate + 3 tamper) on REC-P1-B0 under THIS ELF: 12/12 REFUSED (230.1 s, RTX 4090, E10 MEASURED)",
+        "evidence": "out/eod/e7/guests/ftz-f32/pod/out/step7-negatives.txt"
+      },
+      "conformance": {
+        "veritor.ftz-f32@1": "E4's vectors (out/contract-era ftz conformance: 131 positive / 34 negative) as protocol format-3 statements built by e2e.coverage_v1.elem_builders.build_batch; proven + verified under THIS ELF: positive 3 proofs (64+64+3 obligations) verdict 1 & bind, negative (34) verdict 0, E7 tamper (14) verdict 0; Python mirror (ck_elem.verify_transparent / ck_ftz) agrees on every set",
+        "existing_families": "f32-smoke (reduce-mufu, 32 F32 interior words, 7 chunks) 7/7 and E8's CORE first proof (elem-bf16, 2 x 64 obligations) 2/2 PROVEN+VERIFIED under THIS ELF"
+      },
+      "missing": [],
+      "families": {
+        "veritor.toy-isa@1": "1c03b029f55b1f5ed21dfab08f802b83035e474c4a9e3230e07bab590278bf0c",
+        "veritor.word-arithmetic@2": "5701820f0950cdde87e72f0b83a9e7f002bd965931230015223bccb287607ff5",
+        "veritor.int8-q7@1": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+        "veritor.tensor-core.ampere_bf16_m16n8k16@2": "ce525ee5ed107a1005f4fd95765529ac9b90ac27e895bdaf46a4e1d16a849302",
+        "veritor.tc-ampere-bf16@1": "cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307",
+        "veritor.tc-ampere-bf16@2": "ca39ce505c70125046bcc9e7af49f84ac55b111558cff9dd201dd326c6421f0a",
+        "veritor.elem-bf16@1": "061723740a994b6b47148b19a0b5c5a701edcd52398fd10e9a4a41d4575f5b9e",
+        "veritor.reduce-mufu@1": "a348a7bbe15090308af57cb7e5f1dc035263cc9092b853ba7a2dff7b9d462837",
+        "veritor.ftz-f32@1": "21f8f7d2183cad76ae62486445eee48409b3727b236b12329bb8d9b6e2353fef"
+      },
+      "families_source": "veritor.interface.families.family_table over the families GateSet::resolve admits in zk/sp1/common/src/gateset.rs @ the entry's guest source commit (1d4d4868; A2 conformance-rows R10) and that resolve in this interface at width 32 -- [A3 R13 / A2 R10, 2026-09-10]. veritor.reduce-mufu@1 [CK-ELEM / A2 22:40Z, PROPOSED]: entered when CK-ELEM's expected.diff made it resolve in the interface (SUPPORTED_FAMILIES); digest confirmed by A2 against gateset.rs @ 1d4d4868 (blob 52a782b1 == mainline; REDUCE_MUFU_ID at 32..=32, reduce.rs:603 pin a348a7bb..., `cargo test -p veritor-zk-common` 17/17) -- the approval of that family under this ELF is the user's decision (PROTOCOL-CONFORMANCE R9/R13). || [E7 2026-09-11] veritor.ftz-f32@1 = GateSet::resolve(FTZ_F32_ID, 32).digest() = zk/sp1/common/src/gateset.rs FTZ_F32_DIGEST_HEX = E4's ck_ftz.FTZ_DIGEST (crate test ftz_f32_manifest_and_digest_match_e4s_family_pin); the other 8 digests are 9fd00e60's, unchanged (gateset.rs manifests untouched by the consolidation; crate tests pass). Interface resolution of veritor.ftz-f32@1 is INTERIM through e2e.coverage_v1.builders.ensure_families() (E4's ck_ftz.ensure_families) until typed_obligation.py carries it."
+    },
+    {
+      "elf_sha256": "33892d5e0d83f2c49a9dbe5006fd7cbd23719c69471fea8f7c57d8a7c4a39497",
+      "vk_hash": "0x0022392fa4c952bb303d8c9a9a1c93cf6b38ab6081c80829ebdc2de47dc7e9ad",
+      "approval": "reproduced",
+      "approved_by": "E7 (EOD 2026-09-11, proof integration and guest release; sole writer of this file). E5's dedicated STATEMENT-BOUND guest veritor.select-argmax@1 (zk/sp1/programs/select: TokenSelect_v1|whole-scan argmax over a committed logits row, public values sha256(statement) || verdict). Approved on: two clean-target builds on the pinned toolchain BIT_IDENTICAL on E10's pod (E5's laptop build 8f30cf2c and E5's own pod build bb889cae of the eod/e5 tree differ from THIS digest and are NOT the approved ELF; E5's laptop proofs verify ok=false under this vk and are not evidence); E5's vectors under THIS ELF: conformance 28/28, negatives 30/30 (relation-level: auth/shape/verdict classes), record_tiny 3/3, 0 failures; one REAL TINY row (request 2663944e t=3, V5-TINY) proven on the pod under THIS ELF and host-verified ok/statement_match/verdict true; proof-object negatives G2/G3/G5 on that pod proof under the pod host (statement flipped -> statement_match false; proof flipped -> ok false; another row's statement -> statement_match false) + G1/G4 Python-side. Never on the author's say-so: E5 did not touch this file; E7 re-ran every vector.",
+      "date": "2026-09-11",
+      "records": [
+        "out/eod/e7/guests/select-argmax/pod/ (E10's run of out/eod/jobs/e7-select-guest.json: build-1/build-2.{info.json,elf.sha256,time}, bit-identical.txt = BIT_IDENTICAL, toolchain.txt, E10-SOURCE.txt, E10-run.sh, timing.txt)",
+        "out/eod/e7/guests/select-argmax/pod/{conformance,negatives,record_tiny}.vectors.json: E5's vectors executed under THIS ELF, failures 0/0/0 (elf_sha256 field = this entry)",
+        "out/eod/e7/guests/select-argmax/pod/record_2663944e_t3.core.proof + prove-record_2663944e_t3.{json,time} (1,992,221 cycles, 73.9 s wall CPU on 32 vCPU, SP1 6.4.0 core) + verify-pod-record_2663944e_t3.json (ok true, statement_match true, verdict true, vk = this entry)",
+        "out/eod/e7/guests/select-argmax/pod/proof-object-negatives-pod.json (G2/G3/G5 on the pod proof under the pod host) and out/eod/e7/guests/select-argmax/negatives/proof-object-negatives.json (G1-G5, laptop run on E5's proof: the Python-side checks G1/G4 are ELF-independent)",
+        "out/eod/e7/guests/select-argmax/pod/verify-record_2663944e_t3.json, verify-tie_lowest_index.json: E5's laptop proofs under THIS vk -> ok false (different ELF; recorded as the negative they are)",
+        "out/eod/e7/guests/select-argmax/dossier.md; out/eod/jobs/e7-select-guest.json (the job as requested and as E10 ran it)"
+      ],
+      "guest_build": {
+        "source_commit": "be1566b4 (vllm-poc; E5 FINAL 4c0569a7 merged; zk/sp1 identical to 11442ec3) -- the pod built a git archive (no .git)",
+        "source_tree_sha": "4ff4a5bbcda16ec89d5bd5b18036a4c9b8266a50",
+        "toolchain": {
+          "cargo_prove": "cargo-prove sp1 (f66b4bf 2026-08-12T14:40:11.709680161Z)",
+          "rustc": "rustc 1.94.0-dev",
+          "sp1_sdk": "6.4.0",
+          "sp1_zkvm": "6.4.0",
+          "cargo_lock_sha256": "6c709eb8b41c44333e5c5d73c85580f4ad257a766e22c56082e7bcb422077fa5 (zk/sp1/programs/select/Cargo.lock)"
+        },
+        "features_resolved": [],
+        "elf_sha256": "33892d5e0d83f2c49a9dbe5006fd7cbd23719c69471fea8f7c57d8a7c4a39497",
+        "elf_bytes": 135520,
+        "vk_hash": "0x0022392fa4c952bb303d8c9a9a1c93cf6b38ab6081c80829ebdc2de47dc7e9ad",
+        "public_values_len": 33,
+        "built_by": "root@ddc656bece48 (runpod hjf3rojwpfsyrb, E8's RTX 4090 secure pod, CPU build; E10 executed E7's job)",
+        "built_at": "2026-09-11T22:13Z..22:35Z (build-1 121 s, build-2 clean target 114 s; E10 MEASURED)",
+        "build_argv": "cargo build --release --manifest-path zk/sp1/programs/select/Cargo.toml -p veritor-select-host (sp1_build::build_program('../guest') -> target/elf-compilation/riscv64im-succinct-zkvm-elf/release/veritor-select-guest)",
+        "host_binary": "veritor-select-host sha256 1187626f7a9a9d896e03cb0452578814dc5d0f87db58cda3f43642c07a7c71de (pod, same tree); E7's laptop host 67786752c992... built E5's 8f30cf2c ELF and is NOT this entry's"
+      },
+      "reproduction": {
+        "builds": [
+          "out/eod/e7/guests/select-argmax/pod/build-1.{info.json,elf.sha256,time} (121 s)",
+          "out/eod/e7/guests/select-argmax/pod/build-2.{info.json,elf.sha256,time} (clean target, 114 s)"
+        ],
+        "bit_identical": true,
+        "note": "THREE digests exist for 'the select guest': E5 laptop 8f30cf2c (E5's own toolchain), E5 pod build of the eod/e5 tree bb889cae (zk/sp1 20722536, before the merge), this entry 33892d5e (merged tree be1566b4, pinned toolchain, twice). Only this one is approved; a proof under another vk is GUEST_NOT_APPROVED."
+      },
+      "negatives": {
+        "suite": "relation-level: E5's negatives.vectors.json 30/30 as expected under THIS ELF (auth failures, shape, wrong argmax, tie order, verdict classes) + proof-object G1-G5 (G2/G3/G5 on the pod proof under the pod host; G1 vk-altered -> approval_of GUEST_NOT_APPROVED; G4 verdict byte 0 -> coverage.statement_proof refuses). The 12-negative record suite (9 gate + 3 tamper) is the PROTOCOL guest's; this guest carries no typed-obligation family, so its negatives are the family's own 30 + the 5 proof-object ones.",
+        "evidence": "out/eod/e7/guests/select-argmax/pod/negatives.vectors.json; out/eod/e7/guests/select-argmax/pod/proof-object-negatives-pod.json"
+      },
+      "conformance": {
+        "veritor.select-argmax@1": "E5's conformance.vectors.json 28/28 + record_tiny.vectors.json 3/3 (the three V5-TINY rows) under THIS ELF; real row 2663944e t=3 PROVEN+VERIFIED on the pod"
+      },
+      "missing": [],
+      "families": {},
+      "statement_families": {
+        "veritor.select-argmax@1": {
+          "statement": "E5's SelectStatement (ck_select), format vllm-poc/e2e/coverage_v1/select_vectors + zk/sp1/programs/select/core",
+          "public_values": "sha256(statement_bytes) || verdict (33 bytes)",
+          "verify_with": "veritor-select-host verify --proof <p> --statement <s> (ok && statement_match && verdict); coverage: e2e.coverage_v1.coverage.statement_proof; registry gate: e2e.approved_guests.statement_family_approval(family, elf, vk)"
+        }
+      },
+      "families_source": "a dedicated STATEMENT-BOUND guest: it implements NO gate-set family (families {} -> veritor.interface.families.check_family_approved is fail-closed for every typed obligation under it); the family it proves is listed under statement_families and gated by approved_guests.statement_family_approval",
+      "statement_bound": true
+    },
+    {
+      "elf_sha256": "73081b7b2c9305a93f243a2137f71c851fb24bddf5e6edfbeb398acb2f309029",
+      "vk_hash": "0x006ecb51c5f0e7b5e946186af4ccada3161e17fef9c0152052f7d26a8ae98d0d",
+      "approval": "reproduced",
+      "approved_by": "lane GUEST (seeded provisional from the records the verifier already certified; upgraded 2026-09-09 20:07 UTC after the rebuild from 09b98845ce87 matched bit for bit)",
+      "date": "2026-09-09",
+      "records": [
+        "vllm-poc/results/INT-PAD-2/INTPAD2-B0-20260909T013519Z (certificate.json bound, v2 schema)",
+        "vllm-poc/results/PAD-INT/PADINT-B0-20260909T082901Z{,-S3}",
+        "vllm-poc/results/PAD-INT/PADINT-B0-20260909T095529Z-EOS0{,-S3}"
+      ],
+      "guest_build": {
+        "source_commit": "09b98845ce87",
+        "source_tree_sha": "9cf2b3e5cb1c3cee4bbfc58d590e91a4cf948bda",
+        "toolchain": {
+          "cargo_prove": "cargo-prove sp1 (f66b4bf 2026-08-12T14:40:11.709680161Z)",
+          "rustc": "rustc 1.94.0-dev",
+          "sp1_sdk": "6.4.0"
+        },
+        "features_resolved": [],
+        "elf_sha256": "73081b7b2c9305a93f243a2137f71c851fb24bddf5e6edfbeb398acb2f309029",
+        "vk_hash": "0x006ecb51c5f0e7b5e946186af4ccada3161e17fef9c0152052f7d26a8ae98d0d",
+        "built_by": "REPRODUCTION root@63995b983e2b (runpod nsjd5b5pdzdue8, lane GUEST); the ORIGINAL build event is unrecorded",
+        "built_at": "REPRODUCTION 2026-09-09T20:07Z; the ORIGINAL build time is unrecorded",
+        "host_binary": "veritor-zk-host (archived in the records as bin/veritor-zk-host, sha256 8b074b46e63d14a1177eb42b7798681b365da60dd39821ee72ad007e4198bda5; prover host /workspace/bin/veritor-zk-host-cuda on the record pods)",
+        "record_evidence": "proofs/info.json: sp1_version 6.4.0, guest_features [] (the HOST's report of its own compile-time features; self-reported), public_values_len 33; manifest inputs.adapter_revision 09b98845ce87 (INT-PAD-2) / 'padint' (PAD-INT) name the ADAPTER revision, not the guest source"
+      },
+      "reproduction": {
+        "source_state_from": "the INT-PAD-2 record's manifest inputs.adapter_revision 09b98845ce87 (a CANDIDATE: the run's checkout, not a recorded build event) -- the rebuild is what established that this tree is the guest's source",
+        "procedure": "git archive 09b98845ce87 zk/sp1 -> pod; cd zk/sp1/guest && cargo prove build (default features) with toolchain_2026_09_09; sha256 of target/elf-compilation/riscv64im-succinct-zkvm-elf/release/veritor-zk-guest; cargo prove vkey --elf",
+        "result": "results/GUEST-20260909/legacy/09b98845ce87/: ELF 73081b7b... vk 0x006ecb51... -- bit-identical to the ELF/vk the three records pin",
+        "bit_identical": true
+      },
+      "record_gaps": [
+        "source_commit: not recorded by the records (recovered by rebuilding the adapter_revision candidate)",
+        "source_tree_sha: not recorded; a dirty worktree at build time would have been indistinguishable from a clean one (the match shows the tree WAS clean w.r.t. the guest)",
+        "toolchain.cargo_prove / toolchain.rustc: not recorded (only the sp1-sdk crate version 6.4.0, from the host's const); the match is with the 2026-09-09 toolchain",
+        "features_resolved: only the host's SELF-REPORTED guest_features []; the reproduction resolved default features and got the same ELF",
+        "built_by / built_at: no original build event; the ELF was copied to the pod inside a prebuilt host binary"
+      ],
+      "missing": [],
+      "families": {
+        "veritor.toy-isa@1": "1c03b029f55b1f5ed21dfab08f802b83035e474c4a9e3230e07bab590278bf0c",
+        "veritor.word-arithmetic@2": "5701820f0950cdde87e72f0b83a9e7f002bd965931230015223bccb287607ff5",
+        "veritor.int8-q7@1": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+        "veritor.tensor-core.ampere_bf16_m16n8k16@2": "ce525ee5ed107a1005f4fd95765529ac9b90ac27e895bdaf46a4e1d16a849302",
+        "veritor.tc-ampere-bf16@1": "cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307",
+        "veritor.tc-ampere-bf16@2": "ca39ce505c70125046bcc9e7af49f84ac55b111558cff9dd201dd326c6421f0a"
+      },
+      "families_source": "veritor.interface.families.family_table over the families GateSet::resolve admits in zk/sp1/common/src/gateset.rs @ the entry's guest source commit (09b98845; A2 conformance-rows R10) and that resolve in this interface at width 32 -- [A3 R13 / A2 R10, 2026-09-10]"
+    },
+    {
+      "elf_sha256": "a4d1efe135214019ceba0a0b712d989b46392174cc5f9aa64a36876de04f6a9e",
+      "vk_hash": "0x00dcc5e63fb011fadf6006236e05edf757535f0889245247ce2efdb500a83407",
+      "approval": "reproduced",
+      "approved_by": "lane GUEST (seeded provisional from the cost-integrity row-E record; upgraded 2026-09-09 20:09 UTC after the rebuilds from BOTH 7edaf7a3 and df00e0bf0635 matched bit for bit)",
+      "date": "2026-09-09",
+      "records": [
+        "docs/data/verified-backend/cost-integrity/records/int-b0-pb3host.jsonl (+ .context.json): INT's composed B0 object as format 2 and format 3, core + compressed",
+        "vllm-poc/results/INTPAD-e2e-b0/reverify.json, vllm-poc/results/INTPAD-bound-b0/pod-proof-verify.json",
+        "vllm-poc/fixtures/e2e-composed/INT-B0-20260908T0725Z (host sha 46147df07942..., manifest adapter_revision df00e0bf0635)",
+        "vllm-poc/fixtures/e2e-composed/INT-B1-20260908T0941Z (host sha 46147df07942..., adapter_revision 16d27faaec28)"
+      ],
+      "guest_build": {
+        "source_commit": "7edaf7a3 (zk/sp1 tree acfc6f45...) and df00e0bf0635 = 16d27faaec28 (zk/sp1 tree 16784da4...) BOTH build this ELF: the two trees differ only in host/src/main.rs",
+        "source_tree_sha": "acfc6f45791296ebee85de674d62e962cd013fc6 | 16784da416f617801b5b644c62e68fd64d54a5ea",
+        "toolchain": {
+          "cargo_prove": "cargo-prove sp1 (f66b4bf 2026-08-12T14:40:11.709680161Z)",
+          "rustc": "rustc 1.94.0-dev",
+          "sp1_sdk": "6.4.0"
+        },
+        "features_resolved": [],
+        "elf_sha256": "a4d1efe135214019ceba0a0b712d989b46392174cc5f9aa64a36876de04f6a9e",
+        "vk_hash": "0x00dcc5e63fb011fadf6006236e05edf757535f0889245247ce2efdb500a83407",
+        "built_by": "REPRODUCTION root@63995b983e2b (runpod nsjd5b5pdzdue8, lane GUEST); the ORIGINAL build event is unrecorded",
+        "built_at": "REPRODUCTION 2026-09-09T20:08Z; the ORIGINAL is 'before 2026-09-08T10:24:10Z' (the serve start; /workspace/bin/veritor-zk-host-cuda-pb3 was already present)",
+        "host_binary": "veritor-zk-host-cuda-pb3 sha256 8ee93388544634993a5c8e54a015f5914e0137a0c27dad83e78639146a2a4ba5 (H100 pod cc69b1b0a9de)",
+        "record_evidence": "context.json git_commit '7edaf7a-pb3', daemon_ready {sp1_version 6.4.0, elf_sha256, vk_hash, guest_features []}; host path + sha256"
+      },
+      "reproduction": {
+        "source_state_from": "three candidates named by the records (7edaf7a '+pb3', df00e0bf0635, 16d27faaec28); all three zk/sp1 trees were rebuilt (two distinct trees)",
+        "procedure": "as for 73081b7b (git archive <commit> zk/sp1; cargo prove build; sha256; cargo prove vkey)",
+        "result": "results/GUEST-20260909/legacy/7edaf7a3/ and legacy/df00e0bf0635/: both ELF a4d1efe1... vk 0x00dcc5e6...; the uncommitted 'pb3' working state therefore did not touch the guest (or touched it in a way the ELF does not see)",
+        "bit_identical": true
+      },
+      "record_gaps": [
+        "source_commit is not a commit in the pb3host record: '7edaf7a-pb3' names commit 7edaf7a PLUS an uncommitted working state whose diff was never recorded; the fixture records name the run's adapter_revision, not a build",
+        "source_tree_sha: none; the reproduction shows the guest-relevant tree is 7edaf7a3's zk/sp1 (= df00e0bf's minus host/)",
+        "toolchain.cargo_prove / toolchain.rustc: not recorded; the match is with the 2026-09-09 toolchain",
+        "features_resolved: only the host's self-reported guest_features []",
+        "built_by / built_at: no build event; the binary predates the serve log"
+      ],
+      "missing": [],
+      "families": {
+        "veritor.toy-isa@1": "1c03b029f55b1f5ed21dfab08f802b83035e474c4a9e3230e07bab590278bf0c",
+        "veritor.word-arithmetic@2": "5701820f0950cdde87e72f0b83a9e7f002bd965931230015223bccb287607ff5",
+        "veritor.int8-q7@1": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+        "veritor.tensor-core.ampere_bf16_m16n8k16@2": "ce525ee5ed107a1005f4fd95765529ac9b90ac27e895bdaf46a4e1d16a849302",
+        "veritor.tc-ampere-bf16@1": "cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307"
+      },
+      "families_source": "veritor.interface.families.family_table over the families GateSet::resolve admits in zk/sp1/common/src/gateset.rs @ the entry's guest source commit (299ebe43/7edaf7a3; A2 conformance-rows R10) and that resolve in this interface at width 32 -- [A3 R13 / A2 R10, 2026-09-10]"
+    },
+    {
+      "elf_sha256": "b70e1091945b29a81c6506e1d72a087fd38622d4b4ee75edfeb157be0d8ab9a6",
+      "vk_hash": "0x0020bf6def332f5aaa8d3d907f96a0f8f839c2a16eb4be46fa24e48046354061",
+      "approval": "reproduced",
+      "approved_by": "lane GUEST (seeded provisional from the first committed composed record; upgraded 2026-09-09 20:17 UTC after the rebuild from 299ebe43 matched bit for bit -- NOT from the record's adapter_revision 3e7712f81ee3, which builds a different guest)",
+      "date": "2026-09-09",
+      "records": [
+        "vllm-poc/fixtures/e2e-composed/INT-B0-20260908T0235Z (+ -neg-wa-m12 / -neg-wa-m8b; host sha 4a7eaf760d36..., adapter_revision 3e7712f81ee3, zk/sp1 tree 40ff788acb58c3e52f254a25e4dce981a857f5a1)"
+      ],
+      "guest_build": {
+        "source_commit": "299ebe43 (merge PW, 2026-09-07 16:16 PT) -- the LAST guest-affecting zk/sp1 state before 011b1cbe (IB binding); NOT the record's adapter_revision",
+        "source_tree_sha": "9c4325aeb4285160cfbaedb01ce316c3fea6e10c",
+        "toolchain": {
+          "cargo_prove": "cargo-prove sp1 (f66b4bf 2026-08-12T14:40:11.709680161Z)",
+          "rustc": "rustc 1.94.0-dev",
+          "sp1_sdk": "6.4.0"
+        },
+        "features_resolved": [],
+        "elf_sha256": "b70e1091945b29a81c6506e1d72a087fd38622d4b4ee75edfeb157be0d8ab9a6",
+        "vk_hash": "0x0020bf6def332f5aaa8d3d907f96a0f8f839c2a16eb4be46fa24e48046354061",
+        "built_by": "REPRODUCTION root@63995b983e2b (runpod nsjd5b5pdzdue8, lane GUEST); the ORIGINAL build event is unrecorded",
+        "built_at": "REPRODUCTION 2026-09-09T20:17Z; the ORIGINAL build time is unrecorded",
+        "host_binary": "veritor-zk-host sha256 4a7eaf760d36... (archived in the fixture record)",
+        "record_evidence": "proofs/info.json: sp1_version 6.4.0, guest_features [] (self-reported)"
+      },
+      "reproduction": {
+        "source_state_from": "the record's adapter_revision 3e7712f81ee3 was rebuilt FIRST (results/GUEST-20260909/legacy/3e7712f81ee3/) and gives ELF 08298f5596ef... vk 0x009aea32... -- the pb2 daemon ELF of the proving-overhead records, NOT b70e1091: the run at 3e7712f81ee3 used a host binary built from an OLDER guest. Walking `git log -- zk/sp1/guest zk/sp1/common zk/sp1/Cargo.lock` back one guest-affecting commit (011b1cbe = same tree as 3e7712f8, then 299ebe43) reproduced it",
+        "procedure": "as for 73081b7b",
+        "result": "results/GUEST-20260909/legacy/299ebe43/: ELF b70e1091... vk 0x0020bf6d... bit-identical",
+        "bit_identical": true,
+        "implication": "the INT-B0-20260908T0235Z record's proofs were made by a guest one guest-affecting commit BEHIND its adapter_revision (before IB binding landed in the guest). Its certificate was still bound because the record's h_O||h_L||verdict binding is checked on the HOST side against the public values the guest emitted; the record's own metadata gave no way to know this -- adapter_revision is not a build pin"
+      },
+      "record_gaps": [
+        "source_commit, source_tree_sha, toolchain.cargo_prove, toolchain.rustc, built_by, built_at: none recorded; the adapter_revision names the run's checkout and here it DISAGREES with the guest actually run",
+        "features_resolved: only the host's self-reported guest_features []"
+      ],
+      "missing": [],
+      "families": {
+        "veritor.toy-isa@1": "1c03b029f55b1f5ed21dfab08f802b83035e474c4a9e3230e07bab590278bf0c",
+        "veritor.word-arithmetic@2": "5701820f0950cdde87e72f0b83a9e7f002bd965931230015223bccb287607ff5",
+        "veritor.int8-q7@1": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+        "veritor.tensor-core.ampere_bf16_m16n8k16@2": "ce525ee5ed107a1005f4fd95765529ac9b90ac27e895bdaf46a4e1d16a849302",
+        "veritor.tc-ampere-bf16@1": "cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307"
+      },
+      "families_source": "veritor.interface.families.family_table over the families GateSet::resolve admits in zk/sp1/common/src/gateset.rs @ the entry's guest source commit (299ebe43/7edaf7a3; A2 conformance-rows R10) and that resolve in this interface at width 32 -- [A3 R13 / A2 R10, 2026-09-10]"
+    },
+    {
+      "elf_sha256": "0eec2c182638ec60a71f9fa4e43ec3cd78057139a92ada6e3aafe08ae1757686",
+      "vk_hash": "0x00ec028500bc7c65a90eab54548942c25ab8c69a37a58fcd551c4ac70c6a57e1",
+      "approval": "provisional-legacy",
+      "approved_by": "lane GUEST (seed: the family-proof host archived in the same records)",
+      "date": "2026-09-09",
+      "records": [
+        "vllm-poc/results/INT-PAD-2/INTPAD2-B0-20260909T013519Z/proofs/proof-cov (cov_summary.json program_identity; host bin/veritor-zk-host-cov sha256 d2a7ddf3eba357de6df6052e0a443ab69c599a8eda653162f24c5d1d1eef8cd3)",
+        "vllm-poc/results/INT-PAD-3/pb/results/cov-records.jsonl",
+        "docs/data/proofs/proof-cov/pad-0235Z-records.jsonl"
+      ],
+      "guest_build": {
+        "source_commit": null,
+        "source_tree_sha": null,
+        "toolchain": {
+          "cargo_prove": null,
+          "rustc": null,
+          "sp1_sdk": "6.4.0"
+        },
+        "features_resolved": null,
+        "elf_sha256": "0eec2c182638ec60a71f9fa4e43ec3cd78057139a92ada6e3aafe08ae1757686",
+        "vk_hash": "0x00ec028500bc7c65a90eab54548942c25ab8c69a37a58fcd551c4ac70c6a57e1",
+        "built_by": null,
+        "built_at": null,
+        "host_binary": "veritor-zk-host-cov (the PROOF-COV family-proof host; archived as bin/veritor-zk-host-cov)",
+        "record_evidence": "cov_summary.json program_identity {elf_sha256, vk_hash, host_sha256}; no guest_features field at all for this host"
+      },
+      "missing": [
+        "source_commit, source_tree_sha, toolchain.cargo_prove, toolchain.rustc, built_by, built_at: none recorded",
+        "features_resolved: NOT EVEN SELF-REPORTED (cov_summary.json program_identity carries no guest_features)",
+        "reproducibility: NOT ATTEMPTED on 2026-09-09 -- the PROOF-COV host was built from a PROOF-COV branch state (docs/vllm-poc/proof-cov-intpad-note.md: 'host built from this branch') that no record names; there is no candidate tree to rebuild. The procedure of reports/GUEST-2026-09-09.md \u00a76 applies unchanged once the PROOF-COV lane names its zk/sp1 tree"
+      ],
+      "families": {},
+      "families_source": "not established for this ELF: an entry without families approves no statement family (check_family_approved)"
+    }
+  ],
+  "not_approved_note": "Every other ELF pinned by benchmark / diagnostic records under docs/data (proving-overhead pb-interim 4b186321..., pb2 08298f55... (= what zk/sp1 @ 3e7712f81ee3 builds, results/GUEST-20260909/legacy/3e7712f81ee3), reduce 35b027c5..., ...) is deliberately NOT listed: those records were never put through certificate.py and are not whole-program certificates. A proof from any of them is refused on the strict path.",
+  "families_note": "[A3 R13 / A2 R10, 2026-09-10] `families`: {family_id: gate_set_digest} (veritor.interface.families.family_table) -- the interface families the ELF's checker implements, from ITS source tree. verifier_v3 V4.guest admits the host guest only if (ELF, vk) is an entry here AND check_family_approved(epoch.family, its pinned gate-set digest, 32, entry) is empty; epoch.approved_elf_sha256 may narrow the set to entries here, never widen it."
+}

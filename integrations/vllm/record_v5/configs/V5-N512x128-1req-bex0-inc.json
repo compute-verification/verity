@@ -1,0 +1,56 @@
+{
+ "schema": "veritor/a9/run-config/v1",
+ "run_id": "V5-N512x128-1req-bex0-inc",
+ "workload": {
+  "name": "NIGHT-B0-512x127-1req",
+  "model": "HuggingFaceTB/SmolLM2-135M",
+  "prompt_len": 512,
+  "max_tokens": 128,
+  "requests": 1,
+  "request_indices": [
+   0
+  ],
+  "greedy": true,
+  "prefix_caching": false,
+  "batch_invariant": true
+ },
+ "epoch": {
+  "requests": 1,
+  "B_ex": 0,
+  "B_ex_unit": "RU",
+  "label": "DEFAULT TAKEN"
+ },
+ "sampling": {
+  "q": "1",
+  "s": "1/16384",
+  "delta": "1/1000000000000",
+  "law": "bernoulli-per-unit",
+  "s_source": "NIGHT G4 (E8): s = 2^-14 as TINY; q = 1 (N_R = 1); one request; STEPS = 127"
+ },
+ "randomness": {
+  "mode": "production"
+ },
+ "f_policy": "exempt-on-inconsistency",
+ "capture": {
+  "fields": [
+   "inputs",
+   "outputs",
+   "seed"
+  ]
+ },
+ "population": {
+  "source": "legacy-minus-inputs",
+  "plan": "P1/cu=whole"
+ },
+ "record_label": "NIGHT 2026-09-12 G4 (E8): SmolLM2-135M one-request epoch at prompt 512 x decode 128 (program Serve_v1{C={6f196795e564},LP=512,STEPS=127}), the shipped workload rule (request 0adc9b25-ca09-546a-8eb7-49d5983a574a); N_R = 1, q = 1, B_ex = 0; served on an RTX 4090; interior values from the reference interpreter (E1) under E2's pinned layout",
+ "guest": {
+  "approved_elf_only": true,
+  "family": "veritor.tc-ampere-bf16@2",
+  "approved_elf_sha256": [
+   "73081b7b2c9305a93f243a2137f71c851fb24bddf5e6edfbeb398acb2f309029",
+   "9fd00e60fb6a74762de987cde211aca9de4576de844569da779acac6bf3863db",
+   "666e937f4691deddc4dab67c8cd1bbd9e84be81b59c1cfb396399e1d937f46d4"
+  ],
+  "note_e10_2026_09_11": "666e937f\u2026 = E7's consolidated protocol guest (+ veritor.ftz-f32@1), built twice bit-identical on the 4090 pod 21:57Z (out/eod/e7/guests/ftz-f32/pod), approved in E7's approved_guests.json @ eod/e7 6f96ebb0 (MERGE-READY 23:05Z); the run config lists which APPROVED ELFs the prover may bind -- approval itself is E7's table"
+ }
+}

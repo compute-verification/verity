@@ -1,0 +1,681 @@
+{
+ "case": "TINY",
+ "partition_digest": "8b93d6b012e1c4f42a489671349b48fbbc4eb64d025d03843f0b836b58cdc126",
+ "plan": "P1/cu=operator",
+ "schema": "veritor/required-predicates/v1/kind-table",
+ "table": {
+  "AmpereBF16TcDot16_v1|batch in Attention_v1": {
+   "count": 768,
+   "kind": "AmpereBF16TcDot16_v1|batch",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 768,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "ArgmaxStep_v1|scan in TokenSelect_v1": {
+   "count": 567,
+   "kind": "ArgmaxStep_v1|scan",
+   "operator": "TokenSelect_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 567,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator TokenSelect_v1{V=64}: 2 of 4 inputs and 3 of 3 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Bf16AddF2fp_v1|batch in RMSNormFusedCuda_v2": {
+   "count": 1440,
+   "kind": "Bf16AddF2fp_v1|batch",
+   "operator": "RMSNormFusedCuda_v2",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 1440,
+     "interface": "committed",
+     "proof": null,
+     "reason": "interface committed but no approved checker takes kind program 'Bf16AddF2fp_v1' (batch) in operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}"
+    }
+   }
+  },
+  "Bf16Add_v1|batch in BiasAdd_v1": {
+   "count": 1536,
+   "kind": "Bf16Add_v1|batch",
+   "operator": "BiasAdd_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 1536,
+     "interface": "committed",
+     "proof": null,
+     "reason": "interface committed but no approved checker takes kind program 'Bf16Add_v1' (batch) in operator BiasAdd_v1{N=64}"
+    }
+   }
+  },
+  "Bf16ToF32_v1|batch in RMSNormFusedCuda_v2": {
+   "count": 2880,
+   "kind": "Bf16ToF32_v1|batch",
+   "operator": "RMSNormFusedCuda_v2",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 2880,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Bf16ToF32_v1|batch in RMSNormTriton_v1": {
+   "count": 768,
+   "kind": "Bf16ToF32_v1|batch",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 768,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 1 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Const16[0x0000]_v1|primitive in Attention_v1": {
+   "count": 96,
+   "kind": "Const16[0x0000]_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 96,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "Const32[0x00000000]_v1|primitive in Attention_v1": {
+   "count": 864,
+   "kind": "Const32[0x00000000]_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 864,
+     "interface": "committed",
+     "proof": null,
+     "reason": "interface committed but no approved checker takes kind program 'Const32[0x00000000]_v1' (primitive) in operator Attention_v1{T=1,NH=2,KVH=1,D=16}"
+    }
+   }
+  },
+  "Const32[0x00000000]_v1|primitive in RMSNormTriton_v1": {
+   "count": 1500,
+   "kind": "Const32[0x00000000]_v1|primitive",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 1500,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Const32[0x00000000]_v1|primitive in TokenSelect_v1": {
+   "count": 9,
+   "kind": "Const32[0x00000000]_v1|primitive",
+   "operator": "TokenSelect_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 9,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator TokenSelect_v1{V=64}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Const32[0x00000001]_v1|primitive in TokenSelect_v1": {
+   "count": 9,
+   "kind": "Const32[0x00000001]_v1|primitive",
+   "operator": "TokenSelect_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 9,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator TokenSelect_v1{V=64}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Const32[0x3727c5ac]_v1|primitive in RMSNormFusedCuda_v2": {
+   "count": 45,
+   "kind": "Const32[0x3727c5ac]_v1|primitive",
+   "operator": "RMSNormFusedCuda_v2",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 45,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Const32[0x3727c5ac]_v1|primitive in RMSNormTriton_v1": {
+   "count": 12,
+   "kind": "Const32[0x3727c5ac]_v1|primitive",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 12,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Const32[0x3eb8aa3b]_v1|primitive in Attention_v1": {
+   "count": 48,
+   "kind": "Const32[0x3eb8aa3b]_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 48,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "Const32[0x3f800000]_v1|primitive in RMSNormTriton_v1": {
+   "count": 12,
+   "kind": "Const32[0x3f800000]_v1|primitive",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 12,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Const32[0x42000000]_v1|primitive in RMSNormFusedCuda_v2": {
+   "count": 45,
+   "kind": "Const32[0x42000000]_v1|primitive",
+   "operator": "RMSNormFusedCuda_v2",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 45,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Const32[0x42000000]_v1|primitive in RMSNormTriton_v1": {
+   "count": 12,
+   "kind": "Const32[0x42000000]_v1|primitive",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 12,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "DivFullRcp_v1|primitive in RMSNormTriton_v1": {
+   "count": 24,
+   "kind": "DivFullRcp_v1|primitive",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 24,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "DivFullScaleA_v1|primitive in RMSNormTriton_v1": {
+   "count": 12,
+   "kind": "DivFullScaleA_v1|primitive",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 12,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "DotBf16_v1{K=16}|call in Attention_v1": {
+   "count": 312,
+   "kind": "DotBf16_v1{K=16}|call",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 312,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "F2fpBf16_v1|batch in Attention_v1": {
+   "count": 768,
+   "kind": "F2fpBf16_v1|batch",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 768,
+     "interface": "output-committed",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "F2fpBf16_v1|batch in RMSNormFusedCuda_v2": {
+   "count": 1440,
+   "kind": "F2fpBf16_v1|batch",
+   "operator": "RMSNormFusedCuda_v2",
+   "outcomes": {
+    "ADAPTER": {
+     "checker": "rmsnorm-cone",
+     "count": 1440,
+     "interface": "output-committed",
+     "proof": "zk",
+     "reason": null
+    }
+   }
+  },
+  "F2fpBf16_v1|batch in RMSNormTriton_v1": {
+   "count": 384,
+   "kind": "F2fpBf16_v1|batch",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "ADAPTER": {
+     "checker": "rmsnorm-cone",
+     "count": 384,
+     "interface": "output-committed",
+     "proof": "zk",
+     "reason": null
+    }
+   }
+  },
+  "F2fpBf16_v1|primitive in Attention_v1": {
+   "count": 312,
+   "kind": "F2fpBf16_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 312,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "F32AddFtz_v1|primitive in Attention_v1": {
+   "count": 312,
+   "kind": "F32AddFtz_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 312,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "F32Add_v1|primitive in RMSNormFusedCuda_v2": {
+   "count": 1440,
+   "kind": "F32Add_v1|primitive",
+   "operator": "RMSNormFusedCuda_v2",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 1440,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "F32Add_v1|primitive in RMSNormTriton_v1": {
+   "count": 7728,
+   "kind": "F32Add_v1|primitive",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 7728,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "F32Div_v1|primitive in RMSNormFusedCuda_v2": {
+   "count": 45,
+   "kind": "F32Div_v1|primitive",
+   "operator": "RMSNormFusedCuda_v2",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 45,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "F32FmaSubFtz_v1|primitive in Attention_v1": {
+   "count": 312,
+   "kind": "F32FmaSubFtz_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 312,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "F32Fma_v1|primitive in RMSNormTriton_v1": {
+   "count": 348,
+   "kind": "F32Fma_v1|primitive",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 348,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "F32Max_v1|primitive in Attention_v1": {
+   "count": 264,
+   "kind": "F32Max_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 264,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "F32MulFtz_v1|batch in Attention_v1": {
+   "count": 768,
+   "kind": "F32MulFtz_v1|batch",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 768,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "F32MulFtz_v1|primitive in Attention_v1": {
+   "count": 48,
+   "kind": "F32MulFtz_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 48,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "F32Mul_v1|batch in RMSNormFusedCuda_v2": {
+   "count": 2880,
+   "kind": "F32Mul_v1|batch",
+   "operator": "RMSNormFusedCuda_v2",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 2880,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "F32Mul_v1|batch in RMSNormTriton_v1": {
+   "count": 768,
+   "kind": "F32Mul_v1|batch",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 768,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "F32Mul_v1|primitive in RMSNormFusedCuda_v2": {
+   "count": 1440,
+   "kind": "F32Mul_v1|primitive",
+   "operator": "RMSNormFusedCuda_v2",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 1440,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "F32Mul_v1|primitive in RMSNormTriton_v1": {
+   "count": 60,
+   "kind": "F32Mul_v1|primitive",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 60,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "Fa2InvSum_v1|primitive in Attention_v1": {
+   "count": 48,
+   "kind": "Fa2InvSum_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 48,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "GatherBf16x64_v1|batch in Embedding_v1": {
+   "count": 384,
+   "kind": "GatherBf16x64_v1|batch",
+   "operator": "Embedding_v1",
+   "outcomes": {
+    "ADAPTER": {
+     "checker": "embedding-row",
+     "count": 384,
+     "interface": "committed",
+     "proof": "verifier",
+     "reason": null
+    }
+   }
+  },
+  "GemmCoordinate_v1{K=32}|batch in Gemm_v1": {
+   "count": 5184,
+   "kind": "GemmCoordinate_v1{K=32}|batch",
+   "operator": "Gemm_v1",
+   "outcomes": {
+    "SUPPORTED": {
+     "checker": "gemm-coordinate",
+     "count": 5184,
+     "interface": "committed",
+     "proof": "zk",
+     "reason": null
+    }
+   }
+  },
+  "GuardNegInfZero_v1|primitive in Attention_v1": {
+   "count": 48,
+   "kind": "GuardNegInfZero_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 48,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "Input|batch in Input": {
+   "count": 14884,
+   "kind": "Input|batch",
+   "operator": "Input",
+   "outcomes": {
+    "SUPPORTED": {
+     "checker": "input-equation",
+     "count": 14884,
+     "interface": "committed",
+     "proof": "verifier",
+     "reason": null
+    }
+   }
+  },
+  "MufuEx2Ftz_v1|primitive in Attention_v1": {
+   "count": 312,
+   "kind": "MufuEx2Ftz_v1|primitive",
+   "operator": "Attention_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 312,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)"
+    }
+   }
+  },
+  "MufuSqrtFtz_v1|primitive in RMSNormTriton_v1": {
+   "count": 12,
+   "kind": "MufuSqrtFtz_v1|primitive",
+   "operator": "RMSNormTriton_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 12,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "RopeOutAdd_v1|batch in RoPE_v1": {
+   "count": 576,
+   "kind": "RopeOutAdd_v1|batch",
+   "operator": "RoPE_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 576,
+     "interface": "committed",
+     "proof": null,
+     "reason": "interface committed but no approved checker takes kind program 'RopeOutAdd_v1' (batch) in operator RoPE_v1{NHEADS=2,D=16}"
+    }
+   }
+  },
+  "RopeOut_v1|batch in RoPE_v1": {
+   "count": 576,
+   "kind": "RopeOut_v1|batch",
+   "operator": "RoPE_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 576,
+     "interface": "committed",
+     "proof": null,
+     "reason": "interface committed but no approved checker takes kind program 'RopeOut_v1' (batch) in operator RoPE_v1{NHEADS=2,D=16}"
+    }
+   }
+  },
+  "RsqrtApprox_v1|primitive in RMSNormFusedCuda_v2": {
+   "count": 45,
+   "kind": "RsqrtApprox_v1|primitive",
+   "operator": "RMSNormFusedCuda_v2",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 45,
+     "interface": "interior",
+     "proof": null,
+     "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the operator; today's store commits operator boundaries only); no one-to-one adapter is registered"
+    }
+   }
+  },
+  "SiluMulBf16_v1|batch in SiluMul_v1": {
+   "count": 768,
+   "kind": "SiluMulBf16_v1|batch",
+   "operator": "SiluMul_v1",
+   "outcomes": {
+    "REFUSED": {
+     "checker": null,
+     "count": 768,
+     "interface": "committed",
+     "proof": null,
+     "reason": "interface committed but no approved checker takes kind program 'SiluMulBf16_v1' (batch) in operator SiluMul_v1{I=32}"
+    }
+   }
+  }
+ },
+ "vu_count": 53113
+}

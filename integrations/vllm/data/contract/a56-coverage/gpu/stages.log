@@ -1,0 +1,6 @@
+[a56_gpu_pass 05:02:49] GPU pass 1 rep1: core, approved n1 + n64 + fa2 heads
+[a56_gpu_pass 05:25:40] GPU pass 1 rep1: compressed, approved n1 + n64 + fa2 heads
+[a56_gpu_pass2 05:25:45] pass 1 core stage done; pass 1 compressed stage skipped
+[a56_gpu_pass2 05:25:45] pass 2a: head_n64 core
+[a56_gpu_pass2 05:32:04] pass 2b: compressed, approved n1 + n64
+[a56_gpu_pass2 05:48:14] pass 2c: compressed, head T9 + head_n64

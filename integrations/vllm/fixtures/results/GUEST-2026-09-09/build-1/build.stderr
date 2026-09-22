@@ -1,0 +1,114 @@
+[sp1]     Compiling autocfg v1.5.1
+[sp1]     Compiling proc-macro2 v1.0.107
+[sp1]     Compiling unicode-ident v1.0.24
+[sp1]     Compiling quote v1.0.47
+[sp1]     Compiling cfg-if v1.0.4
+[sp1]     Compiling zerocopy v0.8.56
+[sp1]     Compiling serde_core v1.0.229
+[sp1]     Compiling serde v1.0.229
+[sp1]     Compiling either v1.18.0
+[sp1]     Compiling once_cell v1.21.4
+[sp1]     Compiling pin-project-lite v0.2.17
+[sp1]     Compiling p3-maybe-rayon v0.4.3-succinct
+[sp1]     Compiling version_check v0.9.5
+[sp1]     Compiling getrandom v0.2.17
+[sp1]     Compiling gcd v2.3.0
+[sp1]     Compiling syn v1.0.109
+[sp1]     Compiling radium v0.7.0
+[sp1]     Compiling rand_core v0.6.4
+[sp1]     Compiling itertools v0.12.1
+[sp1]     Compiling tracing-core v0.1.36
+[sp1]     Compiling typenum v1.20.1
+[sp1]     Compiling tap v1.0.1
+[sp1]     Compiling semver v1.0.28
+[sp1]     Compiling generic-array v0.14.9
+[sp1]     Compiling wyz v0.5.1
+[sp1]     Compiling itertools v0.14.0
+[sp1]     Compiling num-traits v0.2.19
+[sp1]     Compiling num-bigint v0.3.3
+[sp1]     Compiling rustc_version v0.4.1
+[sp1]     Compiling find-msvc-tools v0.1.11
+[sp1]     Compiling shlex v2.0.1
+[sp1]     Compiling funty v2.0.0
+[sp1]     Compiling cc v1.4.4
+[sp1]     Compiling p3-koala-bear v0.4.3-succinct
+[sp1]     Compiling subtle v2.6.1
+[sp1]     Compiling syn v3.0.4
+[sp1]     Compiling syn v2.0.119
+[sp1]     Compiling bitvec v1.1.1
+[sp1]     Compiling num-integer v0.1.47
+[sp1]     Compiling crypto-common v0.1.6
+[sp1]     Compiling block-buffer v0.10.4
+[sp1]     Compiling num-bigint v0.4.8
+[sp1]     Compiling byteorder v1.5.0
+[sp1]     Compiling digest v0.10.7
+[sp1]     Compiling rustversion v1.0.23
+[sp1]     Compiling sha2 v0.10.9 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha2-0.10.9-sp1-6.2.0#e48b656e)
+[sp1]     Compiling arrayvec v0.7.8
+[sp1]     Compiling constant_time_eq v0.4.2
+[sp1]     Compiling blake3 v1.8.7
+[sp1]     Compiling lazy_static v1.5.0
+[sp1]     Compiling libm v0.2.16
+[sp1]     Compiling slop-primitives v6.6.0
+[sp1]     Compiling getrandom v0.3.4
+[sp1]     Compiling const-default v1.0.0
+[sp1]     Compiling elf v0.7.4
+[sp1]     Compiling hex v0.4.3
+[sp1]     Compiling addchain v0.2.1
+[sp1]     Compiling sp1-zkvm v6.4.0
+[sp1]     Compiling rlsf v0.2.3
+[sp1]     Compiling critical-section v1.2.0
+[sp1]     Compiling linked_list_allocator v0.10.6
+[sp1]     Compiling veritor-zk-common v0.1.0 (/workspace/veritor-guest/zk/sp1/common)
+[sp1]     Compiling embedded-alloc v0.6.0
+[sp1]     Compiling serde_derive v1.0.229
+[sp1]     Compiling ff_derive v0.13.1
+[sp1]     Compiling ff v0.13.1
+[sp1]     Compiling ppv-lite86 v0.2.21
+[sp1]     Compiling rand_chacha v0.3.1
+[sp1]     Compiling tracing-attributes v0.1.31
+[sp1]     Compiling rand v0.8.8
+[sp1]     Compiling tracing v0.1.44
+[sp1]     Compiling p3-util v0.4.3-succinct
+[sp1]     Compiling bincode v1.3.3
+[sp1]     Compiling p3-field v0.4.3-succinct
+[sp1]     Compiling p3-symmetric v0.4.3-succinct
+[sp1]     Compiling p3-matrix v0.4.3-succinct
+[sp1]     Compiling slop-algebra v6.6.0
+[sp1]     Compiling slop-symmetric v6.6.0
+[sp1]     Compiling p3-challenger v0.4.3-succinct
+[sp1]     Compiling p3-dft v0.4.3-succinct
+[sp1]     Compiling p3-mds v0.4.3-succinct
+[sp1]     Compiling slop-challenger v6.6.0
+[sp1]     Compiling p3-poseidon2 v0.4.3-succinct
+[sp1]     Compiling slop-poseidon2 v6.6.0
+[sp1]     Compiling p3-bn254-fr v0.4.3-succinct
+[sp1]     Compiling slop-koala-bear v6.6.0
+[sp1]     Compiling slop-bn254 v6.6.0
+[sp1]     Compiling sp1-primitives v6.6.0
+[sp1]     Compiling sp1-lib v6.6.0
+[sp1]     Compiling veritor-zk-guest v0.1.0 (/workspace/veritor-guest/zk/sp1/guest)
+[sp1]      Finished `release` profile [optimized] target(s) in 7.89s
+	Command being timed: "cargo prove build"
+	User time (seconds): 52.14
+	System time (seconds): 13.31
+	Percent of CPU this job got: 360%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:18.15
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 427316
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 328
+	Minor (reclaiming a frame) page faults: 2288264
+	Voluntary context switches: 69819
+	Involuntary context switches: 854
+	Swaps: 0
+	File system inputs: 2808
+	File system outputs: 2272968
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

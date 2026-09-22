@@ -1,0 +1,2298 @@
+{
+ "schema": "veritor/compact-p1-validation/v1",
+ "label": "MEASURED",
+ "utc": "2026-09-10T03:59:31Z",
+ "host": "da0af265a59a",
+ "platform": "Linux-6.8.0-101-generic-x86_64-with-glibc2.35",
+ "cpu": "AMD EPYC 9655 96-Core Processor",
+ "cpus": 192,
+ "python": "3.12.14",
+ "args": {
+  "case": "B0",
+  "lp": 32,
+  "steps": 15,
+  "nl": 0,
+  "set": [],
+  "plan": "P1/cu=whole",
+  "workers": 8,
+  "chunks": 24,
+  "reverse": false,
+  "skip_plan_digest": false,
+  "census": "docs/data/table3a/B0-serve-lp32-s15.json",
+  "no_validate": false,
+  "recursion_limit": 100000,
+  "out": "results/p1-b0-lp32s15.json"
+ },
+ "stages": [
+  {
+   "stage": "program",
+   "inputs": {
+    "case": "B0",
+    "LP": 32,
+    "STEPS": 15
+   },
+   "seconds": 0.525,
+   "rss_before_mb": 42.2,
+   "rss_after_mb": 92.4,
+   "maxrss_mb": 94.5
+  },
+  {
+   "stage": "adapt",
+   "inputs": {
+    "gates": 518837608
+   },
+   "seconds": 0.987,
+   "rss_before_mb": 67.9,
+   "rss_after_mb": 161.0,
+   "maxrss_mb": 159.1
+  },
+  {
+   "stage": "circuit",
+   "inputs": {
+    "root_nodes": 4295
+   },
+   "seconds": 0.0,
+   "rss_before_mb": 161.0,
+   "rss_after_mb": 161.0,
+   "maxrss_mb": 159.1
+  },
+  {
+   "stage": "plan[compact]",
+   "inputs": {},
+   "seconds": 10.031,
+   "rss_before_mb": 161.0,
+   "rss_after_mb": 1615.9,
+   "maxrss_mb": 1613.0
+  },
+  {
+   "stage": "plan_digest",
+   "inputs": {
+    "runs": 6102438
+   },
+   "seconds": 68.386,
+   "rss_before_mb": 1569.3,
+   "rss_after_mb": 1578.9,
+   "maxrss_mb": 8954.2
+  },
+  {
+   "stage": "partition_digest",
+   "inputs": {
+    "vus": 166196840
+   },
+   "seconds": 57.544,
+   "rss_before_mb": 1575.4,
+   "rss_after_mb": 1575.4,
+   "maxrss_mb": 8954.2
+  },
+  {
+   "stage": "kind_counts",
+   "inputs": {
+    "runs": 6102438
+   },
+   "seconds": 5.902,
+   "rss_before_mb": 1575.4,
+   "rss_after_mb": 1575.4,
+   "maxrss_mb": 8954.2
+  }
+ ],
+ "config": {
+  "model": "HuggingFaceTB/SmolLM2-135M",
+  "revision": null,
+  "H": 576,
+  "NL": 30,
+  "NH": 9,
+  "KVH": 3,
+  "D": 64,
+  "I": 1536,
+  "V": 49152,
+  "QKV": 960,
+  "GU": 3072,
+  "EPS": 1e-05,
+  "ROPE_THETA": 100000.0,
+  "MAX_POS": 8192,
+  "BIAS": false,
+  "tie_word_embeddings": true
+ },
+ "program": {
+  "gates": 518837608,
+  "input_gates": 135039328,
+  "root_nodes": 4295,
+  "function": "Serve_v1{C={6f196795e564},LP=32,STEPS=15}",
+  "digest": "d4f4b1f1b4d592d697eef5b6c9c803108bdf02d0ef24c945eace6e705832e1b8",
+  "digest_seconds": 0.33
+ },
+ "plan": {
+  "name": "P1/cu=whole",
+  "vu_level": "coordinate",
+  "cu_strategy": "whole",
+  "constructor": "veritor.plans.canonical(compact=True)",
+  "vus": 166196840,
+  "cus": 1,
+  "vu_runs": 6102438,
+  "cu_runs": null,
+  "plan_digest": {
+   "kind": "plan-rule/v1",
+   "digest": "13f706a556aeb82f292872a115c4cf8384f7308e094ea5e9bd096270865e55ff"
+  },
+  "partition_digest": "56ebcdf53f302040870776981860ffcfafd161b1b962c759df8833057aa75b9a",
+  "partition_digest_kind": "partition-intervals/v1",
+  "kind_counts": {
+   "AmpereBF16TcDot16_v1|batch": 1607040,
+   "ArgmaxStep_v1|scan": 786416,
+   "Bf16AddF2fp_v1|batch": 1606464,
+   "Bf16ToF32_v1|batch": 3267072,
+   "Const16[0x0000]_v1|primitive": 25380,
+   "Const32[0x00000000]_v1|primitive": 830785,
+   "Const32[0x00000001]_v1|primitive": 16,
+   "Const32[0x3727c5ac]_v1|primitive": 2836,
+   "Const32[0x3e38aa3b]_v1|primitive": 12690,
+   "Const32[0x3f800000]_v1|primitive": 47,
+   "Const32[0x44100000]_v1|primitive": 2836,
+   "DivFullRcp_v1|primitive": 94,
+   "DivFullScaleA_v1|primitive": 47,
+   "DotBf16_v1{K=64}|call": 304560,
+   "F2fpBf16_v1|batch": 2445696,
+   "F2fpBf16_v1|primitive": 304560,
+   "F32AddFtz_v1|primitive": 295110,
+   "F32Add_v1|primitive": 1636732,
+   "F32Div_v1|primitive": 2789,
+   "F32FmaSubFtz_v1|primitive": 304560,
+   "F32Fma_v1|primitive": 23735,
+   "F32Max_v1|primitive": 291870,
+   "F32MulFtz_v1|batch": 812160,
+   "F32MulFtz_v1|primitive": 12690,
+   "F32Mul_v1|batch": 3267072,
+   "F32Mul_v1|primitive": 1609895,
+   "Fa2InvSum_v1|primitive": 12690,
+   "GatherBf16x49152_v1|batch": 27072,
+   "GemmCoordinate_v1{K=1536}|batch": 812160,
+   "GemmCoordinate_v1{K=576}|batch": 7283712,
+   "GuardNegInfZero_v1|primitive": 12690,
+   "Input|batch": 135039328,
+   "MufuEx2Ftz_v1|primitive": 304560,
+   "MufuSqrtFtz_v1|primitive": 47,
+   "RopeOutAdd_v1|batch": 541440,
+   "RopeOut_v1|batch": 541440,
+   "RsqrtApprox_v1|primitive": 2789,
+   "SiluMulBf16_v1|batch": 2165760
+  },
+  "input_units": 135039328,
+  "non_input_units": 31157512,
+  "census": {
+   "census": "docs/data/table3a/B0-serve-lp32-s15.json",
+   "census_N_V": 31157512,
+   "plan_non_input_units": 31157512,
+   "plan_input_units": 135039328,
+   "kinds_census": 37,
+   "kinds_plan_non_input": 37,
+   "key": "kind_key(fn|form): version suffix and DOT parameter dropped",
+   "per_kind": {
+    "AmpereBF16TcDot16|batch": {
+     "plan": 1607040,
+     "census": 1607040
+    },
+    "ArgmaxStep|scan": {
+     "plan": 786416,
+     "census": 786416
+    },
+    "Bf16AddF2fp|batch": {
+     "plan": 1606464,
+     "census": 1606464
+    },
+    "Bf16ToF32|batch": {
+     "plan": 3267072,
+     "census": 3267072
+    },
+    "Const16[0x0000]|primitive": {
+     "plan": 25380,
+     "census": 25380
+    },
+    "Const32[0x00000000]|primitive": {
+     "plan": 830785,
+     "census": 830785
+    },
+    "Const32[0x00000001]|primitive": {
+     "plan": 16,
+     "census": 16
+    },
+    "Const32[0x3727c5ac]|primitive": {
+     "plan": 2836,
+     "census": 2836
+    },
+    "Const32[0x3e38aa3b]|primitive": {
+     "plan": 12690,
+     "census": 12690
+    },
+    "Const32[0x3f800000]|primitive": {
+     "plan": 47,
+     "census": 47
+    },
+    "Const32[0x44100000]|primitive": {
+     "plan": 2836,
+     "census": 2836
+    },
+    "DivFullRcp|primitive": {
+     "plan": 94,
+     "census": 94
+    },
+    "DivFullScaleA|primitive": {
+     "plan": 47,
+     "census": 47
+    },
+    "DotBf16{K=64}|call": {
+     "plan": 304560,
+     "census": 304560
+    },
+    "F2fpBf16|batch": {
+     "plan": 2445696,
+     "census": 2445696
+    },
+    "F2fpBf16|primitive": {
+     "plan": 304560,
+     "census": 304560
+    },
+    "F32AddFtz|primitive": {
+     "plan": 295110,
+     "census": 295110
+    },
+    "F32Add|primitive": {
+     "plan": 1636732,
+     "census": 1636732
+    },
+    "F32Div|primitive": {
+     "plan": 2789,
+     "census": 2789
+    },
+    "F32FmaSubFtz|primitive": {
+     "plan": 304560,
+     "census": 304560
+    },
+    "F32Fma|primitive": {
+     "plan": 23735,
+     "census": 23735
+    },
+    "F32Max|primitive": {
+     "plan": 291870,
+     "census": 291870
+    },
+    "F32MulFtz|batch": {
+     "plan": 812160,
+     "census": 812160
+    },
+    "F32MulFtz|primitive": {
+     "plan": 12690,
+     "census": 12690
+    },
+    "F32Mul|batch": {
+     "plan": 3267072,
+     "census": 3267072
+    },
+    "F32Mul|primitive": {
+     "plan": 1609895,
+     "census": 1609895
+    },
+    "Fa2InvSum|primitive": {
+     "plan": 12690,
+     "census": 12690
+    },
+    "GatherBf16x49152|batch": {
+     "plan": 27072,
+     "census": 27072
+    },
+    "GemmCoordinate{K=1536}|batch": {
+     "plan": 812160,
+     "census": 812160
+    },
+    "GemmCoordinate{K=576}|batch": {
+     "plan": 7283712,
+     "census": 7283712
+    },
+    "GuardNegInfZero|primitive": {
+     "plan": 12690,
+     "census": 12690
+    },
+    "MufuEx2Ftz|primitive": {
+     "plan": 304560,
+     "census": 304560
+    },
+    "MufuSqrtFtz|primitive": {
+     "plan": 47,
+     "census": 47
+    },
+    "RopeOutAdd|batch": {
+     "plan": 541440,
+     "census": 541440
+    },
+    "RopeOut|batch": {
+     "plan": 541440,
+     "census": 541440
+    },
+    "RsqrtApprox|primitive": {
+     "plan": 2789,
+     "census": 2789
+    },
+    "SiluMulBf16|batch": {
+     "plan": 2165760,
+     "census": 2165760
+    }
+   },
+   "mismatches": {},
+   "agree": true
+  }
+ },
+ "maxrss_mb": 8954.2,
+ "validation": {
+  "mode": "sharded over 5 machines: 57 ranges chosen of 57 finished ({'/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl': 16, '/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl': 19, '/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl': 11, '/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl': 10, '/tmp/cp1/pods/p1-b0-lp32s15-L.parts.jsonl': 1})",
+  "bounds": null,
+  "status": "rejected",
+  "reasons": [
+   [
+    "uncovered",
+    "parts do not tile [0, 166196840) once: gaps/overlaps [[96070460, 126092479], [134254675, 136308252]]; 134121244 of 166196840 verification units validated"
+   ]
+  ],
+  "vu_edges": 10983500826,
+  "cu_edges": 0,
+  "escape_steps": 4469249038,
+  "cu_escape_steps": 38845299,
+  "vu_stats": {
+   "units": 134121244,
+   "gates": 11120734796,
+   "runs": 638782004,
+   "outputs": 135661170,
+   "in_bits": 176091370560,
+   "out_bits": 2419617776
+  },
+  "cu_stats": {
+   "units": 1,
+   "gates": 16,
+   "runs": 16,
+   "outputs": 16,
+   "in_bits": 0,
+   "out_bits": 512
+  },
+  "seconds": null,
+  "worker_seconds_sum": 100310.6,
+  "workers": [
+   {
+    "worker": 15,
+    "range": [
+     0,
+     4002935
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851137,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002935,
+     "gates": 4002935,
+     "runs": 4002935,
+     "outputs": 4002935,
+     "in_bits": 0,
+     "out_bits": 64047472
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 257.205,
+    "maxrss_mb": 2959.7,
+    "pid": 707,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 14,
+    "range": [
+     4002935,
+     8005871
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851171,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 226.862,
+    "maxrss_mb": 2959.5,
+    "pid": 704,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 13,
+    "range": [
+     8005871,
+     12008807
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851171,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 275.654,
+    "maxrss_mb": 2960.6,
+    "pid": 705,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 12,
+    "range": [
+     12008807,
+     16011743
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851171,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 252.689,
+    "maxrss_mb": 2961.2,
+    "pid": 708,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 11,
+    "range": [
+     16011743,
+     20014679
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851171,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 274.968,
+    "maxrss_mb": 2959.5,
+    "pid": 706,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 10,
+    "range": [
+     20014679,
+     24017614
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851169,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002935,
+     "gates": 4002935,
+     "runs": 4002935,
+     "outputs": 4002935,
+     "in_bits": 0,
+     "out_bits": 64046960
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 292.146,
+    "maxrss_mb": 2959.5,
+    "pid": 707,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 9,
+    "range": [
+     24017614,
+     28020550
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851171,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 270.975,
+    "maxrss_mb": 2959.6,
+    "pid": 708,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 8,
+    "range": [
+     28020550,
+     32023486
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 237991011,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 791.783,
+    "maxrss_mb": 2959.6,
+    "pid": 709,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 7,
+    "range": [
+     32023486,
+     36026422
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 243182051,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 837.49,
+    "maxrss_mb": 2923.6,
+    "pid": 709,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 6,
+    "range": [
+     36026422,
+     40029358
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612771,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 994.159,
+    "maxrss_mb": 2923.6,
+    "pid": 708,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 5,
+    "range": [
+     40029358,
+     44032293
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612705,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002935,
+     "gates": 4002935,
+     "runs": 4002935,
+     "outputs": 4002935,
+     "in_bits": 0,
+     "out_bits": 64046960
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1105.986,
+    "maxrss_mb": 2923.6,
+    "pid": 707,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 4,
+    "range": [
+     44032293,
+     48035229
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612771,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1190.101,
+    "maxrss_mb": 2923.6,
+    "pid": 706,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 3,
+    "range": [
+     48035229,
+     52038165
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612771,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1289.404,
+    "maxrss_mb": 2924.8,
+    "pid": 705,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 2,
+    "range": [
+     52038165,
+     56041101
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612771,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1390.628,
+    "maxrss_mb": 2923.6,
+    "pid": 704,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 1,
+    "range": [
+     56041101,
+     60044037
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612771,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1492.381,
+    "maxrss_mb": 2923.6,
+    "pid": 703,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 0,
+    "range": [
+     60044037,
+     64046973
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 246209315,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1529.193,
+    "maxrss_mb": 2923.6,
+    "pid": 702,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 4,
+    "range": [
+     64046973,
+     66048440
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 156919273,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001467,
+     "gates": 2001467,
+     "runs": 2001467,
+     "outputs": 2001467,
+     "in_bits": 0,
+     "out_bits": 32023472
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 978.524,
+    "maxrss_mb": 2921.8,
+    "pid": 778,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 5,
+    "range": [
+     66048440,
+     68049908
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 926.843,
+    "maxrss_mb": 2925.0,
+    "pid": 779,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 6,
+    "range": [
+     68049908,
+     70051376
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 170942187,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1053.793,
+    "maxrss_mb": 2923.6,
+    "pid": 780,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 7,
+    "range": [
+     70051376,
+     72052844
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 991.833,
+    "maxrss_mb": 2922.0,
+    "pid": 781,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 8,
+    "range": [
+     72052844,
+     74054312
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 170942187,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1101.595,
+    "maxrss_mb": 2962.2,
+    "pid": 779,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 9,
+    "range": [
+     74054312,
+     76055780
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1057.122,
+    "maxrss_mb": 2958.8,
+    "pid": 778,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 10,
+    "range": [
+     76055780,
+     78057248
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 159145707,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1119.814,
+    "maxrss_mb": 2959.1,
+    "pid": 781,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 11,
+    "range": [
+     78057248,
+     80058716
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 147312363,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1124.304,
+    "maxrss_mb": 2961.2,
+    "pid": 780,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 12,
+    "range": [
+     80058716,
+     82060184
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1101.086,
+    "maxrss_mb": 2958.7,
+    "pid": 775,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 13,
+    "range": [
+     82060184,
+     84061652
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 170942187,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1180.957,
+    "maxrss_mb": 2960.3,
+    "pid": 774,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 14,
+    "range": [
+     84061652,
+     86063120
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1141.124,
+    "maxrss_mb": 2962.6,
+    "pid": 776,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 15,
+    "range": [
+     86063120,
+     88064588
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 170942187,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1254.762,
+    "maxrss_mb": 2962.2,
+    "pid": 779,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 16,
+    "range": [
+     88064588,
+     90066056
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1212.685,
+    "maxrss_mb": 2958.8,
+    "pid": 778,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 17,
+    "range": [
+     90066056,
+     92067524
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 168752619,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1298.86,
+    "maxrss_mb": 2959.1,
+    "pid": 781,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 18,
+    "range": [
+     92067524,
+     94068992
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 137705451,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1261.392,
+    "maxrss_mb": 2961.3,
+    "pid": 780,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 19,
+    "range": [
+     94068992,
+     96070460
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 139130859,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1303.441,
+    "maxrss_mb": 2958.7,
+    "pid": 775,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 10,
+    "range": [
+     126092479,
+     128093947
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2308.978,
+    "maxrss_mb": 3036.7,
+    "pid": 964,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 0,
+    "range": [
+     128093947,
+     130147523
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 174381315,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2053576,
+     "gates": 2053576,
+     "runs": 2053576,
+     "outputs": 2053576,
+     "in_bits": 0,
+     "out_bits": 32857216
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1869.45,
+    "maxrss_mb": 2923.1,
+    "pid": 774,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 1,
+    "range": [
+     130147523,
+     132201099
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 138955011,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2053576,
+     "gates": 2053576,
+     "runs": 2053576,
+     "outputs": 2053576,
+     "in_bits": 0,
+     "out_bits": 32857216
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1826.122,
+    "maxrss_mb": 2921.6,
+    "pid": 775,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 2,
+    "range": [
+     132201099,
+     134254675
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 174381315,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2053576,
+     "gates": 2053576,
+     "runs": 2053576,
+     "outputs": 2053576,
+     "in_bits": 0,
+     "out_bits": 32857216
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1934.193,
+    "maxrss_mb": 2922.3,
+    "pid": 776,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 3,
+    "range": [
+     136308252,
+     137731518
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 487649156,
+    "escape_steps": 45731526,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 489071738,
+     "runs": 4815651,
+     "outputs": 1422582,
+     "in_bits": 7817290624,
+     "out_bits": 33770544
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2157.332,
+    "maxrss_mb": 2996.3,
+    "pid": 1188,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 4,
+    "range": [
+     137731518,
+     139154784
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 483242086,
+    "escape_steps": 45748251,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 484664686,
+     "runs": 4781531,
+     "outputs": 1422600,
+     "in_bits": 7746824384,
+     "out_bits": 33797008
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2127.928,
+    "maxrss_mb": 2996.6,
+    "pid": 1189,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 5,
+    "range": [
+     139154784,
+     140578050
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 516455328,
+    "escape_steps": 46046595,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 517877856,
+     "runs": 4849528,
+     "outputs": 1422528,
+     "in_bits": 8277891072,
+     "out_bits": 33540368
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2260.902,
+    "maxrss_mb": 2996.9,
+    "pid": 1190,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 6,
+    "range": [
+     140578050,
+     142001316
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 511255107,
+    "escape_steps": 45972960,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 512677626,
+     "runs": 4888287,
+     "outputs": 1422519,
+     "in_bits": 8194827360,
+     "out_bits": 33631824
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2209.402,
+    "maxrss_mb": 2997.2,
+    "pid": 1191,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 7,
+    "range": [
+     142001316,
+     143424582
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 510762817,
+    "escape_steps": 45891705,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 512185356,
+     "runs": 4929371,
+     "outputs": 1422539,
+     "in_bits": 8187003552,
+     "out_bits": 33643040
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2282.422,
+    "maxrss_mb": 2995.3,
+    "pid": 1192,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 8,
+    "range": [
+     143424582,
+     144847848
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 489650617,
+    "escape_steps": 45734118,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 491073197,
+     "runs": 4822565,
+     "outputs": 1422580,
+     "in_bits": 7849307296,
+     "out_bits": 33764464
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2046.41,
+    "maxrss_mb": 3033.2,
+    "pid": 1189,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 9,
+    "range": [
+     144847848,
+     146271114
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 482195584,
+    "escape_steps": 45714228,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 483618193,
+     "runs": 4778856,
+     "outputs": 1422609,
+     "in_bits": 7730069504,
+     "out_bits": 33787808
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1964.544,
+    "maxrss_mb": 3033.7,
+    "pid": 1188,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 10,
+    "range": [
+     146271114,
+     147694380
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 513720838,
+    "escape_steps": 46045358,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 515143366,
+     "runs": 4842218,
+     "outputs": 1422528,
+     "in_bits": 8234191040,
+     "out_bits": 33578928
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2095.876,
+    "maxrss_mb": 3034.7,
+    "pid": 1191,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 11,
+    "range": [
+     147694380,
+     149117647
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 513957782,
+    "escape_steps": 45986325,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423267,
+     "gates": 515380302,
+     "runs": 4884368,
+     "outputs": 1422520,
+     "in_bits": 8238025408,
+     "out_bits": 33586656
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2139.746,
+    "maxrss_mb": 3034.3,
+    "pid": 1190,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 12,
+    "range": [
+     149117647,
+     150540913
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 508697758,
+    "escape_steps": 45895596,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 510120295,
+     "runs": 4931526,
+     "outputs": 1422537,
+     "in_bits": 8153961376,
+     "out_bits": 33668832
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2106.632,
+    "maxrss_mb": 3032.7,
+    "pid": 1192,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 0,
+    "range": [
+     150540913,
+     151964179
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 493898548,
+    "escape_steps": 45757038,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 495321121,
+     "runs": 4835430,
+     "outputs": 1422573,
+     "in_bits": 7917261280,
+     "out_bits": 33728608
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1559.12,
+    "maxrss_mb": 3047.6,
+    "pid": 25185,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-L.parts.jsonl"
+   },
+   {
+    "worker": 9,
+    "range": [
+     151964179,
+     153387445
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 479338004,
+    "escape_steps": 45674175,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 480760622,
+     "runs": 4775604,
+     "outputs": 1422618,
+     "in_bits": 7684356608,
+     "out_bits": 33805216
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2559.661,
+    "maxrss_mb": 2997.4,
+    "pid": 964,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 8,
+    "range": [
+     153387445,
+     154810711
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 579293926,
+    "escape_steps": 46039795,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 580895072,
+     "runs": 33509113,
+     "outputs": 1502846,
+     "in_bits": 9285601952,
+     "out_bits": 35716208
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 4618.251,
+    "maxrss_mb": 3015.2,
+    "pid": 963,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 7,
+    "range": [
+     154810711,
+     156233977
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 565874069,
+    "escape_steps": 45050699,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 567689785,
+     "runs": 62287276,
+     "outputs": 1619116,
+     "in_bits": 9074106400,
+     "out_bits": 39195552
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 3549.858,
+    "maxrss_mb": 2949.3,
+    "pid": 962,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 6,
+    "range": [
+     156233977,
+     157657243
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 565382745,
+    "escape_steps": 44973381,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 567198468,
+     "runs": 62325127,
+     "outputs": 1619123,
+     "in_bits": 9066294784,
+     "out_bits": 39211456
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 4496.316,
+    "maxrss_mb": 2945.3,
+    "pid": 961,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 5,
+    "range": [
+     157657243,
+     159080509
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 512910472,
+    "escape_steps": 44761553,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 514529683,
+     "runs": 33956260,
+     "outputs": 1520911,
+     "in_bits": 8224716384,
+     "out_bits": 36879792
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 4155.27,
+    "maxrss_mb": 2943.9,
+    "pid": 960,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 4,
+    "range": [
+     159080509,
+     160503775
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 561630552,
+    "escape_steps": 44829303,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 563446279,
+     "runs": 62430432,
+     "outputs": 1619127,
+     "in_bits": 9006408096,
+     "out_bits": 39271120
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 4311.536,
+    "maxrss_mb": 2944.3,
+    "pid": 959,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 3,
+    "range": [
+     160503775,
+     161927041
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 559643319,
+    "escape_steps": 44759575,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 561459047,
+     "runs": 62492312,
+     "outputs": 1619128,
+     "in_bits": 8974680608,
+     "out_bits": 39308992
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 3529.204,
+    "maxrss_mb": 2954.0,
+    "pid": 958,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 2,
+    "range": [
+     161927041,
+     163350307
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 559156360,
+    "escape_steps": 44694399,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 560972092,
+     "runs": 62530602,
+     "outputs": 1619132,
+     "in_bits": 8966950976,
+     "out_bits": 39321536
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 3775.324,
+    "maxrss_mb": 2955.4,
+    "pid": 957,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 1,
+    "range": [
+     163350307,
+     164773573
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 558673931,
+    "escape_steps": 44632445,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 560489666,
+     "runs": 62570251,
+     "outputs": 1619135,
+     "in_bits": 8959286432,
+     "out_bits": 39332640
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 4052.345,
+    "maxrss_mb": 2955.4,
+    "pid": 956,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 0,
+    "range": [
+     164773573,
+     166196840
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 530111827,
+    "escape_steps": 44565817,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423267,
+     "gates": 531927690,
+     "runs": 34313040,
+     "outputs": 1619263,
+     "in_bits": 8502315424,
+     "out_bits": 39354176
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 3794.019,
+    "maxrss_mb": 2943.1,
+    "pid": 955,
+    "source": "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl"
+   }
+  ],
+  "worker_maxrss_mb": 3047.6,
+  "worker_maxrss_sum_mb": 168890.1,
+  "gaps": [
+   [
+    96070460,
+    126092479
+   ],
+   [
+    134254675,
+    136308252
+   ]
+  ],
+  "validated": false,
+  "vus_validated": 134121244
+ },
+ "merged_from": {
+  "plans": [
+   "/tmp/cp1/pods/p1-b0-lp32s15.plan.json",
+   "/tmp/cp1/pods/p1-b0-lp32s15-B.plan.json",
+   "/tmp/cp1/pods/p1-b0-lp32s15-C.plan.json"
+  ],
+  "parts": [
+   "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl",
+   "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl",
+   "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl",
+   "/tmp/cp1/pods/p1-b0-lp32s15-L.parts.jsonl",
+   "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl"
+  ],
+  "parts_seen_per_source": {
+   "/tmp/cp1/pods/p1-b0-lp32s15-B.parts.jsonl": 11,
+   "/tmp/cp1/pods/p1-b0-lp32s15-C.parts.jsonl": 19,
+   "/tmp/cp1/pods/p1-b0-lp32s15-D.parts.jsonl": 16,
+   "/tmp/cp1/pods/p1-b0-lp32s15-L.parts.jsonl": 1,
+   "/tmp/cp1/pods/p1-b0-lp32s15.parts.jsonl": 10
+  },
+  "ranges_chosen": 57,
+  "ranges_finished": 57
+ },
+ "worker_maxrss_mb": 3047.6
+}

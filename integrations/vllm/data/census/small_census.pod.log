@@ -1,0 +1,38 @@
+program Serve_v1{C={6f196795e564},LP=32,STEPS=15} gates 518837608 inputs 135039328; plan P1/cu=whole: 166196840 VUs in 6102438 runs; partition_digest 56ebcdf53f302040870776981860ffcfafd161b1b962c759df8833057aa75b9a; build 88.1s rss 1610.2 MB
+  sampling plan: 257 batches over 6102438 runs (9s)
+  batch 1/257 done  units_seen so far 13520  11s
+  batch 9/257 done  units_seen so far 121017  23s
+  batch 17/257 done  units_seen so far 220893  35s
+  batch 25/257 done  units_seen so far 323602  45s
+  batch 33/257 done  units_seen so far 422051  54s
+  batch 41/257 done  units_seen so far 527415  64s
+  batch 49/257 done  units_seen so far 624807  72s
+  batch 57/257 done  units_seen so far 726050  83s
+  batch 65/257 done  units_seen so far 827032  97s
+  batch 73/257 done  units_seen so far 930251  115s
+  batch 81/257 done  units_seen so far 1038823  130s
+  batch 89/257 done  units_seen so far 1142142  148s
+  batch 97/257 done  units_seen so far 1236817  152s
+  batch 105/257 done  units_seen so far 1335983  162s
+  batch 113/257 done  units_seen so far 1442180  171s
+  batch 121/257 done  units_seen so far 1542039  179s
+  batch 129/257 done  units_seen so far 1642831  188s
+  batch 137/257 done  units_seen so far 1745614  195s
+  batch 145/257 done  units_seen so far 1846682  205s
+  batch 153/257 done  units_seen so far 1946430  214s
+  batch 161/257 done  units_seen so far 2036460  223s
+  batch 169/257 done  units_seen so far 2120289  232s
+  batch 177/257 done  units_seen so far 2202497  244s
+  batch 185/257 done  units_seen so far 2284408  259s
+  batch 193/257 done  units_seen so far 2365204  273s
+  batch 201/257 done  units_seen so far 2444719  280s
+  batch 209/257 done  units_seen so far 2523550  287s
+  batch 217/257 done  units_seen so far 2601309  293s
+  batch 225/257 done  units_seen so far 2678548  298s
+  batch 233/257 done  units_seen so far 2754515  304s
+  batch 241/257 done  units_seen so far 2829937  311s
+  batch 249/257 done  units_seen so far 2904399  317s
+  batch 257/257 done  units_seen so far 2969694  321s
+  input widths (exact, whole-node escape sets): {'Input|batch|prompt': {'members': 32, 'consumed': 32, 'unconsumed': 0, 'width': 32, 'escape_steps': 32, 'seconds': 0.095, 'out_bits_total_check': True}, 'Input|batch|weights': {'members': 135039296, 'consumed': 134518016, 'unconsumed': 521280, 'width': 16, 'escape_steps': 18503, 'seconds': 0.038, 'out_bits_total_check': True}}
+boundaries: 138009022 units in 322s
+wrote out/census/census_small.json: N_V per_request 31157544 global 135039296 total 166196840; max cut {'all_families': 80, 'excluding_exceptions': 32}; A_paper 144 (literal 144); interior 97729136 B / 32692858 words; checks {"validated_record": {"partition_digest_equal": true, "program_digest_equal": true, "per_kind_counts_equal": true}, "old_census_rot_input": {"agree_on_relation_units": true}}

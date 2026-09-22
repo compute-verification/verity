@@ -1,0 +1,56 @@
+{
+ "schema": "veritor/a9/run-config/v1",
+ "run_id": "V5-N256x64-1req-bex0-inc",
+ "workload": {
+  "name": "NIGHT-B0-256x63-1req",
+  "model": "HuggingFaceTB/SmolLM2-135M",
+  "prompt_len": 256,
+  "max_tokens": 64,
+  "requests": 1,
+  "request_indices": [
+   0
+  ],
+  "greedy": true,
+  "prefix_caching": false,
+  "batch_invariant": true
+ },
+ "epoch": {
+  "requests": 1,
+  "B_ex": 0,
+  "B_ex_unit": "RU",
+  "label": "DEFAULT TAKEN"
+ },
+ "sampling": {
+  "q": "1",
+  "s": "1/16384",
+  "delta": "1/1000000000000",
+  "law": "bernoulli-per-unit",
+  "s_source": "NIGHT G4 (E8): s = 2^-14 as TINY; q = 1 (N_R = 1); one request; STEPS = 63"
+ },
+ "randomness": {
+  "mode": "production"
+ },
+ "f_policy": "exempt-on-inconsistency",
+ "capture": {
+  "fields": [
+   "inputs",
+   "outputs",
+   "seed"
+  ]
+ },
+ "population": {
+  "source": "legacy-minus-inputs",
+  "plan": "P1/cu=whole"
+ },
+ "record_label": "SCALE 2026-09-12 D47 (E1, after E8's 128x64 config): SmolLM2-135M one-request epoch at prompt 256 x decode 64 (program: the pinned protocol_instance.json#program -- Serve_v4{C={6f196795e564},LP=256,STEPS=63,BN=128}, attention flash_fwd_splitkv_kernel 64x128 since D57; the record's program.digest is authoritative, this label is prose), the shipped workload rule (request a41f5816-d29b-5103-933a-c72c7328191a); N_R = 1, q = 1, B_ex = 0; served on an RTX 4090; interior values from the reference interpreter (E1) under E2's pinned layout",
+ "guest": {
+  "approved_elf_only": true,
+  "family": "veritor.tc-ampere-bf16@2",
+  "approved_elf_sha256": [
+   "73081b7b2c9305a93f243a2137f71c851fb24bddf5e6edfbeb398acb2f309029",
+   "9fd00e60fb6a74762de987cde211aca9de4576de844569da779acac6bf3863db",
+   "666e937f4691deddc4dab67c8cd1bbd9e84be81b59c1cfb396399e1d937f46d4"
+  ],
+  "note_e10_2026_09_11": "666e937f\u2026 = E7's consolidated protocol guest (+ veritor.ftz-f32@1), built twice bit-identical on the 4090 pod 21:57Z (out/eod/e7/guests/ftz-f32/pod), approved in E7's approved_guests.json @ eod/e7 6f96ebb0 (MERGE-READY 23:05Z); the run config lists which APPROVED ELFs the prover may bind -- approval itself is E7's table"
+ }
+}

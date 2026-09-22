@@ -1,0 +1,926 @@
+{
+ "head_kind": "AttentionHead_v1{T,D}|call",
+ "attention_body_kinds": [
+  "AmpereBF16TcDot16_v1|batch",
+  "DotBf16_v1{K=64}|call",
+  "F2fpBf16_v1|primitive",
+  "F32MulFtz_v1|primitive",
+  "MufuEx2Ftz_v1|primitive",
+  "F32FmaSubFtz_v1|primitive",
+  "F32Max_v1|primitive",
+  "F32AddFtz_v1|primitive",
+  "F32FmaFtz_v1|primitive",
+  "F32MulFtz_v1|batch",
+  "GuardNegInfZero_v1|primitive",
+  "F32SubFtz_v1|primitive",
+  "Fa2InvSum_v1|primitive",
+  "Const32[0x3e38aa3b]_v1|primitive",
+  "Const16[0x0000]_v1|primitive"
+ ],
+ "configurations": {
+  "6500x1599_P8099": {
+   "source": "lane/record-6k:out/record-6k/expected_work.json (D4 RECORD-6K; MODELED by census_v2.small_scaling.terms(6500, 1599))",
+   "N_R": 4,
+   "N_V_per_RU_before": 103029958196,
+   "N_V_per_RU_after": 4645966886,
+   "attention_body_VUs_per_RU": 98386178040,
+   "attention_share_before": "95.4928%",
+   "head_units_per_RU": 2186730,
+   "head_units_note": "P x NL x NH = the Fa2InvSum count (one epilogue per head call)",
+   "reduction_factor_attention": 44992.37584887023,
+   "per_kind": [
+    {
+     "kind": "AmpereBF16TcDot16_v1|batch",
+     "count_per_RU": 35490648960,
+     "share_of_population": "34.4469%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.9999999999"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "DotBf16_v1{K=64}|call",
+     "count_per_RU": 8856256500,
+     "share_of_population": "8.5958%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.9997382266"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F2fpBf16_v1|primitive",
+     "count_per_RU": 8856256500,
+     "share_of_population": "8.5958%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.9997382266"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32MulFtz_v1|primitive",
+     "count_per_RU": 9062052930,
+     "share_of_population": "8.7956%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.9997838838"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "MufuEx2Ftz_v1|primitive",
+     "count_per_RU": 8993527200,
+     "share_of_population": "8.7290%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.9997696417"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32FmaSubFtz_v1|primitive",
+     "count_per_RU": 8856256500,
+     "share_of_population": "8.5958%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.9997382266"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32Max_v1|primitive",
+     "count_per_RU": 8854069770,
+     "share_of_population": "8.5937%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.9997376930"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32AddFtz_v1|primitive",
+     "count_per_RU": 8305398450,
+     "share_of_population": "8.0611%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.9995627498"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32FmaFtz_v1|primitive",
+     "count_per_RU": 549082800,
+     "share_of_population": "0.5329%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.4003284601"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32MulFtz_v1|batch",
+     "count_per_RU": 139950720,
+     "share_of_population": "0.1358%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.1222024255"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "GuardNegInfZero_v1|primitive",
+     "count_per_RU": 139457430,
+     "share_of_population": "0.1354%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.1217990620"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32SubFtz_v1|primitive",
+     "count_per_RU": 137270700,
+     "share_of_population": "0.1332%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.1200087386"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "Fa2InvSum_v1|primitive",
+     "count_per_RU": 2186730,
+     "share_of_population": "0.0021%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "0.9845610301",
+      "2^-30": "0.0020344786"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "Const32[0x3e38aa3b]_v1|primitive",
+     "count_per_RU": 139457430,
+     "share_of_population": "0.1354%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "1.0000000000",
+      "2^-30": "0.1217990620"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "Const16[0x0000]_v1|primitive",
+     "count_per_RU": 4305420,
+     "share_of_population": "0.0042%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "0.9997286075",
+      "2^-30": "0.0040017065"
+     },
+     "after": "absorbed into the head unit"
+    }
+   ],
+   "before": {
+    "scenario": "approved set as-built (9fd00e60), per-primitive attention VUs",
+    "unsupported_kinds": [
+     "AmpereBF16TcDot16_v1|batch",
+     "ArgmaxStep_v1|scan",
+     "Bf16AddF2fp_v1|batch",
+     "Bf16ToF32_v1|batch",
+     "Const16[0x0000]_v1|primitive",
+     "Const32[0x00000000]_v1|primitive",
+     "Const32[0x00000001]_v1|primitive",
+     "Const32[0x3727c5ac]_v1|primitive",
+     "Const32[0x3e38aa3b]_v1|primitive",
+     "Const32[0x3f800000]_v1|primitive",
+     "Const32[0x44100000]_v1|primitive",
+     "DivFullRcp_v1|primitive",
+     "DivFullScaleA_v1|primitive",
+     "DotBf16_v1{K=64}|call",
+     "F2fpBf16_v1|batch",
+     "F2fpBf16_v1|primitive",
+     "F32AddFtz_v1|primitive",
+     "F32Add_v1|primitive",
+     "F32Div_v1|primitive",
+     "F32FmaFtz_v1|primitive",
+     "F32FmaSubFtz_v1|primitive",
+     "F32Fma_v1|primitive",
+     "F32Max_v1|primitive",
+     "F32MulFtz_v1|batch",
+     "F32MulFtz_v1|primitive",
+     "F32Mul_v1|batch",
+     "F32Mul_v1|primitive",
+     "F32SubFtz_v1|primitive",
+     "Fa2InvSum_v1|primitive",
+     "GatherBf16x49152_v1|batch",
+     "GuardNegInfZero_v1|primitive",
+     "MufuEx2Ftz_v1|primitive",
+     "MufuSqrtFtz_v1|primitive",
+     "RopeOutAdd_v1|batch",
+     "RopeOut_v1|batch",
+     "RsqrtApprox_v1|primitive",
+     "SiluMulBf16_v1|batch"
+    ],
+    "n_R": 101556712720,
+    "N_4RU": 406226850880,
+    "exposure": {
+     "per_RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-2692069.45697",
+       "expected_unsupported_selected": "6347294545/1024",
+       "expected_unsupported_selected_decimal": "6198529.82910"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-84124.6833742",
+       "expected_unsupported_selected": "6347294545/32768",
+       "expected_unsupported_selected_decimal": "193704.057159"
+      },
+      "2^-30": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-41.0764663993",
+       "expected_unsupported_selected": "6347294545/67108864",
+       "expected_unsupported_selected_decimal": "94.5820591599"
+      }
+     },
+     "4RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-10768277.8279",
+       "expected_unsupported_selected": "6347294545/256",
+       "expected_unsupported_selected_decimal": "24794119.3164"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-336498.733497",
+       "expected_unsupported_selected": "6347294545/8192",
+       "expected_unsupported_selected_decimal": "774816.228638"
+      },
+      "2^-30": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-164.305865597",
+       "expected_unsupported_selected": "6347294545/16777216",
+       "expected_unsupported_selected_decimal": "378.328236639"
+      }
+     }
+    }
+   },
+   "after": {
+    "scenario": "head VU adopted (PROPOSED partition change) AND fa2 guest 33cba058 approved (PROPOSED)",
+    "unsupported_kinds": [
+     "ArgmaxStep_v1|scan",
+     "Bf16AddF2fp_v1|batch",
+     "Bf16ToF32_v1|batch",
+     "Const32[0x00000000]_v1|primitive",
+     "Const32[0x00000001]_v1|primitive",
+     "Const32[0x3727c5ac]_v1|primitive",
+     "Const32[0x3f800000]_v1|primitive",
+     "Const32[0x44100000]_v1|primitive",
+     "DivFullRcp_v1|primitive",
+     "DivFullScaleA_v1|primitive",
+     "F2fpBf16_v1|batch",
+     "F32Add_v1|primitive",
+     "F32Div_v1|primitive",
+     "F32Fma_v1|primitive",
+     "F32Mul_v1|batch",
+     "F32Mul_v1|primitive",
+     "GatherBf16x49152_v1|batch",
+     "MufuSqrtFtz_v1|primitive",
+     "RopeOutAdd_v1|batch",
+     "RopeOut_v1|batch",
+     "RsqrtApprox_v1|primitive",
+     "SiluMulBf16_v1|batch"
+    ],
+    "n_R": 3170534680,
+    "N_4RU": 12682138720,
+    "exposure": {
+     "per_RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-84044.6618021",
+       "expected_unsupported_selected": "396316835/2048",
+       "expected_unsupported_selected_decimal": "193514.079590"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-2626.31803392",
+       "expected_unsupported_selected": "396316835/65536",
+       "expected_unsupported_selected_decimal": "6047.31498718"
+      },
+      "2^-30": {
+       "probability": "0.9478061455809502754906571854023833498300",
+       "complement_log10": "-1.28238063012",
+       "expected_unsupported_selected": "396316835/134217728",
+       "expected_unsupported_selected_decimal": "2.95279052109"
+      }
+     },
+     "4RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-336178.647208",
+       "expected_unsupported_selected": "396316835/512",
+       "expected_unsupported_selected_decimal": "774056.318359"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-10505.2721357",
+       "expected_unsupported_selected": "396316835/16384",
+       "expected_unsupported_selected_decimal": "24189.2599487"
+      },
+      "2^-30": {
+       "probability": "0.9999925787428643127380938066974955977956",
+       "complement_log10": "-5.12952252048",
+       "expected_unsupported_selected": "396316835/33554432",
+       "expected_unsupported_selected_decimal": "11.8111620843"
+      }
+     }
+    }
+   },
+   "after_with_a56_fallbacks": {
+    "scenario": "after + SiluMulBf16/Bf16AddF2fp fallbacks (elem_builder, transferred to CK-ELEM) accounted",
+    "unsupported_kinds": [
+     "ArgmaxStep_v1|scan",
+     "Bf16ToF32_v1|batch",
+     "Const32[0x00000000]_v1|primitive",
+     "Const32[0x00000001]_v1|primitive",
+     "Const32[0x3727c5ac]_v1|primitive",
+     "Const32[0x3f800000]_v1|primitive",
+     "Const32[0x44100000]_v1|primitive",
+     "DivFullRcp_v1|primitive",
+     "DivFullScaleA_v1|primitive",
+     "F2fpBf16_v1|batch",
+     "F32Add_v1|primitive",
+     "F32Div_v1|primitive",
+     "F32Fma_v1|primitive",
+     "F32Mul_v1|batch",
+     "F32Mul_v1|primitive",
+     "GatherBf16x49152_v1|batch",
+     "MufuSqrtFtz_v1|primitive",
+     "RopeOutAdd_v1|batch",
+     "RopeOut_v1|batch",
+     "RsqrtApprox_v1|primitive"
+    ],
+    "n_R": 2521174744,
+    "N_4RU": 10084698976,
+    "exposure": {
+     "per_RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-66831.4022994",
+       "expected_unsupported_selected": "315146843/2048",
+       "expected_unsupported_selected_decimal": "153880.294434"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-2088.41957749",
+       "expected_unsupported_selected": "315146843/65536",
+       "expected_unsupported_selected_decimal": "4808.75920105"
+      },
+      "2^-30": {
+       "probability": "0.9044424843563144803004002051474109845222",
+       "complement_log10": "-1.01973514980",
+       "expected_unsupported_selected": "315146843/134217728",
+       "expected_unsupported_selected_decimal": "2.34802695364"
+      }
+     },
+     "4RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-267325.609198",
+       "expected_unsupported_selected": "315146843/512",
+       "expected_unsupported_selected_decimal": "615521.177734"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-8353.67830996",
+       "expected_unsupported_selected": "315146843/16384",
+       "expected_unsupported_selected_decimal": "19235.0368042"
+      },
+      "2^-30": {
+       "probability": "0.9999166204780505486036896970384471862998",
+       "complement_log10": "-4.07894059920",
+       "expected_unsupported_selected": "315146843/33554432",
+       "expected_unsupported_selected_decimal": "9.39210781455"
+      }
+     }
+    }
+   },
+   "head_only_if_fa2_not_approved": {
+    "scenario": "head VU adopted, fa2 NOT approved: every head unit is unsupported (no other checker)",
+    "n_R": 3172721410,
+    "exposure": {
+     "per_RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-84102.6277296",
+       "expected_unsupported_selected": "1586360705/8192",
+       "expected_unsupported_selected_decimal": "193647.546997"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-2628.12941560",
+       "expected_unsupported_selected": "1586360705/262144",
+       "expected_unsupported_selected_decimal": "6051.48584366"
+      },
+      "2^-30": {
+       "probability": "0.9479123328635096557547593136742998505268",
+       "complement_log10": "-1.28326509299",
+       "expected_unsupported_selected": "1586360705/536870912",
+       "expected_unsupported_selected_decimal": "2.95482707210"
+      }
+     },
+     "4RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-336410.510918",
+       "expected_unsupported_selected": "1586360705/2048",
+       "expected_unsupported_selected_decimal": "774590.187988"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-10512.5176624",
+       "expected_unsupported_selected": "1586360705/65536",
+       "expected_unsupported_selected_decimal": "24205.9433746"
+      },
+      "2^-30": {
+       "probability": "0.9999926389523668994901600053853321689069",
+       "complement_log10": "-5.13306037195",
+       "expected_unsupported_selected": "1586360705/134217728",
+       "expected_unsupported_selected_decimal": "11.8193082884"
+      }
+     }
+    }
+   }
+  },
+  "32x15": {
+   "source": "lane/partition:out/census/census_small.json (D2 census_v2, SMALL B0 Serve_v1{LP=32,STEPS=15}, partition 56ebcdf5...)",
+   "N_R": 4,
+   "N_V_per_RU_before": 166196840,
+   "N_V_per_RU_after": 161908970,
+   "attention_body_VUs_per_RU": 4300560,
+   "attention_share_before": "2.5876%",
+   "head_units_per_RU": 12690,
+   "head_units_note": "P x NL x NH = the Fa2InvSum count (one epilogue per head call)",
+   "reduction_factor_attention": 338.8936170212766,
+   "per_kind": [
+    {
+     "kind": "AmpereBF16TcDot16_v1|batch",
+     "count_per_RU": 1607040,
+     "share_of_population": "0.9669%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "1.0000000000",
+      "2^-19": "0.9533549501",
+      "2^-30": "0.0014955531"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "DotBf16_v1{K=64}|call",
+     "count_per_RU": 304560,
+     "share_of_population": "0.1833%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.9999999915",
+      "2^-19": "0.4406067996",
+      "2^-30": "0.0002836033"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F2fpBf16_v1|primitive",
+     "count_per_RU": 304560,
+     "share_of_population": "0.1833%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.9999999915",
+      "2^-19": "0.4406067996",
+      "2^-30": "0.0002836033"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32MulFtz_v1|primitive",
+     "count_per_RU": 12690,
+     "share_of_population": "0.0076%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.5390933590",
+      "2^-19": "0.0239137028",
+      "2^-30": "0.0000118184"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "MufuEx2Ftz_v1|primitive",
+     "count_per_RU": 304560,
+     "share_of_population": "0.1833%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.9999999915",
+      "2^-19": "0.4406067996",
+      "2^-30": "0.0002836033"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32FmaSubFtz_v1|primitive",
+     "count_per_RU": 304560,
+     "share_of_population": "0.1833%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.9999999915",
+      "2^-19": "0.4406067996",
+      "2^-30": "0.0002836033"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32Max_v1|primitive",
+     "count_per_RU": 291870,
+     "share_of_population": "0.1756%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.9999999816",
+      "2^-19": "0.4269019020",
+      "2^-30": "0.0002717881"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32AddFtz_v1|primitive",
+     "count_per_RU": 295110,
+     "share_of_population": "0.1776%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.9999999849",
+      "2^-19": "0.4304326217",
+      "2^-30": "0.0002748048"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "F32MulFtz_v1|batch",
+     "count_per_RU": 812160,
+     "share_of_population": "0.4887%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.9999999999",
+      "2^-19": "0.7875553389",
+      "2^-30": "0.0007560969"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "GuardNegInfZero_v1|primitive",
+     "count_per_RU": 12690,
+     "share_of_population": "0.0076%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.5390933590",
+      "2^-19": "0.0239137028",
+      "2^-30": "0.0000118184"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "Fa2InvSum_v1|primitive",
+     "count_per_RU": 12690,
+     "share_of_population": "0.0076%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.5390933590",
+      "2^-19": "0.0239137028",
+      "2^-30": "0.0000118184"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "Const32[0x3e38aa3b]_v1|primitive",
+     "count_per_RU": 12690,
+     "share_of_population": "0.0076%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.5390933590",
+      "2^-19": "0.0239137028",
+      "2^-30": "0.0000118184"
+     },
+     "after": "absorbed into the head unit"
+    },
+    {
+     "kind": "Const16[0x0000]_v1|primitive",
+     "count_per_RU": 25380,
+     "share_of_population": "0.0153%",
+     "unsupported_before": true,
+     "exposure_before_per_RU": {
+      "2^-14": "0.7875650683",
+      "2^-19": "0.0472555404",
+      "2^-30": "0.0000236366"
+     },
+     "after": "absorbed into the head unit"
+    }
+   ],
+   "before": {
+    "scenario": "approved set as-built (9fd00e60), per-primitive attention VUs",
+    "unsupported_kinds": [
+     "AmpereBF16TcDot16_v1|batch",
+     "ArgmaxStep_v1|scan",
+     "Bf16AddF2fp_v1|batch",
+     "Bf16ToF32_v1|batch",
+     "Const16[0x0000]_v1|primitive",
+     "Const32[0x00000000]_v1|primitive",
+     "Const32[0x00000001]_v1|primitive",
+     "Const32[0x3727c5ac]_v1|primitive",
+     "Const32[0x3e38aa3b]_v1|primitive",
+     "Const32[0x3f800000]_v1|primitive",
+     "Const32[0x44100000]_v1|primitive",
+     "DivFullRcp_v1|primitive",
+     "DivFullScaleA_v1|primitive",
+     "DotBf16_v1{K=64}|call",
+     "F2fpBf16_v1|batch",
+     "F2fpBf16_v1|primitive",
+     "F32AddFtz_v1|primitive",
+     "F32Add_v1|primitive",
+     "F32Div_v1|primitive",
+     "F32FmaSubFtz_v1|primitive",
+     "F32Fma_v1|primitive",
+     "F32Max_v1|primitive",
+     "F32MulFtz_v1|batch",
+     "F32MulFtz_v1|primitive",
+     "F32Mul_v1|batch",
+     "F32Mul_v1|primitive",
+     "Fa2InvSum_v1|primitive",
+     "GatherBf16x49152_v1|batch",
+     "GuardNegInfZero_v1|primitive",
+     "MufuEx2Ftz_v1|primitive",
+     "MufuSqrtFtz_v1|primitive",
+     "RopeOutAdd_v1|batch",
+     "RopeOut_v1|batch",
+     "RsqrtApprox_v1|primitive",
+     "SiluMulBf16_v1|batch"
+    ],
+    "n_R": 23061640,
+    "N_4RU": 92246560,
+    "exposure": {
+     "per_RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-611.318887829",
+       "expected_unsupported_selected": "2882705/2048",
+       "expected_unsupported_selected_decimal": "1407.57080078"
+      },
+      "2^-19": {
+       "probability": "0.9999999999999999999211413129229580594423",
+       "complement_log10": "-19.1031504578",
+       "expected_unsupported_selected": "2882705/65536",
+       "expected_unsupported_selected_decimal": "43.9865875244"
+      },
+      "2^-30": {
+       "probability": "0.02124881989352974221957128294431786709540",
+       "complement_log10": "-0.00932770129321",
+       "expected_unsupported_selected": "2882705/134217728",
+       "expected_unsupported_selected_decimal": "0.0214778259397"
+      }
+     },
+     "4RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-2445.27555132",
+       "expected_unsupported_selected": "2882705/512",
+       "expected_unsupported_selected_decimal": "5630.28320312"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-76.4126018312",
+       "expected_unsupported_selected": "2882705/16384",
+       "expected_unsupported_selected_decimal": "175.946350098"
+      },
+      "2^-30": {
+       "probability": "0.08232437804766678677193568097926851344100",
+       "complement_log10": "-0.0373108051729",
+       "expected_unsupported_selected": "2882705/33554432",
+       "expected_unsupported_selected_decimal": "0.0859113037586"
+      }
+     }
+    }
+   },
+   "after": {
+    "scenario": "head VU adopted (PROPOSED partition change) AND fa2 guest 33cba058 approved (PROPOSED)",
+    "unsupported_kinds": [
+     "ArgmaxStep_v1|scan",
+     "Bf16AddF2fp_v1|batch",
+     "Bf16ToF32_v1|batch",
+     "Const32[0x00000000]_v1|primitive",
+     "Const32[0x00000001]_v1|primitive",
+     "Const32[0x3727c5ac]_v1|primitive",
+     "Const32[0x3f800000]_v1|primitive",
+     "Const32[0x44100000]_v1|primitive",
+     "DivFullRcp_v1|primitive",
+     "DivFullScaleA_v1|primitive",
+     "F2fpBf16_v1|batch",
+     "F32Add_v1|primitive",
+     "F32Div_v1|primitive",
+     "F32Fma_v1|primitive",
+     "F32Mul_v1|batch",
+     "F32Mul_v1|primitive",
+     "GatherBf16x49152_v1|batch",
+     "MufuSqrtFtz_v1|primitive",
+     "RopeOutAdd_v1|batch",
+     "RopeOut_v1|batch",
+     "RsqrtApprox_v1|primitive",
+     "SiluMulBf16_v1|batch"
+    ],
+    "n_R": 18761080,
+    "N_4RU": 75044320,
+    "exposure": {
+     "per_RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-497.319469044",
+       "expected_unsupported_selected": "2345135/2048",
+       "expected_unsupported_selected_decimal": "1145.08544922"
+      },
+      "2^-19": {
+       "probability": "0.9999999999999997121103463816615760485405",
+       "complement_log10": "-15.5407739428",
+       "expected_unsupported_selected": "2345135/65536",
+       "expected_unsupported_selected_decimal": "35.7839202881"
+      },
+      "2^-30": {
+       "probability": "0.01732085633082206481439817196085254682827",
+       "complement_log10": "-0.00758826129356",
+       "expected_unsupported_selected": "2345135/134217728",
+       "expected_unsupported_selected_decimal": "0.0174726173282"
+      }
+     },
+     "4RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-1989.27787617",
+       "expected_unsupported_selected": "2345135/512",
+       "expected_unsupported_selected_decimal": "4580.34179688"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-62.1630957713",
+       "expected_unsupported_selected": "2345135/16384",
+       "expected_unsupported_selected_decimal": "143.135681152"
+      },
+      "2^-30": {
+       "probability": "0.06750404879528633557977775054228576033133",
+       "complement_log10": "-0.0303530451743",
+       "expected_unsupported_selected": "2345135/33554432",
+       "expected_unsupported_selected_decimal": "0.0698904693127"
+      }
+     }
+    }
+   },
+   "after_with_a56_fallbacks": {
+    "scenario": "after + SiluMulBf16/Bf16AddF2fp fallbacks (elem_builder, transferred to CK-ELEM) accounted",
+    "unsupported_kinds": [
+     "ArgmaxStep_v1|scan",
+     "Bf16ToF32_v1|batch",
+     "Const32[0x00000000]_v1|primitive",
+     "Const32[0x00000001]_v1|primitive",
+     "Const32[0x3727c5ac]_v1|primitive",
+     "Const32[0x3f800000]_v1|primitive",
+     "Const32[0x44100000]_v1|primitive",
+     "DivFullRcp_v1|primitive",
+     "DivFullScaleA_v1|primitive",
+     "F2fpBf16_v1|batch",
+     "F32Add_v1|primitive",
+     "F32Div_v1|primitive",
+     "F32Fma_v1|primitive",
+     "F32Mul_v1|batch",
+     "F32Mul_v1|primitive",
+     "GatherBf16x49152_v1|batch",
+     "MufuSqrtFtz_v1|primitive",
+     "RopeOutAdd_v1|batch",
+     "RopeOut_v1|batch",
+     "RsqrtApprox_v1|primitive"
+    ],
+    "n_R": 14988856,
+    "N_4RU": 59955424,
+    "exposure": {
+     "per_RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-397.325202360",
+       "expected_unsupported_selected": "1873607/2048",
+       "expected_unsupported_selected_decimal": "914.847167969"
+      },
+      "2^-19": {
+       "probability": "0.9999999999996163329453584421747804912444",
+       "complement_log10": "-12.4160454919",
+       "expected_unsupported_selected": "1873607/65536",
+       "expected_unsupported_selected_decimal": "28.5889739990"
+      },
+      "2^-30": {
+       "probability": "0.01386247849978025923122772813608727438338",
+       "complement_log10": "-0.00606251643400",
+       "expected_unsupported_selected": "1873607/134217728",
+       "expected_unsupported_selected_decimal": "0.0139594599605"
+      }
+     },
+     "4RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-1589.30080944",
+       "expected_unsupported_selected": "1873607/512",
+       "expected_unsupported_selected_decimal": "3659.38867188"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-49.6641819677",
+       "expected_unsupported_selected": "1873607/16384",
+       "expected_unsupported_selected_decimal": "114.355895996"
+      },
+      "2^-30": {
+       "probability": "0.05430752292579194355433892614413792863858",
+       "complement_log10": "-0.0242500657360",
+       "expected_unsupported_selected": "1873607/33554432",
+       "expected_unsupported_selected_decimal": "0.0558378398418"
+      }
+     }
+    }
+   },
+   "head_only_if_fa2_not_approved": {
+    "scenario": "head VU adopted, fa2 NOT approved: every head unit is unsupported (no other checker)",
+    "n_R": 18773770,
+    "exposure": {
+     "per_RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-497.655856078",
+       "expected_unsupported_selected": "9386885/8192",
+       "expected_unsupported_selected_decimal": "1145.85998535"
+      },
+      "2^-19": {
+       "probability": "0.9999999999999997189948540025136189097172",
+       "complement_log10": "-15.5512857269",
+       "expected_unsupported_selected": "9386885/262144",
+       "expected_unsupported_selected_decimal": "35.8081245422"
+      },
+      "2^-30": {
+       "probability": "0.01733247003941673211168720056026651890483",
+       "complement_log10": "-0.00759339399572",
+       "expected_unsupported_selected": "9386885/536870912",
+       "expected_unsupported_selected_decimal": "0.0174844358116"
+      }
+     },
+     "4RU": {
+      "2^-14": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-1990.62342431",
+       "expected_unsupported_selected": "9386885/2048",
+       "expected_unsupported_selected_decimal": "4583.43994141"
+      },
+      "2^-19": {
+       "probability": "1.000000000000000000000000000000000000000",
+       "complement_log10": "-62.2051429075",
+       "expected_unsupported_selected": "9386885/65536",
+       "expected_unsupported_selected_decimal": "143.232498169"
+      },
+      "2^-30": {
+       "probability": "0.06754813050528832699521429529565761117052",
+       "complement_log10": "-0.0303735759829",
+       "expected_unsupported_selected": "9386885/134217728",
+       "expected_unsupported_selected_decimal": "0.0699377432466"
+      }
+     }
+    }
+   }
+  }
+ }
+}

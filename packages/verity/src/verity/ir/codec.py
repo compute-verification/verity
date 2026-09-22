@@ -414,10 +414,15 @@ def _record_function_ids(fid: str) -> list[str]:
     return out
 
 
-def _lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
+def lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
     """`registry[fid]`, materialising the on-demand families (`Input<w>`, `Const<w>[bits]`, `GatherBf16x<V>`)
     when a descriptor is decoded in a process that has not built the program (their evaluators are total
-    functions of the id)."""
+    functions of the id).  Public so a semantics package's lazy-family makers (`register_lazy_family`) can
+    resolve the primitive they lift or wrap by id."""
+    return _lookup_primitive(registry, fid)
+
+
+def _lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
     if fid in registry:
         return registry[fid]  # type: ignore[return-value]
     for pat, make in _LAZY_PRIMITIVE_FAMILIES:

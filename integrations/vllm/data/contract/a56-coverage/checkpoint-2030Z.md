@@ -1,0 +1,41 @@
+# A5/6 checkpoint — 2026-09-10 20:30Z — owner of the dominant unsupported operation types (re-engaged 20:40Z brief)
+
+Worktree re-created sparse at `/private/tmp/ctr-a56-coverage` (`contract/a56-coverage`, fast-forwarded to mainline `8a9b5bd6`; A3 ckpt 4, `e2e/verifier_v3/locator.py`, `coverage_v1` wired into V5 present). `.venv` symlinked. 17 A5/6 tests still pass.
+
+## Two premises of the brief that the code contradicts (please re-plan on these before anyone depends on item 1)
+
+**P1 — five of the eight kinds have NO checker in the approved guest `9fd00e60`.** `F32MulFtz`, `MufuEx2Ftz`, `F32FmaSubFtz`, `F32Max`, `F32AddFtz` (44.07 G of the 97.8 G per RU) are FTZ/MUFU gates that exist only in the fa2 guest `zk/sp1-attn` (`common/src/fa2.rs:23-135` `Fa2Op`, `ftz.rs`, `mufu.rs`; ELF `33cba058…`, unapproved). The approved guest's five families have no FTZ op (`zk/sp1/common/src/gateset.rs:300-392`; grep `ftz` → only the `sqrt.approx.ftz` doc comment at `:124`). And the fa2 guest's `In` gate is 16 bits (`fa2.rs:89-93`): a per-primitive VU whose operands are FP32 (every one of the five) cannot be sourced from `In` there either — fa2 checks the **whole-head fold** only. This is what my table said (`coverage.json`: these five are `no path`, checker granularity `whole attention head`). Per-VU checkers for them require a guest change (PROPOSED patch under the user's gate) — options in §3.
+
+**P2 — none of the eight kinds has its whole boundary committed by today's record.** Every one has at least one boundary word that is attention-interior (FP32 score `s[c]`, `m`, `l`, `p`, the FP32 `O` accumulator, the `P` bf16 cast) and the replay commits *operator boundaries only* — verified on a real RU tree, `results/MINREC/MINREC-B0-20260909T1930Z/profile-hash/capture-0/ru/472ba20e…/000000/leaves.json`: 5,713 leaves for 32 positions = `embed`, `input_layernorm.rmsnorm`, `rotary_emb.rope` (q,k), `self_attn.attn.attn/port=0` (head outputs), `post_attention_layernorm.rmsnorm`, `mlp.act_fn.act_mul`, `norm`, `sampler.select`; no score / P / m / l / O word. Same in `out/record/report.md:45` ("no per-scalar norm/attention interiors"). So "as-built VU granularity … where interior values exist in the record's replay/interior trees" has no instance today: a per-VU statement for any of the eight opens words that are not in any tree. Building them requires **committing the attention interior** (a capture/layout change, A2's scope; size at 6500×1599 per RU ≈ the census's 389 GB interior — `out/census/report.md:22`; at TINY 4/9 and 32×15 it is small).
+
+Consequence: the only one of the requested paths whose *boundary is committed today* is the **whole-head relation** (item 4): `q` = `rotary_emb.rope/port=0` slice (head h), `K`/`V` = `rope/port=1` slices and the V rows of positions ≤ t (V today: `qkv_proj.gemm/port=0` slice in the REC profile; `profile-hash` commits no gemm ports — profile-dependent, to pin), `out` = `self_attn.attn.attn/port=0` slice — all operator rows in the RU trees of the request's steps.
+
+## 1. Builder list — what each reads (registered body `verity_ir/registry/b1.py`; committed today? = in the RU trees)
+
+| kind (per RU at 6500×1599) | body | reads (incoming → outgoing) | committed today | checker |
+|---|---|---|---|---|
+| `AmpereBF16TcDot16_v1|batch` 35.49 G | `prims.py:398-402`; PV steps `b1.py:378-388` (`o = tc_dot16(o, prow, vt)`) and QK steps via `DotBf16` | FP32 `o_prev[d]`, 16 bf16 `P` words (`pb`, F2fpBf16 outputs), 16 bf16 `V[k, d]` (committed V row slice) → FP32 `o[d]` | V yes; `o`, `pb` **no** | approved: `tensor-core@2` `tc_dot16` (`gateset.rs:319, 603, 620-626`) |
+| `DotBf16_v1{K=64}|call` 8.86 G | `b1.py:99-106`: 4 chained `tc_dot16` from acc 0 | 64 bf16 `q[h, :]` (rope port 0), 64 bf16 `k[c, h, :]` (rope port 1 at position c) → FP32 `s[c]` | q, k yes; `s[c]` **no** | approved: `tc-ampere-bf16@2` (`programs.gemm_coordinate(64, opened_accumulator=True)`) |
+| `F2fpBf16_v1|primitive` 8.86 G | `prims.py:202-206`; `pb = F2fpBf16(p[c])` `b1.py:372` | FP32 `p[c]` → bf16 `pb[c]` | **no / no** | approved: `elem-f32@1` `f32_to_bf16_hw` (`gateset.rs:377`) / `reduce-mufu@1` `f2fp_bf16` |
+| `F32MulFtz_v1|primitive` 9.06 G | `b1.py:353, 355, 376`, epilogue `:422` | (`m_use`, `scale_log2` const) / (`m_prev−m_use`, const) / (`o_prev[d]`, `scores_scale`) / (`o[d]`, `inv`) → FP32 | **no** | fa2 only (`Fa2Op::MulFtz`), whole-head |
+| `MufuEx2Ftz_v1|primitive` 8.99 G | `b1.py:353, 357` | FP32 → FP32 | **no** | fa2 only (`mufu.rs`) |
+| `F32FmaSubFtz_v1|primitive` 8.86 G | `b1.py:357` `fma(s[c], scale_log2, −max_scaled)` | `s[c]`, const, `max_scaled` → FP32 | **no** | fa2 only |
+| `F32Max_v1|primitive` 8.85 G | `b1.py:347-349` row max chain, `m_new` | `bmax`, `s[c]` → FP32 | **no** | fa2 only |
+| `F32AddFtz_v1|primitive` 8.31 G | `b1.py:370` lane sums, epilogue `:419` | `acc`, `p[c]` → FP32 | **no** | fa2 only |
+| **whole head** `AttentionHead_v1{T,D}` (item 4) | `b1.py:389-424` | `q[D]` bf16, `K[T][D]`, `V[T][D]` bf16 → `out[D]` bf16 | **yes** (rope ports, V rows, attn out — profile-dependent for V) | fa2 guest `33cba058` (unapproved); NaN-extension difference `fa2.rs:254-298` to be listed |
+
+## 2. Plan I am executing (re-ordered by what is buildable; say so if you want the order changed)
+
+1. `vllm-poc/e2e/coverage_v1/builders.py`: `BUILDERS: dict[kind, Builder]`, one `build(located_unit, record) -> Statement` signature (typed object + openings + A2 expectations), fail-closed dispatch. Entries for all eight per-VU kinds exist and **refuse with the exact uncommitted word** until the interior is committed (so `selective_prover` dispatch reports "interior word `<cid>[i]` not committed" instead of "no builder"); the three approved-checker kinds get real builders behind an interior-leaf layout (`attn-interior/v0`, PROPOSED: per (t, layer, head) leaves `scores[T]` F32, `p[T]` F32, `pb[T]` BF16, `m`/`l[4]` F32, `o[D]` F32 per block) and are tested on a **synthetic interior tree** computed from REAL B0 q/k/v rows with the registered evaluators — labelled MODELED until a record commits them.
+2. Whole-head path behind `--flag head-vu` (item 4): builder from committed rows to the head output; fa2 checker (bench `zk/bench/attn_gates.py:184-307` head subcircuit reused); dispatch entry `AttentionHead_v1{T,D}|call`; A2-shaped expectation; integration test on TINY; VU-count consequence.
+3. FTZ five: PROPOSED guest patch options for the user — (a) add a `veritor.fa2-scalar@1` family (the fa2 ops as single gates with 32-bit `In`) to the approved guest lineage; (b) approve fa2 as-is (whole-head only, per-VU kinds stay `no path`); (c) redefine the attention VU as the head (S55). Written as a comparison, not adopted.
+
+## CLAIMS / INTERFACE QUESTIONS / REQUESTS
+
+- **CLAIM:** `vllm-poc/e2e/coverage_v1/builders.py`, `…/attn_builder.py`, `…/interior_layout.py` (new), `zk/bench/a56_*` (new), `tests/contract/a56_*`. Patches for A2's `expected.py` (expectation kinds `dot_expectation`, `tc_step_expectation`, `cast_expectation`, `attention_head_expectation`) and A3's dispatch → `out/contract/a56-coverage/patches/`.
+- **Q-A56-5 (integrator/A2, blocking item 1's integration test):** will a record commit the attention interior? If yes, at which layout — I propose `attn-interior/v0` above and will write it as a PROPOSED patch to `verity_vllm_adapter/capture.py`'s node templates; if no, item 1 cannot have an integration test on any record and I will say so in the report (builders tested on synthetic interior trees only).
+- **Q-A56-6 (integrator):** which TINY record (path, profile) — I need one with RU trees + `commitments.json`; the MINREC `profile-hash` capture has no `.gemm` ports (V rows absent), the REC-P1-B0 profile has them.
+- **Q-A56-7 (integrator):** CPU pod slot for (i) building the fa2 host/guest and proving one head statement, (ii) proving one statement each of the three approved-checker kinds (synthetic interior) under `9fd00e60`; expected footprint `--gb 6`, `--class test`, `--lane a56`.
+- Transfer acknowledged: `SiluMulBf16_v1`/`Bf16AddF2fp_v1` (`elem_builder.py`) go to CK-ELEM for dispatch/integration.
+
+Next checkpoint ≈ 21:30Z: `builders.py` registry + the three approved-kind builders against a synthetic interior tree.

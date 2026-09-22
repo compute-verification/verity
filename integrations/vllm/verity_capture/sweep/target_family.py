@@ -1,0 +1,207 @@
+"""Target-family preflight (R18 infra, r18-int-2; x09 M-0009 / coord M-0026 / report M-0016).
+
+A row id names its DEVICE CLASS in its third token (`<model>__<dtype>__<device>__tp<k>__...`, e.g. `__l40s__`).  The row's Build
+target family, the pod device the GPU stages run on, and the Build that comes out (build_summary.json step.target) must all be
+that class -- #60's Build of record (r17_1207) was a Hopper-target Program (cc 9.0, FA3, Gemm_v2) built on the H100 host for an
+`__l40s__` row and its Match then compared an L40S capture against it.  The check is a PREFLIGHT: it runs before Build and
+before any engine, and fails by name `PRECHECK_FAIL_TARGET_FAMILY`.
+
+Family = compute capability (major, minor), the same reading the finalizer applies (report M-0016: l40s 8.9 / a100 8.0 / h100 9.0 /
+b200 10.0).  Three facts are compared with the row's family:
+  declared  -- the manifest's `target.compute_capability` when the workload declares one (Build gets it as --target)
+  device    -- the pod GPU's compute capability (nvidia-smi compute_cap; torch as fallback) when a GPU stage runs here or the Build
+               target is the device (no declared target)
+  built     -- build_summary.json step.target.compute_capability, checked again AFTER Build (--build-summary)
+A WAIVER (`--waiver <reason>`, row_pod.sh: $TARGET_FAMILY_WAIVER) turns a would-be failure into `WAIVED <reason>` -- recorded in
+stages.txt and in the record, never silent; the release canary sets it because its `__l40s__` base rows also run on the Hopper canary
+host.  A row of record never carries a waiver (the finalizer reads the line).
+
+Torch-free; stdlib only.  Record schema: verity-sweep/target-family/v1.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from typing import Any
+
+FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
+SCHEMA = "verity-sweep/target-family/v1"
+
+# device token in a row id -> compute capability family.  Extend by name; an unknown token is a refusal, not a guess.
+DEVICE_FAMILY: dict[str, tuple[int, int]] = {
+    "l40s": (8, 9), "l40": (8, 9), "l4": (8, 9), "rtx4090": (8, 9),
+    "a100": (8, 0),
+    "a10": (8, 6), "a10g": (8, 6), "a40": (8, 6),
+    "h100": (9, 0), "h200": (9, 0), "h20": (9, 0),
+    "b200": (10, 0), "gb200": (10, 0),
+}
+
+_ROW_RE = re.compile(r"^[^_]+(?:_[^_]+)*__[^_]+__([a-z0-9]+)__tp\d+__")
+
+
+def device_token_of_row(row_id: str) -> str | None:
+    """`smollm2-135m__bf16__l40s__tp1__b1__...` -> `l40s`; None when the id does not carry the grammar."""
+    parts = row_id.split("__")
+    if len(parts) >= 4 and parts[3].startswith("tp"):
+        return parts[2]
+    m = _ROW_RE.match(row_id)
+    return m.group(1) if m else None
+
+
+def row_family(row_id: str) -> tuple[str | None, tuple[int, int] | None]:
+    tok = device_token_of_row(row_id)
+    return tok, DEVICE_FAMILY.get(tok) if tok else None
+
+
+def _cc(v: Any) -> tuple[int, int] | None:
+    if v is None:
+        return None
+    if isinstance(v, str):
+        try:
+            a, b = v.strip().split(".")
+            return int(a), int(b)
+        except ValueError:
+            return None
+    try:
+        a, b = v
+        return int(a), int(b)
+    except (TypeError, ValueError):
+        return None
+
+
+def declared_target(workload: dict) -> tuple[int, int] | None:
+    t = workload.get("target") or {}
+    return _cc(t.get("compute_capability"))
+
+
+def device_cc() -> tuple[tuple[int, int] | None, str]:
+    """(cc, source) of the GPU this process would use; (None, reason) when no device is visible."""
+    vis = os.environ.get("CUDA_VISIBLE_DEVICES")
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=index,compute_cap", "--format=csv,noheader"], capture_output=True, text=True, timeout=20)
+        rows = [r.strip() for r in out.stdout.splitlines() if r.strip()]
+        if out.returncode == 0 and rows:
+            if vis not in (None, ""):
+                want = vis.split(",")[0].strip()
+                rows = [r for r in rows if r.split(",")[0].strip() == want] or rows
+            cc = _cc(rows[0].split(",")[1])
+            if cc:
+                return cc, "nvidia-smi compute_cap"
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        import torch  # noqa: WPS433 -- fallback only
+
+        if torch.cuda.is_available():
+            return tuple(torch.cuda.get_device_capability(0)), "torch.cuda.get_device_capability"
+        return None, "torch.cuda.is_available() False"
+    except Exception as e:  # noqa: BLE001
+        return None, f"no device: {type(e).__name__}"
+
+
+def built_target(build_summary: dict) -> tuple[int, int] | None:
+    step = build_summary.get("step") or {}
+    t = step.get("target") or {}
+    cc = _cc(t.get("compute_capability"))
+    if cc is None:
+        app = step.get("applicability") or {}
+        fam = (app.get("tensor_core_family") or app.get("gemm_target") or "").lower()
+        if fam == "hopper":
+            return (9, 0)
+    return cc
+
+
+def fmt(cc: tuple[int, int] | None) -> str:
+    return "?" if cc is None else f"{cc[0]}.{cc[1]}"
+
+
+def check(row_id: str, workload: dict | None, stages: list[str], *, want_device: bool = True, build_summary: dict | None = None,
+          waiver: str | None = None) -> dict:
+    tok, fam = row_family(row_id)
+    rec: dict[str, Any] = {"schema": SCHEMA, "row": row_id, "device_token": tok, "row_family": list(fam) if fam else None,
+                           "stages": stages, "declared": None, "device": None, "device_source": None, "built": None,
+                           "mismatches": [], "ok": False, "fail_class": None, "waiver": waiver or None, "verdict": None}
+    if fam is None:
+        rec["mismatches"].append({"fact": "row", "value": tok, "why": f"unknown device class {tok!r} in the row id (known: {sorted(DEVICE_FAMILY)})"})
+    if workload is not None:
+        d = declared_target(workload)
+        rec["declared"] = list(d) if d else None
+        if d and fam and d != fam:
+            rec["mismatches"].append({"fact": "declared", "value": fmt(d), "why": f"manifest target.compute_capability {fmt(d)} != row family {fmt(fam)}"})
+    gpu_stage = any(s in ("match", "commit", "bench") for s in stages)
+    build_on_device = "build" in stages and (workload is None or declared_target(workload) is None)
+    if want_device and (gpu_stage or build_on_device):
+        dc, src = device_cc()
+        rec["device"] = list(dc) if dc else None
+        rec["device_source"] = src
+        if dc is None:
+            rec["mismatches"].append({"fact": "device", "value": None, "why": f"no GPU visible for a GPU stage / device-target Build ({src})"})
+        elif fam and dc != fam:
+            rec["mismatches"].append({"fact": "device", "value": fmt(dc), "why": f"pod device {fmt(dc)} != row family {fmt(fam)} (stages {','.join(stages)})"})
+    if build_summary is not None:
+        b = built_target(build_summary)
+        rec["built"] = list(b) if b else None
+        if b is None:
+            rec["mismatches"].append({"fact": "built", "value": None, "why": "build_summary.json step.target.compute_capability absent"})
+        elif fam and b != fam:
+            rec["mismatches"].append({"fact": "built", "value": fmt(b), "why": f"Build target {fmt(b)} != row family {fmt(fam)}"})
+    if not rec["mismatches"]:
+        rec["ok"] = True
+        rec["verdict"] = "PASS"
+    elif waiver:
+        rec["ok"] = True
+        rec["verdict"] = "WAIVED"
+        rec["fail_class"] = None
+        rec["would_fail_class"] = FAIL_CLASS
+    else:
+        rec["verdict"] = "FAIL"
+        rec["fail_class"] = FAIL_CLASS
+    return rec
+
+
+def summary_line(rec: dict) -> str:
+    fam = fmt(tuple(rec["row_family"]) if rec["row_family"] else None)
+    facts = f"row={rec['device_token']}({fam}) declared={fmt(tuple(rec['declared']) if rec['declared'] else None)} " \
+            f"device={fmt(tuple(rec['device']) if rec['device'] else None)} built={fmt(tuple(rec['built']) if rec['built'] else None)}"
+    if rec["verdict"] == "PASS":
+        return f"TARGET-FAMILY-OK {facts}"
+    why = "; ".join(m["why"] for m in rec["mismatches"])
+    if rec["verdict"] == "WAIVED":
+        return f"TARGET-FAMILY-WAIVED ({rec['waiver']}) {facts} -- {why}"
+    return f"{FAIL_CLASS}: {why} [{facts}]"
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--row", required=True, help="row id (device class in its third token)")
+    ap.add_argument("--workload", default=None, help="workload manifest (declared target block)")
+    ap.add_argument("--stages", default="build,match,commit")
+    ap.add_argument("--build-summary", default=None, help="check the Build that came out (step.target) as well")
+    ap.add_argument("--no-device", action="store_true", help="do not read the pod GPU (CPU-only host doing a declared-target Build)")
+    ap.add_argument("--waiver", default=os.environ.get("TARGET_FAMILY_WAIVER") or None, help="named waiver (canary); recorded, never silent")
+    ap.add_argument("--out", default=None, help="write the record here")
+    a = ap.parse_args(argv)
+    wl = json.load(open(a.workload)) if a.workload and os.path.exists(a.workload) else None
+    bs = json.load(open(a.build_summary)) if a.build_summary and os.path.exists(a.build_summary) else None
+    stages = [s for s in a.stages.replace(" ", "").split(",") if s]
+    rec = check(a.row, wl, stages, want_device=not a.no_device, build_summary=bs, waiver=a.waiver)
+    if a.out:
+        os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+        tmp = a.out + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(rec, f, indent=1)
+        os.replace(tmp, a.out)
+    line = summary_line(rec)
+    if rec["verdict"] == "FAIL":
+        print(line, file=sys.stderr)
+        return 3
+    print(line)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

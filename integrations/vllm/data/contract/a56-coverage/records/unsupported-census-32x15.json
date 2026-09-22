@@ -1,0 +1,341 @@
+{
+ "schema": "veritor/a56/unsupported-census/v1",
+ "record": "/Users/danielreuter/veritor-archive/A9-32x15-6c6fdce2/V5-32x15-bex0-inc",
+ "program": "Serve_v1{C={6f196795e564},LP=32,STEPS=15}",
+ "program_build_s": 2.57,
+ "unsupported_selected": 1479,
+ "by_operator": {
+  "post": 607,
+  "pre": 461,
+  "attn": 355,
+  "t=42/final": 7,
+  "t=44/final": 7,
+  "t=38/final": 6,
+  "t=32/final": 5,
+  "t=35/final": 5,
+  "t=41/final": 4,
+  "t=37/final": 3,
+  "t=39/final": 3,
+  "t=40/final": 3,
+  "t=43/final": 3,
+  "t=34/final": 2,
+  "t=36/final": 2,
+  "t=45/final": 2,
+  "t=6/embed": 1,
+  "t=31/final": 1,
+  "t=33/final": 1,
+  "t=44/embed": 1
+ },
+ "attention_by_t": {
+  "t=0": 9,
+  "t=1": 5,
+  "t=10": 5,
+  "t=11": 5,
+  "t=12": 7,
+  "t=13": 6,
+  "t=14": 3,
+  "t=15": 2,
+  "t=16": 4,
+  "t=17": 14,
+  "t=18": 8,
+  "t=19": 5,
+  "t=2": 5,
+  "t=20": 7,
+  "t=21": 11,
+  "t=22": 8,
+  "t=23": 8,
+  "t=24": 7,
+  "t=25": 8,
+  "t=26": 12,
+  "t=27": 9,
+  "t=28": 15,
+  "t=29": 6,
+  "t=3": 5,
+  "t=30": 11,
+  "t=31": 5,
+  "t=32": 8,
+  "t=33": 13,
+  "t=34": 9,
+  "t=35": 11,
+  "t=36": 11,
+  "t=37": 8,
+  "t=38": 10,
+  "t=39": 11,
+  "t=4": 4,
+  "t=40": 11,
+  "t=41": 3,
+  "t=42": 8,
+  "t=43": 4,
+  "t=44": 8,
+  "t=45": 12,
+  "t=46": 8,
+  "t=5": 1,
+  "t=6": 6,
+  "t=7": 5,
+  "t=8": 3,
+  "t=9": 11
+ },
+ "buckets": {
+  "rest": 684,
+  "CK-ELEM four (buildable)": 346,
+  "mixed (attention + other operators)": 145,
+  "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)": 304
+ },
+ "rows": [
+  {
+   "kind": "Bf16ToF32_v1|batch",
+   "count": 238,
+   "by_operator": {
+    "pre": 104,
+    "post": 134
+   },
+   "bucket": "rest",
+   "owner": "open (integrator to assign)",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "F32Mul_v1|batch",
+   "count": 203,
+   "by_operator": {
+    "pre": 100,
+    "post": 101,
+    "t=31/final": 1,
+    "t=35/final": 1
+   },
+   "bucket": "rest",
+   "owner": "open (integrator to assign)",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "SiluMulBf16_v1|batch",
+   "count": 152,
+   "by_operator": {
+    "post": 152
+   },
+   "bucket": "CK-ELEM four (buildable)",
+   "owner": "CK-ELEM",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "F2fpBf16_v1|batch",
+   "count": 145,
+   "by_operator": {
+    "post": 45,
+    "attn": 51,
+    "pre": 49
+   },
+   "bucket": "mixed (attention + other operators)",
+   "owner": "A5/6 (attn part) / open",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "Bf16AddF2fp_v1|batch",
+   "count": 113,
+   "by_operator": {
+    "post": 61,
+    "pre": 51,
+    "t=42/final": 1
+   },
+   "bucket": "CK-ELEM four (buildable)",
+   "owner": "CK-ELEM",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "F32Add_v1|primitive",
+   "count": 99,
+   "by_operator": {
+    "post": 60,
+    "pre": 39
+   },
+   "bucket": "rest",
+   "owner": "open (integrator to assign)",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "AmpereBF16TcDot16_v1|batch",
+   "count": 97,
+   "by_operator": {
+    "attn": 97
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": true
+  },
+  {
+   "kind": "F32Mul_v1|primitive",
+   "count": 91,
+   "by_operator": {
+    "pre": 37,
+    "post": 54
+   },
+   "bucket": "rest",
+   "owner": "open (integrator to assign)",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "F32MulFtz_v1|batch",
+   "count": 56,
+   "by_operator": {
+    "attn": 56
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "ArgmaxStep_v1|scan",
+   "count": 51,
+   "by_operator": {
+    "t=32/final": 5,
+    "t=33/final": 1,
+    "t=34/final": 2,
+    "t=35/final": 4,
+    "t=36/final": 2,
+    "t=37/final": 3,
+    "t=38/final": 6,
+    "t=39/final": 3,
+    "t=40/final": 3,
+    "t=41/final": 4,
+    "t=42/final": 6,
+    "t=43/final": 3,
+    "t=44/final": 7,
+    "t=45/final": 2
+   },
+   "bucket": "rest",
+   "owner": "open (integrator to assign)",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "Const32[0x00000000]_v1|primitive",
+   "count": 46,
+   "by_operator": {
+    "attn": 46
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "RopeOut_v1|batch",
+   "count": 44,
+   "by_operator": {
+    "pre": 44
+   },
+   "bucket": "CK-ELEM four (buildable)",
+   "owner": "CK-ELEM",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "RopeOutAdd_v1|batch",
+   "count": 37,
+   "by_operator": {
+    "pre": 37
+   },
+   "bucket": "CK-ELEM four (buildable)",
+   "owner": "CK-ELEM",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "F32AddFtz_v1|primitive",
+   "count": 22,
+   "by_operator": {
+    "attn": 22
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": true
+  },
+  {
+   "kind": "DotBf16_v1{K=64}|call",
+   "count": 20,
+   "by_operator": {
+    "attn": 20
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": true
+  },
+  {
+   "kind": "F32Max_v1|primitive",
+   "count": 19,
+   "by_operator": {
+    "attn": 19
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": true
+  },
+  {
+   "kind": "F2fpBf16_v1|primitive",
+   "count": 15,
+   "by_operator": {
+    "attn": 15
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": true
+  },
+  {
+   "kind": "MufuEx2Ftz_v1|primitive",
+   "count": 14,
+   "by_operator": {
+    "attn": 14
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": true
+  },
+  {
+   "kind": "F32FmaSubFtz_v1|primitive",
+   "count": 11,
+   "by_operator": {
+    "attn": 11
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": true
+  },
+  {
+   "kind": "GatherBf16x49152_v1|batch",
+   "count": 2,
+   "by_operator": {
+    "t=6/embed": 1,
+    "t=44/embed": 1
+   },
+   "bucket": "rest",
+   "owner": "open (integrator to assign)",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "Const32[0x3e38aa3b]_v1|primitive",
+   "count": 2,
+   "by_operator": {
+    "attn": 2
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "GuardNegInfZero_v1|primitive",
+   "count": 1,
+   "by_operator": {
+    "attn": 1
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": false
+  },
+  {
+   "kind": "Const16[0x0000]_v1|primitive",
+   "count": 1,
+   "by_operator": {
+    "attn": 1
+   },
+   "bucket": "attention body (interior, uncommitted -- InteriorRefuser / head VU PROPOSED)",
+   "owner": "A5/6",
+   "a56_interior_kind": false
+  }
+ ],
+ "label": "counts of SELECTED unsupported VUs in retained RUs (the record's own list), located by the verifier's ProgramLocator; not a population census"
+}

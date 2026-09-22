@@ -1,0 +1,121 @@
+{
+ "schema": "veritor/a56/forced-head-run/v1",
+ "label": "FORCED (labelled) selection through MAINLINE verifier_v3 modules (A3 ckpt 7 carries the attention path) -- not a certificate; head VU is a PROPOSED partition change; fa2 guest UNAPPROVED",
+ "record": "/tmp/a56/rec-tiny",
+ "steps": {
+  "verifier.program_locator_forced_unit": {
+   "identity": {
+    "LP": 4,
+    "STEPS": 8,
+    "case": "B0",
+    "config_sha12": "6f196795e564",
+    "family": "Serve_v1",
+    "function": "Serve_v1{C={6f196795e564},LP=4,STEPS=8}"
+   },
+   "program_gates": 242675685,
+   "ru": 0,
+   "request_id": "2663944e-cf0f-5349-a481-4beffe89398b",
+   "t": 5,
+   "layer": 0,
+   "head": 0,
+   "interval": [
+    176179020,
+    176179343
+   ],
+   "located": {
+    "root": "t=5/layers.0/attn",
+    "t": 5,
+    "layer": 0,
+    "head": 0,
+    "NH": 9,
+    "T": 6,
+    "head_interval": [
+     176179020,
+     176179343
+    ],
+    "head_call": "AttentionHead",
+    "unit": "head"
+   }
+  },
+  "verifier.expected_statement": {
+   "Q_proof": [
+    1000000000
+   ],
+   "uncovered": [],
+   "tree_problems": [],
+   "expected_digest": "28e10f755161e61aef0a798c74b03df0c32bdb3aa4734626b6e2c3719bd51af9",
+   "label": "AttentionHead_v1{T=6,D=64}|call 1000000000",
+   "incoming": 832,
+   "outgoing": 64,
+   "subcircuit": "a33dbdea68d13639e0e40fae4dbe07691af796ec51cfc58da535cf1dee45f8c6"
+  },
+  "prover.build_statement": {
+   "kind": "AttentionHead_v1{T=6,D=64}|call",
+   "obligations": 2,
+   "blocks": 1,
+   "statement_bytes": 31226,
+   "witness_bytes": 23544,
+   "transparent_check_s": 0.007
+  },
+  "verifier.coverage_positive": {
+   "covered": [
+    "1000000000"
+   ],
+   "uncovered": [],
+   "unexpected": 0,
+   "duplicate": [],
+   "views_equal_builder": true,
+   "positions_checked_by": "head_views_of_raw_statement (committed ids; raw format-3 statement, no typed object)",
+   "with_typed_position_check": {
+    "covered": [],
+    "position_problems": {
+     "forced-head": [
+      "no typed object to check positions against"
+     ]
+    }
+   }
+  },
+  "verifier.r9_negative": {
+   "neighbouring_head": {
+    "head": 1,
+    "uncovered": [
+     "1000000000"
+    ],
+    "unexpected": 1,
+    "refused_as_expected": true
+   }
+  },
+  "verifier.refusal_of_fa2_without_host": {
+   "fa2_guest": {
+    "ok": false,
+    "reason": "GUEST_NOT_APPROVED",
+    "detail": "ELF 33cba0583417 (vk 0x00413469f396...) is not in approved_guests.json",
+    "approval": null,
+    "approved_by": null,
+    "date": null,
+    "build_metadata_missing": []
+   },
+   "approved_guest_ok": true,
+   "fa2_family_under_9fd00e60": [
+    "approved guest 9fd00e60fb6a does not implement family 'veritor.fa2-attn@1+ex2.b2a42c4a+rcp.c4083814' (lists ['veritor.elem-bf16@1', 'veritor.int8-q7@1', 'veritor.reduce-mufu@1', 'veritor.tc-ampere-bf16@1', 'veritor.tc-ampere-bf16@2', 'veritor.tensor-core.ampere_bf16_m16n8k16@2', 'veritor.toy-isa@1', 'veritor.word-arithmetic@2'])"
+   ],
+   "refused_as_expected": true,
+   "pod_measured": "approved host verify-many refused both fa2 proofs (ok=false, statement_match=true, 2-6 ms) -- pod/records.jsonl"
+  }
+ },
+ "timings_s": {
+  "verifier.program_locator_forced_unit": 0.656,
+  "verifier.expected_statement": 3.645,
+  "prover.build_statement": 0.286,
+  "verifier.coverage_positive": 0.02,
+  "verifier.r9_negative": 0.041,
+  "verifier.refusal_of_fa2_without_host": 0.001
+ },
+ "verifier_v3_source": "mainline checkout (attention path present: A3 ckpt 7 applied the A5/6 patches) -- no overlay, nothing patched",
+ "verdict": {
+  "forced_head_covered": true,
+  "neighbour_refused": true,
+  "fa2_refused_by_verifier": true,
+  "label": "FORCED (labelled) selection through MAINLINE verifier_v3 modules (A3 ckpt 7 carries the attention path) -- not a certificate; head VU is a PROPOSED partition change; fa2 guest UNAPPROVED"
+ }
+}

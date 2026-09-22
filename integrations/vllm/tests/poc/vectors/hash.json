@@ -1,0 +1,233 @@
+{
+ "_comment": "Known-answer vectors for verity_vllm.hashing (frame: sha256(u32be(len(tag))||tag||(u64be(len(part))||part)*)) and dtypes.f32_to_bf16_bits (RNE).",
+ "frame": "sha256(u32be(len(tag)) || tag || (u64be(len(part)) || part)*)",
+ "H": [
+  {
+   "tag": "verity-vllm/leaf/v1",
+   "parts_hex": [],
+   "digest": "d2e5b5e19ffc0c2ab3b688fb3e0de29e54a4e6e9e4cd5c61779917778b229125"
+  },
+  {
+   "tag": "verity-vllm/leaf/v1",
+   "parts_hex": [
+    ""
+   ],
+   "digest": "beac7d6fa88ecd1ea7ba3bbad14af5ffd2c5b18129c15b869b4929c902571eff"
+  },
+  {
+   "tag": "verity-vllm/leaf/v1",
+   "parts_hex": [
+    "61",
+    "6263"
+   ],
+   "digest": "47f2eb53f30f1297b97bc9c723167beb8573f026059c3cab2765a2ff224156e1"
+  },
+  {
+   "tag": "verity-vllm/node/v1",
+   "parts_hex": [
+    "0000000000000000000000000000000000000000000000000000000000000000",
+    "0101010101010101010101010101010101010101010101010101010101010101"
+   ],
+   "digest": "3618d674b8510557d89919d68b113ed09ee38e5d2bf3d6ea8d6d863a1693d71d"
+  },
+  {
+   "tag": "x",
+   "parts_hex": [
+    "000102"
+   ],
+   "digest": "451514b94ec055775dbdb76858bad693b95aefd999dad2885ce794ea6864280a"
+  }
+ ],
+ "leaf": [
+  {
+   "canonical_id": "p=0123456789ab/r=req-0/t=0/ph=prefill/l=0/op=layers.0.mlp.residual/port=0",
+   "dtype": "bfloat16",
+   "shape": [
+    4
+   ],
+   "shape_text": "[4]",
+   "input_hex": "803f80bf0000807f",
+   "leaf": "9c5626ed4d1fced355fc1743e3ccb0e2e96e6d4c1c9024bb2e6a8fd4fcc4cdf1"
+  },
+  {
+   "canonical_id": "p=0123456789ab/r=req-0/t=3/ph=prefill/l=lm_head/op=lm_head.gemm/port=0",
+   "dtype": "bfloat16",
+   "shape": [
+    2,
+    3
+   ],
+   "shape_text": "[2,3]",
+   "input_hex": "000001000200030004000500",
+   "leaf": "082a99f2321ea1b771b8d07ffdfc896457da19d230bd2bcf4bedb301d235275a"
+  },
+  {
+   "canonical_id": "p=0123456789ab/r=req-0/t=7/ph=decode/l=sampler/op=sampler.select/port=0",
+   "dtype": "int32",
+   "shape": [],
+   "shape_text": "[]",
+   "input_hex": "11000000",
+   "leaf": "aae13f2aeaafbec8c21a8b4c5e4a4fc466c9c838aeea65f8f73f9f106fc802cb"
+  },
+  {
+   "canonical_id": "w=model.embed_tokens.weight",
+   "dtype": "float8_e4m3fn",
+   "shape": [
+    3
+   ],
+   "shape_text": "[3]",
+   "input_hex": "38b800",
+   "leaf": "ee8600a65ddeedd8b45e4ecf07eb437ea2466ecdb8ad03b55a72f1534963beae"
+  },
+  {
+   "canonical_id": "w=model.layers.0.self_attn.qkv_proj.weight/s=1",
+   "dtype": "int8",
+   "shape": [
+    2,
+    2
+   ],
+   "shape_text": "[2,2]",
+   "input_hex": "010203fe",
+   "leaf": "18504cc66d7dae8f8fb8afc3069003b25b3d9ff252efc3bc28478551bd62734f"
+  },
+  {
+   "canonical_id": "p=0123456789ab/r=req-0/b=sampling_params",
+   "dtype": "json",
+   "shape": [],
+   "shape_text": "[]",
+   "input_hex": "7b226d61785f746f6b656e73223a342c2273656564223a6e756c6c2c2274656d7065726174757265223a302e302c22746f705f6b223a2d312c22746f705f70223a312e307d",
+   "leaf": "53bf6417e39062e8765922cdc721496d052cfbc8bfd59fea0dd4eb96d101f90a"
+  },
+  {
+   "canonical_id": "p=0123456789ab/r=req-0/b=finish_reason",
+   "dtype": "utf8",
+   "shape": [],
+   "shape_text": "[]",
+   "input_hex": "73746f70",
+   "leaf": "3d7cedca76a9326e0f77532dbbe240b3abfd5e6dac6003f6f8f6a7cb21f681b7"
+  },
+  {
+   "canonical_id": "p=0123456789ab/r=req-0/b=prompt_token/t=0",
+   "dtype": "int32",
+   "shape": [],
+   "shape_text": "[]",
+   "input_hex": "01000000",
+   "leaf": "0b4f4eef5d6f84b49fbd50cd6b4d9cefa294e15ca6905715c7b036d678384a88"
+  },
+  {
+   "canonical_id": "p=0123456789ab/r=req-0/t=2/ph=prefill/l=0/op=layers.0.mlp.experts.expert.out/port=0/e=5",
+   "dtype": "bfloat16",
+   "shape": [
+    2
+   ],
+   "shape_text": "[2]",
+   "input_hex": "00000000",
+   "leaf": "46d5582651c40e943fbf2a25a7e653a42f3fd7a23a7d50179249d0f55a2b93fe"
+  },
+  {
+   "canonical_id": "p=0123456789ab/r=req-0/t=2/ph=prefill/l=0/op=layers.0.self_attn.o_proj.gemm/port=0/s=1",
+   "dtype": "bfloat16",
+   "shape": [
+    2
+   ],
+   "shape_text": "[2]",
+   "input_hex": "00000000",
+   "leaf": "98b1da56f66b86127bae42caf531472f56bf6e03e5809831879016480efe2517"
+  },
+  {
+   "canonical_id": "p=0123456789ab/r=req-0/t=2/ph=prefill/l=0/op=layers.0.self_attn.qkv_proj.gemm/port=0/c=3,7",
+   "dtype": "bfloat16",
+   "shape": [],
+   "shape_text": "[]",
+   "input_hex": "0000",
+   "leaf": "d69ca5de0f10c058df153106c8521b0a849071d3f1b1f1b75073b5e546e5c0b7"
+  }
+ ],
+ "node": {
+  "left": "360f84035942243c6a36537ae2f8673485e6c04455a0a85a0db19690f2541480",
+  "right": "27042f4e6eca7d0b2a7ee4026df2ecfa51d3339e6d122aa099118ecd8563bad9",
+  "digest": "acaa6d567d1b600cae59074a6b5cd96e3644981652f2b1e6bb6fab4d04cb66d4"
+ },
+ "lift": {
+  "child": "360f84035942243c6a36537ae2f8673485e6c04455a0a85a0db19690f2541480",
+  "digest": "d72de47406ff650429a9a5be91c12aa66e8bcc3615c375f0c34a8d70d89a815f"
+ },
+ "ids": {
+  "ids": [
+   "p=0123456789ab/r=req-0/t=0/ph=prefill/l=0/op=layers.0.mlp.residual/port=0",
+   "p=0123456789ab/r=req-0/t=1/ph=prefill/l=0/op=layers.0.mlp.residual/port=0",
+   "p=0123456789ab/r=req-0/t=2/ph=prefill/l=0/op=layers.0.mlp.residual/port=0"
+  ],
+  "digest": "8df6b05612484242bdb79694c872fbba23ddcc16770255d4f300081189a3a066"
+ },
+ "empty": "141d8e08ee08ed4cd3688c7b73a1fa8c9f035ea38b52e9ad270304a5f9a42f88",
+ "json_digest": {
+  "document": {
+   "b": [
+    1,
+    2
+   ],
+   "a": "x"
+  },
+  "canonical": "{\"a\":\"x\",\"b\":[1,2]}",
+  "digest": "6b77dc07f3e330e0104cfa1c37200f6af76aeea97a882e4b756e20fa13659b86",
+  "profile_id": "721ef82f2d6c"
+ },
+ "bf16_rne": [
+  {
+   "f32_hex": "3f800000",
+   "bf16_hex": "3f80"
+  },
+  {
+   "f32_hex": "3f808000",
+   "bf16_hex": "3f80"
+  },
+  {
+   "f32_hex": "3f818000",
+   "bf16_hex": "3f82"
+  },
+  {
+   "f32_hex": "3f810000",
+   "bf16_hex": "3f81"
+  },
+  {
+   "f32_hex": "7f7fffff",
+   "bf16_hex": "7f80"
+  },
+  {
+   "f32_hex": "80000000",
+   "bf16_hex": "8000"
+  },
+  {
+   "f32_hex": "000116c2",
+   "bf16_hex": "0001"
+  },
+  {
+   "f32_hex": "7fc00000",
+   "bf16_hex": "7fc0"
+  },
+  {
+   "f32_hex": "7f800000",
+   "bf16_hex": "7f80"
+  },
+  {
+   "f32_hex": "3f80c000",
+   "bf16_hex": "3f81"
+  },
+  {
+   "f32_hex": "3dcccccd",
+   "bf16_hex": "3dcd"
+  },
+  {
+   "f32_hex": "c0200000",
+   "bf16_hex": "c020"
+  },
+  {
+   "f32_hex": "477fe000",
+   "bf16_hex": "4780"
+  },
+  {
+   "f32_hex": "3f80c000",
+   "bf16_hex": "3f81"
+  }
+ ]
+}

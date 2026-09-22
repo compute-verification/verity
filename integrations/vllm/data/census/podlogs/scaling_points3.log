@@ -1,0 +1,160 @@
+/workspace/venv/bin/python /workspace/veritor/census_v2/small_census.py --case B0 --lp 160 --steps 8 --workers 8 --mode sample --sample-budget 0 --out out/census/scaling/lp160_s8.json --kind-budget ArgmaxStep_v1|scan=-1 --kind-budget Input|batch|weights=0 --kind-budget Input|batch|prompt=0 --input-exact
+program Serve_v1{C={6f196795e564},LP=160,STEPS=8} gates 1445979921 inputs 135039456; plan P1/cu=whole: 271616469 VUs in 41110856 runs; partition_digest 4f2c654e258f07e97135802cf64f89f8afe109c986b6f3cde63a2205bbeaadc5; build 182.2s rss 11078.0 MB
+  sampling plan: 257 batches over 41110856 runs (59s)
+  batch 1/257 done  units_seen so far 0  61s
+  batch 9/257 done  units_seen so far 0  62s
+  batch 17/257 done  units_seen so far 0  62s
+  batch 25/257 done  units_seen so far 0  62s
+  batch 33/257 done  units_seen so far 0  63s
+  batch 41/257 done  units_seen so far 0  63s
+  batch 49/257 done  units_seen so far 0  64s
+  batch 57/257 done  units_seen so far 0  64s
+  batch 65/257 done  units_seen so far 0  64s
+  batch 73/257 done  units_seen so far 0  65s
+  batch 81/257 done  units_seen so far 0  65s
+  batch 89/257 done  units_seen so far 0  65s
+  batch 97/257 done  units_seen so far 0  66s
+  batch 105/257 done  units_seen so far 0  66s
+  batch 113/257 done  units_seen so far 0  67s
+  batch 121/257 done  units_seen so far 0  67s
+  batch 129/257 done  units_seen so far 0  67s
+  batch 137/257 done  units_seen so far 0  68s
+  batch 145/257 done  units_seen so far 0  68s
+  batch 153/257 done  units_seen so far 0  68s
+  batch 161/257 done  units_seen so far 0  69s
+  batch 169/257 done  units_seen so far 0  69s
+  batch 177/257 done  units_seen so far 0  70s
+  batch 185/257 done  units_seen so far 0  70s
+  batch 193/257 done  units_seen so far 0  70s
+  batch 201/257 done  units_seen so far 0  71s
+  batch 209/257 done  units_seen so far 0  71s
+  batch 217/257 done  units_seen so far 0  71s
+  batch 225/257 done  units_seen so far 0  72s
+  batch 233/257 done  units_seen so far 0  72s
+  batch 241/257 done  units_seen so far 0  73s
+  batch 249/257 done  units_seen so far 9  74s
+  batch 257/257 done  units_seen so far 27  75s
+  input widths (exact, whole-node escape sets): {'Input|batch|prompt': {'members': 160, 'consumed': 160, 'unconsumed': 0, 'width': 32, 'escape_steps': 160, 'seconds': 0.707, 'out_bits_total_check': True}, 'Input|batch|weights': {'members': 135039296, 'consumed': 134525760, 'unconsumed': 513536, 'width': 16, 'escape_steps': 66042, 'seconds': 0.101, 'out_bits_total_check': True}}
+boundaries: 135039483 units in 76s
+wrote out/census/scaling/lp160_s8.json: N_V per_request 442519 global 135039296 total 135481815; max cut {'all_families': 80, 'excluding_exceptions': 32}; A_paper 138 (literal 138); interior 4423536 B / 1327059 words; checks {}
+  -> rc 0 in 277s
+/workspace/venv/bin/python /workspace/veritor/census_v2/small_census.py --case B0 --lp 200 --steps 1 --workers 8 --mode sample --sample-budget 0 --out out/census/scaling/lp200_s1.json --kind-budget ArgmaxStep_v1|scan=-1 --kind-budget Input|batch|weights=0 --kind-budget Input|batch|prompt=0 --input-exact
+program Serve_v1{C={6f196795e564},LP=200,STEPS=1} gates 1698328806 inputs 135039496; plan P1/cu=whole: 307374230 VUs in 55489794 runs; partition_digest e4578dae1c7b10c3b63f06478c29d0a2f6b861dc3af2dcab5bb888325b82cb40; build 216.9s rss 15087.9 MB
+  sampling plan: 257 batches over 55489794 runs (76s)
+  batch 1/257 done  units_seen so far 0  78s
+  batch 9/257 done  units_seen so far 0  79s
+  batch 17/257 done  units_seen so far 0  79s
+  batch 25/257 done  units_seen so far 0  80s
+  batch 33/257 done  units_seen so far 0  80s
+  batch 41/257 done  units_seen so far 0  81s
+  batch 49/257 done  units_seen so far 0  81s
+  batch 57/257 done  units_seen so far 0  82s
+  batch 65/257 done  units_seen so far 0  83s
+  batch 73/257 done  units_seen so far 0  84s
+  batch 81/257 done  units_seen so far 0  84s
+  batch 89/257 done  units_seen so far 0  85s
+  batch 97/257 done  units_seen so far 0  85s
+  batch 105/257 done  units_seen so far 0  86s
+  batch 113/257 done  units_seen so far 0  87s
+  batch 121/257 done  units_seen so far 0  88s
+  batch 129/257 done  units_seen so far 0  88s
+  batch 137/257 done  units_seen so far 0  89s
+  batch 145/257 done  units_seen so far 0  89s
+  batch 153/257 done  units_seen so far 0  90s
+  batch 161/257 done  units_seen so far 0  90s
+  batch 169/257 done  units_seen so far 0  91s
+  batch 177/257 done  units_seen so far 0  91s
+  batch 185/257 done  units_seen so far 0  92s
+  batch 193/257 done  units_seen so far 0  92s
+  batch 201/257 done  units_seen so far 0  93s
+  batch 209/257 done  units_seen so far 0  93s
+  batch 217/257 done  units_seen so far 0  94s
+  batch 225/257 done  units_seen so far 0  94s
+  batch 233/257 done  units_seen so far 0  95s
+  batch 241/257 done  units_seen so far 0  95s
+  batch 249/257 done  units_seen so far 0  96s
+  batch 257/257 done  units_seen so far 6  98s
+  input widths (exact, whole-node escape sets): {'Input|batch|prompt': {'members': 200, 'consumed': 200, 'unconsumed': 0, 'width': 32, 'escape_steps': 200, 'seconds': 0.977, 'out_bits_total_check': True}, 'Input|batch|weights': {'members': 135039296, 'consumed': 134527872, 'unconsumed': 511424, 'width': 16, 'escape_steps': 78997, 'seconds': 0.118, 'out_bits_total_check': True}}
+boundaries: 135039502 units in 100s
+wrote out/census/scaling/lp200_s1.json: N_V per_request 98502 global 135039296 total 135137798; max cut {'all_families': 80, 'excluding_exceptions': 32}; A_paper 136 (literal 136); interior 983008 B / 294902 words; checks {}
+  -> rc 0 in 340s
+/workspace/venv/bin/python /workspace/veritor/census_v2/small_census.py --case B0 --lp 192 --steps 4 --workers 8 --mode sample --sample-budget 0 --out out/census/scaling/lp192_s4.json --kind-budget ArgmaxStep_v1|scan=-1 --kind-budget Input|batch|weights=0 --kind-budget Input|batch|prompt=0 --input-exact
+program Serve_v1{C={6f196795e564},LP=192,STEPS=4} gates 1663860353 inputs 135039488; plan P1/cu=whole: 301889893 VUs in 53129812 runs; partition_digest 5886f126d7be6237da4115a8fac7ad85dca52c1adf1145e2a0ba102270602da7; build 224.9s rss 14433.8 MB
+  sampling plan: 257 batches over 53129812 runs (81s)
+  batch 1/257 done  units_seen so far 0  84s
+  batch 9/257 done  units_seen so far 0  85s
+  batch 17/257 done  units_seen so far 0  85s
+  batch 25/257 done  units_seen so far 0  86s
+  batch 33/257 done  units_seen so far 0  86s
+  batch 41/257 done  units_seen so far 0  87s
+  batch 49/257 done  units_seen so far 0  88s
+  batch 57/257 done  units_seen so far 0  88s
+  batch 65/257 done  units_seen so far 0  89s
+  batch 73/257 done  units_seen so far 0  89s
+  batch 81/257 done  units_seen so far 0  90s
+  batch 89/257 done  units_seen so far 0  90s
+  batch 97/257 done  units_seen so far 0  91s
+  batch 105/257 done  units_seen so far 0  91s
+  batch 113/257 done  units_seen so far 0  92s
+  batch 121/257 done  units_seen so far 0  92s
+  batch 129/257 done  units_seen so far 0  93s
+  batch 137/257 done  units_seen so far 0  93s
+  batch 145/257 done  units_seen so far 0  94s
+  batch 153/257 done  units_seen so far 0  94s
+  batch 161/257 done  units_seen so far 0  95s
+  batch 169/257 done  units_seen so far 0  95s
+  batch 177/257 done  units_seen so far 0  96s
+  batch 185/257 done  units_seen so far 0  96s
+  batch 193/257 done  units_seen so far 0  97s
+  batch 201/257 done  units_seen so far 0  97s
+  batch 209/257 done  units_seen so far 0  98s
+  batch 217/257 done  units_seen so far 0  98s
+  batch 225/257 done  units_seen so far 0  99s
+  batch 233/257 done  units_seen so far 0  99s
+  batch 241/257 done  units_seen so far 0  100s
+  batch 249/257 done  units_seen so far 0  101s
+  batch 257/257 done  units_seen so far 15  103s
+  input widths (exact, whole-node escape sets): {'Input|batch|prompt': {'members': 192, 'consumed': 192, 'unconsumed': 0, 'width': 32, 'escape_steps': 192, 'seconds': 0.963, 'out_bits_total_check': True}, 'Input|batch|weights': {'members': 135039296, 'consumed': 134527552, 'unconsumed': 511744, 'width': 16, 'escape_steps': 77038, 'seconds': 0.12, 'out_bits_total_check': True}}
+boundaries: 135039503 units in 104s
+wrote out/census/scaling/lp192_s4.json: N_V per_request 245947 global 135039296 total 135285243; max cut {'all_families': 80, 'excluding_exceptions': 32}; A_paper 137 (literal 137); interior 2457520 B / 737255 words; checks {}
+  -> rc 0 in 352s
+/workspace/venv/bin/python /workspace/veritor/census_v2/small_census.py --case B0 --lp 72 --steps 9 --workers 8 --mode sample --sample-budget 0 --out out/census/scaling/lp72_s9.json --kind-budget ArgmaxStep_v1|scan=-1 --kind-budget Input|batch|weights=0 --kind-budget Input|batch|prompt=0 --input-exact
+program Serve_v1{C={6f196795e564},LP=72,STEPS=9} gates 764775438 inputs 135039368; plan P1/cu=whole: 190962238 VUs in 13072912 runs; partition_digest 34e650d853da60da6c71078372eab25224336a8293dca6ddf9cea699f4378b27; build 95.9s rss 3457.5 MB
+  sampling plan: 257 batches over 13072912 runs (18s)
+  batch 1/257 done  units_seen so far 0  18s
+  batch 9/257 done  units_seen so far 0  18s
+  batch 17/257 done  units_seen so far 0  19s
+  batch 25/257 done  units_seen so far 0  19s
+  batch 33/257 done  units_seen so far 0  19s
+  batch 41/257 done  units_seen so far 0  19s
+  batch 49/257 done  units_seen so far 0  19s
+  batch 57/257 done  units_seen so far 0  19s
+  batch 65/257 done  units_seen so far 0  19s
+  batch 73/257 done  units_seen so far 0  19s
+  batch 81/257 done  units_seen so far 0  20s
+  batch 89/257 done  units_seen so far 0  20s
+  batch 97/257 done  units_seen so far 0  20s
+  batch 105/257 done  units_seen so far 0  20s
+  batch 113/257 done  units_seen so far 0  20s
+  batch 121/257 done  units_seen so far 0  20s
+  batch 129/257 done  units_seen so far 0  20s
+  batch 137/257 done  units_seen so far 0  20s
+  batch 145/257 done  units_seen so far 0  20s
+  batch 153/257 done  units_seen so far 0  21s
+  batch 161/257 done  units_seen so far 0  21s
+  batch 169/257 done  units_seen so far 0  21s
+  batch 177/257 done  units_seen so far 0  21s
+  batch 185/257 done  units_seen so far 0  21s
+  batch 193/257 done  units_seen so far 0  21s
+  batch 201/257 done  units_seen so far 0  21s
+  batch 209/257 done  units_seen so far 0  21s
+  batch 217/257 done  units_seen so far 0  22s
+  batch 225/257 done  units_seen so far 0  22s
+  batch 233/257 done  units_seen so far 6  22s
+  batch 241/257 done  units_seen so far 12  22s
+  batch 249/257 done  units_seen so far 18  22s
+  batch 257/257 done  units_seen so far 30  23s
+  input widths (exact, whole-node escape sets): {'Input|batch|prompt': {'members': 72, 'consumed': 72, 'unconsumed': 0, 'width': 32, 'escape_steps': 72, 'seconds': 0.208, 'out_bits_total_check': True}, 'Input|batch|weights': {'members': 135039296, 'consumed': 134520192, 'unconsumed': 519104, 'width': 16, 'escape_steps': 31853, 'seconds': 0.056, 'out_bits_total_check': True}}
+boundaries: 135039398 units in 23s
+wrote out/census/scaling/lp72_s9.json: N_V per_request 491582 global 135039296 total 135530878; max cut {'all_families': 80, 'excluding_exceptions': 32}; A_paper 138 (literal 138); interior 4915040 B / 1474510 words; checks {}
+  -> rc 0 in 125s

@@ -1,0 +1,3472 @@
+{
+ "model": "SmolLM2-135M (HuggingFaceTB/SmolLM2-135M)",
+ "workload": "B0 Serve_v1{C={6f196795e564},LP=8,STEPS=1}: LP=8 prompt positions, STEPS=1 decode steps",
+ "partition_digest": "2725a383e388e2178fb96c556a0095656e60e3449ccb4bb46114fd37dbba2a03",
+ "block_size": null,
+ "families": [
+  {
+   "name": "AmpereBF16TcDot16_v1|batch",
+   "count_per_request": 155520,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 13.002,
+   "in_bits": 224.032,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "ArgmaxStep_v1|scan|out=32",
+   "count_per_request": 2,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 4.0,
+   "in_bits": 96.0,
+   "gates_per_unit": 5,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon); width basis: ENDS MODE: first, second and last unit of every run measured; all but the last unit of a run take the first unit's width (assumption: a scan's interface changes only at its final member)"
+  },
+  {
+   "name": "ArgmaxStep_v1|scan|out=80",
+   "count_per_request": 98300,
+   "out_scalars": 3,
+   "out_bits": 80,
+   "kappa": 80,
+   "exception": true,
+   "scope": "per_request",
+   "in_scalars": 4.0,
+   "in_bits": 96.0,
+   "gates_per_unit": 5,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon); width basis: ENDS MODE: first, second and last unit of every run measured; all but the last unit of a run take the first unit's width (assumption: a scan's interface changes only at its final member); interface > 32 bits listed by name, not clamped (DIRECTIVE \u00a71.5.8)"
+  },
+  {
+   "name": "Bf16AddF2fp_v1|batch",
+   "count_per_request": 307008,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "Bf16ToF32_v1|batch",
+   "count_per_request": 624384,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1.0,
+   "in_bits": 16.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "Const16[0x0000]_v1|primitive",
+   "count_per_request": 4860,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "Const32[0x00000000]_v1|primitive|out=0",
+   "count_per_request": 2262,
+   "out_scalars": 0,
+   "out_bits": 0,
+   "kappa": 0,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon); width basis: SCALED ESTIMATE from 1001 of 161705 runs (1001 of 161705 units attributed); out_bits 0: the unit's value is consumed by no other unit (dead value, cut width 0)"
+  },
+  {
+   "name": "Const32[0x00000000]_v1|primitive|out=32",
+   "count_per_request": 159443,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon); width basis: SCALED ESTIMATE from 1001 of 161705 runs (1001 of 161705 units attributed)"
+  },
+  {
+   "name": "Const32[0x00000001]_v1|primitive",
+   "count_per_request": 2,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "Const32[0x3727c5ac]_v1|primitive",
+   "count_per_request": 542,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "Const32[0x3e38aa3b]_v1|primitive",
+   "count_per_request": 2430,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "Const32[0x3f800000]_v1|primitive",
+   "count_per_request": 9,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "Const32[0x44100000]_v1|primitive",
+   "count_per_request": 542,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "DivFullRcp_v1|primitive",
+   "count_per_request": 18,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "DivFullScaleA_v1|primitive",
+   "count_per_request": 9,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "DotBf16_v1{K=64}|call",
+   "count_per_request": 12150,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 128.0,
+   "in_bits": 2048.0,
+   "gates_per_unit": 5,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F2fpBf16_v1|batch",
+   "count_per_request": 467712,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F2fpBf16_v1|primitive",
+   "count_per_request": 12150,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F32AddFtz_v1|primitive",
+   "count_per_request": 12960,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F32Add_v1|primitive|out=0",
+   "count_per_request": 937,
+   "out_scalars": 0,
+   "out_bits": 0,
+   "kappa": 0,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon); width basis: SCALED ESTIMATE from 1001 of 312804 runs (1001 of 312804 units attributed); out_bits 0: the unit's value is consumed by no other unit (dead value, cut width 0)"
+  },
+  {
+   "name": "F32Add_v1|primitive|out=32",
+   "count_per_request": 311867,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon); width basis: SCALED ESTIMATE from 1001 of 312804 runs (1001 of 312804 units attributed)"
+  },
+  {
+   "name": "F32Div_v1|primitive",
+   "count_per_request": 533,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F32FmaSubFtz_v1|primitive",
+   "count_per_request": 12150,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 3.0,
+   "in_bits": 96.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F32Fma_v1|primitive",
+   "count_per_request": 4545,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.002,
+   "in_bits": 64.063,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F32Max_v1|primitive",
+   "count_per_request": 9720,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F32MulFtz_v1|batch",
+   "count_per_request": 155520,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F32MulFtz_v1|primitive",
+   "count_per_request": 2430,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F32Mul_v1|batch",
+   "count_per_request": 624384,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "F32Mul_v1|primitive",
+   "count_per_request": 307665,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "Fa2InvSum_v1|primitive",
+   "count_per_request": 2430,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "GatherBf16x49152_v1|batch",
+   "count_per_request": 5184,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 49153.0,
+   "in_bits": 786464.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "GemmCoordinate_v1{K=1536}|batch|out=0",
+   "count_per_request": 4032,
+   "out_scalars": 0,
+   "out_bits": 0,
+   "kappa": 0,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 3072.0,
+   "in_bits": 49152.0,
+   "gates_per_unit": 98,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon); width basis: attributed on every unit (sampled + bisected change points within every run); out_bits 0: the unit's value is consumed by no other unit (dead value, cut width 0)"
+  },
+  {
+   "name": "GemmCoordinate_v1{K=1536}|batch|out=16",
+   "count_per_request": 151488,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 3072.0,
+   "in_bits": 49152.0,
+   "gates_per_unit": 98,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon); width basis: attributed on every unit (sampled + bisected change points within every run)"
+  },
+  {
+   "name": "GemmCoordinate_v1{K=576}|batch",
+   "count_per_request": 1342464,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1152.0,
+   "in_bits": 18432.0,
+   "gates_per_unit": 38,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "GuardNegInfZero_v1|primitive",
+   "count_per_request": 2430,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "Input[prompt]",
+   "count_per_request": 8,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "Input[weights]|out=0",
+   "count_per_request": 523712,
+   "out_scalars": 0,
+   "out_bits": 0,
+   "kappa": 0,
+   "exception": false,
+   "scope": "global",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon); width basis: exact: whole-node escape set (every member classified consumed/unconsumed in one boundary query); out_bits 0: the unit's value is consumed by no other unit (dead value, cut width 0)"
+  },
+  {
+   "name": "Input[weights]|out=16",
+   "count_per_request": 134515584,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "global",
+   "in_scalars": 0.0,
+   "in_bits": 0.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon); width basis: exact: whole-node escape set (every member classified consumed/unconsumed in one boundary query)"
+  },
+  {
+   "name": "MufuEx2Ftz_v1|primitive",
+   "count_per_request": 12150,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "MufuSqrtFtz_v1|primitive",
+   "count_per_request": 9,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "RopeOutAdd_v1|batch",
+   "count_per_request": 103680,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 4.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "RopeOut_v1|batch",
+   "count_per_request": 103680,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 4.0,
+   "in_bits": 64.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "RsqrtApprox_v1|primitive",
+   "count_per_request": 533,
+   "out_scalars": 1,
+   "out_bits": 32,
+   "kappa": 32,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 1.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  },
+  {
+   "name": "SiluMulBf16_v1|batch",
+   "count_per_request": 414720,
+   "out_scalars": 1,
+   "out_bits": 16,
+   "kappa": 16,
+   "exception": false,
+   "scope": "per_request",
+   "in_scalars": 2.0,
+   "in_bits": 32.0,
+   "gates_per_unit": 1,
+   "notes": "kappa = S.out width (a valid cut; kind-table narrowing not computed for this horizon)"
+  }
+ ],
+ "N_V": {
+  "per_request": 5432862,
+  "global": 135039296,
+  "total_one_request": 140472158
+ },
+ "max_cut_width": {
+  "all_families": 80,
+  "excluding_exceptions": 32
+ },
+ "A_paper": 142,
+ "A_paper_forms": {
+  "primary_population": {
+   "value": 142,
+   "form": "max_cut + ceil(log2(4*(V_global + M*V_r)))"
+  },
+  "directive_literal": {
+   "value": 142,
+   "form": "max_cut + ceil(log2(4*N_V_per_request*M))"
+  },
+  "one_request_total": {
+   "value": 146,
+   "form": "max_cut + ceil(log2(4*N_V_total_one_request*M))"
+  },
+  "difference_bits_primary_minus_literal": 0,
+  "finding": false,
+  "M": 130000000000,
+  "max_cut_used": 80,
+  "A_paper_excluding_exceptions": 94
+ },
+ "A_tight": {
+  "formula": "max_cut + ceil(log2(e*N/k)); N = V_global + M*V_r; k = s*(V_global + q*M*V_r)",
+  "max_cut": 80,
+  "N": 706272060135039296,
+  "M": 130000000000,
+  "rows": [
+   {
+    "q": "2^-1",
+    "s": "2^-8",
+    "k_expected": 1379437617714997.2,
+    "log_term": 11,
+    "A_tight": 91
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-9",
+    "k_expected": 689718808857498.6,
+    "log_term": 12,
+    "A_tight": 92
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-10",
+    "k_expected": 344859404428749.3,
+    "log_term": 13,
+    "A_tight": 93
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-11",
+    "k_expected": 172429702214374.66,
+    "log_term": 14,
+    "A_tight": 94
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-12",
+    "k_expected": 86214851107187.33,
+    "log_term": 15,
+    "A_tight": 95
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-13",
+    "k_expected": 43107425553593.664,
+    "log_term": 16,
+    "A_tight": 96
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-14",
+    "k_expected": 21553712776796.832,
+    "log_term": 17,
+    "A_tight": 97
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-15",
+    "k_expected": 10776856388398.416,
+    "log_term": 18,
+    "A_tight": 98
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-16",
+    "k_expected": 5388428194199.208,
+    "log_term": 19,
+    "A_tight": 99
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-17",
+    "k_expected": 2694214097099.604,
+    "log_term": 20,
+    "A_tight": 100
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-18",
+    "k_expected": 1347107048549.802,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-19",
+    "k_expected": 673553524274.901,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-20",
+    "k_expected": 336776762137.4505,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-21",
+    "k_expected": 168388381068.72525,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-22",
+    "k_expected": 84194190534.36263,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-23",
+    "k_expected": 42097095267.18131,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-1",
+    "s": "2^-24",
+    "k_expected": 21048547633.590656,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-8",
+    "k_expected": 689718809121247.2,
+    "log_term": 12,
+    "A_tight": 92
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-9",
+    "k_expected": 344859404560623.6,
+    "log_term": 13,
+    "A_tight": 93
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-10",
+    "k_expected": 172429702280311.8,
+    "log_term": 14,
+    "A_tight": 94
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-11",
+    "k_expected": 86214851140155.9,
+    "log_term": 15,
+    "A_tight": 95
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-12",
+    "k_expected": 43107425570077.95,
+    "log_term": 16,
+    "A_tight": 96
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-13",
+    "k_expected": 21553712785038.977,
+    "log_term": 17,
+    "A_tight": 97
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-14",
+    "k_expected": 10776856392519.488,
+    "log_term": 18,
+    "A_tight": 98
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-15",
+    "k_expected": 5388428196259.744,
+    "log_term": 19,
+    "A_tight": 99
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-16",
+    "k_expected": 2694214098129.872,
+    "log_term": 20,
+    "A_tight": 100
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-17",
+    "k_expected": 1347107049064.936,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-18",
+    "k_expected": 673553524532.468,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-19",
+    "k_expected": 336776762266.234,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-20",
+    "k_expected": 168388381133.117,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-21",
+    "k_expected": 84194190566.5585,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-22",
+    "k_expected": 42097095283.27925,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-23",
+    "k_expected": 21048547641.639626,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-2",
+    "s": "2^-24",
+    "k_expected": 10524273820.819813,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-8",
+    "k_expected": 344859404824372.25,
+    "log_term": 13,
+    "A_tight": 93
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-9",
+    "k_expected": 172429702412186.12,
+    "log_term": 14,
+    "A_tight": 94
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-10",
+    "k_expected": 86214851206093.06,
+    "log_term": 15,
+    "A_tight": 95
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-11",
+    "k_expected": 43107425603046.53,
+    "log_term": 16,
+    "A_tight": 96
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-12",
+    "k_expected": 21553712801523.266,
+    "log_term": 17,
+    "A_tight": 97
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-13",
+    "k_expected": 10776856400761.633,
+    "log_term": 18,
+    "A_tight": 98
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-14",
+    "k_expected": 5388428200380.816,
+    "log_term": 19,
+    "A_tight": 99
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-15",
+    "k_expected": 2694214100190.408,
+    "log_term": 20,
+    "A_tight": 100
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-16",
+    "k_expected": 1347107050095.204,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-17",
+    "k_expected": 673553525047.602,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-18",
+    "k_expected": 336776762523.801,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-19",
+    "k_expected": 168388381261.9005,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-20",
+    "k_expected": 84194190630.95026,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-21",
+    "k_expected": 42097095315.47513,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-22",
+    "k_expected": 21048547657.737564,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-23",
+    "k_expected": 10524273828.868782,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-3",
+    "s": "2^-24",
+    "k_expected": 5262136914.434391,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-8",
+    "k_expected": 172429702675934.75,
+    "log_term": 14,
+    "A_tight": 94
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-9",
+    "k_expected": 86214851337967.38,
+    "log_term": 15,
+    "A_tight": 95
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-10",
+    "k_expected": 43107425668983.69,
+    "log_term": 16,
+    "A_tight": 96
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-11",
+    "k_expected": 21553712834491.844,
+    "log_term": 17,
+    "A_tight": 97
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-12",
+    "k_expected": 10776856417245.922,
+    "log_term": 18,
+    "A_tight": 98
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-13",
+    "k_expected": 5388428208622.961,
+    "log_term": 19,
+    "A_tight": 99
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-14",
+    "k_expected": 2694214104311.4805,
+    "log_term": 20,
+    "A_tight": 100
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-15",
+    "k_expected": 1347107052155.7402,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-16",
+    "k_expected": 673553526077.8701,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-17",
+    "k_expected": 336776763038.93506,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-18",
+    "k_expected": 168388381519.46753,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-19",
+    "k_expected": 84194190759.73376,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-20",
+    "k_expected": 42097095379.86688,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-21",
+    "k_expected": 21048547689.93344,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-22",
+    "k_expected": 10524273844.96672,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-23",
+    "k_expected": 5262136922.48336,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-4",
+    "s": "2^-24",
+    "k_expected": 2631068461.24168,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-8",
+    "k_expected": 86214851601716.0,
+    "log_term": 15,
+    "A_tight": 95
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-9",
+    "k_expected": 43107425800858.0,
+    "log_term": 16,
+    "A_tight": 96
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-10",
+    "k_expected": 21553712900429.0,
+    "log_term": 17,
+    "A_tight": 97
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-11",
+    "k_expected": 10776856450214.5,
+    "log_term": 18,
+    "A_tight": 98
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-12",
+    "k_expected": 5388428225107.25,
+    "log_term": 19,
+    "A_tight": 99
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-13",
+    "k_expected": 2694214112553.625,
+    "log_term": 20,
+    "A_tight": 100
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-14",
+    "k_expected": 1347107056276.8125,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-15",
+    "k_expected": 673553528138.4062,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-16",
+    "k_expected": 336776764069.2031,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-17",
+    "k_expected": 168388382034.60156,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-18",
+    "k_expected": 84194191017.30078,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-19",
+    "k_expected": 42097095508.65039,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-20",
+    "k_expected": 21048547754.325195,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-21",
+    "k_expected": 10524273877.162598,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-22",
+    "k_expected": 5262136938.581299,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-23",
+    "k_expected": 2631068469.2906494,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-5",
+    "s": "2^-24",
+    "k_expected": 1315534234.6453247,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-8",
+    "k_expected": 43107426064606.625,
+    "log_term": 16,
+    "A_tight": 96
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-9",
+    "k_expected": 21553713032303.312,
+    "log_term": 17,
+    "A_tight": 97
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-10",
+    "k_expected": 10776856516151.656,
+    "log_term": 18,
+    "A_tight": 98
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-11",
+    "k_expected": 5388428258075.828,
+    "log_term": 19,
+    "A_tight": 99
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-12",
+    "k_expected": 2694214129037.914,
+    "log_term": 20,
+    "A_tight": 100
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-13",
+    "k_expected": 1347107064518.957,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-14",
+    "k_expected": 673553532259.4785,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-15",
+    "k_expected": 336776766129.73926,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-16",
+    "k_expected": 168388383064.86963,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-17",
+    "k_expected": 84194191532.43481,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-18",
+    "k_expected": 42097095766.21741,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-19",
+    "k_expected": 21048547883.108704,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-20",
+    "k_expected": 10524273941.554352,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-21",
+    "k_expected": 5262136970.777176,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-22",
+    "k_expected": 2631068485.388588,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-23",
+    "k_expected": 1315534242.694294,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-6",
+    "s": "2^-24",
+    "k_expected": 657767121.347147,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-8",
+    "k_expected": 21553713296051.938,
+    "log_term": 17,
+    "A_tight": 97
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-9",
+    "k_expected": 10776856648025.969,
+    "log_term": 18,
+    "A_tight": 98
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-10",
+    "k_expected": 5388428324012.984,
+    "log_term": 19,
+    "A_tight": 99
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-11",
+    "k_expected": 2694214162006.492,
+    "log_term": 20,
+    "A_tight": 100
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-12",
+    "k_expected": 1347107081003.246,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-13",
+    "k_expected": 673553540501.623,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-14",
+    "k_expected": 336776770250.8115,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-15",
+    "k_expected": 168388385125.40576,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-16",
+    "k_expected": 84194192562.70288,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-17",
+    "k_expected": 42097096281.35144,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-18",
+    "k_expected": 21048548140.67572,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-19",
+    "k_expected": 10524274070.33786,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-20",
+    "k_expected": 5262137035.16893,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-21",
+    "k_expected": 2631068517.584465,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-22",
+    "k_expected": 1315534258.7922325,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-23",
+    "k_expected": 657767129.3961163,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-7",
+    "s": "2^-24",
+    "k_expected": 328883564.6980581,
+    "log_term": 33,
+    "A_tight": 113
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-8",
+    "k_expected": 10776856911774.594,
+    "log_term": 18,
+    "A_tight": 98
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-9",
+    "k_expected": 5388428455887.297,
+    "log_term": 19,
+    "A_tight": 99
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-10",
+    "k_expected": 2694214227943.6484,
+    "log_term": 20,
+    "A_tight": 100
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-11",
+    "k_expected": 1347107113971.8242,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-12",
+    "k_expected": 673553556985.9121,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-13",
+    "k_expected": 336776778492.95605,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-14",
+    "k_expected": 168388389246.47803,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-15",
+    "k_expected": 84194194623.23901,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-16",
+    "k_expected": 42097097311.61951,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-17",
+    "k_expected": 21048548655.809753,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-18",
+    "k_expected": 10524274327.904877,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-19",
+    "k_expected": 5262137163.952438,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-20",
+    "k_expected": 2631068581.976219,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-21",
+    "k_expected": 1315534290.9881096,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-22",
+    "k_expected": 657767145.4940548,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-23",
+    "k_expected": 328883572.7470274,
+    "log_term": 33,
+    "A_tight": 113
+   },
+   {
+    "q": "2^-8",
+    "s": "2^-24",
+    "k_expected": 164441786.3735137,
+    "log_term": 34,
+    "A_tight": 114
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-8",
+    "k_expected": 5388428719635.922,
+    "log_term": 19,
+    "A_tight": 99
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-9",
+    "k_expected": 2694214359817.961,
+    "log_term": 20,
+    "A_tight": 100
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-10",
+    "k_expected": 1347107179908.9805,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-11",
+    "k_expected": 673553589954.4902,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-12",
+    "k_expected": 336776794977.2451,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-13",
+    "k_expected": 168388397488.62256,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-14",
+    "k_expected": 84194198744.31128,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-15",
+    "k_expected": 42097099372.15564,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-16",
+    "k_expected": 21048549686.07782,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-17",
+    "k_expected": 10524274843.03891,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-18",
+    "k_expected": 5262137421.519455,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-19",
+    "k_expected": 2631068710.7597275,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-20",
+    "k_expected": 1315534355.3798637,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-21",
+    "k_expected": 657767177.6899319,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-22",
+    "k_expected": 328883588.84496593,
+    "log_term": 33,
+    "A_tight": 113
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-23",
+    "k_expected": 164441794.42248297,
+    "log_term": 34,
+    "A_tight": 114
+   },
+   {
+    "q": "2^-9",
+    "s": "2^-24",
+    "k_expected": 82220897.21124148,
+    "log_term": 35,
+    "A_tight": 115
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-8",
+    "k_expected": 2694214623566.586,
+    "log_term": 20,
+    "A_tight": 100
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-9",
+    "k_expected": 1347107311783.293,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-10",
+    "k_expected": 673553655891.6465,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-11",
+    "k_expected": 336776827945.82324,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-12",
+    "k_expected": 168388413972.91162,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-13",
+    "k_expected": 84194206986.45581,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-14",
+    "k_expected": 42097103493.227905,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-15",
+    "k_expected": 21048551746.613953,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-16",
+    "k_expected": 10524275873.306976,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-17",
+    "k_expected": 5262137936.653488,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-18",
+    "k_expected": 2631068968.326744,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-19",
+    "k_expected": 1315534484.163372,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-20",
+    "k_expected": 657767242.081686,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-21",
+    "k_expected": 328883621.040843,
+    "log_term": 33,
+    "A_tight": 113
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-22",
+    "k_expected": 164441810.5204215,
+    "log_term": 34,
+    "A_tight": 114
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-23",
+    "k_expected": 82220905.26021075,
+    "log_term": 35,
+    "A_tight": 115
+   },
+   {
+    "q": "2^-10",
+    "s": "2^-24",
+    "k_expected": 41110452.630105376,
+    "log_term": 36,
+    "A_tight": 116
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-8",
+    "k_expected": 1347107575531.918,
+    "log_term": 21,
+    "A_tight": 101
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-9",
+    "k_expected": 673553787765.959,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-10",
+    "k_expected": 336776893882.9795,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-11",
+    "k_expected": 168388446941.48975,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-12",
+    "k_expected": 84194223470.74487,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-13",
+    "k_expected": 42097111735.37244,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-14",
+    "k_expected": 21048555867.68622,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-15",
+    "k_expected": 10524277933.84311,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-16",
+    "k_expected": 5262138966.921555,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-17",
+    "k_expected": 2631069483.4607773,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-18",
+    "k_expected": 1315534741.7303886,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-19",
+    "k_expected": 657767370.8651943,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-20",
+    "k_expected": 328883685.43259716,
+    "log_term": 33,
+    "A_tight": 113
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-21",
+    "k_expected": 164441842.71629858,
+    "log_term": 34,
+    "A_tight": 114
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-22",
+    "k_expected": 82220921.35814929,
+    "log_term": 35,
+    "A_tight": 115
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-23",
+    "k_expected": 41110460.679074645,
+    "log_term": 36,
+    "A_tight": 116
+   },
+   {
+    "q": "2^-11",
+    "s": "2^-24",
+    "k_expected": 20555230.339537323,
+    "log_term": 37,
+    "A_tight": 117
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-8",
+    "k_expected": 673554051514.584,
+    "log_term": 22,
+    "A_tight": 102
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-9",
+    "k_expected": 336777025757.292,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-10",
+    "k_expected": 168388512878.646,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-11",
+    "k_expected": 84194256439.323,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-12",
+    "k_expected": 42097128219.6615,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-13",
+    "k_expected": 21048564109.83075,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-14",
+    "k_expected": 10524282054.915375,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-15",
+    "k_expected": 5262141027.457687,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-16",
+    "k_expected": 2631070513.7288437,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-17",
+    "k_expected": 1315535256.8644218,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-18",
+    "k_expected": 657767628.4322109,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-19",
+    "k_expected": 328883814.21610546,
+    "log_term": 33,
+    "A_tight": 113
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-20",
+    "k_expected": 164441907.10805273,
+    "log_term": 34,
+    "A_tight": 114
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-21",
+    "k_expected": 82220953.55402637,
+    "log_term": 35,
+    "A_tight": 115
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-22",
+    "k_expected": 41110476.77701318,
+    "log_term": 36,
+    "A_tight": 116
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-23",
+    "k_expected": 20555238.38850659,
+    "log_term": 37,
+    "A_tight": 117
+   },
+   {
+    "q": "2^-12",
+    "s": "2^-24",
+    "k_expected": 10277619.194253296,
+    "log_term": 38,
+    "A_tight": 118
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-8",
+    "k_expected": 336777289505.917,
+    "log_term": 23,
+    "A_tight": 103
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-9",
+    "k_expected": 168388644752.9585,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-10",
+    "k_expected": 84194322376.47925,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-11",
+    "k_expected": 42097161188.239624,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-12",
+    "k_expected": 21048580594.119812,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-13",
+    "k_expected": 10524290297.059906,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-14",
+    "k_expected": 5262145148.529953,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-15",
+    "k_expected": 2631072574.2649765,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-16",
+    "k_expected": 1315536287.1324883,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-17",
+    "k_expected": 657768143.5662441,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-18",
+    "k_expected": 328884071.78312206,
+    "log_term": 33,
+    "A_tight": 113
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-19",
+    "k_expected": 164442035.89156103,
+    "log_term": 34,
+    "A_tight": 114
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-20",
+    "k_expected": 82221017.94578052,
+    "log_term": 35,
+    "A_tight": 115
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-21",
+    "k_expected": 41110508.97289026,
+    "log_term": 36,
+    "A_tight": 116
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-22",
+    "k_expected": 20555254.48644513,
+    "log_term": 37,
+    "A_tight": 117
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-23",
+    "k_expected": 10277627.243222564,
+    "log_term": 38,
+    "A_tight": 118
+   },
+   {
+    "q": "2^-13",
+    "s": "2^-24",
+    "k_expected": 5138813.621611282,
+    "log_term": 39,
+    "A_tight": 119
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-8",
+    "k_expected": 168388908501.5835,
+    "log_term": 24,
+    "A_tight": 104
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-9",
+    "k_expected": 84194454250.79175,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-10",
+    "k_expected": 42097227125.395874,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-11",
+    "k_expected": 21048613562.697937,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-12",
+    "k_expected": 10524306781.348969,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-13",
+    "k_expected": 5262153390.674484,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-14",
+    "k_expected": 2631076695.337242,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-15",
+    "k_expected": 1315538347.668621,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-16",
+    "k_expected": 657769173.8343105,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-17",
+    "k_expected": 328884586.91715527,
+    "log_term": 33,
+    "A_tight": 113
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-18",
+    "k_expected": 164442293.45857763,
+    "log_term": 34,
+    "A_tight": 114
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-19",
+    "k_expected": 82221146.72928882,
+    "log_term": 35,
+    "A_tight": 115
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-20",
+    "k_expected": 41110573.36464441,
+    "log_term": 36,
+    "A_tight": 116
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-21",
+    "k_expected": 20555286.682322204,
+    "log_term": 37,
+    "A_tight": 117
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-22",
+    "k_expected": 10277643.341161102,
+    "log_term": 38,
+    "A_tight": 118
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-23",
+    "k_expected": 5138821.670580551,
+    "log_term": 39,
+    "A_tight": 119
+   },
+   {
+    "q": "2^-14",
+    "s": "2^-24",
+    "k_expected": 2569410.8352902755,
+    "log_term": 40,
+    "A_tight": 120
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-8",
+    "k_expected": 84194717999.41675,
+    "log_term": 25,
+    "A_tight": 105
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-9",
+    "k_expected": 42097358999.708374,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-10",
+    "k_expected": 21048679499.854187,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-11",
+    "k_expected": 10524339749.927094,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-12",
+    "k_expected": 5262169874.963547,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-13",
+    "k_expected": 2631084937.4817734,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-14",
+    "k_expected": 1315542468.7408867,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-15",
+    "k_expected": 657771234.3704433,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-16",
+    "k_expected": 328885617.1852217,
+    "log_term": 33,
+    "A_tight": 113
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-17",
+    "k_expected": 164442808.59261084,
+    "log_term": 34,
+    "A_tight": 114
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-18",
+    "k_expected": 82221404.29630542,
+    "log_term": 35,
+    "A_tight": 115
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-19",
+    "k_expected": 41110702.14815271,
+    "log_term": 36,
+    "A_tight": 116
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-20",
+    "k_expected": 20555351.074076355,
+    "log_term": 37,
+    "A_tight": 117
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-21",
+    "k_expected": 10277675.537038177,
+    "log_term": 38,
+    "A_tight": 118
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-22",
+    "k_expected": 5138837.768519089,
+    "log_term": 39,
+    "A_tight": 119
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-23",
+    "k_expected": 2569418.8842595443,
+    "log_term": 40,
+    "A_tight": 120
+   },
+   {
+    "q": "2^-15",
+    "s": "2^-24",
+    "k_expected": 1284709.4421297722,
+    "log_term": 41,
+    "A_tight": 121
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-8",
+    "k_expected": 42097622748.333374,
+    "log_term": 26,
+    "A_tight": 106
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-9",
+    "k_expected": 21048811374.166687,
+    "log_term": 27,
+    "A_tight": 107
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-10",
+    "k_expected": 10524405687.083344,
+    "log_term": 28,
+    "A_tight": 108
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-11",
+    "k_expected": 5262202843.541672,
+    "log_term": 29,
+    "A_tight": 109
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-12",
+    "k_expected": 2631101421.770836,
+    "log_term": 30,
+    "A_tight": 110
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-13",
+    "k_expected": 1315550710.885418,
+    "log_term": 31,
+    "A_tight": 111
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-14",
+    "k_expected": 657775355.442709,
+    "log_term": 32,
+    "A_tight": 112
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-15",
+    "k_expected": 328887677.7213545,
+    "log_term": 33,
+    "A_tight": 113
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-16",
+    "k_expected": 164443838.86067724,
+    "log_term": 34,
+    "A_tight": 114
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-17",
+    "k_expected": 82221919.43033862,
+    "log_term": 35,
+    "A_tight": 115
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-18",
+    "k_expected": 41110959.71516931,
+    "log_term": 36,
+    "A_tight": 116
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-19",
+    "k_expected": 20555479.857584655,
+    "log_term": 37,
+    "A_tight": 117
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-20",
+    "k_expected": 10277739.928792328,
+    "log_term": 38,
+    "A_tight": 118
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-21",
+    "k_expected": 5138869.964396164,
+    "log_term": 39,
+    "A_tight": 119
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-22",
+    "k_expected": 2569434.982198082,
+    "log_term": 40,
+    "A_tight": 120
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-23",
+    "k_expected": 1284717.491099041,
+    "log_term": 41,
+    "A_tight": 121
+   },
+   {
+    "q": "2^-16",
+    "s": "2^-24",
+    "k_expected": 642358.7455495205,
+    "log_term": 42,
+    "A_tight": 122
+   }
+  ]
+ },
+ "interior_bytes_per_RU": {
+  "bytes": 16466400,
+  "bits": 131731200,
+  "words": 5622223,
+  "includes": "outgoing interface words of every request-local relation VU at actual widths (S.out of the unit)",
+  "excludes": "shared weight input gates (referenced, not recommitted); the request's prompt-token and seed input gates and its served output tokens (committed at serve time)",
+  "note": "served output tokens are produced by request-local VUs and so are inside `bits`; they are < 1e-6 of it and are not subtracted"
+ },
+ "provenance": {
+  "label": "MEASURED",
+  "script": "census_v2/small_census.py",
+  "commit": "",
+  "hardware": "4725e109453e Linux-6.8.0-101-generic-x86_64-with-glibc2.35 cpus=192 (CPU pod census-cpu-1)",
+  "utc": "2026-09-10T08:09:07Z",
+  "args": {
+   "case": "B0",
+   "lp": 8,
+   "steps": 1,
+   "nl": 0,
+   "set": [],
+   "plan": "P1/cu=whole",
+   "mode": "sample",
+   "sample_budget": 3000,
+   "kind_budget": [
+    "ArgmaxStep_v1|scan=-1",
+    "Input|batch|weights=0",
+    "Input|batch|prompt=0",
+    "GatherBf16x49152_v1|batch=94"
+   ],
+   "input_exact": true,
+   "workers": 8,
+   "chunks": 0,
+   "validated": "",
+   "old_census": "",
+   "expect_digest": "",
+   "kinds_only": false,
+   "out": "out/census/scaling/lp8_s1.json",
+   "recursion_limit": 100000
+  },
+  "program": {
+   "gates": 205670574,
+   "input_gates": 135039304,
+   "root_nodes": 823,
+   "function": "Serve_v1{C={6f196795e564},LP=8,STEPS=1}",
+   "digest": "8a044fc683f8f3e3c372a75130c8fb864fecab57c6cf03a8185a77db2bb79c23",
+   "digest_seconds": 0.07
+  },
+  "plan": {
+   "name": "P1/cu=whole",
+   "vu_level": "coordinate",
+   "cu_strategy": "whole",
+   "constructor": "veritor.plans.canonical(compact=True)",
+   "vus": 140472158,
+   "runs": 893154,
+   "partition_digest": "2725a383e388e2178fb96c556a0095656e60e3449ccb4bb46114fd37dbba2a03",
+   "partition_digest_kind": "partition-intervals/v1"
+  },
+  "widths": {
+   "method": "veritor.plans.boundary.hierarchical_boundary(unit).outputs: gates of the unit consumed outside it (or protected), at wire width; out_scalars = len(S.out), out_bits = sum of widths",
+   "mode": "sample",
+   "units_verified": 135112406,
+   "units_total": 140472158,
+   "notes": "widths verified on 135112406 of 140472158 units (kinds with < 10k units: every unit; larger kinds: ~3000 evenly spaced units per kind incl. the first/last unit of the sampled runs; within a sampled run every unit is attributed a width -- constant between equal samples, change points located by bisection; kinds where not every run was sampled: per-width counts are SCALED ESTIMATES from the sampled runs, the kind total is exact; per-kind basis in kinds_raw.width_basis); NOT constant within 5 kinds, each split into one family per width: ['ArgmaxStep_v1|scan', 'Const32[0x00000000]_v1|primitive', 'F32Add_v1|primitive', 'GemmCoordinate_v1{K=1536}|batch', 'Input|batch|weights']"
+  },
+  "kappa": "S.out width of the unit (a valid cut, conservative); the kind-table narrowing min(out_bits, reach_bits, ancestor_bits) is not computed for this horizon",
+  "input_widths_exact": {
+   "Input|batch|prompt": {
+    "members": 8,
+    "consumed": 8,
+    "unconsumed": 0,
+    "width": 32,
+    "escape_steps": 8,
+    "seconds": 0.034,
+    "out_bits_total_check": true
+   },
+   "Input|batch|weights": {
+    "members": 135039296,
+    "consumed": 134515584,
+    "unconsumed": 523712,
+    "width": 16,
+    "escape_steps": 3541,
+    "seconds": 0.019,
+    "out_bits_total_check": true
+   }
+  },
+  "seconds": {
+   "build": 89.2,
+   "widths": 58.8
+  },
+  "maxrss_mb": 378.4,
+  "notes_shared_inputs": "Input[weights] is the canonical global set of shared weight-input VUs (scope: global, counted once); Input[prompt] is request-local. The program has no seed input gate (greedy decoding: token selection is deterministic)."
+ },
+ "schema": "veritor/census-v2/small/v1",
+ "findings": [
+  {
+   "kind": "ArgmaxStep_v1|scan",
+   "note": "outgoing width not constant within kind; split into one family per width",
+   "width_basis": "ENDS MODE: first, second and last unit of every run measured; all but the last unit of a run take the first unit's width (assumption: a scan's interface changes only at its final member)",
+   "widths": [
+    {
+     "out_scalars": 1,
+     "out_bits": 32,
+     "units": 2
+    },
+    {
+     "out_scalars": 3,
+     "out_bits": 80,
+     "units": 98300
+    }
+   ]
+  },
+  {
+   "kind": "Const32[0x00000000]_v1|primitive",
+   "note": "outgoing width not constant within kind; split into one family per width",
+   "width_basis": "SCALED ESTIMATE from 1001 of 161705 runs (1001 of 161705 units attributed)",
+   "widths": [
+    {
+     "out_scalars": 0,
+     "out_bits": 0,
+     "units": 2262
+    },
+    {
+     "out_scalars": 1,
+     "out_bits": 32,
+     "units": 159443
+    }
+   ]
+  },
+  {
+   "kind": "F32Add_v1|primitive",
+   "note": "outgoing width not constant within kind; split into one family per width",
+   "width_basis": "SCALED ESTIMATE from 1001 of 312804 runs (1001 of 312804 units attributed)",
+   "widths": [
+    {
+     "out_scalars": 0,
+     "out_bits": 0,
+     "units": 937
+    },
+    {
+     "out_scalars": 1,
+     "out_bits": 32,
+     "units": 311867
+    }
+   ]
+  },
+  {
+   "kind": "GemmCoordinate_v1{K=1536}|batch",
+   "note": "outgoing width not constant within kind; split into one family per width",
+   "width_basis": "attributed on every unit (sampled + bisected change points within every run)",
+   "widths": [
+    {
+     "out_scalars": 0,
+     "out_bits": 0,
+     "units": 4032
+    },
+    {
+     "out_scalars": 1,
+     "out_bits": 16,
+     "units": 151488
+    }
+   ]
+  },
+  {
+   "kind": "Input|batch|weights",
+   "note": "outgoing width not constant within kind; split into one family per width",
+   "width_basis": "exact: whole-node escape set (every member classified consumed/unconsumed in one boundary query)",
+   "widths": [
+    {
+     "out_scalars": 0,
+     "out_bits": 0,
+     "units": 523712
+    },
+    {
+     "out_scalars": 1,
+     "out_bits": 16,
+     "units": 134515584
+    }
+   ]
+  }
+ ],
+ "checks": {},
+ "kind_counts_fn_form": {
+  "AmpereBF16TcDot16_v1|batch": 155520,
+  "ArgmaxStep_v1|scan": 98302,
+  "Bf16AddF2fp_v1|batch": 307008,
+  "Bf16ToF32_v1|batch": 624384,
+  "Const16[0x0000]_v1|primitive": 4860,
+  "Const32[0x00000000]_v1|primitive": 161705,
+  "Const32[0x00000001]_v1|primitive": 2,
+  "Const32[0x3727c5ac]_v1|primitive": 542,
+  "Const32[0x3e38aa3b]_v1|primitive": 2430,
+  "Const32[0x3f800000]_v1|primitive": 9,
+  "Const32[0x44100000]_v1|primitive": 542,
+  "DivFullRcp_v1|primitive": 18,
+  "DivFullScaleA_v1|primitive": 9,
+  "DotBf16_v1{K=64}|call": 12150,
+  "F2fpBf16_v1|batch": 467712,
+  "F2fpBf16_v1|primitive": 12150,
+  "F32AddFtz_v1|primitive": 12960,
+  "F32Add_v1|primitive": 312804,
+  "F32Div_v1|primitive": 533,
+  "F32FmaSubFtz_v1|primitive": 12150,
+  "F32Fma_v1|primitive": 4545,
+  "F32Max_v1|primitive": 9720,
+  "F32MulFtz_v1|batch": 155520,
+  "F32MulFtz_v1|primitive": 2430,
+  "F32Mul_v1|batch": 624384,
+  "F32Mul_v1|primitive": 307665,
+  "Fa2InvSum_v1|primitive": 2430,
+  "GatherBf16x49152_v1|batch": 5184,
+  "GemmCoordinate_v1{K=1536}|batch": 155520,
+  "GemmCoordinate_v1{K=576}|batch": 1342464,
+  "GuardNegInfZero_v1|primitive": 2430,
+  "Input|batch": 135039304,
+  "MufuEx2Ftz_v1|primitive": 12150,
+  "MufuSqrtFtz_v1|primitive": 9,
+  "RopeOutAdd_v1|batch": 103680,
+  "RopeOut_v1|batch": 103680,
+  "RsqrtApprox_v1|primitive": 533,
+  "SiluMulBf16_v1|batch": 414720
+ },
+ "kinds_raw": {
+  "AmpereBF16TcDot16_v1|batch": {
+   "count": 155520,
+   "verified": 3003,
+   "runs": 2430,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 2430 runs (64064 of 155520 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 64064,
+   "widths": [
+    [
+     1,
+     32,
+     64064
+    ]
+   ],
+   "in_scalars_total": 39045,
+   "in_bits_total": 672768
+  },
+  "ArgmaxStep_v1|scan": {
+   "count": 98302,
+   "verified": 6,
+   "runs": 2,
+   "gates_per_unit": 5,
+   "width_basis": "ENDS MODE: first, second and last unit of every run measured; all but the last unit of a run take the first unit's width (assumption: a scan's interface changes only at its final member)",
+   "attributed_runs": 2,
+   "attributed_units": 98302,
+   "widths": [
+    [
+     1,
+     32,
+     2
+    ],
+    [
+     3,
+     80,
+     98300
+    ]
+   ],
+   "in_scalars_total": 24,
+   "in_bits_total": 576
+  },
+  "Bf16AddF2fp_v1|batch": {
+   "count": 307008,
+   "verified": 3198,
+   "runs": 533,
+   "gates_per_unit": 1,
+   "width_basis": "attributed on every unit (sampled + bisected change points within every run)",
+   "attributed_runs": 533,
+   "attributed_units": 307008,
+   "widths": [
+    [
+     1,
+     16,
+     307008
+    ]
+   ],
+   "in_scalars_total": 6396,
+   "in_bits_total": 102336
+  },
+  "Bf16ToF32_v1|batch": {
+   "count": 624384,
+   "verified": 3003,
+   "runs": 1084,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 1084 runs (576576 of 624384 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 576576,
+   "widths": [
+    [
+     1,
+     32,
+     576576
+    ]
+   ],
+   "in_scalars_total": 3003,
+   "in_bits_total": 48048
+  },
+  "Const16[0x0000]_v1|primitive": {
+   "count": 4860,
+   "verified": 4860,
+   "runs": 4860,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     16,
+     4860
+    ]
+   ],
+   "in_scalars_total": 0,
+   "in_bits_total": 0
+  },
+  "Const32[0x00000000]_v1|primitive": {
+   "count": 161705,
+   "verified": 1001,
+   "runs": 161705,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 161705 runs (1001 of 161705 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 1001,
+   "widths": [
+    [
+     0,
+     0,
+     14
+    ],
+    [
+     1,
+     32,
+     987
+    ]
+   ],
+   "in_scalars_total": 0,
+   "in_bits_total": 0
+  },
+  "Const32[0x00000001]_v1|primitive": {
+   "count": 2,
+   "verified": 2,
+   "runs": 2,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     2
+    ]
+   ],
+   "in_scalars_total": 0,
+   "in_bits_total": 0
+  },
+  "Const32[0x3727c5ac]_v1|primitive": {
+   "count": 542,
+   "verified": 542,
+   "runs": 542,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     542
+    ]
+   ],
+   "in_scalars_total": 0,
+   "in_bits_total": 0
+  },
+  "Const32[0x3e38aa3b]_v1|primitive": {
+   "count": 2430,
+   "verified": 2430,
+   "runs": 2430,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     2430
+    ]
+   ],
+   "in_scalars_total": 0,
+   "in_bits_total": 0
+  },
+  "Const32[0x3f800000]_v1|primitive": {
+   "count": 9,
+   "verified": 9,
+   "runs": 9,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     9
+    ]
+   ],
+   "in_scalars_total": 0,
+   "in_bits_total": 0
+  },
+  "Const32[0x44100000]_v1|primitive": {
+   "count": 542,
+   "verified": 542,
+   "runs": 542,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     542
+    ]
+   ],
+   "in_scalars_total": 0,
+   "in_bits_total": 0
+  },
+  "DivFullRcp_v1|primitive": {
+   "count": 18,
+   "verified": 18,
+   "runs": 18,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     18
+    ]
+   ],
+   "in_scalars_total": 18,
+   "in_bits_total": 576
+  },
+  "DivFullScaleA_v1|primitive": {
+   "count": 9,
+   "verified": 9,
+   "runs": 9,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     9
+    ]
+   ],
+   "in_scalars_total": 18,
+   "in_bits_total": 576
+  },
+  "DotBf16_v1{K=64}|call": {
+   "count": 12150,
+   "verified": 1001,
+   "runs": 12150,
+   "gates_per_unit": 5,
+   "width_basis": "SCALED ESTIMATE from 1001 of 12150 runs (1001 of 12150 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 1001,
+   "widths": [
+    [
+     1,
+     32,
+     1001
+    ]
+   ],
+   "in_scalars_total": 128128,
+   "in_bits_total": 2050048
+  },
+  "F2fpBf16_v1|batch": {
+   "count": 467712,
+   "verified": 3003,
+   "runs": 2972,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 2972 runs (157760 of 467712 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 157760,
+   "widths": [
+    [
+     1,
+     16,
+     157760
+    ]
+   ],
+   "in_scalars_total": 3003,
+   "in_bits_total": 96096
+  },
+  "F2fpBf16_v1|primitive": {
+   "count": 12150,
+   "verified": 1001,
+   "runs": 12150,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 12150 runs (1001 of 12150 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 1001,
+   "widths": [
+    [
+     1,
+     16,
+     1001
+    ]
+   ],
+   "in_scalars_total": 1001,
+   "in_bits_total": 32032
+  },
+  "F32AddFtz_v1|primitive": {
+   "count": 12960,
+   "verified": 1001,
+   "runs": 12960,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 12960 runs (1001 of 12960 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 1001,
+   "widths": [
+    [
+     1,
+     32,
+     1001
+    ]
+   ],
+   "in_scalars_total": 2002,
+   "in_bits_total": 64064
+  },
+  "F32Add_v1|primitive": {
+   "count": 312804,
+   "verified": 1001,
+   "runs": 312804,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 312804 runs (1001 of 312804 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 1001,
+   "widths": [
+    [
+     0,
+     0,
+     3
+    ],
+    [
+     1,
+     32,
+     998
+    ]
+   ],
+   "in_scalars_total": 2002,
+   "in_bits_total": 64064
+  },
+  "F32Div_v1|primitive": {
+   "count": 533,
+   "verified": 533,
+   "runs": 533,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     533
+    ]
+   ],
+   "in_scalars_total": 1066,
+   "in_bits_total": 34112
+  },
+  "F32FmaSubFtz_v1|primitive": {
+   "count": 12150,
+   "verified": 1001,
+   "runs": 12150,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 12150 runs (1001 of 12150 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 1001,
+   "widths": [
+    [
+     1,
+     32,
+     1001
+    ]
+   ],
+   "in_scalars_total": 3003,
+   "in_bits_total": 96096
+  },
+  "F32Fma_v1|primitive": {
+   "count": 4545,
+   "verified": 4545,
+   "runs": 4545,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     4545
+    ]
+   ],
+   "in_scalars_total": 9099,
+   "in_bits_total": 291168
+  },
+  "F32Max_v1|primitive": {
+   "count": 9720,
+   "verified": 9720,
+   "runs": 9720,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     9720
+    ]
+   ],
+   "in_scalars_total": 19440,
+   "in_bits_total": 622080
+  },
+  "F32MulFtz_v1|batch": {
+   "count": 155520,
+   "verified": 3003,
+   "runs": 2430,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 2430 runs (64064 of 155520 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 64064,
+   "widths": [
+    [
+     1,
+     32,
+     64064
+    ]
+   ],
+   "in_scalars_total": 6006,
+   "in_bits_total": 192192
+  },
+  "F32MulFtz_v1|primitive": {
+   "count": 2430,
+   "verified": 2430,
+   "runs": 2430,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     2430
+    ]
+   ],
+   "in_scalars_total": 4860,
+   "in_bits_total": 155520
+  },
+  "F32Mul_v1|batch": {
+   "count": 624384,
+   "verified": 3003,
+   "runs": 1084,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 1084 runs (576576 of 624384 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 576576,
+   "widths": [
+    [
+     1,
+     32,
+     576576
+    ]
+   ],
+   "in_scalars_total": 6006,
+   "in_bits_total": 192192
+  },
+  "F32Mul_v1|primitive": {
+   "count": 307665,
+   "verified": 1001,
+   "runs": 307665,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 307665 runs (1001 of 307665 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 1001,
+   "widths": [
+    [
+     1,
+     32,
+     1001
+    ]
+   ],
+   "in_scalars_total": 1001,
+   "in_bits_total": 32032
+  },
+  "Fa2InvSum_v1|primitive": {
+   "count": 2430,
+   "verified": 2430,
+   "runs": 2430,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     2430
+    ]
+   ],
+   "in_scalars_total": 2430,
+   "in_bits_total": 77760
+  },
+  "GatherBf16x49152_v1|batch": {
+   "count": 5184,
+   "verified": 99,
+   "runs": 9,
+   "gates_per_unit": 1,
+   "width_basis": "attributed on every unit (sampled + bisected change points within every run)",
+   "attributed_runs": 9,
+   "attributed_units": 5184,
+   "widths": [
+    [
+     1,
+     16,
+     5184
+    ]
+   ],
+   "in_scalars_total": 4866147,
+   "in_bits_total": 77859936
+  },
+  "GemmCoordinate_v1{K=1536}|batch": {
+   "count": 155520,
+   "verified": 3240,
+   "runs": 270,
+   "gates_per_unit": 98,
+   "width_basis": "attributed on every unit (sampled + bisected change points within every run)",
+   "attributed_runs": 270,
+   "attributed_units": 155520,
+   "widths": [
+    [
+     0,
+     0,
+     4032
+    ],
+    [
+     1,
+     16,
+     151488
+    ]
+   ],
+   "in_scalars_total": 9953280,
+   "in_bits_total": 159252480
+  },
+  "GemmCoordinate_v1{K=576}|batch": {
+   "count": 1342464,
+   "verified": 3248,
+   "runs": 812,
+   "gates_per_unit": 38,
+   "width_basis": "attributed on every unit (sampled + bisected change points within every run)",
+   "attributed_runs": 812,
+   "attributed_units": 1342464,
+   "widths": [
+    [
+     1,
+     16,
+     1342464
+    ]
+   ],
+   "in_scalars_total": 3741696,
+   "in_bits_total": 59867136
+  },
+  "GuardNegInfZero_v1|primitive": {
+   "count": 2430,
+   "verified": 2430,
+   "runs": 2430,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     2430
+    ]
+   ],
+   "in_scalars_total": 2430,
+   "in_bits_total": 77760
+  },
+  "Input|batch|prompt": {
+   "count": 8,
+   "verified": 8,
+   "runs": 1,
+   "gates_per_unit": 1,
+   "width_basis": "exact: whole-node escape set (every member classified consumed/unconsumed in one boundary query)",
+   "attributed_runs": 1,
+   "attributed_units": 8,
+   "widths": [
+    [
+     1,
+     32,
+     8
+    ]
+   ],
+   "in_scalars_total": 0,
+   "in_bits_total": 0
+  },
+  "Input|batch|weights": {
+   "count": 135039296,
+   "verified": 135039296,
+   "runs": 1,
+   "gates_per_unit": 1,
+   "width_basis": "exact: whole-node escape set (every member classified consumed/unconsumed in one boundary query)",
+   "attributed_runs": 1,
+   "attributed_units": 135039296,
+   "widths": [
+    [
+     0,
+     0,
+     523712
+    ],
+    [
+     1,
+     16,
+     134515584
+    ]
+   ],
+   "in_scalars_total": 0,
+   "in_bits_total": 0
+  },
+  "MufuEx2Ftz_v1|primitive": {
+   "count": 12150,
+   "verified": 1001,
+   "runs": 12150,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 12150 runs (1001 of 12150 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 1001,
+   "widths": [
+    [
+     1,
+     32,
+     1001
+    ]
+   ],
+   "in_scalars_total": 1001,
+   "in_bits_total": 32032
+  },
+  "MufuSqrtFtz_v1|primitive": {
+   "count": 9,
+   "verified": 9,
+   "runs": 9,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     9
+    ]
+   ],
+   "in_scalars_total": 9,
+   "in_bits_total": 288
+  },
+  "RopeOutAdd_v1|batch": {
+   "count": 103680,
+   "verified": 3003,
+   "runs": 3240,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 3240 runs (32032 of 103680 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 32032,
+   "widths": [
+    [
+     1,
+     16,
+     32032
+    ]
+   ],
+   "in_scalars_total": 12012,
+   "in_bits_total": 192192
+  },
+  "RopeOut_v1|batch": {
+   "count": 103680,
+   "verified": 3003,
+   "runs": 3240,
+   "gates_per_unit": 1,
+   "width_basis": "SCALED ESTIMATE from 1001 of 3240 runs (32032 of 103680 units attributed)",
+   "attributed_runs": 1001,
+   "attributed_units": 32032,
+   "widths": [
+    [
+     1,
+     16,
+     32032
+    ]
+   ],
+   "in_scalars_total": 12012,
+   "in_bits_total": 192192
+  },
+  "RsqrtApprox_v1|primitive": {
+   "count": 533,
+   "verified": 533,
+   "runs": 533,
+   "gates_per_unit": 1,
+   "width_basis": "measured on every unit",
+   "attributed_runs": 0,
+   "attributed_units": 0,
+   "widths": [
+    [
+     1,
+     32,
+     533
+    ]
+   ],
+   "in_scalars_total": 533,
+   "in_bits_total": 17056
+  },
+  "SiluMulBf16_v1|batch": {
+   "count": 414720,
+   "verified": 3240,
+   "runs": 270,
+   "gates_per_unit": 1,
+   "width_basis": "attributed on every unit (sampled + bisected change points within every run)",
+   "attributed_runs": 270,
+   "attributed_units": 414720,
+   "widths": [
+    [
+     1,
+     16,
+     414720
+    ]
+   ],
+   "in_scalars_total": 6480,
+   "in_bits_total": 103680
+  }
+ },
+ "block_size_note": "SMALL P1 attention is at coordinate level (per key, DotBf16 K=64 is the head dim); no key-block parameter"
+}

@@ -1,0 +1,116 @@
+--- a/vllm-poc/e2e/verifier_v3/expected.py
++++ b/vllm-poc/e2e/verifier_v3/expected.py
+@@ -129,7 +129,41 @@
+         self.lm_head_ops = {n.op for n in self.desc.nodes_of_type("lm_head")}
+         self._committed: CommittedTrees | None = None
+         self._row_index: dict[tuple[str, int, str], str] | None = None
++
++    # [A5/6 patch] (request, t, op, port) -> (tree, canonical id, word count) of every committed operator row, from the COMMITTED id
++    # lists and the RU index entries' shapes -- what `coverage_v1.attn_head_builder.head_expectation` reads (never a value)
++    def attention_row(self, request_id: str, t: int, op: str, port: int):
++        if not hasattr(self, "_attn_rows"):
++            from verity_vllm import identity
++
++            rows: dict[tuple[str, int, str, int], tuple[str, str, int]] = {}
++            for tid, ids in (self._committed.ids if self._committed else {}).items():
++                if not tid.startswith("ru/"):
++                    continue
++                _, rid, step = tid.split("/")
++                shapes = {e["canonical_id"]: int(np.prod(e["shape"])) for e in json.loads((self.sel / "ru" / rid / step / "index.json").read_text())["entries"]}
++                for cid_s in ids:
++                    c = identity.parse(cid_s)
++                    if c.kind == "value" and c.op and c.coordinate is None:
++                        rows[(c.request_id, int(c.t), c.op, int(c.port or 0))] = (tid, cid_s, shapes.get(cid_s, 0))
++            self._attn_rows = rows
++        return self._attn_rows.get((request_id, int(t), op, int(port)))
+ 
++    @property
++    def config(self) -> dict[str, Any]:
++        """NH / KVH / D for the head expectation's slice arithmetic: the pinned program's C (``build_pinned_program`` -> passed to
++        ``coverage_inputs(config=)``), cross-checked against the Description's attention node consts (num_heads / num_kv_heads /
++        head_size) when present -- the fixed circuit is authoritative, a disagreement is a refusal."""
++        C = getattr(self, "_config", None)
++        if C is None:
++            raise ValueError("Deriver.config: the pinned program's C was not given to coverage_inputs(config=) -- head expectations refused")
++        for n in self.desc.nodes_of_type("attention"):
++            k = getattr(n, "consts", None) or {}
++            if k and (int(k.get("num_heads", C["NH"])), int(k.get("num_kv_heads", C["KVH"])), int(k.get("head_size", C["D"]))) != (int(C["NH"]), int(C["KVH"]), int(C["D"])):
++                raise ValueError(f"Description attention consts {k} disagree with the pinned program C (NH={C['NH']}, KVH={C['KVH']}, D={C['D']})")
++            break
++        return {"NH": int(C["NH"]), "KVH": int(C["KVH"]), "D": int(C["D"])}
++
+     def committed(self, tree_ids: list[str]) -> CommittedTrees:
+         """Committed trees for exactly ``tree_ids`` (each call re-checks; the id lists are cached per tree)."""
+         if self._committed is None:
+@@ -238,6 +272,27 @@
+             if e is None:
+                 raise NotAProofCoveredUnit(f"VU {vu_id}: derived-table input (no Input equation; covered by the verifier's opening, V6)")
+             return self._pinned(vu_id, e)
++        # [A5/6 patch] attention body: the head unit (flag COVERAGE_V1_HEAD_VU, PROPOSED partition change) gets its value-free
++        # expectation from the committed id lists; a per-primitive attention kind reads an interior word no record commits -> the
++        # selected equation is uncovered, with the interior leaf named (never "no checker" when a checker exists).
++        from e2e.coverage_v1.builders import base_kind, head_vu_enabled
++        from e2e.coverage_v1.interior_layout import INTERIOR_KINDS
++
++        kind = str(u.get("kind"))
++        L = u.get("locate") or {}
++        if base_kind(kind) == "AttentionHead_v1|call" and head_vu_enabled():
++            from e2e.coverage_v1.attn_head_builder import head_expectation
++            from e2e.coverage_v1.builders import LocatedUnit
++
++            if "refused" in L or L.get("unit") != "head":
++                raise ValueError(f"VU {vu_id}: head unit not located as exactly one head call: {json.dumps(L)[:120]}")
++            unit = LocatedUnit(str(vu_id), kind, u["request_id"], int(L["t"]), layer=int(L["layer"]), head=int(L["head"]), ru_index=int(u.get("ru", 0)))
++            return self._pinned(vu_id, head_expectation(unit, self.deriver.attention_row, self.deriver.config))
++        if kind in INTERIOR_KINDS:
++            reads = INTERIOR_KINDS[kind]
++            raise NotAProofCoveredUnit(f"VU {vu_id}: kind {kind!r} reads attention-interior words (PROPOSED attn-interior/v0 ports "
++                                       f"{sorted({*reads.interior_in, *(() if reads.interior_out is None else (reads.interior_out,))})}) that no record commits"
++                                       + ("" if reads.approved_checker else "; and no checker in the approved guest") + " -- an uncovered selected equation")
+         raise NotAProofCoveredUnit(f"VU {vu_id}: kind {u.get('kind')!r} has no checker (legacy class {cls!r}) -- an uncovered selected equation")
+ 
+     @staticmethod
+@@ -261,6 +316,16 @@
+     def kind_program(self, vu_id: str, e: ExpectedObligation) -> tuple[str, str]:
+         from veritor.interface.programs import input_equation
+ 
++        if str(getattr(e, "label", "")).startswith("AttentionHead_v1{"):
++            # [A5/6 patch] the head unit: fa2 family (gate set id = pinned MUFU tables), head digest re-derived from (T, D) = the label's
++            # parameters through the fixed circuit's lowering -- a disagreement with the expectation's own digest is a refusal upstream
++            import re
++
++            from e2e.coverage_v1.attn_head_builder import fa2_gate_set, head_chain_kinds, head_subcircuit_digest
++
++            m = re.match(r"AttentionHead_v1\{T=(\d+),D=(\d+)\}", str(e.label))
++            T, D = int(m.group(1)), int(m.group(2))
++            return fa2_gate_set().id, head_subcircuit_digest(T, D, head_chain_kinds(T, D))
+         if e.incoming:  # GemmCoordinate<K>: K activation words then K weight words
+             if len(e.incoming) % 2:
+                 raise ValueError(f"VU {vu_id}: {len(e.incoming)} incoming values is not 2K")
+@@ -272,12 +337,13 @@
+ 
+ 
+ def coverage_inputs(sel: Path, commitments: dict[str, Any], *, retained_request_ids: set[str], units: list[dict[str, Any]], checks: list[dict[str, Any]],
+-                    family: str, recompute_leaves: bool = True) -> dict[str, Any]:
++                    family: str, recompute_leaves: bool = True, config: dict[str, Any] | None = None) -> dict[str, Any]:
+     """Everything ``coverage_v1`` needs, built once per record: ``trees`` (a ``CommittedTree`` per committed tree of the RETAINED RUs +
+     the weights tree, id lists checked against ``ids_digest``), ``rank_of``, ``partition``, ``circuit``, and the VU sets: ``Q_proof`` = the
+     selected VUs a proof must cover (provable + Input-equation units), ``derived_only`` = input VUs of a derived table (V6 covers them),
+     ``uncovered`` = selected VUs of retained RUs whose kind has no checker (refusal by itself).  ``problems`` lists tree failures."""
+     d = Deriver(sel, commitments, recompute_leaves=recompute_leaves)
++    d._config = config  # [A5/6 patch] the pinned program's C (build_pinned_program), for head expectations
+     tree_ids = [WEIGHTS_TREE] + [t for t in (commitments.get("trees") or {}) if t.startswith("ru/") and t.split("/")[1] in retained_request_ids]
+     committed = d.committed(tree_ids)
+     row_index = output_row_index(committed.ids, d.lm_head_ops)
+@@ -292,7 +358,10 @@
+             c = checks_by_vu.get(vu)
+             (derived_only if (c is not None and c.get("kind") == "weight" and c.get("expected") is None) else q_proof).append(vu)
+         else:
+-            uncovered.append(vu)
++            # [A5/6 patch] the head unit (flag) is proof-covered; every other non-provable kind is an uncovered selected equation
++            from e2e.coverage_v1.builders import base_kind, head_vu_enabled
++
++            (q_proof if (head_vu_enabled() and base_kind(str(u.get("kind"))) == "AttentionHead_v1|call") else uncovered).append(vu)
+     return {"deriver": d, "trees": committed.trees, "rank_of": committed.rank_of(), "tree_problems": committed.problems,
+             "partition": RecordPartition(d, units_by_vu=units_by_vu, checks_by_vu=checks_by_vu, row_index=row_index), "circuit": RecordCircuit(family),
+             "Q_proof": sorted(q_proof), "derived_only": sorted(derived_only), "uncovered": sorted(uncovered)}

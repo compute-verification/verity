@@ -1,0 +1,215 @@
+{
+ "schema": "veritor/compact-p1-validation/v1",
+ "label": "MEASURED",
+ "utc": "2026-09-10T03:43:20Z",
+ "host": "Daniels-MacBook-Pro.local",
+ "platform": "macOS-26.5.1-arm64-arm-64bit",
+ "cpu": "arm",
+ "cpus": 14,
+ "python": "3.12.11",
+ "args": {
+  "case": "B0",
+  "lp": 4,
+  "steps": 3,
+  "nl": 1,
+  "set": [
+   "V=1024"
+  ],
+  "plan": "P1/cu=whole",
+  "workers": 1,
+  "census": "",
+  "no_validate": false,
+  "recursion_limit": 100000,
+  "out": "/tmp/cp1/p1-b0-nl1-v1024-lp4s3.json"
+ },
+ "stages": [
+  {
+   "stage": "program",
+   "inputs": {
+    "case": "B0",
+    "LP": 4,
+    "STEPS": 3
+   },
+   "seconds": 0.035,
+   "rss_before_mb": 41.5,
+   "rss_after_mb": 48.4,
+   "maxrss_mb": 48.4
+  },
+  {
+   "stage": "adapt",
+   "inputs": {
+    "gates": 6571001
+   },
+   "seconds": 0.047,
+   "rss_before_mb": 48.4,
+   "rss_after_mb": 49.3,
+   "maxrss_mb": 49.3
+  },
+  {
+   "stage": "circuit",
+   "inputs": {
+    "root_nodes": 34
+   },
+   "seconds": 0.0,
+   "rss_before_mb": 49.3,
+   "rss_after_mb": 49.3,
+   "maxrss_mb": 49.3
+  },
+  {
+   "stage": "plan[compact]",
+   "inputs": {},
+   "seconds": 0.039,
+   "rss_before_mb": 49.3,
+   "rss_after_mb": 55.4,
+   "maxrss_mb": 55.4
+  },
+  {
+   "stage": "partition_digest",
+   "inputs": {
+    "vus": 4817497
+   },
+   "seconds": 2.0,
+   "rss_before_mb": 89.3,
+   "rss_after_mb": 89.3,
+   "maxrss_mb": 89.3
+  },
+  {
+   "stage": "kind_counts",
+   "inputs": {
+    "runs": 28311
+   },
+   "seconds": 0.027,
+   "rss_before_mb": 89.3,
+   "rss_after_mb": 89.3,
+   "maxrss_mb": 89.3
+  },
+  {
+   "stage": "validate[stream]",
+   "inputs": {
+    "vus": 4817497,
+    "cus": 1
+   },
+   "seconds": 262.365,
+   "rss_before_mb": 89.3,
+   "rss_after_mb": 89.3,
+   "maxrss_mb": 89.3
+  }
+ ],
+ "config": {
+  "model": "HuggingFaceTB/SmolLM2-135M",
+  "revision": null,
+  "H": 576,
+  "NL": 1,
+  "NH": 9,
+  "KVH": 3,
+  "D": 64,
+  "I": 1536,
+  "V": 1024,
+  "QKV": 960,
+  "GU": 3072,
+  "EPS": 1e-05,
+  "ROPE_THETA": 100000.0,
+  "MAX_POS": 8192,
+  "BIAS": false,
+  "tie_word_embeddings": true
+ },
+ "program": {
+  "gates": 6571001,
+  "input_gates": 4654788,
+  "root_nodes": 34,
+  "function": "Serve_v1{C={dd9040b892bb},LP=4,STEPS=3}",
+  "digest": "bd793c5eb123c13a8e34be9781df0bf24c231b2cd8bff0f203065544fa4ea652",
+  "digest_seconds": 0.03
+ },
+ "plan": {
+  "name": "P1/cu=whole",
+  "vu_level": "coordinate",
+  "cu_strategy": "whole",
+  "constructor": "veritor.plans.canonical(compact=True)",
+  "vus": 4817497,
+  "cus": 1,
+  "vu_runs": 28311,
+  "cu_runs": null,
+  "plan_digest": {
+   "kind": "plan-rule/v1",
+   "digest": "9e9742c2188591e7484acf3c6c076c21e56715ee9288356946f2ce4e886dabfe"
+  },
+  "partition_digest": "2e0ecc29523266079f6eaa99d65dbbcefabe6e5db7d7209d1f3c782b4d15a6fa",
+  "partition_digest_kind": "partition-intervals/v1",
+  "kind_counts": {
+   "AmpereBF16TcDot16_v1|batch": 4032,
+   "ArgmaxStep_v1|scan": 4092,
+   "Bf16AddF2fp_v1|batch": 6336,
+   "Bf16ToF32_v1|batch": 20736,
+   "Const16[0x0000]_v1|primitive": 126,
+   "Const32[0x00000000]_v1|primitive": 4606,
+   "Const32[0x00000001]_v1|primitive": 4,
+   "Const32[0x3727c5ac]_v1|primitive": 18,
+   "Const32[0x3e38aa3b]_v1|primitive": 63,
+   "Const32[0x3f800000]_v1|primitive": 7,
+   "Const32[0x44100000]_v1|primitive": 18,
+   "DivFullRcp_v1|primitive": 14,
+   "DivFullScaleA_v1|primitive": 7,
+   "DotBf16_v1{K=64}|call": 252,
+   "F2fpBf16_v1|batch": 14400,
+   "F2fpBf16_v1|primitive": 252,
+   "F32AddFtz_v1|primitive": 297,
+   "F32Add_v1|primitive": 10844,
+   "F32Div_v1|primitive": 11,
+   "F32FmaSubFtz_v1|primitive": 252,
+   "F32Fma_v1|primitive": 3535,
+   "F32Max_v1|primitive": 189,
+   "F32MulFtz_v1|batch": 4032,
+   "F32MulFtz_v1|primitive": 63,
+   "F32Mul_v1|batch": 20736,
+   "F32Mul_v1|primitive": 6847,
+   "Fa2InvSum_v1|primitive": 63,
+   "GatherBf16x1024_v1|batch": 4032,
+   "GemmCoordinate_v1{K=1536}|batch": 4032,
+   "GemmCoordinate_v1{K=576}|batch": 36352,
+   "GuardNegInfZero_v1|primitive": 63,
+   "Input|batch": 4654788,
+   "MufuEx2Ftz_v1|primitive": 252,
+   "MufuSqrtFtz_v1|primitive": 7,
+   "RopeOutAdd_v1|batch": 2688,
+   "RopeOut_v1|batch": 2688,
+   "RsqrtApprox_v1|primitive": 11,
+   "SiluMulBf16_v1|batch": 10752
+  },
+  "input_units": 4654788,
+  "non_input_units": 162709
+ },
+ "validation": {
+  "mode": "single process, retain=False",
+  "status": "valid",
+  "codes": [],
+  "reasons": [],
+  "vu_edges": 58659931,
+  "cu_edges": 0,
+  "visits": 0,
+  "hops": 208168511,
+  "escape_steps": 33082594,
+  "seconds": 262.36492154200096,
+  "retained": false,
+  "vu_stats": {
+   "units": 4817497,
+   "gates": 62967281,
+   "runs": 8761108,
+   "outputs": 4299174,
+   "in_bits": 940583392,
+   "out_bits": 70134176
+  },
+  "cu_stats": {
+   "units": 1,
+   "gates": 4,
+   "runs": 4,
+   "outputs": 4,
+   "in_bits": 0,
+   "out_bits": 128
+  },
+  "cu_escape_steps": 111238,
+  "validated": true
+ },
+ "maxrss_mb": 89.3,
+ "seconds_total": 264.513
+}

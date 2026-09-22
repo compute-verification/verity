@@ -1,0 +1,48 @@
+{
+ "schema": "verity-gen/golden/v1",
+ "entries": [
+  {
+   "name": "smollm2-135m-m1",
+   "log": "data/logs/m1.jsonl.gz",
+   "profile": "vllm_d9105ea80_sm89_eager",
+   "digest": "d2b299f56e40d311504a81d18873131a06e13d04483cb9bf6451ab53703fe6e8",
+   "attribution_sha": "099bfe628971c29d913d1e2eda16b2cab93322da0bbc73f7077c32ec47868f0a",
+   "n_instances": 14226,
+   "n_steps": 16,
+   "patterns": [
+    "act.silu_and_mul",
+    "attention.fa2_varlen_fwd",
+    "embedding.aten_embedding",
+    "gemm.matmul_kernel_persistent",
+    "rmsnorm.fused_add_rms_norm",
+    "rmsnorm.triton_rms_norm_kernel",
+    "rope.rotary_embedding",
+    "sample.gumbel_two_stage"
+   ],
+   "recorded_utc": "2026-09-17T02:01:04Z",
+   "decision": "D73"
+  },
+  {
+   "name": "qwen2.5-1.5b-m6",
+   "log": "data/logs/m6/log.jsonl.gz",
+   "profile": "vllm_d9105ea80_sm89_eager_qwen15",
+   "digest": "14a3ac665ffd9d2f1f9c4b37e2f3521de7d3cc2fe87366348218dfa9bdd459f5",
+   "attribution_sha": "c926d65ca202e1777350acb9b95b1a919fa071d259df990237223d8dcaa882e8",
+   "n_instances": 14602,
+   "n_steps": 16,
+   "patterns": [
+    "act.silu_and_mul",
+    "attention.fa2_varlen_fwd",
+    "bias_add.aten_add",
+    "embedding.aten_embedding",
+    "gemm.matmul_kernel_persistent",
+    "rmsnorm.fused_add_rms_norm",
+    "rmsnorm.triton_rms_norm_kernel",
+    "rope.rotary_embedding",
+    "sample.gumbel_two_stage"
+   ],
+   "recorded_utc": "2026-09-17T02:01:16Z",
+   "decision": "D73"
+  }
+ ]
+}

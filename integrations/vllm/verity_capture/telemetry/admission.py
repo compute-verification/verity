@@ -1,0 +1,1121 @@
+"""Empirical admission planner (R18 `admit` lane, F-r18-admit-1 / increment C of the runner-telemetry brief).
+
+The reservation model for one row stage is
+
+    reserved(stage) = base_serving + sum(simultaneously-live Verity allocation objects at the stage's peak point) + bounded_margin
+
+where every term is a NAMED allocation object of the row procedure (see `INVENTORY` below and
+`out/gen/sweep/evidence/admit/INVENTORY.md`) with a lifetime (first/last substage where it is resident) and a size
+law in plan-time scale variables (tokens, requests, layers, instances, workers, ...).  Coefficients are measured
+constants (each carries the R17 attempt dir + numbers that pin it, in `CALIBRATION`); there is no global multiplier.
+Simultaneity is computed by a sweep over the stage's substage timeline (`peak_overlap`): sequential reuse is not
+simultaneous residency (the FP8 3-pair result), and a term that outlives its substage (the pymalloc heap residual,
+the pinned pool under `--retain host`) is modelled as a term with a longer lifetime, not as slack.
+
+Two data paths feed the planner:
+
+  (a) increment A telemetry (`lane/r17-mprof` ac6b86b4d, shipped as r18-int-1 b6784cac1; field names checked against
+      zk/campaign/telemetry/{events,sample,cgroup,procs}.py there): `events*.jsonl` spans (`span_start`/`span_end`, `stage`) and
+      named-allocation marks (`kind="mark", name="alloc"|"free", obj=<term>, bytes=<n>, alloc_id=<id>`), plus
+      `resources*.jsonl` `kind="cgroup"` (memory_current_bytes, memory_stat.anon/shmem/file) and `kind="process"` rows
+      (per-pid rss_bytes / rss_anon_bytes) — `observe_increment_a`.
+  (b) the R17 fallback: `resources.jsonl` ({utc|t, max_python_rss_mib, cgroup_current_mib, cgroup_anon_shmem_mib,
+      gpu_used_mib}) + `timeline.jsonl` (`ev` start/end per `stage`/`proc`) + `stages.txt`, the F-dA-15 admission JSON
+      under `commit/`, `match/fold_summary.json`, `commit.log` ledger lines and `cgroup_memory.events.txt` /
+      `commit_oom_cgroup.txt` — `observe_r17` and `row_config_from_attempt`.
+
+API: `predict(row_config) -> {stage: {"reserved_bytes", "terms": {...}, "margin", "peak_point", "admit"}}`,
+`compare(attempt_dir) -> per-stage predicted vs observed peak + residual`, `peak_overlap(intervals)`.
+CLI: `python -m verity_capture.telemetry.admission compare <attempt_dir>... [--md]` / `predict --model ... --requests ...`.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as _dt
+import glob
+import gzip
+import json
+import os
+import re
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+MiB = 1 << 20
+GiB = 1 << 30
+SCHEMA = "verity/admission-plan/v1"
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Model table: structural constants + measured per-model coefficients.  `instances_per_layer_token` and
+# `per_token_bytes` are structural (they follow from the declaration / the op graph), not tunables.
+# ---------------------------------------------------------------------------------------------------------------------
+MODELS: dict[str, dict[str, Any]] = {
+    "llama32-1b": {"family": "dense", "layers": 16, "hidden": 2048, "heads": 32, "dtype_bytes": 2, "weights_bytes": 2_471_645_608,
+                       "per_token_bytes": 1_437_700, "instances_per_layer_token": 10.1, "hidden_per_token_K": 4.4e-3,
+                       "c2_oracle_per_instance": 13_000, "c2_programs_per_instance": 14_500, "build_graph_per_row_ctx_layer": 3_300, "largest_tensor_per_prompt": 392_500_000},
+    "phi3-mini": {"family": "dense", "layers": 32, "hidden": 3072, "heads": 32, "dtype_bytes": 2, "weights_bytes": 7_642_159_168,
+                      "per_token_bytes": 3_950_596, "instances_per_layer_token": 10.1, "hidden_per_token_K": 4.0e-3,
+                      "c2_oracle_per_instance": 17_500, "c2_programs_per_instance": 21_500, "build_graph_per_row_ctx_layer": 6_800, "largest_tensor_per_prompt": 554_000_000},
+    "mistral-7b": {"family": "dense", "layers": 32, "hidden": 4096, "heads": 32, "dtype_bytes": 2, "weights_bytes": 14_483_464_192,
+                       "per_token_bytes": 5_500_000, "instances_per_layer_token": 10.1, "hidden_per_token_K": 4.4e-3,
+                       "c2_oracle_per_instance": 17_500, "c2_programs_per_instance": 21_500, "build_graph_per_row_ctx_layer": 6_800,
+                       "capture_lower_bound": "R17 #60: capture 133,461 MiB observed vs 102,249 predicted; the wide-op operand snapshot (intermediate 14,336) is unmodelled"},
+    "gemma2-2b": {"family": "dense", "layers": 26, "hidden": 2304, "heads": 8, "dtype_bytes": 2, "weights_bytes": 5_228_683_776,
+                      "per_token_bytes": 2_500_000, "instances_per_layer_token": 40.5, "hidden_per_token_K": 1.1e-3,
+                      "c2_oracle_per_instance": 17_500, "c2_programs_per_instance": 21_500, "build_graph_per_row_ctx_layer": 6_800,
+                      "capture_lower_bound": "R17 #57: capture >=198,347 MiB observed vs 122,673 predicted; GeGLU operand snapshot at 40.5 instances/layer-token unmodelled"},
+    "olmoe-1b-7b": {"family": "moe", "layers": 16, "hidden": 2048, "heads": 16, "dtype_bytes": 2, "weights_bytes": 13_887_000_000,
+                        "per_token_bytes": 2_374_660, "instances_per_layer_token": 36.0, "hidden_per_token_K": 1.8e-3,
+                        "c2_oracle_per_instance": 4_000, "c2_programs_per_instance": 5_000, "build_graph_per_row_ctx_layer": 3_300, "largest_tensor_per_prompt": 310_600_000},
+    "qwen3-4b-fp8": {"family": "dense", "layers": 36, "hidden": 2560, "heads": 32, "dtype_bytes": 1, "weights_bytes": 4_400_000_000,
+                         "per_token_bytes": 2_800_000, "instances_per_layer_token": 10.1, "hidden_per_token_K": 4.4e-3,
+                         "c2_oracle_per_instance": 17_500, "c2_programs_per_instance": 21_500, "build_graph_per_row_ctx_layer": 6_800},
+}
+# Unknown dense model: the largest measured dense coefficients (phi3), named as such in the plan.
+DENSE_DEFAULT = {"family": "dense", "layers": 32, "hidden": 4096, "heads": 32, "dtype_bytes": 2, "weights_bytes": 16 * GiB, "per_token_bytes": 4_000_000,
+                     "instances_per_layer_token": 10.1, "hidden_per_token_K": 4.4e-3, "c2_oracle_per_instance": 17_500,
+                     "c2_programs_per_instance": 21_500, "build_graph_per_row_ctx_layer": 6_800, "largest_tensor_per_prompt": 554_000_000}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Measured constants.  value + unit + the R17 evidence that pins it.  These are the only numbers in the model.
+# ---------------------------------------------------------------------------------------------------------------------
+CALIBRATION: dict[str, dict[str, Any]] = {
+    "serving.engine_host": {"value": 3_200 * MiB, "unit": "bytes", "what": "committer process before the first instrumented run: python + torch + vLLM client + CUDA host context",
+                                "source": "prep.committer_setup max_python_rss_mib: b1_llama 2314, llama_b8 2410, r11 2385, r22 3182, r23 2955 (max 3182)"},
+    "serving.weights_mmap": {"value": 1.0, "unit": "x safetensors bytes", "what": "model weights file-mapped by the engine during load; file-backed, resident (unreclaimable while mapped)",
+                                 "source": "#67 commit_oom_cgroup: 18 GiB 'file' at the kill vs OLMoE-1B-7B safetensors 13.9 GB; rss_file of the engine"},
+    "process.python_base": {"value": 3_000 * MiB, "unit": "bytes", "what": "a CPU-side Verity process (build derive / match fold / capture observer) before its own objects: interpreter + torch + program imports",
+                                "source": "build.derive_step 1059-3000 MiB (r60, r57); match.resolve 1963-6898 MiB"},
+    "build.program_graph.per_row_ctx_layer": {"unit": "bytes per (decode row x context token x layer)", "what": "Program object graph during derive_request: per-step decode graphs reference the reachable context",
+                                                  "source": "r11 llama LP4096/T512: 126057 MiB -> 3.3 KB; phi3 LP1024_T54: 15638 MiB -> 6.8 KB; llama_b8 LP1024_T64: 8603 MiB -> 5.0 KB"},
+    "match.capture.instance_records": {"value": 12_300, "unit": "bytes per instance", "what": "capture observer: one record per matched instance (ids, operand digests, positions)",
+                                           "source": "fit over llama_b8 (38141 MiB, 698k inst), r11 (106351, 747k), r23 (141211, 2.86M), r67 (126273, 5.7M) with the two value terms below"},
+    "match.capture.token_values": {"value": 1.03, "unit": "x scheduled token_bytes", "what": "capture observer: snapshot of the committed per-token values (declaration widths x tokens)",
+                                       "source": "same fit; token_bytes from the F-dA-15 composition (llama_b8 5913 MiB, r23 24214, r67 22571)"},
+    "match.capture.hidden_values": {"value": 0.67, "unit": "x scheduled hidden_bytes", "what": "capture observer: the M1 hidden-stream snapshot (heads x prompt x NB per arriving prompt)",
+                                        "source": "r11 vs llama_b8: +101 GB hidden_bytes -> +68 GB RSS (0.67); r23 check 152 vs 141 GB observed"},
+    "match.fold.instance_state": {"value": 26_000, "unit": "bytes per instance (dense); 12000 (moe)", "what": "fold: folded instance dicts + per-instance program rows",
+                                      "source": "llama_b8 27551 MiB -> 28 KB; r23 86639 -> 25.5 KB; r60 49426 -> 21 KB; r67 82881 -> 12 KB (moe)"},
+    "match.fold.attention_operands": {"value": 3_400, "unit": "bytes per (step x context token x layer)", "what": "fold: per-step attention operand rows over the reachable context",
+                                          "source": "r11 149634 MiB fold with steps 512 x K 4608 x 16 layers -> 3.4 KB (the only long-context fold); llama_b8 check 25 vs 27.5 GB"},
+    "commit.pinned_pool.levels_factor": {"value": 1.25, "unit": "x scheduled raw bytes", "what": "pinned host staging pool: raw committed bytes + Merkle levels, allocated during warm-up, resident until commit_delta exits under --retain host (torch host allocator caches it)",
+                                             "source": "F-dA-15 ledger vs 'staging (pinned, in use)': phi3 108803 vs 107614 MiB (0.99); llama_b8 44715 vs 42017 (0.94); r22 103352 vs 98195 (0.95)"},
+    "commit.run_record.bytes_per_leaf": {"value": 268, "unit": "raw bytes per leaf", "what": "per-run leaf digest table: 32 B per leaf, leaves = raw / 268",
+                                             "source": "phi3 commit.log: 87,073,246,248 B in 340,129,939 leaves -> 256 B/leaf raw; x32 B digest = 10.9 GB (observed warm-up excess 15.6 GB over pool+engine; r22 16.6 GB)"},
+    "commit.binding.population_index": {"value": 2_000, "unit": "bytes per instance", "what": "binding map + population/coverage structures (map entries ~0.43 x instances)",
+                                            "source": "binding_coverage RSS deltas: llama_b8 5.6 GB/698k = 8 KB; r22 3.2 GB/1.62M = 2 KB; phi3 1.9 GB/1.3M = 1.4 KB; r67 6.5 GB/5.7M = 1.1 KB (median 2 KB; spread noted)"},
+    "commit.c2.evaluator_base": {"value": 6_700 * MiB, "unit": "bytes", "what": "C2 evaluator fixed cost: program registry, family tables, sampled-replay bookkeeping (independent of instance count)",
+                                     "source": "b1_llama: oracle+replay delta 11.8 GB - 187k x 27.5 KB = 6.7 GB; llama_b8 check 25.9 vs 24.4 GB"},
+    "commit.c2.match_oracle.per_instance": {"unit": "bytes per instance (per model)", "what": "MatchOracle: match/instances parsed into python objects for oracle_compare; freed at pair end (heap residual retained)",
+                                                "source": "oracle_compare RSS deltas: llama_b8 8.8 GB/698k; r22 21.5 GB/1.62M -> 13 KB; phi3 25.7 GB/1.3M -> 17.5 KB net of base; #67 (moe) anon at kill bounds oracle+programs <= 8.6 KB"},
+    "commit.c2.programs.per_instance": {"unit": "bytes per instance (per model)", "what": "sampled-replay Program object graph (pair 0 only under the replay cache); freed after pair 0 (heap residual retained)",
+                                            "source": "sampled_replay RSS deltas: llama_b8 15.6 GB/698k; r22 23 GB/1.62M -> 14.5 KB; phi3 32.3 GB/1.3M -> 21.5 KB net of base"},
+    "commit.c2.heap_residual.retention": {"value": 0.91, "unit": "fraction of pair-0 C2 heap", "what": "pymalloc arenas / glibc heap not returned after pair 0's oracle+programs are freed; resident for the process lifetime",
+                                              "source": "RSS after pair-0 release minus pre-C2 RSS over the pair-0 C2 delta: r22 40.4/44.5 = 0.91; llama_b8 21/24.4 = 0.86; phi3 47.2/58 = 0.81; b1 9.2/11.8 = 0.78 (max used)"},
+    "commit.c2.replay_workers.small_vu": {"value": 250 * MiB, "unit": "bytes per worker", "what": "F-r17-24 (a): a forked replay worker evaluating ordinary VUs: its private (COW-dirtied + evaluator scratch) pages",
+                                              "source": "r22 laneC, 32 forked workers over 800 s: cgroup anon+shmem - parent RSS plateau 6.7-7.6 GB -> <= 240 MB each, no spike"},
+    "commit.c2.replay_workers.largest_vu": {"value": 2.9, "unit": "x largest committed tensor bytes", "what": "F-r17-24 (b): a worker evaluating the largest VU (the step-0 hidden-M1 stream: heads x prompt x NB for the step's prompts) materialises its decoded operand + the recompute + evaluator temporaries",
+                                                "source": "#23 B64 commit2: exec2 ps at the kill: two workers at ~72 GB each vs 'largest tensor bound 25120 MiB' -> 2.9x; cgroup 359518 - parent 256722 = >= 102.8 GB in children"},
+    "commit.c2.replay_workers.largest_vu_picks": {"value": 2, "unit": "workers", "what": "sampled_replay picks per stratum (per-stratum 2): the largest stratum's two VUs can be in two workers at once",
+                                                      "source": "commit.log 'C2 SAMPLED REPLAY ... (per-stratum 2, ...)' on every R17 row"},
+    "commit.largest_tensor.per_prompt": {"unit": "bytes per prompt at 1024/128 (per model), x (LP x K)/(1024 x 1152)", "what": "the largest committed tensor (windowed staging ledger): scales with the prompts in the step and LP x K",
+                                             "source": "'largest tensor bound': llama B1 392, B8 3140, B32 12560, B64 25120 MiB (392.5 x B); r11 LP4096 6274 = 392 x 16; phi3 B8 4228 (528.5 x B); olmoe B32 9480 (296 x B)"},
+    "margin.pod_cotenants": {"value": 2_600 * MiB, "unit": "bytes", "what": "row_pod.sh, hot_commit client, the resource sampler, sshd: pod-resident processes outside the row's stage process",
+                                 "source": "r22 laneC anon+shmem before commit_delta: 2512-2521 MiB; r23 commit.prepare 987-2955 MiB"},
+    "margin.kernel_unreclaimable": {"value": 2 * GiB, "unit": "bytes", "what": "kernel memory charged to the cgroup that the OOM path could not reclaim (slab, page tables of a 250 GB heap, dirty pages)",
+                                        "source": "#67: 175 GiB limit = 154 GiB anon+shmem + 18 GiB file at the kill; #11 memory.peak = memory.max"},
+    "instances_per_layer_token": {"unit": "instances per (layer x token)", "what": "fold instance count law: n_instances = c x layers x (prompt tokens + decode rows)",
+                                      "source": "llama_b8 698398/(16 x 4313) = 10.1; phi3 1315324/(32 x 4090) = 10.05; r22 1622848/(16 x 10034) = 10.1; r11 747358/(16 x 4608) = 10.1; r60 1211108/(32 x 3758) = 10.07; r57 gemma2-2b 4368950/(26 x 4150) = 40.5; r67 olmoe 5745046/(16 x 9967) = 36.0"},
+    "fa2.tap_window.device": {"value": int(24.53 * GiB), "unit": "bytes (device)", "what": "FA2 hidden-M1 tap window on device (F-r17-23): heads x prompt x NB for the largest step, ring of 8 x 256 MiB + scratch",
+                                  "source": "F-r17-23: 24.53 GiB device; r23 commit.log 'windowed staging (P0): 8 x 256 MiB ring + scratch (largest tensor bound 25120 MiB)'"},
+}
+
+# Named allocation objects (the inventory), with lifetime as (first substage, last substage) on the stage timeline.
+INVENTORY: dict[str, dict[str, str]] = {
+    "serving.engine_host": {"stage": "commit", "where": "commit_delta committer process at engine construction", "freed": "process exit", "scales": "constant per engine"},
+    "serving.weights_mmap": {"stage": "commit", "where": "vLLM model load (safetensors mmap)", "freed": "engine teardown", "scales": "model weights bytes"},
+    "build.program_graph": {"stage": "build", "where": "derive_request (Program object graph of one request)", "freed": "request derivation end (heap residual across requests)", "scales": "decode rows x context x layers"},
+    "match.capture.instance_records": {"stage": "match", "where": "m1_capture observer, per matched instance", "freed": "capture end (written to match/)", "scales": "instances"},
+    "match.capture.token_values": {"stage": "match", "where": "m1_capture observer value snapshots", "freed": "capture end", "scales": "tokens x declaration widths"},
+    "match.capture.hidden_values": {"stage": "match", "where": "m1_capture observer M1 hidden-stream snapshot", "freed": "capture end", "scales": "prompt tokens x K x heads"},
+    "match.fold.instance_state": {"stage": "match", "where": "fold (verity_capture.fold) instance dicts", "freed": "fold end", "scales": "instances"},
+    "match.fold.attention_operands": {"stage": "match", "where": "fold per-step attention operand rows", "freed": "fold end", "scales": "steps x context x layers"},
+    "commit.pinned_pool": {"stage": "commit", "where": "bounded warm-up / first instrumented run (torch pinned host allocator)", "freed": "commit_delta exit (--retain host); per-pair release only under --retain none", "scales": "raw committed bytes x 1.25"},
+    "commit.run_record.leaf_digests": {"stage": "commit", "where": "instrumented run per-step leaf table", "freed": "commit_delta exit", "scales": "raw bytes / 268 x 32 B"},
+    "commit.binding.population_index": {"stage": "commit", "where": "binding_coverage (binding map + population)", "freed": "pair end", "scales": "instances"},
+    "commit.c2.evaluator_base": {"stage": "commit", "where": "C2 evaluator construction", "freed": "commit_delta exit", "scales": "constant"},
+    "commit.c2.match_oracle": {"stage": "commit", "where": "oracle_compare: match/instances parsed", "freed": "pair end (heap residual retained)", "scales": "instances x per-model bytes"},
+    "commit.c2.programs": {"stage": "commit", "where": "sampled_replay pair 0: Program graph load", "freed": "pair-0 replay end (heap residual retained; replay cache reuses the record)", "scales": "instances x per-model bytes"},
+    "commit.c2.heap_residual": {"stage": "commit", "where": "pymalloc/glibc arenas after pair-0 C2 frees", "freed": "process exit", "scales": "0.91 x pair-0 C2 heap"},
+    "commit.c2.replay_workers": {"stage": "commit", "where": "forked replay pool children (sampled_replay._parallel_replay)", "freed": "pool close", "scales": "workers x per-worker COW private pages (F-r17-24)"},
+    "fa2.tap_window": {"stage": "commit", "where": "device: FA2 hidden-M1 window ring", "freed": "commit_delta exit", "scales": "heads x prompt x NB (largest step)"},
+}
+
+# Stage timelines: ordered substage points.  Commit repeats the pair block `pairs` times.
+BUILD_POINTS = ["derive"]
+MATCH_POINTS = ["capture", "control", "resolve", "fold", "compare", "global_match"]
+COMMIT_PREFIX = ["setup", "warmup"]
+COMMIT_PAIR_BLOCK = ["control", "instrumented", "binding", "oracle", "replay", "release"]
+
+
+def commit_points(pairs: int) -> list[str]:
+    pts = list(COMMIT_PREFIX)
+    for p in range(max(1, pairs)):
+        pts += [f"p{p}.{s}" for s in COMMIT_PAIR_BLOCK]
+    pts.append("exit")
+    return pts
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Row configuration (plan-time inputs).  Artifact-derived overrides win over the structural estimates.
+# ---------------------------------------------------------------------------------------------------------------------
+@dataclass
+class RowConfig:
+    model: str
+    requests: int = 1
+    prompt_tokens: int = 1024            # sum over requests
+    decode_rows: int = 128               # sum over requests of decode steps (cap + lag)
+    steps: int = 129
+    max_context: int = 1152              # K of the longest reachable context
+    pairs: int = 3
+    replay_workers: int | None = None    # None -> sampled_replay default min(32, cpu_count//2)
+    host_cpus: int = 128
+    retain: str = "host"
+    replay_cache: bool = True
+    largest_vu_in_parent: bool = False   # the FIX: the largest strata are evaluated serially in the parent, never in a forked worker
+    largest_request_rows: int | None = None   # (cap + lag) of the request with the largest rows x context product
+    largest_request_ctx: int | None = None    # its prompt_len + cap + lag
+    largest_tensor_bytes: int | None = None   # 'largest tensor bound' ledger line when the row has run before
+    host_limit_bytes: int | None = None
+    device_limit_bytes: int | None = None
+    # measured-at-plan-time overrides (F-dA-15 admission JSON, fold_summary.json, commit.log)
+    scheduled_raw_bytes: int | None = None
+    token_bytes: int | None = None
+    hidden_bytes: int | None = None
+    n_instances: int | None = None
+    leaves: int | None = None
+    notes: list[str] = field(default_factory=list)
+
+    @property
+    def spec(self) -> dict[str, Any]:
+        return MODELS.get(self.model, DENSE_DEFAULT)
+
+    @property
+    def tokens(self) -> int:
+        return int(self.prompt_tokens) + int(self.decode_rows)
+
+    def instances(self) -> int:
+        if self.n_instances:
+            return int(self.n_instances)
+        return round(self.spec["instances_per_layer_token"] * self.spec["layers"] * self.tokens)
+
+    def token_bytes_est(self) -> int:
+        if self.token_bytes:
+            return int(self.token_bytes)
+        return int(self.tokens * self.spec["per_token_bytes"])
+
+    def hidden_bytes_est(self) -> int:
+        if self.hidden_bytes:
+            return int(self.hidden_bytes)
+        return int(self.token_bytes_est() * self.max_context * self.spec["hidden_per_token_K"])
+
+    def raw_bytes(self) -> int:
+        if self.scheduled_raw_bytes:
+            return int(self.scheduled_raw_bytes)
+        return self.token_bytes_est() + self.hidden_bytes_est()
+
+    def workers(self) -> int:
+        if self.replay_workers is not None:
+            return max(1, int(self.replay_workers))
+        return max(1, min(32, int(self.host_cpus) // 2))
+
+    def largest_request(self) -> tuple[int, int]:
+        """(decode rows, reachable context) of the request that dominates derive_request / the M1 stream."""
+        if self.largest_request_rows and self.largest_request_ctx:
+            return int(self.largest_request_rows), int(self.largest_request_ctx)
+        if self.requests <= 1:
+            return int(self.decode_rows), int(self.max_context)
+        # a mixed row: the longest prompt with the longest cap is the row's (I, O) pair
+        rows = int(self.max_context) - int(self.prompt_tokens // max(1, self.requests)) if self.max_context else self.decode_rows // self.requests
+        return max(1, min(int(self.max_context), max(rows, self.decode_rows // self.requests))), int(self.max_context)
+
+    def largest_tensor(self) -> int:
+        if self.largest_tensor_bytes:
+            return int(self.largest_tensor_bytes)
+        per_prompt = self.spec.get("largest_tensor_per_prompt", 554_000_000)
+        rows, ctx = self.largest_request()
+        lp = max(1, ctx - rows)
+        return int(per_prompt * self.requests * (lp * ctx) / (1024 * 1152))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Terms and the sweep.
+# ---------------------------------------------------------------------------------------------------------------------
+@dataclass
+class Term:
+    name: str
+    bytes: int
+    live_from: str
+    live_until: str
+    basis: str
+    kind: str = "host"     # host | device | margin | base
+
+
+def peak_overlap(intervals: Iterable[tuple[str, float, float, int]]) -> dict[str, Any]:
+    """Sweep-line maximum simultaneous overlap of (name, t0, t1, bytes) intervals (half-open [t0, t1)).
+
+    Returns {"peak_bytes", "t", "live": {name: bytes}} at the first time the maximum is reached.  Sizes are summed,
+    so two intervals of the same name are two allocations.
+    """
+    ev: list[tuple[float, int, str, int]] = []
+    for name, t0, t1, b in intervals:
+        if t1 < t0:
+            t0, t1 = t1, t0
+        ev.append((float(t0), 1, name, int(b)))
+        ev.append((float(t1), 0, name, int(b)))
+    ev.sort(key=lambda e: (e[0], e[1]))   # frees (0) before allocs (1) at the same instant: touching intervals do not overlap
+    cur = 0
+    live: dict[str, int] = {}
+    best = {"peak_bytes": 0, "t": None, "live": {}}
+    for t, is_alloc, name, b in ev:
+        if is_alloc:
+            cur += b
+            live[name] = live.get(name, 0) + b
+            if cur > best["peak_bytes"]:
+                best = {"peak_bytes": cur, "t": t, "live": dict(live)}
+        else:
+            cur -= b
+            live[name] = live.get(name, 0) - b
+            if live[name] <= 0:
+                live.pop(name, None)
+    return best
+
+
+def _terms_to_intervals(terms: list[Term], points: list[str]) -> list[tuple[str, float, float, int]]:
+    idx = {p: i for i, p in enumerate(points)}
+    out = []
+    for t in terms:
+        if t.kind == "device":
+            continue
+        a = idx[t.live_from]
+        b = idx[t.live_until] + 1   # inclusive last point
+        out.append((t.name, a, b, t.bytes))
+    return out
+
+
+def _lower_bound_note(basis: str) -> str:
+    m = re.search(r"\[lower_bound: (.*?)\]", basis or "")
+    return m.group(1) if m else "under-fitted term"
+
+
+def _stage_plan(terms: list[Term], points: list[str], limit: int | None) -> dict[str, Any]:
+    host = [t for t in terms if t.kind in ("host", "base", "row")]
+    margin = [t for t in terms if t.kind == "margin"]
+    device = [t for t in terms if t.kind == "device"]
+    pk = peak_overlap(_terms_to_intervals(host, points))
+    margin_bytes = sum(t.bytes for t in margin)
+    reserved = int(pk["peak_bytes"] + margin_bytes)
+    peak_point = points[int(pk["t"])] if pk["t"] is not None else None
+    lower_bound = {t.name: _lower_bound_note(t.basis) for t in host if "lower_bound" in (t.basis or "")}
+    lb_terms = sorted(lower_bound)
+    decision = _decision(reserved, limit, pk["live"], margin_bytes, lower_bound)
+    return {
+        "reserved_bytes": reserved,
+        "reserved_mib": reserved // MiB,
+        "peak_point": peak_point,
+        "terms": [{"name": t.name, "bytes": t.bytes, "mib": t.bytes // MiB, "live": [t.live_from, t.live_until], "basis": t.basis, "kind": t.kind} for t in terms],
+        "live_at_peak": {k: v // MiB for k, v in sorted(pk["live"].items(), key=lambda kv: -kv[1])},
+        "margin": {t.name: t.bytes // MiB for t in margin},
+        "device_bytes": sum(t.bytes for t in device),
+        "host_limit_bytes": limit,
+        "lower_bound_terms": lb_terms,
+        "decision": decision,
+        "admit": decision["admit"],
+        "verdict": decision["verdict"],
+        "spare_mib": (None if limit is None else (limit - reserved) // MiB),
+    }
+
+
+def _decision(reserved: int, limit: int | None, live: dict[str, int], margin_bytes: int, lower_bound: dict[str, str]) -> dict[str, Any]:
+    """The refusal names what does not fit: the live terms at the peak, largest first, and the shortfall in bytes.
+
+    S-r18-3 C1 (rev M-0053): a stage whose reservation carries a lower-bound term never reads as a plain admit -- the model knows it
+    under-fits that object (R17 killed #57/#60 at 1.4-1.6x the prediction); admit is None with verdict LOWER_BOUND naming the terms and
+    the R17 observation, so the runner/coord decide by name.  Over the limit it is still REFUSE (a lower bound above the limit is a refusal).
+    """
+    if limit is None:
+        return {"admit": None, "verdict": "NO_LIMIT", "reason": "no host limit given"}
+    top = sorted(live.items(), key=lambda kv: -kv[1])
+    if reserved > limit:
+        return {"admit": False, "verdict": "REFUSE", "short_by_bytes": reserved - limit, "short_by_mib": (reserved - limit) // MiB,
+                "live_at_peak_mib": {k: v // MiB for k, v in top}, "margin_mib": margin_bytes // MiB, "lower_bound_terms": sorted(lower_bound),
+                "reason": f"reserved {reserved // MiB} MiB > limit {limit // MiB} MiB; largest live terms: " + ", ".join(f"{k} {v // MiB}" for k, v in top[:4])
+                + ("; and the reservation is a LOWER BOUND (" + ", ".join(sorted(lower_bound)) + ")" if lower_bound else "")}
+    if lower_bound:
+        why = "; ".join(sorted({v for v in lower_bound.values()}))
+        return {"admit": None, "verdict": "LOWER_BOUND", "spare_bytes_if_exact": limit - reserved, "lower_bound_terms": sorted(lower_bound),
+                "live_at_peak_mib": {k: v // MiB for k, v in top}, "margin_mib": margin_bytes // MiB,
+                "reason": f"reserved {reserved // MiB} MiB <= limit {limit // MiB} MiB, but the reservation is a LOWER BOUND: the model under-fits "
+                          + ", ".join(sorted(lower_bound)) + f" ({why}); not an admit -- decide by name"}
+    return {"admit": True, "verdict": "ADMIT", "spare_bytes": limit - reserved, "live_at_peak_mib": {k: v // MiB for k, v in top}, "margin_mib": margin_bytes // MiB}
+
+
+def predict(cfg: RowConfig) -> dict[str, Any]:
+    """Reservation per stage: base serving + simultaneously-live named terms + bounded (named) margin."""
+    sp = cfg.spec
+    C = CALIBRATION
+    inst = cfg.instances()
+    raw = cfg.raw_bytes()
+    tok_b = cfg.token_bytes_est()
+    hid_b = cfg.hidden_bytes_est()
+    layers = sp["layers"]
+    # models whose capture observer the R17 data under-fits carry the flag on the term itself (never silently admitted)
+    lb = f" [lower_bound: {sp['capture_lower_bound']}]" if sp.get("capture_lower_bound") else ""
+    margin_terms = [
+        Term("margin.pod_cotenants", C["margin.pod_cotenants"]["value"], "", "", C["margin.pod_cotenants"]["what"], "margin"),
+        Term("margin.kernel_unreclaimable", C["margin.kernel_unreclaimable"]["value"], "", "", C["margin.kernel_unreclaimable"]["what"], "margin"),
+    ]
+    out: dict[str, Any] = {"schema": SCHEMA, "row": asdict(cfg), "derived": {"instances": inst, "raw_bytes": raw, "token_bytes": tok_b, "hidden_bytes": hid_b,
+                                                                          "workers": cfg.workers(), "model_spec": sp}}
+
+    # ---- build: derive the largest request (rows x reachable context x layers) -------------------------------------
+    # The B requests are derived sequentially; the largest (prompt LP_max, T_max) request dominates; use the row's
+    # longest prompt (max_context - decode) x the longest decode (decode_rows / requests at least) as the plan-time proxy.
+    t_max, ctx_max = cfg.largest_request()
+    ctx = cfg.max_context
+    graph = int(sp["build_graph_per_row_ctx_layer"] * t_max * ctx_max * layers)
+    b_terms = [
+        Term("process.python_base", C["process.python_base"]["value"], "derive", "derive", C["process.python_base"]["what"], "base"),
+        Term("build.program_graph", graph, "derive", "derive", f"{sp['build_graph_per_row_ctx_layer']} B x rows {t_max} x ctx {ctx_max} x layers {layers} (largest request)"),
+    ] + margin_terms
+    out["build"] = _stage_plan(b_terms, BUILD_POINTS, cfg.host_limit_bytes)
+
+    # ---- match ----------------------------------------------------------------------------------------------------
+    fold_inst_coef = 26_000 if sp["family"] == "dense" else 12_000
+    m_terms = [
+        Term("process.python_base", C["process.python_base"]["value"], "capture", "global_match", C["process.python_base"]["what"], "base"),
+        Term("match.capture.instance_records", int(C["match.capture.instance_records"]["value"] * inst), "capture", "capture", f"12.3 KB x {inst} instances{lb}"),
+        Term("match.capture.token_values", int(C["match.capture.token_values"]["value"] * tok_b), "capture", "capture", f"1.03 x token_bytes {tok_b // MiB} MiB{lb}"),
+        Term("match.capture.hidden_values", int(C["match.capture.hidden_values"]["value"] * hid_b), "capture", "capture", f"0.67 x hidden_bytes {hid_b // MiB} MiB{lb}"),
+        Term("match.fold.instance_state", int(fold_inst_coef * inst), "fold", "fold", f"{fold_inst_coef} B x {inst} instances"),
+        Term("match.fold.attention_operands", int(C["match.fold.attention_operands"]["value"] * cfg.steps * ctx * layers), "fold", "fold", f"3.4 KB x steps {cfg.steps} x ctx {ctx} x layers {layers}"),
+    ] + margin_terms
+    out["match"] = _stage_plan(m_terms, MATCH_POINTS, cfg.host_limit_bytes)
+
+    # ---- commit ---------------------------------------------------------------------------------------------------
+    pts = commit_points(cfg.pairs)
+    last = pts[-1]
+    pool = int(raw * C["commit.pinned_pool.levels_factor"]["value"])
+    leaves = int(cfg.leaves or raw // C["commit.run_record.bytes_per_leaf"]["value"])
+    leaf_digests = leaves * 32
+    pool_until = last if cfg.retain == "host" else "p0.release"
+    oracle_b = int(sp["c2_oracle_per_instance"] * inst)
+    programs_b = int(sp["c2_programs_per_instance"] * inst)
+    base_b = C["commit.c2.evaluator_base"]["value"]
+    c2_heap_p0 = oracle_b + programs_b
+    residual_b = int(C["commit.c2.heap_residual.retention"]["value"] * c2_heap_p0)
+    workers = cfg.workers()
+    small_w = int(C["commit.c2.replay_workers.small_vu"]["value"])
+    big_w = int(C["commit.c2.replay_workers.largest_vu"]["value"] * cfg.largest_tensor())
+    n_big = 0 if cfg.largest_vu_in_parent else min(workers, int(C["commit.c2.replay_workers.largest_vu_picks"]["value"]))
+    if workers > 1:
+        workers_b = n_big * big_w + (workers - n_big) * small_w
+        w_basis = (f"{n_big} workers x 2.9 x largest tensor {cfg.largest_tensor() // MiB} MiB + {workers - n_big} workers x 250 MiB"
+                   if n_big else f"{workers} workers x 250 MiB (largest strata evaluated in the parent)")
+    else:
+        workers_b, w_basis = 0, "serial replay"
+    # the parent evaluating the largest VU serially holds the same working set itself
+    parent_big = big_w if (workers == 1 or cfg.largest_vu_in_parent) else 0
+    c_terms = [
+        Term("serving.engine_host", C["serving.engine_host"]["value"], "setup", last, C["serving.engine_host"]["what"], "base"),
+        Term("serving.weights_mmap", int(sp["weights_bytes"]), "setup", last, f"safetensors {sp['weights_bytes'] // MiB} MiB file-mapped", "base"),
+        Term("commit.pinned_pool", pool, "warmup", pool_until, f"raw {raw // MiB} MiB x 1.25 (--retain {cfg.retain})"),
+        Term("commit.run_record.leaf_digests", leaf_digests, "warmup", last, f"{leaves} leaves x 32 B"),
+        Term("commit.c2.evaluator_base", base_b, "p0.oracle", last, C["commit.c2.evaluator_base"]["what"]),
+    ]
+    for p in range(cfg.pairs):
+        c_terms.append(Term("commit.binding.population_index", int(C["commit.binding.population_index"]["value"] * inst), f"p{p}.binding", f"p{p}.release", f"2 KB x {inst} instances"))
+        c_terms.append(Term("commit.c2.match_oracle", oracle_b, f"p{p}.oracle", f"p{p}.replay", f"{sp['c2_oracle_per_instance']} B x {inst} instances ({cfg.model}); freed at the pair's release, its arenas become heap_residual"))
+        if p == 0 or not cfg.replay_cache:
+            c_terms.append(Term("commit.c2.programs", programs_b, f"p{p}.replay", f"p{p}.replay", f"{sp['c2_programs_per_instance']} B x {inst} instances ({cfg.model})"))
+            if workers_b:
+                c_terms.append(Term("commit.c2.replay_workers", int(workers_b), f"p{p}.replay", f"p{p}.replay", w_basis))
+            if parent_big:
+                c_terms.append(Term("commit.c2.largest_vu_eval", int(parent_big), f"p{p}.replay", f"p{p}.replay", f"2.9 x largest tensor {cfg.largest_tensor() // MiB} MiB evaluated in the parent"))
+    if cfg.pairs > 1:
+        c_terms.append(Term("commit.c2.heap_residual", residual_b, "p0.release", last, f"0.91 x pair-0 C2 heap {c2_heap_p0 // MiB} MiB (retained arenas)"))
+    c_terms.append(Term("fa2.tap_window", C["fa2.tap_window.device"]["value"], "warmup", last, C["fa2.tap_window.device"]["what"], "device"))
+    c_terms += margin_terms
+    plan = _stage_plan(c_terms, pts, cfg.host_limit_bytes)
+    # the actionable knob for the F-r17-24 term: how many workers fit beside the parent at the replay point
+    if cfg.host_limit_bytes:
+        parent_at_replay = sum(t.bytes for t in c_terms if t.kind in ("host", "base") and t.name != "commit.c2.replay_workers"
+                               and pts.index(t.live_from) <= pts.index("p0.replay") <= pts.index(t.live_until)) + sum(t.bytes for t in margin_terms)
+        spare = cfg.host_limit_bytes - parent_at_replay
+        # the two largest-stratum workers first, then 250 MiB workers
+        adm = 0
+        if spare > 0:
+            if n_big and spare >= n_big * big_w:
+                adm = n_big + int((spare - n_big * big_w) // small_w)
+            elif not n_big:
+                adm = int(spare // small_w)
+            else:
+                adm = 0 if spare < big_w else 1
+        plan["replay_workers_admissible"] = min(adm, 32)
+        plan["replay_workers_requested"] = workers
+        plan["replay_workers_note"] = ("largest strata in the parent: every forked worker is a 250 MiB worker" if cfg.largest_vu_in_parent else
+                                       f"two forked workers may hold the largest VU ({big_w // MiB} MiB each, F-r17-24); pass --replay-workers <= admissible or evaluate the largest strata in the parent")
+    plan["parent_c2_heap_mib"] = (c2_heap_p0 + base_b) // MiB
+    plan["largest_tensor_mib"] = cfg.largest_tensor() // MiB
+    out["commit"] = plan
+    return out
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Data path (b): R17 attempt directories.
+# ---------------------------------------------------------------------------------------------------------------------
+def _ts(s: str) -> float:
+    s = s.replace("Z", "")
+    for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return _dt.datetime.strptime(s, fmt).replace(tzinfo=_dt.timezone.utc).timestamp()  # noqa: UP017, RUF100 (3.9 laptops read fixtures too)
+        except ValueError:
+            pass
+    raise ValueError(s)
+
+
+def _jsonl(path: str) -> Iterable[dict[str, Any]]:
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rt", errors="replace") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+
+def r17_samples(attempt_dir: str) -> list[dict[str, Any]]:
+    """R17 `resources*.jsonl` -> [{t, rss, cgroup, anon_shmem, gpu, stage}] (MiB), time-sorted."""
+    out = []
+    for f in sorted(glob.glob(os.path.join(attempt_dir, "resources*.jsonl"))):
+        for r in _jsonl(f):
+            t = r.get("utc") or r.get("t")
+            if not t:
+                continue
+            out.append({"t": _ts(t) if isinstance(t, str) else float(t), "rss": r.get("max_python_rss_mib"), "cgroup": r.get("cgroup_current_mib"),
+                        "anon_shmem": r.get("cgroup_anon_shmem_mib"), "gpu": r.get("gpu_used_mib", r.get("gpu0_used_mib")), "stage": r.get("last_stage")})
+    out.sort(key=lambda s: s["t"])
+    return out
+
+
+def r17_spans(attempt_dir: str) -> list[dict[str, Any]]:
+    """R17 `timeline.jsonl` -> [{stage, proc, t0, t1, closed}]; unclosed spans end at the last event (the kill)."""
+    p = os.path.join(attempt_dir, "timeline.jsonl")
+    if not os.path.exists(p):
+        return []
+    ev = sorted(_jsonl(p), key=lambda r: r.get("t", 0))
+    open_: dict[tuple, list[float]] = {}
+    sp = []
+    for r in ev:
+        k = (r.get("proc"), r.get("stage"))
+        if r.get("ev") == "start":
+            open_.setdefault(k, []).append(r["t"])
+        elif r.get("ev") == "end" and open_.get(k):
+            sp.append({"stage": k[1], "proc": k[0], "t0": open_[k].pop(), "t1": r["t"], "closed": True})
+    last = ev[-1]["t"] if ev else 0
+    for k, ts in open_.items():
+        for t0 in ts:
+            sp.append({"stage": k[1], "proc": k[0], "t0": t0, "t1": last, "closed": False})
+    return sorted(sp, key=lambda s: s["t0"])
+
+
+# R17 substage -> plan point
+_R17_POINT = {
+    "build.derive_request": ("build", "derive"), "build.derive_step": ("build", "derive"),
+    "work.match_capture": ("match", "capture"), "work.capture_run": ("match", "capture"), "work.match_control": ("match", "control"),
+    "match.resolve": ("match", "resolve"), "match.fold": ("match", "fold"), "match.compare": ("match", "compare"), "match.global_match": ("match", "global_match"),
+    "prep.committer_setup": ("commit", "setup"), "prep.register_weights": ("commit", "setup"), "prep.warmup_instrumented": ("commit", "warmup"),
+    "validate.binding_coverage": ("commit", "binding"), "validate.oracle_compare": ("commit", "oracle"), "validate.sampled_replay": ("commit", "replay"),
+    "validate.openings_after_release": ("commit", "release"),
+}
+
+
+def observe_r17(attempt_dir: str) -> dict[str, Any]:
+    """Observed host peaks per stage / plan point from the R17 sampler + timeline, with the cgroup kill record if any."""
+    S = r17_samples(attempt_dir)
+    spans = r17_spans(attempt_dir)
+    obs: dict[str, Any] = {"source": "r17", "attempt_dir": attempt_dir, "samples": len(S), "stages": {}, "points": {}, "kill": None, "notes": []}
+    pair_ix: dict[str, int] = {}
+    for s in spans:
+        st = s["stage"]
+        if st.startswith("stage."):
+            name = st.split(".", 1)[1]
+            win = [x for x in S if s["t0"] <= x["t"] <= s["t1"]]
+            if win:
+                obs["stages"][name] = {"rss_mib": max((x["rss"] or 0) for x in win), "cgroup_mib": max((x["cgroup"] or 0) for x in win),
+                                       "anon_shmem_mib": max((x["anon_shmem"] or 0) for x in win), "gpu_mib": max((x["gpu"] or 0) for x in win),
+                                       "n": len(win), "wall_s": int(s["t1"] - s["t0"]), "closed": s["closed"]}
+            continue
+        m = _R17_POINT.get(st)
+        if not m:
+            continue
+        stage, point = m
+        if stage == "commit" and point in COMMIT_PAIR_BLOCK:
+            p = pair_ix.get(point, 0)
+            pair_ix[point] = p + 1
+            point = f"p{p}.{point}"
+        win = [x for x in S if s["t0"] <= x["t"] <= s["t1"]]
+        if not win:
+            continue
+        key = f"{stage}/{point}"
+        rec = {"rss_mib": max((x["rss"] or 0) for x in win), "cgroup_mib": max((x["cgroup"] or 0) for x in win),
+               "anon_shmem_mib": max((x["anon_shmem"] or 0) for x in win), "n": len(win), "wall_s": int(s["t1"] - s["t0"]), "closed": s["closed"], "proc": s["proc"]}
+        prev = obs["points"].get(key)
+        if prev is None or rec["rss_mib"] > prev["rss_mib"]:
+            obs["points"][key] = rec
+    # the committer's own ledger
+    cl = os.path.join(attempt_dir, "commit.log")
+    if os.path.exists(cl):
+        txt = Path(cl).read_text(errors="replace")
+        m = re.search(r"host RSS after run \(MB\) \| (\d+) \| (\d+)", txt)
+        if m:
+            obs["commit_ledger_host_rss_after_run_mb"] = [int(m.group(1)), int(m.group(2))]
+        m = re.search(r"staging \(pinned, in use\) ([\d,]+) B", txt)
+        if m:
+            obs["commit_ledger_pinned_in_use_mib"] = int(m.group(1).replace(",", "")) // MiB
+        m = re.search(r"predicted host (\d+) MiB vs limit (\d+) MiB: (ADMITTED|REFUSED)", txt)
+        if m:
+            obs["f_da_15"] = {"predicted_mib": int(m.group(1)), "limit_mib": int(m.group(2)), "verdict": m.group(3)}
+    # kill record
+    for name in ("commit_oom_cgroup.txt", "cgroup_memory.events.txt"):
+        p = os.path.join(attempt_dir, name)
+        if os.path.exists(p):
+            txt = Path(p).read_text(errors="replace")
+            km = re.search(r"oom_kill (\d+)", txt)
+            mx = re.search(r"(?:^|\n)(?:max |# memory.max\n)(\d{9,})", txt)
+            obs["kill"] = {"file": name, "oom_kill": int(km.group(1)) if km else None, "memory_max_bytes": int(mx.group(1)) if mx else None}
+    st = os.path.join(attempt_dir, "stages.txt")
+    if os.path.exists(st):
+        for line in Path(st).read_text(errors="replace").splitlines():
+            m = re.match(r"(build|match|commit) (PASS|FAIL) \S+ rc=([\d/]+)", line)
+            if m:
+                obs["stages"].setdefault(m.group(1), {})["verdict"] = m.group(2)
+                obs["stages"][m.group(1)]["rc"] = m.group(3)
+    return obs
+
+
+def row_config_from_attempt(attempt_dir: str) -> RowConfig:
+    """Plan-time inputs from an attempt directory's artifacts (preflight row, workload program, F-dA-15 JSON, fold summary)."""
+    notes: list[str] = []
+    row = None
+    pf = os.path.join(attempt_dir, "preflight.json")
+    if os.path.exists(pf):
+        row = json.loads(Path(pf).read_text()).get("row")
+    if not row:
+        for name in ("commit.log", "launcher.log", "row.log"):
+            p = os.path.join(attempt_dir, name)
+            if os.path.exists(p):
+                m = re.search(r"workloads/([\w\-]+__[\w\-]+__[\w\-]+__tp\d+__b\d+__i\d+__o\d+__\w+__\w+__[\w\-]+)\.json", Path(p).read_text(errors="replace"))
+                if m:
+                    row = m.group(1)
+                    break
+    model, requests, K = "llama32-1b", 1, 1152
+    if row:
+        parts = row.split("__")
+        model = parts[0]
+        for p in parts:
+            if re.fullmatch(r"b\d+", p):
+                requests = int(p[1:])
+        i_ = next((int(p[1:]) for p in parts if re.fullmatch(r"i\d+", p)), 1024)
+        o_ = next((int(p[1:]) for p in parts if re.fullmatch(r"o\d+", p)), 128)
+        K = i_ + o_
+    cfg = RowConfig(model=model, requests=requests, max_context=K, notes=notes)
+    if model not in MODELS:
+        notes.append(f"model {model!r} not in MODELS: dense defaults (phi3 coefficients) used")
+    # timeline row start carries B/LP/T
+    tl = os.path.join(attempt_dir, "timeline.jsonl")
+    if os.path.exists(tl):
+        for r in _jsonl(tl):
+            if r.get("stage") == "row" and r.get("ev") == "start":
+                if r.get("B"):
+                    cfg.requests = int(r["B"])
+                if r.get("LP") and r.get("T"):
+                    cfg.prompt_tokens, cfg.decode_rows = int(r["LP"]) * 1, int(r["T"]) + 1
+                    cfg.max_context = int(r["LP"]) + int(r["T"]) + 1
+                break
+    # per-request shapes: build_request_LP<lp>_T<t> sub-dirs / build_summary keys (B > 1) — exact prompt/decode sums
+    shapes: list[tuple[int, int]] = []
+    bs = os.path.join(attempt_dir, "build_summary.json")
+    keys = list(json.loads(Path(bs).read_text()).keys()) if os.path.exists(bs) else []
+    keys += [os.path.basename(p) for p in glob.glob(os.path.join(attempt_dir, "build_request_LP*_T*")) if not p.endswith((".log", ".rc"))]
+    for k in keys:
+        m = re.fullmatch(r"build_request_LP(\d+)_T(\d+)", k)
+        if m:
+            shapes.append((int(m.group(1)), int(m.group(2))))
+    shapes = sorted(set(shapes))
+    if shapes:
+        cfg.requests = len(shapes)
+        cfg.prompt_tokens = sum(lp for lp, _ in shapes)
+        cfg.decode_rows = sum(t + 1 for _, t in shapes)
+        cfg.max_context = max(lp + t + 1 for lp, t in shapes)
+        cfg.steps = max(t for _, t in shapes) + 2
+        lp, t = max(shapes, key=lambda s: (s[1] + 1) * (s[0] + s[1] + 1))
+        cfg.largest_request_rows, cfg.largest_request_ctx = t + 1, lp + t + 1
+    # workload program (when kept): authoritative
+    wp = glob.glob(os.path.join(attempt_dir, "build_workload", "workload_program.json*"))
+    if wp:
+        try:
+            with (gzip.open(wp[0], "rt") if wp[0].endswith(".gz") else open(wp[0])) as fh:
+                j = json.load(fh)
+            reqs = j.get("requests") or []
+            if reqs:
+                lag = int(j.get("lag", 1) or 1)
+                cfg.prompt_tokens = sum(int(r.get("prompt_len", 0)) for r in reqs)
+                cfg.decode_rows = sum(int(r.get("cap", 0)) + lag for r in reqs)
+                cfg.requests = len(reqs)
+                cfg.max_context = max(int(r.get("prompt_len", 0)) + int(r.get("cap", 0)) + lag for r in reqs)
+                cfg.steps = max(int(r.get("cap", 0)) for r in reqs) + 1 + lag
+                big = max(reqs, key=lambda r: (int(r.get("cap", 0)) + lag) * (int(r.get("prompt_len", 0)) + int(r.get("cap", 0)) + lag))
+                cfg.largest_request_rows, cfg.largest_request_ctx = int(big.get("cap", 0)) + lag, int(big.get("prompt_len", 0)) + int(big.get("cap", 0)) + lag
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"workload_program unreadable: {e!r}")
+    # F-dA-15 admission JSON (the runner's own schedule)
+    adm = glob.glob(os.path.join(attempt_dir, "commit", "admission_*.json"))
+    if adm:
+        j = json.loads(Path(adm[0]).read_text())
+        s = j.get("scheduled", {})
+        cfg.scheduled_raw_bytes = int(j.get("scheduled_raw_bytes") or 0) or None
+        cfg.host_limit_bytes = int(j.get("host_cap_bytes") or 0) or None
+        cfg.retain = j.get("retain", cfg.retain)
+        if s:
+            cfg.prompt_tokens = int(s.get("prompt_tokens", cfg.prompt_tokens))
+            cfg.decode_rows = int(s.get("decode_rows", cfg.decode_rows))
+            cfg.steps = int(s.get("steps", cfg.steps))
+            cfg.requests = int(s.get("requests", cfg.requests))
+            comp = s.get("composition", {})
+            cfg.token_bytes = int(comp.get("token_bytes") or 0) or None
+            cfg.hidden_bytes = int(comp.get("hidden_bytes") or 0) or None
+            ks = [int(p.get("K", 0)) for p in j.get("peak_steps", [])]
+            if ks:
+                cfg.max_context = max(ks)
+    fs = os.path.join(attempt_dir, "match", "fold_summary.json")
+    if os.path.exists(fs):
+        j = json.loads(Path(fs).read_text())
+        cfg.n_instances = int(j.get("n_instances") or 0) or None
+        if j.get("n_steps"):
+            cfg.steps = int(j["n_steps"]) + 1
+    cl = os.path.join(attempt_dir, "commit.log")
+    if os.path.exists(cl):
+        txt = Path(cl).read_text(errors="replace")
+        m = re.search(r"--replay-workers[ =](\d+)", txt)
+        if m:
+            cfg.replay_workers = int(m.group(1))
+        m = re.search(r"--pairs[ =](\d+)", txt)
+        if m:
+            cfg.pairs = int(m.group(1))
+        m = re.search(r"in ([\d,]+) leaves", txt)
+        if m:
+            cfg.leaves = int(m.group(1).replace(",", ""))
+        m = re.search(r"--retain (\w+)", txt)
+        if m:
+            cfg.retain = m.group(1)
+        m = re.search(r"largest tensor bound (\d+) MiB", txt)
+        if m:
+            cfg.largest_tensor_bytes = int(m.group(1)) * MiB
+        if "--replay-cache" not in txt and "--no-replay-cache" in txt:
+            cfg.replay_cache = False
+    if cfg.host_limit_bytes is None:
+        for name in ("commit_oom_cgroup.txt", "cgroup_memory.events.txt"):
+            p = os.path.join(attempt_dir, name)
+            if os.path.exists(p):
+                mx = re.search(r"(\d{11,})", Path(p).read_text(errors="replace"))
+                if mx:
+                    cfg.host_limit_bytes = int(mx.group(1))
+                    break
+    if cfg.host_limit_bytes is None:
+        # the sampler's cgroup peak is a lower bound on the limit; the R17 pods were 175 GiB (cp-r3/cp-can), 351 GiB (cp-big), 125 GiB (L40S 2x)
+        S = r17_samples(attempt_dir)
+        pk = max((s["cgroup"] or 0) for s in S) if S else 0
+        for lim in (119_209, 179_290, 359_535):
+            if pk <= lim:
+                cfg.host_limit_bytes = lim * MiB
+                notes.append(f"host limit inferred from the sampler's cgroup peak {pk} MiB -> {lim} MiB class")
+                break
+    return cfg
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Data path (a): increment A telemetry (events*.jsonl spans + alloc/free marks; resources*.jsonl cgroup/process rows).
+# ---------------------------------------------------------------------------------------------------------------------
+ALLOC_MARK = {"kind": "mark", "name": "alloc", "fields": ["obj", "bytes", "alloc_id", "stage"]}
+FREE_MARK = {"kind": "mark", "name": "free", "fields": ["obj", "alloc_id", "stage"]}
+
+
+def observe_increment_a(attempt_dir: str) -> dict[str, Any]:
+    """Named-allocation intervals from increment A marks + cgroup/process samples -> per-stage peak overlap.
+
+    Marks: `{"kind":"mark","name":"alloc","obj":"commit.pinned_pool","bytes":N,"alloc_id":"...","stage":"..."}` and the
+    matching `name:"free"`.  Unfreed allocations end at the last event of their stream.  Spans give stage windows.
+    """
+    recs: list[dict[str, Any]] = []
+    for f in sorted(glob.glob(os.path.join(attempt_dir, "events*.jsonl"))):
+        recs.extend(_jsonl(f))
+    recs.sort(key=lambda r: (str(r.get("t_utc", "")), str(r.get("stream", "")), int(r.get("seq", 0) or 0)))
+    obs: dict[str, Any] = {"source": "increment_a", "attempt_dir": attempt_dir, "events": len(recs), "stages": {}, "allocs": [], "notes": []}
+    if not recs:
+        obs["notes"].append("no events*.jsonl")
+        return obs
+    mono = lambda r: float(r["t_mono"]) if r.get("t_mono") is not None else None
+    last_mono = max((mono(r) for r in recs if mono(r) is not None), default=0.0)
+    spans: dict[str, tuple[float, float]] = {}
+    open_spans: dict[str, tuple[str, float]] = {}
+    for r in recs:
+        if r.get("kind") == "span_start" and mono(r) is not None:
+            open_spans[str(r.get("id"))] = (str(r.get("stage")), mono(r))
+        elif r.get("kind") == "span_end" and str(r.get("id")) in open_spans and mono(r) is not None:
+            st, t0 = open_spans.pop(str(r.get("id")))
+            spans[st] = (t0, mono(r))
+    for (st, t0) in open_spans.values():
+        spans[st] = (t0, last_mono)
+    live: dict[str, tuple[str, float, int, str]] = {}
+    intervals: list[tuple[str, float, float, int, str]] = []
+    for r in recs:
+        if r.get("kind") != "mark" or mono(r) is None:
+            continue
+        if r.get("name") == "alloc" and r.get("obj") is not None:
+            aid = str(r.get("alloc_id") or f"{r.get('obj')}#{len(intervals) + len(live)}")
+            live[aid] = (str(r["obj"]), mono(r), int(r.get("bytes") or 0), str(r.get("stage") or ""))
+        elif r.get("name") == "free":
+            aid = str(r.get("alloc_id") or "")
+            if aid in live:
+                obj, t0, b, st = live.pop(aid)
+                intervals.append((obj, t0, mono(r), b, st))
+    for aid, (obj, t0, b, st) in live.items():
+        intervals.append((obj, t0, last_mono, b, st))
+        obs["notes"].append(f"alloc {aid} ({obj}) never freed: closed at the last event")
+    obs["allocs"] = [{"obj": o, "t0": t0, "t1": t1, "bytes": b, "stage": st} for o, t0, t1, b, st in intervals]
+    # per top-level stage window: peak overlap of named allocations + the sampler's view
+    samples = []
+    for f in sorted(glob.glob(os.path.join(attempt_dir, "resources*.jsonl"))):
+        for r in _jsonl(f):
+            if r.get("kind") == "cgroup" and r.get("t_mono") is not None:
+                cg = r.get("cgroup") or {}
+                ms = cg.get("memory_stat") or {}
+                samples.append({"t": float(r["t_mono"]), "cgroup": cg.get("memory_current_bytes"), "anon_shmem": ((ms.get("anon") or 0) + (ms.get("shmem") or 0)) or None, "rss_sum": None})
+            elif r.get("kind") == "process" and r.get("t_mono") is not None:
+                rows = r.get("processes") or []
+                samples.append({"t": float(r["t_mono"]), "cgroup": None, "anon_shmem": None, "rss_sum": sum(int(p.get("rss_anon_bytes") or p.get("rss_bytes") or 0) for p in rows),
+                                "rss_max": max((int(p.get("rss_bytes") or 0) for p in rows), default=0)})
+    for st, (t0, t1) in spans.items():
+        top = st.split(".", 1)[-1] if st.startswith("stage.") else st
+        inside = [(o, max(a, t0), min(b, t1), n) for o, a, b, n, _ in intervals if b > t0 and a < t1]
+        pk = peak_overlap(inside) if inside else {"peak_bytes": 0, "t": None, "live": {}}
+        win = [s for s in samples if t0 <= s["t"] <= t1]
+        obs["stages"][top] = {"named_peak_bytes": pk["peak_bytes"], "named_peak_mib": pk["peak_bytes"] // MiB, "live_at_peak": {k: v // MiB for k, v in pk["live"].items()},
+                              "cgroup_mib": max((s["cgroup"] or 0) for s in win) // MiB if win else None,
+                              "anon_shmem_mib": max((s["anon_shmem"] or 0) for s in win) // MiB if win else None,
+                              "rss_sum_mib": max((s["rss_sum"] or 0) for s in win) // MiB if win else None,
+                              "rss_max_mib": max((s.get("rss_max") or 0) for s in win) // MiB if win else None, "wall_s": t1 - t0}
+    return obs
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# compare
+# ---------------------------------------------------------------------------------------------------------------------
+def _observed_stage_peak(obs: dict[str, Any], stage: str) -> tuple[int | None, str]:
+    """Observed host peak (MiB) for a stage: the row's largest process RSS (R17: pod-wide max python RSS) — see notes."""
+    st = obs.get("stages", {}).get(stage)
+    if not st:
+        return None, "no samples"
+    return st.get("rss_mib"), f"max_python_rss over {st.get('n')} samples"
+
+
+def compare(attempt_dir: str, cfg: RowConfig | None = None) -> dict[str, Any]:
+    """Predicted vs observed peak per stage (+ per commit point) with the residual and the named attribution."""
+    attempt_dir = str(attempt_dir)
+    cfg = cfg or row_config_from_attempt(attempt_dir)
+    pred = predict(cfg)
+    obs = observe_increment_a(attempt_dir) if glob.glob(os.path.join(attempt_dir, "events*.jsonl")) else observe_r17(attempt_dir)
+    out: dict[str, Any] = {"schema": "verity/admission-compare/v1", "attempt_dir": attempt_dir, "row": asdict(cfg), "derived": pred["derived"], "observed_source": obs["source"],
+                           "stages": {}, "points": {}, "kill": obs.get("kill"), "notes": list(cfg.notes) + list(obs.get("notes", []))}
+    limit = cfg.host_limit_bytes
+    # hand-recorded observations for attempts whose sampler did not see the peak (kill-time cgroup/ps numbers from the R17 notes)
+    override: dict[str, Any] = {}
+    ov = os.path.join(attempt_dir, "admit_observed.json")
+    if os.path.exists(ov):
+        override = json.loads(Path(ov).read_text())
+        out["notes"] += [f"observed override: {override.get('note', '')}"] + list(override.get("notes", []))
+    for stage in ("build", "match", "commit"):
+        p = pred[stage]
+        o_mib, how = _observed_stage_peak(obs, stage)
+        if obs["source"] == "increment_a":
+            s = obs["stages"].get(stage) or {}
+            o_mib = s.get("rss_max_mib") or s.get("anon_shmem_mib")
+            how = "increment A process rss_max / cgroup anon+shmem"
+        o_all = None   # the whole row's charge (parent + children + co-resident), when a cgroup anon+shmem view exists
+        st_obs = obs.get("stages", {}).get(stage) or {}
+        if st_obs.get("anon_shmem_mib"):
+            o_all = st_obs["anon_shmem_mib"]
+        if stage in override:
+            o = override[stage]
+            o_mib = o.get("rss_mib", o_mib)
+            o_all = o.get("anon_shmem_mib", o_all)
+            how = f"override: {o.get('how', '')}"
+        verdict = st_obs.get("verdict")
+        killed = bool(obs.get("kill")) and stage == _killed_stage(obs)
+        # parent-only prediction: the R17 observation is one process's RSS; forked replay workers are charged to the cgroup, not the parent
+        children = sum(t["bytes"] for t in p["terms"] if t["name"] == "commit.c2.replay_workers" and t["live"][0] == p["peak_point"]) if stage == "commit" else 0
+        parent_pred = (p["reserved_bytes"] - children - sum(p["margin"].values()) * MiB) // MiB
+        rec = {"predicted_mib": p["reserved_bytes"] // MiB, "predicted_parent_mib": parent_pred, "predicted_admit": p["admit"], "predicted_verdict": p["verdict"], "observed_mib": o_mib, "observed_all_mib": o_all,
+               "observed_how": how, "verdict": verdict, "observed_is_lower_bound": killed or (verdict == "FAIL"), "peak_point": p["peak_point"],
+               "live_at_peak_mib": p["live_at_peak"], "margin_mib": p["margin"], "limit_mib": (limit // MiB if limit else None), "cotenant": override.get(stage, {}).get("cotenant")}
+        if o_mib is not None:
+            rec["residual_parent_mib"] = parent_pred - int(o_mib)
+            rec["residual_parent_pct"] = round(100.0 * rec["residual_parent_mib"] / max(1, int(o_mib)), 1)
+        if o_all is not None:
+            rec["residual_all_mib"] = rec["predicted_mib"] - int(o_all)
+        out["stages"][stage] = rec
+    # commit points
+    for key, o in obs.get("points", {}).items():
+        stage, point = key.split("/", 1)
+        pts = commit_points(cfg.pairs) if stage == "commit" else (MATCH_POINTS if stage == "match" else BUILD_POINTS)
+        if point not in pts:
+            continue
+        live: dict[str, int] = {}
+        for t in pred[stage]["terms"]:
+            if t["kind"] in ("host", "base") and pts.index(t["live"][0]) <= pts.index(point) <= pts.index(t["live"][1]):
+                live[t["name"]] = live.get(t["name"], 0) + t["mib"]
+        children = live.get("commit.c2.replay_workers", 0)
+        parent = sum(v for n, v in live.items() if n != "commit.c2.replay_workers")
+        pm = parent + children + sum(pred[stage]["margin"].values())
+        out["points"][key] = {"predicted_mib": pm, "predicted_parent_mib": parent, "observed_rss_mib": o["rss_mib"], "observed_cgroup_mib": o["cgroup_mib"],
+                              "observed_anon_shmem_mib": o["anon_shmem_mib"] or None, "residual_parent_mib": parent - int(o["rss_mib"]),
+                              "residual_all_mib": (pm - int(o["anon_shmem_mib"])) if o["anon_shmem_mib"] else None, "live": live, "closed": o["closed"], "n": o["n"]}
+    for k in ("commit_ledger_host_rss_after_run_mb", "commit_ledger_pinned_in_use_mib", "f_da_15"):
+        if k in obs:
+            out[k] = obs[k]
+    out["replay_workers"] = {"requested": pred["commit"].get("replay_workers_requested"), "admissible": pred["commit"].get("replay_workers_admissible"),
+                             "parent_c2_heap_mib": pred["commit"].get("parent_c2_heap_mib"), "largest_tensor_mib": pred["commit"].get("largest_tensor_mib"),
+                             "regime": "largest strata in the parent" if cfg.largest_vu_in_parent else "two forked workers may hold the largest VU (F-r17-24)",
+                             "note": pred["commit"].get("replay_workers_note")}
+    return out
+
+
+def _killed_stage(obs: dict[str, Any]) -> str | None:
+    for st, rec in obs.get("stages", {}).items():
+        if rec.get("verdict") == "FAIL" and rec.get("rc") in ("137", "137/0", "-9"):
+            return st
+    for st, rec in obs.get("stages", {}).items():
+        if rec.get("closed") is False:
+            return st
+    return None
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# rendering / CLI
+# ---------------------------------------------------------------------------------------------------------------------
+def render_compare_md(results: list[dict[str, Any]]) -> str:
+    lines = ["| attempt | model | B | stage | reserved MiB (parent + workers + margin) | parent MiB | observed process MiB | residual parent MiB (%) | observed row MiB (anon+shmem) | residual row | limit MiB | plan | outcome | peak point | live at the predicted peak |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        name = os.path.basename(r["attempt_dir"].rstrip("/"))
+        for stage, s in r["stages"].items():
+            if s["observed_mib"] is None and s["predicted_mib"] == 0:
+                continue
+            lb = "≥" if s["observed_is_lower_bound"] else ""
+            obs = "—" if s["observed_mib"] is None else f"{lb}{s['observed_mib']}" + (" †" if s.get("cotenant") else "")
+            res = "—" if "residual_parent_mib" not in s else f"{s['residual_parent_mib']:+d} ({s['residual_parent_pct']:+.0f}%)"
+            o_all = "—" if s.get("observed_all_mib") is None else f"{lb}{s['observed_all_mib']}"
+            r_all = "—" if s.get("residual_all_mib") is None else f"{s['residual_all_mib']:+d}"
+            plan = {"ADMIT": "admit", "REFUSE": "REFUSE", "LOWER_BOUND": "LOWER_BOUND", "NO_LIMIT": "?"}.get(s.get("predicted_verdict"), "?")
+            live = ", ".join(f"{k.split('.', 1)[-1]} {v}" for k, v in list(s["live_at_peak_mib"].items())[:5])
+            lines.append(f"| {name} | {r['row']['model']} | {r['row']['requests']} | {stage} | {s['predicted_mib']} | {s['predicted_parent_mib']} | {obs} | {res} | {o_all} | {r_all} | {s['limit_mib'] or '—'} | {plan} | {s['verdict'] or '—'} | {s['peak_point']} | {live} |")
+    return "\n".join(lines)
+
+
+def render_points_md(r: dict[str, Any]) -> str:
+    lines = [f"**{os.path.basename(r['attempt_dir'].rstrip('/'))}** — commit points (predicted = Σ live terms + margin; observed = R17 max python RSS / cgroup current / cgroup anon+shmem, MiB)", "",
+             "| point | predicted parent | predicted row (+workers +margin) | observed rss | observed cgroup | observed anon+shmem | residual parent | residual row | live terms |", "|---|---|---|---|---|---|---|---|---|"]
+    for key, p in r["points"].items():
+        if not key.startswith("commit/"):
+            continue
+        live = ", ".join(f"{k.split('.', 1)[-1]} {v}" for k, v in sorted(p["live"].items(), key=lambda kv: -kv[1]))
+        ra = "—" if p["residual_all_mib"] is None else f"{p['residual_all_mib']:+d}"
+        lines.append(f"| {key.split('/', 1)[1]}{'' if p['closed'] else ' (killed)'} | {p['predicted_parent_mib']} | {p['predicted_mib']} | {p['observed_rss_mib']} | {p['observed_cgroup_mib']} | {p['observed_anon_shmem_mib'] or '—'} | {p['residual_parent_mib']:+d} | {ra} | {live} |")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The runner's entry point (row_pod.sh, right after precheck-target): ADVISORY plan for a sweep row from its workload file.
+# ---------------------------------------------------------------------------------------------------------------------
+ADMISSION_SCHEMA = "verity-sweep/admission/v1"
+
+
+def model_key_for_row(row_id: str) -> str:
+    """`<model>__<dtype>__<device>__...` -> MODELS key (`-padded` variants share the base model's coefficients)."""
+    key = row_id.split("__", 1)[0]
+    if key not in MODELS and key.endswith("-padded"):
+        key = key[: -len("-padded")]
+    return key
+
+
+def row_config_from_workload(workload_path: str, row_id: str | None = None, pairs: int = 3, replay_workers: int | None = None,
+                             host_limit_bytes: int | None = None, snapshot_steps: str | None = None, snapshot_max_bytes: int | None = None,
+                             stages: str = "build,match,commit") -> RowConfig:
+    """Plan-time config from the sweep workload (workloads/<row>.json): the same facts row_pod.sh reads for B/I/O/LP/T."""
+    w = json.loads(Path(workload_path).read_text())
+    sw = w.get("sweep") or {}
+    row = row_id or sw.get("row_id") or Path(workload_path).stem
+    reqs = w.get("requests") or []
+    prompt = sum(int(r.get("prompt_len") or len(r.get("prompt_token_ids") or [])) for r in reqs) or int(sw.get("batch", 1)) * int(sw.get("max_input", 1024))
+    decode = sum(int(r.get("max_tokens") or 0) for r in reqs) or int(sw.get("batch", 1)) * int(sw.get("max_output", 128))
+    b = int(sw.get("batch") or len(reqs) or 1)
+    i_max, o_max = int(sw.get("max_input") or 1024), int(sw.get("max_output") or 128)
+    steps = int(w.get("expected_engine_steps") or o_max)
+    lp_max = max((int(r.get("prompt_len") or 0) for r in reqs), default=i_max)
+    t_max = max((int(r.get("max_tokens") or 0) for r in reqs), default=o_max)
+    ea = w.get("engine_args_required") or {}
+    key = model_key_for_row(row)
+    notes = []
+    if key not in MODELS:
+        notes.append(f"no calibration for model '{key}': dense default coefficients (phi3's, the largest measured dense set) -- every term is an estimate")
+    cfg = RowConfig(model=key, requests=b, prompt_tokens=prompt, decode_rows=decode, steps=steps, max_context=int(ea.get("max_model_len") or (i_max + o_max)),
+                    pairs=pairs, replay_workers=replay_workers, host_limit_bytes=host_limit_bytes,
+                    largest_request_rows=t_max, largest_request_ctx=lp_max + t_max, notes=notes)
+    cfg.prefill_rows = int(ea.get("max_num_batched_tokens") or prompt)
+    cfg.snapshot_steps = snapshot_steps or "0,1"
+    cfg.snapshot_max_bytes = snapshot_max_bytes
+    cfg.stages = stages
+    cfg.hf_model = w.get("model")
+    return cfg
+
+
+def cgroup_memory_max() -> int | None:
+    for f in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        try:
+            v = Path(f).read_text().strip()
+        except OSError:
+            continue
+        if v and v != "max":
+            n = int(v)
+            if n < (1 << 60):
+                return n
+    return None
+
+
+def plan_row(cfg: RowConfig, out_path: str | None, advisory: bool = True) -> dict[str, Any]:
+    """predict() for one sweep row -> admission.json beside the attempt + the one-line summary row_pod.sh logs.
+
+    ADVISORY (coord M-0061 (2)): the document records per stage reserved_bytes, the named terms, verdict (ADMIT / REFUSE / LOWER_BOUND /
+    NO_LIMIT) and short_by; `would_refuse` lists the stages a fail-closed runner would have stopped.  Nothing here stops a run.
+    """
+    pred = predict(cfg)
+    stages = [s for s in ("build", "match", "commit") if s in pred and s in (getattr(cfg, "stages", "build,match,commit") or "").split(",")]
+    doc: dict[str, Any] = {
+        "schema": ADMISSION_SCHEMA, "advisory": advisory, "t_utc": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),  # noqa: UP017, RUF100
+        "model": cfg.model, "hf_model": getattr(cfg, "hf_model", None), "host_limit_bytes": cfg.host_limit_bytes,
+        "config": {"requests": cfg.requests, "prompt_tokens": cfg.prompt_tokens, "decode_rows": cfg.decode_rows, "steps": cfg.steps, "max_context": cfg.max_context,
+                   "pairs": cfg.pairs, "replay_workers": cfg.workers(), "prefill_rows": getattr(cfg, "prefill_rows", None),
+                   "snapshot_steps": getattr(cfg, "snapshot_steps", None), "snapshot_max_bytes": getattr(cfg, "snapshot_max_bytes", None),
+                   "largest_vu_in_parent": cfg.largest_vu_in_parent, "n_instances_est": cfg.instances(), "largest_tensor_bytes_est": cfg.largest_tensor()},
+        "notes": list(cfg.notes), "stages": {}, "would_refuse": [], "lower_bound": [],
+    }
+    for s in stages:
+        p = pred[s]
+        doc["stages"][s] = {"reserved_bytes": p["reserved_bytes"], "reserved_mib": p["reserved_mib"], "peak_point": p["peak_point"], "verdict": p["verdict"],
+                            "decision": p["decision"], "lower_bound_terms": p["lower_bound_terms"], "live_at_peak_mib": p["live_at_peak"], "margin_mib": p["margin"],
+                            "device_bytes": p["device_bytes"], "terms": p["terms"]}
+        if p["verdict"] == "REFUSE":
+            doc["would_refuse"].append(s)
+        elif p["verdict"] == "LOWER_BOUND":
+            doc["lower_bound"].append(s)
+    parts = []
+    for s in stages:
+        d = doc["stages"][s]
+        tail = f"(short {d['decision'].get('short_by_mib')} MiB)" if d["verdict"] == "REFUSE" else (f"({','.join(d['lower_bound_terms'])})" if d["verdict"] == "LOWER_BOUND" else "")
+        parts.append(f"{s}={d['verdict']} {d['reserved_mib']}MiB{tail}")
+    lim = f"limit {cfg.host_limit_bytes // MiB} MiB" if cfg.host_limit_bytes else "no cgroup limit read"
+    flag = ("WARN would-refuse " + ",".join(doc["would_refuse"]) + " ") if doc["would_refuse"] else ("NOTE lower-bound " + ",".join(doc["lower_bound"]) + " " if doc["lower_bound"] else "")
+    doc["line"] = f"ADMISSION advisory {flag}{cfg.model} {lim}: " + "; ".join(parts) + (f" [{'; '.join(cfg.notes)}]" if cfg.notes else "")
+    if out_path:
+        Path(out_path).write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    return doc
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="verity_capture.telemetry.admission")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    r = sub.add_parser("plan", help="ADVISORY admission plan for a sweep row from its workload file (row_pod.sh hook): writes admission.json, prints one line, exit 0")
+    r.add_argument("--workload", required=True)
+    r.add_argument("--row")
+    r.add_argument("--out")
+    r.add_argument("--stages", default="build,match,commit")
+    r.add_argument("--pairs", type=int, default=3)
+    r.add_argument("--replay-workers", type=int)
+    r.add_argument("--snapshot-steps")
+    r.add_argument("--snapshot-max-bytes", type=int)
+    r.add_argument("--host-limit-bytes", type=int, help="default: this cgroup's memory.max")
+    r.add_argument("--largest-vu-in-parent", action="store_true")
+    c = sub.add_parser("compare", help="predicted vs observed per stage for attempt dirs")
+    c.add_argument("attempt_dirs", nargs="+")
+    c.add_argument("--md", action="store_true")
+    c.add_argument("--points", action="store_true", help="also print the commit-point tables")
+    c.add_argument("--largest-vu-in-parent", action="store_true", help="predict with the FIX: the largest strata evaluated in the parent, forked workers are 250 MiB workers")
+    c.add_argument("--json-out")
+    p = sub.add_parser("predict", help="reservation per stage for a row config")
+    p.add_argument("--model", required=True)
+    p.add_argument("--requests", type=int, default=1)
+    p.add_argument("--prompt-tokens", type=int, default=1024)
+    p.add_argument("--decode-rows", type=int, default=129)
+    p.add_argument("--steps", type=int, default=129)
+    p.add_argument("--max-context", type=int, default=1153)
+    p.add_argument("--pairs", type=int, default=3)
+    p.add_argument("--replay-workers", type=int)
+    p.add_argument("--host-limit-gib", type=float)
+    p.add_argument("--n-instances", type=int)
+    p.add_argument("--raw-bytes", type=int)
+    p.add_argument("--largest-vu-in-parent", action="store_true")
+    a = ap.parse_args(argv)
+    if a.cmd == "plan":
+        # advisory: never a non-zero exit, never an exception out of the hook -- the failure is written into the line instead
+        try:
+            limit = a.host_limit_bytes if a.host_limit_bytes is not None else cgroup_memory_max()
+            cfg = row_config_from_workload(a.workload, a.row, pairs=a.pairs, replay_workers=a.replay_workers, host_limit_bytes=limit,
+                                           snapshot_steps=a.snapshot_steps, snapshot_max_bytes=a.snapshot_max_bytes, stages=a.stages)
+            cfg.largest_vu_in_parent = a.largest_vu_in_parent
+            print(plan_row(cfg, a.out)["line"])
+        except Exception as e:  # noqa: BLE001 -- advisory hook: report, never stop the row
+            print(f"ADMISSION advisory unavailable: {type(e).__name__}: {e}")
+        return 0
+    if a.cmd == "predict":
+        cfg = RowConfig(model=a.model, requests=a.requests, prompt_tokens=a.prompt_tokens, decode_rows=a.decode_rows, steps=a.steps, max_context=a.max_context, pairs=a.pairs,
+                        replay_workers=a.replay_workers, host_limit_bytes=int(a.host_limit_gib * GiB) if a.host_limit_gib else None, n_instances=a.n_instances,
+                        scheduled_raw_bytes=a.raw_bytes, largest_vu_in_parent=a.largest_vu_in_parent)
+        print(json.dumps(predict(cfg), indent=1, default=str))
+        return 0
+    results = []
+    for d in a.attempt_dirs:
+        cfg = row_config_from_attempt(d)
+        if a.largest_vu_in_parent:
+            cfg.largest_vu_in_parent = True
+        results.append(compare(d, cfg))
+    if a.json_out:
+        Path(a.json_out).write_text(json.dumps(results, indent=1, default=str))
+    if a.md:
+        print(render_compare_md(results))
+        if a.points:
+            for r in results:
+                if any(k.startswith("commit/") for k in r["points"]):
+                    print()
+                    print(render_points_md(r))
+    else:
+        print(json.dumps(results, indent=1, default=str))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

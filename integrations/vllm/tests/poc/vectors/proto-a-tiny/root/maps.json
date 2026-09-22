@@ -1,0 +1,67 @@
+{
+ "counts": {
+  "label": "MEASURED (counted on the validated plan: VU outgoing boundaries)",
+  "program_values": 19245,
+  "rus": 2,
+  "value_runs": 800,
+  "vus": 95
+ },
+ "cu_strategy": "inputs|calls",
+ "plan": {
+  "cus": 2,
+  "descriptor_digest": "6eddbbcde05b6e0035dfa4d47ac885e7e5eaba0dd0ed59ef6bccb915d166e3d1",
+  "digest_kind": "plan-json/v1",
+  "name": "root",
+  "partition_digest": "1c05feae3d93930f4fa5c36390420f2cdc56c50d190e22795bf06ad71673a66c",
+  "partition_digest_kind": "partition-intervals/v1",
+  "status": "valid",
+  "vus": 95
+ },
+ "program": {
+  "digest": "e1dc003bbe8388e8f94f9235c7321232589d875299bc062b4435dd65f8605db4",
+  "gates": 71245,
+  "name": "Serve_v1{C={b60e37f2db33},LP=4,STEPS=8}"
+ },
+ "schema": "veritor/population-maps/v1",
+ "seconds": 0.002,
+ "sha256": {
+  "ru_map.tsv": "e8f016647082f70dbbc548877175833ba5c7be76bae76a90ddbf26af2d737949",
+  "value_map.tsv": "75846ea0bc7b9035dcfceb34ff671a4331841d2b2463e822f3a9173d27f5b9bb",
+  "vu_map.tsv": "387de6db4ac627574157f5c42d10b13f3ebd7dc50e3362ff26956bc98550847a"
+ },
+ "tables": {
+  "ru_map.tsv": [
+   "ru",
+   "n_vus",
+   "first_vu",
+   "last_vu",
+   "size"
+  ],
+  "value_map.tsv": [
+   "position",
+   "gate",
+   "count",
+   "stride",
+   "width_bits",
+   "vu",
+   "ru",
+   "obligation"
+  ],
+  "vu_map.tsv": [
+   "vu",
+   "ru",
+   "kind",
+   "function",
+   "path",
+   "gate_lo",
+   "gate_hi",
+   "size",
+   "out_bits",
+   "in_bits",
+   "n_output_runs",
+   "obligation",
+   "relation"
+  ]
+ },
+ "vu_level": "root-node"
+}
