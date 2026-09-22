@@ -275,7 +275,11 @@ impl Prim for IntCtx {
             None => f(&vals),
         };
         self.n_hints += 1;
-        if self.record_hints && !name.contains(".limb[") && !name.contains(".sel[") && !name.ends_with(".inv") && !name.ends_with(".slack") {
+        let realisation = name.contains(".limb[")
+            || (name.contains(".sel[") && !name.contains(".max.sel["))
+            || name.ends_with(".inv")
+            || name.ends_with(".slack");
+        if self.record_hints && !realisation {
             self.hint_values.push((name.to_string(), v));
         }
         self.push(name, v)
