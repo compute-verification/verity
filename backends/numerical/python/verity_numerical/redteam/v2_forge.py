@@ -191,6 +191,20 @@ def build_gkr_chain(out: Path, p: Params = REAL, seed: int = 424242) -> dict:
     _emit_single("b1_honest", per_vu_rows[0], erows[0], y16s[0])
     _emit_single("b1_wrong_word", per_vu_rows[0], erows[0], y16s[0] ^ 1)
 
+    # (7) CHAIN-SPEC TRUST: load_vu reads the state/ovf/sgn links from the *bundle's* chain.txt (only the
+    #     public-word link epi_y16==public is hardcoded).  Ship the epilogue_wrong_unit rows with an EMPTY
+    #     chain.txt: with no state link the epilogue may read unit0's state instead of unit95's, and the public
+    #     word = cast(unit0 state) still passes the hardcoded word link.  If ACCEPTED this is a real (harness /
+    #     deployment) forgery: an honest 96-unit chain whose published word reflects a non-final unit's state.
+    d = neg / "chain_spec_stripped"
+    d.mkdir(parents=True, exist_ok=True)
+    _write_rows(list(all_rows), d / "units.bin", len(uctx.cols))
+    _write_rows([erow_wrong, erows[1]], d / "epilogue.bin", len(ectx.cols))
+    _write_rows([[y16_wrong], [y16s[1]]], d / "public.bin", 1)
+    (d / "chain.txt").write_text("")  # no state/ovf/sgn links
+    shutil.copy(out / "circuit.txt", d / "circuit.txt")
+    shutil.copy(out / "epilogue.txt", d / "epilogue.txt")
+
     manifest = {
         "vus": vus, "steps": steps, "unit_columns": len(uctx.cols), "epilogue_columns": len(ectx.cols),
         "cases": [c[0] for c in cases] + ["b1_honest", "b1_wrong_word"],
