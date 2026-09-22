@@ -100,6 +100,8 @@ class V2:
 
 def check_widths(p: Params) -> None:
     """The bounds the v2 tables rely on; raised at construction, never silently."""
+    if p.lossy or p.acc_exp != p.exp:
+        raise ValueError("v2 arithmetises the BF16 -> FP32 step only: no lossy rescale, one exponent width")
     if -p.k_lo > V2.vb(p):
         raise ValueError("the normalisation right shift must not exceed the low half of v")
     if V2.vb(p) + p.k_lo < 0:

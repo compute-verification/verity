@@ -38,9 +38,11 @@ from .gadgets import (
     Normalise,
     Pack,
     Product,
+    RescaleState,
     SignedSum,
     StateOut,
 )
+from . import reference
 from .params import REAL, TINY, Params, Reject
 from .step import check_step_expr, gen_step
 
@@ -87,16 +89,16 @@ def _bf16_zref(z3, p, x):
 
 def _fp32_ref(p, x):
     c = x["c"]
-    t = (c >> p.acc_frac) & (2**p.exp - 1)
+    t = (c >> p.acc_frac) & (2**p.acc_exp - 1)
     M = (c & (2**p.acc_frac - 1)) + (2**p.acc_frac if t else 0)
-    return (c >> (p.acc_word_bits - 1), p.floor if M == 0 else max(t, 1) - p.bias, M)
+    return (c >> (p.acc_word_bits - 1), p.floor if M == 0 else max(t, 1) - p.acc_bias, M)
 
 
 def _fp32_zref(z3, p, x):
     c = x["c"]
-    t = (c / 2**p.acc_frac) % 2**p.exp
+    t = (c / 2**p.acc_frac) % 2**p.acc_exp
     M = c % 2**p.acc_frac + z3.If(t == 0, 0, 2**p.acc_frac)
-    return (c / 2 ** (p.acc_word_bits - 1), z3.If(M == 0, p.floor, z3.If(t == 0, 1, t) - p.bias), M)
+    return (c / 2 ** (p.acc_word_bits - 1), z3.If(M == 0, p.floor, z3.If(t == 0, 1, t) - p.acc_bias), M)
 
 
 def _prod_call(ctx, p, x, h):
@@ -152,11 +154,11 @@ def _zdiv_pow2(z3, value, d, width: int):
 
 
 def _align_state_ref(p, x):
-    return ((x["M"] << p.acc_shift) >> x["d"],)
+    return ((x["M"] << p.state_shift) >> x["d"],)
 
 
 def _align_state_zref(z3, p, x):
-    return (_zdiv_pow2(z3, x["M"] * 2**p.acc_shift, x["d"], p.acc_bits),)
+    return (_zdiv_pow2(z3, x["M"] * 2**p.state_shift, x["d"], p.acc_bits),)
 
 
 def _align_prod_ref(p, x):
@@ -199,20 +201,20 @@ def _lead_zref(z3, p, x):
 
 def _norm_ref(p, x):
     E, l, v = x["E"], x["l"], x["v"]
-    e1 = max(E + l - p.width, p.e_min)
-    k = E - e1 + p.acc_sig - p.width
-    return (e1, (v << k) if k >= 0 else (v >> -k))
+    e1 = max(E + l - p.width, p.acc_e_min)
+    k = p.norm_k(E, e1)
+    return (e1, ((v << k) if k >= 0 else (v >> -k)) << p.norm_up)
 
 
 def _norm_zref(z3, p, x):
     E, l, v = x["E"], x["l"], x["v"]
     e_raw = E + l - p.width
-    e1 = z3.If(e_raw < p.e_min, p.e_min, e_raw)
-    k = E - e1 + p.acc_sig - p.width
+    e1 = z3.If(e_raw < p.acc_e_min, p.acc_e_min, e_raw)
+    k = p.norm_k(E, e1)
     out = z3.IntVal(-1)
     for kk in range(p.k_lo, p.k_hi + 1):
         out = z3.If(k == kk, v * 2**kk if kk >= 0 else v / 2 ** (-kk), out)
-    return (e1, out)
+    return (e1, out * 2**p.norm_up if p.norm_up else out)
 
 
 def _norm_inputs(p, x):
@@ -225,13 +227,13 @@ def _out_call(ctx, p, x, h):
 
 def _out_ref(p, x):
     z = int(x["M"] == 0)
-    return (0 if z else x["sgn"], p.floor if z else x["e1"], x["M"], int(not z and x["e1"] > p.e_max), z)
+    return (0 if z else x["sgn"], p.floor if z else x["e1"], x["M"], int(not z and x["e1"] > p.acc_e_max), z)
 
 
 def _out_zref(z3, p, x):
     M, e1, sgn = x["M"], x["e1"], x["sgn"]
     return (z3.If(M == 0, 0, sgn), z3.If(M == 0, p.floor, e1), M,
-            z3.If(z3.And(M != 0, e1 > p.e_max), 1, 0), z3.If(M == 0, 1, 0))
+            z3.If(z3.And(M != 0, e1 > p.acc_e_max), 1, 0), z3.If(M == 0, 1, 0))
 
 
 def _pack_call(ctx, p, x, h):
@@ -243,22 +245,22 @@ def _pack_ref(p, x):
     G = len(p.groups)
     for g in range(G):
         if x[f"ovf[{g}]"]:
-            return ((x[f"sgn[{g}]"] << (p.acc_word_bits - 1)) | (p.t_finite << p.acc_frac),)
+            return ((x[f"sgn[{g}]"] << (p.acc_word_bits - 1)) | (p.acc_t_finite << p.acc_frac),)
     if x["z"]:
         return (0,)
     hidden = x["M"] >> p.acc_frac
-    fld = x["e1"] + p.bias - 1 + hidden
+    fld = x["e1"] + p.acc_bias - 1 + hidden
     return ((x["s"] << (p.acc_word_bits - 1)) + fld * 2**p.acc_frac + (x["M"] & (2**p.acc_frac - 1)),)
 
 
 def _pack_zref(z3, p, x):
     G = len(p.groups)
     hidden = x["M"] / 2**p.acc_frac
-    fld = x["e1"] + p.bias - 1 + hidden
+    fld = x["e1"] + p.acc_bias - 1 + hidden
     fin = x["s"] * 2 ** (p.acc_word_bits - 1) + fld * 2**p.acc_frac + x["M"] % 2**p.acc_frac
     y = z3.If(x["z"] == 1, 0, fin)
     for g in range(G - 1, -1, -1):
-        y = z3.If(x[f"ovf[{g}]"] == 1, x[f"sgn[{g}]"] * 2 ** (p.acc_word_bits - 1) + p.t_finite * 2**p.acc_frac, y)
+        y = z3.If(x[f"ovf[{g}]"] == 1, x[f"sgn[{g}]"] * 2 ** (p.acc_word_bits - 1) + p.acc_t_finite * 2**p.acc_frac, y)
     return (y,)
 
 
@@ -266,7 +268,7 @@ def _pack_admissible(p, x):
     # the state's own invariants: a zero state has M = 0; a nonzero state without hidden bit sits at e_min
     if x["z"] != int(x["M"] == 0):
         return False
-    return x["M"] == 0 or x["M"] >> p.acc_frac == 1 or x["e1"] == p.e_min
+    return x["M"] == 0 or x["M"] >> p.acc_frac == 1 or x["e1"] == p.acc_e_min
 
 
 def _cast_ref(p, x):
@@ -289,10 +291,10 @@ def _cast_admissible(p, x):
 SPECS: dict[str, Spec] = {
     "bf16_decode": Spec("bf16_decode", Bf16Decode.contract, lambda ctx, p, x, h: Bf16Decode.check(ctx, p, x["w"], h),
                         lambda p, x: Bf16Decode.gen(p, x["w"]), _bf16_ref, _bf16_zref,
-                        admissible=lambda p, x: (x["w"] >> p.frac) & (2**p.exp - 1) != p.t_finite),
+                        admissible=lambda p, x: reference._finite_operand(p, x["w"])),
     "fp32_decode": Spec("fp32_decode", Fp32Decode.contract, lambda ctx, p, x, h: Fp32Decode.check(ctx, p, x["c"], h),
                         lambda p, x: Fp32Decode.gen(p, x["c"]), _fp32_ref, _fp32_zref,
-                        admissible=lambda p, x: (x["c"] >> p.acc_frac) & (2**p.exp - 1) != p.t_finite),
+                        admissible=lambda p, x: (x["c"] >> p.acc_frac) & (2**p.acc_exp - 1) != p.acc_t_finite),
     "product": Spec("product", Product.contract, _prod_call, lambda p, x: Product.gen(p, x["m_a"], x["m_b"]),
                     _prod_ref, _prod_zref),
     "group_max": Spec("group_max", GroupMax.contract, _max_call, _max_gen, _max_ref, _max_zref),
@@ -316,7 +318,7 @@ SPECS: dict[str, Spec] = {
     "pack": Spec("pack", Pack.contract, _pack_call, lambda p, x: Pack.gen(p, x["M"]), _pack_ref, _pack_zref,
                  admissible=_pack_admissible,
                  zadmissible=lambda z3, p, x: z3.And(x["z"] == z3.If(x["M"] == 0, 1, 0),
-                                                     z3.Or(x["M"] == 0, x["M"] >= 2**p.acc_frac, x["e1"] == p.e_min))),
+                                                     z3.Or(x["M"] == 0, x["M"] >= 2**p.acc_frac, x["e1"] == p.acc_e_min))),
     "epilogue": Spec("epilogue", Epilogue.contract, lambda ctx, p, x, h: (Epilogue.check(ctx, p, x["y32"], h),),
                      lambda p, x: Epilogue.gen(p, x["y32"]), _cast_ref, _cast_zref, admissible=_cast_admissible,
                      zadmissible=lambda z3, p, x: _cast_zref(z3, p, x)[0] < 2**p.word_bits),
@@ -448,6 +450,7 @@ def _hint_range(p: Params, path: str) -> tuple[int, int]:
     table = {
         "acc": Fp32Decode.contract(p).hints, "a": Bf16Decode.contract(p).hints, "b": Bf16Decode.contract(p).hints,
         "prod": Product.contract(p).hints, "max": GroupMax.contract(p).hints, "acc_align": AlignState.contract(p).hints,
+        **({"acc_rescale": RescaleState.contract(p).hints} if p.lossy else {}),
         "prod_align": AlignProduct.contract(p).hints, "sum": SignedSum.contract(p).hints,
         "lead": LeadingBit.contract(p).hints, "norm": Normalise.contract(p).hints, "out": StateOut.contract(p).hints,
         "pack": Pack.contract(p).hints, "epilogue": Epilogue.contract(p).hints,
@@ -672,6 +675,8 @@ def z3_gadget(spec: Spec, p: Params = REAL, *, timeout_ms: int = 20_000, modulus
 def z3_group_step(p: Params = REAL, *, timeout_ms: int = 60_000, concrete: dict | None = None) -> QueryResult:
     """One full group step at the real widths: a state and n products (symbolic unless ``concrete`` gives them),
     two independent hint copies, and the two output states required to differ."""
+    if p.lossy:
+        raise Reject("z3_group_step models the state term as M 2^acc_shift; the lossy rescale is not wired in yet")
     ctx = Z3Ctx()
     z3 = ctx.z3
     n = p.n

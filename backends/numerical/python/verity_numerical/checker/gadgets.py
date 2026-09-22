@@ -27,8 +27,10 @@ __all__ = [
     "GroupMax",
     "LeadingBit",
     "Normalise",
+    "OperandDecode",
     "Pack",
     "Product",
+    "RescaleState",
     "SignedSum",
     "StateOut",
 ]
@@ -61,18 +63,25 @@ def _bits(n: int) -> Range:
 class Bf16Decode:
     """Operand word w = s 2^(exp+frac) + t 2^frac + f  ->  m = f + 2^frac [t != 0],  e = max(t, 1) - bias.
 
-    The flag nz = [t != 0] is proved by (1 - nz) t = 0 and t - nz in [0, t_finite - 1); the range of t itself
-    excludes the all-ones field (infinities and NaN are outside the domain, so the word is rejected)."""
+    The flag nz = [t != 0] is proved by (1 - nz) t = 0 and t - nz in [0, t_max_finite); the range of t itself
+    excludes the all-ones field for ``"ieee"`` operands (infinities and NaN are outside the domain, so the word is
+    rejected).  For ``"e4m3"`` operands the all-ones field is finite unless the fraction is all ones too, so t
+    ranges over every field and the one NaN word per sign is excluded by ``finite``: (t_finite - t) + (2^frac - 1 -
+    f) >= 1, a sum of two quantities the range checks already make non-negative.  Named for the frozen target's
+    operand; the class decodes every operand format ``Params`` names (``OperandDecode`` is the same object)."""
 
     name = "bf16_decode"
 
     @staticmethod
     def contract(p: Params) -> Contract:
+        checked = {"t-nz": (0, p.t_max_finite)}
+        if p.op_nan_rule == "e4m3":
+            checked["finite-1"] = (0, p.t_finite + 2**p.frac - 1)
         return Contract(
             "bf16_decode",
             inputs={"w": _bits(p.word_bits)},
-            hints={"s": _bit(), "t": (0, p.t_finite), "f": _bits(p.frac), "nz": _bit()},
-            checked={"t-nz": (0, p.t_finite - 1)},
+            hints={"s": _bit(), "t": (0, p.t_max_finite + 1), "f": _bits(p.frac), "nz": _bit()},
+            checked=checked,
             outputs={"m": _bits(p.sig), "e": (p.e_min, p.e_max + 1)},
         )
 
@@ -85,15 +94,20 @@ class Bf16Decode:
     def check(ctx, p: Params, w, h: dict, tag: str = "bf16"):
         s, t, f, nz = h["s"], h["t"], h["f"], h["nz"]
         ctx.boolean(f"{tag}.s", s)
-        ctx.rng(f"{tag}.t", t, 0, p.t_finite)
+        ctx.rng(f"{tag}.t", t, 0, p.t_max_finite + 1)
         ctx.rng(f"{tag}.f", f, 0, 2**p.frac)
         ctx.boolean(f"{tag}.nz", nz)
         ctx.eq(f"{tag}.word", s * 2 ** (p.word_bits - 1) + t * 2**p.frac + f, w)
         ctx.eq(f"{tag}.nz0", (1 - nz) * t, 0)
-        ctx.rng(f"{tag}.nz1", t - nz, 0, p.t_finite - 1)
+        ctx.rng(f"{tag}.nz1", t - nz, 0, p.t_max_finite)
+        if p.op_nan_rule == "e4m3":
+            ctx.rng(f"{tag}.finite", (p.t_finite - t) + (2**p.frac - 1 - f) - 1, 0, p.t_finite + 2**p.frac - 1)
         m = f + nz * 2**p.frac
         e = t - nz - (p.bias - 1)          # max(t, 1) - bias, since max(t, 1) = t + (1 - nz)
         return s, m, e
+
+
+OperandDecode = Bf16Decode
 
 
 class Fp32Decode:
@@ -107,14 +121,14 @@ class Fp32Decode:
         return Contract(
             "fp32_decode",
             inputs={"c": _bits(p.acc_word_bits)},
-            hints={"s": _bit(), "t": (0, p.t_finite), "f": _bits(p.acc_frac), "nz": _bit(), "z": _bit()},
-            checked={"t-nz": (0, p.t_finite - 1), "M+z-1": _bits(p.acc_sig)},
-            outputs={"s": _bit(), "e_hat": (p.exp_lo, p.e_max + 1), "M": _bits(p.acc_sig)},
+            hints={"s": _bit(), "t": (0, p.acc_t_finite), "f": _bits(p.acc_frac), "nz": _bit(), "z": _bit()},
+            checked={"t-nz": (0, p.acc_t_finite - 1), "M+z-1": _bits(p.acc_sig)},
+            outputs={"s": _bit(), "e_hat": (p.exp_lo, p.acc_e_max + 1), "M": _bits(p.acc_sig)},
         )
 
     @staticmethod
     def gen(p: Params, c: int) -> dict:
-        t = (c >> p.acc_frac) & (2**p.exp - 1)
+        t = (c >> p.acc_frac) & (2**p.acc_exp - 1)
         f = c & (2**p.acc_frac - 1)
         return {"s": c >> (p.acc_word_bits - 1), "t": t, "f": f, "nz": int(t != 0), "z": int(t == 0 and f == 0)}
 
@@ -122,17 +136,17 @@ class Fp32Decode:
     def check(ctx, p: Params, c, h: dict, tag: str = "acc"):
         s, t, f, nz, z = h["s"], h["t"], h["f"], h["nz"], h["z"]
         ctx.boolean(f"{tag}.s", s)
-        ctx.rng(f"{tag}.t", t, 0, p.t_finite)
+        ctx.rng(f"{tag}.t", t, 0, p.acc_t_finite)
         ctx.rng(f"{tag}.f", f, 0, 2**p.acc_frac)
         ctx.boolean(f"{tag}.nz", nz)
         ctx.boolean(f"{tag}.z", z)
         ctx.eq(f"{tag}.word", s * 2 ** (p.acc_word_bits - 1) + t * 2**p.acc_frac + f, c)
         ctx.eq(f"{tag}.nz0", (1 - nz) * t, 0)
-        ctx.rng(f"{tag}.nz1", t - nz, 0, p.t_finite - 1)
+        ctx.rng(f"{tag}.nz1", t - nz, 0, p.acc_t_finite - 1)
         M = f + nz * 2**p.acc_frac
         ctx.eq(f"{tag}.z0", z * M, 0)
         ctx.rng(f"{tag}.z1", M + z - 1, 0, 2**p.acc_sig)
-        e = t - nz - (p.bias - 1)
+        e = t - nz - (p.acc_bias - 1)
         e_hat = e + z * (p.floor - e)
         return s, e_hat, M
 
@@ -229,10 +243,47 @@ class GroupMax:
 # Alignment: truncating right shifts as quotient/remainder with tight bounds
 # ---------------------------------------------------------------------------------------------------------------------
 
+class RescaleState:
+    """The lossy accumulator rescale (``width < acc_sig`` only): the state magnitude M (acc_sig bits) enters the
+    adder as its top W bits, M = 2^drop P + r with 0 <= r < 2^drop and P < 2^W, drop = acc_sig - W.  This is the
+    truncation ``GroupSum.step`` performs on the incoming FP32 accumulator before the grouped add on Hopper/Ada
+    FP8 (24 -> 14 bits; a zero-product group still truncates, as measured on Ada -- discrepancy log D10).  It has
+    no hints and no place in the witness when the adder is at least as wide as the accumulator (``REAL``)."""
+
+    name = "rescale_state"
+
+    @staticmethod
+    def contract(p: Params) -> Contract:
+        if not p.lossy:
+            raise Reject("rescale_state: no rescale when the adder is at least as wide as the accumulator")
+        return Contract(
+            "rescale_state",
+            inputs={"M": _bits(p.acc_sig)},
+            hints={"P": _bits(p.width), "r": _bits(p.acc_drop)},
+            outputs={"P": _bits(p.width)},
+        )
+
+    @staticmethod
+    def gen(p: Params, M: int) -> dict:
+        P = M >> p.acc_drop
+        return {"P": P, "r": M - (P << p.acc_drop)}
+
+    @staticmethod
+    def check(ctx, p: Params, M, h: dict, tag: str = "rescale_state"):
+        if not p.lossy:
+            raise Reject(f"{tag}: no rescale when the adder is at least as wide as the accumulator")
+        P, r = h["P"], h["r"]
+        ctx.rng(f"{tag}.P", P, 0, 2**p.width)
+        ctx.rng(f"{tag}.r", r, 0, 2**p.acc_drop)
+        ctx.eq(f"{tag}.div", P * 2**p.acc_drop + r, M)
+        return P
+
+
 class AlignState:
-    """The state term P = M 2^acc_shift (< 2^W) shifted right by d: P = 2^d q + r with 0 <= r < 2^d and the
+    """The state term P = M 2^state_shift (< 2^W) shifted right by d: P = 2^d q + r with 0 <= r < 2^d and the
     tight quotient bound 0 <= q < 2^(W - d).  Both are stated for d~ = min(d, W) through the POW table:
-    r * 2^(W-d~) < 2^W and q * 2^d~ < 2^W; d~ = W forces q = 0, d = 0 forces r = 0."""
+    r * 2^(W-d~) < 2^W and q * 2^d~ < 2^W; d~ = W forces q = 0, d = 0 forces r = 0.  ``M`` is the decoded state
+    (acc_sig bits, shift W - acc_sig) or, when the adder is narrower, :class:`RescaleState`'s W-bit output (shift 0)."""
 
     name = "align_state"
 
@@ -240,7 +291,7 @@ class AlignState:
     def contract(p: Params) -> Contract:
         return Contract(
             "align_state",
-            inputs={"M": _bits(p.acc_sig), "d": (0, p.shift_rows)},
+            inputs={"M": _bits(p.state_bits), "d": (0, p.shift_rows)},
             hints={"q": _bits(p.acc_bits), "r": _bits(p.acc_bits)},
             checked={"r*ipow": _bits(p.acc_bits), "q*pow": _bits(p.acc_bits)},
             outputs={"q": _bits(p.acc_bits)},
@@ -249,7 +300,7 @@ class AlignState:
 
     @staticmethod
     def gen(p: Params, M: int, d: int) -> dict:
-        P = M << p.acc_shift
+        P = M << p.state_shift
         dd = min(d, p.acc_bits)
         q = P >> dd
         return {"q": q, "r": P - (q << dd)}
@@ -261,7 +312,7 @@ class AlignState:
         ctx.rng(f"{tag}.q", q, 0, 2**W)
         ctx.rng(f"{tag}.r", r, 0, 2**W)
         pow_, ipow = ctx.lookup(f"{tag}.pow", pow_table(p), d)
-        ctx.eq(f"{tag}.div", q * pow_ + r, M * 2**p.acc_shift)
+        ctx.eq(f"{tag}.div", q * pow_ + r, M * 2**p.state_shift)
         ctx.lt_pow(f"{tag}.rem", r, ipow, W)           # r < 2^min(d, W)
         ctx.lt_pow(f"{tag}.quot", q, pow_, W)          # q < 2^(W - min(d, W)): the tight bound
         return q
@@ -323,8 +374,10 @@ class SignedSum:
 
     @staticmethod
     def premise(p: Params, m: int | None = None) -> None:
+        # the state term is (a multiple of 2^state_shift) below 2^acc_bits, each aligned product (a multiple of
+        # 2^prod_shift at d = 0, smaller after any shift) below 2^prod_bits: the same bound as ``Params.s_max``
         m = p.n if m is None else m
-        bound = (2**p.acc_bits - 1) + m * (2**p.prod_bits - 1)
+        bound = (2**p.acc_bits - 2**p.state_shift) + m * (2**p.prod_bits - 2**p.prod_shift)
         if bound >= 2**p.s_bits:
             raise Reject(f"signed_sum premise: |S| <= {bound} is not below 2^{p.s_bits}")
 
@@ -398,9 +451,11 @@ class LeadingBit:
 
 
 class Normalise:
-    """e' = max(E + l - W, e_min) by a clamp flag, and M' = floor(v 2^k) with k = E - e' + acc_sig - W (the
-    closed form of the 25-bit normalisation followed by the subnormal shift and the rescale to acc_sig bits) as
-    div M' + r = v mul, r < div, with (mul, div, idiv) = NORM[k]."""
+    """e' = max(E + l - W, acc_e_min) by a clamp flag, and M_n = floor(v 2^k) with k = E - e' + norm_k_offset (the
+    closed form of the W-bit normalisation followed by the subnormal shift and, when W >= acc_sig, the rescale to
+    acc_sig bits) as div M_n + r = v mul, r < div, with (mul, div, idiv) = NORM[k].  The output magnitude is
+    M' = M_n 2^norm_up: the identity when W >= acc_sig; the exact scale back up to acc_sig bits when the adder is
+    narrower (the truncations must precede it, so it cannot fold into k)."""
 
     name = "normalise"
 
@@ -410,36 +465,36 @@ class Normalise:
         return Contract(
             "normalise",
             inputs={"E": (p.floor, last + 1), "l": (0, p.l_hi + 1), "v": _bits(p.s_bits)},
-            hints={"clamp": _bit(), "M": _bits(p.acc_sig), "r": _bits(p.norm_rem_bits)},
+            hints={"clamp": _bit(), "M": _bits(p.norm_bits), "r": _bits(p.norm_rem_bits)},
             checked={"clamp_proof": (0, p.cmp_rows), "r*idiv": _bits(p.norm_rem_bits), "k": (p.k_lo, p.k_hi + 1)},
-            outputs={"e1": (p.e_min, p.exp_hi + 1), "M": _bits(p.acc_sig)},
+            outputs={"e1": (p.acc_e_min, p.exp_hi + 1), "M": _bits(p.acc_sig)},
             tables=("NORM",),
         )
 
     @staticmethod
     def gen(p: Params, E: int, l: int, v: int) -> dict:
         e_raw = E + l - p.width
-        e1 = max(e_raw, p.e_min)
-        k = E - e1 + p.acc_sig - p.width
+        e1 = max(e_raw, p.acc_e_min)
+        k = p.norm_k(E, e1)
         if k >= 0:
-            return {"clamp": int(e_raw < p.e_min), "M": v << k, "r": 0}
+            return {"clamp": int(e_raw < p.acc_e_min), "M": v << k, "r": 0}
         M = v >> -k
-        return {"clamp": int(e_raw < p.e_min), "M": M, "r": v - (M << -k)}
+        return {"clamp": int(e_raw < p.acc_e_min), "M": M, "r": v - (M << -k)}
 
     @staticmethod
     def check(ctx, p: Params, E, l, v, h: dict, tag: str = "norm"):
         clamp, M, r = h["clamp"], h["M"], h["r"]
         ctx.boolean(f"{tag}.clamp", clamp)
-        ctx.rng(f"{tag}.M", M, 0, 2**p.acc_sig)
+        ctx.rng(f"{tag}.M", M, 0, 2**p.norm_bits)
         ctx.rng(f"{tag}.r", r, 0, 2**p.norm_rem_bits)
         e_raw = E + l - p.width
-        ctx.rng(f"{tag}.clamp_proof", clamp * (p.e_min - 1 - e_raw) + (1 - clamp) * (e_raw - p.e_min), 0, p.cmp_rows)
-        e1 = e_raw + clamp * (p.e_min - e_raw)
-        k = E - e1 + p.acc_sig - p.width
+        ctx.rng(f"{tag}.clamp_proof", clamp * (p.acc_e_min - 1 - e_raw) + (1 - clamp) * (e_raw - p.acc_e_min), 0, p.cmp_rows)
+        e1 = e_raw + clamp * (p.acc_e_min - e_raw)
+        k = p.norm_k(E, e1)
         mul, div, idiv = ctx.lookup(f"{tag}.norm", norm_table(p), k)
         ctx.eq(f"{tag}.div", div * M + r, v * mul)
         ctx.lt_pow(f"{tag}.rem", r, idiv, p.norm_rem_bits)      # r < div
-        return e1, M
+        return e1, M * 2**p.norm_up if p.norm_up else M
 
 
 class StateOut:
@@ -453,7 +508,7 @@ class StateOut:
     def contract(p: Params) -> Contract:
         return Contract(
             "state_out",
-            inputs={"sgn": _bit(), "e1": (p.e_min, p.exp_hi + 1), "M": _bits(p.acc_sig)},
+            inputs={"sgn": _bit(), "e1": (p.acc_e_min, p.exp_hi + 1), "M": _bits(p.acc_sig)},
             hints={"z": _bit(), "ovf": _bit()},
             checked={"M+z-1": _bits(p.acc_sig), "ovf_proof": (0, p.cmp_rows)},
             outputs={"s": _bit(), "e_hat": (p.exp_lo, p.exp_hi + 1), "M": _bits(p.acc_sig), "ovf_eff": _bit(), "z": _bit()},
@@ -461,7 +516,7 @@ class StateOut:
 
     @staticmethod
     def gen(p: Params, e1: int, M: int) -> dict:
-        return {"z": int(M == 0), "ovf": int(e1 > p.e_max)}
+        return {"z": int(M == 0), "ovf": int(e1 > p.acc_e_max)}
 
     @staticmethod
     def check(ctx, p: Params, sgn, e1, M, h: dict, tag: str = "out"):
@@ -470,7 +525,7 @@ class StateOut:
         ctx.boolean(f"{tag}.ovf", ovf)
         ctx.eq(f"{tag}.z0", z * M, 0)
         ctx.rng(f"{tag}.z1", M + z - 1, 0, 2**p.acc_sig)
-        ctx.rng(f"{tag}.ovf_proof", ovf * (e1 - p.e_max - 1) + (1 - ovf) * (p.e_max - e1), 0, p.cmp_rows)
+        ctx.rng(f"{tag}.ovf_proof", ovf * (e1 - p.acc_e_max - 1) + (1 - ovf) * (p.acc_e_max - e1), 0, p.cmp_rows)
         ovf_eff = ovf - ovf * z
         s = sgn - sgn * z
         e_hat = e1 + z * (p.floor - e1)
@@ -517,7 +572,7 @@ class Pack:
         ctx.boolean(f"{tag}.hidden", hidden)
         ctx.rng(f"{tag}.low", low, 0, 2**p.acc_frac)
         ctx.eq(f"{tag}.M", hidden * 2**p.acc_frac + low, M)
-        fld = e1 + (p.bias - 1) + hidden
+        fld = e1 + (p.acc_bias - 1) + hidden
         fin = s * 2 ** (p.acc_word_bits - 1) + fld * 2**p.acc_frac + low
         any_ovf, inf_sign, none_yet = 0, 0, 1
         for ovf_g, sgn_g in ovfs:
@@ -525,7 +580,7 @@ class Pack:
             any_ovf = any_ovf + first
             inf_sign = inf_sign + first * sgn_g
             none_yet = none_yet - none_yet * ovf_g
-        inf = inf_sign * 2 ** (p.acc_word_bits - 1) + p.t_finite * 2**p.acc_frac
+        inf = inf_sign * 2 ** (p.acc_word_bits - 1) + p.acc_t_finite * 2**p.acc_frac
         return any_ovf * inf + (1 - any_ovf) * (1 - z) * fin
 
 
