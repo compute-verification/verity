@@ -15,6 +15,7 @@ Parameters: ``k = 4096, n = 16384, t = 192`` as the CPU crate.
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass
 
 import numpy as np
@@ -23,11 +24,13 @@ import torch
 from .field import (
     DEG,
     Ext,
+    Limbs8,
     P,
     e_add,
     e_scale,
     geometric,
     inv_mod,
+    mm_mod_int8,
     py_exts,
     root_of_unity,
     t_exts,
@@ -203,15 +206,63 @@ class Committed:
         return self.merkle.root
 
 
+_ENC: dict = {}
+
+
+def simt_encoder(k: int, n: int):
+    """The b-encode lane's SIMT Reed-Solomon encoder (``backends/direct/encode/encode_ntt_simt.py``: one CTA per row,
+    INTT_k + three coset NTT_k in shared memory, 32-bit Montgomery; BabyBear, ``n = 4k``, the same ``ω = 31^((p-1)/n)``
+    as ``ntt``) or ``None`` when it is not importable / ``VERITY_GPU_TORCH_NTT`` is set.  Its codeword is coset-major
+    (column ``c k + j`` = evaluation at ``ω^(4j + c)``); ``commit`` permutes it to the natural order ``ntt`` produces."""
+    if os.environ.get("VERITY_GPU_TORCH_NTT") or n != 4 * k:
+        return None
+    key = (k, n)
+    if key not in _ENC:
+        try:
+            try:
+                from backends.direct.encode import babybear as bb
+                from backends.direct.encode.encode_ntt_simt import RSEncoderSIMT
+            except ImportError:
+                import sys
+                from pathlib import Path
+
+                sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+                from backends.direct.encode import babybear as bb
+                from backends.direct.encode.encode_ntt_simt import RSEncoderSIMT
+            if bb.P != P or bb.root_of_unity(n) != root_of_unity(n):
+                raise ImportError("encoder field / root mismatch")
+            _ENC[key] = (RSEncoderSIMT(k, n), torch.from_numpy(bb.coset_to_natural(n, k).astype("int64")))
+        except Exception:  # noqa: BLE001 -- no cupy / NVRTC: the torch NTT path
+            _ENC[key] = None
+    return _ENC[key]
+
+
+def encode_rows_device(xr: torch.Tensor, n: int) -> torch.Tensor:
+    """``(rows, k)`` int64 -> ``(rows, n)`` int32 codewords in natural order: the SIMT encoder on CUDA (bit-exact with
+    ``encode_rows``), else the torch NTT."""
+    rows, k = xr.shape
+    enc = simt_encoder(k, n) if xr.is_cuda else None
+    if enc is None:
+        code = torch.empty((rows, n), dtype=torch.int32, device=xr.device)
+        for lo in range(0, rows, ROW_CHUNK * 8):
+            code[lo:lo + ROW_CHUNK * 8] = encode_rows(xr[lo:lo + ROW_CHUNK * 8], n).to(torch.int32)
+        return code
+    import cupy as cp
+
+    kernel, perm = enc
+    out = cp.empty((rows, n), dtype=cp.int32)
+    kernel(cp.asarray(xr.to(torch.int32).contiguous()).view(cp.uint32), out.view(cp.uint32))
+    code_coset = torch.as_tensor(out, device=xr.device)
+    return code_coset[:, perm.to(xr.device)].contiguous()
+
+
 def commit(x: torch.Tensor, params: LigeroParams = DEFAULT) -> Committed:
     l = x.shape[0]
     rows = params.rows_for(l)
     xr = torch.zeros((rows * params.k,), dtype=torch.int64, device=x.device)
     xr[:l] = x.to(torch.int64)
     xr = xr.view(rows, params.k)
-    code = torch.empty((rows, params.n), dtype=torch.int32, device=x.device)
-    for lo in range(0, rows, ROW_CHUNK * 8):
-        code[lo:lo + ROW_CHUNK * 8] = encode_rows(xr[lo:lo + ROW_CHUNK * 8], params.n).to(torch.int32)
+    code = encode_rows_device(xr, params.n)
     return Committed(params, l, rows, xr, code, Merkle(code))
 
 
@@ -223,12 +274,14 @@ def commit(x: torch.Tensor, params: LigeroParams = DEFAULT) -> Committed:
 class Opening:
     w: list[Ext]                # k
     qc: list[Ext]               # 2k - 1
-    columns: list[tuple[list[int], list[bytes]]]   # per opened column: values (rows) + path
+    columns: np.ndarray         # (t, rows) '<u4': the opened columns' values
+    paths: list[list[bytes]]    # per opened column its Merkle path (depth siblings)
 
     def nbytes(self) -> int:
         b = (len(self.w) + len(self.qc)) * 4 * DEG
-        for col, path in self.columns:
-            b += 4 * len(col) + 32 * len(path)
+        b += 4 * self.columns.size
+        for path in self.paths:
+            b += 32 * len(path)
         return b
 
 
@@ -250,6 +303,62 @@ def _pad_a(a: torch.Tensor, rows: int, k: int) -> torch.Tensor:
     full = torch.zeros((rows * k, DEG), dtype=torch.int64, device=a.device)
     full[: a.shape[0]] = a.to(torch.int64)
     return full.view(rows, k, DEG)
+
+
+def _write_a_transposed(a: torch.Tensor, rows: int, k: int, af: torch.Tensor) -> None:
+    """``af[(i, c), r] = a[r k + i, c]`` (zero past ``len(a)``) into the top-left ``(k·6, rows)`` of the zeroed ``af``."""
+    l = a.shape[0]
+    M = k * DEG
+    full_rows = l // k
+    if full_rows:
+        af[:M, :full_rows] = a[: full_rows * k].view(full_rows, M).t()
+    rem = l - full_rows * k
+    if rem:
+        af[: rem * DEG, full_rows] = a[full_rows * k:].reshape(-1)
+
+
+def _a_transposed(a: torch.Tensor, rows: int, k: int, int8: bool):
+    """``aᵀ`` as the ``(k·6, rows)`` GEMM operand, written once in int32 straight into ``Limbs8``'s padded layout on
+    the INT8 path (no int64 ``(rows, k, 6)`` copies: those were the opening's memory peak)."""
+    if not int8:
+        return _pad_a(a, rows, k).permute(1, 2, 0).reshape(k * DEG, rows)
+    M = k * DEG
+    Mp, Kp = Limbs8.padded_shape(M, rows, "a")
+    af = torch.zeros((Mp, Kp), dtype=torch.int32, device=a.device)
+    _write_a_transposed(a, rows, k, af)
+    return Limbs8(af, "a", shape=(M, rows))
+
+
+def _omega_powers(n: int, device) -> torch.Tensor:
+    """``ω_n^e`` for ``e < n`` as int64."""
+    key = ("omega_pows", n, str(device))
+    t = _TW.get(key)
+    if t is None:
+        w = root_of_unity(n)
+        pw = [1]
+        for _ in range(n - 1):
+            pw.append(pw[-1] * w % P)
+        t = _TW[key] = torch.tensor(pw, dtype=torch.int64, device=device)
+    return t
+
+
+def eval_rows_at(a: torch.Tensor, rows: int, k: int, js: list[int], n: int, device) -> torch.Tensor:
+    """``a_i(η_j)`` for every row ``i`` and opened column ``j`` as ``(rows, t, 6)``: the rows are values on the
+    ``k``-domain, so ``a_i(η_j) = Σ_m (INTT a_i)_m η_j^m`` = one modular GEMM ``(M V)ᵀ aᵀ`` with ``M`` the INTT matrix
+    and ``V[m, j] = ω_n^(j m)`` -- the same evaluation as encoding every row on the ``n``-domain and keeping ``t``
+    positions (``encode_ext(·)[:, js]``), without the 43k-row NTT."""
+    t = len(js)
+    jt = torch.tensor(js, dtype=torch.int64, device=device)
+    exps = (jt[None, :] * torch.arange(k, dtype=torch.int64, device=device)[:, None]) % n     # (k, t)
+    V = _omega_powers(n, device)[exps]                                                        # (k, t)
+    MV = _mm_mod_rows(_intt_matrix(k, device), V)                                             # (k, t)
+    aT = torch.zeros((k * DEG, rows), dtype=torch.int32, device=device)
+    _write_a_transposed(a, rows, k, aT)
+    aT = aT.view(k, DEG * rows)
+    if not use_int8(aT.device):
+        aT = aT.to(torch.int64)
+    out = _mm(MV.T.contiguous(), aT)                                                          # (t, 6·rows)
+    return out.view(t, DEG, rows).permute(2, 0, 1)                                            # (rows, t, 6)
 
 
 def _intt_matrix(k: int, device) -> torch.Tensor:
@@ -281,6 +390,20 @@ def _mm_mod_rows(A: torch.Tensor, B: torch.Tensor, chunk: int = 8192) -> torch.T
     return out
 
 
+def use_int8(dev) -> bool:
+    """INT8 tensor-core limb matmuls (``field.mm_mod_int8``) on CUDA unless ``VERITY_GPU_FP64_MM`` is set (the fp64
+    16-bit-limb path of v2e stays the reference)."""
+    return dev.type == "cuda" and not os.environ.get("VERITY_GPU_FP64_MM")
+
+
+def _mm(A, B) -> torch.Tensor:
+    """Modular matmul on the device's fast path; ``A``/``B`` may be pre-split ``Limbs8`` (INT8 path only)."""
+    a_t = A if isinstance(A, torch.Tensor) else A.limbs[0]
+    if use_int8(a_t.device) and (isinstance(A, Limbs8) or isinstance(B, Limbs8) or a_t.is_cuda):
+        return mm_mod_int8(A, B)
+    return _mm_mod_rows(A, B)
+
+
 def open_w_qc(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """``w = Σ_i r_i X_i`` ``(k, 6)`` and the ``2k-1`` coefficients of ``q(Z) = Σ_i a_i(Z) U_i(Z)`` ``(2k-1, 6)``,
     all as modular matmuls (tensor cores): with ``M`` the INTT matrix, ``q``'s coefficient matrix is
@@ -289,18 +412,18 @@ def open_w_qc(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Te
     p = cm.params
     dev = a.device
     rows, k = cm.rows, p.k
-    xr = cm.x_rows                                                    # (rows, k)
-    ar = _pad_a(a, rows, k)                                           # (rows, k, 6)
-    w = _mm_mod_rows(r.T.contiguous(), xr).T.contiguous()             # (k, 6)
-    af = ar.permute(1, 2, 0).reshape(k * DEG, rows)                   # aᵀ: (k·6, rows)
-    del ar
-    H = _mm_mod_rows(af, xr).reshape(k, DEG, k)                       # [u_val, c, i_val]
-    del af
+    int8 = use_int8(dev)
+    xr = Limbs8(cm.x_rows, "b") if int8 else cm.x_rows                # (rows, k), the B operand twice
+    w = _mm(r.T.contiguous(), xr).T.contiguous()                      # (k, 6)
+    af = _a_transposed(a, rows, k, int8)                              # aᵀ: (k·6, rows)
+    H = _mm(af, xr).reshape(k, DEG, k)                                # [u_val, c, i_val]
+    del af, xr
     M = _intt_matrix(k, dev)
-    from .field import mm_mod
-
-    G1 = mm_mod(H.permute(1, 0, 2).reshape(DEG * k, k), M)            # (H M): (6·k, k) -> [c, u_val, v]
-    G = mm_mod(M.T, G1.reshape(DEG, k, k).permute(1, 0, 2).reshape(k, DEG * k))   # Mᵀ (H M): [u, (c, v)]
+    Mt = M.T.contiguous()
+    if int8:
+        M, Mt = Limbs8(M, "b"), Limbs8(Mt, "a")
+    G1 = _mm(H.permute(1, 0, 2).reshape(DEG * k, k), M)               # (H M): (6·k, k) -> [c, u_val, v]
+    G = _mm(Mt, G1.reshape(DEG, k, k).permute(1, 0, 2).reshape(k, DEG * k))   # Mᵀ (H M): [u, (c, v)]
     G = G.reshape(k, DEG, k)
     idx = (torch.arange(k, device=dev).unsqueeze(1) + torch.arange(k, device=dev).unsqueeze(0)).reshape(-1)
     qc = torch.zeros((2 * k - 1, DEG), dtype=torch.int64, device=dev)
@@ -340,18 +463,15 @@ def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript) -> Opening:
     tr.absorb_exts(w_py)
     tr.absorb_exts(qc_py)
     js = open_set(tr, n, p.t)
-    code_cols = code[:, torch.tensor(js, dtype=torch.int64, device=dev)].cpu().numpy().astype("<u4").T
-    cols = []
-    for oi, j in enumerate(js):
-        cols.append((code_cols[oi].tolist(), cm.merkle.path(j)))
-    return Opening(w_py, qc_py, cols)
+    code_cols = np.ascontiguousarray(code[:, torch.tensor(js, dtype=torch.int64, device=dev)].T.contiguous().cpu().numpy().view("<u4"))
+    return Opening(w_py, qc_py, code_cols, [cm.merkle.path(j) for j in js])
 
 
 def verify_open(root: bytes, params: LigeroParams, length: int, a: torch.Tensor, b: Ext, op: Opening, tr: Transcript, device) -> None:
     p = params
     rows, k, n = p.rows_for(length), p.k, p.n
     r = row_coeffs(tr, rows, device)
-    if len(op.w) != k or len(op.qc) != 2 * k - 1 or len(op.columns) != p.t:
+    if len(op.w) != k or len(op.qc) != 2 * k - 1 or op.columns.shape != (p.t, rows) or len(op.paths) != p.t:
         raise VerifyError("ligero: malformed opening")
     tr.absorb_exts(op.w)
     tr.absorb_exts(op.qc)
@@ -359,30 +479,26 @@ def verify_open(root: bytes, params: LigeroParams, length: int, a: torch.Tensor,
         raise VerifyError("ligero: linear functional value mismatch")
     js = open_set(tr, n, p.t)
     w_enc = py_exts(encode_ext(t_exts(op.w, device), n))
-    ar = _pad_a(a, rows, k)
     jt = torch.tensor(js, dtype=torch.int64, device=device)
-    # a_i(η_j) at the opened columns only (encode every row of a; keep t positions)
-    a_at = torch.empty((rows, p.t, DEG), dtype=torch.int64, device=device)
-    for lo in range(0, rows, ROW_CHUNK):
-        hi = min(rows, lo + ROW_CHUNK)
-        a_at[lo:hi] = encode_ext(ar[lo:hi], n)[:, jt]
-    cols = torch.tensor([c for c, _ in op.columns], dtype=torch.int64, device=device).T   # (rows, t)
+    # a_i(η_j) at the opened columns only (one GEMM; = encode every row of a and keep t positions)
+    a_at = eval_rows_at(a, rows, k, js, n, device)                                         # (rows, t, 6)
+    cols = torch.from_numpy(op.columns.astype("int64")).to(device).T                      # (rows, t)
     if bool((cols >= P).any()):
         raise VerifyError("ligero: non-canonical column value")
     lhs = py_exts((r.unsqueeze(1) * cols.unsqueeze(-1) % P).sum(dim=0) % P)               # (t, 6)
     rhs = py_exts((a_at * cols.unsqueeze(-1) % P).sum(dim=0) % P)
-    omega = root_of_unity(n)
+    del a_at
+    # q(η_j) = Σ_m qc[m] η_j^m for the t columns as one modular matmul (was a Python Horner loop: 1.6M ext ops)
+    m_idx = torch.arange(2 * k - 1, dtype=torch.int64, device=device)
+    E = _omega_powers(n, device)[(jt[:, None] * m_idx[None, :]) % n]                       # (t, 2k-1) = η_j^m
+    qv_all = py_exts(_mm_mod_rows(E, t_exts(op.qc, device)))                              # (t, 6)
     for oi, j in enumerate(js):
-        col, path = op.columns[oi]
-        if len(col) != rows or len(path) != p.depth:
+        path = op.paths[oi]
+        if len(path) != p.depth:
             raise VerifyError("ligero: opening shape")
-        if not merkle_verify(root, j, np.array(col, dtype="<u4").tobytes(), path):
+        if not merkle_verify(root, j, np.ascontiguousarray(op.columns[oi]).astype("<u4").tobytes(), path):
             raise VerifyError(f"ligero: merkle path {j}")
         if lhs[oi] != w_enc[j]:
             raise VerifyError(f"ligero: proximity test at column {j}")
-        eta = pow(omega, j, P)
-        qv = (0,) * DEG
-        for c in reversed(op.qc):
-            qv = e_add(e_scale(qv, eta), c)
-        if qv != rhs[oi]:
+        if qv_all[oi] != rhs[oi]:
             raise VerifyError(f"ligero: linear test at column {j}")

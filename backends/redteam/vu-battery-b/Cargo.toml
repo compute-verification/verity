@@ -23,6 +23,8 @@ serde_json = "1.0"
 opt-level = 3
 debug = false
 
-# the same patched p3-fri as verity-direct (backends/direct/Cargo.toml): a patch applies per root manifest
+# the same patched p3-fri and BabyBear^6 p3-baby-bear as verity-direct (backends/direct/Cargo.toml): a patch
+# applies per root manifest
 [patch.crates-io]
+p3-baby-bear = { path = "../../direct/vendor/p3-baby-bear" }
 p3-fri = { path = "../../direct/vendor/p3-fri" }

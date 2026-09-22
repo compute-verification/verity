@@ -1,0 +1,16 @@
+{
+ "lane": "red-team-zk",
+ "report": "backends/numerical/reports/redteam_zk.md",
+ "harness": "backends/direct/ligero/redteam/run.py --fixture-out",
+ "fixtures": [
+  {
+   "file": "q_leak_l256_2vu.json",
+   "finding": "F1: chain message q unmasked on H -> every intermediate accumulator recoverable from the public transcript",
+   "prover_commit": "2b5b4ed",
+   "config": "l=256 n=2048 k=512 t=189 t_pad=256 D=6, --zk, HM96 coins on",
+   "accumulators": 190,
+   "expected_recovery": "all",
+   "source": "laptop CPU; operands of the first two vu-k1536-neg instances with a finite honest chain, accumulators by the checker"
+  }
+ ]
+}

@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 
 from verity_numerical.bench import ledger
 
-__all__ = ["OUT", "REFERENCES", "main", "plot_frontier", "plot_lane", "plot_overview"]
+__all__ = ["OUT", "REFERENCES", "main", "plot_frontier", "plot_gate4", "plot_lane", "plot_overview"]
 
 OUT = ledger.DIR.parent / "plots"
 REFERENCES = {"goal 1e6": 1e6, "SP1 authenticated core, 1 VU per proof (4090, baselines.json)": 3.6e11, "TensorZKP HyperPlonk calibration (H100)": 5.0e7}
@@ -167,6 +167,64 @@ def plot_frontier(lanes: dict[str, list[dict[str, Any]]], out: Path) -> Path:
     return path
 
 
+GATE4_LANE = "gate4-h100"
+DESIGN_ORDER = ("A", "B", "SP1", "C")
+
+
+def _design(e: dict[str, Any]) -> str:
+    """The design a gate-4 entry belongs to: the first token of its label (``A ...``, ``B ...``, ``SP1 ...``, ``C ...``)."""
+    head = e["label"].split()[0].rstrip(":") if e["label"].split() else ""
+    return head if head in DESIGN_ORDER else "other"
+
+
+def plot_gate4(entries: list[dict[str, Any]], out: Path, name: str = "gate4_h100.png") -> Path:
+    """Gate 4 (one machine, full B=4096 K=1536 batch): one bar per whole-VU entry, log overhead, grouped by design
+    (A, B, SP1, C), coloured by proof class, hatched when the number is a sum of separately measured buckets
+    (``ARITHMETIC_DIAGNOSTIC``) rather than an end-to-end proof; a hollow/pale bar is a cited number from other
+    hardware (its ``hardware`` field is drawn under the label)."""
+    rows = [e for e in entries if e["scope"] == "vu" and e["overhead"] is not None]
+    rows.sort(key=lambda e: (DESIGN_ORDER.index(_design(e)) if _design(e) in DESIGN_ORDER else 99, e["overhead"]))
+    fig, ax = plt.subplots(figsize=(max(8, 1.1 * len(rows) + 3), 6.5))
+    x = 0.0
+    ticks, labels = [], []
+    for design in DESIGN_ORDER + ("other",):
+        group = [e for e in rows if _design(e) == design]
+        if not group:
+            continue
+        x0 = x
+        for e in group:
+            colour = COLOURS.get(e["proof_class"], "black")
+            buckets = e["proof_class"] == "ARITHMETIC_DIAGNOSTIC"
+            cited = "H100" not in e["hardware"]
+            ax.bar(x, e["overhead"], width=0.8, color=colour, alpha=0.45 if cited else 0.95, edgecolor="black",
+                   hatch="//" if buckets else None, linestyle="--" if cited else "-")
+            ax.annotate(f"{e['overhead']:.2e}", (x, e["overhead"]), textcoords="offset points", xytext=(0, 3), ha="center", fontsize=7)
+            ticks.append(x)
+            labels.append(e["label"].replace(f"{design} ", "", 1)[:34] + ("\n[" + e["hardware"][:22] + "]" if cited else ""))
+            x += 1.0
+        ax.annotate(design, ((x0 + x - 1.0) / 2, 1.0), xycoords=("data", "axes fraction"), xytext=(0, -12), textcoords="offset points",
+                    ha="center", fontsize=10, fontweight="bold")
+        x += 0.6
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=7)
+    ax.set_yscale("log")
+    ax.set_ylabel("overhead vs native BF16 peak (K=1536 VU, 9.85 ps)")
+    ax.set_title("gate 4 on one H100: end-to-end proofs (solid) vs measured-bucket sums (hatched); pale = cited, other hardware", fontsize=9)
+    ax.axhline(REFERENCES["goal 1e6"], color="#dddddd", linestyle="--", linewidth=1)
+    ax.grid(True, axis="y", which="major", alpha=0.3)
+    from matplotlib.patches import Patch
+
+    handles = [Patch(facecolor=col, edgecolor="black", label=c) for c, col in COLOURS.items() if c != "COMPONENT"]
+    handles.append(Patch(facecolor="white", edgecolor="black", hatch="//", label="hatched: buckets summed, not a proof"))
+    handles.append(Patch(facecolor="#dddddd", edgecolor="black", linestyle="--", label="pale, dashed: cited from other hardware"))
+    ax.legend(handles=handles, fontsize=6, loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=4, frameon=False)
+    fig.tight_layout()
+    path = out / name
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dir", type=Path, default=ledger.DIR)
@@ -178,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
     if lanes:
         written.append(plot_overview(lanes, ns.out))
         written.append(plot_frontier(lanes, ns.out))
+    if lanes.get(GATE4_LANE):
+        written.append(plot_gate4(lanes[GATE4_LANE], ns.out))
     for p in written:
         print(p)
     return 0

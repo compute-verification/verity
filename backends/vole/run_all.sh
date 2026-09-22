@@ -10,7 +10,7 @@ set -euo pipefail
 STAGE=${1:?stage}
 SWANKY=/workspace/swanky
 SWANKY_COMMIT=1b05bddab3e02c2cc4917d08c80a629286a4a4fc
-DIETMC=${DIETMC:-/workspace/target-swanky/release/dietmc}   # profile stage: DIETMC=/workspace/target-swanky-prof/release/dietmc (no AVX-512, +debuginfo, for valgrind)
+DIETMC=${DIETMC:-/workspace/target-swanky-v2/release/dietmc}   # c-compress: swanky 1b05bdda + patches/ (verity_v0 plugin, cached LPN matrix); v1 binary: /workspace/target-swanky/release/dietmc.  profile stage: DIETMC=/workspace/target-swanky-prof/release/dietmc (no AVX-512, +debuginfo, for valgrind)
 FIX=/workspace/research/runs/r20260922-024439-915c/v1   # bench-instances/v1 arrays, digest-verified by that run
 OUT=${RESEARCH_RUN_DIR:-/workspace/vole-out}
 mkdir -p "$OUT"
@@ -29,6 +29,43 @@ bench() {  # dir label [extra bench args]
 }
 
 case "$STAGE" in
+  smoke)
+    # c-compress v2: census, one unit, one VU, plaintext + real prover/verifier
+    $PY backends/vole/export_ir.py census > "$OUT/census.json"
+    $PY backends/vole/export_ir.py unit "$OUT/unit1" --n 1
+    bench "$OUT/unit1" unit-1 --plaintext-too
+    $PY backends/vole/export_ir.py vu "$OUT/vu1" --root $FIX --B 1
+    bench "$OUT/vu1" vu-B1 --plaintext-too
+    ;;
+  c2small)
+    # c-compress: the v2 relation end to end at 64 VUs.  census + Python negatives; dietmc must ACCEPT the honest
+    # instances and REJECT 4 vu-k1536-neg VUs; then F61p / F128p / F384p at B=64, 1 thread, and F61p with 4 threads.
+    $PY backends/vole/export_ir.py census > "$OUT/census.json"
+    $PY backends/vole/export_ir.py negatives --root $FIX > "$OUT/negatives.txt"
+    tail -1 "$OUT/negatives.txt"
+    $PY backends/vole/export_ir.py unit "$OUT/unit1" --n 1
+    bench "$OUT/unit1" unit-1 --plaintext-too --repeat 3
+    $PY backends/vole/export_ir.py tu "$OUT/units_tu4096" --root $FIX --n 4096
+    bench "$OUT/units_tu4096" units-tu4096 --plaintext-too
+    $PY backends/vole/export_ir.py vu "$OUT/vu4neg" --root $FIX --B 4 --procs 4 --neg
+    bench "$OUT/vu4neg" vu-B4-NEG --plaintext-too || true     # accepted must be false (bench exits 1 on reject)
+    ;;
+  c2fields)
+    for F in f61p f128p f384p; do
+      $PY backends/vole/export_ir.py vu "$OUT/vu64_$F" --root $FIX --B 64 --procs 15 --field $F
+      bench "$OUT/vu64_$F" "vu-B64-$F" --plaintext-too
+    done
+    bench "$OUT/vu64_f61p" vu-B64-f61p-t4 --threads 4
+    bench "$OUT/vu64_f384p" vu-B64-f384p-t4 --threads 4
+    ;;
+  c2big)
+    # c-compress: the full 4096-VU batch, one relation, at every field; F384p is the 2^-128 operating point
+    for F in ${FIELDS:-f61p f128p f384p}; do
+      $PY backends/vole/export_ir.py vu "$OUT/vu4096_$F" --root $FIX --B 4096 --procs 15 --field $F
+      bench "$OUT/vu4096_$F" "vu-B4096-$F"
+    done
+    bench "$OUT/vu4096_f384p" vu-B4096-f384p-t4 --threads 4
+    ;;
   small)
     $PY backends/vole/export_ir.py census > "$OUT/census.json"
     $PY backends/vole/export_ir.py negatives --root $FIX > "$OUT/negatives.txt"

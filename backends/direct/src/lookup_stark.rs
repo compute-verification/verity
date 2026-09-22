@@ -204,16 +204,21 @@ where
         .collect()
 }
 
-/// Verify with `degree_bits` read from the proof and no statement: the diagnostic (`tests/lookup.rs`) and the
-/// `--unbound` timing baseline only.  Proof numbers come from `verify_lookup_bound_bytes`.
-pub fn verify_lookup<SC, A>(config: &SC, air: &A, challenger: &mut SC::Challenger, proof: &LookupProof<SC>, preprocessed: RowMajorMatrix<Val<SC>>) -> Result<(), VerificationError>
+/// Verify with the caller's `expected_degree_bits` (the statement's in a bound path, `proof.degree_bits` in the
+/// `--unbound` diagnostic / timing baseline and `tests/lookup.rs`) and `public` main columns whose values on every
+/// row the verifier knows (checked at ζ and ζ·g against the verifier's own barycentric evaluation; PROTOCOL.md 12.5,
+/// 14.7, 15).  `preprocessed` is recomputed by the verifier (the tables are public) and its commitment compared.
+/// The v2 AIR (`air_v2::verify_bound`) binds through this entry; the v1 LogUp path's proof numbers come from
+/// `verify_lookup_bound_bytes`, which reports the typed `BoundError`.
+pub fn verify_lookup<SC, A>(config: &SC, air: &A, challenger: &mut SC::Challenger, proof: &LookupProof<SC>, preprocessed: RowMajorMatrix<Val<SC>>, expected_degree_bits: usize, public: &[(usize, Vec<Val<SC>>)]) -> Result<(), VerificationError>
 where
     SC: StarkGenericConfig,
     Val<SC>: PrimeField64 + TwoAdicField,
     A: LookupAir<Val<SC>>,
     Com<SC>: PartialEq,
 {
-    verify_lookup_inner(config, air, challenger, proof, preprocessed, proof.degree_bits, &[]).map_err(|e| match e {
+    let public: Vec<(usize, String, Vec<Val<SC>>)> = public.iter().map(|(c, w)| (*c, format!("column {c}"), w.clone())).collect();
+    verify_lookup_inner(config, air, challenger, proof, preprocessed, expected_degree_bits, &public).map_err(|e| match e {
         BoundError::Inner(e) => e,
         BoundError::ProofShape | BoundError::DegreeBits { .. } => VerificationError::InvalidProofShape,
         BoundError::StatementColumn { .. } => VerificationError::OodEvaluationMismatch,
@@ -283,6 +288,9 @@ where
 
     // the statement's public columns of the main trace at ζ and ζ·g (F1)
     for (col, name, want) in public_columns {
+        if want.len() != degree || *col >= air.width() {
+            return Err(BoundError::ProofShape);
+        }
         let (w0, w1) = crate::statement::eval_pair::<Val<SC>, SC::Challenge>(want, zeta);
         if o.main_local[*col] != w0 || o.main_next[*col] != w1 {
             return Err(BoundError::StatementColumn { column: *col, name: name.clone() });

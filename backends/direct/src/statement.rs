@@ -31,6 +31,8 @@ use crate::stark::FriParams;
 
 /// The transcript domain tag (versioned: any change to the header layout bumps it).
 pub const DOMAIN_TAG: &[u8] = b"verity-direct/chain-air/statement/v1";
+/// The v2 (checker v2, LogUp) AIR's transcript domain tag.
+pub const DOMAIN_TAG_V2: &[u8] = b"verity-direct/chain-air-v2/statement/v1";
 /// The trace has at least this many rows (uni-stark needs a two-row domain).
 pub const MIN_ROWS: usize = 2;
 
@@ -79,9 +81,13 @@ impl Statement {
     }
     /// The value of a public column on every row of the trace: `per_vu[vu]` on the VU's rows, `0` on padding.
     pub fn expand<G: PrimeField64>(&self, per_row: impl Fn(usize, usize) -> u64) -> Vec<G> {
+        self.expand_to(self.rows(), per_row)
+    }
+    /// `expand` for a trace of `n` rows (an AIR whose table set forces a taller trace).
+    pub fn expand_to<G: PrimeField64>(&self, n: usize, per_row: impl Fn(usize, usize) -> u64) -> Vec<G> {
         let steps = STEPS as usize;
-        let n = self.rows();
         let real = self.b() * steps;
+        assert!(n >= real);
         (0..n).map(|r| if r < real { G::from_canonical_u64(per_row(r / steps, r % steps)) } else { G::zero() }).collect()
     }
     /// The bound columns: `(column index, column name, public values on every row)`.
@@ -134,6 +140,11 @@ fn sha256_words(words: &[u64]) -> [u8; 32] {
 /// element each; integers split into 32-bit halves so they are canonical in either field; the word list is
 /// length-prefixed).
 pub fn header<G: PrimeField64>(kind: FieldKind, air_id: &[u8; 32], lay_width: usize, challenge_ext_degree: usize, fri: FriParams, stmt: &Statement) -> Vec<G> {
+    header_tagged(DOMAIN_TAG, kind, air_id, lay_width, challenge_ext_degree, fri, stmt)
+}
+
+/// `header` under an explicit domain tag (the v2 AIR uses `DOMAIN_TAG_V2`).
+pub fn header_tagged<G: PrimeField64>(tag: &[u8], kind: FieldKind, air_id: &[u8; 32], lay_width: usize, challenge_ext_degree: usize, fri: FriParams, stmt: &Statement) -> Vec<G> {
     let mut out: Vec<G> = Vec::with_capacity(96 + 2 * stmt.b());
     let push_bytes = |out: &mut Vec<G>, b: &[u8]| {
         out.push(G::from_canonical_u64(b.len() as u64));
@@ -143,7 +154,7 @@ pub fn header<G: PrimeField64>(kind: FieldKind, air_id: &[u8; 32], lay_width: us
         out.push(G::from_canonical_u32(v as u32));
         out.push(G::from_canonical_u32((v >> 32) as u32));
     };
-    push_bytes(&mut out, DOMAIN_TAG);
+    push_bytes(&mut out, tag);
     push_bytes(&mut out, air_id);
     let p = kind.prime();
     push_u64(&mut out, p as u64);

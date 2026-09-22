@@ -17,12 +17,48 @@ it cannot check these proofs directly; the Python verifier is the same code path
 | v2c | 0d6437c | fused GKR phase-1 round; opening as tensor-core matmuls | 8.32 s | 1.49 / 1.85 / 4.46 / 0.45 | 8.9 s |
 | v2d | 428db0b | lookup functional as a CSR scatter kernel | 5.41 s | 1.53 / 1.95 / 1.41 / 0.45 | 7.1 s |
 | v2e | c4d472a | sparse gate evaluation; fused LogUp level combine | **4.43 s** | 1.40 / 1.07 / 1.44 / 0.45 | 7.1 s |
+| v5 | 9fb4180 | a-gpu2: packed k=3 GKR phase 1, CUDA-graphed LogUp (a-fusion), INT8 tensor-core opening, SIMT commit NTT | **1.857 s** | 0.43 / 0.66 / 0.57 / 0.10 | 6.5 s |
+| v6 | 5ad05fb | a-gpu2: vectorised Ligero verifier; fused rank-1 input-claim accumulate | **1.790 s** | 0.43 / 0.66 / 0.53 / 0.10 | 1.34 s |
+
+v5/v6 are **not** transcript-identical to v2e (correction, lane a-protocol-diff, 2026-09-22): the LogUp per-level
+sumcheck binds the low bit of the level index first and the next point is `rho = [mu] + x*` (`logup.py` docstring,
+`../PROTOCOL.md` 4.2 "Variable order"), where v2e bound the top bit first with `rho = x* + [mu]`.  Same protocol
+under bit-reversal of the level index, same message *count* and order, different message *values* from level 2 on --
+the independent Rust verifier (`../verifier/`, written against v2e) rejected every v5/v6 proof at `LogUp POW level
+2: final check` until it followed the new schedule (`backends/numerical/reports/a_protocol_diff.md`).  The GKR
+schedule, the eq weights and everything else are v2e's.  Peak device memory 47.9 GB; `--warmup 1` excludes the
+one-off ~60 s LogUp graph compile/capture per process.  Negatives: 52/52 rejected on the v6 path (r20260922-094606-1813).
 
 Every run: 4096/4096 `vu-k1536` accepted with the recorded words, proof 33.9 MB (6086 extension elements + Ligero
 opening), `rounds.sequential_depth` 438 (circuit 197, LogUp R16 435), 1920 transcript slots, peak device memory
 65.7 GB (v1-v2c) / 46.7 GB (v2d-e), 177.8 M committed base elements in 43 417 Ligero rows.  Reference: the CPU Rust prover, 12 threads,
 297.6 s for the same batch (Goldilocks).  The verifier is Python (transcript replay + Merkle paths in `hashlib`),
 not optimised.
+
+## Checker v2 (`lane/a-gpu-v2`; A100-SXM4-80GB, same prover, `gpu/v2/` + `--variant`-free: the manifest selects v2)
+
+PROTOCOL §14's circuit (264 columns / 290 wires / 26 products / 86 lookups per unit into 10 tables, depth 1, the
+(s, e, M, z) state chained across the 96 units, 583 linkage constraints per VU) exported over BabyBear by
+`gpu.v2.export` and proved by the same prover: implicit tables materialised on device, `R<w>` range tables from the
+queries, 12-column strided linkage read, table union over segments (DESIGN §5b).  Same box, same day, median of 3:
+
+| circuit | epilogue | run id | B | prover | split (lookup / arith / open / commit) | verifier | proof | depth | committed | peak mem | label |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| v1 (a-gpu v2e) | limb (v1) | r20260922-091544-4e02 | 4096 | 7.93 s = 1.94 ms/VU | 2.22 / 1.75 / 3.07 / 0.77 | 10.1 s | 33.9 MB | 438 | 177.8 M | 46.6 GB | `NON_ZK_PROOF_DIAGNOSTIC` |
+| v2 | word (a-v2) | r20260922-090930-3bc5 | 4096 | 5.62 s = 1.37 ms/VU | 2.78 / 0.33 / 2.03 / 0.43 | 8.1 s | 21.1 MB | 328 | 109.1 M | 24.4 GB | `INCOMPLETE_CHECKER_DIAGNOSTIC` (epilogue word arithmetic SAT over 31-bit fields) |
+| v2 | **limb** (b-air-v2 gadget) | r20260922-095013-db80 | 4096 | **5.73 s = 1.40 ms/VU** | 2.85 / 0.36 / 2.05 / 0.43 | 8.1 s | 21.1 MB | 328 | 109.1 M | 24.4 GB | **`NON_ZK_PROOF_DIAGNOSTIC`** |
+| v2 | limb | r20260922-095013-db80 | 64 | 2.95 s | 1.97 / 0.16 / 0.76 / 0.06 | 5.5 s | 1.87 MB | 279 | 6.87 M | 9.9 GB | `NON_ZK_PROOF_DIAGNOSTIC` |
+
+v2/v1 same box: **1.38x** end to end (arith 4.9x, commit 1.8x, open 1.5x, lookup 0.78x — the lookup bucket is
+round/launch-bound: 13 shallow trees instead of 5 deep ones, 3524 transcript slots vs 1920; `lane/a-fusion`'s
+graphed LogUp is the fix, not the circuit).  Against a-gpu v1 on the H100 (4.43 s) v2 is 0.77x raw; with the
+measured same-circuit A100/H100 ratio of 0.56x (inside anchor_a100's HBM-bound band 0.52–0.61x) that normalises to
+~1.4x.  Not a breakthrough (< 2x).  Acceptance: 4096/4096 with the recorded words; negatives 52/52 `vu-k1536-neg`
+(8 at witness, 44 at the verifier), a-v2's 30 unit + 4 chain cases 34/34, 15/15 epilogue base columns +1
+(`gpu.run epilogue-negatives`).  Field: BabyBear^6 (the kernels' field); the epilogue's word-form Pack is the only
+v2 gadget SAT over 31-bit fields and is replaced by `lane/b-air-v2`'s limb form (z3 direct UNSAT over BabyBear,
+same function over Z); checker-min's remaining v2 queries re-run with the BabyBear modulus are UNSAT
+(`gpu/v2/results/z3_babybear_v2.json`).  Results: `gpu/v2/results/` (`limbs/` for the honest-label set).
 
 Soundness (`security.accounting.account_candidate_a`, BabyBear^6, Ligero `k = 4096, n = 16384, t = 192`):
 2^-127.7, dominated by the generic SHA-256 collision term; ledger security field `2^-127.7`, proof class
@@ -57,6 +93,28 @@ Laptop (CPU, no Triton, < 30 s): a synthetic 2-VU, 3-step batch through the whol
 PYTHONPATH=backends/gkr python -m gpu.bb_export synth --out /tmp/bbsynth --vus 2 --steps 3
 PYTHONPATH=backends/gkr python -m gpu.run prove /tmp/bbsynth --device cpu
 ~~~
+
+## Proof file (`proof.bin`, `--proof-out` / `negatives --proof-dir`; `Proof.to_bytes`)
+
+Little-endian throughout; an extension element is six `u32` coordinates `c0..c5` (24 bytes), a base element one
+`u32`, a digest 32 bytes.
+
+~~~text
+magic  "VGKRBB6\0" (8)      version u32 = 1        root (32)
+n_msgs u64                  msgs: n_msgs x 24      (every sumcheck/GKR/LogUp message in transcript order)
+has_opening u64 (0 | 1)
+k u64        w:  k x 24     (Ligero proximity row)
+n_qc u64     qc: n_qc x 24  (the 2k-1 coefficients of q)
+t u64  rows u64  depth u64
+per opened column (t of them, in `open_set` order): rows x u32 values, then depth x 32-byte Merkle siblings
+~~~
+
+The counts make the file self-delimiting; a verifier takes `k, n, t`, `rows = ceil(l / k)`, `depth = log2 n`, the
+message count and the column indices from the circuit/config and its own transcript and **rejects** a file whose
+counts differ -- nothing read from the proof sizes anything (`redteam_vu.md` F1-F3).  The independent Rust
+verifier for this format is `../verifier/` (`verity-gkr-verify verify --dir D --proof proof.bin [--vus N]`); it
+reads `circuit.txt`, `epilogue.txt`, `manifest.json` (steps, chain columns) and `public.bin` only -- never the
+witness files.
 
 `VERITY_GPU_TORCH_ONLY=1` disables every Triton kernel (the torch path is the bit-exact reference the kernels are
 tested against; `--clear` skips the commitment and opening for a clear-mode diagnostic).

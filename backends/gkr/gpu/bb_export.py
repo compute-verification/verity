@@ -256,10 +256,20 @@ def write_rows(rows: list[list[int]], path: Path, ncols: int | None = None) -> N
 
 
 def read_rows(path: Path) -> np.ndarray:
-    """``(n_rows, n_cols)`` uint32."""
+    """``(n_rows, n_cols)`` uint32 (the element width, u32 or u64, is read off the file size: the v2 exporter of
+    ``gkr_export.v2`` writes u64 rows; every value must be below ``p``)."""
     with open(path, "rb") as f:
         n, m = struct.unpack("<QQ", f.read(16))
-        return np.frombuffer(f.read(), dtype="<u4").reshape(n, m)
+        body = f.read()
+    if n * m == 0:
+        return np.zeros((n, m), dtype="<u4")
+    width = len(body) // (n * m)
+    if width == 8:
+        arr = np.frombuffer(body, dtype="<u8").reshape(n, m)
+        if arr.max() >= P:
+            raise ValueError(f"{path}: a u64 value is not a canonical BabyBear element")
+        return arr.astype("<u4")
+    return np.frombuffer(body, dtype="<u4").reshape(n, m)
 
 
 def chain_columns(uctx: CircuitCtx, ectx: CircuitCtx) -> dict:

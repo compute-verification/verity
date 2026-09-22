@@ -76,6 +76,14 @@ if [ "$WHAT" = gate ] || [ "$WHAT" = all ] || [ "$WHAT" = full ]; then
     mkdir -p "$RUN_DIR/vu64_babybear_operands" "$RUN_DIR/vu64_babybear_lookup_operands"
     "$BIN" vu-bench --root "$INST" --field babybear --vus 64 --queries 100 --bind-operands --out "$RUN_DIR/vu64_babybear_operands" | tail -1
     "$BIN" vu-bench --root "$INST" --field babybear --lookup --vus 64 --queries 100 --bind-operands --out "$RUN_DIR/vu64_babybear_lookup_operands" | tail -1
+    echo "== vu-neg --v2 (52 vu-k1536-neg; b-air-v2's checker-v2 AIR, PROTOCOL.md 15)"
+    mkdir -p "$RUN_DIR/neg_v2"
+    "$BIN" vu-neg --v2 --root "$INST" --out "$RUN_DIR/neg_v2" | tail -1
+    for EXT in 4 6; do
+        echo "== vu-bench --v2 --ext $EXT 64 VUs (statement-bound through air_v2::{prove_bound, verify_bound}; wrong statement rejected inside)"
+        mkdir -p "$RUN_DIR/vu64_v2_ext$EXT"
+        "$BIN" vu-bench --v2 --ext "$EXT" --root "$INST" --vus 64 --queries 100 --out "$RUN_DIR/vu64_v2_ext$EXT" | tail -1
+    done
 fi
 
 if [ "$WHAT" = battery ] || [ "$WHAT" = all ] || [ "$WHAT" = full ]; then
@@ -85,6 +93,9 @@ if [ "$WHAT" = battery ] || [ "$WHAT" = all ] || [ "$WHAT" = full ]; then
     echo "== babybear rules battery, --lookup (AIR constraints, check-rows)"
     UV_CACHE_DIR=${UV_CACHE_DIR:-/workspace/uv-cache} uv run --frozen --package verity-numerical \
         python backends/direct/tools/battery_adapter.py --bin "$BIN" --extras --lookup --out "$RUN_DIR/battery_babybear_lookup.json" 2>&1 | grep -v "^  rejected" | tail -5
+    echo "== babybear rules battery, --v2 (checker-v2 AIR, check-rows --v2)"
+    UV_CACHE_DIR=${UV_CACHE_DIR:-/workspace/uv-cache} uv run --frozen --package verity-numerical \
+        python backends/direct/tools/battery_adapter.py --bin "$BIN" --extras --v2 --out "$RUN_DIR/battery_babybear_v2.json" 2>&1 | grep -v "^  rejected" | tail -5
 fi
 
 if [ "$WHAT" = timing ] || [ "$WHAT" = full ]; then

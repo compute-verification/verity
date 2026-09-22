@@ -56,7 +56,17 @@ fn main() {
             .with_writer(std::io::stderr)
             .init();
     }
+    let v2 = args.iter().any(|a| a == "--v2");
     match args.get(1).map(|s| s.as_str()) {
+        Some("chain-layout") if v2 => chain_layout_v2(&args),
+        Some("vu-bench") if v2 => match arg(&args, "--ext").as_deref() {
+            Some("5") => vu_bench_v2::<verity_direct::stark::BabyBear5Backend>(&args),
+            Some("6") => vu_bench_v2::<verity_direct::stark::BabyBear6Backend>(&args),
+            _ => vu_bench_v2::<BabyBearBackend>(&args),
+        },
+        Some("vu-neg") if v2 => vu_neg_v2(&args),
+        Some("vu-honest") if v2 => vu_honest_v2(&args),
+        Some("check-rows") if v2 => check_rows_v2::<stark::Val32, stark::ChallengeBb>(&args),
         Some("bench") => bench(&args),
         Some("crosscheck") => crosscheck(&args),
         Some("vu-bench") if args.iter().any(|a| a == "--lookup") => match (field_arg(&args), arg(&args, "--ext").as_deref()) {
@@ -81,7 +91,7 @@ fn main() {
             let d = if kind.small() { 4 } else { 2 };
             let (air_, lay) = air::LookupChainAir::new(kind, d);
             let ll = &air_.lay;
-            let pre_w = verity_direct::lookup::PRE_WIDTH;
+            let pre_w = ll.tables.pre_width();
             let aux_w = ll.aux_width(d);
             println!(
                 "field={kind:?} lookup=logup main_width={} (incl. multiplicity) aux_width={} (helpers={} x{d} + g + S) pre_width={pre_w} committed_width={} hints={} materialised={} constraints={} queries/row={} table_rows={}",
@@ -622,7 +632,7 @@ where
     let ok = if unbound {
         let config = B::config(log_n, fri);
         let mut challenger = B::challenger();
-        verify_lookup(&config, &air_, &mut challenger, &proof, air_.lay.tables.preprocessed(rows)).map_err(stark::BoundError::Inner)
+        verify_lookup(&config, &air_, &mut challenger, &proof, air_.lay.tables.preprocessed(rows), proof.degree_bits, &[]).map_err(stark::BoundError::Inner)
     } else {
         verify_lookup_bound_bytes::<B>(&air_, &lay, &proof_bytes, fri, &stmt)
     };
@@ -1037,4 +1047,376 @@ where
     }
     println!("vu-neg field={kind:?} realisation={}: {} negatives, {} rejected by witness generation AND unsatisfiable in the field", if lookup { "logup" } else { "limbs" }, tier.vus.len(), tier.vus.len() - soundness_bugs);
     assert_eq!(soundness_bugs, 0, "SOUNDNESS BUG: {soundness_bugs} negatives produce violation-free rows");
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Checker v2 on BabyBear with LogUp (PROTOCOL.md 15, V2_AIR.md)
+// ---------------------------------------------------------------------------------------------------------------
+
+use verity_direct::air_v2::{self, V2ChainAir};
+use verity_direct::statement::Statement;
+
+fn ext_arg(args: &[String]) -> usize {
+    arg(args, "--ext").map(|s| s.parse().unwrap()).unwrap_or(4)
+}
+
+fn chain_layout_v2(args: &[String]) {
+    let d = ext_arg(args);
+    let (air_, lay) = V2ChainAir::new(FieldKind::BabyBear, d);
+    let ll = &air_.lay;
+    let pre_w = ll.tables.pre_width();
+    let aux_w = ll.aux_width(d);
+    println!(
+        "field=BabyBear air=v2 lookup=logup main_width={} (incl. multiplicity) aux_width={} (helpers={} x{d} + g + S) pre_width={pre_w} (ncols={}) committed_width={} hints={} materialised={} constraints={} queries/row={} table_rows={}",
+        lay.width,
+        aux_w,
+        ll.n_helpers(),
+        ll.tables.ncols,
+        lay.width + aux_w + pre_w,
+        lay.n_hints,
+        lay.n_mat,
+        lay.constraint_names.len(),
+        ll.n_queries(),
+        ll.tables.total_rows
+    );
+    for (n, r) in ll.tables.describe() {
+        println!("  table {n:9} rows={r}");
+    }
+    let mut by_deg = std::collections::BTreeMap::new();
+    for d in &ll.query_degs {
+        *by_deg.entry(*d).or_insert(0usize) += 1;
+    }
+    println!("  query degrees: {by_deg:?}");
+    let outs = lay.col_names.iter().filter(|n| n.contains(".out[")).count();
+    let mats = lay.col_names.iter().filter(|n| *n == "_mat" || n.ends_with(".mat")).count();
+    println!("  table-output columns={outs} auto-materialised={mats} other (words, state, hints, named materialisations, position)={}", lay.width - outs - mats);
+    if args.iter().any(|a| a == "--names") {
+        for (i, n) in lay.col_names.iter().enumerate() {
+            println!("col {i:4} {n}");
+        }
+        for (i, n) in ll.query_names.iter().enumerate() {
+            println!("query {i:4} deg={} {n}", ll.query_degs[i]);
+        }
+        for (i, n) in lay.constraint_names.iter().enumerate() {
+            println!("constraint {i:4} {n}");
+        }
+    }
+}
+
+/// `vu-bench --v2 [--ext 4|5] [--vus N] [--queries Q] [--bind-operands] --out DIR`: the v2 gate.  The proof is
+/// bound to the statement (every claimed word; the operands too with `--bind-operands`).
+fn vu_bench_v2<B: Backend>(args: &[String])
+where
+    Val<B::SC>: PrimeField64 + Send + Sync + p3_field::TwoAdicField,
+    <<B::SC as StarkGenericConfig>::Pcs as p3_commit::Pcs<<B::SC as StarkGenericConfig>::Challenge, <B::SC as StarkGenericConfig>::Challenger>>::Commitment: PartialEq,
+{
+    use verity_direct::lookup::lookup_soundness_bits_cols;
+    use verity_direct::lookup_stark::proof_bytes_lookup;
+    let kind = B::KIND;
+    assert!(kind.small());
+    let root = Path::new(&arg(args, "--root").unwrap_or_else(|| "fixtures/bench-instances/v1".into())).to_path_buf();
+    let out = arg(args, "--out").or_else(|| std::env::var("RESEARCH_RUN_DIR").ok()).unwrap_or_else(|| ".".into());
+    let mut fri: FriParams = DEFAULT_FRI;
+    if let Some(q) = arg(args, "--queries") {
+        fri.num_queries = q.parse().unwrap();
+    }
+    fs::create_dir_all(&out).unwrap();
+    let tier = load_tier(&root, "vu-k1536");
+    let n_vus: usize = arg(args, "--vus").map(|s| s.parse().unwrap()).unwrap_or(tier.vus.len());
+    let vus = &tier.vus[..n_vus];
+    let recorded_accs = tier.accs.as_ref().unwrap();
+    let ext_deg = <<B::SC as StarkGenericConfig>::Challenge as p3_field::AbstractExtensionField<Val<B::SC>>>::D;
+    let bind_operands = args.iter().any(|a| a == "--bind-operands");
+
+    let (air_, lay) = V2ChainAir::new(kind, ext_deg);
+    let t0 = Instant::now();
+    let (main, queries, accs): (RowMajorMatrix<Val<B::SC>>, Vec<u32>, Vec<Vec<u64>>) = air_v2::trace(&air_, vus, 2);
+    let rows = main.height();
+    let t_witness = t0.elapsed().as_secs_f64();
+
+    let mut acc_mismatch = 0usize;
+    for (i, a) in accs.iter().enumerate() {
+        if a != &recorded_accs[i] {
+            acc_mismatch += 1;
+            if acc_mismatch <= 3 {
+                let j = a.iter().zip(&recorded_accs[i]).position(|(x, y)| x != y).unwrap();
+                eprintln!("vu {i}: step {j}: state word {:#010x} != recorded {:#010x}", a[j], recorded_accs[i][j]);
+            }
+        }
+    }
+    assert_eq!(acc_mismatch, 0, "{acc_mismatch} VUs disagree with the recorded accumulators");
+    let claim_col = lay.col(verity_direct::program::COL_CLAIM);
+    let last_col = lay.col(verity_direct::program::COL_LAST);
+    let (y_hi, carry) = (lay.col("pack.y_hi"), lay.col("cast.carry"));
+    let steps = STEPS as usize;
+    for (i, vu) in vus.iter().enumerate() {
+        let r = i * steps + steps - 1;
+        let row = main.row_slice(r);
+        assert_eq!(row[last_col].as_canonical_u64(), 1);
+        assert_eq!(row[claim_col].as_canonical_u64(), vu.y16, "vu {i}: claim column");
+        assert_eq!(row[y_hi].as_canonical_u64() + row[carry].as_canonical_u64(), vu.y16, "vu {i}: epilogue word != recorded word");
+    }
+    let words: Vec<u64> = vus.iter().map(|v| v.y16).collect();
+    let stmt = if bind_operands {
+        Statement::with_operands(words, vus.iter().flat_map(|v| v.x.iter().copied()).collect(), vus.iter().flat_map(|v| v.w.iter().copied()).collect())
+    } else {
+        Statement::new(words)
+    };
+
+    let width = main.width();
+    let aux_w = air_.lay.aux_width(ext_deg);
+    let pre_w = air_.lay.tables.pre_width();
+    let committed_width = width + aux_w + pre_w;
+    let lqd = p3_util::log2_ceil_usize(verity_direct::program::MAX_DEG - 1);
+    assert!(lqd <= fri.log_blowup);
+
+    // rtt::begin must precede the prover's challenger construction so its RttChallenger is the active (counting) one.
+    let rtt_ms: f64 = arg(args, "--rtt-ms").or_else(|| std::env::var("VERITY_RTT_MS").ok()).map(|s| s.parse().expect("--rtt-ms takes milliseconds")).unwrap_or(0.0);
+    let t1 = Instant::now();
+    verity_direct::rtt::begin(rtt_ms);
+    let (proof, stage) = air_v2::prove_bound::<B>(&air_, &lay, main, &queries, fri, &stmt);
+    let (trips, slept) = verity_direct::rtt::end();
+    let t_prove_wall = t1.elapsed().as_secs_f64();
+    let t_prove = t_prove_wall - slept; // compute: the wall time less the emulated waits for the verifier's coins
+    let t2 = Instant::now();
+    let bytes = proof_bytes_lookup(&proof);
+    let t_ser = t2.elapsed().as_secs_f64();
+    let t3 = Instant::now();
+    let ok = air_v2::verify_bound::<B>(&air_, &lay, &proof, fri, &stmt);
+    let t_verify = t3.elapsed().as_secs_f64();
+    assert!(ok.is_ok(), "verification failed: {:?}", ok.err());
+    // statement binding: a proof of these words is not a proof of other words
+    let mut other = stmt.clone();
+    other.words[0] ^= 1;
+    assert!(air_v2::verify_bound::<B>(&air_, &lay, &proof, fri, &other).is_err(), "a proof verified against a different statement");
+    let lookup_bits = lookup_soundness_bits_cols(rows, air_.lay.n_queries(), air_.lay.tables.total_rows, B::challenge_bits() as f64, air_.lay.tables.ncols);
+    println!(
+        "lookup stages: commit_pre={:.2}s commit_main={:.2}s aux_build={:.2}s commit_aux={:.2}s quotient={:.2}s commit_quotient={:.2}s open={:.2}s; main_width={width} aux_width={aux_w} pre_width={pre_w} helpers={} queries/row={} table_rows={} lookup_bits={lookup_bits:.1}",
+        stage.commit_pre,
+        stage.commit_main,
+        stage.aux_build,
+        stage.commit_aux,
+        stage.quotient,
+        stage.commit_quotient,
+        stage.open,
+        air_.lay.n_helpers(),
+        air_.lay.n_queries(),
+        air_.lay.tables.total_rows
+    );
+    let extra = vec![
+        json!({"name": "direct.lookup.main_width", "value": width, "unit": "count"}),
+        json!({"name": "direct.lookup.aux_width", "value": aux_w, "unit": "count"}),
+        json!({"name": "direct.lookup.pre_width", "value": pre_w, "unit": "count"}),
+        json!({"name": "direct.lookup.helpers", "value": air_.lay.n_helpers(), "unit": "count"}),
+        json!({"name": "direct.lookup.queries_per_row", "value": air_.lay.n_queries(), "unit": "count"}),
+        json!({"name": "direct.lookup.table_rows", "value": air_.lay.tables.total_rows, "unit": "count"}),
+        json!({"name": "direct.lookup.bits", "value": lookup_bits, "unit": "bits"}),
+        json!({"name": "direct.stage.commit_pre_s", "value": stage.commit_pre, "unit": "s"}),
+        json!({"name": "direct.stage.commit_main_s", "value": stage.commit_main, "unit": "s"}),
+        json!({"name": "direct.stage.aux_build_s", "value": stage.aux_build, "unit": "s"}),
+        json!({"name": "direct.stage.commit_aux_s", "value": stage.commit_aux, "unit": "s"}),
+        json!({"name": "direct.stage.quotient_s", "value": stage.quotient, "unit": "s"}),
+        json!({"name": "direct.stage.commit_quotient_s", "value": stage.commit_quotient, "unit": "s"}),
+        json!({"name": "direct.stage.open_s", "value": stage.open, "unit": "s"}),
+        json!({"name": "direct.statement.bound_operands", "value": bind_operands as u64, "unit": "count"}),
+    ];
+    write_result(BenchNumbers {
+        kind,
+        out: &out,
+        fri,
+        n_vus,
+        rows,
+        width,
+        committed_width,
+        t_witness,
+        t_prove,
+        t_ser,
+        t_verify,
+        bytes,
+        lqd,
+        tier: &tier,
+        root: &root,
+        challenge_name: B::challenge_name(),
+        challenge_bits: B::challenge_bits(),
+        rounds_extra: 2,
+        constraints_note: "checker v2 (checker_min.md) as direct AIR constraints on BabyBear: one row per transition unit, the state (s, e_hat, M) carried by a transition constraint, tuple LogUp lookups (T_OP, ALIGN4, chunked SHIFT/SSHIFT, LEAD10, LEADNORM, TNORM10, range tables) against preprocessed tables, attained as a product identity, the FP32 word as two 16-bit limbs; statement binding: header absorbed before the first challenge, degree_bits fixed by the statement, claim column checked at zeta (PROTOCOL.md 15, V2_AIR.md)",
+        realisation: "logup-v2",
+        extra,
+        lookup_bits: Some(lookup_bits),
+        ext_deg,
+        rtt_ms,
+        depth: trips as usize,
+        slept,
+        t_prove_wall,
+    });
+}
+
+/// `vu-neg --v2`: every `vu-k1536-neg` instance must be rejected by witness generation AND violate a field
+/// constraint (row-local evaluation of the honest-hint rows with the claimed word); every `wrong` negative with its
+/// correct word is accepted (control).
+fn vu_neg_v2(args: &[String]) {
+    let kind = FieldKind::BabyBear;
+    let root = Path::new(&arg(args, "--root").unwrap_or_else(|| "fixtures/bench-instances/v1".into())).to_path_buf();
+    let out = arg(args, "--out").or_else(|| std::env::var("RESEARCH_RUN_DIR").ok());
+    let tier = load_tier(&root, "vu-k1536-neg");
+    let (air_, lay) = V2ChainAir::new(kind, 4);
+    let rows_index = tier.index["rows"].as_array().unwrap().clone();
+    let mut report = vec![];
+    let mut soundness_bugs = 0usize;
+    let eval = |vu: &VuIo| {
+        let (rows, qs, _, viol) = air_v2::vu_rows(kind, lay.width, &air_.lay.tables, vu);
+        let fail = air_v2::failing_rows::<stark::Val32, stark::ChallengeBb>(&air_, &lay, &rows, &qs, true);
+        (viol, fail)
+    };
+    for (i, vu) in tier.vus.iter().enumerate() {
+        let (viol, field_fail) = eval(vu);
+        let rejected = !viol.is_empty();
+        let unsatisfiable = !field_fail.is_empty();
+        if !rejected || !unsatisfiable {
+            soundness_bugs += 1;
+        }
+        let meta = &rows_index[i];
+        println!(
+            "neg {i:2} mistake={} verdict={} claimed={} correct={}: integer violations={} ({}), failing field constraints={} ({})",
+            meta[1],
+            meta[5],
+            meta[3],
+            meta[4],
+            viol.len(),
+            viol.first().map(|s| s.as_str()).unwrap_or("-"),
+            field_fail.len(),
+            field_fail.first().map(|(r, n)| format!("row {r} {n}")).unwrap_or("-".into())
+        );
+        report.push(json!({"id": meta[0], "mistake": meta[1], "verdict": meta[5], "claimed_y": meta[3], "correct_y": meta[4], "integer_violations": viol.len(), "first_violation": viol.first(), "failing_field_constraints": field_fail.len(), "first_failing": field_fail.first().map(|(r, n)| json!([r, n]))}));
+    }
+    let mut n_control = 0usize;
+    for (i, row) in rows_index.iter().enumerate() {
+        if let Some(correct) = row[4].as_u64() {
+            let mut vu = tier.vus[i].clone();
+            vu.y16 = correct;
+            let (viol, field_fail) = eval(&vu);
+            assert!(viol.is_empty() && field_fail.is_empty(), "control {i} failed: the correct word is rejected: {:?} {:?}", viol.first(), field_fail.first());
+            n_control += 1;
+        }
+    }
+    println!("controls: {n_control} negatives with their correct word: accepted (no integer violation, no failing field constraint or lookup)");
+    let summary = json!({
+        "schema": "verity-direct/vu-neg/v2",
+        "field": "BabyBear", "air": "v2",
+        "dataset": {"dataset": "bench-instances/v1", "tier": "vu-k1536-neg", "manifest_sha256": manifest_sha256(&root), "n": tier.vus.len()},
+        "rejected_all": soundness_bugs == 0,
+        "soundness_bugs": soundness_bugs,
+        "controls": {"n": n_control, "accepted": n_control},
+        "instances": report,
+        "run_id": std::env::var("RESEARCH_RUN_ID").ok(),
+    });
+    if let Some(out) = out {
+        fs::create_dir_all(&out).unwrap();
+        fs::write(format!("{out}/vu_neg_v2.json"), serde_json::to_string_pretty(&summary).unwrap()).unwrap();
+    }
+    println!("vu-neg --v2: {} negatives, {} rejected by witness generation AND unsatisfiable in the field", tier.vus.len(), tier.vus.len() - soundness_bugs);
+    assert_eq!(soundness_bugs, 0, "SOUNDNESS BUG: {soundness_bugs} negatives produce violation-free rows");
+}
+
+/// `vu-honest --v2 [--vus N] [--eval M]`: the honest witness of the bench tier agrees with the recorded
+/// accumulators and (for the first `M` VUs) satisfies every row-local field constraint and every lookup.
+fn vu_honest_v2(args: &[String]) {
+    use p3_maybe_rayon::prelude::*;
+    let kind = FieldKind::BabyBear;
+    let root = Path::new(&arg(args, "--root").unwrap_or_else(|| "fixtures/bench-instances/v1".into())).to_path_buf();
+    let tier = load_tier(&root, "vu-k1536");
+    let n: usize = arg(args, "--vus").map(|s| s.parse().unwrap()).unwrap_or(tier.vus.len());
+    let m: usize = arg(args, "--eval").map(|s| s.parse().unwrap()).unwrap_or(8.min(n));
+    let (air_, lay) = V2ChainAir::new(kind, 4);
+    let (y_hi, carry) = (lay.col("pack.y_hi"), lay.col("cast.carry"));
+    let recorded = tier.accs.as_ref().unwrap();
+    let t0 = Instant::now();
+    let results: Vec<(usize, usize, usize, Vec<String>)> = tier.vus[..n]
+        .par_iter()
+        .enumerate()
+        .map(|(i, vu)| {
+            let (rows, qs, states, viol) = air_v2::vu_rows(kind, lay.width, &air_.lay.tables, vu);
+            let words: Vec<u64> = rows.iter().map(|r| air_v2::row_word(&air_.idx, r, kind)).collect();
+            let mism = words.iter().zip(&recorded[i]).filter(|(a, b)| a != b).count();
+            if mism > 0 {
+                for (j, (a, b)) in words.iter().zip(&recorded[i]).enumerate() {
+                    if a != b {
+                        eprintln!("vu {i} step {j}: state {:?} -> word {a:#010x} != recorded {b:#010x}", states[j]);
+                    }
+                }
+            }
+            let last = &rows[rows.len() - 1];
+            let y = modp(last[y_hi] + last[carry], kind.prime());
+            let ybad = (y != vu.y16) as usize;
+            let mut fails = vec![];
+            if i < m {
+                fails = air_v2::failing_rows::<stark::Val32, stark::ChallengeBb>(&air_, &lay, &rows, &qs, true).into_iter().map(|(r, n)| format!("row {r} {n}")).collect();
+            }
+            (viol.len(), mism, ybad, fails)
+        })
+        .collect();
+    let t = t0.elapsed().as_secs_f64();
+    let (mut v, mut mm, mut yb, mut ff) = (0, 0, 0, 0);
+    for (i, (a, b, c, f)) in results.iter().enumerate() {
+        v += a;
+        mm += b;
+        yb += c;
+        ff += f.len();
+        if *a > 0 || *b > 0 || *c > 0 || !f.is_empty() {
+            println!("vu {i}: violations={a} acc_mismatch_steps={b} word_bad={c} field_fails={} {:?}", f.len(), &f[..f.len().min(4)]);
+        }
+    }
+    println!("vu-honest --v2: {n} VUs in {t:.2}s ({:.2} ms/VU witness): integer violations={v} accumulator mismatches={mm} bad words={yb} field failures (first {m} VUs)={ff}", 1e3 * t / n as f64);
+    if !args.iter().any(|a| a == "--no-assert") {
+        assert!(v == 0 && mm == 0 && yb == 0 && ff == 0);
+    }
+}
+
+/// `check-rows --v2 --in jobs.json --out report.json`: the battery on the v2 AIR (`tools/battery_adapter.py --v2`).
+fn check_rows_v2<G: PrimeField64 + Send + Sync, EF: p3_field::ExtensionField<G>>(args: &[String]) {
+    let kind = FieldKind::BabyBear;
+    let input = arg(args, "--in").expect("--in jobs.json");
+    let out = arg(args, "--out").expect("--out report.json");
+    let text = fs::read_to_string(&input).unwrap();
+    let jobs: Value = serde_json::from_str(&text).unwrap();
+    let ext_deg = <EF as p3_field::AbstractExtensionField<G>>::D;
+    let (air_, lay) = V2ChainAir::new(kind, ext_deg);
+    let p = kind.prime();
+    let carry_col = lay.col("cast.carry");
+    let y_hi = lay.col("pack.y_hi");
+    let mut report = vec![];
+    let mut n_accepted = 0usize;
+    for job in jobs["jobs"].as_array().expect("jobs") {
+        let id = job["id"].as_str().unwrap_or("").to_string();
+        let res = match job["kind"].as_str().unwrap_or("rows") {
+            "gadget" => {
+                let mut case: verity_direct::program::GadgetCase = serde_json::from_value(job.clone()).unwrap();
+                let honest = air_v2::gadget_honest_outputs(kind, &case);
+                if job["v2_honest_claim"].as_bool().unwrap_or(false) {
+                    case.claimed = honest.clone();
+                }
+                let overrides: Vec<(String, i128)> = job["hints"].as_object().map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_i64().unwrap() as i128)).collect()).unwrap_or_default();
+                let (failing, viol) = air_v2::gadget_failing::<G>(kind, &case, &overrides);
+                let accepted = failing.is_empty();
+                json!({"id": id, "kind": "gadget", "gadget": case.name, "accepted": accepted, "n_failing": failing.len(), "first_failing": failing.first(), "failing": failing.iter().take(8).collect::<Vec<_>>(), "integer_violations": viol.len(), "claimed": case.claimed, "honest_v2": honest})
+            }
+            _ => {
+                let specs: Vec<air::RowSpec> = serde_json::from_value(job["rows"].clone()).unwrap();
+                let starts = job["starts_trace"].as_bool().unwrap_or(false);
+                let (rows, qs, viol) = air_v2::rows_spec(kind, lay.width, &air_.lay.tables, &specs);
+                let failing = air_v2::failing_rows::<G, EF>(&air_, &lay, &rows, &qs, starts);
+                let words: Vec<u64> = rows.iter().map(|r| air_v2::row_word(&air_.idx, r, kind)).collect();
+                let y16s: Vec<u64> = rows.iter().map(|r| modp(r[y_hi] + r[carry_col], p)).collect();
+                let accepted = failing.is_empty();
+                json!({"id": id, "kind": "rows", "n_rows": rows.len(), "accepted": accepted, "n_failing": failing.len(), "first_failing": failing.first().map(|(r, n)| json!([r, n])), "failing": failing.iter().take(8).map(|(r, n)| json!([r, n])).collect::<Vec<_>>(), "integer_violations": viol.len(), "words": words, "y16": y16s})
+            }
+        };
+        if res["accepted"].as_bool().unwrap() {
+            n_accepted += 1;
+        }
+        report.push(res);
+    }
+    let summary = json!({"schema": "verity-direct/check-rows/v2", "field": kind.name(), "realisation": "logup-v2", "width": lay.width, "constraints": lay.constraint_names.len(), "jobs": report.len(), "accepted": n_accepted, "results": report});
+    fs::write(&out, serde_json::to_string_pretty(&summary).unwrap()).unwrap();
+    println!("check-rows --v2 jobs={} accepted={} -> {out}", summary["jobs"], n_accepted);
 }

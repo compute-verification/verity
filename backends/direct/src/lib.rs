@@ -15,6 +15,8 @@ pub mod lookup;
 pub mod lookup_stark;
 pub mod params;
 pub mod program;
+pub mod program_v2;
+pub mod air_v2;
 pub mod stark;
 pub mod statement;
 

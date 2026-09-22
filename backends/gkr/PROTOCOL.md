@@ -198,6 +198,23 @@ Multiplicities are challenge-independent (counts of witness values) and are comm
 any challenge. No inverse or product intermediate is committed (PH23's point); all \((p,q)\) layers are
 computed by the prover on the fly in \(F_c\).
 
+**Variable order of the per-layer sumcheck (fixed 2026-09-22, lane a-protocol-diff).** The identity above does
+not fix which bit of the layer index a sumcheck round binds, but the *message values* depend on it, so it is part
+of the transcript specification. Layer \(k\) (size \(2^k\), children at layer \(k+1\) indexed \(2x+b\)) is
+reduced from the claim \(\sum_x eq(\rho,x)\,[p_0q_1+p_1q_0+\lambda q_0q_1](x)\), \(p_b(x)=p_{k+1}(2x+b)\), by
+\(k\) rounds where **round \(i\) binds bit \(i\) of \(x\) (low bit first**: the round-\(i\) pairs are
+\((2y,2y+1)\) of the current table). After the four claims \(p_{k+1}(2x^*),p_{k+1}(2x^*+1),q_{k+1}(2x^*),
+q_{k+1}(2x^*+1)\) and \(\mu_k\), the next point is \(\rho'=(\mu_k,x^*_0,\dots,x^*_{k-1})\): \(\mu_k\) on bit 0
+(the children pairing), \(x^*_i\) on bit \(i+1\); \(eq(\rho',x^{*\prime})\) at the next layer pairs coordinate
+\(j\) with coordinate \(j\). The leaf point \(\rho_T\) is handed to the linear-constraint step (4.3, 5.1 step
+2d) in the top-bit-first convention of `eq_table` (coordinate 0 on the leaf index's top bit), i.e. reversed.
+This is the schedule of the GPU prover (`gpu/logup.py`, `packed/logup_reference.py`) and of both verifiers
+(`gpu/logup.py::verify_table`, `verifier/src/verify.rs::verify_table`). The Goldilocks crate (`src/logup.rs`)
+and the a-gpu prover up to v2e bound the **top** bit first with \(\rho'=(x^*,\mu_k)\): the same protocol under
+bit-reversal of the layer index, with different message values from layer 2 on (the first layer whose
+\(eq(\rho,x^*)\) has two factors). The two are **not** transcript-compatible; a verifier written to one rejects
+the other at `LogUp <table> level 2: final check` (`backends/numerical/reports/a_protocol_diff.md`).
+
 ### 4.3 Linking lookups to the checker **[proposal]**
 
 The final fractional-GKR claim for table \(T\) at \(\rho_T\in F_c^{n_T}\) splits linearly into
@@ -834,7 +851,9 @@ incoming word *are* unit \(i\)'s outgoing limbs, and unit \(i+1\)'s decode hints
 
 Everything else — message order, round polynomials (degree 3 for logUp and phase 1, degree 2 for phases 2a/2b),
 the batching functional, `open_set` (column index = \(c_0 \bmod n\) of a fresh challenge, repeats skipped) — is
-the Goldilocks protocol verbatim.
+the Goldilocks protocol verbatim, **except** the logUp sumcheck variable order: the GPU prover since a-gpu2 binds
+the low bit first (4.2, "Variable order"), the Goldilocks crate the top bit first. Not forced by the field (a
+kernel-layout choice of `packed/`), but a transcript change all the same.
 
 ### 13.5 Ligero parameters and soundness at \(2^{-128}\) **[derivation: `security.accounting`]**
 
@@ -960,3 +979,10 @@ v1 Goldilocks control on the same binary revision and box.
   read of 12 columns (v1: 2) — still one O(U) pass.
 * Committed payload: 264 columns / unit + 16 / VU + 5.14M multiplicities; Ligero rows shrink proportionally
   (see README for the measured `committed_elements`).
+* **Done (`lane/a-gpu-v2`, `gpu/DESIGN.md` §5b, `gpu/README.md` "Checker v2").**  The GPU prover runs this circuit
+  over BabyBear^6: full VU ×4096 in 5.73 s on the A100 (v1 same box 7.93 s; 109.1 M committed elements, depth 328,
+  24.4 GB), 4096/4096 accepted, 52/52 + 34/34 + 15/15 negatives rejected.  Over BabyBear the epilogue's word-form
+  Pack (14.2) is SAT as stated (`checker_min.md` 3.2); the GPU export uses `lane/b-air-v2`'s limb-form Pack + cast
+  (`gpu/v2/epilogue_limbs.py`: `M = M_hi8 2^16 + M_lo16`, high limb an expression, epilogue per limb as §13 LIMB16;
+  19 epilogue columns, `R8` added; same function over Z, `chain.txt` unchanged), z3 UNSAT directly over BabyBear;
+  the VU body's 14.x queries re-run with the BabyBear modulus are UNSAT (`gpu/v2/results/z3_babybear_v2.json`).

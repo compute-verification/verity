@@ -35,12 +35,15 @@ sha2 = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
-[profile.release]
-opt-level = 3
-debug = false
-
+# BabyBear^6 (PROTOCOL.md 15.5): the registry crate has binomial extensions of degree 4 and 5 only; the vendored
+# copy adds `BinomiallyExtendable<6>` / `HasTwoAdicBionmialExtension<6>` (X^6 - 22) in src/extension.rs, nothing else.
 # lane b-bind (2026-09-22): p3-fri 0.4.3-succinct with the openings absorbed before the batch challenge alpha
 # (`vendor/p3-fri/src/two_adic_pcs.rs`, marked `verity patch`); TRANSCRIPT_CHECKLIST "openings before alpha",
 # red team F19 residual.  The transcript differs from upstream 0.4.3.
 [patch.crates-io]
+p3-baby-bear = { path = "vendor/p3-baby-bear" }
 p3-fri = { path = "vendor/p3-fri" }
+
+[profile.release]
+opt-level = 3
+debug = false

@@ -622,6 +622,119 @@ if triton is not None:
         tl.store(np_ptr + ob + 4, mmul(s4, R2_C), mask=m)
         tl.store(np_ptr + ob + 5, mmul(s5, R2_C), mask=m)
 
+    @triton.jit
+    def eq_outer_kernel(hi_ptr, lo_ptr, out_ptr, n, LO_LOG: tl.constexpr, BLOCK: tl.constexpr):
+        """``out[h 2^LO_LOG + l] = hi[h] * lo[l]`` (extension elements): the eq table of a point as the tensor product
+        of the tables of its top and bottom halves, written straight to ``out`` (int32 or int64)."""
+        idx = (tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)).to(tl.int64)
+        m = idx < n
+        h = idx >> LO_LOG
+        l = idx & ((1 << LO_LOG) - 1)
+        bh = h * 6
+        bl = l * 6
+        a0 = tl.load(hi_ptr + bh + 0, mask=m, other=0).to(tl.int32)
+        a1 = tl.load(hi_ptr + bh + 1, mask=m, other=0).to(tl.int32)
+        a2 = tl.load(hi_ptr + bh + 2, mask=m, other=0).to(tl.int32)
+        a3 = tl.load(hi_ptr + bh + 3, mask=m, other=0).to(tl.int32)
+        a4 = tl.load(hi_ptr + bh + 4, mask=m, other=0).to(tl.int32)
+        a5 = tl.load(hi_ptr + bh + 5, mask=m, other=0).to(tl.int32)
+        b0 = tl.load(lo_ptr + bl + 0, mask=m, other=0).to(tl.int32)
+        b1 = tl.load(lo_ptr + bl + 1, mask=m, other=0).to(tl.int32)
+        b2 = tl.load(lo_ptr + bl + 2, mask=m, other=0).to(tl.int32)
+        b3 = tl.load(lo_ptr + bl + 3, mask=m, other=0).to(tl.int32)
+        b4 = tl.load(lo_ptr + bl + 4, mask=m, other=0).to(tl.int32)
+        b5 = tl.load(lo_ptr + bl + 5, mask=m, other=0).to(tl.int32)
+        c0, c1, c2, c3, c4, c5 = ext_mmul(a0, a1, a2, a3, a4, a5, b0, b1, b2, b3, b4, b5)
+        base = idx * 6
+        tl.store(out_ptr + base + 0, mmul(c0, R2_C), mask=m)
+        tl.store(out_ptr + base + 1, mmul(c1, R2_C), mask=m)
+        tl.store(out_ptr + base + 2, mmul(c2, R2_C), mask=m)
+        tl.store(out_ptr + base + 3, mmul(c3, R2_C), mask=m)
+        tl.store(out_ptr + base + 4, mmul(c4, R2_C), mask=m)
+        tl.store(out_ptr + base + 5, mmul(c5, R2_C), mask=m)
+
+    @triton.jit
+    def rank1_add_kernel(v_ptr, e_ptr, x_ptr, units, ncols, BLOCK: tl.constexpr):
+        """``v[u, c] += e[u] * x[c]`` (extension elements, ``v`` ``(units, ncols, 6)`` canonical, any int dtype) for a
+        block of ``BLOCK`` units and one column per program: one read + one write of ``v``."""
+        pb = tl.program_id(0)
+        c = tl.program_id(1)
+        u = pb * BLOCK + tl.arange(0, BLOCK)
+        m = u < units
+        vb = (u.to(tl.int64) * ncols + c) * 6
+        v0, v1, v2, v3, v4, v5 = load6(v_ptr, vb, m)
+        e0, e1, e2, e3, e4, e5 = load6(e_ptr, u * 6, m)
+        x0 = tl.load(x_ptr + c * 6 + 0).to(tl.int32)
+        x1 = tl.load(x_ptr + c * 6 + 1).to(tl.int32)
+        x2 = tl.load(x_ptr + c * 6 + 2).to(tl.int32)
+        x3 = tl.load(x_ptr + c * 6 + 3).to(tl.int32)
+        x4 = tl.load(x_ptr + c * 6 + 4).to(tl.int32)
+        x5 = tl.load(x_ptr + c * 6 + 5).to(tl.int32)
+        p0, p1, p2, p3, p4, p5 = ext_mmul(e0, e1, e2, e3, e4, e5, x0, x1, x2, x3, x4, x5)
+        tl.store(v_ptr + vb + 0, madd(v0, p0), mask=m)
+        tl.store(v_ptr + vb + 1, madd(v1, p1), mask=m)
+        tl.store(v_ptr + vb + 2, madd(v2, p2), mask=m)
+        tl.store(v_ptr + vb + 3, madd(v3, p3), mask=m)
+        tl.store(v_ptr + vb + 4, madd(v4, p4), mask=m)
+        tl.store(v_ptr + vb + 5, madd(v5, p5), mask=m)
+
+    @triton.jit
+    def split_limbs_kernel(v_ptr, out_ptr, n, BLOCK: tl.constexpr):
+        """``out[i, idx] = l_i`` for ``v[idx] = Σ_i 2^(8i) l_i``, ``l_i ∈ [-128, 128)`` (canonical int32 in, 4 x int8 out)."""
+        idx = (tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)).to(tl.int64)
+        n64 = n.to(tl.int64)                       # the 4 planes span up to 4 n > 2^31 elements
+        m = idx < n64
+        x = tl.load(v_ptr + idx, mask=m, other=0)
+        l0 = ((x + 128) & 255) - 128
+        x = (x - l0) >> 8
+        l1 = ((x + 128) & 255) - 128
+        x = (x - l1) >> 8
+        l2 = ((x + 128) & 255) - 128
+        l3 = (x - l2) >> 8
+        tl.store(out_ptr + idx, l0.to(tl.int8), mask=m)
+        tl.store(out_ptr + n64 + idx, l1.to(tl.int8), mask=m)
+        tl.store(out_ptr + 2 * n64 + idx, l2.to(tl.int8), mask=m)
+        tl.store(out_ptr + 3 * n64 + idx, l3.to(tl.int8), mask=m)
+
+
+def eq_outer(hi: torch.Tensor, lo: torch.Tensor, out_dtype=torch.int64) -> torch.Tensor:
+    """``(len(hi) * len(lo), 6)``: ``out[h * len(lo) + l] = hi[h] * lo[l]`` for canonical ``(·, 6)`` tables (``len(lo)`` a
+    power of two)."""
+    nh, nl = hi.shape[0], lo.shape[0]
+    lo_log = nl.bit_length() - 1
+    if 1 << lo_log != nl:
+        raise ValueError("eq_outer: len(lo) must be a power of two")
+    n = nh * nl
+    out = torch.empty((n, DEG), dtype=out_dtype, device=hi.device)
+    if n:
+        BLOCK = 512
+        eq_outer_kernel[((n + BLOCK - 1) // BLOCK,)](hi.contiguous().view(-1), lo.contiguous().view(-1), out.view(-1), n,
+                                                     LO_LOG=lo_log, BLOCK=BLOCK, num_warps=4)
+    return out
+
+
+def rank1_add(v: torch.Tensor, e: torch.Tensor, x: torch.Tensor) -> None:
+    """In place ``v[u, c] += e[u] x[c]``: ``v`` ``(units, ncols, 6)`` contiguous canonical, ``e`` ``(units, 6)``, ``x``
+    ``(ncols, 6)`` canonical int64."""
+    units, ncols, _ = v.shape
+    assert v.is_contiguous()
+    if units == 0 or ncols == 0:
+        return
+    BLOCK = 128
+    grid = ((units + BLOCK - 1) // BLOCK, ncols)
+    rank1_add_kernel[grid](v.view(-1), e.contiguous().view(-1), _mont(x).view(-1), units, ncols, BLOCK=BLOCK, num_warps=4)
+
+
+def split_limbs(v: torch.Tensor) -> torch.Tensor:
+    """``(4, *v.shape)`` int8 balanced limbs of a contiguous canonical int32 tensor, one pass."""
+    v = v.contiguous()
+    n = v.numel()
+    out = torch.empty((4,) + tuple(v.shape), dtype=torch.int8, device=v.device)
+    if n:
+        BLOCK = 1024
+        split_limbs_kernel[((n + BLOCK - 1) // BLOCK,)](v.view(-1), out.view(-1), n, BLOCK=BLOCK, num_warps=4)
+    return out
+
 
 def combine_level(p: torch.Tensor, q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """One LogUp tree level from ``p`` ``(2n[, 6])`` and ``q`` ``(2n, 6)`` (int32) -> ``(n, 6)`` int32 each."""
