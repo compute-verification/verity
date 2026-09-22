@@ -486,6 +486,23 @@ def _alpha_beta(tb: Tables, rho_lin: torch.Tensor, pub: dict, m: int, l: int, de
 # Helpers
 # ---------------------------------------------------------------------------------------------------------------------
 
+USE_SIMT_ENCODER = True     # the int32 Montgomery radix-4 kernel (encode_simt.py) on CUDA; False = the torch int64 NTT
+
+
+def _simt_encoder(cfg: Config, device, plain: bool = False):
+    """The SIMT encoder for this configuration (``plain``: no mask fold-in, for the chain's R_i rows), or None when
+    it does not apply (CPU, no cupy, or n != 4 l -- the small-l ZK configurations double n)."""
+    if not USE_SIMT_ENCODER or not str(device).startswith("cuda") or cfg.n != 4 * cfg.l or cfg.l < 256:
+        return None
+    try:
+        from . import encode_simt
+        if not encode_simt.available():
+            return None
+        return encode_simt.encoder_for(cfg.l, cfg.n, 0 if plain or not cfg.zk else cfg.t_pad, device)
+    except Exception:  # noqa: BLE001 -- no NVRTC / cupy: the torch path
+        return None
+
+
 def _combine_row(c: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
     return ((c[:, None] * M) % P).sum(0) % P
 
@@ -579,21 +596,33 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
 
     k = cfg.k
     mr = mask_rows(cfg, m, chain is not None)
+    Mrows = n_rows(cfg, m, chain is not None)
+    enc = _simt_encoder(cfg, device)                              # None: the torch int64 NTT (CPU, or no cupy)
     if cfg.zk:
         S = _sample_masks(cfg, m, chain is not None, device)
         clk.lap("zk_masks")
         # coefficient rows of every committed polynomial: witness rows interp_H(W) + Z_H s_j, then the mask rows
-        coefs = torch.zeros((n_rows(cfg, m, chain is not None), k), dtype=torch.int64, device=device)
-        coefs[:m, :l] = intt(W % P)
+        coefs = torch.zeros((Mrows, k), dtype=torch.int64, device=device)
+        if enc is not None:
+            # SIMT kernel: codeword of interp_H(W_j) + Z_H s_j on the coset (the mask folded in per coset, 8c) and the
+            # natural-order coefficients of interp_H(W_j); the 4D / 5D mask rows (degree < k) through the torch NTT
+            U = torch.empty((Mrows, n), dtype=torch.int32, device=device)
+            _, C = enc.encode(W, S["W"], want_coefs=True, out=U[:m])
+            coefs[:m, :l] = C
+        else:
+            coefs[:m, :l] = intt(W % P)
         _add_zh_times(coefs[:m], S["W"], l)
         for kind, sl in mr.items():
             blk = S[kind]
             coefs[sl, :blk.shape[1]] = blk
         del S
-        U = eval_on_coset(coefs, n)                               # (M, n), the coset g <w_n> (disjoint from H)
+        if enc is not None:
+            U[m:] = eval_on_coset(coefs[m:], n).to(torch.int32)
+        else:
+            U = eval_on_coset(coefs, n)                           # (M, n), the coset g <w_n> (disjoint from H)
     else:
         coefs = None
-        U = encode(W, n)                                          # (m, n)
+        U = enc.encode(W)[0] if enc is not None else encode(W, n)   # (m, n); int32 from the kernel
     clk.lap("encode")
 
     gpu_hash = merkle.gpu_available() and str(device).startswith("cuda")
@@ -641,7 +670,9 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         layout, y16_pub = chain
         cc = chain_coefs(sys, layout, rc, y16_pub)
         R = cc.coef.shape[1]
-        Renc = encode(cc.coef.reshape(D * R, l), n).reshape(D, R, n)            # R_i on the codeword domain
+        penc = _simt_encoder(cfg, device, plain=True)
+        Renc = (penc.encode(cc.coef.reshape(D * R, l))[0].to(torch.int64) if penc is not None
+                else encode(cc.coef.reshape(D * R, l), n)).reshape(D, R, n)     # R_i on the codeword domain
         Qev = ((Renc * U.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P   # (D, n)
         if cfg.zk:
             Qev = (Qev + (zh_on_coset(n, l, device)[None, :] * U[mr["chain"]]) % P) % P

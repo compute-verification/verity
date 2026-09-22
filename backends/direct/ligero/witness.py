@@ -225,7 +225,7 @@ def quad_p0(tb: Tables, rho: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
     sp = tb.quad["split"]
     D = rho.shape[0]
     out = torch.empty((D, M.shape[1]), dtype=torch.int64, device=M.device)
-    Ub = M.index_select(0, sp["bool_j"])
+    Ub = M.index_select(0, sp["bool_j"]).to(torch.int64)          # M may be the kernel's int32 codeword
     rb = rho.index_select(1, sp["bool_q"])
     row = compiled(_bool_row, M.device)
     for d in range(D):
@@ -260,7 +260,7 @@ def apply_sparse(triples, consts: torch.Tensor, n_out: int, M: torch.Tensor) -> 
 
 
 def _scaled_rows(M: torch.Tensor, jj: torch.Tensor, cc: torch.Tensor) -> torch.Tensor:
-    return (M.index_select(0, jj) * cc[:, None]) % P
+    return (M.index_select(0, jj).to(torch.int64) * cc[:, None]) % P      # M may be int32 (the SIMT codeword)
 
 
 def check_constraints(sys: System, tb: Tables, W: torch.Tensor, pub: dict[str, torch.Tensor]) -> list[str]:

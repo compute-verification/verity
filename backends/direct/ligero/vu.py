@@ -236,6 +236,9 @@ def bench_vu(args) -> int:
     per_proof = args.batch // STEPS
     total_vus = args.total_vus or per_proof
     n_proofs = -(-total_vus // per_proof)
+    if getattr(args, "no_coin_commitment", False):
+        protocol_mod._COMMIT_COINS = False
+    depth = 3 if protocol_mod._COMMIT_COINS else 2
     R = ChainRunner(args.device, args.target, args.rate_log2, args.hints, n_proofs=n_proofs, zk=args.zk)
     subs = [(lo, min(lo + per_proof, total_vus)) for lo in range(0, total_vus, per_proof)]
     data = {i: _vu_data(vu, i % vu.n) for i in range(total_vus)}
@@ -320,8 +323,8 @@ def bench_vu(args) -> int:
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
-        contract.measurement("rounds.protocol", 3),             # step-0 coin commitments, r1 opening, r2 opening
-        contract.measurement("rounds.sequential_depth", 3),     # PROTOCOL.md 8c (was 2 before the HM96 step)
+        contract.measurement("rounds.protocol", depth),         # 3: step-0 coin commitments, r1 opening, r2 opening
+        contract.measurement("rounds.sequential_depth", depth), # PROTOCOL.md 8c (2 without the HM96 step)
         contract.measurement("mem.peak_device_bytes", peak_dev),
         contract.measurement("census.witness_elements", R.sys.m * l * n_proofs),
         contract.measurement("census.committed_elements", R.sys.m * cfg.n * n_proofs),

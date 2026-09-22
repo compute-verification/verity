@@ -361,6 +361,8 @@ def main(argv=None) -> int:
         sub.choices[name].add_argument("--run-id", default=None)
     sub.choices["bench-vu"].add_argument("--total-vus", type=int, default=None,
                                          help="VUs in the whole batch, proved as ceil(total / (batch // 96)) sub-batches (union-bounded)")
+    sub.choices["bench-vu"].add_argument("--no-coin-commitment", action="store_true",
+                                         help="measure the pre-8c protocol (no step-0 coin commitment; depth 2; honest-verifier ZK only)")
     sub.choices["bench-vu"].add_argument("--hvzk-label", action="store_true",
                                          help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
     args = ap.parse_args(argv)
