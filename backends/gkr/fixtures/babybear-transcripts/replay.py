@@ -10,7 +10,8 @@ import sys
 
 
 def replay(path: str) -> None:
-    t = json.load(open(path))
+    with open(path) as f:
+        t = json.load(f)
     p, deg, ev = t["modulus"], t["degree"], t["events"]
     state = hashlib.sha256(bytes.fromhex(ev[0]["absorb"])).digest()  # state_0 = sha256(domain)
     assert state.hex() == ev[0]["state"], "domain"
