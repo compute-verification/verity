@@ -128,6 +128,7 @@ _SRC_V2 = r"""
 #define LOGK %(logk)d
 #define THREADS %(threads)d
 #define LOGT %(logt)d
+#define MINBLOCKS %(minblocks)d      /* __launch_bounds__ min CTAs per SM: 2 caps the registers at 64 (v2 t512 wants 120) */
 #define PER (K / THREADS)            /* elements per thread: i = t + THREADS * s */
 
 __device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return s >= P ? s - P : s; }
@@ -147,17 +148,21 @@ __device__ __forceinline__ unsigned mont_mul(unsigned a, unsigned w) {
    stage with m >= THREADS (partner s + m/THREADS).  Shared-memory stages (m < THREADS) use the coalesced butterfly
    mapping b = t + THREADS*s.  Global loads/stores are the strided ownership: perfectly coalesced. */
 
-extern "C" __global__ void __launch_bounds__(THREADS)
+extern "C" __global__ void __launch_bounds__(THREADS, MINBLOCKS)
 rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
           const unsigned* __restrict__ tw_inv, const unsigned* __restrict__ tw_fwd,
-          const unsigned* __restrict__ coset_tw, int rows, int write_systematic)
+          const unsigned* __restrict__ coset_tw, int rows, int write_systematic,
+          long long out_stride, int coset_base, int ncosets)
 {
+    /* out_stride: words between consecutive output rows (4K for the (R, n) layout, 3K for a cosets-only store);
+       coset_base: coset c is written at dst + (c - coset_base) * K (0 for (R, n), 1 for the 3K store);
+       ncosets: number of non-systematic cosets computed (3 = the full [n, k] code; 1 = an 8192-point evaluation). */
     __shared__ unsigned x[K];
     unsigned r[PER], coef[PER];
     const int t = threadIdx.x;
     for (int row = blockIdx.x; row < rows; row += gridDim.x) {
         const unsigned* src = in + (size_t)row * K;
-        unsigned* dst = out + (size_t)row * (4 * K);
+        unsigned* dst = out + (size_t)row * out_stride;
         #pragma unroll
         for (int s = 0; s < PER; ++s) {
             r[s] = __ldg(&src[t + THREADS * s]);
@@ -197,7 +202,7 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
         #pragma unroll
         for (int s = 0; s < PER; ++s) coef[s] = x[t + THREADS * s];      /* bit-reversed unscaled coefficients */
         #pragma unroll 1
-        for (int c = 1; c < 4; ++c) {
+        for (int c = 1; c <= ncosets; ++c) {
             const unsigned* ct = coset_tw + (size_t)(c - 1) * K;
             #pragma unroll
             for (int s = 0; s < PER; ++s) x[t + THREADS * s] = mont_mul(coef[s], __ldg(&ct[t + THREADS * s]));
@@ -234,7 +239,7 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
                     }
                 }
             }
-            unsigned* d = dst + (size_t)c * K;
+            unsigned* d = dst + (size_t)(c - coset_base) * K;
             #pragma unroll
             for (int s = 0; s < PER; ++s) d[t + THREADS * s] = r[s];
         }
@@ -269,15 +274,22 @@ def twiddle_tables(k: int, n: int) -> dict[str, np.ndarray]:
 class RSEncoderSIMT:
     """cupy-backed encoder; ``__call__(rows_u32 (R, k) on device, out (R, n) or None) -> out``."""
 
-    def __init__(self, k: int = bb.K_CODE, n: int = bb.N_CODE, threads: int = 512, blocks: int | None = None, variant: str = "v2"):
+    def __init__(self, k: int = bb.K_CODE, n: int = bb.N_CODE, threads: int = 512, blocks: int | None = None, variant: str = "v2",
+                 min_blocks_per_sm: int = 1):
+        """``min_blocks_per_sm`` (v2): second argument of ``__launch_bounds__``; v2 at 512 threads takes 120 registers =
+        one CTA per SM and every register of the SM, so nothing can run beside it.  ``2`` caps the registers at 64
+        and, with ``blocks`` = the SM count, leaves half the SM's registers to a concurrently running kernel
+        (commit_stream's column hash)."""
         import cupy as cp
 
         if n != 4 * k or k & (k - 1) or k < 2 * threads or threads & (threads - 1):
             raise ValueError("this kernel is specialised to n = 4k, k and threads powers of two, k >= 2 x threads")
         self.k, self.n, self.threads, self.variant = k, n, threads, variant
         self.cp = cp
-        params = {"npinv": bb.NEG_P_INV_MOD_R, "pinv": bb.P_INV_MOD_R, "k": k, "logk": k.bit_length() - 1, "threads": threads, "logt": threads.bit_length() - 1}
+        params = {"npinv": bb.NEG_P_INV_MOD_R, "pinv": bb.P_INV_MOD_R, "k": k, "logk": k.bit_length() - 1, "threads": threads,
+                  "logt": threads.bit_length() - 1, "minblocks": min_blocks_per_sm}
         src = {"v1": _SRC, "v2": _SRC_V2}[variant] % params
+        self.min_blocks_per_sm = min_blocks_per_sm
         self.kernel = cp.RawKernel(src, "rs_encode", options=("-std=c++17",))
         tabs = twiddle_tables(k, n)
         self.tw_fwd = cp.asarray(tabs["tw_fwd"])
@@ -285,8 +297,15 @@ class RSEncoderSIMT:
         self.coset = cp.asarray(tabs["coset"])
         sms = cp.cuda.runtime.getDeviceProperties(0)["multiProcessorCount"]
         self.blocks = blocks or sms * 16
+        #: unused dynamic shared memory requested per CTA: caps the resident CTAs per SM (commit_stream uses it to
+        #: leave SM slots free for the concurrently running column-hash kernel)
+        self.extra_smem = 0
 
-    def __call__(self, rows, out=None, write_systematic: bool = True):
+    def __call__(self, rows, out=None, write_systematic: bool = True, ncosets: int = 3, stream=None):
+        """``out`` is ``(R, n)`` (coset ``c`` at column ``c k``; coset 0 = the row when ``write_systematic``) or, for v2 only,
+        ``(R, 3k)`` / ``(R, ncosets * k)`` with ``write_systematic=False`` (coset ``c`` at column ``(c - 1) k``: the cosets-only
+        store).  ``ncosets`` (v2) limits the evaluation to cosets ``1..ncosets`` (1 -> the 8192-point domain of the
+        quadratic / linear tests).  ``stream``: a cupy stream to launch on (default: current)."""
         cp = self.cp
         rows = cp.ascontiguousarray(rows).view(cp.uint32)
         R = rows.shape[0]
@@ -294,8 +313,17 @@ class RSEncoderSIMT:
             raise ValueError(rows.shape)
         if out is None:
             out = cp.empty((R, self.n), dtype=cp.uint32)
-        self.kernel((min(self.blocks, R),), (self.threads,),
-                    (rows, out, self.tw_inv, self.tw_fwd, self.coset, np.int32(R), np.int32(1 if write_systematic else 0)))
+        if out.shape[0] != R or not out.flags.c_contiguous:
+            raise ValueError(out.shape)
+        cosets_only = out.shape[1] != self.n
+        if cosets_only and (write_systematic or self.variant != "v2" or out.shape[1] < ncosets * self.k):
+            raise ValueError("cosets-only output needs v2, write_systematic=False and >= ncosets * k columns")
+        args = [rows, out, self.tw_inv, self.tw_fwd, self.coset, np.int32(R), np.int32(1 if write_systematic else 0)]
+        if self.variant == "v2":
+            args += [np.int64(out.shape[1]), np.int32(1 if cosets_only else 0), np.int32(ncosets)]
+        elif ncosets != 3:
+            raise ValueError("ncosets is a v2 option")
+        self.kernel((min(self.blocks, R),), (self.threads,), tuple(args), shared_mem=self.extra_smem, stream=stream)
         return out
 
     @staticmethod
