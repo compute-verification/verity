@@ -102,11 +102,12 @@ ANCHOR_SKU: dict[str, str] = {
 #: The canonical family set for PINNED: role -> tc_probe family names that cover it (``replay:<fragment>`` = a replay file).
 #: Every role must be covered on the anchor with 0 mismatches for the subject's model (specials are recorded, not asserted:
 #: presence suffices).
+#: Each role lists tc_probe's family names first, then tc_probe_fp4's (block-scaled FP4 on sm_120) equivalents.
 CANONICAL_FAMILIES: dict[str, tuple[str, ...]] = {
-    "random-sweep": ("randn_zero_acc", "randn_random_acc", "uniform_bits"),
-    "adder-width": ("adder_width_cancellation",),
-    "zero-products": ("tiny_acc_zero_products", "zero_products_nonzero_acc"),
-    "accumulator-lsb-walk": ("acc_only_lsb_walk",),
+    "random-sweep": ("randn_zero_acc", "randn_random_acc", "uniform_bits", "random_zero_acc", "random_random_scales", "uniform_encodings"),
+    "adder-width": ("adder_width_cancellation", "large_cancellation", "acc_window"),
+    "zero-products": ("tiny_acc_zero_products", "zero_products_nonzero_acc", "tiny_acc", "signed_zero_matrix"),
+    "accumulator-lsb-walk": ("acc_only_lsb_walk", "acc_offset_walk"),
     "specials": ("specials", "replay:mma_special"),
 }
 UNASSERTED_ROLES = {"specials"}
@@ -128,12 +129,15 @@ REGRESSION_TILES: dict[str, tuple[str, ...]] = {
     "D10": ("replay:golden/ada_e4m3_m16n8k32.json", "family:adder_width_cancellation", "family:zero_products_nonzero_acc"),
     "D11": ("replay:probe3",),                                       # autoproof nvfp4 vectors (model5 vs the refuted v0)
     "D12": ("replay:probe3",),                                       # what autoproof's pin covers
-    "D13": (),                                                       # open: mxf4 underflow zero sign (no measurement anywhere)
+    # D13-D20 tiles are tc_probe_fp4 families (lane fp4-re, RTX 5090, model BlockScaledAlignAdd: 0 mismatches / 15.7M words).
+    "D13": ("family:ue8m0_underflow",),                              # resolved: mxf4 ue8m0 underflow sign is +0
     "D14": ("family:randn_zero_acc", "family:zero_products_nonzero_acc"),  # sm_90 FP8 mma.sync lowering
     "D15": (),                                                       # open: registry n8 vs measured n64; floor -139 vs Hawkeye
-    "D16": ("family:signed_zero",),                                  # open: -0 accumulator with zero products on sm_120 nvf4
-    "D17": ("family:hot_a_only",),                                   # open: opposite-sign accumulator 37-42 binades below
-    "D18": ("family:random_zero_acc",),                              # open: mxf4 ue8m0 hypothesis inexact
+    "D16": ("family:signed_zero", "family:signed_zero_matrix"),      # resolved: every zero result is +0 (acc sign dropped)
+    "D17": ("family:hot_a_only", "family:hot_clip_regime", "family:anchor_participation"),  # resolved: grid anchored on leading scale exponent - 27, acc window 36
+    "D18": ("family:random_zero_acc", "family:ue8m0_scale_extremes"),  # resolved: mxf4 = same adder with ue8m0 as mantissa 8 @ 2^(code-130)
+    "D19": ("family:acc_subnormal",),                                # resolved: subnormal-result regime anchors on the exponent field, floor 2^-174
+    "D20": (),                                                       # excluded: NaN/inf accumulators and overflow (outside the domain; recorded by specials)
 }
 
 #: bench-result ``relation`` label values per target (the coordinator's convention today); ``target=<name>`` is the go-forward key.
@@ -148,8 +152,8 @@ FULL_CONTRACT_PROOF_CLASSES = ("COMPLETE_ZK_BACKEND", "COMPLETE_HVZK_BACKEND", "
 
 #: Model-name aliases used by producers that predate the registry names (fp4-5090's ``model5``).
 MODEL_ALIASES: dict[str, tuple[str, ...]] = {
-    "blackwell_sm120_nvf4_m16n8k64": ("model5", "autoproof-model5"),
-    "blackwell_sm120_mxf4_m16n8k64": ("model5", "autoproof-model5"),
+    # model5 was the registry model for sm_120 FP4 until lane fp4-re refuted it (D16/D17: 29,118 mismatches on the RTX 5090) and
+    # replaced it with BlockScaledAlignAdd; fp4-5090's model5-only sweeps are evidence about model5, not about the current model.
     # tc_probe names the E5M2 hypotheses as the E4M3 pipeline with E5M2 products; the registry's E5M2 models are those pipelines
     "ada_e5m2_m16n8k32": ("ada_e4m3_m16n8k32+e5m2_product",),
     "hopper_e5m2_wgmma_k32": ("hopper_e4m3_wgmma_k32+e5m2_product",),
@@ -425,6 +429,8 @@ class HardwareRecord:
             return False
         if m == 0 and self.elements > 0:
             return True
+        if m is None and self.mismatches:
+            return False  # swept against other models only (e.g. a superseded hypothesis): not evidence about this one either way
         if self.replays and all(int(r.get("mismatches") or 0) == 0 for r in self.replays) and self.replay_records() > 0:
             # a replay compares against the pipeline named in the replay (legacy) or the record's model label
             pipes = {_norm_model(r.get("pipeline") or "") for r in self.replays if r.get("pipeline")}
@@ -445,6 +451,8 @@ class HardwareRecord:
             hits = [v for k, v in f["mismatches"].items() if k in names]
             if f["asserted"] and f["elements"] > 0 and hits and min(hits) == 0:
                 return f"family {fam} reproduced ({f['elements']:,} elements) while other families disagree"
+        if self.mismatches and self.mismatches_for(names) is None:
+            return None  # swept against other models only: the replays say nothing about this model
         for r in self.replays:
             if int(r.get("records") or 0) > 0 and int(r.get("mismatches") or 0) == 0:
                 pipe = _norm_model(r.get("pipeline") or "")
@@ -665,10 +673,19 @@ def _hardware_record(view: _StoreView, art_id: str, kind: str, meta: dict, refs:
         rec.sku, rec.arch, rec.driver, rec.nvcc, rec.seed = meta.get("sku"), meta.get("arch"), meta.get("driver"), meta.get("nvcc"), _as_int(meta.get("seed"))
         rec.host = meta.get("gpu_uuid")
         counts = meta.get("counts") or {}
-        rec.mismatches = {_norm_model(m): int(v) for m, v in (counts.get("mismatches") or {}).items()}
+        # tc_probe_fp4 scores several models per word and names the one it asserts for the instruction ``primary_model`` (fp4-re:
+        # "verity" = the registry model, "model5" = autoproof's refuted control).  The primary key stands for the registry model.
+        ins = INSTRUCTIONS.get(str(meta.get("instruction") or ""))
+        primary = meta.get("primary_model")
+        registry_name = ins.model.name if ins is not None and ins.model is not None else None
+
+        def _key(m: str) -> str:
+            return _norm_model(registry_name) if (primary and m == primary and registry_name) else _norm_model(m)
+
+        rec.mismatches = {_key(m): int(v) for m, v in (counts.get("mismatches") or {}).items()}
         for name, f in (meta.get("families") or {}).items():
-            rec.families[name] = {"elements": int(f.get("elements") or 0), "asserted": True,
-                                  "mismatches": {_norm_model(m): int(v) for m, v in (f.get("mismatches") or {}).items()}}
+            rec.families[name] = {"elements": int(f.get("elements") or 0), "asserted": not bool(f.get("record_only")),
+                                  "mismatches": {_key(m): int(v) for m, v in (f.get("mismatches") or {}).items()}}
         rec.elements = int(counts.get("elements") or 0)
         if counts.get("replay_cases"):
             rec.replays.append({"kind": "autoproof", "file": ",".join(wf.get("replays") or []), "records": int(counts["replay_cases"]),
@@ -1054,9 +1071,25 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
     criteria.append(c)
 
     # ---- PINNED ----
-    c = Criterion("P1", "PINNED", f"hardware evidence on the anchor SKU ({anchor}) with 0 mismatches for the model", bool(agreeing_anchor) and not disagreeing_anchor)
+    # A disagreeing anchor record that a *resolved* D-entry cites as its hardware evidence is superseded: it measured the model as it
+    # stood, the entry's resolution changed the model, and the re-sweep (P1/P2 agreeing records, P5 tiles) speaks for the current one.
+    superseded_by: dict[str, list[str]] = {}
+    for e in d_entries:
+        if e.get("status") == "resolved":
+            refs = {str(x) for x in (e.get("evidence_refs") or [])}
+            for r in disagreeing_anchor:
+                if (r.run_id and r.run_id in refs) or r.id in refs:
+                    superseded_by.setdefault(r.id, []).append(e["id"])
+    live_disagreeing = [r for r in disagreeing_anchor if r.id not in superseded_by]
+    c = Criterion("P1", "PINNED", f"hardware evidence on the anchor SKU ({anchor}) with 0 mismatches for the model", bool(agreeing_anchor) and not live_disagreeing)
     c.evidence = [_ref(r, _fmt_rec(r, names)) for r in agreeing_anchor]
+    for r in disagreeing_anchor:
+        if r.id in superseded_by:
+            c.evidence.append(_ref(r, f"SUPERSEDED (cited by resolved {', '.join(superseded_by[r.id])}): " + _fmt_rec(r, names)))
+    if superseded_by:
+        c.details["superseded"] = superseded_by
     open_ds = [e["id"] for e in d_entries if e.get("status") == "open"]
+    disagreeing_anchor = live_disagreeing
     for r in disagreeing_anchor:
         c.evidence.append(_ref(r, ("CANARY " if r.canary else "") + "DISAGREES: " + _fmt_rec(r, names)))
         c.missing.append(f"{r.id}: {r.mismatches_for(names):,} mismatches on the anchor ({r.run_id}" + (", canary" if r.canary else "") + "); "

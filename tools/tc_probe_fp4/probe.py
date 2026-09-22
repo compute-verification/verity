@@ -1,5 +1,8 @@
-"""Blackwell FP4 tensor-core probe (lane fp4-5090): one ``mma.sync`` per tile on an RTX 5090, raw bits captured and compared
-bit for bit against ``model5.py`` (autoproof's five-way align-add model, a HYPOTHESIS until this probe reproduces it).
+"""Blackwell FP4 tensor-core probe (lanes fp4-5090, fp4-re): one ``mma.sync`` per tile on an RTX 5090, raw bits captured and
+compared bit for bit against ``verity.ml.tc.models`` (``BLACKWELL_SM120_NVF4`` / ``BLACKWELL_SM120_MXF4``, the primary model and
+the validation gate) and against ``model5.py`` (autoproof's five-way align-add, kept as the control whose D16/D17/D18 mismatches
+the verity rule must remove).  Families under ``families_fp4_re`` are lane fp4-re's accumulator families; ``specials`` is
+record-only (NaN / inf accumulators, sums leaving binary32: the hardware words are summarised, no model is asserted).
 
     python tools/tc_probe_fp4/probe.py --instruction nvf4 --out $RESEARCH_RUN_DIR --sass-check \
         --replay-autoproof $RESEARCH_RUN_DIR/inputs/probe3_1783788526.json --sweep --n-random 4096
@@ -76,6 +79,10 @@ if _VERITY_SRC.is_dir() and str(_VERITY_SRC) not in sys.path:
 import model5  # noqa: E402
 
 MAX_TILES_PER_CALL = 1 << 14
+
+# Families whose accumulators or sums lie outside every model's domain (NaN / inf accumulators, sums leaving binary32): the
+# hardware words are recorded and summarised, they never gate validation.
+RECORD_ONLY_FAMILIES = {"specials"}
 
 PTX = {
     "nvf4": "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3",
@@ -398,6 +405,209 @@ def families_nvf4(rng, n_random: int, scale_kind: str):
     acc = np.where(rng.random((n, 16, 8)) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
     yield "signed_zero", A, Bt, scales((n, 16, nblk)), scales((n, 8, nblk)), acc
 
+    yield from families_fp4_re(rng, n_random, scale_kind)
+
+
+# --- lane fp4-re: the accumulator families (D16 sign of zero, D17 alignment anchor, D18 ue8m0 scales, domain edges) ---------------
+
+
+def _scale_value(codes: np.ndarray, scale_kind: str) -> np.ndarray:
+    """Exact float64 value of every scale code (UE4M3: (8+m) 2^(e-10) / m 2^-9; UE8M0: 2^(code-127))."""
+    c = codes.astype(np.int64)
+    if scale_kind == "ue4m3":
+        e, m = (c >> 3) & 0xF, c & 7
+        return np.where(e == 0, m * 2.0**-9, (8 + m) * np.exp2((e - 10).astype(np.float64)))
+    return np.exp2((c - 127).astype(np.float64))
+
+
+def _signed_pow2_acc(rng, shape, e_lo: int, e_hi: int, exact_frac: float = 0.5) -> np.ndarray:
+    """FP32 words +-(1.f) 2^e, e uniform in [e_lo, e_hi], f = 0 with probability ``exact_frac`` else uniform 23 bits."""
+    n = int(np.prod(shape))
+    e = rng.integers(e_lo, e_hi + 1, n) + 127
+    e = np.clip(e, 1, 254).astype(np.uint32)
+    f = np.where(rng.random(n) < exact_frac, 0, rng.integers(0, 1 << 23, n)).astype(np.uint32)
+    s = rng.integers(0, 2, n).astype(np.uint32)
+    return ((s << 31) | (e << 23) | f).reshape(shape)
+
+
+def families_fp4_re(rng, n_random: int, scale_kind: str):
+    """The fp4-re families, both scale kinds: yield (name, A, Bt, SFA, SFB, C) like ``families_nvf4``."""
+    k, nblk = 64, (4 if scale_kind == "ue4m3" else 2)
+    gpb = 4 // nblk  # groups (of 16) per scale block
+    ue4 = scale_kind == "ue4m3"
+
+    def codes(shape):
+        return rng.integers(0, 16, shape).astype(np.uint8)
+
+    def nz_codes(shape):
+        c = rng.integers(1, 16, shape)
+        return np.where(c == 8, 1, c).astype(np.uint8)  # never a zero (0x0 / 0x8)
+
+    def scales(shape, lo=None, hi=None):
+        if ue4:
+            if lo is None:
+                return UE4M3_VALID[rng.integers(0, len(UE4M3_VALID), shape)]
+            return UE4M3_VALID[rng.integers(lo, hi, shape)]
+        lo, hi = (100, 150) if lo is None else (lo, hi)
+        return rng.integers(lo, hi, shape).astype(np.uint8)
+
+    def pm_zero(shape):
+        return np.where(rng.random(shape) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
+
+    zeros = lambda n: np.zeros((n, 16, 8), np.uint32)
+
+    # --- D16: the sign-of-zero matrix.  Accumulator +-0 x (a) all-zero A against random B, (b) random A against all-zero B,
+    # (c) +-0 against +-0 operands, (d) every product -0 x -0, (e) pairs cancelling exactly inside every group, (f) group 0
+    # cancelled exactly by group 1 under equal scales.  Scales random, including the zero UE4M3 code.
+    n = 6 * 96
+    A, Bt = codes((n, 16, k)), codes((n, 8, k))
+    m = np.arange(n) // 96
+    A[m == 0] = np.where(rng.random((int((m == 0).sum()), 16, k)) < 0.5, 0, 8)
+    Bt[m == 1] = np.where(rng.random((int((m == 1).sum()), 8, k)) < 0.5, 0, 8)
+    A[m == 2] = np.where(rng.random((int((m == 2).sum()), 16, k)) < 0.5, 0, 8)
+    Bt[m == 2] = np.where(rng.random((int((m == 2).sum()), 8, k)) < 0.5, 0, 8)
+    A[m == 3], Bt[m == 3] = 8, 8
+    sel = m == 4
+    A[sel, :, 1::2] = A[sel, :, 0::2]
+    Bt[sel, :, 1::2] = np.where(Bt[sel, :, 0::2] == 0, 0, Bt[sel, :, 0::2] ^ 8)
+    sel = m == 5
+    A[sel, :, 16:32] = A[sel, :, :16]
+    Bt[sel, :, 16:32] = np.where(Bt[sel, :, :16] == 0, 0, Bt[sel, :, :16] ^ 8)
+    A[sel, :, 32:] = 0
+    sfa, sfb = scales((n, 16, nblk)), scales((n, 8, nblk))
+    if ue4:  # group 0 and group 1 share a block only in the ue8m0 layout; equalise the scales for the cross-group cancellation
+        sfa[sel, :, 1] = sfa[sel, :, 0]
+        sfb[sel, :, 1] = sfb[sel, :, 0]
+    yield "signed_zero_matrix", A, Bt, sfa, sfb, pm_zero((n, 16, 8))
+
+    # --- D17: accumulator offset walk.  One nonzero product per row/col in group g at slot s (both random per tile), the
+    # accumulator +-(1.f) 2^(E1 - off) with off uniform in 20..60 binades below the term's msb E1, f exact (0) or random;
+    # half the tiles ("many") add random small-scale products in the other groups.  Scales random (nonzero) on the leading block.
+    n = n_random // 2
+    A, Bt = np.zeros((n, 16, k), np.uint8), np.zeros((n, 8, k), np.uint8)
+    g = rng.integers(0, 4, n)
+    s = rng.integers(0, 16, n)
+    kidx = g * 16 + s
+    t = np.arange(n)
+    A[t[:, None], np.arange(16)[None, :], kidx[:, None]] = nz_codes((n, 16))
+    Bt[t[:, None], np.arange(8)[None, :], kidx[:, None]] = nz_codes((n, 8))
+    many = rng.random(n) < 0.5
+    other = np.ones((n, 16, k), bool)
+    other[t[:, None], :, (g[:, None] * 16 + np.arange(16)[None, :])] = False  # keep the leading group clean
+    fill_a, fill_b = codes((n, 16, k)), codes((n, 8, k))
+    A = np.where(many[:, None, None] & other, fill_a, A)
+    Bt = np.where(many[:, None, None] & other[:, :8, :], fill_b, Bt)
+    sfa = scales((n, 16, nblk), 1, len(UE4M3_VALID)) if ue4 else scales((n, 16, nblk), 100, 150)
+    sfb = scales((n, 8, nblk), 1, len(UE4M3_VALID)) if ue4 else scales((n, 8, nblk), 100, 150)
+    small_a = scales((n, 16, nblk), 1, 0x30) if ue4 else scales((n, 16, nblk), 70, 110)
+    small_b = scales((n, 8, nblk), 1, 0x30) if ue4 else scales((n, 8, nblk), 70, 110)
+    blk = g // gpb
+    lead_a = np.zeros((n, 16, nblk), bool)
+    lead_a[t, :, blk] = True
+    sfa = np.where(lead_a, sfa, np.where(many[:, None, None], small_a, sfa))
+    sfb = np.where(lead_a[:, :8], sfb, np.where(many[:, None, None], small_b, sfb))
+    va = model5.E2M1_NUM[A[t[:, None], np.arange(16)[None, :], kidx[:, None]].astype(np.int64)] / 2.0  # (n,16)
+    vb = model5.E2M1_NUM[Bt[t[:, None], np.arange(8)[None, :], kidx[:, None]].astype(np.int64)] / 2.0  # (n,8)
+    sa = _scale_value(sfa[t, :, blk], scale_kind)  # (n,16)
+    sb = _scale_value(sfb[t, :, blk], scale_kind)  # (n,8)
+    term = (va * sa)[:, :, None] * (vb * sb)[:, None, :]  # (n,16,8) exact in float64
+    e1 = np.floor(np.log2(np.abs(term))).astype(np.int64)
+    off = rng.integers(20, 61, (n, 16, 8))
+    acc_e = np.clip(e1 - off + 127, 1, 254).astype(np.uint32)
+    frac = np.where(rng.random((n, 16, 8)) < 0.5, 0, rng.integers(0, 1 << 23, (n, 16, 8))).astype(np.uint32)
+    sign = rng.integers(0, 2, (n, 16, 8)).astype(np.uint32)
+    yield "acc_offset_walk", A, Bt, sfa, sfb, ((sign << 31) | (acc_e << 23) | frac).astype(np.uint32)
+
+    # --- D17: the widest group mantissas under the largest scales (nvf4: 6*6 x 16 under 448 x 448 = 19-bit group terms at
+    # X = 8; model5's msb-anchored window and the scale-exponent anchor differ by 4 binades here) with accumulators around
+    # the two grids (2^-24 .. 2^-8, both signs) and random large accumulators.
+    n = n_random // 8
+    A = np.where(rng.random((n, 16, k)) < 0.8, 0x7, 0xF).astype(np.uint8)
+    Bt = np.where(rng.random((n, 8, k)) < 0.8, 0x7, 0xF).astype(np.uint8)
+    A = np.where(rng.random((n, 16, k)) < 0.1, codes((n, 16, k)), A)
+    if ue4:
+        sfa, sfb = rng.integers(0x78, 0x7F, (n, 16, nblk)).astype(np.uint8), rng.integers(0x78, 0x7F, (n, 8, nblk)).astype(np.uint8)
+    else:
+        sfa, sfb = scales((n, 16, nblk), 128, 141), scales((n, 8, nblk), 128, 141)
+    acc = _signed_pow2_acc(rng, (n, 16, 8), -24, -8)
+    acc[n // 2:] = _signed_pow2_acc(rng, (n - n // 2, 16, 8), 20, 40)
+    yield "wide_mantissa_top_scales", A, Bt, sfa, sfb, acc
+
+    # --- anchor participation.  A tiny accumulator (+-2^e, e in -60..-30, exact or not) against (a) a "dead" group 0: nonzero
+    # A nibbles, all-zero B nibbles, the largest scales -- no elementwise product, the accumulator must come back exact;
+    # (b) a live group 0 whose dot cancels to zero under the largest scales -- the accumulator is truncated away (+0);
+    # (c) nvf4 only: a live nonzero group 0 under a zero scale code on A, then on B -- no participation, exact accumulator.
+    n = 3 * 128 if ue4 else 2 * 128
+    A, Bt = np.zeros((n, 16, k), np.uint8), np.zeros((n, 8, k), np.uint8)
+    m = np.arange(n) // 128
+    A[:, :, :16] = nz_codes((n, 16, 16))
+    Bt[m >= 1, :, :16] = nz_codes((int((m >= 1).sum()), 8, 16))
+    sel = m == 1
+    A[sel, :, 1:16:2] = A[sel, :, 0:16:2]
+    Bt[sel, :, 1:16:2] = Bt[sel, :, 0:16:2] ^ 8
+    if ue4:
+        sfa, sfb = rng.integers(0x60, 0x7F, (n, 16, nblk)).astype(np.uint8), rng.integers(0x60, 0x7F, (n, 8, nblk)).astype(np.uint8)
+        sel = m == 2
+        half = sel & (np.arange(n) % 2 == 0)
+        sfa[half, :, 0] = 0
+        sfb[sel & ~half, :, 0] = 0
+    else:
+        sfa, sfb = scales((n, 16, nblk), 140, 170), scales((n, 8, nblk), 140, 170)
+    yield "anchor_participation", A, Bt, sfa, sfb, _signed_pow2_acc(rng, (n, 16, 8), -60, -30)
+
+    # --- FP32 subnormal accumulators (exponent field 0, random mantissa incl. 0) under small terms
+    n = n_random // 8
+    acc = random_f32_bits(rng, (n, 16, 8), 0, 0)
+    if ue4:
+        yield "acc_subnormal", codes((n, 16, k)), codes((n, 8, k)), scales((n, 16, nblk), 0, 0x20), scales((n, 8, nblk), 0, 0x20), acc
+    else:
+        yield "acc_subnormal", codes((n, 16, k)), codes((n, 8, k)), scales((n, 16, nblk), 40, 80), scales((n, 8, nblk), 40, 80), acc
+
+    if not ue4:
+        # --- D18 / D13: UE8M0 scale extremes.  Every code 0..254 on one operand against 0..115 on the other (ca + cb <= 369 keeps
+        # |sum| < 2^127), then mirrored; random accumulators over 2^-126 .. 2^100 on half the tiles.  Sums below the FP32
+        # subnormal grid decide the sign of the underflowed zero (BLACKWELL_SM120_MXF4 vs ..._UNDERFLOW_SIGNED).
+        n = n_random // 2
+        sfa = rng.integers(0, 255, (n, 16, nblk)).astype(np.uint8)
+        sfb = rng.integers(0, 116, (n, 8, nblk)).astype(np.uint8)
+        swap = np.arange(n) % 2 == 1
+        sfa[swap] = rng.integers(0, 116, (int(swap.sum()), 16, nblk))
+        sfb[swap] = rng.integers(0, 255, (int(swap.sum()), 8, nblk))
+        acc = zeros(n)
+        acc[n // 2:] = _signed_pow2_acc(rng, (n - n // 2, 16, 8), -126, 100, exact_frac=0.2)
+        yield "ue8m0_scale_extremes", codes((n, 16, k)), codes((n, 8, k)), sfa, sfb, acc
+
+        # --- D13: nonzero sums entirely below the subnormal grid, both signs, zero and tiny accumulators
+        n = n_random // 8
+        sfa = rng.integers(0, 60, (n, 16, nblk)).astype(np.uint8)
+        sfb = rng.integers(0, 60, (n, 8, nblk)).astype(np.uint8)
+        acc = zeros(n)
+        acc[n // 2:] = random_f32_bits(rng, (n - n // 2, 16, 8), 0, 2)
+        yield "ue8m0_underflow", codes((n, 16, k)), codes((n, 8, k)), sfa, sfb, acc
+
+    # --- domain edges (record only): NaN / +-inf accumulators over random products; +-FLT_MAX / +-2^127 accumulators with
+    # the largest same-sign products (nvf4 cannot overflow on its own, mxf4 can: 6*6 x 64 under 2^127 x 2^127 scales);
+    # the second half alternates the sign of the whole tile so both overflow directions are observed
+    n = 128
+    A, Bt = codes((n, 16, k)), codes((n, 8, k))
+    special = np.array([0x7FC00000, 0xFFC00000, 0x7F800001, 0x7FBFFFFF, 0x7F800000, 0xFF800000, 0x7F7FFFFF, 0xFF7FFFFF], np.uint32)
+    acc = special[rng.integers(0, len(special), (n, 16, 8))]
+    sel = np.arange(n) >= n // 2
+    negative_tile = (np.arange(n) % 2 == 1) & sel
+    A[sel] = 0x7
+    A[negative_tile] = 0xF                                   # -6.0 x +6.0: every product -36
+    Bt[sel] = 0x7
+    acc[sel] = np.where(rng.random((int(sel.sum()), 16, 8)) < 0.5, np.uint32(0x7F7FFFFF), np.uint32(0x7F000000))
+    acc[negative_tile] |= np.uint32(0x80000000)
+    if ue4:
+        sfa, sfb = scales((n, 16, nblk)), scales((n, 8, nblk))
+        sfa[sel], sfb[sel] = 0x7E, 0x7E
+    else:
+        sfa, sfb = scales((n, 16, nblk)), scales((n, 8, nblk))
+        sfa[sel] = rng.integers(200, 255, (int(sel.sum()), 16, nblk))
+        sfb[sel] = rng.integers(200, 255, (int(sel.sum()), 8, nblk))
+    yield "specials", A, Bt, sfa, sfb, acc
+
 
 def families_bf16(rng, n_random: int):
     k = 16
@@ -423,19 +633,42 @@ def families_bf16(rng, n_random: int):
 _CTX: dict = {}
 
 
+PRIMARY_MODEL = {"nvf4": "verity", "mxf4": "verity", "f8f6f4": "verity", "bf16": None}
+
+
+def verity_models(instr: str) -> dict:
+    """The verity ``BlockScaledAlignAdd`` instances evaluated for ``instr``: ``verity`` is the registry's model, the others are
+    named alternatives (mxf4: the sign of an underflowed zero, log entry D13)."""
+    from verity.ml.tc import models as M
+    if instr == "nvf4":
+        return {"verity": M.BLACKWELL_SM120_NVF4}
+    if instr == "mxf4":
+        return {"verity": M.BLACKWELL_SM120_MXF4, "verity_underflow_signed": M.BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED}
+    if instr == "f8f6f4":
+        return {"verity": M.BlockScaledAlignAdd(
+            name="probe_unscaled_fp4_m16n8k32", arch="sm_120", dtype="e2m1", operand_bits=4, scale=None, k_per_instruction=32,
+            group=16, frac_bits=M.BLACKWELL_SM120_NVF4.frac_bits, acc_window=M.BLACKWELL_SM120_NVF4.acc_window,
+            grid_floor=M.BLACKWELL_SM120_NVF4.grid_floor,
+            underflow_zero="positive", validated="probe instance: the nvf4 adder on unscaled e2m1 (unit weight 2^-2)")}
+    return {}
+
+
 def _init(instr: str, group: int):
     _CTX["instr"] = instr
     _CTX["group"] = group
-    if instr == "bf16":
-        try:
+    try:
+        if instr == "bf16":
             from verity.ml.tc import silicon as S
             _CTX["pipes"] = {"ampere_bf16_m16n8k16": S.AMPERE_BF16_M16N8K16, "hopper_bf16_m16n8k16": S.HOPPER_BF16_M16N8K16}
             _CTX["tc_dot"] = S.tc_dot
-        except Exception as e:  # noqa: BLE001 - a failing initializer would make the pool respawn workers forever; fail the chunk instead
-            _CTX["init_error"] = repr(e)
+        else:
+            _CTX["verity"] = verity_models(instr)
+    except Exception as e:  # noqa: BLE001 - a failing initializer would make the pool respawn workers forever; fail the chunk instead
+        _CTX["init_error"] = repr(e)
 
 
 def _eval_chunk(args):
+    """Every model's word per element of the chunk: ({model: D (n,16,8)}, {model: domain-error mask})."""
     if "init_error" in _CTX:
         raise RuntimeError(f"model worker failed to initialize: {_CTX['init_error']}")
     A, Bt, SFA, SFB, C = args
@@ -443,7 +676,7 @@ def _eval_chunk(args):
     instr = _CTX["instr"]
     if instr == "bf16":
         outs = {name: np.zeros((n, 16, 8), np.uint32) for name in _CTX["pipes"]}
-        err = np.zeros((n, 16, 8), np.bool_)
+        errs = {name: np.zeros((n, 16, 8), np.bool_) for name in _CTX["pipes"]}
         for t in range(n):
             a_rows = [A[t, i].tolist() for i in range(16)]
             b_rows = [Bt[t, j].tolist() for j in range(8)]
@@ -453,15 +686,34 @@ def _eval_chunk(args):
                         try:
                             outs[name][t, i, j] = _CTX["tc_dot"](pipe, int(C[t, i, j]), a_rows[i], b_rows[j])
                         except Exception:  # noqa: BLE001
-                            err[t, i, j] = True
-        return outs, err
-    out = np.zeros((n, 16, 8), np.uint32)
-    err = np.zeros((n, 16, 8), np.bool_)
+                            errs[name][t, i, j] = True
+        return outs, errs
+    out5 = np.zeros((n, 16, 8), np.uint32)
+    err5 = np.zeros((n, 16, 8), np.bool_)
     empty = np.zeros((16, 0), np.uint8)
     for t in range(n):
-        out[t], err[t] = model5.tile_eval(A[t], Bt[t], SFA[t] if SFA is not None else empty, SFB[t] if SFB is not None else empty[:8],
-                                          C[t], SCALE_KIND[instr], _CTX["group"])
-    return {"model5": out}, err
+        out5[t], err5[t] = model5.tile_eval(A[t], Bt[t], SFA[t] if SFA is not None else empty, SFB[t] if SFB is not None else empty[:8],
+                                            C[t], SCALE_KIND[instr], _CTX["group"])
+    outs = {"model5": out5}
+    errs = {"model5": err5}
+    vm = _CTX["verity"]
+    for name in vm:
+        outs[name] = np.zeros((n, 16, 8), np.uint32)
+        errs[name] = np.zeros((n, 16, 8), np.bool_)
+    Al, Bl, Cl = A.tolist(), Bt.tolist(), C.tolist()
+    SAl = SFA.tolist() if SFA is not None else None
+    SBl = SFB.tolist() if SFB is not None else None
+    for t in range(n):
+        for i in range(16):
+            sa = SAl[t][i] if SAl is not None else ()
+            for j in range(8):
+                sb = SBl[t][j] if SBl is not None else ()
+                for name, model in vm.items():
+                    try:
+                        outs[name][t, i, j] = model.step_scaled(Cl[t][i][j], Al[t][i], Bl[t][j], sa, sb)
+                    except Exception:  # noqa: BLE001 - outside the model's domain (non-finite accumulator, sum leaving binary32)
+                        errs[name][t, i, j] = True
+    return outs, errs
 
 
 def model_eval(pool, A, Bt, SFA, SFB, C, procs):
@@ -470,7 +722,27 @@ def model_eval(pool, A, Bt, SFA, SFB, C, procs):
     idx = np.array_split(np.arange(n), chunks)
     parts = pool.map(_eval_chunk, [(A[i], Bt[i], SFA[i] if SFA is not None else None, SFB[i] if SFB is not None else None, C[i]) for i in idx])
     outs = {name: np.concatenate([p[0][name] for p in parts]) for name in parts[0][0]}
-    return outs, np.concatenate([p[1] for p in parts])
+    errs = {name: np.concatenate([p[1][name] for p in parts]) for name in parts[0][1]}
+    return outs, errs
+
+
+def observed_summary(D: np.ndarray, C: np.ndarray, err: np.ndarray) -> dict:
+    """What the hardware returned where the model has no answer: word classes and the most frequent words."""
+    d = D[err].astype(np.uint32)
+    if d.size == 0:
+        return {"elements": 0}
+    exp = (d >> 23) & 0xFF
+    frac = d & 0x7FFFFF
+    cls = {"nan": int(((exp == 0xFF) & (frac != 0)).sum()), "pos_inf": int((d == 0x7F800000).sum()), "neg_inf": int((d == 0xFF800000).sum()),
+           "finite": int((exp != 0xFF).sum())}
+    words, counts = np.unique(d, return_counts=True)
+    top = sorted(zip(counts.tolist(), words.tolist()), reverse=True)[:12]
+    acc_in = {}
+    for a in np.unique(C[err]).tolist()[:16]:
+        sel = err & (C == a)
+        w, c = np.unique(D[sel], return_counts=True)
+        acc_in[f"{a:08x}"] = {f"{int(x):08x}": int(y) for x, y in sorted(zip(w.tolist(), c.tolist()), key=lambda p: -p[1])[:6]}
+    return {"elements": int(d.size), "classes": cls, "top_words": {f"{w:08x}": c for c, w in top}, "by_accumulator": acc_in}
 
 
 # --- records -----------------------------------------------------------------------------------------------------------------------
@@ -577,9 +849,14 @@ def main() -> int:
     identity = probe.identity()
     identity["nvcc"] = nvcc
     identity["arch"] = args.arch
-    results: dict = {"schema": "fp4-5090/tc-probe-fp4/v0", "instruction": PTX[instr], "instruction_id": INSTRUCTION_ID[instr],
-                     "identity": identity, "model": "autoproof-model5" if instr != "bf16" else "verity.ml.tc.silicon.tc_dot",
-                     "model_source": str(HERE / "model5.py") if instr != "bf16" else "verity.ml.tc.silicon"}
+    if instr == "bf16":
+        model_desc, model_src = "verity.ml.tc.silicon.tc_dot", "verity.ml.tc.silicon"
+    else:
+        model_desc = "verity.ml.tc.models." + {"nvf4": "BLACKWELL_SM120_NVF4", "mxf4": "BLACKWELL_SM120_MXF4",
+                                               "f8f6f4": "BlockScaledAlignAdd(scale=None, k=32)"}[instr] + " (control: autoproof model5)"
+        model_src = "verity.ml.tc.models + " + str(HERE / "model5.py")
+    results: dict = {"schema": "fp4-re/tc-probe-fp4/v1", "instruction": PTX[instr], "instruction_id": INSTRUCTION_ID[instr],
+                     "identity": identity, "model": model_desc, "model_source": model_src, "primary_model": PRIMARY_MODEL[instr]}
     print("device", json.dumps(identity), flush=True)
     failures = []
 
@@ -624,10 +901,11 @@ def main() -> int:
                 D = probe.tiles(instr, A, Bt, C, SFA, SFB)
                 t_gpu = time.time() - t0
                 t0 = time.time()
-                models, err = model_eval(pool, A, Bt, SFA, SFB, C, args.procs)
+                models, errs = model_eval(pool, A, Bt, SFA, SFB, C, args.procs)
                 t_model = time.time() - t0
-                fam = {"tiles": int(A.shape[0]), "elements": int(A.shape[0]) * 128,
-                       "nonzero_accumulators": int(np.count_nonzero(C & 0x7FFFFFFF)), "model_domain_errors": int(err.sum()),
+                fam = {"tiles": int(A.shape[0]), "elements": int(A.shape[0]) * 128, "record_only": name in RECORD_ONLY_FAMILIES,
+                       "nonzero_accumulators": int(np.count_nonzero(C & 0x7FFFFFFF)),
+                       "model_domain_errors": {m: int(e.sum()) for m, e in errs.items()},
                        "gpu_seconds": round(t_gpu, 2), "model_seconds": round(t_model, 1), "mismatches_vs_model": {}, "first_mismatches": {}}
                 if SFA is not None and instr == "nvf4":
                     live = np.zeros((A.shape[0], 16, 8, 4), bool)
@@ -639,10 +917,12 @@ def main() -> int:
                 acc_nz = (C & 0x7FFFFFFF) != 0
                 fam["mismatch_split"] = {}
                 for mname, model in models.items():
+                    err = errs[mname]
                     mism = (model != D) | err
                     fam["mismatches_vs_model"][mname] = int(mism.sum())
                     fam["mismatch_split"][mname] = {"acc_zero": int((mism & ~acc_nz).sum()), "acc_nonzero": int((mism & acc_nz).sum()),
-                                                    "acc_negative_zero": int((mism & (C == 0x80000000)).sum())}
+                                                    "acc_negative_zero": int((mism & (C == 0x80000000)).sum()),
+                                                    "domain_errors": int(err.sum()), "wrong_word": int((mism & ~err).sum())}
                     first = []
                     for t, i, j in list(zip(*np.nonzero(mism)))[:20]:
                         rec = hexrec(C[t, i, j], A[t, i], Bt[t, j], D[t, i, j], SFA[t, i] if SFA is not None else None,
@@ -650,6 +930,9 @@ def main() -> int:
                         rec["model"] = "error" if err[t, i, j] else f"{int(model[t, i, j]):08x}"
                         first.append(rec)
                     fam["first_mismatches"][mname] = first
+                primary = PRIMARY_MODEL[instr]
+                if primary in errs and errs[primary].any():
+                    fam["observed_outside_model_domain"] = observed_summary(D, C, errs[primary])
                 kw = {"A": A, "Bt": Bt, "C": C, "D": D, **{f"model_{m}": v for m, v in models.items()}}
                 if SFA is not None:
                     kw["SFA"], kw["SFB"] = SFA, SFB
@@ -662,11 +945,16 @@ def main() -> int:
                 fams[name] = fam
                 print(name, json.dumps({k: v for k, v in fam.items() if k != "first_mismatches"}), flush=True)
         model_names = sorted({m for f in fams.values() for m in f["mismatches_vs_model"]})
+        gated = {k: f for k, f in fams.items() if not f["record_only"]}
         results["sweep"] = {"seed": args.seed, "n_random": args.n_random, "group_hypothesis": args.group, "families": fams,
                             "total_elements": sum(f["elements"] for f in fams.values()),
+                            "gated_elements": sum(f["elements"] for f in gated.values()),
+                            "record_only_families": sorted(k for k, f in fams.items() if f["record_only"]),
                             "total_nonzero_accumulators": sum(f["nonzero_accumulators"] for f in fams.values()),
                             "total_hot_firings": sum(f.get("hot_firings", 0) for f in fams.values()),
-                            "total_mismatches_vs_model": {m: sum(f["mismatches_vs_model"][m] for f in fams.values()) for m in model_names}}
+                            "total_mismatches_vs_model": {m: sum(f["mismatches_vs_model"][m] for f in gated.values()) for m in model_names},
+                            "record_only_mismatches_vs_model": {m: sum(f["mismatches_vs_model"][m] for f in fams.values() if f["record_only"])
+                                                                for m in model_names}}
         (out / "capture_sample.json").write_text(json.dumps(capture, separators=(",", ":")))
         if instr == "bf16":
             agreeing = [m for m, c in results["sweep"]["total_mismatches_vs_model"].items() if c == 0]
@@ -674,10 +962,12 @@ def main() -> int:
             if not agreeing:
                 failures.append("bf16: neither AMPERE nor HOPPER pipeline reproduces every word")
         else:
-            total = results["sweep"]["total_mismatches_vs_model"].get("model5", 0)
+            primary = PRIMARY_MODEL[instr]
+            total = results["sweep"]["total_mismatches_vs_model"].get(primary, 0)
             if total:
-                failures.append(f"sweep mismatches vs model5={total}")
-        print("sweep TOTAL", results["sweep"]["total_elements"], "elements,", results["sweep"]["total_mismatches_vs_model"], flush=True)
+                failures.append(f"sweep mismatches vs {primary}={total} (record-only families excluded)")
+        print("sweep TOTAL", results["sweep"]["total_elements"], "elements,", results["sweep"]["total_mismatches_vs_model"],
+              "record-only:", results["sweep"]["record_only_mismatches_vs_model"], flush=True)
 
     results["seconds"] = round(time.time() - t_all, 1)
     results["failures"] = failures
@@ -700,24 +990,31 @@ def main() -> int:
             for rec in rep["first_mismatches"]:
                 if len(first_mism) < 20:
                     first_mism.append({"model": f"autoproof_replay:{rep['file']}", **rec})
-        primary = "model5" if instr != "bf16" else None
-        model_agrees = all(agree.values()) if agree else None
+        primary = PRIMARY_MODEL[instr]
+        # the verdict: the primary model over the gated families and every autoproof replay; controls/alternatives are recorded
+        verdict_keys = [k for k in agree if k == primary or k.startswith("autoproof_replay:")]
+        model_agrees = all(agree[k] for k in verdict_keys) if verdict_keys else None
         result = {
             "schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": run_id,
             "instruction": INSTRUCTION_ID[instr], "ptx": PTX[instr], "arch": args.arch, "sku": identity["device"],
             "compute_capability": identity["compute_capability"], "driver": identity["driver"], "gpu_uuid": identity["gpu_uuid"],
             "nvcc": nvcc, "sass_mma_counts": {k: v["mma_count"] for k, v in results.get("sass", {}).items()},
-            "families": {name: {"elements": f["elements"], "mismatches": f["mismatches_vs_model"], "hot_firings": f.get("hot_firings")} for name, f in fams.items()},
+            "families": {name: {"elements": f["elements"], "mismatches": f["mismatches_vs_model"], "hot_firings": f.get("hot_firings"),
+                                "record_only": f["record_only"], "domain_errors": f["model_domain_errors"],
+                                "observed_outside_model_domain": f.get("observed_outside_model_domain")} for name, f in fams.items()},
             "counts": {"elements": results.get("sweep", {}).get("total_elements", 0),
+                       "gated_elements": results.get("sweep", {}).get("gated_elements", 0),
                        "replay_cases": sum(r["cases"] for r in replays), "replay_matched": sum(r["matched"] for r in replays),
-                       "mismatches": results.get("sweep", {}).get("total_mismatches_vs_model", {})},
+                       "mismatches": results.get("sweep", {}).get("total_mismatches_vs_model", {}),
+                       "record_only_mismatches": results.get("sweep", {}).get("record_only_mismatches_vs_model", {})},
             "model": results["model"], "primary_model": primary, "model_agrees": model_agrees, "agreement": agree,
             "first_mismatches": first_mism, "seed": args.seed, "n": args.n_random, "group_hypothesis": args.group,
             "bf16_pipeline_finding": results.get("bf16_pipeline_finding"),
             "workload_fingerprint": {"probe": "tools/tc_probe_fp4/probe.py", "instruction": INSTRUCTION_ID[instr], "arch": args.arch,
                                      "device": identity["device"], "seed": args.seed, "n_random": args.n_random,
                                      "replays": [Path(p).name for p in args.replay_autoproof]},
-            "validation": {"status": "passed" if not failures else "failed", "checker": "tc_probe_fp4 vs model5 / tc_dot / autoproof vectors",
+            "validation": {"status": "passed" if not failures else "failed",
+                           "checker": "tc_probe_fp4 vs verity.ml.tc.models (control: model5) / tc_dot / autoproof vectors",
                            "detail": "; ".join(failures) or "every hardware word reproduced", "evidence": ["probe_results.json"]},
             "measurements": [{"name": "wall", "value": results["seconds"], "unit": "s"}],
             "measurement_files": ["probe_results.json"],

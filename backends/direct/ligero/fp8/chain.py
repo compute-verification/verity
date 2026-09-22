@@ -76,7 +76,7 @@ def _pad_unit():
 class FP8ChainRunner:
     """``vu.ChainRunner`` for the FP8 unit: the same protocol (``prove`` / ``verify``) on ``compile_fp8_unit(chain=True)``.
     ``relation`` / ``hooks`` name the relation and its statement word widths for the file formats (``serialize.py``:
-    a ``ligero-statement/v3`` with 8-bit operands and 32-bit slots for the 22-bit public words)."""
+    a ``ligero-statement/v4`` with 8-bit operands and 32-bit slots for the 22-bit public words)."""
 
     relation = "fp8-ada"
     hooks = FP8_HOOKS
@@ -263,7 +263,7 @@ def bench_vu_fp8(args) -> int:
     if args.device.startswith("cuda"):
         torch.cuda.reset_peak_memory_stats()
     keys = None
-    # --dump-dir: every RECORDED rep's sub-batch proofs as ligero-statement/v3 + ligero-proof/v1 files (+ the runner's
+    # --dump-dir: every RECORDED rep's sub-batch proofs as ligero-statement/v4 + ligero-proof/v1 files (+ the runner's
     # step-0 coins, 128 raw bytes, interactive mode), system.bin + manifest.json once -- the layout vu.bench_vu writes
     # for BF16 (repK/sub_XX.{stmt,proof[,coins]}); written after the verifier timer, outside every measured interval.
     dump_dir = Path(os.path.expandvars(args.dump_dir)) if getattr(args, "dump_dir", None) else None
@@ -279,15 +279,22 @@ def bench_vu_fp8(args) -> int:
         agg: dict[str, float] = {}
         vsum = 0.0
         t_pass = time.perf_counter()
+        # Prove every sub-batch of the rep first, then verify (and dump) them: the verifier's host work must not sit
+        # between two timed prover sub-batches (vu.bench_vu since f28c13d; the same discipline here).
+        proved = []
         for si, (lo, hi) in enumerate(subs):
             V = protocol_mod.Coins.sample() if interactive else None
             proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=l, coins=V)
+            for k_, v_ in proof.timings.items():
+                agg[k_] = agg.get(k_, 0.0) + v_
+            proved.append((si, lo, hi, V, proof, pubs, lay_i))
+            if rep == 0:
+                break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
+        for si, lo, hi, V, proof, pubs, lay_i in proved:
             t1 = time.perf_counter()
             ok, why = R.verify_vus(proof, pubs, lay_i, coins=V)
             vsum += time.perf_counter() - t1
             assert ok, f"sub-batch [{lo}, {hi}): {why}"
-            for k_, v_ in proof.timings.items():
-                agg[k_] = agg.get(k_, 0.0) + v_
             if dump_dir is not None and rep > 0:
                 rd = dump_dir / f"rep{rep}"
                 rd.mkdir(exist_ok=True)
@@ -302,8 +309,7 @@ def bench_vu_fp8(args) -> int:
                     (rd / f"{stem}.coins").write_bytes(V.r1 + V.s1 + V.r2 + V.s2)
                     entry["coins"] = f"rep{rep}/{stem}.coins"
                 dump_manifest["files"].append(entry)
-            if rep == 0:
-                break
+        del proved
         wall = time.perf_counter() - t_pass
         if rep == 0:
             print("warm-up (one sub-batch, with the prover's self-check):", {k_: round(v_, 3) for k_, v_ in agg.items()})

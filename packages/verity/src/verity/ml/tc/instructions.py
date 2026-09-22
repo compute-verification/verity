@@ -111,6 +111,17 @@ _RTX5090_NVF4 = (
     "autoproof probe3 vectors replayed 1601/1601; 1,736,704 swept elements with +0 accumulators (263,781 hot-clip firings, full UE4M3 "
     "code sweep), 0 mismatches; probe2 unscaled 1400/1400 (run r20260922-182132-d6db)"
 )
+_RTX5090_FP4_RE = (
+    "verity runs r20260922-215616-3c10 and r20260922-221716-65b9 (nvf4) and r20260922-215831-c3d8, r20260922-221824-8d99, "
+    "r20260922-222148-6342 (mxf4) -- lane fp4-re, RTX 5090 cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, one "
+    "mma.sync per output element with arbitrary finite FP32 accumulators: BlockScaledAlignAdd (scale-exponent anchor "
+    "frac_bits 27, accumulator window 36 on the exponent field, grid floor 2^-174, every zero +0) reproduces 8,339,456 "
+    "nvf4 and 7,389,184 mxf4 words (lane fp4-5090's captures replayed, fit runs, fresh-seed confirmation runs) with 0 "
+    "mismatches; autoproof model5 is the recorded control (D16 -0 accumulators, D17 opposite-sign accumulators 37..42 "
+    "binades below the leading exponent, D18 ue8m0 scales, D13 underflow sign, D19 subnormal-regime anchor and floor). "
+    "Record-only family `specials`: NaN accumulators -> 0x7FFFFFFF, +-inf -> itself, sums leaving binary32 -> +-inf "
+    "(ue8m0 only). Snapshot dataset fp4-evidence-v2."
+)
 _H100_FP8 = (
     "veritor docs/data/tc-fp8-2026-09-08 (lane QZ, H100 80GB HBM3, driver 580.126.09, triton 3.7.1): "
     "wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 / SASS QGMMA.64x64x32.F32.E4M3.E4M3, 16 families, "
@@ -256,22 +267,24 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM120_NVF4,
             status="pinned",
-            evidence=(_AUTOPROOF, _AUTOPROOF_UNSCALED, _RTX5090_NVF4,
-                      "pinned with a zero-initialised accumulator and chain-reachable accumulators only (D12); "
-                      "-0 accumulators (D16) and opposite-sign accumulators at the 42-bit window edge (D17) disagree with the model"),
+            evidence=(_RTX5090_FP4_RE, _AUTOPROOF, _AUTOPROOF_UNSCALED, _RTX5090_NVF4,
+                      "pinned for arbitrary finite FP32 accumulators (D12's zero-init limitation lifted; D16 and D17 resolved by "
+                      "lane fp4-re); NaN/inf accumulators and sums leaving binary32 are outside the model's domain (recorded)"),
         ),
         _i(
-            # autoproof did not probe UE8M0 scales; the PTX mnemonic of the mxf4 kind is not recorded in either
-            # source repository (PTX ISA: kind::mxf4 with .scale_vec::2X and .ue8m0) so it is left None.
+            # autoproof did not probe UE8M0 scales; the mnemonic below is the one ptxas 12.8 accepts on sm_120a (kind::mxf4nvf4
+            # with .scale_vec::2X and .ue8m0; lane fp4-5090) and its SASS is OMMA.SF.16864.F32.E2M1.E2M1.E8.
             id="sm120.mma.m16n8k64.e2m1.mxf4",
             sm="sm_120",
-            ptx=None,
+            ptx="mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0",
             shape=(16, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue8m0",
             model=BLACKWELL_SM120_MXF4,
-            status="hypothesis",
-            evidence=("no measurement; hypothesis = the nvf4 five-way align-add with UE8M0 block-32 scales and no "
-                      "hot-group clip (autoproof native.rs); alternative BLACKWELL_SM120_MXF4_UNDERFLOW_PLUS0 (D13)",),
+            status="pinned",
+            evidence=(_RTX5090_FP4_RE,
+                      "the same adder as nvf4 with the UE8M0 scale 2^(code-127) written as mantissa 8 at 2^(code-130) (D18); a "
+                      "nonzero sum below the subnormal grid is +0 (D13: BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED refuted); the "
+                      "accumulator window anchors on the exponent field and the grid never drops below 2^-174 (D19)"),
         ),
         # --- Blackwell datacenter (sm_100, tcgen05) ---------------------------------------------------------------
         _i(

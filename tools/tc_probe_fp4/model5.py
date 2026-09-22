@@ -162,7 +162,7 @@ def tile_eval(A: np.ndarray, Bt: np.ndarray, SFA: np.ndarray, SFB: np.ndarray, C
                     hot = True
             try:
                 D[i, j] = transducer(int(C[i, j]), terms, hot)
-            except OverflowError:
+            except (OverflowError, AssertionError):  # binary32 overflow / non-finite accumulator: outside the model
                 err[i, j] = True
     return D, err
 

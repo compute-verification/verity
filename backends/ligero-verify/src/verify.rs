@@ -46,6 +46,8 @@ pub struct Timing {
     pub dfold: f64,
     pub quadratic: f64,
     pub chain: f64,
+    /// authentication = included: leaf recomputation + multiproof folds (0 for an excluded statement)
+    pub auth: f64,
     pub total: f64,
 }
 
@@ -136,6 +138,11 @@ fn statement_digest(st: &Statement, sys_id: &[u8; 32]) -> Result<Vec<u8>, String
     h.extend_from_slice(b"|y16=");
     for x in &st.y16 {
         h.extend_from_slice(&x.to_le_bytes());
+    }
+    // authentication = included: `auth.digest_bytes` (version, schema, VU indices, the three tree references) --
+    // the challenges are bound to "the words at these indices under these roots"
+    if let Some(ab) = &st.auth {
+        h.extend_from_slice(&crate::auth::digest_bytes(ab));
     }
     Ok(blake2b_256(&h).to_vec())
 }
@@ -260,7 +267,7 @@ fn column_challenge(seed: &[u8], t: usize, n: usize) -> Vec<u32> {
 
 // ---------------------------------------------------------------------------------------------------- helpers ----
 
-fn par_for<T: Send>(items: usize, threads: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
+pub(crate) fn par_for<T: Send>(items: usize, threads: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
     let threads = threads.max(1).min(items.max(1));
     let mut out: Vec<Option<T>> = (0..items).map(|_| None).collect();
     std::thread::scope(|s| {
@@ -881,12 +888,28 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         }
     }
     tm.chain += lap(&mut clk);
+    // authentication = included: every published word is a leaf at its claimed index under the statement's roots
+    // (auth.rs).  Runs after the Ligero tests so a rejection here means "valid proof, unauthenticated words".
+    let mut auth_note = String::new();
+    if let Some(ab) = &st.auth {
+        let mps = match &pf.auth {
+            Some(m) => m,
+            None => return reject("auth: transcript carries no multiproofs", tm, Some(snd), Some(info)),
+        };
+        if let Err(e) = crate::auth::check(ab, mps, &st.a, &st.b, &st.y16, st.n_vus, st.steps, st.k_ops, opt.threads) {
+            tm.auth += lap(&mut clk);
+            return reject(&e, tm, Some(snd), Some(info));
+        }
+        tm.auth += lap(&mut clk);
+        auth_note = format!(" (authentication: {} VUs, {} + {} + {} leaves under the a/b/y roots)", ab.vu_index.len(),
+                            st.n_vus * st.steps * st.k_ops, st.n_vus * st.steps * st.k_ops, st.n_vus);
+    }
     let reason = if !st.interactive {
-        "accept".to_string()
+        format!("accept{auth_note}")
     } else if opt.own_coins.is_some() {
-        "accept (interactive: coins are this verifier's step-0 coins)".to_string()
+        format!("accept (interactive: coins are this verifier's step-0 coins){auth_note}")
     } else {
-        "accept (interactive: coins replayed from the transcript; sound only if they were the verifier's step-0 coins)".to_string()
+        format!("accept (interactive: coins replayed from the transcript; sound only if they were the verifier's step-0 coins){auth_note}")
     };
     Verdict { accepted: true, reason, timing: tm, soundness: Some(snd), statement: Some(info) }
 }

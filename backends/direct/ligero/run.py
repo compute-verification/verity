@@ -26,9 +26,9 @@ from verity_numerical.bench import contract, instances
 from verity_numerical.checker.params import REAL
 from verity_numerical.checker.step import step_output
 
+from . import protocol as protocol_mod
 from .compile import P
 from .hints_torch import hints_torch
-from . import protocol as protocol_mod
 from .protocol import Config, config_for, prove, soundness, verify
 from .unit import compile_unit, public_vectors
 from .witness import hints_tensor, tables
@@ -383,6 +383,11 @@ def main(argv=None) -> int:
                                          help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
     sub.choices["bench-vu"].add_argument("--dump-dir", default=None, metavar="DIR",
                                          help="write every recorded rep's sub-batch proofs (.stmt/.proof[/.coins]) + system.bin for backends/ligero-verify")
+    sub.choices["bench-vu"].add_argument("--auth", action="store_true",
+                                         help="authentication = included: commit the set's words as three SHA-256 word trees (auth.py), bind roots and "
+                                              "leaf indices into the statement, ship and verify Merkle multiproofs of every boundary word")
+    sub.choices["bench-vu"].add_argument("--auth-cache", default=None, metavar="DIR", help="--auth: directory holding the built trees (reused when the bindings match)")
+    sub.choices["bench-vu"].add_argument("--auth-procs", type=int, default=None, help="--auth: processes for leaf hashing (default: all cores)")
     sub.choices["gate-vu"].add_argument("--row-negatives", type=int, default=60, help="fp8-ada gate: witness-row mutations to try")
     args = ap.parse_args(argv)
     if args.relation == "fp8-ada":

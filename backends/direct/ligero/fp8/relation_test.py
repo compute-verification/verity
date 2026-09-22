@@ -247,14 +247,14 @@ def test_pack_public_rejects_low_bits():
     assert pack_public(0x3F800000) == 0x3F800000 >> 10
 
 
-# --- the dump files (ligero-statement/v3 + ligero-proof/v1 + ligero-system/v1), cold from bytes -------------------------
+# --- the dump files (ligero-statement/v4 + ligero-proof/v1 + ligero-system/v1), cold from bytes -------------------------
 
 @pytest.mark.parametrize("zk,mode", [(False, protocol_mod.MODE_INTERACTIVE), (True, protocol_mod.MODE_FIAT_SHAMIR)])
-def test_dump_round_trip_v3_cpu(tmp_path, zk, mode):
+def test_dump_round_trip_v4_cpu(tmp_path, zk, mode):
     """What ``bench_vu_fp8 --dump-dir`` writes, read back and verified by ``serialize.verify_files`` with no prover state:
-    the v3 statement carries the relation name and the FP8 word widths (1-byte operands, 4-byte public words), the proof
+    the v4 statement carries the relation name and the FP8 word widths (1-byte operands, 4-byte public words), the proof
     and system bytes round-trip, the file verifier accepts the honest files and rejects a flipped public word; a v2
-    (BF16) statement still reads as relation ``bf16``."""
+    (BF16) statement still reads as relation ``bf16`` (v3 = the BF16 words + an authentication block is untouched)."""
     from .. import serialize as ser
     R = FP8ChainRunner("cpu", -128.0, zk=zk, mode=mode)
     vus = instances_fp8(2, seed=5)
@@ -262,11 +262,11 @@ def test_dump_round_trip_v3_cpu(tmp_path, zk, mode):
     proof, pubs, lay = R.prove_vus(vus, check=False, coins=V)
     assert R.verify_vus(proof, pubs, lay, coins=V)[0]
     st = ser._statement_of(R, pubs, lay, R.cfg(lay.l), 1)
-    assert st.relation == "fp8-ada" and (st.word_bytes, st.y_bytes) == (1, 4) and st.v3
+    assert st.relation == "fp8-ada" and (st.word_bytes, st.y_bytes) == (1, 4) and st.v4 and st.auth is None
     raw = ser.statement_bytes(st)
-    assert raw[:8] == ser.STMT_MAGIC_V3
+    assert raw[:8] == ser.STMT_MAGIC_V4
     back = ser.read_statement(raw)
-    assert back.relation == "fp8-ada" and (back.word_bytes, back.y_bytes) == (1, 4)
+    assert back.relation == "fp8-ada" and (back.word_bytes, back.y_bytes) == (1, 4) and back.auth is None
     assert (back.l, back.n, back.D, back.t, back.zk, back.mode, back.n_vus, back.steps) == (st.l, st.n, st.D, st.t, st.zk, st.mode, st.n_vus, st.steps)
     assert np.array_equal(back.a, st.a) and np.array_equal(back.b, st.b) and np.array_equal(back.y16, st.y16)
     assert int(st.a.max()) < 256 and int(st.y16.max()) >= 1 << 16              # 8-bit operands, 22-bit public words
@@ -292,7 +292,7 @@ def test_dump_round_trip_v3_cpu(tmp_path, zk, mode):
     v2 = ser.Statement(st.l, st.n, st.D, st.t, st.target_log2, st.zk, st.t_pad, st.mode, st.n_proofs, st.n_vus, st.steps,
                        np.zeros((st.l, 4), "<u2"), np.zeros((st.l, 4), "<u2"), np.zeros(st.l, "<u2"))
     rv2 = ser.statement_bytes(v2)
-    assert rv2[:8] == ser.STMT_MAGIC and not v2.v3
+    assert rv2[:8] == ser.STMT_MAGIC and not v2.v4
     b2 = ser.read_statement(rv2)
     assert b2.relation == "bf16" and (b2.word_bytes, b2.y_bytes) == (2, 2) and b2.a.dtype == np.dtype("<u2")
     (tmp_path / "v2.stmt").write_bytes(rv2)
