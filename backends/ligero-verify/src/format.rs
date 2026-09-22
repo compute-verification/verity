@@ -1,7 +1,9 @@
-//! The three files (`backends/direct/ligero/serialize.py` defines them): `ligero-system/v1`, `ligero-statement/v1`,
-//! `ligero-proof/v1`.  Reject-first: every length is bounded by the statement before a byte of the proof body is
-//! read, every field element is checked canonical (< p) at parse.
+//! The three files (`backends/direct/ligero/serialize.py` defines them): `ligero-system/v1`, `ligero-statement/v2`
+//! (`/v3` = v2 + the authentication block, `authentication = included`), `ligero-proof/v1` (`/v2` = v1 + one
+//! multiproof per committed tree).  Reject-first: every length is bounded by the statement before a byte of the
+//! proof body is read, every field element is checked canonical (< p) at parse.
 
+use crate::auth::{AuthBlock, TreeRef, MAX_OPENINGS, MAX_POSITIONS, MAX_PROOF_BYTES, SCHEMA, VERSION as AUTH_VERSION};
 use crate::field::P;
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -28,6 +30,12 @@ impl<'a> Rd<'a> {
     }
     fn u32(&mut self) -> Result<u32> {
         Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+    }
+    fn u64(&mut self) -> Result<u64> {
+        Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
+    }
+    fn b32(&mut self) -> Result<[u8; 32]> {
+        Ok(self.take(32)?.try_into().unwrap())
     }
     fn usize_bounded(&mut self, max: usize, what: &str) -> Result<usize> {
         let v = self.u32()? as usize;
@@ -209,14 +217,65 @@ pub struct Statement {
     pub a: Vec<u16>,    // l x k_ops
     pub b: Vec<u16>,
     pub y16: Vec<u16>,  // l
+    /// `authentication = included` (v3): the committed trees and the VU indices the words are claimed under.
+    pub auth: Option<AuthBlock>,
+}
+
+fn read_auth_block(r: &mut Rd, n_vus: usize, steps: usize, k_ops: usize) -> Result<AuthBlock> {
+    if r.str()? != AUTH_VERSION {
+        return Err("unknown authentication block version".into());
+    }
+    if r.str()? != SCHEMA {
+        return Err("unknown authentication leaf schema".into());
+    }
+    let n = r.usize_bounded(1 << 22, "auth n_vus")?;
+    if n != n_vus {
+        return Err(format!("authentication block names {n} VUs, the layout has {n_vus}"));
+    }
+    let raw = r.take(4 * n)?;
+    let mut vu_index = Vec::with_capacity(n);
+    for i in 0..n {
+        let v = u32::from_le_bytes(raw[4 * i..4 * i + 4].try_into().unwrap());
+        if i > 0 && v <= vu_index[i - 1] {
+            return Err("authentication vu_index not strictly increasing".into());
+        }
+        vu_index.push(v);
+    }
+    let mut trees = Vec::with_capacity(3);
+    for name in ["a", "b", "y"] {
+        let binding = r.b32()?;
+        let owner_plus_two = r.u8()?;
+        if owner_plus_two > 1 {
+            return Err(format!("authentication tree {name}: owner code {owner_plus_two} (only -2 / -1 are defined)"));
+        }
+        let count = r.u64()?;
+        let root = r.b32()?;
+        if count == 0 || count > MAX_POSITIONS {
+            return Err(format!("authentication tree {name}: count {count} outside (0, {MAX_POSITIONS}]"));
+        }
+        trees.push(TreeRef { binding, owner_plus_two, count, root });
+    }
+    // every claimed leaf must exist: the a/b trees hold K words per VU, the y tree one word per VU
+    let k = (steps * k_ops) as u64;
+    let last = *vu_index.last().unwrap_or(&0) as u64;
+    if (last + 1).checked_mul(k).map_or(true, |x| x > trees[0].count || x > trees[1].count) || last >= trees[2].count {
+        return Err("authentication block claims leaves beyond the committed count".into());
+    }
+    if (n as u64) * k > MAX_OPENINGS {
+        return Err(format!("authentication openings exceed the limit {MAX_OPENINGS}"));
+    }
+    Ok(AuthBlock { vu_index, trees: [trees[0].clone(), trees[1].clone(), trees[2].clone()] })
 }
 
 impl Statement {
     pub fn parse(d: &[u8]) -> Result<Statement> {
         let mut r = Rd::new(d);
-        if r.take(8)? != b"LIGSTM02" {
-            return Err("not a ligero-statement/v2 file".into());
-        }
+        let magic = r.take(8)?;
+        let v3 = match magic {
+            b"LIGSTM02" => false,
+            b"LIGSTM03" => true,
+            _ => return Err("not a ligero-statement/v2 or /v3 file".into()),
+        };
         if r.u32()? != 1 {
             return Err("statement mode is not chain (1)".into());
         }
@@ -258,8 +317,9 @@ impl Statement {
         let a = r.u16_vec(l * k_ops)?;
         let b = r.u16_vec(l * k_ops)?;
         let y16 = r.u16_vec(l)?;
+        let auth = if v3 { Some(read_auth_block(&mut r, n_vus, steps, k_ops)?) } else { None };
         r.done()?;
-        Ok(Statement { l, n, d: dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops, a, b, y16 })
+        Ok(Statement { l, n, d: dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops, a, b, y16, auth })
     }
 
     pub fn k(&self) -> usize {
@@ -310,15 +370,24 @@ pub struct Proof {
     pub cols: Vec<u32>,   // t
     pub opened: Vec<u32>, // M x t row-major
     pub paths: Vec<[u8; 32]>, // t x depth
+    /// `ligero-proof/v2`: the canonical multiproofs of the a, b, y trees (authentication = included).
+    pub auth: Option<Vec<Vec<[u8; 32]>>>,
 }
 
 impl Proof {
     /// Parse with every size fixed by the statement and the system (`m`); a header that disagrees is rejected
-    /// before the body is read.
+    /// before the body is read.  A v2 transcript is only accepted against a v3 statement and vice versa.
     pub fn parse(d: &[u8], st: &Statement, m: usize) -> Result<Proof> {
         let mut r = Rd::new(d);
-        if r.take(8)? != b"LIGPRF01" {
-            return Err("not a ligero-proof/v1 file".into());
+        let magic = r.take(8)?;
+        let v2 = match magic {
+            b"LIGPRF01" => false,
+            b"LIGPRF02" => true,
+            _ => return Err("not a ligero-proof/v1 or /v2 file".into()),
+        };
+        if v2 != st.auth.is_some() {
+            return Err(if v2 { "transcript carries multiproofs but the statement has no authentication block" }
+                       else { "statement has an authentication block but the transcript carries no multiproofs" }.into());
         }
         let hash_id = r.u8()?;
         if hash_id != 1 {
@@ -389,7 +458,25 @@ impl Proof {
         for _ in 0..st.t * st.depth() {
             paths.push(r.take(32)?.try_into().unwrap());
         }
+        let auth = if let Some(ab) = &st.auth {
+            // a canonical multiproof of `o` leaves in a tree of depth `dep` has at most min(o, 2^dep) * dep siblings
+            let mut mps = Vec::with_capacity(3);
+            for (ti, tree) in ab.trees.iter().enumerate() {
+                let opened_leaves = if ti < 2 { st.n_vus * st.steps * st.k_ops } else { st.n_vus } as u64;
+                let dep = crate::auth::merkle_depth(tree.count) as u64;
+                let bound = opened_leaves.min(1u64 << dep.min(63)).saturating_mul(dep).min(MAX_PROOF_BYTES / 32);
+                let n_sib = r.usize_bounded(bound as usize, "multiproof siblings")?;
+                let mut sibs = Vec::with_capacity(n_sib);
+                for _ in 0..n_sib {
+                    sibs.push(r.b32()?);
+                }
+                mps.push(sibs);
+            }
+            Some(mps)
+        } else {
+            None
+        };
         r.done()?;
-        Ok(Proof { coins, root, w, h, q, v, cols, opened, paths })
+        Ok(Proof { coins, root, w, h, q, v, cols, opened, paths, auth })
     }
 }
