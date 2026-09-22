@@ -987,12 +987,12 @@ def cmd_tu(args) -> int:
 
 
 def _vu_task(task):
-    i, a, b, y, field, io, cw = task
+    i, a, b, y, field, io, cw, lenient = task
     p = FIELDS[field]
     global _UNIT, _EPI
     if _UNIT is None or _UNIT.ctx.p != p or _UNIT.ctx.cw != cw:
         _UNIT, _EPI = Unit(p, chunk_bits=cw), Epi(p, chunk_bits=cw)
-    priv, bad = vu_witness(_UNIT, _EPI, a, b, y, io)
+    priv, bad = vu_witness(_UNIT, _EPI, a, b, y, io, lenient=lenient)
     text = "".join(f"<{hex(v)}>;\n" for v in priv)
     return i, len(priv), text, bad
 
@@ -1007,12 +1007,13 @@ def cmd_vu(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     unit, epi = Unit(p, chunk_bits=args.chunk_bits), Epi(p, chunk_bits=args.chunk_bits)
-    tier = _load_tier(args.root, "vu-k1536")
+    neg = bool(getattr(args, "neg", False))     # vu-k1536-neg: cheating witnesses, dietmc's verifier must reject
+    tier = _load_tier(args.root, "vu-k1536-neg" if neg else "vu-k1536")
     B = args.B
     tasks = []
     for i in range(B):
         a, b, y = tier.instance(i)
-        tasks.append((i, a, b, y, args.field, args.io, args.chunk_bits))
+        tasks.append((i, a, b, y, args.field, args.io, args.chunk_bits, neg))
     inst: list[int] = []
     if args.io == "public":
         inst = [tasks[i][3] for i in range(B)]
@@ -1025,7 +1026,7 @@ def cmd_vu(args) -> int:
             import multiprocessing as mp
             with mp.Pool(args.procs) as pool:
                 for i, n_priv, text, bad in pool.imap(_vu_task, tasks, chunksize=1):   # in order: the stream is positional
-                    if bad is not None:
+                    if bad is not None and not neg:
                         print(f"circuit rejects honest VU {i}: {bad}", file=sys.stderr)
                         return 1
                     f.write(text)
@@ -1033,13 +1034,13 @@ def cmd_vu(args) -> int:
         else:
             for task in tasks:
                 i, n_priv, text, bad = _vu_task(task)
-                if bad is not None:
+                if bad is not None and not neg:
                     print(f"circuit rejects honest VU {i}: {bad}", file=sys.stderr)
                     return 1
                 f.write(text)
                 n_wit += n_priv
         f.write("@end\n")
-    meta = {"kind": "vu-k1536", "version": 2, "B": B, "instances": f"vu-k1536[0:{B}]", "field": args.field,
+    meta = {"kind": "vu-k1536-neg" if neg else "vu-k1536", "version": 2, "B": B, "instances": f"{tier.tier}[0:{B}]", "field": args.field,
             "io": args.io, "chunk_bits": args.chunk_bits, "private_values": n_wit, "private_values_per_vu": n_wit / B,
             "export_seconds": time.time() - t0, "census_vu": census(args.field, args.chunk_bits)["vu"]}
     _write_meta(out, meta)
@@ -1111,6 +1112,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("out")
     v.add_argument("--B", type=int, default=1)
     v.add_argument("--procs", type=int, default=max(1, (os.cpu_count() or 2) - 1))
+    v.add_argument("--neg", action="store_true", help="export vu-k1536-neg instances (cheating witnesses; verifier must reject)")
     common(v, root=True)
     v.set_defaults(fn=cmd_vu)
     n = sub.add_parser("negatives")

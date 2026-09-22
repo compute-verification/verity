@@ -37,6 +37,25 @@ case "$STAGE" in
     $PY backends/vole/export_ir.py vu "$OUT/vu1" --root $FIX --B 1
     bench "$OUT/vu1" vu-B1 --plaintext-too
     ;;
+  c2small)
+    # c-compress: the v2 relation end to end at 64 VUs.  census + Python negatives; dietmc must ACCEPT the honest
+    # instances and REJECT 4 vu-k1536-neg VUs; then F61p / F128p / F384p at B=64, 1 thread, and F61p with 4 threads.
+    $PY backends/vole/export_ir.py census > "$OUT/census.json"
+    $PY backends/vole/export_ir.py negatives --root $FIX > "$OUT/negatives.txt"
+    tail -1 "$OUT/negatives.txt"
+    $PY backends/vole/export_ir.py unit "$OUT/unit1" --n 1
+    bench "$OUT/unit1" unit-1 --plaintext-too --repeat 3
+    $PY backends/vole/export_ir.py tu "$OUT/units_tu4096" --root $FIX --n 4096
+    bench "$OUT/units_tu4096" units-tu4096 --plaintext-too
+    $PY backends/vole/export_ir.py vu "$OUT/vu4neg" --root $FIX --B 4 --procs 4 --neg
+    bench "$OUT/vu4neg" vu-B4-NEG --plaintext-too      # accepted must be false
+    for F in f61p f128p f384p; do
+      $PY backends/vole/export_ir.py vu "$OUT/vu64_$F" --root $FIX --B 64 --procs 15 --field $F
+      bench "$OUT/vu64_$F" "vu-B64-$F" --plaintext-too
+    done
+    bench "$OUT/vu64_f61p" vu-B64-f61p-t4 --threads 4
+    bench "$OUT/vu64_f384p" vu-B64-f384p-t4 --threads 4
+    ;;
   small)
     $PY backends/vole/export_ir.py census > "$OUT/census.json"
     $PY backends/vole/export_ir.py negatives --root $FIX > "$OUT/negatives.txt"
