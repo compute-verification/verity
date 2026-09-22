@@ -632,7 +632,10 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     // ---- the linear test: rhs_j = sum_i a_i(eta_j) C[i, j], rows built and evaluated chunk by chunk
     let t4 = Instant::now();
     let re = RowEval::new(p.k, p.n, &set);
-    let chunk_rows = 8usize;
+    const ROWS_PER_BATCH: usize = 8;
+    const LANES: usize = ROWS_PER_BATCH * crate::field::DEG;
+    let batched = std::env::var("VERITY_GKR_ROWWISE").map(|v| v != "1").unwrap_or(true);
+    let chunk_rows = ROWS_PER_BATCH;
     let n_chunks = rows.div_ceil(chunk_rows);
     let counter = AtomicUsize::new(0);
     let (ns_fill, ns_eval) = (std::sync::atomic::AtomicU64::new(0), std::sync::atomic::AtomicU64::new(0));
@@ -644,6 +647,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
             let mut acc = Vec::new();
             let mut ntt_scratch: Vec<u32> = Vec::new();
             let mut out = vec![Ext::ZERO; set.len()];
+            let mut outb = vec![Ext::ZERO; chunk_rows * set.len()];
             let (mut tf, mut te) = (0u64, 0u64);
             loop {
                 let ci = counter.fetch_add(1, Ordering::Relaxed);
@@ -656,10 +660,19 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
                 for x in buf.iter_mut() { *x = Ext::ZERO; }
                 func.fill(lo, hi, &mut buf[..hi - lo], &mut scratch, &mut acc);
                 let tb = Instant::now();
-                for i in r0..r1 {
-                    let row = &buf[(i - r0) * p.k..(i - r0 + 1) * p.k];
-                    re.eval(row, &mut ntt_scratch, &mut out);
-                    for (oi, col) in op.columns.iter().enumerate() { rhs[oi] += out[oi].scale(col.values[i]); }
+                if batched {
+                    // the whole chunk in one batched evaluation (the tail chunk is zero-padded to `chunk_rows`)
+                    re.eval_batch::<ROWS_PER_BATCH, LANES>(&buf, &mut ntt_scratch, &mut outb);
+                    for i in r0..r1 {
+                        let o = &outb[(i - r0) * set.len()..(i - r0 + 1) * set.len()];
+                        for (oi, col) in op.columns.iter().enumerate() { rhs[oi] += o[oi].scale(col.values[i]); }
+                    }
+                } else {
+                    for i in r0..r1 {
+                        let row = &buf[(i - r0) * p.k..(i - r0 + 1) * p.k];
+                        re.eval(row, &mut ntt_scratch, &mut out);
+                        for (oi, col) in op.columns.iter().enumerate() { rhs[oi] += out[oi].scale(col.values[i]); }
+                    }
                 }
                 tf += (tb - ta).as_nanos() as u64;
                 te += tb.elapsed().as_nanos() as u64;

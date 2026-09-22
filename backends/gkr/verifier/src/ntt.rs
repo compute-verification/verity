@@ -61,6 +61,47 @@ impl Plan {
         }
     }
 
+    /// The same transform on `L` interleaved base-field lanes (`v[pos * L + lane]`, e.g. `L = R * DEG` for `R`
+    /// extension rows batched together): every butterfly is `L` independent lane butterflies sharing one twiddle, a
+    /// loop the compiler vectorises at every stage (the planar layout only vectorises once `half >= 16`).
+    pub fn run_lanes<const L: usize>(&self, v: &mut [u32]) {
+        let n = self.n;
+        assert_eq!(v.len(), n * L);
+        for i in 0..n {
+            let j = self.rev[i] as usize;
+            if j > i {
+                let (a, b) = v.split_at_mut(j * L);
+                a[i * L..(i + 1) * L].swap_with_slice(&mut b[..L]);
+            }
+        }
+        let mut len = 2;
+        let mut level = 0;
+        while len <= n {
+            let half = len / 2;
+            let tw = &self.tw[level][..half];
+            for start in (0..n).step_by(len) {
+                let blk = &mut v[start * L..(start + len) * L];
+                let (lo, hi) = blk.split_at_mut(half * L);
+                for (j, &w) in tw.iter().enumerate() {
+                    let a: &mut [u32; L] = (&mut lo[j * L..(j + 1) * L]).try_into().unwrap();
+                    let b: &mut [u32; L] = (&mut hi[j * L..(j + 1) * L]).try_into().unwrap();
+                    for l in 0..L {
+                        let t = mont_mul(b[l], w);
+                        let u = a[l];
+                        a[l] = add(u, t);
+                        b[l] = sub(u, t);
+                    }
+                }
+            }
+            len *= 2;
+            level += 1;
+        }
+        if let Some(s) = self.scale {
+            let sm = to_mont(s);
+            for x in v.iter_mut() { *x = mont_mul(*x, sm); }
+        }
+    }
+
     /// The same transform on one base-field plane (a coordinate of an extension vector stored planar); the inner
     /// loops are over contiguous `u32`s with contiguous twiddles so they vectorise.
     pub fn run_base(&self, v: &mut [u32]) {
@@ -158,6 +199,47 @@ impl RowEval {
         }
     }
 
+    /// `R` rows at once (`rows` = `R * k` values, row-major; `out` = `R * t`, row-major): the rows are interleaved
+    /// into `L = R * DEG` lanes per position so every NTT butterfly and every twist multiply is an `L`-wide SIMD
+    /// loop with one twiddle.  Bit-exact with `eval` row by row.
+    pub fn eval_batch<const R: usize, const L: usize>(&self, rows: &[Ext], scratch: &mut Vec<u32>, out: &mut [Ext]) {
+        let k = self.k;
+        let t = self.targets.len();
+        assert_eq!(rows.len(), R * k);
+        assert_eq!(out.len(), R * t);
+        assert_eq!(L, R * DEG);
+        scratch.clear();
+        scratch.resize(2 * k * L, 0);
+        let (hat, work) = scratch.split_at_mut(k * L);
+        for r in 0..R {
+            let row = &rows[r * k..(r + 1) * k];
+            for d in 0..k { hat[d * L + r * DEG..d * L + (r + 1) * DEG].copy_from_slice(&row[d].0); }
+        }
+        self.inv_k.run_lanes::<L>(hat);
+        for (i, &(c, m)) in self.targets.iter().enumerate() {
+            if c == 0 { for r in 0..R { out[r * t + i] = rows[r * k + m]; } }
+        }
+        for c in 1..self.ratio {
+            let Some(tw) = &self.twists[c] else { continue };
+            for d in 0..k {
+                let w = tw[d];
+                let src: &[u32; L] = (&hat[d * L..(d + 1) * L]).try_into().unwrap();
+                let dst: &mut [u32; L] = (&mut work[d * L..(d + 1) * L]).try_into().unwrap();
+                for l in 0..L { dst[l] = mont_mul(src[l], w); }
+            }
+            self.fwd_k.run_lanes::<L>(work);
+            for (i, &(cc, m)) in self.targets.iter().enumerate() {
+                if cc == c {
+                    for r in 0..R {
+                        let mut e = [0u32; DEG];
+                        e.copy_from_slice(&work[m * L + r * DEG..m * L + (r + 1) * DEG]);
+                        out[r * t + i] = Ext(e);
+                    }
+                }
+            }
+        }
+    }
+
     /// Interleaved variant (one `Ext` butterfly = six independent lanes; the scratch is reinterpreted).
     fn eval_interleaved(&self, row: &[Ext], scratch: &mut Vec<u32>, out: &mut [Ext]) {
         let k = self.k;
@@ -203,5 +285,20 @@ mod tests {
         let mut scratch = Vec::new();
         re.eval(&row, &mut scratch, &mut out);
         for (i, &j) in opened.iter().enumerate() { assert_eq!(out[i], enc[j], "position {j}"); }
+        // lanes: batched rows agree with the row-by-row evaluation
+        let rows: Vec<Ext> = (0..4 * k as u64).map(|i| Ext([(i * 7 + 1) as u32, (i * i) as u32 % 1000, 5, (i % 3) as u32, 9, (i * 13) as u32])).collect();
+        let mut outb = vec![Ext::ZERO; 4 * opened.len()];
+        re.eval_batch::<4, 24>(&rows, &mut scratch, &mut outb);
+        for r in 0..4 {
+            let mut o = vec![Ext::ZERO; opened.len()];
+            re.eval(&rows[r * k..(r + 1) * k], &mut scratch, &mut o);
+            assert_eq!(&outb[r * opened.len()..(r + 1) * opened.len()], &o[..], "row {r}");
+        }
+        let mut v = rows[..k].to_vec();
+        let mut lanes = vec![0u32; k * DEG];
+        for d in 0..k { lanes[d * DEG..(d + 1) * DEG].copy_from_slice(&v[d].0); }
+        Plan::new(k, false).run(&mut v);
+        Plan::new(k, false).run_lanes::<DEG>(&mut lanes);
+        for d in 0..k { assert_eq!(&lanes[d * DEG..(d + 1) * DEG], &v[d].0); }
     }
 }
