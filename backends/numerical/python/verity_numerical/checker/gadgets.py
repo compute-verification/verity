@@ -484,7 +484,12 @@ class StateOut:
 class Pack:
     """The FP32 word of the final state: +0 when zero; the infinity of the first overflowing group's sum sign
     when any group saturated; otherwise sign, field e' + bias - 1 + hidden and the low acc_frac bits of M
-    (hidden = 0 only at e' = e_min, where the field is 0: a subnormal)."""
+    (hidden = 0 only at e' = e_min, where the field is 0: a subnormal).
+
+    ``e1`` is ``StateOut``'s ``e_hat``, which sits at the floor ``exp_lo`` when ``z = 1`` (red team wave 2, U4): the
+    finite word ``fin`` is then out of range and is discarded by the ``(1 - z)`` mask, never by a range check.  An
+    implementation must keep that mask and must **not** range-check ``e1`` to ``[e_min, exp_hi)`` (it would reject
+    every honest zero); the declared input range below is the range actually fed."""
 
     name = "pack"
 
@@ -494,7 +499,7 @@ class Pack:
         return Contract(
             "pack",
             inputs={
-                "s": _bit(), "e1": (p.e_min, p.exp_hi + 1), "M": _bits(p.acc_sig), "z": _bit(),
+                "s": _bit(), "e1": (p.exp_lo, p.exp_hi + 1), "M": _bits(p.acc_sig), "z": _bit(),
                 **{f"ovf[{g}]": _bit() for g in range(G)}, **{f"sgn[{g}]": _bit() for g in range(G)},
             },
             hints={"hidden": _bit(), "low": _bits(p.acc_frac)},

@@ -71,7 +71,9 @@ def test_u4_containment() -> None:
     c = ZC.containment(REAL)
     assert all(c["derived"].values()), c["failing_derived"]
     bad = {e["edge"] for e in c["edges"] if not e["ok"]}
-    assert bad == {"state_out.e_hat (g=0) contract range -> group_max.cand[0]", "state_out.e_hat (last) -> pack.e1"}
+    # pack.e1 now declares the range it is fed (exp_lo: the floor at z = 1, masked by (1 - z)); the group-to-group
+    # edge is contained only through the per-group ceiling e_hi(g) + growth, which the contracts do not state
+    assert bad == {"state_out.e_hat (g=0) contract range -> group_max.cand[0]"}
 
 
 def test_census_delta_numbers() -> None:

@@ -110,10 +110,11 @@ F1-F4 thresholds.  What an implementation can still get wrong is the *realisatio
       any challenge.  `c_0 = 0` is a constant, not a column.  An infinite intermediate word must be rejected by unit
       `i+1`'s `fp32_decode` range `t < 255`, not by a separate flag.
 - [ ] **Contract-level range gap (U4).**  `state_out.e_hat` reaches the floor (-132) when `z = 1`, below `pack.e1`'s
-      declared `[-126, ..)`; harmless only because `pack` multiplies the finite word by `(1 - z)`.  An implementation that
-      range-checks `pack`'s inputs as declared would reject honest zero results; one that reads `fld = e1 + 126 + hidden`
-      without the `(1 - z)` mask emits a wrapped word.  Likewise the group-to-group exponent edge is contained only by
-      the per-group ceiling `e_hi(g) + growth` (`z3_checker.containment`).
+      formerly declared `[-126, ..)`; harmless only because `pack` multiplies the finite word by `(1 - z)`.  The
+      contract now declares `pack.e1` as the range actually fed (`exp_lo`) and its docstring states the mask
+      dependency (`checker/gadgets.py`, `Pack`).  Still check: an implementation that reads `fld = e1 + 126 + hidden`
+      without the `(1 - z)` mask emits a wrapped word; the group-to-group exponent edge is contained only by the
+      per-group ceiling `e_hi(g) + growth` (`z3_checker.containment`), which the contracts do not state.
 - [ ] **Fiat-Shamir domain separation.**  Every squeezed challenge is bound to (protocol id, `K`, `B`, table ids, the
       unit index range of the sub-batch, the round index); the same transcript prefix must not yield the lookup challenge
       of table `T` and the range-batching challenge (checklist item "verifier-side randomness reuse").  The public
