@@ -130,7 +130,15 @@ GPUS: dict[str, Gpu] = {
                 "NVIDIA H100 Tensor Core GPU datasheet (SXM): INT8 1,979 TOPS, BF16 989 TFLOPS, FP32 67 TFLOPS, HBM3 3.35 TB/s"),
 }
 
-#: Merkle-hash rates (bytes hashed per second) on SIMT cores.  Three stated values; none measured by this lane.
+#: The RTX 4090 (hash-gpu lane's probe device, not a campaign anchor): kept out of ``GPUS`` so the report's rows do not
+#: change; ``reprice`` passes it to ``Priced.times`` explicitly.  Datasheet: INT8 dense 660.6 TOPS (1,321 sparse), BF16
+#: 165.2 TFLOPS (FP32 accumulate), FP32 82.6 TFLOPS, GDDR6X 1,008 GB/s.
+GPU_RTX4090 = Gpu("NVIDIA GeForce RTX 4090", 660.6, 165.2, 82.6, 1.008e12, 1.0e11 * 82.6 / 19.5,
+                  "NVIDIA Ada GPU architecture whitepaper / RTX 4090 datasheet: INT8 660.6 TOPS dense, BF16 165.2 TFLOPS, FP32 82.6 TFLOPS, 1,008 GB/s")
+
+#: Merkle-hash rates (bytes hashed per second) on SIMT cores.  Three stated values; none measured by this lane -- the
+#: hash-gpu lane's measured 4090 rates are in ``reports/hash_gpu.json`` and applied by ``backends/shared/hash_gpu/reprice.py``
+#: (or ``--hash-rate`` below).
 HASH_RATES: dict[str, dict] = {
     "blake3_simt_conservative": {"bytes_per_s": 10e9, "basis": "explore.pcs indicative GPU hash rate (10 GB/s); conservative"},
     "blake3_simt": {"bytes_per_s": 50e9, "basis": "ASSUMPTION: Blake3 tree hashing on A100/H100 SIMT at 50 GB/s (long-message throughput; no measurement in hand)"},
@@ -369,7 +377,7 @@ HINT_FREE_BRANCHES = {"commit_query_wires": "A", "no_commit": "A-hintfree-depth6
 #: takes 4.7 s for 4,096 units single-threaded (backends/direct/README.md) = 1.15 ms per unit on one CPU core.
 HINT_OPS_PER_UNIT = 20_000
 HINT_CPU_SECONDS_PER_UNIT = 4.7 / 4096
-SIMT_INT_OPS_PER_S = {"A100": 19.5e12 * 0.25, "H100": 67e12 * 0.25}      # 25% of the FP32/INT32 peak (ASSUMPTION)
+SIMT_INT_OPS_PER_S = {"A100": 19.5e12 * 0.25, "H100": 67e12 * 0.25, "RTX4090": 82.6e12 * 0.25}      # 25% of the FP32/INT32 peak (ASSUMPTION)
 
 
 @dataclass
@@ -778,6 +786,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     import sys
 
     args = list(argv if argv is not None else sys.argv[1:])
+    if "--hash-rate" in args:            # override the default Merkle hash rate (GB/s), e.g. the hash-gpu lane's measured value
+        i = args.index("--hash-rate")
+        gbps = float(args[i + 1])
+        del args[i:i + 2]
+        HASH_RATES["blake3_simt"] = {"bytes_per_s": gbps * 1e9, "basis": f"--hash-rate {gbps} GB/s (CLI override)"}
+        print(f"hash rate: {gbps} GB/s")
     if args and args[0] == "--report":
         from pathlib import Path
 
