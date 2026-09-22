@@ -143,3 +143,114 @@ product realisation of a variable bound: `x * ipow` in `[2^B - p, p)`). Widths: 
 | NORM_VBND | `normalise.norm.div` |
 | V_PREMISE | `leading_bit.lead.window`, `normalise.norm.vbnd` |
 
+
+<!-- hand-written appendix: z3 verdicts, battery, accounting -->
+
+## 6. z3 over F_p = BabyBear: every embedded gadget, all rules, then each rule dropped
+
+Run `r20260922-054949-dcc0` on vy-cpu3 (12 procs, 300 s per job, tree 91ec50e; `z3_babybear.py --json`, raw in
+`reports/z3_babybear.json`).  Each gadget's *embedded* `check` (limbs, direct bounds, tight quotient) is asserted
+modulo p on the declared hint ranges read mod p; z3 searches for an accepted witness whose outputs differ from the
+integer reference.  Jobs are split on the table row (POW/ALIGN/LEAD/NORM pinned) and on every bit-valued input/hint,
+as wave 2 did for the U2 selector split; a gadget is UNSAT iff every job is.  `lead_norm` is `leading_bit` composed
+with `normalise` with `l` a free hint (the composition the `NORM_VBND` redundancy claim rests on).
+
+~~~
+gadget         rules        verdict   jobs   unsat/sat/unknown   z3 s (sum)  max
+bf16_decode    all          UNSAT        4   4/0/0                0.1   0.04
+fp32_decode    all          UNSAT        8   8/0/0                0.2   0.05
+product        all          UNSAT        8   8/0/0                0.0   0.01
+group_max      all          UNSAT     1024   1024/0/0             2.6   0.33
+align_state    all          UNSAT      512   512/0/0              4.0   0.04
+align_product  all          UNSAT      512   512/0/0              4.8   0.03
+signed_sum     all          UNSAT     2048   2048/0/0            11.6   0.02
+leading_bit    all          UNSAT       31   31/0/0               0.5   0.03
+normalise      all          UNSAT       64   64/0/0              22.2   1.47
+lead_norm      all          UNSAT     1984   1984/0/0           139.0   2.69
+state_out      all          UNSAT        8   8/0/0                0.0   0.01
+pack           all          UNSAT      128   128/0/0              1.8   0.27
+epilogue       all          UNSAT        4   4/0/0                0.1   0.03
+
+fp32_decode    -LIMB16      SAT          8   2/6/0     c = (0, 61568): f = 2^23 - 2 read as the word's fraction
+pack           -LIMB16      UNSAT      128   128/0/0   (the output limbs are a layout, not a soundness rule)
+epilogue       -LIMB16      SAT          4   0/4/0     y32 = 32767 -> hi 30720, lo 32768, rem 65535: y16 = 30720 (ref 0)
+align_state    -LT_DIRECT   SAT        512   0/512/0   M = 2^24 - 1, d = 0: q = 33554369, r = 61 (ref q = 33554430)
+align_product  -LT_DIRECT   SAT        512   13/499/0  u = 65535, d = 0: q = 34814, r = 30721
+leading_bit    -LT_DIRECT   SAT         31   0/31/0    v = 16, l = 0 (ref 5)
+lead_norm      -LT_DIRECT   SAT       1984   1954/30/0 E = -100, v = 0, l = 1: e1 = -124 (ref -125)
+align_state    -QUOT_TIGHT  SAT        512   6/506/0   M = 0, d = 6: q = 31457280, r = 1 (q 2^6 + r = p + 0)
+align_product  -QUOT_TIGHT  SAT        512   25/487/0  u = 0, d = 25: q = 61440, r = 1
+normalise      -NORM_MBND   SAT         64   63/1/0    E = -132, l = 19, v = 2^18, clamp: M = 15730688 (ref 2048)
+lead_norm      -NORM_MBND   SAT       1984   1956/28/0 E = -132, v = 0, clamp: M = 15728640 (ref 0)
+normalise      -NORM_VBND   UNSAT       64   64/0/0    REDUNDANT
+lead_norm      -NORM_VBND   UNSAT     1984   1984/0/0  REDUNDANT (also with l free)
+leading_bit    -V_PREMISE   SAT         31   4/27/0    v = 939524098 = p - 2^30 + 1, l = 0 (ref 30)
+normalise      -V_PREMISE   UNSAT       64   64/0/0
+lead_norm      -V_PREMISE   SAT       1984   1684/299/1  E = -124, v = 1006633088, l = 0, clamp (1 job timed out at 300 s; verdict SAT regardless)
+~~~
+
+Verdicts:
+
+* **All 13 embedded gadgets UNSAT under the six rules** (5,375 jobs, 187 s of z3, no UNKNOWN).
+* **Necessary** (dropping it is SAT with a concrete forgery): `LIMB16` (fp32_decode, epilogue), `LT_DIRECT`
+  (align_state, align_product, leading_bit), `QUOT_TIGHT` (align_state, align_product), `NORM_MBND` (normalise),
+  `V_PREMISE` (leading_bit; it is a guarantee of `signed_sum`'s ranges, |v| <= s_max = 570,417,150, not a check).
+* **Redundant**: `NORM_VBND` -- the extra bound `v < 2^l` in `normalise` stays UNSAT without it, in isolation *and*
+  composed with `leading_bit` with `l` a free hint.  Lanes may drop the `vbnd` column of NORM and its 30-bit range
+  (1 column, 2 chunk lookups per group).  `pack`'s limb output is a layout choice, not a soundness rule (UNSAT
+  without it); the limbs are still what the chained unit consumes.
+* **Found by z3 and fixed in this spec (run 1 -> run 2)**: the direct realisation of the leading-bit window,
+  `rng(span - 1 - (v - lo), 0, 2^30)`, bounds `v - lo` only from above; `v = p - 2^30 + 1`, `l = 0` passed.  The
+  rule now reads: the direct form of `0 <= x < bnd` for an `x` that is not itself a range-checked hint is **two**
+  ranges, `rng(x, 0, 2^B)` and `rng(bnd - 1 - x, 0, 2^B)` (section 2, `LT_DIRECT`).  A lane that implemented the
+  first draft of this table would have shipped that hole: relayed as a breakthrough ledger entry
+  (`leading_bit window lower bound`).
+
+## 7. The forgery battery (`redteam/battery_babybear.py`, `fixtures/redteam/babybear-battery/v1/`)
+
+83 cases, every expected verdict **reject**; `run_battery(prover_accepts) -> report` takes a callable on a `Case`
+(`level` step / vu / gadget, WP2 hint layout of `gen_step` plus the limb hints, claimed output = what the mutated
+witness leads a congruence-only checker to).  Honest instances are the Ada golden records (finite ones).
+
+~~~
+class        cases  what                                                                       naive mod-p  embedded
+wrap            58  (u, w) hints of one gadget re-split with u' 2^s + w' = u 2^s + w + p,        reject       reject
+                    every downstream hint re-derived honestly from the wrong value
+fractional       1  x -> (x 2^s + j p)/2^s on a single hint                                       reject       reject
+zero_swap        4  +0 <-> -0 in an operand / the accumulator, honest hints kept                  reject       reject
+hint_swap        3  another instance's hints under these operands (whole tree / one operand)      reject       reject
+chain            4  unit-2 accumulator handed as c + p (a valid FP32 word != c; unit-2 decodes it)  ACCEPT     reject
+epilogue         1  RN-even tie 0x....8000 with lsb/carry toggled                                  reject       reject
+z3              12  the SAT models above, one per (gadget, dropped rule)                       n/a (gadget) reject; ACCEPTED without the rule
+~~~
+
+Teeth: the naive checker (every WP2 predicate mod p as written, products read mod p, a range wider than p left
+unchecked because it has no in-field realisation) accepts the four `chain` forgeries -- the +p shadow of the
+accumulator word between units, exactly the autoproof class -- and each of the 12 z3 models is accepted by the
+embedding with its rule removed.  The WP2 integer checker rejects all 71 step/vu cases; the embedded BabyBear
+checker (all rules) rejects all 83.  Per-hint `wrap`/`fractional` mutations mostly die on the hint's *own* range
+check (WP2 declares a range for every hint), which is why those classes are small: the wraps that survive a
+per-hint range are precisely the product-realised bounds, and those are the z3 rows.
+
+Not in v1: bench-instances/v1 operands (the golden groups stand in), Hopper params (the rules table is per-params;
+REAL = Ampere is what the lanes are building).
+
+## 8. Soundness accounting for BabyBear^d (`security.accounting`, K = 1536, B = 4096, 393,216 units)
+
+Ligero n = 2^14, k = 2^12, l = 3840 (the test-suite parameters); union bound over every term; exact rationals.
+
+~~~
+challenge field   Ligero t   candidate   lookup (T_range16, 65,536 rows, 1.12e8 queries)   total        meets 2^-128   meets 2^-80
+BabyBear^4          121      A / B       2^-96.5  (identity term alone 2^-96.9)             2^-82.0      no             yes
+BabyBear^4          192      A / B       2^-96.5                                            2^-96.5/-94.8 no            yes
+BabyBear^5          192      A / B       2^-127.4                                           2^-126.6/-125.4 no          yes
+BabyBear^6          192      A / B       2^-158.3 (identity term alone 2^-158.7)            2^-127.7     no*            yes
+BabyBear^6 (hash 2^60 queries) 192  A/B  2^-158.3                                           2^-130.2     yes            yes
+first_configuration(-128): degree 6, t = 191, total 2^-129.5 (A and B); first_configuration(-80): degree 4, t = 120, total 2^-81.4
+~~~
+
+\* at the default hash model (2^64 adversary queries against a 256-bit hash) the collision term is exactly 2^-128 on
+its own, so no configuration meets 2^-128 -- a modelling choice, not a field property.  With 2^60 queries (what
+`first_configuration` uses) **tensor.md's claim stands: BabyBear^6 is the first degree that reaches 2^-128**, and
+degree 5 misses on the lookup identity term (2^-127.4).  At 2^-80 degree 4 is right with the lookup term at
+2^-96.5 and the Ligero opening term (2^-82.0 at t = 121) the binding one.

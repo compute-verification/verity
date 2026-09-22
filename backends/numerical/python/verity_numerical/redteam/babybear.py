@@ -1085,7 +1085,11 @@ def main(argv: list[str] | None = None) -> int:
     rep = rules_report()
     root = Path(__file__).resolve().parents[5]
     out = Path(args.out) if args.out else root / "backends/numerical/reports/babybear_rules.md"
-    out.write_text(render_md(rep))
+    marker = "<!-- hand-written appendix: z3 verdicts, battery, accounting -->"
+    appendix = ""
+    if out.exists() and marker in out.read_text():
+        appendix = out.read_text().split(marker, 1)[1]
+    out.write_text(render_md(rep) + (f"\n{marker}{appendix}" if appendix else ""))
     if args.json:
         Path(args.json).write_text(json.dumps(rep, indent=1, default=str) + "\n")
     print(render_md(rep))

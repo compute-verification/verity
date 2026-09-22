@@ -174,6 +174,8 @@ def _gadget_accepts(case: Case, p: Params, emb: Embedding) -> tuple[bool, str]:
             ctx.eq(f"out[{i}]", got, want)
     except Reject as e:
         return False, str(e)
+    except KeyError as e:  # a column the embedding requires is absent from the witness
+        return False, f"missing hint {e}"
     return True, ""
 
 

@@ -34,7 +34,7 @@
  "params": "REAL",
  "source": "z3_babybear",
  "verdicts": {
-  "embedded": "reject: raised KeyError",
+  "embedded": "reject: missing hint 'f_lo'",
   "int": "reject: integer semantics differ (z3 reference)",
   "without_LIMB16": "accept"
  }
