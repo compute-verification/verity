@@ -169,7 +169,11 @@ def moe_layer_weights_type(C: dict[str, Any]) -> Record:
     fields: list[tuple[str, Any]] = [("ln1", Array(H, BF16)), ("qkv_w", Array(QKV, Array(H, BF16)))]
     if C.get("BIAS", True):
         fields.append(("qkv_b", Array(QKV, BF16)))
-    if C.get("QK_NORM"):
+    if C.get("QK_NORM") == "head":
+        # [R19 qwen3] Qwen3-MoE (`Qwen3MoeAttention`): the per-head q/k RMSNorm of the dense Qwen3 family -- ONE `[D]` vector shared by every
+        # head (`dense_layer_weights_type`), not OLMoE's all-heads `[NH*D]` / `[KVH*D]` norm.  Same field names, so every reader is unchanged.
+        fields += [("q_norm", Array(C["D"], BF16)), ("k_norm", Array(C["D"], BF16))]
+    elif C.get("QK_NORM"):
         fields += [("q_norm", Array(C["NH"] * C["D"], BF16)), ("k_norm", Array(C["KVH"] * C["D"], BF16))]
     fields += [("o_w", Array(H, Array(C["NH"] * C["D"], BF16))), ("ln2", Array(H, BF16)),
                ("gate_w", Array(E, Array(H, BF16))),
