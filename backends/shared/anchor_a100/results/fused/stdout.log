@@ -1,0 +1,65 @@
+25 passed in 1188.44s (0:19:48)
+== simt (block 256, warps 4)
+  n=2^23 deg_in=6 fold+eval:   1871.2 us     484 GB/s  2.08x HBM floor  SIMT-model 0.63 of INT32 peak  TC-model 0.066 of INT8 peak
+  n=2^23 deg_in=6 fold     :    654.3 us    1385 GB/s  0.73x HBM floor  SIMT-model 0.77 of INT32 peak  TC-model 0.142 of INT8 peak
+  n=2^23 deg_in=6 eval     :   1968.4 us     307 GB/s  3.29x HBM floor  SIMT-model 0.02 of INT32 peak  TC-model 0.001 of INT8 peak
+  n=2^22 deg_in=6 fold+eval:    935.4 us     484 GB/s  2.08x HBM floor  SIMT-model 0.63 of INT32 peak  TC-model 0.066 of INT8 peak
+  n=2^22 deg_in=6 fold     :    338.0 us    1340 GB/s  0.75x HBM floor  SIMT-model 0.75 of INT32 peak  TC-model 0.137 of INT8 peak
+  n=2^22 deg_in=6 eval     :    989.5 us     305 GB/s  3.30x HBM floor  SIMT-model 0.02 of INT32 peak  TC-model 0.001 of INT8 peak
+  n=2^22 deg_in=1 fold+eval:    606.6 us     332 GB/s  3.04x HBM floor  SIMT-model 0.60 of INT32 peak  TC-model 0.038 of INT8 peak
+  n=2^22 deg_in=1 eval     :     52.4 us     960 GB/s  1.05x HBM floor  SIMT-model 0.33 of INT32 peak  TC-model 0.016 of INT8 peak
+  n=2^21 deg_in=6 fold+eval:    473.8 us     478 GB/s  2.11x HBM floor  SIMT-model 0.62 of INT32 peak  TC-model 0.065 of INT8 peak
+  n=2^21 deg_in=6 fold     :    179.9 us    1259 GB/s  0.80x HBM floor  SIMT-model 0.70 of INT32 peak  TC-model 0.129 of INT8 peak
+  n=2^21 deg_in=6 eval     :    508.3 us     297 GB/s  3.39x HBM floor  SIMT-model 0.02 of INT32 peak  TC-model 0.001 of INT8 peak
+  n=2^20 deg_in=6 fold+eval:    244.3 us     464 GB/s  2.17x HBM floor  SIMT-model 0.60 of INT32 peak  TC-model 0.063 of INT8 peak
+  n=2^20 deg_in=6 fold     :    101.3 us    1117 GB/s  0.90x HBM floor  SIMT-model 0.62 of INT32 peak  TC-model 0.115 of INT8 peak
+  n=2^20 deg_in=6 eval     :    263.3 us     287 GB/s  3.52x HBM floor  SIMT-model 0.02 of INT32 peak  TC-model 0.001 of INT8 peak
+  n=2^20 deg_in=1 fold+eval:    158.6 us     317 GB/s  3.18x HBM floor  SIMT-model 0.57 of INT32 peak  TC-model 0.037 of INT8 peak
+  n=2^20 deg_in=1 eval     :     20.6 us     610 GB/s  1.65x HBM floor  SIMT-model 0.21 of INT32 peak  TC-model 0.010 of INT8 peak
+  n=2^18 deg_in=6 fold+eval:     78.3 us     362 GB/s  2.79x HBM floor  SIMT-model 0.47 of INT32 peak  TC-model 0.049 of INT8 peak
+  n=2^18 deg_in=6 fold     :     38.5 us     736 GB/s  1.37x HBM floor  SIMT-model 0.41 of INT32 peak  TC-model 0.075 of INT8 peak
+  n=2^18 deg_in=6 eval     :     76.3 us     248 GB/s  4.07x HBM floor  SIMT-model 0.01 of INT32 peak  TC-model 0.001 of INT8 peak
+  n=2^16 deg_in=6 fold+eval:     34.2 us     207 GB/s  4.88x HBM floor  SIMT-model 0.27 of INT32 peak  TC-model 0.028 of INT8 peak
+  n=2^16 deg_in=6 fold     :     25.0 us     283 GB/s  3.56x HBM floor  SIMT-model 0.16 of INT32 peak  TC-model 0.029 of INT8 peak
+  n=2^16 deg_in=6 eval     :     35.0 us     135 GB/s  7.47x HBM floor  SIMT-model 0.01 of INT32 peak  TC-model 0.000 of INT8 peak
+  n=2^14 deg_in=6 fold+eval:     28.9 us      61 GB/s  16.44x HBM floor  SIMT-model 0.08 of INT32 peak  TC-model 0.008 of INT8 peak
+  n=2^14 deg_in=6 fold     :     22.0 us      81 GB/s  12.51x HBM floor  SIMT-model 0.05 of INT32 peak  TC-model 0.008 of INT8 peak
+  n=2^14 deg_in=6 eval     :     31.5 us      37 GB/s  26.91x HBM floor  SIMT-model 0.00 of INT32 peak  TC-model 0.000 of INT8 peak
+  n=2^12 deg_in=6 fold+eval:     27.9 us      16 GB/s  63.58x HBM floor  SIMT-model 0.02 of INT32 peak  TC-model 0.002 of INT8 peak
+  n=2^12 deg_in=6 fold     :     21.1 us      21 GB/s  48.13x HBM floor  SIMT-model 0.01 of INT32 peak  TC-model 0.002 of INT8 peak
+  n=2^12 deg_in=6 eval     :     30.5 us      10 GB/s  104.34x HBM floor  SIMT-model 0.00 of INT32 peak  TC-model 0.000 of INT8 peak
+  layer model:
+  layer w=137: 21 kernels  eager 1.38 ms  graphed 1.03 ms  (171 GB/s; floor 0.09 ms)  tail(n<=2^15: 15 kernels) eager 996 us graphed 475 us
+  layer w=679: 23 kernels  eager 2.40 ms  graphed 2.26 ms  (312 GB/s; floor 0.35 ms)  tail(n<=2^15: 15 kernels) eager 992 us graphed 476 us
+  layer w=673: 23 kernels  eager 2.41 ms  graphed 2.26 ms  (311 GB/s; floor 0.35 ms)  tail(n<=2^15: 15 kernels) eager 993 us graphed 476 us
+  layer w=669: 23 kernels  eager 2.40 ms  graphed 2.26 ms  (311 GB/s; floor 0.35 ms)  tail(n<=2^15: 15 kernels) eager 997 us graphed 476 us
+  layer w=647: 23 kernels  eager 2.40 ms  graphed 2.26 ms  (311 GB/s; floor 0.35 ms)  tail(n<=2^15: 15 kernels) eager 994 us graphed 476 us
+  layer w=533: 23 kernels  eager 2.40 ms  graphed 2.26 ms  (311 GB/s; floor 0.35 ms)  tail(n<=2^15: 15 kernels) eager 993 us graphed 476 us
+  simt 6 layers / 130 rounds: eager 13.40 ms  graphed 12.35 ms  floor 1.81 ms (6.81x)  tail eager 5.96 graphed 2.86 ms
+  launch: single eager 63.8 us; per kernel in a run of 32: eager 38.0 us, graphed 21.9 us
+== tc (block 32, warps 2)
+  n=2^23 deg_in=6 fold+eval:   6246.1 us     145 GB/s  6.95x HBM floor  SIMT-model 0.19 of INT32 peak  TC-model 0.020 of INT8 peak
+  n=2^23 deg_in=6 fold     :   2199.8 us     412 GB/s  2.45x HBM floor  SIMT-model 0.23 of INT32 peak  TC-model 0.042 of INT8 peak
+  n=2^22 deg_in=6 fold+eval:   3130.6 us     145 GB/s  6.97x HBM floor  SIMT-model 0.19 of INT32 peak  TC-model 0.020 of INT8 peak
+  n=2^22 deg_in=6 fold     :   1107.3 us     409 GB/s  2.46x HBM floor  SIMT-model 0.23 of INT32 peak  TC-model 0.042 of INT8 peak
+  n=2^21 deg_in=6 fold+eval:   1568.8 us     144 GB/s  6.98x HBM floor  SIMT-model 0.19 of INT32 peak  TC-model 0.020 of INT8 peak
+  n=2^21 deg_in=6 fold     :    560.9 us     404 GB/s  2.50x HBM floor  SIMT-model 0.23 of INT32 peak  TC-model 0.041 of INT8 peak
+  n=2^20 deg_in=6 fold+eval:    796.1 us     142 GB/s  7.09x HBM floor  SIMT-model 0.19 of INT32 peak  TC-model 0.019 of INT8 peak
+  n=2^20 deg_in=6 fold     :    288.0 us     393 GB/s  2.56x HBM floor  SIMT-model 0.22 of INT32 peak  TC-model 0.040 of INT8 peak
+  n=2^18 deg_in=6 fold+eval:    210.0 us     135 GB/s  7.48x HBM floor  SIMT-model 0.18 of INT32 peak  TC-model 0.018 of INT8 peak
+  n=2^18 deg_in=6 fold     :     83.6 us     339 GB/s  2.98x HBM floor  SIMT-model 0.19 of INT32 peak  TC-model 0.035 of INT8 peak
+  n=2^16 deg_in=6 fold+eval:     57.6 us     123 GB/s  8.21x HBM floor  SIMT-model 0.16 of INT32 peak  TC-model 0.017 of INT8 peak
+  n=2^16 deg_in=6 fold     :     33.4 us     212 GB/s  4.76x HBM floor  SIMT-model 0.12 of INT32 peak  TC-model 0.022 of INT8 peak
+  n=2^14 deg_in=6 fold+eval:     28.8 us      61 GB/s  16.41x HBM floor  SIMT-model 0.08 of INT32 peak  TC-model 0.008 of INT8 peak
+  n=2^14 deg_in=6 fold     :     19.0 us      93 GB/s  10.81x HBM floor  SIMT-model 0.05 of INT32 peak  TC-model 0.010 of INT8 peak
+  n=2^12 deg_in=6 fold+eval:     23.2 us      19 GB/s  52.79x HBM floor  SIMT-model 0.02 of INT32 peak  TC-model 0.003 of INT8 peak
+  n=2^12 deg_in=6 fold     :     16.5 us      27 GB/s  37.55x HBM floor  SIMT-model 0.01 of INT32 peak  TC-model 0.003 of INT8 peak
+  layer model:
+  layer w=137: 21 kernels  eager 1.62 ms  graphed 1.45 ms  (121 GB/s; floor 0.09 ms)  tail(n<=2^15: 15 kernels) eager 1158 us graphed 383 us
+  layer w=679: 23 kernels  eager 4.45 ms  graphed 4.32 ms  (163 GB/s; floor 0.35 ms)  tail(n<=2^15: 15 kernels) eager 1163 us graphed 384 us
+  layer w=673: 23 kernels  eager 4.47 ms  graphed 4.33 ms  (163 GB/s; floor 0.35 ms)  tail(n<=2^15: 15 kernels) eager 1168 us graphed 383 us
+  layer w=669: 23 kernels  eager 4.45 ms  graphed 3.60 ms  (196 GB/s; floor 0.35 ms)  tail(n<=2^15: 15 kernels) eager 1167 us graphed 319 us
+  layer w=647: 23 kernels  eager 3.70 ms  graphed 3.58 ms  (197 GB/s; floor 0.35 ms)  tail(n<=2^15: 15 kernels) eager 1157 us graphed 316 us
+  layer w=533: 23 kernels  eager 3.69 ms  graphed 3.58 ms  (197 GB/s; floor 0.35 ms)  tail(n<=2^15: 15 kernels) eager 1151 us graphed 316 us
+  tc 6 layers / 130 rounds: eager 22.39 ms  graphed 20.85 ms  floor 1.81 ms (11.49x)  tail eager 6.96 graphed 2.10 ms
+  launch: single eager 68.3 us; per kernel in a run of 32: eager 46.8 us, graphed 13.1 us
