@@ -157,7 +157,15 @@ def _check_main(args) -> int:
     if steps:
         pre = struct["per_rank"][0]["prefill"]
         struct["prefill_all_reduce_rows_equal_prompt_tokens"] = (pre["rows_all_reduce"] == [sum(prompts)])
-        struct["prefill_all_gather_rows_equal_requests"] = (pre["rows_all_gather"] == [len(prompts)])
+        # [R19 tp2 F-r19-tp2-1, after moe F-r19-moe-1] the prefill's all-gathers are of TWO row classes: the logits all-gather carries the
+        # step's SAMPLED rows (#requests) and must be present; a MID-MODULE all-gather (OlmoeAttention's q/k gathers, recorded since the
+        # recorder patches the model module's own import) carries the step's TOKENS, exactly like the hidden-stream all-reduces.  The R13 rule
+        # `rows_all_gather == [#requests]` read the 3755-row q/k gathers of row #70 as a structure FAIL (rows [8, 3755]) although every one
+        # of the 66 sites matched its link at every step.  Any other row count still fails.
+        rows_ag = list(pre["rows_all_gather"])
+        struct["prefill_all_gather_rows_equal_requests"] = (len(prompts) in rows_ag) and set(rows_ag) <= {len(prompts), sum(prompts)}
+        struct["prefill_all_gather_rows"] = {"observed": rows_ag, "sampled_rows": len(prompts), "prompt_tokens": sum(prompts),
+                                             "rule": "logits all-gather rows == #requests (required); mid-module all-gather rows == prompt tokens; nothing else"}
         struct["pass"] &= bool(struct["prefill_all_reduce_rows_equal_prompt_tokens"] and struct["prefill_all_gather_rows_equal_requests"])
     res["structure"] = struct
     # ---- 2. cross-rank provenance on the stored steps
