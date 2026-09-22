@@ -77,14 +77,33 @@ coins; any `t <= t_pad` columns are masked) and the test now reports rather than
 
 ## 4. F3: the two modes at B = 4096 (25 x 170) on the L40S, median of 3 (`r20260922-105905-2021`)
 
-BENCH_TABLE
+| run (`--mode`, `--zk`) | prover s (median of 3) | ms/VU | `overhead.vs_native_peak` | verifier s | transcript MB | depth | t | D | t_pad | union bound | peak GB |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| ZK interactive | 1.394 | 0.340 | 3.45e7 | 0.911 | 122.4 | 3 | 197 | 6 | 256 | 2^-128.05 (statistical) | 3.52 |
+| ZK fiat-shamir | 1.500 | 0.366 | 3.72e7 | 1.071 | 165.3 | 1 | 288 | 7 | 512 | 2^-128.04 (q x eps, q = 2^60, PROM) | 3.54 |
+| non-ZK interactive | 1.366 | 0.333 | 3.38e7 | 0.967 | 110.8 | 3 | 196 | 6 | -- | 2^-128.25 (statistical) | 2.80 |
+| non-ZK fiat-shamir | 1.437 | 0.351 | 3.56e7 | 1.049 | 149.8 | 1 | 285 | 7 | -- | 2^-128.59 (q x eps) | 2.81 |
+
+Overhead is `contract.overhead(seconds_per_vu, K)` as in every ledger row (native peak = the campaign's L40S BF16
+constant). ZK costs +2% (interactive) over its control; the FS re-parameterisation (`D = 7`, `t = 288`) costs +7.6%
+prover, +18% verifier, +35% transcript over interactive ZK -- the fused D-generic kernels absorb `D = 7` cheaply.
+Caveat: `b-verifier` shares vy-g3; no `--exclusive`, so these medians may include contention.
 
 Before (b-zk `r20260922-092404-2a1b`, FS-with-prover-nonce run priced with the interactive bound): ZK 1.41 s
 (0.345 ms/VU), non-ZK 1.37 s (0.334 ms/VU), verifier 0.96 s, 122.3 MB, `t = 197`, `D = 6`.
 
 ## 5. Labels per run id (ledger `b-zk-fix.jsonl`)
 
-LABEL_TABLE
+| run id | mode | proof_class | why |
+|---|---|---|---|
+| `r20260922-105905-2021` ZK interactive | interactive, `--zk` | `COMPLETE_ZK_BACKEND` | malicious-verifier ZK under CRH only: unprogrammed simulator accepted by the real `verify()` (honest, adaptive, aborting, statement-adaptive V*), leak 0/16150, negatives/mutations/battery rejected |
+| `r20260922-105905-2021` ZK fiat-shamir | fiat-shamir, `--zk` | `COMPLETE_HVZK_BACKEND` | HVZK via 8b masking; NIZK in the programmable ROM only; soundness by the `q x eps` rule |
+| `r20260922-105905-2021` non-ZK interactive | interactive | `NON_ZK_PROOF_DIAGNOSTIC` | no masking |
+| `r20260922-105905-2021` non-ZK fiat-shamir | fiat-shamir | `NON_ZK_PROOF_DIAGNOSTIC` | no masking |
+
+Supporting runs: `r20260922-105112-d542` (gates, negatives 52/52, mutations 252/252, `redteam_battery`, `redteam/run.py`
+leak regression + simulator, fixture `q_leak_fixed_l256_2vu.json`); `r20260922-105905-2021` also re-ran `redteam_zk.py`
+(PASS) and `redteam_binding.py` after the `config_for` fix. `python -m verity_numerical.bench.ledger check` passes.
 
 Every ZK row notes: the current statement publishes `a, b` and `y16` (`statement_digest`), so privacy is vacuous
 for this statement; the ZK claim is about the construction (masking + coins + derivation) and becomes meaningful
