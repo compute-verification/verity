@@ -20,8 +20,19 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from .field import DEG, P, Ext, e_add, e_mul, e_scale, ext_mul, ext_scale, geometric, inv_mod, py_exts, root_of_unity, t_ext, t_exts
-from .gkr import Reader, VerifyError
+from .field import (
+    DEG,
+    Ext,
+    P,
+    e_add,
+    e_scale,
+    geometric,
+    inv_mod,
+    py_exts,
+    root_of_unity,
+    t_exts,
+)
+from .gkr import VerifyError
 from .transcript import Transcript
 
 
@@ -131,8 +142,8 @@ class Merkle:
         self.rows, self.n = rows, n
         if code.is_cuda:
             import cupy as cp
-
-            from hash_gpu.merkle import commit as gpu_commit, digest_bytes
+            from hash_gpu.merkle import commit as gpu_commit
+            from hash_gpu.merkle import digest_bytes
 
             m = cp.asarray(code.to(torch.int32).contiguous()).view(cp.uint32)
             self.tree = gpu_commit(m, "sha256")
@@ -150,7 +161,6 @@ class Merkle:
 
     def path(self, j: int) -> list[bytes]:
         if self._gpu:
-            from hash_gpu.merkle import digest_bytes
 
             lv = [l.get() for l in self.tree.levels[:-1]] if not hasattr(self, "_host") else self._host
             self._host = lv
@@ -322,7 +332,7 @@ def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript) -> Opening:
     """``a`` ``(l, 6)`` int64 (the linear functional); ``w`` and ``qc`` travel in the Opening."""
     p = cm.params
     dev = a.device
-    rows, k, n = cm.rows, p.k, p.n
+    rows, n = cm.rows, p.n
     r = row_coeffs(tr, rows, dev)                                     # (rows, 6)
     code = cm.code
     w, qc = open_w_qc(cm, a, r)

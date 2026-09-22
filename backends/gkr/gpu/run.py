@@ -112,7 +112,7 @@ def cmd_negatives(args) -> int:
     for d in sorted((root / "neg").iterdir(), key=lambda q: int(q.name)):
         inst = load_instance(d, dev)
         try:
-            proof, st = prover.prove(inst, not args.clear)
+            proof, _st = prover.prove(inst, not args.clear)
         except Exception as e:  # noqa: BLE001 -- the prover itself notices (a lookup miss, a nonzero fractional sum)
             results[int(d.name)] = {"rejected": True, "where": "prover", "why": f"{type(e).__name__}: {e}"}
             print(d.name, "rejected at prover:", e, flush=True)

@@ -359,5 +359,5 @@ try:
             _fast_scatter = _kernels.scatter_terms
             _fast_gate_eval = _kernels.gate_eval
             _fast_combine_level = _kernels.combine_level
-except Exception:  # pragma: no cover
+except Exception:  # noqa: BLE001 -- no Triton / no CUDA: the torch path is used
     _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = _fast_scatter = _fast_gate_eval = _fast_combine_level = None

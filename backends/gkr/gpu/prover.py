@@ -24,15 +24,24 @@ import torch
 
 from . import field as _field
 from . import gkr, ligero, logup
-from .circuit import Circuit, Layer, Query, Table, eval_wires, log2ceil, masked_wires, pad_rows
+from .circuit import (
+    Circuit,
+    Layer,
+    Query,
+    Table,
+    eval_wires,
+    log2ceil,
+    masked_wires,
+    pad_rows,
+)
 from .field import (
     DEG,
-    P,
-    W,
-    Ext,
-    Limbs,
     ONE,
     ZERO,
+    Ext,
+    Limbs,
+    P,
+    W,
     e_add,
     e_mul,
     e_scale,

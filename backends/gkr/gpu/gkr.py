@@ -18,11 +18,12 @@ from dataclasses import dataclass
 
 import torch
 
+from . import field as _field
 from .circuit import Layer
 from .field import (
     DEG,
-    P,
     Ext,
+    P,
     base_contract_ext,
     e_add,
     e_mul,
@@ -40,7 +41,6 @@ from .field import (
     py_exts,
     t_ext,
 )
-from . import field as _field
 from .transcript import Transcript
 
 

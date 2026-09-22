@@ -28,13 +28,26 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
-
 from verity_numerical.checker import REAL, Params, Reject
 from verity_numerical.checker.ctx import IntCtx
-from verity_numerical.checker.step import check_step_expr, step_output
-from verity_numerical.gkr_export.circuit import CHUNK, R16, CircuitCtx, Lin, _get, _leaves, _set
-from verity_numerical.redteam.babybear import DEFAULT, Embedding, check_step_bb, gen_step_bb, limbs
 from verity_numerical.checker.gadgets import Epilogue
+from verity_numerical.checker.step import step_output
+from verity_numerical.gkr_export.circuit import (
+    CHUNK,
+    R16,
+    CircuitCtx,
+    Lin,
+    _get,
+    _leaves,
+    _set,
+)
+from verity_numerical.redteam.babybear import (
+    DEFAULT,
+    Embedding,
+    check_step_bb,
+    gen_step_bb,
+    limbs,
+)
 
 P = 2**31 - 2**27 + 1
 STEP = 16
@@ -396,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--vus", type=int, default=2)
     s.add_argument("--steps", type=int, default=3)
     s.add_argument("--seed", type=int, default=0)
-    st = sub.add_parser("stats")
+    sub.add_parser("stats")
     args = ap.parse_args(argv)
     if args.cmd == "export":
         m = export(args.root, args.tier, args.lo, args.hi, args.out, args.procs)

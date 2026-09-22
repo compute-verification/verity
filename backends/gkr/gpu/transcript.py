@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 
-from .field import DEG, P, Ext, to_bytes
+from .field import DEG, Ext, P, to_bytes
 
 DOMAIN = b"verity-gkr/candidate-a/v1/babybear6"
 

@@ -17,11 +17,12 @@ from dataclasses import dataclass
 
 import torch
 
-from .circuit import Circuit, Query, Table, eval_lin_rows
+from . import field as _field
+from .circuit import Query, Table, eval_lin_rows
 from .field import (
     DEG,
-    P,
     Ext,
+    P,
     e_add,
     e_mul,
     e_sub,
@@ -38,7 +39,6 @@ from .field import (
     t_ext,
     t_exts,
 )
-from . import field as _field
 from .gkr import Reader, VerifyError
 from .transcript import Transcript
 
@@ -217,7 +217,7 @@ def prove_table(p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcri
     lam = tr.challenge()
     rho: list[Ext] = []
     value = e_mul(lam, root_q)      # p_root + λ q_root with p_root = 0
-    for k in range(0, n):
+    for k in range(n):
         # claim: Σ_{x in 2^k} eq(rho, x) (p_k(x) + λ q_k(x)); reduce with level k+1 (children)
         cp, cq = levels_p[n - k - 1], levels_q[n - k - 1]
         p0, p1 = _split(cp)
@@ -269,7 +269,7 @@ def verify_table(n: int, tr: Transcript, rd: Reader) -> LeafClaim:
     lam = tr.challenge()
     rho: list[Ext] = []
     value = e_mul(lam, root_q)
-    for k in range(0, n):
+    for k in range(n):
         running = value
         x_star = []
         for rnd in range(k):
