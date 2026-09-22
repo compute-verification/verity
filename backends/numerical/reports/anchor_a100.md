@@ -2,7 +2,7 @@
 
 **Scope: component measurements** (kernel time on random/patterned data, bit-exact against each lane's CPU reference), then one `ARITHMETIC_DIAGNOSTIC` re-price of A and B with those numbers.  Nothing here is a proof.  Every recorded 4090 / H100 number is the lane's own (its README / report, run id in the lane's table); every A100 number is a `research run --on vy-a100b --exclusive` of the same bench, same flags, CUDA events, warm, median of >= 7, bit-exact checks on.  `overhead.vs_native_peak` is defined against *this* card's dense BF16 peak (`contract.NATIVE_REFERENCE`, 9.85 ps per K=1536 VU), so the last section is the first A-vs-B comparison where the prover and the reference are the same machine.
 
-Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 2.6.0+cu124, CUDA 12.4, 108 SMs (sm_80).  Recorded runs: microbench `r20260922-063608-a304`, hash_gpu `r20260922-063811-e561`.
+Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 2.6.0+cu124, CUDA 12.4, 108 SMs (sm_80).  Recorded runs: microbench `r20260922-063608-a304`, hash_gpu `r20260922-063811-e561`, encode `r20260922-064413-0508`.
 
 Bandwidth ratios the earlier reports *scaled* by: A100/4090 = 2,039/1,008 = 2.02; A100/H100 = 2,039/3,350 = 0.61.  Speed ratios below are recorded-time / A100-time (> 1 = the A100 is faster); a departure from the bandwidth ratio by > 1.5x either way is a finding about the kernel and is flagged.
 
@@ -79,16 +79,41 @@ Poseidon2 permutation throughput:
 
 **Finding (flagged).**  The SIMT hash kernels do *not* scale with bandwidth: SHA-256 runs at 190 GB/s on the A100 vs 446 on the 4090 (0.43x, where the bandwidth scaling assumed 2.02x -- a 4.7x departure), Poseidon2-16 0.45x, Blake3 1.05x.  They are INT32-ALU-bound: the A100 has 108 SMs x 64 INT32 lanes at 1.41 GHz = 9.7 T int32 op/s against the 4090's 128 x 64 x 2.52 GHz = 20.6 T (0.47x), and SHA-256 / Poseidon2 land on that ratio.  Blake3 holds its rate (its chunk-parallel layout was latency-bound on the 4090).  On the anchor the best proof-internal hash is **blake3 at 377 GB/s** (54.0 ms per B batch, 13.2 us/VU); the hash_gpu.md / encode_gpu.json A100 rows (SHA-256 x2.02 = 901 GB/s) overstate the A100's hash rate by 2.4x.
 
+## 2. `backends/direct/encode` -- Reed-Solomon encoders (4090 run `r20260922-062016-6bdf`)
+
+| encoder | shape | RTX 4090 recorded | A100 measured | speed ratio A100/4090 | A100 floor | fraction of floor |
+|---|---|---|---|---|---|---|
+| ntt_simt_v2_t512 | B | 32.2 ms (0.104 us/row) | 60.7 ms (0.195 us/row) | 0.53x | 14.5 ms HBM@1754 | 0.24 |
+| ntt_simt_v2_t512_nosys | B | 31.6 ms (0.102 us/row) | 60.6 ms (0.195 us/row) | 0.52x | 11.6 ms HBM@1754 | 0.19 |
+| ntt_simt_v1_t512 | B | 38.6 ms (0.124 us/row) | 73.2 ms (0.236 us/row) | 0.53x | 14.5 ms HBM@1754 | 0.20 |
+| ntt_simt_v2_t128 | B | 34.8 ms (0.112 us/row) | 71.6 ms (0.230 us/row) | 0.49x | 14.5 ms HBM@1754 | 0.20 |
+| ntt_simt_v2_t256 | B | 39.6 ms (0.128 us/row) | 76.3 ms (0.246 us/row) | 0.52x | 14.5 ms HBM@1754 | 0.19 |
+| ntt_simt_v2_t1024 | B | 32.7 ms (0.105 us/row) | 57.4 ms (0.185 us/row) | 0.57x | 14.5 ms HBM@1754 | 0.25 |
+| matdft_int8_triton | B | 171.7 ms (0.553 us/row) | 607.1 ms (1.955 us/row) | 0.28x | 33.4 ms TC@312T (HBM 14.5) | 0.06; 0.055 of INT8 peak |
+| matdft_int8_cublas | B | 15,224.9 ms (49.017 us/row) | 9,146.2 ms (29.447 us/row) | 1.66x | 33.4 ms TC@312T (HBM 14.5) | 0.00; 0.004 of INT8 peak |
+| ntt_simt_v2_t512 | A | 5.3 ms (0.107 us/row) | 11.6 ms (0.238 us/row) | 0.45x | 2.3 ms HBM@1754 | 0.20 |
+| ntt_simt_v2_t512_nosys | A | 5.2 ms (0.106 us/row) | 11.6 ms (0.237 us/row) | 0.45x | 1.8 ms HBM@1754 | 0.16 |
+| ntt_simt_v1_t512 | A | 6.0 ms (0.122 us/row) | 13.8 ms (0.282 us/row) | 0.43x | 2.3 ms HBM@1754 | 0.17 |
+| ntt_simt_v2_t128 | A | 5.9 ms (0.120 us/row) | 13.7 ms (0.280 us/row) | 0.43x | 2.3 ms HBM@1754 | 0.17 |
+| ntt_simt_v2_t256 | A | 6.3 ms (0.128 us/row) | 14.6 ms (0.299 us/row) | 0.43x | 2.3 ms HBM@1754 | 0.16 |
+| ntt_simt_v2_t1024 | A | 5.2 ms (0.106 us/row) | 11.0 ms (0.225 us/row) | 0.47x | 2.3 ms HBM@1754 | 0.21 |
+| matdft_int8_triton | A | 26.8 ms (0.549 us/row) | 94.6 ms (1.936 us/row) | 0.28x | 5.3 ms TC@312T (HBM 2.3) | 0.06; 0.056 of INT8 peak |
+| matdft_int8_cublas | A | 2,395.7 ms (49.019 us/row) | 1,439.3 ms (29.450 us/row) | 1.66x | 5.3 ms TC@312T (HBM 2.3) | 0.00; 0.004 of INT8 peak |
+
+Bit-exact checks on the A100 (64 full rows vs the numpy reference): `{'simt_v1_t256': True, 'simt_v1_t512': True, 'simt_v2_t128': True, 'simt_v2_t256': True, 'simt_v2_t512': True, 'simt_v2_t1024': True, 'cublas': True, 'triton': True}`.
+
+The SIMT NTT (v2, 512 threads) encodes the B batch in **60.7 ms** on the A100 (0.53x the 4090; bandwidth ratio 2.02), 0.24 of the measured-bandwidth HBM floor (14.5 ms) and 0.21 of the datasheet floor.  The fused Triton INT8 matrix DFT takes 607 ms (0.28x the 4090, 0.055 of the A100 INT8 peak): the SIMT NTT beats it by 10.0x on the anchor too.
+
 ## A vs B on the A100, same batch, same numbers
 
 `explore.tensor` designs A and B (BabyBear, degree-6 challenge, 2^-128, B = 4096, K = 1536, HVZK layer, authentication excluded) priced on the A100 with the A100-measured buckets substituted; the still-modelled buckets are at 0.172 of the A100 INT8 peak / the model's SIMT rate and are listed as `omitted`.  Labels: `ARITHMETIC_DIAGNOSTIC`, scope `vu`, hardware NVIDIA A100 SXM4 80GB.
 
 | design | model only (A100 peaks @0.172, Blake3 50 GB/s) | **A100-measured buckets** overhead (t.total) | buckets | measured buckets |
 |---|---|---|---|---|
-| B | 2.38e+07 (962 ms) | 1.51e+07 (608 ms) | encoding 437.0 ms; hash 54.0 ms; matmul_modelled 447.1 ms; simt_field_modelled 102.4 ms; hint_gen_modelled 1.6 ms; prg_modelled 3.2 ms | encoding: False; hash: True |
-| A | 3.17e+07 (1278 ms) | 3.03e+07 (1222 ms) | encoding 68.8 ms; hash 9.0 ms; matmul_modelled 574.2 ms; simt_field_modelled 637.1 ms; hint_gen_modelled 1.6 ms; prg_modelled 0.5 ms; gkr_checker_modelled 850.1 ms; logup_modelled 248.8 ms | encoding: False; hash: True |
+| B | 2.38e+07 (962 ms) | 4.88e+06 (197 ms) | encoding 57.4 ms; hash 54.0 ms; matmul_modelled 10.1 ms; simt_field_modelled 70.6 ms; hint_gen_modelled 1.6 ms; prg_modelled 3.2 ms | encoding: True; hash: True |
+| A | 3.17e+07 (1278 ms) | 2.88e+07 (1160 ms) | encoding 11.0 ms; hash 9.0 ms; matmul_modelled 505.4 ms; simt_field_modelled 632.1 ms; hint_gen_modelled 1.6 ms; prg_modelled 0.5 ms; gkr_checker_modelled 850.1 ms; logup_modelled 248.8 ms | encoding: True; hash: True |
 
-Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_kernel` = blake3; `hash_A_kernel` = blake3
+Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_kernel` = blake3; `hash_A_kernel` = blake3; `encoder_seconds_per_row_B` = 1.85e-07; `encoder_B_kernel` = ntt_simt_v2_t1024; `encoder_seconds_per_row_A` = 2.25e-07; `encoder_A_kernel` = ntt_simt_v2_t1024
 
-* **B**: overhead **1.51e+07** (608 ms per batch, 148 us/VU).  Measured: encoding = False; hash = True.  Omitted (modelled): witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak); Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak); openings and transcript serialisation (not priced); prover randomness (modelled PRG at 100 GB/s); linear/quadratic tests, constraint combination, helper inversions (modelled SIMT at the A100 rate).
-* **A**: overhead **3.03e+07** (1222 ms per batch, 298 us/VU).  Measured: encoding = False; hash = True.  Omitted (modelled): witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak); Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak); openings and transcript serialisation (not priced); prover randomness (modelled PRG at 100 GB/s); checker GKR sumcheck (modelled @0.172); logUp fractional GKR (modelled @0.172).
+* **B**: overhead **4.88e+06** (197 ms per batch, 48 us/VU).  Measured: encoding = True; hash = True.  Omitted (modelled): witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak); Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak); openings and transcript serialisation (not priced); prover randomness (modelled PRG at 100 GB/s); linear/quadratic tests, constraint combination, helper inversions (modelled SIMT at the A100 rate).
+* **A**: overhead **2.88e+07** (1160 ms per batch, 283 us/VU).  Measured: encoding = True; hash = True.  Omitted (modelled): witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak); Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak); openings and transcript serialisation (not priced); prover randomness (modelled PRG at 100 GB/s); checker GKR sumcheck (modelled @0.172); logUp fractional GKR (modelled @0.172).
