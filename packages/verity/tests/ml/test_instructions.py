@@ -55,8 +55,11 @@ def test_pinned_instructions_and_their_models() -> None:
         "sm90.wgmma.m64n8k32.e4m3": HOPPER_E4M3_K32,
         "sm90.wgmma.m64n8k32.e5m2": HOPPER_E5M2_K32,             # lane tc-probe-fp8 2026-09-22: 25.5M, 0 mismatches
         "sm120.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,          # lane fp4-5090: the 5090 keeps Hopper's BF16 datapath
-        "sm120.mma.m16n8k64.e2m1.nvf4": BLACKWELL_SM120_NVF4,
     }
+    # lane pin-bf16 2026-09-22: the nvf4 pin was ahead of its evidence (computed level HYPOTHESIS: the RTX 5090 sweeps disagree on
+    # 114,148 elements, D16/D17 open) and was downgraded; the model stays declared, the status says what the dossier computed
+    nvf4 = INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.nvf4"]
+    assert nvf4.status == "hypothesis" and nvf4.model is BLACKWELL_SM120_NVF4 and nvf4.dossier and "downgraded" in nvf4.evidence[0]
 
 
 def test_statuses_are_consistent_with_models_and_evidence() -> None:

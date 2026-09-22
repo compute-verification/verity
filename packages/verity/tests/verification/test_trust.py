@@ -378,6 +378,22 @@ def test_td_accepts_a_contract_pinned_recipe_digest(store, repo, monkeypatch):
     store.add_label(art, "instances_manifest_sha256", "ab" * 32, "test")
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert not crit(rep, "Td").passed and any("checked digest ab" in m for m in crit(rep, "Td").missing)
+    assert any("contract digest e6e6e6e6e6e6" in m for m in crit(rep, "Td").missing)
+    # the digest is the identity: instances-hw recorded the set under its own names (`fp8-ada synthetic ...` / `vu-k1536-fp8`) with the
+    # digest as tc_evidence.manifest_sha256, and that replay counts
+    meta2 = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "workload_fingerprint": {"instruction": INSTRUCTION},
+             "validation": {"status": "passed", "checker": "instances_hw"},
+             "tc_evidence": {"instruction": INSTRUCTION, "sku": "NVIDIA GeForce RTX 4090", "instances_dataset": "fp8-ada synthetic (uniform finite E4M3 bytes)",
+                             "instances_tier": "vu-k1536-fp8", "manifest_sha256": "e6" * 32, "instances": 4096, "mismatches": 0,
+                             "model": "ada_e4m3_m16n8k32", "model_agrees": True}}
+    art2 = store.put_artifact("tc-evidence/v1", meta2)
+    for k, v in (("instruction", INSTRUCTION), ("hardware", ANCHOR), ("family", "frozen-instances"), ("mismatches", "0")):
+        store.add_label(art2, k, v, "test")
+    rep = assess("FP8_ADA_MMA", store, repo=repo)
+    td = crit(rep, "Td")
+    assert td.passed and any(e.id == art2 for e in td.evidence) and not any(e.id == art for e in td.evidence)
+    assert td.details["bench-instances-fp8-ada/v1"]["covered"] == ["vu-k1536-fp8-ada"]
+    assert any("recorded as fp8-ada synthetic (uniform finite E4M3 bytes)/vu-k1536-fp8" in e.note for e in td.evidence)
     # the constants must all exist: an absent Hopper set contributes nothing
     assert trust._contract_instance_sets(trust.subjects("FP8_HOPPER_WGMMA"), contract=fake) == []
     real = trust._contract_instance_sets(trust.subjects("FP8_ADA_MMA"))

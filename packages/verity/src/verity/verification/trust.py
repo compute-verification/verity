@@ -143,7 +143,7 @@ REGRESSION_TILES: dict[str, tuple[str, ...]] = {
     "D12": ("replay:probe3",),                                       # what autoproof's pin covers
     "D13": (),                                                       # open: mxf4 underflow zero sign (no measurement anywhere)
     "D14": ("family:randn_zero_acc", "family:zero_products_nonzero_acc"),  # sm_90 FP8 mma.sync lowering
-    "D15": (),                                                       # open: registry n8 vs measured n64; floor -139 vs Hawkeye
+    "D15": ("family:fp8_floor_probe", "family:zero_products_nonzero_acc"),  # the FP8 adder floor: unobservable in [-152, -126] (pin-bf16)
     "D16": ("family:signed_zero",),                                  # open: -0 accumulator with zero products on sm_120 nvf4
     "D17": ("family:hot_a_only",),                                   # open: opposite-sign accumulator 37-42 binades below
     "D18": ("family:random_zero_acc",),                              # open: mxf4 ue8m0 hypothesis inexact
@@ -1317,9 +1317,14 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
     for ds in datasets:
         covered: dict[str, EvidenceRef] = {}
         for r in ev.hardware:                                            # every replay of this dataset, on whatever silicon
-            if r.instances is None or r.instances.get("dataset") != ds.name:
+            if r.instances is None:
                 continue
             sha = r.instances.get("manifest_sha256")
+            # a fixture set is named by its dataset; a contract-pinned set is its recipe digest, whatever the replay called the set
+            # (instances-hw recorded the FP8 Ada set as `fp8-ada synthetic ...` / `vu-k1536-fp8` with the digest as manifest_sha256)
+            by_digest = bool(ds.contract and sha and sha == ds.sha256)
+            if r.instances.get("dataset") != ds.name and not by_digest:
+                continue
             if r.family != anchor:
                 c.missing.append(f"{ds.name}: replay {r.id[:24]} ({r.run_id}) ran on {r.family or r.sku} as {r.instruction or 'an unnamed instruction'}, not on the anchor {anchor}")
                 continue
@@ -1330,11 +1335,20 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
                                  f"{ds.path} pins {ds.sha256[:12]}...; re-run against the frozen set")
                 continue
             for tier, t in (r.instances.get("tiers") or {}).items():
-                if t.get("mismatches") == 0 and tier not in covered:
-                    covered[tier] = _ref(r, f"{ds.name}/{tier}: {t.get('instances') or '?'} instances, 0 mismatches on {anchor}")
+                if t.get("mismatches") != 0:
+                    continue
+                # the digest identifies one recipe, i.e. one tier: a replay that matched it covers the contract tier under its own name
+                key = tier if tier in ds.honest_tiers or not by_digest or len(ds.honest_tiers) != 1 else ds.honest_tiers[0]
+                if key not in covered:
+                    named = f" (recorded as {r.instances.get('dataset')}/{tier})" if key != tier else ""
+                    covered[key] = _ref(r, f"{ds.name}/{key}: {t.get('instances') or '?'} instances, 0 mismatches on {anchor}"
+                                           f"{'; recipe digest ' + sha[:12] + '...' if by_digest else ''}{named}")
         for tier in ds.honest_tiers:
             if tier in covered:
                 c.evidence.append(covered[tier])
+            elif ds.contract:
+                c.missing.append(f"{ds.name}/{tier}: no tc-evidence/v1 on {anchor} labelled family=frozen-instances mismatches=0 whose manifest_sha256 is the "
+                                 f"contract digest {ds.sha256[:12]}... ({ds.path}; or labelled instances_dataset={ds.name} instances_tier={tier})")
             else:
                 c.missing.append(f"{ds.name}/{tier}: no tc-evidence/v1 on {anchor} labelled family=frozen-instances instances_dataset={ds.name} instances_tier={tier} mismatches=0")
         c.details[ds.name] = {"tiers": ds.honest_tiers, "covered": sorted(covered), "manifest_sha256": ds.sha256, "identified_by": ds.path,
