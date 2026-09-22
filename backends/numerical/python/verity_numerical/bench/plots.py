@@ -212,10 +212,12 @@ def plot_gate4(entries: list[dict[str, Any]], out: Path, name: str = "gate4_h100
     ax.set_title("gate 4 on one H100: end-to-end proofs (solid) vs measured-bucket sums (hatched); pale = cited, other hardware", fontsize=9)
     ax.axhline(REFERENCES["goal 1e6"], color="#dddddd", linestyle="--", linewidth=1)
     ax.grid(True, axis="y", which="major", alpha=0.3)
-    for c, name_ in COLOURS.items():
-        ax.bar([], [], color=name_, label=c)
-    ax.bar([], [], color="white", edgecolor="black", hatch="//", label="hatched: buckets summed, not a proof")
-    ax.legend(fontsize=6, loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=4, frameon=False)
+    from matplotlib.patches import Patch
+
+    handles = [Patch(facecolor=col, edgecolor="black", label=c) for c, col in COLOURS.items() if c != "COMPONENT"]
+    handles.append(Patch(facecolor="white", edgecolor="black", hatch="//", label="hatched: buckets summed, not a proof"))
+    handles.append(Patch(facecolor="#dddddd", edgecolor="black", linestyle="--", label="pale, dashed: cited from other hardware"))
+    ax.legend(handles=handles, fontsize=6, loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=4, frameon=False)
     fig.tight_layout()
     path = out / name
     fig.savefig(path, dpi=130)
