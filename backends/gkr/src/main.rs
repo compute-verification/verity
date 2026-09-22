@@ -1,7 +1,11 @@
-//! Candidate A, wave 1: prover + verifier for the WP2 transition unit, data-parallel over B units.
+//! Candidate A: prover + verifier for the WP2 transition unit (data-parallel over B units) and for the full
+//! K=1536 Verity VU (PROTOCOL.md 12: B·96 data-parallel units + B epilogue rows over one commitment, chain
+//! linkage and public output words as linear constraints on the committed vector).
 //!
-//!   verity-gkr run --circuit C --witness W --units B [--out result.json] [--run-id ID]
-//!   verity-gkr negatives --circuit C --dir DIR          every witness in DIR must be rejected
+//!   verity-gkr run --circuit C --witness W --units B [--clear] [--out result.json]       transition units
+//!   verity-gkr run-vu --dir D [--vus B] [--clear] [--out result.json]                     VUs (D from gkr_export.vu)
+//!   verity-gkr negatives --circuit C --dir DIR                                            every unit witness rejected
+//!   verity-gkr negatives-vu --dir D                                                       every D/neg/<id> rejected
 //!
 //! Default mode (PCS): the input/hint columns and the lookup multiplicities are committed with the hash-based
 //! Ligero-style commitment of `ligero.rs` (no masking) → NON_ZK_PROOF_DIAGNOSTIC.  `--clear`: the columns are given
@@ -15,14 +19,25 @@ mod ligero;
 mod logup;
 mod transcript;
 
-use circuit::{layers, read_witness, Circuit, Layer, Query};
+use circuit::{layers, read_witness, Circuit, Layer, Query, Table};
 use field::{eq_table, Ext, Fp};
-use gkr::{eval_columns, LayerClaim, Reader, Strided};
-use logup::TableChallenges;
+use gkr::{eval_columns, threads, LayerClaim, Reader, Strided};
+use logup::{LeafClaim, SegQueries, TableChallenges};
 use std::time::Instant;
 use transcript::{Sha256, Transcript};
 
-pub struct Instance<'a> { pub circ: &'a Circuit, pub layers: &'a [Layer], pub cols: Vec<Fp>, pub units: usize, pub ncols: usize }
+/// One data-parallel circuit over `units` rows of `ncols` committed columns.
+pub struct Segment<'a> { pub name: String, pub circ: &'a Circuit, pub layers: &'a [Layer], pub cols: Vec<Fp>, pub units: usize, pub ncols: usize, pub hash: [u8; 32] }
+
+/// The VU chain over segment 0 (units, VU-major: row v·steps+i) and segment 1 (epilogue, row v).
+pub struct Chain { pub steps: usize, pub col_c: usize, pub col_y: usize, pub epi_y32: usize, pub epi_y16: usize, pub public_y16: Vec<Fp> }
+
+pub struct Instance<'a> { pub segs: Vec<Segment<'a>>, pub chain: Option<Chain> }
+
+impl<'a> Instance<'a> {
+    pub fn tables(&self) -> &'a [Table] { &self.segs[0].circ.tables }
+    pub fn vus(&self) -> usize { self.chain.as_ref().map(|c| self.segs[0].units / c.steps).unwrap_or(0) }
+}
 
 fn log2ceil(n: usize) -> usize { let mut s = 0; while (1usize << s) < n { s += 1; } s }
 
@@ -30,10 +45,14 @@ fn log2ceil(n: usize) -> usize { let mut s = 0; while (1usize << s) < n { s += 1
 pub struct Stats {
     pub t_lookup: f64, pub t_arith: f64, pub t_witness_wires: f64, pub proof_elems: usize, pub slots: u64,
     pub depth_circuit: u64, pub depth_lookup_max: u64, pub lookup_dims: Vec<(String, usize, usize)>, pub committed_elements: usize,
-    pub t_commit: f64, pub t_open: f64, pub ligero_rows: usize,
+    pub t_commit: f64, pub t_open: f64, pub ligero_rows: usize, pub linkage_constraints: usize,
 }
 
 fn table_queries<'a>(circ: &'a Circuit, name: &str) -> Vec<&'a Query> { circ.queries.iter().filter(|q| q.table == name).collect() }
+
+fn seg_queries<'a>(inst: &'a Instance, name: &str) -> Vec<SegQueries<'a>> {
+    inst.segs.iter().map(|s| SegQueries { queries: table_queries(s.circ, name), cols: &s.cols, ncols: s.ncols, units: s.units }).collect()
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mode { Clear, Pcs }
@@ -43,181 +62,297 @@ impl Proof { pub fn size(&self) -> usize { (if self.root != [0u8; 32] { 32 } els
 
 pub const LIGERO: ligero::Params = ligero::Params { k: 4096, n: 16384, t: 192 };
 
-fn start_transcript(inst: &Instance, circuit_hash: &[u8; 32], mode: Mode, root: &[u8; 32]) -> (Transcript, Vec<TableChallenges>, Vec<Ext>, Vec<Ext>) {
-    let mut tr = Transcript::new(b"verity-gkr/candidate-a/v0");
-    tr.absorb(circuit_hash);
+/// Transcript preamble: every public datum (circuits, batch shape, commitment root or the clear witness, the
+/// public output words), then the table challenges and every segment's output-layer point.
+fn start_transcript(inst: &Instance, mode: Mode, root: &[u8; 32]) -> (Transcript, Vec<TableChallenges>, Vec<(Vec<Ext>, Vec<Ext>)>) {
+    let mut tr = Transcript::new(b"verity-gkr/candidate-a/v1");
+    for s in &inst.segs {
+        tr.absorb(&s.hash);
+        tr.absorb(&(s.units as u64).to_le_bytes());
+    }
     match mode {
         Mode::Clear => {
             // the witness is public in this diagnostic: bind the challenges to it
             let mut h = Sha256::new();
-            for v in &inst.cols { h.update(&v.to_bytes()); }
+            for s in &inst.segs { for v in &s.cols { h.update(&v.to_bytes()); } }
             tr.absorb(&h.finalize());
         }
         Mode::Pcs => tr.absorb(root),
     }
-    tr.absorb(&(inst.units as u64).to_le_bytes());
+    if let Some(ch) = &inst.chain {
+        tr.absorb(&(ch.steps as u64).to_le_bytes());
+        let mut buf = Vec::with_capacity(8 * ch.public_y16.len());
+        for y in &ch.public_y16 { buf.extend_from_slice(&y.to_bytes()); }
+        tr.absorb(&buf);
+    }
     let mut chs = Vec::new();
-    for t in &inst.circ.tables {
+    for t in inst.tables() {
         let z = tr.challenge();
         let beta = if t.cols > 1 { tr.challenge() } else { Ext::ONE };
         chs.push(TableChallenges { z, beta });
     }
-    let s_a = inst.layers[0].s_out;
-    let b = log2ceil(inst.units);
-    let z0 = tr.challenges(s_a);
-    let gamma = tr.challenges(b);
-    (tr, chs, z0, gamma)
+    let mut pts = Vec::new();
+    for s in &inst.segs {
+        let z0 = tr.challenges(s.layers[0].s_out);
+        let gamma = tr.challenges(log2ceil(s.units));
+        pts.push((z0, gamma));
+    }
+    (tr, chs, pts)
 }
 
-/// Layout of the committed vector X: W row-major (units × ncols), then every table's multiplicities.
-fn x_layout(inst: &Instance) -> (Vec<usize>, usize) {
+/// Layout of the committed vector X: every segment's rows (row-major), then every table's multiplicities.
+fn x_layout(inst: &Instance) -> (Vec<usize>, Vec<usize>, usize) {
+    let mut seg_offs = Vec::new();
+    let mut l = 0;
+    for s in &inst.segs { seg_offs.push(l); l += s.units * s.ncols; }
     let mut offs = Vec::new();
-    let mut l = inst.units * inst.ncols;
-    for t in &inst.circ.tables { offs.push(l); l += t.rows.len(); }
-    (offs, l)
+    for t in inst.tables() { offs.push(l); l += t.rows.len(); }
+    (seg_offs, offs, l)
 }
 
-struct Functional { a: Vec<Ext>, b: Ext }
+/// The batched linear functional ⟨a, X⟩ = b the Ligero opening proves.  Every residual claim is added with its
+/// batching coefficient ρ (drawn once all claims are fixed); the per-row work is parallel over units.
+struct Acc { a: Vec<Ext>, b: Ext }
 
-fn functional_input(inst: &Instance, l: usize, x_pt: &[Ext], c_pt: &[Ext], value: Ext) -> Functional {
+fn par_rows<F: Fn(usize, &mut [Ext]) -> Ext + Sync>(a: &mut [Ext], ncols: usize, units: usize, f: F) -> Ext {
+    let nthreads = threads().min(units.max(1));
+    let chunk = units.div_ceil(nthreads).max(1);
+    let f = &f;
+    let parts: Vec<Ext> = std::thread::scope(|s| {
+        let hs: Vec<_> = a[..units * ncols].chunks_mut(chunk * ncols).enumerate().map(|(ci, ac)| s.spawn(move || {
+            let mut k = Ext::ZERO;
+            for (i, row) in ac.chunks_mut(ncols).enumerate() { k += f(ci * chunk + i, row); }
+            k
+        })).collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let mut k = Ext::ZERO;
+    for p in parts { k += p; }
+    k
+}
+
+/// Ṽ_in(x*, c*) = value on a segment's committed columns.
+fn add_input_claim(acc: &mut Acc, rho: Ext, seg_off: usize, seg: &Segment, x_pt: &[Ext], c_pt: &[Ext], value: Ext) {
     let ec = eq_table(c_pt);
     let ex = eq_table(x_pt);
-    let mut a = vec![Ext::ZERO; l];
-    for u in 0..inst.units { for i in 0..inst.ncols { a[u * inst.ncols + i] = ec[u] * ex[i]; } }
-    Functional { a, b: value }
+    par_rows(&mut acc.a[seg_off..], seg.ncols, seg.units, |u, row| {
+        let e = rho * ec[u];
+        for (i, x) in row.iter_mut().enumerate() { *x += e * ex[i]; }
+        Ext::ZERO
+    });
+    acc.b += rho * value;
 }
 
-/// p̃(ρ) + λ q̃(ρ) as a functional on X plus a public constant (table rows, padding, linear-form constants).
-fn functional_lookup(inst: &Instance, l: usize, off: usize, table: &circuit::Table, qs: &[&Query], ch: &TableChallenges, n: usize, c: &logup::LeafClaim) -> Functional {
+/// p̃(ρ) + λ q̃(ρ) = value as a functional on X (table rows, padding and the linear-form constants are public).
+fn add_lookup_claim(acc: &mut Acc, rho: Ext, inst: &Instance, seg_offs: &[usize], table_off: usize, table: &Table, segqs: &[SegQueries], ch: &TableChallenges, n: usize, c: &LeafClaim) {
     let eqt = eq_table(&c.rho);
-    let q_t = qs.len();
-    let n_wit = inst.units * q_t;
-    let betas: Vec<Ext> = { let mut v = vec![Ext::ONE]; for k in 1..table.cols { v.push(v[k - 1] * ch.beta); } v };
-    let mut a = vec![Ext::ZERO; l];
+    let bs = logup::betas(table, ch);
     let mut konst = Ext::ZERO;
-    for u in 0..inst.units {
-        for (j, qu) in qs.iter().enumerate() {
-            let e = eqt[u * q_t + j];
-            let le = c.lambda * e;
-            konst += e; // p = 1
-            let mut cst = ch.z;
-            for (k, lin) in qu.cols.iter().enumerate() {
-                cst -= betas[k].scale(lin.konst);
-                let lb = le * betas[k];
-                for t in &lin.terms { a[u * inst.ncols + t.idx as usize] -= lb.scale(t.coef); }
+    let mut base = 0usize;
+    for (si, sq) in segqs.iter().enumerate() {
+        let q_t = sq.queries.len();
+        if q_t == 0 { continue; }
+        let seg = &inst.segs[si];
+        let (eqt, bs, queries) = (&eqt, &bs, &sq.queries);
+        konst += par_rows(&mut acc.a[seg_offs[si]..], seg.ncols, seg.units, |u, row| {
+            let mut k = Ext::ZERO;
+            for (j, qu) in queries.iter().enumerate() {
+                let e = eqt[base + u * q_t + j];
+                let le = c.lambda * e;
+                k += e; // p = 1
+                let mut cst = ch.z;
+                for (kk, lin) in qu.cols.iter().enumerate() {
+                    cst -= bs[kk].scale(lin.konst);
+                    let lb = rho * le * bs[kk];
+                    for t in &lin.terms { row[t.idx as usize] -= lb.scale(t.coef); }
+                }
+                k += le * cst;
             }
-            konst += le * cst;
-        }
+            k
+        });
+        base += sq.n_wit();
     }
-    for (v, row) in table.rows.iter().enumerate() {
-        let e = eqt[n_wit + v];
-        a[off + v] -= e; // p = -m_v
+    for (v, r) in table.rows.iter().enumerate() {
+        let e = eqt[base + v];
+        acc.a[table_off + v] -= rho * e; // p = -m_v
         let mut comb = Ext::ZERO;
-        for (k, x) in row.iter().enumerate() { comb += betas[k].scale(*x); }
+        for (k, x) in r.iter().enumerate() { comb += bs[k].scale(*x); }
         konst += c.lambda * e * (ch.z - comb);
     }
-    for idx in n_wit + table.rows.len()..(1usize << n) { konst += c.lambda * eqt[idx]; } // padding (0, 1)
-    Functional { a, b: c.value - konst }
+    for idx in base + table.rows.len()..(1usize << n) { konst += c.lambda * eqt[idx]; } // padding (0, 1)
+    acc.b += rho * (c.value - konst);
 }
 
-fn batch(fs: &[Functional], l: usize, tr: &mut Transcript) -> Functional {
-    let mut a = vec![Ext::ZERO; l];
-    let mut b = Ext::ZERO;
-    for f in fs {
-        let rho = tr.challenge();
-        for (x, y) in a.iter_mut().zip(&f.a) { if !y.is_zero() { *x += rho * *y; } }
-        b += rho * f.b;
+/// Chain linkage and public endpoints as one functional with geometric coefficients ρ_geo^k (PROTOCOL.md 12.2):
+/// c_{v,0} = 0; c_{v,i} = y_{v,i-1}; y32_v = y_{v,steps-1}; y16_v = the public word.  Returns the constraint count.
+fn add_chain(acc: &mut Acc, rho: Ext, geo: Ext, inst: &Instance, seg_offs: &[usize]) -> usize {
+    let ch = inst.chain.as_ref().unwrap();
+    let (u_seg, e_seg) = (&inst.segs[0], &inst.segs[1]);
+    let vus = u_seg.units / ch.steps;
+    let mut pw = rho;
+    let mut count = 0;
+    for v in 0..vus {
+        for i in 0..ch.steps {
+            let u = v * ch.steps + i;
+            acc.a[seg_offs[0] + u * u_seg.ncols + ch.col_c] += pw;
+            if i > 0 { acc.a[seg_offs[0] + (u - 1) * u_seg.ncols + ch.col_y] -= pw; }
+            pw = pw * geo;
+            count += 1;
+        }
+        acc.a[seg_offs[1] + v * e_seg.ncols + ch.epi_y32] += pw;
+        acc.a[seg_offs[0] + (v * ch.steps + ch.steps - 1) * u_seg.ncols + ch.col_y] -= pw;
+        pw = pw * geo;
+        acc.a[seg_offs[1] + v * e_seg.ncols + ch.epi_y16] += pw;
+        acc.b += pw.scale(ch.public_y16[v]);
+        pw = pw * geo;
+        count += 2;
     }
-    Functional { a, b }
+    count
 }
 
-pub fn prove(inst: &Instance, circuit_hash: &[u8; 32], mode: Mode) -> (Proof, Stats) {
+/// The chain on clear columns (ARITHMETIC_DIAGNOSTIC verifier).
+fn check_chain_clear(inst: &Instance) -> Result<(), String> {
+    let ch = inst.chain.as_ref().unwrap();
+    let (u_seg, e_seg) = (&inst.segs[0], &inst.segs[1]);
+    let vus = u_seg.units / ch.steps;
+    let uc = |u: usize, c: usize| u_seg.cols[u * u_seg.ncols + c];
+    for v in 0..vus {
+        for i in 0..ch.steps {
+            let u = v * ch.steps + i;
+            let want = if i == 0 { Fp::ZERO } else { uc(u - 1, ch.col_y) };
+            if uc(u, ch.col_c) != want { return Err(format!("chain: VU {v} unit {i} incoming word differs from the previous outgoing word")); }
+        }
+        if e_seg.cols[v * e_seg.ncols + ch.epi_y32] != uc(v * ch.steps + ch.steps - 1, ch.col_y) { return Err(format!("chain: VU {v} epilogue input differs from the last word")); }
+        if e_seg.cols[v * e_seg.ncols + ch.epi_y16] != ch.public_y16[v] { return Err(format!("chain: VU {v} output word differs from the public word")); }
+    }
+    Ok(())
+}
+
+fn n_functionals(inst: &Instance) -> usize { 2 * inst.segs.len() + inst.tables().len() + if inst.chain.is_some() { 1 } else { 0 } }
+
+/// Every wire of every unit of a segment (parallel over units).
+fn eval_wires(seg: &Segment) -> Vec<Fp> {
+    let nw = seg.circ.nwires();
+    let mut wires = vec![Fp::ZERO; seg.units * nw];
+    let nthreads = threads().min(seg.units.max(1));
+    let chunk = seg.units.div_ceil(nthreads).max(1);
+    std::thread::scope(|s| {
+        for (ci, wc) in wires.chunks_mut(chunk * nw).enumerate() {
+            s.spawn(move || {
+                let mut tmp = Vec::with_capacity(nw);
+                for (k, w) in wc.chunks_mut(nw).enumerate() {
+                    let u = ci * chunk + k;
+                    seg.circ.eval_wires(&seg.cols[u * seg.ncols..(u + 1) * seg.ncols], &mut tmp);
+                    w.copy_from_slice(&tmp);
+                }
+            });
+        }
+    });
+    wires
+}
+
+/// The layer-k view of the wires: every wire of depth > k zeroed (parallel).
+fn masked_wires(wires: &[Fp], depth_of: &[u32], k_in: u32) -> Vec<Fp> {
+    let mut m = wires.to_vec();
+    let nw = depth_of.len();
+    let nthreads = threads();
+    let chunk = (m.len() / nw).div_ceil(nthreads).max(1) * nw;
+    std::thread::scope(|s| {
+        for mc in m.chunks_mut(chunk) {
+            s.spawn(move || { for (j, v) in mc.iter_mut().enumerate() { if depth_of[j % nw] > k_in { *v = Fp::ZERO; } } });
+        }
+    });
+    m
+}
+
+type FinalClaims = (Vec<Ext>, Ext, Vec<Ext>, Ext);
+
+/// GKR over one segment from its output-layer claim down to the input columns; returns the two input claims
+/// and the copy point, and the segment's sequential depth.
+fn prove_segment(seg: &Segment, z0: &[Ext], gamma: &[Ext], tr: &mut Transcript, out: &mut Vec<Ext>, st: &mut Stats) -> (FinalClaims, Vec<Ext>) {
+    let t1 = Instant::now();
+    let wires = eval_wires(seg);
+    st.t_witness_wires += t1.elapsed().as_secs_f64();
+    let b = log2ceil(seg.units);
+    let nw = seg.circ.nwires();
+    let mut claim = LayerClaim { w: eq_table(z0), copy_point: gamma.to_vec(), value: Ext::ZERO };
+    let nl = seg.layers.len();
+    let depth_of: Vec<u32> = seg.circ.wires.iter().map(|w| match w { circuit::Wire::Input(_) => 0, circuit::Wire::Prod { depth, .. } => *depth }).collect();
+    let mut final_claims = None;
+    let mut depth = 0u64;
+    for (i, layer) in seg.layers.iter().enumerate() {
+        let last = i == nl - 1;
+        let k_in = seg.circ.max_depth - i as u32;
+        let masked: Vec<Fp> = if last { vec![] } else { masked_wires(&wires, &depth_of, k_in) };
+        let input_wires = Strided { data: &masked, width: nw, copies: seg.units };
+        let input_cols = Strided { data: &seg.cols, width: seg.ncols, copies: seg.units };
+        let inp: &(dyn gkr::LayerInput + Sync) = if last { &input_cols } else { &input_wires };
+        let (next, fin) = gkr::prove_layer(layer, inp, b, &claim, tr, out, last);
+        depth += (b + 2 * layer.s_in + if last { 0 } else { 1 }) as u64;
+        if let Some(f) = fin { final_claims = Some((f, next.copy_point.clone())); }
+        claim = next;
+    }
+    st.depth_circuit = st.depth_circuit.max(depth);
+    final_claims.unwrap()
+}
+
+pub fn prove(inst: &Instance, mode: Mode) -> (Proof, Stats) {
     let mut st = Stats::default();
     let mut out: Vec<Ext> = Vec::new();
     let mut bytes: Vec<u8> = Vec::new();
-    let (offs, l) = x_layout(inst);
+    let (seg_offs, offs, l) = x_layout(inst);
     // multiplicities are challenge-independent: count them first so X can be committed before any challenge
-    let mut x: Vec<Fp> = inst.cols.clone();
-    let mut mults: Vec<Vec<u64>> = Vec::new();
-    for t in &inst.circ.tables {
-        let qs = table_queries(inst.circ, &t.name);
-        let (_, _, _, m) = logup::leaves(inst.circ, t, &qs, &inst.cols, inst.ncols, inst.units, &TableChallenges { z: Ext::ZERO, beta: Ext::ONE });
-        x.extend(m.iter().map(|v| Fp::new(*v)));
-        mults.push(m);
-    }
-    debug_assert_eq!(x.len(), l);
     let tc = Instant::now();
-    let committed = if mode == Mode::Pcs { Some(ligero::commit(&x, &LIGERO)) } else { None };
+    let committed = if mode == Mode::Pcs {
+        let mut x: Vec<Fp> = Vec::with_capacity(l);
+        for s in &inst.segs { x.extend_from_slice(&s.cols); }
+        for t in inst.tables() {
+            let m = logup::multiplicities(t, &seg_queries(inst, &t.name));
+            x.extend(m.iter().map(|v| Fp::new(*v)));
+        }
+        debug_assert_eq!(x.len(), l);
+        Some(ligero::commit(&x, &LIGERO))
+    } else { None };
     let root = committed.as_ref().map(|c| c.root()).unwrap_or([0u8; 32]);
     st.t_commit = tc.elapsed().as_secs_f64();
-    let (mut tr, chs, z0, gamma) = start_transcript(inst, circuit_hash, mode, &root);
+    let (mut tr, chs, pts) = start_transcript(inst, mode, &root);
     let t0 = Instant::now();
-    let mut lookup_ns = Vec::new();
-    for (ti, t) in inst.circ.tables.iter().enumerate() {
-        let qs = table_queries(inst.circ, &t.name);
-        let (p, q, n, _) = logup::leaves(inst.circ, t, &qs, &inst.cols, inst.ncols, inst.units, &chs[ti]);
-        let s = logup::prove_table(p, q, n, &mut tr, &mut out);
-        st.lookup_dims.push((t.name.clone(), s.n, qs.len()));
-        lookup_ns.push(n);
+    let mut lookup_claims: Vec<(usize, LeafClaim)> = Vec::new();
+    for (ti, t) in inst.tables().iter().enumerate() {
+        let sq = seg_queries(inst, &t.name);
+        let (p, q, n, _) = logup::leaves(t, &sq, &chs[ti]);
+        let (s, lc) = logup::prove_table(p, q, n, &mut tr, &mut out);
+        st.lookup_dims.push((t.name.clone(), s.n, sq.iter().map(|x| x.queries.len()).sum()));
+        lookup_claims.push((n, lc));
         let d: u64 = 1 + (0..n as u64).map(|k| k + 2).sum::<u64>();
         st.depth_lookup_max = st.depth_lookup_max.max(d);
     }
     st.t_lookup = t0.elapsed().as_secs_f64();
-    let t1 = Instant::now();
-    let nw = inst.circ.nwires();
-    let mut wires = vec![Fp::ZERO; inst.units * nw];
-    let mut tmp = Vec::with_capacity(nw);
-    for u in 0..inst.units {
-        inst.circ.eval_wires(&inst.cols[u * inst.ncols..(u + 1) * inst.ncols], &mut tmp);
-        wires[u * nw..(u + 1) * nw].copy_from_slice(&tmp);
-    }
-    st.t_witness_wires = t1.elapsed().as_secs_f64();
     let t2 = Instant::now();
-    let b = log2ceil(inst.units);
-    let mut claim = LayerClaim { w: eq_table(&z0), copy_point: gamma, value: Ext::ZERO };
-    let nl = inst.layers.len();
-    let depth_of: Vec<u32> = inst.circ.wires.iter().map(|w| match w { circuit::Wire::Input(_) => 0, circuit::Wire::Prod { depth, .. } => *depth }).collect();
-    let mut final_claims = None;
-    for (i, layer) in inst.layers.iter().enumerate() {
-        let last = i == nl - 1;
-        let k_in = inst.circ.max_depth - i as u32;
-        let masked: Vec<Fp> = if last { vec![] } else {
-            let mut m = wires.clone();
-            for (j, v) in m.iter_mut().enumerate() { if depth_of[j % nw] > k_in { *v = Fp::ZERO; } }
-            m
-        };
-        let input_wires = Strided { data: &masked, width: nw, copies: inst.units };
-        let input_cols = Strided { data: &inst.cols, width: inst.ncols, copies: inst.units };
-        let inp: &(dyn gkr::LayerInput + Sync) = if last { &input_cols } else { &input_wires };
-        let (next, fin) = gkr::prove_layer(layer, inp, b, &claim, &mut tr, &mut out, last);
-        st.depth_circuit += (b + 2 * layer.s_in + if last { 0 } else { 1 }) as u64;
-        if let Some(f) = fin { final_claims = Some((f, next.copy_point.clone())); }
-        claim = next;
+    let mut finals = Vec::new();
+    for (si, seg) in inst.segs.iter().enumerate() {
+        finals.push(prove_segment(seg, &pts[si].0, &pts[si].1, &mut tr, &mut out, &mut st));
     }
-    st.t_arith = t2.elapsed().as_secs_f64();
+    st.t_arith = t2.elapsed().as_secs_f64() - st.t_witness_wires;
     if let Some(cm) = &committed {
         let t3 = Instant::now();
-        // the verifier's residual claims, recomputed by the prover from the transcript it produced
-        let ((l_star, vl, r_star, vr), c_star) = final_claims.unwrap();
-        let mut fs = vec![functional_input(inst, l, &l_star, &c_star, vl), functional_input(inst, l, &r_star, &c_star, vr)];
-        // lookup claims: replay the verifier's transcript view of each table (the claims are determined by the proof)
-        let mut tr2 = start_transcript(inst, circuit_hash, mode, &root).0;
-        let mut rd = Reader { msgs: &out, pos: 0 };
-        for (ti, t) in inst.circ.tables.iter().enumerate() {
-            let qs = table_queries(inst.circ, &t.name);
-            match logup::verify_table(lookup_ns[ti], &mut tr2, &mut rd, &t.name) {
-                Ok(lc) => fs.push(functional_lookup(inst, l, offs[ti], t, &qs, &chs[ti], lookup_ns[ti], &lc)),
-                Err(_) => {
-                    // only a dishonest witness gets here (its lookup transcript already fails); emit the proof as is
-                    st.proof_elems = out.len();
-                    st.slots = tr.slots;
-                    st.committed_elements = l;
-                    return (Proof { root, msgs: out, bytes }, st);
-                }
-            }
+        let rhos = tr.challenges(n_functionals(inst));
+        let geo = if inst.chain.is_some() { tr.challenge() } else { Ext::ZERO };
+        let mut acc = Acc { a: vec![Ext::ZERO; l], b: Ext::ZERO };
+        let mut ri = 0;
+        for (si, seg) in inst.segs.iter().enumerate() {
+            let ((l_star, vl, r_star, vr), c_star) = &finals[si];
+            add_input_claim(&mut acc, rhos[ri], seg_offs[si], seg, l_star, c_star, *vl);
+            add_input_claim(&mut acc, rhos[ri + 1], seg_offs[si], seg, r_star, c_star, *vr);
+            ri += 2;
         }
-        let f = batch(&fs, l, &mut tr);
-        ligero::prove_open(cm, &f.a, &LIGERO, &mut tr, &mut out, &mut bytes);
+        for (ti, t) in inst.tables().iter().enumerate() {
+            let (n, lc) = &lookup_claims[ti];
+            add_lookup_claim(&mut acc, rhos[ri], inst, &seg_offs, offs[ti], t, &seg_queries(inst, &t.name), &chs[ti], *n, lc);
+            ri += 1;
+        }
+        if inst.chain.is_some() { st.linkage_constraints = add_chain(&mut acc, rhos[ri], geo, inst, &seg_offs); }
+        ligero::prove_open(cm, acc.a, &LIGERO, &mut tr, &mut out, &mut bytes);
         st.t_open = t3.elapsed().as_secs_f64();
         st.ligero_rows = cm.rows;
     }
@@ -227,78 +362,148 @@ pub fn prove(inst: &Instance, circuit_hash: &[u8; 32], mode: Mode) -> (Proof, St
     (Proof { root, msgs: out, bytes }, st)
 }
 
-/// Verifier.  In `Mode::Clear` it reads `inst.cols`; in `Mode::Pcs` it never touches them (they may be empty).
-pub fn verify(inst: &Instance, circuit_hash: &[u8; 32], proof: &Proof, mode: Mode) -> Result<(), String> {
-    let (mut tr, chs, z0, gamma) = start_transcript(inst, circuit_hash, mode, &proof.root);
+/// Verifier.  In `Mode::Clear` it reads the segments' `cols`; in `Mode::Pcs` it never touches them (they may be empty).
+pub fn verify(inst: &Instance, proof: &Proof, mode: Mode) -> Result<(), String> {
+    let (mut tr, chs, pts) = start_transcript(inst, mode, &proof.root);
     let mut rd = Reader { msgs: &proof.msgs, pos: 0 };
-    let (offs, l) = x_layout(inst);
-    let mut fs: Vec<Functional> = Vec::new();
+    let (seg_offs, offs, l) = x_layout(inst);
     let mut lookup_claims = Vec::new();
-    for (ti, t) in inst.circ.tables.iter().enumerate() {
-        let qs = table_queries(inst.circ, &t.name);
-        let n = logup::log2ceil_pub(inst.units * qs.len() + t.rows.len());
+    for (ti, t) in inst.tables().iter().enumerate() {
+        let sq = seg_queries(inst, &t.name);
+        let n = logup::hypercube_dim(&sq, t);
         let lc = logup::verify_table(n, &mut tr, &mut rd, &t.name)?;
         match mode {
             Mode::Clear => {
-                let (p, q, n2, _) = logup::leaves(inst.circ, t, &qs, &inst.cols, inst.ncols, inst.units, &chs[ti]);
+                let (p, q, n2, _) = logup::leaves(t, &sq, &chs[ti]);
                 debug_assert_eq!(n, n2);
                 logup::check_leaves(&p, &q, &lc, &t.name)?;
             }
-            Mode::Pcs => lookup_claims.push((ti, n, lc)),
+            Mode::Pcs => lookup_claims.push((n, lc)),
         }
     }
-    let b = log2ceil(inst.units);
-    let mut claim = LayerClaim { w: eq_table(&z0), copy_point: gamma, value: Ext::ZERO };
-    let nl = inst.layers.len();
-    let s_c = inst.layers[nl - 1].s_in;
-    for (i, layer) in inst.layers.iter().enumerate() {
-        let last = i == nl - 1;
-        let (next, fin) = gkr::verify_layer(layer, b, &claim, &mut tr, &mut rd, last)?;
-        if let Some((l_star, vl, r_star, vr)) = fin {
-            let c_star = &next.copy_point;
-            match mode {
-                Mode::Clear => {
-                    if eval_columns(&inst.cols, inst.ncols, inst.units, s_c, &l_star, c_star) != vl { return Err("input layer: left evaluation mismatch".into()); }
-                    if eval_columns(&inst.cols, inst.ncols, inst.units, s_c, &r_star, c_star) != vr { return Err("input layer: right evaluation mismatch".into()); }
-                }
-                Mode::Pcs => {
-                    fs.push(functional_input(inst, l, &l_star, c_star, vl));
-                    fs.push(functional_input(inst, l, &r_star, c_star, vr));
+    let mut finals = Vec::new();
+    for (si, seg) in inst.segs.iter().enumerate() {
+        let b = log2ceil(seg.units);
+        let mut claim = LayerClaim { w: eq_table(&pts[si].0), copy_point: pts[si].1.clone(), value: Ext::ZERO };
+        let nl = seg.layers.len();
+        let s_c = seg.layers[nl - 1].s_in;
+        for (i, layer) in seg.layers.iter().enumerate() {
+            let last = i == nl - 1;
+            let (next, fin) = gkr::verify_layer(layer, b, &claim, &mut tr, &mut rd, last)?;
+            if let Some((l_star, vl, r_star, vr)) = fin {
+                let c_star = &next.copy_point;
+                match mode {
+                    Mode::Clear => {
+                        if eval_columns(&seg.cols, seg.ncols, seg.units, s_c, &l_star, c_star) != vl { return Err(format!("{}: input layer: left evaluation mismatch", seg.name)); }
+                        if eval_columns(&seg.cols, seg.ncols, seg.units, s_c, &r_star, c_star) != vr { return Err(format!("{}: input layer: right evaluation mismatch", seg.name)); }
+                    }
+                    Mode::Pcs => finals.push(((l_star, vl, r_star, vr), c_star.clone())),
                 }
             }
+            claim = next;
         }
-        claim = next;
     }
-    if mode == Mode::Pcs {
-        for (ti, n, lc) in &lookup_claims {
-            let t = &inst.circ.tables[*ti];
-            let qs = table_queries(inst.circ, &t.name);
-            fs.push(functional_lookup(inst, l, offs[*ti], t, &qs, &chs[*ti], *n, lc));
+    match mode {
+        Mode::Clear => { if inst.chain.is_some() { check_chain_clear(inst)?; } }
+        Mode::Pcs => {
+            let rhos = tr.challenges(n_functionals(inst));
+            let geo = if inst.chain.is_some() { tr.challenge() } else { Ext::ZERO };
+            let mut acc = Acc { a: vec![Ext::ZERO; l], b: Ext::ZERO };
+            let mut ri = 0;
+            for (si, seg) in inst.segs.iter().enumerate() {
+                let ((l_star, vl, r_star, vr), c_star) = &finals[si];
+                add_input_claim(&mut acc, rhos[ri], seg_offs[si], seg, l_star, c_star, *vl);
+                add_input_claim(&mut acc, rhos[ri + 1], seg_offs[si], seg, r_star, c_star, *vr);
+                ri += 2;
+            }
+            for (ti, t) in inst.tables().iter().enumerate() {
+                let (n, lc) = &lookup_claims[ti];
+                add_lookup_claim(&mut acc, rhos[ri], inst, &seg_offs, offs[ti], t, &seg_queries(inst, &t.name), &chs[ti], *n, lc);
+                ri += 1;
+            }
+            if inst.chain.is_some() { add_chain(&mut acc, rhos[ri], geo, inst, &seg_offs); }
+            let rows = l.div_ceil(LIGERO.k);
+            ligero::verify_open(&proof.root, rows, acc.a, acc.b, &LIGERO, &mut tr, &mut rd, &proof.bytes)?;
         }
-        let f = batch(&fs, l, &mut tr);
-        let rows = l.div_ceil(LIGERO.k);
-        ligero::verify_open(&proof.root, rows, &f.a, f.b, &LIGERO, &mut tr, &mut rd, &proof.bytes)?;
     }
     if rd.pos != proof.msgs.len() { return Err("trailing proof data".into()); }
     Ok(())
 }
 
-fn load(circuit_path: &str, witness_path: &str, units: Option<usize>) -> (Circuit, Vec<Layer>, Vec<Fp>, usize, usize, [u8; 32]) {
-    let text = std::fs::read_to_string(circuit_path).expect("circuit");
+// ------------------------------------------------------------------------------------------------------------------
+// loading
+// ------------------------------------------------------------------------------------------------------------------
+
+pub struct Loaded { pub circ: Circuit, pub layers: Vec<Layer>, pub hash: [u8; 32] }
+
+fn load_circuit(path: &str) -> Loaded {
+    let text = std::fs::read_to_string(path).expect("circuit");
     let hash = Sha256::digest(text.as_bytes());
     let circ = Circuit::parse(&text);
-    let ls = layers(&circ);
-    let bytes = std::fs::read(witness_path).expect("witness");
+    let layers = layers(&circ);
+    Loaded { circ, layers, hash }
+}
+
+fn load_rows(path: &str, ncols: usize, take: Option<usize>, tile: bool) -> (Vec<Fp>, usize) {
+    let bytes = std::fs::read(path).expect("witness");
     let (n, m, mut cols) = read_witness(&bytes);
-    assert_eq!(m, circ.ncols);
-    let units = units.unwrap_or(n);
+    assert_eq!(m, ncols, "{path}: column count");
+    let units = take.unwrap_or(n);
     if units > n {
-        // tile the available units to the requested batch (timing runs only; each unit is still a valid unit)
+        assert!(tile, "{path}: {n} rows, {units} requested");
+        // tile the available rows to the requested batch (timing runs only; each row is still a valid unit)
         let base = cols.clone();
         while cols.len() < units * m { let take = (units * m - cols.len()).min(base.len()); cols.extend_from_slice(&base[..take]); }
     } else { cols.truncate(units * m); }
-    (circ, ls, cols, units, m, hash)
+    (cols, units)
 }
+
+fn segment<'a>(name: &str, ld: &'a Loaded, cols: Vec<Fp>, units: usize) -> Segment<'a> {
+    Segment { name: name.into(), circ: &ld.circ, layers: &ld.layers, cols, units, ncols: ld.circ.ncols, hash: ld.hash }
+}
+
+fn col_index(c: &Circuit, name: &str) -> usize { c.col_names.iter().position(|n| n == name).unwrap_or_else(|| panic!("no column {name}")) }
+
+/// A VU batch directory written by `verity_numerical.gkr_export.vu` (or overrides of its files).
+pub struct VuFiles { pub units: String, pub epilogue: String, pub public: String }
+
+fn load_vu<'a>(unit: &'a Loaded, epi: &'a Loaded, files: &VuFiles, vus: Option<usize>) -> Instance<'a> {
+    let header = |path: &str| -> usize { let b = std::fs::read(path).expect("witness"); u64::from_le_bytes(b[..8].try_into().unwrap()) as usize };
+    let n_pub = header(&files.public);
+    let n_units = header(&files.units);
+    assert!(n_pub > 0 && n_units % n_pub == 0, "units rows must be a multiple of the VU count");
+    let steps = n_units / n_pub;
+    let b = vus.unwrap_or(n_pub).min(n_pub);
+    let (ucols, nu) = load_rows(&files.units, unit.circ.ncols, Some(b * steps), false);
+    let (ecols, ne) = load_rows(&files.epilogue, epi.circ.ncols, Some(b), false);
+    let (pcols, np) = load_rows(&files.public, 1, Some(b), false);
+    assert!(nu == b * steps && ne == b && np == b);
+    let chain = Chain {
+        steps, col_c: col_index(&unit.circ, "x.c"), col_y: col_index(&unit.circ, "y"),
+        epi_y32: col_index(&epi.circ, "y32"), epi_y16: col_index(&epi.circ, "y16"), public_y16: pcols,
+    };
+    Instance { segs: vec![segment("units", unit, ucols, nu), segment("epilogue", epi, ecols, ne)], chain: Some(chain) }
+}
+
+fn strip_cols<'a>(inst: &Instance<'a>) -> Instance<'a> {
+    Instance {
+        segs: inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: vec![], units: s.units, ncols: s.ncols, hash: s.hash }).collect(),
+        chain: inst.chain.as_ref().map(|c| Chain { steps: c.steps, col_c: c.col_c, col_y: c.col_y, epi_y32: c.epi_y32, epi_y16: c.epi_y16, public_y16: c.public_y16.clone() }),
+    }
+}
+
+fn verifier_view<'a>(inst: &Instance<'a>, mode: Mode) -> Instance<'a> {
+    if mode == Mode::Pcs { strip_cols(inst) } else {
+        Instance {
+            segs: inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: s.cols.clone(), units: s.units, ncols: s.ncols, hash: s.hash }).collect(),
+            chain: strip_cols(inst).chain,
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------
+// result.json, CLI
+// ------------------------------------------------------------------------------------------------------------------
 
 fn peak_rss_bytes() -> Option<u64> {
     let s = std::fs::read_to_string("/proc/self/status").ok()?;
@@ -318,72 +523,132 @@ fn cpu_model() -> Option<String> {
 
 fn arg(args: &[String], key: &str) -> Option<String> { args.iter().position(|a| a == key).map(|i| args[i + 1].clone()) }
 
+struct RunReport<'a> { inst: &'a Instance<'a>, mode: Mode, proof: &'a Proof, st: &'a Stats, t_prove: f64, t_verify: f64, res: &'a Result<(), String>, k: usize, unit: &'a str, b: usize }
+
+fn write_result(out: &str, args: &[String], r: &RunReport) {
+    let run_id = arg(args, "--run-id").or_else(|| std::env::var("RESEARCH_RUN_ID").ok()).unwrap_or_else(|| "local".into());
+    let commit = arg(args, "--commit").unwrap_or_else(|| "unknown".into());
+    let threads = threads();
+    let rss = peak_rss_bytes();
+    let depth = 1 + r.st.depth_circuit.max(r.st.depth_lookup_max) + if r.mode == Mode::Pcs { 2 } else { 0 };
+    let ok = r.res.is_ok();
+    let cpu = cpu_model().map(|m| format!("{{\"model\": \"{m}\", \"count\": {}}}", std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0))).unwrap_or("null".into());
+    let meas = |name: &str, value: f64, unit: &str| format!("{{\"name\": \"{name}\", \"value\": {value}, \"unit\": \"{unit}\"}}");
+    let st = r.st;
+    let mut ms = vec![
+        meas("t.total", r.t_prove, "s"), meas("t.lookup", st.t_lookup, "s"), meas("t.arithmetic", st.t_arith, "s"),
+        meas("t.witness", st.t_witness_wires, "s"), meas("t.encoding_commitment", st.t_commit + st.t_open, "s"),
+        meas("t.zk_additional", 0.0, "s"), meas("t.serialization", 0.0, "s"),
+        meas("verifier.seconds", r.t_verify, "s"), meas("transcript.bytes", r.proof.size() as f64, "B"),
+        meas("rounds.protocol", st.slots as f64, "count"), meas("rounds.sequential_depth", depth as f64, "count"),
+        meas("census.committed_elements", st.committed_elements as f64, "count"),
+        meas("prove_seconds", r.t_prove, "s"), meas("verify_seconds", r.t_verify, "s"), meas("proof_bytes", r.proof.size() as f64, "B"), meas("ligero_rows", st.ligero_rows as f64, "count"),
+        meas("threads", threads as f64, "count"), meas("units", r.inst.segs[0].units as f64, "count"),
+        meas("columns_per_unit", r.inst.segs[0].ncols as f64, "count"),
+        meas("t_commit", st.t_commit, "s"), meas("t_open", st.t_open, "s"),
+    ];
+    if r.unit == "vu" {
+        let vus = r.inst.vus() as f64;
+        ms.push(meas("vu.count", vus, "count"));
+        ms.push(meas("vu.seconds_per_vu", r.t_prove / vus, "s"));
+        ms.push(meas("vu.per_second", vus / r.t_prove, "1/s"));
+        ms.push(meas("linkage_constraints", st.linkage_constraints as f64, "count"));
+        ms.push(meas("epilogue_columns", r.inst.segs[1].ncols as f64, "count"));
+    }
+    if let Some(rss) = rss { ms.push(meas("mem.peak_host_bytes", rss as f64, "B")); ms.push(meas("peak_rss_bytes", rss as f64, "B")); }
+    let lk: Vec<String> = st.lookup_dims.iter().map(|(n, d, q)| format!("\"{n}\": {{\"hypercube_dim\": {d}, \"queries_per_unit\": {q}}}")).collect();
+    let segs: Vec<String> = r.inst.segs.iter().map(|s| format!("{{\"name\": \"{}\", \"rows\": {}, \"columns\": {}, \"wires\": {}, \"layers\": {}}}", s.name, s.units, s.ncols, s.circ.nwires(), s.layers.len())).collect();
+    let json = format!(
+        "{{\n\"schema\": \"research/result/v0.1\",\n\"run_id\": \"{run_id}\",\n\"workload_fingerprint\": {{\n  \"profile\": \"first-campaign-target/2026-09-21\", \"domain\": \"finite\", \"K\": {}, \"B\": {}, \"N_subbatches\": 1,\n  \"unit\": \"{}\",\n  \"proof_class\": \"{}\", \"authentication\": \"excluded\", \"zk_mode\": \"none\",\n  \"security\": {{\"target\": -128, \"trace_field\": \"goldilocks\", \"challenge_field\": \"goldilocks^3 (X^3-X-1)\", \"fiat_shamir\": \"sha256\", \"commitment\": \"{}\", \"note\": \"see report for the error terms this configuration achieves\"}},\n  \"hardware\": {{\"gpu\": null, \"cpu\": {cpu}}},\n  \"software\": {{\"backend\": {{\"name\": \"verity-gkr\", \"version\": \"0.2.0\", \"commit\": \"{commit}\"}}, \"toolchain\": {{\"rustc\": \"{}\"}}}},\n  \"preprocessing\": \"circuit export from the WP2 checker (verity_numerical.gkr_export) and witness generation by WP2 gen_step in Python; not timed here\",\n  \"retention\": \"retained\",\n  \"threads\": {threads},\n  \"segments\": [{}],\n  \"lookups\": {{{}}}\n}},\n\"validation\": {{\"status\": \"{}\", \"checker\": \"verity-gkr verify\", \"detail\": \"{}\", \"evidence\": []}},\n\"measurements\": [\n{}\n]\n}}\n",
+        r.k, r.b, r.unit,
+        if r.mode == Mode::Pcs { "NON_ZK_PROOF_DIAGNOSTIC" } else { "ARITHMETIC_DIAGNOSTIC" },
+        if r.mode == Mode::Pcs { format!("ligero-style RS(k={},n={}) over Goldilocks, SHA-256 Merkle columns, t={} opened, no masking", LIGERO.k, LIGERO.n, LIGERO.t) } else { "none: columns in the clear".to_string() },
+        std::env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()), segs.join(", "), lk.join(", "), if ok { "passed" } else { "failed" },
+        match r.res { Ok(()) => "verifier accepted the batch".to_string(), Err(e) => e.replace('"', "'") }, ms.join(",\n"));
+    std::fs::write(out, json).expect("write result");
+}
+
+fn run_and_report(inst: &Instance, mode: Mode, args: &[String], k: usize, unit: &str, b: usize) -> bool {
+    let tp = Instant::now();
+    let (proof, st) = prove(inst, mode);
+    let t_prove = tp.elapsed().as_secs_f64();
+    let tv = Instant::now();
+    let vinst = verifier_view(inst, mode);
+    let res = verify(&vinst, &proof, mode);
+    let t_verify = tv.elapsed().as_secs_f64();
+    let depth = 1 + st.depth_circuit.max(st.depth_lookup_max) + if mode == Mode::Pcs { 2 } else { 0 };
+    eprintln!("mode={mode:?} unit={unit} B={b} units={} verify={:?} prove_s={t_prove:.3} (commit {:.3} lookup {:.3} wires {:.3} arith {:.3} open {:.3}) verify_s={t_verify:.3} proof_bytes={} slots={} depth={depth} rows={} committed={} lookups={:?} rss={:?}",
+        inst.segs[0].units, res, st.t_commit, st.t_lookup, st.t_witness_wires, st.t_arith, st.t_open, proof.size(), st.slots, st.ligero_rows, st.committed_elements, st.lookup_dims, peak_rss_bytes());
+    if let Some(out) = arg(args, "--out") {
+        write_result(&out, args, &RunReport { inst, mode, proof: &proof, st: &st, t_prove, t_verify, res: &res, k, unit, b });
+    }
+    res.is_ok()
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 { eprintln!("usage: run|negatives ..."); std::process::exit(2); }
+    if args.len() < 2 { eprintln!("usage: run|run-vu|negatives|negatives-vu ..."); std::process::exit(2); }
+    let mode = if args.iter().any(|a| a == "--clear") { Mode::Clear } else { Mode::Pcs };
     match args[1].as_str() {
         "run" => {
+            let ld = load_circuit(&arg(&args, "--circuit").unwrap());
             let units: Option<usize> = arg(&args, "--units").map(|s| s.parse().unwrap());
-            let (circ, ls, cols, units, m, hash) = load(&arg(&args, "--circuit").unwrap(), &arg(&args, "--witness").unwrap(), units);
-            let mode = if args.iter().any(|a| a == "--clear") { Mode::Clear } else { Mode::Pcs };
-            let inst = Instance { circ: &circ, layers: &ls, cols, units, ncols: m };
-            let tp = Instant::now();
-            let (proof, st) = prove(&inst, &hash, mode);
-            let t_prove = tp.elapsed().as_secs_f64();
-            let tv = Instant::now();
-            let vinst = Instance { circ: &circ, layers: &ls, cols: if mode == Mode::Pcs { vec![] } else { inst.cols.clone() }, units, ncols: m };
-            let res = verify(&vinst, &hash, &proof, mode);
-            let t_verify = tv.elapsed().as_secs_f64();
-            let ok = res.is_ok();
-            let depth = 1 + st.depth_circuit.max(st.depth_lookup_max);
-            let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(16);
-            let rss = peak_rss_bytes();
-            eprintln!("mode={mode:?} units={units} verify={:?} prove_s={t_prove:.3} (commit {:.3} lookup {:.3} arith {:.3} open {:.3}) verify_s={t_verify:.3} proof_bytes={} slots={} depth={depth} rows={} lookups={:?} rss={:?}", res, st.t_commit, st.t_lookup, st.t_arith, st.t_open, proof.size(), st.slots, st.ligero_rows, st.lookup_dims, rss);
-            if let Some(out) = arg(&args, "--out") {
-                let run_id = arg(&args, "--run-id").or_else(|| std::env::var("RESEARCH_RUN_ID").ok()).unwrap_or_else(|| "local".into());
-                let commit = arg(&args, "--commit").unwrap_or_else(|| "unknown".into());
-                let cpu = cpu_model().map(|m| format!("{{\"model\": \"{m}\", \"count\": {}}}", std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0))).unwrap_or("null".into());
-                let meas = |name: &str, value: f64, unit: &str| format!("{{\"name\": \"{name}\", \"value\": {value}, \"unit\": \"{unit}\"}}");
-                let mut ms = vec![
-                    meas("t.total", t_prove, "s"), meas("t.lookup", st.t_lookup, "s"), meas("t.arithmetic", st.t_arith, "s"),
-                    meas("t.witness", st.t_witness_wires, "s"), meas("t.encoding_commitment", st.t_commit + st.t_open, "s"),
-                    meas("verifier.seconds", t_verify, "s"), meas("transcript.bytes", proof.size() as f64, "B"),
-                    meas("rounds.protocol", st.slots as f64, "count"), meas("rounds.sequential_depth", depth as f64, "count"),
-                    meas("census.committed_elements", st.committed_elements as f64, "count"),
-                    meas("prove_seconds", t_prove, "s"), meas("verify_seconds", t_verify, "s"), meas("proof_bytes", proof.size() as f64, "B"), meas("ligero_rows", st.ligero_rows as f64, "count"),
-                    meas("threads", threads as f64, "count"), meas("units", units as f64, "count"),
-                    meas("columns_per_unit", m as f64, "count"),
-                ];
-                if let Some(r) = rss { ms.push(meas("mem.peak_host_bytes", r as f64, "B")); ms.push(meas("peak_rss_bytes", r as f64, "B")); }
-                let lk: Vec<String> = st.lookup_dims.iter().map(|(n, d, q)| format!("\"{n}\": {{\"hypercube_dim\": {d}, \"queries_per_unit\": {q}}}")).collect();
-                let json = format!(
-                    "{{\n\"schema\": \"research/result/v0.1\",\n\"run_id\": \"{run_id}\",\n\"workload_fingerprint\": {{\n  \"profile\": \"first-campaign-target/2026-09-21\", \"domain\": \"finite\", \"K\": 16, \"B\": {units}, \"N_subbatches\": 1,\n  \"unit\": \"transition\",\n  \"proof_class\": \"{}\", \"authentication\": \"excluded\", \"zk_mode\": \"none\",\n  \"security\": {{\"target\": -128, \"trace_field\": \"goldilocks\", \"challenge_field\": \"goldilocks^3 (X^3-X-1)\", \"fiat_shamir\": \"sha256\", \"commitment\": \"{}\", \"note\": \"see report for the error terms this configuration achieves\"}},\n  \"hardware\": {{\"gpu\": null, \"cpu\": {cpu}}},\n  \"software\": {{\"backend\": {{\"name\": \"verity-gkr\", \"version\": \"0.1.0\", \"commit\": \"{commit}\"}}, \"toolchain\": {{\"rustc\": \"{}\"}}}},\n  \"preprocessing\": \"circuit export from the WP2 checker (verity_numerical.gkr_export) and witness generation by WP2 gen_step in Python; not timed here\",\n  \"retention\": \"retained\",\n  \"threads\": {threads},\n  \"lookups\": {{{}}}\n}},\n\"validation\": {{\"status\": \"{}\", \"checker\": \"verity-gkr verify\", \"detail\": \"{}\", \"evidence\": []}},\n\"measurements\": [\n{}\n]\n}}\n",
-                    if mode == Mode::Pcs { "NON_ZK_PROOF_DIAGNOSTIC" } else { "ARITHMETIC_DIAGNOSTIC" },
-                    if mode == Mode::Pcs { format!("ligero-style RS(k={},n={}) over Goldilocks, SHA-256 Merkle columns, t={} opened, no masking", LIGERO.k, LIGERO.n, LIGERO.t) } else { "none: columns in the clear".to_string() },
-                    std::env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()), lk.join(", "), if ok { "passed" } else { "failed" },
-                    match &res { Ok(()) => "verifier accepted the batch".to_string(), Err(e) => e.replace('"', "'") }, ms.join(",\n"));
-                std::fs::write(&out, json).expect("write result");
-            }
-            if !ok { std::process::exit(1); }
+            let (cols, units) = load_rows(&arg(&args, "--witness").unwrap(), ld.circ.ncols, units, true);
+            let inst = Instance { segs: vec![segment("units", &ld, cols, units)], chain: None };
+            if !run_and_report(&inst, mode, &args, 16, "transition", units) { std::process::exit(1); }
+        }
+        "run-vu" => {
+            let dir = arg(&args, "--dir").unwrap();
+            let unit = load_circuit(&format!("{dir}/circuit.txt"));
+            let epi = load_circuit(&format!("{dir}/epilogue.txt"));
+            let files = VuFiles { units: format!("{dir}/units.bin"), epilogue: format!("{dir}/epilogue.bin"), public: format!("{dir}/public.bin") };
+            let vus: Option<usize> = arg(&args, "--vus").map(|s| s.parse().unwrap());
+            let inst = load_vu(&unit, &epi, &files, vus);
+            let b = inst.vus();
+            let k = 16 * inst.chain.as_ref().unwrap().steps;
+            if !run_and_report(&inst, mode, &args, k, "vu", b) { std::process::exit(1); }
         }
         "negatives" => {
-            let cpath = arg(&args, "--circuit").unwrap();
-            let dir = arg(&args, "--dir").unwrap();
+            // `negatives FIXTURES/` (README form: FIXTURES/circuit.txt + FIXTURES/negatives/*.bin) or `--circuit C --dir D`.
+            let positional = args.get(2).filter(|a| !a.starts_with("--")).cloned();
+            let circuit = arg(&args, "--circuit").or_else(|| positional.as_ref().map(|d| format!("{}/circuit.txt", d.trim_end_matches('/'))))
+                .expect("negatives: pass FIXTURES/ or --circuit C --dir D");
+            let dir = arg(&args, "--dir").or_else(|| positional.as_ref().map(|d| format!("{}/negatives", d.trim_end_matches('/')))).unwrap();
+            let ld = load_circuit(&circuit);
             let mut n_ok = 0;
             let mut n_bad = 0;
             let mut entries: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().map(|e| e == "bin").unwrap_or(false)).collect();
             entries.sort();
             for p in entries {
-                let (circ, ls, cols, units, m, hash) = load(&cpath, p.to_str().unwrap(), None);
-                let inst = Instance { circ: &circ, layers: &ls, cols, units, ncols: m };
-                let mode = if args.iter().any(|a| a == "--clear") { Mode::Clear } else { Mode::Pcs };
-                let (proof, _) = prove(&inst, &hash, mode);
-                match verify(&inst, &hash, &proof, mode) {
+                let (cols, units) = load_rows(p.to_str().unwrap(), ld.circ.ncols, None, false);
+                let inst = Instance { segs: vec![segment("units", &ld, cols, units)], chain: None };
+                let (proof, _) = prove(&inst, mode);
+                match verify(&verifier_view(&inst, mode), &proof, mode) {
                     Ok(()) => { n_bad += 1; println!("ACCEPTED (BUG) {}", p.display()); }
                     Err(e) => { n_ok += 1; println!("rejected {} : {e}", p.file_name().unwrap().to_string_lossy()); }
                 }
             }
             println!("negatives rejected: {n_ok}, wrongly accepted: {n_bad}");
+            if n_bad > 0 { std::process::exit(1); }
+        }
+        "negatives-vu" => {
+            let dir = arg(&args, "--dir").unwrap();
+            let unit = load_circuit(&format!("{dir}/circuit.txt"));
+            let epi = load_circuit(&format!("{dir}/epilogue.txt"));
+            let mut ids: Vec<_> = std::fs::read_dir(format!("{dir}/neg")).unwrap().map(|e| e.unwrap().path()).collect();
+            ids.sort();
+            let (mut n_ok, mut n_bad) = (0, 0);
+            for p in ids {
+                let d = p.to_str().unwrap();
+                let files = VuFiles { units: format!("{d}/units.bin"), epilogue: format!("{d}/epilogue.bin"), public: format!("{d}/public.bin") };
+                let inst = load_vu(&unit, &epi, &files, None);
+                let (proof, _) = prove(&inst, mode);
+                match verify(&verifier_view(&inst, mode), &proof, mode) {
+                    Ok(()) => { n_bad += 1; println!("ACCEPTED (BUG) {}", p.display()); }
+                    Err(e) => { n_ok += 1; println!("rejected {} : {e}", p.file_name().unwrap().to_string_lossy()); }
+                }
+            }
+            println!("vu negatives rejected: {n_ok}, wrongly accepted: {n_bad}");
             if n_bad > 0 { std::process::exit(1); }
         }
         _ => { eprintln!("unknown command"); std::process::exit(2); }
@@ -395,32 +660,35 @@ mod tests {
     use super::*;
     fn fx(p: &str) -> String { format!("{}/fixtures/{p}", env!("CARGO_MANIFEST_DIR")) }
 
+    fn unit_instance<'a>(ld: &'a Loaded, witness: &str, units: Option<usize>) -> Instance<'a> {
+        let (cols, units) = load_rows(witness, ld.circ.ncols, units, true);
+        Instance { segs: vec![segment("units", ld, cols, units)], chain: None }
+    }
+
     #[test]
     fn honest_units_accepted_at_several_batch_sizes() {
+        let ld = load_circuit(&fx("circuit.txt"));
         for units in [1usize, 2, 8] {
-            let (circ, ls, cols, units, m, hash) = load(&fx("circuit.txt"), &fx("honest8.bin"), Some(units));
-            let inst = Instance { circ: &circ, layers: &ls, cols, units, ncols: m };
+            let inst = unit_instance(&ld, &fx("honest8.bin"), Some(units));
             for mode in [Mode::Clear, Mode::Pcs] {
-                let (proof, _) = prove(&inst, &hash, mode);
-                let vinst = Instance { circ: &circ, layers: &ls, cols: if mode == Mode::Pcs { vec![] } else { inst.cols.clone() }, units, ncols: m };
-                verify(&vinst, &hash, &proof, mode).unwrap();
+                let (proof, _) = prove(&inst, mode);
+                verify(&verifier_view(&inst, mode), &proof, mode).unwrap();
             }
         }
     }
 
     #[test]
     fn every_exported_negative_is_rejected() {
+        let ld = load_circuit(&fx("circuit.txt"));
         let dir = fx("negatives");
         let mut n = 0;
         for e in std::fs::read_dir(&dir).unwrap() {
             let p = e.unwrap().path();
             if p.extension().map(|e| e != "bin").unwrap_or(true) { continue; }
-            let (circ, ls, cols, units, m, hash) = load(&fx("circuit.txt"), p.to_str().unwrap(), None);
-            let inst = Instance { circ: &circ, layers: &ls, cols, units, ncols: m };
+            let inst = unit_instance(&ld, p.to_str().unwrap(), None);
             for mode in [Mode::Clear, Mode::Pcs] {
-                let (proof, _) = prove(&inst, &hash, mode);
-                let vinst = Instance { circ: &circ, layers: &ls, cols: if mode == Mode::Pcs { vec![] } else { inst.cols.clone() }, units, ncols: m };
-                assert!(verify(&vinst, &hash, &proof, mode).is_err(), "{} accepted in {mode:?}", p.display());
+                let (proof, _) = prove(&inst, mode);
+                assert!(verify(&verifier_view(&inst, mode), &proof, mode).is_err(), "{} accepted in {mode:?}", p.display());
             }
             n += 1;
         }
@@ -429,15 +697,54 @@ mod tests {
 
     #[test]
     fn tampered_proof_is_rejected() {
-        let (circ, ls, cols, units, m, hash) = load(&fx("circuit.txt"), &fx("honest8.bin"), Some(2));
-        let inst = Instance { circ: &circ, layers: &ls, cols, units, ncols: m };
+        let ld = load_circuit(&fx("circuit.txt"));
+        let inst = unit_instance(&ld, &fx("honest8.bin"), Some(2));
         for mode in [Mode::Clear, Mode::Pcs] {
-            let (mut proof, _) = prove(&inst, &hash, mode);
+            let (mut proof, _) = prove(&inst, mode);
             let k = proof.msgs.len() / 2;
             proof.msgs[k] = proof.msgs[k] + Ext::ONE;
-            assert!(verify(&inst, &hash, &proof, mode).is_err());
-            let (mut proof, _) = prove(&inst, &hash, mode);
-            if mode == Mode::Pcs { proof.bytes[5] ^= 1; assert!(verify(&inst, &hash, &proof, mode).is_err()); }
+            assert!(verify(&inst, &proof, mode).is_err());
+            let (mut proof, _) = prove(&inst, mode);
+            if mode == Mode::Pcs { proof.bytes[5] ^= 1; assert!(verify(&inst, &proof, mode).is_err()); }
         }
+    }
+
+    fn synth_files(units: &str, public: &str) -> VuFiles {
+        VuFiles { units: fx(&format!("vu_synth/{units}")), epilogue: fx("vu_synth/epilogue.bin"), public: fx(&format!("vu_synth/{public}")) }
+    }
+
+    #[test]
+    fn synthetic_vus_accepted_with_chain_and_public_words() {
+        let unit = load_circuit(&fx("vu_synth/circuit.txt"));
+        let epi = load_circuit(&fx("vu_synth/epilogue.txt"));
+        for vus in [1usize, 2] {
+            let inst = load_vu(&unit, &epi, &synth_files("units.bin", "public.bin"), Some(vus));
+            assert_eq!(inst.chain.as_ref().unwrap().steps, 3);
+            for mode in [Mode::Clear, Mode::Pcs] {
+                let (proof, st) = prove(&inst, mode);
+                verify(&verifier_view(&inst, mode), &proof, mode).unwrap();
+                if mode == Mode::Pcs { assert_eq!(st.linkage_constraints, vus * 5); }
+            }
+        }
+    }
+
+    #[test]
+    fn synthetic_vu_negatives_rejected() {
+        let unit = load_circuit(&fx("vu_synth/circuit.txt"));
+        let epi = load_circuit(&fx("vu_synth/epilogue.txt"));
+        for (u, p) in [("units.bin", "negatives/public_wrong_word.bin"), ("negatives/units_broken_chain.bin", "public.bin")] {
+            let inst = load_vu(&unit, &epi, &synth_files(u, p), None);
+            for mode in [Mode::Clear, Mode::Pcs] {
+                let (proof, _) = prove(&inst, mode);
+                assert!(verify(&verifier_view(&inst, mode), &proof, mode).is_err(), "{u} / {p} accepted in {mode:?}");
+            }
+        }
+        // a prover that swaps the public words of two VUs (each word valid for the other) must fail too
+        let inst = load_vu(&unit, &epi, &synth_files("units.bin", "public.bin"), None);
+        let mut swapped = Instance { segs: inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: s.cols.clone(), units: s.units, ncols: s.ncols, hash: s.hash }).collect(), chain: strip_cols(&inst).chain };
+        let ch = swapped.chain.as_mut().unwrap();
+        ch.public_y16.swap(0, 1);
+        let (proof, _) = prove(&swapped, Mode::Pcs);
+        assert!(verify(&verifier_view(&swapped, Mode::Pcs), &proof, Mode::Pcs).is_err());
     }
 }

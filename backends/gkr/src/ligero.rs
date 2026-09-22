@@ -172,22 +172,39 @@ fn row_coeffs(tr: &mut Transcript, rows: usize) -> Vec<Ext> {
 
 /// Prove ⟨a, X⟩ = b (a is public, length rows·k, zero-padded) and proximity; appends to `out` and to the byte
 /// stream `bytes` (opened columns and paths).  Message order: w (k), q coefficients (2k-1), then columns+paths.
-pub fn prove_open(cm: &Committed, a: &[Ext], p: &Params, tr: &mut Transcript, out: &mut Vec<Ext>, bytes: &mut Vec<u8>) {
+pub fn prove_open(cm: &Committed, mut a: Vec<Ext>, p: &Params, tr: &mut Transcript, out: &mut Vec<Ext>, bytes: &mut Vec<u8>) {
     let rows = cm.rows;
-    let mut a = a.to_vec();
     a.resize(rows * p.k, Ext::ZERO);
     let r = row_coeffs(tr, rows);
-    // w = Σ r_i X_i  (message form: X_i = codeword restricted to H = positions j·(n/k))
+    // w = Σ r_i X_i  (message form: X_i = codeword restricted to H = positions j·(n/k)); q on D: Σ_i Enc(a_i)_j U_ij.
+    // Both are sums over rows: every thread accumulates its rows, the partials are added.
     let step = p.n / p.k;
+    let nthreads = crate::gkr::threads().min(rows.max(1));
+    let chunk = rows.div_ceil(nthreads).max(1);
+    let parts: Vec<(Vec<Ext>, Vec<Ext>)> = std::thread::scope(|s| {
+        let hs: Vec<_> = (0..nthreads).map(|t| {
+            let (r, a) = (&r, &a);
+            s.spawn(move || {
+                let mut w = vec![Ext::ZERO; p.k];
+                let mut q = vec![Ext::ZERO; p.n];
+                for i in t * chunk..((t + 1) * chunk).min(rows) {
+                    let cw = &cm.codewords[i * p.n..(i + 1) * p.n];
+                    for m in 0..p.k { w[m] += r[i].scale(cw[m * step]); }
+                    let arow = &a[i * p.k..(i + 1) * p.k];
+                    if arow.iter().all(|x| x.is_zero()) { continue; }
+                    let ae = encode_ext(arow, p.n);
+                    for j in 0..p.n { q[j] += ae[j].scale(cw[j]); }
+                }
+                (w, q)
+            })
+        }).collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
     let mut w = vec![Ext::ZERO; p.k];
-    for i in 0..rows { for m in 0..p.k { w[m] += r[i].scale(cm.codewords[i * p.n + m * step]); } }
-    // q on D: Σ_i Enc(a_i)_j U_ij
     let mut q = vec![Ext::ZERO; p.n];
-    for i in 0..rows {
-        let arow = &a[i * p.k..(i + 1) * p.k];
-        if arow.iter().all(|x| x.is_zero()) { continue; }
-        let ae = encode_ext(arow, p.n);
-        for j in 0..p.n { q[j] += ae[j].scale(cm.codewords[i * p.n + j]); }
+    for (pw, pq) in parts {
+        for (x, y) in w.iter_mut().zip(pw) { *x += y; }
+        for (x, y) in q.iter_mut().zip(pq) { *x += y; }
     }
     ntt_ext(&mut q, true);
     debug_assert!(q[2 * p.k - 1..].iter().all(|x| x.is_zero()), "q degree exceeds 2k-2");
@@ -203,8 +220,7 @@ pub fn prove_open(cm: &Committed, a: &[Ext], p: &Params, tr: &mut Transcript, ou
     }
 }
 
-pub fn verify_open(root: &[u8; 32], rows: usize, a: &[Ext], b: Ext, p: &Params, tr: &mut Transcript, rd: &mut Reader, bytes: &[u8]) -> Result<(), String> {
-    let mut a = a.to_vec();
+pub fn verify_open(root: &[u8; 32], rows: usize, mut a: Vec<Ext>, b: Ext, p: &Params, tr: &mut Transcript, rd: &mut Reader, bytes: &[u8]) -> Result<(), String> {
     a.resize(rows * p.k, Ext::ZERO);
     let r = row_coeffs(tr, rows);
     let w = rd.take(p.k)?;
@@ -217,12 +233,30 @@ pub fn verify_open(root: &[u8; 32], rows: usize, a: &[Ext], b: Ext, p: &Params, 
     let set = open_set(tr, p.n, p.t);
     let w_enc = encode_ext(&w, p.n);
     let omega = root_of_unity(p.n);
-    // a_i(η_j) for the opened columns: encode every nonzero row of a once (public work)
-    let mut a_enc: Vec<Option<Vec<Ext>>> = Vec::with_capacity(rows);
-    for i in 0..rows {
-        let arow = &a[i * p.k..(i + 1) * p.k];
-        if arow.iter().all(|x| x.is_zero()) { a_enc.push(None); } else { a_enc.push(Some(encode_ext(arow, p.n))); }
-    }
+    // a_i(η_j) for the opened columns only: encode every nonzero row of a once (public work, parallel over rows),
+    // keep the t opened positions (rows × t values, not rows × n)
+    let nthreads = crate::gkr::threads().min(rows.max(1));
+    let chunk = rows.div_ceil(nthreads).max(1);
+    let a_enc: Vec<Option<Vec<Ext>>> = {
+        let parts: Vec<Vec<Option<Vec<Ext>>>> = std::thread::scope(|s| {
+            let hs: Vec<_> = (0..nthreads).map(|t| {
+                let (a, set) = (&a, &set);
+                s.spawn(move || {
+                    let mut v = Vec::new();
+                    for i in t * chunk..((t + 1) * chunk).min(rows) {
+                        let arow = &a[i * p.k..(i + 1) * p.k];
+                        if arow.iter().all(|x| x.is_zero()) { v.push(None); } else {
+                            let ae = encode_ext(arow, p.n);
+                            v.push(Some(set.iter().map(|&j| ae[j]).collect()));
+                        }
+                    }
+                    v
+                })
+            }).collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        parts.into_iter().flatten().collect()
+    };
     let col_bytes = rows * 8;
     let depth = p.n.trailing_zeros() as usize;
     let per = col_bytes + 32 * depth;
@@ -239,7 +273,7 @@ pub fn verify_open(root: &[u8; 32], rows: usize, a: &[Ext], b: Ext, p: &Params, 
         let mut qv = Ext::ZERO;
         for c in qc.iter().rev() { qv = qv * eta + *c; }
         let mut rhs = Ext::ZERO;
-        for i in 0..rows { if let Some(ae) = &a_enc[i] { rhs += ae[j].scale(column[i]); } }
+        for i in 0..rows { if let Some(ae) = &a_enc[i] { rhs += ae[oi].scale(column[i]); } }
         if qv != rhs { return Err(format!("ligero: linear test at column {j}")); }
     }
     Ok(())
