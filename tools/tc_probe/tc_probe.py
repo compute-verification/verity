@@ -17,8 +17,9 @@ Instructions (``--instruction``; ``--arch`` is derived from the entry and may be
     sm90.mma.m16n8k16.bf16      sm_90a     mma_bf16_m16n8k16_tiles      16  hopper_bf16_m16n8k16 (pinned)
     sm89.mma.m16n8k32.e4m3      sm_89      mma_e4m3_m16n8k32_tiles      32  ada_e4m3_m16n8k32 (pinned)
     sm89.mma.m16n8k32.e5m2      sm_89      mma_e5m2_m16n8k32_tiles      32  HYPOTHESIS ada_e4m3_m16n8k32 with e5m2 products
-    sm90.mma.m16n8k32.e4m3      sm_90a     mma_e4m3_m16n8k32_tiles      32  HYPOTHESES hopper_e4m3_wgmma_k32 and ada_e4m3_m16n8k32 (open question: which agrees)
-    sm90.mma.m16n8k32.e5m2      sm_90a     mma_e5m2_m16n8k32_tiles      32  HYPOTHESES both of the above with e5m2 products
+    sm90.mma.m16n8k32.e4m3      sm_90a     mma_e4m3_m16n8k32_tiles      32  HYPOTHESES hopper_e4m3_wgmma_k32, ada_e4m3_m16n8k32 (open question: which
+                                                                            agrees) and hopper_bf16_m16n8k16 x2 (see below)
+    sm90.mma.m16n8k32.e5m2      sm_90a     mma_e5m2_m16n8k32_tiles      32  HYPOTHESES the three above with e5m2 products
     sm90.wgmma.m64n8k32.e4m3    sm_90a     wgmma_e4m3_m64n8k32_tiles    32  hopper_e4m3_wgmma_k32 (pinned)
     sm90.wgmma.m64n8k32.e5m2    sm_90a     wgmma_e5m2_m64n8k32_tiles    32  HYPOTHESIS hopper_e4m3_wgmma_k32 with e5m2 products
 
@@ -26,6 +27,14 @@ A pinned model's mismatches fail ``validation``; a HYPOTHESIS model only yields 
 pinned model is compared) and the raw capture is recorded regardless.  The E5M2 product (``_e5m2_product``) is a local
 HYPOTHESIS pending the canonical one in ``verity.ml.tc``.  Kernels: ``mma_tiles.cu`` (``mma.sync``, sm_80+/sm_89+) and
 ``wgmma_tiles.cu`` (``wgmma.mma_async``, sm_90a; A from registers, B through a shared-memory descriptor).
+
+SASS (nvcc 12.4, compile check r20260922-180506-a006 on vy-sp1): every tile kernel holds exactly one MMA-class instruction --
+``HMMA.16816.F32.BF16`` (sm_80/sm_89/sm_90a bf16), ``QMMA.16832.F32.E4M3.E4M3`` / ``QMMA.16832.F32.E5M2.E5M2`` (sm_89 FP8),
+``QGMMA.64x8x32.F32.E4M3.E4M3`` / ``QGMMA.64x8x32.F32.E5M2.E5M2`` (sm_90a wgmma) -- EXCEPT ``mma.sync.m16n8k32.{e4m3,e5m2}`` on
+sm_90a, which ptxas lowers to two ``HMMA.16816.F32`` (the FP16 tensor-core instruction, K = 16 each): there is no FP8 ``mma.sync``
+tensor-core instruction on Hopper, so those two ids are not single-instruction probes.  The table records that count
+(``Instruction.sass_mma`` = 2; the SASS check compares against it and flags ``single_instruction: false``), and their third
+HYPOTHESIS is the Hopper K=16 HMMA pipeline applied twice (k 0..15, then 16..31) with exact FP8 products.
 
     python tools/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k16.bf16 --out $RESEARCH_RUN_DIR \\
         --replay-golden packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json --sweep --n-random 100000
@@ -55,8 +64,9 @@ check, per-family counts per model, first mismatches with A/B/C/D words, family 
 seed, n, families, models; ``tc_evidence`` = per-family counts, ``model_agrees`` per model, first mismatches; validation passed
 iff every mismatch count against a pinned model and every replay is zero).  ``--compile-only`` builds the instruction's kernel
 for its arch (sm_90a compiles wherever the toolkit is, whatever the GPU), runs ``--sass-check`` (cuobjdump: MMA-class
-instructions per tile kernel, exactly one expected) and writes ``result.json`` with ``kind: tc-compile-check/v1`` without
-touching the device.  The BF16 path is unchanged from WP1: the same families, the same random draws, the same words.
+instructions per tile kernel, compared with the table's ``sass_mma``; the tile kernel's SASS is kept as ``sass_<kernel>_<arch>.txt``)
+and writes ``result.json`` with ``kind: tc-compile-check/v1`` without touching the device.  The BF16 path is unchanged from WP1:
+the same families, the same random draws, the same words.
 """
 
 from __future__ import annotations
@@ -251,44 +261,57 @@ def _e5m2_product(a: int, b: int) -> S.Term:
     return S.Term(((a ^ b) >> 7) & 1 == 1, (ea or 1) + (eb or 1) - 30, magnitude)
 
 
-PRODUCTS: dict[str, Callable[[int, int], S.Term]] = {"e5m2": _e5m2_product}
+PRODUCTS: dict[str, Callable[[int, int], S.Term]] = {"e4m3": S.e4m3_product, "e5m2": _e5m2_product}
 
 
-def tc_dot_with_product(pipeline: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b) -> int:
-    """:func:`silicon.tc_dot` with the products formed by ``product`` instead of the pipeline's own (hypothesis models)."""
+def tc_dot_with_product(pipeline: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b, chain: int = 1) -> int:
+    """:func:`silicon.tc_dot` with the products formed by ``product`` instead of the pipeline's own (hypothesis models).  With
+    ``chain`` > 1 the K operands are split into ``chain`` consecutive slices of ``pipeline.k`` each and the pipeline is applied
+    once per slice, the word of one pass being the accumulator of the next (the HYPOTHESIS for a PTX instruction that ptxas
+    lowers to ``chain`` tensor-core instructions, e.g. ``mma.sync.m16n8k32.e4m3`` on sm_90a = two ``HMMA.16816.F32``)."""
 
-    if len(a) != pipeline.k or len(b) != pipeline.k:
-        raise S.InvalidArtifact(f"{pipeline.name} takes {pipeline.k} operand pairs")
+    if len(a) != pipeline.k * chain or len(b) != pipeline.k * chain:
+        raise S.InvalidArtifact(f"{pipeline.name} x{chain} takes {pipeline.k * chain} operand pairs")
     acc = S.fp32_term(acc_bits)
-    start = 0
-    for size in pipeline.groups:
-        terms = [acc, *(product(a[i], b[i]) for i in range(start, start + size))]
-        acc = S.group_sum(terms, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
-        if acc.magnitude and acc.exponent > S.FP32_MAX_EXPONENT:
-            return S.pack_fp32(acc)
-        start += size
+    for pass_ in range(chain):
+        if pass_:
+            acc = S.fp32_term(S.pack_fp32(acc))
+        start = pass_ * pipeline.k
+        for size in pipeline.groups:
+            terms = [acc, *(product(a[i], b[i]) for i in range(start, start + size))]
+            acc = S.group_sum(terms, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
+            if acc.magnitude and acc.exponent > S.FP32_MAX_EXPONENT:
+                return S.pack_fp32(acc)
+            start += size
     return S.pack_fp32(acc)
 
 
 @dataclass(frozen=True)
 class Model:
     """A model the capture is compared with.  ``product`` names an entry of :data:`PRODUCTS` (None: the pipeline's own product,
-    evaluated by :func:`silicon.tc_dot` exactly as pinned).  ``declared`` models fail validation on any mismatch; the others are
-    HYPOTHESES whose agreement counts are reported."""
+    evaluated by :func:`silicon.tc_dot` exactly as pinned).  ``chain`` > 1 applies the pipeline that many times over consecutive
+    K slices (see :func:`tc_dot_with_product`).  ``declared`` models fail validation on any mismatch; the others are HYPOTHESES
+    whose agreement counts are reported."""
 
     pipeline: S.Pipeline
     product: str | None = None
     declared: bool = True
+    chain: int = 1
 
     @property
     def name(self) -> str:
-        n = self.pipeline.name + (f"+{self.product}_product" if self.product else "")
+        n = self.pipeline.name + (f"+{self.product}_product" if self.product else "") + (f"x{self.chain}" if self.chain > 1 else "")
         return n if self.declared else n + "[HYPOTHESIS]"
 
     def describe(self) -> dict:
         p = self.pipeline
         return {"name": self.name, "pipeline": p.name, "groups": list(p.groups), "width": p.width, "zero_exponent": p.zero_exponent,
-                "product": self.product or p.dtype, "declared": self.declared}
+                "product": self.product or p.dtype, "chain": self.chain, "declared": self.declared}
+
+    def evaluate(self, acc_bits: int, a, b) -> int:
+        if self.product is None:
+            return S.tc_dot(self.pipeline, acc_bits, a, b)
+        return tc_dot_with_product(self.pipeline, PRODUCTS[self.product], acc_bits, a, b, self.chain)
 
 
 @dataclass(frozen=True)
@@ -302,16 +325,17 @@ class Instruction:
     m: int
     k: int
     models: tuple[Model, ...]
+    sass_mma: int = 1  # MMA-class SASS instructions ptxas emits for the PTX instruction (measured; 1 = single-instruction probe)
 
     def describe(self) -> dict:
         return {"id": self.id, "arch": self.arch, "tu": self.tu, "kernel": self.kernel, "ptx": self.ptx, "format": self.fmt.name,
-                "m": self.m, "n": N, "k": self.k, "models": [m.describe() for m in self.models]}
+                "m": self.m, "n": N, "k": self.k, "sass_mma": self.sass_mma, "models": [m.describe() for m in self.models]}
 
 
-def _mma(id_: str, arch: str, fmt: Format, models: tuple[Model, ...]) -> Instruction:
+def _mma(id_: str, arch: str, fmt: Format, models: tuple[Model, ...], sass_mma: int = 1) -> Instruction:
     k = 16 if fmt is BF16 else 32
     return Instruction(id_, arch, "mma_tiles.cu", f"mma_{fmt.name}_m16n8k{k}_tiles",
-                       f"mma.sync.aligned.m16n8k{k}.row.col.f32.{fmt.name}.{fmt.name}.f32", fmt, 16, k, models)
+                       f"mma.sync.aligned.m16n8k{k}.row.col.f32.{fmt.name}.{fmt.name}.f32", fmt, 16, k, models, sass_mma)
 
 
 def _wgmma(id_: str, fmt: Format, models: tuple[Model, ...]) -> Instruction:
@@ -321,6 +345,11 @@ def _wgmma(id_: str, fmt: Format, models: tuple[Model, ...]) -> Instruction:
 
 _HOPPER_E5M2 = Model(S.HOPPER_E4M3_K32, "e5m2", declared=False)
 _ADA_E5M2 = Model(S.ADA_E4M3_M16N8K32, "e5m2", declared=False)
+# sm_90a lowers mma.sync.m16n8k32.{e4m3,e5m2} to two HMMA.16816.F32 (compile check r20260922-180506-a006): the third hypothesis for
+# those ids is Hopper's K=16 HMMA pipeline applied twice, k 0..15 then 16..31, with the exact FP8 products (FP8 values are exact
+# in FP16, so the products are the same numbers whichever way the conversion goes).
+_HOPPER_HMMA_X2_E4M3 = Model(S.HOPPER_BF16_M16N8K16, "e4m3", declared=False, chain=2)
+_HOPPER_HMMA_X2_E5M2 = Model(S.HOPPER_BF16_M16N8K16, "e5m2", declared=False, chain=2)
 
 INSTRUCTIONS: dict[str, Instruction] = {
     i.id: i
@@ -330,8 +359,9 @@ INSTRUCTIONS: dict[str, Instruction] = {
         _mma("sm90.mma.m16n8k16.bf16", "sm_90a", BF16, (Model(S.HOPPER_BF16_M16N8K16),)),
         _mma("sm89.mma.m16n8k32.e4m3", "sm_89", E4M3, (Model(S.ADA_E4M3_M16N8K32),)),
         _mma("sm89.mma.m16n8k32.e5m2", "sm_89", E5M2, (_ADA_E5M2,)),
-        _mma("sm90.mma.m16n8k32.e4m3", "sm_90a", E4M3, (Model(S.HOPPER_E4M3_K32, declared=False), Model(S.ADA_E4M3_M16N8K32, declared=False))),
-        _mma("sm90.mma.m16n8k32.e5m2", "sm_90a", E5M2, (_HOPPER_E5M2, _ADA_E5M2)),
+        _mma("sm90.mma.m16n8k32.e4m3", "sm_90a", E4M3,
+             (Model(S.HOPPER_E4M3_K32, declared=False), Model(S.ADA_E4M3_M16N8K32, declared=False), _HOPPER_HMMA_X2_E4M3), sass_mma=2),
+        _mma("sm90.mma.m16n8k32.e5m2", "sm_90a", E5M2, (_HOPPER_E5M2, _ADA_E5M2, _HOPPER_HMMA_X2_E5M2), sass_mma=2),
         _wgmma("sm90.wgmma.m64n8k32.e4m3", E4M3, (Model(S.HOPPER_E4M3_K32),)),
         _wgmma("sm90.wgmma.m64n8k32.e5m2", E5M2, (_HOPPER_E5M2,)),
     )
@@ -358,22 +388,27 @@ def build(tu: str, arch: str, out: Path) -> tuple[Path, str]:
 MMA_SASS = re.compile(r"\b((?:[A-Z]{1,2})?MMA(?:\.[A-Za-z0-9_.]+)?)\b")
 
 
-def sass_check(so: Path, kernel: str) -> dict:
+def sass_check(so: Path, kernel: str, out: Path | None = None, expected: int = 1) -> dict:
     """``cuobjdump -sass`` of the built library: MMA-class instructions (HMMA/QMMA/HGMMA/QGMMA/IMMA...) per device function, and
-    the count in the instruction's tile kernel, which must be exactly one for the probe to be single-instruction."""
+    the count in the instruction's tile kernel, which must equal ``expected`` -- one for a single-instruction probe; the table
+    records the measured count where ptxas lowers a PTX instruction to several (``Instruction.sass_mma``).  With ``out`` the
+    tile kernel's SASS is written to ``sass_<kernel>_<arch>.txt`` there (the evidence behind the count)."""
 
     proc = subprocess.run([cuda_bin("cuobjdump"), "-sass", str(so)], capture_output=True, text=True)
     if proc.returncode != 0:
         return {"ok": False, "error": proc.stderr.strip()[-2000:], "kernel": kernel}
+    device_kernel = f"{kernel}_kernel"
     per_function: dict[str, dict] = {}
+    excerpt: list[str] = []
     current = None
     for line in proc.stdout.splitlines():
         m = re.search(r"Function\s*:\s*(\S+)", line)
         if m:
             current = m.group(1)
             per_function[current] = {"mma_count": 0, "mma": []}
-            continue
-        if current is None or "/*" not in line:
+        if current is not None and device_kernel in current:
+            excerpt.append(line)
+        if m or current is None or "/*" not in line:
             continue
         code = line.split("/*", 1)[1].split("*/", 1)[1] if line.lstrip().startswith("/*") else line  # drop the offset comment
         code = code.split("/*", 1)[0]  # drop the encoding comment
@@ -381,17 +416,24 @@ def sass_check(so: Path, kernel: str) -> dict:
             per_function[current]["mma_count"] += 1
             if hit not in per_function[current]["mma"]:
                 per_function[current]["mma"].append(hit)
-    device_kernel = f"{kernel}_kernel"
     tile_fns = {name: v for name, v in per_function.items() if device_kernel in name}
     count = sum(v["mma_count"] for v in tile_fns.values())
-    return {
-        "ok": bool(tile_fns) and count == 1,
+    result = {
+        "ok": bool(tile_fns) and count == expected,
         "kernel": device_kernel,
         "tile_kernel_functions": tile_fns,
         "tile_kernel_mma_count": count,
+        "expected_mma_count": expected,
+        "single_instruction": bool(tile_fns) and count == 1,
         "functions": per_function,
         "sass_sha256": _sha256_text(proc.stdout),
     }
+    if out is not None:
+        arch = so.stem.rsplit("_", 2)[-2:]  # lib<tu>_sm_90a -> sm_90a
+        name = f"sass_{kernel}_{'_'.join(arch)}.txt"
+        (out / name).write_text("\n".join(excerpt) + "\n")
+        result["sass_file"] = name
+    return result
 
 
 def _sha256_text(text: str) -> str:
@@ -752,12 +794,12 @@ def specials_summary(meta: dict, D: np.ndarray, fmt: Format) -> dict:
 
 # --- the models, per tile, in processes ----------------------------------------------------------------------------------------------
 
-_MODELS: list[tuple[str, S.Pipeline, Callable | None]] = []
+_MODELS: list[Model] = []
 
 
 def _init(model_descs):
     global _MODELS
-    _MODELS = [(name, S.PIPELINES[pname], PRODUCTS[prod] if prod else None) for name, pname, prod in model_descs]
+    _MODELS = [Model(S.PIPELINES[pname], prod, declared, chain) for pname, prod, declared, chain in model_descs]
 
 
 def _eval_tiles(args):
@@ -771,12 +813,9 @@ def _eval_tiles(args):
         for i in range(M):
             for j in range(N):
                 acc = int(C[t, i, j])
-                for m, (_, pipe, product) in enumerate(_MODELS):
+                for m, model in enumerate(_MODELS):
                     try:
-                        if product is None:
-                            outs[m][t, i, j] = S.tc_dot(pipe, acc, a_rows[i], b_rows[j])
-                        else:
-                            outs[m][t, i, j] = tc_dot_with_product(pipe, product, acc, a_rows[i], b_rows[j])
+                        outs[m][t, i, j] = model.evaluate(acc, a_rows[i], b_rows[j])
                     except Exception:  # noqa: BLE001 - domain errors are counted, not raised
                         errs[m][t, i, j] = True
     return outs, errs
@@ -1058,7 +1097,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
         "records": [],
     }
     fams: dict = {}
-    descs = [(m.name, m.pipeline.name, m.product) for m in ins.models]
+    descs = [(m.pipeline.name, m.product, m.declared, m.chain) for m in ins.models]
     with mp.Pool(args.procs, initializer=_init, initargs=(descs,)) as pool:
         for name, A, Bt, C, meta in families(rng, args.n_random, fmt, M, K):
             if only is not None and name not in only:
@@ -1164,7 +1203,7 @@ def compile_only(ids: list[str], out: Path, args) -> int:
         try:
             so, nvcc = build(ins.tu, arch, out)
             entry = {"instruction": ins.describe(), "arch": arch, "nvcc": nvcc, "so": so.name, "compiled": True, "seconds": round(time.time() - t0, 1)}
-            entry["sass"] = sass_check(so, ins.kernel)
+            entry["sass"] = sass_check(so, ins.kernel, out, ins.sass_mma)
             ok = ok and entry["sass"]["ok"]
         except subprocess.CalledProcessError as exc:
             entry = {"instruction": ins.describe(), "arch": arch, "compiled": False, "error": str(exc), "seconds": round(time.time() - t0, 1)}
@@ -1176,6 +1215,7 @@ def compile_only(ids: list[str], out: Path, args) -> int:
     run_id = os.environ.get("RESEARCH_RUN_ID")
     if run_id:
         checks = {id_: {"compiled": e["compiled"], "sass_ok": e.get("sass", {}).get("ok", False), "mma_count": e.get("sass", {}).get("tile_kernel_mma_count"),
+                        "expected_mma_count": e.get("sass", {}).get("expected_mma_count"), "single_instruction": e.get("sass", {}).get("single_instruction"),
                         "mma": sorted({m for f in e.get("sass", {}).get("tile_kernel_functions", {}).values() for m in f["mma"]})}
                   for id_, e in results["instructions"].items()}
         write_result(out, {
@@ -1186,11 +1226,12 @@ def compile_only(ids: list[str], out: Path, args) -> int:
                                      "archs": {id_: e["arch"] for id_, e in results["instructions"].items()},
                                      "nvcc": next((e.get("nvcc") for e in results["instructions"].values() if e.get("nvcc")), None),
                                      "hostname": results["identity"]["hostname"]},
-            "validation": {"status": "passed" if ok else "failed", "checker": "nvcc compile + cuobjdump SASS (exactly one MMA-class instruction per tile kernel)",
+            "validation": {"status": "passed" if ok else "failed",
+                           "checker": "nvcc compile + cuobjdump SASS (MMA-class instructions per tile kernel == the table's sass_mma; 1 = single instruction)",
                            "detail": json.dumps(checks), "evidence": ["probe_results.json"]},
             "measurements": [{"name": f"{id_}.tile_kernel_mma_count", "value": c["mma_count"], "unit": "instructions"} for id_, c in checks.items()],
             "measurement_files": ["probe_results.json"],
-            "artifacts": [],
+            "artifacts": [e["sass"]["sass_file"] for e in results["instructions"].values() if e.get("sass", {}).get("sass_file")],
         })
     print("COMPILE CHECK", "GREEN" if ok else "FAILED", flush=True)
     return 0 if ok else 1
@@ -1236,7 +1277,7 @@ def main() -> int:
     so, nvcc = build(ins.tu, arch, out)
     results: dict = {"schema": "wp1/tc-probe/v0", "instruction": ins.describe()}
     if args.sass_check:
-        results["sass"] = sass_check(so, ins.kernel)
+        results["sass"] = sass_check(so, ins.kernel, out, ins.sass_mma)
         print("sass", json.dumps({k: v for k, v in results["sass"].items() if k in ("ok", "kernel", "tile_kernel_mma_count", "tile_kernel_functions", "error")}), flush=True)
     probe = Probe(so, ins)
     identity = probe.identity()
@@ -1286,7 +1327,9 @@ def main() -> int:
             failures.append(f"instances vu-k1536 accumulator_mismatches={vu['accumulator_mismatches']} y_mismatches={vu['y_mismatches']} "
                             f"other_positions_nonzero={vu['other_positions_nonzero']}")
     if "sass" in results and not results["sass"]["ok"]:
-        failures.append(f"sass tile_kernel_mma_count={results['sass'].get('tile_kernel_mma_count')}")
+        failures.append(f"sass tile_kernel_mma_count={results['sass'].get('tile_kernel_mma_count')} expected={ins.sass_mma}")
+    if "sass" in results and results["sass"]["ok"] and not results["sass"].get("single_instruction", True):
+        findings.append(f"not single-instruction: {results['sass']['tile_kernel_mma_count']} MMA-class SASS instructions per tile kernel (table sass_mma={ins.sass_mma})")
     results["failures"] = failures
     results["hypothesis_findings"] = findings
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
@@ -1323,7 +1366,8 @@ def main() -> int:
             "seed": args.seed,
             "n": args.n_random,
             "layout_check": results["layout_check"],
-            "models": {m.name: {"declared": m.declared, "pipeline": m.pipeline.name, "product": m.product or m.pipeline.dtype} for m in ins.models},
+            "models": {m.name: {"declared": m.declared, "pipeline": m.pipeline.name, "product": m.product or m.pipeline.dtype, "chain": m.chain}
+                       for m in ins.models},
         }
         measurements = [{"name": "wall", "value": results["seconds"], "unit": "s"}]
         if "sweep" in results:
@@ -1355,6 +1399,8 @@ def main() -> int:
         artifacts = []
         if "sweep" in results:
             artifacts = ["capture_sample.json"] + [f"tiles_{name}.npz" for name in results["sweep"]["families"]]
+        if results.get("sass", {}).get("sass_file"):
+            artifacts.append(results["sass"]["sass_file"])
         checker = "tc_probe vs " + (", ".join(declared) if declared else "HYPOTHESIS models only (" + ", ".join(m.name for m in ins.models) + ")")
         detail = "; ".join(failures) or ("every hardware word reproduced" if status == "passed" else "no pinned model compared; agreement counts in tc_evidence")
         if findings:
