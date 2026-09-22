@@ -1100,7 +1100,9 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
     descs = [(m.pipeline.name, m.product, m.declared, m.chain) for m in ins.models]
     with mp.Pool(args.procs, initializer=_init, initargs=(descs,)) as pool:
         for name, A, Bt, C, meta in families(rng, args.n_random, fmt, M, K):
+            n_sample = min(args.golden_per_family, A.shape[0] * M * N)
             if only is not None and name not in only:
+                rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)  # the skipped family's sampling draw: --families leaves the others' tiles unchanged
                 continue
             t0 = time.time()
             D = probe.tiles(A, Bt, C)
@@ -1157,7 +1159,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
                                   "elements_with_D_ne_C": int(np.count_nonzero(D != C)),
                                   "elements_with_D_eq_C_masked_to_14_bits": int(np.count_nonzero(D == (C & ~np.uint32(0x3FF))))}
             np.savez_compressed(out / f"tiles_{name}.npz", A=A, Bt=Bt, C=C, D=D)
-            flat = rng.choice(A.shape[0] * M * N, size=min(args.golden_per_family, A.shape[0] * M * N), replace=False)
+            flat = rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)
             for f in sorted(flat.tolist()):
                 t, i, j = f // (M * N), (f % (M * N)) // N, f % N
                 capture["records"].append({**hexrec(C[t, i, j], A[t, i], Bt[t, j], D[t, i, j], fmt.hex_width), "family": name})
