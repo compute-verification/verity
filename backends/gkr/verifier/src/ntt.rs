@@ -4,7 +4,9 @@
 
 use crate::field::{add, inv, mont_mul, mul, pow, root_of_unity, sub, to_mont, Ext, DEG};
 
-pub struct Plan { pub n: usize, tw: Vec<Vec<u32>>, rev: Vec<u32>, scale: Option<u32> }
+pub struct Plan { pub n: usize, tw: Vec<Vec<u32>>, rev: Vec<u32>, scale: Option<u32>, w: u32, prune_stages: usize, sub_pows: Vec<u32> }
+
+fn bitrev(x: usize, bits: usize) -> usize { if bits == 0 { 0 } else { x.reverse_bits() >> (usize::BITS - bits as u32) } }
 
 impl Plan {
     pub fn new(n: usize, inverse: bool) -> Plan {
@@ -23,7 +25,17 @@ impl Plan {
             tw.push(level);
             len *= 2;
         }
-        Plan { n, tw, rev, scale: if inverse { Some(inv(n as u32)) } else { None } }
+        Plan { n, tw, rev, scale: if inverse { Some(inv(n as u32)) } else { None }, w, prune_stages: 0, sub_pows: vec![] }
+    }
+
+    /// Prepares `eval_pruned` with `stages` leading stages (sub-transform size `n >> stages`).
+    pub fn with_pruning(mut self, stages: usize) -> Plan {
+        let m = self.n >> stages;
+        let wm = pow(self.w, 1u64 << stages);
+        let mut cur = 1u32;
+        self.sub_pows = (0..m).map(|_| { let r = to_mont(cur); cur = mul(cur, wm); r }).collect();
+        self.prune_stages = stages;
+        self
     }
 
     pub fn run(&self, v: &mut [Ext]) {
@@ -102,6 +114,58 @@ impl Plan {
         }
     }
 
+    /// Output-pruned forward transform on `L` lanes (natural-order input): `stages` decimation-in-frequency stages
+    /// (the first `stages` levels of the full transform, `n/2` butterflies each) leave `2^stages` independent
+    /// sub-transforms of size `M = n / 2^stages`; the wanted outputs `X[k]` are then read directly from the
+    /// sub-transform `bitrev_stages(k mod 2^stages)` as `M`-term sums (`X[k] = sum_j y[j] w_M^(j (k >> stages))`).
+    /// Cheaper than the full transform whenever the wanted set is small (`~64` of `4096` here).  `out[i]` receives the
+    /// `L` lanes of `X[wanted[i]]`.  Forward plans only.
+    pub fn eval_pruned<const L: usize>(&self, v: &mut [u32], stages: usize, wanted: &[usize], out: &mut [u32]) {
+        let n = self.n;
+        assert!(self.scale.is_none() && stages <= n.trailing_zeros() as usize);
+        assert_eq!(v.len(), n * L);
+        let levels = self.tw.len();
+        let mut len = n;
+        for s in 0..stages {
+            let half = len / 2;
+            let tw = &self.tw[levels - 1 - s][..half];
+            for start in (0..n).step_by(len) {
+                let blk = &mut v[start * L..(start + len) * L];
+                let (lo, hi) = blk.split_at_mut(half * L);
+                for (j, &w) in tw.iter().enumerate() {
+                    let a: &mut [u32; L] = (&mut lo[j * L..(j + 1) * L]).try_into().unwrap();
+                    let b: &mut [u32; L] = (&mut hi[j * L..(j + 1) * L]).try_into().unwrap();
+                    for l in 0..L {
+                        let u = a[l];
+                        let x = b[l];
+                        a[l] = add(u, x);
+                        b[l] = mont_mul(sub(u, x), w);
+                    }
+                }
+            }
+            len = half;
+        }
+        let m = len; // sub-transform size
+        assert_eq!(stages, self.prune_stages, "plan prepared for a different pruning depth");
+        let wm = &self.sub_pows; // w_M^i, i < M, Montgomery
+        debug_assert_eq!(wm.len(), m);
+        for (i, &k) in wanted.iter().enumerate() {
+            let b = bitrev(k & ((1 << stages) - 1), stages);
+            let kp = k >> stages;
+            let y = &v[b * m * L..(b + 1) * m * L];
+            let o: &mut [u32; L] = (&mut out[i * L..(i + 1) * L]).try_into().unwrap();
+            *o = [0u32; L];
+            let mut e = 0usize;
+            for j in 0..m {
+                let w = wm[e];
+                let yj: &[u32; L] = (&y[j * L..(j + 1) * L]).try_into().unwrap();
+                for l in 0..L { o[l] = add(o[l], mont_mul(yj[l], w)); }
+                e += kp;
+                if e >= m { e -= m; }
+            }
+        }
+    }
+
     /// The same transform on one base-field plane (a coordinate of an extension vector stored planar); the inner
     /// loops are over contiguous `u32`s with contiguous twiddles so they vectorise.
     pub fn run_base(&self, v: &mut [u32]) {
@@ -148,7 +212,7 @@ pub fn encode(row: &[Ext], n: usize) -> Vec<Ext> {
 /// Evaluates rows (given by their `k` values on `H`) at a fixed set of opened positions `j` of the `n`-point domain
 /// without the full size-`n` NTT: `j = (n/k) m' + c` lies on coset `c`; `a(w_n^j) = NTT_k(a_hat_d * w_n^{c d})[m']`,
 /// and coset 0 is the row itself.
-pub struct RowEval { k: usize, ratio: usize, inv_k: Plan, fwd_k: Plan, twists: Vec<Option<Vec<u32>>>, pub targets: Vec<(usize, usize)>, planar: bool }
+pub struct RowEval { k: usize, ratio: usize, inv_k: Plan, fwd_k: Plan, twists: Vec<Option<Vec<u32>>>, pub targets: Vec<(usize, usize)>, planar: bool, prune: usize, wanted: Vec<Vec<usize>>, wanted_slot: Vec<Vec<usize>> }
 
 impl RowEval {
     pub fn new(k: usize, n: usize, opened: &[usize]) -> RowEval {
@@ -163,7 +227,12 @@ impl RowEval {
             for _ in 0..k { v.push(to_mont(cur)); cur = mul(cur, wc); }
             Some(v)
         }).collect();
-        RowEval { k, ratio, inv_k: Plan::new(k, true), fwd_k: Plan::new(k, false), twists, targets, planar: std::env::var("VERITY_GKR_PLANAR").map(|v| v == "1").unwrap_or(false) }
+        // pruning depth: sub-transforms of ~64 points (`VERITY_GKR_PRUNE=0` disables)
+        let prune: usize = std::env::var("VERITY_GKR_PRUNE").ok().and_then(|v| v.parse().ok()).unwrap_or_else(|| (k.trailing_zeros() as usize).saturating_sub(6));
+        let mut wanted = vec![Vec::new(); ratio];
+        let mut wanted_slot = vec![Vec::new(); ratio];
+        for (i, &(c, m)) in targets.iter().enumerate() { wanted[c].push(m); wanted_slot[c].push(i); }
+        RowEval { k, ratio, inv_k: Plan::new(k, true), fwd_k: Plan::new(k, false).with_pruning(prune), twists, targets, planar: std::env::var("VERITY_GKR_PLANAR").map(|v| v == "1").unwrap_or(false), prune, wanted, wanted_slot }
     }
 
     /// `out[i] = row(w_n^{opened[i]})`; `scratch` is reused across rows (`2 k DEG` words).  Planar: the six
@@ -209,8 +278,9 @@ impl RowEval {
         assert_eq!(out.len(), R * t);
         assert_eq!(L, R * DEG);
         scratch.clear();
-        scratch.resize(2 * k * L, 0);
-        let (hat, work) = scratch.split_at_mut(k * L);
+        scratch.resize(2 * k * L + t * L, 0);
+        let (hat, rest) = scratch.split_at_mut(k * L);
+        let (work, pruned) = rest.split_at_mut(k * L);
         for r in 0..R {
             let row = &rows[r * k..(r + 1) * k];
             for d in 0..k { hat[d * L + r * DEG..d * L + (r + 1) * DEG].copy_from_slice(&row[d].0); }
@@ -227,13 +297,25 @@ impl RowEval {
                 let dst: &mut [u32; L] = (&mut work[d * L..(d + 1) * L]).try_into().unwrap();
                 for l in 0..L { dst[l] = mont_mul(src[l], w); }
             }
-            self.fwd_k.run_lanes::<L>(work);
-            for (i, &(cc, m)) in self.targets.iter().enumerate() {
-                if cc == c {
+            if self.prune > 0 {
+                let wl = &self.wanted[c];
+                self.fwd_k.eval_pruned::<L>(work, self.prune, wl, &mut pruned[..wl.len() * L]);
+                for (wi, &i) in self.wanted_slot[c].iter().enumerate() {
                     for r in 0..R {
                         let mut e = [0u32; DEG];
-                        e.copy_from_slice(&work[m * L + r * DEG..m * L + (r + 1) * DEG]);
+                        e.copy_from_slice(&pruned[wi * L + r * DEG..wi * L + (r + 1) * DEG]);
                         out[r * t + i] = Ext(e);
+                    }
+                }
+            } else {
+                self.fwd_k.run_lanes::<L>(work);
+                for (i, &(cc, m)) in self.targets.iter().enumerate() {
+                    if cc == c {
+                        for r in 0..R {
+                            let mut e = [0u32; DEG];
+                            e.copy_from_slice(&work[m * L + r * DEG..m * L + (r + 1) * DEG]);
+                            out[r * t + i] = Ext(e);
+                        }
                     }
                 }
             }
@@ -300,5 +382,21 @@ mod tests {
         Plan::new(k, false).run(&mut v);
         Plan::new(k, false).run_lanes::<DEG>(&mut lanes);
         for d in 0..k { assert_eq!(&lanes[d * DEG..(d + 1) * DEG], &v[d].0); }
+        // pruned forward transform: every output, every pruning depth
+        for stages in 0..=4 {
+            let plan = Plan::new(k, false).with_pruning(stages);
+            let mut l2 = vec![0u32; k * DEG];
+            for d in 0..k { l2[d * DEG..(d + 1) * DEG].copy_from_slice(&rows[d].0); }
+            let wanted: Vec<usize> = (0..k).collect();
+            let mut o = vec![0u32; k * DEG];
+            plan.eval_pruned::<DEG>(&mut l2, stages, &wanted, &mut o);
+            for d in 0..k { assert_eq!(&o[d * DEG..(d + 1) * DEG], &v[d].0, "stages {stages} output {d}"); }
+        }
+        std::env::set_var("VERITY_GKR_PRUNE", "2");
+        let re2 = RowEval::new(k, n, &opened);
+        let mut outp = vec![Ext::ZERO; 4 * opened.len()];
+        re2.eval_batch::<4, 24>(&rows, &mut scratch, &mut outp);
+        assert_eq!(outp, outb);
+        std::env::remove_var("VERITY_GKR_PRUNE");
     }
 }
