@@ -1,3 +1,39 @@
+diff --git a/edge/diet-mac-and-cheese/bin/dietmc.rs b/edge/diet-mac-and-cheese/bin/dietmc.rs
+index 99a2d18..344079e 100644
+--- a/edge/diet-mac-and-cheese/bin/dietmc.rs
++++ b/edge/diet-mac-and-cheese/bin/dietmc.rs
+@@ -69,6 +69,7 @@ fn start_connection_verifier(addresses: &[String]) -> Result<Vec<TcpStream>> {
+             })?;
+         match listener.accept() {
+             Ok((stream, _addr)) => {
++                let _ = stream.set_nodelay(true);
+                 tcp_streams.push(stream);
+                 info!("accept connections on {addr:?}");
+             }
+@@ -88,6 +89,7 @@ fn start_connection_prover(addresses: &[String]) -> Result<Vec<TcpStream>> {
+         loop {
+             let c = TcpStream::connect(addr.clone());
+             if let Ok(stream) = c {
++                let _ = stream.set_nodelay(true);
+                 tcp_streams.push(stream);
+                 info!("connection accepted on {addr:?}");
+                 break;
+@@ -142,6 +144,7 @@ impl<P: Party> Iterator
+                 WhichParty::Verifier(_ev) => match TcpListener::bind(&addr) {
+                     Ok(listener) => match listener.accept() {
+                         Ok((stream, _addr)) => {
++                            let _ = stream.set_nodelay(true);
+                             info!("accept connection on {addr}");
+                             let reader = BufReader::new(stream.try_clone().unwrap());
+                             let writer = BufWriter::new(stream);
+@@ -160,6 +163,7 @@ impl<P: Party> Iterator
+                 WhichParty::Prover(_) => loop {
+                     let c = TcpStream::connect(&addr);
+                     if let Ok(stream) = c {
++                        let _ = stream.set_nodelay(true);
+                         info!("connection accepted by {addr}");
+                         let reader = BufReader::new(stream.try_clone().unwrap());
+                         let writer = BufWriter::new(stream);
 diff --git a/edge/diet-mac-and-cheese/src/backend.rs b/edge/diet-mac-and-cheese/src/backend.rs
 index bb1c1c9..37117bb 100644
 --- a/edge/diet-mac-and-cheese/src/backend.rs

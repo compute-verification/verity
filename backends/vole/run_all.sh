@@ -58,6 +58,14 @@ case "$STAGE" in
     bench "$OUT/vu64_f61p" vu-B64-f61p-t4 --threads 4
     bench "$OUT/vu64_f384p" vu-B64-f384p-t4 --threads 4
     ;;
+  c2big)
+    # c-compress: the full 4096-VU batch, one relation, at every field; F384p is the 2^-128 operating point
+    for F in f61p f128p f384p; do
+      $PY backends/vole/export_ir.py vu "$OUT/vu4096_$F" --root $FIX --B 4096 --procs 15 --field $F
+      bench "$OUT/vu4096_$F" "vu-B4096-$F"
+    done
+    bench "$OUT/vu4096_f384p" vu-B4096-f384p-t4 --threads 4
+    ;;
   small)
     $PY backends/vole/export_ir.py census > "$OUT/census.json"
     $PY backends/vole/export_ir.py negatives --root $FIX > "$OUT/negatives.txt"

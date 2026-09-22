@@ -111,6 +111,25 @@ def main() -> None:
          "                        body,\n                    )?;\n                }\n",
          mode="before", key="// no callframe: the plugin reads its input wires")
 
+    # bin/dietmc.rs: TCP_NODELAY on every stream.  The verifier's challenges (`random()`) are one small segment after a
+    # long prover stream; with Nagle + delayed ACK each of them stalled ~30 ms (measured: 9 challenges per VU cost
+    # 0.27 s/VU at B=64).  Transport only; no protocol change.
+    dm = root / "edge/diet-mac-and-cheese/bin/dietmc.rs"
+    txt = dm.read_text()
+    if "set_nodelay" not in txt:
+        out, hits = [], 0
+        for line in txt.splitlines(keepends=True):
+            out.append(line)
+            if line.strip() in ("Ok((stream, _addr)) => {", "if let Ok(stream) = c {"):
+                indent = line[: len(line) - len(line.lstrip())] + "    "
+                out.append(indent + "let _ = stream.set_nodelay(true);\n")
+                hits += 1
+        assert hits == 4, hits
+        dm.write_text("".join(out))
+        print("  + dietmc.rs: TCP_NODELAY")
+    else:
+        print("  = dietmc.rs: already patched")
+
     if fixed_lpn:
         sv = root / "edge/svole-wykw/src/svole.rs"
         apply_lpn(sv)
