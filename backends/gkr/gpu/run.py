@@ -188,14 +188,15 @@ def cmd_epilogue_negatives(args) -> int:
     ectx, _paths = X.API.build_epilogue()
     seg = inst.segs[1]
     ecirc = seg.circ
-    nbase = sum(1 for d in ectx.derived if d is None)
+    derived = list(ectx.derived) + [None] * (len(ectx.cols) - len(ectx.derived))
+    base_cols = [c for c in range(1, len(ectx.cols)) if derived[c] is None]
     honest_rows = seg.cols.cpu()
     results = {}
-    for col in range(1, nbase):
+    for col in base_cols:
         name = ectx.cols[col]
-        base = [int(v) for v in honest_rows[-1][:nbase]]
+        base = [None if derived[c] is not None else int(v) for c, v in enumerate(honest_rows[-1].tolist())]
         base[col] = (base[col] + 1) % P
-        row = V2.derive(ectx, base + [None] * (len(ectx.cols) - nbase))
+        row = V2.derive(ectx, base)
         rows = honest_rows.clone()
         rows[-1] = torch.tensor([v % P for v in row], dtype=rows.dtype)
         bad = prover.Instance([inst.segs[0], prover.Segment("epilogue", ecirc, seg.layers, rows.to(dev), seg.hash)], inst.chain)
