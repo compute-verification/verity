@@ -13,7 +13,7 @@ import pytest
 from research.cli import main as research_main
 from research.store import canon, ids, remote_s3
 from research.store.cli import main
-from research.store.index import Index, flatten
+from research.store.index import flatten
 from research.store.local import AttemptExists, IntegrityError, LocalStore, NotFound
 from research.store.model import ArtifactManifest, Payload, TreeFile, attempt_errors, validate_attempt_doc
 from research.store.remote import FsRemote, RemoteConflict, load_remote
@@ -447,6 +447,8 @@ def test_cli_smoke_every_command(env, fs_remote, tmp_path, capsys):
     assert main(["sql", "SELECT id FROM attempts", "--json"]) == 0 and json.loads(out()) == [{"id": doc["id"]}]
     assert main(["sql", "DELETE FROM attempts"]) == 1
     assert main(["reindex"]) == 0 and "5 artifacts, 1 attempts, 4 labels" in out()
+    assert main(["where", tart, "--json"]) == 0 and {w["location"]: w for w in json.loads(out())}["remote"]["verified_utc"], "verification survives a rebuild"
+    assert main(["select", "--kind", "run-files/v1", "--json"]) == 0 and json.loads(out())[0]["remote"] is True, "pushed-ness survives a plain reindex"
     assert main(["reindex", "--remote", "--json"]) == 0 and json.loads(out())["artifacts"] == 5
     assert main(["select", "--label", "proof_class=PARTIAL", "--ids"]) == 0 and out() == art
 
@@ -492,6 +494,96 @@ def test_sigv4_aws_documented_vectors():
     assert h["Authorization"].endswith("Signature=34b48302e7b5fa45bde8084f4b7868a86f0a534bc59db6670ed5711ef69dc6f7")
     assert remote_s3.uri_encode("a b/c~d", keep_slash=True) == "a%20b/c~d" and remote_s3.uri_encode("a/b") == "a%2Fb"
     assert remote_s3.canonical_query({"list-type": "2", "prefix": "objects/sha256/"}) == "list-type=2&prefix=objects%2Fsha256%2F"
+
+
+def test_s3remote_against_a_fake_bucket(tmp_path):
+    """The urllib plumbing (path-style URLs, signed payload hash, HEAD 404, list-type=2 paging) against an in-process HTTP server."""
+    import http.server
+    import threading
+    import urllib.parse
+
+    objects: dict[str, bytes] = {}
+    seen: list[tuple[str, str]] = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):  # noqa: D102
+            pass
+
+        def _key(self):
+            u = urllib.parse.urlsplit(self.path)
+            assert u.path.startswith("/bkt")
+            return urllib.parse.unquote(u.path[len("/bkt"):].lstrip("/")), dict(urllib.parse.parse_qsl(u.query, keep_blank_values=True))
+
+        def do_PUT(self):
+            key, _ = self._key()
+            body = self.rfile.read(int(self.headers["Content-Length"]))
+            assert self.headers["Authorization"].startswith("AWS4-HMAC-SHA256 Credential=ak/")
+            assert self.headers["x-amz-content-sha256"] == hashlib.sha256(body).hexdigest()
+            seen.append(("PUT", key))
+            objects[key] = body
+            self.send_response(200)
+            self.end_headers()
+
+        def do_HEAD(self):
+            key, _ = self._key()
+            seen.append(("HEAD", key))
+            if key not in objects:
+                self.send_response(404)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(objects[key])))
+            self.end_headers()
+
+        def do_GET(self):
+            key, q = self._key()
+            if q.get("list-type") == "2":
+                keys = sorted(k for k in objects if k.startswith(q.get("prefix", "")))
+                start = int(q.get("continuation-token", "0"))
+                page, more = keys[start:start + 2], start + 2 < len(keys)
+                xml = ('<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                       + "".join(f"<Contents><Key>{k}</Key></Contents>" for k in page)
+                       + f"<IsTruncated>{'true' if more else 'false'}</IsTruncated>"
+                       + (f"<NextContinuationToken>{start + 2}</NextContinuationToken>" if more else "") + "</ListBucketResult>").encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(xml)))
+                self.end_headers()
+                self.wfile.write(xml)
+                return
+            if key not in objects:
+                self.send_response(404)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(objects[key])))
+            self.end_headers()
+            self.wfile.write(objects[key])
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        r = remote_s3.S3Remote(f"http://127.0.0.1:{srv.server_address[1]}", "bkt", "ak", "sk")
+        files = {}
+        for i in range(5):
+            p = tmp_path / f"f{i}"
+            p.write_bytes(os.urandom(100 + i))
+            files[f"objects/sha256/{i:064x}"] = p
+            r.put(f"objects/sha256/{i:064x}", p)
+        r.put("manifests/x.json", tmp_path / "f0")
+        assert r.head("objects/sha256/" + f"{1:064x}") == {"bytes": 101, "etag": None}
+        assert r.head("objects/sha256/nope") is None
+        assert r.list("objects/sha256/") == sorted(files) and len(r.list("")) == 6 and r.list("zzz") == []
+        r.put("objects/sha256/" + f"{1:064x}", tmp_path / "f1")   # same size: HEAD only, no second PUT
+        assert seen.count(("PUT", "objects/sha256/" + f"{1:064x}")) == 1
+        with pytest.raises(RemoteConflict):
+            r.put("objects/sha256/" + f"{1:064x}", tmp_path / "f2")
+        r.get("objects/sha256/" + f"{3:064x}", tmp_path / "back")
+        assert (tmp_path / "back").read_bytes() == (tmp_path / "f3").read_bytes()
+        with pytest.raises(KeyError):
+            r.get("objects/sha256/nope", tmp_path / "never")
+        assert not (tmp_path / "never").exists()
+    finally:
+        srv.shutdown()
 
 
 def test_s3remote_refuses_oversize_and_conflicts(monkeypatch, tmp_path):

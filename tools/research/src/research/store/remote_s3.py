@@ -118,7 +118,7 @@ class S3Remote:
             payload_hash, size, data = EMPTY_SHA256, 0, None
         extra = dict(headers or {})
         if method in ("PUT", "POST"):
-            extra["content-length"] = str(size)
+            extra["content-length"], extra["content-type"] = str(size), "application/octet-stream"
         signed = sign_headers(method, self.host, path, query, extra, payload_hash, self.access_key, self.secret_key, self.region, self._now())
         url = urllib.parse.urlunsplit((self.scheme, self.host, uri_encode(path, keep_slash=True), canonical_query(query), ""))
         req = urllib.request.Request(url, data=data, method=method, headers=signed)

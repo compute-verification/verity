@@ -528,6 +528,8 @@ class LocalStore:
             r.put(object_key(h), self._resolve_blob(h, art_id, rel.get(h)))
         r.put(manifest_key(ids.hex_of(art_id)), self.manifest_path(ids.hex_of(art_id)))
         self.index.set_presence(art_id, remote=True)
+        if "remote" not in self.index.replicas(art_id):
+            self.index.set_replica(art_id, "remote", None, r.describe())
         if preserve:
             return self.verify(art_id)
         return {"id": art_id, "remote": r.describe(), "preserved": None, "pushed": True}
@@ -558,6 +560,7 @@ class LocalStore:
                 if ids.is_run_id(rid) and not self.attempt_path(rid).exists():
                     self._remote_copy(k, self.attempt_path(rid))
         rmap = self.replica_map()
+        pushed = {r[0] for r in self.index.db.execute("SELECT id FROM replicas WHERE location='remote'")}   # survives the rebuild
         arts = []
         for art in self.artifact_ids():
             h = ids.hex_of(art)
@@ -566,7 +569,7 @@ class LocalStore:
             except (IntegrityError, ValueError, json.JSONDecodeError) as e:
                 _warn(f"skipping {self.manifest_path(h)}: {e}")
                 continue
-            arts.append((m.to_doc(), art, self._blobs_local(m), h in remote_hexes, rmap.get(art)))
+            arts.append((m.to_doc(), art, self._blobs_local(m), h in remote_hexes or art in pushed, rmap.get(art)))
         attempts = []
         for rid in self.attempt_ids():
             try:
