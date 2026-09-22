@@ -218,6 +218,6 @@ def test_proof_v2_round_trip_needs_torch() -> None:
     assert raw[:8] == ser.PROOF_MAGIC_V2
     back = ser.read_proof(raw)
     assert back.auth == [list(s) for s in sibs]
-    assert pf.n_bytes()["auth"] == 32 * sum(len(s) for s in sibs)
+    assert pf.n_bytes()["auth_multiproofs"] == 32 * sum(len(s) for s in sibs)
     pf.auth = None
     assert ser.proof_bytes(pf)[:8] == ser.PROOF_MAGIC and ser.read_proof(ser.proof_bytes(pf)).auth is None

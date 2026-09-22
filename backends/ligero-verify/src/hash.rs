@@ -391,6 +391,7 @@ impl Sha256 {
     }
 }
 
+#[allow(dead_code)] // the framed hashes stream through `Sha256`; one-shot is for tests and pinned vectors
 pub fn sha256(data: &[u8]) -> [u8; 32] {
     let mut h = Sha256::new();
     h.update(data);
