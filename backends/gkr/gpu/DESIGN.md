@@ -82,13 +82,15 @@ structural), plus the negatives.
 
 ## 5. Kernel plan
 
-* v1 (this commit): everything as torch ops (int64 elementwise, `%` reductions, float64 limb matmuls for every
-  contraction; `hash_gpu` for SHA-256).  Goal: a correct end-to-end proof of the full VU on the H100.
-* v2: replace the phase-1 round kernel (the `a_t·b_t` products + `Σ_g w_g` contraction + `eq` weight, 4 evaluation
-  points, both tables) with one fused Triton kernel over BabyBear^6 in registers (the `a-fused` lane's SIMT
-  variant or a local one; `../tensor/reference.py` is the bit-exact reference), and the LogUp `round_poly` with the
-  same kernel shape; store the folded tables as int32.
-* v3: fuse the fold into the round kernel (read once per round), profile, attack the top bucket.
+* v1: everything as torch ops (int64 elementwise, `%` reductions, float64 limb matmuls for every
+  contraction; `hash_gpu` for SHA-256).  A correct end-to-end proof of the full VU on the H100: 26.95 s.
+* v2 (done, `kernels.py`, each step bit-exact against the torch path and on the ledger): fused Triton SIMT
+  BabyBear^6 kernels in 32-bit Montgomery form for `ext_mul`, the fold, the LogUp degree-3 round, the GKR phase-1
+  round (2D tiles over copies x gates), and the lookup functional as a CSR scatter over the sparse (query, column)
+  terms; the Ligero opening as modular matmuls on tensor cores (`G = Mᵀ (aᵀ X) M`).  8.3 s at v2c.  The torch path
+  stays as the reference (`VERITY_GPU_TORCH_ONLY=1`).
+* v3 (next): sparse gate evaluation (`Layer.eval_gates`), int32 storage of the folded tables, the fold fused into
+  the round kernels (one read per round), a batched NTT for the commitment, a compiled verifier.
 
 ## 6. Memory (B = 4096)
 
