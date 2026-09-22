@@ -156,8 +156,8 @@ state_shift    without `split`                    SAT      0.034
 signed_sum     without `split`                    SAT      0.003
 state_decode   without `z1`                       SAT      0.006
 state_decode   without `f`                        SAT      0.002
-group_step     two witnesses, two outputs, concrete x   UNSAT   57.8
-group_step     two witnesses, two outputs, symbolic x   UNKNOWN 60 (redteam run); 1800 s run pending at writing
+group_step     two witnesses, two outputs, concrete x   UNSAT   57.8 / 11.9 (rerun)
+group_step     two witnesses, two outputs, symbolic x   UNKNOWN 60 s (not rerun longer)
 ~~~
 
 10/10 gadgets UNSAT over Z at REAL widths; every deliberately dropped predicate flips to SAT. The whole-group
@@ -179,9 +179,9 @@ lookups hold modulo p):
 gadget         direct F_goldilocks (600 s)   wrap-free F_goldilocks   direct F_m31 (600 s)   wrap-free F_m31
 state_decode   UNSAT  0.2                    UNSAT 0.003              SAT   0.1              SAT (word arithmetic)
 group_max      UNSAT  10.1                   SAT (see note)           UNSAT 5.8              SAT (see note)
-state_shift    UNSAT 381 (after the fix)     UNSAT 0.002 (after)      SAT 52.7 (before)      UNSAT 0.001 (after)
+state_shift    UNSAT 381 (after the fix)     UNSAT 0.002 (after)      SAT 52.7 (before); UNKNOWN 1800 (after)   UNSAT 0.001 (after)
 signed_sum     UNSAT  0.4                    UNSAT 0.003              UNSAT 0.2              UNSAT 0.003
-normalise      UNKNOWN                       UNSAT 0.003              UNKNOWN                UNSAT 0.003
+normalise      UNSAT 152 (1800 s run)        UNSAT 0.003              UNSAT 57 (1800 s run)  UNSAT 0.003
 pack           UNSAT  0.02                   UNSAT (0 congruences)    UNSAT 0.02             UNSAT
 epilogue       UNSAT  0.02                   UNSAT 0.002              SAT   0.004            SAT (word arithmetic)
 ~~~
@@ -240,10 +240,12 @@ known word-arithmetic class.
 
 ### 3.5 Open items at writing
 
-- The *direct* Goldilocks queries for `state_shift` (fixed) and `normalise` are UNKNOWN at 600 s and 1800 s: both
-  gadgets are proven over Goldilocks by wrap-free transfer (UNSAT) plus the integer UNSAT, not by the direct query.
-- Whole-group two-witness query: concrete inputs UNSAT at 57.8 s in the first run, UNKNOWN at 60 s in the rerun
-  (a 1800 s run is queued on vy-cpu2, `out/step.log`); symbolic inputs UNKNOWN (as v1's Z56-Z61).
+- Every v2 gadget is now UNSAT over Goldilocks by the direct query (`state_shift` 381 s, `normalise` 152 s at
+  1800 s timeout) *and* by wrap-free transfer. Over M31 the direct `state_shift` query is UNKNOWN at 1800 s and is
+  covered by wrap-free transfer only (UNSAT in 1 ms; the composition step "wrap-free + integer UNSAT => field UNSAT"
+  is a one-line argument, stated in `z3_gadget_wrapfree`'s docstring).
+- Whole-group two-witness query: concrete inputs UNSAT (57.8 s first run, 11.9 s at 1800 s timeout; the 60 s
+  redteam rerun hit UNKNOWN -- z3 variance); symbolic inputs UNKNOWN at 60 s (as v1's Z56-Z61), not a pass.
 - 31-bit fields: modelled repairs only (as v1).
 
 ## 4. Re-pricing (MODELLED: `explore.tensor`, `explore.vole` with `VERITY_CHECKER_VARIANT=v2`; 2^-128, B=4096)
