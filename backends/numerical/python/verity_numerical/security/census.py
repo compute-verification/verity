@@ -39,12 +39,16 @@ composition calls directly) is wrapped for the duration of a census so that the 
 forms are attributed to its ``name``; hints are attributed to the gadget whose contract declares them.
 
 The v2 arithmetisation (``verity_numerical.checker.v2``) is counted by ``census_unit_v2`` / ``census_vu_v2`` with the
-same interpreter; its fixed tables are ``fixed_tables_v2``.
+same interpreter; its fixed tables are ``fixed_tables_v2``.  With the environment variable
+``VERITY_CHECKER_VARIANT=v2`` the public ``census_unit`` / ``census_vu`` / ``fixed_tables`` return the v2 counts, so
+that every consumer of the census (``security.accounting``, ``explore.fields``, ``explore.tensor``, ``explore.vole``)
+re-prices on v2 in a subprocess without a code change (``CHECKER_VARIANT`` names the active variant).
 """
 from __future__ import annotations
 
 import contextlib
 import math
+import os
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -85,12 +89,16 @@ __all__ = [
     "CensusCtx",
     "Sym",
     "UnitCensus",
+    "CHECKER_VARIANT",
     "census_unit",
+    "census_unit_v1",
     "census_unit_v2",
     "census_vu",
+    "census_vu_v1",
     "census_vu_v2",
     "diff_vs_relation",
     "fixed_tables",
+    "fixed_tables_v1",
     "fixed_tables_v2",
     "gadget_table",
     "layer_shape",
@@ -104,6 +112,9 @@ V2_GADGETS = (g2.StateDecode, g2.OpDecode, g2.Product, g2.GroupMax, g2.StateShif
 _SECTION_METHODS = ("check", "align", "attained")     # the entry points that take ``ctx`` first
 
 RANGE_CHUNK = 16     # the largest range table (relation.RANGE_CHUNK): a w-bit check is ceil(w/16) lookups
+CHECKER_VARIANT = os.environ.get("VERITY_CHECKER_VARIANT", "v1")
+if CHECKER_VARIANT not in ("v1", "v2"):
+    raise ValueError(f"VERITY_CHECKER_VARIANT must be v1 or v2, got {CHECKER_VARIANT!r}")
 
 
 def _width(lo: int, hi: int) -> int:
@@ -471,7 +482,22 @@ def _shape_inputs(p: Params) -> tuple[int, list[int], list[int]]:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def census_unit(p: Params = REAL) -> UnitCensus:
-    """One transition unit with an arbitrary (symbolic) incoming accumulator word, output identity included."""
+    """One transition unit with an arbitrary (symbolic) incoming accumulator word, output identity included
+    (the active ``CHECKER_VARIANT``)."""
+    return census_unit_v2(p) if CHECKER_VARIANT == "v2" else census_unit_v1(p)
+
+
+def census_vu(K: int, p: Params = REAL) -> UnitCensus:
+    """The verification unit of the active ``CHECKER_VARIANT`` (v1: word-chained; v2: state-chained)."""
+    return census_vu_v2(K, p) if CHECKER_VARIANT == "v2" else census_vu_v1(K, p)
+
+
+def fixed_tables(p: Params = REAL) -> dict[str, tuple[int, int]]:
+    """The fixed tables' (rows, columns including the key) of the active ``CHECKER_VARIANT``, plus the 16-bit range table."""
+    return fixed_tables_v2(p) if CHECKER_VARIANT == "v2" else fixed_tables_v1(p)
+
+
+def census_unit_v1(p: Params = REAL) -> UnitCensus:
     ctx = CensusCtx("unit")
     c0, a0, b0 = _shape_inputs(p)
     shape = gen_step(p, c0, a0, b0)
@@ -522,12 +548,14 @@ def census_vu_v2(K: int, p: Params = REAL) -> UnitCensus:
 
 
 def fixed_tables_v2(p: Params = REAL) -> dict[str, tuple[int, int]]:
-    """The v2 fixed tables' (rows, columns including the key); v2 has no separate range table."""
-    return {t.name: (t.rows, 1 + len(t.outs)) for t in v2_tables(p)}
+    """The v2 fixed tables' (rows, columns including the key) and the 16-bit range table (6 queries per unit)."""
+    out = {t.name: (t.rows, 1 + len(t.outs)) for t in v2_tables(p)}
+    out[f"T_range{RANGE_CHUNK}"] = (2**RANGE_CHUNK, 1)
+    return out
 
 
-def census_vu(K: int, p: Params = REAL) -> UnitCensus:
-    """The verification unit: K/16 word-chained units from ``c_0 = 0`` plus the epilogue, as ``step.py`` composes it."""
+def census_vu_v1(K: int, p: Params = REAL) -> UnitCensus:
+    """The v1 verification unit: K/16 word-chained units from ``c_0 = 0`` plus the epilogue, as ``step.py`` composes it."""
     if K % sum(p.groups):
         raise ValueError("K must be a multiple of the unit's product count")
     ctx = CensusCtx(f"vu(K={K})")
@@ -545,8 +573,8 @@ def census_vu(K: int, p: Params = REAL) -> UnitCensus:
     return ctx.c
 
 
-def fixed_tables(p: Params = REAL) -> dict[str, tuple[int, int]]:
-    """The fixed tables' (rows, columns including the key) and the 16-bit range table."""
+def fixed_tables_v1(p: Params = REAL) -> dict[str, tuple[int, int]]:
+    """The v1 fixed tables' (rows, columns including the key) and the 16-bit range table."""
     out = {}
     for t in (pow_table(p), align_table(p), lead_table(p), norm_table(p)):
         out[t.name] = (t.rows, 1 + len(t.outs))
@@ -628,7 +656,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     import sys
 
     K = int((argv or sys.argv[1:] or ["1536"])[0])
-    print(json.dumps({"unit": census_unit().summary(), "vu": census_vu(K).summary(), "tables": fixed_tables(),
+    print(json.dumps({"unit": census_unit_v1().summary(), "vu": census_vu_v1(K).summary(), "tables": fixed_tables_v1(),
                       "unit_v2": census_unit_v2().summary(), "vu_v2": census_vu_v2(K).summary(),
                       "tables_v2": fixed_tables_v2(), "diff": diff_vs_relation(K)}, indent=1))
 

@@ -181,15 +181,25 @@ class _WidthCtx(CensusCtx):
 
 
 def _run_unit(ctx: CensusCtx, p: Params = REAL) -> UnitCensus:
-    """``census.census_unit`` with a caller-supplied context (same construction, the census's own helpers)."""
+    """``census.census_unit`` with a caller-supplied context (same construction, the census's own helpers); the
+    active ``census.CHECKER_VARIANT`` (v2: the lookup-centred unit; its small-field deltas below are v1's and are
+    an approximation there -- v2 has no ``lt_pow`` and one wide product, ``v_hi A``, to split in a 31-bit field)."""
     c0, a0, b0 = census._shape_inputs(p)
-    shape = gen_step(p, c0, a0, b0)
-    h = census._sym_step_hints(ctx, p, shape)
+    if census.CHECKER_VARIANT == "v2":
+        from verity_numerical.checker.v2 import step as step2
+        shape = step2.gen_step(p, c0, a0, b0)
+        h = census._sym_step_hints_v2(ctx, p, shape)
+        run, gadgets = step2.check_step_expr, census.V2_GADGETS
+    else:
+        shape = gen_step(p, c0, a0, b0)
+        h = census._sym_step_hints(ctx, p, shape)
+        run, gadgets = check_step_expr, census.V1_GADGETS
     c = ctx.input(p.acc_word_bits)
     a = [ctx.input(p.word_bits) for _ in a0]
     b = [ctx.input(p.word_bits) for _ in b0]
     y = ctx.input(p.acc_word_bits)
-    got = check_step_expr(ctx, p, c, a, b, h)
+    with census._sectioned(gadgets):
+        got = run(ctx, p, c, a, b, h)
     ctx.eq("y", got, y)
     return ctx.c
 
@@ -229,10 +239,16 @@ class Delta:
     mul: int = 0
     inputs: int = 0
     note: str = ""
+    fixed: dict[str, tuple[int, int, int]] = field(default_factory=dict)   # table -> (queries, rows, columns)
 
     def scaled(self, k: int) -> Delta:
         return Delta({w: n * k for w, n in self.hints.items()}, {w: n * k for w, n in self.ranges.items()},
-                     self.lin * k, self.mul * k, self.inputs * k, self.note)
+                     self.lin * k, self.mul * k, self.inputs * k, self.note,
+                     {t: (q * k, r, c) for t, (q, r, c) in self.fixed.items()})
+
+    @property
+    def fixed_lookups(self) -> int:
+        return sum(q for q, _, _ in self.fixed.values())
 
     @property
     def range_lookups(self) -> int:
@@ -273,6 +289,16 @@ def _signed_sum_tighten(p: Params) -> Delta:
     return Delta(ranges={p.s_bits: 1}, note="signed sum tightened to its premise bound")
 
 
+def _v2_norm_lookup(p: Params) -> Delta:
+    """checker v2 in a field below ``2^(vh + vb + k_hi)`` (every 31-bit prime): the normalisation product
+    ``v_hi A(k)`` (A up to 2^39 at REAL) does not fit; it becomes one more TNORM-style lookup on
+    ``v_hi + 2^vh koff`` (2^vh k_rows rows: 1.3M at REAL) and the product disappears.  Per group."""
+    from verity_numerical.checker.v2.params import V2
+    rows = 2 ** V2.vh(p) * V2.k_rows(p)
+    return Delta(mul=-1, note="v2 normalise: v_hi A(k) as a TNORM_HI lookup instead of a product",
+                 fixed={"TNORM_HI": (1, rows, 2)})
+
+
 F3_SPLIT_PER_GROUP: Delta = _f3_split(REAL)
 F4_LIMBS_PER_UNIT: Delta = _f4_limbs(REAL)
 BABYBEAR_EXTRA: Delta = _signed_sum_tighten(REAL)
@@ -309,7 +335,7 @@ class SmallFieldCensus:
 
     @property
     def lookup(self) -> int:
-        return self.range_lookups + self.base.fixed_lookups
+        return self.range_lookups + self.base.fixed_lookups + sum(d.fixed_lookups for d in self.deltas)
 
     @property
     def extra_hints(self) -> int:
@@ -338,7 +364,11 @@ class SmallFieldCensus:
         out = Counter(self.base.lookups)
         for w, n in self.range_by_width.items():
             out[f"T_range{RANGE_CHUNK}"] += -(-w // RANGE_CHUNK) * n
-        ft = census.fixed_tables()
+        ft = dict(census.fixed_tables())
+        for d in self.deltas:
+            for name, (q, rows, cols) in d.fixed.items():
+                out[name] += q
+                ft.setdefault(name, (rows, cols))
         return tuple(acc.LookupTable(name, ft[name][0], q, ft[name][1]) for name, q in sorted(out.items()))
 
     def summary(self) -> dict:
@@ -362,7 +392,14 @@ def small_field_census(F: acc.Field, p: Params = REAL) -> SmallFieldCensus:
     base = _run_unit(ctx, p)
     deltas: list[Delta] = []
     groups = len(p.groups)
-    if F.characteristic <= 2**31 - 1:                          # F3: the division identity reaches 2^31 - 1
+    if census.CHECKER_VARIANT == "v2":
+        # v2: no lt_pow, no division identity (F3 is moot); the one wide product v_hi A(k) < 2^(vh + vb + k_hi)
+        # becomes a lookup below that; F4 and the BabyBear sign tightening apply as for v1 (F4's +3 mul per limb is
+        # v1's pack; v2's pack has one word-selecting product: an overcount of 2 mul, kept)
+        from verity_numerical.checker.v2.params import V2
+        if F.characteristic < 2 ** (V2.vh(p) + V2.vb(p) + p.k_hi):
+            deltas.append(_v2_norm_lookup(p).scaled(groups))
+    elif F.characteristic <= 2**31 - 1:                        # F3: the division identity reaches 2^31 - 1
         deltas.append(_f3_split(p).scaled(groups))
     if F.characteristic < 2**p.acc_word_bits:                  # F4: words do not fit
         deltas.append(_f4_limbs(p))
