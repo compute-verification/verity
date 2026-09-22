@@ -639,3 +639,106 @@ which is an upper bound a real layout would shrink; the depth column separates t
   lookups — a checker-lane question, not decided here.
 - Whether the first complete backend ships as `COMPLETE_HVZK_BACKEND` (no step 0) with 5.5 as the documented
   path to `COMPLETE_ZK_BACKEND`.
+
+## 12. The VU chain: 96 units + epilogue as one proof (implemented 2026-09-22, lane a-chain)
+
+The Verity VU is `GemmCoordinate<1536>`: 96 word-chained transition units from the constant \(c_0=0\), then the
+epilogue `Epilogue.check` (RN-even cast of the last FP32 word to the BF16 output word). Its public endpoints are
+\(c_0=0\) and the output word \(y16\); the 95 intermediate words and every hint are private. Three ways to wire
+the 96 units of one VU into the data-parallel GKR of section 4, with their costs at \(K=1536, B=4096\)
+(\(U=393\,216\) units, \(468\) exported columns per unit, \(826\) wires, 6 checker layers) **[derivation]**:
+
+| design | sequential depth (checker chain) | committed elements / VU | prover work (wire evaluations per layer sweep; phase-1 tables) | new code |
+|---|---|---|---|---|
+| (a) **deep circuit**: one circuit of 96 unit-blocks + epilogue, \(6\cdot96+2\) strict layers, data-parallel over \(B\) VUs (\(b=12\)) | \(\approx 578\) layers \(\times\) 47 rounds \(=27\,075\) | \(44\,747\) (the 95 intermediate words are wires, not columns: \(-190\)) | \(578\times4096\times79\,296=187\)G wire evaluations (strict layering carries every value of lower depth: width \(96\times826\)); tables 15.6 GB | new exporter for a 45k-column circuit, per-VU wiring tables |
+| (b) **data-parallel units + linkage** *(implemented)*: \(U\) unit copies and \(B\) epilogue copies over **one** commitment; the linkage \(c_{v,0}=0\), \(c_{v,i}=y_{v,i-1}\), \(y32_v=y_{v,95}\) and the public words \(y16_v=\) recorded word are **linear constraints on the committed vector**, batched into the Ligero opening | \(+0\): checker chain 243 (6 layers, \(b=19\)), lookup chain 435 (`R16` has \(2^{28}\) leaves, below) — depth is set by the lookups exactly as before | \(96\cdot468+9=44\,937\) (the words are already the `x.c` / `y` columns of each unit; \(+9\) epilogue columns) | \(6\times393\,216\times826=1.95\)G; tables 15.6 GB; one extra \(O(U)\) pass for the linkage functional; the epilogue GKR (11 wires, 2 layers, \(B\) copies) is negligible | epilogue circuit export; multi-segment instance; one functional; no change to `gkr.rs`/`logup.rs` semantics |
+| (c) **checkpoints every \(m\)**: commit every \(m\)-th word, prove the \(m\) units in between as a deep sub-circuit (\(6m\) layers) data-parallel over \(U/m\) copies | \(m=2\): 495; 4: 1 011; 8: 2 067; 16: 4 227; 32: 8 643; 96: (a) | \(44\,937-2\cdot96(1-1/m)\): \(m=2\): 44 841; 8: 44 769; 96: 44 747 | wire evaluations \(\times m\) (strict layers carry the sub-chain's \(m\times826\) values): 3.9G (m=2) … 187G (m=96) | as (a) plus a checkpoint layout |
+
+The decisive fact is that the committed *word* is 1 element in a row of 468: checkpointing saves at most
+\(190/44\,937=0.42\%\) of the committed elements and costs \(m\times\) the checker's prover work and depth.
+(b) is the \(m=1\) point of (c), it needs the least new code, and its soundness argument is the one the Ligero
+opening already carries. **(b) is implemented first**; (a)/(c) are not built (section 12.4 reports their cost
+model; no measured point is expected to beat \(m=1\)).
+
+### 12.1 Layout **[proposal, implemented]**
+
+Two data-parallel *segments* over one committed vector \(X\):
+
+~~~text
+X = [ unit rows: U = B·96 rows × 468 columns, row v·96+i = unit i of VU v (VU-major) ]
+    [ epilogue rows: B rows × 9 columns: one, y32, y16, hi, lo, hi2, lsb, carry, rem ]
+    [ multiplicities of ALIGN, POW, LEAD, NORM, R16 over BOTH segments ]
+~~~
+
+Segment 0 is the exported unit circuit (section 1), segment 1 the exported epilogue circuit
+(`gkr_export.vu.build_epilogue_circuit`: `Epilogue.check` verbatim — 5 sixteen-bit range chunks into `R16`
+(`hi`, `lo`, `hi2·2`, `rem`, `hi+carry`), 2 booleans, 3 linear identities, and the assertion \(y16=hi+carry\)).
+Each segment runs its own checker GKR (its own \(z_0,\gamma\), \(b_0=\lceil\log_2 U\rceil\), \(b_1=\lceil\log_2 B\rceil\));
+the two are independent and run in lock-step (one verifier message carries both segments' round challenges), so
+the checker depth is the unit segment's. The five logUp instances take the witness side of a table from both
+segments concatenated (unit queries, then epilogue queries, then the table rows, then padding): the epilogue's
+five `R16` queries per VU join the range-check multiset; `R16` therefore has \(352U+5B+65\,536=138\,498\,048\)
+leaves at \(B=4096\), i.e. \(n_T=28\) (the census's 284 range queries per unit gave \(n_T=27\); the exporter's
+352 come from two one-sided checks per non-power-of-two range and the materialised query wires).
+
+### 12.2 Linkage and public endpoints as linear constraints **[proposal, implemented]**
+
+Every claim the verifier is left with after the GKRs is a linear functional of \(X\) (section 4.3 layout rule:
+input claims, lookup leaf claims). The chain adds \(U+2B\) more, all with **public** coefficients:
+
+\[
+X[(v,0),\,c]=0,\qquad X[(v,i),\,c]-X[(v,i-1),\,y]=0\ (1\le i<96),\qquad
+X_{\mathrm{epi}}[v,\,y32]-X[(v,95),\,y]=0,\qquad X_{\mathrm{epi}}[v,\,y16]=\mathrm{word}_v .
+\]
+
+They are combined with geometric coefficients \(\rho_{\mathrm{geo}}^k\) (\(k\) the constraint index) into one
+functional, which is batched with the \(2\cdot2+5\) GKR/lookup functionals by fresh \(\rho_f\) and opened once
+(section 3, `ligero::prove_open`). Transcript: the \(\rho_f\) and \(\rho_{\mathrm{geo}}\) are drawn after the last
+GKR message; the public words are absorbed into the transcript before any challenge (they are part of the
+statement). Soundness **[derivation]**: if any linkage or endpoint constraint fails, the combined value is a
+nonzero polynomial of degree \(<U+2B\) in \(\rho_{\mathrm{geo}}\): error \((U+2B-1)/|F_c|=2^{-173.4}\) at
+\(B=4096\) over \(F_{p^3}\), plus \(1/|F_c|\) for its batching coefficient; the Ligero linear test then binds the
+batched functional to the committed rows as before (the `encoding_opening` term is unchanged). Committing the
+words twice (as `y` of unit \(i\) and `x.c` of unit \(i+1\)) is what makes the linkage linear; a state-chained
+variant (pass \((s,e,M)\)) would save the decode/pack of the word (\(\approx4\%\), section 1) but is not what
+`step.py` composes and is not built.
+
+**Endpoints.** \(c_0=0\) is a constraint with constant 0 (no committed constant column is needed); the output words
+are verifier inputs (\(B\) sixteen-bit words) and the only witness-independent data besides the circuits and the
+batch shape. A `vu-k1536-neg` instance is a *claimed* word: with honest hints the epilogue's \(y16\) column must
+equal the cast of \(c_{96}\) (assertion `y16`) **and** the public word (endpoint constraint), so the prover has no
+accepting witness; an out-of-domain negative (non-finite operand, saturated intermediate) is rejected by the
+unit circuit's range checks (`acc.t < 255`, `a[i].t < 255`) or already by `gen_step`/`check_step` at witness
+generation.
+
+### 12.3 Depth, rounds, what changed in the transcript
+
+`rounds.sequential_depth` \(=1+\max(\text{lookup chain},\text{checker chain})+2\) (message 2a; the Ligero \(r\)
+and \(Q\) coins; the batching coefficients ride on the \(r\) message). At \(B=4096\): lookup chain 435 (\(n_T=28\)),
+checker chain 243 → **438**; the linkage adds no round trip. `rounds.protocol` grows by the epilogue segment's
+sumcheck slots and by \(2\cdot2+5+1+1=11\) batching coins. Sharding `R16` (\(s=1\), section 5.4) would return
+\(n_T\) to 27 (depth 409) for \(+65\,536\) committed multiplicities; not done.
+
+### 12.4 Checkpoint interval \(m\): cost model (no measured points; 12.5 has the measured \(m=1\))
+
+\(m\) = units between committed words (\(m=1\): every word committed = design (b); \(m=96\): design (a)).
+Strict layering (libzk 6.3) carries every value of lower depth, so a sub-chain of \(m\) units is a layer of width
+\(m\times826\); copies \(=U/m\). **[derivation, cost model of section 9.4]**
+
+| \(m\) | committed / VU | checker layers | copies (\(b\)) | width / layer | rounds / layer | checker depth | wire evaluations | phase-1 tables |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 44 937 | 6 | 393 216 (19) | 826 | 40 | 243 | 1.95G | 15.6 GB |
+| 2 | 44 841 | 12 | 196 608 (18) | 1 652 | 41 | 495 | 3.90G | 15.6 GB |
+| 4 | 44 793 | 24 | 98 304 (17) | 3 304 | 42 | 1 011 | 7.80G | 15.6 GB |
+| 8 | 44 769 | 48 | 49 152 (16) | 6 608 | 43 | 2 067 | 15.6G | 15.6 GB |
+| 16 | 44 757 | 96 | 24 576 (15) | 13 216 | 44 | 4 227 | 31.2G | 15.6 GB |
+| 32 | 44 751 | 192 | 12 288 (14) | 26 432 | 45 | 8 643 | 62.4G | 15.6 GB |
+| 96 | 44 747 | 576 | 4 096 (12) | 79 296 | 47 | 27 075 | 187G | 15.6 GB |
+
+Committed elements move by \(<0.5\%\); prover work and depth grow linearly in \(m\). No point of the sweep
+changes the picture, so none is implemented; the recorded runs of 12.5 are all \(m=1\).
+
+### 12.5 Recorded runs
+
+See `README.md` (section "Full VU runs") for the run ids, times, depth, proof bytes and memory of the
+`vu-k1536` batches and the `vu-k1536-neg` rejections on vy-cpu2.
