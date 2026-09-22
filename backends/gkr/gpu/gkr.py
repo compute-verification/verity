@@ -40,6 +40,7 @@ from .field import (
     py_exts,
     t_ext,
 )
+from . import field as _field
 from .transcript import Transcript
 
 
@@ -92,6 +93,8 @@ def _lerp_ext(x0: torch.Tensor, x1: torch.Tensor, t: int) -> torch.Tensor:
 def phase1_round(a: torch.Tensor, bb: torch.Tensor, e: torch.Tensor, wg: torch.Tensor, half: int, base: bool) -> list[Ext]:
     """``h(t) = Σ_{c<half} E_t[c] Σ_g w[g] a_t[c,g] b_t[c,g]`` at t = 0..3."""
     dev = a.device
+    if _field._fast_phase1 is not None and a.is_cuda:
+        return py_exts(_field._fast_phase1(a, bb, e, wg, half, base))
     h = torch.zeros((4, DEG), dtype=torch.int64, device=dev)
     chunk = CHUNK_BASE if base else CHUNK_EXT
     for lo in range(0, half, chunk):

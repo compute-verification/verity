@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from .field import DEG, P, Ext, e_add, e_mul, e_scale, ext_mul, ext_scale, inv_mod, py_exts, root_of_unity, t_ext, t_exts
+from .field import DEG, P, Ext, e_add, e_mul, e_scale, ext_mul, ext_scale, geometric, inv_mod, py_exts, root_of_unity, t_ext, t_exts
 from .gkr import Reader, VerifyError
 from .transcript import Transcript
 
@@ -233,10 +233,7 @@ def open_set(tr: Transcript, n: int, t: int) -> list[int]:
 
 def row_coeffs(tr: Transcript, rows: int, device) -> torch.Tensor:
     r = tr.challenge()
-    v = [(1,) + (0,) * (DEG - 1)]
-    for _ in range(1, rows):
-        v.append(e_mul(v[-1], r))
-    return t_exts(v, device)
+    return geometric((1,) + (0,) * (DEG - 1), r, rows, device)
 
 
 def _pad_a(a: torch.Tensor, rows: int, k: int) -> torch.Tensor:
@@ -245,13 +242,68 @@ def _pad_a(a: torch.Tensor, rows: int, k: int) -> torch.Tensor:
     return full.view(rows, k, DEG)
 
 
-def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript) -> Opening:
-    """``a`` ``(l, 6)`` int64 (the linear functional); ``w`` and ``qc`` travel in the Opening."""
+def _intt_matrix(k: int, device) -> torch.Tensor:
+    """``M[j, m] = k^-1 ω_k^{-jm}``: ``coeffs = values @ M`` (the same map as ``ntt(·, inverse=True)``)."""
+    key = ("intt_mat", k, str(device))
+    t = _TW.get(key)
+    if t is None:
+        w_inv = inv_mod(root_of_unity(k))
+        pw = [1]
+        for _ in range(k - 1):
+            pw.append(pw[-1] * w_inv % P)
+        pw_t = torch.tensor(pw, dtype=torch.int64)
+        idx = (torch.arange(k).unsqueeze(1) * torch.arange(k).unsqueeze(0)) % k
+        t = ((pw_t[idx] * inv_mod(k)) % P).to(device)
+        _TW[key] = t
+    return t
+
+
+def _mm_mod_rows(A: torch.Tensor, B: torch.Tensor, chunk: int = 8192) -> torch.Tensor:
+    """``(A @ B) mod p`` with the contraction axis (``A`` columns / ``B`` rows) processed in chunks."""
+    from .field import mm_mod
+
+    n = A.shape[1]
+    out = None
+    for lo in range(0, n, chunk):
+        hi = min(n, lo + chunk)
+        part = mm_mod(A[:, lo:hi], B[lo:hi])
+        out = part if out is None else (out + part) % P
+    return out
+
+
+def open_w_qc(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """``w = Σ_i r_i X_i`` ``(k, 6)`` and the ``2k-1`` coefficients of ``q(Z) = Σ_i a_i(Z) U_i(Z)`` ``(2k-1, 6)``,
+    all as modular matmuls (tensor cores): with ``M`` the INTT matrix, ``q``'s coefficient matrix is
+    ``G = Mᵀ (aᵀ X) M`` (``G[u, c, v]`` = coefficient ``u`` of ``a``-side times coefficient ``v`` of ``X``-side,
+    summed over rows) and ``qc[m] = Σ_{u+v=m} G[u, ·, v]``.  Identical to encode-multiply-INTT over the ``n``-domain."""
+    p = cm.params
+    dev = a.device
+    rows, k = cm.rows, p.k
+    xr = cm.x_rows                                                    # (rows, k)
+    ar = _pad_a(a, rows, k)                                           # (rows, k, 6)
+    w = _mm_mod_rows(r.T.contiguous(), xr).T.contiguous()             # (k, 6)
+    af = ar.permute(1, 2, 0).reshape(k * DEG, rows)                   # aᵀ: (k·6, rows)
+    del ar
+    H = _mm_mod_rows(af, xr).reshape(k, DEG, k)                       # [u_val, c, i_val]
+    del af
+    M = _intt_matrix(k, dev)
+    from .field import mm_mod
+
+    G1 = mm_mod(H.permute(1, 0, 2).reshape(DEG * k, k), M)            # (H M): (6·k, k) -> [c, u_val, v]
+    G = mm_mod(M.T, G1.reshape(DEG, k, k).permute(1, 0, 2).reshape(k, DEG * k))   # Mᵀ (H M): [u, (c, v)]
+    G = G.reshape(k, DEG, k)
+    idx = (torch.arange(k, device=dev).unsqueeze(1) + torch.arange(k, device=dev).unsqueeze(0)).reshape(-1)
+    qc = torch.zeros((2 * k - 1, DEG), dtype=torch.int64, device=dev)
+    qc.index_add_(0, idx, G.permute(0, 2, 1).reshape(k * k, DEG))
+    return w, qc % P
+
+
+def open_w_qc_reference(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """The v1 path: encode ``a`` rows on the ``n``-domain, multiply by the codewords, INTT (NTT butterflies in torch)."""
     p = cm.params
     dev = a.device
     rows, k, n = cm.rows, p.k, p.n
-    r = row_coeffs(tr, rows, dev)                                     # (rows, 6)
-    ar = _pad_a(a, rows, k)                                           # (rows, k, 6)
+    ar = _pad_a(a, rows, k)
     code = cm.code
     w = torch.zeros((k, DEG), dtype=torch.int64, device=dev)
     qd = torch.zeros((n, DEG), dtype=torch.int64, device=dev)
@@ -263,15 +315,25 @@ def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript) -> Opening:
         cw = code[lo:hi].to(torch.int64)                              # (c, n)
         qd = (qd + (ae * cw.unsqueeze(-1) % P).sum(dim=0)) % P
     q = ntt(qd.T.contiguous(), inverse=True).T                        # (n, 6) coefficients
-    qc = q[: 2 * k - 1]
+    return w, q[: 2 * k - 1]
+
+
+def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript) -> Opening:
+    """``a`` ``(l, 6)`` int64 (the linear functional); ``w`` and ``qc`` travel in the Opening."""
+    p = cm.params
+    dev = a.device
+    rows, k, n = cm.rows, p.k, p.n
+    r = row_coeffs(tr, rows, dev)                                     # (rows, 6)
+    code = cm.code
+    w, qc = open_w_qc(cm, a, r)
     w_py, qc_py = py_exts(w), py_exts(qc)
     tr.absorb_exts(w_py)
     tr.absorb_exts(qc_py)
     js = open_set(tr, n, p.t)
-    code_cols = code[:, torch.tensor(js, dtype=torch.int64, device=dev)].cpu()
+    code_cols = code[:, torch.tensor(js, dtype=torch.int64, device=dev)].cpu().numpy().astype("<u4").T
     cols = []
     for oi, j in enumerate(js):
-        cols.append(([int(v) & 0xFFFFFFFF for v in code_cols[:, oi].tolist()], cm.merkle.path(j)))
+        cols.append((code_cols[oi].tolist(), cm.merkle.path(j)))
     return Opening(w_py, qc_py, cols)
 
 

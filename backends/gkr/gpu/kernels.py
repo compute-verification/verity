@@ -312,6 +312,229 @@ if triton is not None:
             tl.store(out_ptr + ob_out + 5, tl.sum(h5.to(tl.int64), axis=0))
 
 
+    @triton.jit
+    def load6_2d(ptr, off, m):
+        x0 = tl.load(ptr + off + 0, mask=m, other=0).to(tl.int32)
+        x1 = tl.load(ptr + off + 1, mask=m, other=0).to(tl.int32)
+        x2 = tl.load(ptr + off + 2, mask=m, other=0).to(tl.int32)
+        x3 = tl.load(ptr + off + 3, mask=m, other=0).to(tl.int32)
+        x4 = tl.load(ptr + off + 4, mask=m, other=0).to(tl.int32)
+        x5 = tl.load(ptr + off + 5, mask=m, other=0).to(tl.int32)
+        return x0, x1, x2, x3, x4, x5
+
+    @triton.jit
+    def phase1_kernel(a_ptr, b_ptr, e_ptr, w_ptr, out_ptr, half, G,
+                      BASE: tl.constexpr, BC: tl.constexpr, BG: tl.constexpr):
+        """GKR phase-1 round: ``h(t) = Σ_c e_t(c) Σ_g w(g) a_t(c,g) b_t(c,g)`` for t = 0..3, ``x_t = x(c) + t (x(c+half) - x(c))``.
+        ``a``/``b`` are ``(2·half, G[, 6])`` (``BASE``: base field), ``e`` ``(2·half, 6)``, ``w_ptr`` = ``w R mod p`` ``(G, 6)``.
+        Block partials ``(4, 6)`` int64 scaled by ``R^-2``."""
+        pid = tl.program_id(0)
+        c = pid * BC + tl.arange(0, BC)
+        mc = c < half
+        acc00 = tl.zeros([BC], dtype=tl.int32)
+        acc01 = tl.zeros([BC], dtype=tl.int32)
+        acc02 = tl.zeros([BC], dtype=tl.int32)
+        acc03 = tl.zeros([BC], dtype=tl.int32)
+        acc04 = tl.zeros([BC], dtype=tl.int32)
+        acc05 = tl.zeros([BC], dtype=tl.int32)
+        acc10 = tl.zeros([BC], dtype=tl.int32)
+        acc11 = tl.zeros([BC], dtype=tl.int32)
+        acc12 = tl.zeros([BC], dtype=tl.int32)
+        acc13 = tl.zeros([BC], dtype=tl.int32)
+        acc14 = tl.zeros([BC], dtype=tl.int32)
+        acc15 = tl.zeros([BC], dtype=tl.int32)
+        acc20 = tl.zeros([BC], dtype=tl.int32)
+        acc21 = tl.zeros([BC], dtype=tl.int32)
+        acc22 = tl.zeros([BC], dtype=tl.int32)
+        acc23 = tl.zeros([BC], dtype=tl.int32)
+        acc24 = tl.zeros([BC], dtype=tl.int32)
+        acc25 = tl.zeros([BC], dtype=tl.int32)
+        acc30 = tl.zeros([BC], dtype=tl.int32)
+        acc31 = tl.zeros([BC], dtype=tl.int32)
+        acc32 = tl.zeros([BC], dtype=tl.int32)
+        acc33 = tl.zeros([BC], dtype=tl.int32)
+        acc34 = tl.zeros([BC], dtype=tl.int32)
+        acc35 = tl.zeros([BC], dtype=tl.int32)
+        for g0 in range(0, G, BG):
+            g = g0 + tl.arange(0, BG)
+            mg = g < G
+            m2 = mc[:, None] & mg[None, :]
+            wg = g * 6
+            w0 = tl.load(w_ptr + wg + 0, mask=mg, other=0).to(tl.int32)[None, :]
+            w1 = tl.load(w_ptr + wg + 1, mask=mg, other=0).to(tl.int32)[None, :]
+            w2 = tl.load(w_ptr + wg + 2, mask=mg, other=0).to(tl.int32)[None, :]
+            w3 = tl.load(w_ptr + wg + 3, mask=mg, other=0).to(tl.int32)[None, :]
+            w4 = tl.load(w_ptr + wg + 4, mask=mg, other=0).to(tl.int32)[None, :]
+            w5 = tl.load(w_ptr + wg + 5, mask=mg, other=0).to(tl.int32)[None, :]
+            if BASE:
+                off = c[:, None] * G + g[None, :]
+                a0 = tl.load(a_ptr + off, mask=m2, other=0).to(tl.int32)
+                a1 = tl.load(a_ptr + off + half * G, mask=m2, other=0).to(tl.int32)
+                b0 = tl.load(b_ptr + off, mask=m2, other=0).to(tl.int32)
+                b1 = tl.load(b_ptr + off + half * G, mask=m2, other=0).to(tl.int32)
+                da = msub(a1, a0)
+                db = msub(b1, b0)
+                for t in tl.static_range(4):
+                    if t > 0:
+                        a0 = madd(a0, da)
+                        b0 = madd(b0, db)
+                    pr = mmul(a0, b0)
+                    s0 = tl.sum(mmul(pr, w0).to(tl.int64), axis=1)
+                    s1 = tl.sum(mmul(pr, w1).to(tl.int64), axis=1)
+                    s2 = tl.sum(mmul(pr, w2).to(tl.int64), axis=1)
+                    s3 = tl.sum(mmul(pr, w3).to(tl.int64), axis=1)
+                    s4 = tl.sum(mmul(pr, w4).to(tl.int64), axis=1)
+                    s5 = tl.sum(mmul(pr, w5).to(tl.int64), axis=1)
+                    if t == 0:
+                        acc00 = madd(acc00, (s0 % PRIME).to(tl.int32))
+                        acc01 = madd(acc01, (s1 % PRIME).to(tl.int32))
+                        acc02 = madd(acc02, (s2 % PRIME).to(tl.int32))
+                        acc03 = madd(acc03, (s3 % PRIME).to(tl.int32))
+                        acc04 = madd(acc04, (s4 % PRIME).to(tl.int32))
+                        acc05 = madd(acc05, (s5 % PRIME).to(tl.int32))
+                    elif t == 1:
+                        acc10 = madd(acc10, (s0 % PRIME).to(tl.int32))
+                        acc11 = madd(acc11, (s1 % PRIME).to(tl.int32))
+                        acc12 = madd(acc12, (s2 % PRIME).to(tl.int32))
+                        acc13 = madd(acc13, (s3 % PRIME).to(tl.int32))
+                        acc14 = madd(acc14, (s4 % PRIME).to(tl.int32))
+                        acc15 = madd(acc15, (s5 % PRIME).to(tl.int32))
+                    elif t == 2:
+                        acc20 = madd(acc20, (s0 % PRIME).to(tl.int32))
+                        acc21 = madd(acc21, (s1 % PRIME).to(tl.int32))
+                        acc22 = madd(acc22, (s2 % PRIME).to(tl.int32))
+                        acc23 = madd(acc23, (s3 % PRIME).to(tl.int32))
+                        acc24 = madd(acc24, (s4 % PRIME).to(tl.int32))
+                        acc25 = madd(acc25, (s5 % PRIME).to(tl.int32))
+                    else:
+                        acc30 = madd(acc30, (s0 % PRIME).to(tl.int32))
+                        acc31 = madd(acc31, (s1 % PRIME).to(tl.int32))
+                        acc32 = madd(acc32, (s2 % PRIME).to(tl.int32))
+                        acc33 = madd(acc33, (s3 % PRIME).to(tl.int32))
+                        acc34 = madd(acc34, (s4 % PRIME).to(tl.int32))
+                        acc35 = madd(acc35, (s5 % PRIME).to(tl.int32))
+            else:
+                off = (c[:, None] * G + g[None, :]) * 6
+                a0, a1, a2, a3, a4, a5 = load6_2d(a_ptr, off, m2)
+                ah0, ah1, ah2, ah3, ah4, ah5 = load6_2d(a_ptr, off + half * G * 6, m2)
+                b0, b1, b2, b3, b4, b5 = load6_2d(b_ptr, off, m2)
+                bh0, bh1, bh2, bh3, bh4, bh5 = load6_2d(b_ptr, off + half * G * 6, m2)
+                da0 = msub(ah0, a0)
+                da1 = msub(ah1, a1)
+                da2 = msub(ah2, a2)
+                da3 = msub(ah3, a3)
+                da4 = msub(ah4, a4)
+                da5 = msub(ah5, a5)
+                db0 = msub(bh0, b0)
+                db1 = msub(bh1, b1)
+                db2 = msub(bh2, b2)
+                db3 = msub(bh3, b3)
+                db4 = msub(bh4, b4)
+                db5 = msub(bh5, b5)
+                for t in tl.static_range(4):
+                    if t > 0:
+                        a0 = madd(a0, da0)
+                        a1 = madd(a1, da1)
+                        a2 = madd(a2, da2)
+                        a3 = madd(a3, da3)
+                        a4 = madd(a4, da4)
+                        a5 = madd(a5, da5)
+                        b0 = madd(b0, db0)
+                        b1 = madd(b1, db1)
+                        b2 = madd(b2, db2)
+                        b3 = madd(b3, db3)
+                        b4 = madd(b4, db4)
+                        b5 = madd(b5, db5)
+                    p0, p1, p2, p3, p4, p5 = ext_mmul(a0, a1, a2, a3, a4, a5, b0, b1, b2, b3, b4, b5)
+                    x0, x1, x2, x3, x4, x5 = ext_mmul(p0, p1, p2, p3, p4, p5, w0, w1, w2, w3, w4, w5)
+                    s0 = tl.sum(x0.to(tl.int64), axis=1)
+                    s1 = tl.sum(x1.to(tl.int64), axis=1)
+                    s2 = tl.sum(x2.to(tl.int64), axis=1)
+                    s3 = tl.sum(x3.to(tl.int64), axis=1)
+                    s4 = tl.sum(x4.to(tl.int64), axis=1)
+                    s5 = tl.sum(x5.to(tl.int64), axis=1)
+                    if t == 0:
+                        acc00 = madd(acc00, (s0 % PRIME).to(tl.int32))
+                        acc01 = madd(acc01, (s1 % PRIME).to(tl.int32))
+                        acc02 = madd(acc02, (s2 % PRIME).to(tl.int32))
+                        acc03 = madd(acc03, (s3 % PRIME).to(tl.int32))
+                        acc04 = madd(acc04, (s4 % PRIME).to(tl.int32))
+                        acc05 = madd(acc05, (s5 % PRIME).to(tl.int32))
+                    elif t == 1:
+                        acc10 = madd(acc10, (s0 % PRIME).to(tl.int32))
+                        acc11 = madd(acc11, (s1 % PRIME).to(tl.int32))
+                        acc12 = madd(acc12, (s2 % PRIME).to(tl.int32))
+                        acc13 = madd(acc13, (s3 % PRIME).to(tl.int32))
+                        acc14 = madd(acc14, (s4 % PRIME).to(tl.int32))
+                        acc15 = madd(acc15, (s5 % PRIME).to(tl.int32))
+                    elif t == 2:
+                        acc20 = madd(acc20, (s0 % PRIME).to(tl.int32))
+                        acc21 = madd(acc21, (s1 % PRIME).to(tl.int32))
+                        acc22 = madd(acc22, (s2 % PRIME).to(tl.int32))
+                        acc23 = madd(acc23, (s3 % PRIME).to(tl.int32))
+                        acc24 = madd(acc24, (s4 % PRIME).to(tl.int32))
+                        acc25 = madd(acc25, (s5 % PRIME).to(tl.int32))
+                    else:
+                        acc30 = madd(acc30, (s0 % PRIME).to(tl.int32))
+                        acc31 = madd(acc31, (s1 % PRIME).to(tl.int32))
+                        acc32 = madd(acc32, (s2 % PRIME).to(tl.int32))
+                        acc33 = madd(acc33, (s3 % PRIME).to(tl.int32))
+                        acc34 = madd(acc34, (s4 % PRIME).to(tl.int32))
+                        acc35 = madd(acc35, (s5 % PRIME).to(tl.int32))
+        # e_t and the block reduction
+        eb = c * 6
+        e0, e1, e2, e3, e4, e5 = load6(e_ptr, eb, mc)
+        eh0, eh1, eh2, eh3, eh4, eh5 = load6(e_ptr, eb + half * 6, mc)
+        de0 = msub(eh0, e0)
+        de1 = msub(eh1, e1)
+        de2 = msub(eh2, e2)
+        de3 = msub(eh3, e3)
+        de4 = msub(eh4, e4)
+        de5 = msub(eh5, e5)
+        for t in tl.static_range(4):
+            if t > 0:
+                e0 = madd(e0, de0)
+                e1 = madd(e1, de1)
+                e2 = madd(e2, de2)
+                e3 = madd(e3, de3)
+                e4 = madd(e4, de4)
+                e5 = madd(e5, de5)
+            if t == 0:
+                h0, h1, h2, h3, h4, h5 = ext_mmul(e0, e1, e2, e3, e4, e5, acc00, acc01, acc02, acc03, acc04, acc05)
+            elif t == 1:
+                h0, h1, h2, h3, h4, h5 = ext_mmul(e0, e1, e2, e3, e4, e5, acc10, acc11, acc12, acc13, acc14, acc15)
+            elif t == 2:
+                h0, h1, h2, h3, h4, h5 = ext_mmul(e0, e1, e2, e3, e4, e5, acc20, acc21, acc22, acc23, acc24, acc25)
+            else:
+                h0, h1, h2, h3, h4, h5 = ext_mmul(e0, e1, e2, e3, e4, e5, acc30, acc31, acc32, acc33, acc34, acc35)
+            h0 = tl.where(mc, h0, 0)
+            h1 = tl.where(mc, h1, 0)
+            h2 = tl.where(mc, h2, 0)
+            h3 = tl.where(mc, h3, 0)
+            h4 = tl.where(mc, h4, 0)
+            h5 = tl.where(mc, h5, 0)
+            ob = pid * 24 + t * 6
+            tl.store(out_ptr + ob + 0, tl.sum(h0.to(tl.int64), axis=0))
+            tl.store(out_ptr + ob + 1, tl.sum(h1.to(tl.int64), axis=0))
+            tl.store(out_ptr + ob + 2, tl.sum(h2.to(tl.int64), axis=0))
+            tl.store(out_ptr + ob + 3, tl.sum(h3.to(tl.int64), axis=0))
+            tl.store(out_ptr + ob + 4, tl.sum(h4.to(tl.int64), axis=0))
+            tl.store(out_ptr + ob + 5, tl.sum(h5.to(tl.int64), axis=0))
+
+
+def phase1_round(a: torch.Tensor, bb: torch.Tensor, e: torch.Tensor, wg: torch.Tensor, half: int, base: bool) -> torch.Tensor:
+    """``(4, 6)`` int64 canonical: the GKR phase-1 round polynomial at t = 0..3 (see ``gkr.phase1_round``)."""
+    G = a.shape[1]
+    BC, BG = 32, 8
+    grid = ((half + BC - 1) // BC,)
+    partial = torch.empty((grid[0], 4, DEG), dtype=torch.int64, device=e.device)
+    wm = _mont(wg[:G].reshape(G, DEG))
+    phase1_kernel[grid](a.contiguous().view(-1), bb.contiguous().view(-1), e.contiguous().view(-1), wm.view(-1),
+                        partial.view(-1), half, G, BASE=base, BC=BC, BG=BG, num_warps=4)
+    s = partial.sum(dim=0) % P
+    return (s * R2_MOD_P) % P
+
+
 def _mont(x: torch.Tensor) -> torch.Tensor:
     """``x R mod p`` (int64, canonical) for a small extension element."""
     return (x.to(torch.int64) * R) % P

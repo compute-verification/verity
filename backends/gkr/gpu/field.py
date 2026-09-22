@@ -325,6 +325,7 @@ def inv_mod(a: int) -> int:
 _fast_ext_mul = None
 _fast_fold = None
 _fast_logup_round = None
+_fast_phase1 = None
 try:
     import os as _os
 
@@ -335,5 +336,6 @@ try:
             _fast_ext_mul = _kernels.ext_mul
             _fast_fold = _kernels.fold
             _fast_logup_round = _kernels.logup_round
+            _fast_phase1 = _kernels.phase1_round
 except Exception:  # pragma: no cover
-    _fast_ext_mul = _fast_fold = _fast_logup_round = None
+    _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = None
