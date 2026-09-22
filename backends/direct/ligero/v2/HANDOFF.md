@@ -5,6 +5,12 @@ proof a verifier accepts, every negative rejected.  Status: **done for the torch
 kernels wired (GPU Blake3 Merkle, blocked Montgomery inversions)**; the fused radix-4 `commit_stream` and the
 structured-linear-test / F_c-triple CUDA kernels are *not* wired (domain and layout mismatch, below).
 
+## Headline
+
+4 096 VUs = 7 proofs x 682 VUs at l = 65 536: **1.26 s/proof, 1.85 ms/VU, 7.57 s per batch, union 2^-128.06**, verifier
+0.40 s/proof, 9.2 MB/proof, peak 17.1 GiB (run r20260922-094956-5453).  b-v2's synthetic fused batch: 42.4 ms -> 180x.
+Overhead 1.9e8 (ledger).  No `--breakthrough` (target 2e6).
+
 ## Where things are
 
 * Code: `backends/direct/ligero/v2/` -- `system.py` (circuit -> `V2System`: columns, products, asserts, lookups,

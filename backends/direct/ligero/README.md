@@ -121,13 +121,13 @@ Gate (`r20260922-091001-68f7`): 8 honest `vu-k1536` VUs accepted with the record
 = the recorded accumulator; prover self-check: every constraint satisfied); `vu-k1536-neg` 52/52 + flipped word
 rejected; 39/39 unit + chain mutations rejected; battery `epilogue` 2/2 rejected (`chain` class vacuous under v2).
 
-End to end, 4 096 VUs per batch as N sub-batch proofs (`bench`, all sub-batches proved and verified):
+End to end, 4 096 VUs per batch as N sub-batch proofs (`bench`, all sub-batches proved and verified; l = 131 072 would exceed the 24 GB card, so 4 096 VUs in one proof needs the table-side fix below):
 
 | l (units/proof) | VUs/proof | N | prover s/proof | **ms/VU** | s per 4 096 VUs | overhead | verifier s/proof | proof MB | rows m | peak GiB | union security | run |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 16 384 | 170 | 25 | 0.728 | **4.28** | 17.5 | 4.3e8 | 0.26 | 4.5 | 3 139 | 8.5 | 2^-123.5 (t = 189 per proof; t = 194 meets 2^-128) | r20260922-094315-8be5 |
-| 32 768 | 341 | 13 | 0.888 | **2.60** | 10.7 | 2.6e8 | 0.29 | 5.7 | 2 019 | 11.8 | 2^-124.5 | r20260922-094315-8be5 |
-| 65 536 | 682 | 7 | see `results/bench_l65536_*.json` | | | | | | | | | r20260922-094956-5453 |
+| 16 384 | 170 | 25 | 0.727 | **4.27** | 17.5 | 4.3e8 | 0.26 | 4.6 | 3 139 | 8.5 | 2^-128.3 (t = 196 per proof) | r20260922-094956-5453 |
+| 32 768 | 341 | 13 | 0.888 | **2.60** | 10.7 | 2.6e8 | 0.29 | 5.7 | 2 019 | 11.8 | 2^-124.5 (t = 189; t = 193 would meet 2^-128) | r20260922-094315-8be5 |
+| **65 536** | 682 | 7 | 1.261 | **1.85** | **7.57** | **1.9e8** | 0.40 | 9.2 | 1 473 | 17.1 | **2^-128.1** (t = 193 per proof) | r20260922-094956-5453 |
 
 Host hint generation (`gen_unit`, pure Python, pool of 95 processes) is 5.4 / 8.1 s per sub-batch and is reported
 separately from the device clock.  Before the GPU Blake3 Merkle was importable on the pod (venv without cupy /
