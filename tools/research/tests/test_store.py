@@ -209,6 +209,14 @@ def test_labels_append_only(store):
     assert [r["id"] for r in store.index.select_artifacts(label=("proof_class", "PARTIAL"))] == [] , "labels index targets; select joins on artifacts"
 
 
+def test_labels_same_second_history_order_survives_ten_or_more(store):
+    """`~N` is a same-second suffix; 12 assertions in one second read back in the order they were made (`~10` after `~9`, not after `~1`)."""
+    t = "art:" + "6" * 64
+    for i in range(12):
+        store.add_label(t, "seq", i, "lane", ref=f"ledger.jsonl:{i}", ts="2026-09-22T11:07:02Z")
+    assert [l.value for l in store.labels(t)] == list(range(12))
+
+
 def test_attempts_write_once(store):
     doc = _attempt(outputs={"result": "art:" + "5" * 64})
     store.put_attempt(doc)
