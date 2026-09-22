@@ -26,12 +26,10 @@ Ledger `backends/numerical/reports/ledger/gate4-h100.jsonl`, track `shared`.  De
 | B buckets v1 (commit_bench blake3 B + buckets_bench + lintest_structured M1-4 lazy) and v2 (v2_bench) | DONE: v1 111.8 ms = 2.77e6 (87% measured); v2 45.5 ms = 1.13e6 (93%); `gate4/b_buckets/b_measured_h100_gate4.json` | r20260922-093147-3d6c |
 | SP1 / C cited rows in the ledger (labelled CITED) | done | -- |
 | `plots/gate4_h100.png` (`plot_gate4`) + test | done | -- |
-| GATE4_H100.md/.json | next | |
+| H100 kernel column for section (b) (microbench, hash_gpu, encode.bench, fused.bench, bench_logup) | DONE: raw under `gate4/kernel_column/`; table in GATE4_H100.md (b) and `GATE4_H100.json[kernel_column]` | r20260922-093941-aebe |
+| GATE4_H100.md/.json | DONE (`gate4/build_gate4.py` regenerates the JSON) | -- |
 | SP1, C | cited only | -- |
 
 ## Next steps
 
-1. instance build -> bb_export -> a-gpu prove (reps 3) as a recorded run.
-2. a-fusion `bench_fused` + `logup_graph_bench` re-run.
-3. b-ligero2 bench-vu non-ZK and `--zk`.
-4. encode `buckets_bench` + `v2_bench`.
+Lane complete; vy-g4 can be terminated.  Nothing is running on the pod.  If resumed: (1) a-gpu2 at B=4096 once that lane fixes the LogUp fractional-sum failure, labelled by commit; (2) B v2 end-to-end when a v2 prover exists; (3) SP1 on the H100 only if a pre-built CUDA prover image is available (do not rebuild).
