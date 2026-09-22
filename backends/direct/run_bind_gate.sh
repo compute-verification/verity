@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Lane b-bind (2026-09-22): the merged tree (soundness-fixes x b-lookup x latency) and the LogUp statement binding.
-#   research run --on vy-cpu3 --project verity --source . --stage <name> -- bash backends/direct/run_bind_gate.sh [check|test|gate|battery|timing|all]
+#   research run --on vy-cpu3 --project verity --source . --stage <name> -- bash backends/direct/run_bind_gate.sh [check|test|gate|battery|timing|all|full]  (all = everything but timing)
 # check   : cargo check --release --all-targets (direct + redteam battery crate)
 # test    : cargo test --release --tests (unit negatives, chain, statement suite, lookup, lookup statement suite)
 # gate    : vu-neg (52) both fields, limb and --lookup; vu-bench 64 VUs bound (limb + lookup), --bind-operands
@@ -26,18 +26,18 @@ if [ ! -d "$CARGO_TARGET_DIR" ] && [ -d /workspace/cargo-target-merge-check ]; t
     cp -r /workspace/cargo-target-merge-check "$CARGO_TARGET_DIR" || true
 fi
 
-if [ "$WHAT" = check ] || [ "$WHAT" = all ]; then
+if [ "$WHAT" = check ] || [ "$WHAT" = all ] || [ "$WHAT" = full ]; then
     echo "== cargo check --release --all-targets"
     (cd backends/direct && cargo check --release --all-targets -j"$RAYON_NUM_THREADS" 2>&1 | grep -E "^(warning|error)|^\s+-->|Finished|could not compile" | tee "$RUN_DIR/cargo_check.txt" | tail -40)
     (cd backends/redteam/vu-battery-b && cargo check --release -j"$RAYON_NUM_THREADS" 2>&1 | grep -E "^error|Finished|could not compile|\s+-->" | tee "$RUN_DIR/cargo_check_redteam.txt" | tail -20)
 fi
 
-if [ "$WHAT" = test ] || [ "$WHAT" = all ]; then
+if [ "$WHAT" = test ] || [ "$WHAT" = all ] || [ "$WHAT" = full ]; then
     echo "== cargo test --release --tests -- --include-ignored (the pod-sized lookup round trips and lookup statement suite included)"
     (cd backends/direct && cargo test --release --tests -j"$RAYON_NUM_THREADS" -- --include-ignored 2>&1 | grep -E "^test |test result|FAILED|panicked|error" | tee "$RUN_DIR/cargo_test.txt" | grep -E "test result|FAILED|panicked|error")
 fi
 
-if [ "$WHAT" = gate ] || [ "$WHAT" = battery ] || [ "$WHAT" = timing ] || [ "$WHAT" = all ]; then
+if [ "$WHAT" != check ] && [ "$WHAT" != test ]; then
     python3 - "$ROOT/fixtures/bench-instances/v1/manifest.json" "$INST" <<'EOF'
 import hashlib, json, sys, pathlib
 man = json.load(open(sys.argv[1])); root = pathlib.Path(sys.argv[2])
@@ -57,7 +57,7 @@ EOF
     (cd backends/direct && cargo build --release -j"$RAYON_NUM_THREADS" 2>&1 | tail -1)
 fi
 
-if [ "$WHAT" = gate ] || [ "$WHAT" = all ]; then
+if [ "$WHAT" = gate ] || [ "$WHAT" = all ] || [ "$WHAT" = full ]; then
     for FIELD in goldilocks babybear; do
         for MODE in "" "--lookup"; do
             TAG="${FIELD}${MODE:+_lookup}"
@@ -78,15 +78,16 @@ if [ "$WHAT" = gate ] || [ "$WHAT" = all ]; then
     "$BIN" vu-bench --root "$INST" --field babybear --lookup --vus 64 --queries 100 --bind-operands --out "$RUN_DIR/vu64_babybear_lookup_operands" | tail -1
 fi
 
-if [ "$WHAT" = battery ] || [ "$WHAT" = all ]; then
+if [ "$WHAT" = battery ] || [ "$WHAT" = all ] || [ "$WHAT" = full ]; then
     echo "== red-team battery (limb realisation; exit 0 required)"
     mkdir -p "$RUN_DIR/battery"
     INSTANCES_ROOT="$INST" bash fixtures/redteam/vu-battery/v1/run_battery.sh "$RUN_DIR/battery" 2>&1 | tail -5
     echo "== babybear rules battery, --lookup (AIR constraints, check-rows)"
-    python3 backends/direct/tools/battery_adapter.py --bin "$BIN" --lookup --out "$RUN_DIR/battery_babybear_lookup.json" 2>&1 | tail -3
+    UV_CACHE_DIR=${UV_CACHE_DIR:-/workspace/uv-cache} uv run --frozen --package verity-numerical \
+        python backends/direct/tools/battery_adapter.py --bin "$BIN" --extras --lookup --out "$RUN_DIR/battery_babybear_lookup.json" 2>&1 | grep -v "^  rejected" | tail -5
 fi
 
-if [ "$WHAT" = timing ] || [ "$WHAT" = all ]; then
+if [ "$WHAT" = timing ] || [ "$WHAT" = full ]; then
     # bound / unbound alternated, twice, per extension degree: the pair on the same box is the fix's cost
     for EXT in "" "--ext 5"; do
         for REP in 1 2; do
