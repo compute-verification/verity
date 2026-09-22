@@ -123,7 +123,7 @@ def cmd_run(argv: list[str]) -> int:
     from .telemetry.run import run as harness_run
 
     write_json_atomic(run_dir / "job.json", job)
-    os.environ.update(result.env_for(run_id, run_dir))
+    os.environ.update(result.env_for(run_id, run_dir, source_sha=getattr(a, "tree_sha", None)))
     print(f"research: run {run_id} -> {run_dir}", file=sys.stderr)
     try:
         rc = harness_run(a, command)

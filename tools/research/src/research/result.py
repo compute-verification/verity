@@ -31,6 +31,10 @@ MAX_BYTES = 1 << 20
 VALIDATION_STATUSES = ("passed", "failed", "not_run")
 ENV_RUN_ID = "RESEARCH_RUN_ID"
 ENV_RUN_DIR = "RESEARCH_RUN_DIR"
+# [R19 tele, F-r17-tp-06] the git sha of the tree the workload runs from (`research run --source`: the shipped `git archive` has no .git,
+# so a source-identity precheck inside the workload cannot derive it); set by launch_request from request.json remote.source_sha and by
+# the local runner from --tree-sha.  Absent when the run has no declared tree.
+ENV_SOURCE_SHA = "RESEARCH_SOURCE_SHA"
 
 
 @dataclass
@@ -156,5 +160,8 @@ def template(run_id: str) -> dict[str, Any]:
             "measurements": [], "measurement_files": [], "artifacts": []}
 
 
-def env_for(run_id: str, run_dir: str | Path) -> dict[str, str]:
-    return {ENV_RUN_ID: run_id, ENV_RUN_DIR: str(run_dir)}
+def env_for(run_id: str, run_dir: str | Path, source_sha: str | None = None) -> dict[str, str]:
+    env = {ENV_RUN_ID: run_id, ENV_RUN_DIR: str(run_dir)}
+    if source_sha:
+        env[ENV_SOURCE_SHA] = source_sha
+    return env
