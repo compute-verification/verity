@@ -383,6 +383,9 @@ def main(argv=None) -> int:
                                          help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
     sub.choices["bench-vu"].add_argument("--dump-dir", default=None, metavar="DIR",
                                          help="write every recorded rep's sub-batch proofs (.stmt/.proof[/.coins]) + system.bin for backends/ligero-verify")
+    sub.choices["bench-vu"].add_argument("--target-bits", type=float, default=128.0,
+                                         help="the VERIFIER's batch target: reject unless sum_i 2^-b_i <= 2^-target over the sub-batches "
+                                              "presented and every proof's n_proofs is their count (PROTOCOL.md 8c; --target is the prover's)")
     sub.choices["gate-vu"].add_argument("--row-negatives", type=int, default=60, help="fp8-ada gate: witness-row mutations to try")
     args = ap.parse_args(argv)
     if args.relation == "fp8-ada":

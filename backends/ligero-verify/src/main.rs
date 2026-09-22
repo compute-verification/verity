@@ -4,12 +4,14 @@
 //! ligero-verify verify --system system.bin --statement X.stmt --proof X.proof [--threads T] [--soundness-bits 128]
 //!                      [--coins FILE]   (interactive mode: the verifier's own r1||s1||r2||s2, 128 bytes raw or hex)
 //!                      [--allow-any-system] [--json out.json] [--reps R]
-//! ligero-verify batch  --system system.bin --dir DIR [--jobs N] [--threads T] [--soundness-bits 128] [--allow-any-system]
+//! ligero-verify batch  --system system.bin --dir DIR [--jobs N] [--threads T] [--target-bits 128] [--allow-any-system]
 //!                      [--json out.json] [--reps R] [--coins FILE]
 //!                      # every DIR/*.proof with its DIR/*.stmt (and DIR/*.coins when present: that proof's own step-0
 //!                      # coins, as `verify --coins`); the sub-batches are verified concurrently on N jobs (default: the
 //!                      # available parallelism), each exactly as `verify` does; the batch is accepted iff every
-//!                      # sub-batch is.  Agreement with DIR/manifest.json's python_verdict when present.
+//!                      # sub-batch is AND (PROTOCOL.md 8c, "Batch verification") the union of this verifier's own
+//!                      # per-proof bounds over the N sub-batches presented is <= 2^-target AND every proof's n_proofs
+//!                      # is N (`batch: n_proofs mismatch`).  Agreement with DIR/manifest.json's python_verdict when present.
 //! ligero-verify system-digest --system system.bin           # the two digests to pin in verify.rs
 //! ~~~
 
@@ -54,7 +56,7 @@ fn parse_coins(raw: Vec<u8>) -> Result<[u8; 128], String> {
 fn options(args: &[String]) -> verify::Options {
     verify::Options {
         threads: arg(args, "--threads").map(|s| s.parse().expect("--threads")).unwrap_or(1),
-        soundness_bits: arg(args, "--soundness-bits").map(|s| s.parse().expect("--soundness-bits")).unwrap_or(128.0),
+        soundness_bits: Some(arg(args, "--soundness-bits").map(|s| s.parse().expect("--soundness-bits")).unwrap_or(128.0)),
         allow_any_system: flag(args, "--allow-any-system"),
         own_coins: arg(args, "--coins").map(|path| {
             let raw = std::fs::read(&path).expect("--coins file");
@@ -336,12 +338,36 @@ fn main() {
             }
             let available = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
             let jobs = arg(&args, "--jobs").map(|s| s.parse::<usize>().expect("--jobs")).unwrap_or(available).max(1).min(proofs.len());
+            // The batch target (PROTOCOL.md 8c, "Batch verification"): the union of this verifier's own per-proof bounds
+            // over the sub-batches presented must be <= 2^-target_bits.  It replaces the per-proof gate of `verify`
+            // (a proof's own n_proofs is checked against the count presented instead); --soundness-bits is its alias here.
+            let target_bits: f64 = arg(&args, "--target-bits")
+                .or_else(|| arg(&args, "--soundness-bits"))
+                .map(|s| s.parse().expect("--target-bits"))
+                .unwrap_or(128.0);
+            let opt = verify::Options { soundness_bits: None, ..opt };
             // shared, read-only, once: the parsed system + its pinned-digest verdict (the tables per (l, n) are built
             // by the first sub-batch that reaches them and reused by the rest)
             let t0 = Instant::now();
             let shared = verify::Shared::new(&sys, &opt);
             let shared_secs = t0.elapsed().as_secs_f64();
             let results = verify_batch(&shared, &proofs, &opt, reps, jobs);
+            // the batch rule, inside the wall: this verifier's bound of every sub-batch (from its own statement) and the
+            // n_proofs each was sized for, against the number presented -- arithmetic on N numbers
+            let mut per_bits: Vec<f64> = Vec::with_capacity(results.len());
+            let mut claimed: Vec<usize> = Vec::with_capacity(results.len());
+            let mut names: Vec<String> = Vec::with_capacity(results.len());
+            for item in &results {
+                if let Some(v) = &item.verdict {
+                    if let Some(s) = &v.soundness {
+                        per_bits.push(s.per_proof_log2);
+                        claimed.push(v.statement.as_ref().map_or(0, |st| st.n_proofs));
+                        names.push(item.name.clone());
+                    }
+                }
+            }
+            let every_verdict_in = per_bits.len() == results.len() && results.iter().all(|i| i.verdict.as_ref().map_or(false, |v| v.accepted));
+            let bound = if every_verdict_in { Some(verify::batch_bound(&per_bits, &claimed, target_bits, &names)) } else { None };
             let wall = t0.elapsed().as_secs_f64();
             // the report, in proof order whatever the scheduling
             let mut items = Vec::new();
@@ -390,26 +416,37 @@ fn main() {
                 );
                 items.push(verdict_json(v, name, pyv, reps));
             }
-            let batch_accepted = io_errors == 0 && n_rej == 0 && n_acc == proofs.len();
-            let batch_reason = match (&first_reject, io_errors) {
-                (_, e) if e > 0 => format!("{e} sub-batch file(s) could not be read"),
-                (Some(r), _) => r.clone(),
-                (None, _) => format!("accept: all {} sub-batches accepted", proofs.len()),
+            // precedence: unreadable input, a rejected sub-batch (first in name order), then the batch rule
+            let (batch_accepted, batch_reason) = match (&first_reject, io_errors, &bound) {
+                (_, e, _) if e > 0 => (false, format!("{e} sub-batch file(s) could not be read")),
+                (Some(r), _, _) => (false, r.clone()),
+                (None, _, Some(b)) => (b.accepted && n_acc == proofs.len(), b.reason.clone()),
+                (None, _, None) => (false, "batch: no verdict".to_string()),
             };
+            // the batch accounting is reported whatever the verdict (over the sub-batches whose statements parsed)
+            let batch_log2 = bound.as_ref().map(|b| b.batch_log2).unwrap_or_else(|| {
+                let m = per_bits.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                if per_bits.is_empty() { f64::NEG_INFINITY } else { m + per_bits.iter().map(|x| (x - m).exp2()).sum::<f64>().log2() }
+            });
+            let f9 = |x: f64| if x.is_finite() { format!("{x:.9}") } else { "null".to_string() };
             let summary = format!(
-                "{{\"dir\":{},\"jobs\":{jobs},\"available_parallelism\":{available},\"threads\":{},\"reps\":{},\"soundness_bits\":{},\"n\":{},\"accepted\":{n_acc},\"rejected\":{n_rej},\"own_coins\":{n_coins},\"batch_accepted\":{batch_accepted},\"batch_reason\":{},\"python_agree\":{agree},\"python_disagree\":{disagree},\"verify_seconds_sum\":{total_secs:.4},\"shared_seconds\":{shared_secs:.4},\"wall_seconds\":{wall:.4},\"items\":[{}]}}",
+                "{{\"dir\":{},\"jobs\":{jobs},\"available_parallelism\":{available},\"threads\":{},\"reps\":{},\"target_bits\":{target_bits},\"n\":{},\"accepted\":{n_acc},\"rejected\":{n_rej},\"own_coins\":{n_coins},\"batch_accepted\":{batch_accepted},\"batch_reason\":{},\"batch_log2\":{},\"batch_bits\":{},\"per_proof_bits\":[{}],\"n_proofs_claimed\":[{}],\"python_agree\":{agree},\"python_disagree\":{disagree},\"verify_seconds_sum\":{total_secs:.4},\"shared_seconds\":{shared_secs:.4},\"wall_seconds\":{wall:.4},\"items\":[{}]}}",
                 json_str(&dir.to_string_lossy()),
                 opt.threads,
                 reps,
-                opt.soundness_bits,
                 proofs.len(),
                 json_str(&batch_reason),
+                f9(batch_log2),
+                f9(-batch_log2),
+                per_bits.iter().map(|b| f9(-b)).collect::<Vec<_>>().join(","),
+                claimed.iter().map(|k| k.to_string()).collect::<Vec<_>>().join(","),
                 items.join(",")
             );
             eprintln!(
-                "{} proofs: {n_acc} accepted, {n_rej} rejected ({n_coins} against their own coins); batch {}; python agreement {agree}/{} ({disagree} disagree); verify sum {total_secs:.3}s, wall {wall:.3}s at {jobs} jobs x {} threads",
+                "{} proofs: {n_acc} accepted, {n_rej} rejected ({n_coins} against their own coins); batch {} ({batch_reason}); batch bits {:.6} at target {target_bits}; python agreement {agree}/{} ({disagree} disagree); verify sum {total_secs:.3}s, wall {wall:.3}s at {jobs} jobs x {} threads",
                 proofs.len(),
                 if batch_accepted { "ACCEPT" } else { "reject" },
+                -batch_log2,
                 agree + disagree,
                 opt.threads
             );

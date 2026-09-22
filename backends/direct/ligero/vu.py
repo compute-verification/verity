@@ -134,6 +134,37 @@ class ChainRunner:
         return verify(self.p, self.sys, self.tb, self.cfg(lay.l), None, a, b, None, proof, self.device, chain=(lay, y16),
                       coins=coins)
 
+    def batch_bound(self, cfgs: list[Config], n_proofs_claimed: list[int], target_bits: float = 128.0,
+                    names: list[str] | None = None) -> dict:
+        """The batch accounting gate (PROTOCOL.md 8c, "Batch verification") for sub-batch proofs that each verified:
+        this verifier's OWN bound of every proof from its configuration (``soundness(cfg_i)``, one commitment each),
+        union-bounded over the ``len(cfgs)`` presented, against ``target_bits``; and every proof's ``n_proofs`` (the
+        count its ``t`` was sized for) against that number.  Reason strings shared with ``ligero-verify batch``."""
+        per = [soundness(c, self.tb.L, self.tb.Q, 1)["per_proof_total_log2"] for c in cfgs]
+        return protocol_mod.batch_bound(per, n_proofs_claimed, target_bits, names)
+
+    def verify_batch(self, items: list[tuple], target_bits: float = 128.0, n_proofs_claimed: list[int] | None = None) -> dict:
+        """The Python batch verifier on in-memory proofs: ``items`` = ``(proof, pubs, lay[, coins])`` per sub-batch
+        presented together.  Every one is verified as ``verify_vus`` does (own statement, own coins); a rejected
+        sub-batch rejects the batch with ``"<sub_XX>: <reason>"``; then :meth:`batch_bound` with ``n_proofs_claimed``
+        (default: this runner's ``n_proofs`` for every proof -- the count ``config_for`` sized ``t`` for)."""
+        names = [f"sub_{i:02d}" for i in range(len(items))]
+        cfgs, verdicts = [], []
+        for name, it in zip(names, items):
+            proof, pubs, lay = it[0], it[1], it[2]
+            coins = it[3] if len(it) > 3 else None
+            ok, why = self.verify_vus(proof, pubs, lay, coins=coins)
+            verdicts.append({"name": name, "accepted": ok, "reason": why})
+            cfgs.append(self.cfg(lay.l))
+        claimed = list(n_proofs_claimed) if n_proofs_claimed is not None else [self.n_proofs] * len(items)
+        for v in verdicts:
+            if not v["accepted"]:
+                per = [soundness(c, self.tb.L, self.tb.Q, 1)["per_proof_total_log2"] for c in cfgs]
+                return {"accepted": False, "reason": f"{v['name']}: {v['reason']}", "n_subbatches": len(items),
+                        "target_bits": float(target_bits), "batch_log2": protocol_mod.log2_sum(per), "per_proof_log2": per,
+                        "n_proofs_claimed": claimed, "items": verdicts}
+        return {**self.batch_bound(cfgs, claimed, target_bits, names), "items": verdicts}
+
 
 def _vu_data(vu: instances.VuTier, i: int):
     x, w, y16 = vu.instance(i)
@@ -291,10 +322,13 @@ def bench_vu(args) -> int:
         _write_system(dump_dir, R, dump_manifest)
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
                                 "zk": args.zk, "mode": args.mode, "reps": args.reps}
+    target_bits = float(getattr(args, "target_bits", 128.0) or 128.0)   # the VERIFIER's parameter (PROTOCOL.md 8c)
+    batch = None
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
         t_pass = time.perf_counter()
+        cfgs_seen: list[Config] = []
         for si, (lo, hi) in enumerate(subs):
             vus = [data[i] for i in range(lo, hi)]
             V = protocol_mod.Coins.sample() if interactive else None      # the verifier's step 0 (interactive only)
@@ -303,6 +337,7 @@ def bench_vu(args) -> int:
             ok, why = R.verify_vus(proof, pubs, lay_i, coins=V)
             vsum += time.perf_counter() - t0
             assert ok, f"sub-batch [{lo}, {hi}): {why}"
+            cfgs_seen.append(R.cfg(lay_i.l))
             for k, v in proof.timings.items():
                 agg[k] = agg.get(k, 0.0) + v
             if dump_dir is not None and rep > 0:
@@ -321,6 +356,14 @@ def bench_vu(args) -> int:
                 dump_manifest["files"].append(entry)
             if rep == 0:
                 break                                        # warm-up: one sub-batch (graph capture, compile)
+        if rep > 0:
+            # the batch verdict (PROTOCOL.md 8c, "Batch verification"): every sub-batch verified above; now the union
+            # bound of this verifier's own per-proof bounds over the n_proofs presented, and each proof's n_proofs
+            # (what config_for sized t for) against that count.  Arithmetic on n_proofs numbers, inside the verifier time.
+            t0 = time.perf_counter()
+            batch = R.batch_bound(cfgs_seen, [n_proofs] * len(cfgs_seen), target_bits)
+            vsum += time.perf_counter() - t0
+            assert batch["accepted"], batch["reason"]
         wall = time.perf_counter() - t_pass
         if rep == 0:
             print("warm-up (one sub-batch):", {k: round(v, 3) for k, v in agg.items()})
@@ -338,6 +381,9 @@ def bench_vu(args) -> int:
     nbytes = proof.n_bytes()
     nbytes = {k: v * n_proofs for k, v in nbytes.items()}
     snd = soundness(cfg, R.tb.L, R.tb.Q, n_proofs)
+    # security.achieved_log2 (the contract's field; N_subbatches and B_proof are its siblings) is the BATCH bound
+    # -log2 sum_i 2^b_i as the verifier's batch_bound computed it; achieved_bits is the same number as positive bits.
+    assert batch is not None and abs(batch["batch_log2"] - snd["total_log2"]) < 1e-6, (batch, snd["total_log2"])
     total = med["total"] + med["hints_host"]
     n_vus = total_vus
     per_vu = total / n_vus
@@ -363,7 +409,8 @@ def bench_vu(args) -> int:
                   "zk": cfg.zk, "t_pad": cfg.t_pad, "mode": cfg.mode, "bound_model": snd["bound_model"],
                   "hash_assumption": snd["hash_assumption"], "zk_statement": snd["zk_statement"],
                   "fiat_shamir_queries_log2": snd["fiat_shamir_queries_log2"],
-                  "opened_columns": cfg.t, "achieved_log2": snd["total_log2"], "terms_log2": snd["terms_log2"],
+                  "opened_columns": cfg.t, "achieved_log2": batch["batch_log2"], "achieved_bits": -batch["batch_log2"],
+                  "verifier_target_bits": target_bits, "terms_log2": snd["terms_log2"],
                   "per_proof_target_log2": snd["per_proof_target_log2"], "per_proof_total_log2": snd["per_proof_total_log2"],
                   "union_over": n_proofs, "hash_placeholder": True},
         hardware=hw, software=sw,
@@ -412,17 +459,19 @@ def bench_vu(args) -> int:
     ]
     result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or f"b-ligero-vu-{int(time.time())}",
               "workload_fingerprint": fp,
-              "validation": {"status": "passed", "checker": "backends.direct.ligero.run bench-vu (verifier accepted every rep)",
-                             "detail": f"{args.reps} reps, {n_vus} VUs as {n_proofs} proofs at l={l}",
-                             "evidence": {"soundness": snd, "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]}
-                                                                     for r in runs]}},
+              "validation": {"status": "passed", "checker": "backends.direct.ligero.run bench-vu (verifier accepted every sub-batch "
+                                                            "and the batch union bound every rep)",
+                             "detail": f"{args.reps} reps, {n_vus} VUs as {n_proofs} proofs at l={l}; batch {batch['reason']}",
+                             "evidence": {"soundness": snd, "batch": batch,
+                                          "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]} for r in runs]}},
               "measurements": meas, "measurement_files": [], "artifacts": []}
     problems = contract.validate(result)
     if problems:
         print("contract problems:", problems)
     print(json.dumps({"seconds_per_vu": per_vu, "prover_total": total, "verifier": vmed, "bytes": nbytes, "n_proofs": n_proofs,
                       "per_proof_vus": per_proof, "t": cfg.t, "zk": cfg.zk, "k": cfg.k, "peak_device_bytes": peak_dev, "soundness_log2": snd["total_log2"],
-                      "per_proof_log2": snd["per_proof_total_log2"], "medians": med}, indent=1))
+                      "per_proof_log2": snd["per_proof_total_log2"], "batch_bits": -batch["batch_log2"], "target_bits": target_bits,
+                      "batch_reason": batch["reason"], "medians": med}, indent=1))
     if args.out:
         Path(args.out).write_text(json.dumps(result, indent=1, default=str))
     return 0
