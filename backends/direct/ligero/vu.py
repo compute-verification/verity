@@ -24,6 +24,7 @@ from verity_numerical.checker.step import step_output
 from . import merkle
 from .chain import Layout
 from .compile import P
+from .hints_torch import hints_torch
 from .protocol import Config, config_for, prove, soundness, verify
 from .unit import compile_unit, public_vectors
 from .witness import hints_tensor, tables
@@ -45,9 +46,10 @@ def vu_units(x: list[int], w: list[int], accs: list[int]) -> list[tuple]:
 
 
 class ChainRunner:
-    def __init__(self, device: str, target: float, rate_log2: int = 2):
+    def __init__(self, device: str, target: float, rate_log2: int = 2, hints: str = "torch"):
         self.p = REAL
         self.device = device
+        self.hints_mode = hints
         self.target = target
         self.rate_log2 = rate_log2
         t0 = time.perf_counter()
@@ -77,7 +79,17 @@ class ChainRunner:
         a, b = [u[1] for u in units], [u[2] for u in units]
         t0 = time.perf_counter()
         pub = public_vectors(self.p, None, a, b, None, device=self.device)
-        hints = hints_tensor(self.p, self.sys, units, self.device)
+        c_in, y_out = [u[0] for u in units], [u[3] for u in units]
+        if self.hints_mode == "torch":
+            hints = hints_torch(self.p, self.sys, c_in, a, b, y_out, self.device)
+        else:
+            hints = hints_tensor(self.p, self.sys, units, self.device)
+        if check:      # the gate: the torch hint generator must reproduce the checker's gen_step exactly
+            ref = hints_tensor(self.p, self.sys, units, self.device)
+            alt = hints_torch(self.p, self.sys, c_in, a, b, y_out, self.device)
+            assert torch.equal(ref, alt), "hints_torch != gen_step"
+        if str(self.device).startswith("cuda"):
+            torch.cuda.synchronize()
         hints_seconds = time.perf_counter() - t0
         proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
                       chain=(lay, y16))
@@ -95,7 +107,7 @@ def _vu_data(vu: instances.VuTier, i: int):
 
 
 def gate_vu(args) -> int:
-    R = ChainRunner(args.device, args.target, args.rate_log2)
+    R = ChainRunner(args.device, args.target, args.rate_log2, args.hints)
     log = print
     log(f"chain system: {R.sys.summary()} compiled in {R.compile_seconds:.2f}s; device {args.device}")
     root = Path(args.root)
@@ -202,7 +214,7 @@ def gate_vu(args) -> int:
 def bench_vu(args) -> int:
     from .run import _git_commit
 
-    R = ChainRunner(args.device, args.target, args.rate_log2)
+    R = ChainRunner(args.device, args.target, args.rate_log2, args.hints)
     root = Path(args.root)
     vu = instances.load("vu-k1536", root)
     n_vus = args.batch // STEPS
@@ -249,7 +261,7 @@ def bench_vu(args) -> int:
         instances=contract.instances_ref("vu-k1536", 0, n_vus, instances.manifest_sha256(root)),
         scope="vu", omitted="external authentication, ZK masking",
         rows=R.sys.m, linear_constraints=R.tb.L, quadratic_constraints=R.tb.Q,
-        witness_generation="host Python gen_step (hints) + torch program (derived rows)",
+        witness_generation=f"{R.hints_mode} hint generator (gen_step semantics) + torch program (derived rows)",
         note=f"{n_vus} VUs per proof of l = {l} columns ({l - n_vus * STEPS} pad columns)",
     )
     meas = [
@@ -270,7 +282,7 @@ def bench_vu(args) -> int:
         contract.measurement("census.bytes_encoded", R.sys.m * cfg.n * 4),
         contract.measurement("vu.seconds_per_vu", per_vu, "s"),
         contract.measurement("vu.count", n_vus, "count"),
-        contract.measurement("split.hints_host_seconds", med["hints_host"], "s"),
+        contract.measurement("split.hints_seconds", med["hints_host"], "s"),
         contract.measurement("split.witness_torch_seconds", med["witness"], "s"),
         contract.measurement("split.encode_seconds", med["encode"], "s"),
         contract.measurement("split.transfer_seconds", med["transfer"], "s"),

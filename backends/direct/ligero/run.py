@@ -28,11 +28,17 @@ from verity_numerical.checker.step import step_output
 
 from . import merkle
 from .compile import P
+from .hints_torch import hints_torch
 from .protocol import Config, config_for, prove, soundness, verify
 from .unit import compile_unit, public_vectors
 from .witness import hints_tensor, tables
 
 STEP, STEPS = instances.STEP, instances.STEPS
+
+
+def _sync(device):
+    if str(device).startswith("cuda"):
+        torch.cuda.synchronize()
 
 
 def _git_commit() -> str | None:
@@ -69,9 +75,10 @@ def split_pub(units, ys):
 
 
 class Runner:
-    def __init__(self, device: str, target: float, rate_log2: int = 2):
+    def __init__(self, device: str, target: float, rate_log2: int = 2, hints: str = "torch"):
         self.p = REAL
         self.device = device
+        self.hints_mode = hints
         self.target = target
         self.rate_log2 = rate_log2
         t0 = time.perf_counter()
@@ -91,7 +98,15 @@ class Runner:
         c, a, b, y = split_pub(units, ys)
         t0 = time.perf_counter()
         pub = public_vectors(self.p, c, a, b, y, device=self.device)
-        hints = hints_tensor(self.p, self.sys, units, self.device)
+        if self.hints_mode == "torch":
+            hints = hints_torch(self.p, self.sys, c, a, b, None, self.device)
+        else:
+            hints = hints_tensor(self.p, self.sys, units, self.device)
+        if check:      # the gate: the torch hint generator must reproduce the checker's gen_step exactly
+            ref = hints_tensor(self.p, self.sys, units, self.device)
+            alt = hints_torch(self.p, self.sys, c, a, b, None, self.device)
+            assert torch.equal(ref, alt), "hints_torch != gen_step"
+        _sync(self.device)
         hints_seconds = time.perf_counter() - t0
         proof = prove(self.p, self.sys, self.tb, self.cfg(l), pub, hints, self.device, check=check, mutate=mutate)
         proof.timings["hints_host"] = hints_seconds
@@ -107,7 +122,7 @@ class Runner:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def gate(args) -> int:
-    R = Runner(args.device, args.target, args.rate_log2)
+    R = Runner(args.device, args.target, args.rate_log2, args.hints)
     log = print
     log(f"system: {R.sys.summary()} compiled in {R.compile_seconds:.2f}s; device {args.device}")
     root = Path(args.root)
@@ -229,7 +244,7 @@ def gate(args) -> int:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def bench(args) -> int:
-    R = Runner(args.device, args.target, args.rate_log2)
+    R = Runner(args.device, args.target, args.rate_log2, args.hints)
     root = Path(args.root)
     tu = instances.load("tu-k16", root)
     units = [tu.instance(i)[:3] for i in range(args.batch)]
@@ -275,7 +290,7 @@ def bench(args) -> int:
         instances=contract.instances_ref("tu-k16", 0, l, instances.manifest_sha256(root)),
         scope="unit", omitted="chain linkage, epilogue, external authentication, ZK masking",
         rows=R.sys.m, linear_constraints=R.tb.L, quadratic_constraints=R.tb.Q,
-        witness_generation="host Python gen_step (hints) + torch program (derived rows)",
+        witness_generation=f"{R.hints_mode} hint generator (gen_step semantics) + torch program (derived rows)",
     )
     meas = [
         contract.measurement("t.witness", med["witness"] + med["hints_host"]),
@@ -296,7 +311,7 @@ def bench(args) -> int:
         contract.measurement("census.hash_bytes", R.sys.m * cfg.n * 4 + 64 * (cfg.n - 1)),
         contract.measurement("unit.seconds_per_unit", per_unit, "s"),
         contract.measurement("unit.count", l, "count"),
-        contract.measurement("split.hints_host_seconds", med["hints_host"], "s"),
+        contract.measurement("split.hints_seconds", med["hints_host"], "s"),
         contract.measurement("split.witness_torch_seconds", med["witness"], "s"),
         contract.measurement("split.encode_seconds", med["encode"], "s"),
         contract.measurement("split.transfer_seconds", med["transfer"], "s"),
@@ -335,6 +350,7 @@ def main(argv=None) -> int:
         s.add_argument("--rate-log2", type=int, default=2)
         s.add_argument("--batch", type=int, default=4096)
         s.add_argument("--out", default=None)
+        s.add_argument("--hints", default="torch", choices=("torch", "python"), help="hint generator: torch (vectorised) or the checker's Python gen_step")
         s.set_defaults(fn=fn)
     for name in ("gate", "gate-vu"):
         sub.choices[name].add_argument("--vus", type=int, default=64)
