@@ -840,16 +840,52 @@ because every factor is a residue of an integer in \([0, 780)\) bound by ALIGN4/
 
 ### 15.4 Measurement (vy-cpu2, 12 threads, shared; \(B = 4096\), \(K = 1536\), 100 FRI queries, PoW 16)
 
-MEASUREMENT_TABLE_PLACEHOLDER
+Runs `r20260922-085312-82a9` (BabyBear\(^4\), 166 queries), `r20260922-085547-05cc` (BabyBear\(^5\), 166 queries),
+`r20260922-084854-d988` / `r20260922-085143-6e87` (the same at 100 queries: 22.88 s / 25.44 s, proofs 1.18 / 1.20 MB,
+FRI \(2^{-83.8}\) proven); `results/vu_v2_*.json`.  \(2^{19}\) rows (393 216 real), `log_blowup` 2, Keccak Merkle,
+authentication excluded, `NON_ZK_PROOF_DIAGNOSTIC`; the pod was shared (load average \(\approx 30\) on 32 vCPUs), so
+every time is an upper bound.  The v1 + LogUp columns are section 14.5's (same queries, same pod, same threads).
+
+| | v1 + LogUp, BabyBear\(^4\) | v1 + LogUp, BabyBear\(^5\) | **v2, BabyBear\(^4\)** | **v2, BabyBear\(^5\)** |
+|---|---|---|---|---|
+| committed width | 863 | 977 | **405** | **453** |
+| committed bytes / VU | 331 kB | 375 kB | **155.5 kB** (2.13x less) | **174 kB** (2.16x less) |
+| witness s | 5.4 | 5.9 | **2.37** | 2.38 |
+| prove s | 54.7 | 64.5 | **20.55** | 23.05 |
+| total s | 60.1 | 70.4 | **22.92** | 25.43 |
+| s / VU | 0.0147 | 0.0172 | **0.00560** (2.62x) | 0.00621 (2.77x) |
+| overhead vs native peak | 1.49e9 | 1.75e9 | **5.68e8** | 6.31e8 |
+| verify s | 0.44 | 0.51 | 0.455 | 0.557 |
+| proof MB | 2.27 | 2.37 | 1.95 | 1.99 |
+| sequential depth (rounds) | 26 | 26 | 26 | 26 |
+| peak RSS GB | 9.5 | 10.7 | **4.85** | 5.16 |
+| stages: commit_pre / main / aux_build / aux / quotient / commit_q / open s | 0.31 / 5.46 / 0.56 / 5.87 / 37.07 / 0.58 / 4.08 | 0.33 / 5.35 / 0.66 / 7.35 / 43.98 / 0.70 / 5.27 | 0.36 / 3.87 / 0.18 / 1.76 / **10.76** / 0.57 / 2.60 | 0.38 / 4.03 / 0.23 / 2.20 / 11.46 / 0.67 / 3.72 |
+| soundness: FRI / lookup term | \(2^{-128.6}\) / \(2^{-93.8}\) | \(2^{-128.6}\) / \(2^{-124.8}\) | \(2^{-128.6}\) / **\(2^{-94.9}\)** | \(2^{-128.6}\) / **\(2^{-125.8}\)** |
+
+Both breakthrough criteria are met (s/VU 2.62x better than 0.0147, > 1.5x; committed bytes/VU 2.13x under 331 kB,
+> 2x).  Where the time went: the quotient pass fell 3.4x (37.1 to 10.8 s: 88 program constraints instead of 402,
+27 helpers instead of 112, 105 query terms per row instead of 391 -- the \(\beta\)-compressed query term is a
+degree-1 expression per tuple entry, so the quotient cost tracks queries x tuple width), the aux round 3.3x
+(116 columns instead of 456), the main commit 1.4x (281 vs 401 columns), the witness 2.3x (no division hints).
+The quotient pass is now 52% of `prove` (was 68%): commits (5.6 s) and the opening (2.6 s) are the next third.  The
+verifier is unchanged (it recomputes 8 preprocessed columns over \(2^{19}\) rows and opens four commitments); the
+proof shrinks less than the width (1.95 vs 2.27 MB) because the 166 FRI queries open \(405 \times 2\) cells per query
+either way and the FRI folds dominate.
 
 ### 15.5 Soundness label
 
 The lookup identity term (section 14.2, `security.accounting.logup_identity_error`) with this AIR's actual counts,
-\(N = 2^{19} \cdot 105 = 2^{25.7}\) lookups and 7 tuple columns: LOOKUP_BITS_PLACEHOLDER.  The FRI term at 100
+\(N = 2^{19} \cdot 105 = 2^{25.7}\) lookups, 282 280 table rows, 8 \(\beta\)-compressed columns (7 tuple entries +
+tag), `whole_field` sampling: **\(2^{-94.9}\) at BabyBear\(^4\), \(2^{-125.8}\) at BabyBear\(^5\), \(2^{-156.7}\) at
+BabyBear\(^6\)** (the prover's own count with 7 columns: 95.3 / 126.3 bits; v1 + LogUp: 93.4 / 124.3 by the same
+accountant).  The FRI term at 100
 queries / `log_blowup` 2 / PoW 16 is \(2^{-83.8}\) proven (\(2^{-216}\) conjectured); at 166 queries \(2^{-128.6}\).
-The honest label of a v2 proof is the minimum of the two: SOUNDNESS_PLACEHOLDER.  \(2^{-128}\) needs BabyBear\(^6\)
-(not in Plonky3 0.4.3) *and* 166 queries; BabyBear\(^5\) at 166 queries gives \(2^{-124.x}\)-class -- the same
-conclusion as section 14.2, with 4x fewer lookups the v2 term is 2 bits better at each degree.
+The honest label of a v2 proof is the minimum of the two: **\(2^{-94.9}\) at BabyBear\(^4\)** and
+**\(2^{-125.8}\) at BabyBear\(^5\)**, both with 166 queries (at 100 queries the FRI term \(2^{-83.8}\) binds
+instead).  \(2^{-128}\) needs BabyBear\(^6\)
+(not in Plonky3 0.4.3) *and* 166 queries; BabyBear\(^5\) at 166 queries gives \(2^{-125.8}\) -- the same conclusion as
+section 14.2; with 3.7x fewer lookups the v2 term is 1.5 bits better at each degree, not enough to change it.
+BabyBear\(^6\) was not implemented in this lane (section 15.6).
 
 Statement binding (red-team F1-F3): `absorb_header` puts the domain tag, the AIR id (hash of field, layout and
 constraint names), \(B\), \(K\), 96, `degree_bits`, the FRI parameters and every claimed word (and the operands when
@@ -857,3 +893,24 @@ constraint names), \(B\), \(K\), 96, `degree_bits`, the FRI parameters and every
 the table set and rejects a proof of another height; the claim column is opened at \(\zeta, \zeta g\) and compared to
 the verifier's own evaluation of the statement polynomial.  `vu-bench --v2` verifies the proof, then checks that
 the same proof is rejected against a statement with one word flipped.
+
+### 15.6 Open
+
+* **BabyBear\(^6\)** (the brief's item 6): not done.  Plonky3 0.4.3's `BinomialExtensionField<BabyBear, D>` is
+  implemented for D = 4, 5 only; a degree-6 extension needs a `BinomiallyExtendable<6>` impl (irreducible
+  \(X^6 - w\); `backends/gkr/src/field.rs` has a hand-rolled BabyBear\(^6\) with its polynomial) plus the
+  `TwoAdicField`/`HasFrobenius` plumbing uni-stark's challenger and PCS need.  Expected cost from the \(^4 \to ^5\)
+  step: aux width 174, quotient +7%, \(\approx 28\) s total, label \(2^{-128.6}\) (FRI) -- the first honest
+  \(2^{-128}\) at \(2^{19}\) rows.
+* **Operand authentication**: `--bind-operands` absorbs the operand arrays into the header and checks the 32 operand
+  columns at \(\zeta\); it was implemented and is exercised by `vu-bench --v2 --bind-operands` but not measured
+  in the table (the verifier's statement polynomial then has \(32 \times 2^{19}\) coefficients: a hash-chain
+  commitment to the operands is the practical form).
+* **The 2 vacuous battery cases** (`zero_swap`): a v2-native red-team pass -- mutations of v2's own 15 hints (the
+  chunk hints `u_hi/u_lo`, `M2/M1/M0`, `v2/v1/v0`, the Pack limbs) rather than translations of v1's -- would
+  replace the translated battery.  z3 covers each gadget (7/7 UNSAT); the composed unit is covered by the 52
+  negatives, the 5 mutations and the translated battery only.
+* The preprocessed commitment (0.36 s) and the 8-column table recomputation in the verifier could be cached.
+* Trace height is pinned at \(2^{19}\) by the table set (282 280 rows): batches below 2 731 VUs pay for padding.
+  `T16` (65 536) and `T_OP` (65 536) could share a key column; `TNORM10` and `T15` too -- a \(2^{18}\) table set
+  (\(\le 262\,144\) rows) would allow 2 048-VU batches at half the rows.

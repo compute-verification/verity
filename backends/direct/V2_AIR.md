@@ -68,9 +68,11 @@ Per row (BabyBear base field), in allocation order of `program_v2::unit_v2`:
 
 Queries per row: 32 + 2 x (9 + 16 + 3 + 3 + 1 + 1) + 7 = **105**, two of them degree 2 (the state candidate's
 `s4_0` on group 1 is `sgn_0 (1 - z_0)`), so 107 degree units -> 27 helpers x 4 base columns = 108, plus `g` and
-`S`: **aux 116 at BabyBear^4, 145 at ^5**.  Preprocessed 9.  **Committed width ~408 (^4) / ~437 (^5)** against
-863 / 977 (v1 + LogUp): 2.1x / 2.2x fewer.  Program constraints ~160 (v1: 286), max degree 5 unchanged.  The
-exact numbers are `direct-unit chain-layout --v2` (PROTOCOL.md 15 records them).
+`S`: **aux 116 at BabyBear^4, 145 at ^5**.  Preprocessed 8 (7 tuple entries + tag).  **Measured
+(`direct-unit chain-layout --v2`): main 281 (176 table outputs, 101 words/state/hints/position, 4 auto-materialised),
+aux 116 / 145, preprocessed 8, committed 405 (^4) / 453 (^5)** against 863 / 977 (v1 + LogUp): 2.13x / 2.16x fewer.
+Program constraints 88 (v1: 402), 105 queries per row (104 of degree 1, 1 of degree 2), max degree 5 unchanged.
+PROTOCOL.md 15 records the gate and the measurements.
 
 ## 4. What differs from checker v2, and why it is the same relation
 
