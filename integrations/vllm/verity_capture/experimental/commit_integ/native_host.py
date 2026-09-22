@@ -886,6 +886,11 @@ class NativeHostCommitter:
         self.arena_explicit = arena_bytes is not None
         self.arena_sizing: dict[str, Any] | None = None
         self.arena = _DeviceArena(int(arena_bytes or _ARENA_MIN)) if (engine is not None and staging == "arena") else None
+        # [R19 int-20, F-r19-int-20] MANIFEST-DRIVEN input acquisition: module name -> bytes per token of its acquired input.  The required
+        # manifest's promoted members (an interior Program row whose output another module reads) are observed at their first consumer's
+        # input as `<consumer>/in` -- the same mechanism as the embedding's ids, no longer restricted to a module class -- and the binding map
+        # binds that tensor to the producer's identity (binding.promoted_input_acquisition).  Set by commit_delta before install / size_arena.
+        self.acquire_inputs: dict[str, int] = {}
         self._side = None                           # the worker's CUDA side stream (created lazily on the worker thread)
         if engine is not None:
             self._geo_digest = geo_digest or self._model_geo_digest()
@@ -923,6 +928,15 @@ class NativeHostCommitter:
                 continue
             e = f(envelope, self.model)
             extra_pt += int(e.get("per_token_bytes", 0)); extra_ps += int(e.get("per_seq_bytes", 0)); extra_n += int(e.get("tensors_per_step", 0))
+        if self.acquire_inputs:
+            # [R19 int-20] the manifest-driven `<consumer>/in` acquisitions: one per-token tensor per consumer per step (its width from the
+            # promoted member's registry signature), minus the embedding-class inputs the module table already counts
+            for n, bpt in sorted(self.acquire_inputs.items()):
+                m = dict(self._modules).get(n)
+                if m is not None and (_mro_names(m) & ACQUIRE_INPUT_CLASSES):
+                    continue
+                extra_pt += int(bpt); extra_n += 1
+            rec["promoted_inputs"] = {"consumers": sorted(self.acquire_inputs), "per_token_bytes": sum(int(v) for v in self.acquire_inputs.values())}
         if extra_pt or extra_ps or extra_n:
             B = max(1, int(envelope.get("batch") or 1))
             add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_n * GPU_CHUNK_BYTES
@@ -1040,6 +1054,21 @@ class NativeHostCommitter:
             out.append(("runner.sampler", smp))
         return out
 
+    def _acquires_input(self, name: str, m: Any) -> bool:
+        """Whether module `name`'s first positional tensor argument is acquired as `<name>/in`: by class (the embedding's ids,
+        ACQUIRE_INPUT_CLASSES) or [R19 int-20] because the required manifest names it as a promoted member's consumer (`acquire_inputs`)."""
+        return bool(_mro_names(m) & ACQUIRE_INPUT_CLASSES) or name in self.acquire_inputs
+
+    def _input_only_modules(self) -> list[tuple[str, Any]]:
+        """[R19 int-20] the manifest's consumer modules the committer did NOT select (no acquire class): their input is acquired, their
+        output is not (it is no identity of the Program).  Sorted by name; a consumer that is not a module of the built model is skipped
+        here and left unbound (coverage names it)."""
+        if not self.acquire_inputs or getattr(self, "model", None) is None:
+            return []
+        selected = {n for n, _m in self._modules}
+        mods = dict(self.model.named_modules())
+        return [(n, mods[n]) for n in sorted(self.acquire_inputs) if n not in selected and n in mods]
+
     @staticmethod
     def layout_digest(metas: list[TensorMeta]) -> bytes:
         # NOTE: packed mode adds stream_off (>= 0); per-tensor mode leaves it at -1 -> the two layouts never collide
@@ -1119,8 +1148,10 @@ class NativeHostCommitter:
             src.install()
         for name, m in self._modules:
             self._handles.append(m.register_forward_hook(self._make_hook(name)))
-            if _mro_names(m) & ACQUIRE_INPUT_CLASSES:
+            if self._acquires_input(name, m):
                 self._handles.append(m.register_forward_pre_hook(self._make_pre_hook(name)))
+        for name, m in self._input_only_modules():                                # [R19 int-20] a promoted member's consumer of no acquire class
+            self._handles.append(m.register_forward_pre_hook(self._make_pre_hook(name)))
         runner = self.runner
         for nm in ("execute_model", "sample"):
             if hasattr(runner, nm):

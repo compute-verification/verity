@@ -130,6 +130,14 @@ EVALUATORS = {
                        "silu_mul_rows (act), dot_bf16 * g_e (mul_rn) + f2fp_bf16 (down); MoeSum in id order -> out + slot<e>/{up,act,down,g} + router_ids/w",
     "MoeFfnFixed_v1": "padded_moe_block with the router Gemm inside (logits = f2fp(dot_bf16(x, wg))), otherwise MoeFfnFixedL_v1",
     "MoeSum_v1": "per coordinate: f32 sum of the TOPK committed down words ascending from 0.f (F32Add) then one f2fp_bf16 (MoeSumCoordinate_v1) -> sum",
+    # [R19 int-20, F-r19-int-20] `aten.mul.Tensor(x bf16 [N], s bf16 0-d TENSOR)` -- b1.Bf16MulScalarTensor{N}: ATen's bf16 mul_kernel in opmath
+    # float, f32(x_j) * f32(s) (exact widenings, ONE RN multiply) stored by c10::BFloat16(float) = cvt.rn.bf16.f32 (NaN -> 0x7FFF).  The scalar is
+    # a graph VALUE the row wires (arg 1: a registered buffer / input slice), never a constant of the evaluator.  Evaluated with the registry's
+    # own word helpers (derived_rows: bf16_to_f32_words = Bf16ToF32, mul_rn = F32Mul, f2fp_bf16 = F2fpBf16), node for node the Definition's body.
+    # A row of this family is INTERIOR by the vocabulary; when the Program's dataflow reads its output from another module the manifest
+    # PROMOTES it (required_manifest.PROMOTION_RULE) and the replay evaluates it as a VU against the committed promoted member.
+    "Bf16MulScalarTensor_v1": "verity_vllm.registry.derived_rows bf16_to_f32_words (Bf16ToF32) on x[N] and on the one-word scalar s, mul_rn (F32Mul: "
+                              "one RN multiply), f2fp_bf16 (F2fpBf16 = cvt.rn.bf16.f32, NaN -> 0x7FFF) -- b1.Bf16MulScalarTensor{N} node for node -> out",
 }
 #: [R16 fp8] a `weights` field's leaf width (its `Value<b>`) -> the word dtype the registered slice is read as (bf16 -> u16, e4m3 -> u8, f32 -> u32)
 _NP_BY_BITS = {8: np.uint8, 16: np.uint16, 32: np.uint32}
@@ -265,16 +273,51 @@ def manifest_boundary_of(manifest: dict[str, Any] | None) -> str:
     return str((((manifest or {}).get("query") or {}).get("boundary")) or "module") if manifest is not None else "module"
 
 
+def promoted_addresses_of(manifest: dict[str, Any] | None) -> dict[tuple[int, str], dict[str, Any]]:
+    """[R19 int-20, F-r19-int-20] The required manifest's PROMOTED rows (`promoted: true`: an interior Program row whose output another module
+    reads, required as (producer module, `out`) -- required_manifest.PROMOTION_RULE) -> {(request-relative step, op_path): {member, width,
+    dtype, spec}}: the address rule `ProgramIndex.describe` applies to the Program rows the vocabulary calls interior, read from the manifest
+    of record exactly as `padded_slots` is (the SAME rule the manifest was built with; the replay never re-decides which rows cross).  One
+    entry per (step, op_path) whatever the request (requests of one workload share the model, so they share the promoted (step, module) set;
+    the row counts differ per request Program and are reconciled per request by `query_population`).  Two promoted rows disagreeing on the
+    member / signature / family at one address are refused by name.  {} without a manifest (the rows then stay interior: composed by their
+    consumers' evaluation, never addressed)."""
+    out: dict[tuple[int, str], dict[str, Any]] = {}
+    if not isinstance(manifest, dict):
+        return out
+    for r in manifest.get("identities") or []:
+        if not r.get("promoted"):
+            continue
+        st, op = r.get("step"), str(r.get("op_path"))
+        if not isinstance(st, int) or isinstance(st, bool):
+            raise ValueError(f"promoted manifest row {op}/{r.get('output_member')}: step {st!r} is not a request-relative step index")
+        d = {"member": str(r.get("output_member", RM.PROMOTED_MEMBER)), "width": int(r.get("width") or 0), "dtype": str(r.get("dtype")), "spec": str(r.get("spec"))}
+        if d["width"] <= 0:
+            raise ValueError(f"promoted manifest row {op}/{d['member']} step {st}: width {r.get('width')!r} (a zero-width member is never an identity, MAN-02)")
+        prev = out.get((st, op))
+        if prev is None:
+            out[(st, op)] = d
+        elif prev != d:
+            raise ValueError(f"promoted manifest rows at step {st} {op} disagree: {prev} vs {d} (one member per promoted (step, module))")
+    return out
+
+
 class ProgramIndex:
     """The Program's rows with their manifest addresses: (op_path, member, request-relative step, request-local row) per output slice."""
 
     def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
-                 padded_slots: bool = False):
+                 padded_slots: bool = False, promoted: dict[tuple[int, str], dict[str, Any]] | None = None):
         self.rows: list[dict] = list(inst["rows"])
         # [Q_module_pad_v1, revb S-r17b-51 (b)] the manifest's boundary decides whether a padded fixed-slot MoE row (MoeFfnFixedL_v1) names
         # its slot units beside `out` (members_for padded_slots) -- the SAME vocabulary the manifest was built with, read from ITS header,
         # so the row addresses join the identities exactly; the collector never decides this
         self.padded_slots = bool(padded_slots)
+        # [R19 int-20] the manifest's promoted (step, op_path) addresses (`promoted_addresses_of`): a Program row the vocabulary calls interior
+        # (members_for -> [], or the pre-bias Gemm under a BiasAdd) whose (step, module, family) the manifest promoted is addressed at
+        # (module, PROMOTED_MEMBER), request-local row = its ordinal among the promoted rows of that (step, module, family) in Program order
+        # -- the manifest's `rows` are exactly those rows (promote_interior_crossings: a partially crossing group is refused, never promoted)
+        self.promoted: dict[tuple[int, str], dict[str, Any]] = dict(promoted or {})
+        self._promoted_rows: dict[int, tuple[int, dict[str, Any]]] = {}
         # [tp TP-08d] a RANK Program (derive_step --tp W --rank r; result.json `tp` = {"world": W, "rank": r}): the members of its rows are
         # the manifest's TP members -- a row-parallel Gemm / masked EmbeddingShard feeding this module's AllReduce2 produces the rank-local
         # PARTIAL `part_rank<r>` (an lm_head Gemm feeding AllGather2 the `shard_rank<r>`), the collective row produces the module's bound
@@ -339,12 +382,24 @@ class ProgramIndex:
         # replay mismatches were exactly that row; 635/635 other VUs replayed), so `describe` drops a default claim on a hinted member.
         self._hinted: set[tuple[str, str, int]] = set()
         memberless: dict[tuple, bool] = {}                                   # (spec, module, hint, collective) -> claims no member at all
+        pcounts: dict[tuple, int] = {}                                       # [R19 int-20] (step, module, family) -> promoted rows seen so far
+
+        def promote(i: int, s: int, mod: str, fam0: str) -> None:
+            """A row the vocabulary calls interior: addressed at the manifest's promoted member when the manifest promoted its (step, module,
+            family) -- the ordinal among those rows in Program order is its request-local row (the manifest's `rows` count these)."""
+            p = self.promoted.get((s, RM.collector_path(mod, self.prefix))) if self.promoted else None
+            if p is not None and p["spec"] == fam0:
+                pk = (s, mod, fam0)
+                self._promoted_rows[i] = (pcounts.get(pk, 0), p)
+                pcounts[pk] = pcounts[pk] + 1 if pk in pcounts else 1
+
         for r in self.rows:
             i = int(r["i"])
             mod, _node, hint, _row = RM.split_name(r.get("name") or "")
             s = self.step_of(i)
             fam0 = RM.spec_family(r["spec"])
             if RM.is_epilogue_interior(fam0, mod, self._epi[s]):
+                promote(i, s, mod, fam0)
                 continue                                                     # interior rows claim no member: not in the manifest's row count
             # [R16 fp8] a row whose family claims NO member (Fp8GroupQuant / Fp8GroupScale: the activation quant interior to the FP8
             # linear, `members_for` == []) is not in the manifest's row count either: under Qwen3-4B-FP8 every linear module carries a
@@ -361,6 +416,7 @@ class ProgramIndex:
                     empty = False
                 memberless[ck] = empty
             if empty:
+                promote(i, s, mod, fam0)                                     # [R19 int-20] interior by the vocabulary: the manifest may have promoted it
                 continue
             key = (mod, hint, s)
             self._ordinal[i] = counts.get(key, 0)
@@ -408,6 +464,14 @@ class ProgramIndex:
                  "members": [(SAMPLED_MEMBER, 1, "i64")], "step": self.step_of(i)}
         elif kind is not None:
             d = self._describe_plane(i, fam, st, mod, hint, row, kind)
+        elif i in self._promoted_rows:
+            # [R19 int-20] a row the vocabulary calls interior whose (step, module, family) the manifest PROMOTED (its output crosses a module
+            # boundary): addressed at (module, PROMOTED_MEMBER) with the manifest's signature; its request-local row is its ordinal among the
+            # promoted rows of the group.  The replay evaluates it as a VU (its committed member is the value observed at its consumer's
+            # input, bound by the binding map) and its consumers read the committed member instead of composing it.
+            ordinal, p = self._promoted_rows[i]
+            d = {"family": fam, "statics": st, "module": mod, "op_path": RM.collector_path(mod, self.prefix), "hint": hint, "row": int(ordinal),
+                 "name_row": row, "members": [(p["member"], int(p["width"]), str(p["dtype"]))], "step": self.step_of(i), "promoted": True}
         else:
             try:
                 tpc = None if not self.tp else dict(self.tp, collective=self._coll[self.step_of(i)].get(mod))
@@ -839,6 +903,21 @@ def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]
         y = D.as_f32(D.bf16_to_f32_words(np.asarray(arg(0), dtype=np.uint16).reshape(N)))
         b = D.as_f32(D.bf16_to_f32_words(np.asarray(arg(1), dtype=np.uint16).reshape(N)))
         return {"0": D.f2fp_bf16(D.as_u32((y + b).astype(np.float32)))}         # Bf16Add: one f32 add, RNE to bf16
+    if family == "Bf16MulScalarTensor_v1":
+        # [R19 int-20] b1.Bf16MulScalarTensor{N}: out_j = F2fpBf16(F32Mul(Bf16ToF32(x_j), Bf16ToF32(s))) -- arg 0 the N bf16 words of the row,
+        # arg 1 the ONE bf16 word of the scalar tensor (the Definition's `s: Array(1, BF16)`); another arity / width is by name
+        N = int(statics["N"])
+        if len(inputs) != 2:
+            raise _Unresolved(f"{family}: the row wires {len(inputs)} args, the registered Definition takes 2 (x, s)")
+        x = np.asarray(arg(0), dtype=np.uint16).reshape(-1)
+        s = np.asarray(arg(1), dtype=np.uint16).reshape(-1)
+        if x.size != N:
+            raise _Unresolved(f"{family}: x has {x.size} words, the signature has N = {N}")
+        if s.size != 1:
+            raise _Unresolved(f"{family}: the scalar operand has {s.size} words, the signature has 1 (Array(1, BF16))")
+        xf = D.bf16_to_f32_words(x)
+        sf = np.broadcast_to(D.bf16_to_f32_words(s), xf.shape)
+        return {"out": D.f2fp_bf16(D.mul_rn(xf, sf)).astype(np.uint16)}
     if family == "TokenSelect_v1":
         V = int(statics["V"])
         return {SAMPLED_MEMBER: np.asarray([token_select_first_max(np.asarray(arg(0), dtype=np.uint16).reshape(V))], dtype=np.uint64)}
@@ -2568,10 +2647,11 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     all_vus, not_ev, not_ev_fam, indices = [], Counter(), Counter(), {}
     addresses: dict[tuple, dict] = {}                                             # [R17-3] manifest address -> class of the rows producing it
     anchors: dict[str, dict] = {}                                                 # [F-r17b-39] per request: the step `last` is anchored to, named
+    promoted = promoted_addresses_of(manifest)                                    # [R19 int-20] the manifest's promoted (step, module) addresses
     for rid, inst in programs.items():
         pi = indices.get(id(inst))
         if pi is None:
-            pi = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, padded_slots=manifest_boundary_of(manifest) == "module-pad")
+            pi = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, padded_slots=manifest_boundary_of(manifest) == "module-pad", promoted=promoted)
             indices[id(inst)] = pi
         # [tp M-0523 (1)] a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
         # multi-rank map is replayed as rank 0's module outputs at v1 (named below)

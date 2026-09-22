@@ -63,11 +63,9 @@ from verity_capture.experimental.commit_integ.hidden_source import (
     plan_fa2_tap_groups,
 )
 from verity_capture.experimental.commit_integ.native_host import (
-    ACQUIRE_INPUT_CLASSES,
     GPU_CHUNK_BYTES,
     NativeHostCommitter,
     TensorMeta,
-    _mro_names,
     _StepJob,
     memtrace,
 )
@@ -809,16 +807,23 @@ class NativeCollectCommitter(NativeHostCommitter):
             pass
         elif self.wrap:
             for name, m in self._modules:
-                pre = bool(_mro_names(m) & ACQUIRE_INPUT_CLASSES)
+                pre = self._acquires_input(name, m)                     # by class (the embedding's ids) or [R19 int-20] by the manifest (a promoted member's consumer)
                 if "forward" in m.__dict__:
                     raise RuntimeError(f"{name}: forward already wrapped")
                 m.forward = self._make_native_wrapper(m.forward, name, pre) if (self.native_hooks and not self.fault) else self._make_wrapper(m.forward, name, pre)
                 self._wrapped.append(m)
+            for name, m in self._input_only_modules():                  # [R19 int-20] a consumer of no acquire class: input acquired, output not
+                if "forward" in m.__dict__:
+                    raise RuntimeError(f"{name}: forward already wrapped")
+                m.forward = self._make_input_wrapper(m.forward, name)
+                self._wrapped.append(m)
         else:
             for name, m in self._modules:
                 self._handles.append(m.register_forward_hook(self._make_hook(name)))
-                if _mro_names(m) & ACQUIRE_INPUT_CLASSES:
+                if self._acquires_input(name, m):
                     self._handles.append(m.register_forward_pre_hook(self._make_pre_hook(name)))
+            for name, m in self._input_only_modules():
+                self._handles.append(m.register_forward_pre_hook(self._make_pre_hook(name)))
         runner = self.runner
         for nm in ("execute_model", "sample"):
             if hasattr(runner, nm):
@@ -1068,6 +1073,27 @@ class NativeCollectCommitter(NativeHostCommitter):
                 return out
 
         return self._with_pre_flush(fwd, name)
+
+    def _make_input_wrapper(self, orig, name: str):
+        """[R19 int-20] the INPUT-ONLY hook body of a consumer module the required manifest names for a promoted member and the committer
+        did not select (no acquire class): its first positional tensor argument goes to the collector as `<name>/in` (`_acquire`: X-03
+        expected + committed accounting), its output is no identity and is not acquired.  One Python frame per call on the few such
+        modules; a consumer of an acquire class takes the native `HookFwd` path with `nid_in` instead (`install`)."""
+        me = self
+        Tensor = torch.Tensor
+        in_name = f"{name}/in"
+        self._intern(in_name)
+
+        def fwd(*a, **kw):
+            job = me._cur
+            if job is not None and a and isinstance(a[0], Tensor):
+                try:
+                    me._acquire(in_name, a[0], job)
+                except Exception as e:  # noqa: BLE001
+                    me.errors.append(f"{in_name}: {e!r}"[:300])
+            return orig(*a, **kw)
+
+        return fwd
 
     # ------------------------------------------------------------------ acquisition entry used by R9 hooks / the FA2 M1 source / the sampler
 

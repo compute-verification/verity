@@ -44,6 +44,68 @@ MEMBER_RULES: dict[str, tuple[str, ...]] = {
 }
 FIRST_NORM_SUFFIX = ".layers.0.input_layernorm"
 
+#: [R19 int-20, F-r19-int-20] the bytes per element of a promoted member's manifest dtype (required_manifest.PROMOTED_DTYPES)
+PROMOTED_DTYPE_BYTES = {"bf16": 2, "f32": 4}
+PROMOTED_INPUT_RULE = ("a PROMOTED manifest row (`promoted: true`: an interior Program row whose output another module reads; identity (producer "
+                       "module, `out`)) is observed at the INPUT of its first consumer in Program order (`consumers[0]`): the collector acquires "
+                       "that module's first positional tensor argument as `<consumer>/in` (the existing input-acquisition mechanism, no longer "
+                       "restricted to a module class) and the binding map binds that committed tensor to the producer's identity.  One observation "
+                       "point per promoted member; the table is refused by name when two producers share a first consumer, when a consumer's "
+                       "`/in` is itself a manifest identity, or when a producer's first consumer differs between its rows.  A consumer that is "
+                       "not a module of the built model, or whose first argument is not the value, leaves the identity unbound: coverage fails "
+                       "by name, nothing is guessed.")
+
+
+def promoted_input_acquisition(manifest: dict[str, Any]) -> dict[str, Any]:
+    """[R19 int-20] From the required manifest's promoted rows: the committed names the collector must acquire and the identities they bind.
+    Returns {"names": {"<consumer>/in": [producer op_path, member]}, "consumers": {consumer op_path: bytes per token of the acquired
+    input}, "producers": {producer: {"consumer", "width", "dtype", "spec", "rows_n"}}, "problems": [text]} -- `problems` non-empty = the
+    table is not usable (the caller refuses by name; PROMOTED_INPUT_RULE)."""
+    names: dict[str, list[str]] = {}
+    consumers: dict[str, int] = {}
+    producers: dict[str, dict[str, Any]] = {}
+    problems: list[str] = []
+    rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
+    own_inputs = {str(r.get("op_path")) for r in rows if str(r.get("output_member")) == "in" and not r.get("promoted")}
+    for r in rows:
+        if not r.get("promoted"):
+            continue
+        op = str(r.get("op_path"))
+        member = str(r.get("output_member", "out"))
+        cons = [str(c) for c in (r.get("consumers") or [])]
+        if not cons:
+            problems.append(f"promoted row {op}/{member} (spec {r.get('spec')}) names no consumer: no observation point")
+            continue
+        first = cons[0]
+        w, dt = r.get("width"), str(r.get("dtype"))
+        bpe = PROMOTED_DTYPE_BYTES.get(dt)
+        if not isinstance(w, int) or w <= 0 or bpe is None:
+            problems.append(f"promoted row {op}/{member}: width {w!r} / dtype {dt!r} not usable for the arena bound (PROMOTED_DTYPE_BYTES {sorted(PROMOTED_DTYPE_BYTES)})")
+            continue
+        p = producers.get(op)
+        if p is None:
+            producers[op] = {"consumer": first, "width": int(w), "dtype": dt, "spec": r.get("spec"), "rows_n": 1, "member": member}
+        else:
+            p["rows_n"] += 1
+            if p["consumer"] != first:
+                problems.append(f"promoted rows of {op}/{member} name different first consumers ({p['consumer']!r} vs {first!r}): one observation point per member")
+            if p["member"] != member:
+                problems.append(f"promoted rows of {op} name different members ({p['member']!r} vs {member!r})")
+            if (p["width"], p["dtype"]) != (int(w), dt):
+                problems.append(f"promoted rows of {op}/{member} disagree on the signature ({p['width']} {p['dtype']} vs {w} {dt})")
+    for op, p in sorted(producers.items()):
+        name = f"{p['consumer']}/in"
+        if p["consumer"] in own_inputs:
+            problems.append(f"promoted {op}/{p['member']}: its first consumer's input {name} is itself a manifest identity ({p['consumer']}, in)")
+            continue
+        other = names.get(name)
+        if other is not None:
+            problems.append(f"promoted {op}/{p['member']} and {other[0]}/{other[1]} share the first consumer {p['consumer']}: one committed {name} cannot bind two identities")
+            continue
+        names[name] = [op, p["member"]]
+        consumers[p["consumer"]] = int(p["width"]) * PROMOTED_DTYPE_BYTES[p["dtype"]]
+    return {"names": names, "consumers": consumers, "producers": producers, "problems": problems, "rule": PROMOTED_INPUT_RULE}
+
 
 # ---------------------------------------------------------------------- names -> identity parts
 
@@ -80,14 +142,19 @@ def _numel(shape: Iterable[int]) -> int:
 
 def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, program_digest: str, *, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                       request_id: str = "r0", rank: int = 0, layout_version: str = "chunk-leaf-v1", chunk: int = 256,
-                      weight_registration: dict | None = None, collector: dict | None = None) -> dict[str, Any]:
+                      weight_registration: dict | None = None, collector: dict | None = None,
+                      name_bindings: dict[str, list[str] | tuple[str, str]] | None = None) -> dict[str, Any]:
     """identity -> commitment location, for every committed tensor of every step, from the published layouts + the step roots.
 
     `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the
     requests of that step (the scheduler's row order, recorded by the engine wrapper); without it the whole member binds `request_id`.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
-    mixed into the challenge, so the map cannot be chosen after the openings."""
+    mixed into the challenge, so the map cannot be chosen after the openings.
+    `name_bindings` [R19 int-20]: committed name -> (op_path, member) of the identity it binds when that is not the name's own (a promoted
+    member observed at its consumer's input: `<consumer>/in` binds (producer, `out`); `promoted_input_acquisition`).  The entry keeps the
+    committed name and says so (`observation`)."""
     entries: list[dict[str, Any]] = []
+    rebind = {str(k): (str(v[0]), str(v[1])) for k, v in (name_bindings or {}).items()}
     for step in sorted(layouts):
         metas = layouts[step]
         sc = steps[step] if step < len(steps) else None
@@ -95,6 +162,9 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
         inv: Counter = Counter()
         for m in metas:
             op, member = split_name(m.name)
+            bound_via = rebind.get(m.name)
+            if bound_via is not None:
+                op, member = bound_via
             k = inv[m.name]
             inv[m.name] += 1
             numel = _numel(m.shape)
@@ -137,6 +207,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                     "leaf_lo": int(off // chunk), "leaf_hi": int((off + max(m.nbytes, 1) - 1) // chunk + 1),
                     "stream_offset": int(off), "width_bytes": int(m.nbytes), "encoding": {"dtype": m.dtype, "shape": list(m.shape)}, "element_offset": int(goff),
                     "tensor_ordinal": int(m.ordinal), "name": m.name,
+                    **({"observation": "consumer-input"} if bound_via is not None else {}),
                 })
     if weight_registration:
         entries.append({"identity": identity_dict(identity(program_digest, "*", -1, 0, "weights", "registered", 0, 0, rank)), "kind": "registered-input",

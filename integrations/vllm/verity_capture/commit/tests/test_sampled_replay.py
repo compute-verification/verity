@@ -22,7 +22,7 @@ NH, KVH, DH, MAXPOS = 3, 1, 16, 16      # rope=True: attention heads / kv heads 
 ABN = 16                                 # attn=True: the attention rows' key block (one k16 P.V step; T <= LP + T = 4 -> one partial block)
 
 
-def _program(bias: bool = False, rope: bool = False, attn: bool = False):
+def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: bool = False):
     """One request Program: per token row Embedding -> RMSNormTriton -> Gemm(gate_up) -> SiluMul -> Gemm(down) -> RMSNormFused(norm) ;
     per step Gemm(logits, tied embed) -> TokenSelect.  Names / args in the Build's instance-sequence schema.
     `bias`: the gate_up linear is BIASED (Qwen2.5 qkv_proj shape, MAN-07): Gemm -> BiasAdd_v1 under the one module, the module returns post-bias.
@@ -32,7 +32,11 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False):
     here (the real consumer is the state-linked Attention row).
     `attn`: [R17 dense, M-0123] (implies rope) the token row ends in `Attention_v3{T=pos+1,NH,KVH,D,BN}` exactly as the real Programs name
     it (`self_attn.attn/unified_attention_with_output_{s}[t=k]`): arg 0 = the query RoPE member, arg 1 = the T committed KEY members of
-    positions 0..pos (earlier steps' rows by ref), arg 2 = the T V slices of those positions' qkv rows."""
+    positions 0..pos (earlier steps' rows by ref), arg 2 = the T V slices of those positions' qkv rows.
+    `scale`: [R19 int-20, F-r19-int-20] the ROOT module scales the embedding in its own forward body -- `Bf16MulScalarTensor_v1{N=H}` at the
+    UNROOTED path `model/mul_{s}[k]` (arg 0 = the embedding row, arg 1 = the one-word `weights` field `model.normalizer`, a buffer) -- and the
+    first norm AND the final norm's residual read the SCALED row: an interior family (no member by the vocabulary) whose output crosses a
+    module boundary, the shape the manifest promotes (`required_manifest.PROMOTION_RULE`)."""
     rope = rope or attn
     fields = [("model.model.embed_tokens.weight", V * H, f"Array<{V},Array<{H},Value<16>>>"),
               ("model.model.layers.0.input_layernorm.weight", H, f"Array<{H},Value<16>>"),
@@ -41,6 +45,8 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False):
               ("model.model.norm.weight", H, f"Array<{H},Value<16>>")]
     if bias:
         fields.insert(3, ("model.model.layers.0.mlp.gate_up_proj.bias", 2 * I, f"Array<{2 * I},Value<16>>"))
+    if scale:
+        fields.append(("model.normalizer", 1, "Value<16>"))
     QKV = (NH + 2 * KVH) * DH
     if rope:
         fields[2:2] = [("model.model.layers.0.self_attn.qkv_proj.weight", QKV * H, f"Array<{QKV},Array<{H},Value<16>>>"),
@@ -67,6 +73,8 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False):
         for k in toks:
             ids = [["p", 0, k, k + 1]] if s == 0 else [["n", sel_prev, 0, 1]]  # noqa: F821  -- sel_prev set after step 0
             e = add(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding_{s}[{k}]", [ids, W("model.model.embed_tokens.weight")])
+            if scale:                                                  # the root module's own scaling of the embedding: read by the child norms
+                e = add(f"Bf16MulScalarTensor_v1{{N={H}}}", f"model/mul_{s}[{k}]", [[["n", e, 0, H]], W("model.normalizer")])
             ln = add(f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"model.model.layers.0.input_layernorm/triton_launch_{s}[{k}]",
                      [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")])
             if rope:
@@ -105,9 +113,11 @@ class Honest:
     """Executes the Program per request with the registry evaluators and commits the module outputs per (engine step, member name):
     request blocks side by side (r0 then r1), the shape the collector's packed members have."""
 
-    def __init__(self, inst, woff, weights, prompts):
+    def __init__(self, inst, woff, weights, prompts, promoted=None):
         self.inst, self.woff, self.weights, self.prompts = inst, woff, weights, prompts
-        self.pi = SR.ProgramIndex(inst)
+        # `promoted` [R19 int-20]: the manifest's promoted (step, op_path) addresses (SR.promoted_addresses_of) -- a promoted interior row's
+        # output is then a committed member of its own ((module, `out`): the value the collector observes at its consumer's input)
+        self.pi = SR.ProgramIndex(inst, promoted=promoted)
         self.values: dict[tuple[str, int], np.ndarray] = {}       # (rid, row i) -> flattened output words
         self.blocks: dict[tuple[int, str, str, str], np.ndarray] = {}   # (step, rid, op_path, member) -> block words
         self.dtypes: dict[tuple[int, str, str, str], str] = {}    # (step, rid, op_path, member) -> the member's dtype (bf16 / f32 / i32 / i64)
@@ -154,21 +164,26 @@ class Honest:
                 key = (d["step"], rid, d["op_path"], "in")
                 self.blocks[key] = np.concatenate([self.blocks[key], ids]) if key in self.blocks else ids
 
-    def bmap_and_reader(self, order=("r0", "r1"), mutate=None):
-        """Binding map entries (request-local element ranges + element_offset) and a committed reader over packed members."""
+    def bmap_and_reader(self, order=("r0", "r1"), mutate=None, committed_names=None):
+        """Binding map entries (request-local element ranges + element_offset) and a committed reader over packed members.
+        `committed_names` [R19 int-20]: {(op_path, member): committed tensor name} -- an identity whose bytes the collector committed under
+        ANOTHER name (a promoted member observed at its consumer's input, `<consumer>/in`): the entry keeps the identity, carries that name
+        and `observation: consumer-input`, exactly as `binding.build_binding_map(name_bindings=...)` emits it."""
         packed: dict[tuple[int, str, str], list] = {}
         for (step, rid, op, mem), blk in sorted(self.blocks.items(), key=lambda kv: (kv[0][0], kv[0][2], kv[0][3], order.index(kv[0][1]))):
             packed.setdefault((step, op, mem), []).append((rid, blk))
         entries, store = [], {}
         dtype_of = lambda op, mem: "i64" if op == SR.SAMPLER_OP else ("i32" if mem == "in" else "bf16")  # noqa: E731
         for (step, op, mem), parts in packed.items():
-            name = f"{op}/{mem}"
+            rebound = (committed_names or {}).get((op, mem))
+            name = rebound if rebound is not None else f"{op}/{mem}"
             off, arrs = 0, []
             for rid, blk in parts:
                 entries.append({"identity": {"program_digest": "t" * 64, "request_id": rid, "step": step, "invocation": 0, "op_path": op, "output_member": mem,
                                              "element_range": [0, int(blk.size)], "rank": 0}, "name": name, "element_offset": off,
                                 "encoding": {"dtype": self.dtypes.get((step, rid, op, mem), dtype_of(op, mem))},
-                                "family": "moe_block_stream" if op.startswith("moe/") else "instance_outputs"})
+                                "family": "moe_block_stream" if op.startswith("moe/") else "instance_outputs",
+                                **({"observation": "consumer-input"} if rebound is not None else {})})
                 off += int(blk.size)
                 arrs.append(blk)
             store[(step, name)] = np.concatenate(arrs).tobytes()

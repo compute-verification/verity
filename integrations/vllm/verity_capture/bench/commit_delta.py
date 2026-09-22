@@ -589,13 +589,18 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
 
     request_rows = {int(s): [(_logical(rid), lo, hi) for rid, lo, hi in rows] for s, rows in step_rows.items()} if n_req > 1 else None
     padded = bool(getattr(com, "_padding", None))                                   # [B9.1] finalize materialised padding steps (--padded-finalize)
+    # [R19 int-20] the manifest's promoted members observed at their consumers' inputs: `<consumer>/in` binds the producer's identity
+    name_bindings = dict(getattr(com, "promoted_input_bindings", None) or {})
+    if name_bindings:
+        collector = dict(collector, promoted_inputs={"names": name_bindings, "rule": "binding.PROMOTED_INPUT_RULE"})
     if padded:
         from verity_capture.commit import padding_steps as PS
         bmap = PS.padded_binding_map_of_committer(com, rc, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
-                                                  weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows)
+                                                  weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows,
+                                                  name_bindings=name_bindings or None)
     else:
         bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
-                                   weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows)
+                                   weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, name_bindings=name_bindings or None)
     caps = {f"r{int(r.get('index', i))}": int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for i, r in enumerate(reqs)}
     # [R17-1 / F-moe-r17-03 (moe M-0283)] the EXECUTED PREFIX OF RECORD of every request: cap on a length stop; served + LAG on an EOS stop
     # (the driver's served tokens of THIS run; the Program's declared EOS set and LAG -- stop_rule_of_record; nothing from the trace).
@@ -1439,6 +1444,29 @@ def main(argv: list[str] | None = None) -> None:
             _unresolved = sorted(n for n in _named if n not in _mods and not n.startswith(("fa2.", "runner.")))
             if _unresolved:
                 print(f"[delta] NOTE: {len(_unresolved)} manifest op_path(s) are not modules of the built model (e.g. {_unresolved[:3]}); bound by a source or unbound by name", flush=True)
+        # [R19 int-20, F-r19-int-20] MANIFEST-DRIVEN INPUT ACQUISITION: a promoted manifest row (an interior Program row whose output another
+        # module reads -- e.g. a value produced in a parent module's forward body and consumed by a child leaf, which no module OUTPUT
+        # carries) is observed at its first consumer's input: the committer acquires `<consumer>/in` (the embedding-ids mechanism, by the
+        # manifest instead of by class) and the binding map binds it to the producer's identity.  Armed BEFORE size_arena / install; a
+        # table the manifest cannot state unambiguously is refused by name (binding.PROMOTED_INPUT_RULE), never guessed.
+        if required_manifest is not None and hasattr(com, "acquire_inputs") and getattr(com, "model", None) is not None:
+            from verity_capture.commit.binding import promoted_input_acquisition
+
+            _pia = promoted_input_acquisition(required_manifest)
+            if _pia["problems"]:
+                print(f"[delta] REFUSE: the required-value manifest's promoted members have no unambiguous observation point: {_pia['problems'][:4]}", flush=True)
+                sys.exit(3)
+            if _pia["names"]:
+                _mods = dict(com.model.named_modules())
+                _absent = sorted(c for c in _pia["consumers"] if c not in _mods)
+                com.acquire_inputs = dict(_pia["consumers"])
+                com.promoted_input_bindings = dict(_pia["names"])       # read by the binding-map build (name -> the producer identity it binds)
+                print(f"[delta] acquisition extended by the manifest (promoted members): {len(_pia['names'])} consumer input(s) "
+                      f"{sorted(_pia['names'])} bind {sorted(v[0] + '/' + v[1] for v in _pia['names'].values())} "
+                      f"({sum(p['rows_n'] for p in _pia['producers'].values())} promoted manifest rows; "
+                      f"{', '.join(f'{op}: {p['spec']} width {p['width']} {p['dtype']} at {p['consumer']}' for op, p in sorted(_pia['producers'].items()))})", flush=True)
+                if _absent:
+                    print(f"[delta] NOTE: {len(_absent)} promoted-member consumer(s) are not modules of the built model ({_absent[:3]}): their identities stay unbound (coverage names them)", flush=True)
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None and not (args.arena_unchecked and args.arena_mb):
             # X-02: size the device staging block from the workload envelope (refuses here, with needed vs available bytes, if it cannot fit)
             envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
