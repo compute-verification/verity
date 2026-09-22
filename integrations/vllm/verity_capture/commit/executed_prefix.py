@@ -281,6 +281,11 @@ def executed_prefix_facts(epr: dict[str, Any], binding: dict[str, Any], linkage:
     link = cov.get("match_account_link") or {}
     tj = link.get("tokens_json") or {}
     g6 = link.get("global_match") or {}
+    # [r19-int-21, F-r19-int-19] the account legs that are NOT beside the Commit, named: #39 (qwen25-15b i4096, l40s4) had its match/capture/
+    # moved to /vault to free the disk (F-r19-int-14) while its Commit was queued; tokens.json (a_r per request, the lag attestation) went
+    # with it, the link fell to the G6 leg for a_r and the class faulted 'a_r is not linked (linked=False)' + 'LAG rule not attested' after
+    # 47 min -- a MISSING INPUT read as a verdict on the Program.  The fact names the missing leg(s); the consumer faults on it by name.
+    account_missing = [leg for leg, present in (("tokens.json", bool(tj)), ("global_match.json", bool(g6))) if not present]
     past = (cov.get("rows_past_the_stop") or {}).get("steps_past_by_request") or {}
     eos_set = {int(x) for x in (stop.get("eos") or [])} if stop.get("eos") is not None else None
     decl_lag = stop.get("declared_lag")
@@ -296,11 +301,13 @@ def executed_prefix_facts(epr: dict[str, Any], binding: dict[str, Any], linkage:
             a_r, src = int(g_len), f"match record {g6.get('path')} (sha256 {str(g6.get('sha256'))[:16]}): G6 lengths_by_request.served_output_len"
         else:
             a_r, src = int(served_commit if served_commit is not None else rec["cap"]), "the Commit's OWN served tokens (no Match record beside the Commit: NOT linked)"
+        if account_missing:
+            src += f"; Match account leg(s) NOT beside the Commit: {', '.join(account_missing)}"
         linked = bool(link.get("ok") is True and (tj.get("tokens_equal") or {}).get(rid) is True and g6.get("verdict") == "PASS" and lk_ok)
         out[rid] = {"a_r": a_r, "a_r_source": src, "lag": (int(decl_lag) if decl_lag is not None else -1), "cap": int(rec["cap"]), "arrive": int(arrivals.get(rid, 0)),
                     "eos_declared": (None if rec.get("last_served_token") is None or eos_set is None else (int(rec["last_served_token"]) in eos_set)),
                     "served_len_commit": served_commit, "linked": linked, "lag_attested": bool(link.get("lag_attested")),
-                    "rows_past_stop": int(past.get(rid, 0))}
+                    "rows_past_stop": int(past.get(rid, 0)), "account_missing": list(account_missing)}
         if served_tokens is not None and served_tokens.get(rid) is not None:
             out[rid]["served"] = [int(t) for t in served_tokens[rid]]
             out[rid]["eos_ids"] = (sorted(eos_set) if eos_set is not None else None)

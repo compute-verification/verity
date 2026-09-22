@@ -280,6 +280,40 @@ def test_restrictions_of_the_flat_manifest_and_the_linkage_horizon():
     assert linkage_horizon(3, 32, 12, executed=12) == list(range(3, 15)) and linkage_horizon(0, 32, 32, executed=40) == list(range(32))
 
 
+def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_path):
+    """[r19-int-21, F-r19-int-19] #39 (qwen25-15b i4096, l40s4): match/capture/ was moved to /vault to free the disk (F-r19-int-14) while
+    the Commit was queued; tokens.json went with it, a_r fell to the G6 leg and the class faulted 'a_r is not linked' / 'LAG rule not
+    attested' after 47 min -- a missing INPUT read as a verdict.  The facts name the missing leg(s) (a_r_source suffix + account_missing),
+    and reqval's normaliser puts that fault FIRST, before (a) and (b), still fail-closed."""
+    import verity_capture.commit.sampled_replay as SR
+    e = _mixed_epr()
+    # tokens.json absent, global_match.json present: exactly #39's record after the move
+    acct = EP.load_match_account(_match_account(tmp_path, write_tokens=False))
+    assert acct["tokens"] is None and acct["global_match"] is not None
+    link = EP.link_to_match_account(e, acct, order=ORDER, declared_lag=1)
+    binding = {"coverage": {"match_account_link": link}}
+    f = EP.executed_prefix_facts(e, binding, {"result": True}, {"r0": 0, "r1": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
+    assert f["r0"]["account_missing"] == ["tokens.json"] and f["r1"]["account_missing"] == ["tokens.json"]
+    assert "G6 lengths_by_request" in f["r0"]["a_r_source"] and f["r0"]["a_r_source"].endswith("Match account leg(s) NOT beside the Commit: tokens.json")
+    assert f["r0"]["linked"] is False and f["r0"]["lag_attested"] is False
+    # the consumer (reqval's normaliser) accepts the fact and faults on it by name, first
+    facts = EP.facts_accepted_by(SR.executed_prefix_of_record, f)
+    assert "account_missing" in facts["r0"]
+    rec = SR.executed_prefix_of_record("r0", **facts["r0"])
+    assert rec["faults"][0].startswith("Match account leg(s) missing beside the Commit: tokens.json") and "not a verdict on the Program" in rec["faults"][0]
+    assert any("a_r is not linked" in x for x in rec["faults"]) and any("LAG rule not attested" in x for x in rec["faults"])   # still fail-closed
+    assert rec["account_missing"] == ["tokens.json"] and rec["mechanism"].startswith("not classified")
+    # no Match record at all: both legs named; a complete record: none, and no such fault
+    none = EP.executed_prefix_facts(e, {"coverage": {"match_account_link": EP.link_to_match_account(e, EP.load_match_account(None), order=ORDER, declared_lag=1)}},
+                                    {"result": True}, {"r0": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
+    assert none["r0"]["account_missing"] == ["tokens.json", "global_match.json"]
+    full = EP.link_to_match_account(e, EP.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
+    ff = EP.executed_prefix_facts(e, {"coverage": {"match_account_link": full}}, {"result": True}, {"r0": 0, "r1": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
+    assert ff["r0"]["account_missing"] == [] and "NOT beside" not in ff["r0"]["a_r_source"]
+    ok = SR.executed_prefix_of_record("r0", **EP.facts_accepted_by(SR.executed_prefix_of_record, ff)["r0"])
+    assert ok["faults"] == [] and ok["account_missing"] == []
+
+
 def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_only(tmp_path):
     """[reqval M-0343 / revb M-0349 n2] ONE mechanism for the class (sampled_replay.population.not_executed_by_rule, reqval): commit_delta is
     its CALLER -- _executed_prefix_facts derives every flag from a named record fact: a_r from the Match record's tokens.json (path + sha256
@@ -292,7 +326,7 @@ def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_
     stop = {"eos": [EOS], "lag": 1, "declared_lag": 1}
     f = EP.executed_prefix_facts(e, binding, {"result": True}, {"r0": 0, "r1": 0}, stop)
     assert f["r0"] == {"a_r": 11, "a_r_source": f["r0"]["a_r_source"], "lag": 1, "cap": 32, "arrive": 0, "eos_declared": True, "served_len_commit": 11,
-                       "linked": True, "lag_attested": True, "rows_past_stop": 0}
+                       "linked": True, "lag_attested": True, "rows_past_stop": 0, "account_missing": []}
     assert f["r0"]["a_r_source"].startswith("match record ") and "tokens.json" in f["r0"]["a_r_source"] and "sha256" in f["r0"]["a_r_source"]
     assert f["r1"]["a_r"] == 32 and f["r1"]["eos_declared"] is False and f["r1"]["linked"] is True
     # the C2 boundary linkage failed -> linked False (the class faults by name in reqval's normaliser)

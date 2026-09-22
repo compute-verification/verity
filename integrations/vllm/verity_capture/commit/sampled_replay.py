@@ -1481,7 +1481,7 @@ MECH_ARITH_NO_RULE = ("arithmetic(a_r, LAG): n_exec = min(a_r + LAG, cap) -- the
 def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive: int = 0, eos_declared: bool | None = None,
                               served_len_commit: int | None = None, linked: bool | None = None, lag_attested: bool | None = None,
                               rows_past_stop: int = 0, a_r_source: str, served: Sequence[int] | None = None, eos_ids: Iterable[int] | None = None,
-                              rule: Callable[..., dict[str, Any]] | None = None) -> dict[str, Any]:
+                              rule: Callable[..., dict[str, Any]] | None = None, account_missing: Sequence[str] | None = None) -> dict[str, Any]:
     """Normalise one request's R17-1 executed prefix for the population.  The CALLER (the Commit) supplies the facts of record -- `a_r` READ
     from the Match record, `served_len_commit` its own committed served length, `linked` (C2 boundary linkage + tokens_equal + G6 agree),
     `lag_attested` (declared == record_attests == tokens.json), `eos_declared` (served token a_r-1 is a declared EOS id), `rows_past_stop`
@@ -1498,6 +1498,12 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
     without the unit -- the arithmetic is the mechanism and is NAMED as such in `mechanism` (never silently the same thing)."""
     a_r, lag, cap, arrive = int(a_r), int(lag), int(cap), int(arrive)
     faults: list[str] = []
+    if account_missing:
+        # [r19-int-21, F-r19-int-19] FIRST, so the verdict names the cause: a Match account leg the link needs is not beside the Commit
+        # (#39: match/capture/ moved to /vault under a queued Commit, F-r19-int-14).  Still fail-closed -- (a) and (b) below fault too --
+        # but an operator reads 'input missing: restore tokens.json' and not 'the Program's executed prefix is wrong'.
+        faults.append(f"Match account leg(s) missing beside the Commit: {', '.join(str(x) for x in account_missing)} -- the link cannot hold on a "
+                      "missing input (restore the Match record's file(s) and re-run the Commit; not a verdict on the Program) (R17-27 a/b)")
     if not isinstance(a_r_source, str) or not a_r_source.strip():
         faults.append("a_r_source unstated: the record must name where a_r was read (R17-27 (a); S-r17b-09 n1)")
     if lag not in (0, 1):
@@ -1542,6 +1548,7 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
     return {"request_id": str(rid), "a_r": a_r, "a_r_source": a_r_source, "lag": lag, "cap": cap, "arrive": arrive, "n_exec": int(n_exec),
             "executed_prefix": int(n_exec), "steps_not_executed": [int(n_exec), cap] if n_exec < cap else None, "eos_declared": eos_declared,
             "served_len_commit": served_len_commit, "linked": linked, "lag_attested": lag_attested, "rows_past_stop": int(rows_past_stop),
+            "account_missing": [str(x) for x in (account_missing or ())],
             # [revb M-0589 n-r3-1] a faulted request produced NO class: the mechanism is 'not classified', never 'recurrence' beside a fault
             "mechanism": (mechanism if not faults else f"not classified: {len(faults)} fault(s) -- the class is not applicable to this request"),
             "r3_one_mechanism": (by_rule is not None and not faults), "by_rule": by_rule, "faults": faults}

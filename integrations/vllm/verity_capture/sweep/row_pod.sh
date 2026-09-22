@@ -854,6 +854,23 @@ print(wd or (hashlib.sha256(("workload-components/" + ",".join(comps)).encode())
   # commit_verdict (flag `--match-dir`, lane/r15-manbind 757521b3a), row_pod hands it the Match dir.  Feature-detected on the flag name; a
   # tree without it runs unchanged (B=1: C2 stays root-compare-vs-independent-run per attempt.py; B>=2 on such a tree: manbind's verdict
   # names 'live C2 oracle-compare not run' once released).  MATCH_SNAP_STEPS=all at Match makes the compare COMPLETE (every step's values).
+  # [r19-int-21, F-r19-int-19] the Match ACCOUNT this Commit links its executed prefix to (R17-27 a/b: a_r per request, the lag attestation)
+  # is match/capture/tokens.json + match/control/tokens.json beside global_match.json -- INSIDE the capture directory that the disk-freeing
+  # move to /vault (F-r19-int-14) takes away whole.  #39's Commit (l40s4, r20260922-135818-be81) started 8 min after its capture was moved,
+  # ran 47 min and failed BY NAME ("a_r is not linked", linked=False, lag_attested=False) on the missing file.  A Commit over a Match record
+  # refuses to START without the account files, as an INFRA class -- the files are small: restore them from the archive, or run match.
+  # --- row_pod.commit-record-precheck begin (extracted by verity_capture/tests/test_row_pod_commit_record_precheck.py)
+  if [ -d "$D/match" ] && [ -f "$D/match/instances.jsonl" ]; then
+    REC_MISSING=""
+    for f in match/capture/tokens.json match/control/tokens.json global_match.json; do [ -f "$D/$f" ] || REC_MISSING="$REC_MISSING $f"; done
+    if [ -n "$REC_MISSING" ]; then
+      log "PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE: the Match record beside this attempt lacks$REC_MISSING (capture moved / removed? F-r19-int-14) -> Commit not started"
+      tl stage.commit end rc=3 fail_class=PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE missing="${REC_MISSING# }"
+      verdict commit FAIL "PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE: Match record lacks$REC_MISSING -- restore the file(s) (small) or run match; the Commit was NOT run (infra, not a verdict)"
+      tl row end ok=false stopped_at=commit; exit 14
+    fi
+  fi
+  # --- row_pod.commit-record-precheck end
   if [ -d "$D/match" ] && [ -f "$D/match/instances.jsonl" ] && has_flag --match-dir $PY -m verity_capture.bench.commit_delta; then
     CMD_K+=(--match-dir "$D/match"); log "C2 live oracle-compare armed: --match-dir $D/match (Match record of this attempt; snapshot steps ${MATCH_SNAP_STEPS:-$SNAP_DEF})"
   elif [ "$B" -gt 1 ]; then
