@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use p3_air::AirBuilder;
 use p3_field::AbstractField;
 
-use crate::lookup::{Needs, Query, TableSet, GROUP_DEG, INVALID, SPLIT_BITS};
+use crate::lookup::{Needs, Query, TableSet, TupleTable, GROUP_DEG, INVALID, SPLIT_BITS};
 use crate::program::{Ctx, Table, MAX_DEG};
 
 /// How range checks and lookups are realised (PROTOCOL.md sections 12 and 14).
@@ -112,6 +112,8 @@ pub trait Prim {
     fn range_query(&mut self, name: &str, y: &Self::V, w: u32);
     /// LogUp query `(key, outs..) in table`.
     fn table_query(&mut self, name: &str, table: &Table, key: &Self::V, outs: &[Self::V]);
+    /// LogUp query `(keys.., outs..) in tuple table`.
+    fn tuple_query(&mut self, name: &str, table: &TupleTable, keys: &[Self::V], outs: &[Self::V]);
 }
 
 /// Widest range query in one piece; wider ranges are split into a 16-bit low part and a high part.
@@ -229,6 +231,24 @@ impl<P: Prim> Ctx for P {
             let y2 = self.addk(&y2, n - 1);
             limbs(self, &format!("{name}.hi"), &y2, w);
         }
+    }
+    fn lookup_tuple(&mut self, name: &str, table: &TupleTable, keys: &[Self::V]) -> Vec<Self::V> {
+        assert!(self.lookup_mode(), "{name}: tuple lookups need the LogUp realisation");
+        let keys: Vec<Self::V> = keys.iter().map(|k| if self.deg(k) > GROUP_DEG { self.mat(name, k) } else { k.clone() }).collect();
+        let refs: Vec<&Self::V> = keys.iter().collect();
+        let mut outs = Vec::with_capacity(table.n_out);
+        let p = self.prime() as i128;
+        for c in 0..table.n_out {
+            let f = table.f.clone();
+            let o = self.hint(&format!("{name}.out[{c}]"), &refs, &move |v| {
+                // keys are small signed integers: fold the canonical representative back
+                let ks: Vec<i128> = v.iter().map(|&k| { let k = ((k % p) + p) % p; if k > p / 2 { k - p } else { k } }).collect();
+                f(&ks).map(|o| o[c]).unwrap_or(0)
+            });
+            outs.push(o);
+        }
+        self.tuple_query(name, table, &keys, &outs);
+        outs
     }
     fn lookup(&mut self, name: &str, table: &Table, key: &Self::V) -> Vec<Self::V> {
         let nrows = table.keys.len();
@@ -552,6 +572,37 @@ impl Prim for IntCtx {
         let deg = outs.iter().map(|o| o.deg).fold(key.deg.max(1), usize::max);
         self.push_query(name, idx, deg);
     }
+    fn tuple_query(&mut self, name: &str, table: &TupleTable, keys: &[IVal], outs: &[IVal]) {
+        let p = self.kind.prime() as i128;
+        let ks: Vec<i128> = keys.iter().map(|k| { let v = modp(k.v, p as u128) as i128; if v > p / 2 { v - p } else { v } }).collect();
+        let idx = match &self.tables {
+            None => {
+                self.needs.tuples.entry(table.name.to_string()).or_insert_with(|| table.clone());
+                0
+            }
+            Some(t) => {
+                let spec = t.tuple(table.name);
+                let idx = spec.index_tuple(&ks);
+                if idx != INVALID {
+                    let row = spec.outs_at(idx);
+                    let ok = outs.iter().zip(row).all(|(o, &want)| modp(o.v, p as u128) == modp(want, p as u128));
+                    if !ok {
+                        self.violations.push(format!("{name}: outputs differ from the table row"));
+                        INVALID
+                    } else {
+                        idx
+                    }
+                } else {
+                    idx
+                }
+            }
+        };
+        if idx == INVALID {
+            self.violations.push(format!("{name}: keys {:?} not in {}", ks, table.name));
+        }
+        let deg = outs.iter().chain(keys.iter()).map(|o| o.deg).fold(1, usize::max);
+        self.push_query(name, idx, deg);
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -674,6 +725,12 @@ impl<'a, AB: AirBuilder> Prim for AirCtx<'a, AB> {
         let mut vals = vec![key.e.clone()];
         vals.extend(outs.iter().map(|o| o.e.clone()));
         let deg = outs.iter().map(|o| o.deg).fold(key.deg.max(1), usize::max);
+        self.queries.push(Query { name: name.to_string(), tag, vals, deg });
+    }
+    fn tuple_query(&mut self, name: &str, table: &TupleTable, keys: &[Self::V], outs: &[Self::V]) {
+        let tag = self.tables.as_ref().expect("AirCtx lookup tables").tuple(table.name).tag;
+        let vals: Vec<AB::Expr> = keys.iter().chain(outs.iter()).map(|v| v.e.clone()).collect();
+        let deg = keys.iter().chain(outs.iter()).map(|o| o.deg).fold(1, usize::max);
         self.queries.push(Query { name: name.to_string(), tag, vals, deg });
     }
 }

@@ -80,7 +80,7 @@ fn main() {
             let d = if kind.small() { 4 } else { 2 };
             let (air_, lay) = air::LookupChainAir::new(kind, d);
             let ll = &air_.lay;
-            let pre_w = verity_direct::lookup::PRE_WIDTH;
+            let pre_w = ll.tables.pre_width();
             let aux_w = ll.aux_width(d);
             println!(
                 "field={kind:?} lookup=logup main_width={} (incl. multiplicity) aux_width={} (helpers={} x{d} + g + S) pre_width={pre_w} committed_width={} hints={} materialised={} constraints={} queries/row={} table_rows={}",
