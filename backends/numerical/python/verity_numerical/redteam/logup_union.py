@@ -201,6 +201,73 @@ def z3_union_forgery(p: int = 1000003, seed: int = 1, n_tables: int = 3, rows_pe
     }
 
 
+def z3_union_multiplicity_forgery(p: int = 1000003, seed: int = 1, n_tables: int = 3, rows_per_table: int = 3,
+                                  timeout_ms: int = 60_000) -> dict:
+    """Multiplicity manipulation across the merged table, decided exactly.
+
+    Fix the tables, the tags, one bad query ``(q*, 0)`` and a concrete ``gamma``.  The prover's only freedom is the
+    committed multiplicity vector ``m`` (one free field element per union row).  The union identity
+    ``sum_j 1/(z - Q_j) = sum_v m_v / (z - R_v)`` is, for each fixed ``z``, LINEAR in ``m``; two rational functions
+    of denominator degree <= N + |T| that agree on N + |T| + 1 points agree identically, so the identity is stated at
+    ``N + |T| + 1`` distinct non-pole points and handed to z3 as a linear system over F_p.  Outside the collision set
+    the tagged rows are distinct and the bad query is none of them -> UNSAT (no ``m`` exists, whatever the prover
+    commits).  On a collision ``gamma`` the bad query IS a tagged foreign row -> SAT, with ``m`` = the honest
+    multiplicities plus one on that foreign row: the attack is exactly the term of PROTOCOL.md 15.2, nothing more."""
+    import random
+
+    import z3
+
+    rng = random.Random(seed)
+    tables: dict[int, list[int]] = {}
+    used: set[int] = set()
+    for t in range(n_tables):
+        rows = []
+        while len(rows) < rows_per_table:
+            r = rng.randrange(1, 1 << 12)
+            if r not in used:
+                used.add(r)
+                rows.append(r)
+        tables[t] = rows
+    q_bad = next(v for v in range(1 << 12, 1 << 13) if v not in used)
+    gammas = union_collision_gammas([(q_bad, 0)], tables, p)
+    g_out = next(g for g in range(1, p) if g not in gammas)
+    g_in = min(gammas)
+
+    def run(gamma: int) -> tuple[str, list[int] | None]:
+        rows = [(r + gamma * t) % p for t, rs in tables.items() for r in rs]          # R_v, in table order
+        queries = rows + [(q_bad + gamma * 0) % p]                                   # honest once each + the bad one
+        n_pts = len(queries) + len(rows) + 1
+        poles = set(rows) | set(queries)
+        zs = [z for z in range(1, p) if z not in poles][:n_pts]
+        s = z3.Solver()
+        s.set("timeout", timeout_ms)
+        m = [z3.Int(f"m{v}") for v in range(len(rows))]
+        for mv in m:
+            s.add(mv >= 0, mv < p)
+        for i, z in enumerate(zs):
+            lhs = sum(pow(z - q, -1, p) for q in queries) % p
+            rhs = sum(mv * pow(z - r, -1, p) for mv, r in zip(m, rows))
+            k = z3.Int(f"k{i}")                                                     # rhs - lhs = k p: pure LIA
+            s.add(rhs - lhs == k * p)
+        res = s.check()
+        if res == z3.sat:
+            mdl = s.model()
+            return "sat", [mdl[mv].as_long() for mv in m]
+        return str(res), None
+
+    out_res, _ = run(g_out)
+    in_res, m_in = run(g_in)
+    n_rows = n_tables * rows_per_table
+    return {
+        "prime": p, "n_tables": n_tables, "rows_per_table": rows_per_table, "bad_query": (q_bad, 0),
+        "collision_count": len(gammas), "gamma_outside": g_out, "gamma_on_collision": g_in,
+        "outside_collision_set": out_res, "on_collision_set": in_res, "multiplicities_on_collision": m_in,
+        "verdict": "UNSAT for every multiplicity vector outside the collision set; SAT on it with honest m + 1"
+        if out_res == "unsat" and in_res == "sat" and m_in is not None and sum(m_in) == n_rows + 1
+        and sorted(m_in) == [1] * (n_rows - 1) + [2] else "UNEXPECTED",
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -213,7 +280,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "fixtures":
         print(json.dumps(write_fixtures(Path(a.repo)), indent=1))
     else:
-        print(json.dumps(z3_union_forgery(a.prime, a.seed), indent=1))
+        print(json.dumps({"collision": z3_union_forgery(a.prime, a.seed),
+                          "multiplicity": z3_union_multiplicity_forgery(a.prime, a.seed)}, indent=1))
     return 0
 
 

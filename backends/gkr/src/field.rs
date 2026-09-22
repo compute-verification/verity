@@ -18,15 +18,27 @@ pub struct Fp(pub u64);
 
 #[inline]
 fn canon(x: u64) -> u64 {
-    if x >= P { x - P } else { x }
+    if x >= P {
+        x - P
+    } else {
+        x
+    }
 }
 
 impl Fp {
     pub const ZERO: Fp = Fp(0);
     pub const ONE: Fp = Fp(1);
     #[inline]
-    pub fn new(x: u64) -> Fp { Fp(canon(x)) }
-    pub fn from_i64(x: i64) -> Fp { if x < 0 { -Fp::new((-x) as u64) } else { Fp::new(x as u64) } }
+    pub fn new(x: u64) -> Fp {
+        Fp(canon(x))
+    }
+    pub fn from_i64(x: i64) -> Fp {
+        if x < 0 {
+            -Fp::new((-x) as u64)
+        } else {
+            Fp::new(x as u64)
+        }
+    }
     #[inline]
     pub fn reduce128(x: u128) -> Fp {
         let lo = canon(x as u64);
@@ -41,22 +53,35 @@ impl Fp {
         let mut b = self;
         let mut r = Fp::ONE;
         while e > 0 {
-            if e & 1 == 1 { r *= b; }
+            if e & 1 == 1 {
+                r *= b;
+            }
             b *= b;
             e >>= 1;
         }
         r
     }
-    pub fn inv(self) -> Fp { assert!(self.0 != 0, "inverse of zero"); self.pow(P - 2) }
+    pub fn inv(self) -> Fp {
+        assert!(self.0 != 0, "inverse of zero");
+        self.pow(P - 2)
+    }
     pub const BYTES: usize = 8;
-    pub fn to_u64(self) -> u64 { self.0 }
-    pub fn to_bytes(self) -> [u8; 8] { self.0.to_le_bytes() }
-    pub fn from_bytes(b: &[u8]) -> Fp { Fp::new(u64::from_le_bytes(b[..8].try_into().unwrap())) }
+    pub fn to_u64(self) -> u64 {
+        self.0
+    }
+    pub fn to_bytes(self) -> [u8; 8] {
+        self.0.to_le_bytes()
+    }
+    pub fn from_bytes(b: &[u8]) -> Fp {
+        Fp::new(u64::from_le_bytes(b[..8].try_into().unwrap()))
+    }
     /// A uniform element from a 32-byte digest by rejection sampling over its four 8-byte words.
     pub fn rejection_sample(d: &[u8; 32]) -> Option<Fp> {
         for i in 0..4 {
             let v = u64::from_le_bytes(d[8 * i..8 * i + 8].try_into().unwrap());
-            if v < P { return Some(Fp(v)); }
+            if v < P {
+                return Some(Fp(v));
+            }
         }
         None
     }
@@ -64,18 +89,67 @@ impl Fp {
     pub fn root_of_unity(order: usize) -> Fp {
         let mut w = Fp::new(7).pow((1u64 << 32) - 1);
         let mut o = 1u64 << 32;
-        while o > order as u64 { w = w * w; o /= 2; }
+        while o > order as u64 {
+            w = w * w;
+            o /= 2;
+        }
         w
     }
 }
 
-impl Add for Fp { type Output = Fp; #[inline] fn add(self, o: Fp) -> Fp { let (s, c) = self.0.overflowing_add(o.0); if c || s >= P { Fp(s.wrapping_sub(P)) } else { Fp(s) } } }
-impl Sub for Fp { type Output = Fp; #[inline] fn sub(self, o: Fp) -> Fp { let (d, b) = self.0.overflowing_sub(o.0); if b { Fp(d.wrapping_add(P)) } else { Fp(d) } } }
-impl Mul for Fp { type Output = Fp; #[inline] fn mul(self, o: Fp) -> Fp { Fp::reduce128(self.0 as u128 * o.0 as u128) } }
-impl Neg for Fp { type Output = Fp; #[inline] fn neg(self) -> Fp { Fp::ZERO - self } }
-impl AddAssign for Fp { fn add_assign(&mut self, o: Fp) { *self = *self + o; } }
-impl SubAssign for Fp { fn sub_assign(&mut self, o: Fp) { *self = *self - o; } }
-impl MulAssign for Fp { fn mul_assign(&mut self, o: Fp) { *self = *self * o; } }
+impl Add for Fp {
+    type Output = Fp;
+    #[inline]
+    fn add(self, o: Fp) -> Fp {
+        let (s, c) = self.0.overflowing_add(o.0);
+        if c || s >= P {
+            Fp(s.wrapping_sub(P))
+        } else {
+            Fp(s)
+        }
+    }
+}
+impl Sub for Fp {
+    type Output = Fp;
+    #[inline]
+    fn sub(self, o: Fp) -> Fp {
+        let (d, b) = self.0.overflowing_sub(o.0);
+        if b {
+            Fp(d.wrapping_add(P))
+        } else {
+            Fp(d)
+        }
+    }
+}
+impl Mul for Fp {
+    type Output = Fp;
+    #[inline]
+    fn mul(self, o: Fp) -> Fp {
+        Fp::reduce128(self.0 as u128 * o.0 as u128)
+    }
+}
+impl Neg for Fp {
+    type Output = Fp;
+    #[inline]
+    fn neg(self) -> Fp {
+        Fp::ZERO - self
+    }
+}
+impl AddAssign for Fp {
+    fn add_assign(&mut self, o: Fp) {
+        *self = *self + o;
+    }
+}
+impl SubAssign for Fp {
+    fn sub_assign(&mut self, o: Fp) {
+        *self = *self - o;
+    }
+}
+impl MulAssign for Fp {
+    fn mul_assign(&mut self, o: Fp) {
+        *self = *self * o;
+    }
+}
 
 /// F_{p^3} = F_p[X]/(X^3 - X - 1); coordinates (c0, c1, c2).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -86,14 +160,24 @@ impl Ext {
     pub const ONE: Ext = Ext([Fp::ONE, Fp::ZERO, Fp::ZERO]);
     pub const BYTES: usize = DEGREE * Fp::BYTES;
     #[inline]
-    pub fn from_base(x: Fp) -> Ext { Ext([x, Fp::ZERO, Fp::ZERO]) }
-    pub fn from_u64(x: u64) -> Ext { Ext::from_base(Fp::new(x)) }
+    pub fn from_base(x: Fp) -> Ext {
+        Ext([x, Fp::ZERO, Fp::ZERO])
+    }
+    pub fn from_u64(x: u64) -> Ext {
+        Ext::from_base(Fp::new(x))
+    }
     #[inline]
-    pub fn scale(self, s: Fp) -> Ext { Ext([self.0[0] * s, self.0[1] * s, self.0[2] * s]) }
-    pub fn is_zero(self) -> bool { self == Ext::ZERO }
+    pub fn scale(self, s: Fp) -> Ext {
+        Ext([self.0[0] * s, self.0[1] * s, self.0[2] * s])
+    }
+    pub fn is_zero(self) -> bool {
+        self == Ext::ZERO
+    }
     pub fn to_bytes(self) -> [u8; 24] {
         let mut b = [0u8; 24];
-        for i in 0..3 { b[8 * i..8 * i + 8].copy_from_slice(&self.0[i].to_bytes()); }
+        for i in 0..3 {
+            b[8 * i..8 * i + 8].copy_from_slice(&self.0[i].to_bytes());
+        }
         b
     }
     pub fn from_bytes(b: &[u8]) -> Ext {
@@ -102,9 +186,27 @@ impl Ext {
     }
 }
 
-impl Add for Ext { type Output = Ext; #[inline] fn add(self, o: Ext) -> Ext { Ext([self.0[0] + o.0[0], self.0[1] + o.0[1], self.0[2] + o.0[2]]) } }
-impl Sub for Ext { type Output = Ext; #[inline] fn sub(self, o: Ext) -> Ext { Ext([self.0[0] - o.0[0], self.0[1] - o.0[1], self.0[2] - o.0[2]]) } }
-impl Neg for Ext { type Output = Ext; #[inline] fn neg(self) -> Ext { Ext([-self.0[0], -self.0[1], -self.0[2]]) } }
+impl Add for Ext {
+    type Output = Ext;
+    #[inline]
+    fn add(self, o: Ext) -> Ext {
+        Ext([self.0[0] + o.0[0], self.0[1] + o.0[1], self.0[2] + o.0[2]])
+    }
+}
+impl Sub for Ext {
+    type Output = Ext;
+    #[inline]
+    fn sub(self, o: Ext) -> Ext {
+        Ext([self.0[0] - o.0[0], self.0[1] - o.0[1], self.0[2] - o.0[2]])
+    }
+}
+impl Neg for Ext {
+    type Output = Ext;
+    #[inline]
+    fn neg(self) -> Ext {
+        Ext([-self.0[0], -self.0[1], -self.0[2]])
+    }
+}
 impl Mul for Ext {
     type Output = Ext;
     #[inline]
@@ -120,9 +222,21 @@ impl Mul for Ext {
         Ext([d0 + d3, d1 + d3 + d4, d2 + d4])
     }
 }
-impl AddAssign for Ext { fn add_assign(&mut self, o: Ext) { *self = *self + o; } }
-impl SubAssign for Ext { fn sub_assign(&mut self, o: Ext) { *self = *self - o; } }
-impl MulAssign for Ext { fn mul_assign(&mut self, o: Ext) { *self = *self * o; } }
+impl AddAssign for Ext {
+    fn add_assign(&mut self, o: Ext) {
+        *self = *self + o;
+    }
+}
+impl SubAssign for Ext {
+    fn sub_assign(&mut self, o: Ext) {
+        *self = *self - o;
+    }
+}
+impl MulAssign for Ext {
+    fn mul_assign(&mut self, o: Ext) {
+        *self = *self * o;
+    }
+}
 
 /// Multilinear helpers on vectors indexed by the hypercube; variables are bound from the top bit down, and a
 /// point is the list of challenges in that order.  Prover and verifier share these, so the convention is fixed.
@@ -139,7 +253,9 @@ pub fn fold_in_place(v: &mut Vec<Ext>, r: Ext) {
 pub fn eval_mle(values: &[Ext], point: &[Ext]) -> Ext {
     assert_eq!(values.len(), 1 << point.len());
     let mut v = values.to_vec();
-    for &r in point { fold_in_place(&mut v, r); }
+    for &r in point {
+        fold_in_place(&mut v, r);
+    }
     v[0]
 }
 
@@ -151,8 +267,12 @@ pub fn eq_table(point: &[Ext]) -> Vec<Ext> {
     for &r in point.iter().rev() {
         let mut nt = Vec::with_capacity(t.len() * 2);
         let one_minus = Ext::ONE - r;
-        for &e in &t { nt.push(e * one_minus); }
-        for &e in &t { nt.push(e * r); }
+        for &e in &t {
+            nt.push(e * one_minus);
+        }
+        for &e in &t {
+            nt.push(e * r);
+        }
         t = nt;
     }
     t
@@ -166,7 +286,9 @@ pub fn interpolate(vals: &[Ext], r: Ext) -> Ext {
         let mut num = Ext::ONE;
         let mut den = Fp::ONE;
         for j in 0..=d {
-            if j == i { continue; }
+            if j == i {
+                continue;
+            }
             num = num * (r - Ext::from_u64(j as u64));
             den = den * Fp::from_i64(i as i64 - j as i64);
         }
@@ -194,7 +316,14 @@ mod tests {
         let b = Ext([Fp::new(11), Fp::new(13), Fp::new(17)]);
         let c = a * b;
         // (3+5x+7x^2)(11+13x+17x^2) = 33 + 94x + 193x^2 + 176x^3 + 119x^4; x^3=x+1, x^4=x^2+x
-        assert_eq!(c, Ext([Fp::new(33 + 176), Fp::new(94 + 176 + 119), Fp::new(193 + 119)]));
+        assert_eq!(
+            c,
+            Ext([
+                Fp::new(33 + 176),
+                Fp::new(94 + 176 + 119),
+                Fp::new(193 + 119)
+            ])
+        );
         assert_eq!(a * Ext::ONE, a);
     }
     #[test]
