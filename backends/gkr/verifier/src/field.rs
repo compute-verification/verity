@@ -1,16 +1,18 @@
-//! BabyBear `p = 2^31 - 2^27 + 1` and the GPU prover's extension `F_p[X] / (X^6 - 31)` (`gpu/field.py`: `W = 31`).
-//! Canonical `u32` representation everywhere the values are hashed or serialised; Montgomery form only inside the
-//! NTT (twiddles are pre-scaled by `R = 2^32`).
+//! BabyBear `p = 2^31 - 2^27 + 1` and the GPU prover's extension `F_p[X] / (X^6 - W)`, `W = 22` (`gpu/field.py`,
+//! PROTOCOL.md: the smallest non-square non-cube, the CPU crate's `src/field_babybear.rs` and `tensor/reference.py`
+//! use the same polynomial).  Canonical `u32` representation everywhere the values are hashed or serialised;
+//! Montgomery form only inside the NTT (twiddles are pre-scaled by `R = 2^32`).
 //!
-//! Note: the CPU crate's `--features babybear` build uses `X^6 - 22` (`src/field_babybear.rs`); the GPU prover uses
-//! `X^6 - 31`.  Both are irreducible (31 and 22 are non-squares and non-cubes), but the two extension fields are
-//! presented differently, so their transcripts are incompatible -- one of the reasons this verifier is its own crate.
+//! History: the a-gpu prover (main up to 2e1ef3f) used `X^6 - 31`; a-gpu2 moved it to `X^6 - 22` to share
+//! a-packed2's kernels, and this verifier followed (coordinator, 2026-09-22, run r20260922-101240-8f71: the W = 31
+//! verifier rejected every W = 22 proof at the first extension-field check, `LogUp POW level 0`).  Proofs written by
+//! the W = 31 prover are incompatible with this verifier (a different presentation of the field: same soundness).
 
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 pub const P: u32 = 2013265921;
 pub const P64: u64 = P as u64;
-pub const W: u32 = 31;
+pub const W: u32 = 22;
 pub const DEG: usize = 6;
 /// Hash-domain of the GPU prover's transcript (`gpu/transcript.py`).
 pub const DOMAIN: &[u8] = b"verity-gkr/candidate-a/v1/babybear6";
@@ -209,7 +211,7 @@ mod tests {
         assert_ne!(pow(w, 8192), 1);
         // gpu/field.py::_twiddles: root_of_unity(16384) = 31^((p-1)/2^14)
         assert_eq!(w, 1657000625);
-        // W = 31 is a non-square and non-cube: X^6 - 31 irreducible
+        // W is a non-square and non-cube: X^6 - W irreducible
         assert_ne!(pow(W, (P64 - 1) / 2), 1);
         assert_ne!(pow(W, (P64 - 1) / 3), 1);
     }
@@ -217,10 +219,10 @@ mod tests {
     #[test]
     fn ext_mul_matches_python() {
         // gpu/field.py::e_mul on (1,2,3,4,5,6) x (6,5,4,3,2,1) computed by hand:
-        // acc = [6,17,32,50,70,91,70,50,32,17,6]; c_d = acc[d] + 31 acc[d+6] for d<5, c_5 = 91
+        // acc = [6,17,32,50,70,91,70,50,32,17,6]; c_d = acc[d] + W acc[d+6] for d<5, c_5 = 91
         let a = Ext([1, 2, 3, 4, 5, 6]);
         let b = Ext([6, 5, 4, 3, 2, 1]);
-        assert_eq!(a * b, Ext([6 + 31 * 70, 17 + 31 * 50, 32 + 31 * 32, 50 + 31 * 17, 70 + 31 * 6, 91]));
+        assert_eq!(a * b, Ext([6 + W * 70, 17 + W * 50, 32 + W * 32, 50 + W * 17, 70 + W * 6, 91]));
         let x5 = Ext([0, 0, 0, 0, 0, 1]);
         let x1 = Ext([0, 1, 0, 0, 0, 0]);
         assert_eq!(x5 * x1, Ext::from_base(W));

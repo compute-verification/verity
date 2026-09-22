@@ -1,7 +1,7 @@
 # verity-gkr-verify: the independent verifier for Candidate A's GPU proofs
 
 Lane `a-verifier`.  A dependency-free Rust verifier for the proofs of `backends/gkr/gpu` (the a-gpu prover: GKR +
-LogUp + Ligero over BabyBear^6 = F_p[X]/(X^6 - 31), p = 2^31 - 2^27 + 1, SHA-256 Fiat-Shamir).  It shares no code with
+LogUp + Ligero over BabyBear^6 = F_p[X]/(X^6 - 22) (since a-gpu2; a-gpu used X^6 - 31, whose proofs this verifier no longer accepts), p = 2^31 - 2^27 + 1, SHA-256 Fiat-Shamir).  It shares no code with
 the Python prover/verifier or with the Goldilocks Rust crate in `../src`: field, SHA-256, transcript, NTT, circuit
 parser, `proof.bin` parser and every check are written from `../gpu/README.md`, `../PROTOCOL.md` and the a-gpu source.
 Before it, no implementation other than the a-gpu lane's own Python port had accepted a GPU A proof.
@@ -58,7 +58,7 @@ a-verifier.jsonl` for the numbers (verify seconds 1 / 12 threads at B = 64 and 4
 ## Layout
 
 ~~~text
-src/field.rs       BabyBear, Montgomery multiply, Ext (X^6 - 31), inverse, roots of unity, interpolation
+src/field.rs       BabyBear, Montgomery multiply, Ext (X^6 - 22), inverse, roots of unity, interpolation
 src/sha256.rs      SHA-256
 src/transcript.rs  gpu/transcript.py: state <- H(state || msg); challenge words by rejection sampling on H(state || "chal" || ctr)
 src/circuit.rs     circuit.txt / epilogue.txt parser (columns, linear forms, gates, queries, tables, implicit R16), GKR layers
