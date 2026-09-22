@@ -80,7 +80,7 @@ def tc_fold(bptr, out_ptr, idx, m, n_in, n_out, C, corr, pow2, BLOCK: tl.constex
 
 @triton.jit
 def tc_round_kernel(f_ptr, g_ptr, h_ptr, fo_ptr, go_ptr, ho_ptr, C_ptr, corr_ptr, pow2_ptr, s_ptr, n_in, n_out,
-                    EVAL: tl.constexpr, BLOCK: tl.constexpr):
+                    EVAL: tl.constexpr, RELOAD: tl.constexpr, BLOCK: tl.constexpr):
     pid = tl.program_id(0)
     idx = pid * BLOCK + tl.arange(0, BLOCK)
     m = idx < n_out
@@ -91,6 +91,28 @@ def tc_round_kernel(f_ptr, g_ptr, h_ptr, fo_ptr, go_ptr, ho_ptr, C_ptr, corr_ptr
     f0, f1, f2, f3, f4, f5 = tc_fold(f_ptr, fo_ptr, idx, m, n_in, n_out, C, corr, pow2, BLOCK)
     g0, g1, g2, g3, g4, g5 = tc_fold(g_ptr, go_ptr, idx, m, n_in, n_out, C, corr, pow2, BLOCK)
     h0, h1, h2, h3, h4, h5 = tc_fold(h_ptr, ho_ptr, idx, m, n_in, n_out, C, corr, pow2, BLOCK)
+    if EVAL and RELOAD:
+        # the dot's MMA layout makes the SIMT evaluation replicate work; re-read the just-written coefficients
+        # (this program's own rows, L1/L2-hot) to get them in a plain blocked layout
+        tl.debug_barrier()
+        f0 = tl.load(fo_ptr + 0 * n_out + idx, mask=m, other=0)
+        f1 = tl.load(fo_ptr + 1 * n_out + idx, mask=m, other=0)
+        f2 = tl.load(fo_ptr + 2 * n_out + idx, mask=m, other=0)
+        f3 = tl.load(fo_ptr + 3 * n_out + idx, mask=m, other=0)
+        f4 = tl.load(fo_ptr + 4 * n_out + idx, mask=m, other=0)
+        f5 = tl.load(fo_ptr + 5 * n_out + idx, mask=m, other=0)
+        g0 = tl.load(go_ptr + 0 * n_out + idx, mask=m, other=0)
+        g1 = tl.load(go_ptr + 1 * n_out + idx, mask=m, other=0)
+        g2 = tl.load(go_ptr + 2 * n_out + idx, mask=m, other=0)
+        g3 = tl.load(go_ptr + 3 * n_out + idx, mask=m, other=0)
+        g4 = tl.load(go_ptr + 4 * n_out + idx, mask=m, other=0)
+        g5 = tl.load(go_ptr + 5 * n_out + idx, mask=m, other=0)
+        h0 = tl.load(ho_ptr + 0 * n_out + idx, mask=m, other=0)
+        h1 = tl.load(ho_ptr + 1 * n_out + idx, mask=m, other=0)
+        h2 = tl.load(ho_ptr + 2 * n_out + idx, mask=m, other=0)
+        h3 = tl.load(ho_ptr + 3 * n_out + idx, mask=m, other=0)
+        h4 = tl.load(ho_ptr + 4 * n_out + idx, mask=m, other=0)
+        h5 = tl.load(ho_ptr + 5 * n_out + idx, mask=m, other=0)
     if EVAL:
         fa0, fb0 = pairs_of(f0, BLOCK // 2)
         fa1, fb1 = pairs_of(f1, BLOCK // 2)
@@ -141,12 +163,13 @@ def fold_operands(r: ref.Ext, device):
 class FusedRoundTC:
     name = "tc"
 
-    def __init__(self, device, block: int = 64, num_warps: int = 4):
+    def __init__(self, device, block: int = 32, num_warps: int = 2, reload: bool = True):
         if block < 16:
             raise ValueError("tl.dot needs M >= 16")
         self.device = device
         self.block = block
         self.num_warps = num_warps
+        self.reload = reload
 
     def alloc_out(self, n_out: int):
         return torch.empty((DEG, n_out), dtype=torch.int32, device=self.device)
@@ -175,7 +198,7 @@ class FusedRoundTC:
         if s_buf is None:
             s_buf = torch.zeros((grid[0] if eval else 1, 24), dtype=torch.int64, device=self.device)
         tc_round_kernel[grid](f.coeffs.view(torch.int8), g.coeffs.view(torch.int8), h.coeffs.view(torch.int8), outs[0], outs[1], outs[2],
-                              C, corr, pow2, s_buf, n_in, n_out, EVAL=eval, BLOCK=self.block, num_warps=self.num_warps)
+                              C, corr, pow2, s_buf, n_in, n_out, EVAL=eval, RELOAD=self.reload, BLOCK=self.block, num_warps=self.num_warps)
         return (s_buf if eval else None), [FusedTable(o) for o in outs]
 
     finish_s = staticmethod(FusedRound.finish_s)

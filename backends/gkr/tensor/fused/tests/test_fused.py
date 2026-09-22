@@ -89,7 +89,8 @@ def _kernels():
     ks = [("simt", round_simt.FusedRound(dev, block=8, num_warps=1)), ("simt", round_simt.FusedRound(dev, block=256, num_warps=4))]
     if os.environ.get("TC_SKIP_TC") != "1":
         from tensor.fused import round_tc
-        ks += [("tc", round_tc.FusedRoundTC(dev, block=16, num_warps=1)), ("tc", round_tc.FusedRoundTC(dev, block=64, num_warps=4))]
+        ks += [("tc", round_tc.FusedRoundTC(dev, block=16, num_warps=1)), ("tc", round_tc.FusedRoundTC(dev, block=32, num_warps=2)),
+               ("tc", round_tc.FusedRoundTC(dev, block=64, num_warps=4, reload=False))]
     return ks
 
 

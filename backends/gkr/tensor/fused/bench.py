@@ -123,7 +123,7 @@ def make_kernel(impl: str, device, block: int | None, warps: int | None):
     if impl == "tc":
         if rtc is None:
             raise RuntimeError(f"round_tc unavailable: {RTC_ERROR}")
-        return rtc.FusedRoundTC(device, block or 64, warps or 4)
+        return rtc.FusedRoundTC(device, block or 32, warps or 2)
     raise ValueError(impl)
 
 
