@@ -166,9 +166,11 @@ def test_disagreeing_instances_are_refused(tmp_path: Path) -> None:
     # other ids for the same batch size
     cand2 = write_run(tmp_path, "r-cand2", _with_instances("r-cand2", 64, 128))
     assert judge(str(base), str(cand2)).returncode == 2
-    # other ids because B differs: a scaling point, judged (B is not an identity field)
+    # other ids because B differs: a scaling point -- refused until B is named as the experiment (B is an identity
+    # field), then judged with the range delta visible
     cand3 = write_run(tmp_path, "r-cand3", _with_instances("r-cand3", 0, 4096))
-    proc = judge(str(base), str(cand3))
+    assert judge(str(base), str(cand3)).returncode == 2
+    proc = judge(str(base), str(cand3), "--allow", "B")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "instances.range" in proc.stdout  # visible in the fingerprint deltas
 
