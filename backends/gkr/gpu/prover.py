@@ -444,6 +444,7 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     t0 = time.perf_counter()
     lookup_claims = []
     packed = use_packed_logup(dev)
+    graphs = packed and logup_packed.use_graphs(dev)
     for ti, t in enumerate(inst.tables):
         n = hypercube_dim(inst, t.name, t)
         vals = [v for v in seg_query_values(inst, t.name) if v is not None]
@@ -452,12 +453,19 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
         if packed and t.cols == 1 and n_wit % 2 == 0 and len(t.rows) % 2 == 0:
             w = torch.cat([v[:, 0] for v in vals]).to(torch.int32)
             del vals
-            lc = logup_packed.prove_range_table(w, trows[:, 0].to(torch.int32), mults[ti], chs[ti][0], n, tr, out)
+            tab = trows[:, 0].to(torch.int32)
+            # the graphed tree takes the multiplicities from a histogram of the queries: identity tables only
+            if graphs and bool(torch.equal(tab, torch.arange(tab.numel(), dtype=torch.int32, device=dev))):
+                lc = logup_packed.prove_range_table_graphed(w, tab, chs[ti][0], n, tr, out)
+            else:
+                lc = logup_packed.prove_range_table(w, tab, mults[ti], chs[ti][0], n, tr, out)
             del w
         else:
             p_leaf, q_leaf = logup.build_leaves(t, trows, vals, mults[ti], chs[ti][0], chs[ti][1], n)
             del vals
-            if packed:
+            if graphs:
+                lc = logup_packed.prove_ext_table_graphed(p_leaf, q_leaf, n, tr, out)
+            elif packed:
                 lc = logup_packed.prove_ext_table(p_leaf, q_leaf, n, tr, out)
             else:
                 lc = logup.prove_table(p_leaf, q_leaf, n, tr, out)

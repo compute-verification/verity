@@ -34,6 +34,17 @@ except ImportError:  # pragma: no cover
         AVAILABLE = True
     except ImportError:
         AVAILABLE = False
+try:
+    from packed import kernels_graph as _kg
+    from packed import logup_graph as _lgr
+    GRAPHS = AVAILABLE
+except ImportError:  # pragma: no cover
+    try:
+        from backends.gkr.packed import kernels_graph as _kg
+        from backends.gkr.packed import logup_graph as _lgr
+        GRAPHS = AVAILABLE
+    except ImportError:
+        GRAPHS = False
 
 _PROVER = None
 
@@ -197,4 +208,177 @@ def prove_ext_table(p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Tran
     return _walk(lp, levels, n, tr, out, big)
 
 
-__all__ = ["AVAILABLE", "prove_range_table", "prove_ext_table", "FSCoins", "DEG"]
+# ---------------------------------------------------------------------------------------------------------------------
+# CUDA-graphed levels (a-fusion's GraphLogUp, one graph per round = the Fiat-Shamir segmentation)
+# ---------------------------------------------------------------------------------------------------------------------
+#
+# Why the transcript is unchanged: a graph replays the same kernels the eager prover launched, on static buffers; the
+# round constants (eq tables of rho, the prefix, eq(rho_{i-1}, x), r R) are recomputed ON DEVICE from the coin buffer
+# by kernels_graph, so a replay with the Fiat-Shamir challenges written into ``coins`` evaluates exactly the eager
+# arithmetic.  The host loop below does what ``_walk`` did -- absorb S_i, squeeze r_i, write it -- with one D2H per
+# round (the sponge is on the host) and one per level (the four final values).  Launches per round: 1 (the replay).
+
+if GRAPHS:
+
+    class _FSGraph(_lgr.GraphLogUp):
+        """Range table (R16 layout: ``[queries | table | pad]``) with the a-gpu transcript driving the coins."""
+
+        def __init__(self, device, k: int) -> None:
+            super().__init__(str(device), k=k, rounds_per_graph=1)
+
+        def prove_fs(self, w: torch.Tensor, table: torch.Tensor, z: Ext, tr: Transcript, out: list[Ext]) -> LeafClaim:
+            if not self.built or w.numel() != self.Nw or table.numel() != self.Nt:
+                self.build(w.numel(), table.numel())
+            self.w.copy_(w)
+            self.w_e.copy_(w.view(-1, 2)[:, 0])
+            self.w_o.copy_(w.view(-1, 2)[:, 1])
+            self.table.copy_(table)
+            self._h2d(self.zc, [z, tuple(x * _sp.R_MOD_P % P for x in z), _lg.ref.mul(z, z)])
+            self.g_tree.replay()
+            return self._walk_fs(tr, out)
+
+        def _walk_fs(self, tr: Transcript, out: list[Ext]) -> LeafClaim:
+            n = self.n
+            root = self.levels[0][:, 0].to(torch.int64).cpu()                 # sync: the tree is done
+            if bool((root[0] % P).any()):
+                raise ValueError("LogUp: fractional sum is not zero (a query is not in its table)")
+            root_q = py_ext(root[1])
+            if not any(root_q):
+                raise ValueError("LogUp: q_root is zero")
+            out.append(root_q)
+            tr.absorb_ext(root_q)
+            lam = tr.challenge()
+            rho: list[Ext] = []
+            syncs = 1
+            for lv in range(n):
+                self._h2d(self.rho, rho)
+                self._h2d(self.lam6, [lam])
+                rs: list[Ext] = []
+                for (i0, i1, g) in self.g_levels[lv]:
+                    g.replay()
+                    if i1 > i0:                                             # one round: absorb S_i, draw r_i, write it
+                        hs = py_exts(self.S[lv, i0 - 1:i1 - 1].to(torch.int64).cpu())
+                        syncs += 1
+                        out.extend(hs)
+                        tr.absorb_exts(hs)
+                        new = [tr.challenge() for _ in range(i0, i1)]
+                        self._h2d(self.coins[i0 - 1:i1 - 1], new)
+                        rs += new
+                vals = py_exts(self.vals[lv].to(torch.int64).cpu())
+                syncs += 1
+                out.extend(vals)
+                tr.absorb_exts(vals)
+                mu = tr.challenge()
+                lam = tr.challenge()
+                rho = [mu] + rs
+            p_next = logup.e_add(vals[0], logup.e_mul(mu, logup.e_sub(vals[1], vals[0])))
+            q_next = logup.e_add(vals[2], logup.e_mul(mu, logup.e_sub(vals[3], vals[2])))
+            tr.logup_syncs = getattr(tr, "logup_syncs", 0) + syncs
+            return logup.leaf_claim_top(rho, lam, logup.e_add(p_next, logup.e_mul(lam, q_next)))
+
+    class _FSGraphExt(_FSGraph):
+        """Vector-valued table: leaves ``p (2^n,)`` base / ``q (2^n, 6)`` in static buffers, level ``n-1`` by the a-gpu
+        ``_combine_level`` kernel, every level generic (no packed base rounds)."""
+
+        def __init__(self, device) -> None:
+            super().__init__(device, k=0)
+
+        def build_ext(self, n: int) -> None:
+            dev = self.device
+            self.n, self.k_pack, self.Nw, self.Nt = n, 0, 0, 0
+            i32 = torch.int32
+            self.p_leaf = torch.zeros(1 << n, dtype=i32, device=dev)
+            self.q_leaf = torch.zeros((1 << n, 6), dtype=i32, device=dev)
+            self.T4_big = torch.zeros((4, 1 << (n - 1), 6), dtype=i32, device=dev)
+            self.levels = {lv: torch.zeros((2, 1 << lv, 6), dtype=i32, device=dev) for lv in range(n)}
+            self.rho = torch.zeros((n + 1, 6), dtype=i32, device=dev)
+            self.coins = torch.zeros((n + 1, 6), dtype=i32, device=dev)
+            self.lam6 = torch.zeros((1, 6), dtype=i32, device=dev)
+            self.consts = torch.zeros((n + 1, 36), dtype=i32, device=dev)
+            self.S = torch.zeros((n, n, 4, 6), dtype=i32, device=dev)
+            self.vals = torch.zeros((n, 4, 6), dtype=i32, device=dev)
+            self.pool = torch.cuda.graph_pool_handle()
+            self._T4_cur = self._T4_tab_cur = None
+            self.g_tree = self._capture(self._tree_ops)
+            self.g_levels = {}
+            for lv in range(n):
+                self.g_levels[lv] = [(i0, i1, self._capture(lambda lv=lv, i0=i0, i1=i1, tail=tail: self._level_ops(lv, i0, i1, tail)))
+                                     for (i0, i1, tail) in self._segments(lv)]
+            torch.cuda.synchronize()
+            self.built = True
+
+        def _tree_ops(self) -> None:
+            n = self.n
+            np_, nq = logup._combine_level(self.p_leaf, self.q_leaf)
+            pq = self.levels[n - 1]
+            pq[0] = _deinterleave(np_)
+            pq[1] = _deinterleave(nq)
+            for lv in range(n - 1, 0, -1):
+                src, dst = self.levels[lv], self.levels[lv - 1]
+                m = 1 << (lv - 1)
+                self.tk._tree_level_kernel[(-(-m // 256),)](src[0], src[1], dst[0], dst[1], m, R2=self.tk.R2_MOD_P, BLOCK=256)
+            self.T4_big[0, :, 0] = self.p_leaf[0::2]
+            self.T4_big[1, :, 0] = self.p_leaf[1::2]
+            self.T4_big[2] = self.q_leaf[0::2]
+            self.T4_big[3] = self.q_leaf[1::2]
+
+        def _level_ops(self, lv: int, i0: int, i1: int, tail: bool) -> None:
+            self._big = False
+            if i0 == 1:
+                self._T4_cur = self.T4_big if lv == self.n - 1 else self.levels[lv + 1].view(4, 1 << lv, 6)
+            else:
+                self._fold_step(lv, i0 - 1)
+            for i in range(i0, i1):
+                self._generic_round(self._T4_cur, lv, i)
+                if i + 1 < i1:
+                    self._fold_step(lv, i)
+            if tail:
+                if lv and i0 <= lv:
+                    self._fold_step(lv, lv)
+                self.vals[lv] = self._T4_cur[:, 0]
+
+        def prove_fs_ext(self, p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcript, out: list[Ext]) -> LeafClaim:
+            if not self.built or self.n != n:
+                self.build_ext(n)
+            self.p_leaf.copy_(p_leaf)
+            self.q_leaf.copy_(q_leaf)
+            self.g_tree.replay()
+            return self._walk_fs(tr, out)
+
+    _GRAPHS: dict = {}
+
+    def graph_range(device, k: int, Nw: int, Nt: int) -> "_FSGraph":
+        key = ("range", k, Nw, Nt)
+        if key not in _GRAPHS:
+            _GRAPHS[key] = _FSGraph(device, k)
+        return _GRAPHS[key]
+
+    def graph_ext(device, n: int) -> "_FSGraphExt":
+        key = ("ext", n)
+        if key not in _GRAPHS:
+            _GRAPHS[key] = _FSGraphExt(device)
+        return _GRAPHS[key]
+
+
+def use_graphs(device) -> bool:
+    import os
+    return GRAPHS and device.type == "cuda" and not os.environ.get("VERITY_GPU_NO_GRAPHS")
+
+
+def prove_range_table_graphed(w: torch.Tensor, table: torch.Tensor, z: Ext, n: int, tr: Transcript, out: list[Ext]) -> LeafClaim:
+    """:func:`prove_range_table` on CUDA graphs (same messages); falls back to the eager path when the region alignment
+    does not allow the packed rounds the graph was built for."""
+    Nw, Nt = w.numel(), table.numel()
+    if n != _lg.lref.log2ceil(Nw + Nt):
+        raise ValueError("hypercube dimension mismatch")
+    k = _pick_k(Nw, Nt, n, 3)
+    return graph_range(w.device, k, Nw, Nt).prove_fs(w, table, z, tr, out)
+
+
+def prove_ext_table_graphed(p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcript, out: list[Ext]) -> LeafClaim:
+    """:func:`prove_ext_table` on CUDA graphs (same messages)."""
+    return graph_ext(q_leaf.device, n).prove_fs_ext(p_leaf.to(torch.int32), q_leaf.to(torch.int32), n, tr, out)
+
+
+__all__ = ["AVAILABLE", "GRAPHS", "prove_range_table", "prove_ext_table", "prove_range_table_graphed",
+           "prove_ext_table_graphed", "use_graphs", "FSCoins", "DEG"]
