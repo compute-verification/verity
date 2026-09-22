@@ -30,7 +30,9 @@ from verity_numerical.explore import tensor as tx
 from verity_numerical.security import accounting as acc
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "backends" / "direct"))
-from encode import reprice_measured as rm  # noqa: E402,F401  (b-commit lane's bucket picker: the same rows the 4090 re-price used)
+from encode import (
+    reprice_measured as rm,
+)
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -51,7 +53,7 @@ WOULD_NOT_RUN = [
     "The packed lane's plain k=0 direct 2^28 (140 GB) does not fit the 80 GB card on any GPU; k=2..4 at 2^28 were run (17.8-34.4 GB).",
     "`cupy` and `blake3` were absent from the pod's venv and were installed (`cupy-cuda12x`, `blake3`); the hash_gpu / encode benches otherwise ran unchanged.",
     "The A100's `torch._int_mm` reaches 0.12 of the datasheet INT8 peak at 8192^3 (the 4090 got 0.25): the 'fraction of INT8 peak' floors on this card are against a ceiling cuBLAS itself does not approach.",
-    "The first b-ligero attempt failed (`fixtures/bench-instances/v1` operand arrays are built, not committed; PYTHONPATH); it was re-run with `verity_numerical.bench.instances build` first -- see section 7 if present, else it did not finish before the hand-off.",
+    "b-ligero needed `PYTHONPATH=packages/verity/src:backends/numerical/python:.` and `verity_numerical.bench.instances build` on the pod first (the operand arrays are built, not committed); `bench-vu` has no `--vus` flag (85 VUs come from `--batch 8192`).  Run r20260922-080532-9bbb is the failed attempt.",
     "Model-only rows (`explore.tensor` at 0.172 utilisation) are ESTIMATES; the A vs B section labels every still-modelled bucket.  No proof was produced in this lane except the b-ligero prover runs (section 7, `NON_ZK_PROOF_DIAGNOSTIC`).",
 ]
 
@@ -353,6 +355,29 @@ def sec_bwave(commit_a: dict, commit_4: dict, buckets_a: dict, buckets_4: dict, 
     txt = md_table(["B prover bucket", "RTX 4090 recorded", "A100 measured", "speed ratio A100/4090", "A100 floor (measured BW)", "fraction of floor"], rows)
     txt += (f"\n\nBit-exact on the A100: commitment roots `{sum(commit_a['checks'].values())}/{len(commit_a['checks'])}` variants equal the reference; "
             f"lintest checks `{lint_a['checks']}`.")
+    return txt, data
+
+
+def sec_ligero(a: dict, ref: dict, bw_meas: float) -> tuple[str, list[dict]]:
+    """b-ligero: the torch direct-Ligero prover (an actual NON_ZK_PROOF_DIAGNOSTIC proof, verifier-accepted) on the A100 vs the L40S record."""
+    rows, data = [], []
+    for name, label in (("ligero_unit_b4096", "unit prover, 4,096 units (tu-k16), l=4096"), ("ligero_vu_42", "VU chain prover, 42 VUs, l=4096"), ("ligero_vu_85", "VU chain prover, 85 VUs, l=8192")):
+        A, L = a.get(name), ref.get(name)
+        if not A or not L:
+            continue
+        ma = {m["name"]: m["value"] for m in A["measurements"]}
+        ml = {m["name"]: m["value"] for m in L["measurements"]}
+        per = "unit.seconds_per_unit" if "unit.seconds_per_unit" in ma else "vu.seconds_per_vu"
+        rows.append([f"**{label}**: t.total", f"{ml['t.total']*1e3:.1f} ms ({ml[per]*1e6:.1f} us per {'unit' if 'unit' in per else 'VU'})", f"**{ma['t.total']*1e3:.1f} ms** ({ma[per]*1e6:.1f} us)", f"{ml['t.total']/ma['t.total']:.2f}x",
+                     f"{ma['census.bytes_encoded']*2/bw_meas*1e3:.2f} ms (encode read+write at {bw_meas/1e9:.0f} GB/s)", f"{ma['census.bytes_encoded']*2/bw_meas/ma['t.total']:.3f}"])
+        for k, lab in (("split.hints_seconds", "hints (torch, graph-replayed)"), ("split.witness_torch_seconds", "witness rows (torch program)"), ("split.encode_seconds", "encode (NTT) + commit"),
+                       ("split.merkle_seconds", "Merkle"), ("split.tests_seconds", "linear/quadratic tests"), ("split.openings_seconds", "openings + serialisation"), ("verifier.seconds", "verifier (host)")):
+            if k in ma and k in ml:
+                rows.append([f"  {lab}", f"{ml[k]*1e3:.2f} ms", f"{ma[k]*1e3:.2f} ms", f"{ml[k]/ma[k]:.2f}x", "", ""])
+        data.append({"kernel": "ligero_prover", "bench": name, "ref_gpu": "L40S", "ref_total_s": ml["t.total"], "a100_total_s": ma["t.total"], "ratio_ref_over_a100_time": ml["t.total"] / ma["t.total"],
+                     "a100_seconds_per": ma[per], "per": per, "validation": A["validation"], "a100_split": {k: ma[k] for k in ma if k.startswith("split.")}, "proof_class": A["workload_fingerprint"]["proof_class"],
+                     "overhead_vs_native_peak": (ma[per] / contract.native_seconds_per_vu(tx.K_TARGET)) if "vu" in per else None, "transcript_bytes": ma.get("transcript.bytes"), "peak_mem_bytes": ma.get("mem.peak_device_bytes")})
+    txt = md_table(["b-ligero torch prover (`NON_ZK_PROOF_DIAGNOSTIC`, verifier accepted every rep)", "L40S recorded", "A100 measured", "speed ratio A100/L40S", "A100 HBM floor (encode traffic)", "fraction"], rows)
     return txt, data
 
 
@@ -696,6 +721,21 @@ def main(argv=None) -> int:
                 f"where it gained 1.8x on the 4090, and the L2-resident small slices that won there lose here (256-row slices 155 ms vs 98 for 65,536-row: 40 MB L2 vs 72 MB, 0.47x the INT32 rate; the 'overlap' variants are 15-30% *slower* on the A100).  The other buckets scale at the INT32 ratio "
                 f"(0.4-0.7x) except the batch inversion ({inv['ratio_ref_over_a100_time']:.2f}x: HBM-bound) and the structured linear test at M=1 (1.21x lazy); M=3 lazy = "
                 + (f"{l3['a100_ms']:.1f} ms ({l3['ratio_ref_over_a100_time']:.2f}x)." if l3 else "")), ""]
+    lig_a = {n: load(R / "ligero" / f"{n}.json") for n in ("ligero_unit_b4096", "ligero_vu_42", "ligero_vu_85")}
+    lig_ref = {"ligero_unit_b4096": load(REPO / "backends/direct/ligero/results/result_unit_b4096.json"), "ligero_vu_42": load(REPO / "backends/direct/ligero/results/result_vu_42.json"),
+               "ligero_vu_85": load(REPO / "backends/direct/ligero/results/result_vu_85.json")}
+    if all(lig_a.values()) and all(lig_ref.values()):
+        txt, d = sec_ligero(lig_a, lig_ref, bw_meas)
+        doc["kernels"] += d
+        gate = (R / "ligero" / "ligero_gate_vu.log").read_text().strip().splitlines()[-3:] if (R / "ligero" / "ligero_gate_vu.log").exists() else []
+        v85 = next(r for r in d if r["bench"] == "ligero_vu_85")
+        md += ["## 7. `backends/direct/ligero` -- the b-ligero torch prover: an actual proof of the VU chain on the anchor (L40S record `results/result_*.json`; A100 run `r20260922-081113-f56e`)", "", txt, "",
+               ("Gate on the A100 (`run gate-vu --vus 64`): " + "; ".join(gate) + ".") if gate else "", "",
+               (f"This is the one **end-to-end proof** in this report (`NON_ZK_PROOF_DIAGNOSTIC`, 2^-128 by accounting, depth 2, authentication excluded, ZK masking not implemented): "
+                f"**{v85['a100_seconds_per']*1e3:.2f} ms/VU at 85 VUs = overhead {v85['overhead_vs_native_peak']:.3g}** against the same card's BF16 peak "
+                f"({v85['ratio_ref_over_a100_time']:.2f}x the L40S's 2.30 ms/VU; the L40S has 864 GB/s, so the bandwidth ratio would be 2.03x).  The torch-eager encode and tests scale 1.5-1.9x, the hint / witness "
+                "generation is launch-bound (0.6-0.9x) and the host verifier is slower on this pod's CPU.  It is 34x the re-priced bucket sum for B below (52 us/VU): the torch prover is unfused eager "
+                "torch over a 3,516-row-per-unit constraint system, the buckets are the fused CUDA kernels on the model's B shape -- the gap is the port, not the design."), ""]
     tensor_a = load(R / "tensor" / "bench.json")
     tensor_ref = load(REPORTS / "tc_sumcheck_4090.json")
     if tensor_a and tensor_ref:
@@ -727,9 +767,9 @@ def main(argv=None) -> int:
             return None
         fr = r.get(frac) if frac else r.get("fraction_of_floor")
         return [label, f"{ref(r)} ({ref_gpu or r.get('ref_gpu', '')})", a(r), f"{r[ratio_key]:.2f}x", "--" if fr is None else f"{fr:.2f}"]
-    ms = lambda k: (lambda r: f"{r[k]:,.1f} ms")  # noqa: E731
-    us = lambda k: (lambda r: f"{r[k]:,.0f} us")  # noqa: E731
-    sec = lambda k: (lambda r: f"{r[k]*1e3:,.1f} ms")  # noqa: E731
+    ms = lambda k: (lambda r: f"{r[k]:,.1f} ms")
+    us = lambda k: (lambda r: f"{r[k]:,.0f} us")
+    sec = lambda k: (lambda r: f"{r[k]*1e3:,.1f} ms")
     rows = [hl("hash_gpu: SHA-256 Merkle tree, B matrix (20.4 GB)", pick(kernel="hash_gpu", hash="sha256", mds=None, candidate="B"), lambda r: f"{r['ref_gb_per_s']:.0f} GB/s", lambda r: f"{r['a100_gb_per_s']:.0f} GB/s"),
             hl("hash_gpu: Blake3 Merkle tree, B", pick(kernel="hash_gpu", hash="blake3", mds=None, candidate="B"), lambda r: f"{r['ref_gb_per_s']:.0f} GB/s", lambda r: f"{r['a100_gb_per_s']:.0f} GB/s"),
             hl("hash_gpu: Poseidon2-16 Merkle tree (cuda), B", pick(kernel="hash_gpu", hash="poseidon2-16", mds=None, candidate="B"), lambda r: f"{r['ref_gb_per_s']:.1f} GB/s", lambda r: f"{r['a100_gb_per_s']:.1f} GB/s"),

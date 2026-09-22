@@ -2,7 +2,7 @@
 
 **Scope: component measurements** (kernel time on random/patterned data, bit-exact against each lane's CPU reference), then one `ARITHMETIC_DIAGNOSTIC` re-price of A and B with those numbers.  Nothing here is a proof.  Every recorded 4090 / H100 number is the lane's own (its README / report, run id in the lane's table); every A100 number is a `research run --on vy-a100b --exclusive` of the same bench, same flags, CUDA events, warm, median of >= 7, bit-exact checks on.  `overhead.vs_native_peak` is defined against *this* card's dense BF16 peak (`contract.NATIVE_REFERENCE`, 9.85 ps per K=1536 VU), so the last section is the first A-vs-B comparison where the prover and the reference are the same machine.
 
-Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 2.6.0+cu124, CUDA 12.4, 108 SMs (sm_80).  Recorded runs: microbench `r20260922-063608-a304`, hash_gpu `r20260922-063811-e561`, encode `r20260922-064413-0508`, fused `r20260922-064953-f9bb`, fused_logup `r20260922-071602-522d`, packed `r20260922-073828-153f`, packed_killed_mislaunch `r20260922-073540-f5b5`, tensor `r20260922-074359-964b`, wave2_gkr (packed Montgomery 2^26, direct 2^28, logUp GKR full-VU) `r20260922-075147-91a5`, wave2_b (b-commit fused commitment + buckets, b-lintest structured linear test) `r20260922-080250-cff5`.
+Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 2.6.0+cu124, CUDA 12.4, 108 SMs (sm_80).  Recorded runs: microbench `r20260922-063608-a304`, hash_gpu `r20260922-063811-e561`, encode `r20260922-064413-0508`, fused `r20260922-064953-f9bb`, fused_logup `r20260922-071602-522d`, packed `r20260922-073828-153f`, packed_killed_mislaunch `r20260922-073540-f5b5`, tensor `r20260922-074359-964b`, wave2_gkr (packed Montgomery 2^26, direct 2^28, logUp GKR full-VU) `r20260922-075147-91a5`, wave2_b (b-commit fused commitment + buckets, b-lintest structured linear test) `r20260922-080250-cff5`, ligero (b-ligero torch prover: unit b4096, vu 42, vu 85) `r20260922-081113-f56e`, ligero_failed_attempt `r20260922-080532-9bbb`.
 
 Bandwidth ratios the earlier reports *scaled* by: A100/4090 = 2,039/1,008 = 2.02; A100/H100 = 2,039/3,350 = 0.61.  Speed ratios below are recorded-time / A100-time (> 1 = the A100 is faster); a departure from the bandwidth ratio by > 1.5x either way is a finding about the kernel and is flagged.
 
@@ -341,6 +341,39 @@ Bit-exact on the A100: commitment roots `22/22` variants equal the reference; li
 
 **Finding (flagged).**  The fused commitment does *not* carry over: the best fused variant on the A100 is **blake3_s65536_ov0_keep0_fused at 98 ms** (0.56x the 4090's best 46.7 ms, a 4x departure from the bandwidth ratio) against separate encode 57 + Blake3 hash 54 = 111 ms measured in sections 1-2 -- fusing gains 1.1x on the anchor where it gained 1.8x on the 4090, and the L2-resident small slices that won there lose here (256-row slices 155 ms vs 98 for 65,536-row: 40 MB L2 vs 72 MB, 0.47x the INT32 rate; the 'overlap' variants are 15-30% *slower* on the A100).  The other buckets scale at the INT32 ratio (0.4-0.7x) except the batch inversion (1.48x: HBM-bound) and the structured linear test at M=1 (1.21x lazy); M=3 lazy = 11.2 ms (0.64x).
 
+## 7. `backends/direct/ligero` -- the b-ligero torch prover: an actual proof of the VU chain on the anchor (L40S record `results/result_*.json`; A100 run `r20260922-081113-f56e`)
+
+| b-ligero torch prover (`NON_ZK_PROOF_DIAGNOSTIC`, verifier accepted every rep) | L40S recorded | A100 measured | speed ratio A100/L40S | A100 HBM floor (encode traffic) | fraction |
+|---|---|---|---|---|---|
+| **unit prover, 4,096 units (tu-k16), l=4096**: t.total | 94.9 ms (23.2 us per unit) | **72.1 ms** (17.6 us) | 1.32x | 0.25 ms (encode read+write at 1754 GB/s) | 0.003 |
+|   hints (torch, graph-replayed) | 16.95 ms | 20.08 ms | 0.84x |  |  |
+|   witness rows (torch program) | 7.94 ms | 12.23 ms | 0.65x |  |  |
+|   encode (NTT) + commit | 30.92 ms | 16.58 ms | 1.86x |  |  |
+|   Merkle | 0.96 ms | 1.03 ms | 0.93x |  |  |
+|   linear/quadratic tests | 34.01 ms | 18.02 ms | 1.89x |  |  |
+|   openings + serialisation | 3.02 ms | 3.77 ms | 0.80x |  |  |
+|   verifier (host) | 29.68 ms | 38.05 ms | 0.78x |  |  |
+| **VU chain prover, 42 VUs, l=4096**: t.total | 107.9 ms (2568.3 us per VU) | **83.7 ms** (1992.5 us) | 1.29x | 0.26 ms (encode read+write at 1754 GB/s) | 0.003 |
+|   hints (torch, graph-replayed) | 16.95 ms | 18.62 ms | 0.91x |  |  |
+|   witness rows (torch program) | 8.28 ms | 12.49 ms | 0.66x |  |  |
+|   encode (NTT) + commit | 32.27 ms | 17.39 ms | 1.86x |  |  |
+|   Merkle | 1.02 ms | 1.04 ms | 0.98x |  |  |
+|   linear/quadratic tests | 44.20 ms | 28.64 ms | 1.54x |  |  |
+|   openings + serialisation | 3.49 ms | 4.05 ms | 0.86x |  |  |
+|   verifier (host) | 38.73 ms | 46.31 ms | 0.84x |  |  |
+| **VU chain prover, 85 VUs, l=8192**: t.total | 195.3 ms (2297.6 us per VU) | **151.2 ms** (1778.5 us) | 1.29x | 0.53 ms (encode read+write at 1754 GB/s) | 0.003 |
+|   hints (torch, graph-replayed) | 31.39 ms | 35.79 ms | 0.88x |  |  |
+|   witness rows (torch program) | 9.09 ms | 15.70 ms | 0.58x |  |  |
+|   encode (NTT) + commit | 68.54 ms | 43.59 ms | 1.57x |  |  |
+|   Merkle | 1.68 ms | 2.03 ms | 0.83x |  |  |
+|   linear/quadratic tests | 78.59 ms | 48.19 ms | 1.63x |  |  |
+|   openings + serialisation | 3.72 ms | 4.39 ms | 0.85x |  |  |
+|   verifier (host) | 53.61 ms | 64.45 ms | 0.83x |  |  |
+
+Gate on the A100 (`run gate-vu --vus 64`): vu-k1536 [42, 64): l=4096 prover 0.10s -> True accept (0.048s); negatives: 52/52 rejected; mutations: 252/252 rejected (one per gadget scope x row class + 3 chain-specific, l=256).
+
+This is the one **end-to-end proof** in this report (`NON_ZK_PROOF_DIAGNOSTIC`, 2^-128 by accounting, depth 2, authentication excluded, ZK masking not implemented): **1.78 ms/VU at 85 VUs = overhead 1.81e+08** against the same card's BF16 peak (1.29x the L40S's 2.30 ms/VU; the L40S has 864 GB/s, so the bandwidth ratio would be 2.03x).  The torch-eager encode and tests scale 1.5-1.9x, the hint / witness generation is launch-bound (0.6-0.9x) and the host verifier is slower on this pod's CPU.  It is 34x the re-priced bucket sum for B below (52 us/VU): the torch prover is unfused eager torch over a 3,516-row-per-unit constraint system, the buckets are the fused CUDA kernels on the model's B shape -- the gap is the port, not the design.
+
 ## 5. `backends/gkr/tensor` -- the original INT8-limb round (4090 run `r20260922-051730-15d4`)
 
 | INT8-limb round (tensor lane) | RTX 4090 recorded | A100 measured | speed ratio A100/4090 | A100 TC floor | fraction of INT8 peak |
@@ -416,5 +449,5 @@ Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_ker
 * The packed lane's plain k=0 direct 2^28 (140 GB) does not fit the 80 GB card on any GPU; k=2..4 at 2^28 were run (17.8-34.4 GB).
 * `cupy` and `blake3` were absent from the pod's venv and were installed (`cupy-cuda12x`, `blake3`); the hash_gpu / encode benches otherwise ran unchanged.
 * The A100's `torch._int_mm` reaches 0.12 of the datasheet INT8 peak at 8192^3 (the 4090 got 0.25): the 'fraction of INT8 peak' floors on this card are against a ceiling cuBLAS itself does not approach.
-* The first b-ligero attempt failed (`fixtures/bench-instances/v1` operand arrays are built, not committed; PYTHONPATH); it was re-run with `verity_numerical.bench.instances build` first -- see section 7 if present, else it did not finish before the hand-off.
+* b-ligero needed `PYTHONPATH=packages/verity/src:backends/numerical/python:.` and `verity_numerical.bench.instances build` on the pod first (the operand arrays are built, not committed); `bench-vu` has no `--vus` flag (85 VUs come from `--batch 8192`).  Run r20260922-080532-9bbb is the failed attempt.
 * Model-only rows (`explore.tensor` at 0.172 utilisation) are ESTIMATES; the A vs B section labels every still-modelled bucket.  No proof was produced in this lane except the b-ligero prover runs (section 7, `NON_ZK_PROOF_DIAGNOSTIC`).

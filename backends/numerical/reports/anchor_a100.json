@@ -2,7 +2,7 @@
  "lane": "anchor-a100",
  "track": "shared",
  "hardware": "NVIDIA A100 SXM4 80GB",
- "generated": "2026-09-22T08:18:08Z",
+ "generated": "2026-09-22T08:19:16Z",
  "runs": {
   "microbench": "r20260922-063608-a304",
   "hash_gpu": "r20260922-063811-e561",
@@ -13,7 +13,9 @@
   "packed_killed_mislaunch": "r20260922-073540-f5b5",
   "tensor": "r20260922-074359-964b",
   "wave2_gkr (packed Montgomery 2^26, direct 2^28, logUp GKR full-VU)": "r20260922-075147-91a5",
-  "wave2_b (b-commit fused commitment + buckets, b-lintest structured linear test)": "r20260922-080250-cff5"
+  "wave2_b (b-commit fused commitment + buckets, b-lintest structured linear test)": "r20260922-080250-cff5",
+  "ligero (b-ligero torch prover: unit b4096, vu 42, vu 85)": "r20260922-081113-f56e",
+  "ligero_failed_attempt": "r20260922-080532-9bbb"
  },
  "labels": {
   "proof_class": "COMPONENT (kernels) / ARITHMETIC_DIAGNOSTIC (re-price)",
@@ -2876,6 +2878,147 @@
    "ratio_ref_over_a100_time": 0.5275683272729297,
    "a100_floor_ms": 2.9018083991468298,
    "fraction_of_floor": 0.19922997203454323
+  },
+  {
+   "kernel": "ligero_prover",
+   "bench": "ligero_unit_b4096",
+   "ref_gpu": "L40S",
+   "ref_total_s": 0.09491873160004616,
+   "a100_total_s": 0.0720781129784882,
+   "ratio_ref_over_a100_time": 1.3168870226718443,
+   "a100_seconds_per": 1.7597195551388722e-05,
+   "per": "unit.seconds_per_unit",
+   "validation": {
+    "status": "passed",
+    "checker": "backends.direct.ligero.run bench (verifier accepted every rep)",
+    "detail": "7 reps at l=4096, tu-k16 [0, 4096)",
+    "evidence": {
+     "soundness": {
+      "terms_log2": {
+       "irs_query": -128.1289634989389,
+       "linear_query": -188.96671719706228,
+       "quadratic_query": -188.93343845622303,
+       "irs_field": -171.44125552552055,
+       "linear_field": -185.44134357795068,
+       "quadratic_field": -185.44134357795068
+      },
+      "total_log2": -128.12896349893845,
+      "field": "BabyBear^6",
+      "t": 189,
+      "n": 16384,
+      "l": 4096,
+      "rate": 0.25,
+      "note": "k = l + 1 stands in for the non-ZK k = l (the accounting's validate() needs l < k); the linear test here sends nothing (the verifier encodes beta itself), so its query term is at most the Appendix-C ((k+l)/n)^t used"
+     }
+    }
+   },
+   "a100_split": {
+    "split.hints_seconds": 0.020080205984413624,
+    "split.witness_torch_seconds": 0.012226300779730082,
+    "split.encode_seconds": 0.016583438031375408,
+    "split.transfer_seconds": 0.0004092450253665447,
+    "split.merkle_seconds": 0.0010289577767252922,
+    "split.tests_seconds": 0.018016139045357704,
+    "split.openings_seconds": 0.0037740529514849186
+   },
+   "proof_class": "NON_ZK_PROOF_DIAGNOSTIC",
+   "overhead_vs_native_peak": null,
+   "transcript_bytes": 2831276,
+   "peak_mem_bytes": 3175226368
+  },
+  {
+   "kernel": "ligero_prover",
+   "bench": "ligero_vu_42",
+   "ref_gpu": "L40S",
+   "ref_total_s": 0.10786959156394005,
+   "a100_total_s": 0.0836851098574698,
+   "ratio_ref_over_a100_time": 1.2889938454721588,
+   "a100_seconds_per": 0.0019925026156540427,
+   "per": "vu.seconds_per_vu",
+   "validation": {
+    "status": "passed",
+    "checker": "backends.direct.ligero.run bench-vu (verifier accepted every rep)",
+    "detail": "7 reps, 42 VUs at l=4096",
+    "evidence": {
+     "soundness": {
+      "terms_log2": {
+       "irs_query": -128.1289634989389,
+       "linear_query": -188.96671719706228,
+       "quadratic_query": -188.93343845622303,
+       "irs_field": -171.44125552552055,
+       "linear_field": -185.44134357795068,
+       "quadratic_field": -185.44134357795068
+      },
+      "total_log2": -128.12896349893845,
+      "field": "BabyBear^6",
+      "t": 189,
+      "n": 16384,
+      "l": 4096,
+      "rate": 0.25,
+      "note": "k = l + 1 stands in for the non-ZK k = l (the accounting's validate() needs l < k); the linear test here sends nothing (the verifier encodes beta itself), so its query term is at most the Appendix-C ((k+l)/n)^t used"
+     }
+    }
+   },
+   "a100_split": {
+    "split.hints_seconds": 0.018617476802319288,
+    "split.witness_torch_seconds": 0.012494748923927546,
+    "split.encode_seconds": 0.017394091933965683,
+    "split.transfer_seconds": 0.0004247729666531086,
+    "split.merkle_seconds": 0.001038846094161272,
+    "split.tests_seconds": 0.02863600989803672,
+    "split.openings_seconds": 0.004053683020174503
+   },
+   "proof_class": "NON_ZK_PROOF_DIAGNOSTIC",
+   "overhead_vs_native_peak": 202363546.90236372,
+   "transcript_bytes": 3136724,
+   "peak_mem_bytes": 3307493376
+  },
+  {
+   "kernel": "ligero_prover",
+   "bench": "ligero_vu_85",
+   "ref_gpu": "L40S",
+   "ref_total_s": 0.1952924020588398,
+   "a100_total_s": 0.15117242420092225,
+   "ratio_ref_over_a100_time": 1.2918520232187187,
+   "a100_seconds_per": 0.001778499108246144,
+   "per": "vu.seconds_per_vu",
+   "validation": {
+    "status": "passed",
+    "checker": "backends.direct.ligero.run bench-vu (verifier accepted every rep)",
+    "detail": "7 reps, 85 VUs at l=8192",
+    "evidence": {
+     "soundness": {
+      "terms_log2": {
+       "irs_query": -128.1422764575982,
+       "linear_query": -188.98335809070704,
+       "quadratic_query": -188.96671719706228,
+       "irs_field": -170.44129955106385,
+       "linear_field": -185.44134357795068,
+       "quadratic_field": -185.44134357795068
+      },
+      "total_log2": -128.14227645759775,
+      "field": "BabyBear^6",
+      "t": 189,
+      "n": 32768,
+      "l": 8192,
+      "rate": 0.25,
+      "note": "k = l + 1 stands in for the non-ZK k = l (the accounting's validate() needs l < k); the linear test here sends nothing (the verifier encodes beta itself), so its query term is at most the Appendix-C ((k+l)/n)^t used"
+     }
+    }
+   },
+   "a100_split": {
+    "split.hints_seconds": 0.03579298499971628,
+    "split.witness_torch_seconds": 0.01569780195131898,
+    "split.encode_seconds": 0.04358628485351801,
+    "split.transfer_seconds": 0.0008129687048494816,
+    "split.merkle_seconds": 0.0020345798693597317,
+    "split.tests_seconds": 0.04819455789402127,
+    "split.openings_seconds": 0.004390469752252102
+   },
+   "proof_class": "NON_ZK_PROOF_DIAGNOSTIC",
+   "overhead_vs_native_peak": 180628815.68124902,
+   "transcript_bytes": 3535988,
+   "peak_mem_bytes": 6612277248
   },
   {
    "kernel": "tensor",
@@ -6003,7 +6146,7 @@
   "The packed lane's plain k=0 direct 2^28 (140 GB) does not fit the 80 GB card on any GPU; k=2..4 at 2^28 were run (17.8-34.4 GB).",
   "`cupy` and `blake3` were absent from the pod's venv and were installed (`cupy-cuda12x`, `blake3`); the hash_gpu / encode benches otherwise ran unchanged.",
   "The A100's `torch._int_mm` reaches 0.12 of the datasheet INT8 peak at 8192^3 (the 4090 got 0.25): the 'fraction of INT8 peak' floors on this card are against a ceiling cuBLAS itself does not approach.",
-  "The first b-ligero attempt failed (`fixtures/bench-instances/v1` operand arrays are built, not committed; PYTHONPATH); it was re-run with `verity_numerical.bench.instances build` first -- see section 7 if present, else it did not finish before the hand-off.",
+  "b-ligero needed `PYTHONPATH=packages/verity/src:backends/numerical/python:.` and `verity_numerical.bench.instances build` on the pod first (the operand arrays are built, not committed); `bench-vu` has no `--vus` flag (85 VUs come from `--batch 8192`).  Run r20260922-080532-9bbb is the failed attempt.",
   "Model-only rows (`explore.tensor` at 0.172 utilisation) are ESTIMATES; the A vs B section labels every still-modelled bucket.  No proof was produced in this lane except the b-ligero prover runs (section 7, `NON_ZK_PROOF_DIAGNOSTIC`)."
  ]
 }

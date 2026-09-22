@@ -59,6 +59,7 @@ and constraint kernels, CUDA-graph replay of the witness program):
 | | unit proof, B = 4096 units | VU proof, 42 VUs (l = 4096) | VU proof, 85 VUs (l = 8192) |
 |---|---|---|---|
 | **prover total** | **0.095 s** (**23.2 us/unit**, 2.2 ms per 96 units) | **0.108 s** (**2.57 ms/VU**) | **0.195 s** (**2.30 ms/VU**) |
+| **prover total on the A100** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, run `r20260922-081113-f56e`, same commands, 7 reps, verifier accepted every rep; gate-vu 52/52 negatives + 252/252 mutations rejected) | **0.072 s** (**17.6 us/unit**; 1.32x the L40S) | **0.084 s** (**1.99 ms/VU**; 1.29x) | **0.151 s** (**1.78 ms/VU** = overhead 1.81e8 vs the same card's BF16 peak; 1.29x) -- encode 0.044 s, tests 0.048, hints 0.036, witness 0.016; `backends/numerical/reports/anchor_a100.md` section 7 |
 | hints (torch `gen_step` as one CUDA graph, + the public decodes; cross-checked equal to the checker's) | 0.017 s | 0.017 s | 0.031 s |
 | witness (torch program as one CUDA graph: products, bits, selectors) | 0.008 s | 0.008 s | 0.009 s |
 | encode (int64 NTT, compiled butterfly, 3372/3516 x l -> 4l) | 0.031 s | 0.032 s | 0.069 s |
