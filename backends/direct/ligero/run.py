@@ -356,6 +356,10 @@ def main(argv=None) -> int:
         s.set_defaults(fn=fn)
     for name in ("gate", "gate-vu"):
         sub.choices[name].add_argument("--vus", type=int, default=64)
+    sub.choices["gate-vu"].add_argument("--dump-proof", default=None, metavar="PATH",
+                                        help="write each honest sub-batch proof as ligero-proof/v1 (PATH, or PATH_<lo> for several)")
+    sub.choices["gate-vu"].add_argument("--dump-statement", default=None, metavar="PATH",
+                                        help="write the matching ligero-statement/v1 (the verifier's public inputs + configuration)")
     for name in ("bench", "bench-vu"):
         sub.choices[name].add_argument("--reps", type=int, default=5)
         sub.choices[name].add_argument("--run-id", default=None)

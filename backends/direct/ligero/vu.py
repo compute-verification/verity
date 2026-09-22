@@ -135,6 +135,16 @@ def gate_vu(args) -> int:
         proof, pubs, lay = R.prove_vus(vus, check=True)
         ok, why = R.verify_vus(proof, pubs, lay)
         log(f"vu-k1536 [{lo}, {lo + len(vus)}): l={lay.l} prover {proof.timings['total']:.2f}s -> {ok} {why}")
+        if getattr(args, "dump_proof", None) or getattr(args, "dump_statement", None):
+            # ligero-proof/v1 + ligero-statement/v1 (backends/ligero-verify reads them; serialize.py documents them)
+            from . import protocol as _pm
+            from .serialize import _statement_of, proof_bytes, statement_bytes
+            st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1, _pm._COMMIT_COINS)
+            suffix = f"_{lo:05d}" if args.vus > per_proof else ""
+            if args.dump_proof:
+                Path(args.dump_proof).with_name(Path(args.dump_proof).stem + suffix + Path(args.dump_proof).suffix).write_bytes(proof_bytes(proof))
+            if args.dump_statement:
+                Path(args.dump_statement).with_name(Path(args.dump_statement).stem + suffix + Path(args.dump_statement).suffix).write_bytes(statement_bytes(st))
         report["positives"].append({"tier": "vu-k1536", "range": [lo, lo + len(vus)], "l": lay.l, "ok": ok, "why": why,
                                     "timings": proof.timings})
         failures += not ok
