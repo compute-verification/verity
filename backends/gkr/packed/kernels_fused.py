@@ -26,13 +26,13 @@ import triton
 import triton.language as tl
 
 from . import reference as ref
-from .kernels_triton import _limbs, mmul
+from .kernels_triton import FIELD_KEY, _limbs, mmul
 
 P = ref.P
 
 
 @triton.jit
-def _packed_u_kernel(g_ptr, h_ptr, e_ptr, z_ptr, K1, SPLIT_LEN, TWOK: tl.constexpr, ROWS4: tl.constexpr, BLOCK_K: tl.constexpr):
+def _packed_u_kernel(g_ptr, h_ptr, e_ptr, z_ptr, K1, SPLIT_LEN, TWOK: tl.constexpr, ROWS4: tl.constexpr, BLOCK_K: tl.constexpr, FK: tl.constexpr):
     b2 = tl.program_id(0)
     sp = tl.program_id(1)
     offs_n = tl.arange(0, 32)
@@ -67,7 +67,7 @@ def packed_u_inner_product(g: torch.Tensor, h: torch.Tensor, e_lo32: torch.Tenso
     twok = 1 << k
     rows4 = twok * twok * 4
     Z = torch.empty((split, K2 * rows4, 24), dtype=torch.int32, device=g.device)
-    _packed_u_kernel[(K2, split)](g, h, e_lo32, Z, K1, K1 // split, TWOK=twok, ROWS4=rows4, BLOCK_K=BLOCK_K, num_warps=num_warps)
+    _packed_u_kernel[(K2, split)](g, h, e_lo32, Z, K1, K1 // split, TWOK=twok, ROWS4=rows4, BLOCK_K=BLOCK_K, num_warps=num_warps, FK=FIELD_KEY)
     return Z
 
 

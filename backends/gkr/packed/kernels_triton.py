@@ -103,6 +103,12 @@ def msub(a, b):
 P_C = tl.constexpr(P)
 MU_I32_C = tl.constexpr(MU_I32)
 WR_C = tl.constexpr(WR)
+# Triton's on-disk cache key is the kernel source + argument specialisation, NOT the values of the ``tl.constexpr``
+# globals above; a cache populated under another field (see ``gpu/kernels.py`` and reports/a_kernel_a100.md: W 31 -> 22)
+# would be served silently.  Every module-level kernel here (and in kernels_fused / kernels_graph) takes ``FK=FIELD_KEY``
+# as an unused constexpr argument so the field constants are part of the key.  The generated kernels (``_HEADER``)
+# inline the constants into their source and need no key.
+FIELD_KEY = int(hashlib.sha256(f"babybear6:{P}:{W}:{R_MONT}".encode()).hexdigest()[:7], 16)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -760,7 +766,7 @@ def packed_hadamard_limbs(g: torch.Tensor, h: torch.Tensor, i: int, K1: int, K2:
 
 
 @triton.jit
-def _fold_k_kernel(g_ptr, c_ptr, out_ptr, m, TWOK: tl.constexpr, BLOCK: tl.constexpr):
+def _fold_k_kernel(g_ptr, c_ptr, out_ptr, m, TWOK: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
     """out[b, s] = sum_a c[a, s] g[b TWOK + a] (plain); c (TWOK, 6) int32 = eq(r_1..r_k, a) . R (Montgomery pre-scaled)."""
     b = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = b < m
@@ -791,7 +797,7 @@ def fold_k(g: torch.Tensor, k: int, coeffs_R: torch.Tensor, BLOCK: int = 256) ->
     """``(t,) base -> (t / 2^k, 6)`` plain; ``coeffs_R`` = ``eq(r_1..r_k, a) . R mod p`` as ``(2^k, 6) int32``."""
     m = g.numel() >> k
     out = torch.empty((m, 6), dtype=torch.int32, device=g.device)
-    _fold_k_kernel[(triton.cdiv(m, BLOCK),)](g, coeffs_R, out, m, TWOK=1 << k, BLOCK=BLOCK)
+    _fold_k_kernel[(triton.cdiv(m, BLOCK),)](g, coeffs_R, out, m, TWOK=1 << k, BLOCK=BLOCK, FK=FIELD_KEY)
     return out
 
 
@@ -813,7 +819,7 @@ def _ext_mmul6_j(a0, a1, a2, a3, a4, a5, b0, b1, b2, b3, b4, b5):
 
 
 @triton.jit
-def _fold_ext_kernel(gh_ptr, r_ptr, out_ptr, rows, BLOCK_M: tl.constexpr):
+def _fold_ext_kernel(gh_ptr, r_ptr, out_ptr, rows, BLOCK_M: tl.constexpr, FK: tl.constexpr):
     """Row of gh (rows, 12) int32 = [x_e (6) | x_o (6)] plain; r_ptr = r . R (6 int32); out (rows, 6) = x_e + r (x_o - x_e),
     plain.  SIMT Montgomery: one F_{p^6} product per pair (36 mmul), HBM-bound."""
     offs = tl.program_id(0) * BLOCK_M + tl.arange(0, BLOCK_M)
@@ -848,7 +854,7 @@ def _fold_ext_kernel(gh_ptr, r_ptr, out_ptr, rows, BLOCK_M: tl.constexpr):
 
 
 @triton.jit
-def _fold_ext4_kernel(t_ptr, out_ptr, r_ptr, m, stride_in, stride_out, BLOCK_M: tl.constexpr):
+def _fold_ext4_kernel(t_ptr, out_ptr, r_ptr, m, stride_in, stride_out, BLOCK_M: tl.constexpr, FK: tl.constexpr):
     """Four ``(., 6)`` tables at ``t_ptr + j stride_in`` (pairs ``(2y, 2y+1)``, ``y < m``) folded by ``r`` (pre-scaled) into
     ``out_ptr + j stride_out`` rows ``y < m``; rows beyond ``m`` of the output are left as they are (zero-padded buffers)."""
     j = tl.program_id(1)
@@ -886,12 +892,12 @@ def _fold_ext4_kernel(t_ptr, out_ptr, r_ptr, m, stride_in, stride_out, BLOCK_M: 
 def fold_ext4(T4: torch.Tensor, m_pairs: int, r_R: torch.Tensor, out: torch.Tensor, BLOCK_M: int = 256) -> torch.Tensor:
     """``T4 (4, Mp, 6)`` (logical ``2 m_pairs`` rows per table) -> ``out (4, Mp', 6)`` rows ``< m_pairs`` written."""
     grid = (triton.cdiv(m_pairs, BLOCK_M), 4)
-    _fold_ext4_kernel[grid](T4, out, r_R, m_pairs, T4.stride(0), out.stride(0), BLOCK_M=BLOCK_M, num_warps=4)
+    _fold_ext4_kernel[grid](T4, out, r_R, m_pairs, T4.stride(0), out.stride(0), BLOCK_M=BLOCK_M, num_warps=4, FK=FIELD_KEY)
     return out
 
 
 @triton.jit
-def _tree_level_kernel(p_ptr, q_ptr, po_ptr, qo_ptr, m, R2: tl.constexpr, BLOCK: tl.constexpr):
+def _tree_level_kernel(p_ptr, q_ptr, po_ptr, qo_ptr, m, R2: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
     """Fraction-tree level: children ``(p, q)`` stored de-interleaved (``[evens | odds]``, ``2 m`` rows each) -> parents
     ``p' = p0 q1 + p1 q0``, ``q' = q0 q1`` for ``x < m``, written de-interleaved for the next level (``x`` even -> row
     ``x / 2``, odd -> ``m / 2 + x / 2``).  Plain in, plain out (``mmul(., R^2)`` undoes the Montgomery factor)."""
@@ -946,12 +952,12 @@ def tree_level(pq: torch.Tensor, BLOCK: int = 256) -> torch.Tensor:
     """``pq (2, 2m, 6)`` = de-interleaved children ``p, q`` -> ``(2, m, 6)`` de-interleaved parents (plain values)."""
     m = pq.shape[1] // 2
     out = torch.empty((2, m, 6), dtype=torch.int32, device=pq.device)
-    _tree_level_kernel[(triton.cdiv(m, BLOCK),)](pq[0], pq[1], out[0], out[1], m, R2=R2_MOD_P, BLOCK=BLOCK)
+    _tree_level_kernel[(triton.cdiv(m, BLOCK),)](pq[0], pq[1], out[0], out[1], m, R2=R2_MOD_P, BLOCK=BLOCK, FK=FIELD_KEY)
     return out
 
 
 @triton.jit
-def _leaf_level_kernel(w_ptr, z_ptr, zR_ptr, z2_ptr, po_ptr, qo_ptr, m, half_total, R2: tl.constexpr, BLOCK: tl.constexpr):
+def _leaf_level_kernel(w_ptr, z_ptr, zR_ptr, z2_ptr, po_ptr, qo_ptr, m, half_total, R2: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
     """Witness leaves ``(1, z - w_j)``, pairs ``(2x, 2x+1)`` of ``w`` -> level ``n-1`` values ``p = 2 z - (w0 + w1)``,
     ``q = z^2 - z (w0 + w1) + w0 w1`` for ``x < m``, de-interleaved as :func:`tree_level` writes them (odd ``x`` at
     ``half_total + x / 2``, ``half_total`` = half the whole level).  ``z`` plain, ``zR`` = ``z . R``, ``z2`` = ``z^2`` plain."""
@@ -995,11 +1001,11 @@ def leaf_level(w: torch.Tensor, z: torch.Tensor, zR: torch.Tensor, z2: torch.Ten
                half_total: int, BLOCK: int = 256) -> None:
     """``w (2m,) int32`` witness queries -> level rows ``x < m`` of the de-interleaved arrays ``po, qo`` (``2 half_total`` rows)."""
     m = w.numel() // 2
-    _leaf_level_kernel[(triton.cdiv(m, BLOCK),)](w, z, zR, z2, po, qo, m, half_total, R2=R2_MOD_P, BLOCK=BLOCK)
+    _leaf_level_kernel[(triton.cdiv(m, BLOCK),)](w, z, zR, z2, po, qo, m, half_total, R2=R2_MOD_P, BLOCK=BLOCK, FK=FIELD_KEY)
 
 
 @triton.jit
-def _ext_mul_rows_kernel(a_ptr, b_ptr, out_ptr, n, stride_b, R2: tl.constexpr, BLOCK: tl.constexpr):
+def _ext_mul_rows_kernel(a_ptr, b_ptr, out_ptr, n, stride_b, R2: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
     """``out[i] = a[i] b[i]`` (``stride_b = 6``) or ``a[i] b[0]`` (``stride_b = 0``), plain in / plain out."""
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < n
@@ -1032,12 +1038,12 @@ def ext_mul_rows(a: torch.Tensor, b: torch.Tensor, BLOCK: int = 256) -> torch.Te
     b = b.contiguous()
     n = a.shape[0]
     out = torch.empty_like(a)
-    _ext_mul_rows_kernel[(triton.cdiv(n, BLOCK),)](a, b, out, n, 0 if b.shape[0] == 1 else 6, R2=R2_MOD_P, BLOCK=BLOCK)
+    _ext_mul_rows_kernel[(triton.cdiv(n, BLOCK),)](a, b, out, n, 0 if b.shape[0] == 1 else 6, R2=R2_MOD_P, BLOCK=BLOCK, FK=FIELD_KEY)
     return out
 
 
 @triton.jit
-def _eq_prepend_kernel(t_ptr, g_ptr, out_ptr, n, BLOCK: tl.constexpr):
+def _eq_prepend_kernel(t_ptr, g_ptr, out_ptr, n, BLOCK: tl.constexpr, FK: tl.constexpr):
     """``out[2 b + bit] = T[b] . (bit ? g : 1 - g)``: one more eq variable on bit 0.  ``g_ptr`` holds ``(1 - g) R`` then
     ``g R`` (12 int32); ``T`` plain in, ``out`` plain out."""
     b = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
@@ -1072,12 +1078,12 @@ def eq_prepend(T: torch.Tensor, g_pair_R: torch.Tensor, BLOCK: int = 256) -> tor
     ``[(1 - g) R, g R]``."""
     n = T.shape[0]
     out = torch.empty((2 * n, 6), dtype=torch.int32, device=T.device)
-    _eq_prepend_kernel[(triton.cdiv(n, BLOCK),)](T, g_pair_R, out, n, BLOCK=BLOCK)
+    _eq_prepend_kernel[(triton.cdiv(n, BLOCK),)](T, g_pair_R, out, n, BLOCK=BLOCK, FK=FIELD_KEY)
     return out
 
 
 @triton.jit
-def _eq_limbs32_kernel(e_ptr, out_ptr, n, R2: tl.constexpr, BLOCK: tl.constexpr):
+def _eq_limbs32_kernel(e_ptr, out_ptr, n, R2: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
     """``e (n, 6)`` plain -> ``(n, 32) int8``: the 24 balanced limbs of ``e . R`` (columns ``4 s + j``) and 8 zero columns."""
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < n
@@ -1099,7 +1105,7 @@ def eq_limbs32(e: torch.Tensor, BLOCK: int = 256) -> torch.Tensor:
     """``eq`` weights ``(K1, 6)`` plain -> the fused kernels' ``e_lo32`` operand ``(K1, 32) int8`` (``R``-scaled limbs), one launch."""
     n = e.shape[0]
     out = torch.empty((n, 32), dtype=torch.int8, device=e.device)
-    _eq_limbs32_kernel[(triton.cdiv(n, BLOCK),)](e.contiguous(), out, n, R2=R2_MOD_P, BLOCK=BLOCK)
+    _eq_limbs32_kernel[(triton.cdiv(n, BLOCK),)](e.contiguous(), out, n, R2=R2_MOD_P, BLOCK=BLOCK, FK=FIELD_KEY)
     return out
 
 
@@ -1111,7 +1117,7 @@ def _load6(ptr, idx, mask):
 
 
 @triton.jit
-def _logup_small_round_kernel(t_ptr, e_ptr, lam_ptr, q_ptr, m, stride_t, R2: tl.constexpr, BLOCK: tl.constexpr):
+def _logup_small_round_kernel(t_ptr, e_ptr, lam_ptr, q_ptr, m, stride_t, R2: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
     """One program: ``Q(x) = sum_{y<m} e(y) [A_x(y) + lambda B_x(y)]`` for ``x = 0, 1, 2`` from the four tables at
     ``t_ptr + j stride_t`` (pairs ``(2y, 2y+1)``), ``e (m, 6)`` plain, ``lam_ptr`` = ``lambda R``.  Plain ``(3, 6)`` out."""
     y = tl.arange(0, BLOCK)
@@ -1182,7 +1188,7 @@ def logup_small_round(T4: torch.Tensor, e: torch.Tensor, lam_R: torch.Tensor) ->
     """``T4 (4, 2m, 6)``, ``e (m, 6)`` plain, ``lam_R (6,)`` = ``lambda R`` -> ``Q (3, 6)`` plain; ``m <= 64``, one launch."""
     m = T4.shape[1] // 2
     Q = torch.empty((3, 6), dtype=torch.int32, device=T4.device)
-    _logup_small_round_kernel[(1,)](T4, e.contiguous(), lam_R, Q, m, T4.stride(0), R2=R2_MOD_P, BLOCK=max(2, triton.next_power_of_2(m)))
+    _logup_small_round_kernel[(1,)](T4, e.contiguous(), lam_R, Q, m, T4.stride(0), R2=R2_MOD_P, BLOCK=max(2, triton.next_power_of_2(m)), FK=FIELD_KEY)
     return Q
 
 
@@ -1190,5 +1196,5 @@ def fold_ext(gh: torch.Tensor, r_R: torch.Tensor, BLOCK_M: int = 256) -> torch.T
     """``gh (rows, 12) int32`` (``[x_e | x_o]`` per pair) -> ``(rows, 6)`` = ``(1 - r) x_e + r x_o``; ``r_R`` = ``r . R`` (6 int32)."""
     rows = gh.shape[0]
     out = torch.empty((rows, 6), dtype=torch.int32, device=gh.device)
-    _fold_ext_kernel[(triton.cdiv(rows, BLOCK_M),)](gh, r_R, out, rows, BLOCK_M=BLOCK_M, num_warps=4)
+    _fold_ext_kernel[(triton.cdiv(rows, BLOCK_M),)](gh, r_R, out, rows, BLOCK_M=BLOCK_M, num_warps=4, FK=FIELD_KEY)
     return out
