@@ -411,9 +411,14 @@ where
     let lqd = stark::log_quotient_degree_of::<Val<B::SC>, _>(&air_);
     assert!(lqd <= fri.log_blowup, "quotient degree 2^{lqd} exceeds blowup 2^{}", fri.log_blowup);
 
+    // --rtt-ms R (or VERITY_RTT_MS): emulate the network; the prover sleeps R ms at every critical-path challenge
+    let rtt_ms: f64 = arg(args, "--rtt-ms").or_else(|| std::env::var("VERITY_RTT_MS").ok()).map(|s| s.parse().expect("--rtt-ms takes milliseconds")).unwrap_or(0.0);
     let t1 = Instant::now();
+    verity_direct::rtt::begin(rtt_ms);
     let proof = stark::prove_with::<B, _>(&air_, trace, fri);
-    let t_prove = t1.elapsed().as_secs_f64();
+    let (trips, slept) = verity_direct::rtt::end();
+    let t_prove_wall = t1.elapsed().as_secs_f64();
+    let t_prove = t_prove_wall - slept; // compute: the wall time less the emulated waits for the verifier's coins
     let t2 = Instant::now();
     let bytes = stark::proof_bytes_of(&proof);
     let t_ser = t2.elapsed().as_secs_f64();
@@ -610,7 +615,12 @@ fn write_result(b: BenchNumbers) {
     let log_n = rows.trailing_zeros() as usize;
     let t_total = t_witness + t_prove + t_ser;
     let threads = rayon::current_num_threads();
+<<<<<<< HEAD
     let rounds = log_n + 5 + rounds_extra;
+=======
+    let rounds = log_n + 5; // coins: alpha, zeta, FRI batch beta, log_n fold betas, PoW, query indices (derived; rounds.protocol)
+    let depth = trips; // measured: observe -> sample boundaries of the prover's transcript (rounds.sequential_depth)
+>>>>>>> lane/latency
     let bits_proven = fri.bits_proven();
     let bits_conj = fri.bits_conjectured();
     let q128 = fri.queries_for_proven(128.0);
@@ -631,6 +641,24 @@ fn write_result(b: BenchNumbers) {
         FieldKind::BabyBear => "babybear",
     };
 
+<<<<<<< HEAD
+=======
+    // end-to-end wall time at the RTT sweep: measured at the emulated RTT (prover wall incl. the sleeps + verifier),
+    // predicted at the others as compute + depth x RTT (the honest serial number; bytes / bandwidth not included)
+    let mut e2e_measured: Vec<String> = vec![];
+    let mut e2e_predicted: Vec<String> = vec![];
+    let mut e2e: Vec<Value> = vec![];
+    for (name, rtt) in [("0", 0.0f64), ("0.1", 0.1), ("1", 1.0), ("10", 10.0), ("50", 50.0)] {
+        let key = format!("t.e2e.rtt_{name}ms");
+        if (rtt - rtt_ms).abs() < 1e-9 {
+            e2e.push(json!({"name": key, "value": t_witness + t_prove_wall + t_ser + t_verify, "unit": "s"}));
+            e2e_measured.push(key);
+        } else {
+            e2e.push(json!({"name": key, "value": t_total + t_verify + depth as f64 * rtt / 1000.0, "unit": "s"}));
+            e2e_predicted.push(key);
+        }
+    }
+>>>>>>> lane/latency
     let mut measurements = vec![
         json!({"name": "t.witness", "value": t_witness, "unit": "s"}),
         json!({"name": "t.joint.encoding_commitment+arithmetic", "value": t_prove, "unit": "s"}),
@@ -639,7 +667,11 @@ fn write_result(b: BenchNumbers) {
         json!({"name": "verifier.seconds", "value": t_verify, "unit": "s"}),
         json!({"name": "transcript.bytes", "value": bytes, "unit": "B"}),
         json!({"name": "rounds.protocol", "value": rounds, "unit": "count"}),
-        json!({"name": "rounds.sequential_depth", "value": rounds, "unit": "count"}),
+        json!({"name": "rounds.sequential_depth", "value": depth, "unit": "count"}),
+        json!({"name": "direct.depth_formula_legacy", "value": rounds, "unit": "count"}),
+        json!({"name": "direct.rtt_ms", "value": rtt_ms, "unit": "ms"}),
+        json!({"name": "direct.rtt_sleep_seconds", "value": slept, "unit": "s"}),
+        json!({"name": "direct.prove_wall_s", "value": t_prove_wall, "unit": "s"}),
         json!({"name": "mem.peak_host_bytes", "value": peak_rss_bytes().unwrap_or(0), "unit": "B"}),
         json!({"name": "census.committed_elements", "value": committed_trace + quotient_cells, "unit": "count"}),
         json!({"name": "census.witness_elements", "value": committed_trace, "unit": "count"}),
@@ -663,7 +695,11 @@ fn write_result(b: BenchNumbers) {
         json!({"name": "direct.fri_bits_conjectured", "value": bits_conj, "unit": "bits"}),
         json!({"name": "direct.fri_queries_for_128_proven", "value": q128, "unit": "count"}),
     ];
+<<<<<<< HEAD
     measurements.extend(extra);
+=======
+    measurements.extend(e2e);
+>>>>>>> lane/latency
     let result = json!({
         "schema": "research/result/v0.1",
         "run_id": run_id,
@@ -696,8 +732,20 @@ fn write_result(b: BenchNumbers) {
             "preprocessing": "none",
             "retention": "retained",
             "unit": "vu",
+<<<<<<< HEAD
             "constraints": constraints_note,
             "realisation": realisation,
+=======
+            "latency": {
+                "protocol": "Fiat-Shamir as run (Plonky3); the interactive reading counts every observe -> sample boundary of the prover's transcript as one verifier message; measured with an emulated RTT: the prover sleeps one RTT at each",
+                "rtt_ms": rtt_ms,
+                "e2e_measured": e2e_measured,
+                "e2e_predicted": e2e_predicted,
+                "e2e_model": "t.total + verifier.seconds + rounds.sequential_depth x RTT (bytes / bandwidth not included)",
+                "depth_note": "rounds.sequential_depth is the measured count of observe -> sample boundaries (verity_direct::rtt); direct.depth_formula_legacy is the earlier derived log_n + 5"
+            },
+            "constraints": "WP2 gadget contracts + Epilogue as direct AIR constraints, one row per transition unit, accumulator carried by a transition constraint, VU boundary by a step counter; range checks as 2-bit limbs, fixed tables as one-hot selectors; no lookup argument",
+>>>>>>> lane/latency
             "note": "Plonky3 FRI/Keccak is the diagnostic PCS, not Candidate B's Ligero-style interactive PCS (PROTOCOL.md); the claimed output words are committed trace cells (the `vu.claim` column) that the last-row constraint binds to the epilogue word -- not bound to any external statement (authentication excluded)"
         },
         "validation": {"status": "passed", "checker": "p3_uni_stark::verify + recorded accumulators", "detail": format!("proof verified; {n_vus} VUs x {steps} steps in {rows} rows; every intermediate accumulator and output word equals bench-instances/v1"), "evidence": [], "index_note": tier.index.get("note").cloned().unwrap_or(Value::Null)},
@@ -708,7 +756,7 @@ fn write_result(b: BenchNumbers) {
     let path = format!("{out}/result.json");
     fs::write(&path, serde_json::to_string_pretty(&result).unwrap()).unwrap();
     println!(
-        "field={field_name} vus={n_vus} rows={rows} width={width} witness={t_witness:.3}s prove={t_prove:.3}s total={t_total:.3}s ({:.4} s/VU) verify={t_verify:.3}s bytes={bytes} threads={threads} peak_rss={:?} bits_proven={bits_proven:.1} -> {path}",
+        "field={field_name} vus={n_vus} rows={rows} width={width} witness={t_witness:.3}s prove={t_prove:.3}s total={t_total:.3}s ({:.4} s/VU) verify={t_verify:.3}s depth={depth} (legacy {rounds}) rtt_ms={rtt_ms} slept={slept:.3}s prove_wall={t_prove_wall:.3}s bytes={bytes} threads={threads} peak_rss={:?} bits_proven={bits_proven:.1} -> {path}",
         t_total / n_vus as f64,
         peak_rss_bytes()
     );

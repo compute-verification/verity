@@ -7,7 +7,8 @@
 #   GATE=1 run_measure_vu.sh                         cargo test; fixtures negatives (unit + vu_synth); BabyBear: the 83-case battery
 #   TRANSCRIPTS=1 run_measure_vu.sh                  dump-transcript for B=4 and B=64 into $RESEARCH_RUN_DIR (FIELD=babybear: the GPU lane's vectors)
 # Env: FIELD (goldilocks | babybear: `--features babybear`, its own target dir and export cache), INSTANCES_ROOT (built
-# dataset), EXPORT_ROOT (witness cache), VERITY_GKR_THREADS (default 12), PROCS (export).
+# dataset), EXPORT_ROOT (witness cache), VERITY_GKR_THREADS (default 12), PROCS (export), RTT_MS (emulated network
+# round-trip time for the latency axis: `--rtt-ms`, default 0).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
@@ -72,6 +73,8 @@ HI=$((LO + B))
 EXP=$(export_range "$LO" "$HI")
 cp "$EXP/manifest.json" "$RUN_DIR/export_manifest.json"
 echo "B=$B lo=$LO"
-"$BIN" run-vu --dir "$EXP" --vus "$B" --out "$RUN_DIR/result.json" --commit "$COMMIT"
+RTT_MS=${RTT_MS:-0}   # emulated network round-trip time (ms): the prover sleeps it at every critical-path challenge
+echo "rtt_ms=$RTT_MS"
+"$BIN" run-vu --dir "$EXP" --vus "$B" --out "$RUN_DIR/result.json" --commit "$COMMIT" --rtt-ms "$RTT_MS"
 $UV -m verity_numerical.gkr_export.vu finalize --result "$RUN_DIR/result.json" --export-manifest "$RUN_DIR/export_manifest.json" ${RESEARCH_RUN_ID:+--run-id "$RESEARCH_RUN_ID"}
 sha256sum "$EXP"/*.bin "$EXP"/*.txt > "$RUN_DIR/inputs.sha256"

@@ -175,6 +175,7 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
     tr.label("logup: root denominator q_root");
     tr.absorb_ext(q_root);
     tr.label("logup: lambda");
+    tr.round_trip();
     let mut lambda = tr.challenge();
     let mut rho: Vec<Ext> = vec![];
     let mut claim = lambda * q_root;
@@ -195,6 +196,7 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
             let h = round_poly(&p0, &p1, &q0, &q1, &e, half, lambda);
             out.extend_from_slice(&h);
             tr.absorb_exts(&h);
+            tr.round_trip();
             let r = tr.challenge();
             x_star.push(r);
             for v in [&mut p0, &mut p1, &mut q0, &mut q1, &mut e] { par_fold(v, r); }
@@ -203,6 +205,7 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
         let vals = [p0[0], p1[0], q0[0], q1[0]];
         out.extend_from_slice(&vals);
         tr.absorb_exts(&vals);
+        tr.round_trip(); // mu and lambda are two coins of ONE verifier message (no prover message between them)
         let mu = tr.challenge();
         lambda = tr.challenge();
         rho = x_star;

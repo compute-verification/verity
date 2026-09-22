@@ -11,6 +11,15 @@ Labels on every number from this crate: `proof_class = NON_ZK_PROOF_DIAGNOSTIC` 
 No ZK masking anywhere yet; Fiat–Shamir with SHA-256 (the interactive object and step 0 are not implemented; the transcript
 records `rounds.protocol` and `rounds.sequential_depth`).
 
+**Latency axis (lane latency, 2026-09-22).** `rounds.sequential_depth` is *measured*: `Transcript::round_trip()` counts
+the critical-path verifier messages (the longest of the lock-step chains; the logUp `(mu, lambda)` pair is one message),
+and `--rtt-ms X` (or `VERITY_GKR_RTT_MS`, `RTT_MS=` in `run_measure_vu.sh`) sleeps `X` ms at each so the envelope carries
+`t.e2e.rtt_Xms` measured and the other RTTs predicted (`t.total` is compute with the sleep subtracted; `depth_lookup_chain`,
+`depth_checker_chain`, `depth_formula_legacy` are alongside). Full VU B=4096 Goldilocks: depth **355** (legacy counter 381;
+lookup chain 352 = R16 tree of 26 levels, checker chain 197), B=64: depth 214 (lookup 211, checker 167). Measured e2e on
+vy-cpu2: B=64 at 50 ms RTT 18.44 s = 7.20 compute + 0.53 verify + 214 × 50 ms (model 18.43 s); see
+`backends/numerical/reports/latency.md`.
+
 ## Layout
 
 - `Cargo.toml`: standalone crate, **no external crates** (hand-rolled Goldilocks, cubic extension `X^3 − X − 1`, SHA-256).
