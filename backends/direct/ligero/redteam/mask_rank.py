@@ -12,8 +12,9 @@ structured: identities, shifts, and ``Z_H`` multiplication, whose ranks do not d
   w_d  (k coefficients)             mask s_prox_d, deg < k: identity                              -> covered
   v_d  (k coefficients, v|_H = beta) admissible dim k - l = t_pad; mask Z_H s_lin_d, deg s < t_pad: rank t_pad -> covered
   h_d  (2k-1-l coefficients)        mask s_qa (deg < k) + x^k s_qb (deg < t_pad - 1): rank k + t_pad - 1 = 2k-1-l -> covered
-  q_d  (l+k-1 coefficients, sum_H q = rhs)  admissible dim l + k - 2; mask Z_H s_chain (deg < k - 1): rank k - 1
-                                    -> DEFICIENT by l - 1: the values of Q_d on H (minus their sum) are sent in the clear
+  q_d  (l+k-1 coefficients, sum_H q = rhs)  admissible dim l + k - 2; PRE-FIX mask Z_H s_chain (deg < k - 1): rank k - 1
+                                    -> DEFICIENT by l - 1 (red team F1).  b-zk-fix: mask u_ca + x^k u_cb (deg < k, < l-1)
+                                    with sum_H u = 0: rank l + k - 2 = admissible dim               -> covered
 """
 from __future__ import annotations
 
@@ -69,12 +70,22 @@ def message_ranks(l: int, t_pad: int) -> dict:
         Mh[k + i, k + i] = 1
     rh = rank_mod_p(Mh)
     out["h"] = {"admissible_dim": hl, "mask_rank": rh, "covered": rh == hl}
-    # q: l + k - 1 coefficients with one public linear condition; mask Z_H s_chain, deg s_chain < k - 1
+    # q: l + k - 1 coefficients with one public linear condition.  Pre-fix mask Z_H s_chain, deg s_chain < k - 1:
     ql = l + k - 1
     Mq = _zh_times_matrix(l, k - 1, ql)
     rq = rank_mod_p(Mq)
-    out["q"] = {"admissible_dim": ql - 1, "mask_rank": rq, "covered": rq == ql - 1, "deficiency": ql - 1 - rq,
-                "expected_deficiency_formula_l_minus_1": l - 1}
+    out["q_prefix_Z_H_s_chain"] = {"admissible_dim": ql - 1, "mask_rank": rq, "covered": rq == ql - 1, "deficiency": ql - 1 - rq,
+                                   "expected_deficiency_formula_l_minus_1": l - 1}
+    # b-zk-fix mask u_ca + x^k u_cb (identity on all ql coefficients) restricted to the zero-sum subspace: the map
+    # (u_ca, u_cb) -> u projected along the sum functional has rank ql - 1 = admissible dim
+    Mu = np.eye(ql, dtype=np.int64)
+    Mu = np.concatenate([Mu[:, :k], Mu[:, k:k + l - 1]], 1)            # (ql, k + l - 1) = identity
+    # quotient by the sum-over-H functional: append the functional as a row constraint and count the kernel dimension
+    f = np.zeros((1, ql), dtype=np.int64)
+    f[0, ::l] = l % P
+    span = rank_mod_p(Mu)                                              # ql
+    ker_sum = span - rank_mod_p(f @ Mu % P)                            # ql - 1 mask vectors with zero sum
+    out["q"] = {"admissible_dim": ql - 1, "mask_rank": ker_sum, "covered": ker_sum == ql - 1, "deficiency": ql - 1 - ker_sum}
     return out
 
 
@@ -87,8 +98,9 @@ def real_layout_counts(cfg: Config) -> dict:
         "w": {"admissible_dim": k, "mask_rank": k, "covered": True},
         "v": {"admissible_dim": k - l, "mask_rank": tp, "covered": tp == k - l},
         "h": {"admissible_dim": 2 * k - 1 - l, "mask_rank": k + tp - 1, "covered": k + tp - 1 == 2 * k - 1 - l},
-        "q": {"admissible_dim": l + k - 2, "mask_rank": k - 1, "covered": False, "deficiency": l - 1,
-              "field_elements_in_the_clear_per_proof": cfg.D * (l - 1)},
+        "q": {"admissible_dim": l + k - 2, "mask_rank": l + k - 2, "covered": True, "deficiency": 0,
+              "field_elements_in_the_clear_per_proof": 0,
+              "prefix": {"mask_rank": k - 1, "deficiency": l - 1, "field_elements_in_the_clear_per_proof": cfg.D * (l - 1)}},
         "linear_disclosures_of_s_j_per_witness_row": {"openings": t, "through_messages": 0,
                                                        "note": "w, v, h are fully masked by their own mask rows; q on H does not involve s_j (p_j = W_j on H)"},
     }

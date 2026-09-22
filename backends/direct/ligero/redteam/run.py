@@ -63,6 +63,14 @@ def _load_real(root: Path, n: int) -> list[tuple]:
         return out
 
 
+def _chi2_uniform_pooled(x: np.ndarray, bins: int = 64) -> dict:
+    """Pooled chi-square of all values of ``x`` against uniform on [0, p)."""
+    counts = np.bincount((np.asarray(x).astype(np.int64).ravel() * bins // protocol.P), minlength=bins)
+    e = x.size / bins
+    stat = float(((counts - e) ** 2 / e).sum())
+    return {"chi2": stat, "p": float(simulator._chi2_sf(np.array([stat]), bins - 1)[0]), "n": int(x.size)}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -105,10 +113,17 @@ def main(argv=None) -> int:
     ps, (as_, bs, y16s), _ = R.prove_vus(triv, check=False)
     recs = q_leak.recover_accumulators(ps, R.sys, R.tb, cfg, lay, y16s, as_, bs, dev)
     cmp_s = q_leak.compare_with_recorded(recs, triv, STEPS)
-    report["q_leak"] = {"real_witness": cmp_, "trivial_witness": cmp_s,
-                        "witness_free_statistic_real": q_leak.witness_free_distinguisher(pr, R.sys, R.tb, cfg, lay, y16, a, b, dev),
-                        "verdict": "ACCEPTED-LEAK" if cmp_["accumulators_recovered_exactly"] == cmp_["of"] else "inconclusive"}
-    print("q leak:", report["q_leak"]["real_witness"], report["q_leak"]["verdict"])
+    wf_real0 = q_leak.witness_free_distinguisher(pr, R.sys, R.tb, cfg, lay, y16, a, b, dev)
+    # F1 regression: with q = Q + u (u uniform, zero-sum over H) the 6 x 3 systems are inconsistent except by chance
+    # (p^-3 per step) and NO accumulator is recovered; the accumulators read off q|_H must be uniform (chi2 below)
+    qh = q_leak.q_on_H(pr, cfg)
+    pooled = _chi2_uniform_pooled(qh)
+    report["q_leak"] = {"real_witness": cmp_, "trivial_witness": cmp_s, "witness_free_statistic_real": wf_real0,
+                        "q_on_H_pooled_uniform_chi2": pooled,
+                        "verdict": ("ACCEPTED-LEAK" if cmp_["accumulators_recovered_exactly"] == cmp_["of"] else
+                                    "NO-LEAK (F1 fixed)" if (cmp_["accumulators_recovered_exactly"] == 0 and cmp_s["accumulators_recovered_exactly"] == 0
+                                                             and wf_real0["fraction"] < 0.01 and pooled["p"] > 0.001) else "inconclusive")}
+    print("q leak:", report["q_leak"]["real_witness"], report["q_leak"]["witness_free_statistic_real"], report["q_leak"]["verdict"])
 
     # ---- mask ranks ----------------------------------------------------------------------------------------------
     report["mask_ranks"] = {"opened_columns_actual_cols": mask_rank.opened_columns_rank(cfg, pr.cols),
@@ -117,26 +132,46 @@ def main(argv=None) -> int:
     print("mask ranks:", json.dumps(report["mask_ranks"]["opened_columns_actual_cols"]), json.dumps(report["mask_ranks"]["messages_explicit_small"]))
 
     # ---- simulator -----------------------------------------------------------------------------------------------
+    # An oracle with an EMPTY table is installed only to COUNT: the simulator must never program it (F2 repaired:
+    # challenges are functions of the coins alone), and the transcript must verify under the real hash.
     orc = simulator.ProgrammableOracle()
     orc.install()
     try:
         sim_rep: dict = {}
-        # (a) honest verifier: the simulated transcript is accepted by the real verifier (through the programmed oracle)
+        # (a) honest verifier: the simulated transcript is accepted by the real verifier under the REAL hash
         V = Coins.sample()
         t0 = time.perf_counter()
         sp = simulator.simulate(V, R.p, R.sys, R.tb, cfg, lay, y16, a, b, dev, orc, rng=rng)
         t_sim = time.perf_counter() - t0
         assert isinstance(sp, protocol.Proof), sp
+        orc.uninstall()                                          # verify under the untouched real hash
         ok_s, why_s = R.verify_vus(sp, (a, b, y16), lay, coins=V)
-        sim_rep["honest_verifier"] = {"simulated_transcript_accepted": ok_s, "why": why_s, "seconds": t_sim,
-                                      "oracle_points_programmed": len(orc.table), "rewinds": sp.timings.get("rewinds")}
-        # the same transcript under the UNPROGRAMMED oracle: the challenges no longer match -> rejected (the simulator
-        # needs the programmable random oracle; it is not a CRH-only simulator)
-        orc.uninstall()
-        ok_u, why_u = R.verify_vus(sp, (a, b, y16), lay, coins=V)
         orc.install()
-        sim_rep["honest_verifier"]["same_transcript_without_oracle_programming"] = {"accepted": ok_u, "why": why_u}
+        sim_rep["honest_verifier"] = {"simulated_transcript_accepted_real_hash": ok_s, "why": why_s, "seconds": t_sim,
+                                      "oracle_points_programmed": len(orc.table), "oracle_programmed_hits": orc.programmed_hits,
+                                      "rewinds": sp.timings.get("rewinds"),
+                                      "hash_assumption": "collision resistance only (no programming)"}
+        assert ok_s and len(orc.table) == 0 and orc.programmed_hits == 0, sim_rep["honest_verifier"]
+        # a wrong verifier session (other coins) must reject the simulated transcript
+        ok_o, why_o = R.verify_vus(sp, (a, b, y16), lay, coins=Coins.sample())
+        sim_rep["honest_verifier"]["under_another_verifiers_coins"] = {"accepted": ok_o, "why": why_o}
         print("simulator honest:", sim_rep["honest_verifier"])
+        # (a2) statement-adaptive V*: grinds r2 against a target column set before step 0 (legal); simulated like any coins
+        stmt = protocol.statement_digest(R.sys, cfg, a, b, layout=lay, y16=torch.as_tensor(y16, dtype=torch.int64))
+        target = sorted(rng.choice(cfg.n, cfg.t, replace=False).tolist())
+        Vs = simulator.StatementAdaptiveVerifier(cfg, stmt, target, candidates=64)
+        p_real, _, _ = R.prove_vus(real, check=False, coins=Vs)
+        ok_r, why_r = R.verify_vus(p_real, (a, b, y16), lay, coins=Vs)
+        sps = simulator.simulate(Vs, R.p, R.sys, R.tb, cfg, lay, y16, a, b, dev, orc, rng=rng)
+        assert isinstance(sps, protocol.Proof), sps
+        orc.uninstall()
+        ok_ss, why_ss = R.verify_vus(sps, (a, b, y16), lay, coins=Vs)
+        orc.install()
+        sim_rep["statement_adaptive"] = {"target_overlap_ground": Vs.target_overlap, "chance": cfg.t * cfg.t / cfg.n,
+                                         "real_accepted": ok_r, "same_cols_real_vs_sim": p_real.cols == sps.cols,
+                                         "simulated_accepted_real_hash": ok_ss, "why": why_ss,
+                                         "oracle_points_programmed": len(orc.table)}
+        print("simulator statement-adaptive:", sim_rep["statement_adaptive"])
         # (b) adaptive V*: the prover aborts; the simulator outputs the same abort
         for slot in (1, 2):
             Vb = simulator.AdaptiveVerifier(slot)
@@ -210,7 +245,9 @@ def main(argv=None) -> int:
         kw_sim = [q_leak.compare_with_recorded(q_leak.recover_accumulators(x, R.sys, R.tb, cfg, lay, y16, a, b, dev), real, STEPS)["accumulators_recovered_exactly"] for x in sims[:8]]
         sim_rep["q_distinguishers"] = {"witness_free_consistent_fraction": {"real": wf_real, "simulated": wf_sim},
                                        "known_witness_accumulators_matched": {"real": kw_real, "simulated": kw_sim, "of": (STEPS - 1) * lay.n_vus},
-                                       "advantage": 1.0 if (min(wf_real) == 1.0 and max(wf_sim) < 0.01) else "see values"}
+                                       "advantage": (1.0 if (min(wf_real) == 1.0 and max(wf_sim) < 0.01) else
+                                                     "~0 (F1 fixed)" if (max(wf_real) < 0.01 and max(wf_sim) < 0.01 and max(kw_real) == 0 and max(kw_sim) == 0)
+                                                     else "see values")}
         print("indistinguishability:", json.dumps({k: v for k, v in sim_rep["indistinguishability"].items()}, default=str))
         print("q distinguishers:", sim_rep["q_distinguishers"])
         report["simulator"] = sim_rep
@@ -228,8 +265,10 @@ def main(argv=None) -> int:
                        ("v", lambda pr: pr.v), ("q", lambda pr: pr.q)):
         tw[name] = simulator.per_position_chi2(np.stack([pick(x) for x in A_]), np.stack([pick(x) for x in B_]))
     # v differs by construction (beta is public and statement-dependent): report it but it is not a leak
-    tw["note"] = ("v|_H = beta differs between the two statements (public data); q|_H differs by the witness (the leak); "
-                  "opened columns, w, h must be at chance")
+    tw["note"] = ("v|_H = beta differs between the two statements (public data); q must now be at chance too (F1 fixed: "
+                  "q = Q + u with u uniform of zero sum over H); opened columns, w, h must be at chance")
+    tw["q_leak_regression"] = {"q_positions_below_threshold": tw["q"]["positions_below_threshold"],
+                               "pass": tw["q"]["positions_below_threshold"] == 0}
     report["two_witness"] = tw
     print("two witness:", json.dumps(tw, default=str))
 
