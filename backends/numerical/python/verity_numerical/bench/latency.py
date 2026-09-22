@@ -38,6 +38,7 @@ report (``latency.md`` + ``latency.json``).
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import math
 from collections.abc import Iterable, Mapping, Sequence
@@ -285,6 +286,93 @@ CATALOG: dict[str, Design] = {
         hardware=GPU_H100, proof_class="cost model (designated-verifier)", source="reports/tensor.md C row: 3.05e6 at H100@0.172",
         verify_note="verifier = prover (model)", notes="bandwidth-bound: 35 GB per batch against 0.12 s of prover compute"),
 }
+
+
+# --- Candidate A: depth-reduction options (costed, not implemented) --------------------------------------------------
+#
+# A's critical path (measured by the transcript's trip counter, backends/gkr/src/main.rs) is
+#     depth = 1 (message 2a) + max(lookup chain, checker chain) + 2 (Ligero r, Q)
+#     lookup chain(n)  = 1 + sum_{k=0}^{n-1} (ceil(k / c) + 1)     the R16 fractional-GKR tree: level k is a k-round
+#                                                                  sumcheck followed by one (mu, lambda) message
+#     checker chain    = sum over the 6 layers of (ceil(b / c) + 2 ceil(s_in / c) + 1)   (no alpha on the last layer)
+# Every instance (9 tables, 2 segments) already runs in lock-step; within an instance the rounds are inherently serial
+# (each challenge must follow the round polynomial it binds).  Three levers shorten a chain: fewer levels (table
+# sharding, n -> n - s), more variables per message (c), and CUTTING the chain by committing an intermediate layer so
+# the pieces above and below it are independent given the commitment (the verifier opens the committed layer at the
+# pieces' endpoints as Ligero linear functionals; the piece below starts from a random point drawn after com_1).
+
+CHECKER_LAYER_ROUNDS_B4096 = (19 + 2 * 10 + 1, 19 + 2 * 10 + 1, 19 + 2 * 10 + 1, 19 + 2 * 10 + 1, 19 + 2 * 10 + 1, 19 + 2 * 10)  # placeholder, replaced by the run
+
+
+def lookup_chain(n: int, c: int = 1, cuts: Sequence[int] = ()) -> int:
+    """Critical-path messages of the R16 fractional GKR of dimension ``n`` with ``c`` variables per message and the
+    tree cut (committed) at the given levels: the longest piece plus the root's lambda message."""
+
+    bounds = [0, *sorted(set(cuts)), n]
+    pieces = [sum(math.ceil(k / c) + 1 for k in range(lo, hi)) for lo, hi in itertools.pairwise(bounds) if hi > lo]
+    return 1 + max(pieces)
+
+
+def checker_chain(layers: Sequence[tuple[int, int]], c: int = 1, cut_after: Sequence[int] = ()) -> int:
+    """Critical-path messages of the checker GKR: ``layers`` = (b, s_in) per layer from the output layer down; a
+    cut after layer i commits layer i's input wires so the layers below run in parallel with those above."""
+
+    rounds = [math.ceil(b / c) + 2 * math.ceil(s / c) + (1 if i < len(layers) - 1 else 0) for i, (b, s) in enumerate(layers)]
+    bounds = [0, *sorted(set(cut_after)), len(layers)]
+    return max(sum(rounds[lo:hi]) for lo, hi in itertools.pairwise(bounds) if hi > lo)
+
+
+def a_depth_options(n_r16: int, layers: Sequence[tuple[int, int]], committed: float, cpu: Design, gpu: Design,
+                    sumcheck_share_gpu: float = 0.62, commit_share_gpu: float = 0.15) -> list[dict[str, Any]]:
+    """The costed depth-reduction options for A at one (n_R16, checker layout): depth, prover-work factor, committed
+    elements delta, e2e at 10 / 50 ms on the CPU and GPU rows, and the RTT above which each beats the baseline on
+    the GPU (``prove x (w - 1) / (depth_base - depth_opt)``).  Work factors: c variables per message multiply the
+    sumcheck buckets by (d+1)^c / ((d+1) c) (PROTOCOL.md 5.4; the GPU's sumcheck share is ``sumcheck_share_gpu``,
+    fused_sumcheck_4090.md: 55-69%); committing more elements scales the commit/open buckets (``commit_share_gpu``)."""
+
+    t = 65_536  # |R16|
+    base_l, base_c = lookup_chain(n_r16), checker_chain(layers)
+    base = 1 + max(base_l, base_c) + 2
+
+    def row(option: str, l: int, ch: int, work_sum: float, extra_committed: float, note: str, work_other: float = 1.0) -> dict[str, Any]:
+        depth = 1 + max(l, ch) + 2
+        commit_frac = extra_committed / committed
+        w_gpu = 1 + sumcheck_share_gpu * (work_sum - 1) + commit_share_gpu * commit_frac + (work_other - 1)
+        w_cpu = 1 + 0.86 * (work_sum - 1) + 0.13 * commit_frac + (work_other - 1)  # CPU: lookup+arith 86%, commit+open 13% of 261 s
+        out = {"option": option, "depth": depth, "lookup_chain": l, "checker_chain": ch, "prover_work_x": round(w_gpu, 3), "prover_work_x_cpu": round(w_cpu, 3),
+               "committed_pct": 100 * commit_frac, "note": note}
+        for tag, d, w in (("cpu", cpu, w_cpu), ("gpu", gpu, w_gpu)):
+            dd = replace(d, prove_s=d.prove_s * w, depth=depth)
+            out[f"e2e10_{tag}"] = e2e(dd, 10.0)["total"]
+            out[f"e2e50_{tag}"] = e2e(dd, 50.0)["total"]
+        if depth >= base:
+            out["wins_above_rtt_ms_gpu"] = "never (deeper)" if w_gpu >= 1 else f"below {gpu.prove_s * (1 - w_gpu) / (depth - base) * 1000:.3g} ms only"
+        elif w_gpu <= 1:
+            out["wins_above_rtt_ms_gpu"] = "0 ms (also cheaper)"
+        else:
+            out["wins_above_rtt_ms_gpu"] = f"{gpu.prove_s * (w_gpu - 1) / (base - depth) * 1000:.3g} ms"
+        return out
+
+    rows = [row("baseline (b): data-parallel units, query wires committed, c = 1", base_l, base_c, 1.0, 0.0, "measured critical path")]
+    for s in (1, 2, 5):
+        rows.append(row(f"R16 sharding s = {s} (2^{s} tables)", lookup_chain(n_r16 - s), base_c, 1.0, (2**s - 1) * t,
+                        f"+{(2**s - 1) * t:,} multiplicities; {2**s}x the R16 transcript (+{(2**s - 1) * 0.1:.1f} MB)"))
+    for c in (2, 3):
+        rows.append(row(f"c = {c} variables per message", lookup_chain(n_r16, c), checker_chain(layers, c), 4**c / (4 * c), 0.0,
+                        f"pads x{(4**c - 1) / (3 * c):.1f}; sumcheck rounds send (d+1)^c - 1 values"))
+    rows.append(row("c = 2 + sharding s = 5", lookup_chain(n_r16 - 5, 2), checker_chain(layers, 2), 2.0, 31 * t, "PROTOCOL.md 5.4 'both'"))
+    for cuts in ((20,), (16, 21), (13, 17, 20, 22, 24)):
+        extra = sum(2 * 6 * 2**ell for ell in cuts)  # p and q at level ell, 6 base coordinates each (BabyBear^6)
+        rows.append(row(f"cut the R16 tree at levels {list(cuts)} [proposal]", lookup_chain(n_r16, 1, cuts), base_c, 1.0, extra,
+                        f"commit p_l, q_l at the cut levels ({extra / 1e6:.1f}M elements); {2 * len(cuts)} more Ligero functionals; pieces run in parallel"))
+    rows.append(row("cut the tree at [16, 21] + commit depth>=3 checker wires (32/unit) [proposal]", lookup_chain(n_r16, 1, (16, 21)), checker_chain(layers, 1, (2,)),
+                    1.0, sum(2 * 6 * 2**ell for ell in (16, 21)) + 32 * 393_216, "checker chain halves too: the two levers that reach ~140 without extra sumcheck work"))
+    rows.append(row("hint-free branch (query wires not committed; 5 layers after the lookups)", base_l + sum(math.ceil(b) + 2 * s + 1 for b, s in layers[1:]) + 1, base_c, 1.0,
+                    -0.30 * committed, "ZK_CONSTRUCTION.md 4: prover 0.94x, committed -30%, depth ~630 by the derived counter", work_other=0.94))
+    for m in (2, 4):
+        rows.append(row(f"checkpoints every m = {m} units (sub-chain as a deep circuit)", base_l, checker_chain([(b - int(math.log2(m)), s) for b, s in layers] * m), 1.0, -190 / 44_937 * committed / m,
+                        f"PROTOCOL.md 12.4: checker depth x~{m}, wire evaluations x{m}: deeper AND slower at every RTT", work_other=0.5 + 0.5 * m))
+    return rows
 
 
 # --- report --------------------------------------------------------------------------------------------------------
