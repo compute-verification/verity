@@ -9,6 +9,7 @@ one is the run dir, the other is parallelism.  Path-valued key params are conten
 from __future__ import annotations
 
 import argparse
+import shlex
 from pathlib import Path
 
 from research.store.tool import Tool
@@ -58,4 +59,72 @@ TC_PROBE = Tool(
     caches=["nvcc"],
     produces=["tc-evidence/v1", "run-files/v1"],
     parse=parse,
+)
+
+# --- instances_hw: frozen instance sets replayed on silicon (lane instances-hw) --------------------------------------------------------
+
+INSTANCES_SCRIPT = "instances_hw.py"
+
+
+def _script_flags(argv: list[str], script: str) -> list[str]:
+    """The tokens after `script` in `argv` -- also when the command is a shell string (`bash -c 'export ...; python .../script --x'`):
+    the string is split and the flags run to the end of the script's own command."""
+    idx = next((i for i, t in enumerate(argv) if Path(t).name == script), None)
+    if idx is not None:
+        return argv[idx + 1:]
+    for t in argv:
+        if script in t and " " in t:
+            toks = shlex.split(t)
+            j = next((i for i, x in enumerate(toks) if Path(x).name == script), None)
+            if j is None:
+                continue
+            flags: list[str] = []
+            for x in toks[j + 1:]:
+                if x in (";", "&&", "||", "|"):
+                    break
+                if x.endswith(";"):
+                    flags.append(x[:-1])
+                    break
+                flags.append(x)
+            return flags
+    return argv[1:]
+
+
+def parse_instances(argv: list[str]) -> dict:
+    """`instances_hw.py`'s flags.  `--root` (the built bench-instances arrays) and `--manifest` are content-resolved; `--out` and
+    `--procs` never enter the derivation."""
+    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    ap.add_argument("--instances", default=None)
+    ap.add_argument("--instruction", default=None)
+    ap.add_argument("--arch", default=None)
+    ap.add_argument("--root", default=None)
+    ap.add_argument("--manifest", default=None)
+    ap.add_argument("--range", default=None)
+    ap.add_argument("--only-ids", default=None)
+    ap.add_argument("--repeat", type=int, default=1)
+    ap.add_argument("--procs", type=int, default=None)
+    ap.add_argument("--sass-check", action="store_true")
+    ap.add_argument("--out", default=None)
+    ns, unknown = ap.parse_known_args(_script_flags(argv, INSTANCES_SCRIPT))
+    out = vars(ns)
+    for k in ("instruction", "arch", "root", "manifest", "range", "only_ids"):
+        if out[k] is None:
+            out.pop(k)
+    if unknown:
+        out["_unknown"] = unknown
+    return out
+
+
+INSTANCES_HW = Tool(
+    name="instances_hw", version="1",
+    command=["python", "tools/tc_probe/instances_hw.py"],
+    closure=["tools/tc_probe/**", "packages/verity/src/verity/ml/tc/**", "packages/verity/src/verity/verification/target.py",
+             "backends/numerical/python/verity_numerical/bench/instances.py", "backends/numerical/python/verity_numerical/bench/instances_gen.py",
+             "fixtures/bench-instances/v1/manifest.json"],
+    key_params=["instances", "instruction", "arch", "root", "manifest", "range", "only_ids", "repeat", "sass_check"],
+    key_conditions=["hw.family"],
+    param_artifacts=["root", "manifest"],
+    caches=["nvcc"],
+    produces=["tc-evidence/v1", "run-files/v1"],
+    parse=parse_instances,
 )
