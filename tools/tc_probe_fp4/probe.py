@@ -585,16 +585,20 @@ def families_fp4_re(rng, n_random: int, scale_kind: str):
         acc[n // 2:] = random_f32_bits(rng, (n - n // 2, 16, 8), 0, 2)
         yield "ue8m0_underflow", codes((n, 16, k)), codes((n, 8, k)), sfa, sfb, acc
 
-    # --- domain edges (record only): NaN / +-inf accumulators over random products; +-FLT_MAX accumulators with the largest
-    # same-sign products (nvf4 cannot overflow on its own, mxf4 can: 6*6 x 64 under 2^127 x 2^127 scales)
+    # --- domain edges (record only): NaN / +-inf accumulators over random products; +-FLT_MAX / +-2^127 accumulators with
+    # the largest same-sign products (nvf4 cannot overflow on its own, mxf4 can: 6*6 x 64 under 2^127 x 2^127 scales);
+    # the second half alternates the sign of the whole tile so both overflow directions are observed
     n = 128
     A, Bt = codes((n, 16, k)), codes((n, 8, k))
     special = np.array([0x7FC00000, 0xFFC00000, 0x7F800001, 0x7FBFFFFF, 0x7F800000, 0xFF800000, 0x7F7FFFFF, 0xFF7FFFFF], np.uint32)
     acc = special[rng.integers(0, len(special), (n, 16, 8))]
     sel = np.arange(n) >= n // 2
+    negative_tile = (np.arange(n) % 2 == 1) & sel
     A[sel] = 0x7
+    A[negative_tile] = 0xF                                   # -6.0 x +6.0: every product -36
     Bt[sel] = 0x7
     acc[sel] = np.where(rng.random((int(sel.sum()), 16, 8)) < 0.5, np.uint32(0x7F7FFFFF), np.uint32(0x7F000000))
+    acc[negative_tile] |= np.uint32(0x80000000)
     if ue4:
         sfa, sfb = scales((n, 16, nblk)), scales((n, 8, nblk))
         sfa[sel], sfb[sel] = 0x7E, 0x7E
