@@ -1416,6 +1416,60 @@
    "note": ""
   }
  },
+ "killing_questions": {
+  "communication_B4096": {
+   "logup_bytes": 2734498664,
+   "bits_bytes": 12487172920,
+   "antman_bytes": 21066536,
+   "ratio_vs_A": 36.6,
+   "ratio_vs_B": 8.6,
+   "transfer_seconds_1gbps": 21.875989312
+  },
+  "prover_seconds_B4096_r3_1thread": 219.81756963541667,
+  "prover_seconds_B1_r3_1thread": 0.07795010416666667,
+  "field_ops_ratio_A_over_vole": 16.3,
+  "field_ops_ratio_B_over_vole": 8.6,
+  "designated_verifier": "acceptable only under a coordinator ruling: no transferable / multi-auditor proof, auditor protects Delta during the session; per extra auditor the full cost again"
+ },
+ "tooling": {
+  "swanky": {
+   "repo": "https://github.com/GaloisInc/swanky",
+   "license": "MIT",
+   "last_commit": "2026-09-21",
+   "rust": "1.98.0",
+   "status": "research software, not for production (README)"
+  },
+  "diet-mac-and-cheese": {
+   "protocol": "QuickSilver / Mac'n'Cheese over SIEVE Circuit IR",
+   "fields": [
+    "F2",
+    "F40b",
+    "F63b",
+    "F61p",
+    "F127p",
+    "F128p",
+    "F384p",
+    "F384q",
+    "Secp256k1",
+    "Secp256k1order"
+   ],
+   "plugins": {
+    "permutation-check": true,
+    "mux": true,
+    "iter": true,
+    "vectors": true,
+    "ram": false,
+    "extended-arithmetic": false
+   },
+   "gap": "no F_{p^r} MACs over a prime p: 2^-128 needs F384p at r=1 or a new backend"
+  },
+  "emp-zk": {
+   "repo": "https://github.com/emp-toolkit/emp-zk",
+   "language": "C++",
+   "protocols": "Wolverine, QuickSilver, Mystique, AntMan reference implementations"
+  },
+  "overnight_prototype": "diagnostic only: transition unit as SIEVE IR over F61p with dietmc, r=1 (~2^-33)"
+ },
  "assumptions": [
   "wall time = (VOLE correlations + multiplication checks)/2 / anchor rate x ext_factor(r); verifier = prover",
   "ext_factor(r) = (1 + EXT_MULT_COST[r]) / 2: half of the per-gate work is MAC arithmetic in F_{p^r}",
