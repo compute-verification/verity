@@ -1,7 +1,7 @@
 {
  "meta": {
   "lane": "b-v2",
-  "generated": "2026-09-22T08:07:48Z",
+  "generated": "2026-09-22T08:17:22Z",
   "run_ids": {
    "v2_bench": "r20260922-075021-2b1b",
    "commit": "r20260922-064722-07c7",
@@ -65,6 +65,17 @@
    "v1_blocked_ms": 16.550366999581456,
    "v1_blocked_g": 8,
    "v1_floor_blocked_ms": 9.741932494047619
+  },
+  "radix4": {
+   "run": "r20260922-081137-109d",
+   "ratio": 0.9291821364303583,
+   "v2_commit_radix2_ms": 16.265727996826172,
+   "v2_commit_radix4_ms": 15.113823890686035,
+   "v2_encoder_radix2_ms": 10.258432388305664,
+   "v2_encoder_radix4_ms": 9.175968170166016,
+   "exact": true,
+   "v1_commit_radix2_ms": 49.18476867675781,
+   "v1_commit_radix4_ms": 45.626495361328125
   }
  },
  "shape": {
@@ -426,10 +437,10 @@
   "measured_fraction": 0.8923689306272122
  },
  "crossover": {
-  "v2_fixed_ms_per_proof": 9.18659773682761,
-  "v2_marginal_us_per_vu": 8.398852810895766,
+  "v2_fixed_ms_per_proof": 9.05180645915747,
+  "v2_marginal_us_per_vu": 8.131131820629715,
   "v1_us_per_vu": 28.418694387448625,
-  "B_star_time": 458.8746470195303,
+  "B_star_time": 446.1751592555554,
   "B_star_rows": 214.65545755490155,
   "v2_table_rows": 11408,
   "v2_table_elements_inverted": 6257830,
@@ -451,7 +462,7 @@
    "label": "MEASURED buckets on RTX 4090 at the checker-v2 shape (commitment, structured linear test, IRS, F_t + F_c quadratic tests, inversions, openings); r^T A scalars, witness / hint generation, PRG modelled",
    "simt_scale": 1.0,
    "measured_ms": {
-    "commitment": 17.387935638427734,
+    "commitment": 16.15655918462785,
     "matmul:ligero_row_combination": 10.382336378097534,
     "simt:quadratic_hadamards": 5.380831964313984,
     "simt:helper_inversions": 5.193513417183404,
@@ -459,7 +470,7 @@
    },
    "detail": {
     "commitment": {
-     "name": "blake3_s512_ov0_keep1_fused",
+     "name": "blake3_s512_ov0_keep1_fused_radix4",
      "hash": "blake3",
      "slice_rows": 512,
      "overlap": false,
@@ -468,15 +479,17 @@
      "bucket": "commitment",
      "shape": "v2",
      "rows": 104217,
-     "ms_median": 17.387935638427734,
-     "us_per_row": 0.16684356331911046,
+     "ms_median": 16.15655918462785,
+     "us_per_row": 0.15502805861450483,
      "bit_exact": true,
      "bytes_in": 1707491328,
      "codeword_bytes": 6829965312,
      "read_floor_ms": 1.6939398095238096,
      "codeword_gb_per_s": 392.7990909343845,
      "store_bytes": 5122473984,
-     "device_memory_in_use_bytes": 9708896256
+     "device_memory_in_use_bytes": 9708896256,
+     "ms_median_radix2": 17.387935638427734,
+     "radix4_run": "r20260922-081137-109d"
     },
     "irs_row_combination": {
      "name": "irs_row_combination_c1024",
@@ -975,8 +988,8 @@
      "paths_returned": 192
     }
    },
-   "t.total_ms": 43.58829885025666,
-   "t.commitment_ms": 17.387935638427734,
+   "t.total_ms": 42.35692239645678,
+   "t.commitment_ms": 16.15655918462785,
    "t.matmul_ms": 10.382336378097534,
    "t.simt_field_ms": 11.808928361642668,
    "t.extra_ms": 2.509232531168631,
@@ -987,9 +1000,9 @@
     "hint_gen": 0.38083874092009684,
     "prg": 1.1190271999999999
    },
-   "measured_fraction": 0.937266445509624,
-   "seconds_per_vu": 1.0641674523988443e-05,
-   "overhead.vs_native_peak": 1080795.0688425764
+   "measured_fraction": 0.9354426911504289,
+   "seconds_per_vu": 1.0341045506947457e-05,
+   "overhead.vs_native_peak": 1050262.4342993512
   },
   {
    "design": "B",
@@ -1006,7 +1019,7 @@
    "label": "SCALING: measured buckets / 0.47 (INT32 issue-rate ratio), modelled buckets at A100 peaks",
    "simt_scale": 0.4720982142857143,
    "measured_ms": {
-    "commitment": 17.387935638427734,
+    "commitment": 16.15655918462785,
     "matmul:ligero_row_combination": 10.382336378097534,
     "simt:quadratic_hadamards": 5.380831964313984,
     "simt:helper_inversions": 5.193513417183404,
@@ -1014,7 +1027,7 @@
    },
    "detail": {
     "commitment": {
-     "name": "blake3_s512_ov0_keep1_fused",
+     "name": "blake3_s512_ov0_keep1_fused_radix4",
      "hash": "blake3",
      "slice_rows": 512,
      "overlap": false,
@@ -1023,15 +1036,17 @@
      "bucket": "commitment",
      "shape": "v2",
      "rows": 104217,
-     "ms_median": 17.387935638427734,
-     "us_per_row": 0.16684356331911046,
+     "ms_median": 16.15655918462785,
+     "us_per_row": 0.15502805861450483,
      "bit_exact": true,
      "bytes_in": 1707491328,
      "codeword_bytes": 6829965312,
      "read_floor_ms": 1.6939398095238096,
      "codeword_gb_per_s": 392.7990909343845,
      "store_bytes": 5122473984,
-     "device_memory_in_use_bytes": 9708896256
+     "device_memory_in_use_bytes": 9708896256,
+     "ms_median_radix2": 17.387935638427734,
+     "radix4_run": "r20260922-081137-109d"
     },
     "irs_row_combination": {
      "name": "irs_row_combination_c1024",
@@ -1530,8 +1545,8 @@
      "paths_returned": 192
     }
    },
-   "t.total_ms": 94.49854805985453,
-   "t.commitment_ms": 36.83118281804078,
+   "t.total_ms": 91.89024237993799,
+   "t.commitment_ms": 34.22287713812423,
    "t.matmul_ms": 21.99189927842882,
    "t.simt_field_ms": 27.628180264921177,
    "t.extra_ms": 5.315064652309914,
@@ -1542,9 +1557,9 @@
     "hint_gen": 1.6131938461538462,
     "prg": 1.1190271999999999
    },
-   "measured_fraction": 0.915746981412763,
-   "seconds_per_vu": 2.307093458492542e-05,
-   "overhead.vs_native_peak": 2343141.793781488
+   "measured_fraction": 0.9133554584257785,
+   "seconds_per_vu": 2.2434141206039546e-05,
+   "overhead.vs_native_peak": 2278467.4662383916
   },
   {
    "design": "B",
@@ -1561,7 +1576,7 @@
    "label": "SCALING: measured buckets / 0.81 (INT32 issue-rate ratio), modelled buckets at H100 peaks",
    "simt_scale": 0.8102678571428571,
    "measured_ms": {
-    "commitment": 17.387935638427734,
+    "commitment": 16.15655918462785,
     "matmul:ligero_row_combination": 10.382336378097534,
     "simt:quadratic_hadamards": 5.380831964313984,
     "simt:helper_inversions": 5.193513417183404,
@@ -1569,7 +1584,7 @@
    },
    "detail": {
     "commitment": {
-     "name": "blake3_s512_ov0_keep1_fused",
+     "name": "blake3_s512_ov0_keep1_fused_radix4",
      "hash": "blake3",
      "slice_rows": 512,
      "overlap": false,
@@ -1578,15 +1593,17 @@
      "bucket": "commitment",
      "shape": "v2",
      "rows": 104217,
-     "ms_median": 17.387935638427734,
-     "us_per_row": 0.16684356331911046,
+     "ms_median": 16.15655918462785,
+     "us_per_row": 0.15502805861450483,
      "bit_exact": true,
      "bytes_in": 1707491328,
      "codeword_bytes": 6829965312,
      "read_floor_ms": 1.6939398095238096,
      "codeword_gb_per_s": 392.7990909343845,
      "store_bytes": 5122473984,
-     "device_memory_in_use_bytes": 9708896256
+     "device_memory_in_use_bytes": 9708896256,
+     "ms_median_radix2": 17.387935638427734,
+     "radix4_run": "r20260922-081137-109d"
     },
     "irs_row_combination": {
      "name": "irs_row_combination_c1024",
@@ -2085,8 +2102,8 @@
      "paths_returned": 192
     }
    },
-   "t.total_ms": 53.53075538858952,
-   "t.commitment_ms": 21.459490815470044,
+   "t.total_ms": 52.011040095745585,
+   "t.commitment_ms": 19.939775522626107,
    "t.matmul_ms": 12.813461976274644,
    "t.simt_field_ms": 14.572469887385616,
    "t.extra_ms": 3.0967938676681737,
@@ -2097,9 +2114,9 @@
     "hint_gen": 0.46951164179104476,
     "prg": 1.1190271999999999
    },
-   "measured_fraction": 0.9418917790155988,
-   "seconds_per_vu": 1.3069032077292364e-05,
-   "overhead.vs_native_peak": 1327323.5703500058
+   "measured_fraction": 0.9401939096419544,
+   "seconds_per_vu": 1.2698007835875387e-05,
+   "overhead.vs_native_peak": 1289641.420831094
   },
   {
    "design": "B",
@@ -2116,7 +2133,7 @@
    "label": "MEASURED buckets on RTX 4090 at the checker-v2 shape (commitment, structured linear test, IRS, F_t + F_c quadratic tests, inversions, openings); r^T A scalars, witness / hint generation, PRG modelled; table side: public_coefficients (linear test, inversions at its shape; commitment / IRS / openings at the helper_rows row count: upper bound)",
    "simt_scale": 1.0,
    "measured_ms": {
-    "commitment": 17.387935638427734,
+    "commitment": 16.15655918462785,
     "matmul:ligero_row_combination": 5.188607931137085,
     "simt:quadratic_hadamards": 5.380831964313984,
     "simt:helper_inversions": 3.753890700296503,
@@ -2124,7 +2141,7 @@
    },
    "detail": {
     "commitment": {
-     "name": "blake3_s512_ov0_keep1_fused",
+     "name": "blake3_s512_ov0_keep1_fused_radix4",
      "hash": "blake3",
      "slice_rows": 512,
      "overlap": false,
@@ -2133,15 +2150,17 @@
      "bucket": "commitment",
      "shape": "v2",
      "rows": 104217,
-     "ms_median": 17.387935638427734,
-     "us_per_row": 0.16684356331911046,
+     "ms_median": 16.15655918462785,
+     "us_per_row": 0.15502805861450483,
      "bit_exact": true,
      "bytes_in": 1707491328,
      "codeword_bytes": 6829965312,
      "read_floor_ms": 1.6939398095238096,
      "codeword_gb_per_s": 392.7990909343845,
      "store_bytes": 5122473984,
-     "device_memory_in_use_bytes": 9708896256
+     "device_memory_in_use_bytes": 9708896256,
+     "ms_median_radix2": 17.387935638427734,
+     "radix4_run": "r20260922-081137-109d"
     },
     "irs_row_combination": {
      "name": "irs_row_combination_c1024",
@@ -2642,8 +2661,8 @@
      "paths_returned": 192
     }
    },
-   "t.total_ms": 36.95494768640931,
-   "t.commitment_ms": 17.387935638427734,
+   "t.total_ms": 35.72357123260943,
+   "t.commitment_ms": 16.15655918462785,
    "t.matmul_ms": 5.188607931137085,
    "t.simt_field_ms": 10.369305644755764,
    "t.extra_ms": 2.509232531168631,
@@ -2654,9 +2673,9 @@
     "hint_gen": 0.38083874092009684,
     "prg": 1.1190271999999999
    },
-   "measured_fraction": 0.9260058776359462,
-   "seconds_per_vu": 9.022204025002274e-06,
-   "overhead.vs_native_peak": 916317.5962892935
+   "measured_fraction": 0.9234553314040087,
+   "seconds_per_vu": 8.721575007961286e-06,
+   "overhead.vs_native_peak": 885784.9617460681
   },
   {
    "design": "B",
@@ -2673,7 +2692,7 @@
    "label": "SCALING: measured buckets / 0.47 (INT32 issue-rate ratio), modelled buckets at A100 peaks; table side: public_coefficients",
    "simt_scale": 0.4720982142857143,
    "measured_ms": {
-    "commitment": 17.387935638427734,
+    "commitment": 16.15655918462785,
     "matmul:ligero_row_combination": 5.188607931137085,
     "simt:quadratic_hadamards": 5.380831964313984,
     "simt:helper_inversions": 3.753890700296503,
@@ -2681,7 +2700,7 @@
    },
    "detail": {
     "commitment": {
-     "name": "blake3_s512_ov0_keep1_fused",
+     "name": "blake3_s512_ov0_keep1_fused_radix4",
      "hash": "blake3",
      "slice_rows": 512,
      "overlap": false,
@@ -2690,15 +2709,17 @@
      "bucket": "commitment",
      "shape": "v2",
      "rows": 104217,
-     "ms_median": 17.387935638427734,
-     "us_per_row": 0.16684356331911046,
+     "ms_median": 16.15655918462785,
+     "us_per_row": 0.15502805861450483,
      "bit_exact": true,
      "bytes_in": 1707491328,
      "codeword_bytes": 6829965312,
      "read_floor_ms": 1.6939398095238096,
      "codeword_gb_per_s": 392.7990909343845,
      "store_bytes": 5122473984,
-     "device_memory_in_use_bytes": 9708896256
+     "device_memory_in_use_bytes": 9708896256,
+     "ms_median_radix2": 17.387935638427734,
+     "radix4_run": "r20260922-081137-109d"
     },
     "irs_row_combination": {
      "name": "irs_row_combination_c1024",
@@ -3199,8 +3220,8 @@
      "paths_returned": 192
     }
    },
-   "t.total_ms": 80.44776167023934,
-   "t.commitment_ms": 36.83118281804078,
+   "t.total_ms": 77.8394559903228,
+   "t.commitment_ms": 34.22287713812423,
    "t.matmul_ms": 10.990526492432217,
    "t.simt_field_ms": 24.57876666130259,
    "t.extra_ms": 5.315064652309914,
@@ -3211,9 +3232,9 @@
     "hint_gen": 1.6131938461538462,
     "prg": 1.1190271999999999
    },
-   "measured_fraction": 0.9010315792403306,
-   "seconds_per_vu": 1.9640566814023277e-05,
-   "overhead.vs_native_peak": 1994745.067049239
+   "measured_fraction": 0.8977152675997161,
+   "seconds_per_vu": 1.9003773435137402e-05,
+   "overhead.vs_native_peak": 1930070.7395061424
   },
   {
    "design": "B",
@@ -3230,7 +3251,7 @@
    "label": "SCALING: measured buckets / 0.81 (INT32 issue-rate ratio), modelled buckets at H100 peaks; table side: public_coefficients",
    "simt_scale": 0.8102678571428571,
    "measured_ms": {
-    "commitment": 17.387935638427734,
+    "commitment": 16.15655918462785,
     "matmul:ligero_row_combination": 5.188607931137085,
     "simt:quadratic_hadamards": 5.380831964313984,
     "simt:helper_inversions": 3.753890700296503,
@@ -3238,7 +3259,7 @@
    },
    "detail": {
     "commitment": {
-     "name": "blake3_s512_ov0_keep1_fused",
+     "name": "blake3_s512_ov0_keep1_fused_radix4",
      "hash": "blake3",
      "slice_rows": 512,
      "overlap": false,
@@ -3247,15 +3268,17 @@
      "bucket": "commitment",
      "shape": "v2",
      "rows": 104217,
-     "ms_median": 17.387935638427734,
-     "us_per_row": 0.16684356331911046,
+     "ms_median": 16.15655918462785,
+     "us_per_row": 0.15502805861450483,
      "bit_exact": true,
      "bytes_in": 1707491328,
      "codeword_bytes": 6829965312,
      "read_floor_ms": 1.6939398095238096,
      "codeword_gb_per_s": 392.7990909343845,
      "store_bytes": 5122473984,
-     "device_memory_in_use_bytes": 9708896256
+     "device_memory_in_use_bytes": 9708896256,
+     "ms_median_radix2": 17.387935638427734,
+     "radix4_run": "r20260922-081137-109d"
     },
     "irs_row_combination": {
      "name": "irs_row_combination_c1024",
@@ -3756,8 +3779,8 @@
      "paths_returned": 192
     }
    },
-   "t.total_ms": 45.34414017811125,
-   "t.commitment_ms": 21.459490815470044,
+   "t.total_ms": 43.82442488526732,
+   "t.commitment_ms": 19.939775522626107,
    "t.matmul_ms": 6.403571220797284,
    "t.simt_field_ms": 12.795745432384704,
    "t.extra_ms": 3.0967938676681737,
@@ -3768,9 +3791,9 @@
     "hint_gen": 0.46951164179104476,
     "prg": 1.1190271999999999
    },
-   "measured_fraction": 0.9314006848213731,
-   "seconds_per_vu": 1.1070346723171693e-05,
-   "overhead.vs_native_peak": 1124332.089072125
+   "measured_fraction": 0.9290218417760048,
+   "seconds_per_vu": 1.0699322481754716e-05,
+   "overhead.vs_native_peak": 1086649.9395532135
   }
  ]
 }

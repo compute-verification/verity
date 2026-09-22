@@ -191,6 +191,7 @@ def markdown(rep: dict) -> str:
           ("* Still modelled: r^T A scalars / pattern (O(rows + pattern)), witness / hint generation (v2 has 15 hints per unit, v1 225: the CPU anchor's 4.7 s per 4,096 "
           "units is a v1 number), prover randomness; the BabyBear repair rows are checker-min's modelled deltas (stated in `V2_SHAPE.md` section 2)."), "",
           *(_blocked_section(rep) if rep["meta"].get("inverse_blocked") else []),
+          *(_radix4_section(rep) if rep["meta"].get("radix4") else []),
           "## Files", "",
           ("`backends/direct/encode/V2_SHAPE.md`, `v2_shape.py` / `v2_shape.json`, `buckets_v2.py` (the `F_c`-triple kernel + reference), `v2_bench.py`, "
           f"`results_v2_{rep['meta']['run_ids']['v2_bench']}.json`, `reprice_v2.py` (this report); ledger `ledger/b-v2.jsonl`.")]
@@ -235,8 +236,45 @@ def _blocked_section(rep: dict) -> list[str]:
              + v1 + "  The inversions bucket above uses the blocked kernel (the `batch_inverse` rows carry `ms_median_plain`)."), ""]
 
 
+def apply_radix4(bench: dict, radix4: dict, run_id: str) -> dict:
+    """Scale the ``commitment`` rows by the radix-4 / radix-2 fused-commitment ratio measured in the same run at the v2 row count
+    (``radix4_bench.py``; keep=True, the configuration the report uses)."""
+    rs = [r for r in radix4["results"] if r["bucket"] == "commitment" and r["rows"] == 104217 and r["keep"]]
+    r2 = next(r for r in rs if not r["radix4"])
+    r4 = next(r for r in rs if r["radix4"])
+    ratio = r4["ms_median"] / r2["ms_median"]
+    for r in bench["results"]:
+        if r.get("bucket") == "commitment":
+            r["ms_median_radix2"] = r["ms_median"]
+            r["ms_median"] *= ratio
+            r["us_per_row"] *= ratio
+            r["name"] += "_radix4"
+            r["radix4_run"] = run_id
+    enc = [r for r in radix4["results"] if r["bucket"] == "encoder" and r["rows"] == 104217]
+    e2 = min((r for r in enc if not r["radix4"]), key=lambda r: r["ms_median"])
+    e4 = min((r for r in enc if r["radix4"]), key=lambda r: r["ms_median"])
+    v1 = [r for r in radix4["results"] if r["bucket"] == "commitment" and r["rows"] == 310602 and r["keep"]]
+    return {"run": run_id, "ratio": ratio, "v2_commit_radix2_ms": r2["ms_median"], "v2_commit_radix4_ms": r4["ms_median"],
+            "v2_encoder_radix2_ms": e2["ms_median"], "v2_encoder_radix4_ms": e4["ms_median"], "exact": all(radix4["exact"].values()),
+            "v1_commit_radix2_ms": next(r["ms_median"] for r in v1 if not r["radix4"]), "v1_commit_radix4_ms": next(r["ms_median"] for r in v1 if r["radix4"])}
+
+
+def _radix4_section(rep: dict) -> list[str]:
+    b = rep["meta"]["radix4"]
+    return ["## Encoder: radix-4 shared-memory stages (`RSEncoderSIMT(radix4=True)`, run `%s`)" % b["run"], "",
+            (f"The shared-memory stages (m < THREADS; the register stages m >= THREADS were already free of shared-memory traffic) are fused in pairs: "
+             f"the quad is closed under both radix-2 stages, so the arithmetic is unchanged (bit-exact, `exact = {b['exact']}`) with half the shared-memory "
+             f"traffic and half the `__syncthreads`.  Encoder alone at 104,217 rows: {b['v2_encoder_radix2_ms']:.2f} -> **{b['v2_encoder_radix4_ms']:.2f} ms** "
+             f"({b['v2_encoder_radix2_ms'] / b['v2_encoder_radix4_ms']:.2f}x); fused commitment (Blake3, cosets kept): {b['v2_commit_radix2_ms']:.2f} -> "
+             f"**{b['v2_commit_radix4_ms']:.2f} ms** ({1 / b['ratio']:.2f}x; the hash and the store write are unchanged).  At the v1 row count: "
+             f"{b['v1_commit_radix2_ms']:.1f} -> {b['v1_commit_radix4_ms']:.1f} ms.  The commitment bucket above is the run-`{rep['meta']['run_ids']['v2_bench']}` "
+             f"measurement scaled by {b['ratio']:.3f} (`ms_median_radix2` kept on the row); `commit_stream.py`'s default encoder is now radix-4."), ""]
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--radix4", default=None, help="radix4_bench.py result: use the radix-4 encoder's fused-commitment ratio")
+    ap.add_argument("--radix4-run", default="")
     ap.add_argument("--bench", required=True)
     ap.add_argument("--inverse", default=None, help="inverse_bench.py result: use the blocked kernel's timings for the inversions bucket")
     ap.add_argument("--inverse-run", default="")
@@ -249,8 +287,10 @@ def main(argv=None) -> None:
     shape = json.loads(Path(a.shape).read_text())
     v1 = json.loads(Path(a.v1).read_text())
     blocked = apply_blocked_inverse(bench, json.loads(Path(a.inverse).read_text()), a.inverse_run) if a.inverse else None
+    radix4 = apply_radix4(bench, json.loads(Path(a.radix4).read_text()), a.radix4_run) if a.radix4 else None
     rep = reprice(bench, shape, v1)
     rep["meta"]["inverse_blocked"] = blocked
+    rep["meta"]["radix4"] = radix4
     for r in rep["rows"]:
         print(f"{r['table_side']:20} {r['gpu']:8} {r['t.total_ms']:8.1f} ms  {r['measured_fraction']:.0%} measured  overhead {r['overhead.vs_native_peak']:.3g}")
     print("crossover:", json.dumps({k: v for k, v in rep["crossover"].items() if k != "note"}))

@@ -231,7 +231,8 @@ class StreamingCommitter:
         self.hash, self.slice_rows, self.overlap, self.graph, self.keep = hash, slice_rows, overlap, graph, keep_codeword
         if encoder is None:
             sms = cp.cuda.runtime.getDeviceProperties(0)["multiProcessorCount"]
-            encoder = RSEncoderSIMT(threads=1024, min_blocks_per_sm=2, blocks=sms)   # 64 registers, one 32-warp CTA per SM
+            # 64 registers, one 32-warp CTA per SM; radix-4 shared-memory stages (b-v2: same arithmetic, 1.07x on the fused commitment)
+            encoder = RSEncoderSIMT(threads=1024, min_blocks_per_sm=2, blocks=sms, radix4=True)
         self.enc = encoder
         self.k, self.n = self.enc.k, self.enc.n
         self.hash_block = hash_block
