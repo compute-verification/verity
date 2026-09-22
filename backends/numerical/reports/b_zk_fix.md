@@ -123,3 +123,33 @@ once operands are committed (auth-integration LEAF_V2). No private-operand state
   unit prover shares `config_for` and `prove`, so it is expected to pass -- unverified in this lane.
 * O-fix6. A private-operand statement (operands committed, not published) is what would make any ZK label mean
   something for Verity; out of scope here.
+
+## 7. Status after red-team-zk-2 (lane b-zk-fix-2, branch `lane/b-zk-fix-2`, run `r20260922-113615-2dfa`, vy-g3)
+
+red-team-zk-2 (`redteam_zk2.md`) EARNED both labels for `r20260922-105905-2021` and required three repairs; all
+three are on `lane/b-zk-fix-2`:
+
+* **G1 (simulator bug, fixed).** The dummy run of `redteam/simulator.py` sent `v0, q0` uniform without the public
+  constraints `v|_H = beta`, `sum_H q = rhs`. Their `zk2_dummy.PublicCheckVerifier` (aborts at slot 2 iff a public
+  check fails) separated the worlds with advantage 1: **before** real 0/12, sim 12/12 (`redteam_zk2_dummy_laptop.json`,
+  l = 256). Fix: after `V*` opens `r1` the round-1 challenges are known, so the dummy `v0` is drawn on `{v|_H = beta}`
+  and `q0` on `{sum_H q = rhs}` (`_sample_v` / `_sample_q`, shared with the fake-tableau build; `w0, h0` are uniform in
+  the honest world already). **After** (`r20260922-113615-2dfa`): l = 256, n = 24: real 0/24, sim 0/24, advantage 0;
+  real layout l = 16384 (170 VUs), n = 6: real 0/6, sim 0/6. `PublicCheckVerifier` is now in the `redteam/run.py`
+  V* battery (`aborting_on_public_checks`, asserted 0/0). The rest of the suite at the real layout re-passes:
+  honest V accepted under the real hash, 0 oracle points programmed; statement-adaptive V* same columns real vs
+  simulated, both accepted; adaptive V* slot 1 / 2 aborts identical; abort-on-root 4/24 vs 7/24 (expected 0.25);
+  abort-on-`q` 0/6 vs 0/6; indistinguishability 24 vs 24: 0 positions below Bonferroni on every component
+  (median p 0.46-0.47); leak 0/16150. (The "before" could not be re-run inside the same run id: the shipped tree
+  carries no git history; the red team's laptop number is the before.)
+* **G2 (text).** PROTOCOL.md 8c no longer says "constant expected rewinds": against a V* aborting on the replay with
+  probability `p` the GK loop needs `1/(1-p)` expected rewinds; `max_rewinds = 8` outputs an abort transcript on
+  exhaustion, a simulation error of `(1-p) p^8` (up to 0.039 at p = 0.9). The GK estimator is not implemented. Also in
+  the interactive ledger row's note.
+* **G3 (assumption).** The interactive `COMPLETE_ZK_BACKEND` row now carries `assumptions = ["hash", "random-oracle
+  (Merkle hiding)"]`: the unopened Merkle leaves are unsalted `Blake3(column)`, so their hiding is ROM-flavoured. 8c's
+  "no random oracle for zero knowledge" was replaced by exactly that item, with the cost of salting (+32 bytes hashed
+  per leaf, +32 t bytes per proof in the openings, ~0.1 % of the transcript) -- not implemented.
+
+Open after this: O-zk2-4 (abort-rate tests still unpowered, n = 24 / 6 here), O-zk2-5 / O-fix6 (private-operand
+statement), the GK estimator, salted leaves.
