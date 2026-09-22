@@ -330,8 +330,8 @@ def _challenge2(stmt: bytes, root: bytes, w: np.ndarray, h: np.ndarray, t: int, 
     ctr = 0
     while len(cols) < t:
         raw = hashlib.shake_256(seed + ctr.to_bytes(4, "little")).digest(4 * 2 * t)
-        for v in np.frombuffer(raw, dtype="<u4"):
-            c = int(v) % n
+        for u in np.frombuffer(raw, dtype="<u4"):
+            c = int(u) % n
             if c not in seen:
                 seen.add(c)
                 cols.append(c)
