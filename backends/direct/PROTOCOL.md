@@ -538,6 +538,12 @@ done from outside the crate without running `open` twice. Residual, as the red t
 enter the reduced FRI openings through two scalars per opening point, so matching a committed fold at all
 \(t=100\) query points is 100 equations in 2 unknowns; a checklist violation, not a known forgery. Tracked in
 `TRANSCRIPT_CHECKLIST.md`; take upstream's fix (observe openings before `alpha`) when Plonky3 is bumped.
+**Closed 2026-09-22 by lane `b-bind`** (14.7, last paragraph): `p3-fri` is vendored at `vendor/p3-fri`
+(`[patch.crates-io]` in this crate and in `redteam/vu-battery-b`); `TwoAdicFriPcs::open` computes every opened
+value first, absorbs them (`observe_ext_element`), then samples `alpha`; `verify` absorbs the claimed openings before
+`alpha`. `alpha`, the FRI betas and the query indices now depend on the openings. **The transcript differs from
+upstream 0.4.3-succinct**: proofs made before the patch do not verify after it (and vice versa); every number in
+this file from 14.7 on is on the patched transcript.
 
 **What this does not do.** The zero-VU padding rows are not part of the statement (they carry word `0`, and
 \(B\) is bound, so a prover cannot smuggle a real VU into the padding without changing \(B\)). Binding the
@@ -896,7 +902,33 @@ widths, extension degree). `vu-bench --lookup` asserts the wrong-word, wrong-\(B
 on every run. `vu-neg --lookup` (52 negatives, `lookup_failing_rows`), the babybear-rules battery in `--lookup`
 mode and the limb battery (`run_battery.sh`) are in `run_bind_gate.sh`; results in 14.8.
 
-**What stays open.** The F19 residual of 12.5 (openings at \(\zeta\) absorbed before \(\alpha\) / the query indices
-inside `p3-fri 0.4.3::verify_shape_and_sample_challenges`) applies to this path too, through the same `pcs.verify`.
+**The F19 residual (openings before \(\alpha\)), closed for both realisations.** 12.5 left the ζ-openings
+unabsorbed before the PCS batching challenge \(\alpha\) and the FRI query indices, because the sampling sits in
+`p3-fri 0.4.3`'s `TwoAdicFriPcs::{open, verify}`. This lane vendors the crate (`backends/direct/vendor/p3-fri`, a
+copy of `0.4.3-succinct` with the two functions changed, each change marked `verity patch`) and points both root
+manifests at it with `[patch.crates-io]`. `open` now runs two passes: the barycentric openings of every matrix at
+every point are computed and absorbed (`observe_ext_element`, one element per opened value: \(2 \times (401 + 6 +
+456) + 4 \times 5\) extension elements for the LogUp proof), *then* \(\alpha\) is sampled and the reduced openings
+are formed; `verify` absorbs the claimed openings from the proof before sampling \(\alpha\). Since \(\alpha\) is
+sampled before `prover::prove` (the FRI commit phase), the betas and the query indices depend on the openings too.
+Cost: \(\approx 1\,750\) extra challenger observes per proof (µs). **The transcript changes**: proofs produced
+before this patch (every `result.json` of 12.5, 14.5, the b-lookup lane) verify only against the unpatched verifier;
+nothing else in the proof (bytes, shape, opened values) changes. The `RttChallenger` counts the observes as part of
+the message before \(\alpha\); since the openings are a prover message the verifier's \(\alpha\) now answers,
+`rounds.sequential_depth` grows by one (DEPTH_PLACEHOLDER) -- the honest interactive count of a transcript in
+which \(\alpha\) depends on the openings.
+
 The `verify_lookup` (unbound) entry point remains for the diagnostic tests and the `--unbound` baseline; it is not a
 proof verifier and its result is labelled `statement_binding.bound = false`.
+
+### 14.8 Gate and timing of the bound LogUp realisation (vy-cpu3, 12 threads, shared with red-team-3)
+
+Gate run `r20260922-091130-525e` (before the p3-fri patch; the same gate is repeated in the timing run below):
+`cargo test --release --tests -- --include-ignored` 42 tests green (unit negatives 24, `chain.rs` 6 incl.
+`statement_suite`, `statement.rs` 4, `lookup.rs` 3 incl. the 2^17 round trip, `lookup_statement.rs` 5); `vu-neg`
+52/52 rejected in all four (field × realisation) modes; `vu-bench` 64 VUs bound in all four modes plus BabyBear^5
+LogUp and `--bind-operands` in both realisations, the wrong-word / wrong-\(B\) / substituted-table rejections
+asserted inline; `run_battery.sh` exit 0 (36 B cases 0 FORGED, A 14/14); the babybear-rules battery in `--lookup`
+mode 83/83 rejected, 87/87 controls, 6/6 extras. Records: `results/b-bind/`.
+
+TIMING_PLACEHOLDER

@@ -197,6 +197,35 @@ rejected over both fields; `vu-bench` 64 VUs bound over both fields (+ BabyBear 
 | F3 leaf/v2 systematic RS leaks payload (privacy) | **fixed** | `7232e27` (+ docs `354b3ba`) | Codeword domain moved to the coset `31·H_n` (BabyBear's generator, `∉ H_n ⊇ H_k`): disjoint from the message domain, so no codeword symbol is a message symbol. `code_text` gains `/coset=31`; `encode_row` = coset NTT, `decode_row` = coset INTT, prover/verifier evaluate `v`, `q`, `r_i` at `η_c = 31·g_n^c`. The committer's "free systematic quarter" is gone (all `n` symbols computed); the b-encode lane's cosets-only kernel is 31.6 vs 32.2 ms, so no `explore.tensor` / `zk_cost` number moves. `LEAF_V2.md` 2/4/5/6, `ZK_CONSTRUCTION.md` 2.1, `auth_integration.md` privacy column + item 7 updated. | `tests/reference/test_leaf_v2.py::test_no_opened_column_is_a_payload_word` (opens every column of every chunk; the old encoding is shown to expose every word, so the test is not vacuous); `redteam.leaf_v2_exhaustion` now reports `payload_words_in_clear = 0` in every session (`leaf_v2_exhaustion.json` regenerated; `campaign_clear_words` 0.0/row, the pre-fix row kept as `campaign_clear_words_before_fix`). |
 | F4 randomizer exhaustion (leaf/v2) | **stays true, stated** | `354b3ba` | Not a bug the coset fixes: `oracle = True` from session 2 at the reduced code, row determined at ~25 campaign sessions, unchanged. `LEAF_V2.md` 6 now says so and names the only fix -- re-randomisation per session -- as a protocol-owner decision (0.6 s per weight re-commitment vs one private proof per commitment). | `leaf_v2_exhaustion.json` `oracle`, `campaign_projection` |
 
+### 7.1 Carried to the LogUp realisation and the F19 residual closed (lane `b-bind`, 2026-09-22; branch `lane/b-bind`)
+
+`lane/soundness-fixes` was merged onto `main` (b-lookup's LogUp realisation, the latency lane's `--rtt-ms` hooks)
+by this lane; the LogUp prover/verifier (`lookup_stark.rs`, a fork of uni-stark with two extra rounds) had shipped
+with the pre-fix behaviour -- no statement, `degree_bits` from the proof -- which red-team-3's `redteam-logup-b`
+battery exercises as `zero_batch_as_any_statement` and `degree_bits_from_proof` against `verify_lookup`. Gate run
+`r20260922-091130-525e` (vy-cpu3, 12 threads): 42 tests incl. `tests/lookup_statement.rs` (5, 2^17 rows) green,
+`vu-neg` 52/52 in limb and `--lookup` mode over both fields, 64-VU bound proofs in every mode, `run_battery.sh` exit
+0 (36 B cases 0 FORGED), babybear-rules battery `--lookup` 83/83 + 87/87 controls + 6/6 extras. PROTOCOL.md 14.7-14.8.
+
+| attack (LogUp path, `vu-bench --lookup`) | before (`verify_lookup`, b-lookup as merged) | after (`verify_lookup_bound_bytes`) | pin |
+|---|---|---|---|
+| F1a zero batch (two zero VUs) offered as the proof of two real words | **ACCEPTED** (no statement; the words are witness cells) | `StatementColumnMismatch(vu.y16 at zeta)`: the round-1 main column is checked at ζ, ζ·g against the verifier's word polynomial | `lookup_statement.rs` F1a, BabyBear^4 / ^5 / Goldilocks |
+| F1b honest proof, one word changed / two words swapped in the statement | ACCEPTED (same) | `StatementColumnMismatch` | F1b |
+| F1c other FRI parameters at the verifier | ACCEPTED if the proof shape matches (parameters not in the transcript) | header differs -> every challenge differs -> `InvalidOpeningArgument` | F1c |
+| F2 2-VU (2^17-row) proof for the 4096-VU verifier | **ACCEPTED** (`degree_bits` and the table height taken from the proof; red-team-3 `degree_bits_from_proof`) | `DegreeBitsMismatch(expected 19, proof says 17)` before anything is absorbed | F2 |
+| F2' the same words at the limb realisation's height (8 bits) | n/a | `DegreeBitsMismatch(expected 8, proof says 17)`: the height is the tables', `Statement::min_rows` | F2' |
+| table substitution: verifier holds a table set with one entry changed | rejected only through the recomputed preprocessed commitment (the verifier's challenges did not depend on its tables) | header carries `sha256(table set)` -> challenges differ; the commitment check stays | `lookup_statement.rs`, `vu-bench --lookup` inline |
+| table substitution: prover commits its own `P` (honest trace) against the honest verifier | `InvalidOpeningArgument` (commitment compare) | the same, plus the header digest | same |
+| operand flip with `--bind-operands` | n/a (no operands in the statement) | `StatementColumnMismatch(x.a[7])` | `lookup_operand_binding_babybear` |
+| F19 residual: ζ-openings not absorbed before α / the query indices (both realisations) | checklist violation (`p3-fri 0.4.3::TwoAdicFriPcs::{open, verify}` sample α first) | **closed**: vendored `p3-fri` (`backends/direct/vendor/p3-fri`, `[patch.crates-io]`), openings absorbed before α in `open` and `verify`; **transcript changed**; `rounds.sequential_depth` +1 | gate + timing run F3_RUN_PLACEHOLDER |
+
+Statuses: F1 **fixed in both realisations**; F2 **fixed in both realisations**; F19 **fixed** (header 3fe85aa, openings-before-α
+this lane); F3/F4 leaf/v2 unchanged from above. The `verify_lookup` entry point remains for the diagnostic tests and
+the `--unbound` timing baseline and labels its results `statement_binding.bound = false`.
+
+**B + LogUp at 2^-128 (BabyBear, 4096 VUs, 166 queries, PoW 16), bound vs unbound, same box, back to back, twice:**
+LOGUP_TIMING_PLACEHOLDER
+
 **Re-timed B at 2^-128 (BabyBear, 4096 VUs, 166 queries, PoW 16), statement-bound:** `t.total` 544.8 s = witness
 42.0 s + prove 502.9 s (run `r20260922-080527-f30c`; 553.1 s in the gate run), verifier 0.61 s, proof 3.45 MB, peak
 RSS 30.6 GB, `overhead.vs_native_peak` 1.35e10 -- on vy-cpu3, a shared-host EPYC 7713 slice ~3x slower than the
