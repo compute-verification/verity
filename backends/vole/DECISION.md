@@ -44,11 +44,11 @@ verifier accepts every honest batch and rejects the 4 `vu-k1536-neg` VUs exporte
 | private values in the witness stream | 491,703 | 42,155 | 11.7x |
 | P -> V bytes, F61p, 4096 VUs | 8.50 MB | **0.865 MB** | 9.8x |
 | P -> V bytes, F128p, 4096 VUs | 16.7 MB (64 VUs) | **1.68 MB** | 9.9x |
-| P -> V bytes, F384p | 54.4 MB (8 VUs) | **5.6 MB** (64 VUs) | 9.7x |
+| P -> V bytes, F384p, 4096 VUs | 54.4 MB (8 VUs) | **5.10 MB** (20.9 GB per batch) | 10.7x |
 | V -> P bytes, F61p | 1.06 MB | 0.108 MB | 9.8x |
 | prover wall, F61p, 4096 VUs, 1 thread | 0.408 s | **0.0302 s** (sVOLE 0.0076 / online 0.0226; plaintext floor 0.016) | 13.5x |
 | prover wall, F128p, 4096 VUs, 1 thread | 1.64 s (64 VUs) | **0.132 s** (sVOLE 0.066 / online 0.067) | 12.4x |
-| prover wall, F384p, 1 thread | 4.74 s (8 VUs) | **0.32 s** (64 VUs; 4096-VU figure in section 3) | 14.8x |
+| prover wall, F384p, 1 thread | 4.74 s (8 VUs) | **0.307 s** (4096 VUs; sVOLE 0.142 / online 0.162) | 15.4x |
 | soundness accountant, 4096 VUs | (t + 3m)/p: F61p 2^-30.1, F128p 2^-97, F384p 2^-353 | (t + 3m + logUp terms)/p with 2.70e6 terms per VU: **F61p 2^-27.6, F128p 2^-94.6, F384p 2^-350** | the ALIGN table's `N R (C-1)/p` collision bound (2.36e6 per VU) dominates |
 
 The model's logUp-mode figure was 83k committed elements / 667 kB per VU; v2 lands at 101k / 0.87 MB (the extra is
@@ -65,12 +65,12 @@ F384p does (statistically 2^-350; the cap is the computational stack, AES-128 / 
 | A (`a-chain`) | 0.0727 | 7.4e9 | (not communication-bound) | 2^-127.7 | NON_ZK_PROOF_DIAGNOSTIC |
 | B (`b-chain`, BabyBear, 166 queries) | 0.0410 | 4.2e9 | (proof size, not a stream) | 2^-128.6 proven | NON_ZK_PROOF_DIAGNOSTIC |
 | C v1, F384p (8 VUs) | 4.74 | 4.8e11 | 54.4 MB | 2^-128 | COMPLETE_ZK_BACKEND (designated verifier) |
-| **C v2, F384p, 4096 VUs, 1 thread** | **F384P_SPVU** | **F384P_OVH** | **F384P_MB MB** | 2^-128 | COMPLETE_ZK_BACKEND (designated verifier) |
+| **C v2, F384p, 4096 VUs, 1 thread** | **0.307** | **3.1e10** | **5.10 MB** | 2^-128 | COMPLETE_ZK_BACKEND (designated verifier) |
 | C v2, F384p, 4 sVOLE threads | F384P_T4_SPVU | F384P_T4_OVH | same | 2^-128 | |
 | C v2, F61p (sensitivity point) | 0.0302 | 3.1e9 | 0.865 MB | 2^-27.6 | |
 | C v2, F128p | 0.132 | 1.3e10 | 1.68 MB | 2^-94.6 | |
 
-Reading: at the field that reaches 2^-128, C's prover is now within F384P_VS_A of A and F384P_VS_B of B in wall time
+Reading: at the field that reaches 2^-128, C's prover is now within 4.2x of A and 7.5x of B in wall time
 (from 65x / 115x before), with a complete designated-verifier ZK stack where A and B are still non-ZK diagnostics. At
 F61p, C's per-VU time is already *below* A's and near B's, but 2^-27.6 is not a security level.
 
@@ -82,14 +82,14 @@ Native rate 1e11 VU/s (the campaign's normalisation); a prover with 1e6 overhead
 |---|---|---|---|
 | F61p | 0.865 MB | **0.69 Tb/s** | 0.23 Gb/s at 0.030 s/VU |
 | F128p | 1.68 MB | 1.3 Tb/s | 0.10 Gb/s |
-| F384p | F384P_MB MB | **F384P_TBPS Tb/s** | F384P_GBPS Gb/s |
+| F384p | 5.10 MB | **4.1 Tb/s** | 0.13 Gb/s |
 
 v1 needed 1.4 Tb/s at F61p and 44 Tb/s at F384p for the same 1e6 target. Compression bought 10x; the wall is still
 ~10-50x above a 25-100 Gb/s NIC at 2^-128. For the *current* CPU prover (overhead 1e10) the link is trivially
 sufficient (sub-Gb/s), so today C is compute-bound, not link-bound; the wall only bites once the prover approaches
 the GPU floor (`GPU.md`: ~50 us/VU arithmetic).
 
-What AntMan would have to buy (`ANTMAN.md` §3): bytes per VU from 5.6 MB (F384p) / 0.87 MB (F61p) down to the
+What AntMan would have to buy (`ANTMAN.md` §3): bytes per VU from 5.1 MB (F384p) / 0.87 MB (F61p) down to the
 50 kB-per-VU regime at their measured constant (5 kB asymptotically) - i.e. another 20-100x - at the price of
 ring-LWE (BGV) + noise-flooding circuit privacy + a random oracle added to the assumption stack, ~5x more prover
 arithmetic in NTT form, a field with a large power-of-two subgroup (not F_{2^61-1}), and an implementation that does
@@ -100,9 +100,9 @@ and a tighter lookup soundness argument, not 10x).
 
 ## 5. Verdict
 
-C at 2^-128 is now F384P_SPVU s/VU and F384P_MB MB/VU with a complete designated-verifier ZK stack, i.e.
-F384P_VS_B x B's prover time; on communication alone it cannot reach the 1e6-overhead goal without AntMan-class SIMD
-(F384P_TBPS Tb/s per prover otherwise), and with AntMan it trades the campaign's hash-only preference for ring-LWE
+C at 2^-128 is now 0.307 s/VU and 5.10 MB/VU with a complete designated-verifier ZK stack, i.e.
+7.5x B's and 4.2x A's prover time (both non-ZK diagnostics); on communication alone it cannot reach the 1e6-overhead goal without AntMan-class SIMD
+(4.1 Tb/s per prover otherwise), and with AntMan it trades the campaign's hash-only preference for ring-LWE
 plus a 5x arithmetic increase. Recommendation: keep C as the *complete-ZK reference* (it is the only track with a real
 ZK stack measured end to end, and it is now cheap enough to run on every batch), do not fund a C GPU prover or an
 AntMan port on the goal's terms; if a designated-verifier system is acceptable to the product, the next 2x items are

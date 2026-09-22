@@ -212,7 +212,7 @@ Measured (vy-cpu, one thread unless stated; runs 022f = `r20260922-075153-022f`,
 | 022f | F128p | 64 VUs | 11.77 s (per-element inversions) | 0.184 s | 0.069 / 0.108 s | 1.95 MB/VU | 0.145 MB/VU | 724 / 382 MB | 2^-100.6 |
 | **71b6** | **F128p** | **4096 VUs** | **542.5 s** | **0.132 s** | 0.066 / 0.067 s | **1.68 MB/VU** (6.88 GB) | 0.112 MB/VU | 892 / 429 MB | **2^-94.6** |
 | 022f | F384p | 64 VUs | 54.4 s (per-element inversions) / 20.5 s (batched) | 0.850 / 0.320 s | 0.150 / 0.163 s (batched) | 5.64 MB/VU | 0.42 MB/VU | 1190 / 252 MB | 2^-128 |
-| **71b6** | **F384p** | **4096 VUs** | **F384P_WALL s** | **F384P_SPVU s** | F384P_SPLIT | **F384P_MB MB/VU** | F384P_V2P MB/VU | F384P_RSS | **2^-128** (stat. 2^-350) |
+| **71b6** | **F384p** | **4096 VUs** | **1255.6 s** | **0.307 s** | 0.142 / 0.162 s | **5.10 MB/VU** | 0.398 MB/VU | 1477 / 410 MB | **2^-128** (stat. 2^-350) |
 | 71b6 | F384p, 4 threads | 4096 VUs | F384P_T4_WALL s | F384P_T4_SPVU s | | not relayed | | F384P_T4_RSS | 2^-128 |
 
 The 64-VU F61p figure before `TCP_NODELAY` was 21.8 s (0.34 s/VU): nine verifier challenges per VU each stalled
