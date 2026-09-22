@@ -94,6 +94,23 @@ fn fe_from_u64<F: FiniteField + SieveIrDeserialize>(x: u64) -> Result<F> {
     F::from_number(&Number::from_u64(x))
 }
 
+/// Inverses of every element of `xs` (all nonzero) with one field inversion.
+fn batch_inverse<F: FiniteField>(xs: &[F]) -> Vec<F> {
+    let mut prefix = Vec::with_capacity(xs.len());
+    let mut acc = F::ONE;
+    for x in xs {
+        prefix.push(acc);
+        acc *= *x;
+    }
+    let mut inv = if xs.is_empty() { F::ONE } else { acc.inverse() };
+    let mut out = vec![F::ZERO; xs.len()];
+    for i in (0..xs.len()).rev() {
+        out[i] = inv * prefix[i];
+        inv *= xs[i];
+    }
+    out
+}
+
 /// logUp membership of every `ncols`-tuple of `wires` in `rows`.
 fn logup<B: BackendT>(
     backend: &mut B,
@@ -154,8 +171,10 @@ where
     let s = if ncols > 1 { backend.random()? } else { B::FieldElement::ONE };
     let r = backend.random()?;
 
-    // 3. one inverse per query
-    let mut sum_inv: Option<B::Wire> = None;
+    // 3. one inverse per query.  The prover's inverses are computed with one field inversion per call (Montgomery's
+    //    batch trick): a per-element `inverse()` costs ~30 us in F384p and dominated the online phase (measured).
+    let mut d_wires = Vec::with_capacity(n);
+    let mut d_vals: Vec<B::FieldElement> = Vec::with_capacity(if is_prover { n } else { 0 });
     for i in 0..n {
         let mut q = backend.copy(&wires[i * ncols])?;
         let mut pw = s;
@@ -165,19 +184,21 @@ where
             pw *= s;
         }
         let d = backend.add_constant(&q, -r)?;
-        let inv = match backend.wire_value(&d) {
-            Some(v) => {
-                ensure!(
-                    v != B::FieldElement::ZERO,
-                    ErrorKind::OtherError,
-                    "verity_v0 lookup: the challenge hit a query (probability N/p); rerun"
-                );
-                Some(v.inverse())
-            }
-            None => None,
-        };
-        let inv_w = backend.input_private(inv)?;
-        backend.assert_mul(&d, &inv_w, &one)?;
+        if let Some(v) = backend.wire_value(&d) {
+            ensure!(
+                v != B::FieldElement::ZERO,
+                ErrorKind::OtherError,
+                "verity_v0 lookup: the challenge hit a query (probability N/p); rerun"
+            );
+            d_vals.push(v);
+        }
+        d_wires.push(d);
+    }
+    let d_invs = batch_inverse(&d_vals);
+    let mut sum_inv: Option<B::Wire> = None;
+    for (i, d) in d_wires.iter().enumerate() {
+        let inv_w = backend.input_private(if is_prover { Some(d_invs[i]) } else { None })?;
+        backend.assert_mul(d, &inv_w, &one)?;
         sum_inv = Some(match sum_inv {
             None => inv_w,
             Some(acc) => backend.add(&acc, &inv_w)?,
@@ -185,8 +206,8 @@ where
     }
 
     // 4. one committed g_j = m_j / (T_j - r) per row, tied linearly to m_j
-    let mut sum_g: Option<B::Wire> = None;
-    for (j, row) in rows.iter().enumerate() {
+    let mut denoms = Vec::with_capacity(rows.len());
+    for row in rows.iter() {
         let mut t = B::FieldElement::ZERO;
         let mut pw = B::FieldElement::ONE;
         for c in row {
@@ -199,9 +220,14 @@ where
             ErrorKind::OtherError,
             "verity_v0 lookup: the challenge hit a table row (probability R/p); rerun"
         );
-        let g_val = backend.wire_value(&m_wires[j]).map(|m| m * denom.inverse());
+        denoms.push(denom);
+    }
+    let denom_invs = if is_prover { batch_inverse(&denoms) } else { Vec::new() };
+    let mut sum_g: Option<B::Wire> = None;
+    for (j, denom) in denoms.iter().enumerate() {
+        let g_val = backend.wire_value(&m_wires[j]).map(|m| m * denom_invs[j]);
         let g = backend.input_private(g_val)?;
-        let lhs = backend.mul_constant(&g, denom)?;
+        let lhs = backend.mul_constant(&g, *denom)?;
         let diff = backend.sub(&lhs, &m_wires[j])?;
         backend.assert_zero(&diff)?;
         sum_g = Some(match sum_g {
