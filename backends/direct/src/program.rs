@@ -378,13 +378,12 @@ fn align_state<C: Ctx>(ctx: &mut C, m: &C::V, d: &C::V, tag: &str) -> C::V {
     let w = ACC_BITS;
     let q = ctx.hint(&format!("{tag}.q"), &[m, d], &|v| {
         let p = v[0] << ACC_SHIFT;
-        let dd = v[1].min(w);
-        p >> dd
+        shr(p, v[1].min(w))
     });
     let r = ctx.hint(&format!("{tag}.r"), &[m, d], &|v| {
         let p = v[0] << ACC_SHIFT;
         let dd = v[1].min(w);
-        p - ((p >> dd) << dd)
+        p - shl(shr(p, dd), dd)
     });
     ctx.rng(&format!("{tag}.q"), &q, 0, 1 << w);
     ctx.rng(&format!("{tag}.r"), &r, 0, 1 << w);
@@ -405,15 +404,15 @@ fn align_product<C: Ctx>(ctx: &mut C, u: &C::V, d: &C::V, tag: &str) -> C::V {
     let ubits = 2 * SIG;
     let q = ctx.hint(&format!("{tag}.q"), &[u, d], &|v| {
         let (u, d) = (v[0], v[1]);
-        if d <= PROD_SHIFT { u } else if d < PROD_BITS { u >> (d - PROD_SHIFT) } else { 0 }
+        if d <= PROD_SHIFT { u } else if d < PROD_BITS { shr(u, d - PROD_SHIFT) } else { 0 }
     });
     let r = ctx.hint(&format!("{tag}.r"), &[u, d], &|v| {
         let (u, d) = (v[0], v[1]);
         if d <= PROD_SHIFT {
             0
         } else if d < PROD_BITS {
-            let q = u >> (d - PROD_SHIFT);
-            u - (q << (d - PROD_SHIFT))
+            let q = shr(u, d - PROD_SHIFT);
+            u - shl(q, d - PROD_SHIFT)
         } else {
             u
         }
