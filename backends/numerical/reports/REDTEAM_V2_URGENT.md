@@ -63,3 +63,10 @@ $BIN run-vu --dir fixtures/redteam-v2/gkr/neg/chain_spec_stripped           # ve
 ```
 
 Regenerate the fixture: `python -m verity_numerical.redteam.v2_forge gkr-chain --out fixtures/redteam-v2/gkr`.
+
+## Related (not a duplicate)
+
+Same *class* as red-team-3's U1/U2 (statement / geometry taken from the proof rather than the verifier's config),
+but a **different target and code path**: U1/U2 are B's LogUp realisation (`lookup_stark.rs` / `vu_bench_lookup`);
+this is A's GKR `run-vu` chain spec (`gkr/src/main.rs::load_vu`). The B *limbs* path (`vu_bench_v2`,
+`verify_bound`) is statement-bound and rejects a `words[0]^=1` statement — verified this run.
