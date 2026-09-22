@@ -915,7 +915,7 @@ Cost: \(\approx 1\,750\) extra challenger observes per proof (µs). **The transc
 before this patch (every `result.json` of 12.5, 14.5, the b-lookup lane) verify only against the unpatched verifier;
 nothing else in the proof (bytes, shape, opened values) changes. The `RttChallenger` counts the observes as part of
 the message before \(\alpha\); since the openings are a prover message the verifier's \(\alpha\) now answers,
-`rounds.sequential_depth` grows by one (DEPTH_PLACEHOLDER) -- the honest interactive count of a transcript in
+`rounds.sequential_depth` grows by one (measured in `r20260922-094310-af1a` vs `r20260922-091130-525e`: limb 2^13 rows 16 -> 17, LogUp 2^17 rows 21 -> 22, LogUp 2^19 rows 23 -> 24; the legacy count is unchanged) -- the honest interactive count of a transcript in
 which \(\alpha\) depends on the openings.
 
 The `verify_lookup` (unbound) entry point remains for the diagnostic tests and the `--unbound` baseline; it is not a
@@ -931,4 +931,19 @@ LogUp and `--bind-operands` in both realisations, the wrong-word / wrong-\(B\) /
 asserted inline; `run_battery.sh` exit 0 (36 B cases 0 FORGED, A 14/14); the babybear-rules battery in `--lookup`
 mode 83/83 rejected, 87/87 controls, 6/6 extras. Records: `results/b-bind/`.
 
-TIMING_PLACEHOLDER
+Run `r20260922-094310-af1a` (the p3-fri patch of 12.6 applied) repeated the whole gate -- identical counts, all green
+-- and then timed the LogUp realisation at 4096 VUs, bound and unbound back to back, twice, on the same box
+(`vu-bench --lookup --vus 4096 [--unbound]`, `--ext 5` for BabyBear^5; 2^19 rows, 401 main + 570 aux columns,
+`RAYON_NUM_THREADS=12`):
+
+| 4096 VUs, prove s | bound #1 | unbound #1 | bound #2 | unbound #2 |
+|---|---|---|---|---|
+| BabyBear^4 | 199.4 | 197.6 | 182.8 | 201.8 |
+| BabyBear^5 | 213.3 | 225.4 | 217.5 | 218.1 |
+
+Binding costs nothing measurable: the extra work is a few field elements absorbed into the challenger and one
+barycentric evaluation of a public column at two points (verifier, ~ms). The pairs differ by less than the box's
+own swing (up to 10% between repeats here; the brief warned of 40%). Verify 1.1 s, proof 2.37 MB, peak RSS 10.7 GB
+in every configuration. vy-cpu3 is ~3.2x slower than vy-cpu2, where the unbound LogUp prover measured 60.1 s / 70.4 s
+(14.5): 197-202 s / 218-225 s here for the same unbound configurations -- the ratio, not the absolute, is the
+comparison. Records: `results/b-bind/lookup4096_*`.

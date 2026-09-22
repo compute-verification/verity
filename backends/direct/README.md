@@ -127,6 +127,13 @@ rejected; `--unbound` runs the pre-fix path for a same-box timing baseline and l
 (`[patch.crates-io]`; the transcript differs from upstream). Gate: `run_bind_gate.sh [check|test|gate|battery|timing|all|full]`
 (`vu-neg --lookup`, both batteries, the 4096-VU bound/unbound timing pairs); records in `results/b-bind/`.
 
+| LogUp, 4096 VUs, 2^19 rows, vy-cpu3 12 threads (`r20260922-094310-af1a`) | bound #1 | unbound #1 | bound #2 | unbound #2 |
+|---|---|---|---|---|
+| BabyBear^4 prove s | 199.4 | 197.6 | 182.8 | 201.8 |
+| BabyBear^5 prove s | 213.3 | 225.4 | 217.5 | 218.1 |
+
+The binding is free to within the box's swing (vy-cpu3 is ~3.2x slower than the vy-cpu2 of PROTOCOL.md 14.5).
+
 ## The K=1536 VU chain: recorded runs (vy-cpu2, AMD EPYC 9654, **12 threads**, release)
 
 `bench-instances/v1`, tier `vu-k1536`, ids 0..4096 (operand arrays built on the pod by run r20260922-052410-8160,

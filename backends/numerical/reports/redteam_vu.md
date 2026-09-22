@@ -217,14 +217,18 @@ battery exercises as `zero_batch_as_any_statement` and `degree_bits_from_proof` 
 | table substitution: verifier holds a table set with one entry changed | rejected only through the recomputed preprocessed commitment (the verifier's challenges did not depend on its tables) | header carries `sha256(table set)` -> challenges differ; the commitment check stays | `lookup_statement.rs`, `vu-bench --lookup` inline |
 | table substitution: prover commits its own `P` (honest trace) against the honest verifier | `InvalidOpeningArgument` (commitment compare) | the same, plus the header digest | same |
 | operand flip with `--bind-operands` | n/a (no operands in the statement) | `StatementColumnMismatch(x.a[7])` | `lookup_operand_binding_babybear` |
-| F19 residual: ζ-openings not absorbed before α / the query indices (both realisations) | checklist violation (`p3-fri 0.4.3::TwoAdicFriPcs::{open, verify}` sample α first) | **closed**: vendored `p3-fri` (`backends/direct/vendor/p3-fri`, `[patch.crates-io]`), openings absorbed before α in `open` and `verify`; **transcript changed**; `rounds.sequential_depth` +1 | gate + timing run F3_RUN_PLACEHOLDER |
+| F19 residual: ζ-openings not absorbed before α / the query indices (both realisations) | checklist violation (`p3-fri 0.4.3::TwoAdicFriPcs::{open, verify}` sample α first) | **closed**: vendored `p3-fri` (`backends/direct/vendor/p3-fri`, `[patch.crates-io]`), openings absorbed before α in `open` and `verify`; **transcript changed**; `rounds.sequential_depth` +1 | gate + timing run `r20260922-094310-af1a` (42 tests, vu-neg 4x52/52, both batteries green on the patched transcript; `sequential_depth` 16 -> 17 limb, 21 -> 22 LogUp) |
 
 Statuses: F1 **fixed in both realisations**; F2 **fixed in both realisations**; F19 **fixed** (header 3fe85aa, openings-before-α
 this lane); F3/F4 leaf/v2 unchanged from above. The `verify_lookup` entry point remains for the diagnostic tests and
 the `--unbound` timing baseline and labels its results `statement_binding.bound = false`.
 
 **B + LogUp at 2^-128 (BabyBear, 4096 VUs, 166 queries, PoW 16), bound vs unbound, same box, back to back, twice:**
-LOGUP_TIMING_PLACEHOLDER
+Cost of the binding (run `r20260922-094310-af1a`, vy-cpu3, 12 threads, LogUp realisation, 4096 VUs, 2^19 rows,
+bound and unbound back to back, twice): BabyBear^4 prove 199.4 / 182.8 s bound vs 197.6 / 201.8 s unbound;
+BabyBear^5 213.3 / 217.5 s bound vs 225.4 / 218.1 s unbound. The difference is inside the box's own repeat-to-repeat
+swing (~10%); the binding adds a header absorption and one barycentric public-column evaluation. Same box caveat as
+before: vy-cpu3 is ~3.2x slower than the vy-cpu2 that recorded the unbound 60.1 s / 70.4 s (PROTOCOL.md 14.5).
 
 **Re-timed B at 2^-128 (BabyBear, 4096 VUs, 166 queries, PoW 16), statement-bound:** `t.total` 544.8 s = witness
 42.0 s + prove 502.9 s (run `r20260922-080527-f30c`; 553.1 s in the gate run), verifier 0.61 s, proof 3.45 MB, peak
