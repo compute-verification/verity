@@ -103,8 +103,30 @@ time and at 0.9-0.98 of achievable bandwidth, so the next factor for A is bytes 
 1/3; a base-field trace kept out of the challenge field saves 6x on the early rounds), not kernel efficiency.  A100/H100:
 an HBM-bound kernel scales with bandwidth (2.0x / 3.3x the 4090), not with tensor peak; nothing was measured there.
 
+## logUp fractional-sumcheck round (`fused/round_logup.py`, `fused_logup_4090.json`)
+
+The other half of A's rounds: `sum eq (p_l q_r + p_r q_l + lambda q_l q_r)`, five extension tables, fold+eval fused,
+bit-exact against `logup_reference` (kernel tests on the pod, 6/6).  180 n bytes and 7.5 extension products per input
+element (vs 108 n and 3.5 for the checker round).  Eager, warm, median of 11, block 256 / 4 warps:
+
+| n | fold+eval us | GB/s | HBM floor us | frac of floor | fold-only us (GB/s) | G ext-mul/s |
+|---|---|---|---|---|---|---|
+| 2^21 | 600 | 629 | 374 | 0.62 | 473 (798) | 26.2 |
+| 2^20 | 344 | 549 | 187 | 0.54 | 255 (741) | 22.9 |
+| 2^18 | 118 | 401 | 47 | 0.40 | 65 (722) | 16.7 |
+| 2^16 | 78-81 | 146 | 12 | 0.15 | 60 | 6.1 |
+| 2^14, 4096 | 73-84 | - | - | - | 59-60 | - |
+
+This is the first round where SIMT becomes compute-bound: fold-only sits at the same ~800 GB/s as the checker round, but
+adding the 20 extension products per pair costs +127 us at 2^21 (the checker round's eval added ~30 us).  `ROOFLINE.md`
+predicted SIMT would need ~80% of INT32 peak to hide under HBM here; it reaches roughly 60%.  Sizes <= 2^16 are the
+eager-launch floor (13 pointer arguments, not graphed; the checker layer model showed graphing brings that to ~16 us).
+Not in the layer model or the re-price (the re-price keeps logUp at the model's rate; at 600 us per 2^21-round it would
+be priced ~2.2x the checker round per element, consistent with the model's relative weighting).  A `tl.dot` version of
+this round is the one place tensor cores could still pay on this card: the eval is now compute-bound and the products
+share operands (`q_l q_r` feeds `lambda`), but the layout-conversion cost measured in `round_tc` still has to be beaten.
+
 ## Not done
 
-The `<f, g o h>` inner product on `tl.dot` (see above); the logUp fractional-sumcheck round (5 tables, two numerator/
-denominator polynomials: the same fusion, ~1.7x the bytes per pair; not built); base -> extension fold on tensor cores
+The `<f, g o h>` inner product on `tl.dot` (see above); logUp on tensor cores or graphed / in the layer model; base -> extension fold on tensor cores
 (SIMT runs that round in the TC layer model: 2 of 23 kernels per layer); `eq` generated in-kernel; A100/H100.
