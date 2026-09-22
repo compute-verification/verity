@@ -10,28 +10,62 @@ use p3_field::AbstractField;
 use crate::program::{Ctx, Table, MAX_DEG};
 
 pub const GOLDILOCKS_P: u128 = 0xFFFF_FFFF_0000_0001;
+pub const BABYBEAR_P: u128 = 0x7800_0001; // 15 * 2^27 + 1 = 2013265921
 
-fn modp(v: i128) -> u64 {
-    let p = GOLDILOCKS_P as i128;
+/// The trace field.  `small` selects the 31-bit realisation of the program (`program.rs`: F1 direct `lt_pow`,
+/// F3 top-bit exclusion in `Normalise`, F4 16-bit word limbs, the signed-sum premise bound).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum FieldKind {
+    Goldilocks,
+    BabyBear,
+}
+
+impl FieldKind {
+    pub fn prime(self) -> u128 {
+        match self {
+            FieldKind::Goldilocks => GOLDILOCKS_P,
+            FieldKind::BabyBear => BABYBEAR_P,
+        }
+    }
+    pub fn small(self) -> bool {
+        matches!(self, FieldKind::BabyBear)
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            FieldKind::Goldilocks => "goldilocks",
+            FieldKind::BabyBear => "babybear",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "goldilocks" | "gl" => Some(FieldKind::Goldilocks),
+            "babybear" | "bb" => Some(FieldKind::BabyBear),
+            _ => None,
+        }
+    }
+}
+
+pub fn modp(v: i128, p: u128) -> u64 {
+    let p = p as i128;
     (((v % p) + p) % p) as u64
 }
 
-fn mulmod(a: u64, b: u64) -> u64 {
-    ((a as u128 * b as u128) % GOLDILOCKS_P) as u64
+fn mulmod(a: u64, b: u64, p: u128) -> u64 {
+    ((a as u128 * b as u128) % p) as u64
 }
 
-fn inv_modp(v: i128) -> i128 {
-    let mut base = modp(v);
+pub fn inv_modp(v: i128, p: u128) -> i128 {
+    let mut base = modp(v, p);
     if base == 0 {
         return 0; // no inverse: the constraint prod * inv = 1 then fails, which is the intent
     }
-    let mut e = GOLDILOCKS_P as u64 - 2;
+    let mut e = p as u64 - 2;
     let mut acc = 1u64;
     while e > 0 {
         if e & 1 == 1 {
-            acc = mulmod(acc, base);
+            acc = mulmod(acc, base, p);
         }
-        base = mulmod(base, base);
+        base = mulmod(base, base, p);
         e >>= 1;
     }
     acc as i128
@@ -44,6 +78,10 @@ fn inv_modp(v: i128) -> i128 {
 /// The primitive operations a context provides; `Ctx` is implemented once on top of them (below).
 pub trait Prim {
     type V: Clone;
+    /// True for a 31-bit trace field (the program then uses its wrap-free realisations).
+    fn small_field(&self) -> bool;
+    /// The trace field's prime (for the exclusion inverses of `rng`).
+    fn prime(&self) -> u128;
     fn konst(&mut self, k: i128) -> Self::V;
     fn deg(&self, v: &Self::V) -> usize;
     fn add(&mut self, a: &Self::V, b: &Self::V) -> Self::V;
@@ -62,6 +100,12 @@ pub trait Prim {
 
 impl<P: Prim> Ctx for P {
     type V = P::V;
+    fn small_field(&self) -> bool {
+        Prim::small_field(self)
+    }
+    fn prime(&self) -> u128 {
+        Prim::prime(self)
+    }
     fn konst(&mut self, k: i128) -> Self::V {
         Prim::konst(self, k)
     }
@@ -126,7 +170,8 @@ impl<P: Prim> Ctx for P {
                 let f = self.addk(&y, -(n + j));
                 prod = self.mul(&prod, &f);
             }
-            let inv = self.hint(&format!("{name}.inv"), &[&prod], &|v| inv_modp(v[0]));
+            let p = self.prime();
+            let inv = self.hint(&format!("{name}.inv"), &[&prod], &move |v| inv_modp(v[0], p));
             let pi = self.mul(&prod, &inv);
             let one = Prim::konst(self, 1);
             self.eq_raw(&format!("{name}.excl"), &pi, &one);
@@ -226,10 +271,12 @@ pub struct IVal {
 /// -- limbs, selectors, materialised copies -- is recomputed honestly from the mutated value, exactly as the
 /// Python checker recomputes its expressions from mutated hints).  Integer predicate violations are recorded in
 /// `violations` (the analogue of `Reject`); the field evaluator in `air.rs` is the authoritative check.
-#[derive(Default)]
 pub struct IntCtx {
+    pub kind: FieldKind,
     pub cols: Vec<i128>,
+    /// Column names in allocation order; not recorded when `record_names` is false (trace generation).
     pub names: Vec<String>,
+    pub record_names: bool,
     pub overrides: HashMap<String, i128>,
     pub violations: Vec<String>,
     pub n_hints: usize,
@@ -239,19 +286,55 @@ pub struct IntCtx {
     pub record_hints: bool,
 }
 
+impl Default for IntCtx {
+    fn default() -> Self {
+        Self::new_kind(FieldKind::Goldilocks)
+    }
+}
+
 impl IntCtx {
+    /// Goldilocks, names recorded (the layout / test constructor).
     pub fn new() -> Self {
         Self::default()
     }
+    pub fn new_kind(kind: FieldKind) -> Self {
+        Self {
+            kind,
+            cols: Vec::with_capacity(3072),
+            names: vec![],
+            record_names: true,
+            overrides: HashMap::new(),
+            violations: vec![],
+            n_hints: 0,
+            n_mat: 0,
+            n_constraints: 0,
+            hint_values: vec![],
+            record_hints: false,
+        }
+    }
+    /// The fast constructor for trace generation: no names, no hint log.
+    pub fn for_trace(kind: FieldKind) -> Self {
+        let mut c = Self::new_kind(kind);
+        c.record_names = false;
+        c
+    }
     fn push(&mut self, name: &str, v: i128) -> IVal {
         self.cols.push(v);
-        self.names.push(name.to_string());
+        if self.record_names {
+            self.names.push(name.to_string());
+        }
         IVal { v, deg: 1 }
     }
 }
 
 impl Prim for IntCtx {
     type V = IVal;
+    fn small_field(&self) -> bool {
+        self.kind.small()
+    }
+    fn prime(&self) -> u128 {
+        self.kind.prime()
+    }
     fn konst(&mut self, k: i128) -> IVal {
         IVal { v: k, deg: 0 }
     }
@@ -275,17 +358,23 @@ impl Prim for IntCtx {
     }
     fn hint(&mut self, name: &str, deps: &[&IVal], f: &dyn Fn(&[i128]) -> i128) -> IVal {
         let vals: Vec<i128> = deps.iter().map(|d| d.v).collect();
-        let v = match self.overrides.get(name) {
-            Some(&o) => o,
-            None => f(&vals),
+        let v = if self.overrides.is_empty() {
+            f(&vals)
+        } else {
+            match self.overrides.get(name) {
+                Some(&o) => o,
+                None => f(&vals),
+            }
         };
         self.n_hints += 1;
-        let realisation = name.contains(".limb[")
-            || (name.contains(".sel[") && !name.contains(".max.sel["))
-            || name.ends_with(".inv")
-            || name.ends_with(".slack");
-        if self.record_hints && !realisation {
-            self.hint_values.push((name.to_string(), v));
+        if self.record_hints {
+            let realisation = name.contains(".limb[")
+                || (name.contains(".sel[") && !name.contains(".max.sel["))
+                || name.ends_with(".inv")
+                || name.ends_with(".slack");
+            if !realisation {
+                self.hint_values.push((name.to_string(), v));
+            }
         }
         self.push(name, v)
     }
@@ -297,7 +386,8 @@ impl Prim for IntCtx {
     fn eq_raw(&mut self, name: &str, a: &IVal, b: &IVal) {
         self.n_constraints += 1;
         // field semantics (the exclusion inverses are field elements); every other honest value is small
-        if modp(a.v) != modp(b.v) {
+        let p = self.kind.prime();
+        if modp(a.v, p) != modp(b.v, p) {
             self.violations.push(format!("{name}: {} != {}", a.v, b.v));
         }
     }
@@ -329,26 +419,33 @@ pub struct AirCtx<'a, AB: AirBuilder> {
     pub builder: &'a mut AB,
     pub row: &'a [AB::Var],
     pub cursor: usize,
+    pub kind: FieldKind,
     pub constraint_names: Option<Vec<String>>,
 }
 
 impl<'a, AB: AirBuilder> AirCtx<'a, AB> {
+    /// Goldilocks realisation.
     pub fn new(builder: &'a mut AB, row: &'a [AB::Var]) -> Self {
-        Self { builder, row, cursor: 0, constraint_names: None }
+        Self::with_kind(builder, row, FieldKind::Goldilocks)
+    }
+    pub fn with_kind(builder: &'a mut AB, row: &'a [AB::Var], kind: FieldKind) -> Self {
+        Self { builder, row, cursor: 0, kind, constraint_names: None }
     }
     fn next(&mut self) -> AB::Expr {
         let v = self.row[self.cursor];
         self.cursor += 1;
         v.into()
     }
-    fn k(k: i128) -> AB::Expr {
+    /// A constant: every constant of the program is below the trace prime by construction (the 31-bit realisation
+    /// splits the 32-bit words), so the canonical conversion is exact.
+    pub fn k(k: i128) -> AB::Expr {
         if k >= 0 {
             AB::Expr::from_canonical_u64(k as u64)
         } else {
             -AB::Expr::from_canonical_u64((-k) as u64)
         }
     }
-    fn note(&mut self, name: &str) {
+    pub fn note(&mut self, name: &str) {
         if let Some(n) = self.constraint_names.as_mut() {
             n.push(name.to_string());
         }
@@ -357,6 +454,12 @@ impl<'a, AB: AirBuilder> AirCtx<'a, AB> {
 
 impl<'a, AB: AirBuilder> Prim for AirCtx<'a, AB> {
     type V = SVal<AB::Expr>;
+    fn small_field(&self) -> bool {
+        self.kind.small()
+    }
+    fn prime(&self) -> u128 {
+        self.kind.prime()
+    }
     fn konst(&mut self, k: i128) -> Self::V {
         SVal { e: Self::k(k), deg: 0 }
     }
