@@ -1,8 +1,89 @@
 # b-ligero: a specialised Ligero-style direct-constraint prover for the transition unit (torch, GPU)
 
-Track B, lane `b-ligero`. Design: `PROTOCOL.md`. Proof class **NON_ZK_PROOF_DIAGNOSTIC** (no masking; hash and
-challenge expander are host placeholders; the relation is WP2's checker, nothing dropped). Every number below was
-measured on `vy-g3` (NVIDIA L40S 48 GB, torch cu124) on the frozen instance set `fixtures/bench-instances/v1`.
+Track B, lanes `b-ligero` (first pass, sections below) and `b-ligero2` (second pass, next section: bound statement,
+the 4096-VU decision workload, HVZK). Design: `PROTOCOL.md`. Proof class **NON_ZK_PROOF_DIAGNOSTIC** without `--zk`,
+**COMPLETE_HVZK_BACKEND** with it (hash and challenge expander are host placeholders; the relation is WP2's checker,
+nothing dropped). Every number below was measured on `vy-g3` (NVIDIA L40S 48 GB, torch cu124) on the frozen
+instance set `fixtures/bench-instances/v1`.
+
+## Second pass (lane b-ligero2, ledger `b-ligero2.jsonl`)
+
+**1. Statement binding (SOUNDNESS fix, commit 302832f).** The red team's checklist (`redteam_vu.md` F1/F2/F19,
+`TRANSCRIPT_CHECKLIST.md`) applied to this prover: the first pass derived both challenges from the transcript alone
+(`H(root)`, `H(root, w, h, q)`); the public words entered only through the verifier's own `beta` / chain `rhs`, so a
+prover could pick the claimed words *after* seeing the challenges. Concretely (`redteam_binding.py`, run on `vy-g3`,
+`fixtures/redteam/ligero-binding/v1/binding.json`): with LLL (SymPy) on the 21-VU chain a `delta` with `A delta = 0 mod p` was found in
+minutes -- an honest proof of 21 VUs verified against `y16 + delta` (every forged word in `[0, 2^16)`), i.e. any
+honest proof proved many false statements. Fix: `statement_digest` -- field, hash, a digest of the compiled
+constraint system, `l, n, D, t` (and now `zk, k`), the mode, the chain layout, and every public word (`a, b, c, y`
+or `a, b, y16`) -- computed by the **verifier from its configuration** and absorbed into both challenges; sizes
+(`l, n, m, t`, path lengths, `q`/`v` shapes) come from the verifier's `Config` / `System`, so a proof of another
+shape is `malformed` before any challenge is recomputed. The three fixtures (`fixtures/redteam/ligero-binding/v1/`):
+zero-witness proof claiming the real words -- rejected; 2-VU proof against a 4-VU verifier -- rejected (`malformed
+proof`); adaptive claim -- accepted by the pre-fix verifier, rejected by the fixed one (`column challenge
+mismatch`). The 83-case BabyBear battery (`redteam_battery.py`, `results/babybear_battery.json`): 71 applicable
+step/VU cases, **0 forgeries** (12 gadget-level cases do not apply to a unit-level constraint system; the 4
+`zero_swap` cases the reference checker rejects are true statements here -- `c = -0` and `c = +0` give the same
+output word -- their rejection upstream comes from a stale hint, not a constraint).
+
+**2. The decision workload: 4096 VUs of K = 1536** (run `r20260922-074449-a913`, `results/result_vu4096_b*.json`;
+non-ZK, bound statement). 6.6 GB at 85 VUs does not fit 4096 in 48 GB, so the batch is proved as `N_subbatches`
+independently committed proofs; `config_for(..., n_proofs)` gives each proof `accounting.per_proof_target` and the
+reported soundness is `accounting.union_over_proofs`. Prover time = the sum over the sub-batches, every one verified:
+
+| sub-batching | `t` | per-proof / union (log2) | prover total | **ms/VU** | verifier | transcript | peak device | overhead vs 9.85 ps |
+|---|---|---|---|---|---|---|---|---|
+| 49 x 85 VUs (l = 8192, n = 32768) | 198 | -134.2 / -128.6 | 8.13 s | 1.98 | 1.59 s | 180 MB | 6.6 GB | 2.0e8 |
+| **25 x 170 VUs (l = 16384, n = 65536)** | 196 | -132.9 / -128.3 | **7.97 s** | **1.95** | 1.00 s | 111 MB | 13.2 GB | **2.0e8** |
+| 13 x 341 VUs (l = 32768, n = 131072) | 195 | -132.2 / -128.5 | 8.35 s | 2.04 | 0.81 s | 78 MB | 26.4 GB | 2.1e8 |
+
+Split at 25 x 170: hints 0.12 / witness 0.27 / encode 3.62 / transfer 0.11 / Merkle 0.07 / tests 3.61 / openings
+0.12 s. Sub-batching costs ~3 columns of `t` and nothing else; the per-VU time *fell* from the first pass's 2.30
+ms (the operand marshaling is no longer timed, and the warm loop amortises the graph replays). `l = 32768` is
+slower: the size-131072 NTT leaves the L2 sweet spot.
+
+*Route (b), the transposed layout, designed, not implemented*: units as Ligero **rows** (one unit's 3516 witness
+values as a row's payload, `l = 3516 -> 4096`, `m = 4096 x 96 = 393k rows` per 4096 VUs -- the 310k x 4096 shape
+b-commit measured at 46.7 ms encode+Blake3 and 149 ms linear test per 4096 VUs, 259 ms total). Every constraint
+then relates *positions within a row* (`W[unit][var_i] * W[unit][var_j] = W[unit][var_k]`), i.e. the Hadamard and
+linear tests become tests over a fixed per-row pattern: the linear test is `sum_i alpha_i p(zeta_i) = beta` per row
+(the structure b-lintest exploits -- one interpolation of the pattern, then a batched inner product), the quadratic
+test becomes a *permuted* Hadamard product (`p(zeta_a) p(zeta_b) - p(zeta_c)` across positions of the *same* row),
+which Ligero does not test directly: it needs either a rotation argument per (a, b, c) triple pattern (3387
+patterns) or a re-encoding of the permuted rows -- the cost the row layout avoids. The cross-unit chain becomes a
+constraint between *rows* (`p_j(zeta_c) = p_{j+1}(zeta_y)`), a rotation of the row index, which is a cheap
+general linear test. Estimate at b-commit's buckets: encode+hash 47 ms and linear test 149 ms per 4096 VUs are measured; the quadratic
+test is the open item -- either one re-encoding per permutation class of the 3387 (a, b, c) position patterns, or a
+permuted encoding of the whole 393k x 4096 matrix per class (>= 47 ms each). On paper (b) is 0.3-0.5 s per 4096 VUs
+against (a)'s 8 s **if** the permuted Hadamard test costs O(1) encodings; until it does, (a) is the measured route
+and (b) the next design. The int32 constraint-test rewrite (the 36% term) applies to either.
+
+**3. HVZK** (run `r20260922-081245-1e0d`, `results/result_vu4096_zk_b*.json`, `--zk`; PROTOCOL.md 8b as
+implemented; the first `COMPLETE_HVZK_BACKEND` of the campaign):
+
+| | 25 x 170 VUs (l = 16384, k = 16640, n = 65536) | 49 x 85 VUs (l = 8192, k = 8448, n = 32768) |
+|---|---|---|
+| `t` (union over the sub-batches, log2) | 197 (-128.05) | 200 (-128.20) |
+| prover total / **ms/VU** | 8.77 s / **2.14** (+10% over non-ZK 1.95) | 9.23 s / 2.25 |
+| of which ZK masks (host SHAKE-256, ~1.5 M symbols per proof) | 0.45 s | 0.73 s |
+| encode / tests | 3.84 / 3.74 s | 3.58 / 3.88 s |
+| verifier / transcript / peak device | 1.01 s / 122 MB / 13.7 GB | 1.55 s / 193 MB / 6.9 GB |
+| overhead vs native 9.85 ps/VU | **2.2e8** | 2.3e8 |
+
+Gate under `--zk` (`results/gate_vu_zk.json`): 16 VUs accept, 52/52 negatives and 252/252 mutations rejected.
+Simulator-style test (`redteam_zk.py`, `results/redteam_zk.json`, PASS on the L40S): opened columns uniform (chi-square
+64 bins, p = 0.49); a proof of real VUs vs a proof of the trivial VU at the same layout indistinguishable on the
+opened columns and on `w, v, h, q` (p = 0.12-0.43); 0 opened values equal to a payload value of their row and 0
+constant rows in the clear -- the unmasked control leaks 1018 of 1018 constant rows at every column and 192 k of
+665 k opened values are their row's payload. `n` did **not** double (section 8b's estimate assumed `k` rounded to a
+power of two; `k = l + 256` in coefficient form keeps `n = 4 l`), so the ZK cost is +10%, not +33%.
+**What separates this from `COMPLETE_ZK_BACKEND`**: honest-verifier only -- the coins are Fiat-Shamir of the
+transcript; against a malicious verifier the HM96 commitment to the verifier's coins before `root` (one more round,
+depth 3, no arithmetic) is not implemented. Also still placeholders: the hash, the SHAKE expander (and the mask
+sampler's 2^-31 per-symbol bias).
+
+Runs: `python -m backends.direct.ligero.run bench-vu --zk --batch 16384 --total-vus 4096 --reps 3 ...`,
+`gate-vu --zk`, `python -m backends.direct.ligero.redteam_zk`, `redteam_binding`, `redteam_battery`.
 
 ## What it is
 
