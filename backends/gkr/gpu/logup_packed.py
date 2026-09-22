@@ -316,7 +316,7 @@ if GRAPHS:
             for lv in range(n - 1, 0, -1):
                 src, dst = self.levels[lv], self.levels[lv - 1]
                 m = 1 << (lv - 1)
-                self.tk._tree_level_kernel[(-(-m // 256),)](src[0], src[1], dst[0], dst[1], m, R2=self.tk.R2_MOD_P, BLOCK=256)
+                self.tk._tree_level_kernel[(-(-m // 256),)](src[0], src[1], dst[0], dst[1], m, R2=self.tk.R2_MOD_P, BLOCK=256, FK=self.tk.FIELD_KEY)
             self.T4_big[0, :, 0] = self.p_leaf[0::2]
             self.T4_big[1, :, 0] = self.p_leaf[1::2]
             self.T4_big[2] = self.q_leaf[0::2]

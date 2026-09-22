@@ -21,11 +21,11 @@ import torch
 import triton
 import triton.language as tl
 
-from .kernels_triton import R2_MOD_P, _ext_mmul6_j, madd, mmul, msub
+from .kernels_triton import FIELD_KEY, R2_MOD_P, _ext_mmul6_j, madd, mmul, msub
 
 
 @triton.jit
-def _eq_table_vars_kernel(rho_ptr, start, nvars, out_ptr, n, R2: tl.constexpr, BLOCK: tl.constexpr):
+def _eq_table_vars_kernel(rho_ptr, start, nvars, out_ptr, n, R2: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
     b = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = b < n
     zeros = b * 0
@@ -65,12 +65,12 @@ def eq_table_vars(rho: torch.Tensor, start: int, nvars: int, out: torch.Tensor |
     n = 1 << nvars
     if out is None:
         out = torch.empty((n, 6), dtype=torch.int32, device=rho.device)
-    _eq_table_vars_kernel[(triton.cdiv(n, BLOCK),)](rho, start, nvars, out, n, R2=R2_MOD_P, BLOCK=BLOCK)
+    _eq_table_vars_kernel[(triton.cdiv(n, BLOCK),)](rho, start, nvars, out, n, R2=R2_MOD_P, BLOCK=BLOCK, FK=FIELD_KEY)
     return out
 
 
 @triton.jit
-def _round_consts_kernel(rho_ptr, coins_ptr, i, out_ptr, R2: tl.constexpr):
+def _round_consts_kernel(rho_ptr, coins_ptr, i, out_ptr, R2: tl.constexpr, FK: tl.constexpr):
     zero = tl.load(rho_ptr + 0) * 0
     one = zero + 1
     p0 = one
@@ -128,12 +128,12 @@ def _round_consts_kernel(rho_ptr, coins_ptr, i, out_ptr, R2: tl.constexpr):
 
 def round_consts(rho: torch.Tensor, coins: torch.Tensor, i: int, out: torch.Tensor) -> torch.Tensor:
     """Round ``i`` (1-based) constants into ``out (36,) int32``: ``[prefix (6) | eq_x (4 x 6) | r_i R (6)]``."""
-    _round_consts_kernel[(1,)](rho, coins, i, out, R2=R2_MOD_P)
+    _round_consts_kernel[(1,)](rho, coins, i, out, R2=R2_MOD_P, FK=FIELD_KEY)
     return out
 
 
 @triton.jit
-def _scale_R_kernel(v_ptr, out_ptr, n, R2: tl.constexpr, BLOCK: tl.constexpr):
+def _scale_R_kernel(v_ptr, out_ptr, n, R2: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < n
     v = tl.load(v_ptr + i, mask=mask, other=0)
@@ -146,7 +146,7 @@ def scale_R(v: torch.Tensor, out: torch.Tensor | None = None, BLOCK: int = 256) 
     if out is None:
         out = torch.empty_like(v)
     n = v.numel()
-    _scale_R_kernel[(triton.cdiv(n, BLOCK),)](v, out, n, R2=R2_MOD_P, BLOCK=BLOCK)
+    _scale_R_kernel[(triton.cdiv(n, BLOCK),)](v, out, n, R2=R2_MOD_P, BLOCK=BLOCK, FK=FIELD_KEY)
     return out
 
 
