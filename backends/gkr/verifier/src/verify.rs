@@ -16,7 +16,7 @@ use crate::ntt::{encode, RowEval};
 use crate::proof::{Column, Proof};
 use crate::sha256::Sha256;
 use crate::transcript::Transcript;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Instant;
 
 pub struct Params { pub k: usize, pub n: usize, pub t: usize }
@@ -120,30 +120,57 @@ fn start_transcript(stmt: &Statement, root: &[u8; 32]) -> (Transcript, Vec<Table
     (tr, chs, pts)
 }
 
+/// `rho` in the top-bit-first convention of `eq_table` / `SplitEq` (`rho[0]` on the leaf index's top bit).
 struct LeafClaim { rho: Vec<Ext>, lam: Ext, value: Ext }
 
+/// `--trace-logup`: print every level's point, messages and final-check operands (lane a-protocol-diff).
+pub static TRACE_LOGUP: AtomicBool = AtomicBool::new(false);
+
+fn fmt_ext(x: &Ext) -> String { format!("[{}]", x.0.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(",")) }
+fn fmt_exts(xs: &[Ext]) -> String { format!("[{}]", xs.iter().map(fmt_ext).collect::<Vec<_>>().join(" ")) }
+
+/// One table's fractional-sum GKR, in the **low-bit-first** schedule of the a-gpu2 prover (`gpu/logup.py`,
+/// `packed/logup_reference.py`): at level `k` round `i` binds bit `i` of the level index (pairs `(2y, 2y+1)`), and
+/// the next level's point is `rho = [mu] ++ x*` -- `mu` on bit 0 (the children pairing), `x*[i]` on bit `i + 1`.
+/// `eq(rho, x*)` pairs `rho[j]` with `x*[j]` (both on bit `j`).  The a-gpu prover (v2e) bound the top bit first
+/// with `rho = x* ++ [mu]`; the two schedules are the same protocol under bit-reversal of the level index, but the
+/// message values differ from level 2 on (the first level whose `eq(rho, x*)` has two factors), which is what this
+/// verifier rejected until the switch (`a_protocol_diff.md`).  The leaf claim is returned top-bit-first (reversed).
 fn verify_table(n: usize, tr: &mut Transcript, rd: &mut Reader, name: &str) -> Result<LeafClaim, String> {
+    let trace = TRACE_LOGUP.load(Ordering::Relaxed);
     let root_q = rd.next()?;
     if root_q.is_zero() { return Err(format!("LogUp {name}: q_root is zero")); }
     tr.absorb_ext(root_q);
     let mut lam = tr.challenge();
     let mut rho: Vec<Ext> = Vec::new();
     let mut value = lam * root_q;
+    if trace { println!("trace-logup {name}: n={n} q_root={} lambda_0={}", fmt_ext(&root_q), fmt_ext(&lam)); }
     for k in 0..n {
         let mut running = value;
         let mut x_star = Vec::with_capacity(k);
         for rnd in 0..k {
             let h = rd.take(4)?;
+            if trace { println!("trace-logup {name} level {k} round {rnd}: running={} h={}", fmt_ext(&running), fmt_exts(&h)); }
             if h[0] + h[1] != running { return Err(format!("LogUp {name} level {k} round {rnd}: sum mismatch")); }
             tr.absorb_exts(&h);
             let r = tr.challenge();
             running = interpolate(&h, r);
             x_star.push(r);
+            if trace { println!("trace-logup {name} level {k} round {rnd}: r={}", fmt_ext(&r)); }
         }
         let vals = rd.take(4)?;
         let (p0, p1, q0, q1) = (vals[0], vals[1], vals[2], vals[3]);
         let ex = eq_point(&rho, &x_star);
         let g = p0 * q1 + p1 * q0 + lam * (q0 * q1);
+        if trace {
+            let rho_top: Vec<Ext> = rho.iter().rev().copied().collect();
+            let ex_top = eq_point(&rho_top, &x_star);
+            println!("trace-logup {name} level {k}: rho(low-first)={} x*={} lambda={}", fmt_exts(&rho), fmt_exts(&x_star), fmt_ext(&lam));
+            println!("trace-logup {name} level {k}: p0={} p1={} q0={} q1={}", fmt_ext(&p0), fmt_ext(&p1), fmt_ext(&q0), fmt_ext(&q1));
+            println!("trace-logup {name} level {k}: g=p0q1+p1q0+lambda q0q1={} eq(rho,x*)={} eq*g={} running={} ok={}",
+                     fmt_ext(&g), fmt_ext(&ex), fmt_ext(&(ex * g)), fmt_ext(&running), ex * g == running);
+            println!("trace-logup {name} level {k}: [a-gpu top-first pairing] eq(rev rho,x*)*g={} ok={}", fmt_ext(&(ex_top * g)), ex_top * g == running);
+        }
         if ex * g != running { return Err(format!("LogUp {name} level {k}: final check")); }
         tr.absorb_exts(&vals);
         let mu = tr.challenge();
@@ -151,9 +178,13 @@ fn verify_table(n: usize, tr: &mut Transcript, rd: &mut Reader, name: &str) -> R
         let qv = q0 + mu * (q1 - q0);
         lam = tr.challenge();
         value = pv + lam * qv;
-        rho = x_star;
-        rho.push(mu);
+        if trace { println!("trace-logup {name} level {k}: mu={} lambda'={} value'={}", fmt_ext(&mu), fmt_ext(&lam), fmt_ext(&value)); }
+        let mut next = Vec::with_capacity(k + 1);
+        next.push(mu);
+        next.extend_from_slice(&x_star);
+        rho = next;
     }
+    rho.reverse();
     Ok(LeafClaim { rho, lam, value })
 }
 

@@ -1,6 +1,7 @@
-//! Independent verifier for Candidate A's GPU proofs (`backends/gkr/gpu`, BabyBear^6 / X^6 - 31).
+//! Independent verifier for Candidate A's GPU proofs (`backends/gkr/gpu`, BabyBear^6 / X^6 - 22).
 //!
-//!   verity-gkr-verify verify    --dir D --proof P [--vus N] [--threads T] [--json OUT]   accept / reject one proof
+//!   verity-gkr-verify verify    --dir D --proof P [--vus N] [--threads T] [--json OUT] [--trace-logup]
+//!                                                                                        accept / reject one proof (the flag prints every LogUp level's operands)
 //!   verity-gkr-verify negatives --dir D --proofs PD [--threads T] [--json OUT]           every PD/<id>.bin (D/neg/<id>) must be rejected
 //!   verity-gkr-verify mutate    --dir D --proof P [--vus N] [--threads T] [--sample K] [--json OUT]
 //!                                                                                        bit-flip / statement mutations of an accepted proof
@@ -111,6 +112,7 @@ fn cmd_verify(args: &[String]) -> i32 {
     let stmt = statement(&unit, &epi, &dir, vus).unwrap_or_else(|e| { eprintln!("{e}"); std::process::exit(2) });
     let bytes = std::fs::read(arg(args, "--proof").expect("--proof")).expect("proof file");
     let th = threads(args);
+    if args.iter().any(|a| a == "--trace-logup") { verify::TRACE_LOGUP.store(true, std::sync::atomic::Ordering::Relaxed); }
     let (res, st) = verify::verify(&stmt, &bytes, &LIGERO, th);
     let extra = format!(", \"vus\": {}, \"units\": {}, \"steps\": {}", stmt.vus(), stmt.segs[0].units, stmt.chain.steps);
     let json = stats_json(&res, &st, &extra);
