@@ -96,14 +96,6 @@ class StateDecode:
         return {"hdr": c >> p.acc_frac, "f": f, "z": int(t == 0 and f == 0)}
 
     @staticmethod
-    def static(p: Params, c: int) -> tuple[int, int, int, int]:
-        """The state of a constant word (the VU's c_0 = 0): no hints, no predicates."""
-        h = StateDecode.gen(p, c)
-        s, nz, e = hdr_table(p).row(h["hdr"])
-        M = h["f"] + nz * 2**p.acc_frac
-        return s, (p.floor if h["z"] else e), M, h["z"]
-
-    @staticmethod
     def check(ctx, p: Params, c, h: dict, tag: str = "acc"):
         hdr, f, z = h["hdr"], h["f"], h["z"]
         s, nz, e = ctx.lookup(f"{tag}.hdr", hdr_table(p), hdr)

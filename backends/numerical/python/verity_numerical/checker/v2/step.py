@@ -40,19 +40,20 @@ def zero_state(p: Params) -> tuple[int, int, int, int]:
 # One unit on a state
 # ---------------------------------------------------------------------------------------------------------------------
 
-def _group(ctx, p: Params, state, prods: Sequence, hg: dict, tag: str):
-    """One group: returns the next state (s, e_hat, M, z) and (ovf_eff, sgn)."""
+def _group(ctx, p: Params, state, prods: Sequence, hg: dict, tag: str, static: bool = False):
+    """One group: returns the next state (s, e_hat, M, z) and (ovf_eff, sgn).  ``static``: the incoming state is
+    the constant zero state (the VU's first unit), whose halves need no hint."""
     s_c, e_c, M_c, _z_c = state
     cands = [e_c] + [e for _, e, _ in prods]
     s4s = [s_c] + [s4 for _, _, s4 in prods]
     E = hg["E"]
     rows = [GroupMax.align(ctx, p, E, c, s, f"{tag}.max[{i}]") for i, (c, s) in enumerate(zip(cands, s4s))]
     dts, sps, iszs = zip(*rows)
-    if isinstance(M_c, int):
-        mb = V2.mb(p)
-        h_split = {"M_hi": M_c >> mb, "M_lo": M_c & (2**mb - 1)}
-    else:
-        h_split = hg["acc_split"]
+    h_split = hg.get("acc_split")
+    if h_split is None:
+        if not (static and isinstance(M_c, int)):
+            raise Reject(f"{tag}.sshift: the state split hint is missing")
+        h_split = StateShift.gen(p, M_c)
     t_acc = StateShift.check(ctx, p, M_c, dts[0], sps[0], h_split, f"{tag}.sshift")
     terms = [t_acc] + [ProductShift.check(ctx, p, u, dt, sp, None, f"{tag}.pshift[{i}]")
                        for i, ((u, _, _), dt, sp) in enumerate(zip(prods, dts[1:], sps[1:]))]
@@ -63,8 +64,9 @@ def _group(ctx, p: Params, state, prods: Sequence, hg: dict, tag: str):
     return (s_out, e_hat, M, z), (ovf, sgn)
 
 
-def check_unit_expr(ctx, p: Params, state, a: Sequence, b: Sequence, h: dict):
-    """Every predicate of one unit on the incoming state; returns ``(state_out, [(ovf_eff, sgn) per group])``."""
+def check_unit_expr(ctx, p: Params, state, a: Sequence, b: Sequence, h: dict, static: bool = False):
+    """Every predicate of one unit on the incoming state; returns ``(state_out, [(ovf_eff, sgn) per group])``.
+    ``static``: the state is the constant zero state (no split hint for its first group)."""
     k = _k(p)
     if len(a) != k or len(b) != k:
         raise Reject(f"{k} operand pairs expected")
@@ -76,21 +78,15 @@ def check_unit_expr(ctx, p: Params, state, a: Sequence, b: Sequence, h: dict):
     ovfs = []
     start = 0
     for g, size in enumerate(p.groups):
-        state, ov = _group(ctx, p, state, prods[start:start + size], h["groups"][g], f"g{g}")
+        state, ov = _group(ctx, p, state, prods[start:start + size], h["groups"][g], f"g{g}", static and g == 0)
         ovfs.append(ov)
         start += size
     return state, ovfs
 
 
-def _state_in(ctx, p: Params, c, h: dict):
-    if isinstance(c, int):
-        return StateDecode.static(p, c)
-    return StateDecode.check(ctx, p, c, h["acc"])
-
-
 def check_step_expr(ctx, p: Params, c, a: Sequence, b: Sequence, h: dict):
     """The word-in, word-out transition unit: returns the output word as an expression."""
-    state, ovfs = check_unit_expr(ctx, p, _state_in(ctx, p, c, h), a, b, h)
+    state, ovfs = check_unit_expr(ctx, p, StateDecode.check(ctx, p, c, h["acc"]), a, b, h)
     return Pack.check(ctx, p, state, ovfs)
 
 
@@ -127,8 +123,7 @@ def gen_unit(p: Params, state: tuple[int, int, int, int], a: Sequence[int], b: S
 def gen_step(p: Params, c: int, a: Sequence[int], b: Sequence[int]) -> dict:
     """Honest hints for the word-in transition unit."""
     h_acc = StateDecode.gen(p, c)
-    ctx = IntCtx()
-    state = StateDecode.check(ctx, p, c, h_acc)
+    state = StateDecode.check(IntCtx(), p, c, h_acc)
     h, _state, _ovfs = gen_unit(p, state, a, b)
     h["acc"] = h_acc
     return h
@@ -165,6 +160,8 @@ def gen_vu(p: Params, a: Sequence[int], b: Sequence[int]) -> dict:
     n = len(a) // k
     for i, start in enumerate(range(0, len(a), k)):
         h, state, ovfs = gen_unit(p, state, a[start:start + k], b[start:start + k])
+        if i == 0:
+            h["groups"][0]["acc_split"] = None       # the constant zero state is split statically: no hint
         steps.append(h)
         if i < n - 1 and any(o for o, _ in ovfs):
             raise Reject(f"unit {i}: saturation before the last unit is outside the domain")
@@ -179,7 +176,7 @@ def check_vu_expr(ctx, p: Params, a: Sequence, b: Sequence, h: dict):
     n = len(a) // k
     state = zero_state(p)
     for i, start in enumerate(range(0, len(a), k)):
-        state, ovfs = check_unit_expr(ctx, p, state, a[start:start + k], b[start:start + k], h["steps"][i])
+        state, ovfs = check_unit_expr(ctx, p, state, a[start:start + k], b[start:start + k], h["steps"][i], static=(i == 0))
         if i < n - 1:
             for g, (ovf, _) in enumerate(ovfs):
                 ctx.eq(f"u{i}.g{g}.finite", ovf, 0)
