@@ -207,7 +207,7 @@ extra committed rows, negligible). With `k = l + t = 4285 -> 8192` (the next pow
 the rate halves to 1/2: Appendix C then needs `t` such that `(1 - e/n)^t + ((k + l)/n)^t + (2k/n)^t <= 2^-128` with
 `e = (n - k)/2 = 4096`: `(3/4)^t` -> `t = 309`, `(2k/n)^t = 1^t` -- **the quadratic test fails at rate 1/2**
 (`n > 2k` is required). So ZK at `2^-128` needs `n = 32768` (rate 1/4 again with `k = 8192`): encoding, transfer and
-hashing double (`+0.03 s` on the 0.10 s prover at B = 4096: encode 0.031 -> 0.062, hashing 1 -> 2 ms, ~+30%), the opened columns stay `t = 189` (same `(5/8)^189`
+hashing double (`+0.03 s` on the 0.095 s prover at B = 4096: encode 0.031 -> 0.062, hashing 1 -> 2 ms, ~+30%), the opened columns stay `t = 189` (same `(5/8)^189`
 with `e = (n - k)/2 = 12288`) but `m t` bytes are unchanged, `w, h, q` double in length (`+0.4 MB`), peak memory
 doubles (`6.3 GB`; the 85-VU `l = 8192, n = 32768` run measured 6.6 GB). Alternatively keep `n = 16384` and halve `l` to 2048 units per proof (42 -> 21 VUs): same
 per-unit encoding cost, twice the fixed per-proof overhead. Malicious-verifier ZK (the AGENTS.md requirement) adds
@@ -220,12 +220,11 @@ a commitment to the verifier's coins before `root` (one more round; depth 3) -- 
   of `U` to the host (0.37 s) and host hashing (0.28 s) were 65% of the GPU-side prover; now 2 ms.
 * Hints: `hints_torch.py` vectorises `gen_step` (20 ms per 4096 units vs 2.6 s in Python); the gate asserts equality
   with the checker's `gen_step` on every proved unit. A wrong hint is a completeness bug (the constraints reject it),
-  never a soundness one. It runs on the host (23 ms per 4096 units, 22% of the prover); moving it to the device is
-  the next step.
+  never a soundness one. On the device as one CUDA graph (17 ms per 4096 units incl. the public decodes).
 * Kernel fusion (final state): `torch.compile` on the NTT butterfly and on the constraint-table kernels (`_combine`,
   `apply_sparse`), and CUDA-graph replay of the whole witness program (~2500 launches -> one graph; 55 -> 8 ms).
-  Prover 0.101 s per 4096 units (24.6 us/unit), 0.110 s per 42 VUs (2.6 ms/VU), 0.200 s per 85 VUs at `l = 8192`
-  (2.36 ms/VU); `results/result_*.json`.
+  The hint generator is graph-replayed too. Prover 0.095 s per 4096 units (23.2 us/unit), 0.108 s per 42 VUs
+  (2.57 ms/VU), 0.195 s per 85 VUs at `l = 8192` (2.30 ms/VU); `results/result_*.json`.
 * The hash and the SHAKE-256 challenge expander remain "placeholders" in the sense of the shared brief (not the
   campaign's final choice of hash).
 * ZK masking: section 8b (design + cost, not implemented).

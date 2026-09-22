@@ -1,6 +1,6 @@
 {
  "schema": "research/result/v0.1",
- "run_id": "b-ligero-vu-1790060810",
+ "run_id": "b-ligero-vu-1790061561",
  "workload_fingerprint": {
   "profile": "first-campaign-target/2026-09-21",
   "domain": "finite",
@@ -54,7 +54,7 @@
     "numpy": "2.5.3"
    }
   },
-  "preprocessing": "constraint compilation (a function of Params only, 0.38s)",
+  "preprocessing": "constraint compilation (a function of Params only, 0.36s)",
   "retention": "retained",
   "instances": {
    "dataset": "bench-instances/v1",
@@ -100,17 +100,17 @@
  "measurements": [
   {
    "name": "t.witness",
-   "value": 0.04550592601299286,
+   "value": 0.04047635197639465,
    "unit": "s"
   },
   {
    "name": "t.encoding_commitment",
-   "value": 0.07253826968371868,
+   "value": 0.0725173968821764,
    "unit": "s"
   },
   {
    "name": "t.arithmetic",
-   "value": 0.07871354185044765,
+   "value": 0.0785873644053936,
    "unit": "s"
   },
   {
@@ -125,17 +125,17 @@
   },
   {
    "name": "t.serialization",
-   "value": 0.0035484284162521362,
+   "value": 0.0037184525281190872,
    "unit": "s"
   },
   {
    "name": "t.total",
-   "value": 0.20042195357382298,
+   "value": 0.1952924020588398,
    "unit": "s"
   },
   {
    "name": "verifier.seconds",
-   "value": 0.05356120504438877,
+   "value": 0.0536076370626688,
    "unit": "s"
   },
   {
@@ -155,7 +155,7 @@
   },
   {
    "name": "mem.peak_device_bytes",
-   "value": 6603298816,
+   "value": 6612277248,
    "unit": "B"
   },
   {
@@ -175,7 +175,7 @@
   },
   {
    "name": "vu.seconds_per_vu",
-   "value": 0.0023579053361626233,
+   "value": 0.0022975576712804683,
    "unit": "s"
   },
   {
@@ -185,37 +185,37 @@
   },
   {
    "name": "split.hints_seconds",
-   "value": 0.03653537482023239,
+   "value": 0.03138837590813637,
    "unit": "s"
   },
   {
    "name": "split.witness_torch_seconds",
-   "value": 0.008970551192760468,
+   "value": 0.009087976068258286,
    "unit": "s"
   },
   {
    "name": "split.encode_seconds",
-   "value": 0.06856217980384827,
+   "value": 0.06853664480149746,
    "unit": "s"
   },
   {
    "name": "split.transfer_seconds",
-   "value": 0.002312924712896347,
+   "value": 0.002298705279827118,
    "unit": "s"
   },
   {
    "name": "split.merkle_seconds",
-   "value": 0.0016631651669740677,
+   "value": 0.001682046800851822,
    "unit": "s"
   },
   {
    "name": "split.tests_seconds",
-   "value": 0.07871354185044765,
+   "value": 0.0785873644053936,
    "unit": "s"
   },
   {
    "name": "split.openings_seconds",
-   "value": 0.0035484284162521362,
+   "value": 0.0037184525281190872,
    "unit": "s"
   },
   {
