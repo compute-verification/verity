@@ -52,28 +52,34 @@ def _layout(a: torch.Tensor, b: int) -> torch.Tensor:
 
 class _EqSlices:
     """``eq(γ[i:i+κ], b1)`` and ``eq(γ[i+κ:], c)`` for every round as strided slices of the one full table
-    ``E[j] = eq(γ, j)`` (``γ[j]`` on bit ``j``): ``E[b1 << i] = eq(γ[:i], 0) · eq(γ[i:i+κ], b1) · eq(γ[i+κ:], 0)``, so the
-    suffix tables are ``E[:: 2^i]`` rescaled by the inverse of the prefix constant ``Π_{j<i} (1 - γ_j)`` (batch-inverted
-    on the host once per layer) -- no per-round doubling loops."""
+    ``E[j] = eq(γ, j)`` (``γ[j]`` on bit ``j``): ``E[x << i] = eq(γ[:i], 0) · eq(γ[i:i+n], x) · eq(γ[i+n:], 0)`` for
+    ``x < 2^n``, so the window tables are ``E[:: 2^i][: 2^n]`` rescaled by the inverse of the constant
+    ``Π_{j<i} (1 - γ_j) · Π_{j>=i+n} (1 - γ_j)`` (the ``(1 - γ_j)^-1`` batch-inverted on the host once per layer) -- no
+    per-round doubling loops."""
 
     def __init__(self, E: torch.Tensor, gammas: list[Ext]) -> None:
         self.E = E
         b = len(gammas)
+        one_m = [e_sub(ONE, gm) for gm in gammas]
         pref = [ONE]
-        for gm in gammas:
-            pref.append(e_mul(pref[-1], e_sub(ONE, gm)))               # pref[i] = Π_{j<i} (1 - γ_j)
+        for x in one_m:
+            pref.append(e_mul(pref[-1], x))                            # pref[i] = Π_{j<i} (1 - γ_j)
         inv_all = e_inv(pref[b])
-        inv = [ZERO] * (b + 1)
-        for i in range(b, 0, -1):                                      # inv[i] = pref[i]^-1 by the batch trick
-            inv[i] = inv_all
-            inv_all = e_mul(inv_all, e_sub(ONE, gammas[i - 1]))
-        inv[0] = ONE
-        self.inv = [t_ext(x, E.device) for x in inv]
+        inv1 = [ZERO] * b
+        for j in range(b - 1, -1, -1):                                 # (1 - γ_j)^-1 = pref[j+1]^-1 · pref[j]
+            inv1[j] = e_mul(inv_all, pref[j])
+            inv_all = e_mul(inv_all, one_m[j])
+        self.invpref = [ONE]
+        for x in inv1:
+            self.invpref.append(e_mul(self.invpref[-1], x))            # Π_{j<i} (1 - γ_j)^-1
+        self.invsuf = [ONE] * (b + 1)
+        for i in range(b - 1, -1, -1):
+            self.invsuf[i] = e_mul(self.invsuf[i + 1], inv1[i])        # Π_{j>=i} (1 - γ_j)^-1
 
     def suffix(self, i: int, n: int) -> torch.Tensor:
         """``eq(γ[i:i+n], x)`` for ``x < 2^n`` as ``(2^n, 6)`` int64 (canonical)."""
         sl = self.E[:: 1 << i][: 1 << n]
-        return ext_mul(sl, self.inv[i])
+        return ext_mul(sl, t_ext(e_mul(self.invpref[i], self.invsuf[i + n]), self.E.device))
 
 
 def _inputs(kern, gammas: list[Ext], rs: list[Ext], i: int, k: int, kappa: int, wgt: torch.Tensor, t: int,
