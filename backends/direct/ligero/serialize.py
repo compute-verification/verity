@@ -524,7 +524,8 @@ def mutations(pf, st: Statement) -> list[tuple[str, object, Statement]]:
         n, p2 = P_("opened_mask_row_plus1"); p2.opened[M - 1, 0] = (int(p2.opened[M - 1, 0]) + 1) % P; out.append((n, p2, st))
     n, p2 = P_("opened_value_noncanonical_p"); p2.opened[0, 0] = P; out.append((n, p2, st))
     n, p2 = P_("merkle_sibling_flipped"); p2.paths[0][0] = _flip_byte(p2.paths[0][0]); out.append((n, p2, st))
-    n, p2 = P_("merkle_path_truncated"); p2.paths[0] = p2.paths[0][:-1]; out.append((n, p2, st))
+    n, p2 = P_("merkle_paths_truncated"); p2.paths = [pth[:-1] for pth in p2.paths]; out.append((n, p2, st))
+    n, p2 = P_("merkle_paths_extended"); p2.paths = [pth + [pth[-1]] for pth in p2.paths]; out.append((n, p2, st))
     n, p2 = P_("root_flipped"); p2.root = _flip_byte(p2.root); out.append((n, p2, st))
     n, p2 = P_("w_perturbed"); p2.w[0, 0] = (int(p2.w[0, 0]) + 1) % P; out.append((n, p2, st))
     n, p2 = P_("w_noncanonical_p"); p2.w[0, 0] = P; out.append((n, p2, st))
@@ -611,6 +612,7 @@ def cmd_dump_system(args) -> int:
 
     from .unit import compile_unit
     data = system_bytes(compile_unit(REAL, chain=True))
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_bytes(data)
     rd = read_system(data)
     print(json.dumps({"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "sys_id": rd["sys_id"].hex(),
