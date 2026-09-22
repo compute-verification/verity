@@ -18,7 +18,25 @@ Nothing is running on vy-cpu2 or vy-g5 for this lane.
 * Results: `backends/numerical/reports/a_verifier_discrepancies.md` (findings, table, e2e), ledger
   `backends/numerical/reports/ledger/a-verifier.jsonl` (3 entries), envelopes `results_e2e_{kernel,torch}.json`.
 
+## a-verifier-2 (2026-09-22 ~11:10Z) -- what happened since
+
+F1 is an environment fault (`gpu/F1_TRIAGE.md`); the verifier is at 1.00 s / 12T for B = 4096 (run
+r20260922-105647-c947, from 3.02 s); checker-v2 statements verify (`lane/a-gpu-v2` proofs, r20260922-103210-9cba).
+Details, per-stage numbers and the reasoning behind the design choices: `backends/numerical/reports/a_verifier_2.md`.
+
 ## Next three steps
+
+1. **Re-record the a-gpu B = 4096 row** from a committed tree with `--proof-out` and the Rust verifier (needs an H100:
+   47.9 GB peak).  `main`'s prover is verified at B <= 512 on the 4090.
+2. **Verifier below 1 s with margin**: the butterflies saturate the AVX-512 units, so: skip the w = 1 stage of both
+   transforms (~4% of eval), thread `eq_table`/`SplitEq::new` (0.06 s wall), prefetch or sort the R16 query stream
+   (accumulate is 8 ns per query, a dependent-load chain), or port the linear test (9.4 CPU s, row-independent) to the
+   GPU.
+3. **v2 completeness**: a chainless single-segment statement mode + `gpu.run unit-negatives --proof-dir` so the 13
+   unit negatives that reach the verifier are seen by the Rust verifier; verify a-gpu-v2's B = 4096 proof when it
+   exists.
+
+## a-verifier's original next steps (kept for the record)
 
 1. **Sub-second verifier** (3.0 s at 12T now, 93% in the Ligero linear test = 43417 rows x 4 NTT_4096 + the `a`
    scatter): pruned forward NTTs (only ~64 outputs per coset are read), AVX-512 butterflies (interleaved six-lane

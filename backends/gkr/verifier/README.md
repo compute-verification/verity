@@ -52,12 +52,21 @@ Everything that is a loop over independent rows / columns / eq blocks runs on `-
 ::scope`; no rayon).  Peak RSS is ~100 MB at B = 4096 (the proof + one chunk of `a` per thread); `a` is never held
 whole.
 
-## Results (2026-09-22; proofs from the a-gpu prover on vy-g5, `VERITY_GPU_TORCH_ONLY=1` -- see the discrepancies report
-for why the kernel path's proofs are rejected by both verifiers today)
+## Results (2026-09-22)
 
-See `backends/numerical/reports/a_verifier_discrepancies.md` and the ledger `backends/numerical/reports/ledger/
-a-verifier.jsonl` for the numbers (verify seconds 1 / 12 threads at B = 64 and 4096, negatives 44/44, mutations
-16485/16485 at B = 64, the A-GPU end-to-end rows).
+* **v1 (the a-gpu circuit), B = 4096, 12 threads of vy-cpu2: 1.00 s** (1T 10.3 s; B = 64: 0.077 / 0.222 s); the
+  a-verifier lane's 3.02 s before the a-verifier-2 work (batched AVX-512 NTTs, output-pruned forward transforms,
+  planar functional fill).  44/44 negatives, 16485/16485 mutations rejected.  Run r20260922-105647-c947; per-stage
+  numbers and what changed in `backends/numerical/reports/a_verifier_2.md`; ledger `ledger/a-verifier-2.jsonl`.
+* **F1 settled**: the kernel path's proofs are byte-identical to the torch path's on a clean 4090 (`gpu/F1_TRIAGE.md`);
+  `main`'s prover is Rust-verified at B <= 512 from a committed tree.
+* **Checker v2** (`"variant": "v2"` manifests: `chain.txt` links, `itable` implicit tables, table union across the
+  segments): `lane/a-gpu-v2`'s pos64 and synth proofs accepted, 4/4 chain + 44/44 negatives + 786/786 sampled
+  mutations rejected (r20260922-103210-9cba).
+
+Env switches (all default on): `VERITY_GKR_NO_AVX512=1` scalar butterflies, `VERITY_GKR_ROWWISE=1` one row per NTT
+(the a-verifier path), `VERITY_GKR_PRUNE=<stages>` (default 6) the pruned forward transform, `VERITY_GKR_PROFILE=1`
+per-phase fill times on stderr.
 
 ## Layout
 
@@ -65,8 +74,9 @@ a-verifier.jsonl` for the numbers (verify seconds 1 / 12 threads at B = 64 and 4
 src/field.rs       BabyBear, Montgomery multiply, Ext (X^6 - 22), inverse, roots of unity, interpolation
 src/sha256.rs      SHA-256
 src/transcript.rs  gpu/transcript.py: state <- H(state || msg); challenge words by rejection sampling on H(state || "chal" || ctr)
-src/circuit.rs     circuit.txt / epilogue.txt parser (columns, linear forms, gates, queries, tables, implicit R16), GKR layers
-src/ntt.rs         radix-2 NTT (Montgomery twiddles), RowEval (evaluate a row at the opened positions)
+src/circuit.rs     circuit.txt / epilogue.txt parser (columns, linear forms, gates, queries, tables, R<w> and v2 `itable` implicit tables), GKR layers
+src/ntt.rs         radix-2 NTT (Montgomery twiddles), 48-lane batched DIF/pruned-DIT, RowEval (8 rows at the opened positions)
+src/lanes.rs       AVX-512 lane kernels (butterflies, 6-lane accumulate), runtime-detected, scalar fallback
 src/proof.rs       proof.bin parser (statement-bounded)
 src/verify.rs      the verifier: transcript replay, LogUp, GKR, the functional, Ligero
 src/main.rs        verify / negatives / mutate
