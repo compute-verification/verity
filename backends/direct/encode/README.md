@@ -1,4 +1,7 @@
-# encode -- Reed-Solomon encoders for the Ligero witness matrix, measured on an RTX 4090 (b-encode lane, 2026-09-22)
+# encode -- Reed-Solomon encoders, the fused streaming commitment and B's prover buckets on an RTX 4090 (b-encode + b-commit lanes, 2026-09-22)
+
+Sections: the encoder (b-encode lane, below) -- then **the fused encode -> column-hash commitment and B's remaining buckets
+(b-commit lane, second half of this file)**.
 
 **Scope: component.** Encoding the committed matrix of the protocols' `[n = 16384, k = 4096]` RS code over BabyBear
 (`backends/direct/PROTOCOL.md` section 3), nothing else of the prover.  Every kernel is bit-exact against the numpy
@@ -135,3 +138,116 @@ flagged breakthrough); plot `backends/numerical/reports/plots/overhead_b-encode.
 Not done: a Rust port; the fused encode->column-hash kernel (recommendation 3, the next lever); the natural-order
 layout variant; radix-4 stages (the kernel is at 0.78 of the memory floor, so the remaining gain is <= 1.3x);
 A100/H100 measurements (scaled only).
+
+
+---
+
+# b-commit lane: fused commitment and B's remaining buckets (2026-09-22, runs `r20260922-064722-07c7` commit, `r20260922-065537-279b` buckets)
+
+**Scope: component measurements** of every remaining B-Ligero prover bucket on the same RTX 4090 (driver 580.159.04, CUDA
+runtime 12.9, cupy 14.2.0), CUDA-event timings, warm, median of 7, each kernel **bit-exact** against a numpy / Python
+reference before it is timed (`tests/test_commit_stream.py`, `tests/test_buckets.py`; the bench re-checks on a small
+shape).  Inputs are resident pseudo-random data (data-independent cost).  Re-pricing and the honest label:
+`backends/numerical/reports/b_measured_4090.md` (`ARITHMETIC_DIAGNOSTIC`-level: not a proof, buckets measured separately).
+
+## Candidate B shape (310,602 rows x [16384, 4096]; 33,485 product rows; 125.9M helpers; t = 192), ms per batch
+
+~~~text
+bucket                                    kernel / configuration                                              ms/batch   us/row    floor                                      of floor   bit-exact
+commitment, Blake3 leaf, fused            commit_stream: v2 encode -> 512-row L2 slice -> Blake3 chunk CVs      46.7       0.150    unfused encode 32.2 + Blake3 56.6 = 88.8  1.90x      yes (vs unfused + CPU)
+  ... + cosets kept (15.3 GB store)       same, cosets streamed to a resident (R, 3k) store for tests/openings  49.4       0.159    -- (+2.7 ms for the 15.3 GB write)
+  encoder half alone (L2 slices)          v2, 1024 threads, 64 regs, 1 CTA/SM, 512-row slices                   35.7       0.115    SIMT ~14 ms (ROOFLINE.md)                  0.39
+  Blake3 half alone                       blake3_cols_chunks, schedule unrolled, 32,768 chunks per slice        15.4       0.050    20.4 GB hashed = 1.32 TB/s
+commitment, SHA-256 leaf, fused           commit_stream: 16,384 sequential column states, 1024-row slices       58.3       0.188    unfused 78.0                               1.34x      yes
+  SHA-256 half alone                      sha256_cols_update, one thread per column                             30.0       0.097    ~2,000 INT32 ops / 64 B block = INT32 issue rate: at the ALU floor
+IRS row combination v = r^T W             combine_scalar, k-wide rows, F_c scalar per row, chunk 1024            5.7       0.018    read 5.09 GB once = 5.0 ms                 0.89       yes
+quadratic test p_0 (8,192 points)         3 encoder calls (coset 1) per product row + combine_quadratic, s512    7.8       0.232*   6 transforms per product row                          yes
+linear test q_add (8,192 points)          7 encoder calls per row (6 coord. rows of r^T A + witness) + combine  149.4      0.481    14 transforms per row                                 yes (r^T A generation NOT included)
+helper inversions, 125.9M BabyBear^6      batch_inverse: Montgomery trick, 262,144 threads x 481, Fermat inv.   28.8       0.23 ns  traffic 15 ms                              0.52       yes (Python-int F_c)
+column openings, t = 192                  gather_columns from the kept store (+1.3 ms host Merkle paths)          3.8 (+1.3)         239 MB opened                                         yes
+  ... without a store                     gather-mode v2 encoder (encode every row, write the 192 positions)    32.2                (a full re-encode's compute)                          yes
+                                                                                                     sum      246 measured + 12.5 modelled (r^T A, witness, PRG) = 258.7 ms -> overhead 6.41e6
+~~~
+
+\* per product row.  Candidate A shape (48,873 rows): fused Blake3 commitment 7.4 ms (1.96x vs unfused), SHA-256 9.3 ms;
+IRS row combination 1.0 ms; openings 0.66 ms from the store / 5.3 ms re-encoded (+1.4 ms paths).  Slice sweep (B, Blake3):
+256 rows 49.7-52.2 ms, 512 47.2, 1024 46.7-47.1, 4096 58.7-59.3 (slice leaves L2), 65,536 (HBM-sized) 55.4-55.7.
+
+**What changed.**  (1) The commitment is 1.9x faster fused and needs 6.3 GiB instead of 20.6 GiB: the codeword never
+leaves L2.  Blake3 with the 7-round message schedule unrolled to literal indices hashes the 20.4 GB codeword in 15.4 ms
+(the reference-style `m[MSG_PERM[i]]` loop of `hash_gpu` indexes a register array with a constant-memory value and spills:
+359 GB/s there, 1,320 GB/s here); SHA-256 sits at the 4090's INT32 issue rate (30 ms) and cannot go faster on this card.
+The encoder (34-36 ms in L2 slices) is now the commitment's bottleneck, 0.39 of its SIMT floor.  Two-stream overlap of
+encoder and hash gains nothing: both are ALU-bound, and the v2 encoder (120 registers x 512 threads, or 64 x 1024) owns
+every register of the SM; capping it to leave room made the sum slower.  (2) **B's dominant bucket is the linear test,
+not hashing or encoding**: `q_add` needs the `deg < k` interpolant of every row of `r^T A` -- an `F_c` row, i.e. six
+BabyBear coordinate rows, each an INTT + a coset NTT -- times the re-encoded witness row: 14 size-4096 transforms per row
+against the commitment's 4, 149 ms = 58% of the batch.  The cost model priced the whole row-combination bucket as one
+tensor-core matmul of 5.4e11 MACs (9.5 ms at utilisation 0.172) and did not count the `r^T A` encodings.  (3) With every
+bucket measured B is **259 ms per batch on the 4090 = 63 us/VU, overhead 6.4e6** (was 2.65e6 with the encoder and hash
+measured and the rest modelled); H100 scaling 7.9e6, A100 1.4e7 (INT32 issue-rate ratios 0.81 / 0.47, labelled scalings).
+No bucket of B is a tensor-core operation; the IRS combination and the inversions are memory-streaming, the rest is
+integer SIMT arithmetic.
+
+**Still modelled**: `r^T A` generation (the sparse per-unit constraint combination, 8.9 ms in the model), witness
+generation (0.4 ms in the model; no GPU witness kernel exists on main -- the b-ligero lane's generator is Rust/CPU),
+prover randomness (3.2 ms at an assumed 100 GB/s).
+
+## Conventions for the b-ligero Rust/CUDA port
+
+* **Codeword layout: coset-major systematic** (`babybear.encode_rows(layout="coset")`): column `c k + j` (`c < 4`,
+  `j < k`) is the evaluation at `omega^(4 j + c)`, `omega` = `31^((p-1)/16384)`; columns `< k` are the message values
+  (the input row).  `coset_to_natural` is the public permutation to the natural order; Ligero's column sampling is
+  uniform so either labelling is a valid domain (the verifier evaluates its constants for this one).  The 8,192-point
+  domain of the tests is cosets 0 and 1 = the first `2k` columns.  Randomizer positions are the last `k - l = 256`
+  message symbols of a row (values, like the payload: the INTT is part of the protocol).
+* **Arithmetic**: Montgomery `R = 2^32`, `p^-1 mod 2^32 = babybear.P_INV_MOD_R`; twiddles and challenge coefficients in
+  Montgomery form, data plain, so one `mont_mul(data, coeff_R)` is the plain product.  Stage twiddles
+  `tw[m + t] = omega_(2m)^(+-t)`, coset tables `k^-1 omega_n^(c i)` stored at the bit-reversed coefficient position
+  (`encode_ntt_simt.twiddle_tables`).  `F_c = F_p[X] / (X^6 - 31)`, coordinate-major storage `(6, N)`; `F_c x F_t`
+  products are six independent `F_t` products (the tests never multiply two `F_c` elements; only the inversion does).
+* **Column hash / leaf**: leaf `x` = H(column `x` of the coset-major codeword, each element as 4 little-endian bytes,
+  row 0 first).  Blake3: the spec's chunk tree (1 KiB chunk = 256 rows; chunk counter = global chunk index; `ROOT` on the
+  final node), digest = 8 little-endian words.  SHA-256: FIPS padding with the bit length `32 R`, digest = 8 big-endian
+  words (`sha256_cuda.digests_to_bytes`).  Streaming state: SHA-256 one 8-word state per column, folded 16 rows at a
+  time (slices multiples of 16 rows; the `< 16`-row tail and padding in the final kernel); Blake3 one chaining value per
+  (column, chunk) in a `(nchunks, 16384, 8)` table (slices multiples of 256 rows), then `blake3_cols_parents`.
+* **Tree**: `hash_gpu.merkle`: node = SHA-256(left || right) / Blake3 parent-node compression (`PARENT`, counter 0,
+  `ROOT` on the last), leaves in column order `0 .. 16383`, an unpaired node promoted unchanged, depth 14.  Opening of
+  column `x`: the column (`R` u32) + 14 sibling digests, leaf level first (`buckets.merkle_paths`).
+* **Slice pipeline**: encode 512-1024 rows into a `(rows, 3k)` L2-resident buffer (`write_systematic=False`, coset `c`
+  at column `(c - 1) k`), hash the slice reading coset 0 from the input rows, discard; optionally also stream the cosets
+  to a resident `(R, 3k)` store (15.3 GB at B: `keep_codeword=True`) for the quadratic test and the openings -- at 2.7 ms
+  it is cheaper than re-encoding for the openings (32 ms) and for the tests.  Capture the loop as a CUDA graph (600
+  slices x 3 launches otherwise cost more than the GPU work at these sizes).
+* **Tests** (`buckets.py`): thread per (column, 32-row chunk) accumulating six `F_t` lanes, chunk partials reduced once
+  at the end; `p_0` term `r_i (x y - z)` with `r_i` supplied as `(r R, r R^2)` so the plain `x y R^-1` product needs no
+  extra reduction; `q_add` term `R_c[i][j] u[i][j]` with `u` lifted by `R^2`.  Inversion: strided ownership
+  (`idx = s T + t`), prefix products in a global scratch, one `a^(p^6 - 2)` per thread.
+
+## Layout (b-commit files)
+
+| file | what |
+|---|---|
+| `commit_stream.py` | `StreamingCommitter(hash, slice_rows, overlap, graph, keep_codeword)`: fused encode -> column hash -> root; SHA-256 column states / Blake3 chunk CVs; `reference_leaves` (CPU) |
+| `buckets.py` | `Combiner` (`combine_scalar` / `combine_quadratic` / `combine_linear` / `reduce_chunks`), `BatchInverter`, `ColumnGather`, `merkle_paths` |
+| `buckets_ref.py` | numpy / Python-int references (`F_c` arithmetic, `is_irreducible_binomial`) |
+| `encode_ntt_simt.py` | v2 gains `ncosets`, cosets-only `(R, 3k)` output, `min_blocks_per_sm` (register cap), `gather=True` + `.gather(rows, columns)` |
+| `commit_bench.py`, `buckets_bench.py` | the recorded measurements (raw `results_commit_*.json`, `results_buckets_*.json`) |
+| `reprice_measured.py` | `Priced.times(measured=...)` re-pricing -> `reports/b_measured_4090.json` / `.md` |
+
+~~~bash
+# pod (commit first):
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_commit.bench --require-result -- \
+  bash -c 'export PATH=/usr/local/cuda-12.4/bin:$PATH; cd backends/direct && python3 -m encode.commit_bench --reps 7 --out "$RESEARCH_RUN_DIR/bench.json" && \
+           PYTHONPATH=../numerical/python:../../packages/verity/src /workspace/venv312/bin/python encode/envelope.py --bench "$RESEARCH_RUN_DIR/bench.json" --out "$RESEARCH_RUN_DIR/result.json"'
+#   (buckets: python3 -m encode.buckets_bench --reps 7 ...)
+uv run --frozen --package verity-numerical python backends/direct/encode/reprice_measured.py --commit backends/direct/encode/results_commit_<run>.json \
+  --buckets backends/direct/encode/results_buckets_<run>.json --out backends/numerical/reports/b_measured_4090.json --md backends/numerical/reports/b_measured_4090.md
+~~~
+
+**Not done**: a Rust port; a faster encoder (the commitment's bottleneck at 0.39 of its SIMT floor: radix-4 stages and
+fewer shared-memory passes are the levers); the `r^T A` generation kernel (needs the constraint system on the GPU);
+a witness-generation kernel; a cheaper linear test (the 6 coordinate encodings per row are inherent to `q_add` over
+`F_c` with `F_t` rows; only a structural shortcut through the per-unit constraint pattern could remove them).
+Ledger `backends/numerical/reports/ledger/b-commit.jsonl` (5 entries), plot `plots/overhead_b-commit.png`.

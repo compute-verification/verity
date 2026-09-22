@@ -448,33 +448,63 @@ class Priced:
 
     def times(self, gpu: Gpu, gpu_key: str, utilisation: float, hash_rate: float, encoder: str = "rs_matrix_ntt",
               fs: FieldSpec | None = None, encoding_utilisation: float | None = None,
-              encoder_seconds_per_row: float | None = None) -> dict:
+              encoder_seconds_per_row: float | None = None, measured: dict | None = None) -> dict:
         """Seconds per B=4096 batch by bucket and per VU, and the overhead.  ``encoding_utilisation`` (default: the
         same as ``utilisation``) prices the encoding component apart: the expander encoder is a gather.
         ``encoder_seconds_per_row`` replaces the modelled encoding bucket by a MEASURED encoder time per Ligero row
         (b-encode lane: the SIMT NTT on the RTX 4090), reported as ``t.encoding``; the encoding MACs then leave the
-        matmul bucket (the encoder is not a tensor-core operation)."""
+        matmul bucket (the encoder is not a tensor-core operation).
+
+        ``measured`` (b-commit lane) replaces further modelled buckets by MEASURED seconds per batch, keyed
+        ``"commitment"`` (fused encode + hash: replaces the encoding bucket, ``encoding_simt`` and the hash bucket),
+        ``"encoding"`` / ``"hash"`` / ``"hint_gen"`` / ``"prg"`` (that bucket), ``"matmul:<component>"`` /
+        ``"simt:<component>"`` (that component of :attr:`matmul` / :attr:`simt_field_mults`) and ``"extra:<name>"``
+        (a bucket the model does not have, e.g. the column openings).  The result lists ``t.measured`` (name -> s),
+        ``t.modelled`` (every component still priced by the model, name -> s) and ``measured_fraction``."""
         simt_scale = fs.simt_mult_vs_goldilocks if fs else 1.0
         u_enc = utilisation if encoding_utilisation is None else encoding_utilisation
-        measured = encoder_seconds_per_row is not None
-        t_mm = sum(v / (gpu.peak_macs_per_s * (u_enc if k == "encoding" else utilisation)) for k, v in self.matmul.items()
-                   if not (measured and k == "encoding"))
-        t_enc = self.ligero_rows * encoder_seconds_per_row if measured else self.matmul.get("encoding", 0.0) / (gpu.peak_macs_per_s * u_enc)
-        if measured:
-            t_simt_enc = self.simt_field_mults.get("encoding_simt", 0.0) * simt_scale / gpu.simt_field_mults_per_s
-        else:
-            t_simt_enc = 0.0
-        t_simt = self.simt_total * simt_scale / gpu.simt_field_mults_per_s - t_simt_enc
-        t_hash = self.hash_bytes / hash_rate
-        t_hint = self.units * HINT_OPS_PER_UNIT / SIMT_INT_OPS_PER_S[gpu_key]
-        t_prg = self.prg_bytes / PRG_BYTES_PER_S
-        total = t_mm + (t_enc if measured else 0.0) + t_simt + t_hash + t_hint + t_prg
+        measured = dict(measured or {})
+        if encoder_seconds_per_row is not None and "encoding" not in measured and "commitment" not in measured:
+            measured["encoding"] = self.ligero_rows * encoder_seconds_per_row
+        enc_measured = "encoding" in measured or "commitment" in measured
+        mm_skip = {k[len("matmul:"):] for k in measured if k.startswith("matmul:")}
+        simt_skip = {k[len("simt:"):] for k in measured if k.startswith("simt:")}
+        if enc_measured:
+            mm_skip.add("encoding")
+            simt_skip.add("encoding_simt")
+        modelled = {}
+        for k, v in self.matmul.items():
+            if k not in mm_skip:
+                modelled[f"matmul:{k}"] = v / (gpu.peak_macs_per_s * (u_enc if k == "encoding" else utilisation))
+        for k, v in self.simt_field_mults.items():
+            if k not in simt_skip:
+                modelled[f"simt:{k}"] = v * simt_scale / gpu.simt_field_mults_per_s
+        if "hash" not in measured and "commitment" not in measured:
+            modelled["hash"] = self.hash_bytes / hash_rate
+        if "hint_gen" not in measured:
+            modelled["hint_gen"] = self.units * HINT_OPS_PER_UNIT / SIMT_INT_OPS_PER_S[gpu_key]
+        if "prg" not in measured:
+            modelled["prg"] = self.prg_bytes / PRG_BYTES_PER_S
+        t_mm = sum(v for k, v in modelled.items() if k.startswith("matmul:")) + sum(v for k, v in measured.items() if k.startswith("matmul:"))
+        t_simt = sum(v for k, v in modelled.items() if k.startswith("simt:")) + sum(v for k, v in measured.items() if k.startswith("simt:"))
+        t_enc = measured.get("encoding", modelled.get("matmul:encoding", 0.0))
+        if "commitment" in measured:
+            t_enc = 0.0
+        t_hash = measured.get("hash", modelled.get("hash", 0.0)) if "commitment" not in measured else 0.0
+        t_hint = measured.get("hint_gen", modelled.get("hint_gen", 0.0))
+        t_prg = measured.get("prg", modelled.get("prg", 0.0))
+        t_commit = measured.get("commitment", 0.0)
+        t_extra = sum(v for k, v in measured.items() if k.startswith("extra:"))
+        total = t_mm + (t_enc if enc_measured else 0.0) + t_simt + t_hash + t_hint + t_prg + t_commit + t_extra
         per_vu = total / B_TARGET
+        t_measured_total = sum(measured.values())
         return {"gpu": gpu_key, "utilisation": utilisation, "zk": self.zk,
-                "encoder": encoder if not measured else f"measured:{encoder_seconds_per_row:.3g}s/row",
-                "t.matmul": t_mm, "t.encoding": t_enc, "encoding_measured": measured,
+                "encoder": encoder if not enc_measured else (f"measured:{encoder_seconds_per_row:.3g}s/row" if encoder_seconds_per_row else "measured"),
+                "t.matmul": t_mm, "t.encoding": t_enc, "encoding_measured": enc_measured,
                 "t.simt_field": t_simt, "t.hash": t_hash, "t.hint_gen": t_hint, "t.prg": t_prg,
-                "t.total": total,
+                "t.commitment": t_commit, "t.extra": t_extra,
+                "t.total": total, "t.measured": measured, "t.modelled": modelled,
+                "measured_fraction": t_measured_total / total if total else 0.0,
                 "matmul_share_of_time": t_mm / total, "seconds_per_vu": per_vu,
                 "overhead.vs_native_peak": contract.overhead(per_vu, K_TARGET),
                 "hint_gen_cpu_anchor_seconds": self.units * HINT_CPU_SECONDS_PER_UNIT}
