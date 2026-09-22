@@ -10,6 +10,7 @@ chain test), c_0 = 0.
 from __future__ import annotations
 
 import json
+import os
 import platform
 import statistics
 import time
@@ -275,6 +276,23 @@ def prove_with_auth(R: ChainRunner, vus, auth_stmt: auth_mod.AuthStatement, auth
     proof = prove(R.p, R.sys, R.tb, R.cfg(lay.l), pub, hints, R.device, check=False, chain=(lay, y16),
                   words={"a": a, "b": b}, coins=coins, auth=auth_stmt, auth_open=auth_open)
     return {"proof": proof, "pubs": (a, b, y16)}
+
+
+def dump_artifacts(dump_dir: Path | None, out: str | None) -> list[str]:
+    """The result's ``artifacts`` (research/result/v0.1: paths relative to the run directory, which the store preserves as the
+    attempt's ``run-files/v1`` tree): the ``--dump-dir`` tree when it lies inside the run directory (``$RESEARCH_RUN_DIR``, else
+    the directory ``--out`` is written to), so the proofs, statements, coins and system.bin travel with the result.  No dump, a
+    dump elsewhere, or the run directory itself gives ``[]``."""
+    if dump_dir is None:
+        return []
+    run_dir = os.environ.get("RESEARCH_RUN_DIR") or (Path(out).parent if out else None)
+    if run_dir is None:
+        return []
+    try:
+        rel = Path(dump_dir).resolve().relative_to(Path(run_dir).resolve())
+    except ValueError:
+        return []
+    return [rel.as_posix()] if rel.parts else []
 
 
 def gate_vu(args) -> int:
@@ -670,7 +688,7 @@ def bench_vu(args) -> int:
         validation["evidence"]["auth_roots"] = {n: t["root"] for n, t in auth_info["trees"].items()}
     result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or f"b-ligero-vu-{int(time.time())}",
               "workload_fingerprint": fp, "validation": validation,
-              "measurements": meas, "measurement_files": [], "artifacts": []}
+              "measurements": meas, "measurement_files": [], "artifacts": dump_artifacts(dump_dir, args.out)}
     problems = contract.validate(result)
     if problems:
         print("contract problems:", problems)
