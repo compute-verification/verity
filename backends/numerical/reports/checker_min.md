@@ -179,7 +179,7 @@ lookups hold modulo p):
 gadget         direct F_goldilocks (600 s)   wrap-free F_goldilocks   direct F_m31 (600 s)   wrap-free F_m31
 state_decode   UNSAT  0.2                    UNSAT 0.003              SAT   0.1              SAT (word arithmetic)
 group_max      UNSAT  10.1                   SAT (see note)           UNSAT 5.8              SAT (see note)
-state_shift    UNKNOWN (before the fix)      UNSAT 0.002 (after)      SAT 52.7 (before)      UNSAT 0.001 (after)
+state_shift    UNSAT 381 (after the fix)     UNSAT 0.002 (after)      SAT 52.7 (before)      UNSAT 0.001 (after)
 signed_sum     UNSAT  0.4                    UNSAT 0.003              UNSAT 0.2              UNSAT 0.003
 normalise      UNKNOWN                       UNSAT 0.003              UNKNOWN                UNSAT 0.003
 pack           UNSAT  0.02                   UNSAT (0 congruences)    UNSAT 0.02             UNSAT
@@ -194,7 +194,7 @@ M_lo R + 2 dt + s with M_hi, M_lo hints bounded *only* through those keys. Over 
 F_p the key is linear in the hint, so every table row kk has the field solution M_hi = (kk - 2dt - s) / R, and the
 two rows are tied only by the split congruence M_hi 2^mb + M_lo = M (mod p). Over M31 z3 found the forgery in 53 s
 (2^48 row pairs against 2^31 residues); over Goldilocks it is a counting argument (2^48 pairs against 2^64), not a
-proof, and z3 returned UNKNOWN at 600 s. Fix: range-check the two halves themselves (two 16-bit chunks per group,
+proof, and z3 returned UNKNOWN at 600 s (on the fixed gadget the direct Goldilocks query is UNSAT in 381 s). Fix: range-check the two halves themselves (two 16-bit chunks per group,
 +4 lookups per unit, 85 -> 89); then every key is below p, the wrap-free query is UNSAT over both fields in
 milliseconds, and the M31 direct query flips from SAT to (by transfer) UNSAT. The bench-instances (4096 tu-k16,
 256 vu-k1536, 52 negatives) and the pytest suite were rerun on the fixed gadget; the red-team campaign rerun is
@@ -228,18 +228,22 @@ operand, saturated intermediate) -- the instance set's own labelling; v2 rejects
 
 ### 3.4 Red team against v2 (MEASURED, `redteam.campaign --target checker-v2`, `redteam_checker_v2.json`)
 
-Unit target (word in / word out) and VU target (3 chained units + Pack + epilogue), over Z, Goldilocks, M31:
-completeness PASS (87 unit cases, 3 VU cases); mutation of every hint column: no accepted forgery over Z or
-Goldilocks (2555 mutations per field; NOTE = mutations that change no output are recorded, as in v1), VU mutations
-666/666 rejected; coordinated two-outputs-one-input PASS over Z and Goldilocks, SAT over M31 (as v1's X12, same
-wrap class). Tally: UNSAT 17, PASS 9, NOTE 8, SAT 4 (the M31 rows above), UNKNOWN 6 (the 60 s modular and step
-queries listed above). No accepted negative over Z or Goldilocks.
+Rerun on the fixed `state_shift` (the file is the rerun). Unit target (word in / word out) and VU target (3 chained
+units + Pack + epilogue), over Z, Goldilocks, M31: completeness PASS (87 unit cases, 3 VU cases); mutation of every
+hint column: no accepted forgery in any field (2555 mutations per field; NOTE = mutations that change no output are
+recorded, as in v1), VU mutations 666/666 rejected; coordinated two-outputs-one-input PASS over Z and Goldilocks,
+SAT over M31 (as v1's X12: the word-arithmetic class of `state_decode`/`epilogue`). Tally: UNSAT 17, PASS 9, NOTE 8,
+SAT 3 (X9, Z29 `state_decode` M31, Z41 `epilogue` M31 -- all the F4 word class; the `state_shift` M31 SAT of the
+first run is gone), UNKNOWN 7 (60 s direct modular queries, all resolved by the 600 s run or by wrap-free transfer
+above, plus the two 60 s group-step queries). No accepted negative over Z or Goldilocks; over M31 none outside the
+known word-arithmetic class.
 
 ### 3.5 Open items at writing
 
 - The *direct* Goldilocks queries for `state_shift` (fixed) and `normalise` are UNKNOWN at 600 s and 1800 s: both
   gadgets are proven over Goldilocks by wrap-free transfer (UNSAT) plus the integer UNSAT, not by the direct query.
-- Whole-group symbolic two-witness query: UNKNOWN (as v1).
+- Whole-group two-witness query: concrete inputs UNSAT at 57.8 s in the first run, UNKNOWN at 60 s in the rerun
+  (a 1800 s run is queued on vy-cpu2, `out/step.log`); symbolic inputs UNKNOWN (as v1's Z56-Z61).
 - 31-bit fields: modelled repairs only (as v1).
 
 ## 4. Re-pricing (MODELLED: `explore.tensor`, `explore.vole` with `VERITY_CHECKER_VARIANT=v2`; 2^-128, B=4096)

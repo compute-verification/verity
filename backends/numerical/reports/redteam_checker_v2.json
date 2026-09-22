@@ -6,8 +6,8 @@
   "python": "3.14.7",
   "full": false,
   "target": "verity_numerical.checker.v2",
-  "started": "2026-09-22T05:56:57",
-  "finished": "2026-09-22T06:05:42"
+  "started": "2026-09-22T06:40:42",
+  "finished": "2026-09-22T06:48:35"
  },
  "findings": [
   {
@@ -15,7 +15,7 @@
    "target": "checker-v2[unit,Z]",
    "attack": "completeness",
    "status": "PASS",
-   "seconds": 0.027530431747436523,
+   "seconds": 0.027022838592529297,
    "case": "87 cases",
    "detail": {
     "failures": [],
@@ -28,7 +28,7 @@
    "target": "checker-v2[unit,Z]",
    "attack": "mutation",
    "status": "NOTE",
-   "seconds": 0.35558557510375977,
+   "seconds": 0.356823205947876,
    "case": "36 cases, 2555 mutations",
    "detail": {
     "accepted_wrong": [],
@@ -230,7 +230,7 @@
    "target": "checker-v2[unit,Z]",
    "attack": "two-outputs-one-input (coordinated random)",
    "status": "PASS",
-   "seconds": 0.23723578453063965,
+   "seconds": 0.2382826805114746,
    "case": "12 cases, 1909 attempts",
    "detail": {
     "accepted_wrong": []
@@ -242,7 +242,7 @@
    "target": "checker-v2[unit,goldilocks]",
    "attack": "completeness",
    "status": "PASS",
-   "seconds": 0.027029752731323242,
+   "seconds": 0.02738213539123535,
    "case": "87 cases",
    "detail": {
     "failures": [],
@@ -255,7 +255,7 @@
    "target": "checker-v2[unit,goldilocks]",
    "attack": "mutation",
    "status": "NOTE",
-   "seconds": 0.363142728805542,
+   "seconds": 0.363422155380249,
    "case": "36 cases, 2555 mutations",
    "detail": {
     "accepted_wrong": [],
@@ -457,7 +457,7 @@
    "target": "checker-v2[unit,goldilocks]",
    "attack": "two-outputs-one-input (coordinated random)",
    "status": "PASS",
-   "seconds": 0.2381587028503418,
+   "seconds": 0.23788046836853027,
    "case": "12 cases, 1909 attempts",
    "detail": {
     "accepted_wrong": []
@@ -469,7 +469,7 @@
    "target": "checker-v2[unit,m31]",
    "attack": "completeness",
    "status": "PASS",
-   "seconds": 0.02707195281982422,
+   "seconds": 0.02736186981201172,
    "case": "87 cases",
    "detail": {
     "failures": [],
@@ -482,7 +482,7 @@
    "target": "checker-v2[unit,m31]",
    "attack": "mutation",
    "status": "NOTE",
-   "seconds": 0.3619053363800049,
+   "seconds": 0.3642463684082031,
    "case": "36 cases, 2557 mutations",
    "detail": {
     "accepted_wrong": [],
@@ -684,7 +684,7 @@
    "target": "checker-v2[unit,m31]",
    "attack": "two-outputs-one-input (coordinated random)",
    "status": "SAT",
-   "seconds": 0.23800420761108398,
+   "seconds": 0.24001240730285645,
    "case": "12 cases, 1910 attempts",
    "detail": {
     "accepted_wrong": [
@@ -763,7 +763,7 @@
    "target": "checker-v2[vu,Z]",
    "attack": "completeness",
    "status": "PASS",
-   "seconds": 0.0028243064880371094,
+   "seconds": 0.0028581619262695312,
    "case": "3 cases",
    "detail": {
     "failures": [],
@@ -776,7 +776,7 @@
    "target": "checker-v2[vu,Z]",
    "attack": "mutation (v2 VU: 3 state-chained units + Pack + epilogue, every hint)",
    "status": "PASS",
-   "seconds": 0.28058648109436035,
+   "seconds": 0.28124260902404785,
    "case": "3 cases, 666 mutations",
    "detail": {
     "accepted_wrong": [],
@@ -790,7 +790,7 @@
    "target": "checker-v2[vu,goldilocks]",
    "attack": "completeness",
    "status": "PASS",
-   "seconds": 0.002786874771118164,
+   "seconds": 0.002841472625732422,
    "case": "3 cases",
    "detail": {
     "failures": [],
@@ -803,7 +803,7 @@
    "target": "checker-v2[vu,goldilocks]",
    "attack": "mutation (v2 VU: 3 state-chained units + Pack + epilogue, every hint)",
    "status": "PASS",
-   "seconds": 0.28696513175964355,
+   "seconds": 0.28824687004089355,
    "case": "3 cases, 666 mutations",
    "detail": {
     "accepted_wrong": [],
@@ -817,7 +817,7 @@
    "target": "checker-v2[op_decode,Z]",
    "attack": "z3: differs-from-reference",
    "status": "UNSAT",
-   "seconds": 0.0,
+   "seconds": 0.001,
    "case": "",
    "detail": {
     "model": null,
@@ -869,7 +869,7 @@
    "target": "checker-v2[product_shift,Z]",
    "attack": "z3: differs-from-reference",
    "status": "UNSAT",
-   "seconds": 3.042,
+   "seconds": 3.05,
    "case": "",
    "detail": {
     "model": null,
@@ -881,8 +881,8 @@
    "id": "Z19",
    "target": "checker-v2[state_shift,Z]",
    "attack": "z3: differs-from-reference",
-   "status": "UNKNOWN",
-   "seconds": 60.003,
+   "status": "UNSAT",
+   "seconds": 8.775,
    "case": "",
    "detail": {
     "model": null,
@@ -895,7 +895,7 @@
    "target": "checker-v2[signed_sum,Z]",
    "attack": "z3: differs-from-reference",
    "status": "UNSAT",
-   "seconds": 0.028,
+   "seconds": 0.027,
    "case": "",
    "detail": {
     "model": null,
@@ -908,7 +908,7 @@
    "target": "checker-v2[normalise,Z]",
    "attack": "z3: differs-from-reference",
    "status": "UNSAT",
-   "seconds": 1.009,
+   "seconds": 1.008,
    "case": "",
    "detail": {
     "model": null,
@@ -934,7 +934,7 @@
    "target": "checker-v2[epilogue,Z]",
    "attack": "z3: differs-from-reference",
    "status": "UNSAT",
-   "seconds": 0.004,
+   "seconds": 0.005,
    "case": "",
    "detail": {
     "model": null,
@@ -947,75 +947,75 @@
    "target": "checker-v2[group_max,Z]",
    "attack": "z3: excessive E: without `attained`",
    "status": "NOTE",
-   "seconds": 0.887,
+   "seconds": 0.016,
    "case": "",
    "detail": {
     "model": {
      "inputs": {
-      "cand[0]": -132,
-      "cand[1]": -112,
-      "cand[2]": -111,
-      "cand[3]": -130,
-      "cand[4]": -112,
-      "cand[5]": -130,
-      "cand[6]": -112,
-      "cand[7]": -110,
-      "cand[8]": -143,
-      "s4[0]": 0,
+      "cand[0]": -131,
+      "cand[1]": -132,
+      "cand[2]": -130,
+      "cand[3]": -129,
+      "cand[4]": -128,
+      "cand[5]": -104,
+      "cand[6]": -103,
+      "cand[7]": -102,
+      "cand[8]": -101,
+      "s4[0]": 2,
       "s4[1]": 0,
-      "s4[2]": 0,
-      "s4[3]": 3,
-      "s4[4]": 3,
-      "s4[5]": 1,
-      "s4[6]": 3,
-      "s4[7]": 0,
-      "s4[8]": 2,
-      "l": 22
+      "s4[2]": 3,
+      "s4[3]": 0,
+      "s4[4]": 0,
+      "s4[5]": 3,
+      "s4[6]": 0,
+      "s4[7]": 3,
+      "s4[8]": 0,
+      "l": 30
      },
      "hints": {
-      "E": -108
+      "E": -79
      },
      "outputs": {
-      "out[0]": -108,
-      "out[1]": 24,
-      "out[2]": 4,
-      "out[3]": 3,
-      "out[4]": 22,
-      "out[5]": 4,
-      "out[6]": 22,
-      "out[7]": 4,
-      "out[8]": 2,
-      "out[9]": 26,
-      "out[10]": 0,
+      "out[0]": -79,
+      "out[1]": 26,
+      "out[2]": 26,
+      "out[3]": 26,
+      "out[4]": 26,
+      "out[5]": 26,
+      "out[6]": 25,
+      "out[7]": 24,
+      "out[8]": 23,
+      "out[9]": 22,
+      "out[10]": 1,
       "out[11]": 0,
       "out[12]": 0,
       "out[13]": 0,
       "out[14]": 0,
-      "out[15]": 1,
+      "out[15]": 0,
       "out[16]": 0,
       "out[17]": 0,
-      "out[18]": 1
+      "out[18]": 0
      },
      "reference": {
-      "ref[0]": -110,
-      "ref[1]": 22,
-      "ref[2]": 2,
-      "ref[3]": 1,
-      "ref[4]": 20,
-      "ref[5]": 2,
-      "ref[6]": 20,
+      "ref[0]": -101,
+      "ref[1]": 26,
+      "ref[2]": 26,
+      "ref[3]": 26,
+      "ref[4]": 26,
+      "ref[5]": 26,
+      "ref[6]": 3,
       "ref[7]": 2,
-      "ref[8]": 0,
-      "ref[9]": 26,
-      "ref[10]": 0,
+      "ref[8]": 1,
+      "ref[9]": 0,
+      "ref[10]": 1,
       "ref[11]": 0,
       "ref[12]": 0,
       "ref[13]": 0,
       "ref[14]": 0,
-      "ref[15]": 1,
+      "ref[15]": 0,
       "ref[16]": 0,
       "ref[17]": 0,
-      "ref[18]": 1
+      "ref[18]": 0
      }
     },
     "note": "without ['attained']"
@@ -1027,21 +1027,21 @@
    "target": "checker-v2[state_shift,Z]",
    "attack": "z3: halves: without `split`",
    "status": "NOTE",
-   "seconds": 0.007,
+   "seconds": 0.03,
    "case": "",
    "detail": {
     "model": {
      "inputs": {
       "M": 0,
-      "dt": 4,
-      "s": 1
+      "dt": 0,
+      "s": 0
      },
      "hints": {
       "M_hi": 0,
-      "M_lo": 8
+      "M_lo": 1
      },
      "outputs": {
-      "out[0]": -1
+      "out[0]": 2
      },
      "reference": {
       "ref[0]": 0
@@ -1098,7 +1098,7 @@
    "target": "checker-v2[state_decode,Z]",
    "attack": "z3: zero flag: without `z1`",
    "status": "NOTE",
-   "seconds": 0.006,
+   "seconds": 0.005,
    "case": "",
    "detail": {
     "model": {
@@ -1132,27 +1132,27 @@
    "target": "checker-v2[state_decode,Z]",
    "attack": "z3: fraction: without `f`",
    "status": "NOTE",
-   "seconds": 0.003,
+   "seconds": 0.002,
    "case": "",
    "detail": {
     "model": {
      "inputs": {
-      "c": 4269801472
+      "c": 8388608
      },
      "hints": {
-      "hdr": 510,
+      "hdr": 2,
       "f": -8388608,
       "z": 1
      },
      "outputs": {
-      "out[0]": 1,
+      "out[0]": 0,
       "out[1]": -132,
       "out[2]": 0,
       "out[3]": 1
      },
      "reference": {
-      "ref[0]": 1,
-      "ref[1]": 126,
+      "ref[0]": 0,
+      "ref[1]": -126,
       "ref[2]": 8388608,
       "ref[3]": 0
      }
@@ -1166,12 +1166,12 @@
    "target": "checker-v2[state_decode,F_m31]",
    "attack": "z3 over F_p: F_m31, as stated",
    "status": "SAT",
-   "seconds": 0.008,
+   "seconds": 0.012,
    "case": "",
    "detail": {
     "model": {
      "inputs": {
-      "c": 4294967295
+      "c": 2147483648
      },
      "hints": {
       "hdr": 0,
@@ -1186,9 +1186,9 @@
      },
      "reference": {
       "ref[0]": 1,
-      "ref[1]": 128,
-      "ref[2]": 16777215,
-      "ref[3]": 0
+      "ref[1]": -132,
+      "ref[2]": 0,
+      "ref[3]": 1
      }
     },
     "note": "mod 2147483647"
@@ -1200,7 +1200,7 @@
    "target": "checker-v2[state_decode,F_goldilocks]",
    "attack": "z3 over F_p: F_goldilocks, as stated",
    "status": "UNSAT",
-   "seconds": 0.446,
+   "seconds": 0.3,
    "case": "",
    "detail": {
     "model": null,
@@ -1212,8 +1212,8 @@
    "id": "Z31",
    "target": "checker-v2[group_max,F_m31]",
    "attack": "z3 over F_p: F_m31, as stated",
-   "status": "UNSAT",
-   "seconds": 24.032,
+   "status": "UNKNOWN",
+   "seconds": 60.003,
    "case": "",
    "detail": {
     "model": null,
@@ -1226,7 +1226,7 @@
    "target": "checker-v2[group_max,F_goldilocks]",
    "attack": "z3 over F_p: F_goldilocks, as stated",
    "status": "UNSAT",
-   "seconds": 11.511,
+   "seconds": 3.601,
    "case": "",
    "detail": {
     "model": null,
@@ -1238,27 +1238,11 @@
    "id": "Z33",
    "target": "checker-v2[state_shift,F_m31]",
    "attack": "z3 over F_p: F_m31, as stated",
-   "status": "SAT",
-   "seconds": 52.73,
+   "status": "UNKNOWN",
+   "seconds": 60.004,
    "case": "",
    "detail": {
-    "model": {
-     "inputs": {
-      "M": 76,
-      "dt": 0,
-      "s": 0
-     },
-     "hints": {
-      "M_hi": 1391887549,
-      "M_lo": 397682157
-     },
-     "outputs": {
-      "out[0]": 0
-     },
-     "reference": {
-      "ref[0]": 152
-     }
-    },
+    "model": null,
     "note": "mod 2147483647"
    },
    "reproducer": "verity_numerical/checker/v2/search.py::modular_queries_v2"
@@ -1268,7 +1252,7 @@
    "target": "checker-v2[state_shift,F_goldilocks]",
    "attack": "z3 over F_p: F_goldilocks, as stated",
    "status": "UNKNOWN",
-   "seconds": 60.003,
+   "seconds": 60.004,
    "case": "",
    "detail": {
     "model": null,
@@ -1280,8 +1264,8 @@
    "id": "Z35",
    "target": "checker-v2[signed_sum,F_m31]",
    "attack": "z3 over F_p: F_m31, as stated",
-   "status": "UNKNOWN",
-   "seconds": 60.004,
+   "status": "UNSAT",
+   "seconds": 0.366,
    "case": "",
    "detail": {
     "model": null,
@@ -1294,7 +1278,7 @@
    "target": "checker-v2[signed_sum,F_goldilocks]",
    "attack": "z3 over F_p: F_goldilocks, as stated",
    "status": "UNSAT",
-   "seconds": 1.433,
+   "seconds": 32.731,
    "case": "",
    "detail": {
     "model": null,
@@ -1307,7 +1291,7 @@
    "target": "checker-v2[normalise,F_m31]",
    "attack": "z3 over F_p: F_m31, as stated",
    "status": "UNKNOWN",
-   "seconds": 69.12,
+   "seconds": 60.006,
    "case": "",
    "detail": {
     "model": null,
@@ -1320,7 +1304,7 @@
    "target": "checker-v2[normalise,F_goldilocks]",
    "attack": "z3 over F_p: F_goldilocks, as stated",
    "status": "UNKNOWN",
-   "seconds": 60.008,
+   "seconds": 60.009,
    "case": "",
    "detail": {
     "model": null,
@@ -1333,7 +1317,7 @@
    "target": "checker-v2[pack,F_m31]",
    "attack": "z3 over F_p: F_m31, as stated",
    "status": "UNSAT",
-   "seconds": 0.013,
+   "seconds": 0.009,
    "case": "",
    "detail": {
     "model": null,
@@ -1346,7 +1330,7 @@
    "target": "checker-v2[pack,F_goldilocks]",
    "attack": "z3 over F_p: F_goldilocks, as stated",
    "status": "UNSAT",
-   "seconds": 0.013,
+   "seconds": 0.016,
    "case": "",
    "detail": {
     "model": null,
@@ -1359,26 +1343,26 @@
    "target": "checker-v2[epilogue,F_m31]",
    "attack": "z3 over F_p: F_m31, as stated",
    "status": "SAT",
-   "seconds": 0.006,
+   "seconds": 0.009,
    "case": "",
    "detail": {
     "model": {
      "inputs": {
-      "y32": 2147450880
+      "y32": 2147549183
      },
      "hints": {
-      "hi": 65535,
-      "lo": 32767,
-      "hi2": 32767,
+      "hi": 1,
+      "lo": 0,
+      "hi2": 0,
       "lsb": 1,
       "carry": 0,
-      "rem": 65535
+      "rem": 32768
      },
      "outputs": {
-      "out[0]": 65535
+      "out[0]": 1
      },
      "reference": {
-      "ref[0]": 32768
+      "ref[0]": 32769
      }
     },
     "note": "mod 2147483647"
@@ -1390,7 +1374,7 @@
    "target": "checker-v2[epilogue,F_goldilocks]",
    "attack": "z3 over F_p: F_goldilocks, as stated",
    "status": "UNSAT",
-   "seconds": 0.019,
+   "seconds": 0.022,
    "case": "",
    "detail": {
     "model": null,
@@ -1402,8 +1386,8 @@
    "id": "Z43",
    "target": "checker-v2[group_step,Z]",
    "attack": "two-witnesses-two-outputs (concrete x)",
-   "status": "UNSAT",
-   "seconds": 57.773,
+   "status": "UNKNOWN",
+   "seconds": 60.018,
    "case": "",
    "detail": {
     "model": null
@@ -1415,7 +1399,7 @@
    "target": "checker-v2[group_step,Z]",
    "attack": "two-witnesses-two-outputs (symbolic x)",
    "status": "UNKNOWN",
-   "seconds": 60.038,
+   "seconds": 60.027,
    "case": "",
    "detail": {
     "model": null
@@ -1426,8 +1410,8 @@
  "counts": {
   "NOTE": 8,
   "PASS": 9,
-  "SAT": 4,
-  "UNKNOWN": 6,
+  "SAT": 3,
+  "UNKNOWN": 7,
   "UNSAT": 17
  }
 }
