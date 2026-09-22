@@ -231,8 +231,11 @@ def gate_vu_fp8(args) -> int:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def bench_vu_fp8(args) -> int:
-    from ..run import _git_commit
+    from ..run import _git_commit as _git_commit_repo
     from ..vu import ZK_MODE, ZK_MODE_FS, ZK_MODE_HM96, ZK_VACUOUS_NOTE
+
+    def _git_commit():                      # a shipped `git archive` has no .git: the launcher passes the sha in the environment
+        return _git_commit_repo() or os.environ.get("VERITY_COMMIT")
 
     per_proof = args.batch // STEPS
     total_vus = args.total_vus or per_proof
@@ -363,7 +366,7 @@ def bench_vu_fp8(args) -> int:
     for k_, v_ in cen.items():
         if isinstance(v_, int) and not isinstance(v_, bool):
             meas.append(contract.measurement(f"census.{k_}", v_, "count"))
-    result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or f"b-ligero-fp8-vu-{int(time.time())}",
+    result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or os.environ.get("RESEARCH_RUN_ID") or f"b-ligero-fp8-vu-{int(time.time())}",
               "workload_fingerprint": fp,
               "validation": {"status": "passed", "checker": "backends.direct.ligero.fp8.chain bench_vu_fp8 (verifier accepted every rep; "
                                                             "prover self-check on the warm-up sub-batch)",
