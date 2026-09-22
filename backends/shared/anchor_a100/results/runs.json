@@ -7,5 +7,6 @@
  "packed": "r20260922-073828-153f",
  "packed_killed_mislaunch": "r20260922-073540-f5b5",
  "tensor": "r20260922-074359-964b",
- "wave2_gkr (packed Montgomery 2^26, direct 2^28, logUp GKR full-VU)": "r20260922-075147-91a5"
+ "wave2_gkr (packed Montgomery 2^26, direct 2^28, logUp GKR full-VU)": "r20260922-075147-91a5",
+ "wave2_b (b-commit fused commitment + buckets, b-lintest structured linear test)": "r20260922-080250-cff5"
 }
