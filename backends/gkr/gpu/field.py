@@ -240,12 +240,18 @@ def base_contract_ext(X: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
     return mm_mod(X, w)
 
 
-def fold(v: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
-    """``v[i] + (v[i + half] - v[i]) r`` on the leading axis (extension ``v``, ``(2h, ..., 6)``)."""
+def fold(v: torch.Tensor, r: torch.Tensor, chunk_elems: int = 1 << 22) -> torch.Tensor:
+    """``v[i] + (v[i + half] - v[i]) r`` on the leading axis (extension ``v``, ``(2h, ..., 6)``); bounded temporaries."""
     half = v.shape[0] // 2
-    lo = v[:half].to(torch.int64)
-    hi = v[half:].to(torch.int64)
-    return (lo + ext_mul_chunked((hi - lo) % P, r)) % P
+    per_row = v[0].numel() // DEG
+    step = max(1, chunk_elems // per_row)
+    out = torch.empty((half,) + tuple(v.shape[1:]), dtype=torch.int64, device=v.device)
+    for lo_i in range(0, half, step):
+        hi_i = min(half, lo_i + step)
+        lo = v[lo_i:hi_i].to(torch.int64)
+        hi = v[half + lo_i:half + hi_i].to(torch.int64)
+        out[lo_i:hi_i] = (lo + ext_mul((hi - lo) % P, r)) % P
+    return out
 
 
 def fold_base(v: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
@@ -265,7 +271,7 @@ def eq_table(point: list[Ext], device) -> torch.Tensor:
     for r in reversed(point):
         rt = t_ext(r, device)
         one_minus = (t_ext(ONE, device) - rt) % P
-        t = torch.cat([ext_mul(t, one_minus), ext_mul(t, rt)], dim=0)
+        t = torch.cat([ext_mul_chunked(t, one_minus), ext_mul_chunked(t, rt)], dim=0)
     return t
 
 

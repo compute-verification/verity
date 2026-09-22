@@ -27,6 +27,7 @@ from .circuit import Circuit, Layer, Query, Table, eval_wires, log2ceil, masked_
 from .field import (
     DEG,
     P,
+    W,
     Ext,
     ONE,
     ZERO,
@@ -37,8 +38,10 @@ from .field import (
     eq_table,
     ext_mul,
     ext_scale,
+    mm_mod,
     py_ext,
     t_ext,
+    t_exts,
 )
 from .gkr import LayerClaim, Reader, VerifyError
 from .logup import LeafClaim
@@ -223,8 +226,9 @@ def add_input_claim(acc: Acc, rho: Ext, seg_off: int, seg: Segment, x_pt: list[E
     ex = eq_table(x_pt, dev)[: seg.ncols]                            # (ncols, 6)
     e = ext_mul(ec, t_ext(rho, dev))                                  # (units, 6)
     v = acc.seg_view(seg_off, seg.units, seg.ncols)
-    for lo in range(0, seg.units, 1 << 14):
-        hi = min(seg.units, lo + (1 << 14))
+    step = max(1, (1 << 21) // seg.ncols)
+    for lo in range(0, seg.units, step):
+        hi = min(seg.units, lo + step)
         v[lo:hi] = (v[lo:hi] + ext_mul(e[lo:hi].unsqueeze(1), ex.unsqueeze(0))) % P
     acc.b = e_add(acc.b, e_mul(rho, value))
 
@@ -232,11 +236,12 @@ def add_input_claim(acc: Acc, rho: Ext, seg_off: int, seg: Segment, x_pt: list[E
 def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], table_off: int, table: Table, ch, n: int, c: LeafClaim) -> None:
     dev = acc.device
     z, beta = ch
-    eqt = eq_table(c.rho, dev)                                        # (2^n, 6)
+    eqt = eq_table(c.rho, dev).to(torch.int32)                        # (2^n, 6)
     bs = logup.beta_powers(beta, table.cols, dev)                     # (cols, 6)
     bs_py = [py_ext(b) for b in bs]
     lam_t = t_ext(c.lam, dev)
     rho_t = t_ext(rho, dev)
+    rl_t = t_ext(e_mul(rho, c.lam), dev)
     konst = torch.zeros((DEG,), dtype=torch.int64, device=dev)
     base = 0
     for si, s in enumerate(inst.segs):
@@ -245,18 +250,36 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
         if q_t == 0:
             continue
         v = acc.seg_view(seg_offs[si], s.units, s.ncols)
-        e = eqt[base: base + s.units * q_t].view(s.units, q_t, DEG)   # e[u, j]
-        le = ext_mul(e, lam_t)                                         # λ e
-        konst = (konst + e.sum(dim=(0, 1))) % P                        # p = 1
-        rle = ext_mul(le, rho_t)                                       # ρ λ e   (units, q_t, 6)
+        # per query the constant part of  z - Σ_k β^k lin_k  and the per-column coefficients -Σ_k β^k coef_{k,idx}
+        csts = []
+        C = torch.zeros((q_t, s.ncols, DEG), dtype=torch.int64)       # C[j, idx] = -Σ_k β^k coef_{k, idx}
         for j, qu in enumerate(qs):
             cst = z
             for kk, lin in enumerate(qu.cols):
                 cst = e_sub(cst, e_scale(bs_py[kk], lin.konst))
-                lb = ext_mul(rle[:, j], bs[kk])                        # (units, 6)
                 for idx, coef in lin.terms:
-                    v[:, idx] = (v[:, idx] - ext_scale(lb, torch.tensor(coef, device=dev))) % P
-            konst = (konst + ext_mul(le[:, j], t_ext(cst, dev)).sum(dim=0)) % P
+                    C[j, idx] = (C[j, idx] - torch.tensor(e_scale(bs_py[kk], coef), dtype=torch.int64)) % P
+            csts.append(cst)
+        cst_t = t_exts(csts, dev)                                      # (q_t, 6)
+        # Cmat[(j, i), (idx, d)]: coefficient of rle[j]_i in coordinate d of rle[j] · C[j, idx]
+        Cmat = torch.zeros((q_t, DEG, s.ncols, DEG), dtype=torch.int64)
+        for i in range(DEG):
+            for jj in range(DEG):
+                d = i + jj
+                if d < DEG:
+                    Cmat[:, i, :, d] = (Cmat[:, i, :, d] + C[:, :, jj]) % P
+                else:
+                    Cmat[:, i, :, d - DEG] = (Cmat[:, i, :, d - DEG] + W * C[:, :, jj]) % P
+        Cmat = Cmat.reshape(q_t * DEG, s.ncols * DEG).to(dev)
+        step = max(1, (1 << 20) // q_t)
+        for lo in range(0, s.units, step):
+            hi = min(s.units, lo + step)
+            e = eqt[base + lo * q_t: base + hi * q_t].view(hi - lo, q_t, DEG).to(torch.int64)
+            konst = (konst + e.sum(dim=(0, 1))) % P                    # p = 1
+            le = ext_mul(e, lam_t)                                     # λ e        (chunk, q_t, 6)
+            konst = (konst + ext_mul(le, cst_t.unsqueeze(0)).sum(dim=(0, 1))) % P
+            rle = ext_mul(e, rl_t)                                     # ρ λ e
+            v[lo:hi] = (v[lo:hi] + mm_mod(rle.reshape(hi - lo, q_t * DEG), Cmat).view(hi - lo, s.ncols, DEG)) % P
         base += s.units * q_t
     rows = len(table.rows)
     e_tab = eqt[base: base + rows]
