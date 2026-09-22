@@ -52,14 +52,14 @@ __device__ __forceinline__ void lincomb_body(const unsigned* __restrict__ C, con
     for (int d = 0; d < D; ++d) partial[((size_t)s * D + d) * cols + col] = (unsigned)(acc[d] % P);
 }
 
-extern "C" __global__ void lincomb_u32_D%(D)d(const unsigned* C, const unsigned* X, unsigned* out, int R, int cols, int chunk)
-{ lincomb_body<unsigned, %(D)d, 0>(C, X, out, R, cols, chunk); }
-extern "C" __global__ void lincomb_u64_D%(D)d(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk)
-{ lincomb_body<u64, %(D)d, 0>(C, X, out, R, cols, chunk); }
-extern "C" __global__ void boolcomb_u32_D%(D)d(const unsigned* C, const unsigned* X, unsigned* out, int R, int cols, int chunk)
-{ lincomb_body<unsigned, %(D)d, 1>(C, X, out, R, cols, chunk); }
-extern "C" __global__ void boolcomb_u64_D%(D)d(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk)
-{ lincomb_body<u64, %(D)d, 1>(C, X, out, R, cols, chunk); }
+extern "C" __global__ void lincomb_u32_D@D@(const unsigned* C, const unsigned* X, unsigned* out, int R, int cols, int chunk)
+{ lincomb_body<unsigned, @D@, 0>(C, X, out, R, cols, chunk); }
+extern "C" __global__ void lincomb_u64_D@D@(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk)
+{ lincomb_body<u64, @D@, 0>(C, X, out, R, cols, chunk); }
+extern "C" __global__ void boolcomb_u32_D@D@(const unsigned* C, const unsigned* X, unsigned* out, int R, int cols, int chunk)
+{ lincomb_body<unsigned, @D@, 1>(C, X, out, R, cols, chunk); }
+extern "C" __global__ void boolcomb_u64_D@D@(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk)
+{ lincomb_body<u64, @D@, 1>(C, X, out, R, cols, chunk); }
 
 /* general quadratic constraints from CSR tables: for side s in {a,b,c}: ptr_s[q]..ptr_s[q+1] -> (j, coef), const_s[q] */
 template <typename T>
@@ -108,16 +108,16 @@ __device__ __forceinline__ void quad_body(const unsigned* __restrict__ rho, cons
     for (int d = 0; d < D; ++d) partial[((size_t)s * D + d) * cols + col] = (unsigned)(acc[d] % P);
 }
 
-extern "C" __global__ void quad_u32_D%(D)d(const unsigned* rho, const unsigned* X,
+extern "C" __global__ void quad_u32_D@D@(const unsigned* rho, const unsigned* X,
     const int* pa, const int* ja, const unsigned* ca, const unsigned* ka,
     const int* pb, const int* jb, const unsigned* cb, const unsigned* kb,
     const int* pc, const int* jc, const unsigned* ccn, const unsigned* kc, unsigned* out, int Q, int cols, int chunk)
-{ quad_body<unsigned, %(D)d>(rho, X, pa, ja, ca, ka, pb, jb, cb, kb, pc, jc, ccn, kc, out, Q, cols, chunk); }
-extern "C" __global__ void quad_u64_D%(D)d(const unsigned* rho, const u64* X,
+{ quad_body<unsigned, @D@>(rho, X, pa, ja, ca, ka, pb, jb, cb, kb, pc, jc, ccn, kc, out, Q, cols, chunk); }
+extern "C" __global__ void quad_u64_D@D@(const unsigned* rho, const u64* X,
     const int* pa, const int* ja, const unsigned* ca, const unsigned* ka,
     const int* pb, const int* jb, const unsigned* cb, const unsigned* kb,
     const int* pc, const int* jc, const unsigned* ccn, const unsigned* kc, unsigned* out, int Q, int cols, int chunk)
-{ quad_body<u64, %(D)d>(rho, X, pa, ja, ca, ka, pb, jb, cb, kb, pc, jc, ccn, kc, out, Q, cols, chunk); }
+{ quad_body<u64, @D@>(rho, X, pa, ja, ca, ka, pb, jb, cb, kb, pc, jc, ccn, kc, out, Q, cols, chunk); }
 """
 
 THREADS = 256
@@ -138,7 +138,7 @@ class FusedTests:
         self.cp = cp
         self.D = D
         self.device = torch.device(device)
-        self.mod = cp.RawModule(code=_SRC % {"D": D}, options=("-std=c++17",))
+        self.mod = cp.RawModule(code=_SRC.replace("@D@", str(D)), options=("-std=c++17",))
         self.k = {name: self.mod.get_function(f"{name}_D{D}")
                   for name in ("lincomb_u32", "lincomb_u64", "boolcomb_u32", "boolcomb_u64", "quad_u32", "quad_u64")}
 
