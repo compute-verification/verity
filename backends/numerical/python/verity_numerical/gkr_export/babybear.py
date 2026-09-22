@@ -69,8 +69,10 @@ UNUSED_HINTS = ("h.acc.f", "h.pack.low")
 
 
 class BabyBearCircuitCtx(CircuitCtx):
-    """:class:`CircuitCtx` with the BabyBear window discipline: a non-power-of-two range is two one-sided chunks,
-    sound only while ``2^(w+1) - 2 < p`` (``w <= 29``); a wider one has no in-field realisation and is refused.
+    """:class:`CircuitCtx` with the BabyBear window discipline: a non-power-of-two range ``[lo, hi)`` of ``n = hi - lo``
+    values is two one-sided ``w``-bit chunks (``x - lo`` and ``hi - 1 - x``), sound iff ``2^(w+1) - n <= p``: an
+    ``x - lo = t`` in ``[n, 2^w)`` makes ``hi - 1 - x = -(t - n + 1)`` read as ``p - (t - n + 1) >= p - (2^w - n)``,
+    which the second chunk rejects exactly when that is ``>= 2^w``.  A range without a sound form is refused.
     The 5-column NORM table of the embedding loses its unused ``vbnd`` column."""
 
     modulus = BABYBEAR
@@ -79,8 +81,8 @@ class BabyBearCircuitCtx(CircuitCtx):
         if not (isinstance(x, int) or x.is_const):
             n = hi - lo
             w = max(1, (n - 1).bit_length())
-            if n != 1 << w and 2 ** (w + 1) - 2 >= self.modulus:
-                raise Reject(f"{name}: a {w}-bit non-power-of-two range has no sound two-sided form mod p")
+            if n != 1 << w and 2 ** (w + 1) - n > self.modulus:
+                raise Reject(f"{name}: a {w}-bit non-power-of-two range of {n} values has no sound two-sided form mod p")
             if 1 << w > self.modulus:
                 raise Reject(f"{name}: {w}-bit range wider than the field")
         super().rng(name, x, lo, hi)
