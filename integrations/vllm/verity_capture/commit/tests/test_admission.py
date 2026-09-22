@@ -77,7 +77,11 @@ def test_envelope_bound_was_the_loose_one_and_the_scheduled_bound_admits_the_cp_
     assert rec8["scheduled"]["peak_step"] == 0 and rec8["scheduled"]["steps"] == 129        # 8 concurrent prefills; caps + 1 lag row
 
 
-def test_refuses_by_name_over_the_cap_and_a_non_host_retention_pins_nothing():
+def test_refuses_by_name_over_the_cap_and_a_non_host_retention_is_predicted_not_refused():
+    """[R19 admit, F-dA-15 correction] the refusal domain stays `--retain host` unbounded (R17-7.3 / coord M-0157 (2)); a non-host
+    retention on the windowed path is no longer 'predicted host 0 MiB' -- the unbounded windowed collector copies every window to the
+    pinned pool regardless of --retain (R18 #60 `--retain none` datum: the 112 GiB pool was allocated anyway), so the pool is predicted,
+    the excess is named as a WARNING on the record, and the launch is still not refused here."""
     sizing, wl, _ = _fixture("b16")
     small = 32 << 30
     rec = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1)
@@ -86,9 +90,38 @@ def test_refuses_by_name_over_the_cap_and_a_non_host_retention_pins_nothing():
     assert rec["predicted_host_bytes"] > small
     for mode in ("none", "sample", "device"):
         r2 = ADM.admission(sizing, wl["requests"], small, retain=mode, max_num_batched_tokens=5348, lag=1)
-        assert r2["admitted"] is True and r2["predicted_host_bytes"] == 0 and mode in r2["why"]
+        assert r2["admitted"] is True and mode in r2["why"]
+        assert r2["predicted_host_bytes"] == rec["predicted_host_bytes"] and r2["would_exceed_by_bytes"] == rec["predicted_host_bytes"] - small
+        assert "WARNING" in r2["why"] and "regardless of --retain" in r2["pool_rule"] and r2["staging"] == {"windowed": True, "bounded": False, "retain_exclude": []}
+        # the pre-P0 per-step-block path copies nothing under a non-host retention: 0 by that rule, named
+        r2b = ADM.admission(sizing, wl["requests"], small, retain=mode, max_num_batched_tokens=5348, lag=1, windowed=False)
+        assert r2b["predicted_host_bytes"] == 0 and "per-step blocks" in r2b["pool_rule"] and "WARNING" not in r2b["why"]
     r3 = ADM.admission(sizing, wl["requests"], None, retain="host", max_num_batched_tokens=5348, lag=1)
-    assert r3["admitted"] is True and "no container memory limit" in r3["why"]
+    assert r3["admitted"] is True and "no container memory limit" in r3["why"] and r3["would_exceed_by_bytes"] is None
+
+
+def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
+    """[R19 admit, F-r18-admit-1 fix (a)] the RETAIN-windowed pool: under --bounded-staging --retain host --retain-exclude hidden_m1 the pool
+    is (raw - hidden M1) x levels; the hidden stream is the bulk of the raw bytes at 1024/128; bounded + a non-host retention keeps the
+    levels only.  Bounded runs are governed by the bounded HOST BOUND (revb M-0254): recorded here, never refused."""
+    sizing, wl, _ = _fixture("b16")
+    small = 32 << 30
+    full = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1)
+    raw, hidden = full["scheduled_raw_bytes"], full["scheduled_hidden_bytes"]
+    assert 0 < hidden < raw and hidden > 0.5 * raw, (raw, hidden)                 # the M1 stream dominates the stream at this geometry
+    kept = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1, bounded=True, retain_exclude={"fa2_hidden_m1", "fa3_hidden_m1"})
+    assert kept["predicted_host_bytes"] == int((raw - hidden) * full["levels_factor"]) < full["predicted_host_bytes"]
+    assert kept["admitted"] is True and "bounded HOST BOUND governs" in kept["why"] and kept["staging"]["retain_exclude"] == ["fa2_hidden_m1", "fa3_hidden_m1"]
+    # bounded without the exclusion keeps everything; excluding an unrelated family keeps everything too (the rule is by hidden family)
+    b_all = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1, bounded=True)
+    assert b_all["predicted_host_bytes"] == full["predicted_host_bytes"]
+    b_other = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1, bounded=True, retain_exclude={"gemm_qkv"})
+    assert b_other["predicted_host_bytes"] == full["predicted_host_bytes"]
+    lv = ADM.admission(sizing, wl["requests"], small, retain="none", max_num_batched_tokens=5348, lag=1, bounded=True)
+    assert lv["predicted_host_bytes"] == int(raw * (full["levels_factor"] - 1.0)) and "levels only" in lv["pool_rule"]
+    # the CLI alias hidden_m1 names both tap families
+    rule = ADM.predicted_pool_bytes(1000, 600, retain="host", levels_factor=1.25, windowed=True, bounded=True, retain_exclude={"fa2_hidden_m1"})
+    assert rule[0] == 500 and "hidden M1" in rule[1]
 
 
 def test_lag_rows_chunking_and_the_rope_correction_are_named_and_monotone():

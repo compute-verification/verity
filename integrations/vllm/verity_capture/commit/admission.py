@@ -139,21 +139,63 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
             "per_step": steps}
 
 
+#: [R19 admit, F-dA-15 correction] the windowed collector (native_collect_v2b, row_pod default `--window-mb 256`) WITHOUT bounded staging
+#: copies EVERY window of every step to the pinned pool as the learning re-hash source / hit-plan hedge copy, whatever `--retain` says
+#: (R18 #60 datum: `--retain none` still allocated the 112 GiB pool).  The pool is a term of the run under every retention on that path.
+HIDDEN_FAMILIES = ("fa2_hidden_m1", "fa3_hidden_m1")
+
+
+def predicted_pool_bytes(raw: int, hidden: int, *, retain: str, levels_factor: float, windowed: bool, bounded: bool,
+                         retain_exclude: set[str] | frozenset[str] | None) -> tuple[int, str]:
+    """The pinned host pool one Commit run allocates, by path, with the rule that produced it (named on the record):
+      unbounded windowed   raw x levels_factor under EVERY retention (hedge copies of every window; F-dA-15 correction, R19 admit)
+      bounded, retain host (raw - excluded hidden) x levels_factor: `--retain-exclude hidden_m1` keeps the C2 byte source (the module
+                           outputs) and drops the M1 stream's chunk-aligned interior, which no C2 consumer reads (opens by replay)
+      bounded, other       levels only: raw x (levels_factor - 1) (the raw bytes are hashed in the window and released; openings by replay)
+      per-step blocks      raw x levels_factor for retain host, 0 otherwise (the pre-P0 path: nothing is copied unless retained)"""
+    excl = set(retain_exclude or ())
+    if bounded:
+        if retain == "host":
+            kept = raw - hidden if excl & set(HIDDEN_FAMILIES) else raw
+            rule = (f"bounded staging, retain host excluding {sorted(excl)}: kept raw {kept >> 20} MiB (= raw {raw >> 20} - hidden M1 {hidden >> 20}) x {levels_factor}"
+                    if excl else f"bounded staging, retain host: raw {raw >> 20} MiB x {levels_factor}")
+            return int(kept * levels_factor), rule
+        return int(raw * (levels_factor - 1.0)), f"bounded staging, retain {retain}: levels only, raw {raw >> 20} MiB x {levels_factor - 1.0:.2f} (raw bytes released per window, openings by replay)"
+    if windowed:
+        return int(raw * levels_factor), (f"unbounded windowed staging, retain {retain}: raw {raw >> 20} MiB x {levels_factor} -- every window is copied to the pinned pool "
+                                          "regardless of --retain (hedge copy / learning re-hash source; F-dA-15 correction: '0 MiB under retain != host' was wrong by name)")
+    if retain == "host":
+        return int(raw * levels_factor), f"per-step blocks, retain host: raw {raw >> 20} MiB x {levels_factor}"
+    return 0, f"per-step blocks, retain {retain}: no raw bytes copied to host"
+
+
 def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_bytes: int | None, *, retain: str = "host",
               max_num_batched_tokens: int | None = None, lag: int = 1, levels_factor: float = LEVELS_FACTOR,
-              envelope_bound_bytes: int | None = None) -> dict[str, Any]:
-    """The F-dA-15 verdict for one Commit launch: predicted = scheduled raw x levels_factor (retain=host; a non-host retention pins nothing
-    for the run) against the container limit.  `admitted` False names the excess; the envelope bound is carried beside it for the record."""
+              envelope_bound_bytes: int | None = None, windowed: bool = True, bounded: bool = False,
+              retain_exclude: set[str] | frozenset[str] | None = None) -> dict[str, Any]:
+    """The F-dA-15 verdict for one Commit launch: predicted = the pinned pool the run allocates (`predicted_pool_bytes`, by staging path
+    and retention) against the container limit.  The REFUSAL domain is unchanged (R17-7.3 / coord M-0157 (2): `--retain host`, unbounded);
+    under another retention the pool is now PREDICTED and named (a non-host retention on the windowed path allocates it anyway -- the R18
+    #60 `--retain none` 112 GiB datum), recorded as `would_exceed_by_bytes`, never refused here.  `admitted` False names the excess; the
+    envelope bound is carried beside it for the record."""
     sched = scheduled_step_bytes(sizing, requests, max_num_batched_tokens=max_num_batched_tokens, lag=lag)
     raw = int(sched["total_bytes"])
-    predicted = int(raw * levels_factor) if retain == "host" else 0
+    hidden = int(sched["composition"]["hidden_bytes"])
+    predicted, pool_rule = predicted_pool_bytes(raw, hidden, retain=retain, levels_factor=levels_factor, windowed=windowed, bounded=bounded,
+                                                retain_exclude=retain_exclude)
     rec = {"schema": SCHEMA, "retain": retain, "domain": "--retain host: the whole run's raw bytes pinned on host (a non-host retention is recorded, never refused)",
-           "scheduled_raw_bytes": raw, "levels_factor": levels_factor, "predicted_host_bytes": predicted,
+           "scheduled_raw_bytes": raw, "scheduled_hidden_bytes": hidden, "levels_factor": levels_factor, "predicted_host_bytes": predicted, "pool_rule": pool_rule,
+           "staging": {"windowed": bool(windowed), "bounded": bool(bounded), "retain_exclude": sorted(retain_exclude or ())},
            "host_cap_bytes": host_cap_bytes, "envelope_retained_bytes_bound": envelope_bound_bytes,
            "envelope_predicted_host_bytes": (int(envelope_bound_bytes * levels_factor) if envelope_bound_bytes else None),
+           "would_exceed_by_bytes": (max(0, predicted - host_cap_bytes) if host_cap_bytes is not None else None),
            "scheduled": {k: v for k, v in sched.items() if k != "per_step"}, "peak_steps": sorted(sched["per_step"], key=lambda x: -x["bytes"])[:8]}
-    if retain != "host":
-        rec.update(admitted=True, why=f"retain={retain}: the run pins no raw bytes on host (F-dA-15 is a host-retention bound)")
+    if retain != "host" or bounded:
+        over = (f"; WARNING the pool predicted for this path ({predicted >> 20} MiB: {pool_rule}) exceeds the limit {host_cap_bytes >> 20} MiB by "
+                f"{(predicted - host_cap_bytes) >> 20} MiB -- expect an OOM-kill unless the staging path changes"
+                if host_cap_bytes is not None and predicted > host_cap_bytes else f"; pool predicted {predicted >> 20} MiB ({pool_rule})")
+        who = f"retain={retain}" + (" + bounded staging (the bounded HOST BOUND governs, revb M-0254)" if bounded else "")
+        rec.update(admitted=True, why=f"{who}: outside the F-dA-15 refusal domain (--retain host, unbounded), recorded not refused{over}")
     elif host_cap_bytes is None:
         rec.update(admitted=True, why="no container memory limit visible (memory.max unset): nothing to compare against; the scheduled bound is on the record")
     elif predicted > host_cap_bytes:
@@ -221,6 +263,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cap-bytes", type=int, default=None, help="container memory limit (default: this host's cgroup, if any)")
     ap.add_argument("--lag", type=int, default=1, help="post-EOS rows per request (R17-1 declared LAG; default 1 = async scheduling)")
     ap.add_argument("--retain", default="host", choices=["host", "device", "none", "sample"])
+    ap.add_argument("--per-step-blocks", action="store_true", help="the collector stages per-step blocks (--window-mb 0); default: windowed (row_pod's 256 MiB ring)")
+    ap.add_argument("--bounded-staging", action="store_true", help="the run uses --bounded-staging (no hedge copies; retain host keeps the non-excluded families)")
+    ap.add_argument("--retain-exclude", default=None, help="the run's --retain-exclude families (e.g. hidden_m1 = fa2_hidden_m1,fa3_hidden_m1)")
     ap.add_argument("--observed", default=None, help="a record's commit/steps.jsonl: report per-step soundness of the prediction")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
@@ -233,8 +278,14 @@ def main(argv: list[str] | None = None) -> int:
     sw = wl.get("sweep") or {}
     same_row = (int(env.get("batch") or 0) == int(sw.get("batch") or len(wl["requests"])) and int(env.get("max_prompt") or 0) == max(int(r.get("prompt_len") or 0) for r in wl["requests"])
                 and int(env.get("max_new") or 0) == max(int(r.get("max_tokens") or 0) for r in wl["requests"]))
+    excl: set[str] = set()
+    for f in (a.retain_exclude or "").split(","):
+        f = f.strip().removesuffix("_stream")
+        if f:
+            excl |= set(HIDDEN_FAMILIES) if f in ("hidden_m1", "hidden") else {f}
     rec = admission(sizing, wl["requests"], cap, retain=a.retain, max_num_batched_tokens=mnbt, lag=a.lag,
-                    envelope_bound_bytes=(sizing.get("retained_bytes_bound") if same_row else None))
+                    envelope_bound_bytes=(sizing.get("retained_bytes_bound") if same_row else None),
+                    windowed=not a.per_step_blocks, bounded=a.bounded_staging, retain_exclude=excl)
     rec["sizing_record_is_this_row"] = same_row
     rec["host_cap_source"] = cap_src
     if a.observed:
