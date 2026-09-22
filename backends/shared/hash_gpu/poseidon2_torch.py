@@ -75,7 +75,7 @@ class Poseidon2Torch:
         S, W = s.shape
         if S < 17:                                                          # _int_mm needs > 16 rows
             return self._mds_int8(torch.cat((s, torch.zeros((17 - S, W), dtype=s.dtype, device=s.device))))[:S]
-        s8 = s.to(torch.int32).view(torch.int8).view(S, 4 * W)            # little-endian bytes of each lane
+        s8 = s.contiguous().to(torch.int32).view(torch.int8).view(S, 4 * W)     # little-endian bytes of each lane
         c8 = (s8 < 0).to(torch.int8)
         a = torch.cat((s8, c8), dim=1)                                      # (S, 8W) int8
         y = torch._int_mm(a, self.b_int8)                                   # (S, 8W) int32
