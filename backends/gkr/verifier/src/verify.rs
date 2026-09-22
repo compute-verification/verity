@@ -11,7 +11,7 @@
 //! reduced across threads.  The `eq` weights over the LogUp hypercube use a high/low split (one product per leaf).
 
 use crate::circuit::{eval_lin, log2ceil, Circuit, Gate, Layer, Query, Table};
-use crate::field::{add, eq_point, eq_table, interpolate, mat_apply, mul, mul_matrix, planar_times_matrix, sub, Ext, PlanarMats, DEG, DOMAIN, P64};
+use crate::field::{eq_point, eq_table, interpolate, mat_apply, mont_mul, mul, mul_matrix, sub, to_mont, Ext, PlanarMats, DEG, DOMAIN, P64, R_MOD_P};
 use crate::ntt::{encode, RowEval};
 use crate::proof::{Column, Proof};
 use crate::sha256::Sha256;
@@ -282,12 +282,13 @@ struct LookupPlan {
 }
 /// `terms_rank`: the single-column (base) terms as `(rank in touched, coef)`; `terms_mat`: the multi-column terms as
 /// `(idx, matrix of coef)` so the scatter is one matrix product per term.
-struct LookupSeg { base: usize, q_t: usize, terms_mat: Vec<Vec<(usize, [u32; DEG * DEG])>>, terms_rank: Vec<Vec<(usize, u32)>>, touched: Vec<usize> }
+struct LookupSeg { base: usize, q_t: usize, terms_mat: Vec<Vec<(usize, [u32; DEG * DEG])>>, /// CSR: query j's terms are `rank_items[rank_offs[j]..rank_offs[j + 1]]`
+    rank_offs: Vec<u32>, rank_items: Vec<(u32, u32)> /* (rank, coef in Montgomery form) */, touched: Vec<usize> }
 
 /// Per-thread scratch of the fill: planar accumulators and outputs (`[coord * n + col]`).
-pub struct FillScratch { row: Vec<Ext>, planar: Vec<u32>, acc: Vec<u32>, flush: Vec<u32>, /// per-phase nanoseconds (VERITY_GKR_PROFILE=1): input claims, single-column lookups, ext lookups, chain
-    pub prof: [u64; 4], profile: bool }
-impl FillScratch { pub fn new() -> FillScratch { FillScratch { row: Vec::new(), planar: Vec::new(), acc: Vec::new(), flush: Vec::new(), prof: [0; 4], profile: std::env::var("VERITY_GKR_PROFILE").map(|v| v == "1").unwrap_or(false) } } }
+pub struct FillScratch { row: Vec<Ext>, planar: Vec<u32>, acc: Vec<u64>, /// per-phase nanoseconds (VERITY_GKR_PROFILE=1): input claims, single-column lookups, ext lookups, chain
+    pub prof: [u64; 5], profile: bool }
+impl FillScratch { pub fn new() -> FillScratch { FillScratch { row: Vec::new(), planar: Vec::new(), acc: Vec::new(), prof: [0; 5], profile: std::env::var("VERITY_GKR_PROFILE").map(|v| v == "1").unwrap_or(false) } } }
 
 struct Functional<'a> {
     stmt: &'a Statement<'a>,
@@ -306,16 +307,19 @@ struct Functional<'a> {
     per_vu: usize,
 }
 
-/// The R16-style flush: `out[touched[r]] += (rl * hi[block]) * acc[r]` for every touched column, as one planar matrix
-/// product over the ranks; `acc` is zeroed.
-fn flush_single(lp: &LookupPlan, ls: &LookupSeg, h: usize, acc: &mut [u32], flush: &mut [u32], out: &mut [Ext]) {
-    let nt = ls.touched.len();
+/// The R16-style flush: `out[touched[r]] += (rl * hi[block]) * acc[r]` for every touched column; `acc` holds the
+/// unreduced `u64` sums of canonical values (interleaved, `[r * 6 + i]`; at most `2^lo_bits` terms of `< 2^31` per
+/// block, so no overflow) and is zeroed.
+fn flush_single(lp: &LookupPlan, ls: &LookupSeg, h: usize, acc: &mut [u64], out: &mut [Ext]) {
     let g = mul_matrix(lp.rl * lp.eq.hi[h]);
-    planar_times_matrix(acc, nt, &g, flush);
     for (r, &c) in ls.touched.iter().enumerate() {
-        out[c] += Ext(std::array::from_fn(|d| flush[d * nt + r]));
+        let a: &mut [u64; DEG] = (&mut acc[r * DEG..(r + 1) * DEG]).try_into().unwrap();
+        if a.iter().any(|&x| x != 0) {
+            let e = Ext(std::array::from_fn(|i| (a[i] % P64) as u32));
+            out[c] += mat_apply(&e, &g);
+            *a = [0; DEG];
+        }
     }
-    for a in acc.iter_mut() { *a = 0; }
 }
 
 impl<'a> Functional<'a> {
@@ -326,8 +330,8 @@ impl<'a> Functional<'a> {
         let ec = self.eq_c[si][u];
         let profile = sc.profile;
         let mut tp = if profile { Some(Instant::now()) } else { None };
-        let mut lap = |sc_prof: &mut [u64; 4], k: usize| { if let Some(t) = tp.as_mut() { let n = Instant::now(); sc_prof[k] += (n - *t).as_nanos() as u64; *t = n; } };
-        let FillScratch { row, planar, acc, flush, prof, .. } = sc;
+        let mut lap = |sc_prof: &mut [u64; 5], k: usize| { if let Some(t) = tp.as_mut() { let n = Instant::now(); sc_prof[k] += (n - *t).as_nanos() as u64; *t = n; } };
+        let FillScratch { row, planar, acc, prof, .. } = sc;
         // input claims: out[c] = ec * v[c], vectorised over the columns through the planar matrices of v
         planar.resize(DEG * ncols, 0);
         self.v_mats[si].matvec(&ec, planar);
@@ -346,26 +350,30 @@ impl<'a> Functional<'a> {
                 let nt = ls.touched.len();
                 acc.clear();
                 acc.resize(DEG * nt, 0);
-                flush.resize(DEG * nt, 0);
                 let mut hi_cur = x0 >> lp.eq.lo_bits;
                 for j in 0..ls.q_t {
                     let x = x0 + j;
                     let h = x >> lp.eq.lo_bits;
                     if h != hi_cur {
-                        flush_single(lp, ls, hi_cur, acc, flush, out);
+                        lap(prof, 1);
+                        flush_single(lp, ls, hi_cur, acc, out);
+                        lap(prof, 4);
                         hi_cur = h;
                     }
                     let e = &lp.eq.lo[x & mask];
-                    for &(rank, coef) in &ls.terms_rank[j] {
-                        if coef == 1 {
-                            for i in 0..DEG { let a = &mut acc[i * nt + rank]; *a = add(*a, e.0[i]); }
+                    for &(rank, coef) in &ls.rank_items[ls.rank_offs[j] as usize..ls.rank_offs[j + 1] as usize] {
+                        let rank = rank as usize;
+                        let a: &mut [u64; DEG] = (&mut acc[rank * DEG..(rank + 1) * DEG]).try_into().unwrap();
+                        if coef == R_MOD_P {
+                            for i in 0..DEG { a[i] += e.0[i] as u64; }
                         } else {
-                            for i in 0..DEG { let a = &mut acc[i * nt + rank]; *a = add(*a, mul(e.0[i], coef)); }
+                            for i in 0..DEG { a[i] += mont_mul(e.0[i], coef) as u64; }
                         }
                     }
                 }
-                flush_single(lp, ls, hi_cur, acc, flush, out);
                 lap(prof, 1);
+                flush_single(lp, ls, hi_cur, acc, out);
+                lap(prof, 4);
             } else {
                 let mut h_cur = usize::MAX;
                 let mut rl_hi = Ext::ZERO;
@@ -677,7 +685,11 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
                 terms_base.push(m.iter().map(|(&i, e)| (rank_of[&i], e.0[0])).collect::<Vec<_>>());
                 terms_ext.push(m.into_iter().map(|(i, e)| (i, mul_matrix(e))).collect::<Vec<_>>());
             }
-            segs.push(LookupSeg { base, q_t: qs.len(), terms_mat: terms_ext, terms_rank: terms_base, touched });
+            let mut rank_offs = vec![0u32];
+            let mut rank_items = Vec::new();
+            // coefficients in Montgomery form (`R_MOD_P` = 1): the accumulate is a `mont_mul`, not a `% p`
+            for tb in &terms_base { for &(r, c) in tb { rank_items.push((r as u32, to_mont(c))); } rank_offs.push(rank_items.len() as u32); }
+            segs.push(LookupSeg { base, q_t: qs.len(), terms_mat: terms_ext, rank_offs, rank_items, touched });
             base += seg.units * qs.len();
         }
         let lp = LookupPlan { eq, rl: rho * lc.lam, rho, segs, single: t.cols == 1 };
@@ -764,7 +776,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     let n_chunks = rows.div_ceil(chunk_rows);
     let counter = AtomicUsize::new(0);
     let (ns_fill, ns_eval) = (std::sync::atomic::AtomicU64::new(0), std::sync::atomic::AtomicU64::new(0));
-    let prof_ns: [std::sync::atomic::AtomicU64; 4] = Default::default();
+    let prof_ns: [std::sync::atomic::AtomicU64; 5] = Default::default();
     let parts: Vec<Vec<Ext>> = std::thread::scope(|s| {
         let hs: Vec<_> = (0..threads).map(|_| s.spawn(|| {
             let mut rhs = vec![Ext::ZERO; set.len()];
@@ -804,14 +816,14 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
             }
             ns_fill.fetch_add(tf, Ordering::Relaxed);
             ns_eval.fetch_add(te, Ordering::Relaxed);
-            for k in 0..4 { prof_ns[k].fetch_add(fsc.prof[k], Ordering::Relaxed); }
+            for k in 0..5 { prof_ns[k].fetch_add(fsc.prof[k], Ordering::Relaxed); }
             rhs
         })).collect();
         hs.into_iter().map(|h| h.join().unwrap()).collect()
     });
     if prof_ns[0].load(Ordering::Relaxed) > 0 {
-        eprintln!("fill profile (CPU s): input claims {:.3}, single-column lookups {:.3}, ext lookups {:.3}, chain {:.3}",
-            prof_ns[0].load(Ordering::Relaxed) as f64 * 1e-9, prof_ns[1].load(Ordering::Relaxed) as f64 * 1e-9, prof_ns[2].load(Ordering::Relaxed) as f64 * 1e-9, prof_ns[3].load(Ordering::Relaxed) as f64 * 1e-9);
+        let g = |k: usize| prof_ns[k].load(Ordering::Relaxed) as f64 * 1e-9;
+        eprintln!("fill profile (CPU s): input claims {:.3}, single-column lookups {:.3} (+ flush {:.3}), ext lookups {:.3}, chain {:.3}", g(0), g(1), g(4), g(2), g(3));
     }
     st.t_rows_fill_cpu = ns_fill.load(Ordering::Relaxed) as f64 * 1e-9;
     st.t_rows_eval_cpu = ns_eval.load(Ordering::Relaxed) as f64 * 1e-9;
