@@ -183,6 +183,25 @@ by message in `tests/test_kernel_agreement.py` and `tests/test_logup_gpu.py` (`P
 
 Launch overhead is the a-gpu prover's problem to solve (it owns the round loop): ~10 launches + 1 H2D per round here.
 
+## Third pass (lane `a-fusion`): launch-fused logUp, round-fused sumcheck, v2 shape
+
+Full write-up: `backends/numerical/reports/a_kernels_h100_v2.md` (+ `.json`); raw results `backends/numerical/reports/a_fusion/`.
+All on vy-g4 (H100), tests: 31 sumcheck agreement + 7 graphed logUp + 4 vector tests bit-exact.
+
+| what | before -> after |
+|---|---|
+| `logup_graph.py` + `kernels_graph.py`: CUDA graphs per level (coins in a static device buffer, round constants computed on device) | v1 logUp **427 -> 88.9 ms device / 92.0 wall** (21.7 us/VU); per-round graphs (Fiat-Shamir) 103.5 / 107.1 |
+| `kernels_triton.packed_u_{k}` (U pass: the k packed rounds from one read of g, h) | 2^28 k=3 **17.08 -> 12.65 ms/layer**; 2^26 5.68 -> 4.76; v1 batch 136.6 -> **99.6 ms = 24.3 us/VU**; 2.87x HBM floor, 4.17% INT8 peak |
+| `ext_fold_ip` (fold fused into the next Hadamard) | **slower** (2.28 vs 1.75 ms at 2^28): SIMT-bound both ways; opt-in `Kernel(fold_fusion=True)` |
+| v2 sumcheck (census shape, 4 layers s_in 9,9,9,8) | **36.1 ms/batch = 8.8 us/VU** (exporter's 2-layer shape: 20.0 ms) |
+| v2 logUp, 10 tables (5.2 M rows), `logup_graph_bench --suite v2` | sequential 221.6 ms (each instance pays ~14 ms of small levels); **10 streams 84.7 ms = 20.7 us/VU**; SHIFT committed 33.9 ms vs split-u 53.6 ms |
+| A re-priced (`reprice_v2.py`) | v1 1.73e7 -> **7.06e6**; v2 **4.64e6** (modelled 3.89e6); not below 4e6 |
+
+New entry points in `kernels.py`: `sumcheck_layer_device` / `prepare_inputs` (sync-free, graph-capturable layer),
+`GraphLogUp` / `logup_prove_graphed` (`rounds_per_graph=None | 1`), `GraphLogUp.launch/finish` (multi-stream instances).
+`bench_fused.py` (whole-sumcheck fusion on/off, kernel pieces, `--micro` config sweep), `logup_graph_bench.py`
+(`--suite v1 v2 v2-splitu --modes level round concurrent`).
+
 ## Not done / next
 
 1. **Univariate skip** (Gruen 2024/108): a protocol change (round degree `3 (2^s - 1)`, new soundness term); needs
