@@ -9,6 +9,8 @@ Same arithmetic as ``../tensor/fused/field.py`` (a-fused lane); this kernel only
 """
 from __future__ import annotations
 
+import hashlib
+
 import torch
 
 try:
@@ -21,6 +23,12 @@ from .field import DEG, P, W
 
 R = 2**32
 MU = pow(P, -1, R)
+# Every kernel below bakes ``P``, ``W``, ``MU`` and ``R^2 mod p`` in as module-level ``tl.constexpr`` globals.  Triton's
+# on-disk cache key is the kernel SOURCE (plus argument specialisation), not the values of those globals, so a pod whose
+# ``~/.triton/cache`` holds binaries compiled under an earlier field (``W`` was 31 before a-gpu2's 0ec0616) keeps serving
+# them silently: wrong ``X^6 = W`` terms in every extension product (a-kernel-a100 report).  ``FIELD_KEY`` is passed to
+# every launch as an (unused) ``tl.constexpr`` argument so the field constants are part of the cache key.
+FIELD_KEY = int(hashlib.sha256(f"babybear6:{P}:{W}:{R}".encode()).hexdigest()[:7], 16)
 MU_I32 = MU - R
 R2_MOD_P = R * R % P
 WR = W * R % P
@@ -93,7 +101,7 @@ if triton is not None:
         return c0, c1, c2, c3, c4, c5
 
     @triton.jit
-    def ext_mul_kernel(a_ptr, b_ptr, out_ptr, n, sb: tl.constexpr, BLOCK: tl.constexpr):
+    def ext_mul_kernel(a_ptr, b_ptr, out_ptr, n, sb: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
         pid = tl.program_id(0)
         idx = pid * BLOCK + tl.arange(0, BLOCK)
         m = idx < n
@@ -135,7 +143,7 @@ if triton is not None:
         return x0, x1, x2, x3, x4, x5
 
     @triton.jit
-    def fold_kernel(v_ptr, r_ptr, out_ptr, half, BASE: tl.constexpr, BLOCK: tl.constexpr):
+    def fold_kernel(v_ptr, r_ptr, out_ptr, half, BASE: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
         """``out[i] = v[i] + (v[i+half] - v[i]) r``; ``r_ptr`` holds ``r R mod p`` so the Montgomery product is canonical.
         ``BASE``: ``v`` is a base-field vector (stride 1) and ``out`` is extension."""
         pid = tl.program_id(0)
@@ -177,7 +185,7 @@ if triton is not None:
 
     @triton.jit
     def logup_round_kernel(p0_ptr, p1_ptr, q0_ptr, q1_ptr, e_ptr, lam_ptr, out_ptr, half,
-                           PBASE: tl.constexpr, BLOCK: tl.constexpr):
+                           PBASE: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
         """One LogUp sumcheck round: for t = 0..3, ``Σ_c e_t(c) [p0_t q1_t + p1_t q0_t + λ q0_t q1_t](c)``,
         with ``x_t = x(c) + t (x(c+half) - x(c))``.  Writes the block's partial sums as ``(4, 6)`` int64 scaled by
         ``R^-2`` (two Montgomery products deep); the host sums the blocks and multiplies by ``R^2``.
@@ -324,7 +332,7 @@ if triton is not None:
 
     @triton.jit
     def phase1_kernel(a_ptr, b_ptr, e_ptr, w_ptr, out_ptr, half, G,
-                      BASE: tl.constexpr, BC: tl.constexpr, BG: tl.constexpr):
+                      BASE: tl.constexpr, BC: tl.constexpr, BG: tl.constexpr, FK: tl.constexpr):
         """GKR phase-1 round: ``h(t) = Σ_c e_t(c) Σ_g w(g) a_t(c,g) b_t(c,g)`` for t = 0..3, ``x_t = x(c) + t (x(c+half) - x(c))``.
         ``a``/``b`` are ``(2·half, G[, 6])`` (``BASE``: base field), ``e`` ``(2·half, 6)``, ``w_ptr`` = ``w R mod p`` ``(G, 6)``.
         Block partials ``(4, 6)`` int64 scaled by ``R^-2``."""
@@ -523,7 +531,7 @@ if triton is not None:
 
 
     @triton.jit
-    def scatter_terms_kernel(e_ptr, v_ptr, ptr_ptr, tj_ptr, tc_ptr, units, q_t, ncols, BLOCK: tl.constexpr):
+    def scatter_terms_kernel(e_ptr, v_ptr, ptr_ptr, tj_ptr, tc_ptr, units, q_t, ncols, BLOCK: tl.constexpr, FK: tl.constexpr):
         """``v[u, idx] += Σ_{terms t of column idx} e[u, j_t] · c_t`` for a block of units ``u`` and one column ``idx``
         (grid ``(units / BLOCK, ncols)``; CSR ``ptr_ptr[idx]..ptr_ptr[idx+1]`` -> ``tj_ptr`` query index, ``tc_ptr`` the
         coefficient ``c R mod p`` as 6 words).  ``e`` is ``(units, q_t, 6)``, ``v`` ``(units, ncols, 6)`` int64."""
@@ -561,7 +569,7 @@ if triton is not None:
 
 
     @triton.jit
-    def gate_eval_kernel(rows_ptr, ptr_ptr, idx_ptr, coef_ptr, out_ptr, copies, n_in, g_n, BLOCK: tl.constexpr):
+    def gate_eval_kernel(rows_ptr, ptr_ptr, idx_ptr, coef_ptr, out_ptr, copies, n_in, g_n, BLOCK: tl.constexpr, FK: tl.constexpr):
         """``out[c, g] = Σ_{terms t of gate g} rows[c, idx_t] · coef_t`` (base field; CSR by gate, ``coef_ptr`` = ``coef R mod p``)."""
         pb = tl.program_id(0)
         g = tl.program_id(1)
@@ -579,7 +587,7 @@ if triton is not None:
 
 
     @triton.jit
-    def combine_level_kernel(p_ptr, q_ptr, np_ptr, nq_ptr, n, PBASE: tl.constexpr, BLOCK: tl.constexpr):
+    def combine_level_kernel(p_ptr, q_ptr, np_ptr, nq_ptr, n, PBASE: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
         """LogUp tree level: ``np[i] = p[2i] q[2i+1] + p[2i+1] q[2i]``, ``nq[i] = q[2i] q[2i+1]`` (int32 in/out, canonical;
         ``PBASE``: ``p`` is base-field and ``np`` is extension)."""
         pid = tl.program_id(0)
@@ -623,7 +631,7 @@ if triton is not None:
         tl.store(np_ptr + ob + 5, mmul(s5, R2_C), mask=m)
 
     @triton.jit
-    def eq_outer_kernel(hi_ptr, lo_ptr, out_ptr, n, LO_LOG: tl.constexpr, BLOCK: tl.constexpr):
+    def eq_outer_kernel(hi_ptr, lo_ptr, out_ptr, n, LO_LOG: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
         """``out[h 2^LO_LOG + l] = hi[h] * lo[l]`` (extension elements): the eq table of a point as the tensor product
         of the tables of its top and bottom halves, written straight to ``out`` (int32 or int64)."""
         idx = (tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)).to(tl.int64)
@@ -654,7 +662,7 @@ if triton is not None:
         tl.store(out_ptr + base + 5, mmul(c5, R2_C), mask=m)
 
     @triton.jit
-    def rank1_add_kernel(v_ptr, e_ptr, x_ptr, units, ncols, BLOCK: tl.constexpr):
+    def rank1_add_kernel(v_ptr, e_ptr, x_ptr, units, ncols, BLOCK: tl.constexpr, FK: tl.constexpr):
         """``v[u, c] += e[u] * x[c]`` (extension elements, ``v`` ``(units, ncols, 6)`` canonical, any int dtype) for a
         block of ``BLOCK`` units and one column per program: one read + one write of ``v``."""
         pb = tl.program_id(0)
@@ -709,7 +717,7 @@ def eq_outer(hi: torch.Tensor, lo: torch.Tensor, out_dtype=torch.int64) -> torch
     if n:
         BLOCK = 512
         eq_outer_kernel[((n + BLOCK - 1) // BLOCK,)](hi.contiguous().view(-1), lo.contiguous().view(-1), out.view(-1), n,
-                                                     LO_LOG=lo_log, BLOCK=BLOCK, num_warps=4)
+                                                     LO_LOG=lo_log, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
     return out
 
 
@@ -722,7 +730,7 @@ def rank1_add(v: torch.Tensor, e: torch.Tensor, x: torch.Tensor) -> None:
         return
     BLOCK = 128
     grid = ((units + BLOCK - 1) // BLOCK, ncols)
-    rank1_add_kernel[grid](v.view(-1), e.contiguous().view(-1), _mont(x).view(-1), units, ncols, BLOCK=BLOCK, num_warps=4)
+    rank1_add_kernel[grid](v.view(-1), e.contiguous().view(-1), _mont(x).view(-1), units, ncols, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
 
 
 def split_limbs(v: torch.Tensor) -> torch.Tensor:
@@ -747,7 +755,7 @@ def combine_level(p: torch.Tensor, q: torch.Tensor) -> tuple[torch.Tensor, torch
     BLOCK = 256
     grid = ((n + BLOCK - 1) // BLOCK,)
     combine_level_kernel[grid](p.contiguous().view(-1), q.contiguous().view(-1), np_.view(-1), nq.view(-1), n,
-                               PBASE=pbase, BLOCK=BLOCK, num_warps=4)
+                               PBASE=pbase, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
     return np_, nq
 
 
@@ -759,7 +767,7 @@ def gate_eval(rows: torch.Tensor, ptr: torch.Tensor, idx: torch.Tensor, coef_m: 
         return out
     BLOCK = 128
     grid = ((copies + BLOCK - 1) // BLOCK, g_n)
-    gate_eval_kernel[grid](rows.contiguous().view(-1), ptr, idx, coef_m, out.view(-1), copies, n_in, g_n, BLOCK=BLOCK, num_warps=4)
+    gate_eval_kernel[grid](rows.contiguous().view(-1), ptr, idx, coef_m, out.view(-1), copies, n_in, g_n, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
     return out
 
 
@@ -773,7 +781,7 @@ def scatter_terms(e: torch.Tensor, v: torch.Tensor, ptr: torch.Tensor, tj: torch
         return
     BLOCK = 128
     grid = ((units + BLOCK - 1) // BLOCK, ncols)
-    scatter_terms_kernel[grid](e.view(-1), v.view(-1), ptr, tj, _mont(tc).view(-1), units, q_t, ncols, BLOCK=BLOCK, num_warps=4)
+    scatter_terms_kernel[grid](e.view(-1), v.view(-1), ptr, tj, _mont(tc).view(-1), units, q_t, ncols, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
 
 
 def phase1_round(a: torch.Tensor, bb: torch.Tensor, e: torch.Tensor, wg: torch.Tensor, half: int, base: bool) -> torch.Tensor:
@@ -784,7 +792,7 @@ def phase1_round(a: torch.Tensor, bb: torch.Tensor, e: torch.Tensor, wg: torch.T
     partial = torch.empty((grid[0], 4, DEG), dtype=torch.int64, device=e.device)
     wm = _mont(wg[:G].reshape(G, DEG))
     phase1_kernel[grid](a.contiguous().view(-1), bb.contiguous().view(-1), e.contiguous().view(-1), wm.view(-1),
-                        partial.view(-1), half, G, BASE=base, BC=BC, BG=BG, num_warps=4)
+                        partial.view(-1), half, G, BASE=base, BC=BC, BG=BG, num_warps=4, FK=FIELD_KEY)
     s = partial.sum(dim=0) % P
     return (s * R2_MOD_P) % P
 
@@ -810,7 +818,7 @@ def fold(v: torch.Tensor, r: torch.Tensor, base: bool = False, out_dtype=torch.i
     rm = _mont(r.reshape(DEG))
     BLOCK = 256
     grid = ((n + BLOCK - 1) // BLOCK,)
-    fold_kernel[grid](v_c.view(-1), rm, out.view(-1), n, BASE=base, BLOCK=BLOCK, num_warps=4)
+    fold_kernel[grid](v_c.view(-1), rm, out.view(-1), n, BASE=base, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
     return out
 
 
@@ -824,7 +832,7 @@ def logup_round(p0: torch.Tensor, p1: torch.Tensor, q0: torch.Tensor, q1: torch.
     lm = _mont(lam.reshape(DEG))
     logup_round_kernel[grid](p0.contiguous().view(-1), p1.contiguous().view(-1), q0.contiguous().view(-1),
                              q1.contiguous().view(-1), e.contiguous().view(-1), lm, partial.view(-1), half,
-                             PBASE=pbase, BLOCK=BLOCK, num_warps=4)
+                             PBASE=pbase, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
     s = partial.sum(dim=0) % P                    # < grid * p * ... fits int64 for grid < 2^32
     return (s * R2_MOD_P) % P                     # undo the two Montgomery factors: s R^-2 · R^2
 
@@ -849,5 +857,5 @@ def ext_mul(a: torch.Tensor, b: torch.Tensor, out_dtype=torch.int64) -> torch.Te
         return out.reshape(*lead, DEG)
     BLOCK = 256
     grid = ((n + BLOCK - 1) // BLOCK,)
-    ext_mul_kernel[grid](a_c.view(-1), b_c.view(-1), out.view(-1), n, sb=sb, BLOCK=BLOCK, num_warps=4)
+    ext_mul_kernel[grid](a_c.view(-1), b_c.view(-1), out.view(-1), n, sb=sb, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
     return out.reshape(*lead, DEG)
