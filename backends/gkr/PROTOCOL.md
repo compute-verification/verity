@@ -1037,7 +1037,7 @@ Numbers on the exported v2 shape (`V2_EXPORT_TABLES`, 86 lookups/unit + 5 epilog
 |---|---|---|
 | total, Goldilocks\(^3\), B = 4096 | \(2^{-130.16}\) (\(2^{-127.71}\) with the default hash budget) | **\(2^{-130.16}\)** (\(2^{-127.71}\)) — unchanged, set by Ligero + hash |
 | total, BabyBear\(^6\), B = 4096 | \(2^{-130.16}\) | **\(2^{-130.16}\)** |
-| lookup bucket, GL\(^3\) / BB\(^6\), B = 4096 | \(2^{-165.16}\) / \(2^{-158.6}\) | \(2^{-165.21}\) / \(2^{-158.7}\) |
+| lookup bucket, GL\(^3\) / BB\(^6\), B = 4096 | \(2^{-165.16}\) / \(2^{-158.60}\) | \(2^{-165.21}\) / \(2^{-158.65}\) |
 | union collision / identity / GKR, GL\(^3\), B = 4096 | — | \(2^{-165.8}\) / \(2^{-166.8}\) / \(2^{-182.0}\) |
 | \(N\), \(|T|\), \(n\) at B = 4096 | max per table: `T_OP` 12.6M + 65k, \(n_T\le24\) | 33 837 056 + 5 245 624 = 39.1M, \(n=26\) |
 | at B = 64 | \(n_T\le22\) (`SHIFT`) | 528 704 + 5 245 624 = 5.77M, \(n=23\) |
@@ -1049,7 +1049,7 @@ stop condition ("if the union term breaks \(2^{-128}\), stop") is not triggered.
 
 * **Coins**: one 3-element message replaces \(\sum_t(1+[c_t>1])\) per-table coins; the round challenges of one
   \(\mu,\lambda\)-chain of \(n\) levels replace twelve chains. `rounds.protocol` (coins) drops from 2825 to 448 at
-  B = 4096 (2569 → 375 at B = 64).
+  B = 4096 (2029 → 361 at B = 64).
 * **Sequential depth**: the per-table chains run in parallel, so the per-table depth is the *deepest* table
   (\(n_T=24\) at B = 4096); the union is one chain of \(n=26\) levels. Depth = \(1+\sum_{k=1}^{n-1}(k+1)\)
   trips: 351 (union) vs 300 (per-table) at B = 4096, **+51**; 276 vs 253 at B = 64, **+23**. The checker chain
