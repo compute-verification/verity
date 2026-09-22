@@ -13,8 +13,45 @@ pub struct LinForm { pub terms: Vec<Term>, pub konst: Fp }
 #[derive(Clone, Debug)]
 pub enum Wire { Input(u32), Prod { depth: u32, a: LinForm, b: LinForm } }
 
+/// A lookup table: public rows (listed in the circuit text or materialised from an `itable` definition) and the
+/// index from a key (row column 0) to its row: `dense` when row `i` has key `i` (every v2 table, the `R<w>`
+/// ranges), else a hash map (the sparse `T_OP`: the non-finite words have no row).
 #[derive(Clone, Debug)]
-pub struct Table { pub name: String, pub cols: usize, pub rows: Vec<Vec<Fp>> }
+pub struct Table { pub name: String, pub cols: usize, pub rows: Vec<Vec<Fp>>, pub dense: bool, pub index: HashMap<Fp, usize> }
+
+impl Table {
+    pub fn new(name: String, cols: usize, rows: Vec<Vec<Fp>>) -> Table {
+        let dense = rows.iter().enumerate().all(|(i, r)| r[0] == Fp::new(i as u64));
+        let index = if dense { HashMap::new() } else { rows.iter().enumerate().map(|(i, r)| (r[0], i)).collect() };
+        Table { name, cols, rows, dense, index }
+    }
+    /// The row index of a key, if the key has a row.
+    #[inline]
+    pub fn find(&self, key: Fp) -> Option<usize> {
+        if self.dense { let k = key.to_u64() as usize; (k < self.rows.len() && key.to_u64() < self.rows.len() as u64).then_some(k) } else { self.index.get(&key).copied() }
+    }
+}
+
+/// `itable NAME cols rows kind params...`: the v2 tables `circuit.rs` materialises from their definition
+/// (`gkr_export.v2.implicit_table_header`; PROTOCOL.md 14.2).  Values are integers reduced into the field.
+///   shift <bits> <scale> <R>     key x·R + 2d + s (x < 2^bits, d < R/2, s a bit) -> (1 - 2s)·floor(x·2^scale / 2^d)
+///   tnorm <vb> <k_rows> <k_lo>   key v + 2^vb·koff (v < 2^vb, koff < k_rows) -> floor(v·2^(koff + k_lo))
+pub fn materialise(kind: &str, params: &[i64], rows: usize) -> Vec<Vec<Fp>> {
+    let signed = |v: u128, neg: bool| -> Fp { let f = Fp::new((v % (crate::field::P as u128)) as u64); if neg { -f } else { f } };
+    match kind {
+        "shift" => {
+            let (bits, scale, r) = (params[0] as u32, params[1] as u32, params[2] as usize);
+            assert_eq!(rows, (1usize << bits) * r, "shift table row count");
+            (0..rows).map(|k| { let (x, rem) = (k / r, k % r); let (d, s) = (rem / 2, rem % 2); let v = ((x as u128) << scale) >> d; vec![Fp::new(k as u64), signed(v, s == 1)] }).collect()
+        }
+        "tnorm" => {
+            let (vb, k_rows, k_lo) = (params[0] as u32, params[1] as usize, params[2]);
+            assert_eq!(rows, (1usize << vb) * k_rows, "tnorm table row count");
+            (0..rows).map(|key| { let (koff, v) = (key >> vb, key & ((1usize << vb) - 1)); let k = koff as i64 + k_lo; let t = if k >= 0 { (v as u128) << k } else { (v as u128) >> (-k) }; vec![Fp::new(key as u64), signed(t, false)] }).collect()
+        }
+        other => panic!("unknown implicit table kind {other}"),
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Query { pub table: String, pub cols: Vec<LinForm> } // linear forms over *columns*
@@ -75,7 +112,17 @@ impl Circuit {
                 "table" => {
                     let name = it.next().unwrap().to_string();
                     let cols: usize = it.next().unwrap().parse().unwrap();
-                    c.tables.push(Table { name, cols, rows: vec![] });
+                    c.tables.push(Table { name, cols, rows: vec![], dense: true, index: HashMap::new() });
+                }
+                "itable" => {
+                    let name = it.next().unwrap().to_string();
+                    let cols: usize = it.next().unwrap().parse().unwrap();
+                    let rows: usize = it.next().unwrap().parse().unwrap();
+                    let kind = it.next().unwrap();
+                    let params: Vec<i64> = it.map(|s| s.parse().unwrap()).collect();
+                    let rows = materialise(kind, &params, rows);
+                    assert!(rows.iter().all(|r| r.len() == cols), "{name}: implicit table column count");
+                    c.tables.push(Table::new(name, cols, rows));
                 }
                 "row" => { let t = c.tables.last_mut().unwrap(); t.rows.push(it.map(|s| Fp::new(s.parse().unwrap())).collect()); }
                 "query" => {
@@ -99,8 +146,10 @@ impl Circuit {
         widths.sort_unstable();
         widths.dedup();
         for w in widths {
-            c.tables.push(Table { name: format!("R{w}"), cols: 1, rows: (0..1u64 << w).map(|v| vec![Fp::new(v)]).collect() });
+            c.tables.push(Table::new(format!("R{w}"), 1, (0..1u64 << w).map(|v| vec![Fp::new(v)]).collect()));
         }
+        // the row-listed tables get their key index now that every row is read
+        for t in c.tables.iter_mut() { if t.index.is_empty() { let rebuilt = Table::new(std::mem::take(&mut t.name), t.cols, std::mem::take(&mut t.rows)); *t = rebuilt; } }
         c
     }
 
@@ -132,7 +181,7 @@ impl Circuit {
         for (i, q) in self.queries.iter().enumerate() {
             let vals: Vec<Fp> = q.cols.iter().map(|l| eval_lin(l, &w)).collect();
             let t = self.table(&q.table);
-            if !t.rows.iter().any(|r| r[..] == vals[..]) { return Err(format!("query {i} {} {:?}", q.table, vals.iter().map(|v| v.to_u64()).collect::<Vec<_>>())); }
+            if !t.find(vals[0]).map(|ri| t.rows[ri][..] == vals[..]).unwrap_or(false) { return Err(format!("query {i} {} {:?}", q.table, vals.iter().map(|v| v.to_u64()).collect::<Vec<_>>())); }
         }
         Ok(())
     }
