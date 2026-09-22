@@ -2,7 +2,7 @@
  "lane": "anchor-a100",
  "track": "shared",
  "hardware": "NVIDIA A100 SXM4 80GB",
- "generated": "2026-09-22T08:19:16Z",
+ "generated": "2026-09-22T08:20:10Z",
  "runs": {
   "microbench": "r20260922-063608-a304",
   "hash_gpu": "r20260922-063811-e561",
@@ -1898,6 +1898,269 @@
    }
   },
   {
+   "kernel": "tensor",
+   "t": 2097152,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 4635.647773742676,
+   "a100_us": 4893.983840942383,
+   "ratio_ref_over_a100_time": 0.9472135430774201,
+   "a100_fraction_of_int8_peak_round": 0.007911070728062937,
+   "a100_matmul_us": 1371.5520054101942,
+   "ref_matmul_us": 1049.6000200510025
+  },
+  {
+   "kernel": "tensor",
+   "t": 1048576,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 2220.223903656006,
+   "a100_us": 2625.920057296753,
+   "ratio_ref_over_a100_time": 0.8455032351371771,
+   "a100_fraction_of_int8_peak_round": 0.007372016562368062,
+   "a100_matmul_us": 1043.8399836421013,
+   "ref_matmul_us": 722.5279957056046
+  },
+  {
+   "kernel": "tensor",
+   "t": 524288,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 1050.4000186920166,
+   "a100_us": 1717.2479629516602,
+   "ratio_ref_over_a100_time": 0.6116763806704745,
+   "a100_fraction_of_int8_peak_round": 0.005636438817074632,
+   "a100_matmul_us": 774.9760001897812,
+   "ref_matmul_us": 564.7360011935234
+  },
+  {
+   "kernel": "tensor",
+   "t": 262144,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 601.7600297927856,
+   "a100_us": 1044.2880392074585,
+   "ratio_ref_over_a100_time": 0.5762395117054864,
+   "a100_fraction_of_int8_peak_round": 0.004634335888912835,
+   "a100_matmul_us": 702.8480172157288,
+   "ref_matmul_us": 477.34399139881134
+  },
+  {
+   "kernel": "tensor",
+   "t": 131072,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 383.4559917449951,
+   "a100_us": 712.768018245697,
+   "ratio_ref_over_a100_time": 0.5379814777447193,
+   "a100_fraction_of_int8_peak_round": 0.003394920517318507,
+   "a100_matmul_us": 622.5279867649078,
+   "ref_matmul_us": 449.3120163679123
+  },
+  {
+   "kernel": "tensor",
+   "t": 65536,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 297.8239953517914,
+   "a100_us": 534.496009349823,
+   "ratio_ref_over_a100_time": 0.5572052740189275,
+   "a100_fraction_of_int8_peak_round": 0.0022636191167959095,
+   "a100_matmul_us": 598.1119871139526,
+   "ref_matmul_us": 448.1919854879379
+  },
+  {
+   "kernel": "tensor",
+   "t": 32768,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 278.3359885215759,
+   "a100_us": 454.46398854255676,
+   "ratio_ref_over_a100_time": 0.6124489410353183,
+   "a100_fraction_of_int8_peak_round": 0.0013311234939598386,
+   "a100_matmul_us": 581.4399868249893,
+   "ref_matmul_us": 443.26400756835943
+  },
+  {
+   "kernel": "tensor",
+   "t": 16384,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 254.01601195335385,
+   "a100_us": 403.74401211738586,
+   "ratio_ref_over_a100_time": 0.6291511560040187,
+   "a100_fraction_of_int8_peak_round": 0.0007491723395910176,
+   "a100_matmul_us": 565.6319931149483,
+   "ref_matmul_us": 435.52000075578695
+  },
+  {
+   "kernel": "tensor",
+   "t": 8192,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 259.2639923095703,
+   "a100_us": 391.3919925689697,
+   "ratio_ref_over_a100_time": 0.6624151674842549,
+   "a100_fraction_of_int8_peak_round": 0.0003864078109627463,
+   "a100_matmul_us": 549.792006611824,
+   "ref_matmul_us": 423.32800477743154
+  },
+  {
+   "kernel": "tensor",
+   "t": 4096,
+   "deg": 6,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 256.79999589920044,
+   "a100_us": 378.464013338089,
+   "ratio_ref_over_a100_time": 0.6785321373998013,
+   "a100_fraction_of_int8_peak_round": 0.00019980357147169535,
+   "a100_matmul_us": 535.3919938206673,
+   "ref_matmul_us": 414.91200029850006
+  },
+  {
+   "kernel": "tensor",
+   "t": 4194304,
+   "deg": 1,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 3878.848075866699,
+   "a100_us": 3706.399917602539,
+   "ratio_ref_over_a100_time": 1.0465271320143206,
+   "a100_fraction_of_int8_peak_round": 0.0023213092769508157,
+   "a100_matmul_us": 2618.4961050748825,
+   "ref_matmul_us": 2261.3440006971355
+  },
+  {
+   "kernel": "tensor",
+   "t": 1048576,
+   "deg": 1,
+   "ref_gpu": "RTX 4090",
+   "ref_us": 957.1520090103149,
+   "a100_us": 989.3440008163451,
+   "ratio_ref_over_a100_time": 0.967461275573039,
+   "a100_fraction_of_int8_peak_round": 0.002174092253483438,
+   "a100_matmul_us": 1102.655977010727,
+   "ref_matmul_us": 848.4159857034682
+  },
+  {
+   "kernel": "tensor.layers",
+   "key": "total_graphed",
+   "ref_s": 0.09136553478240966,
+   "a100_s": 0.1155804470181465,
+   "ratio_ref_over_a100_time": 0.7904930041329999
+  },
+  {
+   "kernel": "tensor.layers",
+   "key": "total",
+   "ref_s": 0.472353277888149,
+   "a100_s": 0.5196592626459898,
+   "ratio_ref_over_a100_time": 0.9089673019259404
+  },
+  {
+   "kernel": "tensor.layers",
+   "key": "matmul",
+   "ref_s": 0.08054710385203363,
+   "a100_s": 0.09816630462557077,
+   "ratio_ref_over_a100_time": 0.8205168174482997
+  },
+  {
+   "kernel": "tensor.layers",
+   "key": "tensor_bucket",
+   "ref_s": 0.3710038700364531,
+   "a100_s": 0.41466399918869135,
+   "ratio_ref_over_a100_time": 0.894709622157551
+  },
+  {
+   "kernel": "tensor.layers",
+   "key": "kernel.gpu_busy",
+   "ref_s": 0.0874,
+   "a100_s": 0.11553810100000007,
+   "ratio_ref_over_a100_time": 0.7564604164646946
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    8192,
+    8192,
+    8192
+   ],
+   "ref_s": 0.006584991931915283,
+   "a100_s": 0.01453551959991455,
+   "ratio_ref_over_a100_time": 0.45302762564841464,
+   "a100_fraction_of_int8_peak": 0.12122290179678197
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    4096,
+    4096,
+    4096
+   ],
+   "ref_s": 0.0008460479974746704,
+   "a100_s": 0.0019396159648895264,
+   "ratio_ref_over_a100_time": 0.43619356243175605,
+   "a100_fraction_of_int8_peak": 0.1135558466805825
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    48,
+    32768,
+    96
+   ],
+   "ref_s": 0.0008208640217781067,
+   "a100_s": 0.0015470399856567384,
+   "ratio_ref_over_a100_time": 0.5306029769034311,
+   "a100_fraction_of_int8_peak": 0.0003128284713602327
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    48,
+    131072,
+    96
+   ],
+   "ref_s": 0.003204224109649658,
+   "a100_s": 0.006107135772705078,
+   "ratio_ref_over_a100_time": 0.5246688838932408,
+   "a100_fraction_of_int8_peak": 0.0003169788076493283
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    2097152,
+    48,
+    48
+   ],
+   "ref_s": 0.0005828160047531128,
+   "a100_s": 0.0007769280076026917,
+   "ratio_ref_over_a100_time": 0.7501544532439555,
+   "a100_fraction_of_int8_peak": 0.019933199436152325
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    2097152,
+    48,
+    96
+   ],
+   "ref_s": 0.00106985604763031,
+   "a100_s": 0.0007866560220718383,
+   "ratio_ref_over_a100_time": 1.3600049038111979,
+   "a100_fraction_of_int8_peak": 0.03937339952547306
+  },
+  {
+   "kernel": "tensor.int_mm",
+   "shape": [
+    24,
+    32768,
+    24
+   ],
+   "ref_s": 0.000819711983203888,
+   "a100_s": 0.0015450559854507447,
+   "ratio_ref_over_a100_time": 0.5305386930459678,
+   "a100_fraction_of_int8_peak": 3.915377164350512e-05
+  },
+  {
    "kernel": "commit",
    "name": "blake3_s256_ov0_keep0_fused",
    "shape": "B",
@@ -3019,269 +3282,6 @@
    "overhead_vs_native_peak": 180628815.68124902,
    "transcript_bytes": 3535988,
    "peak_mem_bytes": 6612277248
-  },
-  {
-   "kernel": "tensor",
-   "t": 2097152,
-   "deg": 6,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 4635.647773742676,
-   "a100_us": 4893.983840942383,
-   "ratio_ref_over_a100_time": 0.9472135430774201,
-   "a100_fraction_of_int8_peak_round": 0.007911070728062937,
-   "a100_matmul_us": 1371.5520054101942,
-   "ref_matmul_us": 1049.6000200510025
-  },
-  {
-   "kernel": "tensor",
-   "t": 1048576,
-   "deg": 6,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 2220.223903656006,
-   "a100_us": 2625.920057296753,
-   "ratio_ref_over_a100_time": 0.8455032351371771,
-   "a100_fraction_of_int8_peak_round": 0.007372016562368062,
-   "a100_matmul_us": 1043.8399836421013,
-   "ref_matmul_us": 722.5279957056046
-  },
-  {
-   "kernel": "tensor",
-   "t": 524288,
-   "deg": 6,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 1050.4000186920166,
-   "a100_us": 1717.2479629516602,
-   "ratio_ref_over_a100_time": 0.6116763806704745,
-   "a100_fraction_of_int8_peak_round": 0.005636438817074632,
-   "a100_matmul_us": 774.9760001897812,
-   "ref_matmul_us": 564.7360011935234
-  },
-  {
-   "kernel": "tensor",
-   "t": 262144,
-   "deg": 6,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 601.7600297927856,
-   "a100_us": 1044.2880392074585,
-   "ratio_ref_over_a100_time": 0.5762395117054864,
-   "a100_fraction_of_int8_peak_round": 0.004634335888912835,
-   "a100_matmul_us": 702.8480172157288,
-   "ref_matmul_us": 477.34399139881134
-  },
-  {
-   "kernel": "tensor",
-   "t": 131072,
-   "deg": 6,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 383.4559917449951,
-   "a100_us": 712.768018245697,
-   "ratio_ref_over_a100_time": 0.5379814777447193,
-   "a100_fraction_of_int8_peak_round": 0.003394920517318507,
-   "a100_matmul_us": 622.5279867649078,
-   "ref_matmul_us": 449.3120163679123
-  },
-  {
-   "kernel": "tensor",
-   "t": 65536,
-   "deg": 6,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 297.8239953517914,
-   "a100_us": 534.496009349823,
-   "ratio_ref_over_a100_time": 0.5572052740189275,
-   "a100_fraction_of_int8_peak_round": 0.0022636191167959095,
-   "a100_matmul_us": 598.1119871139526,
-   "ref_matmul_us": 448.1919854879379
-  },
-  {
-   "kernel": "tensor",
-   "t": 32768,
-   "deg": 6,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 278.3359885215759,
-   "a100_us": 454.46398854255676,
-   "ratio_ref_over_a100_time": 0.6124489410353183,
-   "a100_fraction_of_int8_peak_round": 0.0013311234939598386,
-   "a100_matmul_us": 581.4399868249893,
-   "ref_matmul_us": 443.26400756835943
-  },
-  {
-   "kernel": "tensor",
-   "t": 16384,
-   "deg": 6,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 254.01601195335385,
-   "a100_us": 403.74401211738586,
-   "ratio_ref_over_a100_time": 0.6291511560040187,
-   "a100_fraction_of_int8_peak_round": 0.0007491723395910176,
-   "a100_matmul_us": 565.6319931149483,
-   "ref_matmul_us": 435.52000075578695
-  },
-  {
-   "kernel": "tensor",
-   "t": 8192,
-   "deg": 6,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 259.2639923095703,
-   "a100_us": 391.3919925689697,
-   "ratio_ref_over_a100_time": 0.6624151674842549,
-   "a100_fraction_of_int8_peak_round": 0.0003864078109627463,
-   "a100_matmul_us": 549.792006611824,
-   "ref_matmul_us": 423.32800477743154
-  },
-  {
-   "kernel": "tensor",
-   "t": 4096,
-   "deg": 6,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 256.79999589920044,
-   "a100_us": 378.464013338089,
-   "ratio_ref_over_a100_time": 0.6785321373998013,
-   "a100_fraction_of_int8_peak_round": 0.00019980357147169535,
-   "a100_matmul_us": 535.3919938206673,
-   "ref_matmul_us": 414.91200029850006
-  },
-  {
-   "kernel": "tensor",
-   "t": 4194304,
-   "deg": 1,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 3878.848075866699,
-   "a100_us": 3706.399917602539,
-   "ratio_ref_over_a100_time": 1.0465271320143206,
-   "a100_fraction_of_int8_peak_round": 0.0023213092769508157,
-   "a100_matmul_us": 2618.4961050748825,
-   "ref_matmul_us": 2261.3440006971355
-  },
-  {
-   "kernel": "tensor",
-   "t": 1048576,
-   "deg": 1,
-   "ref_gpu": "RTX 4090",
-   "ref_us": 957.1520090103149,
-   "a100_us": 989.3440008163451,
-   "ratio_ref_over_a100_time": 0.967461275573039,
-   "a100_fraction_of_int8_peak_round": 0.002174092253483438,
-   "a100_matmul_us": 1102.655977010727,
-   "ref_matmul_us": 848.4159857034682
-  },
-  {
-   "kernel": "tensor.layers",
-   "key": "total_graphed",
-   "ref_s": 0.09136553478240966,
-   "a100_s": 0.1155804470181465,
-   "ratio_ref_over_a100_time": 0.7904930041329999
-  },
-  {
-   "kernel": "tensor.layers",
-   "key": "total",
-   "ref_s": 0.472353277888149,
-   "a100_s": 0.5196592626459898,
-   "ratio_ref_over_a100_time": 0.9089673019259404
-  },
-  {
-   "kernel": "tensor.layers",
-   "key": "matmul",
-   "ref_s": 0.08054710385203363,
-   "a100_s": 0.09816630462557077,
-   "ratio_ref_over_a100_time": 0.8205168174482997
-  },
-  {
-   "kernel": "tensor.layers",
-   "key": "tensor_bucket",
-   "ref_s": 0.3710038700364531,
-   "a100_s": 0.41466399918869135,
-   "ratio_ref_over_a100_time": 0.894709622157551
-  },
-  {
-   "kernel": "tensor.layers",
-   "key": "kernel.gpu_busy",
-   "ref_s": 0.0874,
-   "a100_s": 0.11553810100000007,
-   "ratio_ref_over_a100_time": 0.7564604164646946
-  },
-  {
-   "kernel": "tensor.int_mm",
-   "shape": [
-    8192,
-    8192,
-    8192
-   ],
-   "ref_s": 0.006584991931915283,
-   "a100_s": 0.01453551959991455,
-   "ratio_ref_over_a100_time": 0.45302762564841464,
-   "a100_fraction_of_int8_peak": 0.12122290179678197
-  },
-  {
-   "kernel": "tensor.int_mm",
-   "shape": [
-    4096,
-    4096,
-    4096
-   ],
-   "ref_s": 0.0008460479974746704,
-   "a100_s": 0.0019396159648895264,
-   "ratio_ref_over_a100_time": 0.43619356243175605,
-   "a100_fraction_of_int8_peak": 0.1135558466805825
-  },
-  {
-   "kernel": "tensor.int_mm",
-   "shape": [
-    48,
-    32768,
-    96
-   ],
-   "ref_s": 0.0008208640217781067,
-   "a100_s": 0.0015470399856567384,
-   "ratio_ref_over_a100_time": 0.5306029769034311,
-   "a100_fraction_of_int8_peak": 0.0003128284713602327
-  },
-  {
-   "kernel": "tensor.int_mm",
-   "shape": [
-    48,
-    131072,
-    96
-   ],
-   "ref_s": 0.003204224109649658,
-   "a100_s": 0.006107135772705078,
-   "ratio_ref_over_a100_time": 0.5246688838932408,
-   "a100_fraction_of_int8_peak": 0.0003169788076493283
-  },
-  {
-   "kernel": "tensor.int_mm",
-   "shape": [
-    2097152,
-    48,
-    48
-   ],
-   "ref_s": 0.0005828160047531128,
-   "a100_s": 0.0007769280076026917,
-   "ratio_ref_over_a100_time": 0.7501544532439555,
-   "a100_fraction_of_int8_peak": 0.019933199436152325
-  },
-  {
-   "kernel": "tensor.int_mm",
-   "shape": [
-    2097152,
-    48,
-    96
-   ],
-   "ref_s": 0.00106985604763031,
-   "a100_s": 0.0007866560220718383,
-   "ratio_ref_over_a100_time": 1.3600049038111979,
-   "a100_fraction_of_int8_peak": 0.03937339952547306
-  },
-  {
-   "kernel": "tensor.int_mm",
-   "shape": [
-    24,
-    32768,
-    24
-   ],
-   "ref_s": 0.000819711983203888,
-   "a100_s": 0.0015450559854507447,
-   "ratio_ref_over_a100_time": 0.5305386930459678,
-   "a100_fraction_of_int8_peak": 3.915377164350512e-05
   }
  ],
  "reprice": {

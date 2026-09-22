@@ -699,6 +699,12 @@ def main(argv=None) -> int:
                 f"(the base x base Hadamard share is INT32 work at 0.47x the H100's rate).  **Finding (flagged).**  The logUp fractional GKR runs at **{l3['a100_s']*1e3:.0f} ms = {l3['a100_us_per_vu']:.0f} us/VU** "
                 f"on the A100 vs 427 on the H100 ({l3['ratio_ref_over_a100_time']:.2f}x: a 1.7x departure from the bandwidth ratio) -- it is host-launch-bound (~1 ms x 351 rounds; the 20 smallest levels are "
                 f"{l3['a100_tail_levels_ms']:.0f} of the {l3['a100_s']*1e3:.0f} ms on both cards), so the GPU does not matter yet; the device work is ~0.1-0.2 s.  Fixing the launch loop (CUDA graphs per level) is worth ~2x on either card."), ""]
+    tensor_a = load(R / "tensor" / "bench.json")
+    tensor_ref = load(REPORTS / "tc_sumcheck_4090.json")
+    if tensor_a and tensor_ref:
+        txt, d = sec_tensor(tensor_a, tensor_ref)
+        doc["kernels"] += d
+        md += ["## 5. `backends/gkr/tensor` -- the original INT8-limb round (4090 run `r20260922-051730-15d4`)", "", txt, ""]
     commit_a = load(R / "wave2_b" / "commit.json")
     commit_4 = load(REPO / "backends/direct/encode/results_commit_r20260922-064722-07c7.json")
     buckets_a = load(R / "wave2_b" / "buckets.json")
@@ -736,12 +742,6 @@ def main(argv=None) -> int:
                 f"({v85['ratio_ref_over_a100_time']:.2f}x the L40S's 2.30 ms/VU; the L40S has 864 GB/s, so the bandwidth ratio would be 2.03x).  The torch-eager encode and tests scale 1.5-1.9x, the hint / witness "
                 "generation is launch-bound (0.6-0.9x) and the host verifier is slower on this pod's CPU.  It is 34x the re-priced bucket sum for B below (52 us/VU): the torch prover is unfused eager "
                 "torch over a 3,516-row-per-unit constraint system, the buckets are the fused CUDA kernels on the model's B shape -- the gap is the port, not the design."), ""]
-    tensor_a = load(R / "tensor" / "bench.json")
-    tensor_ref = load(REPORTS / "tc_sumcheck_4090.json")
-    if tensor_a and tensor_ref:
-        txt, d = sec_tensor(tensor_a, tensor_ref)
-        doc["kernels"] += d
-        md += ["## 5. `backends/gkr/tensor` -- the original INT8-limb round (4090 run `r20260922-051730-15d4`)", "", txt, ""]
     # A vs B
     if meas:
         txt, rp = reprice(meas)

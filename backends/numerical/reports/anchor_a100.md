@@ -250,6 +250,37 @@ Agreement test on the A100 (Montgomery kernels): 46 passed in 405.11s (0:06:45)
 
 The Montgomery kernels scale with bandwidth on the A100: 0.52-0.61x the H100 at 2^26 (bandwidth ratio 0.61), k=3 direct 2^28 **31.9 ms** (0.55x the H100's 17.7; 5.9% of the A100 INT8 peak) = **64.3 us/VU, 263 ms per six-layer batch** padded (156 un-padded) -- 1.8x better than the first-pass packed k=3 on the same card (476 ms).  k=2 and k=3 are within 4% of each other on the A100 (the base x base Hadamard share is INT32 work at 0.47x the H100's rate).  **Finding (flagged).**  The logUp fractional GKR runs at **412 ms = 101 us/VU** on the A100 vs 427 on the H100 (1.04x: a 1.7x departure from the bandwidth ratio) -- it is host-launch-bound (~1 ms x 351 rounds; the 20 smallest levels are 144 of the 412 ms on both cards), so the GPU does not matter yet; the device work is ~0.1-0.2 s.  Fixing the launch loop (CUDA graphs per level) is worth ~2x on either card.
 
+## 5. `backends/gkr/tensor` -- the original INT8-limb round (4090 run `r20260922-051730-15d4`)
+
+| INT8-limb round (tensor lane) | RTX 4090 recorded | A100 measured | speed ratio A100/4090 | A100 TC floor | fraction of INT8 peak |
+|---|---|---|---|---|---|
+| t=2^21 deg 6 round (graphed) | 4,636 us | 4,894 us | 0.95x | 38.7 us TC@312T | 0.0079 |
+| t=2^20 deg 6 round (graphed) | 2,220 us | 2,626 us | 0.85x | 19.4 us TC@312T | 0.0074 |
+| t=2^19 deg 6 round (graphed) | 1,050 us | 1,717 us | 0.61x | 9.7 us TC@312T | 0.0056 |
+| t=2^18 deg 6 round (graphed) | 602 us | 1,044 us | 0.58x | 4.8 us TC@312T | 0.0046 |
+| t=2^17 deg 6 round (graphed) | 383 us | 713 us | 0.54x | 2.4 us TC@312T | 0.0034 |
+| t=2^16 deg 6 round (graphed) | 298 us | 534 us | 0.56x | 1.2 us TC@312T | 0.0023 |
+| t=2^15 deg 6 round (graphed) | 278 us | 454 us | 0.61x | 0.6 us TC@312T | 0.0013 |
+| t=2^14 deg 6 round (graphed) | 254 us | 404 us | 0.63x | 0.3 us TC@312T | 0.0007 |
+| t=2^13 deg 6 round (graphed) | 259 us | 391 us | 0.66x | 0.2 us TC@312T | 0.0004 |
+| t=2^12 deg 6 round (graphed) | 257 us | 378 us | 0.68x | 0.1 us TC@312T | 0.0002 |
+| t=2^22 deg 1 round (graphed) | 3,879 us | 3,706 us | 1.05x | 8.6 us TC@312T | 0.0023 |
+| t=2^20 deg 1 round (graphed) | 957 us | 989 us | 0.97x | 2.2 us TC@312T | 0.0022 |
+| layer model graphed wall (130 rounds) | 91.4 ms | 115.6 ms | 0.79x |  |  |
+| layer model, CUDA-event segments (launch gaps included) | 472.4 ms | 519.7 ms | 0.91x |  |  |
+|   of which matmul kernels (events) | 80.5 ms | 98.2 ms | 0.82x |  |  |
+|   tensor bucket (events) | 371.0 ms | 414.7 ms | 0.89x |  |  |
+| layer model GPU kernel time (profiler) | 87.4 ms (report) | 115.5 ms | 0.76x |  |  |
+| `_int_mm` (8192, 8192, 8192) | 6,585 us (0.2528 of 4090 peak) | 14,536 us (0.1212 of A100 peak) | 0.45x |  |  |
+| `_int_mm` (4096, 4096, 4096) | 846 us (0.2459 of 4090 peak) | 1,940 us (0.1136 of A100 peak) | 0.44x |  |  |
+| `_int_mm` (48, 32768, 96) | 821 us (0.0006 of 4090 peak) | 1,547 us (0.0003 of A100 peak) | 0.53x |  |  |
+| `_int_mm` (48, 131072, 96) | 3,204 us (0.0006 of 4090 peak) | 6,107 us (0.0003 of A100 peak) | 0.52x |  |  |
+| `_int_mm` (2097152, 48, 48) | 583 us (0.0251 of 4090 peak) | 777 us (0.0199 of A100 peak) | 0.75x |  |  |
+| `_int_mm` (2097152, 48, 96) | 1,070 us (0.0273 of 4090 peak) | 787 us (0.0394 of A100 peak) | 1.36x |  |  |
+| `_int_mm` (24, 32768, 24) | 820 us (0.0001 of 4090 peak) | 1,545 us (0.0000 of A100 peak) | 0.53x |  |  |
+
+Agreement test on the A100: 22 passed in 29.04s
+
 ## 6. `backends/direct/encode` b-commit + b-lintest -- fused commitment and B's prover buckets (4090 runs `r20260922-064722-07c7`, `r20260922-065537-279b`, `r20260922-073017-0924`; A100 run `r20260922-080250-cff5`)
 
 | B prover bucket | RTX 4090 recorded | A100 measured | speed ratio A100/4090 | A100 floor (measured BW) | fraction of floor |
@@ -373,37 +404,6 @@ Bit-exact on the A100: commitment roots `22/22` variants equal the reference; li
 Gate on the A100 (`run gate-vu --vus 64`): vu-k1536 [42, 64): l=4096 prover 0.10s -> True accept (0.048s); negatives: 52/52 rejected; mutations: 252/252 rejected (one per gadget scope x row class + 3 chain-specific, l=256).
 
 This is the one **end-to-end proof** in this report (`NON_ZK_PROOF_DIAGNOSTIC`, 2^-128 by accounting, depth 2, authentication excluded, ZK masking not implemented): **1.78 ms/VU at 85 VUs = overhead 1.81e+08** against the same card's BF16 peak (1.29x the L40S's 2.30 ms/VU; the L40S has 864 GB/s, so the bandwidth ratio would be 2.03x).  The torch-eager encode and tests scale 1.5-1.9x, the hint / witness generation is launch-bound (0.6-0.9x) and the host verifier is slower on this pod's CPU.  It is 34x the re-priced bucket sum for B below (52 us/VU): the torch prover is unfused eager torch over a 3,516-row-per-unit constraint system, the buckets are the fused CUDA kernels on the model's B shape -- the gap is the port, not the design.
-
-## 5. `backends/gkr/tensor` -- the original INT8-limb round (4090 run `r20260922-051730-15d4`)
-
-| INT8-limb round (tensor lane) | RTX 4090 recorded | A100 measured | speed ratio A100/4090 | A100 TC floor | fraction of INT8 peak |
-|---|---|---|---|---|---|
-| t=2^21 deg 6 round (graphed) | 4,636 us | 4,894 us | 0.95x | 38.7 us TC@312T | 0.0079 |
-| t=2^20 deg 6 round (graphed) | 2,220 us | 2,626 us | 0.85x | 19.4 us TC@312T | 0.0074 |
-| t=2^19 deg 6 round (graphed) | 1,050 us | 1,717 us | 0.61x | 9.7 us TC@312T | 0.0056 |
-| t=2^18 deg 6 round (graphed) | 602 us | 1,044 us | 0.58x | 4.8 us TC@312T | 0.0046 |
-| t=2^17 deg 6 round (graphed) | 383 us | 713 us | 0.54x | 2.4 us TC@312T | 0.0034 |
-| t=2^16 deg 6 round (graphed) | 298 us | 534 us | 0.56x | 1.2 us TC@312T | 0.0023 |
-| t=2^15 deg 6 round (graphed) | 278 us | 454 us | 0.61x | 0.6 us TC@312T | 0.0013 |
-| t=2^14 deg 6 round (graphed) | 254 us | 404 us | 0.63x | 0.3 us TC@312T | 0.0007 |
-| t=2^13 deg 6 round (graphed) | 259 us | 391 us | 0.66x | 0.2 us TC@312T | 0.0004 |
-| t=2^12 deg 6 round (graphed) | 257 us | 378 us | 0.68x | 0.1 us TC@312T | 0.0002 |
-| t=2^22 deg 1 round (graphed) | 3,879 us | 3,706 us | 1.05x | 8.6 us TC@312T | 0.0023 |
-| t=2^20 deg 1 round (graphed) | 957 us | 989 us | 0.97x | 2.2 us TC@312T | 0.0022 |
-| layer model graphed wall (130 rounds) | 91.4 ms | 115.6 ms | 0.79x |  |  |
-| layer model, CUDA-event segments (launch gaps included) | 472.4 ms | 519.7 ms | 0.91x |  |  |
-|   of which matmul kernels (events) | 80.5 ms | 98.2 ms | 0.82x |  |  |
-|   tensor bucket (events) | 371.0 ms | 414.7 ms | 0.89x |  |  |
-| layer model GPU kernel time (profiler) | 87.4 ms (report) | 115.5 ms | 0.76x |  |  |
-| `_int_mm` (8192, 8192, 8192) | 6,585 us (0.2528 of 4090 peak) | 14,536 us (0.1212 of A100 peak) | 0.45x |  |  |
-| `_int_mm` (4096, 4096, 4096) | 846 us (0.2459 of 4090 peak) | 1,940 us (0.1136 of A100 peak) | 0.44x |  |  |
-| `_int_mm` (48, 32768, 96) | 821 us (0.0006 of 4090 peak) | 1,547 us (0.0003 of A100 peak) | 0.53x |  |  |
-| `_int_mm` (48, 131072, 96) | 3,204 us (0.0006 of 4090 peak) | 6,107 us (0.0003 of A100 peak) | 0.52x |  |  |
-| `_int_mm` (2097152, 48, 48) | 583 us (0.0251 of 4090 peak) | 777 us (0.0199 of A100 peak) | 0.75x |  |  |
-| `_int_mm` (2097152, 48, 96) | 1,070 us (0.0273 of 4090 peak) | 787 us (0.0394 of A100 peak) | 1.36x |  |  |
-| `_int_mm` (24, 32768, 24) | 820 us (0.0001 of 4090 peak) | 1,545 us (0.0000 of A100 peak) | 0.53x |  |  |
-
-Agreement test on the A100: 22 passed in 29.04s
 
 ## A vs B on the A100, same batch, same numbers
 
