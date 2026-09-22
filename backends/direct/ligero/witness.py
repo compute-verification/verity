@@ -187,7 +187,66 @@ def tables(sys: System, device) -> Tables:
         exprs = [getattr(q, side) for q in sys.quadratic]
         qq, qj, qc, qconst = _triples(exprs, device)
         quad[side] = (qq, qj, qc, qconst)
-    return Tables(len(sys.linear), len(sys.quadratic), lq, lj, lc, lconst, [c.pub for c in sys.linear], quad)
+    tb = Tables(len(sys.linear), len(sys.quadratic), lq, lj, lc, lconst, [c.pub for c in sys.linear], quad)
+    # the split evaluation (quad_p0): booleanity constraints W_j^2 = W_j are 93% of the quadratic constraints and
+    # need no sparse tables -- one square per row; the rest go through apply_sparse on a Q_gen-row subset
+    bool_q, bool_j, gen_q = [], [], []
+    for q, qc in enumerate(sys.quadratic):
+        a, b, c = qc.a, qc.b, qc.c
+        if (a.c % P == 0 and b.c % P == 0 and c.c % P == 0 and len(a.lin) == len(b.lin) == len(c.lin) == 1):
+            (ja, ka), = a.lin.items()
+            (jb, kb), = b.lin.items()
+            (jc, kc), = c.lin.items()
+            if ja == jb == jc and ka % P == 1 and kb % P == 1 and kc % P == 1:
+                bool_q.append(q)
+                bool_j.append(ja)
+                continue
+        gen_q.append(q)
+    gen = {}
+    for side in ("a", "b", "c"):
+        exprs = [getattr(sys.quadratic[q], side) for q in gen_q]
+        gen[side] = _triples(exprs, device)
+    t = lambda x: torch.tensor(x, dtype=torch.int64, device=device)
+    quad["split"] = {"bool_q": t(bool_q), "bool_j": t(bool_j), "gen_q": t(gen_q), "gen": gen, "Q_gen": len(gen_q)}
+    return tb
+
+
+def _bool_row(c: torch.Tensor, Ub: torch.Tensor) -> torch.Tensor:
+    """sum_j c_j (Ub_j^2 - Ub_j) mod p over the rows of Ub (compiled: one fused pass)."""
+    t = (Ub * Ub - Ub) % P
+    return ((c[:, None] * t) % P).sum(0) % P
+
+
+def quad_p0(tb: Tables, rho: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
+    """(D, cols) = sum_q rho[d, q] (A_q(M) B_q(M) - C_q(M)) mod p, evaluated column-wise on M (m, cols) -- the batched
+    quadratic test's polynomial.  Split form: booleanity constraints directly from the squared rows (no Q x cols
+    intermediates), the general constraints through the sparse tables of their subset.  Equal to the naive
+    apply_sparse form (checked by ``tests_bench.py`` and the gates)."""
+    sp = tb.quad["split"]
+    D = rho.shape[0]
+    out = torch.empty((D, M.shape[1]), dtype=torch.int64, device=M.device)
+    Ub = M.index_select(0, sp["bool_j"])
+    rb = rho.index_select(1, sp["bool_q"])
+    row = compiled(_bool_row, M.device)
+    for d in range(D):
+        out[d] = row(rb[d], Ub)
+    del Ub
+    if sp["Q_gen"]:
+        g = sp["gen"]
+        A = apply_sparse(g["a"][:3], g["a"][3], sp["Q_gen"], M)
+        B = apply_sparse(g["b"][:3], g["b"][3], sp["Q_gen"], M)
+        C = apply_sparse(g["c"][:3], g["c"][3], sp["Q_gen"], M)
+        T = ((A * B) % P - C) % P
+        del A, B, C
+        rg = rho.index_select(1, sp["gen_q"])
+        crow = compiled(_combine_row_w, M.device)
+        for d in range(D):
+            out[d] = (out[d] + crow(rg[d], T)) % P
+    return out
+
+
+def _combine_row_w(c: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
+    return ((c[:, None] * M) % P).sum(0) % P
 
 
 def apply_sparse(triples, consts: torch.Tensor, n_out: int, M: torch.Tensor) -> torch.Tensor:

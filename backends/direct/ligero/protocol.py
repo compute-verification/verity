@@ -37,7 +37,7 @@ from .field import (
     zh_on_coset,
 )
 from .unit import public_vectors
-from .witness import Tables, apply_sparse, build_witness
+from .witness import Tables, build_witness, quad_p0
 
 __all__ = ["Config", "Proof", "config_for", "prove", "soundness", "verify"]
 
@@ -508,15 +508,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     else:
         w = _combine(r, W)                                        # (D, l) evaluations on H
     # quadratic: batched A*B - C on the codeword domain (+ the mask), divided by Z_H
-    A = apply_sparse(tb.quad["a"][:3], tb.quad["a"][3], tb.Q, U)
-    B = apply_sparse(tb.quad["b"][:3], tb.quad["b"][3], tb.Q, U)
-    T = (A * B) % P
-    del A, B
-    C = apply_sparse(tb.quad["c"][:3], tb.quad["c"][3], tb.Q, U)
-    T = (T - C) % P
-    del C
-    P0 = _combine(rho_quad, T)                                    # (D, n)
-    del T
+    P0 = quad_p0(tb, rho_quad, U[:m])                             # (D, n): split form (witness.quad_p0)
     zinv = batch_modinv(zh_on_coset(n, l, device))
     hev = (P0 * zinv) % P
     if cfg.zk:                                                    # + s_qa + x^k s_qb  (the mask / Z_H)
@@ -638,10 +630,7 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
     elif not torch.equal(encode(beta, n)[:, cols], _combine(alpha, Uo)):
         return False, "linear constraints failed"
     # (iii) quadratic constraints
-    A = apply_sparse(tb.quad["a"][:3], tb.quad["a"][3], tb.Q, Uo[:m])
-    B = apply_sparse(tb.quad["b"][:3], tb.quad["b"][3], tb.Q, Uo[:m])
-    C = apply_sparse(tb.quad["c"][:3], tb.quad["c"][3], tb.Q, Uo[:m])
-    lhs = _combine(rho_quad, ((A * B) % P - C) % P)                           # (D, t)
+    lhs = quad_p0(tb, rho_quad, Uo[:m])                                       # (D, t)
     if cfg.zk:                                                                # + Z_H (s_qa + x^k s_qb)
         xk = _xk_on_coset(n, k, device)[cols]
         lhs = (lhs + (zh[None, :] * ((Uo[mr["qa"]] + (xk[None, :] * Uo[mr["qb"]]) % P) % P)) % P) % P
