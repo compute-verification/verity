@@ -2,7 +2,6 @@
 import random
 
 import pytest
-
 from packed import reference as ref
 
 

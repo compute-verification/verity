@@ -236,7 +236,6 @@ def packed_prover(gammas: Sequence[Ext], g: Sequence[int], h: Sequence[int], k: 
         raise ValueError("0 <= k <= n")
     g = [x % P for x in g]
     h = [x % P for x in h]
-    weights = eq_table(gammas)          # eq(gamma, c); the round-i weights eq(gamma_{>=i}, b) are weights[b << i] / eq(gamma_{<i}, 0)
     rounds, rs = [], []
     prefix = ONE                          # eq(gamma_{<i-1}, r_{<i})
     # -- packed rounds: g, h untouched --
