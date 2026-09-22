@@ -84,11 +84,20 @@ LIMITS = VerificationLimits()
 _CHUNK = 1 << 16
 
 
+_POOLS: dict[int, ProcessPoolExecutor] = {}
+
+
 def _pool(workers: int) -> ProcessPoolExecutor:
-    # fork: the workers only hash (no torch/CUDA), and a forked pool is cheap enough to create per verification.
+    """A hashing pool of ``workers`` processes, forked once per process and reused (never shut down; the workers only
+    hash, no torch/CUDA).  Forking a large prover process anew for every verification write-protects its pages and the
+    *next* sub-batch's prover pays the copy-on-write faults (measured on the A100 pod: 0.061 -> 0.10-0.16 s per sub-batch
+    when a 64-worker pool was created per verification), so the fork happens once, in the warm-up."""
     import multiprocessing as mp
-    ctx = mp.get_context("fork") if "fork" in mp.get_all_start_methods() else None
-    return ProcessPoolExecutor(max_workers=workers, mp_context=ctx)
+    ex = _POOLS.get(workers)
+    if ex is None:
+        ctx = mp.get_context("fork") if "fork" in mp.get_all_start_methods() else None
+        ex = _POOLS[workers] = ProcessPoolExecutor(max_workers=workers, mp_context=ctx)
+    return ex
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -212,8 +221,7 @@ def build_word_tree(name: str, binding: bytes, words: np.ndarray, *, procs: int 
     def run(fn, tasks):
         if procs <= 1 or len(tasks) <= 1:
             return [fn(t) for t in tasks]
-        with _pool(min(procs, len(tasks))) as ex:
-            return list(ex.map(fn, tasks, chunksize=1))
+        return list(_pool(procs).map(fn, tasks, chunksize=1))
 
     parts = run(_leaf_chunk, [(domain, s, words[s:e]) for s, e in _chunks(count, _CHUNK)])
     parts += run(_pad_chunk, [(domain.domain_id, count + s, count + e) for s, e in _chunks(width - count, _CHUNK)])
@@ -376,12 +384,11 @@ def _leaf_digests(domain: CommitmentDomain, ranks: np.ndarray, words: np.ndarray
     order = np.argsort(ranks, kind="stable")
     ranks, words = ranks[order], words[order]
     # The domain is a range domain (position == rank): the pool workers use the same leaf frame as the tree builder.
-    tasks = [(domain, int(ranks[s]), words[s:e]) for s, e in _chunks(ranks.size, _CHUNK)
+    chunk = max(4096, -(-ranks.size // max(procs, 1)))   # spread one sub-batch's ~261k leaves over the workers
+    tasks = [(domain, int(ranks[s]), words[s:e]) for s, e in _chunks(ranks.size, chunk)
              if np.array_equal(ranks[s:e], np.arange(ranks[s], ranks[s] + (e - s)))]
-    if len(tasks) == len(_chunks(ranks.size, _CHUNK)) and procs > 1 and len(tasks) > 1:
-        with _pool(min(procs, len(tasks))) as ex:
-            parts = list(ex.map(_leaf_chunk, tasks, chunksize=1))
-        blob = b"".join(parts)
+    if len(tasks) == len(_chunks(ranks.size, chunk)) and procs > 1 and len(tasks) > 1:
+        blob = b"".join(_pool(procs).map(_leaf_chunk, tasks, chunksize=1))
         return {int(r): blob[32 * i:32 * i + 32] for i, r in enumerate(ranks.tolist())}
     leaf = domain.leaf
     return {int(r): leaf(int(r), int(r), SCHEMA, int(w).to_bytes(2, "big")) for r, w in zip(ranks.tolist(), words.tolist())}
