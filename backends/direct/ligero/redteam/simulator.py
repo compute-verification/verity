@@ -10,14 +10,20 @@ count that zero programmed points are ever hit).  The only assumption left is th
 
 Simulator (given V* with the ``Coins`` interface and the public statement):
   1. ``c1, c2 = V*.commitments()``.
-  2. Dummy run: random ``root0``; ``V*.open1(root0)`` -> check ``c1`` (abort transcript on mismatch); uniform
-     ``w0, h0, q0, v0`` of the right shapes; ``V*.open2(...)`` -> check ``c2``.  Now ``(r1, r2)`` are known.
+  2. Dummy run: random ``root0``; ``V*.open1(root0)`` -> check ``c1`` (abort transcript on mismatch).  ``r1`` is
+     now open, so ``rho_lin, rc`` (hence the public ``beta``, ``rhs``) are known; send dummy messages from the
+     HONEST-OBSERVABLE distribution: ``w0, h0`` uniform, ``v0`` uniform on ``{v|_H = beta}``, ``q0`` uniform on
+     ``{sum_H q = rhs}`` (red-team-zk-2 G1: uniform ``v0, q0`` let a V* that applies the public checks separate the
+     worlds with advantage 1); ``V*.open2(...)`` -> check ``c2``.  Now ``(r1, r2)`` are known.
   3. Rewind V* to after step 0.  Derive ``r, rho_lin, rho_quad, rc`` and ``cols`` from ``(stmt, c, r1)`` /
      ``(stmt, c, r2)`` exactly as the verifier does.  Sample the fake tableau: witness rows uniform polynomials of
      degree < k, ``s_prox`` uniform; ``v`` uniform on ``{v|_H = beta}``, ``h`` uniform, ``q`` uniform on
      ``{sum_H q = rhs}``; solve the mask rows ``s_lin, s_qa, u_ca`` (Lagrange at the t opened points + uniform
      slack) so every column test holds at ``cols``; ``w := r . p' + s_prox`` (holds everywhere).  Commit, replay V*:
-     by binding it opens the same coins or aborts (repeat on abort, GK).
+     by binding it opens the same coins or aborts (repeat on abort, GK).  Against a V* that aborts on the replay
+     with probability ``p`` this takes ``1/(1-p)`` expected rewinds; ``max_rewinds = 8`` then outputs an abort
+     transcript, a simulation error of ``(1-p) p^8`` (red-team-zk-2 G2; the GK estimator would make it
+     expected-polynomial with no error -- not implemented).
   4. Output the transcript; the real ``verify`` (real hash) must accept it.
 
 Malicious verifiers modelled: ``AdaptiveVerifier`` (opens a slot to a value that depends on the prover's messages:
@@ -197,6 +203,25 @@ def _u32(x: torch.Tensor) -> np.ndarray:
     return x.cpu().numpy().astype(np.uint32)
 
 
+def _sample_v(beta: torch.Tensor, cfg: Config, device) -> torch.Tensor:
+    """``v`` uniform on the PUBLIC set ``{deg v < k, v|_H = beta}`` (the honest ``v`` is exactly this: ``alpha . U``
+    masked by ``Z_H s_lin`` with ``s_lin`` uniform of degree < t_pad)."""
+    v = torch.zeros((cfg.D, cfg.k), dtype=torch.int64, device=device)
+    v[:, :cfg.l] = intt(beta % P)
+    protocol._add_zh_times(v, _uniform((cfg.D, cfg.t_pad), device), cfg.l)
+    return v
+
+
+def _sample_q(rhs: torch.Tensor, cfg: Config, device) -> torch.Tensor:
+    """``q`` uniform on the PUBLIC set ``{deg q < q_len, sum_H q = rhs}`` (the honest ``q = Q + u`` with ``u`` uniform
+    zero-sum of degree < l + k - 1 is exactly this).  ``sum_H q = l (q_0 + q_l + q_2l)`` so ``q_0`` is solved for."""
+    l = cfg.l
+    q = _uniform((cfg.D, cfg.q_len), device)
+    q[:, 0] = ((rhs * modinv(l)) % P - q[:, l] - q[:, 2 * l]) % P
+    assert torch.equal(protocol._sum_over_H(q, l), rhs % P)
+    return q
+
+
 def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, oracle: ProgrammableOracle | None = None,
              max_rewinds: int = 8, rng: np.random.Generator | None = None) -> Proof | AbortTranscript:
     """The simulator of the module docstring.  No hash is programmed: ``oracle`` is accepted for interface
@@ -217,17 +242,24 @@ def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, orac
     r1, s1 = V.open1(root0)
     if len(r1) != COIN_BYTES or len(s1) != COIN_BYTES or coin_commit(r1, s1) != cc[0]:
         return AbortTranscript(1, ["coin commitments (V)", "root"], root0)
+    # ``r1`` is open, so the round-1 challenges (a function of ``(stmt, c, r1)`` alone) are known already; the dummy
+    # messages are drawn from the HONEST-OBSERVABLE distribution (red-team-zk-2 G1): ``w`` uniform (masked by
+    # ``s_prox``), ``h`` uniform (masked by ``s_qa``), ``v`` uniform on the public set ``{v|_H = beta}``, ``q`` uniform
+    # on the public set ``{sum_H q = rhs}``.  A V* applying the public checks to ``v, q`` behaves identically here
+    # and against the real prover.
+    r, rho_lin, rho_quad, rc = protocol._challenge1(stmt, b"", D, M, tb.L, tb.Q, device, l, cc, r1)
+    alpha, beta = protocol._alpha_beta(tb, rho_lin, pub, m, l, device)
+    ccf = chain_coefs(sys, layout, rc, y16_t)
     w0 = _u32(_uniform((D, k), device))
     h0 = _u32(_uniform((D, cfg.h_len), device))
-    v0 = _u32(_uniform((D, k), device))
-    q0 = _u32(_uniform((D, cfg.q_len), device))
+    v0 = _u32(_sample_v(beta, cfg, device))
+    q0 = _u32(_sample_q(ccf.rhs, cfg, device))
     r2, s2 = V.open2(root0, w0, h0, q0, v0)
     if len(r2) != COIN_BYTES or len(s2) != COIN_BYTES or coin_commit(r2, s2) != cc[1]:
         return AbortTranscript(2, ["coin commitments (V)", "root", "w, h, q, v"], root0)
 
     # ---- 3. rewind: coins known -> the challenges are known (functions of (stmt, c, r_i) alone); build a consistent
     # fake transcript for them.  Exactly the verifier's derivation, no seed of the simulator's choosing.
-    r, rho_lin, rho_quad, rc = protocol._challenge1(stmt, b"", D, M, tb.L, tb.Q, device, l, cc, r1)
     cols = protocol._challenge2(stmt, b"", np.zeros(1, "<u4"), np.zeros(1, "<u4"), t, n, None, None, cc, r2)
     for attempt in range(max_rewinds):
         cols_t = torch.tensor(cols, dtype=torch.int64, device=device)
@@ -243,10 +275,7 @@ def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, orac
         Uo = Uw.index_select(1, cols_t).to(torch.int64)                             # (m, t)
 
         # linear test: v uniform on {v|_H = beta}; s_lin fits v at the opened columns
-        alpha, beta = protocol._alpha_beta(tb, rho_lin, pub, m, l, device)
-        v = torch.zeros((D, k), dtype=torch.int64, device=device)
-        v[:, :l] = intt(beta % P)
-        protocol._add_zh_times(v, _uniform((D, tp), device), l)
+        v = _sample_v(beta, cfg, device)
         v_at = eval_on_coset(v, n)[:, cols_t]                                       # (D, t)
         need = ((v_at - protocol._combine(alpha, Uo)) % P).cpu().numpy()
         for d in range(D):
@@ -265,13 +294,8 @@ def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, orac
             coefs[mr["qa"].start + d] = torch.from_numpy(linalg.interp_with_slack(eta, [int(x) for x in need[d]], k, rng)).to(device)
 
         # chain test: q uniform on {sum_H q = rhs}; u_cb uniform, u_ca fits (q = Q + u_ca + x^k u_cb at the columns)
-        ccf = chain_coefs(sys, layout, rc, y16_t)
         R = ccf.coef.shape[1]
-        q = _uniform((D, cfg.q_len), device)
-        # l (q_0 + q_l + q_2l) = rhs  ->  q_0 := rhs / l - (q_l + q_2l)
-        linv = modinv(l)
-        q[:, 0] = ((ccf.rhs * linv) % P - q[:, l] - q[:, 2 * l]) % P
-        assert torch.equal(protocol._sum_over_H(q, l), ccf.rhs)
+        q = _sample_q(ccf.rhs, cfg, device)
         Rc = encode(ccf.coef.reshape(D * R, l), n).reshape(D, R, n)[:, :, cols_t]  # (D, R, t)
         Qo = ((Rc * Uo.index_select(0, ccf.rows)[None, :, :]) % P).sum(1) % P
         q_at = eval_on_coset(q, n)[:, cols_t]
