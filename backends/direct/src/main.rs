@@ -379,6 +379,8 @@ where
         FieldKind::BabyBear => 4,
     };
     let per_vu_cells = (steps * width) as u64;
+    // bench.contract NATIVE_REFERENCE: A100 dense BF16 tensor-core peak, 312 TFLOP/s; 2K flop per VU
+    let native_seconds_per_vu = 2.0 * 1536.0 / 312e12;
     let run_id = std::env::var("RESEARCH_RUN_ID").unwrap_or_else(|_| "local".into());
     let commit = option_env!("VERITY_COMMIT").map(|s| s.to_string());
     let field_name = match kind {
@@ -398,7 +400,10 @@ where
         json!({"name": "mem.peak_host_bytes", "value": peak_rss_bytes().unwrap_or(0), "unit": "B"}),
         json!({"name": "census.committed_elements", "value": committed_trace + quotient_cells, "unit": "count"}),
         json!({"name": "census.witness_elements", "value": committed_trace, "unit": "count"}),
-        json!({"name": "seconds_per_vu", "value": t_total / n_vus as f64, "unit": "s"}),
+        json!({"name": "vu.count", "value": n_vus, "unit": "count"}),
+        json!({"name": "vu.seconds_per_vu", "value": t_total / n_vus as f64, "unit": "s"}),
+        json!({"name": "vu.per_second", "value": n_vus as f64 / t_total, "unit": "1/s"}),
+        json!({"name": "overhead.vs_native_peak", "value": (t_total / n_vus as f64) / native_seconds_per_vu, "unit": "ratio"}),
         json!({"name": "direct.vus", "value": n_vus, "unit": "count"}),
         json!({"name": "direct.rows", "value": rows, "unit": "count"}),
         json!({"name": "direct.rows_real", "value": n_vus * steps, "unit": "count"}),
@@ -424,7 +429,7 @@ where
             "B": n_vus,
             "N_subbatches": 1,
             "scope": "vu",
-            "instances": {"dataset": "bench-instances/v1", "tier": "vu-k1536", "manifest_sha256": manifest_sha256(&root), "n": n_vus},
+            "instances": {"dataset": "bench-instances/v1", "tier": "vu-k1536", "range": [0, n_vus], "manifest_sha256": manifest_sha256(&root)},
             "proof_class": "NON_ZK_PROOF_DIAGNOSTIC",
             "authentication": "excluded",
             "zk_mode": "none",
