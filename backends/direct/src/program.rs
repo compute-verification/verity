@@ -242,11 +242,10 @@ fn group_max<C: Ctx>(ctx: &mut C, cands: &[C::V], tag: &str) -> (C::V, Vec<C::V>
     let mut sel = Vec::with_capacity(m + 1);
     for i in 0..=m {
         // sel[i] = [i == first index attaining E] over (cands..., floor)
-        let mut deps: Vec<&C::V> = refs.clone();
-        deps.push(&e);
-        let s = ctx.hint(&format!("{tag}.sel[{i}]"), &deps, &move |v| {
-            let e = v[m];
+        // computed from the candidates alone (as Python's gen), so a mutated E leaves the selectors honest
+        let s = ctx.hint(&format!("{tag}.sel[{i}]"), &refs, &move |v| {
             let opts: Vec<i128> = v[..m].iter().copied().chain(std::iter::once(FLOOR)).collect();
+            let e = opts.iter().copied().fold(FLOOR, i128::max);
             let first = opts.iter().position(|&c| c == e).unwrap();
             (first == i) as i128
         });
