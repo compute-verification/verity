@@ -1,0 +1,29 @@
+{
+ "vus": 2,
+ "steps": 3,
+ "unit_columns": 264,
+ "epilogue_columns": 16,
+ "cases": [
+  "honest",
+  "unit0_noninitial_state",
+  "epilogue_wrong_unit",
+  "epilogue_ovf_flip",
+  "swap_vu_epilogues",
+  "epilogue_one_zero",
+  "b1_honest",
+  "b1_wrong_word"
+ ],
+ "expected_accept": [
+  "honest",
+  "b1_honest"
+ ],
+ "expected_reject": [
+  "unit0_noninitial_state",
+  "epilogue_wrong_unit",
+  "epilogue_ovf_flip",
+  "swap_vu_epilogues",
+  "epilogue_one_zero",
+  "b1_wrong_word"
+ ],
+ "note_one_zero": "epilogue_one_zero is expected_reject IFF the verifier pins the one column; if ACCEPTED it is a critical forgery"
+}
