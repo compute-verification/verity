@@ -849,6 +849,63 @@ def _render_stats(root: Path) -> list[str]:
     return lines
 
 
+# --- hardware runs ---------------------------------------------------------------------------------------------------------------
+
+
+def record_hardware(root: Path | str, run_id: str, probe_results: Path | str, note: str | None = None,
+                    build_commit: str | None = None) -> dict:
+    """Append a ``tools/tc_probe --replay-instances`` run to ``manifest.json``'s ``hardware.runs``: the research run id, the
+    device identity, and the match counts of both tiers as the probe reported them.  Refuses a report whose array digests
+    were checked against another manifest than this one's files (``digests.mismatched`` non-empty) and a report from
+    a different dataset.  ``build_commit`` fills ``generated.git_head`` when the build ran from a research source archive
+    (no ``.git`` there, so the builder recorded null); it is the commit the archive was made from.  Returns the entry
+    written.  (This changes the manifest's own sha256, which is the one the contract's ``instances.manifest_sha256``
+    then names.)"""
+
+    root = Path(root)
+    manifest = json.loads((root / "manifest.json").read_text())
+    if build_commit is not None:
+        if manifest["generated"].get("git_head") not in (None, build_commit):
+            raise ValueError(f"manifest already names commit {manifest['generated']['git_head']}")
+        manifest["generated"]["git_head"] = build_commit
+        manifest["generated"]["git_head_source"] = "research run job.json: the commit the source archive was made from"
+    results = json.loads(Path(probe_results).read_text())
+    rep = results["instances_replay"]
+    if rep["dataset"] != manifest["dataset"]:
+        raise ValueError(f"report is for {rep['dataset']}, manifest is {manifest['dataset']}")
+    if rep["digests"]["mismatched"]:
+        raise ValueError(f"the replayed arrays did not match the pinned digests: {rep['digests']['mismatched']}")
+    expected_files = sum(len(manifest["tiers"][t]["files"]) for t in ("tu-k16", "vu-k1536"))
+    if rep["digests"]["checked"] != expected_files:
+        raise ValueError(f"the probe digest-checked {rep['digests']['checked']} arrays, the manifest lists {expected_files}")
+    tu, vu = rep["tu-k16"], rep["vu-k1536"]
+    entry = {
+        "run_id": run_id,
+        "tool": "tools/tc_probe/tc_probe.py --replay-instances",
+        "device": results["identity"],
+        "layout_check": results.get("layout_check"),
+        "arrays_digest_checked": rep["digests"]["checked"],
+        "tu-k16": {"instances": tu["instances"], "matched": tu["instances"] - tu["mismatches"], "mismatches": tu["mismatches"],
+                   "other_positions_nonzero": tu["other_positions_nonzero"]},
+        "vu-k1536": {"instances": vu["instances"], "accumulator_words_compared": vu["accumulator_words_compared"],
+                     "accumulator_matched": vu["accumulator_words_compared"] - vu["accumulator_mismatches"],
+                     "accumulator_mismatches": vu["accumulator_mismatches"], "y_compared": vu["y_compared"],
+                     "y_matched": vu["y_compared"] - vu["y_mismatches"], "y_mismatches": vu["y_mismatches"],
+                     "other_positions_nonzero": vu["other_positions_nonzero"], "epilogue": vu["epilogue"]},
+        "failures": results.get("failures", []),
+        "note": note,
+    }
+    manifest.setdefault("hardware", {})["runs"] = [*manifest.get("hardware", {}).get("runs", []), entry]
+    manifest["hardware"]["note"] = (
+        "sm_89 (RTX 4090, Ada) replay of every tu-k16 transition and every vu-k1536 chain, hardware accumulators carried; "
+        "Ada evidence for this dataset.  Not an sm_80 confirmation of these instances: the A100 measurement of the same "
+        "instruction (mma.sync.m16n8k16 bf16) matched sm_89 word for word on 25.7M elements (tools/tc_probe, WP1), which "
+        "is the evidence that the two architectures agree on the transition; this dataset was replayed on sm_89 only."
+    )
+    _write_json(root / "manifest.json", manifest)
+    return entry
+
+
 # --- seeds import ----------------------------------------------------------------------------------------------------------------
 
 
@@ -926,6 +983,12 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("--from", dest="src", required=True)
     i.add_argument("--out", default=str(DEFAULT_ROOT / "seeds"))
     i.add_argument("--repo-copy", default=str(REPO / G.REPO_FIXTURE_DIR))
+    h = sub.add_parser("record-hardware", help="append a tc_probe --replay-instances run (probe_results.json) to manifest.json")
+    h.add_argument("--root", default=str(DEFAULT_ROOT))
+    h.add_argument("--run-id", required=True)
+    h.add_argument("--report", required=True, help="the run's probe_results.json")
+    h.add_argument("--note", default=None)
+    h.add_argument("--build-commit", default=None, help="commit the build's source archive was made from (fills generated.git_head)")
     a = ap.parse_args(argv)
 
     if a.cmd == "build":
@@ -952,6 +1015,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "import-seeds":
         doc = import_seeds(Path(a.src), Path(a.out), Path(a.repo_copy) if a.repo_copy else None)
         print(f"{len(doc['seeds'])} seeds imported to {a.out}")
+        return 0
+    if a.cmd == "record-hardware":
+        entry = record_hardware(a.root, a.run_id, a.report, a.note, a.build_commit)
+        print(json.dumps(entry, indent=1))
         return 0
     return 2
 
