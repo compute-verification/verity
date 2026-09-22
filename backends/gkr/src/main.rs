@@ -609,8 +609,12 @@ fn main() {
             if !run_and_report(&inst, mode, &args, k, "vu", b) { std::process::exit(1); }
         }
         "negatives" => {
-            let ld = load_circuit(&arg(&args, "--circuit").unwrap());
-            let dir = arg(&args, "--dir").unwrap();
+            // `negatives FIXTURES/` (README form: FIXTURES/circuit.txt + FIXTURES/negatives/*.bin) or `--circuit C --dir D`.
+            let positional = args.get(2).filter(|a| !a.starts_with("--")).cloned();
+            let circuit = arg(&args, "--circuit").or_else(|| positional.as_ref().map(|d| format!("{}/circuit.txt", d.trim_end_matches('/'))))
+                .expect("negatives: pass FIXTURES/ or --circuit C --dir D");
+            let dir = arg(&args, "--dir").or_else(|| positional.as_ref().map(|d| format!("{}/negatives", d.trim_end_matches('/')))).unwrap();
+            let ld = load_circuit(&circuit);
             let mut n_ok = 0;
             let mut n_bad = 0;
             let mut entries: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().map(|e| e == "bin").unwrap_or(false)).collect();
