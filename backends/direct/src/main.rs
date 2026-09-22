@@ -1139,7 +1139,7 @@ fn vu_honest_v2(args: &[String]) {
         .enumerate()
         .map(|(i, vu)| {
             let (rows, qs, states, viol) = air_v2::vu_rows(kind, lay.width, &air_.lay.tables, vu);
-            let words: Vec<u64> = states.iter().map(|&s| air_v2::state_word(s)).collect();
+            let words: Vec<u64> = rows.iter().map(|r| air_v2::row_word(&air_.idx, r, kind)).collect();
             let mism = words.iter().zip(&recorded[i]).filter(|(a, b)| a != b).count();
             if mism > 0 {
                 for (j, (a, b)) in words.iter().zip(&recorded[i]).enumerate() {

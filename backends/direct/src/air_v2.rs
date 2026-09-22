@@ -198,9 +198,8 @@ pub fn vu_rows(kind: FieldKind, lay_width: usize, tables: &Arc<TableSet>, vu: &V
     (rows, qs, states, violations)
 }
 
-/// The FP32 accumulator word of a state (for the recorded-accumulator gate): `Pack` on `(s, e_hat, M, z = [M = 0])`
-/// with no overflow.  A state whose exponent exceeds `E_MAX` is the overflow word (the recorded accumulators of
-/// in-domain instances never reach it before the last unit).
+/// The FP32 word of a finite state `(s, e_hat, M)` (`Pack` with no overflow; the overflow word is not a state --
+/// the row's `pack.y_*` columns carry it, see `row_word`).
 pub fn state_word(st: (i128, i128, i128)) -> u64 {
     use crate::params::*;
     let (s, e, m) = st;
@@ -239,7 +238,7 @@ pub fn trace<G: PrimeField64 + Send + Sync>(air: &V2ChainAir, vus: &[VuIo], min_
         .zip(real_q.par_chunks_mut(steps * q))
         .zip(vus.par_iter())
         .map(|((chunk, qchunk), vu)| {
-            let (rows, qs, states, viol) = vu_rows(kind, lay_width, tables, vu);
+            let (rows, qs, _states, viol) = vu_rows(kind, lay_width, tables, vu);
             assert!(viol.is_empty(), "honest VU violates the integer checker: {:?}", &viol[..viol.len().min(3)]);
             for (r, row) in rows.iter().enumerate() {
                 for (j, &v) in row.iter().enumerate() {
@@ -247,7 +246,8 @@ pub fn trace<G: PrimeField64 + Send + Sync>(air: &V2ChainAir, vus: &[VuIo], min_
                 }
                 qchunk[r * q..(r + 1) * q].copy_from_slice(&qs[r]);
             }
-            states.iter().map(|&s| state_word(s)).collect()
+            // the FP32 accumulator word after each unit is the row's Pack output (incl. the overflow word)
+            rows.iter().map(|r| row_word(&air.idx, r, kind)).collect()
         })
         .collect();
     if !pad_part.is_empty() {
