@@ -174,6 +174,8 @@ fn row_coeffs(tr: &mut Transcript, rows: usize) -> Vec<Ext> {
 /// stream `bytes` (opened columns and paths).  Message order: w (k), q coefficients (2k-1), then columns+paths.
 pub fn prove_open(cm: &Committed, a: &[Ext], p: &Params, tr: &mut Transcript, out: &mut Vec<Ext>, bytes: &mut Vec<u8>) {
     let rows = cm.rows;
+    let mut a = a.to_vec();
+    a.resize(rows * p.k, Ext::ZERO);
     let r = row_coeffs(tr, rows);
     // w = Σ r_i X_i  (message form: X_i = codeword restricted to H = positions j·(n/k))
     let step = p.n / p.k;
@@ -202,6 +204,8 @@ pub fn prove_open(cm: &Committed, a: &[Ext], p: &Params, tr: &mut Transcript, ou
 }
 
 pub fn verify_open(root: &[u8; 32], rows: usize, a: &[Ext], b: Ext, p: &Params, tr: &mut Transcript, rd: &mut Reader, bytes: &[u8]) -> Result<(), String> {
+    let mut a = a.to_vec();
+    a.resize(rows * p.k, Ext::ZERO);
     let r = row_coeffs(tr, rows);
     let w = rd.take(p.k)?;
     let qc = rd.take(2 * p.k - 1)?;
