@@ -37,7 +37,16 @@ EXPORT_ROOT=${EXPORT_ROOT:-/workspace/vu-export$SUFFIX}
 export RUSTC_VERSION
 RUSTC_VERSION=$(rustc --version)
 COMMIT=${GKR_COMMIT:-$(git -C "$HERE" rev-parse --short HEAD 2>/dev/null || echo unknown)}
-UV="uv run --package verity-numerical python"
+# vy-cpu has a stale `uv` (no `run` subcommand) ahead of astral's on PATH: pick one that works, else install it
+UVBIN=""
+for c in "$HOME/.local/bin/uv" "/workspace/uvbin/uv" "$(command -v uv || true)"; do
+    if [ -n "$c" ] && [ -x "$c" ] && "$c" run --help >/dev/null 2>&1; then UVBIN=$c; break; fi
+done
+if [ -z "$UVBIN" ]; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null
+    UVBIN=$HOME/.local/bin/uv
+fi
+UV="$UVBIN run --package verity-numerical python"
 BIN=$CARGO_TARGET_DIR/release/verity-gkr
 FX=$HERE/fixtures
 [ "$FIELD" = "babybear" ] && FX=$FX/babybear
