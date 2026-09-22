@@ -92,12 +92,17 @@ def sha256_file(path: Path) -> tuple[str, int]:
 # ---- client -----------------------------------------------------------------------------------------------------------------------------
 
 class S3Remote:
-    def __init__(self, endpoint: str, bucket: str, access_key: str, secret_key: str, region: str = "auto", timeout: float = 120.0):
+    """`session_token` (a temporary credential's third part, `AWS_SESSION_TOKEN`) travels as `x-amz-security-token`, inside the
+    signed headers, on every request."""
+
+    def __init__(self, endpoint: str, bucket: str, access_key: str, secret_key: str, region: str = "auto", timeout: float = 120.0,
+                 session_token: str | None = None):
         u = urllib.parse.urlsplit(endpoint)
         if u.scheme not in ("http", "https") or not u.netloc:
             raise ValueError(f"endpoint must be an http(s) URL, got {endpoint!r}")
         self.scheme, self.host, self.base_path = u.scheme, u.netloc, u.path.rstrip("/")
         self.bucket, self.access_key, self.secret_key, self.region, self.timeout = bucket, access_key, secret_key, region, timeout
+        self.session_token = session_token or None
         # env-only proxy lookup: the default opener consults macOS SystemConfiguration (_scproxy), which leaves a system thread behind
         self._opener = urllib.request.build_opener(urllib.request.ProxyHandler(urllib.request.getproxies_environment()))
 
@@ -122,6 +127,8 @@ class S3Remote:
         else:
             payload_hash, size, data = EMPTY_SHA256, 0, None
         extra = dict(headers or {})
+        if self.session_token:
+            extra["x-amz-security-token"] = self.session_token
         if method in ("PUT", "POST"):
             extra["content-length"], extra["content-type"] = str(size), "application/octet-stream"
         url = urllib.parse.urlunsplit((self.scheme, self.host, uri_encode(path, keep_slash=True), canonical_query(query), ""))

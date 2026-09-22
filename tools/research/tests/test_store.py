@@ -665,6 +665,70 @@ def test_s3remote_against_a_fake_bucket(tmp_path):
         th.join(5)
 
 
+def test_s3remote_session_token_is_sent_and_signed(monkeypatch, tmp_path, env):
+    """A temporary credential's session token goes out as `x-amz-security-token` on every request and is part of SignedHeaders (so
+    the signature covers it, as SigV4 requires); without a token the header is absent.  The transport is faked: no network."""
+    import io
+    import urllib.request
+
+    sent: list[urllib.request.Request] = []
+
+    class Resp(io.BytesIO):
+        headers = {"Content-Length": "5", "ETag": '"x"'}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_open(req, timeout=None):
+        sent.append(req)
+        return Resp(b"")
+
+    r = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bucket", "ak", "sk", session_token="tok/EN+123==")
+    monkeypatch.setattr(r._opener, "open", fake_open)
+    r.head("objects/sha256/" + "0" * 64)
+    p = tmp_path / "x"
+    p.write_bytes(b"12345")
+    with r._request("PUT", "k", body=p):
+        pass
+    assert len(sent) == 2
+    for req in sent:
+        assert req.get_header("X-amz-security-token") == "tok/EN+123=="
+        auth = req.get_header("Authorization")
+        signed = auth.split("SignedHeaders=")[1].split(",")[0].split(";")
+        assert "x-amz-security-token" in signed and signed == sorted(signed)
+        # the signature is reproducible from the headers that were sent (token included), i.e. it really covers the token
+        method = "PUT" if req.data is not None else "HEAD"
+        sig_headers = {k.lower(): v for k, v in req.header_items() if k.lower() != "authorization"}
+        creq = remote_s3.canonical_request(method, "/bucket/" + ("k" if method == "PUT" else "objects/sha256/" + "0" * 64), {}, sig_headers,
+                                           sig_headers["x-amz-content-sha256"])
+        date = sig_headers["x-amz-date"]
+        sts = remote_s3.string_to_sign(date, f"{date[:8]}/auto/s3/aws4_request", creq)
+        assert auth.endswith("Signature=" + remote_s3.signature("sk", date[:8], "auto", sts))
+    sent.clear()
+    plain = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bucket", "ak", "sk")
+    monkeypatch.setattr(plain._opener, "open", fake_open)
+    plain.head("k")
+    assert sent[0].get_header("X-amz-security-token") is None and "security-token" not in sent[0].get_header("Authorization")
+
+    # load_remote: the token's env var is optional in the config (default AWS_SESSION_TOKEN) and optional in the environment
+    (env / "c.toml").write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://acct.r2.cloudflarestorage.com"\n'
+                                'access_key_id_env = "T_AK"\nsecret_access_key_env = "T_SK"\n')
+    monkeypatch.setenv("T_AK", "id")
+    monkeypatch.setenv("T_SK", "secret")
+    monkeypatch.delenv("AWS_SESSION_TOKEN", raising=False)
+    assert load_remote(env / "c.toml").session_token is None
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "t1")
+    assert load_remote(env / "c.toml").session_token == "t1"
+    (env / "c.toml").write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://acct.r2.cloudflarestorage.com"\n'
+                                'access_key_id_env = "T_AK"\nsecret_access_key_env = "T_SK"\nsession_token_env = "T_ST"\n')
+    assert load_remote(env / "c.toml").session_token is None, "a named env var that is unset means no token, not the default's value"
+    monkeypatch.setenv("T_ST", "t2")
+    assert load_remote(env / "c.toml").session_token == "t2"
+
+
 def test_s3remote_refuses_oversize_and_conflicts(monkeypatch, tmp_path):
     r = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bucket", "ak", "sk")
     assert r._path("objects/sha256/ab") == "/bucket/objects/sha256/ab" and r._path("") == "/bucket"

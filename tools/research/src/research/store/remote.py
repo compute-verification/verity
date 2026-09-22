@@ -9,6 +9,9 @@
 `FsRemote(root)` is a directory (also the test double).  `S3Remote` lives in `remote_s3.py`.  `load_remote()` reads
 `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`); no file, or no `[remote]` table, means no remote: the local store is the
 only replica and nothing is ever called PRESERVED.  The config names the ENV VARS that hold credentials; it never holds secrets.
+For `type = "s3"` the optional `session_token_env` (default `AWS_SESSION_TOKEN`) names the env var of a temporary credential's
+session token; when that variable is set the token is sent (and signed) with every request, when unset the key pair is a
+long-lived one and nothing changes.
 """
 from __future__ import annotations
 
@@ -123,5 +126,7 @@ def load_remote(path: Path | str | None = None) -> Remote | None:
         ak, sk = os.environ.get(r["access_key_id_env"]), os.environ.get(r["secret_access_key_env"])
         if not ak or not sk:
             raise ConfigError(f"{p}: credentials env vars {r['access_key_id_env']} / {r['secret_access_key_env']} are not set")
-        return S3Remote(endpoint=r["endpoint"], bucket=r["bucket"], access_key=ak, secret_key=sk, region=r.get("region", "auto"))
+        # a temporary credential (README §7) has a third part; its env var is optional in the config and optional in the environment
+        token = os.environ.get(r.get("session_token_env") or "AWS_SESSION_TOKEN") or None
+        return S3Remote(endpoint=r["endpoint"], bucket=r["bucket"], access_key=ak, secret_key=sk, region=r.get("region", "auto"), session_token=token)
     raise ConfigError(f"{p}: unknown [remote] type {t!r} (fs | s3)")

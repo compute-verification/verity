@@ -271,7 +271,11 @@ endpoint = "https://<account>.r2.cloudflarestorage.com"
 region = "auto"                   # optional
 access_key_id_env = "RESEARCH_R2_ACCESS_KEY_ID"        # names of env vars; the file never holds secrets
 secret_access_key_env = "RESEARCH_R2_SECRET_ACCESS_KEY"
+session_token_env = "AWS_SESSION_TOKEN"                # optional (this is the default): set when the key pair is a temporary credential
 ~~~
+
+A temporary credential (R2 temp-access credentials, STS-style) is a key pair plus a session token; when the named env var is set
+the token is sent as `x-amz-security-token` inside the SigV4 signed headers on every request, when unset nothing changes.
 
 No remote configured (no file, or no `[remote]` table) => the local store is the only replica and `where` says so; nothing
 fails, nothing is called PRESERVED (`verify` returns `preserved=False, reason="no remote configured"`; `push` refuses). A
