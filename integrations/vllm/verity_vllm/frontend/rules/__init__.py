@@ -3,7 +3,21 @@
 families (`family.py`) whose identity a derivation may claim after verified isomorphism.
 
 The rule modules import `..derive` (for `Ctx`, `refuse`, ...), and `derive` imports `rules.base`; the concrete
-rule sets are therefore resolved lazily (PEP 562) to keep the package import acyclic."""
+rule sets are therefore resolved lazily (PEP 562) to keep the package import acyclic.
+
+PROTOCOL SUMMARY (Build stage: the rules that turn vLLM's exported ATen graph into a Program over registered primitives)
+  Purpose: `DEFAULT_RULES` is the versioned rule set `verity_vllm.frontend.derive` applies node by node to the `torch.export(strict=False)`
+    graph of the vLLM model class: ViewRules (reference rearrangements, no gates), reference-mode and profile-mode OpRules / InPlaceRules /
+    StateRules (each emits a call of a REGISTERED definition, e.g. rules/vllm_bindings.py for the Triton / unified-attention custom ops),
+    PaddingRules, and FamilyRules that may claim a registered program identity after a verified isomorphism.
+  Inputs: the exported graph nodes + `Ctx` (mode, profile, kind vocabulary from rules/vocab.py: PROFILE_B1_EAGER | REFERENCE_CPU_F32).
+  Outputs: rule applications recorded in the Program's provenance (derive-report.json: rule, node, module path, emitted kind) and the
+    Program itself (descriptor.json.gz + instances.json.gz via derive_step); a node no rule accepts is `Unsupported(reason)`, never a gate.
+  Invariants: rules decide structurally (`applies(node, ctx)`), never by op name alone; exactly one applicable rule translates a node;
+    a refusal names one of derive.REASONS (mutation, decomposition, custom_op_without_binding, side_input, dynamic_control_flow,
+    numerics_unregistered, hidden_state, unsupported_view, shape, export, identity); the rule set + versions go into the Program's
+    provenance (`annotations["derive"]`), which `verity.ir.codec.program_digest` EXCLUDES -- the digest covers the dataflow only.
+  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)"."""
 
 from __future__ import annotations
 
