@@ -521,18 +521,22 @@ def build_tableau1(sysm: V2System, cfg: Config, lay: Layout, units, device) -> t
     W1[:lay.n_cols] = torch.from_numpy(np.ascontiguousarray(cols_np)).to(device)
     W1[lay.n_cols:lay.n_cols + lay.n_prods] = torch.from_numpy(np.ascontiguousarray(prods_np)).to(device)
     # multiplicities: keys of the active units' queries (integer keys, before reduction) -> entry indices
-    # the keys are integers (the key Lin evaluated over Z on the integer column values): tables with negative keys
-    # (e.g. E - cand) index by the integer, not its residue
+    # the key Lin's coefficients are stored mod p, so the key is its residue; the signed representative in
+    # (-p/2, p/2) is the integer key for every table (all keys are small)
+    counts_of = {name: np.zeros((sysm.tables[name].size,), dtype=np.int64) for name in sysm.table_order}
     for j, (tname, lins) in enumerate(sysm.lookups):
         td = sysm.tables[tname]
-        idx = units.keys[j] - td.lo
+        kk = units.keys[j] % P
+        kk = np.where(kk > P // 2, kk - P, kk)
+        idx = kk - td.lo
         ok = (idx >= 0) & (idx < len(td.index_of_key))
         ent = np.where(ok, td.index_of_key[np.clip(idx, 0, len(td.index_of_key) - 1)], -1)
         ent = ent[ent >= 0]
-        counts = np.bincount(ent, minlength=td.size)
+        counts_of[tname] += np.bincount(ent, minlength=td.size)          # every query into the table accumulates
+    for tname in sysm.table_order:
         base, nr = lay.mult_base[tname], lay.mult_rows[tname]
         full = np.zeros((nr * l,), dtype=np.int64)
-        full[:td.size] += counts
+        full[:sysm.tables[tname].size] = counts_of[tname]
         W1[base:base + nr] = torch.from_numpy(full.reshape(nr, l)).to(device)
     return W1
 

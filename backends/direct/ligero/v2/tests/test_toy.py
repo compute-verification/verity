@@ -50,7 +50,9 @@ def toy_system():
     dbl = Table("DBL", 0, 70, ("dbl",), lambda k: (2 * k,))   # 70 entries > l: 5 multiplicity rows
     (asq,) = ctx.lookup("sq", sq, a)
     (d,) = ctx.lookup("dbl", dbl, ys[1] - xs[1])
+    (asq2,) = ctx.lookup("sq", sq, ys[1] - xs[1])       # a second query into SQ (multiplicities accumulate)
     ctx.eq("sq_dbl", asq + d, a * a + 2 * a)
+    ctx.eq("sq_twice", asq2, asq)
     ctx.eq("y16", y16, ys[2])
     idx["__ovf"] = [idx["g0.ovf"]]
     idx["__sgn"] = []
