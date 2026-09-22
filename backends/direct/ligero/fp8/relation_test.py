@@ -245,3 +245,56 @@ def test_pack_public_rejects_low_bits():
     with pytest.raises(ValueError):
         pack_public(0x3F800001)
     assert pack_public(0x3F800000) == 0x3F800000 >> 10
+
+
+# --- the dump files (ligero-statement/v3 + ligero-proof/v1 + ligero-system/v1), cold from bytes -------------------------
+
+@pytest.mark.parametrize("zk,mode", [(False, protocol_mod.MODE_INTERACTIVE), (True, protocol_mod.MODE_FIAT_SHAMIR)])
+def test_dump_round_trip_v3_cpu(tmp_path, zk, mode):
+    """What ``bench_vu_fp8 --dump-dir`` writes, read back and verified by ``serialize.verify_files`` with no prover state:
+    the v3 statement carries the relation name and the FP8 word widths (1-byte operands, 4-byte public words), the proof
+    and system bytes round-trip, the file verifier accepts the honest files and rejects a flipped public word; a v2
+    (BF16) statement still reads as relation ``bf16``."""
+    from .. import serialize as ser
+    R = FP8ChainRunner("cpu", -128.0, zk=zk, mode=mode)
+    vus = instances_fp8(2, seed=5)
+    V = protocol_mod.Coins.sample() if R.interactive else None
+    proof, pubs, lay = R.prove_vus(vus, check=False, coins=V)
+    assert R.verify_vus(proof, pubs, lay, coins=V)[0]
+    st = ser._statement_of(R, pubs, lay, R.cfg(lay.l), 1)
+    assert st.relation == "fp8-ada" and (st.word_bytes, st.y_bytes) == (1, 4) and st.v3
+    raw = ser.statement_bytes(st)
+    assert raw[:8] == ser.STMT_MAGIC_V3
+    back = ser.read_statement(raw)
+    assert back.relation == "fp8-ada" and (back.word_bytes, back.y_bytes) == (1, 4)
+    assert (back.l, back.n, back.D, back.t, back.zk, back.mode, back.n_vus, back.steps) == (st.l, st.n, st.D, st.t, st.zk, st.mode, st.n_vus, st.steps)
+    assert np.array_equal(back.a, st.a) and np.array_equal(back.b, st.b) and np.array_equal(back.y16, st.y16)
+    assert int(st.a.max()) < 256 and int(st.y16.max()) >= 1 << 16              # 8-bit operands, 22-bit public words
+    pf2 = ser.read_proof(ser.proof_bytes(proof))                                # the proof round-trips (timings are not in the file)
+    assert pf2.root == proof.root and pf2.timings == {} and np.array_equal(pf2.opened, proof.opened)
+    S2 = ser.read_system(ser.system_bytes(R.sys))
+    assert S2["sys_id"] == protocol_mod.system_id(R.sys) and S2["m"] == R.sys.m
+    (tmp_path / "sub_00.stmt").write_bytes(raw)
+    (tmp_path / "sub_00.proof").write_bytes(ser.proof_bytes(proof))
+    if V is not None:
+        (tmp_path / "sub_00.coins").write_bytes(V.r1 + V.s1 + V.r2 + V.s2)
+        assert len((tmp_path / "sub_00.coins").read_bytes()) == 128
+    ok, why, _ = ser.verify_files(tmp_path / "sub_00.stmt", tmp_path / "sub_00.proof", "cpu", runner=R)
+    assert ok, why
+    ok, why, _ = ser.verify_files(tmp_path / "sub_00.stmt", tmp_path / "sub_00.proof", "cpu")     # runner from the file
+    assert ok, why
+    bad = bytearray(raw)                                                        # flip a bit of the last public word
+    bad[-1] ^= 1 << 3
+    (tmp_path / "bad.stmt").write_bytes(bytes(bad))
+    ok, why, _ = ser.verify_files(tmp_path / "bad.stmt", tmp_path / "sub_00.proof", "cpu", runner=R)
+    assert not ok, why
+    # a BF16 statement (2-byte words, no relation name) is still the v2 file; the FP8 runner refuses it by name
+    v2 = ser.Statement(st.l, st.n, st.D, st.t, st.target_log2, st.zk, st.t_pad, st.mode, st.n_proofs, st.n_vus, st.steps,
+                       np.zeros((st.l, 4), "<u2"), np.zeros((st.l, 4), "<u2"), np.zeros(st.l, "<u2"))
+    rv2 = ser.statement_bytes(v2)
+    assert rv2[:8] == ser.STMT_MAGIC and not v2.v3
+    b2 = ser.read_statement(rv2)
+    assert b2.relation == "bf16" and (b2.word_bytes, b2.y_bytes) == (2, 2) and b2.a.dtype == np.dtype("<u2")
+    (tmp_path / "v2.stmt").write_bytes(rv2)
+    ok, why, _ = ser.verify_files(tmp_path / "v2.stmt", tmp_path / "sub_00.proof", "cpu", runner=R)
+    assert not ok and "bf16" in why and "fp8-ada" in why, why

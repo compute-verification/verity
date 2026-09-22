@@ -34,6 +34,7 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--run-id", default=None)
     ap.add_argument("--total-vus", type=int, default=None)
     ap.add_argument("--row-negatives", type=int, default=60)
+    ap.add_argument("--dump-dir", default=None)          # where the proof files go (bench-vu); not a key param
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     out["cmd"] = argv[idx]
