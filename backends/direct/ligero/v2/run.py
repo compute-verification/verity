@@ -129,16 +129,10 @@ def _mutations(sysm: V2System, units: list[list[int]]) -> list[tuple[str, list[l
         if path.endswith("ovf"):
             mut(f"false {path}", last, ci[path], 1 - units[last][ci[path]])
             break
-    # BabyBear battery 'chain' class: the accumulator handed on as M + p (same residue: an in-field no-op unless the
-    # range rows bind the integer) -- applied to the integer column values before reduction
-    cp = [list(v) for v in units]
-    cp[u][ci["y.M"]] += P
-    cp[u + 1][ci["x.M"]] += P
-    out.append(("battery chain: M handed on as M + p", cp))
-    cp = [list(v) for v in units]
-    cp[u][ci["y.M"]] -= P
-    cp[u + 1][ci["x.M"]] -= P
-    out.append(("battery chain: M handed on as M - p", cp))
+    # BabyBear battery 'chain' class (the accumulator word handed on as c + p) is VACUOUS under v2: the state is
+    # chained as (s, e, M, z) field elements, never as one 33-bit word, so "M + p" is the same element (the same
+    # committed tableau, the same proof); the range/lookup rows bind M in [0, 2^24).  The 4 cases are recorded as
+    # not applicable (the same finding as b-air-v2's battery_adapter --v2).
     return out
 
 
