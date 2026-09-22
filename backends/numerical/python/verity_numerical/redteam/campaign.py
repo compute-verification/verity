@@ -356,6 +356,76 @@ def run_checker(out: Path, *, full: bool = False, seed: int = 0) -> H.Report:
     return rep
 
 
+def run_checker_v2(out: Path, *, full: bool = False, seed: int = 0) -> H.Report:
+    """Wave 3: the checker v2 arithmetisation (``--target checker-v2``).  Completeness, mutation and coordinated
+    attacks on every v2 hint column over Z, Goldilocks and Mersenne-31 (unit and VU); z3 per v2 gadget over the
+    integers and over Goldilocks / M31 (symbolic tables); the two-witness group step.  A SAT or an accepted
+    forgery with another output is a finding that kills the corresponding v2 idea."""
+    from verity_numerical.checker import REAL
+    from verity_numerical.checker.v2 import search as S2
+
+    from . import checker_target as CT
+
+    rng = random.Random(seed)
+    rep = H.Report(meta={"branch": _git("branch", "--show-current"), "commit": _git("rev-parse", "--short", "HEAD"),
+                         "z3": z3.get_version_string(), "python": platform.python_version(), "full": full,
+                         "target": "verity_numerical.checker.v2", "started": time.strftime("%Y-%m-%dT%H:%M:%S")})
+    fid = iter(range(1, 10_000))
+    nid = lambda prefix: f"{prefix}{next(fid)}"  # noqa: E731
+    z3_to = 600_000 if full else 60_000
+    cases = CT.step_cases(24 if full else 12, seed)
+    fields = [("Z", None), ("goldilocks", CT.GOLDILOCKS), ("m31", CT.M31)]
+    for fname, field in fields:
+        t = CT.bound_checker_target_v2(REAL, field)
+        f = rep.add(H.run_completeness(t, cases, fid=nid("C")))
+        f.reproducer = f"{HERE}/checker_target.py::bound_checker_target_v2"
+        if field == CT.M31 and f.status == "FAIL":
+            f.status, f.attack = "NOTE", "completeness (F4: a 32-bit word does not fit; expected for p < 2^32)"
+        sample = cases if full else cases[:36]
+        f = rep.add(H.run_mutations(t, sample, rng=rng, fid=nid("M")))
+        f.reproducer = f"{HERE}/harness.py::run_mutations(bound_checker_target_v2)"
+        f = rep.add(H.run_coordinated(t, sample[:12], rounds=600 if full else 150, rng=rng, fid=nid("X")))
+        f.reproducer = f"{HERE}/harness.py::run_coordinated(bound_checker_target_v2)"
+    golden, _ = C.golden_cases()
+    from verity_numerical.checker import Reject as _Reject
+    from verity_numerical.checker.reference import vu as _vu
+
+    chains = []
+    while len(chains) < (6 if full else 3):
+        picks = rng.sample(golden, 3)
+        x = (sum((list(c[1][1]) for c in picks), []), sum((list(c[1][2]) for c in picks), []))
+        try:
+            _vu(REAL, *x)
+        except _Reject:
+            continue
+        chains.append((f"vu3[{len(chains)}]", x))
+    for fname, field in fields[:2]:
+        tv = CT.checker_vu_target_v2(REAL, field)
+        f = rep.add(H.run_completeness(tv, chains, fid=nid("C")))
+        f.reproducer = f"{HERE}/checker_target.py::checker_vu_target_v2"
+        f = rep.add(H.run_mutations(tv, chains, rng=rng, fid=nid("M"), limit_per_case=None if full else 120))
+        f.attack = "mutation (v2 VU: 3 state-chained units + Pack + epilogue, every hint)"
+        f.reproducer = f"{HERE}/checker_target.py::checker_vu_target_v2"
+    st = {"sat": "SAT", "unsat": "UNSAT", "unknown": "UNKNOWN"}
+    for r in S2.integer_queries_v2(REAL, timeout_ms=z3_to):
+        status = st.get(r.status, r.status.upper())
+        if status == "SAT" and "without" in r.note:
+            status = "NOTE"          # the dropped predicate is load-bearing: the expected demonstration
+        rep.add(H.Finding(nid("Z"), f"checker-v2[{r.gadget},Z]", f"z3: {r.query}", status, r.seconds,
+                          detail={"model": r.model, "note": r.note}, reproducer="verity_numerical/checker/v2/search.py::integer_queries_v2"))
+    for r in S2.modular_queries_v2(REAL, timeout_ms=z3_to):
+        rep.add(H.Finding(nid("Z"), f"checker-v2[{r.gadget},{r.query.split(',')[0]}]", f"z3 over F_p: {r.query}",
+                          st.get(r.status, r.status.upper()), r.seconds, detail={"model": r.model, "note": r.note},
+                          reproducer="verity_numerical/checker/v2/search.py::modular_queries_v2"))
+    for r in (S2.z3_group_step_v2(REAL, timeout_ms=z3_to, concrete=S2.concrete_group_inputs_v2()),
+              S2.z3_group_step_v2(REAL, timeout_ms=z3_to * (3 if full else 1))):
+        rep.add(H.Finding(nid("Z"), "checker-v2[group_step,Z]", r.query, st.get(r.status, r.status.upper()), r.seconds,
+                          detail={"model": r.model}, reproducer="verity_numerical/checker/v2/search.py::z3_group_step_v2"))
+    rep.meta["finished"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    rep.write(out)
+    return rep
+
+
 def _replay_gadget(spec, field: int, model: dict) -> dict:
     """Run the gadget's own ``check`` on the SAT model's values in ``FieldCtx``: accepted, and the outputs mod p."""
     from verity_numerical.checker import REAL, Reject
@@ -403,13 +473,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--full", action="store_true")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--target", choices=("relation", "checker"), default="relation",
-                    help="relation: verity.ml.tc.relation (wave 1); checker: the WP2 checker contracts (wave 2)")
+    ap.add_argument("--target", choices=("relation", "checker", "checker-v2"), default="relation",
+                    help="relation: verity.ml.tc.relation (wave 1); checker: the WP2 checker contracts (wave 2); "
+                         "checker-v2: the v2 arithmetisation (wave 3)")
     a = ap.parse_args(argv)
+    runner = {"relation": run, "checker": run_checker, "checker-v2": run_checker_v2}[a.target]
     if a.out is None:
-        name = "redteam_relation.json" if a.target == "relation" else "redteam_checker.json"
+        name = f"redteam_{a.target.replace('-', '_')}.json"
         a.out = Path(run_dir) / name if run_dir else Path("backends/numerical/reports") / name
-    rep = (run if a.target == "relation" else run_checker)(a.out, full=a.full, seed=a.seed)
+    rep = runner(a.out, full=a.full, seed=a.seed)
     print(rep.table())
     print(rep.to_json()["counts"])
     if run_dir:
