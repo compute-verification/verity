@@ -19,10 +19,13 @@ src/research/
 ├── record.py       job.json v0.2 = the harness's v0.1 + tool, run, workload_fingerprint.expected, cost; v0.1 stays readable
 ├── result.py       the result.json contract (schema, run_id, fingerprint, validation, measurements, artifacts)
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
+├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
+├── store/          the evidence store (README.md there is the contract): tool, tools_registry, derivation, attempt, cli_prov (provenance)
+│                   + canon, local, index, remote, kinds, cli (storage)
 ├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json  (unmodified upstream)
 └── pods/           RunPod lifecycle (runpod.py), budget cap, memory guard, and pod-side shell guards under sh/           (unmodified upstream)
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
-tests/fixtures/     job_v0.1.json: a record as the harness alone writes it
+tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
 
 `telemetry/` and `pods/` were promoted verbatim from `veritor` `zk/campaign/`
@@ -43,10 +46,12 @@ uv sync                                  # from the verity root
 uv run pytest                            # all tests
 
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [harness flags] -- CMD...
+research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
 research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [...] -- CMD...
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [--refresh] [--all] [--json]
 research inspect RUN [--json]
+research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
 research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 ~~~
@@ -109,6 +114,42 @@ Python: `research.store.local.LocalStore` (`put_artifact`, `get_manifest`,
 `fetch`, `where`, `put_attempt`, `get_attempt`, `add_label`, `labels`,
 `snapshot`, `verify`, `push`, `reindex`, `.index`, `.remote`). Nothing is
 called PRESERVED without a remote; nothing in the store is ever overwritten.
+
+### The evidence store: `--tool`, `--scratch`, and the publish step
+
+`src/research/store/README.md` is the contract. What `research run` does:
+
+- Before launch it collects `research.env.conditions()` (source tree, runtime,
+  hardware, execution; `None` when unknown), resolves the harness `--input`
+  paths to content identity, and, with `--tool NAME` (registry in
+  `store/tools_registry.py`: `tc_probe`, `bench_vu`) or `--tool module:NAME`,
+  loads the `Tool` declaration, parses the workload argv into params, replaces
+  path-valued key params by the content they point at, hashes the declared
+  closure, and computes the derivation id and the `reuse_key` (`None` on a
+  dirty tree). All of it goes into `job.json` as the optional `store` section.
+  An unknown tool exits 2 before anything runs; any other failure in this step
+  is recorded in `store.error` and the workload still runs.
+- `--scratch NAME` (repeatable) creates `<store>/scratch/<reuse_key>/NAME/`
+  (`dirty-<run id>` on a dirty tree) and exports `TRITON_CACHE_DIR` for
+  `triton`, `RESEARCH_SCRATCH_<NAME>` otherwise. Cold per commit, on purpose.
+- `--campaign C` (default `$RESEARCH_CAMPAIGN`) is recorded in the conditions
+  and exported to the workload.
+- After the workload exits, whatever its status, `store.attempt.publish`
+  turns a valid `result.json` into an artifact (kind `result.kind`, default
+  `bench-result/v1`), its `artifacts` + `measurement_files` into one
+  `run-files/v1` tree, `events.jsonl` / `resources.jsonl` into `telemetry/v1`,
+  and writes the attempt manifest (write-once). One line reports it:
+  `research: attempt published: N outputs drv=... reuse=...`. A publish failure
+  never changes the run's exit status: it is written to
+  `store_publish_error.json` and `research data attempt publish RUN` retries
+  (also the way to publish old run dirs; `--all` sweeps a runs root).
+- With `--on`, the flags travel to the machine, which runs the same code in
+  the shipped source tree; a `git archive` has no `.git`, so the control side
+  sends the commit/tree it knew as `--source-identity`. The machine publishes
+  to its own `<root>/store`; `research data pull --from MACHINE RUN --project P`
+  copies the attempt and its outputs (sha256-verified) into the local store.
+- `research data lookup --tool T [--param k=v]... [--condition k=v]...
+  [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
 
 ## Not yet built, in order
 

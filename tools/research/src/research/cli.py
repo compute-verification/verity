@@ -1,6 +1,7 @@
 """`research` command line.
 
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
+  research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [...] -- CMD...
   research fetch <run-id> [--all]                # copy the machine's records (or every file, verified) into the local run dir
   research status [--runs-dir D] [--refresh] [--balance] [--all] [--json]
@@ -16,6 +17,10 @@ to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd l
 (--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).
 `--on <machine>` ships the tool (and, with --source, a clean git HEAD), stages the request, and has the machine claim the run id
 and start the same runner detached; see remote.py.  A machine must be listed in ~/.research/machines.toml for the project.
+`--tool` loads a store Tool declaration (research/store/tools_registry.py or dotted.module:NAME): before launch the runner records
+conditions, the closure manifest, content-resolved key params, the derivation id and reuse_key into job.json (`store` section);
+after the workload exits (any status) it publishes the attempt to the local store (research/store/README.md §4, §10).  `--scratch NAME`
+gives the workload a cache dir keyed by reuse_key.  `research data ...` is the store's own surface (research.store.cli / cli_prov).
 """
 from __future__ import annotations
 
@@ -99,6 +104,14 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--expect", action="append", default=[], metavar="K=V", help="expected workload fingerprint entry (recorded separately from what the workload observes)")
     ap.add_argument("--require-result", action="store_true", help="a zero exit without a valid result.json exits 65")
     ap.add_argument("--stage", default="run", help="stage name recorded in the job (default: run)")
+    ap.add_argument("--tool", default=None, metavar="NAME|module:NAME",
+                    help="store Tool declaration (research.store): closure manifest, key params, derivation and reuse_key are computed before launch, "
+                         "the attempt is published after")
+    ap.add_argument("--scratch", action="append", default=[], metavar="NAME",
+                    help="tool cache dir under <store>/scratch/<reuse_key>/NAME (cold per commit, on purpose); `triton` exports TRITON_CACHE_DIR, "
+                         "any other NAME exports RESEARCH_SCRATCH_<NAME>")
+    ap.add_argument("--campaign", default=os.environ.get("RESEARCH_CAMPAIGN"), help="campaign recorded in the attempt's conditions (default $RESEARCH_CAMPAIGN)")
+    ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
@@ -115,22 +128,31 @@ def cmd_run(argv: list[str]) -> int:
         a = hp.parse_args(["--attempt-dir", str(run_dir), "--stage", ns.stage, "--job", run_id, *harness_opts])
     except SystemExit:
         return 2
+    if ns.claimed and not os.environ.get("RESEARCH_STORE"):
+        os.environ["RESEARCH_STORE"] = str(root.parent / "store")     # machine side: the store lives beside the runs, <root>/store (what `data pull` reads)
+    try:
+        prep = _prepare_store(ns, a, command, run_id, run_dir)
+    except (ImportError, LookupError, TypeError) as e:
+        print(f"research run: --tool {ns.tool}: {e}", file=sys.stderr)
+        return 2
     run_dir.mkdir(parents=True, exist_ok=ns.claimed)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
     remote_info = json.loads(ns.remote_json) if ns.remote_json else None
     job = record.extend_job(build_job_from(a, command), run_id=run_id, runs_root=root, expected_fingerprint=_parse_expect(ns.expect),
-                            cost=cost, remote=remote_info)
+                            cost=cost, remote=remote_info, store=prep["section"])
     from .telemetry.job import write_json_atomic
     from .telemetry.run import run as harness_run
 
     write_json_atomic(run_dir / "job.json", job)
     os.environ.update(result.env_for(run_id, run_dir))
+    os.environ.update(prep["env"])
     print(f"research: run {run_id} -> {run_dir}", file=sys.stderr)
     try:
         rc = harness_run(a, command)
     finally:
         if ns.exclusive_lock:
             remote.release_exclusive(Path(ns.exclusive_lock).parent, run_id)
+    _publish_attempt(run_dir, prep)
     s = R.summarize(run_dir)
     line = f"research: run {run_id} {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
     if s["validation"]:
@@ -140,6 +162,93 @@ def cmd_run(argv: list[str]) -> int:
         print(f"research: --require-result: the workload exited 0 but result.json is {s['result']}; exiting {EX_DATAERR}", file=sys.stderr)
         return EX_DATAERR
     return rc
+
+
+def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[str], run_id: str, run_dir: Path) -> dict:
+    """Before launch: load the Tool (errors propagate: the user asked for it), collect conditions, resolve params and inputs to
+    content identity, compute the closure manifest, derivation id and reuse_key, create --scratch dirs.  Everything after the
+    Tool load is best effort: a failure is recorded in the `store` section, never a reason not to run."""
+    from . import env as E
+    from .store import attempt as A
+    from .store import derivation as D
+    from .store.tool import content_identity
+    from .telemetry.job import SECRET_KEY, redact_argv
+
+    source_root = Path(a.cwd or os.getcwd())
+    tool = None
+    if ns.tool:
+        from .store import tools_registry
+
+        tool = tools_registry.load(ns.tool, source_root)
+    argv_red, _ = redact_argv(command)
+    env_out: dict[str, str] = {}
+    if ns.campaign:
+        env_out["RESEARCH_CAMPAIGN"] = ns.campaign
+    conds = None
+    try:
+        hint = json.loads(ns.source_identity) if ns.source_identity else None
+        conds = E.conditions(run_dir=run_dir, project=ns.project, campaign=ns.campaign, exclusive=bool(ns.exclusive_lock), source_root=source_root, source_hint=hint)
+        if tool is not None:
+            conds.update(tool.tool_conditions(conds))
+            params, key = tool.resolve_params(command, source_root)
+            params = {k: ("<redacted>" if SECRET_KEY.search(k) and isinstance(v, str) else v) for k, v in params.items()}
+            params["argv"] = argv_red
+            closure = tool.closure_manifest(source_root)
+            ident = {"name": tool.name, "version": tool.version, "spec": tool.spec}
+            key_params, key_conditions = list(tool.key_params), list(tool.key_conditions)
+        else:
+            params, key, closure = {"argv": argv_red}, {}, {}
+            ident = {"name": Path(command[0]).name, "version": None, "spec": None}
+            key_params, key_conditions = [], []
+        inputs = {}
+        for spec in a.input:                         # harness --input name=path: a fetched artifact is an input; anything else enters the derivation
+            name, _, path = spec.partition("=") if "=" in spec else (Path(spec).name, "=", spec)
+            cid = content_identity(path, source_root)   # by content, as the key param `input.<name>` (inputs hold art: ids only)
+            if isinstance(cid, str) and cid.startswith("art:"):
+                inputs[name] = cid
+            else:
+                key[f"input.{name}"] = cid
+        drv = D.derivation_id(ident, inputs, key, conds, key_conditions)
+        rk = D.reuse_key(drv, conds)
+        sroot = A.store_root()
+        scratch = {}
+        for name in ns.scratch:
+            p = D.scratch_dir(sroot, rk, run_id, name)
+            scratch[name] = str(p)
+            env_out.update(D.scratch_env(name, p))
+        section = {"tool": ident, "derivation": drv, "reuse_key": rk, "key_params": key_params, "key_conditions": key_conditions, "params": params,
+                   "key_params_resolved": key, "inputs": inputs, "closure": closure, "conditions": conds, "scratch": scratch, "campaign": ns.campaign,
+                   "store_root": str(sroot)}
+    except Exception as e:  # noqa: BLE001
+        section = {"error": f"{type(e).__name__}: {e}", "tool": {"name": tool.name, "version": tool.version, "spec": tool.spec} if tool else None,
+                   "campaign": ns.campaign}
+        print(f"research run: store preparation failed ({section['error']}); running anyway, the attempt will be published from the records", file=sys.stderr)
+    return {"tool": tool, "conditions": conds, "section": section, "env": env_out}
+
+
+def _publish_attempt(run_dir: Path, prep: dict) -> None:
+    from . import env as E
+    from .store import attempt as A
+
+    conds = prep.get("conditions")
+    if conds is not None:
+        conds["exec.load_end"] = E.load_now()
+    out = A.publish(run_dir, tool=prep.get("tool"), conditions=conds)
+    if out.get("published"):
+        print(f"research: attempt published: {out['n_outputs']} outputs drv={out['derivation']} reuse={out['reuse_key'] or '-'}"
+              + ("  (already in the store)" if out.get("already") else ""), file=sys.stderr)
+    else:
+        print(f"research: attempt not published: {out.get('error')}  (store_publish_error.json in the run dir; `research data attempt publish` retries)",
+              file=sys.stderr)
+
+
+def _source_identity_hint(git_dir: Path) -> dict | None:
+    from . import env as E
+
+    src = E.source_conditions(git_dir)
+    if not src.get("source.commit"):
+        return None
+    return {"commit": src["source.commit"], "tree": src["source.tree"], "dirty": src["source.dirty"], "dirty_digest": src["source.dirty_digest"]}
 
 
 def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str]) -> int:
@@ -161,6 +270,17 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         harness_args += ["--expect", e]
     if ns.require_result:
         harness_args.append("--require-result")
+    # the store flags travel as `research run` flags: the machine-side runner computes derivation/reuse_key in the shipped source tree
+    if ns.tool:
+        harness_args += ["--tool", ns.tool]
+    for s in ns.scratch:
+        harness_args += ["--scratch", s]
+    if ns.campaign:
+        harness_args += ["--campaign", ns.campaign]
+    if ns.source:
+        hint = _source_identity_hint(Path(ns.source).expanduser())   # a shipped `git archive` has no .git: the machine gets what git knew here
+        if hint:
+            harness_args += ["--source-identity", json.dumps(hint, sort_keys=True)]
     try:
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],

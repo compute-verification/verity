@@ -109,17 +109,30 @@ Published by `research run` at completion or failure (both — a failed attempt 
   "source": {"commit": "<sha>", "tree": "<sha>", "dirty": false, "dirty_digest": null, "lockfiles": {"uv.lock": "<sha256>"}},
   "closure": {"tools/tc_probe/tc_probe.py": "<sha256>", "...": "path -> content sha256 of every declared source file"},
   "execution": {"start_utc": "...", "end_utc": "...", "wall_s": 12.3, "exclusive": false, "load_start": 1.2, "load_end": 1.1,
-                "host": "vy-g5", "project": "verity", "campaign": "r21-silicon", "run_dir": "/workspace/research/runs/r..."},
+                "host": "vy-g5", "project": "verity", "campaign": "r21-silicon", "run_dir": "/workspace/research/runs/r...",
+                "stage": "bench", "remote": {"machine": "vy-g5", "pod_id": "...", "root": "...", "source_sha": "..."} },
   "cost": {"provider": "runpod", "pod_id": "...", "rate_usd_per_hour": 2.69, "usd": 0.0092, "shared": false},
-  "status": {"state": "exited", "rc": 0, "class": null, "failure": null, "validation": "passed"},
+  "status": {"state": "done|failed|cancelled", "rc": 0, "class": "SUCCESS", "failure": "<failure.json why>", "validation": "passed",
+             "result": "valid (research/result/v0.1)|absent|invalid: ...", "timed_out": false},
   "outputs": {"result": "art:...", "run_files": "art:..."},
   "telemetry": {"events": "art:...|null", "resources": "art:...|null"}
 }
 ~~~
 
+`status.state` is status.json's state as recorded (`done` / `failed` / `cancelled`), `argv` and `params.argv` are the harness's
+redacted argv, `execution.run_dir` is where the attempt executed (the machine's run dir for a remote run). A harness
+`--input name=path` that points at a fetched artifact becomes `inputs.<name> = art:...`; any other `--input` enters the
+derivation by content as the key param `input.<name> = sha256:<hex>` (`inputs` holds `art:` ids only).
+
 Without a Tool declaration (`research run -- CMD` with no `--tool`): `tool = {"name": "<argv[0] basename>", "version": null}`,
-`key_params = []`, `key_conditions = []`, `inputs = {}`, so `derivation = drv(H(tool name, {}, {}, {}))` — a real but coarse
+`key_params = []`, `key_conditions = []`, so `derivation = drv(H(tool name, inputs, {}, {}))` — a real but coarse
 derivation; `reuse_key` is still computed (clean tree) so `lookup` is honest. `params` then holds `{"argv": argv}`.
+
+`research run` writes everything it computed before launch into job.json's optional `store` section (`tool {name, version, spec}`,
+`derivation`, `reuse_key`, `key_params`, `key_conditions`, `params`, `key_params_resolved`, `inputs`, `closure`, `conditions`, `scratch`,
+`campaign`, `store_root`); `publish` reads it back, so the manifest says what was requested, not what a re-parse would guess.
+For a run that predates the store, `conditions` are reconstructed from what job.json recorded (SKU, driver, hostname, commit) and
+everything else is `null`.
 
 `attempts/<id>.json` is written once. Publishing an id that exists with different content is an error (`AttemptExists`), never an
 overwrite; the same canonical content again is a no-op. The store validates the envelope only (`model.validate_attempt_doc`):
@@ -178,9 +191,11 @@ TC_PROBE = Tool(
 )
 ~~~
 
-Declarations live next to the tool they describe (`tools/tc_probe/tool.py`, `backends/.../tool.py`) and are found by
-`research run --tool <dotted.module:NAME>` or `--tool <name>` via the registry in `research/store/tools_registry.py`
-(a dict name -> dotted path; keep it tiny).
+Declarations live next to the tool they describe (`tools/tc_probe/tool.py`, `backends/direct/ligero/tool.py`; the example above is
+illustrative, the files follow the scripts' real argparse) and are found by `research run --tool <dotted.module:NAME>` or
+`--tool <name>` via the registry in `research/store/tools_registry.py` (a dict name -> dotted path; keep it tiny). A declaration
+imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls
+back to executing `<source root>/<module path>.py` by file when the module is not on sys.path).
 
 ### 6.2 Params
 
@@ -201,8 +216,14 @@ hw.family  hw.sku  hw.count  hw.vram_mb  hw.cpu  hw.hostname
 exec.exclusive  exec.load_start  exec.load_end  exec.project  exec.campaign  exec.runs_root
 ~~~
 
-`hw.family` comes from ONE SKU->family map inside `conditions()` (`h100`, `a100`, `l40s`, `rtx4090`, `rtx5090`, `b200`,
-`cpu`, `unknown`); nobody else normalises. Tools may add keys under `tool.<name>.<key>` via `Tool.conditions(env) -> dict`.
+`hw.family` comes from ONE SKU->family map inside `research/env.py` (`SKU_FAMILY`: `h100`, `h200`, `a100`, `l40s`, `l40`,
+`rtx4090`, `rtx5090`, `b200`, `a10`, `t4`; `cpu` when there is no GPU, `unknown` for a GPU the table does not know, `null` when the
+probe itself failed); nobody else normalises. Tools may add keys under `tool.<name>.<key>` via `Tool.conditions(env) -> dict`.
+`source.lockfiles.<name>` is one key per lockfile found at the source root (`uv.lock`, `Cargo.lock`), hashed from the files
+themselves; `env.source_identity(conds)` gives the nested `source` block used by the manifest and the reuse key. A shipped
+`git archive` has no `.git`: the control side passes the commit/tree/dirty it knew (`research run --source-identity`, added by
+`--on --source`) and the machine fills only what git could not tell it. `rt.torch` / `rt.triton` are the runner interpreter's
+distributions (`importlib.metadata`, never imported); a workload in another venv may differ.
 
 ### 6.4 Derivation id and reuse key
 
@@ -294,14 +315,16 @@ research data show ART|ATTEMPT|DRV [--json]   manifest (+ producing attempts) / 
 research data where ART [--json]              replicas: local / repo / remote (+ verified_utc)
 research data fetch ART [--to DIR]            materialise payload (file or tree); prints path
 research data verify ART [--json]             PRESERVED check against the remote (exit 1 unless PRESERVED)
-research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA]
-                                              -> attempts with that reuse_key (or --any-source: that derivation)
+research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA] [-- ARGV...]
+                                              -> attempts with that reuse_key (or --any-source: that derivation); ARGV after -- is
+                                                 parsed by the Tool exactly as `run` would, --param overrides; missing key conditions
+                                                 come from this machine's conditions(); --source-tree hashes that tree's lockfiles
 research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
 research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
 research data labels TARGET [--history] [--key K] [--by PAT] [--json]
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
-research data attempt publish RUN_DIR [--tool ...]   (what `research run` calls; also usable after the fact for old runs)
-research data pull --from MACHINE RUN
+research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs)
+research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
 research data reindex [--remote]
 research data sql "SELECT ..." [--json]      power-user escape hatch; read-only connection
 ~~~
@@ -323,6 +346,9 @@ At completion or failure, in the runner (local and machine side alike), `store.a
 3. The attempt manifest (§4) is written to `attempts/<run id>.json` and indexed.
 4. With a remote configured: blobs and manifests are uploaded and verified; `execution.preserved` is recorded per output.
 
+`publish` never raises into the runner: a failure is written to `<run dir>/store_publish_error.json` and reported on one line;
+the workload's exit status stands. It is idempotent (an attempt already in the store is a no-op) and refuses a run whose
+status.json is missing or not terminal (`--force` overrides, for the CLI only).
 `research fetch RUN --all` continues to work as before; `research data pull` complements it by moving store objects.
 Active run state stays in the run registry; the store only ever sees completed/failed attempts.
 
