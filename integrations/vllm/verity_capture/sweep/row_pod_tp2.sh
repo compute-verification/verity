@@ -11,7 +11,8 @@
 # PROVENANCE [R19 lane tp2]: the stage sequence is veritor lane/r17-tp's evidence-dir orchestrators, verbatim in flags --
 #   out/gen/sweep/evidence/tp/olmoe-1b-7b__...__tp2__b8.../r17int6/run_olmoe_b8.sh   (#70: MML 1152, max_num_batched_tokens 3763, GPU_UTIL 0.6,
 #     B8, derive per rank --tp 2 --rank r, tp2_capture --record-collectives + --no-observer control, tp2_match --arm check, required_manifest
-#     build-global --programs-root per rank --workload-digest per rank, tp2_commit --value-check --replay-workers)
+#     build-global --programs-root per rank --workload-digest per rank, tp2_commit --value-check --replay-workers, and its env
+#     VERITY_WINDOW_MB=256 VERITY_WINDOW_SLOTS=8 VERITY_RETAIN=host = P0 windowed staging -- F-r19-tp2-2: the R19 recipe post omitted it)
 #   out/gen/sweep/evidence/tp/qwen3-30b-a3b__...__tp2__b2.../r17int9/scripts/run_qwen3_int6.sh (#75: B2, shapes LP1024_T127 + LP9_T1,
 #     max_num_batched_tokens 2048, Commit GPU util 0.80; the D90 fold Match tp2_fold_match --profile <rank profile> per lane qwen3's
 #     R19 recipe, board 06:02Z)
@@ -226,6 +227,15 @@ if [[ ",$STAGES," == *,commit,* ]]; then
   if [ $rc_man -ne 0 ] || [ "$(jq_ "$D/manifest.json" "d.get('complete')")" != True ]; then
     verdict commit FAIL "required manifest not complete (rc=$rc_man): ${MAN:-no manifest.json} (manifest.log)"; tl stage.commit end ok=false; tl row end ok=false stopped_at=commit; exit 13
   fi
+  # [R19 tp2 F-r19-tp2-2] the P0 WINDOWED device staging of r17int6 (run_olmoe_b8.sh line 42: VERITY_WINDOW_MB=256 VERITY_WINDOW_SLOTS=8
+  # VERITY_RETAIN=host) and row_pod.sh's REL-11 default (--window-mb/--window-slots/--retain, flags tp2_commit does not have: it reads the env
+  # in native_collect.py:712 / native_host.py:870).  Without it size_arena preallocates ONE prefill-sized block = 69.18 GiB for #70
+  # (B8 x 1024-token worst-case FA2 M1 stream, 37 GiB hidden) and refuses on the 44 GiB L40S before any step (run r20260922-075535-ef8e).
+  # Opt out per row: WINDOW_MB=0 (per-step blocks), RETAIN=device.
+  WINDOW_MB=${WINDOW_MB:-256}; WINDOW_SLOTS=${WINDOW_SLOTS:-8}; RETAIN=${RETAIN:-host}
+  [ "$WINDOW_MB" -gt 0 ] && export VERITY_WINDOW_MB=$WINDOW_MB VERITY_WINDOW_SLOTS=$WINDOW_SLOTS
+  export VERITY_RETAIN=$RETAIN
+  log "commit staging: window_mb=$WINDOW_MB slots=$WINDOW_SLOTS retain=$RETAIN"
   CMD_K=("$PY" -m verity_capture.bench.tp2_commit --workload "$WL" --case "$ROLE" --tp "$WORLD" --committer native_collect_v2b --hidden-so "$HIDDEN_SO" --openings 64
          --max-num-seqs "$BATCH" --engine-arg "gpu_memory_utilization=$COMMIT_GPU_UTIL" "${ENGINE[@]}" --build-rank0 "$B/rank0" --build-rank1 "$B/rank1"
          --required-manifest "$D/manifest.json" --match-dir "$M" --checkpoint-dir "$CK" --checkpoint-model "$REPO"
