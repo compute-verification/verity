@@ -287,7 +287,8 @@ impl Prim for IntCtx {
     }
     fn eq_raw(&mut self, name: &str, a: &IVal, b: &IVal) {
         self.n_constraints += 1;
-        if a.v != b.v {
+        // field semantics (the exclusion inverses are field elements); every other honest value is small
+        if modp(a.v) != modp(b.v) {
             self.violations.push(format!("{name}: {} != {}", a.v, b.v));
         }
     }

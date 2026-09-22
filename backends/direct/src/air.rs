@@ -1,7 +1,7 @@
 //! The one-row-per-unit AIR, the trace builder, and a concrete field evaluator of the constraints.
 
 use p3_air::{Air, AirBuilder, BaseAir};
-use p3_field::{AbstractField, Field, PrimeField64};
+use p3_field::{AbstractField, PrimeField64};
 use p3_goldilocks::Goldilocks;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::Matrix;

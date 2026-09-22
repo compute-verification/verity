@@ -136,9 +136,6 @@ pub struct UnitIo {
     pub y: u64,
 }
 
-fn bit() -> (i128, i128) {
-    (0, 2)
-}
 fn bits(n: i128) -> (i128, i128) {
     (0, 1 << n)
 }
