@@ -161,7 +161,7 @@ impl Backend for BabyBear5Backend {
         ConfigBb5::new(PcsBb5::new(log_n, Dft {}, val_mmcs, fri_config))
     }
     fn challenger() -> ChallengerBb {
-        ChallengerBb::from_hasher(vec![], ByteHash {})
+        RttChallenger::new(SerializingChallenger32::from_hasher(vec![], ByteHash {}))
     }
     fn challenge_bits() -> usize {
         155
