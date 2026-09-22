@@ -55,6 +55,22 @@ Whole sumcheck, all rounds, each round replayed as a CUDA graph (device time, no
 | 3 | 3.71 | 9.08 | 1.63% | 1.47e11 | 5.3 GB | 0.112 + 1.64 | 257 / 156 ms | **62.7 us** (38.2) |
 | 4 | 7.30 | 23.37 | 0.85% | 1.97e11 | 5.0 GB | 0.325 + 1.63 | 729 / 436 ms | 178 us (106) |
 
+**A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6 cu124, Triton 3.2; run `r20260922-073828-153f`, same
+flags, 36 tests bit-exact on CUDA; `backends/numerical/reports/anchor_a100.md`).  Whole sumcheck, CUDA-graphed rounds:
+
+| k | 2^24 ms | 2^26 ms | frac. A100 INT8 peak (2^26) | peak mem (2^26) | fit ns/elem + ms | per batch (padded / un-padded) | per VU | vs H100 |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 16.15 | 50.22 | 2.71% | 34.1 GB | 0.704 + 3.25 | 1,578 / 943 ms | 385 us | 0.62x |
+| 1 | 10.63 | 30.73 | 2.59% | 17.2 GB | 0.415 + 3.03 | 937 / 563 ms | 229 us | 0.60x |
+| 2 | 7.42 | 20.21 | 2.55% | 8.9 GB | 0.262 + 2.71 | 596 / 360 ms | 146 us | 0.58x |
+| 3 | 6.96 | 16.58 | 2.83% | 4.5 GB | 0.208 + 2.81 | 476 / 289 ms | **116 us** | 0.54x |
+| 4 | 18.27 | 64.95 | 0.97% | 4.1 GB | 0.928 + 2.69 | 2,071 / 1,234 ms | 506 us | 0.35x |
+
+The plain k = 0 sumcheck scales exactly with bandwidth (0.62x the H100 = 2,039 / 3,350): it is HBM-bound on both cards.  The
+packed k = 3 rounds scale a little worse (0.54x) -- their base x base Hadamards are INT32 work, and the A100 has 0.47x the
+H100's INT32 rate -- so packing saves 3.3x on the A100 (3.8x on the H100).  k = 4's two-pass path is 0.35x.  The fixed
+per-sumcheck intercept is 2.7-3.3 ms on the A100 vs 1.6-1.7 ms on the H100 (launch/tail latency at 1.41 GHz).
+
 * "per batch" = the six c-round sumchecks of the batch (tables `393,216 x 2^read`, `LAYER_READ_LOG2`) from the linear
   fit over t = 2^20..2^26; "per VU" = per batch / 4096; un-padded widths (`LAYER_WIDTHS`) in parentheses.
 * **Measured saving of packing on the dominant bucket: k = 3 vs k = 0 = 3.79x (padded), 3.72x (un-padded).**  The MAC
@@ -99,6 +115,73 @@ Final entries (run r20260922-062108-4b25): `plain c-round sumcheck k=0, fused Tr
 238 us/VU; `packed sumcheck k=3: 3.8x on the dominant bucket (measured)` -- component, 62.7 us/VU, breakthrough;
 `A re-priced w/ packed sumcheck, model` -- `ARITHMETIC_DIAGNOSTIC`, scope vu, overhead 1.07e7, omitted: every modelled
 bucket.  Earlier entries from r20260922-055336-4080 (509 / 247 us per VU, 2.94e7) are the pre-fusion state.
+
+## Second pass (lane `a-packed2`): 32-bit Montgomery, direct 2^28, fused k = 4, logUp
+
+Full write-up: `backends/numerical/reports/a_kernels_h100.md`.  Runs (all vy-g4 / H100):
+
+| run | what |
+|---|---|
+| r20260922-064917-c293 | Montgomery kernels, k = 0..4, t <= 2^26 (36 CUDA tests bit-exact) |
+| r20260922-065412-73be | **direct 2^28** (one full layer table), k = 2, 3, 4: 19.78 / **17.69** / 30.96 ms |
+| r20260922-073439-1f15 | **logUp GKR at the full-VU shape** (393,216 x 306 lookups, 65,536-row table): k = 3 **427 ms = 104 us/VU**, k = 0 447 ms |
+| r20260922-073702-b11f | fused (split) k = 4 vs k = 3: 2^26 7.57 vs 6.13 ms, 2^28 22.88 vs 17.61 ms. **k = 4 fused recovers 1.3x (9.25 -> 7.57) but still loses; default stays k = 3**; kept as a memory lever (11.0 vs 18.2 GB at 2^28) |
+
+| **A100** r20260922-075147-91a5 (anchor-a100 lane, NVIDIA A100-SXM4-80GB, same flags; 46 CUDA tests bit-exact) | Montgomery 2^26: k = 0..4 **21.4 / 17.8 / 11.2 / 11.5 / 15.2 ms** (0.52-0.61x the H100 = the bandwidth ratio 0.61); direct 2^28 k = 2, 3, 4: 34.3 / **31.9** / 43.8 ms (0.55x; 5.9% of the A100 INT8 peak) = **64.3 us/VU, 263 ms per six-layer batch** padded (156 un-padded); logUp GKR full-VU k = 3 **412 ms = 101 us/VU** (H100 427: 1.04x -- launch-bound, the card does not matter yet), k = 0 478 ms. Table: `backends/numerical/reports/anchor_a100.md` section 4b |
+
+The k-table before -> after Montgomery (2^26 ms; per VU = six padded layers / 4096): k = 0 30.9 -> 12.6 (238 -> 90 us), k = 1 18.5 -> 10.7,
+k = 2 11.7 -> 6.4, **k = 3 9.08 -> 5.97 (62.7 -> 37.5 us; 35.6 us from the direct 2^28 point)**, k = 4 23.4 -> 9.25.
+3.35% of INT8 peak and 3.3x the HBM floor at 2^28: still SIMT-bound (limb decomposition + `tl.join` feeding `tl.dot`).
+
+### logUp on the GPU (`logup_gpu.py`, `logup_reference.py`, `logup_bench.py`)
+
+The whole fractional GKR for one table: `bincount` multiplicities; the level below the leaves formed straight from the base
+queries (`leaf_level`), the tree by `tree_level` (levels stored de-interleaved `[evens | odds]` so a level *is* the
+`p0, p1, q0, q1` operand of the sumcheck below it); the 2^26-pair leaf level with **k packed base rounds** on the witness
+(`A_x = 2z - s_x`, `B_x = z^2 - z s_x + pi_x`, `s = w_e + w_o`, `pi = w_e w_o` base: `logup_ip_{half}` = `half^2` Hadamards
++ `half` linear rows per `x`), the table region on the generic kernel with its own eq slice, the padding analytic; all
+other levels on the generic four-table kernel `logup_ext_ip` (`A = p0 q1 + p1 q0`, `B = q0 q1` per pair and `x`, 144 limb
+rows), `reduce_contract`, `finish_round` with `coeff = [1, lambda]`, `fold_ext4`; levels under 128 pairs per chunk in one
+fused SIMT kernel (`logup_small_round`).  Bit-exact against `logup_reference.py` (`logup.rs` with low-bit-first binding).
+
+Split at k = 3 (427 ms): histogram 3.7, tree values 12.6, leaf level 8.2 (packed) + 2.4 (fold_k) + 29.4 (23 extension
+rounds), level 25 48, level 24 37, ..., the 20 smallest levels 171 ms.  **Launch-bound**: ~1 ms of Python/Triton launch
+overhead per round x 351 rounds; the device work is ~90-200 ms.  Peak memory 12.5 GB.
+
+### For a-gpu: `kernels.py`
+
+`from backends.gkr.packed import kernels` (or `from packed import kernels` with `backends/gkr` on `sys.path`).  Everything
+that crosses the module boundary is **plain** (not Montgomery), `torch.int32`, values in `[0, p)`:
+
+* base table `(t,)`; extension table `(t, 6)` **interleaved** (row = the 6 coefficients of one element).  If your prover is
+  planar `(6, t)`, transpose at the boundary (`x.t().contiguous()`).  `X^6 = W` (`reference.W`), BabyBear `p = 2^31 - 2^27 + 1`.
+* host-side extension elements are `reference.Ext` = 6-tuples of Python ints.
+* binding order: round `i` binds bit `i - 1` of the table index (pairs `(2y, 2y+1)`); `eq(gamma, b)` has `gamma[0]` on bit 0.
+  `logup.rs` binds the top bit first; same protocol under bit-reversal (see `logup_reference.py`'s docstring).
+
+~~~python
+from backends.gkr.packed import kernels as K
+kern = K.make_kernel("cuda")                                   # once; compiles the generated Triton module on first use
+rounds, rs, (eq_at_rs, g_at_rs, h_at_rs) = K.sumcheck_layer(kern, gammas, g, h, k=3, challenger=fs_challenge)
+                                                               # g, h: (2^n,) int32; challenger(i, S_i) -> r_i (Fiat-Shamir here)
+gE = K.fold(kern, g, rs[:3])                                   # base (t,) -> extension (t/8, 6) by eq(rs) (fold_k)
+prover = K.LogUpProver("cuda", k=3)
+tr, claim, timing = K.logup_prove(prover, w, table, z, coins)  # w: (Nw,) int32 queries in natural order; coins.next() -> Ext
+S = K.logup_round(prover, T4, rho, rs, i, lam)                 # one generic level round on T4 (4, t_i, 6) = p0, p1, q0, q1
+T4 = K.logup_fold(prover, T4, r)
+pq = K.leaf_level(prover, w, z, n); pq = K.tree_level(prover, pq)
+~~~
+
+Shapes: `sumcheck_layer` needs `t` a multiple of `2^k . 8192` for the fused packed rounds (`k1_log2` lowers the 8192);
+`logup_prove` needs `Nw` and `Nt` aligned so every region (witness / table / pad) is a multiple of `2^(k+1) . 128` leaves
+(`393,216 x 306` and `65,536` are).  The coins object is a stand-in for the verifier: `lambda_0`, then per level
+`r_1..r_k, mu, lambda` -- replace `coins.next()` with the sponge; the transcript (`tr.q_root`, per level `rounds` (4 `Ext`
+each) and `vals = [p0, p1, q0, q1]`) is what `logup.rs` sends, modulo the bit-reversal convention.  Test vectors:
+`python -m backends.gkr.packed.kernels --vectors` (reference SHA-256s of two fixed cases: `sumcheck_t4096_k3_seed7` =
+`a6a12f3b...1afd780`, `logup_Nw12288_Nt2048_seed1` = `2a8fe70f...bee37bda`; the GPU path is checked message
+by message in `tests/test_kernel_agreement.py` and `tests/test_logup_gpu.py` (`PACKED_DEVICE=cuda pytest backends/gkr/packed/tests`).
+
+Launch overhead is the a-gpu prover's problem to solve (it owns the round loop): ~10 launches + 1 H2D per round here.
 
 ## Not done / next
 

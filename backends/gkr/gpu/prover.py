@@ -1,0 +1,555 @@
+"""Candidate A end to end on the device (``backends/gkr/src/main.rs`` ported to torch over BabyBear^6).
+
+Instance = segments (data-parallel circuits over ``units`` rows of committed columns) + optional VU chain
+(PROTOCOL.md §12).  Proof = Ligero root, the extension messages, the Ligero opening.  Order of the protocol
+(identical to the CPU crate, only the field and the transcript hash-domain differ):
+
+  commit X = [segment columns row-major..., table multiplicities...] (challenge-independent)
+  transcript preamble (circuit hashes, unit counts, root, chain public words); table challenges (z, β);
+  per segment: the output-layer point ``z0`` and copy point ``γ``
+  per table: LogUp fractional-sum GKR                          -> leaf claim
+  per segment: GKR layers from the assertions down to the columns  -> two input claims
+  ρ_1..ρ_m, ρ_geo: every residual claim as one linear functional ⟨a, X⟩ = b (input claims, LogUp leaves, chain)
+  Ligero opening of ⟨a, X⟩
+
+``mode`` ``pcs`` is the proof; ``clear`` is the ARITHMETIC_DIAGNOSTIC verifier reading the columns (no commitment).
+"""
+from __future__ import annotations
+
+import hashlib
+import time
+from dataclasses import dataclass, field
+
+import torch
+
+from . import field as _field
+from . import gkr, ligero, logup
+from .circuit import (
+    Circuit,
+    Layer,
+    Query,
+    Table,
+    eval_wires,
+    log2ceil,
+    masked_wires,
+    pad_rows,
+)
+from .field import (
+    DEG,
+    ONE,
+    ZERO,
+    Ext,
+    Limbs,
+    P,
+    W,
+    e_add,
+    e_mul,
+    e_scale,
+    e_sub,
+    eq_table,
+    ext_mul,
+    ext_scale,
+    mm_mod,
+    py_ext,
+    t_ext,
+    t_exts,
+)
+from .gkr import LayerClaim, Reader, VerifyError
+from .logup import LeafClaim
+from .transcript import Transcript
+
+DOMAIN = b"verity-gkr/candidate-a/v1/babybear6"
+
+
+@dataclass
+class Segment:
+    name: str
+    circ: Circuit
+    layers: list[Layer]
+    cols: torch.Tensor          # (units, ncols) int64 canonical, on the device
+    hash: bytes
+
+    @property
+    def units(self) -> int:
+        return self.cols.shape[0]
+
+    @property
+    def ncols(self) -> int:
+        return self.circ.ncols
+
+
+@dataclass
+class Chain:
+    """The word chain on limbed words: ``col_c[j]`` ↔ ``col_y[j]`` ↔ ``epi_y32[j]`` per limb ``j`` (PROTOCOL §12 with
+    the FP32 word as two 16-bit limbs, rule LIMB16)."""
+    steps: int
+    col_c: list[int]
+    col_y: list[int]
+    epi_y32: list[int]
+    epi_y16: int
+    public_y16: list[int]
+
+    @property
+    def limbs(self) -> int:
+        return len(self.col_c)
+
+
+@dataclass
+class Instance:
+    segs: list[Segment]
+    chain: Chain | None = None
+
+    @property
+    def tables(self) -> list[Table]:
+        return self.segs[0].circ.tables
+
+    @property
+    def device(self):
+        return self.segs[0].cols.device
+
+    def vus(self) -> int:
+        return self.segs[0].units // self.chain.steps if self.chain else 0
+
+
+@dataclass
+class Proof:
+    root: bytes
+    msgs: list[Ext]
+    opening: ligero.Opening | None
+
+    def nbytes(self) -> int:
+        return (32 if any(self.root) else 0) + 24 * len(self.msgs) + (self.opening.nbytes() if self.opening else 0)
+
+
+@dataclass
+class Stats:
+    t_commit: float = 0.0
+    t_lookup: float = 0.0
+    t_witness_wires: float = 0.0
+    t_arith: float = 0.0
+    t_open: float = 0.0
+    proof_elems: int = 0
+    slots: int = 0
+    depth_circuit: int = 0
+    depth_lookup_max: int = 0
+    lookup_dims: list = field(default_factory=list)
+    committed_elements: int = 0
+    ligero_rows: int = 0
+    linkage_constraints: int = 0
+    peak_mem: int = 0
+
+    def sequential_depth(self, pcs: bool) -> int:
+        return 1 + max(self.depth_circuit, self.depth_lookup_max) + (2 if pcs else 0)
+
+
+def _sync(dev):
+    if dev.type == "cuda":
+        torch.cuda.synchronize(dev)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Queries / transcript / layout
+# ---------------------------------------------------------------------------------------------------------------------
+
+def table_queries(circ: Circuit, name: str) -> list[Query]:
+    return [q for q in circ.queries if q.table == name]
+
+
+def seg_query_values(inst: Instance, name: str) -> list[torch.Tensor]:
+    """Per segment the ``(units · q_t, cols)`` matrix of query tuples in leaf order (unit-major)."""
+    out = []
+    for s in inst.segs:
+        qs = table_queries(s.circ, name)
+        if not qs:
+            out.append(None)
+            continue
+        vals = torch.stack([logup.query_values(q, s.cols) for q in qs], dim=1)       # (units, q_t, w)
+        out.append(vals.reshape(-1, vals.shape[-1]))
+    return out
+
+
+def hypercube_dim(inst: Instance, name: str, table: Table) -> int:
+    n_wit = sum(s.units * len(table_queries(s.circ, name)) for s in inst.segs)
+    return log2ceil(n_wit + len(table.rows))
+
+
+def start_transcript(inst: Instance, pcs: bool, root: bytes):
+    tr = Transcript(DOMAIN)
+    for s in inst.segs:
+        tr.absorb(s.hash)
+        tr.absorb(s.units.to_bytes(8, "little"))
+    if pcs:
+        tr.absorb(root)
+    else:
+        h = hashlib.sha256()
+        for s in inst.segs:
+            h.update(s.cols.to(torch.int32).cpu().numpy().astype("<u4").tobytes())
+        tr.absorb(h.digest())
+    if inst.chain:
+        tr.absorb(inst.chain.steps.to_bytes(8, "little"))
+        tr.absorb(b"".join(int(y).to_bytes(4, "little") for y in inst.chain.public_y16))
+    chs = []
+    for t in inst.tables:
+        z = tr.challenge()
+        beta = tr.challenge() if t.cols > 1 else ONE
+        chs.append((z, beta))
+    pts = []
+    for s in inst.segs:
+        z0 = tr.challenges(s.layers[0].s_out)
+        gamma = tr.challenges(log2ceil(s.units))
+        pts.append((z0, gamma))
+    return tr, chs, pts
+
+
+def x_layout(inst: Instance):
+    seg_offs, l = [], 0
+    for s in inst.segs:
+        seg_offs.append(l)
+        l += s.units * s.ncols
+    offs = []
+    for t in inst.tables:
+        offs.append(l)
+        l += len(t.rows)
+    return seg_offs, offs, l
+
+
+def n_functionals(inst: Instance) -> int:
+    return 2 * len(inst.segs) + len(inst.tables) + (1 if inst.chain else 0)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The batched functional ⟨a, X⟩ = b
+# ---------------------------------------------------------------------------------------------------------------------
+
+class Acc:
+    def __init__(self, l: int, device) -> None:
+        self.a = torch.zeros((l, DEG), dtype=torch.int64, device=device)
+        self.b: Ext = ZERO
+        self.device = device
+
+    def seg_view(self, off: int, units: int, ncols: int) -> torch.Tensor:
+        return self.a[off: off + units * ncols].view(units, ncols, DEG)
+
+
+def add_input_claim(acc: Acc, rho: Ext, seg_off: int, seg: Segment, x_pt: list[Ext], c_pt: list[Ext], value: Ext) -> None:
+    dev = acc.device
+    ec = eq_table(c_pt, dev)[: seg.units]                            # (units, 6)
+    ex = eq_table(x_pt, dev)[: seg.ncols]                            # (ncols, 6)
+    e = ext_mul(ec, t_ext(rho, dev))                                  # (units, 6)
+    v = acc.seg_view(seg_off, seg.units, seg.ncols)
+    step = max(1, (1 << 21) // seg.ncols)
+    for lo in range(0, seg.units, step):
+        hi = min(seg.units, lo + step)
+        v[lo:hi] = (v[lo:hi] + ext_mul(e[lo:hi].unsqueeze(1), ex.unsqueeze(0))) % P
+    acc.b = e_add(acc.b, e_mul(rho, value))
+
+
+def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], table_off: int, table: Table, ch, n: int, c: LeafClaim) -> None:
+    dev = acc.device
+    z, beta = ch
+    eqt = eq_table(c.rho, dev).to(torch.int32)                        # (2^n, 6)
+    bs = logup.beta_powers(beta, table.cols, dev)                     # (cols, 6)
+    bs_py = [py_ext(b) for b in bs]
+    lam_t = t_ext(c.lam, dev)
+    rho_t = t_ext(rho, dev)
+    rl_t = t_ext(e_mul(rho, c.lam), dev)
+    konst = torch.zeros((DEG,), dtype=torch.int64, device=dev)
+    base = 0
+    for si, s in enumerate(inst.segs):
+        qs = table_queries(s.circ, table.name)
+        q_t = len(qs)
+        if q_t == 0:
+            continue
+        v = acc.seg_view(seg_offs[si], s.units, s.ncols)
+        # per query the constant part of  z - Σ_k β^k lin_k  and the per-column coefficients -Σ_k β^k coef_{k,idx}
+        csts = []
+        terms: dict[tuple[int, int], Ext] = {}                        # (j, idx) -> -Σ_k β^k coef_{k, idx}
+        for j, qu in enumerate(qs):
+            cst = z
+            for kk, lin in enumerate(qu.cols):
+                cst = e_sub(cst, e_scale(bs_py[kk], lin.konst))
+                for idx, coef in lin.terms:
+                    terms[(j, idx)] = e_sub(terms.get((j, idx), ZERO), e_scale(bs_py[kk], coef))
+            csts.append(cst)
+        cst_t = t_exts(csts, dev)                                      # (q_t, 6)
+        e_all = eqt[base: base + s.units * q_t].view(s.units, q_t, DEG)
+        if _field._fast_scatter is not None and dev.type == "cuda":
+            # konst += Σ_u Σ_j e[u, j] (1 + λ cst_j)   (p = 1 for every query leaf)
+            S = e_all.sum(dim=0, dtype=torch.int64) % P                # (q_t, 6)
+            K = ext_mul(cst_t, lam_t)
+            K[:, 0] = (K[:, 0] + 1) % P
+            konst = (konst + ext_mul(S, K).sum(dim=0)) % P
+            # v[u, idx] += Σ_j e[u, j] · (ρ λ C[j, idx])   as a CSR scatter over the (query, column) terms
+            keys = sorted(terms, key=lambda k: (k[1], k[0]))
+            counts = torch.zeros((s.ncols + 1,), dtype=torch.int64)
+            for (_j, idx) in keys:
+                counts[idx + 1] += 1
+            ptr = torch.cumsum(counts, dim=0).to(torch.int32).to(dev)
+            tj = torch.tensor([j for j, _ in keys], dtype=torch.int32, device=dev)
+            tc = ext_mul(t_exts([terms[k] for k in keys], dev), rl_t)  # (T, 6)
+            _field._fast_scatter(e_all, v, ptr, tj, tc)
+        else:
+            C = torch.zeros((q_t, s.ncols, DEG), dtype=torch.int64)   # C[j, idx] = -Σ_k β^k coef_{k, idx}
+            for (j, idx), val in terms.items():
+                C[j, idx] = torch.tensor(val, dtype=torch.int64)
+            # Cmat[(j, i), (idx, d)]: coefficient of rle[j]_i in coordinate d of rle[j] · C[j, idx]
+            Cmat = torch.zeros((q_t, DEG, s.ncols, DEG), dtype=torch.int64)
+            for i in range(DEG):
+                for jj in range(DEG):
+                    d = i + jj
+                    if d < DEG:
+                        Cmat[:, i, :, d] = (Cmat[:, i, :, d] + C[:, :, jj]) % P
+                    else:
+                        Cmat[:, i, :, d - DEG] = (Cmat[:, i, :, d - DEG] + W * C[:, :, jj]) % P
+            Cmat = Limbs(Cmat.reshape(q_t * DEG, s.ncols * DEG).to(dev))
+            step = max(1, (1 << 23) // q_t)
+            for lo in range(0, s.units, step):
+                hi = min(s.units, lo + step)
+                e = e_all[lo:hi].to(torch.int64)
+                konst = (konst + e.sum(dim=(0, 1))) % P                # p = 1
+                le = ext_mul(e, lam_t)                                 # λ e        (chunk, q_t, 6)
+                konst = (konst + ext_mul(le, cst_t.unsqueeze(0)).sum(dim=(0, 1))) % P
+                del le
+                rle = ext_mul(e, rl_t)                                 # ρ λ e
+                del e
+                v[lo:hi] = (v[lo:hi] + mm_mod(rle.reshape(hi - lo, q_t * DEG), Cmat).view(hi - lo, s.ncols, DEG)) % P
+        base += s.units * q_t
+    rows = len(table.rows)
+    e_tab = eqt[base: base + rows]
+    acc.a[table_off: table_off + rows] = (acc.a[table_off: table_off + rows] - ext_mul(e_tab, rho_t)) % P
+    trows = logup.table_rows(table, dev)
+    comb = logup.combine(trows, bs)                                    # (rows, 6)
+    zt = t_ext(z, dev)
+    konst = (konst + ext_mul(ext_mul(e_tab, lam_t), (zt - comb) % P).sum(dim=0)) % P
+    pad = eqt[base + rows:]
+    if pad.shape[0]:
+        konst = (konst + ext_mul(pad, lam_t).sum(dim=0)) % P
+    acc.b = e_add(acc.b, e_mul(rho, e_sub(c.value, py_ext(konst))))
+
+
+def add_chain(acc: Acc, rho: Ext, geo: Ext, inst: Instance, seg_offs: list[int]) -> int:
+    """Chain linkage with geometric coefficients ρ·geo^k in the CPU crate's order: for each VU ``v``: steps
+    constraints ``c_{v,i} - y_{v,i-1} = 0``, then ``y32_v - y_{v,last} = 0``, then ``y16_v = public``."""
+    from .field import geometric
+
+    ch = inst.chain
+    dev = acc.device
+    u_seg, e_seg = inst.segs[0], inst.segs[1]
+    vus = u_seg.units // ch.steps
+    L = ch.limbs
+    per_vu = (ch.steps + 1) * L + 1
+    pw = geometric(rho, geo, vus * per_vu, dev).view(vus, per_vu, DEG)   # pw[v, k] = ρ geo^(v·per_vu + k)
+    vu = acc.seg_view(seg_offs[0], u_seg.units, u_seg.ncols).view(vus, ch.steps, u_seg.ncols, DEG)
+    ve = acc.seg_view(seg_offs[1], e_seg.units, e_seg.ncols).view(vus, e_seg.ncols, DEG)
+    for j in range(L):
+        step_pw = pw[:, j: ch.steps * L: L]                                # (vus, steps, 6): constraint (i, limb j)
+        vu[:, :, ch.col_c[j]] = (vu[:, :, ch.col_c[j]] + step_pw) % P
+        vu[:, :-1, ch.col_y[j]] = (vu[:, :-1, ch.col_y[j]] - step_pw[:, 1:]) % P
+        k = ch.steps * L + j
+        ve[:, ch.epi_y32[j]] = (ve[:, ch.epi_y32[j]] + pw[:, k]) % P
+        vu[:, -1, ch.col_y[j]] = (vu[:, -1, ch.col_y[j]] - pw[:, k]) % P
+    last = pw[:, per_vu - 1]
+    ve[:, ch.epi_y16] = (ve[:, ch.epi_y16] + last) % P
+    y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=dev)
+    acc.b = e_add(acc.b, py_ext(ext_scale(last, y16).sum(dim=0) % P))
+    return vus * per_vu
+
+
+def check_chain_clear(inst: Instance) -> None:
+    ch = inst.chain
+    u_seg, e_seg = inst.segs[0], inst.segs[1]
+    vus = u_seg.units // ch.steps
+    uc = u_seg.cols.view(vus, ch.steps, u_seg.ncols)
+    ec = e_seg.cols
+    for j in range(ch.limbs):
+        if bool((uc[:, 0, ch.col_c[j]] != 0).any()):
+            raise VerifyError("chain: a VU's first incoming word is not zero")
+        if bool((uc[:, 1:, ch.col_c[j]] != uc[:, :-1, ch.col_y[j]]).any()):
+            raise VerifyError("chain: incoming word differs from the previous outgoing word")
+        if bool((ec[:, ch.epi_y32[j]] != uc[:, -1, ch.col_y[j]]).any()):
+            raise VerifyError("chain: epilogue input differs from the last word")
+    y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=ec.device)
+    if bool((ec[:, ch.epi_y16] != y16).any()):
+        raise VerifyError("chain: output word differs from the public word")
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Prover
+# ---------------------------------------------------------------------------------------------------------------------
+
+def prove_segment(seg: Segment, z0: list[Ext], gamma: list[Ext], tr: Transcript, out: list[Ext], st: Stats):
+    dev = seg.cols.device
+    t1 = time.perf_counter()
+    wires = eval_wires(seg.circ, seg.cols)                           # (units, nwires) int32
+    _sync(dev)
+    st.t_witness_wires += time.perf_counter() - t1
+    b = log2ceil(seg.units)
+    copies = 1 << b
+    depth_of = torch.tensor(seg.circ.depth_of(), dtype=torch.int32, device=dev)
+    claim = LayerClaim(eq_table(z0, dev), list(gamma), ZERO)
+    nl = len(seg.layers)
+    finals = None
+    depth = 0
+    for i, layer in enumerate(seg.layers):
+        last = i == nl - 1
+        k_in = seg.circ.max_depth - i
+        if last:
+            rows = pad_rows(seg.cols, copies, 1 << layer.s_in)
+        else:
+            rows = pad_rows(masked_wires(wires, depth_of, k_in), copies, 1 << layer.s_in)
+        nxt, fin = gkr.prove_layer(layer, rows, b, claim, tr, out, last)
+        del rows
+        depth += b + 2 * layer.s_in + (0 if last else 1)
+        if fin is not None:
+            finals = (fin, nxt.copy_point)
+        claim = nxt
+    st.depth_circuit = max(st.depth_circuit, depth)
+    return finals
+
+
+def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero.DEFAULT) -> tuple[Proof, Stats]:
+    dev = inst.device
+    st = Stats()
+    out: list[Ext] = []
+    seg_offs, offs, l = x_layout(inst)
+    if dev.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(dev)
+    tc = time.perf_counter()
+    committed = None
+    mults = []
+    for t in inst.tables:
+        vals = [v for v in seg_query_values(inst, t.name) if v is not None]
+        mults.append(logup.multiplicities(t, logup.table_rows(t, dev), vals))
+    if pcs:
+        x = torch.empty((l,), dtype=torch.int64, device=dev)
+        for s, off in zip(inst.segs, seg_offs):
+            x[off: off + s.units * s.ncols] = s.cols.reshape(-1)
+        for t, off, m in zip(inst.tables, offs, mults):
+            x[off: off + len(t.rows)] = m % P
+        committed = ligero.commit(x, params)
+        del x
+    root = committed.root if committed else bytes(32)
+    _sync(dev)
+    st.t_commit = time.perf_counter() - tc
+    tr, chs, pts = start_transcript(inst, pcs, root)
+    t0 = time.perf_counter()
+    lookup_claims = []
+    for ti, t in enumerate(inst.tables):
+        n = hypercube_dim(inst, t.name, t)
+        vals = [v for v in seg_query_values(inst, t.name) if v is not None]
+        trows = logup.table_rows(t, dev)
+        p_leaf, q_leaf = logup.build_leaves(t, trows, vals, mults[ti], chs[ti][0], chs[ti][1], n)
+        del vals
+        lc = logup.prove_table(p_leaf, q_leaf, n, tr, out)
+        del p_leaf, q_leaf
+        st.lookup_dims.append((t.name, n, sum(len(table_queries(s.circ, t.name)) for s in inst.segs)))
+        lookup_claims.append((n, lc))
+        st.depth_lookup_max = max(st.depth_lookup_max, 1 + sum(k + 2 for k in range(n)))
+    _sync(dev)
+    st.t_lookup = time.perf_counter() - t0
+    t2 = time.perf_counter()
+    finals = [prove_segment(s, pts[si][0], pts[si][1], tr, out, st) for si, s in enumerate(inst.segs)]
+    _sync(dev)
+    st.t_arith = time.perf_counter() - t2 - st.t_witness_wires
+    opening = None
+    if pcs:
+        t3 = time.perf_counter()
+        rhos = tr.challenges(n_functionals(inst))
+        geo = tr.challenge() if inst.chain else ZERO
+        acc = Acc(l, dev)
+        ri = 0
+        for si, s in enumerate(inst.segs):
+            (l_star, vl, r_star, vr), c_star = finals[si]
+            add_input_claim(acc, rhos[ri], seg_offs[si], s, l_star, c_star, vl)
+            add_input_claim(acc, rhos[ri + 1], seg_offs[si], s, r_star, c_star, vr)
+            ri += 2
+        for ti, t in enumerate(inst.tables):
+            n, lc = lookup_claims[ti]
+            add_lookup_claim(acc, rhos[ri], inst, seg_offs, offs[ti], t, chs[ti], n, lc)
+            ri += 1
+        if inst.chain:
+            st.linkage_constraints = add_chain(acc, rhos[ri], geo, inst, seg_offs)
+        opening = ligero.prove_open(committed, acc.a, tr)
+        _sync(dev)
+        st.t_open = time.perf_counter() - t3
+        st.ligero_rows = committed.rows
+    st.proof_elems = len(out)
+    st.slots = tr.slots
+    st.committed_elements = l
+    if dev.type == "cuda":
+        st.peak_mem = torch.cuda.max_memory_allocated(dev)
+    return Proof(root, out, opening), st
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Verifier
+# ---------------------------------------------------------------------------------------------------------------------
+
+def verify(inst: Instance, proof: Proof, pcs: bool = True, params: ligero.LigeroParams = ligero.DEFAULT) -> None:
+    """Raises ``VerifyError`` on rejection.  In ``pcs`` mode the segments' columns are never read (only their
+    shapes); in ``clear`` mode the verifier evaluates the columns itself."""
+    dev = inst.device
+    tr, chs, pts = start_transcript(inst, pcs, proof.root)
+    rd = Reader(proof.msgs)
+    seg_offs, offs, l = x_layout(inst)
+    lookup_claims = []
+    for ti, t in enumerate(inst.tables):
+        n = hypercube_dim(inst, t.name, t)
+        lc = logup.verify_table(n, tr, rd)
+        if pcs:
+            lookup_claims.append((n, lc))
+        else:
+            vals = [v for v in seg_query_values(inst, t.name) if v is not None]
+            trows = logup.table_rows(t, dev)
+            m = logup.multiplicities(t, trows, vals)
+            p_leaf, q_leaf = logup.build_leaves(t, trows, vals, m, chs[ti][0], chs[ti][1], n)
+            e = eq_table(lc.rho, dev)
+            pv = ext_scale(e, p_leaf.to(torch.int64)).sum(dim=0) % P
+            qv = ext_mul(e, q_leaf.to(torch.int64)).sum(dim=0) % P
+            got = e_add(py_ext(pv), e_mul(lc.lam, py_ext(qv)))
+            if got != lc.value:
+                raise VerifyError(f"lookup {t.name}: leaf claim mismatch")
+    finals = []
+    for si, s in enumerate(inst.segs):
+        b = log2ceil(s.units)
+        claim = LayerClaim(eq_table(pts[si][0], dev), list(pts[si][1]), ZERO)
+        nl = len(s.layers)
+        s_c = s.layers[nl - 1].s_in
+        for i, layer in enumerate(s.layers):
+            last = i == nl - 1
+            nxt, fin = gkr.verify_layer(layer, b, claim, tr, rd, last, dev)
+            if fin is not None:
+                l_star, vl, r_star, vr = fin
+                c_star = nxt.copy_point
+                if pcs:
+                    finals.append((fin, c_star))
+                else:
+                    if gkr.eval_columns(s.cols, s_c, l_star, c_star) != vl:
+                        raise VerifyError(f"{s.name}: input layer: left evaluation mismatch")
+                    if gkr.eval_columns(s.cols, s_c, r_star, c_star) != vr:
+                        raise VerifyError(f"{s.name}: input layer: right evaluation mismatch")
+            claim = nxt
+    if not pcs:
+        if inst.chain:
+            check_chain_clear(inst)
+    else:
+        rhos = tr.challenges(n_functionals(inst))
+        geo = tr.challenge() if inst.chain else ZERO
+        acc = Acc(l, dev)
+        ri = 0
+        for si, s in enumerate(inst.segs):
+            (l_star, vl, r_star, vr), c_star = finals[si]
+            add_input_claim(acc, rhos[ri], seg_offs[si], s, l_star, c_star, vl)
+            add_input_claim(acc, rhos[ri + 1], seg_offs[si], s, r_star, c_star, vr)
+            ri += 2
+        for ti, t in enumerate(inst.tables):
+            n, lc = lookup_claims[ti]
+            add_lookup_claim(acc, rhos[ri], inst, seg_offs, offs[ti], t, chs[ti], n, lc)
+            ri += 1
+        if inst.chain:
+            add_chain(acc, rhos[ri], geo, inst, seg_offs)
+        if proof.opening is None:
+            raise VerifyError("missing opening")
+        ligero.verify_open(proof.root, params, l, acc.a, acc.b, proof.opening, tr, dev)
+    if rd.pos != len(proof.msgs):
+        raise VerifyError("trailing proof data")

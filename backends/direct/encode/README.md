@@ -32,6 +32,24 @@ Peak device memory for the B batch: 5.5 GiB with 65,536-row slices (1.07 GB in +
 20.36 GB codeword is never resident -- see the streaming plan).  All SIMT variants in the run: v1 t256 40.2, v1 t512
 38.6, v2 t128 34.8, v2 t256 39.6 (register spill at 16 elements/thread), v2 t512 32.2, v2 t1024 32.7 ms.
 
+**A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6.0+cu124, cupy 14.2.0, Triton 3.2; run
+`r20260922-064413-0508`, same bench and flags, all 8 variants bit-exact; floors at the A100's *measured* copy bandwidth
+1,754 GB/s and datasheet 312 T INT8 MAC/s, `backends/numerical/reports/anchor_a100.md`):
+
+~~~text
+encoder (A100)                          B ms/batch   us/row   codeword GB/s   fraction of A100 HBM floor (14.5 ms)   vs 4090   A ms/batch
+(a) NTT, SIMT, v2 t512                  60.7         0.195    336             0.24                                    0.53x     11.6
+(a) NTT, SIMT, v2 t1024 (best here)     57.4         0.185    355             0.25                                    0.57x     11.0
+(a) NTT, SIMT, v1 t512                  73.2         0.236    278             0.20                                    0.53x     13.8
+(b) INT8 matrix DFT, Triton fused       607.1        1.955    34              0.055 of INT8 peak                      0.28x     94.6
+(b) INT8 matrix DFT, cuBLAS unfused     9,146 (scaled from 8,192 rows)        0.004 of INT8 peak                      1.66x     1,439
+~~~
+
+The encoder does **not** scale with bandwidth: on the A100 it is 0.53x the 4090 (the bandwidth ratio is 2.02x) and sits at
+0.24 of the HBM floor -- INT32/shared-memory-bound (the A100's INT32 rate and shared-memory bandwidth are ~0.47x the 4090's;
+503 vs 948 G butterflies/s).  The 4090's 0.78 of *its* HBM floor was that card's higher ALU:bandwidth ratio, not a
+memory-bound kernel.  Recommendation 5 below ("scales with bandwidth") and the A100/H100 scaling rows are superseded.
+
 **Verdict.**  The SIMT NTT beats the fused tensor-core matrix DFT by **5.3x** and the cost model's tensor-core encoder
 (`rs_matrix_ntt` at 0.172: 413 ms per B batch) by **13x**, at 0.78 of the read+write roofline.  The tensor-core kernel
 reaches the utilisation the model assumed (0.184 vs 0.172) and still loses, because its compute floor at 100% of the
@@ -189,6 +207,25 @@ measured and the rest modelled); H100 scaling 7.9e6, A100 1.4e7 (INT32 issue-rat
 No bucket of B is a tensor-core operation; the IRS combination and the inversions are memory-streaming, the rest is
 integer SIMT arithmetic.
 
+**A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, run `r20260922-080250-cff5`, same bench and flags, 22/22 roots bit-exact;
+`backends/numerical/reports/anchor_a100.md` section 6).  The fused commitment does **not** carry over to the anchor:
+
+~~~text
+bucket (A100)                                   4090 ms   A100 ms   ratio   note
+commitment, Blake3, fused, 512-row slices       46.7      122.4     0.39x   the L2-slice pipeline loses: 256-row 155, 1024-row 110, 4096-row 100, 65,536-row 98.0 (best); overlap variants 15-30% slower
+  ... + cosets kept                             49.4      123.0     0.40x
+commitment, SHA-256, fused (best slice)         58.3      164.5     0.35x
+IRS row combination, chunk 1024                 5.65      7.60      0.74x   0.38 of the measured-bandwidth read floor (5.09 GB at 1,754 GB/s = 2.9 ms)
+quadratic test, s1024                           9.37      16.0      0.58x
+linear test, general path, s512                 212       325       0.65x
+helper inversions, T = 262144                   28.8      19.5      1.48x   HBM-bound: the one bucket that scales with bandwidth
+column openings from the store (+ paths)        3.75      3.01 (+1.3) 1.24x
+~~~
+
+The best A100 commitment is the **unfused** path: SIMT NTT v2 57.4 ms + Blake3 tree 54.0 ms = 111 ms (section 1-2 of the
+anchor report) against 98-123 ms fused; the b-commit A100 *scaling* row (262.7 ms / 6.51e6 for B) is superseded by the
+measured 213 ms / 5.27e6.
+
 **Still modelled**: `r^T A` generation (the sparse per-unit constraint combination, 8.9 ms in the model), witness
 generation (0.4 ms in the model; no GPU witness kernel exists on main -- the b-ligero lane's generator is Rust/CPU),
 prover randomness (3.2 ms at an assumed 100 GB/s).
@@ -249,5 +286,182 @@ uv run --frozen --package verity-numerical python backends/direct/encode/reprice
 **Not done**: a Rust port; a faster encoder (the commitment's bottleneck at 0.39 of its SIMT floor: radix-4 stages and
 fewer shared-memory passes are the levers); the `r^T A` generation kernel (needs the constraint system on the GPU);
 a witness-generation kernel; a cheaper linear test (the 6 coordinate encodings per row are inherent to `q_add` over
-`F_c` with `F_t` rows; only a structural shortcut through the per-unit constraint pattern could remove them).
+`F_c` with `F_t` rows; only a structural shortcut through the per-unit constraint pattern could remove them --
+**done by the b-lintest lane, next section**).
 Ledger `backends/numerical/reports/ledger/b-commit.jsonl` (5 entries), plot `plots/overhead_b-commit.png`.
+
+
+---
+
+# b-lintest lane: the linear test through the structure of r^T A (2026-09-22, runs `r20260922-071843-ac9a`, `r20260922-072315-6497`, `r20260922-073017-0924` = M 1-4 with the lazy kernel)
+
+**Scope: component** (the linear-test bucket, same RTX 4090, CUDA events, warm, median of 7, bit-exact against the
+b-commit GPU path `Combiner.linear` and numpy in every run) and the vu-level re-pricing (`ARITHMETIC_DIAGNOSTIC`,
+`backends/numerical/reports/b_measured_4090.md`).  The algebra, the structure of `A`, the soundness note and the roofline
+are in **`LINTEST.md`**; the kernels in `lintest_structured.py`.
+
+The protocol combines the linear constraints with POWERS of one element (`r_add = (1, rho, rho^2, ...)`, `PROTOCOL.md`
+section 6), and every unit satisfies the same local constraint pattern, so with a unit-major constraint enumeration
+`r^T A` on a Ligero row is a per-row `F_c` scalar times one of `M` fixed rows (`M = 3` for the chain layout: witness
+pattern, helper pattern, the sum constraint's constant row) except on ~130 exceptional rows (unit 0, the last unit, the
+table-side helper equations, the multiplicities).  Interpolation is linear, so `q = sum_m enc(E_m) * enc(sum_i s_im W_i)`
++ the general path on the exceptional rows: **one memory-bound pass over the witness instead of 14 transforms per row**.
+Same test, same `r`, same `q`, same transcript -- a prover-side algorithm.
+
+## Before / after, B shape (310,602 rows), ms per batch
+
+~~~text
+linear test q_add                                      ms/batch   transforms/row   transforms/batch   floor                 of floor   bit-exact
+general path (b-commit; re-timed in the same run)      149.9-150.5   14              4.35M              35 ms HBM (r^T A 30.5 GB + W)   0.23   yes
+structured, M = 1                                        5.66       0               12                 5.05 ms (read W once)   0.89     yes (vs general GPU path + numpy)
+structured, M = 1 + 256 exceptional rows                 6.37       0               12 + 3,584         5.05                    0.79     yes
+structured, M = 2 + 256 exceptional rows                 7.03       0               24 + 3,584         5.05                    0.72     yes
+structured, M = 3 + 256 exceptional rows                 9.72       0               36 + 3,584         5.05                    0.52     yes   (INT32-issue-bound: 2.3e10 mont-muls)
+structured, M = 4 + 256 exceptional rows                13.67       0               48 + 3,584         5.05                    0.37     yes
+structured, lazy reduction (4 rows of 64-bit products per REDC), M = 2 / 3 / 4 + 256:   5.90 / 7.15 / 7.68           0.86 / 0.71 / 0.66   yes
+  split (M = 3 lazy, the chain layout's configuration): combine 6.95 + encode V 0.07 + F_c pointwise 0.05 + exceptional rows 0.08; G = enc(E_m) once per batch 0.16
+~~~
+
+A100 (anchor-a100 lane, run `r20260922-080250-cff5`, all checks bit-exact): structured M = 1 / 2 / 3 / 4 + 256 exceptional =
+9.53 / 14.60 / 20.52 / 27.91 ms plain, **5.18 / 7.79 / 11.23 / 14.57 ms lazy** (4090 lazy 6.25 / 5.90 / 7.15 / 7.68: 1.21x /
+0.76x / 0.64x / 0.53x -- M = 1 lazy is at the A100's read floor, the higher M are INT32-issue-bound at 0.47x the 4090's rate).
+General path 325-540 ms on the A100 (0.31-0.65x), so the shortcut is 29-47x there.
+
+**Speed-up 26x (M = 1) / 21x (M = 3, lazy) / 11x (M = 4, plain)**; the linear test falls from 58% of the B batch to 6%.
+The per-row cost of the exceptional rows is the general path's 0.48 us/row (256 rows = 0.12 ms).  The lazily reduced
+kernel (`combine_multi_lazy`: 1 IMAD.WIDE + one 64-bit add per product, one Montgomery reduction per 4 rows) is what
+keeps `M = 3, 4` near the memory floor; at `M = 1` the plain kernel is already there.
+
+## Tensor cores vs SIMT for the pass over W (LINTEST.md section 4)
+
+The pass is `V[m][c][j] = sum_i s[i][m][c] W[i][j]`: a `(24 M + 1)`-row INT8 limb GEMV against the 310,602-deep witness.
+`torch._int_mm` (cuBLASLt INT8 -> INT32, exact recombination, bit-exact): **10.3 ms at M = 1 (0.49 of the read floor, 2.4%
+of the INT8 peak), 12.4 at M = 2, 16.7 at M = 4**, plus an 11 ms byte-shift pass (`W ^ 0x80`, a 5 GB write) unless the
+witness is stored shifted.  The SIMT kernel: 5.66 / 6.99 / 13.5 ms.  **SIMT wins at every M**: the operation is
+memory-bound and cuBLASLt's skinny kernel reaches half the bandwidth the SIMT kernel does; the tensor cores' 0.25 M ms of
+arithmetic never mattered.  A bandwidth-efficient hand-written tensor-core GEMV could gain at most ~8 ms at M = 4 (3% of
+B) -- the only tensor-core opportunity left in B.  The dense `[rows x |P|] . [|P| x n]` formulation for a uniform `r`
+would cost 170-330 ms at 100% of INT8 peak (LINTEST.md 2.4): the powers combination, not the tensor core, is what makes
+the linear test cheap.
+
+## B re-priced (reprice_measured.py --lintest; b_measured_4090.md)
+
+~~~text
+B, RTX 4090, Blake3 leaves, openings from the store:  116.4 ms per 4096-VU batch = 28.4 us/VU, overhead 2.89e6   (was 258.7 ms / 6.41e6: 2.2x)
+  commitment 49.4 | linear test 7.15 (M = 3 lazy + 256 exc.; 13.7 with the plain M = 4 kernel -> 122.9 ms / 3.05e6) | IRS 5.7 | quadratic 7.8 | inversions 28.8 | openings 5.1 | modelled 12.5 (89% measured)
+  scalings (labels, not measurements): H100 142.9 ms / 3.54e6, A100 262.7 ms / 6.51e6 by the INT32 issue-rate ratio -- the structured
+  linear test is memory-bound, so for that bucket bandwidth scaling (A100 x0.65, H100 x0.30 of the 4090 time) is the right rule
+~~~
+
+B's buckets are now the fused commitment (49.4 ms, encoder-bound at 0.39 of its SIMT floor) and the helper inversions
+(28.8 ms, 0.52 of traffic floor); the linear test is 6%.  The modelled `r^T A` generation (8.9 ms) is kept in the total although the structure
+makes it `O(rows + |pattern|)` (LINTEST.md section 5).
+
+## Conventions for the b-ligero Rust/CUDA port (in addition to the b-commit list above)
+
+* **Constraint enumeration is unit-major**: block `u` holds every linear constraint that involves only unit `u` and its
+  successor (the WP2 identities and splits, the alignment copies, the transition differences, unit `u`'s 306 helper-side
+  `F_c`-linear equations and copies), in a fixed order `c < C`; index `u C + c`.  Boundary constraints (`row0_*`) and the
+  table-side constraints (`h_v (z_T - t_v) = m_T(v)`, the five sums) follow the blocks.  `r_add[idx] = rho^idx`.  Any order
+  gives the same `(#lin - 1)/|F_c|` bound; this one gives the structure.
+* **Rows hold whole units.**  Witness/triple rows: `S = 3` units of 1 064 slots per 3 840-symbol payload (or the transposed
+  layout "one AIR column x 3 840 consecutive units"); helper rows: whole units' `306 x 6` coordinates (12 units of 306 per
+  coordinate row, or 2 units of 1 836 interleaved).  Randomizer positions `>= l` carry 0 in `r^T A`.
+* **Prover algorithm** (`StructuredLinearTest`): per batch compute `pi = sum_c rho^c P_c + rho^(-C) sum_c rho^c P'_c`
+  (own + neighbour pattern), `E_m` (`(M, 6, k)` plain), `G_m = enc(E_m)` on cosets 0 and 1; per-row scalars
+  `s[i][m] = rho^(i S C)` etc. in Montgomery form `(rows, M, 6)`; `combine_multi` (thread per column, `chunk_rows` rows,
+  `6 M` accumulators, `acc (nchunk, 6M, k)` then `reduce_multi`); `V_m` on coset 1 (`6 M` encoder calls, `ncosets = 1`);
+  `fc_pointwise_accum` (`F_c x F_c`, plain inputs: `mont_mul` twice with `R^2`); exceptional rows through
+  `Combiner.linear` and `add_mod_inplace`.  Output `q (6, 2k)` plain, identical to the general path's.
+* **Verifier**: `sum_i R_i(eta) U_i(eta) = sum_m G_m(eta) sum_i s_im U_i(eta)` + exceptional rows: `M` scalar combinations of
+  the opened columns (the IRS test's work) and `M` evaluations of the fixed rows per opened column; it need not
+  materialise `r^T A` either.
+* **Not a tensor-core operation**: implement the pass as the SIMT kernel; store `s` as 24 M bytes per row, never `r^T A`.
+
+Files: `lintest_structured.py`, `tests/test_lintest_structured.py` (the structure test runs on the laptop), `LINTEST.md`,
+`results_lintest_<run>.json`, `reprice_measured.py --lintest results_lintest_r20260922-073017-0924.json --lintest-config linear_test_structured_M3_X256_lazy`; ledger
+`backends/numerical/reports/ledger/b-lintest.jsonl`, plot `plots/overhead_b-lintest.png`.
+
+**Not done**: the `pi`/scalar generation kernel from the real constraint system (the toy `UnitPatternSystem` proves the
+algebra; the b-ligero port's constraint emitter must adopt the enumeration); merging the helper-row classes to `M = 2`;
+a bandwidth-efficient tensor-core GEMV for `M >= 3`; the radix-4 encoder (the remaining encoder gain is <= 1.3x on a bucket
+that is now 40% of B).
+
+---
+
+# b-v2 lane: B at the checker-v2 witness shape (2026-09-22, runs `r20260922-075021-2b1b` buckets, `r20260922-080235-765c` inversions, `r20260922-081137-109d` radix-4)
+
+**Question**: B's fully-measured cost at the checker-v2 relation (33 mul / 9 lin / 89 lookups per unit, 5.2M fixed table rows)
+on the 4090.  **Answer**: `42.4 ms` per 4096-VU batch, overhead `1.05e6` (v1: 116.4 ms / 2.89e6; ~100.4 ms / 2.49e6 with the blocked inversions and the radix-4 encoder), 94% measured -- see
+`backends/numerical/reports/b_measured_4090_v2.md`.  Layout and every count: **`V2_SHAPE.md`** (the b-ligero2 lane's next port).
+
+## v1 vs v2 shape, same kernels (B = 4096, K = 1536, 2^-128, BabyBear^6, HVZK rows, Blake3 leaves)
+
+| | v1 (`b_measured_4090.md`) | v2 (`b_measured_4090_v2.md`) |
+|---|---|---|
+| Ligero rows x [16384, 4096] | 310,602 | **104,217** (34,093 witness + 58,710 helper + 11,408 table-side + 6 blinding) |
+| committed bytes / VU | 1,164.7 kB | **388.8 kB** |
+| quadratic rows | 33,485 `F_t` | 3,502 `F_t` + 9,785 `F_c` triples |
+| helpers inverted | 125.9M | 43.6M (37.4M queries + 6.26M table rows) |
+| linear test structure | M = 3, X ~ 256 | M = 2, X = 9,780 (table-side inverse rows) |
+| commitment / lin. test / IRS / quadratic / inversions / openings / modelled | 49.4 / 7.15 / 5.6 / 7.8 / 28.8 / 5.1 / 12.5 ms | 16.2 / 8.29 / 2.10 / 5.4 / 5.2 / 2.5 / 2.7 ms |
+| **total, overhead** | **116.4 ms, 2.89e6** | **42.4 ms, 1.05e6** (0.36x) |
+
+Crossover: v2 pays 9.1 ms per proof for the tables (11,408 rows + 6.26M inversions + the exceptional rows) and 8.1 us/VU
+after that against v1's 28.4 us/VU: **v2 is cheaper above B = 446 VUs** (215 in committed rows).  Variant (b), public table
+coefficients (MODELLED layout, `V2_SHAPE.md` section 4): 35.7 ms / 8.86e5.
+
+## Layout (b-v2 files)
+
+| file | what |
+|---|---|
+| `V2_SHAPE.md`, `v2_shape.py` / `v2_shape.json` | the witness layout (transposed: rows are AIR columns x 3840 units), per-unit slots incl. BabyBear repairs, per-batch table side, constraint counts, `M`/`X`, matrix, crossover, port conventions |
+| `buckets_v2.py` | `combine_quadratic_fc` (the `h_j (z_T - w_j(beta_T)) = 1` helper triples over `F_c`, `C` compiled in) + numpy reference; `BatchInverterBlocked` (blocked Montgomery trick, `3 + 2/G` passes) |
+| `v2_bench.py` | every bucket at the v2 shape on a synthetic in-range witness, bit-exactness at small shapes -> `results_v2_<run>.json` |
+| `inverse_bench.py` | `BatchInverter` vs `BatchInverterBlocked` at the v1 and v2 helper counts, exactness at small N |
+| `radix4_bench.py` | `RSEncoderSIMT(radix4=)` radix-2 vs radix-4: exactness (256/512/1024 threads, store, gather), encoder alone and fused commitment at 104,217 / 310,602 rows |
+| `reprice_v2.py` | `results_v2_*.json` + `v2_shape.json` + `b_measured_4090.json` -> `reports/b_measured_4090_v2.json` / `.md` (rows for both table-side variants, A100/H100 labelled scalings, crossover) |
+
+~~~sh
+# pod (commit first)
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_v2.bench --require-result -- \
+  bash -c 'export PATH=/usr/local/cuda-12.4/bin:$PATH; cd backends/direct && python3 encode/v2_bench.py --reps 7 --out "$RESEARCH_RUN_DIR/result.json"'
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_v2.inverse --require-result -- \
+  bash -c 'export PATH=/usr/local/cuda-12.4/bin:$PATH; cd backends/direct && python3 encode/inverse_bench.py --reps 15 --n1 125895743 --out "$RESEARCH_RUN_DIR/result.json"'
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_v2.radix4 --require-result -- \
+  bash -c 'export PATH=/usr/local/cuda-12.4/bin:$PATH; cd backends/direct && python3 encode/radix4_bench.py --reps 7 --out "$RESEARCH_RUN_DIR/result.json"'
+# re-price (the --inverse / --radix4 results swap in the blocked inversions and the radix-4 commitment ratio)
+uv run --frozen --package verity-numerical python backends/direct/encode/reprice_v2.py --bench backends/direct/encode/results_v2_<run>.json \
+  --inverse backends/direct/encode/results_inverse_<run>.json --inverse-run <run> --radix4 backends/direct/encode/results_radix4_<run>.json --radix4-run <run> \
+  --out backends/numerical/reports/b_measured_4090_v2.json --md backends/numerical/reports/b_measured_4090_v2.md
+~~~
+
+## Conventions for the b-ligero2 lane (`lane/b-ligero2`, scaling the prover to 4096 VUs + HVZK)
+
+`V2_SHAPE.md` section 6 is the list; in one line each: transposed layout (row = AIR column x 3840 units, tableau 1 witness
++ multiplicities, tableau 2 helper coordinate rows + table inverses); lookup query `w_j(beta_T) = sum_c beta_T^c w_{j,c}`
+with per-table `(beta_T, z_T)`; the helper identity is an `F_c` triple with virtual `y`, `z` (`combine_quadratic_fc`);
+unit-major enumeration with `C = 15` per block then the per-table sums then the table side, `M = 2`; one inversion batch per
+table over `queries + |T|`; tables are committed per proof (multiplicities round 1, inverses round 2), nothing preprocessed.
+The v1 conventions above (rows hold whole units, `r_add = rho^idx`, `s` stored not `r^T A`, SIMT not tensor cores) carry over.
+
+## Inversions bucket (task 4): blocked Montgomery trick
+
+`BatchInverterBlocked(g)` stores one prefix per `G` elements: `(3 + 2/G) x 24 N` bytes instead of `5 x 24 N`, `(4 - 1/G)` `F_c` products per
+element instead of 3 (the within-group prefixes are recomputed in registers on the backward pass).  Bit-exact against `ref.batch_inverse`
+(N = 1000 / 4097 / 70000, G = 2 / 4 / 8).  v2 helper count 43.6M: **5.20 ms (G = 4)** vs 7.78 (1.50x; 0.70 of its 3.63 ms floor).
+v1 helper count 125.9M: **16.6 ms (G = 8)** vs 28.8 (1.74x; 0.59 of its 9.74 ms floor).  G = 8 loses at the v2 size (register pressure:
+`el[G][D] + pf[G][D]` = 96 u32 per thread), so pick `G` per N.  The remaining gap to the floor is the `F_c` product chain (a dependent
+chain of 36 Montgomery products per element on the forward pass; more threads do not help since each thread's segment is sequential).
+
+## Encoder (task 4): radix-4 shared-memory stages
+
+`RSEncoderSIMT(radix4=True)` fuses the shared-memory stages (`m < THREADS`) in pairs on quads closed under both stages: the same
+butterflies in the same order (bit-exact at 256 / 512 / 1024 threads, odd and even `LOGT`, store and gather modes), half the
+shared-memory traffic and syncs; the register stages were already smem-free.  Encoder alone: 10.26 -> **9.18 ms** at 104,217 rows
+(1.12x; 0.088 us/row), 31.1 -> 28.1 ms at 310,602 (1.11-1.13x).  Fused commitment (Blake3, cosets kept): 16.27 -> **15.11 ms** (1.08x)
+at the v2 rows, 49.2 -> 45.6 ms at the v1 rows.  Below the <= 1.3x ceiling because the hash + store write are ~40% of the fused
+kernel and untouched.  `commit_stream.py`'s default encoder is now radix-4.
+
+**Not done**: an end-to-end v2 proof (buckets are measured separately on a synthetic witness); the v2 constraint emitter
+(`pi` / scalars from the real system); witness / hint generation for v2; a radix-8 / register-transposed encoder (the smem stages are now 5 x radix-4 at 1024 threads).

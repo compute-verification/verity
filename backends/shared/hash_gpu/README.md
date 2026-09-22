@@ -86,6 +86,24 @@ Candidate A R = 48,873 rows (3.20 GB). Full tree build, median of 5.
 | poseidon2-16 / torch blocks (int64) | 0.38 | 53,050 (x16 from a 1,024-col slice) | 12,950 | 0.36 | 8,974 | -- |
 | poseidon2-16 / torch int8 (`_int_mm`) | 0.27 | 76,400 (x16 from a 1,024-col slice) | 18,660 | 0.25 | 12,640 | -- |
 
+**A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, driver 580.126.16, torch 2.6.0+cu124, cupy 14.2.0; run
+`r20260922-063811-e561`, same bench, `--reps 7`; full table and floors in `backends/numerical/reports/anchor_a100.md`):
+
+| hash (A100) | B GB/s | B ms | B us/VU | A GB/s | A ms | vs 4090 |
+|---|---|---|---|---|---|---|
+| sha256 | 190 | 107.1 | 26.1 | 186 | 17.2 | 0.43x |
+| sha256-chunked | 344 | 59.1 | 14.4 | 332 | 9.7 | 0.55x |
+| blake3 | **377** | 54.0 | 13.2 | 356 | 9.0 | 1.05x |
+| poseidon2-16 / cuda | 26.1 | 780.6 | 191 | 26.1 | 122.8 | 0.45x |
+| poseidon2-24 / cuda | 13.3 | 1,528 | 373 | 13.3 | 240.5 | 0.39x |
+| poseidon2-16 / torch blocks (int64) | 0.60 | 34,141 (x16) | 8,335 | 0.50 | 6,369 | 1.55x |
+| poseidon2-16 / torch int8 | 0.41 | 49,664 (x16) | 12,125 | 0.37 | 8,733 | 1.54x |
+
+The SIMT hashes do not scale with bandwidth: SHA-256 and Poseidon2 run at ~0.45x the 4090 (the A100's INT32 rate is 0.47x:
+108 SMs x 64 lanes x 1.41 GHz vs 128 x 64 x 2.52 GHz), Blake3 holds its rate.  Blake3 is the fastest proof-internal hash on the
+anchor; the "A100 = 4090 x 2.02" scaling rows below are superseded by these measurements.  Generic trees on the A100: SHA-256
+2.2 G leaves/s, Blake3 2.7 G, Poseidon2-16 0.40 G, Poseidon2-24 0.21 G at 2^27; permutation w16 796 M perm/s, w24 397 M.
+
 Generic trees, 32-byte leaves (tree-dominated), leaves/s at 2^20 / 2^23 / 2^25 / 2^27 leaves:
 
 | hash | GB/s (2^27) | M leaves/s 2^20 | 2^23 | 2^25 | 2^27 | mem at 2^27 |

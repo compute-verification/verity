@@ -10,7 +10,6 @@ use crate::circuit::{eval_lin, Query, Table};
 use crate::field::{eq_table, eval_mle, fold_in_place, interpolate, Ext, Fp};
 use crate::gkr::{eq_point, threads, Reader};
 use crate::transcript::Transcript;
-use std::collections::HashMap;
 
 pub struct TableChallenges { pub z: Ext, pub beta: Ext }
 
@@ -37,8 +36,6 @@ fn fill(table: &Table, segs: &[SegQueries], ch: &TableChallenges, want_pq: bool)
     let size = if want_pq { 1usize << n } else { 0 };
     let mut p = vec![Ext::ZERO; size];
     let mut q = vec![Ext::ONE; size];
-    let mut index: HashMap<Fp, usize> = HashMap::with_capacity(table.rows.len());
-    for (i, r) in table.rows.iter().enumerate() { index.insert(r[0], i); }
     let mut mult = vec![0u64; table.rows.len()];
     let bs = betas(table, ch);
     let nthreads = threads();
@@ -56,7 +53,7 @@ fn fill(table: &Table, segs: &[SegQueries], ch: &TableChallenges, want_pq: bool)
             let mut qcs: Vec<&mut [Ext]> = if want_pq { qw.chunks_mut(chunk * q_t).collect() } else { (0..n_chunks).map(|_| &mut [][..]).collect() };
             for ci in 0..n_chunks {
                 let (pc, qc) = (std::mem::take(&mut pcs[ci]), std::mem::take(&mut qcs[ci]));
-                let (index, bs, table, queries) = (&index, &bs, table, &seg.queries);
+                let (bs, table, queries) = (&bs, table, &seg.queries);
                 let cols = seg.cols;
                 let ncols = seg.ncols;
                 let units = seg.units;
@@ -77,7 +74,7 @@ fn fill(table: &Table, segs: &[SegQueries], ch: &TableChallenges, want_pq: bool)
                                 pc[k * q_t + j] = Ext::ONE;
                                 qc[k * q_t + j] = ch.z - comb;
                             }
-                            if let Some(&ri) = index.get(&vals[0]) {
+                            if let Some(ri) = table.find(vals[0]) {
                                 if table.rows[ri][..] == vals[..] { m[ri] += 1; }
                             }
                         }
@@ -175,6 +172,7 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
     tr.label("logup: root denominator q_root");
     tr.absorb_ext(q_root);
     tr.label("logup: lambda");
+    tr.round_trip();
     let mut lambda = tr.challenge();
     let mut rho: Vec<Ext> = vec![];
     let mut claim = lambda * q_root;
@@ -195,6 +193,7 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
             let h = round_poly(&p0, &p1, &q0, &q1, &e, half, lambda);
             out.extend_from_slice(&h);
             tr.absorb_exts(&h);
+            tr.round_trip();
             let r = tr.challenge();
             x_star.push(r);
             for v in [&mut p0, &mut p1, &mut q0, &mut q1, &mut e] { par_fold(v, r); }
@@ -203,6 +202,7 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
         let vals = [p0[0], p1[0], q0[0], q1[0]];
         out.extend_from_slice(&vals);
         tr.absorb_exts(&vals);
+        tr.round_trip(); // mu and lambda are two coins of ONE verifier message (no prover message between them)
         let mu = tr.challenge();
         lambda = tr.challenge();
         rho = x_star;

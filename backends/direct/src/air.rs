@@ -11,7 +11,13 @@ use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::Matrix;
 use p3_maybe_rayon::prelude::*;
 
+use std::sync::Arc;
+
+use p3_field::{AbstractExtensionField, ExtensionField};
+
 use crate::ctx::{modp, AirCtx, FieldKind, IntCtx};
+use crate::lookup::{aux_matrix, eval_lookup, group_queries, lookup_constraint_names, multiplicities, LookupAirBuilder, LookupLayout, TableSet, INVALID, PRE_WIDTH};
+use crate::lookup_stark::LookupAir;
 use crate::program::{chain_program, unit_program, ChainIo, UnitIo, Word32, COL_FIRST, COL_LAST, COL_STEP, STEPS};
 
 pub type F = Goldilocks;
@@ -186,6 +192,24 @@ impl<F2> BaseAir<F2> for ChainAir {
     }
 }
 
+/// The row-to-row and boundary constraints of the chain (`chain_tail_names` order).
+fn chain_tail<AB: AirBuilder>(builder: &mut AB, idx: &ChainIdx, local: &[AB::Var], next: &[AB::Var]) {
+    let one = AB::Expr::one();
+    // boundary: the trace starts a VU
+    builder.when_first_row().assert_zero(local[idx.step]);
+    builder.when_first_row().assert_one(local[idx.first]);
+    // row to row: next.first = last; step increments inside a VU; the accumulator is carried
+    let nf: AB::Expr = one.clone() - next[idx.first].into();
+    let mut t = builder.when_transition();
+    t.assert_eq(next[idx.first], local[idx.last]);
+    let inc: AB::Expr = next[idx.step].into() - local[idx.step].into() - one;
+    t.assert_zero(nf.clone() * inc);
+    for (ci, yi) in idx.c.iter().zip(idx.y.iter()) {
+        let link: AB::Expr = next[*ci].into() - local[*yi].into();
+        t.assert_zero(nf.clone() * link);
+    }
+}
+
 impl<AB: AirBuilder> Air<AB> for ChainAir {
     fn eval(&self, builder: &mut AB) {
         let main = builder.main();
@@ -196,24 +220,325 @@ impl<AB: AirBuilder> Air<AB> for ChainAir {
             chain_program(&mut ctx, &dummy_chain_io());
             assert_eq!(ctx.cursor, self.width, "layout mismatch");
         }
-        let idx = &self.idx;
-        let one = AB::Expr::one();
-        // boundary: the trace starts a VU
-        builder.when_first_row().assert_zero(local[idx.step]);
-        builder.when_first_row().assert_one(local[idx.first]);
-        // row to row: next.first = last; step increments inside a VU; the accumulator is carried
-        let nf: AB::Expr = one.clone() - next[idx.first].into();
-        {
-            let mut t = builder.when_transition();
-            t.assert_eq(next[idx.first], local[idx.last]);
-            let inc: AB::Expr = next[idx.step].into() - local[idx.step].into() - one;
-            t.assert_zero(nf.clone() * inc);
-            for (ci, yi) in idx.c.iter().zip(idx.y.iter()) {
-                let link: AB::Expr = next[*ci].into() - local[*yi].into();
-                t.assert_zero(nf.clone() * link);
+        chain_tail(builder, &self.idx, &local, &next);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The chain with LogUp lookups (PROTOCOL.md section 14)
+// ---------------------------------------------------------------------------------------------------------------
+
+/// `ChainAir` with range checks and table lookups realised as LogUp queries.  The main trace is the program's
+/// columns plus one multiplicity column (the last); the preprocessed matrix holds the tables; the auxiliary
+/// matrix the helpers, `g` and the running sum.
+pub struct LookupChainAir {
+    /// Main width (program columns + 1 multiplicity column).
+    pub width: usize,
+    pub kind: FieldKind,
+    pub idx: ChainIdx,
+    pub lay: LookupLayout,
+    pub ext_degree: usize,
+}
+
+impl LookupChainAir {
+    /// Column of the multiplicity.
+    pub fn mult_col(&self) -> usize {
+        self.width - 1
+    }
+    pub fn new(kind: FieldKind, ext_degree: usize) -> (Self, Layout) {
+        let (lay, llay) = chain_lookup_layout(kind, ext_degree);
+        let mut idx = chain_idx(kind, &lay);
+        // the multiplicity column is not a program column: `chain_idx` does not see it
+        let _ = &mut idx;
+        (Self { width: lay.width, kind, idx, lay: llay, ext_degree }, lay)
+    }
+}
+
+/// The lookup layout of the chain: a collecting witness run discovers the tables, a second run records the
+/// queries (names, degrees -> groups), a symbolic run names the constraints.
+pub fn chain_lookup_layout(kind: FieldKind, ext_degree: usize) -> (Layout, LookupLayout) {
+    let io = dummy_chain_io();
+    let mut collect = IntCtx::new_kind(kind).with_lookup(None);
+    chain_program(&mut collect, &io);
+    let tables = TableSet::from_needs(&collect.needs);
+    let mut ctx = IntCtx::new_kind(kind).with_lookup(Some(tables.clone()));
+    chain_program(&mut ctx, &io);
+    let groups = group_queries(&ctx.query_degs);
+    let llay = LookupLayout { tables, query_names: ctx.query_names.clone(), query_degs: ctx.query_degs.clone(), groups };
+    let width = ctx.cols.len() + 1;
+    let mut col_names = ctx.names.clone();
+    col_names.push("lookup.m".to_string());
+    // constraint names: a symbolic pass on a concrete (zero) aux / preprocessed row
+    let row: Vec<Goldilocks> = ctx.cols.iter().map(|&v| to_field(kind, v)).chain([Goldilocks::zero()]).collect();
+    let two: Vec<Goldilocks> = [row.clone(), row.clone()].concat();
+    let aux_w = llay.aux_width(ext_degree);
+    let aux = vec![Goldilocks::zero(); 2 * aux_w];
+    let pre = vec![Goldilocks::zero(); 2 * PRE_WIDTH];
+    let mut ev = LookupEvaluator::<Goldilocks, p3_field::extension::BinomialExtensionField<Goldilocks, 2>> {
+        failing: vec![],
+        count: 0,
+        main: RowMajorMatrixView::new(&two, width),
+        pre: RowMajorMatrixView::new(&pre, PRE_WIDTH),
+        aux: RowMajorMatrixView::new(&aux, aux_w),
+        first_row: false,
+        last_row: false,
+        z: Default::default(),
+        beta: Default::default(),
+    };
+    let mut names = vec![];
+    {
+        let mut actx = AirCtx::with_kind(&mut ev, &row[..width - 1], kind).with_lookup(llay.tables.clone());
+        actx.constraint_names = Some(vec![]);
+        chain_program(&mut actx, &io);
+        names = actx.constraint_names.take().unwrap();
+        assert_eq!(actx.queries.len(), llay.n_queries());
+    }
+    names.extend(chain_tail_names(kind));
+    names.extend(lookup_constraint_names(&llay));
+    (Layout { width, col_names, constraint_names: names, n_hints: ctx.n_hints, n_mat: ctx.n_mat }, llay)
+}
+
+impl<F2> BaseAir<F2> for LookupChainAir {
+    fn width(&self) -> usize {
+        self.width
+    }
+}
+
+impl<G: PrimeField64> LookupAir<G> for LookupChainAir {
+    fn preprocessed_width(&self) -> usize {
+        PRE_WIDTH
+    }
+    fn aux_width(&self) -> usize {
+        self.lay.aux_width(self.ext_degree)
+    }
+    fn max_degree(&self) -> usize {
+        crate::program::MAX_DEG
+    }
+    fn eval_lookup<AB: LookupAirBuilder<F = G>>(&self, builder: &mut AB) {
+        let main = builder.main();
+        let local: Vec<AB::Var> = main.row_slice(0).to_vec();
+        let next: Vec<AB::Var> = main.row_slice(1).to_vec();
+        let w = self.width - 1;
+        let queries = {
+            let mut ctx = AirCtx::with_kind(builder, &local[..w], self.kind).with_lookup(self.lay.tables.clone());
+            chain_program(&mut ctx, &dummy_chain_io());
+            assert_eq!(ctx.cursor, w, "layout mismatch");
+            std::mem::take(&mut ctx.queries)
+        };
+        chain_tail(builder, &self.idx, &local, &next);
+        eval_lookup(builder, &self.lay, &queries, local[w], &mut None);
+    }
+}
+
+/// The honest rows of one VU with their query indices (LogUp realisation).
+pub fn chain_rows_lookup(kind: FieldKind, lay_width: usize, idx: &ChainIdx, tables: &Arc<TableSet>, vu: &VuIo) -> (Vec<Vec<i128>>, Vec<Vec<u32>>, Vec<u64>, Vec<String>) {
+    let steps = STEPS as usize;
+    let mut rows = Vec::with_capacity(steps);
+    let mut qs = Vec::with_capacity(steps);
+    let mut accs = Vec::with_capacity(steps);
+    let mut violations = vec![];
+    let mut c: u64 = 0;
+    let p = kind.prime();
+    for s in 0..steps {
+        let io = ChainIo { c, a: vu.x[16 * s..16 * s + 16].to_vec(), b: vu.w[16 * s..16 * s + 16].to_vec(), step: s as u64, y16: vu.y16 };
+        let mut ctx = IntCtx::for_trace(kind).with_lookup(Some(tables.clone()));
+        chain_program(&mut ctx, &io);
+        debug_assert_eq!(ctx.cols.len() + 1, lay_width);
+        for v in ctx.violations {
+            violations.push(format!("step {s}: {v}"));
+        }
+        c = if idx.y.len() == 1 { modp(ctx.cols[idx.y[0]], p) } else { (modp(ctx.cols[idx.y[0]], p) << 16) | modp(ctx.cols[idx.y[1]], p) };
+        accs.push(c);
+        rows.push(ctx.cols);
+        qs.push(ctx.queries);
+    }
+    (rows, qs, accs, violations)
+}
+
+/// The chain trace in the LogUp realisation: the main matrix (program columns + multiplicity), the flat
+/// `n_rows x Q` query index array, and every VU's intermediate accumulators.
+pub fn chain_trace_lookup<G: PrimeField64 + Send + Sync>(air: &LookupChainAir, vus: &[VuIo], min_rows: usize) -> (RowMajorMatrix<G>, Vec<u32>, Vec<Vec<u64>>) {
+    let kind = air.kind;
+    let lay_width = air.width;
+    let idx = &air.idx;
+    let tables = &air.lay.tables;
+    let q = air.lay.n_queries();
+    let steps = STEPS as usize;
+    let real = vus.len() * steps;
+    let n = real.max(min_rows).max(tables.total_rows).next_power_of_two();
+    let mut values: Vec<G> = vec![G::zero(); n * lay_width];
+    let mut queries: Vec<u32> = vec![INVALID; n * q];
+    let (real_part, pad_part) = values.split_at_mut(real * lay_width);
+    let (real_q, pad_q) = queries.split_at_mut(real * q);
+    let accs: Vec<Vec<u64>> = real_part
+        .par_chunks_mut(steps * lay_width)
+        .zip(real_q.par_chunks_mut(steps * q))
+        .zip(vus.par_iter())
+        .map(|((chunk, qchunk), vu)| {
+            let (rows, qs, accs, viol) = chain_rows_lookup(kind, lay_width, idx, tables, vu);
+            assert!(viol.is_empty(), "honest VU violates the integer checker: {:?}", &viol[..viol.len().min(3)]);
+            for (r, row) in rows.iter().enumerate() {
+                for (j, &v) in row.iter().enumerate() {
+                    chunk[r * lay_width + j] = to_field(kind, v);
+                }
+                qchunk[r * q..(r + 1) * q].copy_from_slice(&qs[r]);
+            }
+            accs
+        })
+        .collect();
+    if !pad_part.is_empty() {
+        let (zrows, zqs, _, viol) = chain_rows_lookup(kind, lay_width, idx, tables, &zero_vu());
+        assert!(viol.is_empty());
+        let zrows: Vec<Vec<G>> = zrows.iter().map(|r| r.iter().map(|&v| to_field(kind, v)).collect()).collect();
+        pad_part.par_chunks_mut(lay_width).zip(pad_q.par_chunks_mut(q)).enumerate().for_each(|(i, (row, qrow))| {
+            row[..lay_width - 1].copy_from_slice(&zrows[i % steps]);
+            qrow.copy_from_slice(&zqs[i % steps]);
+        });
+    }
+    // the multiplicity column
+    let mult = multiplicities(tables, &queries);
+    let mc = lay_width - 1;
+    for (r, &m) in mult.iter().enumerate() {
+        values[r * lay_width + mc] = G::from_canonical_u32(m);
+    }
+    (RowMajorMatrix::new(values, lay_width), queries, accs)
+}
+
+/// A concrete `LookupAirBuilder` over one (local, next) row pair of main / preprocessed / aux.
+pub struct LookupEvaluator<'a, G: PrimeField64, EF: ExtensionField<G>> {
+    pub failing: Vec<usize>,
+    pub count: usize,
+    pub main: RowMajorMatrixView<'a, G>,
+    pub pre: RowMajorMatrixView<'a, G>,
+    pub aux: RowMajorMatrixView<'a, G>,
+    pub first_row: bool,
+    pub last_row: bool,
+    pub z: EF,
+    pub beta: EF,
+}
+
+impl<'a, G: PrimeField64, EF: ExtensionField<G>> AirBuilder for LookupEvaluator<'a, G, EF> {
+    type F = G;
+    type Expr = G;
+    type Var = G;
+    type M = RowMajorMatrixView<'a, G>;
+    fn main(&self) -> Self::M {
+        self.main
+    }
+    fn is_first_row(&self) -> G {
+        if self.first_row { G::one() } else { G::zero() }
+    }
+    fn is_last_row(&self) -> G {
+        if self.last_row { G::one() } else { G::zero() }
+    }
+    fn is_transition_window(&self, _size: usize) -> G {
+        if self.last_row { G::zero() } else { G::one() }
+    }
+    fn assert_zero<I: Into<G>>(&mut self, x: I) {
+        if x.into() != G::zero() {
+            self.failing.push(self.count);
+        }
+        self.count += 1;
+    }
+}
+
+impl<'a, G: PrimeField64, EF: ExtensionField<G>> LookupAirBuilder for LookupEvaluator<'a, G, EF> {
+    type EF = EF;
+    fn preprocessed(&self) -> Self::M {
+        self.pre
+    }
+    fn aux(&self) -> Self::M {
+        self.aux
+    }
+    fn challenges(&self) -> (EF, EF) {
+        (self.z, self.beta)
+    }
+    fn ext_from_base(&self, x: G) -> EF {
+        EF::from_base(x)
+    }
+    fn ext_from_cols(&self, cols: &[G]) -> EF {
+        EF::from_base_slice(cols)
+    }
+    fn assert_zero_ext(&mut self, x: EF) {
+        if x != EF::zero() {
+            self.failing.push(self.count);
+        }
+        self.count += 1;
+    }
+    fn ext_degree(&self) -> usize {
+        <EF as AbstractExtensionField<G>>::D
+    }
+}
+
+/// Every failing constraint of the LogUp AIR over a whole committed trace (main, preprocessed, aux), with the
+/// row index: the exhaustive check of the tests (all rows, all constraints, the verifier's own evaluation).
+pub fn lookup_failing_trace<G: PrimeField64, EF: ExtensionField<G>>(air: &LookupChainAir, lay: &Layout, main: &RowMajorMatrix<G>, pre: &RowMajorMatrix<G>, aux: &RowMajorMatrix<G>, z: EF, beta: EF) -> Vec<(usize, String)> {
+    let n = main.height();
+    let (mw, pw, aw) = (main.width(), pre.width(), aux.width());
+    (0..n)
+        .into_par_iter()
+        .flat_map_iter(|r| {
+            let nx = (r + 1) % n;
+            let pair = |m: &RowMajorMatrix<G>, w: usize| -> Vec<G> { [&m.values[r * w..(r + 1) * w], &m.values[nx * w..(nx + 1) * w]].concat() };
+            let (m2, p2, a2) = (pair(main, mw), pair(pre, pw), pair(aux, aw));
+            let mut ev = LookupEvaluator { failing: vec![], count: 0, main: RowMajorMatrixView::new(&m2, mw), pre: RowMajorMatrixView::new(&p2, pw), aux: RowMajorMatrixView::new(&a2, aw), first_row: r == 0, last_row: r + 1 == n, z, beta };
+            air.eval_lookup(&mut ev);
+            assert_eq!(ev.count, lay.constraint_names.len());
+            ev.failing.iter().map(|&i| (r, lay.constraint_names[i].clone())).collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// The row-local failing constraints of adversarial rows in the LogUp realisation (`check-rows`): the program
+/// constraints and the lookup helper constraints (an out-of-table query leaves its group's helper unsatisfiable
+/// -- the prover has no term for it -- which is exactly the verifier's constraint that rejects the row).  The
+/// global table-side / running-sum constraints need the whole trace and are not evaluated here.
+pub fn lookup_failing_rows<G: PrimeField64, EF: ExtensionField<G>>(air: &LookupChainAir, lay: &Layout, rows: &[Vec<i128>], queries: &[Vec<u32>], starts_trace: bool) -> Vec<(usize, String)> {
+    let kind = air.kind;
+    let n = rows.len();
+    let q = air.lay.n_queries();
+    let flat: Vec<u32> = queries.iter().flat_map(|r| r.iter().copied()).collect();
+    assert_eq!(flat.len(), n * q);
+    let z = EF::from_canonical_u64(0x1234_5678_9abc_def1 % kind.prime() as u64) + EF::monomial(1) * G::from_canonical_u32(7);
+    let beta = EF::from_canonical_u64(0x0fed_cba9_8765_4321 % kind.prime() as u64) + EF::monomial(1) * G::from_canonical_u32(11);
+    let mult = vec![G::zero(); n];
+    let aux = aux_matrix::<G, EF>(&air.lay, &flat, &mult, n, z, beta, false);
+    let mw = air.width;
+    let mut mvals = Vec::with_capacity(n * mw);
+    for r in rows {
+        mvals.extend(r.iter().map(|&v| to_field::<G>(kind, v)));
+        mvals.push(G::zero());
+    }
+    let main = RowMajorMatrix::new(mvals, mw);
+    let pre = RowMajorMatrix::new(vec![G::zero(); n * PRE_WIDTH], PRE_WIDTH);
+    let global = ["lookup.table", "lookup.sum_first", "lookup.sum_step", "lookup.sum_last"];
+    let tail = chain_tail_names(kind);
+    let mut out = vec![];
+    for r in 0..n {
+        let nx = if r + 1 < n { r + 1 } else { r };
+        let pair = |m: &RowMajorMatrix<G>, w: usize| -> Vec<G> { [&m.values[r * w..(r + 1) * w], &m.values[nx * w..(nx + 1) * w]].concat() };
+        let (m2, p2, a2) = (pair(&main, mw), pair(&pre, PRE_WIDTH), pair(&aux, aux.width()));
+        let mut ev = LookupEvaluator { failing: vec![], count: 0, main: RowMajorMatrixView::new(&m2, mw), pre: RowMajorMatrixView::new(&p2, PRE_WIDTH), aux: RowMajorMatrixView::new(&a2, aux.width()), first_row: starts_trace && r == 0, last_row: false, z, beta };
+        air.eval_lookup(&mut ev);
+        assert_eq!(ev.count, lay.constraint_names.len());
+        let last = r + 1 == n;
+        for &i in &ev.failing {
+            let name = &lay.constraint_names[i];
+            if global.contains(&name.as_str()) {
+                continue;
+            }
+            if last && tail.contains(name) && name != "vu.row0_step" && name != "vu.row0_first" {
+                continue;
+            }
+            out.push((r, name.clone()));
+        }
+        for (i, &qi) in queries[r].iter().enumerate() {
+            if qi == INVALID {
+                out.push((r, format!("lookup:{}", air.lay.query_names[i])));
             }
         }
     }
+    out
 }
 
 /// One VU's instance: operand words and the claimed output word.
@@ -253,6 +578,141 @@ pub fn chain_rows(kind: FieldKind, lay_width: usize, idx: &ChainIdx, vu: &VuIo) 
         rows.push(ctx.cols);
     }
     (rows, accs, violations)
+}
+
+/// One row of an adversarial trace (`check-rows`): the unit's operands, its position, the claimed word and the
+/// hints the adversary imposes by name (`IntCtx::overrides`; every realisation column -- limbs, selectors,
+/// inverses, materialised copies -- is derived from the imposed values, the only way a prover could fill them).
+/// `c = None` carries the previous row's output limbs (their canonical field values, whatever they are).
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct RowSpec {
+    pub c: Option<u64>,
+    pub a: Vec<u64>,
+    pub b: Vec<u64>,
+    pub step: u64,
+    pub y16: u64,
+    #[serde(default)]
+    pub overrides: std::collections::BTreeMap<String, i128>,
+}
+
+/// The rows of an adversarial trace from `RowSpec`s (integer columns) and the integer-checker violations (for
+/// information only: the field evaluator decides).
+pub fn chain_rows_spec(kind: FieldKind, lay_width: usize, idx: &ChainIdx, specs: &[RowSpec]) -> (Vec<Vec<i128>>, Vec<String>) {
+    let p = kind.prime();
+    let mut rows: Vec<Vec<i128>> = Vec::with_capacity(specs.len());
+    let mut violations = vec![];
+    for (i, sp) in specs.iter().enumerate() {
+        let mut ctx = IntCtx::new_kind(kind);
+        ctx.record_names = false;
+        for (k, v) in &sp.overrides {
+            ctx.overrides.insert(k.clone(), *v);
+        }
+        let mut c = sp.c.unwrap_or(0);
+        if sp.c.is_none() && i > 0 {
+            let prev = &rows[i - 1];
+            if idx.y.len() == 1 {
+                c = modp(prev[idx.y[0]], p);
+            } else {
+                // the limbs as field elements, exactly as the link constraint transports them
+                ctx.overrides.insert("x.c_hi".into(), modp(prev[idx.y[0]], p) as i128);
+                ctx.overrides.insert("x.c_lo".into(), modp(prev[idx.y[1]], p) as i128);
+            }
+        }
+        let io = ChainIo { c, a: sp.a.clone(), b: sp.b.clone(), step: sp.step, y16: sp.y16 };
+        chain_program(&mut ctx, &io);
+        assert_eq!(ctx.cols.len(), lay_width, "row {i}: width");
+        for v in ctx.violations {
+            violations.push(format!("row {i}: {v}"));
+        }
+        rows.push(ctx.cols);
+    }
+    (rows, violations)
+}
+
+/// `chain_rows_spec` in the LogUp realisation: the rows, their query indices and the integer violations (query
+/// membership failures are among them, as `<name>: <v> not in T<w>`).
+pub fn chain_rows_spec_lookup(kind: FieldKind, lay_width: usize, idx: &ChainIdx, tables: &Arc<TableSet>, specs: &[RowSpec]) -> (Vec<Vec<i128>>, Vec<Vec<u32>>, Vec<String>) {
+    let p = kind.prime();
+    let mut rows: Vec<Vec<i128>> = Vec::with_capacity(specs.len());
+    let mut qs = Vec::with_capacity(specs.len());
+    let mut violations = vec![];
+    for (i, sp) in specs.iter().enumerate() {
+        let mut ctx = IntCtx::new_kind(kind).with_lookup(Some(tables.clone()));
+        ctx.record_names = false;
+        for (k, v) in &sp.overrides {
+            ctx.overrides.insert(k.clone(), *v);
+        }
+        let mut c = sp.c.unwrap_or(0);
+        if sp.c.is_none() && i > 0 {
+            let prev = &rows[i - 1];
+            if idx.y.len() == 1 {
+                c = modp(prev[idx.y[0]], p);
+            } else {
+                ctx.overrides.insert("x.c_hi".into(), modp(prev[idx.y[0]], p) as i128);
+                ctx.overrides.insert("x.c_lo".into(), modp(prev[idx.y[1]], p) as i128);
+            }
+        }
+        let io = ChainIo { c, a: sp.a.clone(), b: sp.b.clone(), step: sp.step, y16: sp.y16 };
+        chain_program(&mut ctx, &io);
+        assert_eq!(ctx.cols.len() + 1, lay_width, "row {i}: width");
+        for v in ctx.violations {
+            violations.push(format!("row {i}: {v}"));
+        }
+        rows.push(ctx.cols);
+        qs.push(ctx.queries);
+    }
+    (rows, qs, violations)
+}
+
+/// A gadget-level case in the LogUp realisation: the program constraints are evaluated by the AIR (a plain
+/// evaluator; the queries are recorded, not constrained) and every query whose tuple is not a table row is
+/// reported as `lookup:<name>` -- the membership the LogUp identity enforces.  Returns
+/// `(failing, integer violations)`.
+pub fn gadget_failing_lookup<G: PrimeField64>(kind: FieldKind, _chain_tables: &Arc<TableSet>, case: &crate::program::GadgetCase, overrides: &[(String, i128)]) -> (Vec<String>, Vec<String>) {
+    // the gadget's own tables (a gadget in isolation range-checks its inputs at widths the chain may not use)
+    let mut collect = IntCtx::new_kind(kind).with_lookup(None);
+    crate::program::gadget_program(&mut collect, case);
+    let tables = TableSet::from_needs(&collect.needs);
+    let mut ctx = IntCtx::new_kind(kind).with_lookup(Some(tables.clone()));
+    for (k, v) in overrides {
+        ctx.overrides.insert(k.clone(), *v);
+    }
+    crate::program::gadget_program(&mut ctx, case);
+    let width = ctx.cols.len();
+    let row: Vec<G> = ctx.cols.iter().map(|&v| to_field(kind, v)).collect();
+    let two: Vec<G> = [row.clone(), row.clone()].concat();
+    let mut ev = Evaluator { failing: vec![], count: 0, main: RowMajorMatrixView::new(&two, width), first_row: false };
+    let mut actx = AirCtx::with_kind(&mut ev, &row, kind).with_lookup(tables.clone());
+    actx.constraint_names = Some(vec![]);
+    crate::program::gadget_program(&mut actx, case);
+    let names = actx.constraint_names.take().unwrap();
+    assert_eq!(ev.count, names.len());
+    let mut failing: Vec<String> = ev.failing.iter().map(|&i| names[i].clone()).collect();
+    for (i, &q) in ctx.queries.iter().enumerate() {
+        if q == INVALID {
+            failing.push(format!("lookup:{}", ctx.query_names[i]));
+        }
+    }
+    (failing, ctx.violations)
+}
+
+/// A gadget-level case evaluated by the AIR's own constraints: `(failing constraint names, integer violations)`.
+pub fn gadget_failing<G: PrimeField64>(kind: FieldKind, case: &crate::program::GadgetCase, overrides: &[(String, i128)]) -> (Vec<String>, Vec<String>) {
+    let mut ctx = IntCtx::new_kind(kind);
+    for (k, v) in overrides {
+        ctx.overrides.insert(k.clone(), *v);
+    }
+    crate::program::gadget_program(&mut ctx, case);
+    let width = ctx.cols.len();
+    let row: Vec<G> = ctx.cols.iter().map(|&v| to_field(kind, v)).collect();
+    let two: Vec<G> = [row.clone(), row.clone()].concat();
+    let mut ev = Evaluator { failing: vec![], count: 0, main: RowMajorMatrixView::new(&two, width), first_row: false };
+    let mut actx = AirCtx::with_kind(&mut ev, &row, kind);
+    actx.constraint_names = Some(vec![]);
+    crate::program::gadget_program(&mut actx, case);
+    let names = actx.constraint_names.take().unwrap();
+    assert_eq!(ev.count, names.len());
+    (ev.failing.iter().map(|&i| names[i].clone()).collect(), ctx.violations)
 }
 
 /// The all-zero VU (`a = b = 0`, `c` stays `+0`, `y16 = 0`): the prescribed public padding.

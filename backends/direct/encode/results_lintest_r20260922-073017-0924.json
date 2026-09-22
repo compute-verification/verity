@@ -1,0 +1,325 @@
+{
+ "device": {
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "sms": 128,
+  "l2_bytes": 75497472,
+  "device_memory_bytes": 25250627584,
+  "cuda_driver_version": 13000,
+  "cuda_runtime_version": 12090,
+  "cupy": "14.2.0",
+  "numpy": "2.4.6",
+  "nvidia_smi_driver": "580.159.04"
+ },
+ "started": "2026-09-22T07:30:47Z",
+ "args": {
+  "reps": 7,
+  "out": "/workspace/research/runs/r20260922-073017-0924/lintest_bench.json",
+  "rows": 310602,
+  "M": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "exceptional": [
+   256
+  ],
+  "chunk_rows": 1024,
+  "tc": false,
+  "lazy": true,
+  "baseline": false,
+  "quick": false
+ },
+ "results": [
+  {
+   "name": "linear_test_structured_M1_X256",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 1,
+   "exceptional_rows": 256,
+   "lazy_reduction": false,
+   "chunk_rows": 1024,
+   "ms_median": 5.8368000984191895,
+   "ms_all": [
+    5.840832233428955,
+    5.838848114013672,
+    5.82144021987915,
+    5.834752082824707,
+    5.837823867797852,
+    5.8368000984191895,
+    5.82144021987915
+   ],
+   "us_per_row": 0.018791894766998246,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1804,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.09721600264310837,
+    "combine_multi": 5.661632061004639,
+    "encode_V": 0.0306560005992651,
+    "pointwise": 0.020479999482631683,
+    "exceptional_generic": 0.124032037332654
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 12005277696,
+   "fraction_of_read_floor": 0.8649456829927005
+  },
+  {
+   "name": "linear_test_structured_M1_X256_lazy",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 1,
+   "exceptional_rows": 256,
+   "lazy_reduction": true,
+   "chunk_rows": 1024,
+   "ms_median": 6.249472141265869,
+   "ms_all": [
+    6.250495910644531,
+    6.249472141265869,
+    6.249472141265869,
+    6.247424125671387,
+    6.251520156860352,
+    6.250495910644531,
+    6.243328094482422
+   ],
+   "us_per_row": 0.02012051481080569,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1804,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 1.0536960363388062,
+    "combine_multi": 6.064032077789307,
+    "encode_V": 0.02969600073993206,
+    "pointwise": 0.020479999482631683,
+    "exceptional_generic": 0.13526406325399876
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5726404608,
+   "fraction_of_read_floor": 0.8078306348920598
+  },
+  {
+   "name": "linear_test_structured_M2_X256",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 2,
+   "exceptional_rows": 256,
+   "lazy_reduction": false,
+   "chunk_rows": 1024,
+   "ms_median": 6.767615795135498,
+   "ms_all": [
+    6.828991889953613,
+    6.746111869812012,
+    6.767615795135498,
+    6.756351947784424,
+    6.766592025756836,
+    6.7788801193237305,
+    6.783999919891357
+   ],
+   "us_per_row": 0.02178870643181788,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1816,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.12083200365304947,
+    "combine_multi": 6.978655815124512,
+    "encode_V": 0.04915200173854828,
+    "pointwise": 0.03574400022625923,
+    "exceptional_generic": 0.0
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5776736256,
+   "fraction_of_read_floor": 0.745981332339799
+  },
+  {
+   "name": "linear_test_structured_M2_X256_lazy",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 2,
+   "exceptional_rows": 256,
+   "lazy_reduction": true,
+   "chunk_rows": 1024,
+   "ms_median": 5.900288105010986,
+   "ms_all": [
+    5.944320201873779,
+    5.897215843200684,
+    5.912576198577881,
+    5.89302396774292,
+    5.904384136199951,
+    5.898240089416504,
+    5.900288105010986
+   ],
+   "us_per_row": 0.01899629785066093,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1816,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.11776000261306763,
+    "combine_multi": 5.7169599533081055,
+    "encode_V": 0.047040000557899475,
+    "pointwise": 0.03596799820661545,
+    "exceptional_generic": 0.10032015293836594
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5776736256,
+   "fraction_of_read_floor": 0.8556387345444121
+  },
+  {
+   "name": "linear_test_structured_M3_X256",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 3,
+   "exceptional_rows": 256,
+   "lazy_reduction": false,
+   "chunk_rows": 1024,
+   "ms_median": 9.722880363464355,
+   "ms_all": [
+    9.704447746276855,
+    9.712639808654785,
+    9.71571159362793,
+    9.722880363464355,
+    9.89798355102539,
+    10.053631782531738,
+    10.187744140625
+   ],
+   "us_per_row": 0.031303341135808384,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1828,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.158720001578331,
+    "combine_multi": 9.980928421020508,
+    "encode_V": 0.06656000018119812,
+    "pointwise": 0.048128001391887665,
+    "exceptional_generic": 0.0
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5820776448,
+   "fraction_of_read_floor": 0.5192406837165086
+  },
+  {
+   "name": "linear_test_structured_M3_X256_lazy",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 3,
+   "exceptional_rows": 256,
+   "lazy_reduction": true,
+   "chunk_rows": 1024,
+   "ms_median": 7.14847993850708,
+   "ms_all": [
+    7.14847993850708,
+    7.130112171173096,
+    7.1690239906311035,
+    7.1342082023620605,
+    7.1393280029296875,
+    7.165952205657959,
+    7.157760143280029
+   ],
+   "us_per_row": 0.023014919216576456,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1828,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.158720001578331,
+    "combine_multi": 6.952832221984863,
+    "encode_V": 0.06656000018119812,
+    "pointwise": 0.05119999870657921,
+    "exceptional_generic": 0.07788771763443947
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5820776448,
+   "fraction_of_read_floor": 0.7062361636386436
+  },
+  {
+   "name": "linear_test_structured_M4_X256",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 4,
+   "exceptional_rows": 256,
+   "lazy_reduction": false,
+   "chunk_rows": 1024,
+   "ms_median": 13.641728401184082,
+   "ms_all": [
+    13.042688369750977,
+    13.090815544128418,
+    13.372415542602539,
+    13.641728401184082,
+    13.641728401184082,
+    13.641728401184082,
+    13.677568435668945
+   ],
+   "us_per_row": 0.04392028512753969,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1840,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.17612800002098083,
+    "combine_multi": 13.400064468383789,
+    "encode_V": 0.08278399705886841,
+    "pointwise": 0.06348799914121628,
+    "exceptional_generic": 0.09539193660020828
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5843845120,
+   "fraction_of_read_floor": 0.3700788418556144
+  },
+  {
+   "name": "linear_test_structured_M4_X256_lazy",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 4,
+   "exceptional_rows": 256,
+   "lazy_reduction": true,
+   "chunk_rows": 1024,
+   "ms_median": 7.684095859527588,
+   "ms_all": [
+    7.445504188537598,
+    7.441408157348633,
+    7.462912082672119,
+    7.732223987579346,
+    7.734272003173828,
+    7.688191890716553,
+    7.684095859527588
+   ],
+   "us_per_row": 0.02473936375016126,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1840,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.187391996383667,
+    "combine_multi": 7.559328079223633,
+    "encode_V": 0.08489599823951721,
+    "pointwise": 0.06348799914121628,
+    "exceptional_generic": 0.0
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5843845120,
+   "fraction_of_read_floor": 0.6570083377290696
+  }
+ ],
+ "bench_kind": "bucket",
+ "bucket": "linear_test",
+ "scope": "component: B-Ligero linear test q_add through the structure of r^T A (powers-of-rho combination, per-unit constraint pattern): M fixed F_c rows + per-row F_c scalars + X exceptional rows, measured standalone on resident pseudo-random data; the r^T A scalars/pattern generation is not included (it is O(rows + |pattern|))",
+ "checks": {
+  "toy_structure_matches_dense_rta": true,
+  "toy_exceptional_rows": [
+   0,
+   5
+  ],
+  "numpy_shortcut_equals_numpy_general": true,
+  "gpu_general_equals_numpy": true,
+  "gpu_shortcut_equals_gpu_general": true,
+  "gpu_shortcut_equals_gpu_general_lazy": true,
+  "int8_tc_combine_equals_numpy": true
+ },
+ "finished": "2026-09-22T07:30:52Z",
+ "run_id": "r20260922-073017-0924",
+ "all_bit_exact": true
+}

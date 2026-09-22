@@ -87,6 +87,7 @@ pub trait Ctx {
 /// A fixed table realised by one-hot selection over its distinct rows.  `rows[j]` matches `key == keys[j]`;
 /// when `saturate` is set, the last row instead matches `key >= keys[last]` (proved by a range-checked slack
 /// below `slack_hi`).  Outputs are linear combinations of the selectors.
+#[derive(Clone, Debug)]
 pub struct Table {
     pub name: &'static str,
     pub keys: Vec<i128>,
@@ -377,13 +378,12 @@ fn align_state<C: Ctx>(ctx: &mut C, m: &C::V, d: &C::V, tag: &str) -> C::V {
     let w = ACC_BITS;
     let q = ctx.hint(&format!("{tag}.q"), &[m, d], &|v| {
         let p = v[0] << ACC_SHIFT;
-        let dd = v[1].min(w);
-        p >> dd
+        shr(p, v[1].min(w))
     });
     let r = ctx.hint(&format!("{tag}.r"), &[m, d], &|v| {
         let p = v[0] << ACC_SHIFT;
         let dd = v[1].min(w);
-        p - ((p >> dd) << dd)
+        p - shl(shr(p, dd), dd)
     });
     ctx.rng(&format!("{tag}.q"), &q, 0, 1 << w);
     ctx.rng(&format!("{tag}.r"), &r, 0, 1 << w);
@@ -404,15 +404,15 @@ fn align_product<C: Ctx>(ctx: &mut C, u: &C::V, d: &C::V, tag: &str) -> C::V {
     let ubits = 2 * SIG;
     let q = ctx.hint(&format!("{tag}.q"), &[u, d], &|v| {
         let (u, d) = (v[0], v[1]);
-        if d <= PROD_SHIFT { u } else if d < PROD_BITS { u >> (d - PROD_SHIFT) } else { 0 }
+        if d <= PROD_SHIFT { u } else if d < PROD_BITS { shr(u, d - PROD_SHIFT) } else { 0 }
     });
     let r = ctx.hint(&format!("{tag}.r"), &[u, d], &|v| {
         let (u, d) = (v[0], v[1]);
         if d <= PROD_SHIFT {
             0
         } else if d < PROD_BITS {
-            let q = u >> (d - PROD_SHIFT);
-            u - (q << (d - PROD_SHIFT))
+            let q = shr(u, d - PROD_SHIFT);
+            u - shl(q, d - PROD_SHIFT)
         } else {
             u
         }
@@ -475,9 +475,24 @@ fn leading_bit<C: Ctx>(ctx: &mut C, v: &C::V, tag: &str) -> C::V {
     let row = ctx.lookup(&format!("{tag}.lead"), &lead_table(), &l);
     let (lo, ispan, span) = (&row[0], &row[1], &row[2]);
     let vlo = ctx.sub(v, lo);
+    if ctx.small_field() {
+        // LT_DIRECT, two-range form (babybear_rules.md 2, 6): the direct bound `span - 1 - (v - lo) in [0, 2^30)`
+        // alone only bounds `v - lo` from ABOVE.  `v - lo` is not a range-checked hint, and for `v < lo` the
+        // difference `span - 1 - (v - lo) = 2^l - 1 - v` is a small positive integer that PASSES the direct check:
+        // `v = 16, l = 29` was accepted by the port as shipped (M = v >> 5 = 0, the group's output forced to zero).
+        // The lower bound is a second range on the linear wire: `v - lo in [0, 2^30)`; with `v <= S_MAX` (the
+        // `sum.premise` check) a negative `v - lo >= -2^29` has representative `>= p - 2^29 > 2^30`, so it is
+        // excluded.  SOUNDNESS FIX (b-lookup, 2026-09-22).
+        ctx.rng(&format!("{tag}.window_lo"), &vlo, 0, 1 << S_BITS);
+    }
     ctx.lt_pow(&format!("{tag}.window"), &vlo, ispan, span, S_BITS);
     l
 }
+
+/// Shifts that do not panic on adversarial (overridden) hint inputs in debug builds: the hint closures run on
+/// whatever the row supplies (`IntCtx::overrides`, the battery); the constraints, not these closures, are the check.
+fn shl(v: i128, k: i128) -> i128 { if (0..127).contains(&k) { v << k } else { 0 } }
+fn shr(v: i128, k: i128) -> i128 { if (0..127).contains(&k) { v >> k } else if v < 0 { -1 } else { 0 } }
 
 /// Normalise: (e1, M)
 fn normalise<C: Ctx>(ctx: &mut C, e: &C::V, l: &C::V, v: &C::V, tag: &str) -> (C::V, C::V) {
@@ -486,13 +501,13 @@ fn normalise<C: Ctx>(ctx: &mut C, e: &C::V, l: &C::V, v: &C::V, tag: &str) -> (C
         let (e, l, v) = (x[0], x[1], x[2]);
         let e1 = (e + l - WIDTH).max(E_MIN);
         let k = e - e1 + ACC_SIG - WIDTH;
-        if k >= 0 { v << k } else { v >> -k }
+        if k >= 0 { shl(v, k) } else { shr(v, -k) }
     });
     let r = ctx.hint(&format!("{tag}.r"), &[e, l, v], &|x| {
         let (e, l, v) = (x[0], x[1], x[2]);
         let e1 = (e + l - WIDTH).max(E_MIN);
         let k = e - e1 + ACC_SIG - WIDTH;
-        if k >= 0 { 0 } else { v - ((v >> -k) << -k) }
+        if k >= 0 { 0 } else { v - shl(shr(v, -k), -k) }
     });
     ctx.boolean(&format!("{tag}.clamp"), &clamp);
     ctx.rng(&format!("{tag}.M"), &m, 0, 1 << ACC_SIG);
@@ -760,6 +775,90 @@ pub fn unit_program_with<C: Ctx>(ctx: &mut C, io: &UnitIo, bind_y: bool) -> (Wor
         }
     }
     (c, word)
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// One gadget in isolation (the red team's gadget-level battery cases)
+// ---------------------------------------------------------------------------------------------------------------
+
+/// A gadget-level case (`battery_babybear`, level `gadget`: the z3 models): the gadget's inputs as free columns
+/// pinned to the contract's input ranges (the premises the composition guarantees -- `V_PREMISE` for `v`), its
+/// hints as columns the case overrides (names carry the tag the unit uses: `acc.*`, `cast.*`, `align_state.*`,
+/// `align_prod.*`, `lead.*`, `norm.*`), and every output bound to the claimed value.
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct GadgetCase {
+    pub name: String,
+    pub inputs: std::collections::BTreeMap<String, i128>,
+    pub claimed: Vec<i128>,
+}
+
+fn gadget_input<C: Ctx>(ctx: &mut C, case: &GadgetCase, n: &str, lo: i128, hi: i128) -> C::V {
+    let v = *case.inputs.get(n).unwrap_or_else(|| panic!("gadget {}: missing input {n}", case.name));
+    let x = ctx.hint(&format!("in.{n}"), &[], &move |_| v);
+    ctx.rng(&format!("in.{n}"), &x, lo, hi);
+    x
+}
+
+pub fn gadget_program<C: Ctx>(ctx: &mut C, case: &GadgetCase) {
+    let outs: Vec<C::V> = match case.name.as_str() {
+        "fp32_decode" => {
+            let lo = gadget_input(ctx, case, "c_lo", 0, 1 << HALF);
+            let hi = gadget_input(ctx, case, "c_hi", 0, 1 << HALF);
+            let c = if ctx.small_field() {
+                Word32::Limbs { hi, lo }
+            } else {
+                let hs = ctx.scale(&hi, 1 << HALF);
+                Word32::Full(ctx.add(&hs, &lo))
+            };
+            let (s, e_hat, m) = fp32_decode(ctx, &c, "acc");
+            vec![s, e_hat, m]
+        }
+        "epilogue" => {
+            let lo = gadget_input(ctx, case, "y32_lo", 0, 1 << HALF);
+            let hi = gadget_input(ctx, case, "y32_hi", 0, 1 << HALF);
+            let y = if ctx.small_field() {
+                Word32::Limbs { hi, lo }
+            } else {
+                let hs = ctx.scale(&hi, 1 << HALF);
+                Word32::Full(ctx.add(&hs, &lo))
+            };
+            vec![epilogue(ctx, &y, "cast")]
+        }
+        "align_state" => {
+            let m = gadget_input(ctx, case, "M", 0, 1 << ACC_SIG);
+            let d = gadget_input(ctx, case, "d", 0, SHIFT_ROWS);
+            vec![align_state(ctx, &m, &d, "align_state")]
+        }
+        "align_product" => {
+            let u = gadget_input(ctx, case, "u", 0, 1 << (2 * SIG));
+            let d = gadget_input(ctx, case, "d", 0, SHIFT_ROWS);
+            vec![align_product(ctx, &u, &d, "align_prod")]
+        }
+        "leading_bit" => {
+            let v = gadget_input(ctx, case, "v", 0, S_MAX + 1);
+            vec![leading_bit(ctx, &v, "lead")]
+        }
+        "normalise" => {
+            let e = gadget_input(ctx, case, "E", FLOOR, LAST + 1);
+            let l = gadget_input(ctx, case, "l", 0, L_HI + 1);
+            let v = gadget_input(ctx, case, "v", 0, S_MAX + 1);
+            let (e1, m) = normalise(ctx, &e, &l, &v, "norm");
+            vec![e1, m]
+        }
+        "lead_norm" => {
+            let e = gadget_input(ctx, case, "E", FLOOR, LAST + 1);
+            let v = gadget_input(ctx, case, "v", 0, S_MAX + 1);
+            let l = leading_bit(ctx, &v, "lead");
+            let (e1, m) = normalise(ctx, &e, &l, &v, "norm");
+            vec![e1, m]
+        }
+        other => panic!("gadget_program: unknown gadget {other}"),
+    };
+    assert_eq!(outs.len(), case.claimed.len(), "gadget {}: {} outputs, {} claimed", case.name, outs.len(), case.claimed.len());
+    for (i, (o, &c)) in outs.iter().zip(case.claimed.iter()).enumerate() {
+        let k = ctx.konst(c);
+        ctx.eq(&format!("out[{i}]"), o, &k);
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

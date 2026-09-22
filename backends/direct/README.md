@@ -3,7 +3,10 @@
 The transition unit (one 16-product `mma.sync` update with an arbitrary finite accumulator) as an AIR whose
 constraints are the WP2 gadget contracts (`backends/numerical/python/verity_numerical/checker/`), and the **full
 K=1536 verification unit** as 96 chained rows plus the epilogue (`ChainAir`, PROTOCOL.md 12), proved with Plonky3
-`uni-stark` over Goldilocks or BabyBear. The design is `PROTOCOL.md`; this file is how to build, test and run what exists.
+`uni-stark` over Goldilocks or BabyBear; range checks and fixed tables either as 2-bit limbs / one-hot selectors
+(PROTOCOL.md 12) or as LogUp lookups against preprocessed tables (`--lookup`, PROTOCOL.md 14: 3.4x fewer committed
+bytes per VU, 2.9x faster at 4 096 VUs).  The BabyBear port was checked against the red team's six embedding rules
+and 83-case battery (PROTOCOL.md 13; one soundness fix, `LT_DIRECT` two-range form in `leading_bit`). The design is `PROTOCOL.md`; this file is how to build, test and run what exists.
 
 Labels on every number from this crate: `proof_class = NON_ZK_PROOF_DIAGNOSTIC`, `authentication = excluded`,
 `unit = transition` (`bench`) or `unit = vu`, `scope = vu` (`vu-bench`), `domain = finite`. The PCS is Plonky3 FRI + Keccak Merkle, **not** the Ligero-style interactive
@@ -15,7 +18,8 @@ PCS of `PROTOCOL.md`: it is the fastest complete non-ZK proof of the *right* con
 - `src/params.rs`: `REAL` (SIG 8 / EXP 8 / ACC_SIG 24 / WIDTH 25 / FLOOR −132 / groups 8+8), `MAX_DEG = 5`.
 - `src/program.rs`: the 12 WP2 gadget contracts written once against a `Ctx` trait (hint, eq, boolean, rng, lookup, mat).
 - `src/ctx.rs`: `IntCtx` (i128 witness generator + integer checker) and `AirCtx` (symbolic constraint emitter: range
-  checks as 2-bit limbs, fixed tables as one-hot selectors, auto-materialisation above degree 5).
+  checks as 2-bit limbs, fixed tables as one-hot selectors, auto-materialisation above degree 5; in
+  `Realisation::LogUp` both become recorded queries instead).
 - `src/air.rs`: `UnitAir` (one independent row per unit) and `ChainAir` (one row per unit, accumulator carried by a
   transition constraint, step counter + `first`/`last` selectors, epilogue on every row, claim column bound on the
   last row); `Layout`, trace builders (`chain_trace` is parallel over VUs), per-constraint `Evaluator`.
@@ -26,7 +30,14 @@ PCS of `PROTOCOL.md`: it is the fastest complete non-ZK proof of the *right* con
 - `src/challenger.rs`: fork of `p3_challenger::SerializingChallenger64` with the mask fix below.
 - `src/main.rs`: `bench`, `crosscheck`, `layout` (the unit); `vu-bench`, `vu-neg`, `chain-layout` (the VU chain,
   `--field goldilocks|babybear`, reading `bench-instances/v1` arrays from `--root`).
-- `run_vu.sh`: the pod script (build, `cargo test`, `chain-layout`, `vu-neg`, `vu-bench`).
+  `check-rows` evaluates every AIR constraint on supplied adversarial rows (PROTOCOL.md 13; driven by
+  `tools/battery_adapter.py`, the red team's 83-case battery).  `--lookup` on `chain-layout`, `vu-bench`,
+  `check-rows` selects the LogUp realisation (PROTOCOL.md 14; `--ext 5` for BabyBear^5 challenges).
+- `src/lookup.rs`, `src/lookup_stark.rs`: the LogUp range/table lookups (tables, queries, helper columns, the
+  auxiliary round) and the three-round fork of `p3_uni_stark::prove/verify` they need; `air.rs::LookupChainAir`.
+- `run_vu.sh`: the pod script (build, `cargo test`, `chain-layout`, `vu-neg`, battery, `vu-bench`);
+  `run_lookup.sh`: the same for the LogUp realisation (`tests/lookup.rs` incl. the 2^17-row round trip, battery
+  `--lookup`, `vu-bench --lookup`).
 - `tests/negative.rs`: the `test_negative.py` patterns as Rust tests, plus prove/verify of mutated traces.
 - `tests/chain.rs`: two real VUs (from the committed negative arrays, with their correct words) prove and verify over
   both fields; a wrong claimed word, a broken link, a non-zero `c_0`, a skipped step are rejected by `verify`.
@@ -85,6 +96,16 @@ Witness generation is not in `prove_s`: 4.7 s at B=4096, single-threaded. Rounds
 commits as run (the interactive Ligero design is 3). Soundness of this FRI configuration: proven ≈ 83.8 bits (unique
 decoding, −log2((1+ρ)/2) per query + PoW), conjectured 216; field terms (≈ 2^-128 · degree) omitted. Proof size is
 100 queries × 2,794-wide openings, hence flat in B.
+
+## Latency axis (lane latency, 2026-09-22)
+
+`rounds.sequential_depth` is *measured*: `src/rtt.rs` wraps the Plonky3 challenger and counts every `observe -> sample`
+boundary of the prover's transcript as one verifier message of the interactive reading (as run, Plonky3 is Fiat-Shamir,
+depth 1); `--rtt-ms X` (or `VERITY_RTT_MS`, `RTT_MS=` in `run_vu.sh`) sleeps `X` ms at each boundary, and the envelope
+carries `t.e2e.rtt_Xms` measured plus the other RTTs predicted (`t.total` is compute with the sleep subtracted;
+`direct.depth_formula_legacy` is the earlier `log_n + 5`). Measured: 2^13 rows (B=64) depth **16** (legacy 18), 2^19 rows
+(B=4096) depth **22** (legacy 24); B=64 e2e at 50 ms RTT 3.98 s = 3.04 compute + 0.14 verify + 16 × 50 ms (model 3.98 s).
+See `backends/numerical/reports/latency.md`.
 
 ## The K=1536 VU chain: recorded runs (vy-cpu2, AMD EPYC 9654, **12 threads**, release)
 

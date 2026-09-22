@@ -859,3 +859,104 @@ study's \(B=2^{20}\) failure point stands. The chain functional's Schwartz–Zip
 
 See `README.md` "BabyBear" (gate: `a-babybear.gate`; battery 83/83; measurements B = 64 / 4096 side by side with
 Goldilocks on the same binary revision) — filled in by the lane as the runs land.
+
+## 14. Checker v2 (lookup-centred arithmetisation; implemented 2026-09-22, lane a-v2; `--variant v2`)
+
+The relation is unchanged (`checker_min.md`: the checker-min lane's differential and negatives are the evidence
+that `checker.v2` accepts exactly the WP2 triples); what changes is the *shape* the prover sees. Exporter:
+`gkr_export.v2` (`build_unit_circuit_v2`, `build_epilogue_circuit_v2`, `chain_spec`, `export_circuit_v2`); the Rust
+side is the section-12 machinery with two additions — implicit tables (14.2) and a general link (14.3). Everything
+below is for K = 1536 (96 units of 16 products, two groups of 8) over Goldilocks; BabyBear is **not** instantiated
+(`state_decode` / `epilogue` are SAT as stated on 31-bit fields without the limb split, `babybear_rules.md`).
+
+### 14.1 Shape **[derivation: `gkr_export.v2`; checked by `tests/gkr_export/test_v2_export.py`]**
+
+| | v1 (section 12) | v2 |
+|---|---|---|
+| committed columns / unit | 468 | **264** (4 incoming state, 32 operands, 4 outgoing state, 12 hints, 86 lookup outputs, 126 materialised keys) |
+| wires / unit; multiplicative depth | 826; 4 (6 checker layers) | 290; **1** (2 checker layers: every product feeds a key or an output assertion) |
+| products / lin / lookups per unit | 358 / 137 / 306 (census) | 26 / 9 / 86 (census 33 / 9 / 89: `state_decode`'s 3 mul / 4 lin / 5 lookups are gone — the state is chained, not decoded — Pack's 4 mul move to the epilogue; +2 one-sided halves per group of `attained`) |
+| lookups by table / unit | `R16` 352, `ALIGN` 16, `POW`/`LEAD`/`NORM` 2 | `T_OP` 32, `ALIGN4` 18, `SHIFT` 16, `SSHIFT_HI`/`LO` 2+2, `LEAD` 4, `LEADNORM` 2, `TNORM` 2, `R12` 4, `R4` 4 |
+| epilogue columns / wires | 9 / 11 | 16 / 22 (`Pack.check` on (s, e, M, z, ovf[g], sgn[g]) then `Epilogue.check`; 4 `R16` + 1 `R15`) |
+| fixed table rows / proof | 66 623 | **5 143 328** (`SHIFT` 3 538 944, `TNORM` 1 048 576, `SSHIFT_HI`/`LO` 221 184 each, `T_OP` 65 280, `LEAD` 32 768, `R16` 65 536, `R15` 32 768, `LEADNORM` 12 152, `R12` 4 096, `ALIGN4` 3 120, `R4` 16) |
+| linkage constraints / VU | 98 | **583** (14.3) |
+| committed elements / VU (B = 4096) | 44 937 + tables/B | 96·264 + 16 = **25 360** + tables/B |
+
+### 14.2 Tables: implicit, not committed **[decision]**
+
+A LogUp table is public data: the prover commits only its *multiplicities* (one column of |T| elements), and the
+verifier needs the table's rows only to evaluate the table-side multilinear at the final point (`logup.rs`:
+`Σ m_t/(z − t)` over the table leaves, an O(|T|) pass with no commitment). So the question "committed per proof or
+implicit" is really "listed row by row in `circuit.txt` or materialised from a definition": the *cost* is the same
+either way — |T| multiplicity elements in the Ligero payload and |T| table leaves in the fractional-sum tree — and
+only the circuit text (≈ 60 MB for `SHIFT` alone) and the verifier's evaluation differ. Decision: the four big
+tables are **implicit** (`itable NAME cols rows kind params`, `circuit.rs::materialise`; the small ones stay as
+rows):
+
+| table | rows | definition (`gkr_export.v2.implicit_table_header`) |
+|---|---|---|
+| `SHIFT` | 2^16 · 54 | `shift 16 10 54`: key \(x\cdot54+2d+s\mapsto(1-2s)\lfloor x\,2^{10}/2^{d}\rfloor\), \(x<2^{16}\), \(d<27\) |
+| `SSHIFT_HI` | 2^12 · 54 | `shift 12 13 54` |
+| `SSHIFT_LO` | 2^12 · 54 | `shift 12 1 54` |
+| `TNORM` | 2^15 · 32 | `tnorm 15 32 -7`: key \(v+2^{15}\,k\mapsto\lfloor v\,2^{k-7}\rfloor\), \(v<2^{15}\), \(k<32\) |
+
+Both conventions are cross-checked: the exporter spot-checks `checker.v2.tables` against a Python transcription of
+`materialise` before writing, and `circuit.rs`'s tests compare materialised rows with exported samples. Implicit
+tables are `dense` (key = row index): `Table::find` is an array index, no hash map, so witness generation is O(1)
+per query.
+
+What it costs: `SHIFT` contributes 3.54M table leaves next to \(16U=6.29\)M query leaves at B = 4096 (\(n_T=24\)
+against v1's `R16` at \(2^{28}\), \(n_T=28\): the lookup chain — and so the depth — *shortens*); at B = 64 the 5.1M
+fixed rows are 84 % of the leaves and 76 % of the committed elements. The **split-u `SHIFT` variant** of
+`checker_min.md` (two tables of 2^8·54) is the fallback if the fixed rows dominated at the target B; the
+measurements in 14.5 decide (they do not, at B = 4096). Multiplicity columns: `committed_elements` includes all
+5.14M per proof.
+
+### 14.3 Chain linkage: state instead of words **[proposal, implemented]**
+
+The v1 link is \(c_{v,i}=y_{v,i-1}\) on one column pair. In v2 the unit carries the *state* \((s,e,M,z)\) (sign,
+exponent, magnitude, zero flag) and the group saturation flags; there is no decoded word until Pack. `chain.txt`
+(`gkr_export.v2.write_chain`, `main.rs::read_chain`) has one line per link
+`link <in|-> <out> <epi> <init> <zero_nonlast>`; `Chain.limbs: Vec<Link>` generalises the two v1 links:
+
+| link | in → out (unit columns) | epilogue column | init at unit 0 | non-final units | constraints / VU |
+|---|---|---|---|---|---|
+| state ×4 | `x.s`←`y.s`, `x.e`←`y.e`, `x.M`←`y.M`, `x.z`←`y.z` | `s, e, M, z` | \((0,\ \mathrm{floor},\ 0,\ 1)\) = `zero_state` (the constant \(c_0=0\), no decode) | — | 4·(1 + 95 + 1) = 388 |
+| ovf ×2 | — (`g<g>.ovf`, the group's saturation flag) | `ovf[g]` | — | **must be 0** (a saturated intermediate accumulator is outside the VU's domain; the exporter refuses such a witness) | 2·(95 + 1) = 192 |
+| sgn ×2 | — (`g<g>.sgn`) | `sgn[g]` | — | — | 2 |
+| public word | — | `y16` | — | — | 1 |
+
+Total **583** per VU (v1: 98), \(2.39\)M at B = 4096 — still one linear functional with geometric coefficients,
+batched into the opening exactly as 12.2; Schwartz–Zippel term \(583B/|F_c|<2^{-163}\). The `zero_nonlast`
+constraints are what makes the chain *sound* against a prover who saturates mid-VU and un-saturates later: without
+them Pack would see only the last unit's flags.
+
+### 14.4 Security **[derivation: `security.accounting.account_candidate_a` on the exported shape]**
+
+Layers `(s_out=5, s_in=9, assertions)`, `(9, 9)`; the 12 tables of 14.1 with the exported query counts; Ligero
+\(n=16\,384,k=4096,l=4095,t=192\). **2^-127.71 at both B = 64 and B = 4096** (v1: 2^-127.7). The lookup term grows
+with |T| as the brief warned — `SHIFT` is the worst single lookup identity at B = 64 (\(2^{-169.2}\), \(N=98\,304,\
+|T|=3.54\)M) and `T_OP` at B = 4096 (\(2^{-166.4}\), \(N=12.6\)M) — but the lookup bucket is \(2^{-165}\) in total
+and the budget is set by the commitment hash (\(2^{-128}\)) and the Ligero query test (\(2^{-130.2}\)) as before.
+logUp's \(\mathrm{char}\,F>N\): the largest multiset is `T_OP` with \(32U+65\,280=12.6\)M leaves, far below
+\(2^{64}\).
+
+### 14.5 Recorded runs
+
+See `README.md` "Checker v2" — gate (`gkr.v2.gate`), `vu-k1536-neg`, and the B = 64 / 4096 measurements beside the
+v1 Goldilocks control on the same binary revision and box.
+
+### 14.6 Hand-off to `lane/a-gpu` (layer descriptors)
+
+* The unit circuit has **2 checker layers** (depth 1) instead of 6: the phase-1/2 kernels run 3× fewer sweeps; the
+  layer widths are 264 inputs → 290 wires (v1 468 → 826). Per-layer descriptors come from the same `circuit.txt`
+  format; nothing in the gate grammar changed.
+* **Lookups dominate the tree work**: 86 queries / unit into 10 tables (v1: 374 into 5). The trees are shallower
+  (\(n_T\le24\)) but there are twice as many; the 5.14M table-side leaves are a fixed per-proof cost (materialise
+  them on device from the `itable` parameters — `shift`/`tnorm` are one shift and one multiply per row — rather
+  than uploading 60 MB of rows).
+* `Table::find` is dense for implicit tables (key = index): witness generation for the lookup outputs is a gather.
+* The chain has 8 links (14.3), two of them with the `zero_nonlast` rule: the linkage functional is a strided
+  read of 12 columns (v1: 2) — still one O(U) pass.
+* Committed payload: 264 columns / unit + 16 / VU + 5.14M multiplicities; Ligero rows shrink proportionally
+  (see README for the measured `committed_elements`).

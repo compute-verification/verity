@@ -1,0 +1,109 @@
+{
+ "non_zk": {
+  "config": "Config(l=256, n=1024, D=6, t=189, target_log2=-128.0, zk=False, t_pad=0)",
+  "committed_rows": 3516,
+  "mask_rows": {},
+  "opened_uniform": {
+   "chi2": 3517093.6974556227,
+   "p": 0.0,
+   "n": 664524
+  },
+  "real_vs_simulated": {
+   "opened": {
+    "chi2": 701092.1743223653,
+    "p": 0.0,
+    "n": 664524
+   },
+   "w": {
+    "chi2": 2637.3462799656754,
+    "p": 0.0,
+    "n": 1536
+   },
+   "h": {
+    "chi2": 2919.310344827586,
+    "p": 0.0,
+    "n": 1530
+   },
+   "q": {
+    "chi2": 5923.602436678422,
+    "p": 0.0,
+    "n": 3066
+   }
+  },
+  "payload": {
+   "opened_values_equal_to_own_payload": 192402,
+   "of": 664524,
+   "expected_if_uniform": 0.002525675295528931,
+   "constant_rows": 1018,
+   "constant_rows_opened_in_the_clear": 1018
+  },
+  "zeros_among_opened": 190701
+ },
+ "zk": {
+  "config": "Config(l=256, n=2048, D=6, t=189, target_log2=-128.0, zk=True, t_pad=256)",
+  "committed_rows": 3546,
+  "mask_rows": {
+   "prox": [
+    3516,
+    3522
+   ],
+   "lin": [
+    3522,
+    3528
+   ],
+   "qa": [
+    3528,
+    3534
+   ],
+   "qb": [
+    3534,
+    3540
+   ],
+   "chain": [
+    3540,
+    3546
+   ]
+  },
+  "opened_uniform": {
+   "chi2": 62.75777549042624,
+   "p": 0.48492971252201167,
+   "n": 664524
+  },
+  "real_vs_simulated": {
+   "opened": {
+    "chi2": 66.80220135320923,
+    "p": 0.3477050684376837,
+    "n": 670194
+   },
+   "w": {
+    "chi2": 64.21280262753743,
+    "p": 0.43378320999265146,
+    "n": 3072
+   },
+   "h": {
+    "chi2": 72.98718679150701,
+    "p": 0.18250663025963088,
+    "n": 4602
+   },
+   "q": {
+    "chi2": 70.25588283143637,
+    "p": 0.24747529634049206,
+    "n": 4602
+   },
+   "v": {
+    "chi2": 76.41195403146884,
+    "p": 0.11935240376021047,
+    "n": 3072
+   }
+  },
+  "payload": {
+   "opened_values_equal_to_own_payload": 0,
+   "of": 664524,
+   "expected_if_uniform": 0.002525675295528931,
+   "constant_rows": 1018,
+   "constant_rows_opened_in_the_clear": 0
+  },
+  "zeros_among_opened": 0
+ },
+ "verdict": "PASS"
+}

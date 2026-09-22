@@ -1,0 +1,733 @@
+{
+ "schema": "research/result/v0.1",
+ "run_id": "r20260922-073828-153f",
+ "workload_fingerprint": {
+  "profile": "first-campaign-target/2026-09-21",
+  "domain": "finite",
+  "K": 1536,
+  "B": 4096,
+  "N_subbatches": 1,
+  "proof_class": "ARITHMETIC_DIAGNOSTIC",
+  "authentication": "excluded",
+  "zk_mode": "none",
+  "security": {
+   "target": -128,
+   "challenge_field": "BabyBear^6 (24 limbs)",
+   "note": "operating point of the priced design; nothing is proved here"
+  },
+  "hardware": {
+   "gpu": {
+    "name": "NVIDIA A100-SXM4-80GB",
+    "driver": "580.126.16",
+    "memory": "81920 MiB",
+    "cuda": "12.4"
+   },
+   "cpu": {
+    "model": "AMD EPYC 7742 64-Core Processor",
+    "count": 128
+   }
+  },
+  "software": {
+   "backend": {
+    "name": "backends/gkr/packed/sumcheck_packed",
+    "commit": null,
+    "version": null
+   },
+   "toolchain": {
+    "torch": "2.6.0+cu124",
+    "python": "3.12.14",
+    "cuda": "12.4"
+   }
+  },
+  "preprocessing": "none",
+  "retention": "retained",
+  "instances": null,
+  "stage": "packed.sumcheck",
+  "kind": "kernel measurement (not a proof): Candidate A GKR c-round sumcheck (eq-trick, k packed rounds) on INT8 tensor cores, random tables; t.total is the six-layer batch model from the linear fit",
+  "config": {
+   "log2": [
+    20,
+    22,
+    24,
+    26
+   ],
+   "ks": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "repeats": 9,
+   "warm": 3,
+   "k1_log2": 13,
+   "mode": "triton",
+   "fused": true,
+   "units": 393216,
+   "layer_widths": [
+    137,
+    679,
+    673,
+    669,
+    647,
+    533
+   ],
+   "layer_read_log2": [
+    10,
+    10,
+    10,
+    10,
+    10,
+    9
+   ],
+   "B": 4096,
+   "K": 1536
+  },
+  "peaks": {
+   "int8_dense_tops": 624.0,
+   "hbm_bytes_per_s": 2039000000000.0,
+   "fp32_tflops": 19.5,
+   "bf16_dense_tflops": 312.0,
+   "source": "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB): INT8 624 TOPS dense, HBM2e 2,039 GB/s, FP32 19.5 TFLOPS"
+  }
+ },
+ "validation": {
+  "status": "passed",
+  "checker": "backends/gkr/packed/tests (CUDA path, run before the sweep)",
+  "detail": "kernel == BabyBear^6 reference bit-for-bit for k = 0..4, n <= 9; 36 passed in 61.24s (0:01:01)",
+  "evidence": [
+   "bench.json",
+   "agreement_test.log"
+  ]
+ },
+ "measurements": [
+  {
+   "name": "t.total",
+   "value": 0.47639832419620154,
+   "unit": "s"
+  },
+  {
+   "name": "t.arithmetic",
+   "value": 0.47639832419620154,
+   "unit": "s"
+  },
+  {
+   "name": "mem.peak_device_bytes",
+   "value": 34104633344,
+   "unit": "B"
+  },
+  {
+   "name": "packed.best_k",
+   "value": 3,
+   "unit": "count"
+  },
+  {
+   "name": "packed.k0.batch_seconds.padded",
+   "value": 1.5777486778364522,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k0.batch_seconds.unpadded",
+   "value": 0.9430513095351282,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k0.per_vu_seconds.padded",
+   "value": 0.0003851925482999151,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k0.fit.seconds_per_element",
+   "value": 7.036263630800476e-10,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k1.batch_seconds.padded",
+   "value": 0.9374573013585085,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k1.batch_seconds.unpadded",
+   "value": 0.5630112617383937,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k1.per_vu_seconds.padded",
+   "value": 0.0002288714114644796,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k1.fit.seconds_per_element",
+   "value": 4.151113872313172e-10,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k2.batch_seconds.padded",
+   "value": 0.5964607410606084,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k2.batch_seconds.unpadded",
+   "value": 0.36014779145631826,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k2.per_vu_seconds.padded",
+   "value": 0.0001456202981105001,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k2.fit.seconds_per_element",
+   "value": 2.6197685634619706e-10,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k3.batch_seconds.padded",
+   "value": 0.47639832419620154,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k3.batch_seconds.unpadded",
+   "value": 0.28922250810742894,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k3.per_vu_seconds.padded",
+   "value": 0.00011630818461821327,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k3.fit.seconds_per_element",
+   "value": 2.075033635062391e-10,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k4.batch_seconds.padded",
+   "value": 2.0709548797320383,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k4.batch_seconds.unpadded",
+   "value": 1.234007231751074,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k4.per_vu_seconds.padded",
+   "value": 0.0005056042186845797,
+   "unit": "s"
+  },
+  {
+   "name": "packed.k4.fit.seconds_per_element",
+   "value": 9.278412973624702e-10,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k0.seconds",
+   "value": 0.003352031975984574,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k0.seconds_matmul_only",
+   "value": 0.0037426239699125297,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k0.utilisation.round",
+   "value": 0.006352606005580794,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^20.k0.utilisation.matmul_only",
+   "value": 0.005689628087866956,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^20.k0.macs_performed",
+   "value": 6643771200,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^20.k1.seconds",
+   "value": 0.0028766720294952394,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k1.seconds_matmul_only",
+   "value": 0.003470847982913256,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k1.utilisation.round",
+   "value": 0.004318035626004916,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^20.k1.utilisation.matmul_only",
+   "value": 0.00357882925695474,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^20.k1.macs_performed",
+   "value": 3875530560,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^20.k2.seconds",
+   "value": 0.0026135040223598483,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k2.seconds_matmul_only",
+   "value": 0.0029322239868342873,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k2.utilisation.round",
+   "value": 0.0030862584691160417,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^20.k2.utilisation.matmul_only",
+   "value": 0.0027507956279237563,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^20.k2.macs_performed",
+   "value": 2516576064,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^20.k3.seconds",
+   "value": 0.0025414719954133034,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k3.seconds_matmul_only",
+   "value": 0.0025654720105230807,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k3.utilisation.round",
+   "value": 0.0028880946575663654,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^20.k3.utilisation.matmul_only",
+   "value": 0.0028610765045186046,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^20.k3.macs_performed",
+   "value": 2290083648,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^20.k4.seconds",
+   "value": 0.003492736034095287,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k4.seconds_matmul_only",
+   "value": 0.0029135040044784544,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^20.k4.utilisation.round",
+   "value": 0.0028289546944131987,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^20.k4.utilisation.matmul_only",
+   "value": 0.0033913775250735438,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^20.k4.macs_performed",
+   "value": 3082807104,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^22.k0.seconds",
+   "value": 0.00599667202681303,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^22.k0.seconds_matmul_only",
+   "value": 0.007659935891628263,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^22.k0.utilisation.round",
+   "value": 0.014203980872787273,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^22.k0.utilisation.matmul_only",
+   "value": 0.011119755566403948,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^22.k0.macs_performed",
+   "value": 26575103808,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^22.k1.seconds",
+   "value": 0.004872543945908546,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^22.k1.seconds_matmul_only",
+   "value": 0.007087231993675232,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^22.k1.utilisation.round",
+   "value": 0.010197209241297365,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^22.k1.utilisation.matmul_only",
+   "value": 0.007010684876435132,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^22.k1.macs_performed",
+   "value": 15502141248,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^22.k2.seconds",
+   "value": 0.003958912007510663,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^22.k2.seconds_matmul_only",
+   "value": 0.004961216013878584,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^22.k2.utilisation.round",
+   "value": 0.008149677627129658,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^22.k2.utilisation.matmul_only",
+   "value": 0.0065032154466020415,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^22.k2.macs_performed",
+   "value": 10066323264,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^22.k3.seconds",
+   "value": 0.00366022401303053,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^22.k3.seconds_matmul_only",
+   "value": 0.0038239360079169275,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^22.k3.utilisation.round",
+   "value": 0.008021396392074541,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^22.k3.utilisation.matmul_only",
+   "value": 0.007677980915873507,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^22.k3.macs_performed",
+   "value": 9160353600,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^22.k4.seconds",
+   "value": 0.00676025603711605,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^22.k4.seconds_matmul_only",
+   "value": 0.004260000012814998,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^22.k4.utilisation.round",
+   "value": 0.005846410062885382,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^22.k4.utilisation.matmul_only",
+   "value": 0.009277753240418435,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^22.k4.macs_performed",
+   "value": 12331247424,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^24.k0.seconds",
+   "value": 0.01614681604504585,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^24.k0.seconds_matmul_only",
+   "value": 0.02786803185567259,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^24.k0.utilisation.round",
+   "value": 0.02110053889568744,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^24.k0.utilisation.matmul_only",
+   "value": 0.012225711588263759,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^24.k0.macs_performed",
+   "value": 106300434240,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^24.k1.seconds",
+   "value": 0.010625152021646496,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^24.k1.seconds_matmul_only",
+   "value": 0.020882976062595843,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^24.k1.utilisation.round",
+   "value": 0.01870518757129872,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^24.k1.utilisation.matmul_only",
+   "value": 0.009517104312274764,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^24.k1.macs_performed",
+   "value": 62008584000,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^24.k2.seconds",
+   "value": 0.007421887986361981,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^24.k2.seconds_matmul_only",
+   "value": 0.011627551972866058,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^24.k2.utilisation.round",
+   "value": 0.017388498401183103,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^24.k2.utilisation.matmul_only",
+   "value": 0.011099110774630638,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^24.k2.macs_performed",
+   "value": 40265312064,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^24.k3.seconds",
+   "value": 0.006956223912537098,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^24.k3.seconds_matmul_only",
+   "value": 0.008334912065416575,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^24.k3.utilisation.round",
+   "value": 0.016882793476593883,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^24.k3.utilisation.matmul_only",
+   "value": 0.014090189646942374,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^24.k3.macs_performed",
+   "value": 36641433408,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^24.k4.seconds",
+   "value": 0.018271231599152084,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^24.k4.seconds_matmul_only",
+   "value": 0.009487200133502483,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^24.k4.utilisation.round",
+   "value": 0.00865256267797083,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^24.k4.utilisation.matmul_only",
+   "value": 0.016663818027523772,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^24.k4.macs_performed",
+   "value": 49325008704,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^26.k0.seconds",
+   "value": 0.05021996786445381,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^26.k0.seconds_matmul_only",
+   "value": 0.10744863971695305,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^26.k0.utilisation.round",
+   "value": 0.0271371368576223,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^26.k0.utilisation.matmul_only",
+   "value": 0.012683512276312724,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^26.k0.macs_performed",
+   "value": 425201755968,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^26.k1.seconds",
+   "value": 0.030727232597768307,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^26.k1.seconds_matmul_only",
+   "value": 0.09691100748628381,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^26.k1.utilisation.round",
+   "value": 0.025872226031011393,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^26.k1.utilisation.matmul_only",
+   "value": 0.008203215792483015,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^26.k1.macs_performed",
+   "value": 248034355008,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^26.k2.seconds",
+   "value": 0.020214591853320595,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^26.k2.seconds_matmul_only",
+   "value": 0.05214633681997658,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^26.k2.utilisation.round",
+   "value": 0.025537097865111734,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^26.k2.utilisation.matmul_only",
+   "value": 0.009899487518052861,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^26.k2.macs_performed",
+   "value": 161061267264,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^26.k3.seconds",
+   "value": 0.016578591838479043,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^26.k3.seconds_matmul_only",
+   "value": 0.024011328015476462,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^26.k3.utilisation.round",
+   "value": 0.028335460108378223,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^26.k3.utilisation.matmul_only",
+   "value": 0.01956418351327854,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^26.k3.macs_performed",
+   "value": 146565752640,
+   "unit": "count"
+  },
+  {
+   "name": "packed.t2^26.k4.seconds",
+   "value": 0.06494963305443523,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^26.k4.seconds_matmul_only",
+   "value": 0.029910975508391856,
+   "unit": "s"
+  },
+  {
+   "name": "packed.t2^26.k4.utilisation.round",
+   "value": 0.009736343958319446,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^26.k4.utilisation.matmul_only",
+   "value": 0.021141803523164814,
+   "unit": "ratio"
+  },
+  {
+   "name": "packed.t2^26.k4.macs_performed",
+   "value": 197300053824,
+   "unit": "count"
+  }
+ ],
+ "measurement_files": [
+  "bench.json",
+  "agreement_test.log"
+ ],
+ "artifacts": [
+  "bench.json",
+  "agreement_test.log"
+ ]
+}

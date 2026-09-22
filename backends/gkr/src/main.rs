@@ -29,6 +29,8 @@ mod logup;
 mod transcript;
 
 use circuit::{layers, read_witness, Circuit, Layer, Query, Table};
+#[cfg(test)]
+use circuit::materialise;
 use field::{eq_table, Ext, Fp};
 use gkr::{eval_columns, threads, LayerClaim, Reader, Strided};
 use logup::{LeafClaim, SegQueries, TableChallenges};
@@ -42,11 +44,27 @@ static LOG_TRANSCRIPT: AtomicBool = AtomicBool::new(false);
 /// One data-parallel circuit over `units` rows of `ncols` committed columns.
 pub struct Segment<'a> { pub name: String, pub circ: &'a Circuit, pub layers: &'a [Layer], pub cols: Vec<Fp>, pub units: usize, pub ncols: usize, pub hash: [u8; 32] }
 
-/// The VU chain over segment 0 (units, VU-major: row v·steps+i) and segment 1 (epilogue, row v).  A word is
-/// `limbs.len()` columns (one over Goldilocks; `_lo`/`_hi` 16-bit limbs over BabyBear, PROTOCOL.md 13): each limb
-/// is linked separately, `[unit incoming c, unit outgoing y, epilogue y32]` column indices.
+/// One linked quantity of the VU chain (PROTOCOL.md 12.2 / 14.3).  With `col_c = Some(c)`: `X[(v,0),c] = init`,
+/// `X[(v,i),c] = X[(v,i-1),y]` for `0 < i < steps`, `X_epi[v,epi] = X[(v,steps-1),y]`.  With `col_c = None` the
+/// quantity is not an input of the next unit: `X_epi[v,epi] = X[(v,steps-1),y]` and, if `zero_nonlast`,
+/// `X[(v,i),y] = 0` for every `i < steps-1` (v2's saturation flags: the domain excludes a saturated intermediate).
+#[derive(Clone, Debug)]
+pub struct Link { pub col_c: Option<usize>, pub col_y: usize, pub epi: usize, pub init: Fp, pub zero_nonlast: bool }
+
+impl Link {
+    /// A word linked as one column (v1 Goldilocks) or as one limb (v1 BabyBear): `[x.c, y, y32]`, init 0.
+    pub fn word(cols: [usize; 3]) -> Link { Link { col_c: Some(cols[0]), col_y: cols[1], epi: cols[2], init: Fp::ZERO, zero_nonlast: false } }
+    pub fn constraints_per_vu(&self, steps: usize) -> usize {
+        if self.col_c.is_some() { steps + 1 } else { 1 + if self.zero_nonlast { steps - 1 } else { 0 } }
+    }
+}
+
+/// The VU chain over segment 0 (units, VU-major: row v·steps+i) and segment 1 (epilogue, row v): the links, the
+/// epilogue's output-word column and the public words.
 #[derive(Clone)]
-pub struct Chain { pub steps: usize, pub limbs: Vec<[usize; 3]>, pub epi_y16: usize, pub public_y16: Vec<Fp> }
+pub struct Chain { pub steps: usize, pub limbs: Vec<Link>, pub epi_y16: usize, pub public_y16: Vec<Fp> }
+
+impl Chain { pub fn constraints_per_vu(&self) -> usize { 1 + self.limbs.iter().map(|l| l.constraints_per_vu(self.steps)).sum::<usize>() } }
 
 pub struct Instance<'a> { pub segs: Vec<Segment<'a>>, pub chain: Option<Chain> }
 
@@ -63,6 +81,9 @@ pub struct Stats {
     pub depth_circuit: u64, pub depth_lookup_max: u64, pub lookup_dims: Vec<(String, usize, usize)>, pub committed_elements: usize,
     pub t_commit: f64, pub t_open: f64, pub ligero_rows: usize, pub linkage_constraints: usize,
     pub transcript_log: Option<Vec<Event>>,
+    /// Measured critical-path verifier messages (`rounds.sequential_depth`), the emulated-network sleep (s), and
+    /// the two chains' depths (closed forms checked against `trips`).
+    pub trips: u64, pub slept: f64, pub depth_lookup_chain: u64, pub depth_checker_chain: u64,
 }
 
 fn table_queries<'a>(circ: &'a Circuit, name: &str) -> Vec<&'a Query> { circ.queries.iter().filter(|q| q.table == name).collect() }
@@ -214,15 +235,24 @@ fn add_chain(acc: &mut Acc, rho: Ext, geo: Ext, inst: &Instance, seg_offs: &[usi
     let mut pw = rho;
     let mut count = 0;
     for v in 0..vus {
-        for &[col_c, col_y, epi_y32] in &ch.limbs {
-            for i in 0..ch.steps {
-                let u = v * ch.steps + i;
-                acc.a[seg_offs[0] + u * u_seg.ncols + col_c] += pw;
-                if i > 0 { acc.a[seg_offs[0] + (u - 1) * u_seg.ncols + col_y] -= pw; }
-                pw = pw * geo;
-                count += 1;
+        for lk in &ch.limbs {
+            let (col_y, epi) = (lk.col_y, lk.epi);
+            if let Some(col_c) = lk.col_c {
+                for i in 0..ch.steps {
+                    let u = v * ch.steps + i;
+                    acc.a[seg_offs[0] + u * u_seg.ncols + col_c] += pw;
+                    if i > 0 { acc.a[seg_offs[0] + (u - 1) * u_seg.ncols + col_y] -= pw; } else { acc.b += pw.scale(lk.init); }
+                    pw = pw * geo;
+                    count += 1;
+                }
+            } else if lk.zero_nonlast {
+                for i in 0..ch.steps - 1 {
+                    acc.a[seg_offs[0] + (v * ch.steps + i) * u_seg.ncols + col_y] += pw;
+                    pw = pw * geo;
+                    count += 1;
+                }
             }
-            acc.a[seg_offs[1] + v * e_seg.ncols + epi_y32] += pw;
+            acc.a[seg_offs[1] + v * e_seg.ncols + epi] += pw;
             acc.a[seg_offs[0] + (v * ch.steps + ch.steps - 1) * u_seg.ncols + col_y] -= pw;
             pw = pw * geo;
             count += 1;
@@ -242,13 +272,18 @@ fn check_chain_clear(inst: &Instance) -> Result<(), String> {
     let vus = u_seg.units / ch.steps;
     let uc = |u: usize, c: usize| u_seg.cols[u * u_seg.ncols + c];
     for v in 0..vus {
-        for &[col_c, col_y, epi_y32] in &ch.limbs {
-            for i in 0..ch.steps {
-                let u = v * ch.steps + i;
-                let want = if i == 0 { Fp::ZERO } else { uc(u - 1, col_y) };
-                if uc(u, col_c) != want { return Err(format!("chain: VU {v} unit {i} incoming word differs from the previous outgoing word")); }
+        for lk in &ch.limbs {
+            let (col_y, epi) = (lk.col_y, lk.epi);
+            if let Some(col_c) = lk.col_c {
+                for i in 0..ch.steps {
+                    let u = v * ch.steps + i;
+                    let want = if i == 0 { lk.init } else { uc(u - 1, col_y) };
+                    if uc(u, col_c) != want { return Err(format!("chain: VU {v} unit {i} incoming value differs from the previous outgoing value (column {col_c})")); }
+                }
+            } else if lk.zero_nonlast {
+                for i in 0..ch.steps - 1 { if uc(v * ch.steps + i, col_y) != Fp::ZERO { return Err(format!("chain: VU {v} unit {i}: column {col_y} must be 0 before the last unit")); } }
             }
-            if e_seg.cols[v * e_seg.ncols + epi_y32] != uc(v * ch.steps + ch.steps - 1, col_y) { return Err(format!("chain: VU {v} epilogue input differs from the last word")); }
+            if e_seg.cols[v * e_seg.ncols + epi] != uc(v * ch.steps + ch.steps - 1, col_y) { return Err(format!("chain: VU {v} epilogue input (column {epi}) differs from the last unit's value")); }
         }
         if e_seg.cols[v * e_seg.ncols + ch.epi_y16] != ch.public_y16[v] { return Err(format!("chain: VU {v} output word differs from the public word")); }
     }
@@ -323,8 +358,31 @@ fn prove_segment(seg: &Segment, z0: &[Ext], gamma: &[Ext], tr: &mut Transcript, 
     final_claims.unwrap()
 }
 
-pub fn prove(inst: &Instance, mode: Mode) -> (Proof, Stats) {
+/// Verifier messages on the critical path of the logUp chain of dimension `n`: lambda after q_root, then per level
+/// k its k round challenges and one (mu, lambda) message.  (The earlier derived counter `1 + sum (k + 2)` counted mu
+/// and lambda as two messages; the transcript's `trips` counter is the measured truth and this is its closed form.)
+fn lookup_chain_depth(n: usize) -> u64 { 1 + (0..n as u64).map(|k| k + 1).sum::<u64>() }
+
+/// Verifier messages on the critical path of one segment's checker GKR: per layer b phase-1 rounds, 2 s_in phase-2
+/// rounds and alpha (none on the last layer).
+fn segment_chain_depth(seg: &Segment) -> u64 {
+    let b = log2ceil(seg.units) as u64;
+    let nl = seg.layers.len();
+    seg.layers.iter().enumerate().map(|(i, l)| b + 2 * l.s_in as u64 + if i == nl - 1 { 0 } else { 1 }).sum()
+}
+
+pub fn prove(inst: &Instance, mode: Mode) -> (Proof, Stats) { prove_with_rtt(inst, mode, None) }
+
+/// `prove` with the network emulated at round-trip time `rtt` (`--rtt-ms`): the prover sleeps one RTT at every
+/// critical-path verifier message (`Transcript::round_trip`); `Stats::trips` counts them, `Stats::slept` the time.
+pub fn prove_with_rtt(inst: &Instance, mode: Mode, rtt: Option<std::time::Duration>) -> (Proof, Stats) {
     let mut st = Stats::default();
+    // the critical chain is known before any challenge: the deepest logUp table and the deepest segment
+    let table_depths: Vec<u64> = inst.tables().iter().map(|t| lookup_chain_depth(logup::hypercube_dim(&seg_queries(inst, &t.name), t))).collect();
+    let seg_depths: Vec<u64> = inst.segs.iter().map(segment_chain_depth).collect();
+    let critical_table = (0..table_depths.len()).max_by_key(|&i| table_depths[i]);
+    let critical_seg = (0..seg_depths.len()).max_by_key(|&i| seg_depths[i]);
+    let lookup_is_critical = table_depths.iter().max().copied().unwrap_or(0) >= seg_depths.iter().max().copied().unwrap_or(0);
     let mut out: Vec<Ext> = Vec::new();
     let mut bytes: Vec<u8> = Vec::new();
     let (seg_offs, offs, l) = x_layout(inst);
@@ -343,10 +401,15 @@ pub fn prove(inst: &Instance, mode: Mode) -> (Proof, Stats) {
     let root = committed.as_ref().map(|c| c.root()).unwrap_or([0u8; 32]);
     st.t_commit = tc.elapsed().as_secs_f64();
     let (mut tr, chs, pts) = start_transcript(inst, mode, &root);
+    tr.set_rtt(rtt);
+    // message 2a (all z, beta, z_0, gamma) was drawn in start_transcript after the root: one round trip
+    tr.critical = true;
+    tr.round_trip();
     let t0 = Instant::now();
     let mut lookup_claims: Vec<(usize, LeafClaim)> = Vec::new();
     for (ti, t) in inst.tables().iter().enumerate() {
         let sq = seg_queries(inst, &t.name);
+        tr.critical = lookup_is_critical && Some(ti) == critical_table;
         tr.label(&format!("logup table {}", t.name));
         let (p, q, n, _) = logup::leaves(t, &sq, &chs[ti]);
         let (s, lc) = logup::prove_table(p, q, n, &mut tr, &mut out);
@@ -359,13 +422,16 @@ pub fn prove(inst: &Instance, mode: Mode) -> (Proof, Stats) {
     let t2 = Instant::now();
     let mut finals = Vec::new();
     for (si, seg) in inst.segs.iter().enumerate() {
+        tr.critical = !lookup_is_critical && Some(si) == critical_seg;
         tr.label(&format!("gkr segment {}", seg.name));
         finals.push(prove_segment(seg, &pts[si].0, &pts[si].1, &mut tr, &mut out, &mut st));
     }
     st.t_arith = t2.elapsed().as_secs_f64() - st.t_witness_wires;
+    tr.critical = true;
     if let Some(cm) = &committed {
         let t3 = Instant::now();
         tr.label(&format!("opening: {} functional weights rho{}", n_functionals(inst), if inst.chain.is_some() { ", then geo (chain)" } else { "" }));
+        tr.round_trip(); // rho, geo and the Ligero r are one verifier message (no prover message between them)
         let rhos = tr.challenges(n_functionals(inst));
         let geo = if inst.chain.is_some() { tr.challenge() } else { Ext::ZERO };
         let mut acc = Acc { a: vec![Ext::ZERO; l], b: Ext::ZERO };
@@ -388,6 +454,12 @@ pub fn prove(inst: &Instance, mode: Mode) -> (Proof, Stats) {
     }
     st.proof_elems = out.len();
     st.slots = tr.slots;
+    st.trips = tr.trips;
+    st.slept = tr.slept.as_secs_f64();
+    st.depth_lookup_chain = table_depths.iter().max().copied().unwrap_or(0);
+    st.depth_checker_chain = seg_depths.iter().max().copied().unwrap_or(0);
+    let expected = 1 + st.depth_lookup_chain.max(st.depth_checker_chain) + if mode == Mode::Pcs { 2 } else { 0 };
+    assert_eq!(st.trips, expected, "critical-path trips counted by the transcript disagree with the closed form");
     st.committed_elements = l;
     st.transcript_log = tr.log.take();
     (Proof { root, msgs: out, bytes }, st)
@@ -496,7 +568,24 @@ fn segment<'a>(name: &str, ld: &'a Loaded, cols: Vec<Fp>, units: usize) -> Segme
 fn col_index(c: &Circuit, name: &str) -> usize { c.col_names.iter().position(|n| n == name).unwrap_or_else(|| panic!("no column {name}")) }
 
 /// A VU batch directory written by `verity_numerical.gkr_export.vu` (or overrides of its files).
-pub struct VuFiles { pub units: String, pub epilogue: String, pub public: String }
+pub struct VuFiles { pub units: String, pub epilogue: String, pub public: String, pub chain: Option<String> }
+
+impl VuFiles {
+    /// The files of an export directory; `chain.txt` (checker v2, `gkr_export.v2.write_chain`) when present.
+    pub fn in_dir(d: &str) -> VuFiles {
+        let chain = format!("{d}/chain.txt");
+        VuFiles { units: format!("{d}/units.bin"), epilogue: format!("{d}/epilogue.bin"), public: format!("{d}/public.bin"), chain: std::path::Path::new(&chain).is_file().then_some(chain) }
+    }
+}
+
+/// `chain.txt`: one `link <in|-> <out> <epi> <init> <zero_nonlast>` per line, columns by name (PROTOCOL.md 14.3).
+fn read_chain(text: &str, unit: &Circuit, epi: &Circuit) -> Vec<Link> {
+    text.lines().filter(|l| !l.trim().is_empty()).map(|l| {
+        let t: Vec<&str> = l.split_whitespace().collect();
+        assert!(t.len() == 6 && t[0] == "link", "chain.txt: bad line {l:?}");
+        Link { col_c: (t[1] != "-").then(|| col_index(unit, t[1])), col_y: col_index(unit, t[2]), epi: col_index(epi, t[3]), init: Fp::new(t[4].parse().unwrap()), zero_nonlast: t[5] == "1" }
+    }).collect()
+}
 
 fn load_vu<'a>(unit: &'a Loaded, epi: &'a Loaded, files: &VuFiles, vus: Option<usize>) -> Instance<'a> {
     let header = |path: &str| -> usize { let b = std::fs::read(path).expect("witness"); u64::from_le_bytes(b[..8].try_into().unwrap()) as usize };
@@ -509,10 +598,12 @@ fn load_vu<'a>(unit: &'a Loaded, epi: &'a Loaded, files: &VuFiles, vus: Option<u
     let (ecols, ne) = load_rows(&files.epilogue, epi.circ.ncols, Some(b), false);
     let (pcols, np) = load_rows(&files.public, 1, Some(b), false);
     assert!(nu == b * steps && ne == b && np == b);
-    let limbs: Vec<[usize; 3]> = if unit.circ.col_names.iter().any(|n| n == "x.c") {
-        vec![[col_index(&unit.circ, "x.c"), col_index(&unit.circ, "y"), col_index(&epi.circ, "y32")]]
+    let limbs: Vec<Link> = if let Some(text) = files.chain.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
+        read_chain(&text, &unit.circ, &epi.circ)
+    } else if unit.circ.col_names.iter().any(|n| n == "x.c") {
+        vec![Link::word([col_index(&unit.circ, "x.c"), col_index(&unit.circ, "y"), col_index(&epi.circ, "y32")])]
     } else {
-        ["lo", "hi"].iter().map(|l| [col_index(&unit.circ, &format!("x.c_{l}")), col_index(&unit.circ, &format!("y_{l}")), col_index(&epi.circ, &format!("y32_{l}"))]).collect()
+        ["lo", "hi"].iter().map(|l| Link::word([col_index(&unit.circ, &format!("x.c_{l}")), col_index(&unit.circ, &format!("y_{l}")), col_index(&epi.circ, &format!("y32_{l}"))])).collect()
     };
     let chain = Chain { steps, limbs, epi_y16: col_index(&epi.circ, "y16"), public_y16: pcols };
     Instance { segs: vec![segment("units", unit, ucols, nu), segment("epilogue", epi, ecols, ne)], chain: Some(chain) }
@@ -556,14 +647,20 @@ fn cpu_model() -> Option<String> {
 
 fn arg(args: &[String], key: &str) -> Option<String> { args.iter().position(|a| a == key).map(|i| args[i + 1].clone()) }
 
-struct RunReport<'a> { inst: &'a Instance<'a>, mode: Mode, proof: &'a Proof, st: &'a Stats, t_prove: f64, t_verify: f64, res: &'a Result<(), String>, k: usize, unit: &'a str, b: usize }
+/// `t_prove` is the prover's compute time (wall minus the emulated-network sleep); `t_wall` the wall time with the
+/// sleeps; `rtt_ms` the emulated RTT (0 when none).
+struct RunReport<'a> { inst: &'a Instance<'a>, mode: Mode, proof: &'a Proof, st: &'a Stats, t_prove: f64, t_wall: f64, t_verify: f64, rtt_ms: f64, res: &'a Result<(), String>, k: usize, unit: &'a str, b: usize }
+
+/// The contract's RTT sweep (`t.e2e.rtt_<x>ms`).
+const RTT_SWEEP_MS: [(&str, f64); 5] = [("0", 0.0), ("0.1", 0.1), ("1", 1.0), ("10", 10.0), ("50", 50.0)];
 
 fn write_result(out: &str, args: &[String], r: &RunReport) {
     let run_id = arg(args, "--run-id").or_else(|| std::env::var("RESEARCH_RUN_ID").ok()).unwrap_or_else(|| "local".into());
     let commit = arg(args, "--commit").unwrap_or_else(|| "unknown".into());
     let threads = threads();
     let rss = peak_rss_bytes();
-    let depth = 1 + r.st.depth_circuit.max(r.st.depth_lookup_max) + if r.mode == Mode::Pcs { 2 } else { 0 };
+    let depth = r.st.trips;
+    let depth_legacy = 1 + r.st.depth_circuit.max(r.st.depth_lookup_max) + if r.mode == Mode::Pcs { 2 } else { 0 };
     let ok = r.res.is_ok();
     let cpu = cpu_model().map(|m| format!("{{\"model\": \"{m}\", \"count\": {}}}", std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0))).unwrap_or("null".into());
     let meas = |name: &str, value: f64, unit: &str| format!("{{\"name\": \"{name}\", \"value\": {value}, \"unit\": \"{unit}\"}}");
@@ -579,7 +676,24 @@ fn write_result(out: &str, args: &[String], r: &RunReport) {
         meas("threads", threads as f64, "count"), meas("units", r.inst.segs[0].units as f64, "count"),
         meas("columns_per_unit", r.inst.segs[0].ncols as f64, "count"),
         meas("t_commit", st.t_commit, "s"), meas("t_open", st.t_open, "s"),
+        meas("depth_lookup_chain", st.depth_lookup_chain as f64, "count"), meas("depth_checker_chain", st.depth_checker_chain as f64, "count"),
+        meas("depth_formula_legacy", depth_legacy as f64, "count"),
+        meas("rtt_ms", r.rtt_ms, "ms"), meas("rtt_sleep_seconds", st.slept, "s"), meas("prove_wall_seconds", r.t_wall, "s"),
     ];
+    // end-to-end wall time at the RTT sweep: measured at the emulated RTT (prover wall incl. the sleeps + verifier),
+    // predicted at the others as compute + depth x RTT (the honest serial number; bytes / bandwidth not included here)
+    let mut e2e_measured: Vec<String> = vec![];
+    let mut e2e_predicted: Vec<String> = vec![];
+    for (name, rtt) in RTT_SWEEP_MS {
+        let key = format!("t.e2e.rtt_{name}ms");
+        if (rtt - r.rtt_ms).abs() < 1e-9 {
+            ms.push(meas(&key, r.t_wall + r.t_verify, "s"));
+            e2e_measured.push(format!("\"{key}\""));
+        } else {
+            ms.push(meas(&key, r.t_prove + r.t_verify + depth as f64 * rtt / 1000.0, "s"));
+            e2e_predicted.push(format!("\"{key}\""));
+        }
+    }
     if r.unit == "vu" {
         let vus = r.inst.vus() as f64;
         ms.push(meas("vu.count", vus, "count"));
@@ -592,28 +706,42 @@ fn write_result(out: &str, args: &[String], r: &RunReport) {
     let lk: Vec<String> = st.lookup_dims.iter().map(|(n, d, q)| format!("\"{n}\": {{\"hypercube_dim\": {d}, \"queries_per_unit\": {q}}}")).collect();
     let segs: Vec<String> = r.inst.segs.iter().map(|s| format!("{{\"name\": \"{}\", \"rows\": {}, \"columns\": {}, \"wires\": {}, \"layers\": {}}}", s.name, s.units, s.ncols, s.circ.nwires(), s.layers.len())).collect();
     let json = format!(
-        "{{\n\"schema\": \"research/result/v0.1\",\n\"run_id\": \"{run_id}\",\n\"workload_fingerprint\": {{\n  \"profile\": \"first-campaign-target/2026-09-21\", \"domain\": \"finite\", \"K\": {}, \"B\": {}, \"N_subbatches\": 1,\n  \"unit\": \"{}\",\n  \"proof_class\": \"{}\", \"authentication\": \"excluded\", \"zk_mode\": \"none\",\n  \"security\": {{\"target\": -128, \"trace_field\": \"{}\", \"challenge_field\": \"{}\", \"fiat_shamir\": \"sha256\", \"commitment\": \"{}\", \"note\": \"see report for the error terms this configuration achieves\"}},\n  \"hardware\": {{\"gpu\": null, \"cpu\": {cpu}}},\n  \"software\": {{\"backend\": {{\"name\": \"verity-gkr\", \"version\": \"0.2.0\", \"commit\": \"{commit}\"}}, \"toolchain\": {{\"rustc\": \"{}\"}}}},\n  \"preprocessing\": \"circuit export from the WP2 checker (verity_numerical.gkr_export) and witness generation by WP2 gen_step in Python; not timed here\",\n  \"retention\": \"retained\",\n  \"threads\": {threads},\n  \"segments\": [{}],\n  \"lookups\": {{{}}}\n}},\n\"validation\": {{\"status\": \"{}\", \"checker\": \"verity-gkr verify\", \"detail\": \"{}\", \"evidence\": []}},\n\"measurements\": [\n{}\n]\n}}\n",
+        "{{\n\"schema\": \"research/result/v0.1\",\n\"run_id\": \"{run_id}\",\n\"workload_fingerprint\": {{\n  \"profile\": \"first-campaign-target/2026-09-21\", \"domain\": \"finite\", \"K\": {}, \"B\": {}, \"N_subbatches\": 1,\n  \"unit\": \"{}\",\n  \"proof_class\": \"{}\", \"authentication\": \"excluded\", \"zk_mode\": \"none\",\n  \"security\": {{\"target\": -128, \"trace_field\": \"{}\", \"challenge_field\": \"{}\", \"fiat_shamir\": \"sha256\", \"commitment\": \"{}\", \"note\": \"see report for the error terms this configuration achieves\"}},\n  \"hardware\": {{\"gpu\": null, \"cpu\": {cpu}}},\n  \"software\": {{\"backend\": {{\"name\": \"verity-gkr\", \"version\": \"0.2.0\", \"commit\": \"{commit}\"}}, \"toolchain\": {{\"rustc\": \"{}\"}}}},\n  \"preprocessing\": \"circuit export from the WP2 checker (verity_numerical.gkr_export) and witness generation by WP2 gen_step in Python; not timed here\",\n  \"retention\": \"retained\",\n  \"threads\": {threads},\n  \"latency\": {{\"protocol\": \"interactive (production: verifier coins over the network, ZK_CONSTRUCTION.md 3.3); measured here with the Fiat-Shamir transcript and an emulated RTT: the prover sleeps one RTT at every critical-path verifier message\", \"rtt_ms\": {}, \"e2e_measured\": [{}], \"e2e_predicted\": [{}], \"e2e_model\": \"t.total + verifier.seconds + rounds.sequential_depth x RTT (bytes / bandwidth not included)\", \"depth_note\": \"rounds.sequential_depth is the measured count of critical-path verifier messages (Transcript::trips); depth_formula_legacy is the earlier derived counter, which counted the logUp (mu, lambda) pair as two messages\"}},\n  \"segments\": [{}],\n  \"lookups\": {{{}}}\n}},\n\"validation\": {{\"status\": \"{}\", \"checker\": \"verity-gkr verify\", \"detail\": \"{}\", \"evidence\": []}},\n\"measurements\": [\n{}\n]\n}}\n",
         r.k, r.b, r.unit,
         if r.mode == Mode::Pcs { "NON_ZK_PROOF_DIAGNOSTIC" } else { "ARITHMETIC_DIAGNOSTIC" }, field::NAME, field::EXT_NAME,
         if r.mode == Mode::Pcs { format!("ligero-style RS(k={},n={}) over {}, SHA-256 Merkle columns, t={} opened, no masking", LIGERO.k, LIGERO.n, field::NAME, LIGERO.t) } else { "none: columns in the clear".to_string() },
-        std::env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()), segs.join(", "), lk.join(", "), if ok { "passed" } else { "failed" },
+        std::env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()), r.rtt_ms, e2e_measured.join(", "), e2e_predicted.join(", "), segs.join(", "), lk.join(", "), if ok { "passed" } else { "failed" },
         match r.res { Ok(()) => "verifier accepted the batch".to_string(), Err(e) => e.replace('"', "'") }, ms.join(",\n"));
     std::fs::write(out, json).expect("write result");
 }
 
 fn run_and_report(inst: &Instance, mode: Mode, args: &[String], k: usize, unit: &str, b: usize) -> bool {
+    // --rtt-ms R (or VERITY_GKR_RTT_MS): emulate the network; the prover sleeps R ms at every critical-path challenge
+    let rtt_ms: f64 = arg(args, "--rtt-ms").or_else(|| std::env::var("VERITY_GKR_RTT_MS").ok()).map(|s| s.parse().expect("--rtt-ms takes milliseconds")).unwrap_or(0.0);
+    let rtt = if rtt_ms > 0.0 { Some(std::time::Duration::from_secs_f64(rtt_ms / 1000.0)) } else { None };
     let tp = Instant::now();
-    let (proof, st) = prove(inst, mode);
-    let t_prove = tp.elapsed().as_secs_f64();
+    let (proof, st) = prove_with_rtt(inst, mode, rtt);
+    let t_wall = tp.elapsed().as_secs_f64();
+    let t_prove = t_wall - st.slept; // compute: the wall time less the emulated waits for the verifier's coins
+    // the bucket timers include the sleeps of their chain: take them out of the bucket that slept
+    let mut st = st;
+    if st.slept > 0.0 {
+        let lookup_share = if st.depth_lookup_chain >= st.depth_checker_chain { st.depth_lookup_chain } else { 0 } as f64;
+        let checker_share = if st.depth_lookup_chain >= st.depth_checker_chain { 0 } else { st.depth_checker_chain } as f64;
+        let per_trip = st.slept / st.trips as f64;
+        st.t_lookup -= lookup_share * per_trip;
+        st.t_arith -= checker_share * per_trip;
+        st.t_open -= (st.trips as f64 - lookup_share - checker_share - 1.0).max(0.0) * per_trip; // the Ligero r, Q trips
+    }
     let tv = Instant::now();
     let vinst = verifier_view(inst, mode);
     let res = verify(&vinst, &proof, mode);
     let t_verify = tv.elapsed().as_secs_f64();
-    let depth = 1 + st.depth_circuit.max(st.depth_lookup_max) + if mode == Mode::Pcs { 2 } else { 0 };
-    eprintln!("field={} mode={mode:?} unit={unit} B={b} units={} verify={:?} prove_s={t_prove:.3} (commit {:.3} lookup {:.3} wires {:.3} arith {:.3} open {:.3}) verify_s={t_verify:.3} proof_bytes={} slots={} depth={depth} rows={} committed={} lookups={:?} rss={:?}",
-        field::NAME, inst.segs[0].units, res, st.t_commit, st.t_lookup, st.t_witness_wires, st.t_arith, st.t_open, proof.size(), st.slots, st.ligero_rows, st.committed_elements, st.lookup_dims, peak_rss_bytes());
+    let depth = st.trips;
+    eprintln!("field={} mode={mode:?} unit={unit} B={b} units={} verify={:?} prove_s={t_prove:.3} (commit {:.3} lookup {:.3} wires {:.3} arith {:.3} open {:.3}) verify_s={t_verify:.3} proof_bytes={} slots={} depth={depth} (lookup chain {}, checker chain {}) rtt_ms={rtt_ms} slept_s={:.3} wall_s={t_wall:.3} e2e_s={:.3} rows={} committed={} lookups={:?} rss={:?}",
+        field::NAME, inst.segs[0].units, res, st.t_commit, st.t_lookup, st.t_witness_wires, st.t_arith, st.t_open, proof.size(), st.slots, st.depth_lookup_chain, st.depth_checker_chain, st.slept, t_wall + t_verify, st.ligero_rows, st.committed_elements, st.lookup_dims, peak_rss_bytes());
     if let Some(out) = arg(args, "--out") {
-        write_result(&out, args, &RunReport { inst, mode, proof: &proof, st: &st, t_prove, t_verify, res: &res, k, unit, b });
+        write_result(&out, args, &RunReport { inst, mode, proof: &proof, st: &st, t_prove, t_wall, t_verify, rtt_ms, res: &res, k, unit, b });
     }
     res.is_ok()
 }
@@ -634,7 +762,7 @@ fn main() {
             let dir = arg(&args, "--dir").unwrap();
             let unit = load_circuit(&format!("{dir}/circuit.txt"));
             let epi = load_circuit(&format!("{dir}/epilogue.txt"));
-            let files = VuFiles { units: format!("{dir}/units.bin"), epilogue: format!("{dir}/epilogue.bin"), public: format!("{dir}/public.bin") };
+            let files = VuFiles::in_dir(&dir);
             let vus: Option<usize> = arg(&args, "--vus").map(|s| s.parse().unwrap());
             let inst = load_vu(&unit, &epi, &files, vus);
             let b = inst.vus();
@@ -673,7 +801,7 @@ fn main() {
             let (mut n_ok, mut n_bad) = (0, 0);
             for p in ids {
                 let d = p.to_str().unwrap();
-                let files = VuFiles { units: format!("{d}/units.bin"), epilogue: format!("{d}/epilogue.bin"), public: format!("{d}/public.bin") };
+                let files = VuFiles::in_dir(d);
                 let inst = load_vu(&unit, &epi, &files, None);
                 let (proof, _) = prove(&inst, mode);
                 match verify(&verifier_view(&inst, mode), &proof, mode) {
@@ -699,7 +827,7 @@ fn main() {
             let dir = arg(&args, "--dir").unwrap();
             let unit = load_circuit(&format!("{dir}/circuit.txt"));
             let epi = load_circuit(&format!("{dir}/epilogue.txt"));
-            let files = VuFiles { units: format!("{dir}/units.bin"), epilogue: format!("{dir}/epilogue.bin"), public: format!("{dir}/public.bin") };
+            let files = VuFiles::in_dir(&dir);
             let vus: Option<usize> = arg(&args, "--vus").map(|s| s.parse().unwrap());
             let inst = load_vu(&unit, &epi, &files, vus);
             LOG_TRANSCRIPT.store(true, Ordering::Relaxed);
@@ -794,7 +922,7 @@ mod tests {
     }
 
     fn synth_files(units: &str, public: &str) -> VuFiles {
-        VuFiles { units: fx(&format!("vu_synth/{units}")), epilogue: fx("vu_synth/epilogue.bin"), public: fx(&format!("vu_synth/{public}")) }
+        VuFiles { units: fx(&format!("vu_synth/{units}")), epilogue: fx("vu_synth/epilogue.bin"), public: fx(&format!("vu_synth/{public}")), chain: None }
     }
 
     #[test]
@@ -808,7 +936,7 @@ mod tests {
                 let (proof, st) = prove(&inst, mode);
                 verify(&verifier_view(&inst, mode), &proof, mode).unwrap();
                 let limbs = inst.chain.as_ref().unwrap().limbs.len();
-                if mode == Mode::Pcs { assert_eq!(st.linkage_constraints, vus * (limbs * (3 + 1) + 1)); }
+                if mode == Mode::Pcs { assert_eq!(st.linkage_constraints, vus * (limbs * (3 + 1) + 1)); assert_eq!(st.linkage_constraints, vus * inst.chain.as_ref().unwrap().constraints_per_vu()); }
             }
         }
     }
@@ -831,5 +959,78 @@ mod tests {
         ch.public_y16.swap(0, 1);
         let (proof, _) = prove(&swapped, Mode::Pcs);
         assert!(verify(&verifier_view(&swapped, Mode::Pcs), &proof, Mode::Pcs).is_err());
+    }
+
+    // ---- checker v2 (PROTOCOL.md 14): fixtures/v2_synth from `gkr_export.vu synth --variant v2` (Goldilocks only)
+
+    #[cfg(not(feature = "babybear"))]
+    fn v2_files(units: &str, epilogue: &str, public: &str) -> VuFiles {
+        let f = |p: &str| format!("{}/fixtures/v2_synth/{p}", env!("CARGO_MANIFEST_DIR"));
+        VuFiles { units: f(units), epilogue: f(epilogue), public: f(public), chain: Some(f("chain.txt")) }
+    }
+
+    #[cfg(not(feature = "babybear"))]
+    #[test]
+    fn implicit_tables_match_their_definition() {
+        // SHIFT at REAL: bits 16, scale 10, R 54: key x·54 + 2d + s -> ±floor(x·2^10 / 2^d)
+        let t = materialise("shift", &[16, 10, 54], 65536 * 54);
+        let at = |x: u64, d: u64, s: u64| t[(x * 54 + 2 * d + s) as usize][1];
+        assert_eq!(at(3, 0, 0), Fp::new(3 << 10));
+        assert_eq!(at(3, 11, 0), Fp::new(1));
+        assert_eq!(at(3, 12, 0), Fp::ZERO);
+        assert_eq!(at(65535, 26, 1), -Fp::new((65535u64 << 10) >> 26));
+        assert_eq!(at(7, 1, 1), -Fp::new(7 << 9));
+        // TNORM at REAL: vb 15, k_rows 32, k_lo -7: key v + 2^15·koff -> floor(v·2^(koff-7))
+        let t = materialise("tnorm", &[15, 32, -7], 32768 * 32);
+        assert_eq!(t[(5 + 32768 * 0) as usize][1], Fp::new(5 >> 7));
+        assert_eq!(t[(1000 + 32768 * 7) as usize][1], Fp::new(1000));
+        assert_eq!(t[(32767 + 32768 * 31) as usize][1], Fp::new(32767u64 << 24));
+        let tb = Table::new("T".into(), 2, t);
+        assert!(tb.dense);
+        assert_eq!(tb.find(Fp::new(12345)), Some(12345));
+        assert_eq!(tb.find(Fp::new(32768 * 32)), None);
+        assert_eq!(tb.find(-Fp::ONE), None);
+    }
+
+    #[cfg(not(feature = "babybear"))]
+    #[test]
+    fn v2_synthetic_vus_accepted_with_state_chain() {
+        let f = |p: &str| format!("{}/fixtures/v2_synth/{p}", env!("CARGO_MANIFEST_DIR"));
+        let unit = load_circuit(&f("circuit.txt"));
+        let epi = load_circuit(&f("epilogue.txt"));
+        assert!(unit.circ.tables.iter().any(|t| t.name == "SHIFT" && t.rows.len() == 3_538_944 && t.dense));
+        for vus in [1usize, 2] {
+            let inst = load_vu(&unit, &epi, &v2_files("units.bin", "epilogue.bin", "public.bin"), Some(vus));
+            let ch = inst.chain.as_ref().unwrap();
+            assert_eq!(ch.steps, 3);
+            assert_eq!(ch.limbs.len(), 8);
+            assert_eq!(ch.constraints_per_vu(), 1 + 4 * (3 + 1) + 2 * (1 + 2) + 2);
+            for mode in [Mode::Clear, Mode::Pcs] {
+                let (proof, st) = prove(&inst, mode);
+                verify(&verifier_view(&inst, mode), &proof, mode).unwrap();
+                if mode == Mode::Pcs { assert_eq!(st.linkage_constraints, vus * ch.constraints_per_vu()); }
+            }
+        }
+    }
+
+    #[cfg(not(feature = "babybear"))]
+    #[test]
+    fn v2_synthetic_negatives_rejected() {
+        let f = |p: &str| format!("{}/fixtures/v2_synth/{p}", env!("CARGO_MANIFEST_DIR"));
+        let unit = load_circuit(&f("circuit.txt"));
+        let epi = load_circuit(&f("epilogue.txt"));
+        let cases = [
+            ("units.bin", "epilogue.bin", "negatives/public_wrong_word.bin"),
+            ("negatives/units_broken_chain.bin", "epilogue.bin", "public.bin"),
+            ("negatives/saturated_intermediate/units.bin", "negatives/saturated_intermediate/epilogue.bin", "negatives/saturated_intermediate/public.bin"),
+            ("negatives/false_overflow_flag/units.bin", "negatives/false_overflow_flag/epilogue.bin", "negatives/false_overflow_flag/public.bin"),
+        ];
+        for (u, e, p) in cases {
+            let inst = load_vu(&unit, &epi, &v2_files(u, e, p), None);
+            for mode in [Mode::Clear, Mode::Pcs] {
+                let (proof, _) = prove(&inst, mode);
+                assert!(verify(&verifier_view(&inst, mode), &proof, mode).is_err(), "{u} / {e} / {p} accepted in {mode:?}");
+            }
+        }
     }
 }

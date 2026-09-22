@@ -464,7 +464,7 @@ step, not part of this measurement.
   range checks, realises `LtPow` as a direct range check on \(2^w - 1 - x\) (no product), and adds a bound check
   on the normalised mantissa at \(k = k_{lo}\) so no identity has a term reaching \(p = 2^{31} - 2^{27} + 1\)
   (all constants are kept below \(2^{24}\)); +56 columns over Goldilocks. The 52 `vu-k1536-neg` instances and the
-  mutation tests pass identically over both fields (`tests/chain.rs`, `direct-unit vu-neg`).
+  mutation tests pass identically over both fields (`tests/chain.rs`, `direct-unit vu-neg`). **Section 13 audits
 
 ### 12.5 Statement binding (SOUNDNESS FIX, lane `soundness-fixes`, 2026-09-22; red team F1–F3) **[implemented]**
 
@@ -543,3 +543,307 @@ enter the reduced FRI openings through two scalars per opening point, so matchin
 \(B\) is bound, so a prover cannot smuggle a real VU into the padding without changing \(B\)). Binding the
 operands to the leaf/v2 tableau (the digest in the statement, the chunk roots in the header) is the next step of
 `auth_integration.md`, not this section.
+
+  this port against the red team's six embedding rules: one rule was half-implemented (fixed 2026-09-22).**
+
+## 13. The BabyBear port against the red team's embedding rules (b-lookup, 2026-09-22)
+
+`backends/numerical/reports/babybear_rules.md` derives six rules from all 109 WP2 predicates (interval analysis,
+then z3 on every embedded gadget: UNSAT under the six rules, a concrete forgery when any necessary one is dropped)
+and ships a battery of 83 adversarial witnesses (`fixtures/redteam/babybear-battery/v1`). The port of section 12.4
+was written before either existed. This section maps each rule to the port's constraints and records the battery
+verdict of the AIR's own constraints (`direct-unit check-rows`, `tools/battery_adapter.py`).
+
+### 13.1 Rule mapping
+
+Column and constraint names are `program.rs` names (`tag.name`); "range" is a 2-bit-limb decomposition of the
+named linear wire (`ctx.rs::rng`).
+
+| rule | what it requires | in the port | verdict |
+|---|---|---|---|
+| **LIMB16** | 32-bit words as two public 16-bit limbs; word identities per limb; fraction limbs `f_lo` (16) / `f_hi` (7); `pack.low` as `low_lo`/`low_hi`; the epilogue reads the limbs | `x.c_hi`, `x.c_lo` (16-bit ranges); `acc.f_lo`/`acc.f_hi` hints with 16/7-bit ranges, identities `acc.word_lo` (\(f_{lo}=c_{lo}\)) and `acc.word_hi` (\(s\,2^{15}+t\,2^7+f_{hi}=c_{hi}\)); `pack.low_lo`/`pack.low_hi` (16/7-bit), `pack.M` (\(\mathrm{hidden}\,2^{23}+\mathrm{low}_{hi}2^{16}+\mathrm{low}_{lo}=M\)); the word selection per limb (`pack.y_hi`, `pack.y_lo` materialised); `cast.*` on the limbs directly with the contract's 16-bit ranges `cast.hi`, `cast.lo`; the link `vu.link[0..1]` is per limb | **satisfied** |
+| **LT_DIRECT** (upper) | every `lt_pow` of width > 15 as `rng(bnd - 1 - x, 0, 2^B)` against the table's bound column | `Ctx::lt_pow` in `small_field`: `align_state.rem` (\(pow-1-r\)), `align_state.quot` (\(ipow-1-q\)), `align_prod.rem` (\(sr-1-r\)), `align_prod.quot` (\(isr-1-q\)), `lead.window` (\(span-1-(v-lo)\), LEAD's third column `span`), `norm.rem` (\(div-1-r\), width 7: direct too) | **satisfied** |
+| **LT_DIRECT** (lower, the two-range form) | `rng(x, 0, 2^B)` in addition when `x` is **not** itself a range-checked hint -- the leading-bit window `v - lo` | `align_*`: `q`, `r` are hints with their own ranges (`align_state.q/.r`, `align_prod.q/.r`): nothing more needed. `lead.window`: **MISSING** as shipped. `v - lo` is a linear wire; for \(v<lo\) the direct difference \(span-1-(v-lo)=2^l-1-v\) is a small positive integer that passes. Forgery: \(v=16,\ l=29\) (\(2^{29}-17\in[0,2^{30})\)); at the unit level `g1.lead.l` raised by one on an honest golden instance re-derives to a different output word (\(M\) halved, \(e_1+1\): `0x3fd82158 -> 0x3fec10ac`). **Fixed**: `lead.window_lo` = `rng(v - lo, 0, 2^30)`; with \(v\le S_{MAX}\) (`sum.premise`) and \(lo\le2^{29}\) a negative \(v-lo\ge-2^{29}\) has representative \(\ge p-2^{29}>2^{30}\). +15 limb columns and +16 constraints per group (2 groups): **+30 columns, +32 constraints** (width 2 900 -> 2 930, 3 215 -> 3 247 constraints) | **was MISSING; fixed** |
+| **QUOT_TIGHT** | the tight quotient bound \(q<2^B/pow\) (direct) so that \(q\,pow+r<2^{B+1}\) keeps the division identity inside \((-p,p)\) | `align_state.quot` (\(q<ipow\)) and `align_prod.quot` (\(q<isr\)) are emitted unconditionally (`align_state`, `align_product` in `program.rs`), in the direct form over BabyBear. With them: `align_state.div` has \(q\,pow+r<2^{25}+2^{25}\) vs \(2M<2^{25}\); `align_prod.div` has \(q\,sr+r<2^{17}\) vs \(u<2^{16}\): both differences inside \((-p,p)\) | **satisfied** |
+| **NORM_MBND** | NORM column \(mbnd=2^{30}/div\) and `rng(mbnd - 1 - M, 0, 2^30)`: the quotient tight to the dividend, excluding \(M'=(v+p)/div\) | The port's `norm.k_lo_bound`: `rng(k_lo * M, 0, 2^23)` with `k_lo` = NORM's fourth column \([k=k_{lo}]\). Equivalent: for \(div=2^7\) (the \(k=k_{lo}=-7\) row) \(mbnd=2^{23}\) and `mbnd - 1 - M >= 0` is exactly \(M<2^{23}\); for every other \(k<0\) row \(mbnd=2^{30}/div\ge2^{24}\) is implied by `norm.M`'s 24-bit range; for \(k\ge0\) rows \(div=1\), \(r=0\) and \(M\equiv v\,2^k\) is exact because \(v\,2^k<2^{24}\) once `lead` pins \(l\) (the NORM_VBND redundancy below, which the LT_DIRECT fix restores). The shadow \(M'\ge p/128=15\,728\,640>2^{23}\) is rejected; the honest \(M=v\gg7\le S_{MAX}/128<2^{22.1}\) is accepted. Realised with one product instead of a table column (`k_lo` is linear in the one-hot selectors: degree 2, 12 limb columns) | **satisfied** (equivalent form) |
+| **NORM_VBND** | \(v\,mul<2^{24}\) via a `vbnd` column -- **redundant** (z3: UNSAT without it, in isolation and composed with `leading_bit` with `l` free) | never carried by the port | nothing to drop |
+| **V_PREMISE** | \(v\in[0,S_{MAX}]\), \(S_{MAX}=570\,417\,150\), as the premise of `leading_bit`/`normalise` (a guarantee of `signed_sum`'s ranges, not a check) | guaranteed: `sum.v` = \(S-2\,\mathrm{sgn}\,S\) materialised, `sum.v` 30-bit range; a wrong sign gives a negative \(v\ge-S_{MAX}\) with representative \(\ge p-S_{MAX}>2^{30}\). The port **also** checks it explicitly: `sum.premise` = `rng(S_MAX - v, 0, 2^30)` (15 limbs per group; harmless, and what the `window_lo` argument above uses) | **satisfied** (guarantee + explicit check) |
+
+The mapping says the port implemented the rules' *first draft* faithfully -- the direct form of every wide `lt_pow`
+-- and missed exactly the amendment z3 forced on the red team (`babybear_rules.md` 6, "run 1 -> run 2": the
+direct form bounds only from above). The battery does not contain that forgery (its `leading_bit -LT_DIRECT` case
+\(v=16,l=0\) is the *product-form* hole, which the direct form catches); this lane's extra cases do
+(`battery_adapter.py --extras`: 2 gadget-level, 4 unit-level).
+
+### 13.2 The battery against the AIR's constraints
+
+`direct-unit check-rows --field babybear --in jobs.json --out report.json` evaluates every constraint of
+`ChainAir` (row-local, transition between consecutive supplied rows, boundary when the job starts a trace) on rows
+built by imposing the case's hints by name on the witness generator (`IntCtx::overrides`; limbs, selectors,
+inverses and materialised copies derived from the imposed values, the only assignment that can satisfy their own
+constraints), and reports the first violated constraint. Nothing in the verdict depends on witness generation
+rejecting. Case mapping (`tools/battery_adapter.py`): `step` = the forged unit at VU position 1 (so \(c\ne0\) is
+allowed) followed by an honest zero unit consuming its output limbs through `vu.link`; `vu` = the two forged units
+from \(c_0=0\) plus 94 honest zero units (the identity on a finite accumulator) carrying the word to row 95, where
+the case's epilogue hints and the claimed \(y_{16}\) meet `vu.out`; `gadget` = `program::gadget_program`, the
+gadget alone with inputs pinned to the contract's premises and outputs bound to the claimed values. Every case is
+paired with an honest control (same operands, honest hints, honest word) that must be accepted.
+
+Result (vy-cpu2, `results/battery_babybear.json`, 1.3 s for 176 jobs; the pre-fix constraints of db1f9d8 rebuilt
+with the same tool: `results/battery_babybear_prefix_db1f9d8.json`):
+
+| constraints | width / constraints | battery (83, must reject) | honest controls (87) | this lane's 6 extras (must reject) |
+|---|---|---|---|---|
+| port as shipped (db1f9d8, section 12.4) | 2 900 / 3 215 | **82/83**: `z3-d65d03b3ff` ACCEPTED (`lead_norm`, rule LT_DIRECT dropped: \(E=-100,\ v=0,\ l=1\) -> \(e_1=-124\), reference \(-125\); Python embedded checker: `lead.window.nonneg`) | 87/87 | **0/6**: all six accepted, incl. four unit-level forgeries with a different output word |
+| with `lead.window_lo` (426700b) | 2 930 / 3 247 | **83/83** rejected | 87/87 accepted | 6/6 rejected (first failing: `lead.window_lo.limbs`) |
+
+Where the 83 die (first failing constraint), post-fix: `wrap` 58 -- 32 on an operand decode's `s`
+boolean (`a[i].s`, `b[i].s`), 18 on a quotient's own range (`g*.align_prod[i].q.limbs`, `g*.align_state.q.limbs`),
+the rest on `acc.t.limbs`, `norm.clamp`, `out.z`, `sum.sgn`, `pack.hidden`; `fractional` 1 -- `g0.max.E.limbs`;
+`zero_swap` 4 -- `acc.word_hi` (the sign bit of the word against the honest `s`); `hint_swap` 3 -- `a[0].word`;
+`chain` 4 -- `acc.word_lo` (2: the +p shadow's fraction limb differs from the carried limb) and `g0.max.E.limbs`
+(2); `epilogue` 1 -- `vu.out` (the claim binding on row 95: the mutated hints are the public limbs the port does not
+carry, so the row is honest and the claimed word is wrong); `z3` 12 -- `acc.word_hi`, `cast.lsb_split`,
+`align_state.rem/quot.limbs`, `align_prod.rem/quot.limbs`, `lead.window.limbs`, `lead.window_lo.limbs` (the case
+above), `norm.k_lo_bound.limbs` (2: NORM_MBND's role, in the port's equivalent form), `in.v.hi.limbs` (2: the
+V_PREMISE models' input is outside the premise; the premise is the composition's `sum.premise` check).
+
+Conclusion of goal 1: five of six rules were satisfied by the port as shipped (LIMB16, LT_DIRECT-upper,
+QUOT_TIGHT, NORM_MBND in an equivalent form, V_PREMISE as an explicit check); NORM_VBND was never carried (nothing
+to drop); LT_DIRECT's lower range on the leading-bit window was missing and is a real forgery of the VU relation
+over BabyBear (different output words on golden instances). It is fixed at +30 columns (+1.0%). The Goldilocks path
+is unchanged (its `lt_pow` is the product form, which bounds both sides). Gate after the fix: section 13.3.
+
+### 13.3 Gate after the fix
+
+`run_vu.sh babybear 4096 166` on vy-cpu2 at 12 threads (run `r20260922-065546-a242`, `results/vu_babybear_q166_fix_r20260922-065546-a242.json`; the box was shared with a-babybear, checker-min and this lane's own lookup build, so the times carry that noise):
+
+| | b-chain, as shipped (`r20260922-060503-6847`) | after `lead.window_lo` |
+|---|---|---|
+| width / constraints | 2 900 / 3 215 | 2 930 / 3 247 (+1.0%) |
+| 23 unit negatives, 3 chain mutations | pass | pass |
+| 52 `vu-k1536-neg` | 52 rejected by witness generation AND unsatisfiable in the field | 52 / 52 |
+| battery 83 + 6 extras | 82/83, 0/6 | **83/83, 6/6**; 87/87 controls |
+| 4 096 VUs, words + accumulators | all match | all match |
+| witness / prove / total | 21.2 / 146.9 / 168.1 s | 22.1 / 151.1 / **173.2 s** (+3%, within the shared-box noise) |
+| s/VU, overhead vs native peak | 0.0410, 4.17e9 | 0.0423, 4.30e9 |
+| verify / proof / peak RSS | 0.425 s / 3.45 MB / 30.6 GB | 0.426 s / 3.47 MB / 30.9 GB |
+| FRI bound (166 queries, PoW 16) | 2^-128.6 proven | 2^-128.6 proven |
+
+Ledger: `reports/ledger/b-lookup.jsonl`, label `SOUNDNESS FIX: LT_DIRECT; BabyBear AIR 2^-128, B=4096`.
+
+## 14. Range lookups instead of 2-bit limbs: LogUp inside the AIR (b-lookup, 2026-09-22) **[implemented, diagnostic PCS]**
+
+Section 12.2: 1 922 of the BabyBear chain's 2 930 columns are 2-bit range limbs and 610 are one-hot table selectors;
+tensor.md makes committed bytes per VU the GPU lever.  This section replaces both realisations by one LogUp
+argument [Haboeck 2022] inside the Plonky3 AIR.  The *relation* is unchanged: every `rng(x, lo, hi)` and every
+`lookup(T, key)` of the row program (`program.rs`) is still enforced; only the realisation (`ctx.rs`, `Realisation::LogUp`)
+differs.  Code: `lookup.rs` (tables, queries, helper packing, prover-side auxiliary columns, the constraints),
+`lookup_stark.rs` (the three-round uni-stark), `air.rs::LookupChainAir`, `chain-layout --lookup`,
+`vu-bench --lookup`, `check-rows --lookup`, `tests/lookup.rs`, `run_lookup.sh`.
+
+### 14.1 The argument
+
+One preprocessed matrix \(P\) (6 base columns, committed once, recomputed by the verifier) holds every table the
+program needs as tagged rows \((key, o_1, .., o_4, tag)\):
+
+| table | rows | contents |
+|---|---|---|
+| \(T_7, T_8, T_9\) | 128, 256, 512 | range tables \([0, 2^w)\), key only |
+| \(T_{14}, T_{15}, T_{16}\) | 16 384, 32 768, 65 536 | range tables; \(T_{16}\) is the low half of every split (below), \(T_{14}/T_{15}\) the high halves of the 30/31-bit ranges |
+| POW, ALIGN | 537, 538 | the saturating shift tables expanded to contiguous keys up to their slack bound (`keys[last] + slack_hi`): saturation needs no selector and no slack range any more |
+| LEAD, NORM | 31, 32 | exact rows |
+| padding | rest | \((0, .., 0; tag\,0)\); no query ever carries tag 0 |
+| total | **116 722** | so the trace has at least \(2^{17}\) rows (the 4 096-VU trace has \(2^{19}\)) |
+
+A **query** is a tuple \((v_0, .., v_4)\) of row expressions and a constant tag; it is combined with the second
+challenge as \(q = v_0 + \beta v_1 + \dots + \beta^4 v_4 + \beta^5\, tag\), a table row likewise as \(t_r\).  Range
+checks become queries as follows (`Ctx::rng`, lookup mode):
+
+* \(n = hi - lo \le 2\): the boolean polynomial, as before.
+* \(w = \lceil \log_2 n \rceil \le 16\): the query \((y, tag_w)\) with \(y = x - lo\); when \(n\) is not a power of two a
+  second query \((n - 1 - y, tag_w)\) -- the intersection of the two is exactly \([0, n)\) because \(n \le 2^w\).  This
+  replaces both the exclusion inverses (\(k \le 2\)) and the second limb decomposition of section 12.
+* \(w > 16\): two hint columns `lo16`, `hi16` with the identity \(y = lo16 + 2^{16} hi16\) and the queries
+  \((lo16, T_{16})\), \((hi16, T_{w-16})\).  Used by the 24/26/30/31-bit ranges (7 + 8 + 10 + 1 per row).
+
+Table lookups (`Ctx::lookup`, lookup mode): the outputs are hint columns `<name>.out[c]` and the tuple
+\((key, out_0, .., out_{c-1}, tag_T)\) is one query.  A saturating table's key must lie in the expanded key range
+(previously `key = last + slack` with `slack in [0, slack_hi)`, now the same set as table rows).
+
+**Queries per row: 391** (337 of degree 1, 54 of degree 2; `chain-layout --lookup --names` lists them).  The
+LogUp identity over the whole trace (rows \(i\), queries \(j\), table rows \(r\)) is
+
+\[\sum_{i,j} \frac{1}{z - q_{ij}} \;=\; \sum_r \frac{m_r}{z - t_r},\]
+
+which holds iff every queried tuple is a table row (Haboeck Lemma 5; needs \(\mathrm{char}(F) > \) total lookups:
+\(2^{27.6}\) at 4 096 VUs against \(p = 2^{30.9}\), so one proof may hold at most \(2^{22}\) rows = 43 690 VUs; larger
+batches are several proofs).  Columns:
+
+* **multiplicity** \(m\) (1 base column, last column of the main trace): the histogram of all query indices,
+  computed after witness generation (`lookup::multiplicities`, a parallel reduction over the flat
+  \(rows \times 391\) `u32` index array the witness generator emits alongside the rows).
+* **helpers** \(h_g\) (extension elements, 4 base columns each): the queries of a row are packed greedily in program
+  order into groups \(g\) of total degree \(\le 4\); \(h_g = \sum_{j \in g} 1/(z - q_j)\) with the constraint
+  \(h_g \prod_{j \in g}(z - q_j) - \sum_{j \in g} \prod_{k \ne j}(z - q_k) = 0\) of degree \(1 + \sum_j \deg q_j \le 5\)
+  (`MAX_DEG`, log-blowup 2 unchanged).  **112 helpers = 448 base columns**; the packing is optimal to within one
+  group (\(337 + 2 \cdot 54 = 445\) degree units over 4).
+* **table side** \(g = m / (z - t)\) (4 base columns): \(g (z - t_{row}) - m = 0\) on every row (\(t_{row}\) from \(P\);
+  padding rows have \(m = 0\), \(g = 0\)).
+* **running sum** \(S\) (4 base columns): \(S_0 = \sum_g h_g - g\) (first row), \(S_{i+1} = S_i + \sum_g h_g' - g'\)
+  (transition), \(S_{last} = 0\) (last row); degrees 2.
+
+Widths (`chain-layout --field babybear --lookup`):
+
+| | chain, BabyBear, limbs (section 12/13) | chain, BabyBear, LogUp |
+|---|---|---|
+| main width | 2 930 | **401** (400 program columns + \(m\)) |
+| auxiliary width (after \(z, \beta\)) | -- | **456** (112 helpers + \(g\) + \(S\), \(\times 4\)) |
+| preprocessed width | -- | 6 |
+| **committed width per row** | **2 930** | **863** (**3.40x fewer**) |
+| constraints per row | 3 247 | 402 (286 program + 116 lookup) |
+| max degree (log quotient degree) | 5 (2) | 5 (2) |
+| committed cells per VU (96 rows) | 281 280 | 82 848 |
+| committed bytes per VU | 1.13 MB | **0.33 MB** |
+| hints / materialised | 1 066 / 14 | 386 / 14 |
+| minimum trace height | 2 rows | \(2^{17}\) rows (the tables) |
+
+The 400 program columns are the census' value slots (words, hints, named materialisations) plus 25 split hints and
+66 table-output hints; nothing structural is left to remove except by changing the program itself.
+
+### 14.2 Soundness: the challenge field (accountant, `security.accounting.logup_identity_error`)
+
+The LogUp identity is a rational-function identity in \(z\) of degree \(N + |T| - 1\) with \(N = 2^{19} \cdot 391 =
+2^{27.6}\) lookups, and the \(\beta\)-compression of 6 columns adds \(5 (N + |T| - 1)/|F|\) (Haboeck 3.4).  Over the
+challenge field (`whole_field` sampling; the AIR does not redraw poles):
+
+| challenge field | LogUp term (4 096 VUs) | in Plonky3 0.4.3 |
+|---|---|---|
+| BabyBear\(^4\) (\(2^{124}\)) | \(2^{-93.4}\) | yes (`BinomialExtensionField<BabyBear, 4>`) -- **the implemented configuration** |
+| BabyBear\(^5\) (\(2^{155}\)) | \(2^{-124.3}\) | yes (`<BabyBear, 5>`): `BabyBear5Backend`, `vu-bench --lookup --ext 5` -- **measured** below (aux width 570; the prover's own count of the term, with its actual \(N\), is \(2^{-124.8}\)) |
+| BabyBear\(^6\) (\(2^{186}\)) | \(2^{-155.2}\) | **no** (BabyBear has binomial extensions of degree 4 and 5 only in 0.4.3) |
+
+So with the lookup argument the proof's soundness label is bounded by the challenge field: **\(2^{-93}\) at
+BabyBear\(^4\)** even with 166 FRI queries (the "2^-128 proven" of section 12 referred to the FRI term alone; the
+DEEP/quotient-batching field terms of uni-stark are \(\approx\) constraints \(\cdot\) degree \(/ |F_{ext}|\) and were
+already \(2^{-110}\)-ish at BabyBear\(^4\), which section 12 omitted -- the lookup makes the field term the
+binding one).  \(2^{-128}\) needs BabyBear\(^6\): Candidate B's own PCS (sections 2--4) is not tied to Plonky3 and
+takes any extension; in the diagnostic prover the honest option is BabyBear\(^5\) at \(2^{-124}\) or, for a full
+\(2^{-128}\), a smaller batch per proof (\(2^{17}\) rows: \(2^{-126.3}\) at degree 5).  The measurement below is
+labelled with the lookup term it actually has.
+
+### 14.3 Obtaining the challenges in uni-stark
+
+Plonky3 0.4.3's `p3_uni_stark::prove` commits one matrix and samples only \(\alpha\) (constraint batching) and
+\(\zeta\) (DEEP point); it has no second trace stage and `AirBuilderWithPublicValues` only exposes base-field public
+values.  `lookup_stark.rs` is therefore a fork of `prove`/`verify` (unchanged PCS, challenger, FRI parameters) with
+the round structure
+
+1. commit \(P\) (preprocessed tables; the verifier recomputes \(P\) from the public table set and compares the
+   commitment: 6 columns, an LDE + Merkle tree of \(2^{19} \times 6\) at verification, see the verify time below);
+2. commit the main trace (401 columns, \(m\) included -- \(m\) depends only on the witness, so it can be committed
+   *before* the challenges; committing it after would let the prover pick \(m\) as a function of \(z\), which is unsound);
+3. observe both, sample \(z, \beta \in F_{ext}\);
+4. build and commit the auxiliary matrix (456 columns: helpers, \(g\), \(S\); `lookup::aux_matrix` -- one batch
+   inversion of the 116 722 table denominators, then per row a sum over its 391 query indices, then a sequential
+   prefix sum);
+5. sample \(\alpha\), evaluate the quotient over (main, \(P\), aux) on the coset with a `LookupAirBuilder`
+   (`ProverLookupFolder`: `PackedVal` rows for the three matrices, `PackedChallenge` for \(z, \beta\), extension
+   constraints folded into the same \(\alpha\)-accumulator), commit the quotient chunks;
+6. sample \(\zeta\), open all four commitments at \(\zeta, \zeta \omega\) (quotient at \(\zeta\)) in one `pcs.open`.
+
+Cost in depth: **+2 rounds** (the preprocessed commitment could be cached across proofs; the aux round is
+inherent: \(\log_2 n + 7\) sequential rounds instead of \(\log_2 n + 5\)).  Proof size: two more commitments and
+two more opened-row pairs (\(6 + 456\) extension values) -- but 2 930 - 401 fewer main openings, so the proof is smaller.
+
+### 14.4 Correctness gate
+
+Same relation, so the section 13 battery applies unchanged: `battery_adapter.py --lookup` runs `check-rows
+--lookup`, which evaluates every program constraint and the lookup **helper** constraints on the adversarial rows
+(an out-of-table value leaves its group's helper without a term, which is the verifier's constraint that fails;
+the global table-side and running-sum constraints need the whole trace and are covered by the round-trip
+mutations of `tests/lookup.rs`).  Result: **83/83 rejected, 87/87 honest controls accepted, 6/6 lane extras
+rejected** (`results/battery_babybear_lookup.json`).  `tests/lookup.rs`: layout consistency; the evaluator on an
+honest VU (no failing constraint) and on mutated rows; the pod-sized (\(2^{17}\)-row) round trip -- exhaustive
+evaluation of every constraint on every row of the honest committed trace (`lookup_failing_trace`), honest proof
+verifies, and six mutations reject (claim word, accumulator link, \(c_0 \ne 0\), step skip, a range-checked column
+pushed out of \(T_{16}\), a tampered multiplicity).  The 4 096-VU positive gate (every accumulator and output word
+against bench-instances/v1) is in `vu-bench --lookup`.
+
+### 14.5 Measurement (vy-cpu2, 12 threads, shared with a-babybear and checker-min)
+
+All three columns: BabyBear, \(B = 4096\) VUs (\(K = 1536\), 96 units per VU, \(2^{19}\) rows of which \(393\,216\)
+real), FRI `log_blowup=2`, 166 queries, PoW 16 (FRI term \(2^{-128.6}\) proven), Keccak Merkle, 12 Rayon threads on
+vy-cpu2 while a-babybear and checker-min ran on the other 20 vCPUs (so every time is an upper bound), authentication
+excluded, `NON_ZK_PROOF_DIAGNOSTIC`.  Every accumulator and output word checked against bench-instances/v1; all
+three proofs verify.  Runs `r20260922-065546-a242` (limbs, after the section 13 fix), `r20260922-070654-177a`
+(LogUp, BabyBear\(^4\)), `r20260922-071206-c4b0` (LogUp, BabyBear\(^5\)); `results/vu_*_q166_*.json`.
+
+| | 2-bit limbs (section 12 + 13 fix) | LogUp, BabyBear\(^4\) | LogUp, BabyBear\(^5\) |
+|---|---|---|---|
+| main trace width (base columns) | 2 930 | 401 (+ 6 preprocessed) | 401 (+ 6) |
+| committed width (base-field equivalent) | 2 930 | 863 (401 + 6 + 114 \(\cdot\) 4) | 977 (401 + 6 + 114 \(\cdot\) 5) |
+| committed cells / bytes per VU | 281 280 / **1.125 MB** | 82 848 / **331 kB** (3.40x less) | 93 792 / **375 kB** (3.00x less) |
+| witness s | 22.1 | 5.4 | 5.9 |
+| prove s | 151.1 | 54.7 | 64.5 |
+| total s | 173.2 | **60.1** | 70.4 |
+| s / VU | 0.0423 | **0.0147** (2.88x) | 0.0172 (2.46x) |
+| overhead vs native peak | 4.30e9 | 1.49e9 | 1.75e9 |
+| verify s | 0.43 | 0.44 | 0.51 |
+| proof MB | 3.47 | 2.27 | 2.37 |
+| sequential depth (rounds) | 24 | 26 | 26 |
+| peak RSS GB | 30.9 | 9.5 | 10.7 |
+| soundness: FRI / field (lookup) term | \(2^{-128.6}\) / (\(\approx 2^{-110}\), unaccounted) | \(2^{-128.6}\) / **\(2^{-93.8}\)** | \(2^{-128.6}\) / **\(2^{-124.8}\)** |
+| ledger label | `SOUNDNESS FIX: LT_DIRECT; ...` | `LogUp range lookups ... 2^-93.8` (`--breakthrough`) | -- |
+
+Both breakthrough criteria are met: committed bytes per VU fall 3.4x (> 2x) and s/VU falls 2.9x (> 1.5x).  The
+verifier is not faster: it recomputes the 6 preprocessed table columns (an LDE + Merkle tree of \(2^{19} \times 6\),
+\(\approx 0.1\) s) and opens two more commitments; caching the preprocessed commitment across proofs removes that.
+The \(2^{-128}\) column of section 12's headline does not survive the lookup at BabyBear\(^4\): the honest label for
+the fast configuration is **\(2^{-93.8}\)**, and \(2^{-124.8}\) costs 17% more time at BabyBear\(^5\).  A full
+\(2^{-128}\) with this Plonky3 version needs \(2^{17}\)-row batches (1 024 VUs per proof) at BabyBear\(^5\).
+
+### 14.6 Where the time goes (profile)
+
+`run_profile.sh` runs both realisations with `RUST_LOG=debug` (a `tracing_subscriber` behind the env var prints
+Plonky3's `info_span!`s on close with their busy time; for the lookup prover the stage timers of `lookup_stark.rs`
+are printed as `lookup stages:`).  Run `r20260922-072959-ef63`, same configuration as 14.5, summary in
+`results/profile_spans_babybear_4096_r20260922-072959-ef63.txt`.  Busy seconds inside `prove` (12 threads):
+
+| stage | 2-bit limbs (width 2 930) | LogUp (401 + 6 + 456) | what it is |
+|---|---|---|---|
+| quotient evaluation | **102.0** (69%) | **36.7** (68%) | every constraint on every row of the 4x LDE coset, packed: the CPU bottleneck in both |
+| commit: coset LDE | 20.9 | 7.3 (3.3 main + 3.5 aux + 0.5 P, quotient) | DFT of the committed columns |
+| commit: Merkle (Keccak) | 13.8 | 5.0 | hashing the LDE rows |
+| open (`reduce matrix quotient`) | 7.3 | 3.0 | DEEP quotients over all committed matrices |
+| FRI (commit phase, 19 folds) | 0.5 | 0.5 | |
+| witness (outside `prove`) | 21.6 | 5.5 | integer forward run + hint materialisation (single pass, Rayon over VUs) |
+| total prove | 148 | 54 | |
+
+Reading:
+
+- **Constraint evaluation, not committed bytes, is the CPU bottleneck** in both realisations: 69% / 68% of `prove`.
+  With 2-bit limbs the quotient pass evaluates 3 247 constraints of degree \(\le 3\) per coset row, most of them
+  the trivial `l(l-1)(l-2)(l-3)` limb constraints and the wide limb recompositions -- cheap each, but 2 930 columns
+  of coset data stream through it.  With LogUp the program's constraints (402 base constraints, incl. the chain
+  tail) remain and the lookup adds 112 helper constraints + the \(g\) and \(S\) constraints over \(F_{ext}\), each
+  helper a degree-4 product over its 4 query terms; after the `prod_and_sum` rewrite (one extension multiplication
+  per query term instead of three) the pass is 2.8x cheaper -- the same factor as the total, so on CPU the
+  quotient pass scales with committed width \(\times\) constraint degree, and there is no separate encoding wall.
+- Encoding (LDE + Merkle) is 23% of `prove` in both; per committed base column it costs the same (\(\approx
+  12\) ms per column at \(2^{19}\) rows on 12 threads).  On the GPU (tensor.md) this is the part that becomes the whole
+  story, and it fell 3.4x in bytes.  The \(2^{19}\)-row LDE of a 2 930-column trace also set the 31 GB peak RSS;
+  the lookup prover peaks at 9.5 GB.
+- The lookup-specific work is small: `aux_build` (batch inversion of the 116 722 table denominators, the per-row
+  sums over 391 queries, the prefix sum) is 0.5 s, the preprocessed round 0.3 s.  The aux round's LDE + Merkle
+  (5.8 s) is the price of 456 base columns of extension helpers; BabyBear\(^5\) adds 114 more (7.3 s) and a wider
+  quotient pass (44 s), hence 70.4 s total.
+- Witness generation fell 4x (21.6 s to 5.5 s): the 1 868 2-bit limb decompositions per row are no longer
+  computed and written; the multiplicity histogram is one pass over the query values.
+
+Where the next factor is: (i) the committed aux width -- the 112 helpers could be halved by sharing one helper
+across two tables (a second \(\beta\)-power keeps the degree at 4) and \(g\) folded into \(S\), saving \(\approx
+60\) extension columns of encoding and of quotient input; (ii) the 401 main columns are now mostly the program's own
+hints (words, carries, quotients, selectors), which lookups do not touch -- that is a relation-side question
+(section 12.2's per-gadget census); (iii) on the GPU only the encoding term matters and the 3.4x is the number to
+carry to tensor.md.

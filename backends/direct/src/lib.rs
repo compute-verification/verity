@@ -9,7 +9,10 @@
 
 pub mod air;
 pub mod challenger;
+pub mod rtt;
 pub mod ctx;
+pub mod lookup;
+pub mod lookup_stark;
 pub mod params;
 pub mod program;
 pub mod stark;

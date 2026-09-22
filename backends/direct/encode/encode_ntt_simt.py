@@ -130,6 +130,7 @@ _SRC_V2 = r"""
 #define LOGT %(logt)d
 #define MINBLOCKS %(minblocks)d      /* __launch_bounds__ min CTAs per SM: 2 caps the registers at 64 (v2 t512 wants 120) */
 #define GATHER %(gather)d            /* 1: write only the selected positions: out[slot[pos]][row], out is (t, out_rows) */
+#define RADIX4 %(radix4)d            /* 1: fused radix-4 shared-memory stages (b-v2; same arithmetic, half the smem traffic / syncs) */
 #define PER (K / THREADS)            /* elements per thread: i = t + THREADS * s */
 
 __device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return s >= P ? s - P : s; }
@@ -189,6 +190,40 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
         for (int s = 0; s < PER; ++s) x[t + THREADS * s] = r[s];
         __syncthreads();
         /* INTT, DIF: shared-memory stages m = THREADS/2 .. 1 */
+#if RADIX4
+        /* radix-4 (b-v2): stages lm and lm - 1 fused; the quad {i, i + h, i + m, i + m + h} (h = m / 2) is closed under both,
+           so the arithmetic is the two radix-2 stages verbatim (bit-exact) with half the shared-memory traffic and syncs. */
+        #pragma unroll
+        for (int lm = LOGT - 1; lm >= 1; lm -= 2) {
+            const int m = 1 << lm, h = m >> 1;
+            #pragma unroll
+            for (int s = 0; s < PER / 4; ++s) {
+                const int q = t + s * THREADS;
+                const int tt = q & (h - 1);
+                const int i = ((q >> (lm - 1)) << (lm + 1)) | tt;
+                const unsigned a0 = x[i], a1 = x[i + h], a2 = x[i + m], a3 = x[i + m + h];
+                const unsigned b0 = add_p(a0, a2), b2 = mont_mul(sub_p(a0, a2), __ldg(&tw_inv[m + tt]));
+                const unsigned b1 = add_p(a1, a3), b3 = mont_mul(sub_p(a1, a3), __ldg(&tw_inv[m + tt + h]));
+                const unsigned wh = __ldg(&tw_inv[h + tt]);
+                x[i] = add_p(b0, b1);
+                x[i + h] = mont_mul(sub_p(b0, b1), wh);
+                x[i + m] = add_p(b2, b3);
+                x[i + m + h] = mont_mul(sub_p(b2, b3), wh);
+            }
+            __syncthreads();
+        }
+        if (LOGT & 1) {   /* one radix-2 stage left: m = 1 */
+            #pragma unroll
+            for (int s = 0; s < PER / 2; ++s) {
+                const int b = t + s * THREADS;
+                const int i = b << 1;
+                const unsigned a = x[i], c = x[i + 1];
+                x[i] = add_p(a, c);
+                x[i + 1] = mont_mul(sub_p(a, c), __ldg(&tw_inv[1]));
+            }
+            __syncthreads();
+        }
+#else
         #pragma unroll
         for (int lm = LOGT - 1; lm >= 0; --lm) {
             const int m = 1 << lm;
@@ -203,6 +238,7 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
             }
             __syncthreads();
         }
+#endif
         #pragma unroll
         for (int s = 0; s < PER; ++s) coef[s] = x[t + THREADS * s];      /* bit-reversed unscaled coefficients */
         #pragma unroll 1
@@ -212,6 +248,43 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
             for (int s = 0; s < PER; ++s) x[t + THREADS * s] = mont_mul(coef[s], __ldg(&ct[t + THREADS * s]));
             __syncthreads();
             /* NTT, DIT: shared-memory stages m = 1 .. THREADS/2 */
+#if RADIX4
+            /* radix-4: stages lm and lm + 1 fused on the quad {i, i + m, i + 2m, i + 3m} (same operations as radix-2: bit-exact) */
+            #pragma unroll
+            for (int lm = 0; lm + 1 < LOGT; lm += 2) {
+                const int m = 1 << lm, m2 = m << 1;
+                #pragma unroll
+                for (int s = 0; s < PER / 4; ++s) {
+                    const int q = t + s * THREADS;
+                    const int tt = q & (m - 1);
+                    const int i = ((q >> lm) << (lm + 2)) | tt;
+                    const unsigned a0 = x[i], a1 = x[i + m], a2 = x[i + m2], a3 = x[i + m2 + m];
+                    const unsigned wm = __ldg(&tw_fwd[m + tt]);
+                    const unsigned c1 = mont_mul(a1, wm), c3 = mont_mul(a3, wm);
+                    const unsigned b0 = add_p(a0, c1), b1 = sub_p(a0, c1), b2 = add_p(a2, c3), b3 = sub_p(a2, c3);
+                    const unsigned d2 = mont_mul(b2, __ldg(&tw_fwd[m2 + tt])), d3 = mont_mul(b3, __ldg(&tw_fwd[m2 + tt + m]));
+                    x[i] = add_p(b0, d2);
+                    x[i + m2] = sub_p(b0, d2);
+                    x[i + m] = add_p(b1, d3);
+                    x[i + m2 + m] = sub_p(b1, d3);
+                }
+                __syncthreads();
+            }
+            if (LOGT & 1) {   /* one radix-2 stage left: m = THREADS / 2 */
+                const int m = THREADS >> 1;
+                #pragma unroll
+                for (int s = 0; s < PER / 2; ++s) {
+                    const int b = t + s * THREADS;
+                    const int tt = b & (m - 1);
+                    const int i = ((b >> (LOGT - 1)) << LOGT) | tt;
+                    const unsigned a = x[i];
+                    const unsigned cc = mont_mul(x[i + m], __ldg(&tw_fwd[m + tt]));
+                    x[i] = add_p(a, cc);
+                    x[i + m] = sub_p(a, cc);
+                }
+                __syncthreads();
+            }
+#else
             #pragma unroll
             for (int lm = 0; lm < LOGT; ++lm) {
                 const int m = 1 << lm;
@@ -227,6 +300,7 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
                 }
                 __syncthreads();
             }
+#endif
             #pragma unroll
             for (int s = 0; s < PER; ++s) r[s] = x[t + THREADS * s];
             /* NTT, DIT: register stages m = THREADS .. K/2 */
@@ -284,7 +358,7 @@ class RSEncoderSIMT:
     """cupy-backed encoder; ``__call__(rows_u32 (R, k) on device, out (R, n) or None) -> out``."""
 
     def __init__(self, k: int = bb.K_CODE, n: int = bb.N_CODE, threads: int = 512, blocks: int | None = None, variant: str = "v2",
-                 min_blocks_per_sm: int = 1, gather: bool = False):
+                 min_blocks_per_sm: int = 1, gather: bool = False, radix4: bool = False):
         """``min_blocks_per_sm`` (v2): second argument of ``__launch_bounds__``; v2 at 512 threads takes 120 registers =
         one CTA per SM and every register of the SM, so nothing can run beside it.  ``2`` caps the registers at 64
         and, with ``blocks`` = the SM count, leaves half the SM's registers to a concurrently running kernel
@@ -296,9 +370,12 @@ class RSEncoderSIMT:
         self.k, self.n, self.threads, self.variant = k, n, threads, variant
         self.cp = cp
         params = {"npinv": bb.NEG_P_INV_MOD_R, "pinv": bb.P_INV_MOD_R, "k": k, "logk": k.bit_length() - 1, "threads": threads,
-                  "logt": threads.bit_length() - 1, "minblocks": min_blocks_per_sm, "gather": int(gather)}
-        if gather and variant != "v2":
-            raise ValueError("gather mode is a v2 option")
+                  "logt": threads.bit_length() - 1, "minblocks": min_blocks_per_sm, "gather": int(gather), "radix4": int(radix4)}
+        if (gather or radix4) and variant != "v2":
+            raise ValueError("gather / radix4 are v2 options")
+        if radix4 and k < 4 * threads:
+            raise ValueError("radix4 needs k >= 4 x threads (PER >= 4)")
+        self.radix4 = radix4
         self.gather_mode = gather
         src = {"v1": _SRC, "v2": _SRC_V2}[variant] % params
         self.min_blocks_per_sm = min_blocks_per_sm

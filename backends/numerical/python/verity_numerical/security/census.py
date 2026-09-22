@@ -33,10 +33,22 @@ arbitrary finite ``c``; the VU is the chain from ``c_0 = 0``):
             ``step.py`` composes it (the first unit decodes a constant; every other unit decodes the previous word).
 
 ``diff_vs_relation`` puts the two side by side with ``verity.ml.tc.relation.census`` / ``vu_census``.
+
+Per-gadget breakdown (``UnitCensus.by_gadget``): every gadget's ``check`` (and the free-standing pieces v2's
+composition calls directly) is wrapped for the duration of a census so that the predicates and multiplications it
+forms are attributed to its ``name``; hints are attributed to the gadget whose contract declares them.
+
+The v2 arithmetisation (``verity_numerical.checker.v2``) is counted by ``census_unit_v2`` / ``census_vu_v2`` with the
+same interpreter; its fixed tables are ``fixed_tables_v2``.  With the environment variable
+``VERITY_CHECKER_VARIANT=v2`` the public ``census_unit`` / ``census_vu`` / ``fixed_tables`` return the v2 counts, so
+that every consumer of the census (``security.accounting``, ``explore.fields``, ``explore.tensor``, ``explore.vole``)
+re-prices on v2 in a subprocess without a code change (``CHECKER_VARIANT`` names the active variant).
 """
 from __future__ import annotations
 
+import contextlib
 import math
+import os
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -68,21 +80,41 @@ from verity_numerical.checker.tables import (
     norm_table,
     pow_table,
 )
+from verity_numerical.checker.v2 import gadgets as g2
+from verity_numerical.checker.v2 import step as step2
+from verity_numerical.checker.v2.tables import all_tables as v2_tables
 
 __all__ = [
     "RANGE_CHUNK",
     "CensusCtx",
     "Sym",
     "UnitCensus",
+    "CHECKER_VARIANT",
     "census_unit",
+    "census_unit_v1",
+    "census_unit_v2",
     "census_vu",
+    "census_vu_v1",
+    "census_vu_v2",
     "diff_vs_relation",
     "fixed_tables",
+    "fixed_tables_v1",
+    "fixed_tables_v2",
+    "gadget_table",
     "layer_shape",
     "lookups_by_table",
 ]
 
+V1_GADGETS = (Fp32Decode, Bf16Decode, Product, GroupMax, AlignState, AlignProduct, SignedSum, LeadingBit, Normalise,
+              StateOut, Pack, Epilogue)
+V2_GADGETS = (g2.StateDecode, g2.OpDecode, g2.Product, g2.GroupMax, g2.StateShift, g2.ProductShift, g2.SignedSum,
+              g2.Normalise, g2.Pack, Epilogue)
+_SECTION_METHODS = ("check", "align", "attained")     # the entry points that take ``ctx`` first
+
 RANGE_CHUNK = 16     # the largest range table (relation.RANGE_CHUNK): a w-bit check is ceil(w/16) lookups
+CHECKER_VARIANT = os.environ.get("VERITY_CHECKER_VARIANT", "v1")
+if CHECKER_VARIANT not in ("v1", "v2"):
+    raise ValueError(f"VERITY_CHECKER_VARIANT must be v1 or v2, got {CHECKER_VARIANT!r}")
 
 
 def _width(lo: int, hi: int) -> int:
@@ -172,6 +204,10 @@ class UnitCensus:
     columns_in_mul: int = 0                                       # columns that are a direct operand or product
     queries_on_computed_wires: int = 0                            # range checks / lookup keys that are not columns of depth 0
     query_depth: Counter = field(default_factory=Counter)         # multiplicative depth -> number of queries on it
+    by_gadget: dict = field(default_factory=dict)                 # gadget name -> Counter(mul, lin, range, fixed, hints)
+
+    def _g(self, section: str) -> Counter:
+        return self.by_gadget.setdefault(section, Counter())
 
     # -- derived -----------------------------------------------------------------------------------------------------
     @property
@@ -232,7 +268,19 @@ class UnitCensus:
             "mul_by_depth": dict(sorted(self.mul_by_depth.items())), "depth": self.depth,
             "queries_on_computed_wires": self.queries_on_computed_wires,
             "query_depth": dict(sorted(self.query_depth.items())), "max_query_depth": self.max_query_depth,
+            "by_gadget": gadget_table(self),
         }
+
+
+def gadget_table(c: UnitCensus) -> dict[str, dict[str, int]]:
+    """Per gadget: multiplications, linear identities, lookups (range-check chunks + fixed-table queries), hint
+    columns; sorted by lookups + mul descending."""
+    rows = {}
+    for name, k in c.by_gadget.items():
+        lookups = k["range_lookups"] + k["fixed"]
+        rows[name] = {"mul": k["mul"], "lin": k["lin"], "lookup": lookups, "range": k["range_lookups"],
+                      "fixed": k["fixed"], "hints": k["hints"]}
+    return dict(sorted(rows.items(), key=lambda kv: -(kv[1]["lookup"] + kv[1]["mul"])))
 
 
 class CensusCtx:
@@ -241,6 +289,11 @@ class CensusCtx:
     def __init__(self, variant: str):
         self.c = UnitCensus(variant)
         self._next = 0
+        self.sections: list[str] = ["composition"]     # the innermost gadget whose entry point is running
+
+    @property
+    def section(self) -> Counter:
+        return self.c._g(self.sections[-1])
 
     def column(self) -> int:
         self._next += 1
@@ -260,6 +313,7 @@ class CensusCtx:
 
     def product(self, a: Sym, b: Sym) -> Sym:
         self.c.mul += 1
+        self.section["mul"] += 1
         for x in (a, b):
             if x.atom is not None:
                 self.c.columns_in_mul += 1
@@ -287,18 +341,22 @@ class CensusCtx:
         w = _width(lo, hi)
         self._query(x)
         self.c.range_by_width[w] += 1
+        self.section["range_lookups"] += -(-w // RANGE_CHUNK)
         if w > RANGE_CHUNK:
             self.c.lin_range_splits += 1
+            self.section["lin"] += 1
 
     def eq(self, name: str, a, b) -> None:
         if (isinstance(a, int) or a.const is not None) and (isinstance(b, int) or b.const is not None):
             return
         self.c.lin += 1
+        self.section["lin"] += 1
 
     def boolean(self, name: str, b) -> None:
         if isinstance(b, int) or b.const is not None:
             return
         self.c.mul += 1
+        self.section["mul"] += 1
         self.c.booleans += 1
         self.c.mul_by_depth[1 + b.depth] += 1
         if b.atom is not None:
@@ -309,11 +367,42 @@ class CensusCtx:
             return tuple(self.const(v) for v in table.row(key if isinstance(key, int) else 0))
         self._query(key)
         self.c.lookups[table.name] += 1
+        self.section["fixed"] += 1
         self.c.columns_lookup_outputs += len(table.outs)
         return tuple(Sym(self, atom=self.column(), depth=key.depth) for _ in table.outs)
 
     def lt_pow(self, name: str, x, ipow, bits: int) -> None:
         self.rng(name, x * ipow, 0, 2**bits)
+
+
+@contextlib.contextmanager
+def _sectioned(gadgets: Sequence[type]):
+    """Wrap every gadget entry point (``check``, and v2's ``align``/``attained``) so that the predicates it forms are
+    attributed to the gadget's name in the census context (the first positional argument)."""
+    saved = []
+    for g in gadgets:
+        for meth in _SECTION_METHODS:
+            fn = g.__dict__.get(meth)
+            if fn is None:
+                continue
+            raw = fn.__func__ if isinstance(fn, staticmethod) else fn
+
+            def wrapped(ctx, *args, _raw=raw, _name=g.name, **kw):
+                if isinstance(ctx, CensusCtx):
+                    ctx.sections.append(_name)
+                    try:
+                        return _raw(ctx, *args, **kw)
+                    finally:
+                        ctx.sections.pop()
+                return _raw(ctx, *args, **kw)
+
+            saved.append((g, meth, fn))
+            setattr(g, meth, staticmethod(wrapped))
+    try:
+        yield
+    finally:
+        for g, meth, fn in saved:
+            setattr(g, meth, fn)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -328,37 +417,57 @@ def _hint_widths(contract) -> dict[str, int]:
     return out
 
 
-def _sym_hints(ctx: CensusCtx, p: Params, shape, widths: dict[str, int], key: str | None = None):
+def _sym_hints(ctx: CensusCtx, p: Params, shape, widths: dict[str, int], gadget: str, key: str | None = None):
+    if shape is None:
+        return None
     if isinstance(shape, dict):
-        return {k: _sym_hints(ctx, p, v, widths, k) for k, v in shape.items()}
+        return {k: _sym_hints(ctx, p, v, widths, gadget, k) for k, v in shape.items()}
     if isinstance(shape, list):
-        return [_sym_hints(ctx, p, v, widths, key) for v in shape]
+        return [_sym_hints(ctx, p, v, widths, gadget, key) for v in shape]
     if isinstance(shape, int):
+        ctx.c._g(gadget)["hints"] += 1
         return ctx.hint(widths[key])
     raise TypeError(shape)
 
 
 def _sym_step_hints(ctx: CensusCtx, p: Params, shape: dict) -> dict:
-    W = {g.name: _hint_widths(g.contract(p)) for g in
-         (Fp32Decode, Bf16Decode, Product, GroupMax, AlignState, AlignProduct, SignedSum, LeadingBit, Normalise,
-          StateOut, Pack)}
+    W = {g.name: _hint_widths(g.contract(p)) for g in V1_GADGETS}
+
+    def H(sh, g):
+        return _sym_hints(ctx, p, sh, W[g], g)
+
     h = {
-        "acc": _sym_hints(ctx, p, shape["acc"], W["fp32_decode"]),
-        "a": [_sym_hints(ctx, p, x, W["bf16_decode"]) for x in shape["a"]],
-        "b": [_sym_hints(ctx, p, x, W["bf16_decode"]) for x in shape["b"]],
-        "prod": [_sym_hints(ctx, p, x, W["product"]) for x in shape["prod"]],
+        "acc": H(shape["acc"], "fp32_decode"),
+        "a": [H(x, "bf16_decode") for x in shape["a"]],
+        "b": [H(x, "bf16_decode") for x in shape["b"]],
+        "prod": [H(x, "product") for x in shape["prod"]],
         "groups": [],
-        "pack": _sym_hints(ctx, p, shape["pack"], W["pack"]),
+        "pack": H(shape["pack"], "pack"),
     }
     for g in shape["groups"]:
         h["groups"].append({
-            "max": _sym_hints(ctx, p, g["max"], W["group_max"]),
-            "acc_align": _sym_hints(ctx, p, g["acc_align"], W["align_state"]),
-            "prod_align": [_sym_hints(ctx, p, x, W["align_product"]) for x in g["prod_align"]],
-            "sum": _sym_hints(ctx, p, g["sum"], W["signed_sum"]),
-            "lead": _sym_hints(ctx, p, g["lead"], W["leading_bit"]),
-            "norm": _sym_hints(ctx, p, g["norm"], W["normalise"]),
-            "out": _sym_hints(ctx, p, g["out"], W["state_out"]),
+            "max": H(g["max"], "group_max"),
+            "acc_align": H(g["acc_align"], "align_state"),
+            "prod_align": [H(x, "align_product") for x in g["prod_align"]],
+            "sum": H(g["sum"], "signed_sum"),
+            "lead": H(g["lead"], "leading_bit"),
+            "norm": H(g["norm"], "normalise"),
+            "out": H(g["out"], "state_out"),
+        })
+    return h
+
+
+def _sym_step_hints_v2(ctx: CensusCtx, p: Params, shape: dict, first: bool = False) -> dict:
+    """``first``: the unit takes the constant zero state (the VU's first unit): its acc_split hints are unused."""
+    W = {g.name: _hint_widths(g.contract(p)) for g in V2_GADGETS}
+    h: dict = {"groups": []}
+    if "acc" in shape:
+        h["acc"] = _sym_hints(ctx, p, shape["acc"], W["state_decode"], "state_decode")
+    for i, g in enumerate(shape["groups"]):
+        h["groups"].append({
+            "E": _sym_hints(ctx, p, g["E"], W["group_max"], "group_max", "E"),
+            "acc_split": None if first and i == 0 else _sym_hints(ctx, p, g["acc_split"], W["state_shift"], "state_shift"),
+            "sum": _sym_hints(ctx, p, g["sum"], W["signed_sum"], "signed_sum"),
         })
     return h
 
@@ -373,7 +482,22 @@ def _shape_inputs(p: Params) -> tuple[int, list[int], list[int]]:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def census_unit(p: Params = REAL) -> UnitCensus:
-    """One transition unit with an arbitrary (symbolic) incoming accumulator word, output identity included."""
+    """One transition unit with an arbitrary (symbolic) incoming accumulator word, output identity included
+    (the active ``CHECKER_VARIANT``)."""
+    return census_unit_v2(p) if CHECKER_VARIANT == "v2" else census_unit_v1(p)
+
+
+def census_vu(K: int, p: Params = REAL) -> UnitCensus:
+    """The verification unit of the active ``CHECKER_VARIANT`` (v1: word-chained; v2: state-chained)."""
+    return census_vu_v2(K, p) if CHECKER_VARIANT == "v2" else census_vu_v1(K, p)
+
+
+def fixed_tables(p: Params = REAL) -> dict[str, tuple[int, int]]:
+    """The fixed tables' (rows, columns including the key) of the active ``CHECKER_VARIANT``, plus the 16-bit range table."""
+    return fixed_tables_v2(p) if CHECKER_VARIANT == "v2" else fixed_tables_v1(p)
+
+
+def census_unit_v1(p: Params = REAL) -> UnitCensus:
     ctx = CensusCtx("unit")
     c0, a0, b0 = _shape_inputs(p)
     shape = gen_step(p, c0, a0, b0)
@@ -382,13 +506,56 @@ def census_unit(p: Params = REAL) -> UnitCensus:
     a = [ctx.input(p.word_bits) for _ in a0]
     b = [ctx.input(p.word_bits) for _ in b0]
     y = ctx.input(p.acc_word_bits)
-    got = check_step_expr(ctx, p, c, a, b, h)
+    with _sectioned(V1_GADGETS):
+        got = check_step_expr(ctx, p, c, a, b, h)
     ctx.eq("y", got, y)
     return ctx.c
 
 
-def census_vu(K: int, p: Params = REAL) -> UnitCensus:
-    """The verification unit: K/16 word-chained units from ``c_0 = 0`` plus the epilogue, as ``step.py`` composes it."""
+def census_unit_v2(p: Params = REAL) -> UnitCensus:
+    """The v2 transition unit (word in, word out, symbolic ``c``), output identity included."""
+    ctx = CensusCtx("unit-v2")
+    c0, a0, b0 = _shape_inputs(p)
+    shape = step2.gen_step(p, c0, a0, b0)
+    h = _sym_step_hints_v2(ctx, p, shape)
+    c = ctx.input(p.acc_word_bits)
+    a = [ctx.input(p.word_bits) for _ in a0]
+    b = [ctx.input(p.word_bits) for _ in b0]
+    y = ctx.input(p.acc_word_bits)
+    with _sectioned(V2_GADGETS):
+        got = step2.check_step_expr(ctx, p, c, a, b, h)
+    ctx.eq("y", got, y)
+    return ctx.c
+
+
+def census_vu_v2(K: int, p: Params = REAL) -> UnitCensus:
+    """The v2 verification unit: K/16 state-chained units from the constant zero state, one Pack, the epilogue."""
+    if K % sum(p.groups):
+        raise ValueError("K must be a multiple of the unit's product count")
+    ctx = CensusCtx(f"vu-v2(K={K})")
+    _c0, a0, b0 = _shape_inputs(p)
+    steps = K // sum(p.groups)
+    shape = step2.gen_vu(p, a0 * steps, b0 * steps)
+    h = {"steps": [_sym_step_hints_v2(ctx, p, s, first=(i == 0)) for i, s in enumerate(shape["steps"])],
+         "epilogue": _sym_hints(ctx, p, shape["epilogue"], _hint_widths(Epilogue.contract(p)), "epilogue")}
+    a = [ctx.input(p.word_bits) for _ in range(K)]
+    b = [ctx.input(p.word_bits) for _ in range(K)]
+    y16 = ctx.input(p.word_bits)
+    with _sectioned(V2_GADGETS):
+        got = step2.check_vu_expr(ctx, p, a, b, h)
+    ctx.eq("y16", got, y16)
+    return ctx.c
+
+
+def fixed_tables_v2(p: Params = REAL) -> dict[str, tuple[int, int]]:
+    """The v2 fixed tables' (rows, columns including the key) and the 16-bit range table (6 queries per unit)."""
+    out = {t.name: (t.rows, 1 + len(t.outs)) for t in v2_tables(p)}
+    out[f"T_range{RANGE_CHUNK}"] = (2**RANGE_CHUNK, 1)
+    return out
+
+
+def census_vu_v1(K: int, p: Params = REAL) -> UnitCensus:
+    """The v1 verification unit: K/16 word-chained units from ``c_0 = 0`` plus the epilogue, as ``step.py`` composes it."""
     if K % sum(p.groups):
         raise ValueError("K must be a multiple of the unit's product count")
     ctx = CensusCtx(f"vu(K={K})")
@@ -396,17 +563,18 @@ def census_vu(K: int, p: Params = REAL) -> UnitCensus:
     steps = K // sum(p.groups)
     shape = gen_vu(p, a0 * steps, b0 * steps)
     h = {"steps": [_sym_step_hints(ctx, p, s) for s in shape["steps"]],
-         "epilogue": _sym_hints(ctx, p, shape["epilogue"], _hint_widths(Epilogue.contract(p)))}
+         "epilogue": _sym_hints(ctx, p, shape["epilogue"], _hint_widths(Epilogue.contract(p)), "epilogue")}
     a = [ctx.input(p.word_bits) for _ in range(K)]
     b = [ctx.input(p.word_bits) for _ in range(K)]
     y16 = ctx.input(p.word_bits)
-    got = check_vu_expr(ctx, p, a, b, h)
+    with _sectioned(V1_GADGETS):
+        got = check_vu_expr(ctx, p, a, b, h)
     ctx.eq("y16", got, y16)
     return ctx.c
 
 
-def fixed_tables(p: Params = REAL) -> dict[str, tuple[int, int]]:
-    """The fixed tables' (rows, columns including the key) and the 16-bit range table."""
+def fixed_tables_v1(p: Params = REAL) -> dict[str, tuple[int, int]]:
+    """The v1 fixed tables' (rows, columns including the key) and the 16-bit range table."""
     out = {}
     for t in (pow_table(p), align_table(p), lead_table(p), norm_table(p)):
         out[t.name] = (t.rows, 1 + len(t.outs))
@@ -488,8 +656,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     import sys
 
     K = int((argv or sys.argv[1:] or ["1536"])[0])
-    print(json.dumps({"unit": census_unit().summary(), "vu": census_vu(K).summary(), "tables": fixed_tables(),
-                      "diff": diff_vs_relation(K)}, indent=1))
+    print(json.dumps({"unit": census_unit_v1().summary(), "vu": census_vu_v1(K).summary(), "tables": fixed_tables_v1(),
+                      "unit_v2": census_unit_v2().summary(), "vu_v2": census_vu_v2(K).summary(),
+                      "tables_v2": fixed_tables_v2(), "diff": diff_vs_relation(K)}, indent=1))
 
 
 if __name__ == "__main__":       # pragma: no cover

@@ -1,10 +1,11 @@
 {
  "meta": {
-  "lane": "b-commit",
-  "generated": "2026-09-22T07:02:04Z",
+  "lane": "b-commit + b-lintest (structured linear test)",
+  "generated": "2026-09-22T07:31:57Z",
   "run_ids": {
    "commit": "r20260922-064722-07c7",
-   "buckets": "r20260922-065537-279b"
+   "buckets": "r20260922-065537-279b",
+   "lintest": "r20260922-073017-0924"
   },
   "device": {
    "gpu": "NVIDIA GeForce RTX 4090",
@@ -20,6 +21,7 @@
   "utilisation_modelled_matmul": 0.172,
   "native_seconds_per_vu": 9.846153846153846e-12,
   "proof_class": "ARITHMETIC_DIAGNOSTIC",
+  "linear_test": "structured (b-lintest, LINTEST.md): linear_test_structured_M3_X256_lazy = per-row F_c scalars x fixed rows; r^T A never materialised; the general path's 149.4 ms row is kept in detail.linear_test_general_path",
   "scope": "vu-level re-pricing: tensor.py cost model with the commitment, IRS row combination, linear and quadratic tests, helper inversions and column openings replaced by standalone measurements on the RTX 4090 (B = 4096, K = 1536, 2^-128, BabyBear / BabyBear^6, HVZK rows included, authentication excluded)",
   "omitted": [
    "not an end-to-end proof: buckets measured separately on resident pseudo-random data",
@@ -41,7 +43,7 @@
    "openings": "store",
    "measured_ms": {
     "commitment": 49.39683151245117,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 5.077852235574808
@@ -80,7 +82,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -92,6 +94,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -144,11 +171,11 @@
     }
    },
    "gpu": "RTX4090",
-   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled",
+   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled; linear test STRUCTURED (b-lintest)",
    "simt_scale": 1.0,
-   "t.total_ms": 258.70012520705285,
+   "t.total_ms": 116.40297221098956,
    "t.commitment_ms": 49.39683151245117,
-   "t.matmul_ms": 155.09705686569214,
+   "t.matmul_ms": 12.799903869628906,
    "t.simt_field_ms": 45.52634905241459,
    "t.extra_ms": 5.077852235574808,
    "t.hint_gen_ms": 0.38083874092009684,
@@ -158,9 +185,9 @@
     "hint_gen": 0.38083874092009684,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9515710463332309,
-   "seconds_per_vu": 6.315921025562813e-05,
-   "overhead.vs_native_peak": 6414607.291587233
+   "measured_fraction": 0.8923689306272122,
+   "seconds_per_vu": 2.8418694387448625e-05,
+   "overhead.vs_native_peak": 2886273.648725251
   },
   {
    "design": "B",
@@ -173,7 +200,7 @@
    "openings": "store",
    "measured_ms": {
     "commitment": 49.39683151245117,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 5.077852235574808
@@ -212,7 +239,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -224,6 +251,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -278,9 +330,9 @@
    "gpu": "A100",
    "label": "SCALING: measured buckets / 0.47 (INT32 issue-rate ratio; they are compute-bound on the 4090), modelled buckets at A100 peaks",
    "simt_scale": 0.4720982142857143,
-   "t.total_ms": 564.0876915696349,
+   "t.total_ms": 262.6733911335294,
    "t.commitment_ms": 104.63253199800532,
-   "t.matmul_ms": 328.5270991765015,
+   "t.matmul_ms": 27.11279874039598,
    "t.simt_field_ms": 115.33774633744939,
    "t.extra_ms": 10.755923411524888,
    "t.hint_gen_ms": 1.6131938461538462,
@@ -290,9 +342,9 @@
     "hint_gen": 1.6131938461538462,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9243977439616068,
-   "seconds_per_vu": 0.0001377167215746179,
-   "overhead.vs_native_peak": 13986854.53492213
+   "measured_fraction": 0.8376451383137067,
+   "seconds_per_vu": 6.412924588220932e-05,
+   "overhead.vs_native_peak": 6513126.534911885
   },
   {
    "design": "B",
@@ -305,7 +357,7 @@
    "openings": "store",
    "measured_ms": {
     "commitment": 49.39683151245117,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 5.077852235574808
@@ -344,7 +396,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -356,6 +408,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -410,9 +487,9 @@
    "gpu": "H100",
    "label": "SCALING: measured buckets / 0.81 (INT32 issue-rate ratio; they are compute-bound on the 4090), modelled buckets at H100 peaks",
    "simt_scale": 0.8102678571428571,
-   "t.total_ms": 318.51069219261177,
+   "t.total_ms": 142.89326921124444,
    "t.commitment_ms": 60.96358269305269,
-   "t.matmul_ms": 191.41454952019308,
+   "t.matmul_ms": 15.79712653882576,
    "t.simt_field_ms": 56.17497054160383,
    "t.extra_ms": 6.266880995971113,
    "t.hint_gen_ms": 0.46951164179104476,
@@ -422,9 +499,9 @@
     "hint_gen": 0.46951164179104476,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.953861304811062,
-   "seconds_per_vu": 7.776139946108685e-05,
-   "overhead.vs_native_peak": 7897642.132766633
+   "measured_fraction": 0.897156333376575,
+   "seconds_per_vu": 3.488605205352648e-05,
+   "overhead.vs_native_peak": 3543114.661686283
   },
   {
    "design": "B",
@@ -437,7 +514,7 @@
    "openings": "reencode",
    "measured_ms": {
     "commitment": 46.72617721557617,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 33.50716517998704
@@ -476,7 +553,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -488,6 +565,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -539,11 +641,11 @@
     }
    },
    "gpu": "RTX4090",
-   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled",
+   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled; linear test STRUCTURED (b-lintest)",
    "simt_scale": 1.0,
-   "t.total_ms": 284.45878385459,
+   "t.total_ms": 142.1616308585268,
    "t.commitment_ms": 46.72617721557617,
-   "t.matmul_ms": 155.09705686569214,
+   "t.matmul_ms": 12.799903869628906,
    "t.simt_field_ms": 45.52634905241459,
    "t.extra_ms": 33.50716517998704,
    "t.hint_gen_ms": 0.38083874092009684,
@@ -553,9 +655,9 @@
     "hint_gen": 0.38083874092009684,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9559564439970183,
-   "seconds_per_vu": 6.944794527699951e-05,
-   "overhead.vs_native_peak": 7053306.942195263
+   "measured_fraction": 0.9118709014409971,
+   "seconds_per_vu": 3.470742940882002e-05,
+   "overhead.vs_native_peak": 3524973.299333283
   },
   {
    "design": "B",
@@ -568,7 +670,7 @@
    "openings": "reencode",
    "measured_ms": {
     "commitment": 46.72617721557617,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 33.50716517998704
@@ -607,7 +709,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -619,6 +721,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -672,9 +799,9 @@
    "gpu": "A100",
    "label": "SCALING: measured buckets / 0.47 (INT32 issue-rate ratio; they are compute-bound on the 4090), modelled buckets at A100 peaks",
    "simt_scale": 0.4720982142857143,
-   "t.total_ms": 618.6497675700921,
+   "t.total_ms": 317.23546713398656,
    "t.commitment_ms": 98.97554322731973,
-   "t.matmul_ms": 328.5270991765015,
+   "t.matmul_ms": 27.11279874039598,
    "t.simt_field_ms": 115.33774633744939,
    "t.extra_ms": 70.97498818266757,
    "t.hint_gen_ms": 1.6131938461538462,
@@ -684,9 +811,9 @@
     "hint_gen": 1.6131938461538462,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9310655166756818,
-   "seconds_per_vu": 0.000151037540910667,
-   "overhead.vs_native_peak": 15339750.248739619
+   "measured_fraction": 0.8655689337909311,
+   "seconds_per_vu": 7.745006521825843e-05,
+   "overhead.vs_native_peak": 7866022.248729372
   },
   {
    "design": "B",
@@ -699,7 +826,7 @@
    "openings": "reencode",
    "measured_ms": {
     "commitment": 46.72617721557617,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 33.50716517998704
@@ -738,7 +865,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -750,6 +877,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -803,9 +955,9 @@
    "gpu": "H100",
    "label": "SCALING: measured buckets / 0.81 (INT32 issue-rate ratio; they are compute-bound on the 4090), modelled buckets at H100 peaks",
    "simt_scale": 0.8102678571428571,
-   "t.total_ms": 350.3009926722169,
+   "t.total_ms": 174.68356969084962,
    "t.commitment_ms": 57.667568574595386,
-   "t.matmul_ms": 191.41454952019308,
+   "t.matmul_ms": 15.79712653882576,
    "t.simt_field_ms": 56.17497054160383,
    "t.extra_ms": 41.353195594033586,
    "t.hint_gen_ms": 0.46951164179104476,
@@ -815,9 +967,9 @@
     "hint_gen": 0.46951164179104476,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9580484553315453,
-   "seconds_per_vu": 8.552270328911546e-05,
-   "overhead.vs_native_peak": 8685899.55280079
+   "measured_fraction": 0.9158726389236233,
+   "seconds_per_vu": 4.264735588155508e-05,
+   "overhead.vs_native_peak": 4331372.081720438
   },
   {
    "design": "B",
@@ -830,7 +982,7 @@
    "openings": "store",
    "measured_ms": {
     "commitment": 60.74176025390625,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 5.077852235574808
@@ -869,7 +1021,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -881,6 +1033,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -933,11 +1110,11 @@
     }
    },
    "gpu": "RTX4090",
-   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled",
+   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled; linear test STRUCTURED (b-lintest)",
    "simt_scale": 1.0,
-   "t.total_ms": 270.0450539485079,
+   "t.total_ms": 127.74790095244465,
    "t.commitment_ms": 60.74176025390625,
-   "t.matmul_ms": 155.09705686569214,
+   "t.matmul_ms": 12.799903869628906,
    "t.simt_field_ms": 45.52634905241459,
    "t.extra_ms": 5.077852235574808,
    "t.hint_gen_ms": 0.38083874092009684,
@@ -947,9 +1124,9 @@
     "hint_gen": 0.38083874092009684,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9536056069383567,
-   "seconds_per_vu": 6.592896824914744e-05,
-   "overhead.vs_native_peak": 6695910.837804037
+   "measured_fraction": 0.9019273406151418,
+   "seconds_per_vu": 3.118845238096793e-05,
+   "overhead.vs_native_peak": 3167577.1949420557
   },
   {
    "design": "B",
@@ -962,7 +1139,7 @@
    "openings": "store",
    "measured_ms": {
     "commitment": 60.74176025390625,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 5.077852235574808
@@ -1001,7 +1178,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -1013,6 +1190,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -1067,9 +1269,9 @@
    "gpu": "A100",
    "label": "SCALING: measured buckets / 0.47 (INT32 issue-rate ratio; they are compute-bound on the 4090), modelled buckets at A100 peaks",
    "simt_scale": 0.4720982142857143,
-   "t.total_ms": 588.1185571780126,
+   "t.total_ms": 286.7042567419071,
    "t.commitment_ms": 128.66339760638297,
-   "t.matmul_ms": 328.5270991765015,
+   "t.matmul_ms": 27.11279874039598,
    "t.simt_field_ms": 115.33774633744939,
    "t.extra_ms": 10.755923411524888,
    "t.hint_gen_ms": 1.6131938461538462,
@@ -1079,9 +1281,9 @@
     "hint_gen": 1.6131938461538462,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9274868960252083,
-   "seconds_per_vu": 0.00014358363212353822,
-   "overhead.vs_native_peak": 14582712.63754685
+   "measured_fraction": 0.8512533348099387,
+   "seconds_per_vu": 6.999615643112966e-05,
+   "overhead.vs_native_peak": 7108984.637536606
   },
   {
    "design": "B",
@@ -1094,7 +1296,7 @@
    "openings": "store",
    "measured_ms": {
     "commitment": 60.74176025390625,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 5.077852235574808
@@ -1133,7 +1335,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -1145,6 +1347,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -1199,9 +1426,9 @@
    "gpu": "H100",
    "label": "SCALING: measured buckets / 0.81 (INT32 issue-rate ratio; they are compute-bound on the 4090), modelled buckets at H100 peaks",
    "simt_scale": 0.8102678571428571,
-   "t.total_ms": 332.51214694790616,
+   "t.total_ms": 156.89472396653886,
    "t.commitment_ms": 74.9650374483471,
-   "t.matmul_ms": 191.41454952019308,
+   "t.matmul_ms": 15.79712653882576,
    "t.simt_field_ms": 56.17497054160383,
    "t.extra_ms": 6.266880995971113,
    "t.hint_gen_ms": 0.46951164179104476,
@@ -1211,9 +1438,9 @@
     "hint_gen": 0.46951164179104476,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9558041176047778,
-   "seconds_per_vu": 8.117972337595365e-05,
-   "overhead.vs_native_peak": 8244815.655370293
+   "measured_fraction": 0.9063342133504328,
+   "seconds_per_vu": 3.830437596839328e-05,
+   "overhead.vs_native_peak": 3890288.1842899425
   },
   {
    "design": "B",
@@ -1226,7 +1453,7 @@
    "openings": "reencode",
    "measured_ms": {
     "commitment": 58.337825775146484,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 33.50716517998704
@@ -1265,7 +1492,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -1277,6 +1504,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -1328,11 +1580,11 @@
     }
    },
    "gpu": "RTX4090",
-   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled",
+   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled; linear test STRUCTURED (b-lintest)",
    "simt_scale": 1.0,
-   "t.total_ms": 296.0704324141604,
+   "t.total_ms": 153.7732794180971,
    "t.commitment_ms": 58.337825775146484,
-   "t.matmul_ms": 155.09705686569214,
+   "t.matmul_ms": 12.799903869628906,
    "t.simt_field_ms": 45.52634905241459,
    "t.extra_ms": 33.50716517998704,
    "t.hint_gen_ms": 0.38083874092009684,
@@ -1342,9 +1594,9 @@
     "hint_gen": 0.38083874092009684,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9576837974833162,
-   "seconds_per_vu": 7.228282041361337e-05,
-   "overhead.vs_native_peak": 7341223.948257608
+   "measured_fraction": 0.9185256604746296,
+   "seconds_per_vu": 3.754230454543386e-05,
+   "overhead.vs_native_peak": 3812890.305395627
   },
   {
    "design": "B",
@@ -1357,7 +1609,7 @@
    "openings": "reencode",
    "measured_ms": {
     "commitment": 58.337825775146484,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 33.50716517998704
@@ -1396,7 +1648,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -1408,6 +1660,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -1461,9 +1738,9 @@
    "gpu": "A100",
    "label": "SCALING: measured buckets / 0.47 (INT32 issue-rate ratio; they are compute-bound on the 4090), modelled buckets at A100 peaks",
    "simt_scale": 0.4720982142857143,
-   "t.total_ms": 643.245599979962,
+   "t.total_ms": 341.8312995438565,
    "t.commitment_ms": 123.57137563718972,
-   "t.matmul_ms": 328.5270991765015,
+   "t.matmul_ms": 27.11279874039598,
    "t.simt_field_ms": 115.33774633744939,
    "t.extra_ms": 70.97498818266757,
    "t.hint_gen_ms": 1.6131938461538462,
@@ -1473,9 +1750,9 @@
     "hint_gen": 1.6131938461538462,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9337013699161217,
-   "seconds_per_vu": 0.0001570423828076079,
-   "overhead.vs_native_peak": 15949617.003897678
+   "measured_fraction": 0.8752416699609967,
+   "seconds_per_vu": 8.345490711519934e-05,
+   "overhead.vs_native_peak": 8475889.003887434
   },
   {
    "design": "B",
@@ -1488,7 +1765,7 @@
    "openings": "reencode",
    "measured_ms": {
     "commitment": 58.337825775146484,
-    "matmul:ligero_row_combination": 155.09705686569214,
+    "matmul:ligero_row_combination": 12.799903869628906,
     "simt:quadratic_hadamards": 7.7711358070373535,
     "simt:helper_inversions": 28.828672409057617,
     "extra:openings": 33.50716517998704
@@ -1527,7 +1804,7 @@
      "g_mont_muls_per_s": 1350.6958325960788,
      "device_memory_in_use_bytes": 11904614400
     },
-    "linear_test": {
+    "linear_test_general_path": {
      "name": "linear_test_s256",
      "bucket": "linear_test",
      "shape": "B",
@@ -1539,6 +1816,31 @@
      "transforms_per_row": 14,
      "rA_generation_included": false,
      "device_memory_in_use_bytes": 12087066624
+    },
+    "linear_test": {
+     "name": "linear_test_structured_M3_X256_lazy",
+     "bucket": "linear_test_structured",
+     "shape": "B",
+     "rows": 310602,
+     "M": 3,
+     "exceptional_rows": 256,
+     "lazy_reduction": true,
+     "chunk_rows": 1024,
+     "ms_median": 7.14847993850708,
+     "us_per_row": 0.023014919216576456,
+     "transforms_per_row": 0,
+     "transforms_per_batch": 1828,
+     "encoder_calls_per_row": 0,
+     "split_ms": {
+      "prepare_G_once_per_batch": 0.158720001578331,
+      "combine_multi": 6.952832221984863,
+      "encode_V": 0.06656000018119812,
+      "pointwise": 0.05119999870657921,
+      "exceptional_generic": 0.07788771763443947
+     },
+     "read_floor_ms": 5.0485150476190475,
+     "device_memory_in_use_bytes": 5820776448,
+     "fraction_of_read_floor": 0.7062361636386436
     },
     "quadratic_test": {
      "name": "quadratic_test_s512",
@@ -1592,9 +1894,9 @@
    "gpu": "H100",
    "label": "SCALING: measured buckets / 0.81 (INT32 issue-rate ratio; they are compute-bound on the 4090), modelled buckets at H100 peaks",
    "simt_scale": 0.8102678571428571,
-   "t.total_ms": 364.6316222994552,
+   "t.total_ms": 189.01419931808792,
    "t.commitment_ms": 71.99819820183369,
-   "t.matmul_ms": 191.41454952019308,
+   "t.matmul_ms": 15.79712653882576,
    "t.simt_field_ms": 56.17497054160383,
    "t.extra_ms": 41.353195594033586,
    "t.hint_gen_ms": 0.46951164179104476,
@@ -1604,9 +1906,9 @@
     "hint_gen": 0.46951164179104476,
     "prg": 3.2211968
    },
-   "measured_fraction": 0.9596972208586351,
-   "seconds_per_vu": 8.902139216295294e-05,
-   "overhead.vs_native_peak": 9041235.141549908
+   "measured_fraction": 0.9222509854047446,
+   "seconds_per_vu": 4.6146044755392556e-05,
+   "overhead.vs_native_peak": 4686707.670469557
   },
   {
    "design": "B",
@@ -1703,7 +2005,7 @@
     }
    },
    "gpu": "RTX4090",
-   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled",
+   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled; linear test STRUCTURED (b-lintest)",
    "simt_scale": 1.0,
    "t.total_ms": 637.6664449403598,
    "t.commitment_ms": 8.41113567352295,
@@ -1990,7 +2292,7 @@
     }
    },
    "gpu": "RTX4090",
-   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled",
+   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled; linear test STRUCTURED (b-lintest)",
    "simt_scale": 1.0,
    "t.total_ms": 641.2421254346683,
    "t.commitment_ms": 7.39734411239624,
@@ -2276,7 +2578,7 @@
     }
    },
    "gpu": "RTX4090",
-   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled",
+   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled; linear test STRUCTURED (b-lintest)",
    "simt_scale": 1.0,
    "t.total_ms": 639.7666370103672,
    "t.commitment_ms": 10.511327743530273,
@@ -2563,7 +2865,7 @@
     }
    },
    "gpu": "RTX4090",
-   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled",
+   "label": "MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled; linear test STRUCTURED (b-lintest)",
    "simt_scale": 1.0,
    "t.total_ms": 643.121036929877,
    "t.commitment_ms": 9.27625560760498,

@@ -38,6 +38,9 @@ from tensor import sumcheck_int8 as k
 GPU_PEAKS = {
     "NVIDIA GeForce RTX 4090": {"int8_dense_tops": 660.6, "hbm_bytes_per_s": 1008e9, "fp32_tflops": 82.6, "bf16_dense_tflops": 165.2,
                                 "source": "NVIDIA Ada GPU architecture whitepaper / RTX 4090 datasheet (dense, no sparsity)"},
+    # anchor-a100 lane: the campaign anchor
+    "NVIDIA A100-SXM4-80GB": {"int8_dense_tops": 624.0, "hbm_bytes_per_s": 2.039e12, "fp32_tflops": 19.5, "bf16_dense_tflops": 312.0,
+                              "source": "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB): INT8 624 TOPS dense, HBM2e 2,039 GB/s, FP32 19.5 TFLOPS"},
 }
 #: The frozen target's name (``verity_numerical.bench.contract.PROFILE``), copied so the pod venv needs no workspace install;
 #: ``--reprice`` re-validates the envelope with the real contract.
