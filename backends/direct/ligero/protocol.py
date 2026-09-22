@@ -886,7 +886,8 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
         pc = proof.coins
         if proof.coin_commit is None or pc is None or not pc.well_formed() or len(proof.coin_commit) != 2:
             return False, "malformed coin commitments / openings"
-        if pc != coins or tuple(proof.coin_commit) != coins.commitments():
+        own = (coins.r1, coins.s1, coins.r2, coins.s2)            # field-wise: ``coins`` may be a Coins subclass (V*)
+        if (pc.r1, pc.s1, pc.r2, pc.s2) != own or tuple(proof.coin_commit) != coins.commitments():
             return False, "coins are not this verifier's step-0 coins"
         ccom = tuple(proof.coin_commit)
     else:
