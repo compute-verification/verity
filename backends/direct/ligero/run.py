@@ -327,7 +327,9 @@ def bench(args) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name, fn in (("gate", gate), ("bench", bench)):
+    from .vu import bench_vu, gate_vu
+
+    for name, fn in (("gate", gate), ("bench", bench), ("gate-vu", gate_vu), ("bench-vu", bench_vu)):
         s = sub.add_parser(name)
         s.add_argument("--root", default=str(instances.DEFAULT_ROOT))
         s.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -336,9 +338,11 @@ def main(argv=None) -> int:
         s.add_argument("--batch", type=int, default=4096)
         s.add_argument("--out", default=None)
         s.set_defaults(fn=fn)
-    sub.choices["gate"].add_argument("--vus", type=int, default=64)
-    sub.choices["bench"].add_argument("--reps", type=int, default=5)
-    sub.choices["bench"].add_argument("--run-id", default=None)
+    for name in ("gate", "gate-vu"):
+        sub.choices[name].add_argument("--vus", type=int, default=64)
+    for name in ("bench", "bench-vu"):
+        sub.choices[name].add_argument("--reps", type=int, default=5)
+        sub.choices[name].add_argument("--run-id", default=None)
     args = ap.parse_args(argv)
     return args.fn(args)
 

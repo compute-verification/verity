@@ -25,8 +25,9 @@ import torch
 from verity_numerical.checker.params import Params
 from verity_numerical.security import accounting as acc
 
+from .chain import N_FAMILIES, chain_coefs
 from .compile import P, System
-from .field import batch_modinv, coset_points, encode, intt, poly_eval, zh_on_coset, GEN, modinv
+from .field import batch_modinv, encode, eval_on_coset, intt, zh_on_coset, GEN, modinv
 from . import merkle
 from .unit import public_vectors
 from .witness import Tables, apply_sparse, build_witness, tables
@@ -85,14 +86,16 @@ def _expand(seed: bytes, count: int, device) -> torch.Tensor:
     return torch.from_numpy(arr).to(device)
 
 
-def _challenge1(root: bytes, D: int, m: int, L: int, Q: int, device):
+def _challenge1(root: bytes, D: int, m: int, L: int, Q: int, device, l_chain: int = 0):
     seed = merkle.hash_bytes(b"ligero-b/c1|" + root)
-    x = _expand(seed, D * (m + L + Q), device).reshape(D, m + L + Q)
-    return x[:, :m], x[:, m:m + L], x[:, m + L:]
+    extra = N_FAMILIES * l_chain
+    x = _expand(seed, D * (m + L + Q + extra), device).reshape(D, m + L + Q + extra)
+    rc = x[:, m + L + Q:].reshape(D, N_FAMILIES, l_chain) if l_chain else None
+    return x[:, :m], x[:, m:m + L], x[:, m + L:m + L + Q], rc
 
 
-def _challenge2(root: bytes, w: np.ndarray, h: np.ndarray, t: int, n: int) -> list[int]:
-    seed = merkle.hash_bytes(b"ligero-b/c2|" + root + w.tobytes() + h.tobytes())
+def _challenge2(root: bytes, w: np.ndarray, h: np.ndarray, t: int, n: int, q: np.ndarray | None = None) -> list[int]:
+    seed = merkle.hash_bytes(b"ligero-b/c2|" + root + w.tobytes() + h.tobytes() + (q.tobytes() if q is not None else b""))
     cols: list[int] = []
     seen = set()
     ctr = 0
@@ -119,10 +122,12 @@ class Proof:
     paths: list[list[bytes]]
     hash_name: str = merkle.HASH_NAME
     timings: dict = field(default_factory=dict)
+    q: np.ndarray | None = None   # chain mode: (D, 2l-1) uint32, the chain test's combined polynomial
 
     def n_bytes(self) -> dict:
         b = {"root": len(self.root), "w": self.w.nbytes, "h": self.h.nbytes, "cols": 4 * len(self.cols),
-             "opened_columns": self.opened.nbytes, "merkle_paths": sum(32 * len(p) for p in self.paths)}
+             "opened_columns": self.opened.nbytes, "merkle_paths": sum(32 * len(p) for p in self.paths),
+             "q_chain": self.q.nbytes if self.q is not None else 0}
         b["total"] = sum(b.values())
         return b
 
@@ -183,13 +188,14 @@ class _Clock:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints: torch.Tensor,
-          device, check: bool = False, mutate=None) -> Proof:
+          device, check: bool = False, mutate=None, chain: tuple | None = None) -> Proof:
     """``pub``: the public vectors (from ``public_vectors``); ``hints``: (n_hints, l) from ``gen_step``.
     ``mutate(W)``: a test hook that edits the witness in place before it is committed (the mutated-witness
-    negatives); an honest prover never uses it."""
+    negatives); an honest prover never uses it.  ``chain = (Layout, y16_pub (l,))`` runs the chain test."""
     clk = _Clock(device)
     m, l, n, D = sys.m, cfg.l, cfg.n, cfg.D
     assert hints.shape[1] == l
+    assert (chain is not None) == (sys.chain is not None), "chain mode needs a chain-compiled system"
     W = build_witness(sys, pub, hints, device)
     clk.lap("witness")
     if mutate is not None:
@@ -209,7 +215,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     root, levels = merkle.commit(U_cols)
     clk.lap("merkle")
 
-    r, rho_lin, rho_quad = _challenge1(root, D, m, tb.L, tb.Q, device)
+    r, rho_lin, rho_quad, rc = _challenge1(root, D, m, tb.L, tb.Q, device, l if chain else 0)
     w = _combine(r, W)                                            # (D, l)
     # quadratic: batched A*B - C on the codeword domain, divided by Z_H
     A = apply_sparse(tb.quad["a"][:3], tb.quad["a"][3], tb.Q, U)
@@ -228,44 +234,69 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     if check:
         assert (hcoef[:, l - 1:] == 0).all(), "quotient degree too high: constraints violated"
     h = hcoef[:, :l - 1]
+    q_np = None
+    if chain is not None:
+        layout, y16_pub = chain
+        cc = chain_coefs(sys, layout, rc, y16_pub)
+        R = cc.coef.shape[1]
+        Renc = encode(cc.coef.reshape(D * R, l), n).reshape(D, R, n)            # R_i on the codeword domain
+        Qev = ((Renc * U.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P   # (D, n)
+        qcoef = (intt(Qev) * _ginv_powers(n, device)) % P
+        if check:
+            assert (qcoef[:, 2 * l - 1:] == 0).all(), "chain polynomial degree too high"
+            assert torch.equal((l * (qcoef[:, 0] + qcoef[:, l])) % P, cc.rhs), "chain constraints violated"
+        q_np = qcoef[:, :2 * l - 1].cpu().numpy().astype(np.uint32)
     clk.lap("tests")
 
     w_np = w.cpu().numpy().astype(np.uint32)
     h_np = h.cpu().numpy().astype(np.uint32)
-    cols = _challenge2(root, w_np, h_np, cfg.t, n)
+    cols = _challenge2(root, w_np, h_np, cfg.t, n, q_np)
     opened = U_cols[cols].T.copy()                                # (m, t)
     paths = merkle.open_columns(levels, cols)
     clk.lap("openings")
     total = clk.total()
     timings = dict(clk.marks)
     timings["total"] = total
-    return Proof(root, w_np, h_np, cols, opened, paths, merkle.HASH_NAME, timings)
+    return Proof(root, w_np, h_np, cols, opened, paths, merkle.HASH_NAME, timings, q_np)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Verifier
 # ---------------------------------------------------------------------------------------------------------------------
 
-def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: Proof, device) -> tuple[bool, str]:
-    """Accept/reject the claim ``y[i] = tc_dot(c[i], a[i], b[i])`` for all l units.  Never touches W."""
+def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: Proof, device,
+           chain: tuple | None = None) -> tuple[bool, str]:
+    """Accept/reject the claim ``y[i] = tc_dot(c[i], a[i], b[i])`` for all l units -- or, with
+    ``chain = (Layout, y16_pub)`` (``c = y = None``), the claim that every VU of the layout casts to its
+    ``y16_pub`` word from ``c_0 = 0`` over its 96 units.  Never touches W."""
     t0 = time.perf_counter()
     m, l, n, D, t = sys.m, cfg.l, cfg.n, cfg.D, cfg.t
+    if (chain is not None) != (sys.chain is not None):
+        return False, "chain mode mismatch"
     try:
         pub = public_vectors(p, c, a, b, y, device=device)
     except ValueError as e:
         return False, f"public inputs: {e}"
-    if len(pub["y.s"]) != l:
+    if len(pub["a[0].s"]) != l:
         return False, "wrong number of units"
     # shapes and ranges of the transcript
     if proof.w.shape != (D, l) or proof.h.shape != (D, l - 1) or proof.opened.shape != (m, t) or len(proof.cols) != t:
         return False, "malformed proof"
     if (proof.w >= P).any() or (proof.h >= P).any() or (proof.opened >= P).any():
         return False, "transcript element out of the field"
+    if chain is not None:
+        layout, y16_pub = chain
+        if layout.l != l or proof.q is None or proof.q.shape != (D, 2 * l - 1) or (proof.q >= P).any():
+            return False, "malformed chain transcript"
+        if len(y16_pub) != l or ((y16_pub < 0) | (y16_pub >= 2**p.word_bits)).any():
+            return False, "y16 range"
+    elif proof.q is not None:
+        return False, "unexpected chain transcript"
     if len(set(proof.cols)) != t or any(not 0 <= c_ < n for c_ in proof.cols):
         return False, "bad column set"
     # challenges
-    r, rho_lin, rho_quad = _challenge1(proof.root, D, m, tb.L, tb.Q, device)
-    if proof.cols != _challenge2(proof.root, proof.w, proof.h, t, n):
+    r, rho_lin, rho_quad, rc = _challenge1(proof.root, D, m, tb.L, tb.Q, device, l if chain else 0)
+    if proof.cols != _challenge2(proof.root, proof.w, proof.h, t, n, proof.q):
         return False, "column challenge mismatch"
     cols = torch.tensor(proof.cols, dtype=torch.int64, device=device)
     Uo = torch.from_numpy(proof.opened.astype(np.int64)).to(device)          # (m, t)
@@ -298,9 +329,19 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
     C = apply_sparse(tb.quad["c"][:3], tb.quad["c"][3], tb.Q, Uo)
     lhs = _combine(rho_quad, ((A * B) % P - C) % P)                           # (D, t)
     h = torch.from_numpy(proof.h.astype(np.int64)).to(device)
-    eta = coset_points(n, cols)
-    rhs = (poly_eval(h, eta) * zh_on_coset(n, l, device)[cols]) % P
+    rhs = (eval_on_coset(h, n)[:, cols] * zh_on_coset(n, l, device)[cols]) % P
     if not torch.equal(lhs, rhs):
         return False, "quadratic constraints failed"
+    # (v) chain: the general linear test
+    if chain is not None:
+        cc = chain_coefs(sys, layout, rc, torch.as_tensor(y16_pub, dtype=torch.int64))
+        q = torch.from_numpy(proof.q.astype(np.int64)).to(device)
+        if not torch.equal((l * (q[:, 0] + q[:, l])) % P, cc.rhs):
+            return False, "chain constraints failed (sum over H)"
+        R = cc.coef.shape[1]
+        Rc = encode(cc.coef.reshape(D * R, l), n).reshape(D, R, n)[:, :, cols]          # (D, R, t)
+        expect = ((Rc * Uo.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P
+        if not torch.equal(eval_on_coset(q, n)[:, cols], expect):
+            return False, "chain constraints failed (opened columns)"
     _sync(device)
     return True, f"accept ({time.perf_counter() - t0:.3f}s)"

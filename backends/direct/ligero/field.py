@@ -15,7 +15,7 @@ P = 15 * 2**27 + 1
 GEN = 31                     # multiplicative generator of BabyBear
 TWO_ADICITY = 27
 
-__all__ = ["P", "GEN", "ntt", "intt", "encode", "root_of_unity", "modinv", "coset_points", "zh_on_coset", "Domain", "poly_eval", "batch_modinv"]
+__all__ = ["P", "GEN", "ntt", "intt", "encode", "root_of_unity", "modinv", "coset_points", "zh_on_coset", "Domain", "poly_eval", "batch_modinv", "eval_on_coset"]
 
 
 def modpow(a: int, e: int, m: int = P) -> int:
@@ -124,6 +124,15 @@ def encode(rows: torch.Tensor, n: int) -> torch.Tensor:
         coeffs = torch.cat((coeffs, pad), dim=-1)
     coeffs = (coeffs * coset_scale(n, rows.device)) % P
     return ntt(coeffs)
+
+
+def eval_on_coset(coeffs: torch.Tensor, n: int) -> torch.Tensor:
+    """(R, K <= n) coefficient rows -> (R, n) evaluations on g * <w_n> (one NTT; replaces Horner at many points)."""
+    K = coeffs.shape[-1]
+    if K < n:
+        pad = torch.zeros(coeffs.shape[:-1] + (n - K,), dtype=torch.int64, device=coeffs.device)
+        coeffs = torch.cat((coeffs, pad), dim=-1)
+    return ntt((coeffs % P * coset_scale(n, coeffs.device)) % P)
 
 
 def coset_points(n: int, idx: torch.Tensor) -> torch.Tensor:

@@ -30,12 +30,14 @@ def _signed(x: torch.Tensor) -> torch.Tensor:
 
 
 def hints_tensor(p: Params, sys: System, units: list[tuple[int, list[int], list[int]]], device) -> torch.Tensor:
-    """(n_hints, l) from ``gen_step`` on every unit (host Python; the reference hint generator)."""
+    """(n_hints, l) from ``gen_step`` on every unit (host Python; the reference hint generator).  A unit is
+    ``(c, a, b)`` or, in chain mode, ``(c, a, b, y)`` with ``y`` the unit's output word (for the epilogue rows)."""
     names = [n for _, n in sys.hints]
     pos = {n: i for i, n in enumerate(names)}
     out = torch.zeros((len(names), len(units)), dtype=torch.int64)
-    for col, (c, a, b) in enumerate(units):
-        flat = flatten_hints(p, gen_step(p, c, a, b))
+    for col, u in enumerate(units):
+        c, a, b = u[:3]
+        flat = flatten_hints(p, gen_step(p, c, a, b), u[3] if len(u) > 3 else None)
         for n, v in flat.items():
             out[pos[n], col] = v
     return out.to(device)

@@ -167,6 +167,7 @@ class System:
     hints: list[tuple[int, str]] = field(default_factory=list)
     outputs: dict[str, Expr] = field(default_factory=dict)
     audit_log: list[str] = field(default_factory=list)
+    chain: dict | None = None                                # chain mode: {"c": [3 row idx], "y": [3 Expr], "y16": Expr}
 
     @property
     def m(self) -> int:

@@ -20,6 +20,7 @@ from verity_numerical.checker.gadgets import (
     AlignProduct,
     AlignState,
     Bf16Decode,
+    Epilogue,
     Fp32Decode,
     GroupMax,
     LeadingBit,
@@ -41,7 +42,13 @@ def _k(p: Params) -> int:
     return sum(p.groups)
 
 
-def compile_unit(p: Params = REAL) -> System:
+def compile_unit(p: Params = REAL, chain: bool = False) -> System:
+    """``chain=False``: the unit with a public accumulator word ``c`` and public output components (scope ``unit``).
+    ``chain=True``: the accumulator's word components ``c.s, c.t, c.f`` are *hint rows* decoded in-field
+    (``Fp32Decode`` minus the word identity, which is what the components are), the output components stay
+    expressions (``sys.outputs``), and the ``Epilogue`` (RN-even cast to BF16) is constrained in every column on the
+    unit's own output word; ``sys.chain`` names the rows the protocol's chain test links across columns
+    (``c_in[j+1] = c_out[j]``, ``c_in = 0`` at a chain start, ``y16 = public`` at a chain end)."""
     ctx = LigeroCtx(p)
     k = _k(p)
     W_, U_ = p.acc_bits, 2 * p.sig
@@ -50,11 +57,29 @@ def compile_unit(p: Params = REAL) -> System:
     ctx.whitelist_product("norm", "driver-added checks v < 2^min(s_bits, acc_sig - k) and M < 2^min(acc_sig, s_bits + k) "
                           "bound v * mul < 2^acc_sig and div * M < 2^s_bits", 0, 2 ** max(p.s_bits, p.acc_sig))
 
-    # --- public decodes as pinned rows ------------------------------------------------------------------------------
+    # --- the accumulator: pinned decode (unit) or in-field decode of hint components (chain) ------------------------
     ctx.scope = "x"
-    s_c = ctx.pin("c.s", 0, 2)
-    e_c = ctx.pin("c.e_hat", p.exp_lo, p.e_max + 1)
-    M_c = ctx.pin("c.M", 0, 2**p.acc_sig)
+    if not chain:
+        s_c = ctx.pin("c.s", 0, 2)
+        e_c = ctx.pin("c.e_hat", p.exp_lo, p.e_max + 1)
+        M_c = ctx.pin("c.M", 0, 2**p.acc_sig)
+    else:
+        hc = ctx.hints("acc", ["s", "t", "f", "nz", "z"])
+        s_c, t_c, f_c, nz, zc = hc["s"], hc["t"], hc["f"], hc["nz"], hc["z"]
+        # Fp32Decode.check without ``acc.word``: (s, t, f) *are* the word here (c = s 2^31 + t 2^23 + f > p is
+        # never formed; the components' ranges below make the word unique).
+        ctx.boolean("acc.s", s_c)
+        ctx.rng("acc.t", t_c, 0, p.t_finite)
+        ctx.rng("acc.f", f_c, 0, 2**p.acc_frac)
+        ctx.boolean("acc.nz", nz)
+        ctx.boolean("acc.z", zc)
+        ctx.eq("acc.nz0", (1 - nz) * t_c, 0)
+        ctx.rng("acc.nz1", t_c - nz, 0, p.t_finite - 1)
+        M_c = f_c + nz * 2**p.acc_frac
+        ctx.eq("acc.z0", zc * M_c, 0)
+        ctx.rng("acc.z1", M_c + zc - 1, 0, 2**p.acc_sig)
+        e = t_c - nz - (p.bias - 1)
+        e_c = e + zc * (p.floor - e)
     state = (s_c, e_c, M_c)
     dec_a, dec_b = [], []
     for name, dec in (("a", dec_a), ("b", dec_b)):
@@ -138,10 +163,35 @@ def compile_unit(p: Params = REAL) -> System:
         inf_sign = inf_sign + first * sgn_g
         none_yet = none_yet - none_yet * ovf_g
     live = (1 - any_ovf) * (1 - z)
-    ctx.eq_pub("y.s", any_ovf * inf_sign + live * s, "y.s")
-    ctx.eq_pub("y.t", any_ovf * p.t_finite + live * fld, "y.t")
-    ctx.eq_pub("y.f", live * low, "y.f")
-    ctx.sys.outputs = {"y.s": any_ovf * inf_sign + live * s, "y.t": any_ovf * p.t_finite + live * fld, "y.f": live * low}
+    ys, yt, yf = any_ovf * inf_sign + live * s, any_ovf * p.t_finite + live * fld, live * low
+    ctx.sys.outputs = {"y.s": ys, "y.t": yt, "y.f": yf}
+    if not chain:
+        ctx.eq_pub("y.s", ys, "y.s")
+        ctx.eq_pub("y.t", yt, "y.t")
+        ctx.eq_pub("y.f", yf, "y.f")
+        return ctx.sys
+
+    # --- epilogue (chain): RN-even cast of this unit's output word, on its components ------------------------------
+    # Epilogue.check with y32 = hi 2^L + lo: since y32 = s 2^31 + t 2^23 + f and L = 16 < 23, the split is
+    # f = fhi 2^L + lo (fhi < 2^(acc_frac - L)) and hi = s 2^15 + t 2^7 + fhi -- the same integers, never a word > p.
+    ctx.scope = "epi"
+    L = p.acc_frac - p.frac
+    he = ctx.hints("epi", ["fhi", "lo", "hi2", "lsb", "carry", "rem"])
+    fhi, lo, hi2, lsb, carry, rem = (he[n] for n in ("fhi", "lo", "hi2", "lsb", "carry", "rem"))
+    ctx.rng("epi.fhi", fhi, 0, 2 ** (p.acc_frac - L))
+    ctx.rng("epi.lo", lo, 0, 2**L)
+    ctx.rng("epi.hi2", hi2, 0, 2 ** (p.word_bits - 1))
+    ctx.boolean("epi.lsb", lsb)
+    ctx.boolean("epi.carry", carry)
+    ctx.rng("epi.rem", rem, 0, 2**L)
+    ctx.eq("epi.split", fhi * 2**L + lo, yf)
+    hi = ys * 2 ** (p.word_bits - 1) + yt * 2 ** (p.word_bits - 1 - p.exp) + fhi
+    ctx.eq("epi.lsb_split", 2 * hi2 + lsb, hi)
+    ctx.eq("epi.round", carry * 2**L + rem, lo + lsb + (2 ** (L - 1) - 1))
+    y16 = hi + carry
+    ctx.sys.outputs["y16"] = y16
+    names = {n: i for i, n in ctx.sys.hints}
+    ctx.sys.chain = {"c": [names["acc.s"], names["acc.t"], names["acc.f"]], "y": [ys, yt, yf], "y16": y16}
     return ctx.sys
 
 
@@ -149,9 +199,18 @@ def compile_unit(p: Params = REAL) -> System:
 # Hints and public vectors
 # ---------------------------------------------------------------------------------------------------------------------
 
-def flatten_hints(p: Params, h: dict) -> dict[str, int]:
-    """``gen_step``'s hint dict under the row names ``compile_unit`` uses."""
+def flatten_hints(p: Params, h: dict, y: int | None = None) -> dict[str, int]:
+    """``gen_step``'s hint dict under the row names ``compile_unit`` uses.  ``y`` (the unit's output word) adds the
+    chain mode's rows: the accumulator components and the epilogue's hints (``Epilogue.gen`` on ``y``)."""
     out: dict[str, int] = {}
+    if y is not None:
+        for n in ("s", "t", "f", "nz", "z"):
+            out[f"acc.{n}"] = h["acc"][n]
+        L = p.acc_frac - p.frac
+        ep = Epilogue.gen(p, y)
+        for n in ("lo", "hi2", "lsb", "carry", "rem"):
+            out[f"epi.{n}"] = ep[n]
+        out["epi.fhi"] = (y & (2**p.acc_frac - 1)) >> L
     for i, hp in enumerate(h["prod"]):
         out[f"prod[{i}].z"] = hp["z"]
     for g, hg in enumerate(h["groups"]):
@@ -185,37 +244,42 @@ def public_vectors(p: Params, c, a, b, y, device="cpu"):
     """The verifier's per-unit public work, vectorised: ``c`` (B,), ``a``/``b`` (B, k), ``y`` (B,) integer tensors ->
     dict name -> int64 tensor (B,) of pinned values (as signed integers; the caller reduces mod p) and the output
     components.  Raises ``Reject``-equivalent ``ValueError`` when a word is off the finite domain (t = all ones) or
-    out of range: the checker's ``x.*`` range checks and the decodes' ``rng(t, 0, t_finite)``."""
+    out of range: the checker's ``x.*`` range checks and the decodes' ``rng(t, 0, t_finite)``.
+    ``c=None`` (chain mode): only the operand decodes; the accumulator and the output are not public per unit."""
     import torch
 
-    c = torch.as_tensor(c, dtype=torch.int64, device=device)
     a = torch.as_tensor(a, dtype=torch.int64, device=device)
     b = torch.as_tensor(b, dtype=torch.int64, device=device)
-    y = torch.as_tensor(y, dtype=torch.int64, device=device)
     k = _k(p)
-    if a.shape != (c.shape[0], k) or b.shape != a.shape or y.shape != c.shape:
+    if a.ndim != 2 or a.shape[1] != k or b.shape != a.shape:
         raise ValueError("shape mismatch")
     bad = []
-    if ((c < 0) | (c >= 2**p.acc_word_bits)).any():
-        bad.append("x.c range")
     if ((a < 0) | (a >= 2**p.word_bits) | (b < 0) | (b >= 2**p.word_bits)).any():
         bad.append("x.a/x.b range")
-    if ((y < 0) | (y >= 2**p.acc_word_bits)).any():
-        bad.append("y range")
     out: dict = {}
-    # Fp32Decode of c
-    t = (c >> p.acc_frac) & (2**p.exp - 1)
-    f = c & (2**p.acc_frac - 1)
-    if (t == p.t_finite).any():
-        bad.append("acc.t off the finite range")
-    nz = (t != 0).to(torch.int64)
-    zz = ((t == 0) & (f == 0)).to(torch.int64)
-    M = f + nz * 2**p.acc_frac
-    e = t - nz - (p.bias - 1)
-    e_hat = e + zz * (p.floor - e)
-    out["c.s"] = c >> (p.acc_word_bits - 1)
-    out["c.e_hat"] = e_hat
-    out["c.M"] = M
+    chain = c is None
+    if not chain:
+        c = torch.as_tensor(c, dtype=torch.int64, device=device)
+        y = torch.as_tensor(y, dtype=torch.int64, device=device)
+        if c.shape != (a.shape[0],) or y.shape != c.shape:
+            raise ValueError("shape mismatch")
+        if ((c < 0) | (c >= 2**p.acc_word_bits)).any():
+            bad.append("x.c range")
+        if ((y < 0) | (y >= 2**p.acc_word_bits)).any():
+            bad.append("y range")
+        # Fp32Decode of c
+        t = (c >> p.acc_frac) & (2**p.exp - 1)
+        f = c & (2**p.acc_frac - 1)
+        if (t == p.t_finite).any():
+            bad.append("acc.t off the finite range")
+        nz = (t != 0).to(torch.int64)
+        zz = ((t == 0) & (f == 0)).to(torch.int64)
+        M = f + nz * 2**p.acc_frac
+        e = t - nz - (p.bias - 1)
+        e_hat = e + zz * (p.floor - e)
+        out["c.s"] = c >> (p.acc_word_bits - 1)
+        out["c.e_hat"] = e_hat
+        out["c.M"] = M
     for name, w in (("a", a), ("b", b)):
         t = (w >> p.frac) & (2**p.exp - 1)
         f = w & (2**p.frac - 1)
@@ -229,9 +293,10 @@ def public_vectors(p: Params, c, a, b, y, device="cpu"):
             out[f"{name}[{i}].s"] = s[:, i]
             out[f"{name}[{i}].m"] = m[:, i]
             out[f"{name}[{i}].e"] = e[:, i]
-    out["y.s"] = y >> (p.acc_word_bits - 1)
-    out["y.t"] = (y >> p.acc_frac) & (2**p.exp - 1)
-    out["y.f"] = y & (2**p.acc_frac - 1)
+    if not chain:
+        out["y.s"] = y >> (p.acc_word_bits - 1)
+        out["y.t"] = (y >> p.acc_frac) & (2**p.exp - 1)
+        out["y.f"] = y & (2**p.acc_frac - 1)
     if bad:
         raise ValueError("public inputs rejected: " + "; ".join(bad))
     return out
