@@ -205,8 +205,8 @@ def sec_fused(a100: dict, ref: dict, bw_meas: float) -> tuple[str, list[dict]]:
             if impl in a100["launch"] and impl in ref["measured"]["launch"]:
                 data.append({"kernel": "fused.launch", "impl": impl, "ref": ref["measured"]["launch"][impl], "a100": a100["launch"][impl]})
     txt = md_table(["fused checker round", "RTX 4090 recorded", "A100 measured", "speed ratio A100/4090", "A100 HBM floor (measured BW)", "fraction of floor"], rows)
-    if a100.get("test"):
-        txt += f"\n\nBit-exact tests on the A100 (`TC_DEVICE=cuda pytest tensor/fused/tests`): {a100['test']}"
+    if a100.get("agreement_test_tail"):
+        txt += f"\n\nBit-exact tests on the A100 (`TC_DEVICE=cuda pytest tensor/fused/tests`): {a100['agreement_test_tail']}"
     return txt, data
 
 
@@ -375,24 +375,24 @@ def main(argv=None) -> int:
                       "bandwidth_ratio_a100_over_4090_datasheet": DATASHEET_BW / BW_4090, "bandwidth_ratio_a100_over_h100_datasheet": DATASHEET_BW / BW_H100},
            "sections": {}, "kernels": []}
     md = [f"# anchor-a100: every campaign GPU kernel measured on the A100 (the anchor), {doc['generated'][:10]}", "",
-          "**Scope: component measurements** (kernel time on random/patterned data, bit-exact against each lane's CPU reference), then one "
+          ("**Scope: component measurements** (kernel time on random/patterned data, bit-exact against each lane's CPU reference), then one "
           "`ARITHMETIC_DIAGNOSTIC` re-price of A and B with those numbers.  Nothing here is a proof.  Every recorded 4090 / H100 number is the lane's "
           "own (its README / report, run id in the lane's table); every A100 number is a `research run --on vy-a100b --exclusive` of the same bench, same "
           "flags, CUDA events, warm, median of >= 7, bit-exact checks on.  `overhead.vs_native_peak` is defined against *this* card's dense BF16 peak "
-          "(`contract.NATIVE_REFERENCE`, 9.85 ps per K=1536 VU), so the last section is the first A-vs-B comparison where the prover and the reference are the same machine.",
+          "(`contract.NATIVE_REFERENCE`, 9.85 ps per K=1536 VU), so the last section is the first A-vs-B comparison where the prover and the reference are the same machine."),
           "", f"Device: {mb['hardware']['nvidia_smi'] if mb else A100}; torch {mb['hardware']['torch'] if mb else '?'}, CUDA {mb['hardware']['cuda'] if mb else '?'}, "
           f"{mb['hardware']['sms'] if mb else 108} SMs (sm_80).  Recorded runs: " + ", ".join(f"{k} `{v}`" for k, v in runs.items()) + ".", "",
-          "Bandwidth ratios the earlier reports *scaled* by: A100/4090 = 2,039/1,008 = 2.02; A100/H100 = 2,039/3,350 = 0.61.  Speed ratios below are "
-          "recorded-time / A100-time (> 1 = the A100 is faster); a departure from the bandwidth ratio by > 1.5x either way is a finding about the kernel and is flagged.", ""]
+          ("Bandwidth ratios the earlier reports *scaled* by: A100/4090 = 2,039/1,008 = 2.02; A100/H100 = 2,039/3,350 = 0.61.  Speed ratios below are "
+          "recorded-time / A100-time (> 1 = the A100 is faster); a departure from the bandwidth ratio by > 1.5x either way is a finding about the kernel and is flagged."), ""]
     meas = {}
     if mb:
         txt, s = sec_microbench(mb)
         doc["sections"]["microbench"] = s
         md += ["## 0. The anchor's measured roofline inputs", "", txt, "",
-               f"The floors below use the measured copy bandwidth **{bw_meas/1e9:.0f} GB/s** ({bw_meas/DATASHEET_BW:.2f} of the datasheet's 2,039) and the datasheet INT8 peak "
+               (f"The floors below use the measured copy bandwidth **{bw_meas/1e9:.0f} GB/s** ({bw_meas/DATASHEET_BW:.2f} of the datasheet's 2,039) and the datasheet INT8 peak "
                f"312 T MAC/s; cuBLAS `_int_mm` reaches only {s['int8_macs_per_s_cublas_best']/1e12:.0f} T MAC/s ({s['int8_macs_per_s_cublas_best']/DATASHEET_INT8_MACS:.2f} of it) on this card "
                f"(the 4090 got 0.253 of its peak), while BF16 reaches {s['bf16_flops_per_s_cublas_best']/1e12:.0f} TFLOPS ({s['bf16_flops_per_s_cublas_best']/312e12:.2f} of the peak "
-               "that defines the native reference).  The native reference is therefore ~6% conservative on this card, not more.", ""]
+               "that defines the native reference).  The native reference is therefore ~6% conservative on this card, not more."), ""]
     hash_a = load(R / "hash_gpu" / "bench.json")
     hash_ref = load(REPO / "backends/shared/hash_gpu/results_r20260922-054241-b966.json")
     if hash_a and hash_ref:
@@ -400,7 +400,6 @@ def main(argv=None) -> int:
         doc["kernels"] += d
         md += ["## 1. `backends/shared/hash_gpu` -- Merkle commitment hashing (4090 run `r20260922-054241-b966`)", "", txt, ""]
         sha_b = next(r for r in d if r.get("hash") == "sha256" and r.get("candidate") == "B" and r.get("kernel") == "hash_gpu")
-        sha_a = next(r for r in d if r.get("hash") == "sha256" and r.get("candidate") == "A" and r.get("kernel") == "hash_gpu")
         b3_b = next(r for r in d if r.get("hash") == "blake3" and r.get("candidate") == "B" and r.get("kernel") == "hash_gpu")
         best_b = max((r for r in d if r.get("kernel") == "hash_gpu" and r.get("candidate") == "B" and r.get("mds") is None and r["hash"] in ("sha256", "blake3")), key=lambda r: r["a100_gb_per_s"])
         best_a = max((r for r in d if r.get("kernel") == "hash_gpu" and r.get("candidate") == "A" and r.get("mds") is None and r["hash"] in ("sha256", "blake3")), key=lambda r: r["a100_gb_per_s"])
@@ -408,13 +407,13 @@ def main(argv=None) -> int:
         meas["hash_rate_A"] = best_a["a100_gb_per_s"] * 1e9
         meas["hash_B_kernel"] = best_b["hash"]
         meas["hash_A_kernel"] = best_a["hash"]
-        md += [f"**Finding (flagged).**  The SIMT hash kernels do *not* scale with bandwidth: SHA-256 runs at {sha_b['a100_gb_per_s']:.0f} GB/s on the A100 vs 446 on the 4090 "
+        md += [(f"**Finding (flagged).**  The SIMT hash kernels do *not* scale with bandwidth: SHA-256 runs at {sha_b['a100_gb_per_s']:.0f} GB/s on the A100 vs 446 on the 4090 "
                f"({sha_b['ratio_ref_over_a100_time']:.2f}x, where the bandwidth scaling assumed 2.02x -- a {2.02/sha_b['ratio_ref_over_a100_time']:.1f}x departure), Poseidon2-16 "
                f"{next(r for r in d if r.get('hash') == 'poseidon2-16' and r.get('candidate') == 'B' and r.get('mds') is None)['ratio_ref_over_a100_time']:.2f}x, Blake3 {b3_b['ratio_ref_over_a100_time']:.2f}x.  "
                "They are INT32-ALU-bound: the A100 has 108 SMs x 64 INT32 lanes at 1.41 GHz = 9.7 T int32 op/s against the 4090's 128 x 64 x 2.52 GHz = 20.6 T (0.47x), and SHA-256 / "
                "Poseidon2 land on that ratio.  Blake3 holds its rate (its chunk-parallel layout was latency-bound on the 4090).  On the anchor the best proof-internal hash is "
                f"**{best_b['hash']} at {best_b['a100_gb_per_s']:.0f} GB/s** ({best_b['a100_ms']:.1f} ms per B batch, {best_b['a100_ms']*1e3/4096:.1f} us/VU); the hash_gpu.md / encode_gpu.json "
-               f"A100 rows (SHA-256 x2.02 = 901 GB/s) overstate the A100's hash rate by {901/best_b['a100_gb_per_s']:.1f}x.", ""]
+               f"A100 rows (SHA-256 x2.02 = 901 GB/s) overstate the A100's hash rate by {901/best_b['a100_gb_per_s']:.1f}x."), ""]
     enc_a = load(R / "encode" / "bench.json")
     enc_ref = load(REPO / "backends/direct/encode/results_r20260922-062016-6bdf.json")
     if enc_a and enc_ref:
@@ -443,9 +442,9 @@ def main(argv=None) -> int:
             k21 = next((r for r in d if r.get("kernel") == "fused" and r["impl"] == "simt" and r["n"] == 1 << 21 and r["deg_in"] == 6), None)
             if k21:
                 meas["fused_checker_round_2p21_us"] = k21["a100_us"]
-                md += [f"The SIMT fused round at 2^21 (ext input, cold L2) runs **{k21['a100_us']:.0f} us** on the A100 ({k21['ratio_ref_over_a100_time']:.2f}x the 4090's 273 us; "
+                md += [(f"The SIMT fused round at 2^21 (ext input, cold L2) runs **{k21['a100_us']:.0f} us** on the A100 ({k21['ratio_ref_over_a100_time']:.2f}x the 4090's 273 us; "
                        f"{k21['a100_gb_per_s']:.0f} GB/s = {k21['fraction_of_floor']:.2f} of the measured-bandwidth floor).  The 130-round layer model: {Ls['graphed_seconds']*1e3:.2f} ms graphed "
-                       f"({fused_ref['measured']['layers']['simt']['graphed_seconds']/Ls['graphed_seconds']:.2f}x the 4090's 6.20 ms).", ""]
+                       f"({fused_ref['measured']['layers']['simt']['graphed_seconds']/Ls['graphed_seconds']:.2f}x the 4090's 6.20 ms)."), ""]
     logup_a = load(R / "fused_logup" / "fused_logup.json")
     logup_ref = load(REPORTS / "fused_logup_4090.json")
     if logup_a and logup_ref:
@@ -484,9 +483,9 @@ def main(argv=None) -> int:
         txt, rp = reprice(meas)
         doc["reprice"] = rp
         md += ["## A vs B on the A100, same batch, same numbers", "",
-               "`explore.tensor` designs A and B (BabyBear, degree-6 challenge, 2^-128, B = 4096, K = 1536, HVZK layer, authentication excluded) priced on the A100 with the "
+               ("`explore.tensor` designs A and B (BabyBear, degree-6 challenge, 2^-128, B = 4096, K = 1536, HVZK layer, authentication excluded) priced on the A100 with the "
                "A100-measured buckets substituted; the still-modelled buckets are at 0.172 of the A100 INT8 peak / the model's SIMT rate and are listed as `omitted`.  "
-               "Labels: `ARITHMETIC_DIAGNOSTIC`, scope `vu`, hardware NVIDIA A100 SXM4 80GB.", "", txt, "",
+               "Labels: `ARITHMETIC_DIAGNOSTIC`, scope `vu`, hardware NVIDIA A100 SXM4 80GB."), "", txt, "",
                "Measured inputs: " + "; ".join(f"`{k}` = {fmt(v, 4) if isinstance(v, float) else v}" for k, v in meas.items()), ""]
         for dname, row in rp["designs"].items():
             md += [f"* **{dname}**: overhead **{row['overhead.vs_native_peak']:.3g}** ({row['t.total']*1e3:.0f} ms per batch, {row['seconds_per_vu']*1e6:.0f} us/VU).  Measured: "

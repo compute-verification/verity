@@ -1,0 +1,529 @@
+{
+ "lane": "anchor-a100",
+ "track": "shared",
+ "hardware": "NVIDIA A100 SXM4 80GB",
+ "generated": "2026-09-22T06:44:58Z",
+ "runs": {
+  "microbench": "r20260922-063608-a304",
+  "hash_gpu": "r20260922-063811-e561"
+ },
+ "labels": {
+  "proof_class": "COMPONENT (kernels) / ARITHMETIC_DIAGNOSTIC (re-price)",
+  "authentication": "excluded",
+  "security.target": -128,
+  "B": 4096,
+  "K": 1536
+ },
+ "floors": {
+  "hbm_bytes_per_s_measured_copy": 1753700612864.7932,
+  "hbm_bytes_per_s_datasheet": 2039000000000.0,
+  "int8_macs_per_s_datasheet": 312000000000000.0,
+  "bandwidth_ratio_a100_over_4090_datasheet": 2.0228174603174605,
+  "bandwidth_ratio_a100_over_h100_datasheet": 0.6086567164179104
+ },
+ "sections": {
+  "microbench": {
+   "hbm_copy_bytes_per_s": 1753700612864.7932,
+   "int8_macs_per_s_cublas_best": 37956128571027.53,
+   "bf16_flops_per_s_cublas_best": 291943773221690.9,
+   "hardware": {
+    "name": "NVIDIA A100-SXM4-80GB",
+    "sms": 108,
+    "sm": "8.0",
+    "total_memory_bytes": 85093777408,
+    "nvidia_smi": "NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB",
+    "torch": "2.6.0+cu124",
+    "cuda": "12.4",
+    "python": "3.12.14",
+    "host": "8cd40c8c91c9"
+   },
+   "run_id": "r20260922-063608-a304"
+  }
+ },
+ "kernels": [
+  {
+   "kernel": "hash_gpu",
+   "hash": "sha256",
+   "mds": null,
+   "candidate": "B",
+   "bytes": 20355612672,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 45.597694396972656,
+   "ref_gb_per_s": 446.417586266192,
+   "a100_ms": 107.07891082763672,
+   "a100_gb_per_s": 190.09917559552056,
+   "ratio_ref_over_a100_time": 0.4258326316969227,
+   "a100_floor_ms": 11.607233596587319,
+   "fraction_of_floor": 0.1083988761827369,
+   "scaled_from_columns": null
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "sha256",
+   "mds": null,
+   "candidate": "A",
+   "bytes": 3202940928,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 7.542784214019775,
+   "ref_gb_per_s": 424.6364256379883,
+   "a100_ms": 17.203968048095703,
+   "a100_gb_per_s": 186.1745452587336,
+   "ratio_ref_over_a100_time": 0.4384328192736141,
+   "a100_floor_ms": 1.8263898093573514,
+   "fraction_of_floor": 0.10616096264835329,
+   "scaled_from_columns": null
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "sha256-chunked",
+   "mds": null,
+   "candidate": "B",
+   "bytes": 20355612672,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 32.63078308105469,
+   "ref_gb_per_s": 623.8162480329316,
+   "a100_ms": 59.114593505859375,
+   "a100_gb_per_s": 344.3415824213081,
+   "ratio_ref_over_a100_time": 0.5519920064716398,
+   "a100_floor_ms": 11.607233596587319,
+   "fraction_of_floor": 0.19635140678818713,
+   "scaled_from_columns": null
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "sha256-chunked",
+   "mds": null,
+   "candidate": "A",
+   "bytes": 3202940928,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 5.30841588973999,
+   "ref_gb_per_s": 603.3703829028517,
+   "a100_ms": 9.652288436889648,
+   "a100_gb_per_s": 331.83228505261235,
+   "ratio_ref_over_a100_time": 0.5499644902292801,
+   "a100_floor_ms": 1.8263898093573514,
+   "fraction_of_floor": 0.18921832074320885,
+   "scaled_from_columns": null
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "blake3",
+   "mds": null,
+   "candidate": "B",
+   "bytes": 20355612672,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 56.638465881347656,
+   "ref_gb_per_s": 359.3955513315478,
+   "a100_ms": 53.9785270690918,
+   "a100_gb_per_s": 377.10574514093514,
+   "ratio_ref_over_a100_time": 1.0492777212844502,
+   "a100_floor_ms": 11.607233596587319,
+   "fraction_of_floor": 0.21503427801448183,
+   "scaled_from_columns": null
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "blake3",
+   "mds": null,
+   "candidate": "A",
+   "bytes": 3202940928,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 9.232383728027344,
+   "ref_gb_per_s": 346.9245887469587,
+   "a100_ms": 9.0065279006958,
+   "a100_gb_per_s": 355.62438303805806,
+   "ratio_ref_over_a100_time": 1.0250769030887135,
+   "a100_floor_ms": 1.8263898093573514,
+   "fraction_of_floor": 0.20278511647271458,
+   "scaled_from_columns": null
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "poseidon2-16",
+   "mds": null,
+   "candidate": "B",
+   "bytes": 20355612672,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 352.62872314453125,
+   "ref_gb_per_s": 57.725339247696176,
+   "a100_ms": 780.6008911132812,
+   "a100_gb_per_s": 26.07685041579844,
+   "ratio_ref_over_a100_time": 0.4517400981205869,
+   "a100_floor_ms": 11.607233596587319,
+   "fraction_of_floor": 0.014869613561461936,
+   "scaled_from_columns": null
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "poseidon2-16",
+   "mds": null,
+   "candidate": "A",
+   "bytes": 3202940928,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 57.75551986694336,
+   "ref_gb_per_s": 55.45687988574782,
+   "a100_ms": 122.77568054199219,
+   "a100_gb_per_s": 26.087747295397957,
+   "ratio_ref_over_a100_time": 0.47041498456357245,
+   "a100_floor_ms": 1.8263898093573514,
+   "fraction_of_floor": 0.014875827210199685,
+   "scaled_from_columns": null
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "poseidon2-24",
+   "mds": null,
+   "candidate": "B",
+   "bytes": 20355612672,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 595.8738403320312,
+   "ref_gb_per_s": 34.16094363306417,
+   "a100_ms": 1528.059814453125,
+   "a100_gb_per_s": 13.321214575153943,
+   "ratio_ref_over_a100_time": 0.3899545257953712,
+   "a100_floor_ms": 11.607233596587319,
+   "fraction_of_floor": 0.007596059713631966,
+   "scaled_from_columns": null
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "poseidon2-24",
+   "mds": null,
+   "candidate": "A",
+   "bytes": 3202940928,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 97.01580810546875,
+   "ref_gb_per_s": 33.01462916762996,
+   "a100_ms": 240.51625061035156,
+   "a100_gb_per_s": 13.316941869299823,
+   "ratio_ref_over_a100_time": 0.40336487808734073,
+   "a100_floor_ms": 1.8263898093573514,
+   "fraction_of_floor": 0.00759362331951613,
+   "scaled_from_columns": null
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "poseidon2-16",
+   "mds": "blocks",
+   "candidate": "B",
+   "bytes": 20355612672,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 53050.40625,
+   "ref_gb_per_s": 0.38370323831403275,
+   "a100_ms": 34140.61328125,
+   "a100_gb_per_s": 0.5962286765123603,
+   "ratio_ref_over_a100_time": 1.5538797095696943,
+   "a100_floor_ms": 11.607233596587319,
+   "fraction_of_floor": 0.000339983160260393,
+   "scaled_from_columns": 1024
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "poseidon2-16",
+   "mds": "blocks",
+   "candidate": "A",
+   "bytes": 3202940928,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 8974.2705078125,
+   "ref_gb_per_s": 0.3569026502167166,
+   "a100_ms": 6368.67578125,
+   "a100_gb_per_s": 0.5029210212631281,
+   "ratio_ref_over_a100_time": 1.4091266090564107,
+   "a100_floor_ms": 1.8263898093573514,
+   "fraction_of_floor": 0.0002867770117509232,
+   "scaled_from_columns": 1024
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "poseidon2-16",
+   "mds": "int8",
+   "candidate": "B",
+   "bytes": 20355612672,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 76402.28125,
+   "ref_gb_per_s": 0.26642676552278993,
+   "a100_ms": 49663.51171875,
+   "a100_gb_per_s": 0.4098705864232095,
+   "ratio_ref_over_a100_time": 1.538398687605392,
+   "a100_floor_ms": 11.607233596587319,
+   "fraction_of_floor": 0.00023371753617264072,
+   "scaled_from_columns": 1024
+  },
+  {
+   "kernel": "hash_gpu",
+   "hash": "poseidon2-16",
+   "mds": "int8",
+   "candidate": "A",
+   "bytes": 3202940928,
+   "ref_gpu": "RTX 4090",
+   "ref_ms": 12640.2392578125,
+   "ref_gb_per_s": 0.2533924289463407,
+   "a100_ms": 8733.2451171875,
+   "a100_gb_per_s": 0.36675266582137245,
+   "ratio_ref_over_a100_time": 1.447370260218143,
+   "a100_floor_ms": 1.8263898093573514,
+   "fraction_of_floor": 0.00020913071657211558,
+   "scaled_from_columns": 1024
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "sha256",
+   "log2_leaves": 20,
+   "ref_leaves_per_s": 2592404997.461483,
+   "a100_leaves_per_s": 1547923896.6949463,
+   "ratio": 0.5970995651569464
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "blake3",
+   "log2_leaves": 20,
+   "ref_leaves_per_s": 2202150584.6510277,
+   "a100_leaves_per_s": 2004036514.7740312,
+   "ratio": 0.9100360932363799
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "poseidon2-16",
+   "log2_leaves": 20,
+   "ref_leaves_per_s": 787030157.7361401,
+   "a100_leaves_per_s": 346029974.4000322,
+   "ratio": 0.43966545754151687
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "poseidon2-24",
+   "log2_leaves": 20,
+   "ref_leaves_per_s": 461469151.0509592,
+   "a100_leaves_per_s": 183646241.74755213,
+   "ratio": 0.39795995318281285
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "sha256",
+   "log2_leaves": 23,
+   "ref_leaves_per_s": 4474057959.550539,
+   "a100_leaves_per_s": 2070892965.961999,
+   "ratio": 0.4628668168103123
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "blake3",
+   "log2_leaves": 23,
+   "ref_leaves_per_s": 2658014317.8633914,
+   "a100_leaves_per_s": 2644900200.78838,
+   "ratio": 0.9950661977300586
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "poseidon2-16",
+   "log2_leaves": 23,
+   "ref_leaves_per_s": 858070614.3098247,
+   "a100_leaves_per_s": 397568593.7424377,
+   "ratio": 0.46332852694438864
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "poseidon2-24",
+   "log2_leaves": 23,
+   "ref_leaves_per_s": 536090563.8641604,
+   "a100_leaves_per_s": 204627344.47062564,
+   "ratio": 0.3817029402563333
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "sha256",
+   "log2_leaves": 25,
+   "ref_leaves_per_s": 4565059794.311355,
+   "a100_leaves_per_s": 2160537864.6364636,
+   "ratio": 0.4732770132230839
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "blake3",
+   "log2_leaves": 25,
+   "ref_leaves_per_s": 2719561839.258312,
+   "a100_leaves_per_s": 2758089560.990064,
+   "ratio": 1.01416688570033
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "poseidon2-16",
+   "log2_leaves": 25,
+   "ref_leaves_per_s": 838377238.9094424,
+   "a100_leaves_per_s": 403655226.56438154,
+   "ratio": 0.4814720722731626
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "poseidon2-24",
+   "log2_leaves": 25,
+   "ref_leaves_per_s": 463151955.94900703,
+   "a100_leaves_per_s": 206739549.2384657,
+   "ratio": 0.44637520490408483
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "sha256",
+   "log2_leaves": 27,
+   "ref_leaves_per_s": 4577495194.27049,
+   "a100_leaves_per_s": 2186789534.847985,
+   "ratio": 0.477726232806344
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "blake3",
+   "log2_leaves": 27,
+   "ref_leaves_per_s": 2734483488.844453,
+   "a100_leaves_per_s": 2734095056.575602,
+   "ratio": 0.9998579504061972
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "poseidon2-16",
+   "log2_leaves": 27,
+   "ref_leaves_per_s": 750204886.0037521,
+   "a100_leaves_per_s": 403909533.95540994,
+   "ratio": 0.5383989647241378
+  },
+  {
+   "kernel": "hash_gpu.generic",
+   "hash": "poseidon2-24",
+   "log2_leaves": 27,
+   "ref_leaves_per_s": 468303294.95523,
+   "a100_leaves_per_s": 206921050.67282036,
+   "ratio": 0.4418526474228675
+  },
+  {
+   "kernel": "hash_gpu.permutation",
+   "width": 16,
+   "mds": "cuda-fused",
+   "ref_perm_per_s": 1681445045.3155732,
+   "a100_perm_per_s": 795842069.743655
+  },
+  {
+   "kernel": "hash_gpu.permutation",
+   "width": 16,
+   "mds": "blocks",
+   "ref_perm_per_s": 12187429.035174621,
+   "a100_perm_per_s": 19064507.78225958
+  },
+  {
+   "kernel": "hash_gpu.permutation",
+   "width": 16,
+   "mds": "fp64",
+   "ref_perm_per_s": 16402370.18345279,
+   "a100_perm_per_s": 28719624.199685656
+  },
+  {
+   "kernel": "hash_gpu.permutation",
+   "width": 16,
+   "mds": "int8",
+   "ref_perm_per_s": 8439583.4134887,
+   "a100_perm_per_s": 13199634.805274133
+  },
+  {
+   "kernel": "hash_gpu.permutation",
+   "width": 24,
+   "mds": "cuda-fused",
+   "ref_perm_per_s": 972481262.8201216,
+   "a100_perm_per_s": 396818708.92040473
+  },
+  {
+   "kernel": "hash_gpu.permutation",
+   "width": 24,
+   "mds": "blocks",
+   "ref_perm_per_s": 7131719.856189725,
+   "a100_perm_per_s": 11611326.59335074
+  },
+  {
+   "kernel": "hash_gpu.permutation",
+   "width": 24,
+   "mds": "fp64",
+   "ref_perm_per_s": 8931764.379509294,
+   "a100_perm_per_s": 16159647.987888638
+  },
+  {
+   "kernel": "hash_gpu.permutation",
+   "width": 24,
+   "mds": "int8",
+   "ref_perm_per_s": 5113991.206279303,
+   "a100_perm_per_s": 7775075.571775626
+  }
+ ],
+ "reprice": {
+  "hardware": "NVIDIA A100 SXM4 80GB",
+  "B": 4096,
+  "K": 1536,
+  "security": "2^-128",
+  "proof_class": "ARITHMETIC_DIAGNOSTIC",
+  "authentication": "excluded",
+  "utilisation_modelled": 0.172,
+  "inputs": {
+   "hash_rate_B": 377105745140.9351,
+   "hash_rate_A": 355624383038.05804,
+   "hash_B_kernel": "blake3",
+   "hash_A_kernel": "blake3"
+  },
+  "designs": {
+   "B": {
+    "t.total": 0.6082518891407026,
+    "seconds_per_vu": 0.00014849899637224185,
+    "overhead.vs_native_peak": 15081929.319055812,
+    "buckets": {
+     "t.encoding": 0.4369720072701253,
+     "t.hash": 0.053996600896096085,
+     "t.matmul_modelled": 0.44705701873345266,
+     "t.simt_field_modelled": 0.102363878865,
+     "t.hint_gen_modelled": 0.0016131938461538462,
+     "t.prg_modelled": 0.0032211968
+    },
+    "measured": {
+     "encoding": false,
+     "hash": true
+    },
+    "omitted": [
+     "witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak)",
+     "Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak)",
+     "openings and transcript serialisation (not priced)",
+     "prover randomness (modelled PRG at 100 GB/s)",
+     "linear/quadratic tests, constraint combination, helper inversions (modelled SIMT at the A100 rate)"
+    ],
+    "model_only_overhead": 23840999.861411832,
+    "model_only_t.total": 0.9615038565646066,
+    "ligero_rows": 310602,
+    "hash_bytes": 20362428416
+   },
+   "A": {
+    "t.total": 1.2224341960177794,
+    "seconds_per_vu": 0.00029844584863715316,
+    "overhead.vs_native_peak": 30310906.50221087,
+    "buckets": {
+     "t.encoding": 0.0687572292236136,
+     "t.hash": 0.009016110685686208,
+     "t.matmul_modelled": 0.5741758145259392,
+     "t.simt_field_modelled": 0.63710717952,
+     "t.hint_gen_modelled": 0.0016131938461538462,
+     "t.prg_modelled": 0.00052189744,
+     "t.gkr_checker_modelled": 0.8501317821046155,
+     "t.logup_modelled": 0.24879016892221825
+    },
+    "measured": {
+     "encoding": false,
+     "hash": true
+    },
+    "omitted": [
+     "witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak)",
+     "Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak)",
+     "openings and transcript serialisation (not priced)",
+     "prover randomness (modelled PRG at 100 GB/s)",
+     "checker GKR sumcheck (modelled @0.172)",
+     "logUp fractional GKR (modelled @0.172)"
+    ],
+    "model_only_overhead": 31677409.73914568,
+    "model_only_t.total": 1.2775450613320931,
+    "ligero_rows": 48873,
+    "hash_bytes": 3206348800
+   }
+  }
+ }
+}
