@@ -46,6 +46,10 @@ GPU_PEAKS = {
     "NVIDIA GeForce RTX 4090": {"int8_dense_tops": 660.6, "hbm_bytes_per_s": 1008e9, "fp32_tflops": 82.6, "bf16_dense_tflops": 165.2,
                                 "int32_ops_per_s": roofline.SIMT_INT32_OPS,
                                 "source": "NVIDIA Ada GPU architecture whitepaper / RTX 4090 datasheet (dense, no sparsity)"},
+    # anchor-a100 lane: 108 SMs x 64 INT32 lanes x 1.41 GHz = 9.75 T int32 op/s (Ampere: 64 INT32 units per SM)
+    "NVIDIA A100-SXM4-80GB": {"int8_dense_tops": 624.0, "hbm_bytes_per_s": 2.039e12, "fp32_tflops": 19.5, "bf16_dense_tflops": 312.0,
+                              "int32_ops_per_s": 108 * 64 * 1.41e9,
+                              "source": "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB): INT8 624 TOPS dense, HBM2e 2,039 GB/s, FP32 19.5 TFLOPS"},
 }
 PROFILE = "first-campaign-target/2026-09-21"
 K_TARGET, B_TARGET, UNITS = 1536, 4096, 4096
