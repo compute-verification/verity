@@ -44,7 +44,10 @@ PY=${PY:-/workspace/venv312/bin/python}
 export PATH=$(dirname "$PY"):/usr/local/cuda/bin:$PATH
 export NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build}
 HIDDEN_SO=${HIDDEN_SO:-/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so}
-GPU_UTIL=${GPU_UTIL:-0.6}; COMMIT_GPU_UTIL=${COMMIT_GPU_UTIL:-$GPU_UTIL}; PAIRS=${PAIRS:-3}; REPLAY_WORKERS=${REPLAY_WORKERS:-32}
+# gpu_memory_utilization per case, r17 of record: OLMoE 0.6 (run_olmoe_b8.sh); Qwen3-30B-A3B capture 0.92 / Commit 0.80 (run_qwen3_int6.sh
+# lines 81 and 96: the ~30 GB TP2 shard needs > 0.6 x 44.39 GiB to load; 0.92 CUDA-OOMed the instrumented Commit run).  Env overrides.
+case "$ROLE" in QWEN3_30B_A3B) _GU=0.92; _CGU=0.80 ;; *) _GU=0.6; _CGU="" ;; esac
+GPU_UTIL=${GPU_UTIL:-$_GU}; COMMIT_GPU_UTIL=${COMMIT_GPU_UTIL:-${_CGU:-$GPU_UTIL}}; PAIRS=${PAIRS:-3}; REPLAY_WORKERS=${REPLAY_WORKERS:-32}
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW; B=$D/build; M=$D/match; mkdir -p "$D" "$B" "$M" "$NATIVE_COLLECT_BUILD"
 WL=workloads/$ROW.json
 [ -f "$WL" ] || { echo "no manifest $WL"; exit 2; }
