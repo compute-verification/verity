@@ -19,6 +19,8 @@ the cost model's unit); padding to cuBLAS's minimum shapes is reported separatel
 """
 from __future__ import annotations
 
+# ruff: noqa: B023 F821  -- the timing lambdas are called inside the loop iteration that builds them; ruff misreads the
+# later ``del g, h`` (memory) as making the names undefined.
 import argparse
 import json
 import os
