@@ -9,8 +9,14 @@ use std::time::Instant;
 
 pub const STATEMENT_TAG: &[u8] = b"ligero-b/statement|v2";
 pub const COIN_TAG: &[u8] = b"ligero-b/coin|v1|";
-pub const CHALLENGE1_TAG: &[u8] = b"ligero-b/c1|";
-pub const CHALLENGE2_TAG: &[u8] = b"ligero-b/c2|";
+/// Fiat-Shamir mode tags (challenges from the transcript prefix) and interactive-mode tags (`|v2`: challenges from
+/// the verifier's coins alone, PROTOCOL.md 8c after b-zk-fix).
+pub const CHALLENGE1_TAG_FS: &[u8] = b"ligero-b/c1|";
+pub const CHALLENGE2_TAG_FS: &[u8] = b"ligero-b/c2|";
+pub const CHALLENGE1_TAG_IA: &[u8] = b"ligero-b/c1|v2|";
+pub const CHALLENGE2_TAG_IA: &[u8] = b"ligero-b/c2|v2|";
+/// The campaign's Fiat-Shamir rule (ZK_CONSTRUCTION.md 3.3): eps_FS <= 2^60 x eps_round on every statistical term.
+pub const FS_QUERIES_LOG2: f64 = 60.0;
 
 /// The frozen REAL chain system (`compile_unit(REAL, chain=True)`): the Python `system_id` and this verifier's own
 /// digest of the exported tables.  A system file with other digests is refused unless `--allow-any-system`.
@@ -42,6 +48,11 @@ pub struct Options {
     pub threads: usize,
     pub soundness_bits: f64,
     pub allow_any_system: bool,
+    /// Interactive mode only: the verifier's OWN step-0 randomness `r1 || s1 || r2 || s2` (128 bytes).  Without it a
+    /// file verifier can only REPLAY the transcript's openings, and an interactive-mode accept is conditional on those
+    /// coins being the verifier's (PROTOCOL.md 8c: the challenges are functions of the coins alone, so a prover that
+    /// chose them knows `r` and `cols` before committing -- the file alone is not evidence).
+    pub own_coins: Option<[u8; 128]>,
 }
 
 pub struct Soundness {
@@ -76,15 +87,17 @@ pub fn soundness(st: &Statement) -> Result<Soundness, String> {
     }
     let e = (st.n - k) / 2;
     let log_fs = d as f64 * (P as f64).log2();
+    // Fiat-Shamir: every statistical term x 2^60 (the q x eps rule); interactive: no shift, plus the coin-hiding term.
+    let shift = if st.interactive { 0.0 } else { FS_QUERIES_LOG2 };
     let mut terms = vec![
-        ("irs_query".to_string(), log2_pow((st.n - e) as f64, n, t)),
-        ("linear_query".to_string(), log2_pow((k + l) as f64, n, t)),
-        ("quadratic_query".to_string(), log2_pow((2 * k) as f64, n, t)),
-        ("irs_field".to_string(), ((st.n + 1) as f64).log2() - log_fs),
-        ("linear_field".to_string(), -log_fs),
-        ("quadratic_field".to_string(), -log_fs),
+        ("irs_query".to_string(), log2_pow((st.n - e) as f64, n, t) + shift),
+        ("linear_query".to_string(), log2_pow((k + l) as f64, n, t) + shift),
+        ("quadratic_query".to_string(), log2_pow((2 * k) as f64, n, t) + shift),
+        ("irs_field".to_string(), ((st.n + 1) as f64).log2() - log_fs + shift),
+        ("linear_field".to_string(), -log_fs + shift),
+        ("quadratic_field".to_string(), -log_fs + shift),
     ];
-    if st.coin_commitment {
+    if st.interactive {
         terms.push(("coin_commitment_hiding".to_string(), 1.0 + 64.0 - 256.0));
     }
     let per = log2_sum(&terms.iter().map(|x| x.1).collect::<Vec<_>>());
@@ -102,7 +115,7 @@ fn statement_digest(st: &Statement, sys_id: &[u8; 32]) -> Result<Vec<u8>, String
         format!("|p={}|hash=blake3|l={}|n={}|D={}|t={}|target={}", P, st.l, st.n, st.d, st.t, py_float_repr(st.target_log2)?)
             .as_bytes(),
     );
-    h.extend_from_slice(format!("|zk={}|k={}", st.zk as u8, k).as_bytes());
+    h.extend_from_slice(format!("|zk={}|k={}|mode={}", st.zk as u8, k, st.mode_name()).as_bytes());
     h.extend_from_slice(b"|sys=");
     h.extend_from_slice(sys_id);
     h.extend_from_slice(format!("|mode=chain|l={}|n_vus={}|steps={}", st.l, st.n_vus, st.steps).as_bytes());
@@ -188,7 +201,7 @@ fn expand(seed: &[u8], count: usize) -> Vec<u32> {
 
 fn coin_prefix(st: &Statement, pf: &Proof) -> Vec<u8> {
     let mut v = Vec::new();
-    if st.coin_commitment {
+    if st.interactive {
         let c = pf.coins.as_ref().unwrap();
         v.extend_from_slice(b"|coins=");
         v.extend_from_slice(&c.c1);
@@ -199,7 +212,7 @@ fn coin_prefix(st: &Statement, pf: &Proof) -> Vec<u8> {
 
 fn coin_open(st: &Statement, r: &[u8; 32]) -> Vec<u8> {
     let mut v = Vec::new();
-    if st.coin_commitment {
+    if st.interactive {
         v.extend_from_slice(b"|r=");
         v.extend_from_slice(r);
     }
@@ -388,7 +401,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
     tm.soundness = lap(&mut clk);
 
     // ---- step 0: coin commitments c_i = BLAKE2b(tag || r_i || s_i) ----
-    if let (true, Some(c)) = (st.coin_commitment, &pf.coins) {
+    if let (true, Some(c)) = (st.interactive, &pf.coins) {
         let com = |r: &[u8; 32], s: &[u8; 32]| {
             let mut v = COIN_TAG.to_vec();
             v.extend_from_slice(r);
@@ -400,6 +413,15 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         }
         if com(&c.r2, &c.s2) != c.c2 {
             return reject("coin slot 2: opening does not match its commitment", tm, Some(snd));
+        }
+        if let Some(own) = &opt.own_coins {
+            let mut mine = Vec::with_capacity(128);
+            for part in [&c.r1, &c.s1, &c.r2, &c.s2] {
+                mine.extend_from_slice(part);
+            }
+            if mine[..] != own[..] {
+                return reject("coins are not this verifier's step-0 coins", tm, Some(snd));
+            }
         }
     }
 
@@ -432,28 +454,36 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         Some(c) => (&c.r1, &c.r2),
         None => (&zero, &zero),
     };
-    // challenge 1
-    let mut seed1 = CHALLENGE1_TAG.to_vec();
+    // challenge 1.  Interactive (8c, b-zk-fix F2): BLAKE3(tag_v2 || stmt || c1 c2 || r1) -- the verifier's coin alone,
+    // NO root.  Fiat-Shamir: BLAKE3(tag || stmt || root).
+    let mut seed1 = if st.interactive { CHALLENGE1_TAG_IA.to_vec() } else { CHALLENGE1_TAG_FS.to_vec() };
     seed1.extend_from_slice(&stmt);
-    seed1.extend_from_slice(&coin_prefix(&st, &pf));
-    seed1.extend_from_slice(&pf.root);
-    seed1.extend_from_slice(&coin_open(&st, r1));
+    if st.interactive {
+        seed1.extend_from_slice(&coin_prefix(&st, &pf));
+        seed1.extend_from_slice(&coin_open(&st, r1));
+    } else {
+        seed1.extend_from_slice(&pf.root);
+    }
     let seed1 = blake3(&seed1);
     let per_d = m_rows + nl + nq + 7 * l;
     let x = expand(&seed1, d * per_d);
-    // challenge 2
-    let mut seed2 = CHALLENGE2_TAG.to_vec();
+    // challenge 2.  Interactive: BLAKE3(tag_v2 || stmt || c1 c2 || r2) -- none of root, w, h, q, v.
+    // Fiat-Shamir: BLAKE3(tag || stmt || root || w || h || q [|| "|v=" v]).
+    let mut seed2 = if st.interactive { CHALLENGE2_TAG_IA.to_vec() } else { CHALLENGE2_TAG_FS.to_vec() };
     seed2.extend_from_slice(&stmt);
-    seed2.extend_from_slice(&coin_prefix(&st, &pf));
-    seed2.extend_from_slice(&pf.root);
-    seed2.extend_from_slice(&u32s_le(&pf.w));
-    seed2.extend_from_slice(&u32s_le(&pf.h));
-    seed2.extend_from_slice(&u32s_le(&pf.q));
-    if st.zk {
-        seed2.extend_from_slice(b"|v=");
-        seed2.extend_from_slice(&u32s_le(&pf.v));
+    if st.interactive {
+        seed2.extend_from_slice(&coin_prefix(&st, &pf));
+        seed2.extend_from_slice(&coin_open(&st, r2));
+    } else {
+        seed2.extend_from_slice(&pf.root);
+        seed2.extend_from_slice(&u32s_le(&pf.w));
+        seed2.extend_from_slice(&u32s_le(&pf.h));
+        seed2.extend_from_slice(&u32s_le(&pf.q));
+        if st.zk {
+            seed2.extend_from_slice(b"|v=");
+            seed2.extend_from_slice(&u32s_le(&pf.v));
+        }
     }
-    seed2.extend_from_slice(&coin_open(&st, r2));
     let seed2 = blake3(&seed2);
     if column_challenge(&seed2, t, n) != pf.cols {
         return reject("column challenge mismatch", tm, Some(snd));
@@ -509,12 +539,13 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
     let ctx = Ctx { eta, zh, xk, ..ctx };
     let _ = &ctx.eta;
     let _ = ctx.sys;
-    // mask rows (PROTOCOL.md 8b): prox, lin, qa, qb, chain -- D rows each after the m witness rows
+    // mask rows (PROTOCOL.md 8b, b-zk-fix): prox, lin, qa, qb, chain_a, chain_b -- D rows each after the m witness rows
     let row_prox = |dd: usize| m + dd;
     let row_lin = |dd: usize| m + d + dd;
     let row_qa = |dd: usize| m + 2 * d + dd;
     let row_qb = |dd: usize| m + 3 * d + dd;
-    let row_chain = |dd: usize| m + 4 * d + dd;
+    let row_chain_a = |dd: usize| m + 4 * d + dd;
+    let row_chain_b = |dd: usize| m + 5 * d + dd;
     tm.ntt += lap(&mut clk);
 
     // ---- (i) proximity ----
@@ -578,9 +609,10 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         // v|_H = beta (fold mod x^l - 1, NTT_l) and v(eta_c) = alpha . U[cols] + Z_H s_lin
         for dd in 0..d {
             let v = &pf.v[dd * k..(dd + 1) * k];
+            // x^j = x^(j mod l) on H; with t_pad > l (FS-ZK at l = 256: k = l + 512) a coefficient wraps more than once
             let mut fold = v[..l].to_vec();
             for j in l..k {
-                fold[j - l] = add(fold[j - l], v[j]);
+                fold[j % l] = add(fold[j % l], v[j]);
             }
             ctx.ntt_l.transform(&mut fold, false);
             if fold != beta[dd * l..(dd + 1) * l] {
@@ -747,7 +779,10 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         for c in 0..t {
             let mut e = expect[c] as u32;
             if st.zk {
-                e = add(e, mul(ctx.zh[c], uo[row_chain(dd) * t + c]));
+                // q_d = Q_d + u_ca + x^k u_cb (8b after b-zk-fix F1): the mask is reconstructed from the two opened
+                // chain mask rows, u_ca(eta_c) + eta_c^k u_cb(eta_c); the pre-fix Z_H s_chain vanished on H and leaked q|_H.
+                e = add(e, uo[row_chain_a(dd) * t + c]);
+                e = add(e, mul(ctx.xk[c], uo[row_chain_b(dd) * t + c]));
             }
             if e != q_at[dd][c] {
                 tm.chain += lap(&mut clk);
@@ -756,5 +791,12 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         }
     }
     tm.chain += lap(&mut clk);
-    Verdict { accepted: true, reason: "accept".into(), timing: tm, soundness: Some(snd) }
+    let reason = if !st.interactive {
+        "accept".to_string()
+    } else if opt.own_coins.is_some() {
+        "accept (interactive: coins are this verifier's step-0 coins)".to_string()
+    } else {
+        "accept (interactive: coins replayed from the transcript; sound only if they were the verifier's step-0 coins)".to_string()
+    };
+    Verdict { accepted: true, reason, timing: tm, soundness: Some(snd) }
 }

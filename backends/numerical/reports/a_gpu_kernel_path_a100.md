@@ -26,6 +26,19 @@ is localised, the A GPU numbers with a verifier-accepted proof on more than one 
 (25.5 s a-verifier r20260922-091240-4bf9; 16.6 s / 64 VUs here) and a-gpu-v2's own v2 rows (Python-verified,
 A100 only).
 
+Update 11:05Z (a-protocol-diff, merged 40868e5): the H100 half of the story is resolved -- the Rust verifier's
+rejection at LogUp POW level 2 was the LogUp sumcheck variable order (a-gpu2 binds the low bit first, `rho = [mu] + x*`;
+the verifier had a-gpu's top-bit-first pairing); with the order pinned in PROTOCOL.md §4.2 the Rust verifier ACCEPTS
+a-gpu2's B=4096 proof (3.3 s, 16T) and rejects 1320/1320 mutations + 44/44 negatives (r20260922-103843-37e5,
+-104038-eabb). So on `vy-g5` a-gpu2's 1.875 s row is now independently verified; the A100 failure above is a
+separate, still-open phenomenon (lane a-kernel-a100). `vy-g5` was deleted at 11:05Z after its records were fetched.
+
+Update 11:22Z: merged `main` e130d36 (a-gpu2 + a-gpu-v2 + a-verifier-2 + a-protocol-diff) on `vy-sp1` (RTX 4090, Triton
+cache wiped): kernel-path and torch-path proofs for v1 B=64 are byte-identical, the independent Rust verifier accepts both
+(r20260922-111259-3d41), and a-verifier-2's per-level diff harness reports 0 differing entries. So the packed path is
+correct on sm_89 (4090) and sm_90 (H100, g5) and wrong on sm_80 (A100) for the same source -- the A100 bug is
+architecture- or environment-specific.
+
 Handoff: `vy-a100b` is kept alive as the reproduction machine (venv `/workspace/venv312/bin/python`, sets above).
 Owners: a-verifier-2 (F1 triage) / a-protocol-diff. First things to check: Triton kernels compiled for sm_80 vs sm_90
 (a-packed2/a-fusion/a-gpu2 developed on 4090/H100 only), int32/Montgomery overflow on values present in these

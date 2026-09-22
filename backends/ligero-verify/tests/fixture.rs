@@ -1,5 +1,6 @@
-//! The committed B = 1 ZK proof (run r20260922-100145-374a, `small_zk/b1`) must verify, and one-byte mutations of
-//! every transcript region must be rejected -- through the binary, so the CLI path is what is tested.
+//! The committed B = 1 ZK interactive-mode proof (run r20260922-111453-609b, `small_interactive_zk/b1`, protocol
+//! after b-zk-fix) must verify, and one-byte mutations of every transcript region must be rejected -- through the
+//! binary, so the CLI path is what is tested.
 use std::process::Command;
 
 fn bin() -> String {
@@ -24,8 +25,8 @@ fn every_region_of_the_proof_is_bound() {
     let dir = std::env::temp_dir().join(format!("ligero-verify-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     // header flags, coins, root, w, h, q, v, cols, opened, paths: one flipped byte in each region (byte offsets of
-    // the B = 1 ZK layout: D = 6, l = 256, k = 512, n = 2048, t = 189, M = 3546, depth 11)
-    let regions = [("header", 8usize), ("coins", 44), ("root", 44 + 192), ("w", 44 + 192 + 32 + 7), ("cols", pf.len() - 3546 * 189 * 4 - 189 * 11 * 32 - 189 * 4 + 5), ("opened", pf.len() - 189 * 11 * 32 - 1000), ("paths", pf.len() - 100)];
+    // the B = 1 ZK layout: D = 6, l = 256, k = 512, n = 2048, t = 189, M = 3516 + 6 D = 3552, depth 11)
+    let regions = [("header", 8usize), ("coins", 44), ("root", 44 + 192), ("w", 44 + 192 + 32 + 7), ("cols", pf.len() - 3552 * 189 * 4 - 189 * 11 * 32 - 189 * 4 + 5), ("opened", pf.len() - 189 * 11 * 32 - 1000), ("paths", pf.len() - 100)];
     for (name, off) in regions {
         let mut m = pf.clone();
         m[off] ^= 1;
@@ -57,4 +58,29 @@ fn a_flipped_public_word_is_rejected() {
     assert!(!ok, "{js}");
     assert!(js.contains("column challenge mismatch"), "{js}");
     let _ = std::fs::remove_file(&p);
+}
+
+#[test]
+fn interactive_mode_own_coins_are_checked() {
+    // the transcript's openings r1 || s1 || r2 || s2 sit at bytes 108..236 of the proof file (after the header and c1 c2)
+    let pf = std::fs::read("fixtures/b1.proof").unwrap();
+    let dir = std::env::temp_dir().join(format!("ligero-verify-coins-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mine = dir.join("mine.coins");
+    std::fs::write(&mine, &pf[108..236]).unwrap();
+    let (ok, js) = run(&["verify", "--system", "fixtures/system.bin", "--statement", "fixtures/b1.stmt", "--proof", "fixtures/b1.proof", "--coins", mine.to_str().unwrap()]);
+    assert!(ok, "{js}");
+    assert!(js.contains("coins are this verifier's step-0 coins"), "{js}");
+    let mut other = pf[108..236].to_vec();
+    other[0] ^= 1;
+    let theirs = dir.join("theirs.coins");
+    std::fs::write(&theirs, &other).unwrap();
+    let (ok, js) = run(&["verify", "--system", "fixtures/system.bin", "--statement", "fixtures/b1.stmt", "--proof", "fixtures/b1.proof", "--coins", theirs.to_str().unwrap()]);
+    assert!(!ok, "{js}");
+    assert!(js.contains("coins are not this verifier's step-0 coins"), "{js}");
+    // without --coins the accept is explicitly conditional
+    let (ok, js) = run(&["verify", "--system", "fixtures/system.bin", "--statement", "fixtures/b1.stmt", "--proof", "fixtures/b1.proof"]);
+    assert!(ok, "{js}");
+    assert!(js.contains("coins replayed from the transcript"), "{js}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
