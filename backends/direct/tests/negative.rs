@@ -405,5 +405,9 @@ fn experiment_soundness_shapes() {
         let proof = stark::prove_trace(&air_, trace, DEFAULT_FRI);
         let res = stark::verify_proof(&air_, &proof, 1, DEFAULT_FRI);
         println!("EXPERIMENT {label}: failing={:?} verify={:?}", failing, res.err());
+        let g = |n: &str| verity_direct::air::f_to_u64(row[fx.lay.col(n)]) as i128;
+        let sels: Vec<i128> = (0..10).map(|i| g(&format!("g0.max.sel[{i}]"))).collect();
+        println!("  E={} sels={:?} acc.t={} acc.nz={} acc.z={} prod0: a.t={} a.nz={} b.t={} b.nz={} z={}", g("g0.max.E"), sels, g("acc.t"), g("acc.nz"), g("acc.z"), g("a[0].t"), g("a[0].nz"), g("b[0].t"), g("b[0].nz"), g("prod[0].z"));
     }
+    println!("EXPERIMENT max_constraint_degree={} log_quotient_degree={}", p3_uni_stark::get_max_constraint_degree::<verity_direct::air::F, UnitAir>(&air_, 0, 0), stark::log_quotient_degree(&air_));
 }
