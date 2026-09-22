@@ -184,7 +184,7 @@ where
         });
     }
 
-    // 4. one committed g_j = m_j / (r - T_j) per row, tied linearly to m_j
+    // 4. one committed g_j = m_j / (T_j - r) per row, tied linearly to m_j
     let mut sum_g: Option<B::Wire> = None;
     for (j, row) in rows.iter().enumerate() {
         let mut t = B::FieldElement::ZERO;
@@ -193,7 +193,7 @@ where
             t += *c * pw;
             pw *= s;
         }
-        let denom = r - t;
+        let denom = t - r; // same orientation as d = x_i - r above
         ensure!(
             denom != B::FieldElement::ZERO,
             ErrorKind::OtherError,
@@ -210,7 +210,7 @@ where
         });
     }
 
-    // 5. sum_i 1/(r - x_i) = sum_j m_j / (r - T_j)
+    // 5. sum_i 1/(x_i - r) = sum_j m_j / (T_j - r)
     let zero = backend.constant(B::FieldElement::ZERO)?;
     let lhs = sum_inv.unwrap_or(zero);
     let rhs = sum_g.unwrap_or(zero);
