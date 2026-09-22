@@ -17,6 +17,7 @@ rule is necessary; UNSAT means the rule is redundant for that gadget (reported: 
 
     python -m verity_numerical.redteam.z3_babybear --procs 12 --timeout 120 --json out.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -30,13 +31,19 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 
 from verity_numerical.checker import REAL, Params, Reject
-from verity_numerical.checker.gadgets import Bf16Decode, GroupMax, Product, SignedSum, StateOut
+from verity_numerical.checker.gadgets import (
+    Bf16Decode,
+    GroupMax,
+    Product,
+    SignedSum,
+    StateOut,
+)
 from verity_numerical.checker.search import SPECS, ModZ3Ctx, _lead_zref
 from verity_numerical.checker.tables import align_table, pow_table
 
 from .babybear import ALL_RULES, LIMB, RULES, Embedding, lead_table_bb, norm_table_bb
 
-__all__ = ["BBSpec", "BBZ3Ctx", "GadgetVerdict", "JobResult", "SPECS_BB", "jobs_for", "main", "run_gadget", "run_job"]
+__all__ = ["SPECS_BB", "BBSpec", "BBZ3Ctx", "GadgetVerdict", "JobResult", "jobs_for", "main", "run_gadget", "run_job"]
 
 P = 2**31 - 2**27 + 1
 
@@ -44,6 +51,7 @@ P = 2**31 - 2**27 + 1
 # ---------------------------------------------------------------------------------------------------------------------
 # The context: ModZ3Ctx with rows pinned and canonical booleans
 # ---------------------------------------------------------------------------------------------------------------------
+
 
 class BBZ3Ctx(ModZ3Ctx):
     def __init__(self, pins: dict[str, int] | None = None):
@@ -75,13 +83,14 @@ class BBZ3Ctx(ModZ3Ctx):
 # Specs over the embedding
 # ---------------------------------------------------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class BBSpec:
     name: str
     contract: Callable[[Embedding, Params], object]
-    call: Callable[..., tuple]                                   # (emb, ctx, p, x, h) -> outputs (field elements)
-    zref: Callable[..., tuple]                                   # (z3, p, x[, emb]) -> reference outputs as integers
-    tables: tuple[Callable[[Params], object], ...] = ()          # the tables to split on
+    call: Callable[..., tuple]  # (emb, ctx, p, x, h) -> outputs (field elements)
+    zref: Callable[..., tuple]  # (z3, p, x[, emb]) -> reference outputs as integers
+    tables: tuple[Callable[[Params], object], ...] = ()  # the tables to split on
     zadmissible: Callable[[object, Params, dict], object] | None = None
     note: str = ""
 
@@ -121,8 +130,14 @@ def _lead_norm_contract(emb: Embedding, p: Params):
     from verity_numerical.checker.gadgets import Contract
 
     n = emb.contract("normalise", p)
-    return Contract("lead_norm", {"E": n.inputs["E"], "v": n.inputs["v"]},
-                    {"l": emb.contract("leading_bit", p).hints["l"], **n.hints}, n.checked, n.outputs, ("LEAD", "NORM"))
+    return Contract(
+        "lead_norm",
+        {"E": n.inputs["E"], "v": n.inputs["v"]},
+        {"l": emb.contract("leading_bit", p).hints["l"], **n.hints},
+        n.checked,
+        n.outputs,
+        ("LEAD", "NORM"),
+    )
 
 
 def _lead_norm_call(emb, ctx, p, x, h):
@@ -135,39 +150,89 @@ def _lead_norm_zref(z3, p, x):
     return SPECS["normalise"].zref(z3, p, {**x, "l": l})
 
 
+def _flat(E_ds):
+    return (E_ds[0], *E_ds[1])
+
+
 def _plain(name: str, call):
-    return BBSpec(name, lambda emb, p: emb.contract(name, p), call, SPECS[name].zref, zadmissible=SPECS[name].zadmissible)
+    return BBSpec(
+        name, lambda emb, p: emb.contract(name, p), call, SPECS[name].zref, zadmissible=SPECS[name].zadmissible
+    )
 
 
 SPECS_BB: dict[str, BBSpec] = {
     "bf16_decode": _plain("bf16_decode", lambda emb, ctx, p, x, h: Bf16Decode.check(ctx, p, x["w"], h)),
     "fp32_decode": BBSpec("fp32_decode", lambda emb, p: emb.contract("fp32_decode", p), _fp32_call, _fp32_zref),
-    "product": _plain("product", lambda emb, ctx, p, x, h: Product.check(
-        ctx, p, (x["s_a"], x["m_a"], x["e_a"]), (x["s_b"], x["m_b"], x["e_b"]), h)),
-    "group_max": _plain("group_max", lambda emb, ctx, p, x, h: (lambda E_ds: (E_ds[0], *E_ds[1]))(GroupMax.check(
-        ctx, p, [x[f"cand[{i}]"] for i in range(p.n + 1)], {"E": h["E"], "sel": [h[f"sel[{i}]"] for i in range(p.n + 2)]}))),
-    "align_state": BBSpec("align_state", lambda emb, p: emb.contract("align_state", p),
-                          lambda emb, ctx, p, x, h: (emb.align_state(ctx, p, x["M"], x["d"], h),),
-                          SPECS["align_state"].zref, (pow_table,)),
-    "align_product": BBSpec("align_product", lambda emb, p: emb.contract("align_product", p),
-                            lambda emb, ctx, p, x, h: (emb.align_product(ctx, p, x["u"], x["d"], h),),
-                            SPECS["align_product"].zref, (align_table,)),
-    "signed_sum": _plain("signed_sum", lambda emb, ctx, p, x, h: SignedSum.check(
-        ctx, p, [(x[f"s[{i}]"], x[f"q[{i}]"]) for i in range(p.n + 1)], h)),
-    "leading_bit": BBSpec("leading_bit", lambda emb, p: emb.contract("leading_bit", p),
-                          lambda emb, ctx, p, x, h: (emb.leading_bit(ctx, p, x["v"], h),),
-                          SPECS["leading_bit"].zref, (lead_table_bb,)),
-    "normalise": BBSpec("normalise", lambda emb, p: emb.contract("normalise", p),
-                        lambda emb, ctx, p, x, h: emb.normalise(ctx, p, x["E"], x["l"], x["v"], h),
-                        SPECS["normalise"].zref, (norm_table_bb,), zadmissible=SPECS["normalise"].zadmissible,
-                        note="l = bitlength(v) assumed (leading_bit's guarantee)"),
-    "lead_norm": BBSpec("lead_norm", _lead_norm_contract, _lead_norm_call, _lead_norm_zref, (lead_table_bb, norm_table_bb),
-                        note="leading_bit and normalise composed; l a hint"),
+    "product": _plain(
+        "product",
+        lambda emb, ctx, p, x, h: Product.check(
+            ctx, p, (x["s_a"], x["m_a"], x["e_a"]), (x["s_b"], x["m_b"], x["e_b"]), h
+        ),
+    ),
+    "group_max": _plain(
+        "group_max",
+        lambda emb, ctx, p, x, h: _flat(
+            GroupMax.check(
+                ctx,
+                p,
+                [x[f"cand[{i}]"] for i in range(p.n + 1)],
+                {"E": h["E"], "sel": [h[f"sel[{i}]"] for i in range(p.n + 2)]},
+            )
+        ),
+    ),
+    "align_state": BBSpec(
+        "align_state",
+        lambda emb, p: emb.contract("align_state", p),
+        lambda emb, ctx, p, x, h: (emb.align_state(ctx, p, x["M"], x["d"], h),),
+        SPECS["align_state"].zref,
+        (pow_table,),
+    ),
+    "align_product": BBSpec(
+        "align_product",
+        lambda emb, p: emb.contract("align_product", p),
+        lambda emb, ctx, p, x, h: (emb.align_product(ctx, p, x["u"], x["d"], h),),
+        SPECS["align_product"].zref,
+        (align_table,),
+    ),
+    "signed_sum": _plain(
+        "signed_sum",
+        lambda emb, ctx, p, x, h: SignedSum.check(ctx, p, [(x[f"s[{i}]"], x[f"q[{i}]"]) for i in range(p.n + 1)], h),
+    ),
+    "leading_bit": BBSpec(
+        "leading_bit",
+        lambda emb, p: emb.contract("leading_bit", p),
+        lambda emb, ctx, p, x, h: (emb.leading_bit(ctx, p, x["v"], h),),
+        SPECS["leading_bit"].zref,
+        (lead_table_bb,),
+    ),
+    "normalise": BBSpec(
+        "normalise",
+        lambda emb, p: emb.contract("normalise", p),
+        lambda emb, ctx, p, x, h: emb.normalise(ctx, p, x["E"], x["l"], x["v"], h),
+        SPECS["normalise"].zref,
+        (norm_table_bb,),
+        zadmissible=SPECS["normalise"].zadmissible,
+        note="l = bitlength(v) assumed (leading_bit's guarantee)",
+    ),
+    "lead_norm": BBSpec(
+        "lead_norm",
+        _lead_norm_contract,
+        _lead_norm_call,
+        _lead_norm_zref,
+        (lead_table_bb, norm_table_bb),
+        note="leading_bit and normalise composed; l a hint",
+    ),
     "state_out": _plain("state_out", lambda emb, ctx, p, x, h: StateOut.check(ctx, p, x["sgn"], x["e1"], x["M"], h)),
-    "pack": BBSpec("pack", lambda emb, p: emb.contract("pack", p), _pack_call, _pack_zref,
-                   zadmissible=SPECS["pack"].zadmissible),
-    "epilogue": BBSpec("epilogue", lambda emb, p: emb.contract("epilogue", p), _epi_call, _epi_zref,
-                       zadmissible=lambda z3, p, x: SPECS["epilogue"].zadmissible(z3, p, {"y32": _word(x, "y32_lo", "y32_hi")})),
+    "pack": BBSpec(
+        "pack", lambda emb, p: emb.contract("pack", p), _pack_call, _pack_zref, zadmissible=SPECS["pack"].zadmissible
+    ),
+    "epilogue": BBSpec(
+        "epilogue",
+        lambda emb, p: emb.contract("epilogue", p),
+        _epi_call,
+        _epi_zref,
+        zadmissible=lambda z3, p, x: SPECS["epilogue"].zadmissible(z3, p, {"y32": _word(x, "y32_lo", "y32_hi")}),
+    ),
 }
 
 #: Which gadgets each rule touches (from ``babybear.rules_report()['drop_one_rule']`` and the composition).
@@ -185,12 +250,13 @@ RULE_GADGETS: dict[str, tuple[str, ...]] = {
 # Jobs
 # ---------------------------------------------------------------------------------------------------------------------
 
+
 @dataclass
 class Job:
     gadget: str
     rules: tuple[str, ...]
-    pins: dict[str, int]              # table name -> row
-    bits: dict[str, int]              # "in.<name>" / "hint.<name>" -> 0/1
+    pins: dict[str, int]  # table name -> row
+    bits: dict[str, int]  # "in.<name>" / "hint.<name>" -> 0/1
     timeout_ms: int
 
 
@@ -206,15 +272,17 @@ class JobResult:
     note: str = ""
 
 
-def jobs_for(spec: BBSpec, emb: Embedding, p: Params, timeout_ms: int, *, split_bits: bool = True,
-             max_jobs: int = 200_000) -> list[Job]:
+def jobs_for(
+    spec: BBSpec, emb: Embedding, p: Params, timeout_ms: int, *, split_bits: bool = True, max_jobs: int = 200_000
+) -> list[Job]:
     contract = spec.contract(emb, p)
     row_ranges = []
     for tf in spec.tables:
         t = tf(p)
         row_ranges.append([(t.name, k) for k in range(t.lo, t.hi)])
-    bit_names = [f"in.{n}" for n, r in contract.inputs.items() if r == (0, 2)] + \
-                [f"hint.{n}" for n, r in contract.hints.items() if r == (0, 2)]
+    bit_names = [f"in.{n}" for n, r in contract.inputs.items() if r == (0, 2)] + [
+        f"hint.{n}" for n, r in contract.hints.items() if r == (0, 2)
+    ]
     n_rows = 1
     for rr in row_ranges:
         n_rows *= len(rr)
@@ -271,8 +339,13 @@ def run_job(job: Job, p: Params = REAL) -> JobResult:
             e = m.eval(v, model_completion=True)
             return e.as_long() if hasattr(e, "as_long") else str(e)
 
-        model = {"inputs": {k: val(v) for k, v in x.items()}, "hints": {k: val(v) for k, v in h.items()},
-                 "outputs": [val(o) for o in outs], "reference": [val(r) for r in refs], "pins": job.pins}
+        model = {
+            "inputs": {k: val(v) for k, v in x.items()},
+            "hints": {k: val(v) for k, v in h.items()},
+            "outputs": [val(o) for o in outs],
+            "reference": [val(r) for r in refs],
+            "pins": job.pins,
+        }
     return JobResult(job.gadget, job.rules, job.pins, job.bits, status, round(seconds, 4), model)
 
 
@@ -285,7 +358,7 @@ class GadgetVerdict:
     gadget: str
     rules: tuple[str, ...]
     dropped: str
-    status: str                       # UNSAT | SAT | UNKNOWN
+    status: str  # UNSAT | SAT | UNKNOWN
     jobs: int
     unsat: int
     sat: int
@@ -297,12 +370,23 @@ class GadgetVerdict:
     note: str = ""
 
     def row(self) -> str:
-        return (f"| {self.gadget} | {self.dropped or 'all rules'} | **{self.status}** | {self.jobs} | {self.unsat}/{self.sat}/{self.unknown} "
-                f"| {self.seconds_total:.1f} | {self.seconds_max:.2f} | {self.note} |")
+        return (
+            f"| {self.gadget} | {self.dropped or 'all rules'} | **{self.status}** | {self.jobs} | {self.unsat}/{self.sat}/{self.unknown} "
+            f"| {self.seconds_total:.1f} | {self.seconds_max:.2f} | {self.note} |"
+        )
 
 
-def run_gadget(name: str, emb: Embedding, *, dropped: str = "", timeout_ms: int = 60_000, procs: int = 1,
-               p: Params = REAL, pool=None, log=print) -> GadgetVerdict:
+def run_gadget(
+    name: str,
+    emb: Embedding,
+    *,
+    dropped: str = "",
+    timeout_ms: int = 60_000,
+    procs: int = 1,
+    p: Params = REAL,
+    pool=None,
+    log=print,
+) -> GadgetVerdict:
     spec = SPECS_BB[name]
     jobs = jobs_for(spec, emb, p, timeout_ms)
     t0 = time.perf_counter()
@@ -323,16 +407,30 @@ def run_gadget(name: str, emb: Embedding, *, dropped: str = "", timeout_ms: int 
         if r.status == "unknown":
             unknown.append({"pins": r.pins, "bits": r.bits})
     status = "SAT" if st["sat"] else ("UNSAT" if not st["unknown"] else "UNKNOWN")
-    v = GadgetVerdict(name, tuple(sorted(emb.rules)), dropped, status, len(jobs), st["unsat"], st["sat"], st["unknown"],
-                      round(sum(r.seconds for r in results), 2), round(max((r.seconds for r in results), default=0), 3),
-                      models, unknown[:20], spec.note + (f"; wall {wall:.1f}s" if wall else ""))
+    v = GadgetVerdict(
+        name,
+        tuple(sorted(emb.rules)),
+        dropped,
+        status,
+        len(jobs),
+        st["unsat"],
+        st["sat"],
+        st["unknown"],
+        round(sum(r.seconds for r in results), 2),
+        round(max((r.seconds for r in results), default=0), 3),
+        models,
+        unknown[:20],
+        spec.note + (f"; wall {wall:.1f}s" if wall else ""),
+    )
     log(v.row(), flush=True)
     return v
 
 
 def render(rows: list[GadgetVerdict]) -> str:
-    out = ["| gadget | rule dropped | verdict | jobs | unsat/sat/unknown | z3 s (sum) | z3 s (max) | note |",
-           "|---|---|---|---|---|---|---|---|"]
+    out = [
+        "| gadget | rule dropped | verdict | jobs | unsat/sat/unknown | z3 s (sum) | z3 s (max) | note |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
     out += [r.row() for r in rows]
     return "\n".join(out)
 
@@ -358,8 +456,16 @@ def main(argv: list[str] | None = None) -> int:
             for rule in RULES:
                 for n in RULE_GADGETS[rule]:
                     if n in names:
-                        rows.append(run_gadget(n, Embedding(ALL_RULES - {rule}), dropped=rule, timeout_ms=T,
-                                               procs=args.procs, pool=pool))
+                        rows.append(
+                            run_gadget(
+                                n,
+                                Embedding(ALL_RULES - {rule}),
+                                dropped=rule,
+                                timeout_ms=T,
+                                procs=args.procs,
+                                pool=pool,
+                            )
+                        )
     finally:
         if pool is not None:
             pool.close()
@@ -381,10 +487,15 @@ def main(argv: list[str] | None = None) -> int:
             "schema": "research/result/v0.1",
             "run_id": os.environ.get("RESEARCH_RUN_ID", "local"),
             "workload_fingerprint": {"params": repr(REAL), "p": P, "timeout_s": args.timeout, "rules": list(RULES)},
-            "validation": {"status": "passed" if not problems else "failed",
-                           "detail": "; ".join(problems) or "no forgery under the full rule set",
-                           "unresolved": unknown, "redundant_rules": redundant},
-            "measurements": [{"name": f"z3.{r.gadget}.{r.dropped or 'all'}", "value": r.seconds_total, "unit": "s"} for r in rows],
+            "validation": {
+                "status": "passed" if not problems else "failed",
+                "detail": "; ".join(problems) or "no forgery under the full rule set",
+                "unresolved": unknown,
+                "redundant_rules": redundant,
+            },
+            "measurements": [
+                {"name": f"z3.{r.gadget}.{r.dropped or 'all'}", "value": r.seconds_total, "unit": "s"} for r in rows
+            ],
             "measurement_files": ["z3_babybear.json"],
             "artifacts": ["z3_babybear.json"],
         }

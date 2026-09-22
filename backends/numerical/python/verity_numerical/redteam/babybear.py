@@ -35,6 +35,7 @@ The rules (:data:`RULES`), each droppable so that z3 can show it is necessary:
 checker"); :func:`check_step_bb` / :func:`check_vu_bb` are the embedded unit and VU; ``python -m
 verity_numerical.redteam.babybear`` writes ``backends/numerical/reports/babybear_rules.md``.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -108,6 +109,7 @@ def unlimb(lo, hi):
 # Tables with the bound columns the direct realisations need
 # ---------------------------------------------------------------------------------------------------------------------
 
+
 @cache
 def lead_table_bb(p: Params) -> Table:
     """LEAD with a third column ``span`` = 2^s_bits / ispan: the bound of ``v - lo`` (1 at l = 0, 2^(l-1) otherwise)."""
@@ -150,6 +152,7 @@ def partner_columns(table: Table, bits: int) -> dict[str, str]:
 # The embedded gadgets
 # ---------------------------------------------------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class Embedding:
     """The BabyBear checker under a rule set.  ``rules`` is the set of active rules; dropping one restates the
@@ -168,7 +171,7 @@ class Embedding:
         """The direct variable-bound check ``x < bnd`` (``bnd`` a table column) as ``rng(bnd - 1 - x, 0, 2^bits)``."""
         ctx.rng(name, bnd - 1 - x, 0, 2**bits)
         note = getattr(ctx, "note_bound", None)
-        if note is not None:                 # the interval analysis learns the product bounds the check imposes
+        if note is not None:  # the interval analysis learns the product bounds the check imposes
             note(x, bnd)
 
     def lt(self, ctx, name: str, x, ipow, bnd, bits: int, *, nonneg: bool = False) -> None:
@@ -237,8 +240,10 @@ class Embedding:
             fin_hi = s * 2 ** (p.acc_word_bits - 1 - LIMB) + fld * 2 ** (p.acc_frac - LIMB) + low_hi
             inf_lo = 0
             inf_hi = inf_sign * 2 ** (p.acc_word_bits - 1 - LIMB) + p.t_finite * 2 ** (p.acc_frac - LIMB)
-            return (any_ovf * inf_lo + (1 - any_ovf) * (1 - z) * fin_lo,
-                    any_ovf * inf_hi + (1 - any_ovf) * (1 - z) * fin_hi)
+            return (
+                any_ovf * inf_lo + (1 - any_ovf) * (1 - z) * fin_lo,
+                any_ovf * inf_hi + (1 - any_ovf) * (1 - z) * fin_hi,
+            )
         fin = s * 2 ** (p.acc_word_bits - 1) + fld * 2**p.acc_frac + low
         inf = inf_sign * 2 ** (p.acc_word_bits - 1) + p.t_finite * 2**p.acc_frac
         return (any_ovf * inf + (1 - any_ovf) * (1 - z) * fin, 0)
@@ -318,8 +323,11 @@ class Embedding:
     # -- contracts of the changed gadgets (the others are the integer checker's) --------------------------------------
     def contract(self, gadget: str, p: Params, m: int | None = None) -> Contract:
         base = {
-            "bf16_decode": Bf16Decode.contract, "product": Product.contract, "state_out": StateOut.contract,
-            "signed_sum": lambda p: SignedSum.contract(p, m), "group_max": lambda p: GroupMax.contract(p, m),
+            "bf16_decode": Bf16Decode.contract,
+            "product": Product.contract,
+            "state_out": StateOut.contract,
+            "signed_sum": lambda p: SignedSum.contract(p, m),
+            "group_max": lambda p: GroupMax.contract(p, m),
         }
         if gadget in base:
             return base[gadget](p)
@@ -373,6 +381,7 @@ DEFAULT = Embedding()
 # The embedded unit and VU (hints in the integer checker's tree shape, with the limb hints added)
 # ---------------------------------------------------------------------------------------------------------------------
 
+
 def _k(p: Params) -> int:
     return sum(p.groups)
 
@@ -407,7 +416,7 @@ def check_step_bb(ctx, p: Params, c, a: Sequence, b: Sequence, h: dict, emb: Emb
     start = 0
     z = 0
     for g, size in enumerate(p.groups):
-        group = prods[start:start + size]
+        group = prods[start : start + size]
         start += size
         hg = h["groups"][g]
         if len(hg["prod_align"]) != size:
@@ -416,8 +425,10 @@ def check_step_bb(ctx, p: Params, c, a: Sequence, b: Sequence, h: dict, emb: Emb
         cands = [state[1]] + [e for _, _, e in group]
         E, ds = GroupMax.check(ctx, p, cands, hg["max"], f"{tag}.max")
         q_acc = emb.align_state(ctx, p, state[2], ds[0], hg["acc_align"], f"{tag}.align_state")
-        q_prods = [emb.align_product(ctx, p, u, d, hq, f"{tag}.align_prod[{i}]")
-                   for i, ((u, _, _), d, hq) in enumerate(zip(group, ds[1:], hg["prod_align"]))]
+        q_prods = [
+            emb.align_product(ctx, p, u, d, hq, f"{tag}.align_prod[{i}]")
+            for i, ((u, _, _), d, hq) in enumerate(zip(group, ds[1:], hg["prod_align"]))
+        ]
         terms = [(state[0], q_acc)] + [(s, q) for (_, s, _), q in zip(group, q_prods)]
         sgn, v = SignedSum.check(ctx, p, terms, hg["sum"], f"{tag}.sum")
         l = emb.leading_bit(ctx, p, v, hg["lead"], f"{tag}.lead")
@@ -436,9 +447,9 @@ def gen_vu_bb(p: Params, a: Sequence[int], b: Sequence[int]) -> dict:
         raise Reject(f"operand count must be a positive multiple of {k}")
     steps, c, ctx = [], 0, IntCtx()
     for start in range(0, len(a), k):
-        hs = gen_step_bb(p, c, a[start:start + k], b[start:start + k])
+        hs = gen_step_bb(p, c, a[start : start + k], b[start : start + k])
         steps.append(hs)
-        c = check_step_expr(ctx, p, c, list(a[start:start + k]), list(b[start:start + k]), hs)
+        c = check_step_expr(ctx, p, c, list(a[start : start + k]), list(b[start : start + k]), hs)
     return {"steps": steps, "epilogue": Epilogue.gen(p, c)}
 
 
@@ -449,13 +460,14 @@ def check_vu_bb(ctx, p: Params, a: Sequence, b: Sequence, h: dict, emb: Embeddin
         raise Reject(f"operand count must be a positive multiple of {k} with one unit witness per chunk")
     c = (0, 0)
     for s, start in enumerate(range(0, len(a), k)):
-        c = check_step_bb(ctx, p, c, a[start:start + k], b[start:start + k], h["steps"][s], emb)
+        c = check_step_bb(ctx, p, c, a[start : start + k], b[start : start + k], h["steps"][s], emb)
     return emb.epilogue(ctx, p, c, h["epilogue"])
 
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Mod-p evaluation on Python ints: the BabyBear-rules checker
 # ---------------------------------------------------------------------------------------------------------------------
+
 
 class BabyBearCtx(IntCtx):
     """Every predicate read over F_p on canonical representatives: ``eq`` a congruence, ``rng`` on ``(x - lo) mod p``,
@@ -488,8 +500,9 @@ class BabyBearCtx(IntCtx):
         self.rng(name, (x * ipow) % self.p, 0, 2**bits)
 
 
-def accepts_step_bb(p: Params, c: int, a: Sequence[int], b: Sequence[int], y: int, h: dict,
-                    emb: Embedding = DEFAULT) -> tuple[bool, str]:
+def accepts_step_bb(
+    p: Params, c: int, a: Sequence[int], b: Sequence[int], y: int, h: dict, emb: Embedding = DEFAULT
+) -> tuple[bool, str]:
     """The embedded unit on ints mod p: ``(accepted, first violated predicate)``; words as integers, limbed here."""
     ctx = BabyBearCtx()
     try:
@@ -507,8 +520,9 @@ def accepts_step_bb(p: Params, c: int, a: Sequence[int], b: Sequence[int], y: in
     return True, ""
 
 
-def accepts_vu_bb(p: Params, a: Sequence[int], b: Sequence[int], y16: int, h: dict,
-                  emb: Embedding = DEFAULT) -> tuple[bool, str]:
+def accepts_vu_bb(
+    p: Params, a: Sequence[int], b: Sequence[int], y16: int, h: dict, emb: Embedding = DEFAULT
+) -> tuple[bool, str]:
     ctx = BabyBearCtx()
     try:
         ctx.eq("y16", check_vu_bb(ctx, p, list(a), list(b), h, emb), y16)
@@ -522,6 +536,7 @@ def accepts_vu_bb(p: Params, a: Sequence[int], b: Sequence[int], y16: int, h: di
 # ---------------------------------------------------------------------------------------------------------------------
 # Interval analysis: which predicates need a rule
 # ---------------------------------------------------------------------------------------------------------------------
+
 
 class IVal:
     """An integer interval ``[lo, hi]``.  Affine combinations of atoms (hints, inputs, table columns) are kept as
@@ -558,8 +573,20 @@ class IVal:
             for k, v in o.affine.items():
                 aff[k] = aff.get(k, 0) + sign * v
             aff = {k: v for k, v in aff.items() if v}
-            return IVal(self.ctx, 0, 0, frozenset() if not aff else (next(iter(aff)) if len(aff) == 1 and aff[next(iter(aff))] == 1 and self.const + sign * o.const == 0 else None),
-                        affine=aff, const=self.const + sign * o.const)
+            return IVal(
+                self.ctx,
+                0,
+                0,
+                frozenset()
+                if not aff
+                else (
+                    next(iter(aff))
+                    if len(aff) == 1 and aff[next(iter(aff))] == 1 and self.const + sign * o.const == 0
+                    else None
+                ),
+                affine=aff,
+                const=self.const + sign * o.const,
+            )
         if sign > 0:
             return IVal(self.ctx, self.lo + o.lo, self.hi + o.hi)
         return IVal(self.ctx, self.lo - o.hi, self.hi - o.lo)
@@ -582,10 +609,17 @@ class IVal:
         o = self._lift(o)
         if o is NotImplemented:
             return o
-        if o.affine is not None and not o.affine:            # a constant
+        if o.affine is not None and not o.affine:  # a constant
             c = o.const
             if self.affine is not None:
-                return IVal(self.ctx, 0, 0, None, affine={k: c * v for k, v in self.affine.items()} if c else {}, const=c * self.const)
+                return IVal(
+                    self.ctx,
+                    0,
+                    0,
+                    None,
+                    affine={k: c * v for k, v in self.affine.items()} if c else {},
+                    const=c * self.const,
+                )
             corners = (self.lo * c, self.hi * c)
             return IVal(self.ctx, min(corners), max(corners))
         if self.affine is not None and not self.affine:
@@ -595,7 +629,7 @@ class IVal:
         key = None
         if self.key and o.key:
             key = self.key | o.key
-            if key in self.ctx.facts and lo >= 0:          # a product two tight checks bound
+            if key in self.ctx.facts and lo >= 0:  # a product two tight checks bound
                 hi = min(hi, self.ctx.facts[key] - 1)
         return IVal(self.ctx, lo, hi, key)
 
@@ -609,10 +643,10 @@ class IVal:
 class PredicateBound:
     gadget: str
     predicate: str
-    kind: str                       # eq | rng | boolean | lt_pow | lt_direct | lookup
-    lo: int                         # integer interval of what the predicate constrains (a - b, x, the product ...)
+    kind: str  # eq | rng | boolean | lt_pow | lt_direct | lookup
+    lo: int  # integer interval of what the predicate constrains (a - b, x, the product ...)
     hi: int
-    window_lo: int                  # the interval must lie in [window_lo, window_hi) for the mod-p reading to be sound
+    window_lo: int  # the interval must lie in [window_lo, window_hi) for the mod-p reading to be sound
     window_hi: int
     sound: bool
     note: str = ""
@@ -691,11 +725,18 @@ class BoundCtx:
             self.new_facts[key] = min(fact, self.new_facts.get(key, fact))
 
     def lt_pow(self, name, x, ipow, bits):
-        saved, self.facts = self.facts, {}        # the check's own product, before what it imposes
+        saved, self.facts = self.facts, {}  # the check's own product, before what it imposes
         prod = x * ipow
         self.facts = saved
-        self._record(name, "lt_pow", prod.lo, prod.hi, 2**bits - self.p, self.p,
-                     "product realisation" + ("" if 2 ** (2 * bits) <= self.p else f"; needs 2^{2 * bits} <= p"))
+        self._record(
+            name,
+            "lt_pow",
+            prod.lo,
+            prod.hi,
+            2**bits - self.p,
+            self.p,
+            "product realisation" + ("" if 2 ** (2 * bits) <= self.p else f"; needs 2^{2 * bits} <= p"),
+        )
         if isinstance(x, IVal) and isinstance(ipow, IVal) and x.key is not None and len(x.key) == 1 and ipow.key:
             key = x.key | ipow.key
             self.new_facts[key] = min(2**bits, self.new_facts.get(key, 2**bits))
@@ -703,7 +744,9 @@ class BoundCtx:
             tname, c = cname.split(".")
             partner = partner_columns(self._tables[tname], bits).get(c)
             if partner is not None:
-                cols = list(zip(*(self._tables[tname].fn(k) for k in range(self._tables[tname].lo, self._tables[tname].hi))))
+                cols = list(
+                    zip(*(self._tables[tname].fn(k) for k in range(self._tables[tname].lo, self._tables[tname].hi)))
+                )
                 col = cols[self._tables[tname].outs.index(partner)]
                 self.note_bound(x, self.atom(f"{tname}.{partner}", min(col), max(col) + 1))
 
@@ -714,8 +757,14 @@ def _run_bound(emb: Embedding, gadget: str, p: Params, facts: dict) -> BoundCtx:
     import itertools
 
     c = emb.contract(gadget, p)
-    bits = [n for n, (lo, hi) in {**{f"in.{k}": v for k, v in c.inputs.items()},
-                                  **{f"hint.{k}": v for k, v in c.hints.items()}}.items() if (lo, hi) == (0, 2)]
+    bits = [
+        n
+        for n, (lo, hi) in {
+            **{f"in.{k}": v for k, v in c.inputs.items()},
+            **{f"hint.{k}": v for k, v in c.hints.items()},
+        }.items()
+        if (lo, hi) == (0, 2)
+    ]
     merged: dict[str, PredicateBound] = {}
     order: list[str] = []
     new_facts: dict = {}
@@ -734,7 +783,19 @@ def _run_bound(emb: Embedding, gadget: str, p: Params, facts: dict) -> BoundCtx:
     out = BoundCtx(gadget, facts=facts)
     out.new_facts, out._tables = new_facts, tables
     for name in bits:
-        out.preds.append(PredicateBound(gadget, name.split(".", 1)[1], "boolean", 0, 1, 0, P, True, "hint" if name.startswith("hint") else "input"))
+        out.preds.append(
+            PredicateBound(
+                gadget,
+                name.split(".", 1)[1],
+                "boolean",
+                0,
+                1,
+                0,
+                P,
+                True,
+                "hint" if name.startswith("hint") else "input",
+            )
+        )
     out.preds += [merged[n] for n in order]
     return out
 
@@ -752,8 +813,12 @@ def _run_bound_once(emb: Embedding, gadget: str, p: Params, facts: dict, bits: d
     elif gadget == "product":
         Product.check(ctx, p, (x["s_a"], x["m_a"], x["e_a"]), (x["s_b"], x["m_b"], x["e_b"]), h)
     elif gadget == "group_max":
-        GroupMax.check(ctx, p, [x[f"cand[{i}]"] for i in range(n + 1)],
-                       {"E": h["E"], "sel": [h[f"sel[{i}]"] for i in range(n + 2)]})
+        GroupMax.check(
+            ctx,
+            p,
+            [x[f"cand[{i}]"] for i in range(n + 1)],
+            {"E": h["E"], "sel": [h[f"sel[{i}]"] for i in range(n + 2)]},
+        )
     elif gadget == "align_state":
         emb.align_state(ctx, p, x["M"], x["d"], h)
     elif gadget == "align_product":
@@ -771,7 +836,9 @@ def _run_bound_once(emb: Embedding, gadget: str, p: Params, facts: dict, bits: d
         y = emb.pack(ctx, p, (x["s"], x["e1"], x["M"], x["z"]), [(x[f"ovf[{g}]"], x[f"sgn[{g}]"]) for g in range(G)], h)
         for i, part in enumerate(y):
             if isinstance(part, IVal):
-                ctx.eq(f"pack.y[{i}]", part, ctx.atom(f"y[{i}]", 0, 2**LIMB if emb.has("LIMB16") else 2**p.acc_word_bits))
+                ctx.eq(
+                    f"pack.y[{i}]", part, ctx.atom(f"y[{i}]", 0, 2**LIMB if emb.has("LIMB16") else 2**p.acc_word_bits)
+                )
     elif gadget == "epilogue":
         emb.epilogue(ctx, p, (x["y32_lo"], x["y32_hi"]), h)
     else:
@@ -779,8 +846,20 @@ def _run_bound_once(emb: Embedding, gadget: str, p: Params, facts: dict, bits: d
     return ctx
 
 
-GADGETS: tuple[str, ...] = ("bf16_decode", "fp32_decode", "product", "group_max", "align_state", "align_product",
-                            "signed_sum", "leading_bit", "normalise", "state_out", "pack", "epilogue")
+GADGETS: tuple[str, ...] = (
+    "bf16_decode",
+    "fp32_decode",
+    "product",
+    "group_max",
+    "align_state",
+    "align_product",
+    "signed_sum",
+    "leading_bit",
+    "normalise",
+    "state_out",
+    "pack",
+    "epilogue",
+)
 
 
 def analyse(emb: Embedding = DEFAULT, p: Params = REAL) -> list[PredicateBound]:
@@ -839,42 +918,92 @@ def rules_report(p: Params = REAL) -> dict:
     fb = _by_key(full)
     rows, safe = [], []
     rule_of = {
-        ("fp32_decode", "acc.word"): ("LIMB16", "+2 hint columns (f_lo 16 b, f_hi 7 b), +2 16/7-bit ranges, -1 23-bit range, +1 identity; c as 2 public limbs"),
+        ("fp32_decode", "acc.word"): (
+            "LIMB16",
+            "+2 hint columns (f_lo 16 b, f_hi 7 b), +2 16/7-bit ranges, -1 23-bit range, +1 identity; c as 2 public limbs",
+        ),
         ("pack", "pack.y[0]"): ("LIMB16", "+2 hint columns (low_lo, low_hi), +1 identity; y as 2 public limbs"),
         ("epilogue", "cast.split"): ("LIMB16", "-2 hint columns (hi, lo are the public limbs), -1 identity, -2 ranges"),
-        ("align_state", "align_state.rem"): ("LT_DIRECT", "no multiplication; one 25-bit range (2 chunk lookups) on a linear wire, as before"),
-        ("align_state", "align_state.quot"): ("LT_DIRECT+QUOT_TIGHT", "no multiplication; one 25-bit range on a linear wire"),
+        ("align_state", "align_state.rem"): (
+            "LT_DIRECT",
+            "no multiplication; one 25-bit range (2 chunk lookups) on a linear wire, as before",
+        ),
+        ("align_state", "align_state.quot"): (
+            "LT_DIRECT+QUOT_TIGHT",
+            "no multiplication; one 25-bit range on a linear wire",
+        ),
         ("align_state", "align_state.div"): ("QUOT_TIGHT", "none: the two direct bounds pin q * pow + r < 2^25"),
         ("align_product", "align_prod.rem"): ("LT_DIRECT", "no multiplication; one 16-bit range on a linear wire"),
-        ("align_product", "align_prod.quot"): ("LT_DIRECT+QUOT_TIGHT", "no multiplication; one 16-bit range on a linear wire"),
+        ("align_product", "align_prod.quot"): (
+            "LT_DIRECT+QUOT_TIGHT",
+            "no multiplication; one 16-bit range on a linear wire",
+        ),
         ("align_product", "align_prod.div"): ("QUOT_TIGHT", "none: the two direct bounds pin q * sr + r < 2^16"),
-        ("leading_bit", "lead.window"): ("LT_DIRECT+V_PREMISE", "LEAD gains column span; no multiplication; two 30-bit ranges (4 chunk lookups) on the linear wire v - lo (>= 0 and < span)"),
-        ("normalise", "norm.div"): ("NORM_MBND+NORM_VBND(redundant)+V_PREMISE", "NORM gains columns mbnd (and vbnd); +1 30-bit range (2 chunk lookups) per group [+1 if vbnd kept]; 0 hints, 0 multiplications"),
+        ("leading_bit", "lead.window"): (
+            "LT_DIRECT+V_PREMISE",
+            "LEAD gains column span; no multiplication; two 30-bit ranges (4 chunk lookups) on the linear wire v - lo (>= 0 and < span)",
+        ),
+        ("normalise", "norm.div"): (
+            "NORM_MBND+NORM_VBND(redundant)+V_PREMISE",
+            "NORM gains columns mbnd (and vbnd); +1 30-bit range (2 chunk lookups) per group [+1 if vbnd kept]; 0 hints, 0 multiplications",
+        ),
     }
     for b in naive:
         key = (b.gadget, b.predicate)
         if b.sound:
-            safe.append({"gadget": b.gadget, "predicate": b.predicate, "kind": b.kind, "interval": f"[{b.lo}, {b.hi}]",
-                         "bits": b.bound_bits})
+            safe.append(
+                {
+                    "gadget": b.gadget,
+                    "predicate": b.predicate,
+                    "kind": b.kind,
+                    "interval": f"[{b.lo}, {b.hi}]",
+                    "bits": b.bound_bits,
+                }
+            )
             continue
         rule, added = rule_of.get(key, ("?", "?"))
         emb_pred = fb.get(key)
         # the limbed identities have new names
         if emb_pred is None and key == ("fp32_decode", "acc.word"):
-            emb_pred = max((fb[k] for k in fb if k[0] == "fp32_decode" and k[1].startswith("acc.word")), key=lambda x: x.hi)
+            emb_pred = max(
+                (fb[k] for k in fb if k[0] == "fp32_decode" and k[1].startswith("acc.word")), key=lambda x: x.hi
+            )
         if emb_pred is None and key == ("pack", "pack.y[0]"):
             emb_pred = max((fb[k] for k in fb if k[0] == "pack" and k[1].startswith("pack.y")), key=lambda x: x.hi)
         if emb_pred is None and key == ("epilogue", "cast.split"):
-            emb_pred = PredicateBound("epilogue", "cast.split", "eq", 0, 0, 0, 1, True, "removed: limbs are the public inputs")
+            emb_pred = PredicateBound(
+                "epilogue", "cast.split", "eq", 0, 0, 0, 1, True, "removed: limbs are the public inputs"
+            )
         if emb_pred is None:
             emb_pred = PredicateBound(b.gadget, b.predicate, b.kind, 0, 0, 0, 1, False, "no embedded counterpart")
-        rows.append(asdict(RuleRow(b.gadget, b.predicate, b.bound_bits, f"[{b.lo}, {b.hi}]", rule,
-                                   emb_pred.bound_bits, emb_pred.sound, added)))
+        rows.append(
+            asdict(
+                RuleRow(
+                    b.gadget,
+                    b.predicate,
+                    b.bound_bits,
+                    f"[{b.lo}, {b.hi}]",
+                    rule,
+                    emb_pred.bound_bits,
+                    emb_pred.sound,
+                    added,
+                )
+            )
+        )
     unsound_full = [asdict(b) for b in full if not b.sound]
     return {
-        "p": P, "p_bits": P.bit_length(), "log2_p": round(__import__("math").log2(P), 3),
-        "params": {"acc_bits": p.acc_bits, "prod_bits": p.prod_bits, "s_bits": p.s_bits, "s_max": p.s_max,
-                   "norm_rem_bits": p.norm_rem_bits, "k_lo": p.k_lo, "k_hi": p.k_hi},
+        "p": P,
+        "p_bits": P.bit_length(),
+        "log2_p": round(__import__("math").log2(P), 3),
+        "params": {
+            "acc_bits": p.acc_bits,
+            "prod_bits": p.prod_bits,
+            "s_bits": p.s_bits,
+            "s_max": p.s_max,
+            "norm_rem_bits": p.norm_rem_bits,
+            "k_lo": p.k_lo,
+            "k_hi": p.k_hi,
+        },
         "rules": {r: RULE_TEXT[r] for r in RULES},
         "needs_rule": rows,
         "safe_as_stated": safe,
@@ -888,20 +1017,34 @@ def rules_report(p: Params = REAL) -> dict:
 def render_md(rep: dict) -> str:
     L = []
     L.append("# BabyBear embedding rules for the WP2 checker (red-team-babybear)\n")
-    L.append(f"p = 2^31 - 2^27 + 1 = {rep['p']} (log2 p = {rep['log2_p']}). Every predicate of every gadget contract was run on")
-    L.append("integer intervals (`verity_numerical.redteam.babybear.analyse`): inputs and hints at their declared ranges, table")
-    L.append("columns at their row extremes; the mod-p reading of a predicate is sound iff the interval of what it constrains lies")
-    L.append("in a window of width p (identity: `a - b` in (-p, p); range check on an expression: in `[hi - p, lo + p)`; the")
-    L.append("product realisation of a variable bound: `x * ipow` in `[2^B - p, p)`). Widths: acc_bits = "
-             f"{rep['params']['acc_bits']}, prod_bits = {rep['params']['prod_bits']}, s_bits = {rep['params']['s_bits']}, "
-             f"|S| <= s_max = {rep['params']['s_max']} (2^{rep['params']['s_max'].bit_length() - 1}.x), norm remainder "
-             f"{rep['params']['norm_rem_bits']} bits, k in [{rep['params']['k_lo']}, {rep['params']['k_hi']}].\n")
+    L.append(
+        f"p = 2^31 - 2^27 + 1 = {rep['p']} (log2 p = {rep['log2_p']}). Every predicate of every gadget contract was run on"
+    )
+    L.append(
+        "integer intervals (`verity_numerical.redteam.babybear.analyse`): inputs and hints at their declared ranges, table"
+    )
+    L.append(
+        "columns at their row extremes; the mod-p reading of a predicate is sound iff the interval of what it constrains lies"
+    )
+    L.append(
+        "in a window of width p (identity: `a - b` in (-p, p); range check on an expression: in `[hi - p, lo + p)`; the"
+    )
+    L.append(
+        "product realisation of a variable bound: `x * ipow` in `[2^B - p, p)`). Widths: acc_bits = "
+        f"{rep['params']['acc_bits']}, prod_bits = {rep['params']['prod_bits']}, s_bits = {rep['params']['s_bits']}, "
+        f"|S| <= s_max = {rep['params']['s_max']} (2^{rep['params']['s_max'].bit_length() - 1}.x), norm remainder "
+        f"{rep['params']['norm_rem_bits']} bits, k in [{rep['params']['k_lo']}, {rep['params']['k_hi']}].\n"
+    )
     L.append("## 1. Predicates whose integer bound exceeds p as stated, and the rule that closes each\n")
-    L.append("| gadget | predicate | as-stated interval | bits | rule | embedded bits | embedded sound | added columns / lookups |")
+    L.append(
+        "| gadget | predicate | as-stated interval | bits | rule | embedded bits | embedded sound | added columns / lookups |"
+    )
     L.append("|---|---|---|---|---|---|---|---|")
     for r in rep["needs_rule"]:
-        L.append(f"| {r['gadget']} | `{r['predicate']}` | {r['as_stated_interval']} | {r['as_stated_bits']} | {r['rule']} | "
-                 f"{r['embedded_bits']} | {'yes' if r['embedded_sound'] else 'NO'} | {r['added']} |")
+        L.append(
+            f"| {r['gadget']} | `{r['predicate']}` | {r['as_stated_interval']} | {r['as_stated_bits']} | {r['rule']} | "
+            f"{r['embedded_bits']} | {'yes' if r['embedded_sound'] else 'NO'} | {r['added']} |"
+        )
     L.append("\n## 2. The rules\n")
     for name, text in rep["rules"].items():
         L.append(f"- **{name}**: {text}")
@@ -914,14 +1057,22 @@ def render_md(rep: dict) -> str:
     if rep["embedded_unsound"]:
         L.append("## 4. Embedded predicates still outside the window (MUST be empty)\n")
         for u in rep["embedded_unsound"]:
-            L.append(f"- {u['gadget']} `{u['predicate']}` [{u['lo']}, {u['hi']}] window [{u['window_lo']}, {u['window_hi']}) {u['note']}")
+            L.append(
+                f"- {u['gadget']} `{u['predicate']}` [{u['lo']}, {u['hi']}] window [{u['window_lo']}, {u['window_hi']}) {u['note']}"
+            )
     else:
-        L.append(f"## 4. Under the full rule set every one of the {rep['embedded_predicates']} predicates lies inside its window.\n")
-    L.append("## 5. Dropping one rule at a time: predicates that leave their window (interval verdict; z3 in `z3_babybear` decides)\n")
+        L.append(
+            f"## 4. Under the full rule set every one of the {rep['embedded_predicates']} predicates lies inside its window.\n"
+        )
+    L.append(
+        "## 5. Dropping one rule at a time: predicates that leave their window (interval verdict; z3 in `z3_babybear` decides)\n"
+    )
     L.append("| rule dropped | predicates outside the window by interval arithmetic |")
     L.append("|---|---|")
     for r, bad in rep["drop_one_rule"].items():
-        L.append(f"| {r} | {', '.join(f'`{b}`' for b in bad) if bad else '(none: the interval argument does not need it)'} |")
+        L.append(
+            f"| {r} | {', '.join(f'`{b}`' for b in bad) if bad else '(none: the interval argument does not need it)'} |"
+        )
     L.append("")
     return "\n".join(L) + "\n"
 
