@@ -46,6 +46,7 @@ LIMBS = ref.LIMBS_PER_BASE
 DL = DEGREE * LIMBS
 POW2 = [pow(2, 8 * m, P) for m in range(2 * LIMBS)]
 MIN_DIM = 32            # torch._int_mm: M > 16, K > 16, K and N multiples of 8; we pad to 32
+MM_MAX_ELEMENTS = 1 << 28   # torch._int_mm operand cap: cuBLASLt faults (illegal address) on a 3.2e9-element INT8 operand and on 1.07e9-element row slices of it (probed at t = 2^26, k = 4)
 K1_LOG2_DEFAULT = 13    # inner-product depth 2^13 = 8192 (<= 32768; balanced limbs allow < 2^17)
 
 
@@ -191,13 +192,20 @@ def mm_int8(a: torch.Tensor, b: torch.Tensor) -> tuple[torch.Tensor, int]:
     if a.is_cuda:
         # cuBLASLt IMMA on the H100 (torch 2.6 / cu124) rejects M not a multiple of 32 (probed: 48, 144, 1000 fail; 32k ok)
         Mp, Kp, Np = max(MIN_DIM, -(-M // 32) * 32), max(MIN_DIM, -(-K // 8) * 8), max(MIN_DIM, -(-N // 8) * 8)
-        if (Mp, Kp, Np) != (M, K, N):
+        ap, bp = a, b
+        if (Mp, Kp) != (M, K):           # only at small shapes: the large operand is never copied
             ap = torch.zeros((Mp, Kp), dtype=torch.int8, device=a.device)
             ap[:M, :K] = a
+        if (Kp, Np) != (K, N):           # the weight operand is small (K x 24 -> K x 32)
             bp = torch.zeros((Kp, Np), dtype=torch.int8, device=b.device)
             bp[:K, :N] = b
-            return torch._int_mm(ap, bp)[:M, :N], Mp * Kp * Np
-        return torch._int_mm(a, b), M * K * N
+        if ap.numel() > MM_MAX_ELEMENTS:
+            # cuBLASLt faults (illegal address) on an INT8 operand above ~2^31 elements: chunk the rows
+            rows = max(32, (MM_MAX_ELEMENTS // Kp) // 32 * 32)
+            out = torch.cat([torch._int_mm(ap[r:r + rows], bp) for r in range(0, Mp, rows)], 0)
+        else:
+            out = torch._int_mm(ap, bp)
+        return out[:M, :N], Mp * Kp * Np
     return torch.mm(a.to(torch.int64), b.to(torch.int64)).to(torch.int32), M * K * N
 
 
