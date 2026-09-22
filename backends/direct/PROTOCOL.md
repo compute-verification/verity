@@ -538,3 +538,149 @@ is unchanged (its `lt_pow` is the product form, which bounds both sides). Gate a
 ### 13.3 Gate after the fix
 
 GATE_PLACEHOLDER
+
+## 14. Range lookups instead of 2-bit limbs: LogUp inside the AIR (b-lookup, 2026-09-22) **[implemented, diagnostic PCS]**
+
+Section 12.2: 1 922 of the BabyBear chain's 2 930 columns are 2-bit range limbs and 610 are one-hot table selectors;
+tensor.md makes committed bytes per VU the GPU lever.  This section replaces both realisations by one LogUp
+argument [Haboeck 2022] inside the Plonky3 AIR.  The *relation* is unchanged: every `rng(x, lo, hi)` and every
+`lookup(T, key)` of the row program (`program.rs`) is still enforced; only the realisation (`ctx.rs`, `Realisation::LogUp`)
+differs.  Code: `lookup.rs` (tables, queries, helper packing, prover-side auxiliary columns, the constraints),
+`lookup_stark.rs` (the three-round uni-stark), `air.rs::LookupChainAir`, `chain-layout --lookup`,
+`vu-bench --lookup`, `check-rows --lookup`, `tests/lookup.rs`, `run_lookup.sh`.
+
+### 14.1 The argument
+
+One preprocessed matrix \(P\) (6 base columns, committed once, recomputed by the verifier) holds every table the
+program needs as tagged rows \((key, o_1, .., o_4, tag)\):
+
+| table | rows | contents |
+|---|---|---|
+| \(T_7, T_8, T_9\) | 128, 256, 512 | range tables \([0, 2^w)\), key only |
+| \(T_{14}, T_{15}, T_{16}\) | 16 384, 32 768, 65 536 | range tables; \(T_{16}\) is the low half of every split (below), \(T_{14}/T_{15}\) the high halves of the 30/31-bit ranges |
+| POW, ALIGN | 537, 538 | the saturating shift tables expanded to contiguous keys up to their slack bound (`keys[last] + slack_hi`): saturation needs no selector and no slack range any more |
+| LEAD, NORM | 31, 32 | exact rows |
+| padding | rest | \((0, .., 0; tag\,0)\); no query ever carries tag 0 |
+| total | **116 722** | so the trace has at least \(2^{17}\) rows (the 4 096-VU trace has \(2^{19}\)) |
+
+A **query** is a tuple \((v_0, .., v_4)\) of row expressions and a constant tag; it is combined with the second
+challenge as \(q = v_0 + \beta v_1 + \dots + \beta^4 v_4 + \beta^5\, tag\), a table row likewise as \(t_r\).  Range
+checks become queries as follows (`Ctx::rng`, lookup mode):
+
+* \(n = hi - lo \le 2\): the boolean polynomial, as before.
+* \(w = \lceil \log_2 n \rceil \le 16\): the query \((y, tag_w)\) with \(y = x - lo\); when \(n\) is not a power of two a
+  second query \((n - 1 - y, tag_w)\) -- the intersection of the two is exactly \([0, n)\) because \(n \le 2^w\).  This
+  replaces both the exclusion inverses (\(k \le 2\)) and the second limb decomposition of section 12.
+* \(w > 16\): two hint columns `lo16`, `hi16` with the identity \(y = lo16 + 2^{16} hi16\) and the queries
+  \((lo16, T_{16})\), \((hi16, T_{w-16})\).  Used by the 24/26/30/31-bit ranges (7 + 8 + 10 + 1 per row).
+
+Table lookups (`Ctx::lookup`, lookup mode): the outputs are hint columns `<name>.out[c]` and the tuple
+\((key, out_0, .., out_{c-1}, tag_T)\) is one query.  A saturating table's key must lie in the expanded key range
+(previously `key = last + slack` with `slack in [0, slack_hi)`, now the same set as table rows).
+
+**Queries per row: 391** (337 of degree 1, 54 of degree 2; `chain-layout --lookup --names` lists them).  The
+LogUp identity over the whole trace (rows \(i\), queries \(j\), table rows \(r\)) is
+
+\[\sum_{i,j} \frac{1}{z - q_{ij}} \;=\; \sum_r \frac{m_r}{z - t_r},\]
+
+which holds iff every queried tuple is a table row (Haboeck Lemma 5; needs \(\mathrm{char}(F) > \) total lookups:
+\(2^{27.6}\) at 4 096 VUs against \(p = 2^{30.9}\), so one proof may hold at most \(2^{22}\) rows = 43 690 VUs; larger
+batches are several proofs).  Columns:
+
+* **multiplicity** \(m\) (1 base column, last column of the main trace): the histogram of all query indices,
+  computed after witness generation (`lookup::multiplicities`, a parallel reduction over the flat
+  \(rows \times 391\) `u32` index array the witness generator emits alongside the rows).
+* **helpers** \(h_g\) (extension elements, 4 base columns each): the queries of a row are packed greedily in program
+  order into groups \(g\) of total degree \(\le 4\); \(h_g = \sum_{j \in g} 1/(z - q_j)\) with the constraint
+  \(h_g \prod_{j \in g}(z - q_j) - \sum_{j \in g} \prod_{k \ne j}(z - q_k) = 0\) of degree \(1 + \sum_j \deg q_j \le 5\)
+  (`MAX_DEG`, log-blowup 2 unchanged).  **112 helpers = 448 base columns**; the packing is optimal to within one
+  group (\(337 + 2 \cdot 54 = 445\) degree units over 4).
+* **table side** \(g = m / (z - t)\) (4 base columns): \(g (z - t_{row}) - m = 0\) on every row (\(t_{row}\) from \(P\);
+  padding rows have \(m = 0\), \(g = 0\)).
+* **running sum** \(S\) (4 base columns): \(S_0 = \sum_g h_g - g\) (first row), \(S_{i+1} = S_i + \sum_g h_g' - g'\)
+  (transition), \(S_{last} = 0\) (last row); degrees 2.
+
+Widths (`chain-layout --field babybear --lookup`):
+
+| | chain, BabyBear, limbs (section 12/13) | chain, BabyBear, LogUp |
+|---|---|---|
+| main width | 2 930 | **401** (400 program columns + \(m\)) |
+| auxiliary width (after \(z, \beta\)) | -- | **456** (112 helpers + \(g\) + \(S\), \(\times 4\)) |
+| preprocessed width | -- | 6 |
+| **committed width per row** | **2 930** | **863** (**3.40x fewer**) |
+| constraints per row | 3 247 | 402 (286 program + 116 lookup) |
+| max degree (log quotient degree) | 5 (2) | 5 (2) |
+| committed cells per VU (96 rows) | 281 280 | 82 848 |
+| committed bytes per VU | 1.13 MB | **0.33 MB** |
+| hints / materialised | 1 066 / 14 | 386 / 14 |
+| minimum trace height | 2 rows | \(2^{17}\) rows (the tables) |
+
+The 400 program columns are the census' value slots (words, hints, named materialisations) plus 25 split hints and
+66 table-output hints; nothing structural is left to remove except by changing the program itself.
+
+### 14.2 Soundness: the challenge field (accountant, `security.accounting.logup_identity_error`)
+
+The LogUp identity is a rational-function identity in \(z\) of degree \(N + |T| - 1\) with \(N = 2^{19} \cdot 391 =
+2^{27.6}\) lookups, and the \(\beta\)-compression of 6 columns adds \(5 (N + |T| - 1)/|F|\) (Haboeck 3.4).  Over the
+challenge field (`whole_field` sampling; the AIR does not redraw poles):
+
+| challenge field | LogUp term (4 096 VUs) | in Plonky3 0.4.3 |
+|---|---|---|
+| BabyBear\(^4\) (\(2^{124}\)) | \(2^{-93.4}\) | yes (`BinomialExtensionField<BabyBear, 4>`) -- **the implemented configuration** |
+| BabyBear\(^5\) (\(2^{155}\)) | \(2^{-124.3}\) | yes (`<BabyBear, 5>`), not yet wired (the FRI PCS and the challenger are generic in the degree; the aux width becomes 570) |
+| BabyBear\(^6\) (\(2^{186}\)) | \(2^{-155.2}\) | **no** (BabyBear has binomial extensions of degree 4 and 5 only in 0.4.3) |
+
+So with the lookup argument the proof's soundness label is bounded by the challenge field: **\(2^{-93}\) at
+BabyBear\(^4\)** even with 166 FRI queries (the "2^-128 proven" of section 12 referred to the FRI term alone; the
+DEEP/quotient-batching field terms of uni-stark are \(\approx\) constraints \(\cdot\) degree \(/ |F_{ext}|\) and were
+already \(2^{-110}\)-ish at BabyBear\(^4\), which section 12 omitted -- the lookup makes the field term the
+binding one).  \(2^{-128}\) needs BabyBear\(^6\): Candidate B's own PCS (sections 2--4) is not tied to Plonky3 and
+takes any extension; in the diagnostic prover the honest option is BabyBear\(^5\) at \(2^{-124}\) or, for a full
+\(2^{-128}\), a smaller batch per proof (\(2^{17}\) rows: \(2^{-126.3}\) at degree 5).  The measurement below is
+labelled with the lookup term it actually has.
+
+### 14.3 Obtaining the challenges in uni-stark
+
+Plonky3 0.4.3's `p3_uni_stark::prove` commits one matrix and samples only \(\alpha\) (constraint batching) and
+\(\zeta\) (DEEP point); it has no second trace stage and `AirBuilderWithPublicValues` only exposes base-field public
+values.  `lookup_stark.rs` is therefore a fork of `prove`/`verify` (unchanged PCS, challenger, FRI parameters) with
+the round structure
+
+1. commit \(P\) (preprocessed tables; the verifier recomputes \(P\) from the public table set and compares the
+   commitment: 6 columns, an LDE + Merkle tree of \(2^{19} \times 6\) at verification, see the verify time below);
+2. commit the main trace (401 columns, \(m\) included -- \(m\) depends only on the witness, so it can be committed
+   *before* the challenges; committing it after would let the prover pick \(m\) as a function of \(z\), which is unsound);
+3. observe both, sample \(z, \beta \in F_{ext}\);
+4. build and commit the auxiliary matrix (456 columns: helpers, \(g\), \(S\); `lookup::aux_matrix` -- one batch
+   inversion of the 116 722 table denominators, then per row a sum over its 391 query indices, then a sequential
+   prefix sum);
+5. sample \(\alpha\), evaluate the quotient over (main, \(P\), aux) on the coset with a `LookupAirBuilder`
+   (`ProverLookupFolder`: `PackedVal` rows for the three matrices, `PackedChallenge` for \(z, \beta\), extension
+   constraints folded into the same \(\alpha\)-accumulator), commit the quotient chunks;
+6. sample \(\zeta\), open all four commitments at \(\zeta, \zeta \omega\) (quotient at \(\zeta\)) in one `pcs.open`.
+
+Cost in depth: **+2 rounds** (the preprocessed commitment could be cached across proofs; the aux round is
+inherent: \(\log_2 n + 7\) sequential rounds instead of \(\log_2 n + 5\)).  Proof size: two more commitments and
+two more opened-row pairs (\(6 + 456\) extension values) -- but 2 930 - 401 fewer main openings, so the proof is smaller.
+
+### 14.4 Correctness gate
+
+Same relation, so the section 13 battery applies unchanged: `battery_adapter.py --lookup` runs `check-rows
+--lookup`, which evaluates every program constraint and the lookup **helper** constraints on the adversarial rows
+(an out-of-table value leaves its group's helper without a term, which is the verifier's constraint that fails;
+the global table-side and running-sum constraints need the whole trace and are covered by the round-trip
+mutations of `tests/lookup.rs`).  Result: **83/83 rejected, 87/87 honest controls accepted, 6/6 lane extras
+rejected** (`results/battery_babybear_lookup.json`).  `tests/lookup.rs`: layout consistency; the evaluator on an
+honest VU (no failing constraint) and on mutated rows; the pod-sized (\(2^{17}\)-row) round trip -- exhaustive
+evaluation of every constraint on every row of the honest committed trace (`lookup_failing_trace`), honest proof
+verifies, and six mutations reject (claim word, accumulator link, \(c_0 \ne 0\), step skip, a range-checked column
+pushed out of \(T_{16}\), a tampered multiplicity).  The 4 096-VU positive gate (every accumulator and output word
+against bench-instances/v1) is in `vu-bench --lookup`.
+
+### 14.5 Measurement (vy-cpu2, 12 threads, shared with a-babybear and checker-min)
+
+LOOKUP_MEASUREMENT_PLACEHOLDER
+
+### 14.6 Where the time goes (profile)
+
+LOOKUP_PROFILE_PLACEHOLDER
