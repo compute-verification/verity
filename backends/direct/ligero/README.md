@@ -34,6 +34,7 @@ python -m backends.direct.ligero.run gate     --root fixtures/bench-instances/v1
 python -m backends.direct.ligero.run bench    --root fixtures/bench-instances/v1 --device cuda --reps 5 --out results/result_unit_b4096.json
 python -m backends.direct.ligero.run gate-vu  --root fixtures/bench-instances/v1 --device cuda --vus 64   # results/gate_vu.json
 python -m backends.direct.ligero.run bench-vu --root fixtures/bench-instances/v1 --device cuda --reps 5 --out results/result_vu_42.json
+python -m backends.direct.ligero.run bench-vu --root fixtures/bench-instances/v1 --device cuda --reps 5 --batch 8192 --vus 85 --out results/result_vu_85.json
 python -m backends.direct.ligero.encoder_bench                                                          # NTT vs INT8 matmul DFT
 # laptop (CPU, < 30 s): the same commands with --device cpu --batch 256 --vus 1
 ~~~
@@ -52,25 +53,26 @@ python -m backends.direct.ligero.encoder_bench                                  
 
 ## Measurements (synchronised device clock, warm, median of 5; `results/*.json` per `bench.contract`)
 
-Final state (torch hint generator, GPU Blake3 Merkle from `backends/shared/hash_gpu`):
+Final state (torch hint generator, GPU Blake3 Merkle from `backends/shared/hash_gpu`, `torch.compile`d NTT butterfly
+and constraint kernels, CUDA-graph replay of the witness program):
 
-| | unit proof, B = 4096 units | VU proof, 42 VUs (l = 4096) |
-|---|---|---|
-| **prover total** | **0.345 s** (**84 us/unit**, 8.1 ms per 96 units) | **0.367 s** (**8.7 ms/VU**) |
-| hints (torch `gen_step`, cross-checked equal to the checker's) | 0.020 s | 0.020 s |
-| witness (torch program: products, bits, selectors) | 0.142 s | 0.149 s |
-| encode (int64 NTT, 3372/3516 x 4096 -> 16384) | 0.116 s | 0.121 s |
-| int32 view of U (nothing leaves the device) | 0.001 s | 0.001 s |
-| Merkle (Blake3 on the GPU, 221 MB) | 0.001 s | 0.001 s |
-| tests (w, quotient h, chain q) | 0.062 s | 0.071 s |
-| openings (m x t columns to the host, paths) | 0.003 s | 0.003 s |
-| verifier | 0.028 s | 0.033 s |
-| proof bytes | 2.83 MB (2.55 MB opened columns) | 3.14 MB (75 KB/VU) |
-| committed | 3372 x 16384 x 4 B = 221 MB | 230 MB (5.5 MB/VU) |
-| peak device memory | 3.05 GB | 3.18 GB |
-| soundness (accounting) | 2^-128.1 (t = 189, D = 6) | 2^-128.1 |
-| `rounds.sequential_depth` | 2 | 2 |
-| **overhead vs native 9.85 ps/VU** | 8.2e8 (scope unit, x96) | **8.9e8** (scope vu) |
+| | unit proof, B = 4096 units | VU proof, 42 VUs (l = 4096) | VU proof, 85 VUs (l = 8192) |
+|---|---|---|---|
+| **prover total** | **0.101 s** (**24.6 us/unit**, 2.4 ms per 96 units) | **0.110 s** (**2.62 ms/VU**) | **0.200 s** (**2.36 ms/VU**) |
+| hints (torch `gen_step`, cross-checked equal to the checker's) | 0.023 s | 0.020 s | 0.037 s |
+| witness (torch program as one CUDA graph: products, bits, selectors) | 0.008 s | 0.008 s | 0.009 s |
+| encode (int64 NTT, compiled butterfly, 3372/3516 x l -> 4l) | 0.031 s | 0.032 s | 0.069 s |
+| int32 view of U (nothing leaves the device) | 0.001 s | 0.001 s | 0.002 s |
+| Merkle (Blake3 on the GPU, 221 / 230 / 461 MB) | 0.001 s | 0.001 s | 0.002 s |
+| tests (w, quotient h, chain q; compiled combine / sparse-apply) | 0.034 s | 0.044 s | 0.079 s |
+| openings (m x t columns to the host, paths) | 0.003 s | 0.003 s | 0.004 s |
+| verifier | 0.032 s | 0.038 s | 0.054 s |
+| proof bytes | 2.83 MB (2.55 MB opened columns) | 3.14 MB (75 KB/VU) | 3.54 MB (42 KB/VU) |
+| committed | 3372 x 16384 x 4 B = 221 MB | 230 MB (5.5 MB/VU) | 461 MB |
+| peak device memory | 3.17 GB | 3.30 GB | 6.60 GB |
+| soundness (accounting) | 2^-128.1 (t = 189, D = 6) | 2^-128.1 | 2^-128.1 |
+| `rounds.sequential_depth` | 2 | 2 | 2 |
+| **overhead vs native 9.85 ps/VU** | 2.4e8 (scope unit, x96) | **2.7e8** (scope vu) | **2.4e8** (scope vu) |
 
 How it got there (ledger `b-ligero.jsonl`, all on the L40S):
 
@@ -79,16 +81,20 @@ How it got there (ledger `b-ligero.jsonl`, all on the L40S):
 | first complete prover: Python `gen_step` hints (2.6 s) + host Blake3 | 3.56 s | 3.82 s | 91 |
 | torch hint generator (bit-exact with `gen_step`; 2.6 s -> 0.02 s) | 1.06 s | 1.07 s | 25 |
 | GPU Merkle (`hash_gpu`): transfer 0.40 s + hashing 0.30 s -> 2 ms | 0.345 s | 0.367 s | 8.7 |
+| `torch.compile` NTT butterfly (7 passes/stage -> 1; 93 -> 21 ms per NTT) | 0.25 s | 0.27 s | 6.4 |
+| compiled combine / sparse-apply (tests 0.062 -> 0.034 s) | 0.19 s | 0.20 s | 4.8 |
+| CUDA-graph replay of the witness program (~2500 launches; 55 -> 8 ms) | 0.101 s | 0.110 s | 2.6 |
 
-What is left is the witness program (41%: ~2500 small torch kernels for the bit / selector rows -- one fused kernel
-away), the NTT (34%) and the tests (18%).
+What is left is roughly a three-way split between the NTT (31%), the tests (34% -- a sparse matmul of the constraint
+tables against `W`, still int64) and the host hint generator (22%, the only host work: it is `gen_step` in torch on
+the CPU tensors and moves to the device next). The prover is at 2.4 ms/VU with 0.5 ms of that outside the GPU.
 
 ## Negatives and labels
 
 Every number: `NON_ZK_PROOF_DIAGNOSTIC`, authentication excluded, hardware NVIDIA L40S, security `2^-128` by the
 accounting (hash and SHAKE challenge expander are placeholders), scope `unit` numbers omit chain linkage / epilogue
 (the `vu` row has them), ZK masking omitted (its cost: PROTOCOL.md section 8b -- at `2^-128` it doubles the codeword
-length, so encoding and hashing double: +0.12 s on the 0.35 s prover, ~+35%). No predicate of WP2's
+length, so encoding and hashing double: +0.03 s on the 0.10 s prover, ~+30%). No predicate of WP2's
 `check_step_expr` / `check_vu_expr` is dropped; the restatements are listed in PROTOCOL.md section 5 and 7b.
 
 ## Files
