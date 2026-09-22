@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import torch
 
-from .field import DEG, P, Ext, py_exts
+from .field import DEG, ONE, P, ZERO, Ext, e_inv, e_mul, e_sub, ext_mul, py_exts, t_ext
 
 try:
     from packed import reference as _ref
@@ -50,16 +50,43 @@ def _layout(a: torch.Tensor, b: int) -> torch.Tensor:
     return a.to(torch.int32)[rev].t().contiguous().view(-1)
 
 
-def _inputs(kern, gammas: list[Ext], rs: list[Ext], i: int, k: int, kappa: int, wgt: torch.Tensor, t: int):
+class _EqSlices:
+    """``eq(γ[i:i+κ], b1)`` and ``eq(γ[i+κ:], c)`` for every round as strided slices of the one full table
+    ``E[j] = eq(γ, j)`` (``γ[j]`` on bit ``j``): ``E[b1 << i] = eq(γ[:i], 0) · eq(γ[i:i+κ], b1) · eq(γ[i+κ:], 0)``, so the
+    suffix tables are ``E[:: 2^i]`` rescaled by the inverse of the prefix constant ``Π_{j<i} (1 - γ_j)`` (batch-inverted
+    on the host once per layer) -- no per-round doubling loops."""
+
+    def __init__(self, E: torch.Tensor, gammas: list[Ext]) -> None:
+        self.E = E
+        b = len(gammas)
+        pref = [ONE]
+        for gm in gammas:
+            pref.append(e_mul(pref[-1], e_sub(ONE, gm)))               # pref[i] = Π_{j<i} (1 - γ_j)
+        inv_all = e_inv(pref[b])
+        inv = [ZERO] * (b + 1)
+        for i in range(b, 0, -1):                                      # inv[i] = pref[i]^-1 by the batch trick
+            inv[i] = inv_all
+            inv_all = e_mul(inv_all, e_sub(ONE, gammas[i - 1]))
+        inv[0] = ONE
+        self.inv = [t_ext(x, E.device) for x in inv]
+
+    def suffix(self, i: int, n: int) -> torch.Tensor:
+        """``eq(γ[i:i+n], x)`` for ``x < 2^n`` as ``(2^n, 6)`` int64 (canonical)."""
+        sl = self.E[:: 1 << i][: 1 << n]
+        return ext_mul(sl, self.inv[i])
+
+
+def _inputs(kern, gammas: list[Ext], rs: list[Ext], i: int, k: int, kappa: int, wgt: torch.Tensor, t: int,
+            eqs: _EqSlices):
     """``Kernel.inputs`` with ``e_hi = w(g) ⊗ eq(γ[i+κ:], c_rest)``."""
     b = len(gammas)
     dev = kern.device
     m = t >> i
     K1 = 1 << kappa
     K2 = m // K1
-    e_lo = _sp.eq_table_dev(gammas[i:i + kappa], dev)                          # (K1, 6)
-    eq_c = _sp.eq_table_dev(gammas[i + kappa:b], dev)                          # (2^(b-i-κ), 6)
-    e_hi = _sp.ext_mul(wgt[:, None, :], eq_c[None, :, :]).reshape(K2, DEG).contiguous()
+    e_lo = eqs.suffix(i, kappa).to(torch.int32)                                # (K1, 6)
+    eq_c = eqs.suffix(i + kappa, b - i - kappa)                                # (2^(b-i-κ), 6)
+    e_hi = ext_mul(wgt[:, None, :], eq_c[None, :, :]).reshape(K2, DEG).to(torch.int32)
     gm = gammas[i - 1]
     eq_x = _sp.to_dev([_ref.eval_at(_ref.sub(_ref.ONE, gm), gm, x) for x in range(4)], dev)
     prefix = _sp.to_dev(_ref.eq_points(gammas[:i - 1], rs), dev)
@@ -72,11 +99,11 @@ def _inputs(kern, gammas: list[Ext], rs: list[Ext], i: int, k: int, kappa: int, 
     return _sp.RoundInputs(_sp.decompose(e_lo), e_hi, eq_x, prefix, coeff, None)
 
 
-def phase1(kern, a: torch.Tensor, bb: torch.Tensor, wg: torch.Tensor, gammas: list[Ext], tr, out: list[Ext],
-           k: int = 3) -> tuple[list[Ext], torch.Tensor, torch.Tensor]:
+def phase1(kern, a: torch.Tensor, bb: torch.Tensor, wg: torch.Tensor, gammas: list[Ext], e: torch.Tensor, tr,
+           out: list[Ext], k: int = 3) -> tuple[list[Ext], torch.Tensor, torch.Tensor]:
     """The ``b = len(gammas)`` phase-1 rounds on base gate tables ``a, bb`` ``(2^b, g_n)`` int64 with gate weights
-    ``wg (g_n, 6)`` int64; absorbs / draws on ``tr`` exactly as ``gkr.prove_layer``.  Returns ``(c*, a(c*), b(c*))``
-    with the two tables ``(g_n, 6)`` int64."""
+    ``wg (g_n, 6)`` int64 and ``e = field.eq_table(gammas)`` ``(2^b, 6)`` (top-bit-first); absorbs / draws on ``tr``
+    exactly as ``gkr.prove_layer``.  Returns ``(c*, a(c*), b(c*))`` with the two tables ``(g_n, 6)`` int64."""
     copies, g_n = a.shape
     b = len(gammas)
     if copies != 1 << b:
@@ -85,7 +112,8 @@ def phase1(kern, a: torch.Tensor, bb: torch.Tensor, wg: torch.Tensor, gammas: li
     t = g_n * copies
     k = min(k, b)
     g, h = _layout(a, b), _layout(bb, b)
-    wgt = (wg[:g_n].to(torch.int64) % P).to(torch.int32).contiguous()
+    eqs = _EqSlices(e[_bitrev(b, dev)], gammas)
+    wgt = (wg[:g_n].to(torch.int64) % P).contiguous()
     saved = kern.k1_log2
     rs: list[Ext] = []
     gE = hE = None
@@ -93,7 +121,7 @@ def phase1(kern, a: torch.Tensor, bb: torch.Tensor, wg: torch.Tensor, gammas: li
         for i in range(1, b + 1):
             kappa = min(saved, b - i)          # b1 = the next κ copy bits; the gate index lives in b2
             kern.k1_log2 = kappa
-            inp = _inputs(kern, gammas, rs, i, k, kappa, wgt, t)
+            inp = _inputs(kern, gammas, rs, i, k, kappa, wgt, t, eqs)
             if i <= k:
                 S = kern.packed_round(g, h, i, inp)
             else:

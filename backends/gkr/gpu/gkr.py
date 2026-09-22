@@ -146,14 +146,14 @@ def prove_layer(layer: Layer, rows: torch.Tensor, b: int, claim: LayerClaim, tr:
     for lo in range(0, copies, CHUNK_BASE):
         hi = min(copies, lo + CHUNK_BASE)
         a[lo:hi], bb[lo:hi] = layer.eval_gates(rows[lo:hi].to(torch.int64))
+    e = eq_table(claim.copy_point, dev)
     if _use_packed_phase1(a, b):
         # a-packed2's k=3 Montgomery sumcheck over (gate, bit-reversed copy): the same messages as the loop below
         from . import gkr_packed, logup_packed
-        c_star, a_star, b_star = gkr_packed.phase1(logup_packed.get_prover(dev).kernel, a, bb, wg, claim.copy_point, tr, out)
-        del a, bb
+        c_star, a_star, b_star = gkr_packed.phase1(logup_packed.get_prover(dev).kernel, a, bb, wg, claim.copy_point, e, tr, out)
+        del a, bb, e
         e_star = t_ext(eq_point(claim.copy_point, c_star), dev)
         return _phase2(layer, rows, wg, e_star, b_star, c_star, tr, out, last)
-    e = eq_table(claim.copy_point, dev)
     c_star: list[Ext] = []
     length = copies
     base = True
