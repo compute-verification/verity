@@ -63,7 +63,7 @@ fn main() {
             };
             println!("field={kind:?} width={} hints={} materialised={} constraints={} log_quotient_degree={}", lay.width, lay.n_hints, lay.n_mat, lay.constraint_names.len(), lqd);
             census(&lay);
-            if arg(&args, "--names").is_some() {
+            if args.iter().any(|a| a == "--names") {
                 for (i, n) in lay.col_names.iter().enumerate() {
                     println!("col {i:4} {n}");
                 }
@@ -335,14 +335,16 @@ where
     assert_eq!(acc_mismatch, 0, "{acc_mismatch} VUs disagree with the recorded accumulators");
     let claim_col = lay.col(verity_direct::program::COL_CLAIM);
     let last_col = lay.col(verity_direct::program::COL_LAST);
-    let cast_col = lay.col("cast.y16");
+    // the epilogue word is the linear form hi + cast.carry (hi = cast.hi over Goldilocks, the pack.y_hi limb over BabyBear)
+    let cast_hi = if lay.has("cast.hi") { lay.col("cast.hi") } else { lay.col("pack.y_hi") };
+    let cast_carry = lay.col("cast.carry");
     let steps = STEPS as usize;
     for (i, vu) in vus.iter().enumerate() {
         let r = i * steps + steps - 1;
         let row = trace.row_slice(r);
         assert_eq!(row[last_col].as_canonical_u64(), 1);
         assert_eq!(row[claim_col].as_canonical_u64(), vu.y16, "vu {i}: claim column");
-        assert_eq!(row[cast_col].as_canonical_u64(), vu.y16, "vu {i}: epilogue word != recorded word");
+        assert_eq!(row[cast_hi].as_canonical_u64() + row[cast_carry].as_canonical_u64(), vu.y16, "vu {i}: epilogue word != recorded word");
     }
 
     let rows = trace.height();
