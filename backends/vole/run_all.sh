@@ -48,7 +48,9 @@ case "$STAGE" in
     $PY backends/vole/export_ir.py tu "$OUT/units_tu4096" --root $FIX --n 4096
     bench "$OUT/units_tu4096" units-tu4096 --plaintext-too
     $PY backends/vole/export_ir.py vu "$OUT/vu4neg" --root $FIX --B 4 --procs 4 --neg
-    bench "$OUT/vu4neg" vu-B4-NEG --plaintext-too      # accepted must be false
+    bench "$OUT/vu4neg" vu-B4-NEG --plaintext-too || true     # accepted must be false (bench exits 1 on reject)
+    ;;
+  c2fields)
     for F in f61p f128p f384p; do
       $PY backends/vole/export_ir.py vu "$OUT/vu64_$F" --root $FIX --B 64 --procs 15 --field $F
       bench "$OUT/vu64_$F" "vu-B64-$F" --plaintext-too
