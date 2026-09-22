@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import statistics
 import time
@@ -376,5 +377,5 @@ def bench_vu_fp8(args) -> int:
                       "soundness_log2": snd["total_log2"], "per_proof_log2": snd["per_proof_total_log2"], "rows": R.sys.m,
                       "medians": med}, indent=1))
     if args.out:
-        Path(args.out).write_text(json.dumps(result, indent=1, default=str))
+        Path(os.path.expandvars(args.out)).write_text(json.dumps(result, indent=1, default=str))   # $RESEARCH_RUN_DIR/result.json
     return 0
