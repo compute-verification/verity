@@ -18,6 +18,6 @@ assert cast.round 4 1 2013265920 5 2013265920 6 65536 7 1 2013233154
 assert y16 3 2 1 3 2013265920 6 1 0
 query R16 1 1 1 1 0
 query R16 1 1 2 1 0
-query R16 1 1 4 2 0
+query R15 1 1 4 1 0
 query R16 1 1 7 1 0
 query R16 1 2 2 1 6 1 0

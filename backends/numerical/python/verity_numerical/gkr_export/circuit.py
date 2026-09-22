@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+import re
 import struct
 from collections.abc import Sequence
 from pathlib import Path
@@ -26,6 +27,18 @@ __all__ = [
 GOLDILOCKS = 2**64 - 2**32 + 1
 R16 = "R16"
 CHUNK = 16
+
+
+def range_table(w: int) -> str:
+    """The implicit range table ``R<w>`` = [0, 2^w) (``w <= 16``; the prover materialises it from the name)."""
+    assert 1 <= w <= CHUNK
+    return f"R{w}"
+
+
+def range_table_width(name: str) -> int | None:
+    """Width of an implicit range table name, ``None`` for a declared table."""
+    m = re.fullmatch(r"R(\d+)", name)
+    return int(m.group(1)) if m and 1 <= int(m.group(1)) <= CHUNK else None
 
 
 class Lin:
@@ -126,7 +139,9 @@ class CircuitCtx:
     def _range_pow2(self, y: Lin, w: int, name: str) -> None:
         y = self._as_input_lin(y, name)
         if w <= CHUNK:
-            self.queries.append((R16, [y * 2 ** (CHUNK - w)]))
+            # an exact-width table: the shifted single-chunk form (y * 2^(16-w) in R16) is forgeable, since
+            # y = (r + k p) / 2^(16-w) for any r < 2^16 and the k making it integral lands in R16 too
+            self.queries.append((range_table(w), [y]))
             return
         if w > 2 * CHUNK:
             raise Reject(f"{name}: {w}-bit range needs more than two chunks")
@@ -134,7 +149,7 @@ class CircuitCtx:
         hi = self.column(f"{name}.hi16", ("hi16", y))
         self.asserts.append((f"{name}.split", y - lo - 2**CHUNK * hi))
         self.queries.append((R16, [lo]))
-        self.queries.append((R16, [hi * 2 ** (2 * CHUNK - w)]))
+        self.queries.append((range_table(w - CHUNK), [hi]))
 
     def eq(self, name: str, a, b) -> None:
         d = a - b
@@ -285,9 +300,9 @@ def verify_unit(ctx: CircuitCtx, vals: list[int]) -> str | None:
             return f"assert {name}"
     for i, (tname, lins) in enumerate(ctx.queries):
         row = tuple(ctx.eval_lin(x, vals, cache) % GOLDILOCKS for x in lins)
-        if tname == R16:
-            if row[0] >= 2**CHUNK:
-                return f"query {i} R16 {row[0]}"
+        if (w := range_table_width(tname)) is not None:
+            if row[0] >= 2**w:
+                return f"query {i} {tname} {row[0]}"
         else:
             t = ctx.tables[tname]
             key = row[0] if row[0] < 2**40 else row[0] - GOLDILOCKS

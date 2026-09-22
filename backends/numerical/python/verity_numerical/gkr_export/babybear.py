@@ -38,12 +38,12 @@ from verity_numerical.redteam.babybear import (
 
 from .circuit import (
     CHUNK,
-    R16,
     CircuitCtx,
     _get,
     _leaves,
     _set,
     export_circuit,
+    range_table_width,
     write_witness,
 )
 
@@ -210,9 +210,9 @@ def verify_unit_bb(ctx: CircuitCtx, vals: list[int]) -> str | None:
             return f"assert {name}"
     for i, (tname, lins) in enumerate(ctx.queries):
         row = tuple(ctx.eval_lin(x, vals, cache) % P for x in lins)
-        if tname == R16:
-            if row[0] >= 2**CHUNK:
-                return f"query {i} R16 {row[0]}"
+        if (w := range_table_width(tname)) is not None:
+            if row[0] >= 2**w:
+                return f"query {i} {tname} {row[0]}"
         else:
             t = ctx.tables[tname]
             key = (row[0] - t.lo) % P + t.lo

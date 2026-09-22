@@ -11,3 +11,7 @@ description = "Candidate A: data-parallel GKR + logUp fractional-sumcheck lookup
 [profile.release]
 opt-level = 3
 debug = 1
+
+[features]
+# BabyBear p = 2^31 - 2^27 + 1 with the degree-6 extension X^6 - 22 (PROTOCOL.md 13) in place of Goldilocks^3.
+babybear = []

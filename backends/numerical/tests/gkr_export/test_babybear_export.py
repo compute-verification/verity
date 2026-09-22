@@ -30,7 +30,10 @@ def test_census(unit) -> None:
     assert len(ctx.cols) == 444
     assert sum(1 for w in ctx.wires if w[0] == "prod") == 322          # 358 - 36 lt_pow products
     assert len(ctx.asserts) == 322
-    assert Counter(t for t, _ in ctx.queries) == {"R16": 360, "ALIGN": 16, "POW": 2, "LEAD": 2, "NORM": 2}
+    # 360 range chunks (exact-width tables R<w>: the shifted single-chunk form into R16 was forgeable), 22 table rows
+    assert Counter(t for t, _ in ctx.queries) == {
+        "R16": 139, "R14": 10, "R9": 36, "R8": 137, "R7": 38, "ALIGN": 16, "POW": 2, "LEAD": 2, "NORM": 2,
+    }
     assert max(ctx.depth) == 4
     assert ctx.tables["NORM"].outs == ("mul", "div", "idiv", "mbnd")       # vbnd dropped
     assert ctx.tables["LEAD"].outs == ("lo", "ispan", "span")
