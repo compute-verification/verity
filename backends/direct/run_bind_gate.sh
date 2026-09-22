@@ -28,7 +28,7 @@ fi
 
 if [ "$WHAT" = check ] || [ "$WHAT" = all ]; then
     echo "== cargo check --release --all-targets"
-    (cd backends/direct && cargo check --release --all-targets -j"$RAYON_NUM_THREADS" 2>&1 | grep -E "^(warning: unused|error|warning: `|\s+-->|\s+= )|Finished|could not compile" | tee "$RUN_DIR/cargo_check.txt" | tail -40)
+    (cd backends/direct && cargo check --release --all-targets -j"$RAYON_NUM_THREADS" 2>&1 | grep -E "^(warning|error)|^\s+-->|Finished|could not compile" | tee "$RUN_DIR/cargo_check.txt" | tail -40)
     (cd backends/redteam/vu-battery-b && cargo check --release -j"$RAYON_NUM_THREADS" 2>&1 | grep -E "^error|Finished|could not compile|\s+-->" | tee "$RUN_DIR/cargo_check_redteam.txt" | tail -20)
 fi
 
