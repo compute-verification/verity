@@ -1,6 +1,0 @@
-[E1 ct T-2 2026-09-12] Archived bytes of the approved guest 666e937f4691deddc4dab67c8cd1bbd9e84be81b59c1cfb396399e1d937f46d4 (E7's consolidated protocol
-guest, veritor.tc-ampere-bf16@2 + elem-bf16@1 + reduce-mufu@1 + ftz-f32@1; built twice bit-identical on the 4090 pod 2026-09-11 21:57Z, approved
-'reproduced' in vllm-poc/e2e/approved_guests.json @ eod/e7 6f96ebb0).  Copied from E9's laptop archive out/eod/e9/bin/veritor-zk-guest-666e937f.elf
-(gitignored there); sha256 re-checked at copy time.  Purpose: V4.elf_archived resolves the archived ELF by the host's guest hash over
-vllm-poc/results/GUEST-*/ (E9 08:10Z); the wave-5 tree archived only 9fd00e60's build-1, so a 666e937f host FAILED that check by name on
-E1's run s2 (SmolLM2-360M) -- this directory is the archive of the bytes the host embeds.
