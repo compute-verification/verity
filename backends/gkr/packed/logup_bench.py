@@ -13,12 +13,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import random
 import time
 from pathlib import Path
 
 import torch
 
+from . import bench as _bench
 from . import logup_gpu as lg
 from . import logup_reference as lref
 from . import reference as ref
@@ -57,7 +59,10 @@ def main(argv=None) -> int:
     Nw = a.units * a.lookups
     Nt = 1 << a.table_log2
     n = lref.log2ceil(Nw + Nt)
+    hw = _bench.probe_hardware()
     doc = {"units": a.units, "lookups": a.lookups, "Nw": Nw, "Nt": Nt, "n": n, "vus": VUS, "device": torch.cuda.get_device_name(0),
+           "hardware": hw, "software": {"torch": torch.__version__, "python": platform.python_version(), "commit": _bench.git_commit(),
+                                        "cuda": torch.version.cuda},
            "results": []}
     for k in a.ks:
         prover = lg.LogUpProver("cuda", k=k, k1_log2=a.k1_log2)
@@ -79,6 +84,31 @@ def main(argv=None) -> int:
         del prover
         torch.cuda.empty_cache()
     (out / "logup_bench.json").write_text(json.dumps(doc, indent=1) + "\n")
+    best = min(doc["results"], key=lambda r: r["total_ms"])
+    ms = [{"name": "t.total", "value": best["total_ms"] / 1e3, "unit": "s"}, {"name": "t.arithmetic", "value": best["total_ms"] / 1e3, "unit": "s"},
+          {"name": "logup.us_per_vu", "value": best["us_per_vu"], "unit": "us"}, {"name": "logup.best_k", "value": best["k"], "unit": "count"},
+          {"name": "mem.peak_device_bytes", "value": max(r["mem.peak_device_bytes"] for r in doc["results"]), "unit": "B"}]
+    for r in doc["results"]:
+        for key in ("total_ms", "histogram_ms", "tree_ms", "big_packed_ms", "big_fold_k_ms", "big_ext_ms", "tail_levels_ms"):
+            ms.append({"name": f"logup.k{r['k']}.{key[:-3]}", "value": r[key] / 1e3, "unit": "s"})
+    fp = {"profile": _bench.PROFILE, "domain": _bench.DOMAIN, "K": _bench.K_TARGET, "B": _bench.B_TARGET, "N_subbatches": 1,
+          "proof_class": "ARITHMETIC_DIAGNOSTIC", "authentication": "excluded", "zk_mode": "none",
+          "security": {"target": -128, "challenge_field": "BabyBear^6 (24 limbs)", "note": "operating point of the priced design; nothing is proved here"},
+          "hardware": {"gpu": hw["gpu"], "cpu": hw["cpu"]},
+          "software": {"backend": {"name": "backends/gkr/packed/logup_gpu", "commit": doc["software"]["commit"], "version": None},
+                       "toolchain": {"torch": doc["software"]["torch"], "python": doc["software"]["python"], "cuda": doc["software"]["cuda"]}},
+          "preprocessing": "none", "retention": "retained", "instances": None,
+          "stage": "logup.gkr", "kind": "kernel measurement (not a proof): Candidate A logUp fractional GKR, one 65,536-row range table, "
+                                        f"{a.units} units x {a.lookups} random lookups; coins independent of the transcript",
+          "config": {"units": a.units, "lookups": a.lookups, "table_log2": a.table_log2, "ks": a.ks, "k1_log2": a.k1_log2, "repeats": a.repeats}}
+    env = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "workload_fingerprint": fp,
+           "validation": {"status": "passed", "checker": "backends/gkr/packed/tests/test_logup_gpu.py (run separately on this machine: results/logup/agreement_test_h100.log)",
+                          "detail": "GPU transcript == logup_reference.prove_table message for message (k = 0, 3; with and without padding; tiny)",
+                          "evidence": ["logup_bench.json"]},
+           "measurements": ms, "measurement_files": ["logup_bench.json"], "artifacts": ["logup_bench.json"]}
+    tmp = out / "result.json.tmp"
+    tmp.write_text(json.dumps(env, indent=1, default=str))
+    os.replace(tmp, out / "result.json")
     return 0
 
 
