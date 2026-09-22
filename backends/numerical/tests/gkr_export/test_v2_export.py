@@ -6,7 +6,6 @@ import random
 from collections import Counter
 
 import pytest
-
 from verity_numerical.checker import REAL
 from verity_numerical.checker.ctx import IntCtx
 from verity_numerical.checker.gadgets import Epilogue
@@ -24,7 +23,7 @@ def circuits():
 
 
 def _ops(rng, n):
-    bf = lambda: (rng.randrange(2) << 15) | (rng.randrange(100, 150) << 7) | rng.randrange(128)  # noqa: E731
+    bf = lambda: (rng.randrange(2) << 15) | (rng.randrange(100, 150) << 7) | rng.randrange(128)
     return [bf() for _ in range(n)], [bf() for _ in range(n)]
 
 
@@ -75,7 +74,7 @@ def test_saturated_unit_is_a_domain_reject(circuits):
     unit, epi = circuits
     a = [0x7F7F] * (2 * STEP)
     b = [0x7F7F] * (2 * STEP)
-    h, s_out, flags = gen_unit(REAL, zero_state(REAL), a[:STEP], b[:STEP])
+    _h, s_out, flags = gen_unit(REAL, zero_state(REAL), a[:STEP], b[:STEP])
     assert any(o for o, _ in flags)
     with pytest.raises(Exception, match="saturation before the last unit"):
         v2.vu_rows_v2(unit, epi, a, b, 0x7F80)

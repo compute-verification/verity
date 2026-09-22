@@ -465,3 +465,118 @@ def synth_v2(out: Path, vus: int, steps: int, seed: int, p: Params, api) -> dict
     write_rows([[y16_bad], *[[y] for y in y16s[1:]]], inf_dir / "public.bin", m)
     return {"vus": vus, "steps": steps, "unit_columns": len(uctx.cols), "epilogue_columns": len(ectx.cols), "y16": y16s,
             "field": api.name, "variant": "v2"}
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# transition-unit negatives (`python -m verity_numerical.gkr_export.v2 negatives --out DIR`)
+# ---------------------------------------------------------------------------------------------------------------------
+
+def unit_negatives(out: Path, seed: int = 20260922, p: Params = REAL, modulus: int = GOLDILOCKS) -> dict:
+    """``DIR/circuit.txt`` + ``DIR/negatives/<name>.bin`` (one mutated v2 unit row each, for ``verity-gkr negatives``)
+    and ``DIR/vu/`` (the synth VU with its chain-level negatives under ``neg/<id>/`` for ``negatives-vu``).
+
+    Unit cases, from an honest unit whose incoming state is a real (non-zero) previous output: every hint column
+    ``+1``; every outgoing state component ``+1``; one lookup-output column of every table ``+1`` (the row's
+    claimed output differs from the table's); the four non-finite operand words (T_OP has no row); the hints of
+    another unit under these operands (``hint_swap``); a ``+p`` on a hint (a wrap: identical in the field, so it
+    is written only as the circuit evaluator's control that the file format reduces it -- must be *accepted*, and
+    is therefore not in ``negatives/``).  Every case is checked to be rejected by the circuit's own evaluator
+    before it is written."""
+    import random
+
+    from .vu import field_api
+
+    api = field_api("goldilocks", "v2")
+    unit = api.build_unit()
+    uctx, upaths = unit
+    out.mkdir(parents=True, exist_ok=True)
+    api.export_circuit(uctx, out / "circuit.txt")
+    rng = random.Random(seed)
+
+    def bf16() -> int:
+        return (rng.randrange(2) << 15) | (rng.randrange(100, 150) << 7) | rng.randrange(2**7)
+
+    k = sum(p.groups)
+    a0, b0 = [bf16() for _ in range(k)], [bf16() for _ in range(k)]
+    _, s1, _ = gen_unit(p, zero_state(p), a0, b0)
+    a, b = [bf16() for _ in range(k)], [bf16() for _ in range(k)]
+    h, s2, _ = gen_unit(p, s1, a, b)
+    honest = unit_witness_v2(uctx, upaths, s1, a, b, s2, h)
+    assert verify_row(uctx, honest, modulus) is None
+    cases: list[tuple[str, list[int]]] = []
+    base = 9 + 2 * k
+    for i, path in enumerate(upaths):
+        row = list(honest)
+        row[base + i] += 1
+        cases.append((f"hint.{path[2:]}.plus1", row))
+    for i, n in enumerate(("s", "e", "M", "z")):
+        row = list(honest)
+        row[5 + 2 * k + i] += 1
+        cases.append((f"state_out.{n}.plus1", row))
+    seen: set[str] = set()
+    for col, d in enumerate(uctx.derived):
+        if d is None or d[0] != "row" or d[1].name in seen:
+            continue
+        seen.add(d[1].name)
+        row = list(honest)
+        row[col] += 1
+        cases.append((f"lookup_out.{d[1].name}.{uctx.cols[col]}.plus1", row))
+    for word in (0x7F80, 0xFF80, 0x7FC0, 0x7F81):
+        row = list(honest)
+        row[5] = word                         # x.a[0]: no T_OP row; the derived outputs stay the honest ones
+        cases.append((f"operand.non_finite_{word:04x}", row))
+    h_other, _, _ = gen_unit(p, s1, a0, b0)
+    cases.append(("hint_swap.other_unit", unit_witness_v2(uctx, upaths, s1, a, b, s2, h_other)))
+    row = list(honest)
+    row[5 + 2 * k + 2] = s2[2] + (1 << 23)    # y.M with the hidden bit doubled: a wrong outgoing magnitude
+    cases.append(("state_out.M.hidden_bit", row))
+    neg = out / "negatives"
+    neg.mkdir(exist_ok=True)
+    lines = []
+    for name, row in cases:
+        verdict = verify_row(uctx, row, modulus)
+        if verdict is None:
+            raise AssertionError(f"circuit evaluator ACCEPTS negative {name}")
+        write_rows([row], neg / f"{name}.bin", modulus)
+        lines.append(f"{name}\t{verdict}")
+    (out / "negatives.txt").write_text("\n".join(lines) + "\n")
+    write_rows([honest], out / "honest1.bin", modulus)
+    # the chain-level negatives as a `negatives-vu` directory
+    vu_dir = out / "vu"
+    synth_v2(vu_dir, 2, 3, seed, p, api)
+    negdir = vu_dir / "neg"
+    negdir.mkdir(exist_ok=True)
+    import shutil
+
+    for name, files in (("public_wrong_word", ("units.bin", "epilogue.bin", "negatives/public_wrong_word.bin")),
+                        ("broken_chain", ("negatives/units_broken_chain.bin", "epilogue.bin", "public.bin")),
+                        ("saturated_intermediate", tuple(f"negatives/saturated_intermediate/{f}" for f in ("units.bin", "epilogue.bin", "public.bin"))),
+                        ("false_overflow_flag", tuple(f"negatives/false_overflow_flag/{f}" for f in ("units.bin", "epilogue.bin", "public.bin")))):
+        d = negdir / name
+        d.mkdir(exist_ok=True)
+        for src, dst in zip(files, ("units.bin", "epilogue.bin", "public.bin")):
+            shutil.copy(vu_dir / src, d / dst)
+        shutil.copy(vu_dir / "chain.txt", d / "chain.txt")
+    summary = {"unit_negatives": len(cases), "vu_negatives": 4, "columns": len(uctx.cols), "seed": seed}
+    print(__import__("json").dumps(summary))
+    return summary
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser(prog="python -m verity_numerical.gkr_export.v2")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    n = sub.add_parser("negatives")
+    n.add_argument("--out", required=True)
+    n.add_argument("--seed", type=int, default=20260922)
+    args = ap.parse_args(argv)
+    if args.cmd == "negatives":
+        unit_negatives(Path(args.out), args.seed)
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(main())
