@@ -328,6 +328,15 @@ natural-order coefficients of `interp_H(W_j)` emitted for the coefficient-form m
 `field.encode` / `eval_on_coset` at `l = 256 .. 16384`. Per proof of 3516 rows: `l = 16384 -> 65536`: 145 -> 9.6 ms
 (the 64 KiB shared-memory row allows one CTA per SM); `l = 8192 -> 32768`: 68 -> 2.1 ms (225 GB/s of codeword).
 
+**Tests** (`tests_fused.py`): the D-fold combinations `r W`, `alpha p`, the booleanity sum `sum_j rho_j (U_j^2 - U_j)`
+and the general quadratic constraints `sum_q rho_q (A_q B_q - C_q)(U)` are each one pass over the matrix (one thread
+per column, the rows split across blocks, three 62-bit products per 64-bit reduction), reading the int32 codeword
+directly and evaluating `A_q, B_q, C_q` from CSR tables without the `(Q, n)` intermediates. Exact mod p, bit-exact vs
+the torch paths (`tests_fused_test.py`). The protocol is unchanged: the same polynomials, the same messages.
+
+**Measured (README, third pass).** 4096 VUs on the L40S, 25 x 170: non-ZK 1.37 s (0.334 ms/VU), HVZK 1.43 s,
+**ZK 1.41 s (0.345 ms/VU)**; verifier 0.96 s; 122.3 MB; depth 3; union 2^-128.05; ZK cost +3%.
+
 ## 9. Not done / labelled
 
 * Merkle: `backends/shared/hash_gpu` Blake3 on the device (merged from main during the night; bit-exact with the
