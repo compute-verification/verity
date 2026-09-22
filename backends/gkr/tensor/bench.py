@@ -145,6 +145,13 @@ def time_round(kern: k.Kernel, t: int, deg: int, repeats: int, warm: int, seed: 
             out["seconds"]["total_graphed"] = time_round_graphed(kern, f, g, h, r, C, repeats)
         except Exception as e:  # noqa: BLE001
             out["graph_error"] = f"{type(e).__name__}: {e}"
+        try:
+            prof = profile_round(kern, f, g, h, r, C)
+            out["gpu_kernel_seconds"] = prof["seconds"]
+            out["kernel_count"] = prof["kernel_count"]
+            out["top_kernels"] = prof["top_kernels"]
+        except Exception as e:  # noqa: BLE001
+            out["profile_error"] = f"{type(e).__name__}: {e}"
     return out
 
 
@@ -170,6 +177,56 @@ def time_round_graphed(kern: k.Kernel, f, g, h, r, C, repeats: int) -> float:
         torch.cuda.synchronize()
         times.append(a.elapsed_time(b) / 1e3)
     return median(times)
+
+
+def classify_kernel(name: str) -> str:
+    """GPU kernel name -> bucket.  Inductor names its fused kernels after the ops they contain."""
+    n = name.lower()
+    if "splitk" in n:
+        return "matmul.inner"
+    if "gemm" in n or "xmma" in n or "cutlass" in n or "igemm" in n or "imma" in n:
+        return "matmul.fold"
+    if "bitwise" in n or "rshift" in n or "__rshift" in n:
+        return "limb.decompose"
+    if "triton_red" in n or ("sum" in n and "mul" in n):
+        return "reduce"           # recompose (fold output) and the inner-product block reduction
+    if "remainder" in n and "mul" in n:
+        return "hadamard"
+    if "sum" in n or "reduce" in n:
+        return "chunk_sum"
+    if "elementwise" in n or "vectorized" in n or "triton_poi" in n or "copy" in n or "fill" in n or "cat" in n:
+        return "simt.other"
+    return "other"
+
+
+def profile_round(kern: k.Kernel, f, g, h, r, C) -> dict:
+    """GPU kernel time of one (un-graphed) round, summed by bucket from the CUDA profiler: what the device was busy
+    with, launch gaps excluded.  The CUDA-event segments include CPU launch gaps (the GPU idles while Python issues
+    the next op), the graphed total includes GPU-side launch latency; this is the third view."""
+    torch = k.torch
+    from torch.profiler import ProfilerActivity, profile
+    kern.round_step(f, g, h, r, fold_C=C)
+    torch.cuda.synchronize()
+    with profile(activities=[ProfilerActivity.CUDA]) as prof:
+        kern.round_step(f, g, h, r, fold_C=C)
+        torch.cuda.synchronize()
+    by_bucket: dict[str, float] = {}
+    kernels = []
+    for ev in prof.events():
+        if ev.device_type.name != "CUDA":
+            continue
+        dur = ev.time_range.elapsed_us() / 1e6
+        b = classify_kernel(ev.name)
+        by_bucket[b] = by_bucket.get(b, 0.0) + dur
+        kernels.append((ev.name[:80], dur))
+    by_bucket["gpu_busy"] = sum(v for kk, v in by_bucket.items())
+    by_bucket["matmul"] = by_bucket.get("matmul.inner", 0.0) + by_bucket.get("matmul.fold", 0.0)
+    by_bucket["tensor_bucket"] = by_bucket["gpu_busy"] - by_bucket.get("hadamard", 0.0)
+    agg: dict[str, float] = {}
+    for name, dur in kernels:
+        agg[name] = agg.get(name, 0.0) + dur
+    top = sorted(agg.items(), key=lambda kv: -kv[1])[:12]
+    return {"seconds": by_bucket, "kernel_count": len(kernels), "top_kernels": [{"name": n, "seconds": d, "bucket": classify_kernel(n)} for n, d in top]}
 
 
 def time_int_mm(ops: k.Ops, M: int, K: int, N: int, repeats: int, warm: int = 2) -> dict:
@@ -230,12 +287,12 @@ def time_inner_chunk_loop(ops: k.Ops, half: int, chunk: int, repeats: int) -> di
 def aggregate(rounds: dict[tuple[int, int], dict], peak_macs: float, widths=LAYER_WIDTHS) -> dict:
     """Sum the measured rounds over the six layers' round sequences and derive the effective utilisations."""
     layers = []
-    tot = {"seconds": {}, "macs_performed": 0, "macs_padded": 0, "macs_model_padded": 0, "macs_model_census": 0, "rounds": 0}
+    tot = {"seconds": {}, "kernel_seconds": {}, "macs_performed": 0, "macs_padded": 0, "macs_model_padded": 0, "macs_model_census": 0, "rounds": 0}
     for w in widths:
         seq = layer_rounds(w)
         L = {"width": w, "width_padded": pow2_pad(w), "rounds": len(seq), "seconds": {}, "macs_performed": 0, "macs_padded": 0,
              "macs_model_padded": model_macs_layer(w, padded=True), "macs_model_census": model_macs_layer(w, padded=False),
-             "missing": []}
+             "missing": [], "kernel_seconds": {}}
         for key in seq:
             m = rounds.get(key)
             if m is None:
@@ -243,19 +300,32 @@ def aggregate(rounds: dict[tuple[int, int], dict], peak_macs: float, widths=LAYE
                 continue
             for name, v in m["seconds"].items():
                 L["seconds"][name] = L["seconds"].get(name, 0.0) + v
+            for name, v in m.get("gpu_kernel_seconds", {}).items():
+                L["kernel_seconds"][name] = L["kernel_seconds"].get(name, 0.0) + v
             L["macs_performed"] += m["macs_performed"]
             L["macs_padded"] += m["macs_padded"]
         layers.append(L)
         for name, v in L["seconds"].items():
             tot["seconds"][name] = tot["seconds"].get(name, 0.0) + v
+        for name, v in L["kernel_seconds"].items():
+            tot["kernel_seconds"][name] = tot["kernel_seconds"].get(name, 0.0) + v
         for kk in ("macs_performed", "macs_padded", "macs_model_padded", "macs_model_census", "rounds"):
             tot[kk] += L[kk]
     sec = tot["seconds"]
+    ks = tot["kernel_seconds"]
 
     def util(macs, seconds):
         return macs / (peak_macs * seconds) if seconds > 0 else None
 
     tot["utilisation"] = {
+        # GPU kernel time (profiler; launch gaps excluded): the device-side view
+        "kernel.matmul_only": util(tot["macs_performed"], ks.get("matmul", 0)),
+        "kernel.tensor_bucket": util(tot["macs_performed"], ks.get("tensor_bucket", 0)),
+        "kernel.gpu_busy": util(tot["macs_performed"], ks.get("gpu_busy", 0)),
+        "model_equivalent.kernel.matmul_only": util(tot["macs_model_padded"], ks.get("matmul", 0)),
+        "model_equivalent.kernel.tensor_bucket": util(tot["macs_model_padded"], ks.get("tensor_bucket", 0)),
+        "model_equivalent.kernel.gpu_busy": util(tot["macs_model_padded"], ks.get("gpu_busy", 0)),
+        "model_equivalent.round_graphed": util(tot["macs_model_padded"], sec.get("total_graphed", 0)),
         # achieved fraction of the INT8 dense peak, performed MACs over ...
         "matmul_only": util(tot["macs_performed"], sec.get("matmul", 0)),
         "tensor_bucket": util(tot["macs_performed"], sec.get("tensor_bucket", 0)),      # + limb passes, chunk sums, reductions
@@ -300,6 +370,13 @@ def run_campaign(a) -> dict:
               f"hadamard {m['seconds']['hadamard']*1e3:8.3f} ms  graphed {m['seconds'].get('total_graphed', float('nan'))*1e3:8.3f} ms  "
               f"MACs {m['macs_performed']:.3e} (pad x{m['macs_padded']/max(1, m['macs_performed']):.2f})  "
               f"frac(matmul) {pf.get('matmul', float('nan')):.4f}  frac(tensor) {pf.get('tensor_bucket', float('nan')):.4f}", flush=True)
+        ks_ = m.get("gpu_kernel_seconds")
+        if ks_ and peak_macs:
+            m["peak_fraction"]["kernel.matmul"] = m["macs_performed"] / (peak_macs * ks_["matmul"]) if ks_.get("matmul") else None
+            m["peak_fraction"]["kernel.tensor_bucket"] = m["macs_performed"] / (peak_macs * ks_["tensor_bucket"]) if ks_.get("tensor_bucket") else None
+            m["peak_fraction"]["kernel.gpu_busy"] = m["macs_performed"] / (peak_macs * ks_["gpu_busy"]) if ks_.get("gpu_busy") else None
+            print("      gpu kernels: " + "  ".join(f"{kk} {v*1e6:.0f}us" for kk, v in sorted(ks_.items())) + f"  [{m['kernel_count']} kernels]"
+                  f"  frac(kernel.matmul) {m['peak_fraction']['kernel.matmul'] or float('nan'):.4f}", flush=True)
     ceilings = []
     chunk_loops = []
     if ops.cuda:
@@ -359,6 +436,9 @@ def envelope(doc: dict, run_id: str, artifacts: list[str]) -> dict:
         for name in ("matmul", "matmul.inner", "matmul.fold", "hadamard", "limb.decompose", "chunk_sum", "reduce.inner", "reduce.fold",
                      "tensor_bucket", "total_graphed"):
             m(f"tc.seconds.{name}", agg["seconds"].get(name), "s")
+        for name in ("matmul", "matmul.inner", "matmul.fold", "hadamard", "limb.decompose", "reduce", "chunk_sum", "simt.other", "other",
+                     "tensor_bucket", "gpu_busy"):
+            m(f"tc.kernel_seconds.{name}", agg["kernel_seconds"].get(name), "s")
         for name, v in agg["utilisation"].items():
             m(f"tc.peak_fraction.{name}", v, "ratio")
         m("tc.macs_performed", agg["macs_performed"], "count")
