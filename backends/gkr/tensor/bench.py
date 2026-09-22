@@ -274,7 +274,12 @@ def run_campaign(a) -> dict:
     ops = k.default_ops(prefer_cuda=True)
     if not ops.cuda:
         print("WARNING: no CUDA device; timings are the CPU fallback and mean nothing for the tensor-core question", file=sys.stderr)
-    kern = k.Kernel(ops, chunk=a.chunk, reduce_in_matrix=(a.layout == "reduced"))
+    kern = k.Kernel(ops, chunk=a.chunk, reduce_in_matrix=(a.layout == "reduced"), inner_impl=a.inner)
+    if a.compile:
+        # fuse the SIMT passes (Hadamards, limb decomposition, recomposition) into one kernel each instead of ~40 unfused torch ops
+        k.ext_mul = k.torch.compile(k.ext_mul, dynamic=True)
+        k.decompose = k.torch.compile(k.decompose, dynamic=True)
+        k.recompose = k.torch.compile(k.recompose, dynamic=True)
     hw = probe_hardware()
     peaks = GPU_PEAKS.get((hw["gpu"] or {}).get("name"), None)
     peak_macs = peaks["int8_dense_tops"] * 1e12 / 2 if peaks else None
@@ -323,7 +328,8 @@ def run_campaign(a) -> dict:
         "software": {"torch": k.torch.__version__ if k.torch else None, "python": platform.python_version(), "backend": ops.backend, "device": ops.device,
                      "commit": git_head()},
         "config": {"chunk": a.chunk, "layout": a.layout, "repeats": a.repeats, "warm": a.warm, "limbs": "signed balanced 8-bit",
-                   "hadamard": "torch int64 coefficient arithmetic (36 products + 36 reductions per ext x ext, unfused kernels)",
+                   "inner_impl": kern.inner_impl, "splitk_blocks": k.SPLITK_BLOCKS, "compiled_simt_passes": a.compile,
+                   "hadamard": "torch int64 coefficient arithmetic (36 products + 36 reductions per ext x ext)" + (" fused by torch.compile" if a.compile else ", unfused kernels"),
                    "field": f"BabyBear p=2^31-2^27+1, F_p^6 = F_p[X]/(X^6 - {ref.W})", "units": UNITS, "layer_widths": LAYER_WIDTHS,
                    "round_shape": "3 tables (f, g, h), degree 3, 8 triple inner products + 3 folds per round; layer tables units x 2^ceil(log2 width)"},
         "rounds": [{"key": f"n{t}.deg{deg}", **m} for (t, deg), m in rounds.items()],
@@ -485,6 +491,8 @@ def main(argv=None) -> int:
     ap.add_argument("--base-log2", type=int, nargs="*", default=[22, 20], help="first (base-field) rounds at t = 2^e")
     ap.add_argument("--ceiling", type=int, nargs="*", default=[8192, 4096])
     ap.add_argument("--no-test", dest="test", action="store_false")
+    ap.add_argument("--inner", choices=("auto", "int_mm", "triton"), default="auto", help="inner-product matmul: chunked torch._int_mm or the Triton split-K kernel")
+    ap.add_argument("--compile", action="store_true", help="torch.compile the SIMT passes (Hadamards, limb passes)")
     ap.add_argument("--reprice", type=Path, default=None, help="laptop: a fetched bench.json")
     ap.add_argument("--report", type=Path, default=Path("backends/numerical/reports/tc_sumcheck_4090"))
     a = ap.parse_args(argv)

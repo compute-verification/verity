@@ -41,6 +41,12 @@ try:  # the kernel's device path; the CPU reference path works without it
 except ImportError:  # pragma: no cover
     torch = None
 
+try:  # split-K inner product (cuBLAS via torch._int_mm runs a 48 x K x 96 GEMM on one SM: no split-K for INT8)
+    import triton
+    import triton.language as tl
+except ImportError:  # pragma: no cover
+    triton = None
+
 from . import reference as ref
 
 P = ref.P
@@ -138,6 +144,44 @@ class Ops:
             out[...] = z
             z = out
         return z, M * K * N
+
+
+if triton is not None:
+
+    @triton.jit
+    def _splitk_int8_kernel(f_ptr, gh_ptr, out_ptr, rows, rows_per_block, M, N, stride_f, stride_gh,
+                            BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr):
+        """Block ``b`` accumulates ``F[b-th row slab]^T @ GH[b-th row slab]`` (``M x N`` INT32) with INT8 tensor-core
+        dots over ``BK``-row tiles; ``out[b]`` is the block's partial sum (summed in INT64 by the caller).  ``BM, BN``
+        are the power-of-two tiles; columns beyond ``M, N`` are masked to zero."""
+        b = tl.program_id(0)
+        row0 = b * rows_per_block
+        row1 = tl.minimum(row0 + rows_per_block, rows)
+        m = tl.arange(0, BM)
+        n = tl.arange(0, BN)
+        kk = tl.arange(0, BK)
+        acc = tl.zeros((BM, BN), dtype=tl.int32)
+        for r0 in range(row0, row1, BK):
+            rr = r0 + kk
+            rmask = rr < row1
+            f = tl.load(f_ptr + rr[:, None] * stride_f + m[None, :], mask=rmask[:, None] & (m[None, :] < M), other=0)     # (BK, BM)
+            g = tl.load(gh_ptr + rr[:, None] * stride_gh + n[None, :], mask=rmask[:, None] & (n[None, :] < N), other=0)  # (BK, BN)
+            acc += tl.dot(tl.trans(f), g, out_dtype=tl.int32)
+        tl.store(out_ptr + b * M * N + m[:, None] * N + n[None, :], acc, mask=(m[:, None] < M) & (n[None, :] < N))
+
+
+def splitk_inner(F, GH, rows_per_block: int, BK: int = 64) -> tuple[Any, int]:
+    """``F (rows, M) int8``, ``GH (rows, N) int8`` -> ``(nblocks, M, N) int32`` partial products over row slabs of
+    ``rows_per_block`` (<= the INT32 bound), on tensor cores via Triton ``tl.dot``.  Returns the partials and the MACs the
+    device performed (tiles padded to powers of two)."""
+    rows, M = F.shape
+    N = GH.shape[1]
+    BM, BN = max(16, triton.next_power_of_2(M)), max(16, triton.next_power_of_2(N))
+    nblocks = -(-rows // rows_per_block)
+    out = torch.empty((nblocks, M, N), dtype=torch.int32, device=F.device)
+    _splitk_int8_kernel[(nblocks,)](F, GH, out, rows, rows_per_block, M, N, F.stride(0), GH.stride(0), BM=BM, BN=BN, BK=BK, num_warps=4)
+    tiles = sum(-(-min(rows_per_block, rows - b * rows_per_block) // BK) for b in range(nblocks))
+    return out, tiles * BK * BM * BN
 
 
 @dataclass
@@ -286,11 +330,21 @@ class Table:
         return int(self.coeffs.shape[0])
 
 
+SPLITK_BLOCKS = 256   # target number of row slabs (CTAs) for the split-K inner product
+
+
 class Kernel:
-    def __init__(self, ops: Ops, chunk: int = CHUNK, reduce_in_matrix: bool = True):
+    def __init__(self, ops: Ops, chunk: int = CHUNK, reduce_in_matrix: bool = True, inner_impl: str = "auto"):
+        """``inner_impl``: ``"int_mm"`` (chunk loop of ``torch._int_mm`` / CPU matmul), ``"triton"`` (split-K tensor-core
+        kernel, CUDA only), ``"auto"`` (triton when available on CUDA)."""
         self.ops = ops
         self.chunk = chunk
         self.reduce_in_matrix = reduce_in_matrix
+        if inner_impl == "auto":
+            inner_impl = "triton" if (ops.cuda and triton is not None) else "int_mm"
+        if inner_impl == "triton" and not (ops.cuda and triton is not None):
+            raise RuntimeError("the triton split-K path needs CUDA and triton")
+        self.inner_impl = inner_impl
         self.pow2_row = ops.from_numpy(np.array(POW2, dtype=np.int64))                         # (8,)
         pm = np.array([[POW2[j + jp] for jp in range(LIMBS)] for j in range(LIMBS)], dtype=np.int64)
         self.pow2_pair = ops.from_numpy(pm).reshape(1, 1, LIMBS, 1, 1, LIMBS)                  # 2^(8(j+j')) mod p
@@ -322,16 +376,22 @@ class Kernel:
         ops = self.ops
         half = F.shape[0]
         M, N = 2 * deg_f * LIMBS, 4 * deg_gh * LIMBS
-        nchunks = -(-half // self.chunk)
-        FT = ops.contiguous(F.T)
-        if ops.backend == "torch":
-            buf = torch.zeros((nchunks, M, N), dtype=torch.int32, device=ops.device)
+        if self.inner_impl == "triton":
+            # split-K on tensor cores: one block per slab of <= chunk rows, ~SPLITK_BLOCKS slabs
+            rows_per_block = min(self.chunk, max(64, -(-half // SPLITK_BLOCKS)))
+            buf, padded = splitk_inner(F, GH, rows_per_block)
+            stats.add_mm(M, half, N, padded)
         else:
-            buf = np.zeros((nchunks, M, N), dtype=np.int32)
-        for c in range(nchunks):
-            lo, hi = c * self.chunk, min(half, (c + 1) * self.chunk)
-            _, padded = ops.mm_int8(FT[:, lo:hi], GH[lo:hi], out=buf[c])
-            stats.add_mm(M, hi - lo, N, padded)
+            nchunks = -(-half // self.chunk)
+            FT = ops.contiguous(F.T)
+            if ops.backend == "torch":
+                buf = torch.zeros((nchunks, M, N), dtype=torch.int32, device=ops.device)
+            else:
+                buf = np.zeros((nchunks, M, N), dtype=np.int32)
+            for c in range(nchunks):
+                lo, hi = c * self.chunk, min(half, (c + 1) * self.chunk)
+                _, padded = ops.mm_int8(FT[:, lo:hi], GH[lo:hi], out=buf[c])
+                stats.add_mm(M, hi - lo, N, padded)
         if timer:
             timer.mark("matmul.inner")
         Z = ops.sum(buf, 0)                                                  # (M, N) int64

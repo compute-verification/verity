@@ -14,12 +14,15 @@ from tensor import sumcheck_int8 as k
 
 
 def _backends():
-    out = [k.Ops("numpy")]
+    """(ops, inner_impl) pairs: numpy, torch CPU, and on the pod the CUDA path with both inner-product implementations."""
+    out = [(k.Ops("numpy"), "int_mm")]
     if k.torch is not None:
-        out.append(k.Ops("torch", "cpu"))
+        out.append((k.Ops("torch", "cpu"), "int_mm"))
         dev = os.environ.get("TC_DEVICE")
         if dev and k.torch.cuda.is_available():
-            out.append(k.Ops("torch", dev))
+            out.append((k.Ops("torch", dev), "int_mm"))
+            if k.triton is not None:
+                out.append((k.Ops("torch", dev), "triton"))
     return out
 
 
@@ -53,13 +56,14 @@ def test_round_agrees(t, deg, reduce_in_matrix):
     f, g, h = ([draw(rng) for _ in range(t)] for _ in range(3))
     r = ref.random_ext(rng)
     S_ref, f_ref, g_ref, h_ref = ref.naive_round(f, g, h, r)
-    for ops in _backends():
-        kern = k.Kernel(ops, chunk=8, reduce_in_matrix=reduce_in_matrix)   # chunk 8 so t = 64 exercises INT64 chunk sums
+    for ops, inner in _backends():
+        # chunk 8 so t = 64 exercises the INT64 chunk sums (the triton path clamps slabs to >= 64 rows)
+        kern = k.Kernel(ops, chunk=8, reduce_in_matrix=reduce_in_matrix, inner_impl=inner)
         tf, tg, th = (kern.table_from_ints(x, deg) for x in (f, g, h))
         stats = k.Stats()
         S, f2, g2, h2 = kern.round_step(tf, tg, th, r, stats)
         got = [tuple(int(x) for x in row) for row in ops.to_numpy(S)]
-        assert got == S_ref, (ops.backend, ops.device)
+        assert got == S_ref, (ops.backend, ops.device, inner)
         assert kern.table_to_ints(f2) == f_ref
         assert kern.table_to_ints(g2) == g_ref
         assert kern.table_to_ints(h2) == h_ref
@@ -74,14 +78,29 @@ def test_two_consecutive_rounds_base_then_extension():
     r1, r2 = ref.random_ext(rng), ref.random_ext(rng)
     _, f1, g1, h1 = ref.naive_round(f, g, h, r1)
     S_ref, f_ref, _, _ = ref.naive_round(f1, g1, h1, r2)
-    for ops in _backends():
-        kern = k.Kernel(ops)
+    for ops, inner in _backends():
+        kern = k.Kernel(ops, inner_impl=inner)
         tf, tg, th = (kern.table_from_ints(x, 1) for x in (f, g, h))
         _, tf1, tg1, th1 = kern.round_step(tf, tg, th, r1)
         assert tf1.deg == 6
         S, tf2, _, _ = kern.round_step(tf1, tg1, th1, r2)
         assert [tuple(int(x) for x in row) for row in ops.to_numpy(S)] == S_ref
         assert kern.table_to_ints(tf2) == f_ref
+
+
+@pytest.mark.skipif(not (k.torch is not None and os.environ.get("TC_DEVICE") and k.torch.cuda.is_available() and k.triton is not None),
+                    reason="CUDA + triton only")
+def test_splitk_large_agrees_with_int_mm():
+    """The split-K kernel on a real-sized inner product (2^18 rows, several slabs and partial tiles) equals the
+    chunked ``_int_mm`` loop."""
+    ops = k.Ops("torch", os.environ["TC_DEVICE"])
+    rows = 2**18 + 40
+    F = k.torch.randint(-128, 128, (rows, 48), dtype=k.torch.int8, device=ops.device)
+    GH = k.torch.randint(-128, 128, (rows, 96), dtype=k.torch.int8, device=ops.device)
+    part, _ = k.splitk_inner(F, GH, 4096)
+    got = part.sum(0, dtype=k.torch.int64)
+    want = k.torch.mm(F.T.cpu().to(k.torch.int64), GH.cpu().to(k.torch.int64))
+    assert k.torch.equal(got.cpu(), want)
 
 
 def test_scalar_matrix_is_multiplication():
