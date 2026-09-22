@@ -238,13 +238,14 @@ def main(argv=None) -> int:
     if rd:
         ok = all(r["accepted"] for r in runs)
         r0 = runs[-1]
+        rel_out = str(out.resolve().relative_to(Path(rd).resolve())) if str(out.resolve()).startswith(str(Path(rd).resolve())) else out.name
         env = {
             "schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
             "workload_fingerprint": {"tool": "diet-mac-and-cheese", "swanky_commit": args.swanky_commit, "lpn": args.lpn,
                                      "threads": args.threads, "relation": meta, "field": meta.get("field"),
                                      "zk_mode": "designated-verifier", "mac_extension_degree": 1},
             "validation": {"status": "passed" if ok else "failed", "checker": "dietmc verifier (accept/reject) + export_ir evaluator",
-                           "detail": f"{args.label}: verifier {'accepted' if ok else 'REJECTED'}", "evidence": [str(out.relative_to(rd)) if str(out).startswith(rd) else str(out)]},
+                           "detail": f"{args.label}: verifier {'accepted' if ok else 'REJECTED'}", "evidence": [rel_out]},
             "measurements": [
                 {"name": "prover_wall", "value": r0["prover"]["wall_s"], "unit": "s"},
                 {"name": "verifier_wall", "value": r0["verifier"]["wall_s"], "unit": "s"},
@@ -254,7 +255,7 @@ def main(argv=None) -> int:
                 {"name": "bytes_v2p", "value": (r0["bytes"] or {}).get("v2p"), "unit": "B"},
                 {"name": "prover_peak_rss", "value": r0["prover"]["peak_rss_mb"], "unit": "MB"},
             ],
-            "measurement_files": [str(out)], "artifacts": [],
+            "measurement_files": [rel_out], "artifacts": [],
         }
         # research's result.json is written once per run; several bench invocations in one run append labels
         rp = Path(rd) / "result.json"
