@@ -1,5 +1,12 @@
 """leaf/v2 randomizer exhaustion: what a verifier learns from the SECOND proof against the same commitment.
 
+Status 2026-09-22 (lane soundness-fixes): the *systematic leak* this module demonstrated (payload words read in the
+clear from the first session's openings, ``payload_words_in_clear`` > 0) is FIXED -- the codeword now lives on the
+coset ``31 * H_n``, disjoint from the message domain, so ``payload_words_in_clear`` is 0 up to 2^-15 coincidences.
+The *exhaustion* finding below (a payload-equality oracle once the union of opened columns exceeds ``k - l``) is
+unchanged and stays true for a long-lived commitment; its fix is re-randomisation per session (a protocol-owner
+decision, LEAF_V2.md 6).
+
 LEAF_V2.md 6 states the budget: the union of every column set ``Q`` ever opened against one chunk must stay
 ``<= k - l`` (256 at the campaign's code; ``t = 191`` per proof, so one proof per commitment).  This module makes
 the consequence of exceeding it concrete, at the reference implementation's reduced code (``n=1024, k=256, l=192``:
@@ -29,7 +36,13 @@ import math
 import random
 import sys
 
-from verity_numerical.reference.leaf_v2 import BABYBEAR, Code, commit_tensor, intt, ntt
+from verity_numerical.reference.leaf_v2 import (
+    BABYBEAR,
+    Code,
+    commit_tensor,
+    coset_ntt,
+    intt,
+)
 
 __all__ = ["demo", "encoding_matrix", "rank_mod_p", "sessions_table"]
 
@@ -37,14 +50,15 @@ P = BABYBEAR
 
 
 def encoding_matrix(code: Code) -> list[list[int]]:
-    """``M[c][j]``: codeword symbol ``c`` of the unit message ``e_j`` (systematic RS on the two subgroups)."""
+    """``M[c][j]``: codeword symbol ``c`` of the unit message ``e_j`` (RS: message on ``H_k``, codeword on the coset
+    ``shift * H_n``; before the 2026-09-22 fix the codeword lived on ``H_n`` itself and ``M`` had unit rows)."""
     k, n = code.k, code.n
     cols = []
     for j in range(k):
         e = [0] * k
         e[j] = 1
-        # message on the k-subgroup -> coefficients -> evaluations on the n-subgroup
-        cols.append(ntt(intt(e) + [0] * (n - k)))
+        # message on the k-subgroup -> coefficients -> evaluations on the codeword domain
+        cols.append(coset_ntt(intt(e) + [0] * (n - k), code.shift))
     return [[cols[j][c] for j in range(k)] for c in range(n)]
 
 
@@ -98,9 +112,10 @@ def demo(seed: int = 7) -> dict:
         for c in Q:
             opened[c] = row[c]
         u = len(opened)
-        # systematic positions: column stride*j (j < l) IS payload word j -- opened in the clear, randomizers or not
-        clear = {c // code.stride: row[c] for c in opened if c % code.stride == 0 and c // code.stride < code.l}
-        assert all(true_payload[j] == v for j, v in clear.items())
+        # the former systematic positions: column (n/k) j (j < l) WAS payload word j before the coset fix; count how
+        # many opened columns still equal the payload word the old map would have exposed (chance only: ~2^-15 each)
+        stride = code.n // code.k
+        clear = {c // stride: row[c] for c in opened if c % stride == 0 and c // stride < code.l and row[c] == true_payload[c // stride]}
         a_r = [M[c][code.l:] for c in sorted(opened)]
         rk = rank_mod_p(a_r)
         ok_true = consistent(M, code, opened, true_payload)
@@ -108,7 +123,7 @@ def demo(seed: int = 7) -> dict:
         # payload relations that survive: u - rank(randomizer block)
         out["sessions"].append({
             "session": s, "union_columns": u, "randomizer_rank": rk, "payload_relations": max(0, u - rk),
-            "payload_words_in_clear": len(clear), "clear_words_verified_equal_payload": True,
+            "payload_words_in_clear": len(clear), "clear_words_verified_equal_payload": len(clear) > 0,
             "true_payload_consistent": ok_true, "one_bit_off_payload_consistent": ok_other,
             "oracle": (ok_true and not ok_other),
         })
@@ -134,14 +149,16 @@ def sessions_table(n: int = 16384, k: int = 4096, l: int = 3840, t: int = 191, w
     return rows
 
 
-def clear_words_table(n: int = 16384, k: int = 4096, l: int = 3840, t: int = 191, R: int = 64) -> dict:
-    """Systematic leak at the campaign code: opened column ``(n/k) j`` with ``j < l`` is payload word ``j`` verbatim,
-    for every one of the chunk's ``R`` rows (one column set per chunk), whatever the randomizers."""
+def clear_words_table(n: int = 16384, k: int = 4096, l: int = 3840, t: int = 191, R: int = 64, fixed: bool = True) -> dict:
+    """Systematic leak at the campaign code BEFORE the coset fix: opened column ``(n/k) j`` with ``j < l`` was payload
+    word ``j`` verbatim, for every one of the chunk's ``R`` rows, whatever the randomizers.  With ``fixed`` (the
+    current code: codeword on ``31 H_n``, disjoint from ``H_k``) no column is a message symbol and the row is 0."""
     frac = l / n
-    per_row = t * frac
-    return {"t": t, "systematic_fraction_of_columns": frac, "expected_clear_words_per_row_per_proof": round(per_row, 2),
+    per_row = 0.0 if fixed else t * frac
+    return {"t": t, "encoding": "coset 31*H_n (non-systematic)" if fixed else "H_n (systematic)",
+            "systematic_fraction_of_columns": 0.0 if fixed else frac, "expected_clear_words_per_row_per_proof": round(per_row, 2),
             "expected_clear_words_per_chunk_per_proof": round(per_row * R, 1),
-            "prob_no_clear_word_in_a_proof": (1 - frac) ** t, "budget_irrelevant": True}
+            "prob_no_clear_word_in_a_proof": 1.0 if fixed else (1 - frac) ** t, "budget_irrelevant": not fixed}
 
 
 def main(argv=None) -> int:
@@ -151,6 +168,7 @@ def main(argv=None) -> int:
     d = demo()
     d["campaign_projection"] = sessions_table()
     d["campaign_clear_words"] = clear_words_table()
+    d["campaign_clear_words_before_fix"] = clear_words_table(fixed=False)
     for s in d["sessions"]:
         print(f"session {s['session']}: union {s['union_columns']:4} cols, randomizer rank {s['randomizer_rank']:3}, payload relations {s['payload_relations']:3}, "
               f"words in clear {s['payload_words_in_clear']:3}, "

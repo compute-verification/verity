@@ -1,15 +1,15 @@
 {
- "code": "ligero-rs/babybear/n=1024/k=256/l=192/R=4/w=16",
+ "code": "ligero-rs/babybear/n=1024/k=256/l=192/R=4/w=16/coset=31",
  "t": 48,
  "randomizers": 64,
  "sessions": [
   {
    "session": 1,
    "union_columns": 48,
-   "randomizer_rank": 37,
-   "payload_relations": 11,
-   "payload_words_in_clear": 11,
-   "clear_words_verified_equal_payload": true,
+   "randomizer_rank": 48,
+   "payload_relations": 0,
+   "payload_words_in_clear": 0,
+   "clear_words_verified_equal_payload": false,
    "true_payload_consistent": true,
    "one_bit_off_payload_consistent": true,
    "oracle": false
@@ -19,8 +19,8 @@
    "union_columns": 90,
    "randomizer_rank": 64,
    "payload_relations": 26,
-   "payload_words_in_clear": 21,
-   "clear_words_verified_equal_payload": true,
+   "payload_words_in_clear": 0,
+   "clear_words_verified_equal_payload": false,
    "true_payload_consistent": true,
    "one_bit_off_payload_consistent": false,
    "oracle": true
@@ -30,8 +30,8 @@
    "union_columns": 136,
    "randomizer_rank": 64,
    "payload_relations": 72,
-   "payload_words_in_clear": 33,
-   "clear_words_verified_equal_payload": true,
+   "payload_words_in_clear": 0,
+   "clear_words_verified_equal_payload": false,
    "true_payload_consistent": true,
    "one_bit_off_payload_consistent": false,
    "oracle": true
@@ -41,8 +41,8 @@
    "union_columns": 178,
    "randomizer_rank": 64,
    "payload_relations": 114,
-   "payload_words_in_clear": 43,
-   "clear_words_verified_equal_payload": true,
+   "payload_words_in_clear": 0,
+   "clear_words_verified_equal_payload": false,
    "true_payload_consistent": true,
    "one_bit_off_payload_consistent": false,
    "oracle": true
@@ -52,8 +52,8 @@
    "union_columns": 218,
    "randomizer_rank": 64,
    "payload_relations": 154,
-   "payload_words_in_clear": 50,
-   "clear_words_verified_equal_payload": true,
+   "payload_words_in_clear": 0,
+   "clear_words_verified_equal_payload": false,
    "true_payload_consistent": true,
    "one_bit_off_payload_consistent": false,
    "oracle": true
@@ -63,8 +63,8 @@
    "union_columns": 250,
    "randomizer_rank": 64,
    "payload_relations": 186,
-   "payload_words_in_clear": 55,
-   "clear_words_verified_equal_payload": true,
+   "payload_words_in_clear": 0,
+   "clear_words_verified_equal_payload": false,
    "true_payload_consistent": true,
    "one_bit_off_payload_consistent": false,
    "oracle": true
@@ -299,6 +299,16 @@
  ],
  "campaign_clear_words": {
   "t": 191,
+  "encoding": "coset 31*H_n (non-systematic)",
+  "systematic_fraction_of_columns": 0.0,
+  "expected_clear_words_per_row_per_proof": 0.0,
+  "expected_clear_words_per_chunk_per_proof": 0.0,
+  "prob_no_clear_word_in_a_proof": 1.0,
+  "budget_irrelevant": false
+ },
+ "campaign_clear_words_before_fix": {
+  "t": 191,
+  "encoding": "H_n (systematic)",
   "systematic_fraction_of_columns": 0.234375,
   "expected_clear_words_per_row_per_proof": 44.77,
   "expected_clear_words_per_chunk_per_proof": 2865.0,
