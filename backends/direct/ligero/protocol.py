@@ -59,27 +59,37 @@ class Config:
         return self.l / self.n
 
 
-def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2) -> Config:
+def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs: int = 1) -> Config:
     """t from Appendix C with k = l (no ZK padding) and the extension degree from ``security.accounting``:
-    BabyBear^6 for 2^-128, BabyBear^4 for 2^-80 (the sensitivity point)."""
+    BabyBear^6 for 2^-128, BabyBear^4 for 2^-80 (the sensitivity point).  ``n_proofs > 1``: the batch is proved as
+    that many independently committed sub-batches, so each proof gets ``accounting.per_proof_target`` (the union
+    bound over the sub-batches meets ``target_log2``); ``t`` grows by ~log2(n_proofs) / 0.68 columns."""
     n = l << rate_log2
-    t = acc.ligero_queries_for(target_log2, n, l, l)
+    per_proof = acc.per_proof_target(target_log2, n_proofs) if n_proofs > 1 else target_log2
+    t = acc.ligero_queries_for(per_proof, n, l, l)
     # field terms: (n + 1 + L + Q) / p^D must stay well under the target; D = 6 at -128, 4 at -80
     D = 6 if target_log2 <= -100 else 4
     return Config(l, n, D, t, target_log2)
 
 
-def soundness(cfg: Config, n_linear: int, n_quadratic: int) -> dict:
-    """The error terms actually achieved (Appendix C, e = (n - k) / 2, k = l, uniform combinations)."""
+def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1) -> dict:
+    """The error terms actually achieved (Appendix C, e = (n - k) / 2, k = l, uniform combinations); with
+    ``n_proofs`` sub-batches the reported total is ``accounting.union_over_proofs`` (never the per-proof error)."""
     F = acc.Field.prime("BabyBear", P).extension(cfg.D)
     p = acc.LigeroParams(n=cfg.n, k=cfg.l + 1, l=cfg.l, t=cfg.t, zk=False)   # k = l + 1: validate needs l < k
     terms = acc.ligero_error(p, acc.Field.prime("BabyBear", P), F, combination="uniform")
-    total = sum(terms.values())
-    return {"terms_log2": {k: acc.log2(v) for k, v in terms.items()}, "total_log2": acc.log2(total),
+    bud = acc.Budget("B-Ligero direct (backends/direct/ligero)", {"n": cfg.n, "l": cfg.l, "t": cfg.t, "D": cfg.D})
+    for k, v in terms.items():
+        bud.add("encoding_opening", f"Ligero {k}", v)
+    per_proof_total = bud.total()
+    union = acc.union_over_proofs(bud, n_proofs) if n_proofs > 1 else bud
+    return {"terms_log2": {k: acc.log2(v) for k, v in terms.items()}, "per_proof_total_log2": acc.log2(per_proof_total),
+            "n_proofs": n_proofs, "total_log2": acc.log2(union.total()),
+            "per_proof_target_log2": acc.per_proof_target(cfg.target_log2, n_proofs) if n_proofs > 1 else cfg.target_log2,
             "field": F.name, "t": cfg.t, "n": cfg.n, "l": cfg.l, "rate": cfg.rate,
             "note": "k = l + 1 stands in for the non-ZK k = l (the accounting's validate() needs l < k); "
                     "the linear test here sends nothing (the verifier encodes beta itself), so its query term is "
-                    "at most the Appendix-C ((k+l)/n)^t used"}
+                    "at most the Appendix-C ((k+l)/n)^t used; total_log2 is the union bound over n_proofs sub-batches"}
 
 
 # ---------------------------------------------------------------------------------------------------------------------

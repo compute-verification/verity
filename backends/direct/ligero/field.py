@@ -175,7 +175,16 @@ def coset_points(n: int, idx: torch.Tensor) -> torch.Tensor:
 
 
 def zh_on_coset(n: int, l: int, device) -> torch.Tensor:
-    """Z_H(eta_c) = eta_c^l - 1 for every column c (nonzero on the coset)."""
+    """Z_H(eta_c) = eta_c^l - 1 for every column c (nonzero on the coset).  Cached per (n, l, device)."""
+    key = ("zh", n, l, str(device))
+    hit = Domain._cache.get(key)
+    if hit is None:
+        hit = _zh_on_coset(n, l, device)
+        Domain._cache[key] = hit
+    return hit
+
+
+def _zh_on_coset(n: int, l: int, device) -> torch.Tensor:
     w = root_of_unity(n)
     gl = pow(GEN, l, P)
     wl = pow(w, l, P)          # order n / l

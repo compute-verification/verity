@@ -357,6 +357,8 @@ def main(argv=None) -> int:
     for name in ("bench", "bench-vu"):
         sub.choices[name].add_argument("--reps", type=int, default=5)
         sub.choices[name].add_argument("--run-id", default=None)
+    sub.choices["bench-vu"].add_argument("--total-vus", type=int, default=None,
+                                         help="VUs in the whole batch, proved as ceil(total / (batch // 96)) sub-batches (union-bounded)")
     args = ap.parse_args(argv)
     return args.fn(args)
 
