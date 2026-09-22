@@ -4,6 +4,7 @@
 #           vu B      : one relation with B chained VUs (vu-k1536[0:B]); B=4096 is the decision batch
 #           threads B T : VU batch B with T sVOLE threads (dietmc multithreaded; bytes not relayed)
 #           field F B : VU batch B over field F (f61p | f127p | f128p | f384p)
+#           variants [B] : lpn large, threads 4/8, F128p, F384p(B=8) on B VUs;  profile [B] : callgrind of the prover
 # The swanky checkout is outside the repo: it is pinned here by commit and checked before anything runs.
 set -euo pipefail
 STAGE=${1:?stage}
@@ -68,7 +69,12 @@ case "$STAGE" in
     bench "$OUT/vu${B}_f128p" "vu-B$B-f128p" --plaintext-too
     $PY backends/vole/export_ir.py vu "$OUT/vu8_f384p" --root $FIX --B 8 --procs 8 --field f384p
     bench "$OUT/vu8_f384p" "vu-B8-f384p" --plaintext-too
-    DIETMC=$DIETMC OUT="$OUT/profile_vu$B" bash backends/vole/profile.sh "$OUT/vu$B" F61p 400 1 | tee "$OUT/profile_vu$B.txt"
+    ;;
+  profile)
+    # callgrind instruction profile of the single-threaded F61p prover on B VUs (perf/ptrace unavailable)
+    B=${2:-4}
+    $PY backends/vole/export_ir.py vu "$OUT/vu$B" --root $FIX --B "$B" --procs 8
+    DIETMC=$DIETMC OUT="$OUT/profile_vu$B" bash backends/vole/profile.sh "$OUT/vu$B" F61p 1 | tee "$OUT/profile_vu$B.txt"
     ;;
   *) echo "unknown stage $STAGE" >&2; exit 2;;
 esac
