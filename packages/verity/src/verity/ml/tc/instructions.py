@@ -83,6 +83,15 @@ _A100_RUN = (
 _ADA_RUN = "verity run r20260921-231618-ea24 (RTX 4090, sm_89): the same 25,698,304 elements, 0 mismatches (D2, D9)"
 _GOLDEN_BF16 = "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json (360 records)"
 _GOLDEN_E4M3 = "packages/verity/tests/ml/fixtures/golden/ada_e4m3_m16n8k32.json"
+_RTX5090_BF16 = (
+    "verity run r20260922-182911-1f10 (lane fp4-5090; RTX 5090 cc 12.0, driver 570.153.02, nvcc 12.8.93, -arch=sm_120a, "
+    "SASS HMMA.16816.F32.BF16): 204,800/204,800 elements agree with HOPPER_BF16_M16N8K16, 48,569 disagree with the Ampere/Ada pipeline"
+)
+_RTX5090_NVF4 = (
+    "verity run r20260922-182011-88f8 (lane fp4-5090; RTX 5090, our harness tools/tc_probe_fp4, OMMA.SF UE4M3.4X, one MMA per tile): "
+    "autoproof probe3 vectors replayed 1601/1601; 1,736,704 swept elements with +0 accumulators (263,781 hot-clip firings, full UE4M3 "
+    "code sweep), 0 mismatches; probe2 unscaled 1400/1400 (run r20260922-182132-d6db)"
+)
 _H100_FP8 = (
     "veritor docs/data/tc-fp8-2026-09-08 (lane QZ, H100 80GB HBM3, driver 580.126.09, triton 3.7.1): "
     "wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 / SASS QGMMA.64x64x32.F32.E4M3.E4M3, 16 families, "
@@ -207,7 +216,20 @@ INSTRUCTIONS: dict[str, Instruction] = {
             evidence=("candidates: ADA_E4M3_M16N8K32 (groups (16,16)) vs HOPPER_E4M3_K32 (groups (32,)), both "
                       "width 14, floor -139; nothing measured on the sm_90 mma.sync path (D14)",),
         ),
-        # --- FP4 Blackwell consumer (sm_120) ---------------------------------------------------------------------
+        # --- Blackwell consumer (sm_120) --------------------------------------------------------------------------
+        _i(
+            # lane fp4-5090, run r20260922-182911-1f10 (RTX 5090, cc 12.0, driver 570.153.02, -arch=sm_120a, SASS HMMA.16816):
+            # 204,800/204,800 elements agree with the Hopper BF16 pipeline (one group of 16, 26 bits, floor -133); the Ampere/Ada
+            # pipeline fails 48,569 of them.  The consumer Blackwell keeps Hopper's BF16 datapath for legacy mma.sync.
+            id="sm120.mma.m16n8k16.bf16",
+            sm="sm_120",
+            ptx="mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
+            shape=(16, 8, 16),
+            a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
+            model=HOPPER_BF16_M16N8K16,
+            status="pinned",
+            evidence=(_RTX5090_BF16,),
+        ),
         _i(
             id="sm120.mma.m16n8k64.e2m1.nvf4",
             sm="sm_120",
@@ -216,8 +238,9 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM120_NVF4,
             status="pinned",
-            evidence=(_AUTOPROOF, _AUTOPROOF_UNSCALED,
-                      "pinned with a zero-initialised accumulator and chain-reachable accumulators only (D12)"),
+            evidence=(_AUTOPROOF, _AUTOPROOF_UNSCALED, _RTX5090_NVF4,
+                      "pinned with a zero-initialised accumulator and chain-reachable accumulators only (D12); "
+                      "-0 accumulators (D16) and opposite-sign accumulators at the 42-bit window edge (D17) disagree with the model"),
         ),
         _i(
             # autoproof did not probe UE8M0 scales; the PTX mnemonic of the mxf4 kind is not recorded in either

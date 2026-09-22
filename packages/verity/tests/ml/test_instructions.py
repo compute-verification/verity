@@ -12,6 +12,7 @@ from verity.ml.tc.models import (
     BLACKWELL_SM120_NVF4,
     HOPPER_E4M3_K32,
     MODELS,
+    HOPPER_BF16_M16N8K16,
     Model,
 )
 
@@ -24,6 +25,7 @@ EXPECTED_IDS = {
     "sm90.wgmma.m64n8k32.e4m3",
     "sm90.wgmma.m64n8k32.e5m2",
     "sm90.mma.m16n8k32.e4m3",
+    "sm120.mma.m16n8k16.bf16",
     "sm120.mma.m16n8k64.e2m1.nvf4",
     "sm120.mma.m16n8k64.e2m1.mxf4",
     "sm100.tcgen05.mma.e2m1.nvf4",
@@ -47,6 +49,7 @@ def test_pinned_instructions_and_their_models() -> None:
         "sm89.mma.m16n8k16.bf16": ADA_BF16_M16N8K16,
         "sm89.mma.m16n8k32.e4m3": ADA_E4M3_M16N8K32,
         "sm90.wgmma.m64n8k32.e4m3": HOPPER_E4M3_K32,
+        "sm120.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,          # lane fp4-5090: the 5090 keeps Hopper's BF16 datapath
         "sm120.mma.m16n8k64.e2m1.nvf4": BLACKWELL_SM120_NVF4,
     }
 
