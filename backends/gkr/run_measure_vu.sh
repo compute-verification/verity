@@ -77,6 +77,14 @@ if [ "${GATE:-0}" = "1" ]; then
     fi
     exit 0
 fi
+# a box that has never run the VU tiers (vy-cpu) lacks the frozen instance set: rebuild it from the recipe and check
+# it against the pinned manifest (bench-instances/v1 README) before any export
+if [ ! -f "$INSTANCES_ROOT/vu-k1536-neg.index.json" ] || [ ! -f "$INSTANCES_ROOT/vu-k1536.index.json" ]; then
+    mkdir -p "$INSTANCES_ROOT"
+    cp -R "$HERE/../../fixtures/bench-instances/v1/." "$INSTANCES_ROOT/"      # seeds, manifest, indices, y words
+    $UV -m verity_numerical.bench.instances build --out "$INSTANCES_ROOT" --procs "$PROCS" 2>&1 | tail -2
+    $UV -m verity_numerical.bench.instances verify --root "$INSTANCES_ROOT" 2>&1 | tail -2
+fi
 cache_ok() {  # cache_ok DIR: a manifest of the right variant (a v1 export once landed in the v2 cache: r20260922-075822-5076)
     [ -f "$1/manifest.json" ] || return 1
     if grep -q '"variant"' "$1/manifest.json"; then grep -q "\"variant\": \"$VARIANT\"" "$1/manifest.json"; else [ "$VARIANT" = "v1" ]; fi
