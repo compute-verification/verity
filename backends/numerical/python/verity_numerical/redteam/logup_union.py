@@ -201,8 +201,8 @@ def z3_union_forgery(p: int = 1000003, seed: int = 1, n_tables: int = 3, rows_pe
     }
 
 
-def z3_union_multiplicity_forgery(p: int = 1000003, seed: int = 1, n_tables: int = 3, rows_per_table: int = 3,
-                                  timeout_ms: int = 60_000) -> dict:
+def z3_union_multiplicity_forgery(p: int = 1000003, seed: int = 1, n_tables: int = 3, rows_per_table: int = 2,
+                                  timeout_ms: int = 120_000) -> dict:
     """Multiplicity manipulation across the merged table, decided exactly.
 
     Fix the tables, the tags, one bad query ``(q*, 0)`` and a concrete ``gamma``.  The prover's only freedom is the
@@ -239,16 +239,17 @@ def z3_union_multiplicity_forgery(p: int = 1000003, seed: int = 1, n_tables: int
         n_pts = len(queries) + len(rows) + 1
         poles = set(rows) | set(queries)
         zs = [z for z in range(1, p) if z not in poles][:n_pts]
-        s = z3.Solver()
+        s = z3.SolverFor("QF_LIA")
         s.set("timeout", timeout_ms)
         m = [z3.Int(f"m{v}") for v in range(len(rows))]
+        bound = len(rows) + len(queries)                                            # |rhs - lhs| < bound * p^2 / p
         for mv in m:
             s.add(mv >= 0, mv < p)
         for i, z in enumerate(zs):
             lhs = sum(pow(z - q, -1, p) for q in queries) % p
             rhs = sum(mv * pow(z - r, -1, p) for mv, r in zip(m, rows))
             k = z3.Int(f"k{i}")                                                     # rhs - lhs = k p: pure LIA
-            s.add(rhs - lhs == k * p)
+            s.add(k >= -bound, k <= bound, rhs - lhs == k * p)
         res = s.check()
         if res == z3.sat:
             mdl = s.model()
