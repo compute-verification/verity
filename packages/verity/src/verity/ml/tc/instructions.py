@@ -58,6 +58,8 @@ class Instruction:
     model: Model | None
     status: Status
     evidence: tuple[str, ...] = ()
+    #: The ``trust-dossier/v1`` artifact id (``art:...``) whose computed level this pin cites (``verity.verification.trust``).
+    dossier: str | None = None
 
     def __post_init__(self) -> None:
         if self.status == "pinned" and self.model is None:

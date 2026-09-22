@@ -184,6 +184,57 @@ first-class consumer is the **tensor core**, not the SIMT core. Consequences:
   against the proved target's anchor tensor-core peak (`Target.native_peak`),
   never against the prover's own card.
 
+## Trust: when we trust a silicon circuit
+
+Decided 2026-09-22 (lane `trust`). For every numerical target (one exact
+tensor-core relation on one architecture) "do we trust this circuit, and why"
+is **computed from evidence, never asserted**: `verity.verification.trust.assess`
+evaluates predicates over store artifacts (ids + labels) and repo fixtures and
+returns a level with the exact evidence that satisfies or fails each criterion;
+`Instruction.status` is reported next to it so the two can disagree visibly.
+
+- **UNPROBED** -- no hardware evidence for the instruction on the anchor SKU.
+- **HYPOTHESIS** -- a model agrees somewhere (any SKU, or one family of a
+  sweep), or is inherited from a sibling instruction that does.
+- **PINNED** -- on the anchor SKU: `tc-evidence/v1` with 0 mismatches over
+  >= N_min = 10^7 elements (one default `tc_probe --sweep` is 2.5e7; the
+  1.4e5-element FP8-family run alone cannot pin) covering the canonical
+  families (random sweep, adder-width, zero-products, accumulator LSB walk,
+  specials) and the regression tile of every resolved D-entry naming the
+  target; SASS shows one MMA-class instruction or the lowering is documented.
+- **TRUSTED** -- PINNED and (a) an independent reference agrees (Hawkeye
+  source-close, autoproof model5, a second compiled path or harness) or every
+  disagreement with it is resolved with hardware as arbiter; (b) every
+  discrepancy-log entry naming the target is resolved/excluded; (c) relation
+  == model: the checker accepts >= 2,000 honest VUs incl. edge families and
+  rejects >= 100 mutations (`bench-result/v1` validation); (d) hardware-in-the-
+  loop: the frozen instance set re-executed on the anchor with 0 mismatches
+  (`tc-evidence/v1` labelled `family=frozen-instances instances_dataset=<ds>
+  instances_tier=<tier> mismatches=0`); (e) an independent verifier accepted a
+  full-contract proof; (f) no open `trust_downgrade` label.
+- **TRUSTED_STABLE** -- TRUSTED on >= 2 physical devices of the SKU or >= 2
+  driver/ptxas environments with identical words (the F1 Triton-cache guard).
+
+Trust is re-opened only by an **invalidation trigger**: a canary/probe
+mismatch on the anchor, a driver/ptxas/toolkit change on the anchor (re-run
+`tools/tc_probe/tc_probe.py --instruction <id> --canary`, < 1 min, exit 1 on
+any mismatch, labelled `family=canary`), an independent verifier rejecting an
+honest run, a new D-entry naming the target, a red-team finding. The
+**procedure** is frozen in code with the criteria (`RELITIGATION_PROCEDURE`):
+reproduce on the anchor -> bisect model vs relation vs prover with the stored
+tiles -> open a D-entry with the hardware evidence -> the level downgrades
+automatically (an open D-entry blocks TRUSTED, a mismatch on the anchor blocks
+PINNED; nobody edits a level) -> resolve with hardware as arbiter, the tile
+joins `REGRESSION_TILES`, close with `trust_downgrade=resolved:<D-id>`.
+
+Dossier: `python -m verity.verification.trust <target|instruction|--all>
+[--root STORE] [--format md|json] [--publish]` renders the criteria table with
+evidence ids, D-entries, references, SASS/lowering, the missing items to the
+next level, the triggers and the procedure; `--publish` writes a
+`trust-dossier/v1` artifact (refs = every cited artifact; labels `target`,
+`instruction`, `level`, `anchor`), pushes `--preserve`, and `Instruction.dossier`
+/ `Target.dossier` cite it. Label contract: the docstring of `trust.py`.
+
 ## Census, both candidates, same columns
 
 ~~~text

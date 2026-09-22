@@ -24,6 +24,10 @@ KINDS: dict[str, str] = {
     "native-peak/v1": "one measured dense tensor-core peak of a device (the canonical tables' 'native dense peak, measured' column): meta "
                       "{device, dtype, accumulate: 'fp32', method: 'cublas dense gemm 8192^3, median of 5', flop_per_second, "
                       "spec_flop_per_second, fraction_of_spec, sass, driver, cuda, clocks_mhz?, power_w?}; payload null",
+    "trust-dossier/v1": "the computed trust level of one numerical target (verity.verification.trust): meta = the TrustReport "
+                        "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
+                        "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
+                        "labels target, instruction, level, anchor",
 }
 
 

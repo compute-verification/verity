@@ -228,6 +228,8 @@ class Target:
     native_peak: NativePeak
     status: Status = "frozen"
     instruction: str | None = None
+    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``verity.verification.trust``).
+    dossier: str | None = None
 
 
 #: A100 SXM4 dense BF16 tensor-core peak (312 TFLOPS; 624 with sparsity, not used).  Accumulation on Ampere is FP32.

@@ -69,6 +69,12 @@ for its arch (sm_90a compiles wherever the toolkit is, whatever the GPU), runs `
 instructions per tile kernel, compared with the table's ``sass_mma``; the tile kernel's SASS is kept as ``sass_<kernel>_<arch>.txt``)
 and writes ``result.json`` with ``kind: tc-compile-check/v1`` without touching the device.  The BF16 path is unchanged from WP1:
 the same families, the same random draws, the same words.
+
+``--canary`` (``canary.py``) runs the instruction's fixed canary tile set -- the first tiles of every family under the canary seed
+plus every regression tile of every resolved discrepancy-log entry naming the instruction -- in under a minute, exits 1 on any
+mismatch against a declared model, and marks ``result.json`` (``tc-evidence/v1``) with ``workload_fingerprint.family = canary``
+and ``tc_evidence.canary``; the trust framework (``verity.verification.trust``) treats a failing canary on the anchor as an
+invalidation trigger.  Run it after any driver / ptxas / toolkit change on an anchor and on a second device of the SKU.
 """
 
 from __future__ import annotations
@@ -1280,6 +1286,8 @@ def main() -> int:
     ap.add_argument("--families", default=None, help="comma list (default all)")
     ap.add_argument("--sass-check", action="store_true", help="cuobjdump -sass the built library and count MMA-class instructions in the tile kernel")
     ap.add_argument("--compile-only", action="store_true", help="build + SASS check only (any GPU or none); --instruction may be a comma list")
+    ap.add_argument("--canary", action="store_true", help="the fixed canary tile set (canary.py): the first tiles of every family + every resolved "
+                    "discrepancy-log regression tile; < 1 min; exit 1 on any mismatch; result.json is tc-evidence/v1 with family=canary")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1331,10 +1339,26 @@ def main() -> int:
     if args.sweep:
         results["sweep"], _ = sweep(probe, ins, args, out, identity)
 
+    canary_plan = None
+    if args.canary:
+        import canary as CANARY
+
+        canary_plan = CANARY.canary_plan(ins.id)
+        results["canary"] = CANARY.run_canary(probe, ins, canary_plan, out, args.procs)
+        print("canary", json.dumps({k: results["canary"][k] for k in ("elements", "asserted_elements", "total_mismatches_by_model", "model_agrees", "digest", "seconds")},
+                                   ), flush=True)
+        for r in results["canary"]["replays"]:
+            print("canary_replay", json.dumps({k: v for k, v in r.items() if k != "first_mismatches"}), flush=True)
+
     results["seconds"] = round(time.time() - t_all, 1)
     declared = [m.name for m in ins.models if m.declared]
     failures = []
     findings = []  # hypothesis disagreements: reported, not failures
+    if "canary" in results:
+        failures += results["canary"]["failures"]
+        for mname, count in results["canary"]["total_mismatches_by_model"].items():
+            if count and mname not in declared:
+                findings.append(f"canary mismatches vs {mname}={count}")
     for replay in ("golden_replay", "special_replay"):
         if replay in results and (results[replay]["mismatches"] or results[replay]["other_positions_nonzero"]):
             failures.append(f"{replay} mismatches={results[replay]['mismatches']} other_positions_nonzero={results[replay]['other_positions_nonzero']}")
@@ -1362,7 +1386,7 @@ def main() -> int:
 
     run_id = os.environ.get("RESEARCH_RUN_ID")
     if run_id:
-        checked_something = any(k in results for k in ("golden_replay", "special_replay", "instances_replay")) or ("sweep" in results and declared)
+        checked_something = any(k in results for k in ("golden_replay", "special_replay", "instances_replay")) or (("sweep" in results or "canary" in results) and declared)
         status = "failed" if failures else ("passed" if checked_something else "not_run")
         fingerprint = {
             "probe": "tools/tc_probe/tc_probe.py",
@@ -1383,6 +1407,10 @@ def main() -> int:
         }
         if "instances_replay" in results:
             fingerprint["instances"] = {"dataset": results["instances_replay"]["dataset"], "manifest_sha256": results["instances_replay"]["digests"]["manifest_sha256"]}
+        if "canary" in results:
+            fingerprint["family"] = "canary"  # the trust framework's family label for canary artifacts
+            fingerprint["canary"] = {"seed": canary_plan.seed, "digest": results["canary"]["digest"], "families": list(canary_plan.families),
+                                     "replays": list(canary_plan.replays), "regression": canary_plan.to_dict()["regression"]}
         evidence = {
             "instruction": ins.id,
             "arch": arch,
@@ -1421,10 +1449,25 @@ def main() -> int:
         if "sass" in results:
             evidence["sass"] = {k: v for k, v in results["sass"].items() if k != "functions"}
             measurements.append({"name": "tile_kernel_mma_count", "value": results["sass"].get("tile_kernel_mma_count"), "unit": "instructions"})
+        if "canary" in results:
+            cn = results["canary"]
+            evidence["canary"] = {k: v for k, v in cn.items() if k != "families"}
+            evidence["canary"]["families"] = {name: {k: v for k, v in f.items()} for name, f in cn["families"].items()}
+            if "model_agrees" not in evidence:  # a canary alone: its verdict is the artifact's model_agrees
+                evidence["model_agrees"] = cn["model_agrees"]
+                evidence["total_mismatches_by_model"] = cn["total_mismatches_by_model"]
+            measurements.append({"name": "canary.elements", "value": cn["elements"], "unit": "elements"})
+            for mname, count in cn["total_mismatches_by_model"].items():
+                measurements.append({"name": f"canary.mismatches[{mname}]", "value": count, "unit": "elements"})
+            for r in cn["replays"]:
+                measurements.append({"name": f"canary.replay[{Path(r['file']).name}].mismatches", "value": r["mismatches"], "unit": "records"})
+            evidence["labels"] = CANARY.result_labels(ins, cn, identity)
         evidence["hypothesis_findings"] = findings
         artifacts = []
         if "sweep" in results:
             artifacts = ["capture_sample.json"] + [f"tiles_{name}.npz" for name in results["sweep"]["families"]]
+        if "canary" in results:
+            artifacts.append("canary_tiles.npz")
         if results.get("sass", {}).get("sass_file"):
             artifacts.append(results["sass"]["sass_file"])
         checker = "tc_probe vs " + (", ".join(declared) if declared else "HYPOTHESIS models only (" + ", ".join(m.name for m in ins.models) + ")")
@@ -1442,6 +1485,10 @@ def main() -> int:
             "artifacts": artifacts,
             "tc_evidence": evidence,
         })
+        if "canary" in results:
+            print("canary labels (apply to the result artifact once `research run` has stored it):", flush=True)
+            for cmd in CANARY.label_commands("<artifact-id>", evidence["labels"], os.environ.get("RESEARCH_LANE", "<lane>")):
+                print("   ", cmd, flush=True)
     print("FAILURES" if failures else "ALL HARDWARE WORDS REPRODUCED" if not findings else "RECORDED (hypothesis findings)",
           failures or findings, f"{results['seconds']}s", flush=True)
     return 1 if failures else 0
