@@ -55,6 +55,22 @@ Whole sumcheck, all rounds, each round replayed as a CUDA graph (device time, no
 | 3 | 3.71 | 9.08 | 1.63% | 1.47e11 | 5.3 GB | 0.112 + 1.64 | 257 / 156 ms | **62.7 us** (38.2) |
 | 4 | 7.30 | 23.37 | 0.85% | 1.97e11 | 5.0 GB | 0.325 + 1.63 | 729 / 436 ms | 178 us (106) |
 
+**A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6 cu124, Triton 3.2; run `r20260922-073828-153f`, same
+flags, 36 tests bit-exact on CUDA; `backends/numerical/reports/anchor_a100.md`).  Whole sumcheck, CUDA-graphed rounds:
+
+| k | 2^24 ms | 2^26 ms | frac. A100 INT8 peak (2^26) | peak mem (2^26) | fit ns/elem + ms | per batch (padded / un-padded) | per VU | vs H100 |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 16.15 | 50.22 | 2.71% | 34.1 GB | 0.704 + 3.25 | 1,578 / 943 ms | 385 us | 0.62x |
+| 1 | 10.63 | 30.73 | 2.59% | 17.2 GB | 0.415 + 3.03 | 937 / 563 ms | 229 us | 0.60x |
+| 2 | 7.42 | 20.21 | 2.55% | 8.9 GB | 0.262 + 2.71 | 596 / 360 ms | 146 us | 0.58x |
+| 3 | 6.96 | 16.58 | 2.83% | 4.5 GB | 0.208 + 2.81 | 476 / 289 ms | **116 us** | 0.54x |
+| 4 | 18.27 | 64.95 | 0.97% | 4.1 GB | 0.928 + 2.69 | 2,071 / 1,234 ms | 506 us | 0.35x |
+
+The plain k = 0 sumcheck scales exactly with bandwidth (0.62x the H100 = 2,039 / 3,350): it is HBM-bound on both cards.  The
+packed k = 3 rounds scale a little worse (0.54x) -- their base x base Hadamards are INT32 work, and the A100 has 0.47x the
+H100's INT32 rate -- so packing saves 3.3x on the A100 (3.8x on the H100).  k = 4's two-pass path is 0.35x.  The fixed
+per-sumcheck intercept is 2.7-3.3 ms on the A100 vs 1.6-1.7 ms on the H100 (launch/tail latency at 1.41 GHz).
+
 * "per batch" = the six c-round sumchecks of the batch (tables `393,216 x 2^read`, `LAYER_READ_LOG2`) from the linear
   fit over t = 2^20..2^26; "per VU" = per batch / 4096; un-padded widths (`LAYER_WIDTHS`) in parentheses.
 * **Measured saving of packing on the dominant bucket: k = 3 vs k = 0 = 3.79x (padded), 3.72x (un-padded).**  The MAC

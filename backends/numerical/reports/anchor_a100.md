@@ -2,7 +2,7 @@
 
 **Scope: component measurements** (kernel time on random/patterned data, bit-exact against each lane's CPU reference), then one `ARITHMETIC_DIAGNOSTIC` re-price of A and B with those numbers.  Nothing here is a proof.  Every recorded 4090 / H100 number is the lane's own (its README / report, run id in the lane's table); every A100 number is a `research run --on vy-a100b --exclusive` of the same bench, same flags, CUDA events, warm, median of >= 7, bit-exact checks on.  `overhead.vs_native_peak` is defined against *this* card's dense BF16 peak (`contract.NATIVE_REFERENCE`, 9.85 ps per K=1536 VU), so the last section is the first A-vs-B comparison where the prover and the reference are the same machine.
 
-Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 2.6.0+cu124, CUDA 12.4, 108 SMs (sm_80).  Recorded runs: microbench `r20260922-063608-a304`, hash_gpu `r20260922-063811-e561`, encode `r20260922-064413-0508`, fused `r20260922-064953-f9bb`.
+Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 2.6.0+cu124, CUDA 12.4, 108 SMs (sm_80).  Recorded runs: microbench `r20260922-063608-a304`, hash_gpu `r20260922-063811-e561`, encode `r20260922-064413-0508`, fused `r20260922-064953-f9bb`, fused_logup `r20260922-071602-522d`, packed `r20260922-073828-153f`, packed_killed_mislaunch `r20260922-073540-f5b5`.
 
 Bandwidth ratios the earlier reports *scaled* by: A100/4090 = 2,039/1,008 = 2.02; A100/H100 = 2,039/3,350 = 0.61.  Speed ratios below are recorded-time / A100-time (> 1 = the A100 is faster); a departure from the bandwidth ratio by > 1.5x either way is a finding about the kernel and is flagged.
 
@@ -129,6 +129,68 @@ Bit-exact tests on the A100 (`TC_DEVICE=cuda pytest tensor/fused/tests`): 25 pas
 
 The SIMT fused round at 2^21 (ext input, cold L2) runs **474 us** on the A100 (0.58x the 4090's 273 us; 478 GB/s = 0.27 of the measured-bandwidth floor).  The 130-round layer model: 12.35 ms graphed (0.50x the 4090's 6.20 ms).
 
+## 3b. `backends/gkr/tensor/fused` -- fused logUp fractional-GKR round (4090 report `fused_logup_4090.json`)
+
+| fused logUp round (fold+eval) | RTX 4090 recorded | A100 measured | speed ratio A100/4090 | A100 HBM floor (measured BW) | fraction of floor |
+|---|---|---|---|---|---|
+| logUp round 2^21, block 256 x 4 warps | 600 us (629 GB/s) | 1,469 us (257 GB/s) | 0.41x | 215 us | 0.15 |
+| logUp round 2^21, block 128 x 4 warps | 755 us (500 GB/s) | 1,636 us (231 GB/s) | 0.46x | 215 us | 0.13 |
+| logUp round 2^21, block 512 x 8 warps | 681 us (554 GB/s) | 1,633 us (231 GB/s) | 0.42x | 215 us | 0.13 |
+| logUp round 2^20, block 256 x 4 warps | 344 us (549 GB/s) | 867 us (218 GB/s) | 0.40x | 108 us | 0.12 |
+| logUp round 2^20, block 128 x 4 warps | 402 us (469 GB/s) | 806 us (234 GB/s) | 0.50x | 108 us | 0.13 |
+| logUp round 2^20, block 512 x 8 warps | 385 us (490 GB/s) | 878 us (215 GB/s) | 0.44x | 108 us | 0.12 |
+| logUp round 2^18, block 256 x 4 warps | 118 us (401 GB/s) | 245 us (193 GB/s) | 0.48x | 27 us | 0.11 |
+| logUp round 2^18, block 128 x 4 warps | 137 us (344 GB/s) | 287 us (164 GB/s) | 0.48x | 27 us | 0.09 |
+| logUp round 2^18, block 512 x 8 warps | 124 us (381 GB/s) | 311 us (152 GB/s) | 0.40x | 27 us | 0.09 |
+| logUp round 2^16, block 256 x 4 warps | 81 us (146 GB/s) | 112 us (105 GB/s) | 0.72x | 7 us | 0.06 |
+| logUp round 2^16, block 128 x 4 warps | 78 us (152 GB/s) | 110 us (107 GB/s) | 0.71x | 7 us | 0.06 |
+| logUp round 2^16, block 512 x 8 warps | 82 us (144 GB/s) | 118 us (100 GB/s) | 0.69x | 7 us | 0.06 |
+| logUp round 2^14, block 256 x 4 warps | 78 us (38 GB/s) | 111 us (26 GB/s) | 0.70x | 2 us | 0.02 |
+| logUp round 2^14, block 128 x 4 warps | 73 us (41 GB/s) | 99 us (30 GB/s) | 0.73x | 2 us | 0.02 |
+| logUp round 2^14, block 512 x 8 warps | 84 us (35 GB/s) | 119 us (25 GB/s) | 0.71x | 2 us | 0.01 |
+| logUp round 2^12, block 256 x 4 warps | 80 us (9 GB/s) | 111 us (7 GB/s) | 0.72x | 0 us | 0.00 |
+| logUp round 2^12, block 128 x 4 warps | 73 us (10 GB/s) | 98 us (8 GB/s) | 0.74x | 0 us | 0.00 |
+| logUp round 2^12, block 512 x 8 warps | 82 us (9 GB/s) | 118 us (6 GB/s) | 0.69x | 0 us | 0.00 |
+
+## 4. `backends/gkr/packed` -- base-field-first packed sumcheck (H100 run `r20260922-062108-4b25`)
+
+| packed sumcheck (whole sumcheck, all rounds, CUDA-graphed) | H100 recorded | A100 measured | speed ratio A100/H100 | A100 TC floor | fraction of INT8 peak | A100 peak mem |
+|---|---|---|---|---|---|---|
+| 2^26, k=0 | 30.87 ms (1.39% of H100 INT8 peak) | 50.22 ms (2.71% of A100 INT8 peak) | 0.61x | 1.36 ms TC@312T | 0.0271 | 34.1 GB |
+| 2^26, k=1 | 18.47 ms (1.36% of H100 INT8 peak) | 30.73 ms (2.59% of A100 INT8 peak) | 0.60x | 0.79 ms TC@312T | 0.0259 | 17.2 GB |
+| 2^26, k=2 | 11.73 ms (1.39% of H100 INT8 peak) | 20.21 ms (2.55% of A100 INT8 peak) | 0.58x | 0.52 ms TC@312T | 0.0255 | 8.9 GB |
+| 2^26, k=3 | 9.08 ms (1.63% of H100 INT8 peak) | 16.58 ms (2.83% of A100 INT8 peak) | 0.55x | 0.47 ms TC@312T | 0.0283 | 4.5 GB |
+| 2^26, k=4 | 23.37 ms (0.85% of H100 INT8 peak) | 64.95 ms (0.97% of A100 INT8 peak) | 0.36x | 0.63 ms TC@312T | 0.0097 | 4.1 GB |
+| 2^24, k=0 | 9.20 ms (1.17% of H100 INT8 peak) | 16.15 ms (2.11% of A100 INT8 peak) | 0.57x | 0.34 ms TC@312T | 0.0211 | 8.7 GB |
+| 2^24, k=1 | 6.06 ms (1.03% of H100 INT8 peak) | 10.63 ms (1.87% of A100 INT8 peak) | 0.57x | 0.20 ms TC@312T | 0.0187 | 4.5 GB |
+| 2^24, k=2 | 4.35 ms (0.93% of H100 INT8 peak) | 7.42 ms (1.74% of A100 INT8 peak) | 0.59x | 0.13 ms TC@312T | 0.0174 | 1.8 GB |
+| 2^24, k=3 | 3.71 ms (1.00% of H100 INT8 peak) | 6.96 ms (1.69% of A100 INT8 peak) | 0.53x | 0.12 ms TC@312T | 0.0169 | 1.0 GB |
+| 2^24, k=4 | 7.30 ms (0.68% of H100 INT8 peak) | 18.27 ms (0.87% of A100 INT8 peak) | 0.40x | 0.16 ms TC@312T | 0.0087 | 1.2 GB |
+| 2^22, k=0 | 3.57 ms (0.75% of H100 INT8 peak) | 6.00 ms (1.42% of A100 INT8 peak) | 0.60x | 0.09 ms TC@312T | 0.0142 | 1.7 GB |
+| 2^22, k=1 | 2.77 ms (0.56% of H100 INT8 peak) | 4.87 ms (1.02% of A100 INT8 peak) | 0.57x | 0.05 ms TC@312T | 0.0102 | 1.0 GB |
+| 2^22, k=2 | 2.29 ms (0.44% of H100 INT8 peak) | 3.96 ms (0.81% of A100 INT8 peak) | 0.58x | 0.03 ms TC@312T | 0.0081 | 0.6 GB |
+| 2^22, k=3 | 2.15 ms (0.43% of H100 INT8 peak) | 3.66 ms (0.80% of A100 INT8 peak) | 0.59x | 0.03 ms TC@312T | 0.0080 | 0.4 GB |
+| 2^22, k=4 | 3.00 ms (0.42% of H100 INT8 peak) | 6.76 ms (0.58% of A100 INT8 peak) | 0.44x | 0.04 ms TC@312T | 0.0058 | 0.5 GB |
+| 2^20, k=0 | 2.04 ms (0.33% of H100 INT8 peak) | 3.35 ms (0.64% of A100 INT8 peak) | 0.61x | 0.02 ms TC@312T | 0.0064 | 0.4 GB |
+| 2^20, k=1 | 1.76 ms (0.22% of H100 INT8 peak) | 2.88 ms (0.43% of A100 INT8 peak) | 0.61x | 0.01 ms TC@312T | 0.0043 | 0.3 GB |
+| 2^20, k=2 | 1.56 ms (0.16% of H100 INT8 peak) | 2.61 ms (0.31% of A100 INT8 peak) | 0.60x | 0.01 ms TC@312T | 0.0031 | 0.2 GB |
+| 2^20, k=3 | 1.55 ms (0.15% of H100 INT8 peak) | 2.54 ms (0.29% of A100 INT8 peak) | 0.61x | 0.01 ms TC@312T | 0.0029 | 0.2 GB |
+| 2^20, k=4 | 1.80 ms (0.17% of H100 INT8 peak) | 3.49 ms (0.28% of A100 INT8 peak) | 0.51x | 0.01 ms TC@312T | 0.0028 | 0.3 GB |
+
+Six-layer batch model (linear fit over the measured sizes; padded / un-padded widths):
+
+| k | H100 per batch | H100 per VU | A100 per batch | A100 per VU | speed ratio A100/H100 | A100 fit |
+|---|---|---|---|---|---|---|
+| k=0 | 973 / 581 ms | 237.6 us | 1578 / 943 ms | 385.2 us | 0.62x | 0.704 ns/elem + 3.25 ms |
+| k=1 | 566 / 339 ms | 138.1 us | 937 / 563 ms | 228.9 us | 0.60x | 0.415 ns/elem + 3.03 ms |
+| k=2 | 345 / 209 ms | 84.3 us | 596 / 360 ms | 145.6 us | 0.58x | 0.262 ns/elem + 2.71 ms |
+| k=3 | 257 / 156 ms | 62.7 us | 476 / 289 ms | 116.3 us | 0.54x | 0.208 ns/elem + 2.81 ms |
+| k=4 | 729 / 436 ms | 177.9 us | 2071 / 1234 ms | 505.6 us | 0.35x | 0.928 ns/elem + 2.69 ms |
+
+Agreement test on the A100: 36 passed in 61.24s (0:01:01)
+
+Best k on the A100: **k=3**, 476 ms per six-layer batch = 116.3 us/VU (H100: k=3, 257 ms, 62.7 us/VU).  At 2^26 k=3: 16.58 ms vs 9.08 on the H100 (0.55x; bandwidth ratio 0.61, INT8-peak ratio 0.32).
+
 ## A vs B on the A100, same batch, same numbers
 
 `explore.tensor` designs A and B (BabyBear, degree-6 challenge, 2^-128, B = 4096, K = 1536, HVZK layer, authentication excluded) priced on the A100 with the A100-measured buckets substituted; the still-modelled buckets are at 0.172 of the A100 INT8 peak / the model's SIMT rate and are listed as `omitted`.  Labels: `ARITHMETIC_DIAGNOSTIC`, scope `vu`, hardware NVIDIA A100 SXM4 80GB.
@@ -136,9 +198,9 @@ The SIMT fused round at 2^21 (ext input, cold L2) runs **474 us** on the A100 (0
 | design | model only (A100 peaks @0.172, Blake3 50 GB/s) | **A100-measured buckets** overhead (t.total) | buckets | measured buckets |
 |---|---|---|---|---|
 | B | 2.38e+07 (962 ms) | 4.88e+06 (197 ms) | encoding 57.4 ms; hash 54.0 ms; matmul_modelled 10.1 ms; simt_field_modelled 70.6 ms; hint_gen_modelled 1.6 ms; prg_modelled 3.2 ms | encoding: True; hash: True |
-| A | 3.17e+07 (1278 ms) | 3.71e+07 (1495 ms) | encoding 11.0 ms; hash 9.0 ms; matmul_modelled 505.4 ms; simt_field_modelled 632.1 ms; hint_gen_modelled 1.6 ms; prg_modelled 0.5 ms; gkr_checker_modelled 850.1 ms; logup_modelled 248.8 ms; gkr_checker_measured 1185.4 ms | encoding: True; hash: True; gkr_checker: fused SIMT layer model x96 (graphed) |
+| A | 3.17e+07 (1278 ms) | 2.69e+07 (1084 ms) | encoding 11.0 ms; hash 9.0 ms; matmul_modelled 505.4 ms; simt_field_modelled 632.1 ms; hint_gen_modelled 1.6 ms; prg_modelled 0.5 ms; gkr_checker_modelled 850.1 ms; logup_modelled 248.8 ms; gkr_checker_measured 476.4 ms; logup_measured_rate 546.6 ms | encoding: True; hash: True; gkr_checker: packed k=3 six-layer batch (padded); logup: fused logUp round rate (A100) x model element count |
 
-Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_kernel` = blake3; `hash_A_kernel` = blake3; `encoder_seconds_per_row_B` = 1.85e-07; `encoder_B_kernel` = ntt_simt_v2_t1024; `encoder_seconds_per_row_A` = 2.25e-07; `encoder_A_kernel` = ntt_simt_v2_t1024; `fused_layer_graphed_s` = 0.0123; `fused_checker_round_2p21_us` = 473.7920
+Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_kernel` = blake3; `hash_A_kernel` = blake3; `encoder_seconds_per_row_B` = 1.85e-07; `encoder_B_kernel` = ntt_simt_v2_t1024; `encoder_seconds_per_row_A` = 2.25e-07; `encoder_A_kernel` = ntt_simt_v2_t1024; `fused_layer_graphed_s` = 0.0123; `fused_checker_round_2p21_us` = 473.7920; `logup_round_2p21_us` = 1,468.6720; `logup_over_checker_round` = 3.0998; `packed_k0_batch_s_padded` = 1.5777; `packed_k0_per_vu_s` = 0.000385; `packed_k3_batch_s_padded` = 0.4764; `packed_k3_per_vu_s` = 0.000116
 
 * **B**: overhead **4.88e+06** (197 ms per batch, 48 us/VU).  Measured: encoding = True; hash = True.  Omitted (modelled): witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak); Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak); openings and transcript serialisation (not priced); prover randomness (modelled PRG at 100 GB/s); linear/quadratic tests, constraint combination, helper inversions (modelled SIMT at the A100 rate).
-* **A**: overhead **3.71e+07** (1495 ms per batch, 365 us/VU).  Measured: encoding = True; hash = True; gkr_checker = fused SIMT layer model x96 (graphed).  Omitted (modelled): witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak); Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak); openings and transcript serialisation (not priced); prover randomness (modelled PRG at 100 GB/s); logUp fractional GKR (modelled @0.172).
+* **A**: overhead **2.69e+07** (1084 ms per batch, 265 us/VU).  Measured: encoding = True; hash = True; gkr_checker = packed k=3 six-layer batch (padded); logup = fused logUp round rate (A100) x model element count.  Omitted (modelled): witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak); Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak); openings and transcript serialisation (not priced); prover randomness (modelled PRG at 100 GB/s).
