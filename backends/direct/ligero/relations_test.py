@@ -174,7 +174,7 @@ def test_row_mutations_rejected(unit):
 
 def test_off_domain_operands_are_refused_by_the_public_decode(unit):
     rel, s, tb = unit
-    c, a, b = _cases(rel, 8, 4)
+    c, a, b = _cases(rel, 16, 4)
     y = _oracle(rel, c, a, b)
     for w in rel.off_domain:
         bad = a.copy()
