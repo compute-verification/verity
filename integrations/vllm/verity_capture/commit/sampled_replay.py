@@ -2425,18 +2425,52 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     return out
 
 
+#: [R19 admit, F-r18-admit-1 fix (c)] what the last forked pool did to the parent's heap before the fork: `gc_frozen_objects` = the
+#: objects moved to the permanent generation (never traversed by a collection in the children), `gc_collected` = what the pre-fork
+#: collection freed, `gc_freeze` = the policy (env VERITY_REPLAY_FORK_GC_FREEZE=0 opts out for a measurement, never for a record).
+_FORK_STATS: dict[str, Any] = {}
+FORK_GC_FREEZE = os.environ.get("VERITY_REPLAY_FORK_GC_FREEZE", "1").strip() not in ("0", "false", "no")
+
+
 def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: list[dict], workers: int) -> list[tuple[dict, dict, float]]:
-    """Forked pool over the picked VUs; bounded by a timeout (a child deadlocked on a lock inherited at fork must not hang the Commit)."""
+    """Forked pool over the picked VUs; bounded by a timeout (a child deadlocked on a lock inherited at fork must not hang the Commit).
+
+    [R19 admit, F-r18-admit-1 fix (c): the fork-COW children term] the children inherit the parent's whole C2 heap (the Programs of
+    every instance + the MatchOracle + the binding index: 43.5 GiB at #60 B8 Mistral, ~75 GB at #23 B64 Llama) copy-on-write.  A
+    child evaluates a few VUs, but the FIRST cyclic garbage collection its own allocations trigger traverses EVERY container object
+    of the inherited heap and writes each one's gc header -> every page of the parent heap is copied into that child.  That is the
+    R17 #23 datum ("two ForkPoolWorkers at ~72 GB each", F-r17-24 (b)): 72 GB is the parent's C2 heap (programs 39.5 + oracle
+    35.4 GB modelled), not 2.9 x the largest committed tensor -- a VU reads its own rows only (`CommittedStore.words` slices), and the
+    hidden-M1 stream the "largest tensor" is has no VU row at all.  `gc.freeze()` before the fork moves every live object into the
+    permanent generation, which the children's collections never traverse (they collect only what they allocate after the fork), so a
+    child's private pages are its own scratch + the refcount-dirtied pages of the objects it touches (the 250 MiB ordinary-worker term).
+    Semantics-free: gc.freeze changes WHEN unreachable cycles are reclaimed, never a value; the parent unfreezes right after the pool
+    joins.  The record carries what was frozen (`evaluator.fork`)."""
     global _FORK_FN, _FORK_VUS
+    import gc
     import multiprocessing as mp
     ctx = mp.get_context("fork")
     _FORK_FN, _FORK_VUS = fn, picked
+    _FORK_STATS.clear()
+    _FORK_STATS.update({"gc_freeze": bool(FORK_GC_FREEZE), "workers": int(workers), "picked": len(picked)})
+    frozen = False
     try:
+        if FORK_GC_FREEZE:
+            _FORK_STATS["gc_collected"] = int(gc.collect())          # garbage is not frozen into the permanent generation
+            gc.freeze()
+            frozen = True
+            _FORK_STATS["gc_frozen_objects"] = int(gc.get_freeze_count())
+        # the canary line (commit.log): the planner's `compare` reads it to model the record with 250 MiB workers
+        print(f"[replay] fork gc.freeze={'on' if frozen else 'OFF'}: {workers} workers over {len(picked)} VUs"
+              + (f", {_FORK_STATS['gc_frozen_objects']} objects frozen ({_FORK_STATS['gc_collected']} collected) before the fork" if frozen else
+                 " (VERITY_REPLAY_FORK_GC_FREEZE=0: the children may copy the parent's C2 heap on write, F-r17-24 (b))"), flush=True)
         with ctx.Pool(processes=workers) as pool:
             res = pool.map_async(_fork_worker, range(len(picked)), chunksize=max(1, len(picked) // (workers * 8)))
             out = res.get(timeout=max(300.0, 3.0 * len(picked)))
         return out
     finally:
+        if frozen:
+            gc.unfreeze()
         _FORK_FN, _FORK_VUS = None, []
 
 
@@ -2703,7 +2737,10 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             # [rev-cb F-cb-44] how the committed store was read: the collector's retention and the evaluator that ran (forked pool / serial)
             "evaluator": {"retention": retention, "workers_requested": workers_requested, "workers": int(workers),
                           "mode": "forked pool" if int(workers) > 1 else "serial (parent process)", "note": pool_note,
-                          "prewarmed_libraries": prewarmed},               # [MAN-06g] twin .so's dlopen'ed in the parent before the fork
+                          "prewarmed_libraries": prewarmed,               # [MAN-06g] twin .so's dlopen'ed in the parent before the fork
+                          # [R19 admit, F-r18-admit-1 (c)] gc.freeze before the fork: the children's collections never traverse the
+                          # inherited C2 heap (the 72 GB-per-child COW of R17 #23); {} when no pool was forked
+                          "fork": dict(_FORK_STATS) if int(workers) > 1 else {}},
             "strata": strata, "strata_unevaluated": strata_unevaluated,
             # [rev-cb M-0740 G1] EVERY unevaluated stratum with its reason and class, uncapped (the verdict's named-gap rule decides per stratum)
             "unevaluated_strata": [unev_by_stratum[k] for k in strata_unevaluated if k in unev_by_stratum],

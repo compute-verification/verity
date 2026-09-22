@@ -1248,17 +1248,25 @@ def test_device_retained_store_is_replayed_serially_and_a_child_device_fault_fal
     assert rep["result"] is True and rep["grade"] == "complete", rep.get("why")
     assert rep["evaluator"] == {"retention": "device", "workers_requested": 4, "workers": 1, "mode": "serial (parent process)",
                                 "note": "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context (F-cb-44)",
-                                "prewarmed_libraries": {}}
+                                "prewarmed_libraries": {}, "fork": {}}
     assert rep["timing"]["workers"] == 1 and calls["parent"] > 0
     # (b) no retention hint, a forked pool: the children's device fault is a pool failure, the parent replays serially and PASSES
     rep2 = SR.sampled_replay(_programs(world), bmap, device_reader, _weights(world), per_stratum=2, seed=3, workers=2, retention=None)
     assert rep2["result"] is True and rep2["sample"]["evaluated"] == rep["sample"]["evaluated"], rep2.get("why")
     assert rep2["evaluator"]["workers"] == 1 and rep2["evaluator"]["workers_requested"] == 2
     assert rep2["evaluator"]["note"].startswith("parallel evaluator unavailable (_DeviceInChild") and "hit the device" in rep2["evaluator"]["note"]
+    assert rep2["evaluator"]["fork"] == {}                                   # the pool failed: no forked record stands on a serial replay
     # a host-retained store still uses the forked pool
     rep3 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=2, retention="host")
     assert rep3["result"] is True and rep3["evaluator"]["mode"] == "forked pool" and rep3["evaluator"]["workers"] == 2 and rep3["evaluator"]["note"] is None
     assert rep3["sample"] == rep["sample"]
+    # [R19 admit, F-r18-admit-1 (c)] the forked pool froze the parent's heap before the fork and says so on the record
+    fk = rep3["evaluator"]["fork"]
+    assert fk["gc_freeze"] is True and fk["workers"] == 2 and fk["picked"] == rep3["sample"]["evaluated"] and fk["gc_frozen_objects"] > 0
+    # the record of the VUs (inputs, outputs, verdict per row) is the same under the forked pool and the serial parent: gc.freeze is semantics-free
+    ser = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=1, retention="host")
+    strip = lambda r: {k: v for k, v in r.items() if k not in ("timing", "evaluator", "wall_s")}  # noqa: E731
+    assert strip(ser) == strip(rep3)
 
 
 # ------------------------------------------------------------------------------------------------ [MAN-06f v3] fused-MoE planes

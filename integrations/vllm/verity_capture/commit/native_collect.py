@@ -560,6 +560,29 @@ class _HostRanges:
         return self
 
 
+#: [R19 admit, F-r18-admit-1 fix (a): the RETAIN-windowed pool] the value families NO C2 consumer reads back from host: the attention
+#: launch's M1 export stream (FA2 on Ada/Ampere, FA3 on Hopper).  oracle_compare classifies `hidden_stream` out before any read
+#: (`no oracle family`), sampled_replay has no VU row for it (`fa2_hidden_m1_stream: attention interior, no VU row of its own`), the
+#: boundary linkage reads ids only; its leaves are COMMITTED (coverage + openings) and open by REPLAY against the original root
+#: (openings_after_release, R17-5).  It is 84 % of the raw stream at 1024/128 (planner: #60 hidden 100,126 of 119,879 MiB; #23 122,740
+#: of 146,955), so `--retain-exclude hidden_m1` (= both families, whichever tap the pod has) keeps the C2 byte source whole and the
+#: pinned pool at the 16 % the C2 forms read -- byte-identical oracle / sampled-replay / linkage forms by construction.
+HIDDEN_M1_FAMILIES = frozenset({"fa2_hidden_m1", "fa3_hidden_m1"})
+RETAIN_EXCLUDE_ALIASES = {"hidden_m1": HIDDEN_M1_FAMILIES, "hidden": HIDDEN_M1_FAMILIES}
+
+
+def retain_exclude_families(spec: str | None) -> set[str]:
+    """`VERITY_RETAIN_EXCLUDE` / `--retain-exclude` -> the set of value families (native_host.FAMILY_RULES names) whose chunk-aligned
+    interior is not copied to host: comma-separated family names (`_stream` suffix tolerated) and the aliases `hidden_m1` / `hidden`."""
+    out: set[str] = set()
+    for f in (spec or "").split(","):
+        f = f.strip().removesuffix("_stream")
+        if not f:
+            continue
+        out |= set(RETAIN_EXCLUDE_ALIASES.get(f, {f}))
+    return out
+
+
 def _excluded_chunk_ranges(metas: list, exclude: set[str], chunk: int = GPU_CHUNK_BYTES) -> list[tuple[int, int, str]]:
     """The chunk-aligned INTERIOR [lo, hi) of every tensor of an excluded value family in step-stream order (merged when adjacent): the
     bytes retain=host + exclude does not copy off the staging window.  Boundary chunks shared with a neighbouring tensor are retained
@@ -712,7 +735,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.bounded = os.environ.get("VERITY_STAGING_BOUNDED", "0").strip() in ("1", "true", "yes")
         self.learn_only = False                                  # set by the harness around the warm-up instrumented run
         self.learn_budget_bytes = int(float(os.environ.get("VERITY_LEARN_HOST_BUDGET_MB", "4096")) * (1 << 20))
-        self.retain_exclude: set[str] = {f.strip().removesuffix("_stream") for f in os.environ.get("VERITY_RETAIN_EXCLUDE", "").split(",") if f.strip()}
+        self.retain_exclude: set[str] = retain_exclude_families(os.environ.get("VERITY_RETAIN_EXCLUDE", ""))
         self.retain_chunks: set[tuple[int, int]] = set()          # bounded retain=sample by CHUNK: (step, leaf index) -- a replay keeps only these
         if self.bounded and not self.windowed:
             raise ValueError("bounded staging (VERITY_STAGING_BOUNDED=1) is implemented on the windowed path only (--window-mb > 0)")
