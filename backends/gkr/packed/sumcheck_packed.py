@@ -216,20 +216,37 @@ class RoundInputs:
     prefix: torch.Tensor          # (6,) int32: eq(gamma_{<i-1}, r_{<i})
     coeff: torch.Tensor | None    # packed rounds: (4^(i-1), 6) int32 = eq(r_{<i}, a) eq(r_{<i}, a'), index a . 2^(i-1) + a'
     fold_C: torch.Tensor | None   # ext rounds: (48, 48) int8 fold matrix of r_i; fold_k: (4 . 2^k, 48)
+    fold_coeff: torch.Tensor | None = None   # triton fold_k: (2^k, 6) int32 = eq(r_1..r_k, a)
+    fold_C64: torch.Tensor | None = None     # triton fold_ext: (64, 64) int8 embedding of fold_C
 
 
 class Kernel:
-    def __init__(self, device: str = "cpu", k1_log2: int = K1_LOG2_DEFAULT, compile: bool = False):
+    """``mode``: ``"eager"`` (torch ops, the reference path), ``"compile"`` (torch.compile of the Hadamards) or
+    ``"triton"`` (fused kernels from :mod:`kernels_triton` for the Hadamards and both folds; CUDA only)."""
+
+    def __init__(self, device: str = "cpu", k1_log2: int = K1_LOG2_DEFAULT, compile: bool = False, mode: str | None = None):
         self.device = torch.device(device)
         self.k1_log2 = k1_log2
+        self.mode = mode or ("compile" if compile else "eager")
         self.pow2_row = torch.tensor(POW2, dtype=torch.int64, device=self.device)
         pm = np.array([[POW2[j + jp] for jp in range(LIMBS)] for j in range(LIMBS)], dtype=np.int64)
         self.pow2_pair = torch.tensor(pm, dtype=torch.int64, device=self.device)   # [j, j'] -> 2^(8(j+j')) mod p
         self._ext_hadamard3 = self._ext_hadamard3_eager
         self._packed_hadamard = self._packed_hadamard_eager
-        if compile:
+        self._tk = None
+        if self.mode == "compile":
             self._ext_hadamard3 = torch.compile(self._ext_hadamard3_eager, dynamic=True)
             self._packed_hadamard = torch.compile(self._packed_hadamard_eager, dynamic=True)
+        elif self.mode == "triton":
+            if self.device.type != "cuda":
+                raise ValueError("triton mode needs a CUDA device")
+            from . import kernels_triton as tk
+
+            self._tk = tk
+            self._ext_hadamard3 = tk.ext_hadamard3_limbs
+            self._packed_hadamard = tk.packed_hadamard_limbs
+        elif self.mode != "eager":
+            raise ValueError(f"unknown mode {self.mode!r}")
 
     # -- shapes -------------------------------------------------------------------------------------------------------
 
@@ -257,12 +274,22 @@ class Kernel:
             eq_r = ref.eq_table(rs)
             coeff = to_dev([ref.mul(a, b) for a in eq_r for b in eq_r], self.device)
         fold_C = None
+        inp = RoundInputs(decompose(e_lo), e_hi, eq_x, prefix, coeff, fold_C)
         if r_i is not None:
-            if i > k:
-                fold_C = torch.tensor(fold_matrix_ext(r_i), device=self.device)
-            elif i == k:
-                fold_C = torch.tensor(fold_matrix_k(rs + [r_i]), device=self.device)
-        return RoundInputs(decompose(e_lo), e_hi, eq_x, prefix, coeff, fold_C)
+            self.set_fold(inp, rs, i, k, r_i)
+        return inp
+
+    def set_fold(self, inp: RoundInputs, rs: list[ref.Ext], i: int, k: int, r_i: ref.Ext) -> None:
+        """Fill the fold operands of ``inp`` once ``r_i`` is known (ext round ``i > k``, or ``fold_k`` at ``i == k``)."""
+        if i > k:
+            C48 = fold_matrix_ext(r_i)
+            inp.fold_C = torch.tensor(C48, device=self.device)
+            if self._tk is not None:
+                inp.fold_C64 = self._tk.fold_ext_matrix(C48, self.device)
+        elif i == k:
+            inp.fold_C = torch.tensor(fold_matrix_k(rs + [r_i]), device=self.device)
+            if self._tk is not None:
+                inp.fold_coeff = to_dev(ref.eq_table(rs + [r_i]), self.device)
 
     # -- SIMT pieces --------------------------------------------------------------------------------------------------
 
@@ -348,12 +375,16 @@ class Kernel:
             marks["reduce+contract"] = self._mark()
         return S
 
-    def fold_k(self, g: torch.Tensor, k: int, fold_C: torch.Tensor, stats: Stats | None = None) -> torch.Tensor:
+    def fold_k(self, g: torch.Tensor, k: int, inp: RoundInputs, stats: Stats | None = None) -> torch.Tensor:
         """``g'(b) = sum_a eq(r_1..r_k, a) g(a, b)``: ``(t,) base -> (t / 2^k, 6)`` extension."""
         t = g.numel()
         m = t >> k
+        if self._tk is not None:
+            if stats:
+                stats.add("fold_k", m, LIMBS << k, 2 * DL, 0)
+            return self._tk.fold_k(g, k, inp.fold_coeff)
         L = decompose(g.view(m, 1 << k))                                              # (m, 4 . 2^k), column (a, j)
-        Z, padded = mm_int8(L, fold_C)                                                # (m, 48)
+        Z, padded = mm_int8(L, inp.fold_C)                                            # (m, 48)
         if stats:
             stats.add("fold_k", m, L.shape[1], 2 * DL, padded)
         return recompose(Z, DEGREE, self.pow2_row)
@@ -381,16 +412,24 @@ class Kernel:
             marks["reduce+contract"] = self._mark()
         if not fold:
             return S, gE, hE
-        g2, h2 = self.fold_pair(gE, hE, inp.fold_C, stats, marks)
+        g2, h2 = self.fold_pair(gE, hE, inp, stats, marks)
         return S, g2, h2
 
-    def fold_pair(self, gE: torch.Tensor, hE: torch.Tensor, fold_C: torch.Tensor, stats: Stats | None = None,
+    def fold_pair(self, gE: torch.Tensor, hE: torch.Tensor, inp: RoundInputs, stats: Stats | None = None,
                   marks: dict | None = None) -> tuple[torch.Tensor, torch.Tensor]:
         """Both extension tables folded by ``r_i`` in one matmul: ``[x_e | x_o] (2m x 48) @ [C_(1-r); C_r] (48 x 48)``."""
         m = gE.shape[0] // 2
+        if self._tk is not None:
+            if stats:
+                stats.add("fold.ext", 2 * m, 2 * DL, 2 * DL, 0)
+            F0 = self._tk.fold_ext(gE.view(m, 2 * DEGREE), inp.fold_C64, self.pow2_row)
+            F1 = self._tk.fold_ext(hE.view(m, 2 * DEGREE), inp.fold_C64, self.pow2_row)
+            if marks is not None:
+                marks["matmul.fold"] = self._mark()
+            return F0, F1
         GH = torch.stack([gE, hE], 0)                                                 # (2, t_i, 6)
         L = decompose(GH.view(2 * m, 2 * DEGREE))                                     # (2m, 48): (parity, s, j)
-        Zf, padded = mm_int8(L, fold_C)                                               # (2m, 48)
+        Zf, padded = mm_int8(L, inp.fold_C)                                           # (2m, 48)
         if stats:
             stats.add("fold.ext", 2 * m, 2 * DL, 2 * DL, padded)
         if marks is not None:
@@ -435,8 +474,8 @@ def prove(kernel: Kernel, gammas: list[ref.Ext], g: torch.Tensor, h: torch.Tenso
         rounds.append(S)
         rs.append(r)
     if k:
-        C = torch.tensor(fold_matrix_k(rs), device=kernel.device)
-        gE, hE = kernel.fold_k(g, k, C, stats), kernel.fold_k(h, k, C, stats)
+        kernel.set_fold(inp, rs[:-1], k, k, rs[-1])
+        gE, hE = kernel.fold_k(g, k, inp, stats), kernel.fold_k(h, k, inp, stats)
     else:
         gE = torch.zeros((g.numel(), DEGREE), dtype=torch.int32, device=kernel.device)
         gE[:, 0] = g
@@ -449,7 +488,7 @@ def prove(kernel: Kernel, gammas: list[ref.Ext], g: torch.Tensor, h: torch.Tenso
         r = challenger(i, S)
         rounds.append(S)
         rs.append(r)
-        inp.fold_C = torch.tensor(fold_matrix_ext(r), device=kernel.device)
-        gE, hE = kernel.fold_pair(gE, hE, inp.fold_C, stats)
+        kernel.set_fold(inp, rs[:-1], i, k, r)
+        gE, hE = kernel.fold_pair(gE, hE, inp, stats)
     final = (ref.eq_points(gammas, rs), tuple(int(v) for v in gE[0].tolist()), tuple(int(v) for v in hE[0].tolist()))
     return rounds, rs, final

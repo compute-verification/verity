@@ -11,10 +11,17 @@ from packed import sumcheck_packed as sp
 
 
 def _devices():
-    out = ["cpu"]
+    """``(device, mode)`` pairs: CPU eager always; ``PACKED_DEVICE=cuda`` adds CUDA eager and (if triton imports) triton."""
+    out = [("cpu", "eager")]
     dev = os.environ.get("PACKED_DEVICE")
     if dev and torch.cuda.is_available():
-        out.append(dev)
+        out.append((dev, "eager"))
+        try:
+            import triton  # noqa: F401
+
+            out.append((dev, "triton"))
+        except ImportError:
+            pass
     return out
 
 
@@ -26,11 +33,11 @@ def _instance(n: int, seed: int):
     return gammas, g, h
 
 
-@pytest.mark.parametrize("device", _devices())
-@pytest.mark.parametrize("n,k,k1_log2", [(6, 0, 3), (6, 1, 3), (6, 2, 2), (7, 3, 2), (8, 4, 3), (8, 2, 13), (9, 3, 4)])
-def test_kernel_matches_reference(device, n, k, k1_log2):
+@pytest.mark.parametrize("device,mode", _devices())
+@pytest.mark.parametrize("n,k,k1_log2", [(6, 0, 3), (6, 1, 3), (6, 2, 2), (7, 3, 2), (8, 4, 3), (8, 2, 13), (9, 3, 4), (10, 4, 5)])
+def test_kernel_matches_reference(device, mode, n, k, k1_log2):
     gammas, g, h = _instance(n, 1000 + 10 * n + k)
-    ker = sp.Kernel(device, k1_log2=k1_log2)
+    ker = sp.Kernel(device, k1_log2=k1_log2, mode=mode)
     gt = torch.tensor(g, dtype=torch.int32, device=device)
     ht = torch.tensor(h, dtype=torch.int32, device=device)
     stats = sp.Stats()
