@@ -285,8 +285,9 @@ struct LookupPlan {
 struct LookupSeg { base: usize, q_t: usize, terms_mat: Vec<Vec<(usize, [u32; DEG * DEG])>>, terms_rank: Vec<Vec<(usize, u32)>>, touched: Vec<usize> }
 
 /// Per-thread scratch of the fill: planar accumulators and outputs (`[coord * n + col]`).
-pub struct FillScratch { row: Vec<Ext>, planar: Vec<u32>, acc: Vec<u32>, flush: Vec<u32> }
-impl FillScratch { pub fn new() -> FillScratch { FillScratch { row: Vec::new(), planar: Vec::new(), acc: Vec::new(), flush: Vec::new() } } }
+pub struct FillScratch { row: Vec<Ext>, planar: Vec<u32>, acc: Vec<u32>, flush: Vec<u32>, /// per-phase nanoseconds (VERITY_GKR_PROFILE=1): input claims, single-column lookups, ext lookups, chain
+    pub prof: [u64; 4], profile: bool }
+impl FillScratch { pub fn new() -> FillScratch { FillScratch { row: Vec::new(), planar: Vec::new(), acc: Vec::new(), flush: Vec::new(), prof: [0; 4], profile: std::env::var("VERITY_GKR_PROFILE").map(|v| v == "1").unwrap_or(false) } } }
 
 struct Functional<'a> {
     stmt: &'a Statement<'a>,
@@ -323,12 +324,16 @@ impl<'a> Functional<'a> {
         let seg = &self.stmt.segs[si];
         let ncols = seg.ncols();
         let ec = self.eq_c[si][u];
-        let FillScratch { row, planar, acc, flush } = sc;
+        let profile = sc.profile;
+        let mut tp = if profile { Some(Instant::now()) } else { None };
+        let mut lap = |sc_prof: &mut [u64; 4], k: usize| { if let Some(t) = tp.as_mut() { let n = Instant::now(); sc_prof[k] += (n - *t).as_nanos() as u64; *t = n; } };
+        let FillScratch { row, planar, acc, flush, prof, .. } = sc;
         // input claims: out[c] = ec * v[c], vectorised over the columns through the planar matrices of v
         planar.resize(DEG * ncols, 0);
         self.v_mats[si].matvec(&ec, planar);
         row.resize(ncols, Ext::ZERO);
         for c in 0..ncols { row[c] = Ext(std::array::from_fn(|d| planar[d * ncols + c])); }
+        lap(prof, 0);
         let out = &mut row[..];
         for lp in &self.lookups {
             let ls = &lp.segs[si];
@@ -360,6 +365,7 @@ impl<'a> Functional<'a> {
                     }
                 }
                 flush_single(lp, ls, hi_cur, acc, flush, out);
+                lap(prof, 1);
             } else {
                 let mut h_cur = usize::MAX;
                 let mut rl_hi = Ext::ZERO;
@@ -370,6 +376,7 @@ impl<'a> Functional<'a> {
                     let e = rl_hi * lp.eq.lo[x & mask];
                     for (idx, m) in &ls.terms_mat[j] { out[*idx] += mat_apply(&e, m); }
                 }
+                lap(prof, 2);
             }
         }
         // chain (gpu/prover.py::add_chain ordering: k = i * L + j for the incoming-word constraints, then
@@ -406,6 +413,7 @@ impl<'a> Functional<'a> {
                 }
                 out[ch.epi_y16] += gv * self.chain_k[self.per_vu - 1];
             }
+            lap(prof, 3);
             return;
         }
         let lim = ch.limbs();
@@ -422,6 +430,7 @@ impl<'a> Functional<'a> {
             for j in 0..lim { out[ch.epi_y32[j]] += gv * self.chain_k[ch.steps * lim + j]; }
             out[ch.epi_y16] += gv * self.chain_k[self.per_vu - 1];
         }
+        lap(prof, 3);
     }
 
     /// `a[lo..hi]` into `buf` (zeroed by the caller).
@@ -755,6 +764,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     let n_chunks = rows.div_ceil(chunk_rows);
     let counter = AtomicUsize::new(0);
     let (ns_fill, ns_eval) = (std::sync::atomic::AtomicU64::new(0), std::sync::atomic::AtomicU64::new(0));
+    let prof_ns: [std::sync::atomic::AtomicU64; 4] = Default::default();
     let parts: Vec<Vec<Ext>> = std::thread::scope(|s| {
         let hs: Vec<_> = (0..threads).map(|_| s.spawn(|| {
             let mut rhs = vec![Ext::ZERO; set.len()];
@@ -794,10 +804,15 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
             }
             ns_fill.fetch_add(tf, Ordering::Relaxed);
             ns_eval.fetch_add(te, Ordering::Relaxed);
+            for k in 0..4 { prof_ns[k].fetch_add(fsc.prof[k], Ordering::Relaxed); }
             rhs
         })).collect();
         hs.into_iter().map(|h| h.join().unwrap()).collect()
     });
+    if prof_ns[0].load(Ordering::Relaxed) > 0 {
+        eprintln!("fill profile (CPU s): input claims {:.3}, single-column lookups {:.3}, ext lookups {:.3}, chain {:.3}",
+            prof_ns[0].load(Ordering::Relaxed) as f64 * 1e-9, prof_ns[1].load(Ordering::Relaxed) as f64 * 1e-9, prof_ns[2].load(Ordering::Relaxed) as f64 * 1e-9, prof_ns[3].load(Ordering::Relaxed) as f64 * 1e-9);
+    }
     st.t_rows_fill_cpu = ns_fill.load(Ordering::Relaxed) as f64 * 1e-9;
     st.t_rows_eval_cpu = ns_eval.load(Ordering::Relaxed) as f64 * 1e-9;
     let mut rhs = vec![Ext::ZERO; set.len()];
