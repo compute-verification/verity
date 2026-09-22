@@ -17,14 +17,19 @@ to run the same words through another architecture's instruction of the same sha
     bench-instances/v1/vu-k1536-neg    FIRST                             52 claimed-WRONG or out-of-domain (reject) VUs: the harness must
                                                                          detect every one (hardware word != claimed, or the domain check)
     fp8-ada-synthetic/vu-k1536-fp8     FP8_ADA_MMA (sm89.mma.m16n8k32.e4m3)  4,096 VUs x 48 steps of uniform finite E4M3 bytes from
-                                                                         seed 20260922 (backends.direct.ligero.fp8.chain.instances_fp8,
-                                                                         regenerated here from the same recipe), accumulators recorded
-                                                                         by ADA_E4M3_M16N8K32, no epilogue (the bare FP32 word)
+                                                                       seed 20260922 (backends.direct.ligero.fp8.chain.instances_fp8,
+                                                                       regenerated here from the same recipe), accumulators recorded
+                                                                       by ADA_E4M3_M16N8K32, no epilogue (the bare FP32 word)
+    bench-instances-bf16-hopper/v1/vu-k1536-bf16-hopper   BF16_HOPPER (sm90.mma.m16n8k16.bf16)  4,096 VUs x 96 steps of random_finite_bf16
+                                                                       words from seed 20260922, HOPPER_BF16_M16N8K16 accumulators,
+                                                                       f32_to_bf16 epilogue (relchain.instances, lane b-hopper)
+    bench-instances-fp8-hopper/v1/vu-k1536-fp8-hopper     FP8_HOPPER_WGMMA (sm90.wgmma.m64n8k32.e4m3)  4,096 VUs x 48 E4M3 steps from
+                                                                       seed 20260922, HOPPER_E4M3_K32 accumulators, bare FP32 word
 
 ``bench-instances/v1`` is loaded from ``--root`` (the built arrays; ``python -m verity_numerical.bench.instances build``) after every
 array's sha256 is checked against the pinned ``--manifest`` (default the repository's ``fixtures/bench-instances/v1/manifest.json``);
-the manifest's own sha256 is the recorded ``manifest_sha256``.  The FP8 set has no files: its ``manifest_sha256`` is
-``instances_digest(n)`` (a digest of the recipe: seed, n, K), as ``bench_vu_fp8`` records it.
+the manifest's own sha256 is the recorded ``manifest_sha256``.  The synthetic sets have no files: their ``manifest_sha256`` is
+``instances_digest(n)`` (a digest of the recipe: relation, seed, n, K), as the chain benches record it.
 
 One instance per tile at position ``(r % M, (r // M) % 8)`` with the rest of the tile zero (as ``tc_probe --replay-instances``): every
 other output word must come back ``+0`` (``other_positions_nonzero``).  Step ``s`` of every instance is one launch; the hardware's own
@@ -64,10 +69,10 @@ REPO = HERE.parents[1]
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-import tc_probe as P  # noqa: E402  (sibling module: kernels, formats, instruction table, SASS check, result envelope)
-from verity.ml.tc import silicon as S  # noqa: E402
-from verity.ml.tc.cast import f32_to_bf16_word  # noqa: E402
-from verity.verification import target as T  # noqa: E402
+import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
+from verity.ml.tc import silicon as S
+from verity.ml.tc.cast import f32_to_bf16_word
+from verity.verification import target as T
 
 N = P.N
 FIRST_MISMATCHES = 20
@@ -76,9 +81,10 @@ FP8_ADA_DATASET_ID = "fp8-ada-synthetic"
 #: exactly the ``instances.dataset`` string ``backends.direct.ligero.fp8.chain.bench_vu_fp8`` records in its fingerprint
 FP8_ADA_DATASET = "fp8-ada synthetic (uniform finite E4M3 bytes, model-recorded accumulators)"
 FP8_ADA_TIER = "vu-k1536-fp8"
-FP8_ADA_SEED = 20260922
-FP8_ADA_K, FP8_ADA_STEP = 1536, 32
-FP8_ADA_N = 4096
+SYNTHETIC_SEED = 20260922  # every seeded synthetic set of the ligero chain runners (fp8-ada, bf16-hopper, fp8-hopper)
+K_VU = 1536
+SYNTHETIC_N = 4096
+FP8_ADA_SEED, FP8_ADA_N = SYNTHETIC_SEED, SYNTHETIC_N
 EPILOGUE_BF16 = "f32_to_bf16"
 
 
@@ -174,8 +180,8 @@ def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: 
     else:
         lo, hi = _slice(lo, hi, n_total)
         ids = np.arange(lo, hi, dtype=np.int64)
-    common = dict(dataset=manifest["dataset"], instruction=T.FIRST.instruction, target=T.FIRST.name, model=manifest["target"]["pipeline"],
-                  manifest_sha256=_sha256(manifest_path), source=f"{root} (sha256 of every array == {manifest_path})", ids=ids, total_n=n_total)
+    common = {"dataset": manifest["dataset"], "instruction": T.FIRST.instruction, "target": T.FIRST.name, "model": manifest["target"]["pipeline"],
+              "manifest_sha256": _sha256(manifest_path), "source": f"{root} (sha256 of every array == {manifest_path})", "ids": ids, "total_n": n_total}
     if tier == "tu-k16":
         k = I.STEP
         a = np.frombuffer(data.a.tobytes(), np.uint16).reshape(n_total, 1, k)[ids]
@@ -207,33 +213,115 @@ def fp8_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
     return w
 
 
+def bf16_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
+    """Finite BF16 words with exponent fields in [96, 160), one in ten a signed zero, one in ten a subnormal
+    (``backends.direct.ligero.relations.random_finite_bf16`` of lane b-hopper, verbatim)."""
+
+    sign = rng.integers(0, 2, size=shape, dtype=np.int64) << 15
+    t = rng.integers(96, 160, size=shape, dtype=np.int64)
+    f = rng.integers(0, 128, size=shape, dtype=np.int64)
+    kind = rng.integers(0, 10, size=shape)
+    w = sign | (t << 7) | f
+    w = np.where(kind == 0, sign, w)
+    w = np.where(kind == 1, sign | np.maximum(f, 1), w)
+    return w
+
+
+@dataclass(frozen=True)
+class Synthetic:
+    """A seeded synthetic set of a ligero chain relation (``backends.direct.ligero.relchain.instances`` / ``instances_digest``,
+    and before it ``fp8.chain.instances_fp8``): VU ``i`` draws ``rng = default_rng([seed, i])``, ``a`` then ``b`` (``K_VU`` words
+    each) with ``operands``, and records ``tc_dot(model)`` chained from ``+0`` after every step.  The set has no files: its
+    ``manifest_sha256`` is ``sha256("<relation> synthetic|seed=<seed>|n=<n>|K=1536")``."""
+
+    dataset_id: str        # the --instances dataset token
+    dataset: str           # the instances_dataset string the relation's bench records
+    tier: str
+    relation: str          # the digest prefix
+    target: str
+    instruction: str
+    model: object          # verity.ml.tc.models.GroupSum
+    operands: object       # (rng, shape) -> int64 words
+    dtype: object          # the operand word dtype
+    epilogue: str | None
+    recipe: str
+
+    @property
+    def spec(self) -> str:
+        return f"{self.dataset_id}/{self.tier}"
+
+    @property
+    def k(self) -> int:
+        return int(self.model.k)
+
+    @property
+    def steps(self) -> int:
+        return K_VU // self.k
+
+    def digest(self, n: int, seed: int = SYNTHETIC_SEED) -> str:
+        return hashlib.sha256(f"{self.relation} synthetic|seed={seed}|n={n}|K={K_VU}".encode()).hexdigest()
+
+    def instance(self, i: int, seed: int = SYNTHETIC_SEED) -> tuple[np.ndarray, np.ndarray, list[int]]:
+        rng = np.random.default_rng([seed, i])
+        a = self.operands(rng, (K_VU,))
+        b = self.operands(rng, (K_VU,))
+        al, bl, k = a.tolist(), b.tolist(), self.k
+        accs, c = [], 0
+        for s in range(self.steps):
+            c = S.tc_dot(self.model, c, al[k * s : k * (s + 1)], bl[k * s : k * (s + 1)])
+            accs.append(c)
+        return a, b, accs
+
+
+# lane b-hopper's BF16_HOPPER target (dc3c141) is not in every tree this script runs from: its name and instruction as pinned there
+_BF16_HOPPER = getattr(T, "BF16_HOPPER", None)
+BF16_HOPPER_TARGET = _BF16_HOPPER.name if _BF16_HOPPER else "bf16-hopper-mma-draft/2026-09-22"
+BF16_HOPPER_INSTRUCTION = _BF16_HOPPER.instruction if _BF16_HOPPER else "sm90.mma.m16n8k16.bf16"
+
+FP8_ADA_SYNTHETIC = Synthetic(
+    dataset_id=FP8_ADA_DATASET_ID, dataset=FP8_ADA_DATASET, tier=FP8_ADA_TIER, relation="fp8-ada",
+    target=T.FP8_ADA_MMA.name, instruction=T.FP8_ADA_MMA.instruction, model=S.ADA_E4M3_M16N8K32,
+    operands=fp8_random_finite_operands, dtype=np.uint8, epilogue=None,
+    recipe="a, b = uniform finite E4M3 bytes (NaN codes -> 0x77 | sign); accs = tc_dot(ADA_E4M3_M16N8K32) chained from +0 "
+           "(backends.direct.ligero.fp8.chain.instances_fp8)")
+BF16_HOPPER_SYNTHETIC = Synthetic(
+    dataset_id="bench-instances-bf16-hopper/v1", dataset="bench-instances-bf16-hopper/v1", tier="vu-k1536-bf16-hopper", relation="bf16-hopper",
+    target=BF16_HOPPER_TARGET, instruction=BF16_HOPPER_INSTRUCTION, model=S.HOPPER_BF16_M16N8K16,
+    operands=bf16_random_finite_operands, dtype=np.uint16, epilogue=EPILOGUE_BF16,
+    recipe="a, b = random_finite_bf16 (exponent fields [96, 160), 1/10 signed zeros, 1/10 subnormals); accs = tc_dot(HOPPER_BF16_M16N8K16) "
+           "chained from +0 (backends.direct.ligero.relchain.instances, relation bf16-hopper, lane b-hopper dc3c141)")
+FP8_HOPPER_SYNTHETIC = Synthetic(
+    dataset_id="bench-instances-fp8-hopper/v1", dataset="bench-instances-fp8-hopper/v1", tier="vu-k1536-fp8-hopper", relation="fp8-hopper",
+    target=T.FP8_HOPPER_WGMMA.name, instruction=T.FP8_HOPPER_WGMMA.instruction, model=S.HOPPER_E4M3_K32,
+    operands=fp8_random_finite_operands, dtype=np.uint8, epilogue=None,
+    recipe="a, b = uniform finite E4M3 bytes (NaN codes -> 0x77 | sign); accs = tc_dot(HOPPER_E4M3_K32) chained from +0 "
+           "(backends.direct.ligero.relchain.instances, relation fp8-hopper, lane b-hopper dc3c141)")
+SYNTHETIC = {s.spec: s for s in (FP8_ADA_SYNTHETIC, BF16_HOPPER_SYNTHETIC, FP8_HOPPER_SYNTHETIC)}
+
+
 def fp8_instance(i: int, seed: int = FP8_ADA_SEED) -> tuple[np.ndarray, np.ndarray, list[int]]:
     """VU ``i`` of the FP8 Ada synthetic set: ``(a (1536,), b (1536,), accs (48,))`` exactly as ``instances_fp8`` forms it."""
 
-    rng = np.random.default_rng([seed, i])
-    a = fp8_random_finite_operands(rng, (FP8_ADA_K,))
-    b = fp8_random_finite_operands(rng, (FP8_ADA_K,))
-    al, bl = a.tolist(), b.tolist()
-    accs, c = [], 0
-    for s in range(FP8_ADA_K // FP8_ADA_STEP):
-        c = S.tc_dot(S.ADA_E4M3_M16N8K32, c, al[FP8_ADA_STEP * s : FP8_ADA_STEP * (s + 1)], bl[FP8_ADA_STEP * s : FP8_ADA_STEP * (s + 1)])
-        accs.append(c)
-    return a, b, accs
+    return FP8_ADA_SYNTHETIC.instance(i, seed)
 
 
 def fp8_instances_digest(n: int, seed: int = FP8_ADA_SEED) -> str:
     """``backends.direct.ligero.fp8.chain.instances_digest``: a digest of the recipe (the set has no files)."""
 
-    return hashlib.sha256(f"fp8-ada synthetic|seed={seed}|n={n}|K={FP8_ADA_K}".encode()).hexdigest()
+    return FP8_ADA_SYNTHETIC.digest(n, seed)
 
 
-def _fp8_worker(i: int):
-    a, b, accs = fp8_instance(i)
-    return i, a.astype(np.uint8), b.astype(np.uint8), np.array(accs, np.uint32)
+def _synthetic_worker(job: tuple[str, int]):
+    spec, i = job
+    syn = SYNTHETIC[spec]
+    a, b, accs = syn.instance(i)
+    return i, a.astype(syn.dtype), b.astype(syn.dtype), np.array(accs, np.uint32)
 
 
-def load_fp8_ada(lo: int | None = None, hi: int | None = None, only_ids: list[int] | None = None, total_n: int = FP8_ADA_N,
-                 procs: int = 1) -> InstanceSet:
+def load_synthetic(syn: Synthetic, lo: int | None = None, hi: int | None = None, only_ids: list[int] | None = None,
+                   total_n: int = SYNTHETIC_N, procs: int = 1) -> InstanceSet:
+    """Generate the chosen instances of a synthetic set (``procs`` processes) as an ``InstanceSet``."""
+
     if only_ids is not None:
         ids = np.array(sorted(set(only_ids)), dtype=np.int64)
         if ids.size == 0 or ids.min() < 0 or ids.max() >= total_n:
@@ -241,36 +329,43 @@ def load_fp8_ada(lo: int | None = None, hi: int | None = None, only_ids: list[in
     else:
         lo, hi = _slice(lo, hi, total_n)
         ids = np.arange(lo, hi, dtype=np.int64)
-    steps, k = FP8_ADA_K // FP8_ADA_STEP, FP8_ADA_STEP
-    a = np.zeros((ids.size, steps, k), np.uint8)
-    b = np.zeros((ids.size, steps, k), np.uint8)
+    steps, k = syn.steps, syn.k
+    a = np.zeros((ids.size, steps, k), syn.dtype)
+    b = np.zeros((ids.size, steps, k), syn.dtype)
     acc = np.zeros((ids.size, steps), np.uint32)
-    if procs > 1:
+    jobs = [(syn.spec, int(i)) for i in ids]
+    if procs > 1 and len(jobs) > 1:
         import multiprocessing as mp
 
         with mp.Pool(procs) as pool:
-            results = pool.map(_fp8_worker, [int(i) for i in ids], chunksize=16)
+            results = pool.map(_synthetic_worker, jobs, chunksize=16)
     else:
-        results = [_fp8_worker(int(i)) for i in ids]
+        results = [_synthetic_worker(j) for j in jobs]
     for r, (i, ai, bi, acci) in enumerate(results):
         assert i == ids[r]
         a[r] = ai.reshape(steps, k)
         b[r] = bi.reshape(steps, k)
         acc[r] = acci
     return InstanceSet(
-        dataset=FP8_ADA_DATASET, tier=FP8_ADA_TIER, instruction=T.FP8_ADA_MMA.instruction, target=T.FP8_ADA_MMA.name,
-        model=S.ADA_E4M3_M16N8K32.name, manifest_sha256=fp8_instances_digest(total_n),
-        source=f"generated: rng = default_rng([{FP8_ADA_SEED}, i]); a, b = uniform finite E4M3 bytes (NaN codes -> 0x77 | sign); "
-               f"accs = tc_dot(ADA_E4M3_M16N8K32) chained from +0 (backends.direct.ligero.fp8.chain.instances_fp8)",
-        ids=ids, a=a, b=b, c0=np.zeros(ids.size, np.uint32), acc=acc, y=acc[:, -1].copy(), epilogue=None, total_n=total_n,
+        dataset=syn.dataset, tier=syn.tier, instruction=syn.instruction, target=syn.target, model=syn.model.name,
+        manifest_sha256=syn.digest(total_n), source=f"generated: rng = default_rng([{SYNTHETIC_SEED}, i]); {syn.recipe}",
+        ids=ids, a=a, b=b, c0=np.zeros(ids.size, np.uint32), acc=acc, y=epilogue_words(syn.epilogue, acc[:, -1]), epilogue=syn.epilogue,
+        total_n=total_n,
     )
+
+
+def load_fp8_ada(lo: int | None = None, hi: int | None = None, only_ids: list[int] | None = None, total_n: int = FP8_ADA_N,
+                 procs: int = 1) -> InstanceSet:
+    return load_synthetic(FP8_ADA_SYNTHETIC, lo, hi, only_ids, total_n, procs)
 
 
 DATASETS = {
     f"{BENCH_INSTANCES}/vu-k1536": "FIRST: 4,096 VUs x 96 BF16 steps, per-step accumulators + f32_to_bf16 epilogue",
     f"{BENCH_INSTANCES}/tu-k16": "FIRST: 4,096 single transitions with arbitrary finite c",
     f"{BENCH_INSTANCES}/vu-k1536-neg": "FIRST: 52 claimed-wrong / out-of-domain VUs (the harness must detect all)",
-    f"{FP8_ADA_DATASET_ID}/{FP8_ADA_TIER}": "FP8_ADA_MMA: 4,096 VUs x 48 E4M3 steps generated from seed 20260922, bare FP32 word",
+    FP8_ADA_SYNTHETIC.spec: "FP8_ADA_MMA: 4,096 VUs x 48 E4M3 steps generated from seed 20260922, bare FP32 word",
+    BF16_HOPPER_SYNTHETIC.spec: "BF16_HOPPER: 4,096 VUs x 96 BF16 steps generated from seed 20260922, f32_to_bf16 epilogue (lane b-hopper)",
+    FP8_HOPPER_SYNTHETIC.spec: "FP8_HOPPER_WGMMA: 4,096 VUs x 48 E4M3 steps generated from seed 20260922, bare FP32 word (lane b-hopper)",
 }
 
 
@@ -286,8 +381,8 @@ def load_instances(spec: str, args) -> InstanceSet:
     if dataset == BENCH_INSTANCES:
         manifest = Path(args.manifest) if args.manifest else REPO / "fixtures" / "bench-instances" / "v1" / "manifest.json"
         return load_bench_instances(tier, Path(args.root) if args.root else None, manifest, lo, hi, only)
-    if dataset == FP8_ADA_DATASET_ID and tier == FP8_ADA_TIER:
-        return load_fp8_ada(lo, hi, only, procs=args.procs)
+    if spec in SYNTHETIC:
+        return load_synthetic(SYNTHETIC[spec], lo, hi, only, procs=args.procs)
     raise SystemExit(f"unknown instance set {spec!r}; known: {', '.join(DATASETS)}")
 
 

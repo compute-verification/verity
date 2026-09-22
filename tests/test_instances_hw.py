@@ -53,7 +53,7 @@ class FakeProbe:
         self.calls = 0
 
     def tiles(self, A, Bt, C):
-        n, M, K = A.shape
+        n, M, _ = A.shape
         D = np.zeros((n, M, IH.N), np.uint32)
         live_rows = A.any(axis=2)
         for t in range(n):
@@ -86,13 +86,13 @@ def test_store_declaration_registered_and_parses_flags():
     assert "tc-evidence/v1" in tool.produces and "hw.family" in tool.key_conditions
     argv = ["python", "tools/tc_probe/instances_hw.py", "--instances", "bench-instances/v1/vu-k1536", "--out", "/run", "--sass-check",
             "--range", "0:64", "--manifest", "fixtures/bench-instances/v1/manifest.json", "--procs", "8"]
-    params, key = tool.resolve_params(argv, ROOT)
+    _, key = tool.resolve_params(argv, ROOT)
     assert key["instances"] == "bench-instances/v1/vu-k1536" and key["sass_check"] is True and key["range"] == "0:64" and key["repeat"] == 1
     assert "out" not in key and "procs" not in key and "instruction" not in key
     assert key["manifest"].startswith("sha256:")  # content, never the pathname
     # the remote form: a shell string
-    shell = ["bash", "-c", 'export PYTHONPATH=packages/verity/src PATH=/usr/local/cuda/bin:$PATH; nvidia-smi -L; /workspace/venv-ihw/bin/python '
-                           'tools/tc_probe/instances_hw.py --instances fp8-ada-synthetic/vu-k1536-fp8 --out "$RESEARCH_RUN_DIR" --sass-check --repeat 2; echo done']
+    shell = ["bash", "-c", ('export PYTHONPATH=packages/verity/src PATH=/usr/local/cuda/bin:$PATH; nvidia-smi -L; /workspace/venv-ihw/bin/python '
+                            'tools/tc_probe/instances_hw.py --instances fp8-ada-synthetic/vu-k1536-fp8 --out "$RESEARCH_RUN_DIR" --sass-check --repeat 2; echo done')]
     _, key = tool.resolve_params(shell, ROOT)
     assert key == {"instances": "fp8-ada-synthetic/vu-k1536-fp8", "repeat": 2, "sass_check": True}
 
@@ -125,7 +125,7 @@ def test_fp8_set_loads_with_range_and_only_ids():
     assert inst.ids.tolist() == [2, 3, 4] and inst.manifest_sha256 == IH.fp8_instances_digest(4096) and inst.total_n == 4096
     assert np.array_equal(inst.y, inst.acc[:, -1]) and (inst.c0 == 0).all()
     assert P.E4M3.is_finite(inst.a).all() and P.E4M3.is_finite(inst.b).all()
-    a3, b3, accs3 = IH.fp8_instance(3)
+    a3, _, accs3 = IH.fp8_instance(3)
     assert inst.a[1].reshape(-1).tolist() == a3.tolist() and inst.acc[1].tolist() == accs3
     only = IH.load_fp8_ada(only_ids=[7, 1])
     assert only.ids.tolist() == [1, 7] and only.a[1].reshape(-1).tolist() == IH.fp8_instance(7)[0].tolist()
@@ -152,6 +152,59 @@ def test_fp8_replay_reproduces_every_word_and_locates_an_injected_mismatch():
     bad.y[2] = bad.acc[2, -1]
     rep = IH.replay(FakeProbe(ins), ins, bad)
     assert rep["mismatches"] == {"intermediate": 0, "final": 1, "epilogue": 0, "total": 1} and rep["first_mismatches"][0]["step"] == 47
+
+
+# --- the Hopper synthetic sets (lane b-hopper: backends.direct.ligero.relchain / relations) ------------------------------------------------
+
+
+def test_hopper_sets_are_declared_with_their_targets_and_digests():
+    bf, f8 = IH.BF16_HOPPER_SYNTHETIC, IH.FP8_HOPPER_SYNTHETIC
+    assert bf.spec == "bench-instances-bf16-hopper/v1/vu-k1536-bf16-hopper" and bf.instruction == "sm90.mma.m16n8k16.bf16"
+    assert bf.k == 16 and bf.steps == 96 and bf.epilogue == "f32_to_bf16" and bf.model.name == "hopper_bf16_m16n8k16"
+    assert f8.spec == "bench-instances-fp8-hopper/v1/vu-k1536-fp8-hopper" and f8.instruction == "sm90.wgmma.m64n8k32.e4m3"
+    assert f8.k == 32 and f8.steps == 48 and f8.epilogue is None and f8.target == "fp8-hopper-wgmma-draft/2026-09-22"
+    assert bf.digest(4096) == hashlib.sha256(b"bf16-hopper synthetic|seed=20260922|n=4096|K=1536").hexdigest()
+    assert f8.digest(4096) == hashlib.sha256(b"fp8-hopper synthetic|seed=20260922|n=4096|K=1536").hexdigest()
+    assert IH.FP8_ADA_SYNTHETIC.digest(4096) == IH.fp8_instances_digest(4096)
+    assert set(IH.SYNTHETIC) <= set(IH.DATASETS)
+    rng = np.random.default_rng(0)
+    w = IH.bf16_random_finite_operands(rng, (4096,))
+    assert P.BF16.is_finite(w.astype(np.uint16)).all()
+    e = (w >> 7) & 0xFF
+    assert e.max() < 160 and ((e == 0) | (e >= 96)).all() and (e == 0).sum() > 500  # zeros and subnormals are ~1/5 of the words
+
+
+def test_hopper_bf16_set_replays_through_the_hopper_pipeline():
+    ins = P.INSTRUCTIONS["sm90.mma.m16n8k16.bf16"]
+    inst = IH.load_synthetic(IH.BF16_HOPPER_SYNTHETIC, 0, 2)
+    assert inst.a.dtype == np.uint16 and inst.steps == 96 and inst.epilogue == "f32_to_bf16" and inst.instruction == ins.id
+    assert inst.manifest_sha256 == IH.BF16_HOPPER_SYNTHETIC.digest(4096)
+    rep = IH.replay(FakeProbe(ins), ins, inst)
+    assert rep["mismatches"]["total"] == 0 and rep["words"] == {"intermediate": 2 * 95, "final": 2, "epilogue": 2, "total": 2 * 97}
+    assert rep["domain"]["out_of_domain_instances"] == 0 and rep["other_positions_nonzero"] == 0
+    assert np.array_equal(rep["_y_hw"], IH.epilogue_words("f32_to_bf16", inst.acc[:, -1]))
+
+
+def test_hopper_fp8_set_replays_through_the_wgmma_shape():
+    ins = P.INSTRUCTIONS["sm90.wgmma.m64n8k32.e4m3"]
+    inst = IH.load_synthetic(IH.FP8_HOPPER_SYNTHETIC, 5, 7)
+    assert ins.m == 64 and inst.a.dtype == np.uint8 and inst.steps == 48 and inst.ids.tolist() == [5, 6]
+    rep = IH.replay(FakeProbe(ins), ins, inst)
+    assert rep["mismatches"]["total"] == 0 and rep["words"]["total"] == 2 * 48 and rep["other_positions_nonzero"] == 0
+
+
+def test_hopper_recipes_match_the_relation_registry():
+    pytest.importorskip("torch")
+    try:
+        from backends.direct.ligero import relations, relchain
+    except ImportError:
+        pytest.skip("lane b-hopper's relation registry is not in this tree")
+    for syn, name in ((IH.BF16_HOPPER_SYNTHETIC, "bf16-hopper"), (IH.FP8_HOPPER_SYNTHETIC, "fp8-hopper"), (IH.FP8_ADA_SYNTHETIC, "fp8-ada")):
+        rel = relations.relation(name)
+        assert (syn.dataset, syn.tier, syn.target) == (rel.instances_dataset, rel.instances_tier, rel.target.name)
+        assert syn.digest(4096) == relchain.instances_digest(rel, 4096) and IH.SYNTHETIC_SEED == rel.instance_seed
+        for (a, b, accs), (a2, b2, accs2, y2) in zip([syn.instance(i) for i in range(2)], relchain.instances(rel, 2)):
+            assert a.tolist() == a2 and b.tolist() == b2 and accs == accs2 and accs[-1] == y2
 
 
 # --- bench-instances/v1 -----------------------------------------------------------------------------------------------------------------
@@ -226,7 +279,7 @@ def _gpu_instruction() -> str | None:
     if shutil.which("nvcc") is None and not Path("/usr/local/cuda/bin/nvcc").exists():
         return None
     try:
-        smi = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"], capture_output=True, text=True, timeout=20)
+        smi = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"], capture_output=True, text=True, timeout=20, check=False)
     except OSError:
         return None
     if smi.returncode != 0:
