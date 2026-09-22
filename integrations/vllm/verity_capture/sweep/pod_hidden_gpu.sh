@@ -16,9 +16,9 @@
 # Env: VENV (default /workspace/venv-cu129), CUDA_HOME (default /usr/local/cuda), REPO (default: this tree).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
-VENV=${VENV:-/workspace/venv-cu129}; PY=$VENV/bin/python
+VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # [R19] the one Python 3.12 environment of pod_bootstrap.sh
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export VERITOR_REPO=$REPO PYTHONPATH=$REPO:$REPO/vllm-poc:$REPO/out/gen/r9/cmt-hidden/src${PYTHONPATH:+:$PYTHONPATH}
+export VERITOR_REPO=$REPO PYTHONPATH=$REPO:$REPO/../../packages/verity/src:$REPO/../../tools/research/src:$REPO/out/gen/r9/cmt-hidden/src${PYTHONPATH:+:$PYTHONPATH}   # [R19] core + runner beside the integration
 export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
 fail() { echo "HIDDEN-GPU-FAIL $*"; exit 1; }
 [ -x "$PY" ] || fail "no venv python at $PY"

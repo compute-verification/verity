@@ -5,7 +5,14 @@
 #
 #   bash verity_capture/sweep/row_pod.sh <row-id> <ROLE> <hf-repo> <revision> [stages=build,match,commit]
 #
-# Env: PY (venv-cu129 python), PY312, HIDDEN_SO, GPU_UTIL (gpu_memory_utilization, default 0.5), PAIRS (3), LP/T (request wrapper shape;
+# [R19, Verity] The tree is the Verity checkout the research runner shipped (`research run --source`): this script's tree is
+# integrations/vllm; the core (packages/verity/src) and the runner's telemetry (tools/research/src) sit beside it and go on
+# PYTHONPATH.  One Python 3.12 environment (pod_bootstrap.sh: /workspace/venv312 -- torch cu129, vLLM d9105ea80) serves the GPU and
+# the CPU halves (PY and PY312 default to it; the two-venv split of the 3.11 pods is gone).  When RESEARCH_RUN_DIR is set the row
+# writes $RESEARCH_RUN_DIR/result.json on exit (verity_capture/sweep/research_result.py) so `research inspect` reports the stage
+# verdicts separately from the exit code.
+#
+# Env: PY (venv312 python), PY312 (defaults to PY), HIDDEN_SO, GPU_UTIL (gpu_memory_utilization, default 0.5), PAIRS (3), LP/T (request wrapper shape;
 # default = the manifest's longest prompt / largest cap MINUS ONE = decode steps, REL-01/R-16), MATCH_SNAP_STEPS (0,1), MATCH_SNAP_MAX_BYTES
 # (unset = run_config derives the per-tensor snapshot cap, D87; set = explicit cap in bytes, recorded in match/run.json snapshot_max_bytes),
 # BUILD_TIMEOUT / MATCH_TIMEOUT / COMPARE_TIMEOUT / COMMIT_TIMEOUT (s; Match ones default to B-scaled, REL-06), REQUIRED_CLASSES (REL-02: comma list passed to commit_delta --required-classes),
@@ -22,9 +29,13 @@ if [ -n "${VERITOR_REPO:-}" ] && [ "$(cd "$VERITOR_REPO" 2>/dev/null && pwd -P)"
 fi
 export VERITOR_REPO=$TREE_SELF
 cd "$VERITOR_REPO" || exit 3
-export PYTHONPATH=. HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false
+VERITY_CORE=$(cd "$TREE_SELF/../../packages/verity/src" 2>/dev/null && pwd -P) || { echo "PRECHECK_FAIL_SOURCE_IDENTITY: no packages/verity/src beside $TREE_SELF (not a shipped Verity tree)" >&2; exit 3; }
+VERITY_RESEARCH=$(cd "$TREE_SELF/../../tools/research/src" 2>/dev/null && pwd -P) || { echo "PRECHECK_FAIL_SOURCE_IDENTITY: no tools/research/src beside $TREE_SELF" >&2; exit 3; }
+export VERITY_CORE VERITY_RESEARCH
+export PYTHONPATH=.:$VERITY_CORE:$VERITY_RESEARCH HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
-PY=${PY:-/workspace/venv-cu129/bin/python}; PY312=${PY312:-/workspace/venv-py312/bin/python}
+PY=${PY:-/workspace/venv312/bin/python}; PY312=${PY312:-$PY}
+[ -x "$PY" ] || { echo "no python at $PY (run pod_bootstrap.sh first)" >&2; exit 3; }
 export PATH=$(dirname "$PY"):/usr/local/cuda/bin:$PATH
 NCB_SET=${NATIVE_COLLECT_BUILD:-}   # [R17 rel] the caller's explicit choice wins over the release's per-tree build dir (below)
 export NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build}
@@ -38,6 +49,9 @@ D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW; mkdir -p "$D" "$NATIVE_COLLECT_BUILD" 
 WL=workloads/$ROW.json
 [ -f "$WL" ] || { echo "no manifest $WL"; exit 2; }
 log() { echo "$(date -u +%FT%TZ) [row $ROW] $*" | tee -a "$D/row.log"; }
+# [R19] the research runner's result envelope, written once on exit from the stage verdicts (no-op without RESEARCH_RUN_DIR)
+_research_result() { [ -n "${RESEARCH_RUN_DIR:-}" ] && "$PY" -m verity_capture.sweep.research_result "$D" "$ROW" "$ROLE" "$STAGES" >> "$D/row.log" 2>&1 || true; }
+trap _research_result EXIT
 # has_flag <--flag> <cmd...>: feature-detect a CLI flag from the command's --help.  The WHOLE help text is captured first; the former
 # `... --help 2>/dev/null | grep -q -- "--flag"` pipeline is unsound under `set -o pipefail`: grep -q exits at the first match (the usage line),
 # Python's remaining stdout write hits EPIPE and exits 120, and the pipeline reads as "flag absent" -- a race that became deterministic once
@@ -91,7 +105,7 @@ verdict release "${REL_LINE%%|*}" "${REL_LINE#*|}" >/dev/null
 tl precheck start
 SID_SHA=$(python3 -c "import json;print(json.load(open('EXPORT.json')).get('commit') or '')" 2>/dev/null || true)
 SID_RC=0
-for _py in "$PY" "$PY312"; do
+for _py in "$PY" $([ "$PY312" != "$PY" ] && echo "$PY312"); do
   [ -x "$_py" ] || continue
   if ! "$_py" -m verity_capture.sweep.source_identity --tree "$TREE_HERE" ${SID_SHA:+--sha "$SID_SHA"} --stage precheck --out "$D/source_identity.$(basename "$(dirname "$(dirname "$_py")")").json" >> "$D/row.log" 2>&1; then SID_RC=3; fi
 done
@@ -99,7 +113,7 @@ if [ "$SID_RC" != 0 ]; then
   tl precheck end rc=3 fail_class=PRECHECK_FAIL_SOURCE_IDENTITY
   verdict precheck FAIL "PRECHECK_FAIL_SOURCE_IDENTITY (see $D/source_identity.*.json and row.log)"; exit 3
 fi
-cp "$D/source_identity.venv-cu129.json" "$D/source_identity.json" 2>/dev/null || cp "$(ls "$D"/source_identity.*.json | head -1)" "$D/source_identity.json"
+cp "$D/source_identity.$(basename "$(dirname "$(dirname "$PY")")").json" "$D/source_identity.json" 2>/dev/null || cp "$(ls "$D"/source_identity.*.json | head -1)" "$D/source_identity.json"
 # the attempt manifest (increment A job.json, written by run_row.sh's `tele init` before this script) carries the record too
 if [ -f "$D/job.json" ]; then
   python3 - "$D/job.json" "$D/source_identity.json" <<'EOF' 2>/dev/null || true

@@ -13,7 +13,7 @@
 # (first of /usr/local/cuda-12.9, /usr/local/cuda), FA2 (/workspace/cp/fa2), FA3_TAP_HDIMS (64,128), MAX_JOBS (32), TREE_ONLY=1.
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
-VENV=${VENV:-/workspace/venv-cu129}; PY=$VENV/bin/python
+VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # [R19] the one Python 3.12 environment of pod_bootstrap.sh
 if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export MAX_JOBS=${MAX_JOBS:-32}
