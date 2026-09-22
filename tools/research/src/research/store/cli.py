@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Callable
@@ -348,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         return fn(rest)
-    except (StoreError, ConfigError, RemoteConflict, ValueError, OSError, NotImplementedError) as e:
+    except (StoreError, ConfigError, RemoteConflict, ValueError, OSError, NotImplementedError, sqlite3.Error) as e:
         print(f"research data {cmd}: {e}", file=sys.stderr)
         return 1
 

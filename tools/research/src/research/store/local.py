@@ -4,7 +4,7 @@ disposable catalog, under `~/.research/store` (or `$RESEARCH_STORE`).
     objects/sha256/<hex>          blobs, temp + hard-link (never overwritten, mode 0444)
     manifests/<hex>.json          canonical artifact manifests; hex == art id hex
     attempts/<run id>.json        canonical attempt manifests; write-once, a different second content is AttemptExists
-    labels/<target>/<ts>-<by>.json one immutable assertion each (O_EXCL; a same-second collision gets a numeric suffix)
+    labels/<target>/<ts>-<by>.json one immutable assertion each (O_EXCL; a same-second collision gets a `~N` suffix)
     trees/<hex>/                  LOCAL ONLY: default materialisation of tree payloads for `fetch(art, to=None)`
     catalog.sqlite                LOCAL ONLY: index.Index; `reindex()` rebuilds it from the three directories above
     scratch/                      LOCAL ONLY: tool caches keyed by reuse_key (owned by the run integration, §6.5)
@@ -336,6 +336,7 @@ class LocalStore:
         hex_ = ids.hex_of(art_id)
         if m.payload.type == "file":
             blob = self._resolve_blob(m.payload.sha256, art_id, None)
+            self.index.set_presence(art_id, local=True)
             if to is None:
                 return blob
             to = Path(to)
@@ -344,6 +345,7 @@ class LocalStore:
             shutil.copyfile(blob, dst)
             return dst
         srcs = [(f, self._resolve_blob(f.sha256, art_id, f.path)) for f in m.payload.files or []]
+        self.index.set_presence(art_id, local=True)
         if to is None:
             final = self.root / "trees" / hex_
             if final.is_dir():
@@ -433,7 +435,7 @@ class LocalStore:
         stem = f"{re.sub(r'[^0-9TZ]', '', label.ts)}-{re.sub(r'[^A-Za-z0-9._-]', '_', by)}"
         data = canon.dumps(label.to_doc())
         for n in range(1, 1000):
-            p = d / (f"{stem}.json" if n == 1 else f"{stem}-{n}.json")
+            p = d / (f"{stem}.json" if n == 1 else f"{stem}~{n}.json")   # '~' sorts after '.', so history order survives a same-second collision
             try:
                 fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
             except FileExistsError:
