@@ -31,6 +31,20 @@ def _tele_argv() -> list[str]:
     return [sys.executable, "-m", "research.telemetry"]
 
 
+def _tele_env() -> dict[str, str]:
+    """[R18 infra, r18-int-2; F-r18-infra-1] the sidecar is `python -m research.telemetry` in a NEW process: launched through a script
+    that put its import root on sys.path in-process only, the child found no package -- the r18-int-1 canary's sampler.log reads
+    'No module named telemetry' and no resources.jsonl was written (the workload ran; Level 0 did not).  The package's IMPORT ROOT goes
+    first on the child's PYTHONPATH, so the sidecar resolves the SAME package that runs it.  For research/telemetry/run.py that root is
+    `src/` = parents[2] (research/telemetry/run.py -> telemetry -> research -> src); veritor's parents[1] would name `research/` and
+    reproduce the bug silently (the regression test in tests/test_telemetry.py is the check)."""
+    root = str(Path(__file__).resolve().parents[2])
+    env = dict(os.environ)
+    pp = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = root if not pp else (root + os.pathsep + pp if root not in pp.split(os.pathsep) else pp)
+    return env
+
+
 def _marker(attempt_dir: Path, actor: str, target_pid: int | None, target_pgid: int | None, sig: int, reason: str, starttime: int | None,
             deliver: bool, job: str | None) -> int:
     ns = argparse.Namespace(actor=actor, reason=reason, signal=sig, target_pid=target_pid, target_pgid=target_pgid, target_pod=None,
@@ -85,7 +99,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         sargs = _tele_argv() + ["sample", "--attempt-dir", str(d), "--cadence", str(a.cadence), "--root-pid", str(proc.pid), "--pss-every", str(a.pss_every),
                                 "--linger", str(a.linger)] + sum((["--mount", m] for m in a.mount), [])
         try:
-            sampler = subprocess.Popen(sargs, start_new_session=True, stdout=open(d / "sampler.log", "ab"), stderr=subprocess.STDOUT)
+            sampler = subprocess.Popen(sargs, start_new_session=True, stdout=open(d / "sampler.log", "ab"), stderr=subprocess.STDOUT, env=_tele_env())
         except OSError as e:
             em.emit("mark", stage=a.stage, name="sampler_start_failed", error=str(e))
             sampler = None

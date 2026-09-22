@@ -492,3 +492,50 @@ def test_d6_deferred_hash_records_identity_at_launch_and_completes_at_preserve(t
     doc["computation"]["inputs"][0]["sha256"] = None
     (tmp_path / "job.json").write_text(json.dumps(doc))
     assert job.hash_inputs(tmp_path)[0]["stat_changed_since_launch"] is True
+
+
+# ---- R18 infra regressions (ported from veritor r18-int-3) -------------------------------------------------------------------------------------
+
+def test_event_accepts_kv_positionals_after_options_on_every_python(tmp_path):
+    """[r18-int-2, arch M-0025] run_row.sh writes `tele event ... submitted --stage S row=.. role=..`; 3.11 parse_args rejected the k=v
+    tail ('unrecognized arguments') and the event was silently lost to telemetry_errors.log; parse_intermixed_args takes it everywhere."""
+    env = dict(os.environ, PYTHONPATH=str(PKG_ROOT))
+    r = subprocess.run([sys.executable, "-m", "research.telemetry", "event", "--attempt-dir", str(tmp_path), "--proc", "run_row", "submitted",
+                        "--stage", "build,match", "row=r1", "role=B0"], capture_output=True, text=True, env=env, cwd=str(tmp_path))
+    assert r.returncode == 0, r.stderr
+    recs = [json.loads(l) for l in (tmp_path / "events.jsonl").read_text().splitlines() if l.strip()]
+    ev = [x for x in recs if x.get("kind") == "queue" or x.get("what") == "submitted" or "submitted" in json.dumps(x)]
+    assert ev, recs
+    assert json.dumps(ev[-1]).count("r1") >= 1 and json.dumps(ev[-1]).count("B0") >= 1
+
+
+def test_tele_run_launched_through_the_script_starts_a_sampler_that_finds_the_package(tmp_path):
+    """[r18-int-2, F-r18-infra-1] r18-int-1 canary: `zk/campaign/tele run ...` -> sampler.log '/usr/bin/python3: No module named telemetry',
+    no resources.jsonl.  The launcher below is that script's shape: the import root goes on sys.path IN-PROCESS only, the environment
+    carries no PYTHONPATH and the cwd is elsewhere.  The sidecar (`python -m research.telemetry sample`, a new process) must still
+    resolve the same package -- run._tele_env() puts `src/` (parents[2] of research/telemetry/run.py) on the child's PYTHONPATH.
+
+    The package under test is a COPY of research/ in tmp_path whose __main__ records its own __file__: the interpreter running these
+    tests may have `research` installed (editable) in site-packages, which would let a sidecar that lost the PYTHONPATH import the
+    installed copy and hide the bug (parents[1] passes the naive form of this test for exactly that reason)."""
+    import shutil
+    root = tmp_path / "root"
+    shutil.copytree(PKG_ROOT / "research", root / "research", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    main_py = root / "research" / "telemetry" / "__main__.py"
+    mark = tmp_path / "sidecar_module_file.txt"
+    main_py.write_text(f"import pathlib\npathlib.Path({str(mark)!r}).write_text(__file__)\n" + main_py.read_text())
+    launcher = tmp_path / "tele"
+    launcher.write_text("import sys\n"
+                        f"sys.path.insert(0, {str(root)!r})\n"
+                        "from research.telemetry.cli import main\n"
+                        "sys.exit(main())\n")
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    r = subprocess.run([sys.executable, str(launcher), "run", "--attempt-dir", str(tmp_path / "a"), "--stage", "t", "--cadence", "0.2", "--linger", "0.5",
+                        "--", "sleep", "1.5"], capture_output=True, text=True, env=env, cwd=str(tmp_path))
+    assert r.returncode == 0, r.stderr
+    log = (tmp_path / "a" / "sampler.log").read_text() if (tmp_path / "a" / "sampler.log").exists() else ""
+    assert "No module named" not in log, log
+    assert (tmp_path / "a" / "resources.jsonl").exists(), sorted(p.name for p in (tmp_path / "a").iterdir())
+    assert (tmp_path / "a" / "resources.jsonl").read_text().strip(), "no sample written"
+    assert mark.exists(), "the sidecar did not run the launcher's package (an installed `research` elsewhere may have been imported instead)"
+    assert Path(mark.read_text()).resolve() == main_py.resolve()
