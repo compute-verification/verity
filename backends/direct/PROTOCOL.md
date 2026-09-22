@@ -366,3 +366,102 @@ wires). The field-operation column now favours B by \(\approx2\times\) under A's
   measurements, not here.
 - Whether the first complete backend ships as `COMPLETE_HVZK_BACKEND` (no step 0) with 5.3 as the path to
   `COMPLETE_ZK_BACKEND`.
+
+## 12. The K=1536 VU as one AIR: the chain (`ChainAir`, implemented 2026-09-22) **[implemented, diagnostic PCS]**
+
+The wave-1 diagnostic proved independent transition units (one row each, no relation between rows). The
+verification unit is 96 word-chained units from \(c_0 = +0\) followed by the epilogue (`step.py::gen_vu`,
+`accepts_vu`; `Epilogue` contract in `checker/gadgets.py`). This section fixes how the chain and the epilogue
+enter the AIR. The relation is unchanged: every WP2 contract of the unit is emitted per row exactly as in 4.1,
+the `Epilogue` contract is added, and the only new constraints are the linkage and boundary constraints below.
+
+### 12.1 Design chosen: one row per transition unit, accumulator carried by a transition constraint
+
+Trace: `96 * B` rows in VU order (VU \(i\) occupies rows \(96i \ldots 96i+95\)), padded to the next power of two
+with the rows of the *zero VU* (\(a = b = 0\), \(c\) stays \(+0\), \(y_{16} = 0\); the padding may end inside a
+VU because the last row of the trace has no transition constraint and every zero-VU row satisfies the row-local
+constraints, the epilogue included). \(B = 4096\): 393,216 real rows in a \(2^{19} = 524,288\)-row trace
+(25% padding; a non-power-of-two-friendly PCS would drop it).
+
+Row-local columns beyond the unit's: five committed selectors/hints and the epilogue's columns.
+
+| column | meaning | constraints |
+|---|---|---|
+| `vu.step` \(s\) | position in the VU, \(0 \ldots 95\) | `vu.first_step`: \(\mathrm{first}\cdot s = 0\); `vu.next_step` (transition): \((1-\mathrm{first}')(s' - s - 1) = 0\) |
+| `vu.first` | 1 on the first row of a VU | boolean; `vu.row0_first` (first row of the trace): \(=1\); `vu.next_first` (transition): \(\mathrm{first}' = \mathrm{last}\) |
+| `vu.last` | 1 on the last row of a VU | boolean; `vu.last_def`: \((s-95)\cdot\mathrm{inv} = 1 - \mathrm{last}\); `vu.last_key`: \(\mathrm{last}\cdot(s - 95) = 0\) |
+| `vu.inv` | \((s-95)^{-1}\) or 0 | (the exclusion witness of `last`) |
+| `vu.claim` \(\hat y\) | the claimed BF16 output word of this row's VU | `vu.out`: \(\mathrm{last}\cdot(y_{16} - \hat y) = 0\) |
+| `cast.*` (epilogue) | `Epilogue` hints: `hi`, `lo`, `hi2`, `lsb`, `carry`, `rem` and their range limbs | the contract's identities: split \(y = 2^{16}\,\mathrm{hi} + \mathrm{lo}\), \(\mathrm{hi} = 2\,\mathrm{hi2} + \mathrm{lsb}\), round-to-nearest-even \(\mathrm{lo} + \mathrm{lsb} + (2^{15}-1) = 2^{16}\,\mathrm{carry} + \mathrm{rem}\), \(y_{16} = \mathrm{hi} + \mathrm{carry}\); ranges as 2-bit limbs |
+
+Chain and boundary constraints (`ChainAir::eval`, after the row program):
+
+- `vu.row0_step`, `vu.row0_first` (first row of the trace): \(s = 0\), \(\mathrm{first} = 1\).
+- `vu.first_c[i]` (row-local): \(\mathrm{first}\cdot c_{\mathrm{in}} = 0\) -- the chain starts at \(+0\) (bit
+  pattern 0; the checker's `gen_vu` starts from `c_0 = 0`).
+- `vu.link[i]` (transition): \((1-\mathrm{first}')\,(c_{\mathrm{in}}' - y_{32}) = 0\) -- the next row's input
+  accumulator word is this row's `pack.y` unless the next row starts a VU. Over BabyBear the 32-bit word is two
+  16-bit limbs (`x.c_hi`, `x.c_lo`; `pack.y_hi`, `pack.y_lo`) and the link is two constraints.
+
+Why the step counter: `first`/`last` alone admit a trace whose "VUs" have any length. With \(s\) pinned to 0 at a
+`first` row, forced to increment inside a VU and forced to 95 exactly on a `last` row, and `first' = last`, every
+VU in the trace has exactly 96 rows and the trace is a sequence of complete VUs (the padding's trailing partial
+VU is never followed by a `last` row that could bind a claim: its `vu.out` is satisfied by the zero VU's own
+\(y_{16}=0\) anyway).
+
+The epilogue runs on every row (its identities hold for any finite or infinite FP32 word, and `Pack` guarantees
+one), and only the `last` row's result is bound to the claim. Running it everywhere costs its columns 96 times
+per VU (about 45 of 2 844 Goldilocks columns, 1.6%) and avoids a second AIR or a selector-gated degree increase;
+this is the simplest sound option (12.3 discusses the alternatives).
+
+### 12.2 Sizes
+
+| | unit AIR (wave 1) | chain, Goldilocks | chain, BabyBear |
+|---|---|---|---|
+| width (columns) | 2 794 | 2 844 | 2 900 |
+| constraints per row | 3 090 | 3 151 | 3 215 |
+| of which range-check limbs (2-bit) / one-hot table selectors / exclusion inverses | 1 828 / 610 / 66 | 1 868 / 610 / 67 | 1 922 / 610 / 67 |
+| max constraint degree (log quotient degree) | 5 (2) | 5 (2) | 5 (2) |
+| rows per VU | -- | 96 | 96 |
+| committed trace cells per VU (`rows x width`) | 2 794 per unit | 273 024 | 278 400 |
+| committed bytes per VU (base field) | -- | **2.18 MB** | **1.11 MB** |
+| trace, \(B=4096\) | \(2^{12}\) rows | \(2^{19} \times 2844\) = 1.49 G cells, 11.9 GB | \(2^{19} \times 2900\) = 1.52 G cells, 6.1 GB |
+
+Against the census: `census_vu(1536)` counts 63.7 k slots per VU (3 073 inputs, 21 606 hints, 5 952 lookup
+outputs, 23 424 products, 9 696 materialised) *with a lookup argument for the range checks and tables*; the AIR
+commits 4.3x that because each range check is materialised as 2-bit limbs (1 868 of 2 844 columns) and each
+table lookup as a one-hot selector row (610 columns). tensor.md's 1.15 MB/VU for B over a 31-bit field is met
+by the BabyBear chain (1.11 MB/VU) only because tensor.md's figure already assumed the lookup-free 2-bit-limb
+layout; a range lookup argument (4.2) would cut both fields' committed bytes by ~3x and is the next structural
+step, not part of this measurement.
+
+### 12.3 Alternatives considered
+
+1. **Separate epilogue AIR joined by a lookup.** One row per VU in a second table (4 096 rows), the chain's
+   last-row `pack.y` and the claim looked up in it. Saves the 96x-repeated epilogue columns (1.6%) at the price of
+   a multi-table lookup argument uni-stark does not have; not worth it at this width.
+2. **Per-VU sub-traces** (one STARK per VU, or a batch of 4 096 small traces). Prover work is the same, but each
+   proof pays FRI/Merkle fixed costs and the verifier does 4 096 verifications; the single-trace chain amortises
+   both. A batched variant (one commitment over 4 096 columns groups) is what the Ligero-style PCS of 3--5 does
+   natively and is the proposal's path; irrelevant for the diagnostic PCS.
+3. **Epilogue rows** (a 97th row per VU with a different row program). Needs a row-type selector multiplying every
+   unit constraint (degree +1, so log quotient degree 3 -> blowup 8) or two AIRs; the always-on epilogue is
+   cheaper.
+4. **Public values** for the output words. uni-stark's `public_values` are per-proof, not per-row, and would need
+   a 4 096-term boundary polynomial per column; the claim column is bound to the epilogue output by `vu.out`
+   instead. This binds *committed cells*, not a statement: the verifier learns the words by reading the
+   claim column's opened values, and authentication of the words (and of the operands) is excluded from this
+   diagnostic exactly as in wave 1 (`authentication = excluded`).
+
+### 12.4 Soundness notes specific to the chain
+
+- The linkage constraint transports a *word* (`pack.y`, a 32-bit FP32 bit pattern, or its two 16-bit limbs);
+  `Fp32Decode` on the next row re-derives sign/exponent/mantissa from that word under its own range checks, so
+  the chain never relies on a field element being "the same number" in two encodings.
+- The zero VU's rows satisfy every constraint (checked in `chain_trace`), so padding adds no constraint case.
+- `vu.claim` is a free column on non-`last` rows; a prover may put anything there. Only `last` rows are read.
+- The BabyBear port splits every 32-bit word (`x.c`, `f`, `pack.low`, `pack.y`) into 16-bit limbs with their own
+  range checks, realises `LtPow` as a direct range check on \(2^w - 1 - x\) (no product), and adds a bound check
+  on the normalised mantissa at \(k = k_{lo}\) so no identity has a term reaching \(p = 2^{31} - 2^{27} + 1\)
+  (all constants are kept below \(2^{24}\)); +56 columns over Goldilocks. The 52 `vu-k1536-neg` instances and the
+  mutation tests pass identically over both fields (`tests/chain.rs`, `direct-unit vu-neg`).
