@@ -222,6 +222,144 @@ def run(out: Path, *, full: bool = False, seed: int = 0) -> H.Report:
     return rep
 
 
+def run_checker(out: Path, *, full: bool = False, seed: int = 0) -> H.Report:
+    """Wave 2: the WP2 checker contracts (``--target checker``).  Mutation / coordinated attacks on every hint column
+    under its declared range over Z and F_p; z3 per gadget over Goldilocks, p40 and Mersenne-31 with Boolean case
+    splits (the U3 re-encoding); the full group step (concrete, symbolic, selector-split, bit-vector); U4 range
+    containment; the census deltas.  Every SAT model is replayed through ``FieldCtx`` before it is reported."""
+    from verity_numerical.checker import REAL
+    from verity_numerical.checker import search as S
+
+    from . import census_review as CR
+    from . import checker_target as CT
+    from . import z3_checker as ZC
+
+    rng = random.Random(seed)
+    rep = H.Report(meta={"branch": _git("branch", "--show-current"), "commit": _git("rev-parse", "--short", "HEAD"),
+                         "z3": z3.get_version_string(), "python": platform.python_version(), "full": full,
+                         "target": "verity_numerical.checker (WP2 contracts)", "started": time.strftime("%Y-%m-%dT%H:%M:%S")})
+    fid = iter(range(1, 10_000))
+    nid = lambda prefix: f"{prefix}{next(fid)}"  # noqa: E731
+    z3_to = 300_000 if full else 30_000
+    cases = CT.step_cases(24 if full else 12, seed)
+    fields = [("Z", None), ("goldilocks", CT.GOLDILOCKS), ("p40", CT.P40), ("m31", CT.M31)]
+
+    # ---- completeness, mutations, coordinated: unit ------------------------------------------------------------------
+    for fname, field in fields:
+        t = CT.bound_checker_target(REAL, field)
+        f = rep.add(H.run_completeness(t, cases, fid=nid("C")))
+        f.reproducer = f"{HERE}/checker_target.py::bound_checker_target"
+        if field in (CT.P40, CT.M31) and f.status == "FAIL":
+            f.status, f.attack = "NOTE", "completeness (F4: a 32-bit word does not fit; expected for p < 2^32)"
+        sample = cases if full else cases[:36]
+        f = rep.add(H.run_mutations(t, sample, rng=rng, fid=nid("M")))
+        f.reproducer = f"{HERE}/harness.py::run_mutations(checker_target)"
+        f = rep.add(H.run_coordinated(t, sample[:12], rounds=600 if full else 150, rng=rng, fid=nid("X")))
+        f.reproducer = f"{HERE}/harness.py::run_coordinated(checker_target)"
+    # ---- the VU: word-chained units + epilogue -----------------------------------------------------------------------
+    golden, _ = C.golden_cases()
+    from verity_numerical.checker import Reject as _Reject
+    from verity_numerical.checker.reference import vu as _vu
+
+    chains = []
+    while len(chains) < (6 if full else 3):
+        picks = rng.sample(golden, 3)
+        x = (sum((list(c[1][1]) for c in picks), []), sum((list(c[1][2]) for c in picks), []))
+        try:
+            _vu(REAL, *x)          # 114 of the 360 records saturate: an infinite intermediate word is outside the VU's domain
+        except _Reject:
+            continue
+        chains.append((f"vu3[{len(chains)}]", x))
+    for fname, field in fields[:2]:
+        tv = CT.checker_vu_target(REAL, field)
+        f = rep.add(H.run_completeness(tv, chains, fid=nid("C")))
+        f.reproducer = f"{HERE}/checker_target.py::checker_vu_target"
+        f = rep.add(H.run_mutations(tv, chains, rng=rng, fid=nid("M"), limit_per_case=None if full else 120))
+        f.attack = "mutation (VU: 3 chained units + epilogue, every hint incl. the epilogue's)"
+        f.reproducer = f"{HERE}/checker_target.py::checker_vu_target"
+    rep.add(H.Finding(nid("N"), "checker[vu]", "forged intermediate FP32 word between units", "NOTE", 0.0,
+                      detail={"why": "check_vu_expr passes unit i's *output expression* as unit i+1's c: the word is not a hint, so no "
+                                     "forgery surface exists in the checker; a trace/AIR that materialises c_{i+1} as a column must bind "
+                                     "it with one linear identity to unit i's word (census_review: +1 lin, +1 column per unit)"},
+                      reproducer=f"{HERE}/census_review.py"))
+
+    # ---- z3: per gadget, Boolean case split, three fields ------------------------------------------------------------
+    for fname, field in [("goldilocks", CT.GOLDILOCKS), ("p40", CT.P40), ("m31", CT.M31)]:
+        for name, spec in S.SPECS.items():
+            r = ZC.gadget_split(spec, REAL, modulus=field, timeout_ms=z3_to)
+            st = {"sat": "SAT", "unsat": "UNSAT", "unknown": "UNKNOWN"}[r["status"]]
+            detail = {"field": field, "cases": [(c["case"], c["status"], c.get("seconds")) for c in r["cases"]]}
+            if st == "SAT":
+                detail["model"] = r["model"]
+                detail["replayed_in_FieldCtx"] = _replay_gadget(spec, field, r["model"])
+                detail["missing_bound"] = _missing_bound(name, field)
+            rep.add(H.Finding(nid("Z"), f"checker[{name},{fname}]", "z3 gadget, Boolean hints split: output differs from reference",
+                              st, r["seconds"], case=f"{len(r['cases'])} cases", detail=detail,
+                              reproducer=f"{HERE}/z3_checker.py::gadget_split"))
+    # U3 verbatim: signed_sum over F_(2^31-1) as stated, unsplit (the checker's own UNKNOWN) and split
+    r0 = S.z3_gadget(S.SPECS["signed_sum"], REAL, timeout_ms=z3_to, modulus=S.M31)
+    rep.add(H.Finding(nid("Z"), "checker[signed_sum,m31]", "U3 as stated (checker.search.z3_gadget, no split)",
+                      {"sat": "SAT", "unsat": "UNSAT", "unknown": "UNKNOWN"}[r0.status], r0.seconds,
+                      reproducer="verity_numerical/checker/search.py::z3_gadget(modulus=M31)"))
+    # ---- z3: the full group step ------------------------------------------------------------------------------------
+    r = S.z3_group_step(REAL, timeout_ms=z3_to, concrete=S.concrete_group_inputs())
+    rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 concrete input, Int encoding (checker.search)", r.status.upper(), r.seconds,
+                      reproducer="verity_numerical/checker/search.py::z3_group_step(concrete)"))
+    r = ZC.bv_group_step(REAL, timeout_ms=60_000, concrete=S.concrete_group_inputs())
+    rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 concrete input, 128-bit bit-vector encoding (tables as shifts)",
+                      r["status"].upper(), r["seconds"], detail={"tables_agree": ZC.bv_tables_agree(REAL)},
+                      reproducer=f"{HERE}/z3_checker.py::bv_group_step"))
+    r = ZC.int_group_step_split(REAL, timeout_ms=z3_to if full else 60_000, selectors=(1, 1))
+    rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 symbolic input, Int encoding, one-hot selectors fixed (1 of 100 cases)",
+                      r["status"].upper(), r["seconds"], detail=r, reproducer=f"{HERE}/z3_checker.py::int_group_step_split"))
+    if full:
+        r = ZC.bv_group_step(REAL, timeout_ms=z3_to)
+        rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 symbolic input, bit-vector encoding", r["status"].upper(), r["seconds"],
+                          reproducer=f"{HERE}/z3_checker.py::bv_group_step"))
+    # ---- U4 -----------------------------------------------------------------------------------------------------------
+    c4 = ZC.containment(REAL)
+    rep.add(H.Finding(nid("U"), "checker[contracts]", "U4 range containment along step.py's data flow (real widths)",
+                      "NOTE" if c4["failing_edges"] else "PASS", 0.0,
+                      detail={"failing_edges": c4["failing_edges"], "derived": c4["derived"],
+                              "contract_to_contract_gaps": [e for e in c4["edges"] if not e["ok"]],
+                              "reading": "state_out.e_hat reaches the floor (-132) when z = 1, below pack.e1's declared [-126, ..): harmless "
+                                         "because pack multiplies fin by (1 - z), but the contract does not say so; the group-to-group "
+                                         "exponent edge is contained only through the per-group ceiling e_hi(g) + growth, not the contract"},
+                      reproducer=f"{HERE}/z3_checker.py::containment"))
+    # ---- census ---------------------------------------------------------------------------------------------------------
+    rep.add(H.Finding(nid("N"), "security.census", "counting conventions: what a backend pays that the census does not count",
+                      "NOTE", 0.0, detail=CR.census_delta(REAL), reproducer=f"{HERE}/census_review.py::census_delta"))
+    rep.meta["finished"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    rep.write(out)
+    return rep
+
+
+def _replay_gadget(spec, field: int, model: dict) -> dict:
+    """Run the gadget's own ``check`` on the SAT model's values in ``FieldCtx``: accepted, and the outputs mod p."""
+    from verity_numerical.checker import REAL, Reject
+
+    from .checker_target import FieldCtx
+
+    ctx = FieldCtx(field)
+    x = {k: int(v) for k, v in model["inputs"].items()}
+    h = {k: int(v) for k, v in model["hints"].items()}
+    if spec.name == "group_max":
+        h = {"E": h["E"], "sel": [h[k] for k in h if k.startswith("sel")]}
+    try:
+        outs = spec.call(ctx, REAL, x, h)
+    except Reject as e:
+        return {"accepted": False, "violation": str(e)}
+    return {"accepted": True, "outputs_mod_p": [int(o) % field for o in outs], "reference": spec.ref(REAL, x)}
+
+
+def _missing_bound(name: str, field: int) -> str:
+    F = {"align_state": "F1 (lt_pow product wraps: p < 2^50) / F2 (tight quotient bound)",
+         "align_product": "F1/F2 (p < 2^32 for the 16-bit lt_pow products)", "leading_bit": "F1 (p < 2^60)",
+         "normalise": "F3 (div M' + r reaches 2^31 - 1) / F1", "fp32_decode": "F4 (32-bit word, p < 2^32)",
+         "pack": "F4 (32-bit word)", "epilogue": "F4 (32-bit word)", "signed_sum": "p <= 2^31 - 2 (sign pinning)"}
+    return F.get(name, "not in the checker's F1-F4 list: NEW") + f" at p = {field}"
+
+
 def _write_result(run_dir: Path, out: Path, rep: H.Report) -> None:
     """The ``research`` result envelope: the findings report is the evidence; ``validation`` is *not* 'the relation
     is sound' but 'the campaign ran to completion' (SAT findings are the deliverable, not a failure)."""
@@ -240,12 +378,16 @@ def _write_result(run_dir: Path, out: Path, rep: H.Report) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
-    default_out = Path(run_dir) / "redteam_relation.json" if run_dir else Path("backends/numerical/reports/redteam_relation.json")
-    ap.add_argument("--out", type=Path, default=default_out)
+    ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--full", action="store_true")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--target", choices=("relation", "checker"), default="relation",
+                    help="relation: verity.ml.tc.relation (wave 1); checker: the WP2 checker contracts (wave 2)")
     a = ap.parse_args(argv)
-    rep = run(a.out, full=a.full, seed=a.seed)
+    if a.out is None:
+        name = "redteam_relation.json" if a.target == "relation" else "redteam_checker.json"
+        a.out = Path(run_dir) / name if run_dir else Path("backends/numerical/reports") / name
+    rep = (run if a.target == "relation" else run_checker)(a.out, full=a.full, seed=a.seed)
     print(rep.table())
     print(rep.to_json()["counts"])
     if run_dir:
