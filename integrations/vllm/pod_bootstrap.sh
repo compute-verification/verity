@@ -144,8 +144,52 @@ r["identities"] = {"python": sys.version.split()[0], "executable": sys.executabl
                    "tree": {"integration_root": root, "verity_core": core, "research": research},
                    "native": {k: r["checks"][k].get("value") for k in ("hidden_gpu_so", "fa2_tap_so", "fa3_tap_so") if k in r["checks"]}}
 r["ok"] = all(c["ok"] for c in r["checks"].values())
+# ---- measurements [r19-int-20]: the pod's non-GPU admission resources, MEASURED at bootstrap and recorded beside the checks.  Advisory:
+# none fails the bootstrap (a slow or small pod can still compute); the launcher and the attempt's conditions read them.  Why each:
+#   network  -- vyv-l40s2b (EUR-IS-2) moved 2.6 MB/s to /vault and 6-8 MiB/s to R2 while its neighbours did 84-287 MiB/s (F-r19-mirror-3;
+#               R2 probe 16:30Z): a 30 GB row landed on the one pod that could not ship its evidence.  One 64 MiB download + one 16 MiB
+#               upload against Cloudflare's public speed endpoint (a User-Agent is required: the default python-urllib UA is refused 403).
+#   disk     -- the container overlay is an unmodelled admission resource (F-r19-int-14): l40s4 filled under two rows' captures.
+#   memory   -- the cgroup ceiling, not the host's RAM, is what a Match / Commit is admitted against (351 vs 1511 GiB on tp2).
+import shutil, time, urllib.request
+UA = {"User-Agent": "verity-pod-readiness/1 (python-urllib)"}
+def net(down_bytes=64 << 20, up_bytes=16 << 20):
+    t = time.monotonic(); got = 0
+    with urllib.request.urlopen(urllib.request.Request(f"https://speed.cloudflare.com/__down?bytes={down_bytes}", headers=UA), timeout=90) as f:
+        while True:
+            b = f.read(1 << 20)
+            if not b:
+                break
+            got += len(b)
+    down = got / (time.monotonic() - t) / 1e6
+    data = os.urandom(up_bytes); t = time.monotonic()
+    urllib.request.urlopen(urllib.request.Request("https://speed.cloudflare.com/__up", data=data, method="POST", headers=UA), timeout=90).read()
+    up = up_bytes / (time.monotonic() - t) / 1e6
+    return {"down_MBps": round(down, 1), "up_MBps": round(up, 1), "probe": "speed.cloudflare.com", "bytes": {"down": got, "up": up_bytes}}
+def disk(path="/workspace"):
+    u = shutil.disk_usage(path)
+    return {"path": path, "total_bytes": u.total, "free_bytes": u.free}
+def memory():
+    m = {"total_bytes": os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES"), "cgroup": None, "cgroup_max_bytes": None}
+    for p, k in (("/sys/fs/cgroup/memory.max", "v2"), ("/sys/fs/cgroup/memory/memory.limit_in_bytes", "v1")):
+        try:
+            v = open(p).read().strip(); m["cgroup"] = k; m["cgroup_max_bytes"] = None if v == "max" else int(v); break
+        except OSError:
+            pass
+    return m
+r["measurements"] = {}
+for name, fn in (("network", net), ("disk", disk), ("memory", memory)):
+    try:
+        r["measurements"][name] = fn()
+    except Exception as e:  # noqa: BLE001
+        r["measurements"][name] = {"error": f"{type(e).__name__}: {e}"}
+n = r["measurements"]["network"]
+if "error" not in n and (n["down_MBps"] < 20 or n["up_MBps"] < 20):
+    print(f"WARN slow pod network: down {n['down_MBps']} MB/s up {n['up_MBps']} MB/s (a 30 GB capture ships in "
+          f"{30000 / max(n['up_MBps'], 0.1) / 60:.0f} min at this uplink) -- advisory, recorded in readiness.json")
 json.dump(r, open(out, "w"), indent=1)
 print(json.dumps({k: v["ok"] for k, v in r["checks"].items()}))
+print("measurements " + json.dumps(r["measurements"]))
 sys.exit(0 if r["ok"] else 1)
 EOF
 log "READY $OUT/readiness.json"
