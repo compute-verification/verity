@@ -1,0 +1,84 @@
+# Candidate A: GKR + lookups (`verity-gkr`)
+
+The transition unit (one 16-product `mma.sync` update with an arbitrary finite accumulator) as a layered arithmetic
+circuit exported from the WP2 gadget contracts, proved data-parallel over `B` units with sumcheck GKR, LogUp fractional-sum
+GKR for the lookups and a Ligero-style hash commitment. The design is `PROTOCOL.md`; this file is how to build, test and
+run what exists.
+
+Labels on every number from this crate: `proof_class = NON_ZK_PROOF_DIAGNOSTIC` (PCS mode) or `ARITHMETIC_DIAGNOSTIC`
+(`--clear`: inputs and hints sent in the clear), `authentication = excluded`, `unit = transition`, `domain = finite`.
+No ZK masking anywhere yet; Fiat–Shamir with SHA-256 (the interactive object and step 0 are not implemented; the transcript
+records `rounds.protocol` and `rounds.sequential_depth`).
+
+## Layout
+
+- `Cargo.toml`: standalone crate, **no external crates** (hand-rolled Goldilocks, cubic extension `X^3 − X − 1`, SHA-256).
+- `src/field.rs` (Fp, Ext, eq tables, Lagrange), `src/transcript.rs` (SHA-256 Fiat–Shamir, rejection sampling),
+  `src/circuit.rs` (circuit text parser, layers), `src/gkr.rs` (data-parallel sumcheck GKR per layer), `src/logup.rs`
+  (LogUp fractional-sum GKR per table), `src/ligero.rs` (NTT, RS encode, Merkle, open/verify), `src/main.rs`
+  (`prove`/`verify`, `run` → `result.json` per `verity_numerical.bench.contract`, `negatives`, tests).
+- `run_measure.sh`: the recorded-run driver. `fixtures/`: the exported circuit, an 8-unit honest witness, 52 negatives.
+- The circuit exporter lives campaign-side: `backends/numerical/python/verity_numerical/gkr_export/` (`circuit.py` runs the
+  12 WP2 gadgets once on symbolic values and emits the layered circuit; `negatives.py` re-derives every `test_negative.py`
+  case as a mutated witness; `python -m verity_numerical.gkr_export` writes the fixtures). Tests:
+  `backends/numerical/tests/gkr_export/`.
+
+## What is proved
+
+- **Circuit** (from the gadget contracts, same hints and range checks): 468 committed columns per unit (34 public words +
+  hints + range chunks + looked-up rows + materialised query wires), 826 wires, 358 quadratic products, 353 linear
+  assertions, 374 lookup queries per unit (`R16` 352, `ALIGN` 16, `POW`/`LEAD`/`NORM` 2 each), multiplicative depth 4.
+  Non-power-of-two ranges are two one-sided checks. Units are the low hypercube variables.
+- **GKR.** Output layer = all assertions and all products equal their claimed wires (random linear combination of the
+  assertion vector), then layer by layer down to the inputs; degree-3 rounds, 2 claims merged per layer.
+- **Lookups.** LogUp / fractional-sum GKR per table (Haböck; Papini–Haböck): table leaves `m_t/(z − t)` with committed
+  multiplicities, witness leaves `1/(z − q)`, equality of the two sums via a binary tree of sumchecks.
+- **Commitment.** `X = [468 columns/unit × B | multiplicities of the 5 tables]`, Reed–Solomon encoded row-wise
+  (k = 4096 → n = 16384 over Goldilocks), SHA-256 Merkle over the n columns, root absorbed before any challenge. Every
+  residual input-layer claim is a linear functional of `X`; they are batched into one functional and opened Ligero-style
+  (row combination restricted to the k-symbol payload + t = 192 opened columns with paths). Linear test only: all
+  products are inside the GKR, so no quadratic test is needed.
+
+Soundness by `security/accounting.account_candidate_a` with `LigeroParams(n=16384, k=4096, l=4095, t=192, zk=False)`,
+`commit_query_wires=True`: **127.7 bits at B = 1, 64, 4096** (IRS query term 2^-130.2; the 0.3 bits under 2^-128 are the
+LogUp identity term over Goldilocks^3, parameterised, not tuned).
+
+Against the census (`security/census.py`: 321 committed columns per unit + query wires) the export materialises 147 extra
+columns (range chunks and query wires bound by assertions, `PROTOCOL.md` §4.3 `commit_query_wires`).
+
+## Build, test, cross-check
+
+Never on a laptop; on the `vy-cpu` pod (`~/.research/machines.toml`):
+
+~~~sh
+CARGO_TARGET_DIR=/workspace/target-gkr cargo test --release        # 9 tests: field, NTT/encode, SHA-256 vectors, honest B=1..64, tampered proof, negatives
+cargo run --release -- negatives fixtures/                          # 52 mutated witnesses, all rejected
+uv run --package verity-numerical python -m verity_numerical.gkr_export   # regenerate circuit + fixtures
+~~~
+
+Cross-check on record: 5,120 random finite units (WP2 `gen_step`) each accepted by WP2 `check_step` and by the exported
+circuit's evaluator; the Rust verifier accepted the 4,096-unit batch end-to-end. Negatives: 52/52 rejected, 0 wrongly
+accepted, each failing at a LogUp final identity (range/table violation) or the assertion sumcheck — the families are
+`align_product`, `align_state`, `bf16`, `fp32`, `group_max`, `leading_bit`, `normalise`, `output`, `overflow`, `pack`,
+`product`, `signed_sum`, `state_out`.
+
+## Recorded runs (vy-cpu, 16 threads, commit 27f1057, PCS mode)
+
+~~~sh
+uv run --package research research run --on vy-cpu --project verity --source . --stage gkr.unit -- \
+    bash backends/gkr/run_measure.sh 4096
+~~~
+
+| B | run id | prove_s | verify_s | proof bytes | rounds.protocol | rounds.sequential_depth | peak RSS | committed elements |
+|---|---|---|---|---|---|---|---|---|
+| 1 | r20260922-020045-0ac2 | 0.250 | 0.082 | 443,864 | 684 | 172 | 37 MB | 67,091 |
+| 64 | r20260922-020115-8b4e | 0.331 | 0.106 | 461,432 | 762 | 172 | 43 MB | 96,575 |
+| 4096 | r20260922-020128-bb50 | 6.29 (commit 0.21, lookup 2.39, arith 2.05, open 1.55) | 1.56 | 1,206,296 | 1177 | 254 | 645 MB | 1,983,551 |
+
+`committed_elements` = 468·B + ~66,623 multiplicity entries (`R16` has 65,536 rows: the table multiplicities dominate at
+small B, and the ~440 KB proof floor at B=1 is the price of committing that vector). Clear mode (`ARITHMETIC_DIAGNOSTIC`,
+commit 8d67c52): B=1 prove 0.132 s / verify 0.010 s / 36,816 B (r20260922-014657-999b); B=64 r20260922-014821-560c;
+B=4096 r20260922-014938-14b3.
+
+Not yet built: the VU chain (`y_i = c_{i+1}` across units, public boundaries), ZK rows / salted leaves / batched Merkle
+paths in the commitment (~3× bytes slack), HVZK masking, the interactive object and step 0, a parallel NTT, authentication.
