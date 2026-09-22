@@ -609,23 +609,23 @@ def report() -> dict:
 
 
 SUMMARY = [
-    "Killing question: no option beats logUp on both committed elements and depth for Candidate A at any B, and none beats "
+    ("Killing question: no option beats logUp on both committed elements and depth for Candidate A at any B, and none beats "
     "logUp-16 on committed cells for Candidate B at B >= 64.  LogUp with fractional GKR is committed-optimal (multiplicities "
     "only); every argument that avoids the quadratic-depth tree (Shout) or changes the tree (Lasso, plookup) commits O(N) "
-    "or O(N M^(1/d)) extra elements, x4.7 (Lasso c=2) to x40 (Shout d=4) at B=4096.",
-    "Depth lever inside logUp: dedicated T_range7/8/9 tables move 128 of the 284 range queries per unit off T_range16 "
+    "or O(N M^(1/d)) extra elements, x4.7 (Lasso c=2) to x40 (Shout d=4) at B=4096."),
+    ("Depth lever inside logUp: dedicated T_range7/8/9 tables move 128 of the 284 range queries per unit off T_range16 "
     "(N: 111.7M -> 61.3M, hypercube 27 -> 26): depth 381 -> 354 at B=4096 for +9.2k committed elements (+0.005%); "
     "with the c=2 / s=5 proposals both sit on the checker-chain floor (158), so the lever is worth 27 trips only if the "
-    "proposals are not adopted.",
-    "Table width: 16-bit chunks are optimal for B at B >= 4 (every 16 < w <= 32 check is two chunks whatever W in 16..22; "
+    "proposals are not adopted."),
+    ("Table width: 16-bit chunks are optimal for B at B >= 4 (every 16 < w <= 32 check is two chunks whatever W in 16..22; "
     "narrower chunks add 127-175 queries and 127-175 digit columns per unit).  At B = 1 (U = 96) the 65 536 multiplicity "
     "rows dominate: 8/12-bit chunks halve A's and B's committed elements (116k -> 67k; 457k -> 260k) at equal depth "
-    "(checker chain 225 is the floor); crossover B ~ 3 (8-bit) / ~ 4 (12-bit).",
-    "Fixed tables (ALIGN/POW/LEAD/NORM, <= 512 rows, 22 queries per unit) need no Lasso: their logUp trees have dimension "
-    "20-23 at B=4096 (chains 210-276, under the checker chain 297); their multiplicity vectors total 1 087 elements.",
-    "One logUp over all tables (public table id in the row compression) is depth-neutral (hypercube 27 either way) and saves "
+    "(checker chain 225 is the floor); crossover B ~ 3 (8-bit) / ~ 4 (12-bit)."),
+    ("Fixed tables (ALIGN/POW/LEAD/NORM, <= 512 rows, 22 queries per unit) need no Lasso: their logUp trees have dimension "
+    "20-23 at B=4096 (chains 210-276, under the checker chain 297); their multiplicity vectors total 1 087 elements."),
+    ("One logUp over all tables (public table id in the row compression) is depth-neutral (hypercube 27 either way) and saves "
     "only the four extra trees' pads (-8.4k committed, -0.1 MB transcript at B=4096) at the price of a single challenge "
-    "z for all tables; one grand product per table (plookup) costs +N+|T| committed per table (+112M at B=4096) at equal depth.",
+    "z for all tables; one grand product per table (plookup) costs +N+|T| committed per table (+112M at B=4096) at equal depth."),
     "cq-like multiplicity-free lookups are excluded: they need a pairing-based KZG commitment to the table (hash-based only).",
 ]
 
