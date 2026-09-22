@@ -28,6 +28,24 @@ scale codes in 0x78..0x7E, the other groups on subnormal scales with bits at 2^-
 one-operand-hot controls; large cancellation (two groups cancel exactly at the top of the window while small terms sit below
 E1-41: the window-width probe); accumulator-window probe (large accumulators over tiny terms: W2); tiny accumulators; signed zero.
 
+MEASURED 2026-09-22 on vy-5090 (RTX 5090, driver 570.153.02, nvcc 12.8.93; runs r20260922-182011-88f8 nvf4,
+r20260922-182132-d6db f8f6f4, r20260922-182548-e654 mxf4, r20260922-182911-1f10 bf16):
+  * autoproof replay: probe3 1601/1601 (K=64/128/256) and probe2 1400/1400 dots reproduced bit for bit -- model5 IS the silicon
+    for zero-initialised ascending-K chains, on a different RTX 5090 and a different kernel.
+  * nvf4 sweep, 1,736,704 elements, 263,781 hot firings: every family with a +0 accumulator agrees with model5 (0 mismatches over
+    hot_clip_regime 131,072 / random_zero_acc 262,144 / scale sweeps / acc_window / tiny_acc).  Two regimes autoproof never probed
+    (its accumulators were always +0 or the running sum, i.e. the largest addend) disagree: (1) a -0 accumulator with all-zero
+    products returns +0 on silicon, model5 keeps -0 (16,328/16,328 such elements); (2) an incoming accumulator of the OPPOSITE
+    sign to the result whose msb lies 37..42 binades below E1 -- at the alignment window's edge -- comes out 1 ulp (up to 8 in the
+    cancellation family) larger in magnitude than model5's truncated-toward-zero sum (12,790 of 1,507,328 nonzero-acc elements,
+    100% opposite-sign).  Neither a narrower accumulator window nor an anchor computed from scale exponents explains all of them;
+    the accumulator's alignment path is the open question, not the 42/36-bit windows, the RZ normalisation or the hot clip.
+  * mxf4 (ue8m0, .2X): accepted by ptxas on sm_120a (SASS OMMA.SF...E8); model5 with 4 groups of 16 under a per-32 shift is the
+    better structure (2 groups of 32: 32,691/32,768 wrong in large_cancellation vs 126) but not exact: 798/131,072 zero-acc
+    mismatches.  Capture only; hypothesis open.
+  * bf16 m16n8k16 on the RTX 5090: HOPPER_BF16_M16N8K16 reproduces 204,800/204,800 words; AMPERE_BF16_M16N8K16 fails 48,569.
+    The consumer Blackwell part keeps the Hopper BF16 pipeline (one 16-wide group, 26-bit alignment).
+
 Outputs under ``--out``: ``probe_results.json`` (identity, sass counts, replay and per-family counts, first mismatches),
 ``capture_sample.json`` (records sampled per family: acc, a/b codes, scales, d as hex), ``tiles_<family>.npz`` (the full capture),
 ``result.json`` (``kind: tc-evidence/v1``; meta per store README §11: instruction, arch, sku, driver, nvcc, families, counts,
