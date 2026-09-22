@@ -56,9 +56,13 @@ if [ "${GATE:-0}" = "1" ]; then
     fi
     exit 0
 fi
+cache_ok() {  # cache_ok DIR: a manifest of the right variant (a v1 export once landed in the v2 cache: r20260922-075822-5076)
+    [ -f "$1/manifest.json" ] || return 1
+    if grep -q '"variant"' "$1/manifest.json"; then grep -q "\"variant\": \"$VARIANT\"" "$1/manifest.json"; else [ "$VARIANT" = "v1" ]; fi
+}
 if [ "${NEGATIVES:-0}" = "1" ]; then
     EXP=$EXPORT_ROOT/vu-k1536-neg
-    [ -f "$EXP/manifest.json" ] || $UV -m verity_numerical.gkr_export.vu export --root "$INSTANCES_ROOT" --tier vu-k1536-neg --out "$EXP" --procs "$PROCS" --field "$FIELD" $VFLAG
+    cache_ok "$EXP" || { rm -rf "$EXP"; $UV -m verity_numerical.gkr_export.vu export --root "$INSTANCES_ROOT" --tier vu-k1536-neg --out "$EXP" --procs "$PROCS" --field "$FIELD" $VFLAG; }
     cp "$EXP/manifest.json" "$RUN_DIR/export_manifest.json"
     echo "negatives"
     "$BIN" negatives-vu --dir "$EXP" | tee "$RUN_DIR/negatives_vu.txt"
@@ -66,7 +70,8 @@ if [ "${NEGATIVES:-0}" = "1" ]; then
 fi
 export_range() {  # export_range LO HI -> prints the export dir (cached)
     local exp=$EXPORT_ROOT/vu-k1536-$1-$2
-    if [ ! -f "$exp/manifest.json" ]; then
+    if ! cache_ok "$exp"; then
+        rm -rf "$exp"
         $UV -m verity_numerical.gkr_export.vu export --root "$INSTANCES_ROOT" --tier vu-k1536 --lo "$1" --hi "$2" --out "$exp" --procs "$PROCS" --field "$FIELD" $VFLAG >&2
     fi
     echo "$exp"
