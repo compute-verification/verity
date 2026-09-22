@@ -13,8 +13,9 @@ silently outlive its evidence).  Fields the ledger schema does not carry as colu
 run id -- change them only together with the entry they cite.  End-to-end times use ``bench.latency.e2e`` (prove +
 verify + depth x RTT + bytes / link) at the 10 Gb/s link the a-verifier lane used; ``latency.md`` used 25 Gb/s.
 
-Rows whose lane has not merged into ``main`` (gate4-h100, b-bind, red-team-zk, b-verifier) are marked PENDING and
-carry no ledger lookup; when the lane merges, add the ledger key and drop the PENDING flag.
+Rows whose lane has not merged into ``main`` are marked PENDING and carry no ledger lookup; when the lane merges, add
+the ledger key and drop the PENDING flag (``PENDING_LANES`` lists them with the files they will write).  A red-team
+verdict that downgrades a ledger label is carried as ``label_override`` on the row: downgrades stand, nothing is upgraded.
 
 The tables live in the draft between ``<!-- BEGIN TABLE:<name> -->`` / ``<!-- END TABLE:<name> -->`` markers; the
 prose around them is the coordinator's.
@@ -75,78 +76,103 @@ class Row:
     verify_note: str = ""
     flags: str = ""
     pending: str = ""  # non-empty = PENDING: the file the lane will write
+    verified: str = ""  # who accepted the proofs: the candidate's own verifier / an independent one / REJECTED
+    label_override: str = ""  # a red-team downgrade of the ledger label (downgrades stand; never upgrade)
     # PENDING rows carry their own values (no ledger entry to read):
     manual: dict[str, Any] = field(default_factory=dict)
 
 
 LIKE_FOR_LIKE: tuple[Row, ...] = (
-    Row("A: GKR+LogUp+Ligero v1, BabyBear^6, kernel path (a-gpu v2e)",
+    # --- the same-card rows: one H100 (vy-g4), gate4-h100, main = 38757ed, v1 checker, both statement-bound ---
+    Row("A: GKR+LogUp+Ligero v1, BabyBear^6, a-gpu v2e kernel path -- gate4 same-card row",
+        ("gate4-h100", "r20260922-091718-45c3", "A e2e non-ZK B=4096 (a-gpu v2e, main 38757ed)"),
+        verify_s=6.06, proof_bytes=33.9e6, depth=438, verify_note="Python", verified="own Python verifier, 5/5 reps",
+        flags="median of 5 warm reps [7.54, 5.02, 5.03, 4.40, 4.20]; spread is host-side Merkle openings 1.4-3.9 s"),
+    Row("B-Ligero v1 (b-ligero2 prover), non-ZK -- gate4 same-card row",
+        ("gate4-h100", "r20260922-092841-94ac", "B e2e non-ZK 4096 VUs as 25x170 (b-ligero2)"),
+        verify_s=0.816, proof_bytes=110.8e6, depth=2, verified="own Python verifier, 3/3 reps",
+        flags="25 x 170 VUs, t=196; hash + SHAKE expander host placeholders"),
+    Row("B-Ligero v1 (b-ligero2 --zk), 8b masking -- gate4 same-card row",
+        ("gate4-h100", "r20260922-092841-94ac", "B e2e HVZK 4096 VUs as 25x170 (b-ligero2 --zk)"),
+        verify_s=0.880, proof_bytes=122.3e6, depth=2, verified="own Python verifier, 3/3 reps",
+        label_override="NON_ZK_PROOF_DIAGNOSTIC (red-team-zk F1: 8b leaves q unmasked on H; ledger says COMPLETE_HVZK_BACKEND)",
+        flags="zk masks 0.40 s host SHAKE = 14%"),
+    # --- A's other GPU numbers, each with its verification status (no winner picked) ---
+    Row("A: a-gpu2 v6 (packed GKR + graphed LogUp + INT8 opening), v1, BabyBear^6 X^6-22, H100 vy-g5",
+        ("a-gpu2", "r20260922-094040-9e76", "full VU B=4096 H100 v6"),
+        verify_s=1.34, proof_bytes=33.9e6, depth=438, verify_note="vectorised Python",
+        verified="own Python verifier 4096/4096 x3, 52/52 neg rejected; independent Rust verifier REJECTS (W=31 at LogUp POW level 0, "
+                 "r20260922-101240-8f71; W=22 verifier 2943ae0 at 'LogUp POW level 2: final check', r20260922-102428-2285 -- coordinator, not on main)",
+        flags="reproduced from main at 1.80-1.93 s (r20260922-101240-8f71); a-protocol-diff localising the Rust/Python divergence (PENDING)"),
+    Row("A: a-gpu v2e kernel path, H100 vy-g5 (a-gpu's own record)",
         ("a-gpu", "r20260922-074455-d0b6", "full VU B=4096 H100 v2e"),
-        verify_s=3.017, proof_bytes=33.9e6, depth=438,
-        verify_note="Rust verifier 12T on vy-cpu2 (a-verifier r20260922-093721-1330); Python 7.1 s",
-        flags="a-verifier F1: kernel-path proofs REJECTED by both verifiers on vy-g5, 4.43 s not reproduced from any commit as of "
-              "09:20Z; gate4-h100 (unmerged) ran the same prover on vy-g4: 5.016 s median, accepted 5/5 -- coordinator must resolve"),
-    Row("A: a-gpu v2e re-run by gate4-h100 on vy-g4 (main = 38757ed)", None,
-        verify_s=6.06, proof_bytes=33.9e6, depth=438, pending="GATE4_H100.md", verify_note="Python verifier",
-        manual={"prove_s": 5.016, "overhead": 1.24e8, "proof_class": "NON_ZK_PROOF_DIAGNOSTIC", "hardware": "NVIDIA H100 80GB (vy-g4)",
-                "security": "2^-127.7", "run_id": "r20260922-091718-45c3", "lane": "gate4-h100"},
-        flags="median of 5 warm reps [7.54, 5.02, 5.03, 4.40, 4.20]; spread is host-side Python Merkle openings 1.4-4.0 s"),
-    Row("A: same prover, torch path (reproducible today)",
+        verify_s=3.017, proof_bytes=33.9e6, depth=438, verify_note="Rust 12T; Python 7.1 s",
+        verified="own Python verifier; a-verifier F1: the kernel path at c4d472a REJECTED by both verifiers on vy-g5 and 4.43 s not reproduced (a-verifier-2 F1_TRIAGE.md PENDING)",
+        flags="superseded by gate4's 5.02 s re-run of the same prover (accepted by the Python verifier on vy-g4)"),
+    Row("A: a-gpu torch path (VERITY_GPU_TORCH_ONLY=1), H100 vy-g5",
         ("a-verifier", "r20260922-093721-1330", "A-GPU e2e w/ Rust verifier"),
-        verify_s=3.017, proof_bytes=33.9e6, depth=438, prove_s=25.5,
-        verify_note="Rust verifier 12T", flags="prover 25.5 s median of 3, r20260922-091240-4bf9 (VERITY_GPU_TORCH_ONLY=1)"),
-    Row("A: GKR v1 BabyBear^6, CPU Rust (a-babybear)",
-        ("a-babybear", "r20260922-065112-d687", "BabyBear^6 full VU B=4096"),
-        verify_s=45.0, proof_bytes=33.39e6, depth=381,
-        depth_note="derived counter; latency lane measured 355 trips on the Goldilocks build (double-counted logUp pair)"),
+        verify_s=3.017, proof_bytes=33.9e6, depth=438, prove_s=25.5, verify_note="Rust 12T",
+        verified="INDEPENDENT Rust verifier + Python: accepted (the only A GPU proofs the Rust verifier accepts)",
+        flags="prover 25.5 s median of 3 (r20260922-091240-4bf9)"),
+    Row("A: checker v2 + limb-form epilogue, BabyBear^6, a-gpu-v2, A100 vy-a100b",
+        ("a-gpu-v2", "r20260922-095013-db80", "v2 GPU BabyBear^6 limb epilogue full VU B=4096 A100"),
+        verify_s=8.1, proof_bytes=21.1e6, depth=None, verify_note="Python", depth_note="B=64 run reports 279; not reported at 4096",
+        verified="own Python verifier 4096/4096; 52/52 + 30 unit + 4 chain + 15/15 epilogue negatives rejected; no Rust verifier for v2",
+        flags="same-box v1 control 7.93 s (r20260922-091544-4e02): v2 = 1.38x; lookup bucket launch-bound, a-gpu2's graphed rounds not applied"),
     Row("A: GKR checker v2, Goldilocks^3, CPU Rust (a-v2)",
         ("a-v2", "r20260922-081106-6067", "A on checker v2 (Goldilocks), 4096 VUs"),
-        verify_s=12.2, proof_bytes=41.5e6, depth=328,
-        flags="verifier trusted bundle chain.txt until ff651a8 (red-team-v2 #9); fixed on main, verifier-side, not re-timed"),
-    Row("B-Ligero: direct Ligero (torch), ZK (HM96), L40S (b-zk)",
+        verify_s=12.2, proof_bytes=41.5e6, depth=328, verified="own Rust verifier",
+        flags="run-vu chain.txt trust (red-team-v2 #9) fixed ff651a8, fixture refused r20260922-095128-05ac; not re-timed"),
+    Row("A: GKR v1 BabyBear^6, CPU Rust (a-babybear)",
+        ("a-babybear", "r20260922-065112-d687", "BabyBear^6 full VU B=4096"),
+        verify_s=45.0, proof_bytes=33.39e6, depth=381, verified="own Rust verifier",
+        depth_note="derived; latency lane measured 355 trips on Goldilocks"),
+    # --- B-Ligero's faster (L40S) rows, labels as red-teamed ---
+    Row("B-Ligero: fused tests, --zk + HM96 coins, L40S (b-zk)",
         ("b-zk", "r20260922-092404-2a1b", "B-Ligero full ZK (HM96), fused tests"),
-        verify_s=0.96, proof_bytes=122.3e6, depth=3,
-        flags="25 sub-batches x 170 VUs, union bound; hash + SHAKE expander are host placeholders (ligero/PROTOCOL.md 9)"),
-    Row("B-Ligero: HVZK (no coin commitment), L40S (b-zk)",
+        verify_s=0.96, proof_bytes=122.3e6, depth=3, verified="own Python verifier",
+        label_override="NON_ZK_PROOF_DIAGNOSTIC (red-team-zk VERDICT r20260922-100305-2b13; ledger says COMPLETE_ZK_BACKEND)",
+        flags="F1 q unmasked: 16150/16150 accumulators recovered; F2 simulator PROM-only; F3 measured mode is Fiat-Shamir (needs t~279), 2^-128.05 is the interactive bound; repair on b-zk-fix (PENDING)"),
+    Row("B-Ligero: fused tests, --zk, no coin commitment, L40S (b-zk)",
         ("b-zk", "r20260922-092404-2a1b", "B-Ligero HVZK (no coin commitment), fused"),
-        verify_s=0.94, proof_bytes=122.3e6, depth=2),
-    Row("B-Ligero: non-ZK, L40S (b-zk)",
+        verify_s=0.94, proof_bytes=122.3e6, depth=2, verified="own Python verifier",
+        label_override="NON_ZK_PROOF_DIAGNOSTIC (red-team-zk F1; ledger says COMPLETE_HVZK_BACKEND)"),
+    Row("B-Ligero: fused tests, non-ZK, L40S (b-zk)",
         ("b-zk", "r20260922-092404-2a1b", "B-Ligero non-ZK, fused tests"),
-        verify_s=0.96, proof_bytes=110.8e6, depth=3, depth_note="coin commitment left on; 2 without"),
-    Row("B-Ligero: b-ligero2 non-ZK torch prover on H100 (gate4-h100)", None,
-        verify_s=0.816, proof_bytes=110.8e6, depth=2, pending="GATE4_H100.md",
-        manual={"prove_s": 2.386, "overhead": 5.92e7, "proof_class": "NON_ZK_PROOF_DIAGNOSTIC", "hardware": "NVIDIA H100 80GB (vy-g4)",
-                "security": "2^-128.25 union (25 x 170)", "run_id": "r20260922-092841-94ac", "lane": "gate4-h100"}),
-    Row("B-Ligero: b-ligero2 HVZK on H100 (gate4-h100)", None,
-        verify_s=0.880, proof_bytes=122.3e6, depth=2, pending="GATE4_H100.md",
-        manual={"prove_s": 2.911, "overhead": 7.22e7, "proof_class": "COMPLETE_HVZK_BACKEND", "hardware": "NVIDIA H100 80GB (vy-g4)",
-                "security": "2^-128.05 union (25 x 170)", "run_id": "r20260922-092841-94ac", "lane": "gate4-h100"}),
+        verify_s=0.96, proof_bytes=110.8e6, depth=3, depth_note="coin commitment left on; 2 without", verified="own Python verifier",
+        flags="the fastest measured full-batch prover on any card; F3 applies: as run it is Fiat-Shamir, 2^-128.25 is the interactive bound"),
+    Row("B-Ligero at the checker-v2 shape, eager torch, RTX 4090 (b-e2e-v2)",
+        ("b-e2e-v2", "r20260922-094956-5453", "B-Ligero v2 e2e GPU, 4096 VUs = 7 proofs x 682"),
+        verify_s=0.40 * 7, proof_bytes=9.2e6 * 7, depth=2, verify_note="0.40 s x 7 proofs", verified="own verifier 7/7; 52/52 + 39/39 rejected",
+        flags="INCOMPLETE_CHECKER caveat (Python limb rows not z3-verified); kernels not wired: v2 real is SLOWER than v1 real; 180x above b-v2's synthetic 42.4 ms"),
+    # --- B-AIR, C, SP1 ---
     Row("B-AIR: Plonky3 LogUp AIR, checker v2, BabyBear^6, CPU Rust (b-air-v2)",
         ("b-air-v2", "r20260922-090904-cd75", "checker v2 BabyBear^6 AIR + LogUp"),
-        verify_s=0.731, proof_bytes=2.03e6, depth=26, flags="statement-bound (F1-F3 header); the only honest 2^-128 B-AIR row"),
+        verify_s=0.731, proof_bytes=2.03e6, depth=26, verified="Plonky3's own verifier; none independent",
+        flags="statement-bound (F1-F3 header); the only honest 2^-128 B-AIR row"),
     Row("B-AIR: checker v2, BabyBear^4, CPU Rust (b-air-v2)",
         ("b-air-v2", "r20260922-085312-82a9", "checker v2 BabyBear AIR + LogUp tuple lookups"),
-        verify_s=0.455, proof_bytes=1.95e6, depth=26),
+        verify_s=0.455, proof_bytes=1.95e6, depth=26, verified="Plonky3's own verifier"),
     Row("B-AIR: v1 + LogUp range lookups, BabyBear^4, CPU Rust (b-lookup)",
         ("b-lookup", "r20260922-070654-177a", "BabyBear AIR + LogUp range lookups"),
-        verify_s=0.441, proof_bytes=2.27e6, depth=26,
-        flags="STATEMENT-UNBOUND on main (red-team-3 U1/U2 ACCEPTED); bound on lane/b-bind (unmerged): timing-only until then"),
+        verify_s=0.441, proof_bytes=2.27e6, depth=26, verified="Plonky3's own verifier",
+        flags="STATEMENT-UNBOUND on main (red-team-3 U1/U2 ACCEPTED); fix on lane/b-bind (PENDING): timing-only until then"),
     Row("B-AIR: v1 limbs, BabyBear^4, CPU Rust (b-lookup, after lead.window fix)",
         ("b-lookup", "r20260922-065546-a242", "SOUNDNESS FIX: LT_DIRECT"),
-        verify_s=0.426, proof_bytes=3.47e6, depth=22,
-        flags="STATEMENT-UNBOUND on main (red-team-vu F1/F2); bound on lane/soundness-fixes (unmerged, +2^-105 term at ^4)"),
+        verify_s=0.426, proof_bytes=3.47e6, depth=22, verified="Plonky3's own verifier",
+        flags="STATEMENT-UNBOUND on main (red-team-vu F1/F2); fix on lane/soundness-fixes via b-bind (PENDING, +2^-105 term at ^4)"),
     Row("C: QuickSilver VOLE (dietmc), compressed v2, F384p, 1 thread (c-compress)",
         ("c-compress", "r20260922-080520-71b6", "4096 VUs, compressed relation v2, F384p (2^-128 headline)"),
-        verify_s=1255.6, proof_bytes=20.88e9, depth=3,
-        verify_note="designated verifier runs in lock-step: latency.md sets verify = prove",
+        verify_s=1255.6, proof_bytes=20.88e9, depth=3, verified="designated verifier (dietmc), not red-teamed",
+        verify_note="designated verifier in lock-step: latency.md sets verify = prove",
         depth_note="latency.md catalog; the v2 logUp adds challenges not counted as measured trips"),
     Row("C: same, F61p (sensitivity point, NOT a security level)",
         ("c-compress", "r20260922-075153-022f", "4096 VUs, compressed relation v2, F61p (full batch)"),
-        verify_s=123.8, proof_bytes=3.545e9, depth=3, verify_note="as above"),
+        verify_s=123.8, proof_bytes=3.545e9, depth=3, verify_note="as above", verified="designated verifier"),
     Row("SP1 (baseline): sound authenticated core, 1 VU per proof, RTX 4090",
         ("sp1", "r20260921-220722-019b", "SP1 sound, authenticated core"),
-        verify_s=0.245, proof_bytes=5.9e6, depth=1, depth_note="Fiat-Shamir",
-        flags="B=1; 'per batch' = 4096 x 3.58 s = 14,664 s if serial: an extrapolation, no batch run exists; authentication INCLUDED"),
+        verify_s=0.245, proof_bytes=5.9e6, depth=1, depth_note="Fiat-Shamir", verified="SP1's verifier",
+        flags="B=1; 4096 x 3.58 s = 14,664 s if serial is an extrapolation; authentication INCLUDED"),
 )
 
 
@@ -158,6 +184,10 @@ REPRICED: tuple[tuple[str, tuple[str, str | None, str], str], ...] = (
     ("B v1 buckets (structured linear test M=3), RTX 4090", ("b-lintest", "r20260922-073017-0924", "B re-priced, structured linear test M=3 lazy"), "89% measured"),
     ("B v2 buckets (blocked inversions + radix-4), RTX 4090", ("b-v2", "r20260922-081137-109d", "B at checker-v2 shape, blocked inv + radix-4"), "94% measured"),
     ("B v1 buckets, A100 anchor", ("anchor-a100", "r20260922-080250-cff5", "B re-priced, A100-measured kernels"), "80% measured"),
+    ("A v1 buckets re-run by gate4-h100, H100 vy-g4 (floor 0.285 s)", ("gate4-h100", "r20260922-092450-5b79", "A buckets v1"), "70% measured; a-fusion confirmed within 2%"),
+    ("A v2 buckets re-run by gate4-h100, H100 vy-g4 (floor 0.184 s)", ("gate4-h100", "r20260922-092450-5b79", "A buckets v2"), "68% measured"),
+    ("B v1 buckets re-run by gate4-h100, H100 vy-g4 (floor 0.112 s)", ("gate4-h100", "r20260922-093147-3d6c", "B buckets v1"), "87% measured; L2-slice pipeline slower on H100"),
+    ("B v2 buckets re-run by gate4-h100, H100 vy-g4 (floor 0.046 s)", ("gate4-h100", "r20260922-093147-3d6c", "B buckets v2"), "93% measured"),
     ("A v2 model (CPU ratios scaled), H100 @0.172", ("a-v2", "r20260922-081106-6067", "A GPU re-priced on v2"), "model, not run"),
     ("checker-min models: A v2 / B v2, H100 @0.172", ("checker-min", None, "A re-priced on checker v2, model"), "everything modelled"),
 )
@@ -173,6 +203,11 @@ SOUNDNESS_KEYS: tuple[tuple[str, str | None, str], ...] = (
     ("red-team-3", "r20260922-085839-3976", "B LogUp FORGED: degree_bits"),
     ("red-team-v2", "r20260922-094212-465e", "A-GKR v2 run-vu trusts bundle chain.txt"),
     ("a-verifier", "r20260922-093721-1330", "Rust BB^6 verifier accepts a-gpu B=4096"),
+    ("red-team-zk", "r20260922-100305-2b13", "rt-zk F1 ACCEPTED-LEAK"),
+    ("red-team-zk", "r20260922-100305-2b13", "rt-zk F2 BROKEN"),
+    ("red-team-zk", "r20260922-100305-2b13", "rt-zk F3 MODEL MISMATCH"),
+    ("red-team-zk", "r20260922-100305-2b13", "rt-zk coin commit HOLDS"),
+    ("red-team-zk", "r20260922-100305-2b13", "rt-zk VERDICT"),
 )
 
 
@@ -191,7 +226,7 @@ FIXED_PAIRS: tuple[tuple[str, tuple[str, str | None, str], tuple[str, str | None
      "pre-fix 2.30 ms/VU at 85 VUs (no run id) vs post-fix 1.98 ms/VU at 4096 = 49 x 85: not slower; every 4096-VU B-Ligero row is post-fix"),
     ("A run-vu chain spec from bundle (red-team-v2 #9, fixed ff651a8): verifier-side only",
      ("a-v2", "r20260922-081106-6067", "A on checker v2 (Goldilocks), 4096 VUs"),
-     None, "no re-measurement on the ledger: the fix is a verifier constant + a refused file, prover work unchanged by construction"),
+     None, "verifier-owned v2_chain_spec() at ff651a8, 15/15 tests, forgery fixture refused (r20260922-095128-05ac); prover work unchanged by construction, not re-timed"),
     ("B-AIR F1/F2 statement binding (lane/soundness-fixes, UNMERGED)",
      ("b-chain", "r20260922-060503-6847", "BabyBear AIR at 2^-128 proven"),
      None, ("lane ledger r20260922-080527-f30c on vy-cpu3 (a ~3x slower box): 544.8 s bound vs 426-485 s unbound on the same box, "
@@ -220,10 +255,34 @@ CENSUS: tuple[tuple[str, ...], ...] = (
 
 
 ZK_STATUS: tuple[tuple[str, ...], ...] = (
-    ("A (GKR)", "none implemented", "none", "designed (PROTOCOL.md 5.5, +0.002%, +1 depth); not built", "NON_ZK_PROOF_DIAGNOSTIC", "zk-construction (model +1.43% HVZK); a-gpu has no --zk"),
-    ("B-Ligero (torch)", "implemented: k=l+256 masks, coset domain, blinded v (8b); simulator test PASS", "implemented: step-0 BLAKE2b commitment to both coins, opened after root / after w,h,q,v; one-rewind simulator (8c)", "COMPLETE_ZK_BACKEND label on ledger (b-zk r20260922-092404-2a1b); red-team-zk audit PENDING (REDTEAM_ZK_URGENT.md / redteam_zk.md)", "COMPLETE_ZK_BACKEND (self-labelled)", "+3% over non-ZK; 2^-190 coin-hiding term; hash/expander host placeholders"),
-    ("B-AIR (Plonky3)", "none implemented (modelled +1-1.6%)", "none; as run Fiat-Shamir depth 1", "--", "NON_ZK_PROOF_DIAGNOSTIC", "zk-construction B-AIR delta; F19 weak-FS residual fixed only on lane/b-bind"),
-    ("C (QuickSilver)", "native (IT-MAC)", "native in the F_sVOLE-hybrid, designated verifier", "--", "COMPLETE_ZK_BACKEND (designated-verifier)", "assumption stack LPN + base OT + CRH; verity_v0 plugin not red-teamed"),
+    # candidate, HVZK, malicious-verifier ZK, audit, label as it stands, notes
+    ("A (GKR)", "none implemented", "none", "designed (PROTOCOL.md 5.5, +0.002%, +1 depth); not built", "NON_ZK_PROOF_DIAGNOSTIC",
+     "zk-construction model +1.43% HVZK; no --zk in any A prover"),
+    ("B-Ligero (torch, 8b/8c)",
+     ("IMPLEMENTED BUT BROKEN as a construction: columns, w, v, h masked correctly; the chain message q is unmasked on H -- "
+     "16150/16150 accumulators recovered from the transcript (red-team-zk F1 ACCEPTED-LEAK, r20260922-100305-2b13)"),
+     ("HM96 coin commitment HOLDS with a repair (2^-128 bind, 2^-191 hide); the 8c simulator exists only in the programmable-RO model (F2); "
+     "the measured mode is Fiat-Shamir with a prover-chosen nonce, priced with the interactive bound (F3: FS needs t~279)"),
+     ("red-team-zk VERDICT: COMPLETE_ZK_BACKEND -> NON_ZK_PROOF_DIAGNOSTIC for b-zk r20260922-092404-2a1b (REDTEAM_ZK_URGENT.md, redteam_zk.md); "
+     "repair lane b-zk-fix PENDING (b_zk_fix.md / ledger b-zk-fix.jsonl)"),
+     "NON_ZK_PROOF_DIAGNOSTIC (downgraded; ledger rows still say COMPLETE_ZK/HVZK_BACKEND)",
+     ("for the CURRENT statement (operands a, b and words y16 public via statement_digest) privacy is vacuous: no privacy label is meaningful "
+     "until operands are committed (auth-integration LEAF_V2)")),
+    ("B-AIR (Plonky3)", "none implemented (modelled +1-1.6%)", "none; as run Fiat-Shamir depth 1", "--", "NON_ZK_PROOF_DIAGNOSTIC",
+     "F19 weak-FS residual fixed only on lane/b-bind"),
+    ("C (QuickSilver)", "native (IT-MAC)", "native in the F_sVOLE-hybrid, designated verifier", "not red-teamed",
+     "COMPLETE_ZK_BACKEND (designated-verifier) -- the only candidate holding a ZK label", "assumption stack LPN + base OT + CRH; 20.88 GB/batch at 2^-128"),
+)
+
+
+PENDING_LANES: tuple[tuple[str, ...], ...] = (
+    # lane, what it resolves, file(s) it will write, state at merge time
+    ("b-zk-fix", "B-Ligero ZK repair: one-line q mask (AHIV22 u_add), interactive challenge derivation from coins alone, explicit interactive vs Fiat-Shamir modes each with the accountant's bound", "b_zk_fix.md / ledger b-zk-fix.jsonl", "running; no branch commits yet"),
+    ("b-bind", "B-AIR statement binding: soundness-fixes landing (F1/F2 limb path) + LogUp path U1/U2 + F19", "lane/b-bind (24 commits ahead), ledger b-bind", "running on vy-cpu3"),
+    ("a-protocol-diff", "localise the Rust-verifier / Python-verifier divergence on a-gpu2 proofs (W=22 verifier rejects at LogUp POW level 2)", "backends/gkr/verifier/PROTOCOL_DIFF.md (proposed; 1 commit ahead, no .md yet)", "running"),
+    ("a-verifier-2", "F1 triage: why the a-gpu kernel path at c4d472a was rejected by both verifiers on vy-g5 while gate4 accepted it on vy-g4", "backends/gkr/gpu/F1_TRIAGE.md (11 commits ahead)", "running"),
+    ("b-verifier", "independent Rust verifier for B-Ligero", "backends/ligero-verify/ + DISCREPANCIES.md, reports/b_verifier.md (9 commits ahead)", "running"),
+    ("a-logup-union", "A LogUp union of tables (epilogue R8/R15/R16 tables not in the unit list)", "backends/gkr/gpu/HANDOFF_UNION.md, REDTEAM_URGENT_epilogue_tables.md (12 commits ahead)", "running"),
 )
 
 
@@ -273,8 +332,8 @@ def _design(name: str, v: dict[str, Any], r: Row) -> latency.Design | None:
 
 
 def render_like_for_like(entries: Sequence[dict[str, Any]]) -> str:
-    header = ["design", "hardware", "B / sub", "prover s", "ms/VU", "overhead x native", "verifier s", "proof", "depth",
-              *[f"e2e @{int(r)} ms" for r in RTTS_MS], "soundness (as stated)", "label", "lane / run id", "flags"]
+    header = ["design", "hardware", "B", "prover s", "ms/VU", "overhead x native", "verifier s", "proof", "depth",
+              *[f"e2e @{int(r)} ms" for r in RTTS_MS], "soundness (as stated)", "label", "verified by", "lane / run id", "flags"]
     rows = []
     for r in LIKE_FOR_LIKE:
         v = _row_values(r, entries)
@@ -282,10 +341,11 @@ def render_like_for_like(entries: Sequence[dict[str, Any]]) -> str:
         e2e = [_f(latency.e2e(d, rtt, LINK_GBPS)["total"]) if d else "--" for rtt in RTTS_MS]
         spv = v.get("seconds_per_vu")
         name = ("**PENDING** (" + r.pending + ") " if r.pending else "") + r.design
-        depth = f"{r.depth}" + (f" ({r.depth_note})" if r.depth_note else "")
+        depth = ("--" if r.depth is None else f"{r.depth}") + (f" ({r.depth_note})" if r.depth_note else "")
         verify = _f(r.verify_s) + (f" ({r.verify_note})" if r.verify_note else "")
+        label = r.label_override or v["proof_class"]
         rows.append([name, v["hardware"], f"{v['B']}", _f(v.get("prove_s")), _f(spv * 1e3, 3) if spv else "--", _sci(v.get("overhead")),
-                     verify, _mb(r.proof_bytes), depth, *e2e, v["security"], v["proof_class"], f"{v['lane']} / {v['run_id']}", r.flags or ""])
+                     verify, _mb(r.proof_bytes), depth, *e2e, v["security"], label, r.verified or "--", f"{v['lane']} / {v['run_id']}", r.flags or ""])
     note = (f"\nEnd-to-end = prove + verify + depth x RTT + proof bytes / {LINK_GBPS:.0f} Gb/s (`bench.latency.e2e`; the a-verifier "
             "lane's convention, `latency.md` used 25 Gb/s). Overhead = prover s/VU over 9.85 ps. Sub-batched rows: the soundness "
             "is the union bound over the sub-batches and the prover time is the sum.")
@@ -339,6 +399,12 @@ def render_zk(entries: Sequence[dict[str, Any]]) -> str:
     return _table(header, ZK_STATUS)
 
 
+def render_pending(entries: Sequence[dict[str, Any]]) -> str:
+    del entries
+    header = ["lane (not merged)", "resolves", "file(s) it will write", "state"]
+    return _table(header, PENDING_LANES)
+
+
 def _merge_order(lanes: Iterable[str]) -> list[str]:
     """Lanes in the order they first appear on ``git log --first-parent --reverse main`` (merge commits say
     ``merge lane/<name>``; the sp1 and a-kernel lanes were committed directly and are matched by name in the subject).
@@ -386,6 +452,7 @@ TABLES = {
     "fixed_vs_forgeable": render_fixed,
     "census": render_census,
     "zk_status": render_zk,
+    "pending": render_pending,
     "lanes": render_lanes,
 }
 
