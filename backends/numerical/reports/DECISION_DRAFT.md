@@ -49,8 +49,10 @@ RTT) as a first-class axis, with honest labels.
    user's question means transferable (then B-Ligero FS 1.500 s is the answer and C/B-Ligero-interactive are
    designated-verifier systems) or live (then B-Ligero interactive 1.394 s); (iii) the leaf/v2 protocol change --
    without committed operands every privacy label is vacuous for the current public-operand statement (red-team-zk);
-   (iv) whether the A100 pair (A v1 2.969 / v2 2.450 s, no B on that card) should be shown next to gate4's H100 pair
-   -- B-Ligero has never run on the A100 (anchor-a100 has bucket kernels only).
+   (iv) whether the A100 pair (A v1 2.969 / v2 2.450 s, no current-build B on that card) should be shown next to
+   gate4's H100 pair -- B-Ligero's only A100 run is anchor-a100's early torch prover (1.78 ms/VU at 85 VUs/proof,
+   NON_ZK_PROOF_DIAGNOSTIC, r20260922-081113-f56e; pre-b-ligero2 binding, pre-b-lintest/b-zk speedups), not a
+   like-for-like pair `[COORDINATOR: corrected from "never run on the A100"]`.
 
 ## 2. Like-for-like table (B = 4096, K = 1536)
 
