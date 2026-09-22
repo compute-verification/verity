@@ -8,10 +8,14 @@ A *model* is the executable, bit-exact semantics of one accumulator coordinate o
   is rescaled to the adder's ``width``, aligned to the group's maximum exponent by a truncating right shift,
   summed exactly, and the sum is normalised back to ``width`` bits by truncation (round toward zero).  The result
   of one group is the accumulator of the next.  ``Pipeline`` is this class's historical name and stays an alias.
-* :class:`BlockScaledAlignAdd` -- autoproof's *model5* of Blackwell's block-scaled FP4 path (``mma.sync
-  kind::mxf4nvf4`` on sm_120): four *exact* 16-term group dots over E2M1, per-block scales applied losslessly,
-  then one five-way align-add of the four scaled terms and the carried accumulator through a 42-bit window (a
-  36-bit second window riding the accumulator's exponent, a "hot group clip" at ``2^-19``), normalised RZ.
+* :class:`BlockScaledAlignAdd` -- Blackwell's block-scaled FP4 path (``mma.sync kind::mxf4nvf4`` on sm_120), as
+  measured on the RTX 5090 by lanes fp4-5090 and fp4-re: four *exact* 16-term group dots over E2M1, per-block
+  scales applied losslessly, then one five-way align-add of the four scaled terms and the carried accumulator whose
+  alignment grid is set by the *scale exponents* of the leading live group (27 bits below the unit weight of its
+  scaled dot) and by a 36-bit window riding the accumulator's exponent, truncating toward zero, normalised RZ, every
+  zero result ``+0``.  This supersedes autoproof's *model5* (a 42-bit window anchored on the leading addend's msb
+  plus a "hot group clip" at ``2^-19``): model5 is the special case of this rule in which the leading group's
+  mantissa is 15 bits wide, and the hot clip is what the rule gives for scale exponent fields of 15 and 15.
 
 The :class:`Model` protocol is what the rest of Verity may rely on; :data:`MODELS` lists every instance, and
 ``instructions.INSTRUCTIONS`` says which instruction each one is the model *of* and how well it is validated.
@@ -23,9 +27,11 @@ bit-exact pure-Python port of https://github.com/badasherez/gpu-simulator (``src
 ``src/Hopper_simulator.cpp``, ``src/Hopper_fp8_simulator.cpp``, ``utils/utils.cpp``, commit
 ``30703fcb309c943a6df5eee0277cb81815deb8f4``), generalised so that the group structure, internal width and
 exponent floor are parameters, plus the saturation rule measured on Ada (a group leaving the FP32 range is a
-sticky infinity).  BlockScaledAlignAdd is a port of autoproof ``fp4-ref/src/native.rs`` (``transducer`` /
+sticky infinity).  BlockScaledAlignAdd started as a port of autoproof ``fp4-ref/src/native.rs`` (``transducer`` /
 ``native_dot_f32``) and ``spec/src/dyadic.rs`` (``trunc_rz``, ``to_f32``) as adopted in
-``spec/SEMANTICS.lock.v1.json`` (replica: ``fixtures/tc/autoproof-SEMANTICS.lock.v1.json``).
+``spec/SEMANTICS.lock.v1.json`` (replica: ``fixtures/tc/autoproof-SEMANTICS.lock.v1.json``); its alignment rule was
+re-fitted by lane fp4-re on the RTX 5090 captures of lane fp4-5090 (log entries D16, D17, D18) and confirmed by the
+fp4-re runs cited in each instance's ``validated`` string.
 
 The ``GroupSum`` code moved here from ``silicon.py`` unchanged (Phase 0 of the silicon campaign); ``silicon.py``
 re-exports every name, so ``silicon.tc_dot`` is still the executable definition the frozen target names.
@@ -55,7 +61,7 @@ __all__ = [
     "ADA_E5M2_M16N8K32",
     "AMPERE_BF16_M16N8K16",
     "BLACKWELL_SM120_MXF4",
-    "BLACKWELL_SM120_MXF4_UNDERFLOW_PLUS0",
+    "BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED",
     "BLACKWELL_SM120_NVF4",
     "BlockScaledAlignAdd",
     "GroupSum",
@@ -363,7 +369,7 @@ def pipeline_for(arch: str, dtype: str) -> GroupSum:
 
 
 # =====================================================================================================================
-# BlockScaledAlignAdd: autoproof's model5 of Blackwell's block-scaled FP4 path
+# BlockScaledAlignAdd: Blackwell's block-scaled FP4 path as measured on the RTX 5090 (supersedes autoproof's model5)
 # =====================================================================================================================
 
 _E2M1_NUMERATOR = (0, 1, 2, 3, 4, 6, 8, 12)   # |value| * 2 for the eight magnitudes: {0, .5, 1, 1.5, 2, 3, 4, 6}
@@ -387,7 +393,7 @@ def _scale_dyadic(scale: str, code: int) -> tuple[int, int]:
     if scale == "ue8m0":
         if code == 0xFF:
             raise InvalidArtifact("UE8M0 NaN scale")
-        return 1, code - 127
+        return 8, code - 130                        # 2^(code-127) written with a 4-bit mantissa like UE4M3's
     if scale == "ue4m3":
         if code & 0x80:
             raise InvalidArtifact("UE4M3 scale with the padding bit set (PTX ISA: invalid)")
@@ -424,33 +430,41 @@ def _trunc_rz_to_grid(mant: int, exp: int, lsb: int) -> int:
 
 @dataclass(frozen=True, slots=True)
 class BlockScaledAlignAdd:
-    """autoproof's *model5* (``SEMANTICS.lock.v1`` ``gdfs_model``) of one ``mma.sync kind::mxf4nvf4`` firing.
+    """One ``mma.sync kind::mxf4nvf4`` firing on Blackwell sm_120 as measured on the RTX 5090.
 
     Per instruction (``k`` elements, ``k / group`` groups, one scale byte per ``block`` elements):
 
     1. every group's ``group`` E2M1 x E2M1 products are summed **exactly** as integers (quarters);
-    2. the group's two block scales (UE4M3 for nvfp4, UE8M0 for mxfp4) multiply the group dot **losslessly**;
-    3. one five-way align-add: the (up to four) nonzero scaled group terms and the nonzero carried FP32 accumulator
-       are each truncated **toward zero** at the common ``lsb = max(E1 - (w1 - 1), acc != 0 ? ilog2(acc) - (w2 - 1)
-       : -inf, hot ? hot_clip_lsb : -inf)`` with ``E1`` the largest exponent among them, summed exactly and
-       normalised **RZ** to binary32.  ``w1 = 42`` is the physical window below the largest addend; ``w2 = 36``
-       rides the accumulator's exponent (12 guard bits below its 24-bit significand).
-    4. the *hot group clip* (nvfp4 only -- its trigger reads the UE4M3 exponent field): if any group of the firing
-       has a nonzero elementwise product AND both its scale codes are in ``0x78..0x7E`` (exponent field 15), every
-       addend of the firing is additionally truncated toward zero at ``2^-19`` -- the ``2^-20`` bit, the deepest
-       any NVFP4 term can carry, is dropped before the add.  Per firing; no leakage across the K chain.
+    2. the group's two block scales (UE4M3 for nvfp4, UE8M0 for mxfp4) multiply the group dot **losslessly**: the
+       scaled dot is the integer ``gd * ma * mb`` at the *unit weight* ``2^X``, ``X = -2 + ea + eb``, where ``(ma, ea)``
+       is the scale's 4-bit mantissa and exponent (UE4M3: ``8+m, e-10`` or ``m, -9`` for the subnormal field; UE8M0:
+       ``8, code-130``);
+    3. one five-way align-add of the four scaled dots and the carried FP32 accumulator, each truncated **toward
+       zero** onto the common grid ``2^lsb``, summed exactly and normalised **RZ** to binary32, where::
 
-    A firing whose addends are all zero leaves the accumulator word bit-identical (``-0`` included); a computed
-    zero -- exact cancellation, or every addend truncated away -- is ``+0``.  A sum that leaves the binary32 range
-    is *outside* the model (autoproof's oracle asserts; no silicon evidence) and raises.  ``underflow_zero`` names
-    the one place autoproof's code and prose disagree (log entry D13): a nonzero sum entirely below the FP32
-    subnormal grid becomes a zero of the sum's sign in ``dyadic.rs::to_f32`` (``"signed"``) although the lockfile
-    says computed zeros are ``+0`` (``"positive"``); unreachable with UE4M3 scales, reachable with UE8M0.
+           lsb = max( max{X_g : g participates} - frac_bits,          # the scale-exponent anchor
+                      acc != 0 ? ilog2(acc) - (acc_window - 1) : -inf )  # the accumulator window
+
+       A group *participates* in the anchor when at least one of its elementwise products is nonzero (both nibbles
+       nonzero) **and** both its scale mantissas are nonzero -- whether or not its dot cancels to zero.  With
+       ``frac_bits = 27`` the adder keeps 27 bits below the unit weight of the leading participating group; with
+       ``acc_window = 36`` the accumulator keeps 12 guard bits below its 24-bit significand.
+
+    Every zero result is ``+0``: exact cancellation, every addend truncated away, all-zero products into a ``-0``
+    accumulator (log entry D16).  A sum that leaves the binary32 range is *outside* the model and raises.
+    ``underflow_zero`` fixes the sign of a **nonzero** sum lying entirely below the FP32 subnormal grid (reachable
+    with UE8M0 scales only; log entry D13).
+
+    Relation to autoproof's *model5* (``SEMANTICS.lock.v1`` ``gdfs_model``, log entry D12): model5 anchored the
+    window on the msb of the largest *addend* (``lsb = E1 - 41``) and added a "hot group clip" at ``2^-19`` when a
+    live group had both UE4M3 exponent fields at 15.  Both are what the rule above produces when the leading
+    group's mantissa is 15 bits wide (the clip: ``X = 8`` for exponent fields 15/15, ``8 - 27 = -19``); when it is
+    not, model5 mis-predicts opposite-sign accumulators 37..42 binades below the leading exponent by 1 ulp (D17,
+    12,790 / 1.5M of lane fp4-5090's cases), the rule above does not (fp4-re: 0 / 1,736,704 nvfp4 and
+    0 / 622,592 mxfp4 elements of the same captures).
 
     ``step`` takes ``a_words = a_codes[0..k] + a_scales[0..k/block]`` (likewise ``b``); :meth:`step_scaled`
-    takes them apart.  Ported from ``fp4-ref/src/native.rs`` (``transducer``, ``native_dot_f32``) and
-    ``spec/src/dyadic.rs``; cross-checked against the recorded RTX 5090 vectors in
-    ``fixtures/tc/autoproof-probe-vectors.json`` (``tests/ml/test_models.py``).
+    takes them apart.  ``dyadic.rs``-style helpers (``_trunc_rz_to_grid``, ``_to_f32_rz``) are autoproof's.
     """
 
     name: str
@@ -460,10 +474,8 @@ class BlockScaledAlignAdd:
     scale: Literal["ue4m3", "ue8m0"] | None
     k_per_instruction: int
     group: int
-    w1: int
-    w2: int
-    hot_clip: bool
-    hot_clip_lsb: int
+    frac_bits: int
+    acc_window: int
     underflow_zero: Literal["signed", "positive"]
     validated: str
 
@@ -474,8 +486,8 @@ class BlockScaledAlignAdd:
             raise InvalidArtifact("k must be a multiple of the group size")
         if self.scale is not None and self.k_per_instruction % self.block:
             raise InvalidArtifact("k must be a multiple of the scale block")
-        if self.hot_clip and self.scale != "ue4m3":
-            raise InvalidArtifact("the hot-group clip is defined by the UE4M3 exponent field")
+        if self.frac_bits < 0 or self.acc_window < 1:
+            raise InvalidArtifact("frac_bits must be >= 0 and acc_window >= 1")
 
     @property
     def k(self) -> int:
@@ -505,6 +517,40 @@ class BlockScaledAlignAdd:
         k = self.k
         return self.step_scaled(c_word, a_words[:k], b_words[:k], a_words[k:], b_words[k:])
 
+    def group_terms(
+        self,
+        a_codes: Sequence[int],
+        b_codes: Sequence[int],
+        a_scales: Sequence[int] = (),
+        b_scales: Sequence[int] = (),
+    ) -> list[tuple[int, int, bool]]:
+        """The scaled group dots of one firing as ``(mant, X, participates)``; see the class docstring."""
+
+        k, ns = self.k, self.scales_per_step
+        if len(a_codes) != k or len(b_codes) != k:
+            raise InvalidArtifact(f"{self.name} takes {k} element codes per operand")
+        if len(a_scales) != ns or len(b_scales) != ns:
+            raise InvalidArtifact(f"{self.name} takes {ns} scale bytes per operand")
+        terms: list[tuple[int, int, bool]] = []
+        for g in range(0, k, self.group):
+            gd = 0
+            any_product = False
+            for i in range(g, g + self.group):
+                na, nb = _e2m1_numerator(a_codes[i]), _e2m1_numerator(b_codes[i])
+                any_product |= na != 0 and nb != 0
+                gd += na * nb
+            mant, unit = gd, -2                     # halves x halves = quarters
+            participates = any_product
+            if self.scale:
+                (ma, ea), (mb, eb) = (
+                    _scale_dyadic(self.scale, a_scales[g // self.block]),
+                    _scale_dyadic(self.scale, b_scales[g // self.block]),
+                )
+                mant, unit = mant * ma * mb, unit + ea + eb
+                participates = participates and ma != 0 and mb != 0
+            terms.append((mant, unit, participates))
+        return terms
+
     def step_scaled(
         self,
         c_word: int,
@@ -515,46 +561,21 @@ class BlockScaledAlignAdd:
     ) -> int:
         """One firing on element codes and scale bytes given separately; see the class docstring."""
 
-        k, ns = self.k, self.scales_per_step
-        if len(a_codes) != k or len(b_codes) != k:
-            raise InvalidArtifact(f"{self.name} takes {k} element codes per operand")
-        if len(a_scales) != ns or len(b_scales) != ns:
-            raise InvalidArtifact(f"{self.name} takes {ns} scale bytes per operand")
-        terms: list[tuple[int, int]] = []
-        hot = False
-        for g in range(0, k, self.group):
-            gd = 0
-            any_product = False
-            for i in range(g, g + self.group):
-                na, nb = _e2m1_numerator(a_codes[i]), _e2m1_numerator(b_codes[i])
-                any_product |= na != 0 and nb != 0
-                gd += na * nb
-            mant, exp = gd, -2                      # halves x halves = quarters
-            if self.scale:
-                sa_code, sb_code = a_scales[g // self.block], b_scales[g // self.block]
-                (ma, ea), (mb, eb) = _scale_dyadic(self.scale, sa_code), _scale_dyadic(self.scale, sb_code)
-                mant, exp = mant * ma * mb, exp + ea + eb
-                if self.hot_clip and any_product and (sa_code & 0x78) == 0x78 and (sb_code & 0x78) == 0x78:
-                    hot = True
-            terms.append((mant, exp))
-        return self._transducer(c_word, terms, hot)
+        return self._transducer(c_word, self.group_terms(a_codes, b_codes, a_scales, b_scales))
 
-    def _transducer(self, c_word: int, terms: Sequence[tuple[int, int]], hot: bool) -> int:
-        """``native.rs::transducer``: the five-way align-add and the RZ normalisation."""
+    def _transducer(self, c_word: int, terms: Sequence[tuple[int, int, bool]]) -> int:
+        """The five-way align-add on the common grid and the RZ normalisation."""
 
         acc_m, acc_e = _fp32_dyadic(c_word)
-        addends = [t for t in terms if t[0] != 0]
+        anchors = [unit - self.frac_bits for _, unit, participates in terms if participates]
         if acc_m:
-            addends.append((acc_m, acc_e))
-        if not addends:
-            return c_word                                   # nothing to fold; -0 stays -0
-        e1 = max(_ilog2(m, e) for m, e in addends)
-        lsb = e1 - (self.w1 - 1)
+            anchors.append(_ilog2(acc_m, acc_e) - (self.acc_window - 1))
+        if not anchors:
+            return 0                                        # nothing participates: +0 (a -0 accumulator included)
+        lsb = max(anchors)
+        total = sum(_trunc_rz_to_grid(m, unit, lsb) for m, unit, _ in terms if m)
         if acc_m:
-            lsb = max(lsb, _ilog2(acc_m, acc_e) - (self.w2 - 1))
-        if hot:
-            lsb = max(lsb, self.hot_clip_lsb)
-        total = sum(_trunc_rz_to_grid(m, e, lsb) for m, e in addends)
+            total += _trunc_rz_to_grid(acc_m, acc_e, lsb)
         if total == 0:
             return 0                                        # computed zero (cancellation included) is +0
         return self._to_f32_rz(total, lsb)
@@ -614,6 +635,13 @@ _AUTOPROOF_PIN = (
     "143,076 mismatches, and carries the 1,601 sample vectors verity replays (1,601 / 1,601) -- see log entry D12"
 )
 
+_FP4_RE_PIN = (
+    "lane fp4-re, RTX 5090 (sm_120, driver 570.195.03, sm_120a cubin, one mma.sync per output element, arbitrary FP32 "
+    "accumulators): re-fit of lane fp4-5090's captures (nvfp4 run r20260922-182011-88f8: 1,736,704 elements over 13 "
+    "families, model5 12,790 mismatches -> this rule 0; mxfp4 run r20260922-182548-e654: 622,592 elements over 7 "
+    "families, 0 under this rule) and confirmed by the fp4-re runs cited below"
+)
+
 BLACKWELL_SM120_NVF4 = BlockScaledAlignAdd(
     name="blackwell_sm120_nvf4_m16n8k64",
     arch="sm_120",
@@ -622,21 +650,19 @@ BLACKWELL_SM120_NVF4 = BlockScaledAlignAdd(
     scale="ue4m3",
     k_per_instruction=64,
     group=16,
-    w1=42,
-    w2=36,
-    hot_clip=True,
-    hot_clip_lsb=-19,
-    underflow_zero="signed",
+    frac_bits=27,
+    acc_window=36,
+    underflow_zero="positive",
     validated=(
-        "autoproof: RTX 5090 (sm_120) mma.sync kind::mxf4nvf4, 1.57M dot statements pinned 2026-07-11 "
-        "(SEMANTICS.lock.v1); NOT validated on sm_100 (B200 tcgen05). " + _AUTOPROOF_PIN
+        "RTX 5090 (sm_120) mma.sync kind::mxf4nvf4 ue4m3: " + _FP4_RE_PIN + "; PENDING fp4-re confirmation run; "
+        "NOT validated on sm_100 (B200 tcgen05). Zero-accumulator chains also pinned by " + _AUTOPROOF_PIN
     ),
 )
 
-# mxfp4 (UE8M0 scales over blocks of 32) was NOT probed by autoproof; native.rs applies the same transducer with the
-# hot clip off (its trigger is UE4M3-specific).  Two named hypotheses differ only where a nonzero sum lies entirely
-# below the FP32 subnormal grid (reachable with UE8M0 scales down to 2^-127; unreachable in nvfp4): the sign of
-# that zero.  Log entry D13.
+# mxfp4 (UE8M0 scales over blocks of 32): the same adder, the same constants -- the UE8M0 scale is 2^(code-127)
+# written as the 4-bit mantissa 8 at 2^(code-130), so the anchor follows the raw exponent fields with a 6-bit offset
+# (lane fp4-5090 fitted 33 in raw-exponent units; that is 27 here).  Log entry D18.  ``underflow_zero`` (D13):
+# the sign of a nonzero sum lying entirely below the FP32 subnormal grid.
 BLACKWELL_SM120_MXF4 = BlockScaledAlignAdd(
     name="blackwell_sm120_mxf4_m16n8k64",
     arch="sm_120",
@@ -645,33 +671,29 @@ BLACKWELL_SM120_MXF4 = BlockScaledAlignAdd(
     scale="ue8m0",
     k_per_instruction=64,
     group=16,
-    w1=42,
-    w2=36,
-    hot_clip=False,
-    hot_clip_lsb=-19,
-    underflow_zero="signed",
+    frac_bits=27,
+    acc_window=36,
+    underflow_zero="positive",
     validated=(
-        "HYPOTHESIS (unprobed): the nvfp4 five-way align-add (autoproof native.rs) with UE8M0 block-32 scales and "
-        "no hot-group clip; underflow-to-zero keeps the sign as dyadic.rs::to_f32 does"
+        "RTX 5090 (sm_120) mma.sync kind::mxf4nvf4 ue8m0: " + _FP4_RE_PIN + "; PENDING fp4-re confirmation run "
+        "(scale extremes, underflow sign); NOT validated on sm_100 (B200 tcgen05)"
     ),
 )
 
-BLACKWELL_SM120_MXF4_UNDERFLOW_PLUS0 = BlockScaledAlignAdd(
-    name="blackwell_sm120_mxf4_m16n8k64_underflow_plus0",
+BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED = BlockScaledAlignAdd(
+    name="blackwell_sm120_mxf4_m16n8k64_underflow_signed",
     arch="sm_120",
     dtype="e2m1",
     operand_bits=4,
     scale="ue8m0",
     k_per_instruction=64,
     group=16,
-    w1=42,
-    w2=36,
-    hot_clip=False,
-    hot_clip_lsb=-19,
-    underflow_zero="positive",
+    frac_bits=27,
+    acc_window=36,
+    underflow_zero="signed",
     validated=(
-        "HYPOTHESIS (unprobed): as BLACKWELL_SM120_MXF4 but a nonzero sum below the subnormal grid is +0, as the "
-        "lockfile's zero_handling prose ('computed zero normalizes to +0') reads"
+        "HYPOTHESIS (unprobed): as BLACKWELL_SM120_MXF4 but a nonzero sum below the subnormal grid keeps its sign, "
+        "as autoproof dyadic.rs::to_f32 does (log entry D13)"
     ),
 )
 
@@ -685,6 +707,6 @@ MODELS: dict[str, Model] = {
         HOPPER_E5M2_K32,
         BLACKWELL_SM120_NVF4,
         BLACKWELL_SM120_MXF4,
-        BLACKWELL_SM120_MXF4_UNDERFLOW_PLUS0,
+        BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
     )
 }

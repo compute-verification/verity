@@ -2,7 +2,9 @@
 
 The block-scaled model is replayed on every RTX 5090 vector autoproof recorded (``fixtures/tc/autoproof-probe-vectors.json``:
 1,601 nvfp4 ascending-K chains and 1,400 unscaled-FP4 dots) and must agree bit-for-bit; the refuted single-window
-hypothesis (W=26) must *disagree* somewhere, or the fixture would not discriminate.
+hypothesis (W=26) must *disagree* somewhere, or the fixture would not discriminate.  The accumulator rules that the
+zero-accumulator vectors cannot see (sign of zero, the scale-exponent anchor, the accumulator window) are checked on
+hand-computed cases taken from lane fp4-re's RTX 5090 evidence (log entries D16, D17, D18).
 """
 from __future__ import annotations
 
@@ -20,7 +22,7 @@ from verity.ml.tc.models import (
     ADA_E5M2_M16N8K32,
     AMPERE_BF16_M16N8K16,
     BLACKWELL_SM120_MXF4,
-    BLACKWELL_SM120_MXF4_UNDERFLOW_PLUS0,
+    BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
     BLACKWELL_SM120_NVF4,
     HOPPER_E4M3_K32,
     HOPPER_E5M2_K32,
@@ -170,14 +172,16 @@ def test_nvfp4_step_accepts_codes_then_scales_as_one_operand_vector(vectors: dic
         m.step(0, [0] * 64, [0] * 64)  # scale bytes missing
 
 
+def _bsaa(**kw) -> BlockScaledAlignAdd:
+    base = dict(arch="sm_120", dtype="e2m1", operand_bits=4, scale="ue4m3", k_per_instruction=64, group=16,
+                frac_bits=27, acc_window=36, underflow_zero="positive", validated="test only")
+    return BlockScaledAlignAdd(**{**base, **kw})
+
+
 def test_unscaled_fp4_vectors_replay_under_the_same_transducer(vectors: dict) -> None:
-    # PROBE-2: mma.sync m16n8k32 kind::f8f6f4 e2m1 without scales.  The same five-way align-add (hot clip off,
-    # scale None) with k=32 in two groups of 16 reproduces all 1,400 recorded dots.
-    unscaled = BlockScaledAlignAdd(
-        name="test_unscaled_fp4_m16n8k32", arch="sm_120", dtype="e2m1", operand_bits=4, scale=None,
-        k_per_instruction=32, group=16, w1=42, w2=36, hot_clip=False, hot_clip_lsb=-19, underflow_zero="signed",
-        validated="test only",
-    )
+    # PROBE-2: mma.sync m16n8k32 kind::f8f6f4 e2m1 without scales.  The same five-way align-add (scale None, unit
+    # weight 2^-2) with k=32 in two groups of 16 reproduces all 1,400 recorded dots.
+    unscaled = _bsaa(name="test_unscaled_fp4_m16n8k32", scale=None, k_per_instruction=32)
     cases = vectors["fp4_unscaled_m16n8k32"]["cases"]
     assert len(cases) == 1400
     for c in cases:
@@ -186,61 +190,168 @@ def test_unscaled_fp4_vectors_replay_under_the_same_transducer(vectors: dict) ->
 
 
 def test_single_window_w26_hypothesis_is_refuted_by_the_fixture(vectors: dict) -> None:
-    # autoproof's v0: one 26-bit window below the largest addend, no accumulator window (w2 = w1), no hot clip.
-    v0 = BlockScaledAlignAdd(
-        name="test_v0_w26", arch="sm_120", dtype="e2m1", operand_bits=4, scale="ue4m3",
-        k_per_instruction=64, group=16, w1=26, w2=26, hot_clip=False, hot_clip_lsb=-19, underflow_zero="signed",
-        validated="refuted hypothesis (test only)",
-    )
+    # autoproof's v0: one 26-bit window below the largest addend.  In this model's terms the closest instance is a
+    # 26-bit accumulator window and a term anchor 26 bits below the leading unit weight minus the widest mantissa.
+    v0 = _bsaa(name="test_v0_w26", frac_bits=26 - 19, acc_window=26)
     mismatches = 0
     for c in vectors["nvfp4_m16n8k64"]["cases"]:
         a, b = _nibbles(c["a"]), _nibbles(c["b"])
         sa, sb = _bytes(c["sa"]), _bytes(c["sb"])
         mismatches += v0.chain(0, a, b, sa, sb) != int(c["d"], 16)
-    assert mismatches > 0, "the recorded vectors must discriminate model5 from the refuted W=26 hypothesis"
+    assert mismatches > 0, "the recorded vectors must discriminate the model from the refuted W=26 hypothesis"
+    # ... and from a rule anchored one bit off in either direction
+    for fb in (26, 28):
+        off = _bsaa(name=f"test_frac{fb}", frac_bits=fb)
+        assert any(off.chain(0, _nibbles(c["a"]), _nibbles(c["b"]), _bytes(c["sa"]), _bytes(c["sb"])) != int(c["d"], 16)
+                   for c in vectors["nvfp4_m16n8k64"]["cases"]), fb
 
 
-def test_hot_group_clip_is_per_firing_and_needs_both_scales_hot() -> None:
+ONE = 0x38  # UE4M3 1.0
+
+
+def test_hot_group_clip_is_what_the_anchor_gives_for_exponent_field_15() -> None:
+    # autoproof's "hot group clip" (D12): a live group with both UE4M3 exponent fields at 15 clips every addend at
+    # 2^-19.  Here that is simply the anchor: X = -2 + 5 + 5 = 8, lsb = 8 - 27 = -19.
     m = BLACKWELL_SM120_NVF4
     # Group 0 holds the deepest NVFP4 term: 0.5 * 0.5 under subnormal UE4M3 scales 2^-9 x 2^-9 (code 0x01) = 2^-20.
-    # Group 1 holds +0.25 and -0.25 (exact cancellation, but a nonzero elementwise product): under scales 0x7E (448)
-    # on BOTH sides it makes the firing "hot" and every addend is clipped at 2^-19 -- the 2^-20 term vanishes.
+    # Group 1 holds +0.25 and -0.25 (exact cancellation, but a nonzero elementwise product).
     a = [0x1] + [0] * 15 + [0x1, 0x9] + [0] * 46
     b = [0x1] + [0] * 15 + [0x1, 0x1] + [0] * 46
-    one = 0x38
-    cold = m.step_scaled(0, a, b, [0x01, one, one, one], [0x01, one, one, one])
+    cold = m.step_scaled(0, a, b, [0x01, ONE, ONE, ONE], [0x01, ONE, ONE, ONE])
     assert _f32(cold) == 2.0**-20
-    hot = m.step_scaled(0, a, b, [0x01, 0x7E, one, one], [0x01, 0x7E, one, one])
+    hot = m.step_scaled(0, a, b, [0x01, 0x7E, ONE, ONE], [0x01, 0x7E, ONE, ONE])
     assert hot == 0  # every addend truncated away: computed +0
-    half_hot = m.step_scaled(0, a, b, [0x01, 0x7E, one, one], [0x01, one, one, one])
-    assert _f32(half_hot) == 2.0**-20  # one hot scale is not hot
-    # hot scales over a group with no nonzero product do not trigger the clip
+    # one hot scale (X = -2 + 5 - 3 = 0, lsb = -27): the 2^-20 term survives
+    assert _f32(m.step_scaled(0, a, b, [0x01, 0x7E, ONE, ONE], [0x01, ONE, ONE, ONE])) == 2.0**-20
+    # hot scales over a group with no nonzero elementwise product do not participate in the anchor
     b_cold = [0x1] + [0] * 63
-    assert _f32(m.step_scaled(0, a, b_cold, [0x01, 0x7E, one, one], [0x01, 0x7E, one, one])) == 2.0**-20
-    # and the clip is per firing: a hot firing followed by a cold one does not clip the second
-    assert _f32(m.chain(0, a + a, b + b_cold, [0x01, 0x7E, one, one] * 2, [0x01, 0x7E, one, one] * 2)) == 2.0**-20
-    # a nonzero hot group sum: 0.25 * 448 * 448 = 50176 and the 2^-20 term is below the clip AND FP32 precision
+    assert _f32(m.step_scaled(0, a, b_cold, [0x01, 0x7E, ONE, ONE], [0x01, 0x7E, ONE, ONE])) == 2.0**-20
+    # and the anchor is per firing: a hot firing followed by a cold one does not clip the second
+    assert _f32(m.chain(0, a + a, b + b_cold, [0x01, 0x7E, ONE, ONE] * 2, [0x01, 0x7E, ONE, ONE] * 2)) == 2.0**-20
+    # a nonzero hot group sum: 0.25 * 448 * 448 = 50176 and the 2^-20 term is below the anchor AND FP32 precision
     a_big = [0x1] + [0] * 15 + [0x1] + [0] * 47
-    assert _f32(m.step_scaled(0, a_big, a_big, [0x01, 0x7E, one, one], [0x01, 0x7E, one, one])) == 50176.0
+    assert _f32(m.step_scaled(0, a_big, a_big, [0x01, 0x7E, ONE, ONE], [0x01, 0x7E, ONE, ONE])) == 50176.0
 
 
-def test_zero_handling_matches_the_lockfile() -> None:
+def _w(x: float) -> int:
+    return struct.unpack("<I", struct.pack("<f", x))[0]
+
+
+def test_anchor_follows_the_scale_exponents_not_the_leading_mantissa_d17() -> None:
+    # D17: model5 anchored a 42-bit window on the msb of the largest addend (1.0 -> lsb 2^-41); the hardware anchors
+    # 27 bits below the unit weight of the leading participating group.  1.0 * 1.0 under UE4M3 1.0 (0x38 = 8 x 2^-3)
+    # is the integer 4 * 8 * 8 = 256 at X = -2 - 3 - 3 = -8, so the grid is 2^-35 -- six binades coarser than model5's.
     m = BLACKWELL_SM120_NVF4
-    zeros, ones = [0] * 64, [0x38] * 4
-    assert m.step_scaled(0x8000_0000, zeros, zeros, ones, ones) == 0x8000_0000  # nothing to fold: -0 stays -0
-    assert m.step_scaled(0x3F80_0000, zeros, zeros, ones, ones) == 0x3F80_0000
+    a = [0x2] + [0] * 63  # +1.0
+    ones = [ONE] * 4
+    assert m.group_terms(a, a, ones, ones)[0] == (256, -8, True)
+    # an opposite-sign accumulator below the grid is truncated away: 1.0 exactly (model5: 1 - 2^-36 -> RZ -> 1 - 2^-23)
+    assert m.step_scaled(_w(-(2.0**-36)), a, a, ones, ones) == 0x3F80_0000
+    assert m.step_scaled(_w(-(2.0**-41)), a, a, ones, ones) == 0x3F80_0000
+    # on the grid: 1 - 2^-35 -> RZ -> the binary32 below 1.0
+    assert m.step_scaled(_w(-(2.0**-35)), a, a, ones, ones) == 0x3F7F_FFFF
+    # bits below the grid are dropped toward zero before the add: -(2^-30 + 2^-40) acts as -2^-30
+    assert m.step_scaled(_w(-(2.0**-30 + 2.0**-40)), a, a, ones, ones) == 0x3F7F_FFFF
+    # same-sign accumulators below the grid vanish too (1 + 2^-36 -> 1.0 under both rules: RZ hides the difference)
+    assert m.step_scaled(_w(2.0**-36), a, a, ones, ones) == 0x3F80_0000
+    # the widest nvfp4 group: 6*6 x 16 under 448 x 448 = 2304 quarters x 14 x 14 = 451,584 (19 bits) at X = 8, so the
+    # grid is 2^-19 and a -2^-19 accumulator survives the add: 462,422,016 - 2^-19 -> RZ -> one ulp below the exact
+    # sum.  model5 anchored on the addend's msb (2^26) with 42 bits: grid 2^-15, accumulator dropped, exact sum.
+    six = [0x7] * 64
+    big = m.step_scaled(0, six, six, [0x7E] * 4, [0x7E] * 4)
+    assert _f32(big) == 64 * 36 * 448.0 * 448.0 == 2.0**20 * 441
+    assert m.step_scaled(_w(-(2.0**-19)), six, six, [0x7E] * 4, [0x7E] * 4) == big - 1
+    assert m.step_scaled(_w(-(2.0**-20)), six, six, [0x7E] * 4, [0x7E] * 4) == big
+
+
+def test_accumulator_window_keeps_twelve_guard_bits() -> None:
+    # The second anchor: lsb >= ilog2(acc) - 35.  A tiny product far below a big accumulator is dropped only when it
+    # lies below the accumulator's 36-bit window; the term anchor alone would have kept it.
+    m = BLACKWELL_SM120_NVF4
+    acc = 0x3F80_0000  # 1.0, window down to 2^-35
+    a = [0x1] + [0] * 63  # 0.5 * 0.5 = 0.25 under scales 2^-9 x 2^-9 (0x01): 2^-20 -- inside the window
+    assert m.step_scaled(acc, a, a, [0x01] * 4, [0x01] * 4) == 0x3F80_0008  # 1 + 2^-20 exactly
+    neg = [0x9] + [0] * 63
+    assert m.step_scaled(acc, a, neg, [0x01] * 4, [0x01] * 4) == 0x3F7F_FFF0  # 1 - 2^-20 exactly (20 significant bits)
+    # acc = 2^30: the window floor is 2^-5, the 2^-20 term is truncated away before the subtraction -> exact acc
+    acc = 0x4E80_0000
+    assert m.step_scaled(acc, a, neg, [0x01] * 4, [0x01] * 4) == acc
+    # acc = 2^14: floor 2^-21 keeps the term; 2^14 - 2^-20 -> RZ -> the binary32 below 2^14
+    acc = 0x4680_0000
+    assert m.step_scaled(acc, a, neg, [0x01] * 4, [0x01] * 4) == 0x467F_FFFF
+
+
+def test_participation_needs_a_nonzero_product_and_nonzero_scales() -> None:
+    # A group anchors the grid when at least one elementwise product is nonzero AND both scale mantissas are nonzero,
+    # even if its dot cancels to zero (fp4-5090 captures: the "nonzero-dot-only" rule fails 1,443 elements, the
+    # "products-only" rule 3, "always" 12,729).
+    m = BLACKWELL_SM120_NVF4
+    tiny_acc = struct.unpack("<I", struct.pack("<f", -(2.0**-40)))[0]
+    ones = [ONE] * 4
+    cancel = [0x2, 0xA] + [0] * 62  # +1 * 1 and -1 * 1: dot 0, but live
+    one_b = [0x2, 0x2] + [0] * 62
+    assert m.step_scaled(tiny_acc, cancel, one_b, ones, ones) == 0  # live group: anchor -29 erases the -2^-40 acc -> +0
+    assert m.step_scaled(tiny_acc, [0] * 64, one_b, ones, ones) == tiny_acc  # no nonzero product: acc kept exactly
+    assert m.step_scaled(tiny_acc, cancel, one_b, [0x00] + ones[1:], ones) == tiny_acc  # zero A scale: no participation
+    assert m.step_scaled(tiny_acc, cancel, one_b, ones, [0x00] + ones[1:]) == tiny_acc  # zero B scale: likewise
+    # elementwise: a nonzero A nibble against a zero B nibble is not a nonzero product
+    assert m.step_scaled(tiny_acc, [0x2] + [0] * 63, [0x0, 0x2] + [0] * 62, ones, ones) == tiny_acc
+    # group_terms exposes (mant, unit weight, participates)
+    assert m.group_terms(cancel, one_b, ones, ones)[0] == (0, -8, True)
+    assert m.group_terms([0] * 64, one_b, ones, ones)[0] == (0, -8, False)
+    assert m.group_terms([0x2] + [0] * 63, one_b, [0x7E] + ones[1:], ones)[0] == (4 * 14 * 8, -2 + 5 - 3, True)
+
+
+def test_every_zero_result_is_plus_zero_d16() -> None:
+    m = BLACKWELL_SM120_NVF4
+    zeros, ones = [0] * 64, [ONE] * 4
+    # D16: -0 accumulator with all-zero products comes out +0 on the RTX 5090 (model5 kept -0)
+    assert m.step_scaled(0x8000_0000, zeros, zeros, ones, ones) == 0
+    assert m.step_scaled(0x8000_0000, [0x8] * 64, [0x8] * 64, ones, ones) == 0  # -0 x -0 products
+    assert m.step_scaled(0, [0x8] * 64, [0x8] * 64, ones, ones) == 0
+    assert m.step_scaled(0x3F80_0000, zeros, zeros, ones, ones) == 0x3F80_0000  # a nonzero acc is untouched
     # exact cancellation of the accumulator by a product is +0
     a = [0x2] + [0] * 63  # +1
     b = [0xA] + [0] * 63  # -1
     assert m.step_scaled(0x3F80_0000, a, b, ones, ones) == 0
-    # a nonzero mxfp4 sum entirely below the subnormal grid: the two hypotheses differ only in the sign of that zero
+    # -0 accumulator plus products that cancel exactly: +0
+    assert m.step_scaled(0x8000_0000, [0x2, 0xA] + [0] * 62, [0x2, 0x2] + [0] * 62, ones, ones) == 0
+    # a -0 accumulator that is joined by a live group whose dot is zero: still +0
+    assert m.step_scaled(0x8000_0000, [0x2, 0xA] + [0] * 62, [0x2, 0x2] + [0] * 62, ones, ones) == 0
+
+
+def test_mxf4_scales_share_the_nvf4_adder_d18() -> None:
+    m4, m8 = BLACKWELL_SM120_NVF4, BLACKWELL_SM120_MXF4
+    assert (m8.k, m8.block, m8.scales_per_step, m8.words_per_step) == (64, 32, 2, 66)
+    assert (m8.frac_bits, m8.acc_window) == (m4.frac_bits, m4.acc_window)
+    # UE8M0 code 127 = 1.0 = UE4M3 0x38: identical unit weight (X = -2) and identical results on any nvfp4-representable
+    # firing with block-constant scales
+    rng = random.Random(11)
+    for _ in range(300):
+        a = [rng.randrange(16) for _ in range(64)]
+        b = [rng.randrange(16) for _ in range(64)]
+        acc = rng.choice([0, 0x3F80_0000, 0xC000_0000, 0x0080_0000, 0xB000_0000, 0x2F00_0000])
+        assert m8.step_scaled(acc, a, b, [127, 127], [127, 127]) == m4.step_scaled(acc, a, b, [ONE] * 4, [ONE] * 4)
+        # UE8M0 code 130 (8.0) on A == UE4M3 0x50 (8.0) on A
+        assert m8.step_scaled(acc, a, b, [130, 130], [127, 127]) == m4.step_scaled(acc, a, b, [0x50] * 4, [ONE] * 4)
+    # the anchor follows the raw exponent fields: codes (ca, cb) put the unit weight at ca + cb - 262 and the grid
+    # at ca + cb - 289 (lane fp4-5090's fit: "X_raw - 33" with X_raw = ca + cb - 256)
+    assert m8.group_terms([0x2] + [0] * 63, [0x2] + [0] * 63, [140, 127], [150, 127])[0] == (4 * 8 * 8, 140 + 150 - 262, True)
+    a = [0x2] + [0] * 63
+    term = 2.0**36  # 1.0 * 2^13 * 2^23 = 256 * 2^28; grid 2^1
+    assert _f32(m8.step_scaled(_w(-2.0), a, a, [140, 127], [150, 127])) == term - 2.0**12  # 2^36 - 2 -> RZ
+    assert _f32(m8.step_scaled(_w(-1.0), a, a, [140, 127], [150, 127])) == term  # -1 is below the grid: dropped
+
+
+def test_underflow_sign_hypotheses_d13() -> None:
+    # a nonzero mxfp4 sum entirely below the subnormal grid: the two instances differ only in the sign of that zero
     tiny = [0x00] * 2  # UE8M0 code 0 = 2^-127
     neg = [0x9] + [0] * 63  # -0.5
     pos = [0x1] + [0] * 63
-    assert BLACKWELL_SM120_MXF4.step_scaled(0, neg, pos, tiny, tiny) == 0x8000_0000
-    assert BLACKWELL_SM120_MXF4_UNDERFLOW_PLUS0.step_scaled(0, neg, pos, tiny, tiny) == 0
+    assert BLACKWELL_SM120_MXF4.step_scaled(0, neg, pos, tiny, tiny) == 0
+    assert BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED.step_scaled(0, neg, pos, tiny, tiny) == 0x8000_0000
     assert BLACKWELL_SM120_MXF4.step_scaled(0, pos, pos, tiny, tiny) == 0  # positive underflow is +0 either way
-    # otherwise the two mxfp4 hypotheses agree
+    # otherwise the two agree
     rng = random.Random(3)
     for _ in range(300):
         a = [rng.randrange(16) for _ in range(64)]
@@ -248,19 +359,26 @@ def test_zero_handling_matches_the_lockfile() -> None:
         sa = [rng.randrange(100, 140) for _ in range(2)]
         sb = [rng.randrange(100, 140) for _ in range(2)]
         acc = rng.choice([0, 0x3F80_0000, 0xC000_0000, 0x0080_0000])
-        assert BLACKWELL_SM120_MXF4.step_scaled(acc, a, b, sa, sb) == BLACKWELL_SM120_MXF4_UNDERFLOW_PLUS0.step_scaled(acc, a, b, sa, sb)
+        assert BLACKWELL_SM120_MXF4.step_scaled(acc, a, b, sa, sb) == BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED.step_scaled(acc, a, b, sa, sb)
 
 
 def test_block_scaled_domain_errors() -> None:
     m = BLACKWELL_SM120_NVF4
     with pytest.raises(InvalidArtifact):
-        m.step_scaled(0x7F80_0000, [0] * 64, [0] * 64, [0x38] * 4, [0x38] * 4)  # inf accumulator
+        m.step_scaled(0x7F80_0000, [0] * 64, [0] * 64, [ONE] * 4, [ONE] * 4)  # inf accumulator
     with pytest.raises(InvalidArtifact):
-        m.step_scaled(0, [0] * 64, [0] * 64, [0x7F] * 4, [0x38] * 4)  # UE4M3 NaN scale
+        m.step_scaled(0, [0] * 64, [0] * 64, [0x7F] * 4, [ONE] * 4)  # UE4M3 NaN scale
     with pytest.raises(InvalidArtifact):
-        BlockScaledAlignAdd(name="x", arch="sm_120", dtype="e4m3", operand_bits=8, scale=None, k_per_instruction=64,
-                            group=16, w1=42, w2=36, hot_clip=False, hot_clip_lsb=-19, underflow_zero="signed", validated="")
+        m.step_scaled(0, [0] * 64, [0] * 64, [0x80] * 4, [ONE] * 4)  # UE4M3 padding bit
     with pytest.raises(InvalidArtifact):
-        BlockScaledAlignAdd(name="x", arch="sm_120", dtype="e2m1", operand_bits=4, scale="ue8m0", k_per_instruction=64,
-                            group=16, w1=42, w2=36, hot_clip=True, hot_clip_lsb=-19, underflow_zero="signed", validated="")
+        BLACKWELL_SM120_MXF4.step_scaled(0, [0] * 64, [0] * 64, [0xFF] * 2, [127] * 2)  # UE8M0 NaN scale
+    with pytest.raises(InvalidArtifact):
+        _bsaa(name="x", dtype="e4m3", operand_bits=8, scale=None)
+    with pytest.raises(InvalidArtifact):
+        _bsaa(name="x", k_per_instruction=40)
+    with pytest.raises(InvalidArtifact):
+        _bsaa(name="x", acc_window=0)
+    # a sum leaving the binary32 range is outside the model (no silicon evidence yet): 2^127 acc + 6*6*2^127*2^0
+    with pytest.raises(InvalidArtifact):
+        BLACKWELL_SM120_MXF4.step_scaled(0x7F00_0000, [0x7] + [0] * 63, [0x7] + [0] * 63, [254, 127], [127, 127])
     assert m.product(0x7, 0x7) == e2m1_product(0x7, 0x7)
