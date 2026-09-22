@@ -1,11 +1,12 @@
 # Candidate B: direct constraints (`verity-direct`)
 
 The transition unit (one 16-product `mma.sync` update with an arbitrary finite accumulator) as an AIR whose
-constraints are the WP2 gadget contracts (`backends/numerical/python/verity_numerical/checker/`), proved today with
-Plonky3 `uni-stark` over Goldilocks. The design is `PROTOCOL.md`; this file is how to build, test and run what exists.
+constraints are the WP2 gadget contracts (`backends/numerical/python/verity_numerical/checker/`), and the **full
+K=1536 verification unit** as 96 chained rows plus the epilogue (`ChainAir`, PROTOCOL.md 12), proved with Plonky3
+`uni-stark` over Goldilocks or BabyBear. The design is `PROTOCOL.md`; this file is how to build, test and run what exists.
 
 Labels on every number from this crate: `proof_class = NON_ZK_PROOF_DIAGNOSTIC`, `authentication = excluded`,
-`unit = transition`, `domain = finite`. The PCS is Plonky3 FRI + Keccak Merkle, **not** the Ligero-style interactive
+`unit = transition` (`bench`) or `unit = vu`, `scope = vu` (`vu-bench`), `domain = finite`. The PCS is Plonky3 FRI + Keccak Merkle, **not** the Ligero-style interactive
 PCS of `PROTOCOL.md`: it is the fastest complete non-ZK proof of the *right* constraints, not Candidate B's end state.
 
 ## Layout
@@ -15,17 +16,28 @@ PCS of `PROTOCOL.md`: it is the fastest complete non-ZK proof of the *right* con
 - `src/program.rs`: the 12 WP2 gadget contracts written once against a `Ctx` trait (hint, eq, boolean, rng, lookup, mat).
 - `src/ctx.rs`: `IntCtx` (i128 witness generator + integer checker) and `AirCtx` (symbolic constraint emitter: range
   checks as 2-bit limbs, fixed tables as one-hot selectors, auto-materialisation above degree 5).
-- `src/air.rs`: `UnitAir`, `Layout`, trace generation (one row per unit), per-constraint `Evaluator`.
-- `src/stark.rs`: Goldilocks / `Goldilocks^2` challenges, Keccak256, FRI `log_blowup=2, num_queries=100, pow_bits=16`.
+- `src/air.rs`: `UnitAir` (one independent row per unit) and `ChainAir` (one row per unit, accumulator carried by a
+  transition constraint, step counter + `first`/`last` selectors, epilogue on every row, claim column bound on the
+  last row); `Layout`, trace builders (`chain_trace` is parallel over VUs), per-constraint `Evaluator`.
+- `src/ctx.rs`: `FieldKind::{Goldilocks, BabyBear}`; over BabyBear every 32-bit word is two 16-bit limbs (`Word32`).
+- `src/stark.rs`: `Backend` trait -- `GoldilocksBackend` (Goldilocks^2 challenges, the forked challenger) and
+  `BabyBearBackend` (BabyBear^4 challenges, upstream `SerializingChallenger32`); Keccak256; FRI `log_blowup=2,
+  num_queries=100, pow_bits=16` by default.
 - `src/challenger.rs`: fork of `p3_challenger::SerializingChallenger64` with the mask fix below.
-- `src/main.rs`: `bench` (writes `result.json` per `verity_numerical.bench.contract`), `crosscheck`, `layout`.
+- `src/main.rs`: `bench`, `crosscheck`, `layout` (the unit); `vu-bench`, `vu-neg`, `chain-layout` (the VU chain,
+  `--field goldilocks|babybear`, reading `bench-instances/v1` arrays from `--root`).
+- `run_vu.sh`: the pod script (build, `cargo test`, `chain-layout`, `vu-neg`, `vu-bench`).
 - `tests/negative.rs`: the `test_negative.py` patterns as Rust tests, plus prove/verify of mutated traces.
+- `tests/chain.rs`: two real VUs (from the committed negative arrays, with their correct words) prove and verify over
+  both fields; a wrong claimed word, a broken link, a non-zero `c_0`, a skipped step are rejected by `verify`.
+- `results/`: the `result.json` and `vu_neg.json` records of the runs in the table below.
 - `tools/crosscheck.py`, `fixtures/crosscheck_units.json`: 1,200 WP2-generated units for the cross-check.
 
 ## What is constrained
 
-One row per unit; rows are independent (no transition constraints yet), so `B` units are `B` rows padded to a power
-of two (min 2). Width 2,794 columns: 272 words/hints/named materialisations, 1,828 range-limb columns (2-bit limbs —
+`UnitAir`: one row per unit; rows are independent, so `B` units are `B` rows padded to a power of two (min 2).
+`ChainAir` adds to the same row program the chain columns (PROTOCOL.md 12.1) for a width of 2,844 (Goldilocks) /
+2,900 (BabyBear). The unit's width 2,794 columns: 272 words/hints/named materialisations, 1,828 range-limb columns (2-bit limbs —
 the fallback for a lookup argument `uni-stark` 0.4.3 lacks), 610 one-hot selectors for the four fixed tables
 (POW, ALIGN, LEAD, NORM: boolean + sum-to-one + match + range-checked slack), 66 exclusion inverses, 18 slack, 13
 materialised products. 3,090 constraints, max degree 5 (`log_quotient_degree = 2`), no multiplicity columns.
@@ -56,7 +68,7 @@ Only the last constraint survives the folding and degree ≥ 3 constraints are u
 `src/challenger.rs` forks the challenger with the mask fixed; the negatives fail only after the fix. Anyone using
 Plonky3 0.4.3-succinct with a 64-bit field should check this. Not yet reported upstream.
 
-## Recorded runs (vy-cpu, AMD EPYC 9655P, 16 threads, rustc 1.98.1, release)
+## The transition unit alone: recorded runs (vy-cpu, AMD EPYC 9655P, 16 threads, rustc 1.98.1, release)
 
 ~~~sh
 uv run --package research research run --on vy-cpu --project verity --source . --stage direct.unit -- \
@@ -74,5 +86,53 @@ commits as run (the interactive Ligero design is 3). Soundness of this FRI confi
 decoding, −log2((1+ρ)/2) per query + PoW), conjectured 216; field terms (≈ 2^-128 · degree) omitted. Proof size is
 100 queries × 2,794-wide openings, hence flat in B.
 
-Not yet built: the VU chain (`c_{i+1} = y_i` between rows, step-0 selector, boundary binding), the Ligero PCS,
-HVZK (no randomised columns, no blinded openings), authentication.
+## The K=1536 VU chain: recorded runs (vy-cpu2, AMD EPYC 9654, **12 threads**, release)
+
+`bench-instances/v1`, tier `vu-k1536`, ids 0..4096 (operand arrays built on the pod by run r20260922-052410-8160,
+manifest sha256 `38fb2c3a...`). Scope `vu`, `NON_ZK_PROOF_DIAGNOSTIC`, authentication excluded, 12 of the pod's 32
+vCPUs (`RAYON_NUM_THREADS=12`, the pod is shared).
+
+~~~sh
+uv run --frozen research run --on vy-cpu2 --project verity --source . --stage b-chain.vu.goldilocks \
+    --env RAYON_NUM_THREADS=12 --require-result -- bash backends/direct/run_vu.sh goldilocks 4096
+~~~
+
+Correctness gate (every run repeats it): the 23 unit negatives and the 3 chain tests pass; **all 4,096 output words and
+all 393,216 intermediate accumulators equal the recorded ones** (the trace's `pack.y` per row against `vu-k1536.acc.u32`,
+the epilogue word against `vu-k1536.y.u16`); **all 52 `vu-k1536-neg`** are rejected by witness generation *and* the
+rows it produces violate a field constraint (44 `wrong`: `vu.out` on row 95; 8 `reject`: `a[i].t.excl` /
+`acc.t.excl`, the finiteness exclusions), over both fields; the proof of the honest trace verifies. Run ids:
+r20260922-054320-2c31 (gate only, Goldilocks; the bench step failed on a missing `/usr/bin/time`),
+r20260922-055326-699d (Goldilocks), r20260922-055900-f53a (BabyBear), r20260922-060503-6847 (BabyBear, 166 queries).
+
+| field | run id | width | witness s | prove s | **total s** | **s / VU** | verify s | proof bytes | depth | peak RSS | committed / VU | FRI bits (proven / conj.) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Goldilocks | r20260922-055326-699d | 2,844 | 24.17 | 158.48 | **182.65** | **0.0446** | 0.148 | 3,231,120 | 24 | 59.8 GB | 273,024 cells, 2.18 MB | 83.8 / 216 |
+| BabyBear | r20260922-055900-f53a | 2,900 | 22.05 | 149.01 | **171.06** | **0.0418** | 0.257 | 2,117,836 | 24 | 30.6 GB | 278,400 cells, 1.11 MB | 83.8 / 216 |
+| BabyBear, 166 queries (2^-128 proven) | r20260922-060503-6847 | 2,900 | 21.22 | 146.90 | **168.12** | **0.0410** | 0.425 | 3,453,676 | 24 | 30.6 GB | 1.11 MB | 128.6 / 348 |
+
+Trace: 2^19 rows (393,216 real + zero-VU padding) x width. `overhead.vs_native_peak` (t.total / 4096 over 9.85 ps):
+**4.53e9** (Goldilocks), **4.24e9** (BabyBear). Ledger: `backends/reports/ledger/b-chain.jsonl`.
+
+Reading the numbers:
+
+- The chain costs 96 rows per VU, so per-row throughput is what wave 1 measured: 524,288 rows in 158 s at 12 threads
+  vs 4,096 rows in 1.47 s at 16 threads -- 0.30 ms/row vs 0.36 ms/row; the transition constraints and the epilogue
+  are free at this width.
+- Witness generation (integer program + i128 checker per row, parallel over VUs) is 13% of the total; it was 76% of the
+  wave-1 total because it was single-threaded then.
+- **Goldilocks -> BabyBear on this CPU: 1.07x** on the total (1.06x on the prover), with **0.51x memory** and **0.66x
+  proof bytes**. tensor.md's 1.6x is for a hashing-bound prover (GPU, bytes committed halve); this CPU prover halves
+  the committed bytes (2.18 -> 1.11 MB/VU) and barely moves, so on 12 EPYC threads it is not hashing-bound: the
+  quotient evaluation (3,215 constraints x 2^21 LDE rows) and the DFTs dominate. The field flip is *correct* on the
+  real prover (the same gate passes); the speed-up it promises is a GPU statement, not measured here.
+- Soundness: the default FRI configuration is 100 queries at rate 1/4 with 16 PoW bits: **83.8 bits proven**
+  (unique-decoding bound, -log2((1+rho)/2) per query), 216 conjectured; challenges in Goldilocks^2 (128 bits) or
+  BabyBear^4 (124 bits); DEEP/batching terms (~degree / |challenge field|) omitted. 2^-128 proven needs 166 queries
+  at the same blowup: the third row measures it -- the prover is unchanged (queries only open more Merkle paths),
+  measured: the total is unchanged within noise (168.1 s vs 171.1 s), the proof grows 1.63x (3.45 MB) and the verifier 1.65x (0.425 s).
+- The claimed output words are committed trace cells (the `vu.y16` column) bound to the epilogue word on each VU's
+  last row; nothing binds them to an external statement (authentication excluded, as in wave 1).
+
+Not yet built: the Ligero PCS of PROTOCOL.md 3-5, a range-check lookup argument (1,868 of 2,844 columns are 2-bit
+limbs), HVZK (no randomised columns, no blinded openings), authentication, the GPU prover.
