@@ -196,3 +196,70 @@ accepted). Positives: 64/64 and 4096/4096 `vu-k1536` accepted with the recorded 
 **Transcript vectors for lane a-gpu:** `fixtures/babybear-transcripts/` (`transcript_vu4.json`, `transcript_vu64.json`,
 run r20260922-070527-a263; `README.md` there gives the byte-exact conventions: 4-byte LE base elements, `c_0`-first
 degree-6 coordinates, SHA-256 state chaining, the squeeze counter, the preamble, the message order, Merkle layout).
+
+## Checker v2 (vy-cpu2, 12 threads, PCS mode, `--variant v2`; lane a-v2, 2026-09-22)
+
+The same prover on the checker-min lane's lookup-centred arithmetisation of the SAME relation
+(`backends/numerical/reports/checker_min.md`, `verity_numerical.checker.v2`): one `T_OP` lookup per BF16 word,
+`ALIGN4` + `SHIFT` tables instead of the (q, r) division hints, `LEAD` / `LEADNORM` / `TNORM` instead of the leading-bit
+/ normalise / state-out chain; the VU chains the *state* (s, e, M, z) and the group saturation flags between units and
+packs once, in the epilogue. Exporter `gkr_export/v2.py` (`--variant v2` on `gkr_export.vu`); per unit **264 columns /
+290 wires / 26 products / 86 lookups into 10 tables, multiplicative depth 1** (v1: 468 / 826 / 358 / 374 into 9, depth
+4). The 5.14M fixed table rows are *implicit* (`itable` lines; `circuit.rs::materialise`, dense index) — only their
+multiplicities are committed, per proof. Chain: 8 links, **583 linkage constraints per VU** (v1: 98), including
+`ovf = 0` on every non-final unit. `PROTOCOL.md` §14. Security **2^-127.71** at B = 64 and 4096
+(`account_candidate_a` on the exported shape; the `SHIFT` / `T_OP` logUp identities are the worst lookup terms at
+2^-169 / 2^-166 — the budget is still the commitment hash and the Ligero query test).
+
+~~~sh
+cargo test --release                                                       # 14 tests incl. the v2 fixtures / itable materialisation
+uv run --package verity-numerical python -m verity_numerical.gkr_export.v2 negatives --out DIR   # 30 unit + 4 VU mutations
+VARIANT=v2 GATE=1      bash backends/gkr/run_measure_vu.sh                 # cargo test; generated v2 unit + VU negatives
+VARIANT=v2             bash backends/gkr/run_measure_vu.sh 4096            # export (--variant v2) + prove + verify
+VARIANT=v2 NEGATIVES=1 bash backends/gkr/run_measure_vu.sh                 # vu-k1536-neg
+~~~
+
+**v1 vs v2, Goldilocks^3, same box (shared with the latency and b-lookup lanes, load ≈ 35–48 on 32 vCPU during every
+run), 12 threads, all recorded words accepted** (v1 rows: the a-babybear lane's post-R<w>-fix control, commit 54e5da7;
+v2: commits d30efa3 / bf81577, the same `gkr.rs` / `logup.rs` / `ligero.rs`):
+
+| B | checker | run id | prove_s (commit / lookup / arith / open) | verify_s | proof bytes | rounds | depth | peak RSS | committed | s / VU | v2 / v1 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 64 | v1 | r20260922-064620-cf4c | 5.79 (0.22 / 1.89 / 3.22 / 0.43) | 0.49 | 1,638,920 | 1974 | 234 | 587 MB | 2,959,871 | 0.0905 | — |
+| 64 | v1 (re-run, d30efa3) | r20260922-075822-5076 | 5.39 (0.17 / 1.67 / 3.12 / 0.40) | 0.43 | 1,638,920 | 1974 | 234 | — | 2,959,871 | 0.0843 | — |
+| 64 | **v2** | r20260922-080202-8e4d | **6.13** (0.57 / 3.94 / **0.31** / 1.29) | 1.35 | 3,087,392 | 2199 | 279 | 798 MB | 6,770,360 | 0.0958 | prove 1.06×, arith 0.10×, lookup 2.1×, committed 2.3× |
+| 4096 | v1 | r20260922-065844-2b84 | 261.3 (9.1 / 63.8 / 160.1 / 26.1) | 26.1 | 69,693,032 | 3179 | 381 | 33.8 GB | 184,145,855 | 0.0638 | — |
+| 4096 | v2 (overlapping the `vu-k1536-neg` run) | r20260922-080548-b67d | 57.0 (5.8 / 21.4 / 15.3 / 13.6) | 11.9 | 41,510,240 | 3063 | 328 | 13.4 GB | 109,021,880 | 0.0139 | prove 0.218× |
+| 4096 | **v2 (headline)** | **r20260922-081106-6067** | **54.2** (5.6 / 20.2 / **15.6** / 11.9) | **12.2** | **41,510,240** | 3063 | **328** | **13.3 GB** | **109,021,880** | **0.0132** | **prove 0.207× (4.8×), verify 0.47×, bytes 0.60×, RSS 0.39×, committed 0.59×, depth 328 vs 381** |
+
+(peak RSS from the harness's process sampler, `resources.jsonl`, 5-s samples.) `overhead.vs_native_peak` 1.34e9
+(v1 6.48e9). Measured split ratios v2 / v1 at B = 4096: arith **0.098**, lookup **0.317**, commit + open **0.50**,
+committed elements 0.59 — the arithmetic bucket collapsed by the modelled ~10× (26 products of depth 1 against 358 of
+depth 4) and the lookup bucket by 3× despite 5.1M table leaves; the proof is now **37 % lookup, 29 % arith, 32 %
+commit + open**. Verify 12.2 s is dominated by the table-side evaluation of the implicit tables (5.14M rows) and the
+Ligero column re-encoding.
+
+**Correctness gate** (all on vy-cpu2, binary of d30efa3): `cargo test --release` 14/14 (r20260922-075226-1f2e); the
+generated v2 transition-unit negatives **30/30 rejected** (every hint, lookup-output and outgoing-state column of a unit
+mutated by +1; 13 caught at the phase-2a assertion sumcheck, 17 at the affected table's logUp identity) and the
+4 synthetic VU negatives **4/4 rejected** (`broken_chain`, `false_overflow_flag`, `public_wrong_word`,
+`saturated_intermediate` — all at the linkage functional); `vu-k1536-neg` **52/52 rejected, 0 wrongly accepted**
+(r20260922-080600-a365: 8 at witness generation — the non-finite / saturated operands are outside `T_OP`'s domain —
+and 44 by the verifier at the phase-2a assertion sumcheck). The Z-level wrap cases of the batteries are what the
+`+1` mutations and the `broken_chain` / `public_wrong_word` cases exercise on Goldilocks; the BabyBear-specific
+limb cases do not apply (no BabyBear v2 instantiation: `state_decode` / `epilogue` need the verified limb split first).
+
+**Table-commitment decision and small B.** The tables are implicit but their *multiplicities* are committed and their
+rows are leaves of the fractional-sum trees, so every proof pays 5.14M elements + 5.14M leaves regardless of B. At
+B = 64 that is 76 % of the committed elements and the reason v2 is *not* faster there (6.13 vs 5.79 s: lookup 3.9 vs
+1.9 s, open 1.3 vs 0.4 s, while arith fell 3.2 → 0.3 s). Fitting prove_s = a + b·B to the two points: v2 ≈ 5.4 s +
+0.0119 s/VU, v1 ≈ 1.7 s + 0.0634 s/VU, so **v2 wins from B ≈ 72** and is 4.8× at 4096; the fixed cost is < 10 % of the
+proof from B ≈ 4000. The split-u `SHIFT` fallback (2 × 2^8·54 rows instead of 2^16·54) would cut the fixed cost by
+~3.4M rows and matter only below B ≈ 300; it is not built.
+
+**GPU re-price** (`explore.tensor`, `VERITY_CHECKER_VARIANT=v2`, `ARITHMETIC_DIAGNOSTIC`): scaling the v1 model's
+arith / lookup / commit buckets by the measured CPU ratios (0.098 / 0.317 / 0.50) gives H100 at utilisation 0.172:
+v1 model 0.505 s per 4096 batch (overhead 1.25e7) → v2 model 0.221 s (5.47e6) → **v2 re-priced 0.150 s (3.72e6)**,
+with the commitment (encode + hash, 0.105 s) now 70 % of the GPU time; BabyBear^6 re-priced 0.103 s (2.54e6). The model's
+own v2 row is conservative on the arith bucket (it prices the census's 33 products at depth 3; the export has 26 at
+depth 1).
