@@ -1124,6 +1124,20 @@ recomputation in the verifier, the \(2^{19}\)-row floor -- are the items below.
   `T16` (65 536) and `T_OP` (65 536) could share a key column; `TNORM10` and `T15` too -- a \(2^{18}\) table set
   (\(\le 262\,144\) rows) would allow 2 048-VU batches at half the rows.
 
+### 15.8 After the `lane/b-bind` merge (2026-09-22)
+
+The v2 path binds through the shared `lookup_stark::verify_lookup(.., expected_degree_bits, public)`, which is now a
+wrapper over the LogUp verifier of 14.7 (`verify_lookup_inner`: the statement's `degree_bits`, the public columns
+checked at \(\zeta, \zeta g\), the preprocessed commitment recomputed and compared -- the table set is bound by that
+commitment; the v1 LogUp path additionally absorbs the table digest of 14.7, the v2 header does not and the v2
+transcript is unchanged by the merge in that respect).  Two things *do* change the v2 transcript relative to the
+runs of 15.3-15.6: the vendored `p3-fri` (12.6) absorbs the \(\zeta\)-openings before \(\alpha\) for every
+realisation, so v2 proofs made with upstream 0.4.3 no longer verify and `rounds.sequential_depth` is one larger; and
+`BabyBear6Backend`'s challenger is the `RttChallenger` wrapper as before (merge kept it).  `vu-bench --v2` reports
+`statement_binding.bound = true` like the other bench paths (`BenchNumbers.binding`).  Gate after the merge:
+`run_bind_gate.sh all` (adds `vu-neg --v2`, `vu-bench --v2 --ext 4|6` at 64 VUs with the wrong-statement rejection
+asserted inline, and the battery in `--v2` mode), run `r20260922-111343-3ed9`.
+
 ## 16. B-Ligero at the checker-v2 shape, end to end (b-e2e-v2, 2026-09-22) **[implemented, NON_ZK_PROOF_DIAGNOSTIC]**
 
 Section 15 (lane b-air-v2) is checker v2 as a Plonky3 AIR.  This section is the *Ligero* realisation of the same
