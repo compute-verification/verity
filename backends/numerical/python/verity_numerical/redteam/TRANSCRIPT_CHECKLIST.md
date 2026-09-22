@@ -155,3 +155,20 @@ F1-F4 thresholds.  What an implementation can still get wrong is the *realisatio
       is compared, not used. Plonky3 uni-stark 0.4.3 reads `degree_bits` from the proof: a 2-VU (256-row) proof
       verified as 4096 VUs (`b_degree_bits_unbound`, F2). Pin: `statement_suite` (F2),
       `BoundError::DegreeBits{expected, got}`; header contents `statement.rs::header` (domain tag `verity-direct/stmt/v1`).
+- [ ] **Every realisation of the same relation carries the binding.** A second prover/verifier pair for the same
+      AIR (B's LogUp realisation, `direct/src/lookup_stark.rs`, a fork of uni-stark with two extra rounds) shipped
+      with the pre-fix behaviour while the limb path was being fixed: no statement, `degree_bits` from the proof
+      (`redteam-logup-b` cases `zero_batch_as_any_statement`, `degree_bits_from_proof`). Binding is a property of
+      each verifier entry point, not of the AIR: enumerate the entry points (`verify`, `verify_lookup`, every
+      `--mode`) and pin each. Fixed 2026-09-22 (lane `b-bind`, PROTOCOL.md 14.7): `prove_lookup_bound` /
+      `verify_lookup_bound_bytes`, pin `direct/tests/lookup_statement.rs`. `verify_lookup` (unbound) remains as a
+      diagnostic and is labelled `statement_binding.bound = false` in every result that uses it.
+- [ ] **Preprocessed / public tables are part of the statement.** When the verifier recomputes a preprocessed
+      commitment from a public table definition, the table definition (or its digest) is also absorbed into the
+      challenger before the first challenge, so the two parties' challenges agree only if their tables do; the
+      commitment comparison alone binds the prover's `P` but not the verifier's choice of tables to the transcript.
+      Pin: `lookup_statement.rs` (substituted table row rejected both ways; `statement::table_digest`,
+      `statement::lookup_header`, tag `verity-direct/chain-air/logup/v1`).
+- [ ] **The trace height is a function of the statement AND the realisation.** The LogUp trace is at least the
+      tables' height (2^17 rows for `|P| = 116 722`), so `Statement::rows()` differs between realisations for the
+      same words (`Statement::min_rows`); a proof of the words at the wrong realisation's height is `DegreeBits`.
