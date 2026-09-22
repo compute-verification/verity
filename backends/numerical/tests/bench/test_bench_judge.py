@@ -127,3 +127,64 @@ def test_the_recorded_k16_and_k1536_runs_differ_in_k() -> None:
     ratios = {m["name"]: m["ratio"] for m in rep["measurements"]}
     assert ratios["shards"] == 2.0 and ratios["prove_seconds"] == pytest.approx(3.580119322 / 0.892078765)
     assert rep["derived"]["baseline"]["fields"] == ["B", "K", "authentication", "domain", "profile", "proof_class"]
+
+
+# --- instances --------------------------------------------------------------------------------------------------------------------------
+
+SHA = "f2b7cd4ca31e4adf0ce1e656bb0a2ef882f02301d5058670350b9c2b8d1f81a6"
+
+
+def _with_instances(run_id: str, lo: int, hi: int, sha: str = SHA, **overrides):
+    inst = contract.instances_ref("vu-k1536", lo, hi, sha)
+    res = conforming_result(run_id, B=hi - lo, instances=inst, **overrides)
+    for m in res["measurements"]:
+        if m["name"] == "vu.count":
+            m["value"] = hi - lo
+        if m["name"] == "vu.seconds_per_vu":
+            m["value"] = 4.0 / (hi - lo)
+        if m["name"] == "vu.per_second":
+            m["value"] = (hi - lo) / 4.0
+    return res
+
+
+def test_same_instances_are_judged(tmp_path: Path) -> None:
+    base = write_run(tmp_path, "r-base", _with_instances("r-base", 0, 64))
+    cand = write_run(tmp_path, "r-cand", _with_instances("r-cand", 0, 64))
+    proc = judge(str(base), str(cand))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "WARNING" not in proc.stdout and "REFUSED" not in proc.stdout
+    assert re.search(r"\n  instances\s+.*bench-instances/v1.*\s+=\s+", proc.stdout)
+
+
+def test_disagreeing_instances_are_refused(tmp_path: Path) -> None:
+    base = write_run(tmp_path, "r-base", _with_instances("r-base", 0, 64))
+    # another manifest
+    cand = write_run(tmp_path, "r-cand", _with_instances("r-cand", 0, 64, sha="1" * 64))
+    proc = judge(str(base), str(cand))
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert "REFUSED" in proc.stdout and "\n  instances: " in proc.stdout and "[measurements]" not in proc.stdout
+    # other ids for the same batch size
+    cand2 = write_run(tmp_path, "r-cand2", _with_instances("r-cand2", 64, 128))
+    assert judge(str(base), str(cand2)).returncode == 2
+    # other ids because B differs: a scaling point, judged (B is not an identity field)
+    cand3 = write_run(tmp_path, "r-cand3", _with_instances("r-cand3", 0, 4096))
+    proc = judge(str(base), str(cand3))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "instances.range" in proc.stdout  # visible in the fingerprint deltas
+
+
+def test_missing_instances_warns_and_judges(tmp_path: Path) -> None:
+    base = write_run(tmp_path, "r-base", _with_instances("r-base", 0, 1))
+    cand = write_run(tmp_path, "r-cand", conforming_result("r-cand"))  # instances: null
+    proc = judge(str(base), str(cand))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "WARNING: candidate instances is null: not measured on the shared instance set" in proc.stdout
+    lacking = conforming_result("r-old")
+    del lacking["workload_fingerprint"]["instances"]
+    old = write_run(tmp_path, "r-old", lacking)
+    proc = judge(str(base), str(old))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "WARNING: candidate does not record instances" in proc.stdout
+    assert "workload_fingerprint.instances missing" in proc.stdout
+    rep = json.loads(judge(str(base), str(old), "--json").stdout)
+    assert rep["warnings"] and rep["refused"] == []

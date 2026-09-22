@@ -35,6 +35,11 @@ Fingerprint fields (all required; a sub-field whose value is not known is ``null
     software        {"backend": {"name", "version" and/or "commit", ...}, "toolchain": {...versions}}
     preprocessing   what was amortised offline and is therefore not in the buckets (a string or an object)
     retention       retained | streamed | recomputed   (how the witness was held during proving)
+    instances       which frozen instances were proved: {"dataset": "bench-instances/v1", "tier": "vu-k1536",
+                    "range": [lo, hi), "manifest_sha256"} (``fixtures/bench-instances/v1``; hi - lo = B_real if present
+                    else B; sub-batches are contiguous sub-ranges of it) or null = not measured on the shared set.  Two
+                    results whose non-null ``instances`` disagree are never compared (:func:`compare_instances`); the
+                    judge warns when either is null or absent.  Every Candidate A/B number at K=1536 carries it.
 
 Timing (seconds; the buckets are disjoint and, with the joints, sum to at most ``t.total``, tolerance 1%)::
 
@@ -69,20 +74,25 @@ __all__ = [
     "BUCKET_NAMES",
     "DOMAIN",
     "IDENTITY_FIELDS",
+    "INSTANCES_DATASET",
+    "INSTANCES_FIELD",
+    "INSTANCES_TIERS",
     "MISSING",
     "PROFILE",
     "PROOF_CLASSES",
     "REQUIRED_FIELDS",
-    "ZK_CLASSES",
     "RESULT_SCHEMA",
     "RETENTION",
     "TOLERANCE",
     "T_TOTAL",
     "UNITS",
+    "ZK_CLASSES",
     "ZK_NONE",
+    "compare_instances",
     "fingerprint",
     "identity",
     "incomparable",
+    "instances_ref",
     "joint",
     "measurement",
     "parse_joint",
@@ -117,8 +127,13 @@ ZK_NONE = "none"
 IDENTITY_FIELDS = ("proof_class", "authentication", "profile", "domain", "K", "B", "hardware", "security.target")
 REQUIRED_FIELDS = (
     "profile", "domain", "K", "B", "proof_class", "authentication", "zk_mode", "security", "hardware", "software",
-    "preprocessing", "retention",
+    "preprocessing", "retention", "instances",
 )
+#: The frozen instance set every K=1536 number is measured on (``fixtures/bench-instances/v1``, ``verity_numerical.bench.instances``).
+INSTANCES_DATASET = "bench-instances/v1"
+INSTANCES_FIELD = "instances"
+INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 BUCKETS = ("witness", "encoding_commitment", "arithmetic", "lookup", "zk_additional", "serialization")
 BUCKET_NAMES = tuple(f"t.{b}" for b in BUCKETS)
@@ -218,6 +233,17 @@ def measurement(name: str, value: float | int, unit: str | None = None) -> dict[
     return {"name": name, "value": value, "unit": unit}
 
 
+def instances_ref(tier: str, lo: int, hi: int, manifest_sha256: str, dataset: str = INSTANCES_DATASET) -> dict[str, Any]:
+    """The ``instances`` entry for ids ``[lo, hi)`` of ``tier``: ``{"dataset", "tier", "range": [lo, hi], "manifest_sha256"}``.
+    ``manifest_sha256`` is the sha256 of the dataset's ``manifest.json`` (``verity_numerical.bench.instances.manifest_sha256``)."""
+
+    ref = {"dataset": dataset, "tier": tier, "range": [lo, hi], "manifest_sha256": manifest_sha256}
+    problems = _validate_instances(ref, None, None)
+    if problems:
+        raise ValueError("instances does not conform: " + "; ".join(problems))
+    return ref
+
+
 def fingerprint(
     *,
     profile: str,
@@ -232,19 +258,22 @@ def fingerprint(
     software: Mapping[str, Any],
     preprocessing: str | Mapping[str, Any],
     retention: str,
+    instances: Mapping[str, Any] | None = None,
     B_real: int | None = None,
     N_subbatches: int = 1,
     **extra: Any,
 ) -> dict[str, Any]:
     """A conforming ``workload_fingerprint``: the required fields, then the workload's own ``extra`` entries.  Raises
     ``ValueError`` listing every problem rather than emitting a bad one.  ``N_subbatches`` is always written, so a
-    batch chopped into several proofs is visible beside ``B``."""
+    batch chopped into several proofs is visible beside ``B``; so is ``instances`` (``null`` = not measured on the
+    shared instance set -- see :func:`instances_ref`)."""
 
     fp: dict[str, Any] = {
         "profile": profile, "domain": domain, "K": K, "B": B, "N_subbatches": N_subbatches, "proof_class": proof_class,
         "authentication": authentication,
         "zk_mode": zk_mode, "security": dict(security), "hardware": dict(hardware), "software": dict(software),
         "preprocessing": preprocessing if isinstance(preprocessing, str) else dict(preprocessing), "retention": retention,
+        "instances": None if instances is None else dict(instances),
     }
     if B_real is not None:
         fp["B_real"] = B_real
@@ -326,6 +355,38 @@ def validate_fingerprint(fp: Any) -> list[str]:
             p.append(f"preprocessing must be a non-empty string or an object saying what was amortised offline, got {pre!r}")
     if "retention" in present and present["retention"] not in RETENTION:
         p.append(f"retention must be one of {RETENTION}, got {present['retention']!r}")
+    if "instances" in present and present["instances"] is not None:
+        b = present.get("B") if _is_int(present.get("B")) else None
+        br = fp.get("B_real") if _is_int(fp.get("B_real")) else None
+        p += _validate_instances(present["instances"], b, br)
+    return p
+
+
+def _validate_instances(inst: Any, B: int | None, B_real: int | None) -> list[str]:
+    if not isinstance(inst, Mapping):
+        return [f"instances must be an object {{dataset, tier, range, manifest_sha256}} or null, got {inst!r}"]
+    p = []
+    for key in ("dataset", "tier", "range", "manifest_sha256"):
+        if key not in inst:
+            p.append(f"instances.{key} missing")
+    if p:
+        return p
+    if not isinstance(inst["dataset"], str) or not inst["dataset"]:
+        p.append(f"instances.dataset must be a non-empty string ({INSTANCES_DATASET!r}), got {inst['dataset']!r}")
+    elif inst["dataset"] == INSTANCES_DATASET and inst["tier"] not in INSTANCES_TIERS:
+        p.append(f"instances.tier must be one of {INSTANCES_TIERS} for {INSTANCES_DATASET}, got {inst['tier']!r}")
+    if not isinstance(inst["tier"], str) or not inst["tier"]:
+        p.append(f"instances.tier must be a non-empty string, got {inst['tier']!r}")
+    rng = inst["range"]
+    if not (isinstance(rng, Sequence) and not isinstance(rng, str) and len(rng) == 2 and all(_is_int(v) for v in rng) and 0 <= rng[0] < rng[1]):
+        p.append(f"instances.range must be [lo, hi) with 0 <= lo < hi, got {rng!r}")
+    else:
+        n = rng[1] - rng[0]
+        want = B_real if B_real is not None else B
+        if want is not None and n != want:
+            p.append(f"instances.range [{rng[0]}, {rng[1]}) holds {n} ids but {'B_real' if B_real is not None else 'B'} is {want}")
+    if not isinstance(inst["manifest_sha256"], str) or not _SHA256_RE.match(inst["manifest_sha256"]):
+        p.append(f"instances.manifest_sha256 must be a 64-hex-digit sha256 of the dataset's manifest.json, got {inst['manifest_sha256']!r}")
     return p
 
 
@@ -495,6 +556,32 @@ def incomparable(baseline: Mapping[str, Any] | None, candidate: Mapping[str, Any
         raise ValueError(f"allow takes identity fields {IDENTITY_FIELDS}, not {bad}")
     a, b = identity(baseline), identity(candidate)
     return [(f, a[f], b[f]) for f in IDENTITY_FIELDS if f not in allow and (a[f] is MISSING or b[f] is MISSING or a[f] != b[f])]
+
+
+def compare_instances(baseline: Mapping[str, Any] | None, candidate: Mapping[str, Any] | None) -> tuple[tuple[Any, Any] | None, list[str]]:
+    """``(conflict, warnings)`` for the ``instances`` of two fingerprints.  ``conflict`` is ``(baseline, candidate)`` when
+    both carry a non-null ``instances`` and they disagree -- a different dataset, tier or manifest, or different id
+    ranges for the same batch size (a different range with a different ``B`` is a scaling point, visible in the
+    fingerprint deltas, not a conflict); the judge then refuses.  ``warnings`` name the side(s) that lack it (absent or
+    null): those numbers were not measured on the shared instance set, so the comparison rests on the identity fields alone."""
+
+    fb, fc = baseline or {}, candidate or {}
+    a, b = fb.get(INSTANCES_FIELD), fc.get(INSTANCES_FIELD)
+    warnings = []
+    for who, fp, v in (("baseline", fb, a), ("candidate", fc, b)):
+        if INSTANCES_FIELD not in fp:
+            warnings.append(f"{who} does not record instances (pre-{INSTANCES_DATASET} result): not measured on the shared instance set")
+        elif v is None:
+            warnings.append(f"{who} instances is null: not measured on the shared instance set")
+    if a is None or b is None or not isinstance(a, Mapping) or not isinstance(b, Mapping):
+        return None, warnings
+    if any(a.get(k) != b.get(k) for k in ("dataset", "tier", "manifest_sha256")):
+        return (dict(a), dict(b)), warnings
+    if list(a.get("range") or []) != list(b.get("range") or []):
+        size = lambda fp: fp.get("B_real") if fp.get("B_real") is not None else fp.get("B")  # noqa: E731
+        if size(fb) == size(fc):
+            return (dict(a), dict(b)), warnings
+    return None, warnings
 
 
 # --- hardware probe ----------------------------------------------------------------------------------------------------
