@@ -238,11 +238,19 @@ def test_negative_tier_every_claimed_word_is_detected():
     assert neg["claimed_words"] == 52 and neg["wrong"] == 44 and neg["reject"] == 8
     assert neg["wrong_detected"] == 44 and neg["wrong_correct_reproduced"] == 44 and neg["reject_detected"] == 8 and neg["undetected"] == 0
     rejects = [r for r in neg["rows"] if r["verdict"] == "reject"]
-    # the 44 wrong claims: hardware != claimed; a reject row's claimed word is immaterial (correct_y is null) and may or may not equal
-    # the word the total semantics give (row 45 claims -inf where x[780] * -inf is +inf)
+    # mismatches are against the reference (the correct word of a wrong row): none.  Every claimed-wrong word was contradicted; a reject
+    # row's claimed word is immaterial (correct_y is null) and may or may not equal the word the total semantics give (row 45 claims -inf
+    # where x[780] * -inf is +inf)
     reject_words_differ = sum(not r["hardware_equals_claimed"] for r in rejects)
-    assert rep["mismatches"] == {"intermediate": 0, "final": 0, "epilogue": 44 + reject_words_differ, "total": 44 + reject_words_differ}
+    assert rep["mismatches"] == {"intermediate": 0, "final": 0, "epilogue": 0, "total": 0} and rep["first_mismatches"] == []
+    assert neg["claimed_words_contradicted"] == 44 + reject_words_differ
     assert rep["words"] == {"intermediate": 0, "final": 0, "epilogue": 52, "total": 52}
+    # a wrong row the hardware did not reproduce the correct word for is a mismatch located at the epilogue with the correct word expected
+    bad = IH.load_bench_instances("vu-k1536-neg", None, FIXTURE / "manifest.json")
+    bad.negative["rows"][3]["correct_y"] ^= 1
+    rep = IH.replay(FakeProbe(ins), ins, bad)
+    assert rep["mismatches"]["total"] == 1 and rep["negative"]["wrong_correct_reproduced"] == 43 and rep["negative"]["undetected"] == 0
+    assert rep["first_mismatches"][0]["index"] == 3 and rep["first_mismatches"][0]["expected"] == f"{bad.negative['rows'][3]['correct_y']:04x}"
     dom = rep["domain"]
     # 4 rows with an inf / NaN operand word (their accumulator is non-finite from that step on too) + 4 rows saturating before the last step
     assert dom["nonfinite_operand_instances"] == 4 and dom["nonfinite_intermediate_acc_instances"] == 8 and dom["out_of_domain_instances"] == 8

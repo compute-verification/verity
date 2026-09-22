@@ -44,8 +44,9 @@ Outputs under ``--out``: ``probe_results.json``, ``capture_<tier>.npz`` (the har
 the final words, the ids), ``sass_<kernel>_<arch>.txt`` with ``--sass-check``, and under ``research run`` a ``result.json`` of kind
 ``tc-evidence/v1`` whose ``tc_evidence`` is the meta contract: ``{instruction, target, instances_dataset, instances_tier, range,
 manifest_sha256, elements, mismatches, first_mismatch | null, per_step_checked, sass, device, driver, cuda, model_agrees, ...}``.
-``mismatches`` counts hardware words that differ from the tier's expected words (on the negative tier the expected words are the
-*claimed* ones, so its ``wrong`` rows are expected to mismatch: ``negative.undetected`` is that tier's failure count).
+``mismatches`` counts hardware words that differ from the reference words: the tier's expected (model-recorded) words, and on the
+negative tier the *correct* word of every claimed-wrong row (``negative.claimed_words_contradicted`` counts hardware words that differ
+from the *claimed* ones -- all of them, if the harness detects every wrong claim; ``negative.undetected`` is that tier's failure count).
 ``validation.status`` is ``passed`` iff a positive tier has 0 mismatches, 0 other-position words and 0 out-of-domain instances, or
 the negative tier has 0 undetected rows; ``failed`` otherwise.  ``--repeat N`` runs the whole replay N times and counts words that
 differed between repetitions (nondeterminism); ``--only-ids`` re-runs chosen instances alone (confirming a mismatch).
@@ -197,7 +198,7 @@ def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: 
     if tier == "vu-k1536":
         acc = np.frombuffer(data.acc.tobytes(), np.uint32).reshape(n_total, steps)[ids]
         return InstanceSet(tier=tier, a=x, b=w, c0=c0, acc=acc.copy(), y=y.copy(), epilogue=EPILOGUE_BF16, **common)
-    # vu-k1536-neg: expected = the claimed (wrong) word; the index carries verdict and the correct word
+    # vu-k1536-neg: y = the claimed (wrong) word; the index carries verdict and the correct word (the reference for the compare)
     cols = data.columns
     rows = [dict(zip(cols, r)) for r in data.index]
     neg = {"columns": cols, "rows": [rows[int(i)] for i in ids]}
@@ -441,9 +442,20 @@ def replay(probe, ins: P.Instruction, inst: InstanceSet, log=print) -> dict:
         carried = got  # the hardware's own accumulator carries on
     gpu_seconds = time.time() - t0
     y_hw = epilogue_words(inst.epilogue, carried)
-    y_bad = np.nonzero(y_hw != inst.y)[0]
+    claimed_contradicted = None
+    if inst.negative is None:
+        y_ref = inst.y
+        y_bad = np.nonzero(y_hw != y_ref)[0]
+    else:
+        # the reference word of a claimed-wrong row is its CORRECT word (the claimed one is what the harness must contradict); a reject
+        # row has no reference word -- the domain check judges it (negative_verdicts)
+        rows = inst.negative["rows"]
+        is_wrong = np.array([r["verdict"] == "wrong" for r in rows], bool)
+        y_ref = np.array([int(r["correct_y"]) if r["verdict"] == "wrong" else int(r["claimed_y"]) for r in rows], inst.y.dtype)
+        y_bad = np.nonzero(is_wrong & (y_hw != y_ref))[0]
+        claimed_contradicted = int(np.count_nonzero(y_hw != inst.y))
     y_width = 4 if inst.y.dtype == np.uint16 else 8
-    first_y = [{"index": int(inst.ids[r]), "step": "epilogue" if inst.epilogue else steps - 1, "expected": f"{int(inst.y[r]):0{y_width}x}",
+    first_y = [{"index": int(inst.ids[r]), "step": "epilogue" if inst.epilogue else steps - 1, "expected": f"{int(y_ref[r]):0{y_width}x}",
                 "got": f"{int(y_hw[r]):0{y_width}x}", "acc": f"{int(carried[r]):08x}"} for r in y_bad[:FIRST_MISMATCHES]]
 
     # domain: non-finite operand words, non-finite accumulators before the last step (D8: the last step may saturate)
@@ -490,6 +502,7 @@ def replay(probe, ins: P.Instruction, inst: InstanceSet, log=print) -> dict:
     }
     if inst.negative is not None:
         report["negative"] = negative_verdicts(inst, y_hw, out_of_domain)
+        report["negative"]["claimed_words_contradicted"] = claimed_contradicted
     return report
 
 
@@ -654,8 +667,9 @@ def main(argv: list[str] | None = None) -> int:
         "hostname": identity["hostname"],
         "epilogue": inst.epilogue,
         "model_agrees": bool(model_agrees),
-        "mismatch_semantics": ("hardware word != the tier's expected word; on vu-k1536-neg the expected words are the CLAIMED (wrong) ones, "
-                               "so its wrong rows are meant to mismatch -- negative.undetected is that tier's failure count"),
+        "mismatch_semantics": ("hardware word != the reference word: the tier's expected (model-recorded) word; on the negative tier the "
+                               "CORRECT word of a claimed-wrong row (reject rows have none: the domain check judges them, negative.reject_detected); "
+                               "negative.claimed_words_contradicted counts hardware words != the claimed words, negative.undetected that tier's failures"),
         "source": inst.source,
         "gpu_seconds": rep0["gpu_seconds"],
         "wall": results["seconds"],
