@@ -24,7 +24,7 @@ src/research/
 ├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json  (unmodified upstream)
 └── pods/           RunPod lifecycle (runpod.py), budget cap, memory guard, and pod-side shell guards under sh/           (unmodified upstream)
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
-tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section
+tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
 
 `telemetry/` and `pods/` were promoted verbatim from `veritor` `zk/campaign/`

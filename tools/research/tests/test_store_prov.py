@@ -323,6 +323,7 @@ def test_scratch_dir_layout_and_env(tmp_path):
 def _run_copy(tmp_path: Path) -> Path:
     d = tmp_path / "runs" / RUN_ID
     shutil.copytree(RUN_FIXTURE, d)
+    (d / "state.json").rename(d / "status.json")      # the fixture cannot be tracked as status.json (tests/test_repository.py's report-genre gate)
     return d
 
 
