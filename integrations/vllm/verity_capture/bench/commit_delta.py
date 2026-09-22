@@ -22,6 +22,22 @@ versions.json.  Every number is MEASURED unless the key says otherwise.
 
     PYTHONPATH=. /workspace/venv-cu129/bin/python -m verity_capture.bench.commit_delta \
         --workload verity_capture/profiles/workload_cov_b0_b1_c256.json --pairs 5 --committer native_host --out /workspace/cp/cmt3/b0_b1
+
+PROTOCOL SUMMARY (Commit stage entry: the instrumented runs + the fail-closed X-03 verdict)
+  Purpose: run the row's workload on ONE engine in interleaved (control, instrumented) pairs; the instrumented arm commits every
+    required value through the committer (row_pod: native_collect_v2b + the FA2/FA3 M1 tap); the verdict is then computed from the
+    committed bytes -- manifest coverage, openings, C2 (oracle compare vs the Match record, sampled replay, boundary linkage),
+    weights pin, executed prefix -- and Δ_commit (the overhead) is measured beside it.
+  Inputs: --workload wl.json --case ROLE; --required-manifest manifest.json + --program-digest (the Build's); --program-dir |
+    --programs-root (the Build Programs); --match-dir (this attempt's Match record); --weights-of-record | --checkpoint-dir;
+    --retain device|host, --openings, --pairs, --window-mb/--window-slots, --bounded-staging.
+  Outputs (--out DIR): runs.jsonl, steps.jsonl, summary.json/.md, verdict.json, versions.json, source_identity.json,
+    binding_map_p<k>.json, sampled_replay_p<k>.json, host_admission_<kind>.json, weights_of_record.json, declaration_<committer>.json.
+  Invariants: the source-identity precheck runs before any engine (exit 3 PRECHECK_FAIL_SOURCE_IDENTITY); a manifest whose
+    program_digest is not the Build's is refused before the engine starts; the population is Q(P) at the CAP shape -- EOS-stopped
+    positions are classified not-executed by rule, never cut out; control and instrumented tokens must be equal; PASS only when
+    every commit_verdict check holds (the first failing reason is the verdict; never "PASS with errors recorded").
+  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 from __future__ import annotations

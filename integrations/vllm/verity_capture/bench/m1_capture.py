@@ -13,6 +13,20 @@ observer (the non-interference control) and writes tokens.json / versions.json o
 
 [M6] `--case B1` (or a workload file carrying `"case"`) serves Qwen2.5-1.5B; the accepted tokens come from the workload
 file's `accepted_token_ids` (see `vllm_adapter.load_workload`).
+
+PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one arm per process)
+  Purpose: serve the row's declared workload on a fresh vLLM engine and record what the engine did: with the observer installed
+    (TorchDispatchMode + Triton launch + module hooks) the raw observation log the fold turns into the Captured_v1 Program; with
+    --no-observer the same workload uninstrumented (the `control` arm, whose tokens must equal the capture's).
+  Inputs: --workload wl.json, --checkpoints manifests/checkpoints.json, --case ROLE, --max-num-seqs B, --snapshot-steps,
+    --snapshot-max-bytes[-op], --engine-arg k=v, --target (TargetProfile); env VERITY_TIMELINE, VLLM_BATCH_INVARIANT=1.
+  Outputs (--out DIR = match/capture or match/control): log.jsonl.gz, tokens.json (per request: prompt / generated ids, finish_reason,
+    served_output_len, executed_prefix_len, cap_exhausted; `lag` = the engine's resolved async_scheduling), spec_tokens.json
+    (known BEFORE execution), values/<step>/*.bin + snapshots.json, stats.json, versions.json, cos_sin_cache.npy.
+  Invariants: the two lengths stay distinct per request (executed = served + LAG only on an EOS stop before the cap) and are functions
+    of the served tokens + the attested lag, never of the trace; LAG is None (unattested) when the engine does not report it -- no default;
+    the warm-up runs on throwaway prompts and is never part of the record; nothing observed from the run goes into spec_tokens.json.
+  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 from __future__ import annotations

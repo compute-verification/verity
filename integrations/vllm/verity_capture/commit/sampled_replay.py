@@ -24,6 +24,21 @@ resolver reads every producer at its own step, so the request's history is commi
 Ordered boundary linkage (exhaustive, NOT sampled): every request's committed `input_token_ids` at its arrival step == the DECLARED
 prompt (workload manifest), and at every later step == that request's committed `sampled_token_ids` of the previous step.  This is
 the prescribed-input / designated-output linkage of §4 and replaces the Match-oracle attribution gate at B>=2 (F-cb-23).
+
+PROTOCOL SUMMARY (Commit stage: C2 of record = sampled exact VU replay + exhaustive ordered boundary linkage)
+  Purpose: from the COMMITTED bytes alone (binding map + committed reader), re-evaluate a stratified sample of Program rows with the
+    registry's own relations and require bit equality; link every request's committed input ids to its declared prompt and to its
+    own previous-step sampled ids over the executed prefix.  Needs no Match record.
+  Inputs: the request Programs' instances docs (ProgramIndex), the binding map, `committed(step, op_path, member, rank)`, the weights
+    reader, arrivals, the manifest (Q(P) of record), `executed_prefix` facts per request, the seed (+ an optional verifier challenge).
+  Outputs: the replay record {result True|False|None, grade, sample{seed, seed_source, challenge}, strata, population{query_total,
+    not_executed_by_rule, ...}, uncovered_by_name, query_checks, catch_probability}; the linkage record {result, why, pairs, linked, unlinked}.
+  Invariants: result True only if EVERY sampled VU replays bit-exactly AND every non-empty stratum was evaluated (None = partial,
+    never PASS); the seed is never prover-choosable in advance (run root after commitment, or sha256(challenge|root)[:8]); rows at
+    request-relative steps >= n_exec leave the pool into a NAMED class before any draw; a request linked over fewer steps than its
+    cap must end on a declared EOS id at steps[-1 - lag] (undeclared EOS / unattested lag = unlinked by name); weights_check.equal
+    False fails the replay by name.
+  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 

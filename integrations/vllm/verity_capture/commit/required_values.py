@@ -34,6 +34,20 @@ crossing which boundary); the vocabulary is the bridge to the collector's names 
     PYTHONPATH=. python -m verity_capture.commit.required_values diff  --program <derive dir> [--workload wl.json]   # old vs new
 
 Dependency-free (json/gzip/hashlib/array) like `required_manifest`.
+
+PROTOCOL SUMMARY (Commit stage: the population function behind the manifest of record)
+  Purpose: RequiredValues(P, Q) -- walk the Build's Program `P` (instances.json.gz rows, in Program order) under the query `Q` and
+    yield every logical identity a Commit must bind, per engine step / request / rank; the DEFAULT engine of required_manifest.
+  Inputs: a derive dir (descriptor.json.gz + instances.json.gz; a Workload_v1 root recurses into its request components), the
+    workload manifest (request ids, arrivals, caps), the naming vocabulary `required_manifest.members_for`.
+  Outputs: identity rows in the TABLE-RULES key (program_digest, request_id, step, invocation, op_path, output_member,
+    element_range, rank) consumed by required_manifest.build_manifest; `boundary_audit` (unnamed_crossing / named_interior classes
+    per family); the CLI `audit` / `diff` documents (inventory engine vs traversal).
+  Invariants: rows are consumed once (per-step state is O(modules), never the whole identity list); a row's boundary class is derived
+    from its own `args` (a producer read outside its module crosses), never declared by hand; a family with no naming rule raises
+    UnmodelledFamily -> the population is `complete: False` (fail closed); shared prescribed inputs (weights) are yielded ONCE;
+    the audit is a REPORT beside the population -- it never changes the required set.
+  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 

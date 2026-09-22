@@ -12,6 +12,19 @@
            static configuration record for the eager profile.
 `conformance` — the separate conformance record: which production kernels implement which registered
            definitions, and each definition's conformance status.
+
+PROTOCOL SUMMARY (Build stage: the registry = the closed vocabulary every Program is written in)
+  Purpose: the registered function library the frontend binds vLLM's traced ATen ops to (Build), the fold names captured kernels with
+    (Match) and the replay evaluates bit-exactly with (Commit): primitives with total evaluators on encodings (`prims`), the B1 eager
+    composites (`b1`), the sampler chain (`sampling`), the ⊥-lifted families (`lifted`), and the kernel conformance record.
+  Inputs: none at import beyond `verity.ir` (REGISTRY, register_lazy_family); a descriptor's spec ids (e.g. `Const32[0x..]_v1`,
+    `GatherBf16x64_v1`, `Lifted[..]_v2`) are resolved on demand through the regex families registered here.
+  Outputs: a populated `verity.ir.defs.REGISTRY`; every Program descriptor (descriptor.json.gz) decodes only against it.
+  Invariants: importing ANY `verity_vllm.registry.*` module registers the lazy families first (Python imports the package), so a
+    descriptor decoded after such an import resolves as it did in veritor; family ORDER matters -- the two catch-alls (`{ORD=n}`,
+    `Lifted[..]`) are registered last; a spec id no family matches is a decode failure, never a guessed definition; this module is
+    the one pod_bootstrap.sh's readiness check imports to prove `verity_vllm` resolves from the shipped tree (verity_vllm_from_tree).
+  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 

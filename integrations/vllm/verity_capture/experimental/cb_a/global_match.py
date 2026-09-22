@@ -51,6 +51,21 @@ verdict of record (`alternate_verdict`) and never merged into it. The dag criter
 (`batch_decomp.dag_hashes`) and addresses every fold instance by the canonical index of its structurally identical component instance, so the fold's emission order (AttentionScope: one group per
 distinct T in first-occurrence order over the batch) is recorded in G8 as batch layout, never used as an address and never
 re-sorted; a consumer emitted before its producer, a wiring change or a missing/extra instance still FAILS G3.
+
+PROTOCOL SUMMARY (Match stage: the record checker -- GM-01, the Match verdict of record for any B >= 1)
+  Purpose: establish that THIS row's Build workload Program (GP-01: weights once, one component per declared request, declared arrivals,
+    caps, stop rule + LAG) corresponds to the batched execution the Match stage recorded -- all requests, all executed steps, global I/O
+    associations and chronology -- as eight named checks G1..G8, each PASS/FAIL with evidence; the verdict is PASS iff every check passes.
+  Inputs: --gprog build_workload/workload_program.json (+ --workload wl.json), --oracle <match dir> (program.json + instances.jsonl =
+    the fold, capture/log.jsonl.gz, capture/tokens.json), --within-step dag|sequence, [--derived dirs, --decomp-out match_decomp.json].
+  Outputs: --out global_match.json {verdict, checks[{id, status, ...}], failed_checks, alternate_verdict, requests[{served_output_len,
+    executed_prefix_len, eos_truncated, ...}], lag, achieved_concurrency, impl}, <out>_global_program.json; the brief on stdout.
+    Exit 0 PASS, 3 FAIL, 4 X-09 names missing derived shapes (row_pod derives them and reruns once).
+  Invariants: requests are named r<k> (manifest position) and the record's UUIDs are mapped through the Program's table (G1); a request
+    that stopped early is compared over its executed prefix and must end on a DECLARED EOS id with the declared LAG (G6, fail closed
+    without the declaration); X-09 is evidence inside G3, never the verdict; the other within-step criterion is recorded beside the verdict,
+    never merged; MATCH_IMPL selects record | fast explicitly (no silent fallback); capture/tokens.json is required on a row of record.
+  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 

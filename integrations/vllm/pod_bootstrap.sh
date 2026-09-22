@@ -7,6 +7,19 @@
 # Idempotent: every step checks before it builds.  Runs from this directory (the shipped tree's integrations/vllm).  Fails closed with
 # a named class (BOOTSTRAP_FAIL_<step>) and exits 3; the readiness record (readiness.json) is written whether or not every check passed.
 # Env: WORK (/workspace), VENV ($WORK/venv312), HF_HOME ($WORK/hf), FA2_TAP_HDIMS (64,96,128,256), MAX_JOBS (nproc), CUDA_HOME.
+#
+# PROTOCOL SUMMARY (pod readiness; runs once per pod, before any row_pod.sh)
+#   Purpose: make a fresh pod able to run rows from THIS shipped tree: venv312 (Python 3.12) + the sha256-pinned vLLM d9105ea80 cu129
+#     wheel + torch cu129, the pinned checkpoints (manifests/checkpoints.json: sha256 per safetensors shard), the native taps
+#     (hidden_gpu chunk tree, FA2 matReq tap, FA3 tap on cc 9.0) and a mechanical readiness record.
+#   Inputs: --cases B0[,B1] (checkpoint roles of checkpoints.json), --out DIR; the env above.
+#   Outputs: $OUT/readiness.json (schema verity-vllm/readiness/v1: checks{ok, value|error}, identities, measurements network/disk/memory),
+#     $OUT/{pip,checkpoints,hidden_gpu,fa2_tap,fa3_tap}.log, $OUT/bootstrap.fail on a failure; the last stdout line is BOOTSTRAP-OK.
+#   Invariants: idempotent (every step checks before it builds); a failing step exits 3 with the named class BOOTSTRAP_FAIL_<STEP>;
+#     readiness.json is written BEFORE its verdict is taken (a failed check still leaves the record; `ok` = AND of the checks);
+#     every Verity package must import from this tree (verity_from_tree, verity_vllm_from_tree, verity_capture_from_tree,
+#     no_old_tree_on_path); the network/disk/cgroup-memory measurements are advisory and never fail the bootstrap.
+#   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P); cd "$ROOT" || exit 3
 CORE=$(cd "$ROOT/../../packages/verity/src" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no packages/verity/src beside $ROOT (run from the shipped Verity tree)" >&2; exit 3; }
