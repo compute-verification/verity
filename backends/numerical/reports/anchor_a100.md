@@ -6,6 +6,38 @@ Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 
 
 Bandwidth ratios the earlier reports *scaled* by: A100/4090 = 2,039/1,008 = 2.02; A100/H100 = 2,039/3,350 = 0.61.  Speed ratios below are recorded-time / A100-time (> 1 = the A100 is faster); a departure from the bandwidth ratio by > 1.5x either way is a finding about the kernel and is flagged.
 
+## Headline: one row per kernel
+
+Speed ratio = recorded time / A100 time (> 1: the A100 is faster).  The bandwidth ratios the earlier reports scaled by are **2.02** (vs the 4090) and **0.61** (vs the H100); `fraction of A100 floor` is the HBM floor at the measured 1,754 GB/s for streaming kernels and the fraction of the datasheet INT8 peak for tensor-core kernels.
+
+| kernel | recorded (card) | A100 measured | speed ratio | fraction of A100 floor |
+|---|---|---|---|---|
+| hash_gpu: SHA-256 Merkle tree, B matrix (20.4 GB) | 446 GB/s (RTX 4090) | 190 GB/s | 0.43x | 0.11 |
+| hash_gpu: Blake3 Merkle tree, B | 359 GB/s (RTX 4090) | 377 GB/s | 1.05x | 0.22 |
+| hash_gpu: Poseidon2-16 Merkle tree (cuda), B | 57.7 GB/s (RTX 4090) | 26.1 GB/s | 0.45x | 0.01 |
+| encode: SIMT NTT v2 (t1024), B batch | 32.7 ms (RTX 4090) | 57.4 ms | 0.57x | 0.25 |
+| encode: Triton INT8 matrix DFT, B | 171.7 ms (RTX 4090) | 607.1 ms | 0.28x | 0.06 |
+| fused checker round, SIMT, 2^21 ext input | 273 us (RTX 4090) | 474 us | 0.58x | 0.27 |
+| fused checker round, TC, 2^21 ext input | 506 us (RTX 4090) | 1,569 us | 0.32x | 0.08 |
+| fused 130-round layer model, SIMT, graphed | 6.2 ms (RTX 4090) | 12.3 ms | 0.50x | 0.17 |
+| fused logUp round, 2^21 (best block) | 600 us (RTX 4090) | 1,469 us | 0.41x | 0.15 |
+| packed sumcheck (first pass) 2^26, k=0 | 30.9 ms (H100) | 50.2 ms | 0.61x | 0.03 |
+| packed sumcheck (first pass) 2^26, k=3 | 9.1 ms (H100) | 16.6 ms | 0.55x | 0.03 |
+| Montgomery packed sumcheck 2^26, k=3 (a-packed2) | 6.0 ms (H100) | 11.5 ms | 0.52x | 0.04 |
+| Montgomery packed sumcheck direct 2^28, k=3 | 17.7 ms (H100) | 31.9 ms | 0.55x | 0.06 |
+| logUp fractional GKR, full-VU shape, k=3 | 427.4 ms (H100) | 412.2 ms | 1.04x | -- |
+| INT8-limb round (tensor lane), 2^21 deg 6, graphed | 4,636 us (RTX 4090) | 4,894 us | 0.95x | 0.01 |
+| INT8-limb 130-round layer model, graphed wall | 91.4 ms (RTX 4090) | 115.6 ms | 0.79x | -- |
+| fused commitment (encode -> Blake3 -> root), B, best 4090 config (1024-row slices) | 46.7 ms (RTX 4090) | 159.4 ms | 0.29x | 0.09 |
+| fused commitment, B, best A100 config (65,536-row slices) | 55.4 ms (RTX 4090) | 98.0 ms | 0.56x | 0.15 |
+| IRS row combination, B (chunk 1024) | 5.7 ms (RTX 4090) | 7.6 ms | 0.74x | 0.38 |
+| quadratic test, B (s1024) | 9.4 ms (RTX 4090) | 16.0 ms | 0.58x | -- |
+| structured linear test M=3 lazy, B (b-lintest) | 7.1 ms (RTX 4090) | 11.2 ms | 0.64x | 0.26 |
+| F_c batch inversion, B (T=262144) | 28.8 ms (RTX 4090) | 19.5 ms | 1.48x | -- |
+| `_int_mm` 8192^3 (cuBLAS INT8 ceiling) | 6.6 ms (0.253 of 4090 peak) (RTX 4090) | 14.5 ms | 0.45x | 0.12 |
+
+**Pattern.**  Only the HBM-bound kernels scale with bandwidth (plain k=0 sumcheck 0.62x the H100, Montgomery packed 0.52-0.61x, batch inversion 1.48x the 4090).  Every INT32-SIMT kernel -- SHA-256, Poseidon2, the SIMT NTT encoder, the fused checker/logUp rounds, the quadratic / linear tests, the fused commitment -- lands near the A100's INT32 issue-rate ratio to the 4090 (108 SMs x 64 lanes x 1.41 GHz / 128 x 64 x 2.52 GHz = **0.47x**), not the 2.02x bandwidth ratio; the 4090 rows that were reported as 'fraction of HBM floor' were ALU-bound kernels on a card with a high ALU:bandwidth ratio.  Blake3 (1.05x) and the launch-bound kernels (logUp GKR 1.04x the H100; the torch INT8-limb round 0.6-1.0x) are card-independent.  Tensor-core kernels reach 4-6% of the A100's INT8 peak (cuBLAS itself only 12%).
+
 ## 0. The anchor's measured roofline inputs
 
 | microbench (CUDA events, median of 9) | A100 measured | datasheet | fraction |
@@ -376,3 +408,13 @@ Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_ker
 
   Omitted (still modelled): not an end-to-end proof: buckets measured separately on resident pseudo-random data; hint_gen (modelled); prg (modelled); transcript serialisation, verifier work, network (not priced).
 
+
+## What would not run / caveats
+
+* Nothing was modified for sm_80: every kernel (cupy RawKernels, Triton 3.2 `tl.dot` int8 paths, torch `_int_mm`) compiled and ran bit-exact on the A100 as recorded.
+* The fused lane's `tc` variant of the logUp round is not built on any card (`fused_logup` has SIMT only); the fused SIMT logUp round *was* run (section 3b).
+* The packed lane's plain k=0 direct 2^28 (140 GB) does not fit the 80 GB card on any GPU; k=2..4 at 2^28 were run (17.8-34.4 GB).
+* `cupy` and `blake3` were absent from the pod's venv and were installed (`cupy-cuda12x`, `blake3`); the hash_gpu / encode benches otherwise ran unchanged.
+* The A100's `torch._int_mm` reaches 0.12 of the datasheet INT8 peak at 8192^3 (the 4090 got 0.25): the 'fraction of INT8 peak' floors on this card are against a ceiling cuBLAS itself does not approach.
+* The first b-ligero attempt failed (`fixtures/bench-instances/v1` operand arrays are built, not committed; PYTHONPATH); it was re-run with `verity_numerical.bench.instances build` first -- see section 7 if present, else it did not finish before the hand-off.
+* Model-only rows (`explore.tensor` at 0.172 utilisation) are ESTIMATES; the A vs B section labels every still-modelled bucket.  No proof was produced in this lane except the b-ligero prover runs (section 7, `NON_ZK_PROOF_DIAGNOSTIC`).

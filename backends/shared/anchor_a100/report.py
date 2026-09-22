@@ -45,6 +45,15 @@ INT8_MACS_H100 = 989.5e12
 UTIL = 0.172
 UNITS = 4096
 LAYER_WIDTHS = acc.CHECKER_LAYER_WIDTHS_A
+WOULD_NOT_RUN = [
+    "Nothing was modified for sm_80: every kernel (cupy RawKernels, Triton 3.2 `tl.dot` int8 paths, torch `_int_mm`) compiled and ran bit-exact on the A100 as recorded.",
+    "The fused lane's `tc` variant of the logUp round is not built on any card (`fused_logup` has SIMT only); the fused SIMT logUp round *was* run (section 3b).",
+    "The packed lane's plain k=0 direct 2^28 (140 GB) does not fit the 80 GB card on any GPU; k=2..4 at 2^28 were run (17.8-34.4 GB).",
+    "`cupy` and `blake3` were absent from the pod's venv and were installed (`cupy-cuda12x`, `blake3`); the hash_gpu / encode benches otherwise ran unchanged.",
+    "The A100's `torch._int_mm` reaches 0.12 of the datasheet INT8 peak at 8192^3 (the 4090 got 0.25): the 'fraction of INT8 peak' floors on this card are against a ceiling cuBLAS itself does not approach.",
+    "The first b-ligero attempt failed (`fixtures/bench-instances/v1` operand arrays are built, not committed; PYTHONPATH); it was re-run with `verity_numerical.bench.instances build` first -- see section 7 if present, else it did not finish before the hand-off.",
+    "Model-only rows (`explore.tensor` at 0.172 utilisation) are ESTIMATES; the A vs B section labels every still-modelled bucket.  No proof was produced in this lane except the b-ligero prover runs (section 7, `NON_ZK_PROOF_DIAGNOSTIC`).",
+]
 
 
 def load(p: Path):
@@ -374,7 +383,8 @@ def sec_tensor(a100: dict, ref: dict) -> tuple[str, list[dict]]:
         if c4:
             rows.append([f"`_int_mm` ({ca['M']}, {ca['K']}, {ca['N']})", f"{c4['seconds']*1e6:,.0f} us ({c4['peak_fraction']:.4f} of 4090 peak)",
                          f"{ca['seconds']*1e6:,.0f} us ({ca['macs']/DATASHEET_INT8_MACS/ca['seconds']:.4f} of A100 peak)", f"{c4['seconds']/ca['seconds']:.2f}x", "", ""])
-            data.append({"kernel": "tensor.int_mm", "shape": [ca["M"], ca["K"], ca["N"]], "ref_s": c4["seconds"], "a100_s": ca["seconds"], "a100_fraction_of_int8_peak": ca["macs"] / DATASHEET_INT8_MACS / ca["seconds"]})
+            data.append({"kernel": "tensor.int_mm", "shape": [ca["M"], ca["K"], ca["N"]], "ref_s": c4["seconds"], "a100_s": ca["seconds"], "ratio_ref_over_a100_time": c4["seconds"] / ca["seconds"],
+                             "a100_fraction_of_int8_peak": ca["macs"] / DATASHEET_INT8_MACS / ca["seconds"]})
     txt = md_table(["INT8-limb round (tensor lane)", "RTX 4090 recorded", "A100 measured", "speed ratio A100/4090", "A100 TC floor", "fraction of INT8 peak"], rows)
     if a100.get("agreement_test_tail"):
         txt += f"\n\nAgreement test on the A100: {a100['agreement_test_tail']}"
@@ -706,6 +716,58 @@ def main(argv=None) -> int:
             md += [f"  * {k}: {v['seconds']*1e3:.1f} ms ({v['share']:.0%}) -- {v['basis']}" for k, v in row["buckets"].items()]
             md += ["", "  Omitted (still modelled): " + "; ".join(row["omitted"]) + ".", ""]
         md.append("")
+    # headline table (one row per kernel) inserted after the intro
+    K = doc["kernels"]
+
+    def pick(**m):
+        return next((r for r in K if all(r.get(k) == v for k, v in m.items())), None)
+
+    def hl(label, r, ref, a, ratio_key="ratio_ref_over_a100_time", frac=None, ref_gpu=None):
+        if r is None:
+            return None
+        fr = r.get(frac) if frac else r.get("fraction_of_floor")
+        return [label, f"{ref(r)} ({ref_gpu or r.get('ref_gpu', '')})", a(r), f"{r[ratio_key]:.2f}x", "--" if fr is None else f"{fr:.2f}"]
+    ms = lambda k: (lambda r: f"{r[k]:,.1f} ms")  # noqa: E731
+    us = lambda k: (lambda r: f"{r[k]:,.0f} us")  # noqa: E731
+    sec = lambda k: (lambda r: f"{r[k]*1e3:,.1f} ms")  # noqa: E731
+    rows = [hl("hash_gpu: SHA-256 Merkle tree, B matrix (20.4 GB)", pick(kernel="hash_gpu", hash="sha256", mds=None, candidate="B"), lambda r: f"{r['ref_gb_per_s']:.0f} GB/s", lambda r: f"{r['a100_gb_per_s']:.0f} GB/s"),
+            hl("hash_gpu: Blake3 Merkle tree, B", pick(kernel="hash_gpu", hash="blake3", mds=None, candidate="B"), lambda r: f"{r['ref_gb_per_s']:.0f} GB/s", lambda r: f"{r['a100_gb_per_s']:.0f} GB/s"),
+            hl("hash_gpu: Poseidon2-16 Merkle tree (cuda), B", pick(kernel="hash_gpu", hash="poseidon2-16", mds=None, candidate="B"), lambda r: f"{r['ref_gb_per_s']:.1f} GB/s", lambda r: f"{r['a100_gb_per_s']:.1f} GB/s"),
+            hl("encode: SIMT NTT v2 (t1024), B batch", pick(kernel="encode", encoder="ntt_simt_v2_t1024", shape="B"), ms("ref_ms"), ms("a100_ms")),
+            hl("encode: Triton INT8 matrix DFT, B", pick(kernel="encode", encoder="matdft_int8_triton", shape="B"), ms("ref_ms"), ms("a100_ms")),
+            hl("fused checker round, SIMT, 2^21 ext input", pick(kernel="fused", impl="simt", n=1 << 21, deg_in=6), us("ref_us"), us("a100_us")),
+            hl("fused checker round, TC, 2^21 ext input", pick(kernel="fused", impl="tc", n=1 << 21, deg_in=6), us("ref_us"), us("a100_us")),
+            hl("fused 130-round layer model, SIMT, graphed", pick(kernel="fused.layers", impl="simt"), sec("ref_graphed_s"), sec("a100_graphed_s")),
+            hl("fused logUp round, 2^21 (best block)", min((r for r in K if r.get("kernel") == "fused_logup" and r["n"] == 1 << 21), key=lambda r: r["a100_us"], default=None), us("ref_us"), us("a100_us")),
+            hl("packed sumcheck (first pass) 2^26, k=0", pick(kernel="packed", log2_t=26, k=0), sec("ref_s"), sec("a100_s"), frac="a100_fraction_of_int8_peak"),
+            hl("packed sumcheck (first pass) 2^26, k=3", pick(kernel="packed", log2_t=26, k=3), sec("ref_s"), sec("a100_s"), frac="a100_fraction_of_int8_peak"),
+            hl("Montgomery packed sumcheck 2^26, k=3 (a-packed2)", pick(kernel="packed2", log2_t=26, k=3), sec("ref_s"), sec("a100_s"), frac="a100_fraction_of_int8_peak"),
+            hl("Montgomery packed sumcheck direct 2^28, k=3", pick(kernel="packed2", log2_t=28, k=3), sec("ref_s"), sec("a100_s"), frac="a100_fraction_of_int8_peak"),
+            hl("logUp fractional GKR, full-VU shape, k=3", pick(kernel="logup_gkr", k=3), sec("ref_s"), sec("a100_s")),
+            hl("INT8-limb round (tensor lane), 2^21 deg 6, graphed", pick(kernel="tensor", t=1 << 21, deg=6), us("ref_us"), us("a100_us"), frac="a100_fraction_of_int8_peak_round"),
+            hl("INT8-limb 130-round layer model, graphed wall", pick(kernel="tensor.layers", key="total_graphed"), sec("ref_s"), sec("a100_s"), ref_gpu="RTX 4090"),
+            hl("fused commitment (encode -> Blake3 -> root), B, best 4090 config (1024-row slices)", pick(kernel="commit", name="blake3_s1024_ov1_keep0_fused", shape="B"), ms("ref_ms"), ms("a100_ms")),
+            hl("fused commitment, B, best A100 config (65,536-row slices)", pick(kernel="commit", name="blake3_s65536_ov0_keep0_fused", shape="B"), ms("ref_ms"), ms("a100_ms")),
+            hl("IRS row combination, B (chunk 1024)", pick(kernel="buckets", name="irs_row_combination_c1024", shape="B"), ms("ref_ms"), ms("a100_ms")),
+            hl("quadratic test, B (s1024)", pick(kernel="buckets", name="quadratic_test_s1024", shape="B"), ms("ref_ms"), ms("a100_ms")),
+            hl("structured linear test M=3 lazy, B (b-lintest)", pick(kernel="lintest", name="linear_test_structured_M3_X256_lazy"), ms("ref_ms"), ms("a100_ms")),
+            hl("F_c batch inversion, B (T=262144)", pick(kernel="buckets", name="batch_inverse_T262144", shape="B"), ms("ref_ms"), ms("a100_ms")),
+            hl("`_int_mm` 8192^3 (cuBLAS INT8 ceiling)", pick(kernel="tensor.int_mm", shape=[8192, 8192, 8192]), lambda r: f"{r['ref_s']*1e3:.1f} ms (0.253 of 4090 peak)", lambda r: f"{r['a100_s']*1e3:.1f} ms", frac="a100_fraction_of_int8_peak", ref_gpu="RTX 4090")]
+    rows = [r for r in rows if r]
+    head = ["## Headline: one row per kernel", "",
+            ("Speed ratio = recorded time / A100 time (> 1: the A100 is faster).  The bandwidth ratios the earlier reports scaled by are **2.02** (vs the 4090) and **0.61** (vs the H100); "
+             "`fraction of A100 floor` is the HBM floor at the measured 1,754 GB/s for streaming kernels and the fraction of the datasheet INT8 peak for tensor-core kernels."), "",
+            md_table(["kernel", "recorded (card)", "A100 measured", "speed ratio", "fraction of A100 floor"], rows), "",
+            ("**Pattern.**  Only the HBM-bound kernels scale with bandwidth (plain k=0 sumcheck 0.62x the H100, Montgomery packed 0.52-0.61x, batch inversion 1.48x the 4090).  Every INT32-SIMT kernel "
+             "-- SHA-256, Poseidon2, the SIMT NTT encoder, the fused checker/logUp rounds, the quadratic / linear tests, the fused commitment -- lands near the A100's INT32 issue-rate ratio to the 4090 "
+             "(108 SMs x 64 lanes x 1.41 GHz / 128 x 64 x 2.52 GHz = **0.47x**), not the 2.02x bandwidth ratio; the 4090 rows that were reported as 'fraction of HBM floor' were ALU-bound kernels on a "
+             "card with a high ALU:bandwidth ratio.  Blake3 (1.05x) and the launch-bound kernels (logUp GKR 1.04x the H100; the torch INT8-limb round 0.6-1.0x) are card-independent.  "
+             "Tensor-core kernels reach 4-6% of the A100's INT8 peak (cuBLAS itself only 12%)."), ""]
+    intro_end = next(i for i, line in enumerate(md) if line.startswith("## 0.")) if any(line.startswith("## 0.") for line in md) else 8
+    md[intro_end:intro_end] = head
+    doc["headline"] = rows
+    doc["would_not_run"] = WOULD_NOT_RUN
+    md += ["## What would not run / caveats", ""] + [f"* {x}" for x in WOULD_NOT_RUN] + [""]
     a.out.with_suffix(".json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     a.out.with_suffix(".md").write_text("\n".join(md))
     print("\n".join(md))
