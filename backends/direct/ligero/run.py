@@ -352,6 +352,8 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     from .vu import bench_vu, gate_vu
 
+    # --relation fp8-ada: the Ada E4M3 unit (backends/direct/ligero/fp8); gate-vu / bench-vu dispatch there, nothing else changes
+    ap.add_argument("--relation", default="bf16", choices=("bf16", "fp8-ada"))
     for name, fn in (("gate", gate), ("bench", bench), ("gate-vu", gate_vu), ("bench-vu", bench_vu)):
         s = sub.add_parser(name)
         s.add_argument("--root", default=str(instances.DEFAULT_ROOT))
@@ -381,7 +383,13 @@ def main(argv=None) -> int:
                                          help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
     sub.choices["bench-vu"].add_argument("--dump-dir", default=None, metavar="DIR",
                                          help="write every recorded rep's sub-batch proofs (.stmt/.proof[/.coins]) + system.bin for backends/ligero-verify")
+    sub.choices["gate-vu"].add_argument("--row-negatives", type=int, default=60, help="fp8-ada gate: witness-row mutations to try")
     args = ap.parse_args(argv)
+    if args.relation == "fp8-ada":
+        from .fp8.chain import bench_vu_fp8, gate_vu_fp8
+        if args.cmd not in ("gate-vu", "bench-vu"):
+            ap.error("--relation fp8-ada supports gate-vu and bench-vu")
+        return (gate_vu_fp8 if args.cmd == "gate-vu" else bench_vu_fp8)(args)
     return args.fn(args)
 
 

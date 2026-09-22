@@ -51,8 +51,8 @@ from .field import (
 from .unit import public_vectors
 from .witness import Tables, build_witness, quad_p0
 
-__all__ = ["MODES", "MODE_FIAT_SHAMIR", "MODE_INTERACTIVE", "CoinOpeningError", "Coins", "Config", "Proof", "coin_commit",
-           "config_for", "prove", "soundness", "verify"]
+__all__ = ["BF16_HOOKS", "MODES", "MODE_FIAT_SHAMIR", "MODE_INTERACTIVE", "CoinOpeningError", "Coins", "Config", "Proof",
+           "RelationHooks", "coin_commit", "config_for", "prove", "soundness", "verify"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -223,6 +223,21 @@ COIN_HIDING_TERM = 2 * Fraction(2**64, 2**256)      # 2 slots x q / 2^|r|, q = 2
 STATEMENT_TAG = b"ligero-b/statement|v2"
 _SYS_ID: dict = {}
 
+
+@dataclass(frozen=True)
+class RelationHooks:
+    """What ``prove`` / ``verify`` need from a relation beyond its compiled ``System``: the verifier's public decode and
+    the statement's word widths.  The default (``BF16_HOOKS``) is the BF16 unit of ``unit.py`` and reproduces the
+    pre-hook transcript byte for byte; ``fp8/`` supplies its own (``--relation fp8-ada``)."""
+    public_vectors: object
+    word_dtype: str = "<u2"        # operand words a, b in the statement digest
+    y16_dtype: str = "<u2"         # the chain-end public words
+    y16_bits: int | None = None    # range of the chain-end words (None: 2^p.word_bits)
+    tag: bytes = b""               # domain separation of a non-default relation (b"" for BF16)
+
+
+BF16_HOOKS = RelationHooks(public_vectors)
+
 # Red-team hook ONLY: when False the challenges are derived from the transcript alone (the pre-fix protocol).  The
 # binding fixture (``redteam_binding.py``) uses it to show the adaptive-statement forgery the fix closes.  An honest
 # deployment never touches it.
@@ -259,10 +274,12 @@ def _u_bytes(x, dtype: str) -> bytes:
     return arr.astype(dtype).tobytes()
 
 
-def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None, y16=None) -> bytes:
+def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None, y16=None,
+                     rel: RelationHooks = BF16_HOOKS) -> bytes:
     """The public statement as the verifier sees it (see the module comment above)."""
     h = hashlib.blake2b(digest_size=32)
     h.update(STATEMENT_TAG)
+    h.update(rel.tag)
     h.update(f"|p={P}|hash=blake3|l={cfg.l}|n={cfg.n}|D={cfg.D}|t={cfg.t}|target={cfg.target_log2!r}".encode())
     h.update(f"|zk={int(cfg.zk)}|k={cfg.k}|mode={cfg.mode}".encode())
     h.update(b"|sys=" + system_id(sys))
@@ -270,10 +287,10 @@ def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None
         h.update(f"|mode=chain|l={layout.l}|n_vus={layout.n_vus}|steps={layout.steps}".encode())
     else:
         h.update(b"|mode=unit")
-    h.update(b"|a=" + _u_bytes(a, "<u2"))
-    h.update(b"|b=" + _u_bytes(b, "<u2"))
+    h.update(b"|a=" + _u_bytes(a, rel.word_dtype))
+    h.update(b"|b=" + _u_bytes(b, rel.word_dtype))
     if layout is not None:
-        h.update(b"|y16=" + _u_bytes(y16, "<u2"))
+        h.update(b"|y16=" + _u_bytes(y16, rel.y16_dtype))
     else:
         h.update(b"|c=" + _u_bytes(c, "<u4"))
         h.update(b"|y=" + _u_bytes(y, "<u4"))
@@ -702,7 +719,7 @@ class _Clock:
 
 def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints: torch.Tensor,
           device, check: bool = False, mutate=None, chain: tuple | None = None, words: dict | None = None,
-          coins: Coins | None = None) -> Proof:
+          coins: Coins | None = None, rel: RelationHooks = BF16_HOOKS) -> Proof:
     """``pub``: the public vectors (from ``public_vectors``); ``hints``: (n_hints, l) from ``gen_step``.
     ``words``: the public words the statement binds -- ``{"a", "b", "c", "y"}`` (units) or ``{"a", "b"}`` (chain;
     ``y16`` comes from ``chain``) -- absorbed into every challenge (``statement_digest``).
@@ -728,9 +745,9 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
             raise ValueError("fiat-shamir mode has no step 0: coins must be None")
         src, ccom, sent = None, None, []
     if chain is not None:
-        stmt = statement_digest(sys, cfg, words["a"], words["b"], layout=chain[0], y16=chain[1])
+        stmt = statement_digest(sys, cfg, words["a"], words["b"], layout=chain[0], y16=chain[1], rel=rel)
     else:
-        stmt = statement_digest(sys, cfg, words["a"], words["b"], c=words["c"], y=words["y"])
+        stmt = statement_digest(sys, cfg, words["a"], words["b"], c=words["c"], y=words["y"], rel=rel)
     clk.lap("statement")
     W = build_witness(sys, pub, hints, device)
     clk.lap("witness")
@@ -868,7 +885,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
 # ---------------------------------------------------------------------------------------------------------------------
 
 def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: Proof, device,
-           chain: tuple | None = None, coins: Coins | None = None) -> tuple[bool, str]:
+           chain: tuple | None = None, coins: Coins | None = None, rel: RelationHooks = BF16_HOOKS) -> tuple[bool, str]:
     """Accept/reject the claim ``y[i] = tc_dot(c[i], a[i], b[i])`` for all l units -- or, with
     ``chain = (Layout, y16_pub)`` (``c = y = None``), the claim that every VU of the layout casts to its
     ``y16_pub`` word from ``c_0 = 0`` over its 96 units.  Never touches W.
@@ -901,7 +918,7 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
     if not (proof.hash_name or "").startswith("blake3"):
         return False, "proof names a hash the verifier does not use"
     try:
-        pub = public_vectors(p, c, a, b, y, device=device)
+        pub = rel.public_vectors(p, c, a, b, y, device=device)
     except ValueError as e:
         return False, f"public inputs: {e}"
     if len(pub["a[0].s"]) != l:
@@ -921,13 +938,13 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
         y16_pub = torch.as_tensor(y16_pub, dtype=torch.int64)
         if layout.l != l or proof.q is None or proof.q.shape != (D, cfg.q_len) or (proof.q >= P).any():
             return False, "malformed chain transcript"
-        if len(y16_pub) != l or ((y16_pub < 0) | (y16_pub >= 2**p.word_bits)).any():
+        if len(y16_pub) != l or ((y16_pub < 0) | (y16_pub >= 2 ** (rel.y16_bits or p.word_bits))).any():
             return False, "y16 range"
-        stmt = statement_digest(sys, cfg, a, b, layout=layout, y16=y16_pub)
+        stmt = statement_digest(sys, cfg, a, b, layout=layout, y16=y16_pub, rel=rel)
     elif proof.q is not None:
         return False, "unexpected chain transcript"
     else:
-        stmt = statement_digest(sys, cfg, a, b, c=c, y=y)
+        stmt = statement_digest(sys, cfg, a, b, c=c, y=y, rel=rel)
     if len(set(proof.cols)) != t or any(not 0 <= c_ < n for c_ in proof.cols):
         return False, "bad column set"
     # challenges: H(statement, transcript prefix) -- the statement is the verifier's, not the proof's

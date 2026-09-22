@@ -16,6 +16,7 @@ REGISTRY: dict[str, str] = {
     "tc_probe": "tools.tc_probe.tool:TC_PROBE",
     "bench_vu": "backends.direct.ligero.tool:BENCH_VU",
     "a_gpu_prove": "backends.gkr.gpu.tool:A_GPU_PROVE",
+    "bench_vu_fp8": "backends.direct.ligero.fp8.tool:BENCH_VU_FP8",
 }
 
 
