@@ -45,6 +45,8 @@ REQUEST_SCHEMA = "research/request/v0.1"
 PRESERVED_SCHEMA = "research/preserved/v0.1"
 SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl")
 TERMINAL = ("done", "failed", "cancelled")
+POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
+POD_TARGET_RETRY_S = 2.0
 
 
 class Refused(Exception):
@@ -93,8 +95,17 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
     if not pod or (pod.get("desiredStatus") or "").upper() != "RUNNING":
         raise Refused(f"pod {machine['pod_id']} is {pod.get('desiredStatus') if pod else 'not found'}; no implicit provisioning")
     tgt = runpod.ssh_target(pod)
+    # The REST API intermittently answers a RUNNING pod's GET with publicIp="" / portMappings=None (observed 2026-09-22 on
+    # s00kzu0nisihgr: alternating answers within seconds while ssh worked throughout).  Re-read a few times before refusing;
+    # a mapping that never appears is still refused, by the same name.
+    for _ in range(POD_TARGET_RETRIES):
+        if tgt is not None:
+            break
+        time.sleep(POD_TARGET_RETRY_S)
+        pod = runpod.get(machine["pod_id"]) or pod
+        tgt = runpod.ssh_target(pod)
     if tgt is None:
-        raise Refused(f"pod {machine['pod_id']} has no ssh port mapped yet")
+        raise Refused(f"pod {machine['pod_id']} has no ssh port mapped yet (RUNNING; {1 + POD_TARGET_RETRIES} reads over {POD_TARGET_RETRIES * POD_TARGET_RETRY_S:.0f} s)")
     return {"host": tgt[0], "port": tgt[1], "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
             "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
 

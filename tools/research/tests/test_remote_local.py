@@ -164,3 +164,22 @@ def test_source_sha_reaches_the_workload_as_research_source_sha(tmp_path):
     assert remote.launch_request(req2)["started"]
     _wait_terminal(runs_root / "s2")
     assert (runs_root / "s2" / "stdout.log").read_text().strip() == "<unset>"
+
+
+def test_pod_target_rereads_a_running_pod_whose_mapping_flaps(monkeypatch):
+    """RunPod's REST GET /pods/{id} intermittently answers a RUNNING pod with publicIp='' / portMappings=None (2026-09-22,
+    s00kzu0nisihgr: alternating answers within seconds while ssh worked).  pod_target re-reads before refusing; a mapping that never
+    appears is still refused by name."""
+    from research.pods import runpod
+
+    answers = iter([{"desiredStatus": "RUNNING", "publicIp": "", "portMappings": None, "name": "p"},
+                    {"desiredStatus": "RUNNING", "publicIp": "", "portMappings": None, "name": "p"},
+                    {"desiredStatus": "RUNNING", "publicIp": "10.0.0.1", "portMappings": {"22": 2222}, "name": "p", "costPerHr": 1.0}])
+    monkeypatch.setattr(runpod, "get", lambda pid: next(answers))
+    monkeypatch.setattr(remote, "POD_TARGET_RETRY_S", 0.0)
+    tgt = remote.pod_target({"provider": "runpod", "pod_id": "x"})
+    assert (tgt["host"], tgt["port"]) == ("10.0.0.1", 2222)
+
+    monkeypatch.setattr(runpod, "get", lambda pid: {"desiredStatus": "RUNNING", "publicIp": "", "portMappings": None})
+    with pytest.raises(remote.Refused, match="no ssh port mapped yet"):
+        remote.pod_target({"provider": "runpod", "pod_id": "x"})
