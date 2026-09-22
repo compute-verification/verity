@@ -498,6 +498,10 @@ def bench_vu(args) -> int:
         vsum = 0.0
         vauth = 0.0
         t_pass = time.perf_counter()
+        # Prove every sub-batch of the rep first, then verify them: the verifier's host work (with authentication, ~1M
+        # SHA-256 per proof across a process pool) must not sit between two timed prover sub-batches -- interleaved, the
+        # prover's `tests` lap ran 3x slower on the A100 pod after each verification while every device lap was unchanged.
+        proved = []
         for si, (lo, hi) in enumerate(subs):
             vus = [data[i] for i in range(lo, hi)]
             V = protocol_mod.Coins.sample() if interactive else None      # the verifier's step 0 (interactive only)
@@ -506,6 +510,12 @@ def bench_vu(args) -> int:
                 proof, pubs, lay_i, st_auth = R.prove_vus(vus, check=False, min_l=l, coins=V, auth=(trees, list(range(lo, hi))))
             else:
                 proof, pubs, lay_i = R.prove_vus(vus, check=False, min_l=l, coins=V)
+            for k, v in proof.timings.items():
+                agg[k] = agg.get(k, 0.0) + v
+            proved.append((si, lo, hi, V, proof, pubs, lay_i, st_auth))
+            if rep == 0:
+                break                                        # warm-up: one sub-batch (graph capture, compile)
+        for si, lo, hi, V, proof, pubs, lay_i, st_auth in proved:
             tm_auth: dict = {}
             t0 = time.perf_counter()
             ok, why = R.verify_vus(proof, pubs, lay_i, coins=V, auth=st_auth, auth_procs=getattr(args, "auth_procs", None),
@@ -513,8 +523,6 @@ def bench_vu(args) -> int:
             vsum += time.perf_counter() - t0
             vauth += tm_auth.get("seconds", 0.0)
             assert ok, f"sub-batch [{lo}, {hi}): {why}"
-            for k, v in proof.timings.items():
-                agg[k] = agg.get(k, 0.0) + v
             if dump_dir is not None and rep > 0:
                 rd = dump_dir / f"rep{rep}"
                 rd.mkdir(exist_ok=True)
@@ -529,8 +537,7 @@ def bench_vu(args) -> int:
                     (rd / f"{stem}.coins").write_bytes(V.r1 + V.s1 + V.r2 + V.s2)
                     entry["coins"] = f"rep{rep}/{stem}.coins"
                 dump_manifest["files"].append(entry)
-            if rep == 0:
-                break                                        # warm-up: one sub-batch (graph capture, compile)
+        del proved
         wall = time.perf_counter() - t_pass
         if rep == 0:
             print("warm-up (one sub-batch):", {k: round(v, 3) for k, v in agg.items()})
