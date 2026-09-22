@@ -160,7 +160,39 @@
    },
    "peak_gpu_memory_bytes": 20947402752,
    "peak_host_rss_bytes": 12401483776
+  },
+  {
+   "run": "r20260922-050349-3373",
+   "what": "K=1536 core proof, DIAGNOSTIC: unsound-relation-only guest (statement machinery excluded: no statement parsing, no opening table, no leaf hashing, no witness; the guest reads the compact input K || x || W and runs only the GemmCoordinate<1536> gate chain, committing sha256(input) || sha256(output word) || 0xEE). The median of three proofs -- r20260922-050209-3eb1 0.913 s, r20260922-050349-3373 0.868 s, r20260922-050533-2010 0.855 s -- identical cycles; K=16 r20260922-050711-86b5 (13,226 cycles, 2 shards, 0.680 s); execute-only r20260922-050847-415f (406,671 cycles in 0.50 s). Peak GPU memory is the sampler's maximum at ~5 s cadence over a <1 s prove: the three proofs sampled 7,910 / 10,152 / 9,478 MiB.",
+   "vector": "stage2--qkv-proj-decode-0-k1536",
+   "backend": "sp1-prove",
+   "mode": "core",
+   "proof_class": "ARITHMETIC_DIAGNOSTIC",
+   "authentication": "excluded",
+   "statement_machinery": "excluded",
+   "prover": "cuda",
+   "machine": "vy-sp1 (RTX 4090, sm_89; SP1 6.4.0 cuda prover)",
+   "source_sha": "b96edf670ed62971947b700e45fe05cce03aa53e",
+   "guest_elf_sha256": "616100249a681540a9246fa79d89f76f2cf47eb6f8404e3b52d73587c89b1002",
+   "guest_features": [
+    "unsound-relation-only"
+   ],
+   "validation": "passed",
+   "measurements": {
+    "total_cycles": 406671,
+    "shards": 2,
+    "setup_seconds": 15.955349063,
+    "prove_seconds": 0.868055971,
+    "host_verify_seconds": 0.123913293,
+    "proof_bytes": 2799064,
+    "cycles.gates": 346484,
+    "cycles.relation_only.io": 363,
+    "cycles.relation_only.parse": 31756,
+    "cycles.relation_only.digest": 23989
+   },
+   "peak_gpu_memory_bytes": 10645143552,
+   "peak_host_rss_bytes": 10099859456
   }
  ],
- "reading": "Skipping authentication removes 136,624 of 10,128,736 cycles (1.3%): merkle.auth 138,164 -> 893. prove_seconds 3.580 -> 3.663 s, shards 4 -> 4, peak GPU memory unchanged. The guest's cycles are statement machinery: parse.statement 3.71 M + merkle.table (opening-table construction, no hashing) 4.56 M = 82%; digest 0.90 M (9%); the relation (gates) 0.43 M (4.2%); leaf hashing + path folding 0.14 M (1.3%). No build isolates the relation alone, so the arithmetic-only proving time is NOT measured; a 0.43 M-cycle guest would be one shard and setup-dominated on this prover."
+ "reading": "Skipping authentication removes 136,624 of 10,128,736 cycles (1.3%): merkle.auth 138,164 -> 893. prove_seconds 3.580 -> 3.663 s, shards 4 -> 4, peak GPU memory unchanged. The guest's cycles are statement machinery: parse.statement 3.71 M + merkle.table (opening-table construction, no hashing) 4.56 M = 82%; digest 0.90 M (9%); the relation (gates) 0.43 M (4.2%); leaf hashing + path folding 0.14 M (1.3%). The relation-only diagnostic (unsound-relation-only, r20260922-050349-3373 and two repeats) isolates the relation: 406,671 cycles (4.0% of the sound guest), of which gates 346,484 (the bare chain through GateSet::evaluate; the sound guest's 426,223 gates cycles include the interpreter's per-gate op resolution and argument gathering over the parsed statement), parse of the compact input 31,756, two sha256 digests 23,989, input read 363. Proving: 2 shards (sound: 4), prove_seconds 0.855 / 0.868 / 0.913 s over three proofs (sound 3.580 s, i.e. 4.1x), setup 15.9-16.0 s (sound 17.4 s), proof 2,799,064 B (sound 5,898,276 B), sampled peak GPU memory 7.7-9.9 GiB (sound 19.5 GiB). K=16 relation-only: 13,226 cycles, 2 shards, 0.680 s. The arithmetic baseline of the zkVM path at K=1536 is therefore ~0.87 s of GPU proving after a ~16 s key setup; the sound proof spends the other ~2.7 s on statement machinery, digest and authentication. Nothing here is a result: the relation-only guest verifies no statement."
 }
