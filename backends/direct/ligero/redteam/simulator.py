@@ -1,35 +1,35 @@
 """Class 2: the malicious-verifier simulator for the 8c protocol, written against the real verifier interface.
 
-What PROTOCOL.md 8c claims: "run V* to its commitment, rewind once to extract (r1, r2) and hence r, rho, cols,
-emit the honest-verifier transcript for those coins".  What the code does: ``r, rho, rc = SHAKE(H(stmt, c, root,
-r1))`` and ``cols = H(stmt, c, root, w, h, q, v, r2)`` -- the coins are NOT ``r_i``; they are hashes of the prover's
-own messages together with ``r_i``.  Knowing ``r1`` after the rewind does not give the simulator ``r``: ``r`` depends
-on the ``root`` the simulator has yet to produce, and the tests at the opened columns need the committed rows to
-fit challenges derived from that root (``v|_H = beta`` with ``v(eta_c) = alpha . p'(eta_c) + ...`` at columns that
-are themselves a hash of ``v``).  Without a witness the only way through is to fix ``r`` and ``cols`` first and
-PROGRAM the hash: ``H(... root ... r1) := seed1``, ``H(... root, w, h, q, v ... r2) := seed2``.  So the simulator
-below lives in the programmable random-oracle model for the challenge hash (SHAKE-256 / BLAKE2b) -- the assumption
-ZK_CONSTRUCTION.md 3.2/3.3 chose step 0 to avoid ("Step 0 uses CRH only").  The coin commitment is still needed
-there: without it V* picks ``r1`` after ``root`` and can evaluate the (unprogrammable, already-queried) hash on
-``(root, r1')`` for many ``r1'`` before answering.
+Lane b-zk-fix (red team F2 repaired).  The interactive derivation is now a function of the verifier's coins ALONE:
+``r, rho, rc = SHAKE(H(stmt, c, r1))`` and ``cols = H(stmt, c, r2)`` -- no prover message enters either hash.  So
+after the rewind the simulator knows ``(r1, r2)`` and hence ``r, rho, rc, cols`` BEFORE it builds anything, and it
+prepares a consistent fake tableau without programming any hash: the simulator below runs against the real
+``verify()`` under the real ``merkle.hash_bytes`` (a ``ProgrammableOracle`` with an EMPTY table is installed only to
+count that zero programmed points are ever hit).  The only assumption left is the binding of the coin commitment
+(a collision of Blake2b) and the hiding of the unopened Merkle leaves; the challenge hash needs no oracle.
 
 Simulator (given V* with the ``Coins`` interface and the public statement):
   1. ``c1, c2 = V*.commitments()``.
   2. Dummy run: random ``root0``; ``V*.open1(root0)`` -> check ``c1`` (abort transcript on mismatch); uniform
      ``w0, h0, q0, v0`` of the right shapes; ``V*.open2(...)`` -> check ``c2``.  Now ``(r1, r2)`` are known.
-  3. Rewind V* to after step 0.  Draw ``seed1, seed2``; derive ``r, rho_lin, rho_quad, rc`` and ``cols`` from
-     them.  Sample the fake tableau: witness rows uniform polynomials of degree < k, ``s_prox`` uniform; ``v``
-     uniform on ``{v|_H = beta}``, ``h`` uniform, ``q`` uniform on ``{sum_H q = rhs}``; solve the mask rows
-     ``s_lin, s_qa, s_chain`` (Lagrange at the t opened points + uniform slack) so every column test holds at
-     ``cols``; ``w := r . p' + s_prox`` (holds everywhere).  Commit, program the oracle at ``root`` and at
-     ``(root, w, h, q, v)``, replay V*: by binding it opens the same coins or aborts (repeat on abort, GK).
-  4. Output the transcript; the real ``verify`` (through the programmed oracle) must accept it.
+  3. Rewind V* to after step 0.  Derive ``r, rho_lin, rho_quad, rc`` and ``cols`` from ``(stmt, c, r1)`` /
+     ``(stmt, c, r2)`` exactly as the verifier does.  Sample the fake tableau: witness rows uniform polynomials of
+     degree < k, ``s_prox`` uniform; ``v`` uniform on ``{v|_H = beta}``, ``h`` uniform, ``q`` uniform on
+     ``{sum_H q = rhs}``; solve the mask rows ``s_lin, s_qa, u_ca`` (Lagrange at the t opened points + uniform
+     slack) so every column test holds at ``cols``; ``w := r . p' + s_prox`` (holds everywhere).  Commit, replay V*:
+     by binding it opens the same coins or aborts (repeat on abort, GK).
+  4. Output the transcript; the real ``verify`` (real hash) must accept it.
+
+Malicious verifiers modelled: ``AdaptiveVerifier`` (opens a slot to a value that depends on the prover's messages:
+needs a collision, so the prover aborts and the simulator outputs the same abort), ``StatementAdaptiveVerifier``
+(chooses ``r2`` before step 0 as a function of everything it can see -- the statement and its own commitments -- by
+grinding the column set towards a target: legal, and simulated like any coins), ``AbortingVerifier`` (selective
+abort on a predicate of the messages it has seen).
 
 The indistinguishability test (``indistinguishability``) compares N real transcripts with N simulated ones
 per field-element position (opened columns, w, h, v, q; two-sample chi-square on 8 value bins with Bonferroni),
-then runs the two ``q`` distinguishers of ``q_leak``: the witness-free consistency test and the known-witness
-test.  Expected: every position passes, and the ``q`` distinguishers separate real from simulated with
-advantage 1 -- the simulator is correct for everything but ``q|_H``, which no simulator can produce.
+then runs the two ``q`` distinguishers of ``q_leak``: with the F1 fix both must be at chance (the witness-free
+consistency fraction ~ 0 on real AND simulated transcripts, 0 accumulators recovered from either).
 """
 from __future__ import annotations
 
@@ -59,8 +59,8 @@ from ..unit import public_vectors
 from ..witness import quad_p0
 from . import linalg
 
-__all__ = ["AbortTranscript", "AbortingVerifier", "AdaptiveVerifier", "ProgrammableOracle", "indistinguishability",
-           "simulate"]
+__all__ = ["AbortTranscript", "AbortingVerifier", "AdaptiveVerifier", "ProgrammableOracle", "StatementAdaptiveVerifier",
+           "indistinguishability", "simulate"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -122,6 +122,28 @@ class AdaptiveVerifier(Coins):
         return (_hb(b"adaptive-r2", root, w.tobytes(), h.tobytes()), self.s2) if self.slot == 2 else (self.r2, self.s2)
 
 
+class StatementAdaptiveVerifier(Coins):
+    """Chooses its coins BEFORE step 0 as a function of everything it can see then -- the public statement and its
+    own commitments: grinds ``r2`` over ``candidates`` values so that the column set ``cols = H(stmt, c, r2)``
+    overlaps a target set as much as possible (with the b-zk-fix derivation this is computable ahead of the
+    prover's first message).  Legal for an interactive verifier; the coins are then honestly committed and opened,
+    and the simulator handles them like any other coins."""
+
+    def __init__(self, cfg: Config, stmt: bytes, target_cols: list[int], candidates: int = 64):
+        h = Coins.sample()
+        best, best_score = h.r2, -1
+        c1 = coin_commit(h.r1, h.s1)
+        for i in range(candidates):
+            r2 = _hb(b"stmt-adaptive", h.r2, i.to_bytes(4, "little"))
+            cols = protocol._challenge2(stmt, b"", np.zeros(1, "<u4"), np.zeros(1, "<u4"), cfg.t, cfg.n, None, None,
+                                        (c1, coin_commit(r2, h.s2)), r2)
+            score = len(set(cols) & set(target_cols))
+            if score > best_score:
+                best, best_score = r2, score
+        super().__init__(h.r1, h.s1, best, h.s2)
+        object.__setattr__(self, "target_overlap", best_score)
+
+
 class AbortingVerifier(Coins):
     """Honest coins; refuses to open slot ``slot`` (sends a malformed opening) when ``predicate(V, root, w, h, q, v)``
     holds (``V`` is the verifier itself, so the predicate may use its coins).  The selective-abort verifier of the
@@ -155,44 +177,6 @@ class AbortTranscript:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Challenge derivation from a chosen seed (the body of _challenge1 / _challenge2 after the hash)
-# ---------------------------------------------------------------------------------------------------------------------
-
-def _challenges_from_seed1(seed: bytes, D: int, M: int, L: int, Q: int, l_chain: int, device):
-    extra = N_FAMILIES * l_chain
-    x = protocol._expand(seed, D * (M + L + Q + extra), device).reshape(D, M + L + Q + extra)
-    rc = x[:, M + L + Q:].reshape(D, N_FAMILIES, l_chain)
-    return x[:, :M], x[:, M:M + L], x[:, M + L:M + L + Q], rc
-
-
-def _cols_from_seed2(seed: bytes, t: int, n: int) -> list[int]:
-    import hashlib
-    cols: list[int] = []
-    seen = set()
-    ctr = 0
-    while len(cols) < t:
-        raw = hashlib.shake_256(seed + ctr.to_bytes(4, "little")).digest(4 * 2 * t)
-        for u in np.frombuffer(raw, dtype="<u4"):
-            c = int(u) % n
-            if c not in seen:
-                seen.add(c)
-                cols.append(c)
-                if len(cols) == t:
-                    break
-        ctr += 1
-    return cols
-
-
-def _seed1_preimage(stmt: bytes, cc: tuple[bytes, bytes], root: bytes, r1: bytes) -> bytes:
-    return b"ligero-b/c1|" + protocol._bound(stmt) + protocol._coin_prefix(cc) + root + protocol._coin_open(r1)
-
-
-def _seed2_preimage(stmt: bytes, cc, root: bytes, w: np.ndarray, h: np.ndarray, q: np.ndarray, v: np.ndarray, r2: bytes) -> bytes:
-    return (b"ligero-b/c2|" + protocol._bound(stmt) + protocol._coin_prefix(cc) + root + w.tobytes() + h.tobytes()
-            + q.tobytes() + b"|v=" + v.tobytes() + protocol._coin_open(r2))
-
-
-# ---------------------------------------------------------------------------------------------------------------------
 # The simulator
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -213,11 +197,11 @@ def _u32(x: torch.Tensor) -> np.ndarray:
     return x.cpu().numpy().astype(np.uint32)
 
 
-def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, oracle: ProgrammableOracle,
+def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, oracle: ProgrammableOracle | None = None,
              max_rewinds: int = 8, rng: np.random.Generator | None = None) -> Proof | AbortTranscript:
-    """The simulator of the module docstring.  ``oracle`` must be installed by the caller (it stays programmed so
-    the caller can run ``verify`` on the output)."""
-    assert cfg.zk and protocol._COMMIT_COINS, "the simulator is for the 8b+8c protocol"
+    """The simulator of the module docstring.  No hash is programmed: ``oracle`` is accepted for interface
+    compatibility only and is NEVER written to (the caller may install one with an empty table to count hits)."""
+    assert cfg.zk and cfg.interactive, "the simulator is for the 8b+8c protocol (interactive mode)"
     rng = rng or np.random.default_rng()
     m, l, n, D, t, k = sys.m, cfg.l, cfg.n, cfg.D, cfg.t, cfg.k
     tp = cfg.t_pad
@@ -241,11 +225,11 @@ def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, orac
     if len(r2) != COIN_BYTES or len(s2) != COIN_BYTES or coin_commit(r2, s2) != cc[1]:
         return AbortTranscript(2, ["coin commitments (V)", "root", "w, h, q, v"], root0)
 
-    # ---- 3. rewind: coins known; choose the challenges, build a consistent fake transcript --------------------------
+    # ---- 3. rewind: coins known -> the challenges are known (functions of (stmt, c, r_i) alone); build a consistent
+    # fake transcript for them.  Exactly the verifier's derivation, no seed of the simulator's choosing.
+    r, rho_lin, rho_quad, rc = protocol._challenge1(stmt, b"", D, M, tb.L, tb.Q, device, l, cc, r1)
+    cols = protocol._challenge2(stmt, b"", np.zeros(1, "<u4"), np.zeros(1, "<u4"), t, n, None, None, cc, r2)
     for attempt in range(max_rewinds):
-        seed1, seed2 = os.urandom(32), os.urandom(32)
-        r, rho_lin, rho_quad, rc = _challenges_from_seed1(seed1, D, M, tb.L, tb.Q, l, device)
-        cols = _cols_from_seed2(seed2, t, n)
         cols_t = torch.tensor(cols, dtype=torch.int64, device=device)
         eta = [int(x) for x in coset_points(n, cols_t.cpu()).tolist()]
         zh_c = zh_on_coset(n, l, device)[cols_t]                                    # (t,)
@@ -280,7 +264,7 @@ def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, orac
         for d in range(D):
             coefs[mr["qa"].start + d] = torch.from_numpy(linalg.interp_with_slack(eta, [int(x) for x in need[d]], k, rng)).to(device)
 
-        # chain test: q uniform on {sum_H q = rhs}; s_chain fits
+        # chain test: q uniform on {sum_H q = rhs}; u_cb uniform, u_ca fits (q = Q + u_ca + x^k u_cb at the columns)
         ccf = chain_coefs(sys, layout, rc, y16_t)
         R = ccf.coef.shape[1]
         q = _uniform((D, cfg.q_len), device)
@@ -291,10 +275,11 @@ def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, orac
         Rc = encode(ccf.coef.reshape(D * R, l), n).reshape(D, R, n)[:, :, cols_t]  # (D, R, t)
         Qo = ((Rc * Uo.index_select(0, ccf.rows)[None, :, :]) % P).sum(1) % P
         q_at = eval_on_coset(q, n)[:, cols_t]
-        need = ((q_at - Qo) % P).cpu().numpy()
+        coefs[mr["chain_b"], :l - 1] = _uniform((D, l - 1), device)
+        cb_at = eval_on_coset(coefs[mr["chain_b"]], n)[:, cols_t]
+        need = ((q_at - Qo - (xk_c[None, :] * cb_at) % P) % P).cpu().numpy()
         for d in range(D):
-            vals = [int(need[d, i]) * zh_inv[i] % P for i in range(t)]
-            coefs[mr["chain"].start + d, :k - 1] = torch.from_numpy(linalg.interp_with_slack(eta, vals, k - 1, rng)).to(device)
+            coefs[mr["chain_a"].start + d] = torch.from_numpy(linalg.interp_with_slack(eta, [int(x) for x in need[d]], k, rng)).to(device)
 
         # the whole tableau, the proximity message, the commitment
         U = torch.empty((M, n), dtype=torch.int32, device=device)
@@ -317,10 +302,7 @@ def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, orac
             opened = U_cols[cols].T.copy()
             paths = merkle.open_columns(levels, cols)
         w_np, h_np, q_np, v_np = _u32(w), _u32(h), _u32(q), _u32(v)
-        # program the oracle so the verifier's challenges are the ones the transcript was built for
-        oracle.program(_seed1_preimage(stmt, cc, root, r1), seed1)
-        oracle.program(_seed2_preimage(stmt, cc, root, w_np, h_np, q_np, v_np, r2), seed2)
-        del U, coefs
+        del U, coefs                                             # nothing to program: the challenges never see root
         # ---- replay V* from after step 0 ---------------------------------------------------------------------------
         r1b, s1b = V.open1(root)
         if (r1b, s1b) != (r1, s1):

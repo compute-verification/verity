@@ -1,4 +1,9 @@
-"""The finding: the chain-test message ``q`` is not masked on H.
+"""The finding (red team F1) -- FIXED on lane b-zk-fix: the chain-test message ``q`` was not masked on H.
+Since the fix ``q_d = Q_d + u_d`` with ``u_d = u_ca + x^k u_cb`` uniform of degree < l + k - 1 subject to
+``sum_H u = 0``, so ``q|_H`` is uniform on the affine hyperplane ``sum = rhs`` and the recovery below must FAIL
+(``compare_with_recorded`` -> 0 accumulators, ``witness_free_distinguisher`` -> fraction ~ p^-3).  The module is
+kept as the regression test.  The text below describes the pre-fix protocol.
+
 
 ``q_d = Q_d + Z_H s_chain_d`` (protocol.py, "ZK masking"): the mask ``Z_H(x) s_chain(x)`` VANISHES at every point of
 ``H`` (not merely in its sum over H, which is what the verifier's scalar check uses), so ``q_d|_H = Q_d|_H`` exactly,
@@ -45,8 +50,8 @@ def chain_challenge(proof: Proof, sys: System, tb, cfg: Config, layout, y16, a, 
     """The verifier's chain coefficients ``rc`` (D, 7, l) recomputed exactly as ``verify`` does."""
     stmt = statement_digest(sys, cfg, a, b, layout=layout, y16=torch.as_tensor(y16, dtype=torch.int64))
     M = n_rows(cfg, sys.m, True)
-    ccom = tuple(proof.coin_commit) if (protocol._COMMIT_COINS and proof.coin_commit is not None) else None
-    r1 = proof.coins.r1 if (protocol._COMMIT_COINS and proof.coins is not None) else None
+    ccom = tuple(proof.coin_commit) if (cfg.interactive and proof.coin_commit is not None) else None
+    r1 = proof.coins.r1 if (cfg.interactive and proof.coins is not None) else None
     _, _, _, rc = _challenge1(stmt, proof.root, cfg.D, M, tb.L, tb.Q, device, cfg.l, ccom, r1)
     return rc.cpu()
 

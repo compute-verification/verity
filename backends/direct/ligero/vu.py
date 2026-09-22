@@ -27,11 +27,18 @@ from .compile import P
 from .hints_torch import hints_torch
 from .protocol import Config, config_for, n_rows, prove, soundness, verify
 
-ZK_MODE = ("Ligero HVZK masking: t_pad=256 uniform coefficients (Z_H s_j) per row, 5D committed mask rows "
-           "(prox/lin/quad x2/chain), evaluation on the coset g<w_n> disjoint from H (PROTOCOL.md 8b)")
+ZK_MODE = ("Ligero HVZK masking: t_pad uniform coefficients (Z_H s_j) per row, 6D committed mask rows "
+           "(prox/lin/quad x2/chain x2: q masked by a uniform zero-sum polynomial, AHIV22 u_add -- red team F1 fixed), "
+           "evaluation on the coset g<w_n> disjoint from H (PROTOCOL.md 8b)")
 ZK_MODE_HM96 = ("; malicious-verifier: HM96/GK step-0 commitment c_i = H(r_i || s_i) to both verifier coins before root, "
-                "opened after root / after the test messages, prover aborts on a mismatched opening (PROTOCOL.md 8c; "
-                "redteam_zk.py malicious-verifier test)")
+                "opened after root / after the test messages, prover aborts on a mismatched opening; challenges are "
+                "functions of the coins alone (F2 fixed), simulator by rewinding with a CRH only (PROTOCOL.md 8c; "
+                "redteam/simulator.py against the real verify())")
+ZK_MODE_FS = ("; Fiat-Shamir mode: no step 0, challenges = H(statement, transcript); zero knowledge is HVZK, "
+              "NIZK only in the programmable random-oracle model")
+ZK_VACUOUS_NOTE = ("; NOTE: this statement publishes the operands a, b and the words y16 (statement_digest), so privacy "
+                   "is vacuous for it today -- the ZK claim is about the construction (masking + coins) and becomes "
+                   "meaningful once operands are committed (auth-integration LEAF_V2)")
 from .unit import compile_unit, public_vectors
 from .witness import hints_tensor, tables
 
@@ -53,9 +60,10 @@ def vu_units(x: list[int], w: list[int], accs: list[int]) -> list[tuple]:
 
 class ChainRunner:
     def __init__(self, device: str, target: float, rate_log2: int = 2, hints: str = "torch", n_proofs: int = 1,
-                 zk: bool = False):
+                 zk: bool = False, mode: str = protocol_mod.MODE_INTERACTIVE):
         self.p = REAL
         self.zk = zk
+        self.mode = mode
         self.device = device
         self.hints_mode = hints
         self.target = target
@@ -69,8 +77,12 @@ class ChainRunner:
 
     def cfg(self, l: int) -> Config:
         if l not in self._cfg:
-            self._cfg[l] = config_for(l, self.target, self.rate_log2, self.n_proofs, zk=self.zk)
+            self._cfg[l] = config_for(l, self.target, self.rate_log2, self.n_proofs, zk=self.zk, mode=self.mode)
         return self._cfg[l]
+
+    @property
+    def interactive(self) -> bool:
+        return self.mode == protocol_mod.MODE_INTERACTIVE
 
     def layout(self, n_vus: int, min_l: int = 256) -> Layout:
         l = max(min_l, 1 << (n_vus * STEPS - 1).bit_length())
@@ -78,7 +90,11 @@ class ChainRunner:
 
     def prove_vus(self, vus: list[tuple[list, list, list, int]], check=True, mutate=None, min_l: int = 256, coins=None):
         """``vus``: (x, w, accs, y16) per VU (honest data: the recorded accumulators).  ``coins``: the verifier's
-        step-0 coin source (interactive); None = the prover samples them (Fiat-Shamir reading)."""
+        step-0 coin source.  Interactive mode with ``coins=None``: the RUNNER plays the honest verifier's step 0
+        (``Coins.sample()``; the same object is what ``verify_vus`` then uses as its own coins -- the runner is both
+        parties, as in every gate).  Fiat-Shamir mode: no coins."""
+        if coins is None and self.interactive:
+            coins = protocol_mod.Coins.sample()
         lay = self.layout(len(vus), min_l)
         units, y16 = [], torch.zeros(lay.l, dtype=torch.int64)
         for v, (x, w, accs, y) in enumerate(vus):
@@ -109,7 +125,12 @@ class ChainRunner:
         return proof, (a, b, y16), lay
 
     def verify_vus(self, proof, pubs, lay: Layout, coins=None):
+        """Interactive mode with ``coins=None``: the verifier's own coins are the ones the runner sampled in
+        ``prove_vus`` (``proof.coins``, i.e. the honest step 0 the runner played); pass ``coins`` explicitly to check
+        a transcript against a specific verifier's session."""
         a, b, y16 = pubs
+        if coins is None and self.interactive:
+            coins = proof.coins
         return verify(self.p, self.sys, self.tb, self.cfg(lay.l), None, a, b, None, proof, self.device, chain=(lay, y16),
                       coins=coins)
 
@@ -120,7 +141,7 @@ def _vu_data(vu: instances.VuTier, i: int):
 
 
 def gate_vu(args) -> int:
-    R = ChainRunner(args.device, args.target, args.rate_log2, args.hints, zk=args.zk)
+    R = ChainRunner(args.device, args.target, args.rate_log2, args.hints, zk=args.zk, mode=args.mode)
     log = print
     log(f"chain system: {R.sys.summary()} compiled in {R.compile_seconds:.2f}s; device {args.device}")
     root = Path(args.root)
@@ -236,16 +257,15 @@ def bench_vu(args) -> int:
     per_proof = args.batch // STEPS
     total_vus = args.total_vus or per_proof
     n_proofs = -(-total_vus // per_proof)
-    if getattr(args, "no_coin_commitment", False):
-        protocol_mod._COMMIT_COINS = False
-    depth = 3 if protocol_mod._COMMIT_COINS else 2
-    R = ChainRunner(args.device, args.target, args.rate_log2, args.hints, n_proofs=n_proofs, zk=args.zk)
+    interactive = args.mode == protocol_mod.MODE_INTERACTIVE
+    depth = 3 if interactive else 1                 # interactive: c, r1, r2 on the critical path; Fiat-Shamir: one message
+    R = ChainRunner(args.device, args.target, args.rate_log2, args.hints, n_proofs=n_proofs, zk=args.zk, mode=args.mode)
     subs = [(lo, min(lo + per_proof, total_vus)) for lo in range(0, total_vus, per_proof)]
     data = {i: _vu_data(vu, i % vu.n) for i in range(total_vus)}
     lay = R.layout(per_proof)
     l = lay.l
     cfg = R.cfg(l)
-    print(f"config {cfg}; layout {lay}; zk {cfg.zk}, coin commitment {protocol_mod._COMMIT_COINS}; system {R.sys.summary()}; {total_vus} VUs as {n_proofs} sub-batches of <= {per_proof}")
+    print(f"config {cfg}; layout {lay}; zk {cfg.zk}, mode {cfg.mode}; system {R.sys.summary()}; {total_vus} VUs as {n_proofs} sub-batches of <= {per_proof}")
     runs = []
     if args.device.startswith("cuda"):
         torch.cuda.reset_peak_memory_stats()
@@ -256,9 +276,10 @@ def bench_vu(args) -> int:
         t_pass = time.perf_counter()
         for lo, hi in subs:
             vus = [data[i] for i in range(lo, hi)]
-            proof, pubs, lay_i = R.prove_vus(vus, check=False, min_l=l)
+            V = protocol_mod.Coins.sample() if interactive else None      # the verifier's step 0 (interactive only)
+            proof, pubs, lay_i = R.prove_vus(vus, check=False, min_l=l, coins=V)
             t0 = time.perf_counter()
-            ok, why = R.verify_vus(proof, pubs, lay_i)
+            ok, why = R.verify_vus(proof, pubs, lay_i, coins=V)
             vsum += time.perf_counter() - t0
             assert ok, f"sub-batch [{lo}, {hi}): {why}"
             for k, v in proof.timings.items():
@@ -286,19 +307,24 @@ def bench_vu(args) -> int:
     sw = {"backend": {"name": "b-ligero chain (backends/direct/ligero)", "commit": _git_commit(), "hash": proof.hash_name,
                       "challenge_expander": "SHAKE-256 (placeholder)"},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
-    if cfg.zk and protocol_mod._COMMIT_COINS and not args.hvzk_label:
-        proof_class, zk_mode = "COMPLETE_ZK_BACKEND", ZK_MODE + ZK_MODE_HM96
+    if cfg.zk and interactive and not args.hvzk_label:
+        proof_class, zk_mode = "COMPLETE_ZK_BACKEND", ZK_MODE + ZK_MODE_HM96 + ZK_VACUOUS_NOTE
         omitted = "external authentication; unopened columns hidden by Blake3 of a uniform column (random-oracle hiding, not HM96 salted leaves)"
+    elif cfg.zk and interactive:
+        proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE + ZK_VACUOUS_NOTE
+        omitted = "external authentication (malicious-verifier ZK holds but the conservative label was requested)"
     elif cfg.zk:
-        proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE
-        omitted = "external authentication, malicious-verifier ZK (HM96 commitment to the verifier's coins)"
+        proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE + ZK_MODE_FS + ZK_VACUOUS_NOTE
+        omitted = "external authentication; malicious-verifier ZK outside the programmable random-oracle model (Fiat-Shamir mode: NIZK in PROM only)"
     else:
         proof_class, zk_mode, omitted = "NON_ZK_PROOF_DIAGNOSTIC", "none", "external authentication, ZK masking"
     fp = contract.fingerprint(
         profile=contract.PROFILE, domain=contract.DOMAIN, K=STEP * STEPS, B=n_vus, N_subbatches=n_proofs,
         proof_class=proof_class, authentication="excluded", zk_mode=zk_mode,
         security={"target": round(args.target), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_k": cfg.k, "rs_l": cfg.l,
-                  "zk": cfg.zk, "t_pad": cfg.t_pad,
+                  "zk": cfg.zk, "t_pad": cfg.t_pad, "mode": cfg.mode, "bound_model": snd["bound_model"],
+                  "hash_assumption": snd["hash_assumption"], "zk_statement": snd["zk_statement"],
+                  "fiat_shamir_queries_log2": snd["fiat_shamir_queries_log2"],
                   "opened_columns": cfg.t, "achieved_log2": snd["total_log2"], "terms_log2": snd["terms_log2"],
                   "per_proof_target_log2": snd["per_proof_target_log2"], "per_proof_total_log2": snd["per_proof_total_log2"],
                   "union_over": n_proofs, "hash_placeholder": True},

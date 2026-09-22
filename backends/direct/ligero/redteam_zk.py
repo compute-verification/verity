@@ -72,26 +72,28 @@ class EquivocatingVerifier(Coins):
         return (_h(b"adaptive-r2", root, w.tobytes(), h.tobytes()), self.s2) if self.slot == 2 else (self.r2, self.s2)
 
 
-def adversarial_coins(kind: str, target_cols: list[int] | None = None, cfg=None, stmt_free: bool = True) -> Coins:
+def adversarial_coins(kind: str, target_cols: list[int] | None = None, cfg=None, stmt: bytes | None = None) -> Coins:
     """Coins a malicious verifier might COMMIT to: ``zero`` (no entropy) or ``ground`` (r2 chosen among 256
-    candidates to maximise ... nothing it can see: cols = H(stmt, c, root, w, h, q, v, r2) is not computable before
-    root, so the grinding is against a stand-in transcript -- the point of the test is that the overlap with the
-    target column set stays at chance)."""
+    candidates to maximise the overlap of the column set with a target set).  Since the b-zk-fix derivation
+    ``cols = H(stmt, c, r2)`` is a function of the verifier's own data alone, a verifier that knows the statement
+    CAN steer its column set before step 0 -- which is allowed: an interactive verifier owns its coins, and the
+    masking hides any ``t <= t_pad`` columns (the test checks the view at the ground columns is still the simulated
+    one).  Without the statement (``stmt=None``) the grinding is against a stand-in and the overlap is at chance."""
+    z = b"\0" * COIN_BYTES
     if kind == "zero":
-        z = b"\0" * COIN_BYTES
         return Coins(z, z, z, z)
     if kind == "ground":
         best, best_score = None, -1
-        z = b"\0" * COIN_BYTES
+        s1 = z
         for i in range(256):
             r2 = _h(b"grind", i.to_bytes(4, "little"))
-            # the only transcript the verifier can evaluate before step 0 is an imagined one (empty messages)
-            cols = protocol._challenge2(b"", b"\0" * 32, np.zeros(1, "<u4"), np.zeros(1, "<u4"), cfg.t, cfg.n, None, None,
-                                        (z, z), r2)
+            cc = (protocol.coin_commit(z, z), protocol.coin_commit(r2, s1))
+            cols = protocol._challenge2(stmt if stmt is not None else b"", b"", np.zeros(1, "<u4"), np.zeros(1, "<u4"),
+                                        cfg.t, cfg.n, None, None, cc, r2)
             score = len(set(cols) & set(target_cols))
             if score > best_score:
                 best, best_score = r2, score
-        return Coins(z, z, best, z)
+        return Coins(z, z, best, s1)
     raise ValueError(kind)
 
 
@@ -111,8 +113,10 @@ def malicious_verifier_tests(R: ChainRunner, real: list, trivial: list) -> dict:
     cfg = R.cfg(lay.l)
     rng = np.random.default_rng(3)
     target = sorted(rng.choice(cfg.n, cfg.t, replace=False).tolist())
+    p0, (a0, b0, y0), _ = R.prove_vus(real, check=False)
+    stmt = protocol.statement_digest(R.sys, cfg, a0, b0, layout=lay, y16=y0)
     for kind in ("zero", "ground"):
-        coins = adversarial_coins(kind, target, cfg)
+        coins = adversarial_coins(kind, target, cfg, stmt=stmt)
         pr, pubs_r, lay_r = R.prove_vus(real, check=False, coins=coins)
         ps, pubs_s, _ = R.prove_vus(trivial, check=False, coins=coins)
         okr, whyr = R.verify_vus(pr, pubs_r, lay_r, coins=coins)
@@ -125,32 +129,32 @@ def malicious_verifier_tests(R: ChainRunner, real: list, trivial: list) -> dict:
         stat, pv = _chi2_uniform(pr.opened[:R.sys.m])
         rep["opened_uniform"] = {"chi2": stat, "p": pv}
         overlap = len(set(pr.cols) & set(target))
-        rep["target_column_overlap"] = {"got": overlap, "expected_at_chance": cfg.t * cfg.t / cfg.n, "t": cfg.t, "n": cfg.n}
+        rep["target_column_overlap"] = {"got": overlap, "expected_at_chance": cfg.t * cfg.t / cfg.n, "t": cfg.t, "n": cfg.n,
+                                        "note": "cols = H(stmt, c, r2) is the verifier's own function since b-zk-fix: a "
+                                                "statement-aware verifier may steer its columns (allowed; any t <= t_pad "
+                                                "columns are masked) -- the overlap is reported, not bounded"}
         out[f"committed_{kind}"] = rep
-    # (c) control: commitment off = the pre-8c derivation (coins are H(transcript): in the interactive reading the
-    # verifier picks them after the prover's messages).  Same statistics: the masking is coin-oblivious.
-    protocol._COMMIT_COINS = False
-    try:
-        pr, pubs_r, lay_r = R.prove_vus(real, check=False)
-        ps, pubs_s, _ = R.prove_vus(trivial, check=False)
-        okr, _ = R.verify_vus(pr, pubs_r, lay_r)
-        oks, _ = R.verify_vus(ps, pubs_s, lay_r)
-        rep = {"accepted": [okr, oks], "real_vs_simulated": {}}
-        for name, xr, xs in (("opened", pr.opened, ps.opened), ("w", pr.w, ps.w), ("h", pr.h, ps.h), ("q", pr.q, ps.q), ("v", pr.v, ps.v)):
-            stat, pv = _chi2_two_sample(xr, xs)
-            rep["real_vs_simulated"][name] = {"chi2": stat, "p": pv}
-        out["control_no_commitment"] = rep
-    finally:
-        protocol._COMMIT_COINS = True
-    # the pre-8c proof must not verify under the 8c verifier (it carries no commitments)
-    ok_cross, why_cross = R.verify_vus(pr, pubs_r, lay_r)
+    # (c) control: the Fiat-Shamir mode (no step 0, coins = H(transcript)).  Same statistics: the masking is
+    # coin-oblivious (its ZK is HVZK / NIZK-in-PROM only, PROTOCOL.md 8c).
+    Rf = ChainRunner(R.device, R.target, R.rate_log2, R.hints_mode, zk=True, mode=protocol.MODE_FIAT_SHAMIR)
+    pr, pubs_r, lay_r = Rf.prove_vus(real, check=False)
+    ps, pubs_s, _ = Rf.prove_vus(trivial, check=False)
+    okr, _ = Rf.verify_vus(pr, pubs_r, lay_r)
+    oks, _ = Rf.verify_vus(ps, pubs_s, lay_r)
+    rep = {"accepted": [okr, oks], "real_vs_simulated": {}, "config": str(Rf.cfg(lay_r.l))}
+    for name, xr, xs in (("opened", pr.opened, ps.opened), ("w", pr.w, ps.w), ("h", pr.h, ps.h), ("q", pr.q, ps.q), ("v", pr.v, ps.v)):
+        stat, pv = _chi2_two_sample(xr, xs)
+        rep["real_vs_simulated"][name] = {"chi2": stat, "p": pv}
+    out["control_no_commitment"] = rep
+    assert okr and oks, "fiat-shamir mode proofs must verify"
+    # a Fiat-Shamir proof must not verify under the interactive verifier (another statement digest / no coins)
+    ok_cross, why_cross = R.verify_vus(pr, pubs_r, lay_r, coins=Coins.sample())
     out["pre_8c_proof_under_8c_verifier"] = {"accepted": ok_cross, "why": why_cross}
     ok = (all(out[f"equivocate_slot{s}"]["prover_aborted"] for s in (1, 2))
           and not any("opened" in m for m in out["equivocate_slot1"]["sent_before_abort"])
           and out["equivocate_slot1"]["sent_before_abort"][-1] == "root"
           and all(v["p"] > 0.001 for k in ("zero", "ground") for v in out[f"committed_{k}"]["real_vs_simulated"].values())
           and all(out[f"committed_{k}"]["opened_uniform"]["p"] > 0.001 for k in ("zero", "ground"))
-          and out["committed_ground"]["target_column_overlap"]["got"] <= 4 * (1 + out["committed_ground"]["target_column_overlap"]["expected_at_chance"])
           and not ok_cross)
     out["verdict"] = "PASS" if ok else "FAIL"
     return out
