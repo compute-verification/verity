@@ -58,6 +58,93 @@ pub fn mont_mul(a: u32, b_r: u32) -> u32 {
 /// `x R mod p` (Montgomery form of a canonical value).
 #[inline(always)]
 pub fn to_mont(x: u32) -> u32 { mont_mul(x, R2_MOD_P) }
+/// Montgomery reduction `x R^-1 mod p` (canonical) of an accumulator `x < 2^62`.
+#[inline(always)]
+pub fn mont_reduce(x: u64) -> u32 {
+    let m = (x as u32).wrapping_mul(NEG_PINV);
+    let u = ((x + m as u64 * P64) >> 32) as u32;
+    if u >= P { u - P } else { u }
+}
+/// A product `x < 2^62` folded to a congruent value `< 2^58 + 2^32` (`2^32 = R_MOD_P mod p`), so six of them sum in a
+/// `u64` without overflow.
+#[inline(always)]
+pub fn fold64(x: u64) -> u64 { (x >> 32) * R_MOD_P as u64 + (x & 0xffff_ffff) }
+
+/// The `6 x 6` matrix of "multiply by `v`" in Montgomery form: `(x v)_d = sum_i x_i M[i][d]`, `M[i][d] = v_{d-i}`
+/// (`d >= i`) or `W v_{d-i+6}`; stored `[i * 6 + d]`, scaled by `R` so `mont_reduce(sum_i fold64(x_i M[i][d]))` is
+/// canonical `(x v)_d`.
+pub fn mul_matrix(v: Ext) -> [u32; DEG * DEG] {
+    let mut m = [0u32; DEG * DEG];
+    for i in 0..DEG {
+        for d in 0..DEG {
+            let raw = if d >= i { v.0[d - i] } else { mul(W, v.0[d - i + DEG]) };
+            m[i * DEG + d] = to_mont(raw);
+        }
+    }
+    m
+}
+
+/// `x * v` through its matrix (same result as `x * v`).
+#[inline(always)]
+pub fn mat_apply(x: &Ext, m: &[u32; DEG * DEG]) -> Ext {
+    let mut c = [0u32; DEG];
+    for d in 0..DEG {
+        let mut s = 0u64;
+        for i in 0..DEG { s += fold64(x.0[i] as u64 * m[i * DEG + d] as u64); }
+        c[d] = mont_reduce(s);
+    }
+    Ext(c)
+}
+
+/// Planar Montgomery matrices of `n` extension elements (`[(i * 6 + d) * n + c]`), for `x * v_c` over all `c` as a
+/// vectorised loop (`matvec_planar`).
+pub struct PlanarMats { pub n: usize, pub m: Vec<u32> }
+impl PlanarMats {
+    pub fn new(vs: &[Ext]) -> PlanarMats {
+        let n = vs.len();
+        let mut m = vec![0u32; DEG * DEG * n];
+        for (c, v) in vs.iter().enumerate() {
+            let mm = mul_matrix(*v);
+            for i in 0..DEG { for d in 0..DEG { m[(i * DEG + d) * n + c] = mm[i * DEG + d]; } }
+        }
+        PlanarMats { n, m }
+    }
+    /// `out[d * n + c] = (x * v_c)_d` (planar output).
+    pub fn matvec(&self, x: &Ext, out: &mut [u32]) {
+        let n = self.n;
+        debug_assert_eq!(out.len(), DEG * n);
+        for d in 0..DEG {
+            let (x0, x1, x2, x3, x4, x5) = (x.0[0] as u64, x.0[1] as u64, x.0[2] as u64, x.0[3] as u64, x.0[4] as u64, x.0[5] as u64);
+            let m0 = &self.m[d * n..(d + 1) * n];
+            let m1 = &self.m[(DEG + d) * n..(DEG + d + 1) * n];
+            let m2 = &self.m[(2 * DEG + d) * n..(2 * DEG + d + 1) * n];
+            let m3 = &self.m[(3 * DEG + d) * n..(3 * DEG + d + 1) * n];
+            let m4 = &self.m[(4 * DEG + d) * n..(4 * DEG + d + 1) * n];
+            let m5 = &self.m[(5 * DEG + d) * n..(5 * DEG + d + 1) * n];
+            let o = &mut out[d * n..(d + 1) * n];
+            for c in 0..n {
+                let s = fold64(x0 * m0[c] as u64) + fold64(x1 * m1[c] as u64) + fold64(x2 * m2[c] as u64)
+                    + fold64(x3 * m3[c] as u64) + fold64(x4 * m4[c] as u64) + fold64(x5 * m5[c] as u64);
+                o[c] = mont_reduce(s);
+            }
+        }
+    }
+}
+
+/// `out[d * n + r] = (a_r * g)_d` for planar accumulators `a[i * n + r]` and one matrix `g` (the R16 flush).
+pub fn planar_times_matrix(a: &[u32], n: usize, g: &[u32; DEG * DEG], out: &mut [u32]) {
+    debug_assert_eq!(a.len(), DEG * n);
+    for d in 0..DEG {
+        let (g0, g1, g2, g3, g4, g5) = (g[d] as u64, g[DEG + d] as u64, g[2 * DEG + d] as u64, g[3 * DEG + d] as u64, g[4 * DEG + d] as u64, g[5 * DEG + d] as u64);
+        let (a0, a1, a2, a3, a4, a5) = (&a[..n], &a[n..2 * n], &a[2 * n..3 * n], &a[3 * n..4 * n], &a[4 * n..5 * n], &a[5 * n..6 * n]);
+        let o = &mut out[d * n..(d + 1) * n];
+        for r in 0..n {
+            let s = fold64(a0[r] as u64 * g0) + fold64(a1[r] as u64 * g1) + fold64(a2[r] as u64 * g2)
+                + fold64(a3[r] as u64 * g3) + fold64(a4[r] as u64 * g4) + fold64(a5[r] as u64 * g5);
+            o[r] = mont_reduce(s);
+        }
+    }
+}
 
 pub fn pow(mut b: u32, mut e: u64) -> u32 {
     let mut r = 1u32;
@@ -227,6 +314,38 @@ mod tests {
         let big = Ext([P - 1; 6]);
         assert_eq!(big * Ext::ONE, big);
         assert_eq!((big * big) * a, big * (big * a));
+    }
+
+    #[test]
+    fn matrix_products_match_mul() {
+        let mut s = 0x1234_5678_9abc_def1u64;
+        let mut rnd = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; (s % P64) as u32 };
+        let mut vs = Vec::new();
+        for _ in 0..37 { vs.push(Ext(std::array::from_fn(|_| rnd()))); }
+        vs.push(Ext([P - 1; 6]));
+        vs.push(Ext::ZERO);
+        let xs = [Ext(std::array::from_fn(|_| rnd())), Ext([P - 1; 6]), Ext::ONE, Ext::ZERO];
+        let pm = PlanarMats::new(&vs);
+        let mut out = vec![0u32; DEG * vs.len()];
+        for x in &xs {
+            for v in &vs { assert_eq!(mat_apply(x, &mul_matrix(*v)), *x * *v); }
+            pm.matvec(x, &mut out);
+            for (c, v) in vs.iter().enumerate() {
+                let e: [u32; DEG] = std::array::from_fn(|d| out[d * vs.len() + c]);
+                assert_eq!(Ext(e), *x * *v);
+            }
+            // planar accumulators times one matrix
+            let n = vs.len();
+            let mut a = vec![0u32; DEG * n];
+            for (r, v) in vs.iter().enumerate() { for i in 0..DEG { a[i * n + r] = v.0[i]; } }
+            planar_times_matrix(&a, n, &mul_matrix(*x), &mut out);
+            for (r, v) in vs.iter().enumerate() {
+                let e: [u32; DEG] = std::array::from_fn(|d| out[d * n + r]);
+                assert_eq!(Ext(e), *v * *x);
+            }
+        }
+        assert_eq!(mont_reduce(to_mont(12345) as u64), 12345);
+        assert_eq!(fold64((P as u64 - 1) * (P as u64 - 1)) % P64, ((P as u64 - 1) * (P as u64 - 1)) % P64);
     }
 
     #[test]

@@ -11,7 +11,7 @@
 //! reduced across threads.  The `eq` weights over the LogUp hypercube use a high/low split (one product per leaf).
 
 use crate::circuit::{eval_lin, log2ceil, Circuit, Gate, Layer, Query, Table};
-use crate::field::{eq_point, eq_table, interpolate, mul, sub, Ext, DOMAIN, P64};
+use crate::field::{add, eq_point, eq_table, interpolate, mat_apply, mul, mul_matrix, planar_times_matrix, sub, Ext, PlanarMats, DEG, DOMAIN, P64};
 use crate::ntt::{encode, RowEval};
 use crate::proof::{Column, Proof};
 use crate::sha256::Sha256;
@@ -246,16 +246,23 @@ struct LookupPlan {
     segs: Vec<LookupSeg>,
     single: bool,
 }
-struct LookupSeg { base: usize, q_t: usize, terms_ext: Vec<Vec<(usize, Ext)>>, terms_base: Vec<Vec<(usize, u32)>>, touched: Vec<usize> }
+/// `terms_rank`: the single-column (base) terms as `(rank in touched, coef)`; `terms_mat`: the multi-column terms as
+/// `(idx, matrix of coef)` so the scatter is one matrix product per term.
+struct LookupSeg { base: usize, q_t: usize, terms_mat: Vec<Vec<(usize, [u32; DEG * DEG])>>, terms_rank: Vec<Vec<(usize, u32)>>, touched: Vec<usize> }
+
+/// Per-thread scratch of the fill: planar accumulators and outputs (`[coord * n + col]`).
+pub struct FillScratch { row: Vec<Ext>, planar: Vec<u32>, acc: Vec<u32>, flush: Vec<u32> }
+impl FillScratch { pub fn new() -> FillScratch { FillScratch { row: Vec::new(), planar: Vec::new(), acc: Vec::new(), flush: Vec::new() } } }
 
 struct Functional<'a> {
     stmt: &'a Statement<'a>,
     seg_offs: Vec<usize>,
     table_offs: Vec<usize>,
     l: usize,
-    /// per segment: eq(c*, u) over the copies, and V[col] = rho_l eq(l*, col) + rho_r eq(r*, col)
+    /// per segment: eq(c*, u) over the copies, and V[col] = rho_l eq(l*, col) + rho_r eq(r*, col) (as planar matrices)
     eq_c: Vec<Vec<Ext>>,
     v_col: Vec<Vec<Ext>>,
+    v_mats: Vec<PlanarMats>,
     lookups: Vec<LookupPlan>,
     /// chain: rho_chain * geo^(v * per_vu) per VU, geo^k for k < per_vu
     chain_v: Vec<Ext>,
@@ -263,40 +270,70 @@ struct Functional<'a> {
     per_vu: usize,
 }
 
+/// The R16-style flush: `out[touched[r]] += (rl * hi[block]) * acc[r]` for every touched column, as one planar matrix
+/// product over the ranks; `acc` is zeroed.
+fn flush_single(lp: &LookupPlan, ls: &LookupSeg, h: usize, acc: &mut [u32], flush: &mut [u32], out: &mut [Ext]) {
+    let nt = ls.touched.len();
+    let g = mul_matrix(lp.rl * lp.eq.hi[h]);
+    planar_times_matrix(acc, nt, &g, flush);
+    for (r, &c) in ls.touched.iter().enumerate() {
+        out[c] += Ext(std::array::from_fn(|d| flush[d * nt + r]));
+    }
+    for a in acc.iter_mut() { *a = 0; }
+}
+
 impl<'a> Functional<'a> {
-    /// The unit-local part of `a` for unit `u` of segment `si` (every column), into `out` (length ncols).
-    fn unit_row(&self, si: usize, u: usize, out: &mut [Ext], acc: &mut [Ext]) {
+    /// The unit-local part of `a` for unit `u` of segment `si` (every column), into `sc.row` (length ncols).
+    fn unit_row(&self, si: usize, u: usize, sc: &mut FillScratch) {
         let seg = &self.stmt.segs[si];
         let ncols = seg.ncols();
         let ec = self.eq_c[si][u];
-        let v = &self.v_col[si];
-        for c in 0..ncols { out[c] = ec * v[c]; }
+        let FillScratch { row, planar, acc, flush } = sc;
+        // input claims: out[c] = ec * v[c], vectorised over the columns through the planar matrices of v
+        planar.resize(DEG * ncols, 0);
+        self.v_mats[si].matvec(&ec, planar);
+        row.resize(ncols, Ext::ZERO);
+        for c in 0..ncols { row[c] = Ext(std::array::from_fn(|d| planar[d * ncols + c])); }
+        let out = &mut row[..];
         for lp in &self.lookups {
             let ls = &lp.segs[si];
             if ls.q_t == 0 { continue; }
             let x0 = ls.base + u * ls.q_t;
             let mask = lp.eq.mask();
             if lp.single {
-                // acc[idx] = sum_j lo[x_j & mask] * coef (base); flushed per hi-block with hi * rho * lambda
-                for &c in &ls.touched { acc[c] = Ext::ZERO; }
+                // acc[rank] = sum_j lo[x_j & mask] * coef (base, planar over the touched columns); flushed per hi-block
+                // with the matrix of rl * hi[block]
+                let nt = ls.touched.len();
+                acc.clear();
+                acc.resize(DEG * nt, 0);
+                flush.resize(DEG * nt, 0);
                 let mut hi_cur = x0 >> lp.eq.lo_bits;
                 for j in 0..ls.q_t {
                     let x = x0 + j;
                     let h = x >> lp.eq.lo_bits;
                     if h != hi_cur {
-                        let g = lp.rl * lp.eq.hi[hi_cur];
-                        for &c in &ls.touched { if !acc[c].is_zero() { out[c] += g * acc[c]; acc[c] = Ext::ZERO; } }
+                        flush_single(lp, ls, hi_cur, acc, flush, out);
                         hi_cur = h;
                     }
-                    let e = lp.eq.lo[x & mask];
-                    for &(idx, coef) in &ls.terms_base[j] { acc[idx] += e.scale(coef); }
+                    let e = &lp.eq.lo[x & mask];
+                    for &(rank, coef) in &ls.terms_rank[j] {
+                        if coef == 1 {
+                            for i in 0..DEG { let a = &mut acc[i * nt + rank]; *a = add(*a, e.0[i]); }
+                        } else {
+                            for i in 0..DEG { let a = &mut acc[i * nt + rank]; *a = add(*a, mul(e.0[i], coef)); }
+                        }
+                    }
                 }
-                let g = lp.rl * lp.eq.hi[hi_cur];
-                for &c in &ls.touched { if !acc[c].is_zero() { out[c] += g * acc[c]; } }
+                flush_single(lp, ls, hi_cur, acc, flush, out);
             } else {
+                let mut h_cur = usize::MAX;
+                let mut rl_hi = Ext::ZERO;
                 for j in 0..ls.q_t {
-                    let e = lp.rl * lp.eq.at(x0 + j);
-                    for &(idx, coef) in &ls.terms_ext[j] { out[idx] += e * coef; }
+                    let x = x0 + j;
+                    let h = x >> lp.eq.lo_bits;
+                    if h != h_cur { rl_hi = lp.rl * lp.eq.hi[h]; h_cur = h; }
+                    let e = rl_hi * lp.eq.lo[x & mask];
+                    for (idx, m) in &ls.terms_mat[j] { out[*idx] += mat_apply(&e, m); }
                 }
             }
         }
@@ -320,24 +357,19 @@ impl<'a> Functional<'a> {
     }
 
     /// `a[lo..hi]` into `buf` (zeroed by the caller).
-    fn fill(&self, lo: usize, hi: usize, buf: &mut [Ext], scratch: &mut Vec<Ext>, acc: &mut Vec<Ext>) {
+    fn fill(&self, lo: usize, hi: usize, buf: &mut [Ext], sc: &mut FillScratch) {
         for (si, seg) in self.stmt.segs.iter().enumerate() {
             let (off, ncols, units) = (self.seg_offs[si], seg.ncols(), seg.units);
             let end = off + units * ncols;
             if hi <= off || lo >= end { continue; }
             let u_lo = lo.saturating_sub(off) / ncols;
             let u_hi = ((hi.min(end) - off) + ncols - 1) / ncols;
-            scratch.clear();
-            scratch.resize(ncols, Ext::ZERO);
-            acc.clear();
-            acc.resize(ncols, Ext::ZERO);
             for u in u_lo..u_hi.min(units) {
-                self.unit_row(si, u, scratch, acc);
+                self.unit_row(si, u, sc);
                 let base = off + u * ncols;
-                for c in 0..ncols {
-                    let idx = base + c;
-                    if idx >= lo && idx < hi { buf[idx - lo] += scratch[c]; }
-                }
+                let c_lo = lo.saturating_sub(base).min(ncols);
+                let c_hi = hi.saturating_sub(base).min(ncols);
+                for c in c_lo..c_hi { buf[base + c - lo] += sc.row[c]; }
             }
         }
         for (ti, lp) in self.lookups.iter().enumerate() {
@@ -551,16 +583,22 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
             let mut terms_ext = Vec::new();
             let mut terms_base = Vec::new();
             let mut touched = std::collections::BTreeSet::new();
+            let mut per_query: Vec<std::collections::BTreeMap<usize, Ext>> = Vec::new();
             for qu in &qs {
                 let mut m: std::collections::BTreeMap<usize, Ext> = std::collections::BTreeMap::new();
                 for (kk, lin) in qu.cols.iter().enumerate() {
                     for tm in &lin.terms { *m.entry(tm.idx as usize).or_insert(Ext::ZERO) -= bs[kk].scale(tm.coef); }
                 }
                 for k in m.keys() { touched.insert(*k); }
-                terms_base.push(m.iter().map(|(&i, e)| (i, e.0[0])).collect::<Vec<_>>());
-                terms_ext.push(m.into_iter().collect::<Vec<_>>());
+                per_query.push(m);
             }
-            segs.push(LookupSeg { base, q_t: qs.len(), terms_ext, terms_base, touched: touched.into_iter().collect() });
+            let touched: Vec<usize> = touched.into_iter().collect();
+            let rank_of: std::collections::HashMap<usize, usize> = touched.iter().enumerate().map(|(r, &c)| (c, r)).collect();
+            for m in per_query {
+                terms_base.push(m.iter().map(|(&i, e)| (rank_of[&i], e.0[0])).collect::<Vec<_>>());
+                terms_ext.push(m.into_iter().map(|(i, e)| (i, mul_matrix(e))).collect::<Vec<_>>());
+            }
+            segs.push(LookupSeg { base, q_t: qs.len(), terms_mat: terms_ext, terms_rank: terms_base, touched });
             base += seg.units * qs.len();
         }
         let lp = LookupPlan { eq, rl: rho * lc.lam, rho, segs, single: t.cols == 1 };
@@ -580,7 +618,8 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     let mut cur = rho_chain;
     for _ in 0..stmt.vus() { chain_v.push(cur); cur = cur * g_vu; }
     for (v, y) in ch.public_y16.iter().enumerate() { b += (chain_v[v] * chain_k[per_vu - 1]).scale(*y); }
-    let func = Functional { stmt, seg_offs, table_offs, l, eq_c, v_col, lookups, chain_v, chain_k, per_vu };
+    let v_mats: Vec<PlanarMats> = v_col.iter().map(|v| PlanarMats::new(v)).collect();
+    let func = Functional { stmt, seg_offs, table_offs, l, eq_c, v_col, v_mats, lookups, chain_v, chain_k, per_vu };
     st.t_konst = t2.elapsed().as_secs_f64();
 
     // ---- Ligero: r, w, qc, the functional value, the opened set
@@ -643,8 +682,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
         let hs: Vec<_> = (0..threads).map(|_| s.spawn(|| {
             let mut rhs = vec![Ext::ZERO; set.len()];
             let mut buf = vec![Ext::ZERO; chunk_rows * p.k];
-            let mut scratch = Vec::new();
-            let mut acc = Vec::new();
+            let mut fsc = FillScratch::new();
             let mut ntt_scratch: Vec<u32> = Vec::new();
             let mut out = vec![Ext::ZERO; set.len()];
             let mut outb = vec![Ext::ZERO; chunk_rows * set.len()];
@@ -658,7 +696,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
                 let hi = (r1 * p.k).min(l);
                 let ta = Instant::now();
                 for x in buf.iter_mut() { *x = Ext::ZERO; }
-                func.fill(lo, hi, &mut buf[..hi - lo], &mut scratch, &mut acc);
+                func.fill(lo, hi, &mut buf[..hi - lo], &mut fsc);
                 let tb = Instant::now();
                 if batched {
                     // the whole chunk in one batched evaluation (the tail chunk is zero-padded to `chunk_rows`)
