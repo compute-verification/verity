@@ -29,12 +29,12 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import cupy as cp  # noqa: E402
-import torch  # noqa: E402
+import cupy as cp
+import torch
 
-from hash_gpu import merkle  # noqa: E402
-from hash_gpu.poseidon2_ref import P, instance  # noqa: E402
-from hash_gpu.poseidon2_torch import Poseidon2Torch  # noqa: E402
+from hash_gpu import merkle
+from hash_gpu.poseidon2_ref import P, instance
+from hash_gpu.poseidon2_torch import Poseidon2Torch
 
 N_CODE = 16384
 LIGERO_ROWS = {"B": 310_602, "A": 48_873}
@@ -44,7 +44,7 @@ P2_SLICE_COLS = 1024
 
 def device_info() -> dict:
     props = cp.cuda.runtime.getDeviceProperties(0)
-    free, total = cp.cuda.runtime.memGetInfo()
+    _free, total = cp.cuda.runtime.memGetInfo()
     drv = cp.cuda.runtime.driverGetVersion()
     return {"gpu": props["name"].decode(), "sms": props["multiProcessorCount"], "device_memory_bytes": total,
             "cuda_driver_version": drv, "cuda_runtime_version": cp.cuda.runtime.runtimeGetVersion(),
@@ -57,7 +57,7 @@ def _smi_driver() -> str | None:
         import subprocess
 
         return subprocess.run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
-                              capture_output=True, text=True, timeout=10).stdout.strip()
+                              capture_output=True, text=True, timeout=10, check=False).stdout.strip()
     except Exception:  # noqa: BLE001
         return None
 
@@ -116,8 +116,8 @@ def bench_poseidon2_permutation(reps: int, S: int = 1 << 20) -> list[dict]:
         states = torch.randint(0, P, (S, width), dtype=torch.int64, device="cuda")
         for mds in ("blocks", "fp64", "int8"):
             eng = Poseidon2Torch(instance(width), mds=mds, chunk_states=S)
-            perm_ms, _ = timed(lambda: eng.permute(states), reps)
-            mds_ms, _ = timed(lambda: eng._mds(states), reps)
+            perm_ms, _ = timed(lambda e=eng, st=states: e.permute(st), reps)
+            mds_ms, _ = timed(lambda e=eng, st=states: e._mds(st), reps)
             out.append({"width": width, "mds": mds, "states": S, "permute_ms_median": perm_ms,
                         "permutations_per_s": S / (perm_ms / 1e3), "mds_only_ms_median": mds_ms,
                         "compression_bytes_per_s": S * 64 / (perm_ms / 1e3),
