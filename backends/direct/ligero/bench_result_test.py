@@ -1,5 +1,5 @@
 """``bench_result.py``'s post-verification pruning keeps the first ``--keep-proofs`` sub-batches of every rep and the
-manifest's identity of everything it deletes.  No torch, no GPU.
+manifest's identity of everything it deletes; the verifier command carries the bench's soundness target.  No torch, no GPU.
 
     uv run pytest backends/direct/ligero/bench_result_test.py
 """
@@ -12,7 +12,18 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from backends.direct.ligero.bench_result import prune_proofs  # noqa: E402
+from backends.direct.ligero.bench_result import prune_proofs, verify_cmd  # noqa: E402
+
+
+@pytest.mark.parametrize("target, bits", [(-128, "128"), (-80.0, "80"), (-100, "100")])
+def test_verify_cmd_passes_the_bench_target_as_soundness_bits(target, bits):
+    """ligero-verify defaults to --soundness-bits 128 and rejects a 2^-80 proof as 'parameters give 2^-80.11 ...; requested
+    2^-128', so the soundness sweep must hand it the target the bench proved to."""
+    cmd = verify_cmd(Path("/bin/lv"), Path("s.bin"), Path("a.stmt"), Path("a.proof"), 16, None, target)
+    assert cmd[:2] == ["/bin/lv", "verify"] and "--coins" not in cmd
+    assert cmd[cmd.index("--soundness-bits") + 1] == bits and cmd[cmd.index("--threads") + 1] == "16"
+    with_coins = verify_cmd(Path("/bin/lv"), Path("s.bin"), Path("a.stmt"), Path("a.proof"), 16, Path("a.coins"), target)
+    assert with_coins == cmd + ["--coins", "a.coins"]
 
 
 def _dump(tmp_path: Path, reps: int, subs: int, coins: bool) -> dict:

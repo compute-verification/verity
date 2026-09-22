@@ -62,6 +62,17 @@ def _pop(argv: list[str], flag: str, default=None):
     return default
 
 
+def verify_cmd(vbin: Path, system: Path, stmt: Path, proof: Path, threads: int, coins: Path | None, target_log2: float) -> list[str]:
+    """`ligero-verify verify` for one sub-batch proof.  `--soundness-bits` is the bench's target (`security.target`, e.g. -80
+    -> 80): the verifier defaults to 128 and rejects any proof whose parameters do not reach the bits it was asked for,
+    so a soundness sweep below 2^-128 must tell it the target it is judging against (lane b-sweep)."""
+    cmd = [str(vbin), "verify", "--system", str(system), "--statement", str(stmt), "--proof", str(proof), "--threads", str(threads),
+           "--soundness-bits", f"{-float(target_log2):g}"]
+    if coins is not None:
+        cmd += ["--coins", str(coins)]
+    return cmd
+
+
 def prune_proofs(proofs_dir: Path, manifest: dict, keep: int) -> dict:
     """After the independent verifier has run: delete the dumped .stmt/.proof/.coins of every sub-batch but the first
     ``keep`` of each rep (a 2^20-VU rep is ~14 GB; the manifest keeps every proof's sha256 and byte count, the verdicts
@@ -130,9 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         if vbin is None or not vbin.is_file():
             break
         stmt, proof = proofs_dir / e["stmt"], proofs_dir / e["proof"]
-        cmd = [str(vbin), "verify", "--system", str(system), "--statement", str(stmt), "--proof", str(proof), "--threads", str(threads)]
-        if e.get("coins"):
-            cmd += ["--coins", str(proofs_dir / e["coins"])]
+        cmd = verify_cmd(vbin, system, stmt, proof, threads, proofs_dir / e["coins"] if e.get("coins") else None, sec.get("target", -128.0))
         t1 = time.perf_counter()
         r = subprocess.run(cmd, capture_output=True, text=True)
         wall = time.perf_counter() - t1
@@ -183,7 +192,8 @@ def main(argv: list[str] | None = None) -> int:
           "checker": "v1 (WP2 checker: bits + one-hot selectors)", "batch": B, "K": 1536, "n_subbatches": n_proofs,
           "per_proof_vus": int(meas_in["split.per_proof_vus"]), "security": sec, "hardware": fp_in.get("hardware"), "software": fp_in.get("software"),
           "verifier": {"name": "ligero-verify (backends/ligero-verify, Rust, independent)", "path": str(vbin), "threads": threads,
-                       "sha256": _sha256(vbin) if vbin and vbin.is_file() else None, "coins": "runner's step-0 coins (--coins)" if mode == "interactive" else "n/a (Fiat-Shamir)"},
+                       "sha256": _sha256(vbin) if vbin and vbin.is_file() else None, "coins": "runner's step-0 coins (--coins)" if mode == "interactive" else "n/a (Fiat-Shamir)",
+                       "soundness_bits_requested": -float(sec.get("target", -128.0))},
           "python_verifier": "backends.direct.ligero (live, every rep, every sub-batch; shares code with the prover)",
           "warmup": "one sub-batch (excluded)", "reps": len(reps),
           "dumped_reps": man.get("set", {}).get("dump_reps", len(reps)),    # reps whose proofs were written out and Rust-verified
