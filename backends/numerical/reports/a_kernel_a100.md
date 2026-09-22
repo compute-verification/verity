@@ -111,3 +111,46 @@ against torch on int64 AND int32 inputs (separately cached specialisations).  Th
 * The v1 negatives could not be run: `/workspace/bb/neg` does not exist on `vy-a100b` (a-gpu-v2 exported only
   `pos4096` here; the v1 negatives live on `vy-g5`).  The 52 v2 limb-form negatives were run instead: 52/52 rejected (r20260922-113632-baa3).
 * The Rust verifier's rejection is reported, not investigated (a-protocol-diff's lane).
+
+## Status on merged main (lane/a-kernel-a100-2, commit 039926b + this report)
+
+`main` e9e25bb contains this lane (gpu/kernels `FIELD_KEY`), a-protocol-diff (40868e5: the Rust verifier follows
+a-gpu2's low-bit-first LogUp sumcheck order, PROTOCOL 4.2) and a-verifier-2 (e130d36: checker-v2 support).  One run
+on `vy-a100b` from a fresh worktree off that `main`, default (stale) `~/.triton/cache`, run **r20260922-115019-03ea**:
+
+| set | B | prover median of 3 (s) | reps | own Python verifier | independent Rust verifier (`verity-gkr-verify`, built on the pod from `main`) | proof |
+|---|---|---|---|---|---|---|
+| v1 `/workspace/bb/pos4096` | 4096 | **2.969** | 2.969 / 2.962 / 2.970 | accepted 3/3, 0.83-0.92 s | **accepted**, 1.94 s (`--threads 12`) | 33.87 MB, 6086 msgs |
+| checker-v2 `/workspace/v2l/pos4096` | 4096 | **2.450** | 2.495 / 2.360 / 2.450 | accepted 3/3, 0.99-1.03 s | **accepted**, 2.02 s | 21.13 MB, 11843 msgs |
+
+Both rows are in `ledger/a-kernel-a100.jsonl` (`NON_ZK_PROOF_DIAGNOSTIC`, `verified_by` = the Rust verifier).  So the
+"Rust rejects at `LogUp POW level 2`" of the previous section was the pre-merge verifier (fixed by a-protocol-diff),
+not a live discrepancy: on merged `main` the kernel-path proof is accepted by an independent implementation at
+B = 4096 for both checkers.  The v2 row re-records a-gpu-v2's A100 B = 4096 numbers (5.62 / 5.73 s), which were
+taken on the `W = 31` tree before the field change; 2.45 s on merged `main` is the number to quote, and it is faster
+than the a-gpu-v2 measurement mostly in `lookup` (0.80 vs 2.78 s) -- a-gpu-v2 should confirm which LogUp path its
+rows used before comparing.
+
+**Latent hazard closed.** `packed/kernels_triton.py`, `packed/kernels_fused.py` and `packed/kernels_graph.py` bake
+`P`, `MU`, `WR`, `R2` into module-level `tl.constexpr` globals exactly as `gpu/kernels.py` did, so the same stale-cache
+failure was possible there (it had not fired only because those modules were never compiled under another field on
+these pods).  Every module-level kernel in the three files now takes `FK=FIELD_KEY` (sha256 of `P`, `W`, `R_MONT`) as
+an unused constexpr, including the two external `_tree_level_kernel` launches in `packed/logup_graph.py` and
+`gpu/logup_packed.py`; no arithmetic changed.  The generated kernels (`_HEADER` / `_generated()`) inline the constants
+into their source text and need no key.  Gate, same run: `gpu/v2/tests/test_logup_paths_agree.py` 7/7 passed
+(54 s), `PACKED_DEVICE=cuda pytest packed/tests` 63/63 passed (134 s, all kernels freshly compiled under the new keys).  Cost: the first proof after this commit recompiles every kernel (warm-up 304 s v1 / 161 s v2,
+excluded from the medians via `--warmup 1`); steady state is unchanged.
+
+**F1 on `vy-g5` (a-verifier's report) -- hypothesis, consistent with both observations, not confirmed.**  The A100
+case was: `gpu/kernels.py` binaries compiled under `W = 31` (a-gpu era) served to the `W = 22` tree.  The mirror image
+explains a-verifier's F1: on `vy-g5` the a-gpu tree c4d472a (`W = 31`) kernel path proved and verified at 07:44Z
+(r20260922-074455-d0b6); a-gpu2 committed `W = 22` (0ec0616) at ~08:15Z and ran its `W = 22` tree on `vy-g5` from
+08:26Z (r20260922-082638-110a, -085215-36f1, -090039-bf27); every later a-verifier run of the `W = 31` a-gpu tree on
+the same pod (08:43Z onwards: -084329-7c80, -085845-2a26, -090318-2864, -091240-4bf9, -091831-ef04, -092229-641b)
+produced kernel-path proofs that both verifiers reject at LogUp level 0, while the torch path (`VERITY_GPU_TORCH_ONLY`)
+passed.  Because the source text of `gpu/kernels.py` is identical in both trees, a-gpu2's `W = 22` binaries would be
+served to a-verifier's `W = 31` host arithmetic -- the same symptom (kernel `ext_mul` uses the other field's `W`,
+5 of 6 coordinates wrong, fractional sum non-zero) with the roles swapped.  It also explains "not reproducible today":
+the recorded 4.43 s proof predates the cache poisoning.  Confirming it needs the `vy-g5` cache directory (mtimes /
+PTX `mul.lo.s32 ..., 22` vs `31` of the `ext_mul_kernel` entries, as done for the A100 in the evidence trail above);
+I did not have that pod.  Both trees now carry `FIELD_KEY`, so the two fields can no longer share a cache entry.
