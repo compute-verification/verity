@@ -10,6 +10,7 @@ from verity.ml.tc.models import (
     ADA_E4M3_M16N8K32,
     AMPERE_BF16_M16N8K16,
     BLACKWELL_SM120_NVF4,
+    BLACKWELL_SM120_MXF4,
     HOPPER_E4M3_K32,
     MODELS,
     HOPPER_BF16_M16N8K16,
@@ -55,7 +56,8 @@ def test_pinned_instructions_and_their_models() -> None:
         "sm90.wgmma.m64n8k32.e4m3": HOPPER_E4M3_K32,
         "sm90.wgmma.m64n8k32.e5m2": HOPPER_E5M2_K32,             # lane tc-probe-fp8 2026-09-22: 25.5M, 0 mismatches
         "sm120.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,          # lane fp4-5090: the 5090 keeps Hopper's BF16 datapath
-        "sm120.mma.m16n8k64.e2m1.nvf4": BLACKWELL_SM120_NVF4,
+        "sm120.mma.m16n8k64.e2m1.nvf4": BLACKWELL_SM120_NVF4,      # lane fp4-re 2026-09-22: 8.3M, 0 mismatches, any FP32 acc
+        "sm120.mma.m16n8k64.e2m1.mxf4": BLACKWELL_SM120_MXF4,      # lane fp4-re 2026-09-22: 7.4M, 0 mismatches (D13/D18/D19)
     }
 
 
@@ -96,7 +98,9 @@ def test_mnemonics_come_from_the_source_repos_or_are_none() -> None:
 def test_block_scaled_ids_carry_their_scale_format() -> None:
     assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.nvf4"].scale == "ue4m3"
     assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].scale == "ue8m0"
-    assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].status == "hypothesis"
+    assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].status == "pinned"
+    assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].ptx.endswith(".scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0")
+    assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].model is BLACKWELL_SM120_MXF4
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.nvf4"].scale == "ue4m3"
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.mxf4"].scale == "ue8m0"
 
