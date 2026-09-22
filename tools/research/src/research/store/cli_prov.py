@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -311,9 +312,29 @@ def cmd_attempt(argv: list[str]) -> int:
     if ns.json:
         print(json.dumps(results, indent=2, sort_keys=True, default=str))
     if ns.all and not ns.json:
-        ok = sum(1 for r in results if r.get("published"))
-        print(f"{ok}/{len(results)} published")
+        c = publish_counts(results)
+        print(f"{len(results)} run dir(s): {c['published']} published, {c['already']} already present, {c['refused']} refused (not terminal), {c['errors']} error(s)")
+        for cls, n in sorted(c["error_classes"].items(), key=lambda kv: -kv[1]):
+            print(f"  {n} x {cls}")
     return worst if not ns.all else 0
+
+
+def publish_counts(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """published / already present / refused (run not terminal) / errors, with the error text per class (run ids elided)."""
+    c: dict[str, Any] = {"published": 0, "already": 0, "refused": 0, "errors": 0, "error_classes": {}}
+    for r in results:
+        if r.get("published"):
+            c["already" if r.get("already") else "published"] += 1
+            continue
+        err = str(r.get("error") or "")
+        if "the store only sees completed or failed attempts" in err:
+            c["refused"] += 1
+            continue
+        c["errors"] += 1
+        cls = re.sub(r"r\d{8}-\d{6}-[0-9a-f]{4}", "<run>", err)
+        cls = re.sub(r"/[^\s:]+/(runs|store)/", "…/\\1/", cls)
+        c["error_classes"][cls] = c["error_classes"].get(cls, 0) + 1
+    return c
 
 
 COMMANDS = {"lookup": cmd_lookup, "pull": cmd_pull, "attempt": cmd_attempt}

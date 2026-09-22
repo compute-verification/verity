@@ -403,7 +403,9 @@ class LocalStore:
             ok = self._repo_verified(m, art_id)
             out.append({"location": "repo", "path": mapped, "repo": str(self.repo), "present": ok, "verified_utc": utc_now() if ok else None})
         r = self.remote
-        if r is None:
+        if r is None and getattr(self, "remote_error", None):   # a broken vault is reported as broken, never as absent; the local facts still stand
+            out.append({"location": "remote", "configured": True, "present": None, "verified_utc": None, "error": f"ConfigError: {self.remote_error}"})
+        elif r is None:
             out.append({"location": "remote", "configured": False, "present": False, "verified_utc": None})
         else:
             heads = [(manifest_key(hex_), len(m.canonical()))] + [(object_key(h), n) for h, n in blobs]
@@ -464,8 +466,17 @@ class LocalStore:
             return p
         raise StoreError(f"could not allocate a label file under {d}")
 
+    @staticmethod
+    def _label_order(name: str) -> tuple[str, int]:
+        """`<stem>.json` -> (stem, 1); `<stem>~N.json` -> (stem, N): the same-second suffix sorts numerically (`~10` after `~9`)."""
+        stem = name[:-5] if name.endswith(".json") else name
+        base, sep, n = stem.rpartition("~")
+        if sep and n.isdigit():
+            return base, int(n)
+        return stem, 1
+
     def labels(self, target: str, key: str | None = None, by_glob: str | None = None) -> list[Label]:
-        """Every assertion about `target`, sorted by ts (then file name); `key` exact, `by_glob` fnmatch."""
+        """Every assertion about `target`, sorted by ts (then file name, `~N` numerically); `key` exact, `by_glob` fnmatch."""
         d = self.labels_dir(target)
         out = []
         for p in sorted(d.glob("*.json")) if d.is_dir() else []:
@@ -475,7 +486,7 @@ class LocalStore:
                 _warn(f"skipping unreadable label {p}: {e}")
                 continue
             if (key is None or lab.key == key) and (by_glob is None or fnmatch.fnmatchcase(lab.by, by_glob)):
-                out.append((lab.ts, p.name, lab))
+                out.append((lab.ts, self._label_order(p.name), lab))
         return [lab for _, _, lab in sorted(out, key=lambda t: (t[0], t[1]))]
 
     # ---- snapshots ----------------------------------------------------------------------------------------------------------------------
@@ -504,7 +515,7 @@ class LocalStore:
         r = self.remote
         rep: dict[str, Any] = {"id": art_id, "preserved": False, "remote": r.describe() if r else None, "checked": [], "errors": [], "verified_utc": None}
         if r is None:
-            rep["reason"] = "no remote configured"
+            rep["reason"] = f"remote unusable: {self.remote_error}" if getattr(self, "remote_error", None) else "no remote configured"
             return rep
         keys = [(manifest_key(hex_), hex_, len(m.canonical()))] + [(object_key(h), h, n) for h, n in m.blobs()]
         tmp = self.root / f".verify-{os.getpid()}"

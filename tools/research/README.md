@@ -142,7 +142,21 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   `research: attempt published: N outputs drv=... reuse=...`. A publish failure
   never changes the run's exit status: it is written to
   `store_publish_error.json` and `research data attempt publish RUN` retries
-  (also the way to publish old run dirs; `--all` sweeps a runs root).
+  (also the way to publish old run dirs; `--all --runs-dir DIR` sweeps a runs
+  root and prints `published / already present / refused (not terminal) /
+  errors` with one line per error class). A configured-but-unusable remote
+  (credential env vars unset here) does not stop a local publish: the attempt
+  is written, `preserve_error` records why nothing was pushed.
+- The r20 campaign's numbers live in the store. `python -m
+  verity_numerical.bench.ledger_to_store [--store ROOT] [--dry-run]` imports
+  the frozen ledger once (labels on the attempt when the run is in the store,
+  else on a `ledger-row/v1` artifact; red-team verdicts as separate assertions;
+  idempotent). `python -m verity_numerical.bench.store_tables --diff-ledger
+  [--proof-class-by 'red-team-*']` rebuilds the like-for-like table from store
+  queries alone and diffs it row by row against `decision_tables.py`.
+- Repo replicas: `fixtures/artifacts.json` maps `art:` ids to tracked files
+  registered with `research data put --kind fixture/v1 --file PATH`; `where`
+  lists the `repo` replica when the file still hashes to its id.
 - With `--on`, the flags travel to the machine, which runs the same code in
   the shipped source tree; a `git archive` has no `.git`, so the control side
   sends the commit/tree it knew as `--source-identity`. The machine publishes

@@ -19,6 +19,8 @@ KINDS: dict[str, str] = {
     "run-files/v1": "the files a result.json pointed at, as one tree",
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
+    "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
+                     "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
 }
 
 

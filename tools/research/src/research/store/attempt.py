@@ -193,6 +193,20 @@ def _resolve_tool(tool: Any, store_sec: dict[str, Any]) -> Any:
     return tool
 
 
+def _existing_attempt(st: Any, run_id: str) -> tuple[dict[str, Any] | None, str | None]:
+    """`get_attempt` consults the remote when the local copy is absent; a remote that is configured but unusable here (credential
+    env vars unset on this machine) must not stop a LOCAL publish.  Returns (doc or None, remote error or None)."""
+    from .remote import ConfigError
+
+    try:
+        return st.get_attempt(run_id), None
+    except ConfigError as e:
+        p = st.attempt_path(run_id) if hasattr(st, "attempt_path") else None
+        if p is not None and Path(p).exists():
+            return json.loads(Path(p).read_bytes()), f"{type(e).__name__}: {e}"
+        return None, f"{type(e).__name__}: {e}"
+
+
 def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, conditions: dict[str, Any] | None, force: bool,
              build_kwargs: dict[str, Any]) -> dict[str, Any]:
     st = open_store(store)
@@ -201,7 +215,9 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
         raise FileNotFoundError(f"{run_dir}: no readable job.json (not fetched yet, or refused before it ran)")
     status = _read(run_dir / "status.json") or {}
     run_id = (job.get("run") or {}).get("id") or (job.get("ownership") or {}).get("job") or run_dir.name
-    existing = st.get_attempt(run_id)
+    existing, remote_error = _existing_attempt(st, run_id)
+    if remote_error:
+        remote_push = False                                   # the local publish proceeds; nothing is pushed or called PRESERVED
     if existing:
         outs = {**(existing.get("outputs") or {}), **(existing.get("telemetry") or {})}
         return {"published": True, "already": True, "id": run_id, "derivation": existing.get("derivation"), "reuse_key": existing.get("reuse_key"),
@@ -234,9 +250,9 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
     out = {"published": True, "id": run_id, "derivation": doc["derivation"], "reuse_key": doc["reuse_key"], "outputs": outputs, "telemetry": telemetry,
            "n_outputs": sum(1 for v in {**outputs, **telemetry}.values() if v)}
     if remote_push is not False and hasattr(st, "push_attempt"):        # §10 step 4: preserve on the remote when one is usable here
-        if getattr(st, "remote", None) is None:
+        if remote_error or getattr(st, "remote", None) is None:
             out["preserved"] = False
-            out["preserve_skipped"] = getattr(st, "remote_error", None) or "no remote configured"
+            out["preserve_skipped"] = remote_error or getattr(st, "remote_error", None) or "no remote configured"
         else:
             try:
                 arts = [a for a in {**outputs, **telemetry}.values() if a]

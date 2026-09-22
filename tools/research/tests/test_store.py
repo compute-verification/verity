@@ -14,9 +14,9 @@ from research.cli import main as research_main
 from research.store import canon, ids, remote_s3
 from research.store.cli import main
 from research.store.index import flatten
-from research.store.local import AttemptExists, IntegrityError, LocalStore, NotFound
+from research.store.local import AttemptExists, IntegrityError, LocalStore, NotFound, StoreError
 from research.store.model import ArtifactManifest, Payload, TreeFile, attempt_errors, validate_attempt_doc
-from research.store.remote import FsRemote, RemoteConflict, load_remote
+from research.store.remote import ConfigError, FsRemote, RemoteConflict, load_remote
 
 DRV = "drv:" + "a" * 64
 RK = "b" * 64
@@ -207,6 +207,14 @@ def test_labels_append_only(store):
     with pytest.raises(ValueError):
         store.add_label(t, "k", math.nan, "me")
     assert [r["id"] for r in store.index.select_artifacts(label=("proof_class", "PARTIAL"))] == [] , "labels index targets; select joins on artifacts"
+
+
+def test_labels_same_second_history_order_survives_ten_or_more(store):
+    """`~N` is a same-second suffix; 12 assertions in one second read back in the order they were made (`~10` after `~9`, not after `~1`)."""
+    t = "art:" + "6" * 64
+    for i in range(12):
+        store.add_label(t, "seq", i, "lane", ref=f"ledger.jsonl:{i}", ts="2026-09-22T11:07:02Z")
+    assert [l.value for l in store.labels(t)] == list(range(12))
 
 
 def test_attempts_write_once(store):
@@ -423,6 +431,31 @@ def test_repo_replica_map_verified_then_fallback(env, fs_remote, tmp_path, capsy
     shutil.copy(producer.manifest_path(ids.hex_of(art)), consumer3.manifest_path(ids.hex_of(art)))
     with pytest.raises(NotFound, match="not in the repo replica"):
         consumer3.fetch(art)
+
+
+def test_where_with_a_broken_vault_still_reports_local_and_repo(env, tmp_path, monkeypatch, capsys):
+    """A `[remote]` table whose credential env vars are unset is a broken vault (README §7): the store degrades to local-only.  `where`
+    answers for the local and repo replicas and reports the remote as UNUSABLE -- never as 'not configured', never as absent."""
+    monkeypatch.delenv("SB_TEST_KEY", raising=False)
+    (env / "store.toml").write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://example.invalid"\n'
+                                    'access_key_id_env = "SB_TEST_KEY"\nsecret_access_key_env = "SB_TEST_KEY"\n')
+    repo = env / "repo"
+    fixture = repo / "fixtures" / "PIN.json"
+    fixture.parent.mkdir(parents=True)
+    fixture.write_text('{"pin": 1}')
+    st = LocalStore()
+    art = st.put_artifact("fixture/v1", {}, file=fixture)
+    (repo / "fixtures" / "artifacts.json").write_text(json.dumps({art: "fixtures/PIN.json"}))
+    where = {w["location"]: w for w in LocalStore().where(art)}
+    assert where["local"]["present"] and where["repo"]["present"] and where["repo"]["path"] == "fixtures/PIN.json"
+    assert where["remote"]["configured"] is True and where["remote"]["present"] is None and "SB_TEST_KEY" in where["remote"]["error"]
+    rep = LocalStore().verify(art)                                                # reads never raise; anything that needs the vault says why
+    assert rep["preserved"] is False and "SB_TEST_KEY" in rep["reason"]
+    with pytest.raises(StoreError, match="SB_TEST_KEY"):
+        LocalStore().push(art)
+    assert main(["where", art]) == 0
+    out = capsys.readouterr().out
+    assert "repo      present" in out and "remote    UNUSABLE  ConfigError" in out and "not configured" not in out
 
 
 # ---- CLI --------------------------------------------------------------------------------------------------------------------------------

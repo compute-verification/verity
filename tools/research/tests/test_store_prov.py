@@ -412,6 +412,32 @@ def test_publish_refuses_a_live_run_unless_forced(tmp_path):
     assert A.publish(d, store=st, force=True)["published"] is True
 
 
+def test_publish_is_local_when_the_remote_is_configured_but_unusable_here(tmp_path, monkeypatch):
+    """A `[remote]` table whose credential env vars are unset is a broken vault (README §7): the store degrades to local-only.  A
+    LOCAL publish must still land: the attempt and its artifacts are written, nothing is pushed, the reason is reported."""
+    from research.store.local import LocalStore, StoreError
+
+    monkeypatch.delenv("SB_TEST_R2_KEY", raising=False)
+    cfg = tmp_path / "store.toml"
+    cfg.write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://example.invalid"\n'
+                   'access_key_id_env = "SB_TEST_R2_KEY"\nsecret_access_key_env = "SB_TEST_R2_KEY"\n')
+    st = LocalStore(tmp_path / "store", config_path=cfg)
+    assert st.get_attempt(RUN_ID) is None and "SB_TEST_R2_KEY" in (st.remote_error or "")   # broken vault: reads degrade, the reason is kept
+    with pytest.raises(StoreError, match="SB_TEST_R2_KEY"):
+        st.push_attempt(RUN_ID)                                    # anything that needs the vault still says why it cannot
+    d = _run_copy(tmp_path)
+    out = A.publish(d, store=st)
+    assert out["published"] is True and out.get("already") is None and out["n_outputs"] == 3, out
+    assert out["preserved"] is False and "SB_TEST_R2_KEY" in out["preserve_skipped"]
+    assert st.attempt_path(RUN_ID).exists() and st.has_local(out["outputs"]["run_files"])
+    assert not (d / "store_publish_error.json").exists()
+    again = A.publish(d, store=st)
+    assert again["published"] and again.get("already") is True, "idempotent through the same broken-vault path"
+    assert cli_prov.publish_counts([out, again, {"published": False, "error": "RuntimeError: run r20260922-000000-0000 is running: the store only sees completed or failed attempts (--force to override)"},
+                                    {"published": False, "error": "FileNotFoundError: /x/runs/r20260922-000000-0001: no readable job.json"}]) == {
+        "published": 1, "already": 1, "refused": 1, "errors": 1, "error_classes": {"FileNotFoundError: …/runs/<run>: no readable job.json": 1}}
+
+
 def test_publish_old_v01_record_without_store_section(tmp_path):
     d = tmp_path / "runs" / "oom_own"
     d.mkdir(parents=True)
@@ -645,7 +671,7 @@ def test_attempt_publish_cli(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert rc == 0 and "published 3 output(s)" in out and st.get_attempt(RUN_ID)
     rc = cli_prov.main(["attempt", "publish", "--all", "--runs-dir", str(tmp_path / "runs")])
-    assert rc == 0 and "1/1 published" in capsys.readouterr().out
+    assert rc == 0 and "1 run dir(s): 0 published, 1 already present, 0 refused (not terminal), 0 error(s)" in capsys.readouterr().out
     rc = cli_prov.main(["attempt", "publish", RUN_ID[:14], "--runs-dir", str(tmp_path / "runs"), "--json"])
     assert rc == 0 and json.loads(capsys.readouterr().out)[0]["already"] is True
 

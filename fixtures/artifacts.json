@@ -1,0 +1,9 @@
+{
+  "art:4f8e9ff844325c68da26ead9d9f9f85f2859d8a7470829fa2541ada1d9109801": "fixtures/hawkeye/PIN.json",
+  "art:cf4699436015c096941a361160b5bcb570d02d469ad014988e99aeab0fb022c8": "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
+  "art:592130d2c1e0d166446c59cb43795e090e99695e2f110523715e93a52746010e": "fixtures/bench-instances/v1/manifest.json",
+  "art:c94fae7b8f1c37950b8bb13e76221948057b0bfa4d616ca0a7644ca74a39d3df": "fixtures/bench-instances/v1/vu-k1536.index.json",
+  "art:9e977c565a9468b46936120b1d09495786ffaf308963409a350f565426cc9169": "fixtures/bench-instances/v1/vu-k1536-neg.index.json",
+  "art:19f80a238753239044f5f850e9907259a53938522512eed40a53ea1f5fd7fd53": "fixtures/bench-instances/v1/tu-k16.index.json",
+  "art:3ac491adabc1812e6a2a6b16f0b2c34650f7306da3b2b46e4c35f8b012974d18": "fixtures/discrepancy_log.json"
+}
