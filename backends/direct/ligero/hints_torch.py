@@ -45,10 +45,55 @@ def _decode_fp32(p: Params, c: torch.Tensor):
 
 
 def hints_torch(p: Params, sys: System, c, a, b, y=None, device="cpu") -> torch.Tensor:
-    """``c`` (l,), ``a``/``b`` (l, k), ``y`` (l,) or None (unit mode: no acc/epi rows) -> (n_hints, l) int64."""
-    c = torch.as_tensor(c, dtype=torch.int64, device=device)
-    a = torch.as_tensor(a, dtype=torch.int64, device=device)
-    b = torch.as_tensor(b, dtype=torch.int64, device=device)
+    """``c`` (l,), ``a``/``b`` (l, k), ``y`` (l,) or None (unit mode: no acc/epi rows) -> (n_hints, l) int64.
+    On CUDA the ~150 small kernels are captured once per (system, l, k) as a CUDA graph and replayed."""
+    c = torch.as_tensor(c, dtype=torch.int64).to(device, non_blocking=True)
+    a = torch.as_tensor(a, dtype=torch.int64).to(device, non_blocking=True)
+    b = torch.as_tensor(b, dtype=torch.int64).to(device, non_blocking=True)
+    y = None if y is None else torch.as_tensor(y, dtype=torch.int64).to(device, non_blocking=True)
+    if USE_CUDA_GRAPH and str(device).startswith("cuda"):
+        key = (id(sys), c.shape[0], a.shape[1], y is not None, str(device))
+        g = _GRAPHS.get(key)
+        if g is None:
+            try:
+                g = _Graph(p, sys, c, a, b, y, device)
+            except Exception:  # noqa: BLE001 -- capture unsupported here: eager
+                g = False
+            _GRAPHS[key] = g
+        if g:
+            return g.run(c, a, b, y)
+    return _hints_eager(p, sys, c, a, b, y, device)
+
+
+class _Graph:
+    def __init__(self, p, sys, c, a, b, y, device):
+        self.c, self.a, self.b = torch.zeros_like(c), torch.zeros_like(a), torch.zeros_like(b)
+        self.y = None if y is None else torch.zeros_like(y)
+        s = torch.cuda.Stream()
+        s.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(s):
+            for _ in range(2):
+                _hints_eager(p, sys, self.c, self.a, self.b, self.y, device)
+        torch.cuda.current_stream().wait_stream(s)
+        self.graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self.graph):
+            self.out = _hints_eager(p, sys, self.c, self.a, self.b, self.y, device)
+
+    def run(self, c, a, b, y):
+        self.c.copy_(c)
+        self.a.copy_(a)
+        self.b.copy_(b)
+        if y is not None:
+            self.y.copy_(y)
+        self.graph.replay()
+        return self.out.clone()
+
+
+_GRAPHS: dict = {}
+USE_CUDA_GRAPH = True
+
+
+def _hints_eager(p: Params, sys: System, c, a, b, y, device) -> torch.Tensor:
     l = c.shape[0]
     k = a.shape[1]
     H: dict[str, torch.Tensor] = {}
@@ -139,7 +184,6 @@ def hints_torch(p: Params, sys: System, c, a, b, y=None, device="cpu") -> torch.
     H["pack.hidden"] = M_fin >> p.acc_frac
     H["pack.low"] = M_fin & (2**p.acc_frac - 1)
     if sys.chain is not None:
-        y = torch.as_tensor(y, dtype=torch.int64, device=device)
         L = p.acc_frac - p.frac
         hi, lo = y >> L, y & (2**L - 1)
         lsb = hi & 1
