@@ -532,6 +532,11 @@ pub fn lookup_failing_rows<G: PrimeField64, EF: ExtensionField<G>>(air: &LookupC
             }
             out.push((r, name.clone()));
         }
+        for (i, &qi) in queries[r].iter().enumerate() {
+            if qi == INVALID {
+                out.push((r, format!("lookup:{}", air.lay.query_names[i])));
+            }
+        }
     }
     out
 }
@@ -622,6 +627,73 @@ pub fn chain_rows_spec(kind: FieldKind, lay_width: usize, idx: &ChainIdx, specs:
         rows.push(ctx.cols);
     }
     (rows, violations)
+}
+
+/// `chain_rows_spec` in the LogUp realisation: the rows, their query indices and the integer violations (query
+/// membership failures are among them, as `<name>: <v> not in T<w>`).
+pub fn chain_rows_spec_lookup(kind: FieldKind, lay_width: usize, idx: &ChainIdx, tables: &Arc<TableSet>, specs: &[RowSpec]) -> (Vec<Vec<i128>>, Vec<Vec<u32>>, Vec<String>) {
+    let p = kind.prime();
+    let mut rows: Vec<Vec<i128>> = Vec::with_capacity(specs.len());
+    let mut qs = Vec::with_capacity(specs.len());
+    let mut violations = vec![];
+    for (i, sp) in specs.iter().enumerate() {
+        let mut ctx = IntCtx::new_kind(kind).with_lookup(Some(tables.clone()));
+        ctx.record_names = false;
+        for (k, v) in &sp.overrides {
+            ctx.overrides.insert(k.clone(), *v);
+        }
+        let mut c = sp.c.unwrap_or(0);
+        if sp.c.is_none() && i > 0 {
+            let prev = &rows[i - 1];
+            if idx.y.len() == 1 {
+                c = modp(prev[idx.y[0]], p);
+            } else {
+                ctx.overrides.insert("x.c_hi".into(), modp(prev[idx.y[0]], p) as i128);
+                ctx.overrides.insert("x.c_lo".into(), modp(prev[idx.y[1]], p) as i128);
+            }
+        }
+        let io = ChainIo { c, a: sp.a.clone(), b: sp.b.clone(), step: sp.step, y16: sp.y16 };
+        chain_program(&mut ctx, &io);
+        assert_eq!(ctx.cols.len() + 1, lay_width, "row {i}: width");
+        for v in ctx.violations {
+            violations.push(format!("row {i}: {v}"));
+        }
+        rows.push(ctx.cols);
+        qs.push(ctx.queries);
+    }
+    (rows, qs, violations)
+}
+
+/// A gadget-level case in the LogUp realisation: the program constraints are evaluated by the AIR (a plain
+/// evaluator; the queries are recorded, not constrained) and every query whose tuple is not a table row is
+/// reported as `lookup:<name>` -- the membership the LogUp identity enforces.  Returns
+/// `(failing, integer violations)`.
+pub fn gadget_failing_lookup<G: PrimeField64>(kind: FieldKind, _chain_tables: &Arc<TableSet>, case: &crate::program::GadgetCase, overrides: &[(String, i128)]) -> (Vec<String>, Vec<String>) {
+    // the gadget's own tables (a gadget in isolation range-checks its inputs at widths the chain may not use)
+    let mut collect = IntCtx::new_kind(kind).with_lookup(None);
+    crate::program::gadget_program(&mut collect, case);
+    let tables = TableSet::from_needs(&collect.needs);
+    let mut ctx = IntCtx::new_kind(kind).with_lookup(Some(tables.clone()));
+    for (k, v) in overrides {
+        ctx.overrides.insert(k.clone(), *v);
+    }
+    crate::program::gadget_program(&mut ctx, case);
+    let width = ctx.cols.len();
+    let row: Vec<G> = ctx.cols.iter().map(|&v| to_field(kind, v)).collect();
+    let two: Vec<G> = [row.clone(), row.clone()].concat();
+    let mut ev = Evaluator { failing: vec![], count: 0, main: RowMajorMatrixView::new(&two, width), first_row: false };
+    let mut actx = AirCtx::with_kind(&mut ev, &row, kind).with_lookup(tables.clone());
+    actx.constraint_names = Some(vec![]);
+    crate::program::gadget_program(&mut actx, case);
+    let names = actx.constraint_names.take().unwrap();
+    assert_eq!(ev.count, names.len());
+    let mut failing: Vec<String> = ev.failing.iter().map(|&i| names[i].clone()).collect();
+    for (i, &q) in ctx.queries.iter().enumerate() {
+        if q == INVALID {
+            failing.push(format!("lookup:{}", ctx.query_names[i]));
+        }
+    }
+    (failing, ctx.violations)
 }
 
 /// A gadget-level case evaluated by the AIR's own constraints: `(failing constraint names, integer violations)`.

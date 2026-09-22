@@ -59,8 +59,8 @@ fn main() {
             FieldKind::BabyBear => vu_neg::<BabyBearBackend>(&args),
         },
         Some("check-rows") => match field_arg(&args) {
-            FieldKind::Goldilocks => check_rows::<stark::Val64>(&args),
-            FieldKind::BabyBear => check_rows::<stark::Val32>(&args),
+            FieldKind::Goldilocks => check_rows::<stark::Val64, stark::Challenge>(&args),
+            FieldKind::BabyBear => check_rows::<stark::Val32, stark::ChallengeBb>(&args),
         },
         Some("chain-layout") if args.iter().any(|a| a == "--lookup") => {
             let kind = field_arg(&args);
@@ -708,14 +708,18 @@ fn write_result(b: BenchNumbers) {
 /// every row, transition constraints between consecutive rows, boundary constraints when `starts_trace`) or
 /// `{"kind": "gadget", "name", "inputs", "hints", "claimed"}` (one gadget in isolation, `program::gadget_program`).
 /// A job is `accepted` iff no constraint fails.  Used by `tools/battery_adapter.py` (the red team's 83 forgeries).
-fn check_rows<G: PrimeField64 + Send + Sync>(args: &[String]) {
+fn check_rows<G: PrimeField64 + Send + Sync, EF: p3_field::ExtensionField<G>>(args: &[String]) {
     let kind = field_arg(args);
     let input = arg(args, "--in").expect("--in jobs.json");
     let out = arg(args, "--out").expect("--out report.json");
+    let lookup = args.iter().any(|a| a == "--lookup");
     let text = fs::read_to_string(&input).unwrap();
     let jobs: Value = serde_json::from_str(&text).unwrap();
-    let (air_, lay) = ChainAir::new(kind);
-    let idx = &air_.idx;
+    let (air_, lay_limbs) = ChainAir::new(kind);
+    let ext_deg = <EF as p3_field::AbstractExtensionField<G>>::D;
+    let (air_l, lay_lookup) = air::LookupChainAir::new(kind, ext_deg);
+    let lay = if lookup { &lay_lookup } else { &lay_limbs };
+    let idx = if lookup { &air_l.idx } else { &air_.idx };
     let p = kind.prime();
     let y_hi_col = idx.y[0];
     let carry_col = lay.col("cast.carry");
@@ -728,15 +732,22 @@ fn check_rows<G: PrimeField64 + Send + Sync>(args: &[String]) {
             "gadget" => {
                 let case: verity_direct::program::GadgetCase = serde_json::from_value(job.clone()).unwrap();
                 let overrides: Vec<(String, i128)> = job["hints"].as_object().map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_i64().unwrap() as i128)).collect()).unwrap_or_default();
-                let (failing, viol) = air::gadget_failing::<G>(kind, &case, &overrides);
+                let (failing, viol) = if lookup { air::gadget_failing_lookup::<G>(kind, &air_l.lay.tables, &case, &overrides) } else { air::gadget_failing::<G>(kind, &case, &overrides) };
                 let accepted = failing.is_empty();
                 json!({"id": id, "kind": "gadget", "gadget": case.name, "accepted": accepted, "n_failing": failing.len(), "first_failing": failing.first(), "failing": failing.iter().take(8).collect::<Vec<_>>(), "integer_violations": viol.len()})
             }
             _ => {
                 let specs: Vec<air::RowSpec> = serde_json::from_value(job["rows"].clone()).unwrap();
                 let starts = job["starts_trace"].as_bool().unwrap_or(false);
-                let (rows, viol) = air::chain_rows_spec(kind, lay.width, idx, &specs);
-                let failing = air::chain_failing_rows::<G>(kind, &air_, &lay, &rows, starts);
+                let (rows, viol, failing) = if lookup {
+                    let (rows, qs, viol) = air::chain_rows_spec_lookup(kind, lay.width, idx, &air_l.lay.tables, &specs);
+                    let failing = air::lookup_failing_rows::<G, EF>(&air_l, lay, &rows, &qs, starts);
+                    (rows, viol, failing)
+                } else {
+                    let (rows, viol) = air::chain_rows_spec(kind, lay.width, idx, &specs);
+                    let failing = air::chain_failing_rows::<G>(kind, &air_, lay, &rows, starts);
+                    (rows, viol, failing)
+                };
                 let words: Vec<u64> = rows
                     .iter()
                     .map(|r| if idx.y.len() == 1 { modp(r[idx.y[0]], p) } else { (modp(r[idx.y[0]], p) << 16) | modp(r[idx.y[1]], p) })
@@ -752,7 +763,7 @@ fn check_rows<G: PrimeField64 + Send + Sync>(args: &[String]) {
         }
         report.push(res);
     }
-    let summary = json!({"schema": "verity-direct/check-rows/v1", "field": kind.name(), "width": lay.width, "constraints": lay.constraint_names.len(), "jobs": report.len(), "accepted": n_accepted, "results": report});
+    let summary = json!({"schema": "verity-direct/check-rows/v1", "field": kind.name(), "realisation": if lookup { "logup" } else { "limbs" }, "width": lay.width, "constraints": lay.constraint_names.len(), "jobs": report.len(), "accepted": n_accepted, "results": report});
     fs::write(&out, serde_json::to_string_pretty(&summary).unwrap()).unwrap();
     println!("check-rows field={} jobs={} accepted={} -> {out}", kind.name(), summary["jobs"], n_accepted);
 }

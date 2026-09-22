@@ -236,6 +236,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, default=None, help="JSON report")
     ap.add_argument("--extras", action="store_true", help="add this lane's leading-bit lower-bound forgeries")
     ap.add_argument("--keep", type=Path, default=None, help="keep the jobs JSON here")
+    ap.add_argument("--lookup", action="store_true", help="the LogUp realisation (PROTOCOL.md section 14): `check-rows --lookup`")
     args = ap.parse_args(argv)
 
     cases = load_battery()
@@ -256,7 +257,10 @@ def main(argv=None) -> int:
         if args.keep:
             args.keep.write_text(json.dumps(payload))
         t0 = time.time()
-        subprocess.run([args.bin, "check-rows", "--field", args.field, "--in", str(jp), "--out", str(rp)], check=True)
+        cmd = [args.bin, "check-rows", "--field", args.field, "--in", str(jp), "--out", str(rp)]
+        if args.lookup:
+            cmd.append("--lookup")
+        subprocess.run(cmd, check=True)
         t_check = time.time() - t0
         rep = json.loads(rp.read_text())
     res = {r["id"]: r for r in rep["results"]}
@@ -294,7 +298,7 @@ def main(argv=None) -> int:
     out = {
         "schema": "verity-direct/battery/v1",
         "field": args.field,
-        "air": {"width": rep["width"], "constraints": rep["constraints"]},
+        "air": {"width": rep["width"], "constraints": rep["constraints"], "realisation": rep.get("realisation", "limbs")},
         "battery": {"version": "v1", "total": report.total, "accepted": report.accepted, "by_class": report.by_class, "ok": report.ok},
         "controls": {"total": len(controls), "rejected": ctl_failed},
         "extras": {"total": len(extras), "accepted": extra_accepted},
