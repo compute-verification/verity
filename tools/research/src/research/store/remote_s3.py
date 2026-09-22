@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import io
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -25,6 +26,8 @@ from .remote import RemoteConflict
 
 EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 SINGLE_PUT_MAX = 4 << 30
+RETRIES = 3                     # transient 5xx / connection errors: 4 tries, 1 s, 2 s, 4 s backoff
+RETRY_BACKOFF_S = 1.0
 ALGORITHM = "AWS4-HMAC-SHA256"
 S3_NS = "{http://s3.amazonaws.com/doc/2006-03-01/}"
 
@@ -121,14 +124,27 @@ class S3Remote:
         extra = dict(headers or {})
         if method in ("PUT", "POST"):
             extra["content-length"], extra["content-type"] = str(size), "application/octet-stream"
-        signed = sign_headers(method, self.host, path, query, extra, payload_hash, self.access_key, self.secret_key, self.region, self._now())
         url = urllib.parse.urlunsplit((self.scheme, self.host, uri_encode(path, keep_slash=True), canonical_query(query), ""))
-        req = urllib.request.Request(url, data=data, method=method, headers=signed)
         try:
-            return self._opener.open(req, timeout=self.timeout)  # noqa: S310  (scheme checked in __init__)
+            for attempt in range(RETRIES + 1):
+                # each try is re-signed (fresh timestamp) and, for a file body, re-read from the start
+                if isinstance(body, Path):
+                    data.seek(0)
+                signed = sign_headers(method, self.host, path, query, extra, payload_hash, self.access_key, self.secret_key, self.region, self._now())
+                req = urllib.request.Request(url, data=data, method=method, headers=signed)
+                try:
+                    return self._opener.open(req, timeout=self.timeout)  # noqa: S310  (scheme checked in __init__)
+                except urllib.error.HTTPError as e:
+                    if e.code < 500 or attempt == RETRIES:            # 4xx are the caller's (404 = absent, 403 = credentials); 5xx are retried
+                        raise
+                except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
+                    if attempt == RETRIES:
+                        raise
+                time.sleep(RETRY_BACKOFF_S * (2**attempt))
         finally:
             if isinstance(body, Path):
                 data.close()
+        raise AssertionError("unreachable")
 
     def head(self, key: str) -> dict | None:
         try:

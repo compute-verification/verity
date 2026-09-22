@@ -373,17 +373,27 @@ def cmd_push(argv: list[str]) -> int:
         if doc is None:
             raise StoreError(f"attempt {rid} is not in the store")
         arts += _attempt_artifacts(doc)
-        st.push_attempt(rid)
-        reports.append({"id": rid, "kind": "attempt", "preserved": r.head(attempt_key(rid)) is not None})
+        try:                                                       # one bad upload must not abandon the batch: record, continue
+            st.push_attempt(rid)
+            reports.append({"id": rid, "kind": "attempt", "preserved": r.head(attempt_key(rid)) is not None})
+        except Exception as e:  # noqa: BLE001
+            reports.append({"id": rid, "kind": "attempt", "preserved": False, "errors": [f"{type(e).__name__}: {e}"]})
     for a in dict.fromkeys(arts):
-        rep = st.push(a, preserve=True)
-        reports.append({"id": a, "kind": st.get_manifest(a).kind, "preserved": rep["preserved"], "errors": rep.get("errors", [])})
+        try:
+            rep = st.push(a, preserve=True)
+            reports.append({"id": a, "kind": st.get_manifest(a).kind, "preserved": rep["preserved"], "errors": rep.get("errors", [])})
+        except Exception as e:  # noqa: BLE001
+            reports.append({"id": a, "kind": "?", "preserved": False, "errors": [f"{type(e).__name__}: {e}"]})
+        if not ns.json:
+            x = reports[-1]
+            print(f"{x['id']}  {x['kind']}  {'PRESERVED' if x['preserved'] else 'NOT preserved: ' + '; '.join(x.get('errors') or ['absent'])}", flush=True)
     bad = [x for x in reports if not x["preserved"]]
     if ns.json:
         _dump({"remote": r.describe(), "pushed": reports, "not_preserved": len(bad)})
     else:
         for x in reports:
-            print(f"{x['id']}  {x['kind']}  {'PRESERVED' if x['preserved'] else 'NOT preserved: ' + '; '.join(x.get('errors') or ['absent'])}")
+            if x["kind"] == "attempt":
+                print(f"{x['id']}  attempt  {'PRESERVED' if x['preserved'] else 'NOT preserved: ' + '; '.join(x.get('errors') or ['absent'])}")
         print(f"{len(reports) - len(bad)}/{len(reports)} preserved on {r.describe()}")
     return 1 if bad else 0
 
