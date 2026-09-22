@@ -80,6 +80,30 @@ class Domain:
         return cls._cache[key]
 
 
+def _butterfly_eager(a: torch.Tensor, b: torch.Tensor, tw: torch.Tensor) -> torch.Tensor:
+    bt = (b * tw) % P
+    return torch.cat(((a + bt) % P, (a - bt) % P), dim=-1)
+
+
+_BUTTERFLY: dict = {}
+
+
+def _butterfly(device) -> object:
+    """The stage kernel: ``torch.compile``d (fused: one pass instead of seven) on CUDA, eager elsewhere or if the
+    compiler is unavailable."""
+    key = str(device)
+    fn = _BUTTERFLY.get(key)
+    if fn is None:
+        fn = _butterfly_eager
+        if key.startswith("cuda"):
+            try:
+                fn = torch.compile(_butterfly_eager, dynamic=True)
+            except Exception:  # noqa: BLE001 -- no compiler: stay eager
+                fn = _butterfly_eager
+        _BUTTERFLY[key] = fn
+    return fn
+
+
 def ntt(x: torch.Tensor, inverse: bool = False) -> torch.Tensor:
     """Batched NTT over the last dimension (size n, a power of two): natural order in, natural order out.
     Forward: X[k] = sum_i x[i] w^(ik).  Inverse divides by n."""
@@ -87,13 +111,12 @@ def ntt(x: torch.Tensor, inverse: bool = False) -> torch.Tensor:
     dom = Domain.get(n, x.device)
     lead = x.shape[:-1]
     x = x.index_select(-1, dom.bitrev)
+    bf = _butterfly(x.device)
     L = 2
     for tw in (dom.stages_inv if inverse else dom.stages):
         half = L // 2
         x = x.reshape(lead + (n // L, L))
-        a = x[..., :half]
-        b = (x[..., half:] * tw) % P
-        x = torch.cat(((a + b) % P, (a - b) % P), dim=-1)
+        x = bf(x[..., :half], x[..., half:], tw)
         L *= 2
     x = x.reshape(lead + (n,))
     if inverse:
