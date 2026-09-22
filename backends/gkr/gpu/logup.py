@@ -96,18 +96,22 @@ def query_values(q: Query, cols: torch.Tensor) -> torch.Tensor:
 
 
 def table_rows(t: Table, device) -> torch.Tensor:
-    return torch.tensor(t.rows, dtype=torch.int64, device=device).reshape(len(t.rows), t.cols)
+    """The ``(nrows, cols)`` int64 table on the device (row-listed, range or v2 implicit; cached on the table)."""
+    return t.device_rows(device)
 
 
 def multiplicities(t: Table, trows: torch.Tensor, values: list[torch.Tensor]) -> torch.Tensor:
     """``m_j`` = how many query tuples equal table row ``j`` (int64 ``(rows,)``); raises if a tuple is not a row."""
     dev = trows.device
     m = torch.zeros((trows.shape[0],), dtype=torch.int64, device=dev)
-    if t.name == "R16":
+    if t.dense:
+        # key = row index (range tables, v2 implicit tables): a bounds check, a gather-compare of the outputs
         for v in values:
             key = v[:, 0]
             if bool((key >= trows.shape[0]).any()):
-                raise ValueError("R16 query out of range")
+                raise ValueError(f"{t.name} query key out of range")
+            if t.cols > 1 and not bool((trows[key] == v).all()):
+                raise ValueError(f"query tuple not in table {t.name}")
             m += torch.bincount(key, minlength=trows.shape[0])
         return m
     keys = trows[:, 0]

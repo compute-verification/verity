@@ -960,3 +960,10 @@ v1 Goldilocks control on the same binary revision and box.
   read of 12 columns (v1: 2) — still one O(U) pass.
 * Committed payload: 264 columns / unit + 16 / VU + 5.14M multiplicities; Ligero rows shrink proportionally
   (see README for the measured `committed_elements`).
+* **Done (`lane/a-gpu-v2`, `gpu/DESIGN.md` §5b, `gpu/README.md` "Checker v2").**  The GPU prover runs this circuit
+  over BabyBear^6: full VU ×4096 in 5.73 s on the A100 (v1 same box 7.93 s; 109.1 M committed elements, depth 328,
+  24.4 GB), 4096/4096 accepted, 52/52 + 34/34 + 15/15 negatives rejected.  Over BabyBear the epilogue's word-form
+  Pack (14.2) is SAT as stated (`checker_min.md` 3.2); the GPU export uses `lane/b-air-v2`'s limb-form Pack + cast
+  (`gpu/v2/epilogue_limbs.py`: `M = M_hi8 2^16 + M_lo16`, high limb an expression, epilogue per limb as §13 LIMB16;
+  19 epilogue columns, `R8` added; same function over Z, `chain.txt` unchanged), z3 UNSAT directly over BabyBear;
+  the VU body's 14.x queries re-run with the BabyBear modulus are UNSAT (`gpu/v2/results/z3_babybear_v2.json`).

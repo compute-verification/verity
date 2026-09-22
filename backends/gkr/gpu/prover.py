@@ -79,29 +79,72 @@ class Segment:
 
 
 @dataclass
+class Link:
+    """One linked quantity of the VU chain (``main.rs::Link``, PROTOCOL §12.2 / §14.3).  With ``col_c`` set:
+    ``X[(v,0),c] = init``, ``X[(v,i),c] = X[(v,i-1),y]``, ``X_epi[v,epi] = X[(v,steps-1),y]``.  With ``col_c`` None the
+    quantity is not an input of the next unit: only the epilogue link and, if ``zero_nonlast``, ``X[(v,i),y] = 0`` for
+    every ``i < steps-1`` (v2's saturation flags)."""
+    col_c: int | None
+    col_y: int
+    epi: int
+    init: int = 0
+    zero_nonlast: bool = False
+
+    def constraints_per_vu(self, steps: int) -> int:
+        if self.col_c is not None:
+            return steps + 1
+        return 1 + (steps - 1 if self.zero_nonlast else 0)
+
+
+@dataclass
 class Chain:
-    """The word chain on limbed words: ``col_c[j]`` ↔ ``col_y[j]`` ↔ ``epi_y32[j]`` per limb ``j`` (PROTOCOL §12 with
-    the FP32 word as two 16-bit limbs, rule LIMB16)."""
+    """The VU chain.  v1: the word chain on limbed words, ``col_c[j]`` ↔ ``col_y[j]`` ↔ ``epi_y32[j]`` per limb ``j``
+    (PROTOCOL §12 with the FP32 word as two 16-bit limbs, rule LIMB16); ``links`` is None and the functional is
+    built limb-major within a step (``add_chain``, unchanged).  v2: ``links`` is the ``chain.txt`` list (state ×4,
+    ``ovf`` ×2 with ``zero_nonlast``, ``sgn`` ×2) and the functional follows ``main.rs::add_chain`` link by link."""
     steps: int
     col_c: list[int]
     col_y: list[int]
     epi_y32: list[int]
     epi_y16: int
     public_y16: list[int]
+    links: list[Link] | None = None
+    spec_hash: bytes | None = None      # v2: sha256 of chain.txt, absorbed in the preamble (the links are public data)
 
     @property
     def limbs(self) -> int:
         return len(self.col_c)
+
+    def constraints_per_vu(self) -> int:
+        if self.links is None:
+            return (self.steps + 1) * self.limbs + 1
+        return 1 + sum(lk.constraints_per_vu(self.steps) for lk in self.links)
+
+
+def union_tables(segs: list[Segment]) -> list[Table]:
+    """Every table any segment queries: segment 0's tables in their order, then the later segments' new ones.
+    (``main.rs`` uses segment 0's list only; the v2 epilogue's ``R16``/``R15`` are not in the unit's list.)"""
+    out: list[Table] = []
+    names: set[str] = set()
+    for s in segs:
+        for t in s.circ.tables:
+            if t.name not in names:
+                names.add(t.name)
+                out.append(t)
+    return out
 
 
 @dataclass
 class Instance:
     segs: list[Segment]
     chain: Chain | None = None
+    _tables: list[Table] | None = None
 
     @property
     def tables(self) -> list[Table]:
-        return self.segs[0].circ.tables
+        if self._tables is None:
+            self._tables = union_tables(self.segs)
+        return self._tables
 
     @property
     def device(self):
@@ -266,7 +309,7 @@ def seg_query_values(inst: Instance, name: str) -> list[torch.Tensor]:
 
 def hypercube_dim(inst: Instance, name: str, table: Table) -> int:
     n_wit = sum(s.units * len(table_queries(s.circ, name)) for s in inst.segs)
-    return log2ceil(n_wit + len(table.rows))
+    return log2ceil(n_wit + table.nrows)
 
 
 def start_transcript(inst: Instance, pcs: bool, root: bytes):
@@ -284,6 +327,8 @@ def start_transcript(inst: Instance, pcs: bool, root: bytes):
     if inst.chain:
         tr.absorb(inst.chain.steps.to_bytes(8, "little"))
         tr.absorb(b"".join(int(y).to_bytes(4, "little") for y in inst.chain.public_y16))
+        if inst.chain.spec_hash is not None:
+            tr.absorb(inst.chain.spec_hash)
     chs = []
     for t in inst.tables:
         z = tr.challenge()
@@ -305,7 +350,7 @@ def x_layout(inst: Instance):
     offs = []
     for t in inst.tables:
         offs.append(l)
-        l += len(t.rows)
+        l += t.nrows
     return seg_offs, offs, l
 
 
@@ -413,7 +458,7 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
                 del e
                 v[lo:hi] = (v[lo:hi] + mm_mod(rle.reshape(hi - lo, q_t * DEG), Cmat).view(hi - lo, s.ncols, DEG)) % P
         base += s.units * q_t
-    rows = len(table.rows)
+    rows = table.nrows
     e_tab = eqt[base: base + rows]
     acc.a[table_off: table_off + rows] = (acc.a[table_off: table_off + rows] - ext_mul(e_tab, rho_t)) % P
     trows = logup.table_rows(table, dev)
@@ -432,6 +477,8 @@ def add_chain(acc: Acc, rho: Ext, geo: Ext, inst: Instance, seg_offs: list[int])
     from .field import geometric
 
     ch = inst.chain
+    if ch.links is not None:
+        return add_chain_links(acc, rho, geo, inst, seg_offs)
     dev = acc.device
     u_seg, e_seg = inst.segs[0], inst.segs[1]
     vus = u_seg.units // ch.steps
@@ -454,8 +501,50 @@ def add_chain(acc: Acc, rho: Ext, geo: Ext, inst: Instance, seg_offs: list[int])
     return vus * per_vu
 
 
+def add_chain_links(acc: Acc, rho: Ext, geo: Ext, inst: Instance, seg_offs: list[int]) -> int:
+    """``main.rs::add_chain`` for a general link list (v2, PROTOCOL §14.3): per VU, link by link, the coefficient
+    ``ρ·geo^k`` runs over [steps incoming constraints (or steps-1 ``zero_nonlast`` constraints), the epilogue link],
+    then the public word -- a strided read of the linked columns (12 for v2), one O(U) pass per column."""
+    from .field import geometric
+
+    ch = inst.chain
+    dev = acc.device
+    u_seg, e_seg = inst.segs[0], inst.segs[1]
+    steps = ch.steps
+    vus = u_seg.units // steps
+    per_vu = ch.constraints_per_vu()
+    pw = geometric(rho, geo, vus * per_vu, dev).view(vus, per_vu, DEG)     # pw[v, k] = ρ geo^(v·per_vu + k)
+    vu = acc.seg_view(seg_offs[0], u_seg.units, u_seg.ncols).view(vus, steps, u_seg.ncols, DEG)
+    ve = acc.seg_view(seg_offs[1], e_seg.units, e_seg.ncols).view(vus, e_seg.ncols, DEG)
+    b_acc = torch.zeros((DEG,), dtype=torch.int64, device=dev)
+    o = 0
+    for lk in ch.links:
+        if lk.col_c is not None:
+            step_pw = pw[:, o: o + steps]                                       # (vus, steps, 6): constraint i
+            vu[:, :, lk.col_c] = (vu[:, :, lk.col_c] + step_pw) % P
+            vu[:, :-1, lk.col_y] = (vu[:, :-1, lk.col_y] - step_pw[:, 1:]) % P
+            if lk.init % P:
+                b_acc = (b_acc + ext_scale(pw[:, o], torch.full((vus,), lk.init % P, dtype=torch.int64, device=dev)).sum(dim=0)) % P
+            o += steps
+        elif lk.zero_nonlast:
+            vu[:, :-1, lk.col_y] = (vu[:, :-1, lk.col_y] + pw[:, o: o + steps - 1]) % P
+            o += steps - 1
+        ve[:, lk.epi] = (ve[:, lk.epi] + pw[:, o]) % P
+        vu[:, -1, lk.col_y] = (vu[:, -1, lk.col_y] - pw[:, o]) % P
+        o += 1
+    last = pw[:, o]
+    ve[:, ch.epi_y16] = (ve[:, ch.epi_y16] + last) % P
+    y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=dev)
+    b_acc = (b_acc + ext_scale(last, y16).sum(dim=0)) % P
+    acc.b = e_add(acc.b, py_ext(b_acc))
+    assert o + 1 == per_vu
+    return vus * per_vu
+
+
 def check_chain_clear(inst: Instance) -> None:
     ch = inst.chain
+    if ch.links is not None:
+        return check_chain_links_clear(inst)
     u_seg, e_seg = inst.segs[0], inst.segs[1]
     vus = u_seg.units // ch.steps
     uc = u_seg.cols.view(vus, ch.steps, u_seg.ncols)
@@ -467,6 +556,28 @@ def check_chain_clear(inst: Instance) -> None:
             raise VerifyError("chain: incoming word differs from the previous outgoing word")
         if bool((ec[:, ch.epi_y32[j]] != uc[:, -1, ch.col_y[j]]).any()):
             raise VerifyError("chain: epilogue input differs from the last word")
+    y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=ec.device)
+    if bool((ec[:, ch.epi_y16] != y16).any()):
+        raise VerifyError("chain: output word differs from the public word")
+
+
+def check_chain_links_clear(inst: Instance) -> None:
+    """``main.rs::check_chain_clear`` for a general link list."""
+    ch = inst.chain
+    u_seg, e_seg = inst.segs[0], inst.segs[1]
+    vus = u_seg.units // ch.steps
+    uc = u_seg.cols.view(vus, ch.steps, u_seg.ncols)
+    ec = e_seg.cols
+    for lk in ch.links:
+        if lk.col_c is not None:
+            if bool((uc[:, 0, lk.col_c] != lk.init % P).any()):
+                raise VerifyError(f"chain: a VU's first incoming value differs from init (column {lk.col_c})")
+            if bool((uc[:, 1:, lk.col_c] != uc[:, :-1, lk.col_y]).any()):
+                raise VerifyError(f"chain: incoming value differs from the previous outgoing value (column {lk.col_c})")
+        elif lk.zero_nonlast and bool((uc[:, :-1, lk.col_y] != 0).any()):
+            raise VerifyError(f"chain: column {lk.col_y} must be 0 before the last unit")
+        if bool((ec[:, lk.epi] != uc[:, -1, lk.col_y]).any()):
+            raise VerifyError(f"chain: epilogue input (column {lk.epi}) differs from the last unit's value")
     y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=ec.device)
     if bool((ec[:, ch.epi_y16] != y16).any()):
         raise VerifyError("chain: output word differs from the public word")
@@ -524,7 +635,7 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
         for s, off in zip(inst.segs, seg_offs):
             x[off: off + s.units * s.ncols] = s.cols.reshape(-1)
         for t, off, m in zip(inst.tables, offs, mults):
-            x[off: off + len(t.rows)] = m % P
+            x[off: off + t.nrows] = m % P
         committed = ligero.commit(x, params)
         del x
     root = committed.root if committed else bytes(32)
@@ -540,7 +651,7 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
         vals = [v for v in seg_query_values(inst, t.name) if v is not None]
         trows = logup.table_rows(t, dev)
         n_wit = sum(v.shape[0] for v in vals)
-        if packed and t.cols == 1 and n_wit % 2 == 0 and len(t.rows) % 2 == 0:
+        if packed and t.cols == 1 and n_wit % 2 == 0 and t.nrows % 2 == 0:
             w = torch.cat([v[:, 0] for v in vals]).to(torch.int32)
             del vals
             tab = trows[:, 0].to(torch.int32)
