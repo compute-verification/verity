@@ -123,7 +123,7 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
 
 _SRC_V2 = r"""
 #define P 2013265921u
-#define NPINV %(npinv)du
+#define PINV %(pinv)du        /* p^{-1} mod 2^32 */
 #define K %(k)d
 #define LOGK %(logk)d
 #define THREADS %(threads)d
@@ -132,11 +132,15 @@ _SRC_V2 = r"""
 
 __device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return s >= P ? s - P : s; }
 __device__ __forceinline__ unsigned sub_p(unsigned a, unsigned b) { return a >= b ? a - b : a + P - b; }
+/* Signed-style Montgomery reduction (Plonky3 monty_reduce): x = a w < p 2^32; t = x p^{-1} mod 2^32; the low words of
+   x and t p cancel, so (x - t p) / 2^32 = hi(x) - hi(t p) in (-p, p). */
 __device__ __forceinline__ unsigned mont_mul(unsigned a, unsigned w) {
     unsigned long long x = (unsigned long long)a * w;
-    unsigned m = (unsigned)x * NPINV;
-    unsigned long long t = (x + (unsigned long long)m * P) >> 32;
-    return t >= P ? (unsigned)(t - P) : (unsigned)t;
+    unsigned lo = (unsigned)x, hi = (unsigned)(x >> 32);
+    unsigned t = lo * PINV;
+    unsigned u = __umulhi(t, P);
+    unsigned r = hi - u;
+    return hi < u ? r + P : r;
 }
 
 /* Register-resident stages: thread t owns i = t + THREADS*s (s < PER), which contains the butterfly pairs of every
@@ -176,7 +180,7 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
         for (int s = 0; s < PER; ++s) x[t + THREADS * s] = r[s];
         __syncthreads();
         /* INTT, DIF: shared-memory stages m = THREADS/2 .. 1 */
-        #pragma unroll 1
+        #pragma unroll
         for (int lm = LOGT - 1; lm >= 0; --lm) {
             const int m = 1 << lm;
             #pragma unroll
@@ -199,7 +203,7 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
             for (int s = 0; s < PER; ++s) x[t + THREADS * s] = mont_mul(coef[s], __ldg(&ct[t + THREADS * s]));
             __syncthreads();
             /* NTT, DIT: shared-memory stages m = 1 .. THREADS/2 */
-            #pragma unroll 1
+            #pragma unroll
             for (int lm = 0; lm < LOGT; ++lm) {
                 const int m = 1 << lm;
                 #pragma unroll
@@ -272,7 +276,7 @@ class RSEncoderSIMT:
             raise ValueError("this kernel is specialised to n = 4k, k and threads powers of two, k >= 2 x threads")
         self.k, self.n, self.threads, self.variant = k, n, threads, variant
         self.cp = cp
-        params = {"npinv": bb.NEG_P_INV_MOD_R, "k": k, "logk": k.bit_length() - 1, "threads": threads, "logt": threads.bit_length() - 1}
+        params = {"npinv": bb.NEG_P_INV_MOD_R, "pinv": bb.P_INV_MOD_R, "k": k, "logk": k.bit_length() - 1, "threads": threads, "logt": threads.bit_length() - 1}
         src = {"v1": _SRC, "v2": _SRC_V2}[variant] % params
         self.kernel = cp.RawKernel(src, "rs_encode", options=("-std=c++17",))
         tabs = twiddle_tables(k, n)
