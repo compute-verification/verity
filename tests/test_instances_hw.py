@@ -79,7 +79,7 @@ def _args(**kw):
 
 
 def test_store_declaration_registered_and_parses_flags():
-    from research.store import tools_registry
+    tools_registry = pytest.importorskip("research.store.tools_registry")  # the pod venvs have numpy but not tools/research
 
     tool = tools_registry.load("instances_hw", ROOT)
     assert tool.name == "instances_hw" and tool.spec == "tools.tc_probe.tool:INSTANCES_HW"
