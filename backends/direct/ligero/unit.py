@@ -16,6 +16,7 @@ Departures from ``check_step_expr`` (each argued in PROTOCOL.md, "relation uncha
 """
 from __future__ import annotations
 
+from verity_numerical.checker.ctx import IntCtx
 from verity_numerical.checker.gadgets import (
     AlignProduct,
     AlignState,
@@ -29,13 +30,12 @@ from verity_numerical.checker.gadgets import (
     SignedSum,
     StateOut,
 )
-from verity_numerical.checker.ctx import IntCtx
 from verity_numerical.checker.params import REAL, Params
 from verity_numerical.checker.tables import norm_table
 
-from .compile import Expr, LigeroCtx, System
+from .compile import LigeroCtx, System
 
-__all__ = ["compile_unit", "flatten_hints", "public_vectors", "HINT_NAMES", "PIN_NAMES", "PUB_NAMES"]
+__all__ = ["HINT_NAMES", "PIN_NAMES", "PUB_NAMES", "compile_unit", "flatten_hints", "public_vectors"]
 
 
 def _k(p: Params) -> int:
@@ -134,7 +134,7 @@ def compile_unit(p: Params = REAL, chain: bool = False) -> System:
         e_raw = E + l - p.width
         e1 = e_raw + hn["clamp"] * (p.e_min - e_raw)
         kk = E - e1 + p.acc_sig - p.width
-        mul, div, idiv = ctx.lookup(f"{tag}.norm.norm", norm_table(p), kk)
+        mul, _div, _idiv = ctx.lookup(f"{tag}.norm.norm", norm_table(p), kk)
         # derived columns: vbound(k) = 2^min(s_bits, acc_sig - k), mbound(k) = 2^min(acc_sig, s_bits + k)
         vbound = ctx.table_by_key(mul, lambda kv: 2 ** min(p.s_bits, p.acc_sig - kv))
         mbound = ctx.table_by_key(mul, lambda kv: 2 ** min(p.acc_sig, p.s_bits + kv))

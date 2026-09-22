@@ -4,9 +4,9 @@ both PLACEHOLDERS for the GPU Merkle of ``backends/shared/hash_gpu``; the hash i
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
@@ -23,7 +23,7 @@ except ImportError:                                   # pragma: no cover
 
     HASH_NAME = "sha256 (host, placeholder)"
 
-__all__ = ["HASH_NAME", "commit", "open_columns", "verify_path", "hash_bytes"]
+__all__ = ["HASH_NAME", "commit", "hash_bytes", "open_columns", "verify_path"]
 
 
 def hash_bytes(data: bytes) -> bytes:

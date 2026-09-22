@@ -19,7 +19,7 @@ import torch
 
 from .compile import P, System
 
-__all__ = ["Layout", "ChainCoefs", "chain_coefs", "N_FAMILIES"]
+__all__ = ["N_FAMILIES", "ChainCoefs", "Layout", "chain_coefs"]
 
 N_FAMILIES = 7        # link x3, start x3, end
 

@@ -14,25 +14,23 @@ Fiat-Shamir with SHAKE-256 as the challenge expander (placeholder hash, named in
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import hashlib
-import math
 import time
+from dataclasses import dataclass, field
 
 import numpy as np
 import torch
-
 from verity_numerical.checker.params import Params
 from verity_numerical.security import accounting as acc
 
+from . import merkle
 from .chain import N_FAMILIES, chain_coefs
 from .compile import P, System
-from .field import batch_modinv, encode, eval_on_coset, intt, zh_on_coset, GEN, modinv
-from . import merkle
+from .field import GEN, batch_modinv, encode, eval_on_coset, intt, modinv, zh_on_coset
 from .unit import public_vectors
-from .witness import Tables, apply_sparse, build_witness, tables
+from .witness import Tables, apply_sparse, build_witness
 
-__all__ = ["Config", "Proof", "prove", "verify", "config_for", "soundness"]
+__all__ = ["Config", "Proof", "config_for", "prove", "soundness", "verify"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -215,7 +213,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     root, levels = merkle.commit(U_cols)
     clk.lap("merkle")
 
-    r, rho_lin, rho_quad, rc = _challenge1(root, D, m, tb.L, tb.Q, device, l if chain else 0)
+    r, _rho_lin, rho_quad, rc = _challenge1(root, D, m, tb.L, tb.Q, device, l if chain else 0)
     w = _combine(r, W)                                            # (D, l)
     # quadratic: batched A*B - C on the codeword domain, divided by Z_H
     A = apply_sparse(tb.quad["a"][:3], tb.quad["a"][3], tb.Q, U)

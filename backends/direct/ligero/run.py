@@ -22,7 +22,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-
 from verity_numerical.bench import contract, instances
 from verity_numerical.checker.params import REAL
 from verity_numerical.checker.step import step_output
@@ -38,8 +37,8 @@ STEP, STEPS = instances.STEP, instances.STEPS
 
 def _git_commit() -> str | None:
     try:
-        return subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5).stdout.strip() or None
-    except Exception:
+        return subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5, check=False).stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
         return None
 
 
@@ -155,9 +154,8 @@ def gate(args) -> int:
             for s in range(STEPS):
                 c = step_output(R.p, c, x[16 * s:16 * s + 16], w[16 * s:16 * s + 16])
             honest_last = c
-        except Exception as e:                        # Reject: the operands are off the domain
+        except Exception:  # noqa: BLE001 -- Reject or any failure: the operands are off the domain
             honest_last = None
-        cs = 0
         if honest_last is None:
             # last unit with the offending operands; any claimed word; the verifier must reject on the domain check
             unit = (0, x[-16:], w[-16:])
@@ -181,7 +179,7 @@ def gate(args) -> int:
         try:
             proof, pubs, l = R.prove_units([unit], [claimed], check=False)
             ok, why = R.verify_units(proof, pubs, l)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # the prover cannot even form hints (operands off the domain): the verifier must reject any proof for
             # this statement on its own domain check -- run it on the trivial units' proof
             u_pad, y_pad = pad_units([unit], [claimed], 256)
@@ -268,11 +266,11 @@ def bench(args) -> int:
     fp = contract.fingerprint(
         profile=contract.PROFILE, domain=contract.DOMAIN, K=16, B=l, proof_class="NON_ZK_PROOF_DIAGNOSTIC",
         authentication="excluded", zk_mode="none",
-        security={"target": int(round(args.target)), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_l": cfg.l,
+        security={"target": round(args.target), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_l": cfg.l,
                   "opened_columns": cfg.t, "achieved_log2": snd["total_log2"], "terms_log2": snd["terms_log2"],
                   "hash_placeholder": True},
         hardware=hw, software=sw,
-        preprocessing="constraint compilation (a function of Params only, %.2fs)" % R.compile_seconds,
+        preprocessing=f"constraint compilation (a function of Params only, {R.compile_seconds:.2f}s)",
         retention="retained",
         instances=contract.instances_ref("tu-k16", 0, l, instances.manifest_sha256(root)),
         scope="unit", omitted="chain linkage, epilogue, external authentication, ZK masking",

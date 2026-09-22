@@ -31,7 +31,7 @@ from verity_numerical.checker.params import Params, Reject
 
 P = 15 * 2**27 + 1          # BabyBear
 
-__all__ = ["Expr", "LigeroCtx", "System", "P", "TableOut", "CompileError"]
+__all__ = ["CompileError", "Expr", "LigeroCtx", "P", "System", "TableOut"]
 
 
 class CompileError(Exception):
@@ -45,7 +45,7 @@ class CompileError(Exception):
 class Expr:
     """c + sum_j lin[j] * W_j with Python-int coefficients (exact; reduced mod p only when materialised)."""
 
-    __slots__ = ("lin", "c", "ctx")
+    __slots__ = ("c", "ctx", "lin")
 
     def __init__(self, ctx, lin: dict[int, int] | None = None, c: int = 0):
         self.ctx = ctx
@@ -115,7 +115,7 @@ class TableOut(Expr):
     """A table output: affine in the selector rows, remembering the per-group values so that ``lt_pow`` can form
     2^bits / value as another affine expression of the same selectors."""
 
-    __slots__ = ("sel_rows", "values", "keys")
+    __slots__ = ("keys", "sel_rows", "values")
 
     def __init__(self, ctx, sel_rows: list[int], values: list[int], keys: list[int] | None = None):
         super().__init__(ctx, {r: v for r, v in zip(sel_rows, values)}, 0)

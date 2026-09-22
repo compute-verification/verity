@@ -5,14 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import torch
-
 from verity_numerical.checker.params import Params
 from verity_numerical.checker.step import gen_step
 
-from .compile import P, Expr, System
+from .compile import Expr, P, System
 from .unit import flatten_hints
 
-__all__ = ["build_witness", "eval_expr", "hints_tensor", "Tables", "tables", "check_constraints"]
+__all__ = ["Tables", "build_witness", "check_constraints", "eval_expr", "hints_tensor", "tables"]
 
 
 def eval_expr(e: Expr, W: torch.Tensor) -> torch.Tensor:

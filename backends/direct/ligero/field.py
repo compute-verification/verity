@@ -9,13 +9,15 @@ g^k, NTT_n.
 """
 from __future__ import annotations
 
+from typing import ClassVar
+
 import torch
 
 P = 15 * 2**27 + 1
 GEN = 31                     # multiplicative generator of BabyBear
 TWO_ADICITY = 27
 
-__all__ = ["P", "GEN", "ntt", "intt", "encode", "root_of_unity", "modinv", "coset_points", "zh_on_coset", "Domain", "poly_eval", "batch_modinv", "eval_on_coset"]
+__all__ = ["GEN", "Domain", "P", "batch_modinv", "coset_points", "encode", "eval_on_coset", "intt", "modinv", "ntt", "poly_eval", "root_of_unity", "zh_on_coset"]
 
 
 def modpow(a: int, e: int, m: int = P) -> int:
@@ -43,7 +45,7 @@ def _bitrev(n: int, device) -> torch.Tensor:
 class Domain:
     """Precomputed tables for one size ``n`` on one device."""
 
-    _cache: dict = {}
+    _cache: ClassVar[dict] = {}
 
     def __init__(self, n: int, device):
         self.n = n
@@ -71,7 +73,7 @@ class Domain:
         self.n_inv = modinv(n)
 
     @classmethod
-    def get(cls, n: int, device) -> "Domain":
+    def get(cls, n: int, device) -> Domain:
         key = (n, str(device))
         if key not in cls._cache:
             cls._cache[key] = cls(n, device)

@@ -17,7 +17,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-
 from verity_numerical.bench import contract, instances
 from verity_numerical.checker.params import REAL
 from verity_numerical.checker.step import step_output
@@ -131,7 +130,7 @@ def gate_vu(args) -> int:
                 accs.append(c)
             proof, pubs, lay = R.prove_vus([(x, w, accs, int(y16))], check=False)
             ok, why = R.verify_vus(proof, pubs, lay)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # no honest witness exists: the verifier must reject any proof of this statement -- run it on a proof
             # of a different statement (the trivial VU)
             lay = R.layout(1)
@@ -241,11 +240,11 @@ def bench_vu(args) -> int:
     fp = contract.fingerprint(
         profile=contract.PROFILE, domain=contract.DOMAIN, K=STEP * STEPS, B=n_vus, proof_class="NON_ZK_PROOF_DIAGNOSTIC",
         authentication="excluded", zk_mode="none",
-        security={"target": int(round(args.target)), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_l": cfg.l,
+        security={"target": round(args.target), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_l": cfg.l,
                   "opened_columns": cfg.t, "achieved_log2": snd["total_log2"], "terms_log2": snd["terms_log2"],
                   "hash_placeholder": True},
         hardware=hw, software=sw,
-        preprocessing="constraint compilation (a function of Params only, %.2fs)" % R.compile_seconds,
+        preprocessing=f"constraint compilation (a function of Params only, {R.compile_seconds:.2f}s)",
         retention="retained",
         instances=contract.instances_ref("vu-k1536", 0, n_vus, instances.manifest_sha256(root)),
         scope="vu", omitted="external authentication, ZK masking",
