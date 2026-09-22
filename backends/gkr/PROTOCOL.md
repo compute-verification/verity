@@ -740,5 +740,10 @@ changes the picture, so none is implemented; the recorded runs of 12.5 are all \
 
 ### 12.5 Recorded runs
 
-See `README.md` (section "Full VU runs") for the run ids, times, depth, proof bytes and memory of the
-`vu-k1536` batches and the `vu-k1536-neg` rejections on vy-cpu2.
+vy-cpu2, 12 threads, PCS mode **[measured]**: B=64 r20260922-053451-03f9 (6.33 s, depth 279); B=4096
+r20260922-055358-9f6b (headline, commit 2229c4b): prove 297.6 s, verify 33.0 s, 69.6 MB, `rounds.protocol` 1923,
+`rounds.sequential_depth` **438** (the 12.3 prediction), peak RSS 33.9 GB, 184,128,575 committed elements, all 4096
+recorded words accepted; first B=4096 run r20260922-053757-3b76 (293.4 s, overlapped a duplicate launch).
+Negatives: `vu-k1536-neg` 52/52 rejected (8 at witness generation, 44 by the verifier; r20260922-054550-62b1),
+transition-unit `fixtures/negatives` 52/52 rejected (r20260922-055135-ed34). Table, labels and the per-unit
+comparison: `README.md` "Full VU runs".
