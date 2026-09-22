@@ -109,10 +109,11 @@ FS_QUERIES_LOG2 = 60
 
 
 def _field_terms_ok(D: int, n: int, k: int, l: int, t: int, per_proof: float, zk: bool, shift_log2: int) -> bool:
-    F1 = acc.Field.prime("BabyBear", P)
-    p = acc.LigeroParams(n=n, k=k, l=l, t=t, zk=zk)
-    terms = acc.ligero_error(p, F1, F1.extension(D), combination="uniform")
-    return acc.log2(sum(terms.values()) * Fraction(2) ** shift_log2) <= per_proof
+    """Appendix-C query terms (with the k that sized t) + field terms (n + 3) / p^D, times 2^shift, vs the target."""
+    e = (n - k) // 2
+    query = Fraction(n - e, n) ** t + Fraction(k + l, n) ** t + Fraction(2 * k, n) ** t
+    field = Fraction(n + 3, P ** D)
+    return acc.log2((query + field) * Fraction(2) ** shift_log2) <= per_proof
 
 
 def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs: int = 1, zk: bool = False,
@@ -146,8 +147,7 @@ def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs
         t = acc.ligero_queries_for(query_target, n, k, l)
     # field terms: (n + 1 + 2) / p^D must stay under the (shifted) target; D = 6 at -128 interactive, 7 Fiat-Shamir
     D = 6 if target_log2 <= -100 else 4
-    k_acc = k if zk else l + 1
-    while not _field_terms_ok(D, n, k_acc, l, t, per_proof, zk, shift):
+    while not _field_terms_ok(D, n, k, l, t, per_proof, zk, shift):
         D += 1
         if D > 12:
             raise acc.AccountingError("no extension degree <= 12 meets the target")
