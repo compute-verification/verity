@@ -21,6 +21,10 @@ KINDS: dict[str, str] = {
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
+    "trust-dossier/v1": "the computed trust level of one numerical target (verity.verification.trust): meta = the TrustReport "
+                        "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
+                        "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
+                        "labels target, instruction, level, anchor",
 }
 
 

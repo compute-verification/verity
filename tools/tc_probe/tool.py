@@ -33,10 +33,13 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--procs", type=int, default=None)
     ap.add_argument("--golden-per-family", type=int, default=60)
     ap.add_argument("--families", default=None)
+    ap.add_argument("--canary", action="store_true")
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     if ns.instruction is None:
         out.pop("instruction")
+    if not ns.canary:  # absent unless given: runs recorded before the flag existed keep their derivation hash
+        out.pop("canary")
     if unknown:
         out["_unknown"] = unknown
     if out.get("families"):
@@ -49,7 +52,7 @@ TC_PROBE = Tool(
     command=["python", "tools/tc_probe/tc_probe.py"],
     closure=["tools/tc_probe/**", "packages/verity/src/verity/ml/tc/**"],
     key_params=["instruction", "arch", "pipeline", "sweep", "families", "seed", "n_random", "golden_per_family",
-                "replay_golden", "replay_special", "replay_instances", "instances_manifest"],
+                "replay_golden", "replay_special", "replay_instances", "instances_manifest", "canary"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_golden", "replay_special", "replay_instances", "instances_manifest"],
     caches=["nvcc"],
