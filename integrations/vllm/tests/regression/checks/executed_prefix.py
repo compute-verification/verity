@@ -61,7 +61,8 @@ def expected(row: resolver.Row) -> dict:
             continue
         per[rid] = {"served_output_len": e.get("served_output_len", len(e.get("generated_token_ids") or [])), "executed_prefix_len": e.get("executed_prefix_len"),
                     "cap_exhausted": e.get("cap_exhausted"), "eos_stop": e.get("eos_stop_before_cap")}
-    out = {"tokens_source": _tokens_rel(row), "lag": stop.get("lag"), "eos_of_record": sorted(int(x) for x in (stop.get("eos_token_ids") or [])),
+    # (the tokens file's path is NOT part of the contract: the vault mirror holds it under match/control/, the live dirs under match/capture/)
+    out = {"lag": stop.get("lag"), "eos_of_record": sorted(int(x) for x in (stop.get("eos_token_ids") or [])),
            "requests": per, "ok": True, "any_eos_stop": any(v.get("eos_stop") for v in per.values())}
     if row.has("global_match.json"):
         gm = row.json("global_match.json")

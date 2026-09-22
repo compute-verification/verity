@@ -53,7 +53,7 @@ def identity_rows_sha256(identities: list[dict]) -> str:
 def _summary(man: dict, *, with_rows: bool) -> dict:
     out = {"manifest_digest": man.get("manifest_digest"), "program_digest": man.get("program_digest"),
            "identities": (man.get("populations") or {}).get("identities", len(man.get("identities") or [])),
-           "complete": man.get("complete"), "schema": man.get("schema")}
+           "complete": man.get("complete"), "schema": man.get("schema"), "unmodelled": man.get("unmodelled") or {}}
     if with_rows:
         out["identity_rows_sha256"] = identity_rows_sha256(man.get("identities") or [])
     return out

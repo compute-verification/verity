@@ -2318,8 +2318,7 @@
     "executed_prefix_len": 41,
     "served_output_len": 41
    }
-  },
-  "tokens_source": "match/control/tokens.json"
+  }
  },
  "global_match_checks": {
   "achieved_concurrency": {
