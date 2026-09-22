@@ -22,8 +22,8 @@ Ledger `backends/numerical/reports/ledger/gate4-h100.jsonl`, track `shared`.  De
 | A end-to-end (a-gpu2 head f87b096) | FAILED at B=4096: `logup_packed._walk_fs: LogUp: fractional sum is not zero (a query is not in its table)` -- the lane's packed LogUp (tested at 64 VUs) does not prove the 4096 batch; not fixed here (measurement lane) | r20260922-091947-822f |
 | A end-to-end (a-gpu2 pre-graph merge 179d509) | FAILED, same error in `logup_packed._walk` | r20260922-092252-3ebd |
 | A buckets v1 / v2 (a-fusion `bench_fused` 2^26/2^28 k=3 + `logup_graph_bench` v1 v2 level/round + v2 concurrent) | DONE: v1 0.285 s = 7.07e6 (sumcheck 100.5, logUp 88.3 level); v2 0.184 s = 4.55e6 (sumcheck 36.4, logUp 10 streams 81.2); raw + reprice under `gate4/a_buckets/` | r20260922-092450-5b79 |
-| B end-to-end non-ZK / HVZK (b-ligero2, 25 x 170, batch 16384, reps 3) | running | r20260922-092841-94ac |
-| B buckets v1 / v2 (encode) | pending | |
+| B end-to-end non-ZK / HVZK (b-ligero2, 25 x 170, batch 16384, reps 3) | DONE: non-ZK 2.386 s = 0.583 ms/VU (5.92e7), union 2^-128.25; HVZK 2.911 s = 0.711 ms/VU (7.22e7), union 2^-128.05; verifier 0.82/0.88 s; envelopes under `gate4/b_e2e/` | r20260922-092841-94ac |
+| B buckets v1 (commit_bench blake3 B + buckets_bench + lintest_structured M1-4 lazy) and v2 (v2_bench) | running | r20260922-093147-3d6c |
 | SP1, C | cited only | -- |
 
 ## Next steps
