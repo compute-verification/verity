@@ -130,7 +130,7 @@ def test_a_depth_options_rows():
     assert by["baseline"]["depth"] == 355
     assert by["R16 sharding s = 5"]["depth"] == 235 and by["R16 sharding s = 5"]["committed_pct"] == pytest.approx(1.10, abs=0.01)
     assert by["c = 2 variables per message"]["depth"] == 199 and by["c = 2 variables per message"]["prover_work_x"] > 1.5
-    assert by["cut the tree at [16, 21] + commit depth>=3 checker wires"]["depth"] == 140
+    assert next(r for r in rows if r["option"].startswith("cut the tree at [16, 21] + commit"))["depth"] == 140
     assert all(r["depth"] >= 355 for r in rows if r["option"].startswith("checkpoints")) and all("never" in r["wins_above_rtt_ms_gpu"] for r in rows if r["option"].startswith("checkpoints"))
     assert by["hint-free branch"]["depth"] > 355 and by["hint-free branch"]["prover_work_x"] < 1
 
