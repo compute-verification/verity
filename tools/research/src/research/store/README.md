@@ -109,8 +109,9 @@ Published by `research run` at completion or failure (both — a failed attempt 
 ~~~
 
 `status.state` is status.json's state as recorded (`done` / `failed` / `cancelled`), `argv` and `params.argv` are the harness's
-redacted argv, `execution.run_dir` is where the attempt executed (the machine's run dir for a remote run). `inputs` holds the
-content identity of every harness `--input name=path`: an `art:` id when the path is a fetched artifact, else `sha256:<hex>`.
+redacted argv, `execution.run_dir` is where the attempt executed (the machine's run dir for a remote run). A harness
+`--input name=path` that points at a fetched artifact becomes `inputs.<name> = art:...`; any other `--input` enters the
+derivation by content as the key param `input.<name> = sha256:<hex>` (`inputs` holds `art:` ids only).
 
 Without a Tool declaration (`research run -- CMD` with no `--tool`): `tool = {"name": "<argv[0] basename>", "version": null}`,
 `key_params = []`, `key_conditions = []`, so `derivation = drv(H(tool name, inputs, {}, {}))` — a real but coarse

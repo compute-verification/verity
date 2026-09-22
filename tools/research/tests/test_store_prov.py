@@ -472,15 +472,19 @@ def test_run_with_tool_declaration_resolves_before_launch(tmp_path, monkeypatch)
                  key_conditions=["hw.family"], param_artifacts=["golden"], conditions=lambda env: {"probe": "ok"})
     """))
     (src / "golden.json").write_text("{}")
+    (src / "fetched").mkdir()
+    (src / "fetched/.art-id").write_text("art:" + "b" * 64)
+    (src / "fetched/x.bin").write_bytes(b"x")
     monkeypatch.chdir(src)
-    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_run:T", "--input", "gold=golden.json", "--",
+    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_run:T", "--input", "gold=golden.json",
+                        "--input", "inst=fetched", "--",
                         PY, "-c", "pass", "--golden", "golden.json", "--n", "3"])
     assert rc == 0
     run_dir = next(p for p in (tmp_path / "runs").iterdir() if p.is_dir())
     s = json.loads((run_dir / "job.json").read_text())["store"]
     assert s["tool"] == {"name": "mine", "version": "3", "spec": "mytools.decl_run:T"}
-    assert s["key_params_resolved"] == {"golden": "sha256:" + hashlib.sha256(b"{}").hexdigest(), "n": "3"}
-    assert s["inputs"] == {"gold": "sha256:" + hashlib.sha256(b"{}").hexdigest()}
+    assert s["key_params_resolved"] == {"golden": "sha256:" + hashlib.sha256(b"{}").hexdigest(), "n": "3", "input.gold": "sha256:" + hashlib.sha256(b"{}").hexdigest()}
+    assert s["inputs"] == {"inst": "art:" + "b" * 64}, "a fetched artifact is an input; a plain --input path enters the derivation as a key param, by content"
     assert set(s["closure"]) == {"tools/x/a.py", "tools/x/sub/b.py"} and s["conditions"]["tool.mine.probe"] == "ok"
     tool = tools_registry.load("mytools.decl_run:T", src)
     assert s["derivation"] == D.derivation_id(tool, s["inputs"], s["key_params_resolved"], s["conditions"], ["hw.family"])

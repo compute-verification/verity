@@ -200,9 +200,13 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
             ident = {"name": Path(command[0]).name, "version": None, "spec": None}
             key_params, key_conditions = [], []
         inputs = {}
-        for spec in a.input:
+        for spec in a.input:                         # harness --input name=path: a fetched artifact is an input; anything else enters the derivation
             name, _, path = spec.partition("=") if "=" in spec else (Path(spec).name, "=", spec)
-            inputs[name] = content_identity(path, source_root)
+            cid = content_identity(path, source_root)   # by content, as the key param `input.<name>` (inputs hold art: ids only)
+            if isinstance(cid, str) and cid.startswith("art:"):
+                inputs[name] = cid
+            else:
+                key[f"input.{name}"] = cid
         drv = D.derivation_id(ident, inputs, key, conds, key_conditions)
         rk = D.reuse_key(drv, conds)
         sroot = A.store_root()
