@@ -28,7 +28,7 @@ from verity_numerical.bench import ledger
 __all__ = ["OUT", "REFERENCES", "main", "plot_lane", "plot_overview"]
 
 OUT = ledger.DIR.parent / "plots"
-REFERENCES = {"goal 1e6": 1e6, "SP1 authenticated (baselines.json, 4090)": 3.5e9, "TensorZKP HyperPlonk calibration (H100)": 5.0e7}
+REFERENCES = {"goal 1e6": 1e6, "SP1 authenticated core, 1 VU per proof (4090, baselines.json)": 3.6e11, "TensorZKP HyperPlonk calibration (H100)": 5.0e7}
 COLOURS = {"ARITHMETIC_DIAGNOSTIC": "#9e9e9e", "NON_ZK_PROOF_DIAGNOSTIC": "#1f77b4", "NON_ZK_PROOF": "#17becf",
            "COMPLETE_HVZK_BACKEND": "#ff7f0e", "COMPLETE_ZK_BACKEND": "#2ca02c", "NO_PROOF": "#7f7f7f", "COMPONENT": "#bcbd22"}
 
