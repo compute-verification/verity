@@ -61,7 +61,7 @@ def test_q_on_H_recovers_every_accumulator() -> None:
 def test_recovery_is_not_a_tautology() -> None:
     """Perturbing one value of q on H (one coefficient) breaks the recovery downstream of that column: the test
     genuinely reads the accumulators off q rather than off the recorded arrays."""
-    e, doc = _fixtures()[0]
+    _, doc = _fixtures()[0]
     cfg, lay = doc["config"], doc["layout"]
     q = [list(row) for row in doc["transcript"]["q"]]
     q[0][3] = (q[0][3] + 1) % core.P

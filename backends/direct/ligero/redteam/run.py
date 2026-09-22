@@ -25,7 +25,6 @@ from ..protocol import COIN_HIDING_TERM, CoinOpeningError, Coins, soundness
 from ..vu import STEP, STEPS, ChainRunner, _vu_data
 from . import mask_rank, q_leak, simulator
 
-
 _HAS_VU = [False]
 
 
