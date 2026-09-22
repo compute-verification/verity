@@ -25,14 +25,19 @@ def test_field_and_reference():
     assert np.array_equal(q[:, : bb.K_CODE], direct)
 
 
-cp = pytest.importorskip("cupy")
 try:
-    cp.cuda.runtime.getDeviceCount()
-except Exception:                          # noqa: BLE001 - pragma: no cover - laptop
-    pytest.skip("no CUDA device", allow_module_level=True)
+    import cupy as cp
 
-from encode import buckets as bk
-from encode.encode_ntt_simt import RSEncoderSIMT
+    cp.cuda.runtime.getDeviceCount()
+    HAS_CUDA = True
+except Exception:                          # noqa: BLE001 - pragma: no cover - laptop
+    HAS_CUDA = False
+
+if HAS_CUDA:
+    from encode import buckets as bk
+    from encode.encode_ntt_simt import RSEncoderSIMT
+
+gpu = pytest.mark.skipif(not HAS_CUDA, reason="no CUDA device")
 
 
 @gpu
