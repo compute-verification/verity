@@ -477,43 +477,51 @@ def combine_int8_tc(W_t, s_plain: np.ndarray, chunk_rows: int = 65536, xor_done:
     # -0x7F7F7F80 as int32 has bit pattern 0x80808080
     if A_t is None:
         A_t = s_limb_matrix(s_plain).to(dev)
-    tot = torch.zeros((32, 4 * k), dtype=torch.int64, device=dev)
+    n = A_t.shape[0]
+    tot = torch.zeros((n, 4 * k), dtype=torch.int64, device=dev)
     main = rows - rows % 8                                                               # _int_mm wants the inner dim % 8 == 0
     for r0 in range(0, main, chunk_rows):
         r1 = min(main, r0 + chunk_rows)
-        C = torch._int_mm(A_t[:, r0:r1], W8[r0:r1])                                      # (32, 4k) int32, exact (|ab| <= 2^14, <= 2^17 rows)
+        C = torch._int_mm(A_t[:, r0:r1].contiguous(), W8[r0:r1])                         # (n, 4k) int32, exact (|ab| <= 2^14, <= 2^17 rows)
         tot += C
     if main < rows:                                                                      # < 8 tail rows: exact int64 GEMM on SIMT
         tot += A_t[:, main:].to(torch.int64) @ W8[main:].to(torch.int64)
-    return recombine_limbs(tot, A_t, k)
+    M = 1 if np.ndim(s_plain) == 2 else np.shape(s_plain)[1]
+    return recombine_limbs(tot, A_t, k, M)
 
 
 def s_limb_matrix(s_plain: np.ndarray):
-    """``(32, rows)`` int8: rows ``a * 6 + c`` = limb ``a`` of coordinate ``c`` of ``s`` minus 128; row 24 = ones; 25..31 zero."""
+    """``s`` ``(rows, 6)`` or ``(rows, M, 6)`` plain -> ``(n, rows)`` int8: row ``(m * 4 + a) * 6 + c`` = limb ``a`` of coordinate ``c`` of
+    ``s[:, m]`` minus 128; row ``24 M`` = ones (the shift correction); zero-padded to ``n`` = a multiple of 8, ``>= 32``."""
     import torch
 
-    s = np.asarray(s_plain, dtype=np.int64)                                              # (rows, 6)
-    rows = s.shape[0]
-    limbs = np.stack([(s >> (8 * a)) & 0xFF for a in range(4)], axis=1)                  # (rows, 4, 6)
-    A = np.zeros((32, rows), dtype=np.int8)
-    A[:24] = (limbs.reshape(rows, 24).T - 128).astype(np.int8)
-    A[24] = 1
+    s = np.asarray(s_plain, dtype=np.int64)
+    if s.ndim == 2:
+        s = s[:, None, :]
+    rows, M, _ = s.shape
+    limbs = np.stack([(s >> (8 * a)) & 0xFF for a in range(4)], axis=2)                  # (rows, M, 4, 6)
+    n = max(32, -(-(24 * M + 1) // 8) * 8)
+    A = np.zeros((n, rows), dtype=np.int8)
+    A[:24 * M] = (limbs.reshape(rows, 24 * M).T - 128).astype(np.int8)
+    A[24 * M] = 1
     return torch.from_numpy(A)
 
 
-def recombine_limbs(tot, A_t, k: int):
+def recombine_limbs(tot, A_t, k: int, M: int = 1):
     """``sum_i s_a[i] W_b[i][j] = C[a] + 128 C[ones] + 128 sum_i s_a[i]`` (``W_b = W8_b + 128``, ``s_a = A[a] + 128``), then
-    ``V[c][j] = sum_{a,b} 2^(8(a+b)) (.) mod p``; vectorised torch int64, every term reduced before the 16-term sum."""
+    ``V[m][c][j] = sum_{a,b} 2^(8(a+b)) (.) mod p``; vectorised torch int64, every term reduced before the 16-term sum.
+    Returns ``(6, k)`` for ``M = 1``, else ``(M, 6, k)``."""
     import torch
 
     dev = tot.device
-    ssum = (A_t[:24].to(torch.int64) + 128).sum(dim=1).view(4, D)                        # sum_i s_a[i], (a, c)
-    T = tot[:24].view(4, D, k, 4)                                                        # (a, c, j, b)
-    ones = tot[24].view(k, 4)                                                            # column sums of W8, (j, b)
-    t = T + 128 * ones[None, None] + 128 * ssum[:, :, None, None]                        # exact, |t| < 2^41
+    ssum = (A_t[:24 * M].to(torch.int64) + 128).sum(dim=1).view(M, 4, D)                 # sum_i s_a[i], (m, a, c)
+    T = tot[:24 * M].view(M, 4, D, k, 4)                                                 # (m, a, c, j, b)
+    ones = tot[24 * M].view(k, 4)                                                        # column sums of W8, (j, b)
+    t = T + 128 * ones[None, None, None] + 128 * ssum[:, :, :, None, None]               # exact, |t| < 2^41
     coef = torch.tensor([[pow(2, 8 * (a + b), P) for b in range(4)] for a in range(4)], dtype=torch.int64, device=dev)
-    terms = ((t % P) * coef[:, None, None, :]) % P                                       # < p each
-    return terms.sum(dim=(0, 3)) % P                                                     # (c, j)
+    terms = ((t % P) * coef[None, :, None, None, :]) % P                                 # < p each
+    out = terms.sum(dim=(1, 4)) % P                                                      # (m, c, j)
+    return out[0] if M == 1 else out
 
 
 def combine_int8_tc_ref(W: np.ndarray, s: np.ndarray) -> np.ndarray:
@@ -659,17 +667,22 @@ def bench(a) -> dict:
                     torch.cuda.synchronize()
                     ts.append(s0.elapsed_time(e0))
                 return statistics.median(ts), ts
-            A_t = s_limb_matrix(s).to(W_t.device)                                        # the s limbs: prepared once (24 B / row)
-            for chunk in (32768, 65536, 131072):
-                med, ts = tm(lambda chunk=chunk: combine_int8_tc(W_t, s, chunk_rows=chunk, W8=W8, A_t=A_t), a.reps)
-                t_xor, _ = tm(lambda: (W_t ^ xor_c).view(torch.int8), a.reps)
-                res["results"].append({"name": f"combine_int8_tensorcore_chunk{chunk}", "shape": "B", "rows": R, "M": 1, "chunk_rows": chunk,
-                                       "ms_median": med, "ms_all": ts, "xor_pass_ms": t_xor, "read_floor_ms": R * K * 4 / PEAK_BW * 1e3,
-                                       "fraction_of_read_floor": R * K * 4 / PEAK_BW * 1e3 / med,
-                                       "limb_macs": 32 * R * 4 * K, "t_limb_macs_per_s": 32 * R * 4 * K / (med / 1e3) / 1e12,
-                                       "note": "torch._int_mm, A = 32 x rows int8 (24 s-limb rows shifted by 128 + ones row), B = W bytes ^ 0x80; "
-                                               "INT32 per chunk, INT64 across chunks, limb recombination mod p; bit-exact vs numpy (checks)"})
-                print(f"B combine_int8_tensorcore chunk {chunk}: {med:.2f} ms (+ xor pass {t_xor:.2f} ms), {res['results'][-1]['t_limb_macs_per_s']:.1f} T limb-MAC/s", flush=True)
+            t_xor, _ = tm(lambda: (W_t ^ xor_c).view(torch.int8), a.reps)
+            for M in a.M:
+                sM = np.random.default_rng(6).integers(0, P, (R, M, D)).astype(U64)
+                A_t = s_limb_matrix(sM).to(W_t.device)                                   # the s limbs: prepared once (24 M B / row)
+                n = A_t.shape[0]
+                for chunk in ((32768, 65536, 131072) if M == 1 else (65536,)):
+                    med, ts = tm(lambda chunk=chunk, A_t=A_t, sM=sM: combine_int8_tc(W_t, sM, chunk_rows=chunk, W8=W8, A_t=A_t), a.reps)
+                    res["results"].append({"name": f"combine_int8_tensorcore_M{M}_chunk{chunk}", "bucket": "combine_int8_tensorcore", "shape": "B",
+                                           "rows": R, "M": M, "n_limb_rows": n, "chunk_rows": chunk,
+                                           "ms_median": med, "ms_all": ts, "xor_pass_ms": t_xor, "read_floor_ms": R * K * 4 / PEAK_BW * 1e3,
+                                           "fraction_of_read_floor": R * K * 4 / PEAK_BW * 1e3 / med,
+                                           "limb_macs": n * R * 4 * K, "t_limb_macs_per_s": n * R * 4 * K / (med / 1e3) / 1e12,
+                                           "note": f"torch._int_mm, A = {n} x rows int8 ({24 * M} s-limb rows shifted by 128 + ones row), B = W bytes ^ 0x80; "
+                                                   "INT32 per chunk, INT64 across chunks, limb recombination mod p; bit-exact vs numpy (checks)"})
+                    print(f"B combine_int8_tensorcore M{M} chunk {chunk}: {med:.2f} ms (+ xor pass {t_xor:.2f} ms), "
+                          f"{res['results'][-1]['t_limb_macs_per_s']:.1f} T limb-MAC/s, {res['results'][-1]['fraction_of_read_floor']:.2f} of read floor", flush=True)
             del W_t, W8
             torch.cuda.empty_cache()
         except Exception as e:                                                             # noqa: BLE001
