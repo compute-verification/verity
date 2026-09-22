@@ -641,7 +641,7 @@ challenge field (`whole_field` sampling; the AIR does not redraw poles):
 | challenge field | LogUp term (4 096 VUs) | in Plonky3 0.4.3 |
 |---|---|---|
 | BabyBear\(^4\) (\(2^{124}\)) | \(2^{-93.4}\) | yes (`BinomialExtensionField<BabyBear, 4>`) -- **the implemented configuration** |
-| BabyBear\(^5\) (\(2^{155}\)) | \(2^{-124.3}\) | yes (`<BabyBear, 5>`), not yet wired (the FRI PCS and the challenger are generic in the degree; the aux width becomes 570) |
+| BabyBear\(^5\) (\(2^{155}\)) | \(2^{-124.3}\) | yes (`<BabyBear, 5>`): `BabyBear5Backend`, `vu-bench --lookup --ext 5` -- **measured** below (aux width 570; the prover's own count of the term, with its actual \(N\), is \(2^{-124.8}\)) |
 | BabyBear\(^6\) (\(2^{186}\)) | \(2^{-155.2}\) | **no** (BabyBear has binomial extensions of degree 4 and 5 only in 0.4.3) |
 
 So with the lookup argument the proof's soundness label is bounded by the challenge field: **\(2^{-93}\) at
@@ -693,7 +693,36 @@ against bench-instances/v1) is in `vu-bench --lookup`.
 
 ### 14.5 Measurement (vy-cpu2, 12 threads, shared with a-babybear and checker-min)
 
-LOOKUP_MEASUREMENT_PLACEHOLDER
+All three columns: BabyBear, \(B = 4096\) VUs (\(K = 1536\), 96 units per VU, \(2^{19}\) rows of which \(393\,216\)
+real), FRI `log_blowup=2`, 166 queries, PoW 16 (FRI term \(2^{-128.6}\) proven), Keccak Merkle, 12 Rayon threads on
+vy-cpu2 while a-babybear and checker-min ran on the other 20 vCPUs (so every time is an upper bound), authentication
+excluded, `NON_ZK_PROOF_DIAGNOSTIC`.  Every accumulator and output word checked against bench-instances/v1; all
+three proofs verify.  Runs `r20260922-065546-a242` (limbs, after the section 13 fix), `r20260922-070654-177a`
+(LogUp, BabyBear\(^4\)), `r20260922-071206-c4b0` (LogUp, BabyBear\(^5\)); `results/vu_*_q166_*.json`.
+
+| | 2-bit limbs (section 12 + 13 fix) | LogUp, BabyBear\(^4\) | LogUp, BabyBear\(^5\) |
+|---|---|---|---|
+| main trace width (base columns) | 2 930 | 401 (+ 6 preprocessed) | 401 (+ 6) |
+| committed width (base-field equivalent) | 2 930 | 863 (401 + 6 + 114 \(\cdot\) 4) | 977 (401 + 6 + 114 \(\cdot\) 5) |
+| committed cells / bytes per VU | 281 280 / **1.125 MB** | 82 848 / **331 kB** (3.40x less) | 93 792 / **375 kB** (3.00x less) |
+| witness s | 22.1 | 5.4 | 5.9 |
+| prove s | 151.1 | 54.7 | 64.5 |
+| total s | 173.2 | **60.1** | 70.4 |
+| s / VU | 0.0423 | **0.0147** (2.88x) | 0.0172 (2.46x) |
+| overhead vs native peak | 4.30e9 | 1.49e9 | 1.75e9 |
+| verify s | 0.43 | 0.44 | 0.51 |
+| proof MB | 3.47 | 2.27 | 2.37 |
+| sequential depth (rounds) | 24 | 26 | 26 |
+| peak RSS GB | 30.9 | 9.5 | 10.7 |
+| soundness: FRI / field (lookup) term | \(2^{-128.6}\) / (\(\approx 2^{-110}\), unaccounted) | \(2^{-128.6}\) / **\(2^{-93.8}\)** | \(2^{-128.6}\) / **\(2^{-124.8}\)** |
+| ledger label | `SOUNDNESS FIX: LT_DIRECT; ...` | `LogUp range lookups ... 2^-93.8` (`--breakthrough`) | -- |
+
+Both breakthrough criteria are met: committed bytes per VU fall 3.4x (> 2x) and s/VU falls 2.9x (> 1.5x).  The
+verifier is not faster: it recomputes the 6 preprocessed table columns (an LDE + Merkle tree of \(2^{19} \times 6\),
+\(\approx 0.1\) s) and opens two more commitments; caching the preprocessed commitment across proofs removes that.
+The \(2^{-128}\) column of section 12's headline does not survive the lookup at BabyBear\(^4\): the honest label for
+the fast configuration is **\(2^{-93.8}\)**, and \(2^{-124.8}\) costs 17% more time at BabyBear\(^5\).  A full
+\(2^{-128}\) with this Plonky3 version needs \(2^{17}\)-row batches (1 024 VUs per proof) at BabyBear\(^5\).
 
 ### 14.6 Where the time goes (profile)
 

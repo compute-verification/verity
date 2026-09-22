@@ -20,13 +20,21 @@ cargo build --release -j12 2>&1 | tail -2
 BIN="$CARGO_TARGET_DIR/release/direct-unit"
 for mode in limbs lookup; do
   flag=""; [ "$mode" = lookup ] && flag="--lookup"
-  echo "== vu-bench $flag (RUST_LOG=info)"
-  RUST_LOG=info "$BIN" vu-bench $flag --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES" \
+  echo "== vu-bench $flag (RUST_LOG=debug)"
+  RUST_LOG=debug "$BIN" vu-bench $flag --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES" \
     2> "$OUT/spans_$mode.raw" | grep -E "^field=|^lookup stages"
-  # one line per span close: depth-agnostic name + busy time
-  grep -oE '[a-z_ ]+(\{[^}]*\})?: close time\.busy=[0-9.]+(ms|s|µs)' "$OUT/spans_$mode.raw" \
-    | sed -E 's/\{[^}]*\}//; s/: close time\.busy=/ /' > "$OUT/spans_$mode.txt" || true
-  echo "-- spans ($mode), summed per name:"
-  awk '{n=$NF; v=n; if (n ~ /ms$/) {sub(/ms/,"",v); v/=1000} else if (n ~ /µs$/) {sub(/µs/,"",v); v/=1e6} else {sub(/s/,"",v)}; $NF=""; s[$0]+=v; c[$0]++} END {for (k in s) printf "%9.2f s  x%-4d %s\n", s[k], c[k], k}' "$OUT/spans_$mode.txt" | sort -rn | head -40
-  rm -f "$OUT/spans_$mode.raw"
+  echo "-- spans ($mode), busy time summed per span path (raw in spans_$mode.raw):"
+  python3 - "$OUT/spans_$mode.raw" <<'EOF' || true
+import re, sys, collections
+tot = collections.Counter(); cnt = collections.Counter()
+unit = {"ns": 1e-9, "\u00b5s": 1e-6, "us": 1e-6, "ms": 1e-3, "s": 1.0}
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    m = re.search(r"INFO (.*?): close time\.busy=([0-9.]+)(ns|\u00b5s|us|ms|s)\b", line)
+    if not m:
+        continue
+    path = re.sub(r"\{[^}]*\}", "", m.group(1))
+    tot[path] += float(m.group(2)) * unit[m.group(3)]; cnt[path] += 1
+for k, v in sorted(tot.items(), key=lambda kv: -kv[1])[:40]:
+    print(f"{v:9.2f} s  x{cnt[k]:<5d} {k}")
+EOF
 done
