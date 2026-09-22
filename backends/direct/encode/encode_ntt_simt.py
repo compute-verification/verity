@@ -121,6 +121,124 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
 """
 
 
+_SRC_V2 = r"""
+#define P 2013265921u
+#define NPINV %(npinv)du
+#define K %(k)d
+#define LOGK %(logk)d
+#define THREADS %(threads)d
+#define LOGT %(logt)d
+#define PER (K / THREADS)            /* elements per thread: i = t + THREADS * s */
+
+__device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return s >= P ? s - P : s; }
+__device__ __forceinline__ unsigned sub_p(unsigned a, unsigned b) { return a >= b ? a - b : a + P - b; }
+__device__ __forceinline__ unsigned mont_mul(unsigned a, unsigned w) {
+    unsigned long long x = (unsigned long long)a * w;
+    unsigned m = (unsigned)x * NPINV;
+    unsigned long long t = (x + (unsigned long long)m * P) >> 32;
+    return t >= P ? (unsigned)(t - P) : (unsigned)t;
+}
+
+/* Register-resident stages: thread t owns i = t + THREADS*s (s < PER), which contains the butterfly pairs of every
+   stage with m >= THREADS (partner s + m/THREADS).  Shared-memory stages (m < THREADS) use the coalesced butterfly
+   mapping b = t + THREADS*s.  Global loads/stores are the strided ownership: perfectly coalesced. */
+
+extern "C" __global__ void __launch_bounds__(THREADS)
+rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
+          const unsigned* __restrict__ tw_inv, const unsigned* __restrict__ tw_fwd,
+          const unsigned* __restrict__ coset_tw, int rows, int write_systematic)
+{
+    __shared__ unsigned x[K];
+    unsigned r[PER], coef[PER];
+    const int t = threadIdx.x;
+    for (int row = blockIdx.x; row < rows; row += gridDim.x) {
+        const unsigned* src = in + (size_t)row * K;
+        unsigned* dst = out + (size_t)row * (4 * K);
+        #pragma unroll
+        for (int s = 0; s < PER; ++s) {
+            r[s] = __ldg(&src[t + THREADS * s]);
+            if (write_systematic) dst[t + THREADS * s] = r[s];
+        }
+        /* INTT, DIF: register stages m = K/2 .. THREADS */
+        #pragma unroll
+        for (int lm = LOGK - 1; lm >= LOGT; --lm) {
+            const int m = 1 << lm, ms = m / THREADS;
+            #pragma unroll
+            for (int s = 0; s < PER; ++s) {
+                if (!(s & ms)) {
+                    const unsigned a = r[s], c = r[s + ms];
+                    r[s] = add_p(a, c);
+                    r[s + ms] = mont_mul(sub_p(a, c), __ldg(&tw_inv[m + t + THREADS * (s & (ms - 1))]));
+                }
+            }
+        }
+        #pragma unroll
+        for (int s = 0; s < PER; ++s) x[t + THREADS * s] = r[s];
+        __syncthreads();
+        /* INTT, DIF: shared-memory stages m = THREADS/2 .. 1 */
+        #pragma unroll 1
+        for (int lm = LOGT - 1; lm >= 0; --lm) {
+            const int m = 1 << lm;
+            #pragma unroll
+            for (int s = 0; s < PER / 2; ++s) {
+                const int b = t + s * THREADS;
+                const int tt = b & (m - 1);
+                const int i = ((b >> lm) << (lm + 1)) | tt;
+                const unsigned a = x[i], c = x[i + m];
+                x[i] = add_p(a, c);
+                x[i + m] = mont_mul(sub_p(a, c), __ldg(&tw_inv[m + tt]));
+            }
+            __syncthreads();
+        }
+        #pragma unroll
+        for (int s = 0; s < PER; ++s) coef[s] = x[t + THREADS * s];      /* bit-reversed unscaled coefficients */
+        #pragma unroll 1
+        for (int c = 1; c < 4; ++c) {
+            const unsigned* ct = coset_tw + (size_t)(c - 1) * K;
+            #pragma unroll
+            for (int s = 0; s < PER; ++s) x[t + THREADS * s] = mont_mul(coef[s], __ldg(&ct[t + THREADS * s]));
+            __syncthreads();
+            /* NTT, DIT: shared-memory stages m = 1 .. THREADS/2 */
+            #pragma unroll 1
+            for (int lm = 0; lm < LOGT; ++lm) {
+                const int m = 1 << lm;
+                #pragma unroll
+                for (int s = 0; s < PER / 2; ++s) {
+                    const int b = t + s * THREADS;
+                    const int tt = b & (m - 1);
+                    const int i = ((b >> lm) << (lm + 1)) | tt;
+                    const unsigned a = x[i];
+                    const unsigned cc = mont_mul(x[i + m], __ldg(&tw_fwd[m + tt]));
+                    x[i] = add_p(a, cc);
+                    x[i + m] = sub_p(a, cc);
+                }
+                __syncthreads();
+            }
+            #pragma unroll
+            for (int s = 0; s < PER; ++s) r[s] = x[t + THREADS * s];
+            /* NTT, DIT: register stages m = THREADS .. K/2 */
+            #pragma unroll
+            for (int lm = LOGT; lm < LOGK; ++lm) {
+                const int m = 1 << lm, ms = m / THREADS;
+                #pragma unroll
+                for (int s = 0; s < PER; ++s) {
+                    if (!(s & ms)) {
+                        const unsigned a = r[s];
+                        const unsigned cc = mont_mul(r[s + ms], __ldg(&tw_fwd[m + t + THREADS * (s & (ms - 1))]));
+                        r[s] = add_p(a, cc);
+                        r[s + ms] = sub_p(a, cc);
+                    }
+                }
+            }
+            unsigned* d = dst + (size_t)c * K;
+            #pragma unroll
+            for (int s = 0; s < PER; ++s) d[t + THREADS * s] = r[s];
+        }
+    }
+}
+"""
+
+
 def twiddle_tables(k: int, n: int) -> dict[str, np.ndarray]:
     """Host-side constant tables (uint32, Montgomery form): DIF inverse-stage twiddles, DIT forward-stage twiddles and
     the three fused coset tables ``k^-1 omega_n^(c i)`` stored at bit-reversed coefficient position."""
@@ -147,15 +265,16 @@ def twiddle_tables(k: int, n: int) -> dict[str, np.ndarray]:
 class RSEncoderSIMT:
     """cupy-backed encoder; ``__call__(rows_u32 (R, k) on device, out (R, n) or None) -> out``."""
 
-    def __init__(self, k: int = bb.K_CODE, n: int = bb.N_CODE, threads: int = 256, blocks: int | None = None):
+    def __init__(self, k: int = bb.K_CODE, n: int = bb.N_CODE, threads: int = 256, blocks: int | None = None, variant: str = "v2"):
         import cupy as cp
 
-        if n != 4 * k or k & (k - 1) or k < 2 * threads:
-            raise ValueError("this kernel is specialised to n = 4k, k a power of two >= 2 x threads")
-        self.k, self.n, self.threads = k, n, threads
+        if n != 4 * k or k & (k - 1) or k < 2 * threads or threads & (threads - 1):
+            raise ValueError("this kernel is specialised to n = 4k, k and threads powers of two, k >= 2 x threads")
+        self.k, self.n, self.threads, self.variant = k, n, threads, variant
         self.cp = cp
-        src = _SRC % {"npinv": bb.NEG_P_INV_MOD_R, "k": k, "logk": k.bit_length() - 1, "threads": threads}
-        self.kernel = cp.RawKernel(src, "rs_encode", options=("-std=c++17", "--use_fast_math"))
+        params = {"npinv": bb.NEG_P_INV_MOD_R, "k": k, "logk": k.bit_length() - 1, "threads": threads, "logt": threads.bit_length() - 1}
+        src = {"v1": _SRC, "v2": _SRC_V2}[variant] % params
+        self.kernel = cp.RawKernel(src, "rs_encode", options=("-std=c++17",))
         tabs = twiddle_tables(k, n)
         self.tw_fwd = cp.asarray(tabs["tw_fwd"])
         self.tw_inv = cp.asarray(tabs["tw_inv"])
