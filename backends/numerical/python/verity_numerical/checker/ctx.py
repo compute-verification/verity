@@ -29,20 +29,30 @@ __all__ = ["IntCtx", "Table", "Z3Ctx"]
 
 @dataclass(frozen=True)
 class Table:
-    """A fixed function on an integer key range, ``lo <= key < hi``; ``fn(key)`` returns the row's columns."""
+    """A fixed function on an integer key range, ``lo <= key < hi``; ``fn(key)`` returns the row's columns.
+
+    ``domain`` (optional) excludes keys inside the range (a sparse table: the excluded keys have no row and a
+    lookup on them fails).  ``sym`` (optional) is the same function on z3 integer expressions,
+    ``sym(z3, key) -> (in_domain, outs)``: the z3 searches use it instead of enumerating the rows when the
+    table is large (``ctx.Z3Ctx.lookup``).  ``size`` is the row count when the domain is sparse."""
 
     name: str
     lo: int
     hi: int
     outs: tuple[str, ...]
     fn: Callable[[int], tuple[int, ...]]
+    domain: Callable[[int], bool] | None = None
+    sym: Callable[..., tuple[object, tuple[object, ...]]] | None = None
+    size: int | None = None
 
     @property
     def rows(self) -> int:
-        return self.hi - self.lo
+        return self.size if self.size is not None else self.hi - self.lo
 
     def row(self, key: int) -> tuple[int, ...]:
         if type(key) is not int or not self.lo <= key < self.hi:
+            raise KeyError(key)
+        if self.domain is not None and not self.domain(key):
             raise KeyError(key)
         return self.fn(key)
 
@@ -115,8 +125,13 @@ class Z3Ctx:
                 return tuple(0 for _ in table.outs)
             return table.row(key)
         outs = tuple(self.fresh(f"{name}.{o}") for o in table.outs)
+        if table.sym is not None:
+            in_domain, vals = table.sym(z3, key)
+            self._add(z3.And(key >= table.lo, key < table.hi, in_domain, *[o == v for o, v in zip(outs, vals)]))
+            return outs
         rows = [
-            z3.And(key == k, *[o == v for o, v in zip(outs, table.fn(k))]) for k in range(table.lo, table.hi)
+            z3.And(key == k, *[o == v for o, v in zip(outs, table.fn(k))])
+            for k in range(table.lo, table.hi) if table.domain is None or table.domain(k)
         ]
         self._add(z3.Or(rows))
         return outs
