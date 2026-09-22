@@ -193,6 +193,54 @@ def test_full_anchor_sweep_pins(store, repo):
     assert "independently_verified=true" in joined
 
 
+def test_a_disagreeing_record_cited_by_a_resolved_d_entry_is_superseded(store, repo):
+    """fp4-re's situation: the sweep that *found* the discrepancy disagrees with the model as it stood; once the D-entry citing that run
+    is resolved and a fresh sweep reproduces every word, the old record no longer blocks PINNED (it stays in the evidence as SUPERSEDED)."""
+    bad = hw(store, mismatches=29_118, elements=N_MIN // 4, host="gpu-old")
+    bad_run = store.get_artifact(bad)["meta"]["run_id"] if hasattr(store, "get_artifact") else None
+    hw(store, host="gpu-new")                                        # the re-sweep under the corrected model
+    rep = assess("FP8_ADA_MMA", store, repo=repo)
+    assert rep.level == "HYPOTHESIS" and not crit(rep, "P1").passed  # the finding is not yet explained
+    run_id = bad_run or next(r for r in trust.Evidence.collect(store).hardware if r.id == bad).run_id
+    write_log(repo, [dlog("D10", "resolved", evidence_refs=[GOLDEN]), dlog("D99", "resolved", evidence_refs=[run_id])])
+    trust.REGRESSION_TILES.setdefault("D99", ("family:randn_random_acc",))
+    try:
+        rep = assess("FP8_ADA_MMA", store, repo=repo)
+    finally:
+        trust.REGRESSION_TILES.pop("D99", None)
+    assert crit(rep, "P1").passed and crit(rep, "P1").details["superseded"] == {bad: ["D99"]}
+    assert rep.level == "PINNED", rep.missing_to_next
+    assert any("SUPERSEDED" in e.note for e in crit(rep, "P1").evidence)
+
+
+def test_fp4_probe_envelope_attributes_the_primary_model_and_ignores_the_control(store, repo, monkeypatch):
+    """tc_probe_fp4 scores the registry model ("verity") and autoproof's refuted model5 side by side; the record's mismatches for the
+    registry model come from the primary key, model5's count is not attributed, and a model5-only sweep is evidence about nothing here."""
+    ins = "sm120.mma.m16n8k64.e2m1.nvf4"
+    registry = trust.INSTRUCTIONS[ins].model.name
+    fams = {"random_zero_acc": {"elements": 1000, "mismatches": {"model5": 7, "verity": 0}, "record_only": False},
+            "specials": {"elements": 10, "mismatches": {"model5": 3, "verity": 3}, "record_only": True}}
+    meta = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": "r20260922-000000-fp4a", "instruction": ins, "sku": "NVIDIA GeForce RTX 5090",
+            "arch": "sm_120a", "primary_model": "verity", "counts": {"elements": 1010, "mismatches": {"model5": 7, "verity": 0}}, "families": fams,
+            "workload_fingerprint": {"instruction": ins}, "validation": {"status": "passed"}}
+    art = store.put_artifact("tc-evidence/v1", meta)
+    old = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": "r20260922-000000-fp4b", "instruction": ins, "sku": "NVIDIA GeForce RTX 5090",
+           "arch": "sm_120a", "counts": {"elements": 500, "mismatches": {"model5": 29118}, "replay_cases": 1601, "replay_matched": 1601},
+           "families": {"random_zero_acc": {"elements": 500, "mismatches": {"model5": 29118}}}, "workload_fingerprint": {"instruction": ins, "replays": ["probe3.json"]},
+           "validation": {"status": "failed"}}
+    art_old = store.put_artifact("tc-evidence/v1", old)
+    for a in (art, art_old):
+        for k, v in (("instruction", ins), ("hardware", "rtx5090"), ("evidence", "sweep")):
+            store.add_label(a, k, v, "test")
+    recs = {r.id: r for r in trust.Evidence.collect(store).hardware}
+    names = trust.subjects(ins).model_names
+    assert recs[art].mismatches_for(names) == 0 and recs[art].agrees(names)
+    assert recs[art].families["random_zero_acc"]["mismatches"][trust._norm_model(registry)] == 0
+    assert recs[art].families["specials"]["asserted"] is False
+    assert recs[art_old].mismatches_for(names) is None
+    assert not recs[art_old].agrees(names) and recs[art_old].partially_agrees(names) is None  # the autoproof replay does not vouch for the new model
+
+
 def test_too_few_elements_or_a_missing_family_blocks_pinned(store, repo):
     hw(store, elements=N_MIN // 10, families=FAMILIES[:-2])
     rep = assess("FP8_ADA_MMA", store, repo=repo)
