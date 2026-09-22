@@ -61,9 +61,48 @@ def _frob(a: torch.Tensor) -> torch.Tensor:
     return (a * w) % P
 
 
+_FAST: dict = {}
+R_MOD_P = pow(2, 32, P)
+R_INV = pow(R_MOD_P, P - 2, P)
+
+
+def _fast_inverter(device):
+    """b-v2's blocked Montgomery batch inverter (``buckets_v2.BatchInverterBlocked``, cupy) when importable on CUDA;
+    ``V2_FAST_INV=0`` disables it.  Memoised per device; None when unavailable."""
+    import os
+
+    key = str(device)
+    if key in _FAST:
+        return _FAST[key]
+    inv = None
+    if str(device).startswith("cuda") and os.environ.get("V2_FAST_INV", "1") != "0":
+        try:
+            from backends.direct.encode.buckets_v2 import BatchInverterBlocked
+
+            inv = BatchInverterBlocked()
+        except Exception:  # noqa: BLE001 -- no cupy / kernel build failure: the torch path stays
+            inv = None
+    _FAST[key] = inv
+    return inv
+
+
 def fc_inv(a: torch.Tensor) -> torch.Tensor:
-    """Elementwise inverse over the last axis (0 -> 0)."""
+    """Elementwise inverse over the last axis (0 -> 0).  On CUDA with cupy: the b-v2 blocked Montgomery kernel."""
     a = a % P
+    inv = _fast_inverter(a.device)
+    if inv is not None and a.numel() >= 6:
+        import cupy as cp
+
+        shape = a.shape
+        flat = a.reshape(-1, D)
+        mont = ((flat * R_MOD_P) % P).t().contiguous().to(torch.int32)        # (D, N) Montgomery form
+        out = inv(cp.from_dlpack(mont).view(cp.uint32))
+        res = torch.from_dlpack(out.view(cp.int32)).to(torch.int64) & 0xFFFFFFFF   # (D, N) = mont(a^-1)
+        return ((res * R_INV) % P).t().reshape(shape)
+    return _fc_inv_torch(a)
+
+
+def _fc_inv_torch(a: torch.Tensor) -> torch.Tensor:
     # r = a^(p + p^2 + ... + p^5): Frobenius powers multiplied together
     f = _frob(a)                       # a^p
     r = f
