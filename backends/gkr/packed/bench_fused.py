@@ -167,10 +167,67 @@ def _kernel_pieces(kernel: sp.Kernel, n: int, k: int, repeats: int, warm: int, s
     return out
 
 
+def micro(n: int, k: int, repeats: int, warm: int, k1_log2: int) -> dict:
+    """Configuration sweep of the fused kernels alone at the ``(2^n, k)`` shape (graphed medians, ms)."""
+    import torch
+
+    from packed import kernels_fused as kf
+
+    kernel = sp.Kernel("cuda", k1_log2=k1_log2, mode="triton")
+    tk = kernel._tk
+    dev = kernel.device
+    gen = torch.Generator(device="cpu").manual_seed(5)
+    t = 1 << n
+    g = torch.randint(0, ref.P, (t,), dtype=torch.int64, generator=gen).to(torch.int32).to(dev)
+    h = torch.randint(0, ref.P, (t,), dtype=torch.int64, generator=gen).to(torch.int32).to(dev)
+    rng = random.Random(6)
+    gammas = [ref.random_ext(rng) for _ in range(n)]
+    out: dict = {}
+    inp_k = kernel.inputs(gammas, [], k, k)
+    K1, K2 = kernel.split(t >> k)
+    inp_k.e_lo32 = torch.nn.functional.pad(inp_k.e_lo_limbs, (0, 32 - B.DL))
+    for name, fn in (("u_tensor", kf.packed_u_inner_product), ("u_gen", tk.packed_u_inner_product_gen)):
+        for bk in (64, 128, 256):
+            for w in (4, 8):
+                split = 1
+                while K2 * split < 264 and K1 % (split * 2 * bk) == 0:
+                    split *= 2
+                if K1 % (split * bk):
+                    continue
+                try:
+                    tm, _ = B.time_graphed(lambda: fn(g, h, inp_k.e_lo32, k, K1, K2, split, BLOCK_K=bk, num_warps=w), repeats, warm)
+                    out[f"{name}.bk{bk}.w{w}"] = tm * 1e3
+                except Exception as e:  # noqa: BLE001
+                    out[f"{name}.bk{bk}.w{w}"] = f"error {type(e).__name__}"
+                print(name, bk, w, out[f"{name}.bk{bk}.w{w}"], flush=True)
+    del g, h
+    m_pairs = t >> (k + 2)
+    gE = torch.randint(0, ref.P, (4 * m_pairs, 6), dtype=torch.int64, generator=gen).to(torch.int32).to(dev)
+    hE = torch.randint(0, ref.P, (4 * m_pairs, 6), dtype=torch.int64, generator=gen).to(torch.int32).to(dev)
+    K1, K2 = kernel.split(m_pairs)
+    i = k + 2
+    inp = kernel.inputs(gammas, [ref.random_ext(rng) for _ in range(i - 1)], i, k, ref.random_ext(rng))
+    inp.e_lo32 = torch.nn.functional.pad(inp.e_lo_limbs, (0, 32 - B.DL))
+    r_R = inp.fold_r
+    for bk in (32, 64, 128):
+        for w in (2, 4, 8):
+            split = 1
+            while K2 * split < 264 and K1 % (split * 2 * bk) == 0:
+                split *= 2
+            try:
+                tm, _ = B.time_graphed(lambda: tk.ext_fold_inner_product(gE, hE, r_R, inp.e_lo32, K1, K2, split, BLOCK_K=bk, num_warps=w), repeats, warm)
+                out[f"ext_fold_ip.bk{bk}.w{w}"] = tm * 1e3
+            except Exception as e:  # noqa: BLE001
+                out[f"ext_fold_ip.bk{bk}.w{w}"] = f"error {type(e).__name__}"
+            print("ext_fold_ip", bk, w, out[f"ext_fold_ip.bk{bk}.w{w}"], flush=True)
+    return out
+
+
 def main(argv=None) -> int:
     import torch
 
     ap = argparse.ArgumentParser()
+    ap.add_argument("--micro", action="store_true", help="configuration sweep of the fused kernels alone")
     ap.add_argument("--out", required=True)
     ap.add_argument("--log2", type=int, nargs="*", default=[26])
     ap.add_argument("--ks", type=int, nargs="*", default=[3])
@@ -181,6 +238,10 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    if a.micro:
+        res = {f"2^{n}.k{k}": micro(n, k, a.repeats, a.warm, a.k1_log2) for n in a.log2 for k in a.ks}
+        (out / "micro.json").write_text(json.dumps(res, indent=1) + "\n")
+        return 0
     hw = B.probe_hardware()
     peaks = B.GPU_PEAKS[hw["gpu"]["name"]]
     peak_macs = peaks["int8_dense_tops"] * 1e12 / 2

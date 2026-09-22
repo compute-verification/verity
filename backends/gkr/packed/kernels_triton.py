@@ -372,6 +372,54 @@ def _ext_ip_source() -> str:
     return "\n".join(L) + "\n"
 
 
+def _packed_u_source(k: int) -> str:
+    """a-fusion's U pass in the generated (explicit-name) style of :func:`_packed_ip_source`: per ``b'`` all ``4^k``
+    products ``g(c, b') h(c', b')``, 4 limbs each, one ``tl.dot`` against the eq limbs of ``b'``; rows ``r = c 2^k + c'``."""
+    twok = 1 << k
+    rows4 = twok * twok * 4
+    rows_pad = max(16, triton.next_power_of_2(rows4))
+    L: list[str] = []
+    L.append("@triton.jit")
+    L.append(f"def packed_u_{k}(g_ptr, h_ptr, e_ptr, z_ptr, K1, SPLIT_LEN, BLOCK_K: tl.constexpr):")
+    L.append("    b2 = tl.program_id(0)")
+    L.append("    sp = tl.program_id(1)")
+    L.append("    offs_n = tl.arange(0, 32)")
+    L.append(f"    acc = tl.zeros(({rows_pad}, 32), dtype=tl.int32)")
+    L.append("    for c in range(0, SPLIT_LEN, BLOCK_K):")
+    L.append("        b1 = sp * SPLIT_LEN + c + tl.arange(0, BLOCK_K)")
+    L.append(f"        col = (b2.to(tl.int64) * K1 + b1) * {twok}")
+    L.append("        E = tl.load(e_ptr + b1[:, None] * 32 + offs_n[None, :])")
+    for c in range(twok):
+        L.append(f"        g_{c} = tl.load(g_ptr + col + {c})")
+        L.append(f"        h_{c} = tl.load(h_ptr + col + {c})")
+    names = []
+    for c in range(twok):
+        for cp in range(twok):
+            r = c * twok + cp
+            L.append(f"        l{r}_0, l{r}_1, l{r}_2, l{r}_3 = _limbs(mmul(g_{c}, h_{cp}))")
+            names += [f"l{r}_{j}" for j in range(4)]
+    top = _join_tree(L, names, "        ")
+    L.append(f"        A = tl.reshape({top}, (BLOCK_K, {rows_pad}), can_reorder=False)")
+    L.append("        acc += tl.dot(tl.trans(A), E, out_dtype=tl.int32)")
+    L.append(f"    offs_m = tl.arange(0, {rows_pad})")
+    L.append(f"    z = z_ptr + ((sp * tl.num_programs(0) + b2).to(tl.int64) * {rows4}) * 24")
+    L.append("    tl.store(z + offs_m[:, None] * 24 + offs_n[None, :], acc, mask=offs_n[None, :] < 24)")
+    return "\n".join(L) + "\n"
+
+
+def packed_u_inner_product_gen(g: torch.Tensor, h: torch.Tensor, e_lo32: torch.Tensor, k: int, K1: int, K2: int, split: int,
+                               BLOCK_K: int = 128, num_warps: int = 4) -> torch.Tensor:
+    """Generated-style twin of ``kernels_fused.packed_u_inner_product`` (same output layout)."""
+    if not 1 <= k <= 3:
+        raise ValueError("packed U pass covers k = 1..3")
+    if K1 % (split * BLOCK_K):
+        raise ValueError("K1 must be a multiple of split * BLOCK_K")
+    rows4 = 4 << (2 * k)
+    Z = torch.empty((split, K2 * rows4, 24), dtype=torch.int32, device=g.device)
+    getattr(_generated(), f"packed_u_{k}")[(K2, split)](g, h, e_lo32, Z, K1, K1 // split, BLOCK_K=BLOCK_K, num_warps=num_warps)
+    return Z
+
+
 def _ext_fold_ip_source() -> str:
     """Extension round ``i`` with round ``i - 1``'s fold fused in (lane a-fusion): the tables are read *pre-fold* (4 entries
     per pair ``b``: rows ``4 b .. 4 b + 3`` of the ``(t_{i-1}, 6)`` table), folded by ``r_{i-1}`` in registers into the pair
@@ -637,7 +685,7 @@ def _generated():
     if _MODULE is not None:
         return _MODULE
     src = "\n".join([_HEADER, _ext_mul_helper_source(), _ext_mmul_helper_source(), _ext_hadamard_source(), *[_packed_hadamard_source(1 << e) for e in range(4)],
-                     *[_packed_ip_source(1 << e) for e in range(FUSED_MAX_LOG2_HALF + 1)], _packed_ip_split_source(8), _ext_ip_source(), _ext_fold_ip_source(),
+                     *[_packed_ip_source(1 << e) for e in range(FUSED_MAX_LOG2_HALF + 1)], _packed_ip_split_source(8), _ext_ip_source(), _ext_fold_ip_source(), *[_packed_u_source(kk) for kk in (1, 2, 3)],
                      *[_packed_ip_source(1 << e, linear=True) for e in range(FUSED_MAX_LOG2_HALF + 1)], _logup_ext_ip_source(),
                      _reduce_contract_source(1), _reduce_contract_source(6), _finish_round_source()]) + "\n"
     digest = hashlib.sha256(src.encode()).hexdigest()[:16]
