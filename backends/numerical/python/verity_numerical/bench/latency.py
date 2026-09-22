@@ -1,0 +1,394 @@
+"""End-to-end latency as a first-class axis: what each design costs in wall-clock time per batch when every challenge
+is a real network round trip, and what pipelining independent batches needs to recover throughput.
+
+The protocol is INTERACTIVE (``backends/ZK_CONSTRUCTION.md`` 3.3: the verifier-coin commitment gives
+malicious-verifier ZK at +1 depth, where Fiat-Shamir would force a re-parameterisation), so ``rounds.sequential_depth``
+verifier messages are ``depth`` network round trips on the critical path.  Model (``backends/AGENTS.md`` "Latency is a
+first-class axis"; the contract's ``t.e2e.rtt_<x>ms``)::
+
+    t.e2e(rtt, bw) = t.prove + t.verify + depth x rtt + bytes / bw          (the honest serial number for one batch)
+
+``t.prove`` is prover compute at zero-latency transport (``t.total``), ``t.verify`` the verifier's compute (its per-round
+checks are serial with the prover's, so they are on the critical path; a verifier that only derives coins and defers
+its checks would take them off it -- not assumed), ``bytes`` the total communication (``transcript.bytes`` plus the
+coins), ``bw`` the link bandwidth.  Everything below is per *batch* (one proof of ``B`` VUs).
+
+Pipelining.  Independent batches can be interleaved: while batch 1 waits for a coin the prover works on batch 2.  With
+``N`` batches in flight the prover is busy ``N x t.prove`` out of every ``t.e2e``, so::
+
+    throughput(N)  = min(N / t.e2e, 1 / t.prove, 1 / t.verify)   batches / s
+    N_saturate     = ceil(t.e2e / t.prove)                        batches in flight that saturate the prover
+    memory(N)      = N x mem_per_batch                            must fit the prover's memory
+
+``mem_per_batch`` is what an in-flight batch holds between coins: for A the committed trace plus the sumcheck state
+(peak RSS on the CPU; the codeword store + the phase-1 tables on a GPU), for B the trace plus the codeword store.  When
+``N_saturate x mem_per_batch`` exceeds the machine, memory is the binding constraint and the achievable throughput is
+``floor(capacity / mem_per_batch) / t.e2e``; :func:`memory_binding_rtt` is the RTT at which that happens.
+
+Crossovers.  :func:`crossover_rtt` solves ``t.e2e_a(rtt) = t.e2e_b(rtt)`` for two designs: the RTT above which the
+shallower protocol has the lower end-to-end latency despite a slower prover.
+
+:data:`CATALOG` holds the designs the report runs (numbers from the recorded runs and reports named in each entry;
+every one labelled with its proof class, hardware, and what is modelled rather than measured); :func:`from_envelope`
+builds a design from a ``result.json`` that carries ``rounds.sequential_depth`` (the measured runs of this lane).
+``python -m verity_numerical.bench.latency [--envelope NAME=result.json ...] [--out reports/latency]`` writes the
+report (``latency.md`` + ``latency.json``).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import asdict, dataclass, replace
+from pathlib import Path
+from typing import Any
+
+__all__ = [
+    "BANDWIDTHS_GBPS",
+    "CATALOG",
+    "RTTS_MS",
+    "Design",
+    "bandwidth_for_compute_bound",
+    "crossover_rtt",
+    "e2e",
+    "from_envelope",
+    "memory_binding_rtt",
+    "n_saturate",
+    "pipeline",
+    "report",
+    "sweep",
+]
+
+#: The contract's RTT sweep (ms) and the link speeds of the report (Gbit/s).
+RTTS_MS: tuple[float, ...] = (0.0, 0.1, 1.0, 10.0, 50.0)
+BANDWIDTHS_GBPS: tuple[float, ...] = (10.0, 25.0, 100.0)
+GIB = 1 << 30
+GB = 1e9
+MB = 1e6
+NATIVE_S_PER_VU = 2 * 1536 / 312e12  # contract.NATIVE_REFERENCE at K = 1536 (9.85 ps)
+
+
+@dataclass(frozen=True)
+class Design:
+    """One design at one operating point.  Times in seconds per batch, bytes per batch."""
+
+    name: str
+    prove_s: float
+    verify_s: float
+    depth: int
+    bytes_pv: float
+    mem_per_batch_bytes: float
+    mem_capacity_bytes: float
+    B: int
+    hardware: str
+    proof_class: str
+    source: str
+    K: int = 1536
+    protocol_rounds: int | None = None
+    bytes_vp: float = 0.0
+    interactive: bool = True
+    verify_note: str = ""
+    notes: str = ""
+
+    @property
+    def bytes_total(self) -> float:
+        return self.bytes_pv + self.bytes_vp
+
+    @property
+    def compute_s(self) -> float:
+        return self.prove_s + self.verify_s
+
+
+# --- the model -----------------------------------------------------------------------------------------------------
+
+
+def e2e(d: Design, rtt_ms: float, bw_gbps: float | None = None) -> dict[str, float]:
+    """The serial end-to-end time of one batch and its parts: ``prove + verify + depth x rtt + bytes / bw``."""
+
+    if rtt_ms < 0:
+        raise ValueError("rtt_ms must be non-negative")
+    network = d.depth * rtt_ms / 1000.0
+    transfer = 0.0 if bw_gbps is None else d.bytes_total * 8 / (bw_gbps * 1e9)
+    if bw_gbps is not None and bw_gbps <= 0:
+        raise ValueError("bw_gbps must be positive")
+    total = d.prove_s + d.verify_s + network + transfer
+    return {"prove": d.prove_s, "verify": d.verify_s, "network": network, "transfer": transfer, "total": total,
+            "network_share": network / total if total else 0.0}
+
+
+def n_saturate(d: Design, rtt_ms: float, bw_gbps: float | None = None) -> int:
+    """Batches in flight that keep the prover busy: ``ceil(t.e2e / t.prove)``."""
+
+    return max(1, math.ceil(e2e(d, rtt_ms, bw_gbps)["total"] / d.prove_s - 1e-12))
+
+
+def pipeline(d: Design, rtt_ms: float, bw_gbps: float | None = None, n_inflight: int | None = None) -> dict[str, Any]:
+    """Throughput with ``n_inflight`` batches interleaved (default: the saturating N, capped by memory)."""
+
+    t = e2e(d, rtt_ms, bw_gbps)["total"]
+    n_sat = n_saturate(d, rtt_ms, bw_gbps)
+    n_mem = max(1, int(d.mem_capacity_bytes // d.mem_per_batch_bytes)) if d.mem_per_batch_bytes > 0 else n_sat
+    n = n_inflight if n_inflight is not None else min(n_sat, n_mem)
+    if n < 1:
+        raise ValueError("n_inflight must be at least 1")
+    prover_bound = 1.0 / d.prove_s
+    verifier_bound = 1.0 / d.verify_s if d.verify_s > 0 else math.inf
+    latency_bound = n / t
+    batches_per_s = min(latency_bound, prover_bound, verifier_bound)
+    binding = min((latency_bound, "in-flight batches (latency)"), (prover_bound, "prover compute"), (verifier_bound, "verifier compute"))[1]
+    if n_inflight is None and n_sat > n_mem:
+        binding = "memory (cannot hold N_saturate batches)"
+    vu_per_s = batches_per_s * d.B
+    return {
+        "n_inflight": n, "n_saturate": n_sat, "n_memory_max": n_mem, "memory_bytes": n * d.mem_per_batch_bytes,
+        "memory_fits": n * d.mem_per_batch_bytes <= d.mem_capacity_bytes if d.mem_per_batch_bytes > 0 else True,
+        "batches_per_s": batches_per_s, "vu_per_s": vu_per_s,
+        "seconds_per_vu": 1.0 / vu_per_s if vu_per_s else math.inf,
+        "overhead_vs_native_peak": (1.0 / vu_per_s) / NATIVE_S_PER_VU if vu_per_s else math.inf,
+        "prover_utilisation": min(1.0, n * d.prove_s / t),
+        "binding": binding,
+    }
+
+
+def memory_binding_rtt(d: Design, bw_gbps: float | None = None) -> float | None:
+    """The RTT (ms) above which the saturating number of in-flight batches no longer fits in memory (``None`` when
+    memory never binds, e.g. depth 0)."""
+
+    if d.mem_per_batch_bytes <= 0 or d.depth == 0:
+        return None
+    n_mem = int(d.mem_capacity_bytes // d.mem_per_batch_bytes)
+    base = e2e(d, 0.0, bw_gbps)["total"]
+    # N_saturate(rtt) = ceil(t.e2e / prove) > n_mem  <=>  t.e2e > n_mem x prove
+    rtt = (n_mem * d.prove_s - base) / d.depth * 1000.0
+    return max(0.0, rtt)
+
+
+def crossover_rtt(a: Design, b: Design, bw_gbps: float | None = None) -> float | None:
+    """The RTT (ms) at which ``a`` and ``b`` have the same end-to-end latency (``None`` if parallel or the shallower
+    design is already faster at RTT 0, i.e. no positive crossover)."""
+
+    ca, cb = e2e(a, 0.0, bw_gbps)["total"], e2e(b, 0.0, bw_gbps)["total"]
+    if a.depth == b.depth:
+        return None
+    rtt = (cb - ca) / (a.depth - b.depth) * 1000.0
+    return rtt if rtt > 0 else None
+
+
+def bandwidth_for_compute_bound(d: Design) -> float:
+    """The link speed (Gbit/s) at which transferring the batch takes as long as proving it: below it the design is
+    bandwidth-bound."""
+
+    return d.bytes_total * 8 / d.prove_s / 1e9
+
+
+def sweep(designs: Iterable[Design], rtts_ms: Sequence[float] = RTTS_MS, bws_gbps: Sequence[float] = BANDWIDTHS_GBPS) -> list[dict[str, Any]]:
+    """One row per (design, RTT, bandwidth): the serial e2e and the pipelined throughput at the saturating N."""
+
+    rows = []
+    for d in designs:
+        for rtt in rtts_ms:
+            for bw in bws_gbps:
+                row = {"design": d.name, "B": d.B, "rtt_ms": rtt, "bw_gbps": bw, **{f"e2e.{k}": v for k, v in e2e(d, rtt, bw).items()},
+                       **{f"pipe.{k}": v for k, v in pipeline(d, rtt, bw).items()}}
+                rows.append(row)
+    return rows
+
+
+# --- designs -------------------------------------------------------------------------------------------------------
+
+
+def from_envelope(name: str, result: Mapping[str, Any], *, mem_capacity_bytes: float, mem_per_batch_bytes: float | None = None,
+                  source: str | None = None, notes: str = "") -> Design:
+    """A design from a ``result.json`` with ``t.total``, ``verifier.seconds``, ``rounds.sequential_depth``,
+    ``transcript.bytes`` and (unless given) ``mem.peak_host_bytes`` / ``mem.peak_device_bytes``."""
+
+    m = {x["name"]: x["value"] for x in result.get("measurements", []) if isinstance(x, Mapping) and "name" in x}
+    fp = result.get("workload_fingerprint") or {}
+    for key in ("t.total", "verifier.seconds", "rounds.sequential_depth", "transcript.bytes"):
+        if key not in m:
+            raise ValueError(f"{name}: envelope lacks {key}")
+    mem = mem_per_batch_bytes if mem_per_batch_bytes is not None else m.get("mem.peak_device_bytes") or m.get("mem.peak_host_bytes")
+    if mem is None:
+        raise ValueError(f"{name}: no mem.peak_* measurement; pass mem_per_batch_bytes")
+    hw = fp.get("hardware") or {}
+    dev = (hw.get("gpu") or {}).get("name") or (hw.get("cpu") or {}).get("model") or "?"
+    return Design(
+        name=name, prove_s=float(m["t.total"]), verify_s=float(m["verifier.seconds"]), depth=int(m["rounds.sequential_depth"]),
+        protocol_rounds=int(m["rounds.protocol"]) if "rounds.protocol" in m else None, bytes_pv=float(m["transcript.bytes"]),
+        bytes_vp=32.0 * int(m.get("rounds.protocol", m["rounds.sequential_depth"])),  # one 32-byte coin per slot
+        mem_per_batch_bytes=float(mem), mem_capacity_bytes=mem_capacity_bytes, B=int(fp.get("B", 0)), K=int(fp.get("K", 1536)),
+        hardware=dev, proof_class=str(fp.get("proof_class", "?")), source=source or str(result.get("run_id", "?")), notes=notes,
+    )
+
+
+CPU2 = "AMD EPYC 9654 (vy-cpu2, 12 of 32 threads, shared with b-lookup and checker-min)"
+CPU2_MEM = 256 * GB
+GPU_4090 = "RTX 4090 24 GB"
+GPU_4090_MEM = 24 * GB
+GPU_H100 = "H100 80 GB"
+GPU_H100_MEM = 80 * GB
+
+#: The designs of the report at K = 1536.  ``prove_s`` is the zero-latency prover compute per batch (``t.total``).
+#: CPU rows are the recorded runs of backends/gkr/README.md and backends/direct/README.md (the ``--rtt-ms`` runs of
+#: this lane replace them when their envelopes are given); GPU rows are the re-priced kernel measurements of the
+#: named reports (prover time measured or re-priced per bucket; memory per batch from the reports' device-memory
+#: numbers; the verifier's time is the CPU verifier's, an assumption for a GPU pair).
+CATALOG: dict[str, Design] = {
+    "A-CPU Goldilocks^3": Design(
+        name="A-CPU Goldilocks^3 (GKR+logUp+Ligero)", prove_s=261.3, verify_s=26.1, depth=355, protocol_rounds=3179, bytes_pv=69_693_032,
+        bytes_vp=32 * 3179, mem_per_batch_bytes=33.8 * GB, mem_capacity_bytes=CPU2_MEM, B=4096, hardware=CPU2,
+        proof_class="NON_ZK_PROOF_DIAGNOSTIC", source="backends/gkr/README.md r20260922-065844-2b84 (depth: measured trips of this lane, was 381 by the derived counter)",
+        notes="memory = peak RSS (the committed trace + codeword store + sumcheck state)"),
+    "A-CPU BabyBear^6": Design(
+        name="A-CPU BabyBear^6 (GKR+logUp+Ligero)", prove_s=319.3, verify_s=45.0, depth=355, protocol_rounds=3176, bytes_pv=33_394_904,
+        bytes_vp=32 * 3176, mem_per_batch_bytes=25.7 * GB, mem_capacity_bytes=CPU2_MEM, B=4096, hardware=CPU2,
+        proof_class="NON_ZK_PROOF_DIAGNOSTIC", source="backends/gkr/README.md r20260922-065112-d687; depth as Goldilocks (same lookup chain)"),
+    "A-GPU re-priced (4090, fused SIMT)": Design(
+        name="A-GPU re-priced (4090 fused SIMT sumcheck, BabyBear^6)", prove_s=0.866, verify_s=45.0, depth=355, protocol_rounds=3176, bytes_pv=36 * MB,
+        bytes_vp=32 * 3176, mem_per_batch_bytes=15.6 * GB + 3.0 * GB, mem_capacity_bytes=GPU_4090_MEM, B=4096, hardware=GPU_4090,
+        proof_class="ARITHMETIC_DIAGNOSTIC (re-pricing)", source="reports/fused_sumcheck_4090.md: 0.866 s/batch (graphed x96, conservative; 0.641 s at census widths); ledger a-fused 2.15e7",
+        verify_note="CPU BabyBear verifier 45 s used (no GPU verifier measured): dominates the serial e2e; a GPU verifier or deferred checks would change this row",
+        notes="memory = phase-1 tables 15.6 GB (PROTOCOL.md 12.4) + codeword store 45,809 rows x 16,384 x 4 B = 3.0 GB; one batch per 24 GB card"),
+    "A-GPU re-priced (H100, packed model)": Design(
+        name="A-GPU re-priced (H100 packed sumcheck, model)", prove_s=0.43, verify_s=45.0, depth=355, protocol_rounds=3176, bytes_pv=36 * MB,
+        bytes_vp=32 * 3176, mem_per_batch_bytes=15.6 * GB + 3.0 * GB, mem_capacity_bytes=GPU_H100_MEM, B=4096, hardware=GPU_H100,
+        proof_class="ARITHMETIC_DIAGNOSTIC (model)", source="ledger a-packed: A re-priced w/ packed sumcheck, model, 1.07e7 -> 0.43 s/batch",
+        verify_note="CPU BabyBear verifier 45 s used (assumption)"),
+    "B-CPU AIR (Plonky3 FRI, Goldilocks)": Design(
+        name="B-CPU AIR (Plonky3 uni-stark FRI, Goldilocks^2)", prove_s=182.65, verify_s=0.148, depth=22, protocol_rounds=24, bytes_pv=3_231_120,
+        bytes_vp=32 * 24, mem_per_batch_bytes=59.8 * GB, mem_capacity_bytes=CPU2_MEM, B=4096, hardware=CPU2,
+        proof_class="NON_ZK_PROOF_DIAGNOSTIC", source="backends/direct/README.md r20260922-055326-699d (depth: measured observe->sample boundaries of this lane, was 24 derived); as run it is Fiat-Shamir (depth 1); the interactive reading is the campaign's",
+        notes="t.total includes 24.2 s witness generation; memory = peak RSS (trace 2^19 x 2,844 + LDE + Merkle)"),
+    "B-Ligero GPU re-priced (4090)": Design(
+        name="B-Ligero GPU re-priced (4090, BabyBear, helper columns)", prove_s=0.259, verify_s=0.4, depth=3, protocol_rounds=7, bytes_pv=240 * MB,
+        bytes_vp=32 * 7 + 16384 * 8, mem_per_batch_bytes=20.6 * GIB, mem_capacity_bytes=GPU_4090_MEM, B=4096, hardware=GPU_4090,
+        proof_class="ARITHMETIC_DIAGNOSTIC (re-pricing, HVZK rows)", source="reports/b_measured_4090.md: 259 ms/batch, 95% measured; peak device memory 20.6 GiB (codeword store kept)",
+        verify_note="0.4 s assumed (the CPU FRI verifier's range 0.15-0.4 s; the Ligero verifier re-encodes t = 192 columns of 310,602 rows)",
+        notes="bytes: t = 192 opened columns x 310,602 rows x 4 B = 238 MB + tests (ZK_CONSTRUCTION.md 1); depth 3 interactive (4 with step 0)"),
+    "SP1 (FS, B=1)": Design(
+        name="SP1 core (Fiat-Shamir, one VU per proof)", prove_s=3.58, verify_s=0.245, depth=1, protocol_rounds=1, bytes_pv=5_898_276, bytes_vp=0,
+        mem_per_batch_bytes=9.94 * GB, mem_capacity_bytes=GPU_4090_MEM, B=1, hardware="RTX 4090 (vy-sp1), SP1 6.4.0 cuda", interactive=False,
+        proof_class="NON_ZK_PROOF (authentication included)", source="benchmarks/dot_product/baselines.json r20260921-220722-019b",
+        notes="depth 1: the proof is one message; the transferable baseline; peak GPU memory 9.9 GB per proof"),
+    "C QuickSilver CPU (F61p, 2^-36)": Design(
+        name="C QuickSilver CPU (dietmc F61p, 2^-36 sensitivity point)", prove_s=0.40835 * 4096, verify_s=0.40835 * 4096, depth=3, protocol_rounds=3,
+        bytes_pv=8.58 * MB * 4096, bytes_vp=0.25 * MB * 4096, mem_per_batch_bytes=1.4 * GB, mem_capacity_bytes=128 * GB, B=4096,
+        hardware="AMD EPYC 9655P (vy-cpu, 1 thread)", proof_class="COMPLETE_ZK_BACKEND (designated-verifier)",
+        source="ledger c-vole: 4096 VUs dietmc F61p 0.408 s/VU; 8.58 MB/VU P->V",
+        verify_note="verifier ~ prover (the designated verifier checks every MAC: 38.4 s vs 37.9 s in the F384p run)",
+        notes="2^-36 statistical bound (F61p, r = 1): a sensitivity point, not the operating point; the 2^-128-class F384p run is 4.74 s/VU and 54.4 MB/VU"),
+    "C QuickSilver GPU model": Design(
+        name="C QuickSilver GPU model (tensor.md 3.05e6 overhead)", prove_s=3.05e6 * NATIVE_S_PER_VU * 4096, verify_s=3.05e6 * NATIVE_S_PER_VU * 4096, depth=3,
+        protocol_rounds=3, bytes_pv=8.58 * MB * 4096, bytes_vp=0.25 * MB * 4096, mem_per_batch_bytes=4096 * 8.58 * MB, mem_capacity_bytes=GPU_H100_MEM, B=4096,
+        hardware=GPU_H100, proof_class="cost model (designated-verifier)", source="reports/tensor.md C row: 3.05e6 at H100@0.172",
+        verify_note="verifier = prover (model)", notes="bandwidth-bound: 35 GB per batch against 0.12 s of prover compute"),
+}
+
+
+# --- report --------------------------------------------------------------------------------------------------------
+
+
+def _fmt_s(x: float) -> str:
+    if x >= 100:
+        return f"{x:.0f}"
+    if x >= 10:
+        return f"{x:.1f}"
+    if x >= 1:
+        return f"{x:.2f}"
+    return f"{x:.3f}"
+
+
+def _fmt_bytes(x: float) -> str:
+    for unit, div in (("GB", 1e9), ("MB", 1e6), ("kB", 1e3)):
+        if x >= div:
+            return f"{x / div:.1f} {unit}"
+    return f"{x:.0f} B"
+
+
+def report(designs: Sequence[Design], rtts_ms: Sequence[float] = RTTS_MS, bws_gbps: Sequence[float] = BANDWIDTHS_GBPS,
+           measured: Sequence[Mapping[str, Any]] = (), options: Sequence[Mapping[str, Any]] = ()) -> tuple[str, dict[str, Any]]:
+    """``(markdown, json)`` of the latency tables: serial e2e per design x RTT (at the middle bandwidth), the bandwidth
+    sensitivity at RTT 0, the pipelining requirements per design x RTT, the crossovers, the memory-binding RTTs."""
+
+    bw_mid = bws_gbps[len(bws_gbps) // 2]
+    rows = sweep(designs, rtts_ms, bws_gbps)
+    lines = ["# End-to-end latency: design x RTT (lane latency, 2026-09-22)", "",
+             "Model: `t.e2e = t.prove + t.verify + depth x RTT + bytes / bandwidth` per batch (`verity_numerical.bench.latency`; the",
+             "protocol is interactive, ZK_CONSTRUCTION.md 3.3, so every critical-path verifier message is one round trip). Every row",
+             "carries its proof class and hardware; CPU rows are measured (vy-cpu2 shared with b-lookup and checker-min), GPU rows are",
+             "re-priced kernels with the CPU verifier's time (an assumption). Pipelining: `N_sat = ceil(t.e2e / t.prove)` batches in",
+             "flight saturate the prover if `N_sat x mem_per_batch` fits; otherwise memory binds.", ""]
+    lines += ["## 1. Serial end-to-end latency per batch (s), link " + f"{bw_mid:g} Gb/s", "",
+              "| design | B | proof class | hardware | prove s | verify s | depth | bytes | " + " | ".join(f"rtt {r:g} ms" for r in rtts_ms) + " | network share @50 ms |",
+              "|---|---|---|---|---|---|---|---|" + "---|" * len(rtts_ms) + "---|"]
+    for d in designs:
+        e = [e2e(d, r, bw_mid) for r in rtts_ms]
+        lines.append(f"| {d.name} | {d.B} | {d.proof_class} | {d.hardware} | {_fmt_s(d.prove_s)} | {_fmt_s(d.verify_s)} | {d.depth} | {_fmt_bytes(d.bytes_total)} | "
+                     + " | ".join(_fmt_s(x["total"]) for x in e) + f" | {e2e(d, 50.0, bw_mid)['network_share']:.0%} |")
+    lines += ["", "## 2. Bandwidth sensitivity: transfer time per batch (s) and the link speed at which transfer equals prover compute", "",
+              "| design | bytes / batch | " + " | ".join(f"{b:g} Gb/s" for b in bws_gbps) + " | Gb/s for transfer = prove | bandwidth-bound below |", "|---|---|" + "---|" * len(bws_gbps) + "---|---|"]
+    for d in designs:
+        need = bandwidth_for_compute_bound(d)
+        lines.append(f"| {d.name} | {_fmt_bytes(d.bytes_total)} | " + " | ".join(_fmt_s(e2e(d, 0.0, b)["transfer"]) for b in bws_gbps) + f" | {need:.2f} | {'yes at ' + str([b for b in bws_gbps if b < need]) if any(b < need for b in bws_gbps) else 'no'} |")
+    lines += ["", f"## 3. Pipelining: in-flight batches to saturate the prover, memory, resulting VU/s and overhead (link {bw_mid:g} Gb/s)", "",
+              "| design | mem / batch | capacity | " + " | ".join(f"N_sat @ {r:g} ms (mem, fits?)" for r in rtts_ms) + " | VU/s @ 0 / 10 / 50 ms | overhead @ 0 / 10 / 50 ms | binding @ 50 ms | memory binds above RTT |",
+              "|---|---|---|" + "---|" * len(rtts_ms) + "---|---|---|---|"]
+    for d in designs:
+        ps = [pipeline(d, r, bw_mid) for r in rtts_ms]
+        p0, p10, p50 = pipeline(d, 0.0, bw_mid), pipeline(d, 10.0, bw_mid), pipeline(d, 50.0, bw_mid)
+        mb = memory_binding_rtt(d, bw_mid)
+        lines.append(f"| {d.name} | {_fmt_bytes(d.mem_per_batch_bytes)} | {_fmt_bytes(d.mem_capacity_bytes)} | "
+                     + " | ".join(f"{p['n_saturate']} ({_fmt_bytes(p['n_saturate'] * d.mem_per_batch_bytes)}, {'yes' if p['n_saturate'] * d.mem_per_batch_bytes <= d.mem_capacity_bytes else 'NO'})" for p in ps)
+                     + f" | {p0['vu_per_s']:.3g} / {p10['vu_per_s']:.3g} / {p50['vu_per_s']:.3g} | {p0['overhead_vs_native_peak']:.2e} / {p10['overhead_vs_native_peak']:.2e} / {p50['overhead_vs_native_peak']:.2e} | {p50['binding']} | "
+                     + ("never" if mb is None else f"{mb:.2f} ms") + " |")
+    cross = []
+    lines += ["", f"## 4. Crossovers: the RTT above which the shallower design has the lower serial e2e (link {bw_mid:g} Gb/s)", "", "| deeper | shallower | e2e @ 0 ms deeper / shallower | crossover RTT |", "|---|---|---|---|"]
+    for a in designs:
+        for b in designs:
+            if a.depth > b.depth:
+                x = crossover_rtt(a, b, bw_mid)
+                ea, eb = e2e(a, 0.0, bw_mid)["total"], e2e(b, 0.0, bw_mid)["total"]
+                cross.append({"deeper": a.name, "shallower": b.name, "e2e0_deeper": ea, "e2e0_shallower": eb, "crossover_rtt_ms": x})
+                lines.append(f"| {a.name} | {b.name} | {_fmt_s(ea)} / {_fmt_s(eb)} | " + ("shallower already faster at 0 ms" if x is None else f"{x:.3g} ms") + " |")
+    if measured:
+        lines += ["", "## 5. Measured vs model (the `--rtt-ms` runs on vy-cpu2)", "",
+                  "| run | design | B | RTT ms | depth (measured trips) | legacy depth | t.total s (compute) | verify s | sleep s | e2e measured s | e2e model s | model / measured |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+        for m in measured:
+            lines.append(f"| {m['run_id']} | {m['design']} | {m['B']} | {m['rtt_ms']:g} | {m['depth']} | {m.get('depth_legacy', '-')} | {_fmt_s(m['t_total'])} | {_fmt_s(m['verify'])} | {_fmt_s(m['sleep'])} | {_fmt_s(m['e2e_measured'])} | {_fmt_s(m['e2e_model'])} | {m['e2e_model'] / m['e2e_measured']:.3f} |")
+    if options:
+        lines += ["", "## 6. Depth-reduction options for A (costed, not implemented)", "",
+                  "| option | depth | prover work x | committed +% | e2e @ 10 ms (CPU / GPU) | e2e @ 50 ms (CPU / GPU) | RTT where it beats the baseline (GPU) | note |", "|---|---|---|---|---|---|---|---|"]
+        for o in options:
+            lines.append(f"| {o['option']} | {o['depth']} | {o['prover_work_x']:g} | {o['committed_pct']:+.1f} | {_fmt_s(o['e2e10_cpu'])} / {_fmt_s(o['e2e10_gpu'])} | {_fmt_s(o['e2e50_cpu'])} / {_fmt_s(o['e2e50_gpu'])} | {o['wins_above_rtt_ms_gpu']} | {o['note']} |")
+    doc = {"model": "t.e2e = prove + verify + depth x rtt + bytes / bw; throughput(N) = min(N / t.e2e, 1 / prove, 1 / verify); N_sat = ceil(t.e2e / prove)",
+           "rtts_ms": list(rtts_ms), "bandwidths_gbps": list(bws_gbps), "designs": [asdict(d) for d in designs], "sweep": rows,
+           "crossovers": cross, "memory_binding_rtt_ms": {d.name: memory_binding_rtt(d, bw_mid) for d in designs},
+           "bandwidth_for_compute_bound_gbps": {d.name: bandwidth_for_compute_bound(d) for d in designs},
+           "measured": list(measured), "options": list(options)}
+    return "\n".join(lines) + "\n", doc
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--envelope", action="append", default=[], metavar="KEY=PATH", help="replace CATALOG[KEY]'s prove/verify/depth/bytes/memory with a result.json")
+    ap.add_argument("--out", default=None, help="write <out>.md and <out>.json")
+    a = ap.parse_args(argv)
+    designs = dict(CATALOG)
+    for kv in a.envelope:
+        key, path = kv.split("=", 1)
+        base = designs[key]
+        d = from_envelope(base.name, json.loads(Path(path).read_text()), mem_capacity_bytes=base.mem_capacity_bytes, source=path)
+        designs[key] = replace(d, notes=base.notes, verify_note=base.verify_note)
+    md, doc = report(list(designs.values()))
+    if a.out:
+        Path(a.out + ".md").write_text(md)
+        Path(a.out + ".json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    else:
+        print(md)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
