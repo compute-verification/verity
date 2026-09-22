@@ -90,9 +90,11 @@ eq. 14 with `X^6 = W` inside the matrix).
 
 Packed round `i`: `3 . 4^(i-1) . (t / 2^i) . 96`; fold: `2 . 192 t`; extension round `i`: `(t / 2^i)(3 . 576 + 2 . 2304)`.
 The optimum is `k = 3` (the `4^(i-1)` Hadamard blow-up overtakes the halving of the surviving table at `k = 4`);
-predicted saving on the 5.4e9 bucket: 2.9x from the eq-trick alone, 8.4x with three packed rounds -- in MACs.  The
-measured picture (README.md) is different: the kernels are memory/SIMT-bound, not MAC-bound, so the realised saving of
-`k = 3` over `k = 0` is 2.06x, and the SIMT Hadamard count (last two columns) is what the packed rounds trade MACs for.
+predicted saving on the 5.4e9 bucket: 2.9x from the eq-trick alone, 8.4x with three packed rounds -- in MACs.  Measured
+(README.md, r20260922-062108-4b25): `k = 3` over `k = 0` is **3.8x** (the MAC model says 2.9x for that pair; the base x
+base Hadamards of the packed rounds are cheaper per MAC than the `F_{p^6}` Hadamards and folds they replace), and the
+kernels run at 1.4-1.6% of the INT8 peak -- SIMT modular arithmetic and HBM, not tensor cores, bound them, so the MAC
+count is the wrong unit for the last factor of ~10.
 
 ## 5. Verifier-side change
 
