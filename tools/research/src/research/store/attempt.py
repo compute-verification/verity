@@ -112,7 +112,7 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
     if exclusive is None and launch.get("argv"):
         exclusive = "--exclusive-lock" in launch["argv"]
     cost_sec = job.get("cost") or {}
-    est = record.cost_estimate(job if job.get("schema") == record.JOB_SCHEMA else None, status)
+    est = record.cost_estimate(job, status)
     executed_dir = f"{run_sec['runs_root'].rstrip('/')}/{run_id}" if run_sec.get("runs_root") else str(d)
     return {
         "schema": ATTEMPT_SCHEMA,
