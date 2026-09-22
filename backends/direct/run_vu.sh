@@ -22,17 +22,12 @@ echo "== layout"
 "$BIN" chain-layout --field "$FIELD"
 echo "== vu-neg (52 vu-k1536-neg)"
 "$BIN" vu-neg --root "$ROOT" --field "$FIELD" | tail -5
-<<<<<<< HEAD
 if [ "$FIELD" = "babybear" ]; then
   echo "== red-team battery (83 forgeries + 6 lane extras, every AIR constraint on the adversarial rows)"
   ( cd ../.. && UV_CACHE_DIR=${UV_CACHE_DIR:-/workspace/uv-cache} uv run --frozen --package verity-numerical \
       python backends/direct/tools/battery_adapter.py --bin "$BIN" --extras --out "${RESEARCH_RUN_DIR:-.}/battery_babybear.json" | grep -v "^  rejected" )
 fi
-echo "== vu-bench"
-"$BIN" vu-bench --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES"
-=======
 fi
 RTT_MS=${RTT_MS:-0}   # emulated network round-trip time (ms) for the latency axis: the prover sleeps it at every challenge
 echo "== vu-bench (rtt_ms=$RTT_MS)"
 "$BIN" vu-bench --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES" --rtt-ms "$RTT_MS"
->>>>>>> lane/latency

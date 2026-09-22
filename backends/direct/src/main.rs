@@ -450,6 +450,10 @@ where
         extra: vec![],
         lookup_bits: None,
         ext_deg: if kind.small() { 4 } else { 2 },
+        rtt_ms,
+        depth: trips as usize,
+        slept,
+        t_prove_wall,
     });
 }
 
@@ -513,10 +517,16 @@ where
     let llay = air_.lay.clone();
     let pre_for_verify = pre.clone();
 
+    // --rtt-ms R (or VERITY_RTT_MS): emulate the network; the prover sleeps R ms at every critical-path challenge.
+    // rtt::begin must precede B::challenger() so the prover's RttChallenger is the active (counting) one.
+    let rtt_ms: f64 = arg(args, "--rtt-ms").or_else(|| std::env::var("VERITY_RTT_MS").ok()).map(|s| s.parse().expect("--rtt-ms takes milliseconds")).unwrap_or(0.0);
     let t1 = Instant::now();
+    verity_direct::rtt::begin(rtt_ms);
     let mut challenger = B::challenger();
     let (proof, stage) = prove_lookup(&config, &air_, &mut challenger, pre, main, |z, beta| aux_matrix(&llay, &queries, &mult, rows, z, beta, true));
-    let t_prove = t1.elapsed().as_secs_f64();
+    let (trips, slept) = verity_direct::rtt::end();
+    let t_prove_wall = t1.elapsed().as_secs_f64();
+    let t_prove = t_prove_wall - slept; // compute: the wall time less the emulated waits for the verifier's coins
     let t2 = Instant::now();
     let bytes = proof_bytes_lookup(&proof);
     let t_ser = t2.elapsed().as_secs_f64();
@@ -579,6 +589,10 @@ where
         extra,
         lookup_bits: Some(lookup_bits),
         ext_deg,
+        rtt_ms,
+        depth: trips as usize,
+        slept,
+        t_prove_wall,
     });
 }
 
@@ -607,20 +621,25 @@ struct BenchNumbers<'a> {
     extra: Vec<Value>,
     lookup_bits: Option<f64>,
     ext_deg: usize,
+    /// Emulated network RTT the prover slept at every critical-path challenge (0 = none).
+    rtt_ms: f64,
+    /// Measured observe -> sample boundaries of the prover's transcript (rounds.sequential_depth).
+    depth: usize,
+    /// Seconds spent in the emulated RTT sleeps (already removed from t_prove).
+    slept: f64,
+    /// Prover wall time including the sleeps.
+    t_prove_wall: f64,
 }
 
 fn write_result(b: BenchNumbers) {
-    let BenchNumbers { kind, out, fri, n_vus, rows, width, committed_width, t_witness, t_prove, t_ser, t_verify, bytes, lqd, tier, root, challenge_name, challenge_bits, rounds_extra, constraints_note, realisation, extra, lookup_bits, ext_deg } = b;
+    let BenchNumbers { kind, out, fri, n_vus, rows, width, committed_width, t_witness, t_prove, t_ser, t_verify, bytes, lqd, tier, root, challenge_name, challenge_bits, rounds_extra, constraints_note, realisation, extra, lookup_bits, ext_deg, rtt_ms, depth, slept, t_prove_wall } = b;
     let steps = STEPS as usize;
     let log_n = rows.trailing_zeros() as usize;
     let t_total = t_witness + t_prove + t_ser;
     let threads = rayon::current_num_threads();
-<<<<<<< HEAD
+    // derived coin count (rounds.protocol): alpha, zeta, FRI batch beta, log_n fold betas, PoW, query indices,
+    // plus the extra commitment rounds of the realisation (z, beta for LogUp); the measured depth is `depth`
     let rounds = log_n + 5 + rounds_extra;
-=======
-    let rounds = log_n + 5; // coins: alpha, zeta, FRI batch beta, log_n fold betas, PoW, query indices (derived; rounds.protocol)
-    let depth = trips; // measured: observe -> sample boundaries of the prover's transcript (rounds.sequential_depth)
->>>>>>> lane/latency
     let bits_proven = fri.bits_proven();
     let bits_conj = fri.bits_conjectured();
     let q128 = fri.queries_for_proven(128.0);
@@ -641,8 +660,6 @@ fn write_result(b: BenchNumbers) {
         FieldKind::BabyBear => "babybear",
     };
 
-<<<<<<< HEAD
-=======
     // end-to-end wall time at the RTT sweep: measured at the emulated RTT (prover wall incl. the sleeps + verifier),
     // predicted at the others as compute + depth x RTT (the honest serial number; bytes / bandwidth not included)
     let mut e2e_measured: Vec<String> = vec![];
@@ -658,7 +675,6 @@ fn write_result(b: BenchNumbers) {
             e2e_predicted.push(key);
         }
     }
->>>>>>> lane/latency
     let mut measurements = vec![
         json!({"name": "t.witness", "value": t_witness, "unit": "s"}),
         json!({"name": "t.joint.encoding_commitment+arithmetic", "value": t_prove, "unit": "s"}),
@@ -695,11 +711,8 @@ fn write_result(b: BenchNumbers) {
         json!({"name": "direct.fri_bits_conjectured", "value": bits_conj, "unit": "bits"}),
         json!({"name": "direct.fri_queries_for_128_proven", "value": q128, "unit": "count"}),
     ];
-<<<<<<< HEAD
     measurements.extend(extra);
-=======
     measurements.extend(e2e);
->>>>>>> lane/latency
     let result = json!({
         "schema": "research/result/v0.1",
         "run_id": run_id,
@@ -732,20 +745,16 @@ fn write_result(b: BenchNumbers) {
             "preprocessing": "none",
             "retention": "retained",
             "unit": "vu",
-<<<<<<< HEAD
             "constraints": constraints_note,
             "realisation": realisation,
-=======
             "latency": {
                 "protocol": "Fiat-Shamir as run (Plonky3); the interactive reading counts every observe -> sample boundary of the prover's transcript as one verifier message; measured with an emulated RTT: the prover sleeps one RTT at each",
                 "rtt_ms": rtt_ms,
                 "e2e_measured": e2e_measured,
                 "e2e_predicted": e2e_predicted,
                 "e2e_model": "t.total + verifier.seconds + rounds.sequential_depth x RTT (bytes / bandwidth not included)",
-                "depth_note": "rounds.sequential_depth is the measured count of observe -> sample boundaries (verity_direct::rtt); direct.depth_formula_legacy is the earlier derived log_n + 5"
+                "depth_note": "rounds.sequential_depth is the measured count of observe -> sample boundaries (verity_direct::rtt); direct.depth_formula_legacy is the earlier derived log_n + 5 (+ the realisation's extra commitment rounds)"
             },
-            "constraints": "WP2 gadget contracts + Epilogue as direct AIR constraints, one row per transition unit, accumulator carried by a transition constraint, VU boundary by a step counter; range checks as 2-bit limbs, fixed tables as one-hot selectors; no lookup argument",
->>>>>>> lane/latency
             "note": "Plonky3 FRI/Keccak is the diagnostic PCS, not Candidate B's Ligero-style interactive PCS (PROTOCOL.md); the claimed output words are committed trace cells (the `vu.claim` column) that the last-row constraint binds to the epilogue word -- not bound to any external statement (authentication excluded)"
         },
         "validation": {"status": "passed", "checker": "p3_uni_stark::verify + recorded accumulators", "detail": format!("proof verified; {n_vus} VUs x {steps} steps in {rows} rows; every intermediate accumulator and output word equals bench-instances/v1"), "evidence": [], "index_note": tier.index.get("note").cloned().unwrap_or(Value::Null)},
