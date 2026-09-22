@@ -98,6 +98,120 @@ fn fill(table: &Table, segs: &[SegQueries], ch: &TableChallenges, want_pq: bool)
     (p, q, n, mult)
 }
 
+// ------------------------------------------------------------------------------------------------------------------
+// Batched logUp over the table union (PROTOCOL.md 15, lane a-logup-union): ONE fractional-sum instance for every
+// table.  A query w into table t (cols compressed by β) becomes the field element w(β) + γ·tag(t), a row r of table t
+// becomes r(β) + γ·tag(t), tag(t) = 1 + (index of t in the instance's table order); (z, β, γ) are one verifier message
+// drawn after the multiplicities are committed.  Leaves: [segment 0's queries in circuit order per unit | segment 1's |
+// ... | table 0's rows | table 1's rows | ... | padding (0, 1)].  Multiplicities are the per-table counts (unchanged).
+// ------------------------------------------------------------------------------------------------------------------
+
+pub struct UnionChallenges { pub z: Ext, pub beta: Ext, pub gamma: Ext }
+
+/// One segment's queries into ANY table: `(table index, query)` in the circuit's query order, and its committed rows.
+pub struct UnionSeg<'a> { pub queries: Vec<(usize, &'a Query)>, pub cols: &'a [Fp], pub ncols: usize, pub units: usize }
+
+impl<'a> UnionSeg<'a> { pub fn n_wit(&self) -> usize { self.units * self.queries.len() } }
+
+pub fn union_tag(ti: usize) -> Ext { Ext::from_u64(ti as u64 + 1) }
+
+pub fn union_dim(segs: &[UnionSeg], tables: &[&Table]) -> usize { log2ceil(segs.iter().map(|s| s.n_wit()).sum::<usize>() + tables.iter().map(|t| t.rows.len()).sum::<usize>()) }
+
+pub fn union_betas(tables: &[&Table], beta: Ext) -> Vec<Ext> {
+    let maxc = tables.iter().map(|t| t.cols).max().unwrap_or(1);
+    let mut v = vec![Ext::ONE];
+    for k in 1..maxc { v.push(v[k - 1] * beta); }
+    v
+}
+
+/// Leaves of the union instance (prover; clear-witness verifier): (p, q, n, multiplicities per table).
+pub fn union_leaves(tables: &[&Table], segs: &[UnionSeg], ch: &UnionChallenges) -> (Vec<Ext>, Vec<Ext>, usize, Vec<Vec<u64>>) { union_fill(tables, segs, ch, true) }
+
+/// Only the multiplicities (challenge-independent; one pass over the witness for every table).
+pub fn union_multiplicities(tables: &[&Table], segs: &[UnionSeg]) -> Vec<Vec<u64>> {
+    union_fill(tables, segs, &UnionChallenges { z: Ext::ZERO, beta: Ext::ONE, gamma: Ext::ZERO }, false).3
+}
+
+fn union_fill(tables: &[&Table], segs: &[UnionSeg], ch: &UnionChallenges, want_pq: bool) -> (Vec<Ext>, Vec<Ext>, usize, Vec<Vec<u64>>) {
+    let n = union_dim(segs, tables);
+    let size = if want_pq { 1usize << n } else { 0 };
+    let mut p = vec![Ext::ZERO; size];
+    let mut q = vec![Ext::ONE; size];
+    let mut mult: Vec<Vec<u64>> = tables.iter().map(|t| vec![0u64; t.rows.len()]).collect();
+    let bs = union_betas(tables, ch.beta);
+    let tags: Vec<Ext> = (0..tables.len()).map(|ti| ch.gamma * union_tag(ti)).collect();
+    let nthreads = threads();
+    let mut base = 0usize;
+    for seg in segs {
+        let q_t = seg.queries.len();
+        if q_t == 0 { continue; }
+        let n_wit = seg.n_wit();
+        let (pw, qw): (&mut [Ext], &mut [Ext]) = if want_pq { (&mut p[base..base + n_wit], &mut q[base..base + n_wit]) } else { (&mut [], &mut []) };
+        let chunk = seg.units.div_ceil(nthreads).max(1);
+        let n_chunks = seg.units.div_ceil(chunk);
+        let partial: Vec<Vec<Vec<u64>>> = std::thread::scope(|s| {
+            let mut hs = Vec::new();
+            let mut pcs: Vec<&mut [Ext]> = if want_pq { pw.chunks_mut(chunk * q_t).collect() } else { (0..n_chunks).map(|_| &mut [][..]).collect() };
+            let mut qcs: Vec<&mut [Ext]> = if want_pq { qw.chunks_mut(chunk * q_t).collect() } else { (0..n_chunks).map(|_| &mut [][..]).collect() };
+            for ci in 0..n_chunks {
+                let (pc, qc) = (std::mem::take(&mut pcs[ci]), std::mem::take(&mut qcs[ci]));
+                let (bs, tags, queries) = (&bs, &tags, &seg.queries);
+                let (cols, ncols, units) = (seg.cols, seg.ncols, seg.units);
+                hs.push(s.spawn(move || {
+                    let mut m: Vec<Vec<u64>> = tables.iter().map(|t| vec![0u64; t.rows.len()]).collect();
+                    let mut vals: Vec<Fp> = Vec::with_capacity(8);
+                    let lo = ci * chunk;
+                    let hi = ((ci + 1) * chunk).min(units);
+                    for u in lo..hi {
+                        let k = u - lo;
+                        let row = &cols[u * ncols..(u + 1) * ncols];
+                        for (j, (ti, qu)) in queries.iter().enumerate() {
+                            let table = tables[*ti];
+                            vals.clear();
+                            vals.extend(qu.cols.iter().map(|l| eval_lin(l, row)));
+                            if want_pq {
+                                let mut comb = tags[*ti];
+                                for (kk, v) in vals.iter().enumerate() { comb += bs[kk].scale(*v); }
+                                pc[k * q_t + j] = Ext::ONE;
+                                qc[k * q_t + j] = ch.z - comb;
+                            }
+                            if let Some(ri) = table.find(vals[0]) {
+                                if table.rows[ri][..] == vals[..] { m[*ti][ri] += 1; }
+                            }
+                        }
+                    }
+                    m
+                }));
+            }
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for m in partial { for (mt, pt) in mult.iter_mut().zip(m) { for (a, b) in mt.iter_mut().zip(pt) { *a += b; } } }
+        base += n_wit;
+    }
+    if want_pq {
+        for (ti, t) in tables.iter().enumerate() {
+            let (pt, qt) = (&mut p[base..base + t.rows.len()], &mut q[base..base + t.rows.len()]);
+            let (bs, tag, mt) = (&bs, tags[ti], &mult[ti]);
+            let chunk = t.rows.len().div_ceil(nthreads).max(1);
+            std::thread::scope(|s| {
+                for ((pc, qc), rows) in pt.chunks_mut(chunk).zip(qt.chunks_mut(chunk)).zip(t.rows.chunks(chunk)).zip(mt.chunks(chunk)).map(|(((a, b), c), d)| ((a, b), (c, d))) {
+                    let (rows, ms) = rows;
+                    s.spawn(move || {
+                        for (i, r) in rows.iter().enumerate() {
+                            let mut comb = tag;
+                            for (k, v) in r.iter().enumerate() { comb += bs[k].scale(*v); }
+                            pc[i] = -Ext::from_u64(ms[i]);
+                            qc[i] = ch.z - comb;
+                        }
+                    });
+                }
+            });
+            base += t.rows.len();
+        }
+    }
+    (p, q, n, mult)
+}
+
 pub struct LookupStats { pub n: usize, pub leaves: usize }
 
 fn par_map<T: Send, F: Fn(usize) -> T + Sync>(n: usize, f: F) -> Vec<T> {

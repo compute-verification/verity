@@ -8,6 +8,8 @@
 //!   verity-gkr negatives-vu --dir D                                                       every D/neg/<id> rejected
 //!   verity-gkr check-witness --circuit C --witness W                                      constraint check only (no proof)
 //!   verity-gkr dump-transcript --dir D [--vus B] --out T.json                              prover transcript vectors
+//!   every command takes `--logup union` (one batched logUp over the tagged table union, PROTOCOL.md 15) or
+//!   `--logup per-table` (default; env VERITY_GKR_LOGUP).
 //!
 //! Field: Goldilocks + cubic extension by default; `--features babybear` builds the same prover over BabyBear with
 //! the degree-6 extension (PROTOCOL.md 13; `src/field_babybear.rs`), reading the `fixtures/babybear/` exports.
@@ -33,7 +35,7 @@ use circuit::{layers, read_witness, Circuit, Layer, Query, Table};
 use circuit::materialise;
 use field::{eq_table, Ext, Fp};
 use gkr::{eval_columns, threads, LayerClaim, Reader, Strided};
-use logup::{LeafClaim, SegQueries, TableChallenges};
+use logup::{LeafClaim, SegQueries, TableChallenges, UnionChallenges, UnionSeg};
 use std::time::Instant;
 use transcript::{Event, Sha256, Transcript};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -70,9 +72,20 @@ impl Chain { pub fn constraints_per_vu(&self) -> usize { 1 + self.limbs.iter().m
 /// 2026-09-22 this was segment 0's table list alone, so a table queried only by the epilogue circuit (v2: `R16`,
 /// `R15`) had no logUp instance and its range checks were never proved — a malicious epilogue hint forged any public
 /// word (`v2_forged_public_word_via_epilogue_hint_is_rejected`; `fixtures/redteam-3/logup-union/`).
-pub struct Instance<'a> { pub segs: Vec<Segment<'a>>, pub chain: Option<Chain>, pub tables: Vec<&'a Table> }
+pub struct Instance<'a> { pub segs: Vec<Segment<'a>>, pub chain: Option<Chain>, pub tables: Vec<&'a Table>, pub lookup: Lookup }
+
+/// The lookup argument: one logUp fractional-GKR instance per table (PROTOCOL.md 4.2, the default) or ONE batched
+/// instance over the tagged union of every table (PROTOCOL.md 15, `--logup union`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Lookup { PerTable, Union }
+
+impl Lookup {
+    pub fn name(self) -> &'static str { match self { Lookup::PerTable => "per_table", Lookup::Union => "union" } }
+    pub fn parse(s: &str) -> Lookup { match s { "union" => Lookup::Union, "per-table" | "per_table" => Lookup::PerTable, other => panic!("--logup takes union | per-table, got {other}") } }
+}
 
 impl<'a> Instance<'a> {
+    pub fn with_lookup(mut self, lookup: Lookup) -> Instance<'a> { self.lookup = lookup; self }
     pub fn new(segs: Vec<Segment<'a>>, chain: Option<Chain>) -> Instance<'a> {
         let mut tables: Vec<&'a Table> = Vec::new();
         for s in &segs {
@@ -83,7 +96,14 @@ impl<'a> Instance<'a> {
                 }
             }
         }
-        Instance { segs, chain, tables }
+        Instance { segs, chain, tables, lookup: Lookup::PerTable }
+    }
+    /// Every segment's queries with their table index (union mode's witness side).
+    pub fn union_segs(&self) -> Vec<UnionSeg<'_>> {
+        self.segs.iter().map(|s| UnionSeg {
+            queries: s.circ.queries.iter().map(|q| (self.tables.iter().position(|t| t.name == q.table).expect("query table"), q)).collect(),
+            cols: &s.cols, ncols: s.ncols, units: s.units,
+        }).collect()
     }
     pub fn tables(&self) -> &[&'a Table] { &self.tables }
     pub fn vus(&self) -> usize { self.chain.as_ref().map(|c| self.segs[0].units / c.steps).unwrap_or(0) }
@@ -116,14 +136,23 @@ impl Proof { pub fn size(&self) -> usize { (if self.root != [0u8; 32] { 32 } els
 
 pub const LIGERO: ligero::Params = ligero::Params { k: 4096, n: 16384, t: 192 };
 
-/// Transcript preamble: every public datum (circuits, batch shape, commitment root or the clear witness, the
-/// public output words), then the table challenges and every segment's output-layer point.
-fn start_transcript(inst: &Instance, mode: Mode, root: &[u8; 32]) -> (Transcript, Vec<TableChallenges>, Vec<(Vec<Ext>, Vec<Ext>)>) {
+/// The lookup challenges of one proof: per table (z_T, beta_T), or the union's single (z, beta, gamma).
+pub struct Challenges { pub per_table: Vec<TableChallenges>, pub union: Option<UnionChallenges> }
+
+/// Transcript preamble: every public datum (circuits, batch shape, lookup mode, commitment root or the clear
+/// witness, the public output words), then the table challenges and every segment's output-layer point.
+fn start_transcript(inst: &Instance, mode: Mode, root: &[u8; 32]) -> (Transcript, Challenges, Vec<(Vec<Ext>, Vec<Ext>)>) {
     let mut tr = if LOG_TRANSCRIPT.load(Ordering::Relaxed) { Transcript::with_log(field::DOMAIN) } else { Transcript::new(field::DOMAIN) };
     tr.label("preamble: per segment, sha256(circuit text) then units as u64 LE");
     for s in &inst.segs {
         tr.absorb(&s.hash);
         tr.absorb(&(s.units as u64).to_le_bytes());
+    }
+    if inst.lookup == Lookup::Union {
+        // the lookup mode is part of the statement (a per-table transcript must not verify as a union one)
+        tr.label("preamble: lookup argument = union (PROTOCOL.md 15), table order as tagged");
+        tr.absorb(b"logup-union-v1");
+        for (ti, t) in inst.tables().iter().enumerate() { tr.absorb(&(ti as u64 + 1).to_le_bytes()); tr.absorb(t.name.as_bytes()); }
     }
     match mode {
         Mode::Clear => {
@@ -142,12 +171,24 @@ fn start_transcript(inst: &Instance, mode: Mode, root: &[u8; 32]) -> (Transcript
         for y in &ch.public_y16 { buf.extend_from_slice(&y.to_bytes()); }
         tr.absorb(&buf);
     }
-    let mut chs = Vec::new();
-    for t in inst.tables() {
-        tr.label(&format!("table {}: z{}", t.name, if t.cols > 1 { ", beta" } else { " (beta = 1, single column)" }));
-        let z = tr.challenge();
-        let beta = if t.cols > 1 { tr.challenge() } else { Ext::ONE };
-        chs.push(TableChallenges { z, beta });
+    let mut chs = Challenges { per_table: Vec::new(), union: None };
+    match inst.lookup {
+        Lookup::PerTable => {
+            for t in inst.tables() {
+                tr.label(&format!("table {}: z{}", t.name, if t.cols > 1 { ", beta" } else { " (beta = 1, single column)" }));
+                let z = tr.challenge();
+                let beta = if t.cols > 1 { tr.challenge() } else { Ext::ONE };
+                chs.per_table.push(TableChallenges { z, beta });
+            }
+        }
+        Lookup::Union => {
+            // gamma is drawn here, AFTER the multiplicities are committed (they are part of X, hence of the root)
+            tr.label(&format!("union logup over {} tables: z, beta, gamma (tag(t) = 1 + table index)", inst.tables().len()));
+            let z = tr.challenge();
+            let beta = tr.challenge();
+            let gamma = tr.challenge();
+            chs.union = Some(UnionChallenges { z, beta, gamma });
+        }
     }
     let mut pts = Vec::new();
     for s in &inst.segs {
@@ -242,6 +283,53 @@ fn add_lookup_claim(acc: &mut Acc, rho: Ext, inst: &Instance, seg_offs: &[usize]
     acc.b += rho * (c.value - konst);
 }
 
+/// The union instance's leaf claim as a functional on X (PROTOCOL.md 15.4): the same as `add_lookup_claim` with
+/// every table's queries in one leaf vector, the tag constant γ·tag(t) in every denominator, one β for all tables,
+/// and the table side running over every multiplicity block in table order.
+fn add_union_claim(acc: &mut Acc, rho: Ext, inst: &Instance, seg_offs: &[usize], offs: &[usize], usegs: &[UnionSeg], ch: &UnionChallenges, n: usize, c: &LeafClaim) {
+    let eqt = eq_table(&c.rho);
+    let tables = inst.tables();
+    let bs = logup::union_betas(tables, ch.beta);
+    let tags: Vec<Ext> = (0..tables.len()).map(|ti| ch.gamma * logup::union_tag(ti)).collect();
+    let mut konst = Ext::ZERO;
+    let mut base = 0usize;
+    for (si, sq) in usegs.iter().enumerate() {
+        let q_t = sq.queries.len();
+        if q_t == 0 { continue; }
+        let seg = &inst.segs[si];
+        let (eqt, bs, tags, queries) = (&eqt, &bs, &tags, &sq.queries);
+        konst += par_rows(&mut acc.a[seg_offs[si]..], seg.ncols, seg.units, |u, row| {
+            let mut k = Ext::ZERO;
+            for (j, (ti, qu)) in queries.iter().enumerate() {
+                let e = eqt[base + u * q_t + j];
+                let le = c.lambda * e;
+                k += e; // p = 1
+                let mut cst = ch.z - tags[*ti];
+                for (kk, lin) in qu.cols.iter().enumerate() {
+                    cst -= bs[kk].scale(lin.konst);
+                    let lb = rho * le * bs[kk];
+                    for t in &lin.terms { row[t.idx as usize] -= lb.scale(t.coef); }
+                }
+                k += le * cst;
+            }
+            k
+        });
+        base += sq.n_wit();
+    }
+    for (ti, table) in tables.iter().enumerate() {
+        for (v, r) in table.rows.iter().enumerate() {
+            let e = eqt[base + v];
+            acc.a[offs[ti] + v] -= rho * e; // p = -m_v
+            let mut comb = tags[ti];
+            for (k, x) in r.iter().enumerate() { comb += bs[k].scale(*x); }
+            konst += c.lambda * e * (ch.z - comb);
+        }
+        base += table.rows.len();
+    }
+    for idx in base..(1usize << n) { konst += c.lambda * eqt[idx]; } // padding (0, 1)
+    acc.b += rho * (c.value - konst);
+}
+
 /// Chain linkage and public endpoints as one functional with geometric coefficients ρ_geo^k (PROTOCOL.md 12.2):
 /// c_{v,0} = 0; c_{v,i} = y_{v,i-1}; y32_v = y_{v,steps-1}; y16_v = the public word.  Returns the constraint count.
 fn add_chain(acc: &mut Acc, rho: Ext, geo: Ext, inst: &Instance, seg_offs: &[usize]) -> usize {
@@ -306,7 +394,8 @@ fn check_chain_clear(inst: &Instance) -> Result<(), String> {
     Ok(())
 }
 
-fn n_functionals(inst: &Instance) -> usize { 2 * inst.segs.len() + inst.tables().len() + if inst.chain.is_some() { 1 } else { 0 } }
+fn n_lookup_instances(inst: &Instance) -> usize { match inst.lookup { Lookup::PerTable => inst.tables().len(), Lookup::Union => 1 } }
+fn n_functionals(inst: &Instance) -> usize { 2 * inst.segs.len() + n_lookup_instances(inst) + if inst.chain.is_some() { 1 } else { 0 } }
 
 /// Every wire of every unit of a segment (parallel over units).
 fn eval_wires(seg: &Segment) -> Vec<Fp> {
@@ -393,8 +482,12 @@ pub fn prove(inst: &Instance, mode: Mode) -> (Proof, Stats) { prove_with_rtt(ins
 /// critical-path verifier message (`Transcript::round_trip`); `Stats::trips` counts them, `Stats::slept` the time.
 pub fn prove_with_rtt(inst: &Instance, mode: Mode, rtt: Option<std::time::Duration>) -> (Proof, Stats) {
     let mut st = Stats::default();
-    // the critical chain is known before any challenge: the deepest logUp table and the deepest segment
-    let table_depths: Vec<u64> = inst.tables().iter().map(|t| lookup_chain_depth(logup::hypercube_dim(&seg_queries(inst, &t.name), t))).collect();
+    // the critical chain is known before any challenge: the deepest logUp instance and the deepest segment
+    let usegs = inst.union_segs();
+    let table_depths: Vec<u64> = match inst.lookup {
+        Lookup::PerTable => inst.tables().iter().map(|t| lookup_chain_depth(logup::hypercube_dim(&seg_queries(inst, &t.name), t))).collect(),
+        Lookup::Union => vec![lookup_chain_depth(logup::union_dim(&usegs, inst.tables()))],
+    };
     let seg_depths: Vec<u64> = inst.segs.iter().map(segment_chain_depth).collect();
     let critical_table = (0..table_depths.len()).max_by_key(|&i| table_depths[i]);
     let critical_seg = (0..seg_depths.len()).max_by_key(|&i| seg_depths[i]);
@@ -407,9 +500,12 @@ pub fn prove_with_rtt(inst: &Instance, mode: Mode, rtt: Option<std::time::Durati
     let committed = if mode == Mode::Pcs {
         let mut x: Vec<Fp> = Vec::with_capacity(l);
         for s in &inst.segs { x.extend_from_slice(&s.cols); }
-        for t in inst.tables() {
-            let m = logup::multiplicities(t, &seg_queries(inst, &t.name));
-            x.extend(m.iter().map(|v| Fp::new(*v)));
+        match inst.lookup {
+            Lookup::PerTable => for t in inst.tables() {
+                let m = logup::multiplicities(t, &seg_queries(inst, &t.name));
+                x.extend(m.iter().map(|v| Fp::new(*v)));
+            },
+            Lookup::Union => for m in logup::union_multiplicities(inst.tables(), &usegs) { x.extend(m.iter().map(|v| Fp::new(*v))); },
         }
         debug_assert_eq!(x.len(), l);
         Some(ligero::commit(&x, &LIGERO))
@@ -423,16 +519,27 @@ pub fn prove_with_rtt(inst: &Instance, mode: Mode, rtt: Option<std::time::Durati
     tr.round_trip();
     let t0 = Instant::now();
     let mut lookup_claims: Vec<(usize, LeafClaim)> = Vec::new();
-    for (ti, t) in inst.tables().iter().enumerate() {
-        let sq = seg_queries(inst, &t.name);
-        tr.critical = lookup_is_critical && Some(ti) == critical_table;
-        tr.label(&format!("logup table {}", t.name));
-        let (p, q, n, _) = logup::leaves(t, &sq, &chs[ti]);
-        let (s, lc) = logup::prove_table(p, q, n, &mut tr, &mut out);
-        st.lookup_dims.push((t.name.clone(), s.n, sq.iter().map(|x| x.queries.len()).sum()));
-        lookup_claims.push((n, lc));
-        let d: u64 = 1 + (0..n as u64).map(|k| k + 2).sum::<u64>();
-        st.depth_lookup_max = st.depth_lookup_max.max(d);
+    match inst.lookup {
+        Lookup::PerTable => for (ti, t) in inst.tables().iter().enumerate() {
+            let sq = seg_queries(inst, &t.name);
+            tr.critical = lookup_is_critical && Some(ti) == critical_table;
+            tr.label(&format!("logup table {}", t.name));
+            let (p, q, n, _) = logup::leaves(t, &sq, &chs.per_table[ti]);
+            let (s, lc) = logup::prove_table(p, q, n, &mut tr, &mut out);
+            st.lookup_dims.push((t.name.clone(), s.n, sq.iter().map(|x| x.queries.len()).sum()));
+            lookup_claims.push((n, lc));
+            let d: u64 = 1 + (0..n as u64).map(|k| k + 2).sum::<u64>();
+            st.depth_lookup_max = st.depth_lookup_max.max(d);
+        },
+        Lookup::Union => {
+            tr.critical = lookup_is_critical;
+            tr.label("logup union instance");
+            let (p, q, n, _) = logup::union_leaves(inst.tables(), &usegs, chs.union.as_ref().unwrap());
+            let (s, lc) = logup::prove_table(p, q, n, &mut tr, &mut out);
+            st.lookup_dims.push(("UNION".into(), s.n, usegs.iter().map(|x| x.queries.len()).sum()));
+            lookup_claims.push((n, lc));
+            st.depth_lookup_max = 1 + (0..n as u64).map(|k| k + 2).sum::<u64>();
+        }
     }
     st.t_lookup = t0.elapsed().as_secs_f64();
     let t2 = Instant::now();
@@ -458,10 +565,17 @@ pub fn prove_with_rtt(inst: &Instance, mode: Mode, rtt: Option<std::time::Durati
             add_input_claim(&mut acc, rhos[ri + 1], seg_offs[si], seg, r_star, c_star, *vr);
             ri += 2;
         }
-        for (ti, t) in inst.tables().iter().enumerate() {
-            let (n, lc) = &lookup_claims[ti];
-            add_lookup_claim(&mut acc, rhos[ri], inst, &seg_offs, offs[ti], t, &seg_queries(inst, &t.name), &chs[ti], *n, lc);
-            ri += 1;
+        match inst.lookup {
+            Lookup::PerTable => for (ti, t) in inst.tables().iter().enumerate() {
+                let (n, lc) = &lookup_claims[ti];
+                add_lookup_claim(&mut acc, rhos[ri], inst, &seg_offs, offs[ti], t, &seg_queries(inst, &t.name), &chs.per_table[ti], *n, lc);
+                ri += 1;
+            },
+            Lookup::Union => {
+                let (n, lc) = &lookup_claims[0];
+                add_union_claim(&mut acc, rhos[ri], inst, &seg_offs, &offs, &usegs, chs.union.as_ref().unwrap(), *n, lc);
+                ri += 1;
+            }
         }
         if inst.chain.is_some() { st.linkage_constraints = add_chain(&mut acc, rhos[ri], geo, inst, &seg_offs); }
         ligero::prove_open(cm, acc.a, &LIGERO, &mut tr, &mut out, &mut bytes);
@@ -487,17 +601,32 @@ pub fn verify(inst: &Instance, proof: &Proof, mode: Mode) -> Result<(), String> 
     let mut rd = Reader { msgs: &proof.msgs, pos: 0 };
     let (seg_offs, offs, l) = x_layout(inst);
     let mut lookup_claims = Vec::new();
-    for (ti, t) in inst.tables().iter().enumerate() {
-        let sq = seg_queries(inst, &t.name);
-        let n = logup::hypercube_dim(&sq, t);
-        let lc = logup::verify_table(n, &mut tr, &mut rd, &t.name)?;
-        match mode {
-            Mode::Clear => {
-                let (p, q, n2, _) = logup::leaves(t, &sq, &chs[ti]);
-                debug_assert_eq!(n, n2);
-                logup::check_leaves(&p, &q, &lc, &t.name)?;
+    let usegs = inst.union_segs();
+    match inst.lookup {
+        Lookup::PerTable => for (ti, t) in inst.tables().iter().enumerate() {
+            let sq = seg_queries(inst, &t.name);
+            let n = logup::hypercube_dim(&sq, t);
+            let lc = logup::verify_table(n, &mut tr, &mut rd, &t.name)?;
+            match mode {
+                Mode::Clear => {
+                    let (p, q, n2, _) = logup::leaves(t, &sq, &chs.per_table[ti]);
+                    debug_assert_eq!(n, n2);
+                    logup::check_leaves(&p, &q, &lc, &t.name)?;
+                }
+                Mode::Pcs => lookup_claims.push((n, lc)),
             }
-            Mode::Pcs => lookup_claims.push((n, lc)),
+        },
+        Lookup::Union => {
+            let n = logup::union_dim(&usegs, inst.tables());
+            let lc = logup::verify_table(n, &mut tr, &mut rd, "UNION")?;
+            match mode {
+                Mode::Clear => {
+                    let (p, q, n2, _) = logup::union_leaves(inst.tables(), &usegs, chs.union.as_ref().unwrap());
+                    debug_assert_eq!(n, n2);
+                    logup::check_leaves(&p, &q, &lc, "UNION")?;
+                }
+                Mode::Pcs => lookup_claims.push((n, lc)),
+            }
         }
     }
     let mut finals = Vec::new();
@@ -535,10 +664,17 @@ pub fn verify(inst: &Instance, proof: &Proof, mode: Mode) -> Result<(), String> 
                 add_input_claim(&mut acc, rhos[ri + 1], seg_offs[si], seg, r_star, c_star, *vr);
                 ri += 2;
             }
-            for (ti, t) in inst.tables().iter().enumerate() {
-                let (n, lc) = &lookup_claims[ti];
-                add_lookup_claim(&mut acc, rhos[ri], inst, &seg_offs, offs[ti], t, &seg_queries(inst, &t.name), &chs[ti], *n, lc);
-                ri += 1;
+            match inst.lookup {
+                Lookup::PerTable => for (ti, t) in inst.tables().iter().enumerate() {
+                    let (n, lc) = &lookup_claims[ti];
+                    add_lookup_claim(&mut acc, rhos[ri], inst, &seg_offs, offs[ti], t, &seg_queries(inst, &t.name), &chs.per_table[ti], *n, lc);
+                    ri += 1;
+                },
+                Lookup::Union => {
+                    let (n, lc) = &lookup_claims[0];
+                    add_union_claim(&mut acc, rhos[ri], inst, &seg_offs, &offs, &usegs, chs.union.as_ref().unwrap(), *n, lc);
+                    ri += 1;
+                }
             }
             if inst.chain.is_some() { add_chain(&mut acc, rhos[ri], geo, inst, &seg_offs); }
             let rows = l.div_ceil(LIGERO.k);
@@ -626,12 +762,12 @@ fn load_vu<'a>(unit: &'a Loaded, epi: &'a Loaded, files: &VuFiles, vus: Option<u
 }
 
 fn strip_cols<'a>(inst: &Instance<'a>) -> Instance<'a> {
-    Instance::new(inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: vec![], units: s.units, ncols: s.ncols, hash: s.hash }).collect(), inst.chain.clone())
+    Instance::new(inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: vec![], units: s.units, ncols: s.ncols, hash: s.hash }).collect(), inst.chain.clone()).with_lookup(inst.lookup)
 }
 
 fn verifier_view<'a>(inst: &Instance<'a>, mode: Mode) -> Instance<'a> {
     if mode == Mode::Pcs { strip_cols(inst) } else {
-        Instance::new(inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: s.cols.clone(), units: s.units, ncols: s.ncols, hash: s.hash }).collect(), strip_cols(inst).chain)
+        Instance::new(inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: s.cols.clone(), units: s.units, ncols: s.ncols, hash: s.hash }).collect(), strip_cols(inst).chain).with_lookup(inst.lookup)
     }
 }
 
@@ -716,11 +852,11 @@ fn write_result(out: &str, args: &[String], r: &RunReport) {
     let lk: Vec<String> = st.lookup_dims.iter().map(|(n, d, q)| format!("\"{n}\": {{\"hypercube_dim\": {d}, \"queries_per_unit\": {q}}}")).collect();
     let segs: Vec<String> = r.inst.segs.iter().map(|s| format!("{{\"name\": \"{}\", \"rows\": {}, \"columns\": {}, \"wires\": {}, \"layers\": {}}}", s.name, s.units, s.ncols, s.circ.nwires(), s.layers.len())).collect();
     let json = format!(
-        "{{\n\"schema\": \"research/result/v0.1\",\n\"run_id\": \"{run_id}\",\n\"workload_fingerprint\": {{\n  \"profile\": \"first-campaign-target/2026-09-21\", \"domain\": \"finite\", \"K\": {}, \"B\": {}, \"N_subbatches\": 1,\n  \"unit\": \"{}\",\n  \"proof_class\": \"{}\", \"authentication\": \"excluded\", \"zk_mode\": \"none\",\n  \"security\": {{\"target\": -128, \"trace_field\": \"{}\", \"challenge_field\": \"{}\", \"fiat_shamir\": \"sha256\", \"commitment\": \"{}\", \"note\": \"see report for the error terms this configuration achieves\"}},\n  \"hardware\": {{\"gpu\": null, \"cpu\": {cpu}}},\n  \"software\": {{\"backend\": {{\"name\": \"verity-gkr\", \"version\": \"0.2.0\", \"commit\": \"{commit}\"}}, \"toolchain\": {{\"rustc\": \"{}\"}}}},\n  \"preprocessing\": \"circuit export from the WP2 checker (verity_numerical.gkr_export) and witness generation by WP2 gen_step in Python; not timed here\",\n  \"retention\": \"retained\",\n  \"threads\": {threads},\n  \"latency\": {{\"protocol\": \"interactive (production: verifier coins over the network, ZK_CONSTRUCTION.md 3.3); measured here with the Fiat-Shamir transcript and an emulated RTT: the prover sleeps one RTT at every critical-path verifier message\", \"rtt_ms\": {}, \"e2e_measured\": [{}], \"e2e_predicted\": [{}], \"e2e_model\": \"t.total + verifier.seconds + rounds.sequential_depth x RTT (bytes / bandwidth not included)\", \"depth_note\": \"rounds.sequential_depth is the measured count of critical-path verifier messages (Transcript::trips); depth_formula_legacy is the earlier derived counter, which counted the logUp (mu, lambda) pair as two messages\"}},\n  \"segments\": [{}],\n  \"lookups\": {{{}}}\n}},\n\"validation\": {{\"status\": \"{}\", \"checker\": \"verity-gkr verify\", \"detail\": \"{}\", \"evidence\": []}},\n\"measurements\": [\n{}\n]\n}}\n",
+        "{{\n\"schema\": \"research/result/v0.1\",\n\"run_id\": \"{run_id}\",\n\"workload_fingerprint\": {{\n  \"profile\": \"first-campaign-target/2026-09-21\", \"domain\": \"finite\", \"K\": {}, \"B\": {}, \"N_subbatches\": 1,\n  \"unit\": \"{}\",\n  \"proof_class\": \"{}\", \"authentication\": \"excluded\", \"zk_mode\": \"none\",\n  \"security\": {{\"target\": -128, \"trace_field\": \"{}\", \"challenge_field\": \"{}\", \"fiat_shamir\": \"sha256\", \"commitment\": \"{}\", \"note\": \"see report for the error terms this configuration achieves\"}},\n  \"hardware\": {{\"gpu\": null, \"cpu\": {cpu}}},\n  \"software\": {{\"backend\": {{\"name\": \"verity-gkr\", \"version\": \"0.2.0\", \"commit\": \"{commit}\"}}, \"toolchain\": {{\"rustc\": \"{}\"}}}},\n  \"preprocessing\": \"circuit export from the WP2 checker (verity_numerical.gkr_export) and witness generation by WP2 gen_step in Python; not timed here\",\n  \"retention\": \"retained\",\n  \"threads\": {threads},\n  \"latency\": {{\"protocol\": \"interactive (production: verifier coins over the network, ZK_CONSTRUCTION.md 3.3); measured here with the Fiat-Shamir transcript and an emulated RTT: the prover sleeps one RTT at every critical-path verifier message\", \"rtt_ms\": {}, \"e2e_measured\": [{}], \"e2e_predicted\": [{}], \"e2e_model\": \"t.total + verifier.seconds + rounds.sequential_depth x RTT (bytes / bandwidth not included)\", \"depth_note\": \"rounds.sequential_depth is the measured count of critical-path verifier messages (Transcript::trips); depth_formula_legacy is the earlier derived counter, which counted the logUp (mu, lambda) pair as two messages\"}},\n  \"segments\": [{}],\n  \"lookup_mode\": \"{}\",\n  \"lookups\": {{{}}}\n}},\n\"validation\": {{\"status\": \"{}\", \"checker\": \"verity-gkr verify\", \"detail\": \"{}\", \"evidence\": []}},\n\"measurements\": [\n{}\n]\n}}\n",
         r.k, r.b, r.unit,
         if r.mode == Mode::Pcs { "NON_ZK_PROOF_DIAGNOSTIC" } else { "ARITHMETIC_DIAGNOSTIC" }, field::NAME, field::EXT_NAME,
         if r.mode == Mode::Pcs { format!("ligero-style RS(k={},n={}) over {}, SHA-256 Merkle columns, t={} opened, no masking", LIGERO.k, LIGERO.n, field::NAME, LIGERO.t) } else { "none: columns in the clear".to_string() },
-        std::env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()), r.rtt_ms, e2e_measured.join(", "), e2e_predicted.join(", "), segs.join(", "), lk.join(", "), if ok { "passed" } else { "failed" },
+        std::env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()), r.rtt_ms, e2e_measured.join(", "), e2e_predicted.join(", "), segs.join(", "), r.inst.lookup.name(), lk.join(", "), if ok { "passed" } else { "failed" },
         match r.res { Ok(()) => "verifier accepted the batch".to_string(), Err(e) => e.replace('"', "'") }, ms.join(",\n"));
     std::fs::write(out, json).expect("write result");
 }
@@ -748,8 +884,8 @@ fn run_and_report(inst: &Instance, mode: Mode, args: &[String], k: usize, unit: 
     let res = verify(&vinst, &proof, mode);
     let t_verify = tv.elapsed().as_secs_f64();
     let depth = st.trips;
-    eprintln!("field={} mode={mode:?} unit={unit} B={b} units={} verify={:?} prove_s={t_prove:.3} (commit {:.3} lookup {:.3} wires {:.3} arith {:.3} open {:.3}) verify_s={t_verify:.3} proof_bytes={} slots={} depth={depth} (lookup chain {}, checker chain {}) rtt_ms={rtt_ms} slept_s={:.3} wall_s={t_wall:.3} e2e_s={:.3} rows={} committed={} lookups={:?} rss={:?}",
-        field::NAME, inst.segs[0].units, res, st.t_commit, st.t_lookup, st.t_witness_wires, st.t_arith, st.t_open, proof.size(), st.slots, st.depth_lookup_chain, st.depth_checker_chain, st.slept, t_wall + t_verify, st.ligero_rows, st.committed_elements, st.lookup_dims, peak_rss_bytes());
+    eprintln!("field={} mode={mode:?} lookup={} unit={unit} B={b} units={} verify={:?} prove_s={t_prove:.3} (commit {:.3} lookup {:.3} wires {:.3} arith {:.3} open {:.3}) verify_s={t_verify:.3} proof_bytes={} slots={} depth={depth} (lookup chain {}, checker chain {}) rtt_ms={rtt_ms} slept_s={:.3} wall_s={t_wall:.3} e2e_s={:.3} rows={} committed={} lookups={:?} rss={:?}",
+        field::NAME, inst.lookup.name(), inst.segs[0].units, res, st.t_commit, st.t_lookup, st.t_witness_wires, st.t_arith, st.t_open, proof.size(), st.slots, st.depth_lookup_chain, st.depth_checker_chain, st.slept, t_wall + t_verify, st.ligero_rows, st.committed_elements, st.lookup_dims, peak_rss_bytes());
     if let Some(out) = arg(args, "--out") {
         write_result(&out, args, &RunReport { inst, mode, proof: &proof, st: &st, t_prove, t_wall, t_verify, rtt_ms, res: &res, k, unit, b });
     }
@@ -760,12 +896,14 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 { eprintln!("usage: run|run-vu|negatives|negatives-vu ..."); std::process::exit(2); }
     let mode = if args.iter().any(|a| a == "--clear") { Mode::Clear } else { Mode::Pcs };
+    // --logup union | per-table (default per-table; or VERITY_GKR_LOGUP)
+    let lookup = arg(&args, "--logup").or_else(|| std::env::var("VERITY_GKR_LOGUP").ok()).map(|s| Lookup::parse(&s)).unwrap_or(Lookup::PerTable);
     match args[1].as_str() {
         "run" => {
             let ld = load_circuit(&arg(&args, "--circuit").unwrap());
             let units: Option<usize> = arg(&args, "--units").map(|s| s.parse().unwrap());
             let (cols, units) = load_rows(&arg(&args, "--witness").unwrap(), ld.circ.ncols, units, true);
-            let inst = Instance::new(vec![segment("units", &ld, cols, units)], None);
+            let inst = Instance::new(vec![segment("units", &ld, cols, units)], None).with_lookup(lookup);
             if !run_and_report(&inst, mode, &args, 16, "transition", units) { std::process::exit(1); }
         }
         "run-vu" => {
@@ -774,7 +912,7 @@ fn main() {
             let epi = load_circuit(&format!("{dir}/epilogue.txt"));
             let files = VuFiles::in_dir(&dir);
             let vus: Option<usize> = arg(&args, "--vus").map(|s| s.parse().unwrap());
-            let inst = load_vu(&unit, &epi, &files, vus);
+            let inst = load_vu(&unit, &epi, &files, vus).with_lookup(lookup);
             let b = inst.vus();
             let k = 16 * inst.chain.as_ref().unwrap().steps;
             if !run_and_report(&inst, mode, &args, k, "vu", b) { std::process::exit(1); }
@@ -792,7 +930,7 @@ fn main() {
             entries.sort();
             for p in entries {
                 let (cols, units) = load_rows(p.to_str().unwrap(), ld.circ.ncols, None, false);
-                let inst = Instance::new(vec![segment("units", &ld, cols, units)], None);
+                let inst = Instance::new(vec![segment("units", &ld, cols, units)], None).with_lookup(lookup);
                 let (proof, _) = prove(&inst, mode);
                 match verify(&verifier_view(&inst, mode), &proof, mode) {
                     Ok(()) => { n_bad += 1; println!("ACCEPTED (BUG) {}", p.display()); }
@@ -812,7 +950,7 @@ fn main() {
             for p in ids {
                 let d = p.to_str().unwrap();
                 let files = VuFiles::in_dir(d);
-                let inst = load_vu(&unit, &epi, &files, None);
+                let inst = load_vu(&unit, &epi, &files, None).with_lookup(lookup);
                 let (proof, _) = prove(&inst, mode);
                 match verify(&verifier_view(&inst, mode), &proof, mode) {
                     Ok(()) => { n_bad += 1; println!("ACCEPTED (BUG) {}", p.display()); }
@@ -839,7 +977,7 @@ fn main() {
             let epi = load_circuit(&format!("{dir}/epilogue.txt"));
             let files = VuFiles::in_dir(&dir);
             let vus: Option<usize> = arg(&args, "--vus").map(|s| s.parse().unwrap());
-            let inst = load_vu(&unit, &epi, &files, vus);
+            let inst = load_vu(&unit, &epi, &files, vus).with_lookup(lookup);
             LOG_TRANSCRIPT.store(true, Ordering::Relaxed);
             let (proof, st) = prove(&inst, mode);
             LOG_TRANSCRIPT.store(false, Ordering::Relaxed);
@@ -891,10 +1029,12 @@ mod tests {
     fn honest_units_accepted_at_several_batch_sizes() {
         let ld = load_circuit(&fx("circuit.txt"));
         for units in [1usize, 2, 8] {
-            let inst = unit_instance(&ld, &fx("honest8.bin"), Some(units));
-            for mode in [Mode::Clear, Mode::Pcs] {
-                let (proof, _) = prove(&inst, mode);
-                verify(&verifier_view(&inst, mode), &proof, mode).unwrap();
+            for lookup in [Lookup::PerTable, Lookup::Union] {
+                let inst = unit_instance(&ld, &fx("honest8.bin"), Some(units)).with_lookup(lookup);
+                for mode in [Mode::Clear, Mode::Pcs] {
+                    let (proof, _) = prove(&inst, mode);
+                    verify(&verifier_view(&inst, mode), &proof, mode).unwrap();
+                }
             }
         }
     }
@@ -912,6 +1052,9 @@ mod tests {
                 let (proof, _) = prove(&inst, mode);
                 assert!(verify(&verifier_view(&inst, mode), &proof, mode).is_err(), "{} accepted in {mode:?}", p.display());
             }
+            let inst = inst.with_lookup(Lookup::Union);
+            let (proof, _) = prove(&inst, Mode::Pcs);
+            assert!(verify(&verifier_view(&inst, Mode::Pcs), &proof, Mode::Pcs).is_err(), "{} accepted in union mode", p.display());
             n += 1;
         }
         assert!(n >= 50);
@@ -920,15 +1063,21 @@ mod tests {
     #[test]
     fn tampered_proof_is_rejected() {
         let ld = load_circuit(&fx("circuit.txt"));
-        let inst = unit_instance(&ld, &fx("honest8.bin"), Some(2));
-        for mode in [Mode::Clear, Mode::Pcs] {
-            let (mut proof, _) = prove(&inst, mode);
-            let k = proof.msgs.len() / 2;
-            proof.msgs[k] = proof.msgs[k] + Ext::ONE;
-            assert!(verify(&inst, &proof, mode).is_err());
-            let (mut proof, _) = prove(&inst, mode);
-            if mode == Mode::Pcs { proof.bytes[5] ^= 1; assert!(verify(&inst, &proof, mode).is_err()); }
+        for lookup in [Lookup::PerTable, Lookup::Union] {
+            let inst = unit_instance(&ld, &fx("honest8.bin"), Some(2)).with_lookup(lookup);
+            for mode in [Mode::Clear, Mode::Pcs] {
+                let (mut proof, _) = prove(&inst, mode);
+                let k = proof.msgs.len() / 2;
+                proof.msgs[k] = proof.msgs[k] + Ext::ONE;
+                assert!(verify(&inst, &proof, mode).is_err());
+                let (mut proof, _) = prove(&inst, mode);
+                if mode == Mode::Pcs { proof.bytes[5] ^= 1; assert!(verify(&inst, &proof, mode).is_err()); }
+            }
         }
+        // a union proof is not a per-table proof and vice versa (the mode is in the statement preamble)
+        let inst = unit_instance(&ld, &fx("honest8.bin"), Some(2));
+        let (proof, _) = prove(&inst, Mode::Pcs);
+        assert!(verify(&verifier_view(&inst, Mode::Pcs).with_lookup(Lookup::Union), &proof, Mode::Pcs).is_err());
     }
 
     fn synth_files(units: &str, public: &str) -> VuFiles {
@@ -1015,10 +1164,19 @@ mod tests {
             assert_eq!(ch.steps, 3);
             assert_eq!(ch.limbs.len(), 8);
             assert_eq!(ch.constraints_per_vu(), 1 + 4 * (3 + 1) + 2 * (1 + 2) + 2);
+            assert_eq!(inst.tables().len(), 12, "10 unit tables + the epilogue's R16, R15");
             for mode in [Mode::Clear, Mode::Pcs] {
                 let (proof, st) = prove(&inst, mode);
                 verify(&verifier_view(&inst, mode), &proof, mode).unwrap();
                 if mode == Mode::Pcs { assert_eq!(st.linkage_constraints, vus * ch.constraints_per_vu()); }
+            }
+            let inst = inst.with_lookup(Lookup::Union);
+            for mode in [Mode::Clear, Mode::Pcs] {
+                let (proof, st) = prove(&inst, mode);
+                verify(&verifier_view(&inst, mode), &proof, mode).unwrap();
+                assert_eq!(st.lookup_dims.len(), 1);
+                assert_eq!(st.lookup_dims[0].0, "UNION");
+                assert_eq!(st.lookup_dims[0].2, 86 + 5);
             }
         }
     }
@@ -1075,6 +1233,43 @@ mod tests {
             let err = verify(&verifier_view(&inst, mode), &proof, mode).expect_err("forged fixture accepted");
             assert!(err.starts_with("R16") || err.starts_with("R15"), "expected a range-table rejection, got {err}");
         }
+        let inst = inst.with_lookup(Lookup::Union);
+        for mode in [Mode::Clear, Mode::Pcs] {
+            let (proof, _) = prove(&inst, mode);
+            let err = verify(&verifier_view(&inst, mode), &proof, mode).expect_err("forged fixture accepted in union mode");
+            assert!(err.starts_with("UNION"), "expected the union instance to reject, got {err}");
+        }
+    }
+
+    /// `fixtures/redteam-3/logup-union/cross_table`: a query into table TA whose value is a row of TB only.  The union
+    /// argument must separate the two by the tag; the per-table argument trivially does.  `manifest.json` names the
+    /// cases and their expected outcome.
+    #[test]
+    fn redteam3_cross_table_fixtures() {
+        let d = format!("{}/../../fixtures/redteam-3/logup-union/cross_table", env!("CARGO_MANIFEST_DIR"));
+        let ld = load_circuit(&format!("{d}/circuit.txt"));
+        assert_eq!(ld.circ.tables.len(), 2);
+        let manifest = std::fs::read_to_string(format!("{d}/manifest.json")).unwrap();
+        let mut seen = 0;
+        for e in std::fs::read_dir(&d).unwrap() {
+            let p = e.unwrap().path();
+            if p.extension().map(|e| e != "bin").unwrap_or(true) { continue; }
+            let name = p.file_stem().unwrap().to_str().unwrap().to_string();
+            let expect_accept = manifest.contains(&format!("\"cross_table/{name}\": {{\n  \"rows\"")) && {
+                let i = manifest.find(&format!("cross_table/{name}\"")).unwrap();
+                manifest[i..].find("\"expected\": \"accept\"").map(|j| j < manifest[i..].find("\"mechanism\"").unwrap()).unwrap_or(false)
+            };
+            for lookup in [Lookup::PerTable, Lookup::Union] {
+                let inst = unit_instance(&ld, p.to_str().unwrap(), None).with_lookup(lookup);
+                for mode in [Mode::Clear, Mode::Pcs] {
+                    let (proof, _) = prove(&inst, mode);
+                    let res = verify(&verifier_view(&inst, mode), &proof, mode);
+                    assert_eq!(res.is_ok(), expect_accept, "{name} in {lookup:?}/{mode:?}: {res:?}");
+                }
+            }
+            seen += 1;
+        }
+        assert_eq!(seen, 5);
     }
 
     #[cfg(not(feature = "babybear"))]
@@ -1095,6 +1290,9 @@ mod tests {
                 let (proof, _) = prove(&inst, mode);
                 assert!(verify(&verifier_view(&inst, mode), &proof, mode).is_err(), "{u} / {e} / {p} accepted in {mode:?}");
             }
+            let inst = inst.with_lookup(Lookup::Union);
+            let (proof, _) = prove(&inst, Mode::Pcs);
+            assert!(verify(&verifier_view(&inst, Mode::Pcs), &proof, Mode::Pcs).is_err(), "{u} / {e} / {p} accepted in union mode");
         }
     }
 }

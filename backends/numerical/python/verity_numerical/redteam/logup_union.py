@@ -71,7 +71,27 @@ def forge_epilogue_hint(row: list[int], cols: list[str], p: int = GOLDILOCKS) ->
     return r
 
 
+#: The minimal cross-table circuit: two single-column tables ``TA = [0, 4)`` and ``TB = [0, 8)``, column ``x`` queried
+#: in ``TA`` and ``y`` in ``TB``.  Under the union argument a forger's ``x = 5`` (a row of ``TB``, not of ``TA``) must
+#: still be rejected: it is the tag that separates ``5 + gamma tag(TA)`` from ``5 + gamma tag(TB)``.
+CROSS_TABLE_CIRCUIT = "\n".join(
+    ["ncols 3", "nwires 3", "one 0", "col 0 one", "col 1 x", "col 2 y",
+     f"assert one_is_one 1 0 1 {GOLDILOCKS - 1}",
+     "table TA 1 4", *(f"row {v}" for v in range(4)),
+     "table TB 1 8", *(f"row {v}" for v in range(8)),
+     "query TA 1 1 1 1 0", "query TB 1 1 2 1 0"]) + "\n"
+
+CROSS_TABLE_CASES: dict[str, tuple[list[list[int]], str]] = {
+    "honest": ([[1, 2, 6], [1, 3, 7], [1, 0, 0]], "accept"),
+    "x_in_TB_not_TA": ([[1, 5, 1], [1, 3, 7]], "reject"),          # 5 is a row of TB; tag mismatch
+    "x_in_TB_not_TA_y_shares_it": ([[1, 5, 5]], "reject"),         # both queries read 5: TB's row explains y, not x
+    "x_out_of_both": ([[1, 9, 1]], "reject"),
+    "y_out_of_TB": ([[1, 1, 8]], "reject"),
+}
+
+
 def write_fixtures(repo: Path) -> dict:
+    out: dict = {}
     src = repo / "backends/gkr/fixtures/v2_synth"
     dst = repo / "fixtures/redteam-3/logup-union/forged_epilogue_hint"
     dst.mkdir(parents=True, exist_ok=True)
@@ -85,8 +105,17 @@ def write_fixtures(repo: Path) -> dict:
     _write_rows(dst / "public.bin", [[(pub[0][0] + 1) % GOLDILOCKS]])
     _write_rows(dst / "units.bin", units[:steps])
     shutil.copy(src / "chain.txt", dst / "chain.txt")
-    return {"case": "forged_epilogue_hint", "honest_word": pub[0][0], "claimed_word": (pub[0][0] + 1) % GOLDILOCKS,
-            "expected": "reject", "mechanism": "epilogue R16 lookup (lo, rem out of range)"}
+    out["forged_epilogue_hint"] = {"honest_word": pub[0][0], "claimed_word": (pub[0][0] + 1) % GOLDILOCKS,
+                                   "expected": "reject", "mechanism": "epilogue R16 lookup (lo, rem out of range)"}
+    ct = repo / "fixtures/redteam-3/logup-union/cross_table"
+    ct.mkdir(parents=True, exist_ok=True)
+    (ct / "circuit.txt").write_text(CROSS_TABLE_CIRCUIT)
+    for name, (rows, expected) in CROSS_TABLE_CASES.items():
+        _write_rows(ct / f"{name}.bin", rows)
+        out[f"cross_table/{name}"] = {"rows": rows, "expected": expected,
+                                     "mechanism": "union logUp: tagged multiset differs (gamma outside the collision set)"}
+    (ct / "manifest.json").write_text(json.dumps({k: v for k, v in out.items() if k.startswith("cross_table/")}, indent=1) + "\n")
+    return out
 
 
 # ---------------------------------------------------------------------------------------------------------------------
