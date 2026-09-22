@@ -275,8 +275,13 @@ secret_access_key_env = "RESEARCH_R2_SECRET_ACCESS_KEY"
 
 No remote configured (no file, or no `[remote]` table) => the local store is the only replica and `where` says so; nothing
 fails, nothing is called PRESERVED (`verify` returns `preserved=False, reason="no remote configured"`; `push` refuses). A
-`[remote]` table that is present but unusable (unknown type, missing field, credential env vars unset) is `ConfigError`, on
-purpose: a broken vault must not look like "no vault".
+`[remote]` table that is present but unusable (unknown type, missing field, credential env vars unset) is `ConfigError` from
+`load_remote`, on purpose: a broken vault must not look like "no vault". `LocalStore` keeps that distinction without making the
+local store unusable: `store.remote` degrades to `None` and keeps the reason in `store.remote_error`; reads, puts, labels and
+attempt publication proceed local-only, and `push` / `push_attempt` / `research data push` raise the reason (e.g. which env vars
+to set). `research run` reports which of the three happened: `PRESERVED on the remote`, `NOT preserved: <error>`, or `local only
+(<reason>)`; `research data push RUN` (or `--pending`) preserves later, with credentials in the environment
+(`set -a; source ~/.config/verity/r2.env; set +a` for the R2 vault).
 
 **PRESERVED** means: remote `head` size matches AND a full read-back sha256 matches, for the manifest and every blob (objects
 < 4 GiB; above that, per-part sha256 from the sidecar checked against the parts read back — not implemented). ETags are not
@@ -315,6 +320,10 @@ research data show ART|ATTEMPT|DRV [--json]   manifest (+ producing attempts) / 
 research data where ART [--json]              replicas: local / repo / remote (+ verified_utc)
 research data fetch ART [--to DIR]            materialise payload (file or tree); prints path
 research data verify ART [--json]             PRESERVED check against the remote (exit 1 unless PRESERVED)
+research data push [ART|RUN ...] [--pending] [--json]
+                                              preserve on the remote: blobs + manifest uploaded and read back (PRESERVED) per artifact;
+                                              a run id pushes the attempt manifest and every artifact it references; --pending pushes
+                                              every local artifact without a verified remote replica and every attempt the remote lacks
 research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA] [-- ARGV...]
                                               -> attempts with that reuse_key (or --any-source: that derivation); ARGV after -- is
                                                  parsed by the Tool exactly as `run` would, --param overrides; missing key conditions
