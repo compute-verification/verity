@@ -275,6 +275,7 @@ FIRST = Target(
     native_peak=A100_BF16_PEAK,
     status="frozen",
     instruction="sm80.mma.m16n8k16.bf16",
+    dossier="art:997eefe82d733c30d689801236cd682a47844b52dfcfe1d4ea61d44d99c837cc",
 )
 
 _FP8_DOMAIN = (
@@ -304,6 +305,7 @@ FP8_HOPPER_WGMMA = Target(
     native_peak=H100_FP8_PEAK,
     status="draft",
     instruction="sm90.wgmma.m64n8k32.e4m3",
+    dossier="art:f5e282ad4fe3a7d8ab2777cced6a1b0e8692375529fd031f99d24b3c98035755",
 )
 
 FP8_ADA_MMA = Target(
@@ -323,6 +325,7 @@ FP8_ADA_MMA = Target(
     native_peak=RTX4090_FP8_PEAK,
     status="draft",
     instruction="sm89.mma.m16n8k32.e4m3",
+    dossier="art:2acd0d37dc729e36570bffdee35e6445d4e095d9be9f39bcd11222c439e8197c",
 )
 
 #: Every target by name; ``fixtures/discrepancy_log.json`` entries name one of these (or an instruction id).

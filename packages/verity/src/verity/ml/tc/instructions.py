@@ -145,6 +145,17 @@ _AUTOPROOF_UNSCALED = (
     ".f32 (unscaled FP4), 13,082 dots, 0 mismatches, RZ at the K=116,544 parity boundary"
 )
 
+_PIN_BF16 = (
+    "lane pin-bf16 (2026-09-22): full canonical family set -- randn/uniform/subnormal/cancellation/mixed/near-overflow/signed-zero, "
+    "tiny_acc_zero_products, zero_acc_tiny_cancellation, zero_products_nonzero_acc, acc_only_lsb_walk, specials, adder_width_cancellation -- "
+    "25,833,472 asserted elements per anchor, 0 mismatches, SASS 1x HMMA.16816.F32.BF16, GPU UUID recorded (label device=): A100 r20260922-231411-1d5e "
+    "(sm80), RTX 4090 r20260922-231751-38ca (sm89, + golden and mma_special replays), H100 r20260922-231751-2442 (sm90), RTX 5090 r20260922-231751-6617 "
+    "(sm120); canaries r20260922-231832-9980 / -232813-0d92 / -232442-2eba / -232443-9ce8 (3-25 s).  Silicon facts: every BF16 pipeline passes all "
+    "32 accumulator bits through unchanged with zero products (D == C for 65,536/65,536); the adder-width residual survives at 2^-24 and is dropped "
+    "at 2^-25 inside the pair's k-group of 8 and is never dropped in the other group on sm_80/sm_89 ((8,8), 25 bits), and survives at 2^-25 / is "
+    "dropped at 2^-26 in every slot k=2..15 on sm_90/sm_120 ((16,), 26 bits)"
+)
+
 
 def _i(**kw) -> Instruction:
     return Instruction(**kw)
@@ -162,7 +173,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=AMPERE_BF16_M16N8K16,
             status="pinned",
-            evidence=("Hawkeye (A100) recovered groups (8,8), width 25, floor -132", _A100_RUN, _GOLDEN_BF16),
+            dossier="art:997eefe82d733c30d689801236cd682a47844b52dfcfe1d4ea61d44d99c837cc",
+            evidence=("Hawkeye (A100) recovered groups (8,8), width 25, floor -132", _A100_RUN, _GOLDEN_BF16, _PIN_BF16),
         ),
         _i(
             id="sm89.mma.m16n8k16.bf16",
@@ -172,7 +184,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=ADA_BF16_M16N8K16,
             status="pinned",
-            evidence=(_ADA_4090, _ADA_RUN, _GOLDEN_BF16),
+            dossier="art:e37fcb69bb1d7020cb1a81b71b525b76da2389b5bf3240f9668ed053637d34fe",
+            evidence=(_ADA_4090, _ADA_RUN, _GOLDEN_BF16, _PIN_BF16),
         ),
         _i(
             # veritor measured Hopper BF16 through wgmma (HOPPER_BF16_WGMMA_K16: one group of 16, 26 bits, floor
@@ -185,7 +198,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=HOPPER_BF16_M16N8K16,
             status="pinned",
-            evidence=(_H100_MMA_BF16, "Hawkeye (H100) recovered groups (16,), width 26, floor -133 -- instruction path not stated", _H100_BF16),
+            dossier="art:0664d5c367791927273cf038f0f6caa326a00801a3d563210c1969f159d3afff",
+            evidence=(_H100_MMA_BF16, "Hawkeye (H100) recovered groups (16,), width 26, floor -133 -- instruction path not stated", _H100_BF16, _PIN_BF16),
         ),
         # --- FP8 Ada mma.sync ----------------------------------------------------------------------------------
         _i(
@@ -196,6 +210,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e4m3", b_dtype="e4m3", acc_dtype="f32", scale=None,
             model=ADA_E4M3_M16N8K32,
             status="pinned",
+            dossier="art:2acd0d37dc729e36570bffdee35e6445d4e095d9be9f39bcd11222c439e8197c",
             evidence=(_ADA_4090, _ADA_E4M3_RUN, _GOLDEN_E4M3,
                       "Hawkeye's Hopper_fp8_simulator reproduces only 82.40% of the same tiles (D10)"),
         ),
@@ -207,6 +222,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e5m2", b_dtype="e5m2", acc_dtype="f32", scale=None,
             model=ADA_E5M2_M16N8K32,
             status="pinned",
+            dossier="art:9a5f8e71b80b72a70e5a2536dff85c169e3a592404c092f00c1cd976dd479dc8",
             evidence=(_ADA_E5M2_RUN, "model = sm89.mma.m16n8k32.e4m3's pipeline (groups (16,16), width 14, floor -139) with e5m2 products"),
         ),
         # --- FP8 Hopper ----------------------------------------------------------------------------------------
@@ -218,6 +234,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e4m3", b_dtype="e4m3", acc_dtype="f32", scale=None,
             model=HOPPER_E4M3_K32,
             status="pinned",
+            dossier="art:f5e282ad4fe3a7d8ab2777cced6a1b0e8692375529fd031f99d24b3c98035755",
             evidence=(_H100_WGMMA_E4M3, _H100_FP8, "Hawkeye (H100 FP8, zero accumulator only): groups (32,), width 14, floor -139"),
         ),
         _i(
@@ -228,6 +245,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e5m2", b_dtype="e5m2", acc_dtype="f32", scale=None,
             model=HOPPER_E5M2_K32,
             status="pinned",
+            dossier="art:27fbc67eed97901502f646218cf25d8fe4db2fe2d65d30eefd9efb77923b02a3",
             evidence=(_H100_WGMMA_E5M2, "model = sm90.wgmma.m64n8k32.e4m3's pipeline (groups (32,), width 14, floor -139) with e5m2 products"),
         ),
         _i(
@@ -257,7 +275,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=HOPPER_BF16_M16N8K16,
             status="pinned",
-            evidence=(_RTX5090_BF16,),
+            dossier="art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2",
+            evidence=(_RTX5090_BF16, _PIN_BF16),
         ),
         _i(
             id="sm120.mma.m16n8k64.e2m1.nvf4",
@@ -266,9 +285,12 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(16, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM120_NVF4,
-            status="pinned",
+            # Model BlockScaledAlignAdd (lane fp4-re) reproduces every word of 8.34M sweeps; the computed level is HYPOTHESIS only
+            # because P2 (>= 1e7 zero-mismatch elements on the anchor) is 3.4M short -- lane fp4-proof's fresh-seed sweep closes it,
+            # then this becomes "pinned" (registry <= computed level, lane pin-bf16).
+            status="hypothesis",
             evidence=(_RTX5090_FP4_RE, _AUTOPROOF, _AUTOPROOF_UNSCALED, _RTX5090_NVF4,
-                      "pinned for arbitrary finite FP32 accumulators (D12's zero-init limitation lifted; D16 and D17 resolved by "
+                      "model agrees for arbitrary finite FP32 accumulators (D12's zero-init limitation lifted; D16 and D17 resolved by "
                       "lane fp4-re); NaN/inf accumulators and sums leaving binary32 are outside the model's domain (recorded)"),
         ),
         _i(
@@ -280,7 +302,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(16, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue8m0",
             model=BLACKWELL_SM120_MXF4,
-            status="pinned",
+            # As nvf4: 0 mismatches over 7.39M words (fp4-re), computed HYPOTHESIS until fp4-proof's sweep supplies P2's elements.
+            status="hypothesis",
             evidence=(_RTX5090_FP4_RE,
                       "the same adder as nvf4 with the UE8M0 scale 2^(code-127) written as mantissa 8 at 2^(code-130) (D18); a "
                       "nonzero sum below the subnormal grid is +0 (D13: BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED refuted); the "

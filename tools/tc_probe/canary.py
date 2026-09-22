@@ -290,18 +290,28 @@ def canary_failures(report: dict) -> list[str]:
     return out
 
 
-def result_labels(ins: P.Instruction, report: dict, identity: dict) -> list[dict]:
-    """The label contract for a canary artifact (``verity.verification.trust`` reads exactly these keys)."""
-    declared = report["declared_models"] or [m.name for m in ins.models]
+def evidence_labels(ins: P.Instruction, report: dict, identity: dict, *, evidence: str, family: str | None = None) -> list[dict]:
+    """The label contract of a ``tc-evidence/v1`` artifact (``verity.verification.trust`` reads exactly these keys): ``instruction``,
+    ``hardware`` (the SKU family), ``model`` (the declared pipelines), ``model_agrees``, ``evidence`` (``sweep`` / ``canary``),
+    ``device`` (the GPU UUID, S1's device identity) and, for canaries, ``family=canary``.  ``report`` is a sweep or canary report
+    with ``model_agrees`` per model (a canary's also lists ``declared_models``)."""
+
+    declared = report.get("declared_models") or [m.name for m in ins.models if m.declared] or [m.name for m in ins.models]
     agrees = all(report["model_agrees"].get(m, False) for m in declared)
-    return [
-        {"key": "family", "value": "canary"},
+    labels = [{"key": "family", "value": family}] if family else []
+    return labels + [
         {"key": "instruction", "value": ins.id},
         {"key": "hardware", "value": sku_family(identity.get("device"))},
         {"key": "model", "value": ",".join(declared)},
         {"key": "model_agrees", "value": "true" if agrees else "false"},
-        {"key": "evidence", "value": "canary"},
+        {"key": "evidence", "value": evidence},
+        {"key": "device", "value": identity.get("gpu_uuid")},
     ]
+
+
+def result_labels(ins: P.Instruction, report: dict, identity: dict) -> list[dict]:
+    """The label contract for a canary artifact."""
+    return evidence_labels(ins, report, identity, evidence="canary", family="canary")
 
 
 def sku_family(device: str | None) -> str | None:
