@@ -395,6 +395,8 @@ fn experiment_soundness_shapes() {
         ("acc.s flip", vec![("acc.s", fx.value(&u, "acc.s") ^ 1)]),
         ("a0.f+128", vec![("a[0].f", fx.value(&u, "a[0].f") + 128)]),
         ("sum.sgn flip", vec![("g0.sum.sgn", fx.value(&u, "g0.sum.sgn") ^ 1)]),
+        ("limb4 only", vec![("acc.f.limb[0]", fx.value(&u, "acc.f.limb[0]") + 4), ("acc.f.limb[1]", fx.value(&u, "acc.f.limb[1]") - 1)]),
+        ("sel swap (deg3 only)", vec![("g0.max.sel[0]", 0), ("g0.max.sel[1]", 1)]),
     ];
     for (label, ov) in muts {
         let (row, _) = gen_row(&u, &ov);
