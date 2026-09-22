@@ -144,13 +144,21 @@ class Proof:
         out += struct.pack("<Q", len(op.qc))
         for m in op.qc:
             out += _field.to_bytes(m)
-        rows = len(op.columns[0][0]) if op.columns else 0
-        depth = len(op.columns[0][1]) if op.columns else 0
-        out += struct.pack("<QQQ", len(op.columns), rows, depth)
-        for col, path in op.columns:
-            if len(col) != rows or len(path) != depth:
+        # a-gpu2: ``columns`` is an ``(t, rows)`` ``<u4`` array and the Merkle paths live in ``paths``
+        import numpy as np
+
+        columns = np.asarray(op.columns, dtype="<u4")
+        t = columns.shape[0] if columns.ndim == 2 else 0
+        rows = columns.shape[1] if columns.ndim == 2 else 0
+        depth = len(op.paths[0]) if t else 0
+        if len(op.paths) != t:
+            raise ValueError("ragged opening")
+        out += struct.pack("<QQQ", t, rows, depth)
+        for oi in range(t):
+            path = op.paths[oi]
+            if len(path) != depth:
                 raise ValueError("ragged opening")
-            out += b"".join(int(v).to_bytes(4, "little") for v in col)
+            out += np.ascontiguousarray(columns[oi]).tobytes()
             out += b"".join(path)
         return bytes(out)
 
@@ -186,16 +194,18 @@ class Proof:
         pos += 24 * nq
         t, rows, depth = struct.unpack_from("<QQQ", data, pos)
         pos += 24
-        cols = []
-        for _ in range(t):
-            col = [int.from_bytes(data[pos + 4 * i:pos + 4 * i + 4], "little") for i in range(rows)]
+        import numpy as np
+
+        columns = np.zeros((t, rows), dtype="<u4")
+        paths = []
+        for oi in range(t):
+            columns[oi] = np.frombuffer(data, dtype="<u4", count=rows, offset=pos)
             pos += 4 * rows
-            path = [data[pos + 32 * i:pos + 32 * i + 32] for i in range(depth)]
+            paths.append([data[pos + 32 * i:pos + 32 * i + 32] for i in range(depth)])
             pos += 32 * depth
-            cols.append((col, path))
         if pos != len(data):
             raise ValueError("trailing bytes")
-        return cls(root, msgs, ligero.Opening(w, qc, cols))
+        return cls(root, msgs, ligero.Opening(w, qc, columns, paths))
 
 
 @dataclass
