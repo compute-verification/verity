@@ -177,14 +177,14 @@ def main(argv=None) -> None:
     print(json.dumps(res["device"]), flush=True)
     todo = []
     if "simt" in encs:
-        for variant, threads in (("v1", 256), ("v1", 512), ("v2", 128), ("v2", 256), ("v2", 512)):
+        for variant, threads in (("v1", 256), ("v1", 512), ("v2", 128), ("v2", 256), ("v2", 512), ("v2", 1024)):
             e = RSEncoderSIMT(threads=threads, variant=variant)
             key = f"simt_{variant}_t{threads}"
             ok = check(e, "simt")
             res["checks"][key] = ok
             print(f"simt {variant} threads={threads} bit-exact: {ok}", flush=True)
             todo.append((f"ntt_simt_{variant}_t{threads}", "simt", e, True, None, key))
-            if (variant, threads) == ("v2", 256):
+            if (variant, threads) == ("v2", 512):
                 todo.append((f"ntt_simt_{variant}_t{threads}_nosys", "simt", e, False, None, key))
     if "cublas" in encs:
         e = RSEncoderMatDFT(variant="cublas")

@@ -269,7 +269,7 @@ def twiddle_tables(k: int, n: int) -> dict[str, np.ndarray]:
 class RSEncoderSIMT:
     """cupy-backed encoder; ``__call__(rows_u32 (R, k) on device, out (R, n) or None) -> out``."""
 
-    def __init__(self, k: int = bb.K_CODE, n: int = bb.N_CODE, threads: int = 256, blocks: int | None = None, variant: str = "v2"):
+    def __init__(self, k: int = bb.K_CODE, n: int = bb.N_CODE, threads: int = 512, blocks: int | None = None, variant: str = "v2"):
         import cupy as cp
 
         if n != 4 * k or k & (k - 1) or k < 2 * threads or threads & (threads - 1):
@@ -284,7 +284,7 @@ class RSEncoderSIMT:
         self.tw_inv = cp.asarray(tabs["tw_inv"])
         self.coset = cp.asarray(tabs["coset"])
         sms = cp.cuda.runtime.getDeviceProperties(0)["multiProcessorCount"]
-        self.blocks = blocks or sms * 8
+        self.blocks = blocks or sms * 16
 
     def __call__(self, rows, out=None, write_systematic: bool = True):
         cp = self.cp
