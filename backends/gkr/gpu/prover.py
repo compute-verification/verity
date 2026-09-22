@@ -256,7 +256,7 @@ def add_input_claim(acc: Acc, rho: Ext, seg_off: int, seg: Segment, x_pt: list[E
 def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], table_off: int, table: Table, ch, n: int, c: LeafClaim) -> None:
     dev = acc.device
     z, beta = ch
-    eqt = eq_table(c.rho, dev).to(torch.int32)                        # (2^n, 6)
+    eqt = eq_table(c.rho, dev, out_dtype=torch.int32)                 # (2^n, 6), written once in int32
     bs = logup.beta_powers(beta, table.cols, dev)                     # (cols, 6)
     bs_py = [py_ext(b) for b in bs]
     lam_t = t_ext(c.lam, dev)

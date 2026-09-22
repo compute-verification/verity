@@ -394,15 +394,21 @@ def fold_base(v: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
     return out
 
 
-def eq_table(point: list[Ext], device) -> torch.Tensor:
-    """``eq(point, x)`` for every ``x`` on the hypercube ``(2^n, 6)``, top-bit-first (``field.rs::eq_table``)."""
+def eq_table(point: list[Ext], device, out_dtype=torch.int64) -> torch.Tensor:
+    """``eq(point, x)`` for every ``x`` on the hypercube ``(2^n, 6)``, top-bit-first (``field.rs::eq_table``).  Large
+    tables (``n > 16``, CUDA) are the tensor product of the two halves' tables, written once in ``out_dtype`` by a fused
+    kernel (the doubling loop would materialise ~4x the table in int64 temporaries: 26 GB at ``n = 28``)."""
+    n = len(point)
+    if _fast_eq_outer is not None and n > 16 and torch.device(device).type == "cuda":
+        n_hi = n // 2
+        return _fast_eq_outer(eq_table(point[:n_hi], device), eq_table(point[n_hi:], device), out_dtype)
     t = torch.zeros((1, DEG), dtype=torch.int64, device=device)
     t[0, 0] = 1
     for r in reversed(point):
         rt = t_ext(r, device)
         one_minus = (t_ext(ONE, device) - rt) % P
         t = torch.cat([ext_mul_chunked(t, one_minus), ext_mul_chunked(t, rt)], dim=0)
-    return t
+    return t if out_dtype == torch.int64 else t.to(out_dtype)
 
 
 def eval_mle(values: torch.Tensor, point: list[Ext]) -> Ext:
@@ -449,6 +455,7 @@ _fast_scatter = None
 _fast_gate_eval = None
 _fast_combine_level = None
 _fast_split_limbs = None
+_fast_eq_outer = None
 try:
     import os as _os
 
@@ -464,6 +471,7 @@ try:
             _fast_gate_eval = _kernels.gate_eval
             _fast_combine_level = _kernels.combine_level
             _fast_split_limbs = _kernels.split_limbs
+            _fast_eq_outer = _kernels.eq_outer
 except Exception:  # noqa: BLE001 -- no Triton / no CUDA: the torch path is used
     _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = _fast_scatter = _fast_gate_eval = _fast_combine_level = None
-    _fast_split_limbs = None
+    _fast_split_limbs = _fast_eq_outer = None

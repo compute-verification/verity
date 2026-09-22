@@ -623,6 +623,37 @@ if triton is not None:
         tl.store(np_ptr + ob + 5, mmul(s5, R2_C), mask=m)
 
     @triton.jit
+    def eq_outer_kernel(hi_ptr, lo_ptr, out_ptr, n, LO_LOG: tl.constexpr, BLOCK: tl.constexpr):
+        """``out[h 2^LO_LOG + l] = hi[h] * lo[l]`` (extension elements): the eq table of a point as the tensor product
+        of the tables of its top and bottom halves, written straight to ``out`` (int32 or int64)."""
+        idx = (tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)).to(tl.int64)
+        m = idx < n
+        h = idx >> LO_LOG
+        l = idx & ((1 << LO_LOG) - 1)
+        bh = h * 6
+        bl = l * 6
+        a0 = tl.load(hi_ptr + bh + 0, mask=m, other=0).to(tl.int32)
+        a1 = tl.load(hi_ptr + bh + 1, mask=m, other=0).to(tl.int32)
+        a2 = tl.load(hi_ptr + bh + 2, mask=m, other=0).to(tl.int32)
+        a3 = tl.load(hi_ptr + bh + 3, mask=m, other=0).to(tl.int32)
+        a4 = tl.load(hi_ptr + bh + 4, mask=m, other=0).to(tl.int32)
+        a5 = tl.load(hi_ptr + bh + 5, mask=m, other=0).to(tl.int32)
+        b0 = tl.load(lo_ptr + bl + 0, mask=m, other=0).to(tl.int32)
+        b1 = tl.load(lo_ptr + bl + 1, mask=m, other=0).to(tl.int32)
+        b2 = tl.load(lo_ptr + bl + 2, mask=m, other=0).to(tl.int32)
+        b3 = tl.load(lo_ptr + bl + 3, mask=m, other=0).to(tl.int32)
+        b4 = tl.load(lo_ptr + bl + 4, mask=m, other=0).to(tl.int32)
+        b5 = tl.load(lo_ptr + bl + 5, mask=m, other=0).to(tl.int32)
+        c0, c1, c2, c3, c4, c5 = ext_mmul(a0, a1, a2, a3, a4, a5, b0, b1, b2, b3, b4, b5)
+        base = idx * 6
+        tl.store(out_ptr + base + 0, mmul(c0, R2_C), mask=m)
+        tl.store(out_ptr + base + 1, mmul(c1, R2_C), mask=m)
+        tl.store(out_ptr + base + 2, mmul(c2, R2_C), mask=m)
+        tl.store(out_ptr + base + 3, mmul(c3, R2_C), mask=m)
+        tl.store(out_ptr + base + 4, mmul(c4, R2_C), mask=m)
+        tl.store(out_ptr + base + 5, mmul(c5, R2_C), mask=m)
+
+    @triton.jit
     def split_limbs_kernel(v_ptr, out_ptr, n, BLOCK: tl.constexpr):
         """``out[i, idx] = l_i`` for ``v[idx] = Σ_i 2^(8i) l_i``, ``l_i ∈ [-128, 128)`` (canonical int32 in, 4 x int8 out)."""
         idx = (tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)).to(tl.int64)
@@ -639,6 +670,22 @@ if triton is not None:
         tl.store(out_ptr + n64 + idx, l1.to(tl.int8), mask=m)
         tl.store(out_ptr + 2 * n64 + idx, l2.to(tl.int8), mask=m)
         tl.store(out_ptr + 3 * n64 + idx, l3.to(tl.int8), mask=m)
+
+
+def eq_outer(hi: torch.Tensor, lo: torch.Tensor, out_dtype=torch.int64) -> torch.Tensor:
+    """``(len(hi) * len(lo), 6)``: ``out[h * len(lo) + l] = hi[h] * lo[l]`` for canonical ``(·, 6)`` tables (``len(lo)`` a
+    power of two)."""
+    nh, nl = hi.shape[0], lo.shape[0]
+    lo_log = nl.bit_length() - 1
+    if 1 << lo_log != nl:
+        raise ValueError("eq_outer: len(lo) must be a power of two")
+    n = nh * nl
+    out = torch.empty((n, DEG), dtype=out_dtype, device=hi.device)
+    if n:
+        BLOCK = 512
+        eq_outer_kernel[((n + BLOCK - 1) // BLOCK,)](hi.contiguous().view(-1), lo.contiguous().view(-1), out.view(-1), n,
+                                                     LO_LOG=lo_log, BLOCK=BLOCK, num_warps=4)
+    return out
 
 
 def split_limbs(v: torch.Tensor) -> torch.Tensor:
