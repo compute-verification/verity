@@ -841,26 +841,27 @@ because every factor is a residue of an integer in \([0, 780)\) bound by ALIGN4/
 ### 15.4 Measurement (vy-cpu2, 12 threads, shared; \(B = 4096\), \(K = 1536\), 100 FRI queries, PoW 16)
 
 Runs `r20260922-085312-82a9` (BabyBear\(^4\), 166 queries), `r20260922-085547-05cc` (BabyBear\(^5\), 166 queries),
+`r20260922-090904-cd75` (BabyBear\(^6\), 166 queries),
 `r20260922-084854-d988` / `r20260922-085143-6e87` (the same at 100 queries: 22.88 s / 25.44 s, proofs 1.18 / 1.20 MB,
 FRI \(2^{-83.8}\) proven); `results/vu_v2_*.json`.  \(2^{19}\) rows (393 216 real), `log_blowup` 2, Keccak Merkle,
 authentication excluded, `NON_ZK_PROOF_DIAGNOSTIC`; the pod was shared (load average \(\approx 30\) on 32 vCPUs), so
 every time is an upper bound.  The v1 + LogUp columns are section 14.5's (same queries, same pod, same threads).
 
-| | v1 + LogUp, BabyBear\(^4\) | v1 + LogUp, BabyBear\(^5\) | **v2, BabyBear\(^4\)** | **v2, BabyBear\(^5\)** |
-|---|---|---|---|---|
-| committed width | 863 | 977 | **405** | **453** |
-| committed bytes / VU | 331 kB | 375 kB | **155.5 kB** (2.13x less) | **174 kB** (2.16x less) |
-| witness s | 5.4 | 5.9 | **2.37** | 2.38 |
-| prove s | 54.7 | 64.5 | **20.55** | 23.05 |
-| total s | 60.1 | 70.4 | **22.92** | 25.43 |
-| s / VU | 0.0147 | 0.0172 | **0.00560** (2.62x) | 0.00621 (2.77x) |
-| overhead vs native peak | 1.49e9 | 1.75e9 | **5.68e8** | 6.31e8 |
-| verify s | 0.44 | 0.51 | 0.455 | 0.557 |
-| proof MB | 2.27 | 2.37 | 1.95 | 1.99 |
-| sequential depth (rounds) | 26 | 26 | 26 | 26 |
-| peak RSS GB | 9.5 | 10.7 | **4.85** | 5.16 |
-| stages: commit_pre / main / aux_build / aux / quotient / commit_q / open s | 0.31 / 5.46 / 0.56 / 5.87 / 37.07 / 0.58 / 4.08 | 0.33 / 5.35 / 0.66 / 7.35 / 43.98 / 0.70 / 5.27 | 0.36 / 3.87 / 0.18 / 1.76 / **10.76** / 0.57 / 2.60 | 0.38 / 4.03 / 0.23 / 2.20 / 11.46 / 0.67 / 3.72 |
-| soundness: FRI / lookup term | \(2^{-128.6}\) / \(2^{-93.8}\) | \(2^{-128.6}\) / \(2^{-124.8}\) | \(2^{-128.6}\) / **\(2^{-94.9}\)** | \(2^{-128.6}\) / **\(2^{-125.8}\)** |
+| | v1 + LogUp, BabyBear\(^4\) | v1 + LogUp, BabyBear\(^5\) | **v2, BabyBear\(^4\)** | **v2, BabyBear\(^5\)** | **v2, BabyBear\(^6\)** (15.5) |
+|---|---|---|---|---|---|
+| committed width | 863 | 977 | **405** | **453** | 463 |
+| committed bytes / VU | 331 kB | 375 kB | **155.5 kB** (2.13x less) | **174 kB** (2.16x less) | 177.8 kB (1.86x less) |
+| witness s | 5.4 | 5.9 | **2.37** | 2.38 | 2.39 |
+| prove s | 54.7 | 64.5 | **20.55** | 23.05 | 30.41 |
+| total s | 60.1 | 70.4 | **22.92** | 25.43 | 32.80 |
+| s / VU | 0.0147 | 0.0172 | **0.00560** (2.62x) | 0.00621 (2.77x) | 0.00801 (1.83x) |
+| overhead vs native peak | 1.49e9 | 1.75e9 | **5.68e8** | 6.31e8 | 8.13e8 |
+| verify s | 0.44 | 0.51 | 0.455 | 0.557 | 0.731 |
+| proof MB | 2.27 | 2.37 | 1.95 | 1.99 | 2.03 |
+| sequential depth (rounds) | 26 | 26 | 26 | 26 | 26 |
+| peak RSS GB | 9.5 | 10.7 | **4.85** | 5.16 | 5.47 |
+| stages: commit_pre / main / aux_build / aux / quotient / commit_q / open s | 0.31 / 5.46 / 0.56 / 5.87 / 37.07 / 0.58 / 4.08 | 0.33 / 5.35 / 0.66 / 7.35 / 43.98 / 0.70 / 5.27 | 0.36 / 3.87 / 0.18 / 1.76 / **10.76** / 0.57 / 2.60 | 0.38 / 4.03 / 0.23 / 2.20 / 11.46 / 0.67 / 3.72 | 0.37 / 4.07 / 0.33 / 2.47 / 15.19 / 0.76 / 6.68 |
+| soundness: FRI / lookup term | \(2^{-128.6}\) / \(2^{-93.8}\) | \(2^{-128.6}\) / \(2^{-124.8}\) | \(2^{-128.6}\) / **\(2^{-94.9}\)** | \(2^{-128.6}\) / **\(2^{-125.8}\)** | **\(2^{-128.6}\)** / \(2^{-156.7}\) |
 
 Both breakthrough criteria are met (s/VU 2.62x better than 0.0147, > 1.5x; committed bytes/VU 2.13x under 331 kB,
 > 2x).  Where the time went: the quotient pass fell 3.4x (37.1 to 10.8 s: 88 program constraints instead of 402,
@@ -885,7 +886,18 @@ The honest label of a v2 proof is the minimum of the two: **\(2^{-94.9}\) at Bab
 instead).  \(2^{-128}\) needs BabyBear\(^6\)
 (not in Plonky3 0.4.3) *and* 166 queries; BabyBear\(^5\) at 166 queries gives \(2^{-125.8}\) -- the same conclusion as
 section 14.2; with 3.7x fewer lookups the v2 term is 1.5 bits better at each degree, not enough to change it.
-BabyBear\(^6\) was not implemented in this lane (section 15.6).
+**BabyBear\(^6\) is implemented** (the brief's item 6): Plonky3 0.4.3 has binomial extensions of BabyBear of degree
+4 and 5 only, so `vendor/p3-baby-bear` is the registry crate (`[patch.crates-io]`) plus `BinomiallyExtendable<6>` /
+`HasTwoAdicBionmialExtension<6>` over \(X^6 - 22\): 22 is neither a square nor a cube mod \(p\) (the irreducibility
+criterion for \(X^6 - w\) when \(4 \nmid 6\)), \(X^{p^k} \ne X\) for \(k = 1, 2, 3\); the multiplicative generator
+\(6 + X\) has order \(p^6 - 1 = 2^{28} \cdot 3^2 \cdot 5 \cdot 7^3 \cdot 13 \cdot 31 \cdot 1171 \cdot 7459 \cdot 103237
+\cdot 345769 \cdot 32472031 \cdot 3939008426310247\) (checked against every prime factor); 2-adicity 28 with the
+sparse generator \(22^7 X^3\).  `tests/air_v2.rs::babybear6_field` checks the axioms, inverses, \(x^{p^6} = x\) (and
+\(\ne\) for smaller powers), the orders.  `BabyBear6Backend`, `vu-bench --v2 --ext 6`: **32.80 s, 463 committed
+columns, 177.8 kB/VU, label \(2^{-128.6}\)** (FRI binds; lookup \(2^{-156.7}\)) -- the first honest \(2^{-128}\) of
+the B AIR at \(2^{19}\) rows, 1.83x faster and 1.86x smaller than v1 + LogUp at its \(2^{-93.8}\).  The 43% over
+v2\(^4\) is the generic degree-6 extension multiplication (`BinomialExtensionField` specialises D = 2, 3 only):
+quotient 15.2 vs 10.8 s, `open` 6.7 vs 2.6 s -- a Karatsuba/Toom sextic multiplication would recover most of it.
 
 Statement binding (red-team F1-F3): `absorb_header` puts the domain tag, the AIR id (hash of field, layout and
 constraint names), \(B\), \(K\), 96, `degree_bits`, the FRI parameters and every claimed word (and the operands when
@@ -916,12 +928,10 @@ recomputation in the verifier, the \(2^{19}\)-row floor -- are the items below.
 
 ### 15.7 Open
 
-* **BabyBear\(^6\)** (the brief's item 6): not done.  Plonky3 0.4.3's `BinomialExtensionField<BabyBear, D>` is
-  implemented for D = 4, 5 only; a degree-6 extension needs a `BinomiallyExtendable<6>` impl (irreducible
-  \(X^6 - w\); `backends/gkr/src/field.rs` has a hand-rolled BabyBear\(^6\) with its polynomial) plus the
-  `TwoAdicField`/`HasFrobenius` plumbing uni-stark's challenger and PCS need.  Expected cost from the \(^4 \to ^5\)
-  step: aux width 174, quotient +7%, \(\approx 28\) s total, label \(2^{-128.6}\) (FRI) -- the first honest
-  \(2^{-128}\) at \(2^{19}\) rows.
+* **BabyBear\(^6\) multiplication**: the vendored extension uses Plonky3's generic \(D\)-loop product; the 43%
+  over \(^4\) (section 15.5) is mostly that.  A specialised sextic product (Karatsuba over the cubic split, or
+  Toom-3) in the vendored crate is the obvious next 20%.  The vendored crate is a patch of 0.4.3-succinct only;
+  upstream Plonky3 gained more extension degrees later and the patch should be dropped when the crate is bumped.
 * **Operand authentication**: `--bind-operands` absorbs the operand arrays into the header and checks the 32 operand
   columns at \(\zeta\); it was implemented and is exercised by `vu-bench --v2 --bind-operands` but not measured
   in the table (the verifier's statement polynomial then has \(32 \times 2^{19}\) coefficients: a hash-chain

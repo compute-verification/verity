@@ -44,6 +44,8 @@ PCS of `PROTOCOL.md`: it is the fastest complete non-ZK proof of the *right* con
   `vu-honest`, `vu-bench`, `check-rows` (`--ext 5` for BabyBear^5); `run_v2.sh` is the pod script;
   `tests/air_v2.rs` the tests (exhaustive evaluation of every constraint on the honest committed trace, mutations,
   the pod-sized statement-bound round trip); `tools/battery_adapter.py --v2` the battery translated to v2.
+- `vendor/p3-baby-bear`: Plonky3 0.4.3's crate with BabyBear^6 added (`BinomiallyExtendable<6>` over X^6 - 22,
+  PROTOCOL.md 15.5; `[patch.crates-io]` in `Cargo.toml`); `BabyBear6Backend`, `--ext 6`.
 - `run_vu.sh`: the pod script (build, `cargo test`, `chain-layout`, `vu-neg`, battery, `vu-bench`);
   `run_lookup.sh`: the same for the LogUp realisation (`tests/lookup.rs` incl. the 2^17-row round trip, battery
   `--lookup`, `vu-bench --lookup`).
@@ -132,6 +134,7 @@ r20260922-055326-699d (Goldilocks), r20260922-055900-f53a (BabyBear), r20260922-
 | BabyBear, 166 queries (2^-128 proven) | r20260922-060503-6847 | 2,900 | 21.22 | 146.90 | **168.12** | **0.0410** | 0.425 | 3,453,676 | 24 | 30.6 GB | 1.11 MB | 128.6 / 348 |
 | BabyBear, **checker v2** + LogUp tuple lookups, BabyBear^4, 166 queries (`vu-bench --v2`, PROTOCOL.md 15) | r20260922-085312-82a9 | 281 main + 116 aux + 8 pre = **405** | 2.37 | 20.55 | **22.92** | **0.00560** | 0.455 | 1,948,324 | 26 | 4.85 GB | 38,880 cells, **155.5 kB** | 128.6 / 348; lookup term **2^-94.9** |
 | BabyBear, checker v2 + LogUp, BabyBear^5, 166 queries (`--ext 5`) | r20260922-085547-05cc | 281 + 145 + 8 = 453 | 2.38 | 23.05 | 25.43 | 0.00621 | 0.557 | 1,987,400 | 26 | 5.16 GB | 43,488 cells, 174 kB | 128.6 / 348; lookup term 2^-125.8 |
+| BabyBear, checker v2 + LogUp, **BabyBear^6** (`--ext 6`, vendored extension), 166 queries: **honest 2^-128.6** | r20260922-090904-cd75 | 281 + 174 + 8 = 463 | 2.39 | 30.41 | 32.80 | 0.00801 | 0.731 | 2,026,972 | 26 | 5.47 GB | 44,448 cells, 177.8 kB | **128.6** / 348; lookup term 2^-156.7 |
 
 Trace: 2^19 rows (393,216 real + zero-VU padding) x width. `overhead.vs_native_peak` (t.total / 4096 over 9.85 ps):
 **4.53e9** (Goldilocks), **4.24e9** (BabyBear). Ledger: `backends/reports/ledger/b-chain.jsonl`.
