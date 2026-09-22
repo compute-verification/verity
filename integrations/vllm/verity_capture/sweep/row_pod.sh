@@ -124,7 +124,7 @@ tmp = p + ".tmp"; open(tmp, "w").write(json.dumps(d, indent=1) + "\n"); os.repla
 EOF
 fi
 tl precheck end rc=0
-verdict precheck PASS "source identity == $TREE_HERE${SID_SHA:+ @ $SID_SHA} (verity.ir verity_capture vllm-poc hidden_gpu telemetry)" >/dev/null
+verdict precheck PASS "source identity == $TREE_HERE${SID_SHA:+ @ $SID_SHA} (verity verity_vllm verity_capture verity_vllm_adapter hidden_gpu research)" >/dev/null
 IFS=', ' read -r B I O LP_DEF T_DEF SNAP_DEF CK <<< "$($PY - "$WL" <<'EOF'
 import json, sys
 w = json.load(open(sys.argv[1])); s = w["sweep"]
