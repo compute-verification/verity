@@ -3,7 +3,8 @@
  "field": "babybear",
  "air": {
   "width": 2930,
-  "constraints": 3247
+  "constraints": 3247,
+  "realisation": "limbs"
  },
  "battery": {
   "version": "v1",
@@ -49,7 +50,7 @@
   "total": 6,
   "accepted": []
  },
- "seconds_check_rows": 1.3322370052337646,
+ "seconds_check_rows": 1.3206613063812256,
  "cases": [
   {
    "id": "wrap-484a7233a1",

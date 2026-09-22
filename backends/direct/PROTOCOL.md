@@ -537,7 +537,21 @@ is unchanged (its `lt_pow` is the product form, which bounds both sides). Gate a
 
 ### 13.3 Gate after the fix
 
-GATE_PLACEHOLDER
+`run_vu.sh babybear 4096 166` on vy-cpu2 at 12 threads (run `r20260922-065546-a242`, `results/vu_babybear_q166_fix_r20260922-065546-a242.json`; the box was shared with a-babybear, checker-min and this lane's own lookup build, so the times carry that noise):
+
+| | b-chain, as shipped (`r20260922-060503-6847`) | after `lead.window_lo` |
+|---|---|---|
+| width / constraints | 2 900 / 3 215 | 2 930 / 3 247 (+1.0%) |
+| 23 unit negatives, 3 chain mutations | pass | pass |
+| 52 `vu-k1536-neg` | 52 rejected by witness generation AND unsatisfiable in the field | 52 / 52 |
+| battery 83 + 6 extras | 82/83, 0/6 | **83/83, 6/6**; 87/87 controls |
+| 4 096 VUs, words + accumulators | all match | all match |
+| witness / prove / total | 21.2 / 146.9 / 168.1 s | 22.1 / 151.1 / **173.2 s** (+3%, within the shared-box noise) |
+| s/VU, overhead vs native peak | 0.0410, 4.17e9 | 0.0423, 4.30e9 |
+| verify / proof / peak RSS | 0.425 s / 3.45 MB / 30.6 GB | 0.426 s / 3.47 MB / 30.9 GB |
+| FRI bound (166 queries, PoW 16) | 2^-128.6 proven | 2^-128.6 proven |
+
+Ledger: `reports/ledger/b-lookup.jsonl`, label `SOUNDNESS FIX: LT_DIRECT; BabyBear AIR 2^-128, B=4096`.
 
 ## 14. Range lookups instead of 2-bit limbs: LogUp inside the AIR (b-lookup, 2026-09-22) **[implemented, diagnostic PCS]**
 
