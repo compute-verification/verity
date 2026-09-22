@@ -62,8 +62,9 @@ def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, ca
     seed = rel.instance_seed if seed is None else seed
     path = Path(cache) / f"{rel.name}-{seed}-{n}.npz" if cache else None
     if path is not None and path.exists():
-        z = np.load(path)
-        return [(z["a"][i].tolist(), z["b"][i].tolist(), z["accs"][i].tolist(), int(z["accs"][i][-1])) for i in range(n)]
+        with np.load(path) as z:  # materialise each array once (indexing the lazy NpzFile re-reads the member every time)
+            a, b, accs = z["a"], z["b"], z["accs"]
+        return [(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)]
     jobs = [(rel.name, seed, i) for i in range(n)]
     if procs > 1 and n > 1:
         with ProcessPoolExecutor(procs) as ex:
