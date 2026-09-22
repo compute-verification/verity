@@ -327,6 +327,25 @@ def test_no_remote_is_stated_not_failed(store):
         store.push(art)
 
 
+def test_unusable_remote_degrades_to_local(env, monkeypatch):
+    """store.toml names an S3 bucket but the credential env vars are unset (a pod, a test, a laptop without `source r2.env`): the
+    local store must keep working -- reads, puts, attempt publication -- and only push/push_attempt name the missing credentials."""
+    (env / "s3.toml").write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://acct.r2.cloudflarestorage.com"\n'
+                                 'access_key_id_env = "T_AK_ABSENT"\nsecret_access_key_env = "T_SK_ABSENT"\n')
+    monkeypatch.delenv("T_AK_ABSENT", raising=False)
+    monkeypatch.delenv("T_SK_ABSENT", raising=False)
+    st = LocalStore(env / "degraded", config_path=env / "s3.toml")
+    assert st.remote is None and "T_AK_ABSENT" in (st.remote_error or "")
+    assert st.get_attempt("r20260101-000000-0000") is None                       # the remote fallback is skipped, not an error
+    art = st.snapshot("s", ["art:" + "1" * 64])
+    assert st.get_manifest(art).kind == "dataset-snapshot/v1"
+    with pytest.raises(Exception, match="T_AK_ABSENT"):
+        st.push(art)
+    monkeypatch.setenv("T_AK_ABSENT", "id")
+    monkeypatch.setenv("T_SK_ABSENT", "secret")
+    assert isinstance(LocalStore(env / "degraded", config_path=env / "s3.toml").remote, remote_s3.S3Remote)
+
+
 def test_remote_config(env, monkeypatch):
     assert load_remote(env / "missing.toml") is None
     (env / "c.toml").write_text('[other]\nx = 1\n')

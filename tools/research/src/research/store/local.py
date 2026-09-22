@@ -30,7 +30,7 @@ from typing import Any
 from . import canon, ids, kinds
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
-from .remote import Remote, load_remote
+from .remote import ConfigError, Remote, load_remote
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
 REPLICA_MAP = Path("fixtures") / "artifacts.json"
@@ -156,10 +156,26 @@ class LocalStore:
 
     @property
     def remote(self) -> Remote | None:
-        """The configured remote (README §7), or None: then the local store is the only replica."""
+        """The configured remote (README §7), or None: then the local store is the only replica.
+
+        A remote that is configured but unusable here (e.g. `store.toml` names an S3 bucket and the credential env vars are not set,
+        as on a pod or in a test) degrades to None so the local store keeps working; the reason is kept in `remote_error` and is
+        raised by `push`/`push_attempt`, the only operations that need the remote."""
         if self._remote is _UNSET:
-            self._remote = load_remote(self._config_path)
+            try:
+                self._remote = load_remote(self._config_path)
+                self.remote_error: str | None = None
+            except ConfigError as e:
+                self._remote = None
+                self.remote_error = str(e)
         return self._remote
+
+    def _require_remote(self) -> Remote:
+        r = self.remote
+        if r is None:
+            why = getattr(self, "remote_error", None)
+            raise StoreError(why or "no remote configured (~/.research/store.toml or $RESEARCH_STORE_CONFIG)")
+        return r
 
     @property
     def repo(self) -> Path | None:
@@ -521,9 +537,7 @@ class LocalStore:
     def push(self, art_id: str, preserve: bool = True) -> dict:
         """Upload every blob and the manifest under immutable keys; with `preserve`, run `verify` and return its report."""
         m = self.get_manifest(art_id)
-        r = self.remote
-        if r is None:
-            raise StoreError("no remote configured (~/.research/store.toml or $RESEARCH_STORE_CONFIG)")
+        r = self._require_remote()
         files = m.payload.files if m.payload and m.payload.type == "tree" else []
         rel = {f.sha256: f.path for f in files or []}
         for h, _ in m.blobs():
@@ -537,9 +551,7 @@ class LocalStore:
         return {"id": art_id, "remote": r.describe(), "preserved": None, "pushed": True}
 
     def push_attempt(self, run_id: str) -> None:
-        r = self.remote
-        if r is None:
-            raise StoreError("no remote configured")
+        r = self._require_remote()
         p = self.attempt_path(run_id)
         if not p.exists():
             raise NotFound(f"attempt {run_id} is not local")
