@@ -1,6 +1,6 @@
 {
  "schema": "research/result/v0.1",
- "run_id": "b-ligero-unit-1790057727",
+ "run_id": "b-ligero-unit-1790059506",
  "workload_fingerprint": {
   "profile": "first-campaign-target/2026-09-21",
   "domain": "finite",
@@ -54,7 +54,7 @@
     "numpy": "2.5.3"
    }
   },
-  "preprocessing": "constraint compilation (a function of Params only, 0.63s)",
+  "preprocessing": "constraint compilation (a function of Params only, 0.39s)",
   "retention": "retained",
   "instances": {
    "dataset": "bench-instances/v1",
@@ -70,7 +70,7 @@
   "rows": 3372,
   "linear_constraints": 338,
   "quadratic_constraints": 3246,
-  "witness_generation": "host Python gen_step (hints) + torch program (derived rows)"
+  "witness_generation": "torch hint generator (gen_step semantics) + torch program (derived rows)"
  },
  "validation": {
   "status": "passed",
@@ -99,17 +99,17 @@
  "measurements": [
   {
    "name": "t.witness",
-   "value": 2.7259694915264845,
+   "value": 0.16291734017431736,
    "unit": "s"
   },
   {
    "name": "t.encoding_commitment",
-   "value": 0.761478615924716,
+   "value": 0.8199725672602654,
    "unit": "s"
   },
   {
    "name": "t.arithmetic",
-   "value": 0.06163576617836952,
+   "value": 0.06238052621483803,
    "unit": "s"
   },
   {
@@ -124,17 +124,17 @@
   },
   {
    "name": "t.serialization",
-   "value": 0.0015755798667669296,
+   "value": 0.003205820918083191,
    "unit": "s"
   },
   {
    "name": "t.total",
-   "value": 3.5550503004342318,
+   "value": 1.0550762247294188,
    "unit": "s"
   },
   {
    "name": "verifier.seconds",
-   "value": 0.12302151694893837,
+   "value": 0.029490066692233086,
    "unit": "s"
   },
   {
@@ -179,7 +179,7 @@
   },
   {
    "name": "unit.seconds_per_unit",
-   "value": 0.0008679322022544511,
+   "value": 0.00025758696892808075,
    "unit": "s"
   },
   {
@@ -188,38 +188,38 @@
    "unit": "count"
   },
   {
-   "name": "split.hints_host_seconds",
-   "value": 2.5866481568664312,
+   "name": "split.hints_seconds",
+   "value": 0.021643035113811493,
    "unit": "s"
   },
   {
    "name": "split.witness_torch_seconds",
-   "value": 0.13932133466005325,
+   "value": 0.14127430506050587,
    "unit": "s"
   },
   {
    "name": "split.encode_seconds",
-   "value": 0.11581701971590519,
+   "value": 0.11589081585407257,
    "unit": "s"
   },
   {
    "name": "split.transfer_seconds",
-   "value": 0.36607244424521923,
+   "value": 0.4002143107354641,
    "unit": "s"
   },
   {
    "name": "split.merkle_seconds",
-   "value": 0.2795891519635916,
+   "value": 0.3038674406707287,
    "unit": "s"
   },
   {
    "name": "split.tests_seconds",
-   "value": 0.06163576617836952,
+   "value": 0.06238052621483803,
    "unit": "s"
   },
   {
    "name": "split.openings_seconds",
-   "value": 0.0015755798667669296,
+   "value": 0.003205820918083191,
    "unit": "s"
   },
   {
