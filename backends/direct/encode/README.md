@@ -29,6 +29,24 @@ Peak device memory for the B batch: 5.5 GiB with 65,536-row slices (1.07 GB in +
 20.36 GB codeword is never resident -- see the streaming plan).  All SIMT variants in the run: v1 t256 40.2, v1 t512
 38.6, v2 t128 34.8, v2 t256 39.6 (register spill at 16 elements/thread), v2 t512 32.2, v2 t1024 32.7 ms.
 
+**A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6.0+cu124, cupy 14.2.0, Triton 3.2; run
+`r20260922-064413-0508`, same bench and flags, all 8 variants bit-exact; floors at the A100's *measured* copy bandwidth
+1,754 GB/s and datasheet 312 T INT8 MAC/s, `backends/numerical/reports/anchor_a100.md`):
+
+~~~text
+encoder (A100)                          B ms/batch   us/row   codeword GB/s   fraction of A100 HBM floor (14.5 ms)   vs 4090   A ms/batch
+(a) NTT, SIMT, v2 t512                  60.7         0.195    336             0.24                                    0.53x     11.6
+(a) NTT, SIMT, v2 t1024 (best here)     57.4         0.185    355             0.25                                    0.57x     11.0
+(a) NTT, SIMT, v1 t512                  73.2         0.236    278             0.20                                    0.53x     13.8
+(b) INT8 matrix DFT, Triton fused       607.1        1.955    34              0.055 of INT8 peak                      0.28x     94.6
+(b) INT8 matrix DFT, cuBLAS unfused     9,146 (scaled from 8,192 rows)        0.004 of INT8 peak                      1.66x     1,439
+~~~
+
+The encoder does **not** scale with bandwidth: on the A100 it is 0.53x the 4090 (the bandwidth ratio is 2.02x) and sits at
+0.24 of the HBM floor -- INT32/shared-memory-bound (the A100's INT32 rate and shared-memory bandwidth are ~0.47x the 4090's;
+503 vs 948 G butterflies/s).  The 4090's 0.78 of *its* HBM floor was that card's higher ALU:bandwidth ratio, not a
+memory-bound kernel.  Recommendation 5 below ("scales with bandwidth") and the A100/H100 scaling rows are superseded.
+
 **Verdict.**  The SIMT NTT beats the fused tensor-core matrix DFT by **5.3x** and the cost model's tensor-core encoder
 (`rs_matrix_ntt` at 0.172: 413 ms per B batch) by **13x**, at 0.78 of the read+write roofline.  The tensor-core kernel
 reaches the utilisation the model assumed (0.184 vs 0.172) and still loses, because its compute floor at 100% of the
