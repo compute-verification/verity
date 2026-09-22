@@ -34,6 +34,14 @@ VERITY_RESEARCH=$(cd "$TREE_SELF/../../tools/research/src" 2>/dev/null && pwd -P
 export VERITY_CORE VERITY_RESEARCH
 export PYTHONPATH=.:$VERITY_CORE:$VERITY_RESEARCH HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
+# [r19-int-12, F-r19-int-13] The Match of record is MATCH_IMPL=fast inside MATCH_PIPELINE=shared (veritor policy r17-rules-1 [checker],
+# ruling M-1332: "the Match of record for every configuration class rev has signed"; the record checker's route is the asynchronous
+# audit from the archive on a CPU host).  In R17/R18 the dead launcher run_row.sh carried that default (`have MATCH_IMPL || ENVS+=
+# ("MATCH_IMPL=fast")`) and it did not move with row_pod.sh into the Verity tree: every R19 launch without the env ran the record checker
+# -- #73 qwen3-4b B8 GM-01 single-core 14400 s -> "match FAIL rc=0/0/124" (its FP8 twin #74 under cheap's explicit env: 12 min), #60
+# 2 h 47 min, canary #3's 2 h 32 min orphan.  The runner owns the policy now; an explicit MATCH_IMPL=record still selects the audit checker.
+# (MATCH_SNAP_MAX_BYTES stays as it was: unset = run_config's derived cap, D87; R18's explicit 32 MiB is the launcher's choice.)
+export MATCH_IMPL=${MATCH_IMPL:-fast} MATCH_PIPELINE=${MATCH_PIPELINE:-shared}
 PY=${PY:-/workspace/venv312/bin/python}; PY312=${PY312:-$PY}
 [ -x "$PY" ] || { echo "no python at $PY (run pod_bootstrap.sh first)" >&2; exit 3; }
 export PATH=$(dirname "$PY"):/usr/local/cuda/bin:$PATH
