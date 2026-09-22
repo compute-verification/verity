@@ -182,8 +182,12 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
         for t in tasks:
             vid, ub, eb, err = _one(t)
             results[vid] = (ub, eb, err)
+    # the dataset's identity is the committed manifest (a pod rebuild rewrites the `generated` block, not the arrays)
+    committed = I.DEFAULT_ROOT / "manifest.json"
     manifest: dict = {"tier": tier, "range": [lo, hi], "steps": steps, "unit_columns": len(unit_ctx.cols),
-                      "epilogue_columns": len(epi_ctx.cols), "manifest_sha256": I.manifest_sha256(root),
+                      "epilogue_columns": len(epi_ctx.cols),
+                      "manifest_sha256": I.manifest_sha256(I.DEFAULT_ROOT) if committed.is_file() else I.manifest_sha256(root),
+                      "root_manifest_sha256": I.manifest_sha256(root), "root": str(root),
                       "rejected_at_witness": {}, "written": []}
     if tier == "vu-k1536-neg":
         for vid in range(lo, hi):
