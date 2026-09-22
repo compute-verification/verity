@@ -9,8 +9,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from encode import babybear as bb  # noqa: E402
-from encode import matdft_ref  # noqa: E402
+from encode import babybear as bb
+from encode import matdft_ref
 
 
 def _cuda():

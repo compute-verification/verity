@@ -28,12 +28,12 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import cupy as cp  # noqa: E402
-import torch  # noqa: E402
+import cupy as cp
+import torch
 
-from encode import babybear as bb  # noqa: E402
-from encode.encode_matdft_int8 import RSEncoderMatDFT  # noqa: E402
-from encode.encode_ntt_simt import RSEncoderSIMT  # noqa: E402
+from encode import babybear as bb
+from encode.encode_matdft_int8 import RSEncoderMatDFT
+from encode.encode_ntt_simt import RSEncoderSIMT
 
 ROWS = {"B": 310_602, "A": 48_873}
 PEAK_BW = 1.008e12
@@ -109,23 +109,24 @@ def bench_encoder(name: str, kind: str, encoder, rows: int, slice_rows: int, rep
     mrows = measured_rows or rows
     sl = slices(mrows, slice_rows)
     big = max(sl)
+    bufs = {}
     if kind == "simt":
-        inp = cp.asarray(bb.fill_rows(big, bb.K_CODE, seed=1))
-        out = cp.empty((big, bb.N_CODE), dtype=cp.uint32)
+        bufs["in"] = cp.asarray(bb.fill_rows(big, bb.K_CODE, seed=1))
+        bufs["out"] = cp.empty((big, bb.N_CODE), dtype=cp.uint32)
 
         def run():
             for r in sl:
-                encoder(inp[:r], out[:r], write_systematic=write_systematic)
+                encoder(bufs["in"][:r], bufs["out"][:r], write_systematic=write_systematic)
     else:
-        inp = torch.from_numpy(bb.fill_rows(big, bb.K_CODE, seed=1).view(np.int32)).cuda()
-        out = torch.empty(big, bb.N_CODE, dtype=torch.int32, device="cuda")
+        bufs["in"] = torch.from_numpy(bb.fill_rows(big, bb.K_CODE, seed=1).view(np.int32)).cuda()
+        bufs["out"] = torch.empty(big, bb.N_CODE, dtype=torch.int32, device="cuda")
 
         def run():
             for r in sl:
-                encoder(inp[:r], out[:r])
+                encoder(bufs["in"][:r], bufs["out"][:r])
     med, ts = timed(run, reps)
     mem = mem_in_use()
-    del inp, out
+    bufs.clear()
     cp.get_default_memory_pool().free_all_blocks()
     torch.cuda.empty_cache()
     scale = rows / mrows

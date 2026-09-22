@@ -140,7 +140,7 @@ def twiddle_tables(k: int, n: int) -> dict[str, np.ndarray]:
     for c in range(1, n // k):
         t = (bb.powers(pow(wn, c, bb.P), k) * np.uint64(kinv)) % np.uint64(bb.P)   # indexed by coefficient i
         cos.append(t[rev])                                                          # position -> coefficient rev(pos)
-    mont = lambda a: ((a % np.uint64(bb.P)) * np.uint64(bb.R_MOD_P) % np.uint64(bb.P)).astype(np.uint32)  # noqa: E731
+    mont = lambda a: ((a % np.uint64(bb.P)) * np.uint64(bb.R_MOD_P) % np.uint64(bb.P)).astype(np.uint32)
     return {"tw_fwd": mont(tw_fwd), "tw_inv": mont(tw_inv), "coset": mont(np.concatenate(cos))}
 
 
