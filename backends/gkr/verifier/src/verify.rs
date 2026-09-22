@@ -642,7 +642,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
             let mut buf = vec![Ext::ZERO; chunk_rows * p.k];
             let mut scratch = Vec::new();
             let mut acc = Vec::new();
-            let mut ntt_scratch = Vec::new();
+            let mut ntt_scratch: Vec<u32> = Vec::new();
             let mut out = vec![Ext::ZERO; set.len()];
             let (mut tf, mut te) = (0u64, 0u64);
             loop {
