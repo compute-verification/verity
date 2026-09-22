@@ -255,6 +255,74 @@ pub fn chain_rows(kind: FieldKind, lay_width: usize, idx: &ChainIdx, vu: &VuIo) 
     (rows, accs, violations)
 }
 
+/// One row of an adversarial trace (`check-rows`): the unit's operands, its position, the claimed word and the
+/// hints the adversary imposes by name (`IntCtx::overrides`; every realisation column -- limbs, selectors,
+/// inverses, materialised copies -- is derived from the imposed values, the only way a prover could fill them).
+/// `c = None` carries the previous row's output limbs (their canonical field values, whatever they are).
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct RowSpec {
+    pub c: Option<u64>,
+    pub a: Vec<u64>,
+    pub b: Vec<u64>,
+    pub step: u64,
+    pub y16: u64,
+    #[serde(default)]
+    pub overrides: std::collections::BTreeMap<String, i128>,
+}
+
+/// The rows of an adversarial trace from `RowSpec`s (integer columns) and the integer-checker violations (for
+/// information only: the field evaluator decides).
+pub fn chain_rows_spec(kind: FieldKind, lay_width: usize, idx: &ChainIdx, specs: &[RowSpec]) -> (Vec<Vec<i128>>, Vec<String>) {
+    let p = kind.prime();
+    let mut rows: Vec<Vec<i128>> = Vec::with_capacity(specs.len());
+    let mut violations = vec![];
+    for (i, sp) in specs.iter().enumerate() {
+        let mut ctx = IntCtx::new_kind(kind);
+        ctx.record_names = false;
+        for (k, v) in &sp.overrides {
+            ctx.overrides.insert(k.clone(), *v);
+        }
+        let mut c = sp.c.unwrap_or(0);
+        if sp.c.is_none() && i > 0 {
+            let prev = &rows[i - 1];
+            if idx.y.len() == 1 {
+                c = modp(prev[idx.y[0]], p);
+            } else {
+                // the limbs as field elements, exactly as the link constraint transports them
+                ctx.overrides.insert("x.c_hi".into(), modp(prev[idx.y[0]], p) as i128);
+                ctx.overrides.insert("x.c_lo".into(), modp(prev[idx.y[1]], p) as i128);
+            }
+        }
+        let io = ChainIo { c, a: sp.a.clone(), b: sp.b.clone(), step: sp.step, y16: sp.y16 };
+        chain_program(&mut ctx, &io);
+        assert_eq!(ctx.cols.len(), lay_width, "row {i}: width");
+        for v in ctx.violations {
+            violations.push(format!("row {i}: {v}"));
+        }
+        rows.push(ctx.cols);
+    }
+    (rows, violations)
+}
+
+/// A gadget-level case evaluated by the AIR's own constraints: `(failing constraint names, integer violations)`.
+pub fn gadget_failing<G: PrimeField64>(kind: FieldKind, case: &crate::program::GadgetCase, overrides: &[(String, i128)]) -> (Vec<String>, Vec<String>) {
+    let mut ctx = IntCtx::new_kind(kind);
+    for (k, v) in overrides {
+        ctx.overrides.insert(k.clone(), *v);
+    }
+    crate::program::gadget_program(&mut ctx, case);
+    let width = ctx.cols.len();
+    let row: Vec<G> = ctx.cols.iter().map(|&v| to_field(kind, v)).collect();
+    let two: Vec<G> = [row.clone(), row.clone()].concat();
+    let mut ev = Evaluator { failing: vec![], count: 0, main: RowMajorMatrixView::new(&two, width), first_row: false };
+    let mut actx = AirCtx::with_kind(&mut ev, &row, kind);
+    actx.constraint_names = Some(vec![]);
+    crate::program::gadget_program(&mut actx, case);
+    let names = actx.constraint_names.take().unwrap();
+    assert_eq!(ev.count, names.len());
+    (ev.failing.iter().map(|&i| names[i].clone()).collect(), ctx.violations)
+}
+
 /// The all-zero VU (`a = b = 0`, `c` stays `+0`, `y16 = 0`): the prescribed public padding.
 pub fn zero_vu() -> VuIo {
     VuIo { x: vec![0; 16 * STEPS as usize], w: vec![0; 16 * STEPS as usize], y16: 0 }

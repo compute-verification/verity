@@ -17,7 +17,7 @@ use p3_matrix::Matrix;
 use p3_uni_stark::Val;
 use serde_json::{json, Value};
 use verity_direct::air::{self, ChainAir, ChainIdx, Layout, UnitAir, VuIo};
-use verity_direct::ctx::FieldKind;
+use verity_direct::ctx::{modp, FieldKind};
 use verity_direct::program::{UnitIo, STEPS};
 use verity_direct::stark::{self, BabyBearBackend, Backend, FriParams, GoldilocksBackend, DEFAULT_FRI};
 
@@ -53,6 +53,10 @@ fn main() {
         Some("vu-neg") => match field_arg(&args) {
             FieldKind::Goldilocks => vu_neg::<GoldilocksBackend>(&args),
             FieldKind::BabyBear => vu_neg::<BabyBearBackend>(&args),
+        },
+        Some("check-rows") => match field_arg(&args) {
+            FieldKind::Goldilocks => check_rows::<stark::Val64>(&args),
+            FieldKind::BabyBear => check_rows::<stark::Val32>(&args),
         },
         Some("chain-layout") => {
             let kind = field_arg(&args);
@@ -467,6 +471,61 @@ where
         t_total / n_vus as f64,
         peak_rss_bytes()
     );
+}
+
+/// `check-rows --field F --in jobs.json --out report.json`: evaluate EVERY AIR constraint on supplied
+/// (adversarial) traces and report the first violated one -- the verifier's view, independent of witness
+/// generation.  Jobs: `{"kind": "rows", "starts_trace": bool, "rows": [RowSpec...]}` (row-local constraints on
+/// every row, transition constraints between consecutive rows, boundary constraints when `starts_trace`) or
+/// `{"kind": "gadget", "name", "inputs", "hints", "claimed"}` (one gadget in isolation, `program::gadget_program`).
+/// A job is `accepted` iff no constraint fails.  Used by `tools/battery_adapter.py` (the red team's 83 forgeries).
+fn check_rows<G: PrimeField64 + Send + Sync>(args: &[String]) {
+    let kind = field_arg(args);
+    let input = arg(args, "--in").expect("--in jobs.json");
+    let out = arg(args, "--out").expect("--out report.json");
+    let text = fs::read_to_string(&input).unwrap();
+    let jobs: Value = serde_json::from_str(&text).unwrap();
+    let (air_, lay) = ChainAir::new(kind);
+    let idx = &air_.idx;
+    let p = kind.prime();
+    let y_hi_col = idx.y[0];
+    let carry_col = lay.col("cast.carry");
+    let cast_hi = if lay.has("cast.hi") { lay.col("cast.hi") } else { lay.col("pack.y_hi") };
+    let mut report = vec![];
+    let mut n_accepted = 0usize;
+    for job in jobs["jobs"].as_array().expect("jobs") {
+        let id = job["id"].as_str().unwrap_or("").to_string();
+        let res = match job["kind"].as_str().unwrap_or("rows") {
+            "gadget" => {
+                let case: verity_direct::program::GadgetCase = serde_json::from_value(job.clone()).unwrap();
+                let overrides: Vec<(String, i128)> = job["hints"].as_object().map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_i64().unwrap() as i128)).collect()).unwrap_or_default();
+                let (failing, viol) = air::gadget_failing::<G>(kind, &case, &overrides);
+                let accepted = failing.is_empty();
+                json!({"id": id, "kind": "gadget", "gadget": case.name, "accepted": accepted, "n_failing": failing.len(), "first_failing": failing.first(), "failing": failing.iter().take(8).collect::<Vec<_>>(), "integer_violations": viol.len()})
+            }
+            _ => {
+                let specs: Vec<air::RowSpec> = serde_json::from_value(job["rows"].clone()).unwrap();
+                let starts = job["starts_trace"].as_bool().unwrap_or(false);
+                let (rows, viol) = air::chain_rows_spec(kind, lay.width, idx, &specs);
+                let failing = air::chain_failing_rows::<G>(kind, &air_, &lay, &rows, starts);
+                let words: Vec<u64> = rows
+                    .iter()
+                    .map(|r| if idx.y.len() == 1 { modp(r[idx.y[0]], p) } else { (modp(r[idx.y[0]], p) << 16) | modp(r[idx.y[1]], p) })
+                    .collect();
+                let _ = y_hi_col;
+                let y16s: Vec<u64> = rows.iter().map(|r| modp(r[cast_hi] + r[carry_col], p)).collect();
+                let accepted = failing.is_empty();
+                json!({"id": id, "kind": "rows", "n_rows": rows.len(), "accepted": accepted, "n_failing": failing.len(), "first_failing": failing.first().map(|(r, n)| json!([r, n])), "failing": failing.iter().take(8).map(|(r, n)| json!([r, n])).collect::<Vec<_>>(), "integer_violations": viol.len(), "words": words, "y16": y16s})
+            }
+        };
+        if res["accepted"].as_bool().unwrap() {
+            n_accepted += 1;
+        }
+        report.push(res);
+    }
+    let summary = json!({"schema": "verity-direct/check-rows/v1", "field": kind.name(), "width": lay.width, "constraints": lay.constraint_names.len(), "jobs": report.len(), "accepted": n_accepted, "results": report});
+    fs::write(&out, serde_json::to_string_pretty(&summary).unwrap()).unwrap();
+    println!("check-rows field={} jobs={} accepted={} -> {out}", kind.name(), summary["jobs"], n_accepted);
 }
 
 /// The 52 `vu-k1536-neg` instances: the honest witness generator must reject each claimed word (an integer-checker
