@@ -21,6 +21,9 @@ KINDS: dict[str, str] = {
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
+    "native-peak/v1": "one measured dense tensor-core peak of a device (the canonical tables' 'native dense peak, measured' column): meta "
+                      "{device, dtype, accumulate: 'fp32', method: 'cublas dense gemm 8192^3, median of 5', flop_per_second, "
+                      "spec_flop_per_second, fraction_of_spec, sass, driver, cuda, clocks_mhz?, power_w?}; payload null",
 }
 
 

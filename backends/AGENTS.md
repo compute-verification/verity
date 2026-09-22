@@ -30,7 +30,8 @@ Never compare across `proof_class`, and never compare two numbers that were
 not measured **at the same batch size, on the same hardware, at the same
 soundness target** (`contract.IDENTITY_FIELDS`; `benchmarks/judge.py` refuses
 otherwise). The decision workload is B=4096 K=1536 VUs of one instance set on
-one machine at 2^-128; transition-unit and small-B numbers are diagnostics of a
+one machine at 2^-128; the canonical comparison is the three frozen tables
+below. Transition-unit and small-B numbers are diagnostics of a
 candidate's own scaling, not a comparison. A non-ZK kernel is a diagnostic. An
 implementation whose privacy is honest-verifier zero knowledge is
 `COMPLETE_HVZK_BACKEND`: a valid milestone, not the target.
@@ -42,6 +43,66 @@ extra round/communication/prover cost written down and red-team reviewed. The
 expected path is: arithmetic diagnostic -> complete HVZK -> malicious-verifier
 ZK. Guest-cycle shares are not proving-time shares: measure wall time, memory,
 shards and fixed costs directly.
+
+## Canonical tables (frozen 2026-09-22)
+
+Rendered from the evidence store by `python -m verity_numerical.bench.tables
+--root <store> [--format md|json] [--snapshot]` (`verity_numerical/bench/tables.py`).
+These are the only canonical tables; everything else (memory, committed
+elements, hash bytes, verifier seconds, transcript bytes, the RTT sweep,
+coupling diagnostics) is drill-down behind a Table 2 or Table 3 cell, never
+another top-level table. Caption constants: K = 1536; B = 4096; soundness
+2^-128, target and achieved (union-bounded over sub-batches); dense execution;
+FP32 accumulation; FMA = 2 FLOP; the frozen instance set of the row's target;
+native denominator = datasheet dense peak of the exact target device
+(`Target.native_peak`); authentication = excluded (until `included` runs exist).
+
+~~~text
+Table 1  Candidate proof systems (definitional: no performance, no status)
+         Candidate | Description | ZK | Verifier model | Soundness | Setup | Interaction | Security assumptions
+         rows = tables.CANDIDATES: A-GKR (NON_ZK_PROOF), B-Ligero (COMPLETE_ZK_BACKEND; COMPLETE_HVZK_BACKEND
+         as drill-down), SP1 (any sound class); ZK is No | HVZK | Malicious-verifier ZK (two variants allowed)
+Table 2  Headline proving overhead by target (one row per verity.verification.target.TARGETS)
+         Device | Datatype / target | Native dense peak, spec | Native dense peak, measured | A-GKR | B-Ligero | SP1
+Table 3  Prover phase decomposition (one row per populated Table 2 cell, the same artifact)
+         Device / target | Candidate | Total prover time | Witness | Encoding + commitment | Arithmetic | Lookup | ZK additional | Serialization | Other
+~~~
+
+Cell = the best valid implementation of the candidate in its declared proof
+class: min `t.total` over valid results, printed as R_native_spec / R_proved
+(`2.6e7×`), R_proved = 2KB / `t.total`; R_proved and the artifact id stay in
+the JSON and in a numbered markdown footnote; `—` = no valid result. The
+measured column is `292 T (0.94)` from a `native-peak/v1` artifact (meta:
+device, dtype, accumulate fp32, method "cublas dense gemm 8192^3, median of 5",
+flop_per_second, spec_flop_per_second, fraction_of_spec, sass, driver, cuda)
+matched by normalised device + dtype; `…` when absent. `--snapshot` freezes the
+cell artifacts as a `dataset-snapshot/v1` named `tables-<UTC date>`.
+
+Same-SKU invariant: the prover ran on the row's native device, `hardware.gpu.name`
+≡ `native_peak.device` under `tables.normalise_sku` ("NVIDIA A100-SXM4-80GB" ≡
+"NVIDIA A100 SXM4 80GB", "NVIDIA H100 80GB HBM3" ≡ "NVIDIA H100 SXM5 80GB"); a
+run on any other device never populates a cell.
+Validity (`tables.reject_reasons`; empty = valid): `contract.validate()`
+empty; `profile` is the row's target; K = 1536 and B = 4096 (B_real = B when
+present); `security.target` ≤ −128 and, when present, `security.achieved_log2`
+≤ −128; `instances` equals the target's frozen ref (BF16: `bench-instances/v1`
+`vu-k1536` [0, 4096) manifest 059103cf…; FP8 Ada: `bench-instances-fp8-ada/v1`
+`vu-k1536-fp8-ada`, digest `contract.FP8_ADA_INSTANCES_DIGEST`; Hopper has no
+frozen set yet); `proof_class` is the candidate's declared class;
+authentication excluded; same SKU; **independently verified** -- a label
+`independently_verified=true` (the store's back-fill key; `verified=accepted`
+is also accepted) whose `by` is neither the producing attempt's campaign nor
+an asserter of the result's own `candidate`/`label` labels; **not
+downgraded** -- the latest `red-team-*` `proof_class` verdict on the artifact
+is not below the fingerprint's class. A candidate is recognised from
+`software.backend.name` (`verity-gkr`, `b-ligero chain…`, `sp1`); component
+benchmarks (`verity-direct`, `backends/gkr/...`, `b-encode`) are none. The
+renderer lists every rejected candidate result with its first reason.
+Table 3 identity: T_total = witness + encoding_commitment + arithmetic +
+lookup + zk_additional + serialization + other, each cell `0.41 s (37%)`,
+Other = t.total − Σ buckets − Σ joints (≥ −1 %·t.total); a fused stage
+`t.joint.a+b` prints once as `a+b: 0.41 s (37%)` in the first bucket column it
+covers and `↞` in the others.
 
 ## Proof model: interactive is fine, transferability is not required
 
