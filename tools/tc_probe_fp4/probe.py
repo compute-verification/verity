@@ -537,7 +537,9 @@ def main() -> int:
     ap.add_argument("--families", default=None, help="comma list (default all)")
     ap.add_argument("--sass-check", action="store_true")
     args = ap.parse_args()
-    out = Path(args.out)
+    # the remote runner passes argv without a shell: `$RESEARCH_RUN_DIR` arrives literally and is expanded here
+    args.replay_autoproof = [os.path.expandvars(p) for p in args.replay_autoproof]
+    out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     t_all = time.time()
     instr = args.instruction
