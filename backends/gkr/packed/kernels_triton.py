@@ -372,6 +372,55 @@ def _ext_ip_source() -> str:
     return "\n".join(L) + "\n"
 
 
+def _ext_fold_ip_source() -> str:
+    """Extension round ``i`` with round ``i - 1``'s fold fused in (lane a-fusion): the tables are read *pre-fold* (4 entries
+    per pair ``b``: rows ``4 b .. 4 b + 3`` of the ``(t_{i-1}, 6)`` table), folded by ``r_{i-1}`` in registers into the pair
+    ``(e, o)`` = ``(fold(4b, 4b+1), fold(4b+2, 4b+3))``, the folded pair written to ``gf, hf`` (round ``i + 1``'s input) and
+    round ``i``'s 3 Hadamards + limbs formed from the register copy (:func:`_ext_ip_source` layout).  Per round the folded
+    tables are written once and not re-read: element traffic ``4 M`` (fold read 2, write 1; Hadamard read 1) -> ``3 M``."""
+    L: list[str] = []
+    L.append("@triton.jit")
+    L.append("def ext_fold_ip(g_ptr, h_ptr, r_ptr, gf_ptr, hf_ptr, e_ptr, z_ptr, K1, SPLIT_LEN, BLOCK_K: tl.constexpr):")
+    L.append("    b2 = tl.program_id(0)")
+    L.append("    sp = tl.program_id(1)")
+    L.append("    offs_n = tl.arange(0, 32)")
+    L.append("    acc = tl.zeros((128, 32), dtype=tl.int32)")
+    L.append("    zero8 = tl.zeros((BLOCK_K,), dtype=tl.int8)")
+    for s in range(6):
+        L.append(f"    r{s} = tl.load(r_ptr + {s})")
+    L.append("    for c in range(0, SPLIT_LEN, BLOCK_K):")
+    L.append("        b1 = sp * SPLIT_LEN + c + tl.arange(0, BLOCK_K)")
+    L.append("        b = b2.to(tl.int64) * K1 + b1")
+    L.append("        row = b * 24")
+    L.append("        E = tl.load(e_ptr + b1[:, None] * 32 + offs_n[None, :])")
+    for tbl, out, pfx in (("g", "gf", "g"), ("h", "hf", "h")):
+        for half, off in (("e", 0), ("o", 12)):
+            for s in range(6):
+                L.append(f"        a{s} = tl.load({tbl}_ptr + row + {off + s})")
+                L.append(f"        d{s} = msub(tl.load({tbl}_ptr + row + {off + 6 + s}), a{s})")
+            L.append("        " + ", ".join(f"t{s}" for s in range(6)) + " = _ext_mmul6(" + ", ".join(f"r{s}" for s in range(6)) + ", " + ", ".join(f"d{s}" for s in range(6)) + ")")
+            for s in range(6):
+                L.append(f"        {pfx}{half}{s} = madd(a{s}, t{s})")
+                L.append(f"        tl.store({out}_ptr + b * 12 + {(0 if half == 'e' else 6) + s}, {pfx}{half}{s})")
+    for s in range(6):
+        L.append(f"        g2{s} = msub(madd(go{s}, go{s}), ge{s})")
+        L.append(f"        h2{s} = msub(madd(ho{s}, ho{s}), he{s})")
+    names = []
+    for x, (gp, hp) in enumerate((("ge", "he"), ("go", "ho"), ("g2", "h2"))):
+        L.append("        " + ", ".join(f"c{x}_{d}" for d in range(6)) + " = _ext_mmul6(" + ", ".join(f"{gp}{s}" for s in range(6)) + ", " + ", ".join(f"{hp}{s}" for s in range(6)) + ")")
+        for d in range(6):
+            L.append(f"        l{x}_{d}_0, l{x}_{d}_1, l{x}_{d}_2, l{x}_{d}_3 = _limbs(c{x}_{d})")
+            names += [f"l{x}_{d}_{j}" for j in range(4)]
+    names += ["zero8"] * (128 - 72)
+    top = _join_tree(L, names, "        ")
+    L.append("        A = tl.reshape(" + top + ", (BLOCK_K, 128), can_reorder=False)")
+    L.append("        acc += tl.dot(tl.trans(A), E, out_dtype=tl.int32)")
+    L.append("    offs_m = tl.arange(0, 128)")
+    L.append("    z = z_ptr + ((sp * tl.num_programs(0) + b2).to(tl.int64) * 72) * 24")
+    L.append("    tl.store(z + offs_m[:, None] * 24 + offs_n[None, :], acc, mask=(offs_m[:, None] < 72) & (offs_n[None, :] < 24))")
+    return "\n".join(L) + "\n"
+
+
 def _logup_ext_ip_source() -> str:
     """logUp level round on four extension tables ``p0, p1, q0, q1`` (``(t_i, 6)`` each, pairs ``(2b, 2b+1)``): per pair
     and ``x in {0, 1, 2}`` the two ``F_{p^6}`` Hadamards ``A_x = p0 q1 + p1 q0`` and ``B_x = q0 q1`` (Montgomery, one
@@ -450,6 +499,19 @@ def ext_inner_product(gE: torch.Tensor, hE: torch.Tensor, e_lo32: torch.Tensor, 
     Z = torch.empty((split, K2 * 72, 24), dtype=torch.int32, device=gE.device)
     _generated().ext_ip[(K2, split)](gE, hE, e_lo32, Z, K1, K1 // split, BLOCK_K=BLOCK_K, num_warps=num_warps)
     return Z
+
+
+def ext_fold_inner_product(gE: torch.Tensor, hE: torch.Tensor, r_R: torch.Tensor, e_lo32: torch.Tensor, K1: int, K2: int, split: int,
+                           BLOCK_K: int = 128, num_warps: int = 4) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Fold + next Hadamard fused (lane a-fusion): ``gE, hE (4 K1 K2, 6)`` plain *pre-fold* tables, ``r_R (6,)`` = ``r . R``;
+    returns ``(Z, gF, hF)`` with ``gF, hF (2 K1 K2, 6)`` = ``fold_ext(gE, r_R)`` and ``Z`` = ``ext_inner_product(gF, hF, ...)``."""
+    if K1 % (split * BLOCK_K):
+        raise ValueError("K1 must be a multiple of split * BLOCK_K")
+    gF = torch.empty((gE.shape[0] // 2, 6), dtype=torch.int32, device=gE.device)
+    hF = torch.empty_like(gF)
+    Z = torch.empty((split, K2 * 72, 24), dtype=torch.int32, device=gE.device)
+    _generated().ext_fold_ip[(K2, split)](gE, hE, r_R, gF, hF, e_lo32, Z, K1, K1 // split, BLOCK_K=BLOCK_K, num_warps=num_warps)
+    return Z, gF, hF
 
 
 def _reduce_contract_source(in_s: int) -> str:
@@ -575,7 +637,7 @@ def _generated():
     if _MODULE is not None:
         return _MODULE
     src = "\n".join([_HEADER, _ext_mul_helper_source(), _ext_mmul_helper_source(), _ext_hadamard_source(), *[_packed_hadamard_source(1 << e) for e in range(4)],
-                     *[_packed_ip_source(1 << e) for e in range(FUSED_MAX_LOG2_HALF + 1)], _packed_ip_split_source(8), _ext_ip_source(),
+                     *[_packed_ip_source(1 << e) for e in range(FUSED_MAX_LOG2_HALF + 1)], _packed_ip_split_source(8), _ext_ip_source(), _ext_fold_ip_source(),
                      *[_packed_ip_source(1 << e, linear=True) for e in range(FUSED_MAX_LOG2_HALF + 1)], _logup_ext_ip_source(),
                      _reduce_contract_source(1), _reduce_contract_source(6), _finish_round_source()]) + "\n"
     digest = hashlib.sha256(src.encode()).hexdigest()[:16]

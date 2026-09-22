@@ -49,6 +49,28 @@ def test_kernel_matches_reference(device, mode, n, k, k1_log2):
     assert stats.macs_performed > 0
 
 
+@pytest.mark.parametrize("device,mode", [dm for dm in _devices() if dm[1] == "triton"])
+@pytest.mark.parametrize("n,k,k1_log2", [(12, 0, 7), (12, 1, 7), (12, 2, 7), (13, 3, 8), (14, 3, 7), (15, 2, 9)])
+def test_round_fusion_matches_reference(device, mode, n, k, k1_log2):
+    """a-fusion: the U pass (k packed rounds from one read) and the fold-fused extension rounds emit the reference
+    transcript; the fused paths are exercised only when ``K1 >= 128`` (``k1_log2 >= 7`` and enough rounds left)."""
+    gammas, g, h = _instance(n, 2000 + 10 * n + k)
+    ker = sp.Kernel(device, k1_log2=k1_log2, mode=mode, round_fusion=True)
+    gt = torch.tensor(g, dtype=torch.int32, device=device)
+    ht = torch.tensor(h, dtype=torch.int32, device=device)
+    stats = sp.Stats()
+    rounds, rs, final = sp.prove(ker, gammas, gt, ht, k, ref.seeded_challenger(7), stats)
+    rounds_ref, rs_ref, final_ref = ref.packed_prover(gammas, g, h, k, ref.seeded_challenger(7))
+    assert rs == rs_ref
+    assert rounds == rounds_ref
+    assert final == final_ref
+    labels = {lab for lab, *_ in stats.matmuls}
+    if k:
+        assert "inner.packed.U" in labels
+    if n - k > 2:
+        assert "inner.ext.fold_fused" in labels
+
+
 def test_scalar_matrix_is_the_convolution():
     rng = random.Random(3)
     c = ref.random_ext(rng)
