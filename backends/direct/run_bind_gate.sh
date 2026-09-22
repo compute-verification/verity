@@ -33,8 +33,8 @@ if [ "$WHAT" = check ] || [ "$WHAT" = all ]; then
 fi
 
 if [ "$WHAT" = test ] || [ "$WHAT" = all ]; then
-    echo "== cargo test --release --tests"
-    (cd backends/direct && cargo test --release --tests -j"$RAYON_NUM_THREADS" 2>&1 | grep -E "^test |test result|FAILED|panicked|error" | tee "$RUN_DIR/cargo_test.txt" | grep -E "test result|FAILED|panicked|error")
+    echo "== cargo test --release --tests -- --include-ignored (the pod-sized lookup round trips and lookup statement suite included)"
+    (cd backends/direct && cargo test --release --tests -j"$RAYON_NUM_THREADS" -- --include-ignored 2>&1 | grep -E "^test |test result|FAILED|panicked|error" | tee "$RUN_DIR/cargo_test.txt" | grep -E "test result|FAILED|panicked|error")
 fi
 
 if [ "$WHAT" = gate ] || [ "$WHAT" = battery ] || [ "$WHAT" = timing ] || [ "$WHAT" = all ]; then

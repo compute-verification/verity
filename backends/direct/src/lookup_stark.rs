@@ -17,7 +17,10 @@ use p3_uni_stark::{Domain, PackedChallenge, PackedVal, StarkGenericConfig, Val, 
 use p3_util::log2_strict_usize;
 use serde::{Deserialize, Serialize};
 
+use crate::air::Layout;
 use crate::lookup::LookupAirBuilder;
+use crate::stark::{Backend, BoundError, FriParams};
+use crate::statement::Statement;
 
 /// The AIR of the three-stage protocol: `eval` on a `LookupAirBuilder` (main + preprocessed + aux).
 pub trait LookupAir<F: Field>: BaseAir<F> {
@@ -201,19 +204,47 @@ where
         .collect()
 }
 
-/// Verify; `preprocessed` is recomputed by the verifier (the tables are public) and its commitment compared.
+/// Verify with `degree_bits` read from the proof and no statement: the diagnostic (`tests/lookup.rs`) and the
+/// `--unbound` timing baseline only.  Proof numbers come from `verify_lookup_bound_bytes`.
 pub fn verify_lookup<SC, A>(config: &SC, air: &A, challenger: &mut SC::Challenger, proof: &LookupProof<SC>, preprocessed: RowMajorMatrix<Val<SC>>) -> Result<(), VerificationError>
 where
     SC: StarkGenericConfig,
     A: LookupAir<Val<SC>>,
     Com<SC>: PartialEq,
 {
-    let degree = 1usize << proof.degree_bits;
+    verify_lookup_inner(config, air, challenger, proof, preprocessed, proof.degree_bits, &[]).map_err(|e| match e {
+        BoundError::Inner(e) => e,
+        BoundError::ProofShape | BoundError::DegreeBits { .. } => VerificationError::InvalidProofShape,
+        BoundError::StatementColumn { .. } => VerificationError::OodEvaluationMismatch,
+    })
+}
+
+/// The shared verifier: `degree_bits` is the caller's (the statement's in the bound path), `public_columns` are
+/// `(main column, name, (W(ζ), W(ζ·g)))` checks on the opened main-trace values (PROTOCOL.md 12.5, 14.6).
+/// `preprocessed` is recomputed by the verifier (the tables are public) and its commitment compared.
+fn verify_lookup_inner<SC, A>(
+    config: &SC,
+    air: &A,
+    challenger: &mut SC::Challenger,
+    proof: &LookupProof<SC>,
+    preprocessed: RowMajorMatrix<Val<SC>>,
+    degree_bits: usize,
+    public_columns: &[(usize, String, Vec<Val<SC>>)],
+) -> Result<(), BoundError>
+where
+    SC: StarkGenericConfig,
+    A: LookupAir<Val<SC>>,
+    Com<SC>: PartialEq,
+{
+    if proof.degree_bits != degree_bits {
+        return Err(BoundError::DegreeBits { expected: degree_bits, got: proof.degree_bits });
+    }
+    let degree = 1usize << degree_bits;
     let log_quotient_degree = log_quotient_degree(air.max_degree());
     let quotient_degree = 1 << log_quotient_degree;
     let pcs = config.pcs();
     let trace_domain = pcs.natural_domain_for_degree(degree);
-    let quotient_domain = trace_domain.create_disjoint_domain(1 << (proof.degree_bits + log_quotient_degree));
+    let quotient_domain = trace_domain.create_disjoint_domain(1 << (degree_bits + log_quotient_degree));
     let quotient_chunks_domains = quotient_domain.split_domains(quotient_degree);
 
     let d = <SC::Challenge as AbstractExtensionField<Val<SC>>>::D;
@@ -227,15 +258,15 @@ where
         && o.quotient_chunks.len() == quotient_degree
         && o.quotient_chunks.iter().all(|qc| qc.len() == d);
     if !shape_ok {
-        return Err(VerificationError::InvalidProofShape);
+        return Err(BoundError::ProofShape);
     }
     // the public tables
     if preprocessed.height() != degree {
-        return Err(VerificationError::InvalidProofShape);
+        return Err(BoundError::ProofShape);
     }
     let (pre_commit, _) = pcs.commit(vec![(trace_domain, preprocessed)]);
     if pre_commit != proof.pre_commit {
-        return Err(VerificationError::InvalidOpeningArgument);
+        return Err(BoundError::Inner(VerificationError::InvalidOpeningArgument));
     }
 
     challenger.observe(proof.pre_commit.clone());
@@ -248,6 +279,14 @@ where
     let zeta: SC::Challenge = challenger.sample();
     let zeta_next = trace_domain.next_point(zeta).unwrap();
 
+    // the statement's public columns of the main trace at ζ and ζ·g (F1)
+    for (col, name, want) in public_columns {
+        let (w0, w1) = crate::statement::eval_pair::<Val<SC>, SC::Challenge>(want, zeta);
+        if o.main_local[*col] != w0 || o.main_next[*col] != w1 {
+            return Err(BoundError::StatementColumn { column: *col, name: name.clone() });
+        }
+    }
+
     pcs.verify(
         vec![
             (proof.pre_commit.clone(), vec![(trace_domain, vec![(zeta, o.pre_local.clone()), (zeta_next, o.pre_next.clone())])]),
@@ -258,7 +297,7 @@ where
         &proof.opening_proof,
         challenger,
     )
-    .map_err(|_| VerificationError::InvalidOpeningArgument)?;
+    .map_err(|_| BoundError::Inner(VerificationError::InvalidOpeningArgument))?;
 
     let zps = quotient_chunks_domains
         .iter()
@@ -297,9 +336,102 @@ where
     };
     air.eval_lookup(&mut folder);
     if folder.accumulator * sels.inv_zeroifier != quotient {
-        return Err(VerificationError::OodEvaluationMismatch);
+        return Err(BoundError::Inner(VerificationError::OodEvaluationMismatch));
     }
     Ok(())
+}
+
+// --- statement-bound prove/verify (PROTOCOL.md 14.6; red team F1-F3 carried to the LogUp realisation) ------------
+
+/// The header of the LogUp realisation: the chain header (`statement::header`, with `rows` / `degree_bits` at the
+/// lookup trace's height) followed by `statement::lookup_header` (widths, extension degree, table digest).
+fn absorb_lookup_header<B: Backend>(challenger: &mut <B::SC as StarkGenericConfig>::Challenger, air: &crate::air::LookupChainAir, lay: &Layout, fri: FriParams, stmt: &Statement)
+where
+    Val<B::SC>: PrimeField64 + Send + Sync,
+{
+    let id = crate::statement::air_id(B::KIND, lay);
+    let ext = <<B::SC as StarkGenericConfig>::Challenge as AbstractExtensionField<Val<B::SC>>>::D;
+    assert_eq!(ext, air.ext_degree, "backend extension degree != the AIR's aux layout");
+    for v in crate::statement::header::<Val<B::SC>>(B::KIND, &id, lay.width, ext, fri, stmt) {
+        challenger.observe(v);
+    }
+    let digest = crate::statement::table_digest(&air.lay.tables);
+    for v in crate::statement::lookup_header::<Val<B::SC>>(<crate::air::LookupChainAir as LookupAir<Val<B::SC>>>::preprocessed_width(air), <crate::air::LookupChainAir as LookupAir<Val<B::SC>>>::aux_width(air), ext, &digest) {
+        challenger.observe(v);
+    }
+}
+
+/// The statement for the LogUp realisation: the same words, the trace at least as tall as the tables.
+pub fn lookup_statement(air: &crate::air::LookupChainAir, stmt: Statement) -> Statement {
+    stmt.with_min_rows(air.lay.tables.total_rows)
+}
+
+/// Prove the LogUp chain trace *of the statement* `stmt` (its `min_rows` must already be the tables' height:
+/// `lookup_statement`).  Header absorbed into a fresh `B::challenger()` (the `RttChallenger`-wrapped one, so the
+/// latency hooks count the header as part of the first message) before any challenge; the prover checks its own
+/// public columns against the statement (`check` = false for the red team's forgery attempts).
+pub fn prove_lookup_bound<B: Backend>(
+    air: &crate::air::LookupChainAir,
+    lay: &Layout,
+    fri: FriParams,
+    stmt: &Statement,
+    preprocessed: RowMajorMatrix<Val<B::SC>>,
+    main: RowMajorMatrix<Val<B::SC>>,
+    aux_fn: impl FnOnce(<B::SC as StarkGenericConfig>::Challenge, <B::SC as StarkGenericConfig>::Challenge) -> RowMajorMatrix<Val<B::SC>>,
+    check: bool,
+) -> (LookupProof<B::SC>, StageTimes)
+where
+    Val<B::SC>: PrimeField64 + Send + Sync,
+{
+    if check {
+        assert_eq!(main.height(), stmt.rows(), "main height {} != statement rows {} (B = {}, min_rows = {})", main.height(), stmt.rows(), stmt.b(), stmt.min_rows);
+        assert_eq!(main.width(), lay.width, "main width != layout width");
+        for (col, name, want) in stmt.public_columns::<Val<B::SC>>(lay) {
+            for (r, w) in want.iter().enumerate() {
+                assert_eq!(main.values[r * lay.width + col], *w, "prover: column {name} row {r} differs from the statement");
+            }
+        }
+    }
+    let degree_bits = log2_strict_usize(main.height()).max(stmt.degree_bits());
+    let config = B::config(degree_bits, fri);
+    let mut challenger = B::challenger();
+    absorb_lookup_header::<B>(&mut challenger, air, lay, fri, stmt);
+    prove_lookup(&config, air, &mut challenger, preprocessed, main, aux_fn)
+}
+
+/// Verify a LogUp proof of `stmt` from its wire bytes: `degree_bits` fixed by the statement (F2), header absorbed
+/// from the verifier's own configuration, statement and table set (F1/F3), `vu.y16` (and the operand columns when
+/// bound) checked at ζ, ζ·g against the verifier's own evaluation (F1), the preprocessed commitment recomputed
+/// from the verifier's tables and compared, then the three-round transcript, the PCS opening and the OOD identity.
+pub fn verify_lookup_bound_bytes<B: Backend>(air: &crate::air::LookupChainAir, lay: &Layout, proof_bytes: &[u8], fri: FriParams, stmt: &Statement) -> Result<(), BoundError>
+where
+    Val<B::SC>: PrimeField64 + Send + Sync,
+    Com<B::SC>: PartialEq,
+{
+    let proof: LookupProof<B::SC> = bincode::deserialize(proof_bytes).map_err(|_| BoundError::ProofShape)?;
+    let degree_bits = stmt.degree_bits();
+    if proof.degree_bits != degree_bits {
+        return Err(BoundError::DegreeBits { expected: degree_bits, got: proof.degree_bits });
+    }
+    if lay.width != <crate::air::LookupChainAir as BaseAir<Val<B::SC>>>::width(air) {
+        return Err(BoundError::ProofShape);
+    }
+    let config = B::config(degree_bits, fri);
+    let mut challenger = B::challenger();
+    absorb_lookup_header::<B>(&mut challenger, air, lay, fri, stmt);
+    let preprocessed: RowMajorMatrix<Val<B::SC>> = air.lay.tables.preprocessed(1 << degree_bits);
+    let public = stmt.public_columns::<Val<B::SC>>(lay);
+    verify_lookup_inner(&config, air, &mut challenger, &proof, preprocessed, degree_bits, &public)
+}
+
+/// `verify_lookup_bound_bytes` on an in-memory proof (serialised first: the verifier only ever sees bytes).
+pub fn verify_lookup_bound<B: Backend>(air: &crate::air::LookupChainAir, lay: &Layout, proof: &LookupProof<B::SC>, fri: FriParams, stmt: &Statement) -> Result<(), BoundError>
+where
+    Val<B::SC>: PrimeField64 + Send + Sync,
+    Com<B::SC>: PartialEq,
+{
+    let bytes = bincode::serialize(proof).expect("serialise proof");
+    verify_lookup_bound_bytes::<B>(air, lay, &bytes, fri, stmt)
 }
 
 // --- folders -----------------------------------------------------------------------------------------------------

@@ -241,6 +241,17 @@ impl LookupLayout {
     }
 }
 
+/// The red team's table substitution: the same layout with one entry of the first fixed table's row `row`
+/// changed (its first output column +1).  A verifier holding this table set must reject a proof made against the
+/// honest one (PROTOCOL.md 14.6: the table digest is in the header and the preprocessed commitment is recomputed).
+pub fn substitute_table_row(lay: &LookupLayout, row: usize) -> LookupLayout {
+    let mut tables: TableSet = (*lay.tables).clone();
+    let t = tables.tables.iter_mut().find(|t| matches!(t.kind, TableKind::Fixed(_))).expect("a fixed table");
+    let r = row.min(t.rows - 1);
+    t.outs[r][0] += 1;
+    LookupLayout { tables: Arc::new(tables), query_names: lay.query_names.clone(), query_degs: lay.query_degs.clone(), groups: lay.groups.clone() }
+}
+
 /// Multiplicities of every table row over a flat `n_rows x Q` query index array (`INVALID` entries skipped).
 pub fn multiplicities(tables: &TableSet, queries: &[u32]) -> Vec<u32> {
     let n = tables.total_rows;
