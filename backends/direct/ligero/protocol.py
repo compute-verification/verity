@@ -83,6 +83,75 @@ def soundness(cfg: Config, n_linear: int, n_quadratic: int) -> dict:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# Statement binding (red-team checklist, redteam_vu.md F1/F2 applied to this prover)
+# ---------------------------------------------------------------------------------------------------------------------
+#
+# Every challenge is derived from H(statement, transcript so far).  The statement digest is computed by the VERIFIER
+# from its own configuration and public inputs -- never read from the proof: the field, the hash, the compiled
+# constraint system (a digest of its tables), the code parameters (l, n, D, t), the mode (unit / chain), the chain
+# layout (units per VU, VU count), and every public word (c, a, b, y for units; a, b, y16 for chains).  Sizes come from
+# the verifier's Config / System, so a proof of another l, n, m or t is malformed before any challenge is recomputed.
+
+STATEMENT_TAG = b"ligero-b/statement|v2"
+_SYS_ID: dict = {}
+
+# Red-team hook ONLY: when False the challenges are derived from the transcript alone (the pre-fix protocol).  The
+# binding fixture (``redteam_binding.py``) uses it to show the adaptive-statement forgery the fix closes.  An honest
+# deployment never touches it.
+_BIND_STATEMENT = True
+
+
+def system_id(sys: System) -> bytes:
+    """A digest of the compiled constraint system: rows (kind, name, interval), linear and quadratic tables, pins,
+    hints, chain rows.  Two verifiers with the same digest check the same relation."""
+    key = id(sys)
+    hit = _SYS_ID.get(key)
+    if hit is not None and hit[0] is sys:
+        return hit[1]
+    h = hashlib.blake2b(digest_size=32)
+    h.update(f"m={sys.m};chain={sys.chain is not None}".encode())
+    for r in sys.rows:
+        h.update(f"{r.idx}:{r.kind}:{r.name}:{r.lo}:{r.hi};".encode())
+    for c in sys.linear:
+        h.update(f"L:{c.name}:{sorted(c.lin.items())}:{c.c}:{c.pub};".encode())
+    for q in sys.quadratic:
+        h.update(f"Q:{q.name}:{q.a.key()}:{q.b.key()}:{q.c.key()};".encode())
+    h.update(repr(sys.pins).encode())
+    h.update(repr(sys.hints).encode())
+    if sys.chain is not None:
+        h.update(repr(sys.chain["c"]).encode())
+        h.update(repr([e.key() for e in sys.chain["y"]] + [sys.chain["y16"].key()]).encode())
+    d = h.digest()
+    _SYS_ID[key] = (sys, d)
+    return d
+
+
+def _u_bytes(x, dtype: str) -> bytes:
+    arr = np.ascontiguousarray(np.asarray(x if not isinstance(x, torch.Tensor) else x.cpu().numpy(), dtype=np.int64))
+    return arr.astype(dtype).tobytes()
+
+
+def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None, y16=None) -> bytes:
+    """The public statement as the verifier sees it (see the module comment above)."""
+    h = hashlib.blake2b(digest_size=32)
+    h.update(STATEMENT_TAG)
+    h.update(f"|p={P}|hash=blake3|l={cfg.l}|n={cfg.n}|D={cfg.D}|t={cfg.t}|target={cfg.target_log2!r}".encode())
+    h.update(b"|sys=" + system_id(sys))
+    if layout is not None:
+        h.update(f"|mode=chain|l={layout.l}|n_vus={layout.n_vus}|steps={layout.steps}".encode())
+    else:
+        h.update(b"|mode=unit")
+    h.update(b"|a=" + _u_bytes(a, "<u2"))
+    h.update(b"|b=" + _u_bytes(b, "<u2"))
+    if layout is not None:
+        h.update(b"|y16=" + _u_bytes(y16, "<u2"))
+    else:
+        h.update(b"|c=" + _u_bytes(c, "<u4"))
+        h.update(b"|y=" + _u_bytes(y, "<u4"))
+    return h.digest()
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Transcript
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -93,16 +162,20 @@ def _expand(seed: bytes, count: int, device) -> torch.Tensor:
     return torch.from_numpy(arr).to(device)
 
 
-def _challenge1(root: bytes, D: int, m: int, L: int, Q: int, device, l_chain: int = 0):
-    seed = merkle.hash_bytes(b"ligero-b/c1|" + root)
+def _bound(stmt: bytes) -> bytes:
+    return stmt if _BIND_STATEMENT else b""
+
+
+def _challenge1(stmt: bytes, root: bytes, D: int, m: int, L: int, Q: int, device, l_chain: int = 0):
+    seed = merkle.hash_bytes(b"ligero-b/c1|" + _bound(stmt) + root)
     extra = N_FAMILIES * l_chain
     x = _expand(seed, D * (m + L + Q + extra), device).reshape(D, m + L + Q + extra)
     rc = x[:, m + L + Q:].reshape(D, N_FAMILIES, l_chain) if l_chain else None
     return x[:, :m], x[:, m:m + L], x[:, m + L:m + L + Q], rc
 
 
-def _challenge2(root: bytes, w: np.ndarray, h: np.ndarray, t: int, n: int, q: np.ndarray | None = None) -> list[int]:
-    seed = merkle.hash_bytes(b"ligero-b/c2|" + root + w.tobytes() + h.tobytes() + (q.tobytes() if q is not None else b""))
+def _challenge2(stmt: bytes, root: bytes, w: np.ndarray, h: np.ndarray, t: int, n: int, q: np.ndarray | None = None) -> list[int]:
+    seed = merkle.hash_bytes(b"ligero-b/c2|" + _bound(stmt) + root + w.tobytes() + h.tobytes() + (q.tobytes() if q is not None else b""))
     cols: list[int] = []
     seen = set()
     ctr = 0
@@ -200,14 +273,23 @@ class _Clock:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints: torch.Tensor,
-          device, check: bool = False, mutate=None, chain: tuple | None = None) -> Proof:
+          device, check: bool = False, mutate=None, chain: tuple | None = None, words: dict | None = None) -> Proof:
     """``pub``: the public vectors (from ``public_vectors``); ``hints``: (n_hints, l) from ``gen_step``.
+    ``words``: the public words the statement binds -- ``{"a", "b", "c", "y"}`` (units) or ``{"a", "b"}`` (chain;
+    ``y16`` comes from ``chain``) -- absorbed into every challenge (``statement_digest``).
     ``mutate(W)``: a test hook that edits the witness in place before it is committed (the mutated-witness
     negatives); an honest prover never uses it.  ``chain = (Layout, y16_pub (l,))`` runs the chain test."""
     clk = _Clock(device)
     m, l, n, D = sys.m, cfg.l, cfg.n, cfg.D
     assert hints.shape[1] == l
     assert (chain is not None) == (sys.chain is not None), "chain mode needs a chain-compiled system"
+    if words is None:
+        raise ValueError("prove needs the public words (statement binding)")
+    if chain is not None:
+        stmt = statement_digest(sys, cfg, words["a"], words["b"], layout=chain[0], y16=chain[1])
+    else:
+        stmt = statement_digest(sys, cfg, words["a"], words["b"], c=words["c"], y=words["y"])
+    clk.lap("statement")
     W = build_witness(sys, pub, hints, device)
     clk.lap("witness")
     if mutate is not None:
@@ -235,7 +317,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         hash_name = merkle.HASH_NAME
     clk.lap("merkle")
 
-    r, _rho_lin, rho_quad, rc = _challenge1(root, D, m, tb.L, tb.Q, device, l if chain else 0)
+    r, _rho_lin, rho_quad, rc = _challenge1(stmt, root, D, m, tb.L, tb.Q, device, l if chain else 0)
     w = _combine(r, W)                                            # (D, l)
     # quadratic: batched A*B - C on the codeword domain, divided by Z_H
     A = apply_sparse(tb.quad["a"][:3], tb.quad["a"][3], tb.Q, U)
@@ -270,7 +352,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
 
     w_np = w.cpu().numpy().astype(np.uint32)
     h_np = h.cpu().numpy().astype(np.uint32)
-    cols = _challenge2(root, w_np, h_np, cfg.t, n, q_np)
+    cols = _challenge2(stmt, root, w_np, h_np, cfg.t, n, q_np)
     if gpu_hash:
         cols_t = torch.tensor(cols, dtype=torch.int64, device=device)
         opened = U32.index_select(1, cols_t).cpu().numpy().astype(np.uint32)   # (m, t): the only U bytes that leave
@@ -295,9 +377,11 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
     ``chain = (Layout, y16_pub)`` (``c = y = None``), the claim that every VU of the layout casts to its
     ``y16_pub`` word from ``c_0 = 0`` over its 96 units.  Never touches W."""
     t0 = time.perf_counter()
-    m, l, n, D, t = sys.m, cfg.l, cfg.n, cfg.D, cfg.t
+    m, l, n, D, t = sys.m, cfg.l, cfg.n, cfg.D, cfg.t        # every size from the VERIFIER's configuration
     if (chain is not None) != (sys.chain is not None):
         return False, "chain mode mismatch"
+    if not (proof.hash_name or "").startswith("blake3"):
+        return False, "proof names a hash the verifier does not use"
     try:
         pub = public_vectors(p, c, a, b, y, device=device)
     except ValueError as e:
@@ -307,21 +391,27 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
     # shapes and ranges of the transcript
     if proof.w.shape != (D, l) or proof.h.shape != (D, l - 1) or proof.opened.shape != (m, t) or len(proof.cols) != t:
         return False, "malformed proof"
+    if len(proof.paths) != t or any(len(pth) != n.bit_length() - 1 for pth in proof.paths):
+        return False, "malformed Merkle paths"
     if (proof.w >= P).any() or (proof.h >= P).any() or (proof.opened >= P).any():
         return False, "transcript element out of the field"
     if chain is not None:
         layout, y16_pub = chain
+        y16_pub = torch.as_tensor(y16_pub, dtype=torch.int64)
         if layout.l != l or proof.q is None or proof.q.shape != (D, 2 * l - 1) or (proof.q >= P).any():
             return False, "malformed chain transcript"
         if len(y16_pub) != l or ((y16_pub < 0) | (y16_pub >= 2**p.word_bits)).any():
             return False, "y16 range"
+        stmt = statement_digest(sys, cfg, a, b, layout=layout, y16=y16_pub)
     elif proof.q is not None:
         return False, "unexpected chain transcript"
+    else:
+        stmt = statement_digest(sys, cfg, a, b, c=c, y=y)
     if len(set(proof.cols)) != t or any(not 0 <= c_ < n for c_ in proof.cols):
         return False, "bad column set"
-    # challenges
-    r, rho_lin, rho_quad, rc = _challenge1(proof.root, D, m, tb.L, tb.Q, device, l if chain else 0)
-    if proof.cols != _challenge2(proof.root, proof.w, proof.h, t, n, proof.q):
+    # challenges: H(statement, transcript prefix) -- the statement is the verifier's, not the proof's
+    r, rho_lin, rho_quad, rc = _challenge1(stmt, proof.root, D, m, tb.L, tb.Q, device, l if chain else 0)
+    if proof.cols != _challenge2(stmt, proof.root, proof.w, proof.h, t, n, proof.q):
         return False, "column challenge mismatch"
     cols = torch.tensor(proof.cols, dtype=torch.int64, device=device)
     Uo = torch.from_numpy(proof.opened.astype(np.int64)).to(device)          # (m, t)

@@ -91,7 +91,7 @@ class ChainRunner:
             torch.cuda.synchronize()
         hints_seconds = time.perf_counter() - t0
         proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
-                      chain=(lay, y16))
+                      chain=(lay, y16), words={"a": a, "b": b})
         proof.timings["hints_host"] = hints_seconds
         return proof, (a, b, y16), lay
 
@@ -269,7 +269,7 @@ def bench_vu(args) -> int:
         contract.measurement("t.arithmetic", med["tests"]),
         contract.measurement("t.lookup", 0.0),
         contract.measurement("t.zk_additional", 0.0),
-        contract.measurement("t.serialization", med["openings"]),
+        contract.measurement("t.serialization", med["openings"] + med.get("statement", 0.0)),
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),

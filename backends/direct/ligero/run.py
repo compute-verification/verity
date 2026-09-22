@@ -107,7 +107,8 @@ class Runner:
             assert torch.equal(ref, alt), "hints_torch != gen_step"
         _sync(self.device)
         hints_seconds = time.perf_counter() - t0
-        proof = prove(self.p, self.sys, self.tb, self.cfg(l), pub, hints, self.device, check=check, mutate=mutate)
+        proof = prove(self.p, self.sys, self.tb, self.cfg(l), pub, hints, self.device, check=check, mutate=mutate,
+                      words={"a": a, "b": b, "c": c, "y": y})
         proof.timings["hints_host"] = hints_seconds
         return proof, (c, a, b, y), l
 
@@ -297,7 +298,7 @@ def bench(args) -> int:
         contract.measurement("t.arithmetic", med["tests"]),
         contract.measurement("t.lookup", 0.0),
         contract.measurement("t.zk_additional", 0.0),
-        contract.measurement("t.serialization", med["openings"]),
+        contract.measurement("t.serialization", med["openings"] + med.get("statement", 0.0)),
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
