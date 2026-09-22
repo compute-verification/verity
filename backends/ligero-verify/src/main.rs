@@ -191,6 +191,7 @@ fn main() {
             let mut proofs: Vec<PathBuf> = entries
                 .filter_map(|e| e.ok().map(|e| e.path()))
                 .filter(|p| p.extension().map_or(false, |x| x == "proof"))
+                .filter(|p| !p.file_name().map_or(false, |n| n.to_string_lossy().starts_with("._"))) // macOS AppleDouble
                 .collect();
             proofs.sort();
             let mut items = Vec::new();

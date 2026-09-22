@@ -18,9 +18,27 @@ pub fn sub(a: u32, b: u32) -> u32 {
     if a >= b { a - b } else { a + P - b }
 }
 
+/// floor(2^64 / p): Barrett reduction of a product < 2^62 (the estimate is short by at most one p; two conditional
+/// subtractions make it exact).  A `%` by a u64 is a 20-40 cycle divide on Zen3; this is two multiplies.
+const BARRETT_M: u64 = ((1u128 << 64) / P as u128) as u64;
+
+#[inline(always)]
+pub fn reduce62(x: u64) -> u32 {
+    debug_assert!(x < 1 << 62);
+    let q = ((x as u128 * BARRETT_M as u128) >> 64) as u64;
+    let mut r = x - q * P64; // q <= x / p, so this is x mod p or x mod p + p
+    if r >= P64 {
+        r -= P64;
+    }
+    if r >= P64 {
+        r -= P64;
+    }
+    r as u32
+}
+
 #[inline(always)]
 pub fn mul(a: u32, b: u32) -> u32 {
-    ((a as u64 * b as u64) % P64) as u32
+    reduce62(a as u64 * b as u64)
 }
 
 #[inline(always)]
@@ -44,11 +62,23 @@ pub fn inv(a: u32) -> u32 {
     pow(a, P64 - 2)
 }
 
-/// A u64 sum of up to 2^32 products of reduced elements, reduced once.  Callers keep partial sums in u64 and
-/// reduce every 2^32 / p^2 ... we reduce after each product instead (the product < 2^62, the sum of two < 2^63).
+/// `acc + a * b mod p` for a reduced `acc` (< p): the product is < 2^62 and the sum < 2^62 + 2^31 < 2^62 + p, so one
+/// Barrett reduction of the sum is exact.  Callers keep the running sum in a u64 and get a reduced value back.
 #[inline(always)]
 pub fn mul_acc(acc: u64, a: u32, b: u32) -> u64 {
-    (acc + a as u64 * b as u64) % P64
+    debug_assert!(acc < P64);
+    reduce62_plus(acc + a as u64 * b as u64) as u64
+}
+
+/// Barrett for x < 2^62 + 2^32 (the quotient estimate can still only be short by one).
+#[inline(always)]
+fn reduce62_plus(x: u64) -> u32 {
+    let q = ((x as u128 * BARRETT_M as u128) >> 64) as u64;
+    let mut r = x - q * P64;
+    while r >= P64 {
+        r -= P64;
+    }
+    r as u32
 }
 
 pub fn root_of_unity(n: usize) -> u32 {
@@ -162,6 +192,20 @@ pub fn encode(row: &[u32], ntt_l: &Ntt, ntt_n: &Ntt, scale: &[u32]) -> Vec<u32> 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn barrett_matches_the_divide() {
+        let mut x: u64 = 0x9E3779B97F4A7C15;
+        for _ in 0..200_000 {
+            x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+            let (a, b) = ((x as u32) % super::P, ((x >> 32) as u32) % super::P);
+            assert_eq!(super::mul(a, b), ((a as u64 * b as u64) % super::P as u64) as u32);
+            let acc = (x >> 3) as u32 % super::P;
+            assert_eq!(super::mul_acc(acc as u64, a, b), (acc as u64 + a as u64 * b as u64) % super::P as u64);
+        }
+        assert_eq!(super::mul(super::P - 1, super::P - 1), 1);
+        assert_eq!(super::mul_acc((super::P - 1) as u64, super::P - 1, super::P - 1), 0);
+    }
+
     use super::*;
 
     fn naive_eval(coefs: &[u32], x: u32) -> u32 {
