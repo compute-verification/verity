@@ -171,9 +171,13 @@ class Embedding:
         if note is not None:                 # the interval analysis learns the product bounds the check imposes
             note(x, bnd)
 
-    def lt(self, ctx, name: str, x, ipow, bnd, bits: int) -> None:
-        """``x < 2^bits / ipow`` (= ``x < bnd``): the direct realisation when the rule is on and the width needs it."""
+    def lt(self, ctx, name: str, x, ipow, bnd, bits: int, *, nonneg: bool = False) -> None:
+        """``0 <= x < 2^bits / ipow`` (= ``x < bnd``): the direct realisation when the rule is on and the width needs
+        it.  The direct form only bounds ``x`` from above; ``nonneg`` adds ``rng(x, 0, 2^bits)`` for an ``x`` that is
+        not itself a range-checked hint (the leading-bit window ``v - lo``; found by z3, run 1)."""
         if self.has("LT_DIRECT") and 2 ** (2 * bits) > P:
+            if nonneg:
+                ctx.rng(f"{name}.nonneg", x, 0, 2**bits)
             self.bound(ctx, name, x, bnd, bits)
         else:
             ctx.lt_pow(name, x, ipow, bits)
@@ -290,7 +294,7 @@ class Embedding:
     def leading_bit(self, ctx, p: Params, v, h: dict, tag: str = "lead"):
         l = h["l"]
         lo, ispan, span = ctx.lookup(f"{tag}.lead", lead_table_bb(p), l)
-        self.lt(ctx, f"{tag}.window", v - lo, ispan, span, p.s_bits)
+        self.lt(ctx, f"{tag}.window", v - lo, ispan, span, p.s_bits, nonneg=True)
         return l
 
     def normalise(self, ctx, p: Params, E, l, v, h: dict, tag: str = "norm"):
@@ -795,7 +799,7 @@ def analyse(emb: Embedding = DEFAULT, p: Params = REAL) -> list[PredicateBound]:
 
 RULE_TEXT = {
     "LIMB16": "the word is two public 16-bit limbs; the identity is stated per limb (fraction limbs f_lo/f_hi or low_lo/low_hi as hints)",
-    "LT_DIRECT": "direct variable-bound check rng(bnd - 1 - x, 0, 2^B) against the table's bound column (POW/ALIGN: the partner column; LEAD: new column span)",
+    "LT_DIRECT": "direct variable-bound check rng(bnd - 1 - x, 0, 2^B) against the table's bound column (POW/ALIGN: the partner column; LEAD: new column span), plus rng(x, 0, 2^B) when x is not a range-checked hint (the leading-bit window v - lo: the direct form alone loses v >= lo -- z3 found it)",
     "QUOT_TIGHT": "the tight quotient bound q < 2^B / pow (direct) keeps q * pow + r below 2^B, so the division identity stays inside (-p, p)",
     "NORM_MBND": "NORM column mbnd = 2^30 / div and rng(mbnd - 1 - M', 0, 2^30): the quotient is tight relative to the dividend v < 2^30",
     "NORM_VBND": "NORM column vbnd = 2^24 / mul (k >= 0) and rng(vbnd - 1 - v, 0, 2^30): v * mul < 2^24 (redundant given leading_bit; see z3)",
@@ -844,7 +848,7 @@ def rules_report(p: Params = REAL) -> dict:
         ("align_product", "align_prod.rem"): ("LT_DIRECT", "no multiplication; one 16-bit range on a linear wire"),
         ("align_product", "align_prod.quot"): ("LT_DIRECT+QUOT_TIGHT", "no multiplication; one 16-bit range on a linear wire"),
         ("align_product", "align_prod.div"): ("QUOT_TIGHT", "none: the two direct bounds pin q * sr + r < 2^16"),
-        ("leading_bit", "lead.window"): ("LT_DIRECT+V_PREMISE", "LEAD gains column span; no multiplication; one 30-bit range (2 chunks) on a linear wire"),
+        ("leading_bit", "lead.window"): ("LT_DIRECT+V_PREMISE", "LEAD gains column span; no multiplication; two 30-bit ranges (4 chunk lookups) on the linear wire v - lo (>= 0 and < span)"),
         ("normalise", "norm.div"): ("NORM_MBND+NORM_VBND(redundant)+V_PREMISE", "NORM gains columns mbnd (and vbnd); +1 30-bit range (2 chunk lookups) per group [+1 if vbnd kept]; 0 hints, 0 multiplications"),
     }
     for b in naive:
