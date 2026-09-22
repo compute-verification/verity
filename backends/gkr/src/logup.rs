@@ -2,10 +2,13 @@
 //! multiplicities m_v,  Σ_j 1/(z - w_j) = Σ_v m_v/(z - t_v).  Leaves (p,q): witness (1, z - w_j), table
 //! (-m_v, z - t_v), padding (0, 1); layer k combines pairs by (p0 q1 + p1 q0, q0 q1); the root numerator must be 0.
 //! No division anywhere.  Vector-valued rows are compressed with powers of β.
+//!
+//! The witness side of one table may come from several data-parallel circuits ("segments": the unit circuit and
+//! the epilogue circuit of a VU batch, PROTOCOL.md 12); their queries are laid out one segment after another.
 
-use crate::circuit::{eval_lin, Circuit, Query, Table};
+use crate::circuit::{eval_lin, Query, Table};
 use crate::field::{eq_table, eval_mle, fold_in_place, interpolate, Ext, Fp};
-use crate::gkr::{eq_point, Reader};
+use crate::gkr::{eq_point, threads, Reader};
 use crate::transcript::Transcript;
 use std::collections::HashMap;
 
@@ -13,58 +16,156 @@ pub struct TableChallenges { pub z: Ext, pub beta: Ext }
 
 fn log2ceil(n: usize) -> usize { let mut s = 0; while (1usize << s) < n { s += 1; } s }
 
-/// Leaves for one table over the whole batch (used by prover and, in the clear-witness diagnostic, verifier).
-pub fn leaves(circ: &Circuit, table: &Table, queries: &[&Query], cols: &[Fp], ncols: usize, units: usize, ch: &TableChallenges) -> (Vec<Ext>, Vec<Ext>, usize, Vec<u64>) {
-    let n_wit = units * queries.len();
-    let n = log2ceil(n_wit + table.rows.len());
-    let size = 1usize << n;
+/// One segment's queries into a table: the query forms over its columns, and its committed rows.
+pub struct SegQueries<'a> { pub queries: Vec<&'a Query>, pub cols: &'a [Fp], pub ncols: usize, pub units: usize }
+
+impl<'a> SegQueries<'a> { pub fn n_wit(&self) -> usize { self.units * self.queries.len() } }
+
+pub fn hypercube_dim(segs: &[SegQueries], table: &Table) -> usize { log2ceil(segs.iter().map(|s| s.n_wit()).sum::<usize>() + table.rows.len()) }
+
+pub fn betas(table: &Table, ch: &TableChallenges) -> Vec<Ext> { let mut v = vec![Ext::ONE]; for k in 1..table.cols { v.push(v[k - 1] * ch.beta); } v }
+
+/// Leaves for one table over every segment (prover; and the clear-witness diagnostic verifier).  Returns
+/// (p, q, n, multiplicities); with `z = 0, beta = 1` only the multiplicities are meaningful.
+pub fn leaves(table: &Table, segs: &[SegQueries], ch: &TableChallenges) -> (Vec<Ext>, Vec<Ext>, usize, Vec<u64>) { fill(table, segs, ch, true) }
+
+/// Only the multiplicities (challenge-independent; counted before the commitment).
+pub fn multiplicities(table: &Table, segs: &[SegQueries]) -> Vec<u64> { fill(table, segs, &TableChallenges { z: Ext::ZERO, beta: Ext::ONE }, false).3 }
+
+fn fill(table: &Table, segs: &[SegQueries], ch: &TableChallenges, want_pq: bool) -> (Vec<Ext>, Vec<Ext>, usize, Vec<u64>) {
+    let n = hypercube_dim(segs, table);
+    let size = if want_pq { 1usize << n } else { 0 };
     let mut p = vec![Ext::ZERO; size];
     let mut q = vec![Ext::ONE; size];
-    // key -> row index (col 0 is the key for every table; R16's key is the value itself)
     let mut index: HashMap<u64, usize> = HashMap::with_capacity(table.rows.len());
     for (i, r) in table.rows.iter().enumerate() { index.insert(r[0].0, i); }
     let mut mult = vec![0u64; table.rows.len()];
-    let betas: Vec<Ext> = { let mut v = vec![Ext::ONE]; for k in 1..table.cols { v.push(v[k - 1] * ch.beta); } v };
-    for u in 0..units {
-        let row = &cols[u * ncols..(u + 1) * ncols];
-        for (j, qu) in queries.iter().enumerate() {
-            let vals: Vec<Fp> = qu.cols.iter().map(|l| eval_lin(l, row)).collect();
-            let mut comb = Ext::ZERO;
-            for (k, v) in vals.iter().enumerate() { comb += betas[k].scale(*v); }
-            let idx = u * queries.len() + j;
-            p[idx] = Ext::ONE;
-            q[idx] = ch.z - comb;
-            if let Some(&ri) = index.get(&vals[0].0) {
-                if table.rows[ri][..] == vals[..] { mult[ri] += 1; }
+    let bs = betas(table, ch);
+    let nthreads = threads();
+    let mut base = 0usize;
+    for seg in segs {
+        let q_t = seg.queries.len();
+        if q_t == 0 { continue; }
+        let n_wit = seg.n_wit();
+        let (pw, qw): (&mut [Ext], &mut [Ext]) = if want_pq { (&mut p[base..base + n_wit], &mut q[base..base + n_wit]) } else { (&mut [], &mut []) };
+        let chunk = seg.units.div_ceil(nthreads).max(1);
+        let n_chunks = seg.units.div_ceil(chunk);
+        let partial: Vec<Vec<u64>> = std::thread::scope(|s| {
+            let mut hs = Vec::new();
+            let mut pcs: Vec<&mut [Ext]> = if want_pq { pw.chunks_mut(chunk * q_t).collect() } else { (0..n_chunks).map(|_| &mut [][..]).collect() };
+            let mut qcs: Vec<&mut [Ext]> = if want_pq { qw.chunks_mut(chunk * q_t).collect() } else { (0..n_chunks).map(|_| &mut [][..]).collect() };
+            for ci in 0..n_chunks {
+                let (pc, qc) = (std::mem::take(&mut pcs[ci]), std::mem::take(&mut qcs[ci]));
+                let (index, bs, table, queries) = (&index, &bs, table, &seg.queries);
+                let cols = seg.cols;
+                let ncols = seg.ncols;
+                let units = seg.units;
+                hs.push(s.spawn(move || {
+                    let mut m = vec![0u64; table.rows.len()];
+                    let mut vals: Vec<Fp> = Vec::with_capacity(table.cols);
+                    let lo = ci * chunk;
+                    let hi = ((ci + 1) * chunk).min(units);
+                    for u in lo..hi {
+                        let k = u - lo;
+                        let row = &cols[u * ncols..(u + 1) * ncols];
+                        for (j, qu) in queries.iter().enumerate() {
+                            vals.clear();
+                            vals.extend(qu.cols.iter().map(|l| eval_lin(l, row)));
+                            if want_pq {
+                                let mut comb = Ext::ZERO;
+                                for (kk, v) in vals.iter().enumerate() { comb += bs[kk].scale(*v); }
+                                pc[k * q_t + j] = Ext::ONE;
+                                qc[k * q_t + j] = ch.z - comb;
+                            }
+                            if let Some(&ri) = index.get(&vals[0].0) {
+                                if table.rows[ri][..] == vals[..] { m[ri] += 1; }
+                            }
+                        }
+                    }
+                    m
+                }));
             }
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for m in partial { for (a, b) in mult.iter_mut().zip(m) { *a += b; } }
+        base += n_wit;
+    }
+    if want_pq {
+        for (i, r) in table.rows.iter().enumerate() {
+            let mut comb = Ext::ZERO;
+            for (k, v) in r.iter().enumerate() { comb += bs[k].scale(*v); }
+            p[base + i] = -Ext::from_u64(mult[i]);
+            q[base + i] = ch.z - comb;
         }
     }
-    for (i, r) in table.rows.iter().enumerate() {
-        let mut comb = Ext::ZERO;
-        for (k, v) in r.iter().enumerate() { comb += betas[k].scale(*v); }
-        p[n_wit + i] = -Ext::from_u64(mult[i]);
-        q[n_wit + i] = ch.z - comb;
-    }
-    let _ = circ;
     (p, q, n, mult)
 }
 
 pub struct LookupStats { pub n: usize, pub leaves: usize }
 
-pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transcript, out: &mut Vec<Ext>) -> LookupStats {
+fn par_map<T: Send, F: Fn(usize) -> T + Sync>(n: usize, f: F) -> Vec<T> {
+    let nthreads = threads().min(n.max(1));
+    let chunk = n.div_ceil(nthreads).max(1);
+    let f = &f;
+    let parts: Vec<Vec<T>> = std::thread::scope(|s| {
+        let hs: Vec<_> = (0..nthreads).map(|t| s.spawn(move || { let lo = t * chunk; let hi = ((t + 1) * chunk).min(n); (lo..hi).map(f).collect::<Vec<T>>() })).collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    parts.into_iter().flatten().collect()
+}
+
+/// Σ over x < half of the degree-3 round polynomial at t = 0..3 (parallel over x).
+fn round_poly(p0: &[Ext], p1: &[Ext], q0: &[Ext], q1: &[Ext], e: &[Ext], half: usize, lambda: Ext) -> [Ext; 4] {
+    let nthreads = threads().min(half.max(1));
+    let chunk = half.div_ceil(nthreads).max(1);
+    let parts: Vec<[Ext; 4]> = std::thread::scope(|s| {
+        let hs: Vec<_> = (0..nthreads).map(|t| s.spawn(move || {
+            let mut h = [Ext::ZERO; 4];
+            for x in t * chunk..((t + 1) * chunk).min(half) {
+                let d = |v: &[Ext]| (v[x], v[x + half] - v[x]);
+                let (a0, da) = d(p0); let (b0, db) = d(p1); let (c0, dc) = d(q0); let (d0, dd) = d(q1); let (e0, de) = d(e);
+                for tt in 0..4u64 {
+                    let t = Ext::from_u64(tt);
+                    let (pa, pb, qa, qb) = (a0 + t * da, b0 + t * db, c0 + t * dc, d0 + t * dd);
+                    h[tt as usize] += (e0 + t * de) * (pa * qb + pb * qa + lambda * (qa * qb));
+                }
+            }
+            h
+        })).collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let mut h = [Ext::ZERO; 4];
+    for p in parts { for t in 0..4 { h[t] += p[t]; } }
+    h
+}
+
+fn par_fold(v: &mut Vec<Ext>, r: Ext) {
+    let half = v.len() / 2;
+    if half < 1 << 14 { fold_in_place(v, r); return; }
+    let (lo, hi) = v.split_at_mut(half);
+    let nthreads = threads();
+    let chunk = half.div_ceil(nthreads).max(1);
+    std::thread::scope(|s| {
+        for (lc, hc) in lo.chunks_mut(chunk).zip(hi.chunks(chunk)) {
+            s.spawn(move || { for (a, b) in lc.iter_mut().zip(hc) { *a = *a + (*b - *a) * r; } });
+        }
+    });
+    v.truncate(half);
+}
+
+pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transcript, out: &mut Vec<Ext>) -> (LookupStats, LeafClaim) {
     // tree levels: level n = leaves ... level 0 = root
     let mut levels: Vec<(Vec<Ext>, Vec<Ext>)> = Vec::with_capacity(n + 1);
     levels.push((p_leaf, q_leaf));
     for _ in 0..n {
         let (p, q) = levels.last().unwrap();
         let half = p.len() / 2;
-        let mut np = Vec::with_capacity(half);
-        let mut nq = Vec::with_capacity(half);
-        for x in 0..half {
+        let pairs: Vec<(Ext, Ext)> = par_map(half, |x| {
             let (p0, q0, p1, q1) = (p[2 * x], q[2 * x], p[2 * x + 1], q[2 * x + 1]);
-            np.push(p0 * q1 + p1 * q0);
-            nq.push(q0 * q1);
-        }
+            (p0 * q1 + p1 * q0, q0 * q1)
+        });
+        let np: Vec<Ext> = pairs.iter().map(|x| x.0).collect();
+        let nq: Vec<Ext> = pairs.iter().map(|x| x.1).collect();
         levels.push((np, nq));
     }
     levels.reverse(); // levels[k] has 2^k entries
@@ -74,33 +175,26 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
     tr.absorb_ext(q_root);
     let mut lambda = tr.challenge();
     let mut rho: Vec<Ext> = vec![];
+    let mut claim = lambda * q_root;
     for k in 0..n {
         let (pc, qc) = &levels[k + 1];
         let size = 1usize << k;
-        let mut p0: Vec<Ext> = (0..size).map(|x| pc[2 * x]).collect();
-        let mut p1: Vec<Ext> = (0..size).map(|x| pc[2 * x + 1]).collect();
-        let mut q0: Vec<Ext> = (0..size).map(|x| qc[2 * x]).collect();
-        let mut q1: Vec<Ext> = (0..size).map(|x| qc[2 * x + 1]).collect();
+        let mut p0: Vec<Ext> = par_map(size, |x| pc[2 * x]);
+        let mut p1: Vec<Ext> = par_map(size, |x| pc[2 * x + 1]);
+        let mut q0: Vec<Ext> = par_map(size, |x| qc[2 * x]);
+        let mut q1: Vec<Ext> = par_map(size, |x| qc[2 * x + 1]);
+        levels[k + 1] = (vec![], vec![]); // this level is no longer needed
         let mut e = eq_table(&rho);
         let mut x_star = Vec::with_capacity(k);
         let mut len = size;
         for _ in 0..k {
             let half = len / 2;
-            let mut h = [Ext::ZERO; 4];
-            for x in 0..half {
-                let d = |v: &Vec<Ext>| (v[x], v[x + half] - v[x]);
-                let (a0, da) = d(&p0); let (b0, db) = d(&p1); let (c0, dc) = d(&q0); let (d0, dd) = d(&q1); let (e0, de) = d(&e);
-                for t in 0..4u64 {
-                    let tt = Ext::from_u64(t);
-                    let (pa, pb, qa, qb) = (a0 + tt * da, b0 + tt * db, c0 + tt * dc, d0 + tt * dd);
-                    h[t as usize] += (e0 + tt * de) * (pa * qb + pb * qa + lambda * (qa * qb));
-                }
-            }
+            let h = round_poly(&p0, &p1, &q0, &q1, &e, half, lambda);
             out.extend_from_slice(&h);
             tr.absorb_exts(&h);
             let r = tr.challenge();
             x_star.push(r);
-            for v in [&mut p0, &mut p1, &mut q0, &mut q1, &mut e] { fold_in_place(v, r); }
+            for v in [&mut p0, &mut p1, &mut q0, &mut q1, &mut e] { par_fold(v, r); }
             len = half;
         }
         let vals = [p0[0], p1[0], q0[0], q1[0]];
@@ -110,8 +204,9 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
         lambda = tr.challenge();
         rho = x_star;
         rho.push(mu);
+        claim = (vals[0] + mu * (vals[1] - vals[0])) + lambda * (vals[2] + mu * (vals[3] - vals[2]));
     }
-    LookupStats { n, leaves: 1 << n }
+    (LookupStats { n, leaves: 1 << n }, LeafClaim { rho, lambda, value: claim })
 }
 
 /// The verifier's residual claim after the fractional GKR: p̃(ρ) + λ q̃(ρ) = value on the leaf vectors.

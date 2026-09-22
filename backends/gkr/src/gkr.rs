@@ -145,11 +145,26 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
     let n_in = 1usize << layer.s_in;
     let ec = eq_table(&c_star);
     let mut vf = vec![Ext::ZERO; n_in];
-    for c in 0..copies {
-        let row = input.row(c);
-        if row.is_empty() { continue; }
-        let ecc = ec[c];
-        for (l, v) in row.iter().enumerate().take(n_in) { if v.0 != 0 { vf[l] += ecc.scale(*v); } }
+    {
+        let nthreads = threads();
+        let chunk = copies.div_ceil(nthreads).max(1);
+        let parts: Vec<Vec<Ext>> = std::thread::scope(|s| {
+            let hs: Vec<_> = (0..nthreads).map(|t| {
+                let ec = &ec;
+                s.spawn(move || {
+                    let mut acc = vec![Ext::ZERO; n_in];
+                    for c in t * chunk..((t + 1) * chunk).min(copies) {
+                        let row = input.row(c);
+                        if row.is_empty() { continue; }
+                        let ecc = ec[c];
+                        for (l, v) in row.iter().enumerate().take(n_in) { if v.0 != 0 { acc[l] += ecc.scale(*v); } }
+                    }
+                    acc
+                })
+            }).collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for p in parts { for (x, y) in vf.iter_mut().zip(p) { *x += y; } }
     }
     let wp: Vec<Ext> = w.iter().map(|x| *x * e_star).collect();
     // phase 2a

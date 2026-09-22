@@ -28,6 +28,10 @@ pub const MAX_DEG: usize = 5;
 
 pub trait Ctx {
     type V: Clone;
+    /// 31-bit trace field: the wrap-free realisations below are selected.
+    fn small_field(&self) -> bool;
+    /// The trace field's prime (witness-side inverses).
+    fn prime(&self) -> u128;
     fn konst(&mut self, k: i128) -> Self::V;
     fn add(&mut self, a: &Self::V, b: &Self::V) -> Self::V;
     fn sub(&mut self, a: &Self::V, b: &Self::V) -> Self::V;
@@ -45,9 +49,23 @@ pub trait Ctx {
     fn rng(&mut self, name: &str, x: &Self::V, lo: i128, hi: i128);
     fn lookup(&mut self, name: &str, table: &Table, key: &Self::V) -> Vec<Self::V>;
 
-    fn lt_pow(&mut self, name: &str, x: &Self::V, ipow: &Self::V, bits: i128) {
-        let p = self.mul(x, ipow);
-        self.rng(name, &p, 0, 1 << bits);
+    /// `x * ipow < 2^bits`, i.e. `x < bound` with `bound = 2^bits / ipow` a table column.  Over Goldilocks the
+    /// reference realisation (the product is below 2^60 < p).  Over a 31-bit field the product wraps (checker
+    /// finding F1), so the predicate is realised directly as `bound - 1 - x in [0, 2^bits)`: `x` is already
+    /// range-checked to `[0, 2^bits)` by its gadget and `bound <= 2^bits`, so a violating `x` gives a negative
+    /// difference whose representative is `>= p - 2^bits + 1 >= 2^bits` (true for every `bits <= 30` at
+    /// `p = 2^31 - 2^27 + 1`... for `bits = 30` this needs `p - 2^30 + 1 >= 2^30`, which BabyBear FAILS; the one
+    /// 30-bit use, `LeadingBit.window`, is therefore sound only under the signed-sum premise bound `v <= S_MAX`,
+    /// which the `sum.premise` check enforces explicitly).
+    fn lt_pow(&mut self, name: &str, x: &Self::V, ipow: &Self::V, bound: &Self::V, bits: i128) {
+        if self.small_field() {
+            let d = self.sub(bound, x);
+            let d = self.subk(&d, 1);
+            self.rng(name, &d, 0, 1 << bits);
+        } else {
+            let p = self.mul(x, ipow);
+            self.rng(name, &p, 0, 1 << bits);
+        }
     }
     fn subk(&mut self, a: &Self::V, k: i128) -> Self::V {
         self.addk(a, -k)
@@ -105,18 +123,28 @@ pub fn align_table() -> Table {
 }
 
 pub fn lead_table() -> Table {
-    // LEAD: l -> (2^(l-1), 2^(B-l+1)); row 0 is (0, 2^B).  Exact rows, l in [0, l_hi].
+    // LEAD: l -> (2^(l-1), 2^(B-l+1), span = 2^B / ispan); row 0 is (0, 2^B, 1).  Exact rows, l in [0, l_hi].
+    // The third column is the window width the direct `lt_pow` realisation compares against (free: outputs are
+    // linear in the selectors).
     let b = S_BITS;
     let keys: Vec<i128> = (0..=L_HI).collect();
     let rows = keys
         .iter()
-        .map(|&l| if l == 0 { vec![0, 1i128 << b] } else { vec![1i128 << (l - 1), 1i128 << (b - (l - 1))] })
+        .map(|&l| {
+            if l == 0 {
+                vec![0, 1i128 << b, 1]
+            } else {
+                vec![1i128 << (l - 1), 1i128 << (b - (l - 1)), 1i128 << (l - 1)]
+            }
+        })
         .collect();
     Table { name: "LEAD", keys, rows, saturate: false, slack_hi: 0 }
 }
 
 pub fn norm_table() -> Table {
-    // NORM: k -> (mul, div, idiv), k in [k_lo, k_hi].  Exact rows.
+    // NORM: k -> (mul, div, idiv, [k == k_lo]), k in [k_lo, k_hi].  Exact rows.  The fourth column selects the
+    // one row whose division identity can reach 2^31 - 1 (checker finding F3); the 31-bit realisation bounds M
+    // there.
     let r = NORM_REM_BITS;
     let keys: Vec<i128> = (K_LO..=K_HI).collect();
     let rows = keys
@@ -124,11 +152,49 @@ pub fn norm_table() -> Table {
         .map(|&k| {
             let neg = if k < 0 { -k } else { 0 };
             let pos = if k > 0 { k } else { 0 };
-            vec![1i128 << pos, 1i128 << neg, 1i128 << (r - neg)]
+            vec![1i128 << pos, 1i128 << neg, 1i128 << (r - neg), (k == K_LO) as i128]
         })
         .collect();
     Table { name: "NORM", keys, rows, saturate: false, slack_hi: 0 }
 }
+
+/// A 32-bit word: one column over Goldilocks, two 16-bit limbs `hi * 2^16 + lo` over a 31-bit field (checker
+/// finding F4: the word does not fit the field).
+#[derive(Clone, Debug)]
+pub enum Word32<V> {
+    Full(V),
+    Limbs { hi: V, lo: V },
+}
+
+impl<V: Clone> Word32<V> {
+    pub fn cols(&self) -> Vec<V> {
+        match self {
+            Word32::Full(v) => vec![v.clone()],
+            Word32::Limbs { hi, lo } => vec![hi.clone(), lo.clone()],
+        }
+    }
+    fn refs(&self) -> Vec<&V> {
+        match self {
+            Word32::Full(v) => vec![v],
+            Word32::Limbs { hi, lo } => vec![hi, lo],
+        }
+    }
+    fn is_full(&self) -> bool {
+        matches!(self, Word32::Full(_))
+    }
+}
+
+/// The integer value of a word from its dependency values (`Full`: `v[0]`; `Limbs`: `v[0] << 16 | v[1]`).
+fn word_of(full: bool, v: &[i128]) -> i128 {
+    if full {
+        v[0]
+    } else {
+        (v[0] << HALF) + v[1]
+    }
+}
+
+/// Half a 32-bit word.
+pub const HALF: i128 = 16;
 
 /// One unit's public words (`x`, `y`).  The AIR context receives zeros; it never reads them.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -174,23 +240,50 @@ fn bf16_decode<C: Ctx>(ctx: &mut C, w: &C::V, tag: &str) -> (C::V, C::V, C::V) {
     (s, m, e)
 }
 
-/// Fp32Decode: (s, e_hat, M)
-fn fp32_decode<C: Ctx>(ctx: &mut C, c: &C::V, tag: &str) -> (C::V, C::V, C::V) {
-    let s = ctx.hint(&format!("{tag}.s"), &[c], &|v| v[0] >> (ACC_WORD_BITS - 1));
-    let t = ctx.hint(&format!("{tag}.t"), &[c], &|v| (v[0] >> ACC_FRAC) & ((1 << EXP) - 1));
-    let f = ctx.hint(&format!("{tag}.f"), &[c], &|v| v[0] & ((1 << ACC_FRAC) - 1));
+/// Fp32Decode: (s, e_hat, M).  Over a 31-bit field the word is two 16-bit limbs and the fraction is split at the
+/// limb boundary (`f = f_hi 2^16 + f_lo`, `f_hi < 2^7`): the reconstruction identity becomes two 16-bit
+/// identities (`c_lo = f_lo`, `c_hi = s 2^15 + t 2^7 + f_hi`), each side below 2^16.
+fn fp32_decode<C: Ctx>(ctx: &mut C, c: &Word32<C::V>, tag: &str) -> (C::V, C::V, C::V) {
+    let full = c.is_full();
+    let deps = c.refs();
+    let s = ctx.hint(&format!("{tag}.s"), &deps, &move |v| word_of(full, v) >> (ACC_WORD_BITS - 1));
+    let t = ctx.hint(&format!("{tag}.t"), &deps, &move |v| (word_of(full, v) >> ACC_FRAC) & ((1 << EXP) - 1));
+    let (f, parts) = if full {
+        let f = ctx.hint(&format!("{tag}.f"), &deps, &move |v| word_of(full, v) & ((1 << ACC_FRAC) - 1));
+        let (lo, hi) = bits(ACC_FRAC);
+        ctx.rng(&format!("{tag}.f"), &f, lo, hi);
+        (f, None)
+    } else {
+        let f_lo = ctx.hint(&format!("{tag}.f_lo"), &deps, &move |v| word_of(full, v) & ((1 << HALF) - 1));
+        let f_hi = ctx.hint(&format!("{tag}.f_hi"), &deps, &move |v| (word_of(full, v) >> HALF) & ((1 << (ACC_FRAC - HALF)) - 1));
+        ctx.rng(&format!("{tag}.f_lo"), &f_lo, 0, 1 << HALF);
+        ctx.rng(&format!("{tag}.f_hi"), &f_hi, 0, 1 << (ACC_FRAC - HALF));
+        let f_hi_sh = ctx.scale(&f_hi, 1 << HALF);
+        (ctx.add(&f_hi_sh, &f_lo), Some((f_lo, f_hi)))
+    };
     let nz = ctx.hint(&format!("{tag}.nz"), &[&t], &|v| (v[0] != 0) as i128);
     let z = ctx.hint(&format!("{tag}.z"), &[&t, &f], &|v| (v[0] == 0 && v[1] == 0) as i128);
     ctx.boolean(&format!("{tag}.s"), &s);
     ctx.rng(&format!("{tag}.t"), &t, 0, T_FINITE);
-    let (lo, hi) = bits(ACC_FRAC);
-    ctx.rng(&format!("{tag}.f"), &f, lo, hi);
     ctx.boolean(&format!("{tag}.nz"), &nz);
     ctx.boolean(&format!("{tag}.z"), &z);
-    let s_sh = ctx.scale(&s, 1 << (ACC_WORD_BITS - 1));
-    let t_sh = ctx.scale(&t, 1 << ACC_FRAC);
-    let word = ctx.sum(&[s_sh, t_sh, f.clone()]);
-    ctx.eq(&format!("{tag}.word"), &word, c);
+    match (c, parts) {
+        (Word32::Full(c), _) => {
+            let s_sh = ctx.scale(&s, 1 << (ACC_WORD_BITS - 1));
+            let t_sh = ctx.scale(&t, 1 << ACC_FRAC);
+            let word = ctx.sum(&[s_sh, t_sh, f.clone()]);
+            ctx.eq(&format!("{tag}.word"), &word, c);
+        }
+        (Word32::Limbs { hi: c_hi, lo: c_lo }, Some((f_lo, f_hi))) => {
+            // c_lo = f_lo and c_hi = s 2^15 + t 2^7 + f_hi: every side below 2^16.
+            ctx.eq(&format!("{tag}.word_lo"), &f_lo, c_lo);
+            let s_sh = ctx.scale(&s, 1 << (ACC_WORD_BITS - 1 - HALF));
+            let t_sh = ctx.scale(&t, 1 << (ACC_FRAC - HALF));
+            let word_hi = ctx.sum(&[s_sh, t_sh, f_hi]);
+            ctx.eq(&format!("{tag}.word_hi"), &word_hi, c_hi);
+        }
+        _ => unreachable!(),
+    }
     let one_m_nz = ctx.ksub(1, &nz);
     let nz0 = ctx.mul(&one_m_nz, &t);
     let zero = ctx.konst(0);
@@ -300,8 +393,9 @@ fn align_state<C: Ctx>(ctx: &mut C, m: &C::V, d: &C::V, tag: &str) -> C::V {
     let lhs = ctx.add(&qp, &r);
     let rhs = ctx.scale(m, 1 << ACC_SHIFT);
     ctx.eq(&format!("{tag}.div"), &lhs, &rhs);
-    ctx.lt_pow(&format!("{tag}.rem"), &r, ipow, w);
-    ctx.lt_pow(&format!("{tag}.quot"), &q, pow, w);
+    // r < pow (= 2^dd) and q < ipow (= 2^(W - dd)); with both, q * pow + r < 2^(W + 1) and the identity is exact
+    ctx.lt_pow(&format!("{tag}.rem"), &r, ipow, pow, w);
+    ctx.lt_pow(&format!("{tag}.quot"), &q, pow, ipow, w);
     q
 }
 
@@ -330,8 +424,8 @@ fn align_product<C: Ctx>(ctx: &mut C, u: &C::V, d: &C::V, tag: &str) -> C::V {
     let qs = ctx.mul(&q, sr);
     let lhs = ctx.add(&qs, &r);
     ctx.eq(&format!("{tag}.div"), &lhs, u);
-    ctx.lt_pow(&format!("{tag}.rem"), &r, isr, ubits);
-    ctx.lt_pow(&format!("{tag}.quot"), &q, sr, ubits);
+    ctx.lt_pow(&format!("{tag}.rem"), &r, isr, sr, ubits);
+    ctx.lt_pow(&format!("{tag}.quot"), &q, sr, isr, ubits);
     ctx.mul(&q, sl)
 }
 
@@ -356,6 +450,14 @@ fn signed_sum<C: Ctx>(ctx: &mut C, terms: &[(C::V, C::V)], tag: &str) -> (C::V, 
     let v_expr = ctx.add(&s_val, &ss2);
     let v = ctx.mat(&format!("{tag}.v"), &v_expr);
     ctx.rng(&format!("{tag}.v"), &v, 0, 1 << S_BITS);
+    if ctx.small_field() {
+        // BabyBear: p - 2^30 < 2^30, so a 30-bit range check alone does not exclude a negative representative;
+        // tighten |S| to the premise bound (fields.py BABYBEAR_EXTRA).  Sound: S_MAX - v for v in [0, 2^30) is
+        // negative only for v > S_MAX, and then its representative p + S_MAX - v > p - 2^30 + S_MAX > 2^30 iff
+        // v < S_MAX + p - 2^30 = S_MAX + 0.94e9, which every v < 2^30 satisfies.
+        let slack = ctx.ksub(S_MAX, &v);
+        ctx.rng(&format!("{tag}.premise"), &slack, 0, 1 << S_BITS);
+    }
     let zv = ctx.mul(&z, &v);
     let zero = ctx.konst(0);
     ctx.eq(&format!("{tag}.z0"), &zv, &zero);
@@ -371,9 +473,9 @@ fn signed_sum<C: Ctx>(ctx: &mut C, terms: &[(C::V, C::V)], tag: &str) -> (C::V, 
 fn leading_bit<C: Ctx>(ctx: &mut C, v: &C::V, tag: &str) -> C::V {
     let l = ctx.hint(&format!("{tag}.l"), &[v], &|v| 128 - (v[0] as u128).leading_zeros() as i128);
     let row = ctx.lookup(&format!("{tag}.lead"), &lead_table(), &l);
-    let (lo, ispan) = (&row[0], &row[1]);
+    let (lo, ispan, span) = (&row[0], &row[1], &row[2]);
     let vlo = ctx.sub(v, lo);
-    ctx.lt_pow(&format!("{tag}.window"), &vlo, ispan, S_BITS);
+    ctx.lt_pow(&format!("{tag}.window"), &vlo, ispan, span, S_BITS);
     l
 }
 
@@ -412,12 +514,20 @@ fn normalise<C: Ctx>(ctx: &mut C, e: &C::V, l: &C::V, v: &C::V, tag: &str) -> (C
     let e_m_e1 = ctx.sub(e, &e1);
     let k = ctx.addk(&e_m_e1, ACC_SIG - WIDTH);
     let row = ctx.lookup(&format!("{tag}.norm"), &norm_table(), &k);
-    let (mul, div, idiv) = (&row[0], &row[1], &row[2]);
+    let (mul, div, idiv, k_lo) = (&row[0], &row[1], &row[2], &row[3]);
+    if ctx.small_field() {
+        // F3: div M + r reaches 2^31 - 1 > p only in the k = K_LO row (div = 2^7, M up to 2^24), where the honest
+        // M = v >> 7 < 2^23 because v <= S_MAX < 2^30.  Bounding M below 2^23 there keeps every side of the
+        // division identity below 2^30 < p, so the field identity is the integer one.  In the k >= 0 rows
+        // (div = 1, r = 0) M is the unique residue of v 2^k and the honest one is below 2^24.
+        let km = ctx.mul(k_lo, &m);
+        ctx.rng(&format!("{tag}.k_lo_bound"), &km, 0, 1 << (ACC_SIG - 1));
+    }
     let dm = ctx.mul(div, &m);
     let lhs = ctx.add(&dm, &r);
     let rhs = ctx.mul(v, mul);
     ctx.eq(&format!("{tag}.div"), &lhs, &rhs);
-    ctx.lt_pow(&format!("{tag}.rem"), &r, idiv, NORM_REM_BITS);
+    ctx.lt_pow(&format!("{tag}.rem"), &r, idiv, div, NORM_REM_BITS);
     (e1, m)
 }
 
@@ -451,21 +561,38 @@ fn state_out<C: Ctx>(ctx: &mut C, sgn: &C::V, e1: &C::V, m: &C::V, tag: &str) ->
     (s, e_hat, m.clone(), ovf_eff, z)
 }
 
-/// Pack: the output word expression.
-fn pack<C: Ctx>(ctx: &mut C, state: (&C::V, &C::V, &C::V, &C::V), ovfs: &[(C::V, C::V)], tag: &str) -> C::V {
+/// Pack: the output word expression (`Full`), or its two 16-bit limbs over a 31-bit field (`low` split at the
+/// limb boundary, the infinity constant and the word selection written per limb).
+fn pack<C: Ctx>(ctx: &mut C, state: (&C::V, &C::V, &C::V, &C::V), ovfs: &[(C::V, C::V)], tag: &str) -> Word32<C::V> {
     let (s, e1, m, z) = state;
     let hidden = ctx.hint(&format!("{tag}.hidden"), &[m], &|v| v[0] >> ACC_FRAC);
-    let low = ctx.hint(&format!("{tag}.low"), &[m], &|v| v[0] & ((1 << ACC_FRAC) - 1));
     ctx.boolean(&format!("{tag}.hidden"), &hidden);
-    ctx.rng(&format!("{tag}.low"), &low, 0, 1 << ACC_FRAC);
-    let h_sh = ctx.scale(&hidden, 1 << ACC_FRAC);
-    let hm = ctx.add(&h_sh, &low);
-    ctx.eq(&format!("{tag}.M"), &hm, m);
+    let small = ctx.small_field();
+    // fin = s 2^31 + fld 2^23 + low, as one expression or as (fin_hi, fin_lo)
     let fld_a = ctx.addk(e1, BIAS - 1);
     let fld = ctx.add(&fld_a, &hidden);
-    let s_sh = ctx.scale(s, 1 << (ACC_WORD_BITS - 1));
-    let fld_sh = ctx.scale(&fld, 1 << ACC_FRAC);
-    let fin = ctx.sum(&[s_sh, fld_sh, low.clone()]);
+    let fin: Word32<C::V> = if !small {
+        let low = ctx.hint(&format!("{tag}.low"), &[m], &|v| v[0] & ((1 << ACC_FRAC) - 1));
+        ctx.rng(&format!("{tag}.low"), &low, 0, 1 << ACC_FRAC);
+        let h_sh = ctx.scale(&hidden, 1 << ACC_FRAC);
+        let hm = ctx.add(&h_sh, &low);
+        ctx.eq(&format!("{tag}.M"), &hm, m);
+        let s_sh = ctx.scale(s, 1 << (ACC_WORD_BITS - 1));
+        let fld_sh = ctx.scale(&fld, 1 << ACC_FRAC);
+        Word32::Full(ctx.sum(&[s_sh, fld_sh, low]))
+    } else {
+        let low_lo = ctx.hint(&format!("{tag}.low_lo"), &[m], &|v| v[0] & ((1 << HALF) - 1));
+        let low_hi = ctx.hint(&format!("{tag}.low_hi"), &[m], &|v| (v[0] >> HALF) & ((1 << (ACC_FRAC - HALF)) - 1));
+        ctx.rng(&format!("{tag}.low_lo"), &low_lo, 0, 1 << HALF);
+        ctx.rng(&format!("{tag}.low_hi"), &low_hi, 0, 1 << (ACC_FRAC - HALF));
+        let h_sh = ctx.scale(&hidden, 1 << ACC_FRAC);
+        let lh_sh = ctx.scale(&low_hi, 1 << HALF);
+        let hm = ctx.sum(&[h_sh, lh_sh, low_lo.clone()]);
+        ctx.eq(&format!("{tag}.M"), &hm, m);
+        let s_sh = ctx.scale(s, 1 << (ACC_WORD_BITS - 1 - HALF));
+        let fld_sh = ctx.scale(&fld, 1 << (ACC_FRAC - HALF));
+        Word32::Limbs { hi: ctx.sum(&[s_sh, fld_sh, low_hi]), lo: low_lo }
+    };
     let mut any_ovf = ctx.konst(0);
     let mut inf_sign = ctx.konst(0);
     let mut none_yet = ctx.konst(1);
@@ -479,27 +606,104 @@ fn pack<C: Ctx>(ctx: &mut C, state: (&C::V, &C::V, &C::V, &C::V), ovfs: &[(C::V,
     }
     let any_ovf = ctx.mat(&format!("{tag}.any_ovf"), &any_ovf);
     let inf_sign = ctx.mat(&format!("{tag}.inf_sign"), &inf_sign);
-    let inf_a = ctx.scale(&inf_sign, 1 << (ACC_WORD_BITS - 1));
-    let inf = ctx.addk(&inf_a, T_FINITE << ACC_FRAC);
-    let t1 = ctx.mul(&any_ovf, &inf);
     let one_m_any = ctx.ksub(1, &any_ovf);
     let one_m_z = ctx.ksub(1, z);
     let t2a = ctx.mul(&one_m_any, &one_m_z);
-    let t2 = ctx.mul(&t2a, &fin);
-    ctx.add(&t1, &t2)
+    match fin {
+        Word32::Full(fin) => {
+            let inf_a = ctx.scale(&inf_sign, 1 << (ACC_WORD_BITS - 1));
+            let inf = ctx.addk(&inf_a, T_FINITE << ACC_FRAC);
+            let t1 = ctx.mul(&any_ovf, &inf);
+            let t2 = ctx.mul(&t2a, &fin);
+            Word32::Full(ctx.add(&t1, &t2))
+        }
+        Word32::Limbs { hi, lo } => {
+            // inf = (inf_sign 2^15 + T_FINITE 2^7) 2^16 + 0
+            let inf_a = ctx.scale(&inf_sign, 1 << (ACC_WORD_BITS - 1 - HALF));
+            let inf_hi = ctx.addk(&inf_a, T_FINITE << (ACC_FRAC - HALF));
+            let t1 = ctx.mul(&any_ovf, &inf_hi);
+            let t2 = ctx.mul(&t2a, &hi);
+            let y_hi = ctx.add(&t1, &t2);
+            let y_lo = ctx.mul(&t2a, &lo);
+            Word32::Limbs { hi: y_hi, lo: y_lo }
+        }
+    }
+}
+
+/// Epilogue (`checker/gadgets.py::Epilogue`): `f32_to_bf16` round-to-nearest-even on the final word.
+/// `y32 = hi 2^L + lo` (L = 16), `hi = 2 hi2 + lsb`, `lo + lsb + (2^(L-1) - 1) = carry 2^L + rem`,
+/// `y16 = hi + carry < 2^16`.  Over a 31-bit field the word's limbs ARE `hi` and `lo` (no split identity); they
+/// are range-checked here as the contract requires (`hints: hi, lo: bits(16)`).
+pub fn epilogue<C: Ctx>(ctx: &mut C, y32: &Word32<C::V>, tag: &str) -> C::V {
+    let l = ACC_FRAC - FRAC;
+    assert_eq!(l, HALF);
+    let (hi, lo) = match y32 {
+        Word32::Full(y) => {
+            let hi = ctx.hint(&format!("{tag}.hi"), &[y], &|v| v[0] >> l);
+            let lo = ctx.hint(&format!("{tag}.lo"), &[y], &|v| v[0] & ((1 << l) - 1));
+            (hi, lo)
+        }
+        Word32::Limbs { hi, lo } => (hi.clone(), lo.clone()),
+    };
+    ctx.rng(&format!("{tag}.hi"), &hi, 0, 1 << WORD_BITS);
+    ctx.rng(&format!("{tag}.lo"), &lo, 0, 1 << l);
+    if let Word32::Full(y) = y32 {
+        let hi_sh = ctx.scale(&hi, 1 << l);
+        let sum = ctx.add(&hi_sh, &lo);
+        ctx.eq(&format!("{tag}.split"), &sum, y);
+    }
+    let hi2 = ctx.hint(&format!("{tag}.hi2"), &[&hi], &|v| v[0] >> 1);
+    let lsb = ctx.hint(&format!("{tag}.lsb"), &[&hi], &|v| v[0] & 1);
+    let carry = ctx.hint(&format!("{tag}.carry"), &[&lo, &lsb], &|v| (v[0] + v[1] + ((1 << (l - 1)) - 1)) >> l);
+    let rem = ctx.hint(&format!("{tag}.rem"), &[&lo, &lsb], &|v| (v[0] + v[1] + ((1 << (l - 1)) - 1)) & ((1 << l) - 1));
+    ctx.rng(&format!("{tag}.hi2"), &hi2, 0, 1 << (WORD_BITS - 1));
+    ctx.boolean(&format!("{tag}.lsb"), &lsb);
+    ctx.boolean(&format!("{tag}.carry"), &carry);
+    ctx.rng(&format!("{tag}.rem"), &rem, 0, 1 << l);
+    let hi2_2 = ctx.scale(&hi2, 2);
+    let lhs = ctx.add(&hi2_2, &lsb);
+    ctx.eq(&format!("{tag}.lsb_split"), &lhs, &hi);
+    let c_sh = ctx.scale(&carry, 1 << l);
+    let lhs = ctx.add(&c_sh, &rem);
+    let rhs = ctx.add(&lo, &lsb);
+    let rhs = ctx.addk(&rhs, (1 << (l - 1)) - 1);
+    ctx.eq(&format!("{tag}.round"), &lhs, &rhs);
+    let y16 = ctx.add(&hi, &carry);
+    ctx.rng(&format!("{tag}.y16"), &y16, 0, 1 << WORD_BITS);
+    y16
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // The unit
 // ---------------------------------------------------------------------------------------------------------------
 
-/// `check_step_expr` with the public words as the first 1 + 2k + 1 columns and `y = word` as the final identity.
+/// `check_step_expr` with the public words as the first 1 + 2k + 1 columns and `y = word` as the final identity
+/// (the transition-unit AIR, Goldilocks).
 pub fn unit_program<C: Ctx>(ctx: &mut C, io: &UnitIo) {
-    let c = ctx.hint("x.c", &[], &|_| io.c as i128);
+    unit_program_with(ctx, io, true);
+}
+
+/// The unit with (`bind_y`) or without the public `y` column and its identity; returns the incoming accumulator
+/// column(s) and the materialised output word (`pack.y`, or `pack.y_hi` / `pack.y_lo` over a 31-bit field),
+/// which the chain links to the next row.
+pub fn unit_program_with<C: Ctx>(ctx: &mut C, io: &UnitIo, bind_y: bool) -> (Word32<C::V>, Word32<C::V>) {
+    let c = if ctx.small_field() {
+        let hi = ctx.hint("x.c_hi", &[], &|_| (io.c >> HALF) as i128);
+        let lo = ctx.hint("x.c_lo", &[], &|_| (io.c & ((1 << HALF) - 1)) as i128);
+        Word32::Limbs { hi, lo }
+    } else {
+        Word32::Full(ctx.hint("x.c", &[], &|_| io.c as i128))
+    };
     let a: Vec<C::V> = (0..K).map(|i| ctx.hint(&format!("x.a[{i}]"), &[], &|_| io.a[i] as i128)).collect();
     let b: Vec<C::V> = (0..K).map(|i| ctx.hint(&format!("x.b[{i}]"), &[], &|_| io.b[i] as i128)).collect();
-    let y = ctx.hint("y", &[], &|_| io.y as i128);
-    ctx.rng("x.c", &c, 0, 1 << ACC_WORD_BITS);
+    let y = if bind_y { Some(ctx.hint("y", &[], &|_| io.y as i128)) } else { None };
+    match &c {
+        Word32::Full(c) => ctx.rng("x.c", c, 0, 1 << ACC_WORD_BITS),
+        Word32::Limbs { hi, lo } => {
+            ctx.rng("x.c_hi", hi, 0, 1 << HALF);
+            ctx.rng("x.c_lo", lo, 0, 1 << HALF);
+        }
+    }
     for i in 0..K {
         ctx.rng(&format!("x.a[{i}]"), &a[i], 0, 1 << WORD_BITS);
         ctx.rng(&format!("x.b[{i}]"), &b[i], 0, 1 << WORD_BITS);
@@ -540,6 +744,86 @@ pub fn unit_program<C: Ctx>(ctx: &mut C, io: &UnitIo) {
     }
     // Pack receives (s, e_hat, M, z) exactly as step.py: `Pack.check(ctx, p, (*state, z), ovfs, h)`.
     let word = pack(ctx, (&state.0, &state.1, &state.2, &z_last), &ovfs, "pack");
-    let word = ctx.mat("pack.y", &word);
-    ctx.eq("y", &word, &y);
+    let word = match word {
+        Word32::Full(w) => Word32::Full(ctx.mat("pack.y", &w)),
+        Word32::Limbs { hi, lo } => Word32::Limbs { hi: ctx.mat("pack.y_hi", &hi), lo: ctx.mat("pack.y_lo", &lo) },
+    };
+    if let Some(y) = y {
+        match &word {
+            Word32::Full(w) => ctx.eq("y", w, &y),
+            Word32::Limbs { hi, lo } => {
+                // the unit AIR is Goldilocks-only today; a 31-bit unit AIR would carry two public y limbs
+                let hi_sh = ctx.scale(hi, 1 << HALF);
+                let w = ctx.add(&hi_sh, lo);
+                ctx.eq("y", &w, &y);
+            }
+        }
+    }
+    (c, word)
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The VU chain: one row per transition unit, the accumulator carried row to row
+// ---------------------------------------------------------------------------------------------------------------
+
+/// Units per K=1536 VU.
+pub const STEPS: u64 = 96;
+
+/// One row of the chain: the unit's words, its position in the VU, and the VU's claimed output word (read on
+/// the last row only).  `c` is the incoming accumulator (0 on the first row; the previous row's output word
+/// otherwise -- the transition constraint enforces it, witness generation supplies it).
+#[derive(Clone, Debug, Default)]
+pub struct ChainIo {
+    pub c: u64,
+    pub a: Vec<u64>,
+    pub b: Vec<u64>,
+    pub step: u64,
+    pub y16: u64,
+}
+
+/// Names of the chain's own columns (`Layout::col` finds them; `ChainAir` reads them on the next row too).
+pub const COL_STEP: &str = "vu.step";
+pub const COL_FIRST: &str = "vu.first";
+pub const COL_LAST: &str = "vu.last";
+pub const COL_INV: &str = "vu.inv";
+pub const COL_CLAIM: &str = "vu.y16";
+
+/// The row-local part of the chain AIR: the unit, the VU-position selectors, the epilogue and the output
+/// binding.  Row-to-row constraints (`next.first = last`, step increment, accumulator linkage) are emitted by
+/// `air::ChainAir::eval` and named by `air::chain_tail_names`.
+///
+/// Position columns: `step in [0, 96)`, `first = [step == 0]`, `last = [step == 95]`.  `last` is pinned by an
+/// inverse (`(step - 95) inv = 1 - last`, `last (step - 95) = 0`), so with the increment rule of the transition
+/// constraint `step` is an exact counter and the epilogue identity fires on exactly the 96th row of every VU.
+/// `first c = 0` is the chain start (`c_0 = 0`), `last (y16 - claim) = 0` the chain end.
+pub fn chain_program<C: Ctx>(ctx: &mut C, io: &ChainIo) -> Word32<C::V> {
+    let unit = UnitIo { c: io.c, a: io.a.clone(), b: io.b.clone(), y: 0 };
+    let (c_in, word) = unit_program_with(ctx, &unit, false);
+    let c_cols = c_in.cols();
+    let p = ctx.prime();
+    let step = ctx.hint(COL_STEP, &[], &|_| io.step as i128);
+    let first = ctx.hint(COL_FIRST, &[], &|_| (io.step == 0) as i128);
+    let last = ctx.hint(COL_LAST, &[], &|_| (io.step == STEPS - 1) as i128);
+    let inv = ctx.hint(COL_INV, &[&step], &move |v| crate::ctx::inv_modp(v[0] - (STEPS as i128 - 1), p));
+    ctx.boolean(COL_FIRST, &first);
+    ctx.boolean(COL_LAST, &last);
+    let zero = ctx.konst(0);
+    let d = ctx.subk(&step, STEPS as i128 - 1);
+    let di = ctx.mul(&d, &inv);
+    let one_m_last = ctx.ksub(1, &last);
+    ctx.eq("vu.last_def", &di, &one_m_last);
+    let ld = ctx.mul(&last, &d);
+    ctx.eq("vu.last_key", &ld, &zero);
+    let fs = ctx.mul(&first, &step);
+    ctx.eq("vu.first_step", &fs, &zero);
+    for (i, c) in c_cols.iter().enumerate() {
+        let fc = ctx.mul(&first, c);
+        ctx.eq(&format!("vu.first_c[{i}]"), &fc, &zero);
+    }
+    let y16 = epilogue(ctx, &word, "cast");
+    let claim = ctx.hint(COL_CLAIM, &[], &|_| io.y16 as i128);
+    let diff = ctx.sub(&y16, &claim);
+    let out = ctx.mul(&last, &diff);
+    ctx.eq("vu.out", &out, &zero);
+    word
 }

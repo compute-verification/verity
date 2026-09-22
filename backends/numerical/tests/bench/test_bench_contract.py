@@ -292,8 +292,14 @@ def test_campaign_fields_read_off_the_object() -> None:
     rec = json.loads((FIXTURES / f"{K16_VECTOR}.json").read_text())
     assert vr.campaign_fields(rec, "sp1-prove", False) == {
         "profile": FIRST.name, "domain": "finite", "K": 16, "B": 1, "proof_class": "NON_ZK_PROOF", "authentication": "included",
+        "statement_machinery": "included",
     }
-    assert vr.campaign_fields(rec, "sp1-prove", True)["proof_class"] == "ARITHMETIC_DIAGNOSTIC"
+    diagnostic = vr.campaign_fields(rec, "sp1-prove", True)
+    assert diagnostic["proof_class"] == "ARITHMETIC_DIAGNOSTIC" and diagnostic["authentication"] == "excluded"
+    assert diagnostic["statement_machinery"] == "included", "skip-authentication still parses the statement and builds the table"
+    relation_only = vr.campaign_fields(rec, "sp1-prove", True, True)
+    assert relation_only["proof_class"] == "ARITHMETIC_DIAGNOSTIC" and relation_only["authentication"] == "excluded"
+    assert relation_only["statement_machinery"] == "excluded"
     assert vr.campaign_fields(rec, "sp1-execute", False)["proof_class"] == "NO_PROOF"
     hw = json.loads((FIXTURES / "accept--tc-store-cast-nan-hw.json").read_text())
     assert vr.campaign_fields(hw, "sp1-prove", False)["profile"] is None, "family @2 is not the campaign target: null, not a guess"

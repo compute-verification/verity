@@ -54,6 +54,7 @@ __all__ = [
     "e2e_sweep",
     "first_configuration",
     "fractional_gkr_error",
+    "fri_zk_requirements",
     "hash_collision_bound",
     "hm_commitment_hiding",
     "ligero_error",
@@ -70,6 +71,7 @@ __all__ = [
     "security_bits",
     "sumcheck_error",
     "union_over_proofs",
+    "zk_sumcheck_masking_error",
 ]
 
 GOLDILOCKS = 2**64 - 2**32 + 1
@@ -330,6 +332,57 @@ def hm_commitment_hiding(n_commitments: int, k_bits: int) -> Fraction:
     if n_commitments < 0 or k_bits < 1:
         raise AccountingError("bad commitment parameters")
     return Fraction(n_commitments, 2**k_bits)
+
+
+def zk_sumcheck_masking_error(instances: int, F: Field) -> Fraction:
+    """Libra-style zero-knowledge sumcheck (Xie-Zhang-Zhang-Papamanthou-Song, CRYPTO 2019, section 4.1; the
+    Chiesa-Forbes-Spooner 2017 masking with a structured mask): the prover commits to a random
+    ``g(x) = a_0 + sum_i g_i(x_i)`` (univariate ``g_i`` of the round degree), reveals ``H_g = sum g``, the verifier
+    draws ``rho`` and the sumcheck runs on ``f + rho g`` for the claim ``H + rho H_g``.  If ``sum f != H`` the combined
+    claim holds for at most one ``rho``: ``1/|F|`` per masked instance, union-bounded over ``instances``.  The round
+    degrees are unchanged (``deg g_i = deg_i``), so the LFKN term is not enlarged.  The padded-transcript layer
+    (FS24 / libzk, the protocols' default) adds **no** soundness term: its checks are deferred linear constraints
+    inside the Ligero tests already charged."""
+    if instances < 0:
+        raise AccountingError("negative instance count")
+    return Fraction(instances, F.size)
+
+
+def fri_zk_requirements(trace_rows_log2: int, real_rows: int, queries: int, ood_points: int, arity_log2: int = 1,
+                        constraint_degree: int = 5, F: Field | None = None) -> dict:
+    """What the randomised-trace ZK of an AIR/FRI backend (ethSTARK 5.5; Plonky3 ``zk`` layout) needs and costs.
+
+    Every trace column is a polynomial of degree ``< 2^trace_rows_log2`` fixed on the ``real_rows`` real rows and
+    **uniform** on the padding rows.  The verifier learns each column at the ``ood_points`` out-of-domain points
+    (DEEP ``zeta``, ``g zeta``) and at ``2^arity_log2`` points per FRI query on the LDE; all of them lie outside the
+    trace domain and are distinct, so their joint distribution is uniform iff the number of random rows is at least
+    the number of revealed points (interpolation: the evaluation map from the random rows to the revealed points
+    has full rank).  Constraints are enforced on the real rows only through a public ``is_real`` selector (degree
+    +1); the quotient chunk count doubles when the degree crosses a power of two.  The batched FRI polynomial is
+    additionally blinded by one committed random codeword of the same degree.  Returns the requirement, whether
+    the padding already covers it, the extra committed rows if not, and the Schwartz-Zippel term of the DEEP/
+    quotient degree before and after the selector (a ``batching`` term, when ``F`` is given)."""
+    if trace_rows_log2 < 1 or real_rows < 1 or queries < 1 or ood_points < 0:
+        raise AccountingError("bad FRI ZK parameters")
+    N = 2**trace_rows_log2
+    if real_rows > N:
+        raise AccountingError("real rows exceed the trace domain")
+    revealed = ood_points + queries * 2**arity_log2
+    padding = N - real_rows
+    lq_before = math.ceil(math.log2(max(2, constraint_degree - 1)))
+    lq_after = math.ceil(math.log2(max(2, constraint_degree)))
+    out = {
+        "trace_rows": N, "real_rows": real_rows, "padding_rows": padding, "revealed_points_per_column": revealed,
+        "random_rows_needed": revealed, "padding_covers": padding >= revealed,
+        "extra_trace_rows_if_not": 0 if padding >= revealed else (2 * N - N),
+        "selector_columns": 1, "blinding_codewords": 1,
+        "quotient_chunks_before": 2**lq_before, "quotient_chunks_after": 2**lq_after,
+        "hiding": "perfect (interpolation argument) when padding_covers; the blinding codeword hides the batched FRI polynomial",
+    }
+    if F is not None:
+        out["deep_degree_term_before"] = Fraction(constraint_degree * N, F.size)
+        out["deep_degree_term_after"] = Fraction((constraint_degree + 1) * N, F.size)
+    return out
 
 
 def logup_gkr_error(num_lookups: int, table_rows: int, F: Field, repetitions: int = 1,
@@ -617,6 +670,10 @@ class CandidateA:
     leaf_commitment_bits: int | None = 160   # HM96 commitment per column (None: unsalted leaf hash, extra assumption)
     coin_commitment_bits: int | None = None  # step 0 (malicious-verifier ZK) with HM96 parameter k; None = HVZK only
     depth: DepthOptions = DepthOptions()
+    # How the sumcheck transcripts are hidden: ``padded_transcript`` (FS24 / libzk: one committed pad per transcript
+    # element, checks deferred to Ligero; no soundness term) or ``libra`` (committed masking polynomial per sumcheck
+    # instance and a random rho: ``zk_sumcheck_masking_error``; the final evaluations are still padded).
+    sumcheck_masking: str = "padded_transcript"
 
     @property
     def units(self) -> int:
@@ -733,10 +790,17 @@ def account_candidate_a(p: CandidateA) -> Budget:
           schwartz_zippel_error(s0 + b, Fc))
     rounds = 0
     pads = 0
+    if p.sumcheck_masking not in ("padded_transcript", "libra"):
+        raise AccountingError(f"unknown sumcheck_masking {p.sumcheck_masking!r}")
+    libra = p.sumcheck_masking == "libra"
+    masked_instances = 0
     for j, layer in enumerate(p.layers):
         acc = data_parallel_layer_error(layer.s_out, layer.s_in, b, Fc, alpha=True, assertions=layer.assertions)
         rounds += int(acc["rounds"])
-        pads += int(acc["pad_elements"])
+        # padded transcript: d values per round (+3 final evaluations); libra: (d+1) mask coefficients per round + a_0
+        # and the 3 padded final evaluations
+        pads += int(acc["pad_elements"]) + (int(acc["rounds"]) + 1 if libra else 0)
+        masked_instances += 1
         B.add("batching", f"layer {j}: alpha (two claims -> one)", acc["alpha"])
         if layer.assertions:
             B.add("batching", f"layer {j}: beta (Q + beta*Z assertions)", acc["beta"])
@@ -752,7 +816,13 @@ def account_candidate_a(p: CandidateA) -> Budget:
               shards * random_combination_error(Fc, 2))
         rounds += shards * r_sh
         pads += shards * p.lookup_repetitions * (3 * (n_dim * (n_dim - 1) // 2) + 4 * n_dim)
+        masked_instances += shards * p.lookup_repetitions * (n_dim - 1)      # one sumcheck per fractional-GKR layer
+        if libra:   # one mask per instance: (d+1) = 4 coefficients per round + a_0
+            pads += shards * p.lookup_repetitions * ((n_dim * (n_dim - 1) // 2) + (n_dim - 1))
         extra_mult += (shards - 1) * tbl.rows
+    if libra:
+        B.add("batching", f"libra sumcheck masking: rho per masked instance, {masked_instances} instances",
+              zk_sumcheck_masking_error(masked_instances, Fc))
 
     # ---- encoding / opening: Ligero over the committed inputs, multiplicities and pads --------------------------------
     per_unit = p.inputs_per_unit + (p.query_wires_per_unit if p.depth.commit_query_wires else 0)
@@ -768,6 +838,7 @@ def account_candidate_a(p: CandidateA) -> Budget:
         "K": p.K, "B": p.B, "units": units, "copy_bits_b": b,
         "trace_field": Ft.name, "challenge_field": Fc.name, "extension_degree": ext,
         "checker_layers": len(p.layers), "sumcheck_rounds_total": rounds, "pad_elements": pads,
+        "sumcheck_masking": p.sumcheck_masking, "masked_sumcheck_instances": masked_instances,
         "committed_trace_elements": committed, "ligero_rows": rows,
         "opened_trace_elements": rows * p.ligero.t,
         "merkle_leaves": p.ligero.n,
