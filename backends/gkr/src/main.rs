@@ -66,10 +66,26 @@ pub struct Chain { pub steps: usize, pub limbs: Vec<Link>, pub epi_y16: usize, p
 
 impl Chain { pub fn constraints_per_vu(&self) -> usize { 1 + self.limbs.iter().map(|l| l.constraints_per_vu(self.steps)).sum::<usize>() } }
 
-pub struct Instance<'a> { pub segs: Vec<Segment<'a>>, pub chain: Option<Chain> }
+/// The lookup tables of an instance: the union, by name, of every segment's tables (`Instance::new`).  Until
+/// 2026-09-22 this was segment 0's table list alone, so a table queried only by the epilogue circuit (v2: `R16`,
+/// `R15`) had no logUp instance and its range checks were never proved — a malicious epilogue hint forged any public
+/// word (`v2_forged_public_word_via_epilogue_hint_is_rejected`; `fixtures/redteam-3/logup-union/`).
+pub struct Instance<'a> { pub segs: Vec<Segment<'a>>, pub chain: Option<Chain>, pub tables: Vec<&'a Table> }
 
 impl<'a> Instance<'a> {
-    pub fn tables(&self) -> &'a [Table] { &self.segs[0].circ.tables }
+    pub fn new(segs: Vec<Segment<'a>>, chain: Option<Chain>) -> Instance<'a> {
+        let mut tables: Vec<&'a Table> = Vec::new();
+        for s in &segs {
+            for t in &s.circ.tables {
+                match tables.iter().find(|u| u.name == t.name) {
+                    Some(u) => assert!(u.cols == t.cols && u.rows == t.rows, "table {} differs between segments", t.name),
+                    None => tables.push(t),
+                }
+            }
+        }
+        Instance { segs, chain, tables }
+    }
+    pub fn tables(&self) -> &[&'a Table] { &self.tables }
     pub fn vus(&self) -> usize { self.chain.as_ref().map(|c| self.segs[0].units / c.steps).unwrap_or(0) }
 }
 
@@ -606,22 +622,16 @@ fn load_vu<'a>(unit: &'a Loaded, epi: &'a Loaded, files: &VuFiles, vus: Option<u
         ["lo", "hi"].iter().map(|l| Link::word([col_index(&unit.circ, &format!("x.c_{l}")), col_index(&unit.circ, &format!("y_{l}")), col_index(&epi.circ, &format!("y32_{l}"))])).collect()
     };
     let chain = Chain { steps, limbs, epi_y16: col_index(&epi.circ, "y16"), public_y16: pcols };
-    Instance { segs: vec![segment("units", unit, ucols, nu), segment("epilogue", epi, ecols, ne)], chain: Some(chain) }
+    Instance::new(vec![segment("units", unit, ucols, nu), segment("epilogue", epi, ecols, ne)], Some(chain))
 }
 
 fn strip_cols<'a>(inst: &Instance<'a>) -> Instance<'a> {
-    Instance {
-        segs: inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: vec![], units: s.units, ncols: s.ncols, hash: s.hash }).collect(),
-        chain: inst.chain.clone(),
-    }
+    Instance::new(inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: vec![], units: s.units, ncols: s.ncols, hash: s.hash }).collect(), inst.chain.clone())
 }
 
 fn verifier_view<'a>(inst: &Instance<'a>, mode: Mode) -> Instance<'a> {
     if mode == Mode::Pcs { strip_cols(inst) } else {
-        Instance {
-            segs: inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: s.cols.clone(), units: s.units, ncols: s.ncols, hash: s.hash }).collect(),
-            chain: strip_cols(inst).chain,
-        }
+        Instance::new(inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: s.cols.clone(), units: s.units, ncols: s.ncols, hash: s.hash }).collect(), strip_cols(inst).chain)
     }
 }
 
@@ -755,7 +765,7 @@ fn main() {
             let ld = load_circuit(&arg(&args, "--circuit").unwrap());
             let units: Option<usize> = arg(&args, "--units").map(|s| s.parse().unwrap());
             let (cols, units) = load_rows(&arg(&args, "--witness").unwrap(), ld.circ.ncols, units, true);
-            let inst = Instance { segs: vec![segment("units", &ld, cols, units)], chain: None };
+            let inst = Instance::new(vec![segment("units", &ld, cols, units)], None);
             if !run_and_report(&inst, mode, &args, 16, "transition", units) { std::process::exit(1); }
         }
         "run-vu" => {
@@ -782,7 +792,7 @@ fn main() {
             entries.sort();
             for p in entries {
                 let (cols, units) = load_rows(p.to_str().unwrap(), ld.circ.ncols, None, false);
-                let inst = Instance { segs: vec![segment("units", &ld, cols, units)], chain: None };
+                let inst = Instance::new(vec![segment("units", &ld, cols, units)], None);
                 let (proof, _) = prove(&inst, mode);
                 match verify(&verifier_view(&inst, mode), &proof, mode) {
                     Ok(()) => { n_bad += 1; println!("ACCEPTED (BUG) {}", p.display()); }
@@ -874,7 +884,7 @@ mod tests {
 
     fn unit_instance<'a>(ld: &'a Loaded, witness: &str, units: Option<usize>) -> Instance<'a> {
         let (cols, units) = load_rows(witness, ld.circ.ncols, units, true);
-        Instance { segs: vec![segment("units", ld, cols, units)], chain: None }
+        Instance::new(vec![segment("units", ld, cols, units)], None)
     }
 
     #[test]
@@ -954,7 +964,7 @@ mod tests {
         }
         // a prover that swaps the public words of two VUs (each word valid for the other) must fail too
         let inst = load_vu(&unit, &epi, &synth_files("units.bin", "public.bin"), None);
-        let mut swapped = Instance { segs: inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: s.cols.clone(), units: s.units, ncols: s.ncols, hash: s.hash }).collect(), chain: strip_cols(&inst).chain };
+        let mut swapped = Instance::new(inst.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: s.cols.clone(), units: s.units, ncols: s.ncols, hash: s.hash }).collect(), strip_cols(&inst).chain);
         let ch = swapped.chain.as_mut().unwrap();
         ch.public_y16.swap(0, 1);
         let (proof, _) = prove(&swapped, Mode::Pcs);
@@ -1010,6 +1020,60 @@ mod tests {
                 verify(&verifier_view(&inst, mode), &proof, mode).unwrap();
                 if mode == Mode::Pcs { assert_eq!(st.linkage_constraints, vus * ch.constraints_per_vu()); }
             }
+        }
+    }
+
+    /// A malicious epilogue hint (lane a-logup-union, 2026-09-22): the public word is forged as y16 + 1 by shifting
+    /// 2^16 from `lo` into `hi` (every epilogue *assertion* still holds; only the epilogue's `R16` / `R15` range
+    /// lookups can catch it).  Those lookups belong to a table that exists only in the epilogue circuit, so the
+    /// lookup argument must cover the tables of EVERY segment, not segment 0's alone.
+    #[cfg(not(feature = "babybear"))]
+    #[test]
+    fn v2_forged_public_word_via_epilogue_hint_is_rejected() {
+        let f = |p: &str| format!("{}/fixtures/v2_synth/{p}", env!("CARGO_MANIFEST_DIR"));
+        let unit = load_circuit(&f("circuit.txt"));
+        let epi = load_circuit(&f("epilogue.txt"));
+        let honest = load_vu(&unit, &epi, &v2_files("units.bin", "epilogue.bin", "public.bin"), Some(1));
+        let mut forged = Instance::new(honest.segs.iter().map(|s| Segment { name: s.name.clone(), circ: s.circ, layers: s.layers, cols: s.cols.clone(), units: s.units, ncols: s.ncols, hash: s.hash }).collect(), strip_cols(&honest).chain);
+        let ec = &epi.circ;
+        let (y16, hi, lo, hi2, lsb, rem) = (col_index(ec, "y16"), col_index(ec, "h.hi"), col_index(ec, "h.lo"), col_index(ec, "h.hi2"), col_index(ec, "h.lsb"), col_index(ec, "h.rem"));
+        let row = &mut forged.segs[1].cols[..ec.ncols];
+        let two16 = Fp::new(65536);
+        let carry = col_index(ec, "h.carry");
+        row[hi] += Fp::ONE;
+        row[lo] -= two16;
+        if row[lsb] == Fp::ZERO { row[lsb] = Fp::ONE; } else { row[lsb] = Fp::ZERO; row[hi2] += Fp::ONE; }
+        row[rem] = row[lo] + row[lsb] + Fp::new(32767) - two16 * row[carry]; // cast.round solved for rem
+        row[y16] += Fp::ONE;
+        forged.chain.as_mut().unwrap().public_y16[0] += Fp::ONE;
+        // every assertion of the epilogue row holds: only the lookups can reject
+        let mut w = Vec::new();
+        ec.eval_wires(&forged.segs[1].cols[..ec.ncols], &mut w);
+        for (name, l) in &ec.asserts { assert_eq!(circuit::eval_lin(l, &w), Fp::ZERO, "assertion {name} should still hold in the forgery"); }
+        assert!(ec.check_row(&forged.segs[1].cols[..ec.ncols]).is_err(), "the clear check must see the out-of-range hint");
+        for mode in [Mode::Clear, Mode::Pcs] {
+            let (proof, _) = prove(&forged, mode);
+            assert!(verify(&verifier_view(&forged, mode), &proof, mode).is_err(), "forged public word accepted in {mode:?}");
+        }
+    }
+
+    /// The same forgery as a stored fixture for the red team (`fixtures/redteam-3/logup-union/forged_epilogue_hint`,
+    /// generated by `verity_numerical.redteam.logup_union`): the v2_synth circuits with a 1-VU witness whose epilogue
+    /// hint moves 2^16 from `lo` to `hi` and claims the word y16 + 1.
+    #[cfg(not(feature = "babybear"))]
+    #[test]
+    fn redteam3_forged_epilogue_hint_fixture_is_rejected() {
+        let f = |p: &str| format!("{}/fixtures/v2_synth/{p}", env!("CARGO_MANIFEST_DIR"));
+        let d = format!("{}/../../fixtures/redteam-3/logup-union/forged_epilogue_hint", env!("CARGO_MANIFEST_DIR"));
+        let unit = load_circuit(&f("circuit.txt"));
+        let epi = load_circuit(&f("epilogue.txt"));
+        let inst = load_vu(&unit, &epi, &VuFiles::in_dir(&d), None);
+        assert_eq!(inst.vus(), 1);
+        assert!(inst.tables().iter().any(|t| t.name == "R16") && inst.tables().iter().any(|t| t.name == "R15"), "the epilogue's tables must be in the instance");
+        for mode in [Mode::Clear, Mode::Pcs] {
+            let (proof, _) = prove(&inst, mode);
+            let err = verify(&verifier_view(&inst, mode), &proof, mode).expect_err("forged fixture accepted");
+            assert!(err.starts_with("R16") || err.starts_with("R15"), "expected a range-table rejection, got {err}");
         }
     }
 
