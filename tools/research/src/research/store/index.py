@@ -186,10 +186,11 @@ class Index:
     def attempts_by_output(self, art_id: str) -> list[str]:
         return [r[0] for r in self.db.execute("SELECT DISTINCT attempt FROM attempt_outputs WHERE artifact=? ORDER BY attempt", (art_id,))]
 
-    def select_artifacts(self, kind: str | None = None, where: dict[str, str] | None = None, label: tuple[str, str] | None = None,
+    def select_artifacts(self, kind: str | None = None, where: dict[str, str] | None = None, label: tuple[str, str] | list[tuple[str, str]] | None = None,
                          attempt: str | None = None, tool: str | None = None, derivation: str | None = None) -> list[dict]:
         """Artifacts matching every given facet.  `where` keys are dotted meta keys (a leading `meta.` is accepted);
-        `label` = (key, value) asserted by anyone; `attempt`/`tool`/`derivation` select outputs of matching attempts."""
+        `label` = (key, value) asserted by anyone, or a list of them (all must hold: a conjunction);
+        `attempt`/`tool`/`derivation` select outputs of matching attempts."""
         sql, args = "SELECT a.* FROM artifacts a WHERE 1=1", []
         if kind:
             sql += " AND a.kind=?"
@@ -198,9 +199,10 @@ class Index:
             k = k[5:] if k.startswith("meta.") else k
             sql += " AND EXISTS (SELECT 1 FROM artifact_meta m WHERE m.id=a.id AND m.key=? AND m.value=?)"
             args += [k, v]
-        if label:
+        labels = [label] if label and isinstance(label[0], str) else list(label or [])
+        for k, v in labels:
             sql += " AND EXISTS (SELECT 1 FROM labels l WHERE l.target=a.id AND l.key=? AND l.value=?)"
-            args += [label[0], scalar_text(label[1])]
+            args += [k, scalar_text(v)]
         if attempt or tool or derivation:
             sql += (" AND EXISTS (SELECT 1 FROM attempt_outputs o JOIN attempts t ON t.id=o.attempt WHERE o.artifact=a.id"
                     + (" AND o.attempt=?" if attempt else "") + (" AND t.tool=?" if tool else "") + (" AND t.derivation=?" if derivation else "") + ")")

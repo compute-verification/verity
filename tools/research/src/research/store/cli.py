@@ -6,7 +6,7 @@
   research data push [ART|RUN ...] [--pending]     preserve on the remote: blobs + manifest read back (PRESERVED); a run pushes its attempt + outputs
   research data fetch ART [--to DIR]               materialise the payload (file or tree); prints the path
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
-  research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json]
+  research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--json]
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
@@ -84,17 +84,17 @@ def _select_parser() -> argparse.ArgumentParser:
     ap.add_argument("--tool")
     ap.add_argument("--derivation")
     ap.add_argument("--attempt")
-    ap.add_argument("--label", metavar="k=v")
+    ap.add_argument("--label", action="append", default=[], metavar="k=v", help="repeatable; every given label must be asserted (conjunction)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--ids", action="store_true", help="print ids only")
     return ap
 
 
 def _select(st: LocalStore, ns: argparse.Namespace) -> tuple[list[dict], dict]:
-    label = tuple(next(iter(_kv([ns.label], "--label").items()))) if ns.label else None
+    labels = [tuple(next(iter(_kv([x], "--label").items()))) for x in ns.label]
     query = {k: v for k, v in (("kind", ns.kind), ("where", _kv(ns.where, "--where") or None), ("tool", ns.tool), ("derivation", ns.derivation),
-                               ("attempt", ns.attempt), ("label", list(label) if label else None)) if v}
-    rows = st.index.select_artifacts(kind=ns.kind, where=_kv(ns.where, "--where"), label=label, attempt=ns.attempt, tool=ns.tool, derivation=ns.derivation)
+                               ("attempt", ns.attempt), ("label", [list(x) for x in labels] or None)) if v}
+    rows = st.index.select_artifacts(kind=ns.kind, where=_kv(ns.where, "--where"), label=labels or None, attempt=ns.attempt, tool=ns.tool, derivation=ns.derivation)
     return rows, query
 
 
