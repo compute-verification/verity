@@ -21,6 +21,7 @@ from verity_numerical.bench import contract, instances
 from verity_numerical.checker.params import REAL
 from verity_numerical.checker.step import step_output
 
+from . import auth as auth_mod
 from . import protocol as protocol_mod
 from .chain import Layout
 from .compile import P
@@ -88,14 +89,23 @@ class ChainRunner:
         l = max(min_l, 1 << (n_vus * STEPS - 1).bit_length())
         return Layout(l, n_vus, STEPS)
 
-    def prove_vus(self, vus: list[tuple[list, list, list, int]], check=True, mutate=None, min_l: int = 256, coins=None):
+    def prove_vus(self, vus: list[tuple[list, list, list, int]], check=True, mutate=None, min_l: int = 256, coins=None,
+                  auth: tuple | None = None):
         """``vus``: (x, w, accs, y16) per VU (honest data: the recorded accumulators).  ``coins``: the verifier's
         step-0 coin source.  Interactive mode with ``coins=None``: the RUNNER plays the honest verifier's step 0
         (``Coins.sample()``; the same object is what ``verify_vus`` then uses as its own coins -- the runner is both
-        parties, as in every gate).  Fiat-Shamir mode: no coins."""
+        parties, as in every gate).  Fiat-Shamir mode: no coins.
+        ``auth = (trees, vu_index)`` (authentication = included): the committed word trees (``auth.WordTree`` by
+        name) and the index of every VU of ``vus`` in them; the statement then carries the roots and indices and the
+        transcript the three multiproofs (``auth.py``)."""
         if coins is None and self.interactive:
             coins = protocol_mod.Coins.sample()
         lay = self.layout(len(vus), min_l)
+        auth_stmt = auth_open = None
+        if auth is not None:
+            trees, vu_index = auth
+            auth_stmt = auth_mod.AuthStatement.for_vus(trees, vu_index)
+            auth_open = lambda: auth_mod.open_trees(trees, auth_stmt, K=STEP * STEPS, steps=STEPS)
         units, y16 = [], torch.zeros(lay.l, dtype=torch.int64)
         for v, (x, w, accs, y) in enumerate(vus):
             units += vu_units(x, w, accs)
@@ -120,24 +130,151 @@ class ChainRunner:
             torch.cuda.synchronize()
         hints_seconds = time.perf_counter() - t0
         proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
-                      chain=(lay, y16), words={"a": a, "b": b}, coins=coins)
+                      chain=(lay, y16), words={"a": a, "b": b}, coins=coins, auth=auth_stmt, auth_open=auth_open)
         proof.timings["hints_host"] = hints_seconds
+        if auth_stmt is not None:
+            return proof, (a, b, y16), lay, auth_stmt
         return proof, (a, b, y16), lay
 
-    def verify_vus(self, proof, pubs, lay: Layout, coins=None):
+    def verify_vus(self, proof, pubs, lay: Layout, coins=None, auth: auth_mod.AuthStatement | None = None,
+                   auth_procs: int | None = None, auth_timing: dict | None = None):
         """Interactive mode with ``coins=None``: the verifier's own coins are the ones the runner sampled in
         ``prove_vus`` (``proof.coins``, i.e. the honest step 0 the runner played); pass ``coins`` explicitly to check
-        a transcript against a specific verifier's session."""
+        a transcript against a specific verifier's session.  ``auth``: the verifier's own committed-object block."""
         a, b, y16 = pubs
         if coins is None and self.interactive:
             coins = proof.coins
         return verify(self.p, self.sys, self.tb, self.cfg(lay.l), None, a, b, None, proof, self.device, chain=(lay, y16),
-                      coins=coins)
+                      coins=coins, auth=auth, auth_procs=auth_procs, auth_timing=auth_timing)
 
 
 def _vu_data(vu: instances.VuTier, i: int):
     x, w, y16 = vu.instance(i)
     return (x, w, vu.accs(i), int(y16))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# authentication = included: the frozen set's words as committed objects (auth.py)
+# ---------------------------------------------------------------------------------------------------------------------
+
+def auth_trees_for(vu: instances.VuTier, root: Path, total_vus: int, cache: str | Path | None, procs: int | None):
+    """The three word trees over VUs ``[0, total_vus)`` of the frozen ``vu-k1536`` set (from ``cache`` when the
+    bindings match) and the fingerprint's description of what was committed and how."""
+    if not 0 < total_vus <= vu.n:
+        raise ValueError(f"the committed object is a prefix of the frozen set: 0 < total_vus <= {vu.n}")
+    K = vu.K
+    msha = instances.manifest_sha256(root)
+    bindings = {n: auth_mod.binding_digest(dataset=contract.INSTANCES_DATASET, tier=vu.tier, manifest_sha256=msha, lo=0,
+                                           hi=total_vus, K=K, tree=n) for n in auth_mod.TREE_NAMES}
+    xa = np.frombuffer(vu.x, dtype=np.uint16)[:total_vus * K]
+    wb = np.frombuffer(vu.w, dtype=np.uint16)[:total_vus * K]
+    yy = np.frombuffer(vu.y, dtype=np.uint16)[:total_vus]
+    t0 = time.perf_counter()
+    trees, cached = auth_mod.load_or_build_trees(cache, a_words=xa, b_words=wb, y_words=yy, bindings=bindings, procs=procs)
+    secs = time.perf_counter() - t0
+    from verity.commitments import merkle_depth
+    info = {"version": auth_mod.AUTH_VERSION, "scheme": "verifier-side openings (auth-integration option b): Merkle "
+            "multiproofs of every boundary word beside the Ligero proof; both verifiers recompute the leaves from the "
+            "published words and fold them to the roots",
+            "hash": "SHA-256 with the veritor/protocol/merkle/frame/v3 framing (verity.commitments.merkle)",
+            "tree": "binary Merkle tree, arity 2, one 16-bit word per leaf (leaf rank == position), padded to 2^depth "
+                    "with domain-bound pad leaves; depth = merkle_depth(count)",
+            "leaf": "H('leaf' | domain_id | uint(rank) | uint(position) | 'u16' | word as 2 big-endian bytes)",
+            "domain": "CommitmentDomain(binding, owner, RangeIndexedDomain(0, count)); binding = identity_digest("
+                      f"{auth_mod.BINDING_TAG!r}, {{dataset, tier, manifest_sha256, vu_lo, vu_hi, K, tree, schema}})",
+            "multiproof": "canonical shared-path multiproof of verity.commitments.multiproof (per level, ascending, the "
+                          "sibling of every known node whose sibling is not known)",
+            "trees": {n: {"count": t.count, "depth": merkle_depth(t.count), "root": t.root.hex(),
+                          "binding": t.ref.binding.hex(), "owner": t.ref.owner} for n, t in trees.items()},
+            "committed_vus": [0, total_vus], "K": K, "commit_seconds": secs, "cached": cached,
+            "procs": procs or (__import__("os").cpu_count() or 1)}
+    return trees, info
+
+
+def auth_negatives(R: ChainRunner, trees: dict, vu: instances.VuTier, n_vus: int = 2, procs: int | None = None):
+    """The prover-side ``authentication = included`` negatives on the real trees: every proof is a VALID Ligero
+    proof (honest witness, the statement it was made for), so only the authentication check can reject it.
+    Returns ``[(name, proof, pubs, lay, auth_stmt, meta)]``; the first entry is the honest included proof."""
+    from verity_numerical.checker.step import step_output, vu_output
+    out = []
+    ids = list(range(n_vus))
+    vus = [_vu_data(vu, i) for i in ids]
+    K = STEP * STEPS
+
+    def run(name, vus_, vu_index, trees_=trees, expect=False, **meta):
+        proof, pubs, lay, st = R.prove_vus(vus_, check=False, auth=(trees_, vu_index))
+        tm = {}
+        ok, why = R.verify_vus(proof, pubs, lay, auth=st, auth_procs=procs, auth_timing=tm)
+        out.append((name, proof, pubs, lay, st, {"vu_index": list(vu_index), "python_accepted": ok, "python_reason": why,
+                                                 "python_auth_seconds": tm.get("seconds"), "expected_accepted": expect,
+                                                 **meta}))
+        return ok
+
+    run("auth_honest", vus, ids, expect=True)
+    # (1) words not under the root: one operand word of VU 0 swapped (a valid dot product of the changed words; the
+    #     accumulators and the output word recomputed by the checker's own relation), claimed at VU 0's indices
+    x, w, _accs, _y = vus[0]
+    x2 = list(x); x2[5] ^= 0x0001                      # a different BF16 word (mantissa LSB) at k = 5
+    accs2, c = [], 0
+    for s in range(STEPS):
+        c = step_output(R.p, c, x2[16 * s:16 * s + 16], w[16 * s:16 * s + 16])
+        accs2.append(c)
+    y2 = vu_output(R.p, x2, w)
+    run("auth_word_not_under_root", [(x2, w, accs2, y2)] + vus[1:], ids, mutation="a-word k=5 of VU 0 changed; accs/y16 recomputed")
+    # (1b) the same on a B-word (weights tree)
+    w2 = list(w); w2[K - 1] ^= 0x0001
+    accs3, c = [], 0
+    for s in range(STEPS):
+        c = step_output(R.p, c, x[16 * s:16 * s + 16], w2[16 * s:16 * s + 16])
+        accs3.append(c)
+    y3 = vu_output(R.p, x, w2)
+    run("auth_weight_not_under_root", [(x, w2, accs3, y3)] + vus[1:], ids, mutation=f"b-word k={K - 1} of VU 0 changed; accs/y16 recomputed")
+    # (2) wrong index: the honest words of VUs [0, n) claimed at the leaf indices of VUs [1, n + 1)
+    run("auth_wrong_index", vus, [i + 1 for i in ids], mutation="vu_index shifted by one (committed words of other VUs)")
+    # (2b) wrong index, same words: VU 0 and VU 1 swapped in the proof but not in the index
+    if n_vus >= 2:
+        run("auth_vus_swapped", [vus[1], vus[0]] + vus[2:], ids, mutation="VUs 0 and 1 swapped against a fixed vu_index")
+    # (3) right words, different root: the a tree replaced by a tree over the same words with one bit flipped
+    xa = np.frombuffer(vu.x, dtype=np.uint16)[:trees["a"].count].copy()
+    xa[7] ^= 0x8000
+    other = dict(trees)
+    other["a"] = auth_mod.build_word_tree("a", trees["a"].ref.binding, xa, procs=procs)
+    run("auth_different_root", vus, ids, trees_=other, mutation="a root of a tree whose leaf 7 differs (the prover opens against it)")
+    # (3b) right words, right multiproofs, the y tree's reference carrying the b tree's root: the prover absorbs the
+    #      forged block into its statement digest (so the challenge binding holds) and opens against the real y tree
+    st_ok = auth_mod.AuthStatement.for_vus(trees, ids)
+    forged = auth_mod.AuthStatement(st_ok.vu_index, (st_ok.trees[0], st_ok.trees[1],
+                                                     auth_mod.TreeRef("y", st_ok.trees[2].binding, st_ok.trees[2].owner,
+                                                                      st_ok.trees[2].count, st_ok.trees[1].root)))
+    lay = R.layout(len(vus))
+    made = prove_with_auth(R, vus, forged, lambda: auth_mod.open_trees(trees, st_ok, K=K, steps=STEPS))
+    pf, pubs = made["proof"], made["pubs"]
+    tm = {}
+    ok, why = R.verify_vus(pf, pubs, lay, auth=forged, auth_procs=procs, auth_timing=tm)
+    out.append(("auth_root_of_other_tree", pf, pubs, lay, forged, {"vu_index": ids, "python_accepted": ok, "python_reason": why,
+                                                                  "python_auth_seconds": tm.get("seconds"), "expected_accepted": False,
+                                                                  "mutation": "y tree reference carries the b tree's root"}))
+    return out
+
+
+def prove_with_auth(R: ChainRunner, vus, auth_stmt: auth_mod.AuthStatement, auth_open):
+    """A proof whose statement digest absorbs ``auth_stmt`` as given (for negatives that forge the block)."""
+    lay = R.layout(len(vus))
+    units, y16 = [], torch.zeros(lay.l, dtype=torch.int64)
+    for v, (x, w, accs, y) in enumerate(vus):
+        units += vu_units(x, w, accs)
+        y16[STEPS * v + STEPS - 1] = y
+    while len(units) < lay.l:
+        units.append(_pad_unit())
+    a = np.asarray([u[1] for u in units], dtype=np.int64)
+    b = np.asarray([u[2] for u in units], dtype=np.int64)
+    pub = public_vectors(R.p, None, a, b, None, device=R.device)
+    c_in, y_out = np.asarray([u[0] for u in units], dtype=np.int64), np.asarray([u[3] for u in units], dtype=np.int64)
+    hints = hints_torch(R.p, R.sys, c_in, a, b, y_out, R.device)
+    coins = protocol_mod.Coins.sample() if R.interactive else None
+    proof = prove(R.p, R.sys, R.tb, R.cfg(lay.l), pub, hints, R.device, check=False, chain=(lay, y16),
+                  words={"a": a, "b": b}, coins=coins, auth=auth_stmt, auth_open=auth_open)
+    return {"proof": proof, "pubs": (a, b, y16)}
 
 
 def gate_vu(args) -> int:
@@ -284,24 +421,97 @@ def bench_vu(args) -> int:
     # the verifier timer, outside every measured interval.  system.bin + manifest.json once.
     dump_dir = Path(args.dump_dir) if getattr(args, "dump_dir", None) else None
     dump_manifest = None
+    with_auth = bool(getattr(args, "auth", False))
     if dump_dir is not None:
-        from .serialize import _manifest, _statement_of, _write_system, proof_bytes, sha256_file, statement_bytes
+        from .serialize import (
+            _manifest,
+            _statement_of,
+            _write_system,
+            proof_bytes,
+            sha256_file,
+            statement_bytes,
+        )
         dump_dir.mkdir(parents=True, exist_ok=True)
-        dump_manifest = _manifest(dump_dir, args, R)
+        dump_manifest = _manifest(dump_dir, args, R, auth=with_auth)
         _write_system(dump_dir, R, dump_manifest)
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
-                                "zk": args.zk, "mode": args.mode, "reps": args.reps}
+                                "zk": args.zk, "mode": args.mode, "reps": args.reps, "authentication": "included" if with_auth else "excluded"}
+    # authentication = included: the frozen set's words [0, total_vus) as three committed word trees (auth.py); the
+    # negatives on the real trees must all be rejected BEFORE anything is measured
+    trees = auth_info = None
+    auth_neg_report = None
+    if with_auth:
+        trees, auth_info = auth_trees_for(vu, root, total_vus, getattr(args, "auth_cache", None), getattr(args, "auth_procs", None))
+        print(f"auth trees: {'loaded' if auth_info['cached'] else 'built'} in {auth_info['commit_seconds']:.2f}s; roots "
+              + ", ".join(f"{n}={t['root'][:16]}.. (count {t['count']}, depth {t['depth']})" for n, t in auth_info["trees"].items()), flush=True)
+        negs = auth_negatives(R, trees, vu, n_vus=2, procs=getattr(args, "auth_procs", None))
+        auth_neg_report = {"cases": [{"name": n, **m} for n, _pf, _pubs, _lay, _st, m in negs]}
+        auth_neg_report["total"] = sum(1 for c in auth_neg_report["cases"] if not c["expected_accepted"])
+        auth_neg_report["rejected"] = sum(1 for c in auth_neg_report["cases"] if not c["expected_accepted"] and not c["python_accepted"])
+        auth_neg_report["honest_accepted"] = all(c["python_accepted"] for c in auth_neg_report["cases"] if c["expected_accepted"])
+        for c in auth_neg_report["cases"]:
+            print(f"auth {'negative' if not c['expected_accepted'] else 'honest'} {c['name']}: python {c['python_accepted']} ({c['python_reason']})", flush=True)
+        if auth_neg_report["rejected"] != auth_neg_report["total"] or not auth_neg_report["honest_accepted"]:
+            raise SystemExit("authentication negatives not all rejected (or the honest included proof rejected) -- refusing to bench")
+        if dump_dir is not None:
+            from .serialize import (
+                auth_mutations,
+                read_proof,
+                read_statement,
+                verify_files,
+            )
+            nd = dump_dir / "auth_negatives"
+            nd.mkdir(exist_ok=True)
+            dump_manifest["auth_negatives"] = []
+            for name, pf, pubs, lay_n, st_n, meta in negs:
+                st = _statement_of(R, pubs, lay_n, R.cfg(lay_n.l), 1, auth=st_n)
+                (nd / f"{name}.stmt").write_bytes(statement_bytes(st))
+                (nd / f"{name}.proof").write_bytes(proof_bytes(pf))
+                entry = {"kind": "honest" if meta["expected_accepted"] else "auth_negative", "name": name,
+                         "stmt": f"auth_negatives/{name}.stmt", "proof": f"auth_negatives/{name}.proof",
+                         "proof_sha256": sha256_file(nd / f"{name}.proof"), "expected_accepted": meta["expected_accepted"],
+                         "python_verdict": {"accepted": meta["python_accepted"], "reason": meta["python_reason"]}, "mutation": meta.get("mutation")}
+                if pf.coins is not None:
+                    (nd / f"{name}.coins").write_bytes(pf.coins.r1 + pf.coins.s1 + pf.coins.r2 + pf.coins.s2)
+                    entry["coins"] = f"auth_negatives/{name}.coins"
+                dump_manifest["auth_negatives"].append(entry)
+            st_h = read_statement((nd / "auth_honest.stmt").read_bytes())
+            pf_h = read_proof((nd / "auth_honest.proof").read_bytes())
+            for name, p2, st2 in auth_mutations(pf_h, st_h):
+                (nd / f"mut_{name}.stmt").write_bytes(statement_bytes(st2))
+                (nd / f"mut_{name}.proof").write_bytes(proof_bytes(p2))
+                ok_m, why_m, _s = verify_files(nd / f"mut_{name}.stmt", nd / f"mut_{name}.proof", args.device, runner=R)
+                entry = {"kind": "auth_mutation", "name": f"mut_{name}", "stmt": f"auth_negatives/mut_{name}.stmt",
+                         "proof": f"auth_negatives/mut_{name}.proof", "expected_accepted": False,
+                         "python_verdict": {"accepted": ok_m, "reason": why_m}, "mutation": name}
+                if pf_h.coins is not None:
+                    entry["coins"] = "auth_negatives/auth_honest.coins"
+                dump_manifest["auth_negatives"].append(entry)
+                print(f"auth mutation {name}: python {ok_m} ({why_m})", flush=True)
+                if ok_m:
+                    raise SystemExit(f"authentication file mutation {name} ACCEPTED -- refusing to bench")
+            auth_neg_report["file_mutations"] = sum(1 for e in dump_manifest["auth_negatives"] if e["kind"] == "auth_mutation")
+            auth_neg_report["file_mutations_rejected"] = sum(1 for e in dump_manifest["auth_negatives"]
+                                                             if e["kind"] == "auth_mutation" and not e["python_verdict"]["accepted"])
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
+        vauth = 0.0
         t_pass = time.perf_counter()
         for si, (lo, hi) in enumerate(subs):
             vus = [data[i] for i in range(lo, hi)]
             V = protocol_mod.Coins.sample() if interactive else None      # the verifier's step 0 (interactive only)
-            proof, pubs, lay_i = R.prove_vus(vus, check=False, min_l=l, coins=V)
+            st_auth = None
+            if with_auth:
+                proof, pubs, lay_i, st_auth = R.prove_vus(vus, check=False, min_l=l, coins=V, auth=(trees, list(range(lo, hi))))
+            else:
+                proof, pubs, lay_i = R.prove_vus(vus, check=False, min_l=l, coins=V)
+            tm_auth: dict = {}
             t0 = time.perf_counter()
-            ok, why = R.verify_vus(proof, pubs, lay_i, coins=V)
+            ok, why = R.verify_vus(proof, pubs, lay_i, coins=V, auth=st_auth, auth_procs=getattr(args, "auth_procs", None),
+                                   auth_timing=tm_auth)
             vsum += time.perf_counter() - t0
+            vauth += tm_auth.get("seconds", 0.0)
             assert ok, f"sub-batch [{lo}, {hi}): {why}"
             for k, v in proof.timings.items():
                 agg[k] = agg.get(k, 0.0) + v
@@ -309,7 +519,7 @@ def bench_vu(args) -> int:
                 rd = dump_dir / f"rep{rep}"
                 rd.mkdir(exist_ok=True)
                 stem = f"sub_{si:02d}"
-                st = _statement_of(R, pubs, lay_i, R.cfg(lay_i.l), n_proofs)
+                st = _statement_of(R, pubs, lay_i, R.cfg(lay_i.l), n_proofs, auth=st_auth)
                 (rd / f"{stem}.stmt").write_bytes(statement_bytes(st))
                 (rd / f"{stem}.proof").write_bytes(proof_bytes(proof))
                 entry = {"rep": rep, "sub": si, "vus": [lo, hi], "stmt": f"rep{rep}/{stem}.stmt", "proof": f"rep{rep}/{stem}.proof",
@@ -326,14 +536,16 @@ def bench_vu(args) -> int:
             print("warm-up (one sub-batch):", {k: round(v, 3) for k, v in agg.items()})
             continue
         keys = agg.keys()
-        runs.append((agg, vsum))
+        runs.append((agg, vsum, vauth))
         print(f"rep {rep}: prover {agg['total']:.3f}s (+hints {agg['hints_host']:.3f}s) over {n_proofs} proofs; "
-              f"verifier {vsum:.3f}s; pass wall {wall:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)")
+              f"verifier {vsum:.3f}s" + (f" (auth {vauth:.3f}s)" if with_auth else "") +
+              f"; pass wall {wall:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)")
     if dump_dir is not None:
         (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
         print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)
     med = {k: statistics.median(r[0][k] for r in runs) for k in keys}
     vmed = statistics.median(r[1] for r in runs)
+    vauth_med = statistics.median(r[2] for r in runs)
     peak_dev = torch.cuda.max_memory_allocated() if args.device.startswith("cuda") else 0
     nbytes = proof.n_bytes()
     nbytes = {k: v * n_proofs for k, v in nbytes.items()}
@@ -345,20 +557,37 @@ def bench_vu(args) -> int:
     sw = {"backend": {"name": "b-ligero chain (backends/direct/ligero)", "commit": _git_commit(), "hash": proof.hash_name,
                       "challenge_expander": "SHAKE-256 (placeholder)"},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
+    auth_note = ("; the operands and words are published AND authenticated: each is a leaf the statement's roots commit to "
+                 "(auth.py), so the ZK claim is about the construction, the privacy of the words is not claimed" if with_auth else "")
+    ext = "" if with_auth else "external authentication"
     if cfg.zk and interactive and not args.hvzk_label:
-        proof_class, zk_mode = "COMPLETE_ZK_BACKEND", ZK_MODE + ZK_MODE_HM96 + ZK_VACUOUS_NOTE
-        omitted = "external authentication; unopened columns hidden by Blake3 of a uniform column (random-oracle hiding, not HM96 salted leaves)"
+        proof_class, zk_mode = "COMPLETE_ZK_BACKEND", ZK_MODE + ZK_MODE_HM96 + ZK_VACUOUS_NOTE + auth_note
+        omitted = (ext + "; " if ext else "") + "unopened columns hidden by Blake3 of a uniform column (random-oracle hiding, not HM96 salted leaves)"
     elif cfg.zk and interactive:
-        proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE + ZK_VACUOUS_NOTE
-        omitted = "external authentication (malicious-verifier ZK holds but the conservative label was requested)"
+        proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE + ZK_VACUOUS_NOTE + auth_note
+        omitted = (ext + " " if ext else "") + "(malicious-verifier ZK holds but the conservative label was requested)"
     elif cfg.zk:
-        proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE + ZK_MODE_FS + ZK_VACUOUS_NOTE
-        omitted = "external authentication; malicious-verifier ZK outside the programmable random-oracle model (Fiat-Shamir mode: NIZK in PROM only)"
+        proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE + ZK_MODE_FS + ZK_VACUOUS_NOTE + auth_note
+        omitted = (ext + "; " if ext else "") + "malicious-verifier ZK outside the programmable random-oracle model (Fiat-Shamir mode: NIZK in PROM only)"
     else:
-        proof_class, zk_mode, omitted = "NON_ZK_PROOF_DIAGNOSTIC", "none", "external authentication, ZK masking"
+        proof_class, zk_mode, omitted = "NON_ZK_PROOF_DIAGNOSTIC", "none", (ext + ", " if ext else "") + "ZK masking"
+    if with_auth:
+        sw["authentication"] = {k: v for k, v in auth_info.items() if k not in ("commit_seconds", "cached", "procs")}
+        sw["authentication"]["multiproof_bytes_per_proof"] = int(proof.n_bytes()["auth_multiproofs"])
+        sw["authentication"]["multiproof_siblings_per_proof"] = [len(s) for s in proof.auth]
+        sw["authentication"]["opened_leaves_per_proof"] = {"a": per_proof * STEP * STEPS, "b": per_proof * STEP * STEPS, "y": per_proof}
+        sw["authentication"]["verifier"] = ("python: protocol.verify -> auth.verify_auth (leaf digests + verity.commitments.verify_multiproof, "
+                                            f"{auth_info['procs']} processes for the leaves); rust: backends/ligero-verify (sha256.rs, auth fold)")
+    preprocessing = f"constraint compilation (a function of Params only, {R.compile_seconds:.2f}s)"
+    if with_auth:
+        preprocessing += (f"; object commitment: three SHA-256 word trees (a: activations, b: weights, y: outputs) over the frozen "
+                          f"set's VUs [0, {total_vus}) -- {auth_info['trees']['a']['count']} + {auth_info['trees']['b']['count']} + "
+                          f"{auth_info['trees']['y']['count']} leaves, built once per object in {auth_info['commit_seconds']:.2f}s "
+                          f"({auth_info['procs']} processes{', loaded from cache' if auth_info['cached'] else ''}); the roots are "
+                          f"public inputs; the per-proof multiproof openings are prover work (t.serialization)")
     fp = contract.fingerprint(
         profile=contract.PROFILE, domain=contract.DOMAIN, K=STEP * STEPS, B=n_vus, N_subbatches=n_proofs,
-        proof_class=proof_class, authentication="excluded", zk_mode=zk_mode,
+        proof_class=proof_class, authentication="included" if with_auth else "excluded", zk_mode=zk_mode,
         security={"target": round(args.target), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_k": cfg.k, "rs_l": cfg.l,
                   "zk": cfg.zk, "t_pad": cfg.t_pad, "mode": cfg.mode, "bound_model": snd["bound_model"],
                   "hash_assumption": snd["hash_assumption"], "zk_statement": snd["zk_statement"],
@@ -367,7 +596,7 @@ def bench_vu(args) -> int:
                   "per_proof_target_log2": snd["per_proof_target_log2"], "per_proof_total_log2": snd["per_proof_total_log2"],
                   "union_over": n_proofs, "hash_placeholder": True},
         hardware=hw, software=sw,
-        preprocessing=f"constraint compilation (a function of Params only, {R.compile_seconds:.2f}s)",
+        preprocessing=preprocessing,
         retention="retained",
         instances=contract.instances_ref("vu-k1536", 0, n_vus, instances.manifest_sha256(root)),
         scope="vu", omitted=omitted,
@@ -383,7 +612,7 @@ def bench_vu(args) -> int:
         contract.measurement("t.arithmetic", med["tests"]),
         contract.measurement("t.lookup", 0.0),
         contract.measurement("t.zk_additional", med.get("zk_masks", 0.0)),
-        contract.measurement("t.serialization", med["openings"] + med.get("statement", 0.0)),
+        contract.measurement("t.serialization", med["openings"] + med.get("statement", 0.0) + med.get("auth_openings", 0.0)),
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
@@ -410,12 +639,30 @@ def bench_vu(args) -> int:
         contract.measurement("proof.w_h_q_bytes", nbytes["w"] + nbytes["h"] + nbytes["q_chain"] + nbytes["v_linear"], "B"),
         contract.measurement("split.zk_masks_seconds", med.get("zk_masks", 0.0), "s"),
     ]
+    if with_auth:
+        meas += [
+            contract.measurement("auth.multiproof_bytes", nbytes["auth_multiproofs"], "B"),
+            contract.measurement("auth.opened_leaves", 2 * n_vus * STEP * STEPS + n_vus, "count"),
+            contract.measurement("auth.openings_seconds", med.get("auth_openings", 0.0), "s"),   # prover: in t.serialization
+            contract.measurement("auth.verifier_seconds", vauth_med, "s"),                       # verifier: in verifier.seconds
+            contract.measurement("auth.commit_seconds", auth_info["commit_seconds"], "s"),       # once per object (preprocessing)
+            contract.measurement("auth.negatives_rejected", auth_neg_report["rejected"], "count"),
+            contract.measurement("auth.negatives_total", auth_neg_report["total"], "count"),
+        ]
+    validation = {"status": "passed", "checker": "backends.direct.ligero.run bench-vu (verifier accepted every rep)",
+                  "detail": f"{args.reps} reps, {n_vus} VUs as {n_proofs} proofs at l={l}",
+                  "evidence": {"soundness": snd, "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]}
+                                                          for r in runs]}}
+    if with_auth:
+        validation["checker"] += " + auth.verify_auth on every sub-batch (multiproofs of every boundary word against the roots)"
+        validation["detail"] += (f"; authentication negatives: {auth_neg_report['rejected']}/{auth_neg_report['total']} prover-side "
+                                 f"rejected" + (f", {auth_neg_report['file_mutations_rejected']}/{auth_neg_report['file_mutations']} "
+                                                f"file-level rejected" if "file_mutations" in auth_neg_report else "") +
+                                 ", honest included proof accepted")
+        validation["evidence"]["auth_negatives"] = auth_neg_report
+        validation["evidence"]["auth_roots"] = {n: t["root"] for n, t in auth_info["trees"].items()}
     result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or f"b-ligero-vu-{int(time.time())}",
-              "workload_fingerprint": fp,
-              "validation": {"status": "passed", "checker": "backends.direct.ligero.run bench-vu (verifier accepted every rep)",
-                             "detail": f"{args.reps} reps, {n_vus} VUs as {n_proofs} proofs at l={l}",
-                             "evidence": {"soundness": snd, "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]}
-                                                                     for r in runs]}},
+              "workload_fingerprint": fp, "validation": validation,
               "measurements": meas, "measurement_files": [], "artifacts": []}
     problems = contract.validate(result)
     if problems:

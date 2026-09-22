@@ -43,6 +43,9 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--dump-proof", default=None)
     ap.add_argument("--dump-statement", default=None)
     ap.add_argument("--dump-dir", default=None)
+    ap.add_argument("--auth", action="store_true")       # authentication = included (what is proved changes: roots + multiproofs)
+    ap.add_argument("--auth-cache", default=None)        # where the trees are cached: not what is computed (the bindings pin the object)
+    ap.add_argument("--auth-procs", type=int, default=None)
     # bench_result.py (the wrapper that adds the independent Rust verifier and writes result.json) accepts the same argv plus:
     ap.add_argument("--verifier", default=None)         # path of the ligero-verify binary: where the check runs, not what is computed
     ap.add_argument("--threads", type=int, default=None)
@@ -50,7 +53,8 @@ def parse(argv: list[str]) -> dict:
     out = vars(ns)
     cmd = out["cmd"] = argv[idx]
     for flag, subs in (("vus", ("gate", "gate-vu")), ("dump_proof", ("gate-vu",)), ("dump_statement", ("gate-vu",)), ("reps", ("bench", "bench-vu")),
-                       ("run_id", ("bench", "bench-vu")), ("total_vus", ("bench-vu",)), ("hvzk_label", ("bench-vu",)), ("dump_dir", ("bench-vu",))):
+                       ("run_id", ("bench", "bench-vu")), ("total_vus", ("bench-vu",)), ("hvzk_label", ("bench-vu",)), ("dump_dir", ("bench-vu",)),
+                       ("auth", ("bench-vu",)), ("auth_cache", ("bench-vu",)), ("auth_procs", ("bench-vu",))):
         if cmd not in subs:
             out.pop(flag)                       # run.py does not define it for this subcommand; a default would only be noise in the derivation
     if unknown:
@@ -62,7 +66,7 @@ BENCH_VU = Tool(
     name="bench_vu", version="1",
     command=["python", "-m", "backends.direct.ligero.run"],
     closure=["backends/direct/ligero/**", "packages/verity/src/verity/**"],
-    key_params=["cmd", "mode", "zk", "batch", "total_vus", "vus", "reps", "rate_log2", "target", "hints", "hvzk_label", "root"],
+    key_params=["cmd", "mode", "zk", "batch", "total_vus", "vus", "reps", "rate_log2", "target", "hints", "hvzk_label", "root", "auth"],
     key_conditions=["hw.family"],
     param_artifacts=["root"],
     caches=["triton"],

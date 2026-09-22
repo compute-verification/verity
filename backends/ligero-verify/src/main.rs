@@ -10,6 +10,7 @@
 //! ligero-verify system-digest --system system.bin           # the two digests to pin in verify.rs
 //! ~~~
 
+mod auth;
 mod field;
 mod format;
 mod hash;
@@ -64,8 +65,8 @@ fn json_str(s: &str) -> String {
 
 fn timing_json(t: &verify::Timing) -> String {
     format!(
-        "{{\"parse\":{:.6},\"soundness\":{:.6},\"statement_hash\":{:.6},\"challenge_hash\":{:.6},\"merkle\":{:.6},\"ntt\":{:.6},\"dfold\":{:.6},\"quadratic\":{:.6},\"chain\":{:.6},\"total\":{:.6}}}",
-        t.parse, t.soundness, t.statement_hash, t.challenge_hash, t.merkle, t.ntt, t.dfold, t.quadratic, t.chain, t.total
+        "{{\"parse\":{:.6},\"soundness\":{:.6},\"statement_hash\":{:.6},\"challenge_hash\":{:.6},\"merkle\":{:.6},\"ntt\":{:.6},\"dfold\":{:.6},\"quadratic\":{:.6},\"chain\":{:.6},\"auth\":{:.6},\"total\":{:.6}}}",
+        t.parse, t.soundness, t.statement_hash, t.challenge_hash, t.merkle, t.ntt, t.dfold, t.quadratic, t.chain, t.auth, t.total
     )
 }
 

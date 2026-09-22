@@ -1,0 +1,400 @@
+"""Authentication of the boundary words against committed object roots (``authentication = included``).
+
+The B-Ligero statement (PROTOCOL.md) publishes every VU's operand words ``a``, ``b`` and output word ``y16`` and binds
+the prover's challenges to them through ``statement_digest``.  On its own that proves "*some* dot products were
+computed".  This module supplies the missing half of the claim -- "the dot products were computed on *these committed*
+weights and activations, and produced *these committed* outputs" -- by
+
+  1. committing the instance set's words as three indexed Merkle trees of :mod:`verity.commitments` (one 16-bit word per
+     leaf, ``schema="u16"``, big-endian value bytes; SHA-256 with the ``veritor/protocol/merkle/frame/v3`` framing;
+     binary tree, ``merkle_depth(count)`` levels):
+
+         tree ``a``  activations   owner -1   leaf rank  vu*K + k        for the K words of VU ``vu``
+         tree ``b``  weights       owner -2   leaf rank  vu*K + k
+         tree ``y``  outputs       owner -1   leaf rank  vu              (the 16-bit public output word)
+
+     The commitment domain of each tree is ``CommitmentDomain(binding, owner, RangeIndexedDomain(0, count))``; the
+     *binding* is the identity digest of the frozen instance set's manifest (dataset, tier, ``manifest_sha256``, the VU
+     range, K, the tree name), so the same words under a different manifest are a different object.
+
+  2. extending the public statement with an :class:`AuthStatement` -- the three ``(binding, owner, count, root)``
+     references plus the claimed VU indices ``vu_index`` (one per chain, strictly increasing) -- and absorbing
+     :func:`digest_bytes` of it into ``statement_digest`` so every challenge of the proof is bound to "the words at
+     these leaf indices under these roots".
+
+  3. having the prover ship one Merkle *multiproof* per tree (shared authentication paths, canonical order of
+     :func:`verity.commitments.multiproof`) and having *both* verifiers recompute the leaf digests from the published
+     words and fold them to the root before accepting.  This is the verifier-side-openings option of the
+     ``auth-integration`` lane: the Ligero proof is unchanged; the authentication cost lands in the verifier's time
+     and in the transcript bytes.
+
+Everything here is torch-free.  The trees are built with a process pool (SHA-256 in :mod:`hashlib` releases the GIL
+only per call; the per-leaf framing is the Python-level cost) and cached on disk as one ``.npy`` per level.
+"""
+from __future__ import annotations
+
+import json
+import os
+from collections.abc import Iterable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+from verity.commitments import (
+    CommitmentDomain,
+    RangeIndexedDomain,
+    VerificationLimits,
+    identity_digest,
+    merkle_depth,
+    verify_multiproof,
+)
+from verity.commitments.merkle import (  # the pad-leaf frame has no public wrapper; pinned by tests
+    _PAD,
+    _hash,
+    _uint,
+)
+from verity.errors import ResourceLimit
+
+__all__ = [
+    "AUTH_VERSION",
+    "BINDING_TAG",
+    "SCHEMA",
+    "TREE_NAMES",
+    "AuthStatement",
+    "TreeRef",
+    "WordTree",
+    "auth_positions",
+    "binding_digest",
+    "build_word_tree",
+    "digest_bytes",
+    "load_or_build_trees",
+    "multiproof_siblings",
+    "open_trees",
+    "verify_auth",
+]
+
+AUTH_VERSION = "ligero-b/auth/v1"
+BINDING_TAG = "verity/ligero-b/auth-binding/v1"
+SCHEMA = "u16"
+TREE_NAMES = ("a", "b", "y")
+OWNER = {"a": -1, "b": -2, "y": -1}
+LIMITS = VerificationLimits()
+
+_CHUNK = 1 << 16
+
+
+def _pool(workers: int) -> ProcessPoolExecutor:
+    # fork: the workers only hash (no torch/CUDA), and a forked pool is cheap enough to create per verification.
+    import multiprocessing as mp
+    ctx = mp.get_context("fork") if "fork" in mp.get_all_start_methods() else None
+    return ProcessPoolExecutor(max_workers=workers, mp_context=ctx)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Trees
+# ---------------------------------------------------------------------------------------------------------------------
+
+def binding_digest(*, dataset: str, tier: str, manifest_sha256: str, lo: int, hi: int, K: int, tree: str) -> bytes:
+    """Identity of the committed object: the frozen instance set (by manifest digest) and which words of it."""
+    if tree not in TREE_NAMES:
+        raise ValueError(f"unknown tree {tree!r}")
+    h = identity_digest(BINDING_TAG, {"dataset": dataset, "tier": tier, "manifest_sha256": manifest_sha256,
+                                      "vu_lo": int(lo), "vu_hi": int(hi), "K": int(K), "tree": tree,
+                                      "schema": SCHEMA})
+    return bytes.fromhex(h)
+
+
+def domain_for(binding: bytes, owner: int, count: int) -> CommitmentDomain:
+    return CommitmentDomain(bytes(binding), int(owner), RangeIndexedDomain(0, int(count)))
+
+
+def _leaf_chunk(args) -> bytes:
+    domain, start, words = args
+    leaf = domain.leaf
+    out = bytearray()
+    for i, w in enumerate(words.tolist()):
+        r = start + i
+        out += leaf(r, r, SCHEMA, w.to_bytes(2, "big"))
+    return bytes(out)
+
+
+def _pad_chunk(args) -> bytes:
+    domain_id, start, stop = args
+    out = bytearray()
+    for r in range(start, stop):
+        out += _hash(_PAD, domain_id, _uint(r))
+    return bytes(out)
+
+
+def _node_chunk(args) -> bytes:
+    domain, level, start, pairs = args
+    node = domain.node
+    out = bytearray()
+    for i in range(pairs.shape[0]):
+        p = pairs[i]
+        out += node(level, start + i, p[:32].tobytes(), p[32:].tobytes())
+    return bytes(out)
+
+
+def _chunks(n: int, size: int) -> list[tuple[int, int]]:
+    return [(s, min(n, s + size)) for s in range(0, n, size)]
+
+
+@dataclass(frozen=True)
+class TreeRef:
+    """Public reference to one committed tree: what the verifier needs to rebuild the domain and check the root."""
+
+    name: str
+    binding: bytes
+    owner: int
+    count: int
+    root: bytes
+
+    def domain(self) -> CommitmentDomain:
+        return domain_for(self.binding, self.owner, self.count)
+
+    def to_json(self) -> dict:
+        return {"name": self.name, "binding": self.binding.hex(), "owner": self.owner, "count": self.count,
+                "root": self.root.hex()}
+
+    @classmethod
+    def from_json(cls, d: Mapping) -> TreeRef:
+        return cls(str(d["name"]), bytes.fromhex(d["binding"]), int(d["owner"]), int(d["count"]),
+                   bytes.fromhex(d["root"]))
+
+
+class WordTree:
+    """An indexed Merkle tree over ``count`` 16-bit words; ``levels[0]`` are the leaves (padded to a power of two)."""
+
+    def __init__(self, ref: TreeRef, levels: Sequence[np.ndarray]):
+        self.ref = ref
+        self.levels = list(levels)
+        if len(self.levels) != merkle_depth(ref.count) + 1 or self.levels[-1].shape[0] != 1:
+            raise ValueError("levels do not form a tree of the declared count")
+        if self.root != ref.root:
+            raise ValueError("stored root does not match the reference")
+
+    @property
+    def root(self) -> bytes:
+        return self.levels[-1][0].tobytes()
+
+    @property
+    def count(self) -> int:
+        return self.ref.count
+
+    def save(self, directory: Path) -> None:
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        for lv, arr in enumerate(self.levels):
+            np.save(directory / f"{self.ref.name}.L{lv:02d}.npy", arr)
+        (directory / f"{self.ref.name}.json").write_text(json.dumps(self.ref.to_json(), indent=1))
+
+    @classmethod
+    def load(cls, directory: Path, name: str) -> WordTree:
+        directory = Path(directory)
+        ref = TreeRef.from_json(json.loads((directory / f"{name}.json").read_text()))
+        levels = [np.load(directory / f"{name}.L{lv:02d}.npy", mmap_mode="r") for lv in range(merkle_depth(ref.count) + 1)]
+        return cls(ref, levels)
+
+
+def build_word_tree(name: str, binding: bytes, words: np.ndarray, *, procs: int | None = None) -> WordTree:
+    """Commit ``words`` (uint16, one per leaf, leaf rank == position == array index) in the tree's domain."""
+    words = np.ascontiguousarray(words, dtype=np.uint16).ravel()
+    count = int(words.shape[0])
+    LIMITS.enforce("max_positions", count)
+    owner = OWNER[name]
+    domain = domain_for(binding, owner, count)
+    depth = merkle_depth(count)
+    width = 1 << depth
+    procs = procs or (os.cpu_count() or 1)
+
+    def run(fn, tasks):
+        if procs <= 1 or len(tasks) <= 1:
+            return [fn(t) for t in tasks]
+        with _pool(min(procs, len(tasks))) as ex:
+            return list(ex.map(fn, tasks, chunksize=1))
+
+    parts = run(_leaf_chunk, [(domain, s, words[s:e]) for s, e in _chunks(count, _CHUNK)])
+    parts += run(_pad_chunk, [(domain.domain_id, count + s, count + e) for s, e in _chunks(width - count, _CHUNK)])
+    level = np.frombuffer(b"".join(parts), dtype=np.uint8).reshape(width, 32).copy()
+    levels = [level]
+    for lv in range(depth):
+        pairs = level.reshape(-1, 64)
+        parts = run(_node_chunk, [(domain, lv, s, pairs[s:e]) for s, e in _chunks(pairs.shape[0], _CHUNK)])
+        level = np.frombuffer(b"".join(parts), dtype=np.uint8).reshape(-1, 32).copy()
+        levels.append(level)
+    ref = TreeRef(name, bytes(binding), owner, count, levels[-1][0].tobytes())
+    return WordTree(ref, levels)
+
+
+def load_or_build_trees(cache: Path | None, *, a_words: np.ndarray, b_words: np.ndarray, y_words: np.ndarray,
+                        bindings: Mapping[str, bytes], procs: int | None = None) -> tuple[dict[str, WordTree], bool]:
+    """The three trees of an instance set, from ``cache`` when its bindings match, else built (and cached)."""
+    words = {"a": a_words, "b": b_words, "y": y_words}
+    if cache is not None:
+        cache = Path(cache)
+        try:
+            trees = {n: WordTree.load(cache, n) for n in TREE_NAMES}
+            if all(trees[n].ref.binding == bytes(bindings[n]) and trees[n].count == int(np.size(words[n]))
+                   for n in TREE_NAMES):
+                return trees, True
+        except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            pass
+    trees = {n: build_word_tree(n, bindings[n], words[n], procs=procs) for n in TREE_NAMES}
+    if cache is not None:
+        for t in trees.values():
+            t.save(cache)
+    return trees, False
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Statement block, positions, openings
+# ---------------------------------------------------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class AuthStatement:
+    """The public authentication block: which VUs (by index) under which committed trees."""
+
+    vu_index: tuple[int, ...]
+    trees: tuple[TreeRef, TreeRef, TreeRef]   # in TREE_NAMES order
+
+    def __post_init__(self):
+        if tuple(t.name for t in self.trees) != TREE_NAMES:
+            raise ValueError("trees must be given in (a, b, y) order")
+        idx = self.vu_index
+        if any(idx[i] >= idx[i + 1] for i in range(len(idx) - 1)) or any(v < 0 for v in idx):
+            raise ValueError("vu_index must be strictly increasing and non-negative")
+
+    def tree(self, name: str) -> TreeRef:
+        return self.trees[TREE_NAMES.index(name)]
+
+    def to_json(self) -> dict:
+        return {"version": AUTH_VERSION, "schema": SCHEMA, "vu_index": list(self.vu_index),
+                "trees": [t.to_json() for t in self.trees]}
+
+    @classmethod
+    def from_json(cls, d: Mapping) -> AuthStatement:
+        return cls(tuple(int(v) for v in d["vu_index"]), tuple(TreeRef.from_json(t) for t in d["trees"]))
+
+    @classmethod
+    def for_vus(cls, trees: Mapping[str, WordTree | TreeRef], vu_index: Iterable[int]) -> AuthStatement:
+        refs = tuple(trees[n].ref if isinstance(trees[n], WordTree) else trees[n] for n in TREE_NAMES)
+        return cls(tuple(int(v) for v in vu_index), refs)
+
+
+def digest_bytes(auth: AuthStatement) -> bytes:
+    """What ``statement_digest`` absorbs: version, schema, the VU indices and each tree's reference (root included)."""
+    out = bytearray(b"|auth=" + AUTH_VERSION.encode() + b"|schema=" + SCHEMA.encode() + b"|vus=")
+    out += np.asarray(auth.vu_index, dtype="<u4").tobytes()
+    for t in auth.trees:
+        out += b"|" + t.name.encode() + b":binding=" + t.binding + b"|owner=" + str(t.owner).encode()
+        out += b"|count=" + str(t.count).encode() + b"|root=" + t.root
+    return bytes(out)
+
+
+def auth_positions(auth: AuthStatement, *, K: int, steps: int, words: int = 16) -> dict[str, np.ndarray]:
+    """Leaf ranks of the published words, by tree, in the column-major order of the statement's ``a``/``b``/``y16``.
+
+    Column ``j`` of the statement is step ``j % steps`` of chain ``j // steps``; its ``words`` A-words are leaves
+    ``vu*K + i*words + o`` (likewise B); the chain's output word is leaf ``vu`` of tree ``y`` (one per chain).
+    """
+    if steps * words != K:
+        raise ValueError("steps*words must equal K")
+    vus = np.asarray(auth.vu_index, dtype=np.int64)
+    base = (vus[:, None] * K + (np.arange(steps, dtype=np.int64) * words)[None, :]).reshape(-1)  # per column
+    ab = (base[:, None] + np.arange(words, dtype=np.int64)[None, :]).reshape(-1)               # per column, per word
+    return {"a": ab, "b": ab.copy(), "y": vus.copy()}
+
+
+def multiproof_siblings(tree: WordTree, ranks: np.ndarray) -> list[bytes]:
+    """The canonical multiproof of :mod:`verity.commitments.multiproof` for ``ranks`` (a set), vectorised over the
+    stored levels: per level, ascending, the sibling of every known node whose sibling is not itself known."""
+    idx = np.unique(np.asarray(ranks, dtype=np.int64))
+    if idx.size and (idx[0] < 0 or idx[-1] >= tree.count):
+        raise ValueError("rank out of range")
+    out: list[bytes] = []
+    for lv in range(len(tree.levels) - 1):
+        level = tree.levels[lv]
+        nxt = np.zeros(idx.shape[0], dtype=bool)
+        nxt[:-1] = idx[1:] == idx[:-1] + 1
+        left = (idx % 2 == 0) & nxt
+        right = np.zeros_like(left)
+        right[1:] = left[:-1]
+        sib = idx[~(left | right)] ^ 1
+        if sib.size:
+            block = np.ascontiguousarray(level[sib])
+            out.extend(bytes(block[i]) for i in range(block.shape[0]))
+        idx = np.unique(idx >> 1)
+    return out
+
+
+def open_trees(trees: Mapping[str, WordTree], auth: AuthStatement, *, K: int, steps: int) -> list[list[bytes]]:
+    """The prover's three multiproofs (in TREE_NAMES order) for the VUs of ``auth``."""
+    pos = auth_positions(auth, K=K, steps=steps)
+    return [multiproof_siblings(trees[n], pos[n]) for n in TREE_NAMES]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Verification
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _leaf_digests(domain: CommitmentDomain, ranks: np.ndarray, words: np.ndarray, procs: int) -> dict[int, bytes]:
+    ranks = np.asarray(ranks, dtype=np.int64).ravel()
+    words = np.asarray(words, dtype=np.uint16).ravel()
+    if ranks.shape != words.shape:
+        raise ValueError("ranks/words shape mismatch")
+    if ranks.size == 0:
+        return {}
+    order = np.argsort(ranks, kind="stable")
+    ranks, words = ranks[order], words[order]
+    # The domain is a range domain (position == rank): the pool workers use the same leaf frame as the tree builder.
+    tasks = [(domain, int(ranks[s]), words[s:e]) for s, e in _chunks(ranks.size, _CHUNK)
+             if np.array_equal(ranks[s:e], np.arange(ranks[s], ranks[s] + (e - s)))]
+    if len(tasks) == len(_chunks(ranks.size, _CHUNK)) and procs > 1 and len(tasks) > 1:
+        with _pool(min(procs, len(tasks))) as ex:
+            parts = list(ex.map(_leaf_chunk, tasks, chunksize=1))
+        blob = b"".join(parts)
+        return {int(r): blob[32 * i:32 * i + 32] for i, r in enumerate(ranks.tolist())}
+    leaf = domain.leaf
+    return {int(r): leaf(int(r), int(r), SCHEMA, int(w).to_bytes(2, "big")) for r, w in zip(ranks.tolist(), words.tolist())}
+
+
+def verify_auth(auth: AuthStatement, siblings: Sequence[Sequence[bytes]], *, a_words: np.ndarray, b_words: np.ndarray,
+                y_words: np.ndarray, K: int, steps: int, procs: int | None = None) -> tuple[bool, str]:
+    """Check the three multiproofs against the roots of ``auth`` for the words the statement publishes.
+
+    ``a_words``/``b_words`` are the statement's operand words in column-major order (``(n_cols, 16)`` or flat),
+    ``y_words`` the per-chain output words.  Returns ``(ok, reason)``; every failure is a rejection (no exceptions).
+    """
+    procs = procs or (os.cpu_count() or 1)
+    try:
+        pos = auth_positions(auth, K=K, steps=steps)
+    except ValueError as e:
+        return False, f"auth: {e}"
+    if len(siblings) != len(TREE_NAMES):
+        return False, "auth: expected one multiproof per tree"
+    words = {"a": np.asarray(a_words, dtype=np.uint16).ravel(), "b": np.asarray(b_words, dtype=np.uint16).ravel(),
+             "y": np.asarray(y_words, dtype=np.uint16).ravel()}
+    for name, sibs in zip(TREE_NAMES, siblings):
+        ref = auth.tree(name)
+        ranks, w = pos[name], words[name]
+        if ranks.shape != w.shape:
+            return False, f"auth: {name}: {ranks.size} leaves claimed, {w.size} words published"
+        if ranks.size and (ranks.min() < 0 or ranks.max() >= ref.count):
+            return False, f"auth: {name}: leaf index out of range"
+        if np.unique(ranks).size != ranks.size:
+            return False, f"auth: {name}: duplicate leaf index"
+        try:
+            LIMITS.enforce("max_positions", int(ref.count))
+            LIMITS.enforce("max_openings", int(ranks.size))
+            LIMITS.enforce("max_proof_bytes", 32 * len(sibs))
+        except ResourceLimit as e:
+            return False, f"auth: {name}: {e}"
+        if any(len(s) != 32 for s in sibs):
+            return False, f"auth: {name}: malformed sibling"
+        domain = ref.domain()
+        leaves = _leaf_digests(domain, ranks, w, procs)
+        if not verify_multiproof(ref.root, ref.count, domain.domain_id, leaves, [bytes(s) for s in sibs]):
+            return False, f"auth: {name}: multiproof rejected"
+    return True, ""
