@@ -22,5 +22,4 @@ echo "== layout"
 echo "== vu-neg (52 vu-k1536-neg)"
 "$BIN" vu-neg --root "$ROOT" --field "$FIELD" | tail -5
 echo "== vu-bench"
-/usr/bin/time -v "$BIN" vu-bench --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES" 2> "${RESEARCH_RUN_DIR:-.}/time.txt"
-grep -E "Maximum resident|Elapsed" "${RESEARCH_RUN_DIR:-.}/time.txt" || true
+"$BIN" vu-bench --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES"
