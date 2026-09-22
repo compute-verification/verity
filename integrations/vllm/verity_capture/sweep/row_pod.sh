@@ -307,12 +307,16 @@ pairs = sorted({(int(lp), int(c) - 1) for lp, c in zip(s["input_lengths"], s["ou
 print(" ".join(f"{lp},{t}" for lp, t in pairs if (lp, t) != main))
 EOF
   }
+  # [R19 F-r19-int-3] a shape is on disk only if its derive SUCCEEDED: derive_step writes result.json {"ok": false, ...} on a crash too
+  # (#73 h100b 06:22Z: 8 shapes crashed on a short --revision, the 06:39Z re-run skipped all 8 on `-f result.json`, the step + main
+  # request re-derived for 35 min, and build_summary read the 8 stale failures -> Build FAIL).  A failed shape is re-derived.
+  derived_ok() { [ -f "$1/result.json" ] && $PY -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("ok") is True else 1)' "$1/result.json" 2>/dev/null; }
   if [ "$BUILD_JOBS" -le 1 ]; then
     run_tl build.derive_step "$TO" "$D/build_step.log" "${CMD_S[@]}"; rc1=$?
     if [ $lc_ok -eq 0 ]; then run_tl build.derive_request "$TO" "$D/build_request.log" "${CMD_R[@]}"; rc2=$?; else rc2=1; fi
     for lpt in $(extra_shapes); do
       IFS=, read -r lp t <<< "$lpt"
-      [ -f "$D/build_request_LP${lp}_T${t}/result.json" ] && continue
+      derived_ok "$D/build_request_LP${lp}_T${t}" && continue
       # [R15 fp8] the batch's other shapes are built for the SAME declared target as the main one (rc3 dropped --target here: the FP8 row's
       # extra shapes derived for vLLM's default kernel selection -> DeepGEMM custom op -> Build FAIL while the main shape passed)
       LCTX_X=()
@@ -336,7 +340,7 @@ EOF
     rc2x=0
     for lpt in $(extra_shapes); do
       IFS=, read -r lp t <<< "$lpt"
-      [ -f "$D/build_request_LP${lp}_T${t}/result.json" ] && continue
+      derived_ok "$D/build_request_LP${lp}_T${t}" && continue
       LCTX_X=()
       if lcx=$(launch_args "$lp" "$t"); then [ -n "$lcx" ] && mapfile -t LCTX_X <<< "$lcx"; else rc2x=1; continue; fi
       CMD_X=($PY -m verity_capture.experimental.cb_a.derive_step --model "$REPO" --revision "$REV" --wrapper request --LP "$lp" --T "$t" --max-model-len "$MML" --workload "$WL" --out "$D/build_request_LP${lp}_T${t}" "${TGT_ARGS[@]}" "${LCTX_X[@]}")
