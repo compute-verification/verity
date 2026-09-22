@@ -37,6 +37,13 @@ the same inputs, and reports the first mismatching tensor.  Results (`diff_64.js
 n = 22, m.max = 261) and at synth B = 2; the kernel-chain root `(p, q)` equals the torch root for every table;
 `ALL MATCH`.
 
+The kernels under suspicion are the same code in both trees: `git diff c4d472a main -- backends/gkr/gpu/kernels.py`
+only *adds* `eq_outer_kernel`, `rank1_add_kernel`, `split_limbs_kernel` (a-gpu2); `phase1_round`, `combine_level`,
+`scatter_terms`, `fold`, `logup_round`, `ext_mul` are byte-identical, and `logup.py::_combine_level` / `build_leaves`
+call them the same way.  So the triage on `main` covers the c4d472a kernels; `main`'s prover is the a-gpu2 merge
+(2e1ef3f: packed LogUp/GKR phase 1, CUDA graphs, INT8 opening), which is therefore also Rust-verified here at
+B = 2 / 64 / 512 from a committed tree (the a-gpu2 merge message left that open).
+
 ## What this rules out and what it does not
 
 - Rules out a deterministic kernel bug in the committed level-0 build / tree combine for these table sizes and
