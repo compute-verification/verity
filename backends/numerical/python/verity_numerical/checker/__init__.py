@@ -115,11 +115,11 @@ predicate.
       data flow; it is not machine-checked.  The evidence is enumeration at reduced widths and z3 per gadget at
       the real widths; there is no proof that ``TINY`` widths exhibit every case of the real widths.
   U2  The z3 query for one full group step with *symbolic* inputs (two hint copies, two outputs) returns UNKNOWN
-      at the local timeout (60 s); only the concrete-input instance is UNSAT.  The recorded pod run extends the
-      timeout; its status is reported with the run id.  Until it is UNSAT, step-level soundness at the real widths
-      rests on the per-gadget queries and the induction.
-  U3  ``signed_sum`` read over F_(2^31 - 1) returns UNKNOWN at the local timeout (the sign-pinning argument needs
-      p > 2^31 - 2, one below the modulus); listed as open, not as a finding.
+      at 60 s locally and at the 1800 s timeout of the recorded pod run r20260921-232849-093c; only the
+      concrete-input instance is UNSAT (0.3 s).  Step-level soundness at the real widths therefore rests on the
+      per-gadget queries and the induction of section 1, not on a step-level solver result.
+  U3  ``signed_sum`` read over F_(2^31 - 1) returns UNKNOWN at 20 s locally and at 300 s on the pod run (the
+      sign-pinning argument needs p > 2^31 - 2, one below the modulus); listed as open, not as a finding.
   U4  The contracts' interface ranges (``Contract.inputs``/``outputs``) are consistent by construction of
       ``params.py`` and are exercised by every test, but there is no separate proof that each gadget's output range
       is contained in the next gadget's input range at every width; ``SignedSum.premise`` is the one bound that is
