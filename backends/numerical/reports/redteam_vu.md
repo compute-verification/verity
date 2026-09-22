@@ -197,6 +197,18 @@ rejected over both fields; `vu-bench` 64 VUs bound over both fields (+ BabyBear 
 | F3 leaf/v2 systematic RS leaks payload (privacy) | **fixed** | `7232e27` (+ docs `354b3ba`) | Codeword domain moved to the coset `31·H_n` (BabyBear's generator, `∉ H_n ⊇ H_k`): disjoint from the message domain, so no codeword symbol is a message symbol. `code_text` gains `/coset=31`; `encode_row` = coset NTT, `decode_row` = coset INTT, prover/verifier evaluate `v`, `q`, `r_i` at `η_c = 31·g_n^c`. The committer's "free systematic quarter" is gone (all `n` symbols computed); the b-encode lane's cosets-only kernel is 31.6 vs 32.2 ms, so no `explore.tensor` / `zk_cost` number moves. `LEAF_V2.md` 2/4/5/6, `ZK_CONSTRUCTION.md` 2.1, `auth_integration.md` privacy column + item 7 updated. | `tests/reference/test_leaf_v2.py::test_no_opened_column_is_a_payload_word` (opens every column of every chunk; the old encoding is shown to expose every word, so the test is not vacuous); `redteam.leaf_v2_exhaustion` now reports `payload_words_in_clear = 0` in every session (`leaf_v2_exhaustion.json` regenerated; `campaign_clear_words` 0.0/row, the pre-fix row kept as `campaign_clear_words_before_fix`). |
 | F4 randomizer exhaustion (leaf/v2) | **stays true, stated** | `354b3ba` | Not a bug the coset fixes: `oracle = True` from session 2 at the reduced code, row determined at ~25 campaign sessions, unchanged. `LEAF_V2.md` 6 now says so and names the only fix -- re-randomisation per session -- as a protocol-owner decision (0.6 s per weight re-commitment vs one private proof per commitment). | `leaf_v2_exhaustion.json` `oracle`, `campaign_projection` |
 
+**Re-timed B at 2^-128 (BabyBear, 4096 VUs, 166 queries, PoW 16), statement-bound:** `t.total` 544.8 s = witness
+42.0 s + prove 502.9 s (run `r20260922-080527-f30c`; 553.1 s in the gate run), verifier 0.61 s, proof 3.45 MB, peak
+RSS 30.6 GB, `overhead.vs_native_peak` 1.35e10 -- on vy-cpu3, a shared-host EPYC 7713 slice ~3x slower than the
+b-chain lane's vy-cpu2 (168 s). **Cost of the fix:** the pre-fix `--unbound` path on the same box measured 426.4 s
+and 485.4 s total in two runs (prove 384.0 / 437.8 s); six alternating 512-VU runs (`r20260922-082522-3e97`) gave
+prove bound 45.4 / 46.2 / 64.8 s vs unbound 37.4 / 68.2 / 61.5 s: the box swings 40 % within minutes and the sign of
+the difference flips, so no fix cost is resolvable above the machine noise. Algorithmically the prover adds one
+SHA-256 over the 4096 words, ~20 challenger observes and one O(n) column compare; the verifier adds one O(n)
+barycentric evaluation per public column (+0.05-0.1 s measured: 0.55-0.66 s vs 0.53-0.55 s). Result files:
+`backends/direct/results/vu_babybear_q166_bound_r20260922-080527-f30c.json` and
+`..._UNBOUND_BASELINE_...json` (the latter is a timing baseline, not a proof number).
+
 Ledger: `soundness-fixes.jsonl` -- `vu` entry "B full VU, statement-bound (SOUNDNESS FIX F1-F3)" (`--breakthrough`,
 run `r20260922-073904-7a6c`, timing pair `r20260922-080527-f30c`) and `component` entry "leaf/v2 non-systematic RS on
 coset 31*H_n (PRIVACY FIX F4)" (`--breakthrough`). Statuses in `redteam_vu.json` flipped to `fixed` with the commits.
