@@ -236,9 +236,37 @@ def main(argv=None) -> int:
     out.write_text(json.dumps(result, indent=1) + "\n")
     rd = os.environ.get("RESEARCH_RUN_DIR")
     if rd:
-        env = {"schema": "research/result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"), "label": args.label,
-               "accepted": all(r["accepted"] for r in runs), "bench": str(out)}
-        (Path(rd) / "result.json").write_text(json.dumps(env, indent=1) + "\n")
+        ok = all(r["accepted"] for r in runs)
+        r0 = runs[-1]
+        env = {
+            "schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+            "workload_fingerprint": {"tool": "diet-mac-and-cheese", "swanky_commit": args.swanky_commit, "lpn": args.lpn,
+                                     "threads": args.threads, "relation": meta, "field": meta.get("field"),
+                                     "zk_mode": "designated-verifier", "mac_extension_degree": 1},
+            "validation": {"status": "passed" if ok else "failed", "checker": "dietmc verifier (accept/reject) + export_ir evaluator",
+                           "detail": f"{args.label}: verifier {'accepted' if ok else 'REJECTED'}", "evidence": [str(out.relative_to(rd)) if str(out).startswith(rd) else str(out)]},
+            "measurements": [
+                {"name": "prover_wall", "value": r0["prover"]["wall_s"], "unit": "s"},
+                {"name": "verifier_wall", "value": r0["verifier"]["wall_s"], "unit": "s"},
+                {"name": "svole_extension", "value": r0["svole_extension_s"], "unit": "s"},
+                {"name": "online_estimate", "value": r0.get("online_s_estimate"), "unit": "s"},
+                {"name": "bytes_p2v", "value": (r0["bytes"] or {}).get("p2v"), "unit": "B"},
+                {"name": "bytes_v2p", "value": (r0["bytes"] or {}).get("v2p"), "unit": "B"},
+                {"name": "prover_peak_rss", "value": r0["prover"]["peak_rss_mb"], "unit": "MB"},
+            ],
+            "measurement_files": [str(out)], "artifacts": [],
+        }
+        # research's result.json is written once per run; several bench invocations in one run append labels
+        rp = Path(rd) / "result.json"
+        if rp.exists():
+            try:
+                prev = json.loads(rp.read_text())
+                if prev.get("validation", {}).get("status") == "failed":
+                    env["validation"] = prev["validation"]
+                env["measurement_files"] = sorted(set(prev.get("measurement_files", [])) | {str(out)})
+            except (OSError, ValueError):
+                pass
+        rp.write_text(json.dumps(env, indent=1) + "\n")
     summary = {k: result[k] for k in ("label", "lpn", "threads")}
     for r in runs:
         summary.update({"accepted": r["accepted"], "prover_wall_s": r["prover"]["wall_s"], "verifier_wall_s": r["verifier"]["wall_s"],
