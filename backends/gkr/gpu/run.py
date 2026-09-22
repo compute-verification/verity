@@ -21,9 +21,10 @@ from .gkr import VerifyError
 
 
 def load_instance(d: Path, device, vus: int | None = None, tile: bool = False) -> prover.Instance:
-    man = json.loads((d / "manifest.json").read_text())
-    ucirc = load_circuit(d / "circuit.txt")
-    ecirc = load_circuit(d / "epilogue.txt")
+    root = d if (d / "manifest.json").is_file() else d.parent.parent      # DIR/neg/<id> shares DIR's manifest/circuits
+    man = json.loads((root / "manifest.json").read_text())
+    ucirc = load_circuit(root / "circuit.txt")
+    ecirc = load_circuit(root / "epilogue.txt")
     steps = man["steps"]
     units = read_rows(d / "units.bin").astype("int64")
     epi = read_rows(d / "epilogue.bin").astype("int64")
@@ -41,12 +42,7 @@ def load_instance(d: Path, device, vus: int | None = None, tile: bool = False) -
     units, epi, pub = units[: vus * steps], epi[:vus], pub[:vus]
     ch = man["chain"]
     chain = prover.Chain(steps, ch["col_c"], ch["col_y"], ch["epi_y32"], ch["epi_y16"], [int(v) for v in pub])
-    with open(d / "circuit.txt", "rb") as f:
-        import hashlib
-
-        uh = hashlib.sha256(f.read()).digest()
-    with open(d / "epilogue.txt", "rb") as f:
-        eh = hashlib.sha256(f.read()).digest()
+    uh, eh = ucirc.hash, ecirc.hash
     segs = [
         prover.Segment("unit", ucirc, layers(ucirc), torch.from_numpy(units).to(device) % P, uh),
         prover.Segment("epilogue", ecirc, layers(ecirc), torch.from_numpy(epi).to(device) % P, eh),
