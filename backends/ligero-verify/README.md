@@ -19,15 +19,26 @@ ligero-verify verify --system system.bin --statement X.stmt --proof X.proof [--t
 ligero-verify batch  --system system.bin --dir DIR [--threads T] [--soundness-bits 128] [--reps R] [--json out.json]
                      # every DIR/*.proof with its .stmt; agreement with DIR/manifest.json's python_verdict when present
 ligero-verify system-digest --system system.bin
-cargo test --release                                 # hash vectors (hashlib / BLAKE3 spec), NTT / coset code
+cargo test --release                                 # hash vectors (hashlib / BLAKE3 spec), NTT / coset code, Barrett mul,
+                                                     # and tests/fixture.rs: the B=1 ZK fixture accepted, byte flips in every
+                                                     # region of it rejected, a flipped statement word rejected
 ~~~
+
+Exit status: 0 accept, 1 reject (the reason on stdout), 2 usage / unreadable operator input. Malformed *proof or
+statement bytes* never panic (every read is bounded and every element checked); an unreadable path given on the
+command line is reported and exits 2.
+
+Producing the files (on a machine with torch): `python -m backends.direct.ligero.run gate-vu --zk --vus 2
+--dump-proof X.proof --dump-statement X.stmt` for the honest sub-batches of the gate, or the generators in
+`backends/direct/ligero/serialize.py` (`dump-system`, `gen-honest`, `gen-small`, `gen-negatives`, `gen-mutations`,
+`gen-witness-mutations`; each writes `.stmt` + `.proof` + a `manifest.json` with sha256 and the Python verdict).
 
 ## Files (`ligero-*/v1`, defined in `backends/direct/ligero/serialize.py`)
 
 | file | what | who writes it |
 |---|---|---|
 | `system.bin` (`ligero-system/v1`) | the compiled REAL chain constraint system: pins, 347 linear + 3387 quadratic constraints as sparse affine forms, the chain rows, and the Python `system_id` | `serialize.py dump-system` / every generator |
-| `X.stmt` (`ligero-statement/v1`) | the verifier's configuration (`l, n, D, t, target, zk, t_pad, coin_commitment, n_proofs`) and the public words (`a, b` per unit, `y16` per column; chain layout `n_vus, steps`) | the prover side (`gen-set`, `gen-small`, `gen-negatives`) |
+| `X.stmt` (`ligero-statement/v1`) | the verifier's configuration (`l, n, D, t, target, zk, t_pad, coin_commitment, n_proofs`) and the public words (`a, b` per unit, `y16` per column; chain layout `n_vus, steps`) | the prover side (`run.py gate-vu --dump-statement`, `serialize.py gen-*`) |
 | `X.proof` (`ligero-proof/v1`) | the transcript: coin commitments + openings, root, `w, h, q [, v]`, the `t` column indices, the opened `M x t` columns, the Merkle paths | the prover side |
 
 The verifier reads the statement first, derives every size from it and the system (`k = l + t_pad`, `h_len = 2k - 1
@@ -63,6 +74,28 @@ tables are pinned in `verify.rs` (`PINNED_SYS_ID`, `PINNED_TABLE_DIGEST`); a dif
 Every NTT (D messages, D x R chain rows) and every column loop (Merkle, quadratic) runs on `--threads` OS threads
 (`std::thread::scope`, no rayon). Stage timings (`parse, statement_hash, challenge_hash, merkle, ntt, dfold,
 quadratic, chain`) are in the JSON.
+
+## Byte-level facts the document does not state (DISCREPANCIES.md D5)
+
+* Challenge-1 word order inside each of the `D` slices: `r (M) | rho_lin (L) | rho_quad (Q) | 7 chain families x l`;
+  SHAKE-256 output taken as u32 LE words, each `u mod p`.
+* Challenge-2 columns: `SHAKE-256(seed || ctr as u32 LE)` read `2t` words at a time, `u mod n`, repeats skipped,
+  `ctr += 1` until `t` distinct -- the *ordered* list is what the proof carries and what is compared.
+* Merkle leaf `BLAKE3(column as M x u32 LE)`, node `BLAKE3(left || right)`, no leaf/node domain separator (safe
+  because `4M != 64` for every system in use).
+* `w`, `h`, `q` are absorbed as raw `D x len` u32 LE arrays; `v` with a `|v=` tag and only under ZK; the coins with
+  `|coins=` / `|r=` prefixes and only when the mode commits them.
+* Statement digest text fields: `|target=` is Python's `repr(float)` (D2); `a`, `b`, `y16` are `<u2` words.
+* The evaluation domain is the coset `31 . <w_n>`; the encoder is INTT_l, zero-pad to n, scale coefficient `i` by
+  `31^i`, NTT_n.
+
+## Performance notes
+
+Single-thread time on the 4096-VU ZK sub-batch (`l = 16384`, `n = 65536`, `t = 197`, `D = 6`, 4.9 MB) is 0.13 s on an
+idle laptop and 0.33-0.64 s on the shared `vy-cpu3` EPYC; 60-65% is the message encodes (~30 NTTs of 2^16), 15-25%
+the D-fold of the linear constraints. BabyBear multiplication is a Barrett reduction (`field::reduce62`); the
+earlier `% p` on a u64 was a 20-40 cycle divide on Zen 3 and dominated there. `--threads` parallelises the encodes over
+rows and the column loops; the hashing is serial.
 
 ## What it does NOT do
 
