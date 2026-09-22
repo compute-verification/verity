@@ -560,6 +560,96 @@ if triton is not None:
             tl.store(v_ptr + vb + 5, v5.to(tl.int64), mask=m)
 
 
+    @triton.jit
+    def gate_eval_kernel(rows_ptr, ptr_ptr, idx_ptr, coef_ptr, out_ptr, copies, n_in, g_n, BLOCK: tl.constexpr):
+        """``out[c, g] = Σ_{terms t of gate g} rows[c, idx_t] · coef_t`` (base field; CSR by gate, ``coef_ptr`` = ``coef R mod p``)."""
+        pb = tl.program_id(0)
+        g = tl.program_id(1)
+        lo = tl.load(ptr_ptr + g)
+        hi = tl.load(ptr_ptr + g + 1)
+        c = pb * BLOCK + tl.arange(0, BLOCK)
+        m = c < copies
+        acc = tl.zeros([BLOCK], dtype=tl.int32)
+        for t in range(lo, hi):
+            l = tl.load(idx_ptr + t)
+            k = tl.load(coef_ptr + t).to(tl.int32)
+            x = tl.load(rows_ptr + c * n_in + l, mask=m, other=0).to(tl.int32)
+            acc = madd(acc, mmul(x, k))
+        tl.store(out_ptr + c * g_n + g, acc.to(tl.int64), mask=m)
+
+
+    @triton.jit
+    def combine_level_kernel(p_ptr, q_ptr, np_ptr, nq_ptr, n, PBASE: tl.constexpr, BLOCK: tl.constexpr):
+        """LogUp tree level: ``np[i] = p[2i] q[2i+1] + p[2i+1] q[2i]``, ``nq[i] = q[2i] q[2i+1]`` (int32 in/out, canonical;
+        ``PBASE``: ``p`` is base-field and ``np`` is extension)."""
+        pid = tl.program_id(0)
+        i = pid * BLOCK + tl.arange(0, BLOCK)
+        m = i < n
+        q0_0, q0_1, q0_2, q0_3, q0_4, q0_5 = load6(q_ptr, i * 12, m)
+        q1_0, q1_1, q1_2, q1_3, q1_4, q1_5 = load6(q_ptr, i * 12 + 6, m)
+        r0, r1, r2, r3, r4, r5 = ext_mmul(q0_0, q0_1, q0_2, q0_3, q0_4, q0_5, q1_0, q1_1, q1_2, q1_3, q1_4, q1_5)
+        ob = i * 6
+        tl.store(nq_ptr + ob + 0, mmul(r0, R2_C), mask=m)
+        tl.store(nq_ptr + ob + 1, mmul(r1, R2_C), mask=m)
+        tl.store(nq_ptr + ob + 2, mmul(r2, R2_C), mask=m)
+        tl.store(nq_ptr + ob + 3, mmul(r3, R2_C), mask=m)
+        tl.store(nq_ptr + ob + 4, mmul(r4, R2_C), mask=m)
+        tl.store(nq_ptr + ob + 5, mmul(r5, R2_C), mask=m)
+        if PBASE:
+            a = tl.load(p_ptr + i * 2, mask=m, other=0).to(tl.int32)
+            b = tl.load(p_ptr + i * 2 + 1, mask=m, other=0).to(tl.int32)
+            s0 = madd(mmul(a, q1_0), mmul(b, q0_0))
+            s1 = madd(mmul(a, q1_1), mmul(b, q0_1))
+            s2 = madd(mmul(a, q1_2), mmul(b, q0_2))
+            s3 = madd(mmul(a, q1_3), mmul(b, q0_3))
+            s4 = madd(mmul(a, q1_4), mmul(b, q0_4))
+            s5 = madd(mmul(a, q1_5), mmul(b, q0_5))
+        else:
+            a0, a1, a2, a3, a4, a5 = load6(p_ptr, i * 12, m)
+            b0, b1, b2, b3, b4, b5 = load6(p_ptr, i * 12 + 6, m)
+            x0, x1, x2, x3, x4, x5 = ext_mmul(a0, a1, a2, a3, a4, a5, q1_0, q1_1, q1_2, q1_3, q1_4, q1_5)
+            y0, y1, y2, y3, y4, y5 = ext_mmul(b0, b1, b2, b3, b4, b5, q0_0, q0_1, q0_2, q0_3, q0_4, q0_5)
+            s0 = madd(x0, y0)
+            s1 = madd(x1, y1)
+            s2 = madd(x2, y2)
+            s3 = madd(x3, y3)
+            s4 = madd(x4, y4)
+            s5 = madd(x5, y5)
+        tl.store(np_ptr + ob + 0, mmul(s0, R2_C), mask=m)
+        tl.store(np_ptr + ob + 1, mmul(s1, R2_C), mask=m)
+        tl.store(np_ptr + ob + 2, mmul(s2, R2_C), mask=m)
+        tl.store(np_ptr + ob + 3, mmul(s3, R2_C), mask=m)
+        tl.store(np_ptr + ob + 4, mmul(s4, R2_C), mask=m)
+        tl.store(np_ptr + ob + 5, mmul(s5, R2_C), mask=m)
+
+
+def combine_level(p: torch.Tensor, q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """One LogUp tree level from ``p`` ``(2n[, 6])`` and ``q`` ``(2n, 6)`` (int32) -> ``(n, 6)`` int32 each."""
+    n = q.shape[0] // 2
+    pbase = p.ndim == 1
+    np_ = torch.empty((n, DEG), dtype=torch.int32, device=q.device)
+    nq = torch.empty((n, DEG), dtype=torch.int32, device=q.device)
+    if n == 0:
+        return np_, nq
+    BLOCK = 256
+    grid = ((n + BLOCK - 1) // BLOCK,)
+    combine_level_kernel[grid](p.contiguous().view(-1), q.contiguous().view(-1), np_.view(-1), nq.view(-1), n,
+                               PBASE=pbase, BLOCK=BLOCK, num_warps=4)
+    return np_, nq
+
+
+def gate_eval(rows: torch.Tensor, ptr: torch.Tensor, idx: torch.Tensor, coef_m: torch.Tensor, g_n: int) -> torch.Tensor:
+    """``(copies, g_n)`` int64: every gate's linear form over the (base) input rows ``(copies, n_in)``; ``coef_m`` = ``coef R mod p``."""
+    copies, n_in = rows.shape
+    out = torch.empty((copies, g_n), dtype=torch.int64, device=rows.device)
+    if copies == 0 or g_n == 0:
+        return out
+    BLOCK = 128
+    grid = ((copies + BLOCK - 1) // BLOCK, g_n)
+    gate_eval_kernel[grid](rows.contiguous().view(-1), ptr, idx, coef_m, out.view(-1), copies, n_in, g_n, BLOCK=BLOCK, num_warps=4)
+    return out
+
+
 def scatter_terms(e: torch.Tensor, v: torch.Tensor, ptr: torch.Tensor, tj: torch.Tensor, tc: torch.Tensor) -> None:
     """In place ``v[u, idx] += Σ_t e[u, j_t] c_t`` (see the kernel); ``e`` ``(units, q_t, 6)``, ``v`` ``(units, ncols, 6)``
     contiguous int64, ``ptr`` ``(ncols + 1,)`` int32 CSR, ``tj`` ``(T,)`` int32, ``tc`` ``(T, 6)`` canonical int64."""

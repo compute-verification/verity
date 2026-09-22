@@ -343,6 +343,8 @@ _fast_fold = None
 _fast_logup_round = None
 _fast_phase1 = None
 _fast_scatter = None
+_fast_gate_eval = None
+_fast_combine_level = None
 try:
     import os as _os
 
@@ -355,5 +357,7 @@ try:
             _fast_logup_round = _kernels.logup_round
             _fast_phase1 = _kernels.phase1_round
             _fast_scatter = _kernels.scatter_terms
+            _fast_gate_eval = _kernels.gate_eval
+            _fast_combine_level = _kernels.combine_level
 except Exception:  # pragma: no cover
-    _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = _fast_scatter = None
+    _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = _fast_scatter = _fast_gate_eval = _fast_combine_level = None

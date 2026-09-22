@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 import torch
 
+from . import field as _field
 from .field import Limbs, P, mm_mod
 
 R16_ROWS = 65536
@@ -170,6 +171,7 @@ class Layer:
     gates: list[tuple[list[tuple[int, int]], list[tuple[int, int]]]]   # (a terms, b terms) over the input index space
     _mats: dict = field(default_factory=dict, repr=False)
     _mats_t: dict = field(default_factory=dict, repr=False)
+    _csr: dict = field(default_factory=dict, repr=False)
 
     @property
     def g_n(self) -> int:
@@ -193,13 +195,34 @@ class Layer:
 
     def eval_gates(self, rows: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """``a[c, g] = Σ_l A[g,l] rows[c,l]`` and the same for ``B`` (``rows`` ``(copies, 2^s_in)`` base)."""
-        lim = self._mats_t.get(rows.device)
+        dev = rows.device
+        if _field._fast_gate_eval is not None and rows.is_cuda:
+            csr = self._csr.get(dev)
+            if csr is None:
+                csr = tuple(self._csr_side(side, dev) for side in (0, 1))
+                self._csr[dev] = csr
+            return tuple(_field._fast_gate_eval(rows, *s, self.g_n) for s in csr)
+        lim = self._mats_t.get(dev)
         if lim is None:
-            A, B = self.matrices(rows.device)
+            A, B = self.matrices(dev)
             lim = (Limbs(A.T.contiguous()), Limbs(B.T.contiguous()))
-            self._mats_t[rows.device] = lim
+            self._mats_t[dev] = lim
         r = Limbs(rows)
         return mm_mod(r, lim[0]), mm_mod(r, lim[1])
+
+    def _csr_side(self, side: int, device) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """CSR (by gate) of one side's linear forms: ``ptr`` (g_n + 1) int32, ``idx`` int32, ``coef R mod p`` int64."""
+        ptr, idx, coef = [0], [], []
+        for ta, tb in self.gates:
+            acc: dict[int, int] = {}
+            for i, c in (ta, tb)[side]:
+                acc[i] = (acc.get(i, 0) + c) % P
+            for i, c in sorted(acc.items()):
+                idx.append(i)
+                coef.append(c * (1 << 32) % P)
+            ptr.append(len(idx))
+        return (torch.tensor(ptr, dtype=torch.int32, device=device), torch.tensor(idx, dtype=torch.int32, device=device),
+                torch.tensor(coef, dtype=torch.int64, device=device))
 
     def eval_a_at(self, el: torch.Tensor) -> torch.Tensor:
         """``Ã_g(l*) = Σ_l A[g,l] eq(l*, l)`` for every gate, ``el`` ``(2^s_in, 6)`` -> ``(g_n, 6)``."""

@@ -159,6 +159,8 @@ def build_leaves(t: Table, trows: torch.Tensor, values: list[torch.Tensor], m: t
 # ---------------------------------------------------------------------------------------------------------------------
 
 def _combine_level(p: torch.Tensor, q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    if _field._fast_combine_level is not None and q.is_cuda:
+        return _field._fast_combine_level(p, q)
     p0, p1 = _split(p)
     q0, q1 = _split(q)
     n = q0.shape[0]
