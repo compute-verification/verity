@@ -491,8 +491,8 @@ class LoweringError(ValueError):
 def lower_call_to_subcircuit(call: FunctionCall):
     """A `GemmCoordinate` call's gates as a `typed-obligation/v0` `Subcircuit` (`veritor.interface`). Incoming values
     are the call's `args` in signature order (x[0..K], wrow[0..K]); the one outgoing value is the call's return."""
-    from veritor.interface.programs import make_subcircuit
-    from veritor.interface.typed_obligation import GATE, IN, Definition
+    from verity.verification.programs import make_subcircuit
+    from verity.verification.typed_obligation import GATE, IN, Definition
 
     args = list(call.args)
     pos: dict[int, int] = {}

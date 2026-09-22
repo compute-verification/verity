@@ -27,7 +27,8 @@ import numpy as np
 
 from verity.ir.defs import PrimitiveDefinition, primitive
 from verity.ir.types import Array, Value
-from verity_vllm.registry import tc_total
+from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16 as _AMPERE_BF16_M16N8K16
+from verity.ml.tc.total import tc_dot_total as _tc_dot_total
 
 BF16, F32, I32, BIT = Value(16), Value(32), Value(32), Value(1)
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -354,8 +355,8 @@ def RopeOutAdd(x: int, y: int, c: int, s: int) -> int:
 
 @lru_cache(maxsize=None)
 def _mma():
-    """The 3.12 finite reference (`verity_vllm_numerics.mma` -> `veritor.core.silicon`, `type X = ...` syntax): used by the tests
-    as one of the oracles `_tc_dot16_total` is checked against; NOT used at evaluation time (the pods' Commit venv is 3.11)."""
+    """The finite reference (`verity_vllm_numerics.mma` -> `verity.ml.tc.silicon`): used by the tests as one of the oracles
+    `_tc_dot16_total` is checked against; NOT used at evaluation time."""
     from verity_vllm_numerics import mma  # noqa: WPS433
     return mma
 
@@ -370,8 +371,8 @@ def _tc_dot16_total(acc: int, a: tuple[int, ...], b: tuple[int, ...]) -> int:
     [R17 dense, int-3] Before this the prim evaluated through `verity_vllm_numerics.mma` (unimportable on the pods' 3.11) with a
     documented-not-measured extension path that gave 0x7FC00000 for NaN and ignored a group's finite overflow beside an infinite
     operand; both differences are on non-finite outcomes only, which the vectorised twin flags and the sampled replay never
-    compares (verity.ir/tests/test_derived_rows.py states them)."""
-    return tc_total.tc_dot_total(tc_total.AMPERE_BF16_M16N8K16, acc, a, b)
+    compares (tests/ir/test_derived_rows.py states them)."""
+    return _tc_dot_total(_AMPERE_BF16_M16N8K16, acc, a, b)
 
 
 A16 = Array(16, BF16)
@@ -380,7 +381,7 @@ A16 = Array(16, BF16)
 @primitive("AmpereBF16TcDot16", 1, [("acc", F32), ("a", A16), ("b", A16)], F32, conformance="exact-model-tested")
 def AmpereBF16TcDot16(acc: int, *ab: int) -> int:
     """One accumulator-coordinate transition of `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`
-    (16 products into `acc`): `registry.tc_total.AMPERE_BF16_M16N8K16` (see `_tc_dot16_total`; 3.11-evaluable, no veritor import)."""
+    (16 products into `acc`): `verity.ml.tc.total.tc_dot_total` on `AMPERE_BF16_M16N8K16` (see `_tc_dot16_total`)."""
     return _tc_dot16_total(acc, tuple(ab[:16]), tuple(ab[16:32]))
 
 

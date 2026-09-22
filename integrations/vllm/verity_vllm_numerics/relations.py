@@ -72,11 +72,21 @@ from typing import Any
 
 import numpy as np
 
-from veritor.core import silicon as S
 
 from . import cpu_model as CM
 from . import kernel_zoo as Z
 from .mma import AMPERE_BF16, TCModel, tc_dot_chain
+
+
+def _f32_to_bf16(bits):
+    """FP32 words -> BF16 words, nearest-even, NaN -> 0x7FC0: the vectorised form of `verity.ml.tc.cast.f32_to_bf16_word`
+    (veritor's `core.silicon.f32_to_bf16`, kept here because verity.ml is stdlib-only)."""
+    bits = np.asarray(bits).astype(np.uint32, copy=False)
+    with np.errstate(over="ignore"):
+        rounded = (bits + np.uint32(0x7FFF) + ((bits >> 16) & np.uint32(1))) >> 16
+    exponent_all_ones = (bits & np.uint32(0x7F800000)) == np.uint32(0x7F800000)
+    is_nan = exponent_all_ones & ((bits & np.uint32(0x007FFFFF)) != 0)
+    return np.where(is_nan, np.uint32(0x7FC0), rounded).astype(np.uint16)
 
 MODEL_VERSION = "gemm.bf16.v1 = ampere_bf16_m16n8k16 chain (silicon.AMPERE_BF16_M16N8K16: groups (8,8), width 25, exponent floor -132) + epilogue; A100 validation 2026-09-07"
 EPILOGUES = {
@@ -459,13 +469,13 @@ def independent_gemm_coordinate(node: Any, opened_inputs: Mapping[str, Any], j: 
     v = np.array([acc], np.uint32).view(np.float32)
     if spec.bias_mode == 1:
         v = (v + np.array([bias_word << 16], np.uint32).view(np.float32)).astype(np.float32)
-        out = S.f32_to_bf16(v.view(np.uint32))
+        out = _f32_to_bf16(v.view(np.uint32))
     elif spec.bias_mode == 3:
-        r = S.f32_to_bf16(v.view(np.uint32))
+        r = _f32_to_bf16(v.view(np.uint32))
         rv = (r.astype(np.uint32) << 16).view(np.float32)
-        out = S.f32_to_bf16((rv + np.array([bias_word << 16], np.uint32).view(np.float32)).astype(np.float32).view(np.uint32))
+        out = _f32_to_bf16((rv + np.array([bias_word << 16], np.uint32).view(np.float32)).astype(np.float32).view(np.uint32))
     else:
-        out = S.f32_to_bf16(v.view(np.uint32))
+        out = _f32_to_bf16(v.view(np.uint32))
     return out.astype("<u2").tobytes()
 
 

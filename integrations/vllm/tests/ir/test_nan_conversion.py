@@ -20,7 +20,7 @@ from verity.ir.program import Program
 from verity_vllm.registry import b1, conformance as CF
 from verity_vllm.registry import prims as P
 
-from veritor.core.tc import f32_to_bf16_hw_word, f32_to_bf16_word, is_nan_f32_word
+from verity.ml.tc.cast import f32_is_nan as is_nan_f32_word, f32_to_bf16_hw_word, f32_to_bf16_word
 
 REPO = Path(__file__).resolve().parents[2]
 MEASURED = sorted((REPO / "docs/data/tc-total-2026-09-07").glob("*/cvt_special.json"))
@@ -95,7 +95,7 @@ def test_conformance_record_names_the_evidence():
 
 def test_scan_records_match_the_conformance_record():
     """The two store scans (`docs/data/l8-nan-scan-2026-09-07/`) are what the record states."""
-    root = Path(__file__).resolve().parents[2] / "docs/data/l8-nan-scan-2026-09-07"
+    root = Path(__file__).resolve().parents[2] / "data/l8-nan-scan-2026-09-07"   # was docs/data/ in veritor
     stated = CF.NAN_CANONICALISATION["recorded_traces_finite"]
     for config in ("B0", "B1"):
         scan = json.loads((root / f"{config}.json").read_text())

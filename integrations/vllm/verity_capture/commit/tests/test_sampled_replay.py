@@ -1500,24 +1500,15 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
     `HOPPER_WGMMA_FAMILY_VERSION`, restated by `registry.tc_total`) of the k16 step it replays through, so two Definitions of one
     name with different non-finite content are told apart on the record itself.  The strings are literals (EVALUATORS must import
     without verity.ir); this test holds them equal to the constants the step is evaluated with."""
-    from verity_vllm.registry import tc_total as TC
+    from verity.ml.tc import total as TC   # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
 
-    ampere = f"registry.tc_total {TC.AMPERE_BF16_M16N8K16.name} total family v{TC.TOTAL_FAMILY_VERSION}"
+    ampere = f"registry.tc_total {TC.AMPERE_BF16_DOT16_TOTAL.name} total family v{TC.TOTAL_FAMILY_VERSION}"
     hopper = f"registry.tc_total {TC.HOPPER_BF16_WGMMA_K16.name} family v{TC.HOPPER_WGMMA_FAMILY_VERSION}"
-    assert TC.AMPERE_BF16_M16N8K16.family_version == TC.TOTAL_FAMILY_VERSION == "3"
-    assert TC.HOPPER_BF16_WGMMA_K16.family_version == TC.HOPPER_WGMMA_FAMILY_VERSION == "1"
+    assert TC.TOTAL_FAMILY_VERSION == "3" and TC.HOPPER_WGMMA_FAMILY_VERSION == "1"
     for name in ("Gemm_v1", "Attention_v3"):
         assert ampere in SR.EVALUATORS[name] and "hopper" not in SR.EVALUATORS[name].split("k16 step = ")[1], name
     for name in ("Gemm_v2", "Attention_v2"):
         assert hopper in SR.EVALUATORS[name] and ampere.split(" ", 1)[1] in SR.EVALUATORS[name], name
-    # [rel int-5 podgate] importorskip catches ImportError only: on the pod's Python 3.11 the veritor package raises SyntaxError
-    # (`type OccupantShape = ...`, the M-0259 Gemm_v2 class) -- skip on that too; the port's constants above are asserted regardless
-    try:
-        from veritor.core import silicon_total
-    except (ImportError, SyntaxError):
-        pytest.skip("veritor is Python 3.12 syntax; tc_total is the port")
-    assert silicon_total.TOTAL_FAMILY_VERSION == TC.TOTAL_FAMILY_VERSION
-    assert silicon_total.HOPPER_WGMMA_FAMILY_VERSION == TC.HOPPER_WGMMA_FAMILY_VERSION
 
 
 def test_moe_evaluators_equal_the_registered_definitions():

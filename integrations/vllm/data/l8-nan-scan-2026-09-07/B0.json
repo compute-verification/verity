@@ -1,0 +1,17 @@
+{
+ "store": "vllm-poc/bundles/B0-358bb6d66805-ta1eager-commit.tar.xz:commit",
+ "totals": {
+  "bfloat16/inf_words": 0,
+  "bfloat16/leaves": 14126,
+  "bfloat16/nan_words": 0,
+  "bfloat16/words": 12568704,
+  "int32/leaves": 8,
+  "int32/words": 32
+ },
+ "leaves_with_nan": 0,
+ "leaves_with_inf": 0,
+ "distinct_nan_words": {},
+ "ops_with_nan": {},
+ "nan_leaf_examples": [],
+ "inf_leaf_examples": []
+}

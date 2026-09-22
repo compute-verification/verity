@@ -2,11 +2,13 @@
 
     silicon   the finite-domain model (Hawkeye's grouped truncating accumulation, generalised over groups/width/floor)
     total     the total function on every encoding (NaN, infinities, saturation; measured on A100, RTX 4090, H100)
+    total_fp8 the same total rules for the Hopper E4M3 k32 step (wgmma m64nNk32 f32.e4m3.e4m3; measured on H100)
     cast      FP32 <-> BF16 word casts
     relation  the step as a minimal algebraic relation (witness columns, mul/lin/lookup predicates) and its census
 
 The step is `total.tc_dot_total(pipeline, acc_word, a_words, b_words) -> acc_word'`, with `pipeline` one of
-`silicon.AMPERE_BF16_M16N8K16` or `total.HOPPER_BF16_WGMMA_K16`.  This package imports nothing but the standard library.
+`silicon.AMPERE_BF16_M16N8K16` or `total.HOPPER_BF16_WGMMA_K16`; the FP8 step is
+`total_fp8.tc_dot_total_e4m3(total_fp8.HOPPER_E4M3_WGMMA_K32, ...)`.  This package imports nothing but the standard library.
 """
 from .cast import bf16_to_f32_word, f32_is_nan, f32_to_bf16_hw_word, f32_to_bf16_word  # noqa: F401
 from .errors import InvalidArtifact  # noqa: F401
@@ -37,4 +39,11 @@ from .total import (  # noqa: F401
     group_step_total,
     pack_value,
     tc_dot_total,
+)
+from .total_fp8 import (  # noqa: F401
+    HOPPER_E4M3_FAMILY_VERSION,
+    HOPPER_E4M3_WGMMA_K32,
+    e4m3_class,
+    e4m3_product_total,
+    tc_dot_total_e4m3,
 )

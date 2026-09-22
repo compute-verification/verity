@@ -34,7 +34,7 @@ Registered functions (all `Name_v1`):
   composites  Fp8RowAbsMax{K}, Fp8RowScale, Fp8ActQuant{K}, DotE4m3{K}, ScaledMmFp8Coordinate{K,BIAS},
               ScaledMmFp8{K,N,BIAS} (the cutlass GEMM over the quantised row), QuantLinearFp8{K,N,BIAS} (= Fp8ActQuant
               + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS}
-`verity.ir/registry/b1.py` (TA1) and `hopper.py` (HP) are not modified; the Hopper bf16 composites (RMSNorm, RoPE,
+`verity_vllm/registry/b1.py` (TA1) and `hopper.py` (HP) are not modified; the Hopper bf16 composites (RMSNorm, RoPE,
 AttentionFA3, SiluMul, Embedding, GemmHopper for lm_head, TokenSelect) are reused as registered.
 """
 
@@ -173,7 +173,8 @@ def F32ToE4m3Sat(x: int) -> int:
 
 
 def _fp8_total():
-    from veritor.core.silicon_total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3  # src/veritor (Python 3.12)
+    # verity.ml.tc.total_fp8: veritor's core/silicon_total_fp8.py promoted verbatim (the same lineage as the BF16 total step)
+    from verity.ml.tc.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
 
     return HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
 
@@ -307,7 +308,7 @@ def ScaledMmFp8(B, S, xq, sx, w, sw, *bias):
            lambda S: (((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, E4M3))), ("sw", F32))
                        + ((("b", Array(S.N, BF16)),) if S.BIAS else ())),
                       Tuple(Array(S.K, E4M3), F32, Array(S.N, BF16))),
-           conformance="exact-model-tested; the two halves are the production nodes (Fp8ActQuant, ScaledMmFp8); as one function on real rows: verity.ir/tests/test_fp8.py::test_quant_linear_fp8_on_production_row (layer 0 qkv_proj, t=0/63/130: x_q, s_x and eight output words exact)")
+           conformance="exact-model-tested; the two halves are the production nodes (Fp8ActQuant, ScaledMmFp8); as one function on real rows: tests/ir/test_fp8.py::test_quant_linear_fp8_on_production_row (layer 0 qkv_proj, t=0/63/130: x_q, s_x and eight output words exact)")
 def QuantLinearFp8(B, S, x, w, sw, *bias):
     """The FP8 linear on one token row: `Fp8ActQuant` (computed x_q and s_x from the bf16 row) then `ScaledMmFp8`.
     Returns (x_q, s_x, y) — the three values production materialises.  The layer functions call the two halves as

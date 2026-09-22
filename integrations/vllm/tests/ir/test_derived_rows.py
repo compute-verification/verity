@@ -135,15 +135,11 @@ def test_tc_dot16_matches_prim():
 
 
 def _veritor_silicon():
-    """`(veritor.core.silicon, veritor.core.silicon_total)` -- the 3.12 reference the Hopper port is held against -- or None where
-    `src/veritor` does not import (its `type X = ...` statements are Python 3.12 syntax; the pods' Commit venv is 3.11, rel M-0227).
-    The tests that need the oracle skip BY NAME there; the port-vs-twin checks and the total-rule checks run on every interpreter."""
-    try:
-        from veritor.core import silicon, silicon_total
-    except (SyntaxError, ImportError) as e:
-        print(f"veritor reference not importable here ({type(e).__name__}: {str(e)[:80]}) -- oracle comparisons skipped by name")
-        return None
-    return silicon, silicon_total
+    """`(verity.ml.tc.silicon, verity.ml.tc.total)` -- veritor's `core.silicon` / `core.silicon_total` promoted verbatim into Verity's
+    core; the registered tensor-core primitives are held to them word for word on every encoding.  (Until R19 the reference was
+    `src/veritor`, importable only on 3.12; the Verity runtime is 3.12 everywhere, so the oracle always imports.)"""
+    from verity.ml.tc import silicon, total
+    return silicon, total
 
 
 def _bf16_words_every_encoding(rng, shape):
@@ -196,21 +192,21 @@ def test_hopper_wgmma_port_equals_silicon_total_on_every_encoding():
 
 
 def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
-    """Runs on every interpreter (the pods' 3.11 included): the registered HopperBF16WgmmaDot16 evaluates without `veritor` and
-    follows the total rules of silicon_total by construction -- any NaN operand / acc -> 0x7FFFFFFF; inf * 0 -> NaN; infinities
+    """The registered HopperBF16WgmmaDot16 evaluates from Verity's core alone (`verity.ml.tc.total`; no `veritor`, no numpy) and
+    follows the total rules of the step by construction -- any NaN operand / acc -> 0x7FFFFFFF; inf * 0 -> NaN; infinities
     of both signs -> NaN, of one sign -> that infinity (finite terms ignored); finite overflow -> the sticky infinity; an all-zero
     group -> +0 (never -0); a subnormal result is encoded as a subnormal; the 26-bit adder rounds by truncation."""
     from verity_vllm.registry import hopper as H
     one, two, z, nz, inf, ninf, nan, big = 0x3F80, 0x4000, 0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F7F
     ones = [one] * 16
-    saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon_total")}
+    saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon_total", "numpy")}
     try:
         for k in saved:
-            sys.modules[k] = None                                                  # any `import veritor...` now raises ImportError
+            sys.modules[k] = None                                                  # any `import veritor...` / `import numpy` now raises
         ev = H.HopperBF16WgmmaDot16.evaluate
-        assert ev(0, *ones, *ones) == 0x41800000                                   # evaluates with veritor unimportable (the pods)
-        with pytest.raises(ImportError):
-            H._hopper_total()                                                      # the reference is the only veritor user, and it is lazy
+        assert ev(0, *ones, *ones) == 0x41800000                                   # evaluates with veritor and numpy unimportable
+        pipe, fn = H._hopper_total()                                               # the definition of record is core, stdlib only
+        assert pipe.name == "hopper_bf16_wgmma_k16" and fn(pipe, 0, ones, ones) == 0x41800000
     finally:
         for k, v in saved.items():
             if v is None:
@@ -255,14 +251,13 @@ def test_ampere_tc_dot16_port_equals_silicon_total_and_the_mma_finite_model_on_e
     if ref is None:
         pytest.skip("veritor.core.silicon(_total) (Python 3.12 syntax) is not importable on this interpreter: oracle comparison skipped BY NAME")
     from verity_vllm.registry import prims as P
-    from verity_vllm.registry import tc_total as T
     S, ST = ref
     mma = P._mma()
     rng = np.random.default_rng(1848)
 
     def check(acc, a, b):
         want = ST.tc_dot_total(ST.AMPERE_BF16_DOT16_TOTAL, acc, list(a), list(b))
-        got = T.tc_dot_total(T.AMPERE_BF16_M16N8K16, acc, a, b)
+        got = P._tc_dot16_total(acc, tuple(a), tuple(b))
         assert got == want, (hex(acc), [hex(v) for v in a], [hex(v) for v in b], hex(want), hex(got))
         assert P.AmpereBF16TcDot16.evaluate(acc, *a, *b) == want
         return want

@@ -13,8 +13,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from veritor.core import silicon as S
-from veritor.core.errors import InvalidArtifact
+from verity.errors import InvalidArtifact
+from verity.ml.tc import silicon as S
 
 __all__ = [
     "AMPERE_BF16",

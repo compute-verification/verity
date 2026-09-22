@@ -37,7 +37,8 @@ from __future__ import annotations
 import types
 
 from verity.ir.defs import CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, primitive
-from verity_vllm.registry import b1, tc_total
+from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
+from verity_vllm.registry import b1
 from verity_vllm.registry import prims as P
 from verity_vllm.registry.prims import A16, F32, f32_is_nan
 
@@ -47,25 +48,24 @@ from verity_vllm.registry.prims import A16, F32, f32_is_nan
 
 
 def _hopper_total():
-    """The 3.12 reference (`src/veritor`, `type X = ...` syntax): used by the tests as the oracle the port below is
-    checked against word for word; NOT used at evaluation time -- the pods' Commit venv is Python 3.11 (rel M-0227)."""
-    from veritor.core.silicon_total import HOPPER_BF16_WGMMA_K16, tc_dot_total  # src/veritor (Python 3.12)
-
+    """The step's definition of record: `verity.ml.tc.total` (veritor's `core/silicon_total.py` promoted verbatim, stdlib only,
+    Python >= 3.12).  Until R19 the pods evaluated a pure-Python 3.11 port (`registry.tc_total`, held word-equal to this by
+    tests); the Verity pod runtime is 3.12, so the definition itself evaluates."""
     return HOPPER_BF16_WGMMA_K16, tc_dot_total
 
 
-# `veritor.core.silicon_total.HOPPER_BF16_WGMMA_K16`, stated in verity.ir/registry/tc_total.py so the relation is evaluable without `veritor`.
-HOPPER_WGMMA_K = tc_total.HOPPER_BF16_WGMMA_K16.k                       # 16 operand pairs per step (one group: all sixteen products + acc)
-HOPPER_WGMMA_WIDTH = tc_total.HOPPER_BF16_WGMMA_K16.width               # 26-bit adder
-HOPPER_WGMMA_ZERO_EXPONENT = tc_total.HOPPER_BF16_WGMMA_K16.zero_exponent  # exponent floor -133
+# `verity.ml.tc.total.HOPPER_BF16_WGMMA_K16` (lane HP's re-measured pipeline): the relation's parameters, stated once in core.
+HOPPER_WGMMA_K = HOPPER_BF16_WGMMA_K16.k                       # 16 operand pairs per step (one group: all sixteen products + acc)
+HOPPER_WGMMA_WIDTH = HOPPER_BF16_WGMMA_K16.width               # 26-bit adder
+HOPPER_WGMMA_ZERO_EXPONENT = HOPPER_BF16_WGMMA_K16.zero_exponent  # exponent floor -133
 
 
 def hopper_wgmma_dot16_total(acc_bits: int, a, b) -> int:
-    """`D = acc + sum_{k<16} a[k]*b[k]` on EVERY encoding as `veritor.core.silicon_total.tc_dot_total(HOPPER_BF16_WGMMA_K16, ...)`
-    defines it: `tc_total.tc_dot_total` (the pure-Python 3.11 gate-for-gate port, one group of sixteen products + the accumulator,
-    26-bit adder, floor -133, the NaN / infinity / sticky-overflow / +0 / subnormal rules of silicon_total) on the Hopper pipeline.
-    Checked word for word against the reference in verity.ir/tests/test_derived_rows.py where that reference imports (3.12)."""
-    return tc_total.tc_dot_total(tc_total.HOPPER_BF16_WGMMA_K16, acc_bits, a, b)
+    """`D = acc + sum_{k<16} a[k]*b[k]` on EVERY encoding as `verity.ml.tc.total.tc_dot_total(HOPPER_BF16_WGMMA_K16, ...)`
+    defines it (one group of sixteen products + the accumulator, 26-bit adder, floor -133, the NaN / infinity / sticky-overflow /
+    +0 / subnormal rules of the total step) on the Hopper pipeline.  tests/ir/test_derived_rows.py holds the registered primitive
+    to it word for word."""
+    return tc_dot_total(HOPPER_BF16_WGMMA_K16, acc_bits, a, b)
 
 
 @primitive("HopperBF16WgmmaDot16", 1, [("acc", F32), ("a", A16), ("b", A16)], F32, conformance="exact-model-tested")
