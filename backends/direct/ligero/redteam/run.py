@@ -221,7 +221,23 @@ def main(argv=None) -> int:
         sim_rep["aborting_on_q_leak"] = {"n": nq, "real_abort_rate": ab_real / nq, "sim_abort_rate": ab_sim / nq,
                                          "real_first_accumulator_f_odd": bool(first_f & 1),
                                          "note": "the abort event equals a witness bit for the real prover and never fires for the simulator: abort-conditioning inherits the q leak"}
-        print("simulator aborting:", sim_rep["aborting_on_root"], sim_rep["aborting_on_q_leak"])
+        # ... and as a function of the PUBLIC checks on (v, q) (red-team-zk-2 G1): abort at slot 2 iff v|_H != beta
+        # or sum_H q != rhs.  The honest prover never trips it; the simulator's dummy run must not either.
+        from .zk2_dummy import PublicCheckVerifier
+        ab_real = ab_sim = 0
+        for _ in range(nq):
+            Vp = PublicCheckVerifier(R, cfg, lay, y16, a, b, dev)
+            try:
+                R.prove_vus(real, check=False, coins=Vp)
+            except CoinOpeningError:
+                ab_real += 1
+            Vp2 = PublicCheckVerifier(R, cfg, lay, y16, a, b, dev)
+            if isinstance(simulator.simulate(Vp2, R.p, R.sys, R.tb, cfg, lay, y16, a, b, dev, orc, rng=rng), simulator.AbortTranscript):
+                ab_sim += 1
+        sim_rep["aborting_on_public_checks"] = {"n": nq, "real_abort_rate": ab_real / nq, "sim_abort_rate": ab_sim / nq,
+                                                "expected": 0.0, "note": "G1: dummy-run v0, q0 now on {v|_H = beta}, {sum_H q = rhs}"}
+        assert ab_real == 0 and ab_sim == 0, sim_rep["aborting_on_public_checks"]
+        print("simulator aborting:", sim_rep["aborting_on_root"], sim_rep["aborting_on_q_leak"], sim_rep["aborting_on_public_checks"])
         # (d) indistinguishability: N real vs N simulated accepting transcripts, honest coins, per position
         reals, sims = [], []
         t0 = time.perf_counter()

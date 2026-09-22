@@ -309,22 +309,38 @@ hiding term is in the union).
 collision, `2^-128` at `2^64` queries) and of Blake3 (Merkle); SHAKE-256 as a PRG of the verifier's coin (any
 extendable PRF/XOF would do -- the prover never queries it on inputs of its choosing).  Hiding of the coins from
 the prover (`c_i = H(r_i || s_i)`, 512 random bits) is booked as a random-oracle term but only needs a hiding
-commitment.  **No hash programming, no random oracle for zero knowledge.**  The unopened Merkle leaves are hidden
-by Blake3 of a uniform column (random-oracle hiding); statistically hiding salted leaves are not implemented.
+commitment.  **No hash programming; the challenge hash needs no random oracle.**  Exactly one item of the
+zero-knowledge argument still needs the random-oracle model (red-team-zk-2 G3): the hiding of the **unopened
+Merkle leaves** -- the leaves are unsalted `Blake3(column)`, so the siblings in the opened paths hide their
+(masked, high-entropy) columns only as a random-oracle-flavoured property of Blake3.  The interactive ledger row
+therefore lists `assumptions = ["hash", "random-oracle (Merkle hiding)"]`.  Salting the leaves (`Blake3(column ||
+salt_c)`, `salt_c` uniform 32 bytes, opened with the column) would make the commitment statistically hiding and
+remove that item; cost: `+32` bytes hashed per leaf at commit (one extra Blake3 block per column, against `4 M`
+bytes of column already hashed) and `+32 t` bytes per proof in the openings (`+6.3 KB` at `t = 197`, ~0.1 % of the
+transcript) -- not implemented on this branch.
 
 *Simulator (demonstrated: `redteam/simulator.py`, run against the real `verify()` under the real hash).*  `S`
-receives `c1, c2`, runs `V*` once on a dummy transcript (random `root0`, uniform `w0, h0, q0, v0`), receives the
+receives `c1, c2`, runs `V*` once on a dummy transcript: random `root0`; after `V*` opens `r1` the round-1
+challenges (hence the public `beta`, `rhs`) are known, and the dummy messages are drawn from the
+**honest-observable distribution** -- `w0, h0` uniform, `v0` uniform on `{v|_H = beta}`, `q0` uniform on
+`{sum_H q = rhs}` (red-team-zk-2 G1: with `v0, q0` merely uniform, a `V*` applying the public checks aborted on the
+dummy run w.p. 1 and never on the real prover -- advantage 1, a simulator bug, fixed on lane b-zk-fix-2); receives the
 openings `(r1, r2)` (or an abort, which it outputs), rewinds `V*` to after step 0, computes `r, rho, rc, cols`
 exactly as the verifier does, samples the fake tableau (witness rows uniform of degree `< k`, `s_prox` uniform, `v`
 uniform on `v|_H = beta`, `h` uniform, `q` uniform on `sum_H q = rhs`, `u_cb` uniform) and solves `s_lin, s_qa,
 u_ca` by Lagrange interpolation at the `t <= t_pad` opened points plus uniform slack so every column test holds at
-`cols`; `w := r . p' + s_prox`.  Commits, replays `V*`: by binding it opens the same coins or aborts (Goldreich-Kahan,
-constant expected rewinds).  Models covered in `redteam/run.py`: honest `V`; adaptive `V*` that opens a slot to a
+`cols`; `w := r . p' + s_prox`.  Commits, replays `V*`: by binding it opens the same coins or aborts (Goldreich-Kahan).
+*Rewinds (red-team-zk-2 G2):* against a `V*` that aborts on the replay with probability `p`, the loop needs `1/(1-p)`
+expected rewinds -- not a constant; `redteam/simulator.py` caps at `max_rewinds = 8` and outputs an abort transcript
+on exhaustion, a simulation error of `(1-p) p^8` (up to `0.039` at `p = 0.9`), so the demonstrated simulator is
+exact only for `V*` with bounded abort probability; the standard GK estimator of `p` makes it expected-polynomial
+with no such error and is not implemented.  Models covered in `redteam/run.py`: honest `V`; adaptive `V*` that opens a slot to a
 value depending on `root` / `(w, h)` (needs a collision: the prover aborts having sent only blinded messages, the
 simulator outputs the same abort); statement-adaptive `V*` that grinds `r2` before step 0 against a target column
 set (legal -- an interactive verifier owns its coins; the masking hides any `t <= t_pad` columns; simulated like any
 coins); selectively aborting `V*` (abort on a predicate of `root`, or of `q`: the latter no longer correlates with
-the witness after F1).  Indistinguishability: per-position chi-square real vs simulated on every message and on the
+the witness after F1; or on the public checks `v|_H = beta`, `sum_H q = rhs` -- `zk2_dummy.PublicCheckVerifier`,
+which must abort in neither world).  Indistinguishability: per-position chi-square real vs simulated on every message and on the
 opened columns, plus the two `q` distinguishers of the red team (witness-free consistency, known-witness recovery),
 which must now be at chance on real and simulated transcripts alike.
 
