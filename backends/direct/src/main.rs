@@ -60,6 +60,7 @@ fn main() {
         Some("chain-layout") if v2 => chain_layout_v2(&args),
         Some("vu-bench") if v2 => match arg(&args, "--ext").as_deref() {
             Some("5") => vu_bench_v2::<verity_direct::stark::BabyBear5Backend>(&args),
+            Some("6") => vu_bench_v2::<verity_direct::stark::BabyBear6Backend>(&args),
             _ => vu_bench_v2::<BabyBearBackend>(&args),
         },
         Some("vu-neg") if v2 => vu_neg_v2(&args),

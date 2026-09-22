@@ -18,6 +18,7 @@ for a in "$@"; do
     --skip-tests) SKIP_TESTS=1 ;;
     --skip-checks) SKIP_CHECKS=1 ;;
     --ext5) EXT=5 ;;
+    --ext6) EXT=6 ;;
     --bind-operands) BIND="--bind-operands" ;;
     --no-bench) NO_BENCH=1 ;;
   esac

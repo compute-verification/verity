@@ -152,3 +152,61 @@ fn v2_statement_bound_roundtrip() {
     let three = Statement::new(vec![stmt.words[0], stmt.words[1], stmt.words[0]]);
     assert!(air_v2::verify_bound::<BabyBearBackend>(&air_, &lay, &proof, DEFAULT_FRI, &three).is_err(), "bound to a statement of another size");
 }
+
+/// The vendored BabyBear^6 (`vendor/p3-baby-bear`, X^6 - 22): field axioms on random elements, the 2-adic
+/// generator's order, Frobenius x^(p^6) = x, and the extension's relation to the base field.
+#[test]
+fn babybear6_field() {
+    use p3_field::{Field, TwoAdicField};
+    use rand::{Rng, SeedableRng};
+    type EF6 = BinomialExtensionField<Val32, 6>;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(7);
+    let rnd = |rng: &mut rand::rngs::StdRng| EF6::from_base_slice(&(0..6).map(|_| Val32::from_canonical_u32(rng.gen_range(0..2013265921))).collect::<Vec<_>>());
+    let p: u64 = 2013265921;
+    for _ in 0..50 {
+        let (a, b, c) = (rnd(&mut rng), rnd(&mut rng), rnd(&mut rng));
+        assert_eq!((a * b) * c, a * (b * c));
+        assert_eq!(a * (b + c), a * b + a * c);
+        assert_eq!(a * b, b * a);
+        if a != EF6::zero() {
+            assert_eq!(a * a.inverse(), EF6::one());
+        }
+        // Frobenius: x^p is an automorphism; x^(p^6) = x, and x^(p^k) != x generically for k < 6
+        let mut x = a;
+        for k in 1..=6 {
+            x = x.exp_u64(p);
+            if k < 6 {
+                assert_ne!(x, a, "x^(p^{k}) = x: the extension would be smaller than degree 6");
+            }
+        }
+        assert_eq!(x, a);
+    }
+    // 2-adicity 28: g has order exactly 2^28
+    let g = EF6::two_adic_generator(28);
+    assert_eq!(g.exp_power_of_2(28), EF6::one());
+    assert_ne!(g.exp_power_of_2(27), EF6::one());
+    for bits in [0usize, 1, 5, 27] {
+        let h = EF6::two_adic_generator(bits);
+        assert_eq!(h.exp_power_of_2(bits), EF6::one());
+        if bits > 0 {
+            assert_ne!(h.exp_power_of_2(bits - 1), EF6::one());
+        }
+    }
+    // X^6 = 22
+    let x = EF6::from_base_slice(&[Val32::zero(), Val32::one(), Val32::zero(), Val32::zero(), Val32::zero(), Val32::zero()]);
+    assert_eq!(x.exp_u64(6), EF6::from_canonical_u32(22));
+    // the multiplicative generator has order p^6 - 1: not 1 at (p^6-1)/q for the two small prime factors we can reach
+    let gen = EF6::generator();
+    let n_over_2: u128 = ((p as u128).pow(6) - 1) / 2;
+    let mut acc = EF6::one();
+    let mut base = gen;
+    let mut e = n_over_2;
+    while e > 0 {
+        if e & 1 == 1 {
+            acc *= base;
+        }
+        base = base.square();
+        e >>= 1;
+    }
+    assert_ne!(acc, EF6::one());
+}
