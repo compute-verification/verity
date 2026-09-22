@@ -142,3 +142,22 @@ def test_layer_sequence_simt():
     r = ref.random_ext(rng)
     _, (tf, _, _) = kern.round(tf, tg, th, r, eval=False)
     assert tf.to_ints() == ref.fold(rf, r)
+
+
+@pytest.mark.skipif(not CUDA, reason="CUDA only")
+@pytest.mark.parametrize("t,mode", [(8, "first"), (8, "fold+eval"), (8, "fold"), (200, "fold+eval"), (4096, "fold+eval"), (4096, "first")])
+def test_logup_kernel_matches_reference(t, mode):
+    from tensor.fused import round_logup, round_simt
+    rng = random.Random(500 + t + len(mode))
+    tabs = [[ref.random_ext(rng) for _ in range(t)] for _ in range(5)]
+    lam = ref.random_ext(rng)
+    r_prev = ref.random_ext(rng) if "fold" in mode else None
+    S_ref, folded_ref = round_logup.logup_reference(*tabs, lam, r_prev)
+    dev = os.environ["TC_DEVICE"]
+    dt = [round_simt.FusedTable.from_ints(x, 6, dev) for x in tabs]
+    for kern in (round_logup.LogUpRound(dev, block=8, num_warps=1), round_logup.LogUpRound(dev, block=256, num_warps=4)):
+        S, outs = kern.round(dt, lam, r_prev, eval=(mode != "fold"))
+        if mode != "fold":
+            assert S == S_ref, kern.block
+        if r_prev is not None:
+            assert [o.to_ints() for o in outs] == folded_ref, kern.block
