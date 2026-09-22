@@ -18,7 +18,7 @@ pub const DOMAIN: &[u8] = b"verity-gkr/candidate-a/v1/babybear6";
 /// 2^64 mod p (for folding a u128 accumulator).
 const R64: u64 = ((1u128 << 64) % (P as u128)) as u64;
 /// -p^{-1} mod 2^32 (Montgomery).
-const NEG_PINV: u32 = {
+pub const NEG_PINV: u32 = {
     // Newton iteration for the inverse of p mod 2^32
     let mut inv: u32 = 1;
     let mut i = 0;

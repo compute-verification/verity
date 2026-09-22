@@ -12,6 +12,7 @@ MODES=${MODES:-"-"}
 THREADS=${THREADS:-"12 1"}
 REPS=${REPS:-2}
 (cd backends/gkr/verifier && CARGO_TARGET_DIR=/workspace/cargo-target-a-verifier cargo build --release 2>&1 | tail -1)
+if [ -n "$TEST" ]; then (cd backends/gkr/verifier && CARGO_TARGET_DIR=/workspace/cargo-target-a-verifier cargo test --release 2>&1 | grep -E 'test result|panicked|FAILED'); fi
 V=/workspace/cargo-target-a-verifier/release/verity-gkr-verify
 uptime; nproc; grep -m1 "model name" /proc/cpuinfo
 for mode in $MODES; do

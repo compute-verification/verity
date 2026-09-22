@@ -97,12 +97,7 @@ impl Plan {
                 for (j, &w) in tw.iter().enumerate() {
                     let a: &mut [u32; L] = (&mut lo[j * L..(j + 1) * L]).try_into().unwrap();
                     let b: &mut [u32; L] = (&mut hi[j * L..(j + 1) * L]).try_into().unwrap();
-                    for l in 0..L {
-                        let t = mont_mul(b[l], w);
-                        let u = a[l];
-                        a[l] = add(u, t);
-                        b[l] = sub(u, t);
-                    }
+                    crate::lanes::bf_dit(a, b, w);
                 }
             }
             len *= 2;
@@ -135,12 +130,7 @@ impl Plan {
                 for (j, &w) in tw.iter().enumerate() {
                     let a: &mut [u32; L] = (&mut lo[j * L..(j + 1) * L]).try_into().unwrap();
                     let b: &mut [u32; L] = (&mut hi[j * L..(j + 1) * L]).try_into().unwrap();
-                    for l in 0..L {
-                        let u = a[l];
-                        let x = b[l];
-                        a[l] = add(u, x);
-                        b[l] = mont_mul(sub(u, x), w);
-                    }
+                    crate::lanes::bf_dif(a, b, w);
                 }
             }
             len = half;
@@ -159,7 +149,7 @@ impl Plan {
             for j in 0..m {
                 let w = wm[e];
                 let yj: &[u32; L] = (&y[j * L..(j + 1) * L]).try_into().unwrap();
-                for l in 0..L { o[l] = add(o[l], mont_mul(yj[l], w)); }
+                crate::lanes::mul_add_lanes(o, yj, w);
                 e += kp;
                 if e >= m { e -= m; }
             }
@@ -295,7 +285,7 @@ impl RowEval {
                 let w = tw[d];
                 let src: &[u32; L] = (&hat[d * L..(d + 1) * L]).try_into().unwrap();
                 let dst: &mut [u32; L] = (&mut work[d * L..(d + 1) * L]).try_into().unwrap();
-                for l in 0..L { dst[l] = mont_mul(src[l], w); }
+                crate::lanes::mul_lanes(dst, src, w);
             }
             if self.prune > 0 {
                 let wl = &self.wanted[c];

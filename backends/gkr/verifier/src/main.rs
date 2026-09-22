@@ -10,6 +10,7 @@
 
 mod circuit;
 mod field;
+mod lanes;
 mod ntt;
 mod proof;
 mod sha256;
