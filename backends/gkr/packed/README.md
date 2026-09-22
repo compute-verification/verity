@@ -39,35 +39,42 @@ PYTHONPATH=backends/numerical/python python backends/gkr/packed/bench.py --repri
 
 | run | what | agreement |
 |---|---|---|
-| r20260922-055336-4080 | `--mode triton`, t = 2^20, 2^22, 2^24, k = 0..4, median of 9 after 3 warm | 36 tests passed on the H100 (CPU, CUDA eager, CUDA triton; k = 0..4, n <= 10) |
-| (unrecorded, `results/eager_l22_24`) | `--mode eager`, t = 2^22, 2^24 -- the torch-op baseline the Triton kernels replace | 22 passed |
+| **r20260922-062108-4b25** | **the table**: `--mode triton` (fused kernels), t = 2^20, 2^22, 2^24, 2^26, k = 0..4, median of 9 after 3 warm | 36 tests passed on the H100 (CPU, CUDA eager, CUDA triton; k = 0..4, n <= 10) |
+| r20260922-055336-4080 | earlier state: Triton SIMT passes + cuBLAS `_int_mm`, torch reduce/contract; t <= 2^24 | 36 passed |
+| (unrecorded, `results/eager_l22_24`) | `--mode eager`: the torch-op baseline | 22 passed |
 
-## The table (r20260922-055336-4080, whole sumcheck at t = 2^24, one layer table would be 2^28.6)
+## The table (r20260922-062108-4b25; one layer table would be 2^28.6 elements)
 
-| k | sumcheck ms | matmul-only ms | MACs issued | frac. INT8 peak, whole | frac. peak, matmul-only | peak mem | fit ns/elem | per batch (6 layers, padded) | per VU |
-|---|---|---|---|---|---|---|---|---|---|
-| 0 | 30.36 | 14.79 | 1.06e11 | 0.35% | 0.73% | 7.75 GB | 0.899 | 2084 ms | **509 us** |
-| 1 | 25.39 | 14.76 | 6.20e10 | 0.25% | 0.42% | 4.43 GB | 0.600 | 1421 ms | 347 us |
-| 2 | 22.90 | 8.73 | 4.03e10 | 0.18% | 0.47% | 2.77 GB | 0.443 | 1075 ms | 262 us |
-| 3 | 22.54 | 5.82 | 3.66e10 | 0.16% | 0.64% | 2.05 GB | 0.414 | 1011 ms | **247 us** |
-| 4 | 26.70 | 5.54 | 4.93e10 | 0.19% | 0.90% | 2.87 GB | 0.644 | 1523 ms | 372 us |
+Whole sumcheck, all rounds, each round replayed as a CUDA graph (device time, no launch gaps):
+
+| k | 2^24 ms | 2^26 ms | frac. INT8 peak (2^26, whole round) | MACs issued (2^26) | peak mem (2^26) | fit ns/elem + ms | per batch (6 layers, padded / un-padded) | per VU |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 9.20 | 30.87 | 1.39% | 4.25e11 | 34.9 GB | 0.435 + 1.73 | 973 / 581 ms | **238 us** (142) |
+| 1 | 6.06 | 18.47 | 1.36% | 2.48e11 | 18.0 GB | 0.251 + 1.68 | 566 / 339 ms | 138 us (83) |
+| 2 | 4.35 | 11.73 | 1.39% | 1.61e11 | 9.7 GB | 0.152 + 1.61 | 345 / 209 ms | 84 us (51) |
+| 3 | 3.71 | 9.08 | 1.63% | 1.47e11 | 5.3 GB | 0.112 + 1.64 | 257 / 156 ms | **62.7 us** (38.2) |
+| 4 | 7.30 | 23.37 | 0.85% | 1.97e11 | 5.0 GB | 0.325 + 1.63 | 729 / 436 ms | 178 us (106) |
 
 * "per batch" = the six c-round sumchecks of the batch (tables `393,216 x 2^read`, `LAYER_READ_LOG2`) from the linear
-  fit over t = 2^20, 2^22, 2^24 (`fit ns/elem` x table + ~15.5 ms intercept per sumcheck); "per VU" = per batch / 4096.
-  Un-padded widths (`LAYER_WIDTHS`): 1273 / 880 / 675 / 637 / 942 ms, i.e. 311 / 215 / 165 / 156 / 230 us per VU.
-* **Measured saving of packing on the dominant bucket: k = 3 vs k = 0 = 2.06x (padded), 2.00x (un-padded).**  The
-  MAC model predicts 2.9x for the same pair (3.66e10 vs 1.06e11) and 8.4x against tensor.md's plain 18,432-MAC/element
-  model; the kernels realise less because they are not MAC-bound (next bullet).
-* **Utilisation.**  The plain kernel (k = 0) runs its matmuls at 0.73% of the H100's INT8 peak and the whole round at
-  0.35%; packed k = 3 at 0.64% / 0.16%.  Lane `tc-sumcheck`'s plain kernel on the RTX 4090 reports 2.2% matmul-only
-  batch-weighted (3.6-4.6% in the large rounds, HBM-bound), 0.56% for the tensor bucket -- same order.  Both are two
-  orders below the 17.2% that `tensor.md` assumed (TensorZKP's end-to-end calibration).  Where the time goes (t = 2^24,
-  k = 3, per-round CUDA graphs): packed rounds 1-3 = 1.27 + 1.50 + 1.98 ms (the `4^(i-1)` limb matrix of round 3 is
-  400 MB, written by SIMT and read by cuBLAS; `_int_mm` with N = 24 runs at ~0.6 TB/s), fold_k 0.28 ms, extension rounds
-  4-6 = 1.66 + 1.27 + 1.05 ms, then a floor of ~0.72 ms per round for rounds with t < 2^17 (the reduce/contract chain of
-  ~150 small torch kernels: 13 tail rounds ~ 9.4 ms of the 15.5 ms intercept).
-* Eager torch (`results/eager_l22_24`): 253 ms at 2^24 k = 0, 81 ms at k = 3 -- the fused Triton kernels are 8.3x / 3.6x
-  faster; the eager per-VU figures were 7.47 ms / 1.95 ms.
+  fit over t = 2^20..2^26; "per VU" = per batch / 4096; un-padded widths (`LAYER_WIDTHS`) in parentheses.
+* **Measured saving of packing on the dominant bucket: k = 3 vs k = 0 = 3.79x (padded), 3.72x (un-padded).**  The MAC
+  model predicts 2.9x for the same pair (1.47e11 vs 4.25e11 at 2^26) and 8.4x against tensor.md's plain 18,432-MAC/element
+  model; the kernels beat the MAC ratio because the packed rounds' base x base Hadamards are cheaper per MAC than the
+  extension rounds' `F_{p^6}` Hadamards and folds, which the plain algorithm runs on every element.
+* `k = 4` loses: the `4^(i-1)` blow-up makes round 4 a 192-row Hadamard block per pair (768 limb rows, too large for the
+  fused register tile; it runs the two-pass path through HBM and cuBLAS, 3.2 GB of limbs at 2^26).
+* **Utilisation.**  Whole-round fraction of the H100's 989.5 T MAC/s INT8 peak: 1.4% plain, 1.6% packed k = 3 at 2^26
+  (0.35% / 0.16% before the fused kernels).  The tensor cores are not the bottleneck: the rounds are bound by the SIMT
+  modular arithmetic (INT64 `%` for the Hadamard products and the `F_{p^6}` coefficient products) and by HBM in the
+  folds.  Lane `tc-sumcheck`'s plain kernel on the RTX 4090: 2.2% matmul-only batch-weighted, 0.56% for the tensor bucket.
+  Both are far below the 17.2% that `tensor.md` assumed (TensorZKP's end-to-end calibration).  The bench's
+  `utilisation.matmul_only` column is not meaningful for the fused kernels (the "matmul" is the whole fused kernel).
+* Where the time goes (2^26, k = 3, CUDA-graphed rounds): packed rounds 1-3 = 0.76 + 0.69 + 1.15 ms (fused: Hadamard
+  limbs in registers -> `tl.dot`, BLOCK_K = 128), fold_k 1.03 ms, extension rounds 4-7 = 1.90 + 1.03 + 0.57 + 0.34 ms
+  (fused Hadamard+dot ~50%, the `[x_e | x_o] x [C_(1-r); C_r]` fold ~35%), then a floor of 0.07 ms per round.
+* History of the same measurement at 2^24 (k = 0 / k = 3): eager torch 253 / 81 ms; Triton SIMT passes + cuBLAS +
+  torch reduce 30.4 / 22.5 ms (r20260922-055336-4080, 0.35% / 0.16% of peak); fused inner products 14.1 / 4.7 ms;
+  + Triton reduce/contract and finish 12.6 / 4.5 ms; + one reduction per limb sum 9.2 / 3.7 ms (the table).
 
 ## Re-priced Candidate A (`backends/numerical/reports/packed_sumcheck_h100.json`)
 
@@ -78,26 +85,29 @@ combination, hashing, hint generation) stays modelled at 0.172.
 | | overhead vs native peak | t.total per batch | checker sumcheck |
 |---|---|---|---|
 | model @ 0.172 | 1.07e7 | 0.431 s | 127 ms matmul + 130 ms Hadamards (model) |
-| measured k = 0 (padded / un-padded) | 5.60e7 / 3.59e7 | 2.258 / 1.447 s | 2084 / 1273 ms (92% / 88% of total) |
-| measured k = 3 (padded / un-padded) | **2.94e7 / 2.01e7** | 1.184 / 0.811 s | 1011 / 637 ms (85% / 79%) |
+| measured k = 0 (padded / un-padded) | 2.84e7 / 1.87e7 | 1.147 / 0.755 s | 973 / 581 ms (85% / 77% of total) |
+| measured k = 3 (padded / un-padded) | **1.07e7 / 8.19e6** | 0.431 / 0.330 s | 257 / 156 ms (60% / 47%) |
 
-Read: packing halves the measured dominant bucket (ledger `--breakthrough`, 2.06x), but the measured kernel -- even
-packed -- is 4x slower than the model priced it, because the assumed 17.2% tensor-core utilisation is not what these
-kernels get (0.2-0.7%).  The sumcheck is still 80-90% of A's re-priced total.
+Read: the measured packed kernel lands exactly on the number the model assumed for this bucket (257 ms per batch both
+ways), but for a different reason -- 3.8x fewer/cheaper operations at 1.6% utilisation instead of the plain algorithm
+at 17.2%.  The plain kernel as measured would have put A at 2.84e7.  The sumcheck is still 47-60% of A's re-priced
+total; the remaining buckets are modelled, not measured.
 
 ## Ledger (`backends/reports/ledger/a-packed.jsonl`)
 
-* `plain INT8-limb c-round sumcheck k=0 (eq-trick, Triton)` -- component, 509 us/VU.
-* `packed sumcheck k=3: 2.06x on the dominant bucket (measured)` -- component, 247 us/VU, breakthrough.
-* `A re-priced w/ packed sumcheck, model` -- `ARITHMETIC_DIAGNOSTIC`, scope vu, overhead 2.94e7, omitted: every modelled bucket.
+Final entries (run r20260922-062108-4b25): `plain c-round sumcheck k=0, fused Triton+tensor cores` -- component,
+238 us/VU; `packed sumcheck k=3: 3.8x on the dominant bucket (measured)` -- component, 62.7 us/VU, breakthrough;
+`A re-priced w/ packed sumcheck, model` -- `ARITHMETIC_DIAGNOSTIC`, scope vu, overhead 1.07e7, omitted: every modelled
+bucket.  Earlier entries from r20260922-055336-4080 (509 / 247 us per VU, 2.94e7) are the pre-fusion state.
 
 ## Not done / next
 
 1. **Univariate skip** (Gruen 2024/108): a protocol change (round degree `3 (2^s - 1)`, new soundness term); needs
    `security.accounting` and a flagged re-account.  Not started.
-2. **Make the kernel MAC-bound.**  The A operand of every inner product is materialised in HBM (limbs written by one
-   kernel, read by cuBLAS with N = 24).  One Triton kernel that forms the Hadamard limbs in registers and feeds `tl.dot`
-   directly (as `fold_ext` already does for the fold) removes the 400 MB round trip of the packed rounds and the
-   0.6 TB/s cuBLAS pass; the reduce/contract tail should be one kernel per round (removes the 0.72 ms floor).
-3. The layer model extrapolates linearly from t <= 2^24 to 2^28.6; measure one 2^28 sumcheck directly (memory: 7.75 GB
-   at 2^24 for k = 0 -> ~124 GB naive; needs the chunked A operand of step 2 or k >= 2, 2.05-2.77 GB at 2^24).
+2. **SIMT modular arithmetic.**  The rounds are bound by INT64 `%` (emulated 64-bit division) in the Hadamards and
+   `F_{p^6}` products: a 32-bit Montgomery or Barrett reduction in the Triton kernels (BabyBear fits: `p < 2^31`) should
+   give 2-4x on the Hadamard passes; the fold matrices' INT64 recompositions the same.
+3. **k = 4 fused**: split the 768-row Hadamard block across programs (two 384-row tiles) so round 4 does not go through
+   HBM; and a fused fold_k (currently a SIMT kernel with `2^k . 6` INT64 products per output: 1.03 ms at 2^26).
+4. The layer model extrapolates linearly from t <= 2^26 to 2^28.6 (one layer table); a direct 2^28 measurement needs
+   k >= 2 (memory: 34.9 GB at 2^26 for k = 0, 5.3 GB for k = 3).
