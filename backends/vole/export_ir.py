@@ -711,7 +711,8 @@ def _vu_task(task):
     if _UNIT is None or _UNIT.ctx.p != p:
         _UNIT, _EPI = Unit(p), Epi(p)
     priv, bad = vu_witness(_UNIT, _EPI, a, b, y, io)
-    return i, priv, bad
+    text = "".join(f"<{hex(v)}>;\n" for v in priv)
+    return i, len(priv), text, bad
 
 
 _UNIT: Unit | None = None
@@ -731,27 +732,31 @@ def cmd_vu(args) -> int:
         a, b, y = tier.instance(i)
         tasks.append((i, a, b, y, args.field, args.io))
     inst: list[int] = []
-    results: dict[int, list[int]] = {}
-    if args.procs > 1:
-        import multiprocessing as mp
-        with mp.Pool(args.procs) as pool:
-            for i, priv, bad in pool.imap_unordered(_vu_task, tasks, chunksize=1):
-                if bad is not None:
-                    print(f"circuit rejects honest VU {i}: {bad}", file=sys.stderr)
-                    return 1
-                results[i] = priv
-    else:
-        for task in tasks:
-            i, priv, bad = _vu_task(task)
-            if bad is not None:
-                print(f"circuit rejects honest VU {i}: {bad}", file=sys.stderr)
-                return 1
-            results[i] = priv
     if args.io == "public":
         inst = [tasks[i][3] for i in range(B)]
     (out / "relation.txt").write_text("\n".join(vu_relation(unit, epi, B, args.io)) + "\n")
     write_inputs(out / "instance.txt", "public_input", p, inst)
-    n_wit = write_inputs_stream(out / "witness.txt", "private_input", p, (results[i] for i in range(B)))
+    n_wit = 0
+    with open(out / "witness.txt", "w") as f:
+        f.write("\n".join(header("private_input", p)) + "\n")
+        if args.procs > 1:
+            import multiprocessing as mp
+            with mp.Pool(args.procs) as pool:
+                for i, n_priv, text, bad in pool.imap(_vu_task, tasks, chunksize=1):   # in order: the stream is positional
+                    if bad is not None:
+                        print(f"circuit rejects honest VU {i}: {bad}", file=sys.stderr)
+                        return 1
+                    f.write(text)
+                    n_wit += n_priv
+        else:
+            for task in tasks:
+                i, n_priv, text, bad = _vu_task(task)
+                if bad is not None:
+                    print(f"circuit rejects honest VU {i}: {bad}", file=sys.stderr)
+                    return 1
+                f.write(text)
+                n_wit += n_priv
+        f.write("@end\n")
     meta = {"kind": "vu-k1536", "B": B, "instances": f"vu-k1536[0:{B}]", "field": args.field, "io": args.io,
             "private_values": n_wit, "private_values_per_vu": n_wit / B, "export_seconds": time.time() - t0,
             "census_vu": census(args.field)["vu"]}
