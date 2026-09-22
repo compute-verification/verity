@@ -284,6 +284,55 @@ accounting (hash and SHAKE challenge expander are placeholders), scope `unit` nu
 length, so encoding and hashing double: +0.03 s on the 0.095 s prover, ~+33%). No predicate of WP2's
 `check_step_expr` / `check_vu_expr` is dropped; the restatements are listed in PROTOCOL.md section 5 and 7b.
 
+## v2 shape, end to end (`v2/`, lane b-e2e-v2, vy-g2 RTX 4090, 2026-09-22)
+
+The checker-v2 relation (`checker/v2/`, `gkr_export.v2`: 273 columns / 33 products / 37 asserts / 93 lookups into
+13 tables per unit, the `(s, e, M, z)` state chain, limb pack + epilogue rows) as a Ligero proof with LogUp tables,
+\(F_c = \text{BabyBear}^6\) challenges and a torch-vectorised verifier; PROTOCOL.md section 16.  Layout: one
+Ligero column per unit, one row per constraint-system column; the table side (SHIFT 3.5 M + TNORM 1 M entries
+as-is) is 60-75% of the rows.  `NON_ZK_PROOF_DIAGNOSTIC` with the `INCOMPLETE_CHECKER_DIAGNOSTIC` caveat (the
+limb rows are a port of b-air-v2's z3-UNSAT design; the Python columns were not z3-checked).
+
+~~~sh
+# pod (commit first); instances are built once into /workspace/bi/v1
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_e2e_v2.gate  --require-result -- bash backends/direct/ligero/v2/pod_gate.sh
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_e2e_v2.bench --require-result --env LS="16384 32768" -- bash backends/direct/ligero/v2/pod_bench.sh
+# laptop: the CPU toy of the whole protocol
+python -m pytest backends/direct/ligero/v2/tests/test_toy.py
+~~~
+
+Gate (`r20260922-091001-68f7`): 8 honest `vu-k1536` VUs accepted with the recorded words (every packed intermediate
+= the recorded accumulator; prover self-check: every constraint satisfied); `vu-k1536-neg` 52/52 + flipped word
+rejected; 39/39 unit + chain mutations rejected; battery `epilogue` 2/2 rejected (`chain` class vacuous under v2).
+
+End to end, 4 096 VUs per batch as N sub-batch proofs (`bench`, all sub-batches proved and verified; l = 131 072 would exceed the 24 GB card, so 4 096 VUs in one proof needs the table-side fix below):
+
+| l (units/proof) | VUs/proof | N | prover s/proof | **ms/VU** | s per 4 096 VUs | overhead | verifier s/proof | proof MB | rows m | peak GiB | union security | run |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 16 384 | 170 | 25 | 0.727 | **4.27** | 17.5 | 4.3e8 | 0.26 | 4.6 | 3 139 | 8.5 | 2^-128.3 (t = 196 per proof) | r20260922-094956-5453 |
+| 32 768 | 341 | 13 | 0.888 | **2.60** | 10.7 | 2.6e8 | 0.29 | 5.7 | 2 019 | 11.8 | 2^-124.5 (t = 189; t = 193 would meet 2^-128) | r20260922-094315-8be5 |
+| **65 536** | 682 | 7 | 1.261 | **1.85** | **7.57** | **1.9e8** | 0.40 | 9.2 | 1 473 | 17.1 | **2^-128.1** (t = 193 per proof) | r20260922-094956-5453 |
+
+Host hint generation (`gen_unit`, pure Python, pool of 95 processes) is 5.4 / 8.1 s per sub-batch and is reported
+separately from the device clock.  Before the GPU Blake3 Merkle was importable on the pod (venv without cupy /
+blake3) the same proof took 5.8 s (host SHA-256 over 65 536 columns); before b-v2's blocked Montgomery inverter
+replaced the torch Frobenius inverse, 1.66 s.
+
+Buckets, l = 32 768 (ms per proof of 341 VUs) against b-v2's synthetic batch (ms per 4 096 VUs, one fused proof):
+
+| bucket | real (this prover, per proof) | real per 4 096 VUs (x 13) | b-v2 synthetic | what the delta is |
+|---|---|---|---|---|
+| witness -> device (columns, products, multiplicities) | 206 | 2 680 | -- (hints not in b-v2) | host numpy -> int64 tableau; multiplicity bincount |
+| encode (int64 torch NTT, 2 tableaux) | 30 + 104 | 1 740 | 16.2 (radix-4 fused encode + Blake3) | eager NTT, 8 B/element; `commit_stream` not wired (systematic-domain encoder vs this protocol's coset) |
+| Merkle (GPU Blake3) | 2 + 5 | 91 | (in 16.2) | -- |
+| challenges (SHAKE expand, table image at beta, pole rule) | 44 | 575 | 2.7 modelled | host SHAKE + 13 table evaluations at beta |
+| helpers (F_c inversions, b-v2 blocked kernel) | 113 | 1 470 | 5.2 | the kernel is ~20 ms; the rest is `_lins_eval` + F_c products in eager torch |
+| IRS + sums | 84 | 1 090 | 2.10 | eager r^T W |
+| quadratic (F_t products + F_c helper triples) | 279 | 3 620 | 5.4 | 6 x 6 coordinate products streamed in eager torch |
+| chain | 8 | 105 | (in structured linear 8.29) | -- |
+| openings | 13 | 170 | 2.5 | -- |
+| **total** | **888** | **11 540** | **42.4** | **270x**: eager torch over 2 019 x 131 072 int64 vs fused int32 kernels over 104 217 x 16 384 |
+
 ## Files
 
 `compile.py` (Expr, LigeroCtx, the integer audit, lookups as one-hot selectors) . `unit.py` (the unit and chain
