@@ -9,6 +9,7 @@
 
 pub mod air;
 pub mod challenger;
+pub mod rtt;
 pub mod ctx;
 pub mod params;
 pub mod program;

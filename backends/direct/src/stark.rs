@@ -21,6 +21,7 @@ use p3_util::log2_ceil_usize;
 
 use crate::challenger::FixedSerializingChallenger64;
 use crate::ctx::FieldKind;
+use crate::rtt::RttChallenger;
 
 type ByteHash = Keccak256Hash;
 type MyCompress = CompressionFunctionFromHasher<u8, ByteHash, 2, 32>;
@@ -32,7 +33,7 @@ pub type Challenge = BinomialExtensionField<Val64, 2>;
 type FieldHash64 = SerializingHasher64<ByteHash>;
 type ValMmcs64 = FieldMerkleTreeMmcs<Val64, u8, FieldHash64, MyCompress, 32>;
 type ChallengeMmcs64 = ExtensionMmcs<Val64, Challenge, ValMmcs64>;
-pub type Challenger = FixedSerializingChallenger64<Val64, HashChallenger<u8, ByteHash, 32>>;
+pub type Challenger = RttChallenger<FixedSerializingChallenger64<Val64, HashChallenger<u8, ByteHash, 32>>>;
 pub type Pcs = TwoAdicFriPcs<Val64, Dft, ValMmcs64, ChallengeMmcs64>;
 pub type Config = StarkConfig<Pcs, Challenge, Challenger>;
 pub type UnitProof = Proof<Config>;
@@ -43,7 +44,7 @@ pub type ChallengeBb = BinomialExtensionField<Val32, 4>;
 type FieldHash32 = SerializingHasher32<ByteHash>;
 type ValMmcs32 = FieldMerkleTreeMmcs<Val32, u8, FieldHash32, MyCompress, 32>;
 type ChallengeMmcs32 = ExtensionMmcs<Val32, ChallengeBb, ValMmcs32>;
-pub type ChallengerBb = SerializingChallenger32<Val32, HashChallenger<u8, ByteHash, 32>>;
+pub type ChallengerBb = RttChallenger<SerializingChallenger32<Val32, HashChallenger<u8, ByteHash, 32>>>;
 pub type PcsBb = TwoAdicFriPcs<Val32, Dft, ValMmcs32, ChallengeMmcs32>;
 pub type ConfigBb = StarkConfig<PcsBb, ChallengeBb, ChallengerBb>;
 
@@ -106,7 +107,7 @@ impl Backend for GoldilocksBackend {
         Config::new(Pcs::new(log_n, Dft {}, val_mmcs, fri_config))
     }
     fn challenger() -> Challenger {
-        Challenger::from_hasher(vec![], ByteHash {})
+        RttChallenger::new(FixedSerializingChallenger64::from_hasher(vec![], ByteHash {}))
     }
     fn challenge_bits() -> usize {
         128
@@ -129,7 +130,7 @@ impl Backend for BabyBearBackend {
         ConfigBb::new(PcsBb::new(log_n, Dft {}, val_mmcs, fri_config))
     }
     fn challenger() -> ChallengerBb {
-        ChallengerBb::from_hasher(vec![], ByteHash {})
+        RttChallenger::new(SerializingChallenger32::from_hasher(vec![], ByteHash {}))
     }
     fn challenge_bits() -> usize {
         124
