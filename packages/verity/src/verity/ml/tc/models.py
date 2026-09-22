@@ -415,10 +415,6 @@ def _fp32_dyadic(word: int) -> tuple[int, int]:
     return (-m if word >> 31 else m), ex
 
 
-def _ilog2(mant: int, exp: int) -> int:
-    return abs(mant).bit_length() - 1 + exp
-
-
 def _trunc_rz_to_grid(mant: int, exp: int, lsb: int) -> int:
     """``floor toward zero`` of ``mant * 2^exp`` onto the grid ``2^lsb``, returned as an integer multiple of ``2^lsb``."""
 
@@ -442,18 +438,22 @@ class BlockScaledAlignAdd:
     3. one five-way align-add of the four scaled dots and the carried FP32 accumulator, each truncated **toward
        zero** onto the common grid ``2^lsb``, summed exactly and normalised **RZ** to binary32, where::
 
-           lsb = max( max{X_g : g participates} - frac_bits,          # the scale-exponent anchor
-                      acc != 0 ? ilog2(acc) - (acc_window - 1) : -inf )  # the accumulator window
+           lsb = max( max{X_g : g participates} - frac_bits,      # the scale-exponent anchor
+                      acc != 0 ? E_acc - (acc_window - 1) : -inf,   # the accumulator window
+                      grid_floor )                                  # the adder's absolute floor
 
-       A group *participates* in the anchor when at least one of its elementwise products is nonzero (both nibbles
-       nonzero) **and** both its scale mantissas are nonzero -- whether or not its dot cancels to zero.  With
-       ``frac_bits = 27`` the adder keeps 27 bits below the unit weight of the leading participating group; with
-       ``acc_window = 36`` the accumulator keeps 12 guard bits below its 24-bit significand.
+       ``E_acc`` is the accumulator's *exponent field* (``e - 127``; a subnormal accumulator counts as ``-126``, not
+       its true msb).  A group *participates* in the anchor when at least one of its elementwise products is nonzero
+       (both nibbles nonzero) **and** both its scale mantissas are nonzero -- whether or not its dot cancels to zero.
+       With ``frac_bits = 27`` the adder keeps 27 bits below the unit weight of the leading participating group; with
+       ``acc_window = 36`` the accumulator keeps 12 guard bits below its 24-bit significand; ``grid_floor = -174``
+       is the deepest grid the adder realises (reachable with UE8M0 scales only: it binds when the leading unit weight
+       is below ``2^-147``; NVFP4 unit weights are >= ``2^-20``).
 
     Every zero result is ``+0``: exact cancellation, every addend truncated away, all-zero products into a ``-0``
     accumulator (log entry D16).  A sum that leaves the binary32 range is *outside* the model and raises.
     ``underflow_zero`` fixes the sign of a **nonzero** sum lying entirely below the FP32 subnormal grid (reachable
-    with UE8M0 scales only; log entry D13).
+    with UE8M0 scales only; log entry D13: the RTX 5090 gives ``+0``).
 
     Relation to autoproof's *model5* (``SEMANTICS.lock.v1`` ``gdfs_model``, log entry D12): model5 anchored the
     window on the msb of the largest *addend* (``lsb = E1 - 41``) and added a "hot group clip" at ``2^-19`` when a
@@ -461,7 +461,10 @@ class BlockScaledAlignAdd:
     group's mantissa is 15 bits wide (the clip: ``X = 8`` for exponent fields 15/15, ``8 - 27 = -19``); when it is
     not, model5 mis-predicts opposite-sign accumulators 37..42 binades below the leading exponent by 1 ulp (D17,
     12,790 / 1.5M of lane fp4-5090's cases), the rule above does not (fp4-re: 0 / 1,736,704 nvfp4 and
-    0 / 622,592 mxfp4 elements of the same captures).
+    0 / 622,592 mxfp4 elements of the same captures).  The exponent-field accumulator anchor and ``grid_floor``
+    were fitted by lane fp4-re on the subnormal-result regime of UE8M0 (run r20260922-215831-c3d8: 528 residual
+    mismatches under the true-msb anchor without a floor -> 0; the floor's minimum is sharp, -173 and -175 each
+    leave > 20; log entry D19).
 
     ``step`` takes ``a_words = a_codes[0..k] + a_scales[0..k/block]`` (likewise ``b``); :meth:`step_scaled`
     takes them apart.  ``dyadic.rs``-style helpers (``_trunc_rz_to_grid``, ``_to_f32_rz``) are autoproof's.
@@ -476,6 +479,7 @@ class BlockScaledAlignAdd:
     group: int
     frac_bits: int
     acc_window: int
+    grid_floor: int
     underflow_zero: Literal["signed", "positive"]
     validated: str
 
@@ -488,6 +492,8 @@ class BlockScaledAlignAdd:
             raise InvalidArtifact("k must be a multiple of the scale block")
         if self.frac_bits < 0 or self.acc_window < 1:
             raise InvalidArtifact("frac_bits must be >= 0 and acc_window >= 1")
+        if self.grid_floor > _FP32_SUBNORMAL_EXPONENT:
+            raise InvalidArtifact("grid_floor above the FP32 subnormal grid would truncate the accumulator itself")
 
     @property
     def k(self) -> int:
@@ -569,10 +575,11 @@ class BlockScaledAlignAdd:
         acc_m, acc_e = _fp32_dyadic(c_word)
         anchors = [unit - self.frac_bits for _, unit, participates in terms if participates]
         if acc_m:
-            anchors.append(_ilog2(acc_m, acc_e) - (self.acc_window - 1))
+            e_field = (c_word >> 23) & 0xFF                 # the exponent field, not the true msb: subnormals anchor at -126
+            anchors.append((e_field if e_field else 1) - 127 - (self.acc_window - 1))
         if not anchors:
             return 0                                        # nothing participates: +0 (a -0 accumulator included)
-        lsb = max(anchors)
+        lsb = max(*anchors, self.grid_floor)
         total = sum(_trunc_rz_to_grid(m, unit, lsb) for m, unit, _ in terms if m)
         if acc_m:
             total += _trunc_rz_to_grid(acc_m, acc_e, lsb)
@@ -652,6 +659,7 @@ BLACKWELL_SM120_NVF4 = BlockScaledAlignAdd(
     group=16,
     frac_bits=27,
     acc_window=36,
+    grid_floor=-174,
     underflow_zero="positive",
     validated=(
         "RTX 5090 (sm_120) mma.sync kind::mxf4nvf4 ue4m3: " + _FP4_RE_PIN + "; PENDING fp4-re confirmation run; "
@@ -673,6 +681,7 @@ BLACKWELL_SM120_MXF4 = BlockScaledAlignAdd(
     group=16,
     frac_bits=27,
     acc_window=36,
+    grid_floor=-174,
     underflow_zero="positive",
     validated=(
         "RTX 5090 (sm_120) mma.sync kind::mxf4nvf4 ue8m0: " + _FP4_RE_PIN + "; PENDING fp4-re confirmation run "
@@ -690,6 +699,7 @@ BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED = BlockScaledAlignAdd(
     group=16,
     frac_bits=27,
     acc_window=36,
+    grid_floor=-174,
     underflow_zero="signed",
     validated=(
         "HYPOTHESIS (unprobed): as BLACKWELL_SM120_MXF4 but a nonzero sum below the subnormal grid keeps its sign, "

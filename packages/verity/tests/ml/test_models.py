@@ -174,7 +174,7 @@ def test_nvfp4_step_accepts_codes_then_scales_as_one_operand_vector(vectors: dic
 
 def _bsaa(**kw) -> BlockScaledAlignAdd:
     base = dict(arch="sm_120", dtype="e2m1", operand_bits=4, scale="ue4m3", k_per_instruction=64, group=16,
-                frac_bits=27, acc_window=36, underflow_zero="positive", validated="test only")
+                frac_bits=27, acc_window=36, grid_floor=-174, underflow_zero="positive", validated="test only")
     return BlockScaledAlignAdd(**{**base, **kw})
 
 
@@ -344,13 +344,18 @@ def test_mxf4_scales_share_the_nvf4_adder_d18() -> None:
 
 
 def test_underflow_sign_hypotheses_d13() -> None:
-    # a nonzero mxfp4 sum entirely below the subnormal grid: the two instances differ only in the sign of that zero
-    tiny = [0x00] * 2  # UE8M0 code 0 = 2^-127
+    # a nonzero mxfp4 sum entirely below the subnormal grid: the two instances differ only in the sign of that zero.
+    # RTX 5090 (fp4-re run r20260922-215831-c3d8, ue8m0_underflow / ue8m0_scale_extremes): +0 -- the signed variant
+    # misses 15,205 + 2,003 elements there, the pinned one none.
+    tiny = [51] * 2  # UE8M0 code 51 = 2^-76: -0.5 * 0.5 * 2^-152 = -2^-154, below the grid but above grid_floor
     neg = [0x9] + [0] * 63  # -0.5
     pos = [0x1] + [0] * 63
+    assert BLACKWELL_SM120_MXF4.group_terms(neg, pos, tiny, tiny)[0] == (-64, -160, True)
     assert BLACKWELL_SM120_MXF4.step_scaled(0, neg, pos, tiny, tiny) == 0
     assert BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED.step_scaled(0, neg, pos, tiny, tiny) == 0x8000_0000
     assert BLACKWELL_SM120_MXF4.step_scaled(0, pos, pos, tiny, tiny) == 0  # positive underflow is +0 either way
+    # below grid_floor nothing survives the alignment at all: a computed zero, +0 under both
+    assert BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED.step_scaled(0, neg, pos, [0, 0], [0, 0]) == 0
     # otherwise the two agree
     rng = random.Random(3)
     for _ in range(300):
@@ -360,6 +365,45 @@ def test_underflow_sign_hypotheses_d13() -> None:
         sb = [rng.randrange(100, 140) for _ in range(2)]
         acc = rng.choice([0, 0x3F80_0000, 0xC000_0000, 0x0080_0000])
         assert BLACKWELL_SM120_MXF4.step_scaled(acc, a, b, sa, sb) == BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED.step_scaled(acc, a, b, sa, sb)
+
+
+def test_subnormal_accumulator_anchors_at_its_exponent_field_d19() -> None:
+    # The accumulator window rides the FP32 exponent *field*: a subnormal accumulator (field 0) anchors at -126 - 35 =
+    # -161 whatever its true msb.  Terms below 2^-161 are dropped even though a true-msb window would keep them.
+    m = BLACKWELL_SM120_MXF4
+    acc = 0x0000_0100  # +2^-141 (msb -141; a true-msb window would reach 2^-176)
+    one = [0x2] + [0] * 63  # 1.0 x 1.0 = 4 quarters -> mant 256 at X = ca + cb - 262
+    neg = [0xA] + [0] * 63
+    # codes (46, 46) -> X = -170: term 2^-162, just below the -161 anchor: dropped, so -2^-162 does not borrow
+    assert m.step_scaled(acc, neg, one, [46, 46], [46, 46]) == acc
+    # codes (50, 50) -> X = -162: term 2^-154, on the grid: 2^-141 - 2^-154 rounds toward zero to 0xFF
+    assert m.step_scaled(acc, neg, one, [50, 50], [50, 50]) == 0x0000_00FF
+    assert m.step_scaled(acc, one, one, [50, 50], [50, 50]) == acc  # +2^-154 is on the grid but RZ discards it
+    # (a window anchored at the true msb, -141 - 35 = -176, would have kept the -2^-162 term and given 0xFF: that is
+    # the rejected reading, 528 residual mismatches in fp4-re run r20260922-215831-c3d8)
+    # the smallest normal accumulator anchors at -161 as well: -2^-148 (codes 53, 53 -> X = -156) is on the grid
+    assert m.step_scaled(0x0080_0000, neg, one, [53, 53], [53, 53]) == 0x007F_FFFE
+    assert m.step_scaled(0x0080_0000, neg, one, [46, 46], [46, 46]) == 0x0080_0000
+
+
+def test_grid_floor_is_the_deepest_alignment_d19() -> None:
+    # lsb never goes below 2^-174: bits of a term below that weight are truncated toward zero before the add.
+    m = BLACKWELL_SM120_MXF4
+    assert m.grid_floor == -174
+    one = [0x2] + [0] * 63
+    # leading block 1.0 x 1.0 at X = -150 (codes 56, 56): 256 * 2^-150 = 2^-142 = subnormal word 0x80; its anchor
+    # -150 - 27 = -177 is floored to -174.  The second block holds -1.0 x 1.0 = -256 * 2^X: at X = -176 (codes 43, 43)
+    # that is -2^-168, on the -174 grid, and 2^-142 - 2^-168 rounds toward zero to 0x7F; at X = -180 (codes 41, 41)
+    # -2^-172 is on the grid too; at X = -183 (codes 40, 39) -2^-175 lies below the floor and vanishes.
+    a = [0x2] + [0] * 31 + [0xA] + [0] * 31
+    b = [0x2] + [0] * 31 + [0x2] + [0] * 31
+    assert m.step_scaled(0, one, one, [56, 56], [56, 56]) == 0x0000_0080
+    assert m.step_scaled(0, a, b, [56, 43], [56, 43]) == 0x0000_007F
+    assert m.step_scaled(0, a, b, [56, 41], [56, 41]) == 0x0000_007F   # -2^-172: still on the -174 grid
+    assert m.step_scaled(0, a, b, [56, 40], [56, 39]) == 0x0000_0080   # -2^-175: below the floor, gone
+    # without the floor the anchor of a leading group at X = -150 would keep a -2^-176 term as well
+    unfloored = _bsaa(name="test_no_floor", scale="ue8m0", grid_floor=-400)
+    assert unfloored.step_scaled(0, a, b, [56, 40], [56, 39]) == 0x0000_007F
 
 
 def test_block_scaled_domain_errors() -> None:
@@ -378,6 +422,8 @@ def test_block_scaled_domain_errors() -> None:
         _bsaa(name="x", k_per_instruction=40)
     with pytest.raises(InvalidArtifact):
         _bsaa(name="x", acc_window=0)
+    with pytest.raises(InvalidArtifact):
+        _bsaa(name="x", grid_floor=-140)
     # a sum leaving the binary32 range is outside the model (no silicon evidence yet): 2^127 acc + 6*6*2^127*2^0
     with pytest.raises(InvalidArtifact):
         BLACKWELL_SM120_MXF4.step_scaled(0x7F00_0000, [0x7] + [0] * 63, [0x7] + [0] * 63, [254, 127], [127, 127])

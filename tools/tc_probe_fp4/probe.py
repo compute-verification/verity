@@ -644,6 +644,7 @@ def verity_models(instr: str) -> dict:
         return {"verity": M.BlockScaledAlignAdd(
             name="probe_unscaled_fp4_m16n8k32", arch="sm_120", dtype="e2m1", operand_bits=4, scale=None, k_per_instruction=32,
             group=16, frac_bits=M.BLACKWELL_SM120_NVF4.frac_bits, acc_window=M.BLACKWELL_SM120_NVF4.acc_window,
+            grid_floor=M.BLACKWELL_SM120_NVF4.grid_floor,
             underflow_zero="positive", validated="probe instance: the nvf4 adder on unscaled e2m1 (unit weight 2^-2)")}
     return {}
 
