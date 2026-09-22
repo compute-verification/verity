@@ -844,8 +844,14 @@ def _render_stats(root: Path) -> list[str]:
             continue
         acc = "-" if s.get("acc_differs") is None else f"{s['acc_differs']}/{s['acc_applicable']}"
         lines.append(f"  {name:24s} {s['applicable']:>10d} {s['y_differs']:>9d} {s['y_differs_real']:>6d} {s['y_differs_corner']:>6d} {acc:>11s}")
-    hw = m.get("hardware", {})
-    lines.append(f"hardware: {hw.get('runs') or 'none recorded'}")
+    runs = m.get("hardware", {}).get("runs") or []
+    lines.append(f"hardware: {len(runs)} run(s) recorded" if runs else "hardware: none recorded")
+    for r in runs:
+        tu, vu = r["tu-k16"], r["vu-k1536"]
+        lines.append(f"  {r['run_id']}  {r['device']['device']} ({r['device']['arch']})  arrays digest-checked {r['arrays_digest_checked']}")
+        lines.append(f"    tu-k16: {tu['matched']}/{tu['instances']} outgoing accumulators match, {tu['other_positions_nonzero']} nonzero other positions")
+        lines.append(f"    vu-k1536: {vu['accumulator_matched']}/{vu['accumulator_words_compared']} accumulator words match, "
+                     f"{vu['y_matched']}/{vu['y_compared']} y match, {vu['other_positions_nonzero']} nonzero other positions")
     return lines
 
 
