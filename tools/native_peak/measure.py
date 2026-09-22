@@ -42,6 +42,10 @@ SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
     (r"RTX\s*4090", {"bf16": 165.2e12, "e4m3": 330.3e12}, "NVIDIA Ada GPU Architecture whitepaper, RTX 4090 dense, FP32 accumulate"),
     (r"A100-SXM4", {"bf16": 312.0e12, "e4m3": None}, "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB), BF16 dense; Ampere has no FP8"),
     (r"A100.*PCIe", {"bf16": 312.0e12, "e4m3": None}, "NVIDIA A100 Tensor Core GPU datasheet (PCIe 80GB), BF16 dense; Ampere has no FP8"),
+    # H100 SXM5: the campaign's H100 targets (verity.verification.target H100_BF16_PEAK / H100_FP8_PEAK) quote these two numbers.
+    (r"H100.*(SXM|HBM3)", {"bf16": 989.4e12, "e4m3": 1978.9e12},
+     "NVIDIA Hopper architecture whitepaper, H100 SXM5 dense (BF16 1978.9 / FP8 3957.8 TFLOPS with sparsity, halved), FP32 accumulate"),
+    (r"H100.*PCIe", {"bf16": 756.0e12, "e4m3": 1513.0e12}, "NVIDIA H100 PCIe datasheet, dense (sparse figures halved), FP32 accumulate"),
 ]
 
 SMI_FIELDS = ("timestamp", "clocks.sm", "clocks.mem", "power.draw", "temperature.gpu", "clocks_throttle_reasons.active")
