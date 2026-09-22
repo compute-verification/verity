@@ -249,6 +249,8 @@ def base_contract_ext(X: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
 
 def fold(v: torch.Tensor, r: torch.Tensor, chunk_elems: int = 1 << 22) -> torch.Tensor:
     """``v[i] + (v[i + half] - v[i]) r`` on the leading axis (extension ``v``, ``(2h, ..., 6)``); bounded temporaries."""
+    if _fast_fold is not None and v.is_cuda:
+        return _fast_fold(v, r)
     half = v.shape[0] // 2
     per_row = v[0].numel() // DEG
     step = max(1, chunk_elems // per_row)
@@ -263,6 +265,8 @@ def fold(v: torch.Tensor, r: torch.Tensor, chunk_elems: int = 1 << 22) -> torch.
 
 def fold_base(v: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
     """First fold of a base-field table into the extension: ``lo + (hi - lo) r``."""
+    if _fast_fold is not None and v.is_cuda:
+        return _fast_fold(v, r, base=True)
     half = v.shape[0] // 2
     lo = v[:half].to(torch.int64)
     d = (v[half:].to(torch.int64) - lo) % P
@@ -319,6 +323,8 @@ def inv_mod(a: int) -> int:
 
 # the fused kernel (Triton, CUDA); ``VERITY_GPU_TORCH_ONLY=1`` disables it
 _fast_ext_mul = None
+_fast_fold = None
+_fast_logup_round = None
 try:
     import os as _os
 
@@ -327,5 +333,7 @@ try:
 
         if _kernels.AVAILABLE:
             _fast_ext_mul = _kernels.ext_mul
+            _fast_fold = _kernels.fold
+            _fast_logup_round = _kernels.logup_round
 except Exception:  # pragma: no cover
-    _fast_ext_mul = None
+    _fast_ext_mul = _fast_fold = _fast_logup_round = None

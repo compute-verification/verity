@@ -38,8 +38,11 @@ from .field import (
     t_ext,
     t_exts,
 )
+from . import field as _field
 from .gkr import Reader, VerifyError
 from .transcript import Transcript
+
+_fast_logup_round = _field._fast_logup_round
 
 CHUNK = 1 << 20
 
@@ -172,6 +175,8 @@ def _combine_level(p: torch.Tensor, q: torch.Tensor) -> tuple[torch.Tensor, torc
 
 def round_poly(p0, p1, q0, q1, e, half: int, lam_t: torch.Tensor) -> list[Ext]:
     dev = e.device
+    if _fast_logup_round is not None and e.is_cuda:
+        return py_exts(_fast_logup_round(p0, p1, q0, q1, e, half, lam_t))
     h = torch.zeros((4, DEG), dtype=torch.int64, device=dev)
     chunk = CHUNK // 4
     for lo in range(0, half, chunk):
