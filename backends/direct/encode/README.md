@@ -249,5 +249,98 @@ uv run --frozen --package verity-numerical python backends/direct/encode/reprice
 **Not done**: a Rust port; a faster encoder (the commitment's bottleneck at 0.39 of its SIMT floor: radix-4 stages and
 fewer shared-memory passes are the levers); the `r^T A` generation kernel (needs the constraint system on the GPU);
 a witness-generation kernel; a cheaper linear test (the 6 coordinate encodings per row are inherent to `q_add` over
-`F_c` with `F_t` rows; only a structural shortcut through the per-unit constraint pattern could remove them).
+`F_c` with `F_t` rows; only a structural shortcut through the per-unit constraint pattern could remove them --
+**done by the b-lintest lane, next section**).
 Ledger `backends/numerical/reports/ledger/b-commit.jsonl` (5 entries), plot `plots/overhead_b-commit.png`.
+
+
+---
+
+# b-lintest lane: the linear test through the structure of r^T A (2026-09-22, runs `r20260922-071843-ac9a`, `r20260922-072315-6497`, `r20260922-073017-0924` = M 1-4 with the lazy kernel)
+
+**Scope: component** (the linear-test bucket, same RTX 4090, CUDA events, warm, median of 7, bit-exact against the
+b-commit GPU path `Combiner.linear` and numpy in every run) and the vu-level re-pricing (`ARITHMETIC_DIAGNOSTIC`,
+`backends/numerical/reports/b_measured_4090.md`).  The algebra, the structure of `A`, the soundness note and the roofline
+are in **`LINTEST.md`**; the kernels in `lintest_structured.py`.
+
+The protocol combines the linear constraints with POWERS of one element (`r_add = (1, rho, rho^2, ...)`, `PROTOCOL.md`
+section 6), and every unit satisfies the same local constraint pattern, so with a unit-major constraint enumeration
+`r^T A` on a Ligero row is a per-row `F_c` scalar times one of `M` fixed rows (`M = 3` for the chain layout: witness
+pattern, helper pattern, the sum constraint's constant row) except on ~130 exceptional rows (unit 0, the last unit, the
+table-side helper equations, the multiplicities).  Interpolation is linear, so `q = sum_m enc(E_m) * enc(sum_i s_im W_i)`
++ the general path on the exceptional rows: **one memory-bound pass over the witness instead of 14 transforms per row**.
+Same test, same `r`, same `q`, same transcript -- a prover-side algorithm.
+
+## Before / after, B shape (310,602 rows), ms per batch
+
+~~~text
+linear test q_add                                      ms/batch   transforms/row   transforms/batch   floor                 of floor   bit-exact
+general path (b-commit; re-timed in the same run)      149.9-150.5   14              4.35M              35 ms HBM (r^T A 30.5 GB + W)   0.23   yes
+structured, M = 1                                        5.66       0               12                 5.05 ms (read W once)   0.89     yes (vs general GPU path + numpy)
+structured, M = 1 + 256 exceptional rows                 6.37       0               12 + 3,584         5.05                    0.79     yes
+structured, M = 2 + 256 exceptional rows                 7.03       0               24 + 3,584         5.05                    0.72     yes
+structured, M = 3 + 256 exceptional rows                 9.72       0               36 + 3,584         5.05                    0.52     yes   (INT32-issue-bound: 2.3e10 mont-muls)
+structured, M = 4 + 256 exceptional rows                13.67       0               48 + 3,584         5.05                    0.37     yes
+structured, lazy reduction (4 rows of 64-bit products per REDC), M = 2 / 3 / 4 + 256:   5.90 / 7.15 / 7.68           0.86 / 0.71 / 0.66   yes
+  split (M = 3 lazy, the chain layout's configuration): combine 6.95 + encode V 0.07 + F_c pointwise 0.05 + exceptional rows 0.08; G = enc(E_m) once per batch 0.16
+~~~
+
+**Speed-up 26x (M = 1) / 21x (M = 3, lazy) / 11x (M = 4, plain)**; the linear test falls from 58% of the B batch to 6%.
+The per-row cost of the exceptional rows is the general path's 0.48 us/row (256 rows = 0.12 ms).  The lazily reduced
+kernel (`combine_multi_lazy`: 1 IMAD.WIDE + one 64-bit add per product, one Montgomery reduction per 4 rows) is what
+keeps `M = 3, 4` near the memory floor; at `M = 1` the plain kernel is already there.
+
+## Tensor cores vs SIMT for the pass over W (LINTEST.md section 4)
+
+The pass is `V[m][c][j] = sum_i s[i][m][c] W[i][j]`: a `(24 M + 1)`-row INT8 limb GEMV against the 310,602-deep witness.
+`torch._int_mm` (cuBLASLt INT8 -> INT32, exact recombination, bit-exact): **10.3 ms at M = 1 (0.49 of the read floor, 2.4%
+of the INT8 peak), 12.4 at M = 2, 16.7 at M = 4**, plus an 11 ms byte-shift pass (`W ^ 0x80`, a 5 GB write) unless the
+witness is stored shifted.  The SIMT kernel: 5.66 / 6.99 / 13.5 ms.  **SIMT wins at every M**: the operation is
+memory-bound and cuBLASLt's skinny kernel reaches half the bandwidth the SIMT kernel does; the tensor cores' 0.25 M ms of
+arithmetic never mattered.  A bandwidth-efficient hand-written tensor-core GEMV could gain at most ~8 ms at M = 4 (3% of
+B) -- the only tensor-core opportunity left in B.  The dense `[rows x |P|] . [|P| x n]` formulation for a uniform `r`
+would cost 170-330 ms at 100% of INT8 peak (LINTEST.md 2.4): the powers combination, not the tensor core, is what makes
+the linear test cheap.
+
+## B re-priced (reprice_measured.py --lintest; b_measured_4090.md)
+
+~~~text
+B, RTX 4090, Blake3 leaves, openings from the store:  116.4 ms per 4096-VU batch = 28.4 us/VU, overhead 2.89e6   (was 258.7 ms / 6.41e6: 2.2x)
+  commitment 49.4 | linear test 7.15 (M = 3 lazy + 256 exc.; 13.7 with the plain M = 4 kernel -> 122.9 ms / 3.05e6) | IRS 5.7 | quadratic 7.8 | inversions 28.8 | openings 5.1 | modelled 12.5 (89% measured)
+  scalings (labels, not measurements): H100 142.9 ms / 3.54e6, A100 262.7 ms / 6.51e6 by the INT32 issue-rate ratio -- the structured
+  linear test is memory-bound, so for that bucket bandwidth scaling (A100 x0.65, H100 x0.30 of the 4090 time) is the right rule
+~~~
+
+B's buckets are now the fused commitment (49.4 ms, encoder-bound at 0.39 of its SIMT floor) and the helper inversions
+(28.8 ms, 0.52 of traffic floor); the linear test is 6%.  The modelled `r^T A` generation (8.9 ms) is kept in the total although the structure
+makes it `O(rows + |pattern|)` (LINTEST.md section 5).
+
+## Conventions for the b-ligero Rust/CUDA port (in addition to the b-commit list above)
+
+* **Constraint enumeration is unit-major**: block `u` holds every linear constraint that involves only unit `u` and its
+  successor (the WP2 identities and splits, the alignment copies, the transition differences, unit `u`'s 306 helper-side
+  `F_c`-linear equations and copies), in a fixed order `c < C`; index `u C + c`.  Boundary constraints (`row0_*`) and the
+  table-side constraints (`h_v (z_T - t_v) = m_T(v)`, the five sums) follow the blocks.  `r_add[idx] = rho^idx`.  Any order
+  gives the same `(#lin - 1)/|F_c|` bound; this one gives the structure.
+* **Rows hold whole units.**  Witness/triple rows: `S = 3` units of 1 064 slots per 3 840-symbol payload (or the transposed
+  layout "one AIR column x 3 840 consecutive units"); helper rows: whole units' `306 x 6` coordinates (12 units of 306 per
+  coordinate row, or 2 units of 1 836 interleaved).  Randomizer positions `>= l` carry 0 in `r^T A`.
+* **Prover algorithm** (`StructuredLinearTest`): per batch compute `pi = sum_c rho^c P_c + rho^(-C) sum_c rho^c P'_c`
+  (own + neighbour pattern), `E_m` (`(M, 6, k)` plain), `G_m = enc(E_m)` on cosets 0 and 1; per-row scalars
+  `s[i][m] = rho^(i S C)` etc. in Montgomery form `(rows, M, 6)`; `combine_multi` (thread per column, `chunk_rows` rows,
+  `6 M` accumulators, `acc (nchunk, 6M, k)` then `reduce_multi`); `V_m` on coset 1 (`6 M` encoder calls, `ncosets = 1`);
+  `fc_pointwise_accum` (`F_c x F_c`, plain inputs: `mont_mul` twice with `R^2`); exceptional rows through
+  `Combiner.linear` and `add_mod_inplace`.  Output `q (6, 2k)` plain, identical to the general path's.
+* **Verifier**: `sum_i R_i(eta) U_i(eta) = sum_m G_m(eta) sum_i s_im U_i(eta)` + exceptional rows: `M` scalar combinations of
+  the opened columns (the IRS test's work) and `M` evaluations of the fixed rows per opened column; it need not
+  materialise `r^T A` either.
+* **Not a tensor-core operation**: implement the pass as the SIMT kernel; store `s` as 24 M bytes per row, never `r^T A`.
+
+Files: `lintest_structured.py`, `tests/test_lintest_structured.py` (the structure test runs on the laptop), `LINTEST.md`,
+`results_lintest_<run>.json`, `reprice_measured.py --lintest results_lintest_r20260922-073017-0924.json --lintest-config linear_test_structured_M3_X256_lazy`; ledger
+`backends/numerical/reports/ledger/b-lintest.jsonl`, plot `plots/overhead_b-lintest.png`.
+
+**Not done**: the `pi`/scalar generation kernel from the real constraint system (the toy `UnitPatternSystem` proves the
+algebra; the b-ligero port's constraint emitter must adopt the enumeration); merging the helper-row classes to `M = 2`;
+a bandwidth-efficient tensor-core GEMV for `M >= 3`; the radix-4 encoder (the remaining encoder gain is <= 1.3x on a bucket
+that is now 40% of B).

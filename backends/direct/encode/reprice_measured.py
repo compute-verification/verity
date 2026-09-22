@@ -43,8 +43,10 @@ def _best(results: list[dict], **match) -> dict:
     return min(rows, key=lambda r: r["ms_median"])
 
 
-def measured_buckets(commit: dict, buckets: dict, shape: str, hash: str, openings: str) -> tuple[dict, dict]:
-    """(measured seconds per batch keyed for ``Priced.times``, detail table rows)."""
+def measured_buckets(commit: dict, buckets: dict, shape: str, hash: str, openings: str, lintest: dict | None = None,
+                     lintest_config: str = "linear_test_structured_M4_X256") -> tuple[dict, dict]:
+    """(measured seconds per batch keyed for ``Priced.times``, detail table rows).  ``lintest`` (b-lintest lane): the structured
+    linear test's results file; its ``lintest_config`` row replaces the general-path linear test."""
     cres, bres = commit["results"], buckets["results"]
     fused = _best(cres, shape=shape, hash=hash, mode="fused", keep=openings == "store")
     detail = {"commitment": fused}
@@ -53,6 +55,9 @@ def measured_buckets(commit: dict, buckets: dict, shape: str, hash: str, opening
     detail["irs_row_combination"] = irs
     if shape == "B":
         lin = _best(bres, bucket="linear_test", shape=shape)
+        if lintest is not None:
+            detail["linear_test_general_path"] = lin
+            lin = _best(lintest["results"], name=lintest_config)
         quad = _best(bres, bucket="quadratic_test", shape=shape)
         inv = _best(bres, bucket="batch_inverse", shape=shape)
         detail.update({"linear_test": lin, "quadratic_test": quad, "batch_inverse": inv})
@@ -69,21 +74,22 @@ def measured_buckets(commit: dict, buckets: dict, shape: str, hash: str, opening
     return m, detail
 
 
-def reprice(commit: dict, buckets: dict, run_ids: dict) -> dict:
+def reprice(commit: dict, buckets: dict, run_ids: dict, lintest: dict | None = None, lintest_config: str = "linear_test_structured_M4_X256") -> dict:
     fs = t.FIELDS["babybear"]
     rows_out = []
     for dname in ("B", "A"):
         p = t.price_design(t.DESIGNS[dname], fs, -128)
         for hash in ("blake3", "sha256"):
             for openings in ("store", "reencode"):
-                m, detail = measured_buckets(commit, buckets, dname, hash, openings)
+                m, detail = measured_buckets(commit, buckets, dname, hash, openings, lintest, lintest_config)
                 base = {"design": dname, "field": "babybear", "target_log2": -128, "B": t.B_TARGET, "K": t.K_TARGET, "ligero_rows": p.ligero_rows,
                         "leaf_hash": hash, "openings": openings, "measured_ms": {k: v * 1e3 for k, v in m.items()},
                         "detail": {k: {kk: vv for kk, vv in v.items() if kk != "ms_all"} for k, v in detail.items()}}
                 for gkey, gpu in GPUS.items():
                     scale = INT32_OPS_PER_S[gkey] / INT32_OPS_PER_S["RTX4090"]
                     tm = p.times(gpu, gkey, UTIL, HASH_4090[dname], "rs_matrix_ntt", fs, measured={k: v / scale for k, v in m.items()})
-                    label = ("MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled"
+                    label = (("MEASURED buckets on RTX 4090 (commitment, tests, inversions, openings); r^T A generation, witness generation, PRG modelled"
+                              + ("; linear test STRUCTURED (b-lintest)" if lintest is not None else ""))
                              if gkey == "RTX4090" else
                              f"SCALING: measured buckets / {scale:.2f} (INT32 issue-rate ratio; they are compute-bound on the 4090), modelled buckets at {gkey} peaks")
                     rows_out.append({**base, "gpu": gkey, "label": label, "simt_scale": scale,
@@ -102,10 +108,13 @@ def reprice(commit: dict, buckets: dict, run_ids: dict) -> dict:
                          "t.modelled_ms": {k: v * 1e3 for k, v in tm["t.modelled"].items()},
                          "seconds_per_vu": tm["seconds_per_vu"], "overhead.vs_native_peak": tm["overhead.vs_native_peak"],
                          "encode_only_in_l2_slices_ms": enc["ms_median"]})
-    return {"meta": {"lane": "b-commit", "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run_ids": run_ids,
+    return {"meta": {"lane": "b-commit" if lintest is None else "b-commit + b-lintest (structured linear test)", "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run_ids": run_ids,
                      "device": commit["device"], "utilisation_modelled_matmul": UTIL,
                      "native_seconds_per_vu": contract.native_seconds_per_vu(t.K_TARGET),
                      "proof_class": "ARITHMETIC_DIAGNOSTIC",
+                     "linear_test": ("general path (b-commit): 14 transforms per row" if lintest is None else
+                                     f"structured (b-lintest, LINTEST.md): {lintest_config} = per-row F_c scalars x fixed rows; "
+                                     "r^T A never materialised; the general path's 149.4 ms row is kept in detail.linear_test_general_path"),
                      "scope": "vu-level re-pricing: tensor.py cost model with the commitment, IRS row combination, linear and quadratic tests, "
                               "helper inversions and column openings replaced by standalone measurements on the RTX 4090 (B = 4096, K = 1536, "
                               "2^-128, BabyBear / BabyBear^6, HVZK rows included, authentication excluded)",
@@ -137,7 +146,7 @@ def markdown(rep: dict, commit: dict, buckets: dict) -> str:
     b = [r for r in rep["rows"] if r["design"] == "B" and r["gpu"] == "RTX4090" and "t.commitment_ms" in r]
     best = min(b, key=lambda r: r["t.total_ms"])
     prev = next(r for r in rep["rows"] if r["design"] == "B" and "PREVIOUS" in r["label"])
-    L = [f"# Candidate B on the RTX 4090, every prover bucket measured (b-commit lane, {rep['meta']['generated'][:10]})", "",
+    L = [f"# Candidate B on the RTX 4090, every prover bucket measured ({rep['meta']['lane']} lane, {rep['meta']['generated'][:10]})", "",
          f"**Label: `ARITHMETIC_DIAGNOSTIC`-level re-pricing, scope vu.**  {rep['meta']['scope']}.  Device: {dev['gpu']} "
          f"({dev['sms']} SMs, driver {dev['nvidia_smi_driver']}, CUDA runtime {dev['cuda_runtime_version']}, cupy {dev['cupy']}).  Runs: "
          + ", ".join(f"`{v}`" for v in rep["meta"]["run_ids"].values()) + ".  CUDA-event timings, warm, median of 7; every kernel bit-exact "
@@ -157,9 +166,17 @@ def markdown(rep: dict, commit: dict, buckets: dict) -> str:
     L.append(f"| quadratic test p_0 (8,192-point domain) | 3 encoder calls (coset 1) per product row + `combine_quadratic`, {q['slice_rows']}-row slices | "
              f"**{q['ms_median']:.1f}** | {q['us_per_row']:.3f} per product row | 6 transforms per product row | -- | yes |")
     ln = d["linear_test"]
-    L.append(f"| linear test q_add (8,192-point domain) | 7 encoder calls per row (6 coordinate rows of r^T A + the witness row, coset 1) + `combine_linear`, "
-             f"{ln['slice_rows']}-row slices | **{ln['ms_median']:.1f}** | {ln['us_per_row']:.3f} | 14 transforms per row = 3.5x the commitment's encoding | "
-             f"{ln['us_per_row'] / c['us_per_row']:.1f}x the fused commitment per row | yes (r^T A generation NOT included) |")
+    if "linear_test_general_path" in d:
+        lg = d["linear_test_general_path"]
+        sp = ln["split_ms"]
+        L.append(f"| linear test q_add, STRUCTURED (b-lintest, `LINTEST.md`): r^T A = per-row F_c scalars x {ln['M']} fixed rows + {ln['exceptional_rows']} exceptional rows | "
+                 f"`lintest_structured`: one fused pass over W (`combine_multi`, {sp['combine_multi']:.2f} ms) + {6 * ln['M']} encoder calls ({sp['encode_V']:.2f}) + F_c pointwise ({sp['pointwise']:.2f}) "
+                 f"+ general path for the exceptional rows ({sp['exceptional_generic']:.2f}) | **{ln['ms_median']:.1f}** | {ln['us_per_row']:.4f} | read W once = {ln['read_floor_ms']:.1f} ms; 0 transforms per row | "
+                 f"{ln['fraction_of_read_floor']:.2f} of HBM floor; **{lg['ms_median'] / ln['ms_median']:.0f}x** faster than the general path ({lg['ms_median']:.1f} ms, same run) | yes (vs the general GPU path and numpy) |")
+    else:
+        L.append(f"| linear test q_add (8,192-point domain) | 7 encoder calls per row (6 coordinate rows of r^T A + the witness row, coset 1) + `combine_linear`, "
+                 f"{ln['slice_rows']}-row slices | **{ln['ms_median']:.1f}** | {ln['us_per_row']:.3f} | 14 transforms per row = 3.5x the commitment's encoding | "
+                 f"{ln['us_per_row'] / c['us_per_row']:.1f}x the fused commitment per row | yes (r^T A generation NOT included) |")
     inv = d["batch_inverse"]
     L.append(f"| helper inversions (125.9M F_c elements) | `batch_inverse`, Montgomery trick, {inv['threads']} threads x {inv['segment']} | **{inv['ms_median']:.1f}** | "
              f"{inv['ns_per_element']:.2f} ns / element | traffic {inv['traffic_floor_ms']:.1f} ms | {inv['traffic_floor_ms'] / inv['ms_median']:.2f} of HBM floor | yes |")
@@ -172,10 +189,17 @@ def markdown(rep: dict, commit: dict, buckets: dict) -> str:
           f"(encoder + SHA-256 measured, rest modelled) said {prev['t.total_ms']:.0f} ms / {prev['overhead.vs_native_peak']:.3g}.  Modelled remainder: "
           + ", ".join(f"{k} {v:.1f} ms" for k, v in best["t.modelled_ms"].items()) + ".", "",
           "## What the measurements say", "",
-          (f"* **The linear test is B's bucket, not hashing or encoding.**  q_add needs the deg < k interpolant of every row of r^T A (an F_c row: "
-          f"6 BabyBear coordinate rows), evaluated on 8,192 points, times the re-encoded witness row: 14 NTT-size transforms per row against the "
-          f"commitment's 4.  Measured {ln['ms_median']:.0f} ms = {ln['ms_median'] / best['t.total_ms']:.0%} of the batch.  The model priced the whole "
-          f"row-combination bucket as one tensor-core matmul of 5.4e11 MACs (9.5 ms at utilisation 0.172) and did not count the r^T A encodings at all."),
+          ((f"* **The linear test was B's bucket; the structure of r^T A removes it.**  Under the protocol's powers-of-rho combination every unit's "
+            f"constraint pattern makes r^T A on a Ligero row a per-row F_c scalar times one of {ln['M']} fixed rows (`LINTEST.md`), so q = sum_m enc(E_m) * "
+            f"enc(sum_i s_im W_i): one memory-bound pass over W instead of 14 transforms per row.  Measured {ln['ms_median']:.1f} ms "
+            f"({ln['fraction_of_read_floor']:.2f} of the read floor; M = {ln['M']}, {ln['exceptional_rows']} exceptional rows through the general path) against "
+            f"{d['linear_test_general_path']['ms_median']:.1f} ms for the general path in the same run; now {ln['ms_median'] / best['t.total_ms']:.0%} of the batch.  "
+            f"Same test, same transcript: a prover-side algorithm, given a unit-major constraint enumeration and rows holding whole units (both public conventions).")
+           if "linear_test_general_path" in d else
+           (f"* **The linear test is B's bucket, not hashing or encoding.**  q_add needs the deg < k interpolant of every row of r^T A (an F_c row: "
+            f"6 BabyBear coordinate rows), evaluated on 8,192 points, times the re-encoded witness row: 14 NTT-size transforms per row against the "
+            f"commitment's 4.  Measured {ln['ms_median']:.0f} ms = {ln['ms_median'] / best['t.total_ms']:.0%} of the batch.  The model priced the whole "
+            f"row-combination bucket as one tensor-core matmul of 5.4e11 MACs (9.5 ms at utilisation 0.172) and did not count the r^T A encodings at all.")),
           (f"* **Commitment: {c['ms_median']:.1f} ms fused** ({c['speedup_vs_unfused']:.2f}x vs unfused encode + hash), the codeword never in HBM (peak device memory "
           f"{c['device_memory_in_use_bytes'] / 2**30:.1f} GiB).  Blake3 with an unrolled schedule hashes the 20.4 GB codeword in 15.4 ms; SHA-256 in 30 ms at the "
           f"INT32 issue rate.  The SIMT NTT encoder (34-36 ms in L2 slices) is now the commitment's bottleneck; its SIMT floor is ~14 ms."),
@@ -195,10 +219,16 @@ def main(argv=None) -> None:
     ap.add_argument("--buckets", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--md", default=None)
+    ap.add_argument("--lintest", default=None, help="b-lintest results_lintest_<run>.json: structured linear test replaces the general path")
+    ap.add_argument("--lintest-config", default="linear_test_structured_M4_X256")
     a = ap.parse_args(argv)
     commit = json.loads(Path(a.commit).read_text())
     buckets = json.loads(Path(a.buckets).read_text())
-    rep = reprice(commit, buckets, {"commit": commit.get("run_id"), "buckets": buckets.get("run_id")})
+    lintest = json.loads(Path(a.lintest).read_text()) if a.lintest else None
+    run_ids = {"commit": commit.get("run_id"), "buckets": buckets.get("run_id")}
+    if lintest:
+        run_ids["lintest"] = lintest.get("run_id")
+    rep = reprice(commit, buckets, run_ids, lintest, a.lintest_config)
     print(table(rep))
     if a.out:
         Path(a.out).write_text(json.dumps(rep, indent=1) + "\n")
