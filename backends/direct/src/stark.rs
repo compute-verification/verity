@@ -47,6 +47,12 @@ pub type ChallengerBb = SerializingChallenger32<Val32, HashChallenger<u8, ByteHa
 pub type PcsBb = TwoAdicFriPcs<Val32, Dft, ValMmcs32, ChallengeMmcs32>;
 pub type ConfigBb = StarkConfig<PcsBb, ChallengeBb, ChallengerBb>;
 
+// --- BabyBear with the degree-5 extension (section 14.2: the lookup identity term needs a larger challenge field) --
+pub type ChallengeBb5 = BinomialExtensionField<Val32, 5>;
+type ChallengeMmcs32x5 = ExtensionMmcs<Val32, ChallengeBb5, ValMmcs32>;
+pub type PcsBb5 = TwoAdicFriPcs<Val32, Dft, ValMmcs32, ChallengeMmcs32x5>;
+pub type ConfigBb5 = StarkConfig<PcsBb5, ChallengeBb5, ChallengerBb>;
+
 #[derive(Clone, Copy, Debug, serde::Serialize)]
 pub struct FriParams {
     pub log_blowup: usize,
@@ -136,6 +142,31 @@ impl Backend for BabyBearBackend {
     }
     fn challenge_name() -> &'static str {
         "babybear^4"
+    }
+}
+
+pub struct BabyBear5Backend;
+
+impl Backend for BabyBear5Backend {
+    type SC = ConfigBb5;
+    const KIND: FieldKind = FieldKind::BabyBear;
+    fn config(log_n: usize, fri: FriParams) -> ConfigBb5 {
+        let byte_hash = ByteHash {};
+        let field_hash = FieldHash32::new(byte_hash);
+        let compress = MyCompress::new(byte_hash);
+        let val_mmcs = ValMmcs32::new(field_hash, compress);
+        let challenge_mmcs = ChallengeMmcs32x5::new(val_mmcs.clone());
+        let fri_config = FriConfig { log_blowup: fri.log_blowup, num_queries: fri.num_queries, proof_of_work_bits: fri.proof_of_work_bits, mmcs: challenge_mmcs };
+        ConfigBb5::new(PcsBb5::new(log_n, Dft {}, val_mmcs, fri_config))
+    }
+    fn challenger() -> ChallengerBb {
+        ChallengerBb::from_hasher(vec![], ByteHash {})
+    }
+    fn challenge_bits() -> usize {
+        155
+    }
+    fn challenge_name() -> &'static str {
+        "babybear^5"
     }
 }
 

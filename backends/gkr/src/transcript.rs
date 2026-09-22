@@ -1,7 +1,7 @@
 //! SHA-256 (FIPS 180-4, in-tree so the crate has no dependencies) and the Fiat-Shamir transcript.
 //! Challenges are drawn by rejection sampling so every coordinate is uniform in [0, p).
 
-use crate::field::{Ext, Fp, P};
+use crate::field::{Ext, Fp};
 
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
@@ -64,21 +64,31 @@ impl Sha256 {
     pub fn digest(data: &[u8]) -> [u8; 32] { let mut s = Sha256::new(); s.update(data); s.finalize() }
 }
 
-/// Fiat-Shamir: state <- H(state || message); challenge_i <- H(state || "chal" || ctr) with rejection sampling.
+/// One recorded transcript event (`dump-transcript`): what was absorbed, which challenge came out, or a label
+/// marking the protocol phase the following events belong to.
+#[derive(Clone, Debug)]
+pub enum Event { Label(String), Absorb { bytes: Vec<u8>, state: [u8; 32] }, Challenge { value: Ext, ctr_before: u64 } }
+
+/// Fiat-Shamir: state <- H(state || message); challenge_i <- H(state || "chal" || ctr) with rejection sampling
+/// (`Fp::rejection_sample` on each digest, coordinate by coordinate, `DEGREE` coordinates per challenge).
 /// `slots` counts every challenge drawn (`rounds.protocol` in the one-coin-per-message reading).
-pub struct Transcript { state: [u8; 32], ctr: u64, pub slots: u64 }
+pub struct Transcript { state: [u8; 32], ctr: u64, pub slots: u64, pub log: Option<Vec<Event>> }
 
 impl Transcript {
-    pub fn new(domain: &[u8]) -> Self { Transcript { state: Sha256::digest(domain), ctr: 0, slots: 0 } }
+    pub fn new(domain: &[u8]) -> Self { Transcript { state: Sha256::digest(domain), ctr: 0, slots: 0, log: None } }
+    /// Start recording every absorb / challenge / label (for the transcript vectors).
+    pub fn with_log(domain: &[u8]) -> Self { let mut t = Self::new(domain); t.log = Some(vec![Event::Absorb { bytes: domain.to_vec(), state: t.state }]); t }
+    pub fn label(&mut self, s: &str) { if let Some(l) = &mut self.log { l.push(Event::Label(s.to_string())); } }
     pub fn absorb(&mut self, data: &[u8]) {
         let mut s = Sha256::new();
         s.update(&self.state);
         s.update(data);
         self.state = s.finalize();
+        if let Some(l) = &mut self.log { l.push(Event::Absorb { bytes: data.to_vec(), state: self.state }); }
     }
     pub fn absorb_ext(&mut self, x: Ext) { self.absorb(&x.to_bytes()); }
     pub fn absorb_exts(&mut self, xs: &[Ext]) {
-        let mut buf = Vec::with_capacity(xs.len() * 24);
+        let mut buf = Vec::with_capacity(xs.len() * Ext::BYTES);
         for x in xs { buf.extend_from_slice(&x.to_bytes()); }
         self.absorb(&buf);
     }
@@ -90,15 +100,15 @@ impl Transcript {
             s.update(&self.ctr.to_le_bytes());
             self.ctr += 1;
             let d = s.finalize();
-            for i in 0..4 {
-                let v = u64::from_le_bytes(d[8 * i..8 * i + 8].try_into().unwrap());
-                if v < P { return Fp(v); }
-            }
+            if let Some(v) = Fp::rejection_sample(&d) { return v; }
         }
     }
     pub fn challenge(&mut self) -> Ext {
         self.slots += 1;
-        Ext([self.squeeze_fp(), self.squeeze_fp(), self.squeeze_fp()])
+        let ctr_before = self.ctr;
+        let value = Ext(std::array::from_fn(|_| self.squeeze_fp()));
+        if let Some(l) = &mut self.log { l.push(Event::Challenge { value, ctr_before }); }
+        value
     }
     pub fn challenges(&mut self, n: usize) -> Vec<Ext> { (0..n).map(|_| self.challenge()).collect() }
 }

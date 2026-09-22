@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 
 from verity_numerical.bench import ledger
 
-__all__ = ["OUT", "REFERENCES", "main", "plot_lane", "plot_overview"]
+__all__ = ["OUT", "REFERENCES", "main", "plot_frontier", "plot_lane", "plot_overview"]
 
 OUT = ledger.DIR.parent / "plots"
 REFERENCES = {"goal 1e6": 1e6, "SP1 authenticated core, 1 VU per proof (4090, baselines.json)": 3.6e11, "TensorZKP HyperPlonk calibration (H100)": 5.0e7}
@@ -99,11 +99,69 @@ def plot_lane(lane: str, entries: list[dict[str, Any]], out: Path) -> Path:
 def plot_overview(lanes: dict[str, list[dict[str, Any]]], out: Path) -> Path:
     fig, ax = plt.subplots(figsize=(13, 7))
     for lane, entries in lanes.items():
-        _draw(ax, entries, annotate=True, prefix=f"{lane}: ")
-    _finish(ax, "all lanes -- overhead over time (labels every breakthrough)")
+        _draw(ax, [e for e in entries if e["overhead"] is not None], annotate=False, prefix=f"{lane}: ")
+        for e in entries:
+            if e["breakthrough"] and e["overhead"] is not None:
+                ax.annotate(f"{lane}: {e['label']}", (_ts(e), e["overhead"]), textcoords="offset points",
+                            xytext=(5, 5), fontsize=7, fontweight="bold")
+    _finish(ax, "all lanes -- overhead over time (labels on breakthroughs only; per-lane plots carry every label)")
     fig.autofmt_xdate()
     fig.tight_layout()
     path = out / "overhead_all.png"
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
+TRACK_COLOURS = {"A": "#1f77b4", "B": "#d62728", "C": "#2ca02c", "shared": "#7f7f7f", "sp1": "#7f7f7f", "0": "#7f7f7f"}
+MEASURED_CLASSES = {"NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND"}
+
+
+def plot_frontier(lanes: dict[str, list[dict[str, Any]]], out: Path) -> Path:
+    """Per track, the running best whole-VU overhead over time: solid = an actual proof was produced and verified
+    (``NON_ZK_PROOF_DIAGNOSTIC`` and stronger), dashed = a re-pricing with at least one modelled bucket
+    (``ARITHMETIC_DIAGNOSTIC``).  Only entries that set a new best for their track are labelled (staggered)."""
+    fig, ax = plt.subplots(figsize=(13, 7))
+    by_track: dict[str, list[dict[str, Any]]] = {}
+    for lane, entries in lanes.items():
+        for e in entries:
+            if e["scope"] == "vu" and e["overhead"] is not None:
+                by_track.setdefault(e["track"], []).append({**e, "_lane": lane})
+    for track, entries in sorted(by_track.items()):
+        colour = TRACK_COLOURS.get(track, "black")
+        for measured, style in ((True, "-"), (False, "--")):
+            sel = sorted((e for e in entries if (e["proof_class"] in MEASURED_CLASSES) == measured), key=_ts)
+            if not sel:
+                continue
+            best = float("inf")
+            xs, ys, firsts = [], [], []
+            for e in sel:
+                if e["overhead"] < best:
+                    best = e["overhead"]
+                    firsts.append(e)
+                xs.append(_ts(e))
+                ys.append(best)
+            ax.step(xs, ys, where="post", color=colour, linestyle=style, linewidth=2 if measured else 1.2,
+                    label=f"track {track} -- {'proved and verified' if measured else 're-priced, partly modelled'}")
+            for i, e in enumerate(firsts):
+                ax.plot(_ts(e), e["overhead"], marker="*" if e["breakthrough"] else "o", color=colour, linestyle="none",
+                        markersize=12 if e["breakthrough"] else 6, markeredgecolor="black",
+                        markerfacecolor=colour if measured else "white")
+                dy = (12 + 11 * (i % 3)) * (1 if i % 2 == 0 else -1)
+                ax.annotate(f"{e['_lane']}: {e['label']}"[:70], (_ts(e), e["overhead"]), textcoords="offset points",
+                            xytext=(6, dy), fontsize=6.5, color=colour, arrowprops={"arrowstyle": "-", "color": "#cccccc", "lw": 0.6})
+    for name, y in REFERENCES.items():
+        ax.axhline(y, color="#dddddd", linestyle="--", linewidth=1)
+        ax.annotate(name, (0.01, y), fontsize=6, color="#999999", xycoords=("axes fraction", "data"), xytext=(0, 2), textcoords="offset points")
+    ax.set_yscale("log")
+    ax.set_ylabel("best whole-VU overhead so far (vs native A100 BF16 peak, K=1536)")
+    ax.set_title("frontier per track -- running best K=1536 VU overhead (labels where the best improves)", fontsize=10)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M", tz=_dt.UTC))
+    ax.grid(True, which="major", alpha=0.3)
+    ax.legend(fontsize=7, loc="upper center", bbox_to_anchor=(0.5, -0.14), ncol=3, frameon=False)
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    path = out / "frontier.png"
     fig.savefig(path, dpi=130)
     plt.close(fig)
     return path
@@ -119,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     written = [plot_lane(lane, entries, ns.out) for lane, entries in lanes.items() if entries]
     if lanes:
         written.append(plot_overview(lanes, ns.out))
+        written.append(plot_frontier(lanes, ns.out))
     for p in written:
         print(p)
     return 0

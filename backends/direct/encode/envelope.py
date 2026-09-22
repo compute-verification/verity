@@ -28,17 +28,22 @@ def envelope(res: dict, run_id: str | None) -> tuple[dict, list[str]]:
                                         "toolchain": {k: dev.get(k) for k in ("torch", "cupy", "numpy", "triton")}},
                               preprocessing="twiddle tables (2 x 16 KiB + 48 KiB) and DFT-matrix limb tiles (4 x 4 KiB) computed once on the host",
                               retention="streamed", instances=None,
-                              scope="component: Reed-Solomon encoding of the Ligero witness matrix only; nothing else of the prover")
+                              scope=res.get("scope", "component: Reed-Solomon encoding of the Ligero witness matrix only; nothing else of the prover"))
     ms = []
-    for r in res["encoders"]:
+    for r in res.get("encoders", []):
         tag = f"{r['encoder']}.{r['shape']}"
         ms.append(contract.measurement(f"encode.{tag}.ms_per_batch", r["ms_median"], "ms"))
         ms.append(contract.measurement(f"encode.{tag}.us_per_row", r["us_per_row"], "us"))
         ms.append(contract.measurement(f"encode.{tag}.codeword_gb_per_s", r["codeword_gb_per_s"], "GB/s"))
         ms.append(contract.measurement(f"encode.{tag}.fraction_of_hbm_floor", r["fraction_of_hbm_floor"], "ratio"))
+    for r in res.get("results", []):          # commit_bench / buckets_bench: generic {name, shape, ms_median, us_per_row}
+        tag = f"{r['name']}.{r['shape']}"
+        ms.append(contract.measurement(f"{res.get('bench_kind', 'bucket')}.{tag}.ms_per_batch", r["ms_median"], "ms"))
+        if "us_per_row" in r:
+            ms.append(contract.measurement(f"{res.get('bench_kind', 'bucket')}.{tag}.us_per_row", r["us_per_row"], "us"))
+    note = res.get("bit_exact_note", "every timed encoder is bit-exact vs the numpy reference on 64 rows (bench.checks)")
     out = {"schema": contract.RESULT_SCHEMA, "run_id": run_id or "local",
-           "validation": {"status": "passed" if res["all_bit_exact"] else "failed",
-                          "note": "every timed encoder is bit-exact vs the numpy reference on 64 rows (bench.checks)"},
+           "validation": {"status": "passed" if res["all_bit_exact"] else "failed", "note": note},
            "workload_fingerprint": fp, "measurements": ms, "artifacts": ["bench.json"], "bench": res}
     return out, contract.validate(out)
 

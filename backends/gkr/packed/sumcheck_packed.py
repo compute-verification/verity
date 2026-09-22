@@ -224,9 +224,18 @@ class RoundInputs:
     prefix: torch.Tensor          # (6,) int32: eq(gamma_{<i-1}, r_{<i})
     coeff: torch.Tensor | None    # packed rounds: (4^(i-1), 6) int32 = eq(r_{<i}, a) eq(r_{<i}, a'), index a . 2^(i-1) + a'
     fold_C: torch.Tensor | None   # ext rounds: (48, 48) int8 fold matrix of r_i; fold_k: (4 . 2^k, 48)
-    fold_coeff: torch.Tensor | None = None   # triton fold_k: (2^k, 6) int32 = eq(r_1..r_k, a)
-    fold_C64: torch.Tensor | None = None     # triton fold_ext: (64, 64) int8 embedding of fold_C
+    fold_coeff: torch.Tensor | None = None   # triton fold_k: (2^k, 6) int32 = eq(r_1..r_k, a) . R  (Montgomery pre-scaled)
+    fold_r: torch.Tensor | None = None       # triton fold_ext: (6,) int32 = r_i . R
     e_lo32: torch.Tensor | None = None       # triton fused inner product: e_lo_limbs padded to (K1, 32)
+
+
+#: Montgomery radix of the Triton kernels; ``pre_scale(x) = x R mod p`` is what they load for challenges and weights.
+R_MOD_P = pow(2, 32, P)
+
+
+def pre_scale(x: torch.Tensor) -> torch.Tensor:
+    """``x . R mod p`` elementwise (int32 in, int32 out): the Montgomery pre-scaling of a host-side constant."""
+    return ((x.to(torch.int64) * R_MOD_P) % P).to(torch.int32)
 
 
 class Kernel:
@@ -295,6 +304,9 @@ class Kernel:
             eq_r = ref.eq_table(rs)
             coeff = to_dev([ref.mul(a, b) for a in eq_r for b in eq_r], self.device)
         fold_C = None
+        if self._tk is not None:
+            # the Triton Hadamards are Montgomery products (g h R^-1): the weight limbs carry the compensating R
+            e_lo = pre_scale(e_lo)
         inp = RoundInputs(decompose(e_lo), e_hi, eq_x, prefix, coeff, fold_C)
         if r_i is not None:
             self.set_fold(inp, rs, i, k, r_i)
@@ -306,11 +318,11 @@ class Kernel:
             C48 = fold_matrix_ext(r_i)
             inp.fold_C = torch.tensor(C48, device=self.device)
             if self._tk is not None:
-                inp.fold_C64 = self._tk.fold_ext_matrix(C48, self.device)
+                inp.fold_r = pre_scale(to_dev([r_i], self.device))[0].contiguous()
         elif i == k:
             inp.fold_C = torch.tensor(fold_matrix_k(rs + [r_i]), device=self.device)
             if self._tk is not None:
-                inp.fold_coeff = to_dev(ref.eq_table(rs + [r_i]), self.device)
+                inp.fold_coeff = pre_scale(to_dev(ref.eq_table(rs + [r_i]), self.device))
 
     # -- SIMT pieces --------------------------------------------------------------------------------------------------
 
@@ -481,8 +493,8 @@ class Kernel:
         if self._tk is not None:
             if stats:
                 stats.add("fold.ext", 2 * m, 2 * DL, 2 * DL, 0)
-            F0 = self._tk.fold_ext(gE.view(m, 2 * DEGREE), inp.fold_C64, self.pow2_row)
-            F1 = self._tk.fold_ext(hE.view(m, 2 * DEGREE), inp.fold_C64, self.pow2_row)
+            F0 = self._tk.fold_ext(gE.view(m, 2 * DEGREE), inp.fold_r)
+            F1 = self._tk.fold_ext(hE.view(m, 2 * DEGREE), inp.fold_r)
             if marks is not None:
                 marks["matmul.fold"] = self._mark()
             return F0, F1

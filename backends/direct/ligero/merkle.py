@@ -1,0 +1,125 @@
+"""Merkle commitment to the columns of the codeword matrix U (m x n): leaf c = H(column c as m little-endian uint32),
+internal = H(left || right).  Host hashing: Blake3 (``blake3`` package) when importable, else SHA-256 (hashlib) --
+both PLACEHOLDERS for the GPU Merkle of ``backends/shared/hash_gpu``; the hash is named in the proof header.
+"""
+from __future__ import annotations
+
+import hashlib
+import os
+from concurrent.futures import ThreadPoolExecutor
+
+import numpy as np
+
+try:
+    import blake3 as _blake3
+
+    def _h(data: bytes) -> bytes:
+        return _blake3.blake3(data).digest()
+
+    HASH_NAME = "blake3 (host, placeholder)"
+except ImportError:                                   # pragma: no cover
+    def _h(data: bytes) -> bytes:
+        return hashlib.sha256(data).digest()
+
+    HASH_NAME = "sha256 (host, placeholder)"
+
+__all__ = ["HASH_NAME", "commit", "commit_device", "gpu_available", "hash_bytes", "open_columns", "open_device", "verify_path"]
+
+# --- GPU Merkle (backends/shared/hash_gpu, the hash-gpu lane): Blake3 leaves and nodes on the device, bit-exact with
+# the host Blake3 above, so ``verify_path`` is unchanged. -----------------------------------------------------------
+try:
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _shared = str(_Path(__file__).resolve().parents[2] / "shared")
+    if _shared not in _sys.path:
+        _sys.path.insert(0, _shared)
+    import cupy as _cp  # noqa: F401
+    from hash_gpu import merkle as _gpu_merkle
+
+    GPU_HASH_NAME = "blake3 (GPU, backends/shared/hash_gpu)"
+except Exception:  # noqa: BLE001 -- no cupy / no hash_gpu: the host path stays
+    _gpu_merkle = None
+    GPU_HASH_NAME = None
+
+
+def gpu_available() -> bool:
+    return _gpu_merkle is not None and HASH_NAME.startswith("blake3")
+
+
+def commit_device(U_int32):
+    """``U_int32``: (m, n) contiguous int32 torch tensor on the device -> (root bytes, Tree)."""
+    tree = _gpu_merkle.commit(U_int32, "blake3")
+    return _gpu_merkle.digest_bytes(tree.root, "blake3"), tree
+
+
+def open_device(tree, cols: list[int]) -> list[list[bytes]]:
+    """Authentication paths as bytes (leaf level first), from the device tree."""
+    import cupy as cp
+
+    paths = []
+    levels = [cp.asnumpy(lvl) for lvl in tree.levels[:-1]]        # (N_k, 8) uint32, LE words
+    for c in cols:
+        path, i = [], int(c)
+        for lvl in levels:
+            path.append(lvl[i ^ 1].astype("<u4").tobytes())
+            i >>= 1
+        paths.append(path)
+    return paths
+
+
+def hash_bytes(data: bytes) -> bytes:
+    return _h(data)
+
+
+def leaves_of(U_cols: np.ndarray, threads: int | None = None) -> list[bytes]:
+    """U_cols: (n, m) uint32 (column-major view of U) -> n leaf digests."""
+    n = U_cols.shape[0]
+    raw = np.ascontiguousarray(U_cols.astype(np.uint32))
+    threads = threads or min(32, (os.cpu_count() or 4))
+    if n < 256 or threads <= 1:
+        return [_h(raw[i].tobytes()) for i in range(n)]
+    chunks = np.array_split(np.arange(n), threads)
+
+    def work(idx):
+        return [_h(raw[i].tobytes()) for i in idx]
+
+    with ThreadPoolExecutor(threads) as ex:
+        parts = list(ex.map(work, chunks))
+    return [d for part in parts for d in part]
+
+
+def build_tree(leaves: list[bytes]) -> list[list[bytes]]:
+    levels = [leaves]
+    while len(levels[-1]) > 1:
+        cur = levels[-1]
+        levels.append([_h(cur[i] + cur[i + 1]) for i in range(0, len(cur), 2)])
+    return levels
+
+
+def commit(U_cols: np.ndarray) -> tuple[bytes, list[list[bytes]]]:
+    """Root and the tree (all levels, leaves first)."""
+    levels = build_tree(leaves_of(U_cols))
+    return levels[-1][0], levels
+
+
+def open_columns(levels: list[list[bytes]], cols: list[int]) -> list[list[bytes]]:
+    """Authentication path (sibling per level) for each column."""
+    paths = []
+    for c in cols:
+        path = []
+        i = c
+        for lvl in levels[:-1]:
+            path.append(lvl[i ^ 1])
+            i >>= 1
+        paths.append(path)
+    return paths
+
+
+def verify_path(root: bytes, col: int, column: np.ndarray, path: list[bytes]) -> bool:
+    h = _h(np.ascontiguousarray(column.astype(np.uint32)).tobytes())
+    i = col
+    for sib in path:
+        h = _h(h + sib) if i % 2 == 0 else _h(sib + h)
+        i >>= 1
+    return h == root
