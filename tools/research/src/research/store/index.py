@@ -41,10 +41,25 @@ CREATE TABLE IF NOT EXISTS attempt_inputs(attempt TEXT, name TEXT, artifact TEXT
 CREATE INDEX IF NOT EXISTS attempt_inputs_art ON attempt_inputs(artifact);
 CREATE TABLE IF NOT EXISTS labels(target TEXT, key TEXT, value TEXT, by TEXT, ts TEXT, ref TEXT, path TEXT PRIMARY KEY);
 CREATE INDEX IF NOT EXISTS labels_target ON labels(target, key);
-CREATE TABLE IF NOT EXISTS replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, verified TEXT, PRIMARY KEY(id, location));
+CREATE TABLE IF NOT EXISTS replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, PRIMARY KEY(id, location));
+CREATE TABLE IF NOT EXISTS replica_checks(id TEXT, location TEXT, verified TEXT, PRIMARY KEY(id, location));
 """
-#: Columns added after a table first shipped; `Index.__init__` adds the missing ones to an existing catalog (`ALTER TABLE ... ADD COLUMN`).
-MIGRATIONS = (("replicas", "verified", "TEXT"),)
+# Schema rule: the catalog is shared by every worktree on this machine, including ones running older `research` code, and older
+# code inserts into the original tables positionally (`INSERT ... VALUES (?,?,?,?)`).  Never add a column to a shipped table --
+# it breaks every older writer at once (2026-09-22: `replicas.verified` did exactly that to six running lanes).  Add a side
+# table keyed like the original instead; `replica_checks` is the first.  `_migrate` moves data out of the offending column.
+
+
+def _migrate(db: sqlite3.Connection) -> None:
+    """Undo the one column-add that shipped: move `replicas.verified` into `replica_checks` and restore the 4-column table."""
+    if "verified" in {r[1] for r in db.execute("PRAGMA table_info(replicas)")}:
+        db.execute("BEGIN")
+        db.execute("INSERT OR REPLACE INTO replica_checks(id, location, verified) SELECT id, location, verified FROM replicas WHERE verified IS NOT NULL")
+        db.execute("CREATE TABLE replicas_v4(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, PRIMARY KEY(id, location))")
+        db.execute("INSERT INTO replicas_v4 SELECT id, location, verified_utc, detail FROM replicas")
+        db.execute("DROP TABLE replicas")
+        db.execute("ALTER TABLE replicas_v4 RENAME TO replicas")
+        db.execute("COMMIT")
 
 
 def flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
@@ -80,9 +95,7 @@ class Index:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.path, timeout=30, isolation_level=None)   # autocommit; explicit BEGIN where several writes must land together
         self.db.executescript(SCHEMA)
-        for table, col, typ in MIGRATIONS:
-            if col not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})")}:
-                self.db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+        _migrate(self.db)
 
     def close(self) -> None:
         self.db.close()
@@ -135,8 +148,10 @@ class Index:
     def set_replica(self, art_id: str, location: str, verified_utc: str | None, detail: str | None = None, verified: str | None = None) -> None:
         """`verified` names the check behind `verified_utc` (README §7): `sha256-readback`, `etag-md5`, or both comma-joined."""
         with self.db:
-            self.db.execute("INSERT OR REPLACE INTO replicas(id, location, verified_utc, detail, verified) VALUES (?,?,?,?,?)",
-                            (art_id, location, verified_utc, detail, verified))
+            self.db.execute("INSERT OR REPLACE INTO replicas(id, location, verified_utc, detail) VALUES (?,?,?,?)",
+                            (art_id, location, verified_utc, detail))
+            if verified is not None:
+                self.db.execute("INSERT OR REPLACE INTO replica_checks(id, location, verified) VALUES (?,?,?)", (art_id, location, verified))
 
     def set_presence(self, art_id: str, *, local: bool | None = None, remote: bool | None = None, repo_path: str | None = None) -> None:
         sets, vals = [], []
@@ -225,7 +240,8 @@ class Index:
 
     def replicas(self, art_id: str) -> dict[str, dict]:
         return {r[0]: {"verified_utc": r[1], "detail": r[2], "verified": r[3]}
-                for r in self.db.execute("SELECT location, verified_utc, detail, verified FROM replicas WHERE id=?", (art_id,))}
+                for r in self.db.execute("SELECT r.location, r.verified_utc, r.detail, c.verified FROM replicas r "
+                                         "LEFT JOIN replica_checks c ON c.id = r.id AND c.location = r.location WHERE r.id=?", (art_id,))}
 
     def sql(self, query: str, params: tuple = ()) -> list[tuple]:
         """Power-user escape hatch on a read-only connection."""

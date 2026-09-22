@@ -1157,3 +1157,31 @@ def test_s3remote_refuses_oversize_and_conflicts(monkeypatch, tmp_path):
         r.put("k", p)
     assert remote_s3.SINGLE_PUT_MAX == 5 << 30 and remote_s3.etag_value('"AbC"') == "abc" and remote_s3.etag_value('W/"x"') == "x"
     assert remote_s3.is_md5_etag("0" * 32) and not remote_s3.is_md5_etag("0" * 32 + "-3") and not remote_s3.is_md5_etag(None)
+
+
+def test_catalog_keeps_shipped_tables_positional_for_older_writers(tmp_path):
+    """The catalog is shared by worktrees on older code that insert `replicas` positionally with four values.  A catalog that
+    already grew the 5th column (`verified`, shipped 2026-09-22) is migrated back: the column's data moves to `replica_checks`,
+    the table returns to four columns, and both an old-style positional insert and the new `set_replica(verified=)` work."""
+    import sqlite3
+
+    from research.store.index import Index
+
+    p = tmp_path / "catalog.sqlite"
+    db = sqlite3.connect(p)
+    db.executescript("CREATE TABLE replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, verified TEXT, PRIMARY KEY(id, location));")
+    db.execute("INSERT INTO replicas VALUES ('art:a', 'remote', '2026-09-22T00:00:00Z', null, 'etag-md5')")
+    db.execute("INSERT INTO replicas VALUES ('art:b', 'local', '2026-09-22T00:00:00Z', null, null)")
+    db.commit(); db.close()
+
+    ix = Index(p)
+    assert [r[1] for r in ix.db.execute("PRAGMA table_info(replicas)")] == ["id", "location", "verified_utc", "detail"]
+    assert ix.replicas("art:a") == {"remote": {"verified_utc": "2026-09-22T00:00:00Z", "detail": None, "verified": "etag-md5"}}
+    assert ix.replicas("art:b")["local"]["verified"] is None
+    # an older writer (research at 4987a47) inserting positionally:
+    ix.db.execute("INSERT OR REPLACE INTO replicas VALUES (?,?,?,?)", ("art:c", "remote", "2026-09-22T01:00:00Z", None))
+    assert ix.replicas("art:c")["remote"]["verified"] is None
+    ix.set_replica("art:c", "remote", "2026-09-22T02:00:00Z", verified="sha256-readback")
+    assert ix.replicas("art:c")["remote"] == {"verified_utc": "2026-09-22T02:00:00Z", "detail": None, "verified": "sha256-readback"}
+    Index(p)   # idempotent re-open
+    assert ix.replicas("art:a")["remote"]["verified"] == "etag-md5"
