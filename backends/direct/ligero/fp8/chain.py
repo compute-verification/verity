@@ -313,8 +313,11 @@ def bench_vu_fp8(args) -> int:
         hardware=hw, software=sw,
         preprocessing=f"constraint compilation (a function of FP8Params only, {R.compile_seconds:.2f}s)",
         retention="retained",
-        instances={"dataset": "fp8-ada synthetic (uniform finite E4M3 bytes, model-recorded accumulators)", "tier": "vu-k1536-fp8",
-                   "range": [0, total_vus], "manifest_sha256": instances_digest(total_vus), "seed": INSTANCE_SEED},
+        # the frozen FP8 Ada set (contract.FP8_ADA_INSTANCES_*): the canonical tables accept exactly this dataset/tier at
+        # range [0, 4096) with manifest_sha256 == contract.FP8_ADA_INSTANCES_DIGEST == instances_digest(4096)
+        instances={"dataset": contract.FP8_ADA_INSTANCES_DATASET, "tier": contract.FP8_ADA_INSTANCES_TIER,
+                   "range": [0, total_vus], "manifest_sha256": instances_digest(total_vus), "seed": INSTANCE_SEED,
+                   "recipe": "fp8-ada synthetic (uniform finite E4M3 bytes, model-recorded accumulators)"},
         scope="vu", omitted=omitted,
         relation=RELATION_NAME, model=MODEL_NAME, commit=_git_commit(), step_k=K, steps_per_vu=STEPS,
         rows=R.sys.m, committed_rows=n_rows(cfg, R.sys.m, True), linear_constraints=R.tb.L, quadratic_constraints=R.tb.Q,

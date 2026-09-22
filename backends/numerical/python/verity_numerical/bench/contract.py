@@ -89,6 +89,10 @@ __all__ = [
     "BUCKETS",
     "BUCKET_NAMES",
     "DOMAIN",
+    "FP8_ADA_INSTANCES_DATASET",
+    "FP8_ADA_INSTANCES_DIGEST",
+    "FP8_ADA_INSTANCES_SEED",
+    "FP8_ADA_INSTANCES_TIER",
     "IDENTITY_FIELDS",
     "INSTANCES_DATASET",
     "INSTANCES_FIELD",
@@ -163,6 +167,15 @@ REQUIRED_FIELDS = (
 INSTANCES_DATASET = "bench-instances/v1"
 INSTANCES_FIELD = "instances"
 INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
+#: The frozen FP8 Ada instance set (``fp8-ada-mma-draft/2026-09-22``): the synthetic VUs ``backends/direct/ligero/fp8/chain.py``
+#: draws (``instances_fp8``: uniform finite E4M3 bytes from seed :data:`FP8_ADA_INSTANCES_SEED`, model-recorded accumulators).
+#: :data:`FP8_ADA_INSTANCES_DIGEST` is ``chain.instances_digest(4096)`` = sha256 of
+#: ``"fp8-ada synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-22) so the canonical tables
+#: (``verity_numerical.bench.tables``) recognise the set without importing the prover; a change to the recipe is a new tier.
+FP8_ADA_INSTANCES_DATASET = "bench-instances-fp8-ada/v1"
+FP8_ADA_INSTANCES_TIER = "vu-k1536-fp8-ada"
+FP8_ADA_INSTANCES_SEED = 20260922
+FP8_ADA_INSTANCES_DIGEST = "e66ff0f21c8e67d13b4b2d4cee2afa35b8345656b314da80e6b342ba051f078d"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 BUCKETS = ("witness", "encoding_commitment", "arithmetic", "lookup", "zk_additional", "serialization")
