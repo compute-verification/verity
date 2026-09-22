@@ -7,8 +7,8 @@ Matrices are filled with a deterministic arithmetic pattern (hash cost is data-i
 
 * ``ligero``: the campaign's Ligero layouts at B = 4096, K = 1536, BabyBear, 2^-128 (``explore.tensor``): N = 16384
   codeword columns; Candidate B commits 310,602 rows (20.36 GB, 1.24 MB per leaf), Candidate A 48,873 rows (3.20 GB).
-  Poseidon2 (torch, memory-bound elementwise) runs on a 1024-column slice of the same rows and is scaled by 16
-  (labelled ``scaled_from_columns``).
+  Poseidon2 runs as the fused CUDA kernel on the full shape; the torch version (memory-bound elementwise) runs on
+  a 1024-column slice of the same rows and is scaled by 16 (labelled ``scaled_from_columns``).
 * ``generic``: 32-byte leaves (8 BabyBear elements per column) at 2^20, 2^23, 2^25, 2^27 leaves -- the shape of
   TensorZKP's Merkle number (2^25 x 32 B in 8.59 ms on an H100).
 
@@ -66,7 +66,7 @@ def fill_matrix(R: int, N: int) -> cp.ndarray:
     """(R, N) uint32 with values < P, filled in row blocks: v = (row * 2654435761 + col * 40503 + 12345) mod P."""
     m = cp.empty((R, N), dtype=cp.uint32)
     cols = cp.arange(N, dtype=cp.uint64) * 40503
-    step = max(1, (1 << 28) // N)
+    step = max(1, (1 << 24) // N)          # 128 MB uint64 temporaries beside a matrix that may fill the card
     for r0 in range(0, R, step):
         rows = cp.arange(r0, min(R, r0 + step), dtype=cp.uint64) * 2654435761
         m[r0:r0 + step] = ((rows[:, None] + cols[None, :] + 12345) % P).astype(cp.uint32)
@@ -109,11 +109,23 @@ def bench_tree(m, hash: str, reps: int, engine=None) -> dict:
             "leaves_per_s": N / (tree_ms / 1e3), "device_memory_in_use_bytes": mem_in_use(), "reps": reps}
 
 
-def bench_poseidon2_permutation(reps: int, S: int = 1 << 20) -> list[dict]:
-    """Batched permutation throughput by MDS route, width 16 and 24, plus the isolated external-layer op."""
+def bench_poseidon2_permutation(reps: int, S: int = 1 << 22, S_torch: int = 1 << 20) -> list[dict]:
+    """Batched permutation throughput: the fused CUDA kernel, then torch by MDS route (with the isolated
+    external-layer op), widths 16 and 24."""
+    from hash_gpu.poseidon2_cuda import Poseidon2Cuda
+
     out = []
     for width in (16, 24):
         states = torch.randint(0, P, (S, width), dtype=torch.int64, device="cuda")
+        eng_c = Poseidon2Cuda(instance(width))
+        st_u32 = cp.asarray(states.to(torch.int32)).view(cp.uint32)
+        perm_ms, _ = timed(lambda e=eng_c, st=st_u32: e.permute(st), reps)
+        out.append({"width": width, "mds": "cuda-fused", "states": S, "permute_ms_median": perm_ms,
+                    "permutations_per_s": S / (perm_ms / 1e3), "compression_bytes_per_s": S * 64 / (perm_ms / 1e3),
+                    "note": "fused CUDA kernel, one thread per permutation, Montgomery arithmetic"})
+        del st_u32
+        states = states[:S_torch].contiguous()
+        S = S_torch
         for mds in ("blocks", "fp64", "int8"):
             eng = Poseidon2Torch(instance(width), mds=mds, chunk_states=S)
             perm_ms, _ = timed(lambda e=eng, st=states: e.permute(st), reps)
@@ -123,6 +135,8 @@ def bench_poseidon2_permutation(reps: int, S: int = 1 << 20) -> list[dict]:
                         "compression_bytes_per_s": S * 64 / (perm_ms / 1e3),
                         "note": "bytes = 64 B of input per 2:1 compression (two 8-element digests)"})
         del states
+        torch.cuda.empty_cache()
+        S = 1 << 22
     return out
 
 
@@ -130,7 +144,7 @@ def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--shapes", default="ligero,generic,permutation")
-    ap.add_argument("--hashes", default="sha256,sha256-chunked,blake3,poseidon2-16")
+    ap.add_argument("--hashes", default="sha256,sha256-chunked,blake3,poseidon2-16,poseidon2-24,poseidon2-16-torch")
     ap.add_argument("--generic-log2", default=",".join(map(str, GENERIC_LOG2)))
     ap.add_argument("--p2-mds", default="blocks,int8")
     ap.add_argument("--out", default="result.json")
@@ -145,10 +159,21 @@ def main(argv=None) -> None:
         w = int(hash.split("-")[1])
         return [(mds, Poseidon2Torch(instance(w), mds=mds, chunk_states=1 << 20)) for mds in a.p2_mds.split(",")]
 
+    def p2_cuda(m, hash, cand_or_lg, key):
+        from hash_gpu.poseidon2_cuda import Poseidon2Cuda
+
+        eng = Poseidon2Cuda(instance(int(hash.split("-")[1])))
+        r = bench_tree(m, hash, a.reps, engine=eng)
+        r.update({key: cand_or_lg, "backend": "cuda"})
+        res["ligero" if key == "candidate" else "generic"].append(r)
+        print(f"{key}={cand_or_lg} {hash}/cuda: leaves {r['leaf_ms_median']:.1f} ms, tree {r['tree_ms_median']:.1f} ms, "
+              f"{r['tree_bytes_per_s'] / 1e9:.1f} GB/s, {r['leaves_per_s'] / 1e6:.1f} M leaves/s, mem {r['device_memory_in_use_bytes'] / 2**30:.1f} GiB", flush=True)
+
     if "ligero" in shapes:
         for cand, R in LIGERO_ROWS.items():
             for hash in hashes:
-                if hash.startswith("poseidon2"):
+                if hash.startswith("poseidon2") and hash.endswith("-torch"):
+                    hash = hash[: -len("-torch")]
                     m = torch.as_tensor(fill_matrix(R, P2_SLICE_COLS).view(cp.int32), device="cuda")
                     for mds, eng in p2_engines(hash):
                         r = bench_tree(m, hash, a.reps, engine=eng)
@@ -157,6 +182,10 @@ def main(argv=None) -> None:
                         res["ligero"].append(r)
                         print(f"ligero {cand} {hash}/{mds} slice {P2_SLICE_COLS} cols: tree {r['tree_ms_median']:.1f} ms  "
                               f"{r['tree_bytes_per_s'] / 1e9:.2f} GB/s", flush=True)
+                    del m
+                elif hash.startswith("poseidon2"):
+                    m = fill_matrix(R, N_CODE)
+                    p2_cuda(m, hash, cand, "candidate")
                     del m
                 else:
                     m = fill_matrix(R, N_CODE)
@@ -174,7 +203,8 @@ def main(argv=None) -> None:
             for hash in hashes:
                 if hash == "sha256-chunked":
                     continue                                   # identical to sha256 for 8-row columns
-                if hash.startswith("poseidon2"):
+                if hash.startswith("poseidon2") and hash.endswith("-torch"):
+                    hash = hash[: -len("-torch")]
                     if lg > 25:
                         continue                               # int64 states would exceed the 24 GB card
                     m = torch.as_tensor(fill_matrix(8, N).view(cp.int32), device="cuda")
@@ -184,6 +214,10 @@ def main(argv=None) -> None:
                         res["generic"].append(r)
                         print(f"generic 2^{lg} {hash}/{mds}: tree {r['tree_ms_median']:.2f} ms  {r['tree_bytes_per_s'] / 1e9:.2f} GB/s  "
                               f"{r['leaves_per_s'] / 1e6:.1f} M leaves/s", flush=True)
+                    del m
+                elif hash.startswith("poseidon2"):
+                    m = fill_matrix(8, N)
+                    p2_cuda(m, hash, lg, "log2_leaves")
                     del m
                 else:
                     m = fill_matrix(8, N)
@@ -199,7 +233,7 @@ def main(argv=None) -> None:
         res["permutation"] = bench_poseidon2_permutation(a.reps)
         for r in res["permutation"]:
             print(f"poseidon2 w{r['width']} mds={r['mds']}: {r['permutations_per_s'] / 1e6:.2f} M perm/s  "
-                  f"({r['compression_bytes_per_s'] / 1e9:.3f} GB/s of compression input; mds-only {r['mds_only_ms_median']:.2f} ms / 2^20)", flush=True)
+                  f"({r['compression_bytes_per_s'] / 1e9:.3f} GB/s of compression input; mds-only {r.get('mds_only_ms_median', float('nan')):.2f} ms / {r['states']} states)", flush=True)
     res["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     Path(a.out).write_text(json.dumps(res, indent=1) + "\n")
     rd = os.environ.get("RESEARCH_RUN_DIR")

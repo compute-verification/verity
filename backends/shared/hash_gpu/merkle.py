@@ -126,16 +126,26 @@ def _sha256_chunked_leaves(m):
     return level.reshape(N, 8)
 
 
-def _poseidon2_leaves(matrix, hash: str, **kw):
-    import torch
+def poseidon2_engine(hash: str, backend: str = "cuda", mds: str = "blocks"):
+    """``backend`` ``cuda`` (fused kernel, the fast path) or ``torch`` (elementwise; ``mds`` selects its MDS route)."""
+    from .poseidon2_ref import instance
 
     width = int(hash.split("-")[1])
-    engine = kw.get("engine")
-    if engine is None:
-        from .poseidon2_ref import instance
-        from .poseidon2_torch import Poseidon2Torch
+    if backend == "cuda":
+        from .poseidon2_cuda import Poseidon2Cuda
 
-        engine = Poseidon2Torch(instance(width), mds=kw.get("mds", "blocks"))
+        return Poseidon2Cuda(instance(width))
+    from .poseidon2_torch import Poseidon2Torch
+
+    return Poseidon2Torch(instance(width), mds=mds)
+
+
+def _poseidon2_leaves(matrix, hash: str, **kw):
+    engine = kw.get("engine") or poseidon2_engine(hash, kw.get("backend", "cuda"), kw.get("mds", "blocks"))
+    if type(engine).__name__ == "Poseidon2Cuda":
+        return engine.leaf_tree(matrix)
+    import torch
+
     m = matrix if isinstance(matrix, torch.Tensor) else torch.as_tensor(matrix, device="cuda")
     if m.dtype == torch.int32:
         m = m.to(torch.int64) & 0xFFFFFFFF
@@ -168,10 +178,7 @@ def commit(matrix, hash: str = "blake3", **kw) -> Tree:
     if hash not in HASHES:
         raise ValueError(f"hash must be one of {HASHES}")
     if hash.startswith("poseidon2") and "engine" not in kw:
-        from .poseidon2_ref import instance
-        from .poseidon2_torch import Poseidon2Torch
-
-        kw["engine"] = Poseidon2Torch(instance(int(hash.split("-")[1])), mds=kw.pop("mds", "blocks"))
+        kw["engine"] = poseidon2_engine(hash, kw.pop("backend", "cuda"), kw.pop("mds", "blocks"))
     R, N = matrix.shape
     t = Tree(hash, int(R), int(N))
     lvl = leaves(matrix, hash, **kw)

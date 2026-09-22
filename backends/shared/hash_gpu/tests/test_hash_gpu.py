@@ -119,14 +119,20 @@ def test_poseidon2_torch_permutation(width, mds):
 
 @pytest.mark.skipif(not GPU, reason="no CUDA device")
 @pytest.mark.parametrize("hash", ["poseidon2-16", "poseidon2-24"])
-@pytest.mark.parametrize("R,N", [(1, 1), (8, 2), (9, 3), (40, 5), (200, 3)])
-def test_poseidon2_tree_matches_reference(hash, R, N):
+@pytest.mark.parametrize("backend", ["torch", "cuda"])
+@pytest.mark.parametrize("R,N", [(1, 1), (8, 2), (9, 3), (40, 5), (200, 3), (24, 9)])
+def test_poseidon2_tree_matches_reference(hash, backend, R, N):
     import torch
 
     from hash_gpu import merkle
 
     m = _matrix(R, N, seed=7)
-    t = merkle.commit(torch.tensor(m.astype(np.int64), device="cuda"), hash, mds="int8")
+    if backend == "torch":
+        t = merkle.commit(torch.tensor(m.astype(np.int64), device="cuda"), hash, backend="torch", mds="int8")
+    else:
+        eng = merkle.poseidon2_engine(hash, "cuda")
+        eng.leaf_tree = lambda mm, _f=eng.leaf_tree: _f(mm, col_block=4)      # exercise the column blocking
+        t = merkle.commit(cp.asarray(m), hash, engine=eng)
     ref = reference.tree(m, hash)
     assert len(t.levels) == len(ref)
     for lvl, rl in zip(t.levels, ref):
@@ -137,3 +143,31 @@ def test_poseidon2_tree_matches_reference(hash, R, N):
 def test_sha256_reference_is_hashlib_of_column_bytes():
     m = _matrix(10, 2)
     assert reference.leaf(m, 1, "sha256") == hashlib.sha256(m[:, 1].astype("<u4").tobytes()).digest()
+
+
+@pytest.mark.skipif(not GPU, reason="no CUDA device")
+@pytest.mark.parametrize("width", [16, 24])
+def test_poseidon2_cuda_permutation_and_tree(width):
+    from hash_gpu.poseidon2_cuda import Poseidon2Cuda
+
+    inst = p2.rng_constants(width)
+    eng = Poseidon2Cuda(inst)
+    inp, exp = p2.PLONKY3_VECTORS[width]
+    rng = np.random.default_rng(5)
+    extra = rng.integers(0, P, size=(300, width), dtype=np.int64)
+    states = np.vstack([np.array(inp, dtype=np.int64)[None], extra]).astype(np.uint32)
+    out = eng.permute(cp.asarray(states)).get()
+    assert out[0].tolist() == exp
+    for k in range(1, 4):
+        assert out[k].tolist() == inst.permute(extra[k - 1].tolist())
+    hash = f"poseidon2-{width}"
+    for R, N in [(1, 1), (9, 3), (40, 5), (200, 3)]:
+        m = _matrix(R, N, seed=11)
+        ref = reference.tree(m, hash, p2inst=inst)
+        lv = eng.leaf_tree(cp.asarray(m))
+        assert [row.astype("<u4").tobytes() for row in lv.get()] == ref[0]
+        levels = [lv]
+        while levels[-1].shape[0] > 1:
+            levels.append(eng.merkle_level(levels[-1]))
+        for got, rl in zip(levels, ref):
+            assert [row.astype("<u4").tobytes() for row in got.get()] == rl
