@@ -66,7 +66,7 @@ def main(argv=None) -> int:
         sec["u_high_rank"]["seconds"] = time.perf_counter() - t0
         print("u_high_rank:", json.dumps({k: v for k, v in sec["u_high_rank"].items() if k != "per_d"}), sec["u_high_rank"]["per_d"])
         # the disclosed values themselves, real vs trivial witness, pooled uniformity
-        ps, (as_, bs, y16s), _ = R.prove_vus(triv, check=False)
+        ps, _, _ = R.prove_vus(triv, check=False)
         sec["disclosed_Q_high"] = {"real": zk2.pooled_uniform_chi2(zk2.disclosed_Q_high(pr, m, cfg, dev)),
                                    "trivial": zk2.pooled_uniform_chi2(zk2.disclosed_Q_high(ps, m, cfg, dev))}
         # ---- pre-fix extraction on the fixed transcript (both modes) --------------------------------------------------
@@ -131,7 +131,7 @@ def main(argv=None) -> int:
             res = {}
             for name, pred, slot in (("root_byte<64", lambda V, root, w, h, q, v: root[0] < 64, 1),
                                      ("q00_odd", lambda V, root, w, h, q, v: bool(int(q[0, 0]) & 1), 2),
-                                     ("q_high_sum_odd", lambda V, root, w, h, q, v: bool(int(q[:, cfg.k:].astype(np.int64).sum()) & 1), 2)):
+                                     ("q_high_sum_odd", lambda V, root, w, h, q, v, _k=cfg.k: bool(int(q[:, _k:].astype(np.int64).sum()) & 1), 2)):
                 ar = asim = 0
                 rew = []
                 for _ in range(nA):
