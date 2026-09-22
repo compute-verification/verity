@@ -17,16 +17,22 @@ step: the whole accumulator chain of every VU, exactly, from the public transcri
 Under this prover's statement the operands are public, so the accumulators are computable anyway (the ZK claim
 is vacuous for this statement); as a Ligero ZK *construction* -- the thing the label is about once operands are
 committed rather than published -- the message leaks ``l - 1`` witness-dependent field elements per coordinate.
+The recovery itself is torch-free (``verity_numerical.redteam.ligero_q_leak``, shared with the fixture test).
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 import torch
+from verity_numerical.redteam import ligero_q_leak as core
 
 from .. import protocol
 from ..compile import P, System
 from ..protocol import Config, Proof, _challenge1, _fold_to_H, n_rows, statement_digest
-from .linalg import solve_overdetermined
+
+decode_fp32 = core.decode_fp32
 
 
 def q_on_H(proof: Proof, cfg: Config) -> np.ndarray:
@@ -45,56 +51,19 @@ def chain_challenge(proof: Proof, sys: System, tb, cfg: Config, layout, y16, a, 
     return rc.cpu()
 
 
+def _chain_constants(sys: System) -> tuple[list[int], int]:
+    return [int(e.c) % P for e in sys.chain["y"]], int(sys.chain["y16"].c) % P
+
+
 def recover_accumulators(proof: Proof, sys: System, tb, cfg: Config, layout, y16, a, b, device) -> dict:
     """Recover ``(acc.s, acc.t, acc.f)`` of every accumulator of every VU from ``q`` alone (plus the public
     statement and the verifier's coins).  Returns the recovered components per column and the consistency flags."""
-    D, l, steps, n_vus = cfg.D, cfg.l, layout.steps, layout.n_vus
-    QH = q_on_H(proof, cfg)                                     # (D, l)
-    rc = chain_challenge(proof, sys, tb, cfg, layout, y16, a, b, device).numpy()   # (D, 7, l)
-    start, link, end = (m.cpu().numpy() for m in layout.masks("cpu"))
-    y16 = np.asarray(y16, dtype=np.int64)
-    Yc = [int(e.c) % P for e in sys.chain["y"]]
-    Y16c = int(sys.chain["y16"].c) % P
-    rl = (rc[:, 0:3, :] * link[None, None, :]) % P             # (D, 3, l)
-    rs = (rc[:, 3:6, :] * start[None, None, :]) % P
-    re = (rc[:, 6, :] * end[None, :]) % P
-    rec = np.zeros((l, 3), dtype=np.int64)                      # c_x[j]: accumulator entering column j
-    solved = np.zeros(l, dtype=bool)
-    consistent = np.zeros(l, dtype=bool)
-    end_ok = []
-    for v in range(n_vus):
-        j0 = steps * v
-        c_prev = [0, 0, 0]                                      # public: c_0 = 0 at every chain start
-        solved[j0] = consistent[j0] = True
-        for i in range(steps):
-            j = j0 + i
-            # known part of Q_d(h_j)
-            known = []
-            for d in range(D):
-                k = 0
-                for x in range(3):
-                    k += int(rl[d, x, j - 1] if j >= 1 else 0) * c_prev[x] + int(rs[d, x, j]) * c_prev[x]
-                    k += int(rl[d, x, j]) * Yc[x]
-                k += int(re[d, j]) * ((int(y16[j]) - Y16c) % P)
-                known.append(k % P)
-            if i < steps - 1:
-                # sum_x rl_x[d, j] c_x[j+1] = known_d - Q_d(h_j)
-                A = [[int(rl[d, x, j]) for x in range(3)] for d in range(D)]
-                bvec = [(known[d] - int(QH[d, j])) % P for d in range(D)]
-                sol, ok = solve_overdetermined(A, bvec)
-                if sol is None:
-                    break
-                rec[j + 1] = sol
-                solved[j + 1] = True
-                consistent[j + 1] = ok
-                c_prev = sol
-            else:
-                end_ok.append(all((known[d] - int(QH[d, j])) % P == 0 for d in range(D)))
-    return {"components": rec, "solved": solved, "consistent": consistent, "end_positions_consistent": end_ok}
-
-
-def decode_fp32(word: int) -> tuple[int, int, int]:
-    return (word >> 31) & 1, (word >> 23) & 0xFF, word & 0x7FFFFF
+    QH = q_on_H(proof, cfg).tolist()
+    rc = chain_challenge(proof, sys, tb, cfg, layout, y16, a, b, device).numpy().tolist()
+    Yc, Y16c = _chain_constants(sys)
+    rec = core.recover(QH, rc, [int(v) for v in np.asarray(y16)], Yc, Y16c, cfg.l, layout.n_vus, layout.steps)
+    return {"components": np.asarray(rec["components"], dtype=np.int64), "solved": np.asarray(rec["solved"]),
+            "consistent": np.asarray(rec["consistent"]), "end_positions_consistent": rec["end_positions_consistent"]}
 
 
 def compare_with_recorded(rec: dict, vus: list[tuple], steps: int) -> dict:
@@ -129,3 +98,29 @@ def witness_free_distinguisher(proof: Proof, sys: System, tb, cfg: Config, layou
     idx = [steps * v + i + 1 for v in range(layout.n_vus) for i in range(steps - 1)]
     cons = rec["consistent"][idx]
     return {"steps": len(idx), "consistent_steps": int(cons.sum()), "fraction": float(cons.mean()) if len(idx) else None}
+
+
+def export_fixture(path: Path, proof: Proof, sys: System, tb, cfg: Config, layout, vus: list[tuple], a, b, y16, device,
+                   source: str) -> dict:
+    """Write the torch-free reproduction data: q, the verifier's rc, the chain constants, the layout, the recorded
+    accumulators, and what the recovery gave.  The loader test replays ``ligero_q_leak.recover`` on it."""
+    rc = chain_challenge(proof, sys, tb, cfg, layout, y16, a, b, device).numpy()
+    Yc, Y16c = _chain_constants(sys)
+    rec = recover_accumulators(proof, sys, tb, cfg, layout, y16, a, b, device)
+    cmp_ = compare_with_recorded(rec, vus, layout.steps)
+    doc = {
+        "schema": "redteam-zk/q-leak/v1", "source": source,
+        "config": {"l": cfg.l, "n": cfg.n, "k": cfg.k, "t": cfg.t, "t_pad": cfg.t_pad, "D": cfg.D, "m": sys.m},
+        "layout": {"l": layout.l, "n_vus": layout.n_vus, "steps": layout.steps},
+        "transcript": {"root": proof.root.hex(), "coin_commit": [c.hex() for c in proof.coin_commit],
+                       "r1": proof.coins.r1.hex(), "s1": proof.coins.s1.hex(), "q": proof.q.astype(np.int64).tolist()},
+        "verifier_rc": rc.astype(np.int64).tolist(),
+        "chain_constants": {"Yc": Yc, "Y16c": Y16c},
+        "y16": [int(v) for v in np.asarray(y16)],
+        "recorded_accumulators": [[int(x) for x in accs] for (_, _, accs, _) in vus],
+        "recovered_components": rec["components"].tolist(),
+        "recovered_matches": cmp_,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(doc))
+    return doc

@@ -26,6 +26,9 @@ from ..vu import STEP, STEPS, ChainRunner, _vu_data
 from . import mask_rank, q_leak, simulator
 
 
+_HAS_VU = [False]
+
+
 def _trivial(n):
     return [([0] * (STEP * STEPS), [0] * (STEP * STEPS), [0] * STEPS, 0)] * n
 
@@ -35,8 +38,10 @@ def _load_real(root: Path, n: int) -> list[tuple]:
     operands with the honest chain recomputed by the checker (only those with a finite honest chain)."""
     try:
         vu = instances.load("vu-k1536", root)
+        _HAS_VU[0] = True
         return [_vu_data(vu, i % vu.n) for i in range(n)]
     except FileNotFoundError:
+        _HAS_VU[0] = False
         from verity_numerical.checker.params import REAL
         from verity_numerical.checker.step import step_output
         neg = instances.load("vu-k1536-neg", root)
@@ -67,6 +72,8 @@ def main(argv=None) -> int:
     ap.add_argument("--n-proofs", type=int, default=25, help="sub-batch count the configuration is union-bounded over")
     ap.add_argument("--n-transcripts", type=int, default=48)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--fixture-out", default=None, help="write the torch-free q-leak reproduction fixture here (small --vus)")
+    ap.add_argument("--only-fixture", action="store_true")
     args = ap.parse_args(argv)
     dev = args.device
     rng = np.random.default_rng(7)
@@ -86,6 +93,12 @@ def main(argv=None) -> int:
     pr, (a, b, y16), _ = R.prove_vus(real, check=False)
     ok, why = R.verify_vus(pr, (a, b, y16), lay)
     assert ok, why
+    if args.fixture_out:
+        src = f"redteam.run --device {dev} --vus {args.vus}; instances {'vu-k1536' if _HAS_VU[0] else 'vu-k1536-neg operands, honest chain by the checker'}"
+        doc = q_leak.export_fixture(Path(args.fixture_out), pr, R.sys, R.tb, cfg, lay, real, a, b, y16, dev, src)
+        print("fixture:", args.fixture_out, doc["recovered_matches"])
+        if args.only_fixture:
+            return 0
     rec = q_leak.recover_accumulators(pr, R.sys, R.tb, cfg, lay, y16, a, b, dev)
     cmp_ = q_leak.compare_with_recorded(rec, real, STEPS)
     cmp_["seconds"] = time.perf_counter() - t0
