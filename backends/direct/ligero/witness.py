@@ -52,16 +52,28 @@ def hints_tensor(p: Params, sys: System, units: list[tuple[int, list[int], list[
     return out.to(device)
 
 
-def build_witness(sys: System, pub: dict[str, torch.Tensor], hints: torch.Tensor, device) -> torch.Tensor:
-    """W (m, l) int64 in [0, p)."""
-    l = hints.shape[1]
-    W = torch.zeros((sys.m, l), dtype=torch.int64, device=device)
+_CONST_CACHE: dict = {}
+
+
+def _const(key, make):
+    t = _CONST_CACHE.get(key)
+    if t is None:
+        t = make()
+        _CONST_CACHE[key] = t
+    return t
+
+
+def _run_program(sys: System, W: torch.Tensor, pub_rows: torch.Tensor, hints: torch.Tensor, device) -> None:
+    """The derived rows of W in place.  ``pub_rows``: (n_pins, l) the pinned values in program order (mod p);
+    ``hints``: (n_hints, l).  Device-only work (graph-capturable): every constant is cached on first use."""
     hpos = {n: i for i, (_, n) in enumerate(sys.hints)}
+    ppos = {n: i for i, (_, n) in enumerate(sys.pins)}
+    dk = str(device)
     for op in sys.program:
         kind = op[0]
         if kind == "pin":
             _, idx, name = op
-            W[idx] = pub[name].to(device) % P
+            W[idx] = pub_rows[ppos[name]]
         elif kind == "hint":
             _, idx, name = op
             W[idx] = hints[hpos[name]] % P
@@ -71,13 +83,13 @@ def build_witness(sys: System, pub: dict[str, torch.Tensor], hints: torch.Tensor
         elif kind == "bits":
             _, row0, nbits, e = op
             x = eval_expr(e, W)                      # honest: an integer in [0, 2^nbits)
-            shifts = torch.arange(nbits, dtype=torch.int64, device=device)
-            W[row0:row0 + nbits] = (x[None, :] >> shifts[:, None]) & 1
+            shifts = _const(("shifts", nbits, dk), lambda: torch.arange(nbits, dtype=torch.int64, device=device)[:, None])
+            W[row0:row0 + nbits] = (x[None, :] >> shifts) & 1
         elif kind == "sels":
             _, row0, k0s, k1s, key = op
             x = _signed(eval_expr(key, W))
-            k0 = torch.tensor(k0s, dtype=torch.int64, device=device)[:, None]
-            k1 = torch.tensor(k1s, dtype=torch.int64, device=device)[:, None]
+            k0 = _const(("k0", id(op), dk), lambda: torch.tensor(k0s, dtype=torch.int64, device=device)[:, None])
+            k1 = _const(("k1", id(op), dk), lambda: torch.tensor(k1s, dtype=torch.int64, device=device)[:, None])
             W[row0:row0 + len(k0s)] = ((x[None, :] >= k0) & (x[None, :] <= k1)).to(torch.int64)
         elif kind == "inv":
             from .field import batch_modinv
@@ -85,6 +97,55 @@ def build_witness(sys: System, pub: dict[str, torch.Tensor], hints: torch.Tensor
             W[idx] = batch_modinv(eval_expr(x, W))
         else:
             raise ValueError(kind)
+
+
+class _Graph:
+    """CUDA-graph replay of the witness program for one (system, l, device): the ~1000 small kernels are launched
+    once at capture and replayed afterwards (the program is a fixed function of the system)."""
+
+    def __init__(self, sys: System, l: int, device):
+        self.W = torch.zeros((sys.m, l), dtype=torch.int64, device=device)
+        self.pub = torch.zeros((len(sys.pins), l), dtype=torch.int64, device=device)
+        self.hints = torch.zeros((len(sys.hints), l), dtype=torch.int64, device=device)
+        s = torch.cuda.Stream()
+        s.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(s):
+            for _ in range(2):                                   # warm-up: populate the constant caches
+                _run_program(sys, self.W, self.pub, self.hints, device)
+        torch.cuda.current_stream().wait_stream(s)
+        self.graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self.graph):
+            _run_program(sys, self.W, self.pub, self.hints, device)
+
+    def run(self, pub_rows: torch.Tensor, hints: torch.Tensor) -> torch.Tensor:
+        self.pub.copy_(pub_rows)
+        self.hints.copy_(hints)
+        self.graph.replay()
+        return self.W.clone()
+
+
+_GRAPHS: dict = {}
+USE_CUDA_GRAPH = True
+
+
+def build_witness(sys: System, pub: dict[str, torch.Tensor], hints: torch.Tensor, device) -> torch.Tensor:
+    """W (m, l) int64 in [0, p)."""
+    l = hints.shape[1]
+    pub_rows = torch.stack([pub[name].to(device) % P for _, name in sys.pins]) if sys.pins else \
+        torch.zeros((0, l), dtype=torch.int64, device=device)
+    if USE_CUDA_GRAPH and str(device).startswith("cuda"):
+        key = (id(sys), l, str(device))
+        g = _GRAPHS.get(key)
+        if g is None:
+            try:
+                g = _Graph(sys, l, device)
+            except Exception:  # noqa: BLE001 -- capture unsupported here: eager
+                g = False
+            _GRAPHS[key] = g
+        if g:
+            return g.run(pub_rows, hints.to(device))
+    W = torch.zeros((sys.m, l), dtype=torch.int64, device=device)
+    _run_program(sys, W, pub_rows, hints.to(device), device)
     return W
 
 
