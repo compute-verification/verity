@@ -96,6 +96,13 @@ def cmd_prove(args) -> int:
         print(json.dumps(row), flush=True)
         if err is not None:
             print(f"VERIFY FAILED: {err}", file=sys.stderr)
+        if args.proof_out and rep == 0:
+            data = proof.to_bytes()
+            Path(args.proof_out).write_bytes(data)
+            # round trip through the file format, then the Python verifier again on the parsed copy
+            back = prover.Proof.from_bytes(data)
+            prover.verify(inst, back, pcs)
+            print(f"proof written: {args.proof_out} ({len(data)} bytes, round trip verified)", flush=True)
     if args.json:
         Path(args.json).write_text(json.dumps({"device": str(dev), "gpu": torch.cuda.get_device_name(dev) if dev.type == "cuda" else "cpu",
                                                "pcs": pcs, "runs": runs}, indent=1) + "\n")
@@ -117,6 +124,11 @@ def cmd_negatives(args) -> int:
             results[int(d.name)] = {"rejected": True, "where": "prover", "why": f"{type(e).__name__}: {e}"}
             print(d.name, "rejected at prover:", e, flush=True)
             continue
+        if args.proof_dir:
+            # the proof the prover produced for this negative (an independent verifier must reject it too)
+            pd = Path(args.proof_dir)
+            pd.mkdir(parents=True, exist_ok=True)
+            (pd / f"{d.name}.bin").write_bytes(proof.to_bytes())
         try:
             prover.verify(inst, proof, not args.clear)
             results[int(d.name)] = {"rejected": False, "where": "verifier", "why": "ACCEPTED"}
@@ -142,13 +154,37 @@ def main(argv=None) -> int:
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--clear", action="store_true")
     p.add_argument("--json", default=None)
+    p.add_argument("--proof-out", default=None, help="write the first rep's proof as proof.bin (README 'Proof file')")
     n = sub.add_parser("negatives")
     n.add_argument("dir")
     n.add_argument("--device", default="cuda")
     n.add_argument("--clear", action="store_true")
     n.add_argument("--json", default=None)
+    n.add_argument("--proof-dir", default=None, help="write every negative's proof as <id>.bin here")
+    v = sub.add_parser("verify-file", help="the Python verifier on a proof.bin (cross-check for the Rust verifier)")
+    v.add_argument("dir")
+    v.add_argument("proof")
+    v.add_argument("--vus", type=int, default=None)
+    v.add_argument("--device", default="cpu")
     args = ap.parse_args(argv)
+    if args.cmd == "verify-file":
+        return cmd_verify_file(args)
     return cmd_prove(args) if args.cmd == "prove" else cmd_negatives(args)
+
+
+def cmd_verify_file(args) -> int:
+    dev = _dev(args.device)
+    inst = load_instance(Path(args.dir), dev, args.vus)
+    proof = prover.Proof.from_bytes(Path(args.proof).read_bytes())
+    t0 = time.perf_counter()
+    try:
+        prover.verify(inst, proof, True)
+        err = None
+    except VerifyError as e:
+        err = str(e)
+    dt = time.perf_counter() - t0
+    print(json.dumps({"verified": err is None, "error": err, "verifier_s": dt, "proof_bytes": len(proof.to_bytes())}))
+    return 0 if err is None else 1
 
 
 if __name__ == "__main__":

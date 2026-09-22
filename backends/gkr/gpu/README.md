@@ -58,6 +58,28 @@ PYTHONPATH=backends/gkr python -m gpu.bb_export synth --out /tmp/bbsynth --vus 2
 PYTHONPATH=backends/gkr python -m gpu.run prove /tmp/bbsynth --device cpu
 ~~~
 
+## Proof file (`proof.bin`, `--proof-out` / `negatives --proof-dir`; `Proof.to_bytes`)
+
+Little-endian throughout; an extension element is six `u32` coordinates `c0..c5` (24 bytes), a base element one
+`u32`, a digest 32 bytes.
+
+~~~text
+magic  "VGKRBB6\0" (8)      version u32 = 1        root (32)
+n_msgs u64                  msgs: n_msgs x 24      (every sumcheck/GKR/LogUp message in transcript order)
+has_opening u64 (0 | 1)
+k u64        w:  k x 24     (Ligero proximity row)
+n_qc u64     qc: n_qc x 24  (the 2k-1 coefficients of q)
+t u64  rows u64  depth u64
+per opened column (t of them, in `open_set` order): rows x u32 values, then depth x 32-byte Merkle siblings
+~~~
+
+The counts make the file self-delimiting; a verifier takes `k, n, t`, `rows = ceil(l / k)`, `depth = log2 n`, the
+message count and the column indices from the circuit/config and its own transcript and **rejects** a file whose
+counts differ -- nothing read from the proof sizes anything (`redteam_vu.md` F1-F3).  The independent Rust
+verifier for this format is `../verifier/` (`verity-gkr-verify verify --dir D --proof proof.bin [--vus N]`); it
+reads `circuit.txt`, `epilogue.txt`, `manifest.json` (steps, chain columns) and `public.bin` only -- never the
+witness files.
+
 `VERITY_GPU_TORCH_ONLY=1` disables every Triton kernel (the torch path is the bit-exact reference the kernels are
 tested against; `--clear` skips the commitment and opening for a clear-mode diagnostic).
 
