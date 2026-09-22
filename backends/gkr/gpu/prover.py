@@ -155,7 +155,7 @@ class Proof:
         return bytes(out)
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "Proof":
+    def from_bytes(cls, data: bytes) -> Proof:
         import struct
 
         if data[:8] != cls.MAGIC:
