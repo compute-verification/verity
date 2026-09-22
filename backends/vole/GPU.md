@@ -66,7 +66,43 @@ witness streaming from the overlay disk; peak RSS stays at 229 MB / 48 MB becaus
 | 4096 VUs (the decision batch) | 1672.6 s (verifier 1673.1 s) | 0.408 s: init 0.65 s; sVOLE 1062.9 s = 0.260 s/VU (6,565 extensions); online 609.0 s = 0.149 s/VU, of which parse + clear-eval floor 266.5 s = 0.065 s/VU | 8.50 MB (34.80 GB total; V->P 1.06 MB/VU) | d110 |
 | 4096 independent units (tu-k16) | 19.1 s | 4.66 ms / unit | 89.8 kB / unit | d21f |
 
-### 1.3 The overhead as the ledger counts it
+### 1.3 Instruction profile (callgrind, `profile.sh`, run `r20260922-063937-acf6`)
+
+`perf` and `ptrace` are both unavailable in the container, so the function-level profile is valgrind/callgrind
+(exact instruction counts, 25x slowdown) on a dietmc rebuilt without `target-cpu=native` (valgrind 3.15 has no
+AVX-512; SSE4.2 + AES-NI + PCLMUL only, `+debuginfo`, `/workspace/target-swanky-prof`). 16 VUs, F61p, one
+thread, 64.4 G instructions, bucketed by symbol (`profile_buckets.py`):
+
+| share of instructions | phase / function group |
+|---|---|
+| 28.5 % | **sVOLE: sampling the sparse LPN matrix's random column indices** (`lpn_mtx_indices`: AES-CTR RNG + `uniform_int` rejection sampling + bounds checks) |
+| 21.0 % | sVOLE: the sparse product itself, y = A u + e, F_{2^61-1} multiply-adds (`svole::Sender::send_internal`) |
+| 4.1 % | sVOLE: GGM trees / spsVOLE / AES-PRG |
+| 19.2 % | parsing the SIEVE-IR text relation and witness (`text_parser`, `BufReader::read_exact`, `consume_byte`) |
+| 7.4 % | online QuickSilver: commits, mult-check accumulation, MAC memory (`backend_multifield::Evaluator*`, `homcom::MultCheckState`, `memory`) |
+| 12.8 % | F2/F40b side backend (the field-switching backend is always loaded; its GF(2^40) multiply is scalar in this SSE-only build -- production uses PCLMUL/AVX-512 vector paths, so this share is inflated by the profiling build; its wall share from the timers is < 1 %) |
+| 3.0 % | libc memcpy / allocator |
+| 1.3 % | init: base OT (curve25519), KOS, COPEe, base sVOLE |
+| 1.6 % | F61p arithmetic not attributed to a phase |
+
+Read together with the timers (section 1.1: sVOLE 62 % of wall, parse 18 %, MAC work 17 %): the instruction
+profile agrees on sVOLE and parse, and shows the online MAC work is *memory-bound* (7 % of instructions for
+17 % of the time: streaming 8-byte MACs through `memory.rs` with little arithmetic). Two implementation facts
+worth more than any GPU discussion:
+
+* **Half of the sVOLE instructions are spent generating the random sparse matrix, not multiplying by it.**
+  Per output, `lpn_mtx_indices` (`svole.rs:117`) draws 10 distinct column indices by rejection sampling
+  and 10 random nonzero F_p coefficients from an RNG whose seed both parties coin-toss at init, and it does
+  so afresh for every one of the 6,565 extensions (a fresh public matrix each time). Fixing one public
+  matrix per session (as Ferret does with its fixed code; the matrix is public either way, so this is a
+  security-parameter question about matrix reuse, not a secrecy one) and caching its 6.4 M (index,
+  coefficient) pairs (~77 MB) removes ~28 % of the prover's instructions and the same on the verifier --
+  a ~1.3x wall win at the cost of an LPN-with-reused-matrix assumption that WYKW21's parameter analysis
+  did not consider.
+* **A fifth of the instructions parse text.** The flatbuffer IR, or a purpose-built prover taking the witness
+  from memory, removes it; `GPU.md` 2.2 already treats this as a precondition.
+
+### 1.4 The overhead as the ledger counts it
 
 The ledger's native reference is 9.85 ps per VU (one K = 1536 VU at A100 BF16 peak). One prover thread at
 0.400 s/VU is an overhead of **4.1e10**; the cost model in `explore/vole.py` predicted ~3e6 on an H100 for a
