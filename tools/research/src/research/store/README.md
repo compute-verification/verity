@@ -276,7 +276,9 @@ secret_access_key_env = "RESEARCH_R2_SECRET_ACCESS_KEY"
 No remote configured (no file, or no `[remote]` table) => the local store is the only replica and `where` says so; nothing
 fails, nothing is called PRESERVED (`verify` returns `preserved=False, reason="no remote configured"`; `push` refuses). A
 `[remote]` table that is present but unusable (unknown type, missing field, credential env vars unset) is `ConfigError`, on
-purpose: a broken vault must not look like "no vault".
+purpose: a broken vault must not look like "no vault". Two operations stay local through it: `where` still answers for the
+local and repo replicas and reports the remote row as `UNUSABLE <error>` (never "not configured", never absent), and
+`attempt.publish` still writes the attempt and its artifacts locally, records the error as `preserve_error` and pushes nothing.
 
 **PRESERVED** means: remote `head` size matches AND a full read-back sha256 matches, for the manifest and every blob (objects
 < 4 GiB; above that, per-part sha256 from the sidecar checked against the parts read back — not implemented). ETags are not
@@ -302,7 +304,9 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
 
 Append-only, one file per assertion (`O_EXCL`, mode 0444), never read-modify-write. The file name uses the compact ts
 (`20260922T112029Z`), `by` restricted to `[A-Za-z0-9._-]`, and a `~N` suffix when the same asserter labels twice in one
-second (`~` sorts after `.`, so `labels()` — ordered by ts, then file name — keeps history order). `research data labels
+second (`labels()` orders by ts, then file name with `~N` read numerically, so history order survives past `~9`). Several
+assertions that belong together (one ledger row's fields, one audit's verdicts) share `by`, `ts` and `ref`; `ref` is the key
+to group them by when one target carries several rows. `research data labels
 TARGET` shows the latest assertion per (key, by); `--history` shows every one in ts order; `--key K --by PATTERN` (fnmatch)
 filter. `label TARGET KEY VALUE` stores VALUE as a string unless `--value-json`. The store never picks a winner; decision
 tables do (`proof_class=… by=red-team-*`).
@@ -365,6 +369,8 @@ fixture/v1               a repo-replicated input (golden records, instances); pa
 run-files/v1             the files a result.json pointed at, as one tree
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
+ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
+                         the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
 ~~~
 
 ## 12. Design rules
