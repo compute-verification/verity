@@ -21,6 +21,7 @@ from verity_numerical.bench import contract, instances
 from verity_numerical.checker.params import REAL
 from verity_numerical.checker.step import step_output
 
+from . import protocol as protocol_mod
 from .chain import Layout
 from .compile import P
 from .hints_torch import hints_torch
@@ -28,6 +29,9 @@ from .protocol import Config, config_for, n_rows, prove, soundness, verify
 
 ZK_MODE = ("Ligero HVZK masking: t_pad=256 uniform coefficients (Z_H s_j) per row, 5D committed mask rows "
            "(prox/lin/quad x2/chain), evaluation on the coset g<w_n> disjoint from H (PROTOCOL.md 8b)")
+ZK_MODE_HM96 = ("; malicious-verifier: HM96/GK step-0 commitment c_i = H(r_i || s_i) to both verifier coins before root, "
+                "opened after root / after the test messages, prover aborts on a mismatched opening (PROTOCOL.md 8c; "
+                "redteam_zk.py malicious-verifier test)")
 from .unit import compile_unit, public_vectors
 from .witness import hints_tensor, tables
 
@@ -72,8 +76,9 @@ class ChainRunner:
         l = max(min_l, 1 << (n_vus * STEPS - 1).bit_length())
         return Layout(l, n_vus, STEPS)
 
-    def prove_vus(self, vus: list[tuple[list, list, list, int]], check=True, mutate=None, min_l: int = 256):
-        """``vus``: (x, w, accs, y16) per VU (honest data: the recorded accumulators)."""
+    def prove_vus(self, vus: list[tuple[list, list, list, int]], check=True, mutate=None, min_l: int = 256, coins=None):
+        """``vus``: (x, w, accs, y16) per VU (honest data: the recorded accumulators).  ``coins``: the verifier's
+        step-0 coin source (interactive); None = the prover samples them (Fiat-Shamir reading)."""
         lay = self.layout(len(vus), min_l)
         units, y16 = [], torch.zeros(lay.l, dtype=torch.int64)
         for v, (x, w, accs, y) in enumerate(vus):
@@ -99,13 +104,14 @@ class ChainRunner:
             torch.cuda.synchronize()
         hints_seconds = time.perf_counter() - t0
         proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
-                      chain=(lay, y16), words={"a": a, "b": b})
+                      chain=(lay, y16), words={"a": a, "b": b}, coins=coins)
         proof.timings["hints_host"] = hints_seconds
         return proof, (a, b, y16), lay
 
-    def verify_vus(self, proof, pubs, lay: Layout):
+    def verify_vus(self, proof, pubs, lay: Layout, coins=None):
         a, b, y16 = pubs
-        return verify(self.p, self.sys, self.tb, self.cfg(lay.l), None, a, b, None, proof, self.device, chain=(lay, y16))
+        return verify(self.p, self.sys, self.tb, self.cfg(lay.l), None, a, b, None, proof, self.device, chain=(lay, y16),
+                      coins=coins)
 
 
 def _vu_data(vu: instances.VuTier, i: int):
@@ -236,7 +242,7 @@ def bench_vu(args) -> int:
     lay = R.layout(per_proof)
     l = lay.l
     cfg = R.cfg(l)
-    print(f"config {cfg}; layout {lay}; proof class {'COMPLETE_HVZK_BACKEND' if cfg.zk else 'NON_ZK_PROOF_DIAGNOSTIC'}; system {R.sys.summary()}; {total_vus} VUs as {n_proofs} sub-batches of <= {per_proof}")
+    print(f"config {cfg}; layout {lay}; zk {cfg.zk}, coin commitment {protocol_mod._COMMIT_COINS}; system {R.sys.summary()}; {total_vus} VUs as {n_proofs} sub-batches of <= {per_proof}")
     runs = []
     if args.device.startswith("cuda"):
         torch.cuda.reset_peak_memory_stats()
@@ -277,7 +283,10 @@ def bench_vu(args) -> int:
     sw = {"backend": {"name": "b-ligero chain (backends/direct/ligero)", "commit": _git_commit(), "hash": proof.hash_name,
                       "challenge_expander": "SHAKE-256 (placeholder)"},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
-    if cfg.zk:
+    if cfg.zk and protocol_mod._COMMIT_COINS and not args.hvzk_label:
+        proof_class, zk_mode = "COMPLETE_ZK_BACKEND", ZK_MODE + ZK_MODE_HM96
+        omitted = "external authentication; unopened columns hidden by Blake3 of a uniform column (random-oracle hiding, not HM96 salted leaves)"
+    elif cfg.zk:
         proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE
         omitted = "external authentication, malicious-verifier ZK (HM96 commitment to the verifier's coins)"
     else:
@@ -311,8 +320,8 @@ def bench_vu(args) -> int:
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
-        contract.measurement("rounds.protocol", 2),
-        contract.measurement("rounds.sequential_depth", 2),
+        contract.measurement("rounds.protocol", 3),             # step-0 coin commitments, r1 opening, r2 opening
+        contract.measurement("rounds.sequential_depth", 3),     # PROTOCOL.md 8c (was 2 before the HM96 step)
         contract.measurement("mem.peak_device_bytes", peak_dev),
         contract.measurement("census.witness_elements", R.sys.m * l * n_proofs),
         contract.measurement("census.committed_elements", R.sys.m * cfg.n * n_proofs),

@@ -303,8 +303,8 @@ def bench(args) -> int:
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
-        contract.measurement("rounds.protocol", 2),
-        contract.measurement("rounds.sequential_depth", 2),
+        contract.measurement("rounds.protocol", 3),             # step-0 coin commitments, r1 opening, r2 opening
+        contract.measurement("rounds.sequential_depth", 3),     # PROTOCOL.md 8c
         contract.measurement("mem.peak_device_bytes", peak_dev),
         contract.measurement("census.witness_elements", R.sys.m * l),
         contract.measurement("census.committed_elements", R.sys.m * cfg.n),
@@ -361,6 +361,8 @@ def main(argv=None) -> int:
         sub.choices[name].add_argument("--run-id", default=None)
     sub.choices["bench-vu"].add_argument("--total-vus", type=int, default=None,
                                          help="VUs in the whole batch, proved as ceil(total / (batch // 96)) sub-batches (union-bounded)")
+    sub.choices["bench-vu"].add_argument("--hvzk-label", action="store_true",
+                                         help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
     args = ap.parse_args(argv)
     return args.fn(args)
 
