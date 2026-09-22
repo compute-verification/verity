@@ -8,8 +8,14 @@ import copy
 import random
 
 import pytest
-from conftest import bf16, f32, golden_records, k1536_vector, random_cases, structured_cases
-
+from conftest import (
+    bf16,
+    f32,
+    golden_records,
+    k1536_vector,
+    random_cases,
+    structured_cases,
+)
 from verity.ml.tc.cast import f32_to_bf16_word
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, tc_dot, tc_dot_chain
 from verity_numerical.checker import REAL, Reject
@@ -19,7 +25,12 @@ from verity_numerical.checker.v2 import step as v2
 from verity_numerical.checker.v2.params import V2, check_widths
 from verity_numerical.checker.v2.search import SPECS_V2, table_selfcheck
 from verity_numerical.checker.v2.tables import all_tables
-from verity_numerical.security.census import census_unit, census_unit_v2, census_vu, census_vu_v2
+from verity_numerical.security.census import (
+    census_unit,
+    census_unit_v2,
+    census_vu,
+    census_vu_v2,
+)
 
 PIPE = AMPERE_BF16_M16N8K16
 P = REAL
@@ -131,8 +142,17 @@ def test_group_max_excessive_or_deficient_E_is_rejected() -> None:
 def _forge_E(c, a, b, h, g: int, delta: int) -> dict:
     """The witness with group ``g``'s E shifted by ``delta`` and every downstream hint of that group recomputed
     honestly for the forged E (the aligned terms are what the tables give for it)."""
-    from verity_numerical.checker.v2.gadgets import OpDecode, Product, SignedSum, StateDecode
-    from verity_numerical.checker.v2.tables import shift_table, sshift_hi_table, sshift_lo_table
+    from verity_numerical.checker.v2.gadgets import (
+        OpDecode,
+        Product,
+        SignedSum,
+        StateDecode,
+    )
+    from verity_numerical.checker.v2.tables import (
+        shift_table,
+        sshift_hi_table,
+        sshift_lo_table,
+    )
 
     assert g == 0, "the forged group must be the first (its incoming state is the decoded word)"
     bad = copy.deepcopy(h)

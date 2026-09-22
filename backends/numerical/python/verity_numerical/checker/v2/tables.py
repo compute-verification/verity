@@ -7,14 +7,24 @@ Keys are packed mixed-radix: a key ``a * R + b`` with ``b`` known (by an earlier
 further identity (the soundness argument of every ALIGN4 / SHIFT / TNORM lookup; z3 checks it per gadget)."""
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 from ..ctx import Table
 from ..params import Params
 from .params import V2, check_widths
 
-__all__ = ["align4_table", "hdr_table", "lead_table", "leadnorm_table", "op_table", "shift_table",
-           "sshift_hi_table", "sshift_lo_table", "tnorm_table", "all_tables"]
+__all__ = [
+    "align4_table",
+    "all_tables",
+    "hdr_table",
+    "lead_table",
+    "leadnorm_table",
+    "op_table",
+    "shift_table",
+    "sshift_hi_table",
+    "sshift_lo_table",
+    "tnorm_table",
+]
 
 
 def _ifchain(z3, key, cases: list[tuple[int, object]], default):
@@ -28,7 +38,7 @@ def _ifchain(z3, key, cases: list[tuple[int, object]], default):
 # Decoding
 # ---------------------------------------------------------------------------------------------------------------------
 
-@lru_cache(maxsize=None)
+@cache
 def op_table(p: Params) -> Table:
     """T_OP: operand word w -> (s, m, e_op); finite words only (the all-ones exponent field has no row).
     ``e_op = e_zero`` for a zero operand (``m = 0``), else ``max(t, 1) - bias``."""
@@ -56,7 +66,7 @@ def op_table(p: Params) -> Table:
                  size=2**p.word_bits - 2 * 2**p.frac)
 
 
-@lru_cache(maxsize=None)
+@cache
 def hdr_table(p: Params) -> Table:
     """T_HDR: the accumulator word's header h = s 2^exp + t (finite t) -> (s, nz, e = max(t, 1) - bias)."""
     emask = 2**p.exp - 1
@@ -79,7 +89,7 @@ def hdr_table(p: Params) -> Table:
 # Alignment
 # ---------------------------------------------------------------------------------------------------------------------
 
-@lru_cache(maxsize=None)
+@cache
 def align4_table(p: Params) -> Table:
     """ALIGN4: key 4 d + s4 (d the shift, s4 = s_a + 2 s_b) -> (d~ = min(d, DT), s_p = s_a xor s_b, isz = [d = 0])."""
     DT = V2.dt(p)
@@ -116,19 +126,19 @@ def _shift_table(name: str, p: Params, bits: int, scale: int) -> Table:
     return Table(name, 0, 2**bits * R, ("term",), fn, sym=sym)
 
 
-@lru_cache(maxsize=None)
+@cache
 def shift_table(p: Params) -> Table:
     """SHIFT: the signed aligned product term from (u, d~, s_p)."""
     return _shift_table("SHIFT", p, 2 * p.sig, p.prod_shift)
 
 
-@lru_cache(maxsize=None)
+@cache
 def sshift_hi_table(p: Params) -> Table:
     """SSHIFT_HI: the state term's high half, (M_hi, d~, s) -> (1 - 2 s) floor(M_hi 2^(mb + acc_shift) / 2^d~)."""
     return _shift_table("SSHIFT_HI", p, V2.mh(p), V2.mb(p) + p.acc_shift)
 
 
-@lru_cache(maxsize=None)
+@cache
 def sshift_lo_table(p: Params) -> Table:
     """SSHIFT_LO: the state term's low half, (M_lo, d~, s) -> (1 - 2 s) floor(M_lo 2^acc_shift / 2^d~)."""
     return _shift_table("SSHIFT_LO", p, V2.mb(p), p.acc_shift)
@@ -138,7 +148,7 @@ def sshift_lo_table(p: Params) -> Table:
 # Leading bit and normalisation
 # ---------------------------------------------------------------------------------------------------------------------
 
-@lru_cache(maxsize=None)
+@cache
 def lead_table(p: Params) -> Table:
     """LEAD: x < 2^vb -> (nz = [x != 0], l = bit_length(x))."""
     vb = V2.vb(p)
@@ -155,7 +165,7 @@ def lead_table(p: Params) -> Table:
     return Table("LEAD", 0, 2**vb, ("nz", "l"), fn, sym=sym)
 
 
-@lru_cache(maxsize=None)
+@cache
 def leadnorm_table(p: Params) -> Table:
     """LEADNORM: key l + (l_hi + 1)(E - floor) -> (koff = k - k_lo, A = 2^(vb + k), e_hat, z, ovf_eff, isfloor)
     with k = min(acc_sig - l, E - e_min + acc_sig - W) (the clamp as a minimum), e1 = E - k + acc_sig - W,
@@ -187,7 +197,7 @@ def leadnorm_table(p: Params) -> Table:
     return Table("LEADNORM", 0, V2.leadnorm_rows(p), ("koff", "A", "e_hat", "z", "ovf", "isfloor"), fn, sym=sym)
 
 
-@lru_cache(maxsize=None)
+@cache
 def tnorm_table(p: Params) -> Table:
     """TNORM: key v_lo + 2^vb koff -> floor(v_lo 2^k), k = koff + k_lo."""
     vb = V2.vb(p)

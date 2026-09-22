@@ -35,11 +35,21 @@ from ..search import (
     render,
     z3_gadget,
 )
-from .gadgets import GroupMax, Normalise, OpDecode, Pack, Product, ProductShift, SignedSum, StateDecode, StateShift
+from .gadgets import (
+    GroupMax,
+    Normalise,
+    OpDecode,
+    Pack,
+    Product,
+    ProductShift,
+    SignedSum,
+    StateDecode,
+    StateShift,
+)
 from .params import V2
 from .tables import all_tables, leadnorm_table
 
-__all__ = ["SPECS_V2", "modular_queries_v2", "table_selfcheck", "z3_group_step_v2", "main"]
+__all__ = ["SPECS_V2", "main", "modular_queries_v2", "table_selfcheck", "z3_group_step_v2"]
 
 
 def _nz(x):

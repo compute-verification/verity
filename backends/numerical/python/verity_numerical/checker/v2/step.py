@@ -21,8 +21,17 @@ from collections.abc import Sequence
 from ..ctx import IntCtx
 from ..gadgets import Epilogue
 from ..params import REAL, Params, Reject
-from .gadgets import GroupMax, Normalise, OpDecode, Pack, Product, ProductShift, SignedSum, StateDecode, StateShift
-from .params import V2
+from .gadgets import (
+    GroupMax,
+    Normalise,
+    OpDecode,
+    Pack,
+    Product,
+    ProductShift,
+    SignedSum,
+    StateDecode,
+    StateShift,
+)
 
 __all__ = ["accepts_step", "accepts_vu", "check_step", "check_step_expr", "check_unit_expr", "check_vu",
            "check_vu_expr", "check_vu_words_expr", "contracts", "gen_step", "gen_unit", "gen_vu", "hint_widths",
