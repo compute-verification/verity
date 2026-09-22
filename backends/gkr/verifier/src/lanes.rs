@@ -65,6 +65,20 @@ pub fn mul_add_lanes<const L: usize>(o: &mut [u32; L], y: &[u32; L], w: u32) {
     for l in 0..L { o[l] = add(o[l], mont_mul(y[l], w)); }
 }
 
+/// `a += e` / `a -= e` on one extension element (six canonical lanes), for the lookup accumulators.
+#[inline(always)]
+pub fn acc6_add(a: &mut [u32; 6], e: &[u32; 6]) {
+    #[cfg(target_arch = "x86_64")]
+    if avx512() { unsafe { x86::acc6(a, e, false) }; return; }
+    for i in 0..6 { a[i] = add(a[i], e[i]); }
+}
+#[inline(always)]
+pub fn acc6_sub(a: &mut [u32; 6], e: &[u32; 6]) {
+    #[cfg(target_arch = "x86_64")]
+    if avx512() { unsafe { x86::acc6(a, e, true) }; return; }
+    for i in 0..6 { a[i] = sub(a[i], e[i]); }
+}
+
 #[cfg(target_arch = "x86_64")]
 mod x86 {
     use crate::field::{NEG_PINV, P};
@@ -95,6 +109,22 @@ mod x86 {
     unsafe fn sub16(a: __m512i, b: __m512i, p: __m512i) -> __m512i {
         let d = _mm512_sub_epi32(a, b);
         _mm512_min_epu32(d, _mm512_add_epi32(d, p))
+    }
+
+    /// Masked 6-lane add/sub mod p (AVX512VL 256-bit ops; the two upper lanes are never touched).
+    #[target_feature(enable = "avx512f,avx512vl")]
+    pub unsafe fn acc6(a: &mut [u32; 6], e: &[u32; 6], negate: bool) {
+        let p = _mm256_set1_epi32(P as i32);
+        let x = _mm256_maskz_loadu_epi32(0x3f, a.as_ptr() as *const i32);
+        let y = _mm256_maskz_loadu_epi32(0x3f, e.as_ptr() as *const i32);
+        let r = if negate {
+            let d = _mm256_sub_epi32(x, y);
+            _mm256_min_epu32(d, _mm256_add_epi32(d, p))
+        } else {
+            let s = _mm256_add_epi32(x, y);
+            _mm256_min_epu32(s, _mm256_sub_epi32(s, p))
+        };
+        _mm256_mask_storeu_epi32(a.as_mut_ptr() as *mut i32, 0x3f, r);
     }
 
     #[target_feature(enable = "avx512f")]
@@ -167,6 +197,13 @@ mod tests {
             let mut o = b;
             mul_add_lanes(&mut o, &a, w);
             for l in 0..48 { assert_eq!(o[l], add(b[l], mont_mul(a[l], w))); }
+        }
+        // acc6
+        for _ in 0..200 {
+            let a: [u32; 6] = std::array::from_fn(|_| rng(&mut s));
+            let e: [u32; 6] = std::array::from_fn(|_| rng(&mut s));
+            let mut x = a; acc6_add(&mut x, &e); for i in 0..6 { assert_eq!(x[i], add(a[i], e[i])); }
+            let mut y = a; acc6_sub(&mut y, &e); for i in 0..6 { assert_eq!(y[i], sub(a[i], e[i])); }
         }
         // edge values
         let a = [P - 1; 48];

@@ -370,9 +370,9 @@ impl<'a> Functional<'a> {
                         let a: &mut [u32; DEG] = (&mut acc[rank * DEG..(rank + 1) * DEG]).try_into().unwrap();
                         // the coefficients are +-1 in practice (v1: 517 / 234 terms); anything else pays a mont_mul
                         if coef == R_MOD_P {
-                            for i in 0..DEG { a[i] = add(a[i], e.0[i]); }
+                            crate::lanes::acc6_add(a, &e.0);
                         } else if coef == NEG_R_MOD_P {
-                            for i in 0..DEG { a[i] = sub(a[i], e.0[i]); }
+                            crate::lanes::acc6_sub(a, &e.0);
                         } else {
                             for i in 0..DEG { a[i] = add(a[i], mont_mul(e.0[i], coef)); }
                         }
