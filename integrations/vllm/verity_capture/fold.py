@@ -336,7 +336,7 @@ class _Fold:
         self.peers_leaves: dict[int, int] = {}
         self.collectives: list[dict] = []
         self.cur_coll_k: int = 0
-        self._coll_prep: dict[int, dict] = {}
+        self._coll_prep: dict[int, tuple[Compute, dict]] = {}   # id(c) -> (c, prep); c held so an id() reuse cannot alias a stale prep
         self.sampled: dict[tuple[str, int], int] = {}
         self.outputs: dict[tuple[str, int], Refs] = {}
         #: (request, position) -> step whose SERVED sample produced the token at `position` (= logits row position + 1)
@@ -714,7 +714,11 @@ class _Fold:
         reads: list[tuple[str, Any, Any]] = []
         for p in parts:
             if isinstance(p, Compute):
-                reads.append(("c", p, self._compute_reads(p)))
+                try:
+                    reads.append(("c", p, self._compute_reads(p)))
+                except BaseException:
+                    self._coll_prep.pop(id(p), None)      # [F-r19-tp2-5] a failed read leaves no prep behind for an id() reuse
+                    raise
             elif isinstance(p, Transparent):
                 if p.effect == "move":
                     reads.append(("m", p, self._move_reads(p)))
@@ -747,7 +751,11 @@ class _Fold:
         # [R17 D90] a collective operand is numbered (step, k) and its peers fields allocated ONCE per Compute, before any row is read
         coll_prep = {k: self._collective_prepare(c, op, params[k][1], params[k][0]) for k, op in enumerate(c.operands) if isinstance(op, Collective)}
         if coll_prep:
-            self._coll_prep[id(c)] = next(iter(coll_prep.values()))
+            # [R19 tp2 F-r19-tp2-5] keyed by id(c) AND holding c: a prep whose Compute's reads then raised (Unresolved own row -> a
+            # non-strict `problem`) was never popped, and a LATER Compute allocated at the same address (a 2-row decode Compute with no
+            # collective operand) read the stale 1-row row_map -> KeyError in _compute_emit (row #75 fold, both ranks).  The emit side now
+            # checks the identity and the failing part drops its prep (see _parts).
+            self._coll_prep[id(c)] = (c, next(iter(coll_prep.values())))
         rows: list[list[Coll]] = []
         for i in range(c.rows):
             colls: list[Coll] = []
@@ -893,7 +901,8 @@ class _Fold:
                     "output_views": []}
             if getattr(c, "roots", ()):
                 meta["operand_roots"] = list(c.roots)     # [R15 fp8] per-operand weight names (multi-weight Computes)
-            prep = self._coll_prep.get(id(c))
+            held = self._coll_prep.get(id(c))
+            prep = held[1] if held is not None and held[0] is c else None
             if prep is not None:                          # [R17 D90] the row's collective identity + the peers field it reads
                 pidx, base, j, fname = prep["row_map"][i]
                 meta["collective"] = {"kind": prep["kind"], "step": prep["step"], "k": prep["k"], "site": prep["site"], "rank": prep["rank"],
