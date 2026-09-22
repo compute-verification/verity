@@ -35,6 +35,7 @@ from encode import buckets as bk
 from encode.encode_ntt_simt import RSEncoderSIMT
 
 
+@gpu
 def test_irs_row_combination():
     rng = np.random.default_rng(3)
     rows = 300
@@ -53,6 +54,7 @@ def test_irs_row_combination():
     assert np.array_equal(cp.asnumpy(cb.reduce(acc2)).astype(np.uint64), ref.irs_row_combination(r, W))
 
 
+@gpu
 def test_quadratic_test():
     rng = np.random.default_rng(5)
     rows = 70
@@ -69,6 +71,7 @@ def test_quadratic_test():
     assert np.array_equal(got, ref.quadratic_test(r, x, y, z))
 
 
+@gpu
 def test_linear_test():
     rows = 40
     u = bb.fill_rows(rows, seed=9)
@@ -87,6 +90,7 @@ def test_linear_test():
     assert np.array_equal(got, ref.linear_test(rA, u))
 
 
+@gpu
 @pytest.mark.parametrize("N,T", [(1000, 64), (64 * 7, 64), (5, 64)])
 def test_batch_inverse(N, T):
     rng = np.random.default_rng(11)
@@ -97,6 +101,7 @@ def test_batch_inverse(N, T):
     assert np.array_equal(got_plain, ref.batch_inverse(d))
 
 
+@gpu
 def test_gather_and_encode_gather():
     rows = 200
     W = bb.fill_rows(rows, seed=12)

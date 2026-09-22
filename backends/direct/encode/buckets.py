@@ -318,9 +318,10 @@ class Combiner:
         grid = ((2 * self.k + self.block - 1) // self.block, self.nchunks(rows))
         self.k_lin(grid, (self.block,), (u_in, u_c1, rA_in, rA_c1, acc, np.int32(rows), np.int32(self.chunk_rows), self.r2))
 
-    def reduce(self, acc):
+    def reduce(self, acc, out=None):
         nchunk, d, ncols = acc.shape
-        out = self.cp.empty((d, ncols), dtype=self.cp.uint32)
+        if out is None:
+            out = self.cp.empty((d, ncols), dtype=self.cp.uint32)
         total = d * ncols
         self.k_reduce(((total + 255) // 256,), (256,), (acc, out, np.int32(nchunk), np.int32(ncols)))
         return out
