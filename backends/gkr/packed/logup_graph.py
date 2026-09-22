@@ -306,14 +306,16 @@ class GraphLogUp:
 
     # -- the proof ----------------------------------------------------------------------------------------------------
 
-    def _set(self, buf: torch.Tensor, vals: list[Ext]) -> None:
+    @staticmethod
+    def _h2d(buf: torch.Tensor, vals: list[Ext]) -> None:
+        """Stream-ordered host write: pinned staging + ``non_blocking`` so the host never waits on the stream (a pageable
+        ``copy_`` would synchronise the stream first and serialise instances that run on parallel streams)."""
         if vals:
-            buf[:len(vals)].copy_(to_dev(vals, "cpu"), non_blocking=False)
+            buf[:len(vals)].copy_(to_dev(vals, "cpu").pin_memory(), non_blocking=True)
 
-    def prove(self, w: torch.Tensor, table: torch.Tensor, z: Ext, coins: lref.Coins
-              ) -> tuple[lref.Transcript, lref.LeafClaim, GraphTiming]:
-        """Same messages as ``logup_reference.prove_table(*leaves(w, table, mult, z), coins)``.  ``w (Nw,)``, ``table (Nt,)``
-        int32 on the device (copied into the static buffers)."""
+    def launch(self, w: torch.Tensor, table: torch.Tensor, z: Ext, coins: lref.Coins) -> dict:
+        """Enqueue the whole proof on the current stream and return without synchronising (``finish`` completes it).
+        Several instances launched on different streams overlap (the small levels are latency-bound chains)."""
         if not self.built or w.numel() != self.Nw or table.numel() != self.Nt:
             self.build(w.numel(), table.numel())
         n = self.n
@@ -326,7 +328,7 @@ class GraphLogUp:
         self.w_e.copy_(w.view(-1, 2)[:, 0])
         self.w_o.copy_(w.view(-1, 2)[:, 1])
         self.table.copy_(table)
-        self.zc.copy_(to_dev([z, tuple(x * sp.R_MOD_P % P for x in z), ref.mul(z, z)], "cpu"))
+        self._h2d(self.zc, [z, tuple(x * sp.R_MOD_P % P for x in z), ref.mul(z, z)])
         e0, e1 = ev(), ev()
         e0.record()
         self.g_tree.replay()
@@ -334,15 +336,16 @@ class GraphLogUp:
         lam = coins.next()
         rho: list[Ext] = []
         per_level = []
+        mu = None
         for lv in range(n):
-            self._set(self.rho, rho)
-            self.lam6.copy_(to_dev([lam], "cpu"))
+            self._h2d(self.rho, rho)
+            self._h2d(self.lam6, [lam])
             rs: list[Ext] = []
             a, b = ev(), ev()
             a.record()
             if self.rpg is None:
                 rs = [coins.next() for _ in range(lv)]
-                self._set(self.coins, rs)
+                self._h2d(self.coins, rs)
                 for (_i0, _i1, g) in self.g_levels[lv]:
                     g.replay()
                     tm.graphs += 1
@@ -355,14 +358,27 @@ class GraphLogUp:
                         _S = self.S[lv, i0 - 1:i1 - 1].cpu()      # D2H sync (the sponge would absorb these)
                         tm.host_round_trips += 1
                         new = [coins.next() for _ in range(i0, i1)]
-                        self.coins[i0 - 1:i1 - 1].copy_(to_dev(new, "cpu"))
+                        self._h2d(self.coins[i0 - 1:i1 - 1], new)
                         rs += new
             b.record()
             per_level.append((lv, a, b))
             mu = coins.next()
             lam = coins.next()
             rho = [mu] + rs
+        return {"tm": tm, "t_wall": t_wall, "e0": e0, "e1": e1, "per_level": per_level, "mu": mu, "rho": rho, "lam": lam}
+
+    def prove(self, w: torch.Tensor, table: torch.Tensor, z: Ext, coins: lref.Coins
+              ) -> tuple[lref.Transcript, lref.LeafClaim, GraphTiming]:
+        """Same messages as ``logup_reference.prove_table(*leaves(w, table, mult, z), coins)``.  ``w (Nw,)``, ``table (Nt,)``
+        int32 on the device (copied into the static buffers)."""
+        st = self.launch(w, table, z, coins)
         torch.cuda.synchronize()
+        return self.finish(st)
+
+    def finish(self, st: dict) -> tuple[lref.Transcript, lref.LeafClaim, GraphTiming]:
+        """Timing + transcript of a finished :meth:`launch` (the device must have completed it: synchronise first)."""
+        n = self.n
+        tm, t_wall, e0, e1, per_level, mu, rho, lam = (st[k] for k in ("tm", "t_wall", "e0", "e1", "per_level", "mu", "rho", "lam"))
         tm.tree = e0.elapsed_time(e1)
         for lv, a, b in per_level:
             tm.levels[lv] = a.elapsed_time(b)

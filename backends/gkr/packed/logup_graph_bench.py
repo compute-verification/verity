@@ -93,8 +93,60 @@ def time_eager(k: int, Nw: int, Nt: int, repeats: int) -> dict:
     return {"device_ms": best[0], "wall_ms": best[1], "note": "eager launch loop (logup_gpu); device_ms are CUDA events around the whole proof, launch gaps included"}
 
 
+def time_concurrent(tables: list, k: int, repeats: int) -> dict:
+    """All table instances of the suite as ONE proof: each instance's level graphs replayed on its own CUDA stream
+    (protocol unchanged: independent logUp instances, transcript-independent coins), device time from a start event
+    on the default stream to the join, wall time on the host.  The 20 small levels of every instance are latency-bound
+    chains that overlap across streams; the big levels share the HBM / SMs."""
+    provers, insts, streams = [], [], []
+    for i, (_tname, lookups, rows) in enumerate(tables):
+        Nw, Nt = UNITS * lookups, aligned(rows)
+        p = lgr.GraphLogUp("cuda", k=k, rounds_per_graph=None)
+        w, table, z = instance(Nw, Nt, 100 + i)
+        p.prove(w, table, z, lref.Coins(100 + i))        # build at this shape
+        provers.append(p)
+        insts.append((w, table, z))
+        streams.append(torch.cuda.Stream())
+    torch.cuda.synchronize()
+    dev_ms, wall_ms, per_inst = [], [], []
+    for r in range(repeats):
+        torch.cuda.synchronize()
+        t0 = time.perf_counter()
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
+        states = []
+        for p, (w, table, z), s in zip(provers, insts, streams, strict=True):
+            s.wait_stream(torch.cuda.current_stream())
+            with torch.cuda.stream(s):
+                states.append(p.launch(w, table, z, lref.Coins(200 + r)))
+        for s in streams:
+            torch.cuda.current_stream().wait_stream(s)
+        end.record()
+        torch.cuda.synchronize()
+        wall_ms.append((time.perf_counter() - t0) * 1e3)
+        dev_ms.append(start.elapsed_time(end))
+        per_inst.append([p.finish(st)[2].device_total for p, st in zip(provers, states, strict=True)])
+    mem = torch.cuda.max_memory_allocated()
+    best = min(range(repeats), key=lambda i: dev_ms[i])
+    out = {"device_ms": dev_ms[best], "wall_ms": wall_ms[best], "device_ms_all": dev_ms, "wall_ms_all": wall_ms,
+           "per_instance_device_ms_in_parallel": dict(zip([t[0] for t in tables], per_inst[best], strict=True)),
+           "sum_of_instances_ms": sum(per_inst[best]), "streams": len(tables), "mem.peak_device_bytes": mem,
+           "note": "all instances launched on separate streams; device_ms = default-stream start event -> join; per-instance times are "
+                   "inflated by sharing the GPU"}
+    del provers
+    torch.cuda.empty_cache()
+    return out
+
+
 def run_suite(name: str, tables: list, k: int, repeats: int, eager: bool, modes: list[str]) -> dict:
     out = {"suite": name, "k": k, "tables": [], "totals": {}}
+    if "concurrent" in modes:
+        modes = [m for m in modes if m != "concurrent"]
+        out["totals"]["concurrent"] = time_concurrent(tables, k, repeats)
+        print(json.dumps({"concurrent": out["totals"]["concurrent"]}), flush=True)
+        if not modes:
+            return out
     for (tname, lookups, rows) in tables:
         Nw = UNITS * lookups
         Nt = aligned(rows)
@@ -129,7 +181,7 @@ def main(argv=None) -> int:
     ap.add_argument("--suite", nargs="*", default=["v1", "v2"], choices=["v1", "v2", "v2-splitu"])
     ap.add_argument("--k", type=int, default=3)
     ap.add_argument("--repeats", type=int, default=3)
-    ap.add_argument("--modes", nargs="*", default=["level", "round"], choices=["level", "round"])
+    ap.add_argument("--modes", nargs="*", default=["level", "round"], choices=["level", "round", "concurrent"])
     ap.add_argument("--no-eager", dest="eager", action="store_false")
     a = ap.parse_args(argv)
     out = Path(a.out)
@@ -150,8 +202,8 @@ def main(argv=None) -> int:
             ms.append({"name": f"logup.{s}.{mode}.wall_ms", "value": t["wall_ms"], "unit": "ms"})
             ms.append({"name": f"logup.{s}.{mode}.us_per_vu_device", "value": t["us_per_vu_device"], "unit": "us"})
     v1 = doc["suites"].get("v1") or next(iter(doc["suites"].values()))
-    ms.insert(0, {"name": "t.total", "value": v1["totals"]["level"]["device_ms"] / 1e3, "unit": "s"})
-    ms.insert(1, {"name": "t.arithmetic", "value": v1["totals"]["level"]["device_ms"] / 1e3, "unit": "s"})
+    ms.insert(0, {"name": "t.total", "value": next(iter(v1["totals"].values()))["device_ms"] / 1e3, "unit": "s"})
+    ms.insert(1, {"name": "t.arithmetic", "value": next(iter(v1["totals"].values()))["device_ms"] / 1e3, "unit": "s"})
     fp = {"profile": _bench.PROFILE, "domain": _bench.DOMAIN, "K": _bench.K_TARGET, "B": _bench.B_TARGET, "N_subbatches": 1,
           "proof_class": "ARITHMETIC_DIAGNOSTIC", "authentication": "excluded", "zk_mode": "none",
           "security": {"target": -128, "challenge_field": "BabyBear^6 (24 limbs)", "note": "operating point of the priced design; nothing is proved here"},
