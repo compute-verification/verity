@@ -26,19 +26,25 @@ def _gemma_program(LP: int = 3, T: int = 1, layers: int = 2, softcap_logits: boo
     rows: list[dict] = []
     i = [0]
 
-    def add(spec, name, src: int | None = None) -> int:
+    def add(spec, name, src: int | None = None, reads: int | None = None) -> int:
         """append a row; `src` = the index of the instance whose output is its first operand (`args` ref ["n", src, 0, N], as derive_step
-        writes them) -- given for the narrowings so `build_manifest` can confirm `producer_operand` from the Program's dataflow."""
+        writes them) -- given for the narrowings so `build_manifest` can confirm `producer_operand` from the Program's dataflow.
+        `reads` [R19 int-20] = the instance whose output the row consumes as its module's INPUT (the first norm chain reads the root
+        module's scaled embedding): a plain operand run, not subject to the `narrow_operand` variants (those are the narrowings' own)."""
         args = [[["n", src, 0, H]]] if src is not None else []
         if src is not None and narrow_operand == "param":
             args = [[["p", 1, 0, H]]]
         elif src is not None and narrow_operand == "none":
             args = []
+        if reads is not None:
+            args = args + [[["n", reads, 0, H]]]
         rows.append({"i": i[0], "spec": spec, "form": "call", "name": name, "args": args})
         i[0] += 1
         return i[0] - 1
 
-    def norm_chain(mod: str, sfx: str, n_rows: int, fused: bool, tag: str):
+    def norm_chain(mod: str, sfx: str, n_rows: int, fused: bool, tag: str, x: list[int] | None = None):
+        """`x` [R19 int-20]: the rows this norm's INPUT comes from (per row) -- the ops that read the module input (the square / row scale, and
+        the residual add of the fused form) carry the operand run, exactly as the real Program wires layer 0's norms to `model/mul`."""
         add(f"AddScalarBf16_v1{{N={H},C=1.0}}", f"{mod}/add{tag}{sfx}[0]")                              # (1 + w): one row, weight-derived
         adds: list[int] = []
         if fused and swap_narrows:                                                                       # a Program whose normed narrowing
@@ -46,12 +52,12 @@ def _gemma_program(LP: int = 3, T: int = 1, layers: int = 2, softcap_logits: boo
                 add(f"NarrowF32ToBf16_v1{{N={H}}}", f"{mod}/to_5{tag}{sfx}/0[{r}]")                      # vLLM's order): ordinal contradiction
         if fused:
             for r in range(n_rows):
-                adds.append(add(f"AddWidenedBf16_v1{{N={H}}}", f"{mod}/add_1{tag}{sfx}[{r}]"))
+                adds.append(add(f"AddWidenedBf16_v1{{N={H}}}", f"{mod}/add_1{tag}{sfx}[{r}]", reads=(x[r] if x else None)))
             for r in range(n_rows):
                 add(f"NarrowF32ToBf16_v1{{N={H}}}", f"{mod}/to_3{tag}{sfx}/1[{r}]" if hint_narrow else f"{mod}/to_3{tag}{sfx}[{r}]",
                     src=adds[r])                                                                         # the residual narrows the widened sum
         for r in range(n_rows):
-            add(f"{'SquareF32' if fused else 'SquareBf16'}_v1{{N={H}}}", f"{mod}/pow{tag}{sfx}[{r}]")
+            add(f"{'SquareF32' if fused else 'SquareBf16'}_v1{{N={H}}}", f"{mod}/pow{tag}{sfx}[{r}]", reads=(x[r] if x else None))
         for r in range(n_rows):
             add(f"MeanTriton_v1{{N={H}}}", f"{mod}/mean{tag}{sfx}[{r}]")
         for r in range(n_rows):
@@ -59,7 +65,7 @@ def _gemma_program(LP: int = 3, T: int = 1, layers: int = 2, softcap_logits: boo
         for r in range(n_rows):
             add("RsqrtF32_v1{N=1}", f"{mod}/rsqrt{tag}{sfx}[{r}]")
         for r in range(n_rows):
-            add(f"{'ScaleRowF32' if fused else 'ScaleRowBf16'}_v1{{N={H}}}", f"{mod}/mul{tag}{sfx}[{r}]")
+            add(f"{'ScaleRowF32' if fused else 'ScaleRowBf16'}_v1{{N={H}}}", f"{mod}/mul{tag}{sfx}[{r}]", reads=(x[r] if x else None))
         muls: list[int] = []
         for r in range(n_rows):
             muls.append(add(f"MulVecF32_v1{{N={H}}}", f"{mod}/mul_1{tag}{sfx}[{r}]"))
@@ -75,12 +81,19 @@ def _gemma_program(LP: int = 3, T: int = 1, layers: int = 2, softcap_logits: boo
     for s in range(T + 1):
         n_rows = LP if s == 0 else 1
         sfx = "" if s == 0 else f"_{s}"
+        embeds: list[int] = []
         for r in range(n_rows):
-            add(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding{sfx}[{r}]")
+            embeds.append(add(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding{sfx}[{r}]"))
+        # [R19 int-20, F-r19-int-20] `embed * normalizer`: the recorded Program (gemma2-2b, row 1024 `model/mul[0]`) puts the scale at the
+        # UNROOTED wrapper-level path `model` -- the op is emitted in a module's forward BODY, not by a leaf, so no leaf module owns it -- and
+        # its output is read by layer 0's `input_layernorm` and `pre_feedforward_layernorm` (the residual).  This fixture used to assume
+        # `model.model/mul` (a rooted Gemma2Model path) with no operand runs: a Program shape that never existed.  The rows now carry the real
+        # wiring so the manifest's dataflow audit sees the crossing.
+        scaled: list[int] = []
         for r in range(n_rows):
-            add(f"Bf16MulScalarTensor_v1{{N={H}}}", f"model.model/mul{sfx}[{r}]")                        # embed * normalizer (Gemma2Model)
+            scaled.append(add(f"Bf16MulScalarTensor_v1{{N={H}}}", f"model/mul{sfx}[{r}]", reads=embeds[r]))
         for L in range(layers):
-            norm_chain(f"model.model.layers.{L}.input_layernorm", sfx, n_rows, fused=L > 0, tag="")
+            norm_chain(f"model.model.layers.{L}.input_layernorm", sfx, n_rows, fused=L > 0, tag="", x=(scaled if L == 0 else None))
             for r in range(n_rows):
                 add(f"Gemm_v2{{K={H},N={(NH + 2 * KVH) * D},DOT=k16}}", f"model.model.layers.{L}.self_attn.qkv_proj/triton_launch_1{sfx}[{r}]")
             for r in range(n_rows):
@@ -92,7 +105,7 @@ def _gemma_program(LP: int = 3, T: int = 1, layers: int = 2, softcap_logits: boo
             for r in range(n_rows):
                 add(f"Gemm_v2{{K={NH * D},N={H},DOT=k16}}", f"model.model.layers.{L}.self_attn.o_proj/triton_launch_2{sfx}[{r}]")
             norm_chain(f"model.model.layers.{L}.post_attention_layernorm", sfx, n_rows, fused=False, tag="_p")
-            norm_chain(f"model.model.layers.{L}.pre_feedforward_layernorm", sfx, n_rows, fused=True, tag="_f")
+            norm_chain(f"model.model.layers.{L}.pre_feedforward_layernorm", sfx, n_rows, fused=True, tag="_f", x=(scaled if L == 0 else None))
             for r in range(n_rows):
                 add(f"Gemm_v2{{K={H},N={2 * I},DOT=k16}}", f"model.model.layers.{L}.mlp.gate_up_proj/triton_launch_3{sfx}[{r}]")
                 add(f"GeluTanhMul_v1{{I={I}}}", f"model.model.layers.{L}.mlp.act_fn/gelu_tanh_and_mul{sfx}[{r}]")
@@ -181,12 +194,24 @@ def test_gemma_manifest_requires_exactly_the_returned_tensors():
         # the soft-capped logits: ONE identity, produced by the cap's last mul (the Gemm rows are interior), width V, one row
         lg = outs[("logits_processor", "out")]
         assert lg["spec"] == "Bf16MulScalar_v1" and lg["element_range"] == [0, V] and lg["rows"] == 1, lg
-        # the interior never appears: no identity mentions the chain's f32 rows, the (1+w) vector or the embed scale
+        # the interior never appears: no identity mentions the chain's f32 rows, the (1+w) vector or the soft cap's div / tanh -- every
+        # one of them is read only inside its own module
         for (op, member), r in outs.items():
             assert not r["spec"].startswith(("SquareBf16", "SquareF32", "MeanTriton", "AddScalar", "AddWidened", "Rsqrt", "ScaleRow", "MulVec",
-                                            "Bf16DivScalar", "Bf16Tanh", "Bf16MulScalarTensor")), (op, member, r["spec"])
+                                            "Bf16DivScalar", "Bf16Tanh")), (op, member, r["spec"])
             assert r["element_range"][1] > 0
-        assert ("model", "out") not in outs and ("", "out") not in outs
+        # [R19 int-20, F-r19-int-20] the embed scale is DIFFERENT: `members_for` still names no member for Bf16MulScalarTensor (it is interior
+        # to whatever module computes it), but this Program's dataflow reads its output from layer 0's norms -- another module -- so the
+        # manifest PROMOTES it: (`model`, `out`) per step, the crossing rows, width H bf16 from the registry Definition's output signature,
+        # the reading modules named for the collector.  This test used to assert the member never appears; that assertion encoded the
+        # finding (a value crossing a module boundary that no required member covered), not the rule.
+        sc = outs[("model", "out")]
+        assert sc["spec"] == "Bf16MulScalarTensor_v1" and sc["element_range"] == [0, n_rows * H] and sc["rows"] == n_rows and sc["dtype"] == "bf16", sc
+        assert sc["promoted"] is True and sc["boundary_class"] == "interior_crossing"
+        assert sc["consumers"] == ["model.layers.0.input_layernorm", "model.layers.0.pre_feedforward_layernorm"], sc["consumers"]
+        assert ("", "out") not in outs
+    promo = man["query"]["promotion"]
+    assert promo["families"]["Bf16MulScalarTensor_v1"]["rows"] == LP + T and promo["identities"] == T + 1 and promo["faults"] == {}, promo
     # coverage families of the query are all present; the hidden stream is per layer per step
     fams = man["populations"]["by_family"]
     assert fams["instance_outputs"] > 0 and fams["fa2_hidden_m1_stream"] == 2 * (T + 1)

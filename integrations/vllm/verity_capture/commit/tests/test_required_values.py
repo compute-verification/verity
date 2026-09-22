@@ -619,10 +619,14 @@ def test_unmodelled_family_fails_closed_in_expectation_and_coverage():
         RM.members_for("GeGLU_v9", {"I": 64}, "model.model.layers.1.mlp.act_fn", "")
 
 
-def test_dataflow_audit_names_a_crossing_family_the_vocabulary_calls_interior():
-    """The second gate: suppose a family is (wrongly) listed as interior -- the manifest would be complete and a collector binding nothing
-    of it would pass coverage.  The Program's own dataflow still says its output is read by ANOTHER module: the audit names it under
-    `unnamed_crossing`, and the `audit` CLI exits 1.  Here `MeanTriton_v1` (an interior norm-chain op) is wired as a module output."""
+def test_dataflow_audit_promotes_a_crossing_family_the_vocabulary_calls_interior():
+    """The second gate: suppose a family is (wrongly) listed as interior -- by the vocabulary alone the manifest would be complete and a
+    collector binding nothing of it would pass coverage.  The Program's own dataflow still says its output is read by ANOTHER module.
+    [R19 int-20] The gate used to be a refusal (`unnamed_crossing`, complete:false, `audit` exits 1); it is now a PROMOTION: the crossing
+    rows become a required member (`out`) of their module, class `interior_crossing`, width / dtype from the registry Definition's output
+    (MeanTriton returns one f32 per row), the reading module recorded as its consumer -- the manifest is complete and a collector binding
+    nothing of it FAILS coverage, because the member is required.  Here `MeanTriton_v1` (an interior norm-chain op) is wired as a module
+    output; all three engines emit the promoted identity (row for row: the same pass)."""
     b = DF(LP=2, T=0)
     H, V = b.H, b.V
     e = [b.emit(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding[{r}]", params=[(0, r, r + 1)]) for r in range(2)]
@@ -632,18 +636,25 @@ def test_dataflow_audit_names_a_crossing_family_the_vocabulary_calls_interior():
     b.emit(f"TokenSelect_v1{{V={V}}}", "argmax[0]", inputs=[lg])
     prog = b.program(layers=0, attn_obs={})
     tr, t = traversal_rows(prog)
-    assert not any(r["op_path"] == "model.layers.0.input_layernorm" for r in tr)
-    assert t.boundary_audit["unnamed_crossing"] == {"MeanTriton_v1": 2}, t.boundary_audit
-    assert t.boundary_audit["families"]["MeanTriton_v1"] == {"interior": {"rows": 2, "crossing": 2}}
-    # the inventory is silent (MeanTriton is "interior" by rule) and so is the reference (no dataflow) -- the traversal is NOT: the
-    # population is not complete on a Program with an unnamed crossing, the manifest is complete:false and the binder's coverage refuses
-    assert not t.complete and any(k.startswith("MeanTriton_v1: 2 row(s)") and "unnamed crossing" in k for k in t.unmodelled), t.unmodelled
+    pm = [r for r in tr if r["op_path"] == "model.layers.0.input_layernorm"]
+    assert len(pm) == 1 and pm[0]["output_member"] == "out" and pm[0]["promoted"] is True and pm[0]["boundary_class"] == "interior_crossing", pm
+    assert pm[0]["spec"] == "MeanTriton_v1" and pm[0]["rows"] == 2 and pm[0]["width"] == 1 and pm[0]["dtype"] == "f32" and pm[0]["element_range"] == [0, 2]
+    assert pm[0]["consumers"] == ["model.layers.0.mlp.down_proj"]
+    assert t.complete and t.boundary_audit["unnamed_crossing"] == {} and t.boundary_audit["promoted"] == {"MeanTriton_v1": 2}, t.boundary_audit
+    assert t.boundary_audit["families"]["MeanTriton_v1"] == {"interior_crossing": {"rows": 2, "crossing": 2}}
+    # the inventory (in-memory dataflow pass) and the traversal emit the same identities; the manifest is complete on both
     old = RM.build_manifest(copy.deepcopy(prog), {"sweep": {"arrive_steps": [0]}}, engine="inventory")
     new = RV.manifest_from_traversal(copy.deepcopy(prog), {"sweep": {"arrive_steps": [0]}})
-    assert old["complete"] is True and new["complete"] is False and new["identities"] == old["identities"]
-    assert not RM.coverage_check(new, _layouts_from(new))["ok"] and RM.coverage_check(old, _layouts_from(old))["ok"]   # the second gate the inventory lacks
+    assert old["complete"] is True and new["complete"] is True and new["identities"] == old["identities"]
+    assert any(r.get("promoted") for r in old["identities"]) and old["query"]["promotion"]["rows"] == 2
+    # the second gate, kept: a collector's layouts that cover everything BUT the promoted member do not pass coverage
+    lay = _layouts_from(new)
+    assert RM.coverage_check(new, lay)["ok"]
+    without = {s: [m for m in ms if m["name"] != "model.layers.0.input_layernorm"] for s, ms in lay.items()}
+    assert sum(len(ms) for ms in without.values()) == sum(len(ms) for ms in lay.values()) - 1
+    assert not RM.coverage_check(new, without)["ok"]
     _ref, summ = RV.reference_required_values(copy.deepcopy(prog), RV.Query())
-    assert summ["complete"]                                                     # documented: the reference has no dataflow audit
+    assert summ["complete"] and summ["promotion"]["rows"] == 2 and summ["promotion"]["faults"] == {}, summ.get("promotion")
     # the same Program where the mean stays inside its module (read by a same-module op only): no finding
     b2 = DF(LP=2, T=0)
     e = [b2.emit(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding[{r}]", params=[(0, r, r + 1)]) for r in range(2)]
@@ -729,9 +740,13 @@ def test_gemma_dense_variants_traversal_equals_inventory(variant):
         assert [x.row() for x in ref] == new["identities"]
     else:                                                                       # D2 replace defect: the reference keeps the hinted producer and
         assert not summ["complete"] and "Bf16MulScalar_v1 under logits_processor" in _family_keys(summ["unmodelled"])   # names it; no D1 finding then
-    # this fixture wires only the narrowings' args: an observed crossing is evidence, `named_interior` is honestly withheld (not fully wired)
+    # this fixture wires only the narrowings' args and [R19 int-20] the embed scale's (its `model/mul` rows read the embedding, layer 0's norms
+    # read them -- so the audit is armed on every variant, `narrow_none` included: that variant strips the NARROWINGS' operands only): an
+    # observed crossing is evidence, `named_interior` is honestly withheld (not fully wired); the one crossing interior family is promoted
     aud = new["boundary_audit"]
-    assert aud["available"] == (variant != "narrow_none") and not aud["fully_wired"] and aud["named_interior"] is None and aud["unnamed_crossing"] == {}
+    assert aud["available"] and not aud["fully_wired"] and aud["named_interior"] is None and aud["unnamed_crossing"] == {}
+    assert aud["promoted"] == {"Bf16MulScalarTensor_v1": GEMMA_VARIANTS[variant].get("LP", 3) + GEMMA_VARIANTS[variant].get("T", 1)}
+    assert old["query"]["promotion"] == new["query"]["promotion"] and old["query"]["promotion"]["faults"] == {}
 
 
 def test_stochastic_and_reordered_programs_traversal_equals_inventory():

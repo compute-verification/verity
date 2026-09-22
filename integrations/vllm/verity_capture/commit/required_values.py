@@ -47,14 +47,18 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Iterator, NamedTuple
 
 from . import required_manifest as RM
-from .required_manifest import (EPILOGUE_FAMILIES, IDENTITY_KEY, MOE_LEAF, UnmodelledFamily, _fa2_geometry, _fa3_geometry, _layer_of, _REQ_RE,
-                                collector_path, is_stochastic_select, is_token_select, mat_total_words, members_for, moe_identities,
-                                query_requirements, request_label, spec_family, spec_statics, split_name, wrapper_prefix_of)
+from .required_manifest import (EPILOGUE_FAMILIES, IDENTITY_KEY, INTERIOR_CROSSING, MOE_LEAF, PROMOTED_MEMBER, UnmodelledFamily, _AGGREGATE_PREFIXES,
+                                _STRUCTURE_PREFIXES, _fa2_geometry, _fa3_geometry, _layer_of, _REQ_RE, collector_path, is_aggregate_family,
+                                is_stochastic_select, is_structure_family, is_token_select, mat_total_words, members_for, moe_identities,
+                                promote_interior_crossings, promoted_annotations, promotion_header, query_requirements, request_label, spec_family,
+                                spec_statics, split_name, wrapper_prefix_of)
 
 SCHEMA = "verity-sweep/required-values/v1"
 
-#: boundary classes of a Program row, as the traversal decides them at the step flush
-CLASS_UNSEEN, CLASS_BOUNDARY, CLASS_INTERIOR, CLASS_AGGREGATE, CLASS_DECLARED, CLASS_SAMPLER, CLASS_STRUCTURE, CLASS_UNMODELLED, CLASS_GUARD = range(9)
+#: boundary classes of a Program row, as the traversal decides them at the step flush; [R19 int-20] `CLASS_INTERIOR_CROSSING` is decided
+#: AFTER the walk (a consumer may be in a later step): an interior row whose output another module reads, PROMOTED to a required member
+(CLASS_UNSEEN, CLASS_BOUNDARY, CLASS_INTERIOR, CLASS_AGGREGATE, CLASS_DECLARED, CLASS_SAMPLER, CLASS_STRUCTURE, CLASS_UNMODELLED, CLASS_GUARD,
+ CLASS_INTERIOR_CROSSING) = range(10)
 #: the Program params the vocabulary names (RequiredValues carries a value for each), BY RULE of who reads them and which family carries
 #: the value -- never by the param's name alone [R17 revb F-r17b-08: the step wrapper calls the token input `input_ids`, the request wrapper
 #: `prompt`; a name whitelist flagged the former as unnamed while the population carried it]: the token ids -> `input_token_ids` (every
@@ -67,14 +71,12 @@ NAMED_INPUTS = frozenset({"prompt", "input_ids", "weights", "seed"})
 _COLLECTIVE_PREFIXES = ("AllReduce2", "AllGather2")
 
 CLASS_NAMES = {CLASS_UNSEEN: "unseen", CLASS_BOUNDARY: "boundary", CLASS_INTERIOR: "interior", CLASS_AGGREGATE: "aggregate",
-               CLASS_DECLARED: "declared", CLASS_SAMPLER: "sampler", CLASS_STRUCTURE: "structure", CLASS_UNMODELLED: "unmodelled", CLASS_GUARD: "guard"}
-#: families whose values are bound through a DECLARED aggregate family rather than as their own module output: the fused-MoE block
-#: stream planes (`moe/L<k>/<plane>`, MOE-03) cover the router / expert GEMM / act / sum rows of `mlp.experts`
-_AGGREGATE_PREFIXES = ("MoeExpertGemm", "MoeRouterTopK", "MoeSum")
+               CLASS_DECLARED: "declared", CLASS_SAMPLER: "sampler", CLASS_STRUCTURE: "structure", CLASS_UNMODELLED: "unmodelled", CLASS_GUARD: "guard",
+               CLASS_INTERIOR_CROSSING: INTERIOR_CROSSING}
+#: (`_AGGREGATE_PREFIXES` / `_STRUCTURE_PREFIXES`: the vocabulary's, imported -- the promotion pass and the classifier read one table)
 #: families the query DECLARES required although the Program's dataflow keeps them inside their module (TP-04 rank partials feed the
 #: module's own collective; DECISION M-0248): named by the vocabulary, not a boundary crossing
 _DECLARED_MEMBER_PREFIXES = ("part_rank", "shard_rank")
-_STRUCTURE_PREFIXES = ("Const",)
 #: [R16 pad M-0069 / reqval M-0050] the bot-lifted Program (padded baseline, experimental): every Definition is re-registered as
 #: `Lifted[<id>]_v1{same statics}` (verity_vllm/registry/lifted.py) and the step guard is three hand-authored relations -- `LStepLive<E>`
 #: (`s=<s>/live`: Active iff the previous committed token is an Active non-EOS), `LSelect<w>` (`s=<s>/tok_in`: the step's guarded INPUT
@@ -360,6 +362,16 @@ class Traversal:
         self._fam_of = array("i")
         self._class_of = bytearray()
         self._crosses = bytearray()
+        # [R19 int-20] the CONSUMER modules of a crossing row (module id of the first reader per row; the rare further distinct readers
+        # beside) -- the promoted member names them, the collector observes the value at one of them
+        self._xfirst = array("i")
+        self._xmore: dict[int, list[int]] = {}
+        # the claims the vocabulary called interior (step, module, family, spec, statics, row indices) and the vocabulary's claims / alias
+        # sites per step: the promotion pass after the walk (`_promote`) decides which interior rows crossed
+        self._interior: list[tuple] = []
+        self._named_by_step: dict[int, set[tuple[str, str]]] = {}
+        self._aliased_by_step: dict[int, set[str]] = {}
+        self.promotion: dict[str, Any] | None = None
         self._args_seen = False
         self._unwired = 0                    # rows without operand runs (a synthetic / partially wired Program): a missing edge can hide a crossing, never invent one
         self._param_readers: dict[int, dict[str, int]] = {}   # Program param index -> {family: rows reading it} (the inputs the Program consumes)
@@ -433,6 +445,7 @@ class Traversal:
             self._fam_of.append(self._fid(fam))
             self._class_of.append(CLASS_UNSEEN)
             self._crosses.append(0)
+            self._xfirst.append(-1)
             if self.q.audit:
                 self._audit_args(r, i)
             if is_guard(fam):
@@ -451,6 +464,7 @@ class Traversal:
             i += 1
         if st.claims or st.attn or st.moe:
             yield from self._flush(st)                                            # trailing instances without a sampling event (padded wrapper)
+        yield from self._promote()                                                # [int-20] deferred: every consumer of every row has been walked
         self._finish()
         self._done = True
 
@@ -480,6 +494,20 @@ class Traversal:
                     continue
                 if 0 <= j < i and self._mod_of[j] != me:
                     self._crosses[j] = 1
+                    first = self._xfirst[j]                                        # [int-20] who reads it, Program order (the promoted `consumers`)
+                    if first < 0:
+                        self._xfirst[j] = me
+                    elif first != me:
+                        more = self._xmore.setdefault(j, [])
+                        if me not in more:
+                            more.append(me)
+
+    def _consumers_of(self, i: int) -> list[str]:
+        """The module paths reading row i's output from outside its module, Program order (empty when it does not cross)."""
+        first = self._xfirst[i]
+        if first < 0:
+            return []
+        return [self._mod_names[first]] + [self._mod_names[m] for m in self._xmore.get(i, ())]
 
     def _weights(self) -> Iterator[Identity]:
         wparam = next((t for n, t in self.p.params if n == "weights"), None)
@@ -593,6 +621,7 @@ class Traversal:
                     self._classify(c, CLASS_UNMODELLED)
                 else:
                     self._classify(c, CLASS_INTERIOR)
+                    self._interior.append((step, mod, fam, c.spec, stx, list(c.idx)))   # [int-20] the pre-bias Gemm: interior unless it crosses
                 continue
             try:
                 members = members_for(fam, stx, mod, hint, tp=(dict(tp_ctx, collective=coll) if self.world > 1 else None),
@@ -602,12 +631,13 @@ class Traversal:
                 self._classify(c, CLASS_UNMODELLED)
                 continue
             if not members:
-                if fam.startswith(_AGGREGATE_PREFIXES) or (fam.startswith("SiluMul") and mod.rsplit(".", 1)[-1] == MOE_LEAF):
+                if is_aggregate_family(fam, mod):
                     self._classify(c, CLASS_AGGREGATE)
-                elif fam.startswith(_STRUCTURE_PREFIXES):
+                elif is_structure_family(fam):
                     self._classify(c, CLASS_STRUCTURE)
                 else:
                     self._classify(c, CLASS_INTERIOR)
+                    self._interior.append((step, mod, fam, c.spec, stx, list(c.idx)))   # [int-20] promotable: decided after the walk
                 continue
             if "." not in mod:
                 # [MAN-08] an identity-bearing row under an UNROOTED module path: incomplete, named with the path
@@ -686,6 +716,8 @@ class Traversal:
         for m, (canon, k) in rope_alias.items():
             if m != canon:
                 self.aliases[collector_path(m, prefix)] = [collector_path(canon, prefix), k]
+        self._named_by_step[step] = set(groups)                                      # [int-20] a promoted member never collides silently
+        self._aliased_by_step[step] = set(rope_alias)
         for (mod, member), g in sorted(groups.items(), key=lambda kv: (_layer_of(kv[0][0]), kv[0])):
             op = collector_path(mod, prefix)
             if mod in rope_alias:
@@ -737,8 +769,27 @@ class Traversal:
             yield self._mk(self.hidden_family, step, 0, f"{tap}/L{layer}", gname, 0, mat_total_words(HB, M, NB, BN, a["D"]), dtype="u32",
                            geometry=geometry, attention_module=collector_path(mod, prefix))
 
+    def _promote(self) -> Iterator[Identity]:
+        """[R19 int-20] the deferred promotion pass (`RM.PROMOTION_RULE`), after the walk: every interior claim whose output the Program's
+        dataflow reads from another module is a required member `(module, PROMOTED_MEMBER)` of its step -- class INTERIOR_CROSSING in the
+        audit, `consumers` on the row.  Not armed without operand runs; a claim the pass cannot name is a named fault (`_finish`)."""
+        if not self._args_seen or not self._interior:
+            return
+        res = promote_interior_crossings(self._interior, self._crosses.__getitem__, self._consumers_of,
+                                         named=self._named_by_step.get, aliased=self._aliased_by_step.get, prefix=self.prefix or "")
+        self.promotion = res
+        for i in res["promoted_rows"]:
+            self._class_of[i] = CLASS_INTERIOR_CROSSING
+        for d in res["identities"]:
+            yield self._mk("instance_outputs", d["step"], 0, d["op_path"], d["member"], 0, d["rows"] * d["width"], **promoted_annotations(d))
+
     def _finish(self) -> None:
         q = self.query_info
+        promo = self.promotion or {}
+        if promo.get("identities") or promo.get("faults"):
+            q["promotion"] = promotion_header(promo)
+        for text, n in (promo.get("faults") or {}).items():
+            self._um(text, n)
         if self.guard_rows and not self.lifted_rows:
             self._um("guard rows (LStepLive/LSelect/LBot/LIsEOS/LEmitNext) in a Program with no Lifted[..] row: the step guard / controller is only meaningful as part of a bot-lift", self.guard_rows)
         if self.lifted_rows:                                                     # (an un-lifted Program's query header stays the inventory's)
@@ -781,7 +832,10 @@ class Traversal:
         # rows' outputs the Program reads across a module boundary while the vocabulary names no member for it is a candidate omission
         # of the vocabulary -- the population is NOT declared complete on it (the manifest is complete:false and coverage refuses), the
         # family is named.  Reported from the dataflow, so a vocabulary rule that says "interior" cannot silence it.
+        named_faults = (self.promotion or {}).get("named_families") or set()   # [int-20] already named, per module, by the promotion pass
         for fam, n in sorted(self.boundary_audit["unnamed_crossing"].items()):
+            if fam in named_faults:
+                continue
             self._um(f"{fam}: {n} row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)", n)
         for name, info in sorted(self.boundary_audit["unnamed_input"].items()):
             readers = ", ".join(f"{f} x{c}" for f, c in sorted(info["readers"].items()))
@@ -825,6 +879,7 @@ class Traversal:
             v[1] += self._crosses[i]
         families: dict[str, dict[str, Any]] = {}
         unnamed_crossing: dict[str, int] = {}
+        promoted: dict[str, int] = {}
         named_interior: dict[str, int] | None = {} if (self._args_seen and self._unwired == 0) else None
         for (fam, cls), (rows, crossing) in sorted(per.items()):
             families.setdefault(fam, {})[CLASS_NAMES[cls]] = {"rows": rows, "crossing": crossing}
@@ -832,6 +887,8 @@ class Traversal:
                 continue
             if cls == CLASS_INTERIOR and crossing:
                 unnamed_crossing[fam] = unnamed_crossing.get(fam, 0) + crossing        # an observed crossing is a fact whatever else is unwired
+            if cls == CLASS_INTERIOR_CROSSING:
+                promoted[fam] = promoted.get(fam, 0) + rows                            # [int-20] named by the promotion pass (every row of it crosses)
             # CLASS_GUARD rows cross by design (tok_in feeds the step): the value is named at the lifted Embedding row (`input_token_ids`)
             if named_interior is not None and cls == CLASS_BOUNDARY and crossing == 0 and rows > 0:
                 named_interior[fam] = named_interior.get(fam, 0) + rows                # needs EVERY edge: a missing edge would fake an interior
@@ -865,8 +922,10 @@ class Traversal:
                                  "rank's identity, never a new one; `required_manifest.merge_manifests` binds every collective output to its peer "
                                  "partial identity for identity (`tp_peer_binding`), a missing one is named and the merge is not complete")}
                        if (self.world > 1 and self._args_seen) else None)
+        # [int-20] `promoted` is on the audit only when the pass named something: a Program without a crossing keeps its manifest byte for byte
         return {"available": self._args_seen, "fully_wired": self._args_seen and self._unwired == 0, "unwired_rows": self._unwired, "rows": n,
-                "boundary": self.q.boundary, "families": families, "unnamed_crossing": unnamed_crossing, "named_interior": named_interior,
+                "boundary": self.q.boundary, "families": families, "unnamed_crossing": unnamed_crossing, **({"promoted": promoted} if promoted else {}),
+                "named_interior": named_interior,
                 "inputs_read": {(str(self.p.params[j][0]) if 0 <= j < len(self.p.params or []) else f"param[{j}]"): sum(v.values()) for j, v in sorted(self._param_readers.items())},
                 "named_input": named_input, "unnamed_input": unnamed_input, "peer_inputs": peer_inputs,
                 "hidden_bn_disagreement": {k: dict(v) for k, v in sorted(self.hidden_bn_disagreement.items())},
@@ -1128,6 +1187,9 @@ def reference_required_values(program: ProgramView | dict[str, Any], query: Quer
         unmodelled["guard rows (LStepLive/LSelect/LBot) in a Program with no Lifted[..] row: the step guard is only meaningful as part of a bot-lift"] += guard_n
     segs = RM.segment_steps(rows)
     aliases: dict[str, list] = {}
+    interior_claims: list[tuple] = []                                            # [int-20] (step, module, family, spec, statics, [row]) per interior row
+    named_by_step: dict[int, set[tuple[str, str]]] = {}
+    aliased_by_step: dict[int, set[str]] = {}
     for step, (lo_i, hi_i) in enumerate(segs):
         seg = rows[lo_i: hi_i + 1]
         parsed = [(r, spec_family(r["spec"]), *split_name(r.get("name") or ""), spec_statics(r["spec"])) for r in seg]
@@ -1144,7 +1206,7 @@ def reference_required_values(program: ProgramView | dict[str, Any], query: Quer
         cands: list[dict[str, Any]] = []
         fam_pos: Counter = Counter()
         softcap: dict[str, str] = {}
-        for r, fam, mod, node, hint, rownum, stx in parsed:
+        for k_row, (r, fam, mod, node, hint, rownum, stx) in enumerate(parsed):
             op = collector_path(mod, prefix)
             if is_guard(fam):
                 continue
@@ -1160,6 +1222,8 @@ def reference_required_values(program: ProgramView | dict[str, Any], query: Quer
             if RM.is_epilogue_interior(fam, mod, epi) and not coll_of.get(mod):
                 if int(stx.get("N", 0)) != epi[mod]:
                     unmodelled[f"{fam} under {op}: Gemm width {int(stx.get('N', 0))} != its BiasAdd epilogue width {epi[mod]} (D2)"] += 1
+                else:
+                    interior_claims.append((step, mod, fam, r["spec"], stx, [lo_i + k_row]))   # [int-20] the pre-bias Gemm: interior unless it crosses
                 continue
             ordinal = operand = None
             why = ""
@@ -1173,7 +1237,11 @@ def reference_required_values(program: ProgramView | dict[str, Any], query: Quer
             except UnmodelledFamily as e:
                 unmodelled[f"{e.family} under {op}"] += 1
                 continue
-            if members and "." not in mod:
+            if not members:
+                if not is_aggregate_family(fam, mod) and not is_structure_family(fam):
+                    interior_claims.append((step, mod, fam, r["spec"], stx, [lo_i + k_row]))   # [int-20] interior by the vocabulary: promotable
+                continue
+            if "." not in mod:
                 unmodelled[f"{fam} under unrooted module path {mod!r} (Program names {rows_under[mod]} rows of this step under a bare leaf)"] += 1
                 continue
             for mem in members:
@@ -1235,6 +1303,8 @@ def reference_required_values(program: ProgramView | dict[str, Any], query: Quer
         for m, (canon, k) in rope_alias.items():
             if m != canon:
                 aliases[collector_path(m, prefix)] = [collector_path(canon, prefix), k]
+        named_by_step[step] = set(groups)
+        aliased_by_step[step] = set(rope_alias)
         for (mod, member), g in groups.items():
             op = collector_path(mod, prefix)
             if mod in rope_alias:
@@ -1273,8 +1343,16 @@ def reference_required_values(program: ProgramView | dict[str, Any], query: Quer
             tap = "fa3.m1" if hidden_family.startswith("fa3") else "fa2.m1"
             out.append(mk(hidden_family, step, 0, f"{tap}/L{layer}", gname, 0, mat_total_words(HB, M, NB, BN, a["D"]), dtype="u32",
                           geometry={"HB": HB, "M": M, "NB": NB, "BN": BN, "D": a["D"], "seqlen_k": a["T_max"], "rows": a["rows"]}, attention_module=collector_path(mod, prefix)))
+    # [R19 int-20] the promotion pass over the whole Program's dataflow (a consumer may sit in a later step than its producer)
+    crosses, consumers = RM.program_crossings(rows)
+    promo = promote_interior_crossings(interior_claims, crosses.__getitem__, lambda i: consumers.get(i, ()), named=named_by_step.get, aliased=aliased_by_step.get, prefix=prefix)
+    for text, n in promo["faults"].items():
+        unmodelled[text] += n
+    for d in promo["identities"]:
+        out.append(mk("instance_outputs", d["step"], 0, d["op_path"], d["member"], 0, d["rows"] * d["width"], **promoted_annotations(d)))
     out.sort(key=lambda x: RM._row_key(x.row()))
-    return out, {"unmodelled": dict(unmodelled), "aliases": aliases, "steps": len(segs), "complete": not unmodelled}
+    return out, {"unmodelled": dict(unmodelled), "aliases": aliases, "steps": len(segs), "complete": not unmodelled,
+                 "promotion": promotion_header(promo) if (promo["identities"] or promo["faults"]) else None}
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -1439,11 +1517,18 @@ def guard_summary(boundary_audit: dict[str, Any] | None, *, engine: str) -> dict
     per_req = [ba for rid, ba in parts.items() if isinstance(ba, dict) and rid != "*"]
     available = bool(per_req) and all(bool(ba.get("available")) for ba in per_req)
     flags = audit_flags(boundary_audit)
-    return {"engine": engine, "armed": available, "available": available, "fully_wired": bool(flags["fully_wired"]),
-            "requests_audited": len(per_req),
-            "flags": {k: sum(len(v) for v in flags[k].values()) for k in ("unnamed_crossing", "unnamed_input", "hidden_bn_disagreement")},
-            "named_input": named_input_summary({n: fam for ba in per_req for n, fam in (ba.get("named_input") or {}).items()}),
-            "rule": GUARD_RULE}
+    out = {"engine": engine, "armed": available, "available": available, "fully_wired": bool(flags["fully_wired"]),
+           "requests_audited": len(per_req),
+           "flags": {k: sum(len(v) for v in flags[k].values()) for k in ("unnamed_crossing", "unnamed_input", "hidden_bn_disagreement")},
+           "named_input": named_input_summary({n: fam for ba in per_req for n, fam in (ba.get("named_input") or {}).items()}),
+           "rule": GUARD_RULE}
+    promoted: dict[str, int] = {}                                                # [int-20] rows the promotion pass named (per family, all requests)
+    for ba in per_req:
+        for fam, n in (ba.get("promoted") or {}).items():
+            promoted[fam] = promoted.get(fam, 0) + int(n)
+    if promoted:                                                                 # (absent = nothing promoted: a manifest without a crossing is unchanged)
+        out["promoted"] = promoted
+    return out
 
 
 _NUMBERED = re.compile(r"^(.*?)_(\d+)$")

@@ -360,6 +360,258 @@ class UnmodelledFamily(Exception):
         self.family, self.module = family, module
 
 
+# ---------------------------------------------------------------------------------------------------------------------------------
+# boundary promotion [R19 int-20, F-r19-int-20]: an interior row whose output crosses a module boundary is a required member
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+#: families whose values are bound through a DECLARED aggregate family rather than as their own module output: the fused-MoE block
+#: stream planes (`moe/L<k>/<plane>`, MOE-03) cover the router / expert GEMM / act / sum rows of `mlp.experts` (the SiluMul under the
+#: MoE leaf too).  Never promoted: the crossing is the aggregate's.
+_AGGREGATE_PREFIXES = ("MoeExpertGemm", "MoeRouterTopK", "MoeSum")
+#: structure rows (the value is inside the spec string, hence inside the Program digest): no identity, never promoted
+_STRUCTURE_PREFIXES = ("Const",)
+#: the ONE member a promoted row's output is named as -- a fixed convention: the row's Definition returns one array, the module vocabulary's
+#: word for a single returned tensor is `out` (Gemm under a LogitsProcessor, RMSNormTriton, SiluMul, Attention, Embedding); a promoted member
+#: collides with a vocabulary member of the same module only by name, and the collision is refused (fail closed), never merged
+PROMOTED_MEMBER = "out"
+#: the boundary class of a promoted row: the audit table's column (`required_values.CLASS_INTERIOR_CROSSING`) and the manifest row's `boundary_class`
+INTERIOR_CROSSING = "interior_crossing"
+#: the manifest dtype of a promoted member from its Definition's output word width -- the two widths this registry's composites return as
+#: their bf16 / f32 arrays (`_weights()` labels the weight fields by the same map).  Anything else (a lifted word `Value<17>` / `Value<33>`,
+#: an i64 `Value<64>`, a bit) is NOT derivable: the manifest never guesses a dtype (fail closed by name, `UNDERIVABLE`).
+PROMOTED_DTYPES = {16: "bf16", 32: "f32"}
+#: the named fault of a promoted family whose member the registry cannot size / type; the row stays an unnamed crossing (incomplete)
+UNDERIVABLE = "unnamed crossing: promoted member has no derivable signature"
+PROMOTION_RULE = ("an INTERIOR-classified row (the vocabulary `members_for` names no member for its family; not an aggregate, not structure) whose "
+                  "output the Program's own dataflow (operand runs `args`) reads from ANOTHER module is PROMOTED to a required member of its module: "
+                  f"(module, `{PROMOTED_MEMBER}`) per step, family instance_outputs, `rows` = the crossing rows, width / dtype from the registry "
+                  "Definition's output signature (the same registry the Program was built from), `consumers` = the reading modules in Program order "
+                  f"(the collector observes the value at a consumer's input: `<consumer>/in`), boundary class `{INTERIOR_CROSSING}`.  ADDITIVE: a row the "
+                  "vocabulary names stays named whether or not it crosses (TP-04 partials, MoE aggregates, the logits Gemm, a non-crossing narrowing); "
+                  "a Program without operand runs promotes nothing (the audit is not armed).  Fail closed by name: a member the registry cannot size "
+                  f"({UNDERIVABLE}), two promoted families on one member, a promoted member colliding with a vocabulary member, a partially crossing "
+                  "group, an unrooted producer path whose consumers are not under it (MAN-08)")
+#: the integration's registry modules whose composites a Program row can name (imported once, on the first promotion; verity_vllm/lifting/record.py
+#: imports the same set to populate the registry); an import error is recorded and REPORTED with the fault, never swallowed as 'not registered'
+_REGISTRY_MODULES = ("b1", "dense", "fp8", "moe", "sampling", "b1_tp2", "moe_pad")
+_registry_cache: dict[str, Any] = {}
+
+
+def is_aggregate_family(family: str, module: str) -> bool:
+    return family.startswith(_AGGREGATE_PREFIXES) or (family.startswith("SiluMul") and module.rsplit(".", 1)[-1] == MOE_LEAF)
+
+
+def is_structure_family(family: str) -> bool:
+    return family.startswith(_STRUCTURE_PREFIXES)
+
+
+def _registry() -> tuple[Any, list[str]]:
+    """(verity.ir REGISTRY with the integration's composite modules imported, [import errors]) -- once per process."""
+    if "registry" not in _registry_cache:
+        errors: list[str] = []
+        try:
+            import importlib
+
+            from verity.ir.defs import REGISTRY
+            for m in _REGISTRY_MODULES:
+                try:
+                    importlib.import_module(f"verity_vllm.registry.{m}")
+                except Exception as e:  # noqa: BLE001  (named beside the fault; a missing optional module is not a guess about the family)
+                    errors.append(f"verity_vllm.registry.{m}: {type(e).__name__}: {e}")
+            _registry_cache["registry"] = REGISTRY
+        except Exception as e:  # noqa: BLE001
+            _registry_cache["registry"] = None
+            errors.append(f"verity.ir.defs: {type(e).__name__}: {e}")
+        _registry_cache["errors"] = errors
+    return _registry_cache["registry"], _registry_cache["errors"]
+
+
+def promoted_signature(spec: str) -> tuple[int | None, str | None, str | None]:
+    """(width per row, dtype, None) of the single output member a Program row of `spec` produces, from the registry Definition's output
+    signature bound to the row's statics -- or (None, None, why) when it is not derivable: the family is not a registered Definition, the
+    statics do not bind, the output is a tuple / record (no single `out`), or its word width has no manifest dtype (`PROMOTED_DTYPES`).
+    Never a guess: the caller fails closed on `why` (`UNDERIVABLE`)."""
+    base = spec_family(spec)
+    statics = spec_statics(spec)
+    reg, errors = _registry()
+    if reg is None:
+        return None, None, f"{base}: the registry is not importable ({'; '.join(errors)})"
+    d = reg.defs.get(base)
+    if d is None:
+        try:
+            from verity.ir.codec import lookup_primitive
+            d = lookup_primitive(reg, base)
+        except Exception:  # noqa: BLE001
+            d = None
+    if d is None:
+        return None, None, f"{base} is not a registered Definition" + (f" (registry import errors: {'; '.join(errors)})" if errors else "")
+    try:
+        if hasattr(d, "bind"):
+            sp = d.bind(**statics)
+            if not sp.complete:
+                missing = [k for k in d.statics if k not in statics]
+                return None, None, f"{base}: statics {missing} are not in the row's spec {spec!r}"
+            _params, ret = sp.signature()
+        else:
+            ret = d.ret
+    except Exception as e:  # noqa: BLE001
+        return None, None, f"{base}: output signature not evaluable on statics {statics}: {type(e).__name__}: {e}"
+    from verity.ir.types import Array, Value
+    n, t = 1, ret
+    while isinstance(t, Array):
+        n *= int(t.n)
+        t = t.elem
+    if not isinstance(t, Value):
+        return None, None, f"{base}: output type {ret!r} is not one array of one word width (a tuple / record output has no single `{PROMOTED_MEMBER}` member)"
+    dtype = PROMOTED_DTYPES.get(int(t.w))
+    if dtype is None:
+        return None, None, f"{base}: output word width {int(t.w)} has no manifest dtype ({PROMOTED_DTYPES}; lifted / i64 / bit words are not derivable)"
+    if n <= 0:
+        return None, None, f"{base}: output type {ret!r} has no elements (a zero-width member is never an identity, MAN-02)"
+    return n, dtype, None
+
+
+def promote_interior_crossings(interior: list[tuple], crosses: Any, consumers: Any, *, named: Any, aliased: Any, prefix: str) -> dict[str, Any]:
+    """The promotion pass, shared by the inventory, the traversal and the reference engine (`PROMOTION_RULE`).
+
+    `interior`: [(step, module, family, spec, statics, row indices)] -- the claims the vocabulary called interior (`members_for` -> [] and
+    neither an aggregate nor structure), one per (step, module, family, hint, spec) claim group, rows in Program order.
+    `crosses(i)`: truthy iff row i's output is read by a row of ANOTHER module.  `consumers(i)`: the Program module paths of those readers,
+    Program order.  `named(step)`: the set of (module, member) the vocabulary claimed in that step.  `aliased(step)`: the modules the step's
+    alias table maps (a shared module: refused, never silently re-addressed).  `prefix`: the export wrapper prefix (`collector_path`).
+
+    Returns {"identities": [row dicts: step, module, op_path, member, rows, width, dtype, spec, consumers, program_consumers],
+             "faults": {text: rows}, "promoted_rows": [i], "named_families": {family}, "families": {family: summary}}."""
+    by_group: dict[tuple[int, str], list[tuple]] = {}
+    for step, mod, fam, spec, statics, idx in interior:
+        by_group.setdefault((int(step), mod), []).append((fam, spec, statics, idx))
+    identities: list[dict[str, Any]] = []
+    faults: dict[str, int] = {}
+    promoted_rows: list[int] = []
+    named_families: set[str] = set()
+    families: dict[str, dict[str, Any]] = {}
+
+    def fault(text: str, n: int, fams: Iterable[str]) -> None:
+        faults[text] = faults.get(text, 0) + n
+        named_families.update(fams)
+
+    for (step, mod), claims in sorted(by_group.items(), key=lambda kv: (kv[0][0], kv[0][1])):
+        op = collector_path(mod, prefix)
+        xfam: dict[str, dict[str, Any]] = {}                                     # family -> {rows, crossing, specs, idx}
+        for fam, spec, statics, idx in claims:
+            xs = [int(i) for i in idx if crosses(int(i))]
+            f = xfam.setdefault(fam, {"rows": 0, "crossing": 0, "specs": {}, "idx": []})
+            f["rows"] += len(idx)
+            f["crossing"] += len(xs)
+            if xs:
+                f["specs"][spec] = f["specs"].get(spec, 0) + len(xs)
+                f["idx"].extend(xs)
+        crossing = {fam: f for fam, f in xfam.items() if f["crossing"]}
+        if not crossing:
+            continue                                                             # every interior row of this module stays inside it
+        n_cross = sum(f["crossing"] for f in crossing.values())
+        head = f"{'/'.join(sorted(crossing))} under {op}: {n_cross} row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it"
+        if len(crossing) > 1:
+            fault(f"{head} (unnamed crossing: {len(crossing)} promoted families {sorted(crossing)} claim one member `{PROMOTED_MEMBER}`)", n_cross, crossing)
+            continue
+        fam, f = next(iter(crossing.items()))
+        if f["crossing"] != f["rows"]:
+            fault(f"{head} (unnamed crossing: {f['crossing']} of {f['rows']} rows of the group cross -- a partially crossing group is not one member)", f["crossing"], [fam])
+            continue
+        sig: set[tuple[int, str]] = set()
+        why = None
+        for spec in sorted(f["specs"]):
+            w, dt, why = promoted_signature(spec)
+            if why:
+                break
+            sig.add((int(w), str(dt)))
+        if why:
+            fault(f"{head} ({UNDERIVABLE}: {why})", f["crossing"], [fam])
+            continue
+        if len(sig) != 1:
+            fault(f"{head} ({UNDERIVABLE}: the group's specs {sorted(f['specs'])} have unequal signatures {sorted(sig)})", f["crossing"], [fam])
+            continue
+        (width, dtype), = sig
+        rows_x = sorted(f["idx"])
+        program_consumers: list[str] = []
+        for i in rows_x:
+            for c in consumers(i):
+                if c not in program_consumers:
+                    program_consumers.append(c)
+        if "." not in mod:
+            # [MAN-08, promoted form] an UNROOTED producer path is a bare leaf that lost its parent (`gate`) -- unless the dataflow shows it is
+            # the ANCESTOR of every module reading it (a root-level module whose forward body produced the value): the consumers' own paths
+            # decide, never the path's name
+            if not program_consumers or not all(c.startswith(mod + ".") for c in program_consumers):
+                fault(f"{head} (unnamed crossing: unrooted module path {mod!r} is not the parent of its consumers {program_consumers[:3]}; MAN-08)", f["crossing"], [fam])
+                continue
+        if (mod, PROMOTED_MEMBER) in (named(step) or ()):
+            fault(f"{head} (unnamed crossing: the promoted member `{PROMOTED_MEMBER}` collides with the module's vocabulary member `{PROMOTED_MEMBER}` at step {step})", f["crossing"], [fam])
+            continue
+        if mod in (aliased(step) or ()):
+            fault(f"{head} (unnamed crossing: the module is an alias site at step {step}; a promoted member of a shared module is not addressed)", f["crossing"], [fam])
+            continue
+        identities.append({"step": step, "module": mod, "op_path": op, "member": PROMOTED_MEMBER, "rows": len(rows_x), "width": width, "dtype": dtype,
+                           "spec": fam, "consumers": [collector_path(c, prefix) for c in program_consumers], "program_consumers": program_consumers})
+        promoted_rows.extend(rows_x)
+        s = families.setdefault(fam, {"rows": 0, "identities": 0, "steps": 0, "width": width, "dtype": dtype, "consumers": []})
+        s["rows"] += len(rows_x)
+        s["identities"] += 1
+        s["steps"] += 1
+        for c in program_consumers:
+            cc = collector_path(c, prefix)
+            if cc not in s["consumers"]:
+                s["consumers"].append(cc)
+    return {"identities": identities, "faults": faults, "promoted_rows": promoted_rows, "named_families": named_families, "families": families}
+
+
+def program_crossings(rows: list[dict]) -> tuple[bytearray, dict[int, list[str]]]:
+    """The in-memory dataflow pass of the inventory / reference engines (the traversal's `_audit_args`, streamed): per row i, `crosses[i]`
+    = its output is read by a row of another module; `consumers[i]` = those readers' module paths in Program order.  Operand runs are
+    `args = [[["n", producer, lo, hi] | ["p", param, lo, hi], ..], ..]` (one list per operand)."""
+    n = len(rows)
+    mod_of = [split_name(r.get("name") or "")[0] for r in rows]
+    crosses = bytearray(n)
+    consumers: dict[int, list[str]] = {}
+    for i, r in enumerate(rows):
+        args = r.get("args")
+        if not args:
+            continue
+        me = mod_of[i]
+        for operand in args:
+            for ref in operand:
+                try:
+                    if ref[0] != "n":
+                        continue
+                    j = int(ref[1])
+                except (IndexError, TypeError, ValueError):
+                    continue
+                if 0 <= j < i and mod_of[j] != me:
+                    crosses[j] = 1
+                    c = consumers.setdefault(j, [])
+                    if me not in c:
+                        c.append(me)
+    return crosses, consumers
+
+
+def promoted_annotations(d: dict[str, Any]) -> dict[str, Any]:
+    """The ADDITIVE manifest-row fields of a promoted identity (both engines emit exactly these)."""
+    return {"rows": d["rows"], "width": d["width"], "dtype": d["dtype"], "spec": d["spec"], "promoted": True, "boundary_class": INTERIOR_CROSSING,
+            "consumers": list(d["consumers"])}
+
+
+def promotion_header(result: dict[str, Any] | None) -> dict[str, Any]:
+    """The query header's `promotion` block (identical on every engine): the rule, the member, what was promoted."""
+    fams = (result or {}).get("families") or {}
+    faults = (result or {}).get("faults") or {}
+    return {"rule": PROMOTION_RULE, "member": PROMOTED_MEMBER, "boundary_class": INTERIOR_CROSSING,
+            "families": {k: {kk: vv for kk, vv in v.items()} for k, v in sorted(fams.items())},
+            "identities": sum(int(v["identities"]) for v in fams.values()), "rows": sum(int(v["rows"]) for v in fams.values()),
+            "faults": {k: int(v) for k, v in sorted(faults.items())},
+            "audit": (f"a promoted row is class `{INTERIOR_CROSSING}` in boundary_audit.families.<family> and counted under boundary_audit.promoted "
+                      "(traversal engine); a faulted one stays `interior` with its crossings and is named under `unmodelled` (complete: false)")}
+
+
 #: the padded fixed-slot MoE block Definitions (registry/moe_pad.py: the unlifted twin, what the frontend emits, and their hand lifts)
 PADDED_MOE_FAMILIES = ("MoeFfnFixedL", "MoeFfnFixed", "LMoeFfnL", "LMoeFfn")
 MOE_LEAF = "experts"                    # vLLM FusedMoE module leaf (`model.layers.k.mlp.experts`); its interior is the MoE block stream
@@ -834,6 +1086,11 @@ def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = No
     moe_layers_seen: set[int] = set()
     stochastic_selectors: set[str] = set()
     splits_param = has_splits_param(inst.get("params"))                          # [R16 REQ-03] the derived-S request-owned `splits` Input
+    # [R19 int-20 promotion] the claims the vocabulary calls interior, per step, and the vocabulary's own claims per step -- the promotion
+    # pass after the walk (`promote_interior_crossings`) reads the Program's dataflow for the ones whose output leaves their module
+    interior_claims: list[tuple] = []
+    named_by_step: dict[int, set[tuple[str, str]]] = {}
+    aliased_by_step: dict[int, set[str]] = {}
 
     def add(family: str, step: int | str, invocation: int, op_path: str, member: str, lo: int, hi: int | None, **extra):
         row = {"family": family, "program_digest": pdig, "request_id": request_id, "step": step, "invocation": invocation,
@@ -879,7 +1136,8 @@ def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = No
                 elif f0.startswith("AllGather2"):
                     coll_of[split_name(r.get("name") or "")[0]] = "all_gather"
         epi_mods = epilogue_modules(seg)                                          # [MAN-07] biased linears: BiasAdd produces member 0
-        for r in seg:
+        for k_row, r in enumerate(seg):
+            i_row = lo_i + k_row                                                 # the row's Program index (the operand runs' `["n", i, ..]`)
             fam = spec_family(r["spec"])
             mod, node, hint, _row = split_name(r.get("name") or "")
             st = spec_statics(r["spec"])
@@ -887,6 +1145,8 @@ def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = No
                 if int(st.get("N", 0)) != epi_mods[mod]:                         # rev-cb D2: the epilogue must return the Gemm's width
                     k = f"{fam} under {collector_path(mod, prefix)}: Gemm width {int(st.get('N', 0))} != its BiasAdd epilogue width {epi_mods[mod]} (D2)"
                     unmodelled[k] = unmodelled.get(k, 0) + 1
+                else:
+                    interior_claims.append((step, mod, fam, r["spec"], st, [i_row]))   # [int-20] interior by the vocabulary: promotable if it crosses
                 continue                                                         # the Gemm's pre-bias output: interior, never an identity
             if is_token_select(fam):
                 add("sampled_token_ids", step, 0, "runner.sampler", "sampled_token_ids", 0, n_seq, dtype="i64", spec=fam)
@@ -914,6 +1174,12 @@ def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = No
                 members = members_for(fam, st, mod, hint, tp=(dict(tp_ctx_base, collective=coll_of.get(mod)) if prog_world > 1 else None))
             except UnmodelledFamily as e:
                 unmodelled[f"{e.family} under {collector_path(mod, prefix)}"] = unmodelled.get(f"{e.family} under {collector_path(mod, prefix)}", 0) + 1
+                continue
+            if not members:
+                # [R19 int-20] the vocabulary names no member: interior by rule -- unless the Program's dataflow reads the row's output from
+                # another module (the promotion pass after the walk); aggregates and structure never promote (`PROMOTION_RULE`)
+                if not is_aggregate_family(fam, mod) and not is_structure_family(fam):
+                    interior_claims.append((step, mod, fam, r["spec"], st, [i_row]))
                 continue
             if members and "." not in mod:
                 # [MAN-08, moe M-0583 GATE-PATH] an identity-bearing row whose module path is UNROOTED (a bare leaf such as `gate`: the
@@ -1002,6 +1268,8 @@ def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = No
         for m, (canon, k) in rope_alias.items():
             if m != canon:
                 aliases[collector_path(m, prefix)] = [collector_path(canon, prefix), k]
+        named_by_step[step] = set(groups)                                        # [int-20] what the vocabulary claims here (a promoted member never collides silently)
+        aliased_by_step[step] = set(rope_alias)
         for (mod, member), g in sorted(groups.items(), key=lambda kv: (_layer_of(kv[0][0]), kv[0])):
             op = collector_path(mod, prefix)
             if mod in rope_alias:
@@ -1041,6 +1309,17 @@ def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = No
             tap = "fa3.m1" if hidden_family.startswith("fa3") else "fa2.m1"
             add(hidden_family, step, 0, f"{tap}/L{layer}", gname, 0, mat_total_words(HB, M, NB, BN, a["D"]), dtype="u32",
                 geometry={"HB": HB, "M": M, "NB": NB, "BN": BN, "D": a["D"], "seqlen_k": a["T_max"], "rows": a["rows"]}, attention_module=collector_path(mod, prefix))
+
+    # [R19 int-20] the promotion pass: the Program's dataflow over ALL rows (a consumer may read an earlier step's producer), then every
+    # interior claim whose output another module reads becomes a required member -- the same pass the traversal runs (cross-check: row for row)
+    crosses, consumers = program_crossings(rows)
+    promo = promote_interior_crossings(interior_claims, crosses.__getitem__, lambda i: consumers.get(i, ()), named=named_by_step.get, aliased=aliased_by_step.get, prefix=prefix)
+    for text, n in promo["faults"].items():
+        unmodelled[text] = unmodelled.get(text, 0) + n
+    for d in promo["identities"]:
+        add("instance_outputs", d["step"], 0, d["op_path"], d["member"], 0, d["rows"] * d["width"], **promoted_annotations(d))
+    if promo["identities"] or promo["faults"]:
+        q["promotion"] = promotion_header(promo)
 
     if stochastic_selectors:
         q["required_families"].append("sampler_seed")
