@@ -169,6 +169,44 @@ def cmd_unit_negatives(args) -> int:
     return 0 if n_rej == len(negs) else 1
 
 
+def cmd_epilogue_negatives(args) -> int:
+    """From an honest ``DIR`` (first ``--vus`` VUs): the honest instance must be accepted; then, for every base column
+    of the epilogue circuit (state, flags, the word, every hint), the column of the last VU's epilogue row bumped by
+    +1 and the derived columns recomputed must be rejected.  Exercises the limb-form Pack/cast (``gpu/v2/epilogue_limbs``)
+    inside the GPU prover -- a bumped hint pair would be exactly the BabyBear wrap attack on the word form."""
+    from verity_numerical.gkr_export import v2 as V2
+
+    from .v2 import export as X
+
+    dev = _dev(args.device)
+    root = Path(args.dir)
+    pcs = not args.clear
+    inst = load_instance(root, dev, args.vus)
+    proof, _ = prover.prove(inst, pcs)
+    prover.verify(inst, proof, pcs)
+    print("honest accepted (control)", flush=True)
+    ectx, _paths = X.API.build_epilogue()
+    seg = inst.segs[1]
+    ecirc = seg.circ
+    nbase = sum(1 for d in ectx.derived if d is None)
+    honest_rows = seg.cols.cpu()
+    results = {}
+    for col in range(1, nbase):
+        name = ectx.cols[col]
+        base = [int(v) for v in honest_rows[-1][:nbase]]
+        base[col] = (base[col] + 1) % P
+        row = V2.derive(ectx, base + [None] * (len(ectx.cols) - nbase))
+        rows = honest_rows.clone()
+        rows[-1] = torch.tensor([v % P for v in row], dtype=rows.dtype)
+        bad = prover.Instance([inst.segs[0], prover.Segment("epilogue", ecirc, seg.layers, rows.to(dev), seg.hash)], inst.chain)
+        results[name] = _prove_verify_expect_reject(bad, pcs, f"epilogue[{name}]+1")
+    n_rej = sum(1 for r in results.values() if r["rejected"])
+    print(f"{n_rej}/{len(results)} epilogue negatives rejected")
+    if args.json:
+        Path(args.json).write_text(json.dumps({"device": str(dev), "results": results, "rejected": n_rej, "total": len(results)}, indent=1) + "\n")
+    return 0 if n_rej == len(results) else 1
+
+
 def cmd_negatives(args) -> int:
     dev = _dev(args.device)
     root = Path(args.dir)
@@ -211,8 +249,15 @@ def main(argv=None) -> int:
     u.add_argument("--device", default="cuda")
     u.add_argument("--clear", action="store_true")
     u.add_argument("--json", default=None)
+    e = sub.add_parser("epilogue-negatives")
+    e.add_argument("dir")
+    e.add_argument("--vus", type=int, default=4)
+    e.add_argument("--device", default="cuda")
+    e.add_argument("--clear", action="store_true")
+    e.add_argument("--json", default=None)
     args = ap.parse_args(argv)
-    return {"prove": cmd_prove, "negatives": cmd_negatives, "unit-negatives": cmd_unit_negatives}[args.cmd](args)
+    return {"prove": cmd_prove, "negatives": cmd_negatives, "unit-negatives": cmd_unit_negatives,
+            "epilogue-negatives": cmd_epilogue_negatives}[args.cmd](args)
 
 
 if __name__ == "__main__":

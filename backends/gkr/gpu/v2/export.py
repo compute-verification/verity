@@ -30,21 +30,35 @@ import numpy as np
 from verity_numerical.checker import REAL, Params, Reject
 from verity_numerical.gkr_export import v2 as V2
 
+from . import epilogue_limbs as EL
+
 P = 2**31 - 2**27 + 1
 STEP = 16
 
 
 class BabyBearV2Api:
-    """The ``FieldApi`` surface ``gkr_export.v2`` needs (``synth_v2``, ``unit_negatives``), over BabyBear."""
+    """The ``FieldApi`` surface ``gkr_export.v2`` needs (``synth_v2``, ``unit_negatives``), over BabyBear.
+
+    ``epilogue="limbs"`` (the export default): the BabyBear-sound limb-form Pack + cast of ``epilogue_limbs``;
+    ``"word"``: a-v2's ``Pack.check`` -> ``Epilogue.check`` on the 32-bit word (SAT as stated on 31-bit fields;
+    kept for the synth / negatives generators of ``gkr_export.v2``, whose hint paths are the word form's)."""
 
     name = "babybear"
     variant = "v2"
     modulus = P
 
+    def __init__(self, epilogue: str = "limbs") -> None:
+        if epilogue not in ("limbs", "word"):
+            raise ValueError(epilogue)
+        self.epilogue = epilogue
+        self._word_epi = None
+
     def build_unit(self):
         return V2.build_unit_circuit_v2()
 
     def build_epilogue(self):
+        if self.epilogue == "limbs":
+            return EL.build_epilogue_circuit_limbs()
         return V2.build_epilogue_circuit_v2()
 
     def export_circuit(self, ctx, path: Path) -> None:
@@ -54,10 +68,23 @@ class BabyBearV2Api:
         V2.write_chain(V2.chain_spec(unit, epi), out / "chain.txt", P)
 
     def vu_rows(self, unit, epi, a, b, y16, accs=None, p: Params = REAL, cross_check: bool = True):
-        return V2.vu_rows_v2(unit, epi, a, b, y16, accs, p, cross_check, P)
+        if self.epilogue == "word":
+            return V2.vu_rows_v2(unit, epi, a, b, y16, accs, p, cross_check, P)
+        # unit rows + the a-v2 (word-form) epilogue row, with its cross-checks; then the limb-form epilogue row from
+        # the same last state / flags (columns 1..8 of the word-form row) and the claimed word
+        if self._word_epi is None:
+            self._word_epi = V2.build_epilogue_circuit_v2(p)
+        rows, erow = V2.vu_rows_v2(unit, self._word_epi, a, b, y16, accs, p, cross_check, P)
+        G = len(p.groups)
+        state = erow[1:5]
+        flags = [(erow[5 + 2 * g], erow[6 + 2 * g]) for g in range(G)]
+        if cross_check and EL.pack_word_limbs(p, state, flags)[2] != int(y16):
+            raise Reject("limb epilogue: cast differs from the claimed word")
+        return rows, EL.epilogue_witness_limbs(epi[0], epi[1], state, flags, int(y16), p)
 
 
-API = BabyBearV2Api()
+API = BabyBearV2Api("limbs")
+WORD_API = BabyBearV2Api("word")
 
 
 def write_rows(rows: list[list[int]], path: Path, ncols: int | None = None) -> None:
@@ -144,7 +171,7 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
             vid, ub, eb, err = _one(t)
             results[vid] = (ub, eb, err)
     extra = {"tier": tier, "range": [lo, hi], "steps": steps, "root": str(root), "cross_check": cross_check,
-             "root_manifest_sha256": I.manifest_sha256(root), "rejected_at_witness": {}, "written": []}
+             "epilogue": API.epilogue, "root_manifest_sha256": I.manifest_sha256(root), "rejected_at_witness": {}, "written": []}
     if tier.endswith("-neg"):
         for vid in range(lo, hi):
             ub, eb, err = results[vid]
@@ -179,9 +206,9 @@ def synth(out: Path, vus: int, steps: int, seed: int) -> dict:
     plus ``manifest.json`` and the chain negatives as ``neg/<name>/`` directories the runner can load."""
     import shutil
 
-    info = V2.synth_v2(out, vus, steps, seed, REAL, API)
-    uctx, _ = API.build_unit()
-    ectx, _ = API.build_epilogue()
+    info = V2.synth_v2(out, vus, steps, seed, REAL, WORD_API)
+    uctx, _ = WORD_API.build_unit()
+    ectx, _ = WORD_API.build_epilogue()
     negdir = out / "neg"
     negdir.mkdir(exist_ok=True)
     cases = {"public_wrong_word": ("units.bin", "epilogue.bin", "negatives/public_wrong_word.bin"),
@@ -195,16 +222,17 @@ def synth(out: Path, vus: int, steps: int, seed: int) -> dict:
         for src, dst in zip(files, ("units.bin", "epilogue.bin", "public.bin")):
             shutil.copy(out / src, d / dst)
     return manifest_for(uctx, ectx, out, tier="synth", vus=vus, steps=steps, seed=seed, y16=info["y16"],
-                        chain_negatives=sorted(cases))
+                        chain_negatives=sorted(cases), epilogue="word")
 
 
 def negatives(out: Path, seed: int) -> dict:
     """a-v2's transition-unit negatives (``DIR/negatives/<name>.bin``, one mutated unit row each, ``DIR/circuit.txt``)
     and the synth VU with its chain negatives (``DIR/vu/neg/<name>/``), over BabyBear."""
-    summary = V2.unit_negatives(out, seed, REAL, P, API)
-    uctx, _ = API.build_unit()
-    ectx, _ = API.build_epilogue()
-    manifest_for(uctx, ectx, out / "vu", tier="synth", vus=2, steps=3, seed=seed, chain_negatives=[d.name for d in sorted((out / "vu" / "neg").iterdir())])
+    summary = V2.unit_negatives(out, seed, REAL, P, WORD_API)
+    uctx, _ = WORD_API.build_unit()
+    ectx, _ = WORD_API.build_epilogue()
+    manifest_for(uctx, ectx, out / "vu", tier="synth", vus=2, steps=3, seed=seed, epilogue="word",
+                 chain_negatives=[d.name for d in sorted((out / "vu" / "neg").iterdir())])
     return summary
 
 
