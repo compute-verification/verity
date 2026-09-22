@@ -41,14 +41,16 @@ def pick(bench: dict, variant: str | None = None) -> dict:
     commit = _best([r for r in rs if r.get("bucket") == "commitment" and r.get("keep") is True], shape="v2")
     irs = _best([r for r in rs if r.get("bucket") == "irs_row_combination"], shape="v2")
     quad_ft = _best([r for r in rs if r.get("bucket") == "quadratic_test"], shape="v2")
-    quad_fc = _best([r for r in rs if r.get("bucket") == "quadratic_test_fc" and r["coset1_source"] == "re-encoded"])
-    quad_fc_store = _best([r for r in rs if r.get("bucket") == "quadratic_test_fc" and r["coset1_source"] == "store"])
+    # primary: coset 1 read from the cosets store the fused commitment keeps anyway (keep=True is the commitment row used;
+    # the openings read the same store); the re-encoding variant is kept in the detail table
+    quad_fc = _best([r for r in rs if r.get("bucket") == "quadratic_test_fc" and r["coset1_source"] == "store"])
+    quad_fc_reenc = _best([r for r in rs if r.get("bucket") == "quadratic_test_fc" and r["coset1_source"] == "re-encoded"])
     lin = _best([r for r in rs if r.get("bucket") == "linear_test_structured" and var(r)])
     inv = _best([r for r in rs if r.get("bucket") == "batch_inverse" and var(r)])
     op = _best([r for r in rs if r.get("name") == "open_columns_gather_from_store"])
     paths = _best([r for r in rs if r.get("name") == "open_columns_merkle_paths_host"])
     return {"commitment": commit, "irs_row_combination": irs, "quadratic_test_ft": quad_ft, "quadratic_test_fc": quad_fc,
-            "quadratic_test_fc_store": quad_fc_store, "linear_test": lin, "batch_inverse": inv, "open_columns": op, "merkle_paths": paths}
+            "quadratic_test_fc_reencode": quad_fc_reenc, "linear_test": lin, "batch_inverse": inv, "open_columns": op, "merkle_paths": paths}
 
 
 def measured_seconds(d: dict) -> dict:
@@ -71,7 +73,7 @@ def reprice(bench: dict, shape: dict, v1: dict) -> dict:
             scale = INT32_OPS_PER_S[gkey] / INT32_OPS_PER_S["RTX4090"]
             tm = p.times(gpu, gkey, UTIL, HASH_4090["B"], "rs_matrix_ntt", fs, measured={k: v / scale for k, v in m.items()})
             label = (("MEASURED buckets on RTX 4090 at the checker-v2 shape (commitment, structured linear test, IRS, F_t + F_c quadratic tests, "
-                      "inversions, openings); r^T A scalars, witness / hint generation, PRG modelled" + (f"; table side: {variant}" if variant else ""))
+                      "inversions, openings); r^T A scalars, witness / hint generation, PRG modelled" + (f"; table side: {variant} (linear test, inversions at its shape; commitment / IRS / openings at the helper_rows row count: upper bound)" if variant else ""))
                      if gkey == "RTX4090" else
                      f"SCALING: measured buckets / {scale:.2f} (INT32 issue-rate ratio), modelled buckets at {gkey} peaks" + (f"; table side: {variant}" if variant else ""))
             rows_out.append({"design": "B", "checker": "v2", "table_side": variant or "helper_rows", "field": "babybear", "target_log2": -128,
@@ -130,7 +132,7 @@ def markdown(rep: dict) -> str:
     mv1 = v1["measured_ms"]
     best["measured_ms"]
     lin, irs, qft, qfc, qfs, inv, op, mp, c = (d["linear_test"], d["irs_row_combination"], d["quadratic_test_ft"], d["quadratic_test_fc"],
-                                              d["quadratic_test_fc_store"], d["batch_inverse"], d["open_columns"], d["merkle_paths"], d["commitment"])
+                                              d["quadratic_test_fc_reencode"], d["batch_inverse"], d["open_columns"], d["merkle_paths"], d["commitment"])
     v1_lin = 7.15
     v1_irs = mv1["matmul:ligero_row_combination"] - v1_lin
     mod1, mod2 = sum(v1["t.modelled_ms"].values()), sum(best["t.modelled_ms"].values())
@@ -151,7 +153,7 @@ def markdown(rep: dict) -> str:
          f"| commitment (fused encode -> Blake3 -> root, cosets kept) | {mv1['commitment']:.1f} ms | **{c['ms_median']:.1f} ms** ({c['us_per_row']:.3f} us/row) | {c['ms_median'] / mv1['commitment']:.2f}x |",
          f"| linear test (structured, lazy) | {v1_lin:.2f} ms | **{lin['ms_median']:.2f} ms** (combine {lin['split_ms']['combine_multi']:.2f} + exceptional {lin['split_ms']['exceptional_generic']:.2f}) | {lin['ms_median'] / v1_lin:.2f}x |",
          f"| IRS row combination | {v1_irs:.1f} ms | **{irs['ms_median']:.2f} ms** | {irs['ms_median'] / v1_irs:.2f}x |",
-         f"| quadratic test | {mv1['simt:quadratic_hadamards']:.1f} ms | **{qft['ms_median'] + qfc['ms_median']:.1f} ms** (`F_t` {qft['ms_median']:.2f} + `F_c` helper triples {qfc['ms_median']:.2f} re-encoded; {qfs['ms_median']:.2f} from the store) | {(qft['ms_median'] + qfc['ms_median']) / mv1['simt:quadratic_hadamards']:.2f}x |",
+         f"| quadratic test | {mv1['simt:quadratic_hadamards']:.1f} ms | **{qft['ms_median'] + qfc['ms_median']:.1f} ms** (`F_t` {qft['ms_median']:.2f} + `F_c` helper triples {qfc['ms_median']:.2f} with coset 1 read from the kept store; {qfs['ms_median']:.2f} if re-encoded) | {(qft['ms_median'] + qfc['ms_median']) / mv1['simt:quadratic_hadamards']:.2f}x |",
          f"| helper inversions | {mv1['simt:helper_inversions']:.1f} ms | **{inv['ms_median']:.1f} ms** ({inv['ns_per_element']:.2f} ns/element, {inv['traffic_floor_ms'] / inv['ms_median']:.2f} of traffic floor) | {inv['ms_median'] / mv1['simt:helper_inversions']:.2f}x |",
          f"| openings (t = 192 + paths) | {mv1['extra:openings']:.1f} ms | **{op['ms_median'] + mp['ms_median']:.1f} ms** | |",
          f"| modelled remainder (r^T A scalars, hints, PRG) | {mod1:.1f} ms | {mod2:.1f} ms | |",
