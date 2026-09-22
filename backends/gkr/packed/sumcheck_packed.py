@@ -218,16 +218,19 @@ class RoundInputs:
     fold_C: torch.Tensor | None   # ext rounds: (48, 48) int8 fold matrix of r_i; fold_k: (4 . 2^k, 48)
     fold_coeff: torch.Tensor | None = None   # triton fold_k: (2^k, 6) int32 = eq(r_1..r_k, a)
     fold_C64: torch.Tensor | None = None     # triton fold_ext: (64, 64) int8 embedding of fold_C
+    e_lo32: torch.Tensor | None = None       # triton fused inner product: e_lo_limbs padded to (K1, 32)
 
 
 class Kernel:
     """``mode``: ``"eager"`` (torch ops, the reference path), ``"compile"`` (torch.compile of the Hadamards) or
     ``"triton"`` (fused kernels from :mod:`kernels_triton` for the Hadamards and both folds; CUDA only)."""
 
-    def __init__(self, device: str = "cpu", k1_log2: int = K1_LOG2_DEFAULT, compile: bool = False, mode: str | None = None):
+    def __init__(self, device: str = "cpu", k1_log2: int = K1_LOG2_DEFAULT, compile: bool = False, mode: str | None = None,
+                 fused: bool = True):
         self.device = torch.device(device)
         self.k1_log2 = k1_log2
         self.mode = mode or ("compile" if compile else "eager")
+        self.fused = fused      # triton mode: fused Hadamard + tl.dot inner product for the packed rounds (i <= 3)
         self.pow2_row = torch.tensor(POW2, dtype=torch.int64, device=self.device)
         pm = np.array([[POW2[j + jp] for jp in range(LIMBS)] for j in range(LIMBS)], dtype=np.int64)
         self.pow2_pair = torch.tensor(pm, dtype=torch.int64, device=self.device)   # [j, j'] -> 2^(8(j+j')) mod p
@@ -243,6 +246,8 @@ class Kernel:
             from . import kernels_triton as tk
 
             self._tk = tk
+            self.pw16 = tk.pow2_pair16(self.device)
+            self.one6 = to_dev([ref.ONE], self.device)
             self._ext_hadamard3 = tk.ext_hadamard3_limbs
             self._packed_hadamard = tk.packed_hadamard_limbs
         elif self.mode != "eager":
@@ -357,20 +362,43 @@ class Kernel:
         K1, K2 = self.split(m)
         half = 1 << (i - 1)
         rows = 3 * half * half
-        A = self._packed_hadamard(g, h, i, K1, K2)                                    # (K2 rows 4, K1) int8
-        if marks is not None:
-            marks["hadamard+limbs"] = self._mark()
-        Z, padded = mm_int8(A, inp.e_lo_limbs)                                       # (K2 rows 4, 24) int32
-        if stats:
-            stats.add("inner.packed", A.shape[0], K1, DL, padded)
-            stats.hadamard_base += K2 * rows * K1
-        if marks is not None:
-            marks["matmul.inner"] = self._mark()
-        X = self._reduce_base_ext(Z, K2, rows)                                        # (K2, rows, 6)
-        T = self._contract_b2(X, inp.e_hi)                                            # (rows, 6) = T[x, a, a']
+        fused = self._tk is not None and self.fused and self._tk.has_fused_packed(i) and K1 % 128 == 0
+        if fused:
+            # Hadamard limbs formed in registers and fed to tl.dot: no HBM round trip for the A operand
+            split = 1
+            while K2 * split < 264 and K1 % (split * 256) == 0:
+                split *= 2
+            if inp.e_lo32 is None:
+                inp.e_lo32 = torch.nn.functional.pad(inp.e_lo_limbs, (0, 32 - DL))
+            Zs = self._tk.packed_inner_product(g, h, inp.e_lo32, i, K1, K2, split)   # (split, K2 rows 4, 24)
+            Z = Zs.to(torch.int64).sum(0) if split > 1 else Zs[0]
+            if stats:
+                stats.add("inner.packed.fused", K2 * rows * LIMBS, K1, DL, 0)
+                stats.hadamard_base += K2 * rows * K1
+            if marks is not None:
+                marks["hadamard+limbs"] = self._mark()
+                marks["matmul.inner"] = marks["hadamard+limbs"]
+        else:
+            A = self._packed_hadamard(g, h, i, K1, K2)                                # (K2 rows 4, K1) int8
+            if marks is not None:
+                marks["hadamard+limbs"] = self._mark()
+            Z, padded = mm_int8(A, inp.e_lo_limbs)                                   # (K2 rows 4, 24) int32
+            if stats:
+                stats.add("inner.packed", A.shape[0], K1, DL, padded)
+                stats.hadamard_base += K2 * rows * K1
+            if marks is not None:
+                marks["matmul.inner"] = self._mark()
+        if self._tk is not None:
+            T = self._tk.reduce_contract(Z, inp.e_hi, self.pw16, K2, rows, 1)         # (rows, 6) = T[x, a, a']
+        else:
+            X = self._reduce_base_ext(Z, K2, rows)                                    # (K2, rows, 6)
+            T = self._contract_b2(X, inp.e_hi)                                        # (rows, 6) = T[x, a, a']
         Tv = T.view(3, half * half, DEGREE)
-        Q = (ext_mul(Tv, inp.coeff[None]).to(torch.int64).sum(1) % P).to(torch.int32)  # (3, 6)
-        S = self._q_to_s(Q, inp)
+        if self._tk is not None:
+            S = self._tk.finish_round(Tv, inp.coeff, inp.prefix, inp.eq_x)
+        else:
+            Q = (ext_mul(Tv, inp.coeff[None]).to(torch.int64).sum(1) % P).to(torch.int32)  # (3, 6)
+            S = self._q_to_s(Q, inp)
         if marks is not None:
             marks["reduce+contract"] = self._mark()
         return S
@@ -405,9 +433,13 @@ class Kernel:
             stats.hadamard_ext += 3 * m
         if marks is not None:
             marks["matmul.inner"] = self._mark()
-        X = self._reduce_ext_ext(Z, K2, 3)                                            # (K2, 3, 6)
-        Q = self._contract_b2(X, inp.e_hi)                                            # (3, 6)
-        S = self._q_to_s(Q, inp)
+        if self._tk is not None:
+            Q = self._tk.reduce_contract(Z, inp.e_hi, self.pw16, K2, 3, 6)            # (3, 6)
+            S = self._tk.finish_round(Q.view(3, 1, DEGREE), self.one6, inp.prefix, inp.eq_x)
+        else:
+            X = self._reduce_ext_ext(Z, K2, 3)                                        # (K2, 3, 6)
+            Q = self._contract_b2(X, inp.e_hi)                                        # (3, 6)
+            S = self._q_to_s(Q, inp)
         if marks is not None:
             marks["reduce+contract"] = self._mark()
         if not fold:

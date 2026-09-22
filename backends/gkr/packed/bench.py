@@ -181,9 +181,17 @@ def run_sumcheck(kernel: sp.Kernel, n: int, k: int, repeats: int, warm: int, see
         kernel.packed_round(g, h, i, inp, st)
         tm, how = time_graphed(lambda: kernel.packed_round(g, h, i, inp), repeats, warm)
         seg = segments(kernel, lambda marks: kernel.packed_round(g, h, i, inp, None, marks))
-        A = kernel._packed_hadamard(g, h, i, *kernel.split(t >> i))
-        t_mm = _median_events(lambda: sp.mm_int8(A, inp.e_lo_limbs), repeats, warm)
-        del A
+        if any(lbl == "inner.packed.fused" for (lbl, *_rest) in st.matmuls):
+            # the fused kernel IS the matmul (Hadamard limbs formed in registers): time it alone
+            K1, K2 = kernel.split(t >> i)
+            split = 1
+            while K2 * split < 264 and K1 % (split * 256) == 0:
+                split *= 2
+            t_mm = _median_events(lambda: kernel._tk.packed_inner_product(g, h, inp.e_lo32, i, K1, K2, split), repeats, warm)
+        else:
+            A = kernel._packed_hadamard(g, h, i, *kernel.split(t >> i))
+            t_mm = _median_events(lambda: sp.mm_int8(A, inp.e_lo_limbs), repeats, warm)
+            del A
         rounds.append(_round_row(i, "packed", t >> (i - 1), tm, how, seg, st, t_mm, peak_macs))
         total += tm
         total_mm += t_mm
@@ -318,7 +326,7 @@ def run_campaign(a) -> dict:
     peak_macs = peaks["int8_dense_tops"] * 1e12 / 2
     if hw["gpu"]:
         hw["gpu"]["cuda"] = torch.version.cuda
-    kernel = sp.Kernel("cuda", k1_log2=a.k1_log2, mode=a.mode)
+    kernel = sp.Kernel("cuda", k1_log2=a.k1_log2, mode=a.mode, fused=a.fused)
     results = []
     t0 = time.time()
     for n in a.log2:
@@ -333,7 +341,7 @@ def run_campaign(a) -> dict:
     doc = {
         "hardware": hw, "peaks": peaks,
         "software": {"torch": torch.__version__, "python": platform.python_version(), "commit": git_commit(), "cuda": torch.version.cuda},
-        "config": {"log2": a.log2, "ks": a.ks, "repeats": a.repeats, "warm": a.warm, "k1_log2": a.k1_log2, "mode": a.mode,
+        "config": {"log2": a.log2, "ks": a.ks, "repeats": a.repeats, "warm": a.warm, "k1_log2": a.k1_log2, "mode": a.mode, "fused": a.fused,
                    "units": UNITS, "layer_widths": LAYER_WIDTHS, "layer_read_log2": LAYER_READ_LOG2, "B": B_TARGET, "K": K_TARGET},
         "results": results,
         "layers": layer_model(results),
@@ -476,6 +484,7 @@ def main(argv=None) -> int:
     ap.add_argument("--warm", type=int, default=2)
     ap.add_argument("--k1-log2", type=int, default=sp.K1_LOG2_DEFAULT)
     ap.add_argument("--mode", choices=["eager", "compile", "triton"], default="eager", help="SIMT passes: torch eager, torch.compile, or fused Triton kernels")
+    ap.add_argument("--no-fused", dest="fused", action="store_false", help="triton mode: two-pass packed rounds (limbs to HBM, cuBLAS)")
     ap.add_argument("--no-test", dest="test", action="store_false")
     ap.add_argument("--reprice", type=Path, default=None)
     ap.add_argument("--report", type=Path, default=Path("backends/numerical/reports/packed_sumcheck_h100"))
