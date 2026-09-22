@@ -298,6 +298,53 @@ extern "C" __global__ void combine_multi(const u32* __restrict__ W, const u32* _
     }
 }
 
+/* Same, lazily reduced: the 64-bit products w * (s R) of 4 rows are summed unreduced (each < 2^62, the sum < 2^64) and
+   Montgomery-reduced once (REDC is linear): 1 IMAD.WIDE + 1 64-bit add per product instead of a full mont_mul + add_p. */
+__device__ __forceinline__ u32 redc64(unsigned long long x) {
+    u32 lo = (u32)x, hi = (u32)(x >> 32);
+    u32 t = lo * PINV;
+    u32 u = __umulhi(t, P);
+    u32 r = hi - u;
+    r = hi < u ? r + P : r;            /* r in [0, 2^32): may still be >= P since hi is not < P */
+    return r >= P ? r - P : r;
+}
+extern "C" __global__ void combine_multi_lazy(const u32* __restrict__ W, const u32* __restrict__ s, u32* __restrict__ acc,
+                                              int rows, int chunk_rows, int ncols)
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int chunk = blockIdx.y;
+    if (j >= ncols) return;
+    int i0 = chunk * chunk_rows, i1 = min(rows, i0 + chunk_rows);
+    u32 a[M * D];
+    #pragma unroll
+    for (int c = 0; c < M * D; ++c) a[c] = 0;
+    int i = i0;
+    for (; i + 4 <= i1; i += 4) {
+        u32 w0 = __ldg(&W[(size_t)(i + 0) * ncols + j]), w1 = __ldg(&W[(size_t)(i + 1) * ncols + j]);
+        u32 w2 = __ldg(&W[(size_t)(i + 2) * ncols + j]), w3 = __ldg(&W[(size_t)(i + 3) * ncols + j]);
+        const u32* s0 = s + (size_t)i * M * D;
+        #pragma unroll
+        for (int c = 0; c < M * D; ++c) {
+            unsigned long long x = (unsigned long long)w0 * __ldg(&s0[c]);
+            x += (unsigned long long)w1 * __ldg(&s0[M * D + c]);
+            x += (unsigned long long)w2 * __ldg(&s0[2 * M * D + c]);
+            x += (unsigned long long)w3 * __ldg(&s0[3 * M * D + c]);
+            a[c] = add_p(a[c], redc64(x));
+        }
+    }
+    for (; i < i1; ++i) {
+        u32 w = __ldg(&W[(size_t)i * ncols + j]);
+        const u32* si = s + (size_t)i * M * D;
+        #pragma unroll
+        for (int c = 0; c < M * D; ++c) a[c] = add_p(a[c], mont_mul(w, __ldg(&si[c])));
+    }
+    #pragma unroll
+    for (int c = 0; c < M * D; ++c) {
+        u32* o = acc + ((size_t)chunk * M * D + c) * ncols + j;
+        *o = add_p(*o, a[c]);
+    }
+}
+
 /* acc (nchunk, M*D, ncols) -> out (M*D, ncols) */
 extern "C" __global__ void reduce_multi(const u32* __restrict__ acc, u32* __restrict__ out, int nchunk, int ncols)
 {
@@ -357,14 +404,14 @@ class StructuredLinearTest:
     """GPU shortcut.  ``__init__`` compiles for ``M``; ``prepare(E)`` encodes the fixed rows (once per batch);
     ``__call__(W, s_mont, exceptional)`` returns ``q`` ``(6, 2k)`` plain, the same object as ``Combiner.reduce`` of the general path."""
 
-    def __init__(self, enc, M: int, chunk_rows: int = 1024, block: int = 128, k: int = K):
+    def __init__(self, enc, M: int, chunk_rows: int = 1024, block: int = 128, k: int = K, lazy: bool = False):
         import cupy as cp
 
         from encode import buckets as bk
 
-        self.cp, self.enc, self.M, self.k, self.chunk_rows, self.block = cp, enc, M, k, chunk_rows, block
+        self.cp, self.enc, self.M, self.k, self.chunk_rows, self.block, self.lazy = cp, enc, M, k, chunk_rows, block, lazy
         self.mod = cp.RawModule(code=_SRC % {"pinv": bb.P_INV_MOD_R, "m": M}, options=("-std=c++17",))
-        self.k_combine = self.mod.get_function("combine_multi")
+        self.k_combine = self.mod.get_function("combine_multi_lazy" if lazy else "combine_multi")
         self.k_reduce = self.mod.get_function("reduce_multi")
         self.k_point = self.mod.get_function("fc_pointwise_accum")
         self.k_add = self.mod.get_function("add_mod_inplace")
@@ -572,12 +619,13 @@ def checks(enc) -> dict:
     Wd = cp.asarray(W)
     q_gpu_general = cp.asnumpy(general_path_gpu(enc, Wd, cp.asarray(rA.astype(np.uint32)))).astype(U64)
     out["gpu_general_equals_numpy"] = bool(np.array_equal(q_gpu_general, q_np_general))
-    slt = StructuredLinearTest(enc, M, chunk_rows=8)
-    slt.prepare(st.E)
     s_mont, idx, x_W, x_rA = split_structured(st, W)
-    ws = slt.workspace(rows, len(idx))
-    q_gpu = slt.run(Wd, cp.asarray(s_mont), ws, x_W=cp.asarray(x_W), x_rA=cp.asarray(x_rA))
-    out["gpu_shortcut_equals_gpu_general"] = bool(np.array_equal(cp.asnumpy(q_gpu).astype(U64), q_gpu_general))
+    for lazy in (False, True):
+        slt = StructuredLinearTest(enc, M, chunk_rows=7 if lazy else 8, lazy=lazy)       # 7: exercises the lazy kernel's tail rows
+        slt.prepare(st.E)
+        ws = slt.workspace(rows, len(idx))
+        q_gpu = slt.run(Wd, cp.asarray(s_mont), ws, x_W=cp.asarray(x_W), x_rA=cp.asarray(x_rA))
+        out["gpu_shortcut_equals_gpu_general" + ("_lazy" if lazy else "")] = bool(np.array_equal(cp.asnumpy(q_gpu).astype(U64), q_gpu_general))
     try:
         import torch
 
@@ -595,10 +643,10 @@ def checks(enc) -> dict:
     return out
 
 
-def _bench_structured(enc, W, R: int, M: int, X: int, a, stream, bbench) -> dict:
+def _bench_structured(enc, W, R: int, M: int, X: int, a, stream, bbench, lazy: bool = False) -> dict:
     import cupy as cp
 
-    slt = StructuredLinearTest(enc, M, chunk_rows=a.chunk_rows)
+    slt = StructuredLinearTest(enc, M, chunk_rows=a.chunk_rows, lazy=lazy)
     E = np.random.default_rng(5).integers(0, P, (M, D, K)).astype(U64)
     E[:, :, L_PAYLOAD:] = 0
     t_prep, _ = _timed(lambda: slt.prepare(E), 3)
@@ -617,8 +665,8 @@ def _bench_structured(enc, W, R: int, M: int, X: int, a, stream, bbench) -> dict
         t_comb, _ = _timed(comb, a.reps)
         t_enc, _ = _timed(lambda: [slt.enc(ws["V_sys"][m], ws["V_c1"][m], write_systematic=False, ncosets=1) for m in range(M)], a.reps)
         t_pt, _ = _timed(lambda: slt.pointwise(ws["V_sys"], ws["V_c1"], ws["q"]), a.reps)
-    r = {"name": f"linear_test_structured_M{M}_X{X}", "bucket": "linear_test_structured", "shape": "B", "rows": R, "M": M, "exceptional_rows": X,
-         "chunk_rows": a.chunk_rows, "ms_median": med, "ms_all": ts, "us_per_row": med * 1e3 / R, "transforms_per_row": 0,
+    r = {"name": f"linear_test_structured_M{M}_X{X}" + ("_lazy" if lazy else ""), "bucket": "linear_test_structured", "shape": "B", "rows": R, "M": M,
+         "exceptional_rows": X, "lazy_reduction": lazy, "chunk_rows": a.chunk_rows, "ms_median": med, "ms_all": ts, "us_per_row": med * 1e3 / R, "transforms_per_row": 0,
          "transforms_per_batch": 6 * M + 6 * M + 7 * X, "encoder_calls_per_row": 0,
          "split_ms": {"prepare_G_once_per_batch": t_prep, "combine_multi": t_comb, "encode_V": t_enc, "pointwise": t_pt,
                       "exceptional_generic": max(0.0, med - t_comb - t_enc - t_pt)},
@@ -648,8 +696,9 @@ def bench(a) -> dict:
     stream = cp.cuda.Stream(non_blocking=True)
     for M in a.M:
         for X in a.exceptional:
-            res["results"].append(_bench_structured(enc, W, R, M, X, a, stream, bbench))
-            bbench.free_all()
+            for lazy in ((False, True) if a.lazy else (False,)):
+                res["results"].append(_bench_structured(enc, W, R, M, X, a, stream, bbench, lazy=lazy))
+                bbench.free_all()
     # tensor-core INT8 limb combination (M = 1), with and without the byte-xor pass
     if a.tc:
         try:
@@ -716,6 +765,7 @@ def main(argv=None) -> None:
     ap.add_argument("--exceptional", type=int, nargs="+", default=[0, 256])
     ap.add_argument("--chunk-rows", type=int, default=1024)
     ap.add_argument("--no-tc", dest="tc", action="store_false")
+    ap.add_argument("--lazy", action="store_true", help="also time the lazily-reduced combination kernel")
     ap.add_argument("--baseline", action="store_true", help="also time the b-commit general path (14 transforms/row) in this run")
     ap.add_argument("--quick", action="store_true")
     a = ap.parse_args(argv)
