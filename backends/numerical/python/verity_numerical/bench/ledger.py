@@ -29,7 +29,7 @@ from verity_numerical.bench import contract
 __all__ = ["DIR", "SCHEMA", "SCOPES", "TRACKS", "UNITS_PER_VU", "add", "entry", "load", "load_all", "main", "validate"]
 
 SCHEMA = "ledger/v1"
-DIR = Path(__file__).resolve().parents[4] / "reports" / "ledger"
+DIR = Path(__file__).resolve().parents[3] / "reports" / "ledger"
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
 UNITS_PER_VU = 96  # K=1536 / 16 products per transition unit
