@@ -310,12 +310,12 @@ class FusedTable:
         return int(self.coeffs.shape[1])
 
     @classmethod
-    def from_ints(cls, values: list[ref.Ext], deg: int, device) -> "FusedTable":
+    def from_ints(cls, values: list[ref.Ext], deg: int, device) -> FusedTable:
         arr = torch.tensor([[v[c] for v in values] for c in range(deg)], dtype=torch.int32, device=device)
         return cls(arr.reshape(deg, len(values)))
 
     @classmethod
-    def random(cls, t: int, deg: int, device, seed: int) -> "FusedTable":
+    def random(cls, t: int, deg: int, device, seed: int) -> FusedTable:
         gen = torch.Generator(device="cpu").manual_seed(seed)
         return cls(torch.randint(0, field.P, (deg, t), dtype=torch.int32, generator=gen).to(device))
 
@@ -332,6 +332,8 @@ def challenge_tensor(r: ref.Ext, device):
 class FusedRound:
     """Launch wrapper; ``block`` folded elements (or first-round pairs) per program, ``num_warps`` warps."""
 
+    name = "simt"
+
     def __init__(self, device, block: int = 256, num_warps: int = 4):
         self.device = device
         self.block = block
@@ -339,6 +341,13 @@ class FusedRound:
 
     def alloc_out(self, n_out: int):
         return torch.empty((DEG, n_out), dtype=torch.int32, device=self.device)
+
+    def grid_size(self, n_in: int, fold: bool) -> int:
+        return triton.cdiv(n_in // 2, self.block)
+
+    @staticmethod
+    def supports(deg_in: int, mode: str) -> bool:
+        return True
 
     def launch(self, f: FusedTable, g: FusedTable, h: FusedTable, r_mont=None, eval: bool = True, outs=None, s_buf=None):
         """One fused kernel.  ``r_mont`` (6 int32 on device, ``challenge_tensor``) enables the fold; returns
@@ -350,15 +359,14 @@ class FusedRound:
         fold = r_mont is not None
         if not fold and not eval:
             raise ValueError("nothing to do")
+        grid = (self.grid_size(n_in, fold),)
         if fold:
             n_out = n_in // 2
             if outs is None:
                 outs = [self.alloc_out(n_out) for _ in range(3)]
-            grid = (triton.cdiv(n_out, self.block),)
         else:
             n_out = 0
             outs = [f.coeffs, f.coeffs, f.coeffs]                              # unused
-            grid = (triton.cdiv(n_in // 2, self.block),)
         if s_buf is None:
             s_buf = torch.zeros((grid[0], 24), dtype=torch.int64, device=self.device) if eval else torch.zeros((1, 24), dtype=torch.int64, device=self.device)
         r_arg = r_mont if fold else s_buf
