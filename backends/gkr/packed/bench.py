@@ -184,9 +184,7 @@ def run_sumcheck(kernel: sp.Kernel, n: int, k: int, repeats: int, warm: int, see
         if any(lbl == "inner.packed.fused" for (lbl, *_rest) in st.matmuls):
             # the fused kernel IS the matmul (Hadamard limbs formed in registers): time it alone
             K1, K2 = kernel.split(t >> i)
-            split = 1
-            while K2 * split < 264 and K1 % (split * 256) == 0:
-                split *= 2
+            split = kernel.split_b1(K1, K2)
             t_mm = _median_events(lambda: kernel._tk.packed_inner_product(g, h, inp.e_lo32, i, K1, K2, split), repeats, warm)
         else:
             A = kernel._packed_hadamard(g, h, i, *kernel.split(t >> i))
@@ -229,10 +227,17 @@ def run_sumcheck(kernel: sp.Kernel, n: int, k: int, repeats: int, warm: int, see
         tm, how = time_graphed(lambda: kernel.ext_round(gE, hE, i, inp), repeats, warm)
         seg = segments(kernel, lambda marks: kernel.ext_round(gE, hE, i, inp, None, marks))
         m = gE.shape[0] // 2
-        A = kernel._ext_hadamard3(gE, hE, *kernel.split(m))
         L = sp.decompose(torch.stack([gE, hE], 0).view(2 * m, 2 * sp.DEGREE))
-        t_mm = _median_events(lambda: sp.mm_int8(A, inp.e_lo_limbs), repeats, warm) + _median_events(lambda: sp.mm_int8(L, inp.fold_C), repeats, warm)
-        del A, L
+        if any(lbl == "inner.ext.fused" for (lbl, *_rest) in st.matmuls):
+            K1, K2 = kernel.split(m)
+            split = kernel.split_b1(K1, K2)
+            t_mm = _median_events(lambda: kernel._tk.ext_inner_product(gE, hE, inp.e_lo32, K1, K2, split), repeats, warm)
+        else:
+            A = kernel._ext_hadamard3(gE, hE, *kernel.split(m))
+            t_mm = _median_events(lambda: sp.mm_int8(A, inp.e_lo_limbs), repeats, warm)
+            del A
+        t_mm += _median_events(lambda: sp.mm_int8(L, inp.fold_C), repeats, warm)
+        del L
         rounds.append(_round_row(i, "ext", gE.shape[0], tm, how, seg, st, t_mm, peak_macs))
         total += tm
         total_mm += t_mm

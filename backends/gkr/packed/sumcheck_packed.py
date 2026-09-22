@@ -260,6 +260,14 @@ class Kernel:
         K1 = min(m, 1 << self.k1_log2)
         return K1, m // K1
 
+    @staticmethod
+    def split_b1(K1: int, K2: int) -> int:
+        """Fused inner products: split the ``b1`` reduction so the grid has >= 264 programs (2 waves of 132 SMs)."""
+        split = 1
+        while K2 * split < 264 and K1 % (split * 256) == 0:
+            split *= 2
+        return split
+
     # -- per-round inputs (host side: the verifier's coins) ----------------------------------------------------------
 
     def inputs(self, gammas: list[ref.Ext], rs: list[ref.Ext], i: int, k: int, r_i: ref.Ext | None = None) -> RoundInputs:
@@ -365,9 +373,7 @@ class Kernel:
         fused = self._tk is not None and self.fused and self._tk.has_fused_packed(i) and K1 % 128 == 0
         if fused:
             # Hadamard limbs formed in registers and fed to tl.dot: no HBM round trip for the A operand
-            split = 1
-            while K2 * split < 264 and K1 % (split * 256) == 0:
-                split *= 2
+            split = self.split_b1(K1, K2)
             if inp.e_lo32 is None:
                 inp.e_lo32 = torch.nn.functional.pad(inp.e_lo_limbs, (0, 32 - DL))
             Zs = self._tk.packed_inner_product(g, h, inp.e_lo32, i, K1, K2, split)   # (split, K2 rows 4, 24)
@@ -424,15 +430,28 @@ class Kernel:
         t_i = gE.shape[0]
         m = t_i // 2
         K1, K2 = self.split(m)
-        A = self._ext_hadamard3(gE, hE, K1, K2)                                       # (K2 . 72, K1)
-        if marks is not None:
-            marks["hadamard+limbs"] = self._mark()
-        Z, padded = mm_int8(A, inp.e_lo_limbs)                                       # (K2 . 72, 24)
-        if stats:
-            stats.add("inner.ext", A.shape[0], K1, DL, padded)
-            stats.hadamard_ext += 3 * m
-        if marks is not None:
-            marks["matmul.inner"] = self._mark()
+        if self._tk is not None and self.fused and K1 % 128 == 0:
+            split = self.split_b1(K1, K2)
+            if inp.e_lo32 is None:
+                inp.e_lo32 = torch.nn.functional.pad(inp.e_lo_limbs, (0, 32 - DL))
+            Zs = self._tk.ext_inner_product(gE, hE, inp.e_lo32, K1, K2, split)       # (split, K2 . 72, 24)
+            Z = Zs.to(torch.int64).sum(0) if split > 1 else Zs[0]
+            if stats:
+                stats.add("inner.ext.fused", K2 * 3 * DL, K1, DL, 0)
+                stats.hadamard_ext += 3 * m
+            if marks is not None:
+                marks["hadamard+limbs"] = self._mark()
+                marks["matmul.inner"] = marks["hadamard+limbs"]
+        else:
+            A = self._ext_hadamard3(gE, hE, K1, K2)                                   # (K2 . 72, K1)
+            if marks is not None:
+                marks["hadamard+limbs"] = self._mark()
+            Z, padded = mm_int8(A, inp.e_lo_limbs)                                   # (K2 . 72, 24)
+            if stats:
+                stats.add("inner.ext", A.shape[0], K1, DL, padded)
+                stats.hadamard_ext += 3 * m
+            if marks is not None:
+                marks["matmul.inner"] = self._mark()
         if self._tk is not None:
             Q = self._tk.reduce_contract(Z, inp.e_hi, self.pw16, K2, 3, 6)            # (3, 6)
             S = self._tk.finish_round(Q.view(3, 1, DEGREE), self.one6, inp.prefix, inp.eq_x)

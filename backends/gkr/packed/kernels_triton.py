@@ -201,6 +201,56 @@ def _packed_ip_source(half: int) -> str:
     return "\n".join(L) + "\n"
 
 
+def _ext_ip_source() -> str:
+    """Extension round fused: the 3 ``F_{p^6}`` Hadamards per pair and their 24 limbs each (72 rows, padded to 128) formed
+    in registers and fed to ``tl.dot`` against the eq-weight limbs; INT32 partials over a ``b1`` split."""
+    L: list[str] = []
+    L.append("@triton.jit")
+    L.append("def ext_ip(g_ptr, h_ptr, e_ptr, z_ptr, K1, SPLIT_LEN, BLOCK_K: tl.constexpr):")
+    L.append("    b2 = tl.program_id(0)")
+    L.append("    sp = tl.program_id(1)")
+    L.append("    offs_n = tl.arange(0, 32)")
+    L.append("    acc = tl.zeros((128, 32), dtype=tl.int32)")
+    L.append("    zero8 = tl.zeros((BLOCK_K,), dtype=tl.int8)")
+    L.append("    for c in range(0, SPLIT_LEN, BLOCK_K):")
+    L.append("        b1 = sp * SPLIT_LEN + c + tl.arange(0, BLOCK_K)")
+    L.append("        row = (b2.to(tl.int64) * K1 + b1) * 12")
+    L.append("        E = tl.load(e_ptr + b1[:, None] * 32 + offs_n[None, :])")
+    for s in range(6):
+        L.append(f"        ge{s} = tl.load(g_ptr + row + {s}).to(tl.int64)")
+        L.append(f"        go{s} = tl.load(g_ptr + row + {6 + s}).to(tl.int64)")
+        L.append(f"        he{s} = tl.load(h_ptr + row + {s}).to(tl.int64)")
+        L.append(f"        ho{s} = tl.load(h_ptr + row + {6 + s}).to(tl.int64)")
+        L.append(f"        g2{s} = (go{s} * 2 - ge{s}) % P")
+        L.append(f"        g2{s} = tl.where(g2{s} < 0, g2{s} + P, g2{s})")
+        L.append(f"        h2{s} = (ho{s} * 2 - he{s}) % P")
+        L.append(f"        h2{s} = tl.where(h2{s} < 0, h2{s} + P, h2{s})")
+    names = []
+    for x, (gp, hp) in enumerate((("ge", "he"), ("go", "ho"), ("g2", "h2"))):
+        L.append("        " + ", ".join(f"c{x}_{d}" for d in range(6)) + " = _ext_mul6(" + ", ".join(f"{gp}{s}" for s in range(6)) + ", " + ", ".join(f"{hp}{s}" for s in range(6)) + ")")
+        for d in range(6):
+            L.append(f"        l{x}_{d}_0, l{x}_{d}_1, l{x}_{d}_2, l{x}_{d}_3 = _limbs(c{x}_{d}.to(tl.int32))")
+            names += [f"l{x}_{d}_{j}" for j in range(4)]
+    names += ["zero8"] * (128 - 72)
+    top = _join_tree(L, names, "        ")
+    L.append("        A = tl.reshape(" + top + ", (BLOCK_K, 128), can_reorder=False)")
+    L.append("        acc += tl.dot(tl.trans(A), E, out_dtype=tl.int32)")
+    L.append("    offs_m = tl.arange(0, 128)")
+    L.append("    z = z_ptr + ((sp * tl.num_programs(0) + b2).to(tl.int64) * 72) * 24")
+    L.append("    tl.store(z + offs_m[:, None] * 24 + offs_n[None, :], acc, mask=(offs_m[:, None] < 72) & (offs_n[None, :] < 24))")
+    return "\n".join(L) + "\n"
+
+
+def ext_inner_product(gE: torch.Tensor, hE: torch.Tensor, e_lo32: torch.Tensor, K1: int, K2: int, split: int,
+                      BLOCK_K: int = 128, num_warps: int = 4) -> torch.Tensor:
+    """Extension round fused: ``(split, K2 . 72, 24) int32`` partials of what ``mm_int8(ext_hadamard3_limbs(...), e_lo)`` returns."""
+    if K1 % (split * BLOCK_K):
+        raise ValueError("K1 must be a multiple of split * BLOCK_K")
+    Z = torch.empty((split, K2 * 72, 24), dtype=torch.int32, device=gE.device)
+    _generated().ext_ip[(K2, split)](gE, hE, e_lo32, Z, K1, K1 // split, BLOCK_K=BLOCK_K, num_warps=num_warps)
+    return Z
+
+
 def _reduce_contract_source(in_s: int) -> str:
     """``T[r, d] = sum_{b2} e_hi[b2] . X[b2, r]`` with ``X[b2, r]`` recomposed from the INT32 limb block
     ``Z[(b2, r, s, j), (s', j')]`` (``in_s = 1``: base x ext block ``4 x 24``; ``in_s = 6``: ext x ext ``24 x 24`` with
@@ -222,7 +272,8 @@ def _reduce_contract_source(in_s: int) -> str:
     for s in range(in_s):
         for sp_ in range(6):
             L.append(f"        v = tl.load(z_ptr + base[:, None] + {s * 4 * 24 + sp_ * 4} + joff[None, :], mask=m[:, None], other=0).to(tl.int64)")
-            L.append(f"        y{s}_{sp_} = tl.sum((v * pw[None, :]) % P, axis=1) % P")
+            # |v| < 2^27 (K1 <= 2^13 products < 2^14), pw < 2^31: 16 terms < 2^62, one reduction
+            L.append(f"        y{s}_{sp_} = tl.sum(v * pw[None, :], axis=1) % P")
             L.append(f"        y{s}_{sp_} = tl.where(y{s}_{sp_} < 0, y{s}_{sp_} + P, y{s}_{sp_})")
     for d in range(6):
         lo = [f"y{s}_{d - s}" for s in range(in_s) if 0 <= d - s < 6]
@@ -272,7 +323,7 @@ def _finish_round_source() -> str:
     for x in range(3):
         for d in range(6):
             L.append(f"    t{d} = tl.load(t_ptr + ({x} * R + r) * 6 + {d}, mask=m, other=0).to(tl.int64)")
-        L.append(f"    " + ", ".join(f"u{d}" for d in range(6)) + " = _ext_mul6(" + ", ".join(f"t{d}" for d in range(6)) + ", " + ", ".join(f"c{d}" for d in range(6)) + ")")
+        L.append("    " + ", ".join(f"u{d}" for d in range(6)) + " = _ext_mul6(" + ", ".join(f"t{d}" for d in range(6)) + ", " + ", ".join(f"c{d}" for d in range(6)) + ")")
         for d in range(6):
             L.append(f"    q{x}_{d} = tl.sum(u{d}, axis=0) % P")
     for d in range(6):
@@ -281,8 +332,8 @@ def _finish_round_source() -> str:
     for x in range(4):
         for d in range(6):
             L.append(f"    e{d} = tl.load(eqx_ptr + {x * 6 + d}).to(tl.int64)")
-        L.append(f"    " + ", ".join(f"v{d}" for d in range(6)) + " = _ext_mul6(" + ", ".join(f"pre{d}" for d in range(6)) + ", " + ", ".join(f"e{d}" for d in range(6)) + ")")
-        L.append(f"    " + ", ".join(f"w{d}" for d in range(6)) + " = _ext_mul6(" + ", ".join(f"v{d}" for d in range(6)) + ", " + ", ".join(f"q{x}_{d}" for d in range(6)) + ")")
+        L.append("    " + ", ".join(f"v{d}" for d in range(6)) + " = _ext_mul6(" + ", ".join(f"pre{d}" for d in range(6)) + ", " + ", ".join(f"e{d}" for d in range(6)) + ")")
+        L.append("    " + ", ".join(f"w{d}" for d in range(6)) + " = _ext_mul6(" + ", ".join(f"v{d}" for d in range(6)) + ", " + ", ".join(f"q{x}_{d}" for d in range(6)) + ")")
         for d in range(6):
             L.append(f"    tl.store(s_ptr + {x * 6 + d}, w{d}.to(tl.int32))")
     return "\n".join(L) + "\n"
@@ -321,10 +372,9 @@ def _generated():
     global _MODULE
     if _MODULE is not None:
         return _MODULE
-    src = (_HEADER + "\n" + _ext_hadamard_source() + "\n" + "\n".join(_packed_hadamard_source(1 << e) for e in range(4)) + "\n"
-           + "\n".join(_packed_ip_source(1 << e) for e in range(FUSED_MAX_LOG2_HALF + 1)) + "\n"
-           + _reduce_contract_source(1) + "\n" + _reduce_contract_source(6) + "\n"
-           + _ext_mul_helper_source() + "\n" + _finish_round_source() + "\n")
+    src = "\n".join([_HEADER, _ext_mul_helper_source(), _ext_hadamard_source(), *[_packed_hadamard_source(1 << e) for e in range(4)],
+                     *[_packed_ip_source(1 << e) for e in range(FUSED_MAX_LOG2_HALF + 1)], _ext_ip_source(),
+                     _reduce_contract_source(1), _reduce_contract_source(6), _finish_round_source()]) + "\n"
     digest = hashlib.sha256(src.encode()).hexdigest()[:16]
     cache = Path(os.environ.get("PACKED_KERNEL_CACHE") or Path(tempfile.gettempdir()) / "packed_kernels")
     cache.mkdir(parents=True, exist_ok=True)
@@ -446,10 +496,10 @@ def _fold_ext_kernel(gh_ptr, C_ptr, pow2_ptr, out_ptr, rows, P: tl.constexpr, BL
     acc = tl.dot(A, C, out_dtype=tl.int32)                                            # (BM, 64): column 8 d + m
     z = tl.reshape(acc, (BLOCK_M, 8, 8)).to(tl.int64)
     pw = tl.load(pow2_ptr + tl.arange(0, 8)).to(tl.int64)
-    # Triton's % truncates toward zero (C semantics): the limb sums are signed, so lift the residues into [0, p)
-    z = (z * pw[None, None, :]) % P
-    z = tl.where(z < 0, z + P, z)
-    c = tl.sum(z, axis=2) % P
+    # |acc| < 2^18 (<= 12 limb products), pw < 2^31: the 8-term sum is < 2^52, ONE reduction; Triton's % truncates
+    # toward zero (C semantics) so the signed residue is lifted into [0, p)
+    c = tl.sum(z * pw[None, None, :], axis=2) % P
+    c = tl.where(c < 0, c + P, c)
     d = tl.arange(0, 8)
     tl.store(out_ptr + offs[:, None].to(tl.int64) * 6 + d[None, :], c.to(tl.int32), mask=rmask[:, None] & (d[None, :] < 6))
 
