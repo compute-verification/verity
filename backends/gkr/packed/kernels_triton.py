@@ -540,10 +540,11 @@ def _finish_round_source() -> str:
     return "\n".join(L) + "\n"
 
 
-def finish_round(T: torch.Tensor, coeff: torch.Tensor, prefix: torch.Tensor, eq_x: torch.Tensor) -> torch.Tensor:
-    """``T (3, R, 6) int32``, ``coeff (R, 6) int32``, ``prefix (6,)``, ``eq_x (4, 6)`` -> ``S (4, 6) int32``."""
+def finish_round(T: torch.Tensor, coeff: torch.Tensor, prefix: torch.Tensor, eq_x: torch.Tensor,
+                 out: torch.Tensor | None = None) -> torch.Tensor:
+    """``T (3, R, 6) int32``, ``coeff (R, 6) int32``, ``prefix (6,)``, ``eq_x (4, 6)`` -> ``S (4, 6) int32`` (into ``out`` if given)."""
     R = T.shape[1]
-    S = torch.empty((4, 6), dtype=torch.int32, device=T.device)
+    S = out if out is not None else torch.empty((4, 6), dtype=torch.int32, device=T.device)
     _generated().finish_round[(1,)](T.contiguous(), coeff.contiguous(), prefix, eq_x, S, R, BLOCK_R=max(16, triton.next_power_of_2(R)))
     return S
 
