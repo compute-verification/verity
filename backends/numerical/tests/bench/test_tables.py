@@ -439,3 +439,20 @@ def test_markdown_has_the_three_tables_and_the_rejected_list(store: LocalStore, 
     assert "K = 1536; B = 4096; soundness 2^-128" in md and "authentication = excluded" in md
     assert f"- {bad} (A-GKR / {FIRST.name}) → proof_class 'NON_ZK_PROOF_DIAGNOSTIC'" in md
     assert "(no populated Table 2 cell" in md
+
+
+def test_label_keys_are_the_store_vocabulary() -> None:
+    """The predicate reads labels by the keys pinned in ``research.store.vocab`` (and the ``ImportError`` fallback spells them the same);
+    the ledger's closed sets are the vocabulary's enums."""
+    from research.store import vocab
+    from verity_numerical.bench import ledger, ledger_to_store
+
+    assert T.PRODUCER_LABEL_KEYS == (vocab.CANDIDATE, vocab.LABEL) == ("candidate", "label")
+    assert T.VERIFIED_LABELS == ((vocab.INDEPENDENTLY_VERIFIED, (True, "true")), (vocab.VERIFIED, (vocab.VERIFIED_ACCEPTED,)))
+    assert (vocab.INDEPENDENTLY_VERIFIED, vocab.VERIFIED, vocab.VERIFIED_ACCEPTED) == ("independently_verified", "verified", "accepted")
+    assert vocab.key(vocab.INDEPENDENTLY_VERIFIED).status == vocab.DEPRECATED and vocab.key(vocab.VERIFIED_BY).status == vocab.IGNORED
+    assert set(vocab.PROOF_CLASSES) == set(ledger.PROOF_CLASSES) == set(contract.PROOF_CLASSES) | {"COMPONENT"}
+    assert set(vocab.AUTHENTICATION_VALUES) == set(contract.AUTHENTICATION)
+    assert set(vocab.SCOPES) == set(ledger.SCOPES) and set(vocab.TRACKS) == set(ledger.TRACKS)
+    assert set(vocab.CANDIDATES) == {c for _, c in ledger_to_store.CANDIDATES} | {ledger_to_store.candidate("some-other-lane")}
+    assert set(T.RANK) <= set(vocab.PROOF_CLASSES)

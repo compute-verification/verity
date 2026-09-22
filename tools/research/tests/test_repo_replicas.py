@@ -1,6 +1,8 @@
 """`fixtures/artifacts.json` (store README §7): every repo replica this repository advertises hashes to the art id it is registered
 under.  A repo-registered `fixture/v1` carries no meta and no refs (identity is the bytes and the bare file name -- rule 6: content,
-not pathname), so the manifest, and with it the id, is rebuilt here from the file alone; no store state is needed."""
+not pathname), so the manifest, and with it the id, is rebuilt here from the file alone; no store state is needed.  When a fixture's
+bytes change on purpose, `research data refresh-fixtures` re-registers it and keeps the superseded id under the map's `previous`
+block, which is not an entry."""
 from __future__ import annotations
 
 import hashlib
@@ -12,14 +14,21 @@ import pytest
 REPO = Path(__file__).resolve().parents[3]
 MAP = REPO / "fixtures" / "artifacts.json"
 MAX_BYTES = 20 << 20
+PREVIOUS = "previous"
 
 
-def _entries() -> dict[str, str]:
+def _doc() -> dict:
     if not MAP.is_file():
         pytest.skip(f"{MAP.relative_to(REPO)} absent")
     doc = json.loads(MAP.read_text(encoding="utf-8"))
     assert isinstance(doc, dict) and doc, "the replica map is a non-empty {art id: repo-relative path} object"
     return doc
+
+
+def _entries() -> dict[str, str]:
+    entries = {k: v for k, v in _doc().items() if k != PREVIOUS}
+    assert entries, "the replica map has no entries"
+    return entries
 
 
 def test_replica_map_entries_hash_to_their_ids() -> None:
@@ -49,8 +58,24 @@ def test_replica_map_entries_hash_to_their_ids() -> None:
             continue
         got = ArtifactManifest(kind="fixture/v1", meta={}, refs={}, payload=payload).validate().id
         if got != art:
-            problems.append(f"{rel}: hashes to {got}, registered as {art}")
+            problems.append(f"{rel}: hashes to {got}, registered as {art} (`research data refresh-fixtures --preserve` re-registers it)")
     assert not problems, "\n".join(problems)
+
+
+def test_replica_map_previous_block_is_history_of_current_entries() -> None:
+    """`previous` (written by `refresh-fixtures`) maps a current entry's id to the ids its path hashed to before: art ids, each once,
+    never the current id itself; nothing else lives outside the entries."""
+    try:
+        from research.store import ids
+    except ImportError as e:  # pragma: no cover
+        pytest.skip(f"research.store not importable: {e}")
+    doc = _doc()
+    prev = doc.get(PREVIOUS, {})
+    assert isinstance(prev, dict), "`previous` is an object {current art id: [superseded art ids]}"
+    for art, olds in prev.items():
+        assert art in doc and ids.is_art(art), f"previous[{art!r}] is not a current entry"
+        assert isinstance(olds, list) and olds and all(ids.is_art(o) for o in olds), f"previous[{art}] must be a non-empty list of art ids"
+        assert len(set(olds)) == len(olds) and art not in olds, f"previous[{art}] lists an id twice or lists itself"
 
 
 def test_replica_map_paths_are_tracked() -> None:

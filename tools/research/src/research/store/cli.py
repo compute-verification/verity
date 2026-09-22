@@ -12,6 +12,11 @@
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--json]
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
+                                                   warns (stderr) on a key outside the vocabulary or a value outside its enum; writes anyway
+  research data vocab [--json]                     the label vocabulary (vocab.py): key, asserter group, value form, enum values
+  research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR]
+                                                   re-register every fixtures/artifacts.json entry whose bytes changed; old id kept under `previous`
+  research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
   research data reindex [--remote]
   research data sql "SELECT ..." [--json]          read-only connection
   research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
@@ -30,7 +35,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-from . import ids
+from . import ids, vocab
 from .local import LocalStore, StoreError
 from .remote import ConfigError, RemoteConflict
 
@@ -308,7 +313,21 @@ def cmd_label(argv: list[str]) -> int:
     ap.add_argument("--value-json", action="store_true", help="parse VALUE as JSON instead of a string")
     ns = ap.parse_args(argv)
     value = json.loads(ns.value) if ns.value_json else ns.value
+    why = vocab.check(ns.key, value)                       # warning only (README §8.1): the label is written whatever the vocabulary says
+    if why:
+        print(f"research data label: warning: {why}; stored anyway", file=sys.stderr)
     print(LocalStore(ns.store).add_label(ns.target, ns.key, value, ns.by, ref=ns.ref))
+    return 0
+
+
+def cmd_vocab(argv: list[str]) -> int:
+    ap = _ap("vocab")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    if ns.json:
+        _dump({k.name: {"group": k.group, "form": k.form, "values": list(k.values), "status": k.status, "doc": k.doc} for k in vocab.VOCAB.values()})
+    else:
+        print(vocab.render())
     return 0
 
 
@@ -461,9 +480,97 @@ def cmd_mint_credential(argv: list[str]) -> int:
     return 0
 
 
+def cmd_refresh_fixtures(argv: list[str]) -> int:
+    """Re-register every `fixtures/artifacts.json` entry whose bytes changed (`fixtures.refresh`): put under the new id (content-only
+    identity, as the entries were registered), `--preserve` pushes it, the entry is rewritten and the old id kept under `previous`.
+    Prints `old -> new  path` per changed entry.  Exit 1 when an entry's path is missing, conflicts, or was not PRESERVED."""
+    from . import fixtures as F  # noqa: PLC0415
+
+    ap = _ap("refresh-fixtures")
+    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with fixtures/artifacts.json)")
+    ap.add_argument("--preserve", action="store_true", help="push each re-registered fixture to the remote and verify (as `put --preserve`)")
+    ap.add_argument("--dry-run", action="store_true", help="report what would change; put nothing, write nothing")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store, repo=Path(ns.repo).expanduser().resolve() if ns.repo else None)
+    repo = st.repo
+    if repo is None or not (repo / F.REPLICA_MAP).is_file():
+        print(f"research data refresh-fixtures: no {F.REPLICA_MAP} found (give --repo DIR or set RESEARCH_REPO)", file=sys.stderr)
+        return 1
+    rep = F.refresh(st, repo, preserve=ns.preserve, dry_run=ns.dry_run)
+    bad = [e for e in rep["entries"] if e["status"] in ("missing", "conflict") or (ns.preserve and e["status"] == "changed" and not e.get("preserved"))]
+    if ns.json:
+        _dump(rep)
+        return 1 if bad else 0
+    for e in rep["entries"]:
+        if e["status"] == "changed":
+            older = [x for x in e["previous"] if x != e["id"]]
+            print(f"{e['id']} -> {e['new_id']}  {e['path']}" + (f"  (previously also {', '.join(older)})" if older else "")
+                  + ("" if not ns.preserve or ns.dry_run else ("  PRESERVED" if e["preserved"] else "  NOT preserved: " + "; ".join(e["errors"]))))
+        elif e["status"] == "missing":
+            print(f"{e['id']}  {e['path']}  MISSING: not in the working tree")
+        elif e["status"] == "conflict":
+            print(f"{e['id']}  {e['path']}  CONFLICT: " + "; ".join(e["errors"]))
+    what = "dry run, nothing written" if ns.dry_run else ("map rewritten" if rep["written"] else "map unchanged")
+    print(f"{len(rep['entries'])} fixture(s) in {rep['map']}: {rep['changed']} changed, {rep['unchanged']} unchanged, {rep['missing']} missing; {what}",
+          file=sys.stderr)
+    return 1 if bad else 0
+
+
+def _json_object(p: Path) -> dict:
+    """A run record as a dict; an unreadable or non-object file reads as `{"error": ...}` (a doctor reports, never trips)."""
+    try:
+        doc = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return {"error": f"unreadable: {e}"}
+    return doc if isinstance(doc, dict) else {"error": "not a JSON object"}
+
+
+def cmd_doctor(argv: list[str]) -> int:
+    """Run dirs with a `store_publish_error.json` (README §10) whose run *is* now an attempt in this store -- a stale record of a publish
+    that later succeeded (a back-fill, a retry) -- versus those whose run is not (a real failure, or a run still going).  Read-only;
+    `--clean` deletes the stale files and nothing else.  Local attempts only: `reindex --remote` first if an attempt may live only on the vault."""
+    from ..runs import runs_root  # noqa: PLC0415  (the run registry is the runner's half of the package)
+
+    ap = _ap("doctor")
+    ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root (default $RESEARCH_RUNS or ~/.research/runs)")
+    ap.add_argument("--clean", action="store_true", help="delete the stale store_publish_error.json files (never anything else)")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    root = runs_root(ns.runs_dir)
+    st = LocalStore(ns.store)
+    stale: list[dict] = []
+    real: list[dict] = []
+    for d in sorted(root.iterdir()) if root.is_dir() else []:
+        p = d / "store_publish_error.json"
+        if not d.is_dir() or not p.is_file():
+            continue
+        err = _json_object(p)
+        status = _json_object(d / "status.json") if (d / "status.json").is_file() else {}
+        row = {"run": d.name, "path": str(p), "error": str(err.get("error") or "?").splitlines()[0][:200], "at_utc": err.get("at_utc"),
+               "state": status.get("state"), "deleted": False}
+        (stale if ids.is_run_id(d.name) and st.attempt_path(d.name).exists() else real).append(row)
+    if ns.clean:
+        for row in stale:
+            Path(row["path"]).unlink()
+            row["deleted"] = True
+    if ns.json:
+        _dump({"runs_dir": str(root), "store": str(st.root), "stale": stale, "real": real, "cleaned": ns.clean})
+        return 0
+    for row in stale:
+        print(f"{row['run']}  stale  {'deleted' if row['deleted'] else 'attempt in the store'}  {row['error']}")
+    for row in real:
+        print(f"{row['run']}  REAL   state={row['state'] or '?'}  {row['error']}")
+    n = len(stale) + len(real)
+    print(f"{n} store_publish_error.json file(s) under {root}: {len(stale)} stale (run is an attempt in {st.root}), {len(real)} real (not in the store)"
+          + (f"; deleted {len(stale)} stale file(s), nothing else touched" if ns.clean else "; read-only (--clean deletes the stale ones)"), file=sys.stderr)
+    return 0
+
+
 COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "select": cmd_select, "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
+    "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor,
 }
 
 

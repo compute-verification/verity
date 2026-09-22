@@ -347,7 +347,10 @@ Replica resolution order for `fetch`: local objects -> repo replica (`fixtures/a
 path}` of the payload — a file, or a tree's directory; every blob is sha256-checked against the manifest before use, mismatch
 warns on stderr and falls through) -> remote (downloaded bytes are checked too: `IntegrityError` on mismatch). The repo map
 supplies bytes only; the manifest must still be resolvable locally or remotely. Bytes that arrive from a repo or the remote are
-cached into `objects/`. `research data pull --from MACHINE RUN`
+cached into `objects/`. A repo fixture is registered bare (`fixture/v1`, `meta {}`, `refs {}`), so its id is its bytes (plus the
+bare file name); when the bytes change on purpose, `research data refresh-fixtures [--preserve]` re-registers it and moves the old
+id into the map's `previous` block (`{"previous": {"art:<new>": ["art:<old>", ...]}}`), which readers skip: `replica_map()` takes
+`art:` keys only. `research data pull --from MACHINE RUN`
 copies an attempt manifest plus its outputs' manifests and blobs from a machine's local store over ssh (uses
 `research.remote` helpers) — the same-host tier of the planner until R2 is configured.
 
@@ -368,6 +371,30 @@ to group them by when one target carries several rows. `research data labels
 TARGET` shows the latest assertion per (key, by); `--history` shows every one in ts order; `--key K --by PATTERN` (fnmatch)
 filter. `label TARGET KEY VALUE` stores VALUE as a string unless `--value-json`. The store never picks a winner; decision
 tables do (`proof_class=… by=red-team-*`).
+
+### 8.1 Vocabulary (`vocab.py`)
+
+The store validates a label's envelope only; the *words* are pinned in `research/store/vocab.py` so a producer, a verifier and
+a table read the same key. One constant per key (`vocab.PROOF_CLASS`, never the string), grouped by who asserts it, each with a
+value form: `enum` (a closed set), `bool` (`true` | `false`), `int`, `number`, `text`, `list`. `research data vocab [--json]`
+prints the table; the groups are:
+
+- **result** — the producing lane about its own result (`ledger_to_store`, or `label` by hand): `candidate` (enum: A, B-AIR,
+  B-Ligero, C, SP1, shared), `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
+  `authentication` (enum: included | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
+  `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
+  `omitted` (list), `breakthrough` (bool).
+- **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
+  no-dumps), `verifier`, `verifier_seconds`; `independently_verified` (bool) is the back-fill's spelling of `verified` —
+  accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and carries no verdict — ignored.
+- **evidence** — probe captures and instance sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
+  `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`.
+
+Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and
+`"true"` are one word and `"True"` is another. `research data label` warns on stderr, one line, when the key is outside the
+vocabulary or the value outside its enum — and writes the label regardless: the vocabulary is a shared spelling, not a gate, and
+a worktree on an older `main` keeps working. Consumers (`bench.tables`, the trust module) import the constants; the store
+imports no consumer.
 
 ## 9. CLI (v0.1)
 
@@ -390,7 +417,15 @@ research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--c
 research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
 research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
 research data labels TARGET [--history] [--key K] [--by PAT] [--json]
-research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
+research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]      warns (stderr) outside the vocabulary (§8.1); writes anyway
+research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
+research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
+                                              re-register every fixtures/artifacts.json entry whose bytes changed (§7): put as a bare
+                                              fixture/v1 under the new id (--preserve pushes it), rewrite the entry, keep the old id under
+                                              the map's `previous` block; prints old -> new; idempotent; exit 1 on a missing path or conflict
+research data doctor [--clean] [--runs-dir D] [--json]
+                                              run dirs holding a store_publish_error.json (§10): stale (the run is an attempt in this store)
+                                              vs REAL (it is not); read-only unless --clean, which deletes the stale files and nothing else
 research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs)
 research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
 research data reindex [--remote]
