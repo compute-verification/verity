@@ -12,7 +12,7 @@ use verity_direct::params::{FLOOR, LAST};
 use verity_direct::program::UnitIo;
 use verity_direct::stark::{self, DEFAULT_FRI};
 
-fn bf16(s: u64, e: u64, f: u64) -> u64 {
+const fn bf16(s: u64, e: u64, f: u64) -> u64 {
     (s << 15) | (e << 7) | f
 }
 fn f32w(s: u64, e: u64, f: u64) -> u64 {
