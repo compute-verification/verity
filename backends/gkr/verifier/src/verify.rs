@@ -38,7 +38,7 @@ impl<'a> Statement<'a> {
 #[derive(Default, Debug, Clone)]
 pub struct Stats {
     pub bytes_read: usize, pub slots: u64, pub msgs: usize, pub committed_elements: usize, pub rows: usize,
-    pub t_parse: f64, pub t_transcript: f64, pub t_konst: f64, pub t_merkle: f64, pub t_rows: f64, pub t_total: f64,
+    pub t_parse: f64, pub t_transcript: f64, pub t_konst: f64, pub t_merkle: f64, pub t_rows: f64, pub t_total: f64, pub t_rows_fill_cpu: f64, pub t_rows_eval_cpu: f64,
     pub threads: usize, pub opened: Vec<usize>,
 }
 
@@ -635,6 +635,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     let chunk_rows = 8usize;
     let n_chunks = rows.div_ceil(chunk_rows);
     let counter = AtomicUsize::new(0);
+    let (ns_fill, ns_eval) = (std::sync::atomic::AtomicU64::new(0), std::sync::atomic::AtomicU64::new(0));
     let parts: Vec<Vec<Ext>> = std::thread::scope(|s| {
         let hs: Vec<_> = (0..threads).map(|_| s.spawn(|| {
             let mut rhs = vec![Ext::ZERO; set.len()];
@@ -643,6 +644,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
             let mut acc = Vec::new();
             let mut ntt_scratch = Vec::new();
             let mut out = vec![Ext::ZERO; set.len()];
+            let (mut tf, mut te) = (0u64, 0u64);
             loop {
                 let ci = counter.fetch_add(1, Ordering::Relaxed);
                 if ci >= n_chunks { break; }
@@ -650,18 +652,26 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
                 let r1 = (r0 + chunk_rows).min(rows);
                 let lo = r0 * p.k;
                 let hi = (r1 * p.k).min(l);
+                let ta = Instant::now();
                 for x in buf.iter_mut() { *x = Ext::ZERO; }
                 func.fill(lo, hi, &mut buf[..hi - lo], &mut scratch, &mut acc);
+                let tb = Instant::now();
                 for i in r0..r1 {
                     let row = &buf[(i - r0) * p.k..(i - r0 + 1) * p.k];
                     re.eval(row, &mut ntt_scratch, &mut out);
                     for (oi, col) in op.columns.iter().enumerate() { rhs[oi] += out[oi].scale(col.values[i]); }
                 }
+                tf += (tb - ta).as_nanos() as u64;
+                te += tb.elapsed().as_nanos() as u64;
             }
+            ns_fill.fetch_add(tf, Ordering::Relaxed);
+            ns_eval.fetch_add(te, Ordering::Relaxed);
             rhs
         })).collect();
         hs.into_iter().map(|h| h.join().unwrap()).collect()
     });
+    st.t_rows_fill_cpu = ns_fill.load(Ordering::Relaxed) as f64 * 1e-9;
+    st.t_rows_eval_cpu = ns_eval.load(Ordering::Relaxed) as f64 * 1e-9;
     let mut rhs = vec![Ext::ZERO; set.len()];
     for part in parts { for (x, y) in rhs.iter_mut().zip(part) { *x += y; } }
     for (oi, &j) in set.iter().enumerate() {

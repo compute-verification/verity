@@ -96,9 +96,9 @@ fn cpu_model() -> Option<String> {
 
 fn stats_json(res: &Result<(), String>, st: &verify::Stats, extra: &str) -> String {
     format!(
-        "{{\"accepted\": {}, \"error\": {}, \"verify_seconds\": {:.6}, \"t_parse\": {:.6}, \"t_transcript\": {:.6}, \"t_functional_value\": {:.6}, \"t_merkle_proximity\": {:.6}, \"t_rows_linear_test\": {:.6}, \"bytes_read\": {}, \"msgs\": {}, \"slots\": {}, \"committed_elements\": {}, \"ligero_rows\": {}, \"threads\": {}, \"peak_rss_bytes\": {}, \"cpu\": {}{}}}",
+        "{{\"accepted\": {}, \"error\": {}, \"verify_seconds\": {:.6}, \"t_parse\": {:.6}, \"t_transcript\": {:.6}, \"t_functional_value\": {:.6}, \"t_merkle_proximity\": {:.6}, \"t_rows_linear_test\": {:.6}, \"t_rows_fill_cpu\": {:.6}, \"t_rows_eval_cpu\": {:.6}, \"bytes_read\": {}, \"msgs\": {}, \"slots\": {}, \"committed_elements\": {}, \"ligero_rows\": {}, \"threads\": {}, \"peak_rss_bytes\": {}, \"cpu\": {}{}}}",
         res.is_ok(), match res { Ok(()) => "null".to_string(), Err(e) => format!("\"{}\"", e.replace('"', "'")) },
-        st.t_total, st.t_parse, st.t_transcript, st.t_konst, st.t_merkle, st.t_rows, st.bytes_read, st.msgs, st.slots, st.committed_elements, st.rows, st.threads,
+        st.t_total, st.t_parse, st.t_transcript, st.t_konst, st.t_merkle, st.t_rows, st.t_rows_fill_cpu, st.t_rows_eval_cpu, st.bytes_read, st.msgs, st.slots, st.committed_elements, st.rows, st.threads,
         peak_rss_bytes().map(|v| v.to_string()).unwrap_or("null".into()), cpu_model().map(|m| format!("\"{m}\"")).unwrap_or("null".into()), extra)
 }
 
@@ -125,7 +125,7 @@ fn cmd_negatives(args: &[String]) -> i32 {
     let unit = load_circuit(&dir.join("circuit.txt"));
     let epi = load_circuit(&dir.join("epilogue.txt"));
     let th = threads(args);
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(&proofs).expect("proofs dir").map(|e| e.unwrap().path()).filter(|p| p.extension().map(|e| e == "bin").unwrap_or(false)).collect();
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(&proofs).expect("proofs dir").map(|e| e.unwrap().path()).filter(|p| p.extension().map(|e| e == "bin").unwrap_or(false) && p.file_stem().unwrap().to_string_lossy().parse::<u64>().is_ok()).collect();
     entries.sort_by_key(|p| p.file_stem().unwrap().to_string_lossy().parse::<u64>().unwrap_or(u64::MAX));
     let (mut rejected, mut accepted) = (0, 0);
     let mut rows = Vec::new();
