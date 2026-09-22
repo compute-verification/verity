@@ -84,6 +84,23 @@ fn num(js: &str, key: &str) -> f64 {
     field(js, key).trim_matches('"').parse().unwrap_or_else(|_| panic!("{key} is not a number in {js}"))
 }
 
+/// The JSON string value at `key`, quotes included (a reason may contain commas, which `field` stops at).
+fn sfield<'a>(js: &'a str, key: &str) -> &'a str {
+    let i = js.find(key).unwrap_or_else(|| panic!("{key} in {js}")) + key.len();
+    let rest = &js[i..];
+    assert!(rest.starts_with('"'), "{key} is not a string in {js}");
+    let mut esc = false;
+    for (j, ch) in rest.char_indices().skip(1) {
+        match (esc, ch) {
+            (true, _) => esc = false,
+            (false, '\\') => esc = true,
+            (false, '"') => return &rest[..=j],
+            _ => {}
+        }
+    }
+    panic!("unterminated string at {key} in {js}")
+}
+
 /// The comma-separated body of the JSON array at `key` (`key` ends with `[`).
 fn array<'a>(js: &'a str, key: &str) -> &'a str {
     let i = js.find(key).unwrap_or_else(|| panic!("{key} in {js}")) + key.len();
@@ -123,7 +140,7 @@ fn batch_verdict_and_statement_do_not_depend_on_jobs() {
     // the batch accounting: six copies of a 2^-128.16 proof are 2^-125.57 -- reported, and the accept reason carries it
     let bits = num(&j1, "\"batch_bits\":");
     assert!((125.5..125.7).contains(&bits), "{bits}");
-    assert!(field(&j1, "\"batch_reason\":").starts_with("\"accept: all 6 sub-batches accepted; union bound 2^-125."), "{j1}");
+    assert!(sfield(&j1, "\"batch_reason\":").starts_with("\"accept: all 6 sub-batches accepted; union bound 2^-125."), "{j1}");
     assert!(j1.contains("<= 2^-125\""), "{j1}");
     assert_eq!(array(&j1, "\"n_proofs_claimed\":["), "6,6,6,6,6,6", "{j1}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -138,7 +155,7 @@ fn the_batch_union_bound_and_n_proofs_are_enforced() {
     assert_eq!(c, 1, "{js}");
     assert_eq!(field(&js, "\"accepted\":"), "4", "every sub-batch verifies; it is the BATCH that fails: {js}");
     assert_eq!(field(&js, "\"batch_accepted\":"), "false", "{js}");
-    let reason = field(&js, "\"batch_reason\":").to_string();
+    let reason = sfield(&js, "\"batch_reason\":").to_string();
     assert!(reason.starts_with("\"batch: union bound 2^-126."), "{js}");
     assert!(reason.ends_with("over 4 sub-batches exceeds the target 2^-128\""), "{js}");
     let bits = num(&js, "\"batch_bits\":");
@@ -149,16 +166,16 @@ fn the_batch_union_bound_and_n_proofs_are_enforced() {
     // the default target is 128 (no flag), --soundness-bits is the alias, a fractional target prints two decimals
     let (c, js0) = run_code(&["batch", "--system", "fixtures/system.bin", "--dir", dir.to_str().unwrap(), "--jobs", "2"]);
     assert_eq!(c, 1, "{js0}");
-    assert_eq!(field(&js0, "\"batch_reason\":"), reason, "{js0}");
+    assert_eq!(sfield(&js0, "\"batch_reason\":"), reason, "{js0}");
     let (c, jsa) = run_code(&["batch", "--system", "fixtures/system.bin", "--dir", dir.to_str().unwrap(), "--soundness-bits", "126.5"]);
     assert_eq!(c, 1, "{jsa}");
-    assert!(field(&jsa, "\"batch_reason\":").ends_with("exceeds the target 2^-126.50\""), "{jsa}");
+    assert!(sfield(&jsa, "\"batch_reason\":").ends_with("exceeds the target 2^-126.50\""), "{jsa}");
     // (a) the same four at a target they meet: accepted, the bits reported, identical on any --jobs
     let (c1, a1) = run_batch_at(&dir, "1", "1", "126");
     let (c4, a4) = run_batch_at(&dir, "4", "1", "126");
     assert_eq!((c1, c4), (0, 0), "{a1}\n{a4}");
     assert_eq!(field(&a1, "\"batch_accepted\":"), "true", "{a1}");
-    assert!(field(&a1, "\"batch_reason\":").starts_with("\"accept: all 4 sub-batches accepted; union bound 2^-126."), "{a1}");
+    assert!(sfield(&a1, "\"batch_reason\":").starts_with("\"accept: all 4 sub-batches accepted; union bound 2^-126."), "{a1}");
     assert_eq!(signature(&a1), signature(&a4));
     assert_eq!(field(&a1, "\"batch_bits\":"), field(&js, "\"batch_bits\":"), "the bound does not depend on the target");
     let _ = std::fs::remove_dir_all(&dir);
@@ -170,7 +187,7 @@ fn the_batch_union_bound_and_n_proofs_are_enforced() {
         let (c, js) = run_batch_at(&dir, jobs, "1", "128");
         assert_eq!(c, 1, "{js}");
         assert_eq!(field(&js, "\"accepted\":"), "4", "{js}");
-        assert_eq!(field(&js, "\"batch_reason\":"), want, "{js}");
+        assert_eq!(sfield(&js, "\"batch_reason\":"), want, "{js}");
         assert_eq!(array(&js, "\"n_proofs_claimed\":["), "1,1,1,1", "{js}");
     }
     // a proof sized for a LARGER batch is not this batch's either
@@ -184,15 +201,16 @@ fn the_batch_union_bound_and_n_proofs_are_enforced() {
     }
     let (c, js) = run_batch_at(&dir, "4", "1", "126");
     assert_eq!(c, 1, "{js}");
-    assert_eq!(field(&js, "\"batch_reason\":"), "\"batch: n_proofs mismatch (sub_02.proof: n_proofs = 25, 4 sub-batches presented)\"", "{js}");
+    assert_eq!(sfield(&js, "\"batch_reason\":"), "\"batch: n_proofs mismatch (sub_02.proof: n_proofs = 25, 4 sub-batches presented)\"", "{js}");
     // a rejected sub-batch takes precedence over the accounting
     let p = dir.join("sub_01.proof");
     let mut pf = std::fs::read(&p).unwrap();
-    pf[pf.len() - 100] ^= 1;
+    let off = pf.len() - 100;
+    pf[off] ^= 1;
     std::fs::write(&p, &pf).unwrap();
     let (c, js) = run_batch_at(&dir, "4", "1", "126");
     assert_eq!(c, 1, "{js}");
-    assert!(field(&js, "\"batch_reason\":").starts_with("\"sub_01.proof: "), "{js}");
+    assert!(sfield(&js, "\"batch_reason\":").starts_with("\"sub_01.proof: "), "{js}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -213,9 +231,9 @@ fn a_corrupted_sub_batch_rejects_the_batch_with_the_same_error_on_any_jobs() {
         assert_eq!(field(js, "\"batch_accepted\":"), "false", "{js}");
         assert_eq!(field(js, "\"accepted\":"), "5", "{js}");
         assert_eq!(field(js, "\"rejected\":"), "1", "{js}");
-        assert!(field(js, "\"batch_reason\":").starts_with("\"sub_03.proof: merkle path "), "{js}");
+        assert!(sfield(js, "\"batch_reason\":").starts_with("\"sub_03.proof: merkle path "), "{js}");
     }
-    assert_eq!(field(&j1, "\"batch_reason\":"), field(&j8, "\"batch_reason\":"));
+    assert_eq!(sfield(&j1, "\"batch_reason\":"), sfield(&j8, "\"batch_reason\":"));
     assert_eq!(signature(&j1), signature(&j8), "the rejection differs between --jobs 1 and --jobs 8");
     // a wrong coins file for one sub-batch is a rejection of that sub-batch, not a crash
     let mut coins = std::fs::read(dir.join("sub_00.coins")).unwrap();
@@ -224,12 +242,12 @@ fn a_corrupted_sub_batch_rejects_the_batch_with_the_same_error_on_any_jobs() {
     let (c, js) = run_batch(&dir, "4", "1");
     assert_eq!(c, 1, "{js}");
     assert_eq!(field(&js, "\"rejected\":"), "2", "{js}");
-    assert!(field(&js, "\"batch_reason\":").starts_with("\"sub_00.proof: coins are not this verifier's step-0 coins"), "{js}");
+    assert!(sfield(&js, "\"batch_reason\":").starts_with("\"sub_00.proof: coins are not this verifier's step-0 coins"), "{js}");
     // a missing statement file is an operator error (exit 2), reported after the other verdicts
     std::fs::remove_file(dir.join("sub_05.stmt")).unwrap();
     let (c, js) = run_batch(&dir, "4", "1");
     assert_eq!(c, 2, "{js}");
-    assert!(field(&js, "\"batch_reason\":").contains("could not be read"), "{js}");
+    assert!(sfield(&js, "\"batch_reason\":").contains("could not be read"), "{js}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
