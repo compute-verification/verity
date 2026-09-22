@@ -388,24 +388,22 @@ fn mutated_traces_do_not_verify() {
 fn experiment_soundness_shapes() {
     let fx = Fixture::new();
     let air_ = UnitAir { width: fx.lay.width };
-    for (label, n_units, mutate) in [("random-2", 2usize, false), ("mut-4", 4, true), ("mut-64", 64, true), ("mut-2-distinct", 2, true)] {
-        let units = verity_direct::random_units(n_units, 7);
-        let mut values: Vec<verity_direct::air::F> = Vec::new();
-        for (i, u) in units.iter().enumerate() {
-            let (row, _) = if mutate && i == 0 {
-                gen_row(u, &[("g0.max.E", fx.value(u, "g0.max.E") + 1)])
-            } else {
-                gen_row(u, &[])
-            };
-            values.extend_from_slice(&row);
-        }
-        if !mutate {
-            for v in values.iter_mut() { *v = to_f(rand::random::<u32>() as i128); }
-        }
+    let u = nonzero();
+    let muts: Vec<(&str, Vec<(&str, i128)>)> = vec![
+        ("E+1", vec![("g0.max.E", fx.value(&u, "g0.max.E") + 1)]),
+        ("y+1", vec![("y", u.y as i128 + 1)]),
+        ("acc.s flip", vec![("acc.s", fx.value(&u, "acc.s") ^ 1)]),
+        ("a0.f+128", vec![("a[0].f", fx.value(&u, "a[0].f") + 128)]),
+        ("sum.sgn flip", vec![("g0.sum.sgn", fx.value(&u, "g0.sum.sgn") ^ 1)]),
+    ];
+    for (label, ov) in muts {
+        let (row, _) = gen_row(&u, &ov);
+        let failing = failing_constraints(&fx.lay, &row);
+        let mut values = row.clone();
+        values.extend_from_slice(&row);
         let trace = p3_matrix::dense::RowMajorMatrix::new(values, fx.lay.width);
-        let log_n = n_units.trailing_zeros() as usize;
         let proof = stark::prove_trace(&air_, trace, DEFAULT_FRI);
-        let res = stark::verify_proof(&air_, &proof, log_n, DEFAULT_FRI);
-        println!("EXPERIMENT {label}: verify = {:?}", res.is_ok());
+        let res = stark::verify_proof(&air_, &proof, 1, DEFAULT_FRI);
+        println!("EXPERIMENT {label}: failing={:?} verify={:?}", failing, res.err());
     }
 }
