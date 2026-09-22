@@ -246,10 +246,13 @@ def add_input_claim(acc: Acc, rho: Ext, seg_off: int, seg: Segment, x_pt: list[E
     ex = eq_table(x_pt, dev)[: seg.ncols]                            # (ncols, 6)
     e = ext_mul(ec, t_ext(rho, dev))                                  # (units, 6)
     v = acc.seg_view(seg_off, seg.units, seg.ncols)
-    step = max(1, (1 << 21) // seg.ncols)
-    for lo in range(0, seg.units, step):
-        hi = min(seg.units, lo + step)
-        v[lo:hi] = (v[lo:hi] + ext_mul(e[lo:hi].unsqueeze(1), ex.unsqueeze(0))) % P
+    if _field._fast_rank1_add is not None and dev.type == "cuda":
+        _field._fast_rank1_add(v, e, ex)                              # one read + one write of the segment
+    else:
+        step = max(1, (1 << 21) // seg.ncols)
+        for lo in range(0, seg.units, step):
+            hi = min(seg.units, lo + step)
+            v[lo:hi] = (v[lo:hi] + ext_mul(e[lo:hi].unsqueeze(1), ex.unsqueeze(0))) % P
     acc.b = e_add(acc.b, e_mul(rho, value))
 
 

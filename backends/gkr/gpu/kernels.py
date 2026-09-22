@@ -654,6 +654,31 @@ if triton is not None:
         tl.store(out_ptr + base + 5, mmul(c5, R2_C), mask=m)
 
     @triton.jit
+    def rank1_add_kernel(v_ptr, e_ptr, x_ptr, units, ncols, BLOCK: tl.constexpr):
+        """``v[u, c] += e[u] * x[c]`` (extension elements, ``v`` ``(units, ncols, 6)`` canonical, any int dtype) for a
+        block of ``BLOCK`` units and one column per program: one read + one write of ``v``."""
+        pb = tl.program_id(0)
+        c = tl.program_id(1)
+        u = pb * BLOCK + tl.arange(0, BLOCK)
+        m = u < units
+        vb = (u.to(tl.int64) * ncols + c) * 6
+        v0, v1, v2, v3, v4, v5 = load6(v_ptr, vb, m)
+        e0, e1, e2, e3, e4, e5 = load6(e_ptr, u * 6, m)
+        x0 = tl.load(x_ptr + c * 6 + 0).to(tl.int32)
+        x1 = tl.load(x_ptr + c * 6 + 1).to(tl.int32)
+        x2 = tl.load(x_ptr + c * 6 + 2).to(tl.int32)
+        x3 = tl.load(x_ptr + c * 6 + 3).to(tl.int32)
+        x4 = tl.load(x_ptr + c * 6 + 4).to(tl.int32)
+        x5 = tl.load(x_ptr + c * 6 + 5).to(tl.int32)
+        p0, p1, p2, p3, p4, p5 = ext_mmul(e0, e1, e2, e3, e4, e5, x0, x1, x2, x3, x4, x5)
+        tl.store(v_ptr + vb + 0, madd(v0, p0), mask=m)
+        tl.store(v_ptr + vb + 1, madd(v1, p1), mask=m)
+        tl.store(v_ptr + vb + 2, madd(v2, p2), mask=m)
+        tl.store(v_ptr + vb + 3, madd(v3, p3), mask=m)
+        tl.store(v_ptr + vb + 4, madd(v4, p4), mask=m)
+        tl.store(v_ptr + vb + 5, madd(v5, p5), mask=m)
+
+    @triton.jit
     def split_limbs_kernel(v_ptr, out_ptr, n, BLOCK: tl.constexpr):
         """``out[i, idx] = l_i`` for ``v[idx] = Σ_i 2^(8i) l_i``, ``l_i ∈ [-128, 128)`` (canonical int32 in, 4 x int8 out)."""
         idx = (tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)).to(tl.int64)
@@ -686,6 +711,18 @@ def eq_outer(hi: torch.Tensor, lo: torch.Tensor, out_dtype=torch.int64) -> torch
         eq_outer_kernel[((n + BLOCK - 1) // BLOCK,)](hi.contiguous().view(-1), lo.contiguous().view(-1), out.view(-1), n,
                                                      LO_LOG=lo_log, BLOCK=BLOCK, num_warps=4)
     return out
+
+
+def rank1_add(v: torch.Tensor, e: torch.Tensor, x: torch.Tensor) -> None:
+    """In place ``v[u, c] += e[u] x[c]``: ``v`` ``(units, ncols, 6)`` contiguous canonical, ``e`` ``(units, 6)``, ``x``
+    ``(ncols, 6)`` canonical int64."""
+    units, ncols, _ = v.shape
+    assert v.is_contiguous()
+    if units == 0 or ncols == 0:
+        return
+    BLOCK = 128
+    grid = ((units + BLOCK - 1) // BLOCK, ncols)
+    rank1_add_kernel[grid](v.view(-1), e.contiguous().view(-1), _mont(x).view(-1), units, ncols, BLOCK=BLOCK, num_warps=4)
 
 
 def split_limbs(v: torch.Tensor) -> torch.Tensor:

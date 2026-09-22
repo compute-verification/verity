@@ -456,6 +456,7 @@ _fast_gate_eval = None
 _fast_combine_level = None
 _fast_split_limbs = None
 _fast_eq_outer = None
+_fast_rank1_add = None
 try:
     import os as _os
 
@@ -472,6 +473,7 @@ try:
             _fast_combine_level = _kernels.combine_level
             _fast_split_limbs = _kernels.split_limbs
             _fast_eq_outer = _kernels.eq_outer
+            _fast_rank1_add = _kernels.rank1_add
 except Exception:  # noqa: BLE001 -- no Triton / no CUDA: the torch path is used
     _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = _fast_scatter = _fast_gate_eval = _fast_combine_level = None
-    _fast_split_limbs = _fast_eq_outer = None
+    _fast_split_limbs = _fast_eq_outer = _fast_rank1_add = None

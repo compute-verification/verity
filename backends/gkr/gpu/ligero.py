@@ -305,23 +305,60 @@ def _pad_a(a: torch.Tensor, rows: int, k: int) -> torch.Tensor:
     return full.view(rows, k, DEG)
 
 
-def _a_transposed(a: torch.Tensor, rows: int, k: int, int8: bool):
-    """``aᵀ`` as the ``(k·6, rows)`` GEMM operand ``af[(i, c), r] = a[r k + i, c]`` (zero past ``len(a)``), written once
-    in int32 straight into ``Limbs8``'s padded layout on the INT8 path (no int64 ``(rows, k, 6)`` copies: the functional
-    is 26 GB at the full VU batch and the transposed copies were the opening's memory peak)."""
+def _write_a_transposed(a: torch.Tensor, rows: int, k: int, af: torch.Tensor) -> None:
+    """``af[(i, c), r] = a[r k + i, c]`` (zero past ``len(a)``) into the top-left ``(k·6, rows)`` of the zeroed ``af``."""
     l = a.shape[0]
-    if not int8:
-        return _pad_a(a, rows, k).permute(1, 2, 0).reshape(k * DEG, rows)
     M = k * DEG
-    Mp, Kp = Limbs8.padded_shape(M, rows, "a")
-    af = torch.zeros((Mp, Kp), dtype=torch.int32, device=a.device)
     full_rows = l // k
     if full_rows:
         af[:M, :full_rows] = a[: full_rows * k].view(full_rows, M).t()
     rem = l - full_rows * k
     if rem:
         af[: rem * DEG, full_rows] = a[full_rows * k:].reshape(-1)
+
+
+def _a_transposed(a: torch.Tensor, rows: int, k: int, int8: bool):
+    """``aᵀ`` as the ``(k·6, rows)`` GEMM operand, written once in int32 straight into ``Limbs8``'s padded layout on
+    the INT8 path (no int64 ``(rows, k, 6)`` copies: those were the opening's memory peak)."""
+    if not int8:
+        return _pad_a(a, rows, k).permute(1, 2, 0).reshape(k * DEG, rows)
+    M = k * DEG
+    Mp, Kp = Limbs8.padded_shape(M, rows, "a")
+    af = torch.zeros((Mp, Kp), dtype=torch.int32, device=a.device)
+    _write_a_transposed(a, rows, k, af)
     return Limbs8(af, "a", shape=(M, rows))
+
+
+def _omega_powers(n: int, device) -> torch.Tensor:
+    """``ω_n^e`` for ``e < n`` as int64."""
+    key = ("omega_pows", n, str(device))
+    t = _TW.get(key)
+    if t is None:
+        w = root_of_unity(n)
+        pw = [1]
+        for _ in range(n - 1):
+            pw.append(pw[-1] * w % P)
+        t = _TW[key] = torch.tensor(pw, dtype=torch.int64, device=device)
+    return t
+
+
+def eval_rows_at(a: torch.Tensor, rows: int, k: int, js: list[int], n: int, device) -> torch.Tensor:
+    """``a_i(η_j)`` for every row ``i`` and opened column ``j`` as ``(rows, t, 6)``: the rows are values on the
+    ``k``-domain, so ``a_i(η_j) = Σ_m (INTT a_i)_m η_j^m`` = one modular GEMM ``(M V)ᵀ aᵀ`` with ``M`` the INTT matrix
+    and ``V[m, j] = ω_n^(j m)`` -- the same evaluation as encoding every row on the ``n``-domain and keeping ``t``
+    positions (``encode_ext(·)[:, js]``), without the 43k-row NTT."""
+    t = len(js)
+    jt = torch.tensor(js, dtype=torch.int64, device=device)
+    exps = (jt[None, :] * torch.arange(k, dtype=torch.int64, device=device)[:, None]) % n     # (k, t)
+    V = _omega_powers(n, device)[exps]                                                        # (k, t)
+    MV = _mm_mod_rows(_intt_matrix(k, device), V)                                             # (k, t)
+    aT = torch.zeros((k * DEG, rows), dtype=torch.int32, device=device)
+    _write_a_transposed(a, rows, k, aT)
+    aT = aT.view(k, DEG * rows)
+    if not use_int8(aT.device):
+        aT = aT.to(torch.int64)
+    out = _mm(MV.T.contiguous(), aT)                                                          # (t, 6·rows)
+    return out.view(t, DEG, rows).permute(2, 0, 1)                                            # (rows, t, 6)
 
 
 def _intt_matrix(k: int, device) -> torch.Tensor:
@@ -442,19 +479,19 @@ def verify_open(root: bytes, params: LigeroParams, length: int, a: torch.Tensor,
         raise VerifyError("ligero: linear functional value mismatch")
     js = open_set(tr, n, p.t)
     w_enc = py_exts(encode_ext(t_exts(op.w, device), n))
-    ar = _pad_a(a, rows, k)
     jt = torch.tensor(js, dtype=torch.int64, device=device)
-    # a_i(η_j) at the opened columns only (encode every row of a; keep t positions)
-    a_at = torch.empty((rows, p.t, DEG), dtype=torch.int64, device=device)
-    for lo in range(0, rows, ROW_CHUNK):
-        hi = min(rows, lo + ROW_CHUNK)
-        a_at[lo:hi] = encode_ext(ar[lo:hi], n)[:, jt]
+    # a_i(η_j) at the opened columns only (one GEMM; = encode every row of a and keep t positions)
+    a_at = eval_rows_at(a, rows, k, js, n, device)                                         # (rows, t, 6)
     cols = torch.from_numpy(op.columns.astype("int64")).to(device).T                      # (rows, t)
     if bool((cols >= P).any()):
         raise VerifyError("ligero: non-canonical column value")
     lhs = py_exts((r.unsqueeze(1) * cols.unsqueeze(-1) % P).sum(dim=0) % P)               # (t, 6)
     rhs = py_exts((a_at * cols.unsqueeze(-1) % P).sum(dim=0) % P)
-    omega = root_of_unity(n)
+    del a_at
+    # q(η_j) = Σ_m qc[m] η_j^m for the t columns as one modular matmul (was a Python Horner loop: 1.6M ext ops)
+    m_idx = torch.arange(2 * k - 1, dtype=torch.int64, device=device)
+    E = _omega_powers(n, device)[(jt[:, None] * m_idx[None, :]) % n]                       # (t, 2k-1) = η_j^m
+    qv_all = py_exts(_mm_mod_rows(E, t_exts(op.qc, device)))                              # (t, 6)
     for oi, j in enumerate(js):
         path = op.paths[oi]
         if len(path) != p.depth:
@@ -463,9 +500,5 @@ def verify_open(root: bytes, params: LigeroParams, length: int, a: torch.Tensor,
             raise VerifyError(f"ligero: merkle path {j}")
         if lhs[oi] != w_enc[j]:
             raise VerifyError(f"ligero: proximity test at column {j}")
-        eta = pow(omega, j, P)
-        qv = (0,) * DEG
-        for c in reversed(op.qc):
-            qv = e_add(e_scale(qv, eta), c)
-        if qv != rhs[oi]:
+        if qv_all[oi] != rhs[oi]:
             raise VerifyError(f"ligero: linear test at column {j}")
