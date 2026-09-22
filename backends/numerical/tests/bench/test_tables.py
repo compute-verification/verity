@@ -118,7 +118,7 @@ def test_table1_is_definitional_and_frozen() -> None:
         assert len(row) == len(T.TABLE1_COLUMNS) and all(isinstance(x, str) and x for x in row)
         assert c.zk == "as configured" or c.zk.startswith(T.ZK_VALUES), c.zk
     a, b, sp1 = T.CANDIDATES
-    assert a.proof_classes == ("NON_ZK_PROOF",) and a.zk == "No"
+    assert a.proof_classes == ("NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF") and a.zk == "No"
     assert b.proof_classes == ("COMPLETE_ZK_BACKEND",) and b.drilldown_classes == ("COMPLETE_HVZK_BACKEND",)
     assert b.zk.startswith("Malicious-verifier ZK (interactive") and "; HVZK (Fiat–Shamir variant" in b.zk
     assert set(sp1.proof_classes) == {"NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND"}
@@ -222,18 +222,24 @@ def test_other_device_never_populates_the_row(store: LocalStore) -> None:
 
 
 def test_diagnostic_class_is_rejected(store: LocalStore) -> None:
-    art = put(store, result(proof_class="NON_ZK_PROOF_DIAGNOSTIC"))
+    art = put(store, result(proof_class="ARITHMETIC_DIAGNOSTIC"))
     tab = T.build(store)
     assert cell(tab) is None
-    assert rejected(tab, art) == ["proof_class 'NON_ZK_PROOF_DIAGNOSTIC' is not A-GKR's declared class NON_ZK_PROOF"]
+    assert rejected(tab, art) == ["proof_class 'ARITHMETIC_DIAGNOSTIC' is not A-GKR's declared class NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF"]
+
+
+def test_a_gkr_complete_non_zk_proof_is_its_declared_class(store: LocalStore) -> None:
+    """The user's label for a complete non-ZK proof is NON_ZK_PROOF_DIAGNOSTIC; every A-GKR emitter writes it."""
+    put(store, result(proof_class="NON_ZK_PROOF_DIAGNOSTIC"))
+    assert cell(T.build(store)) is not None
 
 
 def test_redteam_downgrade_is_rejected_and_a_later_reaudit_supersedes(store: LocalStore) -> None:
-    art = put(store, result(), labels=[("proof_class", "NON_ZK_PROOF_DIAGNOSTIC", REDTEAM, "2026-09-22T11:00:00Z")])
+    art = put(store, result(), labels=[("proof_class", "ARITHMETIC_DIAGNOSTIC", REDTEAM, "2026-09-22T11:00:00Z")])
     tab = T.build(store)
     assert cell(tab) is None
     (reason,) = rejected(tab, art)
-    assert reason.startswith("downgraded: red-team-x") and "proof_class=NON_ZK_PROOF_DIAGNOSTIC, below NON_ZK_PROOF" in reason
+    assert reason.startswith("downgraded: red-team-x") and "proof_class=ARITHMETIC_DIAGNOSTIC, below NON_ZK_PROOF" in reason
     # a red team cannot upgrade; a later red-team event supersedes the verdict (latest-event-wins)
     store.add_label(art, "proof_class", "COMPLETE_ZK_BACKEND", "red-team-y", ts="2026-09-22T12:00:00Z")
     assert cell(T.build(store)) is not None
@@ -429,7 +435,7 @@ def test_snapshot_of_nothing_is_refused(store: LocalStore, capsys: pytest.Captur
 
 
 def test_markdown_has_the_three_tables_and_the_rejected_list(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> None:
-    bad = put(store, result(proof_class="NON_ZK_PROOF_DIAGNOSTIC"))
+    bad = put(store, result(proof_class="ARITHMETIC_DIAGNOSTIC"))
     assert T.main(["--root", str(store.root)]) == 0
     md = capsys.readouterr().out
     assert md.count("\n## Table ") + md.startswith("## Table ") == 3
@@ -437,7 +443,7 @@ def test_markdown_has_the_three_tables_and_the_rejected_list(store: LocalStore, 
                     "## Table 3 — Prover phase decomposition"):
         assert heading in md
     assert "K = 1536; B = 4096; soundness 2^-128" in md and "authentication = excluded" in md
-    assert f"- {bad} (A-GKR / {FIRST.name}) → proof_class 'NON_ZK_PROOF_DIAGNOSTIC'" in md
+    assert f"- {bad} (A-GKR / {FIRST.name}) → proof_class 'ARITHMETIC_DIAGNOSTIC'" in md
     assert "(no populated Table 2 cell" in md
 
 
