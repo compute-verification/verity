@@ -9,6 +9,7 @@ from verity_numerical.checker.params import Params
 from verity_numerical.checker.step import gen_step
 
 from .compile import Expr, P, System
+from .field import compiled
 from .unit import flatten_hints
 
 __all__ = ["Tables", "build_witness", "check_constraints", "eval_expr", "hints_tensor", "tables"]
@@ -133,9 +134,13 @@ def apply_sparse(triples, consts: torch.Tensor, n_out: int, M: torch.Tensor) -> 
     qq, jj, cc = triples
     out = torch.zeros((n_out, M.shape[1]), dtype=torch.int64, device=M.device)
     if jj.numel():
-        terms = (M.index_select(0, jj) * cc[:, None]) % P
+        terms = compiled(_scaled_rows, M.device)(M, jj, cc)
         out.index_add_(0, qq, terms)
     return (out + consts[:, None]) % P
+
+
+def _scaled_rows(M: torch.Tensor, jj: torch.Tensor, cc: torch.Tensor) -> torch.Tensor:
+    return (M.index_select(0, jj) * cc[:, None]) % P
 
 
 def check_constraints(sys: System, tb: Tables, W: torch.Tensor, pub: dict[str, torch.Tensor]) -> list[str]:

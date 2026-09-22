@@ -26,7 +26,16 @@ from verity_numerical.security import accounting as acc
 from . import merkle
 from .chain import N_FAMILIES, chain_coefs
 from .compile import P, System
-from .field import GEN, batch_modinv, encode, eval_on_coset, intt, modinv, zh_on_coset
+from .field import (
+    GEN,
+    batch_modinv,
+    compiled,
+    encode,
+    eval_on_coset,
+    intt,
+    modinv,
+    zh_on_coset,
+)
 from .unit import public_vectors
 from .witness import Tables, apply_sparse, build_witness
 
@@ -134,12 +143,17 @@ class Proof:
 # Helpers
 # ---------------------------------------------------------------------------------------------------------------------
 
+def _combine_row(c: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
+    return ((c[:, None] * M) % P).sum(0) % P
+
+
 def _combine(coef: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
     """(D, cols) = coef (D, R) @ M (R, cols) mod p, reducing every product before the sum (R < 2^32 terms)."""
     D = coef.shape[0]
     out = torch.empty((D, M.shape[1]), dtype=torch.int64, device=M.device)
+    row = compiled(_combine_row, M.device)
     for d in range(D):
-        out[d] = ((coef[d][:, None] * M) % P).sum(0) % P
+        out[d] = row(coef[d], M)
     return out
 
 

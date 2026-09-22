@@ -85,23 +85,28 @@ def _butterfly_eager(a: torch.Tensor, b: torch.Tensor, tw: torch.Tensor) -> torc
     return torch.cat(((a + bt) % P, (a - bt) % P), dim=-1)
 
 
-_BUTTERFLY: dict = {}
+_COMPILED: dict = {}
 
 
-def _butterfly(device) -> object:
-    """The stage kernel: ``torch.compile``d (fused: one pass instead of seven) on CUDA, eager elsewhere or if the
-    compiler is unavailable."""
-    key = str(device)
-    fn = _BUTTERFLY.get(key)
-    if fn is None:
-        fn = _butterfly_eager
-        if key.startswith("cuda"):
+def compiled(fn, device):
+    """``torch.compile(fn, dynamic=True)`` on CUDA (elementwise chains fuse into one pass), ``fn`` itself elsewhere
+    or if the compiler is unavailable.  Memoised per (function, device)."""
+    key = (fn, str(device))
+    out = _COMPILED.get(key)
+    if out is None:
+        out = fn
+        if str(device).startswith("cuda"):
             try:
-                fn = torch.compile(_butterfly_eager, dynamic=True)
+                out = torch.compile(fn, dynamic=True)
             except Exception:  # noqa: BLE001 -- no compiler: stay eager
-                fn = _butterfly_eager
-        _BUTTERFLY[key] = fn
-    return fn
+                out = fn
+        _COMPILED[key] = out
+    return out
+
+
+def _butterfly(device):
+    """The stage kernel: fused (one pass instead of seven) on CUDA."""
+    return compiled(_butterfly_eager, device)
 
 
 def ntt(x: torch.Tensor, inverse: bool = False) -> torch.Tensor:
