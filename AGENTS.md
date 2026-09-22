@@ -61,6 +61,14 @@ experimental evidence belongs in artifact storage. Temporary working notes
 need not become permanent documentation. Remove obsolete rules and machinery
 rather than accumulating them.
 
+## Where writing goes
+
+- This repo: code, tests, small fixtures, and maintained current-truth docs only (`README.md`, `AGENTS.md`, `PROTOCOL.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`).
+- Lane reports, handoffs, findings, drafts: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|handoff|finding|draft`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`.
+- Evidence (explore JSON, plots, gate outputs, run results): `~/.research/notes/campaigns/<campaign>/assets/<lane>/...`, cited as `notes-asset:<path>`; the overhead ledger (`backends/numerical/reports/ledger/*.jsonl`) stays here for now.
+- Architecture decisions: Notion (the coordinator publishes); no `docs/adr/` in the repo.
+- `tests/test_repository.py` rejects report-genre files (`*HANDOFF*`, `*REPORT*`, `*URGENT*`, `*DRAFT*`, `*TRIAGE*`, `*STATUS*`, anything under `reports/` or `results/`), and `.gitignore` keeps them out of `git add`.
+
 ## Skills
 
 When creating or modifying a skill in `.agents/skills/`, use

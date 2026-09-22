@@ -1,14 +1,14 @@
 # B-Ligero at the checker-v2 relation: the witness shape (b-v2 lane, 2026-09-22)
 
-**Scope: the Ligero layout** of Candidate B for checker v2 (`backends/numerical/reports/checker_min.md`, `checker/v2/`:
+**Scope: the Ligero layout** of Candidate B for checker v2 (`note:r20-proof/checker-min/20260922T0727Z-report-checker-min`, `checker/v2/`:
 the same relation as v1 -- every accepted pair is accepted by both -- with 33 mul / 9 lin / 89 lookups / 15 hints per
 unit instead of 358 / 137 / 306 / 225, at the price of 5.2M fixed-table rows).  Computed by `v2_shape.py` from the v2
 census under `VERITY_CHECKER_VARIANT=v2` plus the BabyBear repairs of `explore.fields.small_field_census`
-(`v2_shape.json`); the measured buckets at this shape are in `backends/numerical/reports/b_measured_4090_v2.md`.
+(`v2_shape.json`); the measured buckets at this shape are in `note:r20-proof/b-v2/20260922T0818Z-report-b-measured-4090-v2`.
 Nothing of the relation is changed here: the predicates are checker-min's verified gadgets; this file only decides where
 their wires, hints, helpers and tables sit in the committed matrix and counts what the Ligero tests touch.
 
-## 1. Layout decision: rows are AIR columns, aligned by unit (the transposed layout of `LINTEST.md` 2.3)
+## 1. Layout decision: rows are AIR columns, aligned by unit (the transposed layout of `note:r20-proof/b-lintest/20260922T0733Z-report-lintest` 2.3)
 
 Row `(column j, block b)` holds slot `j` of the `l = 3840` consecutive units of block `b` (`blocks = ceil(393,216 / 3840) =
 103`, 0.6% waste), `k - l = 256` randomizers per row (HVZK), coset-major systematic RS `[16384, 4096]` over BabyBear as
@@ -41,10 +41,10 @@ before.  Consequences, all of which v1's "rows hold whole units" layout lacked:
 | `F_c` quadratic triples (helper identities) | 89 | | 95 | v1: 320 (as `F_c x F_t`: 6 coordinate products each) |
 | `F_t`-linear identities (incl. range-chunk splits) | 9 | +2 | 11 | + 4 transition-linkage constraints per unit; v1: 147 |
 
-The BabyBear repairs are checker-min's *modelled* deltas (`checker_min.md` 3.2, `babybear_rules.md`): `state_decode` /
+The BabyBear repairs are checker-min's *modelled* deltas (`note:r20-proof/checker-min/20260922T0727Z-report-checker-min` 3.2, `note:r20-proof/red-team-babybear/20260922T0605Z-report-babybear-rules`): `state_decode` /
 `epilogue` word arithmetic as two 16-bit limbs (F4; only the word-in unit and the epilogue need it -- the state-chained VU
 body is proven over 31-bit fields, so charging F4 to every unit is an overcount kept for safety), the signed-sum tightening,
-and `TNORM_HI` (the `v_hi A(k)` product as a lookup; `checker_min.md` shows the product never exceeds p on admissible
+and `TNORM_HI` (the `v_hi A(k)` product as a lookup; `note:r20-proof/checker-min/20260922T0727Z-report-checker-min` shows the product never exceeds p on admissible
 inputs, so this too is conservative).  Stated, not verified as a gadget set: the lane brief's "take the modelled deltas and
 state them".
 
@@ -87,7 +87,7 @@ rows).  Encoded codeword 6.83 GB (v1 20.4 GB).
 
 | class | count | `r^T A` on the row |
 |---|---|---|
-| unit identities (11) + transition linkage (4), unit-major enumeration `u C + c` | 5,898,240 | `s_i G`, `G = (rho^(u C))_u` restricted to the block: **class 1** (all 34,093 witness rows; the neighbour terms fold in with `rho^(-C)`, as `LINTEST.md` 2.1) |
+| unit identities (11) + transition linkage (4), unit-major enumeration `u C + c` | 5,898,240 | `s_i G`, `G = (rho^(u C))_u` restricted to the block: **class 1** (all 34,093 witness rows; the neighbour terms fold in with `rho^(-C)`, as `note:r20-proof/b-lintest/20260922T0733Z-report-lintest` 2.1) |
 | per-table sum `sum_j h_j - sum_v h_v = 0` (6 coordinate equations x 11 tables) | 66 | constant `rho^(idx_T)` on every `h_j` coordinate slot: **class 2, the ONES row** (all 58,710 helper rows) |
 | table-side `h_v (z_T - t_v(beta_T)) = m_T(v)` (6 `F_t` equations per table row) | 37,546,980 | on the multiplicity rows `-rho^(idx_v)`: geometric in `v` = class 1 again; on the 9,778 `h_v` rows the 6x6 multiplication-by-`(z_T - t_v(beta_T))` matrix times `rho^(idx_v)`: **varies with `v`: exceptional** |
 | boundary (`row0_*`), last unit's missing successor | 2 | touch <= 2 rows per class: exceptional |
@@ -118,7 +118,7 @@ rows are far fewer than the 106M range chunks they replace.
 ### 3.4 HVZK
 
 As v1: 256 random symbols per row (`104,217 x 256 x 4 B = 107 MB` of randomizers, v1 318 MB), 3 blinding rows per tableau,
-HM96 leaf commitments per column (`zk_cost.json`: unchanged per column, the leaves are per column not per row).  All rows
+HM96 leaf commitments per column (`notes-asset:campaigns/r20-proof/assets/zk-construction/reports/zk_cost.json`: unchanged per column, the leaves are per column not per row).  All rows
 above include the randomizer slots; nothing else is added for HVZK.  Malicious-verifier ZK (step 0) is unchanged.
 
 ## 4. Variant (b): public table coefficients (MODELLED, not the protocol as written)
@@ -136,10 +136,10 @@ classes -- a decision for the b-ligero2 lane and the red team.
 ## 5. Batch-size crossover (where v2 beats v1)
 
 Rows: v1 = `75.83 B` (tables negligible); v2 = `22.66 B + 11,414` (witness + helper rows per VU, plus the fixed table side).
-Row crossover `B* = 11,414 / (75.83 - 22.66) = 215 VUs`.  In measured time (`b_measured_4090_v2.md`): v2's fixed per-proof
+Row crossover `B* = 11,414 / (75.83 - 22.66) = 215 VUs`.  In measured time (`note:r20-proof/b-v2/20260922T0818Z-report-b-measured-4090-v2`): v2's fixed per-proof
 cost is the table rows' commitment + the 6.26M table inversions + the exceptional linear-test rows; the per-VU marginal is
 everything else / 4096; the crossover is where `fixed + marginal x B = v1's 28.4 us x B`.  Below it (a few hundred VUs) the
-SHIFT table (57% of the table rows) should be replaced by its split-u variant (`checker_min.md` section 4: two 21k-row
+SHIFT table (57% of the table rows) should be replaced by its split-u variant (`note:r20-proof/checker-min/20260922T0727Z-report-checker-min` section 4: two 21k-row
 lookups per product, +16 lookups per unit), which is a relation-preserving table change, not a new predicate.
 
 ## 6. Conventions for the b-ligero2 port (in addition to `README.md`'s b-commit / b-lintest lists)

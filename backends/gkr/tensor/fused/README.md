@@ -2,8 +2,8 @@
 
 One Triton kernel per sumcheck round: load the tables' u32 limbs for a tile, fold with the previous challenge, evaluate the
 degree-3 round polynomial at 4 points, write the folded tables -- nothing else touches HBM.  Measured on an RTX 4090
-(vy-sp1, torch 2.6 cu124, Triton 3.2); report: `backends/numerical/reports/fused_sumcheck_4090.md` (+ `.json`,
-`fused_logup_4090.json`), roofline: `ROOFLINE.md`.
+(vy-sp1, torch 2.6 cu124, Triton 3.2); report: `note:r20-proof/a-fused/20260922T0630Z-report-fused-sumcheck-4090` (+ `.json`,
+`fused_logup_4090.json`), roofline: `note:r20-proof/a-fused/20260922T0536Z-report-roofline`.
 
 | file | what |
 |---|---|
@@ -25,7 +25,7 @@ degree-3 round polynomial at 4 points, write the folded tables -- nothing else t
 
 **A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6 cu124, Triton 3.2; runs `r20260922-064953-f9bb` (checker,
 25 tests bit-exact on CUDA) and `r20260922-071602-522d` (logUp); floors at the A100's measured copy bandwidth 1,754 GB/s;
-full table `backends/numerical/reports/anchor_a100.md`):
+full table `note:r20-proof/anchor-a100/20260922T0820Z-report-anchor-a100`):
 
 | round (A100) | HBM floor | SIMT fused | TC fused | vs 4090 (SIMT) |
 |---|---|---|---|---|

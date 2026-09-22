@@ -5,7 +5,7 @@ elements column-wise (Ligero layout: one leaf per codeword column, binary tree o
 Poseidon2/BabyBear on the device, and open columns with authentication paths. Every GPU hash is bit-exact against a CPU
 reference. This is *not* Verity's external commitment hash (`verity.commitments.merkle`, unchanged).
 
-Measured rates (RTX 4090, run `r20260922-054241-b966`) are in `backends/numerical/reports/hash_gpu.md`; headline: full
+Measured rates (RTX 4090, run `r20260922-054241-b966`) are in `note:r20-proof/hash-gpu/20260922T0554Z-report-hash-gpu`; headline: full
 tree over Candidate B's 20.36 GB commitment in 45.6 ms with SHA-256 (446 GB/s), 56.6 ms with Blake3 (359 GB/s), 353 ms with
 Poseidon2-16 (58 GB/s); the torch Poseidon2 variants (int64 elementwise, INT8 tensor-core MDS) are 0.3-0.4 GB/s.
 
@@ -21,7 +21,7 @@ Poseidon2-16 (58 GB/s); the torch Poseidon2 variants (int64 elementwise, INT8 te
 | `poseidon2_torch.py` | torch permutation with three MDS strategies: `blocks` (int64 shift-add), `fp64` (float64 matmul), `int8` (`torch._int_mm`, 4 INT8 limbs per element, INT32 accumulate, deferred reduction) |
 | `reference.py` | CPU leaf / node / tree / `verify_path` for all hashes (`hashlib`, `blake3`, `poseidon2_ref`) |
 | `bench.py` | the recorded measurement (CUDA events, warm, median of `--reps`) |
-| `reprice.py` | feeds measured rates into `explore.tensor.Priced.times` -> `backends/numerical/reports/hash_gpu.json` |
+| `reprice.py` | feeds measured rates into `explore.tensor.Priced.times` -> `notes-asset:campaigns/r20-proof/assets/hash-gpu/reports/hash_gpu.json` |
 | `tests/test_hash_gpu.py` | reference vectors (CPU, run anywhere) + GPU-vs-CPU bit-exactness (skipped without CUDA) |
 
 Digest conventions: every digest is `(n, 8)` `uint32`. SHA-256 words are big-endian, Blake3 little-endian (so `digest_bytes`
@@ -87,7 +87,7 @@ Candidate A R = 48,873 rows (3.20 GB). Full tree build, median of 5.
 | poseidon2-16 / torch int8 (`_int_mm`) | 0.27 | 76,400 (x16 from a 1,024-col slice) | 18,660 | 0.25 | 12,640 | -- |
 
 **A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, driver 580.126.16, torch 2.6.0+cu124, cupy 14.2.0; run
-`r20260922-063811-e561`, same bench, `--reps 7`; full table and floors in `backends/numerical/reports/anchor_a100.md`):
+`r20260922-063811-e561`, same bench, `--reps 7`; full table and floors in `note:r20-proof/anchor-a100/20260922T0820Z-report-anchor-a100`):
 
 | hash (A100) | B GB/s | B ms | B us/VU | A GB/s | A ms | vs 4090 |
 |---|---|---|---|---|---|---|
@@ -120,7 +120,7 @@ the 16x16 multiply they remove.
 
 Re-pricing (`reprice.py`, utilisation 0.172): with the measured SHA-256 rate the hash bucket is 9% of Candidate B's time on the
 4090 (the model's assumed 50 GB/s made it 70%); B becomes matmul-bound. With Poseidon2-16 it is 44%. A100/H100 rows in
-`hash_gpu.json` scale the 4090 rate by the bandwidth ratio (x2.02 / x3.32) and are labelled as a SCALING -- an upper bound,
+`notes-asset:campaigns/r20-proof/assets/hash-gpu/reports/hash_gpu.json` scale the 4090 rate by the bandwidth ratio (x2.02 / x3.32) and are labelled as a SCALING -- an upper bound,
 since the SHA-256/Blake3 kernels are compute-bound at 1 TB/s.
 
 Recorded runs: `r20260922-054241-b966` (full measurement, this table). Earlier exploratory runs on vy-g2 during development

@@ -3,7 +3,7 @@
 Lane `b-verifier` (track B), 2026-09-22.  The verifier is `backends/ligero-verify/` (`verity-ligero-verify`, no
 dependencies: its own BabyBear, NTT / coset code, BLAKE3, BLAKE2b-256, SHAKE-256, `ligero-*/v1` parsers, and the
 proximity / linear / quadratic / chain tests), written from `backends/direct/ligero/PROTOCOL.md` + `HANDOFF.md` +
-`redteam_vu.md` F1-F3, with the Python sources read as the reference of record wherever the document is silent.
+`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3, with the Python sources read as the reference of record wherever the document is silent.
 Every such place is an entry below.  Statuses follow `fixtures/discrepancy_log.json` (`open` / `resolved` /
 `excluded`); each entry also carries a structured block (`id`, `issue`, `document`, `code`, `verifier`, `status`,
 `owner`, `evidence`) so the coordinator can lift it into the campaign log.
@@ -15,7 +15,7 @@ interactive / Fiat-Shamir).  D1 re-checked (still open, both modes), D3 resolved
 (an interactive-mode transcript is not transferable evidence: 49/49 forged files for false claims accepted by both
 file verifiers), D5 extended with the new byte facts, D8 (named-reason differences) added.  On the decision workload
 (4096 VUs, `l = 16384`, 25 sub-batches) the two verifiers agree on every file in every mode
-(`backends/numerical/reports/b_verifier.md`, "post b-zk-fix").
+(`note:r20-proof/b-verifier/20260922T1132Z-report-b-verifier`, "post b-zk-fix").
 
 ## D1. The Python verifier never checks that its parameters meet the target; at small `l` non-ZK they do not
 
@@ -200,16 +200,16 @@ challenge in every case; no mutation can change challenge 1 alone.  The mask row
 
 ## Not findings (checked and consistent)
 
-* `redteam_3.md` O1 (`gpu/ligero.py::row_coeffs` geometric powers): the transcript path this lane verifies
+* `note:r20-proof/red-team-3/20260922T0921Z-report-redteam-3` O1 (`gpu/ligero.py::row_coeffs` geometric powers): the transcript path this lane verifies
   (`protocol.py`, torch prover) draws every combination coefficient independently from SHAKE, as section 4 says
   ("`D` *independent* BabyBear combinations"); the Rust verifier would reject a prover that used geometric powers
   (the coefficient rows it recomputes would differ).  If the GPU kernel path ever produces transcripts, this verifier
   is the check.
-* `redteam_vu.md` F1-F3: every size (`M, l, n, t, D, k, depth, n_vus, steps`) comes from the verifier's statement;
+* `note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3: every size (`M, l, n, t, D, k, depth, n_vus, steps`) comes from the verifier's statement;
   the proof header's copies are compared and a disagreement is a named rejection; the statement digest covers
   `a, b, y16`, the configuration and the `system_id` -- confirmed by the statement mutations (`statement_*`: 7/7
   rejected in every mode).
-* `redteam_3.md` O5 (`N_subbatches` not in the ledger schema): the statement file carries `n_proofs` and the
+* `note:r20-proof/red-team-3/20260922T0921Z-report-redteam-3` O5 (`N_subbatches` not in the ledger schema): the statement file carries `n_proofs` and the
   verifier's bound is the union over it; the ledger rows below spell out `25 sub-batches` in `note`.
 
 ## D7. An interactive-mode transcript is not transferable evidence (post b-zk-fix; the file verifier's verdict is conditional)

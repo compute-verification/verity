@@ -1,6 +1,6 @@
 # Ligero-style direct-constraint argument for the transition unit (lane b-ligero, track B)
 
-Status: NON_ZK_PROOF_DIAGNOSTIC without `--zk`; with `--zk`: COMPLETE_ZK_BACKEND in `--mode interactive` (sections 8b + 8c as repaired by lane b-zk-fix after the red-team-zk findings F1-F3: `reports/REDTEAM_ZK_URGENT.md`, `reports/b_zk_fix.md`), COMPLETE_HVZK_BACKEND (NIZK in the programmable ROM) in `--mode fiat-shamir`. In every ZK row: the current statement publishes `a, b, y16`, so privacy is vacuous for it; the claim is about the construction. Implemented in this directory (Python/torch); measured on `vy-g3` (NVIDIA L40S).
+Status: NON_ZK_PROOF_DIAGNOSTIC without `--zk`; with `--zk`: COMPLETE_ZK_BACKEND in `--mode interactive` (sections 8b + 8c as repaired by lane b-zk-fix after the red-team-zk findings F1-F3: `note:r20-proof/red-team-zk/20260922T1102Z-finding-redteam-zk-urgent`, `note:r20-proof/b-zk-fix/20260922T1142Z-report-b-zk-fix`), COMPLETE_HVZK_BACKEND (NIZK in the programmable ROM) in `--mode fiat-shamir`. In every ZK row: the current statement publishes `a, b, y16`, so privacy is vacuous for it; the claim is about the construction. Implemented in this directory (Python/torch); measured on `vy-g3` (NVIDIA L40S).
 The relation is the frozen WP2 checker (`verity_numerical.checker`): every predicate of `check_step_expr` at
 `params.REAL` is constrained; nothing is dropped (section 5 lists the two places where a predicate is *restated*
 and argues equivalence).
@@ -42,7 +42,7 @@ each range check / one-hot one linear constraint. So 3246 quadratic constraints 
 
 ## 2. Field: BabyBear, and the integer audit
 
-`p = 15 * 2^27 + 1` (31 bits, 2-adicity 27). Reasons: tensor.md's 1.6x for B from 4-limb base products, and the
+`p = 15 * 2^27 + 1` (31 bits, 2-adicity 27). Reasons: note:r20-proof/tensor-cost/20260922T0450Z-report-tensor's 1.6x for B from 4-limb base products, and the
 RS encoder needs a 2^14 (here) to 2^17 root of unity, which BabyBear has and Mersenne-31 does not without a circle
 FFT. Challenges: `D` *independent* BabyBear combinations (`D = 6` at 2^-128, `D = 4` at 2^-80, the degrees of
 `accounting.first_extension`); each of Ligero's tests is run `D` times with independent base-field coefficients,
@@ -72,7 +72,7 @@ set is unchanged; they cost two `lt_table` checks per group.
 ## 3. Reed-Solomon code and commitment
 
 Row `W_j` (l symbols) is read as the evaluations of a polynomial of degree `< l` on `H = <w_l>`; its codeword is its
-evaluations on the coset `g <w_n>` with `g = 31` (`n = 4 l`, rate 1/4 as in tensor.md's B row). `H` and the coset are
+evaluations on the coset `g <w_n>` with `g = 31` (`n = 4 l`, rate 1/4 as in note:r20-proof/tensor-cost/20260922T0450Z-report-tensor's B row). `H` and the coset are
 disjoint, so `Z_H(x) = x^l - 1` is invertible on every codeword position (used by the quadratic test) and
 `Enc(constant) = constant`. `encode` = INTT_l, zero-pad, scale by `g^k`, NTT_n -- a batched radix-2 int64 NTT in torch
 (`field.py`); the INT8 matmul-DFT variant was not measured (section 8).
@@ -189,7 +189,7 @@ What changes against the unit system:
 * Transcript: `q` is absorbed before the column challenge (`cols = H(root, w, h, q)`). Depth stays 2.
 * Verifier: `public_vectors` on the operands only (`a, b` pins; the domain checks), `y16_pub` per VU, and the layout.
 
-Gate (vy-g3, `results/gate_vu.json`): 64 `vu-k1536` VUs with the recorded accumulators (two proofs, 42 + 22)
+Gate (vy-g3, `notes-asset:campaigns/r20-proof/assets/b-ligero/results/gate_vu.json`): 64 `vu-k1536` VUs with the recorded accumulators (two proofs, 42 + 22)
 accepted; 52/52 `vu-k1536-neg` rejected (`wrong` at the chain test's sum check, `reject` at the operand domain check
 or as a foreign proof); 249 mutated rows + 3 chain-specific mutations (a broken link `c.f[40] != y.f[39]`, `c_0 != 0`
 at a chain start, a flipped claimed `y16`) rejected.
@@ -349,7 +349,7 @@ which must now be at chance on real and simulated transcripts alike.
 No step 0.  `r, rho [, rc] = SHAKE(H("ligero-b/c1" || stmt || root))`, `cols = H("ligero-b/c2" || stmt || root ||
 w h [q] [v])`; the transcript carries no coins; `rounds.sequential_depth = 1`.  This is the pre-8c protocol.
 
-*Soundness.*  The campaign's rule (`ZK_CONSTRUCTION.md` 3.3, `zk_cost.fiat_shamir_reparameterisation`): the generic
+*Soundness.*  The campaign's rule (`note:r20-proof/zk-construction/20260922T0737Z-report-zk-construction` 3.3, `zk_cost.fiat_shamir_reparameterisation`): the generic
 state-restoration bound `eps_FS <= q x eps_round`, `q = 2^60` hash queries.  `soundness()` multiplies every
 statistical term by `2^60` and `config_for` re-sizes: per-proof target `-132.64 - 60 = -192.64`, **t = 288** (was
 197; `t_pad = 512` so that Lemma 4.15 `k > l + t` holds: `k = l + 512`), and the field terms `(n + 3) / p^D x 2^60`
@@ -394,7 +394,7 @@ union `2^-128.05` (ZK) / `t = 196`, `2^-128.25` (non-ZK).  Fiat-Shamir -- every 
 
 **Cost.** Interactive: no arithmetic; 192 transcript bytes; four Blake2b calls; one more round trip; the F1 fix adds
 one `D`-row mask family (`+D` committed rows) and one `D x (l-1)` mask block.  Fiat-Shamir: `t` 197 -> 288 opened
-columns (+46% opened bytes and paths), `D` 6 -> 7 on every test, `t_pad` 512.  Measured numbers: `reports/b_zk_fix.md`.
+columns (+46% opened bytes and paths), `D` 6 -> 7 on every test, `t_pad` 512.  Measured numbers: `note:r20-proof/b-zk-fix/20260922T1142Z-report-b-zk-fix`.
 
 **Mask sampler** (`mask_sampler.py`): ChaCha20 counter mode on the device under a fresh 32-byte key, reduced to
 BabyBear by rejection (`u < 2p`, then `u mod p`): exactly uniform given the stream. The 8b sampler's direct

@@ -70,7 +70,7 @@ reproducer under `redteam/`.  An unchecked box is an open question, not a pass.
 ## Review items for the build lanes' first commits (wave 2: from the WP2 checker contracts)
 
 Both candidates implement `checker/gadgets.py` `contract()`s as composed by `step.py`.  Wave 2 found no accepted
-deviation from the reference over the integers or over Goldilocks (`reports/redteam_checker.json`: mutation /
+deviation from the reference over the integers or over Goldilocks (`notes-asset:campaigns/r20-proof/assets/red-team-checker/reports/redteam_checker.json`: mutation /
 coordinated on every hint column, z3 per gadget with Boolean case splits); every SAT is a field below the checker's
 F1-F4 thresholds.  What an implementation can still get wrong is the *realisation*.  Check, per commit:
 
@@ -126,7 +126,7 @@ F1-F4 thresholds.  What an implementation can still get wrong is the *realisatio
       (one predicate removed must make the backend *accept* a forged witness -- the test that a bound is load-bearing);
       the F1 witness `leading_bit: v = 537133057, l = 19` and F2 `align_state: M = 0, d >= 25, q = 63, r = 2^25 - 1`
       replayed against the backend's range realisation (must reject); a coordinated two-column forgery
-      (`harness.run_coordinated` on the backend's `check`) at the same case count as `redteam_checker.json` (1,909
+      (`harness.run_coordinated` on the backend's `check`) at the same case count as `notes-asset:campaigns/r20-proof/assets/red-team-checker/reports/redteam_checker.json` (1,909
       attempts, PASS).
 
 ## What the transcript must not let the prover re-supply

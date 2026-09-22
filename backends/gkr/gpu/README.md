@@ -25,7 +25,7 @@ sumcheck binds the low bit of the level index first and the next point is `rho =
 `../PROTOCOL.md` 4.2 "Variable order"), where v2e bound the top bit first with `rho = x* + [mu]`.  Same protocol
 under bit-reversal of the level index, same message *count* and order, different message *values* from level 2 on --
 the independent Rust verifier (`../verifier/`, written against v2e) rejected every v5/v6 proof at `LogUp POW level
-2: final check` until it followed the new schedule (`backends/numerical/reports/a_protocol_diff.md`).  The GKR
+2: final check` until it followed the new schedule (`note:r20-proof/a-protocol-diff/20260922T1047Z-report-a-protocol-diff`).  The GKR
 schedule, the eq weights and everything else are v2e's.  Peak device memory 47.9 GB; `--warmup 1` excludes the
 one-off ~60 s LogUp graph compile/capture per process.  Negatives: 52/52 rejected on the v6 path (r20260922-094606-1813).
 
@@ -111,7 +111,7 @@ per opened column (t of them, in `open_set` order): rows x u32 values, then dept
 
 The counts make the file self-delimiting; a verifier takes `k, n, t`, `rows = ceil(l / k)`, `depth = log2 n`, the
 message count and the column indices from the circuit/config and its own transcript and **rejects** a file whose
-counts differ -- nothing read from the proof sizes anything (`redteam_vu.md` F1-F3).  The independent Rust
+counts differ -- nothing read from the proof sizes anything (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3).  The independent Rust
 verifier for this format is `../verifier/` (`verity-gkr-verify verify --dir D --proof proof.bin [--vus N]`); it
 reads `circuit.txt`, `epilogue.txt`, `manifest.json` (steps, chain columns) and `public.bin` only -- never the
 witness files.

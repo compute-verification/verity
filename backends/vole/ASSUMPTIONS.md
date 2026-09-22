@@ -83,7 +83,7 @@ The d = 10 sparse code is the variant whose security is least studied (the SoK, 
 large fields has fewer dedicated attacks than dual/Ferret codes); state it as such.
 
 **One public LPN matrix per session (v2 patch, `--fixed-lpn`).** `svole.rs` re-sampled the sparse matrix from the shared
-coin-tossed `lpn_rng` at every extension (28% of all prover instructions, `GPU.md`). The patch samples the rows once per
+coin-tossed `lpn_rng` at every extension (28% of all prover instructions, `note:r20-proof/c-vole/20260922T0646Z-report-gpu`). The patch samples the rows once per
 (rows, cols) per sVOLE instance, from the same rng in the same order, and reuses them. This is the setting WYKW21
 analyses (one public A, fresh secret and noise per iteration; Fig. 7) and the assumption stated for L5 above; the
 matrix was public either way. Nothing in the security argument changes; memory grows by the matrix (103 MB for
@@ -175,7 +175,7 @@ B = 64 (0.400 s) to B = 4096 (0.408 s). The 12.7x gap between 8.5 MB/VU and the 
 
 Same predicates, same witness semantics, same negatives (52 WP2 + 52 `vu-k1536-neg` rejected by the evaluator; 4
 `vu-k1536-neg` VUs rejected by dietmc's verifier, run `r20260922-072822-1459`). The expression changed in four ways,
-all realisation not relation (`DECISION.md` §1): output-free `assert_mul` for every product identity and boolean
+all realisation not relation (`note:r20-proof/c-compress/20260922T0859Z-report-decision` §1): output-free `assert_mul` for every product identity and boolean
 check; 10-bit range *chunks* proved by a logUp range lookup instead of bits; the four tables as logUp tuple lookups
 instead of one-hot selectors; 69 range obligations per unit discharged by interval arithmetic over the exporter's
 linear forms (implied by other proven ranges or by linear identities).

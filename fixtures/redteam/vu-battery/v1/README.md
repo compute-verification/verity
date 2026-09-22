@@ -1,6 +1,6 @@
 # vu-battery v1 -- must-reject cases against both full-VU provers
 
-Lane `red-team-vu`; report `backends/numerical/reports/redteam_vu.md` (+ `.json`). Produced by run
+Lane `red-team-vu`; report `note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` (+ `.json`). Produced by run
 `r20260922-070024-e7d1` on `vy-cpu3` (rustc 1.98.1, Plonky3 0.4.3-succinct, `verity-gkr` at `fda93ff`).
 
 - `a/manifest.json` -- Candidate A adversarial `run-vu` batches (`verity_numerical.redteam.vu_forge_a`, B = 4 real

@@ -5,7 +5,7 @@ constraints are the WP2 gadget contracts (`backends/numerical/python/verity_nume
 K=1536 verification unit** as 96 chained rows plus the epilogue (`ChainAir`, PROTOCOL.md 12), proved with Plonky3
 `uni-stark` over Goldilocks or BabyBear; range checks and fixed tables either as 2-bit limbs / one-hot selectors
 (PROTOCOL.md 12) or as LogUp lookups against preprocessed tables (`--lookup`, PROTOCOL.md 14: 3.4x fewer committed
-bytes per VU, 2.9x faster at 4 096 VUs), and with **checker v2** (`checker_min.md`) as the row program on
+bytes per VU, 2.9x faster at 4 096 VUs), and with **checker v2** (`note:r20-proof/checker-min/20260922T0727Z-report-checker-min`) as the row program on
 BabyBear (`--v2`, PROTOCOL.md 15 + `V2_AIR.md`: state-chained units, tuple lookups, chunked tables, the 31-bit
 limb repairs; 405 committed columns, 155 kB/VU, 22.9 s for 4 096 VUs -- a further 2.1x / 2.6x over v1 + LogUp).
 The BabyBear port was checked against the red team's six embedding rules
@@ -123,7 +123,7 @@ depth 1); `--rtt-ms X` (or `VERITY_RTT_MS`, `RTT_MS=` in `run_vu.sh`) sleeps `X`
 carries `t.e2e.rtt_Xms` measured plus the other RTTs predicted (`t.total` is compute with the sleep subtracted;
 `direct.depth_formula_legacy` is the earlier `log_n + 5`). Measured: 2^13 rows (B=64) depth **16** (legacy 18), 2^19 rows
 (B=4096) depth **22** (legacy 24); B=64 e2e at 50 ms RTT 3.98 s = 3.04 compute + 0.14 verify + 16 × 50 ms (model 3.98 s).
-See `backends/numerical/reports/latency.md`.
+See `note:r20-proof/latency/20260922T1111Z-report-latency`.
 
 ## Statement binding (lanes soundness-fixes + b-bind, 2026-09-22)
 
@@ -187,7 +187,7 @@ Reading the numbers:
 - Witness generation (integer program + i128 checker per row, parallel over VUs) is 13% of the total; it was 76% of the
   wave-1 total because it was single-threaded then.
 - **Goldilocks -> BabyBear on this CPU: 1.07x** on the total (1.06x on the prover), with **0.51x memory** and **0.66x
-  proof bytes**. tensor.md's 1.6x is for a hashing-bound prover (GPU, bytes committed halve); this CPU prover halves
+  proof bytes**. note:r20-proof/tensor-cost/20260922T0450Z-report-tensor's 1.6x is for a hashing-bound prover (GPU, bytes committed halve); this CPU prover halves
   the committed bytes (2.18 -> 1.11 MB/VU) and barely moves, so on 12 EPYC threads it is not hashing-bound: the
   quotient evaluation (3,215 constraints x 2^21 LDE rows) and the DFTs dominate. The field flip is *correct* on the
   real prover (the same gate passes); the speed-up it promises is a GPU statement, not measured here.

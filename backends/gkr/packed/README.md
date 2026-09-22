@@ -56,7 +56,7 @@ Whole sumcheck, all rounds, each round replayed as a CUDA graph (device time, no
 | 4 | 7.30 | 23.37 | 0.85% | 1.97e11 | 5.0 GB | 0.325 + 1.63 | 729 / 436 ms | 178 us (106) |
 
 **A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6 cu124, Triton 3.2; run `r20260922-073828-153f`, same
-flags, 36 tests bit-exact on CUDA; `backends/numerical/reports/anchor_a100.md`).  Whole sumcheck, CUDA-graphed rounds:
+flags, 36 tests bit-exact on CUDA; `note:r20-proof/anchor-a100/20260922T0820Z-report-anchor-a100`).  Whole sumcheck, CUDA-graphed rounds:
 
 | k | 2^24 ms | 2^26 ms | frac. A100 INT8 peak (2^26) | peak mem (2^26) | fit ns/elem + ms | per batch (padded / un-padded) | per VU | vs H100 |
 |---|---|---|---|---|---|---|---|---|
@@ -74,7 +74,7 @@ per-sumcheck intercept is 2.7-3.3 ms on the A100 vs 1.6-1.7 ms on the H100 (laun
 * "per batch" = the six c-round sumchecks of the batch (tables `393,216 x 2^read`, `LAYER_READ_LOG2`) from the linear
   fit over t = 2^20..2^26; "per VU" = per batch / 4096; un-padded widths (`LAYER_WIDTHS`) in parentheses.
 * **Measured saving of packing on the dominant bucket: k = 3 vs k = 0 = 3.79x (padded), 3.72x (un-padded).**  The MAC
-  model predicts 2.9x for the same pair (1.47e11 vs 4.25e11 at 2^26) and 8.4x against tensor.md's plain 18,432-MAC/element
+  model predicts 2.9x for the same pair (1.47e11 vs 4.25e11 at 2^26) and 8.4x against note:r20-proof/tensor-cost/20260922T0450Z-report-tensor's plain 18,432-MAC/element
   model; the kernels beat the MAC ratio because the packed rounds' base x base Hadamards are cheaper per MAC than the
   extension rounds' `F_{p^6}` Hadamards and folds, which the plain algorithm runs on every element.
 * `k = 4` loses: the `4^(i-1)` blow-up makes round 4 a 192-row Hadamard block per pair (768 limb rows, too large for the
@@ -83,7 +83,7 @@ per-sumcheck intercept is 2.7-3.3 ms on the A100 vs 1.6-1.7 ms on the H100 (laun
   (0.35% / 0.16% before the fused kernels).  The tensor cores are not the bottleneck: the rounds are bound by the SIMT
   modular arithmetic (INT64 `%` for the Hadamard products and the `F_{p^6}` coefficient products) and by HBM in the
   folds.  Lane `tc-sumcheck`'s plain kernel on the RTX 4090: 2.2% matmul-only batch-weighted, 0.56% for the tensor bucket.
-  Both are far below the 17.2% that `tensor.md` assumed (TensorZKP's end-to-end calibration).  The bench's
+  Both are far below the 17.2% that `note:r20-proof/tensor-cost/20260922T0450Z-report-tensor` assumed (TensorZKP's end-to-end calibration).  The bench's
   `utilisation.matmul_only` column is not meaningful for the fused kernels (the "matmul" is the whole fused kernel).
 * Where the time goes (2^26, k = 3, CUDA-graphed rounds): packed rounds 1-3 = 0.76 + 0.69 + 1.15 ms (fused: Hadamard
   limbs in registers -> `tl.dot`, BLOCK_K = 128), fold_k 1.03 ms, extension rounds 4-7 = 1.90 + 1.03 + 0.57 + 0.34 ms
@@ -118,7 +118,7 @@ bucket.  Earlier entries from r20260922-055336-4080 (509 / 247 us per VU, 2.94e7
 
 ## Second pass (lane `a-packed2`): 32-bit Montgomery, direct 2^28, fused k = 4, logUp
 
-Full write-up: `backends/numerical/reports/a_kernels_h100.md`.  Runs (all vy-g4 / H100):
+Full write-up: `note:r20-proof/a-packed2/20260922T0747Z-report-a-kernels-h100`.  Runs (all vy-g4 / H100):
 
 | run | what |
 |---|---|
@@ -127,7 +127,7 @@ Full write-up: `backends/numerical/reports/a_kernels_h100.md`.  Runs (all vy-g4 
 | r20260922-073439-1f15 | **logUp GKR at the full-VU shape** (393,216 x 306 lookups, 65,536-row table): k = 3 **427 ms = 104 us/VU**, k = 0 447 ms |
 | r20260922-073702-b11f | fused (split) k = 4 vs k = 3: 2^26 7.57 vs 6.13 ms, 2^28 22.88 vs 17.61 ms. **k = 4 fused recovers 1.3x (9.25 -> 7.57) but still loses; default stays k = 3**; kept as a memory lever (11.0 vs 18.2 GB at 2^28) |
 
-| **A100** r20260922-075147-91a5 (anchor-a100 lane, NVIDIA A100-SXM4-80GB, same flags; 46 CUDA tests bit-exact) | Montgomery 2^26: k = 0..4 **21.4 / 17.8 / 11.2 / 11.5 / 15.2 ms** (0.52-0.61x the H100 = the bandwidth ratio 0.61); direct 2^28 k = 2, 3, 4: 34.3 / **31.9** / 43.8 ms (0.55x; 5.9% of the A100 INT8 peak) = **64.3 us/VU, 263 ms per six-layer batch** padded (156 un-padded); logUp GKR full-VU k = 3 **412 ms = 101 us/VU** (H100 427: 1.04x -- launch-bound, the card does not matter yet), k = 0 478 ms. Table: `backends/numerical/reports/anchor_a100.md` section 4b |
+| **A100** r20260922-075147-91a5 (anchor-a100 lane, NVIDIA A100-SXM4-80GB, same flags; 46 CUDA tests bit-exact) | Montgomery 2^26: k = 0..4 **21.4 / 17.8 / 11.2 / 11.5 / 15.2 ms** (0.52-0.61x the H100 = the bandwidth ratio 0.61); direct 2^28 k = 2, 3, 4: 34.3 / **31.9** / 43.8 ms (0.55x; 5.9% of the A100 INT8 peak) = **64.3 us/VU, 263 ms per six-layer batch** padded (156 un-padded); logUp GKR full-VU k = 3 **412 ms = 101 us/VU** (H100 427: 1.04x -- launch-bound, the card does not matter yet), k = 0 478 ms. Table: `note:r20-proof/anchor-a100/20260922T0820Z-report-anchor-a100` section 4b |
 
 The k-table before -> after Montgomery (2^26 ms; per VU = six padded layers / 4096): k = 0 30.9 -> 12.6 (238 -> 90 us), k = 1 18.5 -> 10.7,
 k = 2 11.7 -> 6.4, **k = 3 9.08 -> 5.97 (62.7 -> 37.5 us; 35.6 us from the direct 2^28 point)**, k = 4 23.4 -> 9.25.
@@ -185,7 +185,7 @@ Launch overhead is the a-gpu prover's problem to solve (it owns the round loop):
 
 ## Third pass (lane `a-fusion`): launch-fused logUp, round-fused sumcheck, v2 shape
 
-Full write-up: `backends/numerical/reports/a_kernels_h100_v2.md` (+ `.json`); raw results `backends/numerical/reports/a_fusion/`.
+Full write-up: `note:r20-proof/a-fusion/20260922T0853Z-report-a-kernels-h100-v2` (+ `.json`); raw results `backends/numerical/reports/a_fusion/`.
 All on vy-g4 (H100), tests: 31 sumcheck agreement + 7 graphed logUp + 4 vector tests bit-exact.
 
 | what | before -> after |
