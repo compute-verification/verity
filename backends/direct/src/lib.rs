@@ -8,6 +8,7 @@
 //! * `stark`   the Plonky3 configuration
 
 pub mod air;
+pub mod challenger;
 pub mod ctx;
 pub mod params;
 pub mod program;

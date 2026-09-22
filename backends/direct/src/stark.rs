@@ -1,7 +1,9 @@
 //! Plonky3 uni-stark over Goldilocks with Keccak-256 Merkle trees and FRI (Fiat-Shamir, non-ZK):
 //! `NON_ZK_PROOF_DIAGNOSTIC`.  Not Candidate B's PCS (Ligero-style, interactive; `PROTOCOL.md`).
 
-use p3_challenger::{HashChallenger, SerializingChallenger64};
+use p3_challenger::HashChallenger;
+
+use crate::challenger::FixedSerializingChallenger64;
 use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
 use p3_field::extension::BinomialExtensionField;
@@ -25,7 +27,7 @@ type MyCompress = CompressionFunctionFromHasher<u8, ByteHash, 2, 32>;
 type ValMmcs = FieldMerkleTreeMmcs<Val, u8, FieldHash, MyCompress, 32>;
 type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
 type Dft = Radix2DitParallel;
-pub type Challenger = SerializingChallenger64<Val, HashChallenger<u8, ByteHash, 32>>;
+pub type Challenger = FixedSerializingChallenger64<Val, HashChallenger<u8, ByteHash, 32>>;
 pub type Pcs = TwoAdicFriPcs<Val, Dft, ValMmcs, ChallengeMmcs>;
 pub type Config = StarkConfig<Pcs, Challenge, Challenger>;
 pub type UnitProof = Proof<Config>;
