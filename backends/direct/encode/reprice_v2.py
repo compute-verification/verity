@@ -183,9 +183,9 @@ def markdown(rep: dict) -> str:
           "work, so 3x fewer committed rows is 3x less time; the tables cost 11% of the rows and one exceptional-row pass in the linear test."),
           (f"* **Inversions shrink, not grow**: v1's 320 range-chunk lookups per unit were the helpers; v2's 95 lookups + 6.26M table rows are {sh['helpers_to_invert'] / 125895743:.2f}x "
           f"as many elements.  Still {inv['traffic_floor_ms'] / inv['ms_median']:.2f} of the traffic floor."),
-          (f"* **The `F_c` helper triples are the quadratic test now**: {qfc['ms_median']:.1f} ms for {qfc['rows']:,} rows with re-encoding "
-          f"({qfc['us_per_row']:.2f} us/row, {6 + 3} encoder calls per row on average), {qfs['ms_median']:.1f} ms reading coset 1 from the kept store instead -- "
-          "the store the fused commitment already keeps for the openings."),
+          (f"* **The `F_c` helper triples are the quadratic test now**: {qfc['ms_median']:.1f} ms for {qfc['rows']:,} rows reading coset 1 from the kept store "
+          f"({qfc['us_per_row']:.2f} us/row) -- the store the fused commitment already keeps for the openings; {qfs['ms_median']:.1f} ms if the "
+          f"coset is re-encoded instead ({6 + 3} encoder calls per row on average)."),
           (f"* The linear test's exceptional rows (the table-side inverses, {lin['exceptional_rows']:,} through the general path) are {lin['split_ms']['exceptional_generic']:.1f} ms of its "
           f"{lin['ms_median']:.1f}; variant (b) removes them (X = 1,632)."),
           ("* Still modelled: r^T A scalars / pattern (O(rows + pattern)), witness / hint generation (v2 has 15 hints per unit, v1 225: the CPU anchor's 4.7 s per 4,096 "
