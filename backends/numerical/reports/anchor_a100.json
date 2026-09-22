@@ -2,11 +2,12 @@
  "lane": "anchor-a100",
  "track": "shared",
  "hardware": "NVIDIA A100 SXM4 80GB",
- "generated": "2026-09-22T06:50:23Z",
+ "generated": "2026-09-22T07:16:38Z",
  "runs": {
   "microbench": "r20260922-063608-a304",
   "hash_gpu": "r20260922-063811-e561",
-  "encode": "r20260922-064413-0508"
+  "encode": "r20260922-064413-0508",
+  "fused": "r20260922-064953-f9bb"
  },
  "labels": {
   "proof_class": "COMPONENT (kernels) / ARITHMETIC_DIAGNOSTIC (re-price)",
@@ -881,6 +882,244 @@
     "cublas": true,
     "triton": true
    }
+  },
+  {
+   "kernel": "fused",
+   "impl": "simt",
+   "n": 8388608,
+   "deg_in": 6,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 1013.8239860534668,
+   "a100_us": 1871.232032775879,
+   "ratio_ref_over_a100_time": 0.5417949074704058,
+   "a100_floor_us_measured_bw": 516.6045203804969,
+   "a100_floor_us_datasheet": 444.32058067680236,
+   "fraction_of_floor": 0.27607721080647596,
+   "a100_gb_per_s": 484.1567737893197
+  },
+  {
+   "kernel": "fused",
+   "impl": "simt",
+   "n": 4194304,
+   "deg_in": 6,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 520.19202709198,
+   "a100_us": 935.3600144386292,
+   "ratio_ref_over_a100_time": 0.5561409714570504,
+   "a100_floor_us_measured_bw": 258.30226019024843,
+   "a100_floor_us_datasheet": 222.16029033840118,
+   "fraction_of_floor": 0.27615277134256433,
+   "a100_gb_per_s": 484.2892843477662
+  },
+  {
+   "kernel": "fused",
+   "impl": "simt",
+   "n": 4194304,
+   "deg_in": 1,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 256.03199005126953,
+   "a100_us": 606.5919995307922,
+   "ratio_ref_over_a100_time": 0.42208270179843127,
+   "a100_floor_us_measured_bw": 114.80100452899931,
+   "a100_floor_us_datasheet": 98.73790681706718,
+   "fraction_of_floor": 0.18925571820564657,
+   "a100_gb_per_s": 331.897869005409
+  },
+  {
+   "kernel": "fused",
+   "impl": "simt",
+   "n": 2097152,
+   "deg_in": 6,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 273.4079957008362,
+   "a100_us": 473.7919867038727,
+   "ratio_ref_over_a100_time": 0.5770633598151595,
+   "a100_floor_us_measured_bw": 129.15113009512422,
+   "a100_floor_us_datasheet": 111.08014516920059,
+   "fraction_of_floor": 0.27259036395616726,
+   "a100_gb_per_s": 478.04188833096765
+  },
+  {
+   "kernel": "fused",
+   "impl": "simt",
+   "n": 1048576,
+   "deg_in": 6,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 152.5759994983673,
+   "a100_us": 244.32000517845154,
+   "ratio_ref_over_a100_time": 0.6244924536037304,
+   "a100_floor_us_measured_bw": 64.57556504756211,
+   "a100_floor_us_datasheet": 55.540072584600296,
+   "fraction_of_floor": 0.264307316956694,
+   "a100_gb_per_s": 463.51590373160343
+  },
+  {
+   "kernel": "fused",
+   "impl": "simt",
+   "n": 1048576,
+   "deg_in": 1,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 81.91999793052673,
+   "a100_us": 158.55999290943146,
+   "ratio_ref_over_a100_time": 0.5166498586898838,
+   "a100_floor_us_measured_bw": 28.70025113224983,
+   "a100_floor_us_datasheet": 24.684476704266796,
+   "fraction_of_floor": 0.1810056282522871,
+   "a100_gb_per_s": 317.4296811980128
+  },
+  {
+   "kernel": "fused",
+   "impl": "simt",
+   "n": 262144,
+   "deg_in": 6,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 50.175998359918594,
+   "a100_us": 78.27199995517731,
+   "ratio_ref_over_a100_time": 0.6410465861183058,
+   "a100_floor_us_measured_bw": 16.143891261890527,
+   "a100_floor_us_datasheet": 13.885018146150074,
+   "fraction_of_floor": 0.20625372126859381,
+   "a100_gb_per_s": 361.7072773943773
+  },
+  {
+   "kernel": "fused",
+   "impl": "tc",
+   "n": 8388608,
+   "deg_in": 6,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 1959.9360227584837,
+   "a100_us": 6246.111869812012,
+   "ratio_ref_over_a100_time": 0.31378496953136886,
+   "a100_floor_us_measured_bw": 516.6045203804969,
+   "a100_floor_us_datasheet": 444.32058067680236,
+   "fraction_of_floor": 0.08270817608587677,
+   "a100_gb_per_s": 145.04537909073133
+  },
+  {
+   "kernel": "fused",
+   "impl": "tc",
+   "n": 4194304,
+   "deg_in": 6,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 988.1600141525269,
+   "a100_us": 3130.5599212646484,
+   "ratio_ref_over_a100_time": 0.3156496086979038,
+   "a100_floor_us_measured_bw": 258.30226019024843,
+   "a100_floor_us_datasheet": 222.16029033840118,
+   "fraction_of_floor": 0.08250992368352508,
+   "a100_gb_per_s": 144.69770373122526
+  },
+  {
+   "kernel": "fused",
+   "impl": "tc",
+   "n": 2097152,
+   "deg_in": 6,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 505.56802749633783,
+   "a100_us": 1568.7999725341797,
+   "ratio_ref_over_a100_time": 0.3222641741124348,
+   "a100_floor_us_measured_bw": 129.15113009512422,
+   "a100_floor_us_datasheet": 111.08014516920059,
+   "fraction_of_floor": 0.08232479115007785,
+   "a100_gb_per_s": 144.37303669385764
+  },
+  {
+   "kernel": "fused",
+   "impl": "tc",
+   "n": 1048576,
+   "deg_in": 6,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 263.16800713539124,
+   "a100_us": 796.0960268974304,
+   "ratio_ref_over_a100_time": 0.3305731949963594,
+   "a100_floor_us_measured_bw": 64.57556504756211,
+   "a100_floor_us_datasheet": 55.540072584600296,
+   "fraction_of_floor": 0.08111529622780302,
+   "a100_gb_per_s": 142.2519447074074
+  },
+  {
+   "kernel": "fused",
+   "impl": "tc",
+   "n": 262144,
+   "deg_in": 6,
+   "mode": "fold+eval",
+   "ref_gpu": "RTX 4090",
+   "ref_us": 76.80000364780426,
+   "a100_us": 209.9519968032837,
+   "ratio_ref_over_a100_time": 0.36579791960617875,
+   "a100_floor_us_measured_bw": 16.143891261890527,
+   "a100_floor_us_datasheet": 13.885018146150074,
+   "fraction_of_floor": 0.07689324944604686,
+   "a100_gb_per_s": 134.84773867869782
+  },
+  {
+   "kernel": "fused.layers",
+   "impl": "simt",
+   "ref_gpu": "RTX 4090",
+   "ref_graphed_s": 0.006195584028959274,
+   "a100_graphed_s": 0.012347424030303953,
+   "ref_eager_s": 0.008718464016914368,
+   "a100_eager_s": 0.013397408127784727,
+   "ratio_ref_over_a100_time": 0.5017713827397211,
+   "a100_floor_s_measured_bw": 0.0021094677192116684,
+   "fraction_of_floor": 0.1708427372409385,
+   "bytes": 3699374832
+  },
+  {
+   "kernel": "fused.layers",
+   "impl": "tc",
+   "ref_gpu": "RTX 4090",
+   "ref_graphed_s": 0.008476319909095763,
+   "a100_graphed_s": 0.02085456001758575,
+   "ref_eager_s": 0.010113279938697815,
+   "a100_eager_s": 0.022393184304237368,
+   "ratio_ref_over_a100_time": 0.4064492322997008,
+   "a100_floor_s_measured_bw": 0.0021094677192116684,
+   "fraction_of_floor": 0.10115138930923719,
+   "bytes": 3699374832
+  },
+  {
+   "kernel": "fused.launch",
+   "impl": "simt",
+   "ref": {
+    "n": 64,
+    "eager_single_seconds": 5.4944001138210295e-05,
+    "eager_per_kernel_in_32": 3.2214000821113583e-05,
+    "graphed_per_kernel_in_32": 1.0944000445306302e-05
+   },
+   "a100": {
+    "n": 64,
+    "eager_single_seconds": 6.380800157785416e-05,
+    "eager_per_kernel_in_32": 3.7990998476743696e-05,
+    "graphed_per_kernel_in_32": 2.1926000714302064e-05
+   }
+  },
+  {
+   "kernel": "fused.launch",
+   "impl": "tc",
+   "ref": {
+    "n": 64,
+    "eager_single_seconds": 6.656000018119811e-05,
+    "eager_per_kernel_in_32": 4.24639992415905e-05,
+    "graphed_per_kernel_in_32": 8.128000423312187e-06
+   },
+   "a100": {
+    "n": 64,
+    "eager_single_seconds": 6.828799843788146e-05,
+    "eager_per_kernel_in_32": 4.6824000775814055e-05,
+    "graphed_per_kernel_in_32": 1.3132999651134013e-05
+   }
   }
  ],
  "reprice": {
@@ -899,7 +1138,9 @@
    "encoder_seconds_per_row_B": 1.8481766236271994e-07,
    "encoder_B_kernel": "ntt_simt_v2_t1024",
    "encoder_seconds_per_row_A": 2.252852975501395e-07,
-   "encoder_A_kernel": "ntt_simt_v2_t1024"
+   "encoder_A_kernel": "ntt_simt_v2_t1024",
+   "fused_layer_graphed_s": 0.012347424030303953,
+   "fused_checker_round_2p21_us": 473.7919867038727
   },
   "designs": {
    "B": {
@@ -931,9 +1172,9 @@
     "hash_bytes": 20362428416
    },
    "A": {
-    "t.total": 1.1596827399413339,
-    "seconds_per_vu": 0.0002831256689309897,
-    "overhead.vs_native_peak": 28754950.750803642,
+    "t.total": 1.494903664745898,
+    "seconds_per_vu": 0.000364966715025854,
+    "overhead.vs_native_peak": 37066931.9948133,
     "buckets": {
      "t.encoding": 0.011010368347167968,
      "t.hash": 0.009016110685686208,
@@ -942,18 +1183,22 @@
      "t.hint_gen_modelled": 0.0016131938461538462,
      "t.prg_modelled": 0.00052189744,
      "t.gkr_checker_modelled": 0.8501317821046155,
-     "t.logup_modelled": 0.24879016892221825
+     "t.logup_modelled": 0.24879016892221825,
+     "t.gkr_checker_measured": 1.1853527069091796,
+     "gkr_checker_candidates": {
+      "fused SIMT layer model x96 (graphed)": 1.1853527069091796
+     }
     },
     "measured": {
      "encoding": true,
-     "hash": true
+     "hash": true,
+     "gkr_checker": "fused SIMT layer model x96 (graphed)"
     },
     "omitted": [
      "witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak)",
      "Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak)",
      "openings and transcript serialisation (not priced)",
      "prover randomness (modelled PRG at 100 GB/s)",
-     "checker GKR sumcheck (modelled @0.172)",
      "logUp fractional GKR (modelled @0.172)"
     ],
     "model_only_overhead": 31677409.73914568,
