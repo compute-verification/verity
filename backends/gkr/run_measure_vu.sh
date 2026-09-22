@@ -18,8 +18,10 @@ SUFFIX=""
 if [ "$FIELD" = "babybear" ]; then FEATURES="--features babybear"; SUFFIX="-bb"; fi
 VARIANT=${VARIANT:-v1}
 VFLAG=""
+# v2: the same crate, but its own target dir (another lane rebuilding /workspace/target-gkr from an older source
+# mid-run replaced the binary once: r20260922-074323-12f8) and its own export cache
+if [ "$VARIANT" = "v2" ]; then VFLAG="--variant v2"; SUFFIX="$SUFFIX-v2"; fi
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-/workspace/target-gkr$SUFFIX}
-if [ "$VARIANT" = "v2" ]; then VFLAG="--variant v2"; SUFFIX="$SUFFIX-v2"; fi   # same binary, its own export cache
 export VERITY_GKR_THREADS=${VERITY_GKR_THREADS:-12}
 PROCS=${PROCS:-12}
 RUN_DIR=${RESEARCH_RUN_DIR:-.}
