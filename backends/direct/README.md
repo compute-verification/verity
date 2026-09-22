@@ -26,7 +26,14 @@ PCS of `PROTOCOL.md`: it is the fastest complete non-ZK proof of the *right* con
 - `src/challenger.rs`: fork of `p3_challenger::SerializingChallenger64` with the mask fix below.
 - `src/main.rs`: `bench`, `crosscheck`, `layout` (the unit); `vu-bench`, `vu-neg`, `chain-layout` (the VU chain,
   `--field goldilocks|babybear`, reading `bench-instances/v1` arrays from `--root`).
-- `run_vu.sh`: the pod script (build, `cargo test`, `chain-layout`, `vu-neg`, `vu-bench`).
+  `check-rows` evaluates every AIR constraint on supplied adversarial rows (PROTOCOL.md 13; driven by
+  `tools/battery_adapter.py`, the red team's 83-case battery).  `--lookup` on `chain-layout`, `vu-bench`,
+  `check-rows` selects the LogUp realisation (PROTOCOL.md 14; `--ext 5` for BabyBear^5 challenges).
+- `src/lookup.rs`, `src/lookup_stark.rs`: the LogUp range/table lookups (tables, queries, helper columns, the
+  auxiliary round) and the three-round fork of `p3_uni_stark::prove/verify` they need; `air.rs::LookupChainAir`.
+- `run_vu.sh`: the pod script (build, `cargo test`, `chain-layout`, `vu-neg`, battery, `vu-bench`);
+  `run_lookup.sh`: the same for the LogUp realisation (`tests/lookup.rs` incl. the 2^17-row round trip, battery
+  `--lookup`, `vu-bench --lookup`).
 - `tests/negative.rs`: the `test_negative.py` patterns as Rust tests, plus prove/verify of mutated traces.
 - `tests/chain.rs`: two real VUs (from the committed negative arrays, with their correct words) prove and verify over
   both fields; a wrong claimed word, a broken link, a non-zero `c_0`, a skipped step are rejected by `verify`.

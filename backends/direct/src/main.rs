@@ -43,6 +43,17 @@ fn cpu_model() -> Option<String> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if std::env::var_os("RUST_LOG").is_some() {
+        // profiling: Plonky3's `info_span!`s (commit to trace data / compute quotient polynomial / commit to
+        // quotient poly chunks / open, and the DFT + Merkle spans inside) are printed on close with `time.busy`.
+        use tracing_subscriber::fmt::format::FmtSpan;
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_span_events(FmtSpan::CLOSE)
+            .with_target(false)
+            .with_writer(std::io::stderr)
+            .init();
+    }
     match args.get(1).map(|s| s.as_str()) {
         Some("bench") => bench(&args),
         Some("crosscheck") => crosscheck(&args),
