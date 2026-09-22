@@ -242,7 +242,7 @@ class Timer:
 
 
 def decompose(ops: Ops, coeffs, deg: int):
-    """``(n, deg) int64`` in ``[0, p)`` -> ``(n, 4 deg) int8`` balanced limbs, column ``4 s + j``."""
+    """``(n, deg) int32`` in ``[0, p)`` -> ``(n, 4 deg) int8`` balanced limbs, column ``4 s + j``."""
     v = coeffs
     parts = []
     for _ in range(LIMBS):
@@ -254,28 +254,28 @@ def decompose(ops: Ops, coeffs, deg: int):
 
 def recompose(ops: Ops, z, deg_out: int, pow2):
     """Fold output ``(n, 8 deg_out) int32`` (coefficient block ``d`` = columns ``8d .. 8d+7``, limb positions) ->
-    ``(n, deg_out) int64`` mod p.  Entries are < 2^20 in magnitude, so ``z * 2^(8m) mod p`` stays below 2^51."""
+    ``(n, deg_out) int32`` mod p.  Entries are < 2^20 in magnitude, so ``z * 2^(8m) mod p`` stays below 2^51."""
     n = z.shape[0]
     z64 = ops.astype(z, ops.i64).reshape(n, deg_out, 2 * LIMBS)
-    return ops.sum(z64 * pow2, -1) % P
+    return ops.astype(ops.sum(z64 * pow2, -1) % P, ops.i32)
 
 
 def ext_mul(ops: Ops, a, da: int, b, db: int):
-    """Hadamard product of two coefficient tables (``(n, da)`` and ``(n, db)``, int64 in ``[0, p)``) in ``F_{p^6}``:
+    """Hadamard product of two coefficient tables (``(n, da)`` and ``(n, db)``, int32 in ``[0, p)``) in ``F_{p^6}``:
     ``da db`` coefficient products with a reduction each (products < 2^62), wrapped by ``X^6 = W``.  Returns
     ``(n, deg_out)`` with ``deg_out = 1`` for base x base, else 6."""
     deg_out = 1 if da == 1 and db == 1 else DEGREE
     acc = [None] * deg_out
     for i in range(da):
         for j in range(db):
-            prod = a[:, i] * b[:, j] % P
+            prod = ops.astype(a[:, i], ops.i64) * ops.astype(b[:, j], ops.i64) % P
             d = i + j
             if d >= DEGREE:
                 prod = prod * W % P
                 d -= DEGREE
             acc[d] = prod if acc[d] is None else acc[d] + prod
     cols = [(x % P if x is not None else ops.zeros((a.shape[0],), ops.i64))[:, None] for x in acc]
-    return ops.cat(cols, -1)
+    return ops.astype(ops.cat(cols, -1), ops.i32)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -320,7 +320,7 @@ def fold_matrix(ops: Ops, r: ref.Ext, in_deg: int, reduce_in_matrix: bool = True
 
 @dataclass
 class Table:
-    """A sumcheck table in coefficient form: ``(t, deg) int64`` in ``[0, p)``; ``deg`` 1 (base) or 6 (extension)."""
+    """A sumcheck table in coefficient form: ``(t, deg) int32`` in ``[0, p)`` (p < 2^31); ``deg`` 1 (base) or 6 (extension)."""
 
     coeffs: Any
     deg: int
@@ -352,7 +352,7 @@ class Kernel:
     # -- tables -------------------------------------------------------------------------------------------------------
 
     def table_from_ints(self, values: list[ref.Ext], deg: int) -> Table:
-        arr = np.array([v[:deg] for v in values], dtype=np.int64).reshape(len(values), deg)
+        arr = np.array([v[:deg] for v in values], dtype=np.int32).reshape(len(values), deg)
         return Table(self.ops.from_numpy(arr), deg)
 
     def table_to_ints(self, tb: Table) -> list[ref.Ext]:
@@ -360,7 +360,7 @@ class Kernel:
         return [tuple(int(x) for x in row) + (0,) * (DEGREE - tb.deg) for row in a]
 
     def random_table(self, t: int, deg: int, seed: int) -> Table:
-        return Table(self.ops.randint((t, deg), P, seed), deg)
+        return Table(self.ops.astype(self.ops.randint((t, deg), P, seed), self.ops.i32), deg)
 
     # -- pieces -------------------------------------------------------------------------------------------------------
 
@@ -435,23 +435,27 @@ class Kernel:
         """The three tables folded by ``r`` in one matmul; returns three ``(t/2, 6)`` coefficient tables.  ``C`` is
         the precomputed ``fold_matrix`` (needed inside a CUDA-graph capture, where the host-to-device copy cannot run)."""
         ops = self.ops
-        rows = ops.cat([EO_f, EO_g, EO_h], 0)                                  # (3 t/2, 8 deg)
         if C is None:
             C = fold_matrix(ops, r, deg, self.reduce_in_matrix)                # (8 deg, 48 | 96)
-        Z, padded = ops.mm_int8(rows, C)
-        stats.add_mm(rows.shape[0], rows.shape[1], C.shape[1], padded)
+        Zs = []
+        for rows in (EO_f, EO_g, EO_h):                                        # (t/2, 8 deg) each; one GEMM per table
+            Z, padded = ops.mm_int8(rows, C)
+            stats.add_mm(rows.shape[0], rows.shape[1], C.shape[1], padded)
+            Zs.append(Z)
         if timer:
             timer.mark("matmul.fold")
         deg_out = DEGREE if self.reduce_in_matrix else 2 * DEGREE
-        coeffs = recompose(ops, Z, deg_out, self.pow2_row)                     # (3 t/2, deg_out)
-        if not self.reduce_in_matrix:
-            lo, hi = coeffs[:, :DEGREE], coeffs[:, DEGREE:]                    # block 11 is the paper's zero padding
-            coeffs = (lo + hi * W) % P
-        stats.fold_elements += rows.shape[0]
+        out = []
+        for Z in Zs:
+            coeffs = recompose(ops, Z, deg_out, self.pow2_row)                 # (t/2, deg_out)
+            if not self.reduce_in_matrix:
+                lo, hi = coeffs[:, :DEGREE], coeffs[:, DEGREE:]                # block 11 is the paper's zero padding
+                coeffs = ops.astype((ops.astype(lo, ops.i64) + ops.astype(hi, ops.i64) * W) % P, ops.i32)
+            stats.fold_elements += Z.shape[0]
+            out.append(Table(coeffs, DEGREE))
         if timer:
             timer.mark("reduce.fold")
-        half = EO_f.shape[0]
-        return [Table(coeffs[i * half:(i + 1) * half], DEGREE) for i in range(3)]
+        return out
 
     # -- one round ----------------------------------------------------------------------------------------------------
 
