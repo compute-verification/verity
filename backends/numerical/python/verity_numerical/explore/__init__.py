@@ -1,1 +1,1 @@
-"""Exploratory cost models for the proof campaign (costed through ``verity_numerical.security.accounting``)."""
+"""Cost-model explorations of alternatives to the two candidates (wave 1): each module is a function of the checker census and the accountant, with a pinned report under ``backends/numerical/reports/``."""
