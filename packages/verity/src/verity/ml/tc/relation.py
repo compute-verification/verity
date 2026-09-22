@@ -16,11 +16,20 @@ themselves, only their scaled products `rinv = r * invpow`, `rsinv = r_s * invpo
 dishonest `r >= 2^d` whose product wraps below p into [0, 2^A) is accepted (`align_state` over F_p40 as stated: SAT;
 over Goldilocks with `r` range-checked: UNSAT), and `aligned` carries no tight quotient bound ``q < 2^(A-d)``, which a
 31-bit field needs even with ideal remainder checks (M = 0, d >= W, q = 63, r = 2^25 - 1 gives 2^31 - 1 = 0 in
-Mersenne31: SAT).  The "E* attained" chain ``prod_i (E* - e_i) = 0`` is a *field* identity (a product vanishes iff a
-factor does) whose intermediates are not range-checked either.  A backend embedding this relation in a field must add a
-direct range check on every remainder and the tight quotient bound (or use a 64-bit field and range-check `r` so the
-product cannot wrap); the census below does not include those lookups.  The range lookups are what pin a witness to the
-integers.  The relation is *total* and *unconditional*: NaN/Inf/zero operands
+Mersenne31: SAT).  The red-team lane (same day, `verity_numerical.redteam`, report
+`backends/numerical/reports/redteam_relation.json`) found a forgery that is **field-independent**: `magW` (the split
+of `normB` into a W-bit magnitude and the remainder `r_n`) is never range-checked, so `magW' = magW + k * 2^W (mod p)`
+with a fitting `r_n'` yields an accepted wrong output word over every prime tried, Goldilocks included (388 of 870
+Ampere groups; forged `0x3f7ffffe` for the honest `0x3f800000` on the all-zero group); RANGE(magW, W) makes every
+whole-group z3 query UNSAT.  The wrap thresholds for the other products are p >= 2^52 (`aligned * pow`), 2^59
+(`mag24 * pow_s`) and 2^60 (`mag_t * normpow`) on Ampere (2^54 / 2^60 / 2^64 on Hopper).  The "E* attained" chain
+``prod_i (E* - e_i) = 0`` is a *field* identity (a product vanishes iff a factor does) whose intermediates are not
+range-checked either.  Anyone embedding this relation in a field must add RANGE(magW, W), a direct range check on every
+remainder and the tight quotient bound, and choose p above the wrap thresholds; the census below counts none of that,
+nor the decode of an arbitrary transition-unit accumulator (the VU starts from the constant zero state; the backend
+transition unit does not).  The gadget contracts in `verity_numerical.checker` (WP2) carry the bounds and are UNSAT
+under z3 at real widths; build from those, not from this module.  The relation is *total* and *unconditional*:
+NaN/Inf/zero operands
 take the same predicates as finite ones (their finite-path magnitude is 0, so the finite path is always well defined on
 masked values, and the class flags select the output).
 
