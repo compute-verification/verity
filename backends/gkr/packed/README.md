@@ -159,7 +159,8 @@ Shapes: `sumcheck_layer` needs `t` a multiple of `2^k . 8192` for the fused pack
 (`393,216 x 306` and `65,536` are).  The coins object is a stand-in for the verifier: `lambda_0`, then per level
 `r_1..r_k, mu, lambda` -- replace `coins.next()` with the sponge; the transcript (`tr.q_root`, per level `rounds` (4 `Ext`
 each) and `vals = [p0, p1, q0, q1]`) is what `logup.rs` sends, modulo the bit-reversal convention.  Test vectors:
-`python -m backends.gkr.packed.kernels --vectors` (reference SHA-256s of two fixed cases); the GPU path is checked message
+`python -m backends.gkr.packed.kernels --vectors` (reference SHA-256s of two fixed cases: `sumcheck_t4096_k3_seed7` =
+`a6a12f3b...1afd780`, `logup_Nw12288_Nt2048_seed1` = `2a8fe70f...bee37bda`; the GPU path is checked message
 by message in `tests/test_kernel_agreement.py` and `tests/test_logup_gpu.py` (`PACKED_DEVICE=cuda pytest backends/gkr/packed/tests`).
 
 Launch overhead is the a-gpu prover's problem to solve (it owns the round loop): ~10 launches + 1 H2D per round here.
