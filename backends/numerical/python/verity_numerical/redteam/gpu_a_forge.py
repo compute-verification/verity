@@ -64,6 +64,13 @@ class BBChain:
         self.words: list[int] = []
         self.rechain(0, 0)
 
+    def clone(self) -> BBChain:
+        """Copy the rows/words; share the (unpicklable) module handles."""
+        c = object.__new__(BBChain)
+        c.bb, c.unit, c.epi, c.a, c.b, c.p, c.steps = self.bb, self.unit, self.epi, self.a, self.b, self.p, self.steps
+        c.rows, c.words = [list(r) for r in self.rows], list(self.words)
+        return c
+
     def unit_row(self, i: int, c: int) -> tuple[list[int], int]:
         s = self.bb.STEP
         ai, bi = self.a[i * s:(i + 1) * s], self.b[i * s:(i + 1) * s]
@@ -149,14 +156,14 @@ def build_cases(n_vus: int, root: Path, device, only: set[str] | None = None, p:
     # ---- chain linkage --------------------------------------------------------------------------------------
     if want("splice") and n_vus >= 2:
         k = 40
-        f = copy.deepcopy(chains)
+        f = [ch.clone() for ch in chains]
         f[1].rechain(k, chains[0].words[k - 1])
         pub = honest_pub[:]
         pub[1] = f[1].cast()
         epis = [f[0].epilogue_row(), f[1].epilogue_row()] + honest_epi[2:]
         yield "splice", "reject", "X[(1,40),c] - X[(1,39),y] = 0 (add_chain step constraint)", inst(f, epis, pub), inst(pub=pub), {}, None
     if want("c0_nonzero") and n_vus >= 2:
-        f = copy.deepcopy(chains)
+        f = [ch.clone() for ch in chains]
         f[1].rechain(0, chains[0].y32)
         pub = honest_pub[:]
         pub[1] = f[1].cast()
@@ -197,7 +204,7 @@ def build_cases(n_vus: int, root: Path, device, only: set[str] | None = None, p:
         # row 3 of VU 0: push an R16-checked column to 65536 (out of T16), and credit the multiplicity of
         # table row 65535 so the prover's histogram still sums to the query count.  The prover's own checks
         # (`multiplicities` raises, `prove_table` raises on p_root != 0) are bypassed; the GKR runs on the false leaves.
-        f = copy.deepcopy(chains)
+        f = [ch.clone() for ch in chains]
         col, cname = bare_r16_column()
         f[0].rows[3] = list(f[0].rows[3])
         f[0].rows[3][col] = 65536
@@ -205,7 +212,7 @@ def build_cases(n_vus: int, root: Path, device, only: set[str] | None = None, p:
     if want("logup_table_subst"):
         # the prover's R16 has a 65537th row (65536 is 'in the table' for the prover: its fractional sum vanishes
         # honestly); the circuit hash is the verifier's (R16 is implicit, not in the hashed text).
-        f = copy.deepcopy(chains)
+        f = [ch.clone() for ch in chains]
         col, cname = bare_r16_column()
         f[0].rows[3] = list(f[0].rows[3])
         f[0].rows[3][col] = 65536
