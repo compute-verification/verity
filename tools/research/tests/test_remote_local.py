@@ -146,3 +146,21 @@ def test_snapshot_identity_reaches_the_record(tmp_path):
     _wait_terminal(runs_root / "snap")
     job = json.loads((runs_root / "snap" / "job.json").read_text())
     assert job["tool"]["research_snapshot"] == Path(SRC).name
+
+
+def test_source_sha_reaches_the_workload_as_research_source_sha(tmp_path):
+    """[R19 tele, F-r17-tp-06] a `--source` run executes from <root>/src/<sha>/, a `git archive` export with no .git: the workload's
+    source-identity precheck learns the tree's sha from RESEARCH_SOURCE_SHA (request.json remote.source_sha).  A run without a shipped
+    tree does not carry the variable."""
+    probe = "import os; print(os.environ.get('RESEARCH_SOURCE_SHA', '<unset>'))"
+    req, runs_root = _request(tmp_path, "s1", [PY, "-c", probe])
+    d = json.loads(req.read_text())
+    d["remote"]["source_sha"] = "a" * 40
+    req.write_text(json.dumps(d))
+    assert remote.launch_request(req)["started"]
+    s = _wait_terminal(runs_root / "s1")
+    assert s["state"] == "done" and (runs_root / "s1" / "stdout.log").read_text().strip() == "a" * 40
+    req2, _ = _request(tmp_path, "s2", [PY, "-c", probe])
+    assert remote.launch_request(req2)["started"]
+    _wait_terminal(runs_root / "s2")
+    assert (runs_root / "s2" / "stdout.log").read_text().strip() == "<unset>"

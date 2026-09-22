@@ -323,6 +323,10 @@ def launch_request(request_path: Path) -> dict[str, Any]:
     argv += [*(req.get("harness_args") or []), "--", *req["command"]]
     env = dict(os.environ)
     env.update({k: str(v) for k, v in (req.get("env") or {}).items()})
+    if remote.get("source_sha"):
+        # [R19 tele] the shipped tree (<root>/src/<sha>/, a git archive) has no .git: the workload's source-identity precheck reads the
+        # tree's sha from here (research.result.ENV_SOURCE_SHA) when neither --sha nor EXPORT.json names it
+        env["RESEARCH_SOURCE_SHA"] = str(remote["source_sha"])
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
