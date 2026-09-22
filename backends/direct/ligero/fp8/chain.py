@@ -370,7 +370,9 @@ def bench_vu_fp8(args) -> int:
     ]
     for k_, v_ in cen.items():
         if isinstance(v_, int) and not isinstance(v_, bool):
-            meas.append(contract.measurement(f"census.{k_}", v_, "count"))
+            # ``census.`` is a contract-reserved prefix: only the seven names contract.py defines may live under
+            # it (emitted above).  The relation's own per-gadget row counts go under ``relation.census.``.
+            meas.append(contract.measurement(f"relation.census.{k_}", v_, "count"))
     result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or os.environ.get("RESEARCH_RUN_ID") or f"b-ligero-fp8-vu-{int(time.time())}",
               "workload_fingerprint": fp,
               "validation": {"status": "passed", "checker": "backends.direct.ligero.fp8.chain bench_vu_fp8 (verifier accepted every rep; "
