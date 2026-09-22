@@ -464,4 +464,77 @@ step, not part of this measurement.
   range checks, realises `LtPow` as a direct range check on \(2^w - 1 - x\) (no product), and adds a bound check
   on the normalised mantissa at \(k = k_{lo}\) so no identity has a term reaching \(p = 2^{31} - 2^{27} + 1\)
   (all constants are kept below \(2^{24}\)); +56 columns over Goldilocks. The 52 `vu-k1536-neg` instances and the
-  mutation tests pass identically over both fields (`tests/chain.rs`, `direct-unit vu-neg`).
+  mutation tests pass identically over both fields (`tests/chain.rs`, `direct-unit vu-neg`). **Section 13 audits
+  this port against the red team's six embedding rules: one rule was half-implemented (fixed 2026-09-22).**
+
+## 13. The BabyBear port against the red team's embedding rules (b-lookup, 2026-09-22)
+
+`backends/numerical/reports/babybear_rules.md` derives six rules from all 109 WP2 predicates (interval analysis,
+then z3 on every embedded gadget: UNSAT under the six rules, a concrete forgery when any necessary one is dropped)
+and ships a battery of 83 adversarial witnesses (`fixtures/redteam/babybear-battery/v1`). The port of section 12.4
+was written before either existed. This section maps each rule to the port's constraints and records the battery
+verdict of the AIR's own constraints (`direct-unit check-rows`, `tools/battery_adapter.py`).
+
+### 13.1 Rule mapping
+
+Column and constraint names are `program.rs` names (`tag.name`); "range" is a 2-bit-limb decomposition of the
+named linear wire (`ctx.rs::rng`).
+
+| rule | what it requires | in the port | verdict |
+|---|---|---|---|
+| **LIMB16** | 32-bit words as two public 16-bit limbs; word identities per limb; fraction limbs `f_lo` (16) / `f_hi` (7); `pack.low` as `low_lo`/`low_hi`; the epilogue reads the limbs | `x.c_hi`, `x.c_lo` (16-bit ranges); `acc.f_lo`/`acc.f_hi` hints with 16/7-bit ranges, identities `acc.word_lo` (\(f_{lo}=c_{lo}\)) and `acc.word_hi` (\(s\,2^{15}+t\,2^7+f_{hi}=c_{hi}\)); `pack.low_lo`/`pack.low_hi` (16/7-bit), `pack.M` (\(\mathrm{hidden}\,2^{23}+\mathrm{low}_{hi}2^{16}+\mathrm{low}_{lo}=M\)); the word selection per limb (`pack.y_hi`, `pack.y_lo` materialised); `cast.*` on the limbs directly with the contract's 16-bit ranges `cast.hi`, `cast.lo`; the link `vu.link[0..1]` is per limb | **satisfied** |
+| **LT_DIRECT** (upper) | every `lt_pow` of width > 15 as `rng(bnd - 1 - x, 0, 2^B)` against the table's bound column | `Ctx::lt_pow` in `small_field`: `align_state.rem` (\(pow-1-r\)), `align_state.quot` (\(ipow-1-q\)), `align_prod.rem` (\(sr-1-r\)), `align_prod.quot` (\(isr-1-q\)), `lead.window` (\(span-1-(v-lo)\), LEAD's third column `span`), `norm.rem` (\(div-1-r\), width 7: direct too) | **satisfied** |
+| **LT_DIRECT** (lower, the two-range form) | `rng(x, 0, 2^B)` in addition when `x` is **not** itself a range-checked hint -- the leading-bit window `v - lo` | `align_*`: `q`, `r` are hints with their own ranges (`align_state.q/.r`, `align_prod.q/.r`): nothing more needed. `lead.window`: **MISSING** as shipped. `v - lo` is a linear wire; for \(v<lo\) the direct difference \(span-1-(v-lo)=2^l-1-v\) is a small positive integer that passes. Forgery: \(v=16,\ l=29\) (\(2^{29}-17\in[0,2^{30})\)); at the unit level `g1.lead.l` raised by one on an honest golden instance re-derives to a different output word (\(M\) halved, \(e_1+1\): `0x3fd82158 -> 0x3fec10ac`). **Fixed**: `lead.window_lo` = `rng(v - lo, 0, 2^30)`; with \(v\le S_{MAX}\) (`sum.premise`) and \(lo\le2^{29}\) a negative \(v-lo\ge-2^{29}\) has representative \(\ge p-2^{29}>2^{30}\). +15 limb columns and +16 constraints per group (2 groups): **+30 columns, +32 constraints** (width 2 900 -> 2 930, 3 215 -> 3 247 constraints) | **was MISSING; fixed** |
+| **QUOT_TIGHT** | the tight quotient bound \(q<2^B/pow\) (direct) so that \(q\,pow+r<2^{B+1}\) keeps the division identity inside \((-p,p)\) | `align_state.quot` (\(q<ipow\)) and `align_prod.quot` (\(q<isr\)) are emitted unconditionally (`align_state`, `align_product` in `program.rs`), in the direct form over BabyBear. With them: `align_state.div` has \(q\,pow+r<2^{25}+2^{25}\) vs \(2M<2^{25}\); `align_prod.div` has \(q\,sr+r<2^{17}\) vs \(u<2^{16}\): both differences inside \((-p,p)\) | **satisfied** |
+| **NORM_MBND** | NORM column \(mbnd=2^{30}/div\) and `rng(mbnd - 1 - M, 0, 2^30)`: the quotient tight to the dividend, excluding \(M'=(v+p)/div\) | The port's `norm.k_lo_bound`: `rng(k_lo * M, 0, 2^23)` with `k_lo` = NORM's fourth column \([k=k_{lo}]\). Equivalent: for \(div=2^7\) (the \(k=k_{lo}=-7\) row) \(mbnd=2^{23}\) and `mbnd - 1 - M >= 0` is exactly \(M<2^{23}\); for every other \(k<0\) row \(mbnd=2^{30}/div\ge2^{24}\) is implied by `norm.M`'s 24-bit range; for \(k\ge0\) rows \(div=1\), \(r=0\) and \(M\equiv v\,2^k\) is exact because \(v\,2^k<2^{24}\) once `lead` pins \(l\) (the NORM_VBND redundancy below, which the LT_DIRECT fix restores). The shadow \(M'\ge p/128=15\,728\,640>2^{23}\) is rejected; the honest \(M=v\gg7\le S_{MAX}/128<2^{22.1}\) is accepted. Realised with one product instead of a table column (`k_lo` is linear in the one-hot selectors: degree 2, 12 limb columns) | **satisfied** (equivalent form) |
+| **NORM_VBND** | \(v\,mul<2^{24}\) via a `vbnd` column -- **redundant** (z3: UNSAT without it, in isolation and composed with `leading_bit` with `l` free) | never carried by the port | nothing to drop |
+| **V_PREMISE** | \(v\in[0,S_{MAX}]\), \(S_{MAX}=570\,417\,150\), as the premise of `leading_bit`/`normalise` (a guarantee of `signed_sum`'s ranges, not a check) | guaranteed: `sum.v` = \(S-2\,\mathrm{sgn}\,S\) materialised, `sum.v` 30-bit range; a wrong sign gives a negative \(v\ge-S_{MAX}\) with representative \(\ge p-S_{MAX}>2^{30}\). The port **also** checks it explicitly: `sum.premise` = `rng(S_MAX - v, 0, 2^30)` (15 limbs per group; harmless, and what the `window_lo` argument above uses) | **satisfied** (guarantee + explicit check) |
+
+The mapping says the port implemented the rules' *first draft* faithfully -- the direct form of every wide `lt_pow`
+-- and missed exactly the amendment z3 forced on the red team (`babybear_rules.md` 6, "run 1 -> run 2": the
+direct form bounds only from above). The battery does not contain that forgery (its `leading_bit -LT_DIRECT` case
+\(v=16,l=0\) is the *product-form* hole, which the direct form catches); this lane's extra cases do
+(`battery_adapter.py --extras`: 2 gadget-level, 4 unit-level).
+
+### 13.2 The battery against the AIR's constraints
+
+`direct-unit check-rows --field babybear --in jobs.json --out report.json` evaluates every constraint of
+`ChainAir` (row-local, transition between consecutive supplied rows, boundary when the job starts a trace) on rows
+built by imposing the case's hints by name on the witness generator (`IntCtx::overrides`; limbs, selectors,
+inverses and materialised copies derived from the imposed values, the only assignment that can satisfy their own
+constraints), and reports the first violated constraint. Nothing in the verdict depends on witness generation
+rejecting. Case mapping (`tools/battery_adapter.py`): `step` = the forged unit at VU position 1 (so \(c\ne0\) is
+allowed) followed by an honest zero unit consuming its output limbs through `vu.link`; `vu` = the two forged units
+from \(c_0=0\) plus 94 honest zero units (the identity on a finite accumulator) carrying the word to row 95, where
+the case's epilogue hints and the claimed \(y_{16}\) meet `vu.out`; `gadget` = `program::gadget_program`, the
+gadget alone with inputs pinned to the contract's premises and outputs bound to the claimed values. Every case is
+paired with an honest control (same operands, honest hints, honest word) that must be accepted.
+
+Result (vy-cpu2, `results/battery_babybear.json`, 1.3 s for 176 jobs; the pre-fix constraints of db1f9d8 rebuilt
+with the same tool: `results/battery_babybear_prefix_db1f9d8.json`):
+
+| constraints | width / constraints | battery (83, must reject) | honest controls (87) | this lane's 6 extras (must reject) |
+|---|---|---|---|---|
+| port as shipped (db1f9d8, section 12.4) | 2 900 / 3 215 | **82/83**: `z3-d65d03b3ff` ACCEPTED (`lead_norm`, rule LT_DIRECT dropped: \(E=-100,\ v=0,\ l=1\) -> \(e_1=-124\), reference \(-125\); Python embedded checker: `lead.window.nonneg`) | 87/87 | **0/6**: all six accepted, incl. four unit-level forgeries with a different output word |
+| with `lead.window_lo` (426700b) | 2 930 / 3 247 | **83/83** rejected | 87/87 accepted | 6/6 rejected (first failing: `lead.window_lo.limbs`) |
+
+Where the 83 die (first failing constraint), post-fix: `wrap` 58 -- 32 on an operand decode's `s`
+boolean (`a[i].s`, `b[i].s`), 18 on a quotient's own range (`g*.align_prod[i].q.limbs`, `g*.align_state.q.limbs`),
+the rest on `acc.t.limbs`, `norm.clamp`, `out.z`, `sum.sgn`, `pack.hidden`; `fractional` 1 -- `g0.max.E.limbs`;
+`zero_swap` 4 -- `acc.word_hi` (the sign bit of the word against the honest `s`); `hint_swap` 3 -- `a[0].word`;
+`chain` 4 -- `acc.word_lo` (2: the +p shadow's fraction limb differs from the carried limb) and `g0.max.E.limbs`
+(2); `epilogue` 1 -- `vu.out` (the claim binding on row 95: the mutated hints are the public limbs the port does not
+carry, so the row is honest and the claimed word is wrong); `z3` 12 -- `acc.word_hi`, `cast.lsb_split`,
+`align_state.rem/quot.limbs`, `align_prod.rem/quot.limbs`, `lead.window.limbs`, `lead.window_lo.limbs` (the case
+above), `norm.k_lo_bound.limbs` (2: NORM_MBND's role, in the port's equivalent form), `in.v.hi.limbs` (2: the
+V_PREMISE models' input is outside the premise; the premise is the composition's `sum.premise` check).
+
+Conclusion of goal 1: five of six rules were satisfied by the port as shipped (LIMB16, LT_DIRECT-upper,
+QUOT_TIGHT, NORM_MBND in an equivalent form, V_PREMISE as an explicit check); NORM_VBND was never carried (nothing
+to drop); LT_DIRECT's lower range on the leading-bit window was missing and is a real forgery of the VU relation
+over BabyBear (different output words on golden instances). It is fixed at +30 columns (+1.0%). The Goldilocks path
+is unchanged (its `lt_pow` is the product form, which bounds both sides). Gate after the fix: section 13.3.
+
+### 13.3 Gate after the fix
+
+GATE_PLACEHOLDER

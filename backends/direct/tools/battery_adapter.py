@@ -244,7 +244,10 @@ def main(argv=None) -> int:
     for c in cases + extras:
         j, ctl = jobs_for_case(c)
         jobs.append(j)
-        controls.append(ctl)
+        # the -V_PREMISE z3 models have an input OUTSIDE the gadget's premise (v = p - 2^30 + 1 > S_MAX): the
+        # honest control would be rejected on the input range itself, so there is no honest witness to control with
+        if c.dropped_rule != "V_PREMISE":
+            controls.append(ctl)
     payload = {"field": args.field, "jobs": jobs + controls}
     with tempfile.TemporaryDirectory() as td:
         jp = Path(td) / "jobs.json"
@@ -285,7 +288,7 @@ def main(argv=None) -> int:
                 "first_failing": r.get("first_failing"),
                 "n_failing": r["n_failing"],
                 "python_embedded": c.verdicts.get("embedded"),
-                "control_accepted": res[f"ctl:{c.id}"]["accepted"],
+                "control_accepted": res[f"ctl:{c.id}"]["accepted"] if f"ctl:{c.id}" in res else None,
             }
         )
     out = {
