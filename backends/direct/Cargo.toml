@@ -38,3 +38,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 [profile.release]
 opt-level = 3
 debug = false
+
+# lane b-bind (2026-09-22): p3-fri 0.4.3-succinct with the openings absorbed before the batch challenge alpha
+# (`vendor/p3-fri/src/two_adic_pcs.rs`, marked `verity patch`); TRANSCRIPT_CHECKLIST "openings before alpha",
+# red team F19 residual.  The transcript differs from upstream 0.4.3.
+[patch.crates-io]
+p3-fri = { path = "vendor/p3-fri" }
