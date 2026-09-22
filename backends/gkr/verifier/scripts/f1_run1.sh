@@ -7,12 +7,13 @@ echo "triton cache entries before: $(ls ~/.triton/cache 2>/dev/null | wc -l)"
 rm -rf ~/.triton/cache
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv
 $P -c "import torch,triton;print('torch',torch.__version__,'triton',triton.__version__,torch.cuda.get_device_name(0))"
-# --- statements / witnesses (only if missing)
+# --- statements / witnesses (only if missing); the built operand arrays live in /workspace/bb/instances-v1 (from run r20260922-022913-d462), seeds from the tree
+mkdir -p /workspace/bb/instances-v1 && cp -rn fixtures/bench-instances/v1/seeds /workspace/bb/instances-v1/ 2>/dev/null || true
 if [ ! -f /workspace/bb/pos4096/manifest.json ]; then
-  uv run --frozen --package verity-numerical python -m gpu.bb_export export --root fixtures/bench-instances/v1 --tier vu-k1536 --hi 4096 --out /workspace/bb/pos4096 --procs 24
+  uv run --frozen --package verity-numerical python -m gpu.bb_export export --root /workspace/bb/instances-v1 --tier vu-k1536 --hi 4096 --out /workspace/bb/pos4096 --procs 24
 fi
 if [ ! -f /workspace/bb/neg/manifest.json ]; then
-  uv run --frozen --package verity-numerical python -m gpu.bb_export export --root fixtures/bench-instances/v1 --tier vu-k1536-neg --out /workspace/bb/neg --procs 24
+  uv run --frozen --package verity-numerical python -m gpu.bb_export export --root /workspace/bb/instances-v1 --tier vu-k1536-neg --out /workspace/bb/neg --procs 24
 fi
 if [ ! -f /workspace/bb/synth2/manifest.json ]; then
   uv run --frozen --package verity-numerical python -m gpu.bb_export synth --out /workspace/bb/synth2 --vus 2 --steps 3
