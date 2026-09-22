@@ -42,8 +42,15 @@ if ! $PY -c "import vllm, torch" 2>/dev/null; then
     || fail WHEEL "vLLM wheel download"
   echo "$WSHA  $WORK/wheels/$W" | sha256sum -c >/dev/null || fail WHEEL_SHA "vLLM wheel sha256 != $WSHA"
   log "installing vLLM + torch cu129 into $VENV"
-  uv pip install --python "$PY" --extra-index-url https://download.pytorch.org/whl/cu129 --index-strategy unsafe-best-match \
-    "$WORK/wheels/$W" "numpy>=1.26" safetensors huggingface_hub zstandard pytest ninja >"$OUT/pip.log" 2>&1 || fail PIP "$(tail -3 "$OUT/pip.log")"
+  # UV_HTTP_TIMEOUT: uv's default 30 s per response timed out twice on a 2x L40S pod fetching nvidia-cuda-cccl-cu12 (22 Sep, vyv-l40s2b,
+  # 'operation timed out') while a sibling pod in the same DC installed in 30 s; one retry of the whole install before failing by name.
+  export UV_HTTP_TIMEOUT=${UV_HTTP_TIMEOUT:-600}
+  for _try in 1 2; do
+    uv pip install --python "$PY" --extra-index-url https://download.pytorch.org/whl/cu129 --index-strategy unsafe-best-match \
+      "$WORK/wheels/$W" "numpy>=1.26" safetensors huggingface_hub zstandard pytest ninja >"$OUT/pip.log" 2>&1 && break
+    [ "$_try" = 2 ] && fail PIP "$(tail -3 "$OUT/pip.log")"
+    log "pip install failed (attempt $_try): $(tail -1 "$OUT/pip.log" | cut -c1-160); retrying"
+  done
 fi
 $PY -c "import ninja" 2>/dev/null || uv pip install --python "$PY" ninja >/dev/null 2>&1
 rm -rf /root/.cache/uv /root/.cache/pip 2>/dev/null
