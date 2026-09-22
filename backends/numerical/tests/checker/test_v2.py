@@ -243,3 +243,15 @@ def test_v2_unit_is_smaller_than_v1_on_every_count() -> None:
 def test_v2_vu_is_smaller_than_v1() -> None:
     v1, vv2 = census_vu(1536, P), census_vu_v2(1536, P)
     assert vv2.mul < v1.mul / 10 and vv2.lookup < v1.lookup / 3 and vv2.columns_committed_a < v1.columns_committed_a
+
+
+def test_field_reading_is_wrap_free_for_the_hint_splitting_gadgets() -> None:
+    """Over Goldilocks and M31 no congruence of ``state_shift``, ``signed_sum`` or ``normalise`` can hold with a
+    non-zero multiple of p (so the integer UNSATs transfer to the field).  ``state_shift`` needs the halves' own
+    range checks for this: keyed through M_hi R + 2dt + s alone it is SAT over M31 (z3, 53 s on vy-cpu2)."""
+    from verity_numerical.checker.search import GOLDILOCKS, M31
+    from verity_numerical.checker.v2.search import wrapfree_queries_v2
+
+    rows = wrapfree_queries_v2(REAL, timeout_ms=20_000, names=("state_shift", "signed_sum", "normalise"),
+                               moduli=((GOLDILOCKS, "F_goldilocks"), (M31, "F_m31")))
+    assert [r.status for r in rows] == ["unsat"] * 6, [(r.gadget, r.query, r.status) for r in rows]

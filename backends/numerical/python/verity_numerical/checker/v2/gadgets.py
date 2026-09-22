@@ -220,6 +220,13 @@ class StateShift:
     def check(ctx, p: Params, M, dt, s, h: dict, tag: str = "sshift"):
         R = 2 * V2.dt_rows(p)
         M_hi, M_lo = h["M_hi"], h["M_lo"]
+        # The halves are range-checked on their own, not only through the packed lookup keys: over F_p the key
+        # M_hi R + 2 dt + s is a *linear* function of the hint, so any table row kk has a field solution
+        # M_hi = (kk - 2 dt - s) / R, and the two rows are then only tied by the split congruence (SAT over M31,
+        # z3 UNKNOWN over Goldilocks).  With the halves bounded every key is below p and the field reading is the
+        # integer one (`checker.v2.search.wrapfree_queries_v2`).
+        ctx.rng(f"{tag}.hi_range", M_hi, 0, 2 ** V2.mh(p))
+        ctx.rng(f"{tag}.lo_range", M_lo, 0, 2 ** V2.mb(p))
         ctx.eq(f"{tag}.split", M_hi * 2 ** V2.mb(p) + M_lo, M)
         (hi,) = ctx.lookup(f"{tag}.hi", sshift_hi_table(p), M_hi * R + 2 * dt + s)
         (lo,) = ctx.lookup(f"{tag}.lo", sshift_lo_table(p), M_lo * R + 2 * dt + s)

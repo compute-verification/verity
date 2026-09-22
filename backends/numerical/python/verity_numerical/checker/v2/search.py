@@ -18,7 +18,7 @@ import random
 import time
 from dataclasses import asdict
 
-from ..ctx import Table, Z3Ctx
+from ..ctx import Reject, Table, Z3Ctx
 from ..gadgets import Epilogue
 from ..params import REAL, Params
 from ..search import (
@@ -339,6 +339,69 @@ def _z3_gadget_mod(spec: Spec, p: Params, modulus: int, *, timeout_ms: int, labe
         S.ModZ3Ctx = saved
 
 
+class WrapFreeZ3CtxV2(ModZ3CtxV2):
+    """``ModZ3CtxV2`` that records every congruence multiplier, so a query can ask whether any of them can be
+    non-zero under the predicates.  If not, every accepted F_p assignment satisfies the predicates over Z with the
+    same values, and the integer UNSAT transfers to the field."""
+
+    def __init__(self, modulus: int, *, ideal_bounds: bool = False) -> None:
+        super().__init__(modulus, ideal_bounds=ideal_bounds)
+        self.wraps: list = []
+
+    def _cong(self, a, b):
+        m = self.fresh("wrap")
+        self.wraps.append(m)
+        return a - b == m * self.modulus
+
+    def boolean(self, name, b):
+        # one congruence with a fresh bit (not Or(b = 0, b = 1) with two multipliers, one of which would be free)
+        if isinstance(b, int):
+            super().boolean(name, b)
+            return
+        t = self.fresh(f"{name}.bit")
+        self._add(self.z3.And(self.z3.Or(t == 0, t == 1), self._cong(b, t)))
+
+
+def z3_gadget_wrapfree(spec: Spec, p: Params, modulus: int, *, timeout_ms: int, label: str) -> QueryResult:
+    """Over F_p (hints are field elements in [0, p)): can any congruence in the gadget's predicates wrap, i.e. hold
+    with a non-zero multiple of p?  UNSAT means the field reading of the gadget *is* its integer reading, so the
+    integer 'differs-from-reference' UNSAT is also the field result.  This is a linear query when every key is a
+    linear function of range-checked quantities (the v2 shape), which is why it closes what the direct product
+    query leaves UNKNOWN."""
+    import verity_numerical.checker.search as S
+    ctx = WrapFreeZ3CtxV2(modulus)
+    z3 = ctx.z3
+    contract = spec.contract(p)
+    x = S._symbolic_inputs(ctx, contract)
+    h = S._symbolic_hints(ctx, contract, modulus)
+    try:
+        outs = spec.call(ctx, p, x, h)
+    except Reject as exc:
+        return QueryResult(spec.name, label, "rejected-statically", 0.0, note=str(exc))
+    if spec.zadmissible is not None:
+        ctx.solver.add(spec.zadmissible(z3, p, x))
+    # (the outputs need no side condition: wrap-free predicates are the integer predicates on the same values, so the
+    # integer 'differs-from-reference' UNSAT gives outs == refs as integers, hence as residues)
+    del outs
+    ctx.solver.add(z3.Or([w != 0 for w in ctx.wraps]))
+    ctx.solver.set("timeout", timeout_ms)
+    t0 = time.perf_counter()
+    status = str(ctx.solver.check())
+    seconds = time.perf_counter() - t0
+    model = None
+    if status == "sat":
+        model = {"inputs": S._model_dict(ctx, x), "hints": S._model_dict(ctx, h),
+                 "wraps": S._model_dict(ctx, {f"w{i}": w for i, w in enumerate(ctx.wraps)})}
+    return QueryResult(spec.name, label, status, round(seconds, 3), model, f"mod {modulus}, wrap-free ({len(ctx.wraps)} congruences)")
+
+
+def wrapfree_queries_v2(p: Params = REAL, *, timeout_ms: int = 20_000,
+                        names=("state_decode", "group_max", "state_shift", "signed_sum", "normalise", "pack", "epilogue"),
+                        moduli=((GOLDILOCKS, "F_goldilocks"), (M31, "F_m31"))) -> list[QueryResult]:
+    return [z3_gadget_wrapfree(SPECS_V2[n], p, mod, timeout_ms=timeout_ms, label=f"{lab}, wrap-free")
+            for n in names for mod, lab in moduli]
+
+
 def modular_queries_v2(p: Params = REAL, *, timeout_ms: int = 20_000) -> list[QueryResult]:
     """The gadgets that multiply or split witnesses, over a 31-bit field and over Goldilocks.  Expected: everything
     UNSAT over Goldilocks; over M31 ``normalise`` (v_hi A up to 2^54) and ``signed_sum`` ((1 - 2 sgn) S with |S| <
@@ -489,6 +552,10 @@ def main(argv: list[str] | None = None) -> int:
         for r in more:
             print(f"{r.gadget:14s} {r.query:45s} {r.status:8s} {r.seconds}s {r.note}", flush=True)
         rows += more
+        wf = wrapfree_queries_v2(timeout_ms=T)
+        for r in wf:
+            print(f"{r.gadget:14s} {r.query:45s} {r.status:8s} {r.seconds}s {r.note}", flush=True)
+        rows += wf
     if not args.skip_step and not args.only:
         for r in (z3_group_step_v2(timeout_ms=int(args.step_timeout * 1000), concrete=concrete_group_inputs_v2()),
                   z3_group_step_v2(timeout_ms=int(args.step_timeout * 1000))):
@@ -501,6 +568,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dump(report, f, indent=1, default=str)
         print(f"wrote {args.json}")
     bad = [r for r in rows if r.status == "sat" and not (r.note.startswith("mod") or "without" in r.note)]
+    bad += [r for r in rows if r.status == "sat" and r.note.startswith(f"mod {GOLDILOCKS}")]   # Goldilocks must hold
     return 1 if bad else 0
 
 

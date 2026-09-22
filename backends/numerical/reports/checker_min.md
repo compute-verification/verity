@@ -47,7 +47,9 @@ lookup argument itself, so there is nothing left to recombine or to range-check.
 (`T_range16`); 34 of them are on wires carried between gadgets. Predicted: sharing removes the 34 composition chunks;
 widening to a 24-bit table removes another ~60. Risk: none for sharing (same predicate), the 24-bit table's
 commitment cost is the price. *Verdict: subsumed.* Almost every range check in v1 bounds a hint that v2 no longer
-has; v2 has 6 range chunks per unit (the 23/24-bit state-decode halves and two 4-bit checks). The implied-by-others
+has; v2 has 10 range chunks per unit (the 23/24-bit state-decode halves, two 4-bit `attained` checks, and the
+12/13-bit halves of the state magnitude -- see 3.2 on why the latter are not implied by their lookup keys over a
+field). The implied-by-others
 question was answered by z3 rather than by sharing: for every dropped v1 predicate class the v2 gadget is UNSAT
 without it being restated (section 3).
 
@@ -109,7 +111,7 @@ bf16_decode /       96   64   96   128        0    0   32     0    op_decode: 32
 product             80   16   16    16       16    0    0     0    16 x (m_a m_b), e = e_a + e_b linear
 align_product       64   16   80    32        0    0   16     0    product_shift: 16 x SHIFT
 group_max           38    4   22    22        0    0   20     2    16+2 ALIGN4 (18 candidates incl. state), attained range
-align_state          6   10   18     4        0    2    4     4    state_shift: 2 ALIGN4-derived halves, SSHIFT_HI/LO
+align_state          6   10   18     4        0    2    8     4    state_shift: halves range-checked, SSHIFT_HI/LO
 signed_sum          28    8    8     4        6    2    4     6    sgn boolean, (1-2sgn)S, halves through LEAD
 leading_bit +        2    2    6     2        2    0    4     0    normalise: LEADNORM x2, TNORM x2, v_hi A
 normalise           14    4   12     6
@@ -117,18 +119,18 @@ state_out           16    4    6     4        0    0    0     0    z, ovf_eff ar
 fp32_decode          6    5    6     5        3    4    5     3    state_decode (word-in unit only; absent in the VU)
 pack                 8    2    2     2        4    0    0     0    linear in (s, e_hat, M, z) + hidden bit
 composition          0    2   34     0        2    1    0     0
-total              358  137  306   225       33    9   85    15
-                                            -91% -93% -72%  -93%
+total              358  137  306   225       33    9   89    15
+                                            -91% -93% -71%  -93%
 multiplicative depth 5 -> 3; materialised columns 100 -> 45; lookup-output columns 62 -> 195
 ~~~
 
 `lookups_by_table` v2: T_OP 32, ALIGN4 18, SHIFT 16, LEAD 4, SSHIFT_HI 2, SSHIFT_LO 2, LEADNORM 2, TNORM 2, T_HDR 1,
-T_range16 6. Table sizes (rows): T_OP 65 280, T_HDR 510, ALIGN4 3 120, SHIFT 3 538 944, SSHIFT_HI/LO 221 184 each,
+T_range16 10. Table sizes (rows): T_OP 65 280, T_HDR 510, ALIGN4 3 120, SHIFT 3 538 944, SSHIFT_HI/LO 221 184 each,
 LEAD 32 768, LEADNORM 12 152, TNORM 1 048 576; total 5.2M rows against v1's 65k+ (T_range16, ALIGN, POW, LEAD, NORM).
-This is the trade: -72% lookup *rows queried* per unit for +80x fixed-table rows committed once per proof.
+This is the trade: -71% lookup *rows queried* per unit for +80x fixed-table rows committed once per proof.
 
 VU (K=1536, 96 units, MEASURED by `census_vu`): 34 370 / 13 059 / 29 379 mul/lin/lookups, 21 606 hints (v1) ->
-2 502 / 577 / 7 685, 1 156 hints (v2): -93% / -96% / -74%. Predicates per VU 76 808 -> 10 764 (-86%), so the
+2 502 / 577 / 8 067, 1 156 hints (v2): -93% / -96% / -73%. Predicates per VU 76 808 -> 11 146 (-85%), so the
 `--breakthrough` threshold (> 25%) is met on every count.
 
 ### 3.2 z3 at REAL widths (MEASURED on vy-cpu2, z3 4.x, `checker.v2.search`, `out/search_v2.log`)
@@ -163,24 +165,51 @@ two-witness query with symbolic inputs is UNKNOWN at 60 s, as v1's was at 300 s 
 counted as a pass. The per-gadget UNSATs compose because every wire between gadgets is a lookup output or a range-
 checked hint (the composition census has zero unbounded wires), which is the same argument v1 rests on.
 
-Field embedding, "as stated" (no F-repairs), `modular_queries_v2`:
+Field embedding. Two z3 readings of every gadget over F_p (hints are field elements in [0, p), identities and
+lookups hold modulo p):
+
+- *direct* (`modular_queries_v2`, as v1's): "an accepted assignment whose output residue differs from the
+  reference's";
+- *wrap-free* (`wrapfree_queries_v2`, new): "an accepted assignment in which some congruence holds with a non-zero
+  multiple of p". UNSAT means the field reading of the predicates *is* the integer reading on the same values, so the
+  integer UNSAT above transfers. It is a linear query whenever every lookup key is a linear function of bounded
+  quantities, which is the v2 shape, and it closes what the direct product query leaves UNKNOWN.
 
 ~~~
-gadget         F_m31 (2^31-1)     F_goldilocks (2^64-2^32+1)
-state_decode   SAT   0.01         UNSAT  0.45
-group_max      UNSAT 24.0         UNSAT  11.5
-state_shift    SAT   52.7         UNKNOWN at 60 s (long run in progress, see 3.5)
-signed_sum     UNKNOWN at 60 s    UNSAT  1.43
-normalise      UNKNOWN at 69 s    UNKNOWN at 60 s (long run in progress)
-pack           UNSAT 0.01         UNSAT  0.01
-epilogue       SAT   0.01         UNSAT  0.02
+gadget         direct F_goldilocks (600 s)   wrap-free F_goldilocks   direct F_m31 (600 s)   wrap-free F_m31
+state_decode   UNSAT  0.2                    UNSAT 0.003              SAT   0.1              SAT (word arithmetic)
+group_max      UNSAT  10.1                   SAT (see note)           UNSAT 5.8              SAT (see note)
+state_shift    UNKNOWN (before the fix)      UNSAT 0.002 (after)      SAT 52.7 (before)      UNSAT 0.001 (after)
+signed_sum     UNSAT  0.4                    UNSAT 0.003              UNSAT 0.2              UNSAT 0.003
+normalise      UNKNOWN                       UNSAT 0.003              UNKNOWN                UNSAT 0.003
+pack           UNSAT  0.02                   UNSAT (0 congruences)    UNSAT 0.02             UNSAT
+epilogue       UNSAT  0.02                   UNSAT 0.002              SAT   0.004            SAT (word arithmetic)
 ~~~
 
-The 31-bit SATs are the same class as v1's (v1 as stated over M31: fp32_decode, align_state, align_product,
-leading_bit, normalise, epilogue SAT): products of two 23-31-bit quantities wrap. They are the reason `explore.fields`
-carries small-field deltas; for v2 the `normalise` product v_hi A (up to 2^54) becomes a 1.3M-row lookup below 2^31
-(`_v2_norm_lookup`) and the state-decode / epilogue word arithmetic takes v1's F4 limb split. These deltas are
-MODELLED costs, not verified gadgets: a 31-bit v2 is *not* proven here.
+The direct 600 s results are the main search job (`out/search_v2.log`); the 60 s redteam run had `signed_sum` M31
+and `state_shift` Z UNKNOWN where the 600 s run has UNSAT (z3 variance, both recorded).
+
+**A real finding, fixed.** `state_shift` as first written keyed its two SSHIFT lookups on M_hi R + 2 dt + s and
+M_lo R + 2 dt + s with M_hi, M_lo hints bounded *only* through those keys. Over Z the key range bounds the hint; over
+F_p the key is linear in the hint, so every table row kk has the field solution M_hi = (kk - 2dt - s) / R, and the
+two rows are tied only by the split congruence M_hi 2^mb + M_lo = M (mod p). Over M31 z3 found the forgery in 53 s
+(2^48 row pairs against 2^31 residues); over Goldilocks it is a counting argument (2^48 pairs against 2^64), not a
+proof, and z3 returned UNKNOWN at 600 s. Fix: range-check the two halves themselves (two 16-bit chunks per group,
++4 lookups per unit, 85 -> 89); then every key is below p, the wrap-free query is UNSAT over both fields in
+milliseconds, and the M31 direct query flips from SAT to (by transfer) UNSAT. The bench-instances (4096 tu-k16,
+256 vu-k1536, 52 negatives) and the pytest suite were rerun on the fixed gadget; the red-team campaign rerun is
+recorded in 3.4. Lesson recorded in the gadget's docstring: a lookup key proves a *linear combination* of hints is in
+range, not the hints; in a field that is weaker.
+
+Notes on the remaining rows. `group_max` wrap-free SAT is expected and harmless: E is a hint that enters 18 ALIGN4
+keys as 4(E - e_i) + s4_i; a wrapped E' = E'' + m p satisfies every key congruence with the same rows as the small
+E'' and every other use of E is a congruence too, so E' behaves as E'' -- the direct query, which is the one that
+matters, is UNSAT over both fields. `normalise` wrap-free UNSAT over M31 means the product v_hi A never exceeds p
+on admissible inputs (l = bit_length(v) is enforced by the LEAD outputs), i.e. the `_v2_norm_lookup` delta that
+`explore.fields` charges 31-bit fields for v2 is a conservative overcharge: the M31 re-pricing in section 4 is an
+upper bound. The M31 SATs that remain (`state_decode`, `epilogue`) are the word-arithmetic class v1 has too
+(fp32 word = s 2^31 + e 2^23 + f wraps in a 31-bit field; v1's F4 limb repair), present in the word-in unit and the
+epilogue only, absent in the state-chained VU body; 31-bit v2 is proven for the VU body, modelled for the ends.
 
 ### 3.3 Differential tests against the reference (MEASURED)
 
@@ -208,10 +237,8 @@ queries listed above). No accepted negative over Z or Goldilocks.
 
 ### 3.5 Open items at writing
 
-- Goldilocks `state_shift` and `normalise` as stated: UNKNOWN at 60 s. A 1800 s run is in progress on vy-cpu2
-  (`out/mod_gl.log`); until it returns UNSAT these two gadgets are proven over Z only. Both are lookups plus one
-  product of a 15-bit by a 39-bit quantity (< 2^54 < p), so a SAT would have to come from the symbolic-table
-  encoding, not the arithmetic; still, UNKNOWN is not a pass.
+- The *direct* Goldilocks queries for `state_shift` (fixed) and `normalise` are UNKNOWN at 600 s and 1800 s: both
+  gadgets are proven over Goldilocks by wrap-free transfer (UNSAT) plus the integer UNSAT, not by the direct query.
 - Whole-group symbolic two-witness query: UNKNOWN (as v1).
 - 31-bit fields: modelled repairs only (as v1).
 
@@ -222,7 +249,7 @@ design   field       limb MACs/VU (v1 -> v2)     committed/VU (v1 -> v2)   overh
 A        M31         7.52e9 -> 1.86e9  (-75%)    183 kB -> 119 kB          1.07e7 -> 3.18e6 (-70%) 0.431 -> 0.128
 A        BabyBear    same as M31                                            -> 3.82e6
 A        Goldilocks                                                         -> 5.45e6
-B        M31         5.81e9 -> 1.89e9  (-67%)    1.155 MB -> 0.376 MB      1.42e7 -> 4.58e6 (-68%) 0.574 -> 0.185
+B        M31         5.81e9 -> 1.89e9  (-67%)    1.155 MB -> 0.385 MB      1.42e7 -> 4.70e6 (-67%) 0.574 -> 0.190
 ~~~
 
 A's sequential depth 381 -> 303 rounds. B's modelled time is now 71% Merkle hashing: the next lever for B is the
