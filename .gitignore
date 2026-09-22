@@ -2,3 +2,14 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Run outputs, evidence, and shipped source snapshots live in artifact storage (tests/test_repository.py is the backstop).
+/out/
+runs/
+*.tgz
+*.tar
+*.tar.gz
+*.bundle
+*.safetensors
+*.pt
+*.ckpt
