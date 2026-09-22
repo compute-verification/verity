@@ -960,3 +960,147 @@ v1 Goldilocks control on the same binary revision and box.
   read of 12 columns (v1: 2) — still one O(U) pass.
 * Committed payload: 264 columns / unit + 16 / VU + 5.14M multiplicities; Ligero rows shrink proportionally
   (see README for the measured `committed_elements`).
+
+## 15. Batched logUp over the table union (implemented 2026-09-22, lane a-logup-union; `--logup union`)
+
+**This is a protocol change to Candidate A's lookup argument and to nothing else.** The relation (`checker.v2`),
+the circuit export, the committed columns, the chain linkage and the Ligero opening are those of sections 12–14; only
+*how the lookups are proved* changes: the ten (v2: twelve, counting the epilogue's `R16`/`R15`) per-table
+fractional-GKR instances of section 4 become **one** instance over the union of the tables, every element tagged by
+its table. The per-table path stays the default; `--logup union` selects this section (the mode is part of the
+statement: the transcript absorbs `logup-union-v1` and the tagged table order before any challenge, so a per-table
+proof does not verify as a union proof or vice versa — `main.rs::tampered_proof_is_rejected`).
+
+Motivation (`reports/a_kernels_h100_v2.md`): on the H100 the ten v2 instances cost 221.6 ms sequential / 84.7 ms on
+ten streams against 35 ms modelled, "each instance pays ~14 ms of small-level latency"; one instance was estimated at
+25–35 ms but flagged as a protocol change that the accounting did not cover. This section covers it.
+
+### 15.1 Construction **[implemented: `logup.rs::union_*`, `main.rs::add_union_claim`]**
+
+Tables \(T_1,\dots,T_m\) (v2: \(m=12\); \(\sum_t|T_t| = 5\,245\,624\) rows — the sum of the row counts listed in
+14.1; the "5 143 328" total printed there is a miscount of the same list), columns \(c_t\le c_{\max}=3\). Tag
+\(\mathrm{tag}(t)=1+\text{index of }t\) in `Instance::tables()` order (segments' tables in order of first use,
+deduplicated), a base-field constant. One challenge message \((z,\beta,\gamma)\in F_c^3\) replaces the per-table
+\((z_T,\beta_T)\) messages; it is drawn **after the commitment** (the multiplicities are part of the committed vector
+\(X\), 12.1), at the point where the per-table coins were drawn (5.1 step 2a).
+
+Encoding: a vector \(w=(w_0,\dots,w_{c-1})\) with tag \(t\) becomes the field element
+\[\phi(w,t)=\sum_{k<c} w_k\,\beta^k+\gamma\,\mathrm{tag}(t).\]
+The instance is the ordinary fractional sum \(\sum_j \frac{1}{z-\phi(q_j,t_j)} - \sum_v \frac{m_v}{z-\phi(r_v,t_v)} = 0\)
+with leaves, in this order: for each segment (unit circuit, then epilogue) and each unit, its lookups in circuit
+order — \(p=1,\ q=z-\phi(\text{query},t)\); then for each table in tag order its rows —
+\(p=-m_v,\ q=z-\phi(r_v,t)\); padding \(p=0,q=1\) to \(2^n\), \(n=\lceil\log_2(N+|T|)\rceil\) with
+\(N=\sum_t N_t\) the total number of lookups. One \(\mu,\lambda\)-chain (section 4.3) of \(n\) levels, one leaf
+claim. The multiplicities are computed per table exactly as before (`union_multiplicities` is the per-table count
+with the tables walked once); the committed layout (\(X\) = segments then tables' multiplicities) is unchanged.
+
+The leaf claim is, as in 4.4, one linear functional of \(X\): the query leaves' \(q\) are affine in the committed
+columns with coefficients \(\lambda\,\mathrm{eq}(\rho,j)\,\beta^k\cdot\)(the query's linear form); the table leaves'
+\(p\) read the multiplicity column with coefficient \(-\lambda\,\mathrm{eq}(\rho,v)\); \(z-\gamma\,\mathrm{tag}(t)\)
+and the constant parts of the linear forms go to the public constant. It joins the batched opening
+(`add_union_claim`) in place of the per-table functionals: **one** functional instead of twelve.
+
+### 15.2 Soundness **[derivation: `security.accounting.logup_union_error`; pinned by `test_union_lookup_meets_2_to_minus_128_on_the_exported_v2_shape`]**
+
+Let \(A\) be the multiset of (query vector, tag) pairs the witness produces and \(B\) the multiset of (row, tag)
+pairs with the committed multiplicities (arbitrary field elements). The lookup constraint is \(A\subseteq\)
+rows-of-own-table, i.e. \(A=B\) for the honest \(m\). Suppose some query \(x=(w,t)\) is **not** a row of \(T_t\);
+then \(A(x)\ge1\) and \(B(x)=0\) whatever \(m\) is. Let \(S\) be the support of \(A\cup B\), \(|S|\le N+|T|\).
+
+* **Collision term** (the encoding is not injective at \(x\)): some \(y\in S,\ y\ne x\), has \(\phi(y)=\phi(x)\).
+  - *Same tag* \(t\): \(\phi(y)-\phi(x)=(w'-w)(\beta)\) is a nonzero polynomial of degree \(\le c_t-1\) in
+    \(\beta\); \(\le (c_t-1)/|F_c|\) per \(y\), at most \(N_t+|T_t|\) such \(y\).
+  - *Different tag* \(t'\): for every \(\beta\) exactly one \(\gamma=(w(\beta)-r(\beta))/(\mathrm{tag}(t')-\mathrm{tag}(t))\);
+    \(1/|F_c|\) per \(y\), at most \(N+|T|\) such \(y\). This is the brief's "\(n_{\text{rows}}\cdot n_{\text{tables}}/|F|\)"
+    with \(|S|\) counted once rather than per table: the union bound over the pairs \((x,y)\) with \(x\) fixed.
+  The accountant does not know which table the forged query targets, so it charges
+  \(\big(\max_t (N_t+|T_t|)(c_t-1) + (N+|T|)\big)/|F_c|\). **[derivation]**
+* **Identity term**: if \(\phi\) is injective at \(x\), the encoded multisets \(\phi(A),\phi(B)\) differ at
+  \(\phi(x)\) — count \(A(x)\ne0\) in \(F_c\), which needs \(\mathrm{char}\,F>N\) (Goldilocks: \(2^{64}>3.4\cdot10^7\);
+  BabyBear: \(2^{31}-2^{27}+1=2.01\cdot10^9>3.4\cdot10^7\), so the union does not break the characteristic
+  condition either) — so the cleared rational identity is a nonzero polynomial of degree \(\le N+|T|-1\) in \(z\)
+  (Haböck Lemma 5 with arbitrary \(m\)) vanishing at the conditioned \(z\) with probability
+  \(\le (N+|T|-1)/(|F_c|-|T|)\). This is the per-table identity term with the **new denominator count**:
+  \(N+|T|\) in one term instead of \(\sum_t\) of terms with \(N_t+|T_t|\) each — the same sum, so the bucket does
+  not grow (at B = 4096 over Goldilocks\(^3\): \(2^{-166.8}\) against per-table's twelve terms summing to
+  \(2^{-165.2}\)).
+* **Fractional GKR**: Proposition 1 over \(n=\lceil\log_2(N+|T|)\rceil\) levels (\(2^{-182.0}\) at \(n=26\)).
+* \(z\)-conditioning (5.1 step 2a) applies to the union: the redraw slots \(z^{(1)},z^{(2)}\) travel in the same
+  message as \(\beta,\gamma\) and the condition \(z\notin\{\phi(r_v,t_v)\}\) is computed from public data once the
+  message is known (no extra trip). Completeness: two rows of different tables that happen to collide under
+  \(\gamma\) add their multiplicities on both sides — no honest abort.
+
+Numbers on the exported v2 shape (`V2_EXPORT_TABLES`, 86 lookups/unit + 5 epilogue lookups/VU;
+`hash_queries = 2^60` as in the accounting tests):
+
+| | per-table (§14) | union (§15) |
+|---|---|---|
+| total, Goldilocks\(^3\), B = 4096 | \(2^{-130.16}\) (\(2^{-127.71}\) with the default hash budget) | **\(2^{-130.16}\)** (\(2^{-127.71}\)) — unchanged, set by Ligero + hash |
+| total, BabyBear\(^6\), B = 4096 | \(2^{-130.16}\) | **\(2^{-130.16}\)** |
+| lookup bucket, GL\(^3\) / BB\(^6\), B = 4096 | \(2^{-165.16}\) / \(2^{-158.6}\) | \(2^{-165.21}\) / \(2^{-158.7}\) |
+| union collision / identity / GKR, GL\(^3\), B = 4096 | — | \(2^{-165.8}\) / \(2^{-166.8}\) / \(2^{-182.0}\) |
+| \(N\), \(|T|\), \(n\) at B = 4096 | max per table: `T_OP` 12.6M + 65k, \(n_T\le24\) | 33 837 056 + 5 245 624 = 39.1M, \(n=26\) |
+| at B = 64 | \(n_T\le22\) (`SHIFT`) | 528 704 + 5 245 624 = 5.77M, \(n=23\) |
+
+**The union costs nothing in the bound at either field** (`meets(-128)` holds at B = 64 and 4096). The lane's
+stop condition ("if the union term breaks \(2^{-128}\), stop") is not triggered.
+
+### 15.3 Depth, rounds, verifier **[derivation: `rounds_and_depth_a`; measured `sequential_depth` in README]**
+
+* **Coins**: one 3-element message replaces \(\sum_t(1+[c_t>1])\) per-table coins; the round challenges of one
+  \(\mu,\lambda\)-chain of \(n\) levels replace twelve chains. `rounds.protocol` (coins) drops from 2825 to 448 at
+  B = 4096 (2569 → 375 at B = 64).
+* **Sequential depth**: the per-table chains run in parallel, so the per-table depth is the *deepest* table
+  (\(n_T=24\) at B = 4096); the union is one chain of \(n=26\) levels. Depth = \(1+\sum_{k=1}^{n-1}(k+1)\)
+  trips: 351 (union) vs 300 (per-table) at B = 4096, **+51**; 276 vs 253 at B = 64, **+23**. The checker chain
+  (v2: 2 layers) is far shorter, so the lookup chain is the critical path in both modes: `rounds.sequential_depth`
+  303 → 354 (B = 4096), 256 → 279 (B = 64). This is the honest cost of the union: two more levels of a
+  quadratic-depth chain. The 4.6 mitigations (variables-per-round, sharding) apply unchanged; sharding by table is
+  what the union undoes, so `table_shard_bits` is refused in union mode.
+* **Verifier**: draws \((z,\beta,\gamma)\) once; runs one fractional-GKR verification (\(n\) levels, one final
+  \((\rho,\lambda)\)); evaluates the table side \(\sum_v -m_v/(z-\phi(r_v,t_v))\) as one pass over the 5.2M tagged
+  rows (`check_leaves` in clear mode; the multiplicity functional in PCS mode) instead of twelve passes; checks one
+  leaf functional inside the batched opening. Work is the same O(N+|T|) as before, fewer fixed per-instance costs.
+* Proof bytes: twelve \((\)root claim, \(n_T\) levels of sumcheck polynomials\()\) become one of \(n\) levels: the
+  lookup part of the proof shrinks by roughly \(\sum_t n_T^2/ n^2\approx\) 6–8×; the opening is unchanged. Measured
+  bytes are in the README rows.
+
+### 15.4 GPU shape for `GraphLogUp` (hand-off: `gpu/HANDOFF_UNION.md`)
+
+* Leaves \(2^n\), \(n=\lceil\log_2(N+|T|)\rceil\): **\(2^{26}\) at B = 4096** (39.1M live of 67.1M; 42 % padding),
+  \(2^{23}\) at B = 64 (5.77M of 8.39M). Layout as 15.1: segment 0's \(86\cdot 96B\) query leaves, the epilogue's
+  \(5B\), then the tables in tag order (`T_OP`, `ALIGN4`, `SHIFT`, `SSHIFT_HI`, `SSHIFT_LO`, `LEAD`, `LEADNORM`,
+  `TNORM`, `R12`, `R4`, `R16`, `R15` for the v2 export; the exact order is `Instance::tables()` = the transcript's
+  absorbed order), padding \((0,1)\).
+* Leaf kernels: query side — \(p=1\), \(q=z-\gamma\,\mathrm{tag}(t)-\sum_k\beta^k w_k\) with \(w\) a gather of
+  \(\le3\) committed columns (the linear forms of `circuit.txt`); table side — \(p=-m_v\), \(q\) from the row
+  materialised on device (`itable` parameters, 14.6) plus \(\gamma\,\mathrm{tag}(t)\). Both are embarrassingly
+  parallel; \(\beta^k\) and \(\gamma\,\mathrm{tag}(t)\) are 3 + 12 constants.
+* Tree: **one** fractional-sum tree of \(n\) levels and one \(\mu,\lambda\) sumcheck chain, i.e. the per-level
+  latency (~14 ms/instance on the H100 for the small levels) is paid once. The 12 multiplicity columns are
+  unchanged (already in \(X\)).
+* Transcript: after the Ligero root, `label("union logup over 12 tables: z, beta, gamma (tag(t) = 1 + table index)")`,
+  three `challenge()` calls in that order; then the segments' \((z_0,\gamma_{\text{copy}})\) points as before
+  (`start_transcript`).
+
+### 15.5 Red-team **[`redteam.logup_union`, `fixtures/redteam-3/logup-union/`, `tests/redteam/test_logup_union.py`]**
+
+* **Tagged-union forgery** (query into \(t\) explained by a row of \(t'\)): z3 over \(F_{1000003}\) with 3 tables,
+  free \(\gamma\) — UNSAT when \(\gamma\) is excluded from the finite collision set of 15.2, SAT only on it
+  (the found \(\gamma\) is in the set). The set has \(\le\) (bad queries) \(\times\) (foreign rows) elements.
+* **Multiplicity manipulation across the merged table**: with \(\gamma\) fixed outside the collision set the identity
+  at \(N+|T|+1\) points is a linear system in the committed \(m\) over \(F_p\) — UNSAT for *every* \(m\); on a
+  collision \(\gamma\) it is SAT with exactly the honest \(m\) plus one on the foreign row. So multiplicity freedom
+  buys the prover nothing beyond the collision term.
+* Fixtures: `cross_table/` (two tables sharing a column value; queries into \(T_A\) satisfied only by rows of
+  \(T_B\), and vice versa — must reject in both modes, `main.rs::redteam3_cross_table_fixtures`), and
+  `forged_epilogue_hint/` — **not a union attack**: the pre-fix `main.rs` proved lookups only for the tables of
+  segment 0, so the epilogue's `R16`/`R15` range checks had no logUp instance at all and any public word was
+  forgeable (`REDTEAM_URGENT_epilogue_tables.md`; fixed in `Instance::new`, which now unions every segment's
+  tables; regression `v2_forged_public_word_via_epilogue_hint_is_rejected`).
+
+### 15.6 Recorded runs
+
+README "Batched logUp (union)": gate `gkr.union.gate` (cargo tests in both modes; the 30 + 4 v2 negatives and
+`vu-k1536-neg` rejected under `--logup union`), and B = 64 / 4096 on vy-cpu with `LOGUP=both` — per-table and
+union on the same binary, box and instances (`result_per_table.json` / `result.json`).
