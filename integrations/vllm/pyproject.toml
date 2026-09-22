@@ -21,10 +21,7 @@ packages = [
     "verity_vllm",
     "verity_vllm_adapter",
     "verity_vllm_numerics",
-    "verity_vllm_sampler",
     "verity_capture",
-    "e2e",
-    "record_v5",
 ]
 
 [tool.uv.sources]
