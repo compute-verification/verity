@@ -31,10 +31,12 @@ HYPOTHESIS pending the canonical one in ``verity.ml.tc``.  Kernels: ``mma_tiles.
 SASS (nvcc 12.4, compile check r20260922-180506-a006 on vy-sp1): every tile kernel holds exactly one MMA-class instruction --
 ``HMMA.16816.F32.BF16`` (sm_80/sm_89/sm_90a bf16), ``QMMA.16832.F32.E4M3.E4M3`` / ``QMMA.16832.F32.E5M2.E5M2`` (sm_89 FP8),
 ``QGMMA.64x8x32.F32.E4M3.E4M3`` / ``QGMMA.64x8x32.F32.E5M2.E5M2`` (sm_90a wgmma) -- EXCEPT ``mma.sync.m16n8k32.{e4m3,e5m2}`` on
-sm_90a, which ptxas lowers to two ``HMMA.16816.F32`` (the FP16 tensor-core instruction, K = 16 each): there is no FP8 ``mma.sync``
-tensor-core instruction on Hopper, so those two ids are not single-instruction probes.  The table records that count
-(``Instruction.sass_mma`` = 2; the SASS check compares against it and flags ``single_instruction: false``), and their third
-HYPOTHESIS is the Hopper K=16 HMMA pipeline applied twice (k 0..15, then 16..31) with exact FP8 products.
+sm_90a, which ptxas lowers to ``F2FP.F16.<fmt>.UNPACK_B`` conversions, two ``HMMA.16816.F32`` (the FP16 tensor-core instruction,
+K = 16 each, both with a ZERO accumulator: the low halves of the operand words, k mod 4 in {0, 1}, and the high halves, k mod 4
+in {2, 3}), an ``FADD`` of the two partial words and an ``FADD`` with the accumulator: there is no FP8 ``mma.sync`` tensor-core
+instruction on Hopper, so those two ids are not single-instruction probes.  The table records that count (``Instruction.sass_mma``
+= 2; the SASS check compares against it and flags ``single_instruction: false``), and their third HYPOTHESIS is exactly that
+lowering around Hopper's K=16 HMMA pipeline with exact FP8 products (``SM90_FP8_MMA_LOWERING``).
 
     python tools/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k16.bf16 --out $RESEARCH_RUN_DIR \\
         --replay-golden packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json --sweep --n-random 100000
@@ -264,54 +266,77 @@ def _e5m2_product(a: int, b: int) -> S.Term:
 PRODUCTS: dict[str, Callable[[int, int], S.Term]] = {"e4m3": S.e4m3_product, "e5m2": _e5m2_product}
 
 
-def tc_dot_with_product(pipeline: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b, chain: int = 1) -> int:
-    """:func:`silicon.tc_dot` with the products formed by ``product`` instead of the pipeline's own (hypothesis models).  With
-    ``chain`` > 1 the K operands are split into ``chain`` consecutive slices of ``pipeline.k`` each and the pipeline is applied
-    once per slice, the word of one pass being the accumulator of the next (the HYPOTHESIS for a PTX instruction that ptxas
-    lowers to ``chain`` tensor-core instructions, e.g. ``mma.sync.m16n8k32.e4m3`` on sm_90a = two ``HMMA.16816.F32``)."""
+def tc_dot_with_product(pipeline: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b) -> int:
+    """:func:`silicon.tc_dot` with the products formed by ``product`` instead of the pipeline's own (hypothesis models)."""
 
-    if len(a) != pipeline.k * chain or len(b) != pipeline.k * chain:
-        raise S.InvalidArtifact(f"{pipeline.name} x{chain} takes {pipeline.k * chain} operand pairs")
+    if len(a) != pipeline.k or len(b) != pipeline.k:
+        raise S.InvalidArtifact(f"{pipeline.name} takes {pipeline.k} operand pairs")
     acc = S.fp32_term(acc_bits)
-    for pass_ in range(chain):
-        if pass_:
-            acc = S.fp32_term(S.pack_fp32(acc))
-        start = pass_ * pipeline.k
-        for size in pipeline.groups:
-            terms = [acc, *(product(a[i], b[i]) for i in range(start, start + size))]
-            acc = S.group_sum(terms, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
-            if acc.magnitude and acc.exponent > S.FP32_MAX_EXPONENT:
-                return S.pack_fp32(acc)
-            start += size
+    start = 0
+    for size in pipeline.groups:
+        terms = [acc, *(product(a[i], b[i]) for i in range(start, start + size))]
+        acc = S.group_sum(terms, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
+        if acc.magnitude and acc.exponent > S.FP32_MAX_EXPONENT:
+            return S.pack_fp32(acc)
+        start += size
     return S.pack_fp32(acc)
+
+
+def fp32_add_bits(x: int, y: int) -> int:
+    """IEEE FP32 round-to-nearest-even addition on bit patterns (SASS ``FADD`` without ``.FTZ``: subnormals kept)."""
+
+    with np.errstate(all="ignore"):
+        r = np.array([x], np.uint32).view(np.float32) + np.array([y], np.uint32).view(np.float32)
+    return int(r.view(np.uint32)[0])
+
+
+SM90_FP8_MMA_LOWERING = "2xHMMA.16816.F32+FADD"
+# ptxas (12.4, sm_90a) lowers mma.sync.m16n8k32.{e4m3,e5m2} to: F2FP.F16.<fmt>.UNPACK_B of every operand word (low half and high
+# half separately), HMMA.16816.F32 over the low halves with a zero accumulator, HMMA.16816.F32 over the high halves with a zero
+# accumulator, FADD of the two partial words, FADD with the accumulator (compile check r20260922-181825-a926, sass_*.txt).  The
+# low half of an operand word holds k = 4t, 4t+1 (and 16+4t, 16+4t+1), the high half k = 4t+2, 4t+3 (and 16+..): the partition
+# below.  The one open assumption is that HMMA.16816.F32 with FP16 inputs has Hopper's BF16 K=16 pipeline (groups (16,), width
+# 26); the FP8 values and products are exact in FP16, so the terms are the same numbers.
+_SM90_LOW_K = [k for k in range(32) if k % 4 in (0, 1)]
+_SM90_HIGH_K = [k for k in range(32) if k % 4 in (2, 3)]
+
+
+def sm90_fp8_mma_lowered(pipeline16: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b) -> int:
+    if len(a) != 32 or len(b) != 32:
+        raise S.InvalidArtifact("the sm_90a FP8 mma.sync lowering takes 32 operand pairs")
+    low = tc_dot_with_product(pipeline16, product, 0, [a[k] for k in _SM90_LOW_K], [b[k] for k in _SM90_LOW_K])
+    high = tc_dot_with_product(pipeline16, product, 0, [a[k] for k in _SM90_HIGH_K], [b[k] for k in _SM90_HIGH_K])
+    return fp32_add_bits(acc_bits, fp32_add_bits(low, high))
 
 
 @dataclass(frozen=True)
 class Model:
     """A model the capture is compared with.  ``product`` names an entry of :data:`PRODUCTS` (None: the pipeline's own product,
-    evaluated by :func:`silicon.tc_dot` exactly as pinned).  ``chain`` > 1 applies the pipeline that many times over consecutive
-    K slices (see :func:`tc_dot_with_product`).  ``declared`` models fail validation on any mismatch; the others are HYPOTHESES
+    evaluated by :func:`silicon.tc_dot` exactly as pinned).  ``lowering`` names a multi-instruction lowering the pipeline is
+    embedded in (:data:`SM90_FP8_MMA_LOWERING`).  ``declared`` models fail validation on any mismatch; the others are HYPOTHESES
     whose agreement counts are reported."""
 
     pipeline: S.Pipeline
     product: str | None = None
     declared: bool = True
-    chain: int = 1
+    lowering: str | None = None
 
     @property
     def name(self) -> str:
-        n = self.pipeline.name + (f"+{self.product}_product" if self.product else "") + (f"x{self.chain}" if self.chain > 1 else "")
+        n = self.pipeline.name + (f"+{self.product}_product" if self.product else "") + (f"/{self.lowering}" if self.lowering else "")
         return n if self.declared else n + "[HYPOTHESIS]"
 
     def describe(self) -> dict:
         p = self.pipeline
         return {"name": self.name, "pipeline": p.name, "groups": list(p.groups), "width": p.width, "zero_exponent": p.zero_exponent,
-                "product": self.product or p.dtype, "chain": self.chain, "declared": self.declared}
+                "product": self.product or p.dtype, "lowering": self.lowering, "declared": self.declared}
 
     def evaluate(self, acc_bits: int, a, b) -> int:
+        if self.lowering == SM90_FP8_MMA_LOWERING:
+            return sm90_fp8_mma_lowered(self.pipeline, PRODUCTS[self.product or self.pipeline.dtype], acc_bits, a, b)
         if self.product is None:
             return S.tc_dot(self.pipeline, acc_bits, a, b)
-        return tc_dot_with_product(self.pipeline, PRODUCTS[self.product], acc_bits, a, b, self.chain)
+        return tc_dot_with_product(self.pipeline, PRODUCTS[self.product], acc_bits, a, b)
 
 
 @dataclass(frozen=True)
@@ -345,11 +370,10 @@ def _wgmma(id_: str, fmt: Format, models: tuple[Model, ...]) -> Instruction:
 
 _HOPPER_E5M2 = Model(S.HOPPER_E4M3_K32, "e5m2", declared=False)
 _ADA_E5M2 = Model(S.ADA_E4M3_M16N8K32, "e5m2", declared=False)
-# sm_90a lowers mma.sync.m16n8k32.{e4m3,e5m2} to two HMMA.16816.F32 (compile check r20260922-180506-a006): the third hypothesis for
-# those ids is Hopper's K=16 HMMA pipeline applied twice, k 0..15 then 16..31, with the exact FP8 products (FP8 values are exact
-# in FP16, so the products are the same numbers whichever way the conversion goes).
-_HOPPER_HMMA_X2_E4M3 = Model(S.HOPPER_BF16_M16N8K16, "e4m3", declared=False, chain=2)
-_HOPPER_HMMA_X2_E5M2 = Model(S.HOPPER_BF16_M16N8K16, "e5m2", declared=False, chain=2)
+# sm_90a lowers mma.sync.m16n8k32.{e4m3,e5m2} to two HMMA.16816.F32 plus FADDs (see SM90_FP8_MMA_LOWERING): the third hypothesis
+# for those ids is that lowering around Hopper's K=16 HMMA pipeline with the exact FP8 products.
+_HOPPER_HMMA_X2_E4M3 = Model(S.HOPPER_BF16_M16N8K16, "e4m3", declared=False, lowering=SM90_FP8_MMA_LOWERING)
+_HOPPER_HMMA_X2_E5M2 = Model(S.HOPPER_BF16_M16N8K16, "e5m2", declared=False, lowering=SM90_FP8_MMA_LOWERING)
 
 INSTRUCTIONS: dict[str, Instruction] = {
     i.id: i
@@ -799,7 +823,7 @@ _MODELS: list[Model] = []
 
 def _init(model_descs):
     global _MODELS
-    _MODELS = [Model(S.PIPELINES[pname], prod, declared, chain) for pname, prod, declared, chain in model_descs]
+    _MODELS = [Model(S.PIPELINES[pname], prod, declared, lowering) for pname, prod, declared, lowering in model_descs]
 
 
 def _eval_tiles(args):
@@ -1097,7 +1121,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
         "records": [],
     }
     fams: dict = {}
-    descs = [(m.pipeline.name, m.product, m.declared, m.chain) for m in ins.models]
+    descs = [(m.pipeline.name, m.product, m.declared, m.lowering) for m in ins.models]
     with mp.Pool(args.procs, initializer=_init, initargs=(descs,)) as pool:
         for name, A, Bt, C, meta in families(rng, args.n_random, fmt, M, K):
             n_sample = min(args.golden_per_family, A.shape[0] * M * N)
@@ -1368,7 +1392,7 @@ def main() -> int:
             "seed": args.seed,
             "n": args.n_random,
             "layout_check": results["layout_check"],
-            "models": {m.name: {"declared": m.declared, "pipeline": m.pipeline.name, "product": m.product or m.pipeline.dtype, "chain": m.chain}
+            "models": {m.name: {"declared": m.declared, "pipeline": m.pipeline.name, "product": m.product or m.pipeline.dtype, "lowering": m.lowering}
                        for m in ins.models},
         }
         measurements = [{"name": "wall", "value": results["seconds"], "unit": "s"}]
