@@ -205,7 +205,7 @@ extra committed rows, negligible). With `k = l + t = 4285 -> 8192` (the next pow
 the rate halves to 1/2: Appendix C then needs `t` such that `(1 - e/n)^t + ((k + l)/n)^t + (2k/n)^t <= 2^-128` with
 `e = (n - k)/2 = 4096`: `(3/4)^t` -> `t = 309`, `(2k/n)^t = 1^t` -- **the quadratic test fails at rate 1/2**
 (`n > 2k` is required). So ZK at `2^-128` needs `n = 32768` (rate 1/4 again with `k = 8192`): encoding, transfer and
-hashing double (`+0.5 s` of the 1.0 s GPU prover at B = 4096), the opened columns stay `t = 189` (same `(5/8)^189`
+hashing double (`+0.12 s` on the 0.35 s prover at B = 4096: encode 0.12 -> 0.24, hashing 1 -> 2 ms), the opened columns stay `t = 189` (same `(5/8)^189`
 with `e = (n - k)/2 = 12288`) but `m t` bytes are unchanged, `w, h, q` double in length (`+0.4 MB`), peak memory
 doubles (`5.9 GB`). Alternatively keep `n = 16384` and halve `l` to 2048 units per proof (42 -> 21 VUs): same
 per-unit encoding cost, twice the fixed per-proof overhead. Malicious-verifier ZK (the AGENTS.md requirement) adds
@@ -213,10 +213,14 @@ a commitment to the verifier's coins before `root` (one more round; depth 3) -- 
 
 ## 9. Not done / labelled
 
-* Merkle on the GPU: placeholder host Blake3 (`backends/shared/hash_gpu` not on main at the time of writing); the
-  transfer of `U` to the host (0.37 s) and the hashing (0.28 s) are 65% of the GPU-side prover.
-* The hint generator is the checker's own `gen_step` in Python on the host (2.6 s per 4096 units: 71% of the total
-  prover time); a torch hint generator is a straightforward vectorisation and is the next step.
+* Merkle: `backends/shared/hash_gpu` Blake3 on the device (merged from main during the night; bit-exact with the
+  host `blake3`, so `verify_path` is unchanged and the host path remains the CPU fallback). Before it, the transfer
+  of `U` to the host (0.37 s) and host hashing (0.28 s) were 65% of the GPU-side prover; now 2 ms.
+* Hints: `hints_torch.py` vectorises `gen_step` (20 ms per 4096 units vs 2.6 s in Python); the gate asserts equality
+  with the checker's `gen_step` on every proved unit. A wrong hint is a completeness bug (the constraints reject it),
+  never a soundness one.
+* The hash and the SHAKE-256 challenge expander remain "placeholders" in the sense of the shared brief (not the
+  campaign's final choice of hash).
 * ZK masking: section 8b (design + cost, not implemented).
 
 ## 9. Negative-test expectations

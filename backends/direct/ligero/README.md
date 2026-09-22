@@ -12,7 +12,7 @@ measured on `vy-g3` (NVIDIA L40S 48 GB, torch cu124) on the frozen instance set 
   distinct rows) -- **3372 rows per unit**, 338 linear + 3246 quadratic constraints (the census's 358 mul / 137 lin /
   306 lookups, with the lookups paid as bits and selectors).
 * BabyBear, rate-1/4 Reed-Solomon (`[16384, 4096]`) by a batched radix-2 int64 NTT in torch, Blake3 Merkle over
-  the codeword columns on the host, Ligero's three tests (interleaved proximity; linear constraints with the
+  the codeword columns on the GPU (`backends/shared/hash_gpu`; host Blake3 fallback), Ligero's three tests (interleaved proximity; linear constraints with the
   verifier encoding the public right-hand side itself, so nothing is sent; quadratic constraints as a batched
   Hadamard identity with a quotient by `Z_H`), `t = 189` opened columns, 6 BabyBear coordinates per challenge:
   soundness `2^-128.1` by `security.accounting.ligero_error`. `rounds.sequential_depth = 2`.
@@ -50,59 +50,53 @@ python -m backends.direct.ligero.encoder_bench                                  
 | mutated witnesses, unit: one row per (gadget scope, row class) changed in one column before commitment | 243/243 rejected |
 | mutated witnesses, chain: 249 rows + broken link `c.f[40] != y.f[39]`, `c_0 != 0` at a start, flipped `y16` | 252/252 rejected |
 
-## Measurements (CUDA events / synchronised host clock, warm, median of 5; `results/*.json` per `bench.contract`)
+## Measurements (synchronised device clock, warm, median of 5; `results/*.json` per `bench.contract`)
+
+Final state (torch hint generator, GPU Blake3 Merkle from `backends/shared/hash_gpu`):
 
 | | unit proof, B = 4096 units | VU proof, 42 VUs (l = 4096) |
 |---|---|---|
-| prover total | **3.56 s** (0.87 ms/unit, 83 ms per 96 units) | **3.82 s** (**91 ms/VU**) |
-| of which: hints (`gen_step`, host Python) | 2.59 s | 2.72 s |
-| witness (torch program: derived rows) | 0.14 s | 0.15 s |
-| encode (int64 NTT, 3372/3516 x 4096 -> 16384) | 0.12 s | 0.12 s |
-| transfer of U to host | 0.37 s | 0.40 s |
-| Merkle (host Blake3, placeholder) | 0.28 s | 0.36 s |
-| tests (w, quotient h, chain q) | 0.06 s | 0.07 s |
-| openings | 0.002 s | 0.002 s |
-| verifier | 0.12 s | 0.034 s (NTT evaluation instead of Horner) |
+| **prover total** | **0.345 s** (**84 us/unit**, 8.1 ms per 96 units) | **0.367 s** (**8.7 ms/VU**) |
+| hints (torch `gen_step`, cross-checked equal to the checker's) | 0.020 s | 0.020 s |
+| witness (torch program: products, bits, selectors) | 0.142 s | 0.149 s |
+| encode (int64 NTT, 3372/3516 x 4096 -> 16384) | 0.116 s | 0.121 s |
+| int32 view of U (nothing leaves the device) | 0.001 s | 0.001 s |
+| Merkle (Blake3 on the GPU, 221 MB) | 0.001 s | 0.001 s |
+| tests (w, quotient h, chain q) | 0.062 s | 0.071 s |
+| openings (m x t columns to the host, paths) | 0.003 s | 0.003 s |
+| verifier | 0.028 s | 0.033 s |
 | proof bytes | 2.83 MB (2.55 MB opened columns) | 3.14 MB (75 KB/VU) |
 | committed | 3372 x 16384 x 4 B = 221 MB | 230 MB (5.5 MB/VU) |
-| peak device memory | 2.83 GB | 2.95 GB |
+| peak device memory | 3.05 GB | 3.18 GB |
 | soundness (accounting) | 2^-128.1 (t = 189, D = 6) | 2^-128.1 |
 | `rounds.sequential_depth` | 2 | 2 |
-| overhead vs native 9.85 ps/VU | 8.5e9 (scope unit, x96) | **9.2e9** (scope vu) |
+| **overhead vs native 9.85 ps/VU** | 8.2e8 (scope unit, x96) | **8.9e8** (scope vu) |
 
-GPU-side prover alone (everything but the host hint generator): 0.97 s per 4096 units = **0.24 ms/unit**, 1.10 s
-per 42 VUs = **26 ms/VU**; the L40S is 65% idle inside that (transfer + host hashing).
+How it got there (ledger `b-ligero.jsonl`, all on the L40S):
 
-## Where the cost model (`tensor.md`, row B/BabyBear) was wrong
+| step | unit prover (4096) | VU prover (42) | ms/VU |
+|---|---|---|---|
+| first complete prover: Python `gen_step` hints (2.6 s) + host Blake3 | 3.56 s | 3.82 s | 91 |
+| torch hint generator (bit-exact with `gen_step`; 2.6 s -> 0.02 s) | 1.06 s | 1.07 s | 25 |
+| GPU Merkle (`hash_gpu`): transfer 0.40 s + hashing 0.30 s -> 2 ms | 0.345 s | 0.367 s | 8.7 |
 
-* **Committed bytes**: the model prices B at 1.16 MB/VU; the direct-constraint unit commits 5.5 MB/VU, because the
-  306 lookups per unit became 2401 bit rows + 610 selector rows (3011 of 3372 rows). The AIR-with-lookups B and the
-  direct-constraint B are different objects; the census's "358 mul / 137 lin / 306 lookups" undercounts the
-  committed width of the latter by 4.7x. A lookup argument (LogUp with helper columns) would bring m to ~700.
-* **Hashing is the wall the model said it was, plus the transfer it did not price**: 0.37 s to move 221 MB to the
-  host and 0.28 s to hash it (790 MB/s single-threaded Blake3) are 65% of the GPU-side prover; the model's
-  "B is a hashing problem" is right, and the fix (GPU Merkle, `backends/shared/hash_gpu`) removes the transfer too.
-* **Encoding is not the bottleneck at this shape**: 0.12 s (3% of the prover) with the int64 NTT; the INT8 limb
-  matmul DFT reaches 139 TOPS on the tensor cores (52 ms for the one-stage dense product) but its limb recombination
-  in torch costs 220 ms -- it needs a fused kernel to pay (`encoder_bench.py`, PROTOCOL.md section 8).
-* **Hint generation** is priced at 0.5 ms per batch ("trivially parallel, unmeasured"); on the host it is 2.6 s per
-  4096 units -- 71% of the measured prover. It is the checker's own Python `gen_step`, used deliberately as the
-  reference; a torch hint generator is the obvious next step and turns the 91 ms/VU into ~30 ms/VU.
-* **Depth**: 2, not 3 (no lookup helper message).
+What is left is the witness program (41%: ~2500 small torch kernels for the bit / selector rows -- one fused kernel
+away), the NTT (34%) and the tests (18%).
 
 ## Negatives and labels
 
 Every number: `NON_ZK_PROOF_DIAGNOSTIC`, authentication excluded, hardware NVIDIA L40S, security `2^-128` by the
 accounting (hash and SHAKE challenge expander are placeholders), scope `unit` numbers omit chain linkage / epilogue
 (the `vu` row has them), ZK masking omitted (its cost: PROTOCOL.md section 8b -- at `2^-128` it doubles the codeword
-length, so encoding / transfer / hashing double; +0.5 s on the 1.0 s GPU-side prover). No predicate of WP2's
+length, so encoding and hashing double: +0.12 s on the 0.35 s prover, ~+35%). No predicate of WP2's
 `check_step_expr` / `check_vu_expr` is dropped; the restatements are listed in PROTOCOL.md section 5 and 7b.
 
 ## Files
 
 `compile.py` (Expr, LigeroCtx, the integer audit, lookups as one-hot selectors) . `unit.py` (the unit and chain
-systems; public vectors) . `field.py` (BabyBear, NTT, coset encoding) . `merkle.py` (Blake3/SHA-256 placeholder) .
+systems; public vectors) . `field.py` (BabyBear, NTT, coset encoding) . `merkle.py` (GPU Blake3 via `hash_gpu`;
+host Blake3/SHA-256 fallback) . `hints_torch.py` (vectorised `gen_step`) .
 `witness.py` (W from the program; sparse constraint tables) . `chain.py` (layout, the chain test's coefficients) .
 `protocol.py` (prove / verify) . `vu.py` (chain gate / bench) . `run.py` (CLI) . `encoder_bench.py` .
-`results/` (gate logs, result envelopes). Ledger: `backends/reports/ledger/b-ligero.jsonl`, plot
-`backends/reports/plots/overhead_b-ligero.png`.
+`results/` (gate logs, result envelopes). Ledger: `backends/numerical/reports/ledger/b-ligero.jsonl`, plot
+`backends/numerical/reports/plots/overhead_b-ligero.png`.
