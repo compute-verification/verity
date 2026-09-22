@@ -1040,9 +1040,14 @@ where
     let lqd = p3_util::log2_ceil_usize(verity_direct::program::MAX_DEG - 1);
     assert!(lqd <= fri.log_blowup);
 
+    // rtt::begin must precede the prover's challenger construction so its RttChallenger is the active (counting) one.
+    let rtt_ms: f64 = arg(args, "--rtt-ms").or_else(|| std::env::var("VERITY_RTT_MS").ok()).map(|s| s.parse().expect("--rtt-ms takes milliseconds")).unwrap_or(0.0);
     let t1 = Instant::now();
+    verity_direct::rtt::begin(rtt_ms);
     let (proof, stage) = air_v2::prove_bound::<B>(&air_, &lay, main, &queries, fri, &stmt);
-    let t_prove = t1.elapsed().as_secs_f64();
+    let (trips, slept) = verity_direct::rtt::end();
+    let t_prove_wall = t1.elapsed().as_secs_f64();
+    let t_prove = t_prove_wall - slept; // compute: the wall time less the emulated waits for the verifier's coins
     let t2 = Instant::now();
     let bytes = proof_bytes_lookup(&proof);
     let t_ser = t2.elapsed().as_secs_f64();
@@ -1109,6 +1114,10 @@ where
         extra,
         lookup_bits: Some(lookup_bits),
         ext_deg,
+        rtt_ms,
+        depth: trips as usize,
+        slept,
+        t_prove_wall,
     });
 }
 
