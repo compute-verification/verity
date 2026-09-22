@@ -18,6 +18,10 @@ run).  This lane repaired all three; full report `reports/b_zk_fix.md`, ledger `
   `--no-coin-commitment` is gone.  Labels in `bench_vu`: interactive+zk `COMPLETE_ZK_BACKEND`, fiat-shamir+zk
   `COMPLETE_HVZK_BACKEND` (NIZK in PROM), else `NON_ZK_PROOF_DIAGNOSTIC`; every ZK label notes that the statement
   publishes `a, b, y16` (privacy vacuous today).
+* Numbers (`r20260922-105905-2021`, 4096 VUs as 25 x 170, L40S, median of 3): ZK interactive 1.394 s / 0.340 ms/VU,
+  verifier 0.911 s, 122.4 MB, t=197, D=6, 2^-128.05, `COMPLETE_ZK_BACKEND`; ZK fiat-shamir 1.500 s / 0.366 ms/VU,
+  verifier 1.071 s, 165.3 MB, t=288, D=7, 2^-128.04, `COMPLETE_HVZK_BACKEND`; controls 1.366 s (interactive) and
+  1.437 s (fiat-shamir), `NON_ZK_PROOF_DIAGNOSTIC`.  Gates / negatives / battery / simulator: `r20260922-105112-d542`.
 * Open: `redteam_zk.py` "ground" coins now steer the column set (legal; overlap reported, not bounded); the
   selective-abort-on-`root` rates at small n (O-zk3); statistically hiding leaves; a private-operand statement.
 
