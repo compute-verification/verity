@@ -53,7 +53,10 @@ pub fn eq_point(a: &[Ext], b: &[Ext]) -> Ext {
 
 pub struct LayerClaim { pub w: Vec<Ext>, pub copy_point: Vec<Ext>, pub value: Ext }
 
-fn threads() -> usize { std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(16) }
+pub fn threads() -> usize {
+    if let Ok(s) = std::env::var("VERITY_GKR_THREADS") { if let Ok(n) = s.parse::<usize>() { return n.max(1); } }
+    std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(16)
+}
 
 /// Prover for one layer; returns the next layer's claim (or, for the last layer, the two raw claims).
 pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, claim: &LayerClaim, tr: &mut Transcript, out: &mut Vec<Ext>, last: bool) -> (LayerClaim, Option<(Vec<Ext>, Ext, Vec<Ext>, Ext)>) {
