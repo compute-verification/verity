@@ -46,6 +46,10 @@ Timing (seconds; the buckets are disjoint and, with the joints, sum to at most `
     t.witness  t.encoding_commitment  t.arithmetic  t.lookup  t.zk_additional  t.serialization    t.total
     t.joint.<a>+<b>[+<c>...]   a fused stage covering those buckets, in canonical bucket order (see joint())
 
+The headline is throughput, ``vu.per_second``, and better its inverse relative to the machine being proved:
+``overhead.vs_native_peak`` (ratio) = prover seconds per VU / native seconds per VU at :data:`NATIVE_REFERENCE`
+(:func:`overhead`; checked against ``t.total / vu.count`` and the fingerprint's ``K``).
+
 Other measurements: ``vu.count`` (count), ``vu.seconds_per_vu`` (s), ``vu.per_second`` (1/s), ``mem.peak_host_bytes``,
 ``mem.peak_device_bytes``, ``bytes.moved``, ``transcript.bytes`` (B; the total communication), ``verifier.seconds``,
 ``fixed.setup_seconds`` (s).  Latency (a first-class axis): ``rounds.protocol`` (count of protocol rounds) and
@@ -95,6 +99,9 @@ __all__ = [
     "instances_ref",
     "joint",
     "measurement",
+    "NATIVE_REFERENCE",
+    "native_seconds_per_vu",
+    "overhead",
     "parse_joint",
     "probe_hardware",
     "unit_of",
@@ -165,8 +172,34 @@ UNITS: dict[str, str] = {
     "census.bytes_moved": "B",
     "verifier.seconds": "s",
     "fixed.setup_seconds": "s",
+    "overhead.vs_native_peak": "ratio",
 }
-_RESERVED_PREFIXES = ("t.", "vu.", "mem.", "fixed.", "bytes.", "transcript.", "verifier.", "rounds.", "census.")
+_RESERVED_PREFIXES = ("t.", "vu.", "mem.", "fixed.", "bytes.", "transcript.", "verifier.", "rounds.", "census.", "overhead.")
+
+#: The native reference the headline overhead divides by: the conformance anchor's peak dense BF16 tensor-core rate
+#: (NVIDIA A100 SXM4 datasheet, no sparsity).  A GemmCoordinate<K> is K MACs = 2K FLOP, so the native time of one VU at
+#: peak is 2K / rate: 9.85 ps at K=1536, i.e. ~1.0e11 VU/s.  Peak is the conservative choice (a real decode step runs
+#: below peak, so the true overhead is *lower* than this number); it is also the only reference every result can share
+#: without a runtime capture.  Overhead = prover wall seconds per VU / native seconds per VU -- the prover's own
+#: hardware is in the fingerprint, not in the ratio: the question is "how many native seconds does one proved second buy".
+NATIVE_REFERENCE: dict[str, Any] = {"device": "NVIDIA A100 SXM4 80GB", "rate": "bf16 dense tensor-core peak", "flop_per_second": 312e12,
+                                    "flop_per_vu": "2 * K"}
+
+
+def native_seconds_per_vu(K: int) -> float:
+    """Native wall seconds of one GemmCoordinate<K> at :data:`NATIVE_REFERENCE` (9.846e-12 at K=1536)."""
+
+    if not isinstance(K, int) or K <= 0:
+        raise ValueError(f"K must be a positive int, got {K!r}")
+    return 2 * K / NATIVE_REFERENCE["flop_per_second"]
+
+
+def overhead(seconds_per_vu: float, K: int) -> float:
+    """``overhead.vs_native_peak``: prover seconds per VU over the native seconds per VU at the reference peak."""
+
+    if seconds_per_vu <= 0:
+        raise ValueError(f"seconds_per_vu must be positive, got {seconds_per_vu!r}")
+    return seconds_per_vu / native_seconds_per_vu(K)
 
 #: Sentinel for an identity field a fingerprint does not carry (distinct from a recorded ``null``).
 MISSING = object()
@@ -523,7 +556,27 @@ def validate(result: Any) -> list[str]:
     p += validate_fingerprint(fp)
     pc = fp.get("proof_class") if isinstance(fp, Mapping) else None
     p += validate_measurements(result.get("measurements"), pc if pc in PROOF_CLASSES else None)
+    p += _check_overhead(fp, result.get("measurements"))
     return p
+
+
+def _check_overhead(fp: Any, measurements: Any) -> list[str]:
+    """``overhead.vs_native_peak``, when reported, must be ``t.total / vu.count`` over :func:`native_seconds_per_vu`
+    at the fingerprint's ``K`` (tolerance :data:`TOLERANCE`)."""
+
+    if not isinstance(fp, Mapping) or not isinstance(measurements, list):
+        return []
+    values = {m.get("name"): m.get("value") for m in measurements if isinstance(m, Mapping)}
+    got = values.get("overhead.vs_native_peak")
+    if got is None:
+        return []
+    K, total, count = fp.get("K"), values.get(T_TOTAL), values.get("vu.count")
+    if not (isinstance(K, int) and K > 0) or not _is_number(total) or not _is_number(count) or count <= 0 or total <= 0:
+        return ["overhead.vs_native_peak needs K in the fingerprint and positive t.total and vu.count to be checked against"]
+    want = overhead(total / count, K)
+    if not _is_number(got) or abs(got - want) > TOLERANCE * want:
+        return [f"overhead.vs_native_peak {got!r} is not (t.total / vu.count) / native_seconds_per_vu(K) = {want:.6g}"]
+    return []
 
 
 # --- comparability -----------------------------------------------------------------------------------------------------

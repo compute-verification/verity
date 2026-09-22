@@ -91,6 +91,15 @@ one group               debugging
 K=1536 GemmCoordinate   the architecture decision (handoff section 9.5)
 ~~~
 
+The headline statistic is throughput, `vu.per_second`, and better still
+**overhead**: prover seconds per VU divided by the native seconds the same
+VU takes on the machine being proved (`overhead.vs_native_peak`, against
+the A100's dense BF16 tensor-core peak: 9.85 ps per K=1536 VU, ~1e11 VU/s;
+`contract.NATIVE_REFERENCE`). Report it on every VU-level number; the
+question every run answers is "how many native seconds does one proved
+second buy". Peak is the conservative reference (a real decode step runs
+below peak), so the true overhead is lower than the reported one.
+
 Nothing is selected as the winner on the small cases. The decision is the
 lowest complete numerical-proving cost at matched soundness, privacy and
 domain on the K=1536 VU. A batch may be split into independently committed

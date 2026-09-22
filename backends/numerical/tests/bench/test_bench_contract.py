@@ -241,6 +241,28 @@ def test_incomparable_lists_differences_and_missing(conforming: dict) -> None:
         contract.incomparable(fp, fp, allow=["zk_mode"])
 
 
+def test_overhead_is_prover_seconds_over_native_peak_seconds(conforming: dict) -> None:
+    """One K=1536 VU is 3072 FLOP; at the A100's 312 TFLOPS dense BF16 peak that is 9.85 ps (~1e11 VU/s), so a prover
+    at 34 ms/VU is 3.5e9x overhead.  The reported ratio must agree with t.total / vu.count at the fingerprint's K."""
+
+    assert contract.native_seconds_per_vu(1536) == pytest.approx(9.846e-12, rel=1e-3)
+    assert contract.overhead(0.0344, 1536) == pytest.approx(3.49e9, rel=1e-2)
+    with pytest.raises(ValueError):
+        contract.overhead(0.0, 1536)
+    with pytest.raises(ValueError):
+        contract.native_seconds_per_vu(0)
+    assert contract.unit_of("overhead.vs_native_peak") == "ratio"
+
+    res = json.loads(json.dumps(conforming))
+    fp = res["workload_fingerprint"]
+    values = {m["name"]: m["value"] for m in res["measurements"]}
+    want = contract.overhead(values["t.total"] / values["vu.count"], fp["K"])
+    res["measurements"].append(contract.measurement("overhead.vs_native_peak", want))
+    assert contract.validate(res) == []
+    res["measurements"][-1]["value"] = want * 2
+    assert any("overhead.vs_native_peak" in p for p in contract.validate(res))
+
+
 def test_batch_hardware_and_soundness_target_are_identity(conforming: dict) -> None:
     """B=64 is never compared with B=4096, a 4090 run never with a CPU run, 2^-80 never with 2^-128 -- unless named."""
 
