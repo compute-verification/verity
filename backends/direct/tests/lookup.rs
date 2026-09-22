@@ -124,7 +124,7 @@ where
     let mut ch = B::challenger();
     let (proof, _) = prove_lookup(&config, &air_, &mut ch, pre.clone(), main, |z, beta| aux_matrix(&llay, &queries, &mult, rows, z, beta, false));
     let mut ch = B::challenger();
-    verify_lookup(&config, &air_, &mut ch, &proof, pre).is_ok()
+    verify_lookup(&config, &air_, &mut ch, &proof, pre, proof.degree_bits, &[]).is_ok()
 }
 
 fn set<G: PrimeField64>(t: &mut RowMajorMatrix<G>, row: usize, col: usize, v: u64) {
