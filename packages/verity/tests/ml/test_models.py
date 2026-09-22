@@ -99,11 +99,13 @@ def test_fp8_accumulator_is_truncated_to_the_adder_before_the_add() -> None:
     assert AMPERE_BF16_M16N8K16.step(acc, [0] * 16, [0] * 16) == acc
 
 
-def test_e5m2_hypotheses_share_the_e4m3_pipeline() -> None:
+def test_e5m2_models_share_the_e4m3_pipeline() -> None:
+    # Measured by lane tc-probe-fp8 on 2026-09-22 (RTX 4090 / H100, 0 mismatches over 25M+ elements each): the e5m2
+    # instructions run the e4m3 pipeline with exact e5m2 products, so the models differ only in dtype/product.
     for e5, e4 in ((ADA_E5M2_M16N8K32, ADA_E4M3_M16N8K32), (HOPPER_E5M2_K32, HOPPER_E4M3_K32)):
         assert (e5.groups, e5.width, e5.zero_exponent) == (e4.groups, e4.width, e4.zero_exponent)
         assert e5.dtype == "e5m2" and e5.product(0x3C, 0x3C) == e5m2_product(0x3C, 0x3C)
-        assert "HYPOTHESIS" in e5.validated
+        assert "HYPOTHESIS" not in e5.validated and "0 mismatches" in e5.validated
     # 1.0 * 1.0 summed 32 times from zero is exactly 32.0 under any 14-bit adder
     assert HOPPER_E5M2_K32.step(0, [0x3C] * 32, [0x3C] * 32) == 0x42000000
     with pytest.raises(InvalidArtifact):

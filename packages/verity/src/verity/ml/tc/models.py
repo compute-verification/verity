@@ -250,7 +250,7 @@ HOPPER_BF16_M16N8K16 = GroupSum(
     groups=(16,),
     width=26,
     zero_exponent=-133,
-    validated="Hawkeye (H100), not re-measured here",
+    validated="Hawkeye (H100); re-measured on the mma.sync path by lane tc-probe-fp8 run r20260922-185339-e337 (25,698,304 elements, 0 mismatches) and on the RTX 5090 by lane fp4-5090 run r20260922-182911-1f10 (204,800/204,800)",
 )
 
 HOPPER_E4M3_K32 = GroupSum(
@@ -326,7 +326,7 @@ ADA_E5M2_M16N8K32 = GroupSum(
     groups=(16, 16),
     width=14,
     zero_exponent=-139,
-    validated="HYPOTHESIS (unprobed): ADA_E4M3_M16N8K32's pipeline with e5m2 products",
+    validated="RTX 4090 (sm_89), lane tc-probe-fp8 runs r20260922-175732-172a / r20260922-182641-e27d: 25,040,128 + 141,824 elements, 0 mismatches (ADA_E4M3_M16N8K32's pipeline with e5m2 products)",
 )
 
 HOPPER_E5M2_K32 = GroupSum(
@@ -337,7 +337,7 @@ HOPPER_E5M2_K32 = GroupSum(
     groups=(32,),
     width=14,
     zero_exponent=-139,
-    validated="HYPOTHESIS (unprobed): HOPPER_E4M3_K32's pipeline with e5m2 products",
+    validated="H100 (sm_90a), lane tc-probe-fp8 run r20260922-183837-940b: wgmma m64n8k32 e5m2, 25,554,432 elements, 0 mismatches (HOPPER_E4M3_K32's pipeline with e5m2 products)",
 )
 
 PIPELINES: dict[str, GroupSum] = {

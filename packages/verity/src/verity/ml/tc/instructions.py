@@ -83,6 +83,23 @@ _A100_RUN = (
 _ADA_RUN = "verity run r20260921-231618-ea24 (RTX 4090, sm_89): the same 25,698,304 elements, 0 mismatches (D2, D9)"
 _GOLDEN_BF16 = "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json (360 records)"
 _GOLDEN_E4M3 = "packages/verity/tests/ml/fixtures/golden/ada_e4m3_m16n8k32.json"
+_H100_PROBE = "verity lane tc-probe-fp8 on vy-h100 (H100 80GB HBM3, cc 9.0, driver 570.211.01, nvcc 12.4.131), one PTX op per tile, seed 20260902"
+_H100_WGMMA_E4M3 = (_H100_PROBE + ": run r20260922-183435-fd5d, wgmma.mma_async.sync.aligned.m64n8k32.f32.e4m3.e4m3 / 1x QGMMA.64x8x32.F32.E4M3.E4M3, "
+                    "descriptor (LBO,SBO)=(128,256) K-major no-swizzle, 25,554,432 elements, 0 mismatches; adder-width residual survives at 2^-13 and "
+                    "truncates at 2^-14 in all 30 slots k=2..31 (one group of 32, 14-bit adder); zero products: D == C & ~0x3ff for 262,144/262,144")
+_H100_WGMMA_E5M2 = (_H100_PROBE + ": run r20260922-183837-940b, wgmma ... f32.e5m2.e5m2 / 1x QGMMA.64x8x32.F32.E5M2.E5M2, 25,554,432 elements, "
+                    "0 mismatches against the e4m3 pipeline with exact e5m2 products")
+_H100_MMA_BF16 = (_H100_PROBE + ": run r20260922-185339-e337, mma.sync.aligned.m16n8k16 bf16 / 1x HMMA.16816.F32.BF16, 25,698,304 elements, 0 mismatches "
+                  "against HOPPER_BF16_M16N8K16; AMPERE_BF16_M16N8K16 fails 30,927 of a 192,000-element subset")
+_H100_MMA_FP8 = (_H100_PROBE + ": runs r20260922-184111-671e (e4m3) and r20260922-184835-4b95 (e5m2), 25,040,128 elements each: ptxas 12.4 lowers "
+                 "mma.sync.aligned.m16n8k32 FP8 on sm_90a to 12x F2FP unpack + 2x HMMA.16816.F32 (the BF16 K=16 pipeline over k=0,1 mod 4 and k=2,3 mod 4 "
+                 "with zero accumulators) + IEEE FP32 FADD of the partials and of C; that lowering model gives 0 mismatches, HOPPER_E4M3_K32 fails 74%/62%, "
+                 "ADA_E4M3_M16N8K32 fails 76%/63%; D == C for zero products (no 14-bit accumulator truncation)")
+_ADA_E4M3_RUN = ("verity run r20260922-175246-0477 (lane tc-probe-fp8, RTX 4090): 25,040,128 elements + 141,824 FP8-family words, 0 mismatches against "
+                 "ADA_E4M3_M16N8K32; adder-width probe: 14-bit / (16,16) signature measured directly; zero products: D == C & ~0x3ff (one signed-zero exception, "
+                 "C=0x800001a9 -> +0)")
+_ADA_E5M2_RUN = ("verity runs r20260922-175732-172a and r20260922-182641-e27d (lane tc-probe-fp8, RTX 4090): 25,040,128 + 141,824 elements, 0 mismatches "
+                 "against the Ada e4m3 pipeline with exact e5m2 products; SASS 1x QMMA.16832.F32.E5M2.E5M2")
 _RTX5090_BF16 = (
     "verity run r20260922-182911-1f10 (lane fp4-5090; RTX 5090 cc 12.0, driver 570.153.02, nvcc 12.8.93, -arch=sm_120a, "
     "SASS HMMA.16816.F32.BF16): 204,800/204,800 elements agree with HOPPER_BF16_M16N8K16, 48,569 disagree with the Ampere/Ada pipeline"
@@ -146,17 +163,16 @@ INSTRUCTIONS: dict[str, Instruction] = {
         ),
         _i(
             # veritor measured Hopper BF16 through wgmma (HOPPER_BF16_WGMMA_K16: one group of 16, 26 bits, floor
-            # -133); Hawkeye's H100 model has the same parameters.  Whether the legacy mma.sync path on sm_90 runs
-            # the same pipeline has not been measured anywhere: the wgmma evidence makes this a hypothesis, not a pin.
+            # -133); Hawkeye's H100 model has the same parameters.  The legacy mma.sync path was measured on 2026-09-22
+            # (lane tc-probe-fp8): same pipeline, 0/25.7M mismatches -- pinned.
             id="sm90.mma.m16n8k16.bf16",
             sm="sm_90",
             ptx="mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
             shape=(16, 8, 16),
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=HOPPER_BF16_M16N8K16,
-            status="hypothesis",
-            evidence=("Hawkeye (H100) recovered groups (16,), width 26, floor -133 -- instruction path not stated",
-                      _H100_BF16, "no mma.sync measurement on sm_90 in veritor or verity"),
+            status="pinned",
+            evidence=(_H100_MMA_BF16, "Hawkeye (H100) recovered groups (16,), width 26, floor -133 -- instruction path not stated", _H100_BF16),
         ),
         # --- FP8 Ada mma.sync ----------------------------------------------------------------------------------
         _i(
@@ -167,7 +183,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e4m3", b_dtype="e4m3", acc_dtype="f32", scale=None,
             model=ADA_E4M3_M16N8K32,
             status="pinned",
-            evidence=(_ADA_4090, _GOLDEN_E4M3,
+            evidence=(_ADA_4090, _ADA_E4M3_RUN, _GOLDEN_E4M3,
                       "Hawkeye's Hopper_fp8_simulator reproduces only 82.40% of the same tiles (D10)"),
         ),
         _i(
@@ -177,9 +193,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(16, 8, 32),
             a_dtype="e5m2", b_dtype="e5m2", acc_dtype="f32", scale=None,
             model=ADA_E5M2_M16N8K32,
-            status="hypothesis",
-            evidence=("no measurement; hypothesis = sm89.mma.m16n8k32.e4m3's pipeline (groups (16,16), width 14, "
-                      "floor -139) with e5m2 products",),
+            status="pinned",
+            evidence=(_ADA_E5M2_RUN, "model = sm89.mma.m16n8k32.e4m3's pipeline (groups (16,16), width 14, floor -139) with e5m2 products"),
         ),
         # --- FP8 Hopper ----------------------------------------------------------------------------------------
         _i(
@@ -190,7 +205,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e4m3", b_dtype="e4m3", acc_dtype="f32", scale=None,
             model=HOPPER_E4M3_K32,
             status="pinned",
-            evidence=(_H100_FP8, "Hawkeye (H100 FP8, zero accumulator only): groups (32,), width 14, floor -139"),
+            evidence=(_H100_WGMMA_E4M3, _H100_FP8, "Hawkeye (H100 FP8, zero accumulator only): groups (32,), width 14, floor -139"),
         ),
         _i(
             id="sm90.wgmma.m64n8k32.e5m2",
@@ -199,13 +214,15 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(64, 8, 32),
             a_dtype="e5m2", b_dtype="e5m2", acc_dtype="f32", scale=None,
             model=HOPPER_E5M2_K32,
-            status="hypothesis",
-            evidence=("no measurement; hypothesis = sm90.wgmma.m64n8k32.e4m3's pipeline (groups (32,), width 14, "
-                      "floor -139) with e5m2 products",),
+            status="pinned",
+            evidence=(_H100_WGMMA_E5M2, "model = sm90.wgmma.m64n8k32.e4m3's pipeline (groups (32,), width 14, floor -139) with e5m2 products"),
         ),
         _i(
-            # The Hopper legacy-path question: does mma.sync FP8 on sm_90 run Ada's (16,16) grouping or wgmma's
-            # single group of 32?  Two candidate models, neither vouched for: ADA_E4M3_M16N8K32 and HOPPER_E4M3_K32.
+            # Measured 2026-09-22 (D14 resolved): on sm_90a this PTX op is NOT a tensor-core FP8 instruction.  ptxas lowers
+            # it to two HMMA.16816.F32 (the BF16 K=16 pipeline, HOPPER_BF16_M16N8K16) over the two k-halves with zero
+            # accumulators plus IEEE FP32 FADDs; that composite reproduces 25,040,128/25,040,128 words for e4m3 and e5m2.
+            # `model` stays None because the composite is not a single GroupSum; expressing it as a Model is a follow-up,
+            # and the status stays "unprobed" only in the registry's narrow sense (no single-pipeline model to pin).
             id="sm90.mma.m16n8k32.e4m3",
             sm="sm_90",
             ptx="mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32",
@@ -213,8 +230,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e4m3", b_dtype="e4m3", acc_dtype="f32", scale=None,
             model=None,
             status="unprobed",
-            evidence=("candidates: ADA_E4M3_M16N8K32 (groups (16,16)) vs HOPPER_E4M3_K32 (groups (32,)), both "
-                      "width 14, floor -139; nothing measured on the sm_90 mma.sync path (D14)",),
+            evidence=(_H100_MMA_FP8, "not a pipeline: 2x HMMA.16816.F32 (HOPPER_BF16_M16N8K16) + FP32 FADD lowering (D14, resolved)"),
         ),
         # --- Blackwell consumer (sm_120) --------------------------------------------------------------------------
         _i(

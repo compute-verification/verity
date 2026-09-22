@@ -240,13 +240,15 @@
       "hawkeye_paper": "Hopper FP8 is characterised through wgmma-backed kernels (one group of 32); the mma.sync path on sm_90 is not distinguished",
       "hawkeye_simulator": "Hopper_fp8_simulator: one group of 32, width 14, floor -139 -- the wgmma semantics",
       "verity_reference": "INSTRUCTIONS['sm90.mma.m16n8k32.e4m3']: model None, status unprobed; candidates ADA_E4M3_M16N8K32 (groups (16,16)) and HOPPER_E4M3_K32 (groups (32,)), both width 14, floor -139.  The BF16 analogue sm90.mma.m16n8k16.bf16 is likewise unmeasured: only wgmma BF16 (groups (16,), width 26, floor -133) was probed on the H100.",
-      "hardware_evidence": "none on the sm_90 mma.sync path.  H100 wgmma E4M3 m64n64k32: 144,543,744 words, 0 mismatches against groups (32,) (veritor tc-fp8-2026-09-08); RTX 4090 mma.sync m16n8k32.e4m3: 24,898,304 elements, 0 mismatches against groups (16,16).",
-      "status": "open",
-      "resolution": null,
-      "to_resolve": "On an H100, one mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 per record with the separating tile of D10 (products 0 and 1 = +-256*256, product 16 = 1*1, the rest zero, acc = 0): 0x00000000 is one group of 32, 0x3F800000 two groups of 16; then a full family sweep against the winning model.  The same question for sm90.mma.m16n8k16.bf16 (tile from the BF16 neutral-subgroup measurement).",
+      "hardware_evidence": "H100 (sm_90a, driver 570.211.01, nvcc 12.4.131), lane tc-probe-fp8 runs r20260922-184111-671e (e4m3) and r20260922-184835-4b95 (e5m2), 25,040,128 elements each. SASS: mma.sync.aligned.m16n8k32 FP8 is lowered by ptxas 12.4 to 12x F2FP.F16.<fmt>.UNPACK_B, two HMMA.16816.F32 with zero accumulators (operand halves k mod 4 in {0,1} / {2,3}), FADD of the partials, FADD with C. The composite 'HOPPER_BF16_M16N8K16 over each half + IEEE FP32 adds' gives 0 mismatches for both formats; HOPPER_E4M3_K32 (one group of 32) fails 74%/62%, ADA_E4M3_M16N8K32 ((16,16), 14-bit) fails 76%/63%. Finite families agree: zero products give D == C for 65,536/65,536 (no 14-bit accumulator truncation), acc_only_lsb_walk keeps all 32 bits, the adder-width residual survives to 2^-24..2^-26. BF16: sm90.mma.m16n8k16.bf16 (run r20260922-185339-e337, 1x HMMA.16816.F32.BF16) matches hopper_bf16_m16n8k16 0/25,698,304; ampere fails 30,927 of a 192,000 subset.",
+      "status": "resolved",
+      "resolution": "Neither. On sm_90a the legacy FP8 mma.sync is not a tensor-core FP8 instruction: it is two HMMA.16816.F32 (the Hopper BF16 K=16 pipeline: one group of 16, 26-bit adder, floor -133) over the two k-halves plus IEEE FP32 FADDs. A target over this PTX op must be modelled as that composite, not as a 14-bit FP8 pipeline; the registry entry sm90.mma.m16n8k32.e4m3 records the lowering and keeps model=None until the composite is expressed as a Model. Hopper mma.sync BF16 runs the same pipeline as wgmma BF16 (pinned).",
+      "to_resolve": "",
       "evidence_refs": [
-        "fixtures/tc/veritor-tc-fp8-2026-09-08.json",
-        "packages/verity/tests/ml/fixtures/golden/ada_e4m3_m16n8k32.json"
+        "r20260922-184111-671e",
+        "r20260922-184835-4b95",
+        "r20260922-185339-e337",
+        "tools/tc_probe/tc_probe.py"
       ],
       "owner": "tc-probe-fp8"
     },
@@ -257,13 +259,14 @@
       "hawkeye_paper": "FP8 Hopper: one group of 32, 14-bit adder; the floor -139 is the simulator's constant",
       "hawkeye_simulator": "Hopper_fp8_simulator: zero exponent -139",
       "verity_reference": "HOPPER_E4M3_K32 and ADA_E4M3_M16N8K32 carry zero_exponent=-139; FP8_HOPPER_WGMMA names instruction sm90.wgmma.m64n8k32.e4m3 whose ptx field reads m64n8k32 (the id other lanes use as a string) while its evidence string records the measured m64n64k32 -- the per-element dot semantics do not depend on N, so the model is one and the same, but the shape column is a claim about the id, not about what was measured",
-      "hardware_evidence": "H100 (sm_90, driver 580.126.09), wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 / QGMMA.64x64x32.F32.E4M3.E4M3: 144,543,744 words, 0 mismatches; the fit grid leaves groups (32,) and width 14 unique but the floor only bounded to [-152, -126] (every candidate in that range fits 262,144 words with 0 mismatches).  RTX 4090: no E4M3 term can have exponent below -126 (products >= 2^-18, FP32 subnormal accumulators at -126), so any floor <= -126 gives identical results.",
+      "hardware_evidence": "H100 (sm_90, driver 580.126.09), wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 / QGMMA.64x64x32.F32.E4M3.E4M3: 144,543,744 words, 0 mismatches; the fit grid leaves groups (32,) and width 14 unique but the floor only bounded to [-152, -126] (every candidate in that range fits 262,144 words with 0 mismatches).  RTX 4090: no E4M3 term can have exponent below -126 (products >= 2^-18, FP32 subnormal accumulators at -126), so any floor <= -126 gives identical results. UPDATE 2026-09-22 (lane tc-probe-fp8, run r20260922-183435-fd5d): wgmma.mma_async.sync.aligned.m64n8k32.f32.e4m3.e4m3 measured DIRECTLY on an H100 (1x QGMMA.64x8x32.F32.E4M3.E4M3, descriptor (LBO,SBO)=(128,256)): 25,554,432 elements, 0 mismatches against HOPPER_E4M3_K32; adder-width residual survives at 2^-13 and truncates at 2^-14 in all 30 slots k=2..31 (one group of 32, 14-bit adder); zero products: D == C & ~0x3ff for 262,144/262,144 with no signed-zero exception. Part (a) of this entry is therefore settled: the id's shape is what was measured.",
       "status": "open",
       "resolution": null,
-      "to_resolve": "(a) Either probe wgmma m64n8k32 e4m3 on the H100 directly or record in the registry that the id's shape is nominal and the evidence is m64n64k32 (a coordinator decision on the id string, since other lanes use it).  (b) The floor is observable only when every term's exponent is below it: an FP32 subnormal accumulator (exponent -126) with all-zero products isolates it -- if the hardware truncates a subnormal accumulator differently for floors -126 .. -139 the family tiny_acc_zero_products with subnormal accumulators decides; otherwise the floor is unobservable in the finite domain and any value <= -126 is admissible (say so in the target).",
+      "to_resolve": "(a) SETTLED by r20260922-183435-fd5d (m64n8k32 measured directly). (b) remains: the floor is observable only when every term's exponent is below it; an FP32 subnormal accumulator with all-zero products isolates it -- the zero-products family on the H100 shows D == C & ~0x3ff for all 262,144 cases, consistent with any floor <= -126; decide whether to declare the floor unobservable in the finite domain (any value <= -126 admissible) in the FP8 targets.",
       "evidence_refs": [
         "fixtures/tc/veritor-tc-fp8-2026-09-08.json",
-        "packages/verity/src/verity/ml/tc/instructions.py"
+        "packages/verity/src/verity/ml/tc/instructions.py",
+        "r20260922-183435-fd5d"
       ],
       "owner": "tc-probe-fp8"
     },
