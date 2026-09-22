@@ -20,7 +20,8 @@ Envelope (``research/result/v0.1``, ``tools/research/src/research/result.py``)::
 
 Fingerprint fields (all required; a sub-field whose value is not known is ``null``, never a guess)::
 
-    profile         the frozen target's name: verity.verification.target.FIRST.name
+    profile         the name of the target actually proved (one of :data:`PROFILES`, ``verity.verification.target.TARGETS``);
+                    the campaign target is FIRST.name (:data:`PROFILE`); results of different profiles are never compared
     domain          the relation's domain, "finite" for FIRST (a total-semantics backend is another domain)
     K               GemmCoordinate<K>: a positive multiple of 16
     B               batch size: VU instances established by the one proof; B_real (optional) = real instances when padded
@@ -46,9 +47,19 @@ Timing (seconds; the buckets are disjoint and, with the joints, sum to at most `
     t.witness  t.encoding_commitment  t.arithmetic  t.lookup  t.zk_additional  t.serialization    t.total
     t.joint.<a>+<b>[+<c>...]   a fused stage covering those buckets, in canonical bucket order (see joint())
 
-The headline is throughput, ``vu.per_second``, and better its inverse relative to the machine being proved:
-``overhead.vs_native_peak`` (ratio) = prover seconds per VU / native seconds per VU at :data:`NATIVE_REFERENCE`
-(:func:`overhead`; checked against ``t.total / vu.count`` and the fingerprint's ``K``).
+The headline is throughput, ``vu.per_second``, and better its inverse relative to the machine being proved::
+
+    rate.proved_flop_per_second       R_proved = 2 * K * B / t.total   (B = vu.count; the prover's own throughput, no reference)
+    rate.native_peak_flop_per_second  R_native(target) = native_reference(profile).flop_per_second
+    overhead.vs_native_peak           R_native(target) / R_proved      (ratio)
+
+``R_proved`` is intrinsic to the prover (one VU of GemmCoordinate<K> is K MACs = 2K FLOP).  ``R_native`` depends on
+the target named by the fingerprint's ``profile``: the datasheet dense tensor-core peak of the target's conformance
+anchor for its operand dtype at FP32 accumulate (``Target.native_peak``, ``verity.verification.target``; A100 BF16
+312 TFLOPS for FIRST, RTX 4090 FP8 330.3 TFLOPS for FP8_ADA_MMA, H100 FP8 1978.9 TFLOPS for FP8_HOPPER_WGMMA).  The
+identity ``overhead.vs_native_peak == rate.native_peak_flop_per_second / rate.proved_flop_per_second`` holds by
+construction (:func:`rate_measurements`); :func:`validate` recomputes each of the three from ``t.total``,
+``vu.count``, ``K`` and ``profile`` and rejects a mismatch, so an overhead divided by another target's peak fails.
 
 Other measurements: ``vu.count`` (count), ``vu.seconds_per_vu`` (s), ``vu.per_second`` (1/s), ``mem.peak_host_bytes``,
 ``mem.peak_device_bytes``, ``bytes.moved``, ``transcript.bytes`` (B; the total communication), ``verifier.seconds``,
@@ -67,10 +78,11 @@ from __future__ import annotations
 import re
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from verity.verification.target import FIRST
+from verity.verification.target import FIRST, TARGETS, NativePeak
 
 __all__ = [
     "AUTHENTICATION",
@@ -82,8 +94,13 @@ __all__ = [
     "INSTANCES_FIELD",
     "INSTANCES_TIERS",
     "MISSING",
+    "OVERHEAD",
     "PROFILE",
+    "PROFILES",
     "PROOF_CLASSES",
+    "RATE_NATIVE",
+    "RATE_PROVED",
+    "RATE_TOLERANCE",
     "REQUIRED_FIELDS",
     "RESULT_SCHEMA",
     "RETENTION",
@@ -100,10 +117,13 @@ __all__ = [
     "joint",
     "measurement",
     "NATIVE_REFERENCE",
+    "native_reference",
     "native_seconds_per_vu",
     "overhead",
     "parse_joint",
     "probe_hardware",
+    "proved_flop_per_second",
+    "rate_measurements",
     "unit_of",
     "validate",
     "validate_fingerprint",
@@ -115,6 +135,9 @@ RESULT_SCHEMA = "research/result/v0.1"
 #: The campaign target's profile name and domain label (``backends/AGENTS.md``: the target is fixed).
 PROFILE = FIRST.name
 DOMAIN = "finite"
+#: Every profile a result may name: the targets of ``verity.verification.target.TARGETS`` (FIRST and the FP8 drafts).
+#: ``profile`` is an identity field, so a result of one profile is never compared with a result of another.
+PROFILES = tuple(TARGETS)
 
 PROOF_CLASSES = (
     "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND", "NO_PROOF",
@@ -172,34 +195,77 @@ UNITS: dict[str, str] = {
     "census.bytes_moved": "B",
     "verifier.seconds": "s",
     "fixed.setup_seconds": "s",
+    "rate.proved_flop_per_second": "FLOP/s",
+    "rate.native_peak_flop_per_second": "FLOP/s",
     "overhead.vs_native_peak": "ratio",
 }
-_RESERVED_PREFIXES = ("t.", "vu.", "mem.", "fixed.", "bytes.", "transcript.", "verifier.", "rounds.", "census.", "overhead.")
-
-#: The native reference the headline overhead divides by: the conformance anchor's peak dense BF16 tensor-core rate
-#: (NVIDIA A100 SXM4 datasheet, no sparsity).  A GemmCoordinate<K> is K MACs = 2K FLOP, so the native time of one VU at
-#: peak is 2K / rate: 9.85 ps at K=1536, i.e. ~1.0e11 VU/s.  Peak is the conservative choice (a real decode step runs
-#: below peak, so the true overhead is *lower* than this number); it is also the only reference every result can share
-#: without a runtime capture.  Overhead = prover wall seconds per VU / native seconds per VU -- the prover's own
-#: hardware is in the fingerprint, not in the ratio: the question is "how many native seconds does one proved second buy".
-NATIVE_REFERENCE: dict[str, Any] = {"device": "NVIDIA A100 SXM4 80GB", "rate": "bf16 dense tensor-core peak", "flop_per_second": 312e12,
-                                    "flop_per_vu": "2 * K"}
+_RESERVED_PREFIXES = ("t.", "vu.", "mem.", "fixed.", "bytes.", "transcript.", "verifier.", "rounds.", "census.", "rate.", "overhead.")
+RATE_PROVED = "rate.proved_flop_per_second"
+RATE_NATIVE = "rate.native_peak_flop_per_second"
+OVERHEAD = "overhead.vs_native_peak"
+#: A reported rate must agree with its formula to this relative tolerance (they are computed, not measured).
+RATE_TOLERANCE = 1e-6
 
 
-def native_seconds_per_vu(K: int) -> float:
-    """Native wall seconds of one GemmCoordinate<K> at :data:`NATIVE_REFERENCE` (9.846e-12 at K=1536)."""
+def native_reference(profile: str = PROFILE) -> NativePeak:
+    """The native peak the headline overhead of a ``profile`` divides by: that target's ``Target.native_peak`` -- the
+    datasheet dense tensor-core peak of the instruction's conformance anchor for the target's operand dtype at FP32
+    accumulate, no sparsity (``verity.verification.target``, "Native peak").  A GemmCoordinate<K> is K MACs = 2K FLOP,
+    so the native time of one VU at peak is 2K / rate: 9.85 ps at K=1536 for FIRST (A100 BF16, ~1.0e11 VU/s).  Peak is
+    the conservative choice (a real decode step runs below peak, so the true overhead is *lower* than this number); it
+    is also the only reference every result can share without a runtime capture.  The prover's own hardware is in the
+    fingerprint, not in the ratio: the question is "how many native seconds does one proved second buy".  Raises
+    ``ValueError`` for a profile that is not a target."""
 
-    if not isinstance(K, int) or K <= 0:
+    target = TARGETS.get(profile) if isinstance(profile, str) else None
+    if target is None:
+        raise ValueError(f"profile must be one of {PROFILES}, got {profile!r}")
+    return target.native_peak
+
+
+#: The campaign target's native reference as a plain (JSON-serialisable) mapping, for the callers that predate
+#: :func:`native_reference`: ``NATIVE_REFERENCE["flop_per_second"]`` is ``native_reference(PROFILE).flop_per_second``.
+NATIVE_REFERENCE: dict[str, Any] = {**asdict(native_reference(PROFILE)), "profile": PROFILE, "flop_per_vu": "2 * K"}
+
+
+def native_seconds_per_vu(K: int, profile: str = PROFILE) -> float:
+    """Native wall seconds of one GemmCoordinate<K> at :func:`native_reference` of ``profile`` (9.846e-12 at K=1536 for FIRST)."""
+
+    if not isinstance(K, int) or isinstance(K, bool) or K <= 0:
         raise ValueError(f"K must be a positive int, got {K!r}")
-    return 2 * K / NATIVE_REFERENCE["flop_per_second"]
+    return native_reference(profile).seconds_per_vu(K)
 
 
-def overhead(seconds_per_vu: float, K: int) -> float:
-    """``overhead.vs_native_peak``: prover seconds per VU over the native seconds per VU at the reference peak."""
+def overhead(seconds_per_vu: float, K: int, profile: str = PROFILE) -> float:
+    """``overhead.vs_native_peak``: prover seconds per VU over the native seconds per VU at the peak of ``profile``'s
+    target -- the same number as ``rate.native_peak_flop_per_second / rate.proved_flop_per_second``."""
 
     if seconds_per_vu <= 0:
         raise ValueError(f"seconds_per_vu must be positive, got {seconds_per_vu!r}")
-    return seconds_per_vu / native_seconds_per_vu(K)
+    return seconds_per_vu / native_seconds_per_vu(K, profile)
+
+
+def proved_flop_per_second(t_total: float, vu_count: int, K: int) -> float:
+    """``rate.proved_flop_per_second``: the prover's intrinsic throughput ``2 * K * vu_count / t_total`` -- the FLOP of the
+    VUs it established per prover wall second, independent of any reference machine."""
+
+    if not isinstance(K, int) or isinstance(K, bool) or K <= 0:
+        raise ValueError(f"K must be a positive int, got {K!r}")
+    if not _is_number(vu_count) or vu_count <= 0:
+        raise ValueError(f"vu_count must be positive, got {vu_count!r}")
+    if not _is_number(t_total) or t_total <= 0:
+        raise ValueError(f"t_total must be positive, got {t_total!r}")
+    return 2 * K * vu_count / t_total
+
+
+def rate_measurements(t_total: float, vu_count: int, K: int, profile: str = PROFILE) -> list[dict[str, Any]]:
+    """The three rate measurements of a VU-scope result, consistent by construction: ``rate.proved_flop_per_second``
+    (:func:`proved_flop_per_second`), ``rate.native_peak_flop_per_second`` (:func:`native_reference` of ``profile``)
+    and ``overhead.vs_native_peak`` = native / proved.  ``profile`` must be the fingerprint's."""
+
+    proved = proved_flop_per_second(t_total, vu_count, K)
+    native = native_reference(profile).flop_per_second
+    return [measurement(RATE_PROVED, proved), measurement(RATE_NATIVE, native), measurement(OVERHEAD, native / proved)]
 
 #: Sentinel for an identity field a fingerprint does not carry (distinct from a recorded ``null``).
 MISSING = object()
@@ -339,8 +405,8 @@ def validate_fingerprint(fp: Any) -> list[str]:
             p.append(f"workload_fingerprint.{field} missing")
     present = {f: fp[f] for f in REQUIRED_FIELDS if f in fp}
 
-    if "profile" in present and present["profile"] != PROFILE:
-        p.append(f"profile must be the campaign target {PROFILE!r}, got {present['profile']!r}")
+    if "profile" in present and present["profile"] not in PROFILES:
+        p.append(f"profile must be a target of verity.verification.target, one of {PROFILES} (the campaign target is {PROFILE!r}), got {present['profile']!r}")
     if "domain" in present and (not isinstance(present["domain"], str) or not present["domain"]):
         p.append(f"domain must be a non-empty string (FIRST: {DOMAIN!r}), got {present['domain']!r}")
     if "K" in present and not (_is_int(present["K"]) and present["K"] > 0 and present["K"] % 16 == 0):
@@ -556,27 +622,48 @@ def validate(result: Any) -> list[str]:
     p += validate_fingerprint(fp)
     pc = fp.get("proof_class") if isinstance(fp, Mapping) else None
     p += validate_measurements(result.get("measurements"), pc if pc in PROOF_CLASSES else None)
-    p += _check_overhead(fp, result.get("measurements"))
+    p += _check_rates(fp, result.get("measurements"))
     return p
 
 
-def _check_overhead(fp: Any, measurements: Any) -> list[str]:
-    """``overhead.vs_native_peak``, when reported, must be ``t.total / vu.count`` over :func:`native_seconds_per_vu`
-    at the fingerprint's ``K`` (tolerance :data:`TOLERANCE`)."""
+def _check_rates(fp: Any, measurements: Any) -> list[str]:
+    """The rate measurements, when reported, must be what the contract computes from the fingerprint's ``profile`` and
+    ``K`` and the result's ``t.total`` and ``vu.count``: ``rate.proved_flop_per_second`` = 2 K vu.count / t.total and
+    ``rate.native_peak_flop_per_second`` = :func:`native_reference` (profile) to :data:`RATE_TOLERANCE`;
+    ``overhead.vs_native_peak`` = their ratio, i.e. :func:`overhead` at the fingerprint's ``K`` **and profile**, to
+    :data:`TOLERANCE`.  An overhead divided by another target's peak fails here.  A profile that is not a target is
+    reported by :func:`validate_fingerprint`; the rates are not checked against it."""
 
     if not isinstance(fp, Mapping) or not isinstance(measurements, list):
         return []
     values = {m.get("name"): m.get("value") for m in measurements if isinstance(m, Mapping)}
-    got = values.get("overhead.vs_native_peak")
-    if got is None:
+    reported = {name: values[name] for name in (RATE_PROVED, RATE_NATIVE, OVERHEAD) if values.get(name) is not None}
+    if not reported:
         return []
+    profile = fp.get("profile")
+    if profile not in PROFILES:
+        return []
+    p: list[str] = []
+    native = native_reference(profile).flop_per_second
+    got = reported.get(RATE_NATIVE)
+    if got is not None and (not _is_number(got) or abs(got - native) > RATE_TOLERANCE * native):
+        p.append(f"{RATE_NATIVE} {got!r} is not the native peak of profile {profile!r}, {native:.6g} FLOP/s")
+    if RATE_PROVED not in reported and OVERHEAD not in reported:
+        return p
     K, total, count = fp.get("K"), values.get(T_TOTAL), values.get("vu.count")
-    if not (isinstance(K, int) and K > 0) or not _is_number(total) or not _is_number(count) or count <= 0 or total <= 0:
-        return ["overhead.vs_native_peak needs K in the fingerprint and positive t.total and vu.count to be checked against"]
-    want = overhead(total / count, K)
-    if not _is_number(got) or abs(got - want) > TOLERANCE * want:
-        return [f"overhead.vs_native_peak {got!r} is not (t.total / vu.count) / native_seconds_per_vu(K) = {want:.6g}"]
-    return []
+    if not (_is_int(K) and K > 0) or not _is_number(total) or not _is_number(count) or count <= 0 or total <= 0:
+        names = " and ".join(n for n in (RATE_PROVED, OVERHEAD) if n in reported)
+        return p + [f"{names} needs K in the fingerprint and positive t.total and vu.count to be checked against"]
+    proved = proved_flop_per_second(total, count, K)
+    got = reported.get(RATE_PROVED)
+    if got is not None and (not _is_number(got) or abs(got - proved) > RATE_TOLERANCE * proved):
+        p.append(f"{RATE_PROVED} {got!r} is not 2 * K * vu.count / t.total = {proved:.6g} FLOP/s")
+    got = reported.get(OVERHEAD)
+    want = overhead(total / count, K, profile)
+    if got is not None and (not _is_number(got) or abs(got - want) > TOLERANCE * want):
+        p.append(f"{OVERHEAD} {got!r} is not (t.total / vu.count) / native_seconds_per_vu(K, profile) = {want:.6g} "
+                 f"at the native peak of profile {profile!r} ({native:.6g} FLOP/s)")
+    return p
 
 
 # --- comparability -----------------------------------------------------------------------------------------------------

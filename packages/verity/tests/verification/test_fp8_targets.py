@@ -45,6 +45,23 @@ def test_first_is_frozen_and_the_fp8_targets_are_drafts_over_pinned_instructions
     assert FP8_HOPPER_WGMMA.pipeline is HOPPER_E4M3_K32 and FP8_ADA_MMA.pipeline is ADA_E4M3_M16N8K32
 
 
+def test_every_target_names_its_native_peak_on_its_conformance_anchor_at_fp32_accumulate() -> None:
+    """The overhead reference: the datasheet dense peak of the instruction's conformance device for the operand dtype
+    at FP32 accumulate (A100 BF16 312, H100 FP8 1978.9, RTX 4090 FP8 330.3 TFLOPS -- Ada halves FP8 under FP32
+    accumulate).  One K-VU is 2K FLOP."""
+
+    peaks = {FIRST: ("A100", 312e12), FP8_HOPPER_WGMMA: ("H100", 1978.9e12), FP8_ADA_MMA: ("4090", 330.3e12)}
+    for t, (device, rate) in peaks.items():
+        p = t.native_peak
+        assert device in p.device and p.flop_per_second == rate and p.accumulate == "fp32" and p.source
+        assert "dense" in p.rate and "fp32 accumulate" in p.rate and INSTRUCTIONS[t.instruction].acc_dtype == "f32"
+        assert p.seconds_per_vu(1536) == 2 * 1536 / rate
+    assert "fp8" in FP8_ADA_MMA.native_peak.rate and "bf16" in FIRST.native_peak.rate
+    assert "FP32 accumulate" in FP8_ADA_MMA.native_peak.source
+    with pytest.raises(ValueError):
+        FIRST.native_peak.seconds_per_vu(0)
+
+
 @pytest.mark.parametrize("t", DRAFTS, ids=lambda t: t.name)
 def test_the_family_is_the_cast_free_tensor_core_gate_set_of_the_pipeline(t: Target) -> None:
     gate_set = make_tensor_core_gate_set(t.pipeline)

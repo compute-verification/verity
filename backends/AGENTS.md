@@ -120,7 +120,8 @@ first-class consumer is the **tensor core**, not the SIMT core. Consequences:
 - CPU measurements remain valid **diagnostics** of algorithmic scaling
   (committed elements per VU, depth, constraint counts); the decision
   hardware is a tensor-core GPU, and `overhead.vs_native_peak` is always
-  against the anchor's tensor-core peak.
+  against the proved target's anchor tensor-core peak (`Target.native_peak`),
+  never against the prover's own card.
 
 ## Census, both candidates, same columns
 
@@ -142,11 +143,17 @@ K=1536 GemmCoordinate   the architecture decision (handoff section 9.5)
 ~~~
 
 The headline statistic is throughput, `vu.per_second`, and better still
-**overhead**: prover seconds per VU divided by the native seconds the same
-VU takes on the machine being proved (`overhead.vs_native_peak`, against
-the A100's dense BF16 tensor-core peak: 9.85 ps per K=1536 VU, ~1e11 VU/s;
-`contract.NATIVE_REFERENCE`). Report it on every VU-level number; the
-question every run answers is "how many native seconds does one proved
+**overhead**: `overhead.vs_native_peak` = R_native(target) / R_proved, where
+R_proved = 2·K·B / `t.total` is the prover's own FLOP/s over the VUs it
+established (`rate.proved_flop_per_second`, K MACs = 2K FLOP per VU) and
+R_native is the datasheet dense tensor-core peak of the **proved target's**
+conformance anchor at FP32 accumulate (`rate.native_peak_flop_per_second`,
+`Target.native_peak`, `contract.native_reference(profile)`): A100 BF16
+312 TFLOPS for FIRST (9.85 ps per K=1536 VU, ~1e11 VU/s), RTX 4090 FP8
+330.3 TFLOPS for FP8_ADA_MMA, H100 FP8 1978.9 TFLOPS for FP8_HOPPER_WGMMA.
+Emit all three with `contract.rate_measurements(...)` on every VU-level
+number under the fingerprint's `profile` (the validator recomputes them);
+the question every run answers is "how many native seconds does one proved
 second buy". Peak is the conservative reference (a real decode step runs
 below peak), so the true overhead is lower than the reported one.
 

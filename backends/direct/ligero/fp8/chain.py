@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from verity.ml.tc.silicon import ADA_E4M3_M16N8K32, tc_dot
+from verity.verification.target import FP8_ADA_MMA
 from verity_numerical.bench import contract
 
 from .. import protocol as protocol_mod
@@ -300,7 +301,7 @@ def bench_vu_fp8(args) -> int:
     else:
         proof_class, zk_mode, omitted = "NON_ZK_PROOF_DIAGNOSTIC", "none", "external authentication, ZK masking"
     fp = contract.fingerprint(
-        profile=contract.PROFILE, domain=contract.DOMAIN, K=K * STEPS, B=total_vus, N_subbatches=n_proofs,
+        profile=FP8_ADA_MMA.name, domain=contract.DOMAIN, K=K * STEPS, B=total_vus, N_subbatches=n_proofs,
         proof_class=proof_class, authentication="excluded", zk_mode=zk_mode,
         security={"target": round(args.target), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_k": cfg.k, "rs_l": cfg.l,
                   "zk": cfg.zk, "t_pad": cfg.t_pad, "mode": cfg.mode, "bound_model": snd["bound_model"],
@@ -342,6 +343,7 @@ def bench_vu_fp8(args) -> int:
         contract.measurement("census.bytes_encoded", R.sys.m * cfg.n * 4 * n_proofs),
         contract.measurement("vu.seconds_per_vu", per_vu, "s"),
         contract.measurement("vu.count", total_vus, "count"),
+        *contract.rate_measurements(total, total_vus, K * STEPS, FP8_ADA_MMA.name),
         contract.measurement("split.subbatches", n_proofs, "count"),
         contract.measurement("split.per_proof_vus", per_proof, "count"),
         contract.measurement("split.hints_seconds", med["hints_host"], "s"),

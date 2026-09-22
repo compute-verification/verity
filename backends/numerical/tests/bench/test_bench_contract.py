@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import REPO, VECTOR_RUN, conforming_result
 
-from verity.verification.target import FIRST, K16_VECTOR
+from verity.verification.target import FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, K16_VECTOR, NativePeak
 from verity_numerical.bench import contract
 
 FIXTURES = REPO / "fixtures" / "typed-obligation-v0"
@@ -56,8 +56,8 @@ def test_envelope_problems_are_reported(conforming: dict) -> None:
 @pytest.mark.parametrize(
     ("field", "value", "fragment"),
     [
-        ("profile", "another-target", "profile must be the campaign target"),
-        ("profile", None, "profile must be the campaign target"),
+        ("profile", "another-target", "profile must be a target of verity.verification.target"),
+        ("profile", None, "profile must be a target of verity.verification.target"),
         ("domain", "", "domain must be a non-empty string"),
         ("K", 24, "K must be a positive multiple of 16"),
         ("K", None, "K must be a positive multiple of 16"),
@@ -261,6 +261,141 @@ def test_overhead_is_prover_seconds_over_native_peak_seconds(conforming: dict) -
     assert contract.validate(res) == []
     res["measurements"][-1]["value"] = want * 2
     assert any("overhead.vs_native_peak" in p for p in contract.validate(res))
+
+
+# --- the native reference is the proved target's ---------------------------------------------------------------------
+
+
+def test_native_reference_is_the_targets_anchor_peak_and_the_bf16_default_is_unchanged() -> None:
+    """The default profile is FIRST, whose reference is the A100's 312 TFLOPS dense BF16 peak: every pre-existing number
+    (9.846 ps per K=1536 VU; 340 us/VU = 3.45e7x) is unchanged."""
+
+    ref = contract.native_reference()
+    assert isinstance(ref, NativePeak) and ref is FIRST.native_peak and ref is contract.native_reference(FIRST.name)
+    assert ref.flop_per_second == 312e12 and ref.accumulate == "fp32" and "A100" in ref.device
+    assert contract.native_seconds_per_vu(1536) == pytest.approx(9.846e-12, rel=1e-3)
+    assert contract.native_seconds_per_vu(1536) == contract.native_seconds_per_vu(1536, FIRST.name) == contract.native_seconds_per_vu(1536, contract.PROFILE)
+    assert contract.overhead(340e-6, 1536) == pytest.approx(3.45e7, rel=1e-2)
+    assert contract.overhead(340e-6, 1536) == contract.overhead(340e-6, 1536, FIRST.name)
+    # the pre-native_reference module attribute is still the campaign target's peak, as a plain JSON-able mapping
+    assert contract.NATIVE_REFERENCE["flop_per_second"] == ref.flop_per_second == 312e12
+    assert contract.NATIVE_REFERENCE["device"] == ref.device and contract.NATIVE_REFERENCE["profile"] == contract.PROFILE
+    json.dumps(contract.NATIVE_REFERENCE)
+    assert contract.PROFILES == (FIRST.name, FP8_HOPPER_WGMMA.name, FP8_ADA_MMA.name) and contract.PROFILE == FIRST.name
+    with pytest.raises(ValueError, match="profile must be one of"):
+        contract.native_reference("another-target")
+    with pytest.raises(ValueError, match="profile must be one of"):
+        contract.native_seconds_per_vu(1536, "another-target")
+
+
+def test_fp8_targets_divide_by_their_own_anchor_peak() -> None:
+    """FP8 Ada: the RTX 4090's dense FP8 peak *with FP32 accumulate* (330.3 TFLOPS -- Ada halves FP8 under FP32
+    accumulate; 660.6 is the FP16-accumulate figure): 9.30 ps per K=1536 VU, so 401 us/VU is 4.31e7x, not the 4.07e7x
+    the BF16 constant would give.  FP8 Hopper: the H100's 1978.9 TFLOPS dense FP8 peak, 1.55 ps per VU."""
+
+    ada = contract.native_reference(FP8_ADA_MMA.name)
+    assert ada is FP8_ADA_MMA.native_peak and ada.flop_per_second == 330.3e12 and ada.accumulate == "fp32" and "4090" in ada.device
+    assert contract.native_seconds_per_vu(1536, FP8_ADA_MMA.name) == pytest.approx(9.30e-12, rel=1e-3)
+    assert contract.native_seconds_per_vu(1536, FP8_ADA_MMA.name) == pytest.approx(2 * 1536 / 330.3e12)
+    assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) == pytest.approx(4.31e7, rel=1e-2)
+    assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) != pytest.approx(contract.overhead(401e-6, 1536), rel=1e-2)
+    hopper = contract.native_reference(FP8_HOPPER_WGMMA.name)
+    assert hopper is FP8_HOPPER_WGMMA.native_peak and hopper.flop_per_second == 1978.9e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
+    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(2 * 1536 / 1978.9e12)
+    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(1.552e-12, rel=1e-3)
+    for t in (FIRST, FP8_HOPPER_WGMMA, FP8_ADA_MMA):
+        assert t.native_peak.seconds_per_vu(1536) == contract.native_seconds_per_vu(1536, t.name)
+        assert "sparsity" not in t.native_peak.rate and "dense" in t.native_peak.rate and t.native_peak.source
+
+
+def test_every_target_is_a_valid_profile_and_an_unknown_one_is_not(conforming: dict) -> None:
+    fp = conforming["workload_fingerprint"]
+    for profile in contract.PROFILES:
+        assert contract.validate({**conforming, "workload_fingerprint": {**fp, "profile": profile}}) == [], profile
+    fp8 = contract.fingerprint(**{**{k: fp[k] for k in contract.REQUIRED_FIELDS}, "profile": FP8_ADA_MMA.name})
+    assert fp8["profile"] == FP8_ADA_MMA.name and contract.validate_fingerprint(fp8) == []
+    problems = contract.validate({**conforming, "workload_fingerprint": {**fp, "profile": "fp8-ada-mma-draft/2099-01-01"}})
+    assert len(problems) == 1 and problems[0].startswith("profile must be a target of verity.verification.target, one of (") and "fp8-ada-mma-draft/2099-01-01" in problems[0]
+    with pytest.raises(ValueError, match="profile must be a target"):
+        contract.fingerprint(**{**{k: fp[k] for k in contract.REQUIRED_FIELDS}, "profile": "another-target"})
+
+
+def test_overhead_must_be_against_the_fingerprints_profile(conforming: dict) -> None:
+    """An FP8 Ada result whose overhead was divided by the BF16 A100 constant is off by 330.3/312 = 5.9% and is rejected;
+    the same number against the Ada peak conforms."""
+
+    res = json.loads(json.dumps(conforming))
+    res["workload_fingerprint"]["profile"] = FP8_ADA_MMA.name
+    values = {m["name"]: m["value"] for m in res["measurements"]}
+    per_vu, K = values["t.total"] / values["vu.count"], res["workload_fingerprint"]["K"]
+    bf16_constant = contract.overhead(per_vu, K, FIRST.name)
+    res["measurements"].append(contract.measurement("overhead.vs_native_peak", bf16_constant))
+    problems = contract.validate(res)
+    assert len(problems) == 1 and problems[0].startswith("overhead.vs_native_peak") and FP8_ADA_MMA.name in problems[0], problems
+    res["measurements"][-1]["value"] = contract.overhead(per_vu, K, FP8_ADA_MMA.name)
+    assert contract.validate(res) == []
+    # and the other way round: a FIRST result cannot carry an overhead divided by the Ada peak
+    back = {**res, "workload_fingerprint": {**res["workload_fingerprint"], "profile": FIRST.name}}
+    assert len(contract.validate(back)) == 1 and contract.validate(back)[0].startswith("overhead.vs_native_peak")
+    # a profile that is not a target is the fingerprint's problem; the overhead is not checked against a guess
+    unknown = {**res, "workload_fingerprint": {**res["workload_fingerprint"], "profile": "another-target"}}
+    assert [p.split(" ")[0] for p in contract.validate(unknown)] == ["profile"]
+
+
+def test_rate_measurements_are_three_consistent_numbers_the_validator_recomputes(conforming: dict) -> None:
+    """``rate_measurements`` emits the proved rate 2KB / t.total, the profile's native peak and their exact ratio; a
+    tampered rate (or one under another profile's peak) is rejected to 1e-6."""
+
+    t_total, B, K = 1.643, 4096, 1536
+    ms = contract.rate_measurements(t_total, B, K, FP8_ADA_MMA.name)
+    assert [m["name"] for m in ms] == ["rate.proved_flop_per_second", "rate.native_peak_flop_per_second", "overhead.vs_native_peak"]
+    assert [m["unit"] for m in ms] == ["FLOP/s", "FLOP/s", "ratio"]
+    proved, native, ovh = (m["value"] for m in ms)
+    assert proved == 2 * K * B / t_total == contract.proved_flop_per_second(t_total, B, K)
+    assert native == 330.3e12 == contract.native_reference(FP8_ADA_MMA.name).flop_per_second
+    assert ovh == native / proved
+    assert ovh == pytest.approx(contract.overhead(t_total / B, K, FP8_ADA_MMA.name), rel=1e-12)
+    assert contract.rate_measurements(t_total, B, K)[1]["value"] == 312e12, "the default profile is FIRST"
+    assert contract.unit_of("rate.proved_flop_per_second") == contract.unit_of("rate.native_peak_flop_per_second") == "FLOP/s"
+    assert contract.validate_measurements([contract.measurement("rate.made_up", 1.0, "FLOP/s")]) == ["measurement 'rate.made_up' uses a contract prefix but is not a contract name"]
+    with pytest.raises(ValueError, match="t_total must be positive"):
+        contract.rate_measurements(0.0, B, K)
+    with pytest.raises(ValueError, match="profile must be one of"):
+        contract.rate_measurements(t_total, B, K, "another-target")
+
+    res = json.loads(json.dumps(conforming))
+    res["workload_fingerprint"].update(profile=FP8_ADA_MMA.name, K=1536, B=4096)
+    res["measurements"] = [m for m in res["measurements"] if not m["name"].startswith(("t.", "vu."))]
+    res["measurements"] += [contract.measurement("t.arithmetic", t_total), contract.measurement("t.total", t_total), contract.measurement("vu.count", B), *ms]
+    assert contract.validate(res) == []
+    for i, name in enumerate(("rate.proved_flop_per_second", "rate.native_peak_flop_per_second", "overhead.vs_native_peak")):
+        tampered = json.loads(json.dumps(res))
+        tampered["measurements"][-3 + i]["value"] *= 1.05
+        problems = contract.validate(tampered)
+        assert len(problems) == 1 and problems[0].startswith(name), (name, problems)
+    # the two rates are computed numbers, held to 1e-6; the overhead keeps the contract's 1% (rounded ledger values)
+    tight = json.loads(json.dumps(res))
+    tight["measurements"][-3]["value"] *= 1 + 1e-5
+    tight["measurements"][-1]["value"] *= 1 + 1e-3
+    problems = contract.validate(tight)
+    assert len(problems) == 1 and problems[0].startswith("rate.proved_flop_per_second"), problems
+    # the rates under another profile's peak are rejected; the proved rate is profile-free and stays right
+    wrong_peak = json.loads(json.dumps(res))
+    wrong_peak["measurements"][-3:] = contract.rate_measurements(t_total, B, K, FIRST.name)
+    problems = contract.validate(wrong_peak)
+    assert [p.split(" ")[0] for p in problems] == ["rate.native_peak_flop_per_second", "overhead.vs_native_peak"], problems
+    # a rate without the numbers it is checked against is a problem, not a pass
+    bare = {**res, "measurements": [m for m in res["measurements"] if m["name"] != "vu.count"]}
+    assert any("needs K in the fingerprint and positive t.total and vu.count" in p for p in contract.validate(bare))
+
+
+def test_results_of_different_profiles_are_never_compared(conforming: dict) -> None:
+    fp = conforming["workload_fingerprint"]
+    first, ada = {**fp, "profile": FIRST.name}, {**fp, "profile": FP8_ADA_MMA.name}
+    assert contract.validate_fingerprint(first) == [] and contract.validate_fingerprint(ada) == []
+    assert contract.incomparable(first, ada) == [("profile", FIRST.name, FP8_ADA_MMA.name)]
+    assert contract.identity(first)["profile"] != contract.identity(ada)["profile"]
+    assert contract.incomparable(first, ada, allow=["profile"]) == [], "only an experiment that names the field may cross it"
 
 
 def test_batch_hardware_and_soundness_target_are_identity(conforming: dict) -> None:

@@ -395,6 +395,7 @@ def bench_vu(args) -> int:
         contract.measurement("census.bytes_encoded", R.sys.m * cfg.n * 4 * n_proofs),
         contract.measurement("vu.seconds_per_vu", per_vu, "s"),
         contract.measurement("vu.count", n_vus, "count"),
+        *contract.rate_measurements(total, n_vus, STEP * STEPS, contract.PROFILE),
         contract.measurement("split.subbatches", n_proofs, "count"),
         contract.measurement("split.per_proof_vus", per_proof, "count"),
         contract.measurement("split.hints_seconds", med["hints_host"], "s"),

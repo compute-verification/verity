@@ -772,8 +772,13 @@ fn write_result(b: BenchNumbers) {
         FieldKind::BabyBear => 4,
     };
     let per_vu_cells = (steps * committed_width) as u64;
-    // bench.contract NATIVE_REFERENCE: A100 dense BF16 tensor-core peak, 312 TFLOP/s; 2K flop per VU
-    let native_seconds_per_vu = 2.0 * 1536.0 / 312e12;
+    // bench.contract native_reference(FIRST.name) == verity.verification.target.FIRST.native_peak: the A100 SXM4 dense
+    // BF16 tensor-core peak with FP32 accumulate, 312 TFLOP/s; one GemmCoordinate<K> VU is 2K flop.  This bench is
+    // BF16-only (the fingerprint below names profile FIRST); a bench of another target divides by that target's own
+    // Target.native_peak, never by this constant.  overhead.vs_native_peak == rate.native_peak / rate.proved.
+    let native_peak_flop_per_second = 312e12;
+    let native_seconds_per_vu = 2.0 * 1536.0 / native_peak_flop_per_second;
+    let proved_flop_per_second = 2.0 * 1536.0 * n_vus as f64 / t_total;
     let run_id = std::env::var("RESEARCH_RUN_ID").unwrap_or_else(|_| "local".into());
     let commit = option_env!("VERITY_COMMIT").map(|s| s.to_string());
     let field_name = match kind {
@@ -815,6 +820,8 @@ fn write_result(b: BenchNumbers) {
         json!({"name": "vu.count", "value": n_vus, "unit": "count"}),
         json!({"name": "vu.seconds_per_vu", "value": t_total / n_vus as f64, "unit": "s"}),
         json!({"name": "vu.per_second", "value": n_vus as f64 / t_total, "unit": "1/s"}),
+        json!({"name": "rate.proved_flop_per_second", "value": proved_flop_per_second, "unit": "FLOP/s"}),
+        json!({"name": "rate.native_peak_flop_per_second", "value": native_peak_flop_per_second, "unit": "FLOP/s"}),
         json!({"name": "overhead.vs_native_peak", "value": (t_total / n_vus as f64) / native_seconds_per_vu, "unit": "ratio"}),
         json!({"name": "direct.vus", "value": n_vus, "unit": "count"}),
         json!({"name": "direct.rows", "value": rows, "unit": "count"}),

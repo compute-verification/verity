@@ -347,8 +347,10 @@ def synth(out: Path, vus: int, steps: int, seed: int, p: Params = REAL, field: s
 
 
 def finalize(result: Path, export_manifest: Path, run_id: str | None = None) -> list[str]:
-    """Complete the Rust prover's ``result.json``: the ``instances`` reference of the export, ``overhead.vs_native_peak``
-    for VU-scope runs, and the contract's validation; returns the contract's problem list (empty when conforming)."""
+    """Complete the Rust prover's ``result.json``: the ``instances`` reference of the export, the rate measurements
+    (``rate.proved_flop_per_second``, ``rate.native_peak_flop_per_second``, ``overhead.vs_native_peak`` at the
+    fingerprint's profile) for VU-scope runs, and the contract's validation; returns the contract's problem list
+    (empty when conforming)."""
     from verity_numerical.bench import contract
 
     doc = json.loads(result.read_text())
@@ -360,8 +362,7 @@ def finalize(result: Path, export_manifest: Path, run_id: str | None = None) -> 
     fp["instances"] = contract.instances_ref(man["tier"], lo, lo + fp["B"], man["manifest_sha256"])
     values = {m["name"]: m["value"] for m in doc["measurements"]}
     if fp.get("unit") == "vu" and "vu.count" in values:
-        per_vu = values["t.total"] / values["vu.count"]
-        doc["measurements"].append(contract.measurement("overhead.vs_native_peak", contract.overhead(per_vu, fp["K"])))
+        doc["measurements"].extend(contract.rate_measurements(values["t.total"], values["vu.count"], fp["K"], fp.get("profile", contract.PROFILE)))
     problems = contract.validate(doc)
     doc["contract_problems"] = problems
     result.write_text(json.dumps(doc, indent=1) + "\n")

@@ -122,6 +122,21 @@ much hardware stands behind the model the target computes with.
 * Not covered by any draft: ``sm90.mma.m16n8k32.e4m3`` (the Hopper legacy path -- unprobed; whether it is Hopper's
   one group of 32 or Ada's two of 16 is the probe lane's first question), E5M2 (hypotheses only), and the
   Blackwell block-scaled FP4 path (a model exists, :class:`verity.ml.tc.models.BlockScaledAlignAdd`, no target).
+
+Native peak: what a target's overhead is measured against
+=========================================================
+
+Every target carries a :class:`NativePeak`, the reference rate the campaign's headline ``overhead.vs_native_peak``
+(``verity_numerical.bench.contract``) divides by.  The anchor ``device`` is the **conformance device of the target's
+instruction** -- the card the relation was pinned on (A100 for ``sm80.mma.m16n8k16.bf16``, H100 for
+``sm90.wgmma.m64n8k32.e4m3``, RTX 4090 for ``sm89.mma.m16n8k32.e4m3``) -- not the machine a prover happens to run
+on (that is in the result's ``hardware`` fingerprint).  The ``rate`` is the vendor datasheet's **dense** tensor-core
+peak for the target's operand dtype **at the relation's accumulate width**: our relations accumulate in FP32, so
+where a part halves its FP8 throughput under FP32 accumulate (Ada: 330.3 TFLOPS, against 660.6 with FP16
+accumulate) the halved number is the reference; sparsity figures are never used.  One VU of ``GemmCoordinate<K>``
+is ``K`` multiply-accumulates = ``2K`` FLOP (NVIDIA counts an FMA as two FLOP); block scales, epilogue casts and the
+proof's own arithmetic are not counted.  So the native time of one VU at peak is ``2K / flop_per_second`` and the
+overhead of a prover that establishes ``B`` VUs in ``t`` seconds is ``flop_per_second / (2KB / t)``.
 """
 
 from __future__ import annotations
@@ -144,6 +159,7 @@ __all__ = [
     "HAWKEYE_PIN",
     "K16_VECTOR",
     "K1536_VECTOR",
+    "NativePeak",
     "TARGETS",
     "TC_VECTORS",
     "Target",
@@ -173,10 +189,31 @@ Status = Literal["frozen", "draft"]
 
 
 @dataclass(frozen=True, slots=True)
+class NativePeak:
+    """The native reference rate a target's ``overhead.vs_native_peak`` divides by (module docstring, "Native peak"):
+    the datasheet dense tensor-core peak of the instruction's conformance ``device`` for the target's operand dtype at
+    the relation's ``accumulate`` width, in FLOP per second (an FMA counts as two), with the ``source`` it was read from."""
+
+    device: str
+    rate: str
+    flop_per_second: float
+    accumulate: str
+    source: str
+
+    def seconds_per_vu(self, K: int) -> float:
+        """Native wall seconds of one ``GemmCoordinate<K>`` (``2K`` FLOP) at this peak."""
+
+        if not isinstance(K, int) or isinstance(K, bool) or K <= 0:
+            raise ValueError(f"K must be a positive int, got {K!r}")
+        return 2 * K / self.flop_per_second
+
+
+@dataclass(frozen=True, slots=True)
 class Target:
-    """One target: the family, the pipeline the steps are computed on, the program, the reference sizes -- and
-    its ``status`` (``frozen``: every backend proves it; ``draft``: stated and vectorised, bound to nothing yet)
-    with the id of the instruction class it is a relation over (``verity.ml.tc.instructions.INSTRUCTIONS``)."""
+    """One target: the family, the pipeline the steps are computed on, the program, the reference sizes, the native
+    peak its overhead is measured against -- and its ``status`` (``frozen``: every backend proves it; ``draft``: stated
+    and vectorised, bound to nothing yet) with the id of the instruction class it is a relation over
+    (``verity.ml.tc.instructions.INSTRUCTIONS``)."""
 
     name: str
     family: str
@@ -188,8 +225,38 @@ class Target:
     domain: str
     epilogue: str
     reference_vectors: tuple[str, ...]
+    native_peak: NativePeak
     status: Status = "frozen"
     instruction: str | None = None
+
+
+#: A100 SXM4 dense BF16 tensor-core peak (312 TFLOPS; 624 with sparsity, not used).  Accumulation on Ampere is FP32.
+A100_BF16_PEAK = NativePeak(
+    device="NVIDIA A100 SXM4 80GB",
+    rate="bf16 dense tensor-core peak, fp32 accumulate",
+    flop_per_second=312e12,
+    accumulate="fp32",
+    source="NVIDIA A100 datasheet / Ampere whitepaper",
+)
+#: H100 SXM5 dense FP8 tensor-core peak; Hopper runs FP8 with FP32 accumulate at full rate.
+H100_FP8_PEAK = NativePeak(
+    device="NVIDIA H100 SXM5 80GB",
+    rate="fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
+    flop_per_second=1978.9e12,
+    accumulate="fp32",
+    source="NVIDIA Hopper whitepaper (FP8 3957.8 TFLOPS with sparsity; FP32 accumulate at full rate on Hopper)",
+)
+#: RTX 4090 dense FP8 tensor-core peak with FP32 accumulate -- half the FP16-accumulate figure on Ada.
+RTX4090_FP8_PEAK = NativePeak(
+    device="NVIDIA GeForce RTX 4090",
+    rate="fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
+    flop_per_second=330.3e12,
+    accumulate="fp32",
+    source=(
+        "NVIDIA Ada whitepaper (FP8 with FP32 accumulate 330.3 / 660.6 sparse TFLOPS; FP16 accumulate is 660.6 -- "
+        "Ada halves FP8 throughput with FP32 accumulate)"
+    ),
+)
 
 
 FIRST = Target(
@@ -203,6 +270,7 @@ FIRST = Target(
     domain="finite BF16 operands and finite FP32 accumulators at every step; anything else is rejected, not computed",
     epilogue="f32_to_bf16: RN-even, overflow -> +-inf, NaN -> 0x7FC0 (software canonical word; @2 has the hardware 0x7FFF)",
     reference_vectors=(K16_VECTOR, K1536_VECTOR),
+    native_peak=A100_BF16_PEAK,
     status="frozen",
     instruction="sm80.mma.m16n8k16.bf16",
 )
@@ -231,6 +299,7 @@ FP8_HOPPER_WGMMA = Target(
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
     reference_vectors=("fp8-hopper-wgmma-k32", "fp8-hopper-wgmma-k1536"),
+    native_peak=H100_FP8_PEAK,
     status="draft",
     instruction="sm90.wgmma.m64n8k32.e4m3",
 )
@@ -249,6 +318,7 @@ FP8_ADA_MMA = Target(
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
     reference_vectors=("fp8-ada-mma-k32", "fp8-ada-mma-k1536"),
+    native_peak=RTX4090_FP8_PEAK,
     status="draft",
     instruction="sm89.mma.m16n8k32.e4m3",
 )
