@@ -53,6 +53,11 @@ def main(argv=None) -> int:
     logup_meas = lrec["total_ms"] / 1e3
     logup_scaled = logup_meas * leaf_scale
     tail_ms = lrec["tail_levels_ms"]
+    # host launch overhead per round: the slope of level time vs level index over the smallest levels (device work there is ~0)
+    lv = {int(k): v for k, v in lrec["levels_ms"].items()}
+    slope_ms = (lv[12] - lv[4]) / 8 if 12 in lv and 4 in lv else 0.0
+    n_rounds = lu["n"] * (lu["n"] - 1) // 2
+    logup_device_est = max(0.0, logup_meas - slope_ms * n_rounds / 1e3) * leaf_scale
 
     rows = {}
     for dname in ("A", "A-hintfree-depth630"):
@@ -70,6 +75,11 @@ def main(argv=None) -> int:
                                               "t.gkr_checker": meas_sc, "t.logup": logup_scaled,
                                               "share.sumcheck": meas_sc / total, "share.logup": logup_scaled / total,
                                               "share.modelled": 1 - (meas_sc + logup_scaled) / total}
+            total_e = base["t.total"] - model_gkr - model_logup + meas_sc + logup_device_est
+            g[f"estimate ({tag}, logUp device time)"] = {"overhead": contract.overhead(total_e / tx.B_TARGET, tx.K_TARGET), "t.total": total_e,
+                                                        "t.gkr_checker": meas_sc, "t.logup": logup_device_est,
+                                                        "note": f"logUp with the host launch overhead removed ({slope_ms:.2f} ms/round x {n_rounds} rounds, "
+                                                                "from the slope of the smallest levels): an ESTIMATE of what CUDA graphs / a C++ launcher would leave"}
         rows[dname] = g
     out = {"source": {"sumcheck_bench": str(a.sumcheck), "sumcheck_run_id": sc_run, "logup_bench": str(a.logup), "logup_run_id": lu_run,
                       "commit": sc.get("software", {}).get("commit")},
@@ -79,6 +89,7 @@ def main(argv=None) -> int:
            "logup": {"k": a.logup_k, "measured": lrec, "shape": {k: lu[k] for k in ("units", "lookups", "Nw", "Nt", "n")},
                      "model_leaves": model_leaves, "measured_leaves": meas_leaves, "leaf_scale": leaf_scale,
                      "seconds_per_batch_scaled": logup_scaled, "us_per_vu_scaled": logup_scaled * 1e6 / tx.B_TARGET,
+                     "launch_overhead_ms_per_round": slope_ms, "rounds": n_rounds, "seconds_per_batch_device_estimate": logup_device_est,
                      "launch_overhead_note": f"{tail_ms:.0f} ms of the {lrec['total_ms']:.0f} ms are the {lu['n'] - 7} smallest levels "
                                              "(host launch overhead of ~0.6 ms per round, not device work)"},
            "repriced": rows,
@@ -87,7 +98,8 @@ def main(argv=None) -> int:
                        "Fiat-Shamir host round trips (coins were independent of the transcript)"]}
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.with_suffix(".json").write_text(json.dumps(out, indent=1, default=str) + "\n")
-    print(f"logUp measured {logup_meas*1e3:.1f} ms x {leaf_scale:.3f} = {logup_scaled*1e3:.1f} ms per batch = {logup_scaled*1e6/tx.B_TARGET:.1f} us/VU")
+    print(f"logUp measured {logup_meas*1e3:.1f} ms x {leaf_scale:.3f} = {logup_scaled*1e3:.1f} ms per batch = {logup_scaled*1e6/tx.B_TARGET:.1f} us/VU; "
+          f"launch overhead {slope_ms:.2f} ms/round x {n_rounds} -> device estimate {logup_device_est*1e3:.1f} ms")
     for dname, g in rows.items():
         for label, v in g.items():
             print(f"{dname:22} {label:28} overhead {v['overhead']:.3g}  t.total {v['t.total']:.3f} s  sumcheck {v['t.gkr_checker']*1e3:.0f} ms  logUp {v['t.logup']*1e3:.0f} ms")
