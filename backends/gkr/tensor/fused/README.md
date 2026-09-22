@@ -23,6 +23,22 @@ degree-3 round polynomial at 4 points, write the folded tables -- nothing else t
 | logUp, ext input | 374 us | **600 us** (629 GB/s, 1.62x) | not built | modelled |
 | 6-layer / 130-round checker model | 3.67 ms | **6.20 ms** graphed | 8.48 ms | 91.4 ms graphed |
 
+**A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6 cu124, Triton 3.2; runs `r20260922-064953-f9bb` (checker,
+25 tests bit-exact on CUDA) and `r20260922-071602-522d` (logUp); floors at the A100's measured copy bandwidth 1,754 GB/s;
+full table `backends/numerical/reports/anchor_a100.md`):
+
+| round (A100) | HBM floor | SIMT fused | TC fused | vs 4090 (SIMT) |
+|---|---|---|---|---|
+| checker, ext input, 2^21 | 129 us | **474 us** (478 GB/s, 3.7x floor; SIMT model 0.62 of the A100 INT32 peak) | 1,569 us | 0.58x |
+| checker, base input, 2^22 | 115 us | 607 us (332 GB/s) | -- | 0.42x |
+| logUp, ext input, 2^21 | 215 us | **1,469 us** (257 GB/s) | not built | 0.41x |
+| 6-layer / 130-round checker model | 2.11 ms | **12.35 ms** graphed (13.40 eager; tail 32 us/round graphed) | 20.85 ms | 0.50x |
+
+On the A100 the fused round is **not** HBM-bound: it runs at 0.27 of the card's HBM floor and ~0.6 of its INT32 peak (the A100
+has 108 SMs x 64 INT32 lanes at 1.41 GHz = 9.7 T op/s, 0.47x the 4090's 20.6 T), so it lands at 0.5-0.6x the 4090 where
+the bandwidth ratio would have predicted 2.0x.  Karatsuba / fewer Montgomery reductions (recommendation 4's "not needed
+while memory-bound") is the lever on the anchor; the TC variant loses by 3.3x there.
+
 SIMT wins.  The checker round is HBM-bound on this card: the SIMT arithmetic (0.5 of INT32 peak) hides under the memory
 time and the kernel runs at 0.94-0.98 of the achievable copy bandwidth.  Tensor cores cannot shorten a memory-bound round,
 and the MMA layout conversions plus the occupancy the int8 tiles cost make the TC variant 1.8-2.2x slower.  The logUp
