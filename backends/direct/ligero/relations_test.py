@@ -109,7 +109,8 @@ def test_params_come_from_the_model():
     assert not r.params.lossy and r.k == 16 and r.steps == 96 and r.y_bits == 16 and r.tag == b""
     r = RELATIONS["fp8-hopper"]
     assert (r.params.groups, r.params.width, r.params.floor, r.params.sig, r.params.op_exp) == ((32,), 14, -139, 4, 4)
-    assert r.params.lossy and r.k == 32 and r.steps == 48 and r.y_bits == 22 and r.tag == b"|rel=fp8-hopper|v1"
+    # FP8Params are adder-side (acc_sig == width == 14: the FP32 significand truncated by ``rescale`` = 10 bits first)
+    assert r.params.rescale == 10 and r.k == 32 and r.steps == 48 and r.y_bits == 22 and r.tag == b"|rel=fp8-hopper|v1"
     assert RELATIONS["fp8-ada"].params.groups == (16, 16)
 
 

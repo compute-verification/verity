@@ -10,6 +10,7 @@ from __future__ import annotations
 import torch
 from verity_numerical.checker.params import Params
 
+from . import wide as wide_mod
 from .compile import System
 
 __all__ = ["hints_torch"]
@@ -171,6 +172,23 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device) -> torch.Tensor:
         H[f"{tag}.norm.clamp"] = clamp
         H[f"{tag}.norm.M"] = Mn
         H[f"{tag}.norm.r"] = rn
+        if tag in sys.wide:                                            # wide.py: partial signs, limbs, carries
+            HM = 2**wide_mod.H - 1
+            signed_terms = torch.cat([((1 - 2 * s_st) * q_acc)[:, None], (1 - 2 * s_p[:, sl_]) * aligned], dim=1)
+            SL = torch.zeros_like(S)
+            SH = torch.zeros_like(S)
+            for kidx, idx in enumerate(sys.wide[tag]):
+                A = signed_terms[:, idx].sum(dim=1)
+                sk = (A < 0).to(torch.int64)
+                H[f"{tag}.sum.part[{kidx}].sgn"] = sk
+                vk = A.abs()
+                SL = SL + (1 - 2 * sk) * (vk & HM)
+                SH = SH + (1 - 2 * sk) * (vk >> wide_mod.H)
+            vl, vh = v & HM, v >> wide_mod.H
+            H[f"{tag}.sum.vl"], H[f"{tag}.sum.vh"] = vl, vh
+            H[f"{tag}.sum.carry"] = (SL - (1 - 2 * sgn) * vl) >> wide_mod.H
+            mul, div = torch.ones_like(kk) << kpos, torch.ones_like(kk) << kneg
+            H[f"{tag}.norm.carry"] = (div * (Mn & HM) + rn - mul * vl) >> wide_mod.H
         # StateOut
         zo = (Mn == 0).to(torch.int64)
         ovf = (e1 > p.e_max).to(torch.int64)

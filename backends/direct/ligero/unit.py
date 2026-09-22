@@ -34,6 +34,7 @@ from verity_numerical.checker.params import REAL, Params
 from verity_numerical.checker.tables import norm_table
 
 from .compile import LigeroCtx, System
+from .wide import needs_wide, wide_group, wide_hints
 
 __all__ = ["HINT_NAMES", "PIN_NAMES", "PUB_NAMES", "compile_unit", "flatten_hints", "public_vectors"]
 
@@ -51,11 +52,17 @@ def compile_unit(p: Params = REAL, chain: bool = False) -> System:
     (``c_in[j+1] = c_out[j]``, ``c_in = 0`` at a chain start, ``y16 = public`` at a chain end)."""
     ctx = LigeroCtx(p)
     k = _k(p)
+    wide = needs_wide(p)
     W_, U_ = p.acc_bits, 2 * p.sig
     ctx.whitelist_product("align_state", "lt_pow(q, pow, W) gives q < 2^(W - min(d, W)), so q * pow < 2^W", 0, 2**W_)
     ctx.whitelist_product("align_prod", "lt_pow(q, sr, 2 sig) gives q < 2^(2 sig) / sr, so q * sr < 2^(2 sig)", 0, 2**U_)
-    ctx.whitelist_product("norm", "driver-added checks v < 2^min(s_bits, acc_sig - k) and M < 2^min(acc_sig, s_bits + k) "
-                          "bound v * mul < 2^acc_sig and div * M < 2^s_bits", 0, 2 ** max(p.s_bits, p.acc_sig))
+    if wide:
+        ctx.whitelist_product("norm", "per-limb checks vh < 2^max(B - 16, 0), vl < 2^min(B, 16) with B = min(s_bits, acc_sig - k) "
+                              "give v < 2^B, so mul * v < 2^acc_sig (mul = 2^k for k > 0, else 1) and each of "
+                              "mul * vl, mul * vh is below it", 0, 2**p.acc_sig)
+    else:
+        ctx.whitelist_product("norm", "driver-added checks v < 2^min(s_bits, acc_sig - k) and M < 2^min(acc_sig, s_bits + k) "
+                              "bound v * mul < 2^acc_sig and div * M < 2^s_bits", 0, 2 ** max(p.s_bits, p.acc_sig))
 
     # --- the accumulator: pinned decode (unit) or in-field decode of hint components (chain) ------------------------
     ctx.scope = "x"
@@ -119,28 +126,31 @@ def compile_unit(p: Params = REAL, chain: bool = False) -> System:
             hq = ctx.hints(f"{tag}.prod_align[{i}]", ["q", "r"])
             q_prods.append(AlignProduct.check(ctx, p, u, d, hq, f"{tag}.align_prod[{i}]"))
 
-        ctx.scope = f"{tag}.sum"
         terms = [(state[0], q_acc)] + [(s, q) for (_, s, _), q in zip(group, q_prods)]
-        sgn, v = SignedSum.check(ctx, p, terms, ctx.hints(f"{tag}.sum", ["sgn", "z"]), f"{tag}.sum")
+        if wide:
+            sgn, e1_, M = wide_group(ctx, p, tag, terms, E)
+        else:
+            ctx.scope = f"{tag}.sum"
+            sgn, v = SignedSum.check(ctx, p, terms, ctx.hints(f"{tag}.sum", ["sgn", "z"]), f"{tag}.sum")
 
-        ctx.scope = f"{tag}.lead"
-        l = LeadingBit.check(ctx, p, v, ctx.hints(f"{tag}.lead", ["l"]), f"{tag}.lead")
+            ctx.scope = f"{tag}.lead"
+            l = LeadingBit.check(ctx, p, v, ctx.hints(f"{tag}.lead", ["l"]), f"{tag}.lead")
 
-        ctx.scope = f"{tag}.norm"
-        hn = ctx.hints(f"{tag}.norm", ["clamp", "M", "r"])
-        # The two theorem checks (the products' integer bounds); the lookup is memoised and reused by Normalise.check.
-        ctx.boolean(f"{tag}.norm.clamp", hn["clamp"])
-        ctx.rng(f"{tag}.norm.M", hn["M"], 0, 2**p.acc_sig)
-        e_raw = E + l - p.width
-        e1 = e_raw + hn["clamp"] * (p.e_min - e_raw)
-        kk = E - e1 + p.acc_sig - p.width
-        mul, _div, _idiv = ctx.lookup(f"{tag}.norm.norm", norm_table(p), kk)
-        # derived columns: vbound(k) = 2^min(s_bits, acc_sig - k), mbound(k) = 2^min(acc_sig, s_bits + k)
-        vbound = ctx.table_by_key(mul, lambda kv: 2 ** min(p.s_bits, p.acc_sig - kv))
-        mbound = ctx.table_by_key(mul, lambda kv: 2 ** min(p.acc_sig, p.s_bits + kv))
-        ctx.lt_table(f"{tag}.norm.vbound", v, vbound, p.s_bits)
-        ctx.lt_table(f"{tag}.norm.mbound", hn["M"], mbound, p.acc_sig)
-        e1_, M = Normalise.check(ctx, p, E, l, v, hn, f"{tag}.norm")
+            ctx.scope = f"{tag}.norm"
+            hn = ctx.hints(f"{tag}.norm", ["clamp", "M", "r"])
+            # The two theorem checks (the products' integer bounds); the lookup is memoised and reused by Normalise.check.
+            ctx.boolean(f"{tag}.norm.clamp", hn["clamp"])
+            ctx.rng(f"{tag}.norm.M", hn["M"], 0, 2**p.acc_sig)
+            e_raw = E + l - p.width
+            e1 = e_raw + hn["clamp"] * (p.e_min - e_raw)
+            kk = E - e1 + p.acc_sig - p.width
+            mul, _div, _idiv = ctx.lookup(f"{tag}.norm.norm", norm_table(p), kk)
+            # derived columns: vbound(k) = 2^min(s_bits, acc_sig - k), mbound(k) = 2^min(acc_sig, s_bits + k)
+            vbound = ctx.table_by_key(mul, lambda kv: 2 ** min(p.s_bits, p.acc_sig - kv))
+            mbound = ctx.table_by_key(mul, lambda kv: 2 ** min(p.acc_sig, p.s_bits + kv))
+            ctx.lt_table(f"{tag}.norm.vbound", v, vbound, p.s_bits)
+            ctx.lt_table(f"{tag}.norm.mbound", hn["M"], mbound, p.acc_sig)
+            e1_, M = Normalise.check(ctx, p, E, l, v, hn, f"{tag}.norm")
 
         ctx.scope = f"{tag}.out"
         s_out, e_out, M_out, ovf_eff, z = StateOut.check(ctx, p, sgn, e1_, M, ctx.hints(f"{tag}.out", ["z", "ovf"]), f"{tag}.out")
@@ -199,10 +209,50 @@ def compile_unit(p: Params = REAL, chain: bool = False) -> System:
 # Hints and public vectors
 # ---------------------------------------------------------------------------------------------------------------------
 
-def flatten_hints(p: Params, h: dict, y: int | None = None) -> dict[str, int]:
-    """``gen_step``'s hint dict under the row names ``compile_unit`` uses.  ``y`` (the unit's output word) adds the
-    chain mode's rows: the accumulator components and the epilogue's hints (``Epilogue.gen`` on ``y``)."""
+def _wide_replay(p: Params, c: int, a: list[int], b: list[int], wide: dict) -> dict[str, int]:
+    """The wide groups' extra hint rows (``wide.wide_hints``) by replaying ``gen_step``'s gadget sequence on
+    integers (the same ``check`` calls, so the same ``terms``, ``v``, ``M``, ``r``, ``k`` the checker forms)."""
+    ctx = IntCtx()
+    k = _k(p)
+    s_c, e_c, M_c = Fp32Decode.check(ctx, p, c, Fp32Decode.gen(p, c))
+    dec_a = [Bf16Decode.check(ctx, p, w, Bf16Decode.gen(p, w)) for w in a[:k]]
+    dec_b = [Bf16Decode.check(ctx, p, w, Bf16Decode.gen(p, w)) for w in b[:k]]
+    prods = [Product.check(ctx, p, da, db, Product.gen(p, da[1], db[1])) for da, db in zip(dec_a, dec_b)]
+    state = (s_c, e_c, M_c)
     out: dict[str, int] = {}
+    start = 0
+    for g, size in enumerate(p.groups):
+        group = prods[start:start + size]
+        start += size
+        cands = [state[1]] + [e for _, _, e in group]
+        E, ds = GroupMax.check(ctx, p, cands, GroupMax.gen(p, cands))
+        q_acc = AlignState.check(ctx, p, state[2], ds[0], AlignState.gen(p, state[2], ds[0]))
+        q_prods = [AlignProduct.check(ctx, p, u, d, AlignProduct.gen(p, u, d)) for (u, _, _), d in zip(group, ds[1:])]
+        terms = [(state[0], q_acc)] + [(s, q) for (_, s, _), q in zip(group, q_prods)]
+        sgn, v = SignedSum.check(ctx, p, terms, SignedSum.gen(p, terms))
+        l = LeadingBit.check(ctx, p, v, LeadingBit.gen(p, v))
+        hn = Normalise.gen(p, E, l, v)
+        e1, M = Normalise.check(ctx, p, E, l, v, hn)
+        tag = f"g{g}"
+        if tag in wide:
+            kk = p.norm_k(E, e1)
+            for n, val in wide_hints(p, wide[tag], terms, v, hn["M"], hn["r"], kk).items():
+                out[f"{tag}.{n}"] = val
+        s_out, e_out, M_out, _ovf, _z = StateOut.check(ctx, p, sgn, e1, M, StateOut.gen(p, e1, M))
+        state = (s_out, e_out, M_out)
+    return out
+
+
+def flatten_hints(p: Params, h: dict, y: int | None = None, wide: dict | None = None,
+                  unit: tuple | None = None) -> dict[str, int]:
+    """``gen_step``'s hint dict under the row names ``compile_unit`` uses.  ``y`` (the unit's output word) adds the
+    chain mode's rows: the accumulator components and the epilogue's hints (``Epilogue.gen`` on ``y``).  ``wide``
+    (``System.wide``) with the unit's words ``unit = (c, a, b)`` adds the wide groups' rows (``wide.py``)."""
+    out: dict[str, int] = {}
+    if wide:
+        if unit is None:
+            raise ValueError("wide groups need the unit's words (c, a, b) for their hints")
+        out.update(_wide_replay(p, *unit, wide))
     if y is not None:
         for n in ("s", "t", "f", "nz", "z"):
             out[f"acc.{n}"] = h["acc"][n]
