@@ -1054,7 +1054,6 @@ where
 // ---------------------------------------------------------------------------------------------------------------
 
 use verity_direct::air_v2::{self, V2ChainAir};
-use verity_direct::statement::Statement;
 
 fn ext_arg(args: &[String]) -> usize {
     arg(args, "--ext").map(|s| s.parse().unwrap()).unwrap_or(4)
@@ -1248,6 +1247,7 @@ where
         depth: trips as usize,
         slept,
         t_prove_wall,
+        binding: binding_json(false, bind_operands, "vu.y16 (claim column of the v2 main matrix, round 1)", 1, rows, B::challenge_bits(), &["(v2 domain tag verity-direct/chain-air-v2/statement/v1; tables bound by the verifier's recomputed preprocessed commitment)"]),
     });
 }
 
