@@ -52,6 +52,9 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+_VERITY_SRC = HERE.parents[1] / "packages" / "verity" / "src"  # the bf16 comparison imports verity.ml.tc.silicon from the shipped tree
+if _VERITY_SRC.is_dir() and str(_VERITY_SRC) not in sys.path:
+    sys.path.insert(0, str(_VERITY_SRC))
 import model5  # noqa: E402
 
 MAX_TILES_PER_CALL = 1 << 14
@@ -406,12 +409,17 @@ def _init(instr: str, group: int):
     _CTX["instr"] = instr
     _CTX["group"] = group
     if instr == "bf16":
-        from verity.ml.tc import silicon as S
-        _CTX["pipes"] = {"ampere_bf16_m16n8k16": S.AMPERE_BF16_M16N8K16, "hopper_bf16_m16n8k16": S.HOPPER_BF16_M16N8K16}
-        _CTX["tc_dot"] = S.tc_dot
+        try:
+            from verity.ml.tc import silicon as S
+            _CTX["pipes"] = {"ampere_bf16_m16n8k16": S.AMPERE_BF16_M16N8K16, "hopper_bf16_m16n8k16": S.HOPPER_BF16_M16N8K16}
+            _CTX["tc_dot"] = S.tc_dot
+        except Exception as e:  # noqa: BLE001 - a failing initializer would make the pool respawn workers forever; fail the chunk instead
+            _CTX["init_error"] = repr(e)
 
 
 def _eval_chunk(args):
+    if "init_error" in _CTX:
+        raise RuntimeError(f"model worker failed to initialize: {_CTX['init_error']}")
     A, Bt, SFA, SFB, C = args
     n = A.shape[0]
     instr = _CTX["instr"]
