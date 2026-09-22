@@ -107,6 +107,118 @@ extern "C" __global__ void combine_quadratic_fc(const u32* __restrict__ H_in, co
 """
 
 
+_INVERSE_BLOCKED = bk._INVERSE + r"""
+#define G %(g)d
+/* Blocked Montgomery trick (b-v2): thread t owns d[s T + t] (s < m) as before, but stores one prefix per GROUP of G
+   consecutive s instead of one per element.  Forward: running product over the group, prefix_g[q T + t] = product of
+   everything up to the end of group q.  Backward: the group's G elements are re-read into registers, the within-group
+   prefixes recomputed (G - 1 extra F_c products per group), then out[s] = prefix(s - 1) * inv, inv *= d[s] as before.
+   Traffic (3 + 2/G) x 24 N bytes instead of 5 x 24 N; F_c products ~ (4 - 1/G) per element instead of 3. */
+extern "C" __global__ void batch_inverse_blocked(const u32* __restrict__ d, u32* __restrict__ prefix_g, u32* __restrict__ out,
+                                                 long long N, int m, const u32* __restrict__ exp_words, int nbits, u32 one_mont)
+{
+    long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    long long T = (long long)gridDim.x * blockDim.x;
+    if (t >= T) return;
+    const int ngroups = (m + G - 1) / G;
+    const long long NG = (long long)ngroups * T;       /* prefix_g is (D, NG) */
+    u32 run[D], e[D], tmp[D];
+    #pragma unroll
+    for (int i = 0; i < D; ++i) run[i] = 0;
+    run[0] = one_mont;
+    for (int q = 0; q < ngroups; ++q) {
+        #pragma unroll
+        for (int gi = 0; gi < G; ++gi) {
+            long long idx = ((long long)q * G + gi) * T + t;
+            if (idx < N) {
+                #pragma unroll
+                for (int i = 0; i < D; ++i) e[i] = __ldg(&d[(size_t)i * N + idx]);
+                fc_mul(run, e, tmp);
+                #pragma unroll
+                for (int i = 0; i < D; ++i) run[i] = tmp[i];
+            }
+        }
+        #pragma unroll
+        for (int i = 0; i < D; ++i) prefix_g[(size_t)i * NG + (size_t)q * T + t] = run[i];
+    }
+    u32 inv[D];
+    fc_inv(run, inv, exp_words, nbits, one_mont);
+    for (int q = ngroups - 1; q >= 0; --q) {
+        u32 base[D], el[G][D], pf[G][D];
+        if (q == 0) {
+            #pragma unroll
+            for (int i = 0; i < D; ++i) base[i] = 0;
+            base[0] = one_mont;
+        } else {
+            #pragma unroll
+            for (int i = 0; i < D; ++i) base[i] = prefix_g[(size_t)i * NG + (size_t)(q - 1) * T + t];
+        }
+        /* recompute the within-group prefixes pf[gi] = base * e_0 ... e_gi (elements beyond N count as 1) */
+        #pragma unroll
+        for (int gi = 0; gi < G; ++gi) {
+            long long idx = ((long long)q * G + gi) * T + t;
+            const u32* prev = gi == 0 ? base : pf[gi - 1];
+            if (idx < N) {
+                #pragma unroll
+                for (int i = 0; i < D; ++i) el[gi][i] = __ldg(&d[(size_t)i * N + idx]);
+                fc_mul(prev, el[gi], pf[gi]);
+            } else {
+                #pragma unroll
+                for (int i = 0; i < D; ++i) { el[gi][i] = 0; pf[gi][i] = prev[i]; }
+                el[gi][0] = one_mont;
+            }
+        }
+        #pragma unroll
+        for (int gi = G - 1; gi >= 0; --gi) {
+            long long idx = ((long long)q * G + gi) * T + t;
+            if (idx < N) {
+                const u32* prev = gi == 0 ? base : pf[gi - 1];
+                fc_mul(prev, inv, tmp);
+                #pragma unroll
+                for (int i = 0; i < D; ++i) out[(size_t)i * N + idx] = tmp[i];
+                fc_mul(inv, el[gi], tmp);
+                #pragma unroll
+                for (int i = 0; i < D; ++i) inv[i] = tmp[i];
+            }
+        }
+    }
+}
+"""
+
+
+class BatchInverterBlocked:
+    """``BatchInverter`` with ``G`` elements per stored prefix (``_INVERSE_BLOCKED``); same interface and result."""
+
+    def __init__(self, g: int = 4, threads_total: int = 128 * 1024, block: int = 256):
+        import cupy as cp
+
+        self.cp, self.T, self.block, self.g = cp, threads_total, block, g
+        self.mod = cp.RawModule(code=_INVERSE_BLOCKED % {**bk._params(), "g": g}, options=("-std=c++17",))
+        self.kernel = self.mod.get_function("batch_inverse_blocked")
+        e = bb.P**D - 2
+        self.nbits = e.bit_length()
+        self.exp_words = cp.asarray(np.array([(e >> (32 * i)) & 0xFFFFFFFF for i in range(-(-self.nbits // 32))], dtype=np.uint32))
+        self.one_mont = np.uint32(bb.R_MOD_P)
+        self.scratch = None
+
+    def __call__(self, d_mont, out=None):
+        cp = self.cp
+        N = d_mont.shape[1]
+        m = -(-N // self.T)
+        ngroups = -(-m // self.g)
+        need = (D, max(ngroups * self.T, 1))
+        if self.scratch is None or self.scratch.shape != need:
+            self.scratch = cp.empty(need, dtype=cp.uint32)
+        if out is None:
+            out = cp.empty_like(d_mont)
+        self.kernel((self.T // self.block,), (self.block,), (d_mont, self.scratch, out, np.int64(N), np.int32(m), self.exp_words,
+                                                             np.int32(self.nbits), self.one_mont))
+        return out
+
+    def bytes_moved(self, N: int) -> int:
+        return int((3 + 2 / self.g) * D * N * 4)
+
+
 def fc_mul_np(a, b):
     from .lintest_structured import fc_mul_np as f
 
