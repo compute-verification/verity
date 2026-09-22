@@ -137,7 +137,8 @@ def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1) -
             "field": F.name, "t": cfg.t, "n": cfg.n, "k": cfg.k, "l": cfg.l, "rate": cfg.rate, "zk": cfg.zk, "t_pad": cfg.t_pad,
             "coin_commitment": _COMMIT_COINS,
             "privacy_terms_log2": ({"coin_commitment_binding_collision": acc.log2(acc.hash_collision_bound(256, 2**64)),
-                                    "mask_sampling_bias_per_symbol": -31.0} if _COMMIT_COINS else {}),
+                                    "mask_sampling_bias_per_symbol": "0 (rejection sampling; the simulator's distance is "
+                                                                      "ChaCha20's PRF advantage on the mask key)"} if _COMMIT_COINS else {}),
             "note": ("ZK: k = l + t_pad, every row carries t_pad > t uniform coefficients (Lemma 4.15)" if cfg.zk else
                      "k = l + 1 stands in for the non-ZK k = l (the accounting's validate() needs l < k)") + "; "
                     "the linear test here sends nothing (the verifier encodes beta itself), so its query term is "
@@ -381,7 +382,9 @@ class Proof:
 #     s_chain  uniform degree < k - 1          chain mask Z_H s_chain (sum over H = 0):  q_d = Q_d + Z_H s_chain_d
 # The verifier reconstructs every mask's contribution at the opened columns from the opened mask rows and the public
 # Z_H(eta_c), eta_c^k, so a dishonest mask is just another committed row (no unchecked degree of freedom).
-# Randomness: SHAKE-256 of a fresh os.urandom(32) seed, reduced mod p (statistical bias 2^-31 per symbol).
+# Randomness (8c): a ChaCha20 counter-mode stream on the device under a fresh 32-byte key, reduced to BabyBear by
+# rejection (u < 2p, then u mod p): exactly uniform given the stream (mask_sampler.py; the 8b sampler's direct
+# uint32 mod p had a statistical distance of ~0.11 per symbol).
 
 _MASK_KINDS = ("prox", "lin", "qa", "qb", "chain")
 
@@ -405,6 +408,32 @@ def n_rows(cfg: Config, m: int, chain: bool) -> int:
     return max([m] + [s.stop for s in mr.values()])
 
 
+USE_DEVICE_MASKS = True     # ChaCha20 counter-mode sampler on the device (mask_sampler.py); False = host SHAKE-256
+
+
+def _uniform_symbols(total: int, device) -> torch.Tensor:
+    """``total`` exactly uniform BabyBear symbols (int64 on ``device``), fresh randomness.  Device: ChaCha20 stream +
+    rejection (mask_sampler.py).  Host fallback: SHAKE-256 stream, the same rejection (u < 2p, then u mod p) -- the
+    8b sampler's direct ``u mod p`` had a 0.11 statistical distance per symbol (mask_sampler.py docstring)."""
+    import os
+    if USE_DEVICE_MASKS and str(device).startswith("cuda"):
+        from .mask_sampler import sampler_for
+        s = sampler_for(device)
+        if s is not None:
+            return s.uniform(total)[0]
+    key = os.urandom(32)
+    acc = []
+    got, ctr = 0, 0
+    while got < total:
+        raw = hashlib.shake_256(b"ligero-b/masks|v2|" + key + ctr.to_bytes(4, "little")).digest(4 * (total - got + (total - got) // 8 + 64))
+        u = np.frombuffer(raw, dtype="<u4").astype(np.int64)
+        u = u[u < 2 * P] % P
+        acc.append(u)
+        got += u.shape[0]
+        ctr += 1
+    return torch.from_numpy(np.concatenate(acc)[:total]).to(device)
+
+
 def _sample_masks(cfg: Config, m: int, chain: bool, device) -> dict[str, torch.Tensor]:
     """Fresh uniform mask coefficients: ``W`` (m, t_pad) per witness row and one (D, deg) block per mask kind."""
     D, k, tp = cfg.D, cfg.k, cfg.t_pad
@@ -412,9 +441,7 @@ def _sample_masks(cfg: Config, m: int, chain: bool, device) -> dict[str, torch.T
     if chain:
         shapes["chain"] = (D, k - 1)
     total = sum(a * b for a, b in shapes.values())
-    import os
-    raw = hashlib.shake_256(b"ligero-b/masks|" + os.urandom(32)).digest(4 * total)
-    flat = torch.from_numpy(np.frombuffer(raw, dtype="<u4").astype(np.int64) % P).to(device)
+    flat = _uniform_symbols(total, device)
     out, at = {}, 0
     for name, (a, b) in shapes.items():
         out[name] = flat[at:at + a * b].reshape(a, b)

@@ -208,6 +208,16 @@ def main(argv=None) -> int:
     real = [_vu_data(vu, i) for i in range(args.vus)]
     trivial = [([0] * (STEP * STEPS), [0] * (STEP * STEPS), [0] * STEPS, 0)] * args.vus
     report = {}
+    if args.device.startswith("cuda"):
+        from .mask_sampler import sampler_for
+        smp = sampler_for(args.device)
+        if smp is not None:
+            sym, key = smp.uniform(1_000_000)
+            report["mask_sampler"] = {"kernel_bit_exact_vs_rfc8439_reference": smp.check(),
+                                      "symbols_in_field": bool(((sym >= 0) & (sym < P)).all()),
+                                      "uniform_chi2_p": _chi2_uniform(sym.cpu().numpy())[1],
+                                      "host_reference_prefix_equal": bool((sym[:2048].cpu().numpy() == __import__("backends.direct.ligero.mask_sampler", fromlist=["uniform_host"]).uniform_host(2048, key)).all())}
+            print("mask sampler (ChaCha20 device, rejection):", report["mask_sampler"])
     for zk in (False, True):
         R = ChainRunner(args.device, -128.0, zk=zk)
         pr, pubs_r, lay = R.prove_vus(real, check=False)
@@ -269,7 +279,8 @@ def main(argv=None) -> int:
     verdict = (zk["opened_uniform"]["p"] > 0.001 and all(v["p"] > 0.001 for v in zk["real_vs_simulated"].values())
                and zk["payload"]["constant_rows_opened_in_the_clear"] == 0
                and zk["payload"]["opened_values_equal_to_own_payload"] < 20 * (1 + zk["payload"]["expected_if_uniform"])
-               and report["malicious_verifier"]["verdict"] == "PASS")
+               and report["malicious_verifier"]["verdict"] == "PASS"
+               and all(v is True or (isinstance(v, float) and v > 0.001) for v in report.get("mask_sampler", {}).values()))
     report["verdict"] = "PASS" if verdict else "FAIL"
     print("verdict:", report["verdict"])
     if args.out:
