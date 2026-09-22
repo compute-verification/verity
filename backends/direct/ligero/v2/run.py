@@ -267,11 +267,14 @@ def cmd_bench(a):
     sysm = build_system(REAL)
     pos = instances.load("vu-k1536", root)
     cfg = pr.config_for(a.l, steps=STEPS, n_vus=a.vus)
-    lay = sysm.layout(a.l)
-    log(f"l={cfg.l} n={cfg.n} t={cfg.t} n_vus={cfg.n_vus} m1={lay.m1} m2={lay.m2} m={lay.m} "
-        f"committed {lay.m * cfg.n * 4 / 2**30:.2f} GiB (int32) / {lay.m * cfg.n * 8 / 2**30:.2f} GiB (int64 as run)")
     total = a.total_vus or cfg.n_vus
     n_sub = -(-total // cfg.n_vus)
+    if a.union_target:
+        # the union bound over the N_subbatches proofs of one batch stays at 2^-128: each proof targets 2^-(128 + log2 N)
+        cfg = pr.config_for(a.l, target_log2=-128.0 - float(np.log2(n_sub)), steps=STEPS, n_vus=cfg.n_vus)
+    lay = sysm.layout(a.l)
+    log(f"l={cfg.l} n={cfg.n} t={cfg.t} n_vus={cfg.n_vus} N_subbatches={n_sub} m1={lay.m1} m2={lay.m2} m={lay.m} "
+        f"committed {lay.m * cfg.n * 4 / 2**30:.2f} GiB (int32) / {lay.m * cfg.n * 8 / 2**30:.2f} GiB (int64 as run)")
     results = []
     all_ids = [(i % pos.n) for i in range(n_sub * cfg.n_vus)]
     for s in range(n_sub if a.all_subbatches else min(n_sub, a.reps)):
@@ -352,6 +355,8 @@ def main(argv=None):
     b.add_argument("--all-subbatches", action="store_true")
     b.add_argument("--no-check", action="store_true")
     b.add_argument("--no-acc-check", action="store_true")
+    b.add_argument("--no-union-target", dest="union_target", action="store_false",
+                   help="keep t at the per-proof 2^-128 (default: per-proof 2^-(128 + log2 N_subbatches))")
     b.add_argument("--procs", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     b.add_argument("--out", default="backends/direct/ligero/v2/results/bench.json")
     b.set_defaults(fn=cmd_bench)
