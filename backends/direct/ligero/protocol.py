@@ -5,15 +5,18 @@ the transcript (``Proof``) and the compiled ``System`` (public: a function of ``
                                                    randomness of both of its coins BEFORE the prover's first message
     P -> V   root                          Merkle root of the codeword columns of U = Enc(W)
     V -> P   (r1, s1)                      opening of coin slot 1; P checks c1 and aborts on mismatch
-             r, rho_lin, rho_quad          D independent BabyBear combinations each: H(stmt, c1, c2, root, r1)
+             r, rho_lin, rho_quad          D independent BabyBear combinations each: SHAKE(H(stmt, c1, c2, r1))
     P -> V   w = r W  (D x l),  h  (D x (l-1))   proximity message; quotient of the batched quadratic test by Z_H
     V -> P   (r2, s2)                      opening of coin slot 2; P checks c2
-             cols                          t column indices: H(stmt, c1, c2, root, w, h, q, v, r2)
+             cols                          t column indices: H(stmt, c1, c2, r2)
     P -> V   U[:, cols], Merkle paths
 
-Three verifier messages on the critical path (c, r1, r2): ``rounds.sequential_depth = 3`` (PROTOCOL.md 8c).  In the
-non-interactive (Fiat-Shamir) reading the prover plays the verifier's step 0 itself (``Coins.sample``) and the
-transcript carries the commitments and the openings; the verifier recomputes ``c_i = H(r_i || s_i)``.
+Three verifier messages on the critical path (c, r1, r2): ``rounds.sequential_depth = 3`` (PROTOCOL.md 8c).  The
+challenges are functions of the verifier's coins alone (no prover message enters them: lane b-zk-fix, red team F2).
+``Config.mode = "fiat-shamir"`` is the OTHER protocol: no step 0, challenges ``H(stmt, root)`` and
+``H(stmt, root, w, h, q, v)``, transcript without coins, soundness under the ``q x eps`` rule (``soundness``); the
+two modes are mutually exclusive (``prove`` / ``verify`` reject the other mode's coin usage; the statement digest
+binds the mode).
 
 Verifier: (i) Enc(w)[cols] = r U[cols]; (ii) Enc(beta)[cols] = alpha U[cols] with alpha = sum rho_lin,q a_q,
 beta = sum rho_lin,q (pub_q - c_q) -- the linear constraints, whose right-hand sides are public, so nothing is sent;
@@ -48,7 +51,8 @@ from .field import (
 from .unit import public_vectors
 from .witness import Tables, build_witness, quad_p0
 
-__all__ = ["CoinOpeningError", "Coins", "Config", "Proof", "coin_commit", "config_for", "prove", "soundness", "verify"]
+__all__ = ["MODES", "MODE_FIAT_SHAMIR", "MODE_INTERACTIVE", "CoinOpeningError", "Coins", "Config", "Proof", "coin_commit",
+           "config_for", "prove", "soundness", "verify"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -64,6 +68,11 @@ class Config:
     target_log2: float
     zk: bool = False       # HVZK masking (PROTOCOL.md section 8b as implemented): t_pad random symbols per row
     t_pad: int = 0         # k = l + t_pad; Lemma 4.15 needs t_pad > t
+    mode: str = "interactive"   # "interactive" (8c: verifier coins, challenges from the coins alone) | "fiat-shamir"
+
+    @property
+    def interactive(self) -> bool:
+        return self.mode == MODE_INTERACTIVE
 
     @property
     def rate(self) -> float:
@@ -86,42 +95,80 @@ class Config:
 
 
 ZK_T_PAD = 256      # random symbols per row under ZK (>= t + 1 at every configuration used; asserted in config_for)
+FS_ZK_T_PAD = 512   # Fiat-Shamir mode: t ~ 288 at 2^-128 no longer fits 256 (red team F3 / ZK_CONSTRUCTION.md 3.3)
+
+MODE_INTERACTIVE = "interactive"
+MODE_FIAT_SHAMIR = "fiat-shamir"
+MODES = (MODE_INTERACTIVE, MODE_FIAT_SHAMIR)
+
+# Fiat-Shamir soundness rule of the campaign (ZK_CONSTRUCTION.md 3.3, zk_cost.fiat_shamir_reparameterisation): the
+# generic state-restoration bound eps_FS <= q x eps_round with q = 2^60 hash queries.  Every statistical term of the
+# interactive protocol is multiplied by 2^60 in ``soundness``; ``config_for`` picks t (and the extension degree D)
+# so that the union over the sub-batches still meets the target.
+FS_QUERIES_LOG2 = 60
+
+
+def _field_terms_ok(D: int, n: int, k: int, l: int, t: int, per_proof: float, zk: bool, shift_log2: int) -> bool:
+    """Appendix-C query terms (with the k that sized t) + field terms (n + 3) / p^D, times 2^shift, vs the target."""
+    e = (n - k) // 2
+    query = Fraction(n - e, n) ** t + Fraction(k + l, n) ** t + Fraction(2 * k, n) ** t
+    field = Fraction(n + 3, P ** D)
+    return acc.log2((query + field) * Fraction(2) ** shift_log2) <= per_proof
 
 
 def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs: int = 1, zk: bool = False,
-               t_pad: int = ZK_T_PAD) -> Config:
+               t_pad: int | None = None, mode: str = MODE_INTERACTIVE) -> Config:
     """t from Appendix C with k = l (no ZK padding) or k = l + t_pad (ZK: the padding is t_pad random *coefficients*
     of Z_H(x) s(x), so k need not be a power of two and n stays l << rate_log2 -- section 8b's "n = 32768" was the
     cost of rounding k to a power of two, which the coefficient form avoids) and the extension degree from
     ``security.accounting``: BabyBear^6 for 2^-128, BabyBear^4 for 2^-80 (the sensitivity point).  ``n_proofs > 1``:
     the batch is proved as that many independently committed sub-batches, so each proof gets
     ``accounting.per_proof_target`` (the union bound over the sub-batches meets ``target_log2``); ``t`` grows by
-    ~log2(n_proofs) / 0.68 columns."""
+    ~log2(n_proofs) / 0.68 columns.
+
+    ``mode``: ``interactive`` (statistical bound, live verifier coins) or ``fiat-shamir`` (the per-proof target is
+    shifted by ``FS_QUERIES_LOG2``: more opened columns, ``t_pad = 512`` under ZK so Lemma 4.15 still holds, and the
+    smallest extension degree whose field terms survive the 2^60 factor -- D = 7 at 2^-128)."""
+    if mode not in MODES:
+        raise ValueError(f"mode must be one of {MODES}")
+    fs = mode == MODE_FIAT_SHAMIR
+    if t_pad is None:
+        t_pad = FS_ZK_T_PAD if fs else ZK_T_PAD
     n = l << rate_log2
     per_proof = acc.per_proof_target(target_log2, n_proofs) if n_proofs > 1 else target_log2
+    shift = FS_QUERIES_LOG2 if fs else 0
+    query_target = per_proof - shift
     k = l + (t_pad if zk else 0)
     while n <= 2 * k:                     # small-l ZK configurations (l <= t_pad): the quadratic test needs n > 2k
         n *= 2
-    t = acc.ligero_queries_for(per_proof, n, k, l)
+    t = acc.ligero_queries_for(query_target, n, k, l)
     while zk and not k > l + t:           # small l: the padding lowers the rate; double n until Lemma 4.15 holds
         n *= 2
-        t = acc.ligero_queries_for(per_proof, n, k, l)
-    # field terms: (n + 1 + L + Q) / p^D must stay well under the target; D = 6 at -128, 4 at -80
+        t = acc.ligero_queries_for(query_target, n, k, l)
+    # field terms: (n + 1 + 2) / p^D must stay under the (shifted) target; D = 6 at -128 interactive, 7 Fiat-Shamir
     D = 6 if target_log2 <= -100 else 4
-    return Config(l, n, D, t, target_log2, zk, t_pad if zk else 0)
+    while not _field_terms_ok(D, n, k, l, t, per_proof, zk, shift):
+        D += 1
+        if D > 12:
+            raise acc.AccountingError("no extension degree <= 12 meets the target")
+    return Config(l, n, D, t, target_log2, zk, t_pad if zk else 0, mode)
 
 
 def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1) -> dict:
     """The error terms actually achieved (Appendix C, e = (n - k) / 2, uniform combinations); with ``n_proofs``
-    sub-batches the reported total is ``accounting.union_over_proofs`` (never the per-proof error)."""
+    sub-batches the reported total is ``accounting.union_over_proofs`` (never the per-proof error).  Fiat-Shamir
+    mode: every statistical term is multiplied by 2^FS_QUERIES_LOG2 (the campaign's ``q x eps`` rule) and no coin
+    term is booked (there is no step 0)."""
     F = acc.Field.prime("BabyBear", P).extension(cfg.D)
     k = cfg.k if cfg.zk else cfg.l + 1                                        # k = l + 1: validate needs l < k
     p = acc.LigeroParams(n=cfg.n, k=k, l=cfg.l, t=cfg.t, zk=cfg.zk)
     terms = acc.ligero_error(p, acc.Field.prime("BabyBear", P), F, combination="uniform")
-    bud = acc.Budget("B-Ligero direct (backends/direct/ligero)", {"n": cfg.n, "k": k, "l": cfg.l, "t": cfg.t, "D": cfg.D})
-    for k, v in terms.items():
-        bud.add("encoding_opening", f"Ligero {k}", v)
-    if _COMMIT_COINS:
+    fs_factor = Fraction(2) ** FS_QUERIES_LOG2 if not cfg.interactive else Fraction(1)
+    terms = {name: v * fs_factor for name, v in terms.items()}
+    bud = acc.Budget("B-Ligero direct (backends/direct/ligero)", {"n": cfg.n, "k": k, "l": cfg.l, "t": cfg.t, "D": cfg.D, "mode": cfg.mode})
+    for name, v in terms.items():
+        bud.add("encoding_opening", f"Ligero {name}" + (f" x 2^{FS_QUERIES_LOG2} (Fiat-Shamir)" if not cfg.interactive else ""), v)
+    if cfg.interactive:
         # step 0 (8c): the prover must not learn r_i from c_i = H(r_i || s_i).  Random-oracle hiding: q 2^-|r| with
         # q = 2^64 hash queries and |r| = 256 bits -> 2^-192 per slot (the salt is not even counted), two slots.
         # Binding (a second opening = a collision of H, 2^-128 generic) protects the PROVER's privacy, not soundness,
@@ -131,19 +178,33 @@ def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1) -
         bud.add("commitment_hash", "HM96 step-0 coin commitments: hiding vs the prover, 2 slots x q 2^-256 (q = 2^64)", hide)
     per_proof_total = bud.total()
     union = acc.union_over_proofs(bud, n_proofs) if n_proofs > 1 else bud
-    return {"terms_log2": {k: acc.log2(v) for k, v in terms.items()}, "per_proof_total_log2": acc.log2(per_proof_total),
+    return {"terms_log2": {name: acc.log2(v) for name, v in terms.items()}, "per_proof_total_log2": acc.log2(per_proof_total),
             "n_proofs": n_proofs, "total_log2": acc.log2(union.total()),
             "per_proof_target_log2": acc.per_proof_target(cfg.target_log2, n_proofs) if n_proofs > 1 else cfg.target_log2,
             "field": F.name, "t": cfg.t, "n": cfg.n, "k": cfg.k, "l": cfg.l, "rate": cfg.rate, "zk": cfg.zk, "t_pad": cfg.t_pad,
-            "coin_commitment": _COMMIT_COINS,
+            "mode": cfg.mode, "coin_commitment": cfg.interactive,
+            "fiat_shamir_queries_log2": None if cfg.interactive else FS_QUERIES_LOG2,
+            "bound_model": ("interactive: statistical, live verifier coins committed at step 0 (HM96); no Fiat-Shamir loss"
+                            if cfg.interactive else
+                            f"non-interactive: eps_FS <= 2^{FS_QUERIES_LOG2} x eps_round (BCS16 state restoration; "
+                            "ZK_CONSTRUCTION.md 3.3); challenges = H(statement, transcript prefix)"),
+            "hash_assumption": ("collision resistance of Blake2b (coin commitments) + Blake3 (Merkle); the challenge "
+                                "expander is a PRG of the verifier's coins" if cfg.interactive else
+                                "random oracle for the challenge hash (soundness AND zero knowledge)"),
+            "zk_statement": ((("malicious-verifier ZK (simulator by rewinding V* after step 0, CRH only); "
+                               "operands a, b and words y16 are PUBLIC in this statement, so privacy is vacuous today")
+                              if cfg.interactive else
+                              "HVZK; NIZK only in the programmable random-oracle model; operands a, b and words y16 PUBLIC "
+                              "in this statement, so privacy is vacuous today") if cfg.zk else "none (no masking)"),
             "privacy_terms_log2": ({"coin_commitment_binding_collision": acc.log2(acc.hash_collision_bound(256, 2**64)),
                                     "mask_sampling_bias_per_symbol": "0 (rejection sampling; the simulator's distance is "
-                                                                      "ChaCha20's PRF advantage on the mask key)"} if _COMMIT_COINS else {}),
+                                                                      "ChaCha20's PRF advantage on the mask key)"} if cfg.interactive else {}),
             "note": ("ZK: k = l + t_pad, every row carries t_pad > t uniform coefficients (Lemma 4.15)" if cfg.zk else
                      "k = l + 1 stands in for the non-ZK k = l (the accounting's validate() needs l < k)") + "; "
                     "the linear test here sends nothing (the verifier encodes beta itself), so its query term is "
                     "at most the Appendix-C ((k+l)/n)^t used; total_log2 is the union bound over n_proofs sub-batches"
-                    + ("; + the step-0 coin-commitment hiding term (commitment_hash)" if _COMMIT_COINS else "")}
+                    + ("; + the step-0 coin-commitment hiding term (commitment_hash)" if cfg.interactive else
+                       f"; every statistical term x 2^{FS_QUERIES_LOG2} (Fiat-Shamir, q x eps)")}
 
 
 COIN_HIDING_TERM = 2 * Fraction(2**64, 2**256)      # 2 slots x q / 2^|r|, q = 2^64
@@ -203,7 +264,7 @@ def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None
     h = hashlib.blake2b(digest_size=32)
     h.update(STATEMENT_TAG)
     h.update(f"|p={P}|hash=blake3|l={cfg.l}|n={cfg.n}|D={cfg.D}|t={cfg.t}|target={cfg.target_log2!r}".encode())
-    h.update(f"|zk={int(cfg.zk)}|k={cfg.k}".encode())
+    h.update(f"|zk={int(cfg.zk)}|k={cfg.k}|mode={cfg.mode}".encode())
     h.update(b"|sys=" + system_id(sys))
     if layout is not None:
         h.update(f"|mode=chain|l={layout.l}|n_vus={layout.n_vus}|steps={layout.steps}".encode())
@@ -235,10 +296,20 @@ def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None
 # known coins -- the verifier is bound to open the same values or abort.  Hiding (a soundness term, the prover must
 # not learn r_i from c_i): in the random-oracle model q / 2^{|r_i| + |s_i|} = q 2^-512 per slot; we book it as
 # 2^-192 per slot (q = 2^64 queries, |r| = 256 bits, ignoring the salt) -- see ``soundness``.
+#
+# Challenge derivation (lane b-zk-fix, red team F2).  In the INTERACTIVE mode the challenges are functions of the
+# verifier's coins ALONE:  r, rho, rc = SHAKE(H("c1" || stmt || c1 c2 || r1)),  cols = H("c2" || stmt || c1 c2 || r2)
+# -- neither root nor w, h, q, v enters.  This is what lets the simulator work with a collision-resistant hash only:
+# after the rewind it knows (r1, r2), hence r, rho, rc and cols, BEFORE it builds root and the messages, so it can
+# prepare a tableau consistent with them without programming any hash.  Soundness is unaffected: the coins are
+# hidden from the prover by c_i until it has sent the message the coin must follow (hiding term), and the prover
+# cannot bias r1 / r2 (they are the verifier's), so r and cols are uniform and independent of root / w / h / q / v
+# exactly as in the public-coin protocol -- the statement and the commitments in the seed are domain separation,
+# not entropy.  In the FIAT-SHAMIR mode there is no step 0 and the challenges are H(stmt, transcript prefix) as in
+# the pre-8c protocol; the random-oracle model is then the assumption for soundness AND for zero knowledge.
 
 COIN_TAG = b"ligero-b/coin|v1|"
 COIN_BYTES = 32
-_COMMIT_COINS = True      # red-team control ONLY (redteam_zk.py): False = the pre-8c derivation, coins = H(transcript)
 
 
 class CoinOpeningError(RuntimeError):
@@ -290,11 +361,11 @@ class Coins:
 
 
 def _coin_prefix(cc: tuple[bytes, bytes] | None) -> bytes:
-    return b"|coins=" + cc[0] + cc[1] if (_COMMIT_COINS and cc is not None) else b""
+    return b"|coins=" + cc[0] + cc[1] if cc is not None else b""
 
 
 def _coin_open(r: bytes | None) -> bytes:
-    return b"|r=" + r if (_COMMIT_COINS and r is not None) else b""
+    return b"|r=" + r if r is not None else b""
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -312,9 +383,30 @@ def _bound(stmt: bytes) -> bytes:
     return stmt if _BIND_STATEMENT else b""
 
 
+def seed1_preimage(stmt: bytes, root: bytes, cc: tuple[bytes, bytes] | None, r1: bytes | None) -> bytes:
+    """Interactive (``cc, r1`` given): the verifier's coin alone -- ``H(tag || stmt || c1 c2 || r1)``, no root.
+    Fiat-Shamir (``cc is None``): ``H(tag || stmt || root)``."""
+    if cc is not None:
+        if r1 is None:
+            raise ValueError("interactive challenge 1 needs the opened coin r1")
+        return b"ligero-b/c1|v2|" + _bound(stmt) + _coin_prefix(cc) + _coin_open(r1)
+    return b"ligero-b/c1|" + _bound(stmt) + root
+
+
+def seed2_preimage(stmt: bytes, root: bytes, w: np.ndarray, h: np.ndarray, q: np.ndarray | None, v: np.ndarray | None,
+                   cc: tuple[bytes, bytes] | None, r2: bytes | None) -> bytes:
+    """Interactive: ``H(tag || stmt || c1 c2 || r2)`` -- none of root, w, h, q, v.  Fiat-Shamir: the transcript."""
+    if cc is not None:
+        if r2 is None:
+            raise ValueError("interactive challenge 2 needs the opened coin r2")
+        return b"ligero-b/c2|v2|" + _bound(stmt) + _coin_prefix(cc) + _coin_open(r2)
+    return (b"ligero-b/c2|" + _bound(stmt) + root + w.tobytes() + h.tobytes()
+            + (q.tobytes() if q is not None else b"") + (b"|v=" + v.tobytes() if v is not None else b""))
+
+
 def _challenge1(stmt: bytes, root: bytes, D: int, m: int, L: int, Q: int, device, l_chain: int = 0,
                 cc: tuple[bytes, bytes] | None = None, r1: bytes | None = None):
-    seed = merkle.hash_bytes(b"ligero-b/c1|" + _bound(stmt) + _coin_prefix(cc) + root + _coin_open(r1))
+    seed = merkle.hash_bytes(seed1_preimage(stmt, root, cc, r1))
     extra = N_FAMILIES * l_chain
     x = _expand(seed, D * (m + L + Q + extra), device).reshape(D, m + L + Q + extra)
     rc = x[:, m + L + Q:].reshape(D, N_FAMILIES, l_chain) if l_chain else None
@@ -323,9 +415,7 @@ def _challenge1(stmt: bytes, root: bytes, D: int, m: int, L: int, Q: int, device
 
 def _challenge2(stmt: bytes, root: bytes, w: np.ndarray, h: np.ndarray, t: int, n: int, q: np.ndarray | None = None,
                 v: np.ndarray | None = None, cc: tuple[bytes, bytes] | None = None, r2: bytes | None = None) -> list[int]:
-    seed = merkle.hash_bytes(b"ligero-b/c2|" + _bound(stmt) + _coin_prefix(cc) + root + w.tobytes() + h.tobytes()
-                             + (q.tobytes() if q is not None else b"") + (b"|v=" + v.tobytes() if v is not None else b"")
-                             + _coin_open(r2))
+    seed = merkle.hash_bytes(seed2_preimage(stmt, root, w, h, q, v, cc, r2))
     cols: list[int] = []
     seen = set()
     ctr = 0
@@ -379,14 +469,18 @@ class Proof:
 #     s_lin    uniform degree < t_pad          linear-test message v_d = alpha_d . p + Z_H s_lin_d    (uniform given beta)
 #     s_qa     uniform degree < k              quadratic mask  Z_H (s_qa + x^k s_qb), degree < 2k-1, vanishing on H:
 #     s_qb     uniform degree < t_pad - 1      h_d = P_d / Z_H + s_qa + x^k s_qb   (uniform on all 2k-1-l coefficients)
-#     s_chain  uniform degree < k - 1          chain mask Z_H s_chain (sum over H = 0):  q_d = Q_d + Z_H s_chain_d
+#     u_ca     degree < k                      chain mask u_d = u_ca + x^k u_cb: degree < l + k - 1 = q_len, uniform
+#     u_cb     uniform degree < l - 1          subject to sum_H u = 0 (u_ca[0] adjusted):  q_d = Q_d + u_d
+#                                              (AHIV22 u_add; red team F1: the old Z_H s_chain vanished ON H, so q|_H
+#                                              was Q|_H in the clear -- every accumulator recoverable)
 # The verifier reconstructs every mask's contribution at the opened columns from the opened mask rows and the public
 # Z_H(eta_c), eta_c^k, so a dishonest mask is just another committed row (no unchecked degree of freedom).
 # Randomness (8c): a ChaCha20 counter-mode stream on the device under a fresh 32-byte key, reduced to BabyBear by
 # rejection (u < 2p, then u mod p): exactly uniform given the stream (mask_sampler.py; the 8b sampler's direct
 # uint32 mod p had a statistical distance of ~0.11 per symbol).
 
-_MASK_KINDS = ("prox", "lin", "qa", "qb", "chain")
+_MASK_KINDS = ("prox", "lin", "qa", "qb", "chain_a", "chain_b")
+_CHAIN_KINDS = ("chain_a", "chain_b")
 
 
 def mask_rows(cfg: Config, m: int, chain: bool) -> dict[str, slice]:
@@ -395,7 +489,7 @@ def mask_rows(cfg: Config, m: int, chain: bool) -> dict[str, slice]:
         return {}
     out, at = {}, m
     for kind in _MASK_KINDS:
-        if kind == "chain" and not chain:
+        if kind in _CHAIN_KINDS and not chain:
             continue
         out[kind] = slice(at, at + cfg.D)
         at += cfg.D
@@ -403,7 +497,7 @@ def mask_rows(cfg: Config, m: int, chain: bool) -> dict[str, slice]:
 
 
 def n_rows(cfg: Config, m: int, chain: bool) -> int:
-    """Committed rows: m (+ 5 D or 4 D mask rows under ZK)."""
+    """Committed rows: m (+ 6 D or 4 D mask rows under ZK)."""
     mr = mask_rows(cfg, m, chain)
     return max([m] + [s.stop for s in mr.values()])
 
@@ -436,17 +530,32 @@ def _uniform_symbols(total: int, device) -> torch.Tensor:
 
 def _sample_masks(cfg: Config, m: int, chain: bool, device) -> dict[str, torch.Tensor]:
     """Fresh uniform mask coefficients: ``W`` (m, t_pad) per witness row and one (D, deg) block per mask kind."""
-    D, k, tp = cfg.D, cfg.k, cfg.t_pad
+    D, k, tp, l = cfg.D, cfg.k, cfg.t_pad, cfg.l
     shapes = {"W": (m, tp), "prox": (D, k), "lin": (D, tp), "qa": (D, k), "qb": (D, tp - 1)}
     if chain:
-        shapes["chain"] = (D, k - 1)
+        shapes["chain_a"] = (D, k)
+        shapes["chain_b"] = (D, l - 1)
     total = sum(a * b for a, b in shapes.values())
     flat = _uniform_symbols(total, device)
     out, at = {}, 0
     for name, (a, b) in shapes.items():
-        out[name] = flat[at:at + a * b].reshape(a, b)
+        out[name] = flat[at:at + a * b].reshape(a, b).clone()
         at += a * b
+    if chain:
+        # u = u_ca + x^k u_cb (degree < l + k - 1) must sum to zero over H: sum_H u = l * sum_{l | j} u_j.  Fix the
+        # constant coefficient (index 0, itself one of the l | j terms) so that the sum vanishes; the other
+        # l + k - 2 coefficients stay uniform -- u is uniform on the zero-sum subspace (AHIV22 u_add).
+        s = _sum_over_H(_chain_mask_coefs(cfg, out["chain_a"], out["chain_b"]), l)          # (D,)
+        out["chain_a"][:, 0] = (out["chain_a"][:, 0] - s * modinv(l)) % P
     return out
+
+
+def _chain_mask_coefs(cfg: Config, ca: torch.Tensor, cb: torch.Tensor) -> torch.Tensor:
+    """(D, l + k - 1) coefficients of u = u_ca + x^k u_cb."""
+    u = torch.zeros((ca.shape[0], cfg.q_len), dtype=torch.int64, device=ca.device)
+    u[:, :cfg.k] = ca
+    u[:, cfg.k:cfg.k + cb.shape[1]] = (u[:, cfg.k:cfg.k + cb.shape[1]] + cb) % P
+    return u
 
 
 def _add_zh_times(coefs: torch.Tensor, s: torch.Tensor, l: int) -> torch.Tensor:
@@ -599,17 +708,25 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     ``y16`` comes from ``chain``) -- absorbed into every challenge (``statement_digest``).
     ``mutate(W)``: a test hook that edits the witness in place before it is committed (the mutated-witness
     negatives); an honest prover never uses it.  ``chain = (Layout, y16_pub (l,))`` runs the chain test.
-    ``coins``: the verifier's step-0 coin source (interactive: the verifier's own ``Coins`` or a malicious source
-    with the same interface); ``None`` = non-interactive, the prover samples them (Fiat-Shamir reading)."""
+    ``coins``: the verifier's step-0 coin source -- REQUIRED in the interactive mode (the verifier's own ``Coins`` or
+    a malicious source with the same interface) and FORBIDDEN in the Fiat-Shamir mode (there is no step 0; the
+    challenges are hashes of the transcript).  The two modes are mutually exclusive (red team F3)."""
     clk = _Clock(device)
     m, l, n, D = sys.m, cfg.l, cfg.n, cfg.D
     assert hints.shape[1] == l
     assert (chain is not None) == (sys.chain is not None), "chain mode needs a chain-compiled system"
     if words is None:
         raise ValueError("prove needs the public words (statement binding)")
-    src = coins if coins is not None else Coins.sample()
-    ccom = src.commitments()                                      # step 0: received before anything is computed
-    sent = ["coin commitments (V)"]
+    if cfg.interactive:
+        if coins is None:
+            raise ValueError("interactive mode: prove needs the verifier's step-0 coin source (coins=...)")
+        src = coins
+        ccom = src.commitments()                                  # step 0: received before anything is computed
+        sent = ["coin commitments (V)"]
+    else:
+        if coins is not None:
+            raise ValueError("fiat-shamir mode has no step 0: coins must be None")
+        src, ccom, sent = None, None, []
     if chain is not None:
         stmt = statement_digest(sys, cfg, words["a"], words["b"], layout=chain[0], y16=chain[1])
     else:
@@ -672,9 +789,12 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
 
     M = U.shape[0]
     sent.append("root")
-    r1, s1 = src.open1(root)                                      # V opens coin slot 1 (after root)
-    if len(r1) != COIN_BYTES or len(s1) != COIN_BYTES or coin_commit(r1, s1) != ccom[0]:
-        raise CoinOpeningError(1, sent)                           # public-data abort, before any coin-dependent message
+    if cfg.interactive:
+        r1, s1 = src.open1(root)                                  # V opens coin slot 1 (after root)
+        if len(r1) != COIN_BYTES or len(s1) != COIN_BYTES or coin_commit(r1, s1) != ccom[0]:
+            raise CoinOpeningError(1, sent)                       # public-data abort, before any coin-dependent message
+    else:
+        r1 = s1 = None
     r, rho_lin, rho_quad, rc = _challenge1(stmt, root, D, M, tb.L, tb.Q, device, l if chain else 0, ccom, r1)
     v_np = None
     if cfg.zk:
@@ -708,8 +828,8 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         Renc = (penc.encode(cc.coef.reshape(D * R, l))[0].to(torch.int64) if penc is not None
                 else encode(cc.coef.reshape(D * R, l), n)).reshape(D, R, n)     # R_i on the codeword domain
         Qev = ((Renc * U.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P   # (D, n)
-        if cfg.zk:
-            Qev = (Qev + (zh_on_coset(n, l, device)[None, :] * U[mr["chain"]]) % P) % P
+        if cfg.zk:                                                # + u_ca + x^k u_cb (uniform, zero sum over H)
+            Qev = (Qev + U[mr["chain_a"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["chain_b"]]) % P) % P
         qcoef = (intt(Qev) * _ginv_powers(n, device)) % P
         if check:
             assert (qcoef[:, cfg.q_len:] == 0).all(), "chain polynomial degree too high"
@@ -721,9 +841,12 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     w_np = w.cpu().numpy().astype(np.uint32)
     h_np = h.cpu().numpy().astype(np.uint32)
     sent.append("w, h" + (", q" if q_np is not None else "") + (", v" if v_np is not None else ""))
-    r2, s2 = src.open2(root, w_np, h_np, q_np, v_np)              # V opens coin slot 2 (after the test messages)
-    if len(r2) != COIN_BYTES or len(s2) != COIN_BYTES or coin_commit(r2, s2) != ccom[1]:
-        raise CoinOpeningError(2, sent)
+    if cfg.interactive:
+        r2, s2 = src.open2(root, w_np, h_np, q_np, v_np)          # V opens coin slot 2 (after the test messages)
+        if len(r2) != COIN_BYTES or len(s2) != COIN_BYTES or coin_commit(r2, s2) != ccom[1]:
+            raise CoinOpeningError(2, sent)
+    else:
+        r2 = s2 = None
     cols = _challenge2(stmt, root, w_np, h_np, cfg.t, n, q_np, v_np, ccom, r2)
     if gpu_hash:
         cols_t = torch.tensor(cols, dtype=torch.int64, device=device)
@@ -736,7 +859,8 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     total = clk.total()
     timings = dict(clk.marks)
     timings["total"] = total
-    return Proof(root, w_np, h_np, cols, opened, paths, hash_name, timings, q_np, v_np, ccom, Coins(r1, s1, r2, s2))
+    return Proof(root, w_np, h_np, cols, opened, paths, hash_name, timings, q_np, v_np, ccom,
+                 Coins(r1, s1, r2, s2) if cfg.interactive else None)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -748,25 +872,30 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
     """Accept/reject the claim ``y[i] = tc_dot(c[i], a[i], b[i])`` for all l units -- or, with
     ``chain = (Layout, y16_pub)`` (``c = y = None``), the claim that every VU of the layout casts to its
     ``y16_pub`` word from ``c_0 = 0`` over its 96 units.  Never touches W.
-    ``coins``: interactive -- the verifier's OWN step-0 randomness; the transcript must carry exactly these openings
-    (a proof made in another verifier's session is rejected).  ``None``: non-interactive -- the openings in the
-    transcript are checked against the commitments in the transcript."""
+    ``coins``: interactive mode -- REQUIRED: the verifier's OWN step-0 randomness; the transcript must carry exactly
+    these openings (a proof made in another verifier's session, or with prover-chosen coins, is rejected).
+    Fiat-Shamir mode -- must be ``None``: there is no step 0 and the transcript carries no coins."""
     t0 = time.perf_counter()
     m, l, n, D, t, k = sys.m, cfg.l, cfg.n, cfg.D, cfg.t, cfg.k     # every size from the VERIFIER's configuration
     if (chain is not None) != (sys.chain is not None):
         return False, "chain mode mismatch"
     # step 0 / openings: c_i = H(r_i || s_i) for both slots; interactive: they are this verifier's own coins
-    if _COMMIT_COINS:
+    if cfg.interactive:
+        if coins is None:
+            return False, "interactive mode: the verifier must supply its own step-0 coins"
         pc = proof.coins
         if proof.coin_commit is None or pc is None or not pc.well_formed() or len(proof.coin_commit) != 2:
             return False, "malformed coin commitments / openings"
-        if coins is not None and (pc != coins or proof.coin_commit != coins.commitments()):
+        own = (coins.r1, coins.s1, coins.r2, coins.s2)            # field-wise: ``coins`` may be a Coins subclass (V*)
+        if (pc.r1, pc.s1, pc.r2, pc.s2) != own or tuple(proof.coin_commit) != coins.commitments():
             return False, "coins are not this verifier's step-0 coins"
-        if tuple(proof.coin_commit) != pc.commitments():
-            return False, "coin opening does not match its commitment"
         ccom = tuple(proof.coin_commit)
     else:
-        ccom, pc = None, Coins(b"\0" * 32, b"\0" * 32, b"\0" * 32, b"\0" * 32)
+        if coins is not None:
+            return False, "fiat-shamir mode has no step 0 (coins must be None)"
+        if proof.coin_commit is not None or proof.coins is not None:
+            return False, "fiat-shamir transcript must not carry coins"
+        ccom, pc = None, Coins(None, None, None, None)
     mr = mask_rows(cfg, m, chain is not None)
     M = n_rows(cfg, m, chain is not None)
     if not (proof.hash_name or "").startswith("blake3"):
@@ -850,8 +979,9 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
         R = cc.coef.shape[1]
         Rc = encode(cc.coef.reshape(D * R, l), n).reshape(D, R, n)[:, :, cols]          # (D, R, t)
         expect = ((Rc * Uo.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P
-        if cfg.zk:
-            expect = (expect + (zh[None, :] * Uo[mr["chain"]]) % P) % P
+        if cfg.zk:                                                            # + u_ca(eta_c) + eta_c^k u_cb(eta_c)
+            xk = _xk_on_coset(n, k, device)[cols]
+            expect = (expect + Uo[mr["chain_a"]] + (xk[None, :] * Uo[mr["chain_b"]]) % P) % P
         if not torch.equal(eval_on_coset(q, n)[:, cols], expect):
             return False, "chain constraints failed (opened columns)"
     _sync(device)

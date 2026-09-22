@@ -140,7 +140,7 @@ interpolants collapse to one shared `G(X)` (PROTOCOL A §12.2's `rho_geo`): one 
 | (a) | roots (in O), verdict | no new prover message; checker constraints inherit HVZK / HM96 step 0 | none |
 | (b) | the opened leaves in the clear | n/a | n/a: not private |
 | (c) | tensor digest (Poseidon2 root of salted row leaves), SHA-256 ids path | salted row leaves hide under Poseidon2 as a PRF; the digest is then independent of the rows | hiding of salted Poseidon2; fresh salt per row per commitment |
-| (d) | t columns of each touched chunk, `v`, `q`, chunk roots, ids path | columns uniform (Lemma 4.15, t <= k - l); `v`, `q` one-time-padded by the blinding rows; Q and coefficients committed at step 0 (HM96) | the per-commitment randomizer budget |
+| (d) | t columns of each touched chunk, `v`, `q`, chunk roots, ids path | columns uniform (Lemma 4.15, t <= k - l) **only with the codeword on a coset `31 H_n` disjoint from the message domain `H_k`** -- the systematic encoding of the first leaf/v2 reference exposed payload word j at column (n/k) j in the clear (red team F4, fixed 2026-09-22, `LEAF_V2.md` §2/§6, pin `test_no_opened_column_is_a_payload_word`); `v`, `q` one-time-padded by the blinding rows; Q and coefficients committed at step 0 (HM96) | the per-commitment randomizer budget (a 2nd session past `k - l` is a payload-equality oracle: re-randomise or accept one private proof per commitment -- protocol owner) |
 
 In (d) the column openings are simulatable even against an adaptive verifier without step 0 (any t columns of a
 fresh-randomizer row are uniform); step 0 protects the rest of the proof, as in `ZK_CONSTRUCTION.md`.
@@ -206,8 +206,9 @@ what sharing buys.
 6. **Field/encoding injectivity.** Words are 16-bit; elements >= 2^16 in a payload are rejected by the checker's range
    check; `code_text` fixes `w`. A tensor of another dtype width (fp32) needs a `w = 32` two-element encoding: define
    before use, not ad hoc.
-7. **Encoder agreement.** Committer and prover must use the identical subgroup generator and systematic layout
-   (spec §2-3: Plonky3's `0x1a427a41`); a mismatch is a completeness failure, not a soundness one, but is a
+7. **Encoder agreement.** Committer and prover must use the identical subgroup generator AND coset shift
+   (spec §2-3: Plonky3's `0x1a427a41`, shift 31, `coset=31` in `code_text`; the layout is non-systematic since
+   2026-09-22 -- a systematic encoder is a privacy failure, F4); a mismatch is a completeness failure, not a soundness one, but is a
    cross-implementation risk -- ship conformance vectors (the reference produces them).
 8. **Proof size.** +183 MB per 4 096-VU batch at R = 64; check the verifier's bandwidth budget; `n = 8192` halves it.
 

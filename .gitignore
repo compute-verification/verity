@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Rust build artifacts anywhere (e958a0b accidentally committed backends/ligero-verify/target, 20.8 MB)
+**/target/

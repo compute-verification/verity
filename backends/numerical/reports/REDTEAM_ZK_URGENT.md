@@ -63,3 +63,31 @@ for a non-interactive run". After the one-line fix of finding 1 and a private-op
 `COMPLETE_ZK_BACKEND (random-oracle)` with finding 2 written into PROTOCOL.md 8c, or a challenge derivation
 `r := PRG(r1)`, `cols := PRG(r2)` (coins are the verifier's messages alone) for CRH-only malicious-verifier ZK --
 which then forbids the non-interactive reading entirely.
+
+## Status (lane b-zk-fix, branch `lane/b-zk-fix`, 2026-09-22 ~11:20Z) -- appended by the fixing lane; the text above is the red team's
+
+Full report `b_zk_fix.md`; ledger `ledger/b-zk-fix.jsonl`; PROTOCOL.md 8b/8c rewritten.
+
+* **F1 FIXED** (commit f752d4b): `q_d = Q_d + u_d`, `u_d = u_ca + x^k u_cb` uniform of degree `< l + k - 1` with
+  `sum_H u = 0`, two committed mask rows, verifier check `q(eta_c) = sum_i R_i(eta_c) U_i[c] + U_ca[c] + eta_c^k U_cb[c]`.
+  Run `r20260922-105112-d542` (vy-g3, real layout 170 VUs, `l = 16384`): **0 / 16150** accumulators recovered
+  (was 16150/16150), witness-free consistency 0.0, `q` mask rank `l + k - 2` = admissible dim, two-witness
+  per-position chi2 on `q` 0/198 138 below Bonferroni; fixture `fixtures/redteam-zk/q_leak_fixed_l256_2vu.json`
+  0/190 (`expected_recovery: none`, O-zk1 done). Honest proofs verify; 52/52 negatives and 252/252 mutations
+  rejected in `--zk` interactive, `--zk --mode fiat-shamir` (same run) and non-ZK (`r20260922-105905-2021`);
+  babybear battery 0 forgeries.
+* **F2 FIXED** (f752d4b): interactive challenges `SHAKE(H(stmt, c1 c2, r1))`, `H(stmt, c1 c2, r2)` -- functions of
+  the verifier's coins alone. `redteam/simulator.py` runs against the real `verify()` with the real hash:
+  `r20260922-105112-d542` honest V: accepted, 0 oracle points programmed, 0 programmed hits; adaptive V* (slot 1 /
+  slot 2): identical aborts; new statement-adaptive V* (grinds `r2` before step 0 with `stmt`): real and simulated
+  transcripts both accepted under the real hash, same column set (`r20260922-105905-2021`); indistinguishability
+  32 vs 32: 0 positions below Bonferroni on every component incl. `q`; `q` distinguishers advantage ~0.
+  Soundness argument for the coin-only derivation: PROTOCOL.md 8c.
+* **F3 FIXED** (f752d4b): `--mode interactive | fiat-shamir`, mutually exclusive, bound into the statement digest;
+  interactive `verify(coins=own)` required; Fiat-Shamir priced with `q x eps` (`2^60`): `t = 288`, `t_pad = 512`
+  and **`D = 7`** (the field terms `(n+3)/p^6 x 2^60 = 2^-110` do not survive at `D = 6` -- beyond the `t ~ 279`
+  the red team estimated). Labels: interactive+zk `COMPLETE_ZK_BACKEND` (CRH; statement's operands public, so
+  vacuous today), fiat-shamir+zk `COMPLETE_HVZK_BACKEND` (NIZK in PROM), non-ZK `NON_ZK_PROOF_DIAGNOSTIC`.
+  Timings per mode: `b_zk_fix.md` section 4 (run `r20260922-105905-2021`).
+* Not done: O-zk3 (abort-on-root rates at larger n), O-zk4 (`COIN_HIDING_TERM` derivation text), statistically hiding
+  leaves, a private-operand statement.

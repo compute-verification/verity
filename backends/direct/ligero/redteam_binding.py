@@ -88,7 +88,7 @@ def main(argv=None) -> int:
     a_big, b_big = list(a) + [[0] * 16] * pad, list(b) + [[0] * 16] * pad
     y_big = torch.cat([y16, torch.zeros(pad, dtype=torch.int64)])
     ok, why = protocol.verify(R.p, R.sys, R.tb, R.cfg(lay_big.l), None, a_big, b_big, None, proof_small, R.device,
-                              chain=(lay_big, y_big))
+                              chain=(lay_big, y_big), coins=proof_small.coins)
     results["small_batch_vs_large_verifier"] = {"accepted": ok, "why": why, "l_proof": lay_small.l, "l_verifier": lay_big.l}
     print(f"2. l={lay_small.l} proof against the l={lay_big.l} verifier: {'ACCEPTED -- FORGERY' if ok else 'rejected'} ({why})")
 

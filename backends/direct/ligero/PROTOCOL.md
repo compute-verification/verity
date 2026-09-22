@@ -1,6 +1,6 @@
 # Ligero-style direct-constraint argument for the transition unit (lane b-ligero, track B)
 
-Status: NON_ZK_PROOF_DIAGNOSTIC without `--zk`, COMPLETE_HVZK_BACKEND with it (section 8b; lane b-ligero2). Implemented in this directory (Python/torch); measured on `vy-g3` (NVIDIA L40S).
+Status: NON_ZK_PROOF_DIAGNOSTIC without `--zk`; with `--zk`: COMPLETE_ZK_BACKEND in `--mode interactive` (sections 8b + 8c as repaired by lane b-zk-fix after the red-team-zk findings F1-F3: `reports/REDTEAM_ZK_URGENT.md`, `reports/b_zk_fix.md`), COMPLETE_HVZK_BACKEND (NIZK in the programmable ROM) in `--mode fiat-shamir`. In every ZK row: the current statement publishes `a, b, y16`, so privacy is vacuous for it; the claim is about the construction. Implemented in this directory (Python/torch); measured on `vy-g3` (NVIDIA L40S).
 The relation is the frozen WP2 checker (`verity_numerical.checker`): every predicate of `check_step_expr` at
 `params.REAL` is constrained; nothing is dropped (section 5 lists the two places where a predicate is *restated*
 and argues equivalence).
@@ -222,13 +222,19 @@ two-stage INT8 DFT (8 ms of matmul) would pay only once its recombination is fus
 * Per challenge coordinate `d`, five committed mask rows, all of degree `< k` (so the proximity test covers them like
   any other row; the verifier reconstructs each mask's contribution at the opened columns from the opened mask rows
   and the public `Z_H(eta_c)`, `eta_c^k` -- a dishonest mask is just another committed row, no unchecked freedom):
-  `s_prox` (degree `< k`), `s_lin` (`< t_pad`), `s_qa` (`< k`), `s_qb` (`< t_pad - 1`), `s_chain` (`< k - 1`).
+  `s_prox` (degree `< k`), `s_lin` (`< t_pad`), `s_qa` (`< k`), `s_qb` (`< t_pad - 1`), and -- since b-zk-fix (red
+  team F1) -- the two chain mask rows `u_ca` (`< k`) and `u_cb` (`< l - 1`), six kinds (`M = m + 6D` in chain mode).
 * Messages: proximity `w_d = r_d . p + s_prox_d` (`k` coefficients, uniform; `r_d` is zero on the prox rows, which
   enter with coefficient 1); linear `v_d = alpha_d . p + Z_H s_lin_d` (`k` coefficients; the verifier checks
   `v_d|_H = beta_d` -- the public right-hand side, folded mod `x^l - 1` and NTT'd -- and `v_d(eta_c)` against the
   opened rows; uniform given `beta`); quadratic `h_d = P_d / Z_H + s_qa_d + x^k s_qb_d` (`2k - 1 - l` coefficients,
-  every one masked); chain `q_d = Q_d + Z_H s_chain_d` (`l + k - 1` coefficients; `sum_H q = l (q_0 + q_l + q_2l)`).
-* Statement digest absorbs `zk` and `k`; the verifier's shape checks use `k`, `2k - 1 - l`, `l + k - 1`, `M = m + 5D`.
+  every one masked); chain `q_d = Q_d + u_d` with `u_d = u_ca + x^k u_cb` uniform of degree `< l + k - 1` subject to
+  `sum_H u = 0` (the constant coefficient is adjusted; AHIV22 `u_add`): `q` is uniform on the affine hyperplane
+  `sum_H q = rhs`, the verifier's check `q(eta_c) = sum_i R_i(eta_c) U_i[c] + U_ca[c] + eta_c^k U_cb[c]` reconstructs the
+  mask from the opened rows.  **Pre-fix (red team F1, ACCEPTED-LEAK): `q_d = Q_d + Z_H s_chain_d` -- the mask vanished
+  on every point of `H`, so `q|_H = Q|_H` and every intermediate accumulator was recoverable from the transcript
+  (16150/16150 at the measured layout).**  Regression: `redteam/run.py` (`q_leak` section) must recover nothing.
+* Statement digest absorbs `zk`, `k` and the `mode`; the verifier's shape checks use `k`, `2k - 1 - l`, `l + k - 1`, `M = m + 6D`.
 * Randomness: SHAKE-256 of a fresh `os.urandom(32)` seed, reduced mod `p` (2^-31 statistical bias per symbol; the
   simulator's distance). Cost: `m t_pad + D (3k + 2 t_pad + ...)` symbols, ~1.5 M per proof at `l = 8192`.
 * Soundness: Appendix C with `k = l + 256`: `t = 199` at `l = 8192` (was 198 for the 49-proof union), `197` at
@@ -258,46 +264,117 @@ doubles (`6.3 GB`; the 85-VU `l = 8192, n = 32768` run measured 6.6 GB). Alterna
 per-unit encoding cost, twice the fixed per-proof overhead. Malicious-verifier ZK (the AGENTS.md requirement) adds
 a commitment to the verifier's coins before `root` (one more round; depth 3) -- no arithmetic cost.
 
-## 8c. Malicious-verifier ZK: the step-0 coin commitment (lane b-zk; proof class COMPLETE_ZK_BACKEND)
+## 8c. Malicious-verifier ZK: the step-0 coin commitment and the two modes (lane b-zk; repaired by lane b-zk-fix)
 
-**Transcript (interactive semantics; `protocol.py` docstring).**
+Two protocols share the arithmetic; they are **mutually exclusive** (`Config.mode`, bound into the statement digest;
+`prove` / `verify` reject the other mode's coin usage; `run.py --mode interactive | fiat-shamir`).
+
+### Interactive mode (`--mode interactive`, the default) -- proof class COMPLETE_ZK_BACKEND with `--zk`
 
 ~~~text
  0   V -> P   c1 = H(tag || r1 || s1),  c2 = H(tag || r2 || s2)     r_i, s_i 32 uniform bytes each; H = Blake2b-256
  1   P -> V   root
  2   V -> P   (r1, s1)                     P checks c1; abort (CoinOpeningError, public) on mismatch
-              r, rho_lin, rho_quad [, rc]  = SHAKE-256( H("ligero-b/c1" || stmt || c1 c2 || root || r1) )
+              r, rho_lin, rho_quad [, rc]  = SHAKE-256( H("ligero-b/c1|v2" || stmt || c1 c2 || r1) )     -- NO root
  3   P -> V   w, h [, q] [, v]
  4   V -> P   (r2, s2)                     P checks c2; abort on mismatch
-              cols                         = H("ligero-b/c2" || stmt || c1 c2 || root || w h [q] [v] || r2)  (t distinct)
+              cols                         = H("ligero-b/c2|v2" || stmt || c1 c2 || r2)  (t distinct)        -- NO w h q v
  5   P -> V   U[:, cols], Merkle paths
 ~~~
 
-Three verifier messages on the critical path (step 0 can travel with the statement, but it is a message the prover
-must wait for): **`rounds.sequential_depth = 3`** (was 2). The non-interactive reading (what `bench-vu` measures):
-the prover plays step 0 itself (`Coins.sample()`), the transcript carries `c1, c2, r1, s1, r2, s2` (192 B), and the
-verifier recomputes `c_i = H(r_i || s_i)` -- `verify(..., coins=own)` is the interactive verifier, which additionally
-requires the openings to be its own randomness (a proof from another session is rejected).
+Three verifier messages on the critical path: **`rounds.sequential_depth = 3`**.  `verify(coins=own)` is the only
+verifier: it requires the transcript's openings to be its own step-0 randomness (a proof from another session, or
+one whose coins the prover chose, is rejected: "coins are not this verifier's step-0 coins").  There is no
+non-interactive reading of this mode.
 
-**What a malicious verifier can no longer do.** Choose `r1` after seeing `root`, or `r2` after seeing `w, h, q, v`:
-to open `c_i` to anything but the value fixed at step 0 it needs `(r', s') != (r, s)` with `H(r'||s') = H(r||s)`, a
-collision of `H` (generic `q^2 / 2^256 = 2^-128` at `q = 2^64`; the `coin_commitment_binding_collision` privacy
-term). Every coin the prover accepts is therefore a fixed function of randomness sampled before the prover's first
-message; the verifier's only remaining freedom is *whether* to open the next slot (abort). Nothing about the
-distribution of the coins is required for privacy -- `redteam_zk.py` commits to all-zero coins and to coins ground
-against a target column set: the view is the honest-verifier view at those coins (real vs simulated `p > 0.03` on
-every message, opened columns uniform, target-set overlap at chance), which is what the 8b masking already gives for
-every in-domain coin. An equivocating verifier (`r1 := f(root)` or `r2 := f(w, h)`) makes the prover abort having
-sent only `root` (slot 1) or `root, w, h, q, v` (slot 2) -- blinded messages, never an opened column.
+**The challenges are functions of the verifier's coins alone** (b-zk-fix, red team F2).  Before the fix the seeds
+were `H(stmt, c, root, r1)` and `H(stmt, c, root, w, h, q, v, r2)`: after the rewind the simulator knew `r1` but not
+`r` (which depended on the `root` it had yet to build), so the simulator existed only by programming the hash at
+`(root, r1)` and `(root, w, h, q, v, r2)` -- the programmable random-oracle model, exactly what step 0 was meant to
+avoid.  Now `(stmt, c1, c2, r1)` and `(stmt, c1, c2, r2)` are all fixed before the prover's first message, so
+knowing `(r1, r2)` IS knowing `r, rho, rc, cols`.
 
-**What the simulator needs.** The coins are fixed after step 0, so `S` learns them by running `V*` once on a dummy
-transcript (random `root`, uniform `w, h, q, v` consistent with the public `beta` and chain right-hand side), receiving
-the openings (or an abort, which it outputs). It then **rewinds `V*` to the state after step 0** and, knowing
-`(r1, r2)` and hence `r, rho, cols`, prepares the columns it will open (uniform, `t <= t_pad`), the coefficient rows
-whose values at `cols` match them (Lemma 4.15: `s -> (Z_H(eta_c) s(eta_c))_c` is onto), the Merkle tree over them, and
-the messages; by binding `V*` opens the same coins or aborts, and the expected number of rewinds is constant
-(Goldreich-Kahan). The unopened columns are hidden by the hash of a uniformly random column (random-oracle model);
-statistically hiding leaves (HM96 salted leaves, `backends/gkr/PROTOCOL.md` 5.5) are not implemented.
+*Soundness of the coin-only derivation (interactive model).*  The public-coin Ligero analysis (Appendix C, the terms
+in `soundness()`) needs the combination challenge `r, rho` to be uniform and independent of `root`, and the column
+set `cols` uniform and independent of `(root, w, h, q, v)`.  Both hold: `r1, r2` are the verifier's, sampled before
+`root`, hidden from the prover by `c_i` until the prover has committed the message the coin must follow (the
+`commitment_hash` hiding term, `2 x q 2^-256`, is the only new soundness term), and the prover cannot influence
+them.  `stmt` and `c1 c2` inside the seed are domain separation (the same coins in another session or another
+statement give other challenges), not entropy.  Including `root` in the seed bought nothing in this model: `root`
+is the prover's message, and a seed that depends on it is not more random for the prover.  The bound is the
+statistical interactive bound: **t = 197, D = 6, union 2^-128.05 over 25 x 170** (unchanged from b-zk; the coin
+hiding term is in the union).
+
+*Hash assumptions of this mode.*  Collision resistance of Blake2b (coin commitment binding: a second opening is a
+collision, `2^-128` at `2^64` queries) and of Blake3 (Merkle); SHAKE-256 as a PRG of the verifier's coin (any
+extendable PRF/XOF would do -- the prover never queries it on inputs of its choosing).  Hiding of the coins from
+the prover (`c_i = H(r_i || s_i)`, 512 random bits) is booked as a random-oracle term but only needs a hiding
+commitment.  **No hash programming; the challenge hash needs no random oracle.**  Exactly one item of the
+zero-knowledge argument still needs the random-oracle model (red-team-zk-2 G3): the hiding of the **unopened
+Merkle leaves** -- the leaves are unsalted `Blake3(column)`, so the siblings in the opened paths hide their
+(masked, high-entropy) columns only as a random-oracle-flavoured property of Blake3.  The interactive ledger row
+therefore lists `assumptions = ["hash", "random-oracle (Merkle hiding)"]`.  Salting the leaves (`Blake3(column ||
+salt_c)`, `salt_c` uniform 32 bytes, opened with the column) would make the commitment statistically hiding and
+remove that item; cost: `+32` bytes hashed per leaf at commit (one extra Blake3 block per column, against `4 M`
+bytes of column already hashed) and `+32 t` bytes per proof in the openings (`+6.3 KB` at `t = 197`, ~0.1 % of the
+transcript) -- not implemented on this branch.
+
+*Simulator (demonstrated: `redteam/simulator.py`, run against the real `verify()` under the real hash).*  `S`
+receives `c1, c2`, runs `V*` once on a dummy transcript: random `root0`; after `V*` opens `r1` the round-1
+challenges (hence the public `beta`, `rhs`) are known, and the dummy messages are drawn from the
+**honest-observable distribution** -- `w0, h0` uniform, `v0` uniform on `{v|_H = beta}`, `q0` uniform on
+`{sum_H q = rhs}` (red-team-zk-2 G1: with `v0, q0` merely uniform, a `V*` applying the public checks aborted on the
+dummy run w.p. 1 and never on the real prover -- advantage 1, a simulator bug, fixed on lane b-zk-fix-2); receives the
+openings `(r1, r2)` (or an abort, which it outputs), rewinds `V*` to after step 0, computes `r, rho, rc, cols`
+exactly as the verifier does, samples the fake tableau (witness rows uniform of degree `< k`, `s_prox` uniform, `v`
+uniform on `v|_H = beta`, `h` uniform, `q` uniform on `sum_H q = rhs`, `u_cb` uniform) and solves `s_lin, s_qa,
+u_ca` by Lagrange interpolation at the `t <= t_pad` opened points plus uniform slack so every column test holds at
+`cols`; `w := r . p' + s_prox`.  Commits, replays `V*`: by binding it opens the same coins or aborts (Goldreich-Kahan).
+*Rewinds (red-team-zk-2 G2):* against a `V*` that aborts on the replay with probability `p`, the loop needs `1/(1-p)`
+expected rewinds -- not a constant; `redteam/simulator.py` caps at `max_rewinds = 8` and outputs an abort transcript
+on exhaustion, a simulation error of `(1-p) p^8` (up to `0.039` at `p = 0.9`), so the demonstrated simulator is
+exact only for `V*` with bounded abort probability; the standard GK estimator of `p` makes it expected-polynomial
+with no such error and is not implemented.  Models covered in `redteam/run.py`: honest `V`; adaptive `V*` that opens a slot to a
+value depending on `root` / `(w, h)` (needs a collision: the prover aborts having sent only blinded messages, the
+simulator outputs the same abort); statement-adaptive `V*` that grinds `r2` before step 0 against a target column
+set (legal -- an interactive verifier owns its coins; the masking hides any `t <= t_pad` columns; simulated like any
+coins); selectively aborting `V*` (abort on a predicate of `root`, or of `q`: the latter no longer correlates with
+the witness after F1; or on the public checks `v|_H = beta`, `sum_H q = rhs` -- `zk2_dummy.PublicCheckVerifier`,
+which must abort in neither world).  Indistinguishability: per-position chi-square real vs simulated on every message and on the
+opened columns, plus the two `q` distinguishers of the red team (witness-free consistency, known-witness recovery),
+which must now be at chance on real and simulated transcripts alike.
+
+### Fiat-Shamir mode (`--mode fiat-shamir`) -- proof class COMPLETE_HVZK_BACKEND at most with `--zk`
+
+No step 0.  `r, rho [, rc] = SHAKE(H("ligero-b/c1" || stmt || root))`, `cols = H("ligero-b/c2" || stmt || root ||
+w h [q] [v])`; the transcript carries no coins; `rounds.sequential_depth = 1`.  This is the pre-8c protocol.
+
+*Soundness.*  The campaign's rule (`ZK_CONSTRUCTION.md` 3.3, `zk_cost.fiat_shamir_reparameterisation`): the generic
+state-restoration bound `eps_FS <= q x eps_round`, `q = 2^60` hash queries.  `soundness()` multiplies every
+statistical term by `2^60` and `config_for` re-sizes: per-proof target `-132.64 - 60 = -192.64`, **t = 288** (was
+197; `t_pad = 512` so that Lemma 4.15 `k > l + t` holds: `k = l + 512`), and the field terms `(n + 3) / p^D x 2^60`
+force **D = 7** (BabyBear^6 gives `2^-110` after the shift): union `2^-128.04` over 25 x 170.  Non-ZK FS: `t = 285`,
+`D = 7`.  The 60-bit shift is the cost of removing the verifier; the interactive mode charges none of it.
+
+*Hash assumption.*  The random-oracle model for the challenge hash -- for soundness (the FS transform) AND for zero
+knowledge: the construction is HVZK (8b masking, Lemma 4.15) and a NIZK simulator must program the oracle at the
+transcript it outputs (programmable ROM).  Malicious-verifier ZK in the CRH-only sense is not claimed here.  A
+`bench-vu --mode fiat-shamir --zk` run is labelled **COMPLETE_HVZK_BACKEND** with the note "NIZK in PROM".
+
+### What both modes share
+
+*What a malicious verifier can no longer do (interactive).* Choose `r1` after seeing `root`, or `r2` after seeing
+`w, h, q, v`: opening `c_i` to anything but the step-0 value needs `(r', s') != (r, s)` with `H(r'||s') = H(r||s)`.
+Every coin the prover accepts is a fixed function of randomness sampled before the prover's first message; the
+verifier's only remaining freedom is *whether* to open the next slot (abort) and which coins to commit to (any
+coins give the honest-verifier view at those coins: the masking is coin-oblivious for every in-domain coin, and
+`t <= t_pad`).  An equivocating verifier makes the prover abort having sent only `root` (slot 1) or
+`root, w, h, q, v` (slot 2) -- blinded messages, never an opened column.
+
+*Statement.*  `statement_digest(a, b, y16)`: the operands and the output words are PUBLIC in this statement, so the
+witness is a function of the public input and privacy is vacuous for it today.  Every ZK label of this backend is
+a statement about the construction (masking + coins + derivation) and becomes meaningful once the operands are
+committed instead of published (auth-integration's LEAF_V2).  No private-operand statement is implemented here.
 
 **Pole redraw.** B-Ligero has no retry-on-bad-challenge path: `Z_H` is invertible on the coset by construction, there
 is no lookup helper with a public pole, and the column challenge is a deterministic rejection of repeats inside the
@@ -309,11 +386,15 @@ uniform stream, `u mod n` exact for the power-of-two `n`). Nothing has to be red
 valid witness and is off in every measured run. No abort depends on a valid witness; the mask sampler cannot fail
 (rejection top-up, not abort); hint generation raises only on off-domain public operands.
 
-**Soundness accounting** (`soundness()`): the commitment adds `commitment_hash` = hiding vs the prover, `2 x q / 2^256`
-with `q = 2^64` = `2^-191` per proof, union-bounded with the rest. At 25 x 170: `t = 197`, union `2^-128.05` (ZK) /
-`t = 196`, `2^-128.25` (non-ZK) -- unchanged to two decimals.
+**Soundness accounting** (`soundness()`): interactive -- the commitment adds `commitment_hash` = hiding vs the
+prover, `2 x q / 2^256` with `q = 2^64` = `2^-191` per proof, union-bounded with the rest; at 25 x 170: `t = 197`,
+union `2^-128.05` (ZK) / `t = 196`, `2^-128.25` (non-ZK).  Fiat-Shamir -- every statistical term `x 2^60`; `t = 288`
+(ZK, `t_pad = 512`) / `285` (non-ZK), `D = 7`, union `2^-128.04`.  The result JSON carries `mode`, `bound_model`,
+`hash_assumption`, `zk_statement`, `fiat_shamir_queries_log2` per run.
 
-**Cost.** No arithmetic; 192 transcript bytes; four Blake2b calls; one more round trip.
+**Cost.** Interactive: no arithmetic; 192 transcript bytes; four Blake2b calls; one more round trip; the F1 fix adds
+one `D`-row mask family (`+D` committed rows) and one `D x (l-1)` mask block.  Fiat-Shamir: `t` 197 -> 288 opened
+columns (+46% opened bytes and paths), `D` 6 -> 7 on every test, `t_pad` 512.  Measured numbers: `reports/b_zk_fix.md`.
 
 **Mask sampler** (`mask_sampler.py`): ChaCha20 counter mode on the device under a fresh 32-byte key, reduced to
 BabyBear by rejection (`u < 2p`, then `u mod p`): exactly uniform given the stream. The 8b sampler's direct
@@ -351,7 +432,7 @@ the torch paths (`tests_fused_test.py`). The protocol is unchanged: the same pol
   (2.57 ms/VU), 0.195 s per 85 VUs at `l = 8192` (2.30 ms/VU); `results/result_*.json`.
 * The hash and the SHAKE-256 challenge expander remain "placeholders" in the sense of the shared brief (not the
   campaign's final choice of hash).
-* ZK masking: section 8b, implemented by lane b-ligero2 (`--zk`, COMPLETE_HVZK_BACKEND); malicious-verifier ZK (HM96 coin commitment): section 8c, lane b-zk (COMPLETE_ZK_BACKEND).
+* ZK masking: section 8b, implemented by lane b-ligero2 (`--zk`); malicious-verifier ZK (HM96 coin commitment, coin-only challenges): section 8c, lanes b-zk / b-zk-fix (COMPLETE_ZK_BACKEND in the interactive mode only; the statement's operands are public, so the label is about the construction).
 * Challenge expander: SHAKE-256 with `u mod p` on the *challenges* keeps the 2^-31 per-residue bias (a factor <= 1.5
   on the `1/p^D` field terms, 2^-172 and below: immaterial); only the mask sampler was moved to rejection.
 

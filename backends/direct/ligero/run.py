@@ -28,6 +28,7 @@ from verity_numerical.checker.step import step_output
 
 from .compile import P
 from .hints_torch import hints_torch
+from . import protocol as protocol_mod
 from .protocol import Config, config_for, prove, soundness, verify
 from .unit import compile_unit, public_vectors
 from .witness import hints_tensor, tables
@@ -74,8 +75,10 @@ def split_pub(units, ys):
 
 
 class Runner:
-    def __init__(self, device: str, target: float, rate_log2: int = 2, hints: str = "torch", zk: bool = False):
+    def __init__(self, device: str, target: float, rate_log2: int = 2, hints: str = "torch", zk: bool = False,
+                 mode: str = protocol_mod.MODE_INTERACTIVE):
         self.zk = zk
+        self.mode = mode
         self.p = REAL
         self.device = device
         self.hints_mode = hints
@@ -89,8 +92,12 @@ class Runner:
 
     def cfg(self, l: int) -> Config:
         if l not in self._cfg:
-            self._cfg[l] = config_for(l, self.target, self.rate_log2, zk=self.zk)
+            self._cfg[l] = config_for(l, self.target, self.rate_log2, zk=self.zk, mode=self.mode)
         return self._cfg[l]
+
+    @property
+    def interactive(self) -> bool:
+        return self.mode == protocol_mod.MODE_INTERACTIVE
 
     def prove_units(self, units, ys, check=True, mutate=None, min_l: int = 256):
         l = max(min_l, 1 << (len(units) - 1).bit_length())
@@ -108,14 +115,16 @@ class Runner:
             assert torch.equal(ref, alt), "hints_torch != gen_step"
         _sync(self.device)
         hints_seconds = time.perf_counter() - t0
+        coins = protocol_mod.Coins.sample() if self.interactive else None   # the runner plays the verifier's step 0
         proof = prove(self.p, self.sys, self.tb, self.cfg(l), pub, hints, self.device, check=check, mutate=mutate,
-                      words={"a": a, "b": b, "c": c, "y": y})
+                      words={"a": a, "b": b, "c": c, "y": y}, coins=coins)
         proof.timings["hints_host"] = hints_seconds
         return proof, (c, a, b, y), l
 
     def verify_units(self, proof, pubs, l):
         c, a, b, y = pubs
-        return verify(self.p, self.sys, self.tb, self.cfg(l), c, a, b, y, proof, self.device)
+        return verify(self.p, self.sys, self.tb, self.cfg(l), c, a, b, y, proof, self.device,
+                      coins=proof.coins if self.interactive else None)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -123,7 +132,7 @@ class Runner:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def gate(args) -> int:
-    R = Runner(args.device, args.target, args.rate_log2, args.hints, zk=args.zk)
+    R = Runner(args.device, args.target, args.rate_log2, args.hints, zk=args.zk, mode=args.mode)
     log = print
     log(f"system: {R.sys.summary()} compiled in {R.compile_seconds:.2f}s; device {args.device}")
     root = Path(args.root)
@@ -245,7 +254,7 @@ def gate(args) -> int:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def bench(args) -> int:
-    R = Runner(args.device, args.target, args.rate_log2, args.hints, zk=args.zk)
+    R = Runner(args.device, args.target, args.rate_log2, args.hints, zk=args.zk, mode=args.mode)
     root = Path(args.root)
     tu = instances.load("tu-k16", root)
     units = [tu.instance(i)[:3] for i in range(args.batch)]
@@ -303,8 +312,8 @@ def bench(args) -> int:
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
-        contract.measurement("rounds.protocol", 3),             # step-0 coin commitments, r1 opening, r2 opening
-        contract.measurement("rounds.sequential_depth", 3),     # PROTOCOL.md 8c
+        contract.measurement("rounds.protocol", 3 if R.interactive else 1),
+        contract.measurement("rounds.sequential_depth", 3 if R.interactive else 1),     # PROTOCOL.md 8c
         contract.measurement("mem.peak_device_bytes", peak_dev),
         contract.measurement("census.witness_elements", R.sys.m * l),
         contract.measurement("census.committed_elements", R.sys.m * cfg.n),
@@ -352,17 +361,22 @@ def main(argv=None) -> int:
         s.add_argument("--batch", type=int, default=4096)
         s.add_argument("--out", default=None)
         s.add_argument("--zk", action="store_true", help="HVZK masking (PROTOCOL.md 8b): blinded rows, mask rows, coset domain")
+        s.add_argument("--mode", default=protocol_mod.MODE_INTERACTIVE, choices=protocol_mod.MODES,
+                       help="interactive: verifier-supplied step-0 coins, challenges from the coins alone, statistical bound "
+                            "(PROTOCOL.md 8c); fiat-shamir: no step 0, challenges = H(transcript), q x eps accounting (t ~ 288, D = 7)")
         s.add_argument("--hints", default="torch", choices=("torch", "python"), help="hint generator: torch (vectorised) or the checker's Python gen_step")
         s.set_defaults(fn=fn)
     for name in ("gate", "gate-vu"):
         sub.choices[name].add_argument("--vus", type=int, default=64)
+    sub.choices["gate-vu"].add_argument("--dump-proof", default=None, metavar="PATH",
+                                        help="write each honest sub-batch proof as ligero-proof/v1 (PATH, or PATH_<lo> for several)")
+    sub.choices["gate-vu"].add_argument("--dump-statement", default=None, metavar="PATH",
+                                        help="write the matching ligero-statement/v1 (the verifier's public inputs + configuration)")
     for name in ("bench", "bench-vu"):
         sub.choices[name].add_argument("--reps", type=int, default=5)
         sub.choices[name].add_argument("--run-id", default=None)
     sub.choices["bench-vu"].add_argument("--total-vus", type=int, default=None,
                                          help="VUs in the whole batch, proved as ceil(total / (batch // 96)) sub-batches (union-bounded)")
-    sub.choices["bench-vu"].add_argument("--no-coin-commitment", action="store_true",
-                                         help="measure the pre-8c protocol (no step-0 coin commitment; depth 2; honest-verifier ZK only)")
     sub.choices["bench-vu"].add_argument("--hvzk-label", action="store_true",
                                          help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
     args = ap.parse_args(argv)

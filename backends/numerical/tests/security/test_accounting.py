@@ -409,3 +409,72 @@ def test_candidate_b_powers_combination_terms():
     assert -164 < log2(terms["linear_field"]) < -163          # 335.5M linear constraints (WP2 census)
     with pytest.raises(AccountingError, match="n_linear"):
         ligero_error(LIGERO_128, GL, Fc3, combination="powers")
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Batched logUp over the table union (PROTOCOL.md 15, lane a-logup-union)
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _a_v2(mode: str, B: int, Ft=GL, Fc=None):
+    from verity_numerical.security.accounting import V2_EXPORT_LAYERS, V2_EXPORT_TABLES
+    return CandidateA(K=1536, B=B, trace_field=Ft, challenge_field=Fc or Ft.extension(3), ligero=LIGERO_128,
+                      tables=V2_EXPORT_TABLES, layers=V2_EXPORT_LAYERS, lookup_mode=mode, hash_queries=2**60)
+
+
+def test_logup_union_terms_are_the_derivation():
+    """Two tables (N, |T|, cols): collision = (max_t (N_t+|T_t|)(cols_t-1) + N+|T|)/|F|, identity = (N+|T|-1)/(|F|-|T|),
+    fractional GKR over ceil(log2(N+|T|))."""
+    from verity_numerical.security.accounting import logup_union_error
+    u = logup_union_error([(1000, 100, 4), (500, 50, 1)], Fc3)
+    assert u["collision"] == Fraction(1100 * 3 + 1650, Fc3.size)
+    assert u["identity"] == Fraction(1650 - 1, Fc3.size - 150)
+    assert u["hypercube_dim"] == 11 and u["fractional_gkr"] == fractional_gkr_error(11, Fc3)
+    # one table: the union collapses to the per-table identity plus a collision term of (N+|T|)cols/|F|
+    one = logup_union_error([(1000, 100, 1)], Fc3)
+    assert one["identity"] == logup_identity_error(1000, 100, Fc3)
+    with pytest.raises(AccountingError, match="char"):
+        logup_union_error([(2**31, 10, 1)], Field.prime("BabyBear", BABYBEAR).extension(6))
+
+
+@pytest.mark.parametrize("B", [64, 4096])
+@pytest.mark.parametrize("field", ["Goldilocks^3", "BabyBear^6"])
+def test_union_lookup_meets_2_to_minus_128_on_the_exported_v2_shape(B, field):
+    """The union argument costs nothing at the operating point: the budget is bound by the commitment hash and the
+    Ligero query test on both fields; the lookup bucket stays near 2^-165 (GL^3) / 2^-158 (BB^6).  Depth is the
+    honest cost: one tree of 2^26 (B = 4096) / 2^23 (B = 64) leaves is deeper than the deepest per-table tree."""
+    Ft = GL if field.startswith("Gold") else BB
+    Fc = Ft.extension(3 if field.startswith("Gold") else 6)
+    per = account_candidate_a(_a_v2("per_table", B, Ft, Fc))
+    uni = account_candidate_a(_a_v2("union", B, Ft, Fc))
+    assert per.meets(-128) and uni.meets(-128)
+    assert round(log2(per.total()), 2) == round(log2(uni.total()), 2) == -130.16
+    lk_per, lk_uni = log2(per.by_component()["lookup"]), log2(uni.by_component()["lookup"])
+    assert abs(lk_per - lk_uni) < 0.5
+    if field.startswith("Gold"):
+        assert lk_uni < -165 if B == 4096 else lk_uni < -168
+    else:
+        assert lk_uni < -158.5 if B == 4096 else lk_uni < -161
+    assert uni.parameters["lookup_mode"] == "union"
+    # depth: the union chain is one tree of dimension ceil(log2(N + |T|)); at B = 4096 that is 26 (per-table max 24)
+    dim = 26 if B == 4096 else 23
+    assert uni.parameters["depth.lookup_chain"] == 1 + sum(k + 1 for k in range(1, dim))
+    assert uni.parameters["rounds.sequential_depth"] - per.parameters["rounds.sequential_depth"] == (51 if B == 4096 else 23)
+    # coins: one (z, beta, gamma) message instead of 12 per-table messages, and one chain of round challenges
+    assert uni.parameters["rounds.protocol"] < per.parameters["rounds.protocol"] / 5
+    # the exact union terms at B = 4096 over Goldilocks^3 (PROTOCOL.md 15.2)
+    if B == 4096 and field.startswith("Gold"):
+        names = {t.name.split(":")[0] + ":" + t.name.split(":")[1][:22]: t for t in uni.terms if t.component == "lookup"}
+        coll = next(t for t in uni.terms if "collision" in t.name)
+        ident = next(t for t in uni.terms if t.component == "lookup" and "rational identity" in t.name)
+        gkr = next(t for t in uni.terms if t.component == "lookup" and "fractional GKR" in t.name)
+        assert len(names) == 3
+        assert round(coll.log2, 1) == -165.8 and round(ident.log2, 1) == -166.8 and round(gkr.log2, 1) == -182.0
+        assert "N=33837056" in ident.name and "|T|=5245624" in ident.name
+
+
+def test_union_refuses_sharding_and_repetitions():
+    with pytest.raises(AccountingError, match="union"):
+        account_candidate_a(CandidateA(K=1536, B=64, trace_field=GL, challenge_field=Fc3, ligero=LIGERO_128,
+                                       lookup_mode="union", depth=DepthOptions(table_shard_bits=1)))
+    with pytest.raises(AccountingError, match="lookup_mode"):
+        account_candidate_a(CandidateA(K=1536, B=64, trace_field=GL, challenge_field=Fc3, ligero=LIGERO_128, lookup_mode="x"))

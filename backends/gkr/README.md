@@ -272,3 +272,48 @@ v1 model 0.505 s per 4096 batch (overhead 1.25e7) → v2 model 0.221 s (5.47e6) 
 with the commitment (encode + hash, 0.105 s) now 70 % of the GPU time; BabyBear^6 re-priced 0.103 s (2.54e6). The model's
 own v2 row is conservative on the arith bucket (it prices the census's 33 products at depth 3; the export has 26 at
 depth 1).
+
+## Batched logUp over the table union (vy-cpu, 12 threads, PCS mode, `--variant v2 --logup union`; lane a-logup-union, 2026-09-22)
+
+One fractional-GKR instance over all twelve v2 tables instead of one per table: every query and every row is tagged
+by its table, \(\phi(w,t)=\sum_k w_k\beta^k+\gamma\,\mathrm{tag}(t)\), one \((z,\beta,\gamma)\) message drawn after
+the commitment. `PROTOCOL.md` §15 (construction, soundness, depth, GPU shape); `gpu/HANDOFF_UNION.md` for the GPU
+lanes. **A protocol change to the lookup argument only; relation, export, commitment and chain unchanged.** The
+per-table path stays the default; `--logup union` / `VERITY_GKR_LOGUP=union` / `LOGUP=union|both` in
+`run_measure_vu.sh` select the union (`LOGUP=both` runs both legs on the same binary, box and instances and writes
+`result_per_table.json` + `result.json`). Security **2^-127.71 at both fields and both B, unchanged** (the union's
+collision 2^-165.8 + identity 2^-166.8 + GKR 2^-182.0 terms replace the twelve per-table identities, lookup bucket
+2^-165.2 → 2^-165.2; `account_candidate_a(lookup_mode="union")`, `V2_EXPORT_TABLES`).
+
+~~~sh
+VARIANT=v2 GATE=1 LOGUP=both      bash backends/gkr/run_measure_vu.sh        # cargo test (17, both modes); 30 + 4 v2 negatives per mode
+VARIANT=v2 NEGATIVES=1 LOGUP=both bash backends/gkr/run_measure_vu.sh        # vu-k1536-neg in both modes
+VARIANT=v2 LOGUP=both             bash backends/gkr/run_measure_vu.sh 4096   # per-table then union, one run dir
+~~~
+
+**Correctness gate** (vy-cpu, commit 2f547db): `cargo test --release` 17/17 (r20260922-093758-9aac; honest units in
+both modes, every exported negative rejected in both modes, a per-table proof rejected by a union verifier and vice
+versa, the redteam-3 `cross_table` and `forged_epilogue_hint` fixtures rejected); v2 unit negatives **30/30** and VU
+negatives **4/4** rejected in per-table AND union mode (same run); `vu-k1536-neg` **52/52** in both modes
+(r20260922-095946-5638: 8 at witness generation, 44/44 by the verifier, per mode).
+
+**Per-table vs union, same run, same binary, all VUs accepted:**
+
+| B | lookup | run id | prove_s (commit / lookup / arith / open) | verify_s | proof bytes | coins | depth (lookup chain) | peak RSS | committed | s / VU | union / per-table |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 64 | per-table | r20260922-101533-20c4 | 7.37 (0.94 / 4.41 / 0.29 / 1.72) | 1.76 | 3,152,048 | 2525 | 257 (254) | 1.9 GB | 6,868,664 | 0.1152 | — |
+| 64 | **union** | r20260922-101533-20c4 | **7.09** (1.00 / **3.96** / 0.32 / 1.79) | 1.62 | 2,992,520 | **642** | 280 (277) | 1.9 GB | 6,868,664 | 0.1107 | total **0.96×**, lookup 0.90×, bytes 0.95×, depth +23 |
+| 4096 | per-table (run 1) | r20260922-102013-2931 | 62.93 (9.00 / 25.43 / 13.89 / 14.17) | 17.19 | 41,574,896 | 3393 | 304 (301) | 13.4 GB | 109,120,184 | 0.0154 | — |
+| 4096 | union (run 1) | r20260922-102013-2931 | 70.49 (6.62 / 30.16 / 17.14 / 16.01) | 15.31 | 41,347,304 | 761 | 355 (352) | 13.4 GB | 109,120,184 | 0.0172 | total 1.12×, lookup 1.19× |
+| 4096 | per-table (run 2) | r20260922-102556-cdcc | 67.36 (9.53 / 28.29 / 15.20 / 13.80) | 14.87 | 41,574,896 | 3393 | 304 (301) | 13.5 GB | 109,120,184 | 0.0164 | — |
+| 4096 | **union (run 2)** | r20260922-102556-cdcc | **70.08** (8.49 / **29.45** / 14.82 / 16.80) | 15.17 | 41,347,304 | **761** | 355 (352) | 13.5 GB | 109,120,184 | 0.0171 | total **1.04×**, lookup 1.04×; two-run means **1.08× / 1.11×**, bytes 0.995×, depth +51 |
+
+Reading: on the CPU the union is a wash — slightly faster at B = 64 (twelve trees' fixed costs dominate there),
+slightly slower at B = 4096, where its one tree of \(2^{26}\) leaves (39.1M live, 42 % padding) does 1.25× the leaf
+work of the twelve smaller padded trees (\(2^{24}\)·2 + \(2^{23}\) + \(2^{21}\)·4 + \(2^{20}\)·3 + \(2^{17}\) +
+\(2^{16}\) = 53.7M). Buckets with identical work (arith, commit) vary ±20 % between the two runs on this box, so the
+B = 4096 difference is within noise; the **coins** (3393 → 761) and the **depth** (+51 trips: one 26-level chain vs
+the deepest 24-level per-table chain) are exact. Proof bytes barely move (the opening dominates). The union's case is
+the GPU's per-instance latency (`reports/a_kernels_h100_v2.md`: ~14 ms × 10 instances), not CPU throughput —
+`gpu/HANDOFF_UNION.md`. Not a `--breakthrough` (no > 1.5× change). vy-cpu is slower than vy-cpu2 (a-v2's 54.2 s
+per-table headline): the two legs here are the like-for-like comparison, not the absolute numbers.

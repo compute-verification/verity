@@ -1,4 +1,31 @@
-# b-zk lane handoff (branch `lane/b-zk`, worktree `verity-b-zk`, pod `vy-g3`)
+# b-zk-fix lane handoff (branch `lane/b-zk-fix`, 2026-09-22, pod `vy-g3`) -- read this first
+
+The red team (`reports/REDTEAM_ZK_URGENT.md`) downgraded the b-zk `COMPLETE_ZK_BACKEND` to `NON_ZK_PROOF_DIAGNOSTIC`
+(F1 `q` unmasked on `H`; F2 simulator only in the programmable ROM; F3 interactive bound quoted for a Fiat-Shamir
+run).  This lane repaired all three; full report `reports/b_zk_fix.md`, ledger `reports/ledger/b-zk-fix.jsonl`.
+
+* **F1**: `q_d = Q_d + u_d`, `u_d = u_ca + x^k u_cb` uniform of degree `< l + k - 1` with `sum_H u = 0` (two mask
+  rows `chain_a` (`D x k`), `chain_b` (`D x (l-1)`); `_sample_masks` adjusts `u_ca[0]`); verifier adds
+  `U_ca[c] + eta_c^k U_cb[c]`.  `M = m + 6D` in chain ZK mode.  Regression: `redteam/run.py` `q_leak` section
+  (0/16150 recovered at `l = 16384`, 0/190 in `fixtures/redteam-zk/q_leak_fixed_l256_2vu.json`).
+* **F2**: interactive challenges are `SHAKE(H(stmt, c1 c2, r1))` and `H(stmt, c1 c2, r2)` -- no `root`, `w`, `h`, `q`,
+  `v` (`seed1_preimage` / `seed2_preimage`).  `redteam/simulator.py` runs against the real `verify()` with the real
+  hash (an empty `ProgrammableOracle` only counts: 0 programmed points).  New `StatementAdaptiveVerifier`.
+* **F3**: `Config.mode` in `{"interactive", "fiat-shamir"}` (`run.py --mode`, bound into the statement digest;
+  `prove`/`verify` refuse the other mode's coin usage).  Interactive: `prove(coins=V)` / `verify(coins=V)` are
+  REQUIRED (the runner samples `Coins` for both when a gate passes none).  Fiat-Shamir: no step 0, `soundness()`
+  multiplies every term by `2^60`, `config_for` gives `t = 288`, `t_pad = 512`, `D = 7` at 2^-128 (25 x 170).
+  `--no-coin-commitment` is gone.  Labels in `bench_vu`: interactive+zk `COMPLETE_ZK_BACKEND`, fiat-shamir+zk
+  `COMPLETE_HVZK_BACKEND` (NIZK in PROM), else `NON_ZK_PROOF_DIAGNOSTIC`; every ZK label notes that the statement
+  publishes `a, b, y16` (privacy vacuous today).
+* Numbers (`r20260922-105905-2021`, 4096 VUs as 25 x 170, L40S, median of 3): ZK interactive 1.394 s / 0.340 ms/VU,
+  verifier 0.911 s, 122.4 MB, t=197, D=6, 2^-128.05, `COMPLETE_ZK_BACKEND`; ZK fiat-shamir 1.500 s / 0.366 ms/VU,
+  verifier 1.071 s, 165.3 MB, t=288, D=7, 2^-128.04, `COMPLETE_HVZK_BACKEND`; controls 1.366 s (interactive) and
+  1.437 s (fiat-shamir), `NON_ZK_PROOF_DIAGNOSTIC`.  Gates / negatives / battery / simulator: `r20260922-105112-d542`.
+* Open: `redteam_zk.py` "ground" coins now steer the column set (legal; overlap reported, not bounded); the
+  selective-abort-on-`root` rates at small n (O-zk3); statistically hiding leaves; a private-operand statement.
+
+# b-zk lane handoff (branch `lane/b-zk`, worktree `verity-b-zk`, pod `vy-g3`) -- superseded by the section above
 
 State at 09:35Z 2026-09-22: **everything in the brief is delivered and measured**; the branch is clean and every
 step is committed. Ledger `backends/numerical/reports/ledger/b-zk.jsonl` (6 entries, 3 breakthrough), plot

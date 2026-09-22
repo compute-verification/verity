@@ -24,7 +24,7 @@
   },
   {
    "name": "verifier.seconds",
-   "value": 3.016675,
+   "value": 1.000037,
    "unit": "s"
   },
   {
@@ -34,7 +34,7 @@
   },
   {
    "name": "verifier.peak_rss_bytes",
-   "value": 103440384,
+   "value": 114167808,
    "unit": "bytes"
   },
   {
@@ -60,7 +60,7 @@
  ],
  "sources": {
   "prover": "/tmp/prover_kernel_4096_recorded.json",
-  "verifier": "/Users/danielreuter/.research/runs/r20260922-093721-1330/verify4096_12t.json"
+  "verifier": "/Users/danielreuter/.research/runs/r20260922-105647-c947/v4096_-_t12_r1.json"
  },
  "latency": {
   "rtts_ms": [
@@ -74,49 +74,49 @@
    {
     "rtt_ms": 0.0,
     "prove": 4.43,
-    "verify": 3.016675,
+    "verify": 1.000037,
     "network": 0.0,
     "transfer": 0.0271462112,
-    "total": 7.4738212112,
+    "total": 5.457183211199999,
     "network_share": 0.0,
-    "verifier_share": 0.4036322136632489
+    "verifier_share": 0.1832514983091613
    },
    {
     "rtt_ms": 1.0,
     "prove": 4.43,
-    "verify": 3.016675,
+    "verify": 1.000037,
     "network": 0.438,
     "transfer": 0.0271462112,
-    "total": 7.9118212111999995,
-    "network_share": 0.05536019941653456,
-    "verifier_share": 0.3812870538239142
+    "total": 5.895183211199999,
+    "network_share": 0.07429794534084422,
+    "verifier_share": 0.16963628850415943
    },
    {
     "rtt_ms": 10.0,
     "prove": 4.43,
-    "verify": 3.016675,
+    "verify": 1.000037,
     "network": 4.38,
     "transfer": 0.0271462112,
-    "total": 11.8538212112,
-    "network_share": 0.3695011019620903,
-    "verifier_share": 0.25448966592728056
+    "total": 9.8371832112,
+    "network_share": 0.44524940788062245,
+    "verifier_share": 0.10165887719377034
    },
    {
     "rtt_ms": 50.0,
     "prove": 4.43,
-    "verify": 3.016675,
+    "verify": 1.000037,
     "network": 21.9,
     "transfer": 0.0271462112,
-    "total": 29.3738212112,
-    "network_share": 0.7455618335298407,
-    "verifier_share": 0.10269944037276861
+    "total": 27.3571832112,
+    "network_share": 0.8005210123765287,
+    "verifier_share": 0.036554823363195744
    }
   ],
   "overhead": {
-   "verifier_seconds_per_vu": 0.000736492919921875,
-   "verifier_overhead_vs_native": 74800062.17956544,
-   "prover_plus_verifier_overhead_vs_native": 184644269.9432373,
-   "verifier_share_of_compute": 0.4051036200720456
+   "verifier_seconds_per_vu": 0.000244149658203125,
+   "verifier_overhead_vs_native": 24796449.661254887,
+   "prover_plus_verifier_overhead_vs_native": 134640657.42492676,
+   "verifier_share_of_compute": 0.18416762169392217
   }
  }
 }

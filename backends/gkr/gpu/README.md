@@ -20,8 +20,13 @@ it cannot check these proofs directly; the Python verifier is the same code path
 | v5 | 9fb4180 | a-gpu2: packed k=3 GKR phase 1, CUDA-graphed LogUp (a-fusion), INT8 tensor-core opening, SIMT commit NTT | **1.857 s** | 0.43 / 0.66 / 0.57 / 0.10 | 6.5 s |
 | v6 | 5ad05fb | a-gpu2: vectorised Ligero verifier; fused rank-1 input-claim accumulate | **1.790 s** | 0.43 / 0.66 / 0.53 / 0.10 | 1.34 s |
 
-v5/v6 are transcript-identical to v2e's protocol (same round schedules and messages; the LogUp binding order is the
-low-bit-first schedule of v3, whose verifier port is unchanged); peak device memory 47.9 GB; `--warmup 1` excludes the
+v5/v6 are **not** transcript-identical to v2e (correction, lane a-protocol-diff, 2026-09-22): the LogUp per-level
+sumcheck binds the low bit of the level index first and the next point is `rho = [mu] + x*` (`logup.py` docstring,
+`../PROTOCOL.md` 4.2 "Variable order"), where v2e bound the top bit first with `rho = x* + [mu]`.  Same protocol
+under bit-reversal of the level index, same message *count* and order, different message *values* from level 2 on --
+the independent Rust verifier (`../verifier/`, written against v2e) rejected every v5/v6 proof at `LogUp POW level
+2: final check` until it followed the new schedule (`backends/numerical/reports/a_protocol_diff.md`).  The GKR
+schedule, the eq weights and everything else are v2e's.  Peak device memory 47.9 GB; `--warmup 1` excludes the
 one-off ~60 s LogUp graph compile/capture per process.  Negatives: 52/52 rejected on the v6 path (r20260922-094606-1813).
 
 Every run: 4096/4096 `vu-k1536` accepted with the recorded words, proof 33.9 MB (6086 extension elements + Ligero
