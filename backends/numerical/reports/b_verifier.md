@@ -139,8 +139,9 @@ replacement: no same-hardware pair exists (the Python verifier needs torch + the
   mutations) on `vy-g3`; `r20260922-101533-4fe3`, `r20260922-102215-ad56` (timing) on `vy-cpu3`.
 * `backends/direct/ligero/serialize.py` -- the `ligero-*/v1` formats (writer, reader, round-trip), `dump-system`,
   `gen-honest` / `gen-small` / `gen-negatives` / `gen-mutations` / `gen-witness-mutations`, and `verify` (the Python
-  verifier driven from the files, used for the agreement column).  The torch prover gained the dump path through it
-  (`--dump-proof` / `--dump-statement` semantics: every generator writes `.stmt` + `.proof` + `manifest.json`).
+  verifier driven from the files, used for the agreement column).  `run.py gate-vu --dump-proof PATH
+  --dump-statement PATH` writes the gate's honest sub-batch proofs in the same formats (smoke-tested on `vy-g3`, run
+  `r20260922-103318-2624`: the dumped B = 2 ZK proof is accepted by the Rust verifier at 2^-128.16).
 * Ledger `backends/numerical/reports/ledger/b-verifier.jsonl`: `b-verifier.accept_rate`, `.reject_rate`,
   `.seconds_1T`, `.seconds_12T` (scope `component`, `implementation_status` and the label caveat in `note`).
 
