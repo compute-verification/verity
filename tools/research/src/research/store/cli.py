@@ -3,7 +3,9 @@
   research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
   research data show ART|ATTEMPT|DRV [--json]      manifest / attempt / attempts with that derivation
   research data where ART [--json]                 replicas: local / repo / remote (+ verified_utc)
-  research data push [ART|RUN ...] [--pending]     preserve on the remote: blobs + manifest read back (PRESERVED); a run pushes its attempt + outputs
+  research data push [ART|RUN ...] [--pending] [--jobs N] [--verify head|readback]
+                                                   preserve on the remote: blobs uploaded concurrently and verified, then the manifest (PRESERVED);
+                                                   a run pushes its attempt + outputs
   research data fetch ART [--to DIR]               materialise the payload (file or tree); prints the path
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
@@ -12,6 +14,8 @@
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
   research data reindex [--remote]
   research data sql "SELECT ..." [--json]          read-only connection
+  research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
+                                                   a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
   (lookup / pull / attempt are provided by cli_prov when present)
 
 Every command takes `--store ROOT` (default `$RESEARCH_STORE` or `~/.research/store`).  `COMMANDS` maps a name to
@@ -344,15 +348,32 @@ def _attempt_artifacts(doc: dict) -> list[str]:
     return out
 
 
+def _push_line(x: dict) -> str:
+    """One line per artifact: outcome, then objects / uploaded / skipped, MB, seconds, objects/s and the verification done."""
+    head = f"{x['id']}  {x['kind']}  {'PRESERVED' if x['preserved'] else 'NOT preserved: ' + '; '.join(x.get('errors') or ['absent'])}"
+    if not x.get("objects"):
+        return head
+    s = x.get("seconds") or 0.0
+    rate = f"{x['objects'] / s:.1f} obj/s" if s > 0 else "-"
+    return (f"{head}  {x['objects']} objects ({x.get('uploaded', 0)} uploaded, {x.get('skipped', 0)} already there) "
+            f"{x.get('bytes', 0) / 1e6:.1f} MB in {s:.1f}s  {rate}  verified {x.get('verified') or '-'}")
+
+
 def cmd_push(argv: list[str]) -> int:
-    """Preserve on the remote (README §7): an artifact is pushed blob-by-blob and read back (PRESERVED); a run id pushes the attempt
-    manifest and every artifact it references.  `--pending` pushes every local artifact without a verified remote replica and every
-    attempt the remote lacks.  Exit 1 if anything is not PRESERVED."""
+    """Preserve on the remote (README §7): an artifact's blobs go up concurrently (`--jobs`), each verified (`--verify head`: size +
+    MD5 ETag, the default; `--verify readback`: download + sha256), then its manifest; a run id pushes the attempt manifest and every
+    artifact it references.  `--pending` pushes every local artifact without a verified remote replica and every attempt the remote
+    lacks.  One artifact's failure is reported, the batch continues; exit 1 if anything is not PRESERVED."""
     ap = _ap("push")
     ap.add_argument("targets", nargs="*", help="art:<hex> or run ids")
     ap.add_argument("--pending", action="store_true", help="everything local that the remote does not verifiably hold")
+    ap.add_argument("--jobs", type=int, default=32, metavar="N", help="concurrent uploads per artifact (default 32)")
+    ap.add_argument("--verify", choices=["head", "readback"], default="head",
+                    help="per-object check: head = Content-Length + single-part ETag == MD5 (default); readback = download + sha256")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
+    if ns.jobs < 1:
+        raise ValueError("--jobs must be >= 1")
     st = LocalStore(ns.store)
     from .local import attempt_key  # noqa: PLC0415
 
@@ -378,15 +399,26 @@ def cmd_push(argv: list[str]) -> int:
             reports.append({"id": rid, "kind": "attempt", "preserved": r.head(attempt_key(rid)) is not None})
         except Exception as e:  # noqa: BLE001
             reports.append({"id": rid, "kind": "attempt", "preserved": False, "errors": [f"{type(e).__name__}: {e}"]})
+    def heartbeat(p: dict) -> None:                                # long artifacts (10^5 objects): a running count on stderr, no --json noise
+        if not ns.json and sys.stderr.isatty():
+            print(f"\r  {p['id'][:16]}… {p['done']}/{p['objects'] - 1} blobs  {p['done'] / max(p['seconds'], 1e-9):.1f} obj/s", end="", file=sys.stderr, flush=True)
+
+    notes_seen: set[str] = set()
     for a in dict.fromkeys(arts):
         try:
-            rep = st.push(a, preserve=True)
-            reports.append({"id": a, "kind": st.get_manifest(a).kind, "preserved": rep["preserved"], "errors": rep.get("errors", [])})
+            rep = st.push(a, preserve=True, jobs=ns.jobs, verify=ns.verify, progress=heartbeat)
+            reports.append({"id": a, "kind": st.get_manifest(a).kind, **{k: rep.get(k) for k in ("preserved", "errors", "verified", "objects", "uploaded", "skipped", "bytes", "seconds", "notes")}})
         except Exception as e:  # noqa: BLE001
             reports.append({"id": a, "kind": "?", "preserved": False, "errors": [f"{type(e).__name__}: {e}"]})
         if not ns.json:
             x = reports[-1]
-            print(f"{x['id']}  {x['kind']}  {'PRESERVED' if x['preserved'] else 'NOT preserved: ' + '; '.join(x.get('errors') or ['absent'])}", flush=True)
+            if sys.stderr.isatty() and x.get("objects"):
+                print("\r" + " " * 60 + "\r", end="", file=sys.stderr)
+            print(_push_line(x), flush=True)
+            for note in x.get("notes") or []:
+                if note not in notes_seen:                             # e.g. the remote switching conditional PUT off: said once
+                    notes_seen.add(note)
+                    print(f"research data push: note: {note}", file=sys.stderr)
     bad = [x for x in reports if not x["preserved"]]
     if ns.json:
         _dump({"remote": r.describe(), "pushed": reports, "not_preserved": len(bad)})
@@ -398,9 +430,40 @@ def cmd_push(argv: list[str]) -> int:
     return 1 if bad else 0
 
 
+def cmd_mint_credential(argv: list[str]) -> int:
+    """A short-lived, bucket-scoped R2 credential for a pod (`credentials.py`): signed locally with the parent key from the environment
+    (the env vars store.toml names, default AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), or via the Cloudflare API with
+    CLOUDFLARE_API_TOKEN.  Prints JSON, or with `--env` the three `export` lines for a bootstrap; never writes a file."""
+    from . import credentials as C  # noqa: PLC0415
+
+    ap = _ap("mint-credential")
+    ap.add_argument("--ttl", default="1h", help="lifetime: <n>[s|m|h|d], max 7d (default 1h)")
+    ap.add_argument("--permission", default="object-read-write", choices=C.SCOPES, help="scope preset (default object-read-write)")
+    ap.add_argument("--prefix", action="append", default=[], metavar="P", help="restrict to keys under this prefix (repeatable)")
+    ap.add_argument("--object", action="append", default=[], metavar="KEY", help="restrict to this exact key (repeatable)")
+    ap.add_argument("--actions", default=None, metavar="A,B", help="explicit S3 actions, e.g. PutObject,HeadObject,GetObject (local signing only)")
+    ap.add_argument("--via", default="auto", choices=["auto", "local", "api"], help="local = sign a JWT with the parent secret; api = Cloudflare API")
+    ap.add_argument("--endpoint", default=None, help="override store.toml / R2_ENDPOINT")
+    ap.add_argument("--bucket", default=None, help="override store.toml / R2_BUCKET")
+    ap.add_argument("--account-id", default=None, help="override R2_ACCOUNT_ID / the endpoint's <account> host part")
+    ap.add_argument("--env", action="store_true", help="print `export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_SESSION_TOKEN=...`")
+    ap.add_argument("--json", action="store_true", help="(default output) the credential with bucket, scope, expiry, how it was minted")
+    ns = ap.parse_args(argv)
+    actions = [a for a in (ns.actions or "").split(",") if a] or None
+    cred = C.mint(via=ns.via, scope=ns.permission, ttl_s=C.parse_ttl(ns.ttl), prefixes=ns.prefix or None, objects=ns.object or None, actions=actions,
+                  endpoint=ns.endpoint, bucket=ns.bucket, account_id=ns.account_id)
+    if ns.env:
+        print(C.env_lines(cred))
+        print(f"# {cred['scope'] or 'actions-scoped'} on s3://{cred['bucket']} until {cred['expires_utc']} (minted {cred['via']}"
+              + (f", prefixes {cred['prefixes']}" if cred["prefixes"] else "") + (f", actions {cred['actions']}" if cred["actions"] else "") + ")")
+    else:
+        _dump({k: v for k, v in cred.items() if k != "jwt"})
+    return 0
+
+
 COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "select": cmd_select, "snapshot": cmd_snapshot,
-    "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push,
+    "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
 }
 
 

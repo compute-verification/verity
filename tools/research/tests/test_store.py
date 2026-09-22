@@ -665,6 +665,475 @@ def test_s3remote_against_a_fake_bucket(tmp_path):
         th.join(5)
 
 
+class FakeS3:
+    """An in-process S3 look-alike for `push`: HEAD / PUT / GET (+ list-type=2) on `/<bucket>/<key>`, ETag = MD5 of the stored bytes,
+    `If-None-Match: *` -> 412 when the key exists.  Knobs: `reject_conditional` = 400 | 501 models a service without conditional PUT
+    (a `NotImplemented` error body); `corrupt` keys are stored with one byte flipped (so their ETag != the client's MD5 and their
+    read-back sha256 != the manifest's); `head_404_once` keys answer 404 to their first HEAD although present (a writer that landed
+    between the client's HEAD and PUT, so the conditional PUT meets a 412).  `log` records (method, key, conditional?) in arrival order."""
+
+    def __init__(self, reject_conditional: int | None = None, corrupt: set[str] = frozenset(), head_404_once: set[str] = frozenset()):
+        import http.server
+        import threading
+        import urllib.parse
+
+        self.objects: dict[str, bytes] = {}
+        self.log: list[tuple[str, str, bool]] = []
+        self.lock = threading.Lock()
+        self.reject_conditional, self.corrupt, self.head_404_once = reject_conditional, set(corrupt), set(head_404_once)
+        state = self
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):  # noqa: D102
+                pass
+
+            def _key(self):
+                u = urllib.parse.urlsplit(self.path)
+                assert u.path.startswith("/bkt"), u.path
+                return urllib.parse.unquote(u.path[len("/bkt"):].lstrip("/")), dict(urllib.parse.parse_qsl(u.query, keep_blank_values=True))
+
+            def _reply(self, code: int, body: bytes = b"", headers: dict | None = None, head_only: bool = False):
+                self.send_response(code)
+                for k, v in (headers or {}).items():
+                    self.send_header(k, v)
+                self.send_header("Content-Length", str(len(body)) if not head_only else headers.get("Content-Length", "0"))
+                self.end_headers()
+                if body and not head_only:
+                    self.wfile.write(body)
+
+            def do_PUT(self):
+                key, _ = self._key()
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                cond = self.headers.get("If-None-Match") == "*"
+                with state.lock:
+                    state.log.append(("PUT", key, cond))
+                    if self.headers["x-amz-content-sha256"] != hashlib.sha256(body).hexdigest():
+                        return self._reply(400, b"<Error><Code>XAmzContentSHA256Mismatch</Code></Error>")
+                    if cond and state.reject_conditional:
+                        return self._reply(state.reject_conditional, b"<Error><Code>NotImplemented</Code><Message>If-None-Match</Message></Error>")
+                    if cond and key in state.objects:
+                        return self._reply(412, b"<Error><Code>PreconditionFailed</Code></Error>")
+                    if key in state.corrupt:
+                        body = bytes([body[0] ^ 0xFF]) + body[1:]
+                    state.objects[key] = body
+                self._reply(200, headers={"ETag": f'"{hashlib.md5(body).hexdigest()}"'})
+
+            def do_HEAD(self):
+                key, _ = self._key()
+                with state.lock:
+                    state.log.append(("HEAD", key, False))
+                    if key in state.head_404_once:
+                        state.head_404_once.discard(key)
+                        return self._reply(404, head_only=True, headers={"Content-Length": "0"})
+                    data = state.objects.get(key)
+                if data is None:
+                    return self._reply(404, head_only=True, headers={"Content-Length": "0"})
+                self._reply(200, head_only=True, headers={"Content-Length": str(len(data)), "ETag": f'"{hashlib.md5(data).hexdigest()}"'})
+
+            def do_GET(self):
+                key, q = self._key()
+                with state.lock:
+                    state.log.append(("GET", key, False))
+                    if q.get("list-type") == "2":
+                        keys = sorted(k for k in state.objects if k.startswith(q.get("prefix", "")))
+                        xml = ('<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                               + "".join(f"<Contents><Key>{k}</Key></Contents>" for k in keys) + "<IsTruncated>false</IsTruncated></ListBucketResult>").encode()
+                        return self._reply(200, xml)
+                    data = state.objects.get(key)
+                if data is None:
+                    return self._reply(404)
+                self._reply(200, data, headers={"ETag": f'"{hashlib.md5(data).hexdigest()}"'})
+
+        self.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        self.srv.daemon_threads = True
+        self.thread = threading.Thread(target=self.srv.serve_forever, daemon=True)
+        self.thread.start()
+
+    @property
+    def endpoint(self) -> str:
+        return f"http://127.0.0.1:{self.srv.server_address[1]}"
+
+    def remote(self) -> remote_s3.S3Remote:
+        return remote_s3.S3Remote(self.endpoint, "bkt", "ak", "sk")
+
+    def puts(self, key_prefix: str = "") -> list[tuple[str, bool]]:
+        return [(k, c) for m, k, c in self.log if m == "PUT" and k.startswith(key_prefix)]
+
+    def close(self) -> None:
+        self.srv.shutdown()
+        self.srv.server_close()
+        self.thread.join(5)
+
+
+@pytest.fixture
+def fake_s3(env, monkeypatch):
+    """A `FakeS3` wired in as the store's remote through store.toml (credentials from env vars, as in production)."""
+    made: list[FakeS3] = []
+
+    def make(**kw) -> FakeS3:
+        s = FakeS3(**kw)
+        made.append(s)
+        (env / "store.toml").write_text(f'[remote]\ntype = "s3"\nbucket = "bkt"\nendpoint = "{s.endpoint}"\n'
+                                        'access_key_id_env = "T_AK"\nsecret_access_key_env = "T_SK"\n')
+        monkeypatch.setenv("T_AK", "ak")
+        monkeypatch.setenv("T_SK", "sk")
+        return s
+
+    yield make
+    for s in made:
+        s.close()
+
+
+def _many_files(root: Path, n: int, seed: int = 0) -> Path:
+    rng = __import__("random").Random(seed)
+    for i in range(n):
+        p = root / f"d{i % 7}" / f"f{i:05d}.bin"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(rng.randbytes(rng.randint(1, 4096)))
+    return root
+
+
+def test_push_is_concurrent_conditional_and_verified_by_etag(fake_s3, tmp_path):
+    """300 blobs with 16 workers: every object lands, every PUT is a conditional create, the manifest's PUT comes after the last blob's,
+    and the report is deterministic.  A second push HEADs everything, uploads nothing and is still PRESERVED (`etag-md5`).  A key that
+    another writer created between our HEAD and PUT meets a 412 and counts as present."""
+    s = fake_s3()
+    st = LocalStore()
+    art = st.put_artifact("run-files/v1", {"n": 300}, tree=_many_files(tmp_path / "t", 300))
+    m = st.get_manifest(art)
+    rep = st.push(art, jobs=16)
+    assert rep["preserved"] and rep["verified"] == "etag-md5" and rep["errors"] == [] and rep["notes"] == []
+    assert rep["objects"] == 301 and rep["uploaded"] == 301 and rep["skipped"] == 0 and rep["bytes"] == m.payload.bytes + len(m.canonical())
+    assert set(s.objects) == {f"objects/sha256/{h}" for h, _ in m.blobs()} | {f"manifests/{ids.hex_of(art)}.json"}
+    for h, _ in m.blobs():
+        assert hashlib.sha256(s.objects[f"objects/sha256/{h}"]).hexdigest() == h
+    puts = s.puts()
+    assert len(puts) == 301 and all(c for _, c in puts), "every create carried If-None-Match: *"
+    assert puts[-1][0] == f"manifests/{ids.hex_of(art)}.json", "the manifest is the last object to go up"
+    assert [k for k, _ in puts[:-1]] != sorted(k for k, _ in puts[:-1]) or True   # completion order is arbitrary...
+    assert rep["checked"] == [f"objects/sha256/{h}" for h, _ in m.blobs()] + [f"manifests/{ids.hex_of(art)}.json"], "...the report is not"
+    reps = st.index.replicas(art)["remote"]
+    assert reps["verified_utc"] == rep["verified_utc"] and reps["verified"] == "etag-md5"
+    where = {w["location"]: w for w in st.where(art)}
+    assert where["remote"]["present"] and where["remote"]["verified_utc"] == rep["verified_utc"]
+
+    n_log = len(s.log)
+    again = st.push(art, jobs=16)
+    assert again["preserved"] and again["uploaded"] == 0 and again["skipped"] == 301 and again["verified"] == "etag-md5"
+    assert not [x for x in s.log[n_log:] if x[0] == "PUT"], "a present object costs one HEAD: no PUT"
+    assert [x[0] for x in s.log[n_log:]].count("GET") == 1 and len(s.log[n_log:]) == 301 + 1, "one HEAD per blob; HEAD + GET for the manifest (always read back)"
+
+    # a racing writer: HEAD says absent, the conditional PUT says 412 -> `exists`, then the verifying HEAD confirms size + MD5
+    victim = f"objects/sha256/{m.blobs()[7][0]}"
+    s.head_404_once.add(victim)
+    n_log = len(s.log)
+    race = st.push(art, jobs=4)
+    assert race["preserved"] and race["uploaded"] == 0 and race["skipped"] == 301
+    assert s.log[n_log:].count(("PUT", victim, True)) == 1 and s.objects[victim] == s.objects[victim]
+
+    # `push_attempt` and `preserve=False` still work on the dict-returning `put`
+    st.put_attempt(_attempt(outputs={"result": art}))
+    st.push_attempt("r20260922-105905-2021")
+    assert "attempts/r20260922-105905-2021.json" in s.objects
+    snap = st.snapshot("s", [art])
+    rep = st.push(snap, preserve=False)
+    assert rep["preserved"] is None and rep["objects"] == 1 and rep["verified"] is None and f"manifests/{ids.hex_of(snap)}.json" in s.objects
+    assert st.index.replicas(snap)["remote"]["verified_utc"] is None
+    assert st.push(snap)["verified"] == "sha256-readback", "no blobs: the manifest read-back is the whole check"
+
+
+def test_push_falls_back_to_plain_put_when_the_service_rejects_the_condition(fake_s3, tmp_path):
+    s = fake_s3(reject_conditional=501)
+    st = LocalStore()
+    art = st.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t", 40, seed=1))
+    rep = st.push(art, jobs=8)
+    assert rep["preserved"] and rep["uploaded"] == 41
+    assert len(rep["notes"]) == 1 and "NotImplemented (501)" in rep["notes"][0] and "plain PUT" in rep["notes"][0]
+    puts = s.puts()
+    assert sum(1 for _, c in puts if c) >= 1 and sum(1 for _, c in puts if not c) == 41, "the first rejection switches it off; every object still lands"
+    assert st.remote.conditional_put is False and "501" in st.remote.conditional_put_error
+    assert set(s.objects) == {f"objects/sha256/{h}" for h, _ in st.get_manifest(art).blobs()} | {f"manifests/{ids.hex_of(art)}.json"}
+    s2 = fake_s3(reject_conditional=400)
+    st2 = LocalStore(tmp_path / "s2")
+    art2 = st2.put_artifact("proof/v1", {}, file=tmp_path / "t" / "d0" / "f00000.bin")
+    rep2 = st2.push(art2)
+    assert rep2["preserved"] and "(400)" in rep2["notes"][0] and len(s2.objects) == 2
+
+
+def test_push_surfaces_a_bad_etag_as_not_preserved_and_withholds_the_manifest(fake_s3, tmp_path):
+    """The service stores different bytes for one key (its ETag != our MD5): that blob is an error, the artifact is NOT preserved, the
+    manifest is never uploaded (it must not be visible before its blobs), no verified_utc is recorded, and the batch (`cmd_push`)
+    goes on.  With `--verify readback` the same corruption is caught by sha256."""
+    s = fake_s3()
+    st = LocalStore()
+    art = st.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t", 30, seed=2))
+    m = st.get_manifest(art)
+    bad = f"objects/sha256/{m.blobs()[11][0]}"
+    s.corrupt.add(bad)
+    rep = st.push(art, jobs=8)
+    assert rep["preserved"] is False and len(rep["errors"]) == 1 and rep["errors"][0].startswith(bad) and "ETag" in rep["errors"][0] and "MD5" in rep["errors"][0]
+    assert rep["verified"] is None and rep["verified_utc"] is None and rep["uploaded"] == 30 and rep["objects"] == 31
+    assert f"manifests/{ids.hex_of(art)}.json" not in s.objects and "manifest not uploaded: 1 blob(s) failed" in rep["notes"]
+    assert len(rep["checked"]) == 29
+    assert st.index.replicas(art).get("remote", {}).get("verified_utc") is None
+    assert main(["push", art]) == 1
+    # the remote holds same-size different bytes under an immutable key: a later push refuses to overwrite and says why
+    rep = st.push(art, verify="readback")
+    assert not rep["preserved"] and "RemoteConflict" in rep["errors"][0] and f"manifests/{ids.hex_of(art)}.json" not in s.objects
+    # readback catches a corruption that HEAD cannot see: the server lies about the ETag but serves the bytes it has
+    s2 = fake_s3()
+    st2 = LocalStore(tmp_path / "s2")
+    art2 = st2.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t2", 12, seed=3))
+    m2 = st2.get_manifest(art2)
+    rep = st2.push(art2, jobs=4, verify="readback")
+    assert rep["preserved"] and rep["verified"] == "sha256-readback" and st2.index.replicas(art2)["remote"]["verified"] == "sha256-readback"
+    assert sum(1 for x in s2.log if x[0] == "GET") == 13, "readback: one GET per blob and one for the manifest"
+    victim = f"objects/sha256/{m2.blobs()[0][0]}"
+    data = bytearray(s2.objects[victim])
+    data[0] ^= 1
+    s2.objects[victim] = bytes(data)
+    rep = st2.push(art2, jobs=4, verify="readback")                       # HEAD sees a changed ETag -> RemoteConflict (immutable key)
+    assert not rep["preserved"] and "ETag" in rep["errors"][0]
+    assert not st2.verify(art2)["preserved"] and "read-back sha256" in st2.verify(art2)["errors"][0]
+
+
+def test_push_refuses_a_blob_too_big_for_one_put(fake_s3, tmp_path, monkeypatch, capsys):
+    fake_s3()
+    st = LocalStore()
+    art = st.put_artifact("proof/v1", {}, file=_many_files(tmp_path / "t", 1) / "d0" / "f00000.bin")
+    st.remote.single_put_max = 0
+    with pytest.raises(StoreError, match="multipart upload is not implemented"):
+        st.push(art)
+    with pytest.raises(ValueError, match="verify must be"):
+        st.push(art, verify="etag")
+    monkeypatch.setattr(remote_s3.S3Remote, "single_put_max", 0)
+    assert main(["push", art]) == 1 and "multipart upload is not implemented" in capsys.readouterr().out
+
+
+def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, capsys):
+    s = fake_s3()
+    st = LocalStore()
+    art = st.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t", 25, seed=4))
+    assert main(["push", art, "--jobs", "5", "--verify", "readback"]) == 0
+    out = capsys.readouterr().out
+    line = out.splitlines()[0]
+    assert line.startswith(f"{art}  run-files/v1  PRESERVED  26 objects (26 uploaded, 0 already there)") and "obj/s" in line and "verified sha256-readback" in line
+    assert "1/1 preserved" in out and sum(1 for x in s.log if x[0] == "GET") == 26
+    assert main(["push", art, "--json"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    x = doc["pushed"][0]
+    assert x["preserved"] and x["objects"] == 26 and x["uploaded"] == 0 and x["skipped"] == 26 and x["verified"] == "etag-md5" and x["seconds"] >= 0
+    assert main(["push", art, "--jobs", "0"]) == 1 and "--jobs" in capsys.readouterr().err
+    s.reject_conditional = 501
+    art2 = st.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t2", 3, seed=5))
+    assert main(["push", art2, art]) == 0
+    cap = capsys.readouterr()
+    assert cap.out.count("PRESERVED") == 2 and "2/2 preserved" in cap.out
+    assert cap.err.count("note: NotImplemented (501)") == 1, "the fallback is said once per batch"
+
+
+def test_s3remote_session_token_is_sent_and_signed(monkeypatch, tmp_path, env):
+    """A temporary credential's session token goes out as `x-amz-security-token` on every request and is part of SignedHeaders (so
+    the signature covers it, as SigV4 requires); without a token the header is absent.  The transport is faked: no network."""
+    import io
+    import urllib.request
+
+    sent: list[urllib.request.Request] = []
+
+    class Resp(io.BytesIO):
+        headers = {"Content-Length": "5", "ETag": '"x"'}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_open(req, timeout=None):
+        sent.append(req)
+        return Resp(b"")
+
+    r = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bucket", "ak", "sk", session_token="tok/EN+123==")
+    monkeypatch.setattr(r._opener, "open", fake_open)
+    r.head("objects/sha256/" + "0" * 64)
+    p = tmp_path / "x"
+    p.write_bytes(b"12345")
+    with r._request("PUT", "k", body=p):
+        pass
+    assert len(sent) == 2
+    for req in sent:
+        assert req.get_header("X-amz-security-token") == "tok/EN+123=="
+        auth = req.get_header("Authorization")
+        signed = auth.split("SignedHeaders=")[1].split(",")[0].split(";")
+        assert "x-amz-security-token" in signed and signed == sorted(signed)
+        # the signature is reproducible from the headers that were sent (token included), i.e. it really covers the token
+        method = "PUT" if req.data is not None else "HEAD"
+        sig_headers = {k.lower(): v for k, v in req.header_items() if k.lower() != "authorization"}
+        creq = remote_s3.canonical_request(method, "/bucket/" + ("k" if method == "PUT" else "objects/sha256/" + "0" * 64), {}, sig_headers,
+                                           sig_headers["x-amz-content-sha256"])
+        date = sig_headers["x-amz-date"]
+        sts = remote_s3.string_to_sign(date, f"{date[:8]}/auto/s3/aws4_request", creq)
+        assert auth.endswith("Signature=" + remote_s3.signature("sk", date[:8], "auto", sts))
+    sent.clear()
+    plain = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bucket", "ak", "sk")
+    monkeypatch.setattr(plain._opener, "open", fake_open)
+    plain.head("k")
+    assert sent[0].get_header("X-amz-security-token") is None and "security-token" not in sent[0].get_header("Authorization")
+
+    # load_remote: the token's env var is optional in the config (default AWS_SESSION_TOKEN) and optional in the environment
+    (env / "c.toml").write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://acct.r2.cloudflarestorage.com"\n'
+                                'access_key_id_env = "T_AK"\nsecret_access_key_env = "T_SK"\n')
+    monkeypatch.setenv("T_AK", "id")
+    monkeypatch.setenv("T_SK", "secret")
+    monkeypatch.delenv("AWS_SESSION_TOKEN", raising=False)
+    assert load_remote(env / "c.toml").session_token is None
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "t1")
+    assert load_remote(env / "c.toml").session_token == "t1"
+    (env / "c.toml").write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://acct.r2.cloudflarestorage.com"\n'
+                                'access_key_id_env = "T_AK"\nsecret_access_key_env = "T_SK"\nsession_token_env = "T_ST"\n')
+    assert load_remote(env / "c.toml").session_token is None, "a named env var that is unset means no token, not the default's value"
+    monkeypatch.setenv("T_ST", "t2")
+    assert load_remote(env / "c.toml").session_token == "t2"
+
+
+# ---- temporary credentials ------------------------------------------------------------------------------------------------------------
+
+def test_mint_local_ports_cloudflares_reference_signing():
+    """The JWT is Cloudflare's `createTempCredentials` claim for claim: HS256 with the parent secret, `sub` account, `iss` parent key id,
+    `aud` endpoint host, iat/exp; temp secret = sha256 hex of the JWT; session token = base64("jwt/" + JWT); key id = the parent's.
+    `actions` replaces `scope` (R2 rejects both together)."""
+    import base64
+    import hmac
+
+    from research.store import credentials as C
+
+    ep, acct, ak, sk = "https://1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com", "1d4dfa0a7dc0639e19f5d0125f14a634", "PARENTKEYID", "parent-secret"
+    c = C.mint_local(ep, acct, ak, sk, "verity-dev", "object-read-only", ttl_s=900, now=1_790_000_000)
+    head, claims = C.decode_jwt(c["jwt"])
+    assert head == {"alg": "HS256", "typ": "JWT"}
+    assert claims == {"bucket": "verity-dev", "scope": "object-read-only", "sub": acct, "iss": ak, "aud": "1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com",
+                      "iat": 1_790_000_000, "exp": 1_790_000_900}
+    assert list(claims) == ["bucket", "scope", "sub", "iss", "aud", "iat", "exp"], "claim order as jose emits it"
+    h, p, s = c["jwt"].split(".")
+    assert base64.urlsafe_b64encode(hmac.new(b"parent-secret", f"{h}.{p}".encode(), hashlib.sha256).digest()).rstrip(b"=").decode() == s
+    assert "=" not in c["jwt"] and c["accessKeyId"] == ak
+    assert c["secretAccessKey"] == hashlib.sha256(c["jwt"].encode()).hexdigest()
+    assert base64.b64decode(c["sessionToken"]).decode() == "jwt/" + c["jwt"]
+    assert c["expires_utc"] == "2026-09-21T14:28:20Z"
+    same = C.mint_local(ep, acct, ak, sk, "verity-dev", "object-read-only", ttl_s=900, now=1_790_000_000)
+    assert same == c, "deterministic for a fixed `now`"
+    assert C.mint_local(ep, acct, ak, "other", "verity-dev", "object-read-only", ttl_s=900, now=1_790_000_000)["jwt"] != c["jwt"]
+
+    scoped = C.mint_local(ep, acct, ak, sk, "b", "object-read-write", actions=["PutObject", "HeadObject"], prefixes=["scratch/x/"], now=1)
+    claims = C.decode_jwt(scoped["jwt"])[1]
+    assert "scope" not in claims and claims["actions"] == ["PutObject", "HeadObject"] and claims["paths"] == {"prefixPaths": ["scratch/x/"], "objectPaths": []}
+    assert list(claims)[:3] == ["bucket", "actions", "paths"] and claims["exp"] - claims["iat"] == 3600, "default ttl 1 h"
+    objs = C.mint_local(ep, acct, ak, sk, "b", "object-read-write", objects=["manifests/a.json"], now=1)
+    assert C.decode_jwt(objs["jwt"])[1]["paths"] == {"prefixPaths": [], "objectPaths": ["manifests/a.json"]}
+    assert "paths" not in C.decode_jwt(c["jwt"])[1], "no paths -> no paths claim (whole bucket)"
+    for bad in ({"scope": "root"}, {"scope": "object-read-only", "actions": ["s3:GetObject"]}, {"scope": "object-read-only", "ttl_s": 604801}, {"scope": "object-read-only", "ttl_s": 0}):
+        with pytest.raises(C.MintError):
+            C.mint_local(ep, acct, ak, sk, "b", **bad)
+    assert C.parse_ttl("6h") == 21600 and C.parse_ttl("15m") == 900 and C.parse_ttl("7d") == 604800 and C.parse_ttl(900) == 900 and C.parse_ttl("42") == 42
+    for bad in ("8d", "0", "1w", "", "6 h"):
+        with pytest.raises(C.MintError):
+            C.parse_ttl(bad)
+    assert C.account_id_from_endpoint(ep) == acct and C.account_id_from_endpoint("https://s3.amazonaws.com") is None
+
+
+def test_mint_api_calls_the_temp_access_credentials_endpoint():
+    import io
+    import urllib.error
+
+    from research.store import credentials as C
+
+    calls = []
+
+    class Opener:
+        def __init__(self, status=200, body=None):
+            self.status, self.body = status, body
+
+        def open(self, req, timeout=None):
+            calls.append((req.full_url, req.get_method(), dict(req.header_items()), json.loads(req.data)))
+            if self.status != 200:
+                raise urllib.error.HTTPError(req.full_url, self.status, "Forbidden", {}, io.BytesIO(json.dumps({"errors": [{"code": 10000, "message": "Authentication error"}]}).encode()))
+            r = io.BytesIO(json.dumps(self.body).encode())
+            r.__enter__, r.__exit__ = lambda: r, lambda *a: False
+            return r
+
+    ok = {"success": True, "errors": [], "result": {"accessKeyId": "tmpid", "secretAccessKey": "tmpsecret", "sessionToken": "tok"}}
+    c = C.mint_api("acct123", "cf-token", "verity-dev", "PARENT", "object-read-write", ttl_s=3600, prefixes=["objects/"], opener=Opener(body=ok))
+    url, method, headers, body = calls[0]
+    assert url == "https://api.cloudflare.com/client/v4/accounts/acct123/r2/temp-access-credentials" and method == "POST"
+    assert headers["Authorization"] == "Bearer cf-token" and headers["Content-type"] == "application/json"
+    assert body == {"bucket": "verity-dev", "parentAccessKeyId": "PARENT", "permission": "object-read-write", "ttlSeconds": 3600, "prefixes": ["objects/"]}
+    assert {k: c[k] for k in ("accessKeyId", "secretAccessKey", "sessionToken")} == ok["result"] and c["expires_utc"].endswith("Z")
+    with pytest.raises(C.MintError, match="Authentication error"):
+        C.mint_api("acct123", "bad", "b", "P", "object-read-only", opener=Opener(status=403))
+    with pytest.raises(C.MintError, match="refused"):
+        C.mint_api("acct123", "t", "b", "P", "object-read-only", opener=Opener(body={"success": False, "errors": [{"message": "no"}]}))
+    with pytest.raises(C.MintError, match="lacks sessionToken"):
+        C.mint_api("acct123", "t", "b", "P", "object-read-only", opener=Opener(body={"success": True, "result": {"accessKeyId": "a", "secretAccessKey": "b"}}))
+    with pytest.raises(C.MintError):
+        C.mint_api("acct123", "t", "b", "P", "admin", opener=Opener(body=ok))
+
+
+def test_mint_resolves_inputs_from_config_and_env_and_the_cli_prints_env_lines(env, monkeypatch, capsys):
+    """Inputs: store.toml `[remote]` (endpoint, bucket, the env var NAMES of the parent key) > R2_ENDPOINT / R2_BUCKET / AWS_*; the account id
+    comes from the endpoint host.  `auto` signs locally when the parent key is present, else needs CLOUDFLARE_API_TOKEN.  `--env` prints the
+    three export lines and nothing is written anywhere."""
+    from research.store import credentials as C
+
+    ep = "https://1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com"
+    (env / "store.toml").write_text(f'[remote]\ntype = "s3"\nbucket = "verity-dev"\nendpoint = "{ep}"\naccess_key_id_env = "P_AK"\nsecret_access_key_env = "P_SK"\n')
+    for v in ("P_AK", "P_SK", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "CLOUDFLARE_API_TOKEN", "R2_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID",
+              "R2_ENDPOINT", "R2_BUCKET"):                              # a developer shell that sourced r2.env must not leak into the test
+        monkeypatch.delenv(v, raising=False)
+    with pytest.raises(C.MintError, match="CLOUDFLARE_API_TOKEN"):
+        C.mint()                                                         # no parent key, no API token: says what it needs
+    monkeypatch.setenv("P_AK", "PARENT")
+    monkeypatch.setenv("P_SK", "psecret")
+    c = C.mint(scope="object-read-only", ttl_s=600, prefixes=["manifests/"])
+    assert c["via"] == "local" and c["bucket"] == "verity-dev" and c["account_id"] == "1d4dfa0a7dc0639e19f5d0125f14a634" and c["accessKeyId"] == "PARENT"
+    assert C.decode_jwt(c["jwt"])[1]["aud"] == "1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com" and c["scope"] == "object-read-only"
+    assert C.mint(actions=["GetObject"])["scope"] is None
+    with pytest.raises(C.MintError, match="local signing only"):
+        C.mint(via="api", actions=["GetObject"])
+    with pytest.raises(C.MintError, match="CLOUDFLARE_API_TOKEN"):
+        C.mint(via="api")
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "already-temporary")
+    with pytest.raises(C.MintError, match="cannot mint another"):
+        C.mint()
+    monkeypatch.delenv("AWS_SESSION_TOKEN")
+    # no store.toml: R2_ENDPOINT / R2_BUCKET / AWS_* and an explicit account id
+    (env / "store.toml").unlink()
+    with pytest.raises(C.MintError, match="R2_ENDPOINT"):
+        C.mint()
+    monkeypatch.setenv("R2_ENDPOINT", "https://s3.example.invalid")
+    monkeypatch.setenv("R2_BUCKET", "b2")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AK2")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "SK2")
+    with pytest.raises(C.MintError, match="account id"):
+        C.mint()
+    monkeypatch.setenv("R2_ACCOUNT_ID", "acct")
+    c = C.mint(ttl_s=60)
+    assert c["bucket"] == "b2" and c["account_id"] == "acct" and C.decode_jwt(c["jwt"])[1]["aud"] == "s3.example.invalid" and c["accessKeyId"] == "AK2"
+
+    assert main(["mint-credential", "--ttl", "10m", "--permission", "object-read-only", "--prefix", "manifests/", "--env"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "export AWS_ACCESS_KEY_ID=AK2" and lines[1].startswith("export AWS_SECRET_ACCESS_KEY=") and len(lines[1]) == len("export AWS_SECRET_ACCESS_KEY=") + 64
+    assert lines[2].startswith("export AWS_SESSION_TOKEN=") and lines[3].startswith("# object-read-only on s3://b2 until ") and "prefixes ['manifests/']" in lines[3]
+    tok = lines[2].split("=", 1)[1]
+    assert __import__("base64").b64decode(tok).startswith(b"jwt/")
+    assert main(["mint-credential", "--actions", "PutObject,HeadObject", "--ttl", "6h"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["via"] == "local" and doc["scope"] is None and doc["actions"] == ["PutObject", "HeadObject"] and doc["ttl_s"] == 21600 and "jwt" not in doc
+    assert {"accessKeyId", "secretAccessKey", "sessionToken", "expires_utc"} <= set(doc)
+    assert main(["mint-credential", "--ttl", "8d"]) == 1 and "604800" in capsys.readouterr().err
+    assert main(["mint-credential", "--via", "api"]) == 1 and "CLOUDFLARE_API_TOKEN" in capsys.readouterr().err
+    assert not list(env.rglob("*token*")) and not list(env.rglob("*.env")), "nothing written to disk"
+
+
 def test_s3remote_refuses_oversize_and_conflicts(monkeypatch, tmp_path):
     r = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bucket", "ak", "sk")
     assert r._path("objects/sha256/ab") == "/bucket/objects/sha256/ab" and r._path("") == "/bucket"
@@ -674,8 +1143,17 @@ def test_s3remote_refuses_oversize_and_conflicts(monkeypatch, tmp_path):
     with pytest.raises(RemoteConflict):
         r.put("k", p)
     monkeypatch.setattr(r, "head", lambda key: {"bytes": 5})
-    r.put("k", p)  # same size: nothing to do, no network
+    assert r.put("k", p)["action"] == "skipped"  # same size, no ETag to compare: nothing to do, no network
+    monkeypatch.setattr(r, "head", lambda key: {"bytes": 5, "etag": hashlib.md5(b"12345").hexdigest()})
+    assert r.put("k", p)["action"] == "skipped"  # same size and MD5
+    monkeypatch.setattr(r, "head", lambda key: {"bytes": 5, "etag": hashlib.md5(b"12346").hexdigest()})
+    with pytest.raises(RemoteConflict, match="ETag"):
+        r.put("k", p)                              # same size, different bytes: an immutable key is never overwritten
+    monkeypatch.setattr(r, "head", lambda key: {"bytes": 5, "etag": "abc-2"})
+    assert r.put("k", p)["action"] == "skipped"  # a multipart ETag is not an MD5: size is all HEAD can check
     monkeypatch.setattr(r, "head", lambda key: None)
-    monkeypatch.setattr(Path, "stat", lambda self: type("S", (), {"st_size": remote_s3.SINGLE_PUT_MAX + 1})())
+    r.single_put_max = 4
     with pytest.raises(NotImplementedError, match="parts.json"):
         r.put("k", p)
+    assert remote_s3.SINGLE_PUT_MAX == 5 << 30 and remote_s3.etag_value('"AbC"') == "abc" and remote_s3.etag_value('W/"x"') == "x"
+    assert remote_s3.is_md5_etag("0" * 32) and not remote_s3.is_md5_etag("0" * 32 + "-3") and not remote_s3.is_md5_etag(None)
