@@ -1,0 +1,2782 @@
+{
+ "checks": {
+  "commit_summary": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T0"
+  },
+  "coverage": {
+   "applies": false,
+   "why": "manifest.json not resolvable here (pod / fetched manifest artifact needed)"
+  },
+  "decomp_hashes": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T1"
+  },
+  "executed_prefix": {
+   "applies": true,
+   "strength": "weak",
+   "tier": "T0"
+  },
+  "global_match_checks": {
+   "applies": true,
+   "strength": "weak",
+   "tier": "T0"
+  },
+  "manifest_digest": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T0"
+  },
+  "program_digest": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T2"
+  },
+  "replay_partition": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T1"
+  }
+ },
+ "class": "GREEN",
+ "commit_summary": {
+  "collector": {
+   "layout": "chunk-leaf-v1",
+   "retention": "host",
+   "variant": "native_collect_v2_auto_nw+hidden_m1+moe",
+   "window_mb": 256,
+   "window_slots": 8
+  },
+  "collector_variant": "windowed",
+  "commit_verdict": {
+   "commit_pass": true,
+   "first_fail_reason": null,
+   "required_classes_source": "program/query manifest 9b75a54d4af6a5ca61f5117e29008957d38b7a79e5f69d352685dbf4c8a6891e (R14 MAN-01; classes kept as a secondary check)",
+   "required_manifest": {
+    "coverage": [
+     {
+      "checked": 385292,
+      "checked_by_family": {
+       "fa2_hidden_m1_stream": 2048,
+       "input_token_ids": 1308,
+       "instance_outputs": 255060,
+       "moe_block_stream": 125568,
+       "sampled_token_ids": 1308
+      },
+      "committed_extras_n": 0,
+      "committed_unmatched": [],
+      "committed_unmatched_n": 0,
+      "composition_mismatch": [],
+      "composition_mismatch_n": 0,
+      "duplicate_names_n": 0,
+      "engine_step_basis": "engine schedule of record (request step + observed arrival)",
+      "executed_prefix_of_record": {
+       "lag": 1,
+       "ok": true,
+       "problems": [],
+       "r0": {
+        "cap": 17,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 17,
+        "served_output_len": 17
+       },
+       "r1": {
+        "cap": 35,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 35,
+        "served_output_len": 35
+       },
+       "r10": {
+        "cap": 128,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 128,
+        "served_output_len": 128
+       },
+       "r11": {
+        "cap": 19,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 19,
+        "served_output_len": 19
+       },
+       "r12": {
+        "cap": 9,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 9,
+        "served_output_len": 9
+       },
+       "r13": {
+        "cap": 3,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 3,
+        "served_output_len": 3
+       },
+       "r14": {
+        "cap": 25,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 25,
+        "served_output_len": 25
+       },
+       "r15": {
+        "cap": 55,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 55,
+        "served_output_len": 55
+       },
+       "r16": {
+        "cap": 7,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 7,
+        "served_output_len": 7
+       },
+       "r17": {
+        "cap": 15,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 15,
+        "served_output_len": 15
+       },
+       "r18": {
+        "cap": 67,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 67,
+        "served_output_len": 67
+       },
+       "r19": {
+        "cap": 11,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 11,
+        "served_output_len": 11
+       },
+       "r2": {
+        "cap": 123,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 123,
+        "served_output_len": 123
+       },
+       "r20": {
+        "cap": 13,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 13,
+        "served_output_len": 13
+       },
+       "r21": {
+        "cap": 2,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 2,
+        "served_output_len": 2
+       },
+       "r22": {
+        "cap": 27,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 27,
+        "served_output_len": 27
+       },
+       "r23": {
+        "cap": 9,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 9,
+        "served_output_len": 9
+       },
+       "r24": {
+        "cap": 15,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 15,
+        "served_output_len": 15
+       },
+       "r25": {
+        "cap": 69,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 69,
+        "served_output_len": 69
+       },
+       "r26": {
+        "cap": 21,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 21,
+        "served_output_len": 21
+       },
+       "r27": {
+        "cap": 31,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 31,
+        "served_output_len": 31
+       },
+       "r28": {
+        "cap": 65,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 65,
+        "served_output_len": 65
+       },
+       "r29": {
+        "cap": 103,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 103,
+        "served_output_len": 103
+       },
+       "r3": {
+        "cap": 91,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 91,
+        "served_output_len": 91
+       },
+       "r30": {
+        "cap": 39,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 39,
+        "served_output_len": 39
+       },
+       "r31": {
+        "cap": 29,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 29,
+        "served_output_len": 29
+       },
+       "r4": {
+        "cap": 5,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 5,
+        "served_output_len": 5
+       },
+       "r5": {
+        "cap": 49,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 49,
+        "served_output_len": 49
+       },
+       "r6": {
+        "cap": 117,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 117,
+        "served_output_len": 117
+       },
+       "r7": {
+        "cap": 23,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 23,
+        "served_output_len": 23
+       },
+       "r8": {
+        "cap": 45,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 45,
+        "served_output_len": 45
+       },
+       "r9": {
+        "cap": 41,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 41,
+        "served_output_len": 41
+       }
+      },
+      "families_missing_entirely": [],
+      "manifest_digest": "9b75a54d4af6a5ca61f5117e29008957d38b7a79e5f69d352685dbf4c8a6891e",
+      "manifest_of_record": {
+       "digest": "9b75a54d4af6a5ca61f5117e29008957d38b7a79e5f69d352685dbf4c8a6891e",
+       "edited": false,
+       "identities_n": 385504,
+       "not_executed_n": 0,
+       "required_n": 385504
+      },
+      "missing": [],
+      "missing_by_family": {},
+      "missing_n": 0,
+      "not_executed_by_rule": {
+       "by_family": {},
+       "by_request": {},
+       "kind_by_family": {},
+       "n": 0,
+       "rule": "executed_prefix_len = cap when served_output_len == cap (length stop); served_output_len + LAG when the request stopped by EOS before its cap (the last served token must be a declared EOS id, F-pm-24, and it must be the FIRST EOS served -- tokens served after an EOS are served past the stop, F-r17-14); LAG = the workload Program's declared static (R17-1), never read from the trace; positions >= executed_prefix_len are programmed-but-unexecuted (not required; committed = execution past the stop)",
+       "scope": "NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category. (COORD R17-27)"
+      },
+      "ok": true,
+      "requests_with_missing": [],
+      "schedule": {
+       "all_equal_declared": true,
+       "basis": "engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); arrival = the first committed step the request ran in",
+       "declared_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r10": 0,
+        "r11": 0,
+        "r12": 0,
+        "r13": 0,
+        "r14": 0,
+        "r15": 0,
+        "r16": 0,
+        "r17": 0,
+        "r18": 0,
+        "r19": 0,
+        "r2": 0,
+        "r20": 0,
+        "r21": 0,
+        "r22": 0,
+        "r23": 0,
+        "r24": 0,
+        "r25": 0,
+        "r26": 0,
+        "r27": 0,
+        "r28": 0,
+        "r29": 0,
+        "r3": 0,
+        "r30": 0,
+        "r31": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0,
+        "r8": 0,
+        "r9": 0
+       },
+       "observed_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r10": 0,
+        "r11": 0,
+        "r12": 0,
+        "r13": 0,
+        "r14": 0,
+        "r15": 0,
+        "r16": 0,
+        "r17": 0,
+        "r18": 0,
+        "r19": 0,
+        "r2": 0,
+        "r20": 0,
+        "r21": 0,
+        "r22": 0,
+        "r23": 0,
+        "r24": 0,
+        "r25": 0,
+        "r26": 0,
+        "r27": 0,
+        "r28": 0,
+        "r29": 0,
+        "r3": 0,
+        "r30": 0,
+        "r31": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0,
+        "r8": 0,
+        "r9": 0
+       },
+       "use": "observed",
+       "why": null
+      },
+      "steps_committed": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18,
+       19,
+       20,
+       21,
+       22,
+       23,
+       24,
+       25,
+       26,
+       27,
+       28,
+       29,
+       30,
+       31,
+       32,
+       33,
+       34,
+       35,
+       36,
+       37,
+       38,
+       39,
+       40,
+       41,
+       42,
+       43,
+       44,
+       45,
+       46,
+       47,
+       48,
+       49,
+       50,
+       51,
+       52,
+       53,
+       54,
+       55,
+       56,
+       57,
+       58,
+       59,
+       60,
+       61,
+       62,
+       63,
+       64,
+       65,
+       66,
+       67,
+       68,
+       69,
+       70,
+       71,
+       72,
+       73,
+       74,
+       75,
+       76,
+       77,
+       78,
+       79,
+       80,
+       81,
+       82,
+       83,
+       84,
+       85,
+       86,
+       87,
+       88,
+       89,
+       90,
+       91,
+       92,
+       93,
+       94,
+       95,
+       96,
+       97,
+       98,
+       99,
+       100,
+       101,
+       102,
+       103,
+       104,
+       105,
+       106,
+       107,
+       108,
+       109,
+       110,
+       111,
+       112,
+       113,
+       114,
+       115,
+       116,
+       117,
+       118,
+       119,
+       120,
+       121,
+       122,
+       123,
+       124,
+       125,
+       126,
+       127
+      ],
+      "steps_with_missing": []
+     },
+     {
+      "checked": 385292,
+      "checked_by_family": {
+       "fa2_hidden_m1_stream": 2048,
+       "input_token_ids": 1308,
+       "instance_outputs": 255060,
+       "moe_block_stream": 125568,
+       "sampled_token_ids": 1308
+      },
+      "committed_extras_n": 0,
+      "committed_unmatched": [],
+      "committed_unmatched_n": 0,
+      "composition_mismatch": [],
+      "composition_mismatch_n": 0,
+      "duplicate_names_n": 0,
+      "engine_step_basis": "engine schedule of record (request step + observed arrival)",
+      "executed_prefix_of_record": {
+       "lag": 1,
+       "ok": true,
+       "problems": [],
+       "r0": {
+        "cap": 17,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 17,
+        "served_output_len": 17
+       },
+       "r1": {
+        "cap": 35,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 35,
+        "served_output_len": 35
+       },
+       "r10": {
+        "cap": 128,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 128,
+        "served_output_len": 128
+       },
+       "r11": {
+        "cap": 19,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 19,
+        "served_output_len": 19
+       },
+       "r12": {
+        "cap": 9,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 9,
+        "served_output_len": 9
+       },
+       "r13": {
+        "cap": 3,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 3,
+        "served_output_len": 3
+       },
+       "r14": {
+        "cap": 25,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 25,
+        "served_output_len": 25
+       },
+       "r15": {
+        "cap": 55,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 55,
+        "served_output_len": 55
+       },
+       "r16": {
+        "cap": 7,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 7,
+        "served_output_len": 7
+       },
+       "r17": {
+        "cap": 15,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 15,
+        "served_output_len": 15
+       },
+       "r18": {
+        "cap": 67,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 67,
+        "served_output_len": 67
+       },
+       "r19": {
+        "cap": 11,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 11,
+        "served_output_len": 11
+       },
+       "r2": {
+        "cap": 123,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 123,
+        "served_output_len": 123
+       },
+       "r20": {
+        "cap": 13,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 13,
+        "served_output_len": 13
+       },
+       "r21": {
+        "cap": 2,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 2,
+        "served_output_len": 2
+       },
+       "r22": {
+        "cap": 27,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 27,
+        "served_output_len": 27
+       },
+       "r23": {
+        "cap": 9,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 9,
+        "served_output_len": 9
+       },
+       "r24": {
+        "cap": 15,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 15,
+        "served_output_len": 15
+       },
+       "r25": {
+        "cap": 69,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 69,
+        "served_output_len": 69
+       },
+       "r26": {
+        "cap": 21,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 21,
+        "served_output_len": 21
+       },
+       "r27": {
+        "cap": 31,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 31,
+        "served_output_len": 31
+       },
+       "r28": {
+        "cap": 65,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 65,
+        "served_output_len": 65
+       },
+       "r29": {
+        "cap": 103,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 103,
+        "served_output_len": 103
+       },
+       "r3": {
+        "cap": 91,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 91,
+        "served_output_len": 91
+       },
+       "r30": {
+        "cap": 39,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 39,
+        "served_output_len": 39
+       },
+       "r31": {
+        "cap": 29,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 29,
+        "served_output_len": 29
+       },
+       "r4": {
+        "cap": 5,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 5,
+        "served_output_len": 5
+       },
+       "r5": {
+        "cap": 49,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 49,
+        "served_output_len": 49
+       },
+       "r6": {
+        "cap": 117,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 117,
+        "served_output_len": 117
+       },
+       "r7": {
+        "cap": 23,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 23,
+        "served_output_len": 23
+       },
+       "r8": {
+        "cap": 45,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 45,
+        "served_output_len": 45
+       },
+       "r9": {
+        "cap": 41,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 41,
+        "served_output_len": 41
+       }
+      },
+      "families_missing_entirely": [],
+      "manifest_digest": "9b75a54d4af6a5ca61f5117e29008957d38b7a79e5f69d352685dbf4c8a6891e",
+      "manifest_of_record": {
+       "digest": "9b75a54d4af6a5ca61f5117e29008957d38b7a79e5f69d352685dbf4c8a6891e",
+       "edited": false,
+       "identities_n": 385504,
+       "not_executed_n": 0,
+       "required_n": 385504
+      },
+      "missing": [],
+      "missing_by_family": {},
+      "missing_n": 0,
+      "not_executed_by_rule": {
+       "by_family": {},
+       "by_request": {},
+       "kind_by_family": {},
+       "n": 0,
+       "rule": "executed_prefix_len = cap when served_output_len == cap (length stop); served_output_len + LAG when the request stopped by EOS before its cap (the last served token must be a declared EOS id, F-pm-24, and it must be the FIRST EOS served -- tokens served after an EOS are served past the stop, F-r17-14); LAG = the workload Program's declared static (R17-1), never read from the trace; positions >= executed_prefix_len are programmed-but-unexecuted (not required; committed = execution past the stop)",
+       "scope": "NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category. (COORD R17-27)"
+      },
+      "ok": true,
+      "requests_with_missing": [],
+      "schedule": {
+       "all_equal_declared": true,
+       "basis": "engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); arrival = the first committed step the request ran in",
+       "declared_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r10": 0,
+        "r11": 0,
+        "r12": 0,
+        "r13": 0,
+        "r14": 0,
+        "r15": 0,
+        "r16": 0,
+        "r17": 0,
+        "r18": 0,
+        "r19": 0,
+        "r2": 0,
+        "r20": 0,
+        "r21": 0,
+        "r22": 0,
+        "r23": 0,
+        "r24": 0,
+        "r25": 0,
+        "r26": 0,
+        "r27": 0,
+        "r28": 0,
+        "r29": 0,
+        "r3": 0,
+        "r30": 0,
+        "r31": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0,
+        "r8": 0,
+        "r9": 0
+       },
+       "observed_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r10": 0,
+        "r11": 0,
+        "r12": 0,
+        "r13": 0,
+        "r14": 0,
+        "r15": 0,
+        "r16": 0,
+        "r17": 0,
+        "r18": 0,
+        "r19": 0,
+        "r2": 0,
+        "r20": 0,
+        "r21": 0,
+        "r22": 0,
+        "r23": 0,
+        "r24": 0,
+        "r25": 0,
+        "r26": 0,
+        "r27": 0,
+        "r28": 0,
+        "r29": 0,
+        "r3": 0,
+        "r30": 0,
+        "r31": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0,
+        "r8": 0,
+        "r9": 0
+       },
+       "use": "observed",
+       "why": null
+      },
+      "steps_committed": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18,
+       19,
+       20,
+       21,
+       22,
+       23,
+       24,
+       25,
+       26,
+       27,
+       28,
+       29,
+       30,
+       31,
+       32,
+       33,
+       34,
+       35,
+       36,
+       37,
+       38,
+       39,
+       40,
+       41,
+       42,
+       43,
+       44,
+       45,
+       46,
+       47,
+       48,
+       49,
+       50,
+       51,
+       52,
+       53,
+       54,
+       55,
+       56,
+       57,
+       58,
+       59,
+       60,
+       61,
+       62,
+       63,
+       64,
+       65,
+       66,
+       67,
+       68,
+       69,
+       70,
+       71,
+       72,
+       73,
+       74,
+       75,
+       76,
+       77,
+       78,
+       79,
+       80,
+       81,
+       82,
+       83,
+       84,
+       85,
+       86,
+       87,
+       88,
+       89,
+       90,
+       91,
+       92,
+       93,
+       94,
+       95,
+       96,
+       97,
+       98,
+       99,
+       100,
+       101,
+       102,
+       103,
+       104,
+       105,
+       106,
+       107,
+       108,
+       109,
+       110,
+       111,
+       112,
+       113,
+       114,
+       115,
+       116,
+       117,
+       118,
+       119,
+       120,
+       121,
+       122,
+       123,
+       124,
+       125,
+       126,
+       127
+      ],
+      "steps_with_missing": []
+     },
+     {
+      "checked": 385292,
+      "checked_by_family": {
+       "fa2_hidden_m1_stream": 2048,
+       "input_token_ids": 1308,
+       "instance_outputs": 255060,
+       "moe_block_stream": 125568,
+       "sampled_token_ids": 1308
+      },
+      "committed_extras_n": 0,
+      "committed_unmatched": [],
+      "committed_unmatched_n": 0,
+      "composition_mismatch": [],
+      "composition_mismatch_n": 0,
+      "duplicate_names_n": 0,
+      "engine_step_basis": "engine schedule of record (request step + observed arrival)",
+      "executed_prefix_of_record": {
+       "lag": 1,
+       "ok": true,
+       "problems": [],
+       "r0": {
+        "cap": 17,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 17,
+        "served_output_len": 17
+       },
+       "r1": {
+        "cap": 35,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 35,
+        "served_output_len": 35
+       },
+       "r10": {
+        "cap": 128,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 128,
+        "served_output_len": 128
+       },
+       "r11": {
+        "cap": 19,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 19,
+        "served_output_len": 19
+       },
+       "r12": {
+        "cap": 9,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 9,
+        "served_output_len": 9
+       },
+       "r13": {
+        "cap": 3,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 3,
+        "served_output_len": 3
+       },
+       "r14": {
+        "cap": 25,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 25,
+        "served_output_len": 25
+       },
+       "r15": {
+        "cap": 55,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 55,
+        "served_output_len": 55
+       },
+       "r16": {
+        "cap": 7,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 7,
+        "served_output_len": 7
+       },
+       "r17": {
+        "cap": 15,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 15,
+        "served_output_len": 15
+       },
+       "r18": {
+        "cap": 67,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 67,
+        "served_output_len": 67
+       },
+       "r19": {
+        "cap": 11,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 11,
+        "served_output_len": 11
+       },
+       "r2": {
+        "cap": 123,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 123,
+        "served_output_len": 123
+       },
+       "r20": {
+        "cap": 13,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 13,
+        "served_output_len": 13
+       },
+       "r21": {
+        "cap": 2,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 2,
+        "served_output_len": 2
+       },
+       "r22": {
+        "cap": 27,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 27,
+        "served_output_len": 27
+       },
+       "r23": {
+        "cap": 9,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 9,
+        "served_output_len": 9
+       },
+       "r24": {
+        "cap": 15,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 15,
+        "served_output_len": 15
+       },
+       "r25": {
+        "cap": 69,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 69,
+        "served_output_len": 69
+       },
+       "r26": {
+        "cap": 21,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 21,
+        "served_output_len": 21
+       },
+       "r27": {
+        "cap": 31,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 31,
+        "served_output_len": 31
+       },
+       "r28": {
+        "cap": 65,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 65,
+        "served_output_len": 65
+       },
+       "r29": {
+        "cap": 103,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 103,
+        "served_output_len": 103
+       },
+       "r3": {
+        "cap": 91,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 91,
+        "served_output_len": 91
+       },
+       "r30": {
+        "cap": 39,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 39,
+        "served_output_len": 39
+       },
+       "r31": {
+        "cap": 29,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 29,
+        "served_output_len": 29
+       },
+       "r4": {
+        "cap": 5,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 5,
+        "served_output_len": 5
+       },
+       "r5": {
+        "cap": 49,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 49,
+        "served_output_len": 49
+       },
+       "r6": {
+        "cap": 117,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 117,
+        "served_output_len": 117
+       },
+       "r7": {
+        "cap": 23,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 23,
+        "served_output_len": 23
+       },
+       "r8": {
+        "cap": 45,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 45,
+        "served_output_len": 45
+       },
+       "r9": {
+        "cap": 41,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 41,
+        "served_output_len": 41
+       }
+      },
+      "families_missing_entirely": [],
+      "manifest_digest": "9b75a54d4af6a5ca61f5117e29008957d38b7a79e5f69d352685dbf4c8a6891e",
+      "manifest_of_record": {
+       "digest": "9b75a54d4af6a5ca61f5117e29008957d38b7a79e5f69d352685dbf4c8a6891e",
+       "edited": false,
+       "identities_n": 385504,
+       "not_executed_n": 0,
+       "required_n": 385504
+      },
+      "missing": [],
+      "missing_by_family": {},
+      "missing_n": 0,
+      "not_executed_by_rule": {
+       "by_family": {},
+       "by_request": {},
+       "kind_by_family": {},
+       "n": 0,
+       "rule": "executed_prefix_len = cap when served_output_len == cap (length stop); served_output_len + LAG when the request stopped by EOS before its cap (the last served token must be a declared EOS id, F-pm-24, and it must be the FIRST EOS served -- tokens served after an EOS are served past the stop, F-r17-14); LAG = the workload Program's declared static (R17-1), never read from the trace; positions >= executed_prefix_len are programmed-but-unexecuted (not required; committed = execution past the stop)",
+       "scope": "NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category. (COORD R17-27)"
+      },
+      "ok": true,
+      "requests_with_missing": [],
+      "schedule": {
+       "all_equal_declared": true,
+       "basis": "engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); arrival = the first committed step the request ran in",
+       "declared_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r10": 0,
+        "r11": 0,
+        "r12": 0,
+        "r13": 0,
+        "r14": 0,
+        "r15": 0,
+        "r16": 0,
+        "r17": 0,
+        "r18": 0,
+        "r19": 0,
+        "r2": 0,
+        "r20": 0,
+        "r21": 0,
+        "r22": 0,
+        "r23": 0,
+        "r24": 0,
+        "r25": 0,
+        "r26": 0,
+        "r27": 0,
+        "r28": 0,
+        "r29": 0,
+        "r3": 0,
+        "r30": 0,
+        "r31": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0,
+        "r8": 0,
+        "r9": 0
+       },
+       "observed_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r10": 0,
+        "r11": 0,
+        "r12": 0,
+        "r13": 0,
+        "r14": 0,
+        "r15": 0,
+        "r16": 0,
+        "r17": 0,
+        "r18": 0,
+        "r19": 0,
+        "r2": 0,
+        "r20": 0,
+        "r21": 0,
+        "r22": 0,
+        "r23": 0,
+        "r24": 0,
+        "r25": 0,
+        "r26": 0,
+        "r27": 0,
+        "r28": 0,
+        "r29": 0,
+        "r3": 0,
+        "r30": 0,
+        "r31": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0,
+        "r8": 0,
+        "r9": 0
+       },
+       "use": "observed",
+       "why": null
+      },
+      "steps_committed": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18,
+       19,
+       20,
+       21,
+       22,
+       23,
+       24,
+       25,
+       26,
+       27,
+       28,
+       29,
+       30,
+       31,
+       32,
+       33,
+       34,
+       35,
+       36,
+       37,
+       38,
+       39,
+       40,
+       41,
+       42,
+       43,
+       44,
+       45,
+       46,
+       47,
+       48,
+       49,
+       50,
+       51,
+       52,
+       53,
+       54,
+       55,
+       56,
+       57,
+       58,
+       59,
+       60,
+       61,
+       62,
+       63,
+       64,
+       65,
+       66,
+       67,
+       68,
+       69,
+       70,
+       71,
+       72,
+       73,
+       74,
+       75,
+       76,
+       77,
+       78,
+       79,
+       80,
+       81,
+       82,
+       83,
+       84,
+       85,
+       86,
+       87,
+       88,
+       89,
+       90,
+       91,
+       92,
+       93,
+       94,
+       95,
+       96,
+       97,
+       98,
+       99,
+       100,
+       101,
+       102,
+       103,
+       104,
+       105,
+       106,
+       107,
+       108,
+       109,
+       110,
+       111,
+       112,
+       113,
+       114,
+       115,
+       116,
+       117,
+       118,
+       119,
+       120,
+       121,
+       122,
+       123,
+       124,
+       125,
+       126,
+       127
+      ],
+      "steps_with_missing": []
+     }
+    ],
+    "manifest_digest": "9b75a54d4af6a5ca61f5117e29008957d38b7a79e5f69d352685dbf4c8a6891e",
+    "path": "/workspace/cp/sweep/r19-int-3/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager/manifest.json",
+    "populations": {
+     "by_family": {
+      "fa2_hidden_m1_stream": 2048,
+      "input_token_ids": 1308,
+      "instance_outputs": 255060,
+      "moe_block_stream": 125568,
+      "sampled_token_ids": 1308,
+      "weights": 212
+     },
+     "engine_steps": 128,
+     "identities": 385504,
+     "requests": 32
+    },
+    "program_digest": "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72",
+    "query": {
+     "attention_hidden_family": "fa2_hidden_m1_stream",
+     "boundary": "module",
+     "family_selector": {
+      "digest": "dd6729b72e9a69e9a0ceb429708efca969a13034609887bce93132f8b8c46004",
+      "module": "verity_capture.vu_canonical",
+      "query_id": "Q_fine_v1",
+      "role": "selects WHICH families are required; its unit (the fine partition) is NOT the population unit of record",
+      "version": "2026-09-17.1"
+     },
+     "implemented_query": "Q_module_v1",
+     "moe_layers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "profile": "ampere",
+     "query": "verity_capture.vu_canonical",
+     "query_digest": "dd6729b72e9a69e9a0ceb429708efca969a13034609887bce93132f8b8c46004",
+     "query_id": "Q_module_v1",
+     "query_id_digest": "0d868cf076d7fe9521bca1ed325fb018981a9cecff6520759edbfc38cf4d4e4e",
+     "query_version": "2026-09-17.1",
+     "required_families": [
+      "input_token_ids",
+      "instance_outputs",
+      "sampled_token_ids",
+      "weights",
+      "fa2_hidden_m1_stream",
+      "moe_block_stream"
+     ],
+     "unit": "Program row = module-boundary VU under Q_module_v1: identities are the module output members per (request, step, module) + ids, sampled ids, weights, the attention M1 stream; Q_fine_v1 (vu_canonical) selects the required families (query_digest) and is not the implemented population unit (R17-9 (ii), F-r17b-05, R17-10)",
+     "why": {
+      "fa2_hidden_m1_stream": "the attention override refines AttentionHead into AttnBlock interiors (s[c] dots, PV k-step chains, max chain, Fa2InvSum) -> the M1 export stream of every attention launch (layer x step) is required",
+      "input_token_ids": "Embedding_v1 opens on its ids input (Input32)",
+      "instance_outputs": "every VU family of the query (Gemm y[n], norm normalize path, SiluMul, RoPE, Embedding) opens on the producing instance's OUTPUT words -> every Program instance output member per step is required",
+      "moe_block_stream": "the query's MoE families (MoeRouterTopK weights/ids, MoeExpertGemm up, SiluMul act, MoeExpertGemmW down, MoeSum) are produced inside one module forward -> the six-plane block stream of every MoE layer x step is required",
+      "sampled_token_ids": "TokenSelect_v1 output per step",
+      "weights": "Input16 registered inputs: every weight field the Program's `weights` parameter names"
+     }
+    }
+   },
+   "runs_failed": 0,
+   "runs_instrumented": 3
+  },
+  "committer": "native_collect_v2b",
+  "coverage": [
+   null,
+   null,
+   null
+  ],
+  "engine_settings": {
+   "gpu_memory_utilization": 0.5,
+   "max_num_seqs": 32,
+   "open_after_release": true,
+   "openings": 64,
+   "pairs": 3,
+   "required_manifest": true
+  },
+  "engine_steps": [
+   129,
+   129,
+   129,
+   129,
+   129,
+   129
+  ],
+  "generated_tokens": [
+   1308,
+   1308,
+   1308,
+   1308,
+   1308,
+   1308
+  ],
+  "n_control": 3,
+  "n_runs": 6,
+  "n_treatment": 3,
+  "openings": [
+   null,
+   null,
+   null
+  ],
+  "pass": true,
+  "rc": 0,
+  "retention": "host",
+  "tokens_equal": [
+   true,
+   true,
+   true
+  ]
+ },
+ "decomp_hashes": {
+  "fold_record_pins": {},
+  "requests": {
+   "02073ac7-2289-58a6-9f36-cbe1764bdd4b": {
+    "canonical_sha256": {
+     "a": "23602ef3d92411b7eee611de4db7e45b2ae51070de13193a9cdd62ca557f11df",
+     "b": "23602ef3d92411b7eee611de4db7e45b2ae51070de13193a9cdd62ca557f11df",
+     "equal": true
+    },
+    "derived_digest": "bf10a9e6319976fd054bf39eb1b20a50cfb2efcca6df9e182f7055d3949a0554",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "07d035cb-4852-595d-aeef-1fa95203a327": {
+    "canonical_sha256": {
+     "a": "24657ea610b89502927934542fda10fe572bd4a4c061ce6c4f6960603acea223",
+     "b": "24657ea610b89502927934542fda10fe572bd4a4c061ce6c4f6960603acea223",
+     "equal": true
+    },
+    "derived_digest": "cea8ffab6e858671a0ae9603e80c2bfcc28b029cc86fe2a52c648cd2bc9a9409",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "084a2df6-8fc9-5496-9cf8-a114f920506f": {
+    "canonical_sha256": {
+     "a": "c6c0fb4b6efedb116c06f4608b7505c5643162f09c2c0fb93dc32677afa7b6ff",
+     "b": "c6c0fb4b6efedb116c06f4608b7505c5643162f09c2c0fb93dc32677afa7b6ff",
+     "equal": true
+    },
+    "derived_digest": "622c2d5841d8952e295e2da081a5299bd649511e9e20f6dcaaeb862bad71d46d",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "1252dcc5-3b5c-5ce5-8db4-811789c2023d": {
+    "canonical_sha256": {
+     "a": "bbc8b1fbb1a081baeca6290136eff01ca1d4341101c90b7c8ac175c8ef60c141",
+     "b": "bbc8b1fbb1a081baeca6290136eff01ca1d4341101c90b7c8ac175c8ef60c141",
+     "equal": true
+    },
+    "derived_digest": "bc1c3a729a1b51f5b8bef67a753937ac0dd4604006fc6818e814348b4157419e",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "1e60eee9-50fb-57ec-bb97-19e7bd4eb8d3": {
+    "canonical_sha256": {
+     "a": "ab7a93ba59be1445c2d91e49e25d51b37d46c663ee345fb453d45b65b3777ad8",
+     "b": "ab7a93ba59be1445c2d91e49e25d51b37d46c663ee345fb453d45b65b3777ad8",
+     "equal": true
+    },
+    "derived_digest": "fab7581c0858a2ba51fa0a0f48f3e846cefd483b6ce392457c68fd5f51d361cc",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "228c2e62-01d1-5e40-9b30-6f6c853849a1": {
+    "canonical_sha256": {
+     "a": "3780f3e91cb4c838db4734e360a5d087c7cceb4df5b3c538b35fbe0b69f24350",
+     "b": "3780f3e91cb4c838db4734e360a5d087c7cceb4df5b3c538b35fbe0b69f24350",
+     "equal": true
+    },
+    "derived_digest": "4d8ac279c492869f4dde233136b9d7bfb2b7d413f199491c841e6102d8688a39",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "25d8138e-7886-5644-967f-4c24db3b5e0d": {
+    "canonical_sha256": {
+     "a": "7bcd7d3884e7a020d41dcd05982093ece5f87aafac3c337ede55c415e8adb9d8",
+     "b": "7bcd7d3884e7a020d41dcd05982093ece5f87aafac3c337ede55c415e8adb9d8",
+     "equal": true
+    },
+    "derived_digest": "00095d395e11ca94c971de93e23f64a9bbf2429e08ef8d7a77511b0b11d3602e",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "4b190667-5b84-5f63-9e69-51dfc551053d": {
+    "canonical_sha256": {
+     "a": "e304aa04a75dc216267267401cfabb5512dbfd302dcbead5a0f7917aae43b6ba",
+     "b": "e304aa04a75dc216267267401cfabb5512dbfd302dcbead5a0f7917aae43b6ba",
+     "equal": true
+    },
+    "derived_digest": "dc4d56b5d46b9cee0b9582063d23ca7ceb1cc57bac62734f095a992d7cd2f414",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "4f0a453e-58a9-5f1d-8b7f-690f74dd2af3": {
+    "canonical_sha256": {
+     "a": "efbaad578ad85ae67ec55fa644c4ff6003643c3e7a94aa7fe2b93a92df434a30",
+     "b": "efbaad578ad85ae67ec55fa644c4ff6003643c3e7a94aa7fe2b93a92df434a30",
+     "equal": true
+    },
+    "derived_digest": "a5e9460768b1a91e04f956c38d248734be3216dc4d148322c6803c291d8ec7f8",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "52a75f32-9aa3-5a05-b7ca-1d0896f4136e": {
+    "canonical_sha256": {
+     "a": "70cf9e5d49894cfa9180582fa8323ac681759af9d0d60ee7f006c9843c61e27c",
+     "b": "70cf9e5d49894cfa9180582fa8323ac681759af9d0d60ee7f006c9843c61e27c",
+     "equal": true
+    },
+    "derived_digest": "e6a628d71bd2134a2865ac1a1e3163fb5153e38a3978bc26b5c79350cabdb8ad",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "5563a69d-5be9-543a-8499-a04711db454a": {
+    "canonical_sha256": {
+     "a": "5fb49ccf291d1da64a976b77fea33dfdba453e1753e56a3c28795afe113bc501",
+     "b": "5fb49ccf291d1da64a976b77fea33dfdba453e1753e56a3c28795afe113bc501",
+     "equal": true
+    },
+    "derived_digest": "e0da0ce22aa17ca4b95e1770343b47719cb8b0a90a7d84528cc5c7033316b21d",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "5fa1a081-5bb0-5036-ab31-6156f76b1435": {
+    "canonical_sha256": {
+     "a": "79b8084e8f74ca048408a80e5f61d47591c23eae95d5b90df79830d29f928bdc",
+     "b": "79b8084e8f74ca048408a80e5f61d47591c23eae95d5b90df79830d29f928bdc",
+     "equal": true
+    },
+    "derived_digest": "1c8c63aa501bf40beeef3b6f35772837d7c3fcbddafe75b61eb60737f8de2281",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "6b625033-4a48-5d68-9fe3-ddd0d2eee048": {
+    "canonical_sha256": {
+     "a": "c30b8df0683683ae13850ccaeca0e00ee6ba32730537a51ec657db264c03db02",
+     "b": "c30b8df0683683ae13850ccaeca0e00ee6ba32730537a51ec657db264c03db02",
+     "equal": true
+    },
+    "derived_digest": "79b64217a04ba5cb890707443ecd4459b724f4931b47d4db0418d3277027c01a",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "708f74e7-ac6e-5d73-a06c-6a3db4210739": {
+    "canonical_sha256": {
+     "a": "fb5143371d39f71bc85cbbf30a46251e10a0a0310af4c06df997dfb8429172a6",
+     "b": "fb5143371d39f71bc85cbbf30a46251e10a0a0310af4c06df997dfb8429172a6",
+     "equal": true
+    },
+    "derived_digest": "cda74ba9cdb5422d3ef69d5ee58b0558bf3e362b41b228d826434f6757e93bbb",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "79cd8730-fbfe-5c95-92be-bf8b3c4730ad": {
+    "canonical_sha256": {
+     "a": "b6e9ca999171875a88cea9954702f4ee56e8abffbf80b2a3c0d2bcb1c05bf2e3",
+     "b": "b6e9ca999171875a88cea9954702f4ee56e8abffbf80b2a3c0d2bcb1c05bf2e3",
+     "equal": true
+    },
+    "derived_digest": "43849382b98bd9ba8ed0cfcf9318642bc79aa2d38c0e6e520d2774948bdac6de",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "7b505c9d-aa6a-5b96-a0b6-8cb22d7008f9": {
+    "canonical_sha256": {
+     "a": "f8460d3eba3841cda759399192bab0d9d4c52b340c99e29844d0fcf930408faa",
+     "b": "f8460d3eba3841cda759399192bab0d9d4c52b340c99e29844d0fcf930408faa",
+     "equal": true
+    },
+    "derived_digest": "eb9ec18db6a262f4a254259ed2cf662011a0c164a5062a079eb40cdfc6f53ee1",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "81260634-9a46-5279-8ba1-63f165af634f": {
+    "canonical_sha256": {
+     "a": "2d409391966af9e564f3cb283cc4e8500067799414532519b576ce8cca9a28a5",
+     "b": "2d409391966af9e564f3cb283cc4e8500067799414532519b576ce8cca9a28a5",
+     "equal": true
+    },
+    "derived_digest": "a8b744dc063e341f891e5f2ad587cbfaa752ce83f389f464f3e0ce002756ab7c",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "858615f0-fbc4-511c-a05e-a32f4ea69d91": {
+    "canonical_sha256": {
+     "a": "6d92c01f19abc7ccd3b1a08d7b34baf90d90aff18b49a6b220b71302b11b7fbb",
+     "b": "6d92c01f19abc7ccd3b1a08d7b34baf90d90aff18b49a6b220b71302b11b7fbb",
+     "equal": true
+    },
+    "derived_digest": "fe442efb342bd65a33945d927ecdf7cc39fd74a8111cdbd17efd4624cd8a0004",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "8e8fdb04-c83f-5d6f-b1df-1aba688e7ef0": {
+    "canonical_sha256": {
+     "a": "b428b5521e093c3868e211c36a09e241866858fc9fb66ef266989ac0d8c3a61d",
+     "b": "b428b5521e093c3868e211c36a09e241866858fc9fb66ef266989ac0d8c3a61d",
+     "equal": true
+    },
+    "derived_digest": "53d66ebff35c07929ba5c544db07d3c21e26a2cf6d78b3099d0cc473fb904974",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "91e01a41-5dfc-5e03-b225-2a7e968b546c": {
+    "canonical_sha256": {
+     "a": "ddb537db460737a175ef3a45ccb4a9c8ec2604faeac723b86c94db2a96e814c4",
+     "b": "ddb537db460737a175ef3a45ccb4a9c8ec2604faeac723b86c94db2a96e814c4",
+     "equal": true
+    },
+    "derived_digest": "99eded7b13b3ff115edd730ad8deebb04e79acf9d8dba3c15e7a1c14c7c86e01",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "bc6b9be0-508c-5ce0-838f-ca26d8487e96": {
+    "canonical_sha256": {
+     "a": "c31be87c67610c2d4da2e1016dd65590c497ddb6fba8e542a34e31543e060e77",
+     "b": "c31be87c67610c2d4da2e1016dd65590c497ddb6fba8e542a34e31543e060e77",
+     "equal": true
+    },
+    "derived_digest": "3fa853451aaf71d03c2f1a68c363d59364dc648cc4a799c5a0f986413439f9c7",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "beb77f92-ebb2-5df4-999b-5d2ab2341d92": {
+    "canonical_sha256": {
+     "a": "d22f83d493d82106d9cad51fbb3d127de625c51eb993da00081e83f097c91d3a",
+     "b": "d22f83d493d82106d9cad51fbb3d127de625c51eb993da00081e83f097c91d3a",
+     "equal": true
+    },
+    "derived_digest": "474f62626c29b5e55bcce4e55968978f85819ba75e506d418631b15c9215d68f",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "c439fdf4-58b8-5e26-89cd-299d57129bfb": {
+    "canonical_sha256": {
+     "a": "4a76e414dfe91d12a489196322e00643c9c49ddc023cd6c77e02b27f76fabbe5",
+     "b": "4a76e414dfe91d12a489196322e00643c9c49ddc023cd6c77e02b27f76fabbe5",
+     "equal": true
+    },
+    "derived_digest": "79638058c4dadd80a446d46aafe5cf849e5d47338fe75eeffdb7f6936a81f1b5",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "c51501f4-da28-5a40-a757-06dc3741d4a4": {
+    "canonical_sha256": {
+     "a": "92168e7d96214d89796fc5d28e29b95d38fe8f9dbd133a782ef4094cd479e9db",
+     "b": "92168e7d96214d89796fc5d28e29b95d38fe8f9dbd133a782ef4094cd479e9db",
+     "equal": true
+    },
+    "derived_digest": "206ea198b19056c29144b70670ab8ff80846c3191769422c36ab9923496fac28",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "c6457855-a865-55ee-a3e3-6859187a454a": {
+    "canonical_sha256": {
+     "a": "481ac69d868b47ccabfac53618301dfa933b8f21965b55581ec970422c129a83",
+     "b": "481ac69d868b47ccabfac53618301dfa933b8f21965b55581ec970422c129a83",
+     "equal": true
+    },
+    "derived_digest": "efefc53ae4fd5ead129dd978702f82a68c6bc88d643e0cd9cf373581b8598dd7",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "ce471bbe-203a-54b2-9997-057180a01a3e": {
+    "canonical_sha256": {
+     "a": "b4db2cfd836a38c8874a373ce249c2aa998f07ca3d15ed4a205dc070fa1ec39c",
+     "b": "b4db2cfd836a38c8874a373ce249c2aa998f07ca3d15ed4a205dc070fa1ec39c",
+     "equal": true
+    },
+    "derived_digest": "2e2bdcf059bd603ae570b8080b5cc2692cb049e9288c669d25718b031dc3872a",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "d9ee3d79-9d38-5679-9811-806a8976335d": {
+    "canonical_sha256": {
+     "a": "f9b1e27cc3044b29b34e523efeb4e0d73a5ab2d4ea67bb96bc6cbecaaf08f1ae",
+     "b": "f9b1e27cc3044b29b34e523efeb4e0d73a5ab2d4ea67bb96bc6cbecaaf08f1ae",
+     "equal": true
+    },
+    "derived_digest": "1615cf957b576ffa510dc412a092606c797e341a1fe6f87314cf40c41cb3f723",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "dbca4f2a-61b4-5418-87ed-35abc2747299": {
+    "canonical_sha256": {
+     "a": "3f11c90ff5f386f59cc564c2dd69beb9163394ae5b72ae03e812c416908bb737",
+     "b": "3f11c90ff5f386f59cc564c2dd69beb9163394ae5b72ae03e812c416908bb737",
+     "equal": true
+    },
+    "derived_digest": "4cd6f9fbdeb46eb0457e13dd6184b0d08d0ebb5ff9824dc172c3f1c0ac9eac90",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "ec3a2dbc-6ea8-5046-8c92-02414ea69f9e": {
+    "canonical_sha256": {
+     "a": "e3f1419e1c874716b86a2cea8e657a85aa9c7bf4899a30bb6981415be272af11",
+     "b": "e3f1419e1c874716b86a2cea8e657a85aa9c7bf4899a30bb6981415be272af11",
+     "equal": true
+    },
+    "derived_digest": "36715ed7159ac1043014c270fe8383e21314fca209fdb7a358fd073a0b1a17b5",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "ece5a1af-fbc9-5b47-bd28-6cd2ede4c70f": {
+    "canonical_sha256": {
+     "a": "8fad64b1d818093a4e55de9de4515305d1e73f91a04e0132fd90fe66c3bade65",
+     "b": "8fad64b1d818093a4e55de9de4515305d1e73f91a04e0132fd90fe66c3bade65",
+     "equal": true
+    },
+    "derived_digest": "a39afc99134ad9f48344c761f9ff562086fbd641c0ef962c3ee50e45fa2632b1",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "ee669935-0520-53b1-bcd0-f40b8ba01700": {
+    "canonical_sha256": {
+     "a": "d618fb144d02c3e5ae5e243b74d20718cb36de9c2c3c0a74e1d9cab5dadea91d",
+     "b": "d618fb144d02c3e5ae5e243b74d20718cb36de9c2c3c0a74e1d9cab5dadea91d",
+     "equal": true
+    },
+    "derived_digest": "ad64fe178200c971728dd505a74ede1b4c133132a74f2a42174f6b1ace1ea1ee",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "f5b47629-f22f-5ae5-94fd-31c20b17adef": {
+    "canonical_sha256": {
+     "a": "fe940c4defaa84e44acd53a022b5f17318c38e311528eed38f516d75f946c96c",
+     "b": "fe940c4defaa84e44acd53a022b5f17318c38e311528eed38f516d75f946c96c",
+     "equal": true
+    },
+    "derived_digest": "6a54ee05e99d6111e945f3f95dcea5a6c306be4f83060f2f47f2896bec341e8b",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   }
+  },
+  "verdict": "PASS",
+  "xreq_total": 0
+ },
+ "executed_prefix": {
+  "any_eos_stop": false,
+  "eos_of_record": [
+   50279
+  ],
+  "eos_stop_requests": [],
+  "g6_lengths": {
+   "r0": {
+    "executed_prefix_len": 17,
+    "served_output_len": 17
+   },
+   "r1": {
+    "executed_prefix_len": 35,
+    "served_output_len": 35
+   },
+   "r10": {
+    "executed_prefix_len": 128,
+    "served_output_len": 128
+   },
+   "r11": {
+    "executed_prefix_len": 19,
+    "served_output_len": 19
+   },
+   "r12": {
+    "executed_prefix_len": 9,
+    "served_output_len": 9
+   },
+   "r13": {
+    "executed_prefix_len": 3,
+    "served_output_len": 3
+   },
+   "r14": {
+    "executed_prefix_len": 25,
+    "served_output_len": 25
+   },
+   "r15": {
+    "executed_prefix_len": 55,
+    "served_output_len": 55
+   },
+   "r16": {
+    "executed_prefix_len": 7,
+    "served_output_len": 7
+   },
+   "r17": {
+    "executed_prefix_len": 15,
+    "served_output_len": 15
+   },
+   "r18": {
+    "executed_prefix_len": 67,
+    "served_output_len": 67
+   },
+   "r19": {
+    "executed_prefix_len": 11,
+    "served_output_len": 11
+   },
+   "r2": {
+    "executed_prefix_len": 123,
+    "served_output_len": 123
+   },
+   "r20": {
+    "executed_prefix_len": 13,
+    "served_output_len": 13
+   },
+   "r21": {
+    "executed_prefix_len": 2,
+    "served_output_len": 2
+   },
+   "r22": {
+    "executed_prefix_len": 27,
+    "served_output_len": 27
+   },
+   "r23": {
+    "executed_prefix_len": 9,
+    "served_output_len": 9
+   },
+   "r24": {
+    "executed_prefix_len": 15,
+    "served_output_len": 15
+   },
+   "r25": {
+    "executed_prefix_len": 69,
+    "served_output_len": 69
+   },
+   "r26": {
+    "executed_prefix_len": 21,
+    "served_output_len": 21
+   },
+   "r27": {
+    "executed_prefix_len": 31,
+    "served_output_len": 31
+   },
+   "r28": {
+    "executed_prefix_len": 65,
+    "served_output_len": 65
+   },
+   "r29": {
+    "executed_prefix_len": 103,
+    "served_output_len": 103
+   },
+   "r3": {
+    "executed_prefix_len": 91,
+    "served_output_len": 91
+   },
+   "r30": {
+    "executed_prefix_len": 39,
+    "served_output_len": 39
+   },
+   "r31": {
+    "executed_prefix_len": 29,
+    "served_output_len": 29
+   },
+   "r4": {
+    "executed_prefix_len": 5,
+    "served_output_len": 5
+   },
+   "r5": {
+    "executed_prefix_len": 49,
+    "served_output_len": 49
+   },
+   "r6": {
+    "executed_prefix_len": 117,
+    "served_output_len": 117
+   },
+   "r7": {
+    "executed_prefix_len": 23,
+    "served_output_len": 23
+   },
+   "r8": {
+    "executed_prefix_len": 45,
+    "served_output_len": 45
+   },
+   "r9": {
+    "executed_prefix_len": 41,
+    "served_output_len": 41
+   }
+  },
+  "lag": 1,
+  "ok": true,
+  "requests": {
+   "r0": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 17,
+    "served_output_len": 17
+   },
+   "r1": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 35,
+    "served_output_len": 35
+   },
+   "r10": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 128,
+    "served_output_len": 128
+   },
+   "r11": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 19,
+    "served_output_len": 19
+   },
+   "r12": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 9,
+    "served_output_len": 9
+   },
+   "r13": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 3,
+    "served_output_len": 3
+   },
+   "r14": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 25,
+    "served_output_len": 25
+   },
+   "r15": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 55,
+    "served_output_len": 55
+   },
+   "r16": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 7,
+    "served_output_len": 7
+   },
+   "r17": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 15,
+    "served_output_len": 15
+   },
+   "r18": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 67,
+    "served_output_len": 67
+   },
+   "r19": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 11,
+    "served_output_len": 11
+   },
+   "r2": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 123,
+    "served_output_len": 123
+   },
+   "r20": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 13,
+    "served_output_len": 13
+   },
+   "r21": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 2,
+    "served_output_len": 2
+   },
+   "r22": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 27,
+    "served_output_len": 27
+   },
+   "r23": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 9,
+    "served_output_len": 9
+   },
+   "r24": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 15,
+    "served_output_len": 15
+   },
+   "r25": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 69,
+    "served_output_len": 69
+   },
+   "r26": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 21,
+    "served_output_len": 21
+   },
+   "r27": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 31,
+    "served_output_len": 31
+   },
+   "r28": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 65,
+    "served_output_len": 65
+   },
+   "r29": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 103,
+    "served_output_len": 103
+   },
+   "r3": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 91,
+    "served_output_len": 91
+   },
+   "r30": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 39,
+    "served_output_len": 39
+   },
+   "r31": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 29,
+    "served_output_len": 29
+   },
+   "r4": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 5,
+    "served_output_len": 5
+   },
+   "r5": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 49,
+    "served_output_len": 49
+   },
+   "r6": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 117,
+    "served_output_len": 117
+   },
+   "r7": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 23,
+    "served_output_len": 23
+   },
+   "r8": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 45,
+    "served_output_len": 45
+   },
+   "r9": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 41,
+    "served_output_len": 41
+   }
+  },
+  "tokens_source": "match/control/tokens.json"
+ },
+ "global_match_checks": {
+  "achieved_concurrency": {
+   "declared_requests": 32,
+   "observed_max": 32,
+   "programmed_max": 32
+  },
+  "alternate_verdict": {
+   "criterion": "sequence",
+   "failed_checks": [],
+   "verdict": "PASS"
+  },
+  "checks": {
+   "G1": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G2": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G3": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G4": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G5": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G6": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G7": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G8": {
+    "n_problems": 0,
+    "status": "PASS"
+   }
+  },
+  "chronology_unit": "engine_step",
+  "eos_truncated_requests": [],
+  "failed_checks": [],
+  "fold_record_pins": null,
+  "lag": {
+   "agree": true,
+   "declared": 1,
+   "eos_stop_requests": [],
+   "exercised": false,
+   "record_attests": 1,
+   "tokens_json_lag": 1,
+   "variable_lag": false
+  },
+  "requests_n": 32,
+  "rules_version": "r14-v1",
+  "verdict": "PASS",
+  "within_step_criterion": "dag",
+  "x09": {
+   "unattributed": 0,
+   "verdict": "PASS",
+   "within_step_criterion": "dag",
+   "xreq_total": 0
+  }
+ },
+ "manifest_digest": {
+  "complete": true,
+  "identities": 385504,
+  "manifest_digest": "9b75a54d4af6a5ca61f5117e29008957d38b7a79e5f69d352685dbf4c8a6891e",
+  "program_digest": "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72"
+ },
+ "program_digest": {
+  "batch": 32,
+  "build_summary": {
+   "request": "a7be1df3194a497ce134d14cc3321e7d70a29af3546b383b388b1e4d52264ec7",
+   "shapes": {
+    "build_request_LP1024_T28": "43849382b98bd9ba8ed0cfcf9318642bc79aa2d38c0e6e520d2774948bdac6de",
+    "build_request_LP105_T14": "e0da0ce22aa17ca4b95e1770343b47719cb8b0a90a7d84528cc5c7033316b21d",
+    "build_request_LP115_T116": "4d8ac279c492869f4dde233136b9d7bfb2b7d413f199491c841e6102d8688a39",
+    "build_request_LP11_T24": "a5e9460768b1a91e04f956c38d248734be3216dc4d148322c6803c291d8ec7f8",
+    "build_request_LP131_T102": "dc4d56b5d46b9cee0b9582063d23ca7ceb1cc57bac62734f095a992d7cd2f414",
+    "build_request_LP13_T4": "1c8c63aa501bf40beeef3b6f35772837d7c3fcbddafe75b61eb60737f8de2281",
+    "build_request_LP15_T34": "fe442efb342bd65a33945d927ecdf7cc39fd74a8111cdbd17efd4624cd8a0004",
+    "build_request_LP177_T44": "a39afc99134ad9f48344c761f9ff562086fbd641c0ef962c3ee50e45fa2632b1",
+    "build_request_LP17_T127": "79b64217a04ba5cb890707443ecd4459b724f4931b47d4db0418d3277027c01a",
+    "build_request_LP19_T122": "1615cf957b576ffa510dc412a092606c797e341a1fe6f87314cf40c41cb3f723",
+    "build_request_LP213_T12": "bf10a9e6319976fd054bf39eb1b20a50cfb2efcca6df9e182f7055d3949a0554",
+    "build_request_LP23_T14": "6a54ee05e99d6111e945f3f95dcea5a6c306be4f83060f2f47f2896bec341e8b",
+    "build_request_LP269_T48": "622c2d5841d8952e295e2da081a5299bd649511e9e20f6dcaaeb862bad71d46d",
+    "build_request_LP295_T68": "79638058c4dadd80a446d46aafe5cf849e5d47338fe75eeffdb7f6936a81f1b5",
+    "build_request_LP29_T40": "4cd6f9fbdeb46eb0457e13dd6184b0d08d0ebb5ff9824dc172c3f1c0ac9eac90",
+    "build_request_LP33_T66": "cea8ffab6e858671a0ae9603e80c2bfcc28b029cc86fe2a52c648cd2bc9a9409",
+    "build_request_LP37_T26": "3fa853451aaf71d03c2f1a68c363d59364dc648cc4a799c5a0f986413439f9c7",
+    "build_request_LP397_T30": "ad64fe178200c971728dd505a74ede1b4c133132a74f2a42174f6b1ace1ea1ee",
+    "build_request_LP409_T18": "e6a628d71bd2134a2865ac1a1e3163fb5153e38a3978bc26b5c79350cabdb8ad",
+    "build_request_LP415_T2": "99eded7b13b3ff115edd730ad8deebb04e79acf9d8dba3c15e7a1c14c7c86e01",
+    "build_request_LP41_T16": "fab7581c0858a2ba51fa0a0f48f3e846cefd483b6ce392457c68fd5f51d361cc",
+    "build_request_LP45_T20": "2e2bdcf059bd603ae570b8080b5cc2692cb049e9288c669d25718b031dc3872a",
+    "build_request_LP573_T22": "36715ed7159ac1043014c270fe8383e21314fca209fdb7a358fd073a0b1a17b5",
+    "build_request_LP57_T38": "474f62626c29b5e55bcce4e55968978f85819ba75e506d418631b15c9215d68f",
+    "build_request_LP703_T64": "53d66ebff35c07929ba5c544db07d3c21e26a2cf6d78b3099d0cc473fb904974",
+    "build_request_LP73_T1": "a8b744dc063e341f891e5f2ad587cbfaa752ce83f389f464f3e0ce002756ab7c",
+    "build_request_LP75_T54": "bc1c3a729a1b51f5b8bef67a753937ac0dd4604006fc6818e814348b4157419e",
+    "build_request_LP767_T6": "eb9ec18db6a262f4a254259ed2cf662011a0c164a5062a079eb40cdfc6f53ee1",
+    "build_request_LP821_T8": "206ea198b19056c29144b70670ab8ff80846c3191769422c36ab9923496fac28",
+    "build_request_LP861_T8": "cda74ba9cdb5422d3ef69d5ee58b0558bf3e362b41b228d826434f6757e93bbb",
+    "build_request_LP887_T90": "efefc53ae4fd5ead129dd978702f82a68c6bc88d643e0cd9cf373581b8598dd7",
+    "build_request_LP9_T10": "00095d395e11ca94c971de93e23f64a9bbf2429e08ef8d7a77511b0b11d3602e"
+   },
+   "step": "73c225d3c1ef611a2baf91a15a6a0d4c9aade5227bb1fcb8b15f5e3f4e749b29",
+   "workload": "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72"
+  },
+  "commit_keyed_by": "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72",
+  "program_digest_of_record": "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72",
+  "workload_program_digest": "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72"
+ },
+ "reference": {
+  "branch": "lane/vllm-integration",
+  "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+  "release": "r19-int-21",
+  "tag": "v1-reference"
+ },
+ "replay_partition": {
+  "boundary_linkage_result": true,
+  "facts_of_record": {
+   "r0": {
+    "a_r": 17,
+    "arrive": 0,
+    "cap": 17,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r1": {
+    "a_r": 35,
+    "arrive": 0,
+    "cap": 35,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r10": {
+    "a_r": 128,
+    "arrive": 0,
+    "cap": 128,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r11": {
+    "a_r": 19,
+    "arrive": 0,
+    "cap": 19,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r12": {
+    "a_r": 9,
+    "arrive": 0,
+    "cap": 9,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r13": {
+    "a_r": 3,
+    "arrive": 0,
+    "cap": 3,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r14": {
+    "a_r": 25,
+    "arrive": 0,
+    "cap": 25,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r15": {
+    "a_r": 55,
+    "arrive": 0,
+    "cap": 55,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r16": {
+    "a_r": 7,
+    "arrive": 0,
+    "cap": 7,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r17": {
+    "a_r": 15,
+    "arrive": 0,
+    "cap": 15,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r18": {
+    "a_r": 67,
+    "arrive": 0,
+    "cap": 67,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r19": {
+    "a_r": 11,
+    "arrive": 0,
+    "cap": 11,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r2": {
+    "a_r": 123,
+    "arrive": 0,
+    "cap": 123,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r20": {
+    "a_r": 13,
+    "arrive": 0,
+    "cap": 13,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r21": {
+    "a_r": 2,
+    "arrive": 0,
+    "cap": 2,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r22": {
+    "a_r": 27,
+    "arrive": 0,
+    "cap": 27,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r23": {
+    "a_r": 9,
+    "arrive": 0,
+    "cap": 9,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r24": {
+    "a_r": 15,
+    "arrive": 0,
+    "cap": 15,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r25": {
+    "a_r": 69,
+    "arrive": 0,
+    "cap": 69,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r26": {
+    "a_r": 21,
+    "arrive": 0,
+    "cap": 21,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r27": {
+    "a_r": 31,
+    "arrive": 0,
+    "cap": 31,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r28": {
+    "a_r": 65,
+    "arrive": 0,
+    "cap": 65,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r29": {
+    "a_r": 103,
+    "arrive": 0,
+    "cap": 103,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r3": {
+    "a_r": 91,
+    "arrive": 0,
+    "cap": 91,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r30": {
+    "a_r": 39,
+    "arrive": 0,
+    "cap": 39,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r31": {
+    "a_r": 29,
+    "arrive": 0,
+    "cap": 29,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r4": {
+    "a_r": 5,
+    "arrive": 0,
+    "cap": 5,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r5": {
+    "a_r": 49,
+    "arrive": 0,
+    "cap": 49,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r6": {
+    "a_r": 117,
+    "arrive": 0,
+    "cap": 117,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r7": {
+    "a_r": 23,
+    "arrive": 0,
+    "cap": 23,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r8": {
+    "a_r": 45,
+    "arrive": 0,
+    "cap": 45,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r9": {
+    "a_r": 41,
+    "arrive": 0,
+    "cap": 41,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   }
+  },
+  "not_executed_by_rule": {
+   "applied": true
+  },
+  "population": {},
+  "result": true,
+  "seed": null
+ },
+ "row": 67
+}

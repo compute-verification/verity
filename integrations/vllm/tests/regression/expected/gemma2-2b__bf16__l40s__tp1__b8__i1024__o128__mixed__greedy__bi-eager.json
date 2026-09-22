@@ -1,0 +1,965 @@
+{
+ "checks": {
+  "commit_summary": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T0"
+  },
+  "coverage": {
+   "applies": false,
+   "why": "manifest.json not resolvable here (pod / fetched manifest artifact needed)"
+  },
+  "decomp_hashes": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T1"
+  },
+  "executed_prefix": {
+   "applies": true,
+   "strength": "weak",
+   "tier": "T0"
+  },
+  "global_match_checks": {
+   "applies": true,
+   "strength": "weak",
+   "tier": "T0"
+  },
+  "manifest_digest": {
+   "applies": false,
+   "why": "no manifest of record on this row (Commit never built one)"
+  },
+  "program_digest": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T2"
+  },
+  "replay_partition": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T1"
+  }
+ },
+ "class": "FAIL",
+ "commit_summary": {
+  "collector": {
+   "layout": "chunk-leaf-v1",
+   "retention": "host",
+   "variant": "native_collect_v2_auto_nw+hidden_m1",
+   "window_mb": 256,
+   "window_slots": 8
+  },
+  "collector_variant": "windowed",
+  "commit_verdict": {
+   "commit_pass": false,
+   "first_fail_reason": "identity coverage: manifest incomplete: unmodelled Program families Bf16MulScalarTensor_v1: 1042 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x1042; Bf16MulScalarTensor_v1: 137 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x137; Bf16MulScalarTensor_v1: 209 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x209; Bf16MulScalarTensor_v1: 541 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x541; Bf16MulScalarTensor_v1: 559 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x559; Bf16MulScalarTensor_v1: 780 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x780; Bf16MulScalarTensor_v1: 799 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x799; Bf16MulScalarTensor_v1: 83 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x83",
+   "required_classes_source": "program/query manifest 5c985ad47c74368f81f8e16584ec5e01c44b0c2f7fec43614657d62c694bb3f0 (R14 MAN-01; classes kept as a secondary check)",
+   "required_manifest": {
+    "coverage": [
+     {
+      "checked": 163052,
+      "checked_by_family": {},
+      "committed_extras_n": 0,
+      "committed_unmatched": [],
+      "committed_unmatched_n": 0,
+      "duplicate_names_n": 0,
+      "engine_step_basis": "engine schedule of record (request step + observed arrival)",
+      "error": "manifest incomplete: unmodelled Program families Bf16MulScalarTensor_v1: 1042 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x1042; Bf16MulScalarTensor_v1: 137 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x137; Bf16MulScalarTensor_v1: 209 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x209; Bf16MulScalarTensor_v1: 541 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x541; Bf16MulScalarTensor_v1: 559 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x559; Bf16MulScalarTensor_v1: 780 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x780; Bf16MulScalarTensor_v1: 799 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x799; Bf16MulScalarTensor_v1: 83 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x83",
+      "executed_prefix_of_record": {
+       "lag": 1,
+       "ok": true,
+       "problems": [],
+       "r0": {
+        "cap": 81,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 81,
+        "served_output_len": 81
+       },
+       "r1": {
+        "cap": 107,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 107,
+        "served_output_len": 107
+       },
+       "r2": {
+        "cap": 19,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 19,
+        "served_output_len": 19
+       },
+       "r3": {
+        "cap": 31,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 31,
+        "served_output_len": 31
+       },
+       "r4": {
+        "cap": 53,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 53,
+        "served_output_len": 53
+       },
+       "r5": {
+        "cap": 11,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 11,
+        "served_output_len": 11
+       },
+       "r6": {
+        "cap": 2,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 2,
+        "served_output_len": 2
+       },
+       "r7": {
+        "cap": 128,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 128,
+        "served_output_len": 128
+       }
+      },
+      "families_missing_entirely": [
+       "Bf16MulScalarTensor_v1: 1042 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 137 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 209 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 541 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 559 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 780 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 799 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 83 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)"
+      ],
+      "manifest_digest": "5c985ad47c74368f81f8e16584ec5e01c44b0c2f7fec43614657d62c694bb3f0",
+      "manifest_of_record": {
+       "digest": "5c985ad47c74368f81f8e16584ec5e01c44b0c2f7fec43614657d62c694bb3f0",
+       "edited": false,
+       "identities_n": 163052,
+       "not_executed_n": 0,
+       "required_n": 163052
+      },
+      "missing": [],
+      "missing_by_family": {
+       "(unmodelled)": 163052
+      },
+      "missing_n": 163052,
+      "not_executed_by_rule": {
+       "by_family": {},
+       "by_request": {},
+       "kind_by_family": {},
+       "n": 0,
+       "rule": "executed_prefix_len = cap when served_output_len == cap (length stop); served_output_len + LAG when the request stopped by EOS before its cap (the last served token must be a declared EOS id, F-pm-24, and it must be the FIRST EOS served -- tokens served after an EOS are served past the stop, F-r17-14); LAG = the workload Program's declared static (R17-1), never read from the trace; positions >= executed_prefix_len are programmed-but-unexecuted (not required; committed = execution past the stop)",
+       "scope": "NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category. (COORD R17-27)"
+      },
+      "ok": false,
+      "schedule": {
+       "all_equal_declared": true,
+       "basis": "engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); arrival = the first committed step the request ran in",
+       "declared_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "observed_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "use": "observed",
+       "why": null
+      },
+      "steps_committed": [],
+      "steps_with_missing": [],
+      "unmodelled": {
+       "Bf16MulScalarTensor_v1: 1042 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 1042,
+       "Bf16MulScalarTensor_v1: 137 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 137,
+       "Bf16MulScalarTensor_v1: 209 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 209,
+       "Bf16MulScalarTensor_v1: 541 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 541,
+       "Bf16MulScalarTensor_v1: 559 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 559,
+       "Bf16MulScalarTensor_v1: 780 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 780,
+       "Bf16MulScalarTensor_v1: 799 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 799,
+       "Bf16MulScalarTensor_v1: 83 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 83
+      }
+     },
+     {
+      "checked": 163052,
+      "checked_by_family": {},
+      "committed_extras_n": 0,
+      "committed_unmatched": [],
+      "committed_unmatched_n": 0,
+      "duplicate_names_n": 0,
+      "engine_step_basis": "engine schedule of record (request step + observed arrival)",
+      "error": "manifest incomplete: unmodelled Program families Bf16MulScalarTensor_v1: 1042 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x1042; Bf16MulScalarTensor_v1: 137 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x137; Bf16MulScalarTensor_v1: 209 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x209; Bf16MulScalarTensor_v1: 541 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x541; Bf16MulScalarTensor_v1: 559 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x559; Bf16MulScalarTensor_v1: 780 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x780; Bf16MulScalarTensor_v1: 799 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x799; Bf16MulScalarTensor_v1: 83 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x83",
+      "executed_prefix_of_record": {
+       "lag": 1,
+       "ok": true,
+       "problems": [],
+       "r0": {
+        "cap": 81,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 81,
+        "served_output_len": 81
+       },
+       "r1": {
+        "cap": 107,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 107,
+        "served_output_len": 107
+       },
+       "r2": {
+        "cap": 19,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 19,
+        "served_output_len": 19
+       },
+       "r3": {
+        "cap": 31,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 31,
+        "served_output_len": 31
+       },
+       "r4": {
+        "cap": 53,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 53,
+        "served_output_len": 53
+       },
+       "r5": {
+        "cap": 11,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 11,
+        "served_output_len": 11
+       },
+       "r6": {
+        "cap": 2,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 2,
+        "served_output_len": 2
+       },
+       "r7": {
+        "cap": 128,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 128,
+        "served_output_len": 128
+       }
+      },
+      "families_missing_entirely": [
+       "Bf16MulScalarTensor_v1: 1042 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 137 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 209 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 541 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 559 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 780 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 799 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 83 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)"
+      ],
+      "manifest_digest": "5c985ad47c74368f81f8e16584ec5e01c44b0c2f7fec43614657d62c694bb3f0",
+      "manifest_of_record": {
+       "digest": "5c985ad47c74368f81f8e16584ec5e01c44b0c2f7fec43614657d62c694bb3f0",
+       "edited": false,
+       "identities_n": 163052,
+       "not_executed_n": 0,
+       "required_n": 163052
+      },
+      "missing": [],
+      "missing_by_family": {
+       "(unmodelled)": 163052
+      },
+      "missing_n": 163052,
+      "not_executed_by_rule": {
+       "by_family": {},
+       "by_request": {},
+       "kind_by_family": {},
+       "n": 0,
+       "rule": "executed_prefix_len = cap when served_output_len == cap (length stop); served_output_len + LAG when the request stopped by EOS before its cap (the last served token must be a declared EOS id, F-pm-24, and it must be the FIRST EOS served -- tokens served after an EOS are served past the stop, F-r17-14); LAG = the workload Program's declared static (R17-1), never read from the trace; positions >= executed_prefix_len are programmed-but-unexecuted (not required; committed = execution past the stop)",
+       "scope": "NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category. (COORD R17-27)"
+      },
+      "ok": false,
+      "schedule": {
+       "all_equal_declared": true,
+       "basis": "engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); arrival = the first committed step the request ran in",
+       "declared_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "observed_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "use": "observed",
+       "why": null
+      },
+      "steps_committed": [],
+      "steps_with_missing": [],
+      "unmodelled": {
+       "Bf16MulScalarTensor_v1: 1042 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 1042,
+       "Bf16MulScalarTensor_v1: 137 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 137,
+       "Bf16MulScalarTensor_v1: 209 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 209,
+       "Bf16MulScalarTensor_v1: 541 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 541,
+       "Bf16MulScalarTensor_v1: 559 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 559,
+       "Bf16MulScalarTensor_v1: 780 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 780,
+       "Bf16MulScalarTensor_v1: 799 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 799,
+       "Bf16MulScalarTensor_v1: 83 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 83
+      }
+     },
+     {
+      "checked": 163052,
+      "checked_by_family": {},
+      "committed_extras_n": 0,
+      "committed_unmatched": [],
+      "committed_unmatched_n": 0,
+      "duplicate_names_n": 0,
+      "engine_step_basis": "engine schedule of record (request step + observed arrival)",
+      "error": "manifest incomplete: unmodelled Program families Bf16MulScalarTensor_v1: 1042 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x1042; Bf16MulScalarTensor_v1: 137 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x137; Bf16MulScalarTensor_v1: 209 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x209; Bf16MulScalarTensor_v1: 541 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x541; Bf16MulScalarTensor_v1: 559 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x559; Bf16MulScalarTensor_v1: 780 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x780; Bf16MulScalarTensor_v1: 799 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x799; Bf16MulScalarTensor_v1: 83 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing) x83",
+      "executed_prefix_of_record": {
+       "lag": 1,
+       "ok": true,
+       "problems": [],
+       "r0": {
+        "cap": 81,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 81,
+        "served_output_len": 81
+       },
+       "r1": {
+        "cap": 107,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 107,
+        "served_output_len": 107
+       },
+       "r2": {
+        "cap": 19,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 19,
+        "served_output_len": 19
+       },
+       "r3": {
+        "cap": 31,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 31,
+        "served_output_len": 31
+       },
+       "r4": {
+        "cap": 53,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 53,
+        "served_output_len": 53
+       },
+       "r5": {
+        "cap": 11,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 11,
+        "served_output_len": 11
+       },
+       "r6": {
+        "cap": 2,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 2,
+        "served_output_len": 2
+       },
+       "r7": {
+        "cap": 128,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 128,
+        "served_output_len": 128
+       }
+      },
+      "families_missing_entirely": [
+       "Bf16MulScalarTensor_v1: 1042 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 137 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 209 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 541 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 559 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 780 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 799 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)",
+       "Bf16MulScalarTensor_v1: 83 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)"
+      ],
+      "manifest_digest": "5c985ad47c74368f81f8e16584ec5e01c44b0c2f7fec43614657d62c694bb3f0",
+      "manifest_of_record": {
+       "digest": "5c985ad47c74368f81f8e16584ec5e01c44b0c2f7fec43614657d62c694bb3f0",
+       "edited": false,
+       "identities_n": 163052,
+       "not_executed_n": 0,
+       "required_n": 163052
+      },
+      "missing": [],
+      "missing_by_family": {
+       "(unmodelled)": 163052
+      },
+      "missing_n": 163052,
+      "not_executed_by_rule": {
+       "by_family": {},
+       "by_request": {},
+       "kind_by_family": {},
+       "n": 0,
+       "rule": "executed_prefix_len = cap when served_output_len == cap (length stop); served_output_len + LAG when the request stopped by EOS before its cap (the last served token must be a declared EOS id, F-pm-24, and it must be the FIRST EOS served -- tokens served after an EOS are served past the stop, F-r17-14); LAG = the workload Program's declared static (R17-1), never read from the trace; positions >= executed_prefix_len are programmed-but-unexecuted (not required; committed = execution past the stop)",
+       "scope": "NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category. (COORD R17-27)"
+      },
+      "ok": false,
+      "schedule": {
+       "all_equal_declared": true,
+       "basis": "engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); arrival = the first committed step the request ran in",
+       "declared_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "observed_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "use": "observed",
+       "why": null
+      },
+      "steps_committed": [],
+      "steps_with_missing": [],
+      "unmodelled": {
+       "Bf16MulScalarTensor_v1: 1042 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 1042,
+       "Bf16MulScalarTensor_v1: 137 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 137,
+       "Bf16MulScalarTensor_v1: 209 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 209,
+       "Bf16MulScalarTensor_v1: 541 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 541,
+       "Bf16MulScalarTensor_v1: 559 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 559,
+       "Bf16MulScalarTensor_v1: 780 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 780,
+       "Bf16MulScalarTensor_v1: 799 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 799,
+       "Bf16MulScalarTensor_v1: 83 row(s) whose output the Program reads across a module boundary while the vocabulary names no member for it (unnamed crossing)": 83
+      }
+     }
+    ],
+    "manifest_digest": "5c985ad47c74368f81f8e16584ec5e01c44b0c2f7fec43614657d62c694bb3f0",
+    "path": "/workspace/cp/sweep/r19-int-10/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager/manifest.json",
+    "populations": {
+     "by_family": {
+      "fa2_hidden_m1_stream": 3328,
+      "input_token_ids": 432,
+      "instance_outputs": 158544,
+      "sampled_token_ids": 432,
+      "weights": 316
+     },
+     "engine_steps": 128,
+     "identities": 163052,
+     "requests": 8
+    },
+    "program_digest": "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53",
+    "query": {
+     "attention_hidden_family": "fa2_hidden_m1_stream",
+     "boundary": "module",
+     "family_selector": {
+      "digest": "dd6729b72e9a69e9a0ceb429708efca969a13034609887bce93132f8b8c46004",
+      "module": "verity_capture.vu_canonical",
+      "query_id": "Q_fine_v1",
+      "role": "selects WHICH families are required; its unit (the fine partition) is NOT the population unit of record",
+      "version": "2026-09-17.1"
+     },
+     "implemented_query": "Q_module_v1",
+     "profile": "ampere",
+     "query": "verity_capture.vu_canonical",
+     "query_digest": "dd6729b72e9a69e9a0ceb429708efca969a13034609887bce93132f8b8c46004",
+     "query_id": "Q_module_v1",
+     "query_id_digest": "0d868cf076d7fe9521bca1ed325fb018981a9cecff6520759edbfc38cf4d4e4e",
+     "query_version": "2026-09-17.1",
+     "required_families": [
+      "input_token_ids",
+      "instance_outputs",
+      "sampled_token_ids",
+      "weights",
+      "fa2_hidden_m1_stream"
+     ],
+     "unit": "Program row = module-boundary VU under Q_module_v1: identities are the module output members per (request, step, module) + ids, sampled ids, weights, the attention M1 stream; Q_fine_v1 (vu_canonical) selects the required families (query_digest) and is not the implemented population unit (R17-9 (ii), F-r17b-05, R17-10)",
+     "why": {
+      "fa2_hidden_m1_stream": "the attention override refines AttentionHead into AttnBlock interiors (s[c] dots, PV k-step chains, max chain, Fa2InvSum) -> the M1 export stream of every attention launch (layer x step) is required",
+      "input_token_ids": "Embedding_v1 opens on its ids input (Input32)",
+      "instance_outputs": "every VU family of the query (Gemm y[n], norm normalize path, SiluMul, RoPE, Embedding) opens on the producing instance's OUTPUT words -> every Program instance output member per step is required",
+      "sampled_token_ids": "TokenSelect_v1 output per step",
+      "weights": "Input16 registered inputs: every weight field the Program's `weights` parameter names"
+     }
+    }
+   },
+   "runs_failed": 3,
+   "runs_instrumented": 3
+  },
+  "committer": "native_collect_v2b",
+  "coverage": [
+   null,
+   null,
+   null
+  ],
+  "engine_settings": {
+   "gpu_memory_utilization": 0.5,
+   "max_num_seqs": 8,
+   "open_after_release": true,
+   "openings": 64,
+   "pairs": 3,
+   "required_manifest": true
+  },
+  "engine_steps": [
+   129,
+   129,
+   129,
+   129,
+   129,
+   129
+  ],
+  "generated_tokens": [
+   432,
+   432,
+   432,
+   432,
+   432,
+   432
+  ],
+  "n_control": 3,
+  "n_runs": 6,
+  "n_treatment": 3,
+  "openings": [
+   null,
+   null,
+   null
+  ],
+  "pass": false,
+  "rc": 3,
+  "retention": "host",
+  "tokens_equal": [
+   true,
+   true,
+   true
+  ]
+ },
+ "decomp_hashes": {
+  "fold_record_pins": {},
+  "requests": {
+   "1c2eb52e-7dcd-5731-86a5-87fa3a430644": {
+    "canonical_sha256": {
+     "a": "b8dc0be671cbf024de45b99a9fc44dbe126eed57362648239bcc9768c99a53e4",
+     "b": "b8dc0be671cbf024de45b99a9fc44dbe126eed57362648239bcc9768c99a53e4",
+     "equal": true
+    },
+    "derived_digest": "db4288cb88435015ba626094541823295158e2e2a6e7d132010f7a6a1b488a77",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "94fc282b-8846-5191-b79e-4847c7f59d1c": {
+    "canonical_sha256": {
+     "a": "9dd5fcb8876e4f67f1ee5e4b2cda66e994a9fd1dffe52b969ca78332b6854f68",
+     "b": "9dd5fcb8876e4f67f1ee5e4b2cda66e994a9fd1dffe52b969ca78332b6854f68",
+     "equal": true
+    },
+    "derived_digest": "ee674e57d0e24cb61b07983feaeb7919f578a264fdf4266af8f8f5e5bc1b8dd3",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "97b045e9-e15d-5a6a-a8a6-c97d9091f00e": {
+    "canonical_sha256": {
+     "a": "d2fab146eea50fb94bfeb5738b87d3a6ea71c3d55c4fcf62a9fdf37050a37ef9",
+     "b": "d2fab146eea50fb94bfeb5738b87d3a6ea71c3d55c4fcf62a9fdf37050a37ef9",
+     "equal": true
+    },
+    "derived_digest": "7e9f7c81ac27bc18e3c65b20efaf9b2b78885c7c675a5f06d47f56062a78d08c",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "bfc5fd7a-6d0f-51f8-a8aa-bb59b6c4c3c6": {
+    "canonical_sha256": {
+     "a": "7bf840e7ed82bbe0c8f9ebcca11c42245293c569d12c201ffb013bfe53632f77",
+     "b": "7bf840e7ed82bbe0c8f9ebcca11c42245293c569d12c201ffb013bfe53632f77",
+     "equal": true
+    },
+    "derived_digest": "34d90c724f992d0ad3e8e9b0fc307018908777b0c9a3cbaa030d5cbb19e33b87",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "ce1b1461-3c3d-565f-94f2-f779e2816f34": {
+    "canonical_sha256": {
+     "a": "3411b94f24cfa20d47679f29a534f02140955471e3e6d5dacef0c0b450fa3e8c",
+     "b": "3411b94f24cfa20d47679f29a534f02140955471e3e6d5dacef0c0b450fa3e8c",
+     "equal": true
+    },
+    "derived_digest": "2090db1e551755b5172dc7e0a1c8cd83dcfcb94a82efcbdeec9c6fadd1460c6f",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "e981f58c-46eb-552d-b77c-b2e060c60555": {
+    "canonical_sha256": {
+     "a": "52efa0f94353f17a1055747eca507f04cbd1a90af04ecbe278ff1faa756df0b9",
+     "b": "52efa0f94353f17a1055747eca507f04cbd1a90af04ecbe278ff1faa756df0b9",
+     "equal": true
+    },
+    "derived_digest": "a82b353da6dd857ac8dd65a3969a295ed7d5345931ea0d63c8d40f44d776216a",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "f5d90328-2bee-5187-9a4d-69b33dc3dec6": {
+    "canonical_sha256": {
+     "a": "b3ecc690ac4baf8e908407b1a19fbaff12faba959dc7cc53b3815d460592ffca",
+     "b": "b3ecc690ac4baf8e908407b1a19fbaff12faba959dc7cc53b3815d460592ffca",
+     "equal": true
+    },
+    "derived_digest": "0bfe596bd6083224318e5b542bbe45d7dbe32db03cc6e4e1748f9c16b28b6321",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "fbc6dbdb-b175-53cf-8e89-ba09168a22a9": {
+    "canonical_sha256": {
+     "a": "f5c61acb9d90bac7f1db03c53e70329a1a1fa9b503e9b33bf016b1544aed12c4",
+     "b": "f5c61acb9d90bac7f1db03c53e70329a1a1fa9b503e9b33bf016b1544aed12c4",
+     "equal": true
+    },
+    "derived_digest": "bb9ea7fd206b23488c233610c195509fc5752ba02f2c7e0b7f7a63c2fe23cee8",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   }
+  },
+  "verdict": "PASS",
+  "xreq_total": 0
+ },
+ "executed_prefix": {
+  "any_eos_stop": false,
+  "eos_of_record": [
+   1
+  ],
+  "eos_stop_requests": [],
+  "g6_lengths": {
+   "r0": {
+    "executed_prefix_len": 81,
+    "served_output_len": 81
+   },
+   "r1": {
+    "executed_prefix_len": 107,
+    "served_output_len": 107
+   },
+   "r2": {
+    "executed_prefix_len": 19,
+    "served_output_len": 19
+   },
+   "r3": {
+    "executed_prefix_len": 31,
+    "served_output_len": 31
+   },
+   "r4": {
+    "executed_prefix_len": 53,
+    "served_output_len": 53
+   },
+   "r5": {
+    "executed_prefix_len": 11,
+    "served_output_len": 11
+   },
+   "r6": {
+    "executed_prefix_len": 2,
+    "served_output_len": 2
+   },
+   "r7": {
+    "executed_prefix_len": 128,
+    "served_output_len": 128
+   }
+  },
+  "lag": 1,
+  "ok": true,
+  "requests": {
+   "r0": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 81,
+    "served_output_len": 81
+   },
+   "r1": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 107,
+    "served_output_len": 107
+   },
+   "r2": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 19,
+    "served_output_len": 19
+   },
+   "r3": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 31,
+    "served_output_len": 31
+   },
+   "r4": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 53,
+    "served_output_len": 53
+   },
+   "r5": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 11,
+    "served_output_len": 11
+   },
+   "r6": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 2,
+    "served_output_len": 2
+   },
+   "r7": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 128,
+    "served_output_len": 128
+   }
+  },
+  "tokens_source": "match/control/tokens.json"
+ },
+ "global_match_checks": {
+  "achieved_concurrency": {
+   "declared_requests": 8,
+   "observed_max": 8,
+   "programmed_max": 8
+  },
+  "alternate_verdict": {
+   "criterion": "sequence",
+   "failed_checks": [],
+   "verdict": "PASS"
+  },
+  "checks": {
+   "G1": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G2": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G3": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G4": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G5": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G6": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G7": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G8": {
+    "n_problems": 0,
+    "status": "PASS"
+   }
+  },
+  "chronology_unit": "engine_step",
+  "eos_truncated_requests": [],
+  "failed_checks": [],
+  "fold_record_pins": null,
+  "lag": {
+   "agree": true,
+   "declared": 1,
+   "eos_stop_requests": [],
+   "exercised": false,
+   "record_attests": 1,
+   "tokens_json_lag": 1,
+   "variable_lag": false
+  },
+  "requests_n": 8,
+  "rules_version": "r14-v1",
+  "verdict": "PASS",
+  "within_step_criterion": "dag",
+  "x09": {
+   "unattributed": 0,
+   "verdict": "PASS",
+   "within_step_criterion": "dag",
+   "xreq_total": 0
+  }
+ },
+ "program_digest": {
+  "batch": 8,
+  "build_summary": {
+   "request": "a00764e554c96ce06b8c2eee2cfb119fe268dfdcf78501946b17a325fadc3545",
+   "shapes": {
+    "build_request_LP1024_T18": "a82b353da6dd857ac8dd65a3969a295ed7d5345931ea0d63c8d40f44d776216a",
+    "build_request_LP10_T127": "2090db1e551755b5172dc7e0a1c8cd83dcfcb94a82efcbdeec9c6fadd1460c6f",
+    "build_request_LP179_T30": "0bfe596bd6083224318e5b542bbe45d7dbe32db03cc6e4e1748f9c16b28b6321",
+    "build_request_LP31_T52": "7e9f7c81ac27bc18e3c65b20efaf9b2b78885c7c675a5f06d47f56062a78d08c",
+    "build_request_LP453_T106": "bb9ea7fd206b23488c233610c195509fc5752ba02f2c7e0b7f7a63c2fe23cee8",
+    "build_request_LP531_T10": "ee674e57d0e24cb61b07983feaeb7919f578a264fdf4266af8f8f5e5bc1b8dd3",
+    "build_request_LP719_T80": "db4288cb88435015ba626094541823295158e2e2a6e7d132010f7a6a1b488a77",
+    "build_request_LP779_T1": "34d90c724f992d0ad3e8e9b0fc307018908777b0c9a3cbaa030d5cbb19e33b87"
+   },
+   "step": "30d7b1acac4b3cff9b3bdfe2f3af81468dc9be00023fcbf331e229d4046c7134",
+   "workload": "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53"
+  },
+  "program_digest_of_record": "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53",
+  "workload_program_digest": "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53"
+ },
+ "reference": {
+  "branch": "lane/vllm-integration",
+  "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+  "release": "r19-int-21",
+  "tag": "v1-reference"
+ },
+ "replay_partition": {
+  "boundary_linkage_result": true,
+  "facts_of_record": {
+   "r0": {
+    "a_r": 81,
+    "arrive": 0,
+    "cap": 81,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r1": {
+    "a_r": 107,
+    "arrive": 0,
+    "cap": 107,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r2": {
+    "a_r": 19,
+    "arrive": 0,
+    "cap": 19,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r3": {
+    "a_r": 31,
+    "arrive": 0,
+    "cap": 31,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r4": {
+    "a_r": 53,
+    "arrive": 0,
+    "cap": 53,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r5": {
+    "a_r": 11,
+    "arrive": 0,
+    "cap": 11,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r6": {
+    "a_r": 2,
+    "arrive": 0,
+    "cap": 2,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r7": {
+    "a_r": 128,
+    "arrive": 0,
+    "cap": 128,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   }
+  },
+  "not_executed_by_rule": {
+   "applied": true
+  },
+  "population": {},
+  "result": true,
+  "seed": null
+ },
+ "row": 57
+}

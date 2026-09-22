@@ -1,0 +1,1318 @@
+{
+ "checks": {
+  "commit_summary": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T0"
+  },
+  "coverage": {
+   "applies": false,
+   "why": "manifest.json not resolvable here (pod / fetched manifest artifact needed)"
+  },
+  "decomp_hashes": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T1"
+  },
+  "executed_prefix": {
+   "applies": true,
+   "strength": "weak",
+   "tier": "T0"
+  },
+  "global_match_checks": {
+   "applies": true,
+   "strength": "weak",
+   "tier": "T0"
+  },
+  "manifest_digest": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T0"
+  },
+  "program_digest": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T2"
+  },
+  "replay_partition": {
+   "applies": true,
+   "strength": "strong",
+   "tier": "T1"
+  }
+ },
+ "class": "GREEN",
+ "commit_summary": {
+  "collector": {
+   "layout": "chunk-leaf-v1",
+   "retention": "host",
+   "variant": "native_collect_v2_auto_nw+hidden_m1",
+   "window_mb": 256,
+   "window_slots": 8
+  },
+  "collector_variant": "windowed",
+  "commit_verdict": {
+   "commit_pass": true,
+   "first_fail_reason": null,
+   "required_classes_source": "program/query manifest 085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729 (R14 MAN-01; classes kept as a secondary check)",
+   "required_manifest": {
+    "coverage": [
+     {
+      "checked": 204820,
+      "checked_by_family": {
+       "fa2_hidden_m1_stream": 4096,
+       "input_token_ids": 516,
+       "instance_outputs": 199692,
+       "sampled_token_ids": 516
+      },
+      "committed_extras_n": 0,
+      "committed_unmatched": [],
+      "committed_unmatched_n": 0,
+      "composition_mismatch": [],
+      "composition_mismatch_n": 0,
+      "duplicate_names_n": 0,
+      "engine_step_basis": "engine schedule of record (request step + observed arrival)",
+      "executed_prefix_of_record": {
+       "lag": 1,
+       "ok": true,
+       "problems": [],
+       "r0": {
+        "cap": 2,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 2,
+        "served_output_len": 2
+       },
+       "r1": {
+        "cap": 7,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 7,
+        "served_output_len": 7
+       },
+       "r2": {
+        "cap": 87,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 87,
+        "served_output_len": 87
+       },
+       "r3": {
+        "cap": 128,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 128,
+        "served_output_len": 128
+       },
+       "r4": {
+        "cap": 91,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 91,
+        "served_output_len": 91
+       },
+       "r5": {
+        "cap": 61,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 61,
+        "served_output_len": 61
+       },
+       "r6": {
+        "cap": 123,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 123,
+        "served_output_len": 123
+       },
+       "r7": {
+        "cap": 17,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 17,
+        "served_output_len": 17
+       }
+      },
+      "families_missing_entirely": [],
+      "manifest_digest": "085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729",
+      "manifest_of_record": {
+       "digest": "085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729",
+       "edited": false,
+       "identities_n": 205144,
+       "not_executed_n": 0,
+       "required_n": 205144
+      },
+      "missing": [],
+      "missing_by_family": {},
+      "missing_n": 0,
+      "not_executed_by_rule": {
+       "by_family": {},
+       "by_request": {},
+       "kind_by_family": {},
+       "n": 0,
+       "rule": "executed_prefix_len = cap when served_output_len == cap (length stop); served_output_len + LAG when the request stopped by EOS before its cap (the last served token must be a declared EOS id, F-pm-24, and it must be the FIRST EOS served -- tokens served after an EOS are served past the stop, F-r17-14); LAG = the workload Program's declared static (R17-1), never read from the trace; positions >= executed_prefix_len are programmed-but-unexecuted (not required; committed = execution past the stop)",
+       "scope": "NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category. (COORD R17-27)"
+      },
+      "ok": true,
+      "requests_with_missing": [],
+      "schedule": {
+       "all_equal_declared": true,
+       "basis": "engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); arrival = the first committed step the request ran in",
+       "declared_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "observed_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "use": "observed",
+       "why": null
+      },
+      "steps_committed": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18,
+       19,
+       20,
+       21,
+       22,
+       23,
+       24,
+       25,
+       26,
+       27,
+       28,
+       29,
+       30,
+       31,
+       32,
+       33,
+       34,
+       35,
+       36,
+       37,
+       38,
+       39,
+       40,
+       41,
+       42,
+       43,
+       44,
+       45,
+       46,
+       47,
+       48,
+       49,
+       50,
+       51,
+       52,
+       53,
+       54,
+       55,
+       56,
+       57,
+       58,
+       59,
+       60,
+       61,
+       62,
+       63,
+       64,
+       65,
+       66,
+       67,
+       68,
+       69,
+       70,
+       71,
+       72,
+       73,
+       74,
+       75,
+       76,
+       77,
+       78,
+       79,
+       80,
+       81,
+       82,
+       83,
+       84,
+       85,
+       86,
+       87,
+       88,
+       89,
+       90,
+       91,
+       92,
+       93,
+       94,
+       95,
+       96,
+       97,
+       98,
+       99,
+       100,
+       101,
+       102,
+       103,
+       104,
+       105,
+       106,
+       107,
+       108,
+       109,
+       110,
+       111,
+       112,
+       113,
+       114,
+       115,
+       116,
+       117,
+       118,
+       119,
+       120,
+       121,
+       122,
+       123,
+       124,
+       125,
+       126,
+       127
+      ],
+      "steps_with_missing": []
+     },
+     {
+      "checked": 204820,
+      "checked_by_family": {
+       "fa2_hidden_m1_stream": 4096,
+       "input_token_ids": 516,
+       "instance_outputs": 199692,
+       "sampled_token_ids": 516
+      },
+      "committed_extras_n": 0,
+      "committed_unmatched": [],
+      "committed_unmatched_n": 0,
+      "composition_mismatch": [],
+      "composition_mismatch_n": 0,
+      "duplicate_names_n": 0,
+      "engine_step_basis": "engine schedule of record (request step + observed arrival)",
+      "executed_prefix_of_record": {
+       "lag": 1,
+       "ok": true,
+       "problems": [],
+       "r0": {
+        "cap": 2,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 2,
+        "served_output_len": 2
+       },
+       "r1": {
+        "cap": 7,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 7,
+        "served_output_len": 7
+       },
+       "r2": {
+        "cap": 87,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 87,
+        "served_output_len": 87
+       },
+       "r3": {
+        "cap": 128,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 128,
+        "served_output_len": 128
+       },
+       "r4": {
+        "cap": 91,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 91,
+        "served_output_len": 91
+       },
+       "r5": {
+        "cap": 61,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 61,
+        "served_output_len": 61
+       },
+       "r6": {
+        "cap": 123,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 123,
+        "served_output_len": 123
+       },
+       "r7": {
+        "cap": 17,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 17,
+        "served_output_len": 17
+       }
+      },
+      "families_missing_entirely": [],
+      "manifest_digest": "085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729",
+      "manifest_of_record": {
+       "digest": "085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729",
+       "edited": false,
+       "identities_n": 205144,
+       "not_executed_n": 0,
+       "required_n": 205144
+      },
+      "missing": [],
+      "missing_by_family": {},
+      "missing_n": 0,
+      "not_executed_by_rule": {
+       "by_family": {},
+       "by_request": {},
+       "kind_by_family": {},
+       "n": 0,
+       "rule": "executed_prefix_len = cap when served_output_len == cap (length stop); served_output_len + LAG when the request stopped by EOS before its cap (the last served token must be a declared EOS id, F-pm-24, and it must be the FIRST EOS served -- tokens served after an EOS are served past the stop, F-r17-14); LAG = the workload Program's declared static (R17-1), never read from the trace; positions >= executed_prefix_len are programmed-but-unexecuted (not required; committed = execution past the stop)",
+       "scope": "NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category. (COORD R17-27)"
+      },
+      "ok": true,
+      "requests_with_missing": [],
+      "schedule": {
+       "all_equal_declared": true,
+       "basis": "engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); arrival = the first committed step the request ran in",
+       "declared_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "observed_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "use": "observed",
+       "why": null
+      },
+      "steps_committed": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18,
+       19,
+       20,
+       21,
+       22,
+       23,
+       24,
+       25,
+       26,
+       27,
+       28,
+       29,
+       30,
+       31,
+       32,
+       33,
+       34,
+       35,
+       36,
+       37,
+       38,
+       39,
+       40,
+       41,
+       42,
+       43,
+       44,
+       45,
+       46,
+       47,
+       48,
+       49,
+       50,
+       51,
+       52,
+       53,
+       54,
+       55,
+       56,
+       57,
+       58,
+       59,
+       60,
+       61,
+       62,
+       63,
+       64,
+       65,
+       66,
+       67,
+       68,
+       69,
+       70,
+       71,
+       72,
+       73,
+       74,
+       75,
+       76,
+       77,
+       78,
+       79,
+       80,
+       81,
+       82,
+       83,
+       84,
+       85,
+       86,
+       87,
+       88,
+       89,
+       90,
+       91,
+       92,
+       93,
+       94,
+       95,
+       96,
+       97,
+       98,
+       99,
+       100,
+       101,
+       102,
+       103,
+       104,
+       105,
+       106,
+       107,
+       108,
+       109,
+       110,
+       111,
+       112,
+       113,
+       114,
+       115,
+       116,
+       117,
+       118,
+       119,
+       120,
+       121,
+       122,
+       123,
+       124,
+       125,
+       126,
+       127
+      ],
+      "steps_with_missing": []
+     },
+     {
+      "checked": 204820,
+      "checked_by_family": {
+       "fa2_hidden_m1_stream": 4096,
+       "input_token_ids": 516,
+       "instance_outputs": 199692,
+       "sampled_token_ids": 516
+      },
+      "committed_extras_n": 0,
+      "committed_unmatched": [],
+      "committed_unmatched_n": 0,
+      "composition_mismatch": [],
+      "composition_mismatch_n": 0,
+      "duplicate_names_n": 0,
+      "engine_step_basis": "engine schedule of record (request step + observed arrival)",
+      "executed_prefix_of_record": {
+       "lag": 1,
+       "ok": true,
+       "problems": [],
+       "r0": {
+        "cap": 2,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 2,
+        "served_output_len": 2
+       },
+       "r1": {
+        "cap": 7,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 7,
+        "served_output_len": 7
+       },
+       "r2": {
+        "cap": 87,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 87,
+        "served_output_len": 87
+       },
+       "r3": {
+        "cap": 128,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 128,
+        "served_output_len": 128
+       },
+       "r4": {
+        "cap": 91,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 91,
+        "served_output_len": 91
+       },
+       "r5": {
+        "cap": 61,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 61,
+        "served_output_len": 61
+       },
+       "r6": {
+        "cap": 123,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 123,
+        "served_output_len": 123
+       },
+       "r7": {
+        "cap": 17,
+        "cap_exhausted": true,
+        "eos_stop": false,
+        "executed_prefix_len": 17,
+        "served_output_len": 17
+       }
+      },
+      "families_missing_entirely": [],
+      "manifest_digest": "085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729",
+      "manifest_of_record": {
+       "digest": "085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729",
+       "edited": false,
+       "identities_n": 205144,
+       "not_executed_n": 0,
+       "required_n": 205144
+      },
+      "missing": [],
+      "missing_by_family": {},
+      "missing_n": 0,
+      "not_executed_by_rule": {
+       "by_family": {},
+       "by_request": {},
+       "kind_by_family": {},
+       "n": 0,
+       "rule": "executed_prefix_len = cap when served_output_len == cap (length stop); served_output_len + LAG when the request stopped by EOS before its cap (the last served token must be a declared EOS id, F-pm-24, and it must be the FIRST EOS served -- tokens served after an EOS are served past the stop, F-r17-14); LAG = the workload Program's declared static (R17-1), never read from the trace; positions >= executed_prefix_len are programmed-but-unexecuted (not required; committed = execution past the stop)",
+       "scope": "NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category. (COORD R17-27)"
+      },
+      "ok": true,
+      "requests_with_missing": [],
+      "schedule": {
+       "all_equal_declared": true,
+       "basis": "engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); arrival = the first committed step the request ran in",
+       "declared_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "observed_arrive_steps": {
+        "r0": 0,
+        "r1": 0,
+        "r2": 0,
+        "r3": 0,
+        "r4": 0,
+        "r5": 0,
+        "r6": 0,
+        "r7": 0
+       },
+       "use": "observed",
+       "why": null
+      },
+      "steps_committed": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18,
+       19,
+       20,
+       21,
+       22,
+       23,
+       24,
+       25,
+       26,
+       27,
+       28,
+       29,
+       30,
+       31,
+       32,
+       33,
+       34,
+       35,
+       36,
+       37,
+       38,
+       39,
+       40,
+       41,
+       42,
+       43,
+       44,
+       45,
+       46,
+       47,
+       48,
+       49,
+       50,
+       51,
+       52,
+       53,
+       54,
+       55,
+       56,
+       57,
+       58,
+       59,
+       60,
+       61,
+       62,
+       63,
+       64,
+       65,
+       66,
+       67,
+       68,
+       69,
+       70,
+       71,
+       72,
+       73,
+       74,
+       75,
+       76,
+       77,
+       78,
+       79,
+       80,
+       81,
+       82,
+       83,
+       84,
+       85,
+       86,
+       87,
+       88,
+       89,
+       90,
+       91,
+       92,
+       93,
+       94,
+       95,
+       96,
+       97,
+       98,
+       99,
+       100,
+       101,
+       102,
+       103,
+       104,
+       105,
+       106,
+       107,
+       108,
+       109,
+       110,
+       111,
+       112,
+       113,
+       114,
+       115,
+       116,
+       117,
+       118,
+       119,
+       120,
+       121,
+       122,
+       123,
+       124,
+       125,
+       126,
+       127
+      ],
+      "steps_with_missing": []
+     }
+    ],
+    "manifest_digest": "085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729",
+    "path": "/workspace/cp/sweep/r19-int-6/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager/manifest.json",
+    "populations": {
+     "by_family": {
+      "fa2_hidden_m1_stream": 4096,
+      "input_token_ids": 516,
+      "instance_outputs": 199692,
+      "sampled_token_ids": 516,
+      "weights": 324
+     },
+     "engine_steps": 128,
+     "identities": 205144,
+     "requests": 8
+    },
+    "program_digest": "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501",
+    "query": {
+     "attention_hidden_family": "fa2_hidden_m1_stream",
+     "boundary": "module",
+     "family_selector": {
+      "digest": "dd6729b72e9a69e9a0ceb429708efca969a13034609887bce93132f8b8c46004",
+      "module": "verity_capture.vu_canonical",
+      "query_id": "Q_fine_v1",
+      "role": "selects WHICH families are required; its unit (the fine partition) is NOT the population unit of record",
+      "version": "2026-09-17.1"
+     },
+     "implemented_query": "Q_module_v1",
+     "profile": "ampere",
+     "query": "verity_capture.vu_canonical",
+     "query_digest": "dd6729b72e9a69e9a0ceb429708efca969a13034609887bce93132f8b8c46004",
+     "query_id": "Q_module_v1",
+     "query_id_digest": "0d868cf076d7fe9521bca1ed325fb018981a9cecff6520759edbfc38cf4d4e4e",
+     "query_version": "2026-09-17.1",
+     "required_families": [
+      "input_token_ids",
+      "instance_outputs",
+      "sampled_token_ids",
+      "weights",
+      "fa2_hidden_m1_stream"
+     ],
+     "unit": "Program row = module-boundary VU under Q_module_v1: identities are the module output members per (request, step, module) + ids, sampled ids, weights, the attention M1 stream; Q_fine_v1 (vu_canonical) selects the required families (query_digest) and is not the implemented population unit (R17-9 (ii), F-r17b-05, R17-10)",
+     "why": {
+      "fa2_hidden_m1_stream": "the attention override refines AttentionHead into AttnBlock interiors (s[c] dots, PV k-step chains, max chain, Fa2InvSum) -> the M1 export stream of every attention launch (layer x step) is required",
+      "input_token_ids": "Embedding_v1 opens on its ids input (Input32)",
+      "instance_outputs": "every VU family of the query (Gemm y[n], norm normalize path, SiluMul, RoPE, Embedding) opens on the producing instance's OUTPUT words -> every Program instance output member per step is required",
+      "sampled_token_ids": "TokenSelect_v1 output per step",
+      "weights": "Input16 registered inputs: every weight field the Program's `weights` parameter names"
+     }
+    }
+   },
+   "runs_failed": 0,
+   "runs_instrumented": 3
+  },
+  "committer": "native_collect_v2b",
+  "coverage": [
+   null,
+   null,
+   null
+  ],
+  "engine_settings": {
+   "gpu_memory_utilization": 0.5,
+   "max_num_seqs": 8,
+   "open_after_release": true,
+   "openings": 64,
+   "pairs": 3,
+   "required_manifest": true
+  },
+  "engine_steps": [
+   129,
+   129,
+   129,
+   129,
+   129,
+   129
+  ],
+  "generated_tokens": [
+   516,
+   516,
+   516,
+   516,
+   516,
+   516
+  ],
+  "n_control": 3,
+  "n_runs": 6,
+  "n_treatment": 3,
+  "openings": [
+   null,
+   null,
+   null
+  ],
+  "pass": true,
+  "rc": 0,
+  "retention": "host",
+  "tokens_equal": [
+   true,
+   true,
+   true
+  ]
+ },
+ "decomp_hashes": {
+  "fold_record_pins": {},
+  "requests": {
+   "5bd4e517-3179-5fa9-815a-69b729dbe373": {
+    "canonical_sha256": {
+     "a": "8c54fa5b2cc82660551260aeec0b3d6605ba671512b0cdc81d877999c7d596d5",
+     "b": "8c54fa5b2cc82660551260aeec0b3d6605ba671512b0cdc81d877999c7d596d5",
+     "equal": true
+    },
+    "derived_digest": "6f0fba468282cfb2be3944f733c93e197f66738f65b03fcbdb8c62e947ad578f",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "b08530bd-431b-5c03-acab-13e85923e3c9": {
+    "canonical_sha256": {
+     "a": "06665b87fc1739ae0abb4851668a52242800dfb454d72a308122187b1bcf17e5",
+     "b": "06665b87fc1739ae0abb4851668a52242800dfb454d72a308122187b1bcf17e5",
+     "equal": true
+    },
+    "derived_digest": "7345062d88dcbf988a6336f3e54b7325de0828f37a0e19f2a014b5ddba9e794d",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "c7bb3961-6582-505f-b48d-4c6758ee48b8": {
+    "canonical_sha256": {
+     "a": "ebd295dba25217a08f5db7dca7595eb5c13b68831930ce0d93fd2c2f679ba4ad",
+     "b": "ebd295dba25217a08f5db7dca7595eb5c13b68831930ce0d93fd2c2f679ba4ad",
+     "equal": true
+    },
+    "derived_digest": "4cd648f7cd4c6863ffbadb9e924aafbdd4839ebdbec32658da715a0c90ea55f2",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "d49e555c-28d9-5435-b889-881b9d142d1f": {
+    "canonical_sha256": {
+     "a": "f74a35c9ccbcca5191be0d807728a9067c7f09f1ea792bdc186be0daa7f7bbb0",
+     "b": "f74a35c9ccbcca5191be0d807728a9067c7f09f1ea792bdc186be0daa7f7bbb0",
+     "equal": true
+    },
+    "derived_digest": "7d2d67694d22f71b6b70f7a4af9925f2d483861f3a98f85760217b5342b8e340",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "da43cb9e-74c0-528a-85b3-dceab459f39f": {
+    "canonical_sha256": {
+     "a": "30c38096f0bf730711b9388dfb6dd094001ce2c668c28961802b2131e8bdb06f",
+     "b": "30c38096f0bf730711b9388dfb6dd094001ce2c668c28961802b2131e8bdb06f",
+     "equal": true
+    },
+    "derived_digest": "eb7ebe729576d89c6c987aabea4e3687d695a168c838af3be1b27f9c2d9bbc28",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "e07f1181-ae62-51f8-8da1-5dea5f72d5ca": {
+    "canonical_sha256": {
+     "a": "562024874adb7fd58ed3409bc6074f282d6405f3747349bb9aeb0a2e708b0dcd",
+     "b": "562024874adb7fd58ed3409bc6074f282d6405f3747349bb9aeb0a2e708b0dcd",
+     "equal": true
+    },
+    "derived_digest": "ec4b6aa0db8e3267d538fd04c3782afe879599410e167e4048b3ccf05b2579ae",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "ec872afc-0f2d-59e6-b30b-0802eb07a695": {
+    "canonical_sha256": {
+     "a": "f6ad5f45553d13a10a20714c2e6bffa86b4bf9e3e13d6376c5fab26ceb4847ad",
+     "b": "f6ad5f45553d13a10a20714c2e6bffa86b4bf9e3e13d6376c5fab26ceb4847ad",
+     "equal": true
+    },
+    "derived_digest": "ee4ca7add9e0f29c2738efa94f60bf9b893917f8d166791ae878ab77afd99f09",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   },
+   "fdf29708-4bd4-5577-b16e-6738d7288b53": {
+    "canonical_sha256": {
+     "a": "8755b7965e4dc5d34b80cae17be40f7a188d0549f9495e8fd1139e61df9f8c25",
+     "b": "8755b7965e4dc5d34b80cae17be40f7a188d0549f9495e8fd1139e61df9f8c25",
+     "equal": true
+    },
+    "derived_digest": "30652b2f8a8f60c5f5a196d19620b4453bce5099258c39c983e45cf68479373b",
+    "xreq": {
+     "counts": {},
+     "examples": []
+    }
+   }
+  },
+  "verdict": "PASS",
+  "xreq_total": 0
+ },
+ "executed_prefix": {
+  "any_eos_stop": false,
+  "eos_of_record": [
+   2
+  ],
+  "eos_stop_requests": [],
+  "g6_lengths": {
+   "r0": {
+    "executed_prefix_len": 2,
+    "served_output_len": 2
+   },
+   "r1": {
+    "executed_prefix_len": 7,
+    "served_output_len": 7
+   },
+   "r2": {
+    "executed_prefix_len": 87,
+    "served_output_len": 87
+   },
+   "r3": {
+    "executed_prefix_len": 128,
+    "served_output_len": 128
+   },
+   "r4": {
+    "executed_prefix_len": 91,
+    "served_output_len": 91
+   },
+   "r5": {
+    "executed_prefix_len": 61,
+    "served_output_len": 61
+   },
+   "r6": {
+    "executed_prefix_len": 123,
+    "served_output_len": 123
+   },
+   "r7": {
+    "executed_prefix_len": 17,
+    "served_output_len": 17
+   }
+  },
+  "lag": 1,
+  "ok": true,
+  "requests": {
+   "r0": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 2,
+    "served_output_len": 2
+   },
+   "r1": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 7,
+    "served_output_len": 7
+   },
+   "r2": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 87,
+    "served_output_len": 87
+   },
+   "r3": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 128,
+    "served_output_len": 128
+   },
+   "r4": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 91,
+    "served_output_len": 91
+   },
+   "r5": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 61,
+    "served_output_len": 61
+   },
+   "r6": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 123,
+    "served_output_len": 123
+   },
+   "r7": {
+    "cap_exhausted": true,
+    "eos_stop": false,
+    "executed_prefix_len": 17,
+    "served_output_len": 17
+   }
+  },
+  "tokens_source": "match/control/tokens.json"
+ },
+ "global_match_checks": {
+  "achieved_concurrency": {
+   "declared_requests": 8,
+   "observed_max": 8,
+   "programmed_max": 8
+  },
+  "alternate_verdict": {
+   "criterion": "sequence",
+   "failed_checks": [],
+   "verdict": "PASS"
+  },
+  "checks": {
+   "G1": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G2": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G3": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G4": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G5": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G6": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G7": {
+    "n_problems": 0,
+    "status": "PASS"
+   },
+   "G8": {
+    "n_problems": 0,
+    "status": "PASS"
+   }
+  },
+  "chronology_unit": "engine_step",
+  "eos_truncated_requests": [],
+  "failed_checks": [],
+  "fold_record_pins": null,
+  "lag": {
+   "agree": true,
+   "declared": 1,
+   "eos_stop_requests": [],
+   "exercised": false,
+   "record_attests": 1,
+   "tokens_json_lag": 1,
+   "variable_lag": false
+  },
+  "requests_n": 8,
+  "rules_version": "r14-v1",
+  "verdict": "PASS",
+  "within_step_criterion": "dag",
+  "x09": {
+   "unattributed": 0,
+   "verdict": "PASS",
+   "within_step_criterion": "dag",
+   "xreq_total": 0
+  }
+ },
+ "manifest_digest": {
+  "complete": true,
+  "identities": 205144,
+  "manifest_digest": "085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729",
+  "program_digest": "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501"
+ },
+ "program_digest": {
+  "batch": 8,
+  "build_summary": {
+   "request": "adc4647250c78635ba2eed99696237f93872a6cb17fa0bb56dd6fb8fe12bb38b",
+   "shapes": {
+    "build_request_LP1024_T86": "7345062d88dcbf988a6336f3e54b7325de0828f37a0e19f2a014b5ddba9e794d",
+    "build_request_LP211_T6": "30652b2f8a8f60c5f5a196d19620b4453bce5099258c39c983e45cf68479373b",
+    "build_request_LP21_T127": "7d2d67694d22f71b6b70f7a4af9925f2d483861f3a98f85760217b5342b8e340",
+    "build_request_LP395_T1": "6f0fba468282cfb2be3944f733c93e197f66738f65b03fcbdb8c62e947ad578f",
+    "build_request_LP561_T122": "4cd648f7cd4c6863ffbadb9e924aafbdd4839ebdbec32658da715a0c90ea55f2",
+    "build_request_LP8_T60": "ec4b6aa0db8e3267d538fd04c3782afe879599410e167e4048b3ccf05b2579ae",
+    "build_request_LP937_T90": "ee4ca7add9e0f29c2738efa94f60bf9b893917f8d166791ae878ab77afd99f09",
+    "build_request_LP93_T16": "eb7ebe729576d89c6c987aabea4e3687d695a168c838af3be1b27f9c2d9bbc28"
+   },
+   "step": "ad161a6b310292af8359a464f92c85b00cd93cbf46713dcbf90f448c312c51ea",
+   "workload": "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501"
+  },
+  "commit_keyed_by": "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501",
+  "program_digest_of_record": "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501",
+  "workload_program_digest": "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501"
+ },
+ "reference": {
+  "branch": "lane/vllm-integration",
+  "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+  "release": "r19-int-21",
+  "tag": "v1-reference"
+ },
+ "replay_partition": {
+  "boundary_linkage_result": true,
+  "facts_of_record": {
+   "r0": {
+    "a_r": 2,
+    "arrive": 0,
+    "cap": 2,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r1": {
+    "a_r": 7,
+    "arrive": 0,
+    "cap": 7,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r2": {
+    "a_r": 87,
+    "arrive": 0,
+    "cap": 87,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r3": {
+    "a_r": 128,
+    "arrive": 0,
+    "cap": 128,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r4": {
+    "a_r": 91,
+    "arrive": 0,
+    "cap": 91,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r5": {
+    "a_r": 61,
+    "arrive": 0,
+    "cap": 61,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r6": {
+    "a_r": 123,
+    "arrive": 0,
+    "cap": 123,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   },
+   "r7": {
+    "a_r": 17,
+    "arrive": 0,
+    "cap": 17,
+    "eos_declared": false,
+    "lag": 1,
+    "lag_attested": true,
+    "linked": true,
+    "rows_past_stop": 0
+   }
+  },
+  "not_executed_by_rule": {
+   "applied": true
+  },
+  "population": {},
+  "result": true,
+  "seed": null
+ },
+ "row": 60
+}
