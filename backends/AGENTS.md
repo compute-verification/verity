@@ -100,8 +100,15 @@ first-class consumer is the **tensor core**, not the SIMT core. Consequences:
   and deferred reduction (TensorZKP, USENIX Security 2026, is the calibration:
   sumcheck and linear-time encoding as matrix multiplication), not as 64-bit
   SIMT multiplies. A 64-bit element is 8 limbs (64 limb products per multiply),
-  a 31/32-bit element is 4 (16). The field question is therefore **reopened**:
-  the 2026-09-21 "Goldilocks stays" conclusion was priced on SIMT cores.
+  a 31/32-bit element is 4 (16). The field question was therefore reopened and
+  re-priced (`backends/numerical/reports/tensor.md`, same day): 31-bit fields
+  win every cell (A 1.1-1.2x, B 1.6x at 2^-128) because a 2^-128 challenge is
+  24 limbs in either family while base and trace-times-challenge products are
+  4x and 2x cheaper. **Tensor-core kernel work uses BabyBear (degree-6
+  extension at 2^-128; 2^27 two-adicity; TensorZKP's layout).** The Goldilocks
+  CPU implementations stay as algorithmic diagnostics. Realistic utilisation
+  is the calibration to replace first: 0.172 of INT8 peak (TensorZKP's
+  degree-2 sumcheck) is assumed until a kernel of ours is measured.
 - A prover design must say which of its inner loops are matrix
   multiplications (sumcheck rounds, encoding, LPN expansion, batch checks)
   and which are not (hashing, hint generation), with the non-matmul part's
