@@ -80,7 +80,7 @@ def _finish(ax, title: str) -> None:
     ax.plot([], [], marker="o", markerfacecolor="black", markeredgecolor="black", linestyle="none", label="filled: whole VU")
     ax.plot([], [], marker="o", markerfacecolor="none", markeredgecolor="black", linestyle="none", label="hollow: unit x96")
     ax.plot([], [], marker="*", color="black", linestyle="none", label="star: breakthrough")
-    ax.legend(fontsize=6, loc="upper right")
+    ax.legend(fontsize=6, loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=5, frameon=False)
 
 
 def plot_lane(lane: str, entries: list[dict[str, Any]], out: Path) -> Path:
