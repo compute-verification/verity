@@ -84,8 +84,13 @@ LIKE_FOR_LIKE: tuple[Row, ...] = (
         ("a-gpu", "r20260922-074455-d0b6", "full VU B=4096 H100 v2e"),
         verify_s=3.017, proof_bytes=33.9e6, depth=438,
         verify_note="Rust verifier 12T on vy-cpu2 (a-verifier r20260922-093721-1330); Python 7.1 s",
-        flags="NOT REPRODUCIBLE from any commit as of 09:20Z on vy-g5 (a-verifier F1); gate4-h100 lane re-ran the same "
-              "prover on vy-g4 at 5.02 s accepted (unmerged) -- coordinator must resolve"),
+        flags="a-verifier F1: kernel-path proofs REJECTED by both verifiers on vy-g5, 4.43 s not reproduced from any commit as of "
+              "09:20Z; gate4-h100 (unmerged) ran the same prover on vy-g4: 5.016 s median, accepted 5/5 -- coordinator must resolve"),
+    Row("A: a-gpu v2e re-run by gate4-h100 on vy-g4 (main = 38757ed)", None,
+        verify_s=6.06, proof_bytes=33.9e6, depth=438, pending="GATE4_H100.md", verify_note="Python verifier",
+        manual={"prove_s": 5.016, "overhead": 1.24e8, "proof_class": "NON_ZK_PROOF_DIAGNOSTIC", "hardware": "NVIDIA H100 80GB (vy-g4)",
+                "security": "2^-127.7", "run_id": "r20260922-091718-45c3", "lane": "gate4-h100"},
+        flags="median of 5 warm reps [7.54, 5.02, 5.03, 4.40, 4.20]; spread is host-side Python Merkle openings 1.4-4.0 s"),
     Row("A: same prover, torch path (reproducible today)",
         ("a-verifier", "r20260922-093721-1330", "A-GPU e2e w/ Rust verifier"),
         verify_s=3.017, proof_bytes=33.9e6, depth=438, prove_s=25.5,
@@ -302,21 +307,21 @@ def render_soundness(entries: Sequence[dict[str, Any]]) -> str:
     rows = []
     for key in SOUNDNESS_KEYS:
         e = _find(entries, *key)
-        rows.append([f"{e['lane']} / {e['run_id']}", e["label"], e["note"][:420] + ("..." if len(e["note"]) > 420 else "")])
+        rows.append([f"{e['lane']} / {e['run_id']}", e["label"], e["note"][:260] + ("..." if len(e["note"]) > 260 else "")])
     return _table(header, rows)
 
 
 def render_fixed(entries: Sequence[dict[str, Any]]) -> str:
-    header = ["fix", "before (lane / run id): s per batch, label", "after (lane / run id): s per batch, label", "delta / reading"]
+    header = ["fix", "before (lane / run id): ms/VU at B, soundness", "after (lane / run id): ms/VU at B, soundness", "delta / reading"]
     rows = []
     for name, before, after, note in FIXED_PAIRS:
         b = _find(entries, *before)
-        bs = f"{b['lane']} / {b['run_id']}: {_f((b['seconds_per_vu'] or 0) * (b['B'] or 1))} s, {b['security_target'][:40]}"
+        bs = f"{b['lane']} / {b['run_id']}: {_f((b['seconds_per_vu'] or 0) * 1e3, 3)} ms/VU at B={b['B']}, {b['security_target'][:40]}"
         if after is None:
             as_ = "no ledger row on main"
         else:
             a = _find(entries, *after)
-            as_ = f"{a['lane']} / {a['run_id']}: {_f((a['seconds_per_vu'] or 0) * (a['B'] or 1))} s, {a['security_target'][:40]}"
+            as_ = f"{a['lane']} / {a['run_id']}: {_f((a['seconds_per_vu'] or 0) * 1e3, 3)} ms/VU at B={a['B']}, {a['security_target'][:40]}"
         rows.append([name, bs, as_, note])
     return _table(header, rows)
 
