@@ -9,7 +9,10 @@ verity-gkr dump-transcript --dir EXPORT_DIR --vus 4 --out transcript_vu4.json   
 uv run --package verity-numerical python -m verity_numerical.gkr_export.vu export --field babybear --tier vu-k1536 --lo 0 --hi 64 --out EXPORT_DIR
 ~~~
 
-(`FIELD=babybear TRANSCRIPTS=1 bash backends/gkr/run_measure_vu.sh` does both; run ids in `README.md`.) A GPU prover
+(`FIELD=babybear TRANSCRIPTS=1 bash backends/gkr/run_measure_vu.sh` does both; run r20260922-070527-a263, commit
+1906a36.) `python3 replay.py` re-derives every state and challenge of both files from the absorbed bytes with `hashlib`
+alone — the conventions below, executable. B = 4: 1,079 absorbs, 1,426 challenges, 16,393 proof messages; B = 64:
+1,604 / 1,991 / 18,493. A GPU prover
 that produces the same proof messages in the same order must reproduce every `state` and every `challenge` below
 bit for bit; the first divergence names the phase (the `label` events).
 
