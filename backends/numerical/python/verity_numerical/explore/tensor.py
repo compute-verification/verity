@@ -413,6 +413,8 @@ class Priced:
     prg_bytes: float = 0.0            # prover randomness: randomizers, blinding rows, pads, HM96 strings
     rows: int = 0
     communication_bytes: float = 0.0  # transcript bytes (accountant estimate) incl. step-0 commitments
+    authentication: str = "none"      # explore.auth_integration.AUTH_LEVELS
+    auth_delta: object = None         # the AuthDelta applied (None when authentication == "none")
     ligero_rows: int = 0                                    # rows of the committed Ligero matrix (what the encoder encodes)
 
     @property
@@ -491,19 +493,30 @@ def _encoding(rows: int, L: int, encoder: str) -> tuple[float, float]:
 
 
 def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TARGET, encoder: str = "rs_matrix_ntt",
-                 zk: str = "hvzk") -> Priced:
+                 zk: str = "hvzk", authentication: str = "none", auth_gadget: str | None = None, auth_sharing: str = "bench",
+                 weights_public: bool = False) -> Priced:
     """Limb-price one design on one field at one operating point (module docstring for the model).  ``zk`` in
     :data:`ZK_LEVELS`: ``hvzk`` is the protocol documents' layer (and tensor.md's rows), ``none`` strips it, ``malicious``
-    adds the step-0 verifier-coin commitment."""
+    adds the step-0 verifier-coin commitment.  ``authentication`` (auth-integration lane, ``explore.auth_integration``):
+    ``none`` is every number before that lane (``authentication = excluded`` on the ledger); ``in_circuit_sha256`` /
+    ``leaf_v2_pcs_hash`` / ``algebraic`` / ``verifier_openings`` add that option's binding of x / w / y to the Verity
+    roots (extra committed elements, GKR elements, quadratic products, row combinations, depth) so the result is the
+    *complete* Verity proof's cost; ``weights_public`` routes W through verifier-side openings."""
     if zk not in ZK_LEVELS:
         raise ValueError(f"zk must be one of {ZK_LEVELS}, got {zk!r}")
+    from verity_numerical.explore import auth_integration as ai
+
+    if authentication not in ai.AUTH_LEVELS + ("verifier_openings",):
+        raise ValueError(f"authentication must be one of {ai.AUTH_LEVELS}, got {authentication!r}")
     sfc = _small_field(fs)
     d, lig = _ligero(target_log2, fs, design.candidate, B)
     L, dl = fs.L, d * fs.L
     Fc = fs.option.trace.extension(d)
     tables = sfc.tables()
     units = B * UNITS_PER_VU
-    p = Priced(design.name, fs.name, target_log2, d, units, 0, 0.0, 0.0, 0.0, zk=zk)
+    p = Priced(design.name, fs.name, target_log2, d, units, 0, 0.0, 0.0, 0.0, zk=zk, authentication=authentication)
+    ad = ai.delta(authentication, design.candidate, d, B, auth_sharing, weights_public, auth_gadget, lig, L)
+    p.auth_delta = ad
     coin_bits = 160 if zk == "malicious" else None
     leaf_bits = None if zk == "none" else 160
     eb = fs.element_bytes
@@ -535,8 +548,18 @@ def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TAR
         committed = prm["committed_trace_elements"]
         if zk == "none":
             committed -= prm["pad_elements"] * d          # the padded-transcript pads exist only for privacy
+        # authentication: hash constraints as more checker-GKR elements / logUp leaves, hints as committed elements
+        if ad.gkr_elements:
+            asc = sumcheck_macs(int(ad.gkr_elements), 3, dl)
+            p.matmul["auth_gkr"] = asc["matmul_macs"]
+            p.simt_field_mults["auth_hadamards"] = asc["hadamards"] * acc.EXT_MULT_COST[d]
+        if ad.lookup_leaves:
+            afr = sumcheck_macs(int(ad.lookup_leaves), 3, dl, terms=3, tables=5)
+            p.matmul["auth_logup"] = afr["matmul_macs"]
+            p.simt_field_mults["auth_logup_hadamards"] = afr["hadamards"] * acc.EXT_MULT_COST[d] + 3 * ad.lookup_leaves * acc.EXT_MULT_COST[d]
+        committed += int(ad.committed_elements)
         rows = _zk_rows(committed, zk)
-        depth = prm["rounds.sequential_depth"]
+        depth = prm["rounds.sequential_depth"] + ad.depth_delta
         # Ligero: encoding + one row combination (linear test only, no quadratic test: products are inside the GKR)
         enc_mm, enc_simt = _encoding(rows, L, encoder)
         p.matmul["encoding"] = enc_mm
@@ -553,16 +576,16 @@ def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TAR
         bud = acc.account_candidate_b(cand)
         prm = bud.parameters
         est = acc.census_estimate_b(cand)
-        committed = prm["committed_trace_elements"]
+        committed = prm["committed_trace_elements"] + int(ad.committed_elements)     # + authentication trace cells / helpers
         rows = _zk_rows(committed, zk)
-        depth = prm["rounds.sequential_depth"]
-        helpers = sum(tb.queries_per_unit * units + tb.rows for tb in tables)
+        depth = prm["rounds.sequential_depth"] + ad.depth_delta
+        helpers = sum(tb.queries_per_unit * units + tb.rows for tb in tables) + ad.lookup_leaves
         enc_mm, enc_simt = _encoding(rows, L, encoder)
         p.matmul["encoding"] = enc_mm
         if enc_simt:
             p.simt_field_mults["encoding_simt"] = enc_simt
         # linear test: one row combination over every row; quadratic test: combination over the product rows
-        quad_rows = -(-units * sfc.mul // (fl.K_CODE if zk == "none" else fl.L_PAYLOAD))
+        quad_rows = -(-(units * sfc.mul + int(ad.products_b)) // (fl.K_CODE if zk == "none" else fl.L_PAYLOAD))
         p.matmul["ligero_row_combination"] = (rows + quad_rows) * fl.N_CODE * L * dl
         # sparse per-unit constraint combination r^T A (4 terms per constraint, F_c x small constant): SIMT
         p.simt_field_mults["constraint_combination"] = 4 * prm["linear_constraints"] * d
@@ -584,6 +607,17 @@ def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TAR
         p.hash_bytes += coins * (acc.HM_LEAF_BYTES + acc.HM_DECOMMIT_BYTES)
         p.notes.append(f"step 0: {coins} verifier-coin commitments (HM96 k=160) verified by the prover; +1 depth")
     p.communication_bytes = est["transcript.bytes"]           # accountant estimate (8 B per trace element)
+    if authentication != "none":
+        # the option's own work outside the trace: row combinations over tensor rows (matmul), public linear
+        # constraints (SIMT), native hashing by the prover, prover -> verifier bytes
+        if ad.matmul_macs:
+            p.matmul["auth_cross_tableau"] = ad.matmul_macs
+        if ad.simt_field_mults:
+            p.simt_field_mults["auth_linear_constraints"] = ad.simt_field_mults
+        p.hash_bytes += ad.prover_hash_bytes
+        p.prg_bytes += ad.prg_bytes
+        p.communication_bytes += ad.proof_bytes
+        p.notes.append(f"authentication={authentication}: " + "; ".join(ad.notes))
     p.rows = rows
     p.committed_elements = committed
     p.ligero_rows = rows
@@ -634,11 +668,12 @@ def unit_price(fs: FieldSpec, target_log2: int = -128) -> dict:
 
 def design_row(design: Design, fs: FieldSpec, target_log2: int, utilisations: Sequence[float] = (1.0, 0.17),
                hash_rate_key: str = "blake3_simt", encoder: str = "rs_matrix_ntt",
-               encoding_utilisation: float | None = None, zk: str = "hvzk") -> dict:
+               encoding_utilisation: float | None = None, zk: str = "hvzk", authentication: str = "none",
+               weights_public: bool = False) -> dict:
     """One design x field x operating point: limb MACs per VU by component, committed / encoded / hashed bytes per VU,
     times and overheads per GPU x utilisation (``encoding_utilisation`` applies to the encoding component at the
     realistic point only), and the overhead's sensitivity to the Merkle hash rate on the H100 at the realistic point."""
-    p = price_design(design, fs, target_log2, encoder=encoder, zk=zk)
+    p = price_design(design, fs, target_log2, encoder=encoder, zk=zk, authentication=authentication, weights_public=weights_public)
     hr = HASH_RATES[hash_rate_key]["bytes_per_s"]
     times = {}
     for g, gpu in GPUS.items():
@@ -654,7 +689,8 @@ def design_row(design: Design, fs: FieldSpec, target_log2: int, utilisations: Se
     mm_share = {k: v / p.matmul_total for k, v in p.matmul.items()}
     return {
         "design": design.name, "label": design.label, "field": fs.name, "target_log2": target_log2, "B": B_TARGET, "K": K_TARGET,
-        "zk": p.zk, "extension_degree": p.extension_degree, "challenge_limbs": p.extension_degree * fs.L,
+        "zk": p.zk, "authentication": p.authentication, "weights_public": weights_public,
+        "extension_degree": p.extension_degree, "challenge_limbs": p.extension_degree * fs.L,
         "census.committed_elements": p.committed_elements, "committed_bytes_per_vu": p.committed_bytes / B_TARGET,
         "encoded_bytes_per_vu": p.encoded_bytes / B_TARGET, "hash_bytes_per_vu": p.hash_bytes / B_TARGET,
         "prg_bytes_per_vu": p.prg_bytes / B_TARGET, "communication_bytes_per_vu": p.communication_bytes / B_TARGET,
