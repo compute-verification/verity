@@ -552,8 +552,10 @@
     "tnorm_hi_added_as_tnorm_ms": 19.833536187186837,
     "batch_seconds": {
      "level": 0.2414538877066225,
-     "round": 0.33975420803390444
+     "round": 0.33975420803390444,
+     "concurrent": 0.09321727066040039
     },
+    "sequential_instances_note": "'level'/'round' = the instances one after another (each pays its ~20 latency-bound small levels)",
     "shift": {
      "committed_ms": 33.91055966541171,
      "committed_tree_ms": 2.120703935623169,
@@ -565,6 +567,25 @@
      "split_u_total_ms": 53.57328012213111
     },
     "note": "ten table instances measured separately (checker_min 3.1 tables); each instance pays ~20 latency-bound small levels",
+    "concurrent": {
+     "measured_10_tables_ms": 84.74297332763672,
+     "wall_ms": 84.80388671159744,
+     "streams": 10,
+     "per_instance_device_ms_in_parallel": {
+      "T_OP": 45.20038410741836,
+      "ALIGN4": 42.88915185909718,
+      "SHIFT": 52.983359976671636,
+      "LEAD": 37.916575939394534,
+      "SSHIFT_HI": 30.096703577786684,
+      "SSHIFT_LO": 37.41843197122216,
+      "LEADNORM": 37.06956828664988,
+      "TNORM": 37.916320364922285,
+      "T_HDR": 30.64614424109459,
+      "T_range16": 33.93961587268859
+     },
+     "scaled_to_11_tables_ms": 93.21727066040039,
+     "note": "the ten instances on ten CUDA streams (level graphs, protocol unchanged); TNORM_HI as an 11th instance taken pro rata"
+    },
     "split_u_suite_total_ms": 240.5604800079018
    },
    "repriced": {
@@ -593,6 +614,15 @@
       "share.logup": 0.7635001904140132,
       "share.modelled": 0.12995187576750578
      },
+     "measured sumcheck=baseline logup=concurrent": {
+      "overhead": 4920887.602975155,
+      "t.total": 0.19845863996835678,
+      "t.gkr_checker": 0.047413359324137365,
+      "t.logup": 0.09321727066040039,
+      "share.sumcheck": 0.23890801293255454,
+      "share.logup": 0.469706285779563,
+      "share.modelled": 0.29138570128788244
+     },
      "measured sumcheck=fused logup=level": {
       "overhead": 8316784.63598015,
       "t.total": 0.33541464486375083,
@@ -610,6 +640,15 @@
       "share.sumcheck": 0.08330989260975676,
       "share.logup": 0.783358277444398,
       "share.modelled": 0.13333182994584525
+     },
+     "measured sumcheck=fused logup=concurrent": {
+      "overhead": 4641178.820853946,
+      "t.total": 0.18717802781752874,
+      "t.gkr_checker": 0.036132747173309325,
+      "t.logup": 0.09321727066040039,
+      "share.sumcheck": 0.19303946940040143,
+      "share.logup": 0.49801395894219824,
+      "share.modelled": 0.30894657165740036
      }
     },
     "A-hintfree-depth630": {
@@ -637,6 +676,15 @@
       "share.logup": 0.7783590574248017,
       "share.modelled": 0.11301942501861151
      },
+     "measured sumcheck=baseline logup=concurrent": {
+      "overhead": 4710250.515221388,
+      "t.total": 0.18996367862495317,
+      "t.gkr_checker": 0.047413359324137365,
+      "t.logup": 0.09321727066040039,
+      "share.sumcheck": 0.24959170967491076,
+      "share.logup": 0.49071102083909424,
+      "share.modelled": 0.2596972694859949
+     },
      "measured sumcheck=fused logup=level": {
       "overhead": 8106147.5482263835,
       "t.total": 0.3269196835203472,
@@ -654,6 +702,15 @@
       "share.sumcheck": 0.08497424120775118,
       "share.logup": 0.7990080545590935,
       "share.modelled": 0.11601770423315527
+     },
+     "measured sumcheck=fused logup=concurrent": {
+      "overhead": 4430541.73310018,
+      "t.total": 0.17868306647412513,
+      "t.gkr_checker": 0.036132747173309325,
+      "t.logup": 0.09321727066040039,
+      "share.sumcheck": 0.20221696373529421,
+      "share.logup": 0.5216905692286128,
+      "share.modelled": 0.276092467036093
      }
     }
    }

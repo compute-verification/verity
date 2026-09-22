@@ -81,6 +81,7 @@ def main(argv=None) -> int:
     ap.add_argument("--sumcheck", type=Path, required=True)
     ap.add_argument("--logup-v1", type=Path, required=True)
     ap.add_argument("--logup-v2", type=Path, required=True)
+    ap.add_argument("--logup-v2-concurrent", type=Path, default=None, help="logup_graph_bench.json of the --modes concurrent run")
     ap.add_argument("--k", type=int, default=3)
     ap.add_argument("--out", type=Path, default=Path("backends/numerical/reports/a_kernels_h100_v2"))
     a = ap.parse_args(argv)
@@ -136,9 +137,19 @@ def main(argv=None) -> int:
                                                                   "level_wall": v2["totals"]["level"]["wall_ms"]},
                   "tnorm_hi_added_as_tnorm_ms": tnorm["level_ms"],
                   "batch_seconds": {"level": tot_level / 1e3, "round": tot_round / 1e3},
+                  "sequential_instances_note": "'level'/'round' = the instances one after another (each pays its ~20 latency-bound small levels)",
                   "shift": {"committed_ms": per_table["SHIFT"]["level_ms"], "committed_tree_ms": per_table["SHIFT"]["tree_ms"],
                             "committed_table_share_of_leaves": per_table["SHIFT"]["table_share_of_leaves"]},
                   "note": "ten table instances measured separately (checker_min 3.1 tables); each instance pays ~20 latency-bound small levels"}
+            if a.logup_v2_concurrent is not None:
+                cc = json.loads(a.logup_v2_concurrent.read_text())["suites"]["v2"]["totals"]["concurrent"]
+                n_inst = cc["streams"]
+                lg["concurrent"] = {"measured_10_tables_ms": cc["device_ms"], "wall_ms": cc["wall_ms"], "streams": n_inst,
+                                    "per_instance_device_ms_in_parallel": cc["per_instance_device_ms_in_parallel"],
+                                    "scaled_to_11_tables_ms": cc["device_ms"] * (n_inst + 1) / n_inst,
+                                    "note": "the ten instances on ten CUDA streams (level graphs, protocol unchanged); TNORM_HI as an 11th "
+                                            "instance taken pro rata"}
+                lg["batch_seconds"]["concurrent"] = cc["device_ms"] * (n_inst + 1) / n_inst / 1e3
             if v2s:
                 sp_tabs = {t["table"]: t for t in v2s["tables"]}
                 lg["shift"]["split_u_ms"] = {n: sp_tabs[n]["level"]["device_ms"] for n in ("SHIFT_u_lo", "SHIFT_u_hi") if n in sp_tabs}
@@ -148,7 +159,7 @@ def main(argv=None) -> int:
         for dname, dm in m["designs"].items():
             g = {"model@0.172": {"overhead": dm["overhead"], "t.total": dm["t.total"], "t.gkr_checker": dm["t.gkr_checker"], "t.logup": dm["t.logup"]}}
             for sc_tag in ("baseline", "fused"):
-                for lg_tag in ("level", "round"):
+                for lg_tag in lg["batch_seconds"]:
                     meas_sc = sc_rows[sc_tag]["batch_seconds.padded"]
                     meas_lg = lg["batch_seconds"][lg_tag]
                     total = dm["t.total"] - dm["t.gkr_checker"] - dm["t.logup"] + meas_sc + meas_lg

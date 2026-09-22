@@ -131,7 +131,7 @@ def time_concurrent(tables: list, k: int, repeats: int) -> dict:
     best = min(range(repeats), key=lambda i: dev_ms[i])
     out = {"device_ms": dev_ms[best], "wall_ms": wall_ms[best], "device_ms_all": dev_ms, "wall_ms_all": wall_ms,
            "per_instance_device_ms_in_parallel": dict(zip([t[0] for t in tables], per_inst[best], strict=True)),
-           "sum_of_instances_ms": sum(per_inst[best]), "streams": len(tables), "mem.peak_device_bytes": mem,
+           "sum_of_instances_ms": sum(per_inst[best]), "streams": len(tables), "us_per_vu_device": dev_ms[best] * 1e3 / VUS, "us_per_vu_wall": wall_ms[best] * 1e3 / VUS, "mem.peak_device_bytes": mem,
            "note": "all instances launched on separate streams; device_ms = default-stream start event -> join; per-instance times are "
                    "inflated by sharing the GPU"}
     del provers
