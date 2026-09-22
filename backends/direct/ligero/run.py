@@ -383,6 +383,8 @@ def main(argv=None) -> int:
                                          help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
     sub.choices["bench-vu"].add_argument("--dump-dir", default=None, metavar="DIR",
                                          help="write every recorded rep's sub-batch proofs (.stmt/.proof[/.coins]) + system.bin for backends/ligero-verify")
+    sub.choices["bench-vu"].add_argument("--dump-reps", type=int, default=None, metavar="N",
+                                         help="with --dump-dir: dump only the first N recorded reps (default all; a 2^20-VU rep is ~14 GB of proofs)")
     sub.choices["gate-vu"].add_argument("--row-negatives", type=int, default=60, help="fp8-ada gate: witness-row mutations to try")
     args = ap.parse_args(argv)
     if args.relation == "fp8-ada":

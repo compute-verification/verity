@@ -153,7 +153,9 @@ def main(argv: list[str] | None = None) -> int:
           "verifier": {"name": "ligero-verify (backends/ligero-verify, Rust, independent)", "path": str(vbin), "threads": threads,
                        "sha256": _sha256(vbin) if vbin and vbin.is_file() else None, "coins": "runner's step-0 coins (--coins)" if mode == "interactive" else "n/a (Fiat-Shamir)"},
           "python_verifier": "backends.direct.ligero (live, every rep, every sub-batch; shares code with the prover)",
-          "warmup": "one sub-batch (excluded)", "reps": len(reps)}
+          "warmup": "one sub-batch (excluded)", "reps": len(reps),
+          "dumped_reps": man.get("set", {}).get("dump_reps", len(reps)),    # reps whose proofs were written out and Rust-verified
+          "instances": fp_in.get("instances"), "B_real": fp_in.get("B_real")}
     meas = [
         _m("prove_wall", prove_med, "s"), _m("prove_wall_min", min(prove_reps), "s"), _m("prove_wall_max", max(prove_reps), "s"),
         _m("prove_ms_per_vu", prove_med / B * 1e3, "ms"),
