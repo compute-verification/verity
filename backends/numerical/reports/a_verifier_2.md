@@ -1,7 +1,7 @@
 # a-verifier-2: F1 verdict, the 1.00 s verifier, checker-v2 verification (2026-09-22, ~11:10Z)
 
 Branch `lane/a-verifier-2` off `main` 48897d1.  Pods: vy-sp1 (RTX 4090, GPU prover runs), vy-cpu2 (EPYC 9654, 12 of 32
-threads, shared with red-team-v2; load 31-34 during every timing run).  Ledger `ledger/a-verifier-2.jsonl` (3 entries).
+threads, shared with red-team-v2; load 31-34 during every timing run).  Ledger `ledger/a-verifier-2.jsonl` (4 entries: F1 verdict, verifier timing, e2e row, v2).
 
 ## 1. F1: the kernel path is bit-exact on a clean card; the vy-g5 rejection is an environment fault
 
