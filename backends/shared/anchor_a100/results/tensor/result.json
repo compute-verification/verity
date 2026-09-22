@@ -1,0 +1,532 @@
+{
+ "schema": "research/result/v0.1",
+ "run_id": "r20260922-074359-964b",
+ "workload_fingerprint": {
+  "profile": "first-campaign-target/2026-09-21",
+  "domain": "finite",
+  "K": 1536,
+  "B": 4096,
+  "N_subbatches": 1,
+  "proof_class": "ARITHMETIC_DIAGNOSTIC",
+  "authentication": "excluded",
+  "zk_mode": "none",
+  "security": {
+   "target": -128,
+   "challenge_field": "BabyBear^6 (24 limbs)",
+   "note": "operating point of the priced design; nothing is proved here"
+  },
+  "hardware": {
+   "gpu": {
+    "name": "NVIDIA A100-SXM4-80GB",
+    "driver": "580.126.16",
+    "cuda": "12.4",
+    "memory": "81920 MiB",
+    "sm": "8.0"
+   },
+   "cpu": {
+    "model": "AMD EPYC 7742 64-Core Processor",
+    "count": 128
+   }
+  },
+  "software": {
+   "backend": {
+    "name": "backends/gkr/tensor/sumcheck_int8",
+    "commit": null,
+    "version": null
+   },
+   "toolchain": {
+    "torch": "2.6.0+cu124",
+    "python": "3.12.14",
+    "cuda": "12.4"
+   }
+  },
+  "preprocessing": "none",
+  "retention": "retained",
+  "instances": null,
+  "stage": "tc.sumcheck.round",
+  "kind": "kernel measurement (not a proof): Candidate A GKR c-round on INT8 tensor cores, random tables",
+  "config": {
+   "chunk": 32768,
+   "layout": "reduced",
+   "repeats": 7,
+   "warm": 2,
+   "limbs": "signed balanced 8-bit",
+   "inner_impl": "triton",
+   "splitk_blocks": 256,
+   "compiled_simt_passes": true,
+   "hadamard": "torch int64 coefficient arithmetic (36 products + 36 reductions per ext x ext) fused by torch.compile",
+   "field": "BabyBear p=2^31-2^27+1, F_p^6 = F_p[X]/(X^6 - 22)",
+   "units": 4096,
+   "layer_widths": [
+    137,
+    679,
+    673,
+    669,
+    647,
+    533
+   ],
+   "round_shape": "3 tables (f, g, h), degree 3, 8 triple inner products + 3 folds per round; layer tables units x 2^ceil(log2 width)"
+  },
+  "peaks": {
+   "int8_dense_tops": 624.0,
+   "hbm_bytes_per_s": 2039000000000.0,
+   "fp32_tflops": 19.5,
+   "bf16_dense_tflops": 312.0,
+   "source": "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB): INT8 624 TOPS dense, HBM2e 2,039 GB/s, FP32 19.5 TFLOPS"
+  }
+ },
+ "validation": {
+  "status": "passed",
+  "checker": "backends/gkr/tensor/tests/test_reference_agreement.py (CUDA path, run before the sweep)",
+  "detail": "kernel == BabyBear^6 reference bit-for-bit on t <= 64; timings are medians of CUDA-event repeats",
+  "evidence": [
+   "bench.json",
+   "agreement_test.log"
+  ]
+ },
+ "measurements": [
+  {
+   "name": "t.total",
+   "value": 0.5196592626459898,
+   "unit": "s"
+  },
+  {
+   "name": "t.arithmetic",
+   "value": 0.5196592626459898,
+   "unit": "s"
+  },
+  {
+   "name": "tc.seconds.matmul",
+   "value": 0.09816630462557077,
+   "unit": "s"
+  },
+  {
+   "name": "tc.seconds.matmul.inner",
+   "value": 0.014476863957941535,
+   "unit": "s"
+  },
+  {
+   "name": "tc.seconds.matmul.fold",
+   "value": 0.08368944066762923,
+   "unit": "s"
+  },
+  {
+   "name": "tc.seconds.hadamard",
+   "value": 0.10499526345729832,
+   "unit": "s"
+  },
+  {
+   "name": "tc.seconds.limb.decompose",
+   "value": 0.08012367963790892,
+   "unit": "s"
+  },
+  {
+   "name": "tc.seconds.chunk_sum",
+   "value": 0.007733663877472281,
+   "unit": "s"
+  },
+  {
+   "name": "tc.seconds.reduce.inner",
+   "value": 0.19044098940491674,
+   "unit": "s"
+  },
+  {
+   "name": "tc.seconds.reduce.fold",
+   "value": 0.03826777587831022,
+   "unit": "s"
+  },
+  {
+   "name": "tc.seconds.tensor_bucket",
+   "value": 0.41466399918869135,
+   "unit": "s"
+  },
+  {
+   "name": "tc.seconds.total_graphed",
+   "value": 0.1155804470181465,
+   "unit": "s"
+  },
+  {
+   "name": "tc.kernel_seconds.matmul",
+   "value": 0.029177202000000003,
+   "unit": "s"
+  },
+  {
+   "name": "tc.kernel_seconds.matmul.inner",
+   "value": 0.003389825000000002,
+   "unit": "s"
+  },
+  {
+   "name": "tc.kernel_seconds.matmul.fold",
+   "value": 0.025787377000000007,
+   "unit": "s"
+  },
+  {
+   "name": "tc.kernel_seconds.hadamard",
+   "value": 0.008276924000000001,
+   "unit": "s"
+  },
+  {
+   "name": "tc.kernel_seconds.reduce",
+   "value": 0.009786730000000009,
+   "unit": "s"
+  },
+  {
+   "name": "tc.kernel_seconds.chunk_sum",
+   "value": 0.0025869819999999794,
+   "unit": "s"
+  },
+  {
+   "name": "tc.kernel_seconds.simt.other",
+   "value": 0.06132354700000006,
+   "unit": "s"
+  },
+  {
+   "name": "tc.kernel_seconds.other",
+   "value": 0.004386715999999992,
+   "unit": "s"
+  },
+  {
+   "name": "tc.kernel_seconds.tensor_bucket",
+   "value": 0.10726117700000007,
+   "unit": "s"
+  },
+  {
+   "name": "tc.kernel_seconds.gpu_busy",
+   "value": 0.11553810100000007,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.kernel.matmul_only",
+   "value": 0.01548106139117162,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.kernel.tensor_bucket",
+   "value": 0.004211160720198093,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.kernel.gpu_busy",
+   "value": 0.003909481387309759,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.model_equivalent.kernel.matmul_only",
+   "value": 0.03994115797880614,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.model_equivalent.kernel.tensor_bucket",
+   "value": 0.010864799986872583,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.model_equivalent.kernel.gpu_busy",
+   "value": 0.010086466926278612,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.model_equivalent.round_graphed",
+   "value": 0.010082771476723665,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.matmul_only",
+   "value": 0.0046013146477040376,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.tensor_bucket",
+   "value": 0.0010893013530674834,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.round_total",
+   "value": 0.0008692119776422138,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.round_graphed",
+   "value": 0.00390804904322353,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.model_equivalent.tensor_bucket",
+   "value": 0.0028103988693053638,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.model_equivalent.matmul_only",
+   "value": 0.011871397613534874,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.model_equivalent.census_width.tensor_bucket",
+   "value": 0.001744998405085808,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.macs_performed",
+   "value": 140928545280,
+   "unit": "count"
+  },
+  {
+   "name": "tc.macs_model_padded",
+   "value": 363595825152,
+   "unit": "count"
+  },
+  {
+   "name": "tc.round.n2097152.deg6",
+   "value": 0.005096671916544437,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n2097152.deg6.matmul",
+   "value": 0.02822835164468532,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n1048576.deg6",
+   "value": 0.00434966398589313,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n1048576.deg6.matmul",
+   "value": 0.01854530048399017,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n524288.deg6",
+   "value": 0.003990719944238663,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n524288.deg6.matmul",
+   "value": 0.012489629452464053,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n262144.deg6",
+   "value": 0.003912192009389401,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n262144.deg6.matmul",
+   "value": 0.00688567289075257,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n131072.deg6",
+   "value": 0.003906080052256584,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n131072.deg6.matmul",
+   "value": 0.003887039331043894,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n65536.deg6",
+   "value": 0.003928607992827893,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n65536.deg6.matmul",
+   "value": 0.002022857609748715,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n32768.deg6",
+   "value": 0.0038816640228033065,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n32768.deg6.matmul",
+   "value": 0.0010404301493109704,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n16384.deg6",
+   "value": 0.0038610559403896333,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n16384.deg6.matmul",
+   "value": 0.000534753779552171,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n8192.deg6",
+   "value": 0.0038752320110797883,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n8192.deg6.matmul",
+   "value": 0.00027508025081874753,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n4096.deg6",
+   "value": 0.0038353280276060106,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n4096.deg6.matmul",
+   "value": 0.00014123943281040246,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n2048.deg6",
+   "value": 0.003800000011920929,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n2048.deg6.matmul",
+   "value": 7.249591633905442e-05,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n1024.deg6",
+   "value": 0.003831647902727127,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n1024.deg6.matmul",
+   "value": 3.534365741376822e-05,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n512.deg6",
+   "value": 0.003846175968647003,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n512.deg6.matmul",
+   "value": 1.7794253717603495e-05,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n256.deg6",
+   "value": 0.0038073599860072136,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n256.deg6.matmul",
+   "value": 9.040356680657228e-06,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n128.deg6",
+   "value": 0.0038133119344711305,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n128.deg6.matmul",
+   "value": 4.536283087396566e-06,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n64.deg6",
+   "value": 0.0038173760250210763,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n64.deg6.matmul",
+   "value": 2.2208034149098255e-06,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n32.deg6",
+   "value": 0.0040891520008444785,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n32.deg6.matmul",
+   "value": 7.565274053214596e-07,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n16.deg6",
+   "value": 0.004074688024818897,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n16.deg6.matmul",
+   "value": 3.7849635801223505e-07,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n8.deg6",
+   "value": 0.004034655958414078,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n8.deg6.matmul",
+   "value": 1.9103412567165122e-07,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n4.deg6",
+   "value": 0.004034207955002785,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n4.deg6.matmul",
+   "value": 9.552892588190502e-08,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n2.deg6",
+   "value": 0.003788992039859295,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n2.deg6.matmul",
+   "value": 4.7286839258330964e-08,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n4194304.deg1",
+   "value": 0.004971616050228477,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n4194304.deg1.matmul",
+   "value": 0.0032857411917267174,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.round.n1048576.deg1",
+   "value": 0.002798816032707691,
+   "unit": "s"
+  },
+  {
+   "name": "tc.peak_fraction.round.n1048576.deg1.matmul",
+   "value": 0.001950676523820451,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.int_mm_8192",
+   "value": 0.12122290179678198,
+   "unit": "ratio"
+  },
+  {
+   "name": "tc.peak_fraction.int_mm_4096",
+   "value": 0.11355584668058248,
+   "unit": "ratio"
+  },
+  {
+   "name": "mem.peak_device_bytes",
+   "value": 1731202560,
+   "unit": "B"
+  }
+ ],
+ "measurement_files": [
+  "bench.json",
+  "agreement_test.log"
+ ],
+ "artifacts": [
+  "bench.json",
+  "agreement_test.log"
+ ]
+}

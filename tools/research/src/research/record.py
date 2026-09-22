@@ -4,6 +4,7 @@
     run                   run id, registry root, where it was launched from, remote target if any
     workload_fingerprint  {"expected": ...} supplied before launch; the OBSERVED fingerprint is the workload's, in result.json
     cost                  provider, pod id, rate + when it was observed, sharing; the estimate is derived at read time (cost_estimate)
+    store                 optional: tool / derivation / reuse_key / key params / closure / conditions computed before launch (research.store)
 
 Records written by the harness alone are v0.1 and stay readable: `read_job` returns the same shape with the v0.2 sections set to None,
 which means unknown, never a default.  The harness is never modified for this; `research run` pre-writes job.json and the harness keeps it.
@@ -23,7 +24,7 @@ from .telemetry.events import utc_now_ms
 
 JOB_SCHEMA = "telemetry/job/v0.2"
 READABLE_JOB_SCHEMAS = (JOB_SCHEMA_V1, JOB_SCHEMA)
-V2_SECTIONS = ("tool", "run", "workload_fingerprint", "cost")
+V2_SECTIONS = ("tool", "run", "workload_fingerprint", "cost", "store")   # store: optional, None when the run had no store step
 
 
 def _git(args: list[str], cwd: Path) -> str | None:
@@ -56,8 +57,11 @@ def cost_section(*, provider: str | None = None, pod_id: str | None = None, mach
 
 
 def extend_job(job: dict[str, Any], *, run_id: str, runs_root: Path, expected_fingerprint: dict[str, Any] | None,
-               cost: dict[str, Any] | None = None, remote: dict[str, Any] | None = None) -> dict[str, Any]:
-    """v0.1 job (from telemetry.job.build_job) -> v0.2.  Adds sections; changes nothing the harness wrote."""
+               cost: dict[str, Any] | None = None, remote: dict[str, Any] | None = None, store: dict[str, Any] | None = None) -> dict[str, Any]:
+    """v0.1 job (from telemetry.job.build_job) -> v0.2.  Adds sections; changes nothing the harness wrote.
+
+    `store` (optional): what `research run` computed BEFORE launch for the evidence store -- tool identity, derivation id,
+    reuse_key, key params (content-resolved), inputs, closure manifest, conditions, scratch dirs (research.store README §4/§6)."""
     if job.get("schema") != JOB_SCHEMA_V1:
         raise ValueError(f"extend_job expects a {JOB_SCHEMA_V1} record, got {job.get('schema')!r}")
     out = dict(job)
@@ -67,6 +71,7 @@ def extend_job(job: dict[str, Any], *, run_id: str, runs_root: Path, expected_fi
     out["workload_fingerprint"] = {"expected": expected_fingerprint,
                                    "observed_in": "result.json (workload_fingerprint); expected and observed are never merged"}
     out["cost"] = cost if cost is not None else cost_section()
+    out["store"] = store
     return out
 
 

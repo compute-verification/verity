@@ -24,7 +24,8 @@ from collections.abc import Sequence
 
 from .typed_obligation import GATE, IN, INPUT, Definition, Gate, Subcircuit, subcircuit_digest
 
-__all__ = ["TC_K", "GEMM_WITHIN", "GateSpec", "input_gate", "make_subcircuit", "gemm_coordinate", "input_equation", "elementwise"]
+__all__ = ["TC_K", "GEMM_WITHIN", "GateSpec", "input_gate", "make_subcircuit", "gemm_coordinate", "gemm_accumulator_fp8",
+           "input_equation", "elementwise"]
 
 #: The ``k`` extent of one Ampere BF16 tensor-core step.
 TC_K = 16
@@ -105,6 +106,33 @@ def gemm_coordinate(k: int, *, opened_accumulator: bool = False) -> Subcircuit:
     gates.append(("f32_to_bf16", [(GATE, steps - 1)]))
     definition = Definition("GemmCoordinate", (("K", k),), GEMM_WITHIN)
     return make_subcircuit([16] * (2 * k), gates, [steps], definition)
+
+
+def gemm_accumulator_fp8(k: int, *, step_k: int = 32) -> Subcircuit:
+    """``GemmAccumulator<K>`` over ``k`` (a multiple of ``step_k``) for the FP8 draft targets: the bare dot with the
+    FP32 word outgoing (:data:`verity.verification.target.FP8_HOPPER_WGMMA` / :data:`FP8_ADA_MMA`).
+
+    Incoming values ``0 .. k`` are the A operands (8-bit E4M3 words), ``k .. 2k`` the B operands, ascending ``k``.
+    Gate ``0`` is ``tc_dot{step_k}_0(a[0:step_k], b[0:step_k])``; gate ``s`` is ``tc_dot{step_k}(acc_{s-1}, ...)``;
+    the last accumulator word is the one outgoing value -- there is **no** epilogue cast: the scale-and-
+    ``cvt.rn.satfinite.e4m3x2`` store of a production FP8 GEMM is a separate relation.  The ops are those of
+    ``veritor.tensor-core.<pipeline>@2`` (:func:`verity.verification.families.make_tensor_core_gate_set`) for a
+    ``step_k``-wide pipeline; the body is the same for Hopper (one group of 32) and Ada (two of 16): the grouping is
+    the gate's semantics, not the program's.  Draft: no guest checks this family yet.
+    """
+
+    if k <= 0 or k % step_k:
+        raise ValueError(f"k={k} must be a positive multiple of {step_k}")
+    steps = k // step_k
+    gates: list[GateSpec] = [
+        (f"tc_dot{step_k}_0", [(IN, i) for i in range(step_k)] + [(IN, k + i) for i in range(step_k)])
+    ]
+    for step in range(1, steps):
+        a = [(IN, step_k * step + i) for i in range(step_k)]
+        b = [(IN, k + step_k * step + i) for i in range(step_k)]
+        gates.append((f"tc_dot{step_k}", [(GATE, step - 1), *a, *b]))
+    definition = Definition("GemmAccumulator", (("K", k),), GEMM_WITHIN)
+    return make_subcircuit([8] * (2 * k), gates, [steps - 1], definition)
 
 
 def input_equation(expected: int, width: int = 16) -> Subcircuit:

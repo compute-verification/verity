@@ -36,6 +36,8 @@ __all__ = [
     "RELATION_LAYERS_A",
     "RELATION_TABLES",
     "RTTS_MS",
+    "V2_EXPORT_LAYERS",
+    "V2_EXPORT_TABLES",
     "AccountingError",
     "Budget",
     "CandidateA",
@@ -54,6 +56,7 @@ __all__ = [
     "e2e_sweep",
     "first_configuration",
     "fractional_gkr_error",
+    "fri_zk_requirements",
     "hash_collision_bound",
     "hm_commitment_hiding",
     "ligero_error",
@@ -61,6 +64,7 @@ __all__ = [
     "log2",
     "logup_gkr_error",
     "logup_identity_error",
+    "logup_union_error",
     "per_proof_target",
     "random_combination_error",
     "redraw_terms",
@@ -70,6 +74,7 @@ __all__ = [
     "security_bits",
     "sumcheck_error",
     "union_over_proofs",
+    "zk_sumcheck_masking_error",
 ]
 
 GOLDILOCKS = 2**64 - 2**32 + 1
@@ -332,6 +337,57 @@ def hm_commitment_hiding(n_commitments: int, k_bits: int) -> Fraction:
     return Fraction(n_commitments, 2**k_bits)
 
 
+def zk_sumcheck_masking_error(instances: int, F: Field) -> Fraction:
+    """Libra-style zero-knowledge sumcheck (Xie-Zhang-Zhang-Papamanthou-Song, CRYPTO 2019, section 4.1; the
+    Chiesa-Forbes-Spooner 2017 masking with a structured mask): the prover commits to a random
+    ``g(x) = a_0 + sum_i g_i(x_i)`` (univariate ``g_i`` of the round degree), reveals ``H_g = sum g``, the verifier
+    draws ``rho`` and the sumcheck runs on ``f + rho g`` for the claim ``H + rho H_g``.  If ``sum f != H`` the combined
+    claim holds for at most one ``rho``: ``1/|F|`` per masked instance, union-bounded over ``instances``.  The round
+    degrees are unchanged (``deg g_i = deg_i``), so the LFKN term is not enlarged.  The padded-transcript layer
+    (FS24 / libzk, the protocols' default) adds **no** soundness term: its checks are deferred linear constraints
+    inside the Ligero tests already charged."""
+    if instances < 0:
+        raise AccountingError("negative instance count")
+    return Fraction(instances, F.size)
+
+
+def fri_zk_requirements(trace_rows_log2: int, real_rows: int, queries: int, ood_points: int, arity_log2: int = 1,
+                        constraint_degree: int = 5, F: Field | None = None) -> dict:
+    """What the randomised-trace ZK of an AIR/FRI backend (ethSTARK 5.5; Plonky3 ``zk`` layout) needs and costs.
+
+    Every trace column is a polynomial of degree ``< 2^trace_rows_log2`` fixed on the ``real_rows`` real rows and
+    **uniform** on the padding rows.  The verifier learns each column at the ``ood_points`` out-of-domain points
+    (DEEP ``zeta``, ``g zeta``) and at ``2^arity_log2`` points per FRI query on the LDE; all of them lie outside the
+    trace domain and are distinct, so their joint distribution is uniform iff the number of random rows is at least
+    the number of revealed points (interpolation: the evaluation map from the random rows to the revealed points
+    has full rank).  Constraints are enforced on the real rows only through a public ``is_real`` selector (degree
+    +1); the quotient chunk count doubles when the degree crosses a power of two.  The batched FRI polynomial is
+    additionally blinded by one committed random codeword of the same degree.  Returns the requirement, whether
+    the padding already covers it, the extra committed rows if not, and the Schwartz-Zippel term of the DEEP/
+    quotient degree before and after the selector (a ``batching`` term, when ``F`` is given)."""
+    if trace_rows_log2 < 1 or real_rows < 1 or queries < 1 or ood_points < 0:
+        raise AccountingError("bad FRI ZK parameters")
+    N = 2**trace_rows_log2
+    if real_rows > N:
+        raise AccountingError("real rows exceed the trace domain")
+    revealed = ood_points + queries * 2**arity_log2
+    padding = N - real_rows
+    lq_before = math.ceil(math.log2(max(2, constraint_degree - 1)))
+    lq_after = math.ceil(math.log2(max(2, constraint_degree)))
+    out = {
+        "trace_rows": N, "real_rows": real_rows, "padding_rows": padding, "revealed_points_per_column": revealed,
+        "random_rows_needed": revealed, "padding_covers": padding >= revealed,
+        "extra_trace_rows_if_not": 0 if padding >= revealed else (2 * N - N),
+        "selector_columns": 1, "blinding_codewords": 1,
+        "quotient_chunks_before": 2**lq_before, "quotient_chunks_after": 2**lq_after,
+        "hiding": "perfect (interpolation argument) when padding_covers; the blinding codeword hides the batched FRI polynomial",
+    }
+    if F is not None:
+        out["deep_degree_term_before"] = Fraction(constraint_degree * N, F.size)
+        out["deep_degree_term_after"] = Fraction((constraint_degree + 1) * N, F.size)
+    return out
+
+
 def logup_gkr_error(num_lookups: int, table_rows: int, F: Field, repetitions: int = 1,
                     columns: int = 1) -> dict[str, Fraction]:
     """Papini-Haboeck Proposition 2 in the ``N`` / ``|T|`` form: identity term plus the fractional GKR over the
@@ -340,6 +396,62 @@ def logup_gkr_error(num_lookups: int, table_rows: int, F: Field, repetitions: in
     return {
         "identity": logup_identity_error(num_lookups, table_rows, F, repetitions=repetitions, columns=columns),
         "fractional_gkr": repetitions * fractional_gkr_error(n, F),
+        "hypercube_dim": Fraction(n),
+    }
+
+
+def logup_union_error(tables: Sequence[tuple[int, int, int]], F: Field, challenge_space: str = "conditioned"
+                      ) -> dict[str, Fraction]:
+    """The batched logUp over the tagged table union (PROTOCOL.md 15; lane a-logup-union, 2026-09-22).
+
+    ``tables`` = ``(N_t, |T_t|, cols_t)`` per table: its lookups, rows and columns.  Every query ``w`` into table ``t``
+    is encoded as ``phi(w, t) = w(beta) + gamma tag(t)`` and every row ``r`` of ``t`` as ``phi(r, t)``, with ONE
+    ``(z, beta, gamma)`` message drawn after the multiplicities are committed; one fractional-sum GKR over all
+    ``N = sum N_t`` queries and ``|T| = sum |T_t|`` rows.  *Derivation*: let ``A`` be the multiset of (query vector,
+    tag) pairs and ``B`` the multiset of (row, tag) pairs with the committed multiplicities.  If some query is not a
+    row of its table, ``A != B`` at ``x = `` the first such query (``A(x) >= 1``, ``B(x) = 0``).  Let ``S`` be the
+    support of ``A`` and ``B`` (``|S| <= N + |T|``).
+
+    * ``collision`` -- the encoding is not injective at ``x``: some ``y in S``, ``y != x``, has ``phi(y) = phi(x)``.
+      Same tag: ``w(beta) - r(beta)`` is a nonzero polynomial of degree ``<= cols_t - 1`` in ``beta``
+      (``(cols_t - 1)/|F|`` each, at most ``N_t + |T_t|`` such ``y``); different tag: for every ``beta`` exactly one
+      ``gamma`` (``1/|F|`` each, at most ``N + |T|`` such ``y``).  The accountant does not know which table the bad
+      query targets, so it charges ``max_t (N_t + |T_t|)(cols_t - 1)/|F| + (N + |T|)/|F|`` (union bound; the brief's
+      ``rows x tables / |F|`` is the different-tag half with ``|S|`` counted table by table).
+    * ``identity`` -- when ``phi`` is injective at ``x`` the encoded multisets differ (the count at ``phi(x)`` is
+      ``A(x) != 0 = B(x)`` in ``F``; needs ``char F > N``), so the cleared rational identity is a nonzero polynomial
+      of degree ``<= N + |T| - 1`` in ``z`` (Haboeck Lemma 5 with the committed ``m`` as arbitrary field elements)
+      and vanishes at the conditioned ``z`` (uniform outside the public image of ``phi`` on the rows, ``<= |T|``
+      points) with probability ``<= (N + |T| - 1)/(|F| - |T|)``.
+    * ``fractional_gkr`` -- Papini-Haboeck Proposition 1 over ``n = ceil(log2(N + |T|))``.
+
+    Completeness is unaffected: two rows of different tables colliding under ``gamma`` add their multiplicities on
+    both sides; ``z`` is redrawn only on the public image (PROTOCOL.md 5.1 step 2a), so no honest abort exists."""
+    if not tables:
+        raise AccountingError("no tables")
+    for N_t, T_t, c_t in tables:
+        if N_t < 0 or T_t < 1 or c_t < 1:
+            raise AccountingError("need non-negative lookups, at least one row and one column per table")
+    N = sum(t[0] for t in tables)
+    T = sum(t[1] for t in tables)
+    if N < 1:
+        raise AccountingError("need at least one lookup")
+    if F.characteristic <= N:
+        raise AccountingError(f"logUp needs char(F) > total lookups: char={F.characteristic}, lookups={N} (Haboeck Lemma 5)")
+    if challenge_space == "conditioned":
+        denom = F.size - T
+    elif challenge_space == "whole_field":
+        denom = F.size
+    else:
+        raise AccountingError(f"unknown challenge_space {challenge_space!r}")
+    if denom <= 0:
+        raise AccountingError("table union larger than the challenge field")
+    same_tag = max((N_t + T_t) * (c_t - 1) for N_t, T_t, c_t in tables)
+    n = max(1, math.ceil(math.log2(N + T)))
+    return {
+        "collision": Fraction(same_tag, F.size) + Fraction(N + T, F.size),
+        "identity": Fraction(N + T - 1, denom),
+        "fractional_gkr": fractional_gkr_error(n, F),
         "hypercube_dim": Fraction(n),
     }
 
@@ -498,6 +610,32 @@ class LookupTable:
     rows: int
     queries_per_unit: int
     columns: int = 1
+    #: Lookups issued once per VU rather than per unit (the epilogue circuit's range checks, PROTOCOL.md 12.1).
+    queries_per_vu: int = 0
+
+
+def _n_queries(p: CandidateA | CandidateB, tbl: LookupTable) -> int:
+    return tbl.queries_per_unit * p.units + tbl.queries_per_vu * p.B
+
+
+#: Checker v2 as EXPORTED by ``gkr_export.v2`` for K = 1536 (``fixtures/v2_synth/circuit.txt`` + ``epilogue.txt``,
+#: PROTOCOL.md 14.1): 86 unit lookups into 10 tables, 5 epilogue lookups into ``R16`` / ``R15``.  The census's
+#: ``CENSUS_TABLES`` under ``VERITY_CHECKER_VARIANT=v2`` differs slightly (``T_HDR``, ``T_range16`` at 10 / unit);
+#: this tuple is the shape the Rust prover actually runs, so the union accounting is pinned to it.
+V2_EXPORT_TABLES: tuple[LookupTable, ...] = (
+    LookupTable("T_OP", 65280, 32, 4),
+    LookupTable("ALIGN4", 3120, 18, 4),
+    LookupTable("SSHIFT_HI", 221184, 2, 2),
+    LookupTable("SSHIFT_LO", 221184, 2, 2),
+    LookupTable("SHIFT", 3538944, 16, 2),
+    LookupTable("LEAD", 32768, 4, 3),
+    LookupTable("LEADNORM", 12152, 2, 7),
+    LookupTable("TNORM", 1048576, 2, 2),
+    LookupTable("R4", 16, 4, 1),
+    LookupTable("R12", 4096, 4, 1),
+    LookupTable("R15", 32768, 0, 1, queries_per_vu=1),
+    LookupTable("R16", 65536, 0, 1, queries_per_vu=4),
+)
 
 
 @dataclass(frozen=True)
@@ -508,6 +646,10 @@ class CheckerLayer:
     s_out: int
     s_in: int
     assertions: bool = True
+
+
+#: The exported v2 checker layers (PROTOCOL.md 14.4): assertions over the 290 wires, one product layer from 264 columns.
+V2_EXPORT_LAYERS: tuple[CheckerLayer, ...] = (CheckerLayer(5, 9, assertions=True), CheckerLayer(9, 9, assertions=False))
 
 
 # The census of ``verity.ml.tc.relation`` for AMPERE_BF16_M16N8K16, ALIGN_DIV: 146 mul, 104 lin, 172 lookups per
@@ -610,6 +752,9 @@ class CandidateA:
     query_wires_per_unit: int = CHECKER_UNIT.queries_on_computed_wires
     query_layers: int = sum(1 for L in DEFAULT_LAYERS_A if not L.assertions)   # computed layers holding queries
     lookup_repetitions: int = 1
+    #: ``per_table``: one logUp-GKR instance per table (PROTOCOL.md 4.2); ``union``: ONE instance over the tagged
+    #: table union (PROTOCOL.md 15, ``logup_union_error``; ``--logup union`` in the Rust prover).
+    lookup_mode: str = "per_table"
     hash_bits: int = 256
     hash_queries: int = 2**64
     challenge_field_elements_per_pad: int | None = None   # trace-field elements per pad; default = extension degree
@@ -617,6 +762,10 @@ class CandidateA:
     leaf_commitment_bits: int | None = 160   # HM96 commitment per column (None: unsalted leaf hash, extra assumption)
     coin_commitment_bits: int | None = None  # step 0 (malicious-verifier ZK) with HM96 parameter k; None = HVZK only
     depth: DepthOptions = DepthOptions()
+    # How the sumcheck transcripts are hidden: ``padded_transcript`` (FS24 / libzk: one committed pad per transcript
+    # element, checks deferred to Ligero; no soundness term) or ``libra`` (committed masking polynomial per sumcheck
+    # instance and a random rho: ``zk_sumcheck_masking_error``; the final evaluations are still padded).
+    sumcheck_masking: str = "padded_transcript"
 
     @property
     def units(self) -> int:
@@ -672,7 +821,7 @@ def _extension_degree(trace: Field, challenge: Field) -> int:
 
 def _shards(p: CandidateA | CandidateB, tbl: LookupTable) -> tuple[int, int, int]:
     """(number of shards, lookups per shard, hypercube dimension per shard) for one table under the depth options."""
-    N = tbl.queries_per_unit * p.units
+    N = _n_queries(p, tbl)
     s = p.depth.table_shard_bits
     while s > 0 and N // 2**s <= tbl.rows:
         s -= 1
@@ -733,10 +882,17 @@ def account_candidate_a(p: CandidateA) -> Budget:
           schwartz_zippel_error(s0 + b, Fc))
     rounds = 0
     pads = 0
+    if p.sumcheck_masking not in ("padded_transcript", "libra"):
+        raise AccountingError(f"unknown sumcheck_masking {p.sumcheck_masking!r}")
+    libra = p.sumcheck_masking == "libra"
+    masked_instances = 0
     for j, layer in enumerate(p.layers):
         acc = data_parallel_layer_error(layer.s_out, layer.s_in, b, Fc, alpha=True, assertions=layer.assertions)
         rounds += int(acc["rounds"])
-        pads += int(acc["pad_elements"])
+        # padded transcript: d values per round (+3 final evaluations); libra: (d+1) mask coefficients per round + a_0
+        # and the 3 padded final evaluations
+        pads += int(acc["pad_elements"]) + (int(acc["rounds"]) + 1 if libra else 0)
+        masked_instances += 1
         B.add("batching", f"layer {j}: alpha (two claims -> one)", acc["alpha"])
         if layer.assertions:
             B.add("batching", f"layer {j}: beta (Q + beta*Z assertions)", acc["beta"])
@@ -744,15 +900,44 @@ def account_candidate_a(p: CandidateA) -> Budget:
     B.add("batching", "final input claims: gamma (two evaluation claims -> one Ligero linear constraint)",
           random_combination_error(Fc, 2))
 
-    # ---- lookups: logUp-GKR per table (per shard), claims merged into the checker or the input constraints ---------
+    # ---- lookups: logUp-GKR per table (per shard) or one union instance; claims merged into the input constraints --
     extra_mult = 0
-    for tbl in p.tables:
-        shards, n_dim, r_sh = _lookup_terms(B, p, tbl, gkr=True)
-        B.add("batching", f"{tbl.name}: merge table-side/witness-side claims into the layer / input claim",
-              shards * random_combination_error(Fc, 2))
-        rounds += shards * r_sh
-        pads += shards * p.lookup_repetitions * (3 * (n_dim * (n_dim - 1) // 2) + 4 * n_dim)
-        extra_mult += (shards - 1) * tbl.rows
+    if p.lookup_mode == "union":
+        if p.depth.table_shard_bits or p.lookup_repetitions != 1:
+            raise AccountingError("the union lookup argument is accounted without sharding or repetitions")
+        shape = [(_n_queries(p, t), t.rows, t.columns) for t in p.tables]
+        u = logup_union_error(shape, Fc)
+        n_dim = int(u["hypercube_dim"])
+        N_all, T_all = sum(s[0] for s in shape), sum(s[1] for s in shape)
+        B.add("lookup", f"UNION of {len(p.tables)} tables: gamma/beta collision at the first bad query (max_t (N_t+|T_t|)(cols_t-1) + N+|T|)/|F|",
+              u["collision"])
+        B.add("lookup", f"UNION: rational identity, N={N_all}, |T|={T_all}, conditioned on z not in the tagged image", u["identity"])
+        B.add("lookup", f"UNION: fractional GKR over 2^{n_dim}", u["fractional_gkr"])
+        B.add("batching", "UNION: merge table-side/witness-side claims into the input claim", random_combination_error(Fc, 2))
+        rd = redraw_terms(T_all, Fc, p.redraw_slots)
+        B.add("completeness", "UNION: z in the public tagged image, first slot (redraw, no round trip)", rd["redraw"], kind="completeness")
+        B.add("completeness", f"UNION: all {p.redraw_slots} slots in the image (public abort)", rd["abort"], kind="completeness")
+        rounds += n_dim * (n_dim - 1) // 2 + (n_dim - 1)
+        pads += 3 * (n_dim * (n_dim - 1) // 2) + 4 * n_dim
+        masked_instances += n_dim - 1
+        if libra:
+            pads += (n_dim * (n_dim - 1) // 2) + (n_dim - 1)
+    elif p.lookup_mode == "per_table":
+        for tbl in p.tables:
+            shards, n_dim, r_sh = _lookup_terms(B, p, tbl, gkr=True)
+            B.add("batching", f"{tbl.name}: merge table-side/witness-side claims into the layer / input claim",
+                  shards * random_combination_error(Fc, 2))
+            rounds += shards * r_sh
+            pads += shards * p.lookup_repetitions * (3 * (n_dim * (n_dim - 1) // 2) + 4 * n_dim)
+            masked_instances += shards * p.lookup_repetitions * (n_dim - 1)      # one sumcheck per fractional-GKR layer
+            if libra:   # one mask per instance: (d+1) = 4 coefficients per round + a_0
+                pads += shards * p.lookup_repetitions * ((n_dim * (n_dim - 1) // 2) + (n_dim - 1))
+            extra_mult += (shards - 1) * tbl.rows
+    else:
+        raise AccountingError(f"unknown lookup_mode {p.lookup_mode!r} (per_table | union)")
+    if libra:
+        B.add("batching", f"libra sumcheck masking: rho per masked instance, {masked_instances} instances",
+              zk_sumcheck_masking_error(masked_instances, Fc))
 
     # ---- encoding / opening: Ligero over the committed inputs, multiplicities and pads --------------------------------
     per_unit = p.inputs_per_unit + (p.query_wires_per_unit if p.depth.commit_query_wires else 0)
@@ -768,11 +953,12 @@ def account_candidate_a(p: CandidateA) -> Budget:
         "K": p.K, "B": p.B, "units": units, "copy_bits_b": b,
         "trace_field": Ft.name, "challenge_field": Fc.name, "extension_degree": ext,
         "checker_layers": len(p.layers), "sumcheck_rounds_total": rounds, "pad_elements": pads,
-        "committed_trace_elements": committed, "ligero_rows": rows,
+        "sumcheck_masking": p.sumcheck_masking, "masked_sumcheck_instances": masked_instances,
+        "committed_trace_elements": committed, "ligero_rows": rows, "lookup_mode": p.lookup_mode,
         "opened_trace_elements": rows * p.ligero.t,
         "merkle_leaves": p.ligero.n,
         "zk_class": "COMPLETE_ZK_BACKEND (proposed step 0)" if p.coin_commitment_bits else "COMPLETE_HVZK_BACKEND",
-        **{k: v for k, v in depth.items() if k.startswith("rounds.")},
+        **{k: v for k, v in depth.items() if k.startswith(("rounds.", "depth."))},
     })
     return B
 
@@ -788,7 +974,7 @@ def account_candidate_b(p: CandidateB) -> Budget:
     n_linear = units * p.linear_per_unit + sum(t.rows for t in p.tables)
     n_quadratic = units * p.quadratic_per_unit
     for tbl in p.tables:
-        N = tbl.queries_per_unit * units
+        N = _n_queries(p, tbl)
         if p.lookup_mode == "helper_columns":
             shards, _, _ = _lookup_terms(B, p, tbl, gkr=False)
             committed += p.lookup_repetitions * (N + shards * tbl.rows) * ext     # inverse columns h in F_c
@@ -844,11 +1030,17 @@ def rounds_and_depth_a(p: CandidateA) -> dict[str, int]:
     p.depth.validate()
     c = p.depth.variables_per_round
     slots_lookup = depth_lookup = 0
-    for tbl in p.tables:
-        shards, _, n_dim = _shards(p, tbl)
+    if getattr(p, "lookup_mode", "per_table") == "union":
+        n_dim = max(1, math.ceil(math.log2(sum(_n_queries(p, t) + t.rows for t in p.tables))))
         sl, dp = _fractional_chain(n_dim, c)
-        slots_lookup += shards * (1 + sl) * p.lookup_repetitions      # + 1: the z_T slot itself
-        depth_lookup = max(depth_lookup, dp)
+        slots_lookup = 3 + sl                                           # z, beta, gamma, then the one chain
+        depth_lookup = dp
+    else:
+        for tbl in p.tables:
+            shards, _, n_dim = _shards(p, tbl)
+            sl, dp = _fractional_chain(n_dim, c)
+            slots_lookup += shards * (1 + sl) * p.lookup_repetitions      # + 1: the z_T slot itself
+            depth_lookup = max(depth_lookup, dp)
     layer_rounds = [layer.s_out + p.b + 2 * layer.s_in for layer in p.layers]
     checker_slots = 1 + sum(r + 1 for r in layer_rounds) + 1          # z_0, per-layer challenges + alpha, gamma
     checker_depth = [-(-r // c) + 1 for r in layer_rounds]

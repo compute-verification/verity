@@ -287,6 +287,117 @@ def checker_vu_target(p: Params = REAL, field: int | None = None) -> Target:
                   fmt_y=lambda y: f"{y:#06x}" if isinstance(y, int) and y >= 0 else repr(y))
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# checker v2 (verity_numerical.checker.v2): the same relation, the lookup-centred witness
+# ---------------------------------------------------------------------------------------------------------------------
+
+_KIND_V2 = {"hdr": MAGNITUDE, "M_hi": MAGNITUDE, "M_lo": MAGNITUDE, "v_hi": MAGNITUDE, "v_lo": MAGNITUDE}
+
+
+def checker_columns_v2(p: Params, h: dict, base: tuple = ()) -> list[Column]:
+    """Every hint of a v2 unit witness with its contract range (``acc`` only for the word-in unit; ``acc_split``
+    is ``None`` for a unit on the constant zero state)."""
+    from verity_numerical.checker.v2 import gadgets as G
+
+    kinds = {**_KIND, **_KIND_V2}
+    cols: list[Column] = []
+
+    def add(contract, b, node):
+        for name, v in node.items():
+            lo, hi = contract.hints[name]
+            cols.append(Column(b + (name,), lo, hi, kinds.get(name, OTHER)))
+
+    if h.get("acc") is not None:
+        add(G.StateDecode.contract(p), base + ("acc",), h["acc"])
+    for g, hg in enumerate(h["groups"]):
+        gb = base + ("groups", g)
+        lo, hi = G.GroupMax.contract(p, p.groups[g] + 1).hints["E"]
+        cols.append(Column(gb + ("E",), lo, hi, SHIFT))
+        if hg.get("acc_split") is not None:
+            add(G.StateShift.contract(p), gb + ("acc_split",), hg["acc_split"])
+        add(G.SignedSum.contract(p, p.groups[g]), gb + ("sum",), hg["sum"])
+    return cols
+
+
+def vu_columns_v2(p: Params, h: dict) -> list[Column]:
+    cols: list[Column] = []
+    for s, hs in enumerate(h["steps"]):
+        cols += checker_columns_v2(p, hs, ("steps", s))
+    _cols_of(Epilogue.contract(p), ("epilogue",), h["epilogue"], cols)
+    return cols
+
+
+def bound_checker_target_v2(p: Params = REAL, field: int | None = None) -> Target:
+    """The v2 transition unit as a harness target (``output_of`` bound to the last generated case)."""
+    from verity_numerical.checker.reference import dot
+    from verity_numerical.checker.v2 import step as S2
+
+    state = {"x": None}
+
+    def check(x, y, h):
+        ctx = FieldCtx(field) if field else IntCtx()
+        try:
+            ctx.eq("y", S2.check_step_expr(ctx, p, x[0], list(x[1]), list(x[2]), h), y)
+        except Exception:  # noqa: BLE001
+            return False
+        return True
+
+    def gen(x):
+        state["x"] = x
+        return S2.gen_step(p, x[0], list(x[1]), list(x[2]))
+
+    def output_of(h):
+        x = state["x"]
+        try:
+            y = S2.check_step_expr(LaxCtx(), p, x[0], list(x[1]), list(x[2]), h)
+        except Exception:  # noqa: BLE001
+            return -1
+        return y % field if field else y
+
+    return Target(
+        name=f"checker-v2[unit,{_label(field)}]", check=check, gen=gen,
+        reference=lambda x: dot(p, x[0], list(x[1]), list(x[2])) % field if field else dot(p, x[0], list(x[1]), list(x[2])),
+        columns=lambda h: checker_columns_v2(p, h), output_of=output_of, output_neighbours=fp32_neighbours,
+        fmt_x=fmt_x, fmt_y=lambda y: f"{y:#010x}" if isinstance(y, int) and y >= 0 else repr(y), fmt_h=lambda h: "<unit hints>",
+    )
+
+
+def checker_vu_target_v2(p: Params = REAL, field: int | None = None) -> Target:
+    """The v2 VU (state-chained units, one Pack, the epilogue) as a target; ``x = (a, b)``, ``y`` the BF16 word."""
+    from verity_numerical.checker.reference import vu
+    from verity_numerical.checker.v2 import step as S2
+
+    def ref(x):
+        y = vu(p, list(x[0]), list(x[1]))
+        return y % field if field else y
+
+    def check(x, y, h):
+        ctx = FieldCtx(field) if field else IntCtx()
+        try:
+            ctx.eq("y16", S2.check_vu_expr(ctx, p, list(x[0]), list(x[1]), h), y)
+        except Exception:  # noqa: BLE001
+            return False
+        return True
+
+    state = {"x": None}
+
+    def gen(x):
+        state["x"] = x
+        return S2.gen_vu(p, list(x[0]), list(x[1]))
+
+    def output_of(h):
+        try:
+            y = S2.check_vu_expr(LaxCtx(), p, list(state["x"][0]), list(state["x"][1]), h)
+        except Exception:  # noqa: BLE001
+            return -1
+        return y % field if field else y
+
+    return Target(name=f"checker-v2[vu,{_label(field)}]", check=check, gen=gen, reference=ref,
+                  columns=lambda h: vu_columns_v2(p, h), output_of=output_of,
+                  fmt_x=lambda x: {"a": "".join(f"{w:04x}" for w in x[0]), "b": "".join(f"{w:04x}" for w in x[1])},
+                  fmt_y=lambda y: f"{y:#06x}" if isinstance(y, int) and y >= 0 else repr(y))
+
+
 def step_cases(n_golden: int = 12, seed: int = 0) -> list[tuple[str, Any]]:
     """Structured Ampere cases plus a sample of golden records, as ``(name, (c, a, b))``."""
     import random

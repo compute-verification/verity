@@ -198,6 +198,23 @@ Multiplicities are challenge-independent (counts of witness values) and are comm
 any challenge. No inverse or product intermediate is committed (PH23's point); all \((p,q)\) layers are
 computed by the prover on the fly in \(F_c\).
 
+**Variable order of the per-layer sumcheck (fixed 2026-09-22, lane a-protocol-diff).** The identity above does
+not fix which bit of the layer index a sumcheck round binds, but the *message values* depend on it, so it is part
+of the transcript specification. Layer \(k\) (size \(2^k\), children at layer \(k+1\) indexed \(2x+b\)) is
+reduced from the claim \(\sum_x eq(\rho,x)\,[p_0q_1+p_1q_0+\lambda q_0q_1](x)\), \(p_b(x)=p_{k+1}(2x+b)\), by
+\(k\) rounds where **round \(i\) binds bit \(i\) of \(x\) (low bit first**: the round-\(i\) pairs are
+\((2y,2y+1)\) of the current table). After the four claims \(p_{k+1}(2x^*),p_{k+1}(2x^*+1),q_{k+1}(2x^*),
+q_{k+1}(2x^*+1)\) and \(\mu_k\), the next point is \(\rho'=(\mu_k,x^*_0,\dots,x^*_{k-1})\): \(\mu_k\) on bit 0
+(the children pairing), \(x^*_i\) on bit \(i+1\); \(eq(\rho',x^{*\prime})\) at the next layer pairs coordinate
+\(j\) with coordinate \(j\). The leaf point \(\rho_T\) is handed to the linear-constraint step (4.3, 5.1 step
+2d) in the top-bit-first convention of `eq_table` (coordinate 0 on the leaf index's top bit), i.e. reversed.
+This is the schedule of the GPU prover (`gpu/logup.py`, `packed/logup_reference.py`) and of both verifiers
+(`gpu/logup.py::verify_table`, `verifier/src/verify.rs::verify_table`). The Goldilocks crate (`src/logup.rs`)
+and the a-gpu prover up to v2e bound the **top** bit first with \(\rho'=(x^*,\mu_k)\): the same protocol under
+bit-reversal of the layer index, with different message values from layer 2 on (the first layer whose
+\(eq(\rho,x^*)\) has two factors). The two are **not** transcript-compatible; a verifier written to one rejects
+the other at `LogUp <table> level 2: final check` (`note:r20-proof/a-protocol-diff/20260922T1047Z-report-a-protocol-diff`).
+
 ### 4.3 Linking lookups to the checker **[proposal]**
 
 The final fractional-GKR claim for table \(T\) at \(\rho_T\in F_c^{n_T}\) splits linearly into
@@ -639,3 +656,481 @@ which is an upper bound a real layout would shrink; the depth column separates t
   lookups — a checker-lane question, not decided here.
 - Whether the first complete backend ships as `COMPLETE_HVZK_BACKEND` (no step 0) with 5.5 as the documented
   path to `COMPLETE_ZK_BACKEND`.
+
+## 12. The VU chain: 96 units + epilogue as one proof (implemented 2026-09-22, lane a-chain)
+
+The Verity VU is `GemmCoordinate<1536>`: 96 word-chained transition units from the constant \(c_0=0\), then the
+epilogue `Epilogue.check` (RN-even cast of the last FP32 word to the BF16 output word). Its public endpoints are
+\(c_0=0\) and the output word \(y16\); the 95 intermediate words and every hint are private. Three ways to wire
+the 96 units of one VU into the data-parallel GKR of section 4, with their costs at \(K=1536, B=4096\)
+(\(U=393\,216\) units, \(468\) exported columns per unit, \(826\) wires, 6 checker layers) **[derivation]**:
+
+| design | sequential depth (checker chain) | committed elements / VU | prover work (wire evaluations per layer sweep; phase-1 tables) | new code |
+|---|---|---|---|---|
+| (a) **deep circuit**: one circuit of 96 unit-blocks + epilogue, \(6\cdot96+2\) strict layers, data-parallel over \(B\) VUs (\(b=12\)) | \(\approx 578\) layers \(\times\) 47 rounds \(=27\,075\) | \(44\,747\) (the 95 intermediate words are wires, not columns: \(-190\)) | \(578\times4096\times79\,296=187\)G wire evaluations (strict layering carries every value of lower depth: width \(96\times826\)); tables 15.6 GB | new exporter for a 45k-column circuit, per-VU wiring tables |
+| (b) **data-parallel units + linkage** *(implemented)*: \(U\) unit copies and \(B\) epilogue copies over **one** commitment; the linkage \(c_{v,0}=0\), \(c_{v,i}=y_{v,i-1}\), \(y32_v=y_{v,95}\) and the public words \(y16_v=\) recorded word are **linear constraints on the committed vector**, batched into the Ligero opening | \(+0\): checker chain 243 (6 layers, \(b=19\)), lookup chain 435 (`R16` has \(2^{28}\) leaves, below) — depth is set by the lookups exactly as before | \(96\cdot468+9=44\,937\) (the words are already the `x.c` / `y` columns of each unit; \(+9\) epilogue columns) | \(6\times393\,216\times826=1.95\)G; tables 15.6 GB; one extra \(O(U)\) pass for the linkage functional; the epilogue GKR (11 wires, 2 layers, \(B\) copies) is negligible | epilogue circuit export; multi-segment instance; one functional; no change to `gkr.rs`/`logup.rs` semantics |
+| (c) **checkpoints every \(m\)**: commit every \(m\)-th word, prove the \(m\) units in between as a deep sub-circuit (\(6m\) layers) data-parallel over \(U/m\) copies | \(m=2\): 495; 4: 1 011; 8: 2 067; 16: 4 227; 32: 8 643; 96: (a) | \(44\,937-2\cdot96(1-1/m)\): \(m=2\): 44 841; 8: 44 769; 96: 44 747 | wire evaluations \(\times m\) (strict layers carry the sub-chain's \(m\times826\) values): 3.9G (m=2) … 187G (m=96) | as (a) plus a checkpoint layout |
+
+The decisive fact is that the committed *word* is 1 element in a row of 468: checkpointing saves at most
+\(190/44\,937=0.42\%\) of the committed elements and costs \(m\times\) the checker's prover work and depth.
+(b) is the \(m=1\) point of (c), it needs the least new code, and its soundness argument is the one the Ligero
+opening already carries. **(b) is implemented first**; (a)/(c) are not built (section 12.4 reports their cost
+model; no measured point is expected to beat \(m=1\)).
+
+### 12.1 Layout **[proposal, implemented]**
+
+Two data-parallel *segments* over one committed vector \(X\):
+
+~~~text
+X = [ unit rows: U = B·96 rows × 468 columns, row v·96+i = unit i of VU v (VU-major) ]
+    [ epilogue rows: B rows × 9 columns: one, y32, y16, hi, lo, hi2, lsb, carry, rem ]
+    [ multiplicities of ALIGN, POW, LEAD, NORM, R16 over BOTH segments ]
+~~~
+
+Segment 0 is the exported unit circuit (section 1), segment 1 the exported epilogue circuit
+(`gkr_export.vu.build_epilogue_circuit`: `Epilogue.check` verbatim — 5 sixteen-bit range chunks into `R16`
+(`hi`, `lo`, `hi2·2`, `rem`, `hi+carry`), 2 booleans, 3 linear identities, and the assertion \(y16=hi+carry\)).
+Each segment runs its own checker GKR (its own \(z_0,\gamma\), \(b_0=\lceil\log_2 U\rceil\), \(b_1=\lceil\log_2 B\rceil\));
+the two are independent and run in lock-step (one verifier message carries both segments' round challenges), so
+the checker depth is the unit segment's. The five logUp instances take the witness side of a table from both
+segments concatenated (unit queries, then epilogue queries, then the table rows, then padding): the epilogue's
+five `R16` queries per VU join the range-check multiset; `R16` therefore has \(352U+5B+65\,536=138\,498\,048\)
+leaves at \(B=4096\), i.e. \(n_T=28\) (the census's 284 range queries per unit gave \(n_T=27\); the exporter's
+352 come from two one-sided checks per non-power-of-two range and the materialised query wires).
+
+### 12.2 Linkage and public endpoints as linear constraints **[proposal, implemented]**
+
+Every claim the verifier is left with after the GKRs is a linear functional of \(X\) (section 4.3 layout rule:
+input claims, lookup leaf claims). The chain adds \(U+2B\) more, all with **public** coefficients:
+
+\[
+X[(v,0),\,c]=0,\qquad X[(v,i),\,c]-X[(v,i-1),\,y]=0\ (1\le i<96),\qquad
+X_{\mathrm{epi}}[v,\,y32]-X[(v,95),\,y]=0,\qquad X_{\mathrm{epi}}[v,\,y16]=\mathrm{word}_v .
+\]
+
+They are combined with geometric coefficients \(\rho_{\mathrm{geo}}^k\) (\(k\) the constraint index) into one
+functional, which is batched with the \(2\cdot2+5\) GKR/lookup functionals by fresh \(\rho_f\) and opened once
+(section 3, `ligero::prove_open`). Transcript: the \(\rho_f\) and \(\rho_{\mathrm{geo}}\) are drawn after the last
+GKR message; the public words are absorbed into the transcript before any challenge (they are part of the
+statement). Soundness **[derivation]**: if any linkage or endpoint constraint fails, the combined value is a
+nonzero polynomial of degree \(<U+2B\) in \(\rho_{\mathrm{geo}}\): error \((U+2B-1)/|F_c|=2^{-173.4}\) at
+\(B=4096\) over \(F_{p^3}\), plus \(1/|F_c|\) for its batching coefficient; the Ligero linear test then binds the
+batched functional to the committed rows as before (the `encoding_opening` term is unchanged). Committing the
+words twice (as `y` of unit \(i\) and `x.c` of unit \(i+1\)) is what makes the linkage linear; a state-chained
+variant (pass \((s,e,M)\)) would save the decode/pack of the word (\(\approx4\%\), section 1) but is not what
+`step.py` composes and is not built.
+
+**Endpoints.** \(c_0=0\) is a constraint with constant 0 (no committed constant column is needed); the output words
+are verifier inputs (\(B\) sixteen-bit words) and the only witness-independent data besides the circuits and the
+batch shape. A `vu-k1536-neg` instance is a *claimed* word: with honest hints the epilogue's \(y16\) column must
+equal the cast of \(c_{96}\) (assertion `y16`) **and** the public word (endpoint constraint), so the prover has no
+accepting witness; an out-of-domain negative (non-finite operand, saturated intermediate) is rejected by the
+unit circuit's range checks (`acc.t < 255`, `a[i].t < 255`) or already by `gen_step`/`check_step` at witness
+generation.
+
+### 12.3 Depth, rounds, what changed in the transcript
+
+`rounds.sequential_depth` \(=1+\max(\text{lookup chain},\text{checker chain})+2\) (message 2a; the Ligero \(r\)
+and \(Q\) coins; the batching coefficients ride on the \(r\) message). At \(B=4096\): lookup chain 435 (\(n_T=28\)),
+checker chain 243 → **438**; the linkage adds no round trip. `rounds.protocol` grows by the epilogue segment's
+sumcheck slots and by \(2\cdot2+5+1+1=11\) batching coins. Sharding `R16` (\(s=1\), section 5.4) would return
+\(n_T\) to 27 (depth 409) for \(+65\,536\) committed multiplicities; not done.
+
+### 12.4 Checkpoint interval \(m\): cost model (no measured points; 12.5 has the measured \(m=1\))
+
+\(m\) = units between committed words (\(m=1\): every word committed = design (b); \(m=96\): design (a)).
+Strict layering (libzk 6.3) carries every value of lower depth, so a sub-chain of \(m\) units is a layer of width
+\(m\times826\); copies \(=U/m\). **[derivation, cost model of section 9.4]**
+
+| \(m\) | committed / VU | checker layers | copies (\(b\)) | width / layer | rounds / layer | checker depth | wire evaluations | phase-1 tables |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 44 937 | 6 | 393 216 (19) | 826 | 40 | 243 | 1.95G | 15.6 GB |
+| 2 | 44 841 | 12 | 196 608 (18) | 1 652 | 41 | 495 | 3.90G | 15.6 GB |
+| 4 | 44 793 | 24 | 98 304 (17) | 3 304 | 42 | 1 011 | 7.80G | 15.6 GB |
+| 8 | 44 769 | 48 | 49 152 (16) | 6 608 | 43 | 2 067 | 15.6G | 15.6 GB |
+| 16 | 44 757 | 96 | 24 576 (15) | 13 216 | 44 | 4 227 | 31.2G | 15.6 GB |
+| 32 | 44 751 | 192 | 12 288 (14) | 26 432 | 45 | 8 643 | 62.4G | 15.6 GB |
+| 96 | 44 747 | 576 | 4 096 (12) | 79 296 | 47 | 27 075 | 187G | 15.6 GB |
+
+Committed elements move by \(<0.5\%\); prover work and depth grow linearly in \(m\). No point of the sweep
+changes the picture, so none is implemented; the recorded runs of 12.5 are all \(m=1\).
+
+### 12.5 Recorded runs
+
+vy-cpu2, 12 threads, PCS mode **[measured]**: B=64 r20260922-053451-03f9 (6.33 s, depth 279); B=4096
+r20260922-055358-9f6b (headline, commit 2229c4b): prove 297.6 s, verify 33.0 s, 69.6 MB, `rounds.protocol` 1923,
+`rounds.sequential_depth` **438** (the 12.3 prediction), peak RSS 33.9 GB, 184,128,575 committed elements, all 4096
+recorded words accepted; first B=4096 run r20260922-053757-3b76 (293.4 s, overlapped a duplicate launch).
+Negatives: `vu-k1536-neg` 52/52 rejected (8 at witness generation, 44 by the verifier; r20260922-054550-62b1),
+transition-unit `fixtures/negatives` 52/52 rejected (r20260922-055135-ed34). Table, labels and the per-unit
+comparison: `README.md` "Full VU runs".
+
+## 13. BabyBear instantiation (implemented 2026-09-22, lane a-babybear; `--features babybear`)
+
+The same protocol (sections 1–4, 12) over the trace field \(F_t=\) BabyBear \(p=2^{31}-2^{27}+1=2\,013\,265\,921\)
+with the challenge field \(F_c=F_p[X]/(X^6-22)\) (\(|F_c|\approx2^{185.4}\)). Nothing in the relation changes
+(section 1); the *embedding* of the 109 WP2 predicates into a 31-bit field does (13.2), and the field forces three
+byte-level protocol changes (13.4). The Goldilocks build (`field.rs`) is untouched: `src/field_babybear.rs` exposes
+the same `Fp`/`Ext` API and `#[path]`-swaps in behind the feature; `gkr.rs`, `logup.rs`, `ligero.rs`, `transcript.rs`
+and `main.rs` are field-generic (constants `field::{P, DEGREE, NAME, EXT_NAME, DOMAIN, FIXTURES}`, `Fp::BYTES`,
+`Fp::rejection_sample`, `Fp::root_of_unity`).
+
+### 13.1 Field and extension **[source: `tensor/reference.py`, `field_babybear.rs` tests]**
+
+| | Goldilocks (sections 2, 12) | BabyBear (this section) |
+|---|---|---|
+| \(p\) | \(2^{64}-2^{32}+1\) | \(2^{31}-2^{27}+1\); \(p-1=2^{27}\cdot3\cdot5\), two-adicity 27 (RS length up to \(2^{27}\); \(n=2^{14}\) used) |
+| base element | canonical `u64`, 8 bytes LE | canonical `u32` in \([0,p)\), **4 bytes LE** |
+| extension | \(X^3-X-1\), degree 3 | \(X^6-22\), degree 6; 22 is the smallest non-square non-cube of \(F_p\) (\(2,3\mid p-1\), so \(X^6-w\) is irreducible iff \(w\) is neither: `tests::w_is_the_smallest_non_square_non_cube`), the polynomial `backends/gkr/tensor/reference.py` (`_find_w()`) and the a-gpu lane use, so the two provers agree coordinate by coordinate |
+| extension element | \((c_0,c_1,c_2)\), 24 bytes | \((c_0,\dots,c_5)\), \(x=\sum c_iX^i\), **24 bytes** (6 × 4): the same proof-message size |
+| multiplication | schoolbook + reduction by \(X^3=X+1\) | schoolbook (36 base products, `u128` accumulation, one reduction) + \(X^6=22\) |
+| generator / roots of unity | 7 | 31 (\(31^{(p-1)/2}=-1\), \(31^{(p-1)/3}\neq1\), \(31^{(p-1)/5}\neq1\)); \(\omega_{2^k}=31^{15(2^{27-k})}\) |
+| challenge sampling | 8-byte words of the SHA-256 digest, reject \(\ge p\) | 4-byte words of the digest, reject \(\ge p\) (rejection rate \(1-p/2^{32}=6.25\%\)); 6 coordinates per challenge, each its own digest (`ctr` increments per coordinate) |
+
+Unit tests pin `Fp`/`Ext` against values generated by `tensor/reference.py` (`ext_mul_matches_reference_py`,
+`field_basics_against_python`, `roots_of_unity`).
+
+### 13.2 Where the six rules land in the circuit export (`gkr_export.babybear`, `--field babybear`) **[implemented]**
+
+`note:r20-proof/red-team-babybear/20260922T0605Z-report-babybear-rules` derives the rules from the predicate intervals; the exporter realises each as columns, gates and
+lookups of the layered circuit. `BabyBearCircuitCtx` is `CircuitCtx` with the window discipline: a range
+\([lo,hi)\) of \(n\) values that is not a power of two is two one-sided \(w\)-bit chunk checks (\(x-lo\) and
+\(hi-1-x\)), **sound iff \(2^{w+1}-n\le p\)** (an \(x-lo=t\in[n,2^w)\) makes \(hi-1-x\) read as
+\(p-(t-n+1)\ge p-(2^w-n)\ge2^w\)) — a range without a sound form is refused at export time, none occurs in the unit.
+
+| rule | predicate(s) | in the circuit | census effect per unit |
+|---|---|---|---|
+| **LIMB16** | `fp32_decode.acc.word`, `pack.y`, `epilogue.cast.split` | the word columns `x.c`, `y` (unit) and `y32` (epilogue) become limb pairs `_lo`/`_hi` (public, 16-bit ranged); hints `acc.f_lo/f_hi` (16 + 7 bit) and `pack.low_lo/low_hi` replace the 23-/32-bit identities by per-limb identities; the epilogue's `hi`/`lo` hints *are* the limbs (−2 hints, −1 identity, −2 ranges) | +4 hint columns, +2 public columns; chain linkage is per limb (`Chain.limbs`, 13.3) |
+| **LT_DIRECT** | `align_state.rem/quot`, `align_prod.rem/quot`, `lead.window` | the variable bound \(x<2^B/\mathrm{pow}\) is `rng(bnd - 1 - x, 0, 2^B)` against the table's bound column (POW `ipow`, ALIGN `isr`, LEAD's **new column `span`**: LEAD is 4 columns) on a *linear* wire; no product wire | −36 product wires (the `lt_pow` products), +1 LEAD column; the 25/30-bit ranges are two 16-bit chunks each |
+| **QUOT_TIGHT** | `align_state.quot`, `align_prod.quot` | the quotient's direct bound keeps \(q\cdot\mathrm{pow}+r<2^B<p\): the division identity is an in-window identity, no extra column | 0 |
+| **NORM_MBND** | `norm.div` | NORM gains column `mbnd = 2^30 / div`; `rng(mbnd - 1 - M', 0, 2^30)` per group (two 16-bit chunks) | +1 NORM column, +2 groups × 1 range |
+| **NORM_VBND** | — | redundant given `leading_bit` (z3): the 5-column NORM table of the embedding loses `vbnd` in the export (`BabyBearCircuitCtx.lookup`) | 0 |
+| **V_PREMISE** | `lead.window`, `norm.div` | no gate: \(v\) is the signed-sum wire, a linear form of range-checked hints with \(|v|\le s_{\max}<2^{29.1}\); `leading_bit`/`normalise` are stated for \(v\in[0,s_{\max}]\). The battery adapter's *gadget-only* circuits emit the premise as an explicit range (`premise.v`, sound by the criterion above) | 0 |
+
+**Census** (`fixtures/babybear/manifest.json` vs `fixtures/manifest.json`, per transition unit):
+
+| | Goldilocks | BabyBear |
+|---|---|---|
+| committed columns | 468 | **444** (+6 limb/hint columns, −30 materialised `lt_pow` query wires) |
+| wires | 826 | 766 |
+| product wires (mul) | 358 | **322** |
+| assertions (lin) | 353 | 322 |
+| lookup queries | 374 | **382** (R16 139, R14 10, R9 36, R8 137, R7 38; ALIGN 16, POW 2, LEAD 2, NORM 2) |
+| tables | POW 3×512, ALIGN 4×512, LEAD 3×31, NORM 4×32, R7…R16 | POW 3×512, ALIGN 4×512, **LEAD 4×31, NORM 5×32**, R7…R16 |
+| checker layers / max depth | 6 / 4 | 6 / 4 |
+
+(The brief's 358/137/306 were the census estimate's mul/lin/lookups; the exporter's Goldilocks circuit is 358 /
+353 / 374 because every non-power-of-two range is two chunks and query wires are materialised, section 12.1.)
+
+**Range tables (soundness fix, both fields).** The exporter used to check a \(w<16\)-bit range as the single
+`R16` query \(y\cdot2^{16-w}\). That is **forgeable in any prime field**: for every \(r<2^{16}\) the element
+\(y=(r+kp)/2^{16-w}\) with \(k\equiv-rp^{-1}\pmod{2^{16-w}}\) satisfies \(y\cdot2^{16-w}\equiv r\) and lies in
+\([p/2^{16-w},p)\), far outside \([0,2^w)\) (Goldilocks: \(y=p-(p-1)/2^{15}\) passes a bit check). Sub-16-bit ranges
+now query the exact-width **implicit tables `R<w>`** = \([0,2^w)\) (R7, R8, R9, R14 in the unit; materialised by
+`circuit.rs` like `R16`, narrowest first after the declared tables). The query count is unchanged (a chunk is a
+chunk); the number of logUp instances grows from 5 to **9**, each small table adding a lookup sumcheck over
+\(2^{\lceil\log_2(N+2^w)\rceil}\) leaves. The Goldilocks circuit was regenerated with the fix (commit 445cbca); its
+numbers in section 12.5 / README predate it and are re-measured in 13.5.
+
+### 13.3 Chain linkage per limb **[implemented]**
+
+Section 12.2's functional links one word column per unit. Over BabyBear a word is two limbs, so `Chain.limbs` holds
+\([\,c,\;y,\;y32\,]\) column triples per limb (`x.c_lo/y_lo/y32_lo`, `x.c_hi/y_hi/y32_hi`) and every constraint of
+12.2 is stated per limb with its own geometric coefficient: \(c_{v,0}^{(\ell)}=0\), \(c_{v,i}^{(\ell)}=y_{v,i-1}^{(\ell)}\),
+\(y32_v^{(\ell)}=y_{v,95}^{(\ell)}\), then \(y16_v=\) the public word. Linkage constraints per VU: \(2\cdot(96+1)+1=195\)
+(Goldilocks 98). A "+p shadow" accumulator (the battery's `chain` class) has no limb form: the limbs of unit \(i+1\)'s
+incoming word *are* unit \(i\)'s outgoing limbs, and unit \(i+1\)'s decode hints must match them.
+
+### 13.4 Protocol changes forced by the field (each byte-exact in `fixtures/babybear-transcripts/README.md`)
+
+1. **Transcript domain** `verity-gkr/candidate-a/babybear6/v1` (Goldilocks: `verity-gkr/candidate-a/v1`).
+2. **Base-field serialisation is 4 bytes LE** everywhere a base element is absorbed or sent: the public `y16`
+   words in the preamble, the opened Ligero columns (\(\text{rows}\times4\) bytes per column before the Merkle path),
+   Merkle leaves (SHA-256 of the column's 4-byte values). Extension elements are 6 × 4 bytes, \(c_0\) first.
+3. **Challenge squeeze** reads 4-byte words (13.1); one challenge = 6 squeezes.
+
+Everything else — message order, round polynomials (degree 3 for logUp and phase 1, degree 2 for phases 2a/2b),
+the batching functional, `open_set` (column index = \(c_0 \bmod n\) of a fresh challenge, repeats skipped) — is
+the Goldilocks protocol verbatim, **except** the logUp sumcheck variable order: the GPU prover since a-gpu2 binds
+the low bit first (4.2, "Variable order"), the Goldilocks crate the top bit first. Not forced by the field (a
+kernel-layout choice of `packed/`), but a transcript change all the same.
+
+### 13.5 Ligero parameters and soundness at \(2^{-128}\) **[derivation: `security.accounting`]**
+
+Ligero over the 31-bit trace field with the section-3 tableau: \(k=4096\), \(n=16\,384\) (rate 1/4, RS over the
+\(2^{14}\)-th roots of unity: \(\omega=31^{15\cdot2^{13}}\)), \(t=192\) opened columns — **the Goldilocks parameters
+unchanged**: the query terms \((1-e/n)^t,((k+l)/n)^t,(2k/n)^t\) do not depend on the field, and the field terms
+\((n+1)/|F_c|\) are \(2^{-171}\) at degree 6. `explore.fields.first_small_field_configuration` (census tables,
+\(K=1536\), \(B=4096\), \(2^{60}\) hash queries):
+
+| configuration | batching | sumcheck | lookup | encoding/opening (\(t=192\)) | commitment hash | **total** |
+|---|---|---|---|---|---|---|
+| Goldilocks, degree 3 (sections 9, 12) | \(2^{-180.1}\) | \(2^{-176.0}\) | \(2^{-158.3}\) | \(2^{-130.2}\) | \(2^{-136.0}\) | \(2^{-130.2}\) (\(2^{-127.7}\) with the chain functional's terms, README) |
+| **BabyBear, degree 6** | \(2^{-180.1}\) | \(2^{-176.0}\) | \(2^{-158.3}\) | \(2^{-130.2}\) | \(2^{-136.0}\) | **\(2^{-130.2}\)** (`note:r20-proof/tensor-cost/20260922T0450Z-report-tensor`'s first-configuration sweep: \(2^{-129.5}\)); label **\(2^{-128}\)** |
+| BabyBear, degree 4 | \(2^{-118.3}\) | \(2^{-114.2}\) | \(2^{-96.5}\) | \(2^{-109.6}\) | \(2^{-136.0}\) | \(2^{-96.5}\) at \(t=192\); `note:r20-proof/tensor-cost/20260922T0450Z-report-tensor`: \(2^{-81.4}\) at its first configuration — a \(2^{-80}\) point, not built |
+
+Degree 5 misses \(2^{-128}\) (lookup term \(\approx2^{-127}\), section 2). logUp's \(\mathrm{char}\,F>N\) (Hab22
+Lemma 5) holds for every table: the largest, `R16`, has \(139\cdot96\cdot4096+\text{epilogue chunks}+2^{16}\approx5.5\cdot10^7\)
+leaves at \(B=4096\) (\(n_T=26\); it was 28 before the R7–R14 chunks left `R16`, for both fields), \(<2^{31}\); the
+study's \(B=2^{20}\) failure point stands. The chain functional's Schwartz–Zippel term is \(195B/|F_c|<2^{-165}\).
+
+### 13.6 Recorded runs
+
+See `README.md` "BabyBear" (gate: `a-babybear.gate`; battery 83/83; measurements B = 64 / 4096 side by side with
+Goldilocks on the same binary revision) — filled in by the lane as the runs land.
+
+## 14. Checker v2 (lookup-centred arithmetisation; implemented 2026-09-22, lane a-v2; `--variant v2`)
+
+The relation is unchanged (`note:r20-proof/checker-min/20260922T0727Z-report-checker-min`: the checker-min lane's differential and negatives are the evidence
+that `checker.v2` accepts exactly the WP2 triples); what changes is the *shape* the prover sees. Exporter:
+`gkr_export.v2` (`build_unit_circuit_v2`, `build_epilogue_circuit_v2`, `chain_spec`, `export_circuit_v2`); the Rust
+side is the section-12 machinery with two additions — implicit tables (14.2) and a general link (14.3). Everything
+below is for K = 1536 (96 units of 16 products, two groups of 8) over Goldilocks; BabyBear is **not** instantiated
+(`state_decode` / `epilogue` are SAT as stated on 31-bit fields without the limb split, `note:r20-proof/red-team-babybear/20260922T0605Z-report-babybear-rules`).
+
+### 14.1 Shape **[derivation: `gkr_export.v2`; checked by `tests/gkr_export/test_v2_export.py`]**
+
+| | v1 (section 12) | v2 |
+|---|---|---|
+| committed columns / unit | 468 | **264** (4 incoming state, 32 operands, 4 outgoing state, 12 hints, 86 lookup outputs, 126 materialised keys) |
+| wires / unit; multiplicative depth | 826; 4 (6 checker layers) | 290; **1** (2 checker layers: every product feeds a key or an output assertion) |
+| products / lin / lookups per unit | 358 / 137 / 306 (census) | 26 / 9 / 86 (census 33 / 9 / 89: `state_decode`'s 3 mul / 4 lin / 5 lookups are gone — the state is chained, not decoded — Pack's 4 mul move to the epilogue; +2 one-sided halves per group of `attained`) |
+| lookups by table / unit | `R16` 352, `ALIGN` 16, `POW`/`LEAD`/`NORM` 2 | `T_OP` 32, `ALIGN4` 18, `SHIFT` 16, `SSHIFT_HI`/`LO` 2+2, `LEAD` 4, `LEADNORM` 2, `TNORM` 2, `R12` 4, `R4` 4 |
+| epilogue columns / wires | 9 / 11 | 16 / 22 (`Pack.check` on (s, e, M, z, ovf[g], sgn[g]) then `Epilogue.check`; 4 `R16` + 1 `R15`) |
+| fixed table rows / proof | 66 623 | **5 143 328** (`SHIFT` 3 538 944, `TNORM` 1 048 576, `SSHIFT_HI`/`LO` 221 184 each, `T_OP` 65 280, `LEAD` 32 768, `R16` 65 536, `R15` 32 768, `LEADNORM` 12 152, `R12` 4 096, `ALIGN4` 3 120, `R4` 16) |
+| linkage constraints / VU | 98 | **583** (14.3) |
+| committed elements / VU (B = 4096) | 44 937 + tables/B | 96·264 + 16 = **25 360** + tables/B |
+
+### 14.2 Tables: implicit, not committed **[decision]**
+
+A LogUp table is public data: the prover commits only its *multiplicities* (one column of |T| elements), and the
+verifier needs the table's rows only to evaluate the table-side multilinear at the final point (`logup.rs`:
+`Σ m_t/(z − t)` over the table leaves, an O(|T|) pass with no commitment). So the question "committed per proof or
+implicit" is really "listed row by row in `circuit.txt` or materialised from a definition": the *cost* is the same
+either way — |T| multiplicity elements in the Ligero payload and |T| table leaves in the fractional-sum tree — and
+only the circuit text (≈ 60 MB for `SHIFT` alone) and the verifier's evaluation differ. Decision: the four big
+tables are **implicit** (`itable NAME cols rows kind params`, `circuit.rs::materialise`; the small ones stay as
+rows):
+
+| table | rows | definition (`gkr_export.v2.implicit_table_header`) |
+|---|---|---|
+| `SHIFT` | 2^16 · 54 | `shift 16 10 54`: key \(x\cdot54+2d+s\mapsto(1-2s)\lfloor x\,2^{10}/2^{d}\rfloor\), \(x<2^{16}\), \(d<27\) |
+| `SSHIFT_HI` | 2^12 · 54 | `shift 12 13 54` |
+| `SSHIFT_LO` | 2^12 · 54 | `shift 12 1 54` |
+| `TNORM` | 2^15 · 32 | `tnorm 15 32 -7`: key \(v+2^{15}\,k\mapsto\lfloor v\,2^{k-7}\rfloor\), \(v<2^{15}\), \(k<32\) |
+
+Both conventions are cross-checked: the exporter spot-checks `checker.v2.tables` against a Python transcription of
+`materialise` before writing, and `circuit.rs`'s tests compare materialised rows with exported samples. Implicit
+tables are `dense` (key = row index): `Table::find` is an array index, no hash map, so witness generation is O(1)
+per query.
+
+What it costs: `SHIFT` contributes 3.54M table leaves next to \(16U=6.29\)M query leaves at B = 4096 (\(n_T=24\)
+against v1's `R16` at \(2^{28}\), \(n_T=28\): the lookup chain — and so the depth — *shortens*); at B = 64 the 5.1M
+fixed rows are 84 % of the leaves and 76 % of the committed elements. The **split-u `SHIFT` variant** of
+`note:r20-proof/checker-min/20260922T0727Z-report-checker-min` (two tables of 2^8·54) is the fallback if the fixed rows dominated at the target B; the
+measurements in 14.5 decide (they do not, at B = 4096). Multiplicity columns: `committed_elements` includes all
+5.14M per proof.
+
+### 14.3 Chain linkage: state instead of words **[proposal, implemented]**
+
+The v1 link is \(c_{v,i}=y_{v,i-1}\) on one column pair. In v2 the unit carries the *state* \((s,e,M,z)\) (sign,
+exponent, magnitude, zero flag) and the group saturation flags; there is no decoded word until Pack. `chain.txt`
+(`gkr_export.v2.write_chain`, `main.rs::read_chain`) has one line per link
+`link <in|-> <out> <epi> <init> <zero_nonlast>`; `Chain.limbs: Vec<Link>` generalises the two v1 links:
+
+| link | in → out (unit columns) | epilogue column | init at unit 0 | non-final units | constraints / VU |
+|---|---|---|---|---|---|
+| state ×4 | `x.s`←`y.s`, `x.e`←`y.e`, `x.M`←`y.M`, `x.z`←`y.z` | `s, e, M, z` | \((0,\ \mathrm{floor},\ 0,\ 1)\) = `zero_state` (the constant \(c_0=0\), no decode) | — | 4·(1 + 95 + 1) = 388 |
+| ovf ×2 | — (`g<g>.ovf`, the group's saturation flag) | `ovf[g]` | — | **must be 0** (a saturated intermediate accumulator is outside the VU's domain; the exporter refuses such a witness) | 2·(95 + 1) = 192 |
+| sgn ×2 | — (`g<g>.sgn`) | `sgn[g]` | — | — | 2 |
+| public word | — | `y16` | — | — | 1 |
+
+Total **583** per VU (v1: 98), \(2.39\)M at B = 4096 — still one linear functional with geometric coefficients,
+batched into the opening exactly as 12.2; Schwartz–Zippel term \(583B/|F_c|<2^{-163}\). The `zero_nonlast`
+constraints are what makes the chain *sound* against a prover who saturates mid-VU and un-saturates later: without
+them Pack would see only the last unit's flags.
+
+### 14.4 Security **[derivation: `security.accounting.account_candidate_a` on the exported shape]**
+
+Layers `(s_out=5, s_in=9, assertions)`, `(9, 9)`; the 12 tables of 14.1 with the exported query counts; Ligero
+\(n=16\,384,k=4096,l=4095,t=192\). **2^-127.71 at both B = 64 and B = 4096** (v1: 2^-127.7). The lookup term grows
+with |T| as the brief warned — `SHIFT` is the worst single lookup identity at B = 64 (\(2^{-169.2}\), \(N=98\,304,\
+|T|=3.54\)M) and `T_OP` at B = 4096 (\(2^{-166.4}\), \(N=12.6\)M) — but the lookup bucket is \(2^{-165}\) in total
+and the budget is set by the commitment hash (\(2^{-128}\)) and the Ligero query test (\(2^{-130.2}\)) as before.
+logUp's \(\mathrm{char}\,F>N\): the largest multiset is `T_OP` with \(32U+65\,280=12.6\)M leaves, far below
+\(2^{64}\).
+
+### 14.5 Recorded runs
+
+See `README.md` "Checker v2" — gate (`gkr.v2.gate`), `vu-k1536-neg`, and the B = 64 / 4096 measurements beside the
+v1 Goldilocks control on the same binary revision and box.
+
+### 14.6 Hand-off to `lane/a-gpu` (layer descriptors)
+
+* The unit circuit has **2 checker layers** (depth 1) instead of 6: the phase-1/2 kernels run 3× fewer sweeps; the
+  layer widths are 264 inputs → 290 wires (v1 468 → 826). Per-layer descriptors come from the same `circuit.txt`
+  format; nothing in the gate grammar changed.
+* **Lookups dominate the tree work**: 86 queries / unit into 10 tables (v1: 374 into 5). The trees are shallower
+  (\(n_T\le24\)) but there are twice as many; the 5.14M table-side leaves are a fixed per-proof cost (materialise
+  them on device from the `itable` parameters — `shift`/`tnorm` are one shift and one multiply per row — rather
+  than uploading 60 MB of rows).
+* `Table::find` is dense for implicit tables (key = index): witness generation for the lookup outputs is a gather.
+* The chain has 8 links (14.3), two of them with the `zero_nonlast` rule: the linkage functional is a strided
+  read of 12 columns (v1: 2) — still one O(U) pass.
+* Committed payload: 264 columns / unit + 16 / VU + 5.14M multiplicities; Ligero rows shrink proportionally
+  (see README for the measured `committed_elements`).
+* **Done (`lane/a-gpu-v2`, `gpu/DESIGN.md` §5b, `gpu/README.md` "Checker v2").**  The GPU prover runs this circuit
+  over BabyBear^6: full VU ×4096 in 5.73 s on the A100 (v1 same box 7.93 s; 109.1 M committed elements, depth 328,
+  24.4 GB), 4096/4096 accepted, 52/52 + 34/34 + 15/15 negatives rejected.  Over BabyBear the epilogue's word-form
+  Pack (14.2) is SAT as stated (`note:r20-proof/checker-min/20260922T0727Z-report-checker-min` 3.2); the GPU export uses `lane/b-air-v2`'s limb-form Pack + cast
+  (`gpu/v2/epilogue_limbs.py`: `M = M_hi8 2^16 + M_lo16`, high limb an expression, epilogue per limb as §13 LIMB16;
+  19 epilogue columns, `R8` added; same function over Z, `chain.txt` unchanged), z3 UNSAT directly over BabyBear;
+  the VU body's 14.x queries re-run with the BabyBear modulus are UNSAT (`notes-asset:campaigns/r20-proof/assets/a-gpu-v2/results/z3_babybear_v2.json`).
+
+## 15. Batched logUp over the table union (implemented 2026-09-22, lane a-logup-union; `--logup union`)
+
+**This is a protocol change to Candidate A's lookup argument and to nothing else.** The relation (`checker.v2`),
+the circuit export, the committed columns, the chain linkage and the Ligero opening are those of sections 12–14; only
+*how the lookups are proved* changes: the ten (v2: twelve, counting the epilogue's `R16`/`R15`) per-table
+fractional-GKR instances of section 4 become **one** instance over the union of the tables, every element tagged by
+its table. The per-table path stays the default; `--logup union` selects this section (the mode is part of the
+statement: the transcript absorbs `logup-union-v1` and the tagged table order before any challenge, so a per-table
+proof does not verify as a union proof or vice versa — `main.rs::tampered_proof_is_rejected`).
+
+Motivation (`note:r20-proof/a-fusion/20260922T0853Z-report-a-kernels-h100-v2`): on the H100 the ten v2 instances cost 221.6 ms sequential / 84.7 ms on
+ten streams against 35 ms modelled, "each instance pays ~14 ms of small-level latency"; one instance was estimated at
+25–35 ms but flagged as a protocol change that the accounting did not cover. This section covers it.
+
+### 15.1 Construction **[implemented: `logup.rs::union_*`, `main.rs::add_union_claim`]**
+
+Tables \(T_1,\dots,T_m\) (v2: \(m=12\); \(\sum_t|T_t| = 5\,245\,624\) rows — the sum of the row counts listed in
+14.1; the "5 143 328" total printed there is a miscount of the same list), columns \(c_t\le c_{\max}=3\). Tag
+\(\mathrm{tag}(t)=1+\text{index of }t\) in `Instance::tables()` order (segments' tables in order of first use,
+deduplicated), a base-field constant. One challenge message \((z,\beta,\gamma)\in F_c^3\) replaces the per-table
+\((z_T,\beta_T)\) messages; it is drawn **after the commitment** (the multiplicities are part of the committed vector
+\(X\), 12.1), at the point where the per-table coins were drawn (5.1 step 2a).
+
+Encoding: a vector \(w=(w_0,\dots,w_{c-1})\) with tag \(t\) becomes the field element
+\[\phi(w,t)=\sum_{k<c} w_k\,\beta^k+\gamma\,\mathrm{tag}(t).\]
+The instance is the ordinary fractional sum \(\sum_j \frac{1}{z-\phi(q_j,t_j)} - \sum_v \frac{m_v}{z-\phi(r_v,t_v)} = 0\)
+with leaves, in this order: for each segment (unit circuit, then epilogue) and each unit, its lookups in circuit
+order — \(p=1,\ q=z-\phi(\text{query},t)\); then for each table in tag order its rows —
+\(p=-m_v,\ q=z-\phi(r_v,t)\); padding \(p=0,q=1\) to \(2^n\), \(n=\lceil\log_2(N+|T|)\rceil\) with
+\(N=\sum_t N_t\) the total number of lookups. One \(\mu,\lambda\)-chain (section 4.3) of \(n\) levels, one leaf
+claim. The multiplicities are computed per table exactly as before (`union_multiplicities` is the per-table count
+with the tables walked once); the committed layout (\(X\) = segments then tables' multiplicities) is unchanged.
+
+The leaf claim is, as in 4.4, one linear functional of \(X\): the query leaves' \(q\) are affine in the committed
+columns with coefficients \(\lambda\,\mathrm{eq}(\rho,j)\,\beta^k\cdot\)(the query's linear form); the table leaves'
+\(p\) read the multiplicity column with coefficient \(-\lambda\,\mathrm{eq}(\rho,v)\); \(z-\gamma\,\mathrm{tag}(t)\)
+and the constant parts of the linear forms go to the public constant. It joins the batched opening
+(`add_union_claim`) in place of the per-table functionals: **one** functional instead of twelve.
+
+### 15.2 Soundness **[derivation: `security.accounting.logup_union_error`; pinned by `test_union_lookup_meets_2_to_minus_128_on_the_exported_v2_shape`]**
+
+Let \(A\) be the multiset of (query vector, tag) pairs the witness produces and \(B\) the multiset of (row, tag)
+pairs with the committed multiplicities (arbitrary field elements). The lookup constraint is \(A\subseteq\)
+rows-of-own-table, i.e. \(A=B\) for the honest \(m\). Suppose some query \(x=(w,t)\) is **not** a row of \(T_t\);
+then \(A(x)\ge1\) and \(B(x)=0\) whatever \(m\) is. Let \(S\) be the support of \(A\cup B\), \(|S|\le N+|T|\).
+
+* **Collision term** (the encoding is not injective at \(x\)): some \(y\in S,\ y\ne x\), has \(\phi(y)=\phi(x)\).
+  - *Same tag* \(t\): \(\phi(y)-\phi(x)=(w'-w)(\beta)\) is a nonzero polynomial of degree \(\le c_t-1\) in
+    \(\beta\); \(\le (c_t-1)/|F_c|\) per \(y\), at most \(N_t+|T_t|\) such \(y\).
+  - *Different tag* \(t'\): for every \(\beta\) exactly one \(\gamma=(w(\beta)-r(\beta))/(\mathrm{tag}(t')-\mathrm{tag}(t))\);
+    \(1/|F_c|\) per \(y\), at most \(N+|T|\) such \(y\). This is the brief's "\(n_{\text{rows}}\cdot n_{\text{tables}}/|F|\)"
+    with \(|S|\) counted once rather than per table: the union bound over the pairs \((x,y)\) with \(x\) fixed.
+  The accountant does not know which table the forged query targets, so it charges
+  \(\big(\max_t (N_t+|T_t|)(c_t-1) + (N+|T|)\big)/|F_c|\). **[derivation]**
+* **Identity term**: if \(\phi\) is injective at \(x\), the encoded multisets \(\phi(A),\phi(B)\) differ at
+  \(\phi(x)\) — count \(A(x)\ne0\) in \(F_c\), which needs \(\mathrm{char}\,F>N\) (Goldilocks: \(2^{64}>3.4\cdot10^7\);
+  BabyBear: \(2^{31}-2^{27}+1=2.01\cdot10^9>3.4\cdot10^7\), so the union does not break the characteristic
+  condition either) — so the cleared rational identity is a nonzero polynomial of degree \(\le N+|T|-1\) in \(z\)
+  (Haböck Lemma 5 with arbitrary \(m\)) vanishing at the conditioned \(z\) with probability
+  \(\le (N+|T|-1)/(|F_c|-|T|)\). This is the per-table identity term with the **new denominator count**:
+  \(N+|T|\) in one term instead of \(\sum_t\) of terms with \(N_t+|T_t|\) each — the same sum, so the bucket does
+  not grow (at B = 4096 over Goldilocks\(^3\): \(2^{-166.8}\) against per-table's twelve terms summing to
+  \(2^{-165.2}\)).
+* **Fractional GKR**: Proposition 1 over \(n=\lceil\log_2(N+|T|)\rceil\) levels (\(2^{-182.0}\) at \(n=26\)).
+* \(z\)-conditioning (5.1 step 2a) applies to the union: the redraw slots \(z^{(1)},z^{(2)}\) travel in the same
+  message as \(\beta,\gamma\) and the condition \(z\notin\{\phi(r_v,t_v)\}\) is computed from public data once the
+  message is known (no extra trip). Completeness: two rows of different tables that happen to collide under
+  \(\gamma\) add their multiplicities on both sides — no honest abort.
+
+Numbers on the exported v2 shape (`V2_EXPORT_TABLES`, 86 lookups/unit + 5 epilogue lookups/VU;
+`hash_queries = 2^60` as in the accounting tests):
+
+| | per-table (§14) | union (§15) |
+|---|---|---|
+| total, Goldilocks\(^3\), B = 4096 | \(2^{-130.16}\) (\(2^{-127.71}\) with the default hash budget) | **\(2^{-130.16}\)** (\(2^{-127.71}\)) — unchanged, set by Ligero + hash |
+| total, BabyBear\(^6\), B = 4096 | \(2^{-130.16}\) | **\(2^{-130.16}\)** |
+| lookup bucket, GL\(^3\) / BB\(^6\), B = 4096 | \(2^{-165.16}\) / \(2^{-158.60}\) | \(2^{-165.21}\) / \(2^{-158.65}\) |
+| union collision / identity / GKR, GL\(^3\), B = 4096 | — | \(2^{-165.8}\) / \(2^{-166.8}\) / \(2^{-182.0}\) |
+| \(N\), \(|T|\), \(n\) at B = 4096 | max per table: `T_OP` 12.6M + 65k, \(n_T\le24\) | 33 837 056 + 5 245 624 = 39.1M, \(n=26\) |
+| at B = 64 | \(n_T\le22\) (`SHIFT`) | 528 704 + 5 245 624 = 5.77M, \(n=23\) |
+
+**The union costs nothing in the bound at either field** (`meets(-128)` holds at B = 64 and 4096). The lane's
+stop condition ("if the union term breaks \(2^{-128}\), stop") is not triggered.
+
+### 15.3 Depth, rounds, verifier **[derivation: `rounds_and_depth_a`; measured `sequential_depth` in README]**
+
+* **Coins**: one 3-element message replaces \(\sum_t(1+[c_t>1])\) per-table coins; the round challenges of one
+  \(\mu,\lambda\)-chain of \(n\) levels replace twelve chains. `rounds.protocol` (coins) drops from 2825 to 448 at
+  B = 4096 (2029 → 361 at B = 64).
+* **Sequential depth**: the per-table chains run in parallel, so the per-table depth is the *deepest* table
+  (\(n_T=24\) at B = 4096); the union is one chain of \(n=26\) levels. Depth = \(1+\sum_{k=1}^{n-1}(k+1)\)
+  trips: 351 (union) vs 300 (per-table) at B = 4096, **+51**; 276 vs 253 at B = 64, **+23**. The checker chain
+  (v2: 2 layers) is far shorter, so the lookup chain is the critical path in both modes: `rounds.sequential_depth`
+  303 → 354 (B = 4096), 256 → 279 (B = 64). This is the honest cost of the union: two more levels of a
+  quadratic-depth chain. The 4.6 mitigations (variables-per-round, sharding) apply unchanged; sharding by table is
+  what the union undoes, so `table_shard_bits` is refused in union mode.
+* **Verifier**: draws \((z,\beta,\gamma)\) once; runs one fractional-GKR verification (\(n\) levels, one final
+  \((\rho,\lambda)\)); evaluates the table side \(\sum_v -m_v/(z-\phi(r_v,t_v))\) as one pass over the 5.2M tagged
+  rows (`check_leaves` in clear mode; the multiplicity functional in PCS mode) instead of twelve passes; checks one
+  leaf functional inside the batched opening. Work is the same O(N+|T|) as before, fewer fixed per-instance costs.
+* Proof bytes: twelve (root claim, \(n_T\) levels of sumcheck polynomials) become one of \(n\) levels, but the
+  opening dominates the proof: measured 3 152 048 → 2 992 520 B at B = 64 (0.95×) and 41 574 896 → 41 347 304 B at
+  B = 4096 (0.995×), README rows.
+
+### 15.4 GPU shape for `GraphLogUp` (hand-off: `note:r20-proof/a-logup-union/20260922T1033Z-handoff-handoff-union`)
+
+* Leaves \(2^n\), \(n=\lceil\log_2(N+|T|)\rceil\): **\(2^{26}\) at B = 4096** (39.1M live of 67.1M; 42 % padding),
+  \(2^{23}\) at B = 64 (5.77M of 8.39M). Layout as 15.1: segment 0's \(86\cdot 96B\) query leaves, the epilogue's
+  \(5B\), then the tables in tag order (`T_OP`, `ALIGN4`, `SHIFT`, `SSHIFT_HI`, `SSHIFT_LO`, `LEAD`, `LEADNORM`,
+  `TNORM`, `R12`, `R4`, `R16`, `R15` for the v2 export; the exact order is `Instance::tables()` = the transcript's
+  absorbed order), padding \((0,1)\).
+* Leaf kernels: query side — \(p=1\), \(q=z-\gamma\,\mathrm{tag}(t)-\sum_k\beta^k w_k\) with \(w\) a gather of
+  \(\le3\) committed columns (the linear forms of `circuit.txt`); table side — \(p=-m_v\), \(q\) from the row
+  materialised on device (`itable` parameters, 14.6) plus \(\gamma\,\mathrm{tag}(t)\). Both are embarrassingly
+  parallel; \(\beta^k\) and \(\gamma\,\mathrm{tag}(t)\) are 3 + 12 constants.
+* Tree: **one** fractional-sum tree of \(n\) levels and one \(\mu,\lambda\) sumcheck chain, i.e. the per-level
+  latency (~14 ms/instance on the H100 for the small levels) is paid once. The 12 multiplicity columns are
+  unchanged (already in \(X\)).
+* Transcript: after the Ligero root, `label("union logup over 12 tables: z, beta, gamma (tag(t) = 1 + table index)")`,
+  three `challenge()` calls in that order; then the segments' \((z_0,\gamma_{\text{copy}})\) points as before
+  (`start_transcript`).
+
+### 15.5 Red-team **[`redteam.logup_union`, `fixtures/redteam-3/logup-union/`, `tests/redteam/test_logup_union.py`]**
+
+* **Tagged-union forgery** (query into \(t\) explained by a row of \(t'\)): z3 over \(F_{1000003}\) with 3 tables,
+  free \(\gamma\) — UNSAT when \(\gamma\) is excluded from the finite collision set of 15.2, SAT only on it
+  (the found \(\gamma\) is in the set). The set has \(\le\) (bad queries) \(\times\) (foreign rows) elements.
+* **Multiplicity manipulation across the merged table**: with \(\gamma\) fixed outside the collision set the identity
+  at \(N+|T|+1\) points is a linear system in the committed \(m\) over \(F_p\) — UNSAT for *every* \(m\); on a
+  collision \(\gamma\) it is SAT with exactly the honest \(m\) plus one on the foreign row. So multiplicity freedom
+  buys the prover nothing beyond the collision term.
+* Fixtures: `cross_table/` (two tables sharing a column value; queries into \(T_A\) satisfied only by rows of
+  \(T_B\), and vice versa — must reject in both modes, `main.rs::redteam3_cross_table_fixtures`), and
+  `forged_epilogue_hint/` — **not a union attack**: the pre-fix `main.rs` proved lookups only for the tables of
+  segment 0, so the epilogue's `R16`/`R15` range checks had no logUp instance at all and any public word was
+  forgeable (`note:r20-proof/a-logup-union/20260922T0909Z-finding-redteam-urgent-epilogue-tables`; fixed in `Instance::new`, which now unions every segment's
+  tables; regression `v2_forged_public_word_via_epilogue_hint_is_rejected`).
+
+### 15.6 Recorded runs
+
+README "Batched logUp over the table union": gate r20260922-093758-9aac (17 cargo tests; 30 + 4 v2 negatives rejected
+in both modes), `vu-k1536-neg` r20260922-095946-5638 (52/52 in both modes), B = 64 r20260922-101533-20c4 and
+B = 4096 r20260922-102013-2931 / r20260922-102556-cdcc on vy-cpu with `LOGUP=both` — per-table and union on the same
+binary, box and instances. **CPU verdict: a wash** — union / per-table total 0.96× at B = 64, 1.08× at B = 4096
+(two-run mean; lookup bucket 0.90× / 1.11×), bytes 0.95× / 0.995×, coins 2525 → 642 / 3393 → 761, depth +23 / +51.
+The one \(2^{26}\) tree does 1.25× the leaf work of the twelve padded per-table trees at B = 4096; the union's case
+is the GPU's per-instance latency, to be measured by the GPU lanes (`note:r20-proof/a-logup-union/20260922T1033Z-handoff-handoff-union`).

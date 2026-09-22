@@ -25,6 +25,7 @@ from .gadgets import (
     Normalise,
     Pack,
     Product,
+    RescaleState,
     SignedSum,
     StateOut,
 )
@@ -67,8 +68,12 @@ def gen_step(p: Params, c: int, a: Sequence[int], b: Sequence[int]) -> dict:
         cands = [state[1]] + [e for _, _, e in group]
         hg["max"] = GroupMax.gen(p, cands)
         E, ds = GroupMax.check(ctx, p, cands, hg["max"])
-        hg["acc_align"] = AlignState.gen(p, state[2], ds[0])
-        q_acc = AlignState.check(ctx, p, state[2], ds[0], hg["acc_align"])
+        P = state[2]
+        if p.lossy:                                  # the FP8 adders: truncate the state to W bits first
+            hg["acc_rescale"] = RescaleState.gen(p, state[2])
+            P = RescaleState.check(ctx, p, state[2], hg["acc_rescale"])
+        hg["acc_align"] = AlignState.gen(p, P, ds[0])
+        q_acc = AlignState.check(ctx, p, P, ds[0], hg["acc_align"])
         hg["prod_align"] = [AlignProduct.gen(p, u, d) for (u, _, _), d in zip(group, ds[1:])]
         q_prods = [AlignProduct.check(ctx, p, u, d, hq) for (u, _, _), d, hq in zip(group, ds[1:], hg["prod_align"])]
         terms = [(state[0], q_acc)] + [(s, q) for (_, s, _), q in zip(group, q_prods)]
@@ -113,7 +118,12 @@ def check_step_expr(ctx, p: Params, c, a: Sequence, b: Sequence, h: dict):
         tag = f"g{g}"
         cands = [state[1]] + [e for _, _, e in group]
         E, ds = GroupMax.check(ctx, p, cands, hg["max"], f"{tag}.max")
-        q_acc = AlignState.check(ctx, p, state[2], ds[0], hg["acc_align"], f"{tag}.align_state")
+        P = state[2]
+        if p.lossy:
+            if "acc_rescale" not in hg:
+                raise Reject(f"{tag}.rescale_state: the lossy rescale hints are missing")
+            P = RescaleState.check(ctx, p, state[2], hg["acc_rescale"], f"{tag}.rescale_state")
+        q_acc = AlignState.check(ctx, p, P, ds[0], hg["acc_align"], f"{tag}.align_state")
         q_prods = [
             AlignProduct.check(ctx, p, u, d, hq, f"{tag}.align_prod[{i}]")
             for i, ((u, _, _), d, hq) in enumerate(zip(group, ds[1:], hg["prod_align"]))
@@ -196,9 +206,12 @@ def vu_output(p: Params, a: Sequence[int], b: Sequence[int]) -> int:
 
 
 def contracts(p: Params = REAL) -> list:
-    """Every gadget's contract at ``p``, in data-flow order."""
+    """Every gadget's contract at ``p``, in data-flow order (``RescaleState`` only when the adder is narrower than
+    the accumulator; ``Epilogue`` only when the operand format shares the accumulator's exponent width)."""
     return [
         Fp32Decode.contract(p), Bf16Decode.contract(p), Product.contract(p), GroupMax.contract(p),
+        *([RescaleState.contract(p)] if p.lossy else []),
         AlignState.contract(p), AlignProduct.contract(p), SignedSum.contract(p), LeadingBit.contract(p),
-        Normalise.contract(p), StateOut.contract(p), Pack.contract(p), Epilogue.contract(p),
+        Normalise.contract(p), StateOut.contract(p), Pack.contract(p),
+        *([Epilogue.contract(p)] if p.acc_exp == p.exp else []),
     ]

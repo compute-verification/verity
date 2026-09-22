@@ -1,0 +1,75 @@
+22 passed in 29.04s
+t=2^21= 2097152 deg=6  round    5.097 ms  matmul    1.372 ms  hadamard    2.025 ms  graphed    4.894 ms  MACs 1.208e+10 (pad x1.31)  frac(matmul) 0.0282  frac(tensor) 0.0126
+      gpu kernels: chunk_sum 21us  gpu_busy 4953us  hadamard 404us  matmul 1366us  matmul.fold 1189us  matmul.inner 176us  other 219us  reduce 424us  simt.other 2520us  tensor_bucket 4549us  [121 kernels]  frac(kernel.matmul) 0.0284
+t=2^20= 1048576 deg=6  round    4.350 ms  matmul    1.044 ms  hadamard    1.154 ms  graphed    2.626 ms  MACs 6.040e+09 (pad x1.31)  frac(matmul) 0.0185  frac(tensor) 0.0061
+      gpu kernels: chunk_sum 21us  gpu_busy 2644us  hadamard 243us  matmul 697us  matmul.fold 604us  matmul.inner 93us  other 116us  reduce 207us  simt.other 1360us  tensor_bucket 2401us  [121 kernels]  frac(kernel.matmul) 0.0278
+t=2^19=  524288 deg=6  round    3.991 ms  matmul    0.775 ms  hadamard    0.839 ms  graphed    1.717 ms  MACs 3.020e+09 (pad x1.31)  frac(matmul) 0.0125  frac(tensor) 0.0031
+      gpu kernels: chunk_sum 25us  gpu_busy 1722us  hadamard 150us  matmul 436us  matmul.fold 376us  matmul.inner 60us  other 70us  reduce 119us  simt.other 921us  tensor_bucket 1572us  [121 kernels]  frac(kernel.matmul) 0.0222
+t=2^18=  262144 deg=6  round    3.912 ms  matmul    0.703 ms  hadamard    0.786 ms  graphed    1.044 ms  MACs 1.510e+09 (pad x1.31)  frac(matmul) 0.0069  frac(tensor) 0.0015
+      gpu kernels: chunk_sum 26us  gpu_busy 1045us  hadamard 96us  matmul 234us  matmul.fold 200us  matmul.inner 35us  other 42us  reduce 69us  simt.other 577us  tensor_bucket 949us  [121 kernels]  frac(kernel.matmul) 0.0207
+t=2^17=  131072 deg=6  round    3.906 ms  matmul    0.623 ms  hadamard    0.778 ms  graphed    0.713 ms  MACs 7.550e+08 (pad x1.31)  frac(matmul) 0.0039  frac(tensor) 0.0008
+      gpu kernels: chunk_sum 26us  gpu_busy 713us  hadamard 67us  matmul 127us  matmul.fold 106us  matmul.inner 21us  other 32us  reduce 42us  simt.other 419us  tensor_bucket 646us  [121 kernels]  frac(kernel.matmul) 0.0190
+t=2^16=   65536 deg=6  round    3.929 ms  matmul    0.598 ms  hadamard    0.787 ms  graphed    0.534 ms  MACs 3.775e+08 (pad x1.31)  frac(matmul) 0.0020  frac(tensor) 0.0004
+      gpu kernels: chunk_sum 26us  gpu_busy 539us  hadamard 43us  matmul 83us  matmul.fold 69us  matmul.inner 14us  other 27us  reduce 22us  simt.other 338us  tensor_bucket 496us  [121 kernels]  frac(kernel.matmul) 0.0145
+t=2^15=   32768 deg=6  round    3.882 ms  matmul    0.581 ms  hadamard    0.751 ms  graphed    0.454 ms  MACs 1.887e+08 (pad x1.31)  frac(matmul) 0.0010  frac(tensor) 0.0002
+      gpu kernels: chunk_sum 25us  gpu_busy 455us  hadamard 41us  matmul 61us  matmul.fold 50us  matmul.inner 11us  other 14us  reduce 15us  simt.other 299us  tensor_bucket 414us  [121 kernels]  frac(kernel.matmul) 0.0099
+t=2^14=   16384 deg=6  round    3.861 ms  matmul    0.566 ms  hadamard    0.760 ms  graphed    0.404 ms  MACs 9.437e+07 (pad x1.31)  frac(matmul) 0.0005  frac(tensor) 0.0001
+      gpu kernels: chunk_sum 21us  gpu_busy 402us  hadamard 39us  matmul 43us  matmul.fold 35us  matmul.inner 8us  other 12us  reduce 12us  simt.other 276us  tensor_bucket 363us  [121 kernels]  frac(kernel.matmul) 0.0070
+t=2^13=    8192 deg=6  round    3.875 ms  matmul    0.550 ms  hadamard    0.762 ms  graphed    0.391 ms  MACs 4.719e+07 (pad x1.31)  frac(matmul) 0.0003  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 19us  gpu_busy 383us  hadamard 39us  matmul 40us  matmul.fold 34us  matmul.inner 6us  other 11us  reduce 10us  simt.other 265us  tensor_bucket 345us  [121 kernels]  frac(kernel.matmul) 0.0038
+t=2^12=    4096 deg=6  round    3.835 ms  matmul    0.535 ms  hadamard    0.761 ms  graphed    0.378 ms  MACs 2.359e+07 (pad x1.31)  frac(matmul) 0.0001  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 21us  gpu_busy 388us  hadamard 39us  matmul 40us  matmul.fold 34us  matmul.inner 6us  other 10us  reduce 9us  simt.other 270us  tensor_bucket 349us  [121 kernels]  frac(kernel.matmul) 0.0019
+t=2^11=    2048 deg=6  round    3.800 ms  matmul    0.522 ms  hadamard    0.747 ms  graphed    0.375 ms  MACs 1.180e+07 (pad x1.31)  frac(matmul) 0.0001  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 19us  gpu_busy 377us  hadamard 38us  matmul 39us  matmul.fold 34us  matmul.inner 6us  other 10us  reduce 8us  simt.other 262us  tensor_bucket 339us  [121 kernels]  frac(kernel.matmul) 0.0010
+t=2^10=    1024 deg=6  round    3.832 ms  matmul    0.535 ms  hadamard    0.757 ms  graphed    0.378 ms  MACs 5.898e+06 (pad x1.31)  frac(matmul) 0.0000  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 18us  gpu_busy 371us  hadamard 36us  matmul 39us  matmul.fold 34us  matmul.inner 6us  other 10us  reduce 8us  simt.other 259us  tensor_bucket 334us  [121 kernels]  frac(kernel.matmul) 0.0005
+t=2^9=     512 deg=6  round    3.846 ms  matmul    0.531 ms  hadamard    0.762 ms  graphed    0.370 ms  MACs 2.949e+06 (pad x1.31)  frac(matmul) 0.0000  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 17us  gpu_busy 369us  hadamard 33us  matmul 39us  matmul.fold 34us  matmul.inner 6us  other 9us  reduce 8us  simt.other 262us  tensor_bucket 336us  [121 kernels]  frac(kernel.matmul) 0.0002
+t=2^8=     256 deg=6  round    3.807 ms  matmul    0.523 ms  hadamard    0.745 ms  graphed    0.372 ms  MACs 1.475e+06 (pad x1.31)  frac(matmul) 0.0000  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 17us  gpu_busy 366us  hadamard 32us  matmul 38us  matmul.fold 32us  matmul.inner 6us  other 9us  reduce 8us  simt.other 262us  tensor_bucket 334us  [121 kernels]  frac(kernel.matmul) 0.0001
+t=2^7=     128 deg=6  round    3.813 ms  matmul    0.521 ms  hadamard    0.747 ms  graphed    0.372 ms  MACs 7.373e+05 (pad x1.31)  frac(matmul) 0.0000  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 17us  gpu_busy 365us  hadamard 32us  matmul 36us  matmul.fold 31us  matmul.inner 5us  other 10us  reduce 8us  simt.other 262us  tensor_bucket 334us  [121 kernels]  frac(kernel.matmul) 0.0001
+t=2^6=      64 deg=6  round    3.817 ms  matmul    0.532 ms  hadamard    0.754 ms  graphed    0.367 ms  MACs 3.686e+05 (pad x2.02)  frac(matmul) 0.0000  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 17us  gpu_busy 357us  hadamard 31us  matmul 36us  matmul.fold 31us  matmul.inner 5us  other 9us  reduce 8us  simt.other 256us  tensor_bucket 326us  [121 kernels]  frac(kernel.matmul) 0.0000
+t=2^5=      32 deg=6  round    4.089 ms  matmul    0.781 ms  hadamard    0.755 ms  graphed    0.388 ms  MACs 1.843e+05 (pad x3.74)  frac(matmul) 0.0000  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 17us  gpu_busy 376us  hadamard 31us  matmul 36us  matmul.fold 31us  matmul.inner 5us  other 20us  reduce 6us  simt.other 266us  tensor_bucket 345us  [133 kernels]  frac(kernel.matmul) 0.0000
+t=2^4=      16 deg=6  round    4.075 ms  matmul    0.780 ms  hadamard    0.756 ms  graphed    0.388 ms  MACs 9.216e+04 (pad x7.49)  frac(matmul) 0.0000  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 17us  gpu_busy 379us  hadamard 31us  matmul 36us  matmul.fold 31us  matmul.inner 5us  other 20us  reduce 6us  simt.other 269us  tensor_bucket 348us  [133 kernels]  frac(kernel.matmul) 0.0000
+t=2^3=       8 deg=6  round    4.035 ms  matmul    0.773 ms  hadamard    0.744 ms  graphed    0.387 ms  MACs 4.608e+04 (pad x14.98)  frac(matmul) 0.0000  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 17us  gpu_busy 378us  hadamard 31us  matmul 36us  matmul.fold 31us  matmul.inner 6us  other 20us  reduce 6us  simt.other 268us  tensor_bucket 347us  [133 kernels]  frac(kernel.matmul) 0.0000
+t=2^2=       4 deg=6  round    4.034 ms  matmul    0.773 ms  hadamard    0.745 ms  graphed    0.386 ms  MACs 2.304e+04 (pad x29.96)  frac(matmul) 0.0000  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 17us  gpu_busy 379us  hadamard 31us  matmul 37us  matmul.fold 31us  matmul.inner 6us  other 20us  reduce 6us  simt.other 269us  tensor_bucket 348us  [133 kernels]  frac(kernel.matmul) 0.0000
+t=2^1=       2 deg=6  round    3.789 ms  matmul    0.781 ms  hadamard    0.544 ms  graphed    0.324 ms  MACs 1.152e+04 (pad x59.91)  frac(matmul) 0.0000  frac(tensor) 0.0000
+      gpu kernels: chunk_sum 15us  gpu_busy 310us  matmul 34us  matmul.fold 28us  matmul.inner 6us  other 18us  reduce 6us  simt.other 237us  tensor_bucket 310us  [129 kernels]  frac(kernel.matmul) 0.0000
+t=2^22= 4194304 deg=1  round    4.972 ms  matmul    2.618 ms  hadamard    0.573 ms  graphed    3.706 ms  MACs 2.684e+09 (pad x2.90)  frac(matmul) 0.0033  frac(tensor) 0.0020
+      gpu kernels: chunk_sum 20us  gpu_busy 3703us  matmul 1913us  matmul.fold 1780us  matmul.inner 133us  other 87us  reduce 832us  simt.other 850us  tensor_bucket 3703us  [69 kernels]  frac(kernel.matmul) 0.0045
+t=2^20= 1048576 deg=1  round    2.799 ms  matmul    1.103 ms  hadamard    0.567 ms  graphed    0.989 ms  MACs 6.711e+08 (pad x2.90)  frac(matmul) 0.0020  frac(tensor) 0.0010
+      gpu kernels: chunk_sum 20us  gpu_busy 993us  matmul 472us  matmul.fold 437us  matmul.inner 35us  other 36us  reduce 211us  simt.other 254us  tensor_bucket 993us  [69 kernels]  frac(kernel.matmul) 0.0046
+_int_mm 8192^3: 14.536 ms  37.8 T MAC/s  frac 0.12122290179678198
+_int_mm 4096^3: 1.940 ms  35.4 T MAC/s  frac 0.11355584668058248
+_int_mm (48, 32768, 96): 1547.0 us  0.10 T MAC/s  frac 0.0003128284713602327
+_int_mm (48, 131072, 96): 6107.1 us  0.10 T MAC/s  frac 0.00031697880764932837
+_int_mm (2097152, 48, 48): 776.9 us  6.22 T MAC/s  frac 0.019933199436152325
+_int_mm (2097152, 48, 96): 786.7 us  12.28 T MAC/s  frac 0.039373399525473064
+_int_mm (24, 32768, 24): 1545.1 us  0.01 T MAC/s  frac 3.915377164350512e-05
+inner chunk loop half=1048576 chunk=32768: 48875.0 us, 32 launches, 1527.3 us/launch, frac 0.0003168627759691113
+inner chunk loop half=1048576 chunk=131072: 48723.5 us, 8 launches, 6090.4 us/launch, frac 0.00031784795393715416
+inner chunk loop half=65536 chunk=32768: 3087.8 us, 2 launches, 1543.9 us/launch, frac 0.00031346714422452604
+inner chunk loop half=65536 chunk=131072: 3079.6 us, 1 launches, 3079.6 us/launch, frac 0.00031430426505560084
+{
+ "kernel.matmul_only": 0.01548106139117162,
+ "kernel.tensor_bucket": 0.004211160720198093,
+ "kernel.gpu_busy": 0.003909481387309759,
+ "model_equivalent.kernel.matmul_only": 0.03994115797880614,
+ "model_equivalent.kernel.tensor_bucket": 0.010864799986872583,
+ "model_equivalent.kernel.gpu_busy": 0.010086466926278612,
+ "model_equivalent.round_graphed": 0.010082771476723665,
+ "matmul_only": 0.0046013146477040376,
+ "tensor_bucket": 0.0010893013530674834,
+ "round_total": 0.0008692119776422138,
+ "round_graphed": 0.00390804904322353,
+ "model_equivalent.tensor_bucket": 0.0028103988693053638,
+ "model_equivalent.matmul_only": 0.011871397613534874,
+ "model_equivalent.census_width.tensor_bucket": 0.001744998405085808
+}
+layer-model total 519.66 ms over 130 rounds; peak device memory 1.73 GB
