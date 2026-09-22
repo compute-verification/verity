@@ -10,7 +10,7 @@ set -euo pipefail
 STAGE=${1:?stage}
 SWANKY=/workspace/swanky
 SWANKY_COMMIT=1b05bddab3e02c2cc4917d08c80a629286a4a4fc
-DIETMC=/workspace/target-swanky/release/dietmc
+DIETMC=${DIETMC:-/workspace/target-swanky/release/dietmc}   # profile stage: DIETMC=/workspace/target-swanky-prof/release/dietmc (no AVX-512, +debuginfo, for valgrind)
 FIX=/workspace/research/runs/r20260922-024439-915c/v1   # bench-instances/v1 arrays, digest-verified by that run
 OUT=${RESEARCH_RUN_DIR:-/workspace/vole-out}
 mkdir -p "$OUT"
