@@ -409,10 +409,14 @@ class Priced:
     reductions_words: int = 0
     depth: int = 0
     notes: list = field(default_factory=list)
+<<<<<<< HEAD
     zk: str = "hvzk"                  # none | hvzk | malicious (module docstring)
     prg_bytes: float = 0.0            # prover randomness: randomizers, blinding rows, pads, HM96 strings
     rows: int = 0
     communication_bytes: float = 0.0  # transcript bytes (accountant estimate) incl. step-0 commitments
+=======
+    ligero_rows: int = 0                                    # rows of the committed Ligero matrix (what the encoder encodes)
+>>>>>>> lane/b-encode
 
     @property
     def matmul_total(self) -> float:
@@ -423,21 +427,40 @@ class Priced:
         return sum(self.simt_field_mults.values())
 
     def times(self, gpu: Gpu, gpu_key: str, utilisation: float, hash_rate: float, encoder: str = "rs_matrix_ntt",
-              fs: FieldSpec | None = None, encoding_utilisation: float | None = None) -> dict:
+              fs: FieldSpec | None = None, encoding_utilisation: float | None = None,
+              encoder_seconds_per_row: float | None = None) -> dict:
         """Seconds per B=4096 batch by bucket and per VU, and the overhead.  ``encoding_utilisation`` (default: the
-        same as ``utilisation``) prices the encoding component apart: the expander encoder is a gather."""
+        same as ``utilisation``) prices the encoding component apart: the expander encoder is a gather.
+        ``encoder_seconds_per_row`` replaces the modelled encoding bucket by a MEASURED encoder time per Ligero row
+        (b-encode lane: the SIMT NTT on the RTX 4090), reported as ``t.encoding``; the encoding MACs then leave the
+        matmul bucket (the encoder is not a tensor-core operation)."""
         simt_scale = fs.simt_mult_vs_goldilocks if fs else 1.0
         u_enc = utilisation if encoding_utilisation is None else encoding_utilisation
-        t_mm = sum(v / (gpu.peak_macs_per_s * (u_enc if k == "encoding" else utilisation)) for k, v in self.matmul.items())
-        t_simt = self.simt_total * simt_scale / gpu.simt_field_mults_per_s
+        measured = encoder_seconds_per_row is not None
+        t_mm = sum(v / (gpu.peak_macs_per_s * (u_enc if k == "encoding" else utilisation)) for k, v in self.matmul.items()
+                   if not (measured and k == "encoding"))
+        t_enc = self.ligero_rows * encoder_seconds_per_row if measured else self.matmul.get("encoding", 0.0) / (gpu.peak_macs_per_s * u_enc)
+        if measured:
+            t_simt_enc = self.simt_field_mults.get("encoding_simt", 0.0) * simt_scale / gpu.simt_field_mults_per_s
+        else:
+            t_simt_enc = 0.0
+        t_simt = self.simt_total * simt_scale / gpu.simt_field_mults_per_s - t_simt_enc
         t_hash = self.hash_bytes / hash_rate
         t_hint = self.units * HINT_OPS_PER_UNIT / SIMT_INT_OPS_PER_S[gpu_key]
+<<<<<<< HEAD
         t_prg = self.prg_bytes / PRG_BYTES_PER_S
         total = t_mm + t_simt + t_hash + t_hint + t_prg
         per_vu = total / B_TARGET
         return {"gpu": gpu_key, "utilisation": utilisation, "encoder": encoder, "zk": self.zk,
                 "t.matmul": t_mm, "t.simt_field": t_simt, "t.hash": t_hash, "t.hint_gen": t_hint, "t.prg": t_prg,
                 "t.total": total,
+=======
+        total = t_mm + (t_enc if measured else 0.0) + t_simt + t_hash + t_hint
+        per_vu = total / B_TARGET
+        return {"gpu": gpu_key, "utilisation": utilisation, "encoder": encoder if not measured else f"measured:{encoder_seconds_per_row:.3g}s/row",
+                "t.matmul": t_mm, "t.encoding": t_enc, "encoding_measured": measured,
+                "t.simt_field": t_simt, "t.hash": t_hash, "t.hint_gen": t_hint, "t.total": total,
+>>>>>>> lane/b-encode
                 "matmul_share_of_time": t_mm / total, "seconds_per_vu": per_vu,
                 "overhead.vs_native_peak": contract.overhead(per_vu, K_TARGET),
                 "hint_gen_cpu_anchor_seconds": self.units * HINT_CPU_SECONDS_PER_UNIT}
@@ -572,8 +595,14 @@ def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TAR
     p.communication_bytes = est["transcript.bytes"]           # accountant estimate (8 B per trace element)
     p.rows = rows
     p.committed_elements = committed
+<<<<<<< HEAD
     p.committed_bytes = committed * eb
     p.encoded_bytes = rows * fl.N_CODE * eb
+=======
+    p.ligero_rows = rows
+    p.committed_bytes = committed * fs.element_bytes
+    p.encoded_bytes = rows * fl.N_CODE * fs.element_bytes
+>>>>>>> lane/b-encode
     p.depth = depth
     p.simt_int_ops["hint_generation"] = units * HINT_OPS_PER_UNIT
     if fs.name == "m31":
@@ -851,6 +880,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         del args[i:i + 2]
         HASH_RATES["blake3_simt"] = {"bytes_per_s": gbps * 1e9, "basis": f"--hash-rate {gbps} GB/s (CLI override)"}
         print(f"hash rate: {gbps} GB/s")
+    enc_spr = None
+    if "--encoder-seconds-per-row" in args:   # measured encoder (b-encode lane): replaces the modelled encoding bucket
+        i = args.index("--encoder-seconds-per-row")
+        enc_spr = float(args[i + 1])
+        del args[i:i + 2]
+        print(f"encoder: measured {enc_spr:.3g} s per Ligero row (encoding leaves the matmul bucket)")
+        _orig_times = Priced.times
+
+        def _times(self, *a, **kw):
+            kw.setdefault("encoder_seconds_per_row", enc_spr)
+            return _orig_times(self, *a, **kw)
+        Priced.times = _times
     if args and args[0] == "--report":
         from pathlib import Path
 
