@@ -70,3 +70,15 @@ Same *class* as red-team-3's U1/U2 (statement / geometry taken from the proof ra
 but a **different target and code path**: U1/U2 are B's LogUp realisation (`lookup_stark.rs` / `vu_bench_lookup`);
 this is A's GKR `run-vu` chain spec (`gkr/src/main.rs::load_vu`). The B *limbs* path (`vu_bench_v2`,
 `verify_bound`) is statement-bound and rejects a `words[0]^=1` statement — verified this run.
+
+## Status (coordinator, 2026-09-22 09:58Z)
+
+**FIXED on `main` ff651a8** (`backends/gkr/src/main.rs`): the checker-v2 chain is now the verifier's own constant
+(`v2_chain_spec()`: the four state links from `(0, floor = -132, 0, 1)`, the two saturation flags zero before the
+last unit, the two signs -- by column name, identical to `gkr_export.v2.chain_spec`). A bundle's `chain.txt` is
+informative only and must agree with it; an empty or shortened file is refused; no file yields the same chain. Test
+`v2_chain_is_verifier_owned` covers the no-file / empty-file cases and this fixture. Verified on vy-cpu2 (run
+r20260922-095128-05ac): `cargo check` both features, 15/15 tests, `run-vu --dir fixtures/redteam-v2/gkr/neg/chain_spec_stripped`
+refused with `chain.txt disagrees with the verifier's checker-v2 chain (PROTOCOL.md 14.3): 0 link(s) given, 8 required`,
+`neg/honest` accepted. Still open from this report: `steps` is taken from the witness header (the statement absorbs it,
+so a verifier expecting K=1536 must check `steps == 96` itself -- the CLI harness has no such expectation yet).
