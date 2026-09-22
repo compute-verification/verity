@@ -223,15 +223,18 @@
       "hawkeye_paper": "not covered",
       "hawkeye_simulator": "autoproof: native.rs applies the same five-way transducer to mxf4 with the hot clip off (its trigger reads the UE4M3 exponent field); dyadic.rs::to_f32(Round::Rz) of a nonzero value below 2^-149 yields -0.0 for a negative value; SEMANTICS.lock.v1 zero_handling: 'all-addends-zero firing leaves the accumulator bit-identical (incl. -0); exact cancellation normalizes to +0' -- silent on underflow",
       "verity_reference": "two named hypotheses, identical everywhere else: BLACKWELL_SM120_MXF4 (underflow_zero='signed', as the code) and BLACKWELL_SM120_MXF4_UNDERFLOW_PLUS0 (underflow_zero='positive', as the prose); INSTRUCTIONS['sm120.mma.m16n8k64.e2m1.mxf4'] carries the first with status hypothesis and ptx=None (the kind::mxf4 mnemonic is not recorded in either source repository)",
-      "hardware_evidence": "none: autoproof probed nvfp4 (UE4M3) only, where every nonzero term is at least 2^-20 and the case is unreachable; no mxf4 measurement exists in veritor, autoproof or verity",
-      "status": "open",
-      "resolution": null,
-      "to_resolve": "Probe mma.sync kind::mxf4 (UE8M0 block-32 scales) on sm_120 with scale codes near 0 (2^-127) and negative E2M1 products whose scaled sum is nonzero and below 2^-149, from a +0 accumulator; the word 0x80000000 confirms BLACKWELL_SM120_MXF4, 0x00000000 the _UNDERFLOW_PLUS0 variant.  The same probe pins the mxf4 mnemonic and whether the hot clip is indeed absent.",
+      "hardware_evidence": "Lane fp4-re, RTX 5090, family ue8m0_underflow (scale codes 0..59 on both operands, random E2M1 products, +0 and tiny accumulators; 65,536 / 131,072 / 131,072 elements in runs c3d8 / 8d99 / 6342) and ue8m0_scale_extremes: the word 0x80000000 never appears; BLACKWELL_SM120_MXF4 (underflow_zero='positive') 0 mismatches, the 'signed' alternative 15,205 + 2,003 (c3d8), 12,035 + 2,699 (8d99), 11,737 + 2,735 (6342). RTX 5090 (sm_120, cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, GPU-506928f9), tools/tc_probe_fp4 (one mma.sync per output element, arbitrary FP32 accumulators; SASS OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X for nvf4, OMMA.SF.16864.F32.E2M1.E2M1.E8 for mxf4, one MMA per kernel). Lane fp4-re runs: nvf4 r20260922-215616-3c10 (seed 20260922, 2,252,800 gated elements) and r20260922-221716-65b9 (fresh seed 20260923, 4,349,952); mxf4 r20260922-215831-c3d8 (2,039,808), r20260922-221824-8d99 (3,940,352) and r20260922-222148-6342 (786,432); lane fp4-5090's captures r20260922-182011-88f8 (1,736,704) and r20260922-182548-e654 (622,592) replayed offline. Snapshot fp4-evidence-v2 = art:cac4b3da0b251a7c96a2edfe317ec52327ec391609b20d7f7021f57b13b60382.",
+      "status": "resolved",
+      "resolution": "+0. A nonzero exact sum lying entirely below the FP32 subnormal grid returns +0 on sm_120 (the prose of autoproof's lockfile, not its dyadic.rs::to_f32 code). BLACKWELL_SM120_MXF4 carries underflow_zero='positive' and is the pinned model; the signed variant is kept as BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED, marked REFUTED, so the probe keeps scoring it. The mnemonic is recorded (D18) and there is no hot clip on the ue8m0 path.",
+      "to_resolve": "",
       "evidence_refs": [
-        "fixtures/tc/autoproof-SEMANTICS.lock.v1.json",
-        "packages/verity/src/verity/ml/tc/models.py"
+        "r20260922-215831-c3d8",
+        "r20260922-221824-8d99",
+        "r20260922-222148-6342",
+        "packages/verity/src/verity/ml/tc/models.py",
+        "packages/verity/tests/ml/test_models.py"
       ],
-      "owner": "tc-probe-fp8"
+      "owner": "fp4-re"
     },
     {
       "id": "D14",
@@ -277,16 +280,20 @@
       "hawkeye_paper": "n/a (Hawkeye covers BF16/FP8 Ampere/Hopper; no FP4)",
       "hawkeye_simulator": "n/a",
       "verity_reference": "BlockScaledAlignAdd / autoproof model5 keeps the accumulator's sign when every product is zero (16,328/16,328 elements return -0 in the model)",
-      "hardware_evidence": "RTX 5090 (cc 12.0, driver 570.153.02, nvcc 12.8.93, -arch=sm_120a), mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64 ... ue4m3 / OMMA.SF UE4M3.4X: family signed_zero_acc, 16,328/16,328 elements give +0 where model5 gives -0. Run r20260922-182011-88f8 (lane fp4-5090); the same probe replays autoproof's probe3 vectors 1601/1601 and 1,736,704 swept +0-accumulator elements with 0 mismatches, so this is the only zero-accumulator-sign disagreement.",
-      "status": "open",
-      "resolution": null,
-      "to_resolve": "Decide whether the model's five-way aligned add canonicalises an all-zero sum to +0 (RZ with a +0 identity, as the Ada FP8 mma.sync does for its truncated accumulator: D-log Ada finding 'C = 0x800001a9 -> +0') or keeps the accumulator sign only when the accumulator is nonzero; probe -0 accumulator with a nonzero product that cancels exactly, and -0 with subnormal products, then fix BlockScaledAlignAdd and re-run family signed_zero_acc. Also record the same test for sm120 mxf4 (ue8m0).",
+      "hardware_evidence": "RTX 5090 (cc 12.0, driver 570.153.02, nvcc 12.8.93, -arch=sm_120a), mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64 ... ue4m3 / OMMA.SF UE4M3.4X: family signed_zero_acc, 16,328/16,328 elements give +0 where model5 gives -0. Run r20260922-182011-88f8 (lane fp4-5090); the same probe replays autoproof's probe3 vectors 1601/1601 and 1,736,704 swept +0-accumulator elements with 0 mismatches, so this is the only zero-accumulator-sign disagreement.  Lane fp4-re: family signed_zero_matrix (acc in {+0, -0} x products all +0 / all -0 / mixed signs / exactly cancelling +xy and -xy, per group and across groups; 73,728 elements per run) and every other family: the hardware never emitted the word 0x80000000 in 15.7M elements, 245,000 of them with a -0 accumulator (all-zero products, -0 products, exact cancellation, sums truncated away entirely, ue8m0 underflow). RTX 5090 (sm_120, cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, GPU-506928f9), tools/tc_probe_fp4 (one mma.sync per output element, arbitrary FP32 accumulators; SASS OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X for nvf4, OMMA.SF.16864.F32.E2M1.E2M1.E8 for mxf4, one MMA per kernel). Lane fp4-re runs: nvf4 r20260922-215616-3c10 (seed 20260922, 2,252,800 gated elements) and r20260922-221716-65b9 (fresh seed 20260923, 4,349,952); mxf4 r20260922-215831-c3d8 (2,039,808), r20260922-221824-8d99 (3,940,352) and r20260922-222148-6342 (786,432); lane fp4-5090's captures r20260922-182011-88f8 (1,736,704) and r20260922-182548-e654 (622,592) replayed offline. Snapshot fp4-evidence-v2 = art:cac4b3da0b251a7c96a2edfe317ec52327ec391609b20d7f7021f57b13b60382.",
+      "status": "resolved",
+      "resolution": "Every zero result of the instruction is +0: the accumulator's sign is dropped whenever the aligned sum is zero, whether all addends were zero (the -0 accumulator included), the products cancelled exactly, or every addend truncated away on the grid; a nonzero accumulator of either sign is untouched by all-zero products (D == C). BlockScaledAlignAdd returns 0 for any zero total and the mxf4 underflow case is +0 as well (D13). Rejected: model5's 'all-addends-zero firing leaves the accumulator bit-identical' (16,328 / 32,768 signed_zero and 30,942 / 73,728 signed_zero_matrix mismatches in run 3c10; 16,484 + 30,836 in 65b9). BlockScaledAlignAdd (verity.ml.tc.models): exact 16-term group dots; the two block scales multiply the dot losslessly as dyadics (UE4M3: 4-bit mantissa m at 2^(e-10), subnormal field m at 2^-9; UE8M0: mantissa 8 at 2^(code-130)), giving the unit weight X_g = -2 + ea + eb; one five-way align-add of the four scaled dots and the accumulator, each truncated toward zero onto 2^lsb with lsb = max(max{X_g over participating groups} - 27, E_acc - 35, -174), where a group participates when some elementwise product is nonzero and both scale mantissas are nonzero (whether or not its dot cancels), E_acc is the accumulator's exponent field (subnormals count as -126) and the third term is an absolute grid floor; exact integer sum, RZ normalisation to binary32; every zero result is +0.",
+      "to_resolve": "",
       "evidence_refs": [
         "r20260922-182011-88f8",
+        "r20260922-215616-3c10",
+        "r20260922-221716-65b9",
+        "r20260922-221824-8d99",
         "tools/tc_probe_fp4/probe.py",
-        "tools/tc_probe_fp4/model5.py"
+        "packages/verity/src/verity/ml/tc/models.py",
+        "packages/verity/tests/ml/test_models.py"
       ],
-      "owner": "fp4-5090"
+      "owner": "fp4-re"
     },
     {
       "id": "D17",
@@ -295,16 +302,19 @@
       "hawkeye_paper": "n/a",
       "hawkeye_simulator": "n/a",
       "verity_reference": "BlockScaledAlignAdd / autoproof model5: four exact 16-term group dots, UE4M3 scales as exponent shifts, five-way aligned add of the scaled groups and the accumulator in a 42-bit window truncating toward zero, then a 36-bit second window (autoproof SEMANTICS.lock.v1, pinned on zero-init accumulator chains only -- D12)",
-      "hardware_evidence": "RTX 5090, same instruction and run as D16 plus the nonzero-accumulator families: 12,790 of 1,500,000 nonzero-accumulator elements disagree, 100% of them opposite-sign accumulators at the 42-bit window edge; the hardware value is always 1 ulp larger in magnitude than model5. Neither a narrower accumulator window nor anchoring the window to the scale exponent explains every case. Captured tiles in the run's tiles_*.npz (run r20260922-182011-88f8, lane fp4-5090). Autoproof's zero-init chains never truncate the accumulator, so the regime was unobserved before this run.",
-      "status": "open",
-      "resolution": null,
-      "to_resolve": "Fit the accumulator's alignment/truncation rule from the captured tiles: candidates are (a) accumulator truncated toward zero BEFORE alignment (as the Ada FP8 mma.sync truncates its accumulator to the 14-bit adder, giving a sticky/rounding-direction difference for opposite signs), (b) a sign-magnitude adder with the accumulator's dropped bits contributing a borrow, (c) a wider or differently anchored first window. Whichever fits all 12,790 mismatches and keeps the 1,736,704 zero-accumulator agreements becomes the model; until then the nvf4 pin is 'zero-init accumulators only' (D12) and any GemmCoordinate chain with truncated accumulators over sm120 nvf4 is outside the supported domain.",
+      "hardware_evidence": "RTX 5090, same instruction and run as D16 plus the nonzero-accumulator families: 12,790 of 1,500,000 nonzero-accumulator elements disagree, 100% of them opposite-sign accumulators at the 42-bit window edge; the hardware value is always 1 ulp larger in magnitude than model5. Neither a narrower accumulator window nor anchoring the window to the scale exponent explains every case. Captured tiles in the run's tiles_*.npz (run r20260922-182011-88f8, lane fp4-5090). Autoproof's zero-init chains never truncate the accumulator, so the regime was unobserved before this run.  Lane fp4-re separating families: acc_offset_walk (opposite- and same-sign accumulators 24..56 binades below the leading unit weight in 1-binade steps, exact and inexact significands, 1 vs many nonzero products, leading product in each k-slot, block scale 1 and != 1; 262,144 / 524,288 elements per run), wide_mantissa_top_scales (leading group with 15-bit vs 4-bit scale mantissas at the same exponent), anchor_participation (a group whose products cancel to exactly zero, or whose scale mantissa is zero, next to a far smaller live group), acc_subnormal. Model5 (the recorded control) misses 10,450 / 2,550 / 15,637 / 0 of them in run 3c10 and 20,659 / 5,296 / 15,557 / 0 in 65b9; the pinned rule 0. RTX 5090 (sm_120, cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, GPU-506928f9), tools/tc_probe_fp4 (one mma.sync per output element, arbitrary FP32 accumulators; SASS OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X for nvf4, OMMA.SF.16864.F32.E2M1.E2M1.E8 for mxf4, one MMA per kernel). Lane fp4-re runs: nvf4 r20260922-215616-3c10 (seed 20260922, 2,252,800 gated elements) and r20260922-221716-65b9 (fresh seed 20260923, 4,349,952); mxf4 r20260922-215831-c3d8 (2,039,808), r20260922-221824-8d99 (3,940,352) and r20260922-222148-6342 (786,432); lane fp4-5090's captures r20260922-182011-88f8 (1,736,704) and r20260922-182548-e654 (622,592) replayed offline. Snapshot fp4-evidence-v2 = art:cac4b3da0b251a7c96a2edfe317ec52327ec391609b20d7f7021f57b13b60382.",
+      "status": "resolved",
+      "resolution": "The 42-bit window is not anchored on the largest addend's msb; the adder keeps 27 bits below the *unit weight of the leading participating group's scale exponent* (lsb = max X_g - 27), independently of how wide that group's mantissa is, and the accumulator keeps 12 guard bits below its exponent field (lsb >= E_acc - 35). Model5's E1 - 41 coincides with X - 27 exactly when the leading group's mantissa is 15 bits wide (its 'hot clip' at 2^-19 is the same rule for exponent fields 15/15), so it was right on autoproof's chains and wrong by one grid step when the leading mantissa is narrower and an opposite-sign accumulator sits at the window edge. Rejected on the same captures (88f8 / 3c10, mismatches): model5 12,790 (nonzero-acc) / 88,697 total; H1 sticky bit on the truncated accumulator 96,413 / 215,575; H1b two's-complement (floor) truncation 54,620 / 129,979; H2 two-stage adder (exact product sum RZ to fp32, then fp32 add RZ | RN) 427,366 | 746,300 / 681,324 | 1,052,204; H3 model5 window widened to 43 / 44 / 48 bits 18,132 / 23,210 / 35,024, narrowed to 41 bits 11,260; H4 anchoring on groups with a *nonzero dot* instead of participating groups 1,443 / 17,827 (all of anchor_participation wrong: a cancelled group still anchors, the number of nonzero products is irrelevant); anchor constant 26 / 28 instead of 27: 13,678 / 12,596; accumulator window 34 / 36 instead of 35: 1,412 / 1,277. BlockScaledAlignAdd (verity.ml.tc.models): exact 16-term group dots; the two block scales multiply the dot losslessly as dyadics (UE4M3: 4-bit mantissa m at 2^(e-10), subnormal field m at 2^-9; UE8M0: mantissa 8 at 2^(code-130)), giving the unit weight X_g = -2 + ea + eb; one five-way align-add of the four scaled dots and the accumulator, each truncated toward zero onto 2^lsb with lsb = max(max{X_g over participating groups} - 27, E_acc - 35, -174), where a group participates when some elementwise product is nonzero and both scale mantissas are nonzero (whether or not its dot cancels), E_acc is the accumulator's exponent field (subnormals count as -126) and the third term is an absolute grid floor; exact integer sum, RZ normalisation to binary32; every zero result is +0.",
+      "to_resolve": "",
       "evidence_refs": [
         "r20260922-182011-88f8",
+        "r20260922-215616-3c10",
+        "r20260922-221716-65b9",
         "tools/tc_probe_fp4/probe.py",
-        "tools/tc_probe_fp4/model5.py"
+        "packages/verity/src/verity/ml/tc/models.py",
+        "packages/verity/tests/ml/test_models.py"
       ],
-      "owner": "fp4-5090"
+      "owner": "fp4-re"
     },
     {
       "id": "D18",
@@ -313,15 +323,59 @@
       "hawkeye_paper": "n/a",
       "hawkeye_simulator": "n/a",
       "verity_reference": "Registry entry sm120.mma.m16n8k64.e2m1.mxf4 is a hypothesis with ptx=None (D13); the natural hypothesis is BlockScaledAlignAdd with 4 x 16-term groups and ue8m0 shifts",
-      "hardware_evidence": "RTX 5090, mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64 ... ue8m0 / OMMA.SF E8: 622,592 elements captured; the 4x16-group shift hypothesis beats a 2x32 grouping but leaves 798 of 131,072 zero-accumulator elements mismatched. Run r20260922-182548-e654 (lane fp4-5090). The PTX mnemonic (scale_vec::2X, ue8m0) and its acceptance on sm_120a resolve the D13 'mnemonic' question; the clip and underflow-sign questions remain.",
-      "status": "open",
-      "resolution": null,
-      "to_resolve": "Fit the ue8m0 path from the captured tiles: whether the scale is applied as a pure exponent shift (no ue4m3-style clip), where the window anchors when one scale is 2^-127, and the sign of an underflowed zero. Record the mnemonic in the registry (ptx field) once silicon-p0's registry is reopened.",
+      "hardware_evidence": "RTX 5090, mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64 ... ue8m0 / OMMA.SF E8: 622,592 elements captured; the 4x16-group shift hypothesis beats a 2x32 grouping but leaves 798 of 131,072 zero-accumulator elements mismatched. Run r20260922-182548-e654 (lane fp4-5090). The PTX mnemonic (scale_vec::2X, ue8m0) and its acceptance on sm_120a resolve the D13 'mnemonic' question; the clip and underflow-sign questions remain.  Lane fp4-re: the same families as nvf4 plus ue8m0_scale_extremes (codes 0..254 on both operands, one nonzero product per block, two blocks with different scales and cancelling products, +-2^k accumulators) and ue8m0_underflow (scaled sums below 2^-149, both signs, zero and tiny accumulators). The pinned rule: 0 / 622,592 (e654, offline), 0 / 2,039,808 (c3d8, offline after D19), 0 / 3,940,352 (8d99) and 0 / 786,432 (6342) on the pod. Model5 + ue8m0 exponent shift: 19,709 / 101,672 / 139,013 / 36,932. RTX 5090 (sm_120, cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, GPU-506928f9), tools/tc_probe_fp4 (one mma.sync per output element, arbitrary FP32 accumulators; SASS OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X for nvf4, OMMA.SF.16864.F32.E2M1.E2M1.E8 for mxf4, one MMA per kernel). Lane fp4-re runs: nvf4 r20260922-215616-3c10 (seed 20260922, 2,252,800 gated elements) and r20260922-221716-65b9 (fresh seed 20260923, 4,349,952); mxf4 r20260922-215831-c3d8 (2,039,808), r20260922-221824-8d99 (3,940,352) and r20260922-222148-6342 (786,432); lane fp4-5090's captures r20260922-182011-88f8 (1,736,704) and r20260922-182548-e654 (622,592) replayed offline. Snapshot fp4-evidence-v2 = art:cac4b3da0b251a7c96a2edfe317ec52327ec391609b20d7f7021f57b13b60382.",
+      "status": "resolved",
+      "resolution": "MXFP4 runs the nvf4 adder with the same constants once the UE8M0 scale 2^(code-127) is written as the 4-bit mantissa 8 at 2^(code-130) (lane fp4-5090's raw-exponent fit of 33 bits is the same 27 in these units); scales combine exactly (powers of two), there is no hot clip, and a nonzero sum entirely below the subnormal grid is +0 (D13). Rejected: model5 + ue8m0 shift (H1 'exact exponent add') 19,709 / 101,672; H2 block partial sums at reduced width / groups of 32 per scale block 1,576 (e654) / 4,160 (c3d8); H3 scales combining with their own rounding is moot for powers of two and refuted for nvf4's mantissa products (RZ to 4 / 5 bits: 1.39M / 1.33M of 1.74M); H4 large |scale| pushing terms below the floor differently: the true-msb accumulator anchor left 528 (c3d8) and the floor-less exponent-field anchor 99 -- resolved by D19; underflow sign 'signed' 17,470 / 14,734 / 14,472; final normalisation RN / RA / jam instead of RZ 414,144 / 431,169 / 863,183 (c3d8). The mnemonic ptxas 12.8 accepts on sm_120a is mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0 (recorded in the registry). BlockScaledAlignAdd (verity.ml.tc.models): exact 16-term group dots; the two block scales multiply the dot losslessly as dyadics (UE4M3: 4-bit mantissa m at 2^(e-10), subnormal field m at 2^-9; UE8M0: mantissa 8 at 2^(code-130)), giving the unit weight X_g = -2 + ea + eb; one five-way align-add of the four scaled dots and the accumulator, each truncated toward zero onto 2^lsb with lsb = max(max{X_g over participating groups} - 27, E_acc - 35, -174), where a group participates when some elementwise product is nonzero and both scale mantissas are nonzero (whether or not its dot cancels), E_acc is the accumulator's exponent field (subnormals count as -126) and the third term is an absolute grid floor; exact integer sum, RZ normalisation to binary32; every zero result is +0.",
+      "to_resolve": "",
       "evidence_refs": [
         "r20260922-182548-e654",
+        "r20260922-215831-c3d8",
+        "r20260922-221824-8d99",
+        "r20260922-222148-6342",
+        "tools/tc_probe_fp4/probe.py",
+        "packages/verity/src/verity/ml/tc/models.py",
+        "packages/verity/src/verity/ml/tc/instructions.py"
+      ],
+      "owner": "fp4-re"
+    },
+    {
+      "id": "D19",
+      "profile": "sm120.mma.m16n8k64.e2m1.mxf4",
+      "issue": "In the subnormal-result regime reachable only with UE8M0 scales (leading unit weight below about 2^-140), the scale-exponent-anchored adder that reproduces every nvf4 word and every normal-range mxf4 word still mis-predicted 528 of 2,039,808 elements (acc_subnormal 262, ue8m0_underflow 210, ue8m0_scale_extremes 56) when the accumulator window was anchored on the accumulator's true msb and the grid had no lower bound",
+      "hawkeye_paper": "n/a",
+      "hawkeye_simulator": "n/a (autoproof never probed UE8M0 and its chains never reach subnormal results)",
+      "verity_reference": "BlockScaledAlignAdd before this entry: lsb = max(max X_g - 27, ilog2(acc) - 35); the accumulator's window followed its true msb and a term's grid could be arbitrarily deep",
+      "hardware_evidence": "Lane fp4-re run r20260922-215831-c3d8 (fit data), then the fresh-seed runs r20260922-221824-8d99 and r20260922-222148-6342 (confirmation, 0 mismatches). Offline fit on c3d8 (all 14 gated families): true-msb anchor, no floor 528; exponent-field anchor, no floor 99; exponent-field anchor + floor 2^-172 / -173 / -174 / -175 / -176: 47 / 24 / 0 / 22 / 37; true-msb anchor + floor -174: 429. Every mismatch is a subnormal-magnitude result. RTX 5090 (sm_120, cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, GPU-506928f9), tools/tc_probe_fp4 (one mma.sync per output element, arbitrary FP32 accumulators; SASS OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X for nvf4, OMMA.SF.16864.F32.E2M1.E2M1.E8 for mxf4, one MMA per kernel). Lane fp4-re runs: nvf4 r20260922-215616-3c10 (seed 20260922, 2,252,800 gated elements) and r20260922-221716-65b9 (fresh seed 20260923, 4,349,952); mxf4 r20260922-215831-c3d8 (2,039,808), r20260922-221824-8d99 (3,940,352) and r20260922-222148-6342 (786,432); lane fp4-5090's captures r20260922-182011-88f8 (1,736,704) and r20260922-182548-e654 (622,592) replayed offline. Snapshot fp4-evidence-v2 = art:cac4b3da0b251a7c96a2edfe317ec52327ec391609b20d7f7021f57b13b60382.",
+      "status": "resolved",
+      "resolution": "Two rules of the same adder, both invisible with UE4M3 scales (unit weights >= 2^-20) and with normal-range results: (1) the accumulator's 36-bit window is anchored on its *exponent field* -- a subnormal accumulator anchors at -126 - 35 = -161 whatever its true msb (the hardware aligns on the exponent field, not on a normalised significand); (2) the alignment grid never drops below 2^-174 (-174 = -149 - 25: the FP32 subnormal ulp less 25 guard bits) -- bits of a term below that weight are truncated toward zero before the add. Both are in BlockScaledAlignAdd (grid_floor=-174, exponent-field anchor) and carried by the nvf4 instance too, where they are inert. The floor's value is sharp (-173 and -175 each leave > 20 mismatches). BlockScaledAlignAdd (verity.ml.tc.models): exact 16-term group dots; the two block scales multiply the dot losslessly as dyadics (UE4M3: 4-bit mantissa m at 2^(e-10), subnormal field m at 2^-9; UE8M0: mantissa 8 at 2^(code-130)), giving the unit weight X_g = -2 + ea + eb; one five-way align-add of the four scaled dots and the accumulator, each truncated toward zero onto 2^lsb with lsb = max(max{X_g over participating groups} - 27, E_acc - 35, -174), where a group participates when some elementwise product is nonzero and both scale mantissas are nonzero (whether or not its dot cancels), E_acc is the accumulator's exponent field (subnormals count as -126) and the third term is an absolute grid floor; exact integer sum, RZ normalisation to binary32; every zero result is +0.",
+      "to_resolve": "",
+      "evidence_refs": [
+        "r20260922-215831-c3d8",
+        "r20260922-221824-8d99",
+        "r20260922-222148-6342",
+        "packages/verity/src/verity/ml/tc/models.py",
+        "packages/verity/tests/ml/test_models.py"
+      ],
+      "owner": "fp4-re"
+    },
+    {
+      "id": "D20",
+      "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+      "issue": "What the instruction returns outside BlockScaledAlignAdd's domain: NaN / +-inf accumulators, and sums that leave the binary32 range",
+      "hawkeye_paper": "n/a",
+      "hawkeye_simulator": "autoproof's oracle asserts on non-finite accumulators and on overflow; SEMANTICS.lock.v1 is silent",
+      "verity_reference": "BlockScaledAlignAdd raises InvalidArtifact on a non-finite accumulator and on a sum that leaves binary32; the registry's domain excludes both",
+      "hardware_evidence": "Lane fp4-re record-only family `specials` (never gates validation), runs 3c10 / 65b9 (nvf4: 6,163 / 6,176 elements outside the domain) and c3d8 / 8d99 / 6342 (mxf4: 14,368 / 14,337 / 14,373): a NaN accumulator of either sign and any payload (0x7FC00000, 0xFFC00000, 0x7F800001, 0x7FBFFFFF) returns 0x7FFFFFFF; a +inf / -inf accumulator returns itself; +-2^127 and +-FLT_MAX accumulators with 64 same-sign products of 36 under UE8M0 scales 2^73..2^127 return +inf / -inf of the sum's sign (nvf4 cannot overflow: its largest term is 576 x 480^2 and +FLT_MAX + that rounds toward zero to FLT_MAX, matched by the model). RTX 5090 (sm_120, cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, GPU-506928f9), tools/tc_probe_fp4 (one mma.sync per output element, arbitrary FP32 accumulators; SASS OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X for nvf4, OMMA.SF.16864.F32.E2M1.E2M1.E8 for mxf4, one MMA per kernel). Lane fp4-re runs: nvf4 r20260922-215616-3c10 (seed 20260922, 2,252,800 gated elements) and r20260922-221716-65b9 (fresh seed 20260923, 4,349,952); mxf4 r20260922-215831-c3d8 (2,039,808), r20260922-221824-8d99 (3,940,352) and r20260922-222148-6342 (786,432); lane fp4-5090's captures r20260922-182011-88f8 (1,736,704) and r20260922-182548-e654 (622,592) replayed offline. Snapshot fp4-evidence-v2 = art:cac4b3da0b251a7c96a2edfe317ec52327ec391609b20d7f7021f57b13b60382.",
+      "status": "excluded",
+      "resolution": "Outside the pinned domain, recorded: NaN in -> canonical 0x7FFFFFFF (sign and payload dropped), inf in -> same inf, overflow -> +-inf. A GemmCoordinate whose accumulator can be non-finite or whose exact sum can exceed FLT_MAX is not covered by sm120.mma.m16n8k64.e2m1.{nvf4,mxf4}; the probe keeps observing the family so a change would be seen.",
+      "to_resolve": "",
+      "evidence_refs": [
+        "r20260922-221716-65b9",
+        "r20260922-221824-8d99",
+        "r20260922-222148-6342",
         "tools/tc_probe_fp4/probe.py"
       ],
-      "owner": "fp4-5090"
+      "owner": "fp4-re"
     }
   ]
 }

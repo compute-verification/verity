@@ -643,10 +643,31 @@ _AUTOPROOF_PIN = (
 )
 
 _FP4_RE_PIN = (
-    "lane fp4-re, RTX 5090 (sm_120, driver 570.195.03, sm_120a cubin, one mma.sync per output element, arbitrary FP32 "
-    "accumulators): re-fit of lane fp4-5090's captures (nvfp4 run r20260922-182011-88f8: 1,736,704 elements over 13 "
-    "families, model5 12,790 mismatches -> this rule 0; mxfp4 run r20260922-182548-e654: 622,592 elements over 7 "
-    "families, 0 under this rule) and confirmed by the fp4-re runs cited below"
+    "lane fp4-re 2026-09-22, RTX 5090 (sm_120, cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, GPU-506928f9), "
+    "one mma.sync per output element, arbitrary finite FP32 accumulators (families: random operands and scales, uniform "
+    "encodings, scale sweeps, hot-clip regime, large cancellation, accumulator window walks, tiny / subnormal / -0 "
+    "accumulators, signed-zero matrix, accumulator-offset walk 24..56 binades, wide-mantissa top scales, anchor "
+    "participation)"
+)
+_FP4_RE_NVF4 = (
+    "SASS OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X; 0 mismatches over 8,339,456 elements: lane fp4-5090's captures "
+    "r20260922-182011-88f8 (1,736,704; model5 29,118), fit run r20260922-215616-3c10 (2,252,800; model5 88,697) and the "
+    "fresh-seed confirmation run r20260922-221716-65b9 (4,349,952; model5 114,148); autoproof probe3 vectors replayed "
+    "1,601 / 1,601 in each run"
+)
+_FP4_RE_MXF4 = (
+    "SASS OMMA.SF.16864.F32.E2M1.E2M1.E8, PTX mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64"
+    ".row.col.f32.e2m1.e2m1.f32.ue8m0; 0 mismatches over 7,389,184 elements: lane fp4-5090's captures "
+    "r20260922-182548-e654 (622,592; model5+ue8m0-shift 19,709), fit run r20260922-215831-c3d8 (2,039,808; the "
+    "true-msb accumulator anchor without a floor left 528, log entry D19), fresh-seed confirmation runs "
+    "r20260922-221824-8d99 (3,940,352) and r20260922-222148-6342 (786,432; ue8m0 scale extremes 2^-127..2^127, "
+    "sums below the subnormal grid, subnormal accumulators); the signed-underflow alternative misses 14,734 + 14,472 "
+    "of the confirmation elements (D13)"
+)
+_FP4_RE_EDGES = (
+    "outside the model (record-only family `specials`): a NaN accumulator of either sign and any payload returns "
+    "0x7FFFFFFF, +-inf returns itself, a sum leaving binary32 returns +-inf of its sign (ue8m0 only; nvf4 cannot "
+    "overflow); NOT validated on sm_100 (B200 tcgen05)"
 )
 
 BLACKWELL_SM120_NVF4 = BlockScaledAlignAdd(
@@ -662,8 +683,8 @@ BLACKWELL_SM120_NVF4 = BlockScaledAlignAdd(
     grid_floor=-174,
     underflow_zero="positive",
     validated=(
-        "RTX 5090 (sm_120) mma.sync kind::mxf4nvf4 ue4m3: " + _FP4_RE_PIN + "; PENDING fp4-re confirmation run; "
-        "NOT validated on sm_100 (B200 tcgen05). Zero-accumulator chains also pinned by " + _AUTOPROOF_PIN
+        "RTX 5090 (sm_120) mma.sync kind::mxf4nvf4 ue4m3: " + _FP4_RE_PIN + "; " + _FP4_RE_NVF4 + "; " + _FP4_RE_EDGES
+        + ". Zero-accumulator chains also pinned by " + _AUTOPROOF_PIN
     ),
 )
 
@@ -683,10 +704,7 @@ BLACKWELL_SM120_MXF4 = BlockScaledAlignAdd(
     acc_window=36,
     grid_floor=-174,
     underflow_zero="positive",
-    validated=(
-        "RTX 5090 (sm_120) mma.sync kind::mxf4nvf4 ue8m0: " + _FP4_RE_PIN + "; PENDING fp4-re confirmation run "
-        "(scale extremes, underflow sign); NOT validated on sm_100 (B200 tcgen05)"
-    ),
+    validated="RTX 5090 (sm_120) mma.sync kind::mxf4nvf4 ue8m0: " + _FP4_RE_PIN + "; " + _FP4_RE_MXF4 + "; " + _FP4_RE_EDGES,
 )
 
 BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED = BlockScaledAlignAdd(
@@ -702,8 +720,10 @@ BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED = BlockScaledAlignAdd(
     grid_floor=-174,
     underflow_zero="signed",
     validated=(
-        "HYPOTHESIS (unprobed): as BLACKWELL_SM120_MXF4 but a nonzero sum below the subnormal grid keeps its sign, "
-        "as autoproof dyadic.rs::to_f32 does (log entry D13)"
+        "REFUTED on the RTX 5090 (lane fp4-re): as BLACKWELL_SM120_MXF4 but a nonzero sum below the subnormal grid keeps "
+        "its sign, as autoproof dyadic.rs::to_f32 does; 17,470 / 2,039,808 (run r20260922-215831-c3d8), 14,734 / "
+        "3,940,352 (r20260922-221824-8d99) and 14,472 / 786,432 (r20260922-222148-6342) mismatches, all of them -0 where "
+        "the hardware gives +0 (log entry D13). Kept as the named alternative the probe scores alongside the pin."
     ),
 )
 
