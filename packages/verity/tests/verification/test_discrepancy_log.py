@@ -10,7 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from verity.verification.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN
+from verity.ml.tc.instructions import INSTRUCTIONS
+from verity.verification.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN, TARGETS
 
 ROOT = Path(__file__).resolve().parents[4]
 REQUIRED = ("id", "profile", "issue", "hawkeye_paper", "hawkeye_simulator", "verity_reference",
@@ -31,8 +32,19 @@ def test_every_entry_has_every_field_and_a_known_status() -> None:
         missing = [field for field in REQUIRED if field not in entry]
         assert not missing, f"{entry.get('id')}: missing {missing}"
         assert entry["status"] in STATUSES, entry["id"]
-        assert entry["profile"] == FIRST.name, f"{entry['id']} is about another profile"
+        # the profile names a target (frozen or draft) or, for instruction classes without a target, an instruction id
+        assert entry["profile"] in TARGETS or entry["profile"] in INSTRUCTIONS, f"{entry['id']} is about an unknown profile"
         assert entry["issue"].strip() and entry["owner"].strip()
+
+
+def test_the_frozen_target_keeps_its_entries() -> None:
+    """D1..D9 are the frozen target's; the silicon entries (D10..) are about the draft targets or instruction ids."""
+    log = load()
+    first = [e["id"] for e in log["entries"] if e["profile"] == FIRST.name]
+    assert first[:9] == [f"D{i}" for i in range(1, 10)]
+    for entry in log["entries"]:
+        if entry["profile"] != FIRST.name:
+            assert int(entry["id"][1:]) >= 10, f"{entry['id']} is not the frozen target's but numbered among its entries"
 
 
 def test_leaving_open_requires_a_resolution_and_evidence_that_exists() -> None:

@@ -92,13 +92,44 @@ Explicitly unresolved (not part of the target)
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
   accumulator).  Whether a given GEMM kernel launch (split-K, stream-K, different tile orders) realises exactly this
   chain is a frontend/integration binding question; the K=1536 vector is one captured case where it did.
-* **Other dtypes.** FP8 (E4M3) pipelines exist in ``silicon`` but have no gate family.
+* **Other dtypes.** FP8 (E4M3) pipelines exist in ``silicon`` and now have *draft* targets below
+  (:data:`FP8_HOPPER_WGMMA`, :data:`FP8_ADA_MMA`); nothing about them is frozen.
+
+Draft targets (silicon Phase 0, 2026-09-22)
+===========================================
+
+A :class:`Target` carries a ``status``: ``"frozen"`` (:data:`FIRST`: every backend proves it, it changes only by
+re-versioning) or ``"draft"`` (a relation stated precisely enough to generate vectors against, owned by the silicon
+campaign, not yet bound to a guest or a registered family digest).  Each target names its ``instruction`` in
+:data:`verity.ml.tc.instructions.INSTRUCTIONS`; the instruction's status (pinned / hypothesis / unprobed) says how
+much hardware stands behind the model the target computes with.
+
+* :data:`FP8_HOPPER_WGMMA` -- ``sm90.wgmma.m64n8k32.e4m3`` (pinned: veritor H100, 144,543,744 words), model
+  :data:`verity.ml.tc.models.HOPPER_E4M3_K32` (one group of 32, 14-bit truncating adder, floor -139).  Program
+  ``GemmAccumulator<K>`` (:func:`verity.verification.programs.gemm_accumulator_fp8`), ``K`` a multiple of 32:
+  ``tc_dot32_0`` then ``K/32 - 1`` chained ``tc_dot32`` in ascending ``k``, the FP32 accumulator word **public**
+  (the bare dot).  Domain: finite E4M3 operands (every byte but ``0x7F``/``0xFF``; 448 is finite) and finite FP32
+  accumulators at every step.  The scale-and-``cvt.rn.satfinite.e4m3x2`` epilogue of a production FP8 GEMM is a
+  **separate, later relation** -- it composes with this one but is not part of it.  Note the lossy step: the
+  incoming accumulator keeps only its top 14 significand bits, even through a group of zero products (D10).
+* :data:`FP8_ADA_MMA` -- ``sm89.mma.m16n8k32.e4m3`` (pinned: veritor RTX 4090, 24,898,304 elements), model
+  :data:`verity.ml.tc.models.ADA_E4M3_M16N8K32` (two groups of 16, the same 14-bit adder and floor).  Same program,
+  same domain, same absent epilogue; a different grouping and so a different function.
+* The families are the cast-free ``veritor.tensor-core.<pipeline>@2`` sets of :func:`verity.verification.families.make_tensor_core_gate_set`
+  (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are recorded here but **no guest is
+  bound to them** and no ``typed-obligation/v0`` lowering has been produced -- the reference vectors are model
+  replays (``fixtures/tc/vectors/``, schema ``verity/tc-reference-vector/v0``), not authenticated obligations.
+* Not covered by any draft: ``sm90.mma.m16n8k32.e4m3`` (the Hopper legacy path -- unprobed; whether it is Hopper's
+  one group of 32 or Ada's two of 16 is the probe lane's first question), E5M2 (hypotheses only), and the
+  Blackwell block-scaled FP4 path (a model exists, :class:`verity.ml.tc.models.BlockScaledAlignAdd`, no target).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
+from verity.ml.tc.models import ADA_E4M3_M16N8K32, HOPPER_E4M3_K32
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, Pipeline
 
 from .families import TC_AMPERE_BF16_NAME, TC_AMPERE_BF16_VERSION
@@ -108,9 +139,13 @@ __all__ = [
     "FAMILY",
     "FAMILY_DIGEST",
     "FIRST",
+    "FP8_ADA_MMA",
+    "FP8_HOPPER_WGMMA",
     "HAWKEYE_PIN",
     "K16_VECTOR",
     "K1536_VECTOR",
+    "TARGETS",
+    "TC_VECTORS",
     "Target",
 ]
 
@@ -126,10 +161,22 @@ FAMILY_DIGEST = "cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d30
 K16_VECTOR = "accept--packed-word-row"
 K1536_VECTOR = "stage2--qkv-proj-decode-0-k1536"
 
+#: Where the draft targets' model-replay vectors live (names below are files ``<name>.json`` in this directory).
+TC_VECTORS = "fixtures/tc/vectors"
+#: ``veritor.tensor-core.<pipeline>@2`` manifest digests of the FP8 draft families (``make_tensor_core_gate_set``).
+FP8_HOPPER_FAMILY = "veritor.tensor-core.hopper_e4m3_wgmma_k32@2"
+FP8_HOPPER_FAMILY_DIGEST = "6d90478ba12f63f1171355f343f65bce6665541f1f7d4cca711ed9ea2ae9f777"
+FP8_ADA_FAMILY = "veritor.tensor-core.ada_e4m3_m16n8k32@2"
+FP8_ADA_FAMILY_DIGEST = "2bcdad67108dd15195372308784247d6792a3335f1dc19345d91d8ad68a17d16"
+
+Status = Literal["frozen", "draft"]
+
 
 @dataclass(frozen=True, slots=True)
 class Target:
-    """One frozen target: the family, the pipeline the steps are computed on, the program, and the reference sizes."""
+    """One target: the family, the pipeline the steps are computed on, the program, the reference sizes -- and
+    its ``status`` (``frozen``: every backend proves it; ``draft``: stated and vectorised, bound to nothing yet)
+    with the id of the instruction class it is a relation over (``verity.ml.tc.instructions.INSTRUCTIONS``)."""
 
     name: str
     family: str
@@ -141,6 +188,8 @@ class Target:
     domain: str
     epilogue: str
     reference_vectors: tuple[str, ...]
+    status: Status = "frozen"
+    instruction: str | None = None
 
 
 FIRST = Target(
@@ -154,4 +203,55 @@ FIRST = Target(
     domain="finite BF16 operands and finite FP32 accumulators at every step; anything else is rejected, not computed",
     epilogue="f32_to_bf16: RN-even, overflow -> +-inf, NaN -> 0x7FC0 (software canonical word; @2 has the hardware 0x7FFF)",
     reference_vectors=(K16_VECTOR, K1536_VECTOR),
+    status="frozen",
+    instruction="sm80.mma.m16n8k16.bf16",
 )
+
+_FP8_DOMAIN = (
+    "finite E4M3 operands (every byte but 0x7F/0xFF; 448 = 0x7E is finite, there are no infinities) and finite FP32 "
+    "accumulators at every step; anything else is rejected, not computed"
+)
+_FP8_EPILOGUE = (
+    "none: the FP32 accumulator word is the public output (the bare dot).  The production FP8 store -- scale by a "
+    "per-tensor factor, then cvt.rn.satfinite.e4m3x2 -- is a SEPARATE relation, to be stated and pinned later; it "
+    "composes with this target, it is not part of it"
+)
+
+FP8_HOPPER_WGMMA = Target(
+    name="fp8-hopper-wgmma-draft/2026-09-22",
+    family=FP8_HOPPER_FAMILY,
+    family_digest=FP8_HOPPER_FAMILY_DIGEST,
+    pipeline=HOPPER_E4M3_K32,
+    program="GemmAccumulator<K> (K a multiple of 32): tc_dot32_0, then (K/32 - 1) x tc_dot32 chained in ascending k; no cast",
+    transition_unit=(
+        "tc_dot32(c, a[0:32], b[0:32]) with any finite FP32 c: one group of 32, the 14-bit truncating adder (the "
+        "incoming accumulator keeps its top 14 significand bits), floor -139"
+    ),
+    statement_format=2,
+    domain=_FP8_DOMAIN,
+    epilogue=_FP8_EPILOGUE,
+    reference_vectors=("fp8-hopper-wgmma-k32", "fp8-hopper-wgmma-k1536"),
+    status="draft",
+    instruction="sm90.wgmma.m64n8k32.e4m3",
+)
+
+FP8_ADA_MMA = Target(
+    name="fp8-ada-mma-draft/2026-09-22",
+    family=FP8_ADA_FAMILY,
+    family_digest=FP8_ADA_FAMILY_DIGEST,
+    pipeline=ADA_E4M3_M16N8K32,
+    program="GemmAccumulator<K> (K a multiple of 32): tc_dot32_0, then (K/32 - 1) x tc_dot32 chained in ascending k; no cast",
+    transition_unit=(
+        "tc_dot32(c, a[0:32], b[0:32]) with any finite FP32 c: two groups of 16 (c joins the first, its result the "
+        "second), the 14-bit truncating adder, floor -139"
+    ),
+    statement_format=2,
+    domain=_FP8_DOMAIN,
+    epilogue=_FP8_EPILOGUE,
+    reference_vectors=("fp8-ada-mma-k32", "fp8-ada-mma-k1536"),
+    status="draft",
+    instruction="sm89.mma.m16n8k32.e4m3",
+)
+
+#: Every target by name; ``fixtures/discrepancy_log.json`` entries name one of these (or an instruction id).
+TARGETS: dict[str, Target] = {t.name: t for t in (FIRST, FP8_HOPPER_WGMMA, FP8_ADA_MMA)}

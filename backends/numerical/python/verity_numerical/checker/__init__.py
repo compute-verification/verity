@@ -16,6 +16,20 @@ Layout.  ``params.py`` the widths as data (``REAL``, ``TOY``, ``TINY``); ``table
 class per gadget with ``contract(p)`` (ranges as data), ``gen`` (honest hints) and ``check`` (predicates);
 ``step.py`` the unit and the VU; ``search.py`` the adversarial searches.
 
+FP8 (silicon Phase 0).  ``Params`` carries two formats -- the operand's (``sig``, ``exp``, ``op_nan_rule``) and the
+accumulator's (``acc_sig``, ``acc_exp``) -- and admits an adder narrower than the accumulator (``width <
+acc_sig``, the *lossy* case of Hopper/Ada E4M3: 14 < 24).  ``Params.from_model(model)`` derives them from a
+``verity.ml.tc.models.GroupSum``; at ``AMPERE_BF16_M16N8K16`` it is ``REAL`` and nothing below changes (contracts,
+hint layout and outputs at ``REAL``/``TOY``/``TINY`` are byte-identical to the BF16-only checker).  In the lossy
+case one gadget joins the data flow before ``AlignState``: ``RescaleState`` (M = 2^drop P + r, r < 2^drop, P < 2^W),
+the truncation of the incoming FP32 significand to the adder width that ``GroupSum.step`` performs; ``Normalise``
+then produces a W-bit magnitude and scales it back up exactly (``norm_up``), since the truncations must precede
+the scale-up and no longer fold into one floor division.  ``Bf16Decode`` (alias ``OperandDecode``) admits the
+E4M3 rule (the all-ones exponent is finite unless the fraction is all ones: 448 is a value, ``0x7F``/``0xFF`` are the
+NaNs) through one extra range check.  ``tests/checker/test_fp8.py`` compares the reference and the gadget relation
+with ``model.step`` on ``HOPPER_E4M3_K32`` and ``ADA_E4M3_M16N8K32``.  The z3 group-step search and the v2
+arithmetisation are BF16-only and say so.
+
 Predicates.  Every gadget is written with five predicates only, so that a backend can read off what it must
 provide:  ``rng(x, lo, hi)`` a range check on an expression; ``eq(a, b)`` an identity; ``boolean(b)``;
 ``lookup(TABLE, key)`` a row of a fixed table (POW, ALIGN, LEAD, NORM); ``lt_pow(x, 2^k, B)`` the variable-bound
@@ -181,8 +195,8 @@ Goldilocks (2^64 - 2^32 + 1) satisfies every magnitude above, including F1 with 
 31-bit or 40-bit field needs the direct realisation of every ``lt_pow`` (F1), keeps the tight quotient bound (F2)
 and, at 31 bits, also needs the word split (F4) and a wider normalisation division (F3).
 """
-from .params import REAL, TINY, TOY, Params, Reject
+from .params import REAL, TINY, TOY, TOY_LOSSY, Params, Reject
 from .step import accepts_step, accepts_vu, check_step, check_vu, contracts, gen_step, gen_vu, step_output, vu_output
 
-__all__ = ["REAL", "TINY", "TOY", "Params", "Reject", "accepts_step", "accepts_vu", "check_step", "check_vu",
-           "contracts", "gen_step", "gen_vu", "step_output", "vu_output"]
+__all__ = ["REAL", "TINY", "TOY", "TOY_LOSSY", "Params", "Reject", "accepts_step", "accepts_vu", "check_step",
+           "check_vu", "contracts", "gen_step", "gen_vu", "step_output", "vu_output"]
