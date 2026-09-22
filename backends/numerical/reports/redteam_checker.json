@@ -7,7 +7,10 @@
   "full": false,
   "target": "verity_numerical.checker (WP2 contracts)",
   "started": "2026-09-21T19:07:11",
-  "finished": "2026-09-21T19:13:57"
+  "finished": "2026-09-21T19:13:57",
+  "pod_run_full": "r20260922-021542-120b (vy-sp1, --target checker --full; launched 02:15 UTC, running at report time)",
+  "wave1_pod_sweep": "r20260922-000944-d633 -> reports/redteam_relation_pod.json (60 SAT / 349 UNSAT / 19 UNKNOWN; laptop 38 / 222 / 8; 0 SAT-NOT-REPLAYED; every SAT in the wave-1 families split/align/final/norm, no new class)",
+  "headline": "no accepted deviation from the reference against the WP2 contracts over Z or Goldilocks (mutation 23,445 x 4 fields, coordinated 1,909 x 4, z3 per gadget with Boolean split: 12/12 UNSAT at Goldilocks); U3 resolved: signed_sum over F_(2^31-1) UNSAT in 0.2 s once the two Boolean hints are case-split (4 linear cases); U2 open: symbolic full group step UNKNOWN under Int, bit-vector, selector-split, vs-reference and linearised QF_LIA encodings at 60-120 s (concrete input UNSAT in all); U4: one contract-level gap (state_out.e_hat reaches the floor -132 when z = 1, below pack.e1 [-126, ..); masked by (1 - z) in pack) and the group-to-group exponent edge holds only through the per-group ceiling; every SAT is at p40 / Mersenne-31 in the checker F1-F4 classes with the concrete witness replayed in FieldCtx"
  },
  "findings": [
   {
