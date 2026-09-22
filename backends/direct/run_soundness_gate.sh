@@ -71,7 +71,9 @@ fi
 
 if [ "$WHAT" = timing ] || [ "$WHAT" = all ]; then
     Q=${QUERIES:-166}
-    for MODE in bound unbound; do
+    # ORDER swaps the two runs (first run on a cold box pays page-cache / allocator warm-up: r20260922-073904-7a6c
+    # saw the identical witness phase 26% slower in the first run) -- always report both orders
+    for MODE in ${ORDER:-bound unbound}; do
         FLAG=""; [ "$MODE" = unbound ] && FLAG="--unbound"
         echo "== vu-bench babybear 4096 VUs, $Q queries ($MODE)"
         mkdir -p "$RUN_DIR/vu4096_babybear_$MODE"
