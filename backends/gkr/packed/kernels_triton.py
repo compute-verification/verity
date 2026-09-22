@@ -290,6 +290,50 @@ def _packed_ip_source(half: int, linear: bool = False) -> str:
     return "\n".join(L) + "\n"
 
 
+def _packed_ip_split_source(half: int) -> str:
+    """Packed round with ``half^2 . 4 > 256`` limb rows (``half = 8``, round 4): the ``x`` block is a third grid axis, each
+    program forms the ``half^2`` Hadamards of ONE ``x`` (``256`` limb rows for ``half = 8``) so the register tile stays at
+    256 rows; ``g, h`` are read three times (once per ``x`` program).  Output layout = :func:`_packed_ip_source`'s."""
+    rows_x = half * half            # Hadamards per x
+    rows4 = rows_x * 4
+    rows_pad = max(16, triton.next_power_of_2(rows4))
+    L: list[str] = []
+    L.append("@triton.jit")
+    L.append(f"def packed_ip_{half}(g_ptr, h_ptr, e_ptr, z_ptr, K1, SPLIT_LEN, BLOCK_K: tl.constexpr):")
+    L.append("    b2 = tl.program_id(0)")
+    L.append("    sp = tl.program_id(1)")
+    L.append("    xx = tl.program_id(2)")
+    L.append("    offs_n = tl.arange(0, 32)")
+    L.append(f"    acc = tl.zeros(({rows_pad}, 32), dtype=tl.int32)")
+    L.append("    zero8 = tl.zeros((BLOCK_K,), dtype=tl.int8)")
+    L.append("    for c in range(0, SPLIT_LEN, BLOCK_K):")
+    L.append("        b1 = sp * SPLIT_LEN + c + tl.arange(0, BLOCK_K)")
+    L.append(f"        col = (b2.to(tl.int64) * K1 + b1) * {2 * half}")
+    L.append("        E = tl.load(e_ptr + b1[:, None] * 32 + offs_n[None, :])")
+    for a in range(half):
+        # the x-point of table g at a: x = 0 -> g0, 1 -> g1, 2 -> 2 g1 - g0 (runtime select on the program's x)
+        L.append(f"        g0_{a} = tl.load(g_ptr + col + {a})")
+        L.append(f"        g1_{a} = tl.load(g_ptr + col + {half + a})")
+        L.append(f"        gx_{a} = tl.where(xx == 0, g0_{a}, tl.where(xx == 1, g1_{a}, msub(madd(g1_{a}, g1_{a}), g0_{a})))")
+        L.append(f"        h0_{a} = tl.load(h_ptr + col + {a})")
+        L.append(f"        h1_{a} = tl.load(h_ptr + col + {half + a})")
+        L.append(f"        hx_{a} = tl.where(xx == 0, h0_{a}, tl.where(xx == 1, h1_{a}, msub(madd(h1_{a}, h1_{a}), h0_{a})))")
+    names = []
+    for a in range(half):
+        for a2 in range(half):
+            r = a * half + a2
+            L.append(f"        l{r}_0, l{r}_1, l{r}_2, l{r}_3 = _limbs(mmul(gx_{a}, hx_{a2}))")
+            names += [f"l{r}_{j}" for j in range(4)]
+    names += ["zero8"] * (rows_pad - rows4)
+    top = _join_tree(L, names, "        ")
+    L.append(f"        A = tl.reshape({top}, (BLOCK_K, {rows_pad}), can_reorder=False)")
+    L.append("        acc += tl.dot(tl.trans(A), E, out_dtype=tl.int32)")
+    L.append(f"    offs_m = tl.arange(0, {rows_pad})")
+    L.append(f"    z = z_ptr + (((sp * tl.num_programs(0) + b2) * 3 + xx).to(tl.int64) * {rows4}) * 24")
+    L.append(f"    tl.store(z + offs_m[:, None] * 24 + offs_n[None, :], acc, mask=(offs_m[:, None] < {rows4}) & (offs_n[None, :] < 24))")
+    return "\n".join(L) + "\n"
+
+
 def _ext_ip_source() -> str:
     """Extension round fused: the 3 ``F_{p^6}`` Hadamards per pair and their 24 limbs each (72 rows, padded to 128) formed
     in registers and fed to ``tl.dot`` against the eq-weight limbs; INT32 partials over a ``b1`` split."""
@@ -390,7 +434,7 @@ def logup_packed_inner_product(g: torch.Tensor, h: torch.Tensor, e_lo32: torch.T
     """logUp leaf level, packed round ``i``: ``(split, K2 . rows . 4, 24)`` with ``rows = 3 (half^2 + half)`` (products then
     linear rows per ``x``)."""
     half = 1 << (i - 1)
-    if not has_fused_packed(i) or K1 % (split * BLOCK_K):
+    if half > (1 << FUSED_MAX_LOG2_HALF) or K1 % (split * BLOCK_K):
         raise ValueError("fused logUp packed round covers i <= 3 with K1 a multiple of split * BLOCK_K")
     rows4 = 3 * (half * half + half) * 4
     Z = torch.empty((split, K2 * rows4, 24), dtype=torch.int32, device=g.device)
@@ -530,7 +574,7 @@ def _generated():
     if _MODULE is not None:
         return _MODULE
     src = "\n".join([_HEADER, _ext_mul_helper_source(), _ext_mmul_helper_source(), _ext_hadamard_source(), *[_packed_hadamard_source(1 << e) for e in range(4)],
-                     *[_packed_ip_source(1 << e) for e in range(FUSED_MAX_LOG2_HALF + 1)], _ext_ip_source(),
+                     *[_packed_ip_source(1 << e) for e in range(FUSED_MAX_LOG2_HALF + 1)], _packed_ip_split_source(8), _ext_ip_source(),
                      *[_packed_ip_source(1 << e, linear=True) for e in range(FUSED_MAX_LOG2_HALF + 1)], _logup_ext_ip_source(),
                      _reduce_contract_source(1), _reduce_contract_source(6), _finish_round_source()]) + "\n"
     digest = hashlib.sha256(src.encode()).hexdigest()[:16]
@@ -562,13 +606,14 @@ def ext_hadamard3_limbs(gE: torch.Tensor, hE: torch.Tensor, K1: int, K2: int, BL
     return A
 
 
-#: the fused Hadamard + tl.dot inner product exists for half = 2^(i-1) <= 4 (rows 12 / 48 / 192, tile 16 / 64 / 256);
-#: half = 8 would need a 1024-row accumulator tile.
+#: the fused Hadamard + tl.dot inner product exists for half = 2^(i-1) <= 4 (rows 12 / 48 / 192, tile 16 / 64 / 256) in one
+#: program per (b2, split); half = 8 (round 4: 768 limb rows) is split over a third grid axis (one x per program, 256 rows).
 FUSED_MAX_LOG2_HALF = 2
+FUSED_SPLIT_HALVES = (8,)
 
 
 def has_fused_packed(i: int) -> bool:
-    return 1 <= i <= FUSED_MAX_LOG2_HALF + 1
+    return 1 <= i <= FUSED_MAX_LOG2_HALF + 1 or (1 << (i - 1)) in FUSED_SPLIT_HALVES
 
 
 def packed_inner_product(g: torch.Tensor, h: torch.Tensor, e_lo32: torch.Tensor, i: int, K1: int, K2: int, split: int,
@@ -577,13 +622,14 @@ def packed_inner_product(g: torch.Tensor, h: torch.Tensor, e_lo32: torch.Tensor,
     to get what ``mm_int8(packed_hadamard_limbs(...), e_lo)`` returns).  ``e_lo32`` is ``(K1, 32) int8`` (24 limbs + 0)."""
     half = 1 << (i - 1)
     if not has_fused_packed(i):
-        raise ValueError("fused packed inner product covers i <= 3")
+        raise ValueError("fused packed inner product covers i <= 4")
     if K1 % (split * BLOCK_K):
         raise ValueError("K1 must be a multiple of split * BLOCK_K")
     rows4 = 3 * half * half * 4
     Z = torch.empty((split, K2 * rows4, 24), dtype=torch.int32, device=g.device)
     warps = num_warps or 4          # measured on the H100: BLOCK_K = 128, 4 warps (8 warps or BLOCK_K <= 64 are 3-10x slower)
-    getattr(_generated(), f"packed_ip_{half}")[(K2, split)](g, h, e_lo32, Z, K1, K1 // split, BLOCK_K=BLOCK_K, num_warps=warps)
+    grid = (K2, split, 3) if half in FUSED_SPLIT_HALVES else (K2, split)
+    getattr(_generated(), f"packed_ip_{half}")[grid](g, h, e_lo32, Z, K1, K1 // split, BLOCK_K=BLOCK_K, num_warps=warps)
     return Z
 
 
