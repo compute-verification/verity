@@ -152,13 +152,72 @@ setting (no subfield/extension assumption is needed here, since the combinations
     opened columns: m t * 4 = 2.55 MB; Merkle paths: t * 14 * 32 = 85 KB      total ~2.8 MB per 4096 units (~700 B/unit)
 
 The opened columns dominate (Ligero's `t * m`); `m` is what a cheaper range-check realisation would shrink.
+Chain (m = 3516, + `q`: D (2l - 1) * 4 = 197 KB): 3.14 MB per 42 VUs (75 KB/VU).
 
-## 8. Not done / labelled
+## 7b. The chain: the verification unit (`chain.py`, `vu.py`; `compile_unit(chain=True)`)
 
-* INT8 matmul DFT encoder (tensor.md's proposal): not measured; the int64 NTT was fast enough that encoding is not
-  the bottleneck at this shape (README table). The matmul variant would matter once hashing moves to the GPU.
-* Merkle on the GPU: placeholder host Blake3 (`backends/shared/hash_gpu` not on main at the time of writing).
-* The chain (VU) and ZK masking: sections in README.md (design + estimate, labelled).
+A VU is 96 units from `c_0 = +0` plus the `Epilogue` (RN-even cast to BF16). Column `j = 96 v + i` holds unit `i` of
+VU `v`; a proof of `l` columns holds `floor(l / 96)` VUs (`l = 4096`: 42 VUs, 64 pad columns = trivial units).
+What changes against the unit system:
+
+* The accumulator is no longer public. Its word components `c.s, c.t, c.f` (plus `nz, z`) are **hint rows**, and
+  `Fp32Decode.check` runs in-field *without* `acc.word` -- the components are the word (the ranges `s in {0,1}`,
+  `t < 255`, `f < 2^23` make it unique; `2^32 > p` is why the word itself is never formed). Same predicates otherwise.
+* The output components `y.s, y.t, y.f` stay expressions (no `y.*` pins). The **epilogue** is constrained in every
+  column on the unit's own output: `Epilogue.check` with `y32 = hi 2^16 + lo` restated as `f = fhi 2^16 + lo`
+  (`fhi < 2^7`), `hi = s 2^15 + t 2^7 + fhi` -- the same integers; `hi2, lsb, carry, rem` as in the gadget;
+  `y16 = hi + carry`. Per column this is unconditional (a selector-gated version would raise the quotient's degree
+  to `3l`, which the rate-1/4 code does not pay for); it costs 6 hint + ~55 bit rows (3372 -> 3516 rows).
+* **Cross-column constraints** (`c_in[j+1] = c_out[j]` on the components, `c_in = 0` at every chain start and pad,
+  `y16 = y16_pub` at every chain end) are one linear system `A w = b` over the *flattened* witness and are checked by
+  Ligero's **general linear test**: the verifier draws one uniform coefficient per constraint (`7 l` per coordinate,
+  `D` coordinates); `r^T A` is a coefficient per `(row, column)`, interpolated per involved row to `R_i(X)` (degree
+  `< l`, ~20 rows: the three `c.*` rows and the rows in the `y.*` / `y16` expressions); the prover sends
+  `q(X) = sum_i R_i(X) p_i(X)` (degree `< 2l - 1`, `D (2l - 1)` coefficients = 196 KB); the verifier checks
+  `sum_{H} q = l (q_0 + q_l) = r^T b` and `q(eta_c) = sum_i R_i(eta_c) U_i[c]` at the opened columns. No rotation, no
+  extra openings, no second commitment: the shift `j -> j+1` lives in the coefficients, not in the code. Soundness
+  term: the linear test's `((k + l)/n)^t = 2^-189` (Appendix C, `k = l`) plus `1/p^D` for the combination.
+* Transcript: `q` is absorbed before the column challenge (`cols = H(root, w, h, q)`). Depth stays 2.
+* Verifier: `public_vectors` on the operands only (`a, b` pins; the domain checks), `y16_pub` per VU, and the layout.
+
+Gate (vy-g3, `results/gate_vu.json`): 64 `vu-k1536` VUs with the recorded accumulators (two proofs, 42 + 22)
+accepted; 52/52 `vu-k1536-neg` rejected (`wrong` at the chain test's sum check, `reject` at the operand domain check
+or as a foreign proof); 249 mutated rows + 3 chain-specific mutations (a broken link `c.f[40] != y.f[39]`, `c_0 != 0`
+at a chain start, a flipped claimed `y16`) rejected.
+
+## 8. Encoder: int64 NTT vs INT8 matmul DFT (`encoder_bench.py`, vy-g3, m = 3372, l = 4096 -> n = 16384)
+
+    int64 radix-2 NTT encode (used):                                 116 ms   (1.9 GB/s of codeword)
+    one-stage dense DFT, 16 INT8 limb matmuls (torch._int_mm) only:   52 ms   (139 TOPS; exact = NTT on a slice)
+    one-stage + limb recombination mod p in torch int64:             272 ms   (the recombination, not the matmul)
+    two-stage 64 x 64 INT8 matmuls only (x4 shifts for n = 4l):        8 ms   (no twiddles / recombination)
+
+The tensor cores win the arithmetic by 2x (one-stage) to 14x (two-stage), but in torch the limb recombination and
+twiddle passes are int64 elementwise kernels that cost more than the NTT itself; the matmul DFT pays only with a fused
+kernel (recombination in registers). At this shape the encoder is 3% of the prover, so the NTT stays.
+
+## 8b. ZK masking cost (not implemented; NON_ZK_PROOF_DIAGNOSTIC)
+
+Ligero's honest-verifier ZK: every row is padded with `t` uniformly random message symbols (`k = l + t`, so an opening
+of `t` columns reveals nothing of the row; Lemma 4.15 needs `k > l + t`), and the linear / quadratic / chain test
+messages are blinded by random codeword rows (`w`, `h`, `q` each get one masking row per coordinate: `D (m ... )`
+extra committed rows, negligible). With `k = l + t = 4285 -> 8192` (the next power of two for the NTT) at `n = 16384`
+the rate halves to 1/2: Appendix C then needs `t` such that `(1 - e/n)^t + ((k + l)/n)^t + (2k/n)^t <= 2^-128` with
+`e = (n - k)/2 = 4096`: `(3/4)^t` -> `t = 309`, `(2k/n)^t = 1^t` -- **the quadratic test fails at rate 1/2**
+(`n > 2k` is required). So ZK at `2^-128` needs `n = 32768` (rate 1/4 again with `k = 8192`): encoding, transfer and
+hashing double (`+0.5 s` of the 1.0 s GPU prover at B = 4096), the opened columns stay `t = 189` (same `(5/8)^189`
+with `e = (n - k)/2 = 12288`) but `m t` bytes are unchanged, `w, h, q` double in length (`+0.4 MB`), peak memory
+doubles (`5.9 GB`). Alternatively keep `n = 16384` and halve `l` to 2048 units per proof (42 -> 21 VUs): same
+per-unit encoding cost, twice the fixed per-proof overhead. Malicious-verifier ZK (the AGENTS.md requirement) adds
+a commitment to the verifier's coins before `root` (one more round; depth 3) -- no arithmetic cost.
+
+## 9. Not done / labelled
+
+* Merkle on the GPU: placeholder host Blake3 (`backends/shared/hash_gpu` not on main at the time of writing); the
+  transfer of `U` to the host (0.37 s) and the hashing (0.28 s) are 65% of the GPU-side prover.
+* The hint generator is the checker's own `gen_step` in Python on the host (2.6 s per 4096 units: 71% of the total
+  prover time); a torch hint generator is a straightforward vectorisation and is the next step.
+* ZK masking: section 8b (design + cost, not implemented).
 
 ## 9. Negative-test expectations
 
@@ -168,3 +227,6 @@ The opened columns dominate (Ligero's `t * m`); `m` is what a cheaper range-chec
 * Mutated witnesses: one row of every `(gadget scope, row class)` (243 of them) changed in one column before
   commitment: the verifier rejects (linear or quadratic test) -- an accepted one is a soundness bug.
 * Wrong `y` for a unit: rejected at the linear test.
+* Chain: every `vu-k1536-neg` as a VU claim (`wrong`: the chain test's sum check; `reject`: the operand domain
+  check, or any proof of a different statement); a broken link, a nonzero `c_0`, a flipped claimed `y16`: the chain
+  test; mutated rows (252): linear / quadratic / chain test.
