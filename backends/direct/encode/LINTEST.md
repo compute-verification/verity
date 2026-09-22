@@ -3,7 +3,7 @@
 **Scope: component** (the linear-test bucket of the B prover, measured standalone on the RTX 4090 `vy-g2`), plus a
 vu-level re-pricing labelled `ARITHMETIC_DIAGNOSTIC` in `backends/numerical/reports/b_measured_4090.md`.  Recorded runs:
 `r20260922-071843-ac9a` (SIMT path + the b-commit general path in the same run), `r20260922-072315-6497` (same +
-the INT8 tensor-core variant).  Kernel: `lintest_structured.py`; tests `tests/test_lintest_structured.py`.
+the INT8 tensor-core variant), `r20260922-073017-0924` (M = 1..4 with the lazily reduced kernel).  Kernel: `lintest_structured.py`; tests `tests/test_lintest_structured.py`.
 
 ## 1. The test as B-Ligero specifies it (PROTOCOL.md section 5 step 5, section 6; AHIV22 4.7)
 
@@ -157,11 +157,12 @@ might be a matmul", is a memory-bound GEMV -- on tensor cores or on SIMT.
 | (2') the same on tensor cores: `torch._int_mm`, `A = (24 M + 1) x rows` INT8 s-limbs, `B = W` bytes `^ 0x80` (zero-copy view) | read `W` once; `(24M+1) x rows x 16,384` limb MACs = 1.6e11 (M=1) | 5.05 ms HBM; 0.25 ms INT8 | see section 4 (run `r20260922-072315-6497`) |
 | (3) encode `V_m` (6 M calls), `q += G_m * V_m` (8,192 x 36 M mont-muls) | negligible | -- | 0.03 + 0.02 ms (M=1); 0.08 + 0.06 (M=4) |
 | (3') exceptional rows, general path | `14 X` transforms | -- | 0.14 ms for X = 256 (0.48 us/row, as the general path) |
-| **structured total** | | **5.05 ms** (one read of `W`) | **5.67 ms (M=1) / 6.38 ms (M=1, X=256) / 6.98 ms (M=2, X=256) / 13.7 ms (M=4, X=256)** |
+| (2, lazy) `combine_multi_lazy`: 4 rows of 64-bit products `w * (s R)` summed unreduced (< 2^64), one REDC per 4 rows | same reads; ~1/2 the INT32 ops | 5.05 ms HBM | 6.06 (M=1), 5.72 (M=2), **6.95 (M=3)**, 7.56 ms (M=4) (run `r20260922-073017-0924`) |
+| **structured total** | | **5.05 ms** (one read of `W`) | **5.67 ms (M=1) / 6.38 (M=1, X=256) / 5.90 (M=2 lazy, X=256) / 7.15 (M=3 lazy, X=256) / 7.68 (M=4 lazy, X=256); plain kernel 9.72 (M=3) / 13.7 (M=4)** |
 
-The realistic configuration for the chain layout is `M = 3, X ~ 130` -> ~10 ms on SIMT (compute-bound; ~7 ms if
-`E_helper` and `E_sum` are merged into one row class per helper-row parity -- not attempted).  Against the 149.4 ms of
-the general path: **26x (M=1), 21x (M=2), 11x (M=4)** -- the linear test drops from 58% of the B batch to 2-5%.
+The chain layout's configuration is `M = 3, X ~ 130`: **7.15 ms** with the lazily reduced kernel (0.71 of the read
+floor).  Against the 149.4 ms of the general path: **26x (M=1), 21x (M=3 lazy), 11x (M=4 plain)** -- the linear test
+drops from 58% of the B batch to 6%.
 
 ## 4. Tensor cores vs SIMT for step (2)
 
@@ -174,15 +175,16 @@ tail and `M = 2`).  The operation reads the same 5.09 GB whether it runs on tens
 | `M` | SIMT `combine_multi` | tensor cores `torch._int_mm` (n = 24 M + 1 -> 32 / 56 / 104 limb rows) | INT8 utilisation | + byte-xor pass |
 |---|---|---|---|---|
 | 1 | **5.66 ms** (0.89 of floor) | 10.3 ms (0.49 of floor; 15.8 T limb-MAC/s) | 2.4% of 660 T | +11.0 ms (a 5 GB write) |
-| 2 | **6.99 ms** | 12.4 ms (0.41; 22.9 T) | 3.5% | idem |
-| 4 | **13.5 ms** (INT32-issue-bound) | 16.7 ms (0.30; 31.7 T) | 4.8% | idem |
+| 2 | **6.99 ms** (5.72 lazy) | 12.4 ms (0.41; 22.9 T) | 3.5% | idem |
+| 3 | 9.98 ms (**6.95 lazy**) | not run (between the M = 2 and M = 4 rows) | -- | idem |
+| 4 | 13.5 ms (INT32-issue-bound; **7.56 lazy**) | 16.7 ms (0.30; 31.7 T) | 4.8% | idem |
 
 **Verdict: SIMT wins at every `M`.**  The row combination is a memory-bound GEMV (`n <= 104` output rows against a
 310,602-deep reduction); cuBLASLt's INT8 kernel at these shapes runs at half the bandwidth the SIMT kernel reaches, and
 the byte-shift pass (`W ^ 0x80`) costs another full write unless the witness is stored shifted from the start.  Even a
-hand-written `mma.sync` kernel could at best close the 0.6 ms gap to the floor at `M = 1`; at `M = 4` the SIMT kernel is
-2.7x above the floor and a bandwidth-efficient tensor-core GEMV would gain ~8 ms per batch (3% of B) -- the only remaining
-tensor-core opportunity in B, and a small one.  "The one B bucket that might be a matmul" is a matmul of rank `M <= 4`.
+hand-written `mma.sync` kernel could at best close the 0.6 ms gap to the floor at `M = 1`; at `M = 3, 4` the lazily
+reduced SIMT kernel is 1.4-1.5x above the floor, so a bandwidth-efficient tensor-core GEMV would gain ~2-2.5 ms per batch
+(2% of B) -- the only remaining tensor-core opportunity in B, and a small one.  "The one B bucket that might be a matmul" is a matmul of rank `M <= 4`.
 
 ## 5. What the r^T A generation bucket becomes
 
