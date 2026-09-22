@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -18,6 +19,24 @@ from .bb_export import read_rows
 from .circuit import layers, load_circuit
 from .field import P
 from .gkr import VerifyError
+
+
+def read_chain(path: Path, ucirc, ecirc, steps: int, public: list[int]) -> prover.Chain:
+    """``chain.txt`` (``main.rs::read_chain``, PROTOCOL.md 14.3): ``link <in|-> <out> <epi> <init> <zero_nonlast>``."""
+    text = path.read_text()
+    links = []
+    for line in text.splitlines():
+        t = line.split()
+        if not t:
+            continue
+        if t[0] != "link":
+            raise ValueError(f"chain.txt: unknown line {t[0]}")
+        init = int(t[4])
+        if init >= P:
+            raise ValueError("chain.txt: init is not a canonical BabyBear element (a Goldilocks chain file?)")
+        links.append(prover.Link(None if t[1] == "-" else ucirc.col_index(t[1]), ucirc.col_index(t[2]), ecirc.col_index(t[3]), init, t[5] == "1"))
+    return prover.Chain(steps, [], [], [], ecirc.col_index("y16"), public, links=links,
+                        spec_hash=hashlib.sha256(text.encode()).digest())
 
 
 def load_instance(d: Path, device, vus: int | None = None, tile: bool = False) -> prover.Instance:
@@ -40,8 +59,11 @@ def load_instance(d: Path, device, vus: int | None = None, tile: bool = False) -
         epi = torch.from_numpy(epi).repeat(reps, 1).numpy()
         pub = torch.from_numpy(pub).repeat(reps).numpy()
     units, epi, pub = units[: vus * steps], epi[:vus], pub[:vus]
-    ch = man["chain"]
-    chain = prover.Chain(steps, ch["col_c"], ch["col_y"], ch["epi_y32"], ch["epi_y16"], [int(v) for v in pub])
+    if man.get("variant") == "v2":
+        chain = read_chain(root / man.get("chain_file", "chain.txt"), ucirc, ecirc, steps, [int(v) for v in pub])
+    else:
+        ch = man["chain"]
+        chain = prover.Chain(steps, ch["col_c"], ch["col_y"], ch["epi_y32"], ch["epi_y16"], [int(v) for v in pub])
     uh, eh = ucirc.hash, ecirc.hash
     segs = [
         prover.Segment("unit", ucirc, layers(ucirc), torch.from_numpy(units).to(device) % P, uh),
@@ -102,6 +124,51 @@ def cmd_prove(args) -> int:
     return 0 if all(r["verified"] for r in runs) else 1
 
 
+def _prove_verify_expect_reject(inst: prover.Instance, pcs: bool, name: str) -> dict:
+    try:
+        proof, _st = prover.prove(inst, pcs)
+    except Exception as e:  # noqa: BLE001 -- the prover itself notices (a lookup miss, a nonzero fractional sum)
+        print(name, "rejected at prover:", e, flush=True)
+        return {"rejected": True, "where": "prover", "why": f"{type(e).__name__}: {e}"}
+    try:
+        prover.verify(inst, proof, pcs)
+    except VerifyError as e:
+        print(name, "rejected at verifier:", e, flush=True)
+        return {"rejected": True, "where": "verifier", "why": str(e)}
+    print(name, "ACCEPTED (soundness bug)", flush=True)
+    return {"rejected": False, "where": "verifier", "why": "ACCEPTED"}
+
+
+def cmd_unit_negatives(args) -> int:
+    """``DIR/circuit.txt`` + ``DIR/negatives/<name>.bin`` (one mutated unit row each, ``gpu.v2.export negatives``):
+    each is proved as a one-segment, one-unit instance without a chain and must be rejected; ``DIR/honest1.bin``
+    must be accepted."""
+    dev = _dev(args.device)
+    root = Path(args.dir)
+    circ = load_circuit(root / "circuit.txt")
+    lay = layers(circ)
+
+    def inst_of(path: Path) -> prover.Instance:
+        rows = read_rows(path).astype("int64")
+        return prover.Instance([prover.Segment("unit", circ, lay, torch.from_numpy(rows).to(dev) % P, circ.hash)])
+
+    results = {}
+    honest = root / "honest1.bin"
+    if honest.is_file():
+        proof, _ = prover.prove(inst_of(honest), not args.clear)
+        prover.verify(inst_of(honest), proof, not args.clear)
+        results["honest1"] = {"rejected": False, "where": "verifier", "why": "accepted (control)"}
+        print("honest1 accepted (control)", flush=True)
+    for f in sorted((root / "negatives").glob("*.bin")):
+        results[f.stem] = _prove_verify_expect_reject(inst_of(f), not args.clear, f.stem)
+    negs = {k: v for k, v in results.items() if k != "honest1"}
+    n_rej = sum(1 for r in negs.values() if r["rejected"])
+    print(f"{n_rej}/{len(negs)} unit negatives rejected")
+    if args.json:
+        Path(args.json).write_text(json.dumps({"device": str(dev), "results": results, "rejected": n_rej, "total": len(negs)}, indent=1) + "\n")
+    return 0 if n_rej == len(negs) else 1
+
+
 def cmd_negatives(args) -> int:
     dev = _dev(args.device)
     root = Path(args.dir)
@@ -109,21 +176,13 @@ def cmd_negatives(args) -> int:
     results = {}
     for vid, why in man.get("rejected_at_witness", {}).items():
         results[int(vid)] = {"rejected": True, "where": "witness", "why": why}
-    for d in sorted((root / "neg").iterdir(), key=lambda q: int(q.name)):
+    def key(q: Path):
+        return (0, int(q.name), "") if q.name.isdigit() else (1, 0, q.name)
+
+    for d in sorted((root / "neg").iterdir(), key=key):
+        name = int(d.name) if d.name.isdigit() else d.name
         inst = load_instance(d, dev)
-        try:
-            proof, _st = prover.prove(inst, not args.clear)
-        except Exception as e:  # noqa: BLE001 -- the prover itself notices (a lookup miss, a nonzero fractional sum)
-            results[int(d.name)] = {"rejected": True, "where": "prover", "why": f"{type(e).__name__}: {e}"}
-            print(d.name, "rejected at prover:", e, flush=True)
-            continue
-        try:
-            prover.verify(inst, proof, not args.clear)
-            results[int(d.name)] = {"rejected": False, "where": "verifier", "why": "ACCEPTED"}
-            print(d.name, "ACCEPTED (soundness bug)", flush=True)
-        except VerifyError as e:
-            results[int(d.name)] = {"rejected": True, "where": "verifier", "why": str(e)}
-            print(d.name, "rejected at verifier:", e, flush=True)
+        results[name] = _prove_verify_expect_reject(inst, not args.clear, str(name))
     n_rej = sum(1 for r in results.values() if r["rejected"])
     print(f"{n_rej}/{len(results)} negatives rejected")
     if args.json:
@@ -147,8 +206,13 @@ def main(argv=None) -> int:
     n.add_argument("--device", default="cuda")
     n.add_argument("--clear", action="store_true")
     n.add_argument("--json", default=None)
+    u = sub.add_parser("unit-negatives")
+    u.add_argument("dir")
+    u.add_argument("--device", default="cuda")
+    u.add_argument("--clear", action="store_true")
+    u.add_argument("--json", default=None)
     args = ap.parse_args(argv)
-    return cmd_prove(args) if args.cmd == "prove" else cmd_negatives(args)
+    return {"prove": cmd_prove, "negatives": cmd_negatives, "unit-negatives": cmd_unit_negatives}[args.cmd](args)
 
 
 if __name__ == "__main__":
