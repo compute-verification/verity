@@ -666,7 +666,15 @@ fi
 
 # ---------------------------------------------------------------- Commit + overhead (one run)
 if [[ ",$STAGES," == *,commit,* ]]; then
-  TO=${COMMIT_TIMEOUT:-2400}
+  # [r19-int-10, F-r19-int-10] 2400 s was the R12 constant (B=1 256/32).  #60 mistral B8 1024/128 on l40s2b (r20260922-073827-2712): pairs 0
+  # and 1 complete and green (sampled replay 15216/15216, linkage 516/516, weights pin, 68/68 openings, tokens equal; RSS 155 GB -- admit's
+  # F-r18-admit-1 fix held on memory) and pair 2 inside its replay when `timeout 2400` fired -> "commit FAIL rc=124", an INFRA-TIMEOUT
+  # with no verdict.  The wall scales with the pairs x per-pair replay (population VUs ~ B x tokens): the floor is multiplied by
+  # ceil(B/4) x ceil((I+O)/288) like Match's (REL-06/06b), capped at 4 h.  B1 256/32 keeps 2400 s; B8 1024/128 -> 14400 s.  COMMIT_TIMEOUT overrides.
+  K_SCALE_B=$(( (B + 3) / 4 )); [ "$K_SCALE_B" -lt 1 ] && K_SCALE_B=1
+  K_SCALE_T=$(( (I + O + 287) / 288 )); [ "$K_SCALE_T" -lt 1 ] && K_SCALE_T=1
+  TO=${COMMIT_TIMEOUT:-$(( 2400 * K_SCALE_B * K_SCALE_T > 14400 ? 14400 : 2400 * K_SCALE_B * K_SCALE_T ))}
+  log "commit timeout ${TO}s (B=$B I=$I O=$O; x$K_SCALE_B x$K_SCALE_T over the 2400 s floor)"
   tl stage.commit start
   [ -f "$HIDDEN_SO" ] || { verdict commit FAIL "hidden .so missing: $HIDDEN_SO"; tl stage.commit end ok=false; tl row end ok=false stopped_at=commit; exit 12; }
   tl commit.prepare start
