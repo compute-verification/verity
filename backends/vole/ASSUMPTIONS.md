@@ -1,7 +1,8 @@
 # Track C, c-vole: the instantiated assumption stack (Diet Mac'n'Cheese, swanky `1b05bdda`)
 
 Status: **measured** (2026-09-22, vy-cpu). This is the stack the numbers in `backends/numerical/reports/ledger/c-vole.jsonl`
-were produced with, layer by layer, read from the source of `GaloisInc/swanky` at commit
+(relation v1) and `c-compress.jsonl` (relation v2, section 6: same protocol, the relation re-expressed with a logUp
+lookup plugin and output-free multiplication checks, plus three prover-side fixes in `patches/`) were produced with, layer by layer, read from the source of `GaloisInc/swanky` at commit
 `1b05bddab3e02c2cc4917d08c80a629286a4a4fc` (cloned 2026-09-22 05:17Z, `edge/diet-mac-and-cheese`, Rust 1.98.0 pinned by
 `rust-toolchain`), not from the papers. Never say "VOLE" alone: the proof rests on every row of section 2.
 
@@ -60,6 +61,7 @@ setup; `SVOLE<F61p,F61p t>` = every LPN extension, logged by the verifier; `time
 | L5 LPN extension | **primal LPN with regular noise over F_p, d = 10 local code**: y = A^T u + e with A an n x k matrix whose every column has exactly `LPN_PARAMS_D = 10` random nonzero F_p entries (`lpn_mtx_indices`), e regular of weight t (one nonzero per block of n/t, from L4). Two-stage: `LPN_SETUP_*` then `LPN_EXTEND_*`; `k + t + r` outputs are saved as the next base | **LPN (regular noise, d-local / sparse-matrix variant) over F_p** with the parameters below; the only assumption beyond symmetric-key + base OT | computational | `edge/svole-wykw/src/svole.rs` |
 | L6 IT-MAC commitments | M = K + w Delta in F_p (r = 1): commit a value = one sVOLE + one F_p element P -> V | none | perfect hiding, statistical binding 1/p | `diet-mac-and-cheese/src/mac.rs`, `homcom.rs` |
 | L7 online proof | QuickSilver: linear gates local; one committed output + one degree-2 check per `@mul`; checks batched per 3M with one verifier challenge chi; `@assert_zero` batched | none | statistical, (t + 3m)/p | `diet-mac-and-cheese/src/backend.rs`, `homcom.rs` |
+| L7' (v2 only) | `verity_v0` plugin (`patches/`): `assert_mul` = the same degree-2 QuickSilver triple with no committed output; `range`/`lookup` = logUp (Haböck 2022, ePrint 2022/1530) over IT-MACs: committed multiplicities, verifier challenge(s) r (and s for multi-column tables) via `random()`, committed inverses `1/(x_i - r)` each checked by one `assert_mul`, committed `g_j = m_j/(T_j - r)` each checked linearly, one `assert_zero` on the sum identity | none | statistical: per call `(N + R)/p`, plus `N R (C-1)/p` for a C-column table (Schwartz-Zippel on the rational identity and on the column combination) | `plugins/verity_v0.rs` |
 | side channel | `F2`/`F40b` backend always loaded (KOS + sVOLE over F_{2^40}) for field switching, even when the relation never uses it: one extra base-OT + LPN setup in `init time` (~90 ms, 5.7 MB at B = 1) | as L0-L5 | | `bin/dietmc.rs` |
 
 LPN parameters actually used (`lpn = 'medium'`, the default, mapped for `F61p` by `mapping_lpn_size`, `lib.rs:91`):
@@ -79,6 +81,13 @@ Ferret's regular-noise analysis). **We did not re-derive the LPN security estima
 "computational term 2^-136" is replaced by "WYKW21's 128-bit claim for these parameters, not independently checked".
 The d = 10 sparse code is the variant whose security is least studied (the SoK, BDSW23 §3, notes primal d-local LPN over
 large fields has fewer dedicated attacks than dual/Ferret codes); state it as such.
+
+**One public LPN matrix per session (v2 patch, `--fixed-lpn`).** `svole.rs` re-sampled the sparse matrix from the shared
+coin-tossed `lpn_rng` at every extension (28% of all prover instructions, `GPU.md`). The patch samples the rows once per
+(rows, cols) per sVOLE instance, from the same rng in the same order, and reuses them. This is the setting WYKW21
+analyses (one public A, fresh secret and noise per iteration; Fig. 7) and the assumption stated for L5 above; the
+matrix was public either way. Nothing in the security argument changes; memory grows by the matrix (103 MB for
+the F61p extend set).
 
 **Summary line for every ledger entry:**
 `LPN-regular-noise(primal, d=10 local code, k=19870, n=642048, t=2508, F_{2^61-1}), base-OT(Chou-Orlandi/Ristretto, ROM),
@@ -161,3 +170,50 @@ d110 = `r20260922-053613-d110`, 5d62 = `r20260922-061644-5d62`.
 The 4096-VU batch is a full run, not an extrapolation: 4096 chained VUs in one relation, 14.2 GB text witness,
 6,565 LPN extensions, 2.01e9 private inputs, 2.05e9 multiplications, verifier accepted. Per-VU cost is flat from
 B = 64 (0.400 s) to B = 4096 (0.408 s). The 12.7x gap between 8.5 MB/VU and the cost model's 667 kB/VU is section 4.
+
+## 6. Relation v2 (c-compress): the same checker, compressed (`export_ir.py` v2 + `patches/`)
+
+Same predicates, same witness semantics, same negatives (52 WP2 + 52 `vu-k1536-neg` rejected by the evaluator; 4
+`vu-k1536-neg` VUs rejected by dietmc's verifier, run `r20260922-072822-1459`). The expression changed in four ways,
+all realisation not relation (`DECISION.md` §1): output-free `assert_mul` for every product identity and boolean
+check; 10-bit range *chunks* proved by a logUp range lookup instead of bits; the four tables as logUp tuple lookups
+instead of one-hot selectors; 69 range obligations per unit discharged by interval arithmetic over the exporter's
+linear forms (implied by other proven ranges or by linear identities).
+
+| | per unit | per VU (96 units + epilogue) |
+|---|---|---|
+| private wires (`@private`) | 439 = 32 operand words + 225 hints + 120 range chunks + 62 table outputs | 42,155 (+1 claimed word) |
+| `@mul` with committed output | 166 | 15,936 |
+| `assert_mul` (output-free) | 192 | 18,434 |
+| range queries (10-bit chunks into the `[0, 1024)` table) | 381 | 36,584 |
+| table queries POW / ALIGN / LEAD / NORM | 2 / 16 / 2 / 2 | 192 / 1,536 / 192 / 192 |
+| logUp helpers committed | inverses 403 | inverses 38,696 + table `m_j`, `g_j` 4,222 |
+| **committed elements (sVOLE correlations)** | 1,008 | **101,009** (v1: 993,095; 9.83x) |
+| multiplication checks t (`@mul` + `assert_mul` + inverse checks) | 761 | 73,066 (v1: 501,393) |
+| soundness terms per VU beyond t: logUp `(N + R)/p` per call, `+ N R (C-1)/p` per multi-column table | | range 37,608; POW 197,312; ALIGN 2,361,344; LEAD 12,127; NORM 18,656 |
+| accountant `(t + 3m + logUp)/p`, 4096 VUs (1.106e10 terms) | | **F61p 2^-27.6, F128p 2^-94.6, F384p 2^-350 (cap 2^-128 computational)** |
+
+The logUp soundness is the standard one: the rational identity `sum_i 1/(X - x_i) = sum_j m_j/(X - T_j)` holds iff
+every query is a table entry (with `p > N` so no multiplicity vanishes), and a false identity survives a uniformly
+random `r` with probability `<= (N + R)/p`; for C-column tables the tuples are first combined with a second challenge
+`s` as `sum_c s^c t_c`, and a non-row tuple collides with some row with probability `<= R (C-1)/p`, union-bounded over
+the `<= N` queries. Challenges are the verifier's `random()`, sent after the prover's commitments have been read
+(sequential channel: the prover flushes and blocks; the verifier reaches `random()` only after consuming the pending
+`fix` messages). The ALIGN term is the reason F128p is 2.5 bits *worse* than in v1; it is a loose union bound, not a
+measured weakness.
+
+Measured (vy-cpu, one thread unless stated; runs 022f = `r20260922-075153-022f`, 71b6 = `r20260922-080520-71b6`):
+
+| run | field | batch | prover wall | per VU | sVOLE / online (per VU) | P->V | V->P | peak RSS P / V | soundness |
+|---|---|---|---|---|---|---|---|---|---|
+| 022f | F61p | 64 VUs | 2.42 s | 0.0378 s | 0.010 / 0.026 s (plaintext floor 0.016) | 0.949 MB/VU | 0.141 MB/VU | 301 / 244 MB | 2^-33.6 |
+| 022f | F61p, 4 threads | 64 VUs | 1.92 s | 0.030 s | | not relayed | | 515 / 352 MB | 2^-33.6 |
+| **022f** | **F61p** | **4096 VUs** | **123.8 s** | **0.0302 s** | 0.0076 / 0.0226 s | **0.865 MB/VU** (3.54 GB) | 0.108 MB/VU | 344 / 263 MB | **2^-27.6** |
+| 022f | F128p | 64 VUs | 11.77 s (per-element inversions) | 0.184 s | 0.069 / 0.108 s | 1.95 MB/VU | 0.145 MB/VU | 724 / 382 MB | 2^-100.6 |
+| **71b6** | **F128p** | **4096 VUs** | **542.5 s** | **0.132 s** | 0.066 / 0.067 s | **1.68 MB/VU** (6.88 GB) | 0.112 MB/VU | 892 / 429 MB | **2^-94.6** |
+| 022f | F384p | 64 VUs | 54.4 s (per-element inversions) / 20.5 s (batched) | 0.850 / 0.320 s | 0.150 / 0.163 s (batched) | 5.64 MB/VU | 0.42 MB/VU | 1190 / 252 MB | 2^-128 |
+| **71b6** | **F384p** | **4096 VUs** | **F384P_WALL s** | **F384P_SPVU s** | F384P_SPLIT | **F384P_MB MB/VU** | F384P_V2P MB/VU | F384P_RSS | **2^-128** (stat. 2^-350) |
+| 71b6 | F384p, 4 threads | 4096 VUs | F384P_T4_WALL s | F384P_T4_SPVU s | | not relayed | | F384P_T4_RSS | 2^-128 |
+
+The 64-VU F61p figure before `TCP_NODELAY` was 21.8 s (0.34 s/VU): nine verifier challenges per VU each stalled
+~30 ms in Nagle + delayed ACK. v1 had one challenge per 3M gates and did not see it (its 0.6 s `init` did).
