@@ -484,8 +484,9 @@ def combine_int8_tc(W_t, s_plain: np.ndarray, chunk_rows: int = 65536, xor_done:
         r1 = min(main, r0 + chunk_rows)
         C = torch._int_mm(A_t[:, r0:r1].contiguous(), W8[r0:r1])                         # (n, 4k) int32, exact (|ab| <= 2^14, <= 2^17 rows)
         tot += C
-    if main < rows:                                                                      # < 8 tail rows: exact int64 GEMM on SIMT
-        tot += A_t[:, main:].to(torch.int64) @ W8[main:].to(torch.int64)
+    if main < rows:                                                                      # < 8 tail rows: exact int64 GEMM on the host (tiny)
+        tail = A_t[:, main:].cpu().to(torch.int64) @ W8[main:].cpu().to(torch.int64)
+        tot += tail.to(dev)
     M = 1 if np.ndim(s_plain) == 2 else np.shape(s_plain)[1]
     return recombine_limbs(tot, A_t, k, M)
 
@@ -580,10 +581,15 @@ def checks(enc) -> dict:
     try:
         import torch
 
-        W_t = torch.from_numpy(W.view(np.int32)).cuda()
-        s = rng.integers(0, P, (rows, D)).astype(U64)
+        W42 = bb.fill_rows(42, seed=11)                                                    # 42 % 8 != 0: exercises the tail path
+        W_t = torch.from_numpy(W42.view(np.int32)).cuda()
+        s = rng.integers(0, P, (42, D)).astype(U64)
         got = combine_int8_tc(W_t, s).cpu().numpy().astype(U64)
-        out["int8_tc_combine_equals_numpy"] = bool(np.array_equal(got, combine_int8_tc_ref(W, s)))
+        ok = np.array_equal(got, combine_int8_tc_ref(W42, s))
+        s2 = rng.integers(0, P, (42, 2, D)).astype(U64)
+        got2 = combine_int8_tc(W_t, s2).cpu().numpy().astype(U64)
+        ok = ok and all(np.array_equal(got2[m], combine_int8_tc_ref(W42, s2[:, m])) for m in range(2))
+        out["int8_tc_combine_equals_numpy"] = bool(ok)
     except Exception as e:                                                                 # noqa: BLE001
         out["int8_tc_combine_equals_numpy"] = f"error: {e}"
     return out
@@ -650,7 +656,7 @@ def bench(a) -> dict:
             import torch
 
             W_t = torch.from_dlpack(W.view(cp.int32))                                   # zero-copy view of the resident rows
-            s = np.random.default_rng(6).integers(0, P, (R, D)).astype(U64)
+
             xor_c = torch.tensor(-0x7F7F7F80, dtype=torch.int32, device=W_t.device)
             W8 = (W_t ^ xor_c).view(torch.int8)
             torch.cuda.synchronize()
@@ -683,11 +689,14 @@ def bench(a) -> dict:
                                                    "INT32 per chunk, INT64 across chunks, limb recombination mod p; bit-exact vs numpy (checks)"})
                     print(f"B combine_int8_tensorcore M{M} chunk {chunk}: {med:.2f} ms (+ xor pass {t_xor:.2f} ms), "
                           f"{res['results'][-1]['t_limb_macs_per_s']:.1f} T limb-MAC/s, {res['results'][-1]['fraction_of_read_floor']:.2f} of read floor", flush=True)
-            del W_t, W8
-            torch.cuda.empty_cache()
         except Exception as e:                                                             # noqa: BLE001
             res["tc_error"] = repr(e)
             print("tensor-core variant failed:", repr(e), flush=True)
+        finally:
+            W_t = W8 = A_t = None                                                          # noqa: F841 - release the torch views before cupy allocates again
+            import torch
+
+            torch.cuda.empty_cache()
     bbench.free_all()
     # the general path (the b-commit kernels), same run, same device, for the before/after table
     if a.baseline:
