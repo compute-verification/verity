@@ -38,6 +38,86 @@ impl Plan {
         self
     }
 
+    /// Decimation-in-frequency transform on `L` lanes, natural-order input, **bit-reversed output** (no permutation
+    /// pass), scaled for inverse plans.  Stages recurse into the two halves once a block is small enough that its
+    /// remaining stages run from L1 (`v[bitrev(i)] = X[i]`).
+    pub fn dif_lanes<const L: usize>(&self, v: &mut [u32]) {
+        let n = self.n;
+        assert_eq!(v.len(), n * L);
+        let levels = self.tw.len();
+        self.dif_rec::<L>(v, n, levels);
+        if let Some(s) = self.scale {
+            let sm = to_mont(s);
+            for x in v.chunks_exact_mut(L) { let x: &mut [u32; L] = x.try_into().unwrap(); let y = *x; crate::lanes::mul_lanes(x, &y, sm); }
+        }
+    }
+    fn dif_rec<const L: usize>(&self, blk: &mut [u32], len: usize, level: usize) {
+        if len < 2 { return; }
+        let half = len / 2;
+        let tw = &self.tw[level - 1][..half];
+        let (lo, hi) = blk.split_at_mut(half * L);
+        for (j, &w) in tw.iter().enumerate() {
+            let a: &mut [u32; L] = (&mut lo[j * L..(j + 1) * L]).try_into().unwrap();
+            let b: &mut [u32; L] = (&mut hi[j * L..(j + 1) * L]).try_into().unwrap();
+            crate::lanes::bf_dif(a, b, w);
+        }
+        self.dif_rec::<L>(lo, half, level - 1);
+        self.dif_rec::<L>(hi, half, level - 1);
+    }
+
+    /// Output-pruned decimation-in-time transform on `L` lanes with **bit-reversed input** (`v[bitrev(i)] = x[i]`, as
+    /// `dif_lanes` leaves it): the first `log2(n) - stages` DIT stages run inside each of the `2^stages` contiguous
+    /// blocks of `M = n >> stages` positions (block `b` = the length-`M` DFT `Y_b` of the decimated sequence
+    /// `x[j 2^stages + bitrev_stages(b)]`, natural order, L1-resident), then every wanted output is the `2^stages`-term
+    /// sum `X[k] = sum_b w_n^(bitrev(b) k) Y_b[k mod M]` with the twiddles of `pruned_twiddles`.  Forward plans only.
+    pub fn dit_pruned<const L: usize>(&self, v: &mut [u32], stages: usize, wanted: &[usize], wtw: &[u32], out: &mut [u32]) {
+        let n = self.n;
+        assert!(self.scale.is_none());
+        assert_eq!(v.len(), n * L);
+        let m = n >> stages;
+        let nb = 1usize << stages;
+        assert_eq!(wtw.len(), wanted.len() * nb);
+        for b in 0..nb {
+            let blk = &mut v[b * m * L..(b + 1) * m * L];
+            let mut len = 2;
+            let mut level = 0;
+            while len <= m {
+                let half = len / 2;
+                let tw = &self.tw[level][..half];
+                for start in (0..m).step_by(len) {
+                    let sub = &mut blk[start * L..(start + len) * L];
+                    let (lo, hi) = sub.split_at_mut(half * L);
+                    for (j, &w) in tw.iter().enumerate() {
+                        let a: &mut [u32; L] = (&mut lo[j * L..(j + 1) * L]).try_into().unwrap();
+                        let bb: &mut [u32; L] = (&mut hi[j * L..(j + 1) * L]).try_into().unwrap();
+                        crate::lanes::bf_dit(a, bb, w);
+                    }
+                }
+                len *= 2;
+                level += 1;
+            }
+        }
+        for (i, &k) in wanted.iter().enumerate() {
+            let km = k & (m - 1);
+            let o: &mut [u32; L] = (&mut out[i * L..(i + 1) * L]).try_into().unwrap();
+            *o = [0u32; L];
+            for b in 0..nb {
+                let y: &[u32; L] = (&v[(b * m + km) * L..(b * m + km + 1) * L]).try_into().unwrap();
+                crate::lanes::mul_add_lanes(o, y, wtw[i * nb + b]);
+            }
+        }
+    }
+
+    /// The `2^stages` twiddles `w_n^(bitrev_stages(b) k)` (Montgomery) per wanted output, for `dit_pruned`.
+    pub fn pruned_twiddles(&self, stages: usize, wanted: &[usize]) -> Vec<u32> {
+        let nb = 1usize << stages;
+        let mut out = Vec::with_capacity(wanted.len() * nb);
+        for &k in wanted {
+            for b in 0..nb { out.push(to_mont(pow(self.w, ((bitrev(b, stages) * k) % self.n) as u64))); }
+        }
+        out
+    }
+
     pub fn run(&self, v: &mut [Ext]) {
         let n = self.n;
         assert_eq!(v.len(), n);
@@ -202,14 +282,16 @@ pub fn encode(row: &[Ext], n: usize) -> Vec<Ext> {
 /// Evaluates rows (given by their `k` values on `H`) at a fixed set of opened positions `j` of the `n`-point domain
 /// without the full size-`n` NTT: `j = (n/k) m' + c` lies on coset `c`; `a(w_n^j) = NTT_k(a_hat_d * w_n^{c d})[m']`,
 /// and coset 0 is the row itself.
-pub struct RowEval { k: usize, ratio: usize, inv_k: Plan, fwd_k: Plan, twists: Vec<Option<Vec<u32>>>, pub targets: Vec<(usize, usize)>, planar: bool, prune: usize, wanted: Vec<Vec<usize>>, wanted_slot: Vec<Vec<usize>> }
+pub struct RowEval { k: usize, ratio: usize, inv_k: Plan, fwd_k: Plan, twists: Vec<Option<Vec<u32>>>, pub targets: Vec<(usize, usize)>, planar: bool, prune: usize, wanted: Vec<Vec<usize>>, wanted_slot: Vec<Vec<usize>>,
+    /// permutation-free path (`VERITY_GKR_NOPERM=0` disables): twists in bit-reversed order, `dit_pruned` twiddles per coset
+    noperm: bool, twists_br: Vec<Option<Vec<u32>>>, wtw: Vec<Vec<u32>> }
 
 impl RowEval {
     pub fn new(k: usize, n: usize, opened: &[usize]) -> RowEval {
         let ratio = n / k;
         let wn = root_of_unity(n);
         let targets: Vec<(usize, usize)> = opened.iter().map(|&j| (j % ratio, j / ratio)).collect();
-        let twists = (0..ratio).map(|c| {
+        let twists: Vec<Option<Vec<u32>>> = (0..ratio).map(|c| {
             if c == 0 || !targets.iter().any(|t| t.0 == c) { return None; }
             let wc = pow(wn, c as u64);
             let mut cur = 1u32;
@@ -222,7 +304,12 @@ impl RowEval {
         let mut wanted = vec![Vec::new(); ratio];
         let mut wanted_slot = vec![Vec::new(); ratio];
         for (i, &(c, m)) in targets.iter().enumerate() { wanted[c].push(m); wanted_slot[c].push(i); }
-        RowEval { k, ratio, inv_k: Plan::new(k, true), fwd_k: Plan::new(k, false).with_pruning(prune), twists, targets, planar: std::env::var("VERITY_GKR_PLANAR").map(|v| v == "1").unwrap_or(false), prune, wanted, wanted_slot }
+        let fwd_k = Plan::new(k, false).with_pruning(prune);
+        let bits = k.trailing_zeros() as usize;
+        let twists_br: Vec<Option<Vec<u32>>> = twists.iter().map(|t| t.as_ref().map(|v| (0..k).map(|i| v[bitrev(i, bits)]).collect())).collect();
+        let wtw: Vec<Vec<u32>> = wanted.iter().map(|w| fwd_k.pruned_twiddles(prune, w)).collect();
+        let noperm = std::env::var("VERITY_GKR_NOPERM").map(|v| v != "0").unwrap_or(true) && prune > 0;
+        RowEval { k, ratio, inv_k: Plan::new(k, true), fwd_k, twists, targets, planar: std::env::var("VERITY_GKR_PLANAR").map(|v| v == "1").unwrap_or(false), prune, wanted, wanted_slot, noperm, twists_br, wtw }
     }
 
     /// `out[i] = row(w_n^{opened[i]})`; `scratch` is reused across rows (`2 k DEG` words).  Planar: the six
@@ -275,12 +362,12 @@ impl RowEval {
             let row = &rows[r * k..(r + 1) * k];
             for d in 0..k { hat[d * L + r * DEG..d * L + (r + 1) * DEG].copy_from_slice(&row[d].0); }
         }
-        self.inv_k.run_lanes::<L>(hat);
+        if self.noperm { self.inv_k.dif_lanes::<L>(hat); } else { self.inv_k.run_lanes::<L>(hat); }
         for (i, &(c, m)) in self.targets.iter().enumerate() {
             if c == 0 { for r in 0..R { out[r * t + i] = rows[r * k + m]; } }
         }
         for c in 1..self.ratio {
-            let Some(tw) = &self.twists[c] else { continue };
+            let Some(tw) = (if self.noperm { &self.twists_br[c] } else { &self.twists[c] }) else { continue };
             for d in 0..k {
                 let w = tw[d];
                 let src: &[u32; L] = (&hat[d * L..(d + 1) * L]).try_into().unwrap();
@@ -289,7 +376,8 @@ impl RowEval {
             }
             if self.prune > 0 {
                 let wl = &self.wanted[c];
-                self.fwd_k.eval_pruned::<L>(work, self.prune, wl, &mut pruned[..wl.len() * L]);
+                if self.noperm { self.fwd_k.dit_pruned::<L>(work, self.prune, wl, &self.wtw[c], &mut pruned[..wl.len() * L]); }
+                else { self.fwd_k.eval_pruned::<L>(work, self.prune, wl, &mut pruned[..wl.len() * L]); }
                 for (wi, &i) in self.wanted_slot[c].iter().enumerate() {
                     for r in 0..R {
                         let mut e = [0u32; DEG];
@@ -382,11 +470,38 @@ mod tests {
             plan.eval_pruned::<DEG>(&mut l2, stages, &wanted, &mut o);
             for d in 0..k { assert_eq!(&o[d * DEG..(d + 1) * DEG], &v[d].0, "stages {stages} output {d}"); }
         }
-        std::env::set_var("VERITY_GKR_PRUNE", "2");
-        let re2 = RowEval::new(k, n, &opened);
-        let mut outp = vec![Ext::ZERO; 4 * opened.len()];
-        re2.eval_batch::<4, 24>(&rows, &mut scratch, &mut outp);
-        assert_eq!(outp, outb);
+        // dif_lanes (bit-reversed output) == run_lanes (natural), forward and inverse
+        for inverse in [false, true] {
+            let plan = Plan::new(k, inverse);
+            let mut a = vec![0u32; k * DEG];
+            for d in 0..k { a[d * DEG..(d + 1) * DEG].copy_from_slice(&rows[d].0); }
+            let mut b = a.clone();
+            plan.run_lanes::<DEG>(&mut a);
+            plan.dif_lanes::<DEG>(&mut b);
+            let bits = k.trailing_zeros() as usize;
+            for i in 0..k { assert_eq!(&b[bitrev(i, bits) * DEG..(bitrev(i, bits) + 1) * DEG], &a[i * DEG..(i + 1) * DEG], "dif {inverse} {i}"); }
+        }
+        // dit_pruned on bit-reversed input == full forward, every output, several depths
+        for stages in 0..=3 {
+            let plan = Plan::new(k, false);
+            let bits = k.trailing_zeros() as usize;
+            let mut br = vec![0u32; k * DEG];
+            for d in 0..k { br[bitrev(d, bits) * DEG..(bitrev(d, bits) + 1) * DEG].copy_from_slice(&rows[d].0); }
+            let wanted: Vec<usize> = (0..k).collect();
+            let wtw = plan.pruned_twiddles(stages, &wanted);
+            let mut o = vec![0u32; k * DEG];
+            plan.dit_pruned::<DEG>(&mut br, stages, &wanted, &wtw, &mut o);
+            for d in 0..k { assert_eq!(&o[d * DEG..(d + 1) * DEG], &v[d].0, "dit_pruned stages {stages} output {d}"); }
+        }
+        for (prune, noperm) in [("2", "0"), ("2", "1"), ("3", "1")] {
+            std::env::set_var("VERITY_GKR_PRUNE", prune);
+            std::env::set_var("VERITY_GKR_NOPERM", noperm);
+            let re2 = RowEval::new(k, n, &opened);
+            let mut outp = vec![Ext::ZERO; 4 * opened.len()];
+            re2.eval_batch::<4, 24>(&rows, &mut scratch, &mut outp);
+            assert_eq!(outp, outb, "prune {prune} noperm {noperm}");
+        }
         std::env::remove_var("VERITY_GKR_PRUNE");
+        std::env::remove_var("VERITY_GKR_NOPERM");
     }
 }

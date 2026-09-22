@@ -11,7 +11,10 @@
 //! reduced across threads.  The `eq` weights over the LogUp hypercube use a high/low split (one product per leaf).
 
 use crate::circuit::{eval_lin, log2ceil, Circuit, Gate, Layer, Query, Table};
-use crate::field::{eq_point, eq_table, interpolate, mat_apply, mont_mul, mul, mul_matrix, sub, to_mont, Ext, PlanarMats, DEG, DOMAIN, P64, R_MOD_P};
+use crate::field::{add, eq_point, eq_table, interpolate, mat_apply, mont_mul, mul, mul_matrix, planar_times_matrix, sub, to_mont, Ext, PlanarMats, DEG, DOMAIN, P, P64, R_MOD_P};
+
+/// Montgomery form of `-1`.
+const NEG_R_MOD_P: u32 = P - R_MOD_P;
 use crate::ntt::{encode, RowEval};
 use crate::proof::{Column, Proof};
 use crate::sha256::Sha256;
@@ -286,9 +289,9 @@ struct LookupSeg { base: usize, q_t: usize, terms_mat: Vec<Vec<(usize, [u32; DEG
     rank_offs: Vec<u32>, rank_items: Vec<(u32, u32)> /* (rank, coef in Montgomery form) */, touched: Vec<usize> }
 
 /// Per-thread scratch of the fill: planar accumulators and outputs (`[coord * n + col]`).
-pub struct FillScratch { row: Vec<Ext>, planar: Vec<u32>, acc: Vec<u64>, /// per-phase nanoseconds (VERITY_GKR_PROFILE=1): input claims, single-column lookups, ext lookups, chain
+pub struct FillScratch { row: Vec<Ext>, planar: Vec<u32>, acc: Vec<u32>, flush: Vec<u32>, /// per-phase nanoseconds (VERITY_GKR_PROFILE=1): input claims, single-column lookups, ext lookups, chain
     pub prof: [u64; 5], profile: bool }
-impl FillScratch { pub fn new() -> FillScratch { FillScratch { row: Vec::new(), planar: Vec::new(), acc: Vec::new(), prof: [0; 5], profile: std::env::var("VERITY_GKR_PROFILE").map(|v| v == "1").unwrap_or(false) } } }
+impl FillScratch { pub fn new() -> FillScratch { FillScratch { row: Vec::new(), planar: Vec::new(), acc: Vec::new(), flush: Vec::new(), prof: [0; 5], profile: std::env::var("VERITY_GKR_PROFILE").map(|v| v == "1").unwrap_or(false) } } }
 
 struct Functional<'a> {
     stmt: &'a Statement<'a>,
@@ -307,19 +310,19 @@ struct Functional<'a> {
     per_vu: usize,
 }
 
-/// The R16-style flush: `out[touched[r]] += (rl * hi[block]) * acc[r]` for every touched column; `acc` holds the
-/// unreduced `u64` sums of canonical values (interleaved, `[r * 6 + i]`; at most `2^lo_bits` terms of `< 2^31` per
-/// block, so no overflow) and is zeroed.
-fn flush_single(lp: &LookupPlan, ls: &LookupSeg, h: usize, acc: &mut [u64], out: &mut [Ext]) {
+/// The R16-style flush: `out[touched[r]] += (rl * hi[block]) * acc[r]` for every touched column, as one planar
+/// matrix product over the ranks (`acc` interleaved `[r * 6 + i]`, canonical; transposed into `flush`, which also
+/// receives the products); `acc` is zeroed.
+fn flush_single(lp: &LookupPlan, ls: &LookupSeg, h: usize, acc: &mut [u32], flush: &mut [u32], out: &mut [Ext]) {
+    let nt = ls.touched.len();
     let g = mul_matrix(lp.rl * lp.eq.hi[h]);
+    let (planar, prod) = flush.split_at_mut(DEG * nt);
+    for r in 0..nt { for i in 0..DEG { planar[i * nt + r] = acc[r * DEG + i]; } }
+    planar_times_matrix(planar, nt, &g, prod);
     for (r, &c) in ls.touched.iter().enumerate() {
-        let a: &mut [u64; DEG] = (&mut acc[r * DEG..(r + 1) * DEG]).try_into().unwrap();
-        if a.iter().any(|&x| x != 0) {
-            let e = Ext(std::array::from_fn(|i| (a[i] % P64) as u32));
-            out[c] += mat_apply(&e, &g);
-            *a = [0; DEG];
-        }
+        out[c] += Ext(std::array::from_fn(|d| prod[d * nt + r]));
     }
+    for a in acc.iter_mut() { *a = 0; }
 }
 
 impl<'a> Functional<'a> {
@@ -331,7 +334,7 @@ impl<'a> Functional<'a> {
         let profile = sc.profile;
         let mut tp = if profile { Some(Instant::now()) } else { None };
         let mut lap = |sc_prof: &mut [u64; 5], k: usize| { if let Some(t) = tp.as_mut() { let n = Instant::now(); sc_prof[k] += (n - *t).as_nanos() as u64; *t = n; } };
-        let FillScratch { row, planar, acc, prof, .. } = sc;
+        let FillScratch { row, planar, acc, flush, prof, .. } = sc;
         // input claims: out[c] = ec * v[c], vectorised over the columns through the planar matrices of v
         planar.resize(DEG * ncols, 0);
         self.v_mats[si].matvec(&ec, planar);
@@ -350,29 +353,33 @@ impl<'a> Functional<'a> {
                 let nt = ls.touched.len();
                 acc.clear();
                 acc.resize(DEG * nt, 0);
+                flush.resize(2 * DEG * nt, 0);
                 let mut hi_cur = x0 >> lp.eq.lo_bits;
                 for j in 0..ls.q_t {
                     let x = x0 + j;
                     let h = x >> lp.eq.lo_bits;
                     if h != hi_cur {
                         lap(prof, 1);
-                        flush_single(lp, ls, hi_cur, acc, out);
+                        flush_single(lp, ls, hi_cur, acc, flush, out);
                         lap(prof, 4);
                         hi_cur = h;
                     }
                     let e = &lp.eq.lo[x & mask];
                     for &(rank, coef) in &ls.rank_items[ls.rank_offs[j] as usize..ls.rank_offs[j + 1] as usize] {
                         let rank = rank as usize;
-                        let a: &mut [u64; DEG] = (&mut acc[rank * DEG..(rank + 1) * DEG]).try_into().unwrap();
+                        let a: &mut [u32; DEG] = (&mut acc[rank * DEG..(rank + 1) * DEG]).try_into().unwrap();
+                        // the coefficients are +-1 in practice (v1: 517 / 234 terms); anything else pays a mont_mul
                         if coef == R_MOD_P {
-                            for i in 0..DEG { a[i] += e.0[i] as u64; }
+                            for i in 0..DEG { a[i] = add(a[i], e.0[i]); }
+                        } else if coef == NEG_R_MOD_P {
+                            for i in 0..DEG { a[i] = sub(a[i], e.0[i]); }
                         } else {
-                            for i in 0..DEG { a[i] += mont_mul(e.0[i], coef) as u64; }
+                            for i in 0..DEG { a[i] = add(a[i], mont_mul(e.0[i], coef)); }
                         }
                     }
                 }
                 lap(prof, 1);
-                flush_single(lp, ls, hi_cur, acc, out);
+                flush_single(lp, ls, hi_cur, acc, flush, out);
                 lap(prof, 4);
             } else {
                 let mut h_cur = usize::MAX;
