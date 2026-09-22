@@ -14,6 +14,9 @@ flight saturate the prover if `N_sat x mem_per_batch` fits; otherwise memory bin
 | A-CPU BabyBear^6 (GKR+logUp+Ligero) | 4096 | NON_ZK_PROOF_DIAGNOSTIC | AMD EPYC 9654 (vy-cpu2, 12 of 32 threads, shared with b-lookup and checker-min) | 319 | 45.0 | 355 | 33.5 MB | 364 | 364 | 365 | 368 | 382 | 5% |
 | A-GPU re-priced (4090 fused SIMT sumcheck, BabyBear^6) | 4096 | ARITHMETIC_DIAGNOSTIC (re-pricing) | RTX 4090 24 GB | 0.866 | 45.0 | 355 | 36.1 MB | 45.9 | 45.9 | 46.2 | 49.4 | 63.6 | 28% |
 | A-GPU re-priced (4090 fused SIMT) with a hypothetical 1 s verifier | 4096 | ARITHMETIC_DIAGNOSTIC (re-pricing + verifier assumption) | RTX 4090 24 GB | 0.866 | 1.00 | 355 | 36.1 MB | 1.88 | 1.91 | 2.23 | 5.43 | 19.6 | 90% |
+| A-GPU BabyBear^6, a-gpu2 prover (r20260922-094040-9e76, tree 5ad05fb, Python-verified) + independent Rust verifier (a-verifier-2, r20260922-105647-c947) | 4096 | MEASURED prover + MEASURED independent verifier | H100 80 GB + EPYC 9654 (vy-cpu2, 12 of 32 threads, shared) | 1.79 | 1.00 | 438 | 33.9 MB | 2.8 | 2.84 | 3.24 | 7.18 | 24.7 | 89% |
+| A-GPU BabyBear^6, a-gpu recorded 4.43 s row (not Rust-verified from a committed tree; F1_TRIAGE.md) + Rust verifier | 4096 | MEASURED prover (unverified row) + MEASURED verifier | H100 80 GB + EPYC 9654 (vy-cpu2, 12 threads) | 4.43 | 1.00 | 438 | 33.9 MB | 5.44 | 5.48 | 5.88 | 9.82 | 27.3 | 80% |
+| A-GPU BabyBear^6, torch path (`VERITY_GPU_TORCH_ONLY=1`, Rust-verified) + Rust verifier | 4096 | MEASURED prover + MEASURED independent verifier | H100 80 GB + EPYC 9654 (vy-cpu2, 12 threads) | 25.5 | 1.00 | 438 | 33.9 MB | 26.5 | 26.5 | 26.9 | 30.9 | 48.4 | 45% |
 | A-GPU re-priced (H100 packed sumcheck, model) | 4096 | ARITHMETIC_DIAGNOSTIC (model) | H100 80 GB | 0.430 | 45.0 | 355 | 36.1 MB | 45.4 | 45.5 | 45.8 | 49.0 | 63.2 | 28% |
 | B-CPU AIR (Plonky3 uni-stark FRI, Goldilocks^2) | 4096 | NON_ZK_PROOF_DIAGNOSTIC | AMD EPYC 9654 96-Core Processor | 184 | 0.148 | 22 | 3.2 MB | 184 | 184 | 184 | 184 | 185 | 1% |
 | B-Ligero GPU re-priced (4090, BabyBear, helper columns) | 4096 | ARITHMETIC_DIAGNOSTIC (re-pricing, HVZK rows) | RTX 4090 24 GB | 0.259 | 0.400 | 3 | 240.1 MB | 0.736 | 0.736 | 0.739 | 0.766 | 0.886 | 17% |
@@ -177,3 +180,19 @@ committed wires per unit (+7%) cut the checker chain 197 -> 129; together depth 
 (iii) `c` variables per message halves or thirds the rounds of every sumcheck at 2x / 5.3x the sumcheck work. The
 checkpointed variant (PROTOCOL.md 12.4) is deeper *and* slower at every RTT -- it does not win under a latency objective
 either. The hint-free branch is 6% cheaper but ~170 rounds deeper: it wins only below ~0.5 ms RTT on the GPU.
+
+## 8. Update (a-verifier-2, 2026-09-22 ~11:00Z): the independent Rust verifier at 1.00 s
+
+The "hypothetical 1 s verifier" row of section 1 is now a measured one: `backends/gkr/verifier` (the independent
+BabyBear^6 verifier, no code shared with the prover) accepts the a-gpu B = 4096 proof in **1.00 s on 12 threads of
+vy-cpu2** (1.00 / 1.03 s over two reps with the pod at load 33 of 32 cores; 10.3 s on one thread; 0.077 s at B = 64),
+down from the a-verifier lane's 3.02 s (r20260922-093721-1330) and the 45 s Goldilocks-Rust / 7.1 s Python rows
+above.  Per stage at 12 threads: parse 0.035, transcript replay 0.007, functional value 0.116, Merkle + proximity
+0.024, Ligero linear test 0.81 (CPU: fill 4.5 s + NTT eval 4.9 s over 12 threads, 11.5x scaling).  The three new rows
+of section 1 join it with the three prover records that exist: the a-gpu2 1.79 s H100 prover (Python-verified, its
+tree not yet Rust-verified at B = 4096 -- `main` is Rust-verified at B <= 512 on the 4090, `F1_TRIAGE.md`), the
+a-gpu 4.43 s recorded row, and the torch path.  With the 1.79 s prover the verifier is 36% of the 2.82 s e2e at RTT 0
+(`backends/gkr/verifier/results_e2e_agpu2.json`; `results_e2e_kernel.json`, `results_e2e_torch.json` for the other
+two); the network term (438 round trips) passes the compute at 6.4 ms RTT.  How the 3x came about, and what is left
+(the verifier is now at the machine's throughput for the 4-transform linear test; the levers that remain are
+algorithmic), in `backends/numerical/reports/a_verifier_2.md`.
