@@ -167,8 +167,8 @@ mod tests {
         let a = Ext([Fp::new(3), Fp::new(5), Fp::new(7)]);
         let b = Ext([Fp::new(11), Fp::new(13), Fp::new(17)]);
         let c = a * b;
-        // (3+5x+7x^2)(11+13x+17x^2) = 33 + 94x + 191x^2 + 176x^3 + 119x^4; x^3=x+1, x^4=x^2+x
-        assert_eq!(c, Ext([Fp::new(33 + 176), Fp::new(94 + 176 + 119), Fp::new(191 + 119)]));
+        // (3+5x+7x^2)(11+13x+17x^2) = 33 + 94x + 193x^2 + 176x^3 + 119x^4; x^3=x+1, x^4=x^2+x
+        assert_eq!(c, Ext([Fp::new(33 + 176), Fp::new(94 + 176 + 119), Fp::new(193 + 119)]));
         assert_eq!(a * Ext::ONE, a);
     }
     #[test]

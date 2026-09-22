@@ -81,9 +81,17 @@ pub fn prove(inst: &Instance, circuit_hash: &[u8; 32]) -> (Vec<Ext>, Stats) {
     let b = log2ceil(inst.units);
     let mut claim = LayerClaim { w: eq_table(&z0), copy_point: gamma, value: Ext::ZERO };
     let nl = inst.layers.len();
+    let depth_of: Vec<u32> = inst.circ.wires.iter().map(|w| match w { circuit::Wire::Input(_) => 0, circuit::Wire::Prod { depth, .. } => *depth }).collect();
     for (i, layer) in inst.layers.iter().enumerate() {
         let last = i == nl - 1;
-        let input_wires = Strided { data: &wires, width: nw, copies: inst.units };
+        // V^(k) feeds layer i: k = max_depth for the assertion layer, else the layer's own depth - 1
+        let k_in = inst.circ.max_depth - i as u32;
+        let masked: Vec<Fp> = if last { vec![] } else {
+            let mut m = wires.clone();
+            for (j, v) in m.iter_mut().enumerate() { if depth_of[j % nw] > k_in { *v = Fp::ZERO; } }
+            m
+        };
+        let input_wires = Strided { data: &masked, width: nw, copies: inst.units };
         let input_cols = Strided { data: &inst.cols, width: inst.ncols, copies: inst.units };
         let inp: &(dyn gkr::LayerInput + Sync) = if last { &input_cols } else { &input_wires };
         let (next, _fin) = gkr::prove_layer(layer, inp, b, &claim, &mut tr, &mut out, last);
