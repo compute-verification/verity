@@ -94,8 +94,9 @@ def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs
     while n <= 2 * k:                     # small-l ZK configurations (l <= t_pad): the quadratic test needs n > 2k
         n *= 2
     t = acc.ligero_queries_for(per_proof, n, k, l)
-    if zk and not k > l + t:
-        raise ValueError(f"ZK needs k > l + t (Lemma 4.15): t_pad={t_pad} <= t={t}")
+    while zk and not k > l + t:           # small l: the padding lowers the rate; double n until Lemma 4.15 holds
+        n *= 2
+        t = acc.ligero_queries_for(per_proof, n, k, l)
     # field terms: (n + 1 + L + Q) / p^D must stay well under the target; D = 6 at -128, 4 at -80
     D = 6 if target_log2 <= -100 else 4
     return Config(l, n, D, t, target_log2, zk, t_pad if zk else 0)
