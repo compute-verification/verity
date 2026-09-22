@@ -57,8 +57,7 @@ identity term over Goldilocks^3; parameterised, not tuned.
   The Rust verifier accepted the 4096-unit batch end-to-end (run bb50 below) and the 1024-unit file at B=1 and B=64.
   `fixtures/bench-instances/v1` is not on main (checked `git show main:...`), so honest units are WP2 `gen` on random finite inputs.
 - `cargo test --release` on vy-cpu: 9/9 green (field, NTT/encode, SHA-256 vectors, honest batches B=1..64, tampered proof, all negatives).
-- Python: `pytest backends/numerical/tests/gkr_export` 3/3 green; ruff clean on the added files (full-suite run was still in flight
-  at report time — see the final message).
+- Python: `pytest backends/numerical/tests/gkr_export` 3/3 green; `pytest backends/numerical -q` 291/291 green; ruff clean on the added files.
 
 ## Negatives rejected (52/52, 0 wrongly accepted; `verity-gkr negatives`, PCS mode, commit 27f1057)
 
