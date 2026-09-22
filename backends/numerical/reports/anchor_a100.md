@@ -2,7 +2,7 @@
 
 **Scope: component measurements** (kernel time on random/patterned data, bit-exact against each lane's CPU reference), then one `ARITHMETIC_DIAGNOSTIC` re-price of A and B with those numbers.  Nothing here is a proof.  Every recorded 4090 / H100 number is the lane's own (its README / report, run id in the lane's table); every A100 number is a `research run --on vy-a100b --exclusive` of the same bench, same flags, CUDA events, warm, median of >= 7, bit-exact checks on.  `overhead.vs_native_peak` is defined against *this* card's dense BF16 peak (`contract.NATIVE_REFERENCE`, 9.85 ps per K=1536 VU), so the last section is the first A-vs-B comparison where the prover and the reference are the same machine.
 
-Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 2.6.0+cu124, CUDA 12.4, 108 SMs (sm_80).  Recorded runs: microbench `r20260922-063608-a304`, hash_gpu `r20260922-063811-e561`, encode `r20260922-064413-0508`, fused `r20260922-064953-f9bb`, fused_logup `r20260922-071602-522d`, packed `r20260922-073828-153f`, packed_killed_mislaunch `r20260922-073540-f5b5`, tensor `r20260922-074359-964b`, wave2_gkr (packed Montgomery 2^26, direct 2^28, logUp GKR full-VU) `r20260922-075147-91a5`.
+Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 2.6.0+cu124, CUDA 12.4, 108 SMs (sm_80).  Recorded runs: microbench `r20260922-063608-a304`, hash_gpu `r20260922-063811-e561`, encode `r20260922-064413-0508`, fused `r20260922-064953-f9bb`, fused_logup `r20260922-071602-522d`, packed `r20260922-073828-153f`, packed_killed_mislaunch `r20260922-073540-f5b5`, tensor `r20260922-074359-964b`, wave2_gkr (packed Montgomery 2^26, direct 2^28, logUp GKR full-VU) `r20260922-075147-91a5`, wave2_b (b-commit fused commitment + buckets, b-lintest structured linear test) `r20260922-080250-cff5`.
 
 Bandwidth ratios the earlier reports *scaled* by: A100/4090 = 2,039/1,008 = 2.02; A100/H100 = 2,039/3,350 = 0.61.  Speed ratios below are recorded-time / A100-time (> 1 = the A100 is faster); a departure from the bandwidth ratio by > 1.5x either way is a finding about the kernel and is flagged.
 
@@ -218,6 +218,97 @@ Agreement test on the A100 (Montgomery kernels): 46 passed in 405.11s (0:06:45)
 
 The Montgomery kernels scale with bandwidth on the A100: 0.52-0.61x the H100 at 2^26 (bandwidth ratio 0.61), k=3 direct 2^28 **31.9 ms** (0.55x the H100's 17.7; 5.9% of the A100 INT8 peak) = **64.3 us/VU, 263 ms per six-layer batch** padded (156 un-padded) -- 1.8x better than the first-pass packed k=3 on the same card (476 ms).  k=2 and k=3 are within 4% of each other on the A100 (the base x base Hadamard share is INT32 work at 0.47x the H100's rate).  **Finding (flagged).**  The logUp fractional GKR runs at **412 ms = 101 us/VU** on the A100 vs 427 on the H100 (1.04x: a 1.7x departure from the bandwidth ratio) -- it is host-launch-bound (~1 ms x 351 rounds; the 20 smallest levels are 144 of the 412 ms on both cards), so the GPU does not matter yet; the device work is ~0.1-0.2 s.  Fixing the launch loop (CUDA graphs per level) is worth ~2x on either card.
 
+## 6. `backends/direct/encode` b-commit + b-lintest -- fused commitment and B's prover buckets (4090 runs `r20260922-064722-07c7`, `r20260922-065537-279b`, `r20260922-073017-0924`; A100 run `r20260922-080250-cff5`)
+
+| B prover bucket | RTX 4090 recorded | A100 measured | speed ratio A100/4090 | A100 floor (measured BW) | fraction of floor |
+|---|---|---|---|---|---|
+| fused commitment (encode -> blake3 -> root), B, 256-row slices | 52.2 ms (0.168 us/row) | 154.9 ms (0.499 us/row) | 0.34x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| fused commitment (encode -> blake3 -> root), B, 256-row slices, overlap | 49.7 ms (0.160 us/row) | 192.7 ms (0.620 us/row) | 0.26x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| fused commitment (encode -> blake3 -> root), B, 512-row slices | 47.2 ms (0.152 us/row) | 122.4 ms (0.394 us/row) | 0.39x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.12 |
+| fused commitment (encode -> blake3 -> root), B, 512-row slices, cosets kept | 49.4 ms (0.159 us/row) | 123.0 ms (0.396 us/row) | 0.40x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.12 |
+| fused commitment (encode -> blake3 -> root), B, 512-row slices, overlap | 48.0 ms (0.155 us/row) | 167.0 ms (0.538 us/row) | 0.29x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| fused commitment (encode -> blake3 -> root), B, 1024-row slices | 47.1 ms (0.152 us/row) | 110.5 ms (0.356 us/row) | 0.43x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.13 |
+| fused commitment (encode -> blake3 -> root), B, 1024-row slices, overlap | 46.7 ms (0.150 us/row) | 159.4 ms (0.513 us/row) | 0.29x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| fused commitment (encode -> blake3 -> root), B, 4096-row slices | 59.3 ms (0.191 us/row) | 100.0 ms (0.322 us/row) | 0.59x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.15 |
+| fused commitment (encode -> blake3 -> root), B, 4096-row slices, overlap | 58.7 ms (0.189 us/row) | 149.0 ms (0.480 us/row) | 0.39x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.10 |
+| fused commitment (encode -> blake3 -> root), B, 65536-row slices | 55.4 ms (0.178 us/row) | 98.0 ms (0.316 us/row) | 0.56x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.15 |
+| fused commitment (encode -> blake3 -> root), B, 65536-row slices, overlap | 55.7 ms (0.179 us/row) | 138.3 ms (0.445 us/row) | 0.40x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.10 |
+| fused commitment (encode -> sha256 -> root), B, 256-row slices | 61.7 ms (0.199 us/row) | 195.1 ms (0.628 us/row) | 0.32x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.07 |
+| fused commitment (encode -> sha256 -> root), B, 256-row slices, overlap | 59.9 ms (0.193 us/row) | 221.4 ms (0.713 us/row) | 0.27x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.07 |
+| fused commitment (encode -> sha256 -> root), B, 512-row slices | 58.8 ms (0.189 us/row) | 178.3 ms (0.574 us/row) | 0.33x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| fused commitment (encode -> sha256 -> root), B, 512-row slices, cosets kept | 60.7 ms (0.196 us/row) | 178.9 ms (0.576 us/row) | 0.34x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| fused commitment (encode -> sha256 -> root), B, 512-row slices, overlap | 59.5 ms (0.192 us/row) | 198.6 ms (0.639 us/row) | 0.30x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.07 |
+| fused commitment (encode -> sha256 -> root), B, 1024-row slices | 58.9 ms (0.190 us/row) | 173.4 ms (0.558 us/row) | 0.34x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| fused commitment (encode -> sha256 -> root), B, 1024-row slices, overlap | 58.3 ms (0.188 us/row) | 196.3 ms (0.632 us/row) | 0.30x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.07 |
+| fused commitment (encode -> sha256 -> root), B, 4096-row slices | 64.7 ms (0.208 us/row) | 166.0 ms (0.534 us/row) | 0.39x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| fused commitment (encode -> sha256 -> root), B, 4096-row slices, overlap | 64.1 ms (0.206 us/row) | 187.4 ms (0.603 us/row) | 0.34x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| fused commitment (encode -> sha256 -> root), B, 65536-row slices | 62.7 ms (0.202 us/row) | 164.5 ms (0.530 us/row) | 0.38x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| fused commitment (encode -> sha256 -> root), B, 65536-row slices, overlap | 62.5 ms (0.201 us/row) | 180.8 ms (0.582 us/row) | 0.35x | 14.5 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| sha256_s512_ov0_keep0_encode_only (B, unfused reference pass) | 33.6 ms | 82.1 ms | 0.41x |  |  |
+| sha256_s512_ov0_keep0_hash_only (B, unfused reference pass) | 30.0 ms | 91.8 ms | 0.33x |  |  |
+| blake3_s512_ov0_keep0_encode_only (B, unfused reference pass) | 35.7 ms | 84.0 ms | 0.43x |  |  |
+| blake3_s512_ov0_keep0_hash_only (B, unfused reference pass) | 15.4 ms | 36.7 ms | 0.42x |  |  |
+| fused commitment (encode -> blake3 -> root), A, 256-row slices | 8.2 ms (0.168 us/row) | 24.5 ms (0.502 us/row) | 0.33x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| fused commitment (encode -> blake3 -> root), A, 256-row slices, overlap | 7.8 ms (0.160 us/row) | 30.4 ms (0.623 us/row) | 0.26x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| fused commitment (encode -> blake3 -> root), A, 512-row slices | 7.4 ms (0.152 us/row) | 19.3 ms (0.396 us/row) | 0.38x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.12 |
+| fused commitment (encode -> blake3 -> root), A, 512-row slices, cosets kept | 8.4 ms (0.172 us/row) | 20.0 ms (0.409 us/row) | 0.42x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.11 |
+| fused commitment (encode -> blake3 -> root), A, 512-row slices, overlap | 7.5 ms (0.154 us/row) | 26.4 ms (0.540 us/row) | 0.29x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| fused commitment (encode -> blake3 -> root), A, 1024-row slices | 7.5 ms (0.153 us/row) | 17.5 ms (0.358 us/row) | 0.43x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.13 |
+| fused commitment (encode -> blake3 -> root), A, 1024-row slices, overlap | 7.4 ms (0.151 us/row) | 25.1 ms (0.513 us/row) | 0.30x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| fused commitment (encode -> blake3 -> root), A, 4096-row slices | 9.3 ms (0.191 us/row) | 15.9 ms (0.324 us/row) | 0.59x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.14 |
+| fused commitment (encode -> blake3 -> root), A, 4096-row slices, overlap | 9.2 ms (0.189 us/row) | 23.0 ms (0.471 us/row) | 0.40x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.10 |
+| fused commitment (encode -> blake3 -> root), A, 65536-row slices | 8.7 ms (0.179 us/row) | 15.6 ms (0.318 us/row) | 0.56x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.15 |
+| fused commitment (encode -> blake3 -> root), A, 65536-row slices, overlap | 8.7 ms (0.178 us/row) | 15.6 ms (0.318 us/row) | 0.56x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.15 |
+| fused commitment (encode -> sha256 -> root), A, 256-row slices | 10.5 ms (0.215 us/row) | 30.7 ms (0.629 us/row) | 0.34x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.07 |
+| fused commitment (encode -> sha256 -> root), A, 256-row slices, overlap | 9.5 ms (0.195 us/row) | 34.9 ms (0.714 us/row) | 0.27x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.07 |
+| fused commitment (encode -> sha256 -> root), A, 512-row slices | 9.3 ms (0.191 us/row) | 28.1 ms (0.575 us/row) | 0.33x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| fused commitment (encode -> sha256 -> root), A, 512-row slices, cosets kept | 10.5 ms (0.215 us/row) | 28.1 ms (0.575 us/row) | 0.37x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| fused commitment (encode -> sha256 -> root), A, 512-row slices, overlap | 9.5 ms (0.194 us/row) | 31.3 ms (0.641 us/row) | 0.30x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.07 |
+| fused commitment (encode -> sha256 -> root), A, 1024-row slices | 9.4 ms (0.192 us/row) | 27.4 ms (0.561 us/row) | 0.34x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| fused commitment (encode -> sha256 -> root), A, 1024-row slices, overlap | 9.3 ms (0.190 us/row) | 30.9 ms (0.633 us/row) | 0.30x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.07 |
+| fused commitment (encode -> sha256 -> root), A, 4096-row slices | 10.3 ms (0.211 us/row) | 26.2 ms (0.537 us/row) | 0.39x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| fused commitment (encode -> sha256 -> root), A, 4096-row slices, overlap | 10.2 ms (0.208 us/row) | 29.4 ms (0.601 us/row) | 0.35x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.08 |
+| fused commitment (encode -> sha256 -> root), A, 65536-row slices | 9.9 ms (0.203 us/row) | 26.0 ms (0.533 us/row) | 0.38x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| fused commitment (encode -> sha256 -> root), A, 65536-row slices, overlap | 9.8 ms (0.201 us/row) | 26.0 ms (0.533 us/row) | 0.38x | 2.3 ms (read W + write codeword at 1754 GB/s) | 0.09 |
+| sha256_s512_ov0_keep0_encode_only (A, unfused reference pass) | 5.2 ms | 13.1 ms | 0.40x |  |  |
+| sha256_s512_ov0_keep0_hash_only (A, unfused reference pass) | 4.8 ms | 14.6 ms | 0.33x |  |  |
+| blake3_s512_ov0_keep0_encode_only (A, unfused reference pass) | 5.4 ms | 13.4 ms | 0.41x |  |  |
+| blake3_s512_ov0_keep0_hash_only (A, unfused reference pass) | 2.4 ms | 5.9 ms | 0.41x |  |  |
+| irs_row_combination: `irs_row_combination_c256` (B) | 5.97 ms | 9.01 ms | 0.66x | 2.90 ms read floor | 0.32 |
+| irs_row_combination: `irs_row_combination_c1024` (B) | 5.65 ms | 7.60 ms | 0.74x | 2.90 ms read floor | 0.38 |
+| irs_row_combination: `irs_row_combination_c4096` (B) | 5.67 ms | 8.57 ms | 0.66x | 2.90 ms read floor | 0.34 |
+| irs_row_combination: `irs_row_combination_c256` (A) | 1.03 ms | 1.27 ms | 0.81x | 0.46 ms read floor | 0.36 |
+| irs_row_combination: `irs_row_combination_c1024` (A) | 0.97 ms | 1.49 ms | 0.66x | 0.46 ms read floor | 0.31 |
+| irs_row_combination: `irs_row_combination_c4096` (A) | 1.56 ms | 3.01 ms | 0.52x | 0.46 ms read floor | 0.15 |
+| quadratic_test: `quadratic_test_s256` (B) | 8.86 ms | 20.76 ms | 0.43x |  |  |
+| quadratic_test: `quadratic_test_s512` (B) | 7.77 ms | 16.71 ms | 0.47x |  |  |
+| quadratic_test: `quadratic_test_s1024` (B) | 9.37 ms | 16.02 ms | 0.58x |  |  |
+| linear_test: `linear_test_s128` (B) | 169.61 ms | 540.06 ms | 0.31x |  |  |
+| linear_test: `linear_test_s256` (B) | 149.45 ms | 402.59 ms | 0.37x |  |  |
+| linear_test: `linear_test_s512` (B) | 212.15 ms | 325.11 ms | 0.65x |  |  |
+| batch_inverse: `batch_inverse_T32768` (B) | 29.19 ms | 29.83 ms | 0.98x |  |  |
+| batch_inverse: `batch_inverse_T65536` (B) | 28.96 ms | 23.10 ms | 1.25x |  |  |
+| batch_inverse: `batch_inverse_T131072` (B) | 28.90 ms | 20.51 ms | 1.41x |  |  |
+| batch_inverse: `batch_inverse_T262144` (B) | 28.83 ms | 19.52 ms | 1.48x |  |  |
+| open_columns: `open_columns_encode_gather` (B) | 32.18 ms | 66.05 ms | 0.49x |  |  |
+| open_columns: `open_columns_gather_from_store` (B) | 3.75 ms | 3.01 ms | 1.24x |  |  |
+| open_columns: `open_columns_merkle_paths_host` (B) | 1.33 ms | 1.30 ms | 1.02x |  |  |
+| open_columns: `open_columns_encode_gather` (A) | 5.25 ms | 11.53 ms | 0.45x |  |  |
+| open_columns: `open_columns_gather_from_store` (A) | 0.66 ms | 0.52 ms | 1.26x |  |  |
+| open_columns: `open_columns_merkle_paths_host` (A) | 1.43 ms | 1.22 ms | 1.18x |  |  |
+| linear test, structured: `linear_test_structured_M1_X256` | 5.84 ms | 9.53 ms | 0.61x | 2.90 ms read floor | 0.30 |
+| linear test, structured: `linear_test_structured_M1_X256_lazy` | 6.25 ms | 5.18 ms | 1.21x | 2.90 ms read floor | 0.56 |
+| linear test, structured: `linear_test_structured_M2_X256` | 6.77 ms | 14.60 ms | 0.46x | 2.90 ms read floor | 0.20 |
+| linear test, structured: `linear_test_structured_M2_X256_lazy` | 5.90 ms | 7.79 ms | 0.76x | 2.90 ms read floor | 0.37 |
+| linear test, structured: `linear_test_structured_M3_X256` | 9.72 ms | 20.52 ms | 0.47x | 2.90 ms read floor | 0.14 |
+| linear test, structured: `linear_test_structured_M3_X256_lazy` | 7.15 ms | 11.23 ms | 0.64x | 2.90 ms read floor | 0.26 |
+| linear test, structured: `linear_test_structured_M4_X256` | 13.64 ms | 27.91 ms | 0.49x | 2.90 ms read floor | 0.10 |
+| linear test, structured: `linear_test_structured_M4_X256_lazy` | 7.68 ms | 14.57 ms | 0.53x | 2.90 ms read floor | 0.20 |
+
+Bit-exact on the A100: commitment roots `22/22` variants equal the reference; lintest checks `{'toy_structure_matches_dense_rta': True, 'toy_exceptional_rows': [0, 5], 'numpy_shortcut_equals_numpy_general': True, 'gpu_general_equals_numpy': True, 'gpu_shortcut_equals_gpu_general': True, 'gpu_shortcut_equals_gpu_general_lazy': True, 'int8_tc_combine_equals_numpy': True}`.
+
+**Finding (flagged).**  The fused commitment does *not* carry over: the best fused variant on the A100 is **blake3_s65536_ov0_keep0_fused at 98 ms** (0.56x the 4090's best 46.7 ms, a 4x departure from the bandwidth ratio) against separate encode 57 + Blake3 hash 54 = 111 ms measured in sections 1-2 -- fusing gains 1.1x on the anchor where it gained 1.8x on the 4090, and the L2-resident small slices that won there lose here (256-row slices 155 ms vs 98 for 65,536-row: 40 MB L2 vs 72 MB, 0.47x the INT32 rate; the 'overlap' variants are 15-30% *slower* on the A100).  The other buckets scale at the INT32 ratio (0.4-0.7x) except the batch inversion (1.48x: HBM-bound) and the structured linear test at M=1 (1.21x lazy); M=3 lazy = 11.2 ms (0.64x).
+
 ## 5. `backends/gkr/tensor` -- the original INT8-limb round (4090 run `r20260922-051730-15d4`)
 
 | INT8-limb round (tensor lane) | RTX 4090 recorded | A100 measured | speed ratio A100/4090 | A100 TC floor | fraction of INT8 peak |
@@ -255,32 +346,33 @@ Agreement test on the A100: 22 passed in 29.04s
 
 | design | model only (A100 peaks @0.172, Blake3 50 GB/s) | **A100-measured buckets**: overhead (t.total per batch) | buckets, ms (measured in bold) |
 |---|---|---|---|
-| **B** | 2.38e+07 (962 ms) | **4.88e+06** (197 ms; 48 us/VU) | encoding **57.4**; hash **54.0**; row_combination 10.1; linear/quadratic tests + helpers (SIMT) 70.6; hint_generation 1.6; prg 3.2 |
-| **A** | 3.17e+07 (1278 ms) | **1.83e+07** (736 ms; 180 us/VU) | encoding **11.0**; hash **9.0**; row_combination 1.4; other SIMT (logUp tree build, ...) 37.2; gkr_checker_sumcheck **263.4**; logup_fractional_gkr **412.2**; hint_generation 1.6; prg 0.5 |
+| **B** | 2.38e+07 (962 ms) | **5.27e+06** (213 ms; 52 us/VU; 80.0% measured) | commitment **111.4**; ligero_row_combination **18.8**; quadratic_hadamards **16.0**; helper_inversions **19.5**; openings **4.3**; constraint_combination 37.8; hint_gen 1.6; prg 3.2 |
+| **A** | 3.17e+07 (1278 ms) | **1.74e+07** (701 ms; 171 us/VU; 99.7% measured) | commitment **20.0**; ligero_row_combination **1.3**; openings **1.7**; gkr_checker **263.4**; logup_fractional_gkr **412.2**; hint_gen 1.6; prg 0.5 |
 
-Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_kernel` = blake3; `hash_A_kernel` = blake3; `encoder_seconds_per_row_B` = 1.85e-07; `encoder_B_kernel` = ntt_simt_v2_t1024; `encoder_seconds_per_row_A` = 2.25e-07; `encoder_A_kernel` = ntt_simt_v2_t1024; `fused_layer_graphed_s` = 0.0123; `fused_checker_round_2p21_us` = 473.7920; `logup_round_2p21_us` = 1,468.6720; `logup_over_checker_round` = 3.0998; `packed_k0_batch_s_padded` = 1.5777; `packed_k0_per_vu_s` = 0.000385; `packed_k3_batch_s_padded` = 0.4764; `packed_k3_per_vu_s` = 0.000116; `packed2_best_batch_s_padded` = 0.2634; `packed2_best_batch_s_unpadded` = 0.1561; `packed2_best_label` = Montgomery packed k=3 from the 2^28 fit; `logup_gkr_full_vu_s` = 0.4122
+Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_kernel` = blake3; `hash_B_ms` = 53.9785; `hash_A_kernel` = blake3; `encoder_seconds_per_row_B` = 1.85e-07; `encoder_B_kernel` = ntt_simt_v2_t1024; `encoder_seconds_per_row_A` = 2.25e-07; `encoder_A_kernel` = ntt_simt_v2_t1024; `fused_layer_graphed_s` = 0.0123; `fused_checker_round_2p21_us` = 473.7920; `logup_round_2p21_us` = 1,468.6720; `logup_over_checker_round` = 3.0998; `packed_k0_batch_s_padded` = 1.5777; `packed_k0_per_vu_s` = 0.000385; `packed_k3_batch_s_padded` = 0.4764; `packed_k3_per_vu_s` = 0.000116; `packed2_best_batch_s_padded` = 0.2634; `packed2_best_batch_s_unpadded` = 0.1561; `packed2_best_label` = Montgomery packed k=3 from the 2^28 fit; `logup_gkr_full_vu_s` = 0.4122
 
-* **B**: overhead **4.88e+06** (197 ms per batch, 48 us/VU).
+* **B**: overhead **5.27e+06** (213 ms per batch, 52 us/VU).
 
-  * encoding: 57.4 ms (29%) -- measured: ntt_simt_v2_t1024 0.185 us/row x 310,602 rows
-  * hash: 54.0 ms (27%) -- measured: blake3 377 GB/s over 20.36 GB
-  * row_combination: 10.1 ms (5%) -- modelled matmul @0.172
-  * linear/quadratic tests + helpers (SIMT): 70.6 ms (36%) -- modelled SIMT
-  * hint_generation: 1.6 ms (1%) -- modelled
+  * commitment: 111.4 ms (52%) -- measured: UNFUSED encode (ntt_simt_v2_t1024, 57.4 ms) + Blake3 tree over the stored codeword (54.0 ms) -- beats the fused commit_stream (blake3_s512_ov0_keep1_fused 123.0 ms) on the A100
+  * ligero_row_combination: 18.8 ms (9%) -- measured: IRS row combination + structured linear test M=3 lazy (b-lintest)
+  * quadratic_hadamards: 16.0 ms (8%) -- measured: quadratic test
+  * helper_inversions: 19.5 ms (9%) -- measured: F_c batch inversion
+  * openings: 4.3 ms (2%) -- measured: t=192 column openings (gather from store) + host Merkle paths
+  * constraint_combination: 37.8 ms (18%) -- modelled SIMT
+  * hint_gen: 1.6 ms (1%) -- modelled
   * prg: 3.2 ms (2%) -- modelled
 
-  Omitted (still modelled): witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak); Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak); openings and transcript serialisation (not priced); prover randomness (modelled PRG at 100 GB/s); linear/quadratic tests, constraint combination, helper inversions (modelled SIMT at the A100 rate).
+  Omitted (still modelled): not an end-to-end proof: buckets measured separately on resident pseudo-random data; simt:constraint_combination (modelled); hint_gen (modelled); prg (modelled); transcript serialisation, verifier work, network (not priced).
 
-* **A**: overhead **1.83e+07** (736 ms per batch, 180 us/VU).
+* **A**: overhead **1.74e+07** (701 ms per batch, 171 us/VU).
 
-  * encoding: 11.0 ms (1%) -- measured: ntt_simt_v2_t1024 0.225 us/row x 48,873 rows
-  * hash: 9.0 ms (1%) -- measured: blake3 356 GB/s over 3.21 GB
-  * row_combination: 1.4 ms (0%) -- modelled matmul @0.172
-  * other SIMT (logUp tree build, ...): 37.2 ms (5%) -- modelled SIMT
-  * gkr_checker_sumcheck: 263.4 ms (36%) -- measured: Montgomery packed k=3 from the 2^28 fit six-layer batch (padded) (model @0.172: 850 ms; alternatives fused SIMT layer model x96 (graphed) 1185 ms, packed k=3 six-layer batch (padded) 476 ms, plain k=0 six-layer batch (padded) 1578 ms, Montgomery packed k=3 from the 2^28 fit six-layer batch (padded) 263 ms)
-  * logup_fractional_gkr: 412.2 ms (56%) -- measured: a-packed2 logUp fractional GKR at the full-VU shape (393,216 units x 306 lookups, 65,536-row table), k=3, whole bucket on the A100 (model @0.172: 249 ms; launch-bound: ~0.1-0.2 s of device work)
-  * hint_generation: 1.6 ms (0%) -- modelled
+  * commitment: 20.0 ms (3%) -- measured: fused commit_stream encode -> blake3 -> root, blake3_s512_ov0_keep1_fused (cosets kept)
+  * ligero_row_combination: 1.3 ms (0%) -- measured: IRS row combination
+  * openings: 1.7 ms (0%) -- measured: t=192 column openings (gather from store) + host Merkle paths
+  * gkr_checker: 263.4 ms (38%) -- measured: Montgomery packed k=3 from the 2^28 fit six-layer batch, padded (un-padded 156 ms)
+  * logup_fractional_gkr: 412.2 ms (59%) -- measured: a-packed2 logUp fractional GKR, full-VU shape, k=3 (launch-bound; includes its tree build)
+  * hint_gen: 1.6 ms (0%) -- modelled
   * prg: 0.5 ms (0%) -- modelled
 
-  Omitted (still modelled): witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak); Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak); openings and transcript serialisation (not priced); prover randomness (modelled PRG at 100 GB/s).
+  Omitted (still modelled): not an end-to-end proof: buckets measured separately on resident pseudo-random data; hint_gen (modelled); prg (modelled); transcript serialisation, verifier work, network (not priced).
 

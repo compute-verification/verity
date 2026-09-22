@@ -21,12 +21,16 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 import time
 from pathlib import Path
 
 from verity_numerical.bench import contract
 from verity_numerical.explore import tensor as tx
 from verity_numerical.security import accounting as acc
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "backends" / "direct"))
+from encode import reprice_measured as rm  # noqa: E402,F401  (b-commit lane's bucket picker: the same rows the 4090 re-price used)
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -298,6 +302,51 @@ def sec_packed2(a26: dict, h26: dict, a28: dict, h28: dict, alog: dict, hlog: di
     return txt, data
 
 
+def sec_bwave(commit_a: dict, commit_4: dict, buckets_a: dict, buckets_4: dict, lint_a: dict, lint_4: dict, bw_meas: float) -> tuple[str, list[dict]]:
+    """b-commit (fused commitment, prover buckets) and b-lintest (structured linear test) on the A100 vs the recorded 4090 rows."""
+    rows, data = [], []
+    for shape in ("B", "A"):
+        for hash in ("blake3", "sha256"):
+            for r4 in sorted((r for r in commit_4["results"] if r["shape"] == shape and r["hash"] == hash and r["mode"] == "fused"), key=lambda r: (r["slice_rows"], r["overlap"], r["keep"])):
+                ra = next((r for r in commit_a["results"] if r["name"] == r4["name"] and r["shape"] == shape), None)
+                if not ra:
+                    continue
+                floor = (ra["bytes_in"] + ra["codeword_bytes"]) / bw_meas * 1e3
+                rows.append([f"fused commitment (encode -> {hash} -> root), {shape}, {r4['slice_rows']}-row slices{', overlap' if r4['overlap'] else ''}{', cosets kept' if r4['keep'] else ''}",
+                             f"{r4['ms_median']:.1f} ms ({r4['us_per_row']:.3f} us/row)", f"{ra['ms_median']:.1f} ms ({ra['us_per_row']:.3f} us/row)", f"{r4['ms_median']/ra['ms_median']:.2f}x",
+                             f"{floor:.1f} ms (read W + write codeword at {bw_meas/1e9:.0f} GB/s)", f"{floor/ra['ms_median']:.2f}"])
+                data.append({"kernel": "commit", "name": r4["name"], "shape": shape, "hash": hash, "ref_gpu": "RTX 4090", "ref_ms": r4["ms_median"], "a100_ms": ra["ms_median"],
+                             "ratio_ref_over_a100_time": r4["ms_median"] / ra["ms_median"], "a100_floor_ms": floor, "fraction_of_floor": floor / ra["ms_median"]})
+        for r4 in (r for r in commit_4["results"] if r["shape"] == shape and r["mode"] != "fused"):
+            ra = next((r for r in commit_a["results"] if r["name"] == r4["name"] and r["shape"] == shape), None)
+            if ra:
+                rows.append([f"{r4['name']} ({shape}, unfused reference pass)", f"{r4['ms_median']:.1f} ms", f"{ra['ms_median']:.1f} ms", f"{r4['ms_median']/ra['ms_median']:.2f}x", "", ""])
+                data.append({"kernel": "commit", "name": r4["name"], "shape": shape, "ref_gpu": "RTX 4090", "ref_ms": r4["ms_median"], "a100_ms": ra["ms_median"], "ratio_ref_over_a100_time": r4["ms_median"] / ra["ms_median"]})
+    for r4 in buckets_4["results"]:
+        ra = next((r for r in buckets_a["results"] if r["name"] == r4["name"] and r["shape"] == r4["shape"]), None)
+        if not ra:
+            continue
+        fl = ra.get("read_floor_ms")
+        floor_meas = ra["bytes_read"] / bw_meas * 1e3 if ra.get("bytes_read") else None
+        rows.append([f"{r4['bucket']}: `{r4['name']}` ({r4['shape']})", f"{r4['ms_median']:.2f} ms", f"{ra['ms_median']:.2f} ms", f"{r4['ms_median']/ra['ms_median']:.2f}x",
+                     f"{floor_meas:.2f} ms read floor" if floor_meas else "", f"{floor_meas/ra['ms_median']:.2f}" if floor_meas else ""])
+        data.append({"kernel": "buckets", "bucket": r4["bucket"], "name": r4["name"], "shape": r4["shape"], "ref_gpu": "RTX 4090", "ref_ms": r4["ms_median"], "a100_ms": ra["ms_median"],
+                     "ratio_ref_over_a100_time": r4["ms_median"] / ra["ms_median"], "a100_floor_ms": floor_meas, "fraction_of_floor": floor_meas / ra["ms_median"] if floor_meas else None, "datasheet_floor_ms_4090": fl})
+    for r4 in lint_4["results"]:
+        ra = next((r for r in lint_a["results"] if r["name"] == r4["name"]), None)
+        if not ra:
+            continue
+        floor_meas = ra["read_floor_ms"] * 1.008e12 / bw_meas if ra.get("read_floor_ms") else None
+        rows.append([f"linear test, structured: `{r4['name']}`", f"{r4['ms_median']:.2f} ms", f"{ra['ms_median']:.2f} ms", f"{r4['ms_median']/ra['ms_median']:.2f}x",
+                     f"{floor_meas:.2f} ms read floor" if floor_meas else "", f"{floor_meas/ra['ms_median']:.2f}" if floor_meas else ""])
+        data.append({"kernel": "lintest", "name": r4["name"], "M": r4["M"], "lazy": r4["lazy_reduction"], "ref_gpu": "RTX 4090", "ref_ms": r4["ms_median"], "a100_ms": ra["ms_median"],
+                     "ratio_ref_over_a100_time": r4["ms_median"] / ra["ms_median"], "a100_floor_ms": floor_meas, "fraction_of_floor": floor_meas / ra["ms_median"] if floor_meas else None})
+    txt = md_table(["B prover bucket", "RTX 4090 recorded", "A100 measured", "speed ratio A100/4090", "A100 floor (measured BW)", "fraction of floor"], rows)
+    txt += (f"\n\nBit-exact on the A100: commitment roots `{sum(commit_a['checks'].values())}/{len(commit_a['checks'])}` variants equal the reference; "
+            f"lintest checks `{lint_a['checks']}`.")
+    return txt, data
+
+
 def sec_tensor(a100: dict, ref: dict) -> tuple[str, list[dict]]:
     rows, data = [], []
     for r4 in ref["measured"]["rounds"]:
@@ -361,6 +410,59 @@ def reprice(meas: dict) -> tuple[str, dict]:
                    "Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak)", "openings and transcript serialisation (not priced)",
                    "prover randomness (modelled PRG at 100 GB/s)"]
         total = tm["t.total"]
+        if "bwave" in meas:
+            # every B-lane bucket measured on the A100, picked by the b-commit lane's own selector (same rows as reports/b_measured_4090)
+            bw = meas["bwave"]
+            variants = {}
+            for hash in ("blake3", "sha256"):
+                for openings in ("store", "reencode"):
+                    m, detail = rm.measured_buckets(bw["commit"], bw["buckets"], dname, hash, openings, bw["lintest"], "linear_test_structured_M3_X256_lazy")
+                    variants[(hash, openings)] = (m, detail)
+            (hash, openings), (m, detail) = min(variants.items(), key=lambda kv: sum(kv[1][0].values()))
+            commit_label = f"measured: fused commit_stream encode -> {hash} -> root, {detail['commitment']['name']} ({'cosets kept' if openings == 'store' else 'no store'})"
+            sep = meas.get(f"encoder_seconds_per_row_{dname}", 0) * p.ligero_rows + (meas.get(f"hash_{dname}_ms", 0) if dname == "B" else p.hash_bytes / hr * 1e3) * 1e-3
+            if sep and sep < m["commitment"] and openings == "store":
+                # on the anchor the unfused path (SIMT NTT into HBM, then the Blake3 tree over the stored codeword) beats the fused L2-slice pipeline
+                m["commitment"] = sep
+                commit_label = (f"measured: UNFUSED encode ({meas.get(f'encoder_{dname}_kernel')}, {meas.get(f'encoder_seconds_per_row_{dname}')*p.ligero_rows*1e3:.1f} ms) + Blake3 tree over the stored "
+                                f"codeword ({(meas.get(f'hash_{dname}_ms', 0) if dname == 'B' else p.hash_bytes / hr * 1e3):.1f} ms) -- beats the fused commit_stream "
+                                f"({detail['commitment']['name']} {detail['commitment']['ms_median']:.1f} ms) on the A100")
+            if dname == "A":
+                # A's checker sumcheck and logUp are whole measured buckets (section 4b); the model's matmul + Hadamard components go
+                if "packed2_best_batch_s_padded" in meas:
+                    m["matmul:gkr_checker"] = meas["packed2_best_batch_s_padded"]
+                    m["simt:gkr_hadamards"] = 0.0
+                if "logup_gkr_full_vu_s" in meas:
+                    m["matmul:logup_fractional_gkr"] = meas["logup_gkr_full_vu_s"]
+                    m["simt:logup_hadamards"] = 0.0
+                    m["simt:logup_tree_build"] = 0.0          # the measured logUp GKR builds its own tree (tree_ms inside the 412 ms)
+            tm2 = p.times(gpu, "A100", UTIL, hr, "rs_matrix_ntt", fs, measured=m)
+            buckets = {}
+            for k, v in m.items():
+                label = {"commitment": commit_label,
+                         "matmul:ligero_row_combination": "measured: IRS row combination" + (" + structured linear test M=3 lazy (b-lintest)" if dname == "B" else ""),
+                         "simt:quadratic_hadamards": "measured: quadratic test", "simt:helper_inversions": "measured: F_c batch inversion",
+                         "extra:openings": f"measured: t=192 column openings ({'gather from store' if openings == 'store' else 're-encode'}) + host Merkle paths",
+                         "matmul:gkr_checker": f"measured: {meas.get('packed2_best_label')} six-layer batch, padded (un-padded {meas.get('packed2_best_batch_s_unpadded', 0)*1e3:.0f} ms)",
+                         "matmul:logup_fractional_gkr": "measured: a-packed2 logUp fractional GKR, full-VU shape, k=3 (launch-bound; includes its tree build)"}.get(k, "measured")
+                if v > 0:
+                    buckets[k.split(":")[-1]] = (v, label)
+            for k, v in tm2["t.modelled"].items():
+                buckets[k.split(":")[-1]] = (v, "modelled" + (" matmul @0.172" if k.startswith("matmul") else " SIMT" if k.startswith("simt") else ""))
+            omitted = ["not an end-to-end proof: buckets measured separately on resident pseudo-random data"] + [
+                f"{k} (modelled)" for k in tm2["t.modelled"]] + ["transcript serialisation, verifier work, network (not priced)"]
+            total = tm2["t.total"]
+            per_vu = total / tx.B_TARGET
+            row = {"t.total": total, "seconds_per_vu": per_vu, "overhead.vs_native_peak": contract.overhead(per_vu, tx.K_TARGET),
+                   "buckets": {k: {"seconds": v[0], "basis": v[1], "share": v[0] / total} for k, v in buckets.items()},
+                   "measured_buckets": [k for k, v in buckets.items() if v[1].startswith("measured")], "measured_fraction": tm2["measured_fraction"],
+                   "leaf_hash": hash, "openings": openings, "omitted": omitted, "model_only_overhead": model["overhead.vs_native_peak"], "model_only_t.total": model["t.total"],
+                   "variants": {f"{h}/{o}": {"t.total": p.times(gpu, "A100", UTIL, hr, "rs_matrix_ntt", fs, measured=mm)["t.total"]} for (h, o), (mm, _) in variants.items()},
+                   "ligero_rows": p.ligero_rows, "hash_bytes": p.hash_bytes}
+            out["designs"][dname] = row
+            lines.append(f"| **{dname}** | {model['overhead.vs_native_peak']:.3g} ({model['t.total']*1e3:.0f} ms) | **{row['overhead.vs_native_peak']:.3g}** ({total*1e3:.0f} ms; {per_vu*1e6:.0f} us/VU; {tm2['measured_fraction']:.1%} measured) | "
+                         + "; ".join(f"{k} **{v[0]*1e3:.1f}**" if v[1].startswith("measured") else f"{k} {v[0]*1e3:.1f}" for k, v in buckets.items()) + " |")
+            continue
         if dname == "B":
             buckets["row_combination"] = (tm["t.matmul"], "modelled matmul @0.172")
             buckets["linear/quadratic tests + helpers (SIMT)"] = (tm["t.simt_field"], "modelled SIMT")
@@ -470,6 +572,7 @@ def main(argv=None) -> int:
         meas["hash_rate_B"] = best_b["a100_gb_per_s"] * 1e9
         meas["hash_rate_A"] = best_a["a100_gb_per_s"] * 1e9
         meas["hash_B_kernel"] = best_b["hash"]
+        meas["hash_B_ms"] = best_b["a100_ms"]
         meas["hash_A_kernel"] = best_a["hash"]
         md += [(f"**Finding (flagged).**  The SIMT hash kernels do *not* scale with bandwidth: SHA-256 runs at {sha_b['a100_gb_per_s']:.0f} GB/s on the A100 vs 446 on the 4090 "
                f"({sha_b['ratio_ref_over_a100_time']:.2f}x, where the bandwidth scaling assumed 2.02x -- a {2.02/sha_b['ratio_ref_over_a100_time']:.1f}x departure), Poseidon2-16 "
@@ -561,6 +664,28 @@ def main(argv=None) -> int:
                 f"(the base x base Hadamard share is INT32 work at 0.47x the H100's rate).  **Finding (flagged).**  The logUp fractional GKR runs at **{l3['a100_s']*1e3:.0f} ms = {l3['a100_us_per_vu']:.0f} us/VU** "
                 f"on the A100 vs 427 on the H100 ({l3['ratio_ref_over_a100_time']:.2f}x: a 1.7x departure from the bandwidth ratio) -- it is host-launch-bound (~1 ms x 351 rounds; the 20 smallest levels are "
                 f"{l3['a100_tail_levels_ms']:.0f} of the {l3['a100_s']*1e3:.0f} ms on both cards), so the GPU does not matter yet; the device work is ~0.1-0.2 s.  Fixing the launch loop (CUDA graphs per level) is worth ~2x on either card."), ""]
+    commit_a = load(R / "wave2_b" / "commit.json")
+    commit_4 = load(REPO / "backends/direct/encode/results_commit_r20260922-064722-07c7.json")
+    buckets_a = load(R / "wave2_b" / "buckets.json")
+    buckets_4 = load(REPO / "backends/direct/encode/results_buckets_r20260922-065537-279b.json")
+    lint_a = load(R / "wave2_b" / "lintest.json")
+    lint_4 = load(REPO / "backends/direct/encode/results_lintest_r20260922-073017-0924.json")
+    if commit_a and commit_4 and buckets_a and buckets_4 and lint_a and lint_4:
+        txt, d = sec_bwave(commit_a, commit_4, buckets_a, buckets_4, lint_a, lint_4, bw_meas)
+        doc["kernels"] += d
+        md += ["## 6. `backends/direct/encode` b-commit + b-lintest -- fused commitment and B's prover buckets (4090 runs `r20260922-064722-07c7`, `r20260922-065537-279b`, "
+               "`r20260922-073017-0924`; A100 run `r20260922-080250-cff5`)", "", txt, ""]
+        meas["bwave"] = {"commit": commit_a, "buckets": buckets_a, "lintest": lint_a}
+        best_c = min((r for r in d if r["kernel"] == "commit" and r["shape"] == "B" and "hash" in r), key=lambda r: r["a100_ms"])
+        ref_c = min((r for r in commit_4["results"] if r["shape"] == "B" and r["mode"] == "fused"), key=lambda r: r["ms_median"])
+        l3 = next((r for r in d if r["kernel"] == "lintest" and r["name"] == "linear_test_structured_M3_X256_lazy"), None)
+        inv = min((r for r in d if r["kernel"] == "buckets" and r["bucket"] == "batch_inverse"), key=lambda r: r["a100_ms"])
+        md += [(f"**Finding (flagged).**  The fused commitment does *not* carry over: the best fused variant on the A100 is **{best_c['name']} at {best_c['a100_ms']:.0f} ms** "
+                f"({best_c['ratio_ref_over_a100_time']:.2f}x the 4090's best {ref_c['ms_median']:.1f} ms, a {2.02/best_c['ratio_ref_over_a100_time']:.0f}x departure from the bandwidth ratio) against "
+                f"separate encode {meas['encoder_seconds_per_row_B']*310602*1e3:.0f} + Blake3 hash {meas['hash_B_ms']:.0f} = {meas['encoder_seconds_per_row_B']*310602*1e3 + meas['hash_B_ms']:.0f} ms measured in sections 1-2 -- fusing gains 1.1x on the anchor "
+                f"where it gained 1.8x on the 4090, and the L2-resident small slices that won there lose here (256-row slices 155 ms vs 98 for 65,536-row: 40 MB L2 vs 72 MB, 0.47x the INT32 rate; the 'overlap' variants are 15-30% *slower* on the A100).  The other buckets scale at the INT32 ratio "
+                f"(0.4-0.7x) except the batch inversion ({inv['ratio_ref_over_a100_time']:.2f}x: HBM-bound) and the structured linear test at M=1 (1.21x lazy); M=3 lazy = "
+                + (f"{l3['a100_ms']:.1f} ms ({l3['ratio_ref_over_a100_time']:.2f}x)." if l3 else "")), ""]
     tensor_a = load(R / "tensor" / "bench.json")
     tensor_ref = load(REPORTS / "tc_sumcheck_4090.json")
     if tensor_a and tensor_ref:
@@ -575,7 +700,7 @@ def main(argv=None) -> int:
                ("`explore.tensor` designs A and B (BabyBear, degree-6 challenge, 2^-128, B = 4096, K = 1536, HVZK layer, authentication excluded) priced on the A100 with the "
                "A100-measured buckets substituted; the still-modelled buckets are at 0.172 of the A100 INT8 peak / the model's SIMT rate and are listed as `omitted`.  "
                "Labels: `ARITHMETIC_DIAGNOSTIC`, scope `vu`, hardware NVIDIA A100 SXM4 80GB."), "", txt, "",
-               "Measured inputs: " + "; ".join(f"`{k}` = {fmt(v, 4) if isinstance(v, float) else v}" for k, v in meas.items()), ""]
+               "Measured inputs: " + "; ".join(f"`{k}` = {fmt(v, 4) if isinstance(v, float) else v}" for k, v in meas.items() if k != "bwave"), ""]
         for dname, row in rp["designs"].items():
             md += [f"* **{dname}**: overhead **{row['overhead.vs_native_peak']:.3g}** ({row['t.total']*1e3:.0f} ms per batch, {row['seconds_per_vu']*1e6:.0f} us/VU).", ""]
             md += [f"  * {k}: {v['seconds']*1e3:.1f} ms ({v['share']:.0%}) -- {v['basis']}" for k, v in row["buckets"].items()]
