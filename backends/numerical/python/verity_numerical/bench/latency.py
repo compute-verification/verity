@@ -252,6 +252,12 @@ CATALOG: dict[str, Design] = {
         proof_class="ARITHMETIC_DIAGNOSTIC (re-pricing)", source="reports/fused_sumcheck_4090.md: 0.866 s/batch (graphed x96, conservative; 0.641 s at census widths); ledger a-fused 2.15e7",
         verify_note="CPU BabyBear verifier 45 s used (no GPU verifier measured): dominates the serial e2e; a GPU verifier or deferred checks would change this row",
         notes="memory = phase-1 tables 15.6 GB (PROTOCOL.md 12.4) + codeword store 45,809 rows x 16,384 x 4 B = 3.0 GB; one batch per 24 GB card"),
+    "A-GPU re-priced (4090) + 1 s verifier": Design(
+        name="A-GPU re-priced (4090 fused SIMT) with a hypothetical 1 s verifier", prove_s=0.866, verify_s=1.0, depth=355, protocol_rounds=3176, bytes_pv=36 * MB,
+        bytes_vp=32 * 3176, mem_per_batch_bytes=15.6 * GB + 3.0 * GB, mem_capacity_bytes=GPU_4090_MEM, B=4096, hardware=GPU_4090,
+        proof_class="ARITHMETIC_DIAGNOSTIC (re-pricing + verifier assumption)", source="as the row above; verifier 1 s ASSUMED (no such verifier exists) to expose the depth x RTT term",
+        verify_note="hypothetical: a GPU or 45x-parallel verifier; the row isolates the network term from the CPU verifier's 45 s",
+        notes="same memory per batch as the row above"),
     "A-GPU re-priced (H100, packed model)": Design(
         name="A-GPU re-priced (H100 packed sumcheck, model)", prove_s=0.43, verify_s=45.0, depth=355, protocol_rounds=3176, bytes_pv=36 * MB,
         bytes_vp=32 * 3176, mem_per_batch_bytes=15.6 * GB + 3.0 * GB, mem_capacity_bytes=GPU_H100_MEM, B=4096, hardware=GPU_H100,
@@ -374,6 +380,58 @@ def a_depth_options(n_r16: int, layers: Sequence[tuple[int, int]], committed: fl
 
 # --- report --------------------------------------------------------------------------------------------------------
 
+NOTES_MD = [
+    "## 7. Reading the tables",
+    "",
+    "**What the depth is.** `rounds.sequential_depth` is now *measured*: A counts `Transcript::round_trip()` at every",
+    "critical-path verifier message (the logUp `(mu, lambda)` pair is one message, so the derived counter's 381 is 355; the",
+    "lock-step instances -- 9 tables, 2 segments -- share their messages, only the longest chain counts), B counts every",
+    "`observe -> sample` boundary of the prover's Plonky3 challenger (22 at 2^19 rows, 16 at 2^13; the derived `log_n + 5`",
+    "over-counted by 2). Both provers sleep one RTT at each such boundary under `--rtt-ms`, so `t.e2e.rtt_<x>ms` in the",
+    "envelopes is wall-clock with the emulated link and `t.total` is the compute with the sleep subtracted.",
+    "",
+    "**Serial e2e (section 1).** At 50 ms every design's network term is `depth x 0.05 s`: A 17.8 s, B-AIR 1.1 s, B-Ligero",
+    "0.15 s, SP1 0.05 s, C 0.15 s. On the CPU provers that is noise for A (261 s of compute) and for B-AIR (183 s); on the GPU",
+    "re-pricings it is the whole story for A: 0.87 s of kernels behind 17.8 s of waiting (plus the 45 s CPU verifier, which is",
+    "the honest serial number until a GPU verifier or deferred checks exist -- the table says so per row). B-Ligero at 0.26 s",
+    "compute + 0.15 s network + 0.4 s verify stays under a second at 50 ms; its 240 MB of opened columns cost 0.08 s at 25 Gb/s.",
+    "C is bandwidth-bound: 35 GB per batch of 4096 VUs needs ~2.3 Tb/s to hide behind 0.12 s of GPU compute (section 2).",
+    "",
+    "The row *A-GPU with a hypothetical 1 s verifier* isolates the network term: 1.9 s at 0 ms, 5.4 s at 10 ms, 19.6 s at",
+    "50 ms -- 90% of the batch's wall-clock is waiting for coins.",
+    "",
+    "**Pipelining (section 3).** `N_sat` is how many batches the prover must hold to keep busy. With the real (45 s CPU)",
+    "verifier A-GPU is verifier-bound at ~90 VU/s whatever the RTT. With the 1 s verifier it needs 3 batches in flight at",
+    "0-1 ms, 7 at 10 ms, 23 at 50 ms, at 18.6 GB each (phase-1 tables 15.6 GB + codeword store 3.0 GB): one 24 GB card holds",
+    "one batch, so memory binds at every RTT and A's throughput on a 4090 is one batch per e2e -- 2,200 VU/s at 0 ms, 750 at",
+    "10 ms, 210 at 50 ms (overhead 4.7e7 -> 4.9e8). B-Ligero needs 3-4 batches (22 GB each with the codeword store kept):",
+    "also more than one card holds, but its e2e is 0.74-0.89 s, so one batch per e2e is still 4,600-5,600 VU/s; the",
+    "re-encode-on-demand store (b_measured_4090.md, 5.6 GB) would fit 4 batches and remove the bind. The CPU rows saturate",
+    "at N = 2 (A: 68 GB, B-AIR: 120 GB of 256 GB) at every RTT up to 50 ms: compute-bound; memory binds only above",
+    "4.3 s (A) / 25 s (B) of RTT.",
+    "",
+    "**Crossovers (section 4).** B-AIR (CPU) and B-Ligero (GPU) are already faster than A at 0 ms on the same class of",
+    "hardware, so there is no A -> B crossover in the e2e sense: the shallower design wins everywhere and the gap grows by",
+    "`(355 - depth_B) x RTT` -- 17 s per batch at 50 ms. The crossovers that exist: A-GPU (1 s verifier) loses to SP1's",
+    "single-VU 3.8 s proof above 5.5 ms RTT and to the C GPU model above 28 ms; A-GPU beats B-CPU AIR up to 0.4-0.5 s of",
+    "RTT (the CPU prover's 183 s is the gap). Within A, the RTT above which a depth-reduction option pays its extra prover",
+    "work back (section 6, last column): sharding and the committed-cut proposals below 0.15 ms, `c = 2` above 3.4 ms,",
+    "`c = 3` above 11 ms.",
+    "",
+    "**Can the verifier pre-commit all coins so the prover never waits? No.** The HM96 step-0 commitment hides the coins;",
+    "opening coin `i` must follow the prover's message `i` or the prover learns it early and soundness is gone. The round trip",
+    "is inherent to every coin that binds a prover message. **Can rounds be batched?** Yes, exactly when the prover's messages",
+    "for those rounds do not depend on each other's coins: (i) the 9 tables and 2 segments already share messages (lock-step);",
+    "(ii) the levels of the fractional tree and the layers of the checker are serial *only because* each level's claim is",
+    "produced by the previous level's sumcheck -- committing an intermediate level (`p_l`, `q_l` of the tree, or the wires of",
+    "a checker layer) makes the pieces above and below it independent given the commitment, so their rounds share round",
+    "trips. That is the `cut` family in section 6: 26M committed elements (+14%) cut the lookup chain 352 -> 137, and 32",
+    "committed wires per unit (+7%) cut the checker chain 203 -> 135; together depth 355 -> 140 at ~+3% GPU prover time.",
+    "(iii) `c` variables per message halves or thirds the rounds of every sumcheck at 2x / 5.3x the sumcheck work. The",
+    "checkpointed variant (PROTOCOL.md 12.4) is deeper *and* slower at every RTT -- it does not win under a latency objective",
+    "either. The hint-free branch is 6% cheaper but ~170 rounds deeper: it wins only below ~0.5 ms RTT on the GPU.",
+]
+
 
 def _fmt_s(x: float) -> str:
     if x >= 100:
@@ -447,6 +505,7 @@ def report(designs: Sequence[Design], rtts_ms: Sequence[float] = RTTS_MS, bws_gb
                   "| option | depth | prover work x | committed +% | e2e @ 10 ms (CPU / GPU) | e2e @ 50 ms (CPU / GPU) | RTT where it beats the baseline (GPU) | note |", "|---|---|---|---|---|---|---|---|"]
         for o in options:
             lines.append(f"| {o['option']} | {o['depth']} | {o['prover_work_x']:g} | {o['committed_pct']:+.1f} | {_fmt_s(o['e2e10_cpu'])} / {_fmt_s(o['e2e10_gpu'])} | {_fmt_s(o['e2e50_cpu'])} / {_fmt_s(o['e2e50_gpu'])} | {o['wins_above_rtt_ms_gpu']} | {o['note']} |")
+    lines += ["", *NOTES_MD]
     doc = {"model": "t.e2e = prove + verify + depth x rtt + bytes / bw; throughput(N) = min(N / t.e2e, 1 / prove, 1 / verify); N_sat = ceil(t.e2e / prove)",
            "rtts_ms": list(rtts_ms), "bandwidths_gbps": list(bws_gbps), "designs": [asdict(d) for d in designs], "sweep": rows,
            "crossovers": cross, "memory_binding_rtt_ms": {d.name: memory_binding_rtt(d, bw_mid) for d in designs},
