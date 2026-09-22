@@ -31,3 +31,9 @@ verity = { workspace = true }
 # Run from this directory: fixtures are read relative to it.  CUDA / vLLM / pod-tree tests skip or fail by name off-pod.
 testpaths = ["tests/ir", "verity_capture"]
 addopts = "-q -p no:cacheprovider"
+# tests/regression (R19 reference regression; skipped unless VERITY_REGRESSION=1) is run explicitly: `pytest tests/regression -m regression`.
+markers = [
+    "regression: R19 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
+    "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
+    "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
+]
