@@ -57,6 +57,19 @@ case "$STAGE" in
     $PY backends/vole/export_ir.py vu "$OUT/vu${B}_$F" --root $FIX --B "$B" --procs 15 --field "$F"
     bench "$OUT/vu${B}_$F" "vu-B$B-$F" --plaintext-too
     ;;
+  variants)
+    # B=64 VUs: sVOLE threads 4 and 8, lpn=large, F128p (2^-97 class), F384p on B=8 (2^-128 class), then the
+    # gdb sampling profile of the single-threaded F61p prover (perf is unavailable in the container)
+    B=${2:-64}
+    $PY backends/vole/export_ir.py vu "$OUT/vu$B" --root $FIX --B "$B" --procs 15
+    bench "$OUT/vu$B" "vu-B$B-lpnlarge" --lpn large
+    for T in 4 8; do bench "$OUT/vu$B" "vu-B$B-t$T" --threads "$T"; done
+    $PY backends/vole/export_ir.py vu "$OUT/vu${B}_f128p" --root $FIX --B "$B" --procs 15 --field f128p
+    bench "$OUT/vu${B}_f128p" "vu-B$B-f128p" --plaintext-too
+    $PY backends/vole/export_ir.py vu "$OUT/vu8_f384p" --root $FIX --B 8 --procs 8 --field f384p
+    bench "$OUT/vu8_f384p" "vu-B8-f384p" --plaintext-too
+    DIETMC=$DIETMC OUT="$OUT/profile_vu$B" bash backends/vole/profile.sh "$OUT/vu$B" F61p 400 1 | tee "$OUT/profile_vu$B.txt"
+    ;;
   *) echo "unknown stage $STAGE" >&2; exit 2;;
 esac
 # keep the run directory small: the witness files are reproducible from the exporter
