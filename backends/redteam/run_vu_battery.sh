@@ -8,8 +8,16 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
-export PATH=$HOME/.cargo/bin:$HOME/.local/bin:$PATH
+export PATH=$HOME/.cargo/bin:$HOME/.local/bin:/workspace/uvbin:$PATH
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-/workspace/target}
+if ! command -v cargo >/dev/null 2>&1; then   # vy-cpu3 ships without a toolchain: bootstrap stable once
+    curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal >/dev/null
+    export PATH=$HOME/.cargo/bin:$PATH
+fi
+if ! command -v uv >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null
+    export PATH=$HOME/.local/bin:$PATH
+fi
 export VERITY_GKR_THREADS=${VERITY_GKR_THREADS:-12}
 RUN_DIR=${RESEARCH_RUN_DIR:-/tmp/redteam-vu}
 VUS=${VUS:-4}
