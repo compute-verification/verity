@@ -60,7 +60,7 @@ case "$STAGE" in
     ;;
   c2big)
     # c-compress: the full 4096-VU batch, one relation, at every field; F384p is the 2^-128 operating point
-    for F in f61p f128p f384p; do
+    for F in ${FIELDS:-f61p f128p f384p}; do
       $PY backends/vole/export_ir.py vu "$OUT/vu4096_$F" --root $FIX --B 4096 --procs 15 --field $F
       bench "$OUT/vu4096_$F" "vu-B4096-$F"
     done
