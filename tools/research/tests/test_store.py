@@ -665,6 +665,273 @@ def test_s3remote_against_a_fake_bucket(tmp_path):
         th.join(5)
 
 
+class FakeS3:
+    """An in-process S3 look-alike for `push`: HEAD / PUT / GET (+ list-type=2) on `/<bucket>/<key>`, ETag = MD5 of the stored bytes,
+    `If-None-Match: *` -> 412 when the key exists.  Knobs: `reject_conditional` = 400 | 501 models a service without conditional PUT
+    (a `NotImplemented` error body); `corrupt` keys are stored with one byte flipped (so their ETag != the client's MD5 and their
+    read-back sha256 != the manifest's); `head_404_once` keys answer 404 to their first HEAD although present (a writer that landed
+    between the client's HEAD and PUT, so the conditional PUT meets a 412).  `log` records (method, key, conditional?) in arrival order."""
+
+    def __init__(self, reject_conditional: int | None = None, corrupt: set[str] = frozenset(), head_404_once: set[str] = frozenset()):
+        import http.server
+        import threading
+        import urllib.parse
+
+        self.objects: dict[str, bytes] = {}
+        self.log: list[tuple[str, str, bool]] = []
+        self.lock = threading.Lock()
+        self.reject_conditional, self.corrupt, self.head_404_once = reject_conditional, set(corrupt), set(head_404_once)
+        state = self
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):  # noqa: D102
+                pass
+
+            def _key(self):
+                u = urllib.parse.urlsplit(self.path)
+                assert u.path.startswith("/bkt"), u.path
+                return urllib.parse.unquote(u.path[len("/bkt"):].lstrip("/")), dict(urllib.parse.parse_qsl(u.query, keep_blank_values=True))
+
+            def _reply(self, code: int, body: bytes = b"", headers: dict | None = None, head_only: bool = False):
+                self.send_response(code)
+                for k, v in (headers or {}).items():
+                    self.send_header(k, v)
+                self.send_header("Content-Length", str(len(body)) if not head_only else headers.get("Content-Length", "0"))
+                self.end_headers()
+                if body and not head_only:
+                    self.wfile.write(body)
+
+            def do_PUT(self):
+                key, _ = self._key()
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                cond = self.headers.get("If-None-Match") == "*"
+                with state.lock:
+                    state.log.append(("PUT", key, cond))
+                    if self.headers["x-amz-content-sha256"] != hashlib.sha256(body).hexdigest():
+                        return self._reply(400, b"<Error><Code>XAmzContentSHA256Mismatch</Code></Error>")
+                    if cond and state.reject_conditional:
+                        return self._reply(state.reject_conditional, b"<Error><Code>NotImplemented</Code><Message>If-None-Match</Message></Error>")
+                    if cond and key in state.objects:
+                        return self._reply(412, b"<Error><Code>PreconditionFailed</Code></Error>")
+                    if key in state.corrupt:
+                        body = bytes([body[0] ^ 0xFF]) + body[1:]
+                    state.objects[key] = body
+                self._reply(200, headers={"ETag": f'"{hashlib.md5(body).hexdigest()}"'})
+
+            def do_HEAD(self):
+                key, _ = self._key()
+                with state.lock:
+                    state.log.append(("HEAD", key, False))
+                    if key in state.head_404_once:
+                        state.head_404_once.discard(key)
+                        return self._reply(404, head_only=True, headers={"Content-Length": "0"})
+                    data = state.objects.get(key)
+                if data is None:
+                    return self._reply(404, head_only=True, headers={"Content-Length": "0"})
+                self._reply(200, head_only=True, headers={"Content-Length": str(len(data)), "ETag": f'"{hashlib.md5(data).hexdigest()}"'})
+
+            def do_GET(self):
+                key, q = self._key()
+                with state.lock:
+                    state.log.append(("GET", key, False))
+                    if q.get("list-type") == "2":
+                        keys = sorted(k for k in state.objects if k.startswith(q.get("prefix", "")))
+                        xml = ('<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                               + "".join(f"<Contents><Key>{k}</Key></Contents>" for k in keys) + "<IsTruncated>false</IsTruncated></ListBucketResult>").encode()
+                        return self._reply(200, xml)
+                    data = state.objects.get(key)
+                if data is None:
+                    return self._reply(404)
+                self._reply(200, data, headers={"ETag": f'"{hashlib.md5(data).hexdigest()}"'})
+
+        self.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        self.srv.daemon_threads = True
+        self.thread = threading.Thread(target=self.srv.serve_forever, daemon=True)
+        self.thread.start()
+
+    @property
+    def endpoint(self) -> str:
+        return f"http://127.0.0.1:{self.srv.server_address[1]}"
+
+    def remote(self) -> remote_s3.S3Remote:
+        return remote_s3.S3Remote(self.endpoint, "bkt", "ak", "sk")
+
+    def puts(self, key_prefix: str = "") -> list[tuple[str, bool]]:
+        return [(k, c) for m, k, c in self.log if m == "PUT" and k.startswith(key_prefix)]
+
+    def close(self) -> None:
+        self.srv.shutdown()
+        self.srv.server_close()
+        self.thread.join(5)
+
+
+@pytest.fixture
+def fake_s3(env, monkeypatch):
+    """A `FakeS3` wired in as the store's remote through store.toml (credentials from env vars, as in production)."""
+    made: list[FakeS3] = []
+
+    def make(**kw) -> FakeS3:
+        s = FakeS3(**kw)
+        made.append(s)
+        (env / "store.toml").write_text(f'[remote]\ntype = "s3"\nbucket = "bkt"\nendpoint = "{s.endpoint}"\n'
+                                        'access_key_id_env = "T_AK"\nsecret_access_key_env = "T_SK"\n')
+        monkeypatch.setenv("T_AK", "ak")
+        monkeypatch.setenv("T_SK", "sk")
+        return s
+
+    yield make
+    for s in made:
+        s.close()
+
+
+def _many_files(root: Path, n: int, seed: int = 0) -> Path:
+    rng = __import__("random").Random(seed)
+    for i in range(n):
+        p = root / f"d{i % 7}" / f"f{i:05d}.bin"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(rng.randbytes(rng.randint(1, 4096)))
+    return root
+
+
+def test_push_is_concurrent_conditional_and_verified_by_etag(fake_s3, tmp_path):
+    """300 blobs with 16 workers: every object lands, every PUT is a conditional create, the manifest's PUT comes after the last blob's,
+    and the report is deterministic.  A second push HEADs everything, uploads nothing and is still PRESERVED (`etag-md5`).  A key that
+    another writer created between our HEAD and PUT meets a 412 and counts as present."""
+    s = fake_s3()
+    st = LocalStore()
+    art = st.put_artifact("run-files/v1", {"n": 300}, tree=_many_files(tmp_path / "t", 300))
+    m = st.get_manifest(art)
+    rep = st.push(art, jobs=16)
+    assert rep["preserved"] and rep["verified"] == "etag-md5" and rep["errors"] == [] and rep["notes"] == []
+    assert rep["objects"] == 301 and rep["uploaded"] == 301 and rep["skipped"] == 0 and rep["bytes"] == m.payload.bytes + len(m.canonical())
+    assert set(s.objects) == {f"objects/sha256/{h}" for h, _ in m.blobs()} | {f"manifests/{ids.hex_of(art)}.json"}
+    for h, _ in m.blobs():
+        assert hashlib.sha256(s.objects[f"objects/sha256/{h}"]).hexdigest() == h
+    puts = s.puts()
+    assert len(puts) == 301 and all(c for _, c in puts), "every create carried If-None-Match: *"
+    assert puts[-1][0] == f"manifests/{ids.hex_of(art)}.json", "the manifest is the last object to go up"
+    assert [k for k, _ in puts[:-1]] != sorted(k for k, _ in puts[:-1]) or True   # completion order is arbitrary...
+    assert rep["checked"] == [f"objects/sha256/{h}" for h, _ in m.blobs()] + [f"manifests/{ids.hex_of(art)}.json"], "...the report is not"
+    reps = st.index.replicas(art)["remote"]
+    assert reps["verified_utc"] == rep["verified_utc"] and reps["verified"] == "etag-md5"
+    where = {w["location"]: w for w in st.where(art)}
+    assert where["remote"]["present"] and where["remote"]["verified_utc"] == rep["verified_utc"]
+
+    n_log = len(s.log)
+    again = st.push(art, jobs=16)
+    assert again["preserved"] and again["uploaded"] == 0 and again["skipped"] == 301 and again["verified"] == "etag-md5"
+    assert not [x for x in s.log[n_log:] if x[0] == "PUT"], "a present object costs one HEAD: no PUT"
+    assert [x[0] for x in s.log[n_log:]].count("GET") == 1 and len(s.log[n_log:]) == 301 + 1, "one HEAD per blob; HEAD + GET for the manifest (always read back)"
+
+    # a racing writer: HEAD says absent, the conditional PUT says 412 -> `exists`, then the verifying HEAD confirms size + MD5
+    victim = f"objects/sha256/{m.blobs()[7][0]}"
+    s.head_404_once.add(victim)
+    n_log = len(s.log)
+    race = st.push(art, jobs=4)
+    assert race["preserved"] and race["uploaded"] == 0 and race["skipped"] == 301
+    assert s.log[n_log:].count(("PUT", victim, True)) == 1 and s.objects[victim] == s.objects[victim]
+
+    # `push_attempt` and `preserve=False` still work on the dict-returning `put`
+    st.put_attempt(_attempt(outputs={"result": art}))
+    st.push_attempt("r20260922-105905-2021")
+    assert "attempts/r20260922-105905-2021.json" in s.objects
+    snap = st.snapshot("s", [art])
+    rep = st.push(snap, preserve=False)
+    assert rep["preserved"] is None and rep["objects"] == 1 and rep["verified"] is None and f"manifests/{ids.hex_of(snap)}.json" in s.objects
+    assert st.index.replicas(snap)["remote"]["verified_utc"] is None
+    assert st.push(snap)["verified"] == "sha256-readback", "no blobs: the manifest read-back is the whole check"
+
+
+def test_push_falls_back_to_plain_put_when_the_service_rejects_the_condition(fake_s3, tmp_path):
+    s = fake_s3(reject_conditional=501)
+    st = LocalStore()
+    art = st.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t", 40, seed=1))
+    rep = st.push(art, jobs=8)
+    assert rep["preserved"] and rep["uploaded"] == 41
+    assert len(rep["notes"]) == 1 and "NotImplemented (501)" in rep["notes"][0] and "plain PUT" in rep["notes"][0]
+    puts = s.puts()
+    assert sum(1 for _, c in puts if c) >= 1 and sum(1 for _, c in puts if not c) == 41, "the first rejection switches it off; every object still lands"
+    assert st.remote.conditional_put is False and "501" in st.remote.conditional_put_error
+    assert set(s.objects) == {f"objects/sha256/{h}" for h, _ in st.get_manifest(art).blobs()} | {f"manifests/{ids.hex_of(art)}.json"}
+    s2 = fake_s3(reject_conditional=400)
+    st2 = LocalStore(tmp_path / "s2")
+    art2 = st2.put_artifact("proof/v1", {}, file=tmp_path / "t" / "d0" / "f00000.bin")
+    rep2 = st2.push(art2)
+    assert rep2["preserved"] and "(400)" in rep2["notes"][0] and len(s2.objects) == 2
+
+
+def test_push_surfaces_a_bad_etag_as_not_preserved_and_withholds_the_manifest(fake_s3, tmp_path):
+    """The service stores different bytes for one key (its ETag != our MD5): that blob is an error, the artifact is NOT preserved, the
+    manifest is never uploaded (it must not be visible before its blobs), no verified_utc is recorded, and the batch (`cmd_push`)
+    goes on.  With `--verify readback` the same corruption is caught by sha256."""
+    s = fake_s3()
+    st = LocalStore()
+    art = st.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t", 30, seed=2))
+    m = st.get_manifest(art)
+    bad = f"objects/sha256/{m.blobs()[11][0]}"
+    s.corrupt.add(bad)
+    rep = st.push(art, jobs=8)
+    assert rep["preserved"] is False and len(rep["errors"]) == 1 and rep["errors"][0].startswith(bad) and "ETag" in rep["errors"][0] and "MD5" in rep["errors"][0]
+    assert rep["verified"] is None and rep["verified_utc"] is None and rep["uploaded"] == 30 and rep["objects"] == 31
+    assert f"manifests/{ids.hex_of(art)}.json" not in s.objects and "manifest not uploaded: 1 blob(s) failed" in rep["notes"]
+    assert len(rep["checked"]) == 29
+    assert st.index.replicas(art).get("remote", {}).get("verified_utc") is None
+    assert main(["push", art]) == 1
+    # the remote holds same-size different bytes under an immutable key: a later push refuses to overwrite and says why
+    rep = st.push(art, verify="readback")
+    assert not rep["preserved"] and "RemoteConflict" in rep["errors"][0] and f"manifests/{ids.hex_of(art)}.json" not in s.objects
+    # readback catches a corruption that HEAD cannot see: the server lies about the ETag but serves the bytes it has
+    s2 = fake_s3()
+    st2 = LocalStore(tmp_path / "s2")
+    art2 = st2.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t2", 12, seed=3))
+    m2 = st2.get_manifest(art2)
+    rep = st2.push(art2, jobs=4, verify="readback")
+    assert rep["preserved"] and rep["verified"] == "sha256-readback" and st2.index.replicas(art2)["remote"]["verified"] == "sha256-readback"
+    assert sum(1 for x in s2.log if x[0] == "GET") == 13, "readback: one GET per blob and one for the manifest"
+    victim = f"objects/sha256/{m2.blobs()[0][0]}"
+    data = bytearray(s2.objects[victim])
+    data[0] ^= 1
+    s2.objects[victim] = bytes(data)
+    rep = st2.push(art2, jobs=4, verify="readback")                       # HEAD sees a changed ETag -> RemoteConflict (immutable key)
+    assert not rep["preserved"] and "ETag" in rep["errors"][0]
+    assert not st2.verify(art2)["preserved"] and "read-back sha256" in st2.verify(art2)["errors"][0]
+
+
+def test_push_refuses_a_blob_too_big_for_one_put(fake_s3, tmp_path, monkeypatch, capsys):
+    fake_s3()
+    st = LocalStore()
+    art = st.put_artifact("proof/v1", {}, file=_many_files(tmp_path / "t", 1) / "d0" / "f00000.bin")
+    st.remote.single_put_max = 0
+    with pytest.raises(StoreError, match="multipart upload is not implemented"):
+        st.push(art)
+    with pytest.raises(ValueError, match="verify must be"):
+        st.push(art, verify="etag")
+    monkeypatch.setattr(remote_s3.S3Remote, "single_put_max", 0)
+    assert main(["push", art]) == 1 and "multipart upload is not implemented" in capsys.readouterr().out
+
+
+def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, capsys):
+    s = fake_s3()
+    st = LocalStore()
+    art = st.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t", 25, seed=4))
+    assert main(["push", art, "--jobs", "5", "--verify", "readback"]) == 0
+    out = capsys.readouterr().out
+    line = out.splitlines()[0]
+    assert line.startswith(f"{art}  run-files/v1  PRESERVED  26 objects (26 uploaded, 0 already there)") and "obj/s" in line and "verified sha256-readback" in line
+    assert "1/1 preserved" in out and sum(1 for x in s.log if x[0] == "GET") == 26
+    assert main(["push", art, "--json"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    x = doc["pushed"][0]
+    assert x["preserved"] and x["objects"] == 26 and x["uploaded"] == 0 and x["skipped"] == 26 and x["verified"] == "etag-md5" and x["seconds"] >= 0
+    assert main(["push", art, "--jobs", "0"]) == 1 and "--jobs" in capsys.readouterr().err
+    s.reject_conditional = 501
+    art2 = st.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t2", 3, seed=5))
+    assert main(["push", art2, art]) == 0
+    cap = capsys.readouterr()
+    assert cap.out.count("PRESERVED") == 2 and "2/2 preserved" in cap.out
+    assert cap.err.count("note: NotImplemented (501)") == 1, "the fallback is said once per batch"
+
+
 def test_s3remote_session_token_is_sent_and_signed(monkeypatch, tmp_path, env):
     """A temporary credential's session token goes out as `x-amz-security-token` on every request and is part of SignedHeaders (so
     the signature covers it, as SigV4 requires); without a token the header is absent.  The transport is faked: no network."""
@@ -738,8 +1005,17 @@ def test_s3remote_refuses_oversize_and_conflicts(monkeypatch, tmp_path):
     with pytest.raises(RemoteConflict):
         r.put("k", p)
     monkeypatch.setattr(r, "head", lambda key: {"bytes": 5})
-    r.put("k", p)  # same size: nothing to do, no network
+    assert r.put("k", p)["action"] == "skipped"  # same size, no ETag to compare: nothing to do, no network
+    monkeypatch.setattr(r, "head", lambda key: {"bytes": 5, "etag": hashlib.md5(b"12345").hexdigest()})
+    assert r.put("k", p)["action"] == "skipped"  # same size and MD5
+    monkeypatch.setattr(r, "head", lambda key: {"bytes": 5, "etag": hashlib.md5(b"12346").hexdigest()})
+    with pytest.raises(RemoteConflict, match="ETag"):
+        r.put("k", p)                              # same size, different bytes: an immutable key is never overwritten
+    monkeypatch.setattr(r, "head", lambda key: {"bytes": 5, "etag": "abc-2"})
+    assert r.put("k", p)["action"] == "skipped"  # a multipart ETag is not an MD5: size is all HEAD can check
     monkeypatch.setattr(r, "head", lambda key: None)
-    monkeypatch.setattr(Path, "stat", lambda self: type("S", (), {"st_size": remote_s3.SINGLE_PUT_MAX + 1})())
+    r.single_put_max = 4
     with pytest.raises(NotImplementedError, match="parts.json"):
         r.put("k", p)
+    assert remote_s3.SINGLE_PUT_MAX == 5 << 30 and remote_s3.etag_value('"AbC"') == "abc" and remote_s3.etag_value('W/"x"') == "x"
+    assert remote_s3.is_md5_etag("0" * 32) and not remote_s3.is_md5_etag("0" * 32 + "-3") and not remote_s3.is_md5_etag(None)

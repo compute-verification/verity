@@ -11,8 +11,10 @@ disposable catalog, under `~/.research/store` (or `$RESEARCH_STORE`).
 
 Replica resolution for a blob (`fetch`): local objects -> repo replica map `<repo>/fixtures/artifacts.json` (`{art id: repo-relative
 path}`, every blob sha256-checked against the manifest before use, mismatch warns and falls through) -> remote (`remote.py`).  Bytes
-that arrive from a repo or the remote are checked against the manifest before they enter `objects/`.  `verify` is the PRESERVED
-check (§7): remote head size + full read-back sha256 for the manifest and every blob; nothing is called PRESERVED without a remote.
+that arrive from a repo or the remote are checked against the manifest before they enter `objects/`.  `push` uploads an artifact's
+blobs concurrently (conditional create per object, verified by HEAD size + MD5 ETag or by read-back) and the manifest last; `verify`
+is the standalone PRESERVED check (§7): remote head size + full read-back sha256 for the manifest and every blob.  Nothing is called
+PRESERVED without a remote, and the replica record says which check was done (`verified`: `etag-md5` | `sha256-readback`).
 """
 from __future__ import annotations
 
@@ -24,18 +26,23 @@ import re
 import secrets
 import shutil
 import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from . import canon, ids, kinds
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
 from .remote import ConfigError, Remote, load_remote
+from .remote_s3 import SINGLE_PUT_MAX, is_md5_etag
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
 REPLICA_MAP = Path("fixtures") / "artifacts.json"
 SNAPSHOT_KIND = "dataset-snapshot/v1"
-BIG = 4 << 30
+VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"     # what a replica record's `verified` says was checked
+VERIFY_MODES = ("head", "readback")                             # `push(verify=...)`: HEAD size + MD5 ETag, or download + sha256
 _UNSET = object()
 
 
@@ -507,9 +514,22 @@ class LocalStore:
 
     # ---- remote: verify / push ----------------------------------------------------------------------------------------------------------
 
+    def _readback(self, r: Remote, key: str, sha: str) -> str | None:
+        """Download `key` and sha256 it; None when it matches `sha`, else the reason.  Thread-safe (one temp file per thread)."""
+        tmp = self.root / f".verify-{os.getpid()}-{threading.get_ident()}"
+        try:
+            r.get(key, tmp)
+            got = sha256_file(tmp)[0]
+        except KeyError:
+            return f"{key}: absent"
+        finally:
+            tmp.unlink(missing_ok=True)
+        return None if got == sha else f"{key}: read-back sha256 {got} != {sha}"
+
     def verify(self, art_id: str) -> dict:
-        """PRESERVED check (§7): for the manifest and every blob, remote head size matches and a full read-back sha256 matches.
-        Records `verified_utc` for the remote replica.  Without a remote: preserved=False, reason given, nothing raised."""
+        """PRESERVED check (§7) by read-back: for the manifest and every blob, remote head size matches and a full read-back sha256
+        matches.  Records `verified_utc` (+ `verified: "sha256-readback"`) for the remote replica.  Without a remote: preserved=False,
+        reason given, nothing raised."""
         m = self.get_manifest(art_id)
         hex_ = ids.hex_of(art_id)
         r = self.remote
@@ -518,7 +538,6 @@ class LocalStore:
             rep["reason"] = f"remote unusable: {self.remote_error}" if getattr(self, "remote_error", None) else "no remote configured"
             return rep
         keys = [(manifest_key(hex_), hex_, len(m.canonical()))] + [(object_key(h), h, n) for h, n in m.blobs()]
-        tmp = self.root / f".verify-{os.getpid()}"
         for key, sha, size in keys:
             head = r.head(key)
             if head is None:
@@ -527,39 +546,109 @@ class LocalStore:
             if head["bytes"] != size:
                 rep["errors"].append(f"{key}: remote size {head['bytes']} != {size}")
                 continue
-            if size >= BIG:
-                rep["errors"].append(f"{key}: >= 4 GiB; per-part check via {key}.parts.json is not implemented")
+            if size > SINGLE_PUT_MAX:
+                rep["errors"].append(f"{key}: > 5 GiB; per-part check via {key}.parts.json is not implemented")
                 continue
-            try:
-                r.get(key, tmp)
-                got = sha256_file(tmp)[0]
-            finally:
-                tmp.unlink(missing_ok=True)
-            if got != sha:
-                rep["errors"].append(f"{key}: read-back sha256 {got} != {sha}")
+            err = self._readback(r, key, sha)
+            if err:
+                rep["errors"].append(err)
             else:
                 rep["checked"].append(key)
         if not rep["errors"]:
-            rep["preserved"], rep["verified_utc"] = True, utc_now()
-            self.index.set_replica(art_id, "remote", rep["verified_utc"], r.describe())
+            rep["preserved"], rep["verified_utc"], rep["verified"] = True, utc_now(), VERIFY_READBACK
+            self.index.set_replica(art_id, "remote", rep["verified_utc"], r.describe(), verified=VERIFY_READBACK)
             self.index.set_presence(art_id, remote=True)
         return rep
 
-    def push(self, art_id: str, preserve: bool = True) -> dict:
-        """Upload every blob and the manifest under immutable keys; with `preserve`, run `verify` and return its report."""
+    def _push_object(self, r: Remote, key: str, path: Path, size: int, sha: str, verify: str | None) -> dict:
+        """Upload one object (the remote's conditional `put`: HEAD, skip when present, else create) and verify it.  `verify` is
+        `head` (size + single-part ETag == MD5, falling back to read-back when the remote gives no MD5 ETag), `readback` (download
+        + sha256), or None (upload only).  Never raises: the outcome is in the dict (`error` set = not preserved)."""
+        out: dict[str, Any] = {"key": key, "bytes": size, "action": None, "verified": None, "fallback": None, "error": None}
+        try:
+            res = r.put(key, path)
+            out["action"], out["fallback"] = res["action"], res.get("fallback")
+            if verify is None:
+                return out
+            if verify == "head":
+                head = {"bytes": res["bytes"], "etag": res["etag"]} if res["action"] == "skipped" else r.head(key)    # the HEAD `put` did is the check
+                if head is None:
+                    out["error"] = f"{key}: absent after upload"
+                elif head["bytes"] != size:
+                    out["error"] = f"{key}: remote size {head['bytes']} != {size}"
+                elif is_md5_etag(head.get("etag")):
+                    if head["etag"] == res["md5"]:
+                        out["verified"] = VERIFY_HEAD
+                    else:
+                        out["error"] = f"{key}: remote ETag {head['etag']} != local MD5 {res['md5']}"
+                else:                                                   # a multipart ETag, or a remote without one: content must be read
+                    out["error"], out["verified"] = self._readback(r, key, sha), VERIFY_READBACK
+            else:
+                out["error"], out["verified"] = self._readback(r, key, sha), VERIFY_READBACK
+            if out["error"]:
+                out["verified"] = None
+        except Exception as e:  # noqa: BLE001  one object's failure is reported, not raised: the artifact ends up NOT preserved
+            out["error"] = f"{key}: {type(e).__name__}: {e}"
+        return out
+
+    def push(self, art_id: str, preserve: bool = True, *, jobs: int = 32, verify: str = "head", progress: Callable[[dict], None] | None = None) -> dict:
+        """Upload every blob (`jobs` threads) and then the manifest under immutable keys; a manifest is never visible before its
+        blobs, so it goes up only when every blob is present and (with `preserve`) verified.  `verify`: `head` (default; size +
+        single-part ETag == MD5, recorded as `etag-md5`) or `readback` (download + sha256, `sha256-readback`); the manifest is
+        always read back.  The report is the `verify` shape (`preserved`, `checked`, `errors`, `verified_utc`) plus `verified`,
+        `objects`, `uploaded`, `skipped`, `bytes`, `seconds`, `notes` (e.g. the remote switching conditional PUT off).  Results are
+        reported in manifest order whatever the completion order.  `progress`, when given, is called with running counts."""
+        if verify not in VERIFY_MODES:
+            raise ValueError(f"verify must be one of {VERIFY_MODES}, got {verify!r}")
+        t0 = time.monotonic()
         m = self.get_manifest(art_id)
+        hex_ = ids.hex_of(art_id)
         r = self._require_remote()
         files = m.payload.files if m.payload and m.payload.type == "tree" else []
         rel = {f.sha256: f.path for f in files or []}
-        for h, _ in m.blobs():
-            r.put(object_key(h), self._resolve_blob(h, art_id, rel.get(h)))
-        r.put(manifest_key(ids.hex_of(art_id)), self.manifest_path(ids.hex_of(art_id)))
-        self.index.set_presence(art_id, remote=True)
-        if "remote" not in self.index.replicas(art_id):
-            self.index.set_replica(art_id, "remote", None, r.describe())
-        if preserve:
-            return self.verify(art_id)
-        return {"id": art_id, "remote": r.describe(), "preserved": None, "pushed": True}
+        blobs = [(object_key(h), self._resolve_blob(h, art_id, rel.get(h)), n, h) for h, n in m.blobs()]
+        limit = getattr(r, "single_put_max", None)
+        big = [(k, n) for k, _, n, _ in blobs if limit is not None and n > limit]
+        if big:
+            raise StoreError(f"{art_id}: {big[0][0]} is {big[0][1]} bytes > {limit} (one PutObject); multipart upload is not implemented"
+                             + (f" ({len(big)} such blobs)" if len(big) > 1 else ""))
+        mode = verify if preserve else None
+        results: list[dict | None] = [None] * len(blobs)
+        done = 0
+        with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(blobs) or 1))) as ex:
+            futs = {ex.submit(self._push_object, r, k, p, n, h, mode): i for i, (k, p, n, h) in enumerate(blobs)}
+            for fut in as_completed(futs):
+                results[futs[fut]] = fut.result()
+                done += 1
+                if progress and (done % 100 == 0 or done == len(blobs)):
+                    progress({"id": art_id, "done": done, "objects": len(blobs) + 1, "seconds": time.monotonic() - t0})
+        objs = [x for x in results if x is not None]
+        errors = [x["error"] for x in objs if x["error"]]
+        notes = sorted({x["fallback"] for x in objs if x["fallback"]})
+        if not errors:                                                  # blobs first, manifest last, and only over a complete blob set
+            man = self._push_object(r, manifest_key(hex_), self.manifest_path(hex_), len(m.canonical()), hex_, VERIFY_READBACK if preserve else None)
+            objs.append(man)
+            if man["error"]:
+                errors.append(man["error"])
+            if man["fallback"]:
+                notes.append(man["fallback"])
+        else:
+            notes.append(f"manifest not uploaded: {len(errors)} blob(s) failed")
+        preserved = (not errors) if preserve else None
+        methods = sorted({x["verified"] for x in objs[:len(blobs)] if x["verified"]})   # the blobs' check(s); the manifest is always read back
+        rep: dict[str, Any] = {"id": art_id, "remote": r.describe(), "preserved": preserved, "checked": [x["key"] for x in objs if x["verified"]],
+                               "errors": errors, "verified_utc": None, "verified": (",".join(methods) or VERIFY_READBACK) if preserved else None,
+                               "objects": len(blobs) + 1, "uploaded": sum(1 for x in objs if x["action"] == "created"),
+                               "skipped": sum(1 for x in objs if x["action"] in ("skipped", "exists")),
+                               "bytes": sum(x["bytes"] for x in objs if x["action"]), "seconds": round(time.monotonic() - t0, 3), "notes": notes}
+        if not errors:
+            self.index.set_presence(art_id, remote=True)
+            if preserve:
+                rep["verified_utc"] = utc_now()
+                self.index.set_replica(art_id, "remote", rep["verified_utc"], r.describe(), verified=rep["verified"])
+            elif "remote" not in self.index.replicas(art_id):
+                self.index.set_replica(art_id, "remote", None, r.describe())
+        return rep
 
     def push_attempt(self, run_id: str) -> None:
         r = self._require_remote()

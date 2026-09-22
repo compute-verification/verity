@@ -157,7 +157,8 @@ attempt_conditions(attempt, key, value)
 attempt_outputs(attempt, name, artifact)
 attempt_inputs(attempt, name, artifact)
 labels(target, key, value, by, ts, ref, path)
-replicas(id, location, verified_utc, detail)   verifications (§7); the one table a rebuild keeps, since it is not a local fact
+replicas(id, location, verified_utc, detail, verified)   verifications (§7: verified = etag-md5 | sha256-readback); the one table a rebuild
+                                                          keeps, since it is not a local fact; `verified` is added to an older catalog on open
 ~~~
 
 Flattening: nested objects get dotted keys, lists numeric components (`families.0`), scalars are stored as text (strings raw,
@@ -166,7 +167,7 @@ blob present here; `remote` means pushed (from a listing or a recorded push/veri
 
 `research.store.index.Index(path)`: `index_artifact(manifest_doc, art_id, local=None, remote=None, repo_path=None)` (None keeps the
 current flag), `index_attempt(doc)`, `index_label(label, path)`, `set_presence(art_id, *, local, remote, repo_path)`,
-`set_replica(art_id, location, verified_utc, detail)`, `rebuild(artifacts, attempts, labels)`, `artifact(id)`, `artifacts()`,
+`set_replica(art_id, location, verified_utc, detail, verified=None)`, `rebuild(artifacts, attempts, labels)`, `artifact(id)`, `artifacts()`,
 `attempt(run_id)`, `attempts_by_reuse_key(key)`, `attempts_by_derivation(drv)`, `attempts_by_output(art_id)`,
 `select_artifacts(kind=None, where=None, label=None, attempt=None, tool=None, derivation=None)`, `labels(target, key=None)`,
 `replicas(art_id)`, `sql(query, params=())` and `sql_with_columns(...)` on a read-only (`?mode=ro`) connection. Attempt queries
@@ -250,18 +251,23 @@ Keyed by reuse_key ON PURPOSE: every commit gets a cold cache; the recompile cos
 
 ~~~python
 class Remote(Protocol):
-    def put(self, key: str, path: Path) -> None            # upload under an immutable key; RemoteConflict if the key holds a different size
+    def put(self, key: str, path: Path) -> dict            # conditional create under an immutable key -> {"action": created|skipped|exists, ...};
+                                                           # RemoteConflict if the key holds a different size or (single-part ETag) MD5
     def get(self, key: str, path: Path) -> None            # KeyError when absent
-    def head(self, key: str) -> dict | None               # {"bytes": n} or None
+    def head(self, key: str) -> dict | None               # {"bytes": n, "etag": md5 hex | None} or None
     def list(self, prefix: str) -> list[str]
     def describe(self) -> str                              # for `where`
 ~~~
 
-`FsRemote(root)` (a directory, also the test double) and `S3Remote(endpoint, bucket, access_key, secret_key, region="auto")`
-(SigV4 with signed payload hashes, stdlib `urllib`+`hmac`, path-style `<endpoint>/<bucket>/<key>`; single PUT for objects
-<= 4 GiB; above that `put` raises `NotImplementedError` — the planned design is multipart with per-part sha256 recorded in a
-sidecar key `<key>.parts.json`). The signer is tested against the AWS documented vectors; R2 itself has not been exercised yet.
-Config `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`):
+`FsRemote(root)` (a directory, also the test double; its `etag` is the file's MD5) and `S3Remote(endpoint, bucket, access_key,
+secret_key, region="auto", session_token=None)` (SigV4 with signed payload hashes, stdlib `urllib`+`hmac`, path-style
+`<endpoint>/<bucket>/<key>`; one PUT for objects <= 5 GiB, the service's PutObject limit; above that `push` raises `StoreError`
+naming multipart as unimplemented — the planned design is multipart with per-part sha256 recorded in a sidecar key
+`<key>.parts.json`). `S3Remote.put` is HEAD-then-`PUT If-None-Match: *`: a 412 means another writer created the key first
+(`exists`, fine for immutable content); a 400/501 means the service lacks conditional PUT, so it is switched off for the rest of
+the session and the plain PUT is used (the push report carries a note). Cloudflare R2 honours `If-None-Match: *` (checked live).
+The signer is tested against the AWS documented vectors and the client against R2. Config `~/.research/store.toml` (or
+`$RESEARCH_STORE_CONFIG`):
 
 ~~~toml
 [remote]
@@ -287,10 +293,24 @@ to set). `research run` reports which of the three happened: `PRESERVED on the r
 (<reason>)`; `research data push RUN` (or `--pending`) preserves later, with credentials in the environment
 (`set -a; source ~/.config/verity/r2.env; set +a` for the R2 vault). `where` still answers for the local and repo replicas and reports the remote row as `UNUSABLE <error>` (never "not configured", never absent).
 
-**PRESERVED** means: remote `head` size matches AND a full read-back sha256 matches, for the manifest and every blob (objects
-< 4 GiB; above that, per-part sha256 from the sidecar checked against the parts read back — not implemented). ETags are not
-content hashes. `research data verify ART` performs it (exit 1 unless PRESERVED); `put --preserve` performs it after upload;
-`LocalStore.push(art, preserve=True)` returns the verify report; the `replicas` table records `verified_utc` per location.
+**PRESERVED** means: for the manifest and every blob, the remote holds an object of the right size whose content was checked,
+by one of two checks, and the replica record (`replicas.verified`) says which:
+
+~~~text
+etag-md5          `push --verify head` (default): HEAD after upload; Content-Length == bytes and the single-part ETag == hex MD5 of
+                  the local bytes (S3 and R2 make a single-PUT object's ETag its MD5; a `-` in the ETag marks multipart, which is not
+                  an MD5, and such an object falls back to read-back).  One extra round trip per object.
+sha256-readback   `push --verify readback`, `verify`, `put --preserve`'s manifest: download and sha256 against the manifest.  Costs
+                  the object's bytes again.  Manifests are always read back (they are small); blobs on request.
+~~~
+
+`LocalStore.push(art, preserve=True, jobs=32, verify="head")` uploads the blobs with `jobs` threads (per blob: HEAD; present with
+the right size and MD5 -> skipped and thereby verified; else conditional PUT, then the check), and the manifest **after** every
+blob is present and verified — a manifest is never visible before its blobs, and a failed blob withholds it. One failed object
+makes the artifact NOT preserved without aborting a `research data push` batch. The report has the `verify` shape (`preserved`,
+`checked`, `errors`, `verified_utc`) plus `verified`, `objects`, `uploaded`, `skipped`, `bytes`, `seconds`, `notes`; results are
+in manifest order whatever the completion order. `research data verify ART` is the standalone read-back check (exit 1 unless
+PRESERVED); the `replicas` table records `verified_utc` and `verified` per location (`where` shows `verified_utc`).
 
 Replica resolution order for `fetch`: local objects -> repo replica (`fixtures/artifacts.json`: `{art id: repo-relative
 path}` of the payload — a file, or a tree's directory; every blob is sha256-checked against the manifest before use, mismatch
@@ -326,8 +346,10 @@ research data show ART|ATTEMPT|DRV [--json]   manifest (+ producing attempts) / 
 research data where ART [--json]              replicas: local / repo / remote (+ verified_utc)
 research data fetch ART [--to DIR]            materialise payload (file or tree); prints path
 research data verify ART [--json]             PRESERVED check against the remote (exit 1 unless PRESERVED)
-research data push [ART|RUN ...] [--pending] [--json]
-                                              preserve on the remote: blobs + manifest uploaded and read back (PRESERVED) per artifact;
+research data push [ART|RUN ...] [--pending] [--jobs N] [--verify head|readback] [--json]
+                                              preserve on the remote: blobs uploaded with N threads (default 32), each verified (head:
+                                              size + MD5 ETag, default; readback: download + sha256), then the manifest (PRESERVED); one
+                                              line per artifact with objects, uploaded/skipped, MB, seconds, objects/s and the check done;
                                               a run id pushes the attempt manifest and every artifact it references; --pending pushes
                                               every local artifact without a verified remote replica and every attempt the remote lacks
 research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA] [-- ARGV...]
@@ -389,7 +411,9 @@ ledger-row/v1            one frozen overhead-ledger row whose run is not an atte
 1. **A derivation key is a claim of dependency completeness.** Bias to false misses. Exact reuse includes the source tree.
 2. **Immutable objects only.** Blobs, manifests, attempts, labels are write-once; the index is disposable.
 3. **Labels are assertions, not fields.** Keep every assertion; policy chooses.
-4. **Verify uploads.** Size + content read-back before anything is called PRESERVED. Never trust ETags.
+4. **Verify uploads.** Size + a content check before anything is called PRESERVED, and the record says which check: a single-part
+   ETag is the object's MD5 and is accepted as the transport check (`etag-md5`); a multipart ETag is not a hash and never is; the
+   manifest's sha256 stays the identity and read-back (`sha256-readback`) stays available for anything that matters more than time.
 5. **Producers never carry verifier truth.** A proof artifact may hold proof bytes, the claimed statement, prover metadata;
    the verifier's chain/spec/keys come from its own closure or an explicit trusted input artifact (the `chain.txt` lesson).
 6. **Content, not pathname**, is the identity of every input.

@@ -1,9 +1,11 @@
 """Remotes (README §7): where a second replica of every immutable key lives.  Keys are the store's relative paths.
 
     class Remote(Protocol):
-        put(key, path)     upload under an immutable key; refuse (RemoteConflict) to overwrite a key whose size differs
+        put(key, path)     create under an immutable key; refuse (RemoteConflict) to overwrite a key whose content differs.  Returns
+                           {"action": "created"|"skipped"|"exists", "bytes", "etag", "md5", ...}: `skipped` = HEAD found it already,
+                           `exists` = the conditional create lost a race; `etag` is an MD5 hex when the remote can say so
         get(key, path)     download to `path` (temp + rename by the caller's convention); KeyError when absent
-        head(key)          {"bytes": n} or None
+        head(key)          {"bytes": n, "etag": md5 hex | None} or None
         list(prefix)       every key under `prefix`
 
 `FsRemote(root)` is a directory (also the test double).  `S3Remote` lives in `remote_s3.py`.  `load_remote()` reads
@@ -15,8 +17,10 @@ long-lived one and nothing changes.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
+import threading
 import tomllib
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -32,15 +36,25 @@ class ConfigError(ValueError):
 
 @runtime_checkable
 class Remote(Protocol):
-    def put(self, key: str, path: Path) -> None: ...
+    def put(self, key: str, path: Path) -> dict: ...
     def get(self, key: str, path: Path) -> None: ...
     def head(self, key: str) -> dict | None: ...
     def list(self, prefix: str) -> list[str]: ...
     def describe(self) -> str: ...
 
 
+def md5_file(path: Path) -> str:
+    h = hashlib.md5(usedforsecurity=False)
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 class FsRemote:
-    """A directory used as a remote: `<root>/<key>`.  Writes go temp + rename; an existing key with a different size conflicts."""
+    """A directory used as a remote: `<root>/<key>`.  Writes go temp + hard-link (the first writer wins, so a concurrent
+    `put` of the same key reports `exists`); an existing key with a different size or MD5 conflicts.  `head` reports the file's
+    MD5 as its `etag`, the way a single-part S3 object does, so the test double exercises the same verification path."""
 
     def __init__(self, root: Path | str):
         self.root = Path(root).expanduser()
@@ -53,22 +67,27 @@ class FsRemote:
             raise ValueError(f"bad remote key {key!r}")
         return self.root / key
 
-    def put(self, key: str, path: Path) -> None:
+    def put(self, key: str, path: Path) -> dict:
         dst = self._p(key)
-        size = Path(path).stat().st_size
+        size, md5 = Path(path).stat().st_size, md5_file(Path(path))
+        res = {"action": "created", "bytes": size, "etag": md5, "md5": md5, "conditional": True, "fallback": None}
         if dst.exists():
             if dst.stat().st_size != size:
                 raise RemoteConflict(f"{key}: remote holds {dst.stat().st_size} bytes, local is {size}")
-            return
+            have = md5_file(dst)
+            if have != md5:
+                raise RemoteConflict(f"{key}: remote ETag {have} != local MD5 {md5} (same size, different bytes)")
+            return {**res, "action": "skipped"}
         dst.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dst.parent / f".tmp-{dst.name}-{os.getpid()}"
+        tmp = dst.parent / f".tmp-{dst.name}-{os.getpid()}-{threading.get_ident()}"
         shutil.copyfile(path, tmp)
         try:
             os.link(tmp, dst)
         except FileExistsError:
-            pass
+            res["action"] = "exists"
         finally:
             tmp.unlink(missing_ok=True)
+        return res
 
     def get(self, key: str, path: Path) -> None:
         src = self._p(key)
@@ -79,7 +98,7 @@ class FsRemote:
 
     def head(self, key: str) -> dict | None:
         p = self._p(key)
-        return {"bytes": p.stat().st_size} if p.is_file() else None
+        return {"bytes": p.stat().st_size, "etag": md5_file(p)} if p.is_file() else None
 
     def list(self, prefix: str) -> list[str]:
         base = self.root
