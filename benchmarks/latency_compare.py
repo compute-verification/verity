@@ -109,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     root = runs_root(a.runs_dir)
     try:
-        designs = [design_of(resolve(r, root), a.capacity_gb * 1e9) for r in a.runs]
+        designs = [design_of(Path(r).parent if r.endswith("result.json") else resolve(r, root), a.capacity_gb * 1e9) for r in a.runs]
     except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
         print(f"latency_compare: {e}", file=sys.stderr)
         return 1

@@ -301,9 +301,6 @@ CATALOG: dict[str, Design] = {
 # the pieces above and below it are independent given the commitment (the verifier opens the committed layer at the
 # pieces' endpoints as Ligero linear functionals; the piece below starts from a random point drawn after com_1).
 
-CHECKER_LAYER_ROUNDS_B4096 = (19 + 2 * 10 + 1, 19 + 2 * 10 + 1, 19 + 2 * 10 + 1, 19 + 2 * 10 + 1, 19 + 2 * 10 + 1, 19 + 2 * 10)  # placeholder, replaced by the run
-
-
 def lookup_chain(n: int, c: int = 1, cuts: Sequence[int] = ()) -> int:
     """Critical-path messages of the R16 fractional GKR of dimension ``n`` with ``c`` variables per message and the
     tree cut (committed) at the given levels: the longest piece plus the root's lambda message."""
@@ -458,9 +455,33 @@ def report(designs: Sequence[Design], rtts_ms: Sequence[float] = RTTS_MS, bws_gb
     return "\n".join(lines) + "\n", doc
 
 
+def measured_row(result: Mapping[str, Any]) -> dict[str, Any]:
+    """The measured-vs-model row of one ``--rtt-ms`` run: the envelope's ``t.e2e.rtt_<rtt>ms`` at the RTT it ran
+    against ``t.total + verifier.seconds + depth x rtt`` (no transfer term: the run is on one host)."""
+
+    m = {x["name"]: x["value"] for x in result.get("measurements", []) if isinstance(x, Mapping) and "name" in x}
+    fp = result.get("workload_fingerprint") or {}
+    rtt = float((fp.get("latency") or {}).get("rtt_ms", 0.0))
+    depth = int(m["rounds.sequential_depth"])
+    e2e_meas = float(m[f"t.e2e.rtt_{rtt:g}ms"])
+    model = float(m["t.total"]) + float(m["verifier.seconds"]) + depth * rtt / 1000
+    return {"run_id": result.get("run_id"), "design": (fp.get("software") or {}).get("backend", {}).get("name", "?"), "B": fp.get("B"), "rtt_ms": rtt, "depth": depth,
+            "depth_legacy": m.get("depth_formula_legacy", m.get("direct.depth_formula_legacy")), "t_total": float(m["t.total"]), "verify": float(m["verifier.seconds"]),
+            "sleep": e2e_meas - float(m["t.total"]) - float(m["verifier.seconds"]), "e2e_measured": e2e_meas, "e2e_model": model,
+            "lookup_chain": m.get("depth_lookup_chain"), "checker_chain": m.get("depth_checker_chain")}
+
+
+#: The checker GKR's per-layer (b, s_in) at B = 4096 (96 x 4096 = 393,216 unit copies, b = 19; 826 wires, s = 7 as
+#: the B = 64 run's checker chain 167 = 6 x (13 + 14) + 5 implies); the R16 fractional tree has n = 26 levels.
+A_CHECKER_LAYERS_B4096: tuple[tuple[int, int], ...] = ((19, 7),) * 6
+A_R16_LEVELS_B4096 = 26
+A_COMMITTED_B4096 = 44_937 * 4096
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--envelope", action="append", default=[], metavar="KEY=PATH", help="replace CATALOG[KEY]'s prove/verify/depth/bytes/memory with a result.json")
+    ap.add_argument("--measured", action="append", default=[], metavar="PATH", help="result.json of an --rtt-ms run for the measured-vs-model table")
     ap.add_argument("--out", default=None, help="write <out>.md and <out>.json")
     a = ap.parse_args(argv)
     designs = dict(CATALOG)
@@ -469,7 +490,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         base = designs[key]
         d = from_envelope(base.name, json.loads(Path(path).read_text()), mem_capacity_bytes=base.mem_capacity_bytes, source=path)
         designs[key] = replace(d, notes=base.notes, verify_note=base.verify_note)
-    md, doc = report(list(designs.values()))
+    measured = [measured_row(json.loads(Path(p).read_text())) for p in a.measured]
+    options = a_depth_options(A_R16_LEVELS_B4096, A_CHECKER_LAYERS_B4096, A_COMMITTED_B4096, designs["A-CPU Goldilocks^3"], designs["A-GPU re-priced (4090, fused SIMT)"])
+    md, doc = report(list(designs.values()), measured=measured, options=options)
     if a.out:
         Path(a.out + ".md").write_text(md)
         Path(a.out + ".json").write_text(json.dumps(doc, indent=1, default=str) + "\n")

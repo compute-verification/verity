@@ -107,3 +107,37 @@ def test_catalog_entries_are_consistent():
     # SP1 is the depth-1 baseline; B-Ligero and C are the shallow interactive designs; A is the deep one
     assert L.CATALOG["SP1 (FS, B=1)"].depth == 1 and not L.CATALOG["SP1 (FS, B=1)"].interactive
     assert L.CATALOG["B-Ligero GPU re-priced (4090)"].depth < 5 < L.CATALOG["A-CPU Goldilocks^3"].depth
+
+
+def test_depth_chains_match_the_measured_runs():
+    # A at B = 64 (r20260922-073131-bfd0): lookup chain 211 (n = 20), checker chain 167 (b = 13, s = 7), depth 214
+    assert L.lookup_chain(20) == 211
+    assert L.checker_chain(((13, 7),) * 6) == 167
+    assert 1 + max(L.lookup_chain(20), L.checker_chain(((13, 7),) * 6)) + 2 == 214
+    # B = 4096: n = 26 -> 352; the checker at b = 19 is below it
+    assert L.lookup_chain(L.A_R16_LEVELS_B4096) == 352
+    assert L.checker_chain(L.A_CHECKER_LAYERS_B4096) == 203
+    # the levers: sharding removes levels, c halves rounds, cuts take the longest piece
+    assert L.lookup_chain(21) == 232
+    assert L.lookup_chain(26, 2) == 196
+    assert L.lookup_chain(26, 1, (16, 21)) == 137
+    assert L.checker_chain(L.A_CHECKER_LAYERS_B4096, 1, (2,)) == 4 * 33 + 3
+
+
+def test_a_depth_options_rows():
+    rows = L.a_depth_options(26, L.A_CHECKER_LAYERS_B4096, L.A_COMMITTED_B4096, L.CATALOG["A-CPU Goldilocks^3"], L.CATALOG["A-GPU re-priced (4090, fused SIMT)"])
+    by = {r["option"].split(" [")[0].split(" (")[0]: r for r in rows}
+    assert by["baseline"]["depth"] == 355
+    assert by["R16 sharding s = 5"]["depth"] == 235 and by["R16 sharding s = 5"]["committed_pct"] == pytest.approx(1.10, abs=0.01)
+    assert by["c = 2 variables per message"]["depth"] == 199 and by["c = 2 variables per message"]["prover_work_x"] > 1.5
+    assert by["cut the tree at [16, 21] + commit depth>=3 checker wires"]["depth"] == 140
+    assert all(r["depth"] >= 355 for r in rows if r["option"].startswith("checkpoints")) and all("never" in r["wins_above_rtt_ms_gpu"] for r in rows if r["option"].startswith("checkpoints"))
+    assert by["hint-free branch"]["depth"] > 355 and by["hint-free branch"]["prover_work_x"] < 1
+
+
+def test_measured_row():
+    env = {"run_id": "r", "workload_fingerprint": {"B": 64, "latency": {"rtt_ms": 10}, "software": {"backend": {"name": "verity-gkr"}}},
+           "measurements": [{"name": "t.total", "value": 6.0}, {"name": "verifier.seconds", "value": 0.5}, {"name": "rounds.sequential_depth", "value": 214},
+                            {"name": "t.e2e.rtt_10ms", "value": 8.65}]}
+    row = L.measured_row(env)
+    assert row["e2e_model"] == pytest.approx(6.5 + 2.14) and row["sleep"] == pytest.approx(2.15) and row["depth"] == 214
