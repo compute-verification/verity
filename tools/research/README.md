@@ -13,7 +13,8 @@ exists. This file is for people changing the tool.
 
 ~~~text
 src/research/
-├── cli.py          research run | fetch | status | inspect | tele | launch-request
+├── cli.py          research run | fetch | status | inspect | tele | data | launch-request
+├── store/          the evidence store (`research data`): README.md is the spec; canon, ids, model, local, index, remote, remote_s3, kinds, cli
 ├── runs.py         run ids, the local registry (~/.research/runs or $RESEARCH_RUNS), read-time summaries
 ├── record.py       job.json v0.2 = the harness's v0.1 + tool, run, workload_fingerprint.expected, cost; v0.1 stays readable
 ├── result.py       the result.json contract (schema, run_id, fingerprint, validation, measurements, artifacts)
@@ -47,6 +48,7 @@ research fetch RUN [--all]               # records only, or every file sha256-ve
 research status [--refresh] [--all] [--json]
 research inspect RUN [--json]
 research tele SUBCOMMAND ...             # the harness's own surface
+research data SUBCOMMAND ...             # the evidence store (below)
 ~~~
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
@@ -82,6 +84,31 @@ Limitations, stated: until `fetch --all` completes, the only copy of the
 evidence is on the machine. Budget enforcement is the project's deadman
 (`pods/budget_cap.py`), not this command. Provisioning is a separate,
 explicit act; `--on` never creates a pod.
+
+### research data
+
+`src/research/store/` is the evidence store; its `README.md` is the contract
+(four objects: Tool, Derivation, Attempt, Artifact; two relations: Replica,
+Label). Artifacts are immutable, typed, content-addressed manifests with an
+optional file or tree payload; the id is the sha256 of the canonical manifest.
+Local root `~/.research/store` (or `$RESEARCH_STORE`); an optional remote in
+`~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`: `fs` directory or
+`s3`/R2 via stdlib SigV4). The sqlite catalog is disposable (`reindex`).
+
+~~~text
+research data put --kind proof/v1 --meta '{"backend":"sp1"}' --file proof.bin [--preserve]   # -> art:<hex>
+research data show ART|RUN|DRV [--json]      research data where ART        research data fetch ART [--to DIR]
+research data verify ART                     # PRESERVED = remote size + full read-back sha256; exit 1 otherwise
+research data select --kind K --where meta.k=v --label k=v --tool T --derivation D --attempt R [--json|--ids]
+research data snapshot --name N --members art:a,art:b | --select <select flags>   # dataset-snapshot/v1; identity = content
+research data label ART proof_class COMPLETE --by red-team-1 [--ref RUN]          research data labels ART [--history]
+research data reindex [--remote]             research data sql "SELECT ..."       # read-only connection
+~~~
+
+Python: `research.store.local.LocalStore` (`put_artifact`, `get_manifest`,
+`fetch`, `where`, `put_attempt`, `get_attempt`, `add_label`, `labels`,
+`snapshot`, `verify`, `push`, `reindex`, `.index`, `.remote`). Nothing is
+called PRESERVED without a remote; nothing in the store is ever overwritten.
 
 ## Not yet built, in order
 

@@ -7,6 +7,7 @@
   research inspect <run-id|prefix|path> [--runs-dir D] [--json]
   research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
+  research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
@@ -386,6 +387,10 @@ def main(argv: list[str] | None = None) -> int:
         from .telemetry.cli import main as tele_main
 
         return tele_main(rest)
+    if cmd == "data":
+        from .store.cli import main as data_main
+
+        return data_main(rest)
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 
