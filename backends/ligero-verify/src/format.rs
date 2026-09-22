@@ -199,7 +199,9 @@ pub struct Statement {
     pub target_log2: f64,
     pub zk: bool,
     pub t_pad: usize,
-    pub coin_commitment: bool,
+    /// PROTOCOL.md 8c (b-zk-fix): `interactive` = step-0 coins committed, challenges from the coins alone;
+    /// `false` = Fiat-Shamir, no coins, challenges from the transcript prefix.
+    pub interactive: bool,
     pub n_proofs: usize,
     pub n_vus: usize,
     pub steps: usize,
@@ -212,8 +214,8 @@ pub struct Statement {
 impl Statement {
     pub fn parse(d: &[u8]) -> Result<Statement> {
         let mut r = Rd::new(d);
-        if r.take(8)? != b"LIGSTM01" {
-            return Err("not a ligero-statement/v1 file".into());
+        if r.take(8)? != b"LIGSTM02" {
+            return Err("not a ligero-statement/v2 file".into());
         }
         if r.u32()? != 1 {
             return Err("statement mode is not chain (1)".into());
@@ -229,10 +231,10 @@ impl Statement {
             _ => return Err("zk flag not 0/1".into()),
         };
         let t_pad = r.usize_bounded(1 << 16, "t_pad")?;
-        let coin_commitment = match r.u8()? {
-            0 => false,
-            1 => true,
-            _ => return Err("coin_commitment flag not 0/1".into()),
+        let interactive = match r.u8()? {
+            0 => true,
+            1 => false,
+            _ => return Err("mode code not 0 (interactive) / 1 (fiat-shamir)".into()),
         };
         let n_proofs = r.usize_bounded(1 << 20, "n_proofs")?;
         let n_vus = r.usize_bounded(1 << 22, "n_vus")?;
@@ -257,7 +259,7 @@ impl Statement {
         let b = r.u16_vec(l * k_ops)?;
         let y16 = r.u16_vec(l)?;
         r.done()?;
-        Ok(Statement { l, n, d: dd, t, target_log2, zk, t_pad, coin_commitment, n_proofs, n_vus, steps, k_ops, a, b, y16 })
+        Ok(Statement { l, n, d: dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops, a, b, y16 })
     }
 
     pub fn k(&self) -> usize {
@@ -272,9 +274,13 @@ impl Statement {
     pub fn w_len(&self) -> usize {
         if self.zk { self.k() } else { self.l }
     }
-    /// Committed rows: m witness rows + 5 D mask rows under ZK (prox, lin, qa, qb, chain).
+    /// Committed rows: m witness rows + 6 D mask rows under ZK (prox, lin, qa, qb, chain_a, chain_b -- PROTOCOL.md
+    /// 8b after b-zk-fix; the pre-fix protocol had one chain mask row family, `Z_H s_chain`).
     pub fn committed_rows(&self, m: usize) -> usize {
-        m + if self.zk { 5 * self.d } else { 0 }
+        m + if self.zk { 6 * self.d } else { 0 }
+    }
+    pub fn mode_name(&self) -> &'static str {
+        if self.interactive { "interactive" } else { "fiat-shamir" }
     }
     pub fn depth(&self) -> usize {
         self.n.trailing_zeros() as usize
@@ -324,10 +330,13 @@ impl Proof {
         if has_coins > 1 || has_v > 1 || has_q > 1 {
             return Err("flag byte not 0/1".into());
         }
-        // With the commitment off (HVZK mode) the Python prover still writes c_i / r_i / s_i into the transcript and
-        // the Python verifier ignores them (DISCREPANCIES.md D4): they are parsed and never used.
-        if st.coin_commitment && has_coins != 1 {
-            return Err("coin commitments / openings missing (the verifier's mode commits the coins)".into());
+        // The two modes are mutually exclusive (PROTOCOL.md 8c): an interactive transcript carries the step-0
+        // commitments and both openings; a Fiat-Shamir transcript must not carry coins at all.
+        if st.interactive && has_coins != 1 {
+            return Err("coin commitments / openings missing (interactive mode)".into());
+        }
+        if !st.interactive && has_coins != 0 {
+            return Err("fiat-shamir transcript must not carry coins".into());
         }
         if (has_v == 1) != st.zk {
             return Err("linear-test message presence disagrees with the zk mode".into());

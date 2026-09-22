@@ -14,8 +14,10 @@ ligero-system/v1     magic "LIGSYS01" | u32 m | u32 n_pins | n_pins x (str name,
     linear           u32 nnz | nnz x (u32 row, u32 coef) | u32 const | u32 pub_pin (0xFFFFFFFF = 0)
     expr             u32 nnz | nnz x (u32 row, u32 coef) | u32 const
     str              u32 len | utf-8 bytes
-ligero-statement/v1  magic "LIGSTM01" | u32 mode (1 = chain) | u32 l | u32 n | u32 D | u32 t | f64 target_log2
-                     | u8 zk | u32 t_pad | u8 coin_commitment | u32 n_proofs | u32 n_vus | u32 steps | u32 K
+ligero-statement/v2  magic "LIGSTM02" | u32 layout (1 = chain) | u32 l | u32 n | u32 D | u32 t | f64 target_log2
+                     | u8 zk | u32 t_pad | u8 mode (0 = interactive: step-0 coins, challenges from the coins alone;
+                     1 = fiat-shamir: no coins, challenges from the transcript; PROTOCOL.md 8c after b-zk-fix)
+                     | u32 n_proofs | u32 n_vus | u32 steps | u32 K
                      | l x K u16 a | l x K u16 b | l x u16 y16
 ligero-proof/v1      magic "LIGPRF01" | u8 hash (1 = blake3, 2 = sha256) | u8 has_coins | u8 zk | u8 has_chain
                      | u32 D | u32 w_len | u32 h_len | u32 q_len | u32 v_len | u32 M | u32 t | u32 depth
@@ -38,7 +40,9 @@ import numpy as np
 
 from .compile import P, System
 
-SYS_MAGIC, STMT_MAGIC, PROOF_MAGIC = b"LIGSYS01", b"LIGSTM01", b"LIGPRF01"
+SYS_MAGIC, STMT_MAGIC, PROOF_MAGIC = b"LIGSYS01", b"LIGSTM02", b"LIGPRF01"
+MODE_CODES = {"interactive": 0, "fiat-shamir": 1}
+MODE_NAMES = {v: k for k, v in MODE_CODES.items()}
 HASH_IDS = {"blake3": 1, "sha256": 2}
 NO_PUB = 0xFFFFFFFF
 
@@ -181,7 +185,7 @@ class Statement:
     target_log2: float
     zk: bool
     t_pad: int
-    coin_commitment: bool
+    mode: str          # "interactive" | "fiat-shamir"
     n_proofs: int
     n_vus: int
     steps: int
@@ -191,7 +195,11 @@ class Statement:
 
     def config(self):
         from .protocol import Config
-        return Config(self.l, self.n, self.D, self.t, self.target_log2, self.zk, self.t_pad)
+        return Config(self.l, self.n, self.D, self.t, self.target_log2, self.zk, self.t_pad, self.mode)
+
+    @property
+    def interactive(self) -> bool:
+        return self.mode == "interactive"
 
     def layout(self):
         from .chain import Layout
@@ -207,7 +215,7 @@ def statement_bytes(st: Statement) -> bytes:
     w.f64(st.target_log2)
     w.u8(int(st.zk))
     w.u32(st.t_pad)
-    w.u8(int(st.coin_commitment))
+    w.u8(MODE_CODES[st.mode])
     w.u32(st.n_proofs)
     w.u32(st.n_vus)
     w.u32(st.steps)
@@ -222,20 +230,22 @@ def statement_bytes(st: Statement) -> bytes:
 def read_statement(data: bytes) -> Statement:
     r = _R(data)
     if r.take(8) != STMT_MAGIC:
-        raise ValueError("not a ligero-statement/v1 file")
+        raise ValueError("not a ligero-statement/v2 file")
     if r.u32() != 1:
         raise ValueError("only chain mode (1) is defined")
     l, n, D, t = r.u32(), r.u32(), r.u32(), r.u32()
     target = r.f64()
     zk = bool(r.u8())
     t_pad = r.u32()
-    cc = bool(r.u8())
+    mode_code = r.u8()
+    if mode_code not in MODE_NAMES:
+        raise ValueError(f"unknown mode code {mode_code}")
     n_proofs, n_vus, steps, K = r.u32(), r.u32(), r.u32(), r.u32()
     a = r.arr((l, K), "<u2")
     b = r.arr((l, K), "<u2")
     y16 = r.arr((l,), "<u2")
     r.done()
-    return Statement(l, n, D, t, target, zk, t_pad, cc, n_proofs, n_vus, steps, a, b, y16)
+    return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, a, b, y16)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -318,18 +328,19 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
     except ValueError as e:
         return False, f"unreadable proof: {e}", 0.0
     R = runner or _runner(device, st)
-    prev = pm._COMMIT_COINS
-    pm._COMMIT_COINS = st.coin_commitment
+    # Interactive mode: ``verify`` demands the verifier's OWN step-0 coins.  A verifier reading a file has none, so the
+    # only thing it can do is REPLAY the transcript's openings as its coins (the "coins are not this verifier's coins"
+    # check is then vacuous; what remains is c_i = H(r_i || s_i) and the coin-only challenge derivation).
+    coins = pf.coins if (st.interactive and pf.coins is not None) else None
+    if st.interactive and coins is None:
+        return False, "interactive transcript carries no coins", 0.0
+    t0 = time.perf_counter()
     try:
-        t0 = time.perf_counter()
-        try:
-            ok, why = pm.verify(R.p, R.sys, R.tb, st.config(), None, st.a.astype(np.int64), st.b.astype(np.int64), None,
-                                pf, device, chain=(st.layout(), st.y16.astype(np.int64)))
-        except Exception as e:  # noqa: BLE001 -- the Python verifier is not reject-first on malformed input
-            ok, why = False, f"python verifier raised {type(e).__name__}: {e}"
-        return ok, why, time.perf_counter() - t0
-    finally:
-        pm._COMMIT_COINS = prev
+        ok, why = pm.verify(R.p, R.sys, R.tb, st.config(), None, st.a.astype(np.int64), st.b.astype(np.int64), None,
+                            pf, device, chain=(st.layout(), st.y16.astype(np.int64)), coins=coins)
+    except Exception as e:  # noqa: BLE001 -- the Python verifier is not reject-first on malformed input
+        ok, why = False, f"python verifier raised {type(e).__name__}: {e}"
+    return ok, why, time.perf_counter() - t0
 
 
 def _runner(device: str, st: Statement | None = None):
@@ -337,7 +348,8 @@ def _runner(device: str, st: Statement | None = None):
     zk = st.zk if st is not None else False
     n_proofs = st.n_proofs if st is not None else 1
     target = st.target_log2 if st is not None else -128.0
-    return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk)
+    mode = st.mode if st is not None else "interactive"
+    return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk, mode=mode)
 
 
 def sha256_file(path: Path) -> str:
@@ -348,9 +360,9 @@ def sha256_file(path: Path) -> str:
 # Generators
 # ---------------------------------------------------------------------------------------------------------------------
 
-def _statement_of(R, pubs, lay, cfg, n_proofs: int, coin_commitment: bool) -> Statement:
+def _statement_of(R, pubs, lay, cfg, n_proofs: int, mode: str | None = None) -> Statement:
     a, b, y16 = pubs
-    return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, coin_commitment, n_proofs,
+    return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
                      lay.n_vus, lay.steps, np.asarray(a, dtype=np.int64), np.asarray(b, dtype=np.int64),
                      np.asarray(y16, dtype=np.int64))
 
@@ -378,8 +390,8 @@ def _write(out: Path, stem: str, st: Statement, pf, manifest: dict, kind: str, R
 
 def _manifest(out: Path, args, R) -> dict:
     from .run import _git_commit
-    return {"format": {"system": "ligero-system/v1", "statement": "ligero-statement/v1", "proof": "ligero-proof/v1"},
-            "commit": _git_commit(), "device": args.device, "system": R.sys.summary(), "files": []}
+    return {"format": {"system": "ligero-system/v1", "statement": "ligero-statement/v2", "proof": "ligero-proof/v1"},
+            "commit": _git_commit(), "device": args.device, "system": R.sys.summary(), "zk": R.zk, "mode": R.mode, "files": []}
 
 
 def _save_manifest(out: Path, man: dict):
@@ -399,18 +411,16 @@ def gen_set(args) -> int:
     """The honest sub-batched set: ``--total-vus`` VUs as ceil(total / (batch // 96)) proofs (b-zk's 25 x 170)."""
     from verity_numerical.bench import instances
 
-    from . import protocol as pm
     from .vu import STEPS, ChainRunner, _vu_data
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     per_proof = args.batch // STEPS
     total = args.total_vus
     n_proofs = -(-total // per_proof)
-    pm._COMMIT_COINS = not args.no_coin_commitment
-    R = ChainRunner(args.device, args.target, 2, "torch", n_proofs=n_proofs, zk=args.zk)
+    R = ChainRunner(args.device, args.target, 2, "torch", n_proofs=n_proofs, zk=args.zk, mode=args.mode)
     man = _manifest(out, args, R)
     man["set"] = {"total_vus": total, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs, "zk": args.zk,
-                  "coin_commitment": pm._COMMIT_COINS, "mode": args.mode_label}
+                  "mode": args.mode}
     _write_system(out, R, man)
     vu = instances.load("vu-k1536", Path(args.root))
     lay = R.layout(per_proof)
@@ -420,7 +430,7 @@ def gen_set(args) -> int:
         hi = min(lo + per_proof, total)
         vus = [_vu_data(vu, j % vu.n) for j in range(lo, hi)]
         pf, pubs, lay_i = R.prove_vus(vus, check=False, min_l=lay.l)
-        st = _statement_of(R, pubs, lay_i, R.cfg(lay_i.l), n_proofs, pm._COMMIT_COINS)
+        st = _statement_of(R, pubs, lay_i, R.cfg(lay_i.l), n_proofs)
         _write(out, f"sub_{i:02d}", st, pf, man, "honest", R, args.device,
                {"vus": [lo, hi], "prover_seconds": pf.timings.get("total")})
         _save_manifest(out, man)
@@ -435,12 +445,10 @@ def gen_negatives(args) -> int:
     from verity_numerical.bench import instances
     from verity_numerical.checker.step import step_output
 
-    from . import protocol as pm
     from .vu import STEP, STEPS, ChainRunner
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    pm._COMMIT_COINS = not args.no_coin_commitment
-    R = ChainRunner(args.device, args.target, 2, "torch", zk=args.zk)
+    R = ChainRunner(args.device, args.target, 2, "torch", zk=args.zk, mode=args.mode)
     man = _manifest(out, args, R)
     _write_system(out, R, man)
     neg = instances.load("vu-k1536-neg", Path(args.root))
@@ -467,7 +475,7 @@ def gen_negatives(args) -> int:
             yv[STEPS - 1] = int(y16)
             pf, pubs = foreign, (a, b, yv)
             meta["prover"] = f"refused ({type(e).__name__}); foreign proof (trivial VU) attached"
-        st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1, pm._COMMIT_COINS)
+        st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1)
         _write(out, f"neg_{i:02d}", st, pf, man, "negative", R, args.device, meta)
     _save_manifest(out, man)
     return 0
@@ -477,19 +485,17 @@ def gen_small(args) -> int:
     """B = 1 and B = 64 honest proofs (single proof each)."""
     from verity_numerical.bench import instances
 
-    from . import protocol as pm
     from .vu import ChainRunner, _vu_data
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    pm._COMMIT_COINS = not args.no_coin_commitment
-    R = ChainRunner(args.device, args.target, 2, "torch", zk=args.zk)
+    R = ChainRunner(args.device, args.target, 2, "torch", zk=args.zk, mode=args.mode)
     man = _manifest(out, args, R)
     _write_system(out, R, man)
     vu = instances.load("vu-k1536", Path(args.root))
     for B in args.sizes:
         vus = [_vu_data(vu, j) for j in range(B)]
         pf, pubs, lay = R.prove_vus(vus, check=False)
-        st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1, pm._COMMIT_COINS)
+        st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1)
         _write(out, f"b{B}", st, pf, man, "honest", R, args.device, {"vus": [0, B]})
     _save_manifest(out, man)
     return 0
@@ -517,11 +523,14 @@ def mutations(pf, st: Statement) -> list[tuple[str, object, Statement]]:
         return name, p2
 
     M, t = pf.opened.shape
-    m_rows = st.l and (M - (5 * st.D if st.zk else 0))
+    m_rows = M - (6 * st.D if st.zk else 0)
     n, p2 = P_("opened_value_plus1"); p2.opened[0, 0] = (int(p2.opened[0, 0]) + 1) % P; out.append((n, p2, st))
     n, p2 = P_("opened_value_minus1"); p2.opened[m_rows - 1, t - 1] = (int(p2.opened[m_rows - 1, t - 1]) - 1) % P; out.append((n, p2, st))
     if st.zk:
-        n, p2 = P_("opened_mask_row_plus1"); p2.opened[M - 1, 0] = (int(p2.opened[M - 1, 0]) + 1) % P; out.append((n, p2, st))
+        D = st.D
+        n, p2 = P_("opened_mask_row_prox_plus1"); p2.opened[m_rows, 0] = (int(p2.opened[m_rows, 0]) + 1) % P; out.append((n, p2, st))
+        n, p2 = P_("opened_mask_row_chain_a_plus1"); p2.opened[m_rows + 4 * D, 0] = (int(p2.opened[m_rows + 4 * D, 0]) + 1) % P; out.append((n, p2, st))
+        n, p2 = P_("opened_mask_row_chain_b_plus1"); p2.opened[M - 1, t - 1] = (int(p2.opened[M - 1, t - 1]) + 1) % P; out.append((n, p2, st))
     n, p2 = P_("opened_value_noncanonical_p"); p2.opened[0, 0] = P; out.append((n, p2, st))
     n, p2 = P_("merkle_sibling_flipped"); p2.paths[0][0] = _flip_byte(p2.paths[0][0]); out.append((n, p2, st))
     n, p2 = P_("merkle_paths_truncated"); p2.paths = [pth[:-1] for pth in p2.paths]; out.append((n, p2, st))
@@ -549,6 +558,19 @@ def mutations(pf, st: Statement) -> list[tuple[str, object, Statement]]:
         n, p2 = P_("coin_opening_s2_mismatch"); p2.coins = Coins(c.r1, c.s1, c.r2, _flip_byte(c.s2)); out.append((n, p2, st))
         n, p2 = P_("coin_commitment_c1_flipped"); p2.coin_commit = (_flip_byte(pf.coin_commit[0]), pf.coin_commit[1]); out.append((n, p2, st))
         n, p2 = P_("coins_stripped"); p2.coin_commit = None; p2.coins = None; out.append((n, p2, st))
+        # the challenge blocks: a CONSISTENT re-opening of a slot (fresh r_i, s_i and c_i = H(r_i || s_i)) changes the
+        # derived challenge (interactive: r / cols are functions of the coins alone) while the transcript stays as it was
+        from .protocol import coin_commit
+        r1n, s1n = bytes(32 * [7]), bytes(32 * [9])
+        n, p2 = P_("challenge1_coin_reopened_consistently"); p2.coins = Coins(r1n, s1n, c.r2, c.s2); p2.coin_commit = (coin_commit(r1n, s1n), pf.coin_commit[1]); out.append((n, p2, st))
+        r2n, s2n = bytes(32 * [11]), bytes(32 * [13])
+        n, p2 = P_("challenge2_coin_reopened_consistently"); p2.coins = Coins(c.r1, c.s1, r2n, s2n); p2.coin_commit = (pf.coin_commit[0], coin_commit(r2n, s2n)); out.append((n, p2, st))
+    else:
+        # Fiat-Shamir transcript: the challenge inputs are root (challenge 1) and root, w, h, q, v (challenge 2); a
+        # planted coin block must be refused (the mode has no step 0)
+        from .protocol import coin_commit
+        r1n, s1n, r2n, s2n = bytes(32 * [7]), bytes(32 * [9]), bytes(32 * [11]), bytes(32 * [13])
+        n, p2 = P_("coins_planted_in_fs_transcript"); p2.coins = Coins(r1n, s1n, r2n, s2n); p2.coin_commit = (coin_commit(r1n, s1n), coin_commit(r2n, s2n)); out.append((n, p2, st))
     # statement-side
     st2 = copy.deepcopy(st); end = st.steps - 1; st2.y16[end] ^= 1; out.append(("statement_y16_flipped", pf, st2))
     st2 = copy.deepcopy(st); st2.a[0, 0] ^= 1; out.append(("statement_operand_a_flipped", pf, st2))
@@ -556,7 +578,9 @@ def mutations(pf, st: Statement) -> list[tuple[str, object, Statement]]:
     st2 = copy.deepcopy(st); st2.a[0, 0] = 0x7F80; out.append(("statement_operand_off_domain_inf", pf, st2))
     st2 = copy.deepcopy(st); st2.t = st.t - 1; out.append(("statement_t_minus_1", pf, st2))
     st2 = copy.deepcopy(st); st2.zk = not st.zk; st2.t_pad = 0 if st.zk else 256; out.append(("statement_zk_mode_flipped", pf, st2))
-    st2 = copy.deepcopy(st); st2.coin_commitment = not st.coin_commitment; out.append(("statement_coin_mode_flipped", pf, st2))
+    st2 = copy.deepcopy(st); st2.mode = "fiat-shamir" if st.interactive else "interactive"; out.append(("statement_mode_flipped", pf, st2))
+    st2 = copy.deepcopy(st); st2.D = st.D - 1; out.append(("statement_D_minus_1", pf, st2))
+    st2 = copy.deepcopy(st); st2.t_pad = st.t_pad + 1; out.append(("statement_t_pad_plus_1", pf, st2))
     return out
 
 
@@ -606,12 +630,10 @@ def gen_witness_mutations(args) -> int:
     exercised by the plain value mutations instead."""
     from verity_numerical.bench import instances
 
-    from . import protocol as pm
     from .vu import STEPS, ChainRunner, _vu_data
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    pm._COMMIT_COINS = not args.no_coin_commitment
-    R = ChainRunner(args.device, args.target, 2, "torch", zk=args.zk)
+    R = ChainRunner(args.device, args.target, 2, "torch", zk=args.zk, mode=args.mode)
     man = _manifest(out, args, R)
     _write_system(out, R, man)
     vu = instances.load("vu-k1536", Path(args.root))
@@ -633,8 +655,81 @@ def gen_witness_mutations(args) -> int:
     cases.append(("all_bits_of_one_column_flipped", lambda W: W.__setitem__((slice(None), 5), (1 - W[:, 5]) % P)))
     for name, mut in cases:
         pf, pubs, lay = R.prove_vus(base, check=False, mutate=mut)
-        st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1, pm._COMMIT_COINS)
+        st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1)
         _write(out, f"wmut_{name}", st, pf, man, "witness_mutation", R, args.device, {"mutation": name})
+    _save_manifest(out, man)
+    return 0
+
+
+def gen_forged_interactive(args) -> int:
+    """DISCREPANCY BV-D7 demonstration: interactive-mode transcripts are not transferable evidence.  In the interactive
+    mode the challenges are functions of the verifier's coins alone (PROTOCOL.md 8c after b-zk-fix); a prover that
+    CHOOSES the coins knows ``r, rho, rc, cols`` before committing and can build a tableau that passes every column
+    test for ANY public statement -- which is exactly what the b-zk-fix simulator (``redteam/simulator.py``) does.
+    Here the simulator is run as a cheating prover: honest VU operands with a WRONG claimed word (and the 52
+    ``vu-k1536-neg`` claims), coins sampled by the prover itself, written as ordinary proof files.  A file verifier
+    that replays the transcript's coins (Rust without ``--coins``, Python ``verify_files``) accepts them; the same
+    files are rejected under any other verifier's coins.  Fiat-Shamir mode has no such transcript."""
+    from verity_numerical.bench import instances
+    from verity_numerical.checker.step import step_output
+
+    from . import protocol as pm
+    from .redteam import simulator
+    from .vu import STEP, STEPS, ChainRunner, _vu_data
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    R = ChainRunner(args.device, args.target, 2, "torch", zk=True, mode="interactive")
+    man = _manifest(out, args, R)
+    man["forgery"] = "redteam/simulator.simulate run as a cheating prover with prover-chosen coins (BV-D7)"
+    _write_system(out, R, man)
+    vu = instances.load("vu-k1536", Path(args.root))
+    cases = []
+    x, w, _accs, y = _vu_data(vu, 0)
+    cases.append(("honest_operands_wrong_word", x, w, int(y) ^ 1, {"true_y16": int(y)}))
+    if args.negatives:
+        neg = instances.load("vu-k1536-neg", Path(args.root))
+        cols = {n: i for i, n in enumerate(neg.columns)}
+        for i in range(neg.n):
+            row = neg.index[i]
+            xn, wn, y16n = neg.instance(i)
+            cases.append((f"neg_{i:02d}", xn, wn, int(y16n), {"neg_id": i, "mistake": row[cols["mistake"]], "verdict": row[cols["verdict"]]}))
+    rng = np.random.default_rng(11)
+    for name, xx, ww, claimed, meta in cases:
+        lay = R.layout(1)
+        cfg = R.cfg(lay.l)
+        a = np.zeros((lay.l, STEP), dtype=np.int64)
+        b = np.zeros((lay.l, STEP), dtype=np.int64)
+        for s in range(STEPS):
+            a[s], b[s] = xx[16 * s:16 * s + 16], ww[16 * s:16 * s + 16]
+        yv = np.zeros(lay.l, dtype=np.int64)
+        yv[STEPS - 1] = claimed
+        try:
+            true_word = 0
+            for s in range(STEPS):
+                true_word = step_output(R.p, true_word, xx[16 * s:16 * s + 16], ww[16 * s:16 * s + 16])
+            meta["checker_word"] = int(true_word)
+            meta["claim_is_false"] = int(true_word) != claimed
+        except Exception as e:  # noqa: BLE001 -- off-domain operands: the checker itself refuses
+            meta["checker_word"] = f"checker refused ({type(e).__name__})"
+            meta["claim_is_false"] = True
+        V = pm.Coins.sample()                                   # the PROVER plays step 0
+        try:
+            t0 = time.perf_counter()
+            pf = simulator.simulate(V, R.p, R.sys, R.tb, cfg, lay, yv, a, b, args.device, rng=rng)
+            meta["simulator_seconds"] = time.perf_counter() - t0
+        except Exception as e:  # noqa: BLE001
+            meta["simulator"] = f"raised {type(e).__name__}: {e}"
+            man["files"].append({"kind": "forged_interactive", "name": name, **meta})
+            print(f"forged {name}: simulator raised {type(e).__name__}: {e}", flush=True)
+            continue
+        if not isinstance(pf, pm.Proof):
+            meta["simulator"] = f"abort transcript {pf}"
+            man["files"].append({"kind": "forged_interactive", "name": name, **meta})
+            continue
+        ok_o, why_o = R.verify_vus(pf, (a, b, yv), lay, coins=pm.Coins.sample())
+        meta["python_under_other_verifiers_coins"] = {"accepted": ok_o, "reason": why_o}
+        st = _statement_of(R, (a, b, yv), lay, cfg, 1)
+        _write(out, f"forged_{name}", st, pf, man, "forged_interactive", R, args.device, meta)
     _save_manifest(out, man)
     return 0
 
@@ -671,17 +766,18 @@ def main(argv=None) -> int:
         s.add_argument("--device", default="cpu")
         s.add_argument("--target", type=float, default=-128.0)
         s.add_argument("--zk", action="store_true")
-        s.add_argument("--no-coin-commitment", action="store_true")
+        s.add_argument("--mode", default="interactive", choices=("interactive", "fiat-shamir"))
         s.add_argument("--out", required=True)
 
     s = sub.add_parser("gen-set"); common(s)
     s.add_argument("--batch", type=int, default=16384)
     s.add_argument("--total-vus", type=int, default=4096)
-    s.add_argument("--mode-label", default="")
     s = sub.add_parser("gen-negatives"); common(s)
     s = sub.add_parser("gen-small"); common(s)
     s.add_argument("--sizes", type=int, nargs="+", default=[1, 64])
     s = sub.add_parser("gen-witness-mutations"); common(s)
+    s = sub.add_parser("gen-forged-interactive"); common(s)
+    s.add_argument("--negatives", action="store_true", help="also the 52 vu-k1536-neg claims")
     s = sub.add_parser("gen-mutations")
     s.add_argument("--src", required=True)
     s.add_argument("--base", default="b1")
@@ -697,7 +793,7 @@ def main(argv=None) -> int:
     s.add_argument("--out", required=True)
     args = ap.parse_args(argv)
     return {"gen-set": gen_set, "gen-negatives": gen_negatives, "gen-small": gen_small, "gen-mutations": gen_mutations,
-            "gen-witness-mutations": gen_witness_mutations, "verify": cmd_verify, "dump-system": cmd_dump_system}[args.cmd](args)
+            "gen-witness-mutations": gen_witness_mutations, "gen-forged-interactive": gen_forged_interactive, "verify": cmd_verify, "dump-system": cmd_dump_system}[args.cmd](args)
 
 
 if __name__ == "__main__":

@@ -158,9 +158,8 @@ def gate_vu(args) -> int:
         log(f"vu-k1536 [{lo}, {lo + len(vus)}): l={lay.l} prover {proof.timings['total']:.2f}s -> {ok} {why}")
         if getattr(args, "dump_proof", None) or getattr(args, "dump_statement", None):
             # ligero-proof/v1 + ligero-statement/v1 (backends/ligero-verify reads them; serialize.py documents them)
-            from . import protocol as _pm
             from .serialize import _statement_of, proof_bytes, statement_bytes
-            st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1, _pm._COMMIT_COINS)
+            st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1)
             suffix = f"_{lo:05d}" if args.vus > per_proof else ""
             if args.dump_proof:
                 Path(args.dump_proof).with_name(Path(args.dump_proof).stem + suffix + Path(args.dump_proof).suffix).write_bytes(proof_bytes(proof))

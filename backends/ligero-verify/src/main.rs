@@ -2,6 +2,7 @@
 //!
 //! ~~~text
 //! ligero-verify verify --system system.bin --statement X.stmt --proof X.proof [--threads T] [--soundness-bits 128]
+//!                      [--coins FILE]   (interactive mode: the verifier's own r1||s1||r2||s2, 128 bytes raw or hex)
 //!                      [--allow-any-system] [--json out.json] [--reps R]
 //! ligero-verify batch  --system system.bin --dir DIR [--threads T] [--soundness-bits 128] [--allow-any-system]
 //!                      [--json out.json] [--reps R]          # every DIR/*.proof with its DIR/*.stmt; agreement with
@@ -30,6 +31,19 @@ fn options(args: &[String]) -> verify::Options {
         threads: arg(args, "--threads").map(|s| s.parse().expect("--threads")).unwrap_or(1),
         soundness_bits: arg(args, "--soundness-bits").map(|s| s.parse().expect("--soundness-bits")).unwrap_or(128.0),
         allow_any_system: flag(args, "--allow-any-system"),
+        own_coins: arg(args, "--coins").map(|path| {
+            let raw = std::fs::read(path).expect("--coins file");
+            let raw = if raw.len() == 256 || raw.len() == 257 {
+                let txt = String::from_utf8_lossy(&raw).trim().to_string();
+                (0..128).map(|i| u8::from_str_radix(&txt[2 * i..2 * i + 2], 16).expect("--coins hex")).collect::<Vec<u8>>()
+            } else {
+                raw
+            };
+            let mut out = [0u8; 128];
+            assert_eq!(raw.len(), 128, "--coins must hold r1 || s1 || r2 || s2 (128 bytes, raw or hex)");
+            out.copy_from_slice(&raw);
+            out
+        }),
     }
 }
 
