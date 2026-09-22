@@ -1,4 +1,4 @@
-"""JSON codec for the structural query AST (`verity.ir.gateset`) and `query_id`.
+"""JSON codec for the structural query AST (`verity.ir.query_ast`) and `query_id`.
 
     to_json(query)   -> {"op": ..., ...}        one object per constructor; paths / selectors as their canonical strings
     from_json(doc)   -> Query                   inverse
@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 
 from .codec import canonical_json
-from .gateset import (Concat, Default, Each, Instances, Inter, Members, Minus, NameSel, Nodes, NodeSel, Override, Path,
+from .query_ast import (Concat, Default, Each, Instances, Inter, Members, Minus, NameSel, Nodes, NodeSel, Override, Path,
                       Pred, Query, QueryError, Rest, Root, Union, Where, Zip)
 
 SCHEMA = "verity-ir/query/v1"

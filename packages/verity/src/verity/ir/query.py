@@ -4,7 +4,7 @@ Results are ordered collections of `FunctionCall`s (path queries) or `Region`s (
 call-preorder, zero-based. `groups(F, k)` is evaluated once per scope selected by the left side and
 concatenated; a block whose calls are not adjacent is rejected (`GapError`), never absorbed or re-cut.
 
-`parse(text)` (2026-09-17) turns the general structural query syntax of `verity.ir.gateset` into its AST:
+`parse(text)` (2026-09-17) turns the general structural query syntax of `verity.ir.query_ast` into its AST:
 `members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")`, `each(F, G)`, `concat(...)`, `rest()`, `default(32)`,
 `override(F, {"//Gemm_v1{*}": G})`, `zip(...)`, `where(F, spec=..., form=..., w_max=...)`, `union/minus/inter(F, G)`,
 `root()`.  The legacy strings stay valid as sugar: `//A//B` -> `instances("//A//B")`, `/` -> `root()`,
@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from typing import Iterator
 
-from .gateset import (Default, Each, Instances, Members, Nodes, NodeSel, Path, Query, QueryError, Rest, Root, Zip,
+from .query_ast import (Default, Each, Instances, Members, Nodes, NodeSel, Path, Query, QueryError, Rest, Root, Zip,
                       concat as _concat, inter as _inter, minus as _minus, override as _override, union as _union,
                       where as _where)
 from .layout import FunctionCall, Circuit, Region
@@ -131,7 +131,7 @@ def groups(circuit: Circuit, scope: FunctionCall | Region | None, fname: str, k:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# `parse(text)`: the general structural query syntax -> `gateset` AST (legacy strings are sugar)
+# `parse(text)`: the general structural query syntax -> `query_ast` AST (legacy strings are sugar)
 # ---------------------------------------------------------------------------------------------------------
 
 _TOKEN = re.compile(r"""\s*(?:(?P<str>"[^"]*"|'[^']*')|(?P<num>-?\d+)|(?P<id>[A-Za-z_][A-Za-z0-9_]*)|(?P<p>[(),:{}\[\]=]))""")
@@ -333,7 +333,7 @@ def _legacy(text: str) -> Query:
 
 
 def parse(text: str) -> Query:
-    """Parse the general query syntax (or a legacy path string) into a `gateset` Query."""
+    """Parse the general query syntax (or a legacy path string) into a `query_ast` Query."""
     t = text.strip()
     if not t:
         raise QueryError("empty query")

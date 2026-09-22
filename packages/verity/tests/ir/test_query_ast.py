@@ -1,4 +1,4 @@
-"""Structural query AST (`verity.ir.gateset`), its string syntax (`query.parse`) and JSON codec (`query_codec`).
+"""Structural query AST (`verity.ir.query_ast`), its string syntax (`query.parse`) and JSON codec (`query_codec`).
 
 Promoted from veritor@0903f60d6 `verity_ir/tests/test_gateset_api.py`: the program-independent tests.  The evaluation
 tests there (families, partitions, canonical queries) build small b1 Programs from veritor's registry and move with it.
@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-from verity.ir import gateset as G
-from verity.ir.gateset import QueryError
+from verity.ir import query_ast as G
+from verity.ir.query_ast import QueryError
 from verity.ir.query import parse
 from verity.ir.query_codec import from_json, query_id, to_json
 
