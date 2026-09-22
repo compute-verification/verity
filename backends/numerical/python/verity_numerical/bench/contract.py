@@ -3,9 +3,9 @@
 ``research`` records and ships an opaque workload; the workload owns the meaning of ``$RESEARCH_RUN_DIR/result.json``
 (``tools/research/README.md``).  This module is that meaning for the proof campaign, shared by every backend:
 
-* the ``workload_fingerprint`` fields a campaign number must carry (:data:`REQUIRED_FIELDS`), with the five
+* the ``workload_fingerprint`` fields a campaign number must carry (:data:`REQUIRED_FIELDS`), with the
   :data:`IDENTITY_FIELDS` two results must agree on before any of their numbers may be compared
-  (``backends/AGENTS.md``: never compare across ``proof_class``);
+  (``backends/AGENTS.md``: never compare across ``proof_class``; the same batch size, hardware and soundness target);
 * the measurement names: the six disjoint timing buckets ``t.<bucket>`` (seconds), ``t.total``, joint stages
   ``t.joint.<a>+<b>`` for a kernel that fuses buckets it cannot split (never double-counted against a standalone
   bucket or another joint), and the rest of the decision's columns (VU throughput, peak memory, bytes moved,
@@ -109,7 +109,12 @@ RETENTION = ("retained", "streamed", "recomputed")
 ZK_NONE = "none"
 
 #: Two results whose values differ on any of these are never compared; the judge refuses (``benchmarks/judge.py``).
-IDENTITY_FIELDS = ("proof_class", "authentication", "profile", "domain", "K")
+#: Two results must agree on every one of these before any of their numbers may be compared: same proof class and
+#: authentication, same target and domain, same K **and batch size**, the **same hardware** (the whole probed object:
+#: a 4090 run is never compared with a CPU run, nor with another pod's driver), and the same soundness target
+#: (``security.target``, a dotted path into the fingerprint).  The decision numbers are B=4096 K=1536 VUs of one
+#: instance set on one machine at 2^-128; ``--allow`` names the one field an experiment deliberately varies.
+IDENTITY_FIELDS = ("proof_class", "authentication", "profile", "domain", "K", "B", "hardware", "security.target")
 REQUIRED_FIELDS = (
     "profile", "domain", "K", "B", "proof_class", "authentication", "zk_mode", "security", "hardware", "software",
     "preprocessing", "retention",
@@ -463,11 +468,22 @@ def validate(result: Any) -> list[str]:
 # --- comparability -----------------------------------------------------------------------------------------------------
 
 
+def _lookup(fp: Mapping[str, Any], path: str) -> Any:
+    """``fp`` at the dotted ``path`` (:data:`MISSING` where any step is absent or not an object)."""
+
+    node: Any = fp
+    for key in path.split("."):
+        if not isinstance(node, Mapping) or key not in node:
+            return MISSING
+        node = node[key]
+    return node
+
+
 def identity(fp: Mapping[str, Any] | None) -> dict[str, Any]:
-    """The five identity fields of ``fp`` (:data:`MISSING` where it does not carry one)."""
+    """The :data:`IDENTITY_FIELDS` of ``fp`` (:data:`MISSING` where it does not carry one)."""
 
     fp = fp or {}
-    return {f: fp.get(f, MISSING) for f in IDENTITY_FIELDS}
+    return {f: _lookup(fp, f) for f in IDENTITY_FIELDS}
 
 
 def incomparable(baseline: Mapping[str, Any] | None, candidate: Mapping[str, Any] | None, allow: Sequence[str] = ()) -> list[tuple[str, Any, Any]]:

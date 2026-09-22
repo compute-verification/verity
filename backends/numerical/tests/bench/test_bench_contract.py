@@ -238,7 +238,21 @@ def test_incomparable_lists_differences_and_missing(conforming: dict) -> None:
     lacking = {k: v for k, v in fp.items() if k != "domain"}
     assert contract.incomparable(fp, lacking) == [("domain", "finite", contract.MISSING)]
     with pytest.raises(ValueError, match="allow takes identity fields"):
-        contract.incomparable(fp, fp, allow=["B"])
+        contract.incomparable(fp, fp, allow=["zk_mode"])
+
+
+def test_batch_hardware_and_soundness_target_are_identity(conforming: dict) -> None:
+    """B=64 is never compared with B=4096, a 4090 run never with a CPU run, 2^-80 never with 2^-128 -- unless named."""
+
+    fp = conforming["workload_fingerprint"]
+    assert contract.incomparable(fp, {**fp, "B": fp["B"] * 2}) == [("B", fp["B"], fp["B"] * 2)]
+    other_box = {**fp, "hardware": {**fp["hardware"], "cpu": {"model": "somewhere else"}}}
+    assert [f for f, _, _ in contract.incomparable(fp, other_box)] == ["hardware"]
+    assert contract.incomparable(fp, other_box, allow=["hardware"]) == []
+    weaker = {**fp, "security": {**fp["security"], "target": -80}}
+    assert [f for f, _, _ in contract.incomparable(fp, weaker)] == ["security.target"]
+    no_target = {**fp, "security": {k: v for k, v in fp["security"].items() if k != "target"}}
+    assert contract.incomparable(fp, no_target)[0][0] == "security.target"
 
 
 # --- the workload emits conforming results ----------------------------------------------------------------------------

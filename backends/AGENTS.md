@@ -26,7 +26,12 @@ proof_class     ARITHMETIC_DIAGNOSTIC | NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF
 authentication  included | excluded
 ~~~
 
-Never compare across `proof_class`. A non-ZK kernel is a diagnostic. An
+Never compare across `proof_class`, and never compare two numbers that were
+not measured **at the same batch size, on the same hardware, at the same
+soundness target** (`contract.IDENTITY_FIELDS`; `benchmarks/judge.py` refuses
+otherwise). The decision workload is B=4096 K=1536 VUs of one instance set on
+one machine at 2^-128; transition-unit and small-B numbers are diagnostics of a
+candidate's own scaling, not a comparison. A non-ZK kernel is a diagnostic. An
 implementation whose privacy is honest-verifier zero knowledge is
 `COMPLETE_HVZK_BACKEND`: a valid milestone, not the target.
 `COMPLETE_ZK_BACKEND` is reserved for a construction whose malicious-verifier

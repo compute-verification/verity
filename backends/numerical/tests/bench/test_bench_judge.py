@@ -117,9 +117,13 @@ def test_the_recorded_k16_and_k1536_runs_differ_in_k() -> None:
     for field in contract.REQUIRED_FIELDS:
         assert f"workload_fingerprint.{field} missing" in proc.stdout
     proc = judge(K16_RUN, K1536_RUN, "--allow", "K")
+    assert proc.returncode == 2, "pre-contract runs recorded neither hardware nor a soundness target: still refused with only K allowed"
+    assert "hardware: <missing> vs <missing>" in proc.stdout
+    legacy_allow = ("--allow", "K", "--allow", "hardware", "--allow", "security.target")
+    proc = judge(K16_RUN, K1536_RUN, *legacy_allow)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "prove_seconds" in proc.stdout and "(allowed to differ)" in proc.stdout
-    rep = json.loads(judge(K16_RUN, K1536_RUN, "--allow", "K", "--json").stdout)
+    rep = json.loads(judge(K16_RUN, K1536_RUN, *legacy_allow, "--json").stdout)
     ratios = {m["name"]: m["ratio"] for m in rep["measurements"]}
     assert ratios["shards"] == 2.0 and ratios["prove_seconds"] == pytest.approx(3.580119322 / 0.892078765)
     assert rep["derived"]["baseline"]["fields"] == ["B", "K", "authentication", "domain", "profile", "proof_class"]
