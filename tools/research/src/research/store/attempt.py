@@ -38,7 +38,7 @@ DEFAULT_RESULT_KIND = "bench-result/v1"
 def store_root(explicit: str | os.PathLike[str] | None = None) -> Path:
     if explicit:
         return Path(explicit).expanduser()
-    return Path(os.environ.get("RESEARCH_STORE", Path.home() / ".research" / "store")).expanduser()
+    return Path(os.environ.get("RESEARCH_STORE") or Path.home() / ".research" / "store").expanduser()
 
 
 def open_store(store: Any = None, root: str | os.PathLike[str] | None = None) -> Any:

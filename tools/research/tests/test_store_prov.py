@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -252,7 +253,6 @@ def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
     (src / "mytools/decl.py").write_text("from research.store.tool import Tool\nT = Tool(name='mine', version='2', key_params=['k'])\n")
     t = tools_registry.load("mytools.decl:T", src)
     assert t.name == "mine" and t.spec == "mytools.decl:T"
-    assert "mytools.decl" not in sys.modules or True    # loaded by file path: no dependence on sys.path
 
 
 def test_tc_probe_declaration_parses_real_flags_and_optional_instruction():
@@ -485,6 +485,47 @@ def test_run_with_tool_declaration_resolves_before_launch(tmp_path, monkeypatch)
     assert s["derivation"] == D.derivation_id(tool, s["inputs"], s["key_params_resolved"], s["conditions"], ["hw.family"])
     assert s["reuse_key"] == D.reuse_key(s["derivation"], s["conditions"])
     assert research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--tool", "nope", "--", "true"]) == 2, "an unknown tool is refused before anything runs"
+
+
+def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
+    """The machine gets a `git archive` (no .git) as cwd and the research source on PYTHONPATH: `--tool tc_probe` must resolve
+    there, the closure must come from the archive, and the source identity from the control side's hint."""
+    from research import remote
+    from research import runs as R
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "tools/tc_probe", "packages/verity/src/verity/ml/tc", ".gitignore", "uv.lock"],
+                         cwd=REPO, capture_output=True, check=True).stdout
+    subprocess.run(["tar", "-xf", "-", "-C", str(src_dir)], input=tar, check=True)
+    assert (src_dir / "tools/tc_probe/tool.py").exists() and not (src_dir / ".git").exists()
+    hint = {"commit": "c" * 40, "tree": "t" * 40, "dirty": False}
+    root = tmp_path / "root"
+    (root / "requests" / "r1").mkdir(parents=True)
+    req = {"schema": remote.REQUEST_SCHEMA, "run_id": "r1", "runs_root": str(root / "runs"), "tool": str(Path(remote.__file__).resolve().parents[1]),
+           "python": PY, "cwd": str(src_dir), "env": {"RESEARCH_STORE": ""},   # a machine has no store configured
+           "harness_args": ["--stage", "t", "--no-sampler", "--tool", "tc_probe", "--campaign", "camp", "--scratch", "nvcc", "--source-identity", json.dumps(hint)],
+           "command": [PY, "-c", "import os; print(os.environ['RESEARCH_SCRATCH_NVCC'])", "--arch", "sm_89", "--out", "o", "--instruction", "mma.x"],
+           "exclusive": False, "cost": {}, "remote": {"machine": "m", "pod_id": "p1"}}
+    (root / "requests/r1/request.json").write_text(json.dumps(req))
+    assert remote.launch_request(root / "requests/r1/request.json")["started"]
+    deadline = time.time() + 30
+    while time.time() < deadline and R.summarize(root / "runs/r1")["state"] not in R.TERMINAL:
+        time.sleep(0.1)
+    s = R.summarize(root / "runs/r1")
+    assert s["state"] == "done" and s["rc"] == 0, (root / "runs/r1/launcher.log").read_text()
+    store = json.loads((root / "runs/r1/job.json").read_text())["store"]
+    assert "error" not in store, store.get("error")
+    assert store["tool"] == {"name": "tc_probe", "version": "1", "spec": "tools.tc_probe.tool:TC_PROBE"}
+    assert "tools/tc_probe/tc_probe.py" in store["closure"] and "packages/verity/src/verity/ml/tc/silicon.py" in store["closure"]
+    assert store["key_params_resolved"]["arch"] == "sm_89" and store["key_params_resolved"]["instruction"] == "mma.x" and "out" not in store["key_params_resolved"]
+    c = store["conditions"]
+    assert (c["source.commit"], c["source.tree"], c["source.dirty"]) == ("c" * 40, "t" * 40, False), "the control side's hint fills what git cannot say in an archive"
+    assert c["source.lockfiles.uv.lock"] == hashlib.sha256((src_dir / "uv.lock").read_bytes()).hexdigest(), "lockfiles are hashed from the archive itself"
+    assert c["exec.campaign"] == "camp" and len(store["reuse_key"]) == 64
+    assert (root / "runs/r1/stdout.log").read_text().strip() == str(root / "store" / "scratch" / store["reuse_key"] / "nvcc")
+    assert store["scratch"]["nvcc"] == str(root / "store" / "scratch" / store["reuse_key"] / "nvcc"), "the machine's store is <root>/store, beside its runs"
+    assert store["store_root"] == str(root / "store")
 
 
 @pytest.mark.skipif(not _store_core_available(), reason="research.store.local (lane store-core) is not merged: the local store cannot be opened")

@@ -127,6 +127,8 @@ def cmd_run(argv: list[str]) -> int:
         a = hp.parse_args(["--attempt-dir", str(run_dir), "--stage", ns.stage, "--job", run_id, *harness_opts])
     except SystemExit:
         return 2
+    if ns.claimed and not os.environ.get("RESEARCH_STORE"):
+        os.environ["RESEARCH_STORE"] = str(root.parent / "store")     # machine side: the store lives beside the runs, <root>/store (what `data pull` reads)
     try:
         prep = _prepare_store(ns, a, command, run_id, run_dir)
     except (ImportError, LookupError, TypeError) as e:
@@ -169,7 +171,7 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     from .store import attempt as A
     from .store import derivation as D
     from .store.tool import content_identity
-    from .telemetry.job import redact_argv
+    from .telemetry.job import SECRET_KEY, redact_argv
 
     source_root = Path(a.cwd or os.getcwd())
     tool = None
@@ -188,6 +190,7 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
         if tool is not None:
             conds.update(tool.tool_conditions(conds))
             params, key = tool.resolve_params(command, source_root)
+            params = {k: ("<redacted>" if SECRET_KEY.search(k) and isinstance(v, str) else v) for k, v in params.items()}
             params["argv"] = argv_red
             closure = tool.closure_manifest(source_root)
             ident = {"name": tool.name, "version": tool.version, "spec": tool.spec}
