@@ -72,7 +72,7 @@ case "$STAGE" in
     ;;
   profile)
     # callgrind instruction profile of the single-threaded F61p prover on B VUs (perf/ptrace unavailable)
-    B=${2:-4}
+    B=${2:-16}
     $PY backends/vole/export_ir.py vu "$OUT/vu$B" --root $FIX --B "$B" --procs 8
     DIETMC=$DIETMC OUT="$OUT/profile_vu$B" bash backends/vole/profile.sh "$OUT/vu$B" F61p 1 | tee "$OUT/profile_vu$B.txt"
     ;;
