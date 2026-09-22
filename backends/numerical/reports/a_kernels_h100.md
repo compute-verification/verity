@@ -37,8 +37,14 @@ Whole sumcheck per layer table, CUDA-graphed rounds (device time), median of 9:
   by fusing round `i`'s Hadamard with round `i-1`'s fold (one read of the tables per two rounds), (c) fuse the three packed
   rounds into one pass over `g, h` (they read the same tables: 3 x 2.15 GB -> 2.15 GB).
 * **Fused k = 4 (DESIGN.md's split of the 768-row block)**: implemented as a third grid axis over `x` (each program forms
-  the 64 Hadamards of one `x`, 256 limb rows; `g, h` read three times).  Measured in run r20260922-073702-b11f -- see
-  `backends/gkr/packed/README.md` for the keep/drop verdict.
+  the 64 Hadamards of one `x`, 256 limb rows; `g, h` read three times).  Run r20260922-073702-b11f (46 tests bit-exact,
+  the split kernel included): 2^26 **9.25 -> 7.57 ms**, 2^28 **30.96 -> 22.88 ms** -- fusing recovers 1.3x, but k = 4
+  still loses to k = 3 (6.13 / 17.61 ms in the same run; per VU 44.7 vs 34.2 µs).  The fourth base round's 64 Hadamards
+  per `x` cost more SIMT work than the extension round it replaces (16 Hadamards + 3 x 32-row `tl.dot` per `x` at k = 3 vs
+  64 + 256 rows at k = 4), and the packed rounds are SIMT-bound.  **Verdict: drop as the default (k = 3 stays); the
+  kernel is kept** because it halves the peak memory (11.0 vs 18.2 GB at 2^28: the extension table after the fold is
+  2^24 x 6 instead of 2^25 x 6) -- a lever if a-gpu needs to hold more layers resident.  The fused `fold_k` was already
+  in the first pass (`fold_k` = one Triton pass, 2.4 ms of the 427 ms logUp; 0.5 ms per layer at 2^26).
 
 ## 2. LogUp fractional GKR (first GPU measurement)
 
