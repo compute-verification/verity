@@ -1,4 +1,5 @@
 set -e
+export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH
 P=/workspace/tc/venv/bin/python
 R=$RESEARCH_RUN_DIR
 export PYTHONPATH=backends/gkr
