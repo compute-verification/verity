@@ -189,9 +189,8 @@ impl<P: Prim> Ctx for P {
     }
 }
 
-/// Bit decomposition (LIMB_BITS = 1: every limb is a boolean, degree 2).  LIMB_BITS = 2 (degree-4 limb
-/// constraint) halves the columns but needs degree >= 3 enforced, which the pinned Plonky3 did not do (MAX_DEG).
-pub const LIMB_BITS: i128 = 1;
+/// Range limbs: LIMB_BITS = 2 (degree-4 limb constraint x(x-1)(x-2)(x-3)); LIMB_BITS = 1 gives booleans.
+pub const LIMB_BITS: i128 = 2;
 
 fn limbs<P: Prim + ?Sized>(ctx: &mut P, name: &str, y: &P::V, w: i128) {
     let nl = ((w + LIMB_BITS - 1) / LIMB_BITS) as usize;

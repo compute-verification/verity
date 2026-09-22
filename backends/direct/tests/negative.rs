@@ -384,10 +384,9 @@ fn mutated_traces_do_not_verify() {
     }
 }
 
-/// Reproducer for the finding that motivated MAX_DEG = 2: with MAX_DEG = 5 and 2-bit limbs, the rows mutated
-/// below had a violated degree-3 (`attained`) or degree-4 (limb) constraint and still produced verifying proofs,
-/// while degree-<=2 violations were rejected.  Run with `--ignored --nocapture` after setting MAX_DEG = 5 and
-/// LIMB_BITS = 2 to reproduce; at MAX_DEG = 2 every line must print a verification error.
+/// Reproducer of the challenger finding (`src/challenger.rs`): with the upstream `SerializingChallenger64`,
+/// every row below whose violated constraint was not the last one produced a verifying proof (alpha = 0);
+/// with the fixed challenger every line prints `OodEvaluationMismatch`.  `--ignored --nocapture`.
 #[test]
 #[ignore]
 fn reproducer_degree_ge3_constraints_unenforced() {
