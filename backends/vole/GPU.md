@@ -55,13 +55,15 @@ at one thread:
 ### 1.2 Scaling and the batch of 4096 VUs
 
 `init` is a fixed 0.65-0.69 s per session; the extension count grows as ceil(VOLEs / 622,178), so per-VU cost is
-flat from B = 64 on. Measured:
+flat from B = 64 on: 0.400 s/VU at B = 64 and 0.408 s/VU at B = 4096 (the 2 % difference is the 14 GB text
+witness streaming from the overlay disk; peak RSS stays at 229 MB / 48 MB because both sides stream). The batch of
+4096 was run in full, not extrapolated. Measured:
 
 | batch | prover wall | per VU | p->v bytes per VU | run |
 |---|---|---|---|---|
 | 1 VU | 1.26 s | 1.26 s (init-dominated) | 13.9 MB (includes the 2 extensions' fixed cost) | d21f |
 | 64 VUs | 25.6 s | 0.400 s | 8.58 MB | d21f |
-| 4096 VUs | see `ASSUMPTIONS.md`/ledger entry for `r20260922-053613-d110` | | | d110 |
+| 4096 VUs (the decision batch) | 1672.6 s (verifier 1673.1 s) | 0.408 s: init 0.65 s; sVOLE 1062.9 s = 0.260 s/VU (6,565 extensions); online 609.0 s = 0.149 s/VU, of which parse + clear-eval floor 266.5 s = 0.065 s/VU | 8.50 MB (34.80 GB total; V->P 1.06 MB/VU) | d110 |
 | 4096 independent units (tu-k16) | 19.1 s | 4.66 ms / unit | 89.8 kB / unit | d21f |
 
 ### 1.3 The overhead as the ledger counts it
