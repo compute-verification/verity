@@ -134,15 +134,33 @@ as one field element and `Epilogue.check` splits it as `hi 2^16 + lo` — over B
 Goldilocks-only.  Choice made here: **run the unchanged v2 circuit over BabyBear^6** (the field every kernel of
 this prover is written for; a Goldilocks^3 port would rewrite `field.py`, `kernels.py`, the NTT and the Ligero
 matmuls for 64-bit arithmetic — 4–8× the SIMT work per product with 32-bit-limb emulation — and was priced at more
-than the night) and **label every number `INCOMPLETE_CHECKER_DIAGNOSTIC`** naming the unverified rows: the
-epilogue segment's `Pack`/`Epilogue` word arithmetic (16 columns per VU).  Everything else that is proved is the
-verified gadget set; the relation is unchanged.  `lane/b-air-v2` (`V2_AIR.md` 4.5) has the limb-form Pack
-(`M = M_hi8 2^16 + M_lo16`, the high limb as the expression `s 2^15 + fld 2^7 + M_hi8`, epilogue per limb as
-PROTOCOL §13) z3-checked over BabyBear; adopting it into the exporter's epilogue circuit is the step that turns
-the label into `NON_ZK_PROOF_DIAGNOSTIC` (the unit segment does not change).  A second, smaller caveat: the M31
-wrap-free results bound keys and products below `2^31 - 1`; BabyBear's `p` is `2^27` smaller, and no v2 product
-exceeds `2^30` on table-consistent rows (`normalise`'s `v_hi A` is a 24-bit mantissa), but that bound is read off
-the gadget, not re-run in z3 for BabyBear.
+than the night) and **repair the epilogue's embedding**, which is the only SAT row.  The first end-to-end numbers
+(r20260922-090930-3bc5, 5.62 s) ran a-v2's word-form epilogue and are labelled `INCOMPLETE_CHECKER_DIAGNOSTIC`
+naming those 16 columns; the export default is now the limb form and the second set carries the honest label.
+
+**Limb-form epilogue (`gpu/v2/epilogue_limbs.py`).**  `lane/b-air-v2`'s `pack_limbs` / `epilogue_limbs`
+(`V2_AIR.md` 4.5; `reports/b_air_v2_z3.json` `pack_epilogue_limbs`: integer UNSAT, wrap-free UNSAT and *direct*
+UNSAT with the BabyBear modulus at REAL widths), copied verbatim: `M = M_hi8 2^16 + M_lo16` with the two hints
+range-checked (`R8`, `R16`), the finite high limb the *expression* `s 2^15 + fld 2^7 + M_hi8` (below `2^16` on every
+admissible state, so no wrap is possible), the infinity blend per limb, then v1's epilogue on the limb pair
+(PROTOCOL §13 LIMB16: `lsb_split`, `round`, `y16 = y_hi + carry`).  `y_hi 2^16 + y_lo` equals `Pack.word`
+identically over Z (`gpu/v2/tests/test_epilogue_limbs.py`, 5000 admissible states), so the relation is unchanged —
+same function, different embedding.  Epilogue: 19 columns / 26 wires / 9 asserts / 7 range queries (`R8` ×1, `R16`
+×5, `R15` ×1) per VU vs 16 / 22 / 6 / 5 for the word form; the 9 leading columns (`one, s, e, M, z, ovf[g], sgn[g]`)
+are the same, so `chain.txt` is byte-identical (`chain_sha256 0802…42a47`).  The `gkr_export.v2` synth and
+negatives generators keep the word form (their hint paths are the word form's; `BabyBearV2Api("word")`); the
+bench-instances export uses `"limbs"` and records `"epilogue": "limbs"` in the manifest.  `gpu.run
+epilogue-negatives` bumps every base column of one VU's epilogue row (state, flags, the word, all six hints) by +1,
+recomputes the derived wires and requires the GPU prover/verifier to reject — a bumped hint pair is exactly the
+BabyBear wrap attack on the word form.
+
+**Unit body over BabyBear.**  checker-min's z3 queries were run for M31 and Goldilocks only; re-running
+`checker.v2.search` with the BabyBear modulus (`gpu/v2/results/z3_babybear_v2.json`, 120 s direct budget) gives
+the M31 pattern exactly: `state_shift`, `signed_sum`, `normalise`, `pack` wrap-free UNSAT (so the integer UNSAT
+transfers), `group_max`, `product_shift`, `signed_sum`, `op_decode`, `product`, `pack` direct UNSAT, `group_max`
+wrap-free SAT (the harmless hint-`E` class, direct UNSAT), `state_decode` SAT (absent from the chained VU body),
+`epilogue` SAT as stated (the row the limb form replaces).  With the limb epilogue every gadget the GPU prover
+checks is therefore verified over the field it runs on, and the label is `NON_ZK_PROOF_DIAGNOSTIC`.
 
 ## 6. Memory (B = 4096)
 
