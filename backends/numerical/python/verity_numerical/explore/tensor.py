@@ -275,6 +275,27 @@ def sumcheck_macs(n_elements: int, m_factors: int, dl: int, terms: int = 1, tabl
             "inner_products_per_round": ip, "reductions": ip * math.ceil(math.log2(max(2, n_elements)))}
 
 
+def packed_sumcheck_macs(n_elements: int, packed_rounds: int = 0, dl: int = 24, base_limbs: int = 4) -> dict:
+    """Limb MACs of the eq-trick sumcheck of ``backends/gkr/packed`` (DESIGN.md 4) over ``n_elements`` base-field
+    elements per table (two folded tables ``g, h``; ``eq`` is never a table), with the first ``packed_rounds = k`` rounds
+    in the base field: packed round ``i`` does ``3 . 4^(i-1)`` base x base Hadamards per surviving pair and one
+    ``base_limbs x dl`` weighted inner product each (``n / 2^i`` pairs); then ONE fold of both tables by the ``k``
+    challenges (``2 . 2^k . base_limbs . 2 dl`` per output... = ``2 . 8 dl`` per input element); extension rounds
+    ``i > k`` do 3 ``dl x dl`` inner products and 2 ``2 dl x 2 dl`` folds per pair.  ``k = 0`` is the eq-trick alone;
+    the plain model (:func:`sumcheck_macs` with ``m = 3``, three folded tables) is returned for comparison.  The bench
+    (``backends/gkr/packed/bench.py::mac_model``) counts the same MACs as issued."""
+    n = n_elements
+    packed = sum(3 * 4 ** (i - 1) * (n >> i) * base_limbs * dl for i in range(1, packed_rounds + 1))
+    fold = 2 * 8 * dl * n if packed_rounds else 0
+    ext = sum((n >> i) * (3 * dl * dl + 2 * 4 * dl * dl) for i in range(packed_rounds + 1, max(1, n.bit_length() - 1) + 1))
+    plain = sumcheck_macs(n, 3, dl)["matmul_macs"]
+    total = packed + fold + ext
+    return {"packed_rounds": packed_rounds, "matmul_macs": total, "matmul_macs.packed_rounds": packed, "matmul_macs.fold_k": fold,
+            "matmul_macs.ext_rounds": ext, "hadamards_base": sum(3 * 4 ** (i - 1) * (n >> i) for i in range(1, packed_rounds + 1)),
+            "hadamards_ext": sum(3 * (n >> i) for i in range(packed_rounds + 1, max(1, n.bit_length() - 1) + 1)),
+            "plain_model_matmul_macs": plain, "saving_vs_plain_model": plain / total if total else None}
+
+
 ENCODERS: dict[str, dict] = {
     "rs_matrix_ntt": {"basis": "Reed-Solomon n=16384/k=4096 (the protocols' Ligero code) as two-stage dense matrix DFTs on tensor cores "
                                "(TensorFHE-style O(N sqrt N)): interpolate k = 64 x 64 (2 x 64 MACs per payload symbol), evaluate "
