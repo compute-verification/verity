@@ -53,6 +53,15 @@ code: 10 MACs per correlation, a gather; dense dual: ``k`` MACs per correlation,
 Conversion.  ``t = MACs / (peak_MAC_per_s x utilisation)`` with utilisation 1.0 and TensorZKP's achieved 0.17;
 SIMT field multiplications at a stated rate; hashing at a stated GB/s; the parts are summed (no overlap assumed).
 ``overhead.vs_native_peak`` = prover seconds per VU / ``contract.native_seconds_per_vu(1536)``.
+
+Privacy knob (``zk``, zk-construction lane, 2026-09-22; ``backends/ZK_CONSTRUCTION.md``).  The accountant's rows
+(``ligero_rows``) and committed elements already contain the honest-verifier ZK layer of the protocol documents: the
+``k - l`` row randomizers (payload ``l = 3840`` of ``k = 4096`` symbols), the three blinding rows, the transcript pads
+of Candidate A (``pad_elements`` x extension degree) and the HM96 leaf commitments.  ``zk="hvzk"`` (default) is
+therefore what ``tensor.md`` reported; ``zk="none"`` removes them (payload ``k`` per row, no blinding rows, no pads,
+plain Merkle leaves) and is the non-ZK diagnostic a kernel measurement corresponds to; ``zk="malicious"`` adds the
+verifier-coin-commitment step 0 (HM96, ``rounds.protocol`` commitments verified by the prover; +1 depth).  Prover
+randomness (randomizers, blinding rows, pads, HM96 strings) is priced as PRG output at :data:`PRG_BYTES_PER_S`.
 """
 from __future__ import annotations
 
@@ -75,6 +84,7 @@ __all__ = [
     "HASH_RATES",
     "LIMB_OPTIONS",
     "TENSORZKP",
+    "ZK_LEVELS",
     "Design",
     "FieldSpec",
     "Gpu",
@@ -399,6 +409,10 @@ class Priced:
     reductions_words: int = 0
     depth: int = 0
     notes: list = field(default_factory=list)
+    zk: str = "hvzk"                  # none | hvzk | malicious (module docstring)
+    prg_bytes: float = 0.0            # prover randomness: randomizers, blinding rows, pads, HM96 strings
+    rows: int = 0
+    communication_bytes: float = 0.0  # transcript bytes (accountant estimate) incl. step-0 commitments
 
     @property
     def matmul_total(self) -> float:
@@ -418,13 +432,27 @@ class Priced:
         t_simt = self.simt_total * simt_scale / gpu.simt_field_mults_per_s
         t_hash = self.hash_bytes / hash_rate
         t_hint = self.units * HINT_OPS_PER_UNIT / SIMT_INT_OPS_PER_S[gpu_key]
-        total = t_mm + t_simt + t_hash + t_hint
+        t_prg = self.prg_bytes / PRG_BYTES_PER_S
+        total = t_mm + t_simt + t_hash + t_hint + t_prg
         per_vu = total / B_TARGET
-        return {"gpu": gpu_key, "utilisation": utilisation, "encoder": encoder,
-                "t.matmul": t_mm, "t.simt_field": t_simt, "t.hash": t_hash, "t.hint_gen": t_hint, "t.total": total,
+        return {"gpu": gpu_key, "utilisation": utilisation, "encoder": encoder, "zk": self.zk,
+                "t.matmul": t_mm, "t.simt_field": t_simt, "t.hash": t_hash, "t.hint_gen": t_hint, "t.prg": t_prg,
+                "t.total": total,
                 "matmul_share_of_time": t_mm / total, "seconds_per_vu": per_vu,
                 "overhead.vs_native_peak": contract.overhead(per_vu, K_TARGET),
                 "hint_gen_cpu_anchor_seconds": self.units * HINT_CPU_SECONDS_PER_UNIT}
+
+
+ZK_LEVELS = ("none", "hvzk", "malicious")
+#: HM96 randomness per leaf / coin: x_j of 6k+4 bits at k = 160 (O(k) variant), rounded to bytes.
+HM_RANDOM_BYTES = (6 * 160 + 4 + 7) // 8
+
+
+def _zk_rows(committed: int, zk: str, payload_zk: int = fl.L_PAYLOAD, payload_none: int = fl.K_CODE) -> int:
+    """Ligero rows for ``committed`` elements: payload ``l`` plus three blinding rows with ZK, payload ``k`` without."""
+    if zk == "none":
+        return -(-committed // payload_none)
+    return -(-committed // payload_zk) + 3
 
 
 def _small_field(fs: FieldSpec) -> fl.SmallFieldCensus:
@@ -448,22 +476,32 @@ def _encoding(rows: int, L: int, encoder: str) -> tuple[float, float]:
     raise ValueError(encoder)
 
 
-def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TARGET, encoder: str = "rs_matrix_ntt") -> Priced:
-    """Limb-price one design on one field at one operating point (module docstring for the model)."""
+def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TARGET, encoder: str = "rs_matrix_ntt",
+                 zk: str = "hvzk") -> Priced:
+    """Limb-price one design on one field at one operating point (module docstring for the model).  ``zk`` in
+    :data:`ZK_LEVELS`: ``hvzk`` is the protocol documents' layer (and tensor.md's rows), ``none`` strips it, ``malicious``
+    adds the step-0 verifier-coin commitment."""
+    if zk not in ZK_LEVELS:
+        raise ValueError(f"zk must be one of {ZK_LEVELS}, got {zk!r}")
     sfc = _small_field(fs)
     d, lig = _ligero(target_log2, fs, design.candidate, B)
     L, dl = fs.L, d * fs.L
     Fc = fs.option.trace.extension(d)
     tables = sfc.tables()
     units = B * UNITS_PER_VU
-    p = Priced(design.name, fs.name, target_log2, d, units, 0, 0.0, 0.0, 0.0)
+    p = Priced(design.name, fs.name, target_log2, d, units, 0, 0.0, 0.0, 0.0, zk=zk)
+    coin_bits = 160 if zk == "malicious" else None
+    leaf_bits = None if zk == "none" else 160
+    eb = fs.element_bytes
     if design.candidate == "A":
         cand = acc.CandidateA(K=K_TARGET, B=B, trace_field=fs.option.trace, challenge_field=Fc, ligero=lig,
                               hash_queries=fl.HASH_QUERIES, tables=tables, inputs_per_unit=sfc.columns_committed_a,
                               query_wires_per_unit=sfc.queries_on_computed_wires,
-                              depth=acc.DepthOptions(commit_query_wires=design.commit_query_wires))
+                              depth=acc.DepthOptions(commit_query_wires=design.commit_query_wires),
+                              coin_commitment_bits=coin_bits, leaf_commitment_bits=leaf_bits)
         bud = acc.account_candidate_a(cand)
         prm = bud.parameters
+        est = acc.census_estimate_a(cand)
         # checker GKR: per layer a degree-3 data-parallel sumcheck (eq, V_l, V_r) over units x carried width
         gkr_elements = units * sum(acc.CHECKER_LAYER_WIDTHS_A)
         sc = sumcheck_macs(gkr_elements, 3, dl)
@@ -480,8 +518,10 @@ def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TAR
         p.matmul["logup_fractional_gkr"] = fr["matmul_macs"] * cand.lookup_repetitions
         p.simt_field_mults["logup_hadamards"] = fr["hadamards"] * acc.EXT_MULT_COST[d]
         p.simt_field_mults["logup_tree_build"] = 3 * leaves * acc.EXT_MULT_COST[d]        # p0 q1 + p1 q0, q0 q1 per pair
-        rows = prm["ligero_rows"]
         committed = prm["committed_trace_elements"]
+        if zk == "none":
+            committed -= prm["pad_elements"] * d          # the padded-transcript pads exist only for privacy
+        rows = _zk_rows(committed, zk)
         depth = prm["rounds.sequential_depth"]
         # Ligero: encoding + one row combination (linear test only, no quadratic test: products are inside the GKR)
         enc_mm, enc_simt = _encoding(rows, L, encoder)
@@ -490,15 +530,17 @@ def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TAR
             p.simt_field_mults["encoding_simt"] = enc_simt
         p.matmul["ligero_row_combination"] = rows * fl.N_CODE * L * dl
         p.reductions_words = reduction_words(dl) * (sc["reductions"] + fr["reductions"]) + rows * fl.N_CODE * dl * 2
-        p.hash_bytes = rows * fl.N_CODE * fs.element_bytes + fl.N_CODE * (acc.HM_LEAF_BYTES + 2 * acc.DIGEST_BYTES)
+        trees = 1
     else:
         cand = acc.CandidateB(K=K_TARGET, B=B, trace_field=fs.option.trace, challenge_field=Fc, ligero=lig,
                               hash_queries=fl.HASH_QUERIES, tables=tables, witness_per_unit=sfc.columns_committed_b,
-                              linear_per_unit=sfc.lin_total + 2 * sfc.mul, quadratic_per_unit=sfc.mul)
+                              linear_per_unit=sfc.lin_total + 2 * sfc.mul, quadratic_per_unit=sfc.mul,
+                              coin_commitment_bits=coin_bits, leaf_commitment_bits=leaf_bits)
         bud = acc.account_candidate_b(cand)
         prm = bud.parameters
-        rows = prm["ligero_rows"]
+        est = acc.census_estimate_b(cand)
         committed = prm["committed_trace_elements"]
+        rows = _zk_rows(committed, zk)
         depth = prm["rounds.sequential_depth"]
         helpers = sum(tb.queries_per_unit * units + tb.rows for tb in tables)
         enc_mm, enc_simt = _encoding(rows, L, encoder)
@@ -506,17 +548,32 @@ def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TAR
         if enc_simt:
             p.simt_field_mults["encoding_simt"] = enc_simt
         # linear test: one row combination over every row; quadratic test: combination over the product rows
-        quad_rows = -(-units * sfc.mul // fl.L_PAYLOAD)
+        quad_rows = -(-units * sfc.mul // (fl.K_CODE if zk == "none" else fl.L_PAYLOAD))
         p.matmul["ligero_row_combination"] = (rows + quad_rows) * fl.N_CODE * L * dl
         # sparse per-unit constraint combination r^T A (4 terms per constraint, F_c x small constant): SIMT
         p.simt_field_mults["constraint_combination"] = 4 * prm["linear_constraints"] * d
         p.simt_field_mults["quadratic_hadamards"] = units * sfc.mul                          # x o y per product triple, F_t
         p.simt_field_mults["helper_inversions"] = 3 * helpers * acc.EXT_MULT_COST[d]         # Montgomery batch trick
         p.reductions_words = (rows + quad_rows) * fl.N_CODE * dl * 2
-        p.hash_bytes = rows * fl.N_CODE * fs.element_bytes + 2 * fl.N_CODE * (acc.HM_LEAF_BYTES + 2 * acc.DIGEST_BYTES)
+        trees = 2
+    # hashing: the codeword matrix once, the Merkle tree(s); HM96 leaves (hvzk, malicious) hash the x_j strings too
+    p.hash_bytes = rows * fl.N_CODE * eb + trees * fl.N_CODE * 2 * acc.DIGEST_BYTES
+    if zk != "none":
+        p.hash_bytes += trees * fl.N_CODE * acc.HM_LEAF_BYTES
+        # prover randomness: k-l randomizers per row, 3 blinding rows of k symbols per tree, HM96 x_j per leaf, pads
+        p.prg_bytes = (rows * (fl.K_CODE - fl.L_PAYLOAD) + trees * 3 * fl.K_CODE) * eb + trees * fl.N_CODE * HM_RANDOM_BYTES
+        if design.candidate == "A":
+            p.prg_bytes += prm["pad_elements"] * d * eb
+    coins = est["rounds.protocol"] - (1 if zk == "malicious" else 0)
+    if zk == "malicious":
+        # step 0: the prover verifies R HM96 openings (hash of x_i each) and evaluates R universal hashes
+        p.hash_bytes += coins * (acc.HM_LEAF_BYTES + acc.HM_DECOMMIT_BYTES)
+        p.notes.append(f"step 0: {coins} verifier-coin commitments (HM96 k=160) verified by the prover; +1 depth")
+    p.communication_bytes = est["transcript.bytes"]           # accountant estimate (8 B per trace element)
+    p.rows = rows
     p.committed_elements = committed
-    p.committed_bytes = committed * fs.element_bytes
-    p.encoded_bytes = rows * fl.N_CODE * fs.element_bytes
+    p.committed_bytes = committed * eb
+    p.encoded_bytes = rows * fl.N_CODE * eb
     p.depth = depth
     p.simt_int_ops["hint_generation"] = units * HINT_OPS_PER_UNIT
     if fs.name == "m31":
@@ -562,11 +619,11 @@ def unit_price(fs: FieldSpec, target_log2: int = -128) -> dict:
 
 def design_row(design: Design, fs: FieldSpec, target_log2: int, utilisations: Sequence[float] = (1.0, 0.17),
                hash_rate_key: str = "blake3_simt", encoder: str = "rs_matrix_ntt",
-               encoding_utilisation: float | None = None) -> dict:
+               encoding_utilisation: float | None = None, zk: str = "hvzk") -> dict:
     """One design x field x operating point: limb MACs per VU by component, committed / encoded / hashed bytes per VU,
     times and overheads per GPU x utilisation (``encoding_utilisation`` applies to the encoding component at the
     realistic point only), and the overhead's sensitivity to the Merkle hash rate on the H100 at the realistic point."""
-    p = price_design(design, fs, target_log2, encoder=encoder)
+    p = price_design(design, fs, target_log2, encoder=encoder, zk=zk)
     hr = HASH_RATES[hash_rate_key]["bytes_per_s"]
     times = {}
     for g, gpu in GPUS.items():
@@ -582,9 +639,11 @@ def design_row(design: Design, fs: FieldSpec, target_log2: int, utilisations: Se
     mm_share = {k: v / p.matmul_total for k, v in p.matmul.items()}
     return {
         "design": design.name, "label": design.label, "field": fs.name, "target_log2": target_log2, "B": B_TARGET, "K": K_TARGET,
-        "extension_degree": p.extension_degree, "challenge_limbs": p.extension_degree * fs.L,
+        "zk": p.zk, "extension_degree": p.extension_degree, "challenge_limbs": p.extension_degree * fs.L,
         "census.committed_elements": p.committed_elements, "committed_bytes_per_vu": p.committed_bytes / B_TARGET,
         "encoded_bytes_per_vu": p.encoded_bytes / B_TARGET, "hash_bytes_per_vu": p.hash_bytes / B_TARGET,
+        "prg_bytes_per_vu": p.prg_bytes / B_TARGET, "communication_bytes_per_vu": p.communication_bytes / B_TARGET,
+        "ligero_rows": p.rows,
         "limb_macs_per_vu": p.matmul_total / B_TARGET, "limb_macs_by_component_per_vu": {k: v / B_TARGET for k, v in p.matmul.items()},
         "matmul_share_of_components": mm_share,
         "simt_field_mults_per_vu": p.simt_total / B_TARGET, "simt_by_component_per_vu": {k: v / B_TARGET for k, v in p.simt_field_mults.items()},
