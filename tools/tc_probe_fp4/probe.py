@@ -233,15 +233,17 @@ def layout_check(probe: Probe, instr: str) -> str:
         nblk = NBLK[instr]
         if nblk:
             blk = k // nblk
-            # distinct power-of-two scales per (row, block) and (col, block): exact, and any lane/byte misrouting changes the result
+            # distinct power-of-two scales per (row, block) and (col, block) in 2^-2..2^3: any lane/byte misrouting changes the
+            # result, and every exact sum stays below 24 significant bits (|term| < 2^17, lowest bit 2^-4) so FP32 holds it exactly
+            # (a wider range made 3/8192 mxf4 elements need > 24 bits: RNE reference vs RZ hardware, a false "layout" failure)
             if instr == "nvf4":
-                ea = rng.integers(4, 11, (n, 16, nblk))
-                eb = rng.integers(4, 11, (n, 8, nblk))
+                ea = rng.integers(5, 11, (n, 16, nblk))
+                eb = rng.integers(5, 11, (n, 8, nblk))
                 sfa, sfb = (ea << 3).astype(np.uint8), (eb << 3).astype(np.uint8)
                 pa, pb = 2.0 ** (ea - 7), 2.0 ** (eb - 7)
             else:
-                ea = rng.integers(122, 133, (n, 16, nblk))
-                eb = rng.integers(122, 133, (n, 8, nblk))
+                ea = rng.integers(125, 131, (n, 16, nblk))
+                eb = rng.integers(125, 131, (n, 8, nblk))
                 sfa, sfb = ea.astype(np.uint8), eb.astype(np.uint8)
                 pa, pb = 2.0 ** (ea - 127), 2.0 ** (eb - 127)
             prod = np.einsum("nigk,njgk->nijg", a.reshape(n, 16, nblk, blk), b.reshape(n, 8, nblk, blk)).astype(np.float64)
