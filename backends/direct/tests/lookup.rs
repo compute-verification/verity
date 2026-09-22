@@ -103,7 +103,7 @@ const FRI: FriParams = FriParams { log_blowup: 2, num_queries: 8, proof_of_work_
 
 fn roundtrip<B: Backend>(mutate: impl Fn(&LookupChainAir, &air::Layout, &mut RowMajorMatrix<Val<B::SC>>)) -> bool
 where
-    Val<B::SC>: PrimeField64 + Send + Sync,
+    Val<B::SC>: PrimeField64 + p3_field::TwoAdicField + Send + Sync,
     <<B::SC as StarkGenericConfig>::Pcs as p3_commit::Pcs<<B::SC as StarkGenericConfig>::Challenge, <B::SC as StarkGenericConfig>::Challenger>>::Commitment: PartialEq,
 {
     let kind = B::KIND;

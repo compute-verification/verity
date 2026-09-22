@@ -55,7 +55,7 @@ where
 
 fn statement_suite<B: Backend>()
 where
-    Val<B::SC>: PrimeField64 + Send + Sync,
+    Val<B::SC>: PrimeField64 + p3_field::TwoAdicField + Send + Sync,
     Com<B>: PartialEq,
 {
     let kind = B::KIND;

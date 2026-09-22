@@ -8,7 +8,7 @@ use std::iter;
 use p3_air::{AirBuilder, BaseAir};
 use p3_challenger::{CanObserve, CanSample, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
-use p3_field::{AbstractExtensionField, AbstractField, Field, PackedValue};
+use p3_field::{AbstractExtensionField, AbstractField, Field, PackedValue, PrimeField64, TwoAdicField};
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::VerticalPair;
 use p3_matrix::Matrix;
@@ -209,6 +209,7 @@ where
 pub fn verify_lookup<SC, A>(config: &SC, air: &A, challenger: &mut SC::Challenger, proof: &LookupProof<SC>, preprocessed: RowMajorMatrix<Val<SC>>) -> Result<(), VerificationError>
 where
     SC: StarkGenericConfig,
+    Val<SC>: PrimeField64 + TwoAdicField,
     A: LookupAir<Val<SC>>,
     Com<SC>: PartialEq,
 {
@@ -233,6 +234,7 @@ fn verify_lookup_inner<SC, A>(
 ) -> Result<(), BoundError>
 where
     SC: StarkGenericConfig,
+    Val<SC>: PrimeField64 + TwoAdicField,
     A: LookupAir<Val<SC>>,
     Com<SC>: PartialEq,
 {
@@ -405,7 +407,7 @@ where
 /// from the verifier's tables and compared, then the three-round transcript, the PCS opening and the OOD identity.
 pub fn verify_lookup_bound_bytes<B: Backend>(air: &crate::air::LookupChainAir, lay: &Layout, proof_bytes: &[u8], fri: FriParams, stmt: &Statement) -> Result<(), BoundError>
 where
-    Val<B::SC>: PrimeField64 + Send + Sync,
+    Val<B::SC>: PrimeField64 + TwoAdicField + Send + Sync,
     Com<B::SC>: PartialEq,
 {
     let proof: LookupProof<B::SC> = bincode::deserialize(proof_bytes).map_err(|_| BoundError::ProofShape)?;
@@ -427,7 +429,7 @@ where
 /// `verify_lookup_bound_bytes` on an in-memory proof (serialised first: the verifier only ever sees bytes).
 pub fn verify_lookup_bound<B: Backend>(air: &crate::air::LookupChainAir, lay: &Layout, proof: &LookupProof<B::SC>, fri: FriParams, stmt: &Statement) -> Result<(), BoundError>
 where
-    Val<B::SC>: PrimeField64 + Send + Sync,
+    Val<B::SC>: PrimeField64 + TwoAdicField + Send + Sync,
     Com<B::SC>: PartialEq,
 {
     let bytes = bincode::serialize(proof).expect("serialise proof");

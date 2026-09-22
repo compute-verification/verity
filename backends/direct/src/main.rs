@@ -529,7 +529,7 @@ fn binding_json(unbound: bool, bind_operands: bool, public_columns: &str, n_publ
 /// `vu-bench --lookup`: the LogUp realisation (PROTOCOL.md section 14): three commitment rounds.
 fn vu_bench_lookup<B: Backend>(args: &[String])
 where
-    Val<B::SC>: PrimeField64 + Send + Sync,
+    Val<B::SC>: PrimeField64 + p3_field::TwoAdicField + Send + Sync,
     <<B::SC as StarkGenericConfig>::Pcs as p3_commit::Pcs<<B::SC as StarkGenericConfig>::Challenge, <B::SC as StarkGenericConfig>::Challenger>>::Commitment: PartialEq,
 {
     use verity_direct::lookup::{aux_matrix, lookup_soundness_bits, PRE_WIDTH};
