@@ -327,6 +327,29 @@ def test_no_remote_is_stated_not_failed(store):
         store.push(art)
 
 
+def test_cli_push_run_and_pending(store, fs_remote, tmp_path, capsys):
+    """`push RUN` preserves the attempt and every artifact it references; `push --pending` finds what the remote lacks; a second
+    `--pending` has nothing left to do; exit code follows PRESERVED."""
+    from research.store.cli import main
+    from research.store.local import attempt_key
+
+    src = tmp_path / "p.bin"
+    src.write_bytes(b"proof" * 100)
+    art = store.put_artifact("proof/v1", {"n": 1}, file=src)
+    tele = store.put_artifact("telemetry/v1", {"run_id": "r20260922-105905-2021", "stream": "events"}, file=src)
+    store.put_attempt(_attempt(outputs={"result": art, "run_files": None}, telemetry={"events": tele, "resources": None}))
+    assert main(["push", "r20260922-105905-2021"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("PRESERVED") == 3 and "3/3 preserved" in out
+    assert (fs_remote / attempt_key("r20260922-105905-2021")).is_file()
+    assert store.where(art)[-1]["verified_utc"]
+    extra = store.snapshot("s", [art])                              # local only so far
+    assert main(["push", "--pending"]) == 0 and extra in capsys.readouterr().out
+    assert main(["push", "--pending", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["pushed"] == []
+    assert main(["push", "nonsense"]) == 1 and "not an artifact or run id" in capsys.readouterr().err
+
+
 def test_unusable_remote_degrades_to_local(env, monkeypatch):
     """store.toml names an S3 bucket but the credential env vars are unset (a pod, a test, a laptop without `source r2.env`): the
     local store must keep working -- reads, puts, attempt publication -- and only push/push_attempt name the missing credentials."""

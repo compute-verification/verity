@@ -235,8 +235,15 @@ def _publish_attempt(run_dir: Path, prep: dict) -> None:
         conds["exec.load_end"] = E.load_now()
     out = A.publish(run_dir, tool=prep.get("tool"), conditions=conds)
     if out.get("published"):
-        print(f"research: attempt published: {out['n_outputs']} outputs drv={out['derivation']} reuse={out['reuse_key'] or '-'}"
-              + ("  (already in the store)" if out.get("already") else ""), file=sys.stderr)
+        if out.get("already"):
+            pres = "  (already in the store)"
+        elif out.get("preserved"):
+            pres = "  PRESERVED on the remote"
+        elif out.get("preserve_error"):
+            pres = f"  NOT preserved: {out['preserve_error']}  (`research data push {run_dir.name}` retries)"
+        else:
+            pres = f"  local only ({out.get('preserve_skipped', 'no remote')}; `research data push {run_dir.name}` with credentials preserves it)"
+        print(f"research: attempt published: {out['n_outputs']} outputs drv={out['derivation']} reuse={out['reuse_key'] or '-'}{pres}", file=sys.stderr)
     else:
         print(f"research: attempt not published: {out.get('error')}  (store_publish_error.json in the run dir; `research data attempt publish` retries)",
               file=sys.stderr)

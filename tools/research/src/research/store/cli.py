@@ -3,6 +3,7 @@
   research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
   research data show ART|ATTEMPT|DRV [--json]      manifest / attempt / attempts with that derivation
   research data where ART [--json]                 replicas: local / repo / remote (+ verified_utc)
+  research data push [ART|RUN ...] [--pending]     preserve on the remote: blobs + manifest read back (PRESERVED); a run pushes its attempt + outputs
   research data fetch ART [--to DIR]               materialise the payload (file or tree); prints the path
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json]
@@ -331,9 +332,62 @@ def cmd_sql(argv: list[str]) -> int:
     return 0
 
 
+def _attempt_artifacts(doc: dict) -> list[str]:
+    out = []
+    for sec in ("outputs", "telemetry"):
+        for v in (doc.get(sec) or {}).values():
+            if isinstance(v, str) and v.startswith("art:"):
+                out.append(v)
+    return out
+
+
+def cmd_push(argv: list[str]) -> int:
+    """Preserve on the remote (README §7): an artifact is pushed blob-by-blob and read back (PRESERVED); a run id pushes the attempt
+    manifest and every artifact it references.  `--pending` pushes every local artifact without a verified remote replica and every
+    attempt the remote lacks.  Exit 1 if anything is not PRESERVED."""
+    ap = _ap("push")
+    ap.add_argument("targets", nargs="*", help="art:<hex> or run ids")
+    ap.add_argument("--pending", action="store_true", help="everything local that the remote does not verifiably hold")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    from .local import attempt_key  # noqa: PLC0415
+
+    r = st._require_remote()  # noqa: SLF001  (names the missing credentials when the remote is configured but unusable here)
+    arts: list[str] = []
+    runs: list[str] = []
+    for t in ns.targets:
+        (arts if t.startswith("art:") else runs).append(t)
+    if ns.pending:
+        verified = {row[0] for row in st.index.db.execute("SELECT id FROM replicas WHERE location='remote' AND verified_utc IS NOT NULL")}
+        arts += [a for a in st.artifact_ids() if a not in verified]
+        runs += [rid for rid in st.attempt_ids() if r.head(attempt_key(rid)) is None]
+    reports: list[dict] = []
+    for rid in dict.fromkeys(runs):
+        if not ids.is_run_id(rid):
+            raise ValueError(f"not an artifact or run id: {rid!r}")
+        doc = st.get_attempt(rid)
+        if doc is None:
+            raise StoreError(f"attempt {rid} is not in the store")
+        arts += _attempt_artifacts(doc)
+        st.push_attempt(rid)
+        reports.append({"id": rid, "kind": "attempt", "preserved": r.head(attempt_key(rid)) is not None})
+    for a in dict.fromkeys(arts):
+        rep = st.push(a, preserve=True)
+        reports.append({"id": a, "kind": st.get_manifest(a).kind, "preserved": rep["preserved"], "errors": rep.get("errors", [])})
+    bad = [x for x in reports if not x["preserved"]]
+    if ns.json:
+        _dump({"remote": r.describe(), "pushed": reports, "not_preserved": len(bad)})
+    else:
+        for x in reports:
+            print(f"{x['id']}  {x['kind']}  {'PRESERVED' if x['preserved'] else 'NOT preserved: ' + '; '.join(x.get('errors') or ['absent'])}")
+        print(f"{len(reports) - len(bad)}/{len(reports)} preserved on {r.describe()}")
+    return 1 if bad else 0
+
+
 COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "select": cmd_select, "snapshot": cmd_snapshot,
-    "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql,
+    "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push,
 }
 
 

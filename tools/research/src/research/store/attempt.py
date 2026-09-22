@@ -233,11 +233,20 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
     st.put_attempt(doc)
     out = {"published": True, "id": run_id, "derivation": doc["derivation"], "reuse_key": doc["reuse_key"], "outputs": outputs, "telemetry": telemetry,
            "n_outputs": sum(1 for v in {**outputs, **telemetry}.values() if v)}
-    if remote_push is not False and hasattr(st, "push_attempt"):        # §10 step 4 belongs to the storage half; hook when it exists
-        try:
-            out["preserved"] = st.push_attempt(run_id)
-        except Exception as e:  # noqa: BLE001
-            out["preserve_error"] = f"{type(e).__name__}: {e}"
+    if remote_push is not False and hasattr(st, "push_attempt"):        # §10 step 4: preserve on the remote when one is usable here
+        if getattr(st, "remote", None) is None:
+            out["preserved"] = False
+            out["preserve_skipped"] = getattr(st, "remote_error", None) or "no remote configured"
+        else:
+            try:
+                arts = [a for a in {**outputs, **telemetry}.values() if a]
+                reports = [st.push(a, preserve=True) for a in arts]
+                st.push_attempt(run_id)
+                out["preserved"] = all(r.get("preserved") for r in reports)
+                out["preserved_artifacts"] = {r["id"]: bool(r.get("preserved")) for r in reports}
+            except Exception as e:  # noqa: BLE001
+                out["preserved"] = False
+                out["preserve_error"] = f"{type(e).__name__}: {e}"
     return out
 
 
