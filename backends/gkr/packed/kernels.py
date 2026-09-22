@@ -36,6 +36,7 @@ from collections.abc import Callable
 import torch
 
 from . import logup_gpu as _lg
+from . import logup_graph as _lgr
 from . import logup_reference as logup_reference
 from . import reference as reference
 from . import sumcheck_packed as _sp
@@ -43,8 +44,9 @@ from . import sumcheck_packed as _sp
 Ext = reference.Ext
 P = reference.P
 
-__all__ = ["Ext", "P", "SumcheckKernel", "sumcheck_layer", "fold", "LogUpProver", "logup_prove", "logup_round",
-           "logup_fold", "multiplicities", "leaf_level", "tree_level", "reference", "logup_reference"]
+__all__ = ["Ext", "P", "SumcheckKernel", "sumcheck_layer", "sumcheck_layer_device", "prepare_inputs", "fold", "LogUpProver",
+           "GraphLogUp", "logup_prove", "logup_prove_graphed", "logup_round", "logup_fold", "multiplicities", "leaf_level",
+           "tree_level", "reference", "logup_reference"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -54,9 +56,13 @@ __all__ = ["Ext", "P", "SumcheckKernel", "sumcheck_layer", "fold", "LogUpProver"
 SumcheckKernel = _sp.Kernel
 
 
-def make_kernel(device: str = "cuda", k1_log2: int = _sp.K1_LOG2_DEFAULT) -> SumcheckKernel:
-    """The kernel object (holds the Montgomery constants and the generated Triton module); make one and reuse it."""
-    return _sp.Kernel(device, k1_log2=k1_log2, mode="triton")
+def make_kernel(device: str = "cuda", k1_log2: int = _sp.K1_LOG2_DEFAULT, round_fusion: bool = True) -> SumcheckKernel:
+    """The kernel object (holds the Montgomery constants and the generated Triton module); make one and reuse it.
+
+    ``round_fusion`` (a-fusion, default on): the ``k`` packed rounds are served by ONE read of ``g, h`` (the ``U`` tensor,
+    ``kernels_fused``; 3.48 vs 7.83 ms at 2^28 k=3) -- same messages, different summation order.  ``fold_fusion``
+    (``Kernel(fold_fusion=True)``) fuses the fold into the next Hadamard pass and is OFF: measured slower (SIMT-bound)."""
+    return _sp.Kernel(device, k1_log2=k1_log2, mode="triton", round_fusion=round_fusion)
 
 
 def sumcheck_layer(kernel: SumcheckKernel, gammas: list[Ext], g: torch.Tensor, h: torch.Tensor, k: int,
@@ -68,6 +74,21 @@ def sumcheck_layer(kernel: SumcheckKernel, gammas: list[Ext], g: torch.Tensor, h
     round trip per round).  Returns ``(rounds, rs, (eq(gammas, rs), g(rs), h(rs)))`` -- identical to
     ``reference.packed_prover``.  ``k = 3`` is the measured optimum on the H100 (``README.md``)."""
     return _sp.prove(kernel, gammas, g, h, k, challenger)
+
+
+prepare_inputs = _sp.prepare_inputs
+
+
+def sumcheck_layer_device(kernel: SumcheckKernel, gammas: list[Ext], coins: list[Ext], g: torch.Tensor, h: torch.Tensor, k: int,
+                          inputs: list[_sp.RoundInputs] | None = None) -> list[torch.Tensor]:
+    """:func:`sumcheck_layer` without host synchronisation: the coins are known ahead (``coins[i-1] = r_i``; benchmarks,
+    or a prover that derives the layer's coins from an earlier commitment) and every host-side operand comes from
+    :func:`prepare_inputs` (eq tables, fold operands, ``R``-scaled challenges -- reusable across proofs with the same coins).
+    Returns the ``n`` messages ``S_i (4, 6) int32`` plain as device tensors, bit-identical to ``sumcheck_layer``'s.  The
+    whole call is CUDA-graph capturable (``bench_fused.py`` times it as one graph: 12.65 ms at 2^28 k=3)."""
+    if inputs is None:
+        inputs = _sp.prepare_inputs(kernel, gammas, coins, k)
+    return _sp.prove_device(kernel, gammas, coins, g, h, k, inputs)
 
 
 def fold(kernel: SumcheckKernel, table: torch.Tensor, rs: list[Ext]) -> torch.Tensor:
@@ -105,6 +126,22 @@ def logup_prove(prover: LogUpProver, w: torch.Tensor, table: torch.Tensor, z: Ex
     ``(Transcript, LeafClaim, Timing)``; ``Transcript.q_root`` and per level ``rounds`` (4 ``Ext`` each) / ``vals``
     (``p0, p1, q0, q1``) are exactly ``logup_reference.prove_table``'s."""
     return prover.prove(w, table, z, coins, mult)
+
+
+GraphLogUp = _lgr.GraphLogUp
+
+
+def logup_prove_graphed(prover: GraphLogUp, w: torch.Tensor, table: torch.Tensor, z: Ext, coins: logup_reference.Coins):
+    """:func:`logup_prove` on CUDA graphs (a-fusion; v1 shape 427 -> 89 ms device / 92 ms wall).  ``prover =
+    GraphLogUp("cuda", k=3, rounds_per_graph=None | 1)``: ``None`` = one graph per level with the level's coins written
+    into the static device coin buffer before replay (coins must be known ahead of the level: a transcript-independent
+    coin source, or a sponge fed only by earlier levels); ``1`` = one graph per round, the message ``S_i`` synced to the
+    host and ``r_i`` written between replays (drop-in for Fiat-Shamir; 103.5 / 107.1 ms).  Both keep the transcript
+    identical: the round constants (``eq(r, .)`` tables, ``prefix``, ``eq_x``, ``r R``) are computed ON DEVICE from the
+    coin buffer (``kernels_graph.py``), so replaying with new coins evaluates exactly the eager prover's arithmetic.  The
+    first call at a shape compiles and captures (~1 min); reuse the prover for that shape.  Returns ``(Transcript,
+    LeafClaim, Timing)`` with ``logup_reference.prove_table``'s ``q_root`` / ``rounds`` / ``vals``."""
+    return prover.prove(w, table, z, coins)
 
 
 def logup_round(prover: LogUpProver, T4: torch.Tensor, rho: list[Ext], rs: list[Ext], i: int, lam: Ext) -> torch.Tensor:
