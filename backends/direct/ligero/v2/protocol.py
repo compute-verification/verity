@@ -521,11 +521,11 @@ def build_tableau1(sysm: V2System, cfg: Config, lay: Layout, units, device) -> t
     W1[:lay.n_cols] = torch.from_numpy(np.ascontiguousarray(cols_np)).to(device)
     W1[lay.n_cols:lay.n_cols + lay.n_prods] = torch.from_numpy(np.ascontiguousarray(prods_np)).to(device)
     # multiplicities: keys of the active units' queries (integer keys, before reduction) -> entry indices
-    # the key Lin's coefficients are stored mod p; an honest key lies in [0, p), so its residue IS the integer key
+    # the keys are integers (the key Lin evaluated over Z on the integer column values): tables with negative keys
+    # (e.g. E - cand) index by the integer, not its residue
     for j, (tname, lins) in enumerate(sysm.lookups):
         td = sysm.tables[tname]
-        kk = units.keys[j] % P
-        idx = kk - td.lo
+        idx = units.keys[j] - td.lo
         ok = (idx >= 0) & (idx < len(td.index_of_key))
         ent = np.where(ok, td.index_of_key[np.clip(idx, 0, len(td.index_of_key) - 1)], -1)
         ent = ent[ent >= 0]

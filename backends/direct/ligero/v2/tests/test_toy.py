@@ -47,7 +47,7 @@ def toy_system():
     ctx.eq("y.z", ys[3], xs[3])
     ctx.eq("ovf0", ovf, 0 * a)
     sq = Table("SQ", 0, 8, ("sq",), lambda k: (k * k,))
-    dbl = Table("DBL", 0, 16, ("dbl",), lambda k: (2 * k,))
+    dbl = Table("DBL", 0, 70, ("dbl",), lambda k: (2 * k,))   # 70 entries > l: 5 multiplicity rows
     (asq,) = ctx.lookup("sq", sq, a)
     (d,) = ctx.lookup("dbl", dbl, ys[1] - xs[1])
     ctx.eq("sq_dbl", asq + d, a * a + 2 * a)
