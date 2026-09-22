@@ -64,6 +64,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
+import math
 import multiprocessing as mp
 import os
 import platform
@@ -672,12 +673,12 @@ def adder_width_tiles(fmt: Format, M: int, K: int):
     for s, (variant, pa, r0, slot_base) in enumerate(cases):
         pe = 2 * pa
         info = [[None] * N for _ in range(M)]
+        # The residual 2^(pe + ratio) = 2^up * 2^fl: the a exponent `up` is one per tile (a row is shared by the eight columns), the
+        # b exponent fl = pe + ratio - up carries the column's ratio; `up` is placed so that the eight fl land mid-range.
+        up = max(lo, min(hi, pe + r0 + N // 2 - (lo + hi) // 2))
         for j in range(N):
             ratio = r0 + j
-            # residual 2^(pe + ratio) = 2^up * 2^fl with both exponents inside the format
-            target = pe + ratio
-            up = max(lo, min(hi, target // 2))
-            fl = target - up
+            fl = pe + ratio - up
             if not (lo <= fl <= hi):
                 continue
             Bt[s, j, 0] = fmt.pow2(pa)
@@ -698,9 +699,10 @@ def adder_width_tiles(fmt: Format, M: int, K: int):
 
 def adder_width_summary(meta: dict, D: np.ndarray) -> dict:
     """Per variant and slot: whether the residual survived (D == 2^(pe+ratio)), was truncated (D == 0) or came back as something
-    else, folded to the most negative surviving ratio and the least negative truncated one."""
+    else (written relative to the pair term P = 2^pe, so the three pair exponents fold), folded to the most negative surviving
+    ratio and the least negative truncated one; a ratio whose verdict differs between pair exponents is listed as inconsistent."""
 
-    table: dict[tuple, dict[int, str]] = {}
+    table: dict[tuple, dict[int, set]] = {}
     for s, info in enumerate(meta["elements"]):
         for i, row in enumerate(info):
             for j, e in enumerate(row):
@@ -709,12 +711,20 @@ def adder_width_summary(meta: dict, D: np.ndarray) -> dict:
                 variant, pe, ratio, slot = e
                 want = int(f32_bits(np.array([2.0 ** (pe + ratio)], np.float32))[0])
                 got = int(D[s, i, j])
-                verdict = "survived" if got == want else ("truncated" if got == 0 else f"{got:08x}")
-                table.setdefault((variant, slot), {})
-                prev = table[(variant, slot)].get(ratio)
-                table[(variant, slot)][ratio] = verdict if prev in (None, verdict) else f"inconsistent({prev},{verdict})"
+                if got == want:
+                    verdict = "survived"
+                elif got == 0:
+                    verdict = "truncated"
+                else:
+                    value = float(np.array([got], np.uint32).view(np.float32)[0])
+                    if value != 0 and np.isfinite(value) and math.log2(abs(value)).is_integer():
+                        verdict = f"{'-' if value < 0 else ''}2^{int(math.log2(abs(value))) - pe:+d}*P"
+                    else:
+                        verdict = f"{got:08x}"
+                table.setdefault((variant, slot), {}).setdefault(ratio, set()).add(verdict)
     out: dict[str, dict] = {}
-    for (variant, slot), by_ratio in sorted(table.items()):
+    for (variant, slot), by_ratios in sorted(table.items()):
+        by_ratio = {r: (next(iter(v)) if len(v) == 1 else "inconsistent(" + ",".join(sorted(v)) + ")") for r, v in by_ratios.items()}
         surv = [r for r, v in by_ratio.items() if v == "survived"]
         trunc = [r for r, v in by_ratio.items() if v == "truncated"]
         other = {r: v for r, v in by_ratio.items() if v not in ("survived", "truncated")}
