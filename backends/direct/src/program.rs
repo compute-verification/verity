@@ -11,8 +11,8 @@
 //! Column allocation is by call order, so the two runs agree on the layout by construction.
 //!
 //! Predicates (the checker's five, section "Predicates" of the checker docstring):
-//!   rng(x, lo, hi)     lo <= x < hi        realised as 2-bit limbs of x - lo (plus an exclusion product or a
-//!                                          second decomposition when hi - lo is not a power of two)
+//!   rng(x, lo, hi)     lo <= x < hi        realised as bits of x - lo (plus an exclusion product or a second
+//!                                          decomposition when hi - lo is not a power of two)
 //!   eq(a, b)           a == b              one polynomial identity
 //!   boolean(b)         b (b - 1) = 0
 //!   lookup(T, key)     one-hot selectors over the table's *distinct* rows; outputs are linear in the selectors
@@ -20,8 +20,12 @@
 
 use crate::params::*;
 
-/// Maximum constraint degree the AIR admits (log_blowup = 2 lets the quotient have degree 4).
-pub const MAX_DEG: usize = 5;
+/// Maximum constraint degree the AIR admits.  Set to 2 (every product is of two columns, every range limb is a
+/// bit): with p3-uni-stark 0.4.3-succinct, constraints of degree >= 3 were found NOT to be enforced (a violated
+/// degree-3 `attained` and a violated degree-4 limb constraint both produced proofs that verified; see
+/// `tests/negative.rs::reproducer_degree_ge3_constraints_unenforced`), so the AIR is kept at degree 2, where
+/// every mutation of the negative suite is rejected by the verifier.
+pub const MAX_DEG: usize = 2;
 
 pub trait Ctx {
     type V: Clone;

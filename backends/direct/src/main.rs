@@ -162,7 +162,7 @@ fn bench(args: &[String]) {
             "preprocessing": "none",
             "retention": "retained",
             "unit": "transition",
-            "constraints": "WP2 gadget contracts as direct AIR constraints; range checks as 2-bit limbs (degree-4), fixed tables as one-hot selectors; no lookup argument",
+            "constraints": "WP2 gadget contracts as direct AIR constraints; range checks as bit decompositions (degree 2), fixed tables as one-hot selectors, every product materialised (max constraint degree 2); no lookup argument",
             "note": "Plonky3 FRI/Keccak is the diagnostic PCS, not Candidate B's Ligero-style interactive PCS (PROTOCOL.md); public words are committed trace cells, not bound to any statement (authentication excluded)"
         },
         "validation": {"status": "passed", "checker": "p3_uni_stark::verify", "detail": format!("proof verified; {units} units in {rows} rows"), "evidence": []},

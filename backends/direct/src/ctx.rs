@@ -124,10 +124,10 @@ impl<P: Prim> Ctx for P {
             let mut prod = self.addk(&y, -n);
             for j in 1..k {
                 let f = self.addk(&y, -(n + j));
-                prod = self.mul_raw(&prod, &f);
+                prod = self.mul(&prod, &f);
             }
             let inv = self.hint(&format!("{name}.inv"), &[&prod], &|v| inv_modp(v[0]));
-            let pi = self.mul_raw(&prod, &inv);
+            let pi = self.mul(&prod, &inv);
             let one = Prim::konst(self, 1);
             self.eq_raw(&format!("{name}.excl"), &pi, &one);
         } else {
@@ -189,14 +189,20 @@ impl<P: Prim> Ctx for P {
     }
 }
 
+/// Bit decomposition (LIMB_BITS = 1: every limb is a boolean, degree 2).  LIMB_BITS = 2 (degree-4 limb
+/// constraint) halves the columns but needs degree >= 3 enforced, which the pinned Plonky3 did not do (MAX_DEG).
+pub const LIMB_BITS: i128 = 1;
+
 fn limbs<P: Prim + ?Sized>(ctx: &mut P, name: &str, y: &P::V, w: i128) {
-    let nl = ((w + 1) / 2) as usize;
+    let nl = ((w + LIMB_BITS - 1) / LIMB_BITS) as usize;
     let mut acc = ctx.konst(0);
     for i in 0..nl {
-        let shift = 2 * i as u32;
+        let shift = (LIMB_BITS as u32) * i as u32;
         let mask = (1i128 << w) - 1;
-        let limb = ctx.hint(&format!("{name}.limb[{i}]"), &[y], &move |v| ((v[0] & mask) >> shift) & 3);
-        if i == nl - 1 && w % 2 == 1 {
+        let lmask = (1i128 << LIMB_BITS) - 1;
+        let limb = ctx.hint(&format!("{name}.limb[{i}]"), &[y], &move |v| ((v[0] & mask) >> shift) & lmask);
+        let top_bits = w - shift as i128;
+        if LIMB_BITS == 1 || (i == nl - 1 && top_bits == 1) {
             ctx.boolean_raw(&format!("{name}.limb[{i}]"), &limb);
         } else {
             ctx.limb4_raw(&format!("{name}.limb[{i}]"), &limb);
