@@ -693,7 +693,7 @@ def bench(a) -> dict:
             res["tc_error"] = repr(e)
             print("tensor-core variant failed:", repr(e), flush=True)
         finally:
-            W_t = W8 = A_t = None                                                          # noqa: F841 - release the torch views before cupy allocates again
+            W_t = W8 = A_t = None                                                          # release the torch views before cupy allocates again
             import torch
 
             torch.cuda.empty_cache()
