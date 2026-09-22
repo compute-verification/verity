@@ -190,15 +190,56 @@ def markdown(rep: dict) -> str:
           f"{lin['ms_median']:.1f}; variant (b) removes them (X = 1,632)."),
           ("* Still modelled: r^T A scalars / pattern (O(rows + pattern)), witness / hint generation (v2 has 15 hints per unit, v1 225: the CPU anchor's 4.7 s per 4,096 "
           "units is a v1 number), prover randomness; the BabyBear repair rows are checker-min's modelled deltas (stated in `V2_SHAPE.md` section 2)."), "",
+          *(_blocked_section(rep) if rep["meta"].get("inverse_blocked") else []),
           "## Files", "",
           ("`backends/direct/encode/V2_SHAPE.md`, `v2_shape.py` / `v2_shape.json`, `buckets_v2.py` (the `F_c`-triple kernel + reference), `v2_bench.py`, "
           f"`results_v2_{rep['meta']['run_ids']['v2_bench']}.json`, `reprice_v2.py` (this report); ledger `ledger/b-v2.jsonl`.")]
     return "\n".join(L) + "\n"
 
 
+def apply_blocked_inverse(bench: dict, inverse: dict, run_id: str) -> dict:
+    """Replace the ``batch_inverse`` rows' timings by the blocked-Montgomery kernel's (``inverse_bench.py``): the ratio best blocked /
+    best plain measured at the v2 helper count is applied to every ``batch_inverse`` row (variant (b) has a smaller N)."""
+    rows = inverse["bench"]["v2"]
+    plain = min((r for r in rows if r["g"] == 1), key=lambda r: r["ms_median"])
+    blocked = min((r for r in rows if r["g"] > 1), key=lambda r: r["ms_median"])
+    ratio = blocked["ms_median"] / plain["ms_median"]
+    for r in bench["results"]:
+        if r.get("bucket") == "batch_inverse":
+            r["ms_median_plain"] = r["ms_median"]
+            r["ms_median"] *= ratio
+            r["ns_per_element"] *= ratio
+            r["bytes_moved"] = int(r["bytes_moved"] * blocked["bytes_moved"] / plain["bytes_moved"])
+            r["traffic_floor_ms"] *= blocked["bytes_moved"] / plain["bytes_moved"]
+            r["name"] += f"+blocked_G{blocked['g']}"
+            r["blocked_run"] = run_id
+    v1rows = inverse["bench"].get("v1", [])
+    v1p = min((r for r in v1rows if r["g"] == 1), key=lambda r: r["ms_median"], default=None)
+    v1b = min((r for r in v1rows if r["g"] > 1), key=lambda r: r["ms_median"], default=None)
+    return {"run": run_id, "g": blocked["g"], "threads": blocked["threads"], "exact": all(inverse["exact"].values()),
+            "v2_plain_ms": plain["ms_median"], "v2_blocked_ms": blocked["ms_median"], "v2_floor_plain_ms": plain["traffic_floor_ms"],
+            "v2_floor_blocked_ms": blocked["traffic_floor_ms"], "ratio": ratio,
+            "v1_plain_ms": v1p and v1p["ms_median"], "v1_blocked_ms": v1b and v1b["ms_median"], "v1_blocked_g": v1b and v1b["g"],
+            "v1_floor_blocked_ms": v1b and v1b["traffic_floor_ms"]}
+
+
+def _blocked_section(rep: dict) -> list[str]:
+    b = rep["meta"]["inverse_blocked"]
+    v1 = (f"  At the v1 helper count (125.9M) the same kernel is {b['v1_blocked_ms']:.1f} ms (G = {b['v1_blocked_g']}, {b['v1_floor_blocked_ms'] / b['v1_blocked_ms']:.2f} of "
+          f"its floor) against 28.8 ms: v1's total becomes {116.4 - 28.8 + b['v1_blocked_ms']:.1f} ms." if b.get("v1_blocked_ms") else "")
+    return ["## Inversions: blocked Montgomery trick (`BatchInverterBlocked`, run `%s`)" % b["run"], "",
+            (f"One stored prefix per G = {b['g']} elements instead of one per element: traffic (3 + 2/G) x 24 N bytes instead of 5 x 24 N, "
+             f"(4 - 1/G) `F_c` products per element instead of 3.  At the v2 helper count: **{b['v2_blocked_ms']:.2f} ms** ({b['v2_floor_blocked_ms'] / b['v2_blocked_ms']:.2f} of its "
+             f"traffic floor {b['v2_floor_blocked_ms']:.2f} ms) against {b['v2_plain_ms']:.2f} ms for the plain kernel ({b['v2_floor_plain_ms'] / b['v2_plain_ms']:.2f} of {b['v2_floor_plain_ms']:.2f}): "
+             f"{1 / b['ratio']:.2f}x.  Bit-exact against `ref.batch_inverse` at N = 1000 / 4097 / 70000, G = 2 / 4 / 8 (`exact = {b['exact']}`)."
+             + v1 + "  The inversions bucket above uses the blocked kernel (the `batch_inverse` rows carry `ms_median_plain`)."), ""]
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench", required=True)
+    ap.add_argument("--inverse", default=None, help="inverse_bench.py result: use the blocked kernel's timings for the inversions bucket")
+    ap.add_argument("--inverse-run", default="")
     ap.add_argument("--v1", default=str(HERE.parents[1] / "numerical/reports/b_measured_4090.json"))
     ap.add_argument("--shape", default=str(HERE / "v2_shape.json"))
     ap.add_argument("--out", default=None)
@@ -207,7 +248,9 @@ def main(argv=None) -> None:
     bench = json.loads(Path(a.bench).read_text())
     shape = json.loads(Path(a.shape).read_text())
     v1 = json.loads(Path(a.v1).read_text())
+    blocked = apply_blocked_inverse(bench, json.loads(Path(a.inverse).read_text()), a.inverse_run) if a.inverse else None
     rep = reprice(bench, shape, v1)
+    rep["meta"]["inverse_blocked"] = blocked
     for r in rep["rows"]:
         print(f"{r['table_side']:20} {r['gpu']:8} {r['t.total_ms']:8.1f} ms  {r['measured_fraction']:.0%} measured  overhead {r['overhead.vs_native_peak']:.3g}")
     print("crossover:", json.dumps({k: v for k, v in rep["crossover"].items() if k != "note"}))

@@ -350,7 +350,7 @@ that is now 40% of B).
 # b-v2 lane: B at the checker-v2 witness shape (2026-09-22, run `r20260922-075021-2b1b`; inversions `r20260922-080235-765c`)
 
 **Question**: B's fully-measured cost at the checker-v2 relation (33 mul / 9 lin / 89 lookups per unit, 5.2M fixed table rows)
-on the 4090.  **Answer**: `46.2 ms` per 4096-VU batch, overhead `1.14e6` (v1: 116.4 ms / 2.89e6), 94% measured -- see
+on the 4090.  **Answer**: `43.6 ms` per 4096-VU batch, overhead `1.08e6` (v1: 116.4 ms / 2.89e6; 104.2 ms with the blocked inversions), 94% measured -- see
 `backends/numerical/reports/b_measured_4090_v2.md`.  Layout and every count: **`V2_SHAPE.md`** (the b-ligero2 lane's next port).
 
 ## v1 vs v2 shape, same kernels (B = 4096, K = 1536, 2^-128, BabyBear^6, HVZK rows, Blake3 leaves)
@@ -362,12 +362,12 @@ on the 4090.  **Answer**: `46.2 ms` per 4096-VU batch, overhead `1.14e6` (v1: 11
 | quadratic rows | 33,485 `F_t` | 3,502 `F_t` + 9,785 `F_c` triples |
 | helpers inverted | 125.9M | 43.6M (37.4M queries + 6.26M table rows) |
 | linear test structure | M = 3, X ~ 256 | M = 2, X = 9,780 (table-side inverse rows) |
-| commitment / lin. test / IRS / quadratic / inversions / openings / modelled | 49.4 / 7.15 / 5.6 / 7.8 / 28.8 / 5.1 / 12.5 ms | 17.4 / 8.29 / 2.10 / 5.4 / 7.8 / 2.5 / 2.7 ms |
-| **total, overhead** | **116.4 ms, 2.89e6** | **46.2 ms, 1.14e6** (0.40x) |
+| commitment / lin. test / IRS / quadratic / inversions / openings / modelled | 49.4 / 7.15 / 5.6 / 7.8 / 28.8 / 5.1 / 12.5 ms | 17.4 / 8.29 / 2.10 / 5.4 / 5.2 / 2.5 / 2.7 ms |
+| **total, overhead** | **116.4 ms, 2.89e6** | **43.6 ms, 1.08e6** (0.37x) |
 
-Crossover: v2 pays 9.6 ms per proof for the tables (11,408 rows + 6.26M inversions + the exceptional rows) and 8.9 us/VU
-after that against v1's 28.4 us/VU: **v2 is cheaper above B = 491 VUs** (215 in committed rows).  Variant (b), public table
-coefficients (MODELLED layout, `V2_SHAPE.md` section 4): 38.8 ms / 9.62e5.
+Crossover: v2 pays 9.2 ms per proof for the tables (11,408 rows + 6.26M inversions + the exceptional rows) and 8.4 us/VU
+after that against v1's 28.4 us/VU: **v2 is cheaper above B = 459 VUs** (215 in committed rows).  Variant (b), public table
+coefficients (MODELLED layout, `V2_SHAPE.md` section 4): 37.0 ms / 9.16e5.
 
 ## Layout (b-v2 files)
 
@@ -398,6 +398,15 @@ with per-table `(beta_T, z_T)`; the helper identity is an `F_c` triple with virt
 unit-major enumeration with `C = 15` per block then the per-table sums then the table side, `M = 2`; one inversion batch per
 table over `queries + |T|`; tables are committed per proof (multiplicities round 1, inverses round 2), nothing preprocessed.
 The v1 conventions above (rows hold whole units, `r_add = rho^idx`, `s` stored not `r^T A`, SIMT not tensor cores) carry over.
+
+## Inversions bucket (task 4): blocked Montgomery trick
+
+`BatchInverterBlocked(g)` stores one prefix per `G` elements: `(3 + 2/G) x 24 N` bytes instead of `5 x 24 N`, `(4 - 1/G)` `F_c` products per
+element instead of 3 (the within-group prefixes are recomputed in registers on the backward pass).  Bit-exact against `ref.batch_inverse`
+(N = 1000 / 4097 / 70000, G = 2 / 4 / 8).  v2 helper count 43.6M: **5.20 ms (G = 4)** vs 7.78 (1.50x; 0.70 of its 3.63 ms floor).
+v1 helper count 125.9M: **16.6 ms (G = 8)** vs 28.8 (1.74x; 0.59 of its 9.74 ms floor).  G = 8 loses at the v2 size (register pressure:
+`el[G][D] + pf[G][D]` = 96 u32 per thread), so pick `G` per N.  The remaining gap to the floor is the `F_c` product chain (a dependent
+chain of 36 Montgomery products per element on the forward pass; more threads do not help since each thread's segment is sequential).
 
 **Not done**: an end-to-end v2 proof (buckets are measured separately on a synthetic witness); the v2 constraint emitter
 (`pi` / scalars from the real system); witness / hint generation for v2; the radix-4 encoder.
