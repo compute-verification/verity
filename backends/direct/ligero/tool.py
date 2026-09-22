@@ -47,6 +47,7 @@ def parse(argv: list[str]) -> dict:
     # bench_result.py (the wrapper that adds the independent Rust verifier and writes result.json) accepts the same argv plus:
     ap.add_argument("--verifier", default=None)         # path of the ligero-verify binary: where the check runs, not what is computed
     ap.add_argument("--threads", type=int, default=None)
+    ap.add_argument("--keep-proofs", type=int, default=None)   # how many verified sub-batch proofs per rep stay on disk afterwards
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     cmd = out["cmd"] = argv[idx]

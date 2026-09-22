@@ -9,6 +9,10 @@ on every recorded rep's sub-batch proof -- with `--coins` = the runner's step-0 
 file proof is sound only against the verifier's own coins) -- and writes one result.json whose measurement names are the same as
 `backends/gkr/bench_result.py`'s (prove_wall, verify_wall, verify_python_wall, proof_bytes, depth, soundness_bits, e2e_0ms) so the
 two candidates are `research data select`-able side by side.  Nothing in the prover is touched.
+
+Lane b-sweep: `--keep-proofs N` deletes every dumped sub-batch proof but the first N of each rep once the verifier has
+judged them (the manifest keeps each proof's sha256 and size, `verify/independent.json` every verdict) -- a 2^20-VU rep is
+~14 GB of proofs, more than a run tree should ship; `--dump-reps` (bench-vu) limits how many reps are written at all.
 """
 from __future__ import annotations
 
@@ -58,6 +62,26 @@ def _pop(argv: list[str], flag: str, default=None):
     return default
 
 
+def prune_proofs(proofs_dir: Path, manifest: dict, keep: int) -> dict:
+    """After the independent verifier has run: delete the dumped .stmt/.proof/.coins of every sub-batch but the first
+    ``keep`` of each rep (a 2^20-VU rep is ~14 GB; the manifest keeps every proof's sha256 and byte count, the verdicts
+    stay in verify/independent.json).  Returns {"kept", "deleted", "bytes_deleted"}; manifest entries get "retained"."""
+    kept = deleted = bytes_deleted = 0
+    for e in manifest["files"]:
+        retain = e["sub"] < keep
+        e["retained"] = retain
+        if retain:
+            kept += 1
+            continue
+        for key in ("stmt", "proof", "coins"):
+            p = proofs_dir / e[key] if e.get(key) else None
+            if p is not None and p.is_file():
+                bytes_deleted += p.stat().st_size
+                p.unlink()
+        deleted += 1
+    return {"kept": kept, "deleted": deleted, "bytes_deleted": bytes_deleted}
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     run_dir = Path(os.environ.get("RESEARCH_RUN_DIR") or "backends/direct/ligero/results/bench_result")
@@ -65,6 +89,8 @@ def main(argv: list[str] | None = None) -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
     verifier = _pop(argv, "--verifier")
     threads = int(_pop(argv, "--threads", "1"))
+    keep_proofs = _pop(argv, "--keep-proofs")          # retain only this many sub-batch proofs per dumped rep after verification
+    keep_proofs = None if keep_proofs is None else int(keep_proofs)
     if "bench-vu" not in argv:
         print("bench_result.py: the subcommand must be bench-vu", file=sys.stderr)
         return 2
@@ -126,6 +152,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"verify rep{e['rep']} sub{e['sub']:02d}: {'accept' if accepted else 'REJECT'} {wall:.3f}s ({(doc or {}).get('reason')})", flush=True)
     (v_dir / "independent.json").write_text(json.dumps({"verifier": str(vbin), "verifier_sha256": _sha256(vbin) if vbin and vbin.is_file() else None,
                                                        "threads": threads, "items": verdicts}, indent=1))
+    pruned = None
+    if keep_proofs is not None:
+        pruned = prune_proofs(proofs_dir, man, keep_proofs)
+        man["pruned"] = pruned
+        (proofs_dir / "manifest.json").write_text(json.dumps(man, indent=1, default=str))
+        print(f"bench_result.py: kept {pruned['kept']} sub-batch proofs per rep, deleted {pruned['deleted']} ({pruned['bytes_deleted'] / 1e9:.2f} GB) after verification", flush=True)
     n_acc = sum(1 for v in verdicts if v["accepted"])
     by_rep: dict[int, float] = {}
     for v in verdicts:
@@ -155,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
           "python_verifier": "backends.direct.ligero (live, every rep, every sub-batch; shares code with the prover)",
           "warmup": "one sub-batch (excluded)", "reps": len(reps),
           "dumped_reps": man.get("set", {}).get("dump_reps", len(reps)),    # reps whose proofs were written out and Rust-verified
-          "instances": fp_in.get("instances"), "B_real": fp_in.get("B_real")}
+          "proofs_retained": pruned, "instances": fp_in.get("instances"), "B_real": fp_in.get("B_real")}
     meas = [
         _m("prove_wall", prove_med, "s"), _m("prove_wall_min", min(prove_reps), "s"), _m("prove_wall_max", max(prove_reps), "s"),
         _m("prove_ms_per_vu", prove_med / B * 1e3, "ms"),
