@@ -16,7 +16,6 @@ torch = pytest.importorskip("torch")
 from verity_numerical.bench import instances
 
 from .chain import Layout
-from .tool import parse
 from .vu import STEP, STEPS, _pad_unit, _vu_data, marshal_ids, vu_units
 
 
@@ -69,6 +68,9 @@ def test_marshal_ids_rejects_layout_mismatch():
 
 
 def test_tool_parse_dump_reps():
+    pytest.importorskip("research.store.tool")            # tools/research (the store declaration's only dependency)
+    from .tool import parse
+
     argv = ["python", "backends/direct/ligero/bench_result.py", "bench-vu", "--zk", "--mode", "fiat-shamir", "--batch", "131072",
             "--total-vus", "1048576", "--reps", "3", "--dump-reps", "1", "--verifier", "/workspace/bin/ligero-verify", "--threads", "16"]
     out = parse(argv)
