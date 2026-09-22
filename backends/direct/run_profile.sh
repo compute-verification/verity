@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Profile the two realisations side by side with Plonky3's tracing spans (PROTOCOL.md section 14.6):
 #   bash backends/direct/run_profile.sh babybear [VUS] [QUERIES]
-# Runs `vu-bench` (2-bit limbs) and `vu-bench --lookup` (LogUp) once each with RUST_LOG=info; the span close
+# Runs `vu-bench` (2-bit limbs) and `vu-bench --lookup` (LogUp) once each with RUST_LOG=debug; the span close
 # events (commit to trace data / compute quotient polynomial / commit to quotient poly chunks / open, with the
 # DFT and Merkle spans inside them) go to stderr and are summarised into spans_{limbs,lookup}.txt.
 set -euo pipefail
@@ -29,11 +29,12 @@ import re, sys, collections
 tot = collections.Counter(); cnt = collections.Counter()
 unit = {"ns": 1e-9, "\u00b5s": 1e-6, "us": 1e-6, "ms": 1e-3, "s": 1.0}
 for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
-    m = re.search(r"INFO (.*?): close time\.busy=([0-9.]+)(ns|\u00b5s|us|ms|s)\b", line)
+    line = re.sub(r"\x1b\[[0-9;]*m", "", line)
+    m = re.search(r"(INFO|DEBUG) (.*?): close time\.busy=([0-9.]+)(ns|\u00b5s|us|ms|s)\b", line)
     if not m:
         continue
-    path = re.sub(r"\{[^}]*\}", "", m.group(1))
-    tot[path] += float(m.group(2)) * unit[m.group(3)]; cnt[path] += 1
+    path = re.sub(r"\{[^}]*\}", "", m.group(2))
+    tot[path] += float(m.group(3)) * unit[m.group(4)]; cnt[path] += 1
 for k, v in sorted(tot.items(), key=lambda kv: -kv[1])[:40]:
     print(f"{v:9.2f} s  x{cnt[k]:<5d} {k}")
 EOF

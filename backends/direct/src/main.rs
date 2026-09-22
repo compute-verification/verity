@@ -51,6 +51,7 @@ fn main() {
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
             .with_span_events(FmtSpan::CLOSE)
             .with_target(false)
+            .with_ansi(false)
             .with_writer(std::io::stderr)
             .init();
     }

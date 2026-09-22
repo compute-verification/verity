@@ -726,4 +726,45 @@ the fast configuration is **\(2^{-93.8}\)**, and \(2^{-124.8}\) costs 17% more t
 
 ### 14.6 Where the time goes (profile)
 
-LOOKUP_PROFILE_PLACEHOLDER
+`run_profile.sh` runs both realisations with `RUST_LOG=debug` (a `tracing_subscriber` behind the env var prints
+Plonky3's `info_span!`s on close with their busy time; for the lookup prover the stage timers of `lookup_stark.rs`
+are printed as `lookup stages:`).  Run `r20260922-072959-ef63`, same configuration as 14.5, summary in
+`results/profile_spans_babybear_4096_r20260922-072959-ef63.txt`.  Busy seconds inside `prove` (12 threads):
+
+| stage | 2-bit limbs (width 2 930) | LogUp (401 + 6 + 456) | what it is |
+|---|---|---|---|
+| quotient evaluation | **102.0** (69%) | **36.7** (68%) | every constraint on every row of the 4x LDE coset, packed: the CPU bottleneck in both |
+| commit: coset LDE | 20.9 | 7.3 (3.3 main + 3.5 aux + 0.5 P, quotient) | DFT of the committed columns |
+| commit: Merkle (Keccak) | 13.8 | 5.0 | hashing the LDE rows |
+| open (`reduce matrix quotient`) | 7.3 | 3.0 | DEEP quotients over all committed matrices |
+| FRI (commit phase, 19 folds) | 0.5 | 0.5 | |
+| witness (outside `prove`) | 21.6 | 5.5 | integer forward run + hint materialisation (single pass, Rayon over VUs) |
+| total prove | 148 | 54 | |
+
+Reading:
+
+- **Constraint evaluation, not committed bytes, is the CPU bottleneck** in both realisations: 69% / 68% of `prove`.
+  With 2-bit limbs the quotient pass evaluates 3 247 constraints of degree \(\le 3\) per coset row, most of them
+  the trivial `l(l-1)(l-2)(l-3)` limb constraints and the wide limb recompositions -- cheap each, but 2 930 columns
+  of coset data stream through it.  With LogUp the program's constraints (402 base constraints, incl. the chain
+  tail) remain and the lookup adds 112 helper constraints + the \(g\) and \(S\) constraints over \(F_{ext}\), each
+  helper a degree-4 product over its 4 query terms; after the `prod_and_sum` rewrite (one extension multiplication
+  per query term instead of three) the pass is 2.8x cheaper -- the same factor as the total, so on CPU the
+  quotient pass scales with committed width \(\times\) constraint degree, and there is no separate encoding wall.
+- Encoding (LDE + Merkle) is 23% of `prove` in both; per committed base column it costs the same (\(\approx
+  12\) ms per column at \(2^{19}\) rows on 12 threads).  On the GPU (tensor.md) this is the part that becomes the whole
+  story, and it fell 3.4x in bytes.  The \(2^{19}\)-row LDE of a 2 930-column trace also set the 31 GB peak RSS;
+  the lookup prover peaks at 9.5 GB.
+- The lookup-specific work is small: `aux_build` (batch inversion of the 116 722 table denominators, the per-row
+  sums over 391 queries, the prefix sum) is 0.5 s, the preprocessed round 0.3 s.  The aux round's LDE + Merkle
+  (5.8 s) is the price of 456 base columns of extension helpers; BabyBear\(^5\) adds 114 more (7.3 s) and a wider
+  quotient pass (44 s), hence 70.4 s total.
+- Witness generation fell 4x (21.6 s to 5.5 s): the 1 868 2-bit limb decompositions per row are no longer
+  computed and written; the multiplicity histogram is one pass over the query values.
+
+Where the next factor is: (i) the committed aux width -- the 112 helpers could be halved by sharing one helper
+across two tables (a second \(\beta\)-power keeps the degree at 4) and \(g\) folded into \(S\), saving \(\approx
+60\) extension columns of encoding and of quotient input; (ii) the 401 main columns are now mostly the program's own
+hints (words, carries, quotients, selectors), which lookups do not touch -- that is a relation-side question
+(section 12.2's per-gadget census); (iii) on the GPU only the encoding term matters and the 3.4x is the number to
+carry to tensor.md.

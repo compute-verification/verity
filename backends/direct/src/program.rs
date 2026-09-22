@@ -490,6 +490,11 @@ fn leading_bit<C: Ctx>(ctx: &mut C, v: &C::V, tag: &str) -> C::V {
     l
 }
 
+/// Shifts that do not panic on adversarial (overridden) hint inputs in debug builds: the hint closures run on
+/// whatever the row supplies (`IntCtx::overrides`, the battery); the constraints, not these closures, are the check.
+fn shl(v: i128, k: i128) -> i128 { if (0..127).contains(&k) { v << k } else { 0 } }
+fn shr(v: i128, k: i128) -> i128 { if (0..127).contains(&k) { v >> k } else if v < 0 { -1 } else { 0 } }
+
 /// Normalise: (e1, M)
 fn normalise<C: Ctx>(ctx: &mut C, e: &C::V, l: &C::V, v: &C::V, tag: &str) -> (C::V, C::V) {
     let clamp = ctx.hint(&format!("{tag}.clamp"), &[e, l], &|x| ((x[0] + x[1] - WIDTH) < E_MIN) as i128);
@@ -497,13 +502,13 @@ fn normalise<C: Ctx>(ctx: &mut C, e: &C::V, l: &C::V, v: &C::V, tag: &str) -> (C
         let (e, l, v) = (x[0], x[1], x[2]);
         let e1 = (e + l - WIDTH).max(E_MIN);
         let k = e - e1 + ACC_SIG - WIDTH;
-        if k >= 0 { v << k } else { v >> -k }
+        if k >= 0 { shl(v, k) } else { shr(v, -k) }
     });
     let r = ctx.hint(&format!("{tag}.r"), &[e, l, v], &|x| {
         let (e, l, v) = (x[0], x[1], x[2]);
         let e1 = (e + l - WIDTH).max(E_MIN);
         let k = e - e1 + ACC_SIG - WIDTH;
-        if k >= 0 { 0 } else { v - ((v >> -k) << -k) }
+        if k >= 0 { 0 } else { v - shl(shr(v, -k), -k) }
     });
     ctx.boolean(&format!("{tag}.clamp"), &clamp);
     ctx.rng(&format!("{tag}.M"), &m, 0, 1 << ACC_SIG);
