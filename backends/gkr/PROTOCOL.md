@@ -851,9 +851,9 @@ unchanged**: the query terms \((1-e/n)^t,((k+l)/n)^t,(2k/n)^t\) do not depend on
 | BabyBear, degree 4 | \(2^{-118.3}\) | \(2^{-114.2}\) | \(2^{-96.5}\) | \(2^{-109.6}\) | \(2^{-136.0}\) | \(2^{-96.5}\) at \(t=192\); `tensor.md`: \(2^{-81.4}\) at its first configuration — a \(2^{-80}\) point, not built |
 
 Degree 5 misses \(2^{-128}\) (lookup term \(\approx2^{-127}\), section 2). logUp's \(\mathrm{char}\,F>N\) (Hab22
-Lemma 5) holds for every table: the largest, `R16`, has \(139\cdot96\cdot4096+5\cdot4096+2^{16}=54\,722\,560\) leaves at
-\(B=4096\) (\(n_T=26\), one less than Goldilocks' 28 since the R7–R14 chunks left `R16`), \(<2^{31}\); the study's
-\(B=2^{20}\) failure point stands. The chain functional's Schwartz–Zippel term is \(195B/|F_c|<2^{-165}\).
+Lemma 5) holds for every table: the largest, `R16`, has \(139\cdot96\cdot4096+\text{epilogue chunks}+2^{16}\approx5.5\cdot10^7\)
+leaves at \(B=4096\) (\(n_T=26\); it was 28 before the R7–R14 chunks left `R16`, for both fields), \(<2^{31}\); the
+study's \(B=2^{20}\) failure point stands. The chain functional's Schwartz–Zippel term is \(195B/|F_c|<2^{-165}\).
 
 ### 13.6 Recorded runs
 
