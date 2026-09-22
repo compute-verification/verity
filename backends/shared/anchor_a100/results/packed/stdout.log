@@ -1,0 +1,26 @@
+36 passed in 61.24s (0:01:01)
+t=2^20 k=0:    3.352 ms  matmul-only    3.743 ms  util round 0.0064 matmul 0.0057  MACs 6.644e+09 (model 6.644e+09)  mem 0.38 GB  [11s]
+t=2^20 k=1:    2.877 ms  matmul-only    3.471 ms  util round 0.0043 matmul 0.0036  MACs 3.876e+09 (model 3.876e+09)  mem 0.27 GB  [14s]
+t=2^20 k=2:    2.614 ms  matmul-only    2.932 ms  util round 0.0031 matmul 0.0028  MACs 2.517e+09 (model 2.517e+09)  mem 0.23 GB  [17s]
+t=2^20 k=3:    2.541 ms  matmul-only    2.565 ms  util round 0.0029 matmul 0.0029  MACs 2.290e+09 (model 2.290e+09)  mem 0.25 GB  [22s]
+t=2^20 k=4:    3.493 ms  matmul-only    2.914 ms  util round 0.0028 matmul 0.0034  MACs 3.083e+09 (model 3.083e+09)  mem 0.27 GB  [67s]
+t=2^22 k=0:    5.997 ms  matmul-only    7.660 ms  util round 0.0142 matmul 0.0111  MACs 2.658e+10 (model 2.658e+10)  mem 1.73 GB  [70s]
+t=2^22 k=1:    4.873 ms  matmul-only    7.087 ms  util round 0.0102 matmul 0.0070  MACs 1.550e+10 (model 1.550e+10)  mem 0.98 GB  [72s]
+t=2^22 k=2:    3.959 ms  matmul-only    4.961 ms  util round 0.0081 matmul 0.0065  MACs 1.007e+10 (model 1.007e+10)  mem 0.61 GB  [75s]
+t=2^22 k=3:    3.660 ms  matmul-only    3.824 ms  util round 0.0080 matmul 0.0077  MACs 9.160e+09 (model 9.160e+09)  mem 0.44 GB  [78s]
+t=2^22 k=4:    6.760 ms  matmul-only    4.260 ms  util round 0.0058 matmul 0.0093  MACs 1.233e+10 (model 1.233e+10)  mem 0.51 GB  [81s]
+t=2^24 k=0:   16.147 ms  matmul-only   27.868 ms  util round 0.0211 matmul 0.0122  MACs 1.063e+11 (model 1.063e+11)  mem 8.74 GB  [86s]
+t=2^24 k=1:   10.625 ms  matmul-only   20.883 ms  util round 0.0187 matmul 0.0095  MACs 6.201e+10 (model 6.201e+10)  mem 4.51 GB  [90s]
+t=2^24 k=2:    7.422 ms  matmul-only   11.628 ms  util round 0.0174 matmul 0.0111  MACs 4.027e+10 (model 4.027e+10)  mem 1.79 GB  [93s]
+t=2^24 k=3:    6.956 ms  matmul-only    8.335 ms  util round 0.0169 matmul 0.0141  MACs 3.664e+10 (model 3.664e+10)  mem 1.04 GB  [96s]
+t=2^24 k=4:   18.271 ms  matmul-only    9.487 ms  util round 0.0087 matmul 0.0167  MACs 4.933e+10 (model 4.933e+10)  mem 1.25 GB  [99s]
+t=2^26 k=0:   50.220 ms  matmul-only  107.449 ms  util round 0.0271 matmul 0.0127  MACs 4.252e+11 (model 4.252e+11)  mem 34.10 GB  [106s]
+t=2^26 k=1:   30.727 ms  matmul-only   96.911 ms  util round 0.0259 matmul 0.0082  MACs 2.480e+11 (model 2.480e+11)  mem 17.19 GB  [112s]
+t=2^26 k=2:   20.215 ms  matmul-only   52.146 ms  util round 0.0255 matmul 0.0099  MACs 1.611e+11 (model 1.611e+11)  mem 8.87 GB  [118s]
+t=2^26 k=3:   16.579 ms  matmul-only   24.011 ms  util round 0.0283 matmul 0.0196  MACs 1.466e+11 (model 1.466e+11)  mem 4.51 GB  [123s]
+t=2^26 k=4:   64.950 ms  matmul-only   29.911 ms  util round 0.0097 matmul 0.0211  MACs 1.973e+11 (model 1.973e+11)  mem 4.14 GB  [129s]
+k=0: batch 1577.7 ms (padded) / 943.1 ms (unpadded); per VU 385.19 us; fit 0.704 ns/elem + 3.251 ms
+k=1: batch 937.5 ms (padded) / 563.0 ms (unpadded); per VU 228.87 us; fit 0.415 ns/elem + 3.026 ms
+k=2: batch 596.5 ms (padded) / 360.1 ms (unpadded); per VU 145.62 us; fit 0.262 ns/elem + 2.715 ms
+k=3: batch 476.4 ms (padded) / 289.2 ms (unpadded); per VU 116.31 us; fit 0.208 ns/elem + 2.810 ms
+k=4: batch 2071.0 ms (padded) / 1234.0 ms (unpadded); per VU 505.60 us; fit 0.928 ns/elem + 2.694 ms

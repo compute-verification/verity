@@ -32,6 +32,24 @@ Peak device memory for the B batch: 5.5 GiB with 65,536-row slices (1.07 GB in +
 20.36 GB codeword is never resident -- see the streaming plan).  All SIMT variants in the run: v1 t256 40.2, v1 t512
 38.6, v2 t128 34.8, v2 t256 39.6 (register spill at 16 elements/thread), v2 t512 32.2, v2 t1024 32.7 ms.
 
+**A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6.0+cu124, cupy 14.2.0, Triton 3.2; run
+`r20260922-064413-0508`, same bench and flags, all 8 variants bit-exact; floors at the A100's *measured* copy bandwidth
+1,754 GB/s and datasheet 312 T INT8 MAC/s, `backends/numerical/reports/anchor_a100.md`):
+
+~~~text
+encoder (A100)                          B ms/batch   us/row   codeword GB/s   fraction of A100 HBM floor (14.5 ms)   vs 4090   A ms/batch
+(a) NTT, SIMT, v2 t512                  60.7         0.195    336             0.24                                    0.53x     11.6
+(a) NTT, SIMT, v2 t1024 (best here)     57.4         0.185    355             0.25                                    0.57x     11.0
+(a) NTT, SIMT, v1 t512                  73.2         0.236    278             0.20                                    0.53x     13.8
+(b) INT8 matrix DFT, Triton fused       607.1        1.955    34              0.055 of INT8 peak                      0.28x     94.6
+(b) INT8 matrix DFT, cuBLAS unfused     9,146 (scaled from 8,192 rows)        0.004 of INT8 peak                      1.66x     1,439
+~~~
+
+The encoder does **not** scale with bandwidth: on the A100 it is 0.53x the 4090 (the bandwidth ratio is 2.02x) and sits at
+0.24 of the HBM floor -- INT32/shared-memory-bound (the A100's INT32 rate and shared-memory bandwidth are ~0.47x the 4090's;
+503 vs 948 G butterflies/s).  The 4090's 0.78 of *its* HBM floor was that card's higher ALU:bandwidth ratio, not a
+memory-bound kernel.  Recommendation 5 below ("scales with bandwidth") and the A100/H100 scaling rows are superseded.
+
 **Verdict.**  The SIMT NTT beats the fused tensor-core matrix DFT by **5.3x** and the cost model's tensor-core encoder
 (`rs_matrix_ntt` at 0.172: 413 ms per B batch) by **13x**, at 0.78 of the read+write roofline.  The tensor-core kernel
 reaches the utilisation the model assumed (0.184 vs 0.172) and still loses, because its compute floor at 100% of the
@@ -189,6 +207,25 @@ measured and the rest modelled); H100 scaling 7.9e6, A100 1.4e7 (INT32 issue-rat
 No bucket of B is a tensor-core operation; the IRS combination and the inversions are memory-streaming, the rest is
 integer SIMT arithmetic.
 
+**A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, run `r20260922-080250-cff5`, same bench and flags, 22/22 roots bit-exact;
+`backends/numerical/reports/anchor_a100.md` section 6).  The fused commitment does **not** carry over to the anchor:
+
+~~~text
+bucket (A100)                                   4090 ms   A100 ms   ratio   note
+commitment, Blake3, fused, 512-row slices       46.7      122.4     0.39x   the L2-slice pipeline loses: 256-row 155, 1024-row 110, 4096-row 100, 65,536-row 98.0 (best); overlap variants 15-30% slower
+  ... + cosets kept                             49.4      123.0     0.40x
+commitment, SHA-256, fused (best slice)         58.3      164.5     0.35x
+IRS row combination, chunk 1024                 5.65      7.60      0.74x   0.38 of the measured-bandwidth read floor (5.09 GB at 1,754 GB/s = 2.9 ms)
+quadratic test, s1024                           9.37      16.0      0.58x
+linear test, general path, s512                 212       325       0.65x
+helper inversions, T = 262144                   28.8      19.5      1.48x   HBM-bound: the one bucket that scales with bandwidth
+column openings from the store (+ paths)        3.75      3.01 (+1.3) 1.24x
+~~~
+
+The best A100 commitment is the **unfused** path: SIMT NTT v2 57.4 ms + Blake3 tree 54.0 ms = 111 ms (section 1-2 of the
+anchor report) against 98-123 ms fused; the b-commit A100 *scaling* row (262.7 ms / 6.51e6 for B) is superseded by the
+measured 213 ms / 5.27e6.
+
 **Still modelled**: `r^T A` generation (the sparse per-unit constraint combination, 8.9 ms in the model), witness
 generation (0.4 ms in the model; no GPU witness kernel exists on main -- the b-ligero lane's generator is Rust/CPU),
 prover randomness (3.2 ms at an assumed 100 GB/s).
@@ -284,6 +321,11 @@ structured, M = 4 + 256 exceptional rows                13.67       0           
 structured, lazy reduction (4 rows of 64-bit products per REDC), M = 2 / 3 / 4 + 256:   5.90 / 7.15 / 7.68           0.86 / 0.71 / 0.66   yes
   split (M = 3 lazy, the chain layout's configuration): combine 6.95 + encode V 0.07 + F_c pointwise 0.05 + exceptional rows 0.08; G = enc(E_m) once per batch 0.16
 ~~~
+
+A100 (anchor-a100 lane, run `r20260922-080250-cff5`, all checks bit-exact): structured M = 1 / 2 / 3 / 4 + 256 exceptional =
+9.53 / 14.60 / 20.52 / 27.91 ms plain, **5.18 / 7.79 / 11.23 / 14.57 ms lazy** (4090 lazy 6.25 / 5.90 / 7.15 / 7.68: 1.21x /
+0.76x / 0.64x / 0.53x -- M = 1 lazy is at the A100's read floor, the higher M are INT32-issue-bound at 0.47x the 4090's rate).
+General path 325-540 ms on the A100 (0.31-0.65x), so the shortcut is 29-47x there.
 
 **Speed-up 26x (M = 1) / 21x (M = 3, lazy) / 11x (M = 4, plain)**; the linear test falls from 58% of the B batch to 6%.
 The per-row cost of the exceptional rows is the general path's 0.48 us/row (256 rows = 0.12 ms).  The lazily reduced

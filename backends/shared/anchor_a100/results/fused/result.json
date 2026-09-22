@@ -1,0 +1,848 @@
+{
+ "schema": "research/result/v0.1",
+ "run_id": "r20260922-064953-f9bb",
+ "workload_fingerprint": {
+  "profile": "first-campaign-target/2026-09-21",
+  "domain": "finite",
+  "K": 1536,
+  "B": 4096,
+  "N_subbatches": 1,
+  "proof_class": "ARITHMETIC_DIAGNOSTIC",
+  "authentication": "excluded",
+  "zk_mode": "none",
+  "security": {
+   "target": -128,
+   "challenge_field": "BabyBear^6",
+   "note": "operating point of the priced design; nothing is proved here"
+  },
+  "hardware": {
+   "gpu": {
+    "name": "NVIDIA A100-SXM4-80GB",
+    "cuda": "12.4",
+    "sm": "8.0",
+    "driver": "580.126.16",
+    "memory": "81920 MiB"
+   },
+   "cpu": {
+    "model": "AMD EPYC 7742 64-Core Processor",
+    "count": 128
+   }
+  },
+  "software": {
+   "backend": {
+    "name": "backends/gkr/tensor/fused",
+    "commit": null,
+    "version": null
+   },
+   "toolchain": {
+    "torch": "2.6.0+cu124",
+    "triton": "3.2.0",
+    "python": "3.12.14",
+    "cuda": "12.4"
+   }
+  },
+  "preprocessing": "none",
+  "retention": "retained",
+  "instances": null,
+  "stage": "tc.sumcheck.fused",
+  "kind": "kernel measurement (not a proof): fused degree-3 GKR round (SIMT and tensor-core Triton kernels), random tables",
+  "config": {
+   "out": "/workspace/research/runs/r20260922-064953-f9bb",
+   "impl": [
+    "simt",
+    "tc"
+   ],
+   "sizes": [
+    23,
+    22,
+    21,
+    20,
+    18,
+    16,
+    14,
+    12
+   ],
+   "repeats": 7,
+   "warm": 2,
+   "block": null,
+   "warps": null,
+   "test": true,
+   "layers": true,
+   "flush": true,
+   "field": "BabyBear p=2^31-2^27+1, F_p^6 = F_p[X]/(X^6 - 22)",
+   "units": 4096,
+   "layer_widths": [
+    137,
+    679,
+    673,
+    669,
+    647,
+    533
+   ],
+   "l2_flush": true,
+   "tc_error": null
+  },
+  "peaks": {
+   "int8_dense_tops": 624.0,
+   "hbm_bytes_per_s": 2039000000000.0,
+   "fp32_tflops": 19.5,
+   "bf16_dense_tflops": 312.0,
+   "int32_ops_per_s": 9745920000000.0,
+   "source": "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB): INT8 624 TOPS dense, HBM2e 2,039 GB/s, FP32 19.5 TFLOPS"
+  }
+ },
+ "validation": {
+  "status": "passed",
+  "checker": "backends/gkr/tensor/fused/tests/test_fused.py (CUDA path, run before the sweep)",
+  "detail": "kernels == BabyBear^6 reference bit-for-bit on t <= 4096 in every mode; timings are medians of CUDA-event repeats",
+  "evidence": [
+   "bench.json",
+   "agreement_test.log"
+  ]
+ },
+ "measurements": [
+  {
+   "name": "fused.seconds.simt.n8388608.deg6.fold_eval",
+   "value": 0.0018712320327758788,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n8388608.deg6.fold_eval",
+   "value": 484.1567737893197,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n8388608.deg6.fold_eval",
+   "value": 2.0819702513108496,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n8388608.deg6.fold",
+   "value": 0.000654304027557373,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n8388608.deg6.fold",
+   "value": 1384.631036709551,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n8388608.deg6.fold",
+   "value": 0.7279917705697395,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n8388608.deg6.eval",
+   "value": 0.00196835196018219,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n8388608.deg6.eval",
+   "value": 306.8454159712859,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n8388608.deg6.eval",
+   "value": 3.2850417426288914,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n4194304.deg6.fold_eval",
+   "value": 0.0009353600144386291,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n4194304.deg6.fold_eval",
+   "value": 484.2892843477662,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n4194304.deg6.fold_eval",
+   "value": 2.0814005855148325,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n4194304.deg6.fold",
+   "value": 0.0003380480110645294,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n4194304.deg6.fold",
+   "value": 1340.0014707186976,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n4194304.deg6.fold",
+   "value": 0.7522379803504009,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n4194304.deg6.eval",
+   "value": 0.0009895359873771667,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n4194304.deg6.eval",
+   "value": 305.1833302196972,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n4194304.deg6.eval",
+   "value": 3.302932697124561,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n4194304.deg1.fold_eval",
+   "value": 0.0006065919995307922,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n4194304.deg1.fold_eval",
+   "value": 331.897869005409,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n4194304.deg1.fold_eval",
+   "value": 3.0370788550726506,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n4194304.deg1.eval",
+   "value": 5.241600051522255e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n4194304.deg1.eval",
+   "value": 960.2344227958175,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n4194304.deg1.eval",
+   "value": 1.049743662662195,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n2097152.deg6.fold_eval",
+   "value": 0.0004737919867038727,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n2097152.deg6.fold_eval",
+   "value": 478.04188833096765,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n2097152.deg6.fold_eval",
+   "value": 2.1086018288466826,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n2097152.deg6.fold",
+   "value": 0.0001798720061779022,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n2097152.deg6.fold",
+   "value": 1259.1865783494286,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n2097152.deg6.fold",
+   "value": 0.8005167918175478,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n2097152.deg6.eval",
+   "value": 0.0005082560181617736,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n2097152.deg6.eval",
+   "value": 297.0844192777263,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n2097152.deg6.eval",
+   "value": 3.3929749747585443,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n1048576.deg6.fold_eval",
+   "value": 0.00024432000517845155,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n1048576.deg6.fold_eval",
+   "value": 463.51590373160343,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n1048576.deg6.fold_eval",
+   "value": 2.1746826632806915,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n1048576.deg6.fold",
+   "value": 0.00010134399682283402,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n1048576.deg6.fold",
+   "value": 1117.4436725440482,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n1048576.deg6.fold",
+   "value": 0.902058890991005,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n1048576.deg6.eval",
+   "value": 0.0002633279860019684,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n1048576.deg6.eval",
+   "value": 286.7050826851182,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n1048576.deg6.eval",
+   "value": 3.5158079185748647,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n1048576.deg1.fold_eval",
+   "value": 0.00015855999290943147,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n1048576.deg1.fold_eval",
+   "value": 317.4296811980128,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n1048576.deg1.fold_eval",
+   "value": 3.1755064497929206,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n1048576.deg1.eval",
+   "value": 2.0640000700950622e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n1048576.deg1.eval",
+   "value": 609.6371885985675,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n1048576.deg1.eval",
+   "value": 1.653442438964703,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n262144.deg6.fold_eval",
+   "value": 7.82719999551773e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n262144.deg6.fold_eval",
+   "value": 361.7072773943773,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n262144.deg6.fold_eval",
+   "value": 2.7867838525708066,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n262144.deg6.fold",
+   "value": 3.846399858593941e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n262144.deg6.fold",
+   "value": 736.0532716520363,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n262144.deg6.fold",
+   "value": 1.3694660954873445,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n262144.deg6.eval",
+   "value": 7.625599950551986e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n262144.deg6.eval",
+   "value": 247.51322023696983,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n262144.deg6.eval",
+   "value": 4.072509739216912,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n65536.deg6.fold_eval",
+   "value": 3.42399999499321e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n65536.deg6.fold_eval",
+   "value": 206.71401899385916,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n65536.deg6.fold_eval",
+   "value": 4.876302076202895,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n65536.deg6.fold",
+   "value": 2.499200031161308e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n65536.deg6.fold",
+   "value": 283.2061424355498,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n65536.deg6.fold",
+   "value": 3.559244836045157,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n65536.deg6.eval",
+   "value": 3.4976001828908924e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n65536.deg6.eval",
+   "value": 134.90941655029062,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n65536.deg6.eval",
+   "value": 7.471680078197097,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n16384.deg6.fold_eval",
+   "value": 2.8863999992609024e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n16384.deg6.fold_eval",
+   "value": 61.303769417027944,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n16384.deg6.fold_eval",
+   "value": 16.44270832912298,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n16384.deg6.fold",
+   "value": 2.1951999515295028e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n16384.deg6.fold",
+   "value": 80.60641577397642,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n16384.deg6.fold",
+   "value": 12.505208057215592,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n16384.deg6.eval",
+   "value": 3.148800134658813e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n16384.deg6.eval",
+   "value": 37.46341303201895,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n16384.deg6.eval",
+   "value": 26.906251150649037,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n4096.deg6.fold_eval",
+   "value": 2.7904000133275985e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n4096.deg6.fold_eval",
+   "value": 15.853210933455694,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n4096.deg6.fold_eval",
+   "value": 63.5833336370221,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n4096.deg6.fold",
+   "value": 2.112000063061714e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n4096.deg6.fold",
+   "value": 20.945453920049133,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n4096.deg6.fold",
+   "value": 48.12500143695312,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.simt.n4096.deg6.eval",
+   "value": 3.052799962460995e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.simt.n4096.deg6.eval",
+   "value": 9.660377477280187,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.simt.n4096.deg6.eval",
+   "value": 104.34374871692854,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n8388608.deg6.fold_eval",
+   "value": 0.006246111869812012,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n8388608.deg6.fold_eval",
+   "value": 145.04537909073133,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n8388608.deg6.fold_eval",
+   "value": 6.949549212246589,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n8388608.deg6.fold",
+   "value": 0.00219980788230896,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n8388608.deg6.fold",
+   "value": 411.84035719022745,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n8388608.deg6.fold",
+   "value": 2.4475503247837573,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n4194304.deg6.fold_eval",
+   "value": 0.0031305599212646485,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n4194304.deg6.fold_eval",
+   "value": 144.69770373122526,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n4194304.deg6.fold_eval",
+   "value": 6.966247383388691,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n4194304.deg6.fold",
+   "value": 0.0011072640419006348,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n4194304.deg6.fold",
+   "value": 409.10281094511566,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n4194304.deg6.fold",
+   "value": 2.4639283158952217,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n2097152.deg6.fold_eval",
+   "value": 0.0015687999725341798,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n2097152.deg6.fold_eval",
+   "value": 144.37303669385764,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n2097152.deg6.fold_eval",
+   "value": 6.981913126461829,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n2097152.deg6.fold",
+   "value": 0.0005609279870986938,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n2097152.deg6.fold",
+   "value": 403.7816283182698,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n2097152.deg6.fold",
+   "value": 2.496398868364243,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n1048576.deg6.fold_eval",
+   "value": 0.0007960960268974304,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n1048576.deg6.fold_eval",
+   "value": 142.2519447074074,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n1048576.deg6.fold_eval",
+   "value": 7.086019119621293,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n1048576.deg6.fold",
+   "value": 0.00028799998760223387,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n1048576.deg6.fold",
+   "value": 393.2160169270841,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n1048576.deg6.fold",
+   "value": 2.563476452147976,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n262144.deg6.fold_eval",
+   "value": 0.00020995199680328368,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n262144.deg6.fold_eval",
+   "value": 134.84773867869782,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n262144.deg6.fold_eval",
+   "value": 7.47509754243462,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n262144.deg6.fold",
+   "value": 8.35840031504631e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n262144.deg6.fold",
+   "value": 338.7197422099439,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n262144.deg6.fold",
+   "value": 2.9759115705019212,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n65536.deg6.fold_eval",
+   "value": 5.7631999254226684e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n65536.deg6.fold_eval",
+   "value": 122.8117728274178,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n65536.deg6.fold_eval",
+   "value": 8.207682185457088,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n65536.deg6.fold",
+   "value": 3.3440001308918e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n65536.deg6.fold",
+   "value": 211.65932185871125,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n65536.deg6.fold",
+   "value": 4.7623699780767,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n16384.deg6.fold_eval",
+   "value": 2.8799999505281448e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n16384.deg6.fold_eval",
+   "value": 61.4400010553996,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n16384.deg6.fold_eval",
+   "value": 16.406249718177907,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n16384.deg6.fold",
+   "value": 1.897599920630455e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n16384.deg6.fold",
+   "value": 93.24789597441139,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n16384.deg6.fold",
+   "value": 10.809895381195625,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n4096.deg6.fold_eval",
+   "value": 2.316799946129322e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n4096.deg6.fold_eval",
+   "value": 19.093923095909265,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n4096.deg6.fold_eval",
+   "value": 52.79166543914471,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.seconds.tc.n4096.deg6.fold",
+   "value": 1.648000068962574e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.gb_per_s.tc.n4096.deg6.fold",
+   "value": 26.84271732333563,
+   "unit": "GB/s"
+  },
+  {
+   "name": "fused.floor_multiple.tc.n4096.deg6.fold",
+   "value": 37.55208490474615,
+   "unit": "ratio"
+  },
+  {
+   "name": "fused.layers.simt.eager",
+   "value": 0.013397408127784727,
+   "unit": "s"
+  },
+  {
+   "name": "fused.layers.simt.graphed",
+   "value": 0.012347424030303953,
+   "unit": "s"
+  },
+  {
+   "name": "fused.layers.simt.hbm_floor",
+   "value": 0.0018143084021579206,
+   "unit": "s"
+  },
+  {
+   "name": "fused.layers.simt.tail_graphed",
+   "value": 0.0028555200397968293,
+   "unit": "s"
+  },
+  {
+   "name": "t.total",
+   "value": 0.012347424030303953,
+   "unit": "s"
+  },
+  {
+   "name": "t.arithmetic",
+   "value": 0.012347424030303953,
+   "unit": "s"
+  },
+  {
+   "name": "fused.layers.tc.eager",
+   "value": 0.022393184304237368,
+   "unit": "s"
+  },
+  {
+   "name": "fused.layers.tc.graphed",
+   "value": 0.02085456001758575,
+   "unit": "s"
+  },
+  {
+   "name": "fused.layers.tc.hbm_floor",
+   "value": 0.0018143084021579206,
+   "unit": "s"
+  },
+  {
+   "name": "fused.layers.tc.tail_graphed",
+   "value": 0.002100863993167877,
+   "unit": "s"
+  },
+  {
+   "name": "fused.launch.simt.eager_single",
+   "value": 6.380800157785416e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.launch.simt.graphed_per_kernel",
+   "value": 2.1926000714302064e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.launch.tc.eager_single",
+   "value": 6.828799843788146e-05,
+   "unit": "s"
+  },
+  {
+   "name": "fused.launch.tc.graphed_per_kernel",
+   "value": 1.3132999651134013e-05,
+   "unit": "s"
+  },
+  {
+   "name": "mem.peak_device_bytes",
+   "value": 1199576064,
+   "unit": "B"
+  }
+ ],
+ "measurement_files": [
+  "bench.json",
+  "agreement_test.log"
+ ],
+ "artifacts": [
+  "bench.json",
+  "agreement_test.log"
+ ]
+}
