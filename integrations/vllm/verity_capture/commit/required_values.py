@@ -682,6 +682,7 @@ class Traversal:
                     self._um(f"{fam} under {collector_path(mod, prefix)} ({member}: soft-cap chain without a hinted producer; default claim {g['family']})")
         # shared RotaryEmbedding: one module instance called once per layer -> alias (first path, invocation = layer order)
         rope_alias = RM.shared_module_aliases(groups, shared=self.q.shared_rope)     # [R17-39 (c)] one rule, signature-grouped, fail-closed
+        rope_alias.update(RM.collective_site_aliases(groups))                        # [R19 moe F-r19-moe-1] mid-module collective sites -> (module, k)
         for m, (canon, k) in rope_alias.items():
             if m != canon:
                 self.aliases[collector_path(m, prefix)] = [collector_path(canon, prefix), k]
@@ -689,7 +690,7 @@ class Traversal:
             op = collector_path(mod, prefix)
             if mod in rope_alias:
                 canon, k = rope_alias[mod]
-                yield self._mk("instance_outputs", step, k, collector_path(canon, prefix), member, 0, g["rows"] * g["width"], rows=g["rows"], width=g["width"],
+                yield self._mk(RM.alias_family(member), step, k, collector_path(canon, prefix), member, 0, g["rows"] * g["width"], rows=g["rows"], width=g["width"],
                                dtype=g["dtype"], spec=g["family"], program_op_path=op, **g.get("extras", {}))
                 continue
             fam_label = "tp_rank_partials" if member.startswith(_DECLARED_MEMBER_PREFIXES) else "instance_outputs"
@@ -1230,6 +1231,7 @@ def reference_required_values(program: ProgramView | dict[str, Any], query: Quer
                 if m == mod and not g["hinted"]:
                     unmodelled[f"{fam} under {collector_path(mod, prefix)} ({member}: soft-cap chain without a hinted producer; default claim {g['family']})"] += 1
         rope_alias = RM.shared_module_aliases(groups, shared=q.shared_rope)          # [R17-39 (c)] one rule, signature-grouped, fail-closed
+        rope_alias.update(RM.collective_site_aliases(groups))                        # [R19 moe F-r19-moe-1] mid-module collective sites -> (module, k)
         for m, (canon, k) in rope_alias.items():
             if m != canon:
                 aliases[collector_path(m, prefix)] = [collector_path(canon, prefix), k]
@@ -1237,7 +1239,7 @@ def reference_required_values(program: ProgramView | dict[str, Any], query: Quer
             op = collector_path(mod, prefix)
             if mod in rope_alias:
                 canon, k = rope_alias[mod]
-                out.append(mk("instance_outputs", step, k, collector_path(canon, prefix), member, 0, g["rows"] * g["width"], rows=g["rows"], width=g["width"],
+                out.append(mk(RM.alias_family(member), step, k, collector_path(canon, prefix), member, 0, g["rows"] * g["width"], rows=g["rows"], width=g["width"],
                               dtype=g["dtype"], spec=g["family"], program_op_path=op, **g["extras"]))
                 continue
             label = "tp_rank_partials" if member.startswith(_DECLARED_MEMBER_PREFIXES) else "instance_outputs"

@@ -69,6 +69,32 @@ def _committed(committer: Any, step: int, m: Any) -> bytes | None:
     return None
 
 
+def _ref_key(member: str, occ: int) -> str:
+    """Reference-tap key of the `occ`-th commit of `member` in a step: the member itself for the first (every site of R15-R18 commits each
+    member once per step), `<member>#<occ>` for a mid-module site's later calls (R19: OlmoeAttention's k gather is `#1`)."""
+    return member if occ == 0 else f"{member}#{occ}"
+
+
+def _split_ref_key(key: str) -> tuple[str, int]:
+    if "#" in key:
+        m, o = key.rsplit("#", 1)
+        return m, int(o)
+    return key, 0
+
+
+def _metas_by_name(layouts: list) -> dict[str, list]:
+    """Layout metas of one step grouped by committed name IN COMMIT ORDER (the binder's occurrence k = position k)."""
+    out: dict[str, list] = {}
+    for m in layouts:
+        out.setdefault(m.name, []).append(m)
+    return out
+
+
+def _nth(by_name: dict[str, list], name: str, k: int):
+    ms = by_name.get(name) or []
+    return ms[k] if k < len(ms) else None
+
+
 class TPPartialSource:
     short_name = "tp_partial"
     ns_name = "tp_partial"
@@ -118,6 +144,15 @@ class TPPartialSource:
         nested = [(n, c) for n, c in self.sites if c in MOE_SITE_CLASSES and any(n.startswith(p + ".") for p in moe_paths)]
         self.sites = [s for s in self.sites if s not in nested]
         self.nested_moe_sites_dropped = [n for n, _c in nested]
+        # [R19 moe F-r19-moe-1, row #70] MID-module sites: model classes that call a collective name bound in THEIR OWN python module
+        # (OlmoeAttention: q and k all-gathered inside `self_attn`, twice per layer).  `collective_sites.mid_module_sites` is the one finder
+        # (shared with the Match recorder); this source hooks the modules for attribution, patches their modules' collective names, binds
+        # each call's rank-local input (`<module>/shard_rank<r>` | `/part_rank<r>`) AND received output (`<module>/out`; no layer module
+        # hook binds it) -- the k-th call of the step is the binder's occurrence k = the manifest's invocation k (`collective_site_aliases`).
+        from verity_capture.tp.collective_sites import mid_module_sites
+        self.mid_sites: dict[str, dict[str, Any]] = {s["name"]: s for s in mid_module_sites(model, self.world)}
+        self.sites += [(s["name"], s["cls"]) for s in self.mid_sites.values() if s["name"] not in {n for n, _c in self.sites}]
+        self._occ: dict[tuple[int, str], int] = {}                       # (step, member) -> calls bound so far (mid-module sites commit a member twice)
         self.modules = [(n, m) for n, m in model.named_modules() if n in {s[0] for s in self.sites}]
         self.cur: tuple[str, str] | None = None
         self._cur_stack: list[tuple[str, str]] = []
@@ -131,9 +166,15 @@ class TPPartialSource:
         return [n for n, _c in self.sites]
 
     def received_site_names(self) -> list[str]:
-        """The sites whose RECEIVED collective output this source binds as `<module>/out` (fused-MoE blocks only; a linear's / embedding's /
-        logits processor's output is the native collector's module hook) -- expected modules of every step for `identity_check`."""
-        return [n for n, c in self.sites if c in MOE_SITE_CLASSES]
+        """The sites whose RECEIVED collective output this source binds as `<module>/out` (fused-MoE blocks and mid-module sites; a
+        linear's / embedding's / logits processor's output is the native collector's module hook) -- expected modules of every step for
+        `identity_check`."""
+        return [n for n, c in self.sites if c in MOE_SITE_CLASSES or n in self.mid_sites]
+
+    def site_counts(self) -> dict[str, int]:
+        """Rank-local partials this source binds per site per step: 1 (one collective per module forward), or a mid-module site's static
+        call count (OlmoeAttention: 2) -- what identity_check requires exactly (`tp_sites_bad` otherwise)."""
+        return {n: int(self.mid_sites[n]["per_step"]) if n in self.mid_sites else 1 for n, _c in self.sites}
 
     def extra_step_bytes(self, envelope: dict[str, Any], model: Any) -> dict[str, int]:
         """Bytes this source adds to ONE step (prefill worst case): every RowParallelLinear partial is (tokens, output_size) bf16,
@@ -162,6 +203,14 @@ class TPPartialSource:
                 h = int(getattr(m, "hidden_size", 0) or getattr(cfg, "hidden_dim", 0) or getattr(cfg, "hidden_size", 0) or 0)
                 per_token += 2 * h * isz
                 n_moe_out += 1
+            elif n in self.mid_sites:
+                # [R19 moe] per call: the rank-local input (<= H per token) and the received output (<= H per token: a gathered q/k row is the
+                # module's full head width); H from the module, else its config -- an upper bound for the arena, exact bytes are the run's
+                cfg = getattr(m, "config", None)
+                h = int(getattr(m, "hidden_size", 0) or (int(getattr(m, "total_num_heads", 0) or 0) * int(getattr(m, "head_dim", 0) or 0))
+                        or getattr(cfg, "hidden_size", 0) or 0)
+                per_token += int(self.mid_sites[n]["per_step"]) * 2 * h * isz
+                n_moe_out += 2 * int(self.mid_sites[n]["per_step"]) - 1                  # per call: partial + out; the site itself counted once below
         return {"per_token_bytes": per_token, "per_seq_bytes": per_seq, "tensors_per_step": len(self.sites) + n_moe_out}
 
     # -- install / uninstall -------------------------------------------------------------------------------------------------
@@ -183,15 +232,23 @@ class TPPartialSource:
         for n, m in self.modules:
             self._handles.append(m.register_forward_pre_hook(pre(n, type(m).__name__)))
             self._handles.append(m.register_forward_hook(post))
+        targets: list[tuple[Any, str, str]] = []
         for modname, attr, kind in SITES:
             try:
-                mod = importlib.import_module(modname)
+                targets.append((importlib.import_module(modname), attr, kind))
             except Exception:  # noqa: BLE001
                 continue
-            if hasattr(mod, attr):
-                orig = getattr(mod, attr)
-                self._patched.append((mod, attr, orig))
-                setattr(mod, attr, self._wrap(kind, orig))
+        if self.mid_sites:
+            from verity_capture.tp.collective_sites import patch_targets
+            targets += patch_targets(list(self.mid_sites.values()))               # [R19 moe] the model classes' own imports of the names
+        done: set[tuple[int, str]] = set()
+        for mod, attr, kind in targets:
+            if (id(mod), attr) in done or not hasattr(mod, attr):
+                continue
+            done.add((id(mod), attr))
+            orig = getattr(mod, attr)
+            self._patched.append((mod, attr, orig))
+            setattr(mod, attr, self._wrap(kind, orig))
         self.active = True
 
     def uninstall(self) -> None:
@@ -233,9 +290,11 @@ class TPPartialSource:
         what = "shard" if kind in ("all_gather", "gather") else "part"
         member = f"{name}/{what}_rank{self.label_rank}"
         self.c._acquire(member, x, job)      # op_path = the issuing module, output_member = part_rank<r> | shard_rank<r>
+        step = int(getattr(job, "step", len(self.ref)))
+        occ = self._occ.get((step, member), 0)                          # [R19 moe] a mid-module site commits this member once per CALL (occurrence k)
+        self._occ[(step, member)] = occ + 1
         if self.reference:
-            step = int(getattr(job, "step", len(self.ref)))
-            self.ref.setdefault(step, {})[member] = _bytes(x)          # independent clone of the collective INPUT at the moment it exists
+            self.ref.setdefault(step, {})[_ref_key(member, occ)] = _bytes(x)   # independent clone of the collective INPUT at the moment it exists
             if step < self.ref_reexec_steps and self._cur_in is not None and _cls == "RowParallelLinear":
                 self.ref_in.setdefault(step, {})[member] = (name, self._cur_in.detach().clone())
         nb = x.numel() * x.element_size()
@@ -253,7 +312,13 @@ class TPPartialSource:
         logits); MoERunner / FusedMoE are not among them and the MoE block collector binds the six block-stream planes and never a module
         output, so this source is the ONE binder of that name (a second binder would be refused by the binding map's duplicate rule)."""
         job = getattr(self.c, "_cur", None)
-        if job is None or y is None or self.cur is None or kind != "all_reduce" or self.cur[1] not in MOE_SITE_CLASSES:
+        if job is None or y is None or self.cur is None:
+            return
+        # [R19 moe F-r19-moe-1] a MID-module site's received output too (any kind: OLMoE's gathered q / k rows are `self_attn/out`, the
+        # module's k-th collective identity; no layer-module hook binds them) -- the same lifetime rule as the MoE block output below: the
+        # gathered row is consumed by q_norm / k_norm (out of place) but its storage is the module's to reuse, so flush right here.
+        mid = self.cur[0] in self.mid_sites
+        if not mid and (kind != "all_reduce" or self.cur[1] not in MOE_SITE_CLASSES):
             return
         if not hasattr(y, "device") or y.device.type != "cuda":
             return
@@ -272,9 +337,11 @@ class TPPartialSource:
         if getattr(self.c, "gather", False) and nc is not None and hasattr(nc, "flush"):
             nc.flush()
             self.stats["received_flushes"] = self.stats.get("received_flushes", 0) + 1
+        step = int(getattr(job, "step", len(self.ref)))
+        occ = self._occ.get((step, member), 0)
+        self._occ[(step, member)] = occ + 1
         if self.reference:
-            step = int(getattr(job, "step", len(self.ref)))
-            self.ref.setdefault(step, {})[member] = _bytes(y)
+            self.ref.setdefault(step, {})[_ref_key(member, occ)] = _bytes(y)
         self.stats["received_bound"] = self.stats.get("received_bound", 0) + 1
         self.stats["bytes"] += y.numel() * y.element_size()
 
@@ -320,11 +387,12 @@ class TPPartialSource:
                                "reexec_equal": 0, "reexec_mismatch": [], "reexec_skipped": {}, "missing_in_commit": [], "by_member": {}}
         mods = dict(self.modules)
         for step, refs in sorted(self.ref.items()):
-            metas = {m.name: m for m in self.c._layouts.get(step, [])}
-            for member, ref in refs.items():
+            by_name = _metas_by_name(self.c._layouts.get(step, []))
+            for rkey, ref in refs.items():
+                member, occ = _split_ref_key(rkey)                        # [R19 moe] the occ-th commit of the member (mid-module sites)
                 kind = member.rsplit("/", 1)[-1].split("_rank")[0]
                 bm = res["by_member"].setdefault(kind, {"tensors": 0, "tap_equal": 0, "reexec": 0, "reexec_equal": 0})
-                m = metas.get(member)
+                m = _nth(by_name, member, occ)
                 committed = _committed(self.c, step, m)
                 if committed is None:
                     res["missing_in_commit"].append((step, member))
@@ -402,9 +470,10 @@ class TPPartialSource:
         received = set(self.received_site_names())
         # [rev-pm M-0585 TIP1] exhaustive in both directions: an oracle step the committer never reached (a Commit that stopped early) FAILs
         res["oracle_steps_not_committed"] = sorted(s for s in by_step if s not in self.c._layouts)
+        mid_counts = {n: int(s["per_step"]) for n, s in self.mid_sites.items()}
         for step in sorted(self.c._layouts):
-            metas = {m.name: m for m in self.c._layouts.get(step, [])}
-            fam = {n for n in metas if n.endswith((f"/part_rank{self.rank}", f"/shard_rank{self.rank}")) or (n.endswith("/out") and n.rsplit("/", 1)[0] in received)}
+            by_name = _metas_by_name(self.c._layouts.get(step, []))
+            fam = {n for n in by_name if n.endswith((f"/part_rank{self.rank}", f"/shard_rank{self.rank}")) or (n.endswith("/out") and n.rsplit("/", 1)[0] in received)}
             pt = cap / f"coll.rank{self.rank}.step{step}.pt"
             if not pt.exists() or step not in by_step:
                 res["steps_without_oracle"].append(step)
@@ -416,21 +485,26 @@ class TPPartialSource:
             if n_part < len(xs) or (any(x.get("module") in received for x in xs) and n_out < len(xs)):
                 res["oracle_inconsistent"].append({"step": step, "jsonl_names": len(xs), "pt_part": n_part, "pt_out": n_out})
                 continue
-            # [TIP3] one oracle record per module per step, else refused for this step
+            # [TIP3] one oracle record per module per step, else refused for this step -- except a MID-module site (R19 moe: OlmoeAttention
+            # gathers q then k), which is recorded exactly its static call count of times and paired by (step, module, occurrence j) with the
+            # committer's j-th commit of the member (the binder's occurrence j); any other multiplicity is still refused
             mods = [x.get("module") for x in xs]
-            dups = sorted({m for m in mods if mods.count(m) > 1})
+            dups = sorted({m for m in mods if mods.count(m) > 1 and mods.count(m) != mid_counts.get(m)})
             if dups:
                 res["duplicate_module_steps"].append({"step": step, "modules": dups[:6]})
                 continue
             seen: set[str] = set()
+            occ_of: dict[str, int] = {}
             for k, x in enumerate(xs):
                 mod = x.get("module")
+                j = occ_of.get(mod, 0)
+                occ_of[mod] = j + 1
                 pairs = [(f"{mod}/{'part' if x['kind'] == 'all_reduce' else 'shard'}_rank{self.rank}", v["part"][k], "partial")]
                 if mod in received:
                     pairs.append((f"{mod}/out", v["out"][k], "out"))
                 for member, oracle_t, what in pairs:
                     bm = res["by_member"].setdefault(what, {"tensors": 0, "equal": 0})
-                    committed = _committed(self.c, step, metas.get(member))
+                    committed = _committed(self.c, step, _nth(by_name, member, j))
                     if committed is None:
                         res["missing_in_commit"].append((step, k, member))
                         continue
@@ -479,11 +553,15 @@ class TPPartialSource:
                  "bytes": self.stats["bytes"], "tensors": self.stats["launches"], "rank": self.rank, "world": self.world,
                  "sites": len(self.sites), "site_names": self.site_names(),
                  "received_site_names": self.received_site_names(), "nested_moe_sites_dropped": self.nested_moe_sites_dropped,
+                 "mid_module_sites": {n: {"cls": s["cls"], "calls": s["calls"]} for n, s in self.mid_sites.items()},          # [R19 moe F-r19-moe-1]
                  "evidence": ("TP-03 source: wraps tensor_model_parallel_all_reduce (linear, vocab_parallel_embedding) and "
-                              "tensor_model_parallel_all_gather/gather (logits_processor) in THIS rank's process; the collective INPUT "
-                              f"(rank {self.rank}'s partial GEMM / masked embedding / logits shard) is snapshotted into the packed step "
+                              "tensor_model_parallel_all_gather/gather (logits_processor) in THIS rank's process, plus the same names in the "
+                              "python module of every model class that calls one directly (mid-module sites, R19 moe: OlmoeAttention's q/k "
+                              "gathers); the collective INPUT "
+                              f"(rank {self.rank}'s partial GEMM / masked embedding / logits shard / mid-module operand) is snapshotted into the packed step "
                               "stream before the collective, attributed to the issuing module by a forward pre-hook; identity_check requires "
-                              f"exactly one partial per site per step ({len(self.sites)} sites); value correspondence: tp2_match.py cross-rank "
+                              f"exactly the declared count of partials per site per step ({len(self.sites)} sites; 1 each, a mid-module site its "
+                              "static call count); value correspondence: tp2_match.py cross-rank "
                               "provenance (received == AllReduce2/AllGather2(part_rank0, part_rank1) bit-exact; part_rank_r == Gemm_v1{K/W} "
                               f"on the shard, R13 tp2_semantics); kinds seen {self.stats['kinds']}; shapes seen {self.stats['shapes']}")}]
 

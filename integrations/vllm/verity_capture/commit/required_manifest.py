@@ -49,6 +49,10 @@ FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights
             "sampler_splits")                   # [R16 reqval REQ-03, stoch M-0254 derived S] additive: only a Program whose `splits` Input a stochastic selector reads
 TP_PARTIAL_MEMBER = "part_rank{rank}"
 TP_SHARD_MEMBER = "shard_rank{rank}"
+#: [R19 moe, row #70 / F-r19-moe-1] a MID-module collective SITE: the frontend names a collective whose rank-local operand is produced by
+#: ANOTHER module (OLMoE `OlmoeAttention._apply_qk_norm`: q and k all-gathered inside `self_attn`, each a slice of `qkv_proj`'s Gemm) under
+#: `<module>.<fx node>` (`model.layers.3.self_attn.all_gather2_7`), not under the bare module.  The leaf is the collective's fx node name.
+_COLLECTIVE_SITE_RE = re.compile(r"^(all_reduce2|all_gather2)(_\d+)?$")
 #: vLLM `LinearBase.forward` returns `(output, output_bias)` (return_bias=True default) -> the Gemm output is tuple slot 0
 _LINEAR_LEAVES = ("qkv_proj", "o_proj", "gate_up_proj", "down_proj", "gate_proj", "up_proj", "out_proj", "fc1", "fc2", "dense",
                   "gate")            # [R14 moe] the MoE router logits GEMM `mlp.gate` is a ReplicatedLinear -> member "0", not a logits `out`
@@ -132,6 +136,17 @@ def split_name(name: str) -> tuple[str, str, str, int | None]:
     mod, node = parts[0], parts[1]
     hint = parts[2] if len(parts) > 2 else ""
     return mod, node, hint, row
+
+
+def collective_site(module: str) -> tuple[str, str] | None:
+    """[R19 moe F-r19-moe-1] `<module>.<collective fx node>` -> (module, node) for a MID-module collective site (see `_COLLECTIVE_SITE_RE`);
+    None for every other module path.  The collector commits the site's output and rank-local shard under the MODULE (its hook is on the
+    module; the k-th collective of the module in the step is occurrence k), so the site's identities live at (module, invocation k) and
+    the site path is an `op_path_aliases` entry (`collective_site_aliases`) -- exactly the shared-RoPE alias mechanism."""
+    if "." not in module:
+        return None
+    parent, leaf = module.rsplit(".", 1)
+    return (parent, leaf) if parent and _COLLECTIVE_SITE_RE.match(leaf) else None
 
 
 def collector_path(program_module: str, wrapper_prefix: str) -> str:
@@ -243,11 +258,18 @@ def members_for(family: str, statics: dict[str, Any], module: str, hint: str, tp
         # (Lift(Q_fine_v1), or a declared padded-boundary Q with its own digest) -- the query decides the boundaries, never the collector.
         out = [("out", int(statics.get("H", 0)), "bf16")]
         return out + (padded_slot_members(statics) if padded_slots else [])
-    if family.startswith("AllReduce2"):
+    if family.startswith(("AllReduce2", "AllGather2")):
         n = int(statics.get("N", 0))
-        return [("0" if (leaf in _LINEAR_LEAVES or "proj" in leaf) else "out", n, "bf16")]   # the all-reduced module output (received by every rank)
-    if family.startswith("AllGather2"):
-        return [("out", int(statics.get("N", 0)) * world, "bf16")]              # the gathered logits (rank shards side by side)
+        gather = family.startswith("AllGather2")
+        # the all-reduced module output (received by every rank) / the gathered row (rank shards side by side)
+        out = [("out", n * world, "bf16")] if gather else [("0" if (leaf in _LINEAR_LEAVES or "proj" in leaf) else "out", n, "bf16")]
+        if tp is not None and collective_site(module) is not None:
+            # [R19 moe F-r19-moe-1, row #70] a MID-module collective site (OLMoE: q / k all-gathered inside `self_attn`, each a slice of the
+            # qkv Gemm's output): no Gemm / EmbeddingShard row under this module produces the rank-local operand, so the collective row
+            # ITSELF carries the partial member (`shard_rank<r>` for a gather, `part_rank<r>` for a reduce; width N = the rank's operand).
+            # Without it the gathered output had no peer partial to bind to (tp_peer_binding: 6,944 unbound per rank on row #70).
+            out.append(((TP_SHARD_MEMBER if gather else TP_PARTIAL_MEMBER).format(rank=rank), n, "bf16"))
+        return out
     if family.startswith("EmbeddingShard"):
         return [(TP_PARTIAL_MEMBER.format(rank=rank), int(statics.get("H", 0)), "bf16")]   # this rank's masked shard lookup (before its all-reduce)
     if family.startswith("Gemm"):
@@ -594,6 +616,37 @@ def shared_module_aliases(groups: dict[tuple, dict], *, shared: bool, family_pre
         for k, m in enumerate(members):
             out[m] = (members[0], k)
     return out
+
+
+def collective_site_aliases(groups: dict[tuple, dict]) -> dict[str, tuple[str, int]]:
+    """[R19 moe F-r19-moe-1, row #70] THE ONE rule every builder applies for a MID-module collective site (`collective_site`): site path ->
+    (module, invocation).  The collector hooks the MODULE and commits the module's k-th collective of the step as occurrence k of
+    (module, member) (binding.build_binding_map's counter), so the site's identities (`out` and `shard_rank<r>` / `part_rank<r>`) are
+    required at (module, k) and the site path is recorded in `op_path_aliases` -- the table sampled_replay resolves every Program row
+    through (`identities_unreachable_by_alias`: an invocation >= 1 identity is addressed ONLY through it).  k counts the module's sites in
+    PROGRAM order (`groups` insertion order = the step's row order; both members of one site share its k); when the module also carries
+    an ordinary (non-site) member, its own identity keeps invocation 0 and the sites start at 1 -- never a collision by (op_path, member,
+    invocation).  OLMoE `self_attn`: the q gather is invocation 0, the k gather invocation 1, on both ranks (same fx node order)."""
+    out: dict[str, tuple[str, int]] = {}
+    next_k: dict[str, int] = {}
+    bare = {mod for (mod, _m) in groups if collective_site(mod) is None}
+    for (mod, _member) in groups:                                  # insertion order: the step's Program order
+        if mod in out:
+            continue
+        site = collective_site(mod)
+        if site is None:
+            continue
+        parent = site[0]
+        k = next_k.get(parent, 1 if parent in bare else 0)
+        out[mod] = (parent, k)
+        next_k[parent] = k + 1
+    return out
+
+
+def alias_family(member: str) -> str:
+    """The manifest family of a member emitted through an alias: a rank-local partial member is `tp_rank_partials`, anything else an
+    instance output (TP-04; the shared-RoPE members are `0` / `1`)."""
+    return "tp_rank_partials" if member.startswith(("part_rank", "shard_rank")) else "instance_outputs"
 
 
 _REQ_RE = re.compile(r"^r(\d+)$")
@@ -945,6 +998,7 @@ def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = No
         # shared modules: vLLM's `get_rope` returns ONE RotaryEmbedding instance for identical parameters, registered under the first layer's
         # path and called once per layer -> the Program's per-layer paths alias (first path, invocation = layer order); recorded in `op_path_aliases`
         rope_alias = shared_module_aliases(groups, shared=shared_rope)          # [R17-39 (c)] one rule, signature-grouped, fail-closed
+        rope_alias.update(collective_site_aliases(groups))                       # [R19 moe F-r19-moe-1] mid-module collective sites -> (module, k)
         for m, (canon, k) in rope_alias.items():
             if m != canon:
                 aliases[collector_path(m, prefix)] = [collector_path(canon, prefix), k]
@@ -952,7 +1006,7 @@ def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = No
             op = collector_path(mod, prefix)
             if mod in rope_alias:
                 canon, k = rope_alias[mod]
-                add("instance_outputs", step, k, collector_path(canon, prefix), member, 0, g["rows"] * g["width"], rows=g["rows"], width=g["width"],
+                add(alias_family(member), step, k, collector_path(canon, prefix), member, 0, g["rows"] * g["width"], rows=g["rows"], width=g["width"],
                     dtype=g["dtype"], spec=g["family"], program_op_path=op, **g.get("extras", {}))
                 continue
             # every module of the request wrapper is called ONCE per engine step (prefill: one call over all prompt rows -- the Program's

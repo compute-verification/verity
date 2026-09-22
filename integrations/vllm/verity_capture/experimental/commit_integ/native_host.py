@@ -2028,7 +2028,9 @@ class NativeHostCommitter:
             modules += [s for s in tp_src.received_site_names() if s not in modules]
         return {"modules": modules, "attention_layers": attn_layers, "fa2_hidden_per_layer": 1 if fa2 else 0, "sampler_ids": 1 if any(n == "runner.sampler" for n in modules) else 0,
                 "moe_layers": moe_layers, "moe_tensors_per_layer": (getattr(moe_src, "stats", {}).get("tensors_per_layer", 6) if moe_src is not None else 0),
-                "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None)}
+                "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
+                # [R19 moe F-r19-moe-1] partials per site per step: 1, or a mid-module site's static call count (OlmoeAttention: 2 gathers)
+                "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {})}
 
     def identity_check(self, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
         """X-03 on IDENTITIES.  For every committed step: (1) every module of the expected manifest produced >= 1 committed tensor and no
@@ -2083,7 +2085,8 @@ class NativeHostCommitter:
             tp_sites = man.get("tp_sites") or []
             tp_counts = Counter(n.rsplit("/", 1)[0] for n in names.elements() if TP_PARTIAL_RE.search(n))
             if tp_sites:
-                tp_bad = {s: tp_counts.get(s, 0) for s in tp_sites if tp_counts.get(s, 0) != 1}
+                tp_want = man.get("tp_site_counts") or {}                     # [R19 moe] a mid-module site binds its static call count per step
+                tp_bad = {s: tp_counts.get(s, 0) for s in tp_sites if tp_counts.get(s, 0) != int(tp_want.get(s, 1))}
                 tp_bad.update({s: c for s, c in tp_counts.items() if s not in tp_sites})
                 rk = man.get("tp_rank")
                 if rk is not None and any(not n.endswith(f"_rank{rk}") for n in names if TP_PARTIAL_RE.search(n)):

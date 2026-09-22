@@ -546,8 +546,16 @@ class TP2CaptureWorkerExtension:
         sites = [(L, "tensor_model_parallel_all_reduce", "all_reduce"), (VE, "tensor_model_parallel_all_reduce", "all_reduce"),
                  (LP, "tensor_model_parallel_all_gather", "all_gather"), (LP, "tensor_model_parallel_gather", "gather")]
         sites += [(mod, "tensor_model_parallel_all_reduce", "all_reduce") for mod in st["moe_sites"]]
+        # [R19 moe F-r19-moe-1, row #70] MID-module sites: a model class that imports a collective name into ITS OWN module and calls it
+        # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
+        # above -- R17 row #70 recorded 34 collectives per step against the Build's 66 links (structure FAIL).  The one finder shared
+        # with the committer's TPPartialSource names the modules (hooked below for attribution) and the python modules to patch.
+        from verity_capture.tp.collective_sites import mid_module_sites, patch_targets
+        mid = mid_module_sites(model, world)
+        st["mid_sites"] = {s["name"]: s for s in mid}
+        sites += patch_targets(mid)
         for mod, attr, kind in sites:
-            if hasattr(mod, attr):
+            if hasattr(mod, attr) and (mod.__name__, attr) not in st["orig"]:
                 st["orig"][(mod.__name__, attr)] = getattr(mod, attr)
                 setattr(mod, attr, coll_wrap(getattr(mod, attr), kind))
 
@@ -569,7 +577,8 @@ class TP2CaptureWorkerExtension:
 
         cand = [(n, type(m).__name__, m) for n, m in model.named_modules()
                 if type(m).__name__ in ("RowParallelLinear", "VocabParallelEmbedding", "LogitsProcessor", "ParallelLMHead") + MOE_COLLECTIVE_CLASSES
-                or getattr(m, "reduce_results", False) is True]
+                or getattr(m, "reduce_results", False) is True
+                or n in st["mid_sites"]]                                          # [R19 moe] mid-module sites: hooked for the module name
         moe_paths = [n for n, c, _m in cand if c in MOE_COLLECTIVE_CLASSES]
         nested_moe = [n for n, c, _m in cand if c in MOE_COLLECTIVE_CLASSES and any(n.startswith(p + ".") for p in moe_paths)]
         hooked = []
@@ -581,6 +590,7 @@ class TP2CaptureWorkerExtension:
             hooked.append(n)
         st["handles"].append(model.register_forward_pre_hook(model_pre, with_kwargs=True))
         meta = {"rank": rank, "world_size": world, "facts": facts, "hooked": hooked, "nested_moe_sites_dropped": nested_moe, "store_steps": int(store_steps),
+                "mid_module_sites": {n: {"cls": s["cls"], "py_module": s["py_module"], "calls": s["calls"]} for n, s in st["mid_sites"].items()},
                 "attribution_rule": "outermost hooked module (cur is a stack; a fused-MoE runner nested under a hooked fused-MoE wrapper is not hooked)"}
         (out / f"coll_meta.rank{rank}.json").write_text(json.dumps(meta, indent=1, default=str) + "\n")
         return _jsonable({"rank": rank, "world_size": world, "n_hooked": len(hooked)})
