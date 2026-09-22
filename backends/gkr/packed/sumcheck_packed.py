@@ -605,14 +605,12 @@ def prove(kernel: Kernel, gammas: list[ref.Ext], g: torch.Tensor, h: torch.Tenso
     u_pass = fusion and k and kernel.has_u_pass(g, k)
     if u_pass:
         # a-fusion (i): one read of g, h -> U; every packed round is a 4^(i-1) 2^(k-i)-term contraction of U
-        inp = kernel.inputs(gammas, rs, k, k)
-        U = kernel.packed_U(g, h, k, inp, stats)
+        U = kernel.packed_U(g, h, k, kernel.inputs(gammas, rs, k, k), stats)
     for i in range(1, k + 1):
+        inp = kernel.inputs(gammas, rs, i, k)          # prefix / eq_x depend on the challenges so far
         if u_pass:
-            inp_i = kernel.inputs(gammas, rs, i, k) if i < k else inp
-            S = S_to_ext(kernel.packed_round_U(U, gammas, rs, i, k, inp_i))
+            S = S_to_ext(kernel.packed_round_U(U, gammas, rs, i, k, inp))
         else:
-            inp = kernel.inputs(gammas, rs, i, k)
             S = S_to_ext(kernel.packed_round(g, h, i, inp, stats))
         r = challenger(i, S)
         rounds.append(S)
