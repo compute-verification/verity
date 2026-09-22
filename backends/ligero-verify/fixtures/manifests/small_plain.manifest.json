@@ -1,0 +1,65 @@
+{
+ "format": {
+  "system": "ligero-system/v1",
+  "statement": "ligero-statement/v1",
+  "proof": "ligero-proof/v1"
+ },
+ "commit": null,
+ "device": "cuda",
+ "system": {
+  "rows": 3516,
+  "by_kind": {
+   "hint": 103,
+   "bit": 2534,
+   "prod": 173,
+   "pin": 96,
+   "sel": 610
+  },
+  "linear": 347,
+  "quadratic": 3387,
+  "pins": 96,
+  "hints": 103
+ },
+ "files": [
+  {
+   "kind": "honest",
+   "stmt": "b1.stmt",
+   "proof": "b1.proof",
+   "stmt_sha256": "f57ea8e7388da1bc678d78e47b84f09643dd9a8985ae17e814916a2114a72420",
+   "proof_sha256": "45c726ca21529b203a226b1ecf0167c9d197c740f68e2b0a9c9cdb14fd6188a9",
+   "proof_bytes": 2744128,
+   "python_verdict": {
+    "accepted": true,
+    "reason": "accept (0.022s)",
+    "seconds": 0.022422846406698227
+   },
+   "vus": [
+    0,
+    1
+   ]
+  },
+  {
+   "kind": "honest",
+   "stmt": "b64.stmt",
+   "proof": "b64.proof",
+   "stmt_sha256": "7fb38d87032383d240902351a1f54f6d8eb31906ab290266e3623b322e5a50af",
+   "proof_sha256": "13028a6345cecf7f99e472ddb2977517292fd10ce174a9708e86f3bd9ace0bcc",
+   "proof_bytes": 3536224,
+   "python_verdict": {
+    "accepted": true,
+    "reason": "accept (0.045s)",
+    "seconds": 0.04491079971194267
+   },
+   "vus": [
+    0,
+    64
+   ]
+  }
+ ],
+ "system_file": {
+  "path": "system.bin",
+  "sha256": "bee0ad8c9a17abac6ed0480c4b2458e5fe2ec35e3348a5c164c6957d88cb1a93",
+  "sys_id": "44cb05b9e6988219beba2d66582124e67a1893aac39d0b66126ce0b9d4db89cb",
+  "bytes": 229581
+ }
+}

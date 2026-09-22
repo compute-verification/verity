@@ -128,6 +128,13 @@ that RTT in a separate run; the residual is prover-compute drift on the shared b
 | checkpoints every m = 2 units (sub-chain as a deep circuit) | 386 | 1.5 | -0.2 | 420 / 50.2 | 436 / 65.6 | never (deeper) | PROTOCOL.md 12.4: checker depth x~2, wire evaluations x2: deeper AND slower at every RTT |
 | checkpoints every m = 4 units (sub-chain as a deep circuit) | 746 | 2.5 | -0.1 | 685 / 54.6 | 715 / 84.5 | never (deeper) | PROTOCOL.md 12.4: checker depth x~4, wire evaluations x4: deeper AND slower at every RTT |
 
+**Note on the B-Ligero verifier time (lane b-verifier, 2026-09-22).** The `verify s` of the B-Ligero row is the
+Python/torch verifier on GPU hardware (0.40 s re-priced; 1.03 s measured on the L40S for the 25-sub-batch 4096-VU ZK
+set). An independent Rust verifier (`backends/ligero-verify`, CPU only, no torch) verifies the same 25 proofs in
+8.3-16 s at 1 thread / 5.9-6.7 s at 12 threads on `vy-cpu3` (EPYC 7713, contended container) and 3.4 s / 1.3 s (1 / 8
+threads) on an idle laptop -- other hardware, so this is a note, not a replacement of the row; the row's serial e2e
+would read 6-16 s with a CPU verifier of that speed. Details: `b_verifier.md` section 3.
+
 ## 7. Reading the tables
 
 **What the depth is.** `rounds.sequential_depth` is now *measured*: A counts `Transcript::round_trip()` at every

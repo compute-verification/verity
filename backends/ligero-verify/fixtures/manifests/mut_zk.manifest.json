@@ -1,0 +1,462 @@
+{
+ "format": "ligero-proof/v1 mutations",
+ "base": "b1",
+ "src": "/workspace/research/runs/r20260922-100145-374a/proofs/small_zk",
+ "files": [
+  {
+   "kind": "mutation",
+   "mutation": "opened_value_plus1",
+   "stmt": "mut_opened_value_plus1.stmt",
+   "proof": "mut_opened_value_plus1.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "073e9c8cdd2c6d8a27a56532d373ba5c39367014e51a60842d760d9f2ac3fecf",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "merkle path 0 invalid",
+    "seconds": 0.16327639669179916
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "opened_value_minus1",
+   "stmt": "mut_opened_value_minus1.stmt",
+   "proof": "mut_opened_value_minus1.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "f8779d989ecf8d3a0183ddb38edae4efb78b4bef2f1e22fe83d3cf5d4fac2409",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "merkle path 188 invalid",
+    "seconds": 0.007805772125720978
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "opened_mask_row_plus1",
+   "stmt": "mut_opened_mask_row_plus1.stmt",
+   "proof": "mut_opened_mask_row_plus1.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "31334da8e42042c45ce0a94b281078e17dfa54c5e80c2c3c251a4e0fc9e02342",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "merkle path 0 invalid",
+    "seconds": 0.0031678862869739532
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "opened_value_noncanonical_p",
+   "stmt": "mut_opened_value_noncanonical_p.stmt",
+   "proof": "mut_opened_value_noncanonical_p.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "90dac2a36ab0eb1b1d786f3ff717adb95f380a6f2d722424156bfccf58278ac0",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "transcript element out of the field",
+    "seconds": 0.0013009998947381973
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "merkle_sibling_flipped",
+   "stmt": "mut_merkle_sibling_flipped.stmt",
+   "proof": "mut_merkle_sibling_flipped.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "6b99a8d7e9ad3d32500e1ed9fed861a660c4a73fbd37883906c1f717e1f9a05d",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "merkle path 0 invalid",
+    "seconds": 0.0030821561813354492
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "merkle_paths_truncated",
+   "stmt": "mut_merkle_paths_truncated.stmt",
+   "proof": "mut_merkle_paths_truncated.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "81c9ba00d42a18ac0db06710f60f6914777776d446a140c2036670ae348a8019",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "malformed Merkle paths",
+    "seconds": 0.0013164114207029343
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "merkle_paths_extended",
+   "stmt": "mut_merkle_paths_extended.stmt",
+   "proof": "mut_merkle_paths_extended.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "b47269f17affa51b69b01b1a4cc3ea83cf87a0430316265431d623b7edf70e90",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "malformed Merkle paths",
+    "seconds": 0.0011558495461940765
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "root_flipped",
+   "stmt": "mut_root_flipped.stmt",
+   "proof": "mut_root_flipped.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "77c3f0aeff854c869dca7aba33fd261f5ced2c45ae94047b5d109188b99f87a6",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.002435188740491867
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "w_perturbed",
+   "stmt": "mut_w_perturbed.stmt",
+   "proof": "mut_w_perturbed.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "afd81ff275bdfea07fbaaa069343dec971235ddd8a8e472accfabc0c58841c3b",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.00249299593269825
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "w_noncanonical_p",
+   "stmt": "mut_w_noncanonical_p.stmt",
+   "proof": "mut_w_noncanonical_p.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "4fff405993f54a589735ae52033f69faf820047ed6ffbcb71d50b9ab3e06bfca",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "transcript element out of the field",
+    "seconds": 0.0010209064930677414
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "h_perturbed",
+   "stmt": "mut_h_perturbed.stmt",
+   "proof": "mut_h_perturbed.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "c0a338057735d5636f59ac890165f2989de6271208c2abb3bc9abf426ecb214f",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.0023817475885152817
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "h_last_coefficient_perturbed",
+   "stmt": "mut_h_last_coefficient_perturbed.stmt",
+   "proof": "mut_h_last_coefficient_perturbed.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "e724e755ba06db22ff2d7c26e2db16969261ace2a3a3432e2c593819798598d2",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.0023555494844913483
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "q_perturbed",
+   "stmt": "mut_q_perturbed.stmt",
+   "proof": "mut_q_perturbed.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "e1c381226a0597389ff8e3d3d228b3973a1982520a84ab07c1d7adebd59d3906",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.002363080158829689
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "q_sum_preserving_perturbation",
+   "stmt": "mut_q_sum_preserving_perturbation.stmt",
+   "proof": "mut_q_sum_preserving_perturbation.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "b6e322b6beb6d648d75100180e4cacc3fce9036cde14396063a34faea367c681",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.002370191738009453
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "v_perturbed",
+   "stmt": "mut_v_perturbed.stmt",
+   "proof": "mut_v_perturbed.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "6dfd6fa7699df9388ed184dd8469bdd7add62e54afd38debd530f5237c68b18e",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.0023725535720586777
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "v_perturbed_in_H_kernel",
+   "stmt": "mut_v_perturbed_in_H_kernel.stmt",
+   "proof": "mut_v_perturbed_in_H_kernel.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "b7fdb7172c2207db1e91d81eb43449450a5c8cb19b94a01b9f0429e9267b6cf1",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.0023762695491313934
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "t_minus_1_columns",
+   "stmt": "mut_t_minus_1_columns.stmt",
+   "proof": "mut_t_minus_1_columns.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "fc2259328ad3dd792af822e304da0ab3f8b3d2eb0f7dad0e4df85cc92c3a22ff",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "malformed proof",
+    "seconds": 0.001000506803393364
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "duplicated_column_index",
+   "stmt": "mut_duplicated_column_index.stmt",
+   "proof": "mut_duplicated_column_index.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "796ae0c054ac0859c5d4452e86873bf5b352f00d188493556ba6aefe7f3fe948",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "bad column set",
+    "seconds": 0.001418163999915123
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "columns_swapped",
+   "stmt": "mut_columns_swapped.stmt",
+   "proof": "mut_columns_swapped.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "a09010d37e1ddc9ac0ba5aa847580e9bc3f20689ac9d4ed6f6f846697379b29c",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.0028647519648075104
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "column_index_out_of_range",
+   "stmt": "mut_column_index_out_of_range.stmt",
+   "proof": "mut_column_index_out_of_range.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "539717410c4b11a059b7b6ae2422c77cf309017cf8c7b5f6250e695979bfc88e",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "bad column set",
+    "seconds": 0.0015826206654310226
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "opened_row_dropped",
+   "stmt": "mut_opened_row_dropped.stmt",
+   "proof": "mut_opened_row_dropped.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "a0d5766b67b0586cf626ef2460efeac79b35e0072936ac244354d22b9da3fe19",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "malformed proof",
+    "seconds": 0.0009866449981927872
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "extra_opened_row",
+   "stmt": "mut_extra_opened_row.stmt",
+   "proof": "mut_extra_opened_row.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "c829569b0a1e11439dc4ff1086f6a906a4470c12f3149d30bc3a77392e31cdd9",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "malformed proof",
+    "seconds": 0.0010107550770044327
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "coin_opening_r1_mismatch",
+   "stmt": "mut_coin_opening_r1_mismatch.stmt",
+   "proof": "mut_coin_opening_r1_mismatch.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "b065c2bba975d183fa150df7969901b1125ca1cc3daa4cbdad22551c4b29ea1b",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "coin opening does not match its commitment",
+    "seconds": 2.8071925044059753e-05
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "coin_opening_s2_mismatch",
+   "stmt": "mut_coin_opening_s2_mismatch.stmt",
+   "proof": "mut_coin_opening_s2_mismatch.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "df9a95883f11861da0a085c0692e155b9adece314ffd1777b382e0fb995c3727",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "coin opening does not match its commitment",
+    "seconds": 2.3754313588142395e-05
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "coin_commitment_c1_flipped",
+   "stmt": "mut_coin_commitment_c1_flipped.stmt",
+   "proof": "mut_coin_commitment_c1_flipped.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "ada8aa746a5453292651b24bd74dcc957e8455822df41c2efcb6d6b4cbe77ea7",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "coin opening does not match its commitment",
+    "seconds": 3.421306610107422e-05
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "coins_stripped",
+   "stmt": "mut_coins_stripped.stmt",
+   "proof": "mut_coins_stripped.proof",
+   "stmt_sha256": "4b7e5aa9470c7b820c8eca2a54eb206aebc846c6690d337ff7468f5f9e10c75a",
+   "proof_sha256": "ec7dedc0a2e036855d8a1f29a706c9e9831ea64902bfdf64522c76cbe3eb67c4",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "malformed coin commitments / openings",
+    "seconds": 1.9291415810585022e-05
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "statement_y16_flipped",
+   "stmt": "mut_statement_y16_flipped.stmt",
+   "proof": "mut_statement_y16_flipped.proof",
+   "stmt_sha256": "319b8489b6c572400f551aec5ca26c2eca0611fc578fa469883fae30e94fd8c2",
+   "proof_sha256": "cdaef01ea38301c76ce0a10c653575fb52089d941dd8130d5a8fe52bde3c96d3",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.003000617027282715
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "statement_operand_a_flipped",
+   "stmt": "mut_statement_operand_a_flipped.stmt",
+   "proof": "mut_statement_operand_a_flipped.proof",
+   "stmt_sha256": "b0d923b6f3a9d5edb44143a3cfcbb170019416c5591fa42b2413e1224f8bf8e2",
+   "proof_sha256": "cdaef01ea38301c76ce0a10c653575fb52089d941dd8130d5a8fe52bde3c96d3",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.002382200211286545
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "statement_operand_b_flipped",
+   "stmt": "mut_statement_operand_b_flipped.stmt",
+   "proof": "mut_statement_operand_b_flipped.proof",
+   "stmt_sha256": "48ad84f39d96ae671e6eeb07ce39a0663e91bbf54b9c92b42e1751abd1d9dc5a",
+   "proof_sha256": "cdaef01ea38301c76ce0a10c653575fb52089d941dd8130d5a8fe52bde3c96d3",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.0023736245930194855
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "statement_operand_off_domain_inf",
+   "stmt": "mut_statement_operand_off_domain_inf.stmt",
+   "proof": "mut_statement_operand_off_domain_inf.proof",
+   "stmt_sha256": "b4f7b5823a7f63e2cf379523c755ef178d7cd6bc57071e701feaf5805457073c",
+   "proof_sha256": "cdaef01ea38301c76ce0a10c653575fb52089d941dd8130d5a8fe52bde3c96d3",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "public inputs: public inputs rejected: a.t off the finite range",
+    "seconds": 0.0009846556931734085
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "statement_t_minus_1",
+   "stmt": "mut_statement_t_minus_1.stmt",
+   "proof": "mut_statement_t_minus_1.proof",
+   "stmt_sha256": "d5c15a7008f1823f0fef6f69c9948687f37d05f2a1053981f1d5a93fad745259",
+   "proof_sha256": "cdaef01ea38301c76ce0a10c653575fb52089d941dd8130d5a8fe52bde3c96d3",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "malformed proof",
+    "seconds": 0.000993378460407257
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "statement_zk_mode_flipped",
+   "stmt": "mut_statement_zk_mode_flipped.stmt",
+   "proof": "mut_statement_zk_mode_flipped.proof",
+   "stmt_sha256": "3a7e510563797a9d0aa941703461da9400393aae56decf7b5158eca1314dc614",
+   "proof_sha256": "cdaef01ea38301c76ce0a10c653575fb52089d941dd8130d5a8fe52bde3c96d3",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "malformed proof",
+    "seconds": 0.0009892415255308151
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "statement_coin_mode_flipped",
+   "stmt": "mut_statement_coin_mode_flipped.stmt",
+   "proof": "mut_statement_coin_mode_flipped.proof",
+   "stmt_sha256": "138701cb7c526fe1ed1fd7f26838777866a4bee3f9cad46dfc4735a2c6e7648c",
+   "proof_sha256": "cdaef01ea38301c76ce0a10c653575fb52089d941dd8130d5a8fe52bde3c96d3",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.0024274159222841263
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "subbatch_swapped_sub_00_proof_sub_01_stmt",
+   "stmt": "mut_subbatch_swapped_sub_00_proof_sub_01_stmt.stmt",
+   "proof": "mut_subbatch_swapped_sub_00_proof_sub_01_stmt.proof",
+   "stmt_sha256": "9a6acffc6f1db046fba8752f5540838a45b70284f669ff8c87e2c467ef446fdd",
+   "proof_sha256": "89bbb43da9a22d683e29b9d4538bd9d68310f762d7a48193d8387bc2cc4a0ddb",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.030113093554973602
+   }
+  },
+  {
+   "kind": "mutation",
+   "mutation": "subbatch_swapped_sub_01_proof_sub_00_stmt",
+   "stmt": "mut_subbatch_swapped_sub_01_proof_sub_00_stmt.stmt",
+   "proof": "mut_subbatch_swapped_sub_01_proof_sub_00_stmt.proof",
+   "stmt_sha256": "441ad3889f6da6e2d9f80d20dd64ff35edf7f2d82bd1afb16c11fec89b073c04",
+   "proof_sha256": "140a45e35e3d64f9c01ba028e69f966be49e4577da946d5dcba8337217e8dca7",
+   "python_verdict": {
+    "accepted": false,
+    "reason": "column challenge mismatch",
+    "seconds": 0.031338900327682495
+   }
+  }
+ ]
+}
