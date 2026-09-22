@@ -91,9 +91,9 @@ def _init_worker() -> None:
 
 
 def _one(task):
-    vid, a, b, y16, accs = task
+    vid, a, b, y16, accs, cross_check = task
     try:
-        rows, erow = API.vu_rows(_UNIT, _EPI, a, b, y16, accs, cross_check=True)
+        rows, erow = API.vu_rows(_UNIT, _EPI, a, b, y16, accs, cross_check=cross_check)
     except Reject as e:
         return vid, None, None, str(e)
     ub = np.array([[v % P for v in r] for r in rows], dtype="<u4").tobytes()
@@ -124,11 +124,15 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
     API.export_circuit(ectx, out / "epilogue.txt")
     API.export_extra(uctx, ectx, out)
     steps = tierdata.K // STEP
+    # negatives: no integer cross-check at witness generation, so that a wrong claimed word reaches the prover as an
+    # in-domain-looking witness (the chain is the checker's own; the epilogue row carries the claimed word) and the
+    # *proof system* has to reject it; a non-finite operand (no T_OP row) or a saturated intermediate still fails here
+    cross_check = not tier.endswith("-neg")
     tasks = []
     for vid in range(lo, hi):
         x, w, y = tierdata.instance(vid)
         accs = tierdata.accs(vid) if tierdata.acc is not None else None
-        tasks.append((vid, x, w, y, accs))
+        tasks.append((vid, x, w, y, accs, cross_check))
     results = {}
     if procs > 1:
         with mp.get_context("fork").Pool(procs, initializer=_init_worker) as pool:
@@ -139,7 +143,7 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
         for t in tasks:
             vid, ub, eb, err = _one(t)
             results[vid] = (ub, eb, err)
-    extra = {"tier": tier, "range": [lo, hi], "steps": steps, "root": str(root),
+    extra = {"tier": tier, "range": [lo, hi], "steps": steps, "root": str(root), "cross_check": cross_check,
              "root_manifest_sha256": I.manifest_sha256(root), "rejected_at_witness": {}, "written": []}
     if tier.endswith("-neg"):
         for vid in range(lo, hi):
