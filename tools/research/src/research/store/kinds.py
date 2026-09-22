@@ -10,8 +10,9 @@ KIND_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*/v[0-9]+$")
 
 KINDS: dict[str, str] = {
     "bench-result/v1": "a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?",
-    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (tools/native_peak): meta {device, dtype, accumulate, method, "
-                      "flop_per_second, spec_flop_per_second, fraction_of_spec, sass, driver, cuda, clocks_mhz, power_w, sizes} + the result envelope",
+    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (tools/native_peak; the canonical tables' 'native dense peak, "
+                      "measured' column): meta {device, dtype, accumulate, method, flop_per_second, spec_flop_per_second, fraction_of_spec, "
+                      "sass, driver, cuda, clocks_mhz, power_w, sizes} + the result envelope",
     "tc-evidence/v1": "one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees, first_mismatches, "
                       "seed, n}; payload tree = probe_results.json, capture_sample.json, tiles_*.npz",
     "dataset-snapshot/v1": "meta {name, note, query?}; refs.members = [art:...]; payload null",
@@ -23,9 +24,6 @@ KINDS: dict[str, str] = {
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
-    "native-peak/v1": "one measured dense tensor-core peak of a device (the canonical tables' 'native dense peak, measured' column): meta "
-                      "{device, dtype, accumulate: 'fp32', method: 'cublas dense gemm 8192^3, median of 5', flop_per_second, "
-                      "spec_flop_per_second, fraction_of_spec, sass, driver, cuda, clocks_mhz?, power_w?}; payload null",
     "trust-dossier/v1": "the computed trust level of one numerical target (verity.verification.trust): meta = the TrustReport "
                         "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
                         "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
