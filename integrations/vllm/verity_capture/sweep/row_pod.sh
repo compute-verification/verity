@@ -438,7 +438,12 @@ if [[ ",$STAGES," == *,match,* ]]; then
   # write; 1.63 GB -> 534 MB on a llama B8 1024/128 row, lossless, every reader accepts both forms).  VERITY_INSTANCES_FORM=runs restores v1.
   export VERITY_INSTANCES_FORM=${VERITY_INSTANCES_FORM:-progressions}
   log "fold: instances.jsonl stored form = $VERITY_INSTANCES_FORM (F2)"
-  CMD_M=($PY312 -m verity_capture.bench.run_config --case "$ROLE" --workload "$WL" --out "$D/match" --checkpoint-dir "$CK" --phase all
+  # [r19-int-13, F-r19-int-14] MATCH_PHASE=cpu resumes the CPU half (resolve -> fold -> gates) over a capture already in $D/match/capture
+  # (run_config's own --phase cpu, D87: realized shape from the existing capture, spec kept): #69 olmoe B128's fold died on ENOSPC at its
+  # program.json write 2 h 39 min in, with the 74 GB / 188k-file capture complete on disk.  Default all = capture + CPU, unchanged.
+  MATCH_PHASE=${MATCH_PHASE:-all}; case "$MATCH_PHASE" in all|cpu) ;; *) log "MATCH_PHASE=$MATCH_PHASE is not all|cpu"; exit 2;; esac
+  [ "$MATCH_PHASE" = cpu ] && { [ -d "$D/match/capture" ] || { verdict match FAIL "MATCH_PHASE=cpu without $D/match/capture"; exit 12; }; log "match: MATCH_PHASE=cpu over the existing capture (no GPU stage)"; }
+  CMD_M=($PY312 -m verity_capture.bench.run_config --case "$ROLE" --workload "$WL" --out "$D/match" --checkpoint-dir "$CK" --phase "$MATCH_PHASE"
          --python-gpu "$PY" --python-cpu "$PY312" --max-num-seqs "$B" --snapshot-steps "${MATCH_SNAP_STEPS:-$SNAP_DEF}"
          ${MATCH_SNAP_MAX_BYTES:+--snapshot-max-bytes "$MATCH_SNAP_MAX_BYTES"} --skip "$SKIP"
          --engine-arg "gpu_memory_utilization=$GPU_UTIL" --cards-dir "$D/match/cards")
