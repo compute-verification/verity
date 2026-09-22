@@ -94,12 +94,20 @@ B = 4096 — consider \(k\)-packing the top two levels or splitting into two ins
 shows; at B = 64 the padding is 31 %). Estimate: **25–40 ms** (a-fusion's 25–35 ms plus the padding). The
 per-round host trips (`rounds_per_graph = 1`) drop from Σ over 12 instances (~1900 rounds) to 325.
 
-## CPU-measured ratio (vy-cpu, EPYC 9655P, 12 threads, same binary and instances; `LOGUP=both`)
+## CPU-measured ratio (vy-cpu, EPYC 9655P, 12 threads, same binary and instances, `LOGUP=both`)
 
-See `backends/gkr/README.md` "Batched logUp (union)" rows and the ledger `backends/numerical/reports/ledger/a-logup-union.jsonl`
-for the numbers at B = 64 and B = 4096: `lookup` bucket and total, per-table vs union, `result_per_table.json`
-vs `result.json` in the same run dir. (Filled in by the lane at the end of the run; if this paragraph still has no
-numbers, the runs are `gkr.union.b64` / `gkr.union.b4096` on vy-cpu — `research fetch <id> --all`.)
+| B | per-table prove / lookup (s) | union prove / lookup (s) | union / per-table | bytes | coins | depth |
+|---|---|---|---|---|---|---|
+| 64 (r20260922-101533-20c4) | 7.37 / 4.41 | 7.09 / 3.96 | **0.96× / 0.90×** | 0.95× | 2525 → 642 | 257 → 280 |
+| 4096 (two runs, r20260922-102013-2931 + -102556-cdcc) | 65.1 / 26.9 (mean) | 70.3 / 29.8 (mean) | **1.08× / 1.11×** | 0.995× | 3393 → 761 | 304 → 355 |
+
+So on the CPU the union is a wash: the one \(2^{26}\) tree (67.1M leaves, 39.1M live) does ~1.25× the leaf work of
+the twelve padded per-table trees (53.7M leaves in total) and there is no per-instance fixed cost to amortise on a
+CPU. **Expect the GPU picture to be the opposite of the CPU one only if your per-instance latency (~14 ms × 12 on
+the H100) exceeds the extra 13.4M leaves' worth of tree work (~0.2 ms at H100 bandwidth).** If the padding hurts,
+k-pack the top levels or split the union into two trees of \(2^{25}\) (queries | tables) with the same challenges —
+that is still one instance for the transcript if both trees' root claims are absorbed together (needs a §15 amendment;
+not implemented).
 
 ## Open for the GPU lanes
 

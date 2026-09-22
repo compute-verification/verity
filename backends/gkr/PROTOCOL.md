@@ -1061,9 +1061,9 @@ stop condition ("if the union term breaks \(2^{-128}\), stop") is not triggered.
   \((\rho,\lambda)\)); evaluates the table side \(\sum_v -m_v/(z-\phi(r_v,t_v))\) as one pass over the 5.2M tagged
   rows (`check_leaves` in clear mode; the multiplicity functional in PCS mode) instead of twelve passes; checks one
   leaf functional inside the batched opening. Work is the same O(N+|T|) as before, fewer fixed per-instance costs.
-* Proof bytes: twelve \((\)root claim, \(n_T\) levels of sumcheck polynomials\()\) become one of \(n\) levels: the
-  lookup part of the proof shrinks by roughly \(\sum_t n_T^2/ n^2\approx\) 6–8×; the opening is unchanged. Measured
-  bytes are in the README rows.
+* Proof bytes: twelve (root claim, \(n_T\) levels of sumcheck polynomials) become one of \(n\) levels, but the
+  opening dominates the proof: measured 3 152 048 → 2 992 520 B at B = 64 (0.95×) and 41 574 896 → 41 347 304 B at
+  B = 4096 (0.995×), README rows.
 
 ### 15.4 GPU shape for `GraphLogUp` (hand-off: `gpu/HANDOFF_UNION.md`)
 
@@ -1101,6 +1101,10 @@ stop condition ("if the union term breaks \(2^{-128}\), stop") is not triggered.
 
 ### 15.6 Recorded runs
 
-README "Batched logUp (union)": gate `gkr.union.gate` (cargo tests in both modes; the 30 + 4 v2 negatives and
-`vu-k1536-neg` rejected under `--logup union`), and B = 64 / 4096 on vy-cpu with `LOGUP=both` — per-table and
-union on the same binary, box and instances (`result_per_table.json` / `result.json`).
+README "Batched logUp over the table union": gate r20260922-093758-9aac (17 cargo tests; 30 + 4 v2 negatives rejected
+in both modes), `vu-k1536-neg` r20260922-095946-5638 (52/52 in both modes), B = 64 r20260922-101533-20c4 and
+B = 4096 r20260922-102013-2931 / r20260922-102556-cdcc on vy-cpu with `LOGUP=both` — per-table and union on the same
+binary, box and instances. **CPU verdict: a wash** — union / per-table total 0.96× at B = 64, 1.08× at B = 4096
+(two-run mean; lookup bucket 0.90× / 1.11×), bytes 0.95× / 0.995×, coins 2525 → 642 / 3393 → 761, depth +23 / +51.
+The one \(2^{26}\) tree does 1.25× the leaf work of the twelve padded per-table trees at B = 4096; the union's case
+is the GPU's per-instance latency, to be measured by the GPU lanes (`gpu/HANDOFF_UNION.md`).
