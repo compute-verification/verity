@@ -319,39 +319,40 @@ def random_finite_unit(rng: random.Random, p: Params = REAL) -> tuple[int, list[
 # Export
 # ---------------------------------------------------------------------------------------------------------------------
 
-def _fe(v: int) -> int:
-    return v % GOLDILOCKS
+def _fe(v: int, modulus: int = GOLDILOCKS) -> int:
+    return v % modulus
 
 
-def _lin_wires(x: Lin) -> str:
-    return f"{len(x.terms)} " + " ".join(f"{w} {_fe(c)}" for w, c in sorted(x.terms.items())) + f" {_fe(x.const)}"
+def _lin_wires(x: Lin, m: int = GOLDILOCKS) -> str:
+    return f"{len(x.terms)} " + " ".join(f"{w} {_fe(c, m)}" for w, c in sorted(x.terms.items())) + f" {_fe(x.const, m)}"
 
 
-def _lin_cols(ctx: CircuitCtx, x: Lin) -> str:
-    return f"{len(x.terms)} " + " ".join(f"{ctx.wires[w][1]} {_fe(c)}" for w, c in sorted(x.terms.items())) + f" {_fe(x.const)}"
+def _lin_cols(ctx: CircuitCtx, x: Lin, m: int = GOLDILOCKS) -> str:
+    return f"{len(x.terms)} " + " ".join(f"{ctx.wires[w][1]} {_fe(c, m)}" for w, c in sorted(x.terms.items())) + f" {_fe(x.const, m)}"
 
 
-def export_circuit(ctx: CircuitCtx, path: Path) -> None:
-    """The text format ``backends/gkr`` parses (see ``backends/gkr/src/circuit.rs``)."""
+def export_circuit(ctx: CircuitCtx, path: Path, modulus: int = GOLDILOCKS) -> None:
+    """The text format ``backends/gkr`` parses (see ``backends/gkr/src/circuit.rs``); values reduced mod ``modulus``."""
+    m = modulus
     lines = [f"ncols {len(ctx.cols)}", f"nwires {len(ctx.wires)}", "one 0"]
     lines += [f"col {i} {n}" for i, n in enumerate(ctx.cols)]
     for w, kind in enumerate(ctx.wires):
         if kind[0] == "prod":
-            lines.append(f"prod {w} {ctx.depth[w]} {_lin_wires(kind[1])} {_lin_wires(kind[2])}")
+            lines.append(f"prod {w} {ctx.depth[w]} {_lin_wires(kind[1], m)} {_lin_wires(kind[2], m)}")
     for name, x in ctx.asserts:
-        lines.append(f"assert {name} {_lin_wires(x)}")
+        lines.append(f"assert {name} {_lin_wires(x, m)}")
     for tname, t in ctx.tables.items():
         lines.append(f"table {tname} {len(t.outs) + 1} {t.rows}")
         for key in range(t.lo, t.hi):
-            lines.append("row " + " ".join(str(_fe(v)) for v in (key, *t.row(key))))
+            lines.append("row " + " ".join(str(_fe(v, m)) for v in (key, *t.row(key))))
     for tname, lins in ctx.queries:
-        lines.append(f"query {tname} {len(lins)} " + " ".join(_lin_cols(ctx, x) for x in lins))
+        lines.append(f"query {tname} {len(lins)} " + " ".join(_lin_cols(ctx, x, m) for x in lins))
     path.write_text("\n".join(lines) + "\n")
 
 
-def write_witness(units: list[list[int]], path: Path) -> None:
-    """Flat little-endian u64: ``n_units n_cols`` then the columns of every unit, reduced mod Goldilocks."""
+def write_witness(units: list[list[int]], path: Path, modulus: int = GOLDILOCKS) -> None:
+    """Flat little-endian u64: ``n_units n_cols`` then the columns of every unit, reduced mod ``modulus``."""
     ncols = len(units[0]) if units else 0
     with open(path, "wb") as f:
         f.write(struct.pack("<QQ", len(units), ncols))
-        f.writelines(struct.pack(f"<{ncols}Q", *(_fe(v) for v in u)) for u in units)
+        f.writelines(struct.pack(f"<{ncols}Q", *(_fe(v, modulus) for v in u)) for u in units)
