@@ -571,6 +571,36 @@ def _first_extension(fn, label: str, obj: Committed, target_log2: int, rate: Fra
                    "total.sequential_depth": None, "soundness.log2": None})
 
 
+def killing_table(rows: Sequence[PcsRow]) -> list[dict]:
+    """Per PCS configuration: A and B side by side (hash bytes, field ops, indicative GPU seconds, total depth) and
+    the B/A ratios, plus B under that PCS against A under the current Ligero -- the question whether any PCS choice
+    removes B's committed-size disadvantage."""
+    by = {}
+    for r in rows:
+        if r.values.get("census.hash_bytes") is None:
+            continue
+        by.setdefault((r["pcs"], r["regime"]), {})[r["object"][0]] = r
+    a_lig = next(r for r in rows if r["pcs"].startswith("Ligero") and r["object"].startswith("A"))
+    out = []
+    for (name, regime), d in by.items():
+        if "A" not in d or "B" not in d:
+            continue
+        a, b = d["A"], d["B"]
+        out.append({
+            "pcs": name, "regime": regime,
+            "A.hash_bytes": a["census.hash_bytes"], "B.hash_bytes": b["census.hash_bytes"],
+            "B/A.hash_bytes": round(b["census.hash_bytes"] / a["census.hash_bytes"], 2),
+            "A.field_ops": a["census.field_ops"], "B.field_ops": b["census.field_ops"],
+            "B/A.field_ops": round(b["census.field_ops"] / a["census.field_ops"], 2),
+            "A.est_gpu_s": round(a["est.prover_seconds_gpu"], 2), "B.est_gpu_s": round(b["est.prover_seconds_gpu"], 2),
+            "B.hash_bytes / A.Ligero.hash_bytes": round(b["census.hash_bytes"] / a_lig["census.hash_bytes"], 2),
+            "B.est_gpu_s / A.Ligero.est_gpu_s": round(b["est.prover_seconds_gpu"] / a_lig["est.prover_seconds_gpu"], 2),
+            "A.total_depth": a["total.sequential_depth"], "B.total_depth": b["total.sequential_depth"],
+            "A.proof_bytes": a["proof_bytes"], "B.proof_bytes": b["proof_bytes"],
+        })
+    return out
+
+
 def _fmt(v) -> str:
     if v is None:
         return "-"
@@ -606,9 +636,15 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(f"\n== 2^{target}  (A: {objs['A'].elements:,} elements, F_c=GL^{objs['A'].ext}; "
               f"B: {objs['B'].elements:,} elements, F_c=GL^{objs['B'].ext}) ==")
         print(render(rows))
+        kt = killing_table(rows)
+        print("\n-- B vs A per PCS (hash bytes, indicative GPU s, total depth) --")
+        for k in kt:
+            print(f"{k['pcs']:44} {k['regime'][:22]:22} B/A hash {k['B/A.hash_bytes']:5.2f}  B/A ops {k['B/A.field_ops']:5.2f}  "
+                  f"B vs A-Ligero hash {k['B.hash_bytes / A.Ligero.hash_bytes']:5.2f}  gpu {k['B.est_gpu_s / A.Ligero.est_gpu_s']:5.2f}  "
+                  f"depth A {k['A.total_depth']} B {k['B.total_depth']}")
         report[str(target)] = {"objects": {k: {"elements": o.elements, "ext": o.ext, "ligero_t": o.ligero.t,
                                                 "other_depth": o.other_depth} for k, o in objs.items()},
-                               "rows": [r.as_dict() for r in rows]}
+                               "rows": [r.as_dict() for r in rows], "killing_question": kt}
     if json_path:
         with open(json_path, "w") as f:
             json.dump({"generator": "verity_numerical.explore.pcs (every number is a cost-model ESTIMATE)",
