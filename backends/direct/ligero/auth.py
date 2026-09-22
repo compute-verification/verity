@@ -307,25 +307,52 @@ def auth_positions(auth: AuthStatement, *, K: int, steps: int, words: int = 16) 
     return {"a": ab, "b": ab.copy(), "y": vus.copy()}
 
 
+def _ranges(idx: np.ndarray) -> list[tuple[int, int]]:
+    """Sorted unique ranks -> maximal runs ``[lo, hi)`` of consecutive ranks (so no two runs are adjacent)."""
+    if idx.size == 0:
+        return []
+    cut = np.flatnonzero(idx[1:] != idx[:-1] + 1) + 1
+    starts = np.concatenate(([0], cut))
+    ends = np.concatenate((cut, [idx.size]))
+    return [(int(idx[s]), int(idx[e - 1]) + 1) for s, e in zip(starts.tolist(), ends.tolist())]
+
+
+def _merge(runs: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Merge sorted runs that overlap or touch (``hi == lo_next``)."""
+    out: list[tuple[int, int]] = []
+    for lo, hi in runs:
+        if out and lo <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], hi))
+        else:
+            out.append((lo, hi))
+    return out
+
+
 def multiproof_siblings(tree: WordTree, ranks: np.ndarray) -> list[bytes]:
-    """The canonical multiproof of :mod:`verity.commitments.multiproof` for ``ranks`` (a set), vectorised over the
-    stored levels: per level, ascending, the sibling of every known node whose sibling is not itself known."""
-    idx = np.unique(np.asarray(ranks, dtype=np.int64))
+    """The canonical multiproof of :mod:`verity.commitments.multiproof` for ``ranks`` (a set): per level, ascending,
+    the sibling of every known node whose sibling is not itself known.
+
+    Computed on the *runs* of known nodes rather than node by node: inside a run every sibling is known, so a run
+    ``[lo, hi)`` needs ``lo - 1`` iff ``lo`` is odd and ``hi`` iff ``hi - 1`` is even (neither is known, the runs being
+    maximal); its parents are the run ``[lo >> 1, ((hi - 1) >> 1) + 1)`` and touching parent runs merge.  Emission in run
+    order is ascending: ``lo_i - 1 < hi_i < lo_{i+1} - 1`` whenever both ends are emitted (they differ in parity).  A
+    sub-batch's ``170 x 1536`` contiguous leaves are one run, so the cost is ``O(depth x runs)`` -- this is prover-side
+    work the transcript carries, timed as ``auth_openings``."""
+    idx = np.asarray(ranks, dtype=np.int64).ravel()
+    if idx.size > 1 and not bool(np.all(idx[1:] > idx[:-1])):   # already a sorted set (the statement's order) -> no sort
+        idx = np.unique(idx)
     if idx.size and (idx[0] < 0 or idx[-1] >= tree.count):
         raise ValueError("rank out of range")
+    runs = _ranges(idx)
     out: list[bytes] = []
     for lv in range(len(tree.levels) - 1):
         level = tree.levels[lv]
-        nxt = np.zeros(idx.shape[0], dtype=bool)
-        nxt[:-1] = idx[1:] == idx[:-1] + 1
-        left = (idx % 2 == 0) & nxt
-        right = np.zeros_like(left)
-        right[1:] = left[:-1]
-        sib = idx[~(left | right)] ^ 1
-        if sib.size:
-            block = np.ascontiguousarray(level[sib])
-            out.extend(bytes(block[i]) for i in range(block.shape[0]))
-        idx = np.unique(idx >> 1)
+        for lo, hi in runs:
+            if lo & 1:
+                out.append(level[lo - 1].tobytes())
+            if not ((hi - 1) & 1):
+                out.append(level[hi].tobytes())
+        runs = _merge([(lo >> 1, ((hi - 1) >> 1) + 1) for lo, hi in runs])
     return out
 
 

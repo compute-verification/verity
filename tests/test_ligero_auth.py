@@ -74,11 +74,20 @@ def test_word_tree_and_multiproofs_agree_with_verity_commitments() -> None:
     dom = auth.domain_for(bytes([9]) * 32, -2, 333)
     ref = MerkleTree(dom, {i: int(w).to_bytes(2, "big") for i, w in enumerate(words.tolist())}, lambda _p: auth.SCHEMA)
     assert ref.commitment.root == tree.ref.root
-    for ranks in ([0], [332], [5, 6], [0, 1, 2, 3], sorted(rng.choice(333, 40, replace=False).tolist()), list(range(333))):
+    patterns = [[0], [332], [5, 6], [0, 1, 2, 3], [1, 2], [7], [6, 7], [3, 4, 5, 6, 7, 8, 9, 10, 11],   # run ends of both parities
+                [0, 1, 2, 3, 6, 7],          # two runs whose parents touch and merge
+                [2, 3, 4, 5, 8, 9, 10, 11],  # runs separated by exactly one unknown pair
+                [10, 12, 14, 16],            # singletons
+                list(range(100, 150)) + list(range(151, 200)) + [300, 331, 332],
+                sorted(rng.choice(333, 40, replace=False).tolist()), list(range(333))]
+    for _ in range(20):
+        patterns.append(sorted(rng.choice(333, int(rng.integers(1, 80)), replace=False).tolist()))
+    for ranks in patterns:
         sibs = auth.multiproof_siblings(tree, np.array(ranks))
-        assert sibs == multiproof(ref, ranks)
+        assert sibs == multiproof(ref, ranks), ranks
         leaves = {r: bytes(tree.levels[0][r]) for r in ranks}
         assert verify_multiproof(tree.ref.root, 333, dom.domain_id, leaves, sibs)
+    assert auth.multiproof_siblings(tree, np.array([], dtype=np.int64)) == []
     with pytest.raises(ValueError):
         auth.multiproof_siblings(tree, np.array([333]))
 
