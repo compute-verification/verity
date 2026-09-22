@@ -598,6 +598,47 @@ def gen_mutations(args) -> int:
     return 0
 
 
+def gen_witness_mutations(args) -> int:
+    """Negatives that reach the TESTS (a transcript mutation is caught earlier by the Fiat-Shamir binding): the
+    witness is edited before commitment (``prove(mutate=...)``, vu.gate_vu step 3) so root, messages and openings are
+    all consistent with a wrong witness -- one row per row class, a broken chain link, a nonzero c_0, and (ZK) a
+    committed mask row edited after the messages were formed is impossible without the tree, so the mask rows are
+    exercised by the plain value mutations instead."""
+    from verity_numerical.bench import instances
+
+    from . import protocol as pm
+    from .vu import STEPS, ChainRunner, _vu_data
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    pm._COMMIT_COINS = not args.no_coin_commitment
+    R = ChainRunner(args.device, args.target, 2, "torch", zk=args.zk)
+    man = _manifest(out, args, R)
+    _write_system(out, R, man)
+    vu = instances.load("vu-k1536", Path(args.root))
+    base = [_vu_data(vu, 0), _vu_data(vu, 1)]
+    picks, seen = [], set()
+    for r in R.sys.rows:
+        if r.kind not in seen:
+            seen.add(r.kind)
+            picks.append(r)
+    rng = np.random.default_rng(7)
+    cases = []
+    for r in picks:
+        col, delta = int(rng.integers(0, 2 * STEPS)), int(rng.integers(1, 3))
+        cases.append((f"row_{r.kind}_{r.name.replace('[', '_').replace(']', '').replace('.', '_')}_col{col}",
+                      lambda W, idx=r.idx, col=col, delta=delta: W.__setitem__((idx, col), (int(W[idx, col]) + delta) % P)))
+    c_rows = R.sys.chain["c"]
+    cases.append(("chain_link_broken_cf40", lambda W: W.__setitem__((c_rows[2], 40), (int(W[c_rows[2], 40]) + 1) % P)))
+    cases.append(("chain_c0_nonzero_vu1", lambda W: W.__setitem__((c_rows[1], STEPS), 1)))
+    cases.append(("all_bits_of_one_column_flipped", lambda W: W.__setitem__((slice(None), 5), (1 - W[:, 5]) % P)))
+    for name, mut in cases:
+        pf, pubs, lay = R.prove_vus(base, check=False, mutate=mut)
+        st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1, pm._COMMIT_COINS)
+        _write(out, f"wmut_{name}", st, pf, man, "witness_mutation", R, args.device, {"mutation": name})
+    _save_manifest(out, man)
+    return 0
+
+
 def cmd_verify(args) -> int:
     ok, why, secs = verify_files(Path(args.statement), Path(args.proof), args.device)
     res = {"accepted": ok, "reason": why, "seconds": secs, "verifier": "python (backends.direct.ligero.protocol.verify)"}
@@ -640,6 +681,7 @@ def main(argv=None) -> int:
     s = sub.add_parser("gen-negatives"); common(s)
     s = sub.add_parser("gen-small"); common(s)
     s.add_argument("--sizes", type=int, nargs="+", default=[1, 64])
+    s = sub.add_parser("gen-witness-mutations"); common(s)
     s = sub.add_parser("gen-mutations")
     s.add_argument("--src", required=True)
     s.add_argument("--base", default="b1")
@@ -655,7 +697,7 @@ def main(argv=None) -> int:
     s.add_argument("--out", required=True)
     args = ap.parse_args(argv)
     return {"gen-set": gen_set, "gen-negatives": gen_negatives, "gen-small": gen_small, "gen-mutations": gen_mutations,
-            "verify": cmd_verify, "dump-system": cmd_dump_system}[args.cmd](args)
+            "gen-witness-mutations": gen_witness_mutations, "verify": cmd_verify, "dump-system": cmd_dump_system}[args.cmd](args)
 
 
 if __name__ == "__main__":
