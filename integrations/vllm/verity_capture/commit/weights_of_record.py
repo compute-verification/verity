@@ -87,7 +87,16 @@ EXPERTS_RE = re.compile(r"^(.*\.experts)(?:\.(routed_experts))?\.(w13|w2)_(\w+)$
 #: `_k_scale = _v_scale = 1.0` and never touches the placeholders, which no kernel reads (Qwen3-4B-FP8 B1: 144 such fields, 723 - 435
 #: checkpoint - 144 `_x_scale`).  Pinned EXACTLY as the sentinel under kv_cache_dtype auto (a served value other than -1.0 means the
 #: loader wrote it from somewhere that is not the pinned checkpoint); any other kv_cache_dtype: unpinned by name (the scale is then live).
+#: [R19, F-r19-int-11] vLLM d9105ea80's `BaseKVCacheMethod.process_weights_after_loading` ends every branch with `del layer.k_scale /
+#: v_scale / q_scale / prob_scale` (kv_cache.py:106-109, 209-212; the early-return branch asserts they are already gone): the placeholders
+#: exist only between `create_weights` and the end of weight loading, so the served model has NO parameter to compare the record's
+#: pinned sentinel against.  #74 (Qwen3-4B-FP8 B8, H100): 579/579 compared equal, 144 placeholders "not found among the served
+#: parameters", 3/3 pairs FAIL with every other check green.  A deleted parameter cannot reach a served value; `check_served` therefore
+#: reports a placeholder field absent from the served model as `placeholders_deleted` (by name, counted, in the result), not as
+#: `missing` -- only for fields matching PLACEHOLDER_RE, only under the record's kv_cache_dtype=auto assumption, and only when the
+#: `_x_scale` the kernels do read is itself among the compared fields.  A placeholder that IS served is compared exactly as before.
 ENGINE_CONSTANT_RE = re.compile(r"(\.attn\._?(k|v|q|prob)_scale|\.rotary_emb\.cos_sin_cache)$")
+PLACEHOLDER_RE = re.compile(r"^(.*\.attn\.)(k|v|q|prob)_scale$")
 
 
 # ------------------------------------------------------------------------------------------------------------------ checkpoint index
@@ -725,6 +734,22 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
         if str(got.get("digest")) != str(f["digest"]):
             mismatched.append({"field": f["field"], "served_name": f["served_name"], "of_record": f["digest"][:16], "served": str(got.get("digest"))[:16],
                                "shape": f.get("shape"), "served_dtype": got.get("dtype")})
+    # [F-r19-int-11] a loader placeholder (`attn.k_scale`, no underscore) the engine deleted after loading is absent by construction, not
+    # missing: moved out of `missing` by name iff the record assumes kv_cache_dtype auto AND the `attn._k_scale` the kernels read was
+    # itself found and compared (so the scale that reaches the served values IS pinned).
+    placeholders_deleted: list[str] = []
+    if rec_kvd == "auto" and missing:
+        # the layers whose engine-constant `attn._x_scale` (the scale the kernels read) IS among the served parameters and was compared
+        layers_with_served_scale = {f["field"].rsplit(".attn._", 1)[0] + ".attn." for f in record.get("fields", [])
+                                    if ENGINE_CONSTANT_RE.search(f["field"]) and ".attn._" in f["field"] and any(c in lp for c in (f["served_name"], f["field"]))}
+        still_missing = []
+        for name in missing:
+            m = PLACEHOLDER_RE.match(name)
+            if m and m.group(1) in layers_with_served_scale:
+                placeholders_deleted.append(name)
+            else:
+                still_missing.append(name)
+        missing = still_missing
     analytic_failed = [a for a in analytic_checked if a.get("status") != "pass"]
     ok = (record.get("complete", False) and shards_ok and prog_why is None and ent_why is None and kv_why is None and not mismatched and not missing
           and not analytic_failed)
@@ -751,6 +776,10 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
             "of_record_set": ((record.get("of_record_set") or {}).get("program_digests") if isinstance(record.get("of_record_set"), dict) else None),
             "checkpoint_entry": ck.get("entry"), "checkpoint_entry_of_record": bool(ent_why is None) if checkpoint_of_record else None,
             "compared": compared, "mismatched": mismatched, "missing": missing, "unpinned": unpinned,
+            "placeholders_deleted": placeholders_deleted,
+            "placeholders_deleted_note": ((f"{len(placeholders_deleted)} Fp8KVCacheMethod loader placeholder(s) (attn.q/k/v/prob_scale) pinned as the -1.0 "
+                                          "sentinel on the record are not served: vLLM's process_weights_after_loading deletes them after weight loading; "
+                                          "the attn._x_scale the kernels read are compared (F-r19-int-11)") if placeholders_deleted else None),
             "analytic": analytic_checked, "engine_assumptions": record.get("engine_assumptions"),
             "unpinned_note": (("engine constants left unpinned by name are not authenticated by this pin (form (B) only)") if unpinned else
                               "every declared weight field is pinned: checkpoint bytes by digest, kv scales as the engine constant, the rotary table by the frozen analytic bound"),

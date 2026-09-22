@@ -383,6 +383,55 @@ def test_fp8_kv_scale_loader_placeholders_are_pinned_as_the_sentinel_unless_the_
     assert res2["result"] is False and [m["served_name"] for m in res2["mismatched"]] == ["model.layers.0.self_attn.attn.k_scale"]
 
 
+def test_f_r19_int_11_a_loader_placeholder_the_engine_deleted_after_loading_is_named_not_missing(checkpoint, tmp_path):
+    """[R19 F-r19-int-11] vLLM d9105ea80's `BaseKVCacheMethod.process_weights_after_loading` ends with `del layer.k_scale / v_scale /
+    q_scale / prob_scale` (kv_cache.py:106-109, 209-212): the loader placeholders the record pins as the -1.0 sentinel do not exist on
+    the served model.  #74 Qwen3-4B-FP8 B8 on vyv-h100 (12:10Z): 579/579 compared equal, 144 placeholders 'not found among the served
+    parameters', 3/3 pairs FAIL with every other check green.  A deleted parameter cannot reach a served value: an absent placeholder is
+    reported in `placeholders_deleted` by name and the pin passes -- iff the record assumes kv_cache_dtype auto AND the `_x_scale` the
+    kernels read was compared.  A placeholder that IS served is still compared exactly; any other absent field is still `missing`."""
+    d, man, t = checkpoint
+    prog, fields = _program()
+    L = "model.model.layers.0.self_attn.attn."
+    extra = [(L + s, [], 32) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
+
+    def ty(shape, bits):
+        tt = f"Value<{bits}>"
+        for n in reversed(shape):
+            tt = f"Array<{n},{tt}>"
+        return tt
+    prog["instances"]["params"] = [["weights", "{" + ", ".join(f"{n}: {ty(s, b)}" for n, s, b in fields + extra) + "}"]]
+    ck = WR.CheckpointIndex(str(d), checkpoints_manifest=str(man))
+    rec = WR.weights_of_record(prog, ck, prefix=PREFIX)
+    assert rec["complete"] is True and rec["n_pinned"] == len(fields) + len(extra)
+    # the served model after process_weights_after_loading: `_k_scale` present (compared), the four placeholders deleted
+    served = _served(t, fields)
+    ok = WR.check(rec, live_digests(served), kv_cache_dtype="auto")
+    assert ok["result"] is True, ok["why"]
+    assert ok["missing"] == [] and ok["compared"] == len(fields)
+    assert sorted(ok["placeholders_deleted"]) == sorted(n for n, _s, _b in extra) and "process_weights_after_loading deletes them" in ok["placeholders_deleted_note"]
+    # one placeholder still served (an older engine) is compared exactly: the sentinel passes, another word fails by name
+    part = dict(served)
+    part["model.layers.0.self_attn.attn.k_scale"] = np.full((), -1.0, dtype=np.float32).view(np.uint32)
+    r = WR.check(rec, live_digests(part), kv_cache_dtype="auto")
+    assert r["result"] is True and r["compared"] == len(fields) + 1 and len(r["placeholders_deleted"]) == 3
+    part["model.layers.0.self_attn.attn.k_scale"] = np.float32(1.0).reshape(()).view(np.uint32)
+    r = WR.check(rec, live_digests(part), kv_cache_dtype="auto")
+    assert r["result"] is False and [m["served_name"] for m in r["mismatched"]] == ["model.layers.0.self_attn.attn.k_scale"]
+    # the rule needs the scale the kernels read: without `_k_scale` among the served parameters the placeholders stay MISSING by name
+    no_scale = {k: v for k, v in served.items() if not k.endswith("attn._k_scale")}
+    r = WR.check(rec, live_digests(no_scale), kv_cache_dtype="auto")
+    assert r["result"] is False and r["placeholders_deleted"] == [] and len(r["missing"]) == len(extra) + 1 and "not found among the served parameters" in r["why"]
+    # any other absent field is still missing
+    gone = {k: v for k, v in served.items() if k != "model.layers.0.self_attn.o_proj.weight"}
+    r = WR.check(rec, live_digests(gone), kv_cache_dtype="auto")
+    assert r["result"] is False and r["missing"] == ["model.model.layers.0.self_attn.o_proj.weight"] and len(r["placeholders_deleted"]) == 4
+    # another kv_cache_dtype on the record leaves the placeholders unpinned by name -- nothing to delete-classify (they are never compared)
+    recq = WR.weights_of_record(prog, ck, prefix=PREFIX, kv_cache_dtype="fp8_e4m3")
+    rq = WR.check(recq, live_digests(served), kv_cache_dtype="fp8_e4m3")
+    assert rq["placeholders_deleted"] == [] and set(rq["unpinned"]) >= {n for n, _s, _b in extra}
+
+
 def _quantized_prog_and_ck(t, tmp_path, extra_tensors: dict, sub: str, *, placeholder_bits: int = 32):
     d0 = tmp_path / "snap"                                                          # the fixture's checkpoint dir (config.json: tied lm_head)
     prog, fields = _program()
