@@ -30,7 +30,11 @@ rejected at parse.
    Merkle root; then in order the per-table `(z, beta)` and per-segment `(z0, gamma)` challenges.
 2. LogUp per table (`gpu/logup.py`): the fractional-sum tree from the root (`lambda q_root = p0 q1 + p1 q0 + lambda
    q0 q1`) down `n` levels of sumcheck (degree-3 messages, `h(0) + h(1) = running`), each level's final check, the
-   leaf claim `(rho, lambda, value)`.
+   leaf claim `(rho, lambda, value)`.  Variable order: **low bit first** (`PROTOCOL.md` 4.2 "Variable order"; the
+   a-gpu2 schedule, `rho = [mu] ++ x*`), the leaf `rho` reversed to `eq_table`'s top-bit-first convention.  The
+   verifier's first version followed a-gpu's top-bit-first order (`rho = x* ++ [mu]`) and rejected every a-gpu2
+   proof at `LogUp POW level 2: final check` (lane a-protocol-diff).  `verify --trace-logup` prints every level's
+   `rho, x*, lambda, p0, p1, q0, q1, eq, eq*g, running, mu` and the value the other pairing would give.
 3. GKR per segment (`gpu/gkr.py`): every layer's phase-1 / phase-2a / phase-2b sumcheck rounds, the gate identity at
    the final point with the layer's linear forms (incl. the assertion layer's zero), `eq(z*, x*)`, the copy
    constraints, the depth; the input layer's two claims `(l*, v_l)`, `(r*, v_r)` at the copy point `c*`.
