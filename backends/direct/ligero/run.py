@@ -379,6 +379,8 @@ def main(argv=None) -> int:
                                          help="VUs in the whole batch, proved as ceil(total / (batch // 96)) sub-batches (union-bounded)")
     sub.choices["bench-vu"].add_argument("--hvzk-label", action="store_true",
                                          help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
+    sub.choices["bench-vu"].add_argument("--dump-dir", default=None, metavar="DIR",
+                                         help="write every recorded rep's sub-batch proofs (.stmt/.proof[/.coins]) + system.bin for backends/ligero-verify")
     args = ap.parse_args(argv)
     return args.fn(args)
 

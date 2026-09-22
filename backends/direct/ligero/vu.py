@@ -279,11 +279,23 @@ def bench_vu(args) -> int:
     if args.device.startswith("cuda"):
         torch.cuda.reset_peak_memory_stats()
     keys = None
+    # --dump-dir: every RECORDED rep's sub-batch proofs as ligero-statement/v2 + ligero-proof/v1 files (+ the runner's
+    # step-0 coins, 128 raw bytes, interactive mode) for the independent verifier (backends/ligero-verify); written after
+    # the verifier timer, outside every measured interval.  system.bin + manifest.json once.
+    dump_dir = Path(args.dump_dir) if getattr(args, "dump_dir", None) else None
+    dump_manifest = None
+    if dump_dir is not None:
+        from .serialize import _manifest, _statement_of, _write_system, proof_bytes, sha256_file, statement_bytes
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        dump_manifest = _manifest(dump_dir, args, R)
+        _write_system(dump_dir, R, dump_manifest)
+        dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
+                                "zk": args.zk, "mode": args.mode, "reps": args.reps}
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
         t_pass = time.perf_counter()
-        for lo, hi in subs:
+        for si, (lo, hi) in enumerate(subs):
             vus = [data[i] for i in range(lo, hi)]
             V = protocol_mod.Coins.sample() if interactive else None      # the verifier's step 0 (interactive only)
             proof, pubs, lay_i = R.prove_vus(vus, check=False, min_l=l, coins=V)
@@ -293,6 +305,20 @@ def bench_vu(args) -> int:
             assert ok, f"sub-batch [{lo}, {hi}): {why}"
             for k, v in proof.timings.items():
                 agg[k] = agg.get(k, 0.0) + v
+            if dump_dir is not None and rep > 0:
+                rd = dump_dir / f"rep{rep}"
+                rd.mkdir(exist_ok=True)
+                stem = f"sub_{si:02d}"
+                st = _statement_of(R, pubs, lay_i, R.cfg(lay_i.l), n_proofs)
+                (rd / f"{stem}.stmt").write_bytes(statement_bytes(st))
+                (rd / f"{stem}.proof").write_bytes(proof_bytes(proof))
+                entry = {"rep": rep, "sub": si, "vus": [lo, hi], "stmt": f"rep{rep}/{stem}.stmt", "proof": f"rep{rep}/{stem}.proof",
+                         "proof_bytes": (rd / f"{stem}.proof").stat().st_size, "proof_sha256": sha256_file(rd / f"{stem}.proof"),
+                         "python_verdict": {"accepted": ok, "reason": why}, "prover_seconds": proof.timings.get("total")}
+                if V is not None:
+                    (rd / f"{stem}.coins").write_bytes(V.r1 + V.s1 + V.r2 + V.s2)
+                    entry["coins"] = f"rep{rep}/{stem}.coins"
+                dump_manifest["files"].append(entry)
             if rep == 0:
                 break                                        # warm-up: one sub-batch (graph capture, compile)
         wall = time.perf_counter() - t_pass
@@ -303,6 +329,9 @@ def bench_vu(args) -> int:
         runs.append((agg, vsum))
         print(f"rep {rep}: prover {agg['total']:.3f}s (+hints {agg['hints_host']:.3f}s) over {n_proofs} proofs; "
               f"verifier {vsum:.3f}s; pass wall {wall:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)")
+    if dump_dir is not None:
+        (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
+        print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)
     med = {k: statistics.median(r[0][k] for r in runs) for k in keys}
     vmed = statistics.median(r[1] for r in runs)
     peak_dev = torch.cuda.max_memory_allocated() if args.device.startswith("cuda") else 0
@@ -383,7 +412,9 @@ def bench_vu(args) -> int:
     result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or f"b-ligero-vu-{int(time.time())}",
               "workload_fingerprint": fp,
               "validation": {"status": "passed", "checker": "backends.direct.ligero.run bench-vu (verifier accepted every rep)",
-                             "detail": f"{args.reps} reps, {n_vus} VUs as {n_proofs} proofs at l={l}", "evidence": {"soundness": snd}},
+                             "detail": f"{args.reps} reps, {n_vus} VUs as {n_proofs} proofs at l={l}",
+                             "evidence": {"soundness": snd, "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]}
+                                                                     for r in runs]}},
               "measurements": meas, "measurement_files": [], "artifacts": []}
     problems = contract.validate(result)
     if problems:

@@ -1,6 +1,10 @@
 """Store declaration for the Ligero VU benchmark (research.store README §6.1).
 
     research run --tool bench_vu --project verity --scratch triton -- python -m backends.direct.ligero.run bench-vu --mode fiat-shamir --zk ...
+    research run --tool bench_vu ... -- python backends/direct/ligero/bench_result.py bench-vu --zk --mode interactive ... --verifier /workspace/bin/ligero-verify
+
+The second form is the wrapper that runs bench-vu, verifies every dumped proof with the independent Rust verifier and writes
+$RESEARCH_RUN_DIR/result.json; its argv carries the same subcommand and flags, so the same parse applies.
 
 Key params follow run.py's argparse for the `bench-vu` / `gate-vu` / `bench` / `gate` subcommands.  `--device`, `--out` and
 `--run-id` never enter the derivation (the device is a condition, `hw.family`; the others name where the answer goes).  `--root`
@@ -38,11 +42,15 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--hvzk-label", action="store_true")
     ap.add_argument("--dump-proof", default=None)
     ap.add_argument("--dump-statement", default=None)
+    ap.add_argument("--dump-dir", default=None)
+    # bench_result.py (the wrapper that adds the independent Rust verifier and writes result.json) accepts the same argv plus:
+    ap.add_argument("--verifier", default=None)         # path of the ligero-verify binary: where the check runs, not what is computed
+    ap.add_argument("--threads", type=int, default=None)
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     cmd = out["cmd"] = argv[idx]
     for flag, subs in (("vus", ("gate", "gate-vu")), ("dump_proof", ("gate-vu",)), ("dump_statement", ("gate-vu",)), ("reps", ("bench", "bench-vu")),
-                       ("run_id", ("bench", "bench-vu")), ("total_vus", ("bench-vu",)), ("hvzk_label", ("bench-vu",))):
+                       ("run_id", ("bench", "bench-vu")), ("total_vus", ("bench-vu",)), ("hvzk_label", ("bench-vu",)), ("dump_dir", ("bench-vu",))):
         if cmd not in subs:
             out.pop(flag)                       # run.py does not define it for this subcommand; a default would only be noise in the derivation
     if unknown:
