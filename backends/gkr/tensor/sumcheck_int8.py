@@ -371,11 +371,13 @@ class Kernel:
         s3 = (27 * Tooo - 18 * two_odd + 12 * one_odd - 8 * Teee) % P
         return self.ops.cat([Teee[None], Tooo[None], s2[None], s3[None]], 0)
 
-    def fold(self, EO_f, EO_g, EO_h, deg: int, r: ref.Ext, stats: Stats, timer: Timer | None):
-        """The three tables folded by ``r`` in one matmul; returns three ``(t/2, 6)`` coefficient tables."""
+    def fold(self, EO_f, EO_g, EO_h, deg: int, r: ref.Ext, stats: Stats, timer: Timer | None, C=None):
+        """The three tables folded by ``r`` in one matmul; returns three ``(t/2, 6)`` coefficient tables.  ``C`` is
+        the precomputed ``fold_matrix`` (needed inside a CUDA-graph capture, where the host-to-device copy cannot run)."""
         ops = self.ops
         rows = ops.cat([EO_f, EO_g, EO_h], 0)                                  # (3 t/2, 8 deg)
-        C = fold_matrix(ops, r, deg, self.reduce_in_matrix)                    # (8 deg, 48 | 96)
+        if C is None:
+            C = fold_matrix(ops, r, deg, self.reduce_in_matrix)                # (8 deg, 48 | 96)
         Z, padded = ops.mm_int8(rows, C)
         stats.add_mm(rows.shape[0], rows.shape[1], C.shape[1], padded)
         if timer:
@@ -393,7 +395,8 @@ class Kernel:
 
     # -- one round ----------------------------------------------------------------------------------------------------
 
-    def round_step(self, f: Table, g: Table, h: Table, r: ref.Ext, stats: Stats | None = None, timer: Timer | None = None):
+    def round_step(self, f: Table, g: Table, h: Table, r: ref.Ext, stats: Stats | None = None, timer: Timer | None = None,
+                   fold_C=None):
         """One degree-3 round: returns ``(S (4, 6) int64, f', g', h')``."""
         ops = self.ops
         stats = stats if stats is not None else Stats()
@@ -419,7 +422,7 @@ class Kernel:
         T = self.inner_products(EO_f, GH, deg, deg_gh, stats, timer)
         S = self.round_values(T)
         # 4. fold on tensor cores, recompose
-        f2, g2, h2 = self.fold(EO_f, EO_g, EO_h, deg, r, stats, timer)
+        f2, g2, h2 = self.fold(EO_f, EO_g, EO_h, deg, r, stats, timer, fold_C)
         return S, f2, g2, h2
 
 

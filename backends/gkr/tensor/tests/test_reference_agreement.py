@@ -9,7 +9,6 @@ import os
 import random
 
 import pytest
-
 from tensor import reference as ref
 from tensor import sumcheck_int8 as k
 
