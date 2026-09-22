@@ -85,3 +85,9 @@ read + 2 written per butterfly.  `@0.25` is the cuBLAS `_int_mm` ceiling measure
    the 20 GB write and the hash lane's 20 GB read.  Then B's commitment is bounded by the hash rate (446 GB/s) and the
    input read, ~50 ms per batch for encode + hash together.
 3. On A100/H100 the memory-bound NTT scales with bandwidth (2.0x / 3.3x), not with tensor peak.
+
+## Measured (run `r20260922-062016-6bdf`, README.md for the full table)
+
+Prediction 1 held: SIMT NTT v2 **32.2 ms** per B batch (0.78 of the 25.2 ms read+write floor; 948 G butterflies/s),
+fused Triton INT8 matrix DFT 171.7 ms (0.184 of the INT8 peak -- the model's utilisation, and still 5.3x slower),
+unfused cuBLAS 15.2 s.  B re-priced: 1.22e7 -> 2.57e6 on the 4090 (`reports/encode_gpu.json`).
