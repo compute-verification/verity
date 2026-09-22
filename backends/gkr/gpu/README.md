@@ -15,11 +15,12 @@ it cannot check these proofs directly; the Python verifier is the same code path
 | v2a | 53ad266 | fused `ext_mul` (Montgomery SIMT) | 17.50 s | 5.48 / 5.74 / 5.74 / 0.45 | 9.4 s |
 | v2b | 581c6e5 | fused fold + LogUp degree-3 round | 13.81 s | 1.53 / 5.39 / 6.38 / 0.45 | 9.8 s |
 | v2c | 0d6437c | fused GKR phase-1 round; opening as tensor-core matmuls | 8.32 s | 1.49 / 1.85 / 4.46 / 0.45 | 8.9 s |
-| v2d | 428db0b | lookup functional as a CSR scatter kernel | **5.41 s** | 1.53 / 1.95 / 1.41 / 0.45 | 7.1 s |
+| v2d | 428db0b | lookup functional as a CSR scatter kernel | 5.41 s | 1.53 / 1.95 / 1.41 / 0.45 | 7.1 s |
+| v2e | c4d472a | sparse gate evaluation; fused LogUp level combine | **4.43 s** | 1.40 / 1.07 / 1.44 / 0.45 | 7.1 s |
 
 Every run: 4096/4096 `vu-k1536` accepted with the recorded words, proof 33.9 MB (6086 extension elements + Ligero
 opening), `rounds.sequential_depth` 438 (circuit 197, LogUp R16 435), 1920 transcript slots, peak device memory
-65.7 GB (v1-v2c) / 46.8 GB (v2d), 177.8 M committed base elements in 43 417 Ligero rows.  Reference: the CPU Rust prover, 12 threads,
+65.7 GB (v1-v2c) / 46.7 GB (v2d-e), 177.8 M committed base elements in 43 417 Ligero rows.  Reference: the CPU Rust prover, 12 threads,
 297.6 s for the same batch (Goldilocks).  The verifier is Python (transcript replay + Merkle paths in `hashlib`),
 not optimised.
 
@@ -60,14 +61,17 @@ PYTHONPATH=backends/gkr python -m gpu.run prove /tmp/bbsynth --device cpu
 `VERITY_GPU_TORCH_ONLY=1` disables every Triton kernel (the torch path is the bit-exact reference the kernels are
 tested against; `--clear` skips the commitment and opening for a clear-mode diagnostic).
 
-## Where the time goes (v2d, profiler with per-call syncs, B = 4096)
+## Where the time goes (v2e, profiler with per-call syncs, B = 4096; the wall split is 1.40 / 1.07 / 1.44 / 0.45)
 
-`Layer.eval_gates` 1.3 s (fp64 tensor-core matmuls of the layer input rows against the dense gate matrices),
-Ligero opening 1.3 s (0.84 s in the `Mᵀ (aᵀ X) M` matmuls, the rest Merkle paths + column extraction), LogUp
-level combine 0.7 s, LogUp folds 0.54 s (6562 small launches), phase-1 rounds 0.45 s, LogUp rounds 0.43 s,
-commit 0.38 s (NTT butterflies + SHA-256 Merkle via `hash_gpu`), eq tables 0.3 s.  Next: sparse gate evaluation
-(the gate matrices have a handful of terms per row, the same CSR trick as the lookup functional), int32 storage of
-the folded tables, fusing the fold into the round kernels, a batched NTT for the commitment.
+Ligero opening 1.2 s (0.84 s in the `Mᵀ (aᵀ X) M` fp64 matmuls, the rest Merkle paths + column extraction on the
+host), LogUp rounds 0.6 s (1201 sequential rounds: each is one kernel, a block-partial reduction and a
+device-to-host sync for the transcript), LogUp folds 0.6 s (6562 small launches, ~90 µs each of Python + launch
+overhead), phase-1 rounds 0.4 s (119), commit 0.4 s (NTT butterflies in torch + SHA-256 Merkle via `hash_gpu`),
+eq tables 0.3 s (152), the dense layer matrices for phase 2 0.24 s.  The prover is now dominated by the
+sequential round structure (1920 transcript slots, each a sync) and launch overhead rather than by arithmetic:
+next steps are CUDA graphs / one launch per round (fold fused into the round kernel, all five LogUp tables folded
+in one kernel), a batched NTT for the commitment, INT8 tensor-core limbs for the opening matmuls, and a compiled
+verifier (the Python verifier at 7 s is now slower than the prover).
 
 ## Kernels (`kernels.py`, all bit-exact against the torch path incl. `p-1` edge values)
 
