@@ -7,12 +7,21 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, tc_dot
+
 from verity_numerical.checker import REAL, Params, Reject, check_step, gen_step
 from verity_numerical.checker.ctx import Table
 from verity_numerical.checker.step import check_step_expr
 
-__all__ = ["CircuitCtx", "Lin", "build_unit_circuit", "export_circuit", "random_finite_unit", "unit_witness",
-           "write_witness", "verify_unit"]
+__all__ = [
+    "CircuitCtx",
+    "Lin",
+    "build_unit_circuit",
+    "export_circuit",
+    "random_finite_unit",
+    "unit_witness",
+    "verify_unit",
+    "write_witness",
+]
 
 GOLDILOCKS = 2**64 - 2**32 + 1
 R16 = "R16"
@@ -22,7 +31,7 @@ CHUNK = 16
 class Lin:
     """A linear form over circuit wires with an integer constant.  ``Lin * Lin`` creates a product wire."""
 
-    __slots__ = ("b", "terms", "const")
+    __slots__ = ("b", "const", "terms")
 
     def __init__(self, b: CircuitCtx, terms: dict[int, int] | None = None, const: int = 0) -> None:
         self.b = b
@@ -345,5 +354,4 @@ def write_witness(units: list[list[int]], path: Path) -> None:
     ncols = len(units[0]) if units else 0
     with open(path, "wb") as f:
         f.write(struct.pack("<QQ", len(units), ncols))
-        for u in units:
-            f.write(struct.pack(f"<{ncols}Q", *(_fe(v) for v in u)))
+        f.writelines(struct.pack(f"<{ncols}Q", *(_fe(v) for v in u)) for u in units)

@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import random
 
-from verity_numerical.gkr_export import build_unit_circuit, random_finite_unit, unit_witness
+from verity_numerical.gkr_export import (
+    build_unit_circuit,
+    random_finite_unit,
+    unit_witness,
+)
 from verity_numerical.gkr_export.circuit import verify_unit
 from verity_numerical.gkr_export.negatives import negative_cases
 

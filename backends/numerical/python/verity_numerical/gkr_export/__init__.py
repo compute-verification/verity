@@ -9,6 +9,13 @@ Witnesses come from the WP2 ``gen_step`` (the base columns) plus the derived col
 (range chunks, looked-up rows, materialised query wires).  Nothing here changes the accepted (x, y) set: every
 predicate of the checker is emitted, the non-power-of-two ranges (e.g. ``t < 255``) as two one-sided checks.
 """
-from .circuit import CircuitCtx, build_unit_circuit, export_circuit, random_finite_unit, unit_witness, write_witness
+from .circuit import (
+    CircuitCtx,
+    build_unit_circuit,
+    export_circuit,
+    random_finite_unit,
+    unit_witness,
+    write_witness,
+)
 
 __all__ = ["CircuitCtx", "build_unit_circuit", "export_circuit", "random_finite_unit", "unit_witness", "write_witness"]

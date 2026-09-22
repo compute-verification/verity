@@ -9,6 +9,7 @@ import copy
 from collections.abc import Callable
 
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, tc_dot
+
 from verity_numerical.checker import REAL, Reject, check_step, gen_step
 from verity_numerical.checker.gadgets import Bf16Decode
 from verity_numerical.checker.tables import align_table, norm_table

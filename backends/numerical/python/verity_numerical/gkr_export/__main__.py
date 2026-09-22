@@ -9,7 +9,15 @@ import random
 import sys
 from pathlib import Path
 
-from .circuit import GOLDILOCKS, build_unit_circuit, export_circuit, random_finite_unit, unit_witness, verify_unit, write_witness
+from .circuit import (
+    GOLDILOCKS,
+    build_unit_circuit,
+    export_circuit,
+    random_finite_unit,
+    unit_witness,
+    verify_unit,
+    write_witness,
+)
 from .negatives import negative_cases
 
 
