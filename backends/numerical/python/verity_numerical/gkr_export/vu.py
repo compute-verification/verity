@@ -84,11 +84,25 @@ def epilogue_witness(ctx: CircuitCtx, paths: list[str], y32: int, y16: int, h: d
 
 
 class FieldApi:
-    """The per-field export functions (``goldilocks``: :mod:`.circuit`; ``babybear``: :mod:`.babybear`)."""
+    """The per-field export functions (``goldilocks``: :mod:`.circuit`; ``babybear``: :mod:`.babybear`); with
+    ``variant="v2"`` the checker-v2 circuits of :mod:`.v2` (Goldilocks only; PROTOCOL.md 14)."""
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, variant: str = "v1") -> None:
         self.name = name
-        if name == "goldilocks":
+        self.variant = variant
+        if variant not in ("v1", "v2"):
+            raise ValueError(f"unknown checker variant {variant!r}")
+        if variant == "v2":
+            if name != "goldilocks":
+                raise ValueError("checker v2 is exported over Goldilocks only (the BabyBear limb split of its "
+                                 "state_decode / epilogue word arithmetic is not built)")
+            from . import v2
+
+            self.modulus = GOLDILOCKS
+            self.build_unit, self.build_epilogue = v2.build_unit_circuit_v2, v2.build_epilogue_circuit_v2
+            self.unit_witness, self.epilogue_witness, self.verify_unit = None, None, v2.verify_row
+            self._v2 = v2
+        elif name == "goldilocks":
             self.modulus = GOLDILOCKS
             self.build_unit, self.build_epilogue = build_unit_circuit, build_epilogue_circuit
             self.unit_witness, self.epilogue_witness, self.verify_unit = unit_witness, epilogue_witness, verify_unit
@@ -102,11 +116,24 @@ class FieldApi:
             raise ValueError(f"unknown field {name!r}")
 
     def export_circuit(self, ctx: CircuitCtx, path: Path) -> None:
-        export_circuit(ctx, path, modulus=self.modulus)
+        if self.variant == "v2":
+            self._v2.export_circuit_v2(ctx, path, modulus=self.modulus)
+        else:
+            export_circuit(ctx, path, modulus=self.modulus)
+
+    def export_extra(self, unit: CircuitCtx, epi: CircuitCtx, out: Path) -> None:
+        """Files beyond the two circuits: v2 writes ``chain.txt`` (the linkage, read by ``main.rs::load_vu``)."""
+        if self.variant == "v2":
+            self._v2.write_chain(self._v2.chain_spec(unit, epi), out / "chain.txt", self.modulus)
+
+    def vu_rows(self, unit, epi, a, b, y16, accs=None, p: Params = REAL, cross_check: bool = True):
+        if self.variant == "v2":
+            return self._v2.vu_rows_v2(unit, epi, a, b, y16, accs, p, cross_check, self.modulus)
+        return vu_rows(unit, epi, a, b, y16, accs, p, cross_check, api=self)
 
 
-def field_api(name: str = "goldilocks") -> FieldApi:
-    return FieldApi(name)
+def field_api(name: str = "goldilocks", variant: str = "v1") -> FieldApi:
+    return FieldApi(name, variant)
 
 
 def vu_rows(unit: tuple[CircuitCtx, list[str]], epi: tuple[CircuitCtx, list[str]], a: Sequence[int], b: Sequence[int],
@@ -158,9 +185,9 @@ _EPI: tuple | None = None
 _API: FieldApi | None = None
 
 
-def _init_worker(field: str = "goldilocks") -> None:
+def _init_worker(field: str = "goldilocks", variant: str = "v1") -> None:
     global _UNIT, _EPI, _API
-    _API = field_api(field)
+    _API = field_api(field, variant)
     _UNIT = _API.build_unit()
     _EPI = _API.build_epilogue()
 
@@ -169,7 +196,7 @@ def _one(task: tuple[int, list[int], list[int], int, list[int] | None]) -> tuple
     vid, a, b, y16, accs = task
     assert _UNIT is not None and _EPI is not None and _API is not None
     try:
-        rows, erow = vu_rows(_UNIT, _EPI, a, b, y16, accs, cross_check=accs is not None, api=_API)
+        rows, erow = _API.vu_rows(_UNIT, _EPI, a, b, y16, accs, cross_check=accs is not None)
     except Reject as e:
         return vid, None, None, str(e)
     m = _API.modulus
@@ -191,10 +218,11 @@ def _write_batch(out: Path, results: list[tuple[int, bytes, bytes]], y16s: list[
     write_rows([[y] for y in y16s], out / "public.bin", modulus=modulus)
 
 
-def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int, field: str = "goldilocks") -> dict:
+def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int, field: str = "goldilocks",
+           variant: str = "v1") -> dict:
     from verity_numerical.bench import instances as I
 
-    api = field_api(field)
+    api = field_api(field, variant)
     tierdata = I.load(tier, root)
     hi = tierdata.n if hi is None else min(hi, tierdata.n)
     unit_ctx, _ = api.build_unit()
@@ -202,6 +230,7 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
     out.mkdir(parents=True, exist_ok=True)
     api.export_circuit(unit_ctx, out / "circuit.txt")
     api.export_circuit(epi_ctx, out / "epilogue.txt")
+    api.export_extra(unit_ctx, epi_ctx, out)
     steps = tierdata.K // STEP
     tasks = []
     for vid in range(lo, hi):
@@ -210,18 +239,18 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
         tasks.append((vid, x, w, y, accs))
     results: dict[int, tuple[bytes | None, bytes | None, str | None]] = {}
     if procs > 1:
-        with mp.get_context("fork").Pool(procs, initializer=_init_worker, initargs=(field,)) as pool:
+        with mp.get_context("fork").Pool(procs, initializer=_init_worker, initargs=(field, variant)) as pool:
             for vid, ub, eb, err in pool.imap_unordered(_one, tasks, chunksize=4):
                 results[vid] = (ub, eb, err)
     else:
-        _init_worker(field)
+        _init_worker(field, variant)
         for t in tasks:
             vid, ub, eb, err = _one(t)
             results[vid] = (ub, eb, err)
     # the dataset's identity is the committed manifest (a pod rebuild rewrites the `generated` block, not the arrays)
     committed = I.DEFAULT_ROOT / "manifest.json"
     manifest: dict = {"tier": tier, "range": [lo, hi], "steps": steps, "unit_columns": len(unit_ctx.cols),
-                      "epilogue_columns": len(epi_ctx.cols), "field": field, "modulus": api.modulus,
+                      "epilogue_columns": len(epi_ctx.cols), "field": field, "variant": variant, "modulus": api.modulus,
                       "manifest_sha256": I.manifest_sha256(I.DEFAULT_ROOT) if committed.is_file() else I.manifest_sha256(root),
                       "root_manifest_sha256": I.manifest_sha256(root), "root": str(root),
                       "rejected_at_witness": {}, "written": []}
@@ -233,6 +262,7 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
                 continue
             _write_batch(out / "neg" / str(vid), [(vid, ub, eb)], [int(tierdata.y[vid])], steps, len(unit_ctx.cols), len(epi_ctx.cols),
                          api.modulus)
+            api.export_extra(unit_ctx, epi_ctx, out / "neg" / str(vid))
             manifest["written"].append(vid)
         rows = {r[0]: r for r in tierdata.index}
         manifest["index"] = {vid: dict(zip(tierdata.columns, rows[vid])) for vid in range(lo, hi)}
@@ -256,8 +286,10 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
 # synthetic VUs for the Rust tests (random finite operands, the checker's own chain)
 # ---------------------------------------------------------------------------------------------------------------------
 
-def synth(out: Path, vus: int, steps: int, seed: int, p: Params = REAL, field: str = "goldilocks") -> dict:
-    api = field_api(field)
+def synth(out: Path, vus: int, steps: int, seed: int, p: Params = REAL, field: str = "goldilocks", variant: str = "v1") -> dict:
+    api = field_api(field, variant)
+    if variant == "v2":
+        return api._v2.synth_v2(out, vus, steps, seed, p, api)
     m = api.modulus
     rng = random.Random(seed)
     unit = api.build_unit()
@@ -348,26 +380,28 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--out", required=True)
     e.add_argument("--procs", type=int, default=1)
     e.add_argument("--field", default="goldilocks", choices=("goldilocks", "babybear"))
+    e.add_argument("--variant", default="v1", choices=("v1", "v2"), help="checker arithmetisation (v2: PROTOCOL.md 14)")
     s = sub.add_parser("synth")
     s.add_argument("--out", required=True)
     s.add_argument("--vus", type=int, default=2)
     s.add_argument("--steps", type=int, default=3)
     s.add_argument("--seed", type=int, default=1)
     s.add_argument("--field", default="goldilocks", choices=("goldilocks", "babybear"))
+    s.add_argument("--variant", default="v1", choices=("v1", "v2"), help="checker arithmetisation (v2: PROTOCOL.md 14)")
     f = sub.add_parser("finalize")
     f.add_argument("--result", required=True)
     f.add_argument("--export-manifest", required=True)
     f.add_argument("--run-id", default=None)
     args = ap.parse_args(argv)
     if args.cmd == "export":
-        m = export(Path(args.root), args.tier, args.lo, args.hi, Path(args.out), args.procs, args.field)
+        m = export(Path(args.root), args.tier, args.lo, args.hi, Path(args.out), args.procs, args.field, args.variant)
         print(json.dumps({k: v for k, v in m.items() if k not in ("written", "index")}, default=str))
     elif args.cmd == "finalize":
         problems = finalize(Path(args.result), Path(args.export_manifest), args.run_id)
         print(json.dumps({"contract_problems": problems}))
         return 1 if problems else 0
     else:
-        print(json.dumps(synth(Path(args.out), args.vus, args.steps, args.seed, field=args.field)))
+        print(json.dumps(synth(Path(args.out), args.vus, args.steps, args.seed, field=args.field, variant=args.variant)))
     return 0
 
 
