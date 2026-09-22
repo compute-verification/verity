@@ -48,6 +48,11 @@ pub struct Options {
     pub threads: usize,
     pub soundness_bits: f64,
     pub allow_any_system: bool,
+    /// Interactive mode only: the verifier's OWN step-0 randomness `r1 || s1 || r2 || s2` (128 bytes).  Without it a
+    /// file verifier can only REPLAY the transcript's openings, and an interactive-mode accept is conditional on those
+    /// coins being the verifier's (PROTOCOL.md 8c: the challenges are functions of the coins alone, so a prover that
+    /// chose them knows `r` and `cols` before committing -- the file alone is not evidence).
+    pub own_coins: Option<[u8; 128]>,
 }
 
 pub struct Soundness {
@@ -409,6 +414,15 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         if com(&c.r2, &c.s2) != c.c2 {
             return reject("coin slot 2: opening does not match its commitment", tm, Some(snd));
         }
+        if let Some(own) = &opt.own_coins {
+            let mut mine = Vec::with_capacity(128);
+            for part in [&c.r1, &c.s1, &c.r2, &c.s2] {
+                mine.extend_from_slice(part);
+            }
+            if mine[..] != own[..] {
+                return reject("coins are not this verifier's step-0 coins", tm, Some(snd));
+            }
+        }
     }
 
     // ---- statement: public decodes and digest ----
@@ -595,9 +609,10 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         // v|_H = beta (fold mod x^l - 1, NTT_l) and v(eta_c) = alpha . U[cols] + Z_H s_lin
         for dd in 0..d {
             let v = &pf.v[dd * k..(dd + 1) * k];
+            // x^j = x^(j mod l) on H; with t_pad > l (FS-ZK at l = 256: k = l + 512) a coefficient wraps more than once
             let mut fold = v[..l].to_vec();
             for j in l..k {
-                fold[j - l] = add(fold[j - l], v[j]);
+                fold[j % l] = add(fold[j % l], v[j]);
             }
             ctx.ntt_l.transform(&mut fold, false);
             if fold != beta[dd * l..(dd + 1) * l] {
@@ -776,5 +791,12 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         }
     }
     tm.chain += lap(&mut clk);
-    Verdict { accepted: true, reason: "accept".into(), timing: tm, soundness: Some(snd) }
+    let reason = if !st.interactive {
+        "accept".to_string()
+    } else if opt.own_coins.is_some() {
+        "accept (interactive: coins are this verifier's step-0 coins)".to_string()
+    } else {
+        "accept (interactive: coins replayed from the transcript; sound only if they were the verifier's step-0 coins)".to_string()
+    };
+    Verdict { accepted: true, reason, timing: tm, soundness: Some(snd) }
 }

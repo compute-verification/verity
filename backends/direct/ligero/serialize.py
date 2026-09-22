@@ -661,6 +661,79 @@ def gen_witness_mutations(args) -> int:
     return 0
 
 
+def gen_forged_interactive(args) -> int:
+    """DISCREPANCY BV-D7 demonstration: interactive-mode transcripts are not transferable evidence.  In the interactive
+    mode the challenges are functions of the verifier's coins alone (PROTOCOL.md 8c after b-zk-fix); a prover that
+    CHOOSES the coins knows ``r, rho, rc, cols`` before committing and can build a tableau that passes every column
+    test for ANY public statement -- which is exactly what the b-zk-fix simulator (``redteam/simulator.py``) does.
+    Here the simulator is run as a cheating prover: honest VU operands with a WRONG claimed word (and the 52
+    ``vu-k1536-neg`` claims), coins sampled by the prover itself, written as ordinary proof files.  A file verifier
+    that replays the transcript's coins (Rust without ``--coins``, Python ``verify_files``) accepts them; the same
+    files are rejected under any other verifier's coins.  Fiat-Shamir mode has no such transcript."""
+    from verity_numerical.bench import instances
+    from verity_numerical.checker.step import step_output
+
+    from . import protocol as pm
+    from .redteam import simulator
+    from .vu import STEP, STEPS, ChainRunner, _vu_data
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    R = ChainRunner(args.device, args.target, 2, "torch", zk=True, mode="interactive")
+    man = _manifest(out, args, R)
+    man["forgery"] = "redteam/simulator.simulate run as a cheating prover with prover-chosen coins (BV-D7)"
+    _write_system(out, R, man)
+    vu = instances.load("vu-k1536", Path(args.root))
+    cases = []
+    x, w, _accs, y = _vu_data(vu, 0)
+    cases.append(("honest_operands_wrong_word", x, w, int(y) ^ 1, {"true_y16": int(y)}))
+    if args.negatives:
+        neg = instances.load("vu-k1536-neg", Path(args.root))
+        cols = {n: i for i, n in enumerate(neg.columns)}
+        for i in range(neg.n):
+            row = neg.index[i]
+            xn, wn, y16n = neg.instance(i)
+            cases.append((f"neg_{i:02d}", xn, wn, int(y16n), {"neg_id": i, "mistake": row[cols["mistake"]], "verdict": row[cols["verdict"]]}))
+    rng = np.random.default_rng(11)
+    for name, xx, ww, claimed, meta in cases:
+        lay = R.layout(1)
+        cfg = R.cfg(lay.l)
+        a = np.zeros((lay.l, STEP), dtype=np.int64)
+        b = np.zeros((lay.l, STEP), dtype=np.int64)
+        for s in range(STEPS):
+            a[s], b[s] = xx[16 * s:16 * s + 16], ww[16 * s:16 * s + 16]
+        yv = np.zeros(lay.l, dtype=np.int64)
+        yv[STEPS - 1] = claimed
+        try:
+            true_word = 0
+            for s in range(STEPS):
+                true_word = step_output(R.p, true_word, xx[16 * s:16 * s + 16], ww[16 * s:16 * s + 16])
+            meta["checker_word"] = int(true_word)
+            meta["claim_is_false"] = int(true_word) != claimed
+        except Exception as e:  # noqa: BLE001 -- off-domain operands: the checker itself refuses
+            meta["checker_word"] = f"checker refused ({type(e).__name__})"
+            meta["claim_is_false"] = True
+        V = pm.Coins.sample()                                   # the PROVER plays step 0
+        try:
+            t0 = time.perf_counter()
+            pf = simulator.simulate(V, R.p, R.sys, R.tb, cfg, lay, yv, a, b, args.device, rng=rng)
+            meta["simulator_seconds"] = time.perf_counter() - t0
+        except Exception as e:  # noqa: BLE001
+            meta["simulator"] = f"raised {type(e).__name__}: {e}"
+            man["files"].append({"kind": "forged_interactive", "name": name, **meta})
+            print(f"forged {name}: simulator raised {type(e).__name__}: {e}", flush=True)
+            continue
+        if not isinstance(pf, pm.Proof):
+            meta["simulator"] = f"abort transcript {pf}"
+            man["files"].append({"kind": "forged_interactive", "name": name, **meta})
+            continue
+        ok_o, why_o = R.verify_vus(pf, (a, b, yv), lay, coins=pm.Coins.sample())
+        meta["python_under_other_verifiers_coins"] = {"accepted": ok_o, "reason": why_o}
+        st = _statement_of(R, (a, b, yv), lay, cfg, 1)
+        _write(out, f"forged_{name}", st, pf, man, "forged_interactive", R, args.device, meta)
+    _save_manifest(out, man)
+    return 0
+
+
 def cmd_verify(args) -> int:
     ok, why, secs = verify_files(Path(args.statement), Path(args.proof), args.device)
     res = {"accepted": ok, "reason": why, "seconds": secs, "verifier": "python (backends.direct.ligero.protocol.verify)"}
@@ -703,6 +776,8 @@ def main(argv=None) -> int:
     s = sub.add_parser("gen-small"); common(s)
     s.add_argument("--sizes", type=int, nargs="+", default=[1, 64])
     s = sub.add_parser("gen-witness-mutations"); common(s)
+    s = sub.add_parser("gen-forged-interactive"); common(s)
+    s.add_argument("--negatives", action="store_true", help="also the 52 vu-k1536-neg claims")
     s = sub.add_parser("gen-mutations")
     s.add_argument("--src", required=True)
     s.add_argument("--base", default="b1")
@@ -718,7 +793,7 @@ def main(argv=None) -> int:
     s.add_argument("--out", required=True)
     args = ap.parse_args(argv)
     return {"gen-set": gen_set, "gen-negatives": gen_negatives, "gen-small": gen_small, "gen-mutations": gen_mutations,
-            "gen-witness-mutations": gen_witness_mutations, "verify": cmd_verify, "dump-system": cmd_dump_system}[args.cmd](args)
+            "gen-witness-mutations": gen_witness_mutations, "gen-forged-interactive": gen_forged_interactive, "verify": cmd_verify, "dump-system": cmd_dump_system}[args.cmd](args)
 
 
 if __name__ == "__main__":
