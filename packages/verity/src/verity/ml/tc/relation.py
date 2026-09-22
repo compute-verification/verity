@@ -9,12 +9,18 @@ sixteen) -- as a fixed set of predicates over integer witness columns, of exactl
     lookup   one query into a fixed table:                          (key, outs...) in T
              a w-bit range check is ceil(w/16) lookups into 16-bit range tables (plus one `lin` split when w > 16)
 
-Every witness value is a non-negative integer below 2^40 (the largest: the K-bit remainder scale, K = W + 10), so every
-`mul`/`lin` identity holds verbatim over any prime field larger than that -- except the "E* attained" chain
-``prod_i (E* - e_i) = 0``, whose intermediates are not range-checked and which is a *field* identity (a product vanishes iff
-a factor does).  Over a 31-bit field (Mersenne31, BabyBear) the handful of values above 2^31 (`normB`, `rinv`, `rsinv`,
-the alignment products) would need one extra limb split each; the count here is for a field of at least 40 bits.  The
-range lookups are what pin a witness to the integers.  The relation is *total* and *unconditional*: NaN/Inf/zero operands
+Every *honest* witness value is a non-negative integer below 2^40 (the largest: the K-bit remainder scale, K = W + 10).
+That does **not** make the predicates sound over a 40-bit field (WP2 checker lane, 2026-09-21, z3 at real widths --
+`verity_numerical.checker.search`, run r20260921-232849-093c): the remainder columns `r`, `r_s` are never range-checked
+themselves, only their scaled products `rinv = r * invpow`, `rsinv = r_s * invpow_s`, so over F_p with p ~ 2^40 a
+dishonest `r >= 2^d` whose product wraps below p into [0, 2^A) is accepted (`align_state` over F_p40 as stated: SAT;
+over Goldilocks with `r` range-checked: UNSAT), and `aligned` carries no tight quotient bound ``q < 2^(A-d)``, which a
+31-bit field needs even with ideal remainder checks (M = 0, d >= W, q = 63, r = 2^25 - 1 gives 2^31 - 1 = 0 in
+Mersenne31: SAT).  The "E* attained" chain ``prod_i (E* - e_i) = 0`` is a *field* identity (a product vanishes iff a
+factor does) whose intermediates are not range-checked either.  A backend embedding this relation in a field must add a
+direct range check on every remainder and the tight quotient bound (or use a 64-bit field and range-check `r` so the
+product cannot wrap); the census below does not include those lookups.  The range lookups are what pin a witness to the
+integers.  The relation is *total* and *unconditional*: NaN/Inf/zero operands
 take the same predicates as finite ones (their finite-path magnitude is 0, so the finite path is always well defined on
 masked values, and the class flags select the output).
 
