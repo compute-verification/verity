@@ -1427,7 +1427,12 @@ def main(argv: list[str] | None = None) -> None:
         # arena is sized and the hooks are installed -- unless a source already binds that site (the TP source binds the received all-reduce
         # output of the same module on TP>1 rows: never two binders).  A manifest that names no such module (every MOE-01 row) changes nothing.
         if required_manifest is not None and hasattr(com, "_modules") and getattr(com, "model", None) is not None:
-            _named = {str(i.get("op_path")) for i in (required_manifest.get("identities") or []) if i.get("family") == "instance_outputs" and i.get("op_path")}
+            # [R19 int-20] a PROMOTED row's op_path is the producer module of a value that is NOT that module's forward output (the promoted
+            # member is observed at its consumer's input, below): it never extends the OUTPUT acquisition -- hooking the producer's output
+            # would commit a second, wrong tensor under the promoted identity (found on the first int-22 Commit: `model` (the model root)
+            # hooked as an instance_outputs module beside `model.layers.0.input_layernorm/in`)
+            _named = {str(i.get("op_path")) for i in (required_manifest.get("identities") or [])
+                      if i.get("family") == "instance_outputs" and i.get("op_path") and not i.get("promoted")}
             _selected = {n for n, _m in com._modules}
             _bound_by_source = set()
             for _s in getattr(com, "sources", []) or []:

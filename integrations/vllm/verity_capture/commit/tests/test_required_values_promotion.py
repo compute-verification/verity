@@ -111,13 +111,21 @@ def test_a_crossing_interior_row_at_an_unrooted_producer_is_promoted_and_the_eng
     assert man["guard"]["promoted"] == {"Bf16MulScalarTensor_v1": LP + T} and man["guard"]["flags"]["unnamed_crossing"] == 0
     outs = {(r["op_path"], r["output_member"]) for r in man["identities"] if r["step"] == 0 and r["family"] == "instance_outputs"}
     assert ("model.layers.0.input_layernorm", "out") in outs and ("model.embed_tokens", "out") in outs and ("logits_processor", "out") in outs
-    # the promoted identity is a bindable required value: a collector covering the manifest exactly passes, one omitting it fails BY NAME
-    assert RM.coverage_check(man, _layouts_from(man))["ok"]
+    # the promoted identity is a bindable required value: a collector covering the manifest exactly passes, one omitting it fails BY NAME.
+    # [Commit 2, PROMOTED_OBSERVATION_RULE] its committed name is its first consumer's INPUT (`model.layers.0.input_layernorm/in`), never the
+    # producer module's own output (`model`: the model root's forward output is not the scaled embedding) -- a bare `model` tensor is
+    # counted as misbound and covers nothing
+    cov = RM.coverage_check(man, _layouts_from(man))
+    assert cov["ok"] and cov["promoted_observed_as"] == {"model.layers.0.input_layernorm/in": ["model", "out"]} and cov["promoted_misbound_n"] == 0
     lay = _layouts_from(man)
     for step in lay:
-        lay[step] = [m for m in lay[step] if m["name"] != "model"]                # the committed name of (model, out) is the bare op path
+        lay[step] = [m for m in lay[step] if m["name"] != "model.layers.0.input_layernorm/in"]
     cov = RM.coverage_check(man, lay)
     assert not cov["ok"] and cov["missing_n"] == 2 and all(m["op_path"] == "model" and m["output_member"] == "out" for m in cov["missing"]), cov["missing"]
+    for step in lay:
+        lay[step].append({"name": "model", "numel": 4 * 3 * 2304 * 16, "inv": 0})    # the producer module's own output, committed: not a binder
+    cov = RM.coverage_check(man, lay)
+    assert not cov["ok"] and cov["missing_n"] == 2 and cov["promoted_misbound"] == ["model"] and cov["promoted_misbound_n"] == 2, cov
     # the inventory (the other side of the one-release cross-check) promotes the same rows: agree
     inv = RM.build_manifest(copy.deepcopy(prog), WL, engine="inventory")
     cc = RM.cross_check_manifests(man, inv, primary_engine="traversal", other_engine="inventory")

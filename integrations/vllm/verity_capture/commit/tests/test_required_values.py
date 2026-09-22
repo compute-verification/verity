@@ -647,12 +647,16 @@ def test_dataflow_audit_promotes_a_crossing_family_the_vocabulary_calls_interior
     new = RV.manifest_from_traversal(copy.deepcopy(prog), {"sweep": {"arrive_steps": [0]}})
     assert old["complete"] is True and new["complete"] is True and new["identities"] == old["identities"]
     assert any(r.get("promoted") for r in old["identities"]) and old["query"]["promotion"]["rows"] == 2
-    # the second gate, kept: a collector's layouts that cover everything BUT the promoted member do not pass coverage
+    # the second gate, kept: a collector's layouts that cover everything BUT the promoted member do not pass coverage.  [Commit 2,
+    # PROMOTED_OBSERVATION_RULE] the promoted member's committed name is its first consumer's input (`model.layers.0.mlp.down_proj/in`);
+    # the producer module's own output name (`model.layers.0.input_layernorm`) is not a binder of it
     lay = _layouts_from(new)
-    assert RM.coverage_check(new, lay)["ok"]
-    without = {s: [m for m in ms if m["name"] != "model.layers.0.input_layernorm"] for s, ms in lay.items()}
+    cov = RM.coverage_check(new, lay)
+    assert cov["ok"] and cov["promoted_observed_as"] == {"model.layers.0.mlp.down_proj/in": ["model.layers.0.input_layernorm", "out"]}
+    without = {s: [m for m in ms if m["name"] != "model.layers.0.mlp.down_proj/in"] for s, ms in lay.items()}
     assert sum(len(ms) for ms in without.values()) == sum(len(ms) for ms in lay.values()) - 1
-    assert not RM.coverage_check(new, without)["ok"]
+    cov = RM.coverage_check(new, without)
+    assert not cov["ok"] and cov["missing_n"] == 1 and cov["missing"][0]["op_path"] == "model.layers.0.input_layernorm" and cov["missing"][0]["output_member"] == "out"
     _ref, summ = RV.reference_required_values(copy.deepcopy(prog), RV.Query())
     assert summ["complete"] and summ["promotion"]["rows"] == 2 and summ["promotion"]["faults"] == {}, summ.get("promotion")
     # the same Program where the mean stays inside its module (read by a same-module op only): no finding

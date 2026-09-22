@@ -72,6 +72,8 @@ def _layouts_from(man: dict, *, rope_per_layer_names: bool = False) -> dict[int,
         op, member = r["op_path"], r["output_member"]
         if r["family"].endswith("hidden_m1_stream"):
             name = f"{op}/{member}"
+        elif r.get("promoted"):
+            name = f"{r['consumers'][0]}/in"              # [R19 int-20] a promoted member is observed at its first consumer's input (PROMOTED_OBSERVATION_RULE)
         elif member == "out":
             name = op
         else:

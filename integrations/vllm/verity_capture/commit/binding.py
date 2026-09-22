@@ -27,6 +27,10 @@ import json
 from collections import Counter
 from typing import Any, Iterable, Iterator
 
+from verity_capture.commit.required_manifest import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
+from verity_capture.commit.required_manifest import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
+from verity_capture.commit.required_manifest import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
+
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 RULES_VERSION = "r14-v1"
 MAP_SCHEMA = "binding-map/1"
@@ -44,67 +48,9 @@ MEMBER_RULES: dict[str, tuple[str, ...]] = {
 }
 FIRST_NORM_SUFFIX = ".layers.0.input_layernorm"
 
-#: [R19 int-20, F-r19-int-20] the bytes per element of a promoted member's manifest dtype (required_manifest.PROMOTED_DTYPES)
-PROMOTED_DTYPE_BYTES = {"bf16": 2, "f32": 4}
-PROMOTED_INPUT_RULE = ("a PROMOTED manifest row (`promoted: true`: an interior Program row whose output another module reads; identity (producer "
-                       "module, `out`)) is observed at the INPUT of its first consumer in Program order (`consumers[0]`): the collector acquires "
-                       "that module's first positional tensor argument as `<consumer>/in` (the existing input-acquisition mechanism, no longer "
-                       "restricted to a module class) and the binding map binds that committed tensor to the producer's identity.  One observation "
-                       "point per promoted member; the table is refused by name when two producers share a first consumer, when a consumer's "
-                       "`/in` is itself a manifest identity, or when a producer's first consumer differs between its rows.  A consumer that is "
-                       "not a module of the built model, or whose first argument is not the value, leaves the identity unbound: coverage fails "
-                       "by name, nothing is guessed.")
-
-
-def promoted_input_acquisition(manifest: dict[str, Any]) -> dict[str, Any]:
-    """[R19 int-20] From the required manifest's promoted rows: the committed names the collector must acquire and the identities they bind.
-    Returns {"names": {"<consumer>/in": [producer op_path, member]}, "consumers": {consumer op_path: bytes per token of the acquired
-    input}, "producers": {producer: {"consumer", "width", "dtype", "spec", "rows_n"}}, "problems": [text]} -- `problems` non-empty = the
-    table is not usable (the caller refuses by name; PROMOTED_INPUT_RULE)."""
-    names: dict[str, list[str]] = {}
-    consumers: dict[str, int] = {}
-    producers: dict[str, dict[str, Any]] = {}
-    problems: list[str] = []
-    rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
-    own_inputs = {str(r.get("op_path")) for r in rows if str(r.get("output_member")) == "in" and not r.get("promoted")}
-    for r in rows:
-        if not r.get("promoted"):
-            continue
-        op = str(r.get("op_path"))
-        member = str(r.get("output_member", "out"))
-        cons = [str(c) for c in (r.get("consumers") or [])]
-        if not cons:
-            problems.append(f"promoted row {op}/{member} (spec {r.get('spec')}) names no consumer: no observation point")
-            continue
-        first = cons[0]
-        w, dt = r.get("width"), str(r.get("dtype"))
-        bpe = PROMOTED_DTYPE_BYTES.get(dt)
-        if not isinstance(w, int) or w <= 0 or bpe is None:
-            problems.append(f"promoted row {op}/{member}: width {w!r} / dtype {dt!r} not usable for the arena bound (PROMOTED_DTYPE_BYTES {sorted(PROMOTED_DTYPE_BYTES)})")
-            continue
-        p = producers.get(op)
-        if p is None:
-            producers[op] = {"consumer": first, "width": int(w), "dtype": dt, "spec": r.get("spec"), "rows_n": 1, "member": member}
-        else:
-            p["rows_n"] += 1
-            if p["consumer"] != first:
-                problems.append(f"promoted rows of {op}/{member} name different first consumers ({p['consumer']!r} vs {first!r}): one observation point per member")
-            if p["member"] != member:
-                problems.append(f"promoted rows of {op} name different members ({p['member']!r} vs {member!r})")
-            if (p["width"], p["dtype"]) != (int(w), dt):
-                problems.append(f"promoted rows of {op}/{member} disagree on the signature ({p['width']} {p['dtype']} vs {w} {dt})")
-    for op, p in sorted(producers.items()):
-        name = f"{p['consumer']}/in"
-        if p["consumer"] in own_inputs:
-            problems.append(f"promoted {op}/{p['member']}: its first consumer's input {name} is itself a manifest identity ({p['consumer']}, in)")
-            continue
-        other = names.get(name)
-        if other is not None:
-            problems.append(f"promoted {op}/{p['member']} and {other[0]}/{other[1]} share the first consumer {p['consumer']}: one committed {name} cannot bind two identities")
-            continue
-        names[name] = [op, p["member"]]
-        consumers[p["consumer"]] = int(p["width"]) * PROMOTED_DTYPE_BYTES[p["dtype"]]
-    return {"names": names, "consumers": consumers, "producers": producers, "problems": problems, "rule": PROMOTED_INPUT_RULE}
+#: [R19 int-20, F-r19-int-20] a promoted member's observation point (`PROMOTED_INPUT_RULE`, `promoted_input_acquisition`): the manifest
+#: module owns the rule (required_manifest.PROMOTED_OBSERVATION_RULE / promoted_observation, shared by the collector's arming, this map and
+#: the layout-level required_manifest.coverage_check); imported above under the binding's names for its callers (bench.commit_delta, tests).
 
 
 # ---------------------------------------------------------------------- names -> identity parts

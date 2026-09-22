@@ -600,6 +600,71 @@ def promoted_annotations(d: dict[str, Any]) -> dict[str, Any]:
             "consumers": list(d["consumers"])}
 
 
+#: [R19 int-20, F-r19-int-20] the bytes per element of a promoted member's manifest dtype (PROMOTED_DTYPES)
+PROMOTED_DTYPE_BYTES = {"bf16": 2, "f32": 4}
+PROMOTED_OBSERVATION_RULE = ("a PROMOTED manifest row (`promoted: true`: an interior Program row whose output another module reads; identity (producer "
+                             "module, `out`)) is observed at the INPUT of its first consumer in Program order (`consumers[0]`): the collector acquires "
+                             "that module's first positional tensor argument as `<consumer>/in` (the existing input-acquisition mechanism, no longer "
+                             "restricted to a module class) and that committed tensor binds the producer's identity -- the producer module's own "
+                             "forward output never does (the promoted value is by definition not a module output).  One observation point per "
+                             "promoted member; the table is refused by name when two producers share a first consumer, when a consumer's `/in` is "
+                             "itself a manifest identity, or when a producer's first consumer differs between its rows.  A consumer that is not a "
+                             "module of the built model, or whose first argument is not the value, leaves the identity unbound: coverage fails by "
+                             "name, nothing is guessed.")
+
+
+def promoted_observation(manifest: dict[str, Any]) -> dict[str, Any]:
+    """[R19 int-20] From the required manifest's promoted rows: the committed names the collector must acquire and the identities they bind
+    (PROMOTED_OBSERVATION_RULE).  Returns {"names": {"<consumer>/in": [producer op_path, member]}, "consumers": {consumer op_path: bytes per
+    token of the acquired input}, "producers": {producer: {"consumer", "width", "dtype", "spec", "rows_n", "member"}}, "problems": [text]} --
+    `problems` non-empty = the table is not usable (the caller refuses by name).  The one definition the collector's arming
+    (bench.commit_delta via binding.promoted_input_acquisition), the binding map and the layout-level `coverage_check` share."""
+    names: dict[str, list[str]] = {}
+    consumers: dict[str, int] = {}
+    producers: dict[str, dict[str, Any]] = {}
+    problems: list[str] = []
+    rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
+    own_inputs = {str(r.get("op_path")) for r in rows if str(r.get("output_member")) == "in" and not r.get("promoted")}
+    for r in rows:
+        if not r.get("promoted"):
+            continue
+        op = str(r.get("op_path"))
+        member = str(r.get("output_member", PROMOTED_MEMBER))
+        cons = [str(c) for c in (r.get("consumers") or [])]
+        if not cons:
+            problems.append(f"promoted row {op}/{member} (spec {r.get('spec')}) names no consumer: no observation point")
+            continue
+        first = cons[0]
+        w, dt = r.get("width"), str(r.get("dtype"))
+        bpe = PROMOTED_DTYPE_BYTES.get(dt)
+        if not isinstance(w, int) or isinstance(w, bool) or w <= 0 or bpe is None:
+            problems.append(f"promoted row {op}/{member}: width {w!r} / dtype {dt!r} not usable for the arena bound (PROMOTED_DTYPE_BYTES {sorted(PROMOTED_DTYPE_BYTES)})")
+            continue
+        p = producers.get(op)
+        if p is None:
+            producers[op] = {"consumer": first, "width": int(w), "dtype": dt, "spec": r.get("spec"), "rows_n": 1, "member": member}
+        else:
+            p["rows_n"] += 1
+            if p["consumer"] != first:
+                problems.append(f"promoted rows of {op}/{member} name different first consumers ({p['consumer']!r} vs {first!r}): one observation point per member")
+            if p["member"] != member:
+                problems.append(f"promoted rows of {op} name different members ({p['member']!r} vs {member!r})")
+            if (p["width"], p["dtype"]) != (int(w), dt):
+                problems.append(f"promoted rows of {op}/{member} disagree on the signature ({p['width']} {p['dtype']} vs {w} {dt})")
+    for op, p in sorted(producers.items()):
+        name = f"{p['consumer']}/in"
+        if p["consumer"] in own_inputs:
+            problems.append(f"promoted {op}/{p['member']}: its first consumer's input {name} is itself a manifest identity ({p['consumer']}, in)")
+            continue
+        other = names.get(name)
+        if other is not None:
+            problems.append(f"promoted {op}/{p['member']} and {other[0]}/{other[1]} share the first consumer {p['consumer']}: one committed {name} cannot bind two identities")
+            continue
+        names[name] = [op, p["member"]]
+        consumers[p["consumer"]] = int(p["width"]) * PROMOTED_DTYPE_BYTES[p["dtype"]]
+    return {"names": names, "consumers": consumers, "producers": producers, "problems": problems, "rule": PROMOTED_OBSERVATION_RULE}
+
+
 def promotion_header(result: dict[str, Any] | None) -> dict[str, Any]:
     """The query header's `promotion` block (identical on every engine): the rule, the member, what was promoted."""
     fams = (result or {}).get("families") or {}
@@ -1715,13 +1780,25 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
                 "checked_by_family": {}, "families_missing_entirely": sorted(um), "steps_with_missing": [], "missing": [],
                 "committed_unmatched_n": 0, "committed_unmatched": [], "committed_extras_n": 0, "duplicate_names_n": 0, "steps_committed": [], "unmodelled": um}
     aliases = manifest.get("op_path_aliases") or {}
+    # [R19 int-20] a PROMOTED identity (producer module, `out`) is committed under its first consumer's input name (`<consumer>/in`,
+    # PROMOTED_OBSERVATION_RULE): that name binds the producer identity here; a committed tensor named for the producer module itself (its
+    # forward output -- by definition NOT the promoted value) binds nothing and is counted under `promoted_misbound`
+    promoted_keys = {(str(r["op_path"]), str(r["output_member"])) for r in manifest.get("identities") or [] if r.get("promoted")}
+    rebind: dict[str, tuple[str, str]] = {}
+    if promoted_keys:
+        rebind = {k: (v[0], v[1]) for k, v in promoted_observation(manifest)["names"].items()}
+    misbound: list[str] = []
     have: dict[tuple, list[int]] = {}
     extras = 0
     for step, metas in layouts.items():
         seen: Counter = Counter()
         for m in metas:
-            ident = committed_identity(m["name"])
+            ident = rebind.get(m["name"]) or committed_identity(m["name"])
             if ident is None:
+                extras += 1
+                continue
+            if ident in promoted_keys and m["name"] not in rebind:
+                misbound.append(m["name"])
                 extras += 1
                 continue
             op, member = ident
@@ -1810,7 +1887,9 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
             "requests_with_missing": requests_missing[:64],
             "missing": missing[:max_report], "committed_unmatched_n": len(unexpected), "committed_unmatched": [list(k) for k in unexpected[:max_report]],
             "committed_extras_n": extras, "duplicate_names_n": len(dup), "steps_committed": sorted(int(s) for s in layouts),
-            "composition_mismatch_n": len(composition), "composition_mismatch": composition[:max_report]}
+            "composition_mismatch_n": len(composition), "composition_mismatch": composition[:max_report],
+            **({"promoted_observed_as": dict(sorted((k, list(v)) for k, v in rebind.items())), "promoted_misbound_n": len(misbound),
+                "promoted_misbound": sorted(set(misbound))[:max_report]} if promoted_keys else {})}
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
