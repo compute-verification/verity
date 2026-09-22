@@ -6,8 +6,8 @@ import random
 import pytest
 import torch
 
-from .. import logup_reference as lref
-from .. import reference as ref
+from packed import logup_reference as lref
+from packed import reference as ref
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
 
@@ -21,7 +21,7 @@ def _case(Nw: int, Nt: int, seed: int):
 
 
 def _run(Nw: int, Nt: int, k: int, seed: int = 1, k1_log2: int = 7):
-    from .. import logup_gpu as lg
+    from packed import logup_gpu as lg
 
     queries, table, z = _case(Nw, Nt, seed)
     mult = lref.multiplicities(queries, table)
