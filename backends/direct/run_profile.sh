@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Profile the two realisations side by side with Plonky3's tracing spans (PROTOCOL.md section 14.6):
-#   bash backends/direct/run_profile.sh babybear [VUS] [QUERIES]
+#   bash backends/direct/run_profile.sh babybear [VUS] [QUERIES] [MODES="limbs lookup v2"]
 # Runs `vu-bench` (2-bit limbs) and `vu-bench --lookup` (LogUp) once each with RUST_LOG=debug; the span close
 # events (commit to trace data / compute quotient polynomial / commit to quotient poly chunks / open, with the
 # DFT and Merkle spans inside them) go to stderr and are summarised into spans_{limbs,lookup}.txt.
@@ -18,8 +18,8 @@ cd backends/direct
 echo "== build ($FIELD, $VUS VUs, $QUERIES queries, threads=$RAYON_NUM_THREADS)"
 cargo build --release -j12 2>&1 | tail -2
 BIN="$CARGO_TARGET_DIR/release/direct-unit"
-for mode in limbs lookup; do
-  flag=""; [ "$mode" = lookup ] && flag="--lookup"
+for mode in ${MODES:-limbs lookup}; do
+  flag=""; [ "$mode" = lookup ] && flag="--lookup"; [ "$mode" = v2 ] && flag="--v2"
   echo "== vu-bench $flag (RUST_LOG=debug)"
   RUST_LOG=debug "$BIN" vu-bench $flag --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES" \
     2> "$OUT/spans_$mode.raw" | grep -E "^field=|^lookup stages"
