@@ -86,6 +86,16 @@ commits as run (the interactive Ligero design is 3). Soundness of this FRI confi
 decoding, −log2((1+ρ)/2) per query + PoW), conjectured 216; field terms (≈ 2^-128 · degree) omitted. Proof size is
 100 queries × 2,794-wide openings, hence flat in B.
 
+## Latency axis (lane latency, 2026-09-22)
+
+`rounds.sequential_depth` is *measured*: `src/rtt.rs` wraps the Plonky3 challenger and counts every `observe -> sample`
+boundary of the prover's transcript as one verifier message of the interactive reading (as run, Plonky3 is Fiat-Shamir,
+depth 1); `--rtt-ms X` (or `VERITY_RTT_MS`, `RTT_MS=` in `run_vu.sh`) sleeps `X` ms at each boundary, and the envelope
+carries `t.e2e.rtt_Xms` measured plus the other RTTs predicted (`t.total` is compute with the sleep subtracted;
+`direct.depth_formula_legacy` is the earlier `log_n + 5`). Measured: 2^13 rows (B=64) depth **16** (legacy 18), 2^19 rows
+(B=4096) depth **22** (legacy 24); B=64 e2e at 50 ms RTT 3.98 s = 3.04 compute + 0.14 verify + 16 × 50 ms (model 3.98 s).
+See `backends/numerical/reports/latency.md`.
+
 ## The K=1536 VU chain: recorded runs (vy-cpu2, AMD EPYC 9654, **12 threads**, release)
 
 `bench-instances/v1`, tier `vu-k1536`, ids 0..4096 (operand arrays built on the pod by run r20260922-052410-8160,
