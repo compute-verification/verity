@@ -131,6 +131,7 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
         for p in &partial { for t in 0..4 { h[t] += p[t]; } }
         out.extend_from_slice(&h);
         tr.absorb_exts(&h);
+        tr.round_trip();
         let r = tr.challenge();
         c_star.push(r);
         // fold a, bb, e
@@ -198,6 +199,7 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
         return (LayerClaim { w: vec![], copy_point: c_star.clone(), value: Ext::ZERO }, Some((l_star, vl, r_star, vr)));
     }
     tr.label(&format!("gkr layer {}: alpha (merge the two input claims)", layer.name));
+    tr.round_trip();
     let alpha = tr.challenge();
     let er = eq_table(&r_star);
     let nw: Vec<Ext> = el.iter().zip(&er).map(|(x, y)| *x + alpha * *y).collect();
@@ -231,6 +233,7 @@ fn sumcheck_prod(u: &mut Vec<Ext>, w: &mut Vec<Ext>, tr: &mut Transcript, out: &
         }
         out.extend_from_slice(&[s0, s1, s2]);
         tr.absorb_exts(&[s0, s1, s2]);
+        tr.round_trip();
         let r = tr.challenge();
         point.push(r);
         fold_in_place(u, r);

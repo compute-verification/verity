@@ -72,10 +72,36 @@ pub enum Event { Label(String), Absorb { bytes: Vec<u8>, state: [u8; 32] }, Chal
 /// Fiat-Shamir: state <- H(state || message); challenge_i <- H(state || "chal" || ctr) with rejection sampling
 /// (`Fp::rejection_sample` on each digest, coordinate by coordinate, `DEGREE` coordinates per challenge).
 /// `slots` counts every challenge drawn (`rounds.protocol` in the one-coin-per-message reading).
-pub struct Transcript { state: [u8; 32], ctr: u64, pub slots: u64, pub log: Option<Vec<Event>> }
+///
+/// Latency emulation (lane latency, 2026-09-22): in production the protocol is interactive (the verifier's coins
+/// arrive over the network, `backends/ZK_CONSTRUCTION.md` 3.3), so every verifier message on the critical path is
+/// one network round trip.  The prover marks those points with [`Transcript::round_trip`]: it counts them
+/// (`trips` = `rounds.sequential_depth`, measured rather than derived) and, when `rtt` is set (`--rtt-ms`),
+/// sleeps one RTT there -- the prover waiting for the challenge.  Only the *critical* chain is marked (the
+/// deepest logUp table, the deepest segment: the other instances run in lock-step with it and cost no extra
+/// trip, PROTOCOL.md 5.4).  The protocol and the bytes are unchanged; the hook is a delay, not a change.
+pub struct Transcript {
+    state: [u8; 32], ctr: u64, pub slots: u64, pub log: Option<Vec<Event>>,
+    rtt: Option<std::time::Duration>, pub trips: u64, pub critical: bool, pub slept: std::time::Duration,
+}
 
 impl Transcript {
-    pub fn new(domain: &[u8]) -> Self { Transcript { state: Sha256::digest(domain), ctr: 0, slots: 0, log: None } }
+    pub fn new(domain: &[u8]) -> Self {
+        Transcript { state: Sha256::digest(domain), ctr: 0, slots: 0, log: None, rtt: None, trips: 0, critical: false, slept: std::time::Duration::ZERO }
+    }
+    /// Emulate a network with this round-trip time: every critical-path verifier message costs one sleep.
+    pub fn set_rtt(&mut self, rtt: Option<std::time::Duration>) { self.rtt = rtt; }
+    /// One verifier message on the critical path (a prover message was just absorbed and the next prover message
+    /// depends on the challenge drawn next).  No-op unless `critical` is set for the current chain.
+    pub fn round_trip(&mut self) {
+        if !self.critical { return; }
+        self.trips += 1;
+        if let Some(d) = self.rtt {
+            let t = std::time::Instant::now();
+            std::thread::sleep(d);
+            self.slept += t.elapsed();
+        }
+    }
     /// Start recording every absorb / challenge / label (for the transcript vectors).
     pub fn with_log(domain: &[u8]) -> Self { let mut t = Self::new(domain); t.log = Some(vec![Event::Absorb { bytes: domain.to_vec(), state: t.state }]); t }
     pub fn label(&mut self, s: &str) { if let Some(l) = &mut self.log { l.push(Event::Label(s.to_string())); } }

@@ -201,6 +201,7 @@ pub fn prove_open(cm: &Committed, mut a: Vec<Ext>, p: &Params, tr: &mut Transcri
         for (x, y) in q.iter_mut().zip(pq) { *x += y; }
     }
     ntt_ext(&mut q, true);
+    tr.round_trip(); // w and q go to the verifier; Q comes back (the opened columns are the final one-way message)
     debug_assert!(q[2 * p.k - 1..].iter().all(|x| x.is_zero()), "q degree exceeds 2k-2");
     let qc = q[..2 * p.k - 1].to_vec();
     out.extend_from_slice(&w);
