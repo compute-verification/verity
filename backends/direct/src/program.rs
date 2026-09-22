@@ -87,6 +87,7 @@ pub trait Ctx {
 /// A fixed table realised by one-hot selection over its distinct rows.  `rows[j]` matches `key == keys[j]`;
 /// when `saturate` is set, the last row instead matches `key >= keys[last]` (proved by a range-checked slack
 /// below `slack_hi`).  Outputs are linear combinations of the selectors.
+#[derive(Clone, Debug)]
 pub struct Table {
     pub name: &'static str,
     pub keys: Vec<i128>,

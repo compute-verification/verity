@@ -14,7 +14,7 @@ use std::time::Instant;
 use p3_field::PrimeField64;
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
-use p3_uni_stark::Val;
+use p3_uni_stark::{StarkGenericConfig, Val};
 use serde_json::{json, Value};
 use verity_direct::air::{self, ChainAir, ChainIdx, Layout, UnitAir, VuIo};
 use verity_direct::ctx::{modp, FieldKind};
@@ -46,6 +46,10 @@ fn main() {
     match args.get(1).map(|s| s.as_str()) {
         Some("bench") => bench(&args),
         Some("crosscheck") => crosscheck(&args),
+        Some("vu-bench") if args.iter().any(|a| a == "--lookup") => match field_arg(&args) {
+            FieldKind::Goldilocks => vu_bench_lookup::<GoldilocksBackend>(&args),
+            FieldKind::BabyBear => vu_bench_lookup::<BabyBearBackend>(&args),
+        },
         Some("vu-bench") => match field_arg(&args) {
             FieldKind::Goldilocks => vu_bench::<GoldilocksBackend>(&args),
             FieldKind::BabyBear => vu_bench::<BabyBearBackend>(&args),
@@ -58,6 +62,43 @@ fn main() {
             FieldKind::Goldilocks => check_rows::<stark::Val64>(&args),
             FieldKind::BabyBear => check_rows::<stark::Val32>(&args),
         },
+        Some("chain-layout") if args.iter().any(|a| a == "--lookup") => {
+            let kind = field_arg(&args);
+            let d = if kind.small() { 4 } else { 2 };
+            let (air_, lay) = air::LookupChainAir::new(kind, d);
+            let ll = &air_.lay;
+            let pre_w = verity_direct::lookup::PRE_WIDTH;
+            let aux_w = ll.aux_width(d);
+            println!(
+                "field={kind:?} lookup=logup main_width={} (incl. multiplicity) aux_width={} (helpers={} x{d} + g + S) pre_width={pre_w} committed_width={} hints={} materialised={} constraints={} queries/row={} table_rows={}",
+                lay.width,
+                aux_w,
+                ll.n_helpers(),
+                lay.width + aux_w + pre_w,
+                lay.n_hints,
+                lay.n_mat,
+                lay.constraint_names.len(),
+                ll.n_queries(),
+                ll.tables.total_rows
+            );
+            for (n, r) in ll.tables.describe() {
+                println!("  table {n:8} rows={r}");
+            }
+            let mut by_deg = std::collections::BTreeMap::new();
+            for d in &ll.query_degs {
+                *by_deg.entry(*d).or_insert(0usize) += 1;
+            }
+            println!("  query degrees: {by_deg:?}");
+            census(&lay);
+            if args.iter().any(|a| a == "--names") {
+                for (i, n) in lay.col_names.iter().enumerate() {
+                    println!("col {i:4} {n}");
+                }
+                for (i, n) in ll.query_names.iter().enumerate() {
+                    println!("query {i:4} deg={} {n}", ll.query_degs[i]);
+                }
+            }
+        }
         Some("chain-layout") => {
             let kind = field_arg(&args);
             let (air_, lay) = ChainAir::new(kind);
@@ -367,9 +408,193 @@ where
     let ok = stark::verify_with::<B, _>(&air_, &proof, log_n, fri);
     let t_verify = t3.elapsed().as_secs_f64();
     assert!(ok.is_ok(), "verification failed: {:?}", ok.err());
+    write_result(BenchNumbers {
+        kind,
+        out: &out,
+        fri,
+        n_vus,
+        rows,
+        width,
+        committed_width: width,
+        t_witness,
+        t_prove,
+        t_ser,
+        t_verify,
+        bytes,
+        lqd,
+        tier: &tier,
+        root: &root,
+        challenge_name: B::challenge_name(),
+        challenge_bits: B::challenge_bits(),
+        rounds_extra: 0,
+        constraints_note: "WP2 gadget contracts + Epilogue as direct AIR constraints, one row per transition unit, accumulator carried by a transition constraint, VU boundary by a step counter; range checks as 2-bit limbs, fixed tables as one-hot selectors; no lookup argument",
+        realisation: "limbs",
+        extra: vec![],
+        lookup_bits: None,
+    });
+}
+
+/// `vu-bench --lookup`: the LogUp realisation (PROTOCOL.md section 14): three commitment rounds.
+fn vu_bench_lookup<B: Backend>(args: &[String])
+where
+    Val<B::SC>: PrimeField64 + Send + Sync,
+    <<B::SC as StarkGenericConfig>::Pcs as p3_commit::Pcs<<B::SC as StarkGenericConfig>::Challenge, <B::SC as StarkGenericConfig>::Challenger>>::Commitment: PartialEq,
+{
+    use verity_direct::lookup::{aux_matrix, lookup_soundness_bits, PRE_WIDTH};
+    use verity_direct::lookup_stark::{proof_bytes_lookup, prove_lookup, verify_lookup};
+    let kind = B::KIND;
+    let root = Path::new(&arg(args, "--root").unwrap_or_else(|| "fixtures/bench-instances/v1".into())).to_path_buf();
+    let out = arg(args, "--out").or_else(|| std::env::var("RESEARCH_RUN_DIR").ok()).unwrap_or_else(|| ".".into());
+    let mut fri: FriParams = DEFAULT_FRI;
+    if let Some(q) = arg(args, "--queries") {
+        fri.num_queries = q.parse().unwrap();
+    }
+    fs::create_dir_all(&out).unwrap();
+    let tier = load_tier(&root, "vu-k1536");
+    let n_vus: usize = arg(args, "--vus").map(|s| s.parse().unwrap()).unwrap_or(tier.vus.len());
+    let vus = &tier.vus[..n_vus];
+    let recorded_accs = tier.accs.as_ref().unwrap();
+    let ext_deg = <<B::SC as StarkGenericConfig>::Challenge as p3_field::AbstractExtensionField<Val<B::SC>>>::D;
+
+    let (air_, lay) = air::LookupChainAir::new(kind, ext_deg);
+    let t0 = Instant::now();
+    let (main, queries, accs): (RowMajorMatrix<Val<B::SC>>, Vec<u32>, Vec<Vec<u64>>) = air::chain_trace_lookup(&air_, vus, 2);
+    let rows = main.height();
+    let pre: RowMajorMatrix<Val<B::SC>> = air_.lay.tables.preprocessed(rows);
+    let t_witness = t0.elapsed().as_secs_f64();
+
+    let mut acc_mismatch = 0usize;
+    for (i, a) in accs.iter().enumerate() {
+        if a != &recorded_accs[i] {
+            acc_mismatch += 1;
+        }
+    }
+    assert_eq!(acc_mismatch, 0, "{acc_mismatch} VUs disagree with the recorded accumulators");
+    let claim_col = lay.col(verity_direct::program::COL_CLAIM);
+    let last_col = lay.col(verity_direct::program::COL_LAST);
+    let cast_hi = if lay.has("cast.hi") { lay.col("cast.hi") } else { lay.col("pack.y_hi") };
+    let cast_carry = lay.col("cast.carry");
+    let steps = STEPS as usize;
+    for (i, vu) in vus.iter().enumerate() {
+        let r = i * steps + steps - 1;
+        let row = main.row_slice(r);
+        assert_eq!(row[last_col].as_canonical_u64(), 1);
+        assert_eq!(row[claim_col].as_canonical_u64(), vu.y16, "vu {i}: claim column");
+        assert_eq!(row[cast_hi].as_canonical_u64() + row[cast_carry].as_canonical_u64(), vu.y16, "vu {i}: epilogue word != recorded word");
+    }
+
+    let width = main.width();
+    let aux_w = air_.lay.aux_width(ext_deg);
+    let committed_width = width + aux_w + PRE_WIDTH;
+    let log_n = rows.trailing_zeros() as usize;
+    let lqd = p3_util::log2_ceil_usize(verity_direct::program::MAX_DEG - 1);
+    assert!(lqd <= fri.log_blowup);
+    let config = B::config(log_n, fri);
+    let mult: Vec<Val<B::SC>> = (0..rows).map(|r| main.values[r * width + width - 1]).collect();
+    let llay = air_.lay.clone();
+    let pre_for_verify = pre.clone();
+
+    let t1 = Instant::now();
+    let mut challenger = B::challenger();
+    let (proof, stage) = prove_lookup(&config, &air_, &mut challenger, pre, main, |z, beta| aux_matrix(&llay, &queries, &mult, rows, z, beta, true));
+    let t_prove = t1.elapsed().as_secs_f64();
+    let t2 = Instant::now();
+    let bytes = proof_bytes_lookup(&proof);
+    let t_ser = t2.elapsed().as_secs_f64();
+    let t3 = Instant::now();
+    let mut challenger = B::challenger();
+    let ok = verify_lookup(&config, &air_, &mut challenger, &proof, pre_for_verify);
+    let t_verify = t3.elapsed().as_secs_f64();
+    assert!(ok.is_ok(), "verification failed: {:?}", ok.err());
+    let lookup_bits = lookup_soundness_bits(rows, air_.lay.n_queries(), air_.lay.tables.total_rows, B::challenge_bits() as f64);
+    println!(
+        "lookup stages: commit_pre={:.2}s commit_main={:.2}s aux_build={:.2}s commit_aux={:.2}s quotient={:.2}s commit_quotient={:.2}s open={:.2}s; main_width={width} aux_width={aux_w} pre_width={PRE_WIDTH} helpers={} queries/row={} table_rows={} lookup_bits={lookup_bits:.1}",
+        stage.commit_pre,
+        stage.commit_main,
+        stage.aux_build,
+        stage.commit_aux,
+        stage.quotient,
+        stage.commit_quotient,
+        stage.open,
+        air_.lay.n_helpers(),
+        air_.lay.n_queries(),
+        air_.lay.tables.total_rows
+    );
+    let extra = vec![
+        json!({"name": "direct.lookup.main_width", "value": width, "unit": "count"}),
+        json!({"name": "direct.lookup.aux_width", "value": aux_w, "unit": "count"}),
+        json!({"name": "direct.lookup.pre_width", "value": PRE_WIDTH, "unit": "count"}),
+        json!({"name": "direct.lookup.helpers", "value": air_.lay.n_helpers(), "unit": "count"}),
+        json!({"name": "direct.lookup.queries_per_row", "value": air_.lay.n_queries(), "unit": "count"}),
+        json!({"name": "direct.lookup.table_rows", "value": air_.lay.tables.total_rows, "unit": "count"}),
+        json!({"name": "direct.lookup.bits", "value": lookup_bits, "unit": "bits"}),
+        json!({"name": "direct.stage.commit_pre_s", "value": stage.commit_pre, "unit": "s"}),
+        json!({"name": "direct.stage.commit_main_s", "value": stage.commit_main, "unit": "s"}),
+        json!({"name": "direct.stage.aux_build_s", "value": stage.aux_build, "unit": "s"}),
+        json!({"name": "direct.stage.commit_aux_s", "value": stage.commit_aux, "unit": "s"}),
+        json!({"name": "direct.stage.quotient_s", "value": stage.quotient, "unit": "s"}),
+        json!({"name": "direct.stage.commit_quotient_s", "value": stage.commit_quotient, "unit": "s"}),
+        json!({"name": "direct.stage.open_s", "value": stage.open, "unit": "s"}),
+    ];
+    write_result(BenchNumbers {
+        kind,
+        out: &out,
+        fri,
+        n_vus,
+        rows,
+        width,
+        committed_width,
+        t_witness,
+        t_prove,
+        t_ser,
+        t_verify,
+        bytes,
+        lqd,
+        tier: &tier,
+        root: &root,
+        challenge_name: B::challenge_name(),
+        challenge_bits: B::challenge_bits(),
+        rounds_extra: 2,
+        constraints_note: "WP2 gadget contracts + Epilogue as direct AIR constraints, one row per transition unit, accumulator carried by a transition constraint, VU boundary by a step counter; range checks and fixed tables as LogUp queries against preprocessed tables (PROTOCOL.md section 14): multiplicity column in the main trace, helper / g / running-sum columns in an auxiliary round after the challenges z, beta",
+        realisation: "logup",
+        extra,
+        lookup_bits: Some(lookup_bits),
+    });
+}
+
+struct BenchNumbers<'a> {
+    kind: FieldKind,
+    out: &'a str,
+    fri: FriParams,
+    n_vus: usize,
+    rows: usize,
+    width: usize,
+    /// Total committed width per row (main + aux + preprocessed for the lookup realisation).
+    committed_width: usize,
+    t_witness: f64,
+    t_prove: f64,
+    t_ser: f64,
+    t_verify: f64,
+    bytes: usize,
+    lqd: usize,
+    tier: &'a VuTier,
+    root: &'a Path,
+    challenge_name: &'static str,
+    challenge_bits: usize,
+    rounds_extra: usize,
+    constraints_note: &'a str,
+    realisation: &'a str,
+    extra: Vec<Value>,
+    lookup_bits: Option<f64>,
+}
+
+fn write_result(b: BenchNumbers) {
+    let BenchNumbers { kind, out, fri, n_vus, rows, width, committed_width, t_witness, t_prove, t_ser, t_verify, bytes, lqd, tier, root, challenge_name, challenge_bits, rounds_extra, constraints_note, realisation, extra, lookup_bits } = b;
+    let steps = STEPS as usize;
+    let log_n = rows.trailing_zeros() as usize;
     let t_total = t_witness + t_prove + t_ser;
     let threads = rayon::current_num_threads();
-    let rounds = log_n + 5;
+    let rounds = log_n + 5 + rounds_extra;
     let bits_proven = fri.bits_proven();
     let bits_conj = fri.bits_conjectured();
     let q128 = fri.queries_for_proven(128.0);
@@ -378,13 +603,13 @@ where
         FieldKind::Goldilocks => 2,
         FieldKind::BabyBear => 4,
     };
-    let committed_trace = (rows * width) as u64;
+    let committed_trace = (rows * committed_width) as u64;
     let quotient_cells = (rows * (1 << lqd) * ext_deg) as u64;
     let field_bytes = match kind {
         FieldKind::Goldilocks => 8u64,
         FieldKind::BabyBear => 4,
     };
-    let per_vu_cells = (steps * width) as u64;
+    let per_vu_cells = (steps * committed_width) as u64;
     // bench.contract NATIVE_REFERENCE: A100 dense BF16 tensor-core peak, 312 TFLOP/s; 2K flop per VU
     let native_seconds_per_vu = 2.0 * 1536.0 / 312e12;
     let run_id = std::env::var("RESEARCH_RUN_ID").unwrap_or_else(|_| "local".into());
@@ -394,7 +619,7 @@ where
         FieldKind::BabyBear => "babybear",
     };
 
-    let measurements = vec![
+    let mut measurements = vec![
         json!({"name": "t.witness", "value": t_witness, "unit": "s"}),
         json!({"name": "t.joint.encoding_commitment+arithmetic", "value": t_prove, "unit": "s"}),
         json!({"name": "t.serialization", "value": t_ser, "unit": "s"}),
@@ -414,6 +639,7 @@ where
         json!({"name": "direct.rows", "value": rows, "unit": "count"}),
         json!({"name": "direct.rows_real", "value": n_vus * steps, "unit": "count"}),
         json!({"name": "direct.width", "value": width, "unit": "count"}),
+        json!({"name": "direct.committed_width", "value": committed_width, "unit": "count"}),
         json!({"name": "direct.trace_cells", "value": committed_trace, "unit": "count"}),
         json!({"name": "direct.quotient_cells", "value": quotient_cells, "unit": "count"}),
         json!({"name": "direct.committed_cells_per_vu", "value": per_vu_cells, "unit": "count"}),
@@ -425,6 +651,7 @@ where
         json!({"name": "direct.fri_bits_conjectured", "value": bits_conj, "unit": "bits"}),
         json!({"name": "direct.fri_queries_for_128_proven", "value": q128, "unit": "count"}),
     ];
+    measurements.extend(extra);
     let result = json!({
         "schema": "research/result/v0.1",
         "run_id": run_id,
@@ -443,20 +670,22 @@ where
                 "target": -80,
                 "fri": fri,
                 "field": field_name,
-                "challenge_field": B::challenge_name(),
-                "challenge_bits": B::challenge_bits(),
+                "challenge_field": challenge_name,
+                "challenge_bits": challenge_bits,
                 "hash": "keccak256",
                 "fri_bits_proven_bound": bits_proven,
                 "fri_bits_conjectured_bound": bits_conj,
                 "queries_for_128_proven": q128,
-                "note": "proven bound: unique decoding radius, -log2((1+rate)/2) per query + PoW; field terms (DEEP/quotient batching over the challenge field, ~degree/|challenge field|) omitted"
+                "lookup_bits": lookup_bits,
+                "note": "proven bound: unique decoding radius, -log2((1+rate)/2) per query + PoW; field terms (DEEP/quotient batching over the challenge field, ~degree/|challenge field|) omitted; lookup_bits = the LogUp identity term at the challenge field (section 14.4), null for the limb realisation"
             },
             "hardware": {"gpu": null, "cpu": cpu_model().map(|m| json!({"model": m, "count": threads}))},
-            "software": {"backend": {"name": "verity-direct (plonky3 uni-stark)", "version": "0.2.0", "commit": commit, "plonky3": "0.4.3-succinct"}, "toolchain": {"rustc": option_env!("VERITY_RUSTC").unwrap_or("unknown")}},
+            "software": {"backend": {"name": "verity-direct (plonky3 uni-stark)", "version": "0.3.0", "commit": commit, "plonky3": "0.4.3-succinct"}, "toolchain": {"rustc": option_env!("VERITY_RUSTC").unwrap_or("unknown")}},
             "preprocessing": "none",
             "retention": "retained",
             "unit": "vu",
-            "constraints": "WP2 gadget contracts + Epilogue as direct AIR constraints, one row per transition unit, accumulator carried by a transition constraint, VU boundary by a step counter; range checks as 2-bit limbs, fixed tables as one-hot selectors; no lookup argument",
+            "constraints": constraints_note,
+            "realisation": realisation,
             "note": "Plonky3 FRI/Keccak is the diagnostic PCS, not Candidate B's Ligero-style interactive PCS (PROTOCOL.md); the claimed output words are committed trace cells (the `vu.claim` column) that the last-row constraint binds to the epilogue word -- not bound to any external statement (authentication excluded)"
         },
         "validation": {"status": "passed", "checker": "p3_uni_stark::verify + recorded accumulators", "detail": format!("proof verified; {n_vus} VUs x {steps} steps in {rows} rows; every intermediate accumulator and output word equals bench-instances/v1"), "evidence": [], "index_note": tier.index.get("note").cloned().unwrap_or(Value::Null)},
