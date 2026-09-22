@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 
 import torch
 
+from . import field as _field
 from . import gkr, ligero, logup
 from .circuit import Circuit, Layer, Query, Table, eval_wires, log2ceil, masked_wires, pad_rows
 from .field import (
@@ -29,6 +30,7 @@ from .field import (
     P,
     W,
     Ext,
+    Limbs,
     ONE,
     ZERO,
     e_add,
@@ -252,34 +254,56 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
         v = acc.seg_view(seg_offs[si], s.units, s.ncols)
         # per query the constant part of  z - Σ_k β^k lin_k  and the per-column coefficients -Σ_k β^k coef_{k,idx}
         csts = []
-        C = torch.zeros((q_t, s.ncols, DEG), dtype=torch.int64)       # C[j, idx] = -Σ_k β^k coef_{k, idx}
+        terms: dict[tuple[int, int], Ext] = {}                        # (j, idx) -> -Σ_k β^k coef_{k, idx}
         for j, qu in enumerate(qs):
             cst = z
             for kk, lin in enumerate(qu.cols):
                 cst = e_sub(cst, e_scale(bs_py[kk], lin.konst))
                 for idx, coef in lin.terms:
-                    C[j, idx] = (C[j, idx] - torch.tensor(e_scale(bs_py[kk], coef), dtype=torch.int64)) % P
+                    terms[(j, idx)] = e_sub(terms.get((j, idx), ZERO), e_scale(bs_py[kk], coef))
             csts.append(cst)
         cst_t = t_exts(csts, dev)                                      # (q_t, 6)
-        # Cmat[(j, i), (idx, d)]: coefficient of rle[j]_i in coordinate d of rle[j] · C[j, idx]
-        Cmat = torch.zeros((q_t, DEG, s.ncols, DEG), dtype=torch.int64)
-        for i in range(DEG):
-            for jj in range(DEG):
-                d = i + jj
-                if d < DEG:
-                    Cmat[:, i, :, d] = (Cmat[:, i, :, d] + C[:, :, jj]) % P
-                else:
-                    Cmat[:, i, :, d - DEG] = (Cmat[:, i, :, d - DEG] + W * C[:, :, jj]) % P
-        Cmat = Cmat.reshape(q_t * DEG, s.ncols * DEG).to(dev)
-        step = max(1, (1 << 20) // q_t)
-        for lo in range(0, s.units, step):
-            hi = min(s.units, lo + step)
-            e = eqt[base + lo * q_t: base + hi * q_t].view(hi - lo, q_t, DEG).to(torch.int64)
-            konst = (konst + e.sum(dim=(0, 1))) % P                    # p = 1
-            le = ext_mul(e, lam_t)                                     # λ e        (chunk, q_t, 6)
-            konst = (konst + ext_mul(le, cst_t.unsqueeze(0)).sum(dim=(0, 1))) % P
-            rle = ext_mul(e, rl_t)                                     # ρ λ e
-            v[lo:hi] = (v[lo:hi] + mm_mod(rle.reshape(hi - lo, q_t * DEG), Cmat).view(hi - lo, s.ncols, DEG)) % P
+        e_all = eqt[base: base + s.units * q_t].view(s.units, q_t, DEG)
+        if _field._fast_scatter is not None and dev.type == "cuda":
+            # konst += Σ_u Σ_j e[u, j] (1 + λ cst_j)   (p = 1 for every query leaf)
+            S = e_all.sum(dim=0, dtype=torch.int64) % P                # (q_t, 6)
+            K = ext_mul(cst_t, lam_t)
+            K[:, 0] = (K[:, 0] + 1) % P
+            konst = (konst + ext_mul(S, K).sum(dim=0)) % P
+            # v[u, idx] += Σ_j e[u, j] · (ρ λ C[j, idx])   as a CSR scatter over the (query, column) terms
+            keys = sorted(terms, key=lambda k: (k[1], k[0]))
+            counts = torch.zeros((s.ncols + 1,), dtype=torch.int64)
+            for (_j, idx) in keys:
+                counts[idx + 1] += 1
+            ptr = torch.cumsum(counts, dim=0).to(torch.int32).to(dev)
+            tj = torch.tensor([j for j, _ in keys], dtype=torch.int32, device=dev)
+            tc = ext_mul(t_exts([terms[k] for k in keys], dev), rl_t)  # (T, 6)
+            _field._fast_scatter(e_all, v, ptr, tj, tc)
+        else:
+            C = torch.zeros((q_t, s.ncols, DEG), dtype=torch.int64)   # C[j, idx] = -Σ_k β^k coef_{k, idx}
+            for (j, idx), val in terms.items():
+                C[j, idx] = torch.tensor(val, dtype=torch.int64)
+            # Cmat[(j, i), (idx, d)]: coefficient of rle[j]_i in coordinate d of rle[j] · C[j, idx]
+            Cmat = torch.zeros((q_t, DEG, s.ncols, DEG), dtype=torch.int64)
+            for i in range(DEG):
+                for jj in range(DEG):
+                    d = i + jj
+                    if d < DEG:
+                        Cmat[:, i, :, d] = (Cmat[:, i, :, d] + C[:, :, jj]) % P
+                    else:
+                        Cmat[:, i, :, d - DEG] = (Cmat[:, i, :, d - DEG] + W * C[:, :, jj]) % P
+            Cmat = Limbs(Cmat.reshape(q_t * DEG, s.ncols * DEG).to(dev))
+            step = max(1, (1 << 23) // q_t)
+            for lo in range(0, s.units, step):
+                hi = min(s.units, lo + step)
+                e = e_all[lo:hi].to(torch.int64)
+                konst = (konst + e.sum(dim=(0, 1))) % P                # p = 1
+                le = ext_mul(e, lam_t)                                 # λ e        (chunk, q_t, 6)
+                konst = (konst + ext_mul(le, cst_t.unsqueeze(0)).sum(dim=(0, 1))) % P
+                del le
+                rle = ext_mul(e, rl_t)                                 # ρ λ e
+                del e
+                v[lo:hi] = (v[lo:hi] + mm_mod(rle.reshape(hi - lo, q_t * DEG), Cmat).view(hi - lo, s.ncols, DEG)) % P
         base += s.units * q_t
     rows = len(table.rows)
     e_tab = eqt[base: base + rows]

@@ -210,17 +210,33 @@ def ext_sum(a: torch.Tensor, dim: int = 0) -> torch.Tensor:
     return a.to(torch.int64).sum(dim=dim) % P
 
 
-def mm_mod(A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+class Limbs:
+    """A canonical int64 matrix pre-split into its two 16-bit float64 limb matrices (reused across ``mm_mod`` calls)."""
+
+    def __init__(self, B: torch.Tensor) -> None:
+        B = B.to(torch.int64)
+        self.shape = B.shape
+        self.lo = (B & 0xFFFF).to(torch.float64)
+        self.hi = (B >> 16).to(torch.float64)
+
+
+def mm_mod(A: torch.Tensor | Limbs, B: torch.Tensor | Limbs) -> torch.Tensor:
     """``(A @ B) mod p`` for canonical int64 matrices via exact float64 limb matmuls (``k ≤ 2^21``)."""
-    A = A.to(torch.int64)
-    B = B.to(torch.int64)
-    k = A.shape[-1]
+    if isinstance(A, Limbs):
+        a_lo, a_hi = A.lo, A.hi
+    else:
+        A = A.to(torch.int64)
+        a_lo = (A & 0xFFFF).to(torch.float64)
+        a_hi = (A >> 16).to(torch.float64)
+    k = a_lo.shape[-1]
     if k > (1 << 21):
         raise ValueError("mm_mod: contraction too long for exact float64 limbs")
-    a_lo = (A & 0xFFFF).to(torch.float64)
-    a_hi = (A >> 16).to(torch.float64)
-    b_lo = (B & 0xFFFF).to(torch.float64)
-    b_hi = (B >> 16).to(torch.float64)
+    if isinstance(B, Limbs):
+        b_lo, b_hi = B.lo, B.hi
+    else:
+        B = B.to(torch.int64)
+        b_lo = (B & 0xFFFF).to(torch.float64)
+        b_hi = (B >> 16).to(torch.float64)
     ll = (a_lo @ b_lo).to(torch.int64) % P
     lh = ((a_lo @ b_hi).to(torch.int64) + (a_hi @ b_lo).to(torch.int64)) % P
     hh = (a_hi @ b_hi).to(torch.int64) % P
@@ -326,6 +342,7 @@ _fast_ext_mul = None
 _fast_fold = None
 _fast_logup_round = None
 _fast_phase1 = None
+_fast_scatter = None
 try:
     import os as _os
 
@@ -337,5 +354,6 @@ try:
             _fast_fold = _kernels.fold
             _fast_logup_round = _kernels.logup_round
             _fast_phase1 = _kernels.phase1_round
+            _fast_scatter = _kernels.scatter_terms
 except Exception:  # pragma: no cover
-    _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = None
+    _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = _fast_scatter = None

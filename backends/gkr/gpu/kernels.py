@@ -522,6 +522,57 @@ if triton is not None:
             tl.store(out_ptr + ob + 5, tl.sum(h5.to(tl.int64), axis=0))
 
 
+    @triton.jit
+    def scatter_terms_kernel(e_ptr, v_ptr, ptr_ptr, tj_ptr, tc_ptr, units, q_t, ncols, BLOCK: tl.constexpr):
+        """``v[u, idx] += Σ_{terms t of column idx} e[u, j_t] · c_t`` for a block of units ``u`` and one column ``idx``
+        (grid ``(units / BLOCK, ncols)``; CSR ``ptr_ptr[idx]..ptr_ptr[idx+1]`` -> ``tj_ptr`` query index, ``tc_ptr`` the
+        coefficient ``c R mod p`` as 6 words).  ``e`` is ``(units, q_t, 6)``, ``v`` ``(units, ncols, 6)`` int64."""
+        pb = tl.program_id(0)
+        idx = tl.program_id(1)
+        lo = tl.load(ptr_ptr + idx)
+        hi = tl.load(ptr_ptr + idx + 1)
+        if hi > lo:
+            u = pb * BLOCK + tl.arange(0, BLOCK)
+            m = u < units
+            vb = (u * ncols + idx) * 6
+            v0, v1, v2, v3, v4, v5 = load6(v_ptr, vb, m)
+            for t in range(lo, hi):
+                j = tl.load(tj_ptr + t)
+                c0 = tl.load(tc_ptr + t * 6 + 0).to(tl.int32)
+                c1 = tl.load(tc_ptr + t * 6 + 1).to(tl.int32)
+                c2 = tl.load(tc_ptr + t * 6 + 2).to(tl.int32)
+                c3 = tl.load(tc_ptr + t * 6 + 3).to(tl.int32)
+                c4 = tl.load(tc_ptr + t * 6 + 4).to(tl.int32)
+                c5 = tl.load(tc_ptr + t * 6 + 5).to(tl.int32)
+                e0, e1, e2, e3, e4, e5 = load6(e_ptr, (u * q_t + j) * 6, m)
+                p0, p1, p2, p3, p4, p5 = ext_mmul(e0, e1, e2, e3, e4, e5, c0, c1, c2, c3, c4, c5)
+                v0 = madd(v0, p0)
+                v1 = madd(v1, p1)
+                v2 = madd(v2, p2)
+                v3 = madd(v3, p3)
+                v4 = madd(v4, p4)
+                v5 = madd(v5, p5)
+            tl.store(v_ptr + vb + 0, v0.to(tl.int64), mask=m)
+            tl.store(v_ptr + vb + 1, v1.to(tl.int64), mask=m)
+            tl.store(v_ptr + vb + 2, v2.to(tl.int64), mask=m)
+            tl.store(v_ptr + vb + 3, v3.to(tl.int64), mask=m)
+            tl.store(v_ptr + vb + 4, v4.to(tl.int64), mask=m)
+            tl.store(v_ptr + vb + 5, v5.to(tl.int64), mask=m)
+
+
+def scatter_terms(e: torch.Tensor, v: torch.Tensor, ptr: torch.Tensor, tj: torch.Tensor, tc: torch.Tensor) -> None:
+    """In place ``v[u, idx] += Σ_t e[u, j_t] c_t`` (see the kernel); ``e`` ``(units, q_t, 6)``, ``v`` ``(units, ncols, 6)``
+    contiguous int64, ``ptr`` ``(ncols + 1,)`` int32 CSR, ``tj`` ``(T,)`` int32, ``tc`` ``(T, 6)`` canonical int64."""
+    units, q_t, _ = e.shape
+    ncols = v.shape[1]
+    assert v.is_contiguous() and e.is_contiguous()
+    if units == 0 or tj.numel() == 0:
+        return
+    BLOCK = 128
+    grid = ((units + BLOCK - 1) // BLOCK, ncols)
+    scatter_terms_kernel[grid](e.view(-1), v.view(-1), ptr, tj, _mont(tc).view(-1), units, q_t, ncols, BLOCK=BLOCK, num_warps=4)
+
+
 def phase1_round(a: torch.Tensor, bb: torch.Tensor, e: torch.Tensor, wg: torch.Tensor, half: int, base: bool) -> torch.Tensor:
     """``(4, 6)`` int64 canonical: the GKR phase-1 round polynomial at t = 0..3 (see ``gkr.phase1_round``)."""
     G = a.shape[1]

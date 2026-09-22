@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 import torch
 
-from .field import P, mm_mod
+from .field import Limbs, P, mm_mod
 
 R16_ROWS = 65536
 
@@ -169,6 +169,7 @@ class Layer:
     s_in: int
     gates: list[tuple[list[tuple[int, int]], list[tuple[int, int]]]]   # (a terms, b terms) over the input index space
     _mats: dict = field(default_factory=dict, repr=False)
+    _mats_t: dict = field(default_factory=dict, repr=False)
 
     @property
     def g_n(self) -> int:
@@ -192,8 +193,13 @@ class Layer:
 
     def eval_gates(self, rows: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """``a[c, g] = Σ_l A[g,l] rows[c,l]`` and the same for ``B`` (``rows`` ``(copies, 2^s_in)`` base)."""
-        A, B = self.matrices(rows.device)
-        return mm_mod(rows, A.T), mm_mod(rows, B.T)
+        lim = self._mats_t.get(rows.device)
+        if lim is None:
+            A, B = self.matrices(rows.device)
+            lim = (Limbs(A.T.contiguous()), Limbs(B.T.contiguous()))
+            self._mats_t[rows.device] = lim
+        r = Limbs(rows)
+        return mm_mod(r, lim[0]), mm_mod(r, lim[1])
 
     def eval_a_at(self, el: torch.Tensor) -> torch.Tensor:
         """``Ã_g(l*) = Σ_l A[g,l] eq(l*, l)`` for every gate, ``el`` ``(2^s_in, 6)`` -> ``(g_n, 6)``."""
