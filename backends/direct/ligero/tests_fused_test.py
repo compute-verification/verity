@@ -1,0 +1,101 @@
+"""Bit-exactness and timing of tests_fused against the torch paths (protocol._combine, witness.quad_p0)."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import time
+
+import torch
+
+from . import protocol, tests_fused, witness
+from .field import P
+
+
+def _bench(fn, reps):
+    fn(); torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    for _ in range(reps):
+        fn()
+    torch.cuda.synchronize()
+    return (time.perf_counter() - t0) / reps * 1e3
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--device", default="cuda")
+    ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--out")
+    a = ap.parse_args()
+    dev = torch.device(a.device)
+    g = torch.Generator(device="cpu").manual_seed(7)
+    rep = {"exact": {}, "timing": {}}
+    D = 6
+    f = tests_fused.fused_for(D, dev)
+    assert f is not None
+    for R, cols, dt in ((37, 1000, torch.int32), (3521, 16640, torch.int64), (2534, 65536, torch.int32)):
+        X = torch.randint(0, P, (R, cols), generator=g).to(dt).to(dev)
+        C = torch.randint(0, P, (D, R), generator=g).to(dev)
+        witness.USE_FUSED = False
+        ref = protocol._combine(C, X.to(torch.int64))
+        refb = torch.stack([witness._bool_row(C[d], X.to(torch.int64)) for d in range(D)])
+        witness.USE_FUSED = True
+        got = f.lincomb(C, X)
+        gotb = f.lincomb(C, X, square_minus=True)
+        rep["exact"][f"lincomb_{R}x{cols}_{str(dt)[6:]}"] = torch.equal(ref, got)
+        rep["exact"][f"boolcomb_{R}x{cols}_{str(dt)[6:]}"] = torch.equal(refb, gotb)
+        if R > 100:
+            witness.USE_FUSED = False
+            t_ref = _bench(lambda C=C, X=X: protocol._combine(C, X.to(torch.int64)), a.reps)
+            witness.USE_FUSED = True
+            t_new = _bench(lambda C=C, X=X: f.lincomb(C, X), a.reps)
+            rep["timing"][f"lincomb_{R}x{cols}"] = {"torch_ms": t_ref, "fused_ms": t_new}
+            print(f"lincomb {R}x{cols}: torch {t_ref:.2f} ms | fused {t_new:.2f} ms")
+    # general quadratic constraints: random sparse tables, Q rows, <= 4 terms per side
+    Q, cols, R = 853, 65536, 3521
+    X = torch.randint(0, P, (R, cols), generator=g).to(torch.int32).to(dev)
+    gen = {}
+    for side in ("a", "b", "c"):
+        nnz = torch.randint(1, 5, (Q,), generator=g)
+        qq = torch.repeat_interleave(torch.arange(Q), nnz)
+        jj = torch.randint(0, R, (qq.numel(),), generator=g)
+        cc = torch.randint(0, P, (qq.numel(),), generator=g)
+        consts = torch.randint(0, P, (Q,), generator=g)
+        perm = torch.randperm(qq.numel(), generator=g)                          # unsorted, as _triples may give
+        gen[side] = tuple(t.to(dev) for t in (qq[perm], jj[perm], cc[perm], consts))
+    rho = torch.randint(0, P, (D, Q), generator=g).to(dev)
+    A = witness.apply_sparse(gen["a"][:3], gen["a"][3], Q, X)
+    B = witness.apply_sparse(gen["b"][:3], gen["b"][3], Q, X)
+    Cc = witness.apply_sparse(gen["c"][:3], gen["c"][3], Q, X)
+    T = ((A * B) % P - Cc) % P
+    witness.USE_FUSED = False
+    ref = protocol._combine(rho, T)
+    witness.USE_FUSED = True
+    csr = tests_fused.csr_tables(gen, Q, dev)
+    got = f.quad_general(rho, X, csr)
+    rep["exact"]["quad_general_853x65536"] = torch.equal(ref, got)
+
+    def torch_quad():
+        A = witness.apply_sparse(gen["a"][:3], gen["a"][3], Q, X)
+        B = witness.apply_sparse(gen["b"][:3], gen["b"][3], Q, X)
+        Cc = witness.apply_sparse(gen["c"][:3], gen["c"][3], Q, X)
+        T = ((A * B) % P - Cc) % P
+        witness.USE_FUSED = False
+        out = protocol._combine(rho, T)
+        witness.USE_FUSED = True
+        return out
+    t_ref = _bench(torch_quad, a.reps)
+    t_new = _bench(lambda: f.quad_general(rho, X, csr), a.reps)
+    rep["timing"]["quad_general_853x65536"] = {"torch_ms": t_ref, "fused_ms": t_new}
+    print(f"quad_general 853x65536: torch {t_ref:.2f} ms | fused {t_new:.2f} ms")
+    ok = all(rep["exact"].values())
+    print("exact:", rep["exact"])
+    print("bit-exact:", "PASS" if ok else "FAIL")
+    if a.out:
+        with open(a.out, "w") as fh:
+            json.dump(rep, fh, indent=1)
+    raise SystemExit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main()

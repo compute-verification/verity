@@ -32,7 +32,7 @@ import torch
 from verity_numerical.checker.params import Params
 from verity_numerical.security import accounting as acc
 
-from . import merkle
+from . import merkle, witness
 from .chain import N_FAMILIES, chain_coefs
 from .compile import P, System
 from .field import (
@@ -537,6 +537,11 @@ def _combine_row(c: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
 def _combine(coef: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
     """(D, cols) = coef (D, R) @ M (R, cols) mod p, reducing every product before the sum (R < 2^32 terms)."""
     D = coef.shape[0]
+    if witness.USE_FUSED:
+        from . import tests_fused
+        f = tests_fused.fused_for(D, M.device)
+        if f is not None:
+            return f.lincomb(coef, M)
     out = torch.empty((D, M.shape[1]), dtype=torch.int64, device=M.device)
     row = compiled(_combine_row, M.device)
     for d in range(D):

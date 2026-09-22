@@ -211,6 +211,9 @@ def tables(sys: System, device) -> Tables:
     return tb
 
 
+USE_FUSED = True    # tests_fused.py kernels on CUDA (one pass); False = the torch.compile passes below
+
+
 def _bool_row(c: torch.Tensor, Ub: torch.Tensor) -> torch.Tensor:
     """sum_j c_j (Ub_j^2 - Ub_j) mod p over the rows of Ub (compiled: one fused pass)."""
     t = (Ub * Ub - Ub) % P
@@ -224,9 +227,19 @@ def quad_p0(tb: Tables, rho: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
     apply_sparse form (checked by ``tests_bench.py`` and the gates)."""
     sp = tb.quad["split"]
     D = rho.shape[0]
+    rb = rho.index_select(1, sp["bool_q"])
+    if USE_FUSED:
+        from . import tests_fused
+        f = tests_fused.fused_for(D, M.device)
+        if f is not None:                                         # one pass over the rows for all D combinations
+            out = f.lincomb(rb, M.index_select(0, sp["bool_j"]), square_minus=True)
+            if sp["Q_gen"]:
+                if "csr" not in sp:
+                    sp["csr"] = tests_fused.csr_tables(sp["gen"], sp["Q_gen"], M.device)
+                out = (out + f.quad_general(rho.index_select(1, sp["gen_q"]), M, sp["csr"])) % P
+            return out
     out = torch.empty((D, M.shape[1]), dtype=torch.int64, device=M.device)
     Ub = M.index_select(0, sp["bool_j"]).to(torch.int64)          # M may be the kernel's int32 codeword
-    rb = rho.index_select(1, sp["bool_q"])
     row = compiled(_bool_row, M.device)
     for d in range(D):
         out[d] = row(rb[d], Ub)
