@@ -55,8 +55,8 @@ def _ref_round(p0, p1, q0, q1, e, half, lam_t):
 
 
 def _diff(name: str, a: torch.Tensor, b: torch.Tensor, report: list[dict]) -> bool:
-    a64 = a.to(torch.int64).reshape(-1, DEG) if a.ndim > 1 else a.to(torch.int64).reshape(-1, 1)
-    b64 = b.to(torch.int64).reshape(-1, DEG) if b.ndim > 1 else b.to(torch.int64).reshape(-1, 1)
+    a64 = a.to(torch.int64).cpu().reshape(-1, DEG) if a.ndim > 1 else a.to(torch.int64).cpu().reshape(-1, 1)
+    b64 = b.to(torch.int64).cpu().reshape(-1, DEG) if b.ndim > 1 else b.to(torch.int64).cpu().reshape(-1, 1)
     if a64.shape != b64.shape:
         report.append({"tensor": name, "mismatch": "shape", "kernel": list(a.shape), "torch": list(b.shape)})
         return False

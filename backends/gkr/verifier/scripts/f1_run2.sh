@@ -3,7 +3,7 @@
 # then the kernel/torch diff harness.  Exports exist from run 1 (/workspace/bb/{pos4096,neg,synth2}).
 set -e
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH
-P=/workspace/tc/venv/bin/python
+P=/workspace/venv-av2/bin/python   # torch 2.6.0+cu124, triton 3.2.0, cupy 14.2.0 (this lane's venv)
 R=$RESEARCH_RUN_DIR
 export PYTHONPATH=backends/gkr:backends/numerical/python:packages/verity/src
 SIZES=${SIZES:-"synth2: pos4096:--vus_64 pos4096:--vus_512"}
