@@ -299,7 +299,7 @@ def capture_sass(dtype: str, n: int, device: str, out_dir: Path, timeout_s: floa
 
 # ---- environment -----------------------------------------------------------------------------------------------------------------------------
 
-def environment(device: str) -> dict:
+def environment(device: int) -> dict:
     import torch
 
     p = torch.cuda.get_device_properties(device)
@@ -414,7 +414,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = False
     torch.backends.cuda.matmul.allow_tf32 = False
-    envd = environment(a.device)
+    dev = torch.device(a.device)
+    idx = dev.index if dev.index is not None else torch.cuda.current_device()   # the memory/capability queries want an index
+    torch.cuda.set_device(idx)
+    envd = environment(idx)
     print(json.dumps(envd), flush=True)
 
     skipped = None
@@ -422,7 +425,7 @@ def main(argv: list[str] | None = None) -> int:
         if not hasattr(torch, "float8_e4m3fn") or not hasattr(torch, "_scaled_mm"):
             skipped = f"torch {torch.__version__} has no float8_e4m3fn/_scaled_mm"
         else:
-            major, minor = torch.cuda.get_device_capability(a.device)
+            major, minor = torch.cuda.get_device_capability(idx)
             if (major, minor) < (8, 9):
                 skipped = f"FP8 tensor cores need sm_89+; this card is sm_{major}{minor} ({envd['device']})"
             else:
@@ -447,11 +450,11 @@ def main(argv: list[str] | None = None) -> int:
             need = 2 * n * n * 4                              # the fp32 randn sources, freed once converted
             need += (3 * n * n * 2) if a.dtype == "bf16" else (2 * n * n + 4 * n * n)
             need += 3 * n * CHECK_BLOCK * 4                   # the fp32 check strips
-            free, total = torch.cuda.mem_get_info(a.device)
+            free, total = torch.cuda.mem_get_info(idx)
             if need > free * 0.9:
                 print(f"native_peak: skip {n}^3: needs ~{need / 2**30:.1f} GiB, {free / 2**30:.1f} GiB free", flush=True)
                 continue
-            torch.cuda.reset_peak_memory_stats()
+            torch.cuda.reset_peak_memory_stats(idx)
             r = measure_size(n, a.dtype, a.device, a.warmup, a.reps, a.sustain_s)
             results.append(r)
             print(f"native_peak {a.dtype} {n}^3: median {r['seconds_median'] * 1e3:.3f} ms = {r['flop_per_second'] / 1e12:.1f} TFLOP/s "
