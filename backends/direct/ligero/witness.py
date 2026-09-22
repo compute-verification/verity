@@ -83,13 +83,13 @@ def _run_program(sys: System, W: torch.Tensor, pub_rows: torch.Tensor, hints: to
         elif kind == "bits":
             _, row0, nbits, e = op
             x = eval_expr(e, W)                      # honest: an integer in [0, 2^nbits)
-            shifts = _const(("shifts", nbits, dk), lambda: torch.arange(nbits, dtype=torch.int64, device=device)[:, None])
+            shifts = _const(("shifts", nbits, dk), lambda nb=nbits: torch.arange(nb, dtype=torch.int64, device=device)[:, None])
             W[row0:row0 + nbits] = (x[None, :] >> shifts) & 1
         elif kind == "sels":
             _, row0, k0s, k1s, key = op
             x = _signed(eval_expr(key, W))
-            k0 = _const(("k0", id(op), dk), lambda: torch.tensor(k0s, dtype=torch.int64, device=device)[:, None])
-            k1 = _const(("k1", id(op), dk), lambda: torch.tensor(k1s, dtype=torch.int64, device=device)[:, None])
+            k0 = _const(("k0", id(op), dk), lambda v=k0s: torch.tensor(v, dtype=torch.int64, device=device)[:, None])
+            k1 = _const(("k1", id(op), dk), lambda v=k1s: torch.tensor(v, dtype=torch.int64, device=device)[:, None])
             W[row0:row0 + len(k0s)] = ((x[None, :] >= k0) & (x[None, :] <= k1)).to(torch.int64)
         elif kind == "inv":
             from .field import batch_modinv
