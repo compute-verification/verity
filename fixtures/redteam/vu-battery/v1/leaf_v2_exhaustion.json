@@ -1,0 +1,308 @@
+{
+ "code": "ligero-rs/babybear/n=1024/k=256/l=192/R=4/w=16",
+ "t": 48,
+ "randomizers": 64,
+ "sessions": [
+  {
+   "session": 1,
+   "union_columns": 48,
+   "randomizer_rank": 37,
+   "payload_relations": 11,
+   "payload_words_in_clear": 11,
+   "clear_words_verified_equal_payload": true,
+   "true_payload_consistent": true,
+   "one_bit_off_payload_consistent": true,
+   "oracle": false
+  },
+  {
+   "session": 2,
+   "union_columns": 90,
+   "randomizer_rank": 64,
+   "payload_relations": 26,
+   "payload_words_in_clear": 21,
+   "clear_words_verified_equal_payload": true,
+   "true_payload_consistent": true,
+   "one_bit_off_payload_consistent": false,
+   "oracle": true
+  },
+  {
+   "session": 3,
+   "union_columns": 136,
+   "randomizer_rank": 64,
+   "payload_relations": 72,
+   "payload_words_in_clear": 33,
+   "clear_words_verified_equal_payload": true,
+   "true_payload_consistent": true,
+   "one_bit_off_payload_consistent": false,
+   "oracle": true
+  },
+  {
+   "session": 4,
+   "union_columns": 178,
+   "randomizer_rank": 64,
+   "payload_relations": 114,
+   "payload_words_in_clear": 43,
+   "clear_words_verified_equal_payload": true,
+   "true_payload_consistent": true,
+   "one_bit_off_payload_consistent": false,
+   "oracle": true
+  },
+  {
+   "session": 5,
+   "union_columns": 218,
+   "randomizer_rank": 64,
+   "payload_relations": 154,
+   "payload_words_in_clear": 50,
+   "clear_words_verified_equal_payload": true,
+   "true_payload_consistent": true,
+   "one_bit_off_payload_consistent": false,
+   "oracle": true
+  },
+  {
+   "session": 6,
+   "union_columns": 250,
+   "randomizer_rank": 64,
+   "payload_relations": 186,
+   "payload_words_in_clear": 55,
+   "clear_words_verified_equal_payload": true,
+   "true_payload_consistent": true,
+   "one_bit_off_payload_consistent": false,
+   "oracle": true
+  }
+ ],
+ "campaign_projection": [
+  {
+   "sessions": 1,
+   "expected_union": 191.0,
+   "payload_relations_F_p": 0.0,
+   "leaked_bits_per_row": 0.0,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.0,
+   "full_recovery": false
+  },
+  {
+   "sessions": 2,
+   "expected_union": 379.8,
+   "payload_relations_F_p": 123.8,
+   "leaked_bits_per_row": 3825.5,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.0623,
+   "full_recovery": false
+  },
+  {
+   "sessions": 3,
+   "expected_union": 566.3,
+   "payload_relations_F_p": 310.3,
+   "leaked_bits_per_row": 9591.8,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.1561,
+   "full_recovery": false
+  },
+  {
+   "sessions": 4,
+   "expected_union": 750.7,
+   "payload_relations_F_p": 494.7,
+   "leaked_bits_per_row": 15291.0,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.2489,
+   "full_recovery": false
+  },
+  {
+   "sessions": 5,
+   "expected_union": 933.0,
+   "payload_relations_F_p": 677.0,
+   "leaked_bits_per_row": 20923.7,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.3406,
+   "full_recovery": false
+  },
+  {
+   "sessions": 6,
+   "expected_union": 1113.1,
+   "payload_relations_F_p": 857.1,
+   "leaked_bits_per_row": 26490.8,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.4312,
+   "full_recovery": false
+  },
+  {
+   "sessions": 7,
+   "expected_union": 1291.1,
+   "payload_relations_F_p": 1035.1,
+   "leaked_bits_per_row": 31992.9,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.5207,
+   "full_recovery": false
+  },
+  {
+   "sessions": 8,
+   "expected_union": 1467.1,
+   "payload_relations_F_p": 1211.1,
+   "leaked_bits_per_row": 37430.9,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.6092,
+   "full_recovery": false
+  },
+  {
+   "sessions": 9,
+   "expected_union": 1641.0,
+   "payload_relations_F_p": 1385.0,
+   "leaked_bits_per_row": 42805.6,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.6967,
+   "full_recovery": false
+  },
+  {
+   "sessions": 10,
+   "expected_union": 1812.9,
+   "payload_relations_F_p": 1556.9,
+   "leaked_bits_per_row": 48117.5,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.7832,
+   "full_recovery": false
+  },
+  {
+   "sessions": 11,
+   "expected_union": 1982.7,
+   "payload_relations_F_p": 1726.7,
+   "leaked_bits_per_row": 53367.6,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.8686,
+   "full_recovery": false
+  },
+  {
+   "sessions": 12,
+   "expected_union": 2150.6,
+   "payload_relations_F_p": 1894.6,
+   "leaked_bits_per_row": 58556.4,
+   "payload_bits_per_row": 61440,
+   "fraction": 0.9531,
+   "full_recovery": false
+  },
+  {
+   "sessions": 13,
+   "expected_union": 2316.5,
+   "payload_relations_F_p": 2060.5,
+   "leaked_bits_per_row": 63684.7,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.0365,
+   "full_recovery": false
+  },
+  {
+   "sessions": 14,
+   "expected_union": 2480.5,
+   "payload_relations_F_p": 2224.5,
+   "leaked_bits_per_row": 68753.3,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.119,
+   "full_recovery": false
+  },
+  {
+   "sessions": 15,
+   "expected_union": 2642.6,
+   "payload_relations_F_p": 2386.6,
+   "leaked_bits_per_row": 73762.8,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.2006,
+   "full_recovery": false
+  },
+  {
+   "sessions": 16,
+   "expected_union": 2802.8,
+   "payload_relations_F_p": 2546.8,
+   "leaked_bits_per_row": 78713.8,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.2811,
+   "full_recovery": false
+  },
+  {
+   "sessions": 17,
+   "expected_union": 2961.1,
+   "payload_relations_F_p": 2705.1,
+   "leaked_bits_per_row": 83607.2,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.3608,
+   "full_recovery": false
+  },
+  {
+   "sessions": 18,
+   "expected_union": 3117.6,
+   "payload_relations_F_p": 2861.6,
+   "leaked_bits_per_row": 88443.5,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.4395,
+   "full_recovery": false
+  },
+  {
+   "sessions": 19,
+   "expected_union": 3272.3,
+   "payload_relations_F_p": 3016.3,
+   "leaked_bits_per_row": 93223.4,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.5173,
+   "full_recovery": false
+  },
+  {
+   "sessions": 20,
+   "expected_union": 3425.1,
+   "payload_relations_F_p": 3169.1,
+   "leaked_bits_per_row": 97947.6,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.5942,
+   "full_recovery": false
+  },
+  {
+   "sessions": 21,
+   "expected_union": 3576.2,
+   "payload_relations_F_p": 3320.2,
+   "leaked_bits_per_row": 102616.8,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.6702,
+   "full_recovery": false
+  },
+  {
+   "sessions": 22,
+   "expected_union": 3725.5,
+   "payload_relations_F_p": 3469.5,
+   "leaked_bits_per_row": 107231.5,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.7453,
+   "full_recovery": false
+  },
+  {
+   "sessions": 23,
+   "expected_union": 3873.1,
+   "payload_relations_F_p": 3617.1,
+   "leaked_bits_per_row": 111792.4,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.8195,
+   "full_recovery": false
+  },
+  {
+   "sessions": 24,
+   "expected_union": 4018.9,
+   "payload_relations_F_p": 3762.9,
+   "leaked_bits_per_row": 116300.1,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.8929,
+   "full_recovery": false
+  },
+  {
+   "sessions": 25,
+   "expected_union": 4163.1,
+   "payload_relations_F_p": 3907.1,
+   "leaked_bits_per_row": 120755.3,
+   "payload_bits_per_row": 61440,
+   "fraction": 1.9654,
+   "full_recovery": true
+  }
+ ],
+ "campaign_clear_words": {
+  "t": 191,
+  "systematic_fraction_of_columns": 0.234375,
+  "expected_clear_words_per_row_per_proof": 44.77,
+  "expected_clear_words_per_chunk_per_proof": 2865.0,
+  "prob_no_clear_word_in_a_proof": 7.031957779383679e-23,
+  "budget_irrelevant": true
+ }
+}
