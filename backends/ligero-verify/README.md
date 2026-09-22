@@ -24,17 +24,39 @@ check a transcript from your own session.  Fiat-Shamir files (`--mode fiat-shami
 cargo build --release
 ligero-verify verify --system system.bin --statement X.stmt --proof X.proof [--threads T] [--soundness-bits 128]
                      [--allow-any-system] [--reps R] [--json out.json] [--coins FILE]   # --coins: interactive mode only
-ligero-verify batch  --system system.bin --dir DIR [--threads T] [--soundness-bits 128] [--reps R] [--json out.json]
-                     # every DIR/*.proof with its .stmt; agreement with DIR/manifest.json's python_verdict when present
+ligero-verify batch  --system system.bin --dir DIR [--jobs N] [--threads T] [--soundness-bits 128] [--reps R] [--json out.json]
+                     # every DIR/*.proof with its .stmt (+ its .coins when present, = `verify --coins` for that proof), the
+                     # sub-batches verified concurrently on N jobs (default: available parallelism); batch ACCEPT iff every
+                     # sub-batch accepts; agreement with DIR/manifest.json's python_verdict when present
 ligero-verify system-digest --system system.bin
 cargo test --release                                 # hash vectors (hashlib / BLAKE3 spec), NTT / coset code, Barrett mul,
                                                      # and tests/fixture.rs: the B=1 ZK interactive fixture accepted, byte flips
-                                                     # in every region rejected, a flipped statement word rejected, --coins checked
+                                                     # in every region rejected, a flipped statement word rejected, --coins checked,
+                                                     # batch verdict + parsed statements identical at --jobs 1 / 8, one corrupted
+                                                     # sub-batch rejects the batch with the same error at any --jobs
 ~~~
 
-Exit status: 0 accept, 1 reject (the reason on stdout), 2 usage / unreadable operator input. Malformed *proof or
-statement bytes* never panic (every read is bounded and every element checked); an unreadable path given on the
-command line is reported and exits 2.
+Exit status: `verify` 0 accept, 1 reject (the reason on stdout), 2 usage / unreadable operator input.  `batch`: 0 every
+sub-batch accepted, 1 a sub-batch rejected (`batch_reason` names the first one in name order), 2 a sub-batch file
+unreadable, 3 a verdict disagrees with `manifest.json`'s Python verdict (checked first: the agreement gate).  Malformed
+*proof or statement bytes* never panic (every read is bounded and every element checked); an unreadable path given on
+the command line is reported and exits 2.
+
+**Batch mode (lane b-verify-par).**  A 4096-VU batch is `N_subbatches` (25) independently committed proofs, each with
+its own statement (its VUs' `a, b, y16`; `n_proofs` = 25 for the union bound) -- there is no batch-level statement and
+no check that spans sub-batches (PROTOCOL.md 8c; `bench-vu` dumps them as `repK/sub_XX.{stmt,proof[,coins]}`).  `batch`
+therefore verifies them on `--jobs` OS threads pulling from one queue, each sub-batch exactly as `verify` would
+(its own statement, proof, challenges, checks, `--threads` inside), and accepts the batch iff every sub-batch accepts.
+Shared, read-only, computed once: the parsed `system.bin` with its pinned-digest verdict, and the domain tables per
+`(l, n)` (NTT twiddles for `H` and the coset, `g^i`, `eta_c`; built by the first sub-batch that reaches them).  Results
+are reported in name order and the batch reason is the first rejected sub-batch in that order, so the verdict and the
+JSON (minus timings) do not depend on scheduling.  Interactive-mode files are still live-verifier-only (D7): with a
+`sub_XX.coins` beside the proof the transcript is checked against those coins (`accept (interactive: coins are this
+verifier's step-0 coins)`); without one the accept stays conditional (`coins replayed from the transcript`); nothing
+about what is checked changes with `--jobs`.  Per-item JSON carries the parsed statement (`l, n, D, t, zk, mode,
+n_proofs, n_vus, steps` and the BLAKE2b statement digest) and the summary `batch_accepted`, `batch_reason`, `jobs`,
+`shared_seconds` (system parse + pin check), `wall_seconds` (the batch's in-process wall) beside `verify_seconds_sum`
+(the sum of per-sub-batch totals, the number the sequential measurements reported).
 
 Producing the files (on a machine with torch): `python -m backends.direct.ligero.run gate-vu --zk --vus 2
 --dump-proof X.proof --dump-statement X.stmt` for the honest sub-batches of the gate, or the generators in
@@ -88,8 +110,9 @@ tables are pinned in `verify.rs` (`PINNED_SYS_ID`, `PINNED_TABLE_DIGEST`); a dif
    mask rows; the pre-fix `Z_H s_chain` vanished on H and leaked `q|_H`, red team F1).
 
 Every NTT (D messages, D x R chain rows) and every column loop (Merkle, quadratic) runs on `--threads` OS threads
-(`std::thread::scope`, no rayon). Stage timings (`parse, statement_hash, challenge_hash, merkle, ntt, dfold,
-quadratic, chain`) are in the JSON.
+(`std::thread::scope`, no rayon); `batch` runs whole sub-batches on `--jobs` threads (total concurrency `jobs x
+threads`). Stage timings (`shared, parse, statement_hash, challenge_hash, merkle, ntt, dfold, quadratic, chain`) are
+in the JSON.
 
 ## Byte-level facts the document does not state (DISCREPANCIES.md D5)
 
@@ -113,7 +136,10 @@ is 0.13 s on an idle laptop (0.17 s for the Fiat-Shamir sub-batch: `t = 288`, `D
 the shared `vy-cpu3` EPYC; 60-65% is the message encodes (~30 NTTs of 2^16), 15-25%
 the D-fold of the linear constraints. BabyBear multiplication is a Barrett reduction (`field::reduce62`); the
 earlier `% p` on a u64 was a 20-40 cycle divide on Zen 3 and dominated there. `--threads` parallelises the encodes over
-rows and the column loops; the hashing is serial.
+rows and the column loops; the hashing is serial.  The 25 sub-batch proofs of a 4096-VU batch were 2.6 s (non-ZK
+interactive) / 3.3 s (ZK Fiat-Shamir) as a sequential sum at 16 threads each on the h100-bestvsbest H100 pod
+(`note:r21-bestvsbest/h100-bestvsbest/20260922T1833Z-report-h100-bestvsbest`); `batch --jobs` measurements are in lane
+b-verify-par's note.
 
 ## What it does NOT do
 
