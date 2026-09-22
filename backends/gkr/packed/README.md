@@ -127,6 +127,8 @@ Full write-up: `backends/numerical/reports/a_kernels_h100.md`.  Runs (all vy-g4 
 | r20260922-073439-1f15 | **logUp GKR at the full-VU shape** (393,216 x 306 lookups, 65,536-row table): k = 3 **427 ms = 104 us/VU**, k = 0 447 ms |
 | r20260922-073702-b11f | fused (split) k = 4 vs k = 3: 2^26 7.57 vs 6.13 ms, 2^28 22.88 vs 17.61 ms. **k = 4 fused recovers 1.3x (9.25 -> 7.57) but still loses; default stays k = 3**; kept as a memory lever (11.0 vs 18.2 GB at 2^28) |
 
+| **A100** r20260922-075147-91a5 (anchor-a100 lane, NVIDIA A100-SXM4-80GB, same flags; 46 CUDA tests bit-exact) | Montgomery 2^26: k = 0..4 **21.4 / 17.8 / 11.2 / 11.5 / 15.2 ms** (0.52-0.61x the H100 = the bandwidth ratio 0.61); direct 2^28 k = 2, 3, 4: 34.3 / **31.9** / 43.8 ms (0.55x; 5.9% of the A100 INT8 peak) = **64.3 us/VU, 263 ms per six-layer batch** padded (156 un-padded); logUp GKR full-VU k = 3 **412 ms = 101 us/VU** (H100 427: 1.04x -- launch-bound, the card does not matter yet), k = 0 478 ms. Table: `backends/numerical/reports/anchor_a100.md` section 4b |
+
 The k-table before -> after Montgomery (2^26 ms; per VU = six padded layers / 4096): k = 0 30.9 -> 12.6 (238 -> 90 us), k = 1 18.5 -> 10.7,
 k = 2 11.7 -> 6.4, **k = 3 9.08 -> 5.97 (62.7 -> 37.5 us; 35.6 us from the direct 2^28 point)**, k = 4 23.4 -> 9.25.
 3.35% of INT8 peak and 3.3x the HBM floor at 2^28: still SIMT-bound (limb decomposition + `tl.join` feeding `tl.dot`).

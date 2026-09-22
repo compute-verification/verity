@@ -2,7 +2,7 @@
 
 **Scope: component measurements** (kernel time on random/patterned data, bit-exact against each lane's CPU reference), then one `ARITHMETIC_DIAGNOSTIC` re-price of A and B with those numbers.  Nothing here is a proof.  Every recorded 4090 / H100 number is the lane's own (its README / report, run id in the lane's table); every A100 number is a `research run --on vy-a100b --exclusive` of the same bench, same flags, CUDA events, warm, median of >= 7, bit-exact checks on.  `overhead.vs_native_peak` is defined against *this* card's dense BF16 peak (`contract.NATIVE_REFERENCE`, 9.85 ps per K=1536 VU), so the last section is the first A-vs-B comparison where the prover and the reference are the same machine.
 
-Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 2.6.0+cu124, CUDA 12.4, 108 SMs (sm_80).  Recorded runs: microbench `r20260922-063608-a304`, hash_gpu `r20260922-063811-e561`, encode `r20260922-064413-0508`, fused `r20260922-064953-f9bb`, fused_logup `r20260922-071602-522d`, packed `r20260922-073828-153f`, packed_killed_mislaunch `r20260922-073540-f5b5`, tensor `r20260922-074359-964b`.
+Device: NVIDIA A100-SXM4-80GB, 580.126.16, 1410 MHz, 1593 MHz, 81920 MiB; torch 2.6.0+cu124, CUDA 12.4, 108 SMs (sm_80).  Recorded runs: microbench `r20260922-063608-a304`, hash_gpu `r20260922-063811-e561`, encode `r20260922-064413-0508`, fused `r20260922-064953-f9bb`, fused_logup `r20260922-071602-522d`, packed `r20260922-073828-153f`, packed_killed_mislaunch `r20260922-073540-f5b5`, tensor `r20260922-074359-964b`, wave2_gkr (packed Montgomery 2^26, direct 2^28, logUp GKR full-VU) `r20260922-075147-91a5`.
 
 Bandwidth ratios the earlier reports *scaled* by: A100/4090 = 2,039/1,008 = 2.02; A100/H100 = 2,039/3,350 = 0.61.  Speed ratios below are recorded-time / A100-time (> 1 = the A100 is faster); a departure from the bandwidth ratio by > 1.5x either way is a finding about the kernel and is flagged.
 
@@ -191,6 +191,33 @@ Agreement test on the A100: 36 passed in 61.24s (0:01:01)
 
 Best k on the A100: **k=3**, 476 ms per six-layer batch = 116.3 us/VU (H100: k=3, 257 ms, 62.7 us/VU).  At 2^26 k=3: 16.58 ms vs 9.08 on the H100 (0.55x; bandwidth ratio 0.61, INT8-peak ratio 0.32).
 
+## 4b. `backends/gkr/packed` second pass (a-packed2, landed on main 07:4xZ): 32-bit Montgomery packed sumcheck, direct 2^28, logUp fractional GKR (H100 runs `r20260922-064917-c293`, `r20260922-065412-73be`, `r20260922-073439-1f15`; A100 run `r20260922-075147-91a5`)
+
+| a-packed2 kernels (whole sumcheck, CUDA-graphed rounds) | H100 recorded | A100 measured | speed ratio A100/H100 | A100 TC floor | fraction of INT8 peak | A100 peak mem |
+|---|---|---|---|---|---|---|
+| Montgomery packed sumcheck 2^26, k=0 | 12.56 ms | 21.39 ms (6.37% of A100 INT8 peak) | 0.59x | 1.36 ms TC@312T | 0.0637 | 34.1 GB |
+| Montgomery packed sumcheck 2^26, k=1 | 10.68 ms | 17.80 ms (4.47% of A100 INT8 peak) | 0.60x | 0.79 ms TC@312T | 0.0447 | 17.2 GB |
+| Montgomery packed sumcheck 2^26, k=2 | 6.43 ms | 11.17 ms (4.62% of A100 INT8 peak) | 0.58x | 0.52 ms TC@312T | 0.0462 | 8.9 GB |
+| Montgomery packed sumcheck 2^26, k=3 | 5.97 ms | 11.54 ms (4.07% of A100 INT8 peak) | 0.52x | 0.47 ms TC@312T | 0.0407 | 4.5 GB |
+| Montgomery packed sumcheck 2^26, k=4 | 9.25 ms | 15.19 ms (4.16% of A100 INT8 peak) | 0.61x | 0.63 ms TC@312T | 0.0416 | 2.4 GB |
+| Montgomery packed sumcheck 2^28, k=2 | 19.78 ms | 34.33 ms (6.01% of A100 INT8 peak) | 0.58x | 2.06 ms TC@312T | 0.0601 | 34.4 GB |
+| Montgomery packed sumcheck 2^28, k=3 | 17.69 ms | 31.93 ms (5.88% of A100 INT8 peak) | 0.55x | 1.88 ms TC@312T | 0.0588 | 17.8 GB |
+| Montgomery packed sumcheck 2^28, k=4 | 30.96 ms | 43.80 ms (5.78% of A100 INT8 peak) | 0.71x | 2.53 ms TC@312T | 0.0578 | 10.6 GB |
+| six-layer batch from the 2^26 fit, k=0 (padded / un-padded) | 369 / 223 ms = 90.1 us/VU | 638 / 385 ms = **155.8 us/VU** | 0.58x |  |  |  |
+| six-layer batch from the 2^26 fit, k=1 (padded / un-padded) | 308 / 187 ms = 75.2 us/VU | 519 / 314 ms = **126.7 us/VU** | 0.59x |  |  |  |
+| six-layer batch from the 2^26 fit, k=2 (padded / un-padded) | 169 / 104 ms = 41.4 us/VU | 303 / 186 ms = **74.0 us/VU** | 0.56x |  |  |  |
+| six-layer batch from the 2^26 fit, k=3 (padded / un-padded) | 154 / 95 ms = 37.5 us/VU | 316 / 194 ms = **77.2 us/VU** | 0.49x |  |  |  |
+| six-layer batch from the 2^26 fit, k=4 (padded / un-padded) | 263 / 160 ms = 64.2 us/VU | 432 / 263 ms = **105.5 us/VU** | 0.61x |  |  |  |
+| six-layer batch from the 2^28 fit, k=2 (padded / un-padded) | 163 / 97 ms = 39.8 us/VU | 283 / 168 ms = **69.1 us/VU** | 0.58x |  |  |  |
+| six-layer batch from the 2^28 fit, k=3 (padded / un-padded) | 146 / 86 ms = 35.6 us/VU | 263 / 156 ms = **64.3 us/VU** | 0.55x |  |  |  |
+| six-layer batch from the 2^28 fit, k=4 (padded / un-padded) | 255 / 151 ms = 62.4 us/VU | 361 / 214 ms = **88.2 us/VU** | 0.71x |  |  |  |
+| logUp fractional GKR, full-VU shape (393,216 x 306 lookups, 2^27 leaves), k=3 | 427 ms = 104 us/VU | **412 ms = 101 us/VU** (20 smallest levels 144 ms) | 1.04x |  |  | 12.4 GB |
+| logUp fractional GKR, full-VU shape (393,216 x 306 lookups, 2^27 leaves), k=0 | 447 ms = 109 us/VU | **478 ms = 117 us/VU** (20 smallest levels 142 ms) | 0.94x |  |  | 24.8 GB |
+
+Agreement test on the A100 (Montgomery kernels): 46 passed in 405.11s (0:06:45)
+
+The Montgomery kernels scale with bandwidth on the A100: 0.52-0.61x the H100 at 2^26 (bandwidth ratio 0.61), k=3 direct 2^28 **31.9 ms** (0.55x the H100's 17.7; 5.9% of the A100 INT8 peak) = **64.3 us/VU, 263 ms per six-layer batch** padded (156 un-padded) -- 1.8x better than the first-pass packed k=3 on the same card (476 ms).  k=2 and k=3 are within 4% of each other on the A100 (the base x base Hadamard share is INT32 work at 0.47x the H100's rate).  **Finding (flagged).**  The logUp fractional GKR runs at **412 ms = 101 us/VU** on the A100 vs 427 on the H100 (1.04x: a 1.7x departure from the bandwidth ratio) -- it is host-launch-bound (~1 ms x 351 rounds; the 20 smallest levels are 144 of the 412 ms on both cards), so the GPU does not matter yet; the device work is ~0.1-0.2 s.  Fixing the launch loop (CUDA graphs per level) is worth ~2x on either card.
+
 ## 5. `backends/gkr/tensor` -- the original INT8-limb round (4090 run `r20260922-051730-15d4`)
 
 | INT8-limb round (tensor lane) | RTX 4090 recorded | A100 measured | speed ratio A100/4090 | A100 TC floor | fraction of INT8 peak |
@@ -229,9 +256,9 @@ Agreement test on the A100: 22 passed in 29.04s
 | design | model only (A100 peaks @0.172, Blake3 50 GB/s) | **A100-measured buckets**: overhead (t.total per batch) | buckets, ms (measured in bold) |
 |---|---|---|---|
 | **B** | 2.38e+07 (962 ms) | **4.88e+06** (197 ms; 48 us/VU) | encoding **57.4**; hash **54.0**; row_combination 10.1; linear/quadratic tests + helpers (SIMT) 70.6; hint_generation 1.6; prg 3.2 |
-| **A** | 3.17e+07 (1278 ms) | **2.69e+07** (1084 ms; 265 us/VU) | encoding **11.0**; hash **9.0**; row_combination 1.4; other SIMT (logUp tree build, ...) 37.2; gkr_checker_sumcheck **476.4**; logup_fractional_gkr **546.6**; hint_generation 1.6; prg 0.5 |
+| **A** | 3.17e+07 (1278 ms) | **1.83e+07** (736 ms; 180 us/VU) | encoding **11.0**; hash **9.0**; row_combination 1.4; other SIMT (logUp tree build, ...) 37.2; gkr_checker_sumcheck **263.4**; logup_fractional_gkr **412.2**; hint_generation 1.6; prg 0.5 |
 
-Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_kernel` = blake3; `hash_A_kernel` = blake3; `encoder_seconds_per_row_B` = 1.85e-07; `encoder_B_kernel` = ntt_simt_v2_t1024; `encoder_seconds_per_row_A` = 2.25e-07; `encoder_A_kernel` = ntt_simt_v2_t1024; `fused_layer_graphed_s` = 0.0123; `fused_checker_round_2p21_us` = 473.7920; `logup_round_2p21_us` = 1,468.6720; `logup_over_checker_round` = 3.0998; `packed_k0_batch_s_padded` = 1.5777; `packed_k0_per_vu_s` = 0.000385; `packed_k3_batch_s_padded` = 0.4764; `packed_k3_per_vu_s` = 0.000116
+Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_kernel` = blake3; `hash_A_kernel` = blake3; `encoder_seconds_per_row_B` = 1.85e-07; `encoder_B_kernel` = ntt_simt_v2_t1024; `encoder_seconds_per_row_A` = 2.25e-07; `encoder_A_kernel` = ntt_simt_v2_t1024; `fused_layer_graphed_s` = 0.0123; `fused_checker_round_2p21_us` = 473.7920; `logup_round_2p21_us` = 1,468.6720; `logup_over_checker_round` = 3.0998; `packed_k0_batch_s_padded` = 1.5777; `packed_k0_per_vu_s` = 0.000385; `packed_k3_batch_s_padded` = 0.4764; `packed_k3_per_vu_s` = 0.000116; `packed2_best_batch_s_padded` = 0.2634; `packed2_best_batch_s_unpadded` = 0.1561; `packed2_best_label` = Montgomery packed k=3 from the 2^28 fit; `logup_gkr_full_vu_s` = 0.4122
 
 * **B**: overhead **4.88e+06** (197 ms per batch, 48 us/VU).
 
@@ -244,14 +271,14 @@ Measured inputs: `hash_rate_B` = 3.77e+11; `hash_rate_A` = 3.56e+11; `hash_B_ker
 
   Omitted (still modelled): witness/hint generation (modelled: 2e4 int ops per unit at 25% of the A100 FP32 peak); Ligero row combination (modelled matmul @0.172 of the A100 INT8 peak); openings and transcript serialisation (not priced); prover randomness (modelled PRG at 100 GB/s); linear/quadratic tests, constraint combination, helper inversions (modelled SIMT at the A100 rate).
 
-* **A**: overhead **2.69e+07** (1084 ms per batch, 265 us/VU).
+* **A**: overhead **1.83e+07** (736 ms per batch, 180 us/VU).
 
   * encoding: 11.0 ms (1%) -- measured: ntt_simt_v2_t1024 0.225 us/row x 48,873 rows
   * hash: 9.0 ms (1%) -- measured: blake3 356 GB/s over 3.21 GB
   * row_combination: 1.4 ms (0%) -- modelled matmul @0.172
-  * other SIMT (logUp tree build, ...): 37.2 ms (3%) -- modelled SIMT
-  * gkr_checker_sumcheck: 476.4 ms (44%) -- measured: packed k=3 six-layer batch (padded) (model @0.172: 850 ms; alternatives fused SIMT layer model x96 (graphed) 1185 ms, packed k=3 six-layer batch (padded) 476 ms, plain k=0 six-layer batch (padded) 1578 ms)
-  * logup_fractional_gkr: 546.6 ms (50%) -- measured rate: fused logUp round 1469 us = 3.10x a fused checker round at 2^21, x the fused checker layer model x96 at the model's logUp/checker element ratio (model @0.172: 249 ms)
+  * other SIMT (logUp tree build, ...): 37.2 ms (5%) -- modelled SIMT
+  * gkr_checker_sumcheck: 263.4 ms (36%) -- measured: Montgomery packed k=3 from the 2^28 fit six-layer batch (padded) (model @0.172: 850 ms; alternatives fused SIMT layer model x96 (graphed) 1185 ms, packed k=3 six-layer batch (padded) 476 ms, plain k=0 six-layer batch (padded) 1578 ms, Montgomery packed k=3 from the 2^28 fit six-layer batch (padded) 263 ms)
+  * logup_fractional_gkr: 412.2 ms (56%) -- measured: a-packed2 logUp fractional GKR at the full-VU shape (393,216 units x 306 lookups, 65,536-row table), k=3, whole bucket on the A100 (model @0.172: 249 ms; launch-bound: ~0.1-0.2 s of device work)
   * hint_generation: 1.6 ms (0%) -- modelled
   * prg: 0.5 ms (0%) -- modelled
 

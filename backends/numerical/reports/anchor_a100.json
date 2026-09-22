@@ -2,7 +2,7 @@
  "lane": "anchor-a100",
  "track": "shared",
  "hardware": "NVIDIA A100 SXM4 80GB",
- "generated": "2026-09-22T07:49:45Z",
+ "generated": "2026-09-22T08:04:26Z",
  "runs": {
   "microbench": "r20260922-063608-a304",
   "hash_gpu": "r20260922-063811-e561",
@@ -11,7 +11,8 @@
   "fused_logup": "r20260922-071602-522d",
   "packed": "r20260922-073828-153f",
   "packed_killed_mislaunch": "r20260922-073540-f5b5",
-  "tensor": "r20260922-074359-964b"
+  "tensor": "r20260922-074359-964b",
+  "wave2_gkr (packed Montgomery 2^26, direct 2^28, logUp GKR full-VU)": "r20260922-075147-91a5"
  },
  "labels": {
   "proof_class": "COMPONENT (kernels) / ARITHMETIC_DIAGNOSTIC (re-price)",
@@ -1678,6 +1679,222 @@
    "a100_fit_s_per_elem": 9.278412973624702e-10
   },
   {
+   "kernel": "packed2",
+   "log2_t": 26,
+   "k": 0,
+   "ref_gpu": "H100",
+   "ref_s": 0.012557087711989878,
+   "a100_s": 0.02138828755915165,
+   "ratio_ref_over_a100_time": 0.5871011261309199,
+   "a100_fraction_of_int8_peak": 0.06371833823320507,
+   "a100_peak_mem_bytes": 34104629760
+  },
+  {
+   "kernel": "packed2",
+   "log2_t": 26,
+   "k": 1,
+   "ref_gpu": "H100",
+   "ref_s": 0.010682911880314349,
+   "a100_s": 0.017799776084721095,
+   "ratio_ref_over_a100_time": 0.6001711386405758,
+   "a100_fraction_of_int8_peak": 0.04466246672391102,
+   "a100_peak_mem_bytes": 17193102336
+  },
+  {
+   "kernel": "packed2",
+   "log2_t": 26,
+   "k": 2,
+   "ref_gpu": "H100",
+   "ref_s": 0.006433471977710728,
+   "a100_s": 0.011174464143812655,
+   "ratio_ref_over_a100_time": 0.57572979741252,
+   "a100_fraction_of_int8_peak": 0.04619657853995376,
+   "a100_peak_mem_bytes": 8871598592
+  },
+  {
+   "kernel": "packed2",
+   "log2_t": 26,
+   "k": 3,
+   "ref_gpu": "H100",
+   "ref_s": 0.005968288078904154,
+   "a100_s": 0.0115437760874629,
+   "ratio_ref_over_a100_time": 0.5170135000613884,
+   "a100_fraction_of_int8_peak": 0.04069396566020472,
+   "a100_peak_mem_bytes": 4509491200
+  },
+  {
+   "kernel": "packed2",
+   "log2_t": 26,
+   "k": 4,
+   "ref_gpu": "H100",
+   "ref_s": 0.009253280121833084,
+   "a100_s": 0.015191807895898824,
+   "ratio_ref_over_a100_time": 0.6090967043054235,
+   "a100_fraction_of_int8_peak": 0.0416258533360819,
+   "a100_peak_mem_bytes": 2362003456
+  },
+  {
+   "kernel": "packed2",
+   "log2_t": 28,
+   "k": 2,
+   "ref_gpu": "H100",
+   "ref_s": 0.01977660773694515,
+   "a100_s": 0.03433190483599901,
+   "ratio_ref_over_a100_time": 0.5760416682795946,
+   "a100_fraction_of_int8_peak": 0.060144874356172474,
+   "a100_peak_mem_bytes": 34368920064
+  },
+  {
+   "kernel": "packed2",
+   "log2_t": 28,
+   "k": 3,
+   "ref_gpu": "H100",
+   "ref_s": 0.017688000068068508,
+   "a100_s": 0.03193081623315812,
+   "ratio_ref_over_a100_time": 0.5539476328732444,
+   "a100_fraction_of_int8_peak": 0.05884748319527879,
+   "a100_peak_mem_bytes": 17793979904
+  },
+  {
+   "kernel": "packed2",
+   "log2_t": 28,
+   "k": 4,
+   "ref_gpu": "H100",
+   "ref_s": 0.030962559826672075,
+   "a100_s": 0.043798560418188574,
+   "ratio_ref_over_a100_time": 0.7069309934171719,
+   "a100_fraction_of_int8_peak": 0.05775276416188095,
+   "a100_peak_mem_bytes": 10571735040
+  },
+  {
+   "kernel": "packed2.layers",
+   "log2_t_fit": 26,
+   "k": 0,
+   "ref_gpu": "H100",
+   "ref_batch_s_padded": 0.36924782053954225,
+   "a100_batch_s_padded": 0.6382125601413823,
+   "a100_batch_s_unpadded": 0.3846552520774606,
+   "a100_per_vu_s": 0.00015581361331576716,
+   "ratio_ref_over_a100_time": 0.5785655808117335
+  },
+  {
+   "kernel": "packed2.layers",
+   "log2_t_fit": 26,
+   "k": 1,
+   "ref_gpu": "H100",
+   "ref_batch_s_padded": 0.30806988638540017,
+   "a100_batch_s_padded": 0.5191517040340053,
+   "a100_batch_s_unpadded": 0.31398265909416,
+   "a100_per_vu_s": 0.00012674602149267709,
+   "ratio_ref_over_a100_time": 0.5934101419519198
+  },
+  {
+   "kernel": "packed2.layers",
+   "log2_t_fit": 26,
+   "k": 2,
+   "ref_gpu": "H100",
+   "ref_batch_s_padded": 0.16941552592029024,
+   "a100_batch_s_padded": 0.3029018481489568,
+   "a100_batch_s_unpadded": 0.1856688109634573,
+   "a100_per_vu_s": 7.395064652074141e-05,
+   "ratio_ref_over_a100_time": 0.5593083269567158
+  },
+  {
+   "kernel": "packed2.layers",
+   "log2_t_fit": 26,
+   "k": 3,
+   "ref_gpu": "H100",
+   "ref_batch_s_padded": 0.1536891854925178,
+   "a100_batch_s_padded": 0.3162903408927415,
+   "a100_batch_s_unpadded": 0.19350518008376055,
+   "a100_per_vu_s": 7.721932150701697e-05,
+   "ratio_ref_over_a100_time": 0.485911726101797
+  },
+  {
+   "kernel": "packed2.layers",
+   "log2_t_fit": 26,
+   "k": 4,
+   "ref_gpu": "H100",
+   "ref_batch_s_padded": 0.2628303414383368,
+   "a100_batch_s_padded": 0.43216990048742504,
+   "a100_batch_s_unpadded": 0.2627061883946269,
+   "a100_per_vu_s": 0.00010551022961118775,
+   "ratio_ref_over_a100_time": 0.6081643842893784
+  },
+  {
+   "kernel": "packed2.layers",
+   "log2_t_fit": 28,
+   "k": 2,
+   "ref_gpu": "H100",
+   "ref_batch_s_padded": 0.1631570138297975,
+   "a100_batch_s_padded": 0.2832382148969918,
+   "a100_batch_s_unpadded": 0.16787094483774126,
+   "a100_per_vu_s": 6.914995480883589e-05,
+   "ratio_ref_over_a100_time": 0.5760416682795947
+  },
+  {
+   "kernel": "packed2.layers",
+   "log2_t_fit": 28,
+   "k": 3,
+   "ref_gpu": "H100",
+   "ref_batch_s_padded": 0.1459260005615652,
+   "a100_batch_s_padded": 0.2634292339235545,
+   "a100_batch_s_unpadded": 0.15613046570256123,
+   "a100_per_vu_s": 6.43137778133678e-05,
+   "ratio_ref_over_a100_time": 0.5539476328732444
+  },
+  {
+   "kernel": "packed2.layers",
+   "log2_t_fit": 28,
+   "k": 4,
+   "ref_gpu": "H100",
+   "ref_batch_s_padded": 0.2554411185700446,
+   "a100_batch_s_padded": 0.3613381234500557,
+   "a100_batch_s_unpadded": 0.21415956251354512,
+   "a100_per_vu_s": 8.821731529542376e-05,
+   "ratio_ref_over_a100_time": 0.7069309934171719
+  },
+  {
+   "kernel": "logup_gkr",
+   "k": 3,
+   "ref_gpu": "H100",
+   "ref_s": 0.42737664794921876,
+   "a100_s": 0.41219119262695314,
+   "ratio_ref_over_a100_time": 1.0368408049320184,
+   "a100_us_per_vu": 100.63261538743973,
+   "a100_tail_levels_ms": 144.44640138745308,
+   "ref_tail_levels_ms": 171.09872046113014,
+   "a100_peak_mem_bytes": 12449908736,
+   "split_ms": {
+    "histogram_ms": 5.412703990936279,
+    "tree_ms": 19.564863204956055,
+    "big_packed_ms": 10.129599571228027,
+    "big_fold_k_ms": 3.5720319747924805,
+    "big_ext_ms": 27.150527954101562,
+    "tail_levels_ms": 144.44640138745308
+   }
+  },
+  {
+   "kernel": "logup_gkr",
+   "k": 0,
+   "ref_gpu": "H100",
+   "ref_s": 0.4466475830078125,
+   "a100_s": 0.4776759643554688,
+   "ratio_ref_over_a100_time": 0.9350430340586153,
+   "a100_us_per_vu": 116.62010848522186,
+   "a100_tail_levels_ms": 142.00659184157848,
+   "ref_tail_levels_ms": 161.37884825468063,
+   "a100_peak_mem_bytes": 24801980416,
+   "split_ms": {
+    "histogram_ms": 5.371456146240234,
+    "tree_ms": 19.598432540893555,
+    "big_packed_ms": 0.003648000070825219,
+    "big_fold_k_ms": 25.172927856445312,
+    "big_ext_ms": 85.89984130859375,
+    "tail_levels_ms": 142.00659184157848
+   }
+  },
+  {
    "kernel": "tensor",
    "t": 2097152,
    "deg": 6,
@@ -1958,7 +2175,11 @@
    "packed_k0_batch_s_padded": 1.5777486778364522,
    "packed_k0_per_vu_s": 0.0003851925482999151,
    "packed_k3_batch_s_padded": 0.47639832419620154,
-   "packed_k3_per_vu_s": 0.00011630818461821327
+   "packed_k3_per_vu_s": 0.00011630818461821327,
+   "packed2_best_batch_s_padded": 0.2634292339235545,
+   "packed2_best_batch_s_unpadded": 0.15613046570256123,
+   "packed2_best_label": "Montgomery packed k=3 from the 2^28 fit",
+   "logup_gkr_full_vu_s": 0.41219119262695314
   },
   "designs": {
    "B": {
@@ -2014,49 +2235,49 @@
     "hash_bytes": 20362428416
    },
    "A": {
-    "t.total": 1.083716714609564,
-    "seconds_per_vu": 0.0002645792760277256,
-    "overhead.vs_native_peak": 26871332.721565884,
+    "t.total": 0.736381215465008,
+    "seconds_per_vu": 0.00017978057018188672,
+    "overhead.vs_native_peak": 18258964.15909787,
     "buckets": {
      "encoding": {
       "seconds": 0.011010368347167968,
       "basis": "measured: ntt_simt_v2_t1024 0.225 us/row x 48,873 rows",
-      "share": 0.010159821472472838
+      "share": 0.014951995129608472
      },
      "hash": {
       "seconds": 0.009016110685686208,
       "basis": "measured: blake3 356 GB/s over 3.21 GB",
-      "share": 0.008319619476326418
+      "share": 0.012243808636526313
      },
      "row_combination": {
       "seconds": 0.001432442275491913,
       "basis": "modelled matmul @0.172",
-      "share": 0.0013217866405317797
+      "share": 0.0019452455405008645
      },
      "other SIMT (logUp tree build, ...)": {
       "seconds": 0.03716677632000004,
       "basis": "modelled SIMT",
-      "share": 0.03429565662221081
+      "share": 0.050472195025412295
      },
      "gkr_checker_sumcheck": {
-      "seconds": 0.47639832419620154,
-      "basis": "measured: packed k=3 six-layer batch (padded) (model @0.172: 850 ms; alternatives fused SIMT layer model x96 (graphed) 1185 ms, packed k=3 six-layer batch (padded) 476 ms, plain k=0 six-layer batch (padded) 1578 ms)",
-      "share": 0.4395967301914651
+      "seconds": 0.2634292339235545,
+      "basis": "measured: Montgomery packed k=3 from the 2^28 fit six-layer batch (padded) (model @0.172: 850 ms; alternatives fused SIMT layer model x96 (graphed) 1185 ms, packed k=3 six-layer batch (padded) 476 ms, plain k=0 six-layer batch (padded) 1578 ms, Montgomery packed k=3 from the 2^28 fit six-layer batch (padded) 263 ms)",
+      "share": 0.3577348639416405
      },
      "logup_fractional_gkr": {
-      "seconds": 0.5465576014988622,
-      "basis": "measured rate: fused logUp round 1469 us = 3.10x a fused checker round at 2^21, x the fused checker layer model x96 at the model's logUp/checker element ratio (model @0.172: 249 ms)",
-      "share": 0.5043362293214912
+      "seconds": 0.41219119262695314,
+      "basis": "measured: a-packed2 logUp fractional GKR at the full-VU shape (393,216 units x 306 lookups, 65,536-row table), k=3, whole bucket on the A100 (model @0.172: 249 ms; launch-bound: ~0.1-0.2 s of device work)",
+      "share": 0.5597524542592572
      },
      "hint_generation": {
       "seconds": 0.0016131938461538462,
       "basis": "modelled",
-      "share": 0.001488575219341375
+      "share": 0.002190704776649077
      },
      "prg": {
       "seconds": 0.00052189744,
       "basis": "modelled",
-      "share": 0.00048158105616007455
+      "share": 0.0007087326904047024
      }
     },
     "measured_buckets": [

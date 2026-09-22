@@ -260,6 +260,44 @@ def sec_packed(a100: dict, ref: dict) -> tuple[str, list[dict]]:
     return txt, data
 
 
+def sec_packed2(a26: dict, h26: dict, a28: dict, h28: dict, alog: dict, hlog: dict) -> tuple[str, list[dict]]:
+    """a-packed2 second pass: 32-bit Montgomery packed sumcheck (2^26 table, direct 2^28) and the logUp fractional GKR at the full-VU shape."""
+    rows, data = [], []
+    for lg, A, H in ((26, a26, h26), (28, a28, h28)):
+        for k in range(5):
+            ra = next((r for r in A["results"] if r["log2_t"] == lg and r["k"] == k), None)
+            rh = next((r for r in H["results"] if r["log2_t"] == lg and r["k"] == k), None)
+            if not ra or not rh:
+                continue
+            util_a = ra["macs_performed"] / DATASHEET_INT8_MACS / ra["seconds"]
+            rows.append([f"Montgomery packed sumcheck 2^{lg}, k={k}", f"{rh['seconds']*1e3:.2f} ms", f"{ra['seconds']*1e3:.2f} ms ({util_a:.2%} of A100 INT8 peak)", f"{rh['seconds']/ra['seconds']:.2f}x",
+                         f"{ra['macs_performed']/DATASHEET_INT8_MACS*1e3:.2f} ms TC@312T", f"{util_a:.4f}", f"{ra['mem.peak_device_bytes']/1e9:.1f} GB"])
+            data.append({"kernel": "packed2", "log2_t": lg, "k": k, "ref_gpu": "H100", "ref_s": rh["seconds"], "a100_s": ra["seconds"], "ratio_ref_over_a100_time": rh["seconds"] / ra["seconds"],
+                         "a100_fraction_of_int8_peak": util_a, "a100_peak_mem_bytes": ra["mem.peak_device_bytes"]})
+    for lg, A, H in ((26, a26, h26), (28, a28, h28)):
+        for k in sorted(A["layers"], key=int):
+            La, Lh = A["layers"][k], H["layers"].get(k)
+            if not Lh:
+                continue
+            rows.append([f"six-layer batch from the 2^{lg} fit, k={k} (padded / un-padded)", f"{Lh['batch_seconds.padded']*1e3:.0f} / {Lh['batch_seconds.unpadded']*1e3:.0f} ms = {Lh['per_vu_seconds.padded']*1e6:.1f} us/VU",
+                         f"{La['batch_seconds.padded']*1e3:.0f} / {La['batch_seconds.unpadded']*1e3:.0f} ms = **{La['per_vu_seconds.padded']*1e6:.1f} us/VU**", f"{Lh['batch_seconds.padded']/La['batch_seconds.padded']:.2f}x", "", "", ""])
+            data.append({"kernel": "packed2.layers", "log2_t_fit": lg, "k": int(k), "ref_gpu": "H100", "ref_batch_s_padded": Lh["batch_seconds.padded"], "a100_batch_s_padded": La["batch_seconds.padded"],
+                         "a100_batch_s_unpadded": La["batch_seconds.unpadded"], "a100_per_vu_s": La["per_vu_seconds.padded"], "ratio_ref_over_a100_time": Lh["batch_seconds.padded"] / La["batch_seconds.padded"]})
+    for ra in alog["results"]:
+        rh = next((r for r in hlog["results"] if r["k"] == ra["k"]), None)
+        if not rh:
+            continue
+        rows.append([f"logUp fractional GKR, full-VU shape ({alog['units']:,} x {alog['lookups']} lookups, 2^{alog['n']} leaves), k={ra['k']}", f"{rh['total_ms']:.0f} ms = {rh['us_per_vu']:.0f} us/VU",
+                     f"**{ra['total_ms']:.0f} ms = {ra['us_per_vu']:.0f} us/VU** (20 smallest levels {ra['tail_levels_ms']:.0f} ms)", f"{rh['total_ms']/ra['total_ms']:.2f}x", "", "", f"{ra['mem.peak_device_bytes']/1e9:.1f} GB"])
+        data.append({"kernel": "logup_gkr", "k": ra["k"], "ref_gpu": "H100", "ref_s": rh["total_ms"] * 1e-3, "a100_s": ra["total_ms"] * 1e-3, "ratio_ref_over_a100_time": rh["total_ms"] / ra["total_ms"],
+                     "a100_us_per_vu": ra["us_per_vu"], "a100_tail_levels_ms": ra["tail_levels_ms"], "ref_tail_levels_ms": rh["tail_levels_ms"], "a100_peak_mem_bytes": ra["mem.peak_device_bytes"],
+                     "split_ms": {k: ra[k] for k in ("histogram_ms", "tree_ms", "big_packed_ms", "big_fold_k_ms", "big_ext_ms", "tail_levels_ms")}})
+    txt = md_table(["a-packed2 kernels (whole sumcheck, CUDA-graphed rounds)", "H100 recorded", "A100 measured", "speed ratio A100/H100", "A100 TC floor", "fraction of INT8 peak", "A100 peak mem"], rows)
+    if a26.get("agreement_test_tail"):
+        txt += f"\n\nAgreement test on the A100 (Montgomery kernels): {a26['agreement_test_tail']}"
+    return txt, data
+
+
 def sec_tensor(a100: dict, ref: dict) -> tuple[str, list[dict]]:
     rows, data = [], []
     for r4 in ref["measured"]["rounds"]:
@@ -341,13 +379,20 @@ def reprice(meas: dict) -> tuple[str, dict]:
                 cands["packed k=3 six-layer batch (padded)"] = meas["packed_k3_batch_s_padded"]
             if "packed_k0_batch_s_padded" in meas:
                 cands["plain k=0 six-layer batch (padded)"] = meas["packed_k0_batch_s_padded"]
+            if "packed2_best_batch_s_padded" in meas:
+                cands[meas["packed2_best_label"] + " six-layer batch (padded)"] = meas["packed2_best_batch_s_padded"]
             if cands:
                 best_label = min(cands, key=cands.get)
                 t_gkr = cands[best_label]
                 buckets["gkr_checker_sumcheck"] = (t_gkr, f"measured: {best_label} (model @0.172: {(t_gkr_mm + t_gkr_simt)*1e3:.0f} ms; alternatives "
                                                    + ", ".join(f"{k} {v*1e3:.0f} ms" for k, v in cands.items()) + ")")
                 total = total - t_gkr_mm - t_gkr_simt + t_gkr
-                if "fused_layer_graphed_s" in meas and "logup_over_checker_round" in meas:
+                if "logup_gkr_full_vu_s" in meas:
+                    t_logup = meas["logup_gkr_full_vu_s"]
+                    buckets["logup_fractional_gkr"] = (t_logup, f"measured: a-packed2 logUp fractional GKR at the full-VU shape (393,216 units x 306 lookups, 65,536-row table), k=3, "
+                                                        f"whole bucket on the A100 (model @0.172: {(t_logup_mm + t_logup_simt)*1e3:.0f} ms; launch-bound: ~0.1-0.2 s of device work)")
+                    total = total - t_logup_mm - t_logup_simt + t_logup
+                elif "fused_layer_graphed_s" in meas and "logup_over_checker_round" in meas:
                     # per element the measured logUp round costs (logup_us / checker_us) of a fused checker round; the model's MAC ratio
                     # (which carries the 5-vs-3 table factor, hence x3/5) supplies the element count relative to the checker.
                     t_logup = meas["fused_layer_graphed_s"] * tx.UNITS_PER_VU / p.matmul["gkr_checker"] * p.matmul["logup_fractional_gkr"] * meas["logup_over_checker_round"] * 3 / 5
@@ -491,6 +536,31 @@ def main(argv=None) -> int:
         md += [f"Best k on the A100: **k={best_k}**, {Lb['batch_seconds.padded']*1e3:.0f} ms per six-layer batch = {Lb['per_vu_seconds.padded']*1e6:.1f} us/VU "
                f"(H100: k=3, 257 ms, 62.7 us/VU)." + (f"  At 2^26 k=3: {r26['a100_s']*1e3:.2f} ms vs 9.08 on the H100 ({r26['ratio_ref_over_a100_time']:.2f}x; bandwidth ratio 0.61, "
                                                      f"INT8-peak ratio 0.32)." if r26 else ""), ""]
+    p2_a26 = load(R / "wave2_gkr" / "packed26" / "bench.json")
+    p2_h26 = load(REPO / "backends/gkr/packed/results/r20260922-064917-c293/bench.json")
+    p2_a28 = load(R / "wave2_gkr" / "packed28" / "bench.json")
+    p2_h28 = load(REPO / "backends/gkr/packed/results/r20260922-065412-73be/bench.json")
+    lg_a = load(R / "wave2_gkr" / "logup" / "logup_bench.json")
+    lg_h = load(REPO / "backends/gkr/packed/results/r20260922-073439-1f15/logup_bench.json")
+    if p2_a26 and p2_h26 and p2_a28 and p2_h28 and lg_a and lg_h:
+        txt, d = sec_packed2(p2_a26, p2_h26, p2_a28, p2_h28, lg_a, lg_h)
+        doc["kernels"] += d
+        md += ["## 4b. `backends/gkr/packed` second pass (a-packed2, landed on main 07:4xZ): 32-bit Montgomery packed sumcheck, direct 2^28, logUp fractional GKR "
+               "(H100 runs `r20260922-064917-c293`, `r20260922-065412-73be`, `r20260922-073439-1f15`; A100 run `r20260922-075147-91a5`)", "", txt, ""]
+        best = min((r for r in d if r["kernel"] == "packed2.layers"), key=lambda r: r["a100_batch_s_padded"])
+        meas["packed2_best_batch_s_padded"] = best["a100_batch_s_padded"]
+        meas["packed2_best_batch_s_unpadded"] = best["a100_batch_s_unpadded"]
+        meas["packed2_best_label"] = f"Montgomery packed k={best['k']} from the 2^{best['log2_t_fit']} fit"
+        l3 = next((r for r in d if r["kernel"] == "logup_gkr" and r["k"] == 3), None)
+        if l3:
+            meas["logup_gkr_full_vu_s"] = l3["a100_s"]
+        r28 = next((r for r in d if r["kernel"] == "packed2" and r["log2_t"] == 28 and r["k"] == 3), None)
+        md += [(f"The Montgomery kernels scale with bandwidth on the A100: 0.52-0.61x the H100 at 2^26 (bandwidth ratio 0.61), k=3 direct 2^28 **{r28['a100_s']*1e3:.1f} ms** "
+                f"({r28['ratio_ref_over_a100_time']:.2f}x the H100's 17.7; {r28['a100_fraction_of_int8_peak']:.1%} of the A100 INT8 peak) = **{best['a100_per_vu_s']*1e6:.1f} us/VU, {best['a100_batch_s_padded']*1e3:.0f} ms per six-layer batch** "
+                f"padded ({best['a100_batch_s_unpadded']*1e3:.0f} un-padded) -- 1.8x better than the first-pass packed k=3 on the same card (476 ms).  k=2 and k=3 are within 4% of each other on the A100 "
+                f"(the base x base Hadamard share is INT32 work at 0.47x the H100's rate).  **Finding (flagged).**  The logUp fractional GKR runs at **{l3['a100_s']*1e3:.0f} ms = {l3['a100_us_per_vu']:.0f} us/VU** "
+                f"on the A100 vs 427 on the H100 ({l3['ratio_ref_over_a100_time']:.2f}x: a 1.7x departure from the bandwidth ratio) -- it is host-launch-bound (~1 ms x 351 rounds; the 20 smallest levels are "
+                f"{l3['a100_tail_levels_ms']:.0f} of the {l3['a100_s']*1e3:.0f} ms on both cards), so the GPU does not matter yet; the device work is ~0.1-0.2 s.  Fixing the launch loop (CUDA graphs per level) is worth ~2x on either card."), ""]
     tensor_a = load(R / "tensor" / "bench.json")
     tensor_ref = load(REPORTS / "tc_sumcheck_4090.json")
     if tensor_a and tensor_ref:
