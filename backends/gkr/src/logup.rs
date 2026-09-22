@@ -14,7 +14,7 @@ pub struct TableChallenges { pub z: Ext, pub beta: Ext }
 fn log2ceil(n: usize) -> usize { let mut s = 0; while (1usize << s) < n { s += 1; } s }
 
 /// Leaves for one table over the whole batch (used by prover and, in the clear-witness diagnostic, verifier).
-pub fn leaves(circ: &Circuit, table: &Table, queries: &[&Query], cols: &[Fp], ncols: usize, units: usize, ch: &TableChallenges) -> (Vec<Ext>, Vec<Ext>, usize) {
+pub fn leaves(circ: &Circuit, table: &Table, queries: &[&Query], cols: &[Fp], ncols: usize, units: usize, ch: &TableChallenges) -> (Vec<Ext>, Vec<Ext>, usize, Vec<u64>) {
     let n_wit = units * queries.len();
     let n = log2ceil(n_wit + table.rows.len());
     let size = 1usize << n;
@@ -46,7 +46,7 @@ pub fn leaves(circ: &Circuit, table: &Table, queries: &[&Query], cols: &[Fp], nc
         q[n_wit + i] = ch.z - comb;
     }
     let _ = circ;
-    (p, q, n)
+    (p, q, n, mult)
 }
 
 pub struct LookupStats { pub n: usize, pub leaves: usize }
@@ -114,9 +114,12 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
     LookupStats { n, leaves: 1 << n }
 }
 
-/// Verifier; `p_leaf`/`q_leaf` are the leaf vectors the verifier reconstructs from the clear witness (with a
-/// PCS they would be opened as linear functionals of the committed columns).  Returns Ok on acceptance.
-pub fn verify_table(p_leaf: &[Ext], q_leaf: &[Ext], n: usize, tr: &mut Transcript, rd: &mut Reader, name: &str) -> Result<(), String> {
+/// The verifier's residual claim after the fractional GKR: p̃(ρ) + λ q̃(ρ) = value on the leaf vectors.
+pub struct LeafClaim { pub rho: Vec<Ext>, pub lambda: Ext, pub value: Ext }
+
+/// Verifier of the fractional GKR; returns the leaf claim, which the caller checks against the clear leaf
+/// vectors (`check_leaves`) or turns into a linear functional on the committed columns (PCS mode).
+pub fn verify_table(n: usize, tr: &mut Transcript, rd: &mut Reader, name: &str) -> Result<LeafClaim, String> {
     let q_root = rd.next()?;
     if q_root.is_zero() { return Err(format!("{name}: zero root denominator")); }
     tr.absorb_ext(q_root);
@@ -147,8 +150,14 @@ pub fn verify_table(p_leaf: &[Ext], q_leaf: &[Ext], n: usize, tr: &mut Transcrip
         let q_next = q0 + mu * (q1 - q0);
         claim = p_next + lambda * q_next;
     }
-    let pv = eval_mle(p_leaf, &rho);
-    let qv = eval_mle(q_leaf, &rho);
-    if pv + lambda * qv != claim { return Err(format!("{name}: leaf evaluation mismatch (multiset differs)")); }
+    Ok(LeafClaim { rho, lambda, value: claim })
+}
+
+pub fn check_leaves(p_leaf: &[Ext], q_leaf: &[Ext], c: &LeafClaim, name: &str) -> Result<(), String> {
+    let pv = eval_mle(p_leaf, &c.rho);
+    let qv = eval_mle(q_leaf, &c.rho);
+    if pv + c.lambda * qv != c.value { return Err(format!("{name}: leaf evaluation mismatch (multiset differs)")); }
     Ok(())
 }
+
+pub fn log2ceil_pub(n: usize) -> usize { log2ceil(n) }
