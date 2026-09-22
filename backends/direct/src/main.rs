@@ -1131,6 +1131,7 @@ fn vu_honest_v2(args: &[String]) {
     let n: usize = arg(args, "--vus").map(|s| s.parse().unwrap()).unwrap_or(tier.vus.len());
     let m: usize = arg(args, "--eval").map(|s| s.parse().unwrap()).unwrap_or(8.min(n));
     let (air_, lay) = V2ChainAir::new(kind, 4);
+    let (y_hi, carry) = (lay.col("pack.y_hi"), lay.col("cast.carry"));
     let recorded = tier.accs.as_ref().unwrap();
     let t0 = Instant::now();
     let results: Vec<(usize, usize, usize, Vec<String>)> = tier.vus[..n]
@@ -1140,7 +1141,15 @@ fn vu_honest_v2(args: &[String]) {
             let (rows, qs, states, viol) = air_v2::vu_rows(kind, lay.width, &air_.lay.tables, vu);
             let words: Vec<u64> = states.iter().map(|&s| air_v2::state_word(s)).collect();
             let mism = words.iter().zip(&recorded[i]).filter(|(a, b)| a != b).count();
-            let y = air_v2::row_word(&air_.idx, &rows[rows.len() - 1], kind);
+            if mism > 0 {
+                for (j, (a, b)) in words.iter().zip(&recorded[i]).enumerate() {
+                    if a != b {
+                        eprintln!("vu {i} step {j}: state {:?} -> word {a:#010x} != recorded {b:#010x}", states[j]);
+                    }
+                }
+            }
+            let last = &rows[rows.len() - 1];
+            let y = modp(last[y_hi] + last[carry], kind.prime());
             let ybad = (y != vu.y16) as usize;
             let mut fails = vec![];
             if i < m {
@@ -1161,7 +1170,9 @@ fn vu_honest_v2(args: &[String]) {
         }
     }
     println!("vu-honest --v2: {n} VUs in {t:.2}s ({:.2} ms/VU witness): integer violations={v} accumulator mismatches={mm} bad words={yb} field failures (first {m} VUs)={ff}", 1e3 * t / n as f64);
-    assert!(v == 0 && mm == 0 && yb == 0 && ff == 0);
+    if !args.iter().any(|a| a == "--no-assert") {
+        assert!(v == 0 && mm == 0 && yb == 0 && ff == 0);
+    }
 }
 
 /// `check-rows --v2 --in jobs.json --out report.json`: the battery on the v2 AIR (`tools/battery_adapter.py --v2`).

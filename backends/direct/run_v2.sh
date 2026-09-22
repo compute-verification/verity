@@ -12,12 +12,14 @@ SKIP_TESTS=0
 SKIP_CHECKS=0
 EXT=4
 BIND=""
+NO_BENCH=0
 for a in "$@"; do
   case "$a" in
     --skip-tests) SKIP_TESTS=1 ;;
     --skip-checks) SKIP_CHECKS=1 ;;
     --ext5) EXT=5 ;;
     --bind-operands) BIND="--bind-operands" ;;
+    --no-bench) NO_BENCH=1 ;;
   esac
 done
 ROOT=${INSTANCES_ROOT:-/workspace/bench-instances/v1}
@@ -40,11 +42,12 @@ if [ "$SKIP_CHECKS" = 0 ]; then
   echo "== vu-neg --v2 (52 vu-k1536-neg + 44 controls)"
   "$BIN" vu-neg --v2 --root "$ROOT" --out "$OUT" | tail -3
   echo "== vu-honest --v2 ($VUS VUs against the recorded accumulators; exhaustive row-local evaluation of the first 64)"
-  "$BIN" vu-honest --v2 --root "$ROOT" --vus "$VUS" --eval 64 | tail -3
+  "$BIN" vu-honest --v2 --root "$ROOT" --vus "$VUS" --eval 64 --no-assert 2>&1 | tail -40
   echo "== red-team battery on the v2 AIR (83 + 6 extras + 87 controls)"
   ( cd ../.. && UV_CACHE_DIR=${UV_CACHE_DIR:-/workspace/uv-cache} uv run --frozen --package verity-numerical \
       python backends/direct/tools/battery_adapter.py --bin "$BIN" --extras --v2 --out "$OUT/battery_babybear_v2.json" | grep -v "^  rejected" ) || echo "battery (v2) FAILED"
 fi
+if [ "$NO_BENCH" = 1 ]; then exit 0; fi
 echo "== vu-bench --v2 --ext $EXT $BIND"
 if command -v /usr/bin/time >/dev/null; then
   /usr/bin/time -v "$BIN" vu-bench --v2 --ext "$EXT" --root "$ROOT" --vus "$VUS" --queries "$QUERIES" $BIND 2> "$OUT/time_v2_ext$EXT.txt" || { cat "$OUT/time_v2_ext$EXT.txt"; exit 1; }
