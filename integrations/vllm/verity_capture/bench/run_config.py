@@ -535,7 +535,17 @@ def load_stages(run: Path) -> list[dict]:
     p = run / G.ARTIFACTS["stages"]
     if not p.exists():
         return []
-    d = json.loads(p.read_text())
+    text = p.read_text()
+    try:
+        d = json.loads(text)
+    except json.JSONDecodeError as e:
+        # [F-r19-int-17] an interrupted save (ENOSPC mid-write left a 0-byte stages.json on l40s4 #69) must not block `--phase cpu`
+        # over the preserved capture: set the unreadable record aside under a stamped name and start the stage list empty.
+        aside = p.with_name(p.name + f".unreadable-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}")
+        p.replace(aside)
+        print(f"[stages] {p.name} unreadable ({e.__class__.__name__}: {e}; {len(text)} bytes) -> set aside as {aside.name}; resuming with no stage records",
+              file=sys.stderr)
+        return []
     return list(d.get("stages", d) if isinstance(d, dict) else d)
 
 
