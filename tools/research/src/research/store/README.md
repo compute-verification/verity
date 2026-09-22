@@ -31,8 +31,9 @@ reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identit
 attempt id = run id (r20260922-105905-2021)
 ~~~
 
-Two agents freezing the same member set produce the same snapshot id. Two attempts producing byte-identical outputs
-produce the same artifact id; provenance lives on the Attempt (§4), not inside the artifact.
+Two agents freezing the same member set produce the same snapshot id (members are sorted and de-duplicated; `name`, `note`
+and `query` are part of the content, keys absent when not given). Two attempts producing byte-identical outputs produce the
+same artifact id; provenance lives on the Attempt (§4), not inside the artifact.
 
 ## 2. Artifact manifest — `research/artifact/v0.1`
 
@@ -54,9 +55,11 @@ produce the same artifact id; provenance lives on the Attempt (§4), not inside 
  "files": [{"path": "tiles_random.npz", "sha256": "<hex>", "bytes": 100}, ...]}
 ~~~
 
-Tree `files` are sorted by `path`; paths are relative, no `..`, no absolute. Every file (and a file payload) is one blob at
-`objects/sha256/<hex>`. `refs` values are `art:` ids or lists of them (the store checks the syntax, not existence — a ref may
-point at an artifact that lives only remotely). `meta` may contain `art:` strings too; only `refs` is indexed as edges.
+Tree `files` are sorted by `path`; paths are relative with `/` separators, no `..`, `.` or empty components, no absolute, no
+duplicates, and no path that is both a file and a directory of another (`a` and `a/b`); `bytes` is the sum; an empty tree is
+legal. A file payload's `name` is a bare file name. Every file (and a file payload) is one blob at `objects/sha256/<hex>`.
+`refs` values are `art:` ids or lists of them (the store checks the syntax, not existence — a ref may point at an artifact that
+lives only remotely). `meta` may contain `art:` strings too; only `refs` is indexed as edges.
 
 Manifest identity excludes producer, time, labels. The manifest file is `manifests/<sha256 hex>.json` (canonical bytes).
 
@@ -68,14 +71,22 @@ Kinds are strings `<name>/v<int>`. The store validates only the envelope; kind-s
 Local store root: `~/.research/store` (or `$RESEARCH_STORE`). Remote uses the same relative keys.
 
 ~~~text
-objects/sha256/<hex>                 blobs (content-addressed; write temp + rename; never overwritten)
+objects/sha256/<hex>                 blobs (content-addressed; write temp + hard-link, mode 0444; never overwritten)
 manifests/<hex>.json                 artifact manifests (canonical bytes; hex == art id hex)
 attempts/<run id>.json               attempt manifests (canonical bytes; immutable once published)
 labels/<target>/<ts>-<by>.json       one immutable file per assertion; <target> = id with ':' -> '_'
 snapshots are ordinary artifacts (kind dataset-snapshot/v1)
+trees/<hex>/                         LOCAL ONLY: where `fetch ART` (no --to) materialises a tree payload
 catalog.sqlite                       LOCAL ONLY: rebuildable index (§5); never uploaded
 scratch/<reuse_key>/<name>/          LOCAL ONLY: tool caches namespaced by reuse_key (§6.5)
 ~~~
+
+Python API: `research.store.local.LocalStore(root=None, *, config_path=None, repo=None)` (root from `$RESEARCH_STORE`, config
+per §7, repo = `$RESEARCH_REPO` or the nearest ancestor of cwd holding `fixtures/artifacts.json`). Methods: `put_artifact`,
+`put_manifest`, `get_manifest`, `has_local`, `fetch`, `where`, `put_attempt`, `get_attempt`, `push_attempt`, `add_label`,
+`labels`, `snapshot`, `verify`, `push`, `reindex`, `index`, `remote`. Errors: `StoreError` > `NotFound`, `AttemptExists`,
+`IntegrityError`; `remote.RemoteConflict`, `remote.ConfigError`. A file payload fetched without `to` is returned as its
+read-only object path (no copy); with `to` it is copied to `to/<name>` when `to` is a directory, else to `to`.
 
 ## 4. Attempt manifest — `research/attempt/v0.1`
 
@@ -110,12 +121,17 @@ Without a Tool declaration (`research run -- CMD` with no `--tool`): `tool = {"n
 `key_params = []`, `key_conditions = []`, `inputs = {}`, so `derivation = drv(H(tool name, {}, {}, {}))` — a real but coarse
 derivation; `reuse_key` is still computed (clean tree) so `lookup` is honest. `params` then holds `{"argv": argv}`.
 
-`attempts/<id>.json` is written once. Publishing an id that exists with different content is an error, never an overwrite.
+`attempts/<id>.json` is written once. Publishing an id that exists with different content is an error (`AttemptExists`), never an
+overwrite; the same canonical content again is a no-op. The store validates the envelope only (`model.validate_attempt_doc`):
+schema, id syntax, every top-level key above present (`reuse_key`, `closure`, `cost`, `telemetry` may be `null`), `tool.name` a
+string, `derivation` a `drv:` id, `inputs`/`outputs` values `art:` ids, the whole document canonicalisable.
 
 ## 5. Index — `catalog.sqlite` (rebuildable, local only)
 
-`research data reindex` deletes and rebuilds it from `manifests/`, `attempts/`, `labels/` (local), then, with `--remote`,
-from the remote listing too. Tables (denormalised; add columns freely, the file is disposable):
+`research data reindex` wipes and rebuilds it from `manifests/`, `attempts/`, `labels/` (local), then, with `--remote`,
+from the remote listing too (manifests and attempts the remote has and we lack are fetched and cached first). Deleting the
+file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; add columns freely,
+the file is disposable):
 
 ~~~text
 artifacts(id, kind, bytes, payload_type, manifest_json, local INTEGER, remote INTEGER, repo_path TEXT)
@@ -128,7 +144,20 @@ attempt_conditions(attempt, key, value)
 attempt_outputs(attempt, name, artifact)
 attempt_inputs(attempt, name, artifact)
 labels(target, key, value, by, ts, ref, path)
+replicas(id, location, verified_utc, detail)   verifications (§7); the one table a rebuild keeps, since it is not a local fact
 ~~~
+
+Flattening: nested objects get dotted keys, lists numeric components (`families.0`), scalars are stored as text (strings raw,
+everything else `json.dumps`: `true`, `null`, `1.5`); `--where` and `--label` compare that text. `local` means manifest + every
+blob present here; `remote` means pushed (from a listing or a recorded push/verification).
+
+`research.store.index.Index(path)`: `index_artifact(manifest_doc, art_id, local=None, remote=None, repo_path=None)` (None keeps the
+current flag), `index_attempt(doc)`, `index_label(label, path)`, `set_presence(art_id, *, local, remote, repo_path)`,
+`set_replica(art_id, location, verified_utc, detail)`, `rebuild(artifacts, attempts, labels)`, `artifact(id)`, `artifacts()`,
+`attempt(run_id)`, `attempts_by_reuse_key(key)`, `attempts_by_derivation(drv)`, `attempts_by_output(art_id)`,
+`select_artifacts(kind=None, where=None, label=None, attempt=None, tool=None, derivation=None)`, `labels(target, key=None)`,
+`replicas(art_id)`, `sql(query, params=())` and `sql_with_columns(...)` on a read-only (`?mode=ro`) connection. Attempt queries
+return the attempt documents; artifact queries return `{id, kind, bytes, payload_type, manifest, local, remote, repo_path}`.
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
@@ -200,33 +229,44 @@ Keyed by reuse_key ON PURPOSE: every commit gets a cold cache; the recompile cos
 
 ~~~python
 class Remote(Protocol):
-    def put(self, key: str, path: Path) -> None            # upload under an immutable key; refuse to overwrite a different object
-    def get(self, key: str, path: Path) -> None
+    def put(self, key: str, path: Path) -> None            # upload under an immutable key; RemoteConflict if the key holds a different size
+    def get(self, key: str, path: Path) -> None            # KeyError when absent
     def head(self, key: str) -> dict | None               # {"bytes": n} or None
     def list(self, prefix: str) -> list[str]
+    def describe(self) -> str                              # for `where`
 ~~~
 
-`FsRemote(root)` (a directory, also the test double) and `S3Remote(endpoint, bucket, region="auto", access_key, secret)`
-(SigV4, stdlib `urllib`+`hmac`; single PUT for objects <= 4 GiB, multipart above with per-part sha256 recorded in a sidecar
-key `<key>.parts.json`). Config `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`):
+`FsRemote(root)` (a directory, also the test double) and `S3Remote(endpoint, bucket, access_key, secret_key, region="auto")`
+(SigV4 with signed payload hashes, stdlib `urllib`+`hmac`, path-style `<endpoint>/<bucket>/<key>`; single PUT for objects
+<= 4 GiB; above that `put` raises `NotImplementedError` — the planned design is multipart with per-part sha256 recorded in a
+sidecar key `<key>.parts.json`). The signer is tested against the AWS documented vectors; R2 itself has not been exercised yet.
+Config `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`):
 
 ~~~toml
 [remote]
 type = "s3"                       # or "fs" with path = "/vault/store"
 bucket = "verity-research"
 endpoint = "https://<account>.r2.cloudflarestorage.com"
+region = "auto"                   # optional
 access_key_id_env = "RESEARCH_R2_ACCESS_KEY_ID"        # names of env vars; the file never holds secrets
 secret_access_key_env = "RESEARCH_R2_SECRET_ACCESS_KEY"
 ~~~
 
-No remote configured => the local store is the only replica and `where` says so; nothing fails, nothing is called PRESERVED.
+No remote configured (no file, or no `[remote]` table) => the local store is the only replica and `where` says so; nothing
+fails, nothing is called PRESERVED (`verify` returns `preserved=False, reason="no remote configured"`; `push` refuses). A
+`[remote]` table that is present but unusable (unknown type, missing field, credential env vars unset) is `ConfigError`, on
+purpose: a broken vault must not look like "no vault".
 
-**PRESERVED** means: remote `head` size matches AND a full read-back sha256 matches (objects < 4 GiB; above that, per-part
-sha256 from the sidecar checked against the parts read back). ETags are not content hashes. `research data verify ART`
-performs it; `put --preserve` performs it after upload; the local `replicas` view records `verified_utc` per location.
+**PRESERVED** means: remote `head` size matches AND a full read-back sha256 matches, for the manifest and every blob (objects
+< 4 GiB; above that, per-part sha256 from the sidecar checked against the parts read back — not implemented). ETags are not
+content hashes. `research data verify ART` performs it (exit 1 unless PRESERVED); `put --preserve` performs it after upload;
+`LocalStore.push(art, preserve=True)` returns the verify report; the `replicas` table records `verified_utc` per location.
 
 Replica resolution order for `fetch`: local objects -> repo replica (`fixtures/artifacts.json`: `{art id: repo-relative
-path}`, verified against the manifest on open, fall back on mismatch) -> remote. `research data pull --from MACHINE RUN`
+path}` of the payload — a file, or a tree's directory; every blob is sha256-checked against the manifest before use, mismatch
+warns on stderr and falls through) -> remote (downloaded bytes are checked too: `IntegrityError` on mismatch). The repo map
+supplies bytes only; the manifest must still be resolvable locally or remotely. Bytes that arrive from a repo or the remote are
+cached into `objects/`. `research data pull --from MACHINE RUN`
 copies an attempt manifest plus its outputs' manifests and blobs from a machine's local store over ssh (uses
 `research.remote` helpers) — the same-host tier of the planner until R2 is configured.
 
@@ -239,30 +279,38 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
  "by": "red-team-zk-2", "ts": "2026-09-22T11:20:29Z", "ref": "art:<findings>|r<run id>|<url>"}
 ~~~
 
-Append-only, one file per assertion, never read-modify-write. `research data labels TARGET` lists all; `--history` orders
-by ts; `--key K --by PATTERN` filters. The store never picks a winner; decision tables do (`proof_class=… by=red-team-*`).
+Append-only, one file per assertion (`O_EXCL`, mode 0444), never read-modify-write. The file name uses the compact ts
+(`20260922T112029Z`), `by` restricted to `[A-Za-z0-9._-]`, and a `~N` suffix when the same asserter labels twice in one
+second (`~` sorts after `.`, so `labels()` — ordered by ts, then file name — keeps history order). `research data labels
+TARGET` shows the latest assertion per (key, by); `--history` shows every one in ts order; `--key K --by PATTERN` (fnmatch)
+filter. `label TARGET KEY VALUE` stores VALUE as a string unless `--value-json`. The store never picks a winner; decision
+tables do (`proof_class=… by=red-team-*`).
 
 ## 9. CLI (v0.1)
 
 ~~~text
 research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
-research data show ART|ATTEMPT|DRV [--json]
-research data where ART                       replicas: local / repo / remote (+ verified_utc)
+research data show ART|ATTEMPT|DRV [--json]   manifest (+ producing attempts) / attempt / attempts with that derivation
+research data where ART [--json]              replicas: local / repo / remote (+ verified_utc)
 research data fetch ART [--to DIR]            materialise payload (file or tree); prints path
-research data verify ART                      PRESERVED check against the remote
+research data verify ART [--json]             PRESERVED check against the remote (exit 1 unless PRESERVED)
 research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA]
                                               -> attempts with that reuse_key (or --any-source: that derivation)
-research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json]
+research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
 research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
-research data labels TARGET [--history] [--key K] [--by PAT]
-research data label  TARGET KEY VALUE --by WHO [--ref REF]
+research data labels TARGET [--history] [--key K] [--by PAT] [--json]
+research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
 research data attempt publish RUN_DIR [--tool ...]   (what `research run` calls; also usable after the fact for old runs)
 research data pull --from MACHINE RUN
 research data reindex [--remote]
-research data sql "SELECT ..."               power-user escape hatch; read-only connection
+research data sql "SELECT ..." [--json]      power-user escape hatch; read-only connection
 ~~~
 
-No query DSL: flags for common facets + `sql`.
+No query DSL: flags for common facets + `sql`. Every command takes `--store ROOT`. `--ref name=a,b` or a repeated name makes a
+list. `--members` repeats or comma-separates; `--select` takes the rest of the line as select flags and records them as
+`meta.query` (so a snapshot frozen by query and one frozen by an explicit member list differ). `put --preserve` exits 1 unless
+PRESERVED (the id is still printed). `research/store/cli.py` exposes `COMMANDS: dict[str, fn(argv) -> int]` and `main(argv)`;
+`cli_prov.py` (lookup / pull / attempt) is merged into `COMMANDS` when importable. `research/cli.py` dispatches `data`.
 
 ## 10. `research run` integration
 

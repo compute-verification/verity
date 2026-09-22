@@ -222,7 +222,7 @@ class LocalStore:
                 files.append(TreeFile(p.relative_to(tree).as_posix(), h, n))
                 blobs.append((p, h))
             payload = Payload.tree(files)
-        m = ArtifactManifest(kind=kind, meta=meta, refs=dict(refs or {}), payload=payload).validate()
+        m = ArtifactManifest(kind=kind, meta={} if meta is None else meta, refs=dict(refs or {}), payload=payload).validate()
         if not kinds.is_known(kind):
             _warn(f"unknown kind {kind!r} (known: {', '.join(sorted(kinds.KINDS))}); storing anyway")
         for p, h in blobs:
@@ -278,6 +278,8 @@ class LocalStore:
 
     def has_local(self, art_id: str) -> bool:
         """Manifest and every payload blob present in this store."""
+        if not ids.is_art(art_id):
+            raise ValueError(f"not an art: id: {art_id!r}")
         hex_ = ids.hex_of(art_id)
         if not self.manifest_path(hex_).exists():
             return False

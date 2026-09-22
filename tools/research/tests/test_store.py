@@ -560,7 +560,9 @@ def test_s3remote_against_a_fake_bucket(tmp_path):
             self.wfile.write(objects[key])
 
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    srv.daemon_threads = False
+    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th.start()
     try:
         r = remote_s3.S3Remote(f"http://127.0.0.1:{srv.server_address[1]}", "bkt", "ak", "sk")
         files = {}
@@ -584,6 +586,8 @@ def test_s3remote_against_a_fake_bucket(tmp_path):
         assert not (tmp_path / "never").exists()
     finally:
         srv.shutdown()
+        srv.server_close()
+        th.join(5)
 
 
 def test_s3remote_refuses_oversize_and_conflicts(monkeypatch, tmp_path):

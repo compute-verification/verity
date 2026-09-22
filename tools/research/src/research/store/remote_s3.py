@@ -95,6 +95,8 @@ class S3Remote:
             raise ValueError(f"endpoint must be an http(s) URL, got {endpoint!r}")
         self.scheme, self.host, self.base_path = u.scheme, u.netloc, u.path.rstrip("/")
         self.bucket, self.access_key, self.secret_key, self.region, self.timeout = bucket, access_key, secret_key, region, timeout
+        # env-only proxy lookup: the default opener consults macOS SystemConfiguration (_scproxy), which leaves a system thread behind
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler(urllib.request.getproxies_environment()))
 
     def describe(self) -> str:
         return f"s3://{self.bucket} @ {self.scheme}://{self.host}"
@@ -123,7 +125,7 @@ class S3Remote:
         url = urllib.parse.urlunsplit((self.scheme, self.host, uri_encode(path, keep_slash=True), canonical_query(query), ""))
         req = urllib.request.Request(url, data=data, method=method, headers=signed)
         try:
-            return urllib.request.urlopen(req, timeout=self.timeout)  # noqa: S310  (scheme checked in __init__)
+            return self._opener.open(req, timeout=self.timeout)  # noqa: S310  (scheme checked in __init__)
         finally:
             if isinstance(body, Path):
                 data.close()
