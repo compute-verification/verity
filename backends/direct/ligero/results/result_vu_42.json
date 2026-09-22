@@ -1,0 +1,239 @@
+{
+ "schema": "research/result/v0.1",
+ "run_id": "b-ligero-vu-1790058797",
+ "workload_fingerprint": {
+  "profile": "first-campaign-target/2026-09-21",
+  "domain": "finite",
+  "K": 1536,
+  "B": 42,
+  "N_subbatches": 1,
+  "proof_class": "NON_ZK_PROOF_DIAGNOSTIC",
+  "authentication": "excluded",
+  "zk_mode": "none",
+  "security": {
+   "target": -128,
+   "field": "BabyBear",
+   "challenge_coords": 6,
+   "rs_n": 16384,
+   "rs_l": 4096,
+   "opened_columns": 189,
+   "achieved_log2": -128.12896349893845,
+   "terms_log2": {
+    "irs_query": -128.1289634989389,
+    "linear_query": -188.96671719706228,
+    "quadratic_query": -188.93343845622303,
+    "irs_field": -171.44125552552055,
+    "linear_field": -185.44134357795068,
+    "quadratic_field": -185.44134357795068
+   },
+   "hash_placeholder": true
+  },
+  "hardware": {
+   "gpu": {
+    "name": "NVIDIA L40S",
+    "driver": "570.124.06",
+    "cuda": "12.8",
+    "count": 1,
+    "memory_total_bytes": 48305799168
+   },
+   "cpu": {
+    "model": "AMD EPYC 9354 32-Core Processor",
+    "count": 128
+   }
+  },
+  "software": {
+   "backend": {
+    "name": "b-ligero chain (backends/direct/ligero)",
+    "commit": null,
+    "hash": "blake3 (host, placeholder)",
+    "challenge_expander": "SHAKE-256 (placeholder)"
+   },
+   "toolchain": {
+    "python": "3.12.14",
+    "torch": "2.6.0+cu124",
+    "numpy": "2.5.3"
+   }
+  },
+  "preprocessing": "constraint compilation (a function of Params only, 0.42s)",
+  "retention": "retained",
+  "instances": {
+   "dataset": "bench-instances/v1",
+   "tier": "vu-k1536",
+   "range": [
+    0,
+    42
+   ],
+   "manifest_sha256": "059103cf9bd55ee83cbd4bb14ae6db2f60db2cb4ddf85cdc22b1cecee6e4eeea"
+  },
+  "scope": "vu",
+  "omitted": "external authentication, ZK masking",
+  "rows": 3516,
+  "linear_constraints": 347,
+  "quadratic_constraints": 3387,
+  "witness_generation": "host Python gen_step (hints) + torch program (derived rows)",
+  "note": "42 VUs per proof of l = 4096 columns (64 pad columns)"
+ },
+ "validation": {
+  "status": "passed",
+  "checker": "backends.direct.ligero.run bench-vu (verifier accepted every rep)",
+  "detail": "5 reps, 42 VUs at l=4096",
+  "evidence": {
+   "soundness": {
+    "terms_log2": {
+     "irs_query": -128.1289634989389,
+     "linear_query": -188.96671719706228,
+     "quadratic_query": -188.93343845622303,
+     "irs_field": -171.44125552552055,
+     "linear_field": -185.44134357795068,
+     "quadratic_field": -185.44134357795068
+    },
+    "total_log2": -128.12896349893845,
+    "field": "BabyBear^6",
+    "t": 189,
+    "n": 16384,
+    "l": 4096,
+    "rate": 0.25,
+    "note": "k = l + 1 stands in for the non-ZK k = l (the accounting's validate() needs l < k); the linear test here sends nothing (the verifier encodes beta itself), so its query term is at most the Appendix-C ((k+l)/n)^t used"
+   }
+  }
+ },
+ "measurements": [
+  {
+   "name": "t.witness",
+   "value": 2.870442083105445,
+   "unit": "s"
+  },
+  {
+   "name": "t.encoding_commitment",
+   "value": 0.8763953559100628,
+   "unit": "s"
+  },
+  {
+   "name": "t.arithmetic",
+   "value": 0.07413695566356182,
+   "unit": "s"
+  },
+  {
+   "name": "t.lookup",
+   "value": 0.0,
+   "unit": "s"
+  },
+  {
+   "name": "t.zk_additional",
+   "value": 0.0,
+   "unit": "s"
+  },
+  {
+   "name": "t.serialization",
+   "value": 0.0016793664544820786,
+   "unit": "s"
+  },
+  {
+   "name": "t.total",
+   "value": 3.822607012465596,
+   "unit": "s"
+  },
+  {
+   "name": "verifier.seconds",
+   "value": 0.03402738273143768,
+   "unit": "s"
+  },
+  {
+   "name": "transcript.bytes",
+   "value": 3136724,
+   "unit": "B"
+  },
+  {
+   "name": "rounds.protocol",
+   "value": 2,
+   "unit": "count"
+  },
+  {
+   "name": "rounds.sequential_depth",
+   "value": 2,
+   "unit": "count"
+  },
+  {
+   "name": "mem.peak_device_bytes",
+   "value": 2949535744,
+   "unit": "B"
+  },
+  {
+   "name": "census.witness_elements",
+   "value": 14401536,
+   "unit": "count"
+  },
+  {
+   "name": "census.committed_elements",
+   "value": 57606144,
+   "unit": "count"
+  },
+  {
+   "name": "census.bytes_encoded",
+   "value": 230424576,
+   "unit": "B"
+  },
+  {
+   "name": "vu.seconds_per_vu",
+   "value": 0.0910144526777523,
+   "unit": "s"
+  },
+  {
+   "name": "vu.count",
+   "value": 42,
+   "unit": "count"
+  },
+  {
+   "name": "split.hints_host_seconds",
+   "value": 2.7236801236867905,
+   "unit": "s"
+  },
+  {
+   "name": "split.witness_torch_seconds",
+   "value": 0.14676195941865444,
+   "unit": "s"
+  },
+  {
+   "name": "split.encode_seconds",
+   "value": 0.12114042602479458,
+   "unit": "s"
+  },
+  {
+   "name": "split.transfer_seconds",
+   "value": 0.39563743956387043,
+   "unit": "s"
+  },
+  {
+   "name": "split.merkle_seconds",
+   "value": 0.3596174903213978,
+   "unit": "s"
+  },
+  {
+   "name": "split.tests_seconds",
+   "value": 0.07413695566356182,
+   "unit": "s"
+  },
+  {
+   "name": "split.openings_seconds",
+   "value": 0.0016793664544820786,
+   "unit": "s"
+  },
+  {
+   "name": "proof.opened_columns_bytes",
+   "value": 2658096,
+   "unit": "B"
+  },
+  {
+   "name": "proof.merkle_paths_bytes",
+   "value": 84672,
+   "unit": "B"
+  },
+  {
+   "name": "proof.w_h_q_bytes",
+   "value": 393168,
+   "unit": "B"
+  }
+ ],
+ "measurement_files": [],
+ "artifacts": []
+}
