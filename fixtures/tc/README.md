@@ -11,6 +11,10 @@ artifacts; once registered, the registry's `evidence` pointers become artifact i
 | `autoproof-SEMANTICS.lock.v1.json` | autoproof `spec/SEMANTICS.lock.v1.json` (+ sha256 of `SCR.lock.v1.json`, `fp4-ref/src/native.rs`, `spec/src/{dyadic,formats}.rs`) | the model5 / gdfs description that `models.BlockScaledAlignAdd` ports |
 | `autoproof-probe-vectors.json` | autoproof `probes/results/probe3_1783788526.json` (1,601 nvfp4 sample vectors of 1,574,998 dots) and `probe2_1783788240.json` (1,400 unscaled-FP4 vectors + 26 K-boundary results) | `sm120.mma.m16n8k64.e2m1.nvf4` -> `BLACKWELL_SM120_NVF4` on an RTX 5090; replayed by `packages/verity/tests/ml/test_models.py` |
 
+`vectors/` holds the FP8 draft targets' reference vectors (`verity/tc-reference-vector/v0`: `fp8-{hopper-wgmma,ada-mma}-k{32,1536}`),
+model replays of `GemmAccumulator<K>` on `HOPPER_E4M3_K32` / `ADA_E4M3_M16N8K32` from a recorded seed and recipe -- not
+hardware captures; `packages/verity/tests/verification/test_fp8_targets.py` replays and regenerates them.
+
 Nothing here is a hardware capture taken by this repo: the raw words of the H100 run (143 MB of `.npz`) stayed on the
 pod, and autoproof's 1.57M dots exist only as the per-suite counts in its result files. `fixtures/discrepancy_log.json`
-entries D10-D13 record what these replicas do and do not settle.
+entries D10-D15 record what these replicas do and do not settle.

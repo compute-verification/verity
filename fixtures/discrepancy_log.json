@@ -1,6 +1,6 @@
 {
  "schema": "verity/discrepancy-log/v0",
- "what": "Where the paper, the pinned simulator, Verity's reference and the hardware disagree or are silent about the frozen target. An entry leaves `open` only with an explicit `resolution` and `evidence_refs`; editing the reference implementation never resolves an entry by itself (tests/verification/test_discrepancy_log.py).",
+ "what": "Where the paper, the pinned simulator, Verity's reference and the hardware disagree or are silent about the frozen target. An entry leaves `open` only with an explicit `resolution` and `evidence_refs`; editing the reference implementation never resolves an entry by itself (tests/verification/test_discrepancy_log.py).  Silicon Phase 0 (2026-09-22) extends the log beyond the frozen target: an entry's `profile` names a target of verity.verification.target.TARGETS (frozen or draft) or, for an instruction class with no target yet, an id of verity.ml.tc.instructions.INSTRUCTIONS; the `hawkeye_*` columns then hold what the nearest published model (Hawkeye's Hopper FP8 simulator; autoproof's lockfile for FP4) says.",
  "statuses": {
   "open": "unresolved; a lane owns it",
   "resolved": "settled with evidence; the resolution says what the target does",
@@ -163,6 +163,109 @@
     "r20260921-232750-56c5"
    ],
    "owner": "WP1"
+  },
+  {
+   "id": "D10",
+   "profile": "fp8-ada-mma-draft/2026-09-22",
+   "issue": "Hawkeye's Hopper FP8 simulator does not describe Ada's FP8 mma.sync; and the FP8 path truncates a pass-through accumulator to 14 significand bits even when every product is zero",
+   "hawkeye_paper": "recovers one accumulation group of 32 with a 14-bit truncating adder for Hopper FP8 (zero accumulator only); Ada is not studied; the accumulator's treatment through a group of zero products is not discussed",
+   "hawkeye_simulator": "Hopper_fp8_simulator: one group of 32, 14-bit adder, floor -139; reproduces 10,547,091 / 12,800,000 (82.40 %, 2,252,909 mismatches) of the RTX 4090 E4M3 m16n8k32 random-tile elements; the synthetic Ampere-style FP8 model HAWKEYE_AMPERE_GROUPSUM_E4M3_V0 (groups (8,8), width 25) is not measured against anything",
+   "verity_reference": "verity.ml.tc.models.ADA_E4M3_M16N8K32: two groups of 16, width 14, floor -139; GroupSum.step rescales the incoming FP32 significand to 14 bits before the grouped add, so 0x3F800001 with 32 zero products becomes 0x3F800000 (the group of zeros is not a no-op); the checker's RescaleState gadget (backends/numerical, Params.lossy) is this truncation",
+   "hardware_evidence": "RTX 4090 (sm_89, driver 580.159.03), mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32, veritor gpu/tensor-core-semantics: 24,898,304 / 24,898,304 elements bit-exact over 194,518 tiles against the two-group model (families incl. signed_zero 256 tiles and tiny_acc_zero_products 512 tiles: all-zero products, accumulator exponents 0..30); reproducing tile a=b08234bb..., b=3b382f3d..., acc=0: GPU c0c9d800, Hopper_fp8_simulator c0c9d400; neutral-subgroup measurement results/characterize_e4m3.json separates the groupings.  Hopper (H100, wgmma m64n64k32): one group of 32 -- the same adder, a different grouping (veritor tc-fp8-2026-09-08, 144,543,744 words, 0 mismatches).",
+   "status": "resolved",
+   "resolution": "Ada E4M3 mma.sync is GroupSum(groups=(16,16), width=14, floor=-139), Hopper wgmma E4M3 is GroupSum(groups=(32,), width=14, floor=-139): the same 14-bit truncating adder, a different grouping, and so different functions (36 of 48 K=1536 steps differ on shared operands, fixtures/tc/vectors).  The 14-bit rescale of the incoming accumulator applies unconditionally -- through a group of zero products too -- and is a rule of the model (GroupSum.step) and a gadget of the checker (RescaleState), not a special case.  Hawkeye's Hopper FP8 simulator is the wrong model for sm_89 and is kept only as the source of the floor constant.  Recorded by lane silicon-p0 2026-09-22 from veritor's measurements; no new hardware.",
+   "evidence_refs": [
+    "packages/verity/tests/ml/fixtures/golden/ada_e4m3_m16n8k32.json",
+    "fixtures/tc/veritor-tc-fp8-2026-09-08.json",
+    "packages/verity/src/verity/ml/tc/models.py",
+    "backends/numerical/tests/checker/test_fp8.py"
+   ],
+   "owner": "silicon-p0"
+  },
+  {
+   "id": "D11",
+   "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+   "issue": "autoproof's v0 hypothesis for Blackwell block-scaled FP4 -- a single 26-bit alignment window with truncation toward zero -- is refuted by silicon",
+   "hawkeye_paper": "not covered (Hawkeye studies Ampere/Hopper BF16/FP16/FP8); autoproof SEMANTICS.lock v0 stated the single-window NATIVE hypothesis as PENDING-PROBE",
+   "hawkeye_simulator": "autoproof's v0 NATIVE reference: one 26-bit window below the largest addend, RZ; SEMANTICS.lock.v1 records it REFUTED by PROBE-3 with 142,270 mismatching dot statements; the checked-in probes/results/probe3_1783788526.json scores it at 143,076 / 1,574,998 (scan64: 1,058 of 1,060)",
+   "verity_reference": "verity.ml.tc.models.BlockScaledAlignAdd (BLACKWELL_SM120_NVF4): four exact 16-term E2M1 group dots, UE4M3 scales as exact exponent shifts, a five-way aligned add with a 42-bit first window and a 36-bit second window riding the accumulator's exponent, RZ normalisation, and the hot-group clip at 2^-19 when both scale codes of a live group are in 0x78..0x7E -- autoproof's model5, ported from fp4-ref/src/native.rs and spec/src/dyadic.rs",
+   "hardware_evidence": "RTX 5090 (sm_120, driver 570.195.03, GPU-297048d1), kernel SASS 166a24a0..., mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3, ascending-K chains from a zero accumulator: 1,574,998 dot statements over K in {64, 128, 256} (random, extreme scale span, directed cancellation, curated); v0 mismatches 142,270 (lockfile) / 143,076 (probe3 JSON); model5 0 mismatches (lockfile).  Verity replays the 1,601 recorded sample vectors 1,601 / 1,601 and the 1,400 unscaled kind::f8f6f4 E2M1 m16n8k32 vectors of probe2 1,400 / 1,400.",
+   "status": "resolved",
+   "resolution": "The single-window W=26 model is not the Blackwell consumer (sm_120) block-scaled FP4 semantics; the five-way align-add with the 42/36-bit windows and the hot-group clip is what verity carries as BLACKWELL_SM120_NVF4, status pinned on sm_120 by autoproof's evidence.  The two mismatch counts (142,270 vs 143,076) are two scorings of v0 on the same probe (lockfile prose vs the JSON); both refute it and the difference is not pursued.  Not evidence about sm_100 (B200 tcgen05.mma): see the sm100.* unprobed instructions.  Recorded by lane silicon-p0 2026-09-22.",
+   "evidence_refs": [
+    "fixtures/tc/autoproof-SEMANTICS.lock.v1.json",
+    "fixtures/tc/autoproof-probe-vectors.json",
+    "packages/verity/tests/ml/test_models.py"
+   ],
+   "owner": "silicon-p0"
+  },
+  {
+   "id": "D12",
+   "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+   "issue": "What exactly autoproof's pin covers: the lockfile counts 1,574,998 / 1,574,998 for model5 while the checked-in probe JSON scores the clip-less model2 at 1,574,997 / 1,574,998; the pin date is 2026-07-11 (not 2026-09 as the campaign brief says); and every probe starts from a zero accumulator so only chain-reachable accumulators were exercised",
+   "hawkeye_paper": "not covered",
+   "hawkeye_simulator": "autoproof SEMANTICS.lock.v1 (status: ADOPTED at oracle-v3, human review 2026-07-11): gdfs_model MEASURED, 1,574,998/1,574,998 bitwise under model5 = model2 + hot-group clip; probes/results/probe3_1783788526.json: model2_under_test Gdfs2Config{w1 42, w2 36, ...}, total_model2_mismatches 1 -- the one mismatch that motivated the clip; notes: acc zero-init, ascending-K chain, one warp per case",
+   "verity_reference": "BLACKWELL_SM120_NVF4.validated quotes both counts and the 2026-07-11 date; INSTRUCTIONS['sm120.mma.m16n8k64.e2m1.nvf4'].status = pinned with evidence naming the zero-init limitation; the model raises on a sum leaving the binary32 range (autoproof's oracle asserts there) and on non-finite inputs",
+   "hardware_evidence": "as D11.  No probe with an arbitrary finite FP32 accumulator (only the chain's own values), no overflow, no NaN/inf operands, no UE8M0 (mxf4) scales, no sm_100.",
+   "status": "resolved",
+   "resolution": "The pin is model5 (clip on) at 1,574,998 / 1,574,998 on sm_120, dated 2026-07-11: the JSON's single model2 mismatch is the clip's evidence, not a defect of the pin, and verity's port carries the clip.  The pin's domain is chains from +0 with finite E2M1 products and UE4M3 scales; results for arbitrary incoming accumulators (the second window w2=36 rides the accumulator exponent and is exercised only where the chain put it), for overflow and for special values are the model's extrapolation and are marked so.  Recorded by lane silicon-p0 2026-09-22.",
+   "evidence_refs": [
+    "fixtures/tc/autoproof-SEMANTICS.lock.v1.json",
+    "fixtures/tc/autoproof-probe-vectors.json",
+    "packages/verity/src/verity/ml/tc/instructions.py"
+   ],
+   "owner": "silicon-p0"
+  },
+  {
+   "id": "D13",
+   "profile": "sm120.mma.m16n8k64.e2m1.mxf4",
+   "issue": "Sign of a computed zero when a nonzero exact sum lies entirely below the FP32 subnormal grid: autoproof's code (dyadic.rs::to_f32, RZ) returns a zero of the sum's sign, its lockfile prose says a computed zero normalises to +0; reachable only with UE8M0 (mxf4) scales, which autoproof never probed",
+   "hawkeye_paper": "not covered",
+   "hawkeye_simulator": "autoproof: native.rs applies the same five-way transducer to mxf4 with the hot clip off (its trigger reads the UE4M3 exponent field); dyadic.rs::to_f32(Round::Rz) of a nonzero value below 2^-149 yields -0.0 for a negative value; SEMANTICS.lock.v1 zero_handling: 'all-addends-zero firing leaves the accumulator bit-identical (incl. -0); exact cancellation normalizes to +0' -- silent on underflow",
+   "verity_reference": "two named hypotheses, identical everywhere else: BLACKWELL_SM120_MXF4 (underflow_zero='signed', as the code) and BLACKWELL_SM120_MXF4_UNDERFLOW_PLUS0 (underflow_zero='positive', as the prose); INSTRUCTIONS['sm120.mma.m16n8k64.e2m1.mxf4'] carries the first with status hypothesis and ptx=None (the kind::mxf4 mnemonic is not recorded in either source repository)",
+   "hardware_evidence": "none: autoproof probed nvfp4 (UE4M3) only, where every nonzero term is at least 2^-20 and the case is unreachable; no mxf4 measurement exists in veritor, autoproof or verity",
+   "status": "open",
+   "resolution": null,
+   "to_resolve": "Probe mma.sync kind::mxf4 (UE8M0 block-32 scales) on sm_120 with scale codes near 0 (2^-127) and negative E2M1 products whose scaled sum is nonzero and below 2^-149, from a +0 accumulator; the word 0x80000000 confirms BLACKWELL_SM120_MXF4, 0x00000000 the _UNDERFLOW_PLUS0 variant.  The same probe pins the mxf4 mnemonic and whether the hot clip is indeed absent.",
+   "evidence_refs": [
+    "fixtures/tc/autoproof-SEMANTICS.lock.v1.json",
+    "packages/verity/src/verity/ml/tc/models.py"
+   ],
+   "owner": "tc-probe-fp8"
+  },
+  {
+   "id": "D14",
+   "profile": "sm90.mma.m16n8k32.e4m3",
+   "issue": "The Hopper legacy path: does FP8 mma.sync on sm_90 run Ada's two groups of 16 or wgmma's one group of 32?",
+   "hawkeye_paper": "Hopper FP8 is characterised through wgmma-backed kernels (one group of 32); the mma.sync path on sm_90 is not distinguished",
+   "hawkeye_simulator": "Hopper_fp8_simulator: one group of 32, width 14, floor -139 -- the wgmma semantics",
+   "verity_reference": "INSTRUCTIONS['sm90.mma.m16n8k32.e4m3']: model None, status unprobed; candidates ADA_E4M3_M16N8K32 (groups (16,16)) and HOPPER_E4M3_K32 (groups (32,)), both width 14, floor -139.  The BF16 analogue sm90.mma.m16n8k16.bf16 is likewise unmeasured: only wgmma BF16 (groups (16,), width 26, floor -133) was probed on the H100.",
+   "hardware_evidence": "none on the sm_90 mma.sync path.  H100 wgmma E4M3 m64n64k32: 144,543,744 words, 0 mismatches against groups (32,) (veritor tc-fp8-2026-09-08); RTX 4090 mma.sync m16n8k32.e4m3: 24,898,304 elements, 0 mismatches against groups (16,16).",
+   "status": "open",
+   "resolution": null,
+   "to_resolve": "On an H100, one mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 per record with the separating tile of D10 (products 0 and 1 = +-256*256, product 16 = 1*1, the rest zero, acc = 0): 0x00000000 is one group of 32, 0x3F800000 two groups of 16; then a full family sweep against the winning model.  The same question for sm90.mma.m16n8k16.bf16 (tile from the BF16 neutral-subgroup measurement).",
+   "evidence_refs": [
+    "fixtures/tc/veritor-tc-fp8-2026-09-08.json",
+    "packages/verity/tests/ml/fixtures/golden/ada_e4m3_m16n8k32.json"
+   ],
+   "owner": "tc-probe-fp8"
+  },
+  {
+   "id": "D15",
+   "profile": "fp8-hopper-wgmma-draft/2026-09-22",
+   "issue": "The registry id sm90.wgmma.m64n8k32.e4m3 names an n8 shape while the H100 evidence is wgmma m64n64k32; and the exponent floor of the FP8 adders (-139) is Hawkeye's constant, not pinned by measurement on either Hopper or Ada",
+   "hawkeye_paper": "FP8 Hopper: one group of 32, 14-bit adder; the floor -139 is the simulator's constant",
+   "hawkeye_simulator": "Hopper_fp8_simulator: zero exponent -139",
+   "verity_reference": "HOPPER_E4M3_K32 and ADA_E4M3_M16N8K32 carry zero_exponent=-139; FP8_HOPPER_WGMMA names instruction sm90.wgmma.m64n8k32.e4m3 whose ptx field reads m64n8k32 (the id other lanes use as a string) while its evidence string records the measured m64n64k32 -- the per-element dot semantics do not depend on N, so the model is one and the same, but the shape column is a claim about the id, not about what was measured",
+   "hardware_evidence": "H100 (sm_90, driver 580.126.09), wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 / QGMMA.64x64x32.F32.E4M3.E4M3: 144,543,744 words, 0 mismatches; the fit grid leaves groups (32,) and width 14 unique but the floor only bounded to [-152, -126] (every candidate in that range fits 262,144 words with 0 mismatches).  RTX 4090: no E4M3 term can have exponent below -126 (products >= 2^-18, FP32 subnormal accumulators at -126), so any floor <= -126 gives identical results.",
+   "status": "open",
+   "resolution": null,
+   "to_resolve": "(a) Either probe wgmma m64n8k32 e4m3 on the H100 directly or record in the registry that the id's shape is nominal and the evidence is m64n64k32 (a coordinator decision on the id string, since other lanes use it).  (b) The floor is observable only when every term's exponent is below it: an FP32 subnormal accumulator (exponent -126) with all-zero products isolates it -- if the hardware truncates a subnormal accumulator differently for floors -126 .. -139 the family tiny_acc_zero_products with subnormal accumulators decides; otherwise the floor is unobservable in the finite domain and any value <= -126 is admissible (say so in the target).",
+   "evidence_refs": [
+    "fixtures/tc/veritor-tc-fp8-2026-09-08.json",
+    "packages/verity/src/verity/ml/tc/instructions.py"
+   ],
+   "owner": "tc-probe-fp8"
   }
  ]
 }
