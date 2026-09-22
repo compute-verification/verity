@@ -36,9 +36,80 @@ class Lin:
 
 @dataclass
 class Table:
+    """A public lookup table: row-listed (``rows``), an implicit range table ``R<w>`` (``range_width``), or a v2
+    implicit table materialised from its ``itable`` definition (``implicit = (kind, params)``, PROTOCOL.md 14.2).
+    ``nrows`` is the row count in every case; ``device_rows`` materialises the ``(nrows, cols)`` int64 matrix on a
+    device (cached) so the 3.5M-row ``SHIFT`` table never exists as a Python list."""
     name: str
     cols: int
     rows: list[list[int]] = field(default_factory=list)
+    range_width: int | None = None
+    implicit: tuple[str, list[int]] | None = None
+    _nrows: int = 0
+    _dev_rows: dict = field(default_factory=dict, repr=False)
+
+    @property
+    def nrows(self) -> int:
+        if self.range_width is not None:
+            return 1 << self.range_width
+        if self.implicit is not None:
+            return self._nrows
+        return len(self.rows)
+
+    @property
+    def dense(self) -> bool:
+        """Key = row index (range tables and the v2 implicit tables)."""
+        return self.range_width is not None or self.implicit is not None
+
+    def device_rows(self, device) -> torch.Tensor:
+        key = str(device)
+        t = self._dev_rows.get(key)
+        if t is None:
+            if self.range_width is not None:
+                t = torch.arange(self.nrows, dtype=torch.int64, device=device).unsqueeze(1)
+            elif self.implicit is not None:
+                t = materialise(self.implicit[0], self.implicit[1], self.nrows, device)
+            else:
+                t = torch.tensor(self.rows, dtype=torch.int64, device=device).reshape(len(self.rows), self.cols)
+            self._dev_rows[key] = t
+        return t
+
+
+def range_table_width(name: str) -> int | None:
+    """``R<w>``, ``1 <= w <= 16``: the implicit exact-width range table (``circuit.rs::range_width``)."""
+    if not name.startswith("R"):
+        return None
+    try:
+        w = int(name[1:])
+    except ValueError:
+        return None
+    return w if 1 <= w <= 16 else None
+
+
+def materialise(kind: str, params: list[int], rows: int, device) -> torch.Tensor:
+    """``circuit.rs::materialise`` on the device (PROTOCOL.md 14.2), ``(rows, 2)`` int64 canonical mod ``p``:
+    ``shift <bits> <scale> <R>``: key ``x R + 2 d + s`` -> ``(1 - 2 s) floor(x 2^scale / 2^d)``, ``x < 2^bits``;
+    ``tnorm <vb> <k_rows> <k_lo>``: key ``v + 2^vb koff`` -> ``floor(v 2^(koff + k_lo))``.  Every intermediate fits
+    int64 (``x 2^scale < 2^29`` for the v2 parameters; the tnorm shift is at most ``2^(15 + 24)``)."""
+    key = torch.arange(rows, dtype=torch.int64, device=device)
+    if kind == "shift":
+        bits, scale, R = params
+        if rows != (1 << bits) * R:
+            raise ValueError("shift table row count")
+        x, rem = key // R, key % R
+        d, s = rem // 2, rem % 2
+        v = (x << scale) >> d
+        val = torch.where(s == 1, (-v) % P, v % P)
+    elif kind == "tnorm":
+        vb, k_rows, k_lo = params
+        if rows != (1 << vb) * k_rows:
+            raise ValueError("tnorm table row count")
+        koff, v = key >> vb, key & ((1 << vb) - 1)
+        k = koff + k_lo
+        val = torch.where(k >= 0, v << k.clamp(min=0), v >> (-k).clamp(min=0)) % P
+    else:
+        raise ValueError(f"unknown implicit table kind {kind}")
+    return torch.stack([key, val], dim=1)
 
 
 @dataclass
@@ -128,6 +199,9 @@ def parse_circuit(text: str) -> Circuit:
             asserts.append((toks[1], l))
         elif kind == "table":
             tables.append(Table(toks[1], int(toks[2])))
+        elif kind == "itable":
+            # itable NAME cols rows kind params...  (v2, PROTOCOL.md 14.2): materialised on the device on first use
+            tables.append(Table(toks[1], int(toks[2]), implicit=(toks[4], [int(v) for v in toks[5:]]), _nrows=int(toks[3])))
         elif kind == "row":
             tables[-1].rows.append([int(v) % P for v in toks[1:]])
         elif kind == "query":
@@ -150,7 +224,11 @@ def parse_circuit(text: str) -> Circuit:
             next_col += 1
     if next_col != ncols:
         raise ValueError("column/wire mismatch")
-    tables.append(Table("R16", 1, [[v] for v in range(R16_ROWS)]))
+    # the range tables R<w> = [0, 2^w) are implicit: every one the queries reference, narrowest first
+    # (``circuit.rs``; the v1 circuits reference R16 only, so their table list is unchanged)
+    widths = sorted({w for q in queries if (w := range_table_width(q.table)) is not None})
+    for w in widths:
+        tables.append(Table(f"R{w}", 1, range_width=w))
     return Circuit(ncols, col_names, one_col, wires, asserts, tables, queries, max_depth, hashlib.sha256(text.encode()).digest())
 
 

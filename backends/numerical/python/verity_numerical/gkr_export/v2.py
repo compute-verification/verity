@@ -471,7 +471,7 @@ def synth_v2(out: Path, vus: int, steps: int, seed: int, p: Params, api) -> dict
 # transition-unit negatives (`python -m verity_numerical.gkr_export.v2 negatives --out DIR`)
 # ---------------------------------------------------------------------------------------------------------------------
 
-def unit_negatives(out: Path, seed: int = 20260922, p: Params = REAL, modulus: int = GOLDILOCKS) -> dict:
+def unit_negatives(out: Path, seed: int = 20260922, p: Params = REAL, modulus: int = GOLDILOCKS, api=None) -> dict:
     """``DIR/circuit.txt`` + ``DIR/negatives/<name>.bin`` (one mutated v2 unit row each, for ``verity-gkr negatives``)
     and ``DIR/vu/`` (the synth VU with its chain-level negatives under ``neg/<id>/`` for ``negatives-vu``).
 
@@ -484,9 +484,10 @@ def unit_negatives(out: Path, seed: int = 20260922, p: Params = REAL, modulus: i
     before it is written."""
     import random
 
-    from .vu import field_api
+    if api is None:
+        from .vu import field_api
 
-    api = field_api("goldilocks", "v2")
+        api = field_api("goldilocks", "v2")
     unit = api.build_unit()
     uctx, upaths = unit
     out.mkdir(parents=True, exist_ok=True)

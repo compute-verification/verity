@@ -1,11 +1,19 @@
 """The Ligero-style argument for B units of the transition unit (PROTOCOL.md): prover and verifier share nothing but
 the transcript (``Proof``) and the compiled ``System`` (public: a function of ``Params`` only).
 
+    V -> P   c1 = H(r1 || s1), c2 = H(r2 || s2)   step 0 (HM96 / Goldreich-Kahan): the verifier commits to the
+                                                   randomness of both of its coins BEFORE the prover's first message
     P -> V   root                          Merkle root of the codeword columns of U = Enc(W)
-    V -> P   r, rho_lin, rho_quad          D independent BabyBear combinations each (from H(root))
+    V -> P   (r1, s1)                      opening of coin slot 1; P checks c1 and aborts on mismatch
+             r, rho_lin, rho_quad          D independent BabyBear combinations each: H(stmt, c1, c2, root, r1)
     P -> V   w = r W  (D x l),  h  (D x (l-1))   proximity message; quotient of the batched quadratic test by Z_H
-    V -> P   cols                          t column indices (from H(root, w, h))
+    V -> P   (r2, s2)                      opening of coin slot 2; P checks c2
+             cols                          t column indices: H(stmt, c1, c2, root, w, h, q, v, r2)
     P -> V   U[:, cols], Merkle paths
+
+Three verifier messages on the critical path (c, r1, r2): ``rounds.sequential_depth = 3`` (PROTOCOL.md 8c).  In the
+non-interactive (Fiat-Shamir) reading the prover plays the verifier's step 0 itself (``Coins.sample``) and the
+transcript carries the commitments and the openings; the verifier recomputes ``c_i = H(r_i || s_i)``.
 
 Verifier: (i) Enc(w)[cols] = r U[cols]; (ii) Enc(beta)[cols] = alpha U[cols] with alpha = sum rho_lin,q a_q,
 beta = sum rho_lin,q (pub_q - c_q) -- the linear constraints, whose right-hand sides are public, so nothing is sent;
@@ -17,13 +25,14 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass, field
+from fractions import Fraction
 
 import numpy as np
 import torch
 from verity_numerical.checker.params import Params
 from verity_numerical.security import accounting as acc
 
-from . import merkle
+from . import merkle, witness
 from .chain import N_FAMILIES, chain_coefs
 from .compile import P, System
 from .field import (
@@ -39,7 +48,7 @@ from .field import (
 from .unit import public_vectors
 from .witness import Tables, build_witness, quad_p0
 
-__all__ = ["Config", "Proof", "config_for", "prove", "soundness", "verify"]
+__all__ = ["CoinOpeningError", "Coins", "Config", "Proof", "coin_commit", "config_for", "prove", "soundness", "verify"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -112,16 +121,32 @@ def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1) -
     bud = acc.Budget("B-Ligero direct (backends/direct/ligero)", {"n": cfg.n, "k": k, "l": cfg.l, "t": cfg.t, "D": cfg.D})
     for k, v in terms.items():
         bud.add("encoding_opening", f"Ligero {k}", v)
+    if _COMMIT_COINS:
+        # step 0 (8c): the prover must not learn r_i from c_i = H(r_i || s_i).  Random-oracle hiding: q 2^-|r| with
+        # q = 2^64 hash queries and |r| = 256 bits -> 2^-192 per slot (the salt is not even counted), two slots.
+        # Binding (a second opening = a collision of H, 2^-128 generic) protects the PROVER's privacy, not soundness,
+        # and is reported separately (privacy_terms_log2).
+        hide = COIN_HIDING_TERM
+        terms = {**terms, "coin_commitment_hiding": hide}
+        bud.add("commitment_hash", "HM96 step-0 coin commitments: hiding vs the prover, 2 slots x q 2^-256 (q = 2^64)", hide)
     per_proof_total = bud.total()
     union = acc.union_over_proofs(bud, n_proofs) if n_proofs > 1 else bud
     return {"terms_log2": {k: acc.log2(v) for k, v in terms.items()}, "per_proof_total_log2": acc.log2(per_proof_total),
             "n_proofs": n_proofs, "total_log2": acc.log2(union.total()),
             "per_proof_target_log2": acc.per_proof_target(cfg.target_log2, n_proofs) if n_proofs > 1 else cfg.target_log2,
             "field": F.name, "t": cfg.t, "n": cfg.n, "k": cfg.k, "l": cfg.l, "rate": cfg.rate, "zk": cfg.zk, "t_pad": cfg.t_pad,
+            "coin_commitment": _COMMIT_COINS,
+            "privacy_terms_log2": ({"coin_commitment_binding_collision": acc.log2(acc.hash_collision_bound(256, 2**64)),
+                                    "mask_sampling_bias_per_symbol": "0 (rejection sampling; the simulator's distance is "
+                                                                      "ChaCha20's PRF advantage on the mask key)"} if _COMMIT_COINS else {}),
             "note": ("ZK: k = l + t_pad, every row carries t_pad > t uniform coefficients (Lemma 4.15)" if cfg.zk else
                      "k = l + 1 stands in for the non-ZK k = l (the accounting's validate() needs l < k)") + "; "
                     "the linear test here sends nothing (the verifier encodes beta itself), so its query term is "
-                    "at most the Appendix-C ((k+l)/n)^t used; total_log2 is the union bound over n_proofs sub-batches"}
+                    "at most the Appendix-C ((k+l)/n)^t used; total_log2 is the union bound over n_proofs sub-batches"
+                    + ("; + the step-0 coin-commitment hiding term (commitment_hash)" if _COMMIT_COINS else "")}
+
+
+COIN_HIDING_TERM = 2 * Fraction(2**64, 2**256)      # 2 slots x q / 2^|r|, q = 2^64
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -195,6 +220,84 @@ def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# Step 0: the verifier's coin commitments (HM96 / Goldreich-Kahan; PROTOCOL.md 8c)
+# ---------------------------------------------------------------------------------------------------------------------
+#
+# The verifier's two coins (the combination challenge and the column challenge) are functions of two 32-byte random
+# strings r1, r2 that the verifier commits to -- c_i = H(tag || r_i || s_i), s_i a 32-byte salt -- before the prover's
+# first message, and opens one at a time, each right after the prover message it must follow.  The prover checks each
+# opening against the commitment BEFORE computing anything that depends on the coin and aborts (CoinOpeningError) on a
+# mismatch: the abort depends on public data only (c_i, r_i, s_i).  What a malicious verifier can no longer do: choose
+# r1 after seeing root, or r2 after seeing w, h, q, v -- by binding (a second opening of c_i is a collision of H) every
+# coin the prover accepts is a fixed function of the verifier's randomness sampled before root.  What the simulator
+# gets: after step 0 the coins are fixed, so the simulator runs the verifier once to learn them (dummy root, random
+# messages), rewinds to the state after step 0, and prepares root / messages / opened columns consistent with the now
+# known coins -- the verifier is bound to open the same values or abort.  Hiding (a soundness term, the prover must
+# not learn r_i from c_i): in the random-oracle model q / 2^{|r_i| + |s_i|} = q 2^-512 per slot; we book it as
+# 2^-192 per slot (q = 2^64 queries, |r| = 256 bits, ignoring the salt) -- see ``soundness``.
+
+COIN_TAG = b"ligero-b/coin|v1|"
+COIN_BYTES = 32
+_COMMIT_COINS = True      # red-team control ONLY (redteam_zk.py): False = the pre-8c derivation, coins = H(transcript)
+
+
+class CoinOpeningError(RuntimeError):
+    """The verifier opened a coin slot to a value that does not match its step-0 commitment.  ``sent`` lists the
+    prover messages that had been sent when the prover aborted."""
+
+    def __init__(self, slot: int, sent: list[str]):
+        super().__init__(f"coin slot {slot}: opening does not match the commitment (verifier equivocation); "
+                         f"prover aborted after sending {sent}")
+        self.slot, self.sent = slot, list(sent)
+
+
+def coin_commit(r: bytes, s: bytes) -> bytes:
+    if len(r) != COIN_BYTES or len(s) != COIN_BYTES:
+        raise ValueError("coin randomness and salt are 32 bytes each")
+    return hashlib.blake2b(COIN_TAG + r + s, digest_size=32).digest()
+
+
+@dataclass(frozen=True)
+class Coins:
+    """The verifier's step-0 randomness: two slots (r_i, s_i).  As a ``CoinSource`` it is the HONEST verifier: it
+    opens exactly what it committed to, whatever the prover sent."""
+    r1: bytes
+    s1: bytes
+    r2: bytes
+    s2: bytes
+
+    @staticmethod
+    def sample() -> Coins:
+        import os
+        return Coins(os.urandom(COIN_BYTES), os.urandom(COIN_BYTES), os.urandom(COIN_BYTES), os.urandom(COIN_BYTES))
+
+    def well_formed(self) -> bool:
+        return all(isinstance(x, bytes) and len(x) == COIN_BYTES for x in (self.r1, self.s1, self.r2, self.s2))
+
+    def commitments(self) -> tuple[bytes, bytes]:
+        return coin_commit(self.r1, self.s1), coin_commit(self.r2, self.s2)
+
+    # CoinSource interface (what the prover calls; a malicious verifier in redteam_zk.py overrides these)
+    def open1(self, root: bytes) -> tuple[bytes, bytes]:
+        return self.r1, self.s1
+
+    def open2(self, root: bytes, w: np.ndarray, h: np.ndarray, q: np.ndarray | None, v: np.ndarray | None) -> tuple[bytes, bytes]:
+        return self.r2, self.s2
+
+    def opened(self) -> Coins:
+        """The values actually opened (a malicious source may differ from its fields); honest: itself."""
+        return self
+
+
+def _coin_prefix(cc: tuple[bytes, bytes] | None) -> bytes:
+    return b"|coins=" + cc[0] + cc[1] if (_COMMIT_COINS and cc is not None) else b""
+
+
+def _coin_open(r: bytes | None) -> bytes:
+    return b"|r=" + r if (_COMMIT_COINS and r is not None) else b""
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Transcript
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -209,8 +312,9 @@ def _bound(stmt: bytes) -> bytes:
     return stmt if _BIND_STATEMENT else b""
 
 
-def _challenge1(stmt: bytes, root: bytes, D: int, m: int, L: int, Q: int, device, l_chain: int = 0):
-    seed = merkle.hash_bytes(b"ligero-b/c1|" + _bound(stmt) + root)
+def _challenge1(stmt: bytes, root: bytes, D: int, m: int, L: int, Q: int, device, l_chain: int = 0,
+                cc: tuple[bytes, bytes] | None = None, r1: bytes | None = None):
+    seed = merkle.hash_bytes(b"ligero-b/c1|" + _bound(stmt) + _coin_prefix(cc) + root + _coin_open(r1))
     extra = N_FAMILIES * l_chain
     x = _expand(seed, D * (m + L + Q + extra), device).reshape(D, m + L + Q + extra)
     rc = x[:, m + L + Q:].reshape(D, N_FAMILIES, l_chain) if l_chain else None
@@ -218,16 +322,17 @@ def _challenge1(stmt: bytes, root: bytes, D: int, m: int, L: int, Q: int, device
 
 
 def _challenge2(stmt: bytes, root: bytes, w: np.ndarray, h: np.ndarray, t: int, n: int, q: np.ndarray | None = None,
-                v: np.ndarray | None = None) -> list[int]:
-    seed = merkle.hash_bytes(b"ligero-b/c2|" + _bound(stmt) + root + w.tobytes() + h.tobytes()
-                             + (q.tobytes() if q is not None else b"") + (b"|v=" + v.tobytes() if v is not None else b""))
+                v: np.ndarray | None = None, cc: tuple[bytes, bytes] | None = None, r2: bytes | None = None) -> list[int]:
+    seed = merkle.hash_bytes(b"ligero-b/c2|" + _bound(stmt) + _coin_prefix(cc) + root + w.tobytes() + h.tobytes()
+                             + (q.tobytes() if q is not None else b"") + (b"|v=" + v.tobytes() if v is not None else b"")
+                             + _coin_open(r2))
     cols: list[int] = []
     seen = set()
     ctr = 0
     while len(cols) < t:
         raw = hashlib.shake_256(seed + ctr.to_bytes(4, "little")).digest(4 * 2 * t)
-        for v in np.frombuffer(raw, dtype="<u4"):
-            c = int(v) % n
+        for u in np.frombuffer(raw, dtype="<u4"):
+            c = int(u) % n
             if c not in seen:
                 seen.add(c)
                 cols.append(c)
@@ -249,11 +354,14 @@ class Proof:
     timings: dict = field(default_factory=dict)
     q: np.ndarray | None = None   # chain mode: (D, l+k-1) uint32, the chain test's combined polynomial
     v: np.ndarray | None = None   # ZK only: (D, k) coefficients of the blinded linear-test message alpha p + Z_H s_lin
+    coin_commit: tuple[bytes, bytes] | None = None   # step 0: (c1, c2)
+    coins: Coins | None = None                       # the openings (r1, s1), (r2, s2) as the prover received them
 
     def n_bytes(self) -> dict:
         b = {"root": len(self.root), "w": self.w.nbytes, "h": self.h.nbytes, "cols": 4 * len(self.cols),
              "opened_columns": self.opened.nbytes, "merkle_paths": sum(32 * len(p) for p in self.paths),
-             "q_chain": self.q.nbytes if self.q is not None else 0, "v_linear": self.v.nbytes if self.v is not None else 0}
+             "q_chain": self.q.nbytes if self.q is not None else 0, "v_linear": self.v.nbytes if self.v is not None else 0,
+             "coin_commitments_and_openings": 6 * COIN_BYTES if self.coin_commit is not None else 0}
         b["total"] = sum(b.values())
         return b
 
@@ -274,7 +382,9 @@ class Proof:
 #     s_chain  uniform degree < k - 1          chain mask Z_H s_chain (sum over H = 0):  q_d = Q_d + Z_H s_chain_d
 # The verifier reconstructs every mask's contribution at the opened columns from the opened mask rows and the public
 # Z_H(eta_c), eta_c^k, so a dishonest mask is just another committed row (no unchecked degree of freedom).
-# Randomness: SHAKE-256 of a fresh os.urandom(32) seed, reduced mod p (statistical bias 2^-31 per symbol).
+# Randomness (8c): a ChaCha20 counter-mode stream on the device under a fresh 32-byte key, reduced to BabyBear by
+# rejection (u < 2p, then u mod p): exactly uniform given the stream (mask_sampler.py; the 8b sampler's direct
+# uint32 mod p had a statistical distance of ~0.11 per symbol).
 
 _MASK_KINDS = ("prox", "lin", "qa", "qb", "chain")
 
@@ -298,6 +408,32 @@ def n_rows(cfg: Config, m: int, chain: bool) -> int:
     return max([m] + [s.stop for s in mr.values()])
 
 
+USE_DEVICE_MASKS = True     # ChaCha20 counter-mode sampler on the device (mask_sampler.py); False = host SHAKE-256
+
+
+def _uniform_symbols(total: int, device) -> torch.Tensor:
+    """``total`` exactly uniform BabyBear symbols (int64 on ``device``), fresh randomness.  Device: ChaCha20 stream +
+    rejection (mask_sampler.py).  Host fallback: SHAKE-256 stream, the same rejection (u < 2p, then u mod p) -- the
+    8b sampler's direct ``u mod p`` had a 0.11 statistical distance per symbol (mask_sampler.py docstring)."""
+    import os
+    if USE_DEVICE_MASKS and str(device).startswith("cuda"):
+        from .mask_sampler import sampler_for
+        s = sampler_for(device)
+        if s is not None:
+            return s.uniform(total)[0]
+    key = os.urandom(32)
+    acc = []
+    got, ctr = 0, 0
+    while got < total:
+        raw = hashlib.shake_256(b"ligero-b/masks|v2|" + key + ctr.to_bytes(4, "little")).digest(4 * (total - got + (total - got) // 8 + 64))
+        u = np.frombuffer(raw, dtype="<u4").astype(np.int64)
+        u = u[u < 2 * P] % P
+        acc.append(u)
+        got += u.shape[0]
+        ctr += 1
+    return torch.from_numpy(np.concatenate(acc)[:total]).to(device)
+
+
 def _sample_masks(cfg: Config, m: int, chain: bool, device) -> dict[str, torch.Tensor]:
     """Fresh uniform mask coefficients: ``W`` (m, t_pad) per witness row and one (D, deg) block per mask kind."""
     D, k, tp = cfg.D, cfg.k, cfg.t_pad
@@ -305,9 +441,7 @@ def _sample_masks(cfg: Config, m: int, chain: bool, device) -> dict[str, torch.T
     if chain:
         shapes["chain"] = (D, k - 1)
     total = sum(a * b for a, b in shapes.values())
-    import os
-    raw = hashlib.shake_256(b"ligero-b/masks|" + os.urandom(32)).digest(4 * total)
-    flat = torch.from_numpy((np.frombuffer(raw, dtype="<u4").astype(np.int64) % P)).to(device)
+    flat = _uniform_symbols(total, device)
     out, at = {}, 0
     for name, (a, b) in shapes.items():
         out[name] = flat[at:at + a * b].reshape(a, b)
@@ -379,6 +513,23 @@ def _alpha_beta(tb: Tables, rho_lin: torch.Tensor, pub: dict, m: int, l: int, de
 # Helpers
 # ---------------------------------------------------------------------------------------------------------------------
 
+USE_SIMT_ENCODER = True     # the int32 Montgomery radix-4 kernel (encode_simt.py) on CUDA; False = the torch int64 NTT
+
+
+def _simt_encoder(cfg: Config, device, plain: bool = False):
+    """The SIMT encoder for this configuration (``plain``: no mask fold-in, for the chain's R_i rows), or None when
+    it does not apply (CPU, no cupy, or n != 4 l -- the small-l ZK configurations double n)."""
+    if not USE_SIMT_ENCODER or not str(device).startswith("cuda") or cfg.n != 4 * cfg.l or cfg.l < 256:
+        return None
+    try:
+        from . import encode_simt
+        if not encode_simt.available():
+            return None
+        return encode_simt.encoder_for(cfg.l, cfg.n, 0 if plain or not cfg.zk else cfg.t_pad, device)
+    except Exception:  # noqa: BLE001 -- no NVRTC / cupy: the torch path
+        return None
+
+
 def _combine_row(c: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
     return ((c[:, None] * M) % P).sum(0) % P
 
@@ -386,6 +537,11 @@ def _combine_row(c: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
 def _combine(coef: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
     """(D, cols) = coef (D, R) @ M (R, cols) mod p, reducing every product before the sum (R < 2^32 terms)."""
     D = coef.shape[0]
+    if witness.USE_FUSED:
+        from . import tests_fused
+        f = tests_fused.fused_for(D, M.device)
+        if f is not None:
+            return f.lincomb(coef, M)
     out = torch.empty((D, M.shape[1]), dtype=torch.int64, device=M.device)
     row = compiled(_combine_row, M.device)
     for d in range(D):
@@ -436,18 +592,24 @@ class _Clock:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints: torch.Tensor,
-          device, check: bool = False, mutate=None, chain: tuple | None = None, words: dict | None = None) -> Proof:
+          device, check: bool = False, mutate=None, chain: tuple | None = None, words: dict | None = None,
+          coins: Coins | None = None) -> Proof:
     """``pub``: the public vectors (from ``public_vectors``); ``hints``: (n_hints, l) from ``gen_step``.
     ``words``: the public words the statement binds -- ``{"a", "b", "c", "y"}`` (units) or ``{"a", "b"}`` (chain;
     ``y16`` comes from ``chain``) -- absorbed into every challenge (``statement_digest``).
     ``mutate(W)``: a test hook that edits the witness in place before it is committed (the mutated-witness
-    negatives); an honest prover never uses it.  ``chain = (Layout, y16_pub (l,))`` runs the chain test."""
+    negatives); an honest prover never uses it.  ``chain = (Layout, y16_pub (l,))`` runs the chain test.
+    ``coins``: the verifier's step-0 coin source (interactive: the verifier's own ``Coins`` or a malicious source
+    with the same interface); ``None`` = non-interactive, the prover samples them (Fiat-Shamir reading)."""
     clk = _Clock(device)
     m, l, n, D = sys.m, cfg.l, cfg.n, cfg.D
     assert hints.shape[1] == l
     assert (chain is not None) == (sys.chain is not None), "chain mode needs a chain-compiled system"
     if words is None:
         raise ValueError("prove needs the public words (statement binding)")
+    src = coins if coins is not None else Coins.sample()
+    ccom = src.commitments()                                      # step 0: received before anything is computed
+    sent = ["coin commitments (V)"]
     if chain is not None:
         stmt = statement_digest(sys, cfg, words["a"], words["b"], layout=chain[0], y16=chain[1])
     else:
@@ -466,21 +628,33 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
 
     k = cfg.k
     mr = mask_rows(cfg, m, chain is not None)
+    Mrows = n_rows(cfg, m, chain is not None)
+    enc = _simt_encoder(cfg, device)                              # None: the torch int64 NTT (CPU, or no cupy)
     if cfg.zk:
         S = _sample_masks(cfg, m, chain is not None, device)
         clk.lap("zk_masks")
         # coefficient rows of every committed polynomial: witness rows interp_H(W) + Z_H s_j, then the mask rows
-        coefs = torch.zeros((n_rows(cfg, m, chain is not None), k), dtype=torch.int64, device=device)
-        coefs[:m, :l] = intt(W % P)
+        coefs = torch.zeros((Mrows, k), dtype=torch.int64, device=device)
+        if enc is not None:
+            # SIMT kernel: codeword of interp_H(W_j) + Z_H s_j on the coset (the mask folded in per coset, 8c) and the
+            # natural-order coefficients of interp_H(W_j); the 4D / 5D mask rows (degree < k) through the torch NTT
+            U = torch.empty((Mrows, n), dtype=torch.int32, device=device)
+            _, C = enc.encode(W, S["W"], want_coefs=True, out=U[:m])
+            coefs[:m, :l] = C
+        else:
+            coefs[:m, :l] = intt(W % P)
         _add_zh_times(coefs[:m], S["W"], l)
         for kind, sl in mr.items():
             blk = S[kind]
             coefs[sl, :blk.shape[1]] = blk
         del S
-        U = eval_on_coset(coefs, n)                               # (M, n), the coset g <w_n> (disjoint from H)
+        if enc is not None:
+            U[m:] = eval_on_coset(coefs[m:], n).to(torch.int32)
+        else:
+            U = eval_on_coset(coefs, n)                           # (M, n), the coset g <w_n> (disjoint from H)
     else:
         coefs = None
-        U = encode(W, n)                                          # (m, n)
+        U = enc.encode(W)[0] if enc is not None else encode(W, n)   # (m, n); int32 from the kernel
     clk.lap("encode")
 
     gpu_hash = merkle.gpu_available() and str(device).startswith("cuda")
@@ -497,7 +671,11 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     clk.lap("merkle")
 
     M = U.shape[0]
-    r, rho_lin, rho_quad, rc = _challenge1(stmt, root, D, M, tb.L, tb.Q, device, l if chain else 0)
+    sent.append("root")
+    r1, s1 = src.open1(root)                                      # V opens coin slot 1 (after root)
+    if len(r1) != COIN_BYTES or len(s1) != COIN_BYTES or coin_commit(r1, s1) != ccom[0]:
+        raise CoinOpeningError(1, sent)                           # public-data abort, before any coin-dependent message
+    r, rho_lin, rho_quad, rc = _challenge1(stmt, root, D, M, tb.L, tb.Q, device, l if chain else 0, ccom, r1)
     v_np = None
     if cfg.zk:
         r[:, mr["prox"]] = 0                                      # the proximity mask enters with coefficient 1
@@ -508,6 +686,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         v_np = v.cpu().numpy().astype(np.uint32)
     else:
         w = _combine(r, W)                                        # (D, l) evaluations on H
+    clk.lap("tests_w")
     # quadratic: batched A*B - C on the codeword domain (+ the mask), divided by Z_H
     P0 = quad_p0(tb, rho_quad, U[:m])                             # (D, n): split form (witness.quad_p0)
     zinv = batch_modinv(zh_on_coset(n, l, device))
@@ -519,12 +698,15 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     if check:
         assert (hcoef[:, cfg.h_len:] == 0).all(), "quotient degree too high: constraints violated"
     h = hcoef[:, :cfg.h_len]
+    clk.lap("tests_quad")
     q_np = None
     if chain is not None:
         layout, y16_pub = chain
         cc = chain_coefs(sys, layout, rc, y16_pub)
         R = cc.coef.shape[1]
-        Renc = encode(cc.coef.reshape(D * R, l), n).reshape(D, R, n)            # R_i on the codeword domain
+        penc = _simt_encoder(cfg, device, plain=True)
+        Renc = (penc.encode(cc.coef.reshape(D * R, l))[0].to(torch.int64) if penc is not None
+                else encode(cc.coef.reshape(D * R, l), n)).reshape(D, R, n)     # R_i on the codeword domain
         Qev = ((Renc * U.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P   # (D, n)
         if cfg.zk:
             Qev = (Qev + (zh_on_coset(n, l, device)[None, :] * U[mr["chain"]]) % P) % P
@@ -533,11 +715,16 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
             assert (qcoef[:, cfg.q_len:] == 0).all(), "chain polynomial degree too high"
             assert torch.equal(_sum_over_H(qcoef[:, :cfg.q_len], l), cc.rhs), "chain constraints violated"
         q_np = qcoef[:, :cfg.q_len].cpu().numpy().astype(np.uint32)
-    clk.lap("tests")
+    clk.lap("tests_chain")
+    clk.marks["tests"] = clk.marks["tests_w"] + clk.marks["tests_quad"] + clk.marks["tests_chain"]   # the bucket
 
     w_np = w.cpu().numpy().astype(np.uint32)
     h_np = h.cpu().numpy().astype(np.uint32)
-    cols = _challenge2(stmt, root, w_np, h_np, cfg.t, n, q_np, v_np)
+    sent.append("w, h" + (", q" if q_np is not None else "") + (", v" if v_np is not None else ""))
+    r2, s2 = src.open2(root, w_np, h_np, q_np, v_np)              # V opens coin slot 2 (after the test messages)
+    if len(r2) != COIN_BYTES or len(s2) != COIN_BYTES or coin_commit(r2, s2) != ccom[1]:
+        raise CoinOpeningError(2, sent)
+    cols = _challenge2(stmt, root, w_np, h_np, cfg.t, n, q_np, v_np, ccom, r2)
     if gpu_hash:
         cols_t = torch.tensor(cols, dtype=torch.int64, device=device)
         opened = U32.index_select(1, cols_t).cpu().numpy().astype(np.uint32)   # (m, t): the only U bytes that leave
@@ -549,7 +736,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     total = clk.total()
     timings = dict(clk.marks)
     timings["total"] = total
-    return Proof(root, w_np, h_np, cols, opened, paths, hash_name, timings, q_np, v_np)
+    return Proof(root, w_np, h_np, cols, opened, paths, hash_name, timings, q_np, v_np, ccom, Coins(r1, s1, r2, s2))
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -557,14 +744,29 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
 # ---------------------------------------------------------------------------------------------------------------------
 
 def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: Proof, device,
-           chain: tuple | None = None) -> tuple[bool, str]:
+           chain: tuple | None = None, coins: Coins | None = None) -> tuple[bool, str]:
     """Accept/reject the claim ``y[i] = tc_dot(c[i], a[i], b[i])`` for all l units -- or, with
     ``chain = (Layout, y16_pub)`` (``c = y = None``), the claim that every VU of the layout casts to its
-    ``y16_pub`` word from ``c_0 = 0`` over its 96 units.  Never touches W."""
+    ``y16_pub`` word from ``c_0 = 0`` over its 96 units.  Never touches W.
+    ``coins``: interactive -- the verifier's OWN step-0 randomness; the transcript must carry exactly these openings
+    (a proof made in another verifier's session is rejected).  ``None``: non-interactive -- the openings in the
+    transcript are checked against the commitments in the transcript."""
     t0 = time.perf_counter()
     m, l, n, D, t, k = sys.m, cfg.l, cfg.n, cfg.D, cfg.t, cfg.k     # every size from the VERIFIER's configuration
     if (chain is not None) != (sys.chain is not None):
         return False, "chain mode mismatch"
+    # step 0 / openings: c_i = H(r_i || s_i) for both slots; interactive: they are this verifier's own coins
+    if _COMMIT_COINS:
+        pc = proof.coins
+        if proof.coin_commit is None or pc is None or not pc.well_formed() or len(proof.coin_commit) != 2:
+            return False, "malformed coin commitments / openings"
+        if coins is not None and (pc != coins or proof.coin_commit != coins.commitments()):
+            return False, "coins are not this verifier's step-0 coins"
+        if tuple(proof.coin_commit) != pc.commitments():
+            return False, "coin opening does not match its commitment"
+        ccom = tuple(proof.coin_commit)
+    else:
+        ccom, pc = None, Coins(b"\0" * 32, b"\0" * 32, b"\0" * 32, b"\0" * 32)
     mr = mask_rows(cfg, m, chain is not None)
     M = n_rows(cfg, m, chain is not None)
     if not (proof.hash_name or "").startswith("blake3"):
@@ -600,8 +802,8 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
     if len(set(proof.cols)) != t or any(not 0 <= c_ < n for c_ in proof.cols):
         return False, "bad column set"
     # challenges: H(statement, transcript prefix) -- the statement is the verifier's, not the proof's
-    r, rho_lin, rho_quad, rc = _challenge1(stmt, proof.root, D, M, tb.L, tb.Q, device, l if chain else 0)
-    if proof.cols != _challenge2(stmt, proof.root, proof.w, proof.h, t, n, proof.q, proof.v):
+    r, rho_lin, rho_quad, rc = _challenge1(stmt, proof.root, D, M, tb.L, tb.Q, device, l if chain else 0, ccom, pc.r1)
+    if proof.cols != _challenge2(stmt, proof.root, proof.w, proof.h, t, n, proof.q, proof.v, ccom, pc.r2):
         return False, "column challenge mismatch"
     cols = torch.tensor(proof.cols, dtype=torch.int64, device=device)
     Uo = torch.from_numpy(proof.opened.astype(np.int64)).to(device)          # (M, t)

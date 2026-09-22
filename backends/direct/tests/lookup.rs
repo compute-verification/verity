@@ -103,7 +103,7 @@ const FRI: FriParams = FriParams { log_blowup: 2, num_queries: 8, proof_of_work_
 
 fn roundtrip<B: Backend>(mutate: impl Fn(&LookupChainAir, &air::Layout, &mut RowMajorMatrix<Val<B::SC>>)) -> bool
 where
-    Val<B::SC>: PrimeField64 + Send + Sync,
+    Val<B::SC>: PrimeField64 + Send + Sync + p3_field::TwoAdicField,
     <<B::SC as StarkGenericConfig>::Pcs as p3_commit::Pcs<<B::SC as StarkGenericConfig>::Challenge, <B::SC as StarkGenericConfig>::Challenger>>::Commitment: PartialEq,
 {
     let kind = B::KIND;
@@ -124,7 +124,7 @@ where
     let mut ch = B::challenger();
     let (proof, _) = prove_lookup(&config, &air_, &mut ch, pre.clone(), main, |z, beta| aux_matrix(&llay, &queries, &mult, rows, z, beta, false));
     let mut ch = B::challenger();
-    verify_lookup(&config, &air_, &mut ch, &proof, pre).is_ok()
+    verify_lookup(&config, &air_, &mut ch, &proof, pre, proof.degree_bits, &[]).is_ok()
 }
 
 fn set<G: PrimeField64>(t: &mut RowMajorMatrix<G>, row: usize, col: usize, v: u64) {

@@ -14,6 +14,17 @@ This module checks the *distributional* consequence on real proofs, against the 
   3. payload in the clear: opened values equal to a payload value of their own row (non-ZK: every constant row is
      opened in the clear at every column -- ~35% of all opened values are 0; ZK: the uniform-chance count M t |payload| / p).
 
+  4. malicious verifier (PROTOCOL.md 8c, the HM96 step-0 coin commitment): (a) a verifier whose coin openings are a
+     function of the prover's messages (r1 := f(root), r2 := f(w, h)) -- the prover must abort at the mismatched
+     opening, having sent nothing beyond root (slot 1) or the blinded test messages (slot 2), never an opened column;
+     (b) a verifier that commits to adversarially chosen coins (all-zero randomness; randomness ground before step 0
+     against a target column set) -- bound to them, its view is the honest-verifier view at those coins: the same
+     real-vs-simulated statistics as in 1, and it gains no control over the column set (overlap with the target at
+     chance); (c) the control: with the commitment off (coins = H(transcript), the pre-8c protocol) an interactive
+     verifier could choose the coins after the prover's messages -- for THIS prover the masking makes every message
+     uniform for every in-domain coin, so the measured advantage is at chance in all three settings: the commitment
+     is what makes the simulator's rewinding argument go through and turns equivocation into a public abort.
+
     python -m backends.direct.ligero.redteam_zk --device cuda --out results/redteam_zk.json
 """
 from __future__ import annotations
@@ -27,12 +38,122 @@ import numpy as np
 import torch
 from verity_numerical.bench import instances
 
+from . import protocol
 from .compile import P
-from .protocol import mask_rows
+from .protocol import COIN_BYTES, CoinOpeningError, Coins, mask_rows
 from .vu import STEP, STEPS, ChainRunner, _vu_data
 from .witness import build_witness
 
 BINS = 64
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Malicious verifiers (coin sources with the ``Coins`` interface)
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _h(*parts: bytes) -> bytes:
+    import hashlib
+    return hashlib.blake2b(b"|".join(parts), digest_size=COIN_BYTES).digest()
+
+
+class EquivocatingVerifier(Coins):
+    """Commits honestly at step 0, then opens slot ``slot`` to a value that depends on the prover's messages (the
+    adaptive coin choice the commitment forbids).  The prover must abort at that opening."""
+
+    def __init__(self, slot: int):
+        h = Coins.sample()
+        super().__init__(h.r1, h.s1, h.r2, h.s2)
+        object.__setattr__(self, "slot", slot)
+
+    def open1(self, root):
+        return (_h(b"adaptive-r1", root), self.s1) if self.slot == 1 else (self.r1, self.s1)
+
+    def open2(self, root, w, h, q, v):
+        return (_h(b"adaptive-r2", root, w.tobytes(), h.tobytes()), self.s2) if self.slot == 2 else (self.r2, self.s2)
+
+
+def adversarial_coins(kind: str, target_cols: list[int] | None = None, cfg=None, stmt_free: bool = True) -> Coins:
+    """Coins a malicious verifier might COMMIT to: ``zero`` (no entropy) or ``ground`` (r2 chosen among 256
+    candidates to maximise ... nothing it can see: cols = H(stmt, c, root, w, h, q, v, r2) is not computable before
+    root, so the grinding is against a stand-in transcript -- the point of the test is that the overlap with the
+    target column set stays at chance)."""
+    if kind == "zero":
+        z = b"\0" * COIN_BYTES
+        return Coins(z, z, z, z)
+    if kind == "ground":
+        best, best_score = None, -1
+        z = b"\0" * COIN_BYTES
+        for i in range(256):
+            r2 = _h(b"grind", i.to_bytes(4, "little"))
+            # the only transcript the verifier can evaluate before step 0 is an imagined one (empty messages)
+            cols = protocol._challenge2(b"", b"\0" * 32, np.zeros(1, "<u4"), np.zeros(1, "<u4"), cfg.t, cfg.n, None, None,
+                                        (z, z), r2)
+            score = len(set(cols) & set(target_cols))
+            if score > best_score:
+                best, best_score = r2, score
+        return Coins(z, z, best, z)
+    raise ValueError(kind)
+
+
+def malicious_verifier_tests(R: ChainRunner, real: list, trivial: list) -> dict:
+    """Section 4 of the module docstring.  ``R`` is a --zk ChainRunner."""
+    out: dict = {}
+    # (a) equivocation at either slot: the prover aborts, publicly, before any coin-dependent message
+    for slot in (1, 2):
+        try:
+            R.prove_vus(real, check=False, coins=EquivocatingVerifier(slot))
+            out[f"equivocate_slot{slot}"] = {"prover_aborted": False}
+        except CoinOpeningError as e:
+            out[f"equivocate_slot{slot}"] = {"prover_aborted": True, "slot": e.slot, "sent_before_abort": e.sent,
+                                             "opened_columns_sent": False}
+    # (b) adversarially chosen but committed coins: bound -> honest-verifier view at those coins
+    lay = R.layout(len(real))
+    cfg = R.cfg(lay.l)
+    rng = np.random.default_rng(3)
+    target = sorted(rng.choice(cfg.n, cfg.t, replace=False).tolist())
+    for kind in ("zero", "ground"):
+        coins = adversarial_coins(kind, target, cfg)
+        pr, pubs_r, lay_r = R.prove_vus(real, check=False, coins=coins)
+        ps, pubs_s, _ = R.prove_vus(trivial, check=False, coins=coins)
+        okr, whyr = R.verify_vus(pr, pubs_r, lay_r, coins=coins)
+        oks, whys = R.verify_vus(ps, pubs_s, lay_r, coins=coins)
+        assert okr and oks, (whyr, whys)
+        rep = {"accepted": [okr, oks], "coins": kind, "real_vs_simulated": {}}
+        for name, xr, xs in (("opened", pr.opened, ps.opened), ("w", pr.w, ps.w), ("h", pr.h, ps.h), ("q", pr.q, ps.q), ("v", pr.v, ps.v)):
+            stat, pv = _chi2_two_sample(xr, xs)
+            rep["real_vs_simulated"][name] = {"chi2": stat, "p": pv}
+        stat, pv = _chi2_uniform(pr.opened[:R.sys.m])
+        rep["opened_uniform"] = {"chi2": stat, "p": pv}
+        overlap = len(set(pr.cols) & set(target))
+        rep["target_column_overlap"] = {"got": overlap, "expected_at_chance": cfg.t * cfg.t / cfg.n, "t": cfg.t, "n": cfg.n}
+        out[f"committed_{kind}"] = rep
+    # (c) control: commitment off = the pre-8c derivation (coins are H(transcript): in the interactive reading the
+    # verifier picks them after the prover's messages).  Same statistics: the masking is coin-oblivious.
+    protocol._COMMIT_COINS = False
+    try:
+        pr, pubs_r, lay_r = R.prove_vus(real, check=False)
+        ps, pubs_s, _ = R.prove_vus(trivial, check=False)
+        okr, _ = R.verify_vus(pr, pubs_r, lay_r)
+        oks, _ = R.verify_vus(ps, pubs_s, lay_r)
+        rep = {"accepted": [okr, oks], "real_vs_simulated": {}}
+        for name, xr, xs in (("opened", pr.opened, ps.opened), ("w", pr.w, ps.w), ("h", pr.h, ps.h), ("q", pr.q, ps.q), ("v", pr.v, ps.v)):
+            stat, pv = _chi2_two_sample(xr, xs)
+            rep["real_vs_simulated"][name] = {"chi2": stat, "p": pv}
+        out["control_no_commitment"] = rep
+    finally:
+        protocol._COMMIT_COINS = True
+    # the pre-8c proof must not verify under the 8c verifier (it carries no commitments)
+    ok_cross, why_cross = R.verify_vus(pr, pubs_r, lay_r)
+    out["pre_8c_proof_under_8c_verifier"] = {"accepted": ok_cross, "why": why_cross}
+    ok = (all(out[f"equivocate_slot{s}"]["prover_aborted"] for s in (1, 2))
+          and not any("opened" in m for m in out["equivocate_slot1"]["sent_before_abort"])
+          and out["equivocate_slot1"]["sent_before_abort"][-1] == "root"
+          and all(v["p"] > 0.001 for k in ("zero", "ground") for v in out[f"committed_{k}"]["real_vs_simulated"].values())
+          and all(out[f"committed_{k}"]["opened_uniform"]["p"] > 0.001 for k in ("zero", "ground"))
+          and out["committed_ground"]["target_column_overlap"]["got"] <= 4 * (1 + out["committed_ground"]["target_column_overlap"]["expected_at_chance"])
+          and not ok_cross)
+    out["verdict"] = "PASS" if ok else "FAIL"
+    return out
 
 
 def _chi2_uniform(x: np.ndarray) -> tuple[float, float]:
@@ -87,6 +208,16 @@ def main(argv=None) -> int:
     real = [_vu_data(vu, i) for i in range(args.vus)]
     trivial = [([0] * (STEP * STEPS), [0] * (STEP * STEPS), [0] * STEPS, 0)] * args.vus
     report = {}
+    if args.device.startswith("cuda"):
+        from .mask_sampler import sampler_for
+        smp = sampler_for(args.device)
+        if smp is not None:
+            sym, key = smp.uniform(1_000_000)
+            report["mask_sampler"] = {"kernel_bit_exact_vs_rfc8439_reference": smp.check(),
+                                      "symbols_in_field": bool(((sym >= 0) & (sym < P)).all()),
+                                      "uniform_chi2_p": _chi2_uniform(sym.cpu().numpy())[1],
+                                      "host_reference_prefix_equal": bool((sym[:2048].cpu().numpy() == __import__("backends.direct.ligero.mask_sampler", fromlist=["uniform_host"]).uniform_host(2048, key)).all())}
+            print("mask sampler (ChaCha20 device, rejection):", report["mask_sampler"])
     for zk in (False, True):
         R = ChainRunner(args.device, -128.0, zk=zk)
         pr, pubs_r, lay = R.prove_vus(real, check=False)
@@ -128,10 +259,28 @@ def main(argv=None) -> int:
         for k_, v_ in rep["real_vs_simulated"].items():
             print(f"   real vs simulated {k_:6s}: chi2 {v_['chi2']:.1f} p {v_['p']:.3g}")
         print(f"   payload: {rep['payload']}\n   zeros among opened values: {rep['zeros_among_opened']}")
+        if zk:
+            mv = malicious_verifier_tests(R, real, trivial)
+            report["malicious_verifier"] = mv
+            for s in (1, 2):
+                e = mv[f"equivocate_slot{s}"]
+                print(f"   equivocating verifier, slot {s}: prover aborted {e['prover_aborted']}; sent before abort: {e.get('sent_before_abort')}")
+            for k in ("zero", "ground"):
+                c = mv[f"committed_{k}"]
+                print(f"   committed adversarial coins ({k}): real vs simulated p = " +
+                      ", ".join(f"{n} {v['p']:.3g}" for n, v in c["real_vs_simulated"].items()) +
+                      f"; opened uniform p {c['opened_uniform']['p']:.3g}; target-column overlap {c['target_column_overlap']['got']} "
+                      f"(chance {c['target_column_overlap']['expected_at_chance']:.2f})")
+            c = mv["control_no_commitment"]
+            print("   control (no commitment): real vs simulated p = " + ", ".join(f"{n} {v['p']:.3g}" for n, v in c["real_vs_simulated"].items()))
+            print(f"   pre-8c proof under the 8c verifier: {mv['pre_8c_proof_under_8c_verifier']}")
+            print("   malicious-verifier verdict:", mv["verdict"])
     zk = report["zk"]
     verdict = (zk["opened_uniform"]["p"] > 0.001 and all(v["p"] > 0.001 for v in zk["real_vs_simulated"].values())
                and zk["payload"]["constant_rows_opened_in_the_clear"] == 0
-               and zk["payload"]["opened_values_equal_to_own_payload"] < 20 * (1 + zk["payload"]["expected_if_uniform"]))
+               and zk["payload"]["opened_values_equal_to_own_payload"] < 20 * (1 + zk["payload"]["expected_if_uniform"])
+               and report["malicious_verifier"]["verdict"] == "PASS"
+               and all(v is True or (isinstance(v, float) and v > 0.001) for v in report.get("mask_sampler", {}).values()))
     report["verdict"] = "PASS" if verdict else "FAIL"
     print("verdict:", report["verdict"])
     if args.out:

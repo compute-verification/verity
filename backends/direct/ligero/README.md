@@ -2,9 +2,91 @@
 
 Track B, lanes `b-ligero` (first pass, sections below) and `b-ligero2` (second pass, next section: bound statement,
 the 4096-VU decision workload, HVZK). Design: `PROTOCOL.md`. Proof class **NON_ZK_PROOF_DIAGNOSTIC** without `--zk`,
-**COMPLETE_HVZK_BACKEND** with it (hash and challenge expander are host placeholders; the relation is WP2's checker,
-nothing dropped). Every number below was measured on `vy-g3` (NVIDIA L40S 48 GB, torch cu124) on the frozen
+**COMPLETE_HVZK_BACKEND** with `--zk --no-coin-commitment`, **COMPLETE_ZK_BACKEND** with `--zk` (lane b-zk, third
+pass below: HM96 coin commitment, PROTOCOL.md 8c; hash and challenge expander are host placeholders; the relation is
+WP2's checker, nothing dropped). Every number below was measured on `vy-g3` (NVIDIA L40S 48 GB, torch cu124) on the frozen
 instance set `fixtures/bench-instances/v1`.
+
+## Third pass (lane b-zk, ledger `b-zk.jsonl`, plot `plots/overhead_b-zk.png`): COMPLETE_ZK_BACKEND, 4.6x
+
+Runs `r20260922-090407-5483` (SIMT encoder), `r20260922-091350-15e3` (+ device mask sampler),
+`r20260922-092404-2a1b` (+ fused test kernels; the numbers below). 4096 VUs of K = 1536 as 25 sub-batches of 170
+(`l = 16384`, `n = 65536`, `D = 6`), median of 3 reps, verifier accepted every proof of every rep; every gate green
+before and after each step (52/52 negatives, 252/252 chain mutations, 243/243 unit mutations, with and without
+`--zk`; `redteam_zk` PASS incl. the malicious-verifier section; `redteam_binding` OK).
+
+| 4096 VUs, L40S | non-ZK | HVZK (`--zk --no-coin-commitment`) | **ZK** (`--zk`, PROTOCOL 8c) |
+|---|---|---|---|
+| prover total / **ms/VU** | 1.37 s / **0.334** | 1.43 s / **0.350** | **1.41 s / 0.345** |
+| overhead vs native 9.85 ps | 3.4e7 | 3.6e7 | **3.5e7** |
+| ZK cost over non-ZK | -- | +4% | **+3%** |
+| verifier | 0.96 s | 0.94 s | 0.96 s |
+| transcript | 110.8 MB | 122.3 MB | 122.3 MB |
+| `rounds.sequential_depth` | 3 (commitment on in every mode) | 2 | **3** |
+| peak device memory | 2.81 GB | 3.53 GB | 3.53 GB |
+| t / union bound (`accounting.union_over_proofs`, 25 proofs) | 196 / 2^-128.25 | 197 / 2^-128.05 | 197 / **2^-128.05** (incl. the 2^-190 coin-hiding term) |
+| proof class | NON_ZK_PROOF_DIAGNOSTIC | COMPLETE_HVZK_BACKEND | **COMPLETE_ZK_BACKEND** |
+
+Split of the ZK prover (s over the 25 proofs): hints 0.12, witness 0.26, masks 0.02, encode 0.20, Merkle 0.06,
+tests 0.57 (`tests_w` 0.34 = challenge-1 host expansion + the D-fold combinations; `tests_quad` 0.13; `tests_chain`
+0.10), openings 0.12. Was (b-ligero2 HVZK): 6.43 s = encode 3.84 + tests 3.74 (later 1.41) + masks 0.45 + ...
+
+**1. HM96 coin commitment (PROTOCOL.md 8c; `protocol.Coins`, `coin_commit`, `CoinOpeningError`).** Step 0 of the
+interactive protocol: the verifier commits to the randomness of BOTH of its coins, `c_i = BLAKE2b(COIN_TAG || r_i || s_i)` (32-byte `r_i`,
+32-byte salt `s_i`), before the prover's first message; `(c_1, c_2)` are absorbed into every
+challenge; slot 1 is opened after `root` (the prover checks `c_1` and aborts otherwise), slot 2 after `w, h, q, v`.
+Challenge `i` is `H(stmt, c_1, c_2, transcript so far, r_i)`. In the Fiat-Shamir transcript the prover plays step 0
+(`Coins.sample`) and the proof carries `coin_commit` and `coins`; the verifier recomputes the commitments and rejects
+a foreign or mismatched opening. What the malicious verifier loses: it can no longer choose `r`, `rho`, the columns
+as a function of `root` (or of `w, h, q, v`); the coins are fixed (information-theoretically hidden, computationally
+bound) before it sees anything, so its view equals the honest-verifier view at those coins, which 8b's masking
+simulates. The simulator runs the verifier to its commitment, rewinds once to learn the opening (extractable because
+the verifier must open to continue), then produces the 8b honest-verifier transcript for those coins.
+`rounds.sequential_depth` 2 -> 3 (`c`, `r_1`, `r_2`). Cost: 1.41 vs 1.43 s -- nothing measurable.
+
+Open questions of `zk_cost.md`, for this prover: *pole redraw* -- B-Ligero has no retry-on-bad-challenge path (the
+quotient `h = P_0 / Z_H` is over a fixed domain with no poles; the column sampler draws `t` distinct indices by
+rejection from the hash stream, which depends on public data only), so nothing is redrawn under committed coins.
+*Abort leakage* -- the prover's only aborts are the two `CoinOpeningError`s (public data: the verifier's opening vs
+its commitment) and, with `check=True`, the self-check assertions on the honest witness (a real deployment runs
+`check=False`; the assertions can only fire on an invalid witness, which is not a ZK input). No abort depends on the
+witness. `redteam_zk.py` section 4: an equivocating verifier is aborted at slot 1 / slot 2 with only `root` /
+`root, w, h, q, v` sent (never opened columns); adversarially chosen but committed coins (all-zero, or targeting a
+fixed column set) give chi-squared p > 0.001 on every message between a real and an all-trivial witness and the
+opened columns stay uniform; the pre-8c proof is rejected by the 8c verifier (`column challenge mismatch`).
+Accounting: `protocol.soundness` adds `COIN_HIDING_TERM = 2 * 2^64 / 2^256` (two slots, brute-force of a 32-byte
+`r`) -- the union bound moves by < 2^-60.
+
+**2. Device mask sampler (`mask_sampler.py`).** ChaCha20 in counter mode (RFC 8439 block function as a cupy kernel;
+the host reference reproduces the RFC test vector) with exact rejection: a 32-bit word is accepted iff `u < 2p`,
+then reduced mod p (acceptance 0.9375, exactly uniform -- the 2^-31 relative bias of `u mod p` is gone, so the 8b
+argument needs no bias term). The host fallback uses the same rejection on SHAKE-256. This is a documented new
+derivation (not bit-exact with the old `SHAKE mod p` sampler; the masks are secret randomness, nothing depends on
+their derivation). 0.44 -> 0.02 s.
+
+**3. SIMT encoder (`encode_simt.py`, `encode_simt_test.py`).** The prover is over BabyBear, so the b-encode kernel
+applies: the int32 Montgomery radix-4 DIF/DIT from `encode_ntt_simt` (v2), adapted to Ligero's domain (inverse NTT
+on H then the four cosets `g w_4^c <w_l>`, output in the natural order of `g <w_n>`), with the ZK mask `Z_H s_j`
+folded in per coset (`z_c s_{j,i} (g w_n^c)^i` added to the bit-reversed coefficients) and an optional natural-order
+coefficient output (for `interp_H(W_j)`); dynamic shared memory for `l = 16384`. Bit-exact against `field.encode` /
+`eval_on_coset` / `intt` (plain and ZK, l = 256..16384). Encode bucket, 3516 rows x l -> 4l on the L40S: torch int64
+**145.0 ms -> SIMT 9.60 ms** at `l = 16384` (15x; 96 GB/s of codeword, shared-memory bound at K = 65536), 68.4 ->
+2.05 ms at `l = 8192` (33x; 225 GB/s). On the 4096-VU workload: 3.62 s -> 0.20 s. L40S vs 4090: the 4090 number
+(`b_encode_4090.md`, 32.2 ms per 310,602 rows of the smaller v2 domain) is not the same shape; per codeword byte the
+L40S at `l = 8192` runs at 225 GB/s against the 4090's ~0.78 x 1008 GB/s = 790 GB/s, i.e. this kernel on the L40S is
+~3.5x below the 4090's HBM-floor fraction -- it is shared-memory / issue bound at these row lengths, not bandwidth
+bound (the 4090 measurement was at n = 1024-4096 per row).
+
+**4. Fused test kernels (`tests_fused.py`, `tests_fused_test.py`; step 5 of the brief).** After the encoder the
+tests were 52% (1.37 s). Two cupy kernels, one thread per column, rows split across blocks (>= 2^19 threads in
+flight), 64-bit accumulation of three products per reduction: `lincomb` (all D combinations of a row matrix in one
+pass, also the `x^2 - x` booleanity form) and `quad_general` (the non-booleanity quadratic constraints straight from
+CSR tables, A_q B_q - C_q and the D-fold rho combination without the (Q, n) intermediates). Bit-exact vs the torch
+paths; 3521 x 16640 combine 3.94 -> 0.76 ms, 2534 x 65536 booleanity 14.3 -> 1.05 ms, 853 general constraints on
+65536 columns 41.8 -> 2.26 ms. Tests 1.37 -> 0.57 s; prover 2.22 -> 1.41 s.
+
+**Non-ZK note.** The coin commitment is on in every mode (it costs nothing), so the non-ZK row also reports depth 3;
+it is not needed there.
 
 ## Second pass (lane b-ligero2, ledger `b-ligero2.jsonl`)
 
@@ -201,6 +283,55 @@ accounting (hash and SHAKE challenge expander are placeholders), scope `unit` nu
 (the `vu` row has them), ZK masking omitted (its cost: PROTOCOL.md section 8b -- at `2^-128` it doubles the codeword
 length, so encoding and hashing double: +0.03 s on the 0.095 s prover, ~+33%). No predicate of WP2's
 `check_step_expr` / `check_vu_expr` is dropped; the restatements are listed in PROTOCOL.md section 5 and 7b.
+
+## v2 shape, end to end (`v2/`, lane b-e2e-v2, vy-g2 RTX 4090, 2026-09-22)
+
+The checker-v2 relation (`checker/v2/`, `gkr_export.v2`: 273 columns / 33 products / 37 asserts / 93 lookups into
+13 tables per unit, the `(s, e, M, z)` state chain, limb pack + epilogue rows) as a Ligero proof with LogUp tables,
+\(F_c = \text{BabyBear}^6\) challenges and a torch-vectorised verifier; PROTOCOL.md section 16.  Layout: one
+Ligero column per unit, one row per constraint-system column; the table side (SHIFT 3.5 M + TNORM 1 M entries
+as-is) is 60-75% of the rows.  `NON_ZK_PROOF_DIAGNOSTIC` with the `INCOMPLETE_CHECKER_DIAGNOSTIC` caveat (the
+limb rows are a port of b-air-v2's z3-UNSAT design; the Python columns were not z3-checked).
+
+~~~sh
+# pod (commit first); instances are built once into /workspace/bi/v1
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_e2e_v2.gate  --require-result -- bash backends/direct/ligero/v2/pod_gate.sh
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_e2e_v2.bench --require-result --env LS="16384 32768" -- bash backends/direct/ligero/v2/pod_bench.sh
+# laptop: the CPU toy of the whole protocol
+python -m pytest backends/direct/ligero/v2/tests/test_toy.py
+~~~
+
+Gate (`r20260922-091001-68f7`): 8 honest `vu-k1536` VUs accepted with the recorded words (every packed intermediate
+= the recorded accumulator; prover self-check: every constraint satisfied); `vu-k1536-neg` 52/52 + flipped word
+rejected; 39/39 unit + chain mutations rejected; battery `epilogue` 2/2 rejected (`chain` class vacuous under v2).
+
+End to end, 4 096 VUs per batch as N sub-batch proofs (`bench`, all sub-batches proved and verified; l = 131 072 would exceed the 24 GB card, so 4 096 VUs in one proof needs the table-side fix below):
+
+| l (units/proof) | VUs/proof | N | prover s/proof | **ms/VU** | s per 4 096 VUs | overhead | verifier s/proof | proof MB | rows m | peak GiB | union security | run |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 16 384 | 170 | 25 | 0.727 | **4.27** | 17.5 | 4.3e8 | 0.26 | 4.6 | 3 139 | 8.5 | 2^-128.3 (t = 196 per proof) | r20260922-094956-5453 |
+| 32 768 | 341 | 13 | 0.888 | **2.60** | 10.7 | 2.6e8 | 0.29 | 5.7 | 2 019 | 11.8 | 2^-124.5 (t = 189; t = 193 would meet 2^-128) | r20260922-094315-8be5 |
+| **65 536** | 682 | 7 | 1.261 | **1.85** | **7.57** | **1.9e8** | 0.40 | 9.2 | 1 473 | 17.1 | **2^-128.1** (t = 193 per proof) | r20260922-094956-5453 |
+
+Host hint generation (`gen_unit`, pure Python, pool of 95 processes) is 5.4 / 8.1 s per sub-batch and is reported
+separately from the device clock.  Before the GPU Blake3 Merkle was importable on the pod (venv without cupy /
+blake3) the same proof took 5.8 s (host SHA-256 over 65 536 columns); before b-v2's blocked Montgomery inverter
+replaced the torch Frobenius inverse, 1.66 s.
+
+Buckets, l = 32 768 (ms per proof of 341 VUs) against b-v2's synthetic batch (ms per 4 096 VUs, one fused proof):
+
+| bucket | real (this prover, per proof) | real per 4 096 VUs (x 13) | b-v2 synthetic | what the delta is |
+|---|---|---|---|---|
+| witness -> device (columns, products, multiplicities) | 206 | 2 680 | -- (hints not in b-v2) | host numpy -> int64 tableau; multiplicity bincount |
+| encode (int64 torch NTT, 2 tableaux) | 30 + 104 | 1 740 | 16.2 (radix-4 fused encode + Blake3) | eager NTT, 8 B/element; `commit_stream` not wired (systematic-domain encoder vs this protocol's coset) |
+| Merkle (GPU Blake3) | 2 + 5 | 91 | (in 16.2) | -- |
+| challenges (SHAKE expand, table image at beta, pole rule) | 44 | 575 | 2.7 modelled | host SHAKE + 13 table evaluations at beta |
+| helpers (F_c inversions, b-v2 blocked kernel) | 113 | 1 470 | 5.2 | the kernel is ~20 ms; the rest is `_lins_eval` + F_c products in eager torch |
+| IRS + sums | 84 | 1 090 | 2.10 | eager r^T W |
+| quadratic (F_t products + F_c helper triples) | 279 | 3 620 | 5.4 | 6 x 6 coordinate products streamed in eager torch |
+| chain | 8 | 105 | (in structured linear 8.29) | -- |
+| openings | 13 | 170 | 2.5 | -- |
+| **total** | **888** | **11 540** | **42.4** | **270x**: eager torch over 2 019 x 131 072 int64 vs fused int32 kernels over 104 217 x 16 384 |
 
 ## Files
 

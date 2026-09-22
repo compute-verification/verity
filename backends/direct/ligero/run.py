@@ -303,8 +303,8 @@ def bench(args) -> int:
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
-        contract.measurement("rounds.protocol", 2),
-        contract.measurement("rounds.sequential_depth", 2),
+        contract.measurement("rounds.protocol", 3),             # step-0 coin commitments, r1 opening, r2 opening
+        contract.measurement("rounds.sequential_depth", 3),     # PROTOCOL.md 8c
         contract.measurement("mem.peak_device_bytes", peak_dev),
         contract.measurement("census.witness_elements", R.sys.m * l),
         contract.measurement("census.committed_elements", R.sys.m * cfg.n),
@@ -356,11 +356,19 @@ def main(argv=None) -> int:
         s.set_defaults(fn=fn)
     for name in ("gate", "gate-vu"):
         sub.choices[name].add_argument("--vus", type=int, default=64)
+    sub.choices["gate-vu"].add_argument("--dump-proof", default=None, metavar="PATH",
+                                        help="write each honest sub-batch proof as ligero-proof/v1 (PATH, or PATH_<lo> for several)")
+    sub.choices["gate-vu"].add_argument("--dump-statement", default=None, metavar="PATH",
+                                        help="write the matching ligero-statement/v1 (the verifier's public inputs + configuration)")
     for name in ("bench", "bench-vu"):
         sub.choices[name].add_argument("--reps", type=int, default=5)
         sub.choices[name].add_argument("--run-id", default=None)
     sub.choices["bench-vu"].add_argument("--total-vus", type=int, default=None,
                                          help="VUs in the whole batch, proved as ceil(total / (batch // 96)) sub-batches (union-bounded)")
+    sub.choices["bench-vu"].add_argument("--no-coin-commitment", action="store_true",
+                                         help="measure the pre-8c protocol (no step-0 coin commitment; depth 2; honest-verifier ZK only)")
+    sub.choices["bench-vu"].add_argument("--hvzk-label", action="store_true",
+                                         help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
     args = ap.parse_args(argv)
     return args.fn(args)
 

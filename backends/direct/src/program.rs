@@ -48,6 +48,10 @@ pub trait Ctx {
     fn boolean(&mut self, name: &str, b: &Self::V);
     fn rng(&mut self, name: &str, x: &Self::V, lo: i128, hi: i128);
     fn lookup(&mut self, name: &str, table: &Table, key: &Self::V) -> Vec<Self::V>;
+    /// A tuple lookup `(keys..; outs..) in table` (LogUp realisation only, PROTOCOL.md 15): the outputs are
+    /// hints computed from the integer keys, the whole tuple is one query.  Every component is bound to its
+    /// table column, so no key component needs a separate range check.
+    fn lookup_tuple(&mut self, name: &str, table: &crate::lookup::TupleTable, keys: &[Self::V]) -> Vec<Self::V>;
 
     /// `x * ipow < 2^bits`, i.e. `x < bound` with `bound = 2^bits / ipow` a table column.  Over Goldilocks the
     /// reference realisation (the product is below 2^60 < p).  Over a 31-bit field the product wraps (checker

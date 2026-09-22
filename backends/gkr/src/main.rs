@@ -1288,6 +1288,40 @@ fn read_chain(text: &str, unit: &Circuit, epi: &Circuit) -> Vec<Link> {
         .collect()
 }
 
+/// The checker-v2 chain (PROTOCOL.md 14.3), owned by the VERIFIER: the four state links `(s, e, M, z)` from the zero
+/// state `(0, floor, 0, 1)` (`checker.params.REAL.floor = -132`), the two saturation flags (zero before the last
+/// unit) and the two signs, all by column name, exactly `gkr_export.v2.chain_spec`.  It is a constant here because
+/// the linkage is part of the relation, not of the proof: red-team-v2 case 9 (`chain_spec_stripped`) shipped a
+/// bundle whose `chain.txt` was empty and the verifier, which then took the chain from the bundle, accepted an
+/// epilogue that published a non-final unit's state.
+pub fn v2_chain_spec() -> Vec<(Option<&'static str>, &'static str, &'static str, Fp, bool)> {
+    let floor = Fp::ZERO - Fp::new(132);
+    vec![
+        (Some("x.s"), "y.s", "s", Fp::ZERO, false),
+        (Some("x.e"), "y.e", "e", floor, false),
+        (Some("x.M"), "y.M", "M", Fp::ZERO, false),
+        (Some("x.z"), "y.z", "z", Fp::ONE, false),
+        (None, "g0.norm.leadnorm.ovf", "ovf[0]", Fp::ZERO, true),
+        (None, "g1.norm.leadnorm.ovf", "ovf[1]", Fp::ZERO, true),
+        (None, "h.groups[0].sum.sgn", "sgn[0]", Fp::ZERO, false),
+        (None, "h.groups[1].sum.sgn", "sgn[1]", Fp::ZERO, false),
+    ]
+}
+
+/// The verifier's v2 chain resolved against the two circuits (every named column must exist).
+fn v2_chain(unit: &Circuit, epi: &Circuit) -> Vec<Link> {
+    v2_chain_spec()
+        .into_iter()
+        .map(|(c, y, e, init, zn)| Link {
+            col_c: c.map(|c| col_index(unit, c)),
+            col_y: col_index(unit, y),
+            epi: col_index(epi, e),
+            init,
+            zero_nonlast: zn,
+        })
+        .collect()
+}
+
 fn load_vu<'a>(
     unit: &'a Loaded,
     epi: &'a Loaded,
@@ -1310,12 +1344,24 @@ fn load_vu<'a>(
     let (ecols, ne) = load_rows(&files.epilogue, epi.circ.ncols, Some(b), false);
     let (pcols, np) = load_rows(&files.public, 1, Some(b), false);
     assert!(nu == b * steps && ne == b && np == b);
-    let limbs: Vec<Link> = if let Some(text) = files
+    let bundle_chain = files
         .chain
         .as_ref()
         .and_then(|p| std::fs::read_to_string(p).ok())
-    {
-        read_chain(&text, &unit.circ, &epi.circ)
+        .map(|text| read_chain(&text, &unit.circ, &epi.circ));
+    let limbs: Vec<Link> = if unit.circ.col_names.iter().any(|n| n == "x.s") {
+        // checker v2: the chain is the verifier's (`v2_chain_spec`); a bundle's `chain.txt` is informative only and
+        // must agree with it -- an empty or shortened one is a forgery attempt, not a configuration (red-team-v2 #9).
+        let own = v2_chain(&unit.circ, &epi.circ);
+        if let Some(theirs) = bundle_chain {
+            assert!(theirs.len() == own.len() && theirs.iter().zip(&own).all(|(a, b)| a.col_c == b.col_c && a.col_y == b.col_y && a.epi == b.epi && a.init == b.init && a.zero_nonlast == b.zero_nonlast),
+                "chain.txt disagrees with the verifier's checker-v2 chain (PROTOCOL.md 14.3): {} link(s) given, {} required", theirs.len(), own.len());
+        }
+        own
+    } else if let Some(theirs) = bundle_chain {
+        // v1 with an explicit chain file (tests): the word links are the only admissible content
+        assert!(!theirs.is_empty(), "chain.txt is empty");
+        theirs
     } else if unit.circ.col_names.iter().any(|n| n == "x.c") {
         vec![Link::word([
             col_index(&unit.circ, "x.c"),
@@ -2293,6 +2339,67 @@ mod tests {
             seen += 1;
         }
         assert_eq!(seen, 5);
+    }
+
+    /// red-team-v2 #9: the chain is the verifier's, not the bundle's -- no `chain.txt` gives the same 8 links, an
+    /// empty one is refused, and the shipped `chain_spec_stripped` forgery (empty file, epilogue on unit 0) is refused.
+    #[cfg(not(feature = "babybear"))]
+    #[test]
+    fn v2_chain_is_verifier_owned() {
+        let f = |p: &str| format!("{}/fixtures/v2_synth/{p}", env!("CARGO_MANIFEST_DIR"));
+        let unit = load_circuit(&f("circuit.txt"));
+        let epi = load_circuit(&f("epilogue.txt"));
+        let mut files = v2_files("units.bin", "epilogue.bin", "public.bin");
+        files.chain = None;
+        let inst = load_vu(&unit, &epi, &files, Some(1));
+        assert_eq!(inst.chain.as_ref().unwrap().limbs.len(), 8);
+        let own = v2_chain(&unit.circ, &epi.circ);
+        let theirs = read_chain(
+            &std::fs::read_to_string(f("chain.txt")).unwrap(),
+            &unit.circ,
+            &epi.circ,
+        );
+        assert!(own.iter().zip(&theirs).all(|(a, b)| a.col_c == b.col_c
+            && a.col_y == b.col_y
+            && a.epi == b.epi
+            && a.init == b.init
+            && a.zero_nonlast == b.zero_nonlast));
+        let empty = std::env::temp_dir().join("verity-gkr-empty-chain.txt");
+        std::fs::write(&empty, "").unwrap();
+        files.chain = Some(empty.to_str().unwrap().into());
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| load_vu(
+                &unit,
+                &epi,
+                &files,
+                Some(1)
+            )))
+            .is_err(),
+            "an empty chain.txt was accepted"
+        );
+        let rt = format!(
+            "{}/../../fixtures/redteam-v2/gkr/neg/chain_spec_stripped",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        if std::path::Path::new(&rt).is_dir() {
+            let (u2, e2) = (
+                load_circuit(&format!("{rt}/circuit.txt")),
+                load_circuit(&format!("{rt}/epilogue.txt")),
+            );
+            let files = VuFiles::in_dir(&rt);
+            let loaded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                load_vu(&u2, &e2, &files, None)
+            }));
+            if let Ok(inst) = loaded {
+                for mode in [Mode::Clear, Mode::Pcs] {
+                    let (proof, _) = prove(&inst, mode);
+                    assert!(
+                        verify(&verifier_view(&inst, mode), &proof, mode).is_err(),
+                        "chain_spec_stripped accepted in {mode:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[cfg(not(feature = "babybear"))]

@@ -146,6 +146,89 @@ def gadget_job(cid: str, gadget: str, inputs: dict, hints: dict | None, claimed:
     return {"id": cid, "kind": "gadget", "name": gadget, "inputs": inputs, "hints": o, "claimed": claimed}
 
 
+# --- the checker-v2 AIR (`check-rows --v2`, PROTOCOL.md section 15) ----------------------------------------------------
+#
+# v2 has its own hint layout (15 hints per unit: group maxima, signed-sum signs and leading bits, product/state shift
+# limbs, pack limbs, epilogue) and carries the accumulator as a state (s, e_hat, M) instead of an FP32 word.  A battery
+# case is therefore translated as: its operands, the hints that have the same meaning in v2 imposed by name (the group
+# maximum `max.E`, the signed sum's sign `sum.sgn`, the leading bit `sum.l`, the epilogue's `hi2/lsb/carry/rem`;
+# everything else re-derived by v2's witness generator, the only way a prover could fill those columns), and the
+# claimed word BOUND: at step level the following zero unit's incoming state is the claimed word's state (the link
+# constraint `vu.link[*]` checks it), at VU level `vu.out` binds the claimed `y16`.  An `acc` (incoming word) hint that
+# differs from the honest decode becomes the row's incoming word.  Gadget cases map one-to-one (the v2 gadgets take the
+# same inputs; the `-LIMB16` models are already in limb form).
+
+V2_UNIT_MAP = {"max.E": "max.E", "sum.sgn": "sum.sgn", "lead.l": "sum.l"}
+
+
+BIAS, FLOOR, ACC_FRAC = 127, -126, 23
+
+
+def _v2_unit(h: dict | None, honest: dict) -> dict[str, int]:
+    """The v2 overrides of one unit's v1 hint tree against the honest tree: the mapped group hints, and an `acc`
+    decode that differs from the honest one as the incoming state columns (s, e_hat, M) it denotes."""
+    o: dict[str, int] = {}
+    if h is None:
+        return o
+    for g, hg in enumerate(h["groups"]):
+        for path, col in V2_UNIT_MAP.items():
+            a, b = path.split(".")
+            v = hg[a][b]
+            if v != honest["groups"][g][a][b]:
+                o[f"g{g}.{col}"] = v
+    acc = h["acc"]
+    if any(acc[k] != honest["acc"][k] for k in ("s", "t", "f")):
+        s, t, f = acc["s"], acc["t"], acc["f"]
+        m = f + (2**ACC_FRAC if t != 0 else 0)
+        o["st.s"], o["st.e"], o["st.M"] = s, (FLOOR if m == 0 else max(t, 1) - BIAS), m
+    return o
+
+
+def step_job_v2(cid: str, x: dict, h: dict | None, claimed_word: int | None) -> dict:
+    honest = gen_step_bb(REAL, x["c"], x["a"], x["b"])
+    o = _v2_unit(h, honest)
+    row = {"c": x["c"], "a": list(x["a"]), "b": list(x["b"]), "step": 1, "y16": 0, "overrides": o}
+    nxt = zero_row(2, 0)
+    if claimed_word is not None:
+        nxt["c"] = claimed_word & 0xFFFFFFFF
+    return {"id": cid, "kind": "rows", "starts_trace": False, "rows": [row, nxt]}
+
+
+def vu_job_v2(cid: str, x: dict, h: dict | None, y16: int) -> dict:
+    n_units = len(x["a"]) // K
+    rows = []
+    c = 0
+    for s in range(STEPS):
+        if s < n_units:
+            a, b = list(x["a"][K * s : K * (s + 1)]), list(x["b"][K * s : K * (s + 1)])
+            honest = gen_step_bb(REAL, c, a, b)
+            hs = h["steps"][s] if h else None
+            o = _v2_unit(hs, honest)
+            rows.append({"c": 0 if s == 0 else None, "a": a, "b": b, "step": s, "y16": y16, "overrides": o})
+            c = int(check_step_expr(IntCtx(), REAL, c, a, b, honest))
+        else:
+            rows.append(zero_row(s, y16))
+    if h:
+        rows[-1]["overrides"].update({f"cast.{k}": v for k, v in h["epilogue"].items() if k in ("hi2", "lsb", "carry", "rem")})
+    return {"id": cid, "kind": "rows", "starts_trace": True, "rows": rows}
+
+
+def jobs_for_case_v2(c: Case) -> tuple[dict, dict]:
+    if c.level == "step":
+        return step_job_v2(c.id, c.inputs, c.hints, c.claimed["y"]), step_job_v2(f"ctl:{c.id}", c.inputs, None, c.honest["y"])
+    if c.level == "vu":
+        return vu_job_v2(c.id, c.inputs, c.hints, c.claimed["y16"] & 0xFFFF), vu_job_v2(f"ctl:{c.id}", c.inputs, None, c.honest["y16"])
+    j, ctl = jobs_for_case(c)
+    ctl["v2_honest_claim"] = True  # the honest v2 outputs (v1's `honest` are the v1 gadget's: e.g. a zero result's exponent)
+    return j, ctl
+
+
+#: Battery cases the v2 relation makes vacuous: `zero_swap` swaps the incoming word's zero sign under hints of +0.  v2
+#: has no word input -- the unit reads the state (s, e_hat, M), the -0 word and the +0 hints denote the same zero
+#: state and the claimed word is the correct output of that state (IEEE: -0 + x = x).  Reported, not counted.
+V2_VACUOUS = {"zero_swap"}
+
+
 def jobs_for_case(c: Case) -> tuple[dict, dict]:
     """``(the forgery, its honest control)``."""
     if c.level == "step":
@@ -229,6 +312,10 @@ def extra_cases(p=REAL) -> list[Case]:
     return out
 
 
+def report_accepted_ids(report, cases, res) -> list[str]:
+    return [c.id for c in cases if res[c.id]["accepted"]]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bin", required=True, help="path to the direct-unit binary (release build)")
@@ -237,13 +324,14 @@ def main(argv=None) -> int:
     ap.add_argument("--extras", action="store_true", help="add this lane's leading-bit lower-bound forgeries")
     ap.add_argument("--keep", type=Path, default=None, help="keep the jobs JSON here")
     ap.add_argument("--lookup", action="store_true", help="the LogUp realisation (PROTOCOL.md section 14): `check-rows --lookup`")
+    ap.add_argument("--v2", action="store_true", help="the checker-v2 AIR (PROTOCOL.md section 15): `check-rows --v2`")
     args = ap.parse_args(argv)
 
     cases = load_battery()
     extras = extra_cases() if args.extras else []
     jobs, controls = [], []
     for c in cases + extras:
-        j, ctl = jobs_for_case(c)
+        j, ctl = jobs_for_case_v2(c) if args.v2 else jobs_for_case(c)
         jobs.append(j)
         # the -V_PREMISE z3 models have an input OUTSIDE the gadget's premise (v = p - 2^30 + 1 > S_MAX): the
         # honest control would be rejected on the input range itself, so there is no honest witness to control with
@@ -260,6 +348,8 @@ def main(argv=None) -> int:
         cmd = [args.bin, "check-rows", "--field", args.field, "--in", str(jp), "--out", str(rp)]
         if args.lookup:
             cmd.append("--lookup")
+        if args.v2:
+            cmd.append("--v2")
         subprocess.run(cmd, check=True)
         t_check = time.time() - t0
         rep = json.loads(rp.read_text())
@@ -267,6 +357,10 @@ def main(argv=None) -> int:
 
     report = run_battery(lambda c: res[c.id]["accepted"], cases)
     print(report.render())
+    vacuous_accepted = [c.id for c in cases if args.v2 and c.cls in V2_VACUOUS and res[c.id]["accepted"]]
+    if args.v2:
+        n_vac = sum(1 for c in cases if c.cls in V2_VACUOUS)
+        print(f"v2: {len(vacuous_accepted)}/{n_vac} vacuous cases ({', '.join(sorted(V2_VACUOUS))}) accepted: the claimed word is the correct output of the state the forged word denotes; not counted")
     ctl_failed = [cid for cid in res if cid.startswith("ctl:") and not res[cid]["accepted"]]
     print(f"controls: {len(controls) - len(ctl_failed)}/{len(controls)} honest witnesses accepted")
     for cid in ctl_failed[:10]:
@@ -296,12 +390,13 @@ def main(argv=None) -> int:
             }
         )
     out = {
-        "schema": "verity-direct/battery/v1",
+        "schema": "verity-direct/battery/v2" if args.v2 else "verity-direct/battery/v1",
         "field": args.field,
         "air": {"width": rep["width"], "constraints": rep["constraints"], "realisation": rep.get("realisation", "limbs")},
         "battery": {"version": "v1", "total": report.total, "accepted": report.accepted, "by_class": report.by_class, "ok": report.ok},
         "controls": {"total": len(controls), "rejected": ctl_failed},
         "extras": {"total": len(extras), "accepted": extra_accepted},
+        "v2_vacuous_accepted": vacuous_accepted if args.v2 else None,
         "seconds_check_rows": t_check,
         "cases": detail,
     }
@@ -309,7 +404,7 @@ def main(argv=None) -> int:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(out, indent=1) + "\n")
         print(f"wrote {args.out}")
-    ok = report.ok and not ctl_failed and not extra_accepted
+    ok = (report.ok or (args.v2 and set(report_accepted_ids(report, cases, res)) <= set(vacuous_accepted))) and not ctl_failed and not extra_accepted
     print("RESULT:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 

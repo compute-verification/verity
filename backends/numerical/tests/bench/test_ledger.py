@@ -35,3 +35,23 @@ def test_cli_add_check_and_plots(tmp_path: Path) -> None:
     assert ledger.main(["check", "--dir", str(d)]) == 0
     assert plots.main(["--dir", str(d), "--out", str(out)]) == 0
     assert (out / "overhead_A-x.png").stat().st_size > 1000 and (out / "overhead_all.png").exists()
+
+
+def test_plot_gate4_groups_by_design_and_hatches_buckets(tmp_path: Path) -> None:
+    d, out = tmp_path / "ledger", tmp_path / "plots"
+    common = ["--dir", str(d), "--lane", plots.GATE4_LANE, "--track", "shared", "--scope", "vu", "--security", "2^-128", "--B", "4096"]
+    assert ledger.main(["add", *common, "--label", "A e2e non-ZK", "--proof-class", "NON_ZK_PROOF_DIAGNOSTIC",
+                        "--hardware", "NVIDIA H100 80GB HBM3", "--seconds-per-vu", "1e-3"]) == 0
+    assert ledger.main(["add", *common, "--label", "A buckets v1", "--proof-class", "ARITHMETIC_DIAGNOSTIC",
+                        "--hardware", "NVIDIA H100 80GB HBM3", "--overhead", "7e6", "--omitted", "encoding"]) == 0
+    assert ledger.main(["add", *common, "--label", "B e2e HVZK", "--proof-class", "COMPLETE_HVZK_BACKEND", "--assumptions", "hash",
+                        "--hardware", "NVIDIA H100 80GB HBM3", "--seconds-per-vu", "1.5e-3"]) == 0
+    assert ledger.main(["add", *common, "--label", "SP1 sound core, 1 VU", "--proof-class", "NON_ZK_PROOF",
+                        "--hardware", "RTX 4090 (cited)", "--seconds-per-vu", "3.58"]) == 0
+    entries = ledger.load(d / f"{plots.GATE4_LANE}.jsonl")
+    assert [plots._design(e) for e in entries] == ["A", "A", "B", "SP1"]
+    out.mkdir()
+    p = plots.plot_gate4(entries, out)
+    assert p.stat().st_size > 1000
+    # main() draws it only when the gate-4 lane is present
+    assert plots.main(["--dir", str(d), "--out", str(out)]) == 0 and (out / "gate4_h100.png").exists()
