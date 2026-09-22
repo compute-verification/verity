@@ -67,8 +67,27 @@ def test_round_fusion_matches_reference(device, mode, n, k, k1_log2):
     labels = {lab for lab, *_ in stats.matmuls}
     if k:
         assert "inner.packed.U" in labels
+    # the sync-free device pipeline (benchmarks / whole-sumcheck CUDA graphs) emits the same messages
+    inputs = sp.prepare_inputs(ker, gammas, rs, k)
+    msgs = sp.prove_device(ker, gammas, rs, gt, ht, k, inputs)
+    assert [sp.S_to_ext(S) for S in msgs] == rounds_ref
+    # both fused kernels (U pass + fold-fused extension rounds) and the tensor-style U kernel agree too
+    ker2 = sp.Kernel(device, k1_log2=k1_log2, mode=mode, round_fusion=True, fold_fusion=True)
+    stats2 = sp.Stats()
+    rounds2, _, final2 = sp.prove(ker2, gammas, gt, ht, k, ref.seeded_challenger(7), stats2)
+    assert rounds2 == rounds_ref and final2 == final_ref
     if n - k > 2:
-        assert "inner.ext.fold_fused" in labels
+        assert "inner.ext.fold_fused" in {lab for lab, *_ in stats2.matmuls}
+    if k:
+        from packed import kernels_fused as kf
+
+        inp_k = ker.inputs(gammas, [], k, k)
+        K1, K2 = ker.split((1 << n) >> k)
+        split = ker.split_b1(K1, K2)
+        inp_k.e_lo32 = torch.nn.functional.pad(inp_k.e_lo_limbs, (0, 32 - sp.DL))
+        Za = kf.packed_u_inner_product(gt, ht, inp_k.e_lo32, k, K1, K2, split)
+        Zb = ker._tk.packed_u_inner_product_gen(gt, ht, inp_k.e_lo32, k, K1, K2, split)
+        assert torch.equal(Za, Zb)
 
 
 def test_scalar_matrix_is_the_convolution():

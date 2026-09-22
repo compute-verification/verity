@@ -227,6 +227,8 @@ class RoundInputs:
     fold_coeff: torch.Tensor | None = None   # triton fold_k: (2^k, 6) int32 = eq(r_1..r_k, a) . R  (Montgomery pre-scaled)
     fold_r: torch.Tensor | None = None       # triton fold_ext: (6,) int32 = r_i . R
     e_lo32: torch.Tensor | None = None       # triton fused inner product: e_lo_limbs padded to (K1, 32)
+    u_eq_r: torch.Tensor | None = None       # U pass round i: (2^(i-1), 6) eq(r_{<i}, a) plain
+    u_wd: torch.Tensor | None = None         # U pass round i: (2^(k-i), 6) eq(gamma_i..gamma_{k-1}, d) plain
 
 
 #: Montgomery radix of the Triton kernels; ``pre_scale(x) = x R mod p`` is what they load for challenges and weights.
@@ -243,13 +245,17 @@ class Kernel:
     ``"triton"`` (fused kernels from :mod:`kernels_triton` for the Hadamards and both folds; CUDA only)."""
 
     def __init__(self, device: str = "cpu", k1_log2: int = K1_LOG2_DEFAULT, compile: bool = False, mode: str | None = None,
-                 fused: bool = True, round_fusion: bool = True):
+                 fused: bool = True, round_fusion: bool = True, fold_fusion: bool = False):
         self.device = torch.device(device)
         self.k1_log2 = k1_log2
         self.mode = mode or ("compile" if compile else "eager")
         self.fused = fused      # triton mode: fused Hadamard + tl.dot inner product for the packed rounds (i <= 3)
-        #: triton mode: a-fusion's U pass (all k packed rounds from one read of g, h) + fold fused into the next Hadamard
+        #: triton mode: a-fusion's U pass (all k packed rounds from one read of g, h): measured 2.25x faster than the three
+        #: packed rounds at 2^28 (3.48 vs 7.83 ms)
         self.round_fusion = round_fusion
+        #: the fold fused into the next Hadamard pass (``ext_fold_ip``): measured SLOWER than fold_ext x2 + ext_ip (2.28 vs
+        #: 1.75 ms at 2^28 / round k+2; both SIMT-bound, fusing adds Montgomery work to the SIMT-bound pass) -- opt-in
+        self.fold_fusion = fold_fusion
         self._u_terms: dict = {}
         self.pow2_row = torch.tensor(POW2, dtype=torch.int64, device=self.device)
         pm = np.array([[POW2[j + jp] for jp in range(LIMBS)] for j in range(LIMBS)], dtype=np.int64)
@@ -442,8 +448,6 @@ class Kernel:
         """``U[c . 2^k + c'] = sum_{b'} eq(gamma_{>= k}, b') g(c, b') h(c', b')`` as ``(4^k, 6) int32`` plain: the one read of
         ``g, h`` that serves all ``k`` packed rounds (``inp_k`` = :meth:`inputs` at ``i = k``: its ``e_lo / e_hi`` are the
         weights over ``b'``).  ``kernels_fused.packed_u_inner_product``."""
-        from . import kernels_fused as kf
-
         t = g.numel()
         m = t >> k
         K1, K2 = self.split(m)
@@ -451,7 +455,8 @@ class Kernel:
         split = self.split_b1(K1, K2)
         if inp_k.e_lo32 is None:
             inp_k.e_lo32 = torch.nn.functional.pad(inp_k.e_lo_limbs, (0, 32 - DL))
-        Zs = kf.packed_u_inner_product(g, h, inp_k.e_lo32, k, K1, K2, split)          # (split, K2 rows 4, 24)
+        # generated explicit-name kernel: 3.48 ms at 2^28 k=3 vs 13.7 ms for the tensor-broadcast twin (kernels_fused)
+        Zs = self._tk.packed_u_inner_product_gen(g, h, inp_k.e_lo32, k, K1, K2, split)  # (split, K2 rows 4, 24)
         Z = Zs.to(torch.int64).sum(0) if split > 1 else Zs[0]
         if stats:
             stats.add("inner.packed.U", K2 * rows * LIMBS, K1, DL, 0)
@@ -468,9 +473,10 @@ class Kernel:
             for key in ("ia", "iap", "id"):
                 terms[key] = terms[key].to(self.device)
             terms["uidx"] = {kk: v.to(self.device) for kk, v in terms["uidx"].items()}
-        eq_r = eq_table_dev(rs, self.device)
-        wd = eq_table_dev(gammas[i:k], self.device)
-        Q = kf.round_from_U(U, eq_r, wd, terms, self._tk.ext_mul_rows)                  # (3, 1, 6)
+        if inp.u_eq_r is None:
+            inp.u_eq_r = eq_table_dev(rs, self.device)
+            inp.u_wd = eq_table_dev(gammas[i:k], self.device)
+        Q = kf.round_from_U(U, inp.u_eq_r, inp.u_wd, terms, self._tk.ext_mul_rows)      # (3, 1, 6)
         return self._tk.finish_round(Q, self.one6, inp.prefix, inp.eq_x)
 
     def ext_round_fused_fold(self, gE: torch.Tensor, hE: torch.Tensor, i: int, inp: RoundInputs, fold_r: torch.Tensor,
@@ -601,46 +607,99 @@ def prove(kernel: Kernel, gammas: list[ref.Ext], g: torch.Tensor, h: torch.Tenso
     with zero high coefficients: the ordinary algorithm as the cost model prices it, minus the eq fold)."""
     n = len(gammas)
     rounds, rs = [], []
-    fusion = kernel.round_fusion and kernel._tk is not None
-    u_pass = fusion and k and kernel.has_u_pass(g, k)
+    u_pass = kernel.round_fusion and kernel._tk is not None and k and kernel.has_u_pass(g, k)
+    U = None
     if u_pass:
         # a-fusion (i): one read of g, h -> U; every packed round is a 4^(i-1) 2^(k-i)-term contraction of U
         U = kernel.packed_U(g, h, k, kernel.inputs(gammas, rs, k, k), stats)
     for i in range(1, k + 1):
         inp = kernel.inputs(gammas, rs, i, k)          # prefix / eq_x depend on the challenges so far
-        if u_pass:
-            S = S_to_ext(kernel.packed_round_U(U, gammas, rs, i, k, inp))
-        else:
-            S = S_to_ext(kernel.packed_round(g, h, i, inp, stats))
+        S = S_to_ext(_packed_message(kernel, U, g, h, gammas, rs, i, k, inp, stats))
         r = challenger(i, S)
         rounds.append(S)
         rs.append(r)
     if k:
         kernel.set_fold(inp, rs[:-1], k, k, rs[-1])
-        gE, hE = kernel.fold_k(g, k, inp, stats), kernel.fold_k(h, k, inp, stats)
-    else:
-        gE = torch.zeros((g.numel(), DEGREE), dtype=torch.int32, device=kernel.device)
-        gE[:, 0] = g
-        hE = torch.zeros_like(gE)
-        hE[:, 0] = h
-    pending = None     # a-fusion (ii): the fold by r_{i-1} is deferred into round i's Hadamard pass
+    gE, hE = _after_packed(kernel, g, h, k, inp if k else None, stats)
+    pending = None     # a-fusion (ii, opt-in): the fold by r_{i-1} is deferred into round i's Hadamard pass
     for i in range(k + 1, n + 1):
         inp = kernel.inputs(gammas, rs, i, k)
-        if pending is not None:
-            S, gE, hE = kernel.ext_round_fused_fold(gE, hE, i, inp, pending, stats)
-        else:
-            S, _, _ = kernel.ext_round(gE, hE, i, inp, stats, fold=False)
+        S, gE, hE = _ext_message(kernel, gE, hE, i, inp, pending, stats)
         S = S_to_ext(S)
         r = challenger(i, S)
         rounds.append(S)
         rs.append(r)
         kernel.set_fold(inp, rs[:-1], i, k, r)
-        m = gE.shape[0] // 2
-        K1, _ = kernel.split(m // 2) if m >= 2 else (0, 0)
-        if fusion and i < n and K1 % 128 == 0 and kernel.fused:
-            pending = inp.fold_r
-        else:
-            pending = None
-            gE, hE = kernel.fold_pair(gE, hE, inp, stats)
+        pending, gE, hE = _fold_or_defer(kernel, gE, hE, i, n, inp, stats)
     final = (ref.eq_points(gammas, rs), tuple(int(v) for v in gE[0].tolist()), tuple(int(v) for v in hE[0].tolist()))
     return rounds, rs, final
+
+
+def _packed_message(kernel, U, g, h, gammas, rs, i, k, inp, stats):
+    if U is not None:
+        return kernel.packed_round_U(U, gammas, rs, i, k, inp)
+    return kernel.packed_round(g, h, i, inp, stats)
+
+
+def _after_packed(kernel, g, h, k, inp, stats):
+    if k:
+        return kernel.fold_k(g, k, inp, stats), kernel.fold_k(h, k, inp, stats)
+    gE = torch.zeros((g.numel(), DEGREE), dtype=torch.int32, device=kernel.device)
+    gE[:, 0] = g
+    hE = torch.zeros_like(gE)
+    hE[:, 0] = h
+    return gE, hE
+
+
+def _ext_message(kernel, gE, hE, i, inp, pending, stats):
+    if pending is not None:
+        return kernel.ext_round_fused_fold(gE, hE, i, inp, pending, stats)
+    S, _, _ = kernel.ext_round(gE, hE, i, inp, stats, fold=False)
+    return S, gE, hE
+
+
+def _fold_or_defer(kernel, gE, hE, i, n, inp, stats):
+    m = gE.shape[0] // 2
+    K1, _ = kernel.split(m // 2) if m >= 2 else (0, 0)
+    if kernel.fold_fusion and kernel._tk is not None and kernel.fused and i < n and K1 % 128 == 0:
+        return inp.fold_r, gE, hE
+    g2, h2 = kernel.fold_pair(gE, hE, inp, stats)
+    return None, g2, h2
+
+
+def prepare_inputs(kernel: Kernel, gammas: list[ref.Ext], coins: list[ref.Ext], k: int) -> list[RoundInputs]:
+    """All rounds' host-side inputs for coins known ahead (benchmarks; a transcript-independent challenger): entry
+    ``i - 1`` is round ``i``'s :class:`RoundInputs` with its fold operands filled."""
+    n = len(gammas)
+    out = []
+    for i in range(1, n + 1):
+        rs = coins[:i - 1]
+        inp = kernel.inputs(gammas, rs, i, k)
+        if i >= k:
+            kernel.set_fold(inp, rs, i, k, coins[i - 1])
+        if i <= k:
+            inp.u_eq_r = eq_table_dev(rs, kernel.device)
+            inp.u_wd = eq_table_dev(gammas[i:k], kernel.device)
+        out.append(inp)
+    return out
+
+
+def prove_device(kernel: Kernel, gammas: list[ref.Ext], coins: list[ref.Ext], g: torch.Tensor, h: torch.Tensor, k: int,
+                 inputs: list[RoundInputs], stats: Stats | None = None) -> list[torch.Tensor]:
+    """The device pipeline of :func:`prove` with every host-side input precomputed (:func:`prepare_inputs`): no host
+    synchronisation, capturable in one CUDA graph.  Returns the ``n`` messages ``S_i (4, 6)`` as device tensors."""
+    n = len(gammas)
+    msgs = []
+    U = None
+    if kernel.round_fusion and kernel._tk is not None and k and kernel.has_u_pass(g, k):
+        U = kernel.packed_U(g, h, k, inputs[k - 1], stats)
+    for i in range(1, k + 1):
+        msgs.append(_packed_message(kernel, U, g, h, gammas, coins[:i - 1], i, k, inputs[i - 1], stats))
+    gE, hE = _after_packed(kernel, g, h, k, inputs[k - 1] if k else None, stats)
+    pending = None
+    for i in range(k + 1, n + 1):
+        inp = inputs[i - 1]
+        S, gE, hE = _ext_message(kernel, gE, hE, i, inp, pending, stats)
+        msgs.append(S)
+        pending, gE, hE = _fold_or_defer(kernel, gE, hE, i, n, inp, stats)
+    return msgs

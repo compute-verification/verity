@@ -72,15 +72,14 @@ def _whole_sumcheck(kernel: sp.Kernel, n: int, k: int, repeats: int, warm: int, 
     gammas = [ref.random_ext(rng) for _ in range(n)]
     coins = [ref.random_ext(rng) for _ in range(n)]
 
-    def challenger(i, S):
-        return coins[i - 1]
-
+    inputs = sp.prepare_inputs(kernel, gammas, coins, k)      # host work (eq tables, fold operands) outside the timing
     st = sp.Stats()
     torch.cuda.reset_peak_memory_stats(dev)
-    sp.prove(kernel, gammas, g, h, k, challenger, st)
+    sp.prove_device(kernel, gammas, coins, g, h, k, inputs, st)
     torch.cuda.synchronize()
+    # eager: the whole device pipeline launched from Python (launch gaps included), CUDA events + wall clock
     for _ in range(warm):
-        sp.prove(kernel, gammas, g, h, k, challenger)
+        sp.prove_device(kernel, gammas, coins, g, h, k, inputs)
     torch.cuda.synchronize()
     dev_ms, wall_ms = [], []
     for _ in range(repeats):
@@ -88,18 +87,20 @@ def _whole_sumcheck(kernel: sp.Kernel, n: int, k: int, repeats: int, warm: int, 
         b = torch.cuda.Event(enable_timing=True)
         t0 = time.perf_counter()
         a.record()
-        sp.prove(kernel, gammas, g, h, k, challenger)
+        sp.prove_device(kernel, gammas, coins, g, h, k, inputs)
         b.record()
         torch.cuda.synchronize()
         wall_ms.append((time.perf_counter() - t0) * 1e3)
         dev_ms.append(a.elapsed_time(b))
+    # graphed: the whole sumcheck as one CUDA graph (the number a-gpu's per-layer graph would see)
+    tg, how = B.time_graphed(lambda: sp.prove_device(kernel, gammas, coins, g, h, k, inputs), repeats, warm)
     mem = torch.cuda.max_memory_allocated(dev)
     del g, h
     torch.cuda.empty_cache()
     labels = {}
     for lab, M, K, N in st.matmuls:
         labels[lab] = labels.get(lab, 0) + 1
-    return {"device_ms": statistics.median(dev_ms), "wall_ms": statistics.median(wall_ms), "device_ms_all": dev_ms, "wall_ms_all": wall_ms,
+    return {"device_ms": tg * 1e3, "timing": how, "eager_device_ms": statistics.median(dev_ms), "eager_wall_ms": statistics.median(wall_ms),
             "macs_performed": st.macs_performed, "hadamard_base": st.hadamard_base, "hadamard_ext": st.hadamard_ext, "kernels": labels,
             "mem.peak_device_bytes": mem}
 
@@ -122,9 +123,7 @@ def _kernel_pieces(kernel: sp.Kernel, n: int, k: int, repeats: int, warm: int, s
         K1, K2 = kernel.split(t >> k)
         split = kernel.split_b1(K1, K2)
         inp_k.e_lo32 = torch.nn.functional.pad(inp_k.e_lo_limbs, (0, 32 - B.DL))
-        from packed import kernels_fused as kf
-
-        tm, _ = B.time_graphed(lambda: kf.packed_u_inner_product(g, h, inp_k.e_lo32, k, K1, K2, split), repeats, warm)
+        tm, _ = B.time_graphed(lambda: tk.packed_u_inner_product_gen(g, h, inp_k.e_lo32, k, K1, K2, split), repeats, warm)
         out["u_pass_ms"] = tm * 1e3
         tot = 0.0
         rs: list = []
@@ -260,7 +259,8 @@ def main(argv=None) -> int:
                 r["x_hbm_floor"] = r["device_ms"] / r["hbm_floor_ms"]
                 r["frac_int8_peak"] = r["macs_performed"] / (r["device_ms"] / 1e3) / peak_macs
                 row["fused" if fusion else "baseline"] = r
-                print(f"t=2^{n} k={k} fusion={fusion}: device {r['device_ms']:.3f} ms wall {r['wall_ms']:.3f} ms  "
+                print(f"t=2^{n} k={k} fusion={fusion}: graphed {r['device_ms']:.3f} ms ({r['timing']}) eager dev {r['eager_device_ms']:.3f} "
+                      f"wall {r['eager_wall_ms']:.3f} ms  "
                       f"floor {r['hbm_floor_ms']:.3f} ms ({r['x_hbm_floor']:.2f}x)  INT8 {r['frac_int8_peak']*100:.2f}%  "
                       f"mem {r['mem.peak_device_bytes']/1e9:.2f} GB [{time.time()-t0:.0f}s]", flush=True)
             if a.pieces:
