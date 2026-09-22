@@ -67,6 +67,67 @@ reproducer under `redteam/`.  An unchecked box is an open question, not a pass.
 - [ ] **Sparse-lookup shortcuts.** A prover-side optimisation that omits lookups for rows with zero multiplicity
       changes the message shape with the private data.
 
+## Review items for the build lanes' first commits (wave 2: from the WP2 checker contracts)
+
+Both candidates implement `checker/gadgets.py` `contract()`s as composed by `step.py`.  Wave 2 found no accepted
+deviation from the reference over the integers or over Goldilocks (`reports/redteam_checker.json`: mutation /
+coordinated on every hint column, z3 per gadget with Boolean case splits); every SAT is a field below the checker's
+F1-F4 thresholds.  What an implementation can still get wrong is the *realisation*.  Check, per commit:
+
+### In a GKR layer wiring (Candidate A) and in an AIR / trace (Candidate B) alike
+
+- [ ] **Every `rng` of the contracts is present, on the canonical representative.**  Diff the layer's / AIR's range
+      queries against `contract().hints` + `contract().checked` (the `checked` expressions: `t-nz`, `M+z-1`, `u+z-1`,
+      `d[i]`, `d_floor`, `r*ipow`, `q*pow`, `r*isr`, `q*sr`, `v`, `v+z-1`, `(v-lo)*ispan`, `clamp_proof`, `r*idiv`,
+      `ovf_proof`, `hi+carry`).  A dropped one is a SAT (`checker/search.py::integer_queries`, `drop=`).  Signed ranges
+      (`E`, `d`, `k`, `cand`, `e1`) are checked as `x - lo` in `[0, hi - lo)`, never as a signed comparison in the field.
+- [ ] **Wrap thresholds of the trace field.**  With the product realisation of `lt_pow`, `p > 2^60` is required (F1:
+      `leading_bit` is `(v - lo) * ispan < 2^30`; SAT at `p40`, reproducer `z3_checker.gadget_split(leading_bit, P40)`);
+      `p > 2^32` for words as single elements (F4: `fp32_decode`, `pack`, `epilogue` SAT at Mersenne-31); `p >= 2^31 - 1`
+      for `signed_sum` (now proved UNSAT at exactly `2^31 - 1`); `p > 2^31 - 1` for `normalise`'s `div M' + r` (F3).
+      Goldilocks passes all four; any smaller trace field must switch `lt_pow` to a direct (lookup or bit) bound and split
+      the words.  Confirm the protocol document states `p` and the check `p > 2^60` explicitly.
+- [ ] **The tight quotient bounds (`quot`) are realised, not only `rem`.**  Over the integers they are implied and a
+      compiler may drop them as "redundant"; over any field they are load-bearing (F2, `checker/search.py::modular_queries`).
+- [ ] **Table multiplicities.**  `POW` (512 rows) is queried 2x, `ALIGN` (512) 16x, `LEAD` (31) 2x, `NORM` (32) 2x, the
+      16-bit range table 284x per unit (`security.census.lookups_by_table`).  Multiplicities committed before the lookup
+      challenge; the *same* query count on every unit (no zero-multiplicity shortcut: the histogram of `d`, `l`, `k` is
+      private).  A vector-valued lookup on `(key, cols...)` binds *every* column of the row: a row with only `pow` bound and
+      `ipow` free re-opens F1.
+- [ ] **The `magW` lesson: no prover-supplied value stands in for a computed expression.**  In the checker every gadget
+      output (`m`, `e`, `u`, `E - cand`, `q * sl`, `S`, `v`, `e1`, `k`, the packed word) is an *expression* of committed
+      columns.  An implementation that materialises one as a column must bind it by an identity to the expression, in the
+      same commitment round as the hints -- a column bound only by a later range check or lookup is a re-entry point
+      (wave 1's `magW`: 388/870 groups forged at Goldilocks).  Grep the AIR for columns without a defining identity.
+- [ ] **Query wires on computed wires.**  140 of the 306 lookup queries per unit are on expressions (`lt_pow` products,
+      `t - nz`, `M + z - 1`, `d = E - cand`, `k`, ...; `census.queries_on_computed_wires`).  GKR: the lookup argument
+      reads a *committed* copy, so the checker must bind copy = wire (Candidate A `commit_query_wires`); check the
+      binding is in the layer, not assumed.  AIR: each is a column with its defining constraint (`census_review`: +44
+      chunk columns for the 22 checks wider than 16 bits, +69 scaled rows for the sub-16-bit checks on plain columns if the
+      one 16-bit table is used).
+- [ ] **Chaining of units.**  `step.py` passes unit `i`'s output *expression* as unit `i+1`'s `c`; a trace that stores
+      `c_{i+1}` as a column needs `c_{i+1} = word_i` as one linear identity per unit (`census_review`) -- committed before
+      any challenge.  `c_0 = 0` is a constant, not a column.  An infinite intermediate word must be rejected by unit
+      `i+1`'s `fp32_decode` range `t < 255`, not by a separate flag.
+- [ ] **Contract-level range gap (U4).**  `state_out.e_hat` reaches the floor (-132) when `z = 1`, below `pack.e1`'s
+      declared `[-126, ..)`; harmless only because `pack` multiplies the finite word by `(1 - z)`.  An implementation that
+      range-checks `pack`'s inputs as declared would reject honest zero results; one that reads `fld = e1 + 126 + hidden`
+      without the `(1 - z)` mask emits a wrapped word.  Likewise the group-to-group exponent edge is contained only by
+      the per-group ceiling `e_hi(g) + growth` (`z3_checker.containment`).
+- [ ] **Fiat-Shamir domain separation.**  Every squeezed challenge is bound to (protocol id, `K`, `B`, table ids, the
+      unit index range of the sub-batch, the round index); the same transcript prefix must not yield the lookup challenge
+      of table `T` and the range-batching challenge (checklist item "verifier-side randomness reuse").  The public
+      inputs (`a`, `b`, `y16`, `K`) are absorbed before the first challenge; the tables by their identifiers, not their
+      contents re-sent by the prover.  Candidate A (interactive, libzk-style) must state where the interactive protocol
+      is made non-interactive, if at all, and that the AHIV22 extractor argument survives it.
+- [ ] **Negatives suite coverage.**  Port `tests/checker/test_negative.py` (every hint mutated in the handoff's named
+      ways) to the backend's witness layout and additionally include: each `drop=` case of `search.integer_queries`
+      (one predicate removed must make the backend *accept* a forged witness -- the test that a bound is load-bearing);
+      the F1 witness `leading_bit: v = 537133057, l = 19` and F2 `align_state: M = 0, d >= 25, q = 63, r = 2^25 - 1`
+      replayed against the backend's range realisation (must reject); a coordinated two-column forgery
+      (`harness.run_coordinated` on the backend's `check`) at the same case count as `redteam_checker.json` (1,909
+      attempts, PASS).
+
 ## What the transcript must not let the prover re-supply
 
 - [ ] `magW` (never range-checked in the relation; `forge_split`) -- must be derived in-circuit from committed
