@@ -61,8 +61,8 @@ def _limbs(v):
 _HEADER = f"""
 import triton
 import triton.language as tl
-P = {P}
-W = {W}
+P: tl.constexpr = {P}
+W: tl.constexpr = {W}
 
 @triton.jit
 def _limbs(v):
@@ -78,7 +78,9 @@ def _limbs(v):
 
 
 def _store4(lines: list[str], base_expr: str, val: str, ind: str) -> None:
-    lines.append(f"{ind}l0, l1, l2, l3 = _limbs(({val}).to(tl.int32))")
+    lines.append(f"{ind}_v = {val}")
+    lines.append(f"{ind}_v = tl.where(_v < 0, _v + P, _v)")   # Triton % truncates toward zero
+    lines.append(f"{ind}l0, l1, l2, l3 = _limbs(_v.to(tl.int32))")
     lines.append(f"{ind}_b = {base_expr}")
     for j in range(4):
         lines.append(f"{ind}tl.store(_b + {j} * K1, l{j}, mask=mask)")
@@ -242,7 +244,9 @@ def _fold_ext_kernel(gh_ptr, C_ptr, pow2_ptr, out_ptr, rows, P: tl.constexpr, BL
     acc = tl.dot(A, C, out_dtype=tl.int32)                                            # (BM, 64): column 8 d + m
     z = tl.reshape(acc, (BLOCK_M, 8, 8)).to(tl.int64)
     pw = tl.load(pow2_ptr + tl.arange(0, 8)).to(tl.int64)
+    # Triton's % truncates toward zero (C semantics): the limb sums are signed, so lift the residues into [0, p)
     z = (z * pw[None, None, :]) % P
+    z = tl.where(z < 0, z + P, z)
     c = tl.sum(z, axis=2) % P
     d = tl.arange(0, 8)
     tl.store(out_ptr + offs[:, None].to(tl.int64) * 6 + d[None, :], c.to(tl.int32), mask=rmask[:, None] & (d[None, :] < 6))
