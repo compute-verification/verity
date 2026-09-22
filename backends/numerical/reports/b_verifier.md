@@ -159,3 +159,97 @@ replacement: no same-hardware pair exists (the Python verifier needs torch + the
    BLAKE3 of the exported tables); the compilation of the REAL constraint system itself (`compile_unit`) is not
    re-derived here -- a wrong-but-consistent system would be accepted with `--allow-any-system` only.
 6. Leaf / node domain separation in the Merkle tree (D5): safe today because `4M != 64`, worth a tag.
+
+## 6. Post b-zk-fix (lane `b-verifier-2`, `main` a52441c, branch `lane/b-verifier-2`)
+
+Lane b-zk-fix changed the protocol after the crate above was merged (`PROTOCOL.md` 8b/8c): (F1) the chain message is
+masked, `q_d = Q_d + u_ca + x^k u_cb`, two more committed mask-row families (`M = m + 6D`), column check
+`q(eta_c) = sum_i R_i(eta_c) U_i[c] + U_ca[c] + eta_c^k U_cb[c]`; (F2) in `--mode interactive` the challenges are
+functions of the verifier's coins alone, `r, rho, rc = SHAKE(H(stmt, c1 c2, r1))`, `cols = H(stmt, c1 c2, r2)`;
+(F3) `--mode fiat-shamir` keeps the transcript-hash derivation and pays the `q x eps` rule: every statistical term
+`x 2^60`, hence `t = 288 / 285`, `t_pad = 512`, `D = 7`.  The Rust verifier was re-derived from the new text
+(everything the text leaves out is in `DISCREPANCIES.md` D5, "post b-zk-fix") and re-gated on fresh proof sets
+generated from `main` on vy-g3.  Changes to the crate: `ligero-statement/v2` (a mode byte replaces
+`coin_commitment`), six mask kinds and the new chain check, the two seed constructions, per-mode soundness (FS shift,
+coin-hiding term only in interactive mode), a fold `v mod (x^l - 1)` that is correct for `t_pad > l` (FS-ZK at
+`l = 256`), `--coins FILE` (the verifier's own step-0 randomness) and a conditional accept wording in interactive
+mode; on the Python side `serialize.py` got `--mode`, the new mutations and `gen-forged-interactive`.  The
+`target/` directory that had been committed with the merge is untracked again (`.gitignore`).
+
+### 6.1 Agreement matrix (fresh sets; Rust `--threads 8`, laptop; Python `verify_files` on vy-g3)
+
+Runs: interactive `r20260922-111453-609b`, Fiat-Shamir `r20260922-111531-e2d3`, forged `r20260922-112419-ec4f`.
+All sets: 4096 VUs of K = 1536 as 25 sub-batches x 170 VUs, `l = 16384`, `n = 65536`; B = 1 (`l = 256`) and B = 64
+(`l = 8192`) single proofs; negatives and witness mutations at `l = 256`.  "agree" = same accept/reject verdict.
+
+| set | interactive ZK (t=197, D=6) | interactive non-ZK (t=196, D=6) | FS ZK (t=288, D=7, t_pad=512) | FS non-ZK (t=285, D=7) |
+|---|---|---|---|---|
+| honest 25 sub-batches | 25 acc / 25 agree | 25 / 25 | 25 / 25 | 25 / 25 |
+| honest B=1, B=64 | 2 acc / 2 agree | **1 acc + 1 refused (D1: 2^-127.73)** / 1 agree; 2 / 2 at `--soundness-bits 127.5` | 2 / 2 | **1 acc + 1 refused (D1: 2^-127.88)** / 1 agree; 2 / 2 at 127.5 |
+| 52 `vu-k1536-neg` (prover forced to emit) | 52 rej / 52 agree | -- | 52 / 52 | -- |
+| transcript mutations | 41 rej / 41 agree | 36 / 36 (at 127.5; 36 / 36 at 128 too, refused on parameters first) | 36 / 36 | 31 / 31 (idem) |
+| witness mutations | 8 rej / 8 agree | -- | 8 / 8 | -- |
+| **forged (simulator as prover, D7)** | **49 ACCEPTED by both file verifiers**; 49 rejected under any other verifier's coins | n/a | no such object | n/a |
+
+Totals: honest 108/108 accepted at each file's own bound (106/108 at the default 2^-128: the two B = 1 non-ZK
+proofs, D1); negatives 104/104 rejected; transcript mutations 144/144 rejected; witness mutations 16/16 rejected;
+Python verdict agreement 372/372 on the gate sets.  Named reasons agree up to the wording differences listed in D8.
+Union bounds recomputed by the verifier at 25 x 170: interactive ZK `2^-128.05`, non-ZK `2^-128.25`; FS ZK
+`2^-128.04`, non-ZK `2^-128.59` -- the same numbers `soundness()` reports.
+
+New mutations this round (all rejected by both, same reason class): `opened_mask_row_{prox,chain_a,chain_b}_plus1`
+(Merkle path), `challenge{1,2}_coin_reopened_consistently` (a consistent re-opening of a coin slot: `c1 c2` is in both
+seeds, so "column challenge mismatch"), `coins_planted_in_fs_transcript` and `statement_mode_flipped` ("fiat-shamir
+transcript must not carry coins" / "coin commitments missing"), `statement_D_minus_1`, `statement_t_pad_plus_1`.
+Interactive-mode behaviour worth noting: `root_flipped` and the `w / h / q / v` perturbations now reach the Merkle
+check and their own tests (proximity / quadratic / chain / linear) instead of the column challenge -- nothing
+hash-binds an interactive transcript, only the coins do.
+
+### 6.2 Discrepancies (new / updated; full text in `backends/ligero-verify/DISCREPANCIES.md`)
+
+* **D7 (new, open, the finding of this round).**  An interactive-mode transcript is not transferable evidence.
+  The file verifier can only replay the openings it finds in the file, and after F2 those openings *are* the
+  challenges: a prover that chooses them knows `r, rho, rc, cols` before committing.  b-zk-fix's own simulator
+  (`redteam/simulator.py`), run as a cheating prover with `Coins.sample()`d coins, produced 49 accepted proof files
+  for false claims (honest operands with the word flipped + 48 of the 52 negatives; 4 have off-domain operands the
+  simulator refuses) -- accepted by the Python file verifier and by the Rust verifier without `--coins`, real hashes,
+  13 ms each; all 49 rejected under any other verifier's coins.  The document says exactly this ("no non-interactive
+  reading of this mode"), so it is not a bug in b-zk-fix; it is a trap for anything that stores `--mode interactive`
+  transcripts as proofs.  The Rust verifier now says so in its verdict and takes `--coins`; only `--mode fiat-shamir`
+  files (or a live session) can back a soundness claim from a file.
+* **D1 (updated, still open).**  `config_for` now raises `D` until the field terms pass (that is the `D = 7`), but
+  still sizes `t` at `k = l` for non-ZK while `soundness()` reports at `k = l + 1`: B = 1 non-ZK gives `2^-127.73`
+  (interactive) / `2^-127.88` (FS) against a `2^-128` statement; refused at the default, accepted at 127.5.  Every ZK
+  and every `l >= 8192` configuration meets its target.
+* **D3 (resolved by b-zk-fix).**  The mode is a `Config` field bound into the digest; FS transcripts carry no coins
+  and are refused if they do; both verifiers agree on the two mutations that test it.
+* **D4 (superseded by D7).**  The pre-fix reading "a file verifier checks the FS chain" was true when `root` and the
+  messages entered the interactive hashes; it is false after F2 and holds only for `--mode fiat-shamir` files.
+* **D5 (extended).**  Seed byte layouts (`|v2|` tags and `|coins=` / `|r=` separators in interactive mode; the
+  unversioned pre-8c tags in FS mode), mask-row order (`prox, lin, qa, qb, chain_a, chain_b`), `|mode=` in the digest
+  and the `t_pad > l` fold are code-only.
+* **D8 (new, excluded).**  Reason-string differences that are not verdict differences (coin openings, malformed
+  shapes, operand domain).
+
+### 6.3 Timing (laptop, Apple M-series, idle; best of 3 reps summed over the 25 sub-batches)
+
+| set | 1 thread | 8 threads | per sub-batch 1T (ms: NTT / D-fold / quadratic / challenge / Merkle) | Python (torch, L40S) |
+|---|---|---|---|---|
+| interactive ZK, 143 MB | 3.36 s | 1.24 s | 134.5 (86.5 / 21.8 / 12.5 / 3.7 / 3.3) | 1.11 s |
+| Fiat-Shamir ZK, 184 MB | 4.30 s | 1.65 s | 171.8 (102.1 / 30.8 / 20.0 / 6.7 / 4.6) | 1.28 s |
+
+Fiat-Shamir costs +28% (D = 7: one more row in every message and D-fold; t = 288 columns; the transcript hash over
+`w, h, q, v`).  No vy-cpu3 run this round (the pod was loaded by another lane's cargo gate, per the brief); the
+previous round's EPYC figures (8.3-16 s at 1T) are in section 3.  The Python time is the manifests' `verify_files`
+seconds on the L40S -- other hardware, a note on `latency.md`, not a replacement.  Ledger rows:
+`ledger/b-verifier-2.jsonl` (`accept_rate`, `reject_rate`, `seconds_1T`, `seconds_12T` -- the latter at 8 threads on
+the laptop, said so in the row).
+
+### 6.4 Open items (post-fix)
+
+1. **D7**: the coordinator / b-zk-fix should decide how interactive transcripts are archived (store the session's
+   coins as the verifier's own record, or archive Fiat-Shamir proofs for anything that must be re-verified later),
+   and the ledger's `COMPLETE_ZK_BACKEND` rows should say "interactive session; transcript not transferable".
+2. **D1** unchanged: choose `t` at the `k` the claim is made at.
+3. `D5`: fold the seed layouts and the mask order into PROTOCOL.md 8b/8c.
+4. A same-hardware Rust-vs-Python comparison still does not exist; an idle EPYC run would give the real 1T / 12T.
