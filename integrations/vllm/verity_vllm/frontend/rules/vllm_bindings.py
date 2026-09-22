@@ -1637,6 +1637,43 @@ def _tp_op(name: str) -> set:
         return set()
 
 
+def _hint_module(hint: str) -> str:
+    """The module of a naming hint (`<module>/<node>[/<member>][i]` -> `<module>`; a bare node name -> ``)."""
+    head = hint.split("/", 1)[0] if "/" in hint else ""
+    return head.split("[", 1)[0]
+
+
+def _collective_hint(node, ctx) -> str:
+    """[R19 moe F-r19-moe-1, row #70] the naming hint of a TP collective row.  A collective whose rank-local operand is produced UNDER the
+    collective's own module (a row-parallel linear's all-reduce of its Gemm, the MoE runner's all-reduce of its MoeSum, the logits
+    processor's all-gather of its Gemm shard) is named under that module (`<module>/<node>`) as before: the Gemm / MoeSum row under the
+    module IS the rank's partial (required_manifest TP-04 `members_for`).  A collective issued MID-module -- every rank-local operand row
+    lives under ANOTHER module (OLMoE `OlmoeAttention._apply_qk_norm`: q and k all-gathered inside `self_attn`, each a slice of the
+    `qkv_proj` Gemm's output) -- is named at its call SITE `<module>.<fx node>/<node>`, so the manifest (`collective_site`) requires it as
+    the module's k-th collective identity WITH its own `shard_rank<r>` / `part_rank<r>` member, rather than folding both calls into one
+    `<module>/out` of twice the width with no partial to bind (row #70: 6,944 unbound per rank).  The rank-local operand is the one that
+    is NOT a Program input (the peer's partial arrives as a `peers_<k>` Input); when neither operand is an input (a TP1-style test
+    Program) both are examined.  Its producing rows are read off the Program's own refs (`node_hints` of the rows' nodes: space "n")."""
+    own_mod = ctx.stack_path(node) if node.meta.get("nn_module_stack") else ""
+    base = ctx.hint_name(node)
+    if not own_mod:
+        return base
+    producers: set[str] = set()
+    for a in node.args[:2]:
+        if not isinstance(a, torch.fx.Node) or ctx.is_input_storage(a) is not None:
+            continue
+        rows, _lead = rows_of(ctx.coll(a))
+        for r in rows:
+            ref = r.refs[0]
+            if ref[0] == "n":
+                producers.add(_hint_module(ctx.node_hints.get(int(ref[1]), "")))
+            else:
+                producers.add("")                                            # a parameter ref: no producing row (an input; not this module's)
+    if not producers or own_mod in producers:
+        return base
+    return f"{own_mod}.{node.name}/{node.name}"
+
+
 class AllReduce2Rule(OpRule):
     """`verity_tp::all_reduce2(part_rank0 [.., N] bf16, part_rank1 [.., N] bf16)` -> `all_reduce2{N}` (`AllReduce2_v1{N}`: one bf16 add per
     element = `ncclSum` bf16 of two terms) per row.  Operands are in RANK ORDER; one of them is this rank's partial (a value the rank
@@ -1666,7 +1703,8 @@ class AllReduce2Rule(OpRule):
         rb, _ = rows_of(b)
         N = ra[0].type.n
         fn = ctx.kind("all_reduce2", node, N=N)
-        outs = [ctx.call(fn, array_of([x, y]), node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]/all_reduce") for i, (x, y) in enumerate(zip(ra, rb))]
+        hint = _collective_hint(node, ctx)                                   # [R19 moe F-r19-moe-1] site-named when mid-module
+        outs = [ctx.call(fn, array_of([x, y]), node=node, rule=self, name=f"{hint}[{i}]/all_reduce") for i, (x, y) in enumerate(zip(ra, rb))]
         ctx.define(node, from_rows(outs, lead))
         ctx.record(self, node, {"N": N, "rows": len(ra), "world": 2}, emitted=f"{fn.id} x{len(ra)}")
 
@@ -1697,7 +1735,8 @@ class AllGather2Rule(OpRule):
         rb, _ = rows_of(b)
         N = ra[0].type.n
         fn = ctx.kind("all_gather2", node, N=N)
-        outs = [ctx.call(fn, array_of([x, y]), node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]/all_gather") for i, (x, y) in enumerate(zip(ra, rb))]
+        hint = _collective_hint(node, ctx)                                   # [R19 moe F-r19-moe-1] site-named when mid-module
+        outs = [ctx.call(fn, array_of([x, y]), node=node, rule=self, name=f"{hint}[{i}]/all_gather") for i, (x, y) in enumerate(zip(ra, rb))]
         ctx.define(node, from_rows(outs, lead))
         ctx.record(self, node, {"N": N, "rows": len(ra), "world": 2}, emitted=f"{fn.id} x{len(ra)}")
 

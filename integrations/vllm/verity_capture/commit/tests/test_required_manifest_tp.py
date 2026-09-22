@@ -326,6 +326,91 @@ def test_tp2_coverage_per_rank_positive_and_negatives():
     assert not c["ok"] and all(m["op_path"] == "model.layers.0.mlp.down_proj" for m in c["missing"])
 
 
+def _olmoe_tp_program(rank: int, *, site_names: bool, Q: int = 64, **kw) -> dict:
+    """[R19 moe, row #70] the OLMoE TP2 attention: `OlmoeAttention._apply_qk_norm` all-gathers q AND k (two `all_gather2` calls, N = Q/W
+    columns each) in the MIDDLE of `self_attn` -- between the qkv_proj Gemm (whose output is the module's ordinary `0`, not a partial: the
+    gathered value is a q/k SLICE of it) and the q_norm/k_norm rows.  `site_names=True` is the frontend vocabulary of the fix (the row's
+    module is the call SITE `<self_attn>.<fx node>`); False is the R17 vocabulary (both calls under the bare `self_attn`), which the
+    manifest folded into ONE `self_attn/out` identity of width 2 x W x N per token with no partial on either rank (6,944 unbound per rank)."""
+    prog = _tp_program(rank, **kw)
+    rows_in = prog["instances"]["rows"]
+    # after the last qkv_proj row of every layer-0 call, one all_gather2 row per token row for q (node 5) and for k (node 6)
+    rows: list[dict] = []
+    pending: list[dict] = []
+    for r in rows_in:
+        mod = r["name"].split("/", 1)[0]
+        if pending and mod != "model.model.layers.0.self_attn.qkv_proj":
+            n = len(pending)
+            for node in ("all_gather2_5", "all_gather2_6"):
+                site = f"model.model.layers.0.self_attn.{node}" if site_names else "model.model.layers.0.self_attn"
+                for i in range(n):
+                    rows.append({"i": len(rows), "spec": f"AllGather2_v1{{N={Q // W}}}", "form": "call", "name": f"{site}/{node}[{i}]/all_gather", "args": []})
+            pending = []
+        if mod == "model.model.layers.0.self_attn.qkv_proj":
+            pending.append(r)
+        rows.append(dict(r, i=len(rows)))
+    prog["instances"]["rows"] = rows
+    return prog
+
+
+def test_tp2_mid_module_collective_is_its_own_identity_with_a_partial():
+    """[R19 moe F-r19-moe, row #70] a collective issued MID-module (no Gemm/EmbeddingShard partial under the same module) is required as
+    ONE identity per call SITE -- op_path = the module, invocation = the site's index among the module's collective sites in Program
+    order, the site path recorded in `op_path_aliases` (the binder's k-th occurrence = invocation k; sampled_replay resolves rows through
+    the same table) -- and the collective's rank-local INPUT is required on the SAME row as `shard_rank<r>` / `part_rank<r>` (there is no
+    partial-producing row to hang it on: the shard is a slice of the qkv Gemm's `0`), so `tp_peer_binding` binds every gathered output
+    to the peer's shard.  The qkv_proj Gemm stays the module's ordinary `0` (it feeds attention, not the collective)."""
+    Q = 64
+    m = {rank: build_manifest(_olmoe_tp_program(rank, site_names=True, Q=Q), {"sweep": {"row_id": "olmoe-tp2-test", "batch": 1, "arrive_steps": [0]}},
+                              rank=rank, ranks=W) for rank in (0, 1)}
+    for rank in (0, 1):
+        man = m[rank]
+        assert man["complete"] is True and man["unmodelled"] == {}, man["unmodelled"]
+        s0 = [r for r in man["identities"] if r["step"] == 0 and r["op_path"] == "model.layers.0.self_attn"]
+        outs = sorted(((r["invocation"], r["output_member"], r["element_range"], r["family"], r["spec"]) for r in s0))
+        LP = 4
+        assert outs == [(0, "out", [0, LP * Q], "instance_outputs", "AllGather2_v1"), (0, f"shard_rank{rank}", [0, LP * Q // W], "tp_rank_partials", "AllGather2_v1"),
+                        (1, "out", [0, LP * Q], "instance_outputs", "AllGather2_v1"), (1, f"shard_rank{rank}", [0, LP * Q // W], "tp_rank_partials", "AllGather2_v1")], outs
+        # the site paths alias to (module, k) -- the collector commits under the module; the k-th occurrence is invocation k
+        assert man["op_path_aliases"]["model.layers.0.self_attn.all_gather2_5"] == ["model.layers.0.self_attn", 0]
+        assert man["op_path_aliases"]["model.layers.0.self_attn.all_gather2_6"] == ["model.layers.0.self_attn", 1]
+        # the qkv Gemm is NOT a partial: the module's ordinary output
+        qkv = [r for r in man["identities"] if r["step"] == 0 and r["op_path"] == "model.layers.0.self_attn.qkv_proj"]
+        assert [(r["output_member"], r["family"]) for r in qkv] == [("0", "instance_outputs")]
+        # the dense TP2 vocabulary (o_proj / down_proj / embed / logits) is unchanged
+        assert [r for r in man["identities"] if r["step"] == 0 and r["op_path"] == "model.layers.0.self_attn.o_proj" and r["family"] == "tp_rank_partials"]
+    row = merge_manifests([m[0], m[1]])
+    assert row["complete"] is True
+    pb = row["tp_peer_binding"]
+    assert pb["n_unbound"] == 0, pb["unbound"]
+    assert pb["collective_outputs"] == m[0]["populations"]["by_family"]["tp_rank_partials"] + m[1]["populations"]["by_family"]["tp_rank_partials"]
+    # coverage: the collector's committed names (module/out x2 in order, module/shard_rank<r> x2) bind exactly
+    for rank in (0, 1):
+        c = coverage_check(row, _layouts(row, rank), rank=rank)
+        assert c["ok"], (c["missing"][:3], c["committed_unmatched"][:3] if "committed_unmatched" in c else None)
+    # every invocation >= 1 identity is the image of an alias entry (sampled_replay's identities_unreachable_by_alias)
+    images = {(c, int(k)) for c, k in row["op_path_aliases"].values()}
+    assert all((r["op_path"], int(r["invocation"])) in images for r in row["identities"] if int(r.get("invocation", 0) or 0) >= 1)
+    # the three enumerators (inventory / streaming Traversal / reference) agree on the site rule
+    from verity_capture.commit import required_values as RV
+    wl = {"sweep": {"row_id": "olmoe-tp2-test", "batch": 1, "arrive_steps": [0]}}
+    for rank in (0, 1):
+        trav = build_manifest(_olmoe_tp_program(rank, site_names=True, Q=Q), wl, rank=rank, ranks=W, engine="traversal")
+        assert RV.manifest_equal(m[rank], trav)["equal"], RV.manifest_equal(m[rank], trav)
+        ref, _summary = RV.reference_required_values(_olmoe_tp_program(rank, site_names=True, Q=Q), RV.Query(rank=rank, ranks=W))
+        assert {str(i.key()) for i in ref} == {str((r["program_digest"], r["request_id"], r["step"], r["invocation"], r["op_path"], r["output_member"],
+                                                      tuple(r["element_range"]), r["rank"])) for r in m[rank]["identities"]}
+
+
+def test_tp2_mid_module_collective_under_the_bare_module_is_named_not_folded():
+    """The R17 vocabulary (two gathers under the bare `self_attn`, no site): the manifest must NOT emit one folded 2xWxN `out` identity
+    with no partial (the silent shape of row #70); the merge names it unbound (fail closed, by name)."""
+    m = {rank: build_manifest(_olmoe_tp_program(rank, site_names=False), {"sweep": {"row_id": "olmoe-tp2-bare", "batch": 1, "arrive_steps": [0]}},
+                              rank=rank, ranks=W) for rank in (0, 1)}
+    row = merge_manifests([m[0], m[1]])
+    assert row["complete"] is False or row["tp_peer_binding"]["n_unbound"] > 0
+
+
 def test_tp2_global_b2_per_rank_then_merged():
     """[R15 tp TP-04, task 3] a B>=2 TP row: per rank, manbind's global manifest over the declared requests (request-local addressing,
     engine-step composition) built from that rank's request Programs; then the rank parts merged with tp-ranks-fold.  The partials
