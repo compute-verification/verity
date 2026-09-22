@@ -405,7 +405,7 @@ pub fn decode_word(c: u64) -> (i128, i128, i128) {
     let f = (c & ((1 << 23) - 1)) as i128;
     let m = f + if t != 0 { 1 << ACC_FRAC } else { 0 };
     if m == 0 {
-        return V2Io::ZERO_STATE;
+        return (s, V2Io::ZERO_STATE.1, 0);
     }
     (s, t.max(1) - BIAS, m)
 }
@@ -459,6 +459,13 @@ pub fn failing_rows<G: PrimeField64, EF: ExtensionField<G>>(air: &V2ChainAir, la
         }
     }
     out
+}
+
+/// The honest outputs of a v2 gadget on the case's inputs (the v2 semantics: e.g. the exponent of a zero result is
+/// LEADNORM's, not v1's `E - 25`).
+pub fn gadget_honest_outputs(kind: FieldKind, case: &crate::program::GadgetCase) -> Vec<i128> {
+    let mut ctx = IntCtx::new_kind(kind).with_lookup(None);
+    crate::program_v2::gadget_outputs_v2(&mut ctx, case).iter().map(|v| v.v).collect()
 }
 
 /// A gadget-level case on the v2 gadgets: `(failing constraint names incl. `lookup:<name>`, integer violations)`.

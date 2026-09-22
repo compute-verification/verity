@@ -1182,11 +1182,15 @@ fn check_rows_v2<G: PrimeField64 + Send + Sync, EF: p3_field::ExtensionField<G>>
         let id = job["id"].as_str().unwrap_or("").to_string();
         let res = match job["kind"].as_str().unwrap_or("rows") {
             "gadget" => {
-                let case: verity_direct::program::GadgetCase = serde_json::from_value(job.clone()).unwrap();
+                let mut case: verity_direct::program::GadgetCase = serde_json::from_value(job.clone()).unwrap();
+                let honest = air_v2::gadget_honest_outputs(kind, &case);
+                if job["v2_honest_claim"].as_bool().unwrap_or(false) {
+                    case.claimed = honest.clone();
+                }
                 let overrides: Vec<(String, i128)> = job["hints"].as_object().map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_i64().unwrap() as i128)).collect()).unwrap_or_default();
                 let (failing, viol) = air_v2::gadget_failing::<G>(kind, &case, &overrides);
                 let accepted = failing.is_empty();
-                json!({"id": id, "kind": "gadget", "gadget": case.name, "accepted": accepted, "n_failing": failing.len(), "first_failing": failing.first(), "failing": failing.iter().take(8).collect::<Vec<_>>(), "integer_violations": viol.len()})
+                json!({"id": id, "kind": "gadget", "gadget": case.name, "accepted": accepted, "n_failing": failing.len(), "first_failing": failing.first(), "failing": failing.iter().take(8).collect::<Vec<_>>(), "integer_violations": viol.len(), "claimed": case.claimed, "honest_v2": honest})
             }
             _ => {
                 let specs: Vec<air::RowSpec> = serde_json::from_value(job["rows"].clone()).unwrap();

@@ -456,7 +456,17 @@ fn state_decode_limbs<C: Ctx>(ctx: &mut C, c_hi: &C::V, c_lo: &C::V, tag: &str) 
 /// `dsp = 2 min(d, DT)`; `leading_bit`: `l`; `epilogue`: `y16`; `fp32_decode`: `(s, e_hat, M)`); `normalise` and
 /// `lead_norm` output v2's `(e_hat, M')` (`e_hat = FLOOR` on a zero result, where v1 reported the clamped `e1`).
 pub fn gadget_program_v2<C: Ctx>(ctx: &mut C, case: &crate::program::GadgetCase) {
-    let outs: Vec<C::V> = match case.name.as_str() {
+    let outs = gadget_outputs_v2(ctx, case);
+    assert_eq!(outs.len(), case.claimed.len(), "gadget {}: {} outputs, {} claimed", case.name, outs.len(), case.claimed.len());
+    for (i, (o, &c)) in outs.iter().zip(case.claimed.iter()).enumerate() {
+        let k = ctx.konst(c);
+        ctx.eq(&format!("out[{i}]"), o, &k);
+    }
+}
+
+/// The v2 gadget's outputs (unbound).
+pub fn gadget_outputs_v2<C: Ctx>(ctx: &mut C, case: &crate::program::GadgetCase) -> Vec<C::V> {
+    match case.name.as_str() {
         "fp32_decode" => {
             let lo = gadget_input(ctx, case, "c_lo", 0, 1 << HALF16);
             let hi = gadget_input(ctx, case, "c_hi", 0, 1 << HALF16);
@@ -503,10 +513,5 @@ pub fn gadget_program_v2<C: Ctx>(ctx: &mut C, case: &crate::program::GadgetCase)
             vec![e_hat, m]
         }
         other => panic!("gadget_program_v2: unknown gadget {other}"),
-    };
-    assert_eq!(outs.len(), case.claimed.len(), "gadget {}: {} outputs, {} claimed", case.name, outs.len(), case.claimed.len());
-    for (i, (o, &c)) in outs.iter().zip(case.claimed.iter()).enumerate() {
-        let k = ctx.konst(c);
-        ctx.eq(&format!("out[{i}]"), o, &k);
     }
 }
