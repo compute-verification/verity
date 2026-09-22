@@ -16,7 +16,7 @@ from research.store.cli import main
 from research.store.index import flatten
 from research.store.local import AttemptExists, IntegrityError, LocalStore, NotFound
 from research.store.model import ArtifactManifest, Payload, TreeFile, attempt_errors, validate_attempt_doc
-from research.store.remote import FsRemote, RemoteConflict, load_remote
+from research.store.remote import ConfigError, FsRemote, RemoteConflict, load_remote
 
 DRV = "drv:" + "a" * 64
 RK = "b" * 64
@@ -389,6 +389,29 @@ def test_repo_replica_map_verified_then_fallback(env, fs_remote, tmp_path, capsy
     shutil.copy(producer.manifest_path(ids.hex_of(art)), consumer3.manifest_path(ids.hex_of(art)))
     with pytest.raises(NotFound, match="not in the repo replica"):
         consumer3.fetch(art)
+
+
+def test_where_with_a_broken_vault_still_reports_local_and_repo(env, tmp_path, monkeypatch, capsys):
+    """A `[remote]` table whose credential env vars are unset is ConfigError (README §7).  `where` is a local question for two of the
+    three replicas: it answers those and reports the remote as UNUSABLE -- never as 'not configured', never as absent."""
+    monkeypatch.delenv("SB_TEST_KEY", raising=False)
+    (env / "store.toml").write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://example.invalid"\n'
+                                    'access_key_id_env = "SB_TEST_KEY"\nsecret_access_key_env = "SB_TEST_KEY"\n')
+    repo = env / "repo"
+    fixture = repo / "fixtures" / "PIN.json"
+    fixture.parent.mkdir(parents=True)
+    fixture.write_text('{"pin": 1}')
+    st = LocalStore()
+    art = st.put_artifact("fixture/v1", {}, file=fixture)
+    (repo / "fixtures" / "artifacts.json").write_text(json.dumps({art: "fixtures/PIN.json"}))
+    where = {w["location"]: w for w in LocalStore().where(art)}
+    assert where["local"]["present"] and where["repo"]["present"] and where["repo"]["path"] == "fixtures/PIN.json"
+    assert where["remote"]["configured"] is True and where["remote"]["present"] is None and "SB_TEST_KEY" in where["remote"]["error"]
+    with pytest.raises(ConfigError):
+        LocalStore().verify(art)                                                  # anything that needs the vault still says why it cannot
+    assert main(["where", art]) == 0
+    out = capsys.readouterr().out
+    assert "repo      present" in out and "remote    UNUSABLE  ConfigError" in out and "not configured" not in out
 
 
 # ---- CLI --------------------------------------------------------------------------------------------------------------------------------

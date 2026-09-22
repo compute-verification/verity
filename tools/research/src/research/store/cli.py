@@ -192,6 +192,9 @@ def cmd_where(argv: list[str]) -> int:
         if r.get("configured") is False:
             print("remote    not configured (the local store is the only replica)")
             continue
+        if r.get("error"):
+            print(f"remote    UNUSABLE  {r['error']}")
+            continue
         print(f"{r['location']:<9} {'present' if r['present'] else 'ABSENT ':<8} verified={r.get('verified_utc') or '-':<21} "
               f"{r.get('path') or r.get('remote')}" + (f"  blobs {r['blobs']}" if r.get("blobs") else ""))
     return 0

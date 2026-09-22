@@ -30,7 +30,7 @@ from typing import Any
 from . import canon, ids, kinds
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
-from .remote import Remote, load_remote
+from .remote import ConfigError, Remote, load_remote
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
 REPLICA_MAP = Path("fixtures") / "artifacts.json"
@@ -386,7 +386,11 @@ class LocalStore:
         if mapped:
             ok = self._repo_verified(m, art_id)
             out.append({"location": "repo", "path": mapped, "repo": str(self.repo), "present": ok, "verified_utc": utc_now() if ok else None})
-        r = self.remote
+        try:
+            r = self.remote
+        except ConfigError as e:                       # a broken vault is reported as broken, never as absent; the local facts still stand
+            out.append({"location": "remote", "configured": True, "present": None, "verified_utc": None, "error": f"{type(e).__name__}: {e}"})
+            return out
         if r is None:
             out.append({"location": "remote", "configured": False, "present": False, "verified_utc": None})
         else:
