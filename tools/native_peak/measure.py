@@ -159,6 +159,8 @@ def _make_operands(n: int, dtype: str, device: str):
     tdt = torch.bfloat16 if dtype == "bf16" else torch.float8_e4m3fn   # randn magnitudes (< ~6) sit comfortably inside e4m3's range
     a, b = a32.to(tdt), b32.to(tdt)
     del a32, b32
+    if dtype != "bf16":
+        b = b.t()          # cuBLASLt's FP8 path wants mat2 column-major: the operand the GEMM multiplies by IS this transposed view
     ref_a, ref_b = a[:CHECK_BLOCK].float(), b[:, :CHECK_BLOCK].float()
     return a, b, ref_a, ref_b
 
@@ -169,10 +171,9 @@ def _gemm_fn(dtype: str, a, b, device: str):
     if dtype == "bf16":
         return lambda: torch.matmul(a, b)
     one = torch.ones((), device=device, dtype=torch.float32)
-    bt = b.t()   # column-major view of b: what cuBLASLt's FP8 path requires
 
     def fn():
-        out = torch._scaled_mm(a, bt, scale_a=one, scale_b=one, out_dtype=torch.float32)
+        out = torch._scaled_mm(a, b, scale_a=one, scale_b=one, out_dtype=torch.float32)
         return out[0] if isinstance(out, tuple) else out
     return fn
 
