@@ -544,7 +544,7 @@
    "fixture": "fixtures/redteam/vu-battery/v1/vu_battery_b_r20260922-070024-e7d1.json",
    "fix_owner": "direct (B)",
    "fix": {
-    "commit": "SOUNDNESS_COMMIT",
+    "commit": "3fe85aa",
     "lane": "soundness-fixes",
     "finding": "F2",
     "check": "BoundError::DegreeBits{expected:19, got:8}",
@@ -570,7 +570,7 @@
    "fixture": "fixtures/redteam/vu-battery/v1/vu_battery_b_r20260922-070024-e7d1.json",
    "fix_owner": "direct (B)",
    "fix": {
-    "commit": "SOUNDNESS_COMMIT",
+    "commit": "3fe85aa",
     "lane": "soundness-fixes",
     "finding": "F1",
     "check": "BoundError::StatementColumn{column: claim, name: \"claim\"}",
@@ -951,7 +951,7 @@
    "fixture": "fixtures/redteam/vu-battery/v1/vu_battery_b_r20260922-070024-e7d1.json",
    "fix_owner": "direct (B)",
    "fix": {
-    "commit": "SOUNDNESS_COMMIT",
+    "commit": "3fe85aa",
     "lane": "soundness-fixes",
     "finding": "F2",
     "check": "BoundError::DegreeBits{expected:19, got:8}",
@@ -977,7 +977,7 @@
    "fixture": "fixtures/redteam/vu-battery/v1/vu_battery_b_r20260922-070024-e7d1.json",
    "fix_owner": "direct (B)",
    "fix": {
-    "commit": "SOUNDNESS_COMMIT",
+    "commit": "3fe85aa",
     "lane": "soundness-fixes",
     "finding": "F1",
     "check": "BoundError::StatementColumn{column: claim, name: \"claim\"}",
@@ -1010,7 +1010,7 @@
    },
    "fixture": null,
    "fix_owner": null,
-   "note_2026_09_22": "F3 partial: header (field, AIR id, layout width, ext degree, FRI params, degree_bits, B, K, words hash, operands hash) absorbed before any challenge (SOUNDNESS_COMMIT); openings still not absorbed before alpha/queries: inside p3-fri 0.4.3 verify_shape_and_sample_challenges, needs a p3-fri patch (residual documented PROTOCOL.md 12.5)"
+   "note_2026_09_22": "F3 partial: header (field, AIR id, layout width, ext degree, FRI params, degree_bits, B, K, words hash, operands hash) absorbed before any challenge (3fe85aa); openings still not absorbed before alpha/queries: inside p3-fri 0.4.3 verify_shape_and_sample_challenges, needs a p3-fri patch (residual documented PROTOCOL.md 12.5)"
   },
   {
    "id": "B/challenger_fork",
@@ -1401,8 +1401,8 @@
  ],
  "fixes_2026_09_22": {
   "lane": "soundness-fixes",
-  "F1_F2_F3_commit": "SOUNDNESS_COMMIT",
+  "F1_F2_F3_commit": "3fe85aa",
   "F4_commit": "7232e27",
-  "gate_run": "GATE_RUN"
+  "gate_run": "r20260922-073904-7a6c"
  }
 }
