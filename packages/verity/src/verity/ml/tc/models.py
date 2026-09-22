@@ -607,9 +607,11 @@ class BlockScaledAlignAdd:
 _AUTOPROOF_PIN = (
     "autoproof SEMANTICS.lock.v1 (ADOPTED 2026-07-11, oracle-v3): RTX 5090 (sm_120, driver 570.195.03, GPU "
     "GPU-297048d1), kernel SASS 166a24a0..., mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64"
-    ".row.col.f32.e2m1.e2m1.f32.ue4m3, ascending-K chain from a zero accumulator: 1,574,998 / 1,574,998 dot "
-    "statements bit-exact (K in {64, 128, 256}; random, extreme-scale-span, directed-cancellation, curated); "
-    "the v0 single-window W=26 hypothesis was REFUTED there (142,270 mismatches)"
+    ".row.col.f32.e2m1.e2m1.f32.ue4m3, ascending-K chain from a zero accumulator: the lockfile records 1,574,998 / "
+    "1,574,998 dot statements bit-exact under model5 (K in {64, 128, 256}; random, extreme-scale-span, "
+    "directed-cancellation, curated) and the v0 single-window W=26 hypothesis REFUTED (142,270 mismatches); the "
+    "checked-in probes/results/probe3_1783788526.json scores the clip-less model2 at 1,574,997 / 1,574,998 and v0 at "
+    "143,076 mismatches, and carries the 1,601 sample vectors verity replays (1,601 / 1,601) -- see log entry D12"
 )
 
 BLACKWELL_SM120_NVF4 = BlockScaledAlignAdd(

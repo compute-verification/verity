@@ -96,8 +96,10 @@ _H100_BF16 = (
 )
 _AUTOPROOF = (
     "autoproof spec/SEMANTICS.lock.v1.json + probes/results/probe3_1783788526.json (RTX 5090 sm_120, driver "
-    "570.195.03, SASS 166a24a0...): 1,574,998/1,574,998 dot statements bit-exact under model5; 1,601 recorded "
-    "sample vectors replayed in verity (tests/ml/test_models.py) -- replica fixtures/tc/autoproof-SEMANTICS.lock.v1.json"
+    "570.195.03, SASS 166a24a0...): lockfile records 1,574,998/1,574,998 dot statements bit-exact under model5 "
+    "(the JSON itself scores the clip-less model2 at 1,574,997/1,574,998, D12); the 1,601 recorded sample vectors "
+    "replay 1,601/1,601 in verity (tests/ml/test_models.py) -- replicas fixtures/tc/autoproof-{SEMANTICS.lock.v1,"
+    "probe-vectors}.json"
 )
 _AUTOPROOF_UNSCALED = (
     "autoproof probes/results/probe2_1783788240.json: mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1"
