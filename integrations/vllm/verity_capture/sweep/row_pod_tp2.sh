@@ -122,7 +122,7 @@ import glob, json, os, sys
 b, world = sys.argv[1], int(sys.argv[2]); out = {"tp": {"world": world}, "ranks": {}}; ok = True
 for r in range(world):
     rd = f"{b}/rank{r}"; rk = {}
-    for p in [f"{rd}/build_step"] + sorted(glob.glob(f"{rd}/build_request_LP*_T*")):
+    for p in [f"{rd}/build_step"] + sorted(p for p in glob.glob(f"{rd}/build_request_LP*_T*") if os.path.isdir(p)):   # not the .log/.rc beside each dir
         res = json.load(open(f"{p}/result.json")) if os.path.exists(f"{p}/result.json") else {"ok": False, "message": "no result.json"}
         rk[os.path.basename(p)] = {"ok": bool(res.get("ok")), "unsupported": res.get("unsupported"), "message": (res.get("message") or "")[:300],
                                    "program_digest": (res.get("program") or {}).get("digest")}
