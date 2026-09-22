@@ -577,7 +577,7 @@ def main(argv=None) -> int:
            "sections": {}, "kernels": []}
     md = [f"# anchor-a100: every campaign GPU kernel measured on the A100 (the anchor), {doc['generated'][:10]}", "",
           ("**Scope: component measurements** (kernel time on random/patterned data, bit-exact against each lane's CPU reference), then one "
-          "`ARITHMETIC_DIAGNOSTIC` re-price of A and B with those numbers.  Nothing here is a proof.  Every recorded 4090 / H100 number is the lane's "
+          "`ARITHMETIC_DIAGNOSTIC` re-price of A and B with those numbers.  Nothing here is a proof except section 7 (the b-ligero torch prover, `NON_ZK_PROOF_DIAGNOSTIC`, verifier-accepted on the A100).  Every recorded 4090 / H100 number is the lane's "
           "own (its README / report, run id in the lane's table); every A100 number is a `research run --on vy-a100b --exclusive` of the same bench, same "
           "flags, CUDA events, warm, median of >= 7, bit-exact checks on.  `overhead.vs_native_peak` is defined against *this* card's dense BF16 peak "
           "(`contract.NATIVE_REFERENCE`, 9.85 ps per K=1536 VU), so the last section is the first A-vs-B comparison where the prover and the reference are the same machine."),

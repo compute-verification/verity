@@ -2,7 +2,7 @@
  "lane": "anchor-a100",
  "track": "shared",
  "hardware": "NVIDIA A100 SXM4 80GB",
- "generated": "2026-09-22T08:20:10Z",
+ "generated": "2026-09-22T08:20:26Z",
  "runs": {
   "microbench": "r20260922-063608-a304",
   "hash_gpu": "r20260922-063811-e561",
