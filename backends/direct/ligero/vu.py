@@ -10,6 +10,7 @@ chain test), c_0 = 0.
 from __future__ import annotations
 
 import json
+import os
 import platform
 import statistics
 import time
@@ -138,6 +139,23 @@ class ChainRunner:
 def _vu_data(vu: instances.VuTier, i: int):
     x, w, y16 = vu.instance(i)
     return (x, w, vu.accs(i), int(y16))
+
+
+def dump_artifacts(dump_dir: Path | None, out: str | None) -> list[str]:
+    """The result's ``artifacts`` (research/result/v0.1: paths relative to the run directory, which the store preserves as the
+    attempt's ``run-files/v1`` tree): the ``--dump-dir`` tree when it lies inside the run directory (``$RESEARCH_RUN_DIR``, else
+    the directory ``--out`` is written to), so the proofs, statements, coins and system.bin travel with the result.  No dump, a
+    dump elsewhere, or the run directory itself gives ``[]``."""
+    if dump_dir is None:
+        return []
+    run_dir = os.environ.get("RESEARCH_RUN_DIR") or (Path(out).parent if out else None)
+    if run_dir is None:
+        return []
+    try:
+        rel = Path(dump_dir).resolve().relative_to(Path(run_dir).resolve())
+    except ValueError:
+        return []
+    return [rel.as_posix()] if rel.parts else []
 
 
 def gate_vu(args) -> int:
@@ -416,7 +434,7 @@ def bench_vu(args) -> int:
                              "detail": f"{args.reps} reps, {n_vus} VUs as {n_proofs} proofs at l={l}",
                              "evidence": {"soundness": snd, "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]}
                                                                      for r in runs]}},
-              "measurements": meas, "measurement_files": [], "artifacts": []}
+              "measurements": meas, "measurement_files": [], "artifacts": dump_artifacts(dump_dir, args.out)}
     problems = contract.validate(result)
     if problems:
         print("contract problems:", problems)
