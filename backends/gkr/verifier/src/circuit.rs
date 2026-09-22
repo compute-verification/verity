@@ -245,17 +245,19 @@ pub fn layers(c: &Circuit) -> Vec<Layer> {
     out
 }
 
-/// `<QQ>` header then `n x m` LE u32 (`gpu/bb_export.py::write_rows`); values must be canonical.
+/// `<QQ>` header then `n x m` LE u32, or LE u64 (the v2 synth exporter of `gkr_export.v2`; read off the file size
+/// like `gpu/bb_export.py::read_rows`); every value must be a canonical element.
 pub fn read_rows(bytes: &[u8]) -> Result<(usize, usize, Vec<u32>), String> {
     if bytes.len() < 16 { return Err("rows file: short header".into()); }
     let n = u64::from_le_bytes(bytes[..8].try_into().unwrap()) as usize;
     let m = u64::from_le_bytes(bytes[8..16].try_into().unwrap()) as usize;
-    if bytes.len() != 16 + 4 * n * m { return Err(format!("rows file: {} bytes for {n} x {m}", bytes.len())); }
+    let width = if bytes.len() == 16 + 8 * n * m && n * m > 0 { 8 } else { 4 };
+    if bytes.len() != 16 + width * n * m { return Err(format!("rows file: {} bytes for {n} x {m}", bytes.len())); }
     let mut v = Vec::with_capacity(n * m);
     for i in 0..n * m {
-        let x = u32::from_le_bytes(bytes[16 + 4 * i..20 + 4 * i].try_into().unwrap());
-        if x >= P { return Err(format!("rows file: non-canonical value at {i}")); }
-        v.push(x);
+        let x = if width == 8 { u64::from_le_bytes(bytes[16 + 8 * i..24 + 8 * i].try_into().unwrap()) } else { u32::from_le_bytes(bytes[16 + 4 * i..20 + 4 * i].try_into().unwrap()) as u64 };
+        if x >= P64 { return Err(format!("rows file: non-canonical value at {i}")); }
+        v.push(x as u32);
     }
     Ok((n, m, v))
 }
