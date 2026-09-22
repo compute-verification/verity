@@ -66,7 +66,7 @@ def main(argv=None) -> int:
     R = ChainRunner(dev, -128.0, n_proofs=1, zk=True, mode=protocol.MODE_INTERACTIVE)
     lay = R.layout(len(real))
     cfg = R.cfg(lay.l)
-    pr, (a, b, y16), _ = R.prove_vus(real, check=False)
+    _, (a, b, y16), _ = R.prove_vus(real, check=False)
     ab_real = ab_sim = 0
     for _ in range(args.n):
         V = PublicCheckVerifier(R, cfg, lay, y16, a, b, dev)
