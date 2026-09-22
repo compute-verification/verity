@@ -172,7 +172,14 @@ def ext_scale(a: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
 
 
 def ext_mul(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    """Coordinate-wise product of two extension tensors (broadcasting), reduced mod ``X^6 - W`` and ``p``."""
+    """Coordinate-wise product of two extension tensors (broadcasting), reduced mod ``X^6 - W`` and ``p``.
+    On CUDA the fused Triton kernel (``kernels.ext_mul``) is used when available; the torch path is the reference."""
+    if _fast_ext_mul is not None and a.is_cuda:
+        return _fast_ext_mul(a, b)
+    return _ref_ext_mul(a, b)
+
+
+def _ref_ext_mul(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     a = a.to(torch.int64)
     b = b.to(torch.int64)
     prod = (a.unsqueeze(-1) * b.unsqueeze(-2)) % P           # (..., 6, 6): [i, j] = a_i b_j
@@ -308,3 +315,17 @@ def root_of_unity(order: int) -> int:
 
 def inv_mod(a: int) -> int:
     return pow(a % P, P - 2, P)
+
+
+# the fused kernel (Triton, CUDA); ``VERITY_GPU_TORCH_ONLY=1`` disables it
+_fast_ext_mul = None
+try:
+    import os as _os
+
+    if not _os.environ.get("VERITY_GPU_TORCH_ONLY"):
+        from . import kernels as _kernels
+
+        if _kernels.AVAILABLE:
+            _fast_ext_mul = _kernels.ext_mul
+except Exception:  # pragma: no cover
+    _fast_ext_mul = None
