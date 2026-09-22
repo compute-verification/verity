@@ -344,3 +344,82 @@ Files: `lintest_structured.py`, `tests/test_lintest_structured.py` (the structur
 algebra; the b-ligero port's constraint emitter must adopt the enumeration); merging the helper-row classes to `M = 2`;
 a bandwidth-efficient tensor-core GEMV for `M >= 3`; the radix-4 encoder (the remaining encoder gain is <= 1.3x on a bucket
 that is now 40% of B).
+
+---
+
+# b-v2 lane: B at the checker-v2 witness shape (2026-09-22, runs `r20260922-075021-2b1b` buckets, `r20260922-080235-765c` inversions, `r20260922-081137-109d` radix-4)
+
+**Question**: B's fully-measured cost at the checker-v2 relation (33 mul / 9 lin / 89 lookups per unit, 5.2M fixed table rows)
+on the 4090.  **Answer**: `42.4 ms` per 4096-VU batch, overhead `1.05e6` (v1: 116.4 ms / 2.89e6; ~100.4 ms / 2.49e6 with the blocked inversions and the radix-4 encoder), 94% measured -- see
+`backends/numerical/reports/b_measured_4090_v2.md`.  Layout and every count: **`V2_SHAPE.md`** (the b-ligero2 lane's next port).
+
+## v1 vs v2 shape, same kernels (B = 4096, K = 1536, 2^-128, BabyBear^6, HVZK rows, Blake3 leaves)
+
+| | v1 (`b_measured_4090.md`) | v2 (`b_measured_4090_v2.md`) |
+|---|---|---|
+| Ligero rows x [16384, 4096] | 310,602 | **104,217** (34,093 witness + 58,710 helper + 11,408 table-side + 6 blinding) |
+| committed bytes / VU | 1,164.7 kB | **388.8 kB** |
+| quadratic rows | 33,485 `F_t` | 3,502 `F_t` + 9,785 `F_c` triples |
+| helpers inverted | 125.9M | 43.6M (37.4M queries + 6.26M table rows) |
+| linear test structure | M = 3, X ~ 256 | M = 2, X = 9,780 (table-side inverse rows) |
+| commitment / lin. test / IRS / quadratic / inversions / openings / modelled | 49.4 / 7.15 / 5.6 / 7.8 / 28.8 / 5.1 / 12.5 ms | 16.2 / 8.29 / 2.10 / 5.4 / 5.2 / 2.5 / 2.7 ms |
+| **total, overhead** | **116.4 ms, 2.89e6** | **42.4 ms, 1.05e6** (0.36x) |
+
+Crossover: v2 pays 9.1 ms per proof for the tables (11,408 rows + 6.26M inversions + the exceptional rows) and 8.1 us/VU
+after that against v1's 28.4 us/VU: **v2 is cheaper above B = 446 VUs** (215 in committed rows).  Variant (b), public table
+coefficients (MODELLED layout, `V2_SHAPE.md` section 4): 35.7 ms / 8.86e5.
+
+## Layout (b-v2 files)
+
+| file | what |
+|---|---|
+| `V2_SHAPE.md`, `v2_shape.py` / `v2_shape.json` | the witness layout (transposed: rows are AIR columns x 3840 units), per-unit slots incl. BabyBear repairs, per-batch table side, constraint counts, `M`/`X`, matrix, crossover, port conventions |
+| `buckets_v2.py` | `combine_quadratic_fc` (the `h_j (z_T - w_j(beta_T)) = 1` helper triples over `F_c`, `C` compiled in) + numpy reference; `BatchInverterBlocked` (blocked Montgomery trick, `3 + 2/G` passes) |
+| `v2_bench.py` | every bucket at the v2 shape on a synthetic in-range witness, bit-exactness at small shapes -> `results_v2_<run>.json` |
+| `inverse_bench.py` | `BatchInverter` vs `BatchInverterBlocked` at the v1 and v2 helper counts, exactness at small N |
+| `radix4_bench.py` | `RSEncoderSIMT(radix4=)` radix-2 vs radix-4: exactness (256/512/1024 threads, store, gather), encoder alone and fused commitment at 104,217 / 310,602 rows |
+| `reprice_v2.py` | `results_v2_*.json` + `v2_shape.json` + `b_measured_4090.json` -> `reports/b_measured_4090_v2.json` / `.md` (rows for both table-side variants, A100/H100 labelled scalings, crossover) |
+
+~~~sh
+# pod (commit first)
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_v2.bench --require-result -- \
+  bash -c 'export PATH=/usr/local/cuda-12.4/bin:$PATH; cd backends/direct && python3 encode/v2_bench.py --reps 7 --out "$RESEARCH_RUN_DIR/result.json"'
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_v2.inverse --require-result -- \
+  bash -c 'export PATH=/usr/local/cuda-12.4/bin:$PATH; cd backends/direct && python3 encode/inverse_bench.py --reps 15 --n1 125895743 --out "$RESEARCH_RUN_DIR/result.json"'
+uv run --frozen research run --on vy-g2 --source . --project verity --stage b_v2.radix4 --require-result -- \
+  bash -c 'export PATH=/usr/local/cuda-12.4/bin:$PATH; cd backends/direct && python3 encode/radix4_bench.py --reps 7 --out "$RESEARCH_RUN_DIR/result.json"'
+# re-price (the --inverse / --radix4 results swap in the blocked inversions and the radix-4 commitment ratio)
+uv run --frozen --package verity-numerical python backends/direct/encode/reprice_v2.py --bench backends/direct/encode/results_v2_<run>.json \
+  --inverse backends/direct/encode/results_inverse_<run>.json --inverse-run <run> --radix4 backends/direct/encode/results_radix4_<run>.json --radix4-run <run> \
+  --out backends/numerical/reports/b_measured_4090_v2.json --md backends/numerical/reports/b_measured_4090_v2.md
+~~~
+
+## Conventions for the b-ligero2 lane (`lane/b-ligero2`, scaling the prover to 4096 VUs + HVZK)
+
+`V2_SHAPE.md` section 6 is the list; in one line each: transposed layout (row = AIR column x 3840 units, tableau 1 witness
++ multiplicities, tableau 2 helper coordinate rows + table inverses); lookup query `w_j(beta_T) = sum_c beta_T^c w_{j,c}`
+with per-table `(beta_T, z_T)`; the helper identity is an `F_c` triple with virtual `y`, `z` (`combine_quadratic_fc`);
+unit-major enumeration with `C = 15` per block then the per-table sums then the table side, `M = 2`; one inversion batch per
+table over `queries + |T|`; tables are committed per proof (multiplicities round 1, inverses round 2), nothing preprocessed.
+The v1 conventions above (rows hold whole units, `r_add = rho^idx`, `s` stored not `r^T A`, SIMT not tensor cores) carry over.
+
+## Inversions bucket (task 4): blocked Montgomery trick
+
+`BatchInverterBlocked(g)` stores one prefix per `G` elements: `(3 + 2/G) x 24 N` bytes instead of `5 x 24 N`, `(4 - 1/G)` `F_c` products per
+element instead of 3 (the within-group prefixes are recomputed in registers on the backward pass).  Bit-exact against `ref.batch_inverse`
+(N = 1000 / 4097 / 70000, G = 2 / 4 / 8).  v2 helper count 43.6M: **5.20 ms (G = 4)** vs 7.78 (1.50x; 0.70 of its 3.63 ms floor).
+v1 helper count 125.9M: **16.6 ms (G = 8)** vs 28.8 (1.74x; 0.59 of its 9.74 ms floor).  G = 8 loses at the v2 size (register pressure:
+`el[G][D] + pf[G][D]` = 96 u32 per thread), so pick `G` per N.  The remaining gap to the floor is the `F_c` product chain (a dependent
+chain of 36 Montgomery products per element on the forward pass; more threads do not help since each thread's segment is sequential).
+
+## Encoder (task 4): radix-4 shared-memory stages
+
+`RSEncoderSIMT(radix4=True)` fuses the shared-memory stages (`m < THREADS`) in pairs on quads closed under both stages: the same
+butterflies in the same order (bit-exact at 256 / 512 / 1024 threads, odd and even `LOGT`, store and gather modes), half the
+shared-memory traffic and syncs; the register stages were already smem-free.  Encoder alone: 10.26 -> **9.18 ms** at 104,217 rows
+(1.12x; 0.088 us/row), 31.1 -> 28.1 ms at 310,602 (1.11-1.13x).  Fused commitment (Blake3, cosets kept): 16.27 -> **15.11 ms** (1.08x)
+at the v2 rows, 49.2 -> 45.6 ms at the v1 rows.  Below the <= 1.3x ceiling because the hash + store write are ~40% of the fused
+kernel and untouched.  `commit_stream.py`'s default encoder is now radix-4.
+
+**Not done**: an end-to-end v2 proof (buckets are measured separately on a synthetic witness); the v2 constraint emitter
+(`pi` / scalars from the real system); witness / hint generation for v2; a radix-8 / register-transposed encoder (the smem stages are now 5 x radix-4 at 1024 threads).

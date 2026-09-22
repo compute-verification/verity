@@ -82,14 +82,16 @@ def test_matdft_reference_matches_encoder():
 
 @pytest.mark.skipif(_cuda() is None, reason="no CUDA device")
 @pytest.mark.parametrize("k,threads,variant", [(512, 256, "v1"), (4096, 256, "v1"), (4096, 512, "v1"),
-                                               (1024, 128, "v2"), (4096, 128, "v2"), (4096, 256, "v2"), (4096, 512, "v2")])
+                                               (1024, 128, "v2"), (4096, 128, "v2"), (4096, 256, "v2"), (4096, 512, "v2"),
+                                               (1024, 128, "v2r4"), (4096, 512, "v2r4"), (4096, 1024, "v2r4"), (2048, 256, "v2r4")])
 def test_simt_kernel_bit_exact(k, threads, variant):
     cp = _cuda()
     from encode.encode_ntt_simt import RSEncoderSIMT
 
     rows = bb.fill_rows(37, k, seed=k)
     ref = bb.encode_rows(rows, 4 * k, layout="coset")
-    enc = RSEncoderSIMT(k, 4 * k, threads=threads, variant=variant)
+    radix4 = variant == "v2r4"   # radix-4 shared-memory stages (odd and even LOGT: 128 -> 7, 256 -> 8, 512 -> 9, 1024 -> 10)
+    enc = RSEncoderSIMT(k, 4 * k, threads=threads, variant="v2" if radix4 else variant, radix4=radix4)
     out = cp.asnumpy(enc(cp.asarray(rows)))
     assert np.array_equal(out.astype(np.uint64), ref)
     out2 = cp.asnumpy(enc(cp.asarray(rows), write_systematic=False))
