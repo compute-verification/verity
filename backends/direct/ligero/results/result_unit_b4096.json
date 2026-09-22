@@ -1,6 +1,6 @@
 {
  "schema": "research/result/v0.1",
- "run_id": "b-ligero-unit-1790059506",
+ "run_id": "b-ligero-unit-1790060089",
  "workload_fingerprint": {
   "profile": "first-campaign-target/2026-09-21",
   "domain": "finite",
@@ -45,7 +45,7 @@
    "backend": {
     "name": "b-ligero (backends/direct/ligero)",
     "commit": null,
-    "hash": "blake3 (host, placeholder)",
+    "hash": "blake3 (GPU, backends/shared/hash_gpu)",
     "challenge_expander": "SHAKE-256 (placeholder)"
    },
    "toolchain": {
@@ -54,7 +54,7 @@
     "numpy": "2.5.3"
    }
   },
-  "preprocessing": "constraint compilation (a function of Params only, 0.39s)",
+  "preprocessing": "constraint compilation (a function of Params only, 0.43s)",
   "retention": "retained",
   "instances": {
    "dataset": "bench-instances/v1",
@@ -99,17 +99,17 @@
  "measurements": [
   {
    "name": "t.witness",
-   "value": 0.16291734017431736,
+   "value": 0.16246397979557514,
    "unit": "s"
   },
   {
    "name": "t.encoding_commitment",
-   "value": 0.8199725672602654,
+   "value": 0.11791813187301159,
    "unit": "s"
   },
   {
    "name": "t.arithmetic",
-   "value": 0.06238052621483803,
+   "value": 0.06160858832299709,
    "unit": "s"
   },
   {
@@ -124,17 +124,17 @@
   },
   {
    "name": "t.serialization",
-   "value": 0.003205820918083191,
+   "value": 0.003051299601793289,
    "unit": "s"
   },
   {
    "name": "t.total",
-   "value": 1.0550762247294188,
+   "value": 0.3451801482588053,
    "unit": "s"
   },
   {
    "name": "verifier.seconds",
-   "value": 0.029490066692233086,
+   "value": 0.027459001168608665,
    "unit": "s"
   },
   {
@@ -154,7 +154,7 @@
   },
   {
    "name": "mem.peak_device_bytes",
-   "value": 2831964672,
+   "value": 3052952064,
    "unit": "B"
   },
   {
@@ -179,7 +179,7 @@
   },
   {
    "name": "unit.seconds_per_unit",
-   "value": 0.00025758696892808075,
+   "value": 8.427249713349738e-05,
    "unit": "s"
   },
   {
@@ -189,37 +189,37 @@
   },
   {
    "name": "split.hints_seconds",
-   "value": 0.021643035113811493,
+   "value": 0.0203383956104517,
    "unit": "s"
   },
   {
    "name": "split.witness_torch_seconds",
-   "value": 0.14127430506050587,
+   "value": 0.14212558418512344,
    "unit": "s"
   },
   {
    "name": "split.encode_seconds",
-   "value": 0.11589081585407257,
+   "value": 0.11578397452831268,
    "unit": "s"
   },
   {
    "name": "split.transfer_seconds",
-   "value": 0.4002143107354641,
+   "value": 0.001154981553554535,
    "unit": "s"
   },
   {
    "name": "split.merkle_seconds",
-   "value": 0.3038674406707287,
+   "value": 0.000979175791144371,
    "unit": "s"
   },
   {
    "name": "split.tests_seconds",
-   "value": 0.06238052621483803,
+   "value": 0.06160858832299709,
    "unit": "s"
   },
   {
    "name": "split.openings_seconds",
-   "value": 0.003205820918083191,
+   "value": 0.003051299601793289,
    "unit": "s"
   },
   {
