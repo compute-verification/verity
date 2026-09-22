@@ -120,6 +120,83 @@ class Proof:
     def nbytes(self) -> int:
         return (32 if any(self.root) else 0) + 24 * len(self.msgs) + (self.opening.nbytes() if self.opening else 0)
 
+    # ``proof.bin`` (README "Proof file"): every count is written so the file is self-delimiting, but a verifier
+    # takes every size from the circuit/config and rejects a file whose counts disagree (statement binding).
+    MAGIC = b"VGKRBB6\0"
+
+    def to_bytes(self) -> bytes:
+        import struct
+
+        out = bytearray(self.MAGIC)
+        out += struct.pack("<I", 1)
+        out += self.root
+        out += struct.pack("<Q", len(self.msgs))
+        for m in self.msgs:
+            out += _field.to_bytes(m)
+        op = self.opening
+        if op is None:
+            out += struct.pack("<Q", 0)
+            return bytes(out)
+        out += struct.pack("<Q", 1)
+        out += struct.pack("<Q", len(op.w))
+        for m in op.w:
+            out += _field.to_bytes(m)
+        out += struct.pack("<Q", len(op.qc))
+        for m in op.qc:
+            out += _field.to_bytes(m)
+        rows = len(op.columns[0][0]) if op.columns else 0
+        depth = len(op.columns[0][1]) if op.columns else 0
+        out += struct.pack("<QQQ", len(op.columns), rows, depth)
+        for col, path in op.columns:
+            if len(col) != rows or len(path) != depth:
+                raise ValueError("ragged opening")
+            out += b"".join(int(v).to_bytes(4, "little") for v in col)
+            out += b"".join(path)
+        return bytes(out)
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> "Proof":
+        import struct
+
+        if data[:8] != cls.MAGIC:
+            raise ValueError("not a proof.bin")
+        (ver,) = struct.unpack_from("<I", data, 8)
+        if ver != 1:
+            raise ValueError(f"proof.bin version {ver}")
+        pos = 12
+        root = data[pos:pos + 32]
+        pos += 32
+        (n,) = struct.unpack_from("<Q", data, pos)
+        pos += 8
+        msgs = [_field.from_bytes(data[pos + 24 * i:pos + 24 * i + 24]) for i in range(n)]
+        pos += 24 * n
+        (has,) = struct.unpack_from("<Q", data, pos)
+        pos += 8
+        if not has:
+            if pos != len(data):
+                raise ValueError("trailing bytes")
+            return cls(root, msgs, None)
+        (k,) = struct.unpack_from("<Q", data, pos)
+        pos += 8
+        w = [_field.from_bytes(data[pos + 24 * i:pos + 24 * i + 24]) for i in range(k)]
+        pos += 24 * k
+        (nq,) = struct.unpack_from("<Q", data, pos)
+        pos += 8
+        qc = [_field.from_bytes(data[pos + 24 * i:pos + 24 * i + 24]) for i in range(nq)]
+        pos += 24 * nq
+        t, rows, depth = struct.unpack_from("<QQQ", data, pos)
+        pos += 24
+        cols = []
+        for _ in range(t):
+            col = [int.from_bytes(data[pos + 4 * i:pos + 4 * i + 4], "little") for i in range(rows)]
+            pos += 4 * rows
+            path = [data[pos + 32 * i:pos + 32 * i + 32] for i in range(depth)]
+            pos += 32 * depth
+            cols.append((col, path))
+        if pos != len(data):
+            raise ValueError("trailing bytes")
+        return cls(root, msgs, ligero.Opening(w, qc, cols))
+
 
 @dataclass
 class Stats:
