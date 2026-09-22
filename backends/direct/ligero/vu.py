@@ -133,6 +133,16 @@ class ChainRunner:
         proof.timings["hints_host"] = hints_seconds
         return proof, (a, b, y16), lay
 
+    def verify_vus(self, proof, pubs, lay: Layout, coins=None):
+        """Interactive mode with ``coins=None``: the verifier's own coins are the ones the runner sampled in
+        ``prove_vus`` (``proof.coins``, i.e. the honest step 0 the runner played); pass ``coins`` explicitly to check
+        a transcript against a specific verifier's session."""
+        a, b, y16 = pubs
+        if coins is None and self.interactive:
+            coins = proof.coins
+        return verify(self.p, self.sys, self.tb, self.cfg(lay.l), None, a, b, None, proof, self.device, chain=(lay, y16),
+                      coins=coins)
+
 
 def marshal_ids(vu: instances.VuTier, ids: list[int], lay: Layout):
     """Vectorised loader for ``bench_vu``: the arrays ``prove_vus`` builds from ``[_vu_data(vu, i) for i in ids]`` --
@@ -160,16 +170,6 @@ def marshal_ids(vu: instances.VuTier, ids: list[int], lay: Layout):
     y16[STEPS * torch.arange(n_vus) + STEPS - 1] = torch.from_numpy(
         np.frombuffer(vu.y, dtype=np.uint16)[idx].astype(np.int64))
     return a, b, c_in, y_out, y16
-
-    def verify_vus(self, proof, pubs, lay: Layout, coins=None):
-        """Interactive mode with ``coins=None``: the verifier's own coins are the ones the runner sampled in
-        ``prove_vus`` (``proof.coins``, i.e. the honest step 0 the runner played); pass ``coins`` explicitly to check
-        a transcript against a specific verifier's session."""
-        a, b, y16 = pubs
-        if coins is None and self.interactive:
-            coins = proof.coins
-        return verify(self.p, self.sys, self.tb, self.cfg(lay.l), None, a, b, None, proof, self.device, chain=(lay, y16),
-                      coins=coins)
 
 
 def _vu_data(vu: instances.VuTier, i: int):
