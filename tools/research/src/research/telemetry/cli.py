@@ -4,6 +4,7 @@
   event         spans / marks / holds / queue timeline       sample        Level-0 sidecar
   cancel-intent cancellation marker (+ optional delivery)    classify      failure.json
   run           reference harness (sampler + spans + timeout markers + classify)
+  set-timeout   raise/lower/clear a RUNNING attempt's stage timeout (control/timeout_s; the run loop records a mark)
   render-rules  policy.toml -> RULES.md                      check-rules   verify a RULES.md is the render of a policy
   read          dump merged events / span accounting / holds of an attempt dir (for fixtures and humans)
 """
@@ -209,6 +210,9 @@ def main(argv: list[str] | None = None) -> int:
         return m(rest)
     if cmd == "run":
         from .run import main as m
+        return m(rest)
+    if cmd == "set-timeout":
+        from .run import set_timeout_main as m
         return m(rest)
     if cmd in ("render-rules", "check-rules"):
         from .policy import main as m
