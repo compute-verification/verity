@@ -219,13 +219,50 @@ tl admission end rc=0 advisory=true
 log "start B=$B I=$I O=$O LP=$LP T=$T ckpt=$CK stages=$STAGES target=${TGT:-device} hidden_so=$HIDDEN_SO code=$CODE9"
 tl row start stages="$STAGES" B="$B" I="$I" O="$O" LP="$LP" T="$T" code="$CODE9" release="${REL_LINE%%|*}" pod="$(hostname 2>/dev/null)"
 
+# [r19-int-19, F-r19-int-6] a cancelled row must take its stage with it.  The research runner (tele run) starts this shell as a session
+# leader and cancels with killpg(pgid, SIGTERM).  GNU `timeout` puts itself and the stage in a NEW process group (so that its own expiry
+# can kill the stage's forked workers -- fold workers, commit_delta's legs); that group never sees the runner's killpg, so the shell died
+# and the stage lived on with ppid 1 under its own 14400 s clock: #23's record GM-01 ran 54 min / 46 GB past its cancelled run, #11's the
+# same class (R19).  `--foreground` would fix the cancel path and break the expiry path (timeout then signals only its direct child).
+# Fix: keep timeout's group and FORWARD: the stage runs in the background under `wait` (bash runs a trap only after a foreground child
+# ends, but `wait` returns at once on a trapped signal); the trap signals timeout's pid, and timeout forwards to the stage and to its
+# whole group (coreutils cleanup(): send_sig(child), send_sig(0, sig) when not --foreground).  The shell then waits for the stage to be
+# gone, records the cancel on the timeline / stage log, and exits 128+signal -- the EXIT trap still writes the research result envelope.
+# --- row_pod.signal-forwarding begin (extracted by verity_capture/tests/test_row_pod_cancel_forwarding.py)
+RUN_TO_PID=""; ROW_SIGNALLED=""
+_on_signal() {  # <TERM|INT|HUP>
+  ROW_SIGNALLED=$1
+  if [ -n "$RUN_TO_PID" ] && kill -0 "$RUN_TO_PID" 2>/dev/null; then
+    log "SIG$1 received: forwarding to the running stage (timeout pid $RUN_TO_PID -> its process group)"
+    kill -s "$1" "$RUN_TO_PID" 2>/dev/null || true
+  fi
+}
+trap '_on_signal TERM' TERM; trap '_on_signal INT' INT; trap '_on_signal HUP' HUP
+_signum() { case "$1" in TERM) echo 15;; INT) echo 2;; HUP) echo 1;; *) echo 15;; esac; }
+
 run_to() {  # <timeout-s> <logfile> <cmd...>
   local to=$1 lf=$2; shift 2
   echo "\$ $*" > "$lf"
-  timeout "$to" "$@" >> "$lf" 2>&1; local rc=$?
+  timeout "$to" "$@" >> "$lf" 2>&1 &
+  RUN_TO_PID=$!
+  local rc
+  while :; do
+    wait "$RUN_TO_PID"; rc=$?
+    # a trapped signal returns from `wait` (rc > 128) while the stage is still alive: the trap forwarded it -- keep waiting for the stage
+    kill -0 "$RUN_TO_PID" 2>/dev/null || break
+  done
+  RUN_TO_PID=""
   [ $rc -eq 124 ] && echo "TIMEOUT after ${to}s" >> "$lf"
+  if [ -n "$ROW_SIGNALLED" ]; then
+    echo "CANCELLED by SIG$ROW_SIGNALLED (stage rc=$rc)" >> "$lf"
+    log "row cancelled by SIG$ROW_SIGNALLED; stage ended rc=$rc -> stop"
+    tl row cancelled signal="$ROW_SIGNALLED" rc="$rc"
+    tl row end ok=false stopped_at=cancel
+    exit $((128 + $(_signum "$ROW_SIGNALLED")))
+  fi
   return $rc
 }
+# --- row_pod.signal-forwarding end
 # [R16 sys] run_to with a timeline span named after the sub-step: `run_tl <stage> <timeout-s> <logfile> <cmd...>` (rc on the end event)
 run_tl() { local st=$1; shift; tl "$st" start; run_to "$@"; local rc=$?; tl "$st" end rc=$rc; return $rc; }
 
