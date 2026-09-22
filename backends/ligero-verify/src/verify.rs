@@ -93,13 +93,13 @@ pub fn soundness(st: &Statement) -> Result<Soundness, String> {
 
 // ------------------------------------------------------------------------------------------- public statement ----
 
-fn statement_digest(st: &Statement, sys_id: &[u8; 32]) -> Vec<u8> {
+fn statement_digest(st: &Statement, sys_id: &[u8; 32]) -> Result<Vec<u8>, String> {
     let k = st.k();
     let mut h = Vec::new();
     h.extend_from_slice(STATEMENT_TAG);
     // Python: f"|p={P}|hash=blake3|l={l}|n={n}|D={D}|t={t}|target={target!r}" -- repr of a float
     h.extend_from_slice(
-        format!("|p={}|hash=blake3|l={}|n={}|D={}|t={}|target={}", P, st.l, st.n, st.d, st.t, py_float_repr(st.target_log2))
+        format!("|p={}|hash=blake3|l={}|n={}|D={}|t={}|target={}", P, st.l, st.n, st.d, st.t, py_float_repr(st.target_log2)?)
             .as_bytes(),
     );
     h.extend_from_slice(format!("|zk={}|k={}", st.zk as u8, k).as_bytes());
@@ -118,18 +118,18 @@ fn statement_digest(st: &Statement, sys_id: &[u8; 32]) -> Vec<u8> {
     for x in &st.y16 {
         h.extend_from_slice(&x.to_le_bytes());
     }
-    blake2b_256(&h).to_vec()
+    Ok(blake2b_256(&h).to_vec())
 }
 
 /// Python's `repr(float)`: shortest round-trip digits, always with a fractional part or an exponent.  Rust's `{:?}`
 /// agrees for the values a target takes (e.g. -128.0, -80.0, -133.02); documented in DISCREPANCIES.md (D2).
-fn py_float_repr(x: f64) -> String {
+fn py_float_repr(x: f64) -> Result<String, String> {
     let s = format!("{:?}", x);
-    if s.contains('e') {
+    if !x.is_finite() || s.contains('e') {
         // Rust: 1e-5 / 1e16; Python: 1e-05 / 1e+16 -- targets never reach these; refuse rather than guess
-        panic!("target_log2 {x} has an exponent repr; not supported");
+        return Err(format!("statement: target_log2 {x} has an exponent repr; refusing to guess Python's repr"));
     }
-    s
+    Ok(s)
 }
 
 /// The pinned decodes of the public operands (`unit.public_vectors`, chain mode): per pin name `a[i].s|m|e` /
@@ -408,7 +408,10 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
         Ok(p) => p,
         Err(e) => return reject(&format!("public inputs: {e}"), tm, Some(snd)),
     };
-    let stmt = statement_digest(&st, &sys.sys_id);
+    let stmt = match statement_digest(&st, &sys.sys_id) {
+        Ok(d) => d,
+        Err(e) => return reject(&e, tm, Some(snd)),
+    };
     tm.statement_hash = lap(&mut clk);
 
     // ---- column set: distinct, then the challenge ----
@@ -650,7 +653,7 @@ fn verify_inner(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Option
     let is_end = |j: usize| in_vu(j) && j % steps == steps - 1;
     let is_link = |j: usize| in_vu(j) && j % steps != steps - 1;
     let mut involved: Vec<u32> = Vec::new();
-    let mut pos = |row: u32, inv: &mut Vec<u32>| -> usize {
+    let pos = |row: u32, inv: &mut Vec<u32>| -> usize {
         match inv.iter().position(|r| *r == row) {
             Some(p) => p,
             None => {

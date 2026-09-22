@@ -181,8 +181,14 @@ fn main() {
             let sys = std::fs::read(arg(&args, "--system").expect("--system")).expect("read system");
             let dir = PathBuf::from(arg(&args, "--dir").expect("--dir"));
             let py = manifest_verdicts(&dir.join("manifest.json"));
-            let mut proofs: Vec<PathBuf> = std::fs::read_dir(&dir)
-                .expect("read dir")
+            let entries = match std::fs::read_dir(&dir) {
+                Ok(e) => e,
+                Err(e) => {
+                    eprintln!("batch: cannot read {}: {e}", dir.display());
+                    std::process::exit(2);
+                }
+            };
+            let mut proofs: Vec<PathBuf> = entries
                 .filter_map(|e| e.ok().map(|e| e.path()))
                 .filter(|p| p.extension().map_or(false, |x| x == "proof"))
                 .collect();
