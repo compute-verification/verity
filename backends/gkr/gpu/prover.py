@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 import torch
 
 from . import field as _field
-from . import gkr, ligero, logup
+from . import gkr, ligero, logup, logup_packed
 from .circuit import (
     Circuit,
     Layer,
@@ -224,6 +224,15 @@ def _sync(dev):
         torch.cuda.synchronize(dev)
 
 
+def use_packed_logup(dev) -> bool:
+    """The packed LogUp kernels (``logup_packed``) run on CUDA unless ``VERITY_GPU_TORCH_ONLY`` is set; the torch
+    path (``logup.prove_table``) produces the identical transcript."""
+    import os
+
+    return (dev.type == "cuda" and logup_packed.AVAILABLE and not os.environ.get("VERITY_GPU_TORCH_ONLY")
+            and not os.environ.get("VERITY_GPU_NO_PACKED"))
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Queries / transcript / layout
 # ---------------------------------------------------------------------------------------------------------------------
@@ -314,17 +323,20 @@ def add_input_claim(acc: Acc, rho: Ext, seg_off: int, seg: Segment, x_pt: list[E
     ex = eq_table(x_pt, dev)[: seg.ncols]                            # (ncols, 6)
     e = ext_mul(ec, t_ext(rho, dev))                                  # (units, 6)
     v = acc.seg_view(seg_off, seg.units, seg.ncols)
-    step = max(1, (1 << 21) // seg.ncols)
-    for lo in range(0, seg.units, step):
-        hi = min(seg.units, lo + step)
-        v[lo:hi] = (v[lo:hi] + ext_mul(e[lo:hi].unsqueeze(1), ex.unsqueeze(0))) % P
+    if _field._fast_rank1_add is not None and dev.type == "cuda":
+        _field._fast_rank1_add(v, e, ex)                              # one read + one write of the segment
+    else:
+        step = max(1, (1 << 21) // seg.ncols)
+        for lo in range(0, seg.units, step):
+            hi = min(seg.units, lo + step)
+            v[lo:hi] = (v[lo:hi] + ext_mul(e[lo:hi].unsqueeze(1), ex.unsqueeze(0))) % P
     acc.b = e_add(acc.b, e_mul(rho, value))
 
 
 def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], table_off: int, table: Table, ch, n: int, c: LeafClaim) -> None:
     dev = acc.device
     z, beta = ch
-    eqt = eq_table(c.rho, dev).to(torch.int32)                        # (2^n, 6)
+    eqt = eq_table(c.rho, dev, out_dtype=torch.int32)                 # (2^n, 6), written once in int32
     bs = logup.beta_powers(beta, table.cols, dev)                     # (cols, 6)
     bs_py = [py_ext(b) for b in bs]
     lam_t = t_ext(c.lam, dev)
@@ -511,14 +523,33 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     tr, chs, pts = start_transcript(inst, pcs, root)
     t0 = time.perf_counter()
     lookup_claims = []
+    packed = use_packed_logup(dev)
+    graphs = packed and logup_packed.use_graphs(dev)
     for ti, t in enumerate(inst.tables):
         n = hypercube_dim(inst, t.name, t)
         vals = [v for v in seg_query_values(inst, t.name) if v is not None]
         trows = logup.table_rows(t, dev)
-        p_leaf, q_leaf = logup.build_leaves(t, trows, vals, mults[ti], chs[ti][0], chs[ti][1], n)
-        del vals
-        lc = logup.prove_table(p_leaf, q_leaf, n, tr, out)
-        del p_leaf, q_leaf
+        n_wit = sum(v.shape[0] for v in vals)
+        if packed and t.cols == 1 and n_wit % 2 == 0 and len(t.rows) % 2 == 0:
+            w = torch.cat([v[:, 0] for v in vals]).to(torch.int32)
+            del vals
+            tab = trows[:, 0].to(torch.int32)
+            # the graphed tree takes the multiplicities from a histogram of the queries: identity tables only
+            if graphs and bool(torch.equal(tab, torch.arange(tab.numel(), dtype=torch.int32, device=dev))):
+                lc = logup_packed.prove_range_table_graphed(w, tab, chs[ti][0], n, tr, out)
+            else:
+                lc = logup_packed.prove_range_table(w, tab, mults[ti], chs[ti][0], n, tr, out)
+            del w
+        else:
+            p_leaf, q_leaf = logup.build_leaves(t, trows, vals, mults[ti], chs[ti][0], chs[ti][1], n)
+            del vals
+            if graphs:
+                lc = logup_packed.prove_ext_table_graphed(p_leaf, q_leaf, n, tr, out)
+            elif packed:
+                lc = logup_packed.prove_ext_table(p_leaf, q_leaf, n, tr, out)
+            else:
+                lc = logup.prove_table(p_leaf, q_leaf, n, tr, out)
+            del p_leaf, q_leaf
         st.lookup_dims.append((t.name, n, sum(len(table_queries(s.circ, t.name)) for s in inst.segs)))
         lookup_claims.append((n, lc))
         st.depth_lookup_max = max(st.depth_lookup_max, 1 + sum(k + 2 for k in range(n)))

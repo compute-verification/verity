@@ -1,6 +1,6 @@
 """Load a VU batch directory (``bb_export``) and prove / verify it on a device; the measurement driver.
 
-    python -m gpu.run prove DIR [--vus N] [--device cuda] [--reps 3] [--clear] [--json OUT]
+    python -m gpu.run prove DIR [--vus N] [--device cuda] [--reps 3] [--warmup 1] [--clear] [--json OUT]
     python -m gpu.run negatives DIR             # every DIR/neg/<id>: prove + verify, all must reject
 """
 from __future__ import annotations
@@ -81,6 +81,11 @@ def cmd_prove(args) -> int:
     inst = load_instance(Path(args.dir), dev, args.vus, tile=args.tile)
     pcs = not args.clear
     runs = []
+    for _ in range(args.warmup):
+        # the LogUp CUDA graphs (one per round and shape) compile and capture on the first proof of a process (~1 min);
+        # a warm-up proof is excluded from the recorded repetitions and reported as such
+        proof, st, tp, tv, err = prove_once(inst, pcs)
+        print(json.dumps({"warmup": True, "prover_s": tp, "verified": err is None, "error": err}), flush=True)
     for rep in range(args.reps):
         proof, st, tp, tv, err = prove_once(inst, pcs)
         row = {
@@ -90,7 +95,7 @@ def cmd_prove(args) -> int:
             "t_open": st.t_open, "slots": st.slots, "sequential_depth": st.sequential_depth(pcs),
             "depth_circuit": st.depth_circuit, "depth_lookup_max": st.depth_lookup_max, "lookup_dims": st.lookup_dims,
             "committed_elements": st.committed_elements, "ligero_rows": st.ligero_rows,
-            "linkage_constraints": st.linkage_constraints, "peak_mem_bytes": st.peak_mem,
+            "linkage_constraints": st.linkage_constraints, "peak_mem_bytes": st.peak_mem, "warmup_reps": args.warmup,
         }
         runs.append(row)
         print(json.dumps(row), flush=True)
@@ -152,6 +157,7 @@ def main(argv=None) -> int:
     p.add_argument("--tile", action="store_true", help="tile the available VUs to --vus (timing runs only)")
     p.add_argument("--device", default="cuda")
     p.add_argument("--reps", type=int, default=1)
+    p.add_argument("--warmup", type=int, default=0, help="unrecorded proofs first (graph build / kernel compile)")
     p.add_argument("--clear", action="store_true")
     p.add_argument("--json", default=None)
     p.add_argument("--proof-out", default=None, help="write the first rep's proof as proof.bin (README 'Proof file')")

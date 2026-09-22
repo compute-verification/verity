@@ -10,6 +10,14 @@ is then reduced by the caller to a claim on the unit columns (``prover.py``).
 
 ``p`` leaves are base-field values (1, -m, 0) and are stored as one int32 per leaf; every other table is an
 extension element (int32 storage, int64 compute).
+
+**Binding order (a-gpu2).**  Since the swap to the packed kernels (``../packed/logup_gpu.py``) every level's sumcheck
+binds the *low* bit of the level index first (round ``i`` pairs ``(2y, 2y+1)``; ``logup_reference.py``), and the
+claim point is ``rho = [mu] + x*`` (``mu`` on bit 0 = the children pairing).  ``logup.rs`` / the v2e prover bound the
+top bit first with ``rho = x* + [mu]``; the two are the same protocol under bit-reversal of the level index, but
+the message *values* differ, so the verifier here follows the new schedule (``verify_table``) and the leaf claim
+handed to ``prover.add_lookup_claim`` is converted to the top-bit-first convention (``LeafClaim.rho`` reversed)
+at the boundary.  The torch code below is the CPU reference of the same schedule (``VERITY_GPU_TORCH_ONLY=1``).
 """
 from __future__ import annotations
 
@@ -197,7 +205,53 @@ def round_poly(p0, p1, q0, q1, e, half: int, lam_t: torch.Tensor) -> list[Ext]:
     return py_exts(h)
 
 
+def _fold_low(v: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
+    """Bind the *low* bit: ``out[y] = v[2y] + (v[2y+1] - v[2y]) r`` (base ``v`` -> extension)."""
+    v0, v1 = v[0::2], v[1::2]
+    if v.ndim == 1:
+        d = (v1.to(torch.int64) - v0.to(torch.int64)) % P
+        o = (d.unsqueeze(-1) * r) % P
+        o[..., 0] = (o[..., 0] + v0.to(torch.int64)) % P
+        return o
+    a, b = v0.to(torch.int64), v1.to(torch.int64)
+    return (a + ext_mul((b - a) % P, r)) % P
+
+
+def round_poly_low(p0, p1, q0, q1, e, lam_t: torch.Tensor) -> list[Ext]:
+    """``round_poly`` with the pairs ``(2y, 2y+1)`` (low-bit-first binding); torch reference."""
+    dev = e.device
+    half = e.shape[0] // 2
+    h = torch.zeros((4, DEG), dtype=torch.int64, device=dev)
+    chunk = CHUNK // 4
+    for lo in range(0, half, chunk):
+        hi = min(half, lo + chunk)
+        a0, a1 = p0[2 * lo:2 * hi:2].to(torch.int64), p0[2 * lo + 1:2 * hi:2].to(torch.int64)
+        c0, c1 = p1[2 * lo:2 * hi:2].to(torch.int64), p1[2 * lo + 1:2 * hi:2].to(torch.int64)
+        b0, b1 = q0[2 * lo:2 * hi:2].to(torch.int64), q0[2 * lo + 1:2 * hi:2].to(torch.int64)
+        d0, d1 = q1[2 * lo:2 * hi:2].to(torch.int64), q1[2 * lo + 1:2 * hi:2].to(torch.int64)
+        e0, e1 = e[2 * lo:2 * hi:2].to(torch.int64), e[2 * lo + 1:2 * hi:2].to(torch.int64)
+        for t in range(4):
+            pa, pb = _lerp(a0, a1, t), _lerp(c0, c1, t)
+            qa, qb = _lerp(b0, b1, t), _lerp(d0, d1, t)
+            qq = ext_mul(qa, qb)
+            g = (_mul(pa, qb) + _mul(pb, qa) + ext_mul(qq, lam_t)) % P
+            h[t] = (h[t] + ext_sum(ext_mul(_lerp(e0, e1, t), g))) % P
+    return py_exts(h)
+
+
+def eq_table_low(rho: list[Ext], device) -> torch.Tensor:
+    """``eq(rho, y)`` with ``rho[j]`` on bit ``j`` of ``y`` (the packed kernels' convention)."""
+    return eq_table(list(reversed(rho)), device)
+
+
+def leaf_claim_top(rho_low: list[Ext], lam: Ext, value: Ext) -> LeafClaim:
+    """The low-bit-first claim point as a top-bit-first ``LeafClaim`` (what ``prover.add_lookup_claim`` indexes)."""
+    return LeafClaim(list(reversed(rho_low)), lam, value)
+
+
 def prove_table(p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcript, out: list[Ext]) -> LeafClaim:
+    """Torch reference of the low-bit-first schedule (the GPU path is ``logup_packed.prove_table``); returns the
+    leaf claim in the top-bit-first convention."""
     dev = q_leaf.device
     levels_p = [p_leaf]
     levels_q = [q_leaf]
@@ -224,22 +278,19 @@ def prove_table(p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcri
         q0, q1 = _split(cq)
         levels_p[n - k - 1] = None
         levels_q[n - k - 1] = None
-        e = eq_table(rho, dev)
+        e = eq_table_low(rho, dev)
         lam_t = t_ext(lam, dev)
         x_star: list[Ext] = []
         length = 1 << k
         while length > 1:
-            half = length // 2
-            h = round_poly(p0, p1, q0, q1, e, half, lam_t)
+            h = round_poly_low(p0, p1, q0, q1, e, lam_t)
             out.extend(h)
             tr.absorb_exts(h)
             r = tr.challenge()
             x_star.append(r)
             rt = t_ext(r, dev)
-            p0 = fold_base(p0, rt) if p0.ndim == 1 else fold(p0, rt)
-            p1 = fold_base(p1, rt) if p1.ndim == 1 else fold(p1, rt)
-            q0, q1, e = fold(q0, rt), fold(q1, rt), fold(e, rt)
-            length = half
+            p0, p1, q0, q1, e = (_fold_low(v, rt) for v in (p0, p1, q0, q1, e))
+            length //= 2
         vals = []
         for v in (p0, p1, q0, q1):
             if v.ndim == 1:
@@ -253,8 +304,8 @@ def prove_table(p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcri
         qv = e_add(vals[2], e_mul(mu, e_sub(vals[3], vals[2])))
         lam = tr.challenge()
         value = e_add(pv, e_mul(lam, qv))
-        rho = x_star + [mu]
-    return LeafClaim(rho, lam, value)
+        rho = [mu] + x_star
+    return leaf_claim_top(rho, lam, value)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -293,5 +344,5 @@ def verify_table(n: int, tr: Transcript, rd: Reader) -> LeafClaim:
         qv = e_add(q0, e_mul(mu, e_sub(q1, q0)))
         lam = tr.challenge()
         value = e_add(pv, e_mul(lam, qv))
-        rho = x_star + [mu]
-    return LeafClaim(rho, lam, value)
+        rho = [mu] + x_star          # low-bit-first: mu binds the children bit (bit 0 of the next level's index)
+    return leaf_claim_top(rho, lam, value)

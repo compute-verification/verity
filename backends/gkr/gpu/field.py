@@ -1,8 +1,10 @@
 """BabyBear and BabyBear^6 arithmetic on torch tensors (int64 compute, int32 storage) plus the small-value
 Python-int versions the transcript-side logic uses.
 
-Base field ``p = 2^31 - 2^27 + 1``; challenge field ``F_{p^6} = F_p[X] / (X^6 - W)``, ``W = 31`` (the same
-``W`` as ``backends/gkr/tensor/reference.py``: the smallest non-square non-cube).  An extension element is a
+Base field ``p = 2^31 - 2^27 + 1``; challenge field ``F_{p^6} = F_p[X] / (X^6 - W)``, ``W = 22`` (the smallest
+non-square non-cube, the modulus the a-packed kernels ``../packed/reference.py`` are generated for; the v1-v2e
+prover used ``W = 31``, ``../tensor/reference.py``'s choice -- the same field up to isomorphism, the same soundness
+bound, a different coordinate representation, hence a different transcript).  An extension element is a
 tensor whose last dimension is 6 (planar coordinate order ``c0..c5``); a base element is any int64 tensor of
 canonical values in ``[0, p)``.  Every product of two canonical values (< 2^62) fits int64, so one product is
 reduced before it is accumulated; sums of up to 2^32 canonical values fit as well.
@@ -20,7 +22,7 @@ from __future__ import annotations
 import torch
 
 P = 2**31 - 2**27 + 1
-W = 31
+W = 22          # X^6 - 22 irreducible (22 is a non-square non-cube mod p); must equal packed.reference.W
 DEG = 6
 _R32 = (2**32) % P          # 2^32 mod p
 _R16 = 2**16
@@ -243,6 +245,107 @@ def mm_mod(A: torch.Tensor | Limbs, B: torch.Tensor | Limbs) -> torch.Tensor:
     return (ll + lh * _R16 + hh * _R32) % P
 
 
+_POW8 = [pow(2, 8 * s, P) for s in range(8)]
+_INT8_MAX_ELEMS = 1 << 28        # cuBLASLt faults above ~2^31 operand elements; chunk rows well below (packed lane's probe)
+_INT8_K_CHUNK = 1 << 16          # 4 . 2^14 . 2^16 = 2^32 > int32 -- but each group of equal limb weight has <= 4 terms
+#                                  summed in int64, and one _int_mm holds K . 2^14 <= 2^30
+
+
+class Limbs8:
+    """A canonical matrix pre-split into its four balanced INT8 limbs ``x = Σ_i 2^(8i) l_i``, ``l_i ∈ [-128, 128)``
+    (each ``(rows, cols)`` int8, contiguous), for the INT8 tensor-core ``mm_mod_int8``."""
+
+    @staticmethod
+    def padded_shape(M: int, K: int, side: str) -> tuple[int, int]:
+        """The stored (zero-padded) int32 layout for a logical ``(M, K)`` operand: ``(Mp, Kp)`` for side ``a``,
+        ``(Np, Kp)`` = the transpose for side ``b`` (cuBLASLt: rows of A a multiple of 32, K and N multiples of 8)."""
+        if side == "a":
+            return max(32, -(-M // 32) * 32), max(32, -(-K // 8) * 8)
+        return max(32, -(-K // 8) * 8), max(32, -(-M // 8) * 8)
+
+    def __init__(self, B: torch.Tensor, side: str = "a", shape: tuple[int, int] | None = None) -> None:
+        """``side="b"``: the right operand of the GEMM, stored column-major (cuBLASLt's IGEMM runs at 485 TMAC/s
+        with a column-major ``B`` and at 50 with a row-major one, probed on the H100).  ``shape``: pass the logical
+        ``(M, K)`` when ``B`` is already the padded int32 storage of :meth:`padded_shape` (no copy is made)."""
+        self.side = side
+        if shape is not None:
+            self.shape = tuple(shape)
+            v = B
+            if v.dtype != torch.int32 or tuple(v.shape) != self.padded_shape(*shape, side) or not v.is_contiguous():
+                raise ValueError("Limbs8: pre-padded operand has the wrong dtype / shape")
+        else:
+            self.shape = tuple(B.shape)
+            M, K = B.shape
+            v = torch.zeros(self.padded_shape(M, K, side), dtype=torch.int32, device=B.device)
+            if side == "a":
+                v[:M, :K] = B.to(torch.int32)
+            else:
+                v[:K, :M] = B.to(torch.int32).t()
+        ls8 = _split_limbs(v)                                   # (4, *v.shape) int8, one pass
+        self.limbs = [ls8[i].t() if side == "b" else ls8[i] for i in range(4)]
+
+
+def _split_limbs(v: torch.Tensor) -> torch.Tensor:
+    """``(4, *v.shape)`` int8: the balanced limbs of a canonical int32 tensor (fused kernel on CUDA)."""
+    if _fast_split_limbs is not None and v.is_cuda:
+        return _fast_split_limbs(v)
+    out = []
+    for _ in range(4):
+        l = ((v + 128) & 255) - 128
+        out.append(l.to(torch.int8))
+        v = (v - l) >> 8
+    return torch.stack(out, 0)
+
+
+def _int_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """``torch._int_mm`` on ``a (M, K) int8``, ``b (K, N) int8`` -> int32, with the shape rules of cuBLASLt (M a multiple
+    of 32 and > 16, K and N multiples of 8) met by zero padding, and the operand-size cap by row chunking."""
+    M, K = a.shape
+    N = b.shape[1]
+    Mp, Kp, Np = max(32, -(-M // 32) * 32), max(32, -(-K // 8) * 8), max(32, -(-N // 8) * 8)
+    if (Mp, Kp) != (M, K):
+        ap = torch.zeros((Mp, Kp), dtype=torch.int8, device=a.device)
+        ap[:M, :K] = a
+        a = ap
+    if (Kp, Np) != (K, N) or b.stride(0) != 1:
+        bp = torch.zeros((Np, Kp), dtype=torch.int8, device=b.device).t()      # column-major
+        bp[:K, :N] = b
+        b = bp
+    if a.numel() > _INT8_MAX_ELEMS:
+        rows = max(32, (_INT8_MAX_ELEMS // Kp) // 32 * 32)
+        out = torch.cat([torch._int_mm(a[r:r + rows].contiguous(), b) for r in range(0, Mp, rows)], 0)
+    else:
+        out = torch._int_mm(a.contiguous(), b)
+    return out[:M, :N]
+
+
+def mm_mod_int8(A: torch.Tensor | Limbs8, B: torch.Tensor | Limbs8) -> torch.Tensor:
+    """``(A @ B) mod p`` for canonical matrices on INT8 tensor cores: 16 limb GEMMs (INT32 accumulate, exact for
+    ``K ≤ 2^16`` per chunk since ``|l_i l_j| < 2^14``), the limb products of equal weight ``2^(8(i+j))`` summed in
+    int64 and recombined mod ``p``.  Bit-exact with ``mm_mod``."""
+    a = A if isinstance(A, Limbs8) else Limbs8(A, "a")
+    b = B if isinstance(B, Limbs8) else Limbs8(B, "b")
+    K = a.shape[1]
+    dev = a.limbs[0].device
+    out = torch.zeros((a.shape[0], b.shape[1]), dtype=torch.int64, device=dev)
+    for lo in range(0, K, _INT8_K_CHUNK):
+        hi = min(K, lo + _INT8_K_CHUNK)
+        if lo == 0 and hi == K:
+            al, bl = a.limbs, b.limbs
+        else:
+            al = [l[:, lo:hi].contiguous() for l in a.limbs]
+            bl = [l[lo:hi].t().contiguous().t() for l in b.limbs]
+        for s in range(7):
+            acc = None
+            for i in range(4):
+                j = s - i
+                if 0 <= j < 4:
+                    pr = _int_mm(al[i], bl[j])[: a.shape[0], : b.shape[1]].to(torch.int64)
+                    acc = pr if acc is None else acc + pr
+            out = (out + (acc % P) * _POW8[s]) % P
+    return out
+
+
 def ext_contract(X: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
     """``Σ_g X[..., g, :] · w[g, :]`` in the extension: ``X`` ``(m, k, 6)``, ``w`` ``(k, 6)`` -> ``(m, 6)``."""
     k = w.shape[0]
@@ -291,15 +394,21 @@ def fold_base(v: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
     return out
 
 
-def eq_table(point: list[Ext], device) -> torch.Tensor:
-    """``eq(point, x)`` for every ``x`` on the hypercube ``(2^n, 6)``, top-bit-first (``field.rs::eq_table``)."""
+def eq_table(point: list[Ext], device, out_dtype=torch.int64) -> torch.Tensor:
+    """``eq(point, x)`` for every ``x`` on the hypercube ``(2^n, 6)``, top-bit-first (``field.rs::eq_table``).  Large
+    tables (``n > 16``, CUDA) are the tensor product of the two halves' tables, written once in ``out_dtype`` by a fused
+    kernel (the doubling loop would materialise ~4x the table in int64 temporaries: 26 GB at ``n = 28``)."""
+    n = len(point)
+    if _fast_eq_outer is not None and n > 16 and torch.device(device).type == "cuda":
+        n_hi = n // 2
+        return _fast_eq_outer(eq_table(point[:n_hi], device), eq_table(point[n_hi:], device), out_dtype)
     t = torch.zeros((1, DEG), dtype=torch.int64, device=device)
     t[0, 0] = 1
     for r in reversed(point):
         rt = t_ext(r, device)
         one_minus = (t_ext(ONE, device) - rt) % P
         t = torch.cat([ext_mul_chunked(t, one_minus), ext_mul_chunked(t, rt)], dim=0)
-    return t
+    return t if out_dtype == torch.int64 else t.to(out_dtype)
 
 
 def eval_mle(values: torch.Tensor, point: list[Ext]) -> Ext:
@@ -345,6 +454,9 @@ _fast_phase1 = None
 _fast_scatter = None
 _fast_gate_eval = None
 _fast_combine_level = None
+_fast_split_limbs = None
+_fast_eq_outer = None
+_fast_rank1_add = None
 try:
     import os as _os
 
@@ -359,5 +471,9 @@ try:
             _fast_scatter = _kernels.scatter_terms
             _fast_gate_eval = _kernels.gate_eval
             _fast_combine_level = _kernels.combine_level
+            _fast_split_limbs = _kernels.split_limbs
+            _fast_eq_outer = _kernels.eq_outer
+            _fast_rank1_add = _kernels.rank1_add
 except Exception:  # noqa: BLE001 -- no Triton / no CUDA: the torch path is used
     _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = _fast_scatter = _fast_gate_eval = _fast_combine_level = None
+    _fast_split_limbs = _fast_eq_outer = _fast_rank1_add = None

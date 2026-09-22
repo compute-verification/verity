@@ -17,6 +17,12 @@ it cannot check these proofs directly; the Python verifier is the same code path
 | v2c | 0d6437c | fused GKR phase-1 round; opening as tensor-core matmuls | 8.32 s | 1.49 / 1.85 / 4.46 / 0.45 | 8.9 s |
 | v2d | 428db0b | lookup functional as a CSR scatter kernel | 5.41 s | 1.53 / 1.95 / 1.41 / 0.45 | 7.1 s |
 | v2e | c4d472a | sparse gate evaluation; fused LogUp level combine | **4.43 s** | 1.40 / 1.07 / 1.44 / 0.45 | 7.1 s |
+| v5 | 9fb4180 | a-gpu2: packed k=3 GKR phase 1, CUDA-graphed LogUp (a-fusion), INT8 tensor-core opening, SIMT commit NTT | **1.857 s** | 0.43 / 0.66 / 0.57 / 0.10 | 6.5 s |
+| v6 | 5ad05fb | a-gpu2: vectorised Ligero verifier; fused rank-1 input-claim accumulate | **1.790 s** | 0.43 / 0.66 / 0.53 / 0.10 | 1.34 s |
+
+v5/v6 are transcript-identical to v2e's protocol (same round schedules and messages; the LogUp binding order is the
+low-bit-first schedule of v3, whose verifier port is unchanged); peak device memory 47.9 GB; `--warmup 1` excludes the
+one-off ~60 s LogUp graph compile/capture per process.  Negatives: 52/52 rejected on the v6 path (r20260922-094606-1813).
 
 Every run: 4096/4096 `vu-k1536` accepted with the recorded words, proof 33.9 MB (6086 extension elements + Ligero
 opening), `rounds.sequential_depth` 438 (circuit 197, LogUp R16 435), 1920 transcript slots, peak device memory

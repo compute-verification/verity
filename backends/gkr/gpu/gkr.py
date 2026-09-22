@@ -147,6 +147,13 @@ def prove_layer(layer: Layer, rows: torch.Tensor, b: int, claim: LayerClaim, tr:
         hi = min(copies, lo + CHUNK_BASE)
         a[lo:hi], bb[lo:hi] = layer.eval_gates(rows[lo:hi].to(torch.int64))
     e = eq_table(claim.copy_point, dev)
+    if _use_packed_phase1(a, b):
+        # a-packed2's k=3 Montgomery sumcheck over (gate, bit-reversed copy): the same messages as the loop below
+        from . import gkr_packed, logup_packed
+        c_star, a_star, b_star = gkr_packed.phase1(logup_packed.get_prover(dev).kernel, a, bb, wg, claim.copy_point, e, tr, out)
+        del a, bb, e
+        e_star = t_ext(eq_point(claim.copy_point, c_star), dev)
+        return _phase2(layer, rows, wg, e_star, b_star, c_star, tr, out, last)
     c_star: list[Ext] = []
     length = copies
     base = True
@@ -170,6 +177,21 @@ def prove_layer(layer: Layer, rows: torch.Tensor, b: int, claim: LayerClaim, tr:
         a, bb = ext_from_base(a), ext_from_base(bb)
     b_star = bb[0]                   # (g_n, 6)
     del a, bb
+    return _phase2(layer, rows, wg, e_star, b_star, c_star, tr, out, last)
+
+
+def _use_packed_phase1(a: torch.Tensor, b: int) -> bool:
+    import os
+    if os.environ.get("VERITY_GPU_TORCH_ONLY") or os.environ.get("VERITY_GPU_NO_PACKED"):
+        return False
+    from . import gkr_packed, logup_packed
+    return logup_packed.AVAILABLE and gkr_packed.fits(a, b)
+
+
+def _phase2(layer: Layer, rows: torch.Tensor, wg: torch.Tensor, e_star: torch.Tensor, b_star: torch.Tensor,
+            c_star: list[Ext], tr: Transcript, out: list[Ext], last: bool) -> tuple[LayerClaim, FinalClaims | None]:
+    """Phases 2a/2b (the two gate-variable sumchecks) given phase 1's ``c*``, ``eq(γ, c*)`` and ``b_g(c*)``."""
+    dev = rows.device
     # Ṽ(·) = Σ_c eq(c*, c) V_in(·, c)
     ec = eq_table(c_star, dev)                                   # (copies, 6)
     vf = mm_mod(ec.T, rows.to(torch.int64)).T.contiguous()       # (n_in, 6)
