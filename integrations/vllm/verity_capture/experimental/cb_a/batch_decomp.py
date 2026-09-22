@@ -545,8 +545,16 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     #   meta     -- the fold recorded `request` on the instance (fold._compute_emit, X-09+);
     #   dataflow -- every request-owned operand the instance reads (its own prompt parameter / a node attributed earlier) names ONE request
     #               (row independence: an instance over one request's data is that request's; several requests -> non-separable, refused);
+    #   weight-only -- [R19, F-r19-int-15] every node operand is a shared weight or an earlier weight-only instance (and there is at least
+    #               one): the instance carries no request's data -- gemma2's RMSNorm scale `1 + w` (AddScalarBf16 N=2304, rows=1, per norm
+    #               per step; 11235 on #57 B8 1024/128) is the first such node in the table (llama/mistral/olmoe/qwen norms multiply by w
+    #               directly).  It is SHARED: owned by no request, read like a weight, and projected into the leg of every request that has
+    #               rows in its engine step -- the request's own derive computes the same node inside its forward.  Before this rule the
+    #               row-count channel refused it ("rows=1 != tokens|logits") and every norm reading it counted as a cross-request read.
     #   rows     -- no request-owned operand at all: the fold's row-count rule (token rows / logits rows).
     # A per-position Attention group (rows=|positions sharing T|) is the case only dataflow gets right on pre-X-09 folds.
+    SHARED = "*weight-only*"                 # owner_of_node sentinel; never a request id
+    shared_idx: list[tuple[int, int]] = []   # (instance index, engine step) of every weight-only instance
     owners_of_param: dict[int, set[str]] = collections.defaultdict(set)
     for rid, pidx in param_of.items():
         owners_of_param[pidx].add(rid)
@@ -570,6 +578,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         rid, h = o.get("request"), "meta"
         if rid is None:
             deps: set = set()
+            reads_weight = False        # a shared weight node or an earlier weight-only instance among the operands
             for a in r["args"]:
                 for run in a:   # record (space, idx, lo, hi) | compact (space, (idx0, lo, hi), (dI, dL, dH), count): space / idx only
                     if run[0] != "n":
@@ -578,8 +587,14 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
                         if idx in B.inputs:
                             if idx not in weights_nodes:
                                 deps |= owners_of_param.get(idx, {("?", "param", idx)})
+                            else:
+                                reads_weight = True
                         else:
-                            deps.add(owner_of_node.get(idx, ("?", "node", idx)))
+                            own = owner_of_node.get(idx, ("?", "node", idx))
+                            if own == SHARED:
+                                reads_weight = True
+                            else:
+                                deps.add(own)
             unknown = {d for d in deps if isinstance(d, tuple)}
             owners = deps - unknown
             if unknown:
@@ -588,6 +603,8 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
                 rid, h = next(iter(owners)), "dataflow"
             elif len(owners) > 1:
                 h = "reads several requests: " + ", ".join(sorted(owners))[:200]
+            elif reads_weight:
+                rid, h = SHARED, "weight-only"
             else:
                 st = steps.get(o["step"])
                 if st is None:
@@ -598,6 +615,10 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         how[h.split(":")[0] if h.startswith("rows") else h.split(" ")[0]] += 1
         if rid is None:
             unattributed.append({"i": i, "k": r["k"], "spec": r["spec"], "step": o["step"], "row": o["row"], "rows": o["rows"], "why": h})
+            continue
+        if rid == SHARED:
+            owner_of_node[r["k"]] = SHARED
+            shared_idx.append((i, o["step"]))
             continue
         # cross-check against the row-count rule whenever it applies unambiguously (diagnostic; the dataflow channel is authoritative)
         st = steps.get(o["step"])
@@ -629,7 +650,10 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
                                               "request_owned_inputs": len(reqs) + len(seed_node_of)},
                       "weight_map": {"n_ranges": len(B.oracle_wmap), "n_overlaps": len(B.oracle_wmap_overlaps)}},
            "attribution": {"how": dict(how), "unattributed": len(unattributed), "unattributed_examples": unattributed[:12],
-                           "attributed": sum(len(v) for v in per_req.values()), "row_rule_disagreements": disagree},
+                           "attributed": sum(len(v) for v in per_req.values()), "row_rule_disagreements": disagree,
+                           # [R19, F-r19-int-15] weight-only instances: owned by no request, projected into every participating leg
+                           "weight_only_shared": len(shared_idx),
+                           "weight_only_specs": dict(collections.Counter(B.inst[i]["spec"].split("{")[0] for i, _ in shared_idx).most_common(6))},
            "derived_available": {f"LP{lp}_T{t}": d for (lp, t), d in sorted(derived.items())}, "derived_unreadable": bad_derived,
            "requests": [], "missing_derived": []}
     missing: set[tuple[int, int]] = set()
@@ -749,7 +773,14 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             prof["seconds"] = round(time.time() - prof["t_start"], 3)
         return ent, None
 
-    items = list(per_req.items())
+    if shared_idx:
+        # [R19, F-r19-int-15] a weight-only instance of engine step s belongs to the projection of every request with rows in s (the
+        # request's own derive computes that node inside its forward at that step); a request with no rows in s does not see it.
+        # Legs stay in request order; each leg's indices stay in node order (producers precede consumers).
+        present: dict[int, set[str]] = {s: {r for r, _ in st.get("rows", [])} | {r for r, _ in st.get("logits_rows", [])} for s, st in steps.items()}
+        items = [(rid, sorted(idxs + [i for i, s in shared_idx if rid in present.get(s, ())])) for rid, idxs in per_req.items()]
+    else:
+        items = list(per_req.items())
     if X09_LEGS is not None:
         # [R17 mfast, BRIEF §5 step 3] the per-request comparisons are separable once attribution is done (above, single and exact): the
         # fast path runs the legs on forked workers over the SAME fold / components (copy-on-write) -- every component is loaded here
