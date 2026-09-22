@@ -14,9 +14,10 @@ from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.verification.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN, TARGETS
 
 ROOT = Path(__file__).resolve().parents[4]
-REQUIRED = ("id", "profile", "issue", "hawkeye_paper", "hawkeye_simulator", "verity_reference",
+REQUIRED = ("id", "profile", "class", "issue", "hawkeye_paper", "hawkeye_simulator", "verity_reference",
             "hardware_evidence", "status", "resolution", "evidence_refs", "owner")
 STATUSES = ("open", "resolved", "excluded")
+CLASSES = ("numerics", "binding")
 
 
 def load() -> dict:
@@ -32,9 +33,18 @@ def test_every_entry_has_every_field_and_a_known_status() -> None:
         missing = [field for field in REQUIRED if field not in entry]
         assert not missing, f"{entry.get('id')}: missing {missing}"
         assert entry["status"] in STATUSES, entry["id"]
+        assert entry["class"] in CLASSES and set(log["classes"]) == set(CLASSES), entry["id"]
         # the profile names a target (frozen or draft) or, for instruction classes without a target, an instruction id
         assert entry["profile"] in TARGETS or entry["profile"] in INSTRUCTIONS, f"{entry['id']} is about an unknown profile"
         assert entry["issue"].strip() and entry["owner"].strip()
+
+
+def test_only_the_kernel_binding_question_is_binding_class() -> None:
+    """D6 (which kernels / shapes realise the accumulation chain; owner integration) is a deployment caveat, not a numerics gate;
+    every other entry is about words (model vs hardware / paper / simulator)."""
+    log = load()
+    assert {e["id"] for e in log["entries"] if e["class"] == "binding"} == {"D6"}
+    assert all(e["class"] == "numerics" for e in log["entries"] if e["id"] != "D6")
 
 
 def test_the_frozen_target_keeps_its_entries() -> None:

@@ -6,10 +6,15 @@
     "resolved": "settled with evidence; the resolution says what the target does",
     "excluded": "outside the frozen target's supported domain; the resolution says why and what the evidence says anyway"
   },
+  "classes": {
+    "numerics": "the model's words vs the hardware's (or the paper's / the simulator's): gates TRUSTED through the trust framework's Tb criterion and PINNED through the regression tiles",
+    "binding": "which kernels, shapes or accumulation orders realise the chain the circuit proves: a deployment caveat the trust dossier lists, not a gate on the circuit"
+  },
   "entries": [
     {
       "id": "D1",
       "profile": "first-campaign-target/2026-09-21",
+      "class": "numerics",
       "issue": "NaN and infinity operands/accumulators; overflow saturation",
       "hawkeye_paper": "discusses hardware saturation qualitatively (sections 5-7); no bit-level rule for NaN payloads",
       "hawkeye_simulator": "multiply_bfloat16_to_gfloat has no NaN/infinity branch; Gfloat::operator float masks exponent bits rather than saturating",
@@ -27,6 +32,7 @@
     {
       "id": "D2",
       "profile": "first-campaign-target/2026-09-21",
+      "class": "numerics",
       "issue": "Ampere (sm_80) evidence for the finite-domain pipeline parameters (groups (8,8), 25-bit truncating adder, floor -132) with arbitrary incoming accumulators",
       "hawkeye_paper": "Ampere structure recovered on A100 by targeted tests (accumulator + 8 products, normalize, + 8 products)",
       "hawkeye_simulator": "Ampere_simulator.cpp; the matrix wrapper initialises the accumulator to zero",
@@ -46,6 +52,7 @@
     {
       "id": "D3",
       "profile": "first-campaign-target/2026-09-21",
+      "class": "numerics",
       "issue": "Closed-form normalisation e' = max(E + l - 25, -126), M' = floor(v * 2^(E - e' - 1)) (handoff section 4.4) versus the simulator's successive shifts",
       "hawkeye_paper": "not stated in this form",
       "hawkeye_simulator": "group_sum normalises by successive shifts; the formula was derived from that code, not quoted",
@@ -64,6 +71,7 @@
     {
       "id": "D4",
       "profile": "first-campaign-target/2026-09-21",
+      "class": "numerics",
       "issue": "Zero results: sign of a cancellation to zero, and a nonzero magnitude truncated to zero",
       "hawkeye_paper": "not discussed at bit level",
       "hawkeye_simulator": "S = 0 returns the zero representation; a magnitude truncated to zero resets the exponent to -132 keeping the computed sign internally; Gfloat::operator float returns +0 whenever the significand is zero",
@@ -80,6 +88,7 @@
     {
       "id": "D5",
       "profile": "first-campaign-target/2026-09-21",
+      "class": "numerics",
       "issue": "FP32 -> BF16 epilogue NaN word: software canonical 0x7FC0 (family @1) versus hardware cvt.rn.bf16.f32 0x7FFF (family @2)",
       "hawkeye_paper": "not covered (the paper is about the mma step)",
       "hawkeye_simulator": "not covered",
@@ -96,6 +105,7 @@
     {
       "id": "D6",
       "profile": "first-campaign-target/2026-09-21",
+      "class": "binding",
       "issue": "Kernel-level accumulation order: does a real GEMM launch (split-K, stream-K, tile order) realise the ascending-k single-accumulator chain the relation checks?",
       "hawkeye_paper": "section 8: evidence concerns tested low-level configurations, not arbitrary cuBLAS scheduling",
       "hawkeye_simulator": "matrix wrapper: zero-initialised accumulator, fixed k order",
@@ -112,6 +122,7 @@
     {
       "id": "D7",
       "profile": "first-campaign-target/2026-09-21",
+      "class": "numerics",
       "issue": "Arbitrary incoming accumulator c in the transition unit: the pinned wrapper only ever passes c = 0 and has finalisation logic",
       "hawkeye_paper": "the recovered structure takes the accumulator into the first group",
       "hawkeye_simulator": "group_sum accepts any accumulator triple; the matrix wrapper zero-initialises and finalises",
@@ -131,6 +142,7 @@
     {
       "id": "D8",
       "profile": "first-campaign-target/2026-09-21",
+      "class": "numerics",
       "issue": "Finite inputs whose group result leaves the FP32 range (result exponent > 127): the pinned simulator masks and keeps computing, the hardware saturates and holds",
       "hawkeye_paper": "not covered; section 8 scopes the evidence to the tested magnitudes",
       "hawkeye_simulator": "Gfloat::operator float writes (exponent + 127 - [bit 23 clear]) & 0xFF into the exponent field: an exponent of 128 gives an infinity or a NaN word depending on the mantissa, 129 and above wrap into a small finite field; group_sum has no range check, so an overflowed group-1 result enters group 2 as an ordinary Gfloat and can return into range",
@@ -149,6 +161,7 @@
     {
       "id": "D9",
       "profile": "first-campaign-target/2026-09-21",
+      "class": "numerics",
       "issue": "Does a zero incoming accumulator contribute an exponent to the alignment maximum? Equivalent encodings in the simulator (zero at -132) and silicon (zeros skipped); a zero carried at its FP32 exponent (-126 or -127) would truncate differently",
       "hawkeye_paper": "the recovered structure aligns to the maximum exponent; the accumulator's zero is not discussed",
       "hawkeye_simulator": "every zero Gfloat carries AMPERE_ZERO_EXPONENT = -132 (multiply_bfloat16_to_gfloat, group_sum, the wrapper's start) and group_sum's maximum ranges over every term, so a zero never raises it; utils.cpp::bfloat16_to_gfloat_tensor (unused by the mma path) would decode a zero at -127",
@@ -167,6 +180,7 @@
     {
       "id": "D10",
       "profile": "fp8-ada-mma-draft/2026-09-22",
+      "class": "numerics",
       "issue": "Hawkeye's Hopper FP8 simulator does not describe Ada's FP8 mma.sync; and the FP8 path truncates a pass-through accumulator to 14 significand bits even when every product is zero",
       "hawkeye_paper": "recovers one accumulation group of 32 with a 14-bit truncating adder for Hopper FP8 (zero accumulator only); Ada is not studied; the accumulator's treatment through a group of zero products is not discussed",
       "hawkeye_simulator": "Hopper_fp8_simulator: one group of 32, 14-bit adder, floor -139; reproduces 10,547,091 / 12,800,000 (82.40 %, 2,252,909 mismatches) of the RTX 4090 E4M3 m16n8k32 random-tile elements; the synthetic Ampere-style FP8 model HAWKEYE_AMPERE_GROUPSUM_E4M3_V0 (groups (8,8), width 25) is not measured against anything",
@@ -185,6 +199,7 @@
     {
       "id": "D11",
       "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+      "class": "numerics",
       "issue": "autoproof's v0 hypothesis for Blackwell block-scaled FP4 -- a single 26-bit alignment window with truncation toward zero -- is refuted by silicon",
       "hawkeye_paper": "not covered (Hawkeye studies Ampere/Hopper BF16/FP16/FP8); autoproof SEMANTICS.lock v0 stated the single-window NATIVE hypothesis as PENDING-PROBE",
       "hawkeye_simulator": "autoproof's v0 NATIVE reference: one 26-bit window below the largest addend, RZ; SEMANTICS.lock.v1 records it REFUTED by PROBE-3 with 142,270 mismatching dot statements; the checked-in probes/results/probe3_1783788526.json scores it at 143,076 / 1,574,998 (scan64: 1,058 of 1,060)",
@@ -202,6 +217,7 @@
     {
       "id": "D12",
       "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+      "class": "numerics",
       "issue": "What exactly autoproof's pin covers: the lockfile counts 1,574,998 / 1,574,998 for model5 while the checked-in probe JSON scores the clip-less model2 at 1,574,997 / 1,574,998; the pin date is 2026-07-11 (not 2026-09 as the campaign brief says); and every probe starts from a zero accumulator so only chain-reachable accumulators were exercised",
       "hawkeye_paper": "not covered",
       "hawkeye_simulator": "autoproof SEMANTICS.lock.v1 (status: ADOPTED at oracle-v3, human review 2026-07-11): gdfs_model MEASURED, 1,574,998/1,574,998 bitwise under model5 = model2 + hot-group clip; probes/results/probe3_1783788526.json: model2_under_test Gdfs2Config{w1 42, w2 36, ...}, total_model2_mismatches 1 -- the one mismatch that motivated the clip; notes: acc zero-init, ascending-K chain, one warp per case",
@@ -219,6 +235,7 @@
     {
       "id": "D13",
       "profile": "sm120.mma.m16n8k64.e2m1.mxf4",
+      "class": "numerics",
       "issue": "Sign of a computed zero when a nonzero exact sum lies entirely below the FP32 subnormal grid: autoproof's code (dyadic.rs::to_f32, RZ) returns a zero of the sum's sign, its lockfile prose says a computed zero normalises to +0; reachable only with UE8M0 (mxf4) scales, which autoproof never probed",
       "hawkeye_paper": "not covered",
       "hawkeye_simulator": "autoproof: native.rs applies the same five-way transducer to mxf4 with the hot clip off (its trigger reads the UE4M3 exponent field); dyadic.rs::to_f32(Round::Rz) of a nonzero value below 2^-149 yields -0.0 for a negative value; SEMANTICS.lock.v1 zero_handling: 'all-addends-zero firing leaves the accumulator bit-identical (incl. -0); exact cancellation normalizes to +0' -- silent on underflow",
@@ -236,6 +253,7 @@
     {
       "id": "D14",
       "profile": "sm90.mma.m16n8k32.e4m3",
+      "class": "numerics",
       "issue": "The Hopper legacy path: does FP8 mma.sync on sm_90 run Ada's two groups of 16 or wgmma's one group of 32?",
       "hawkeye_paper": "Hopper FP8 is characterised through wgmma-backed kernels (one group of 32); the mma.sync path on sm_90 is not distinguished",
       "hawkeye_simulator": "Hopper_fp8_simulator: one group of 32, width 14, floor -139 -- the wgmma semantics",
@@ -255,6 +273,7 @@
     {
       "id": "D15",
       "profile": "fp8-hopper-wgmma-draft/2026-09-22",
+      "class": "numerics",
       "issue": "The registry id sm90.wgmma.m64n8k32.e4m3 names an n8 shape while the H100 evidence is wgmma m64n64k32; and the exponent floor of the FP8 adders (-139) is Hawkeye's constant, not pinned by measurement on either Hopper or Ada",
       "hawkeye_paper": "FP8 Hopper: one group of 32, 14-bit adder; the floor -139 is the simulator's constant",
       "hawkeye_simulator": "Hopper_fp8_simulator: zero exponent -139",
@@ -273,6 +292,7 @@
     {
       "id": "D16",
       "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+      "class": "numerics",
       "issue": "A -0 FP32 accumulator with all-zero E2M1 products returns +0 on the RTX 5090, while model5 (BlockScaledAlignAdd) returns -0",
       "hawkeye_paper": "n/a (Hawkeye covers BF16/FP8 Ampere/Hopper; no FP4)",
       "hawkeye_simulator": "n/a",
@@ -291,6 +311,7 @@
     {
       "id": "D17",
       "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+      "class": "numerics",
       "issue": "With a nonzero accumulator of the opposite sign to the scaled group sum, whose msb lies 37-42 binades below the leading exponent, the RTX 5090 result is 1 ulp larger in magnitude than model5's",
       "hawkeye_paper": "n/a",
       "hawkeye_simulator": "n/a",
@@ -309,6 +330,7 @@
     {
       "id": "D18",
       "profile": "sm120.mma.m16n8k64.e2m1.mxf4",
+      "class": "numerics",
       "issue": "The MXFP4 (ue8m0 scales) variant is accepted on sm_120a and captured, but the 'model5 with ue8m0 exponent shifts' hypothesis is not exact",
       "hawkeye_paper": "n/a",
       "hawkeye_simulator": "n/a",

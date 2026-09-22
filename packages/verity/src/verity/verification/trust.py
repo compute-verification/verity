@@ -59,7 +59,7 @@ from verity.verification.target import TARGETS, Target
 __all__ = [
     "ANCHOR_SKU", "CANONICAL_FAMILIES", "Criterion", "DOSSIER_KIND", "EvidenceRef", "HONEST_MIN", "INDEPENDENT_REFERENCES",
     "INVALIDATION_TRIGGERS", "Level", "N_MIN", "NEGATIVES_MIN", "REGRESSION_TILES", "RELATION_LABELS", "RELITIGATION_PROCEDURE",
-    "TrustReport", "assess", "main", "publish", "render_markdown", "sku_family", "subjects",
+    "TrustReport", "assess", "d_class", "main", "publish", "registry_level", "render_markdown", "sku_family", "subjects",
 ]
 
 
@@ -72,6 +72,19 @@ class Level(IntEnum):
     PINNED = 2
     TRUSTED = 3
     TRUSTED_STABLE = 4
+
+
+def registry_level(status: str | None) -> Level:
+    """The ladder level a registry ``Instruction.status`` asserts (``pinned`` -> PINNED, ``hypothesis`` -> HYPOTHESIS, ``unprobed`` ->
+    UNPROBED).  The registry may never sit above the computed level (TRUSTED and above are computed only): ``python -m
+    verity.verification.trust --all --publish`` reports every instruction whose status exceeds its level, and the registry is
+    downgraded citing the dossier."""
+    if status is None:
+        return Level.UNPROBED
+    try:
+        return Level[str(status).upper()]
+    except KeyError:
+        raise ValueError(f"registry status {status!r} is not a trust-ladder level ({', '.join(l.name.lower() for l in Level)})") from None
 
 
 #: Elements with 0 mismatches on the anchor SKU for PINNED.  One default ``tc_probe --sweep`` is ~2.5e7 elements, so 1e7 demands a
@@ -504,9 +517,10 @@ class DatasetIdentity:
     """A frozen instance set in the repo (``fixtures/<name>/v<k>/manifest.json`` whose ``target.profile`` names the target)."""
 
     name: str
-    path: str
-    sha256: str
+    path: str                 # repo-relative manifest path, or ``contract:<CONSTANT>`` for a recipe pinned by digest in the bench contract
+    sha256: str               # the manifest's sha256, or the contract's recipe digest
     tiers: dict[str, dict]
+    contract: bool = False    # True: a seeded recipe (no manifest, no composition) identified by its contract digest
 
     @property
     def honest_tiers(self) -> list[str]:
@@ -822,6 +836,49 @@ def _load_discrepancies(repo: Path | None) -> list[dict]:
     return list(doc.get("entries") or [])
 
 
+#: Discrepancy-log entry classes.  ``numerics``: the model's words vs the hardware's (gates TRUSTED through Tb and PINNED through
+#: P5's regression tiles).  ``binding``: which kernels / shapes / accumulation orders realise the chain the circuit proves -- a
+#: deployment caveat the dossier lists, not a gate on the circuit (D6).  An entry without the field is ``numerics``.
+D_CLASSES = ("numerics", "binding")
+
+
+def d_class(entry: dict) -> str:
+    cls = entry.get("class") or "numerics"
+    if cls not in D_CLASSES:
+        raise ValueError(f"{entry.get('id')}: class must be one of {D_CLASSES}, got {cls!r}")
+    return cls
+
+
+#: Instance sets identified by a recipe digest pinned in the bench contract rather than by a repo fixture manifest (the FP8 Ada
+#: set is seeded: uniform finite E4M3 bytes from ``FP8_ADA_INSTANCES_SEED``).  target name -> the contract constant prefix; the
+#: constants ``<PREFIX>_INSTANCES_{DATASET,TIER,DIGEST}`` must all exist for the set to count (the Hopper ones once b-hopper lands them).
+CONTRACT_INSTANCE_SETS: dict[str, str] = {
+    "fp8-ada-mma-draft/2026-09-22": "FP8_ADA",
+    "fp8-hopper-wgmma-draft/2026-09-22": "FP8_HOPPER",
+}
+
+
+def _contract_instance_sets(subject: Subject, contract: Any | None = None) -> list[DatasetIdentity]:
+    """The subject's contract-pinned instance sets (``CONTRACT_INSTANCE_SETS``); ``contract`` overrides the module (tests)."""
+    prefixes = [p for name, p in CONTRACT_INSTANCE_SETS.items() if name in subject.names]
+    if not prefixes:
+        return []
+    if contract is None:
+        try:
+            from verity_numerical.bench import contract as _contract  # a sibling workspace package; absent -> no contract sets
+        except ImportError:
+            return []
+        contract = _contract
+    out = []
+    for prefix in prefixes:
+        vals = {k: getattr(contract, f"{prefix}_INSTANCES_{k}", None) for k in ("DATASET", "TIER", "DIGEST")}
+        if not all(isinstance(v, str) and v for v in vals.values()):
+            continue
+        out.append(DatasetIdentity(name=vals["DATASET"], path=f"contract:{prefix}_INSTANCES_DIGEST", sha256=vals["DIGEST"],
+                                   tiers={vals["TIER"]: {}}, contract=True))
+    return out
+
+
 def _datasets_for(subject: Subject, repo: Path | None) -> list[DatasetIdentity]:
     if repo is None or not (repo / "fixtures").is_dir():
         return []
@@ -897,6 +954,7 @@ class TrustReport:
     previous_dossiers: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     canaries: list[dict] = field(default_factory=list)   # `tc_probe --canary` runs on the anchor: {id, run_id, passed, ...}
+    deployment_caveats: list[dict] = field(default_factory=list)   # binding-class D-entries: listed, never a gate on the circuit
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -1026,8 +1084,10 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
     agreeing_anchor = [r for r in on_anchor if r.agrees(names)]
     disagreeing_anchor = [r for r in on_anchor if not r.agrees(names) and (r.mismatches_for(names) or 0) > 0]
     siblings = [i for i, ins in INSTRUCTIONS.items() if ins.model is not None and subject.model is not None and ins.model is subject.model and i != subject.instruction]
-    d_entries = [e for e in _load_discrepancies(repo_path) if e.get("profile") in subject.names]
-    datasets = _datasets_for(subject, repo_path)
+    all_entries = [e for e in _load_discrepancies(repo_path) if e.get("profile") in subject.names]
+    d_entries = [e for e in all_entries if d_class(e) == "numerics"]      # model vs hardware words: these gate the levels
+    binding_entries = [e for e in all_entries if d_class(e) == "binding"]  # which kernels/shapes realise the chain: dossier caveats
+    datasets = _datasets_for(subject, repo_path) + _contract_instance_sets(subject)
 
     # ---- HYPOTHESIS ----
     c = Criterion("H1", "HYPOTHESIS", "a model is registered for the instruction", subject.model is not None)
@@ -1207,14 +1267,16 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
             c.missing.append(f"{e['name']}: {e['verdict']}")
     criteria.append(c)
 
-    c = Criterion("Tb", "TRUSTED", "every discrepancy-log entry naming the target or its instruction is resolved (or excluded from the domain)", True)
+    c = Criterion("Tb", "TRUSTED", "every numerics-class discrepancy-log entry naming the target or its instruction is resolved (or excluded from the domain); "
+                  "binding-class entries are deployment caveats, not gates", True)
     for e in d_entries:
         status = e.get("status")
         c.evidence.append(EvidenceRef(e["id"], "discrepancy-log", f"{status}: {str(e.get('issue') or '')[:120]}"))
         if status not in ("resolved", "excluded"):
             c.passed = False
             c.missing.append(f"{e['id']} is {status} (owner {e.get('owner') or '?'}): {str(e.get('to_resolve') or e.get('issue') or '')[:200]}")
-    c.details = {"entries": [e["id"] for e in d_entries], "open": [e["id"] for e in d_entries if e.get("status") == "open"]}
+    c.details = {"entries": [e["id"] for e in d_entries], "open": [e["id"] for e in d_entries if e.get("status") == "open"],
+                 "binding": [e["id"] for e in binding_entries]}
     criteria.append(c)
 
     attributed = [(r, why) for r in ev.relation for why in [_relation_attribution(r, subject, datasets)] if why]
@@ -1240,12 +1302,18 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
     if best_n < NEGATIVES_MIN:
         c.missing.append(f"negative set: {best_n} rejected mutations recorded (need {NEGATIVES_MIN}); extend the negative tier and re-run the checker sweep")
     if datasets and not edge:
-        c.missing.append("the frozen honest set has no edge (corner) families in its manifest")
+        if all(ds.contract for ds in datasets):
+            c.missing.append("the instance set is a seeded recipe pinned by contract digest with no corner families: freeze a fixture manifest with edge families "
+                             "(or add a corner tier to the recipe) so the honest set includes them")
+        else:
+            c.missing.append("the frozen honest set has no edge (corner) families in its manifest")
     if not datasets and subject.target is not None:
-        c.missing.append(f"no frozen instance set (fixtures/*/v*/manifest.json with target.profile = {subject.name}) whose edge families the honest set must include")
+        c.missing.append(f"no frozen instance set (fixtures/*/v*/manifest.json with target.profile = {subject.name}, or a contract-pinned recipe digest in "
+                         f"CONTRACT_INSTANCE_SETS) whose edge families the honest set must include")
     criteria.append(c)
 
-    c = Criterion("Td", "TRUSTED", "hardware-in-the-loop: the frozen instance set's expected words re-executed on the anchor with 0 mismatches", False)
+    c = Criterion("Td", "TRUSTED", "hardware-in-the-loop: the frozen instance set (a repo fixture manifest or a contract-pinned recipe digest) re-executed "
+                  "on the anchor with 0 mismatches", False)
     for ds in datasets:
         covered: dict[str, EvidenceRef] = {}
         for r in ev.hardware:                                            # every replay of this dataset, on whatever silicon
@@ -1258,7 +1326,8 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
             if r.instruction not in (None, subject.instruction):
                 continue
             if sha and sha != ds.sha256:
-                c.missing.append(f"{ds.name}: replay {r.id[:24]} checked manifest {sha[:12]}..., the repo pins {ds.sha256[:12]}...; re-run against the frozen set")
+                c.missing.append(f"{ds.name}: replay {r.id[:24]} checked {'digest' if ds.contract else 'manifest'} {sha[:12]}..., "
+                                 f"{ds.path} pins {ds.sha256[:12]}...; re-run against the frozen set")
                 continue
             for tier, t in (r.instances.get("tiers") or {}).items():
                 if t.get("mismatches") == 0 and tier not in covered:
@@ -1268,12 +1337,14 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
                 c.evidence.append(covered[tier])
             else:
                 c.missing.append(f"{ds.name}/{tier}: no tc-evidence/v1 on {anchor} labelled family=frozen-instances instances_dataset={ds.name} instances_tier={tier} mismatches=0")
-        c.details[ds.name] = {"tiers": ds.honest_tiers, "covered": sorted(covered), "manifest_sha256": ds.sha256}
+        c.details[ds.name] = {"tiers": ds.honest_tiers, "covered": sorted(covered), "manifest_sha256": ds.sha256, "identified_by": ds.path,
+                              "contract": ds.contract}
         if all(t in covered for t in ds.honest_tiers):
             c.passed = True
     if not datasets:
-        c.missing.append(f"no frozen instance set to re-execute on {anchor}: freeze one (fixtures/<dataset>/v<k>/manifest.json with target.profile = {subject.name}), "
-                         f"then `tc_probe --replay-instances` on the anchor labelled family=frozen-instances")
+        c.missing.append(f"no frozen instance set to re-execute on {anchor}: freeze one (fixtures/<dataset>/v<k>/manifest.json with target.profile = {subject.name}, "
+                         f"or pin a recipe digest in the bench contract and list it in CONTRACT_INSTANCE_SETS), then `tc_probe --replay-instances` on the anchor "
+                         f"labelled family=frozen-instances")
     criteria.append(c)
 
     c = Criterion("Te", "TRUSTED", "an independent verifier accepted a full-contract proof of the relation", False)
@@ -1329,10 +1400,13 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
             break
     next_level = Level(level + 1) if level < Level.TRUSTED_STABLE else None
     missing_to_next = [m for cr in criteria if next_level is not None and Level[cr.level] == next_level and not cr.passed for m in cr.missing]
-    if registry is not None and registry.status == "pinned" and level < Level.PINNED:
-        notes.append(f"registry asserts status=pinned but the computed level is {level.name}: the registry is ahead of the evidence")
+    if registry is not None and registry_level(registry.status) > level:
+        notes.append(f"REGISTRY AHEAD OF THE EVIDENCE: registry asserts status={registry.status} but the computed level is {level.name}; "
+                     f"downgrade Instruction.status to {level.name.lower()} citing this dossier (registry status <= computed level)")
     if registry is not None and registry.status != "pinned" and level >= Level.PINNED:
         notes.append(f"registry says status={registry.status} but the evidence pins the model: update the registry")
+    if registry is not None and registry.dossier is None:
+        notes.append("registry Instruction.dossier is unset: point it at the published dossier id")
     canaries = [r for r in on_anchor if r.canary]
     failing_canaries = [r for r in canaries if not r.agrees(names)]
     if failing_canaries:
@@ -1344,8 +1418,8 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
         model=subject.model.name if subject.model else None, anchor_sku=subject.anchor_sku, anchor_family=anchor,
         level=level.name, registry_status=registry.status if registry else None, criteria=criteria,
         next_level=next_level.name if next_level else None, missing_to_next=missing_to_next,
-        d_entries=[{"id": e["id"], "status": e.get("status"), "issue": e.get("issue"), "resolution": e.get("resolution"), "owner": e.get("owner"),
-                    "evidence_refs": list(e.get("evidence_refs") or []), "regression_tiles": list(REGRESSION_TILES.get(e["id"], ()))} for e in d_entries],
+        d_entries=[_d_summary(e) for e in d_entries],
+        deployment_caveats=[_d_summary(e) for e in binding_entries],
         references=refs_out, sass=sass_info,
         hardware_records=[{"id": r.id, "kind": r.kind, "run_id": r.run_id, "family": r.family, "sku": r.sku, "elements": r.elements,
                            "mismatches": r.mismatches_for(names), "agrees": r.agrees(names), "families": sorted(r.families), "legacy": r.legacy, "canary": r.canary,
@@ -1364,6 +1438,11 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
         canaries=[{"id": r.id, "run_id": r.run_id, "passed": r.agrees(names), "elements": r.elements, "mismatches": r.mismatches_for(names),
                    "driver": r.driver, "nvcc": (r.nvcc or "")[:60] or None} for r in canaries],
     )
+
+
+def _d_summary(e: dict) -> dict:
+    return {"id": e["id"], "class": d_class(e), "status": e.get("status"), "issue": e.get("issue"), "resolution": e.get("resolution"), "owner": e.get("owner"),
+            "evidence_refs": list(e.get("evidence_refs") or []), "regression_tiles": list(REGRESSION_TILES.get(e["id"], ()))}
 
 
 # --- rendering ---------------------------------------------------------------------------------------------------------------
@@ -1408,13 +1487,23 @@ def render_markdown(rep: TrustReport) -> str:
         for m in later:
             out.append(f"- {m}")
         out.append("")
-    out.append("## Discrepancy-log entries naming the subject")
+    out.append("## Discrepancy-log entries naming the subject (numerics)")
     out.append("")
     if rep.d_entries:
         out.append("| entry | status | issue | resolution | regression tiles |")
         out.append("|---|---|---|---|---|")
         for e in rep.d_entries:
             out.append(f"| {e['id']} | {e['status']} | {str(e.get('issue') or '')[:140].replace('|', '/')} | {str(e.get('resolution') or '')[:160].replace('|', '/')} | {', '.join(e['regression_tiles']) or '-'} |")
+    else:
+        out.append("none")
+    out.append("")
+    out.append("## Deployment caveats (binding-class entries: which kernels / shapes realise the chain; not a gate on the circuit)")
+    out.append("")
+    if rep.deployment_caveats:
+        out.append("| entry | status | owner | issue | resolution |")
+        out.append("|---|---|---|---|---|")
+        for e in rep.deployment_caveats:
+            out.append(f"| {e['id']} | {e['status']} | {e.get('owner') or '-'} | {str(e.get('issue') or '')[:160].replace('|', '/')} | {str(e.get('resolution') or '')[:160].replace('|', '/')} |")
     else:
         out.append("none")
     out.append("")
@@ -1546,6 +1635,7 @@ def main(argv: list[str] | None = None) -> int:
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
     published: list[dict] = []
+    ahead: list[str] = []
     for name in names:
         rep = assess(name, store, repo=args.repo, evidence=evidence)
         text = json.dumps({"schema": DOSSIER_SCHEMA, **rep.to_dict()}, indent=1, sort_keys=True) if args.format == "json" else render_markdown(rep)
@@ -1557,8 +1647,12 @@ def main(argv: list[str] | None = None) -> int:
             res = publish(rep, store, push=not args.no_push)
             published.append({"subject": rep.subject, **res})
             print(f"published {rep.subject}: {res['id']} level={rep.level} pushed={json.dumps(res['pushed'])[:120]}", file=sys.stderr)
+        if rep.target is None and registry_level(rep.registry_status) > Level[rep.level]:
+            ahead.append(f"{rep.instruction}: registry status={rep.registry_status} > computed {rep.level}" + (f" (dossier {published[-1]['id']})" if published else ""))
     if published and args.format == "json" and not out_dir:
         sys.stdout.write(json.dumps(published, indent=1) + "\n")
+    for line in ahead:
+        print(f"REGISTRY AHEAD OF THE EVIDENCE  {line}: downgrade Instruction.status and cite the dossier", file=sys.stderr)
     return 0
 
 

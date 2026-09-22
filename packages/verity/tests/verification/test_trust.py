@@ -305,7 +305,83 @@ def test_passing_canary_is_a_verdict_not_coverage(store, repo):
 def test_registry_ahead_of_evidence_is_noted(store, repo):
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.registry_status == "pinned"
-    assert any("registry is ahead of the evidence" in n for n in rep.notes)
+    assert any("ahead of the evidence" in n.lower() and "downgrade" in n for n in rep.notes)
+    assert trust.registry_level("pinned") == Level.PINNED > trust.registry_level("hypothesis") > trust.registry_level("unprobed") == trust.registry_level(None)
+    with pytest.raises(ValueError):
+        trust.registry_level("trusted-by-fiat")
+
+
+def test_registry_status_values_are_trust_ladder_members_and_never_above_pinned():
+    """No store: the registry may assert at most PINNED (TRUSTED and above are computed), every status is a ladder level, and a
+    dossier reference, when set, is a store artifact id."""
+    from verity.ml.tc.instructions import INSTRUCTIONS
+    from verity.verification.target import TARGETS
+
+    for ins in INSTRUCTIONS.values():
+        assert ins.status.upper() in Level.__members__, f"{ins.id}: status {ins.status!r} is not a trust-ladder level"
+        assert trust.registry_level(ins.status) <= Level.PINNED, f"{ins.id}: the registry cannot assert {ins.status}"
+        assert ins.dossier is None or ins.dossier.startswith("art:"), f"{ins.id}: dossier {ins.dossier!r} is not a store artifact id"
+        if ins.model is None:
+            assert trust.registry_level(ins.status) == Level.UNPROBED
+    for t in TARGETS.values():
+        assert t.dossier is None or t.dossier.startswith("art:"), f"{t.name}: dossier {t.dossier!r} is not a store artifact id"
+
+
+def test_binding_class_entries_are_deployment_caveats_not_gates(store, repo):
+    trusted(store)
+    write_log(repo, [dlog("D10", "resolved", evidence_refs=[GOLDEN]), dlog("D6", "open", **{"class": "binding", "owner": "integration"}),
+                     dlog("D98", "open", **{"class": "numerics"})])
+    rep = assess("FP8_ADA_MMA", store, repo=repo)
+    assert not crit(rep, "Tb").passed and [e["id"] for e in rep.d_entries] == ["D10", "D98"]           # the numerics entry gates ...
+    assert [e["id"] for e in rep.deployment_caveats] == ["D6"] and crit(rep, "Tb").details["binding"] == ["D6"]
+    write_log(repo, [dlog("D10", "resolved", evidence_refs=[GOLDEN]), dlog("D6", "open", **{"class": "binding", "owner": "integration"})])
+    rep = assess("FP8_ADA_MMA", store, repo=repo)
+    assert rep.level == "TRUSTED" and crit(rep, "Tb").passed                                          # ... the binding one does not
+    assert [e["id"] for e in rep.deployment_caveats] == ["D6"] and rep.deployment_caveats[0]["class"] == "binding"
+    md = render_markdown(rep)
+    assert "## Deployment caveats" in md and "| D6 | open | integration |" in md
+    assert TrustReport.from_dict(json.loads(json.dumps(rep.to_dict()))) == rep
+    write_log(repo, [dlog("D10", "resolved", evidence_refs=[GOLDEN], **{"class": "folklore"})])
+    with pytest.raises(ValueError):
+        assess("FP8_ADA_MMA", store, repo=repo)
+
+
+def test_td_accepts_a_contract_pinned_recipe_digest(store, repo, monkeypatch):
+    """The FP8 Ada instance set is seeded, not a fixture: its identity is the recipe digest pinned in the bench contract."""
+    import functools
+    import shutil
+    import types
+
+    shutil.rmtree(repo / "fixtures" / "fp8-instances")                                              # no manifest in the repo
+    fake = types.SimpleNamespace(FP8_ADA_INSTANCES_DATASET="bench-instances-fp8-ada/v1", FP8_ADA_INSTANCES_TIER="vu-k1536-fp8-ada",
+                                 FP8_ADA_INSTANCES_DIGEST="e6" * 32)
+    monkeypatch.setattr(trust, "_contract_instance_sets", functools.partial(trust._contract_instance_sets, contract=fake))
+    hw(store)
+    relation(store)
+    relation(store, verified=True, proof_class="COMPLETE_ZK_BACKEND")
+    rep = assess("FP8_ADA_MMA", store, repo=repo)
+    assert not crit(rep, "Td").passed
+    assert any("bench-instances-fp8-ada/v1/vu-k1536-fp8-ada" in m and "family=frozen-instances" in m for m in crit(rep, "Td").missing)
+    assert crit(rep, "Td").details["bench-instances-fp8-ada/v1"]["identified_by"] == "contract:FP8_ADA_INSTANCES_DIGEST"
+    assert any("seeded recipe" in m for m in crit(rep, "Tc").missing)                                # no corner families in a recipe
+    # a replay of the contract set on the anchor with the digest as its manifest sha256
+    meta = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "workload_fingerprint": {"instruction": INSTRUCTION},
+            "validation": {"status": "passed", "checker": "tc_probe --replay-instances"},
+            "tc_evidence": {"instruction": INSTRUCTION, "sku": "NVIDIA GeForce RTX 4090"}}
+    art = store.put_artifact("tc-evidence/v1", meta)
+    for k, v in (("instruction", INSTRUCTION), ("hardware", ANCHOR), ("family", "frozen-instances"), ("instances_dataset", "bench-instances-fp8-ada/v1"),
+                 ("instances_tier", "vu-k1536-fp8-ada"), ("instances_manifest_sha256", "e6" * 32), ("mismatches", "0")):
+        store.add_label(art, k, v, "test")
+    rep = assess("FP8_ADA_MMA", store, repo=repo)
+    assert crit(rep, "Td").passed and any(e.id == art for e in crit(rep, "Td").evidence)
+    # a replay against another digest is not the frozen set
+    store.add_label(art, "instances_manifest_sha256", "ab" * 32, "test")
+    rep = assess("FP8_ADA_MMA", store, repo=repo)
+    assert not crit(rep, "Td").passed and any("checked digest ab" in m for m in crit(rep, "Td").missing)
+    # the constants must all exist: an absent Hopper set contributes nothing
+    assert trust._contract_instance_sets(trust.subjects("FP8_HOPPER_WGMMA"), contract=fake) == []
+    real = trust._contract_instance_sets(trust.subjects("FP8_ADA_MMA"))
+    assert real == [] or (real[0].contract and real[0].name == "bench-instances-fp8-ada/v1" and len(real[0].sha256) == 64)
 
 
 # --- constants, dossier, publish -------------------------------------------------------------------------------------------------
@@ -427,7 +503,8 @@ def test_canary_bf16_anchor_prefers_its_own_capture_directory(canary):
     plan = canary.canary_plan("sm80.mma.m16n8k16.bf16", REPO_ROOT)
     assert "D2" in plan.regression
     assert plan.replays == ("packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",)
-    assert "adder_width_cancellation" not in plan.families                                    # FP8-only today (TODO in canary.py)
+    assert {"adder_width_cancellation", "acc_only_lsb_walk", "zero_products_nonzero_acc", "specials"} <= set(plan.families)  # pin-bf16: BF16 has them too
+    assert "fp8_floor_probe" not in plan.families                                             # the D15(b) probe is FP8-only
 
 
 def test_run_canary_bookkeeping_without_a_device(canary, tmp_path):
@@ -449,8 +526,11 @@ def test_run_canary_bookkeeping_without_a_device(canary, tmp_path):
     assert good["failures"] == [] and good["model_agrees"] == {MODEL: True}
     assert good["elements"] == plan.elements(ins.m) and good["digest"] == canary.canary_digest(plan, ins.fmt, ins.m, ins.k)
     assert (tmp_path / "canary_tiles.npz").is_file()
-    labels = {lab["key"]: lab["value"] for lab in canary.result_labels(ins, good, {"device": "NVIDIA GeForce RTX 4090"})}
-    assert labels == {"family": "canary", "instruction": INSTRUCTION, "hardware": ANCHOR, "model": MODEL, "model_agrees": "true", "evidence": "canary"}
+    labels = {lab["key"]: lab["value"] for lab in canary.result_labels(ins, good, {"device": "NVIDIA GeForce RTX 4090", "gpu_uuid": "GPU-abc"})}
+    assert labels == {"family": "canary", "instruction": INSTRUCTION, "hardware": ANCHOR, "model": MODEL, "model_agrees": "true", "evidence": "canary", "device": "GPU-abc"}
+    sweep_labels = {lab["key"]: lab["value"] for lab in canary.evidence_labels(ins, {"model_agrees": {MODEL: False}}, {"device": "NVIDIA GeForce RTX 4090"}, evidence="sweep")}
+    assert sweep_labels == {"instruction": INSTRUCTION, "hardware": ANCHOR, "model": MODEL, "model_agrees": "false", "evidence": "sweep", "device": None}
+    assert all("device" not in cmd for cmd in canary.label_commands("art:x", canary.evidence_labels(ins, good, {"device": "x"}, evidence="sweep"), "lane"))  # no UUID: no label
 
     def flipped(A, Bt, C):
         D = fake_model(A, Bt, C)[0][0].copy()
