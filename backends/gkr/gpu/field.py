@@ -245,6 +245,91 @@ def mm_mod(A: torch.Tensor | Limbs, B: torch.Tensor | Limbs) -> torch.Tensor:
     return (ll + lh * _R16 + hh * _R32) % P
 
 
+_POW8 = [pow(2, 8 * s, P) for s in range(8)]
+_INT8_MAX_ELEMS = 1 << 28        # cuBLASLt faults above ~2^31 operand elements; chunk rows well below (packed lane's probe)
+_INT8_K_CHUNK = 1 << 16          # 4 . 2^14 . 2^16 = 2^32 > int32 -- but each group of equal limb weight has <= 4 terms
+#                                  summed in int64, and one _int_mm holds K . 2^14 <= 2^30
+
+
+class Limbs8:
+    """A canonical matrix pre-split into its four balanced INT8 limbs ``x = Σ_i 2^(8i) l_i``, ``l_i ∈ [-128, 128)``
+    (each ``(rows, cols)`` int8, contiguous), for the INT8 tensor-core ``mm_mod_int8``."""
+
+    def __init__(self, B: torch.Tensor, side: str = "a") -> None:
+        """``side="b"``: the right operand of the GEMM, stored column-major (cuBLASLt's IGEMM runs at 485 TMAC/s
+        with a column-major ``B`` and at 50 with a row-major one, probed on the H100)."""
+        self.shape = tuple(B.shape)
+        self.side = side
+        M, K = B.shape
+        # pad once to cuBLASLt's shape rules (rows of A a multiple of 32, the contraction a multiple of 8, N of 8)
+        Mp = max(32, -(-M // 32) * 32) if side == "a" else M
+        Kp = max(32, -(-K // 8) * 8) if side == "a" else max(32, -(-K // 8) * 8)
+        Np = None
+        if side == "b":
+            Kp, Np = max(32, -(-M // 8) * 8), max(32, -(-K // 8) * 8)
+        v = torch.zeros((Mp, Kp) if side == "a" else (Np, Kp), dtype=torch.int32, device=B.device)
+        if side == "a":
+            v[:M, :K] = B.to(torch.int32)
+        else:
+            v[:K, :M] = B.to(torch.int32).t()
+        ls = []
+        for _ in range(4):
+            l = ((v + 128) & 255) - 128
+            l8 = l.to(torch.int8).contiguous()
+            ls.append(l8.t() if side == "b" else l8)
+            v = (v - l) >> 8
+        self.limbs = ls
+
+
+def _int_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """``torch._int_mm`` on ``a (M, K) int8``, ``b (K, N) int8`` -> int32, with the shape rules of cuBLASLt (M a multiple
+    of 32 and > 16, K and N multiples of 8) met by zero padding, and the operand-size cap by row chunking."""
+    M, K = a.shape
+    N = b.shape[1]
+    Mp, Kp, Np = max(32, -(-M // 32) * 32), max(32, -(-K // 8) * 8), max(32, -(-N // 8) * 8)
+    if (Mp, Kp) != (M, K):
+        ap = torch.zeros((Mp, Kp), dtype=torch.int8, device=a.device)
+        ap[:M, :K] = a
+        a = ap
+    if (Kp, Np) != (K, N) or b.stride(0) != 1:
+        bp = torch.zeros((Np, Kp), dtype=torch.int8, device=b.device).t()      # column-major
+        bp[:K, :N] = b
+        b = bp
+    if a.numel() > _INT8_MAX_ELEMS:
+        rows = max(32, (_INT8_MAX_ELEMS // Kp) // 32 * 32)
+        out = torch.cat([torch._int_mm(a[r:r + rows].contiguous(), b) for r in range(0, Mp, rows)], 0)
+    else:
+        out = torch._int_mm(a.contiguous(), b)
+    return out[:M, :N]
+
+
+def mm_mod_int8(A: torch.Tensor | Limbs8, B: torch.Tensor | Limbs8) -> torch.Tensor:
+    """``(A @ B) mod p`` for canonical matrices on INT8 tensor cores: 16 limb GEMMs (INT32 accumulate, exact for
+    ``K ≤ 2^16`` per chunk since ``|l_i l_j| < 2^14``), the limb products of equal weight ``2^(8(i+j))`` summed in
+    int64 and recombined mod ``p``.  Bit-exact with ``mm_mod``."""
+    a = A if isinstance(A, Limbs8) else Limbs8(A, "a")
+    b = B if isinstance(B, Limbs8) else Limbs8(B, "b")
+    K = a.shape[1]
+    dev = a.limbs[0].device
+    out = torch.zeros((a.shape[0], b.shape[1]), dtype=torch.int64, device=dev)
+    for lo in range(0, K, _INT8_K_CHUNK):
+        hi = min(K, lo + _INT8_K_CHUNK)
+        if lo == 0 and hi == K:
+            al, bl = a.limbs, b.limbs
+        else:
+            al = [l[:, lo:hi].contiguous() for l in a.limbs]
+            bl = [l[lo:hi].t().contiguous().t() for l in b.limbs]
+        for s in range(7):
+            acc = None
+            for i in range(4):
+                j = s - i
+                if 0 <= j < 4:
+                    pr = _int_mm(al[i], bl[j])[: a.shape[0], : b.shape[1]].to(torch.int64)
+                    acc = pr if acc is None else acc + pr
+            out = (out + (acc % P) * _POW8[s]) % P
+    return out
+
+
 def ext_contract(X: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
     """``Σ_g X[..., g, :] · w[g, :]`` in the extension: ``X`` ``(m, k, 6)``, ``w`` ``(k, 6)`` -> ``(m, 6)``."""
     k = w.shape[0]
