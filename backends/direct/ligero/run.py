@@ -74,7 +74,8 @@ def split_pub(units, ys):
 
 
 class Runner:
-    def __init__(self, device: str, target: float, rate_log2: int = 2, hints: str = "torch"):
+    def __init__(self, device: str, target: float, rate_log2: int = 2, hints: str = "torch", zk: bool = False):
+        self.zk = zk
         self.p = REAL
         self.device = device
         self.hints_mode = hints
@@ -88,7 +89,7 @@ class Runner:
 
     def cfg(self, l: int) -> Config:
         if l not in self._cfg:
-            self._cfg[l] = config_for(l, self.target, self.rate_log2)
+            self._cfg[l] = config_for(l, self.target, self.rate_log2, zk=self.zk)
         return self._cfg[l]
 
     def prove_units(self, units, ys, check=True, mutate=None, min_l: int = 256):
@@ -122,7 +123,7 @@ class Runner:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def gate(args) -> int:
-    R = Runner(args.device, args.target, args.rate_log2, args.hints)
+    R = Runner(args.device, args.target, args.rate_log2, args.hints, zk=args.zk)
     log = print
     log(f"system: {R.sys.summary()} compiled in {R.compile_seconds:.2f}s; device {args.device}")
     root = Path(args.root)
@@ -244,7 +245,7 @@ def gate(args) -> int:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def bench(args) -> int:
-    R = Runner(args.device, args.target, args.rate_log2, args.hints)
+    R = Runner(args.device, args.target, args.rate_log2, args.hints, zk=args.zk)
     root = Path(args.root)
     tu = instances.load("tu-k16", root)
     units = [tu.instance(i)[:3] for i in range(args.batch)]
@@ -350,6 +351,7 @@ def main(argv=None) -> int:
         s.add_argument("--rate-log2", type=int, default=2)
         s.add_argument("--batch", type=int, default=4096)
         s.add_argument("--out", default=None)
+        s.add_argument("--zk", action="store_true", help="HVZK masking (PROTOCOL.md 8b): blinded rows, mask rows, coset domain")
         s.add_argument("--hints", default="torch", choices=("torch", "python"), help="hint generator: torch (vectorised) or the checker's Python gen_step")
         s.set_defaults(fn=fn)
     for name in ("gate", "gate-vu"):
