@@ -129,6 +129,7 @@ _SRC_V2 = r"""
 #define THREADS %(threads)d
 #define LOGT %(logt)d
 #define MINBLOCKS %(minblocks)d      /* __launch_bounds__ min CTAs per SM: 2 caps the registers at 64 (v2 t512 wants 120) */
+#define GATHER %(gather)d            /* 1: write only the selected positions: out[slot[pos]][row], out is (t, out_rows) */
 #define PER (K / THREADS)            /* elements per thread: i = t + THREADS * s */
 
 __device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return s >= P ? s - P : s; }
@@ -152,7 +153,7 @@ extern "C" __global__ void __launch_bounds__(THREADS, MINBLOCKS)
 rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
           const unsigned* __restrict__ tw_inv, const unsigned* __restrict__ tw_fwd,
           const unsigned* __restrict__ coset_tw, int rows, int write_systematic,
-          long long out_stride, int coset_base, int ncosets)
+          long long out_stride, int coset_base, int ncosets, const int* __restrict__ slot, long long out_rows)
 {
     /* out_stride: words between consecutive output rows (4K for the (R, n) layout, 3K for a cosets-only store);
        coset_base: coset c is written at dst + (c - coset_base) * K (0 for (R, n), 1 for the 3K store);
@@ -166,7 +167,10 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
         #pragma unroll
         for (int s = 0; s < PER; ++s) {
             r[s] = __ldg(&src[t + THREADS * s]);
-            if (write_systematic) dst[t + THREADS * s] = r[s];
+            if (GATHER) {
+                const int sl = __ldg(&slot[t + THREADS * s]);
+                if (sl >= 0) out[(size_t)sl * out_rows + row] = r[s];
+            } else if (write_systematic) dst[t + THREADS * s] = r[s];
         }
         /* INTT, DIF: register stages m = K/2 .. THREADS */
         #pragma unroll
@@ -241,7 +245,12 @@ rs_encode(const unsigned* __restrict__ in, unsigned* __restrict__ out,
             }
             unsigned* d = dst + (size_t)(c - coset_base) * K;
             #pragma unroll
-            for (int s = 0; s < PER; ++s) d[t + THREADS * s] = r[s];
+            for (int s = 0; s < PER; ++s) {
+                if (GATHER) {
+                    const int sl = __ldg(&slot[c * K + t + THREADS * s]);
+                    if (sl >= 0) out[(size_t)sl * out_rows + row] = r[s];
+                } else d[t + THREADS * s] = r[s];
+            }
         }
     }
 }
@@ -275,7 +284,7 @@ class RSEncoderSIMT:
     """cupy-backed encoder; ``__call__(rows_u32 (R, k) on device, out (R, n) or None) -> out``."""
 
     def __init__(self, k: int = bb.K_CODE, n: int = bb.N_CODE, threads: int = 512, blocks: int | None = None, variant: str = "v2",
-                 min_blocks_per_sm: int = 1):
+                 min_blocks_per_sm: int = 1, gather: bool = False):
         """``min_blocks_per_sm`` (v2): second argument of ``__launch_bounds__``; v2 at 512 threads takes 120 registers =
         one CTA per SM and every register of the SM, so nothing can run beside it.  ``2`` caps the registers at 64
         and, with ``blocks`` = the SM count, leaves half the SM's registers to a concurrently running kernel
@@ -287,7 +296,10 @@ class RSEncoderSIMT:
         self.k, self.n, self.threads, self.variant = k, n, threads, variant
         self.cp = cp
         params = {"npinv": bb.NEG_P_INV_MOD_R, "pinv": bb.P_INV_MOD_R, "k": k, "logk": k.bit_length() - 1, "threads": threads,
-                  "logt": threads.bit_length() - 1, "minblocks": min_blocks_per_sm}
+                  "logt": threads.bit_length() - 1, "minblocks": min_blocks_per_sm, "gather": int(gather)}
+        if gather and variant != "v2":
+            raise ValueError("gather mode is a v2 option")
+        self.gather_mode = gather
         src = {"v1": _SRC, "v2": _SRC_V2}[variant] % params
         self.min_blocks_per_sm = min_blocks_per_sm
         self.kernel = cp.RawKernel(src, "rs_encode", options=("-std=c++17",))
@@ -319,10 +331,29 @@ class RSEncoderSIMT:
         if cosets_only and (write_systematic or self.variant != "v2" or out.shape[1] < ncosets * self.k):
             raise ValueError("cosets-only output needs v2, write_systematic=False and >= ncosets * k columns")
         args = [rows, out, self.tw_inv, self.tw_fwd, self.coset, np.int32(R), np.int32(1 if write_systematic else 0)]
+        if self.gather_mode:
+            raise RuntimeError("gather-mode encoder: use .gather(rows, columns)")
         if self.variant == "v2":
-            args += [np.int64(out.shape[1]), np.int32(1 if cosets_only else 0), np.int32(ncosets)]
+            args += [np.int64(out.shape[1]), np.int32(1 if cosets_only else 0), np.int32(ncosets), self.coset, np.int64(0)]
         elif ncosets != 3:
             raise ValueError("ncosets is a v2 option")
+        self.kernel((min(self.blocks, R),), (self.threads,), tuple(args), shared_mem=self.extra_smem, stream=stream)
+        return out
+
+    def gather(self, rows, columns, out=None, stream=None):
+        """Gather mode (``gather=True``): encode every row and write only the codeword columns ``columns`` (coset-layout
+        indices, any order, host or device ints) -> ``out`` ``(t, R)`` uint32: ``out[q, i] = codeword[i, columns[q]]``."""
+        cp = self.cp
+        rows = cp.ascontiguousarray(rows).view(cp.uint32)
+        R = rows.shape[0]
+        cols = np.asarray(cp.asnumpy(columns) if hasattr(columns, "device") else columns, dtype=np.int64)
+        slot = np.full(self.n, -1, dtype=np.int32)
+        slot[cols] = np.arange(len(cols), dtype=np.int32)
+        slot_d = cp.asarray(slot)
+        if out is None:
+            out = cp.empty((len(cols), R), dtype=cp.uint32)
+        args = [rows, out, self.tw_inv, self.tw_fwd, self.coset, np.int32(R), np.int32(1), np.int64(0), np.int32(0), np.int32(3),
+                slot_d, np.int64(R)]
         self.kernel((min(self.blocks, R),), (self.threads,), tuple(args), shared_mem=self.extra_smem, stream=stream)
         return out
 
