@@ -1,8 +1,10 @@
 """BabyBear and BabyBear^6 arithmetic on torch tensors (int64 compute, int32 storage) plus the small-value
 Python-int versions the transcript-side logic uses.
 
-Base field ``p = 2^31 - 2^27 + 1``; challenge field ``F_{p^6} = F_p[X] / (X^6 - W)``, ``W = 31`` (the same
-``W`` as ``backends/gkr/tensor/reference.py``: the smallest non-square non-cube).  An extension element is a
+Base field ``p = 2^31 - 2^27 + 1``; challenge field ``F_{p^6} = F_p[X] / (X^6 - W)``, ``W = 22`` (the smallest
+non-square non-cube, the modulus the a-packed kernels ``../packed/reference.py`` are generated for; the v1-v2e
+prover used ``W = 31``, ``../tensor/reference.py``'s choice -- the same field up to isomorphism, the same soundness
+bound, a different coordinate representation, hence a different transcript).  An extension element is a
 tensor whose last dimension is 6 (planar coordinate order ``c0..c5``); a base element is any int64 tensor of
 canonical values in ``[0, p)``.  Every product of two canonical values (< 2^62) fits int64, so one product is
 reduced before it is accumulated; sums of up to 2^32 canonical values fit as well.
@@ -20,7 +22,7 @@ from __future__ import annotations
 import torch
 
 P = 2**31 - 2**27 + 1
-W = 31
+W = 22          # X^6 - 22 irreducible (22 is a non-square non-cube mod p); must equal packed.reference.W
 DEG = 6
 _R32 = (2**32) % P          # 2^32 mod p
 _R16 = 2**16

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 import torch
 
 from . import field as _field
-from . import gkr, ligero, logup
+from . import gkr, ligero, logup, logup_packed
 from .circuit import (
     Circuit,
     Layer,
@@ -145,6 +145,15 @@ class Stats:
 def _sync(dev):
     if dev.type == "cuda":
         torch.cuda.synchronize(dev)
+
+
+def use_packed_logup(dev) -> bool:
+    """The packed LogUp kernels (``logup_packed``) run on CUDA unless ``VERITY_GPU_TORCH_ONLY`` is set; the torch
+    path (``logup.prove_table``) produces the identical transcript."""
+    import os
+
+    return (dev.type == "cuda" and logup_packed.AVAILABLE and not os.environ.get("VERITY_GPU_TORCH_ONLY")
+            and not os.environ.get("VERITY_GPU_NO_PACKED"))
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -434,14 +443,25 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     tr, chs, pts = start_transcript(inst, pcs, root)
     t0 = time.perf_counter()
     lookup_claims = []
+    packed = use_packed_logup(dev)
     for ti, t in enumerate(inst.tables):
         n = hypercube_dim(inst, t.name, t)
         vals = [v for v in seg_query_values(inst, t.name) if v is not None]
         trows = logup.table_rows(t, dev)
-        p_leaf, q_leaf = logup.build_leaves(t, trows, vals, mults[ti], chs[ti][0], chs[ti][1], n)
-        del vals
-        lc = logup.prove_table(p_leaf, q_leaf, n, tr, out)
-        del p_leaf, q_leaf
+        n_wit = sum(v.shape[0] for v in vals)
+        if packed and t.cols == 1 and n_wit % 2 == 0 and len(t.rows) % 2 == 0:
+            w = torch.cat([v[:, 0] for v in vals]).to(torch.int32)
+            del vals
+            lc = logup_packed.prove_range_table(w, trows[:, 0].to(torch.int32), mults[ti], chs[ti][0], n, tr, out)
+            del w
+        else:
+            p_leaf, q_leaf = logup.build_leaves(t, trows, vals, mults[ti], chs[ti][0], chs[ti][1], n)
+            del vals
+            if packed:
+                lc = logup_packed.prove_ext_table(p_leaf, q_leaf, n, tr, out)
+            else:
+                lc = logup.prove_table(p_leaf, q_leaf, n, tr, out)
+            del p_leaf, q_leaf
         st.lookup_dims.append((t.name, n, sum(len(table_queries(s.circ, t.name)) for s in inst.segs)))
         lookup_claims.append((n, lc))
         st.depth_lookup_max = max(st.depth_lookup_max, 1 + sum(k + 2 for k in range(n)))
