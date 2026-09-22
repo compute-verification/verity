@@ -10,7 +10,7 @@ set -euo pipefail
 STAGE=${1:?stage}
 SWANKY=/workspace/swanky
 SWANKY_COMMIT=1b05bddab3e02c2cc4917d08c80a629286a4a4fc
-DIETMC=${DIETMC:-/workspace/target-swanky/release/dietmc}   # profile stage: DIETMC=/workspace/target-swanky-prof/release/dietmc (no AVX-512, +debuginfo, for valgrind)
+DIETMC=${DIETMC:-/workspace/target-swanky-v2/release/dietmc}   # c-compress: swanky 1b05bdda + patches/ (verity_v0 plugin, cached LPN matrix); v1 binary: /workspace/target-swanky/release/dietmc.  profile stage: DIETMC=/workspace/target-swanky-prof/release/dietmc (no AVX-512, +debuginfo, for valgrind)
 FIX=/workspace/research/runs/r20260922-024439-915c/v1   # bench-instances/v1 arrays, digest-verified by that run
 OUT=${RESEARCH_RUN_DIR:-/workspace/vole-out}
 mkdir -p "$OUT"
@@ -29,6 +29,14 @@ bench() {  # dir label [extra bench args]
 }
 
 case "$STAGE" in
+  smoke)
+    # c-compress v2: census, one unit, one VU, plaintext + real prover/verifier
+    $PY backends/vole/export_ir.py census > "$OUT/census.json"
+    $PY backends/vole/export_ir.py unit "$OUT/unit1" --n 1
+    bench "$OUT/unit1" unit-1 --plaintext-too
+    $PY backends/vole/export_ir.py vu "$OUT/vu1" --root $FIX --B 1
+    bench "$OUT/vu1" vu-B1 --plaintext-too
+    ;;
   small)
     $PY backends/vole/export_ir.py census > "$OUT/census.json"
     $PY backends/vole/export_ir.py negatives --root $FIX > "$OUT/negatives.txt"
