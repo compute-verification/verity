@@ -39,8 +39,8 @@ def test_epilogue_circuit_shape() -> None:
     assert ctx.cols[:3] == ["one", "y32", "y16"]
     assert paths == ["h.hi", "h.lo", "h.hi2", "h.lsb", "h.carry", "h.rem"]
     assert sum(1 for w in ctx.wires if w[0] == "prod") == 2           # the two booleans
-    assert len(ctx.asserts) == 6 and len(ctx.queries) == 5            # 3 eq + 2 boolean; 5 range chunks into R16
-    assert all(t == "R16" for t, _ in ctx.queries)
+    assert len(ctx.asserts) == 6 and len(ctx.queries) == 5            # 3 eq + 2 boolean; 5 range chunks
+    assert all(t.startswith("R") for t, _ in ctx.queries)
 
 
 def test_chained_rows_satisfy_both_circuits_and_link() -> None:

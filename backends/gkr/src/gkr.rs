@@ -89,6 +89,7 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
     let w = &claim.w;
     let mut c_star = Vec::with_capacity(b);
     let mut len = copies;
+    tr.label(&format!("gkr layer {}: phase 1, {b} rounds h(0..3) over the copy variables", layer.name));
     for _round in 0..b {
         let half = len / 2;
         // h(t) = Σ_{c<half} E_t[c] · Σ_g w[g] (a0 + t da)(b0 + t db)
@@ -175,6 +176,7 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
     }
     let _ = a_star;
     let mut v2 = vf.clone();
+    tr.label(&format!("gkr layer {}: phase 2a, {} rounds s(0..2), then (V(l*), P(l*))", layer.name, layer.s_in));
     let l_star = sumcheck_prod(&mut vf, &mut p, tr, out);
     let vl = vf[0];
     let pl = p[0];
@@ -187,6 +189,7 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
         let wa = wp[g] * eval_terms_ext(&gate.a, &el);
         for t in &gate.b { rr[t.idx as usize] += wa.scale(t.coef); }
     }
+    tr.label(&format!("gkr layer {}: phase 2b, {} rounds s(0..2), then V(r*)", layer.name, layer.s_in));
     let r_star = sumcheck_prod(&mut v2, &mut rr, tr, out);
     let vr = v2[0];
     out.push(vr);
@@ -194,6 +197,7 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
     if last {
         return (LayerClaim { w: vec![], copy_point: c_star.clone(), value: Ext::ZERO }, Some((l_star, vl, r_star, vr)));
     }
+    tr.label(&format!("gkr layer {}: alpha (merge the two input claims)", layer.name));
     let alpha = tr.challenge();
     let er = eq_table(&r_star);
     let nw: Vec<Ext> = el.iter().zip(&er).map(|(x, y)| *x + alpha * *y).collect();

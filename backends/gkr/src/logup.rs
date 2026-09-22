@@ -37,8 +37,8 @@ fn fill(table: &Table, segs: &[SegQueries], ch: &TableChallenges, want_pq: bool)
     let size = if want_pq { 1usize << n } else { 0 };
     let mut p = vec![Ext::ZERO; size];
     let mut q = vec![Ext::ONE; size];
-    let mut index: HashMap<u64, usize> = HashMap::with_capacity(table.rows.len());
-    for (i, r) in table.rows.iter().enumerate() { index.insert(r[0].0, i); }
+    let mut index: HashMap<Fp, usize> = HashMap::with_capacity(table.rows.len());
+    for (i, r) in table.rows.iter().enumerate() { index.insert(r[0], i); }
     let mut mult = vec![0u64; table.rows.len()];
     let bs = betas(table, ch);
     let nthreads = threads();
@@ -77,7 +77,7 @@ fn fill(table: &Table, segs: &[SegQueries], ch: &TableChallenges, want_pq: bool)
                                 pc[k * q_t + j] = Ext::ONE;
                                 qc[k * q_t + j] = ch.z - comb;
                             }
-                            if let Some(&ri) = index.get(&vals[0].0) {
+                            if let Some(&ri) = index.get(&vals[0]) {
                                 if table.rows[ri][..] == vals[..] { m[ri] += 1; }
                             }
                         }
@@ -172,7 +172,9 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
     let q_root = levels[0].1[0];
     debug_assert!(levels[0].0[0].is_zero(), "honest root numerator is zero");
     out.push(q_root);
+    tr.label("logup: root denominator q_root");
     tr.absorb_ext(q_root);
+    tr.label("logup: lambda");
     let mut lambda = tr.challenge();
     let mut rho: Vec<Ext> = vec![];
     let mut claim = lambda * q_root;
@@ -187,6 +189,7 @@ pub fn prove_table(p_leaf: Vec<Ext>, q_leaf: Vec<Ext>, n: usize, tr: &mut Transc
         let mut e = eq_table(&rho);
         let mut x_star = Vec::with_capacity(k);
         let mut len = size;
+        tr.label(&format!("logup: level {k}: {k} rounds of degree-3 polynomials h(0..3), then (p0,p1,q0,q1), then mu, lambda"));
         for _ in 0..k {
             let half = len / 2;
             let h = round_poly(&p0, &p1, &q0, &q1, &e, half, lambda);

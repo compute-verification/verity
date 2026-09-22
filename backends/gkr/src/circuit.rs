@@ -31,6 +31,12 @@ pub struct Circuit {
     pub max_depth: u32,
 }
 
+/// `R<w>` (1 <= w <= 16) names an implicit exact-width range table.
+pub fn range_width(name: &str) -> Option<u32> {
+    let w: u32 = name.strip_prefix('R')?.parse().ok()?;
+    (1..=16).contains(&w).then_some(w)
+}
+
 fn parse_lin(tok: &mut std::slice::Iter<'_, &str>) -> LinForm {
     let n: usize = tok.next().unwrap().parse().unwrap();
     let mut terms = Vec::with_capacity(n);
@@ -88,8 +94,13 @@ impl Circuit {
             if let Some(p) = prods.remove(&w) { c.wires.push(p); } else { c.wires.push(Wire::Input(next_col)); next_col += 1; }
         }
         assert_eq!(next_col as usize, c.ncols, "column/wire mismatch");
-        // R16 is implicit
-        c.tables.push(Table { name: "R16".into(), cols: 1, rows: (0..65536u64).map(|v| vec![Fp::new(v)]).collect() });
+        // the range tables R<w> = [0, 2^w), w <= 16, are implicit: every one the queries reference, narrowest first
+        let mut widths: Vec<u32> = c.queries.iter().filter_map(|q| range_width(&q.table)).collect();
+        widths.sort_unstable();
+        widths.dedup();
+        for w in widths {
+            c.tables.push(Table { name: format!("R{w}"), cols: 1, rows: (0..1u64 << w).map(|v| vec![Fp::new(v)]).collect() });
+        }
         c
     }
 
@@ -107,6 +118,23 @@ impl Circuit {
             };
             out.push(v);
         }
+    }
+}
+
+impl Circuit {
+    /// The verifier's relation on one row in the clear: every assertion zero, every query a row of its table.
+    pub fn check_row(&self, cols: &[Fp]) -> Result<(), String> {
+        let mut w = Vec::with_capacity(self.nwires());
+        self.eval_wires(cols, &mut w);
+        for (name, l) in &self.asserts {
+            if eval_lin(l, &w) != Fp::ZERO { return Err(format!("assert {name}")); }
+        }
+        for (i, q) in self.queries.iter().enumerate() {
+            let vals: Vec<Fp> = q.cols.iter().map(|l| eval_lin(l, &w)).collect();
+            let t = self.table(&q.table);
+            if !t.rows.iter().any(|r| r[..] == vals[..]) { return Err(format!("query {i} {} {:?}", q.table, vals.iter().map(|v| v.to_u64()).collect::<Vec<_>>())); }
+        }
+        Ok(())
     }
 }
 

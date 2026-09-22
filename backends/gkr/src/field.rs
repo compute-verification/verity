@@ -5,6 +5,13 @@ use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 pub const P: u64 = 0xFFFF_FFFF_0000_0001;
 const EPS: u64 = 0xFFFF_FFFF; // 2^64 mod p
+pub const DEGREE: usize = 3;
+pub const NAME: &str = "goldilocks";
+pub const EXT_NAME: &str = "goldilocks^3 (X^3-X-1)";
+/// Fixture subdirectory of this field's exports (`fixtures/`).
+#[allow(dead_code)]
+pub const FIXTURES: &str = "";
+pub const DOMAIN: &[u8] = b"verity-gkr/candidate-a/v1";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Hash)]
 pub struct Fp(pub u64);
@@ -41,7 +48,25 @@ impl Fp {
         r
     }
     pub fn inv(self) -> Fp { assert!(self.0 != 0, "inverse of zero"); self.pow(P - 2) }
+    pub const BYTES: usize = 8;
+    pub fn to_u64(self) -> u64 { self.0 }
     pub fn to_bytes(self) -> [u8; 8] { self.0.to_le_bytes() }
+    pub fn from_bytes(b: &[u8]) -> Fp { Fp::new(u64::from_le_bytes(b[..8].try_into().unwrap())) }
+    /// A uniform element from a 32-byte digest by rejection sampling over its four 8-byte words.
+    pub fn rejection_sample(d: &[u8; 32]) -> Option<Fp> {
+        for i in 0..4 {
+            let v = u64::from_le_bytes(d[8 * i..8 * i + 8].try_into().unwrap());
+            if v < P { return Some(Fp(v)); }
+        }
+        None
+    }
+    /// A primitive `order`-th root of unity (order a power of two ≤ 2^32): 7 generates F_p^*, p - 1 = 2^32 (2^32 - 1).
+    pub fn root_of_unity(order: usize) -> Fp {
+        let mut w = Fp::new(7).pow((1u64 << 32) - 1);
+        let mut o = 1u64 << 32;
+        while o > order as u64 { w = w * w; o /= 2; }
+        w
+    }
 }
 
 impl Add for Fp { type Output = Fp; #[inline] fn add(self, o: Fp) -> Fp { let (s, c) = self.0.overflowing_add(o.0); if c || s >= P { Fp(s.wrapping_sub(P)) } else { Fp(s) } } }
@@ -59,6 +84,7 @@ pub struct Ext(pub [Fp; 3]);
 impl Ext {
     pub const ZERO: Ext = Ext([Fp::ZERO, Fp::ZERO, Fp::ZERO]);
     pub const ONE: Ext = Ext([Fp::ONE, Fp::ZERO, Fp::ZERO]);
+    pub const BYTES: usize = DEGREE * Fp::BYTES;
     #[inline]
     pub fn from_base(x: Fp) -> Ext { Ext([x, Fp::ZERO, Fp::ZERO]) }
     pub fn from_u64(x: u64) -> Ext { Ext::from_base(Fp::new(x)) }
