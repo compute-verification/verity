@@ -311,7 +311,7 @@ def cmd_bench(a):
                "verifier_s": float(np.mean([r["verifier_s"] for r in steady])),
                "proof_MB": results[0]["proof_bytes"]["total"] / 1e6,
                "peak_device_GiB": max(r["peak_device_GiB"] for r in results),
-               "buckets_ms": {k: float(np.mean([r["prover_s"][k] for r in steady])) * 1e3 for k in results[0]["prover_s"]
+               "buckets_ms": {k: float(np.mean([r["prover_s"].get(k, 0.0) for r in steady])) * 1e3 for k in steady[0]["prover_s"]
                               if k not in ("peak_device_bytes",)},
                "witness_gen_host_s": float(np.mean([r["witness_gen_host_s"] for r in results])),
                "soundness_per_proof": snd, "soundness_union_log2": float(union_log2),
