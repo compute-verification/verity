@@ -24,6 +24,31 @@ opening), `rounds.sequential_depth` 438 (circuit 197, LogUp R16 435), 1920 trans
 297.6 s for the same batch (Goldilocks).  The verifier is Python (transcript replay + Merkle paths in `hashlib`),
 not optimised.
 
+## Checker v2 (`lane/a-gpu-v2`; A100-SXM4-80GB, same prover, `gpu/v2/` + `--variant`-free: the manifest selects v2)
+
+PROTOCOL §14's circuit (264 columns / 290 wires / 26 products / 86 lookups per unit into 10 tables, depth 1, the
+(s, e, M, z) state chained across the 96 units, 583 linkage constraints per VU) exported over BabyBear by
+`gpu.v2.export` and proved by the same prover: implicit tables materialised on device, `R<w>` range tables from the
+queries, 12-column strided linkage read, table union over segments (DESIGN §5b).  Same box, same day, median of 3:
+
+| circuit | epilogue | run id | B | prover | split (lookup / arith / open / commit) | verifier | proof | depth | committed | peak mem | label |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| v1 (a-gpu v2e) | limb (v1) | r20260922-091544-4e02 | 4096 | 7.93 s = 1.94 ms/VU | 2.22 / 1.75 / 3.07 / 0.77 | 10.1 s | 33.9 MB | 438 | 177.8 M | 46.6 GB | `NON_ZK_PROOF_DIAGNOSTIC` |
+| v2 | word (a-v2) | r20260922-090930-3bc5 | 4096 | 5.62 s = 1.37 ms/VU | 2.78 / 0.33 / 2.03 / 0.43 | 8.1 s | 21.1 MB | 328 | 109.1 M | 24.4 GB | `INCOMPLETE_CHECKER_DIAGNOSTIC` (epilogue word arithmetic SAT over 31-bit fields) |
+| v2 | **limb** (b-air-v2 gadget) | r20260922-095013-db80 | 4096 | **5.73 s = 1.40 ms/VU** | 2.85 / 0.36 / 2.05 / 0.43 | 8.1 s | 21.1 MB | 328 | 109.1 M | 24.4 GB | **`NON_ZK_PROOF_DIAGNOSTIC`** |
+| v2 | limb | r20260922-095013-db80 | 64 | 2.95 s | 1.97 / 0.16 / 0.76 / 0.06 | 5.5 s | 1.87 MB | 279 | 6.87 M | 9.9 GB | `NON_ZK_PROOF_DIAGNOSTIC` |
+
+v2/v1 same box: **1.38x** end to end (arith 4.9x, commit 1.8x, open 1.5x, lookup 0.78x — the lookup bucket is
+round/launch-bound: 13 shallow trees instead of 5 deep ones, 3524 transcript slots vs 1920; `lane/a-fusion`'s
+graphed LogUp is the fix, not the circuit).  Against a-gpu v1 on the H100 (4.43 s) v2 is 0.77x raw; with the
+measured same-circuit A100/H100 ratio of 0.56x (inside anchor_a100's HBM-bound band 0.52–0.61x) that normalises to
+~1.4x.  Not a breakthrough (< 2x).  Acceptance: 4096/4096 with the recorded words; negatives 52/52 `vu-k1536-neg`
+(8 at witness, 44 at the verifier), a-v2's 30 unit + 4 chain cases 34/34, 15/15 epilogue base columns +1
+(`gpu.run epilogue-negatives`).  Field: BabyBear^6 (the kernels' field); the epilogue's word-form Pack is the only
+v2 gadget SAT over 31-bit fields and is replaced by `lane/b-air-v2`'s limb form (z3 direct UNSAT over BabyBear,
+same function over Z); checker-min's remaining v2 queries re-run with the BabyBear modulus are UNSAT
+(`gpu/v2/results/z3_babybear_v2.json`).  Results: `gpu/v2/results/` (`limbs/` for the honest-label set).
+
 Soundness (`security.accounting.account_candidate_a`, BabyBear^6, Ligero `k = 4096, n = 16384, t = 192`):
 2^-127.7, dominated by the generic SHA-256 collision term; ledger security field `2^-127.7`, proof class
 `NON_ZK_PROOF_DIAGNOSTIC`, authentication excluded, omitted: ZK masking, external authentication.
