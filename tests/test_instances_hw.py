@@ -275,24 +275,32 @@ def test_unknown_set_and_bad_range_are_refused():
 # --- on a GPU host ----------------------------------------------------------------------------------------------------------------------
 
 
-def _gpu_instruction() -> str | None:
+def _gpu_compute_capability() -> str | None:
     if shutil.which("nvcc") is None and not Path("/usr/local/cuda/bin/nvcc").exists():
         return None
     try:
         smi = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"], capture_output=True, text=True, timeout=20, check=False)
     except OSError:
         return None
-    if smi.returncode != 0:
+    if smi.returncode != 0 or not smi.stdout.strip():
         return None
-    cc = smi.stdout.strip().splitlines()[0].strip()
-    return {"8.0": "sm80.mma.m16n8k16.bf16", "8.6": "sm80.mma.m16n8k16.bf16", "8.9": "sm89.mma.m16n8k16.bf16", "9.0": "sm90.mma.m16n8k16.bf16"}.get(cc)
+    return smi.stdout.strip().splitlines()[0].strip()
 
 
-def test_negative_tier_on_the_device(tmp_path):
-    ins = _gpu_instruction()
-    if ins is None:
-        pytest.skip("needs nvcc and an sm_80/sm_89/sm_90 GPU")
-    rc = IH.main(["--instances", "bench-instances/v1/vu-k1536-neg", "--instruction", ins, "--out", str(tmp_path), "--only-ids", "0,20,44,48"])
-    assert rc == 0
-    res = json.loads((tmp_path / "probe_results.json").read_text())
-    assert res["replay"]["negative"]["detected"] == 4 and res["failures"] == []
+def test_on_the_device(tmp_path):
+    """Ampere / Ada: the FIRST negative tier on the BF16 mma (the Ada pipeline is the Ampere one: hardware == correct word); Hopper: a
+    few instances of the Hopper BF16 synthetic set on its own instruction (the FIRST set's correct words are Ampere words, not Hopper's)."""
+    cc = _gpu_compute_capability()
+    if cc in ("8.0", "8.6", "8.9"):
+        ins = "sm80.mma.m16n8k16.bf16" if cc != "8.9" else "sm89.mma.m16n8k16.bf16"
+        rc = IH.main(["--instances", "bench-instances/v1/vu-k1536-neg", "--instruction", ins, "--out", str(tmp_path), "--only-ids", "0,20,44,48"])
+        res = json.loads((tmp_path / "probe_results.json").read_text())
+        assert rc == 0 and res["failures"] == []
+        assert res["replay"]["negative"]["detected"] == 4 and res["replay"]["negative"]["wrong_correct_reproduced"] == 2
+    elif cc == "9.0":
+        rc = IH.main(["--instances", "bench-instances-bf16-hopper/v1/vu-k1536-bf16-hopper", "--out", str(tmp_path), "--range", "0:4", "--procs", "1"])
+        res = json.loads((tmp_path / "probe_results.json").read_text())
+        assert rc == 0 and res["failures"] == []
+        assert res["replay"]["words"]["total"] == 4 * 97 and res["replay"]["mismatches"]["total"] == 0
+    else:
+        pytest.skip("needs nvcc and an sm_80/sm_86/sm_89/sm_90 GPU")
