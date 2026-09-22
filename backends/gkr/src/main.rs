@@ -205,8 +205,16 @@ pub fn prove(inst: &Instance, circuit_hash: &[u8; 32], mode: Mode) -> (Proof, St
         let mut rd = Reader { msgs: &out, pos: 0 };
         for (ti, t) in inst.circ.tables.iter().enumerate() {
             let qs = table_queries(inst.circ, &t.name);
-            let lc = logup::verify_table(lookup_ns[ti], &mut tr2, &mut rd, &t.name).expect("prover replays its own lookup transcript");
-            fs.push(functional_lookup(inst, l, offs[ti], t, &qs, &chs[ti], lookup_ns[ti], &lc));
+            match logup::verify_table(lookup_ns[ti], &mut tr2, &mut rd, &t.name) {
+                Ok(lc) => fs.push(functional_lookup(inst, l, offs[ti], t, &qs, &chs[ti], lookup_ns[ti], &lc)),
+                Err(_) => {
+                    // only a dishonest witness gets here (its lookup transcript already fails); emit the proof as is
+                    st.proof_elems = out.len();
+                    st.slots = tr.slots;
+                    st.committed_elements = l;
+                    return (Proof { root, msgs: out, bytes }, st);
+                }
+            }
         }
         let f = batch(&fs, l, &mut tr);
         ligero::prove_open(cm, &f.a, &LIGERO, &mut tr, &mut out, &mut bytes);
