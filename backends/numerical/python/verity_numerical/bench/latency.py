@@ -497,9 +497,18 @@ def report(designs: Sequence[Design], rtts_ms: Sequence[float] = RTTS_MS, bws_gb
                 lines.append(f"| {a.name} | {b.name} | {_fmt_s(ea)} / {_fmt_s(eb)} | " + ("shallower already faster at 0 ms" if x is None else f"{x:.3g} ms") + " |")
     if measured:
         lines += ["", "## 5. Measured vs model (the `--rtt-ms` runs on vy-cpu2)", "",
-                  "| run | design | B | RTT ms | depth (measured trips) | legacy depth | t.total s (compute) | verify s | sleep s | e2e measured s | e2e model s | model / measured |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+                  "| run | design | B | RTT ms | depth (measured trips) | legacy depth | t.total s (compute) | verify s | sleep s | e2e measured s | model (same run's compute) | predicted from the RTT-0 run | predicted / measured |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+        base0 = {(m["design"], m["B"]): m for m in measured if m["rtt_ms"] == 0}
         for m in measured:
-            lines.append(f"| {m['run_id']} | {m['design']} | {m['B']} | {m['rtt_ms']:g} | {m['depth']} | {m.get('depth_legacy', '-')} | {_fmt_s(m['t_total'])} | {_fmt_s(m['verify'])} | {_fmt_s(m['sleep'])} | {_fmt_s(m['e2e_measured'])} | {_fmt_s(m['e2e_model'])} | {m['e2e_model'] / m['e2e_measured']:.3f} |")
+            b0 = base0.get((m["design"], m["B"]))
+            pred = (b0["t_total"] + b0["verify"] + m["depth"] * m["rtt_ms"] / 1000) if b0 else None
+            lines.append(f"| {m['run_id']} | {m['design']} | {m['B']} | {m['rtt_ms']:g} | {m['depth']} | {m.get('depth_legacy', '-')} | {_fmt_s(m['t_total'])} | {_fmt_s(m['verify'])} | {_fmt_s(m['sleep'])} | {_fmt_s(m['e2e_measured'])} | {_fmt_s(m['e2e_model'])} | "
+                         + (f"{_fmt_s(pred)} | {pred / m['e2e_measured']:.3f} |" if pred else "- | - |"))
+            m["e2e_predicted_from_rtt0"] = pred
+        lines += ["", "The sleep column is the measured wall-clock minus compute minus verify: `depth x RTT` to within the sleep overshoot (~0.1 ms per",
+                  "trip). The last column is the honest test -- the RTT-0 run's compute plus `depth x RTT` against the wall-clock measured at",
+                  "that RTT in a separate run; the residual is prover-compute drift on the shared box, not the network term."]
     if options:
         lines += ["", "## 6. Depth-reduction options for A (costed, not implemented)", "",
                   "| option | depth | prover work x | committed +% | e2e @ 10 ms (CPU / GPU) | e2e @ 50 ms (CPU / GPU) | RTT where it beats the baseline (GPU) | note |", "|---|---|---|---|---|---|---|---|"]
