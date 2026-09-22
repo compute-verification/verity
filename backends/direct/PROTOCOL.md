@@ -459,9 +459,87 @@ step, not part of this measurement.
   `Fp32Decode` on the next row re-derives sign/exponent/mantissa from that word under its own range checks, so
   the chain never relies on a field element being "the same number" in two encodings.
 - The zero VU's rows satisfy every constraint (checked in `chain_trace`), so padding adds no constraint case.
-- `vu.claim` is a free column on non-`last` rows; a prover may put anything there. Only `last` rows are read.
+- `vu.claim` (`vu.y16`) was a free column on non-`last` rows in the diagnostic (only `last` rows were read); since 12.5 it is a public column equal to the statement's word on every row of the VU.
 - The BabyBear port splits every 32-bit word (`x.c`, `f`, `pack.low`, `pack.y`) into 16-bit limbs with their own
   range checks, realises `LtPow` as a direct range check on \(2^w - 1 - x\) (no product), and adds a bound check
   on the normalised mantissa at \(k = k_{lo}\) so no identity has a term reaching \(p = 2^{31} - 2^{27} + 1\)
   (all constants are kept below \(2^{24}\)); +56 columns over Goldilocks. The 52 `vu-k1536-neg` instances and the
   mutation tests pass identically over both fields (`tests/chain.rs`, `direct-unit vu-neg`).
+
+### 12.5 Statement binding (SOUNDNESS FIX, lane `soundness-fixes`, 2026-09-22; red team F1–F3) **[implemented]**
+
+The red team (`backends/numerical/reports/redteam_vu.md`) forged the diagnostic B verifier twice, over both fields:
+**F1** a trace of two zero VUs verified "as" two real VUs (the verifier was handed no public values; the sentence
+"`vu.claim` … not bound to an external statement" above was the accepted forgery), and **F2** a 256-row proof was
+accepted by the verifier configured for \(B=4096\) (uni-stark 0.4.3 reads `degree_bits` from the proof). Both are
+closed by `src/statement.rs` + `stark::prove_bound` / `stark::verify_bound_bytes`; the relation and the AIR are
+unchanged (no new column, no new constraint, no change to `air.rs`).
+
+**The statement.** \(\mathsf{stmt} = (B, K, \text{words}[0..B])\), the claimed 16-bit output word of every VU in
+VU order; optionally the operands \((x, w)\) (`Statement::with_operands`, `vu-bench --bind-operands`). The trace
+height is a *function of the statement*: \(n = 2^{\lceil \log_2 \max(96B, 2)\rceil}\); `degree_bits` \(= \log_2 n\).
+
+**Mechanism 1 — header absorbed before any challenge (F1, F2, F3).** Prover and verifier absorb into the
+Fiat–Shamir challenger, before the trace commitment is observed and before `alpha` is drawn, the header
+(`statement::header`, `DOMAIN_TAG = "verity-direct/chain-air/statement/v1"`): domain tag; the AIR identity
+`air_id` = SHA-256(field name, width, every column name, every constraint name in emission order); the trace
+field's prime; the width; the challenge-extension degree; \(B\); \(K\); 96; \(n\); `degree_bits`; the FRI
+parameters (`log_blowup`, `num_queries`, `proof_of_work_bits`); the \(B\) claimed words (length-prefixed); and
+either `0` or `1 ‖ SHA-256(x) ‖ SHA-256(w)`. Every variable-length block is length-prefixed and every integer is
+split into two 32-bit halves so the encoding is canonical in both fields. **The verifier builds the header from
+its own configuration and statement; nothing in it is read from the proof.** Consequently a proof for another
+AIR, field, extension, batch size, FRI configuration or word list yields different challenges and fails the
+opening argument.
+
+**Mechanism 2 — `degree_bits` fixed by the verifier (F2).** `verify_bound_bytes` computes `degree_bits` from
+\(B\) and rejects a proof whose `degree_bits` differs (`BoundError::DegreeBits{expected, got}`) *before* anything
+else is read; the PCS is configured for exactly that height (`B::config(degree_bits, ·)`), never for an upper
+bound. Pinned by `tests/chain.rs::statement_binding_*` (a 2-VU proof offered to the \(B=4096\) verifier →
+`DegreeBits{expected: 19, got: 8}`) and the battery case `b_degree_bits_unbound`.
+
+**Mechanism 3 — public columns checked at \(\zeta\) (F1).** `vu.y16` is a committed column whose value on every
+row the verifier knows from the statement: \(W(g^i) = \text{words}[\lfloor i/96\rfloor]\) for \(i < 96B\), \(0\)
+on the zero-VU padding. \(W\) is a public polynomial of degree \(< n\) over the natural trace domain
+\(\{g^i\}\). After \(\zeta\) is drawn the verifier evaluates \(W(\zeta)\) and \(W(\zeta g)\) itself
+(`statement::eval_pair`, barycentric with one batch inversion, \(O(n)\) extension operations, the two points
+share the inverse denominators) and requires the opened `trace_local[y16] = W(\zeta)`,
+`trace_next[y16] = W(\zeta g)` (`BoundError::StatementColumn`). The FRI opening argument binds the opened values
+to the committed column polynomial \(C\) of degree \(< n\); \(C \ne W\) agree at \(\zeta\) with probability
+\(\le (n-1)/|F_c|\) (Schwartz–Zippel; \(\zeta\) is sampled after the trace commitment and after the header, so
+the prover commits before knowing it). The existing last-row constraint `vu.out: last·(epilogue − y16) = 0` then
+ties the bound word to the epilogue; the chain constraints tie the epilogue to the operands. With
+`--bind-operands` the 32 operand columns `x.a[j]`, `x.b[j]` are checked the same way (\(W\) from \(x, w\)), which
+removes the "any \(x, w\)" freedom entirely; without it the operands are witness and their binding is the
+authentication layer's job (`auth_integration.md`; `authentication = excluded`).
+
+**Consequence for 12.4.** `vu.y16` is no longer free on non-`last` rows: it must equal the VU's word on every row
+(the battery case `b_claim_free_nonlast` moved from `accept_by_design` to `reject`). Honest traces already had
+this property (`chain_program` writes `io.y16` on every row).
+
+**Soundness accounting.** Added term: (number of public columns) \(\times\, n/|F_c|\) — \(2^{19}/2^{128} =
+2^{-109}\) (Goldilocks²), \(2^{19}/2^{124} = 2^{-105}\) (BabyBear⁴) for \(B = 4096\) with one column; \(\times 33\)
+with operands (\(2^{-104}\) / \(2^{-100}\)). These are the same order as the DEEP/quotient-batching field term
+the proof already carries (`~degree/|F_c|`, 12.2) and, like it, are field terms that the challenge extension —
+not the query count — controls; they do not move the FRI query term that sets \(t\) at the \(2^{-128}\) operating
+point (the accountant's field-term row for B gains this entry).
+
+**Cost.** Prover: none (no column, no constraint; the header is ~100 + 2B field elements hashed once).
+Proof: none. Verifier: one bincode decode (the verifier receives bytes), \(O(n)\) extension operations per
+public column (\(\approx 2^{19}\) inversions batched + \(2^{20}\) multiplications for \(B=4096\)); measured in
+`vu-bench` as `verifier.seconds` (it includes the statement checks).
+
+**F3 (transcript absorption gaps).** In our control and done: public values (the words), `degree_bits`, the AIR
+id and the FRI parameters are absorbed before the first challenge (above). Not done: uni-stark 0.4.3 / p3-fri
+0.4.3 sample the batch-combination `alpha` (`two_adic_pcs.rs:330`) and the query indices without absorbing the
+claimed openings at \(\zeta\) (they are transmitted in the proof, and `pcs.verify` uses them only after `alpha`);
+fixing that requires patching `p3-fri`'s `open` (compute the barycentric `ys` for every matrix first, observe
+them, then sample `alpha`) and `verify` (observe the claimed values before `alpha`) — the prover side cannot be
+done from outside the crate without running `open` twice. Residual, as the red team argued: the claimed values
+enter the reduced FRI openings through two scalars per opening point, so matching a committed fold at all
+\(t=100\) query points is 100 equations in 2 unknowns; a checklist violation, not a known forgery. Tracked in
+`TRANSCRIPT_CHECKLIST.md`; take upstream's fix (observe openings before `alpha`) when Plonky3 is bumped.
+
+**What this does not do.** The zero-VU padding rows are not part of the statement (they carry word `0`, and
+\(B\) is bound, so a prover cannot smuggle a real VU into the padding without changing \(B\)). Binding the
+operands to the leaf/v2 tableau (the digest in the statement, the chunk roots in the header) is the next step of
+`auth_integration.md`, not this section.

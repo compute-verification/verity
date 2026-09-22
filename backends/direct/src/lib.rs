@@ -13,6 +13,7 @@ pub mod ctx;
 pub mod params;
 pub mod program;
 pub mod stark;
+pub mod statement;
 
 use program::UnitIo;
 use rand::{Rng, SeedableRng};

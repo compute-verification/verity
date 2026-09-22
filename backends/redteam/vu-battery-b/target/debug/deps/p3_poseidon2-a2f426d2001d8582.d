@@ -1,0 +1,8 @@
+/Users/danielreuter/projects/verity-soundness/backends/redteam/vu-battery-b/target/debug/deps/p3_poseidon2-a2f426d2001d8582.d: /Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/lib.rs /Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/diffusion.rs /Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/matrix.rs /Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/round_numbers.rs
+
+/Users/danielreuter/projects/verity-soundness/backends/redteam/vu-battery-b/target/debug/deps/libp3_poseidon2-a2f426d2001d8582.rmeta: /Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/lib.rs /Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/diffusion.rs /Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/matrix.rs /Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/round_numbers.rs
+
+/Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/lib.rs:
+/Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/diffusion.rs:
+/Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/matrix.rs:
+/Users/danielreuter/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/p3-poseidon2-0.4.3-succinct/src/round_numbers.rs:

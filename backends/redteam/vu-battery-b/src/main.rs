@@ -20,7 +20,7 @@ use std::time::Instant;
 
 use p3_baby_bear::BabyBear;
 use p3_challenger::{CanSample, HashChallenger, SerializingChallenger32, SerializingChallenger64};
-use p3_field::{PrimeField64};
+use p3_field::{PrimeField64, TwoAdicField};
 use p3_goldilocks::Goldilocks;
 use p3_keccak::Keccak256Hash;
 use p3_matrix::dense::RowMajorMatrix;
@@ -32,6 +32,7 @@ use verity_direct::challenger::FixedSerializingChallenger64;
 use verity_direct::ctx::{modp, FieldKind, IntCtx};
 use verity_direct::program::{chain_program, ChainIo, COL_CLAIM, COL_FIRST, COL_LAST, STEPS};
 use verity_direct::stark::{self, BabyBearBackend, Backend, FriParams, GoldilocksBackend, DEFAULT_FRI};
+use verity_direct::statement::Statement;
 
 fn arg(args: &[String], key: &str) -> Option<String> {
     args.iter().position(|a| a == key).and_then(|i| args.get(i + 1).cloned())
@@ -264,7 +265,7 @@ fn cases(forge: &Forge, vus: &[VuIo]) -> Vec<Case> {
     push("b_claim_last", "reject", "vu.out: last (y16 - claim) = 0", format!("VU 0 last row claim {v:#06x} -> {:#06x}", v ^ 1), cm, None);
     let mut cf = honest.clone();
     for r in cf.iter_mut().take(steps - 1) { set_claim(forge, r, 0x1234); }
-    push("b_claim_free_nonlast", "accept_by_design", "vu.claim is read only on last rows (PROTOCOL B 12.4)", "VU 0 rows 0..94: claim := 0x1234".into(), cf, None);
+    push("b_claim_free_nonlast", "reject", "statement column: vu.y16 is a public column equal to the VU's word on EVERY row (PROTOCOL B 'Statement binding'; was accept_by_design before the fix)", "VU 0 rows 0..94: claim := 0x1234".into(), cf, None);
 
     // +p accumulator shadow (the BabyBear battery's `chain` class) at row 1 of VU 0
     let c1 = forge.word(&h0[0]);
@@ -296,10 +297,10 @@ fn cases(forge: &Forge, vus: &[VuIo]) -> Vec<Case> {
     }
 
     // statement binding: a proof of a smaller trace verified with the batch's log_n; the zero batch
-    push("b_degree_bits_unbound", "reject", "uni-stark 0.4.3 verify reads degree_bits from the PROOF; log_n is only an upper bound for the PCS",
+    push("b_degree_bits_unbound", "reject", "verify_bound: degree_bits is fixed by the verifier's statement (B = 4096 -> 19) and the proof's (8) must equal it -> DegreeBitsMismatch (F2; was FORGED: uni-stark read degree_bits from the proof)",
          "honest 2-VU trace (256 rows) verified by the verifier configured for log_n = 19 (B = 4096)".into(), honest.clone(), Some(19));
     let zero = [forge.zero_rows.clone(), forge.zero_rows.clone()].concat();
-    push("b_zero_batch_as_any_statement", "reject", "no public values: the verifier is not given (a, b, y16); any satisfying trace is a proof of every statement",
+    push("b_zero_batch_as_any_statement", "reject", "verify_bound: the committed vu.y16 column opened at zeta must equal the statement's word polynomial W(zeta) -> StatementColumnMismatch (F1; was FORGED: no public values)",
          "two zero VUs (a = b = 0, y16 = 0) proved and verified as if they were the two real VUs".into(), zero, None);
     let _ = idx;
     out
@@ -307,18 +308,30 @@ fn cases(forge: &Forge, vus: &[VuIo]) -> Vec<Case> {
 
 const COL_INV_NAME: &str = "vu.inv";
 
-fn run_backend<B: Backend>(forge: &Forge, cs: &[Case], fri: FriParams) -> Vec<Value>
+fn run_backend<B: Backend>(forge: &Forge, cs: &[Case], fri: FriParams, vus: &[VuIo]) -> Vec<Value>
 where
-    Val<B::SC>: PrimeField64 + Send + Sync,
+    Val<B::SC>: PrimeField64 + TwoAdicField + Send + Sync,
 {
     let mut out = vec![];
+    // the statement every case is verified against: the two REAL VUs' words (the forger signs its trace for it)
+    let real = Statement::new(vus.iter().map(|v| v.y16).collect());
     for c in cs {
         let t0 = Instant::now();
         let failing = forge.failing::<Val<B::SC>>(&c.rows);
         let trace: RowMajorMatrix<Val<B::SC>> = forge.trace(&c.rows);
         let log_n = trace.height().trailing_zeros() as usize;
-        let proof = stark::prove_with::<B, _>(&forge.air, trace, fri);
-        let res = stark::verify_with::<B, _>(&forge.air, &proof, c.verify_log_n.unwrap_or(log_n), fri);
+        // b_degree_bits_unbound: the verifier is configured for a B = 4096 statement (log_n 19) padded with zero words
+        let verify_stmt = match c.verify_log_n {
+            Some(bits) => {
+                let mut s = real.clone();
+                s.words.resize(if bits == 19 { 4096 } else { (1usize << bits) / STEPS as usize }, 0);
+                assert_eq!(s.degree_bits(), bits);
+                s
+            }
+            None => real.clone(),
+        };
+        let proof = stark::prove_bound_unchecked::<B, _>(&forge.air, &forge.lay, trace, fri, &real);
+        let res = stark::verify_bound::<B, _>(&forge.air, &forge.lay, &proof, fri, &verify_stmt);
         let accepted = res.is_ok();
         let status = match (c.expected, accepted) {
             ("reject", true) => "FORGED",
@@ -328,12 +341,12 @@ where
         };
         let mut by_name: BTreeMap<String, usize> = BTreeMap::new();
         for (_, n) in &failing { *by_name.entry(n.clone()).or_default() += 1; }
-        eprintln!("[{}] {:24} expected={:16} verify={:?} evaluator_failing={} -> {status} ({:.1}s)", forge.kind.name(), c.id, c.expected, res, failing.len(), t0.elapsed().as_secs_f64());
+        eprintln!("[{}] {:24} expected={:16} verify={} evaluator_failing={} -> {status} ({:.1}s)", forge.kind.name(), c.id, c.expected, res.as_ref().map(|_| "Ok".to_string()).unwrap_or_else(|e| format!("Err({e})")), failing.len(), t0.elapsed().as_secs_f64());
         out.push(json!({
             "id": c.id, "field": forge.kind.name(), "expected": c.expected, "mechanism": c.mechanism, "mutation": c.mutation,
             "rows_real": c.rows.len(), "log_n_proved": log_n, "log_n_verified": c.verify_log_n.unwrap_or(log_n),
             "evaluator": {"failing_total": failing.len(), "by_constraint": by_name, "first": failing.iter().take(6).map(|(r, n)| json!([r, n])).collect::<Vec<_>>()},
-            "verifier": {"accepted": accepted, "error": res.err().map(|e| format!("{e:?}"))},
+            "verifier": {"accepted": accepted, "error": res.as_ref().err().map(|e| format!("{e}")), "statement": {"words": verify_stmt.words.len(), "degree_bits": verify_stmt.degree_bits()}},
             "fri": {"log_blowup": fri.log_blowup, "num_queries": fri.num_queries, "pow_bits": fri.proof_of_work_bits},
             "status": status,
         }));
@@ -359,8 +372,8 @@ fn battery(args: &[String]) {
         let forge = Forge::new(kind);
         let cs = cases(&forge, &vus);
         let r = match kind {
-            FieldKind::Goldilocks => run_backend::<GoldilocksBackend>(&forge, &cs, fri),
-            FieldKind::BabyBear => run_backend::<BabyBearBackend>(&forge, &cs, fri),
+            FieldKind::Goldilocks => run_backend::<GoldilocksBackend>(&forge, &cs, fri, &vus),
+            FieldKind::BabyBear => run_backend::<BabyBearBackend>(&forge, &cs, fri, &vus),
         };
         results.extend(r);
     }

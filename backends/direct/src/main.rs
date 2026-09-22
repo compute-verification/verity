@@ -20,6 +20,7 @@ use verity_direct::air::{self, ChainAir, ChainIdx, Layout, UnitAir, VuIo};
 use verity_direct::ctx::FieldKind;
 use verity_direct::program::{UnitIo, STEPS};
 use verity_direct::stark::{self, BabyBearBackend, Backend, FriParams, GoldilocksBackend, DEFAULT_FRI};
+use verity_direct::statement::Statement;
 
 fn arg(args: &[String], key: &str) -> Option<String> {
     args.iter().position(|a| a == key).and_then(|i| args.get(i + 1).cloned())
@@ -301,7 +302,7 @@ fn manifest_sha256(root: &Path) -> Option<String> {
 
 fn vu_bench<B: Backend>(args: &[String])
 where
-    Val<B::SC>: PrimeField64 + Send + Sync,
+    Val<B::SC>: PrimeField64 + p3_field::TwoAdicField + Send + Sync,
 {
     let kind = B::KIND;
     let root = Path::new(&arg(args, "--root").unwrap_or_else(|| "fixtures/bench-instances/v1".into())).to_path_buf();
@@ -353,16 +354,45 @@ where
     let lqd = stark::log_quotient_degree_of::<Val<B::SC>, _>(&air_);
     assert!(lqd <= fri.log_blowup, "quotient degree 2^{lqd} exceeds blowup 2^{}", fri.log_blowup);
 
+    // the statement (PROTOCOL.md "Statement binding"): every claimed word; the operands too with --bind-operands
+    let bind_operands = args.iter().any(|a| a == "--bind-operands");
+    let words: Vec<u64> = vus.iter().map(|v| v.y16).collect();
+    let stmt = if bind_operands {
+        Statement::with_operands(words, vus.iter().flat_map(|v| v.x.iter().copied()).collect(), vus.iter().flat_map(|v| v.w.iter().copied()).collect())
+    } else {
+        Statement::new(words)
+    };
+    assert_eq!(stmt.degree_bits(), log_n);
+
+    // `--unbound`: the pre-fix path (no header, no statement check, degree_bits from the proof) for a same-machine
+    // A/B timing of the fix ONLY; its result is labelled as such and is not a proof number.
+    let unbound = args.iter().any(|a| a == "--unbound");
     let t1 = Instant::now();
-    let proof = stark::prove_with::<B, _>(&air_, trace, fri);
+    let proof = if unbound { stark::prove_unbound::<B, _>(&air_, trace, fri) } else { stark::prove_bound::<B, _>(&air_, &lay, trace, fri, &stmt) };
     let t_prove = t1.elapsed().as_secs_f64();
     let t2 = Instant::now();
-    let bytes = stark::proof_bytes_of(&proof);
+    let proof_bytes = bincode::serialize(&proof).expect("serialise proof");
+    let bytes = proof_bytes.len();
     let t_ser = t2.elapsed().as_secs_f64();
     let t3 = Instant::now();
-    let ok = stark::verify_with::<B, _>(&air_, &proof, log_n, fri);
+    let ok = if unbound {
+        stark::verify_unbound::<B, _>(&air_, &proof, log_n, fri).map_err(stark::BoundError::Inner)
+    } else {
+        stark::verify_bound_bytes::<B, _>(&air_, &lay, &proof_bytes, fri, &stmt)
+    };
     let t_verify = t3.elapsed().as_secs_f64();
     assert!(ok.is_ok(), "verification failed: {:?}", ok.err());
+    // the statement checks fire: a proof of these VUs is not a proof of any other word list or batch size
+    if !unbound {
+        let mut other = stmt.clone();
+        other.words[0] ^= 1;
+        let r = stark::verify_bound_bytes::<B, _>(&air_, &lay, &proof_bytes, fri, &other);
+        assert!(matches!(r, Err(stark::BoundError::StatementColumn { .. })), "wrong-word statement not rejected: {r:?}");
+        let mut bigger = stmt.clone();
+        bigger.words.extend(std::iter::repeat(0).take(n_vus.max(1)));
+        let r = stark::verify_bound_bytes::<B, _>(&air_, &lay, &proof_bytes, fri, &bigger);
+        assert!(matches!(r, Err(stark::BoundError::DegreeBits { .. })), "wrong-B statement not rejected: {r:?}");
+    }
     let t_total = t_witness + t_prove + t_ser;
     let threads = rayon::current_num_threads();
     let rounds = log_n + 5;
@@ -453,9 +483,17 @@ where
             "retention": "retained",
             "unit": "vu",
             "constraints": "WP2 gadget contracts + Epilogue as direct AIR constraints, one row per transition unit, accumulator carried by a transition constraint, VU boundary by a step counter; range checks as 2-bit limbs, fixed tables as one-hot selectors; no lookup argument",
-            "note": "Plonky3 FRI/Keccak is the diagnostic PCS, not Candidate B's Ligero-style interactive PCS (PROTOCOL.md); the claimed output words are committed trace cells (the `vu.claim` column) that the last-row constraint binds to the epilogue word -- not bound to any external statement (authentication excluded)"
+            "statement_binding": if unbound { json!({"bound": false, "note": "TIMING BASELINE of the pre-fix path (red-team F1/F2 forgeable): not a proof number"}) } else { json!({
+                "bound": true,
+                "header_absorbed_before_first_challenge": ["domain tag", "AIR id (sha256 of field, layout, constraint names)", "field prime", "width", "challenge extension degree", "B", "K", "STEPS", "rows", "degree_bits", "FRI log_blowup/num_queries/pow_bits", "every claimed word", if bind_operands { "sha256(x), sha256(w)" } else { "operands: not bound" }],
+                "degree_bits": "fixed by the verifier from B; a proof with another degree_bits is rejected (DegreeBitsMismatch)",
+                "public_columns_checked_at_zeta": if bind_operands { "vu.y16 + x.a[0..16] + x.b[0..16]" } else { "vu.y16" },
+                "extra_soundness_term": format!("<= {} columns x n / |challenge field| = 2^{:.1}", if bind_operands { 33 } else { 1 }, ((if bind_operands { 33.0f64 } else { 1.0 }) * rows as f64).log2() - B::challenge_bits() as f64),
+                "operands_bound": bind_operands
+            }) },
+            "note": if unbound { "TIMING BASELINE: pre-fix unbound path (no statement); Plonky3 FRI/Keccak diagnostic PCS" } else { "Plonky3 FRI/Keccak is the diagnostic PCS, not Candidate B's Ligero-style interactive PCS (PROTOCOL.md); the claimed output words are the statement: absorbed into the transcript before the first challenge and checked at zeta against the committed `vu.y16` column (PROTOCOL.md 12.5 'Statement binding', red-team F1-F3 fixed); operands are witness unless --bind-operands (authentication excluded)" }
         },
-        "validation": {"status": "passed", "checker": "p3_uni_stark::verify + recorded accumulators", "detail": format!("proof verified; {n_vus} VUs x {steps} steps in {rows} rows; every intermediate accumulator and output word equals bench-instances/v1"), "evidence": [], "index_note": tier.index.get("note").cloned().unwrap_or(Value::Null)},
+        "validation": {"status": "passed", "checker": if unbound { "p3_uni_stark::verify (UNBOUND baseline) + recorded accumulators" } else { "verity_direct::stark::verify_bound_bytes (uni-stark verify + statement binding) + recorded accumulators" }, "detail": format!("proof verified{}; {n_vus} VUs x {steps} steps in {rows} rows; every intermediate accumulator and output word equals bench-instances/v1", if unbound { String::new() } else { format!(" for the statement of {n_vus} claimed words; wrong-word and wrong-B statements rejected") }), "evidence": [], "index_note": tier.index.get("note").cloned().unwrap_or(Value::Null)},
         "measurements": measurements,
         "measurement_files": [],
         "artifacts": []
