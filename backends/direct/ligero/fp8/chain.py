@@ -360,7 +360,7 @@ def bench_vu_fp8(args) -> int:
         contract.measurement("units_per_vu", STEPS, "count"),
     ]
     for k_, v_ in cen.items():
-        if isinstance(v_, int):
+        if isinstance(v_, int) and not isinstance(v_, bool):
             meas.append(contract.measurement(f"census.{k_}", v_, "count"))
     result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or f"b-ligero-fp8-vu-{int(time.time())}",
               "workload_fingerprint": fp,
