@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from verity_capture.sweep.seed_checkpoint import entry
+from verity_capture.sweep.seed_checkpoint import entry, local_path
 
 TREE = Path(__file__).resolve().parents[2]
 MANIFEST = TREE / "manifests" / "checkpoints.json"
@@ -18,7 +18,22 @@ DOC = {"checkpoints": [
     {"role": "B1-B4,R*,D*,Q1/Q2 base,X1", "repo": "Qwen/Qwen2.5-1.5B", "revision": "8faed761d45a263340a0528343f099c05c9a4323"},
     {"role": "QWEN15_INSTRUCT", "repo": "Qwen/Qwen2.5-1.5B-Instruct", "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306"},
     {"role": "MISTRAL7B", "repo": "unsloth/mistral-7b-v0.3", "revision": "abc"},
+    # OLMoE: the 09-07 pre-registration stub (no local_path, downloaded False) precedes the seeded OLMOE entry for the same repo@revision
+    {"role": "M1/M2", "repo": "allenai/OLMoE-1B-7B-0924", "revision": "6d84c48581ece794365f2b8e9cfb043c68ade9c5", "downloaded": False},
+    {"role": "OLMOE", "repo": "allenai/OLMoE-1B-7B-0924", "revision": "6d84c48581ece794365f2b8e9cfb043c68ade9c5", "downloaded": True,
+     "local_path": "/workspace/hf/hub/models--allenai--OLMoE-1B-7B-0924/snapshots/6d84c48581ece794365f2b8e9cfb043c68ade9c5"},
 ]}
+
+
+def test_a_duplicated_repo_revision_prefers_the_case_role_then_a_recorded_local_path():
+    """[F-r19-int-16] #67's Commit relaunch exited 3 on KeyError local_path: repo@revision matched the OLMoE stub first."""
+    e = entry(DOC, "OLMOE", "allenai/OLMoE-1B-7B-0924", "6d84c48581ece794365f2b8e9cfb043c68ade9c5")
+    assert e["role"] == "OLMOE" and "local_path" in e
+    e2 = entry(DOC, "SOMETHING_ELSE", "allenai/OLMoE-1B-7B-0924", "6d84c485")      # no role match: the entry with a local_path wins
+    assert e2 is e
+    stub = DOC["checkpoints"][3]
+    assert local_path(stub, "/hf") == Path("/hf/hub/models--allenai--OLMoE-1B-7B-0924/snapshots/6d84c48581ece794365f2b8e9cfb043c68ade9c5")
+    assert local_path(e, "/hf") == Path(e["local_path"])
 
 
 def test_repo_and_revision_select_before_the_role_name():

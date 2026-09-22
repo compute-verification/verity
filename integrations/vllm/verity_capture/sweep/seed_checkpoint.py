@@ -21,17 +21,28 @@ from pathlib import Path
 
 def entry(doc: dict, case: str, repo: str | None = None, revision: str | None = None) -> dict | None:
     if repo:
-        for c in doc["checkpoints"]:
-            if c.get("repo") == repo and (not revision or str(c.get("revision", "")).startswith(revision) or revision.startswith(str(c.get("revision", "")))):
-                return c
+        hits = [c for c in doc["checkpoints"]
+                if c.get("repo") == repo and (not revision or str(c.get("revision", "")).startswith(revision) or revision.startswith(str(c.get("revision", ""))))]
+        if hits:
+            # the manifest can carry one repo@revision twice (OLMoE: a 09-07 pre-registration stub without local_path next to the seeded
+            # OLMOE entry) -- prefer the entry whose role is the case, then one that records a local_path (F-r19-int-16)
+            hits.sort(key=lambda c: (c.get("role") != case, "local_path" not in c))
+            return hits[0]
     for c in doc["checkpoints"]:
         if c.get("role") == case or c.get("repo") == case:
             return c
     return None
 
 
+def local_path(ent: dict, hf_home: str) -> Path:
+    """The entry's recorded local_path, else the HF cache snapshot dir that snapshot_download would populate."""
+    if ent.get("local_path"):
+        return Path(ent["local_path"])
+    return Path(hf_home) / "hub" / ("models--" + ent["repo"].replace("/", "--")) / "snapshots" / ent["revision"]
+
+
 def seed(ent: dict, hf_home: str) -> tuple[bool, str]:
-    local = Path(ent["local_path"]); shas = ent.get("safetensors_sha256", {})
+    local = local_path(ent, hf_home); shas = ent.get("safetensors_sha256", {})
     if not all((local / f).exists() for f in shas) or not (local / "config.json").exists():
         from huggingface_hub import snapshot_download
         p = snapshot_download(ent["repo"], revision=ent["revision"], allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model", "*.py"],
