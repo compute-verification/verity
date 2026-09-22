@@ -426,7 +426,7 @@ NOTES_MD = [
     "produced by the previous level's sumcheck -- committing an intermediate level (`p_l`, `q_l` of the tree, or the wires of",
     "a checker layer) makes the pieces above and below it independent given the commitment, so their rounds share round",
     "trips. That is the `cut` family in section 6: 26M committed elements (+14%) cut the lookup chain 352 -> 137, and 32",
-    "committed wires per unit (+7%) cut the checker chain 203 -> 135; together depth 355 -> 140 at ~+3% GPU prover time.",
+    "committed wires per unit (+7%) cut the checker chain 197 -> 129; together depth 355 -> 140 at ~+3% GPU prover time.",
     "(iii) `c` variables per message halves or thirds the rounds of every sumcheck at 2x / 5.3x the sumcheck work. The",
     "checkpointed variant (PROTOCOL.md 12.4) is deeper *and* slower at every RTT -- it does not win under a latency objective",
     "either. The hint-free branch is 6% cheaper but ~170 rounds deeper: it wins only below ~0.5 ms RTT on the GPU.",
@@ -530,9 +530,10 @@ def measured_row(result: Mapping[str, Any]) -> dict[str, Any]:
             "lookup_chain": m.get("depth_lookup_chain"), "checker_chain": m.get("depth_checker_chain")}
 
 
-#: The checker GKR's per-layer (b, s_in) at B = 4096 (96 x 4096 = 393,216 unit copies, b = 19; 826 wires, s = 7 as
-#: the B = 64 run's checker chain 167 = 6 x (13 + 14) + 5 implies); the R16 fractional tree has n = 26 levels.
-A_CHECKER_LAYERS_B4096: tuple[tuple[int, int], ...] = ((19, 7),) * 6
+#: The checker GKR's per-layer (b, s_in) at B = 4096 (96 x 4096 = 393,216 unit copies, b = 19; 826 wires): fitted to
+#: the measured checker chain 197 of r20260922-074606-be7b (6 x 19 + 2 x 39 + 5); the B = 64 run's 167 is
+#: 6 x 13 + 2 x 42 + 5. The R16 fractional tree has n = 26 levels (352 = measured lookup chain).
+A_CHECKER_LAYERS_B4096: tuple[tuple[int, int], ...] = ((19, 7), (19, 7), (19, 7), (19, 6), (19, 6), (19, 6))
 A_R16_LEVELS_B4096 = 26
 A_COMMITTED_B4096 = 44_937 * 4096
 

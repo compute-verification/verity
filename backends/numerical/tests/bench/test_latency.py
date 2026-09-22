@@ -114,14 +114,15 @@ def test_depth_chains_match_the_measured_runs():
     assert L.lookup_chain(20) == 211
     assert L.checker_chain(((13, 7),) * 6) == 167
     assert 1 + max(L.lookup_chain(20), L.checker_chain(((13, 7),) * 6)) + 2 == 214
-    # B = 4096: n = 26 -> 352; the checker at b = 19 is below it
+    # B = 4096 (r20260922-074606-be7b): lookup chain 352 (n = 26), checker chain 197, depth 355
     assert L.lookup_chain(L.A_R16_LEVELS_B4096) == 352
-    assert L.checker_chain(L.A_CHECKER_LAYERS_B4096) == 203
+    assert L.checker_chain(L.A_CHECKER_LAYERS_B4096) == 197
+    assert 1 + max(352, 197) + 2 == 355
     # the levers: sharding removes levels, c halves rounds, cuts take the longest piece
     assert L.lookup_chain(21) == 232
     assert L.lookup_chain(26, 2) == 196
     assert L.lookup_chain(26, 1, (16, 21)) == 137
-    assert L.checker_chain(L.A_CHECKER_LAYERS_B4096, 1, (2,)) == 4 * 33 + 3
+    assert L.checker_chain(L.A_CHECKER_LAYERS_B4096, 1, (2,)) == 34 + 32 + 32 + 31
 
 
 def test_a_depth_options_rows():
