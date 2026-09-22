@@ -14,6 +14,8 @@ records `rounds.protocol` and `rounds.sequential_depth`).
 ## Layout
 
 - `Cargo.toml`: standalone crate, **no external crates** (hand-rolled Goldilocks, cubic extension `X^3 − X − 1`, SHA-256).
+  `--features babybear` swaps in `src/field_babybear.rs` (BabyBear `p = 2^31 − 2^27 + 1`, degree-6 extension
+  `X^6 − 22`, same API) and reads `fixtures/babybear/` (section "BabyBear"; `PROTOCOL.md` §13).
 - `src/field.rs` (Fp, Ext, eq tables, Lagrange), `src/transcript.rs` (SHA-256 Fiat–Shamir, rejection sampling),
   `src/circuit.rs` (circuit text parser, layers), `src/gkr.rs` (data-parallel sumcheck GKR per layer), `src/logup.rs`
   (LogUp fractional-sum GKR per table), `src/ligero.rs` (NTT, RS encode, Merkle, open/verify), `src/main.rs`
@@ -135,3 +137,62 @@ m = 96 column of §12.4 (cost model, not run).
 
 Not yet built: ZK rows / salted leaves / batched Merkle paths in the commitment (~3× bytes slack), HVZK masking, the
 interactive object and step 0, a parallel NTT, `R16` sharding (depth 438 → 409), authentication.
+
+## BabyBear (vy-cpu2, 12 threads, PCS mode, `--features babybear`; lane a-babybear, 2026-09-22)
+
+The same prover over BabyBear `p = 2^31 − 2^27 + 1` with the degree-6 extension `F_p[X]/(X^6 − 22)` (the polynomial
+of `tensor/reference.py` and the a-gpu lane), implementing the six embedding rules of
+`backends/numerical/reports/babybear_rules.md` in the exporter's `--field babybear` mode (`gkr_export/babybear.py`:
+words as 16-bit limb pairs, direct bound ranges on linear wires instead of `lt_pow` products, LEAD `span` / NORM `mbnd`
+columns, `NORM_VBND` dropped; per unit **444 columns / 322 products / 322 assertions / 382 lookups** vs Goldilocks
+468 / 358 / 353 / 374). `PROTOCOL.md` §13 has the field, the rule-by-rule circuit mapping, the per-limb chain linkage,
+the three byte-level protocol changes and the soundness table (degree 6: `2^-130.2` by the accountant at the
+Goldilocks Ligero parameters k = 4096, n = 16384, t = 192; label **2^-128**).
+
+~~~sh
+cargo test --release --features babybear                                   # 12 tests: field vectors from tensor/reference.py, honest/negatives/synth VUs
+uv run --package verity-numerical python -m verity_numerical.gkr_export fixtures/babybear --units 8 --field babybear
+uv run --package verity-numerical python backends/gkr/tools/battery_adapter.py      # the 83-case battery through prove+verify
+FIELD=babybear GATE=1      bash backends/gkr/run_measure_vu.sh             # cargo test, 52 TU negatives, battery
+FIELD=babybear             bash backends/gkr/run_measure_vu.sh 4096        # export (--field babybear) + prove + verify
+FIELD=babybear NEGATIVES=1 bash backends/gkr/run_measure_vu.sh             # vu-k1536-neg
+FIELD=babybear TRANSCRIPTS=1 bash backends/gkr/run_measure_vu.sh           # transcript vectors B = 4, 64 for lane a-gpu
+~~~
+
+**Range-table soundness fix (both fields, commit 445cbca).** While porting, the exporter's single-chunk range check
+`y · 2^(16−w) ∈ R16` for `w < 16` turned out to be forgeable in any prime field (`y = (r + k p)/2^(16−w)` passes for
+every `r < 2^16`; over Goldilocks `y = p − (p−1)/2^15` passes a bit check). Sub-16-bit ranges now use exact-width
+implicit tables `R7/R8/R9/R14` (query count unchanged, 9 logUp instances instead of 5). The Goldilocks circuit was
+regenerated and **re-measured on the same box and binary revision** as the control below; the a-chain numbers in
+"Full VU runs" (297.6 s, depth 438) predate the fix. The fix also shortens the lookup chain (`R16` lost the
+sub-16-bit chunks): depth 438 → **381** at B = 4096.
+
+**Goldilocks vs BabyBear, same commit (54e5da7 / 25d4bcc), same box (shared with b-chain and checker-min, load ≈ 35–40
+on 32 vCPU), 12 threads, all recorded words accepted:**
+
+| B | field | run id | prove_s (commit / lookup / arith / open) | verify_s | proof bytes | rounds | depth | peak RSS | committed | s / VU | ratio BB/GL |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 64 | Goldilocks^3 | r20260922-064620-cf4c | 5.79 (0.22 / 1.89 / 3.22 / 0.43) | 0.49 | 1,638,920 | 1974 | 234 | 587 MB | 2,959,871 | 0.0905 | — |
+| 64 | **BabyBear^6** | r20260922-064308-006f | 6.93 (0.25 / 2.34 / 3.65 / 0.68) | 0.74 | 1,057,496 | 1991 | 234 | 454 MB | 2,812,351 | 0.1083 | prove 1.20×, verify 1.51×, bytes 0.65×, RSS 0.77× |
+| 4096 | Goldilocks^3 | r20260922-065844-2b84 | 261.3 (9.1 / 63.8 / 160.1 / 26.1) | 26.1 | 69,693,032 | 3179 | 381 | 33.8 GB | 184,145,855 | 0.0638 | — |
+| 4096 | **BabyBear^6** | r20260922-065112-d687 | **319.3** (6.1 / 79.7 / 188.1 / 44.4) | **45.0** | **33,394,904** | 3176 | 381 | **25.7 GB** | 174,704,575 | 0.0780 | **prove 1.22×, verify 1.72×, bytes 0.48×, RSS 0.76×** |
+
+Reading: on this CPU BabyBear^6 is a *slower* prover (1.2×) with half the proof and three quarters of the memory —
+inside the ±1.5× band, so no `--breakthrough`. The challenge-field arithmetic dominates the sumchecks (`arith`,
+`lookup`): a degree-6 multiply is 36 base products with 31-bit operands against 9 native `u64` products for
+Goldilocks^3, and the opening (`open`: the `w`/`q` polynomials and the row combination over the extension) grows
+1.7×; the 4-byte base field only helps the commit (6.1 vs 9.1 s) and the bytes. `tensor.md`'s flip to BabyBear was
+priced for INT8 tensor cores (limb matmuls), not for scalar CPU arithmetic — this measurement does not contradict it,
+it says the CPU reference gains nothing from the field. Per transition unit: 0.812 ms (BabyBear) vs 0.665 ms.
+
+**Correctness gate (vy-cpu2, `--features babybear`):** `cargo test` 12/12 (r20260922-063837-b26c); transition-unit
+`fixtures/babybear/negatives` **52/52 rejected**; `vu-k1536-neg` **52/52 rejected** (44 by the verifier at the
+assertion sumcheck, 8 at witness generation — the non-finite / saturated negatives whose hints leave the finite
+domain; r20260922-064946-e1b6); **the 83-case BabyBear battery 83/83 rejected** through prove + verify
+(`tools/battery_adapter.py`, r20260922-063837-b26c: wrap 58, z3 12, zero_swap 4, chain 4, hint_swap 3,
+epilogue 1, fractional 1; `check-witness` also rejects all 83; the adapter's honest unit and honest 2-unit VU are
+accepted). Positives: 64/64 and 4096/4096 `vu-k1536` accepted with the recorded words (table).
+
+**Transcript vectors for lane a-gpu:** `fixtures/babybear-transcripts/` (`transcript_vu4.json`, `transcript_vu64.json`,
+run r20260922-070527-a263; `README.md` there gives the byte-exact conventions: 4-byte LE base elements, `c_0`-first
+degree-6 coordinates, SHA-256 state chaining, the squeeze counter, the preamble, the message order, Merkle layout).
