@@ -622,6 +622,35 @@ if triton is not None:
         tl.store(np_ptr + ob + 4, mmul(s4, R2_C), mask=m)
         tl.store(np_ptr + ob + 5, mmul(s5, R2_C), mask=m)
 
+    @triton.jit
+    def split_limbs_kernel(v_ptr, out_ptr, n, BLOCK: tl.constexpr):
+        """``out[i, idx] = l_i`` for ``v[idx] = Σ_i 2^(8i) l_i``, ``l_i ∈ [-128, 128)`` (canonical int32 in, 4 x int8 out)."""
+        idx = (tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)).to(tl.int64)
+        n64 = n.to(tl.int64)                       # the 4 planes span up to 4 n > 2^31 elements
+        m = idx < n64
+        x = tl.load(v_ptr + idx, mask=m, other=0)
+        l0 = ((x + 128) & 255) - 128
+        x = (x - l0) >> 8
+        l1 = ((x + 128) & 255) - 128
+        x = (x - l1) >> 8
+        l2 = ((x + 128) & 255) - 128
+        l3 = (x - l2) >> 8
+        tl.store(out_ptr + idx, l0.to(tl.int8), mask=m)
+        tl.store(out_ptr + n64 + idx, l1.to(tl.int8), mask=m)
+        tl.store(out_ptr + 2 * n64 + idx, l2.to(tl.int8), mask=m)
+        tl.store(out_ptr + 3 * n64 + idx, l3.to(tl.int8), mask=m)
+
+
+def split_limbs(v: torch.Tensor) -> torch.Tensor:
+    """``(4, *v.shape)`` int8 balanced limbs of a contiguous canonical int32 tensor, one pass."""
+    v = v.contiguous()
+    n = v.numel()
+    out = torch.empty((4,) + tuple(v.shape), dtype=torch.int8, device=v.device)
+    if n:
+        BLOCK = 1024
+        split_limbs_kernel[((n + BLOCK - 1) // BLOCK,)](v.view(-1), out.view(-1), n, BLOCK=BLOCK, num_warps=4)
+    return out
+
 
 def combine_level(p: torch.Tensor, q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """One LogUp tree level from ``p`` ``(2n[, 6])`` and ``q`` ``(2n, 6)`` (int32) -> ``(n, 6)`` int32 each."""

@@ -305,6 +305,25 @@ def _pad_a(a: torch.Tensor, rows: int, k: int) -> torch.Tensor:
     return full.view(rows, k, DEG)
 
 
+def _a_transposed(a: torch.Tensor, rows: int, k: int, int8: bool):
+    """``aᵀ`` as the ``(k·6, rows)`` GEMM operand ``af[(i, c), r] = a[r k + i, c]`` (zero past ``len(a)``), written once
+    in int32 straight into ``Limbs8``'s padded layout on the INT8 path (no int64 ``(rows, k, 6)`` copies: the functional
+    is 26 GB at the full VU batch and the transposed copies were the opening's memory peak)."""
+    l = a.shape[0]
+    if not int8:
+        return _pad_a(a, rows, k).permute(1, 2, 0).reshape(k * DEG, rows)
+    M = k * DEG
+    Mp, Kp = Limbs8.padded_shape(M, rows, "a")
+    af = torch.zeros((Mp, Kp), dtype=torch.int32, device=a.device)
+    full_rows = l // k
+    if full_rows:
+        af[:M, :full_rows] = a[: full_rows * k].view(full_rows, M).t()
+    rem = l - full_rows * k
+    if rem:
+        af[: rem * DEG, full_rows] = a[full_rows * k:].reshape(-1)
+    return Limbs8(af, "a", shape=(M, rows))
+
+
 def _intt_matrix(k: int, device) -> torch.Tensor:
     """``M[j, m] = k^-1 ω_k^{-jm}``: ``coeffs = values @ M`` (the same map as ``ntt(·, inverse=True)``)."""
     key = ("intt_mat", k, str(device))
@@ -358,10 +377,8 @@ def open_w_qc(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Te
     rows, k = cm.rows, p.k
     int8 = use_int8(dev)
     xr = Limbs8(cm.x_rows, "b") if int8 else cm.x_rows                # (rows, k), the B operand twice
-    ar = _pad_a(a, rows, k)                                           # (rows, k, 6)
     w = _mm(r.T.contiguous(), xr).T.contiguous()                      # (k, 6)
-    af = ar.permute(1, 2, 0).reshape(k * DEG, rows)                   # aᵀ: (k·6, rows)
-    del ar
+    af = _a_transposed(a, rows, k, int8)                              # aᵀ: (k·6, rows)
     H = _mm(af, xr).reshape(k, DEG, k)                                # [u_val, c, i_val]
     del af, xr
     M = _intt_matrix(k, dev)

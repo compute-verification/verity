@@ -255,30 +255,46 @@ class Limbs8:
     """A canonical matrix pre-split into its four balanced INT8 limbs ``x = Σ_i 2^(8i) l_i``, ``l_i ∈ [-128, 128)``
     (each ``(rows, cols)`` int8, contiguous), for the INT8 tensor-core ``mm_mod_int8``."""
 
-    def __init__(self, B: torch.Tensor, side: str = "a") -> None:
-        """``side="b"``: the right operand of the GEMM, stored column-major (cuBLASLt's IGEMM runs at 485 TMAC/s
-        with a column-major ``B`` and at 50 with a row-major one, probed on the H100)."""
-        self.shape = tuple(B.shape)
-        self.side = side
-        M, K = B.shape
-        # pad once to cuBLASLt's shape rules (rows of A a multiple of 32, the contraction a multiple of 8, N of 8)
-        Mp = max(32, -(-M // 32) * 32) if side == "a" else M
-        Kp = max(32, -(-K // 8) * 8) if side == "a" else max(32, -(-K // 8) * 8)
-        Np = None
-        if side == "b":
-            Kp, Np = max(32, -(-M // 8) * 8), max(32, -(-K // 8) * 8)
-        v = torch.zeros((Mp, Kp) if side == "a" else (Np, Kp), dtype=torch.int32, device=B.device)
+    @staticmethod
+    def padded_shape(M: int, K: int, side: str) -> tuple[int, int]:
+        """The stored (zero-padded) int32 layout for a logical ``(M, K)`` operand: ``(Mp, Kp)`` for side ``a``,
+        ``(Np, Kp)`` = the transpose for side ``b`` (cuBLASLt: rows of A a multiple of 32, K and N multiples of 8)."""
         if side == "a":
-            v[:M, :K] = B.to(torch.int32)
+            return max(32, -(-M // 32) * 32), max(32, -(-K // 8) * 8)
+        return max(32, -(-K // 8) * 8), max(32, -(-M // 8) * 8)
+
+    def __init__(self, B: torch.Tensor, side: str = "a", shape: tuple[int, int] | None = None) -> None:
+        """``side="b"``: the right operand of the GEMM, stored column-major (cuBLASLt's IGEMM runs at 485 TMAC/s
+        with a column-major ``B`` and at 50 with a row-major one, probed on the H100).  ``shape``: pass the logical
+        ``(M, K)`` when ``B`` is already the padded int32 storage of :meth:`padded_shape` (no copy is made)."""
+        self.side = side
+        if shape is not None:
+            self.shape = tuple(shape)
+            v = B
+            if v.dtype != torch.int32 or tuple(v.shape) != self.padded_shape(*shape, side) or not v.is_contiguous():
+                raise ValueError("Limbs8: pre-padded operand has the wrong dtype / shape")
         else:
-            v[:K, :M] = B.to(torch.int32).t()
-        ls = []
-        for _ in range(4):
-            l = ((v + 128) & 255) - 128
-            l8 = l.to(torch.int8).contiguous()
-            ls.append(l8.t() if side == "b" else l8)
-            v = (v - l) >> 8
-        self.limbs = ls
+            self.shape = tuple(B.shape)
+            M, K = B.shape
+            v = torch.zeros(self.padded_shape(M, K, side), dtype=torch.int32, device=B.device)
+            if side == "a":
+                v[:M, :K] = B.to(torch.int32)
+            else:
+                v[:K, :M] = B.to(torch.int32).t()
+        ls8 = _split_limbs(v)                                   # (4, *v.shape) int8, one pass
+        self.limbs = [ls8[i].t() if side == "b" else ls8[i] for i in range(4)]
+
+
+def _split_limbs(v: torch.Tensor) -> torch.Tensor:
+    """``(4, *v.shape)`` int8: the balanced limbs of a canonical int32 tensor (fused kernel on CUDA)."""
+    if _fast_split_limbs is not None and v.is_cuda:
+        return _fast_split_limbs(v)
+    out = []
+    for _ in range(4):
+        l = ((v + 128) & 255) - 128
+        out.append(l.to(torch.int8))
+        v = (v - l) >> 8
+    return torch.stack(out, 0)
 
 
 def _int_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -432,6 +448,7 @@ _fast_phase1 = None
 _fast_scatter = None
 _fast_gate_eval = None
 _fast_combine_level = None
+_fast_split_limbs = None
 try:
     import os as _os
 
@@ -446,5 +463,7 @@ try:
             _fast_scatter = _kernels.scatter_terms
             _fast_gate_eval = _kernels.gate_eval
             _fast_combine_level = _kernels.combine_level
+            _fast_split_limbs = _kernels.split_limbs
 except Exception:  # noqa: BLE001 -- no Triton / no CUDA: the torch path is used
     _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = _fast_scatter = _fast_gate_eval = _fast_combine_level = None
+    _fast_split_limbs = None
