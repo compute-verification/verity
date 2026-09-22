@@ -33,6 +33,15 @@ from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.verification.target import FIRST, FP8_ADA_MMA, TARGETS, Target
 from verity_numerical.bench import contract
 
+try:  # the label keys are pinned with the store (`research.store.vocab`, tools/research); verity-numerical does not depend on that package
+    from research.store import vocab as _vocab
+
+    _CANDIDATE, _LABEL, _PROOF_CLASS = _vocab.CANDIDATE, _vocab.LABEL, _vocab.PROOF_CLASS
+    _INDEPENDENTLY_VERIFIED, _VERIFIED, _VERIFIED_ACCEPTED = _vocab.INDEPENDENTLY_VERIFIED, _vocab.VERIFIED, _vocab.VERIFIED_ACCEPTED
+except ImportError:  # pragma: no cover  -- the same spellings, so the predicate still imports where the store package is absent (tested equal)
+    _CANDIDATE, _LABEL, _PROOF_CLASS = "candidate", "label", "proof_class"
+    _INDEPENDENTLY_VERIFIED, _VERIFIED, _VERIFIED_ACCEPTED = "independently_verified", "verified", "accepted"
+
 __all__ = [
     "AUTHENTICATION",
     "B",
@@ -113,11 +122,11 @@ FROZEN_INSTANCES: dict[str, dict[str, Any]] = {
 
 #: Label keys whose asserter is the *producer* of a result (the lane's own row labels, ``ledger_to_store``); a verification
 #: label by any of them, or by the producing attempt's ``execution.campaign``, is a self-assertion and does not count.
-PRODUCER_LABEL_KEYS = ("candidate", "label")
+PRODUCER_LABEL_KEYS = (_CANDIDATE, _LABEL)
 #: The labels that mean "an independent verifier accepted this result": ``(key, accepted values)``.  The store's back-fill of
 #: Rust-verifier acceptance used ``independently_verified=true`` (by ``h100-bestvsbest``, ``coordinator``); ``verified=accepted``
 #: is the name the freeze spec gives it.  Either counts when the asserter is not a producer.
-VERIFIED_LABELS: tuple[tuple[str, tuple[Any, ...]], ...] = (("independently_verified", (True, "true")), ("verified", ("accepted",)))
+VERIFIED_LABELS: tuple[tuple[str, tuple[Any, ...]], ...] = ((_INDEPENDENTLY_VERIFIED, (True, "true")), (_VERIFIED, (_VERIFIED_ACCEPTED,)))
 REDTEAM_GLOB = "red-team-*"
 #: Proof classes in order of strength; a red-team ``proof_class`` verdict below the fingerprint's class is a downgrade.
 RANK: dict[str, int] = {c: i for i, c in enumerate(("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF",
@@ -323,7 +332,7 @@ def _redteam_ceiling(labels: Sequence[_Label], self_: set[str]) -> tuple[str | N
     grant the highest), or ``(None, None)`` when no red team spoke.  Downgrades stand, nothing is upgraded, a later
     re-audit supersedes an earlier verdict."""
 
-    verdicts = [l for l in labels if l.key == "proof_class" and l.by not in self_ and fnmatch.fnmatchcase(l.by, REDTEAM_GLOB)]
+    verdicts = [l for l in labels if l.key == _PROOF_CLASS and l.by not in self_ and fnmatch.fnmatchcase(l.by, REDTEAM_GLOB)]
     if not verdicts:
         return None, None
     latest = verdicts[-1]
