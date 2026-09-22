@@ -66,3 +66,19 @@ against `manifest.json` (`tiers.<tier>.files.<file>.sha256`) before trusting it.
 prefix is representative. Real = the 24 seeds + 24 × 143 (seed activation row × another real weight row of the same
 layer/op, drawn deterministically from the pinned Hugging Face checkpoint). Corner families and the sensitivity table
 are in `manifest.json` and printed by `python -m verity_numerical.bench.instances stats`.
+
+## Notes recorded while building
+
+- Expected words come from `verity.ml.tc.silicon` (`tc_dot_chain`, `tc_dot`, pipeline `AMPERE_BF16_M16N8K16`) and were
+  cross-checked step by step against `verity_numerical.reference.hawkeye_close` on every instance of every tier
+  (`manifest.json` `cross_check`). Transitions that saturate (D8) are tagged `silicon-only`: there the simulator is the
+  reference and the hardware replay is the confirmation, not `hawkeye_close`.
+- BF16 subnormal operands: `silicon.bf16_product` treats an exponent field of 0 as exponent 1 with no implicit bit, so a
+  subnormal operand's product is exact (never flushed) but its `Term` is unnormalised — its exponent is the field's
+  (−126 + the other operand's) with a significand that has leading zeros. Alignment uses that unnormalised exponent, so
+  such a product can be the group's alignment maximum with a much smaller true value than a normal product of the same
+  exponent. This is the behaviour the finite sweep's `subnormal` family measured on both the A100 and the RTX 4090
+  (discrepancy log D2, 0 mismatches against `silicon.tc_dot`). Two subnormal operands multiply to a product below the
+  −132 floor and are flushed. The `bf16-subnormal` corners exercise both.
+- The −132 exponent floor (`zero_exponent`) is observable only when the accumulator is exactly ±0 (a subnormal FP32
+  accumulator already sits at −126 > −132): the `floor-flush` corners and the `floor-window` TU corners are built so.
