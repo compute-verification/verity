@@ -66,9 +66,18 @@ Parameters (the protocols' reference set): RS `[n = 16 384, k = 4 096]` over `F_
 `t = 192` (`191` minimum), `k - l = 256 >= t + 1`.
 
 ~~~text
-per committed row       k - l = 256 uniformly random symbols at the randomizer positions zeta_{l+1..k}
+per committed row       k - l = 256 uniformly random symbols at the randomizer positions zeta_{l+1..k} of H_k
                         -> any t <= 256 opened columns of the row are uniform (the randomizer-to-opened-symbols
                            map is a t x 256 Cauchy-type matrix of full rank: zk_reference.opened_columns_rank)
+                           IF AND ONLY IF the codeword domain is disjoint from the interpolation domain H_k.
+                        FIX 2026-09-22 (red team F4, lane soundness-fixes): with the codeword evaluated on H_n
+                        itself (systematic RS, as the first leaf/v2 reference and the direct/encode "systematic
+                        quarter" do) the opened column (n/k) j IS message symbol j -- payload in the clear for
+                        every j < l hit by Q, randomizers irrelevant; the Cauchy row for that column is zero.
+                        B-Ligero's committed tableau and leaf/v2 MUST encode on a coset s H_n with s notin H_n
+                        (leaf/v2: s = 31, `code_text .../coset=31`; all n symbols computed, the free systematic
+                        quarter is gone, encoder cost unchanged within noise: cosets-only 31.6 ms vs 32.2 ms,
+                        direct/encode/README). Pin: tests/reference/test_leaf_v2.py::test_no_opened_column_is_a_payload_word.
 per tableau             3 blinding rows: u_0 (uniform codeword, degree < k), u_add (uniform degree < k+l-1,
                         payload sum 0), u_q (uniform degree < 2k-1, vanishing on the payload points)
                         -> v = r^T U + u_0, q_add + u_add, p_0 + u_q are uniform on their affine spaces
