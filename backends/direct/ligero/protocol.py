@@ -681,6 +681,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         v_np = v.cpu().numpy().astype(np.uint32)
     else:
         w = _combine(r, W)                                        # (D, l) evaluations on H
+    clk.lap("tests_w")
     # quadratic: batched A*B - C on the codeword domain (+ the mask), divided by Z_H
     P0 = quad_p0(tb, rho_quad, U[:m])                             # (D, n): split form (witness.quad_p0)
     zinv = batch_modinv(zh_on_coset(n, l, device))
@@ -692,6 +693,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     if check:
         assert (hcoef[:, cfg.h_len:] == 0).all(), "quotient degree too high: constraints violated"
     h = hcoef[:, :cfg.h_len]
+    clk.lap("tests_quad")
     q_np = None
     if chain is not None:
         layout, y16_pub = chain
@@ -708,7 +710,8 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
             assert (qcoef[:, cfg.q_len:] == 0).all(), "chain polynomial degree too high"
             assert torch.equal(_sum_over_H(qcoef[:, :cfg.q_len], l), cc.rhs), "chain constraints violated"
         q_np = qcoef[:, :cfg.q_len].cpu().numpy().astype(np.uint32)
-    clk.lap("tests")
+    clk.lap("tests_chain")
+    clk.marks["tests"] = clk.marks["tests_w"] + clk.marks["tests_quad"] + clk.marks["tests_chain"]   # the bucket
 
     w_np = w.cpu().numpy().astype(np.uint32)
     h_np = h.cpu().numpy().astype(np.uint32)
