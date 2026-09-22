@@ -256,7 +256,7 @@ where
 
         // pass 2: the reduced openings
         for ((mats, points), opened_values_for_round) in izip!(mats_and_points, &all_opened_values) {
-            for ((mat, points_for_mat), opened_values_for_mat) in izip!(mats, points, opened_values_for_round) {
+            for (mat, points_for_mat, opened_values_for_mat) in izip!(mats, points, opened_values_for_round) {
                 let log_height = log2_strict_usize(mat.height());
                 let reduced_opening_for_log_height = reduced_openings[log_height]
                     .get_or_insert_with(|| vec![Challenge::zero(); mat.height()]);
