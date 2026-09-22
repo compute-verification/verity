@@ -1,6 +1,9 @@
 """Seed one pinned checkpoint (manifests/checkpoints.json) into HF_HOME and verify every listed safetensors sha256.
 
-    python -m verity_capture.sweep.seed_checkpoint <ROLE|repo> [--manifest manifests/checkpoints.json]
+    python -m verity_capture.sweep.seed_checkpoint <ROLE|repo> [--repo HF_REPO --revision SHA] [--manifest manifests/checkpoints.json]
+
+--repo/--revision (the workload manifest's model + tokenizer_revision) select the entry first: a CASES key is not always the entry's
+`role` -- Qwen2.5-1.5B's role reads "B1-B4,R*,D*,Q1/Q2 base,X1" while its case is B1, so #39's Commit relaunch exited 3 here (r19-int-14).
 
 The same rule pod_bootstrap.sh applies at --cases, callable for one role after bootstrap (R19: a pod bootstrapped with --cases B0,MISTRAL7B,OLMOE
 was handed #11 = LLAMA32_1B; the Build died in 7 s on HF's offline lookup).  Exit 0 = present and verified; 3 = no entry; 4 = sha mismatch.
@@ -16,7 +19,11 @@ import sys
 from pathlib import Path
 
 
-def entry(doc: dict, case: str) -> dict | None:
+def entry(doc: dict, case: str, repo: str | None = None, revision: str | None = None) -> dict | None:
+    if repo:
+        for c in doc["checkpoints"]:
+            if c.get("repo") == repo and (not revision or str(c.get("revision", "")).startswith(revision) or revision.startswith(str(c.get("revision", "")))):
+                return c
     for c in doc["checkpoints"]:
         if c.get("role") == case or c.get("repo") == case:
             return c
@@ -43,12 +50,14 @@ def seed(ent: dict, hf_home: str) -> tuple[bool, str]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("case")
+    ap.add_argument("--repo", default=None, help="the workload manifest's model; selects the entry before the role/repo name match")
+    ap.add_argument("--revision", default=None, help="the workload manifest's tokenizer_revision (full or prefix)")
     ap.add_argument("--manifest", default="manifests/checkpoints.json")
     a = ap.parse_args(argv)
     doc = json.load(open(a.manifest))
-    ent = entry(doc, a.case)
+    ent = entry(doc, a.case, a.repo, a.revision)
     if ent is None:
-        print(f"no checkpoints.json entry for {a.case}", file=sys.stderr); return 3
+        print(f"no checkpoints.json entry for {a.case}" + (f" / {a.repo}@{(a.revision or '')[:12]}" if a.repo else ""), file=sys.stderr); return 3
     hf_home = os.environ.get("HF_HOME") or "/workspace/hf"
     ok, msg = seed(ent, hf_home)
     print(("checkpoint OK " if ok else "checkpoint FAIL ") + msg)
