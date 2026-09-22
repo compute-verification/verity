@@ -14,12 +14,21 @@ from .unit import flatten_hints
 __all__ = ["Tables", "build_witness", "check_constraints", "eval_expr", "hints_tensor", "tables"]
 
 
+_EXPR_CACHE: dict = {}
+
+
 def eval_expr(e: Expr, W: torch.Tensor) -> torch.Tensor:
     """(l,) values of an affine expression on the witness (mod p)."""
     if not e.lin:
         return torch.full((W.shape[1],), e.c % P, dtype=torch.int64, device=W.device)
-    idx = torch.tensor(list(e.lin.keys()), dtype=torch.int64, device=W.device)
-    coef = torch.tensor([v % P for v in e.lin.values()], dtype=torch.int64, device=W.device)
+    key = (id(e), str(W.device))
+    hit = _EXPR_CACHE.get(key)
+    if hit is None or hit[0] is not e:
+        idx = torch.tensor(list(e.lin.keys()), dtype=torch.int64, device=W.device)
+        coef = torch.tensor([v % P for v in e.lin.values()], dtype=torch.int64, device=W.device)
+        hit = (e, idx, coef)
+        _EXPR_CACHE[key] = hit
+    _, idx, coef = hit
     acc = ((W.index_select(0, idx) * coef[:, None]) % P).sum(0)
     return (acc + e.c) % P
 
@@ -61,13 +70,14 @@ def build_witness(sys: System, pub: dict[str, torch.Tensor], hints: torch.Tensor
         elif kind == "bits":
             _, row0, nbits, e = op
             x = eval_expr(e, W)                      # honest: an integer in [0, 2^nbits)
-            for i in range(nbits):
-                W[row0 + i] = (x >> i) & 1
+            shifts = torch.arange(nbits, dtype=torch.int64, device=device)
+            W[row0:row0 + nbits] = (x[None, :] >> shifts[:, None]) & 1
         elif kind == "sels":
             _, row0, k0s, k1s, key = op
             x = _signed(eval_expr(key, W))
-            for g, (k0, k1) in enumerate(zip(k0s, k1s)):
-                W[row0 + g] = ((x >= k0) & (x <= k1)).to(torch.int64)
+            k0 = torch.tensor(k0s, dtype=torch.int64, device=device)[:, None]
+            k1 = torch.tensor(k1s, dtype=torch.int64, device=device)[:, None]
+            W[row0:row0 + len(k0s)] = ((x[None, :] >= k0) & (x[None, :] <= k1)).to(torch.int64)
         elif kind == "inv":
             from .field import batch_modinv
             _, idx, x = op
