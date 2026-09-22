@@ -18,7 +18,8 @@ Ledger `backends/numerical/reports/ledger/gate4-h100.jsonl`, track `shared`.  De
 
 | row | status | run id |
 |---|---|---|
-| A end-to-end (a-gpu v2e, main 38757ed) | pending | |
+| A end-to-end (a-gpu v2e, main 38757ed) | DONE: 5.02 s median of 5 warm (1.23 ms/VU, 1.24e8), verified 4096/4096; cold run r20260922-090931-b5be (rep0 316 s compile) | r20260922-091718-45c3 |
+| A end-to-end (a-gpu2 head f87b096) | running | r20260922-091947-822f |
 | A buckets v1 / v2 (a-fusion kernels) | pending | |
 | B end-to-end non-ZK / HVZK (b-ligero2) | pending | |
 | B buckets v1 / v2 (encode) | pending | |
