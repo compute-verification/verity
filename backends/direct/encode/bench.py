@@ -10,8 +10,8 @@ resident buffer, the cost is data-independent).  The unfused cuBLAS matrix-DFT i
 and scaled linearly (labelled ``scaled_from_rows``).  Every encoder is checked bit-exactly against the numpy reference
 on 64 rows before it is timed.  Timing: one warm-up, then ``reps`` timings, median.
 
-Writes the result envelope (``verity_numerical.bench.contract``: fingerprint + measurements, proof_class NO_PROOF,
-scope component) to ``--out`` and to ``$RESEARCH_RUN_DIR/result.json``.
+Writes the raw JSON to ``--out`` and ``$RESEARCH_RUN_DIR/bench.json``; ``envelope.py`` wraps it in the campaign result
+envelope (``verity_numerical.bench.contract``) as ``result.json``.
 """
 from __future__ import annotations
 
@@ -157,32 +157,6 @@ def bench_encoder(name: str, kind: str, encoder, rows: int, slice_rows: int, rep
     return res
 
 
-def envelope(res: dict, run_id: str | None, problems_out: list) -> dict:
-    from verity_numerical.bench import contract
-
-    hw = contract.probe_hardware()
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False).stdout.strip() or None
-    fp = contract.fingerprint(profile=contract.PROFILE, domain=contract.DOMAIN, K=1536, B=4096, proof_class="NO_PROOF",
-                              authentication="excluded", zk_mode="none", security={"target": -128, "note": "Ligero shape at 2^-128 (rows, n, k); no proof"},
-                              hardware=hw, software={"backend": {"name": "b-encode RS encoders (cupy RawKernel / torch _int_mm / Triton)", "commit": commit},
-                                                     "toolchain": {k: res["device"][k] for k in ("torch", "cupy", "numpy", "triton")}},
-                              preprocessing="twiddle tables (16 KiB x 2 + 48 KiB) and DFT-matrix limb tiles (4 x 4 KiB) computed once on the host",
-                              retention="streamed", instances=None,
-                              scope="component: Reed-Solomon encoding of the Ligero witness matrix only; nothing else of the prover")
-    ms = []
-    for r in res["encoders"]:
-        tag = f"{r['encoder']}.{r['shape']}"
-        ms.append(contract.measurement(f"encode.{tag}.ms_per_batch", r["ms_median"], "ms"))
-        ms.append(contract.measurement(f"encode.{tag}.us_per_row", r["us_per_row"], "us"))
-        ms.append(contract.measurement(f"encode.{tag}.codeword_gb_per_s", r["codeword_gb_per_s"], "GB/s"))
-        ms.append(contract.measurement(f"encode.{tag}.fraction_of_hbm_floor", r["fraction_of_hbm_floor"], "ratio"))
-    out = {"schema": contract.RESULT_SCHEMA, "run_id": run_id or "local", "validation": {"status": "passed" if res["all_bit_exact"] else "failed",
-           "note": "every timed encoder bit-exact vs numpy reference on 64 rows"}, "workload_fingerprint": fp, "measurements": ms,
-           "artifacts": ["bench.json"], "bench": res}
-    problems_out.extend(contract.validate(out))
-    return out
-
-
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--reps", type=int, default=7)
@@ -242,19 +216,11 @@ def main(argv=None) -> None:
                   + (f" [scaled from {r['scaled_from_rows']} rows]" if r["scaled_from_rows"] else ""), flush=True)
     res["all_bit_exact"] = all(res["checks"].values())
     res["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    problems: list = []
-    try:
-        env = envelope(res, os.environ.get("RESEARCH_RUN_ID"), problems)
-    except Exception as ex:  # noqa: BLE001
-        print(f"envelope failed: {ex!r}", flush=True)
-        env = {"bench": res, "envelope_error": repr(ex)}
-    if problems:
-        print("contract problems:", problems, flush=True)
-    env["contract_problems"] = problems
-    Path(a.out).write_text(json.dumps(env, indent=1) + "\n")
+    res["run_id"] = os.environ.get("RESEARCH_RUN_ID")
+    Path(a.out).write_text(json.dumps(res, indent=1) + "\n")
     rd = os.environ.get("RESEARCH_RUN_DIR")
     if rd:
-        Path(rd, "result.json").write_text(json.dumps(env, indent=1) + "\n")
+        Path(rd, "bench.json").write_text(json.dumps(res, indent=1) + "\n")
 
 
 if __name__ == "__main__":

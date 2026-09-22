@@ -58,11 +58,11 @@ class _Stage:
         xl = _balanced_limbs_torch(X)                                 # (M, N, 4)
         xs = xl.permute(2, 0, 1).reshape(4 * M, self.N)              # row block i = limb i
         y = torch._int_mm(xs, self.limbs)                             # (4M, 4N) int32
-        y = y.view(4, M, self.N, 4).to(torch.int64)                   # [i, m, n, j]
+        y = y.view(4, M, 4, self.N).to(torch.int64)                   # [i, m, j, n]: column block j = limb j of F
         acc = torch.zeros(M, self.N, dtype=torch.int64, device=X.device)
         for i in range(4):
             for j in range(4):
-                acc += y[i, :, :, j] * weights[i + j]
+                acc += y[i, :, j, :] * weights[i + j]
         return torch.remainder(acc, P)
 
 
