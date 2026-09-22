@@ -4,13 +4,13 @@ Lanes `b-verifier` / `b-verifier-2` (the latter brought it to the b-zk-fix proto
 with statement-bound SHAKE-256 challenges, BLAKE3 Merkle, BLAKE2b statement digest and HM96 coin commitments;
 PROTOCOL.md sections 3, 4, 6, 7b, 8b, 8c). It shares no code with the Python prover/verifier: BLAKE3, BLAKE2b,
 SHAKE-256 (Keccak), the BabyBear NTT, the coset code, the file parsers and every check are written from
-`PROTOCOL.md`, `HANDOFF.md` and the red-team transcript rules (`redteam_vu.md` F1-F3), with the Python sources read
+`PROTOCOL.md`, `HANDOFF.md` and the red-team transcript rules (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3), with the Python sources read
 as the *reference of record* where the document is silent (each such place is a finding in `DISCREPANCIES.md`).
 
 Before it, every B-Ligero proof had been verified only by the code that produced it (shared `field.py`, shared
 transcript code, shared constants). This verifier accepts the honest 4096-VU proof sets in all four modes (ZK /
 non-ZK x `--mode interactive` / `--mode fiat-shamir`) and rejects every negative and every mutation; the agreement
-matrix against the Python verifier is in `backends/numerical/reports/b_verifier.md`.
+matrix against the Python verifier is in `note:r20-proof/b-verifier/20260922T1132Z-report-b-verifier`.
 
 **Read this first if you verify an `--mode interactive` file.**  In that mode the challenges are functions of the
 verifier's step-0 coins alone (PROTOCOL.md 8c after b-zk-fix), so a proof *file* verifies against the coins it

@@ -101,7 +101,7 @@ first-class consumer is the **tensor core**, not the SIMT core. Consequences:
   sumcheck and linear-time encoding as matrix multiplication), not as 64-bit
   SIMT multiplies. A 64-bit element is 8 limbs (64 limb products per multiply),
   a 31/32-bit element is 4 (16). The field question was therefore reopened and
-  re-priced (`backends/numerical/reports/tensor.md`, same day): 31-bit fields
+  re-priced (`note:r20-proof/tensor-cost/20260922T0450Z-report-tensor`, same day): 31-bit fields
   win every cell (A 1.1-1.2x, B 1.6x at 2^-128) because a 2^-128 challenge is
   24 limbs in either family while base and trace-times-challenge products are
   4x and 2x cheaper. **Tensor-core kernel work uses BabyBear (degree-6

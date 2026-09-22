@@ -19,7 +19,7 @@ python -m verifier.e2e --prover run.json --verifier out.json --out envelope.json
 
 ## What it checks, and what it takes from where
 
-Statement binding (`redteam_vu.md` F1-F3): every size comes from the statement -- `k = 4096, n = 16384, t = 192`
+Statement binding (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3): every size comes from the statement -- `k = 4096, n = 16384, t = 192`
 (the a-gpu config), rows = ceil(l / k) from the circuits' column counts x units, the message count from the
 circuits' layer structure and the tables' hypercube dimensions, the Merkle depth from `n`, the column indices from its
 own transcript.  `proof.bin`'s counts are *checked* against these, never *used*; a proof whose counts disagree is
@@ -57,7 +57,7 @@ whole.
 * **v1 (the a-gpu circuit), B = 4096, 12 threads of vy-cpu2: 1.00 s** (1T 10.3 s; B = 64: 0.077 / 0.222 s); the
   a-verifier lane's 3.02 s before the a-verifier-2 work (batched AVX-512 NTTs, output-pruned forward transforms,
   planar functional fill).  44/44 negatives, 16485/16485 mutations rejected.  Run r20260922-105647-c947; per-stage
-  numbers and what changed in `backends/numerical/reports/a_verifier_2.md`; ledger `ledger/a-verifier-2.jsonl`.
+  numbers and what changed in `note:r20-proof/a-verifier-2/20260922T1110Z-report-a-verifier-2`; ledger `ledger/a-verifier-2.jsonl`.
 * **F1 settled**: the kernel path's proofs are byte-identical to the torch path's on a clean 4090 (`gpu/F1_TRIAGE.md`);
   `main`'s prover is Rust-verified at B <= 512 from a committed tree.
 * **Checker v2** (`"variant": "v2"` manifests: `chain.txt` links, `itable` implicit tables, table union across the

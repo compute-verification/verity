@@ -1,6 +1,6 @@
 # fixtures/redteam-zk
 
-Recorded evidence of the red-team-zk lane (`backends/numerical/reports/redteam_zk.md`).
+Recorded evidence of the red-team-zk lane (`note:r20-proof/red-team-zk/20260922T1013Z-report-redteam-zk`).
 
 * `manifest.json` -- one entry per fixture: file, finding, prover commit, configuration, accumulator count,
   `expected_recovery` (`"all"` while the leak exists; `"none"` once `q` is masked on `H` and the fixture is regenerated).

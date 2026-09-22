@@ -77,7 +77,7 @@ are in `manifest.json` and printed by `python -m verity_numerical.bench.instance
   manifest `059103cf…`, arrays rebuilt there and digest-verified first): `vu-k1536` 4096/4096 accepted with every one
   of the 393,216 recorded intermediate accumulators reproduced by the checker's chain, `tu-k16` 4096/4096 accepted,
   `vu-k1536-neg` 52/52 (each `wrong` claim rejected and its correct word accepted; both `reject` classes rejected).
-  Report: `backends/numerical/reports/checker_sweep.json`. A proof backend that disagrees with this dataset disagrees
+  Report: `notes-asset:campaigns/r20-proof/assets/checker-min/reports/checker_sweep.json`. A proof backend that disagrees with this dataset disagrees
   with the checker, not only with `silicon`.
 - BF16 subnormal operands: `silicon.bf16_product` treats an exponent field of 0 as exponent 1 with no implicit bit, so a
   subnormal operand's product is exact (never flushed) but its `Term` is unnormalised — its exponent is the field's

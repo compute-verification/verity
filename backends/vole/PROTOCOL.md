@@ -2,7 +2,7 @@
 
 Status: **cost model / exploratory**. Nothing here is implemented or measured. Every number comes from
 `verity_numerical.explore.vole` (census from `security.census`, throughput from the cited tables) and is
-reproduced in `backends/numerical/reports/vole.json`. Same tags as the two candidate documents: **[source]**,
+reproduced in `notes-asset:campaigns/r20-proof/assets/explore/reports/vole.json`. Same tags as the two candidate documents: **[source]**,
 **[derivation]**, **[proposal]**, **[assumption]**.
 
 **Proof class, stated plainly.** This is *designated-verifier* zero knowledge: the auditor holds a secret MAC key

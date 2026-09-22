@@ -18,7 +18,7 @@ and `--rtt-ms X` (or `VERITY_GKR_RTT_MS`, `RTT_MS=` in `run_measure_vu.sh`) slee
 `depth_checker_chain`, `depth_formula_legacy` are alongside). Full VU B=4096 Goldilocks: depth **355** (legacy counter 381;
 lookup chain 352 = R16 tree of 26 levels, checker chain 197), B=64: depth 214 (lookup 211, checker 167). Measured e2e on
 vy-cpu2: B=64 at 50 ms RTT 18.44 s = 7.20 compute + 0.53 verify + 214 × 50 ms (model 18.43 s); see
-`backends/numerical/reports/latency.md`.
+`note:r20-proof/latency/20260922T1111Z-report-latency`.
 
 ## Layout
 
@@ -151,7 +151,7 @@ interactive object and step 0, a parallel NTT, `R16` sharding (depth 438 → 409
 
 The same prover over BabyBear `p = 2^31 − 2^27 + 1` with the degree-6 extension `F_p[X]/(X^6 − 22)` (the polynomial
 of `tensor/reference.py` and the a-gpu lane), implementing the six embedding rules of
-`backends/numerical/reports/babybear_rules.md` in the exporter's `--field babybear` mode (`gkr_export/babybear.py`:
+`note:r20-proof/red-team-babybear/20260922T0605Z-report-babybear-rules` in the exporter's `--field babybear` mode (`gkr_export/babybear.py`:
 words as 16-bit limb pairs, direct bound ranges on linear wires instead of `lt_pow` products, LEAD `span` / NORM `mbnd`
 columns, `NORM_VBND` dropped; per unit **444 columns / 322 products / 322 assertions / 382 lookups** vs Goldilocks
 468 / 358 / 353 / 374). `PROTOCOL.md` §13 has the field, the rule-by-rule circuit mapping, the per-limb chain linkage,
@@ -190,7 +190,7 @@ Reading: on this CPU BabyBear^6 is a *slower* prover (1.2×) with half the proof
 inside the ±1.5× band, so no `--breakthrough`. The challenge-field arithmetic dominates the sumchecks (`arith`,
 `lookup`): a degree-6 multiply is 36 base products with 31-bit operands against 9 native `u64` products for
 Goldilocks^3, and the opening (`open`: the `w`/`q` polynomials and the row combination over the extension) grows
-1.7×; the 4-byte base field only helps the commit (6.1 vs 9.1 s) and the bytes. `tensor.md`'s flip to BabyBear was
+1.7×; the 4-byte base field only helps the commit (6.1 vs 9.1 s) and the bytes. `note:r20-proof/tensor-cost/20260922T0450Z-report-tensor`'s flip to BabyBear was
 priced for INT8 tensor cores (limb matmuls), not for scalar CPU arithmetic — this measurement does not contradict it,
 it says the CPU reference gains nothing from the field. Per transition unit: 0.812 ms (BabyBear) vs 0.665 ms.
 
@@ -209,7 +209,7 @@ degree-6 coordinates, SHA-256 state chaining, the squeeze counter, the preamble,
 ## Checker v2 (vy-cpu2, 12 threads, PCS mode, `--variant v2`; lane a-v2, 2026-09-22)
 
 The same prover on the checker-min lane's lookup-centred arithmetisation of the SAME relation
-(`backends/numerical/reports/checker_min.md`, `verity_numerical.checker.v2`): one `T_OP` lookup per BF16 word,
+(`note:r20-proof/checker-min/20260922T0727Z-report-checker-min`, `verity_numerical.checker.v2`): one `T_OP` lookup per BF16 word,
 `ALIGN4` + `SHIFT` tables instead of the (q, r) division hints, `LEAD` / `LEADNORM` / `TNORM` instead of the leading-bit
 / normalise / state-out chain; the VU chains the *state* (s, e, M, z) and the group saturation flags between units and
 packs once, in the epilogue. Exporter `gkr_export/v2.py` (`--variant v2` on `gkr_export.vu`); per unit **264 columns /
@@ -277,7 +277,7 @@ depth 1).
 
 One fractional-GKR instance over all twelve v2 tables instead of one per table: every query and every row is tagged
 by its table, \(\phi(w,t)=\sum_k w_k\beta^k+\gamma\,\mathrm{tag}(t)\), one \((z,\beta,\gamma)\) message drawn after
-the commitment. `PROTOCOL.md` §15 (construction, soundness, depth, GPU shape); `gpu/HANDOFF_UNION.md` for the GPU
+the commitment. `PROTOCOL.md` §15 (construction, soundness, depth, GPU shape); `note:r20-proof/a-logup-union/20260922T1033Z-handoff-handoff-union` for the GPU
 lanes. **A protocol change to the lookup argument only; relation, export, commitment and chain unchanged.** The
 per-table path stays the default; `--logup union` / `VERITY_GKR_LOGUP=union` / `LOGUP=union|both` in
 `run_measure_vu.sh` select the union (`LOGUP=both` runs both legs on the same binary, box and instances and writes
@@ -314,6 +314,6 @@ work of the twelve smaller padded trees (\(2^{24}\)·2 + \(2^{23}\) + \(2^{21}\)
 \(2^{16}\) = 53.7M). Buckets with identical work (arith, commit) vary ±20 % between the two runs on this box, so the
 B = 4096 difference is within noise; the **coins** (3393 → 761) and the **depth** (+51 trips: one 26-level chain vs
 the deepest 24-level per-table chain) are exact. Proof bytes barely move (the opening dominates). The union's case is
-the GPU's per-instance latency (`reports/a_kernels_h100_v2.md`: ~14 ms × 10 instances), not CPU throughput —
-`gpu/HANDOFF_UNION.md`. Not a `--breakthrough` (no > 1.5× change). vy-cpu is slower than vy-cpu2 (a-v2's 54.2 s
+the GPU's per-instance latency (`note:r20-proof/a-fusion/20260922T0853Z-report-a-kernels-h100-v2`: ~14 ms × 10 instances), not CPU throughput —
+`note:r20-proof/a-logup-union/20260922T1033Z-handoff-handoff-union`. Not a `--breakthrough` (no > 1.5× change). vy-cpu is slower than vy-cpu2 (a-v2's 54.2 s
 per-table headline): the two legs here are the like-for-like comparison, not the absolute numbers.

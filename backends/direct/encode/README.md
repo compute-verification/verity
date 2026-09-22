@@ -6,7 +6,7 @@ Sections: the encoder (b-encode lane, below) -- then **the fused encode -> colum
 **Scope: component.** Encoding the committed matrix of the protocols' `[n = 16384, k = 4096]` RS code over BabyBear
 (`backends/direct/PROTOCOL.md` section 3), nothing else of the prover.  Every kernel is bit-exact against the numpy
 reference (`babybear.encode_rows`) on tiny sizes (laptop tests) and on 64 full rows before it is timed (pod).
-Roofline: `ROOFLINE.md`.  Recorded run: **`r20260922-062016-6bdf`** (`research run --on vy-g2 --source .`, tree
+Roofline: `note:r20-proof/b-encode/20260922T0625Z-report-roofline`.  Recorded run: **`r20260922-062016-6bdf`** (`research run --on vy-g2 --source .`, tree
 `bdef01a..403cbfa`; CUDA-event timings, warm, median of 7; raw `results_r20260922-062016-6bdf.json`, envelope
 `result.json` in the run, contract-valid).  Device: RTX 4090 (128 SMs, 24 GB, 1,008 GB/s), driver 580.159.04,
 CUDA runtime 12.9, cupy 14.2.0, torch 2.4.1+cu124, Triton 3.0.0.  Earlier run `r20260922-061346-71f8` (v1 kernel
@@ -34,7 +34,7 @@ Peak device memory for the B batch: 5.5 GiB with 65,536-row slices (1.07 GB in +
 
 **A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6.0+cu124, cupy 14.2.0, Triton 3.2; run
 `r20260922-064413-0508`, same bench and flags, all 8 variants bit-exact; floors at the A100's *measured* copy bandwidth
-1,754 GB/s and datasheet 312 T INT8 MAC/s, `backends/numerical/reports/anchor_a100.md`):
+1,754 GB/s and datasheet 312 T INT8 MAC/s, `note:r20-proof/anchor-a100/20260922T0820Z-report-anchor-a100`):
 
 ~~~text
 encoder (A100)                          B ms/batch   us/row   codeword GB/s   fraction of A100 HBM floor (14.5 ms)   vs 4090   A ms/batch
@@ -57,11 +57,11 @@ INT8 peak (31.6 ms) is already above the whole problem's memory floor: the O(N s
 INT32-equivalent multiplies of the O(N log N) NTT for a 16x faster pipe.  "Expressible as a matmul" was the wrong
 criterion for this operation.
 
-## Re-pricing (`reprice.py` -> `backends/numerical/reports/encode_gpu.json`; utilisation 0.172 for the still-modelled matmuls)
+## Re-pricing (`reprice.py` -> `notes-asset:campaigns/r20-proof/assets/b-encode/reports/encode_gpu.json`; utilisation 0.172 for the still-modelled matmuls)
 
 ~~~text
 design  gpu       enc ms  hash ms  matmul ms  simt ms  total ms  enc%  hash%  overhead   label
-B       RTX4090    412.8     45.7        9.5     24.2     492.5   84%     9%  1.22e+07   model encoder rs_matrix_ntt@0.172 + measured SHA-256 (hash_gpu.md)
+B       RTX4090    412.8     45.7        9.5     24.2     492.5   84%     9%  1.22e+07   model encoder rs_matrix_ntt@0.172 + measured SHA-256 (note:r20-proof/hash-gpu/20260922T0554Z-report-hash-gpu)
 B       RTX4090     31.6     45.7        9.5     16.7     103.8   30%    44%  2.57e+06   MEASURED encoder + MEASURED SHA-256 (this card)
 B       A100        15.6     22.6       10.1     70.6     120.5   13%    19%  2.99e+06   SCALING: encoder and SHA-256 x2.02 (bandwidth), other buckets at A100 peaks
 B       H100         9.5     13.7        3.2     20.5      47.4   20%    29%  1.18e+06   SCALING: encoder and SHA-256 x3.32 (bandwidth), other buckets at H100 peaks
@@ -79,7 +79,7 @@ and H100 rows are scalings by the bound that applies (bandwidth for the memory-b
 is an upper bound since that kernel is compute-bound; INT8 / FP32 peaks for the modelled buckets), not measurements.
 Note the A100 row gets *worse* than the 4090 because the model's SIMT bucket scales with FP32 peak (19.5 vs 82.6
 TFLOPS); that bucket is unmeasured.  For comparison, A's tensor-core sumcheck measured at 0.014 utilisation
-(`tc_sumcheck_4090.md`) puts A at ~1e8 on this card; B at 2.6e6 with two of four buckets measured.
+(`note:r20-proof/tc-sumcheck/20260922T0524Z-report-tc-sumcheck-4090`) puts A at ~1e8 on this card; B at 2.6e6 with two of four buckets measured.
 
 ## Recommendation for the b-ligero prover
 
@@ -115,9 +115,9 @@ TFLOPS); that bucket is unmeasured.  For comparison, A's tensor-core sumcheck me
 | `matdft_ref.py` | numpy reference of the two-stage limb-GEMM DFT (balanced int8 limbs, INT32 dots, INT64 recombination with `2^(8s) mod p`) |
 | `encode_matdft_int8.py` | `RSEncoderMatDFT(variant="cublas")`: `torch._int_mm`, DFT-matrix limbs decomposed once and resident; `variant="triton"` dispatches to `matdft_triton.py` |
 | `matdft_triton.py` | fused Triton kernel: one program per row, 4 DFTs x (split, 16 `tl.dot`, recombine, twiddle, `tl.trans`, split, 16 `tl.dot`, recombine) |
-| `roofline.py`, `ROOFLINE.md` | floors per candidate shape |
+| `roofline.py`, `note:r20-proof/b-encode/20260922T0625Z-report-roofline` | floors per candidate shape |
 | `bench.py` | the recorded measurement (slices, bit-exact check, CUDA events, median of `--reps`) -> `bench.json`; `envelope.py` wraps it in the `contract` result envelope (python 3.12) |
-| `reprice.py` | measured encoder + measured hash into `explore.tensor` (`Priced.times(encoder_seconds_per_row=...)`, CLI `--encoder-seconds-per-row`) -> `reports/encode_gpu.json` |
+| `reprice.py` | measured encoder + measured hash into `explore.tensor` (`Priced.times(encoder_seconds_per_row=...)`, CLI `--encoder-seconds-per-row`) -> `notes-asset:campaigns/r20-proof/assets/b-encode/reports/encode_gpu.json` |
 | `tests/test_encode.py` | reference checks (laptop, < 1 s) and GPU bit-exactness for every kernel variant (skipped without CUDA) |
 
 ## Running
@@ -151,7 +151,7 @@ enc(rows, out, write_systematic=False)                  # only cosets 1..3 writt
 ~~~
 
 Ledger: `backends/numerical/reports/ledger/b-encode.jsonl` (4 component entries, 1 `ARITHMETIC_DIAGNOSTIC` vu entry
-flagged breakthrough); plot `backends/numerical/reports/plots/overhead_b-encode.png`.
+flagged breakthrough); plot `notes-asset:campaigns/r20-proof/assets/synthesis/reports/plots/overhead_b-encode.png`.
 
 Not done: a Rust port; the fused encode->column-hash kernel (recommendation 3, the next lever); the natural-order
 layout variant; radix-4 stages (the kernel is at 0.78 of the memory floor, so the remaining gain is <= 1.3x);
@@ -166,7 +166,7 @@ A100/H100 measurements (scaled only).
 runtime 12.9, cupy 14.2.0), CUDA-event timings, warm, median of 7, each kernel **bit-exact** against a numpy / Python
 reference before it is timed (`tests/test_commit_stream.py`, `tests/test_buckets.py`; the bench re-checks on a small
 shape).  Inputs are resident pseudo-random data (data-independent cost).  Re-pricing and the honest label:
-`backends/numerical/reports/b_measured_4090.md` (`ARITHMETIC_DIAGNOSTIC`-level: not a proof, buckets measured separately).
+`note:r20-proof/b-commit/20260922T0733Z-report-b-measured-4090` (`ARITHMETIC_DIAGNOSTIC`-level: not a proof, buckets measured separately).
 
 ## Candidate B shape (310,602 rows x [16384, 4096]; 33,485 product rows; 125.9M helpers; t = 192), ms per batch
 
@@ -174,7 +174,7 @@ shape).  Inputs are resident pseudo-random data (data-independent cost).  Re-pri
 bucket                                    kernel / configuration                                              ms/batch   us/row    floor                                      of floor   bit-exact
 commitment, Blake3 leaf, fused            commit_stream: v2 encode -> 512-row L2 slice -> Blake3 chunk CVs      46.7       0.150    unfused encode 32.2 + Blake3 56.6 = 88.8  1.90x      yes (vs unfused + CPU)
   ... + cosets kept (15.3 GB store)       same, cosets streamed to a resident (R, 3k) store for tests/openings  49.4       0.159    -- (+2.7 ms for the 15.3 GB write)
-  encoder half alone (L2 slices)          v2, 1024 threads, 64 regs, 1 CTA/SM, 512-row slices                   35.7       0.115    SIMT ~14 ms (ROOFLINE.md)                  0.39
+  encoder half alone (L2 slices)          v2, 1024 threads, 64 regs, 1 CTA/SM, 512-row slices                   35.7       0.115    SIMT ~14 ms (note:r20-proof/b-encode/20260922T0625Z-report-roofline)                  0.39
   Blake3 half alone                       blake3_cols_chunks, schedule unrolled, 32,768 chunks per slice        15.4       0.050    20.4 GB hashed = 1.32 TB/s
 commitment, SHA-256 leaf, fused           commit_stream: 16,384 sequential column states, 1024-row slices       58.3       0.188    unfused 78.0                               1.34x      yes
   SHA-256 half alone                      sha256_cols_update, one thread per column                             30.0       0.097    ~2,000 INT32 ops / 64 B block = INT32 issue rate: at the ALU floor
@@ -208,7 +208,7 @@ No bucket of B is a tensor-core operation; the IRS combination and the inversion
 integer SIMT arithmetic.
 
 **A100 rows** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, run `r20260922-080250-cff5`, same bench and flags, 22/22 roots bit-exact;
-`backends/numerical/reports/anchor_a100.md` section 6).  The fused commitment does **not** carry over to the anchor:
+`note:r20-proof/anchor-a100/20260922T0820Z-report-anchor-a100` section 6).  The fused commitment does **not** carry over to the anchor:
 
 ~~~text
 bucket (A100)                                   4090 ms   A100 ms   ratio   note
@@ -297,8 +297,8 @@ Ledger `backends/numerical/reports/ledger/b-commit.jsonl` (5 entries), plot `plo
 
 **Scope: component** (the linear-test bucket, same RTX 4090, CUDA events, warm, median of 7, bit-exact against the
 b-commit GPU path `Combiner.linear` and numpy in every run) and the vu-level re-pricing (`ARITHMETIC_DIAGNOSTIC`,
-`backends/numerical/reports/b_measured_4090.md`).  The algebra, the structure of `A`, the soundness note and the roofline
-are in **`LINTEST.md`**; the kernels in `lintest_structured.py`.
+`note:r20-proof/b-commit/20260922T0733Z-report-b-measured-4090`).  The algebra, the structure of `A`, the soundness note and the roofline
+are in **`note:r20-proof/b-lintest/20260922T0733Z-report-lintest`**; the kernels in `lintest_structured.py`.
 
 The protocol combines the linear constraints with POWERS of one element (`r_add = (1, rho, rho^2, ...)`, `PROTOCOL.md`
 section 6), and every unit satisfies the same local constraint pattern, so with a unit-major constraint enumeration
@@ -332,7 +332,7 @@ The per-row cost of the exceptional rows is the general path's 0.48 us/row (256 
 kernel (`combine_multi_lazy`: 1 IMAD.WIDE + one 64-bit add per product, one Montgomery reduction per 4 rows) is what
 keeps `M = 3, 4` near the memory floor; at `M = 1` the plain kernel is already there.
 
-## Tensor cores vs SIMT for the pass over W (LINTEST.md section 4)
+## Tensor cores vs SIMT for the pass over W (note:r20-proof/b-lintest/20260922T0733Z-report-lintest section 4)
 
 The pass is `V[m][c][j] = sum_i s[i][m][c] W[i][j]`: a `(24 M + 1)`-row INT8 limb GEMV against the 310,602-deep witness.
 `torch._int_mm` (cuBLASLt INT8 -> INT32, exact recombination, bit-exact): **10.3 ms at M = 1 (0.49 of the read floor, 2.4%
@@ -341,10 +341,10 @@ witness is stored shifted.  The SIMT kernel: 5.66 / 6.99 / 13.5 ms.  **SIMT wins
 memory-bound and cuBLASLt's skinny kernel reaches half the bandwidth the SIMT kernel does; the tensor cores' 0.25 M ms of
 arithmetic never mattered.  A bandwidth-efficient hand-written tensor-core GEMV could gain at most ~8 ms at M = 4 (3% of
 B) -- the only tensor-core opportunity left in B.  The dense `[rows x |P|] . [|P| x n]` formulation for a uniform `r`
-would cost 170-330 ms at 100% of INT8 peak (LINTEST.md 2.4): the powers combination, not the tensor core, is what makes
+would cost 170-330 ms at 100% of INT8 peak (note:r20-proof/b-lintest/20260922T0733Z-report-lintest 2.4): the powers combination, not the tensor core, is what makes
 the linear test cheap.
 
-## B re-priced (reprice_measured.py --lintest; b_measured_4090.md)
+## B re-priced (reprice_measured.py --lintest; note:r20-proof/b-commit/20260922T0733Z-report-b-measured-4090)
 
 ~~~text
 B, RTX 4090, Blake3 leaves, openings from the store:  116.4 ms per 4096-VU batch = 28.4 us/VU, overhead 2.89e6   (was 258.7 ms / 6.41e6: 2.2x)
@@ -355,7 +355,7 @@ B, RTX 4090, Blake3 leaves, openings from the store:  116.4 ms per 4096-VU batch
 
 B's buckets are now the fused commitment (49.4 ms, encoder-bound at 0.39 of its SIMT floor) and the helper inversions
 (28.8 ms, 0.52 of traffic floor); the linear test is 6%.  The modelled `r^T A` generation (8.9 ms) is kept in the total although the structure
-makes it `O(rows + |pattern|)` (LINTEST.md section 5).
+makes it `O(rows + |pattern|)` (note:r20-proof/b-lintest/20260922T0733Z-report-lintest section 5).
 
 ## Conventions for the b-ligero Rust/CUDA port (in addition to the b-commit list above)
 
@@ -378,7 +378,7 @@ makes it `O(rows + |pattern|)` (LINTEST.md section 5).
   materialise `r^T A` either.
 * **Not a tensor-core operation**: implement the pass as the SIMT kernel; store `s` as 24 M bytes per row, never `r^T A`.
 
-Files: `lintest_structured.py`, `tests/test_lintest_structured.py` (the structure test runs on the laptop), `LINTEST.md`,
+Files: `lintest_structured.py`, `tests/test_lintest_structured.py` (the structure test runs on the laptop), `note:r20-proof/b-lintest/20260922T0733Z-report-lintest`,
 `results_lintest_<run>.json`, `reprice_measured.py --lintest results_lintest_r20260922-073017-0924.json --lintest-config linear_test_structured_M3_X256_lazy`; ledger
 `backends/numerical/reports/ledger/b-lintest.jsonl`, plot `plots/overhead_b-lintest.png`.
 
@@ -393,11 +393,11 @@ that is now 40% of B).
 
 **Question**: B's fully-measured cost at the checker-v2 relation (33 mul / 9 lin / 89 lookups per unit, 5.2M fixed table rows)
 on the 4090.  **Answer**: `42.4 ms` per 4096-VU batch, overhead `1.05e6` (v1: 116.4 ms / 2.89e6; ~100.4 ms / 2.49e6 with the blocked inversions and the radix-4 encoder), 94% measured -- see
-`backends/numerical/reports/b_measured_4090_v2.md`.  Layout and every count: **`V2_SHAPE.md`** (the b-ligero2 lane's next port).
+`note:r20-proof/b-v2/20260922T0818Z-report-b-measured-4090-v2`.  Layout and every count: **`V2_SHAPE.md`** (the b-ligero2 lane's next port).
 
 ## v1 vs v2 shape, same kernels (B = 4096, K = 1536, 2^-128, BabyBear^6, HVZK rows, Blake3 leaves)
 
-| | v1 (`b_measured_4090.md`) | v2 (`b_measured_4090_v2.md`) |
+| | v1 (`note:r20-proof/b-commit/20260922T0733Z-report-b-measured-4090`) | v2 (`note:r20-proof/b-v2/20260922T0818Z-report-b-measured-4090-v2`) |
 |---|---|---|
 | Ligero rows x [16384, 4096] | 310,602 | **104,217** (34,093 witness + 58,710 helper + 11,408 table-side + 6 blinding) |
 | committed bytes / VU | 1,164.7 kB | **388.8 kB** |
@@ -420,7 +420,7 @@ coefficients (MODELLED layout, `V2_SHAPE.md` section 4): 35.7 ms / 8.86e5.
 | `v2_bench.py` | every bucket at the v2 shape on a synthetic in-range witness, bit-exactness at small shapes -> `results_v2_<run>.json` |
 | `inverse_bench.py` | `BatchInverter` vs `BatchInverterBlocked` at the v1 and v2 helper counts, exactness at small N |
 | `radix4_bench.py` | `RSEncoderSIMT(radix4=)` radix-2 vs radix-4: exactness (256/512/1024 threads, store, gather), encoder alone and fused commitment at 104,217 / 310,602 rows |
-| `reprice_v2.py` | `results_v2_*.json` + `v2_shape.json` + `b_measured_4090.json` -> `reports/b_measured_4090_v2.json` / `.md` (rows for both table-side variants, A100/H100 labelled scalings, crossover) |
+| `reprice_v2.py` | `results_v2_*.json` + `v2_shape.json` + `b_measured_4090.json` -> `notes-asset:campaigns/r20-proof/assets/b-v2/reports/b_measured_4090_v2.json` / `.md` (rows for both table-side variants, A100/H100 labelled scalings, crossover) |
 
 ~~~sh
 # pod (commit first)

@@ -430,8 +430,8 @@ this is the simplest sound option (12.3 discusses the alternatives).
 Against the census: `census_vu(1536)` counts 63.7 k slots per VU (3 073 inputs, 21 606 hints, 5 952 lookup
 outputs, 23 424 products, 9 696 materialised) *with a lookup argument for the range checks and tables*; the AIR
 commits 4.3x that because each range check is materialised as 2-bit limbs (1 868 of 2 844 columns) and each
-table lookup as a one-hot selector row (610 columns). tensor.md's 1.15 MB/VU for B over a 31-bit field is met
-by the BabyBear chain (1.11 MB/VU) only because tensor.md's figure already assumed the lookup-free 2-bit-limb
+table lookup as a one-hot selector row (610 columns). note:r20-proof/tensor-cost/20260922T0450Z-report-tensor's 1.15 MB/VU for B over a 31-bit field is met
+by the BabyBear chain (1.11 MB/VU) only because note:r20-proof/tensor-cost/20260922T0450Z-report-tensor's figure already assumed the lookup-free 2-bit-limb
 layout; a range lookup argument (4.2) would cut both fields' committed bytes by ~3x and is the next structural
 step, not part of this measurement.
 
@@ -468,7 +468,7 @@ step, not part of this measurement.
 
 ### 12.5 Statement binding (SOUNDNESS FIX, lane `soundness-fixes`, 2026-09-22; red team F1–F3) **[implemented]**
 
-The red team (`backends/numerical/reports/redteam_vu.md`) forged the diagnostic B verifier twice, over both fields:
+The red team (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu`) forged the diagnostic B verifier twice, over both fields:
 **F1** a trace of two zero VUs verified "as" two real VUs (the verifier was handed no public values; the sentence
 "`vu.claim` … not bound to an external statement" above was the accepted forgery), and **F2** a 256-row proof was
 accepted by the verifier configured for \(B=4096\) (uni-stark 0.4.3 reads `degree_bits` from the proof). Both are
@@ -510,7 +510,7 @@ the prover commits before knowing it). The existing last-row constraint `vu.out:
 ties the bound word to the epilogue; the chain constraints tie the epilogue to the operands. With
 `--bind-operands` the 32 operand columns `x.a[j]`, `x.b[j]` are checked the same way (\(W\) from \(x, w\)), which
 removes the "any \(x, w\)" freedom entirely; without it the operands are witness and their binding is the
-authentication layer's job (`auth_integration.md`; `authentication = excluded`).
+authentication layer's job (`note:r20-proof/auth-integration/20260922T0737Z-report-auth-integration`; `authentication = excluded`).
 
 **Consequence for 12.4.** `vu.y16` is no longer free on non-`last` rows: it must equal the VU's word on every row
 (the battery case `b_claim_free_nonlast` moved from `accept_by_design` to `reject`). Honest traces already had
@@ -548,13 +548,13 @@ this file from 14.7 on is on the patched transcript.
 **What this does not do.** The zero-VU padding rows are not part of the statement (they carry word `0`, and
 \(B\) is bound, so a prover cannot smuggle a real VU into the padding without changing \(B\)). Binding the
 operands to the leaf/v2 tableau (the digest in the statement, the chunk roots in the header) is the next step of
-`auth_integration.md`, not this section.
+`note:r20-proof/auth-integration/20260922T0737Z-report-auth-integration`, not this section.
 
   this port against the red team's six embedding rules: one rule was half-implemented (fixed 2026-09-22).**
 
 ## 13. The BabyBear port against the red team's embedding rules (b-lookup, 2026-09-22)
 
-`backends/numerical/reports/babybear_rules.md` derives six rules from all 109 WP2 predicates (interval analysis,
+`note:r20-proof/red-team-babybear/20260922T0605Z-report-babybear-rules` derives six rules from all 109 WP2 predicates (interval analysis,
 then z3 on every embedded gadget: UNSAT under the six rules, a concrete forgery when any necessary one is dropped)
 and ships a battery of 83 adversarial witnesses (`fixtures/redteam/babybear-battery/v1`). The port of section 12.4
 was written before either existed. This section maps each rule to the port's constraints and records the battery
@@ -576,7 +576,7 @@ named linear wire (`ctx.rs::rng`).
 | **V_PREMISE** | \(v\in[0,S_{MAX}]\), \(S_{MAX}=570\,417\,150\), as the premise of `leading_bit`/`normalise` (a guarantee of `signed_sum`'s ranges, not a check) | guaranteed: `sum.v` = \(S-2\,\mathrm{sgn}\,S\) materialised, `sum.v` 30-bit range; a wrong sign gives a negative \(v\ge-S_{MAX}\) with representative \(\ge p-S_{MAX}>2^{30}\). The port **also** checks it explicitly: `sum.premise` = `rng(S_MAX - v, 0, 2^30)` (15 limbs per group; harmless, and what the `window_lo` argument above uses) | **satisfied** (guarantee + explicit check) |
 
 The mapping says the port implemented the rules' *first draft* faithfully -- the direct form of every wide `lt_pow`
--- and missed exactly the amendment z3 forced on the red team (`babybear_rules.md` 6, "run 1 -> run 2": the
+-- and missed exactly the amendment z3 forced on the red team (`note:r20-proof/red-team-babybear/20260922T0605Z-report-babybear-rules` 6, "run 1 -> run 2": the
 direct form bounds only from above). The battery does not contain that forgery (its `leading_bit -LT_DIRECT` case
 \(v=16,l=0\) is the *product-form* hole, which the direct form catches); this lane's extra cases do
 (`battery_adapter.py --extras`: 2 gadget-level, 4 unit-level).
@@ -595,8 +595,8 @@ the case's epilogue hints and the claimed \(y_{16}\) meet `vu.out`; `gadget` = `
 gadget alone with inputs pinned to the contract's premises and outputs bound to the claimed values. Every case is
 paired with an honest control (same operands, honest hints, honest word) that must be accepted.
 
-Result (vy-cpu2, `results/battery_babybear.json`, 1.3 s for 176 jobs; the pre-fix constraints of db1f9d8 rebuilt
-with the same tool: `results/battery_babybear_prefix_db1f9d8.json`):
+Result (vy-cpu2, `notes-asset:campaigns/r20-proof/assets/b-air/results/battery_babybear.json`, 1.3 s for 176 jobs; the pre-fix constraints of db1f9d8 rebuilt
+with the same tool: `notes-asset:campaigns/r20-proof/assets/b-air/results/battery_babybear_prefix_db1f9d8.json`):
 
 | constraints | width / constraints | battery (83, must reject) | honest controls (87) | this lane's 6 extras (must reject) |
 |---|---|---|---|---|
@@ -622,7 +622,7 @@ is unchanged (its `lt_pow` is the product form, which bounds both sides). Gate a
 
 ### 13.3 Gate after the fix
 
-`run_vu.sh babybear 4096 166` on vy-cpu2 at 12 threads (run `r20260922-065546-a242`, `results/vu_babybear_q166_fix_r20260922-065546-a242.json`; the box was shared with a-babybear, checker-min and this lane's own lookup build, so the times carry that noise):
+`run_vu.sh babybear 4096 166` on vy-cpu2 at 12 threads (run `r20260922-065546-a242`, `notes-asset:campaigns/r20-proof/assets/b-air/results/vu_babybear_q166_fix_r20260922-065546-a242.json`; the box was shared with a-babybear, checker-min and this lane's own lookup build, so the times carry that noise):
 
 | | b-chain, as shipped (`r20260922-060503-6847`) | after `lead.window_lo` |
 |---|---|---|
@@ -641,7 +641,7 @@ Ledger: `reports/ledger/b-lookup.jsonl`, label `SOUNDNESS FIX: LT_DIRECT; BabyBe
 ## 14. Range lookups instead of 2-bit limbs: LogUp inside the AIR (b-lookup, 2026-09-22) **[implemented, diagnostic PCS]**
 
 Section 12.2: 1 922 of the BabyBear chain's 2 930 columns are 2-bit range limbs and 610 are one-hot table selectors;
-tensor.md makes committed bytes per VU the GPU lever.  This section replaces both realisations by one LogUp
+note:r20-proof/tensor-cost/20260922T0450Z-report-tensor makes committed bytes per VU the GPU lever.  This section replaces both realisations by one LogUp
 argument [Haboeck 2022] inside the Plonky3 AIR.  The *relation* is unchanged: every `rng(x, lo, hi)` and every
 `lookup(T, key)` of the row program (`program.rs`) is still enforced; only the realisation (`ctx.rs`, `Realisation::LogUp`)
 differs.  Code: `lookup.rs` (tables, queries, helper packing, prover-side auxiliary columns, the constraints),
@@ -769,7 +769,7 @@ Same relation, so the section 13 battery applies unchanged: `battery_adapter.py 
 (an out-of-table value leaves its group's helper without a term, which is the verifier's constraint that fails;
 the global table-side and running-sum constraints need the whole trace and are covered by the round-trip
 mutations of `tests/lookup.rs`).  Result: **83/83 rejected, 87/87 honest controls accepted, 6/6 lane extras
-rejected** (`results/battery_babybear_lookup.json`).  `tests/lookup.rs`: layout consistency; the evaluator on an
+rejected** (`notes-asset:campaigns/r20-proof/assets/b-air/results/battery_babybear_lookup.json`).  `tests/lookup.rs`: layout consistency; the evaluator on an
 honest VU (no failing constraint) and on mutated rows; the pod-sized (\(2^{17}\)-row) round trip -- exhaustive
 evaluation of every constraint on every row of the honest committed trace (`lookup_failing_trace`), honest proof
 verifies, and six mutations reject (claim word, accumulator link, \(c_0 \ne 0\), step skip, a range-checked column
@@ -814,7 +814,7 @@ the fast configuration is **\(2^{-93.8}\)**, and \(2^{-124.8}\) costs 17% more t
 `run_profile.sh` runs both realisations with `RUST_LOG=debug` (a `tracing_subscriber` behind the env var prints
 Plonky3's `info_span!`s on close with their busy time; for the lookup prover the stage timers of `lookup_stark.rs`
 are printed as `lookup stages:`).  Run `r20260922-072959-ef63`, same configuration as 14.5, summary in
-`results/profile_spans_babybear_4096_r20260922-072959-ef63.txt`.  Busy seconds inside `prove` (12 threads):
+`notes-asset:campaigns/r20-proof/assets/b-air/results/profile_spans_babybear_4096_r20260922-072959-ef63.txt`.  Busy seconds inside `prove` (12 threads):
 
 | stage | 2-bit limbs (width 2 930) | LogUp (401 + 6 + 456) | what it is |
 |---|---|---|---|
@@ -837,7 +837,7 @@ Reading:
   per query term instead of three) the pass is 2.8x cheaper -- the same factor as the total, so on CPU the
   quotient pass scales with committed width \(\times\) constraint degree, and there is no separate encoding wall.
 - Encoding (LDE + Merkle) is 23% of `prove` in both; per committed base column it costs the same (\(\approx
-  12\) ms per column at \(2^{19}\) rows on 12 threads).  On the GPU (tensor.md) this is the part that becomes the whole
+  12\) ms per column at \(2^{19}\) rows on 12 threads).  On the GPU (note:r20-proof/tensor-cost/20260922T0450Z-report-tensor) this is the part that becomes the whole
   story, and it fell 3.4x in bytes.  The \(2^{19}\)-row LDE of a 2 930-column trace also set the 31 GB peak RSS;
   the lookup prover peaks at 9.5 GB.
 - The lookup-specific work is small: `aux_build` (batch inversion of the 116 722 table denominators, the per-row
@@ -852,7 +852,7 @@ across two tables (a second \(\beta\)-power keeps the degree at 4) and \(g\) fol
 60\) extension columns of encoding and of quotient input; (ii) the 401 main columns are now mostly the program's own
 hints (words, carries, quotients, selectors), which lookups do not touch -- that is a relation-side question
 (section 12.2's per-gadget census); (iii) on the GPU only the encoding term matters and the 3.4x is the number to
-carry to tensor.md.
+carry to note:r20-proof/tensor-cost/20260922T0450Z-report-tensor.
 
 ### 14.7 Statement binding of the LogUp realisation (SOUNDNESS FIX, lane `b-bind`, 2026-09-22) **[implemented]**
 
@@ -950,7 +950,7 @@ comparison. Records: `results/b-bind/lookup4096_*`.
 
 ## 15. Checker v2 as the AIR: state-chained units, tuple lookups, BabyBear limb repairs (b-air-v2, 2026-09-22) **[implemented, diagnostic PCS]**
 
-The relation is unchanged (section 1; `checker/v2/` accepts exactly the reference's set, checker_min.md).  What
+The relation is unchanged (section 1; `checker/v2/` accepts exactly the reference's set, note:r20-proof/checker-min/20260922T0727Z-report-checker-min).  What
 changes is the *program* the row evaluates: checker v2's 15-hint unit instead of v1's, on the LogUp prover of
 section 14.  Design and the per-column derivation: `V2_AIR.md`; code `program_v2.rs` (gadgets and the row program),
 `air_v2.rs` (layout, trace, statement-bound prove/verify, adversarial-row evaluation), `statement.rs` (F1-F3);
@@ -962,7 +962,7 @@ One row per transition unit, the accumulator carried as the **state** \((s, \hat
 transition constraint, not as an FP32 word: `next.st = (sgn_1 (1 - z_1), \hat e_1, (v2_1 2^{10} + v1_1) A1_1 + t_1)`
 on every row with `next.first = 0`, and `first * st = (0, floor, 0)` on the first row of a VU.  The word exists only
 on the Pack columns (`pack.y_hi`, `pack.y_lo`: two 16-bit limbs, the `LIMB16` rule of section 13) and is read once, by
-the epilogue on the last row (`vu.out`).  This is where the 31-bit repairs of checker_min.md 3.2 (`state_decode` and
+the epilogue on the last row (`vu.out`).  This is where the 31-bit repairs of note:r20-proof/checker-min/20260922T0727Z-report-checker-min 3.2 (`state_decode` and
 `epilogue` SAT on 31-bit fields as stated) are realised: the 33-bit word \(s 2^{31} + fld\, 2^{23} + M\) is never one
 field element -- `M = M_hi8 2^16 + M_lo16` (T8, T16 lookups), `y_hi = s 2^15 + fld 2^7 + M_hi8` is an *expression*
 below \(2^{16}\) on every finite state (no hint), `y_lo = M_lo16`; the infinity blend and the BF16 epilogue run per
@@ -1007,7 +1007,7 @@ because every factor is a residue of an integer in \([0, 780)\) bound by ALIGN4/
 * `vu-honest --v2`: all **4 096 VUs, 393 216 accumulator words** (the row's Pack word per unit, including the
   \(\pm\infty\) word at unit 95 of 20 VUs) and **4 096 BF16 words** equal bench-instances/v1; the first 64 VUs also
   evaluated row-locally with every lookup: 0 failures.  Witness 0.9 ms/VU single-threaded-equivalent.
-* Battery (`battery_adapter.py --v2 --extras`, `results/battery_babybear_v2.json`): v2 has its own hint layout, so
+* Battery (`battery_adapter.py --v2 --extras`, `notes-asset:campaigns/r20-proof/assets/b-air/results/battery_babybear_v2.json`): v2 has its own hint layout, so
   a case is translated as its operands + the hints with the same meaning imposed by name (`max.E`, `sum.sgn`, the
   leading bit, the epilogue's `hi2/lsb/carry/rem`, an `acc` decode as the incoming state) + the claimed word bound
   (step level: the following unit's incoming state is the claimed word's state, `vu.link[*]` checks it; VU level:
@@ -1101,7 +1101,7 @@ Busy seconds inside `prove` (12 threads, 166 queries; `results/profile_spans_v2_
 
 The quotient pass is still the largest item but no longer two thirds: per committed column it costs about the
 same as before (\(\approx\) 27 ms per column), so the 3.3x fall is the width and the constraint count.  Encoding
-(LDE + Merkle, 7.3 s) is now 35% of `prove` -- on the GPU (tensor.md) this is the term that remains, and it fell
+(LDE + Merkle, 7.3 s) is now 35% of `prove` -- on the GPU (note:r20-proof/tensor-cost/20260922T0450Z-report-tensor) this is the term that remains, and it fell
 1.7x in time and 2.1x in bytes.  The remaining fixed costs -- the preprocessed round, the 8-column table
 recomputation in the verifier, the \(2^{19}\)-row floor -- are the items below.
 
@@ -1201,7 +1201,7 @@ quadratic query terms \(2^{-189}\); field terms \(2^{-169}\) to \(2^{-185}\); lo
 \(2^{-162.6}\) (SHIFT) to \(2^{-171.4}\), Haboeck Thm 4 with the conditioned challenge space).  A batch of 4 096 VUs
 is \(N\) sub-batch proofs; the bench targets \(2^{-(128 + \log_2 N)}\) per proof (t = 194 at N = 25) so the union
 bound over the batch meets \(2^{-128}\).  Field: BabyBear\(^6\); hash model as in `accounting` (2^64 queries: the
-collision term alone is \(2^{-128}\), see babybear_rules.md section 8).
+collision term alone is \(2^{-128}\), see note:r20-proof/red-team-babybear/20260922T0605Z-report-babybear-rules section 8).
 
 ### 16.4 What was verified (gate, vy-g2, run r20260922-091001-68f7) and what the label means
 
@@ -1219,6 +1219,6 @@ WP2 (v1) hint layout and were not mapped onto the v2 columns here (open).
 
 Label **NON_ZK_PROOF_DIAGNOSTIC**, with the **INCOMPLETE_CHECKER_DIAGNOSTIC** caveat: the BabyBear word-class
 repair rows (`pack.M_hi8/M_lo16`, the `y_hi` expression, the epilogue on limbs) are a Python port of b-air-v2's
-design, whose *Rust* realisation is z3-UNSAT (`b_air_v2_z3.json`: `pack_epilogue_limbs`, `state_decode_limbs`,
+design, whose *Rust* realisation is z3-UNSAT (`notes-asset:campaigns/r20-proof/assets/b-air-v2/reports/b_air_v2_z3.json`: `pack_epilogue_limbs`, `state_decode_limbs`,
 Z and \(F_{\text{babybear}}\)); the Python column set here was not itself put through z3.  No ZK (systematic-free
 domain but no blinding rows yet).

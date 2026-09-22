@@ -1,6 +1,6 @@
 # fixtures/redteam-3
 
-Recorded verdicts of the red-team-3 batteries (`backends/numerical/reports/redteam_3.md`).
+Recorded verdicts of the red-team-3 batteries (`note:r20-proof/red-team-3/20260922T0921Z-report-redteam-3`).
 
 * `manifest.json` -- one entry per battery: file, harness, run id, case count, accepted forgeries.
 * `logup_b_battery.json` -- T1, `backends/redteam/logup-b` against `verity_direct::lookup_stark::verify_lookup`

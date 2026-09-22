@@ -40,9 +40,9 @@ uv run --package verity-numerical --with numpy python backends/gkr/tensor/bench.
 |---|---|---|---|---|
 | r20260922-051730-15d4 | the table: Triton split-K inner product, compiled SIMT passes, median of 7 | 87.4 ms / 130 rounds | 91.4 ms | agreement test 22 passed on CUDA |
 | r20260922-052015-a62d | `--inner int_mm`: cuBLAS chunk loop for the inner product | 30.2 ms for the 2^21 round alone (vs 4.6) | | `_int_mm(48, 32768, 96)` = 821 us: no split-K |
-| **A100** r20260922-074359-964b (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6.0+cu124, Triton 3.2, same flags) | the table on the anchor | 115.5 ms / 130 rounds (0.76x the 4090) | 115.6 ms (0.79x) | 22 passed on CUDA; 2^21 deg-6 round 4,894 us (0.95x), 2^18 1,044 us (0.58x); matmul kernels 98.2 ms (0.82x); `_int_mm` 8192^3 = 14.5 ms = **0.121 of the A100 INT8 peak** (4090: 0.253), `(48, 32768, 96)` 1,547 us (0.53x); table in `backends/numerical/reports/anchor_a100.md` |
+| **A100** r20260922-074359-964b (anchor-a100 lane, NVIDIA A100-SXM4-80GB, torch 2.6.0+cu124, Triton 3.2, same flags) | the table on the anchor | 115.5 ms / 130 rounds (0.76x the 4090) | 115.6 ms (0.79x) | 22 passed on CUDA; 2^21 deg-6 round 4,894 us (0.95x), 2^18 1,044 us (0.58x); matmul kernels 98.2 ms (0.82x); `_int_mm` 8192^3 = 14.5 ms = **0.121 of the A100 INT8 peak** (4090: 0.253), `(48, 32768, 96)` 1,547 us (0.53x); table in `note:r20-proof/anchor-a100/20260922T0820Z-report-anchor-a100` |
 
-Per-round results, ceilings, effective utilisation and the re-priced overheads: `backends/numerical/reports/tc_sumcheck_4090.md`
+Per-round results, ceilings, effective utilisation and the re-priced overheads: `note:r20-proof/tc-sumcheck/20260922T0524Z-report-tc-sumcheck-4090`
 (`.json` beside it).  Headline: matmul kernels reach 2.2% of the INT8 peak batch-weighted over the 130 rounds (3.6-4.6% in
 the large rounds, HBM-bound at 0.8-0.9 TB/s), the tensor bucket 0.56%; model-equivalent utilisation 0.056 / 0.014 /
 0.012 against the assumed 0.172; `_int_mm` 8192^3 reaches 0.253 of peak on this card.

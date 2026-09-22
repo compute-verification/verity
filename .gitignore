@@ -5,3 +5,36 @@ __pycache__/
 
 # Rust build artifacts anywhere (e958a0b accidentally committed backends/ligero-verify/target, 20.8 MB)
 **/target/
+
+# notes and reports live in ~/.research/notes (AGENTS.md "Where writing goes"); tests/test_repository.py is the backstop
+/notes/
+**/HANDOFF*.md
+**/*HANDOFF*.md
+**/*REPORT*.md
+**/*URGENT*.md
+**/*DRAFT*.md
+**/*TRIAGE*.md
+**/*STATUS*.md
+**/reports/*.md
+**/reports/*.json
+**/reports/plots/
+**/reports/gate*/
+**/results/**
+!**/reports/ledger/
+# evidence still read by code, pinned in the repo until those scripts read from the notes store:
+# backends/shared/anchor_a100/report.py, backends/direct/encode/reprice_v2.py, backends/gkr/tensor/fused/bench.py
+!backends/numerical/reports/b_measured_4090.json
+!backends/numerical/reports/fused_logup_4090.json
+!backends/numerical/reports/fused_sumcheck_4090.json
+!backends/numerical/reports/packed_sumcheck_h100.json
+!backends/numerical/reports/tc_sumcheck_4090.json
+!backends/direct/ligero/results/result_unit_b4096.json
+!backends/direct/ligero/results/result_vu_42.json
+!backends/direct/ligero/results/result_vu_85.json
+!backends/gkr/packed/results/r20260922-064917-c293/
+!backends/gkr/packed/results/r20260922-064917-c293/bench.json
+!backends/gkr/packed/results/r20260922-065412-73be/
+!backends/gkr/packed/results/r20260922-065412-73be/bench.json
+!backends/gkr/packed/results/r20260922-073439-1f15/
+!backends/gkr/packed/results/r20260922-073439-1f15/logup_bench.json
+!backends/shared/anchor_a100/results/**

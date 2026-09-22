@@ -4,14 +4,14 @@ The relation is the frozen one (`checker/v2/`: the same accepted set as v1 and t
 This file fixes how checker v2's gadgets become rows of the LogUp AIR of PROTOCOL.md 14 over BabyBear
 (p = 2^31 - 2^27 + 1), what changes against the Python gadgets and why each change is an *embedding* (the same
 predicate over Z, realised so that no identity can wrap mod p), and what it costs.  Code: `src/program_v2.rs`,
-`src/air_v2.rs`; z3 verdicts: `backends/numerical/reports/b_air_v2_z3.json` (`redteam/z3_air_v2.py`);
+`src/air_v2.rs`; z3 verdicts: `notes-asset:campaigns/r20-proof/assets/b-air-v2/reports/b_air_v2_z3.json` (`redteam/z3_air_v2.py`);
 protocol text: PROTOCOL.md 15.
 
 ## 1. Lookups are tuples, not packed keys
 
 checker v2 packs every multi-input table key linearly (`4 (E - cand) + s4`, `u R + 2 dt + s`, `l + 31 (E - floor)`)
 because its `lookup` predicate has one key.  Over F_p a packed key binds only a *linear combination* of the
-components (the `state_shift` finding, checker_min.md 3.2), so the halves had to be range-checked separately.
+components (the `state_shift` finding, note:r20-proof/checker-min/20260922T0727Z-report-checker-min 3.2), so the halves had to be range-checked separately.
 The LogUp argument of PROTOCOL.md 14 combines the whole tuple `(k_1, .., k_a, o_1, .., o_b, tag)` with powers
 of `beta`: membership binds **every component** to a table column, i.e. each key component is bound to its
 column's value set for free.  Every v2 lookup below is therefore a tuple lookup (`Ctx::lookup_tuple`) with the
@@ -91,8 +91,8 @@ PROTOCOL.md 15 records the gate and the measurements.
    every `k >= -7`; for `k >= 0` all three parts are exact products.  `A1 = 2^(10 + k)` is set to 0 for `k > 13`:
    `k > 13` forces `l <= 10` (k <= 24 - l), i.e. `v2 = v1 = 0`, so the clamped rows multiply zero.  All products
    stay below 2^24 on every table-consistent row (z3, section 6): this is the "TNORM_HI"/`_v2_norm_lookup` 31-bit
-   repair of checker_min.md 5, realised.
-5. **Pack on limbs** (the F4 word class; checker_min.md 3.2: `epilogue`/`state_decode` SAT on 31-bit fields as
+   repair of note:r20-proof/checker-min/20260922T0727Z-report-checker-min 5, realised.
+5. **Pack on limbs** (the F4 word class; note:r20-proof/checker-min/20260922T0727Z-report-checker-min 3.2: `epilogue`/`state_decode` SAT on 31-bit fields as
    stated).  The FP32 word `s 2^31 + fld 2^23 + M` (33 bits of range) never exists as one field element: `M` is
    split into `M_hi8 2^16 + M_lo16` (both sides `< 2^24`), the high limb is the *expression* `s 2^15 + fld 2^7 +
    M_hi8` (`fld <= 254` on a finite state, `M_hi8 < 2^8`, so `< 2^16`: no hint, no wrap), the low limb is
@@ -125,7 +125,7 @@ word) is absorbed before the first challenge; the verifier fixes `degree_bits` f
 whose height differs; the claim column `vu.y16` is checked at `zeta` and `zeta g` against the verifier's own
 statement polynomial (barycentric evaluation, `statement.rs`).
 
-## 6. z3 obligations (section 2 of the brief; results in `b_air_v2_z3.json`)
+## 6. z3 obligations (section 2 of the brief; results in `notes-asset:campaigns/r20-proof/assets/b-air-v2/reports/b_air_v2_z3.json`)
 
 Per AIR gadget, at REAL widths, hints symbolic, tables symbolic (`Table.sym`): (i) over Z, "accepted and output
 differs from the reference" UNSAT; (ii) over F_p (BabyBear), the wrap-free query -- every congruence holds with

@@ -90,7 +90,7 @@ it is not needed there.
 
 ## Second pass (lane b-ligero2, ledger `b-ligero2.jsonl`)
 
-**1. Statement binding (SOUNDNESS fix, commit 302832f).** The red team's checklist (`redteam_vu.md` F1/F2/F19,
+**1. Statement binding (SOUNDNESS fix, commit 302832f).** The red team's checklist (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1/F2/F19,
 `TRANSCRIPT_CHECKLIST.md`) applied to this prover: the first pass derived both challenges from the transcript alone
 (`H(root)`, `H(root, w, h, q)`); the public words entered only through the verifier's own `beta` / chain `rhs`, so a
 prover could pick the claimed words *after* seeing the challenges. Concretely (`redteam_binding.py`, run on `vy-g3`,
@@ -103,7 +103,7 @@ or `a, b, y16`) -- computed by the **verifier from its configuration** and absor
 shape is `malformed` before any challenge is recomputed. The three fixtures (`fixtures/redteam/ligero-binding/v1/`):
 zero-witness proof claiming the real words -- rejected; 2-VU proof against a 4-VU verifier -- rejected (`malformed
 proof`); adaptive claim -- accepted by the pre-fix verifier, rejected by the fixed one (`column challenge
-mismatch`). The 83-case BabyBear battery (`redteam_battery.py`, `results/babybear_battery.json`): 71 applicable
+mismatch`). The 83-case BabyBear battery (`redteam_battery.py`, `notes-asset:campaigns/r20-proof/assets/b-ligero/results/babybear_battery.json`): 71 applicable
 step/VU cases, **0 forgeries** (12 gadget-level cases do not apply to a unit-level constraint system; the 4
 `zero_swap` cases the reference checker rejects are true statements here -- `c = -0` and `c = +0` give the same
 output word -- their rejection upstream comes from a stale hint, not a constraint).
@@ -152,8 +152,8 @@ implemented; the first `COMPLETE_HVZK_BACKEND` of the campaign):
 | verifier / transcript / peak device | 1.01 s / 122 MB / 13.7 GB | 1.55 s / 193 MB / 6.9 GB |
 | overhead vs native 9.85 ps/VU | **2.2e8** | 2.3e8 |
 
-Gate under `--zk` (`results/gate_vu_zk.json`): 16 VUs accept, 52/52 negatives and 252/252 mutations rejected.
-Simulator-style test (`redteam_zk.py`, `results/redteam_zk.json`, PASS on the L40S): opened columns uniform (chi-square
+Gate under `--zk` (`notes-asset:campaigns/r20-proof/assets/b-ligero/results/gate_vu_zk.json`): 16 VUs accept, 52/52 negatives and 252/252 mutations rejected.
+Simulator-style test (`redteam_zk.py`, `notes-asset:campaigns/r20-proof/assets/b-ligero/results/redteam_zk.json`, PASS on the L40S): opened columns uniform (chi-square
 64 bins, p = 0.49); a proof of real VUs vs a proof of the trivial VU at the same layout indistinguishable on the
 opened columns and on `w, v, h, q` (p = 0.12-0.43); 0 opened values equal to a payload value of their row and 0
 constant rows in the clear -- the unmasked control leaks 1018 of 1018 constant rows at every column and 192 k of
@@ -214,9 +214,9 @@ Runs: `python -m backends.direct.ligero.run bench-vu [--zk] --batch 16384 --tota
 
 ~~~
 # on vy-g3, /workspace/bl/src, PYTHONPATH=packages/verity/src:backends/numerical/python:.
-python -m backends.direct.ligero.run gate     --root fixtures/bench-instances/v1 --device cuda --vus 64   # results/gate_unit.log
+python -m backends.direct.ligero.run gate     --root fixtures/bench-instances/v1 --device cuda --vus 64   # notes-asset:campaigns/r20-proof/assets/b-ligero/results/gate_unit.log
 python -m backends.direct.ligero.run bench    --root fixtures/bench-instances/v1 --device cuda --reps 5 --out results/result_unit_b4096.json
-python -m backends.direct.ligero.run gate-vu  --root fixtures/bench-instances/v1 --device cuda --vus 64   # results/gate_vu.json
+python -m backends.direct.ligero.run gate-vu  --root fixtures/bench-instances/v1 --device cuda --vus 64   # notes-asset:campaigns/r20-proof/assets/b-ligero/results/gate_vu.json
 python -m backends.direct.ligero.run bench-vu --root fixtures/bench-instances/v1 --device cuda --reps 5 --out results/result_vu_42.json
 python -m backends.direct.ligero.run bench-vu --root fixtures/bench-instances/v1 --device cuda --reps 5 --batch 8192 --vus 85 --out results/result_vu_85.json
 python -m backends.direct.ligero.encoder_bench                                                          # NTT vs INT8 matmul DFT
@@ -243,7 +243,7 @@ and constraint kernels, CUDA-graph replay of the witness program):
 | | unit proof, B = 4096 units | VU proof, 42 VUs (l = 4096) | VU proof, 85 VUs (l = 8192) |
 |---|---|---|---|
 | **prover total** | **0.095 s** (**23.2 us/unit**, 2.2 ms per 96 units) | **0.108 s** (**2.57 ms/VU**) | **0.195 s** (**2.30 ms/VU**) |
-| **prover total on the A100** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, run `r20260922-081113-f56e`, same commands, 7 reps, verifier accepted every rep; gate-vu 52/52 negatives + 252/252 mutations rejected) | **0.072 s** (**17.6 us/unit**; 1.32x the L40S) | **0.084 s** (**1.99 ms/VU**; 1.29x) | **0.151 s** (**1.78 ms/VU** = overhead 1.81e8 vs the same card's BF16 peak; 1.29x) -- encode 0.044 s, tests 0.048, hints 0.036, witness 0.016; `backends/numerical/reports/anchor_a100.md` section 7 |
+| **prover total on the A100** (anchor-a100 lane, NVIDIA A100-SXM4-80GB, run `r20260922-081113-f56e`, same commands, 7 reps, verifier accepted every rep; gate-vu 52/52 negatives + 252/252 mutations rejected) | **0.072 s** (**17.6 us/unit**; 1.32x the L40S) | **0.084 s** (**1.99 ms/VU**; 1.29x) | **0.151 s** (**1.78 ms/VU** = overhead 1.81e8 vs the same card's BF16 peak; 1.29x) -- encode 0.044 s, tests 0.048, hints 0.036, witness 0.016; `note:r20-proof/anchor-a100/20260922T0820Z-report-anchor-a100` section 7 |
 | hints (torch `gen_step` as one CUDA graph, + the public decodes; cross-checked equal to the checker's) | 0.017 s | 0.017 s | 0.031 s |
 | witness (torch program as one CUDA graph: products, bits, selectors) | 0.008 s | 0.008 s | 0.009 s |
 | encode (int64 NTT, compiled butterfly, 3372/3516 x l -> 4l) | 0.031 s | 0.032 s | 0.069 s |
@@ -341,4 +341,4 @@ host Blake3/SHA-256 fallback) . `hints_torch.py` (vectorised `gen_step`) .
 `witness.py` (W from the program; sparse constraint tables) . `chain.py` (layout, the chain test's coefficients) .
 `protocol.py` (prove / verify) . `vu.py` (chain gate / bench) . `run.py` (CLI) . `encoder_bench.py` .
 `results/` (gate logs, result envelopes). Ledger: `backends/numerical/reports/ledger/b-ligero.jsonl`, plot
-`backends/numerical/reports/plots/overhead_b-ligero.png`.
+`notes-asset:campaigns/r20-proof/assets/synthesis/reports/plots/overhead_b-ligero.png`.

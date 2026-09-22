@@ -1,6 +1,6 @@
 # Statement-binding fixtures for the direct Ligero GPU prover (`backends/direct/ligero`)
 
-The red team's checklist (`backends/numerical/reports/redteam_vu.md`, F1 / F2 / F19) applied to the b-ligero prover,
+The red team's checklist (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu`, F1 / F2 / F19) applied to the b-ligero prover,
 lane `b-ligero2`.  `binding.json` is the output of
 
 ~~~text

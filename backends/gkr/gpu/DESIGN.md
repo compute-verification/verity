@@ -10,7 +10,7 @@ Ligero parameters and Fiat-Shamir structure, and changes the field.
 * Base field `p = 2^31 - 2^27 + 1` (BabyBear), challenges in `F_{p^6} = F_p[X]/(X^6 - 31)` (the same `W = 31` as
   `../tensor/reference.py`).  Tables are u32 BabyBear (int32 tensors, int64 compute); an extension element is six
   u32 in planar order `c0..c5` (a trailing dimension of 6).
-* The circuit is the WP2 checker **under the red-team's BabyBear embedding** (`babybear_rules.md`): it is
+* The circuit is the WP2 checker **under the red-team's BabyBear embedding** (`note:r20-proof/red-team-babybear/20260922T0605Z-report-babybear-rules`): it is
   `verity_numerical.redteam.babybear.check_step_bb` run on the symbolic `CircuitCtx` of `gkr_export`
   (`bb_export.py`).  FP32 words are two public 16-bit limbs (`x.c_lo/x.c_hi`, `y_lo/y_hi`, epilogue `y32_lo/y32_hi`,
   rule LIMB16); wide variable bounds are the direct checks against the tables' bound columns (LT_DIRECT,
@@ -126,7 +126,7 @@ and proved by the *same* prover, verifier and kernels as v1.  What v2 needed in 
   lookup chain and with it `rounds.sequential_depth` shorten (279 vs 438).  The 5.14M table-side leaves are a fixed
   per-proof cost (1.9 s of the 2.75 s at B = 64).
 
-**Field caveat (the reason for the label).**  checker-min's z3 results (`checker_min.md` 3.2) prove the v2 gadgets
+**Field caveat (the reason for the label).**  checker-min's z3 results (`note:r20-proof/checker-min/20260922T0727Z-report-checker-min` 3.2) prove the v2 gadgets
 UNSAT over Z and Goldilocks; over 31-bit fields the state-chained VU body is UNSAT by wrap-free transfer (M31), but
 `epilogue` (and the absent `state_decode`) are SAT as stated: `Pack.check` forms the FP32 word `s 2^31 + e 2^23 + M`
 as one field element and `Epilogue.check` splits it as `hi 2^16 + lo` — over BabyBear (`p < 2^31`) a second
@@ -139,7 +139,7 @@ than the night) and **repair the epilogue's embedding**, which is the only SAT r
 naming those 16 columns; the export default is now the limb form and the second set carries the honest label.
 
 **Limb-form epilogue (`gpu/v2/epilogue_limbs.py`).**  `lane/b-air-v2`'s `pack_limbs` / `epilogue_limbs`
-(`V2_AIR.md` 4.5; `reports/b_air_v2_z3.json` `pack_epilogue_limbs`: integer UNSAT, wrap-free UNSAT and *direct*
+(`V2_AIR.md` 4.5; `notes-asset:campaigns/r20-proof/assets/b-air-v2/reports/b_air_v2_z3.json` `pack_epilogue_limbs`: integer UNSAT, wrap-free UNSAT and *direct*
 UNSAT with the BabyBear modulus at REAL widths), copied verbatim: `M = M_hi8 2^16 + M_lo16` with the two hints
 range-checked (`R8`, `R16`), the finite high limb the *expression* `s 2^15 + fld 2^7 + M_hi8` (below `2^16` on every
 admissible state, so no wrap is possible), the infinity blend per limb, then v1's epilogue on the limb pair
