@@ -50,6 +50,26 @@ def to_dev(v, device) -> torch.Tensor:
     return sp.to_dev(v, device)
 
 
+#: ``X^p = OMEGA . X`` in ``F_p[X] / (X^6 - W)`` (``6 | p - 1``): the Frobenius scales coefficient ``s`` by ``OMEGA^s``.
+OMEGA = pow(ref.W, (P - 1) // 6, P)
+
+
+def ext_inv(a: Ext) -> Ext:
+    """``a^-1`` in ``F_{p^6}`` via the norm: ``a^-1 = (prod_{j=1..5} a^(p^j)) / N(a)``, ``N(a) in F_p``; 5 Frobenius maps
+    (coefficient scalings), 5 ext products, one base inversion."""
+    if all(x == 0 for x in a):
+        raise ZeroDivisionError("ext_inv(0)")
+    prod = None
+    for j in range(1, 6):
+        om = pow(OMEGA, j, P)
+        frob = tuple(a[s_] * pow(om, s_, P) % P for s_ in range(6))
+        prod = frob if prod is None else ref.mul(prod, frob)
+    norm = ref.mul(prod, a)
+    if any(norm[1:]):
+        raise ArithmeticError("norm not in the base field")
+    return ref.scale(prod, pow(norm[0], P - 2, P))
+
+
 def multiplicities(w: torch.Tensor, table: torch.Tensor) -> torch.Tensor:
     """``m_v`` = number of queries equal to ``table[v]`` (``int32 (Nt,)``); queries outside the table count nowhere."""
     Nt = table.numel()
@@ -87,6 +107,7 @@ class LogUpProver:
         self.tk = self.kernel._tk
         self.pw16 = self.kernel.pw16
         self.one6 = self.kernel.one6
+        self._one_limbs32 = self.tk.eq_limbs32(self.one6)     # e_lo of a round with K1 = 1
 
     # -- small helpers ------------------------------------------------------------------------------------------------
 
@@ -95,22 +116,45 @@ class LogUpProver:
         e.record()
         return e
 
+    def _suffix_tables(self, rho: list[Ext]) -> list[torch.Tensor]:
+        """``suf[i] = eq(rho[i:], .)`` as ``(2^(k-i), 6)`` for ``i = 0..k`` (``k = len(rho)``): one H2D copy of the
+        ``[(1 - rho_j) R, rho_j R]`` pairs and ``k`` prepend launches.  Also ``self._c0[i] = eq(rho[i:], 0)`` on the host."""
+        k = len(rho)
+        suf = [None] * (k + 1)
+        suf[k] = self.one6
+        pairs = sp.pre_scale(to_dev([[ref.sub(ref.ONE, g), g] for g in rho], self.device)).reshape(k, 12) if k else None
+        c0 = [ref.ONE] * (k + 1)
+        for i in range(k - 1, -1, -1):
+            suf[i] = self.tk.eq_prepend(suf[i + 1], pairs[i])
+            c0[i] = ref.mul(c0[i + 1], ref.sub(ref.ONE, rho[i]))
+        self._c0 = c0
+        return suf
+
     def _inputs(self, rho: list[Ext], rs: list[Ext], i: int, K1: int) -> sp.RoundInputs:
-        """Round ``i`` eq inputs at an explicit inner depth ``K1`` (``e_hi`` covers the whole level)."""
+        """Round ``i`` eq inputs at an explicit inner depth ``K1``, from the level's suffix tables (:meth:`_suffix_tables`
+        -> ``self._suf``): ``e_lo' = suf[i][:K1] = c . eq(rho[i:i+kappa], b1)`` with ``c = eq(rho[i+kappa:], 0)`` and
+        ``e_hi' = suf[i+kappa] / c``, so ``e_lo' (x) e_hi'`` is the exact eq table.  ``inp.e_lo_sum`` = ``sum_b1 e_lo'`` = ``c``
+        as a ``(1, 6)`` tensor (the region sums of the packed rounds need it)."""
         kappa = int(math.log2(K1))
-        e_lo = sp.pre_scale(sp.eq_table_dev(rho[i:i + kappa], self.device))
-        e_hi = sp.eq_table_dev(rho[i + kappa:], self.device)
+        c = self._c0[i + kappa]
         gm = rho[i - 1]
-        eq_x = to_dev([ref.eval_at(ref.sub(ref.ONE, gm), gm, x) for x in range(4)], self.device)
-        prefix = to_dev(ref.eq_points(rho[:i - 1], rs), self.device)
-        inp = sp.RoundInputs(sp.decompose(e_lo), e_hi, eq_x, prefix, None, None)
-        inp.e_lo32 = torch.nn.functional.pad(inp.e_lo_limbs, (0, 32 - sp.DL))
+        consts = to_dev([ref.eval_at(ref.sub(ref.ONE, gm), gm, x) for x in range(4)] + [ref.eq_points(rho[:i - 1], rs), c, ext_inv(c)],
+                        self.device)                                            # one H2D copy: eq_x (4), prefix, c, c^-1
+        if kappa:
+            e_lo32 = self.tk.eq_limbs32(self._suf[i][:K1])
+            e_hi = self.tk.ext_mul_rows(self._suf[i + kappa], consts[6:7])
+        else:
+            e_lo32 = self._one_limbs32
+            e_hi = self._suf[i]
+        inp = sp.RoundInputs(e_lo32[:, :sp.DL], e_hi, consts[:4], consts[4], None, None)
+        inp.e_lo32 = e_lo32
+        inp.e_lo_sum = consts[5:6]
         return inp
 
     def _fold4(self, T4: torch.Tensor, r: Ext) -> torch.Tensor:
         m = T4.shape[1] // 2
         out = torch.empty((4, m, 6), dtype=torch.int32, device=self.device)
-        r_R = sp.pre_scale(to_dev([r], self.device))[0].contiguous()
+        r_R = to_dev([tuple(x * sp.R_MOD_P % P for x in r)], self.device)[0].contiguous()   # r R, pre-scaled on the host
         return self.tk.fold_ext4(T4, m, r_R, out)
 
     def _ext_ip(self, T4: torch.Tensor, e_lo32: torch.Tensor, e_hi: torch.Tensor, K1: int, K2: int) -> torch.Tensor:
@@ -122,8 +166,10 @@ class LogUpProver:
 
     # -- one generic round --------------------------------------------------------------------------------------------
 
-    def generic_round(self, T4: torch.Tensor, rho: list[Ext], rs: list[Ext], i: int, lam6: torch.Tensor) -> torch.Tensor:
-        """Level with ``len(rho)`` rounds, round ``i`` on ``T4 (4, t_i, 6)`` = ``p0, p1, q0, q1``: ``S_i(0..3)`` as ``(4, 6)``."""
+    def generic_round(self, T4: torch.Tensor, rho: list[Ext], rs: list[Ext], i: int, lam6: torch.Tensor,
+                      lam_R: torch.Tensor) -> torch.Tensor:
+        """Level with ``len(rho)`` rounds, round ``i`` on ``T4 (4, t_i, 6)`` = ``p0, p1, q0, q1``: ``S_i(0..3)`` as ``(4, 6)``.
+        ``lam6 (1, 6)`` plain and ``lam_R (6,)`` = ``lambda R``."""
         n = len(rho)
         m = 1 << (n - i)
         K1, K2 = self.kernel.split(m)
@@ -133,20 +179,18 @@ class LogUpProver:
             coeff = torch.cat([self.one6, lam6], 0)                             # (2, 6)
             return self.tk.finish_round(Q, coeff, inp.prefix, inp.eq_x)
         inp = self._inputs(rho, rs, i, 1)
-        V = sp.Kernel._three_points(T4.view(4, m, 2, 6), 2)                     # (4, m, 3, 6)
-        A = sp.add_mod(sp.ext_mul(V[0], V[3]), sp.ext_mul(V[1], V[2]))
-        B = sp.ext_mul(V[2], V[3])
-        U = sp.add_mod(A, sp.ext_mul(B, lam6[None]))                             # (m, 3, 6)
-        e = inp.e_hi                                                              # (m, 6): eq over all of b
-        Q = (sp.ext_mul(U, e[:, None, :]).to(torch.int64).sum(0) % P).to(torch.int32)
-        return self.kernel._q_to_s(Q, inp)
+        Q = self.tk.logup_small_round(T4, inp.e_hi, lam_R)                      # (3, 6), one launch
+        return self.tk.finish_round(Q.view(3, 1, 6), self.one6, inp.prefix, inp.eq_x)
 
     def generic_level(self, T4: torch.Tensor, rho: list[Ext], lam: Ext, coins: lref.Coins, rs: list[Ext], rounds: list,
                       i0: int = 1) -> torch.Tensor:
         """Rounds ``i0..len(rho)`` with folds; returns the ``(4, 1, 6)`` final tables."""
         lam6 = to_dev([lam], self.device)
+        lam_R = sp.pre_scale(lam6)[0].contiguous()
+        if i0 == 1:
+            self._suf = self._suffix_tables(rho)
         for i in range(i0, len(rho) + 1):
-            rounds.append(self.generic_round(T4, rho, rs, i, lam6))
+            rounds.append(self.generic_round(T4, rho, rs, i, lam6, lam_R))
             r = coins.next()
             rs.append(r)
             T4 = self._fold4(T4, r)
@@ -177,6 +221,8 @@ class LogUpProver:
         c1 = to_dev([ref.add(ref.add(z, z), ref.mul(lam, ref.mul(z, z)))], dev)[0]   # 2 z + lambda z^2
         c2 = to_dev([ref.add(ref.ONE, ref.mul(lam, z))], dev)[0]                    # 1 + lambda z
         rs: list[Ext] = []
+        self._suf = self._suffix_tables(rho)
+        mul = self.tk.ext_mul_rows
         t0 = self._ev()
         for i in range(1, k + 1):
             half = 1 << (i - 1)
@@ -195,20 +241,20 @@ class LogUpProver:
             eq_r = ref.eq_table(rs)
             c_prod = to_dev([ref.mul(a, b) for a in eq_r for b in eq_r], dev)
             c_lin = to_dev(eq_r, dev)
-            pi = (sp.ext_mul(Tw[:, :half * half], c_prod[None]).to(torch.int64).sum(1) % P).to(torch.int32)   # (3, 6)
-            s = (sp.ext_mul(Tw[:, half * half:], c_lin[None]).to(torch.int64).sum(1) % P).to(torch.int32)
-            Ew = (e_hi[:Bw].to(torch.int64).sum(0) % P).to(torch.int32)
-            Q = sp.add_mod(sp.sub_mod(sp.ext_mul(c1[None], Ew[None]).expand(3, 6), sp.ext_mul(c2[None], s)),
-                           sp.ext_mul(lam6, pi))
+            hh = half * half
+            pi = (mul(Tw[:, :hh].reshape(3 * hh, 6), c_prod.repeat(3, 1)).view(3, hh, 6).to(torch.int64).sum(1) % P).to(torch.int32)
+            s = (mul(Tw[:, hh:].reshape(3 * half, 6), c_lin.repeat(3, 1)).view(3, half, 6).to(torch.int64).sum(1) % P).to(torch.int32)
+            Ew = mul((e_hi[:Bw].to(torch.int64).sum(0) % P).to(torch.int32)[None], inp.e_lo_sum)   # sum_b e(b) over the witness
+            Q = sp.add_mod(sp.sub_mod(mul(Ew, c1[None]).expand(3, 6), mul(s, c2[None])), mul(pi, lam6))
             # table region: generic on its own eq-weight slice
             if Bt:
                 Qt = self._ext_ip(T4_tab, inp.e_lo32, e_hi[Bw:Bw + Bt], K1, Bt)
-                Q = sp.add_mod(Q, sp.add_mod(Qt[:, 0], sp.ext_mul(lam6, Qt[:, 1])))
+                Q = sp.add_mod(Q, sp.add_mod(Qt[:, 0], mul(Qt[:, 1], lam6)))
             # padding: A = 0, B = 1
             if Rp:
-                Ep = (e_hi[Bw + Bt:].to(torch.int64).sum(0) % P).to(torch.int32)
-                Q = sp.add_mod(Q, sp.ext_mul(lam6, Ep[None]).expand(3, 6))
-            rounds.append(self.kernel._q_to_s(Q, inp))
+                Ep = mul((e_hi[Bw + Bt:].to(torch.int64).sum(0) % P).to(torch.int32)[None], inp.e_lo_sum)
+                Q = sp.add_mod(Q, mul(Ep, lam6).expand(3, 6))
+            rounds.append(self.tk.finish_round(Q.contiguous().view(3, 1, 6), self.one6, inp.prefix, inp.eq_x))
             r = coins.next()
             rs.append(r)
             if Bt:
@@ -278,8 +324,9 @@ class LogUpProver:
         self.tk.leaf_level(w, z6[0].contiguous(), zR, z2, pq[0], pq[1], half_total)
         x = torch.arange(Nw // 2, (Nw + Nt) // 2, device=dev)
         dst = torch.where(x % 2 == 0, x // 2, half_total + x // 2)
-        pq[0][dst] = sp.add_mod(sp.ext_mul(T4_tab[0], T4_tab[3]), sp.ext_mul(T4_tab[1], T4_tab[2]))
-        pq[1][dst] = sp.ext_mul(T4_tab[2], T4_tab[3])
+        mul = self.tk.ext_mul_rows
+        pq[0][dst] = sp.add_mod(mul(T4_tab[0], T4_tab[3]), mul(T4_tab[1], T4_tab[2]))
+        pq[1][dst] = mul(T4_tab[2], T4_tab[3])
         levels = {n - 1: pq}
         for lv in range(n - 1, 0, -1):
             levels[lv - 1] = self.tk.tree_level(levels[lv])

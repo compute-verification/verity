@@ -841,6 +841,194 @@ def leaf_level(w: torch.Tensor, z: torch.Tensor, zR: torch.Tensor, z2: torch.Ten
     _leaf_level_kernel[(triton.cdiv(m, BLOCK),)](w, z, zR, z2, po, qo, m, half_total, R2=R2_MOD_P, BLOCK=BLOCK)
 
 
+@triton.jit
+def _ext_mul_rows_kernel(a_ptr, b_ptr, out_ptr, n, stride_b, R2: tl.constexpr, BLOCK: tl.constexpr):
+    """``out[i] = a[i] b[i]`` (``stride_b = 6``) or ``a[i] b[0]`` (``stride_b = 0``), plain in / plain out."""
+    i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    mask = i < n
+    ia = i.to(tl.int64) * 6
+    ib = i.to(tl.int64) * stride_b
+    a0 = tl.load(a_ptr + ia + 0, mask=mask, other=0)
+    a1 = tl.load(a_ptr + ia + 1, mask=mask, other=0)
+    a2 = tl.load(a_ptr + ia + 2, mask=mask, other=0)
+    a3 = tl.load(a_ptr + ia + 3, mask=mask, other=0)
+    a4 = tl.load(a_ptr + ia + 4, mask=mask, other=0)
+    a5 = tl.load(a_ptr + ia + 5, mask=mask, other=0)
+    b0 = tl.load(b_ptr + ib + 0, mask=mask, other=0)
+    b1 = tl.load(b_ptr + ib + 1, mask=mask, other=0)
+    b2 = tl.load(b_ptr + ib + 2, mask=mask, other=0)
+    b3 = tl.load(b_ptr + ib + 3, mask=mask, other=0)
+    b4 = tl.load(b_ptr + ib + 4, mask=mask, other=0)
+    b5 = tl.load(b_ptr + ib + 5, mask=mask, other=0)
+    c0, c1, c2, c3, c4, c5 = _ext_mmul6_j(a0, a1, a2, a3, a4, a5, b0, b1, b2, b3, b4, b5)
+    tl.store(out_ptr + ia + 0, mmul(c0, R2), mask=mask)
+    tl.store(out_ptr + ia + 1, mmul(c1, R2), mask=mask)
+    tl.store(out_ptr + ia + 2, mmul(c2, R2), mask=mask)
+    tl.store(out_ptr + ia + 3, mmul(c3, R2), mask=mask)
+    tl.store(out_ptr + ia + 4, mmul(c4, R2), mask=mask)
+    tl.store(out_ptr + ia + 5, mmul(c5, R2), mask=mask)
+
+
+def ext_mul_rows(a: torch.Tensor, b: torch.Tensor, BLOCK: int = 256) -> torch.Tensor:
+    """``(n, 6) x (n, 6) | (1, 6) -> (n, 6)`` plain ``F_{p^6}`` Hadamard, one launch (the torch ``ext_mul`` is ~150)."""
+    a = a.contiguous()
+    b = b.contiguous()
+    n = a.shape[0]
+    out = torch.empty_like(a)
+    _ext_mul_rows_kernel[(triton.cdiv(n, BLOCK),)](a, b, out, n, 0 if b.shape[0] == 1 else 6, R2=R2_MOD_P, BLOCK=BLOCK)
+    return out
+
+
+@triton.jit
+def _eq_prepend_kernel(t_ptr, g_ptr, out_ptr, n, BLOCK: tl.constexpr):
+    """``out[2 b + bit] = T[b] . (bit ? g : 1 - g)``: one more eq variable on bit 0.  ``g_ptr`` holds ``(1 - g) R`` then
+    ``g R`` (12 int32); ``T`` plain in, ``out`` plain out."""
+    b = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    mask = b < n
+    ib = b.to(tl.int64) * 6
+    t0 = tl.load(t_ptr + ib + 0, mask=mask, other=0)
+    t1 = tl.load(t_ptr + ib + 1, mask=mask, other=0)
+    t2 = tl.load(t_ptr + ib + 2, mask=mask, other=0)
+    t3 = tl.load(t_ptr + ib + 3, mask=mask, other=0)
+    t4 = tl.load(t_ptr + ib + 4, mask=mask, other=0)
+    t5 = tl.load(t_ptr + ib + 5, mask=mask, other=0)
+    zeros = b * 0
+    for bit in tl.static_range(2):
+        g0 = zeros + tl.load(g_ptr + bit * 6 + 0)
+        g1 = zeros + tl.load(g_ptr + bit * 6 + 1)
+        g2 = zeros + tl.load(g_ptr + bit * 6 + 2)
+        g3 = zeros + tl.load(g_ptr + bit * 6 + 3)
+        g4 = zeros + tl.load(g_ptr + bit * 6 + 4)
+        g5 = zeros + tl.load(g_ptr + bit * 6 + 5)
+        c0, c1, c2, c3, c4, c5 = _ext_mmul6_j(t0, t1, t2, t3, t4, t5, g0, g1, g2, g3, g4, g5)
+        o = (2 * b + bit).to(tl.int64) * 6
+        tl.store(out_ptr + o + 0, c0, mask=mask)
+        tl.store(out_ptr + o + 1, c1, mask=mask)
+        tl.store(out_ptr + o + 2, c2, mask=mask)
+        tl.store(out_ptr + o + 3, c3, mask=mask)
+        tl.store(out_ptr + o + 4, c4, mask=mask)
+        tl.store(out_ptr + o + 5, c5, mask=mask)
+
+
+def eq_prepend(T: torch.Tensor, g_pair_R: torch.Tensor, BLOCK: int = 256) -> torch.Tensor:
+    """``T (n, 6)`` = ``eq(gammas, .)`` -> ``(2n, 6)`` = ``eq([g] + gammas, .)`` (``g`` on bit 0).  ``g_pair_R`` = the 12 int32
+    ``[(1 - g) R, g R]``."""
+    n = T.shape[0]
+    out = torch.empty((2 * n, 6), dtype=torch.int32, device=T.device)
+    _eq_prepend_kernel[(triton.cdiv(n, BLOCK),)](T, g_pair_R, out, n, BLOCK=BLOCK)
+    return out
+
+
+@triton.jit
+def _eq_limbs32_kernel(e_ptr, out_ptr, n, R2: tl.constexpr, BLOCK: tl.constexpr):
+    """``e (n, 6)`` plain -> ``(n, 32) int8``: the 24 balanced limbs of ``e . R`` (columns ``4 s + j``) and 8 zero columns."""
+    i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    mask = i < n
+    o = i.to(tl.int64) * 32
+    for s in tl.static_range(6):
+        v = tl.load(e_ptr + i.to(tl.int64) * 6 + s, mask=mask, other=0)
+        vR = mmul(v, R2)                     # v R^2 R^-1 = v R
+        l0, l1, l2, l3 = _limbs(vR)
+        tl.store(out_ptr + o + 4 * s + 0, l0, mask=mask)
+        tl.store(out_ptr + o + 4 * s + 1, l1, mask=mask)
+        tl.store(out_ptr + o + 4 * s + 2, l2, mask=mask)
+        tl.store(out_ptr + o + 4 * s + 3, l3, mask=mask)
+    z = tl.zeros((BLOCK,), dtype=tl.int8)
+    for c in tl.static_range(24, 32):
+        tl.store(out_ptr + o + c, z, mask=mask)
+
+
+def eq_limbs32(e: torch.Tensor, BLOCK: int = 256) -> torch.Tensor:
+    """``eq`` weights ``(K1, 6)`` plain -> the fused kernels' ``e_lo32`` operand ``(K1, 32) int8`` (``R``-scaled limbs), one launch."""
+    n = e.shape[0]
+    out = torch.empty((n, 32), dtype=torch.int8, device=e.device)
+    _eq_limbs32_kernel[(triton.cdiv(n, BLOCK),)](e.contiguous(), out, n, R2=R2_MOD_P, BLOCK=BLOCK)
+    return out
+
+
+@triton.jit
+def _load6(ptr, idx, mask):
+    return (tl.load(ptr + idx + 0, mask=mask, other=0), tl.load(ptr + idx + 1, mask=mask, other=0),
+            tl.load(ptr + idx + 2, mask=mask, other=0), tl.load(ptr + idx + 3, mask=mask, other=0),
+            tl.load(ptr + idx + 4, mask=mask, other=0), tl.load(ptr + idx + 5, mask=mask, other=0))
+
+
+@triton.jit
+def _logup_small_round_kernel(t_ptr, e_ptr, lam_ptr, q_ptr, m, stride_t, R2: tl.constexpr, BLOCK: tl.constexpr):
+    """One program: ``Q(x) = sum_{y<m} e(y) [A_x(y) + lambda B_x(y)]`` for ``x = 0, 1, 2`` from the four tables at
+    ``t_ptr + j stride_t`` (pairs ``(2y, 2y+1)``), ``e (m, 6)`` plain, ``lam_ptr`` = ``lambda R``.  Plain ``(3, 6)`` out."""
+    y = tl.arange(0, BLOCK)
+    mask = y < m
+    ie = (2 * y).to(tl.int64) * 6
+    io = ie + 6
+    zeros = y * 0
+    lr0 = zeros + tl.load(lam_ptr + 0)
+    lr1 = zeros + tl.load(lam_ptr + 1)
+    lr2 = zeros + tl.load(lam_ptr + 2)
+    lr3 = zeros + tl.load(lam_ptr + 3)
+    lr4 = zeros + tl.load(lam_ptr + 4)
+    lr5 = zeros + tl.load(lam_ptr + 5)
+    e0, e1, e2, e3, e4, e5 = _load6(e_ptr, y.to(tl.int64) * 6, mask)
+    ae0, ae1, ae2, ae3, ae4, ae5 = _load6(t_ptr, ie, mask)
+    ao0, ao1, ao2, ao3, ao4, ao5 = _load6(t_ptr, io, mask)
+    be0, be1, be2, be3, be4, be5 = _load6(t_ptr + stride_t, ie, mask)
+    bo0, bo1, bo2, bo3, bo4, bo5 = _load6(t_ptr + stride_t, io, mask)
+    ce0, ce1, ce2, ce3, ce4, ce5 = _load6(t_ptr + 2 * stride_t, ie, mask)
+    co0, co1, co2, co3, co4, co5 = _load6(t_ptr + 2 * stride_t, io, mask)
+    de0, de1, de2, de3, de4, de5 = _load6(t_ptr + 3 * stride_t, ie, mask)
+    do0, do1, do2, do3, do4, do5 = _load6(t_ptr + 3 * stride_t, io, mask)
+    for x in tl.static_range(3):
+        if x == 0:
+            a0, a1, a2, a3, a4, a5 = ae0, ae1, ae2, ae3, ae4, ae5
+            b0, b1, b2, b3, b4, b5 = be0, be1, be2, be3, be4, be5
+            c0, c1, c2, c3, c4, c5 = ce0, ce1, ce2, ce3, ce4, ce5
+            d0, d1, d2, d3, d4, d5 = de0, de1, de2, de3, de4, de5
+        elif x == 1:
+            a0, a1, a2, a3, a4, a5 = ao0, ao1, ao2, ao3, ao4, ao5
+            b0, b1, b2, b3, b4, b5 = bo0, bo1, bo2, bo3, bo4, bo5
+            c0, c1, c2, c3, c4, c5 = co0, co1, co2, co3, co4, co5
+            d0, d1, d2, d3, d4, d5 = do0, do1, do2, do3, do4, do5
+        else:
+            a0, a1, a2, a3, a4, a5 = msub(madd(ao0, ao0), ae0), msub(madd(ao1, ao1), ae1), msub(madd(ao2, ao2), ae2), msub(madd(ao3, ao3), ae3), msub(madd(ao4, ao4), ae4), msub(madd(ao5, ao5), ae5)
+            b0, b1, b2, b3, b4, b5 = msub(madd(bo0, bo0), be0), msub(madd(bo1, bo1), be1), msub(madd(bo2, bo2), be2), msub(madd(bo3, bo3), be3), msub(madd(bo4, bo4), be4), msub(madd(bo5, bo5), be5)
+            c0, c1, c2, c3, c4, c5 = msub(madd(co0, co0), ce0), msub(madd(co1, co1), ce1), msub(madd(co2, co2), ce2), msub(madd(co3, co3), ce3), msub(madd(co4, co4), ce4), msub(madd(co5, co5), ce5)
+            d0, d1, d2, d3, d4, d5 = msub(madd(do0, do0), de0), msub(madd(do1, do1), de1), msub(madd(do2, do2), de2), msub(madd(do3, do3), de3), msub(madd(do4, do4), de4), msub(madd(do5, do5), de5)
+        u0, u1, u2, u3, u4, u5 = _ext_mmul6_j(a0, a1, a2, a3, a4, a5, d0, d1, d2, d3, d4, d5)
+        v0, v1, v2, v3, v4, v5 = _ext_mmul6_j(b0, b1, b2, b3, b4, b5, c0, c1, c2, c3, c4, c5)
+        w0, w1, w2, w3, w4, w5 = _ext_mmul6_j(c0, c1, c2, c3, c4, c5, d0, d1, d2, d3, d4, d5)   # B R^-1
+        l0, l1, l2, l3, l4, l5 = _ext_mmul6_j(w0, w1, w2, w3, w4, w5, lr0, lr1, lr2, lr3, lr4, lr5)  # lambda B R^-1
+        s0 = madd(madd(u0, v0), l0)
+        s1 = madd(madd(u1, v1), l1)
+        s2 = madd(madd(u2, v2), l2)
+        s3 = madd(madd(u3, v3), l3)
+        s4 = madd(madd(u4, v4), l4)
+        s5 = madd(madd(u5, v5), l5)          # U R^-1
+        g0, g1, g2, g3, g4, g5 = _ext_mmul6_j(s0, s1, s2, s3, s4, s5, e0, e1, e2, e3, e4, e5)   # U e R^-2
+        for d_ in tl.static_range(6):
+            if d_ == 0:
+                gg = g0
+            elif d_ == 1:
+                gg = g1
+            elif d_ == 2:
+                gg = g2
+            elif d_ == 3:
+                gg = g3
+            elif d_ == 4:
+                gg = g4
+            else:
+                gg = g5
+            tot = (tl.sum(gg.to(tl.int64), axis=0) % P_C).to(tl.int32)
+            tl.store(q_ptr + x * 6 + d_, mmul(mmul(tot, R2), R2))
+
+
+def logup_small_round(T4: torch.Tensor, e: torch.Tensor, lam_R: torch.Tensor) -> torch.Tensor:
+    """``T4 (4, 2m, 6)``, ``e (m, 6)`` plain, ``lam_R (6,)`` = ``lambda R`` -> ``Q (3, 6)`` plain; ``m <= 64``, one launch."""
+    m = T4.shape[1] // 2
+    Q = torch.empty((3, 6), dtype=torch.int32, device=T4.device)
+    _logup_small_round_kernel[(1,)](T4, e.contiguous(), lam_R, Q, m, T4.stride(0), R2=R2_MOD_P, BLOCK=max(2, triton.next_power_of_2(m)))
+    return Q
+
+
 def fold_ext(gh: torch.Tensor, r_R: torch.Tensor, BLOCK_M: int = 256) -> torch.Tensor:
     """``gh (rows, 12) int32`` (``[x_e | x_o]`` per pair) -> ``(rows, 6)`` = ``(1 - r) x_e + r x_o``; ``r_R`` = ``r . R`` (6 int32)."""
     rows = gh.shape[0]
