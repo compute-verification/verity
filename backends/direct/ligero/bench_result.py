@@ -9,6 +9,14 @@ on every recorded rep's sub-batch proof -- with `--coins` = the runner's step-0 
 file proof is sound only against the verifier's own coins) -- and writes one result.json whose measurement names are the same as
 `backends/gkr/bench_result.py`'s (prove_wall, verify_wall, verify_python_wall, proof_bytes, depth, soundness_bits, e2e_0ms) so the
 two candidates are `research data select`-able side by side.  Nothing in the prover is touched.
+
+Lane b-hopper: `--relation <name>` (before `bench-vu`, as run.py takes it) selects a registered relation (relations.py); its
+proofs are dumped and verified the same way.  `--verifier python` runs the Python file verifier (`serialize.py verify`) in a
+SEPARATE PROCESS instead of the Rust binary -- the acceptance check for relations the Rust verifier cannot read (the FP8
+relations: 8-bit operands, 22-bit public words), labelled as such in `fp["verifier"]` and `independently_verified=false`.  A
+non-Ampere BF16 relation (bf16-hopper) is checked by the Rust binary with `--allow-any-system` (its system id is not the
+pinned Ampere one; the statement digest binds the system id).  The inner bench's `profile`, `relation`, `model`,
+`instances`, `census` and the rate / overhead measurements are carried into this result.
 """
 from __future__ import annotations
 
@@ -65,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
     verifier = _pop(argv, "--verifier")
     threads = int(_pop(argv, "--threads", "1"))
+    relation = argv[argv.index("--relation") + 1] if "--relation" in argv else "bf16"
+    python_verifier = verifier == "python"
     if "bench-vu" not in argv:
         print("bench_result.py: the subcommand must be bench-vu", file=sys.stderr)
         return 2
@@ -96,17 +106,26 @@ def main(argv: list[str] | None = None) -> int:
     verdicts = []
     v_dir = run_dir / "verify"
     v_dir.mkdir(exist_ok=True)
-    vbin = Path(verifier) if verifier else None
-    if vbin is None or not vbin.is_file():
+    vbin = None if (verifier is None or python_verifier) else Path(verifier)
+    have_verifier = python_verifier or (vbin is not None and vbin.is_file())
+    if not have_verifier:
         print(f"bench_result.py: no independent verifier at {verifier!r}; verify_wall not measured", file=sys.stderr)
     system = proofs_dir / "system.bin"
+    allow_any = relation != "bf16"            # the pinned system id is the Ampere relation's
     for e in man["files"]:
-        if vbin is None or not vbin.is_file():
+        if not have_verifier:
             break
         stmt, proof = proofs_dir / e["stmt"], proofs_dir / e["proof"]
-        cmd = [str(vbin), "verify", "--system", str(system), "--statement", str(stmt), "--proof", str(proof), "--threads", str(threads)]
-        if e.get("coins"):
-            cmd += ["--coins", str(proofs_dir / e["coins"])]
+        if python_verifier:
+            vjson = v_dir / f"rep{e['rep']}_sub{e['sub']:02d}.json"
+            cmd = [sys.executable, "-m", "backends.direct.ligero.serialize", "verify", "--statement", str(stmt), "--proof", str(proof),
+                   "--device", "cpu", "--relation", relation, "--json", str(vjson)]
+        else:
+            cmd = [str(vbin), "verify", "--system", str(system), "--statement", str(stmt), "--proof", str(proof), "--threads", str(threads)]
+            if allow_any:
+                cmd.append("--allow-any-system")
+            if e.get("coins"):
+                cmd += ["--coins", str(proofs_dir / e["coins"])]
         t1 = time.perf_counter()
         r = subprocess.run(cmd, capture_output=True, text=True)
         wall = time.perf_counter() - t1
@@ -120,11 +139,14 @@ def main(argv: list[str] | None = None) -> int:
                     doc = None
                 break
         accepted = bool(doc and doc.get("accepted")) and r.returncode == 0
+        secs = (doc or {}).get("seconds") if python_verifier else (doc or {}).get("timing", {}).get("total")
         verdicts.append({"rep": e["rep"], "sub": e["sub"], "proof": e["proof"], "proof_sha256": e["proof_sha256"], "proof_bytes": e["proof_bytes"],
-                         "accepted": accepted, "rc": r.returncode, "reason": (doc or {}).get("reason"), "verify_seconds": (doc or {}).get("timing", {}).get("total"),
+                         "accepted": accepted, "rc": r.returncode, "reason": (doc or {}).get("reason"), "verify_seconds": secs,
                          "process_wall": wall, "coins": bool(e.get("coins")), "stdout_tail": out[-1][:300] if out else r.stderr[-300:]})
         print(f"verify rep{e['rep']} sub{e['sub']:02d}: {'accept' if accepted else 'REJECT'} {wall:.3f}s ({(doc or {}).get('reason')})", flush=True)
-    (v_dir / "independent.json").write_text(json.dumps({"verifier": str(vbin), "verifier_sha256": _sha256(vbin) if vbin and vbin.is_file() else None,
+    (v_dir / "independent.json").write_text(json.dumps({"verifier": "python (backends.direct.ligero.serialize verify, separate process)" if python_verifier else str(vbin),
+                                                       "verifier_sha256": _sha256(vbin) if vbin and vbin.is_file() else None,
+                                                       "relation": relation, "allow_any_system": allow_any and not python_verifier,
                                                        "threads": threads, "items": verdicts}, indent=1))
     n_acc = sum(1 for v in verdicts if v["accepted"])
     by_rep: dict[int, float] = {}
@@ -146,12 +168,24 @@ def main(argv: list[str] | None = None) -> int:
     B = int(meas_in["vu.count"])
     proof_class = PROOF_CLASS[(zk, mode)] if fp_in.get("proof_class") is None else fp_in["proof_class"]
 
-    fp = {"candidate": "B-Ligero", "backend": "backends/direct/ligero (b-zk-fix prover)", "commit": source_commit(fp_in.get("software", {}).get("backend", {}).get("commit")),
+    if python_verifier:
+        verifier_fp = {"name": "python file verifier (backends.direct.ligero.serialize verify), separate process; shares code with the prover",
+                       "independent": False, "relation": relation,
+                       "why_not_rust": "backends/ligero-verify reads ligero-statement/v2 (16-bit words) and decodes BF16 operands only",
+                       "coins": "transcript's own coins replayed (file verifier)" if mode == "interactive" else "n/a (Fiat-Shamir)"}
+    else:
+        verifier_fp = {"name": "ligero-verify (backends/ligero-verify, Rust, independent)", "path": str(vbin), "threads": threads,
+                       "independent": True, "relation": relation, "allow_any_system": allow_any,
+                       "sha256": _sha256(vbin) if vbin and vbin.is_file() else None,
+                       "coins": "runner's step-0 coins (--coins)" if mode == "interactive" else "n/a (Fiat-Shamir)"}
+    fp = {"candidate": "B-Ligero", "backend": fp_in.get("software", {}).get("backend", {}).get("name") or "backends/direct/ligero (b-zk-fix prover)",
+          "commit": source_commit(fp_in.get("software", {}).get("backend", {}).get("commit")),
           "protocol": "Ligero direct-constraint chain proof, BabyBear, PROTOCOL.md 3-8c", "mode": mode, "zk": zk, "proof_class": proof_class,
-          "checker": "v1 (WP2 checker: bits + one-hot selectors)", "batch": B, "K": 1536, "n_subbatches": n_proofs,
+          "checker": "v1 (WP2 checker: bits + one-hot selectors)", "batch": B, "K": int(fp_in.get("K", 1536)), "n_subbatches": n_proofs,
           "per_proof_vus": int(meas_in["split.per_proof_vus"]), "security": sec, "hardware": fp_in.get("hardware"), "software": fp_in.get("software"),
-          "verifier": {"name": "ligero-verify (backends/ligero-verify, Rust, independent)", "path": str(vbin), "threads": threads,
-                       "sha256": _sha256(vbin) if vbin and vbin.is_file() else None, "coins": "runner's step-0 coins (--coins)" if mode == "interactive" else "n/a (Fiat-Shamir)"},
+          "profile": fp_in.get("profile"), "relation_id": relation,
+          **{k: fp_in[k] for k in ("relation", "model", "instances", "census", "rows", "step_k", "steps_per_vu", "domain") if k in fp_in},
+          "verifier": verifier_fp,
           "python_verifier": "backends.direct.ligero (live, every rep, every sub-batch; shares code with the prover)",
           "warmup": "one sub-batch (excluded)", "reps": len(reps)}
     meas = [
@@ -163,12 +197,15 @@ def main(argv: list[str] | None = None) -> int:
         _m("proofs_verified_independent", n_acc, "count"), _m("proofs_total", len(man["files"]), "count"),
         _m("peak_device_bytes", meas_in["mem.peak_device_bytes"], "B"), _m("bench_wall", bench_wall, "s"),
     ]
+    meas += [m for m in bench["measurements"] if m["name"].startswith(("rate.", "overhead.", "t.", "vu.", "rows_per_unit", "units_per_vu"))]
     meas = [m for m in meas if m["value"] is not None]
     status = "passed" if (python_ok and all_rust_ok) else "failed"
     result = {"schema": "research/result/v0.1", "run_id": run_id, "kind": "bench-result/v1", "workload_fingerprint": fp,
               "validation": {"status": status,
-                             "checker": "backends/ligero-verify verify (independent Rust) on every recorded rep's sub-batch proof; Python verifier live per rep",
-                             "detail": f"python: {bench['validation']['status']}; rust: {n_acc}/{len(man['files'])} accepted "
+                             "checker": ("backends.direct.ligero.serialize verify (Python file verifier, separate process; NOT independent of the prover) "
+                                         "on every recorded rep's sub-batch proof; Python verifier live per rep" if python_verifier else
+                                         "backends/ligero-verify verify (independent Rust) on every recorded rep's sub-batch proof; Python verifier live per rep"),
+                             "detail": f"python: {bench['validation']['status']}; {'python-file' if python_verifier else 'rust'}: {n_acc}/{len(man['files'])} accepted "
                                        f"({'coins from the runner' if mode == 'interactive' else 'transferable Fiat-Shamir files'}); "
                                        f"reps prove {['%.3f' % v for v in prove_reps]} s, rust verify {['%.3f' % v for v in rust_rep_sums]} s",
                              "evidence": {"reps": reps, "rust_rep_sums": rust_rep_sums, "python_verifier_reps": pyv_reps}},

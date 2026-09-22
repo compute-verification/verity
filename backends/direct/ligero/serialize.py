@@ -19,6 +19,10 @@ ligero-statement/v2  magic "LIGSTM02" | u32 layout (1 = chain) | u32 l | u32 n |
                      1 = fiat-shamir: no coins, challenges from the transcript; PROTOCOL.md 8c after b-zk-fix)
                      | u32 n_proofs | u32 n_vus | u32 steps | u32 K
                      | l x K u16 a | l x K u16 b | l x u16 y16
+ligero-statement/v3  magic "LIGSTM03" | the v2 header through u32 K | u8 word_bytes | u8 y_bytes | str relation
+                     | l x K a | l x K b | l x y16   (u8/u16/u32 per the byte widths; lane b-hopper: the FP8 relations'
+                     8-bit operands and 22-bit public words; a 16/16-bit relation is always written as v2 so that the
+                     Rust verifier, which reads v2 only, can check it -- its relation is then named by the system id)
 ligero-proof/v1      magic "LIGPRF01" | u8 hash (1 = blake3, 2 = sha256) | u8 has_coins | u8 zk | u8 has_chain
                      | u32 D | u32 w_len | u32 h_len | u32 q_len | u32 v_len | u32 M | u32 t | u32 depth
                      | [c1 c2 r1 s1 r2 s2, 32 B each] | 32 B root | D x w_len u32 w | D x h_len u32 h
@@ -41,6 +45,8 @@ import numpy as np
 from .compile import P, System
 
 SYS_MAGIC, STMT_MAGIC, PROOF_MAGIC = b"LIGSYS01", b"LIGSTM02", b"LIGPRF01"
+STMT_MAGIC_V3 = b"LIGSTM03"
+_DTYPES = {1: "<u1", 2: "<u2", 4: "<u4"}
 MODE_CODES = {"interactive": 0, "fiat-shamir": 1}
 MODE_NAMES = {v: k for k, v in MODE_CODES.items()}
 HASH_IDS = {"blake3": 1, "sha256": 2}
@@ -189,9 +195,16 @@ class Statement:
     n_proofs: int
     n_vus: int
     steps: int
-    a: np.ndarray      # (l, K) uint16
-    b: np.ndarray      # (l, K) uint16
-    y16: np.ndarray    # (l,) uint16
+    a: np.ndarray      # (l, K) operand words
+    b: np.ndarray      # (l, K) operand words
+    y16: np.ndarray    # (l,) the chain-end public words
+    relation: str = "bf16"     # relations.py name; "bf16" = the Ampere relation of vu.py (v2 files carry no name)
+    word_bytes: int = 2        # bytes per operand word in the file (2: v2)
+    y_bytes: int = 2           # bytes per public word in the file (2: v2)
+
+    @property
+    def v3(self) -> bool:
+        return self.word_bytes != 2 or self.y_bytes != 2
 
     def config(self):
         from .protocol import Config
@@ -208,7 +221,7 @@ class Statement:
 
 def statement_bytes(st: Statement) -> bytes:
     w = _W()
-    w.raw(STMT_MAGIC)
+    w.raw(STMT_MAGIC_V3 if st.v3 else STMT_MAGIC)
     w.u32(1)
     for x in (st.l, st.n, st.D, st.t):
         w.u32(x)
@@ -221,16 +234,21 @@ def statement_bytes(st: Statement) -> bytes:
     w.u32(st.steps)
     K = int(np.asarray(st.a).shape[1])
     w.u32(K)
-    w.arr(st.a, "<u2")
-    w.arr(st.b, "<u2")
-    w.arr(st.y16, "<u2")
+    if st.v3:
+        w.u8(st.word_bytes)
+        w.u8(st.y_bytes)
+        w.s(st.relation)
+    w.arr(st.a, _DTYPES[st.word_bytes])
+    w.arr(st.b, _DTYPES[st.word_bytes])
+    w.arr(st.y16, _DTYPES[st.y_bytes])
     return w.bytes()
 
 
 def read_statement(data: bytes) -> Statement:
     r = _R(data)
-    if r.take(8) != STMT_MAGIC:
-        raise ValueError("not a ligero-statement/v2 file")
+    magic = r.take(8)
+    if magic not in (STMT_MAGIC, STMT_MAGIC_V3):
+        raise ValueError("not a ligero-statement/v2 or /v3 file")
     if r.u32() != 1:
         raise ValueError("only chain mode (1) is defined")
     l, n, D, t = r.u32(), r.u32(), r.u32(), r.u32()
@@ -241,11 +259,17 @@ def read_statement(data: bytes) -> Statement:
     if mode_code not in MODE_NAMES:
         raise ValueError(f"unknown mode code {mode_code}")
     n_proofs, n_vus, steps, K = r.u32(), r.u32(), r.u32(), r.u32()
-    a = r.arr((l, K), "<u2")
-    b = r.arr((l, K), "<u2")
-    y16 = r.arr((l,), "<u2")
+    relation, wb, yb = "bf16", 2, 2
+    if magic == STMT_MAGIC_V3:
+        wb, yb = r.u8(), r.u8()
+        if wb not in _DTYPES or yb not in _DTYPES:
+            raise ValueError(f"statement word widths {wb}/{yb} bytes are not 1, 2 or 4")
+        relation = r.s()
+    a = r.arr((l, K), _DTYPES[wb])
+    b = r.arr((l, K), _DTYPES[wb])
+    y16 = r.arr((l,), _DTYPES[yb])
     r.done()
-    return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, a, b, y16)
+    return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, a, b, y16, relation, wb, yb)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -319,10 +343,17 @@ def read_proof(data: bytes):
 # The Python verifier on files (the cross-check)
 # ---------------------------------------------------------------------------------------------------------------------
 
-def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=None) -> tuple[bool, str, float]:
-    """Run ``protocol.verify`` on the two files with the statement's configuration; returns (ok, reason, seconds)."""
+def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=None,
+                 relation: str | None = None) -> tuple[bool, str, float]:
+    """Run ``protocol.verify`` on the two files with the statement's configuration; returns (ok, reason, seconds).
+    ``relation``: which registered relation's system to check against (a v3 statement names its own; a v2 statement
+    is the Ampere relation unless told otherwise -- the system id in the digest rejects a mismatch either way)."""
     from . import protocol as pm
     st = read_statement(Path(stmt_path).read_bytes())
+    if relation is not None:
+        if st.v3 and st.relation != relation:
+            return False, f"statement names relation {st.relation!r}, verifier asked for {relation!r}", 0.0
+        st.relation = relation
     try:
         pf = read_proof(Path(proof_path).read_bytes())
     except ValueError as e:
@@ -336,19 +367,25 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
         return False, "interactive transcript carries no coins", 0.0
     t0 = time.perf_counter()
     try:
+        rel = {"rel": R.hooks} if hasattr(R, "hooks") else {}
         ok, why = pm.verify(R.p, R.sys, R.tb, st.config(), None, st.a.astype(np.int64), st.b.astype(np.int64), None,
-                            pf, device, chain=(st.layout(), st.y16.astype(np.int64)), coins=coins)
+                            pf, device, chain=(st.layout(), st.y16.astype(np.int64)), coins=coins, **rel)
     except Exception as e:  # noqa: BLE001 -- the Python verifier is not reject-first on malformed input
         ok, why = False, f"python verifier raised {type(e).__name__}: {e}"
     return ok, why, time.perf_counter() - t0
 
 
 def _runner(device: str, st: Statement | None = None):
-    from .vu import ChainRunner
     zk = st.zk if st is not None else False
     n_proofs = st.n_proofs if st is not None else 1
     target = st.target_log2 if st is not None else -128.0
     mode = st.mode if st is not None else "interactive"
+    name = st.relation if st is not None else "bf16"
+    if name != "bf16":
+        from .relations import relation
+        from .relchain import RelationChainRunner
+        return RelationChainRunner(relation(name), device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
+    from .vu import ChainRunner
     return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk, mode=mode)
 
 
@@ -360,11 +397,18 @@ def sha256_file(path: Path) -> str:
 # Generators
 # ---------------------------------------------------------------------------------------------------------------------
 
-def _statement_of(R, pubs, lay, cfg, n_proofs: int, mode: str | None = None) -> Statement:
+def _statement_of(R, pubs, lay, cfg, n_proofs: int, mode: str | None = None, relation: str = "bf16") -> Statement:
+    """The statement of a runner's public inputs.  A relation whose words are 16-bit (the BF16 relations) is written as
+    v2 -- the Rust verifier's format -- and its relation is implied by the system id; other widths take v3."""
     a, b, y16 = pubs
+    wb, yb = 2, 2
+    if relation != "bf16":
+        from .relations import relation as _rel
+        r = _rel(relation)
+        wb, yb = np.dtype(r.word_dtype).itemsize, np.dtype(r.y_dtype).itemsize
     return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
                      lay.n_vus, lay.steps, np.asarray(a, dtype=np.int64), np.asarray(b, dtype=np.int64),
-                     np.asarray(y16, dtype=np.int64))
+                     np.asarray(y16, dtype=np.int64), relation, wb, yb)
 
 
 def _write(out: Path, stem: str, st: Statement, pf, manifest: dict, kind: str, R, device: str, extra: dict | None = None):
@@ -390,7 +434,10 @@ def _write(out: Path, stem: str, st: Statement, pf, manifest: dict, kind: str, R
 
 def _manifest(out: Path, args, R) -> dict:
     from .run import _git_commit
-    return {"format": {"system": "ligero-system/v1", "statement": "ligero-statement/v2", "proof": "ligero-proof/v1"},
+    rel = getattr(getattr(R, "rel", None), "name", "bf16")
+    v3 = rel != "bf16" and (np.dtype(R.rel.word_dtype).itemsize != 2 or np.dtype(R.rel.y_dtype).itemsize != 2)
+    return {"format": {"system": "ligero-system/v1", "statement": "ligero-statement/v3" if v3 else "ligero-statement/v2",
+                       "proof": "ligero-proof/v1"},
             "commit": _git_commit(), "device": args.device, "system": R.sys.summary(), "zk": R.zk, "mode": R.mode, "files": []}
 
 
@@ -735,8 +782,9 @@ def gen_forged_interactive(args) -> int:
 
 
 def cmd_verify(args) -> int:
-    ok, why, secs = verify_files(Path(args.statement), Path(args.proof), args.device)
-    res = {"accepted": ok, "reason": why, "seconds": secs, "verifier": "python (backends.direct.ligero.protocol.verify)"}
+    ok, why, secs = verify_files(Path(args.statement), Path(args.proof), args.device, relation=args.relation)
+    res = {"accepted": ok, "reason": why, "seconds": secs, "verifier": "python (backends.direct.ligero.protocol.verify)",
+           "relation": args.relation or "(from the statement)"}
     print(json.dumps(res))
     if args.json:
         Path(args.json).write_text(json.dumps(res, indent=1))
@@ -789,6 +837,7 @@ def main(argv=None) -> int:
     s.add_argument("--proof", required=True)
     s.add_argument("--device", default="cpu")
     s.add_argument("--json", default=None)
+    s.add_argument("--relation", default=None, help="relations.py name (v2 statements: bf16 unless given, e.g. bf16-hopper)")
     s = sub.add_parser("dump-system")
     s.add_argument("--out", required=True)
     args = ap.parse_args(argv)
