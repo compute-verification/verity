@@ -100,6 +100,19 @@ above diagnostic. Report the six timing buckets (witness,
 encoding/commitment, arithmetic, lookup, ZK-additional, serialization), peak
 memory, bytes moved, transcript bytes, rounds, verifier work.
 
+Every Candidate A/B number at K=1536 is measured on the frozen instance set
+`bench-instances/v1` (`fixtures/bench-instances/v1/`, loader and recipe
+`verity_numerical.bench.instances`): the `vu-k1536` tier, 4,096 valid VUs
+(3,456 real Qwen2.5-1.5B coordinates including the 24 hardware-confirmed
+captures, 640 adversarial-but-valid corners, interleaved so every prefix is
+representative). B=1, 64, 4096 are the id prefixes `[0:1]`, `[0:64]`,
+`[0:4096]`; `B_proof` and `N_subbatches` are contiguous id ranges of it, and
+the result fingerprint's `instances` field records which (`contract.instances_ref`).
+The judge refuses two results whose `instances` disagree and warns when either
+lacks it. Negatives (`vu-k1536-neg`, each tagged with the implementation
+mistake it equals) and the transition-unit tier (`tu-k16`) are for the
+checker, not for timing.
+
 The public pole-redraw rule of the lookup argument (redraw `z_T` only when it
 lies in the public table image) is provisionally accepted; the red team checks
 that the condition depends only on public data, that the transcript records

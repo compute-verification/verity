@@ -22,3 +22,4 @@ dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
 testpaths = ["tools/research/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests"]
+markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`"]

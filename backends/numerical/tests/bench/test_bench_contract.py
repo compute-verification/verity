@@ -327,3 +327,59 @@ def test_latency_and_census_names_are_defined_with_units() -> None:
     assert contract.unit_of("rounds") is None
     assert contract.validate_measurements([contract.measurement("rounds.made_up", 480, "count")], None), "rounds. is reserved"
     assert not contract.validate_measurements([contract.measurement("rounds.sequential_depth", 480)], None)
+
+
+# --- instances: which bench-instances/v1 ids were proved ------------------------------------------------------------------------------
+
+SHA = "f2b7cd4ca31e4adf0ce1e656bb0a2ef882f02301d5058670350b9c2b8d1f81a6"
+
+
+def test_instances_is_required_but_nullable(conforming: dict) -> None:
+    fp = conforming["workload_fingerprint"]
+    assert "instances" in contract.REQUIRED_FIELDS and fp["instances"] is None
+    assert contract.validate_fingerprint(fp) == []
+    assert contract.validate_fingerprint({k: v for k, v in fp.items() if k != "instances"}) == ["workload_fingerprint.instances missing"]
+    built = contract.fingerprint(**{k: fp[k] for k in contract.REQUIRED_FIELDS if k != "instances"})
+    assert built["instances"] is None, "always written: null = not measured on the shared instance set"
+
+
+def test_instances_ref_and_its_validation(conforming: dict) -> None:
+    fp = {**conforming["workload_fingerprint"], "B": 64}
+    ref = contract.instances_ref("vu-k1536", 0, 64, SHA)
+    assert ref == {"dataset": "bench-instances/v1", "tier": "vu-k1536", "range": [0, 64], "manifest_sha256": SHA}
+    assert contract.validate_fingerprint({**fp, "instances": ref}) == []
+    assert contract.validate_fingerprint({**fp, "B": 4096, "B_real": 64, "instances": ref}) == []
+    assert contract.validate_fingerprint({**fp, "B": 65, "instances": ref}) == ["instances.range [0, 64) holds 64 ids but B is 65"]
+    assert contract.validate_fingerprint({**fp, "instances": {**ref, "tier": "vu-k32"}}) == [
+        f"instances.tier must be one of {contract.INSTANCES_TIERS} for bench-instances/v1, got 'vu-k32'"
+    ]
+    assert contract.validate_fingerprint({**fp, "instances": {**ref, "range": [64, 64]}}) == ["instances.range must be [lo, hi) with 0 <= lo < hi, got [64, 64]"]
+    assert contract.validate_fingerprint({**fp, "instances": {**ref, "manifest_sha256": "abc"}}) == [
+        "instances.manifest_sha256 must be a 64-hex-digit sha256 of the dataset's manifest.json, got 'abc'"
+    ]
+    assert contract.validate_fingerprint({**fp, "instances": {"dataset": "x"}}) == ["instances.tier missing", "instances.range missing", "instances.manifest_sha256 missing"]
+    assert contract.validate_fingerprint({**fp, "instances": "vu-k1536"}) == ["instances must be an object {dataset, tier, range, manifest_sha256} or null, got 'vu-k1536'"]
+    with pytest.raises(ValueError, match="instances does not conform"):
+        contract.instances_ref("vu-k1536", 5, 5, SHA)
+
+
+def test_compare_instances_conflicts_and_warnings(conforming: dict) -> None:
+    fp = conforming["workload_fingerprint"]
+    same = contract.instances_ref("vu-k1536", 0, 64, SHA)
+    a, b = {**fp, "B": 64, "instances": same}, {**fp, "B": 64, "instances": dict(same)}
+    assert contract.compare_instances(a, b) == (None, [])
+    # a different manifest, tier or dataset: conflict
+    other = {**same, "manifest_sha256": "0" * 64}
+    conflict, warnings = contract.compare_instances(a, {**b, "instances": other})
+    assert conflict == (same, other) and warnings == []
+    assert contract.compare_instances(a, {**b, "instances": {**same, "tier": "tu-k16"}})[0] is not None
+    # different ids for the same batch size: conflict; different ids because B differs: a scaling point, no conflict
+    shifted = contract.instances_ref("vu-k1536", 64, 128, SHA)
+    assert contract.compare_instances(a, {**b, "instances": shifted})[0] == (same, shifted)
+    bigger = contract.instances_ref("vu-k1536", 0, 4096, SHA)
+    assert contract.compare_instances(a, {**b, "B": 4096, "instances": bigger}) == (None, [])
+    # null or absent on either side: no conflict, a warning naming the side
+    conflict, warnings = contract.compare_instances(a, {**b, "instances": None})
+    assert conflict is None and warnings == ["candidate instances is null: not measured on the shared instance set"]
+    conflict, warnings = contract.compare_instances({k: v for k, v in a.items() if k != "instances"}, {**b, "instances": None})
+    assert conflict is None and len(warnings) == 2 and warnings[0].startswith("baseline does not record instances")

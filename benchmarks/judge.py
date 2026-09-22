@@ -14,6 +14,11 @@ when they agree on the contract's identity fields -- ``proof_class``, ``authenti
 and prints nothing that looks like a ratio.  ``--allow K`` (repeatable) lets a named identity field differ when that
 difference *is* the experiment (a scaling curve); the output then labels it.  Exit 0: judged; 1: a run could not be read.
 
+The ``instances`` field (which ``bench-instances/v1`` ids were proved, ``contract.compare_instances``) is judged
+alongside: two results that both record it and disagree (dataset, tier, manifest, or different id ranges for the same
+batch size) are REFUSED; a result that lacks it or records ``null`` was not measured on the shared instance set, and the
+judge says so in a WARNING and goes on -- the comparison then rests on the identity fields alone.
+
 Results recorded before the contract (the ``dot-product-vector`` workload's early baselines) carry none of the
 identity fields.  For those, and only those, the judge derives them from the vector fixture the run names --
 ``fixtures/typed-obligation-v0/<vector>.json``, whose sha256 must equal the recorded ``vector_sha256`` -- through the
@@ -129,17 +134,24 @@ def judge(base_dir: Path, cand_dir: Path, allow: list[str]) -> dict[str, Any]:
         if note:
             derived[who] = {"fields": names, "note": note}
     refused = contract.incomparable(fb, fc, allow)
+    conflict, warnings = contract.compare_instances(fb, fc)
     ib, ic = contract.identity(fb), contract.identity(fc)
     identity = [{"field": f, "baseline": _show(ib[f]), "candidate": _show(ic[f]),
                  "same": ib[f] is not contract.MISSING and ib[f] == ic[f], "allowed": f in allow} for f in contract.IDENTITY_FIELDS]
+    identity.append({"field": contract.INSTANCES_FIELD, "baseline": _show(fb.get(contract.INSTANCES_FIELD, contract.MISSING)),
+                     "candidate": _show(fc.get(contract.INSTANCES_FIELD, contract.MISSING)),
+                     "same": conflict is None and not warnings, "allowed": False})
     rep: dict[str, Any] = {
         "baseline": {"id": rb.get("run_id"), "dir": str(base_dir)},
         "candidate": {"id": rc.get("run_id"), "dir": str(cand_dir)},
         "identity": identity,
-        "refused": [{"field": f, "baseline": _show(a), "candidate": _show(b)} for f, a, b in refused],
+        "refused": [{"field": f, "baseline": _show(a), "candidate": _show(b)} for f, a, b in refused]
+        + ([{"field": contract.INSTANCES_FIELD, "baseline": conflict[0], "candidate": conflict[1]}] if conflict else []),
+        "warnings": warnings,
         "derived": derived,
         "contract": {"baseline": contract.validate(rb), "candidate": contract.validate(rc)},
     }
+    refused = rep["refused"]
     if refused:
         return rep
     flat_b, flat_c = flatten(fb), flatten(fc)
@@ -185,6 +197,8 @@ def render(rep: dict[str, Any]) -> str:
         lines.append(f"  {row['field']:<16} {_fmt(row['baseline']):>36}  {mark:>2}  {_fmt(row['candidate']):<36}{tag}")
     for who, d in rep["derived"].items():
         lines.append(f"  note: {who} {', '.join(d['fields']) or '(nothing)'} {d['note']}")
+    for w in rep.get("warnings", ()):
+        lines.append(f"  WARNING: {w}")
     lines.append("")
     lines.append("[contract]")
     for who in ("baseline", "candidate"):

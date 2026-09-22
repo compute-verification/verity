@@ -29,7 +29,8 @@ proof is verified under the guest's *own* key, and the result says so.  Without 
 The fingerprint carries the campaign contract's fields (``verity_numerical.bench.contract``): ``profile`` (the frozen
 target's name when the vector is in its family, else null), ``domain``, ``K`` and ``B`` read off the object,
 ``zk_mode``, ``security``, ``hardware`` (nvidia-smi / cpuinfo, when present), ``software``, ``preprocessing``,
-``retention``.  Where a value is not observed it is null, never a guess.  SP1's measurements are reported under the
+``retention``, ``instances`` (the ``bench-instances/v1`` ids the vector is, by content: the K=1536 vector is
+``vu-k1536`` id 0; every other vector null).  Where a value is not observed it is null, never a guess.  SP1's measurements are reported under the
 host's own names (so the earlier baseline runs stay comparable) *and* under the contract's where they truly fit:
 ``setup_seconds`` -> ``fixed.setup_seconds``; ``prove_seconds`` -> the joint stage
 ``t.joint.witness+encoding_commitment+arithmetic+lookup`` (the SDK's one prover timer: trace generation,
@@ -76,6 +77,29 @@ from verity_numerical.bench import contract  # noqa: E402
 
 RESULT_SCHEMA = contract.RESULT_SCHEMA
 BACKENDS = ("reference", "sp1-execute", "sp1-prove")
+INSTANCES_ROOT = REPO / "fixtures" / "bench-instances" / "v1"
+
+
+def instances_of(rec: dict) -> dict | None:
+    """The ``bench-instances/v1`` ids a vector proves, found by content: the K=1536 vector is instance 0 of ``vu-k1536``
+    (seed ``qkv_proj_decode_0``, j=1014) iff its packed witness holds that seed's ``x.u16`` and ``w_row.u16`` bytes.  Null
+    for every other vector (not measured on the shared set), and when the dataset is not checked out."""
+
+    manifest = INSTANCES_ROOT / "manifest.json"
+    seed = INSTANCES_ROOT / "seeds" / "qkv_proj_decode_0"
+    if not (manifest.is_file() and (seed / "x.u16").is_file() and (seed / "w_row.u16").is_file() and isinstance(rec.get("witness"), str)):
+        return None
+    try:
+        packed = bytes.fromhex(rec["witness"])
+    except ValueError:
+        return None
+    if (seed / "x.u16").read_bytes() not in packed or (seed / "w_row.u16").read_bytes() not in packed:
+        return None
+    index = json.loads((INSTANCES_ROOT / "vu-k1536.index.json").read_text())
+    row0 = index["rows"][0]
+    if not ("seed" in row0[1] and index["seeds"][row0[2]] == "qkv_proj_decode_0"):
+        return None
+    return contract.instances_ref("vu-k1536", 0, 1, __import__("hashlib").sha256(manifest.read_bytes()).hexdigest())
 
 
 def source_sha() -> str | None:
@@ -312,6 +336,8 @@ def main(argv: list[str] | None = None) -> int:
         "hardware": contract.probe_hardware(),
         # the guest reads the whole witness (the openings) from stdin into memory; the reference checker holds the record
         "retention": "retained",
+        # which bench-instances/v1 ids this vector is (by content): the K=1536 vector is vu-k1536 id 0; others null
+        "instances": instances_of(rec),
     }
     started = time.perf_counter()
     if a.backend == "reference":
