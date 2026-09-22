@@ -10,6 +10,8 @@ KIND_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*/v[0-9]+$")
 
 KINDS: dict[str, str] = {
     "bench-result/v1": "a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?",
+    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (tools/native_peak): meta {device, dtype, accumulate, method, "
+                      "flop_per_second, spec_flop_per_second, fraction_of_spec, sass, driver, cuda, clocks_mhz, power_w, sizes} + the result envelope",
     "tc-evidence/v1": "one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees, first_mismatches, "
                       "seed, n}; payload tree = probe_results.json, capture_sample.json, tiles_*.npz",
     "dataset-snapshot/v1": "meta {name, note, query?}; refs.members = [art:...]; payload null",

@@ -20,6 +20,7 @@ REGISTRY: dict[str, str] = {
     "ligero_verify_batch": "backends.direct.ligero.tool:LIGERO_VERIFY_BATCH",
     "a_gpu_prove": "backends.gkr.gpu.tool:A_GPU_PROVE",
     "bench_vu_fp8": "backends.direct.ligero.fp8.tool:BENCH_VU_FP8",
+    "native_peak": "tools.native_peak.tool:NATIVE_PEAK",
 }
 
 
