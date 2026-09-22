@@ -10,10 +10,12 @@ QUERIES=${3:-100}
 shift 3 || true
 SKIP_TESTS=0
 PROFILE=0
+EXT=4
 for a in "$@"; do
   case "$a" in
     --skip-tests) SKIP_TESTS=1 ;;
     --profile) PROFILE=1 ;;
+    --ext5) EXT=5 ;;
   esac
 done
 ROOT=${INSTANCES_ROOT:-/workspace/bench-instances/v1}
@@ -38,9 +40,9 @@ if [ "$FIELD" = "babybear" ]; then
 fi
 echo "== vu-bench --lookup"
 if [ "$PROFILE" = 1 ] && command -v perf >/dev/null; then
-  perf record -F 200 -g -o "${RESEARCH_RUN_DIR:-.}/perf.data" -- "$BIN" vu-bench --lookup --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES"
+  perf record -F 200 -g -o "${RESEARCH_RUN_DIR:-.}/perf.data" -- "$BIN" vu-bench --lookup --ext "$EXT" --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES"
   perf report -i "${RESEARCH_RUN_DIR:-.}/perf.data" --no-children --percent-limit 1 --stdio 2>/dev/null | head -80 > "${RESEARCH_RUN_DIR:-.}/perf_report.txt" || true
   rm -f "${RESEARCH_RUN_DIR:-.}/perf.data"
 else
-  "$BIN" vu-bench --lookup --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES"
+  "$BIN" vu-bench --lookup --ext "$EXT" --root "$ROOT" --field "$FIELD" --vus "$VUS" --queries "$QUERIES"
 fi

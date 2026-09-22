@@ -46,9 +46,10 @@ fn main() {
     match args.get(1).map(|s| s.as_str()) {
         Some("bench") => bench(&args),
         Some("crosscheck") => crosscheck(&args),
-        Some("vu-bench") if args.iter().any(|a| a == "--lookup") => match field_arg(&args) {
-            FieldKind::Goldilocks => vu_bench_lookup::<GoldilocksBackend>(&args),
-            FieldKind::BabyBear => vu_bench_lookup::<BabyBearBackend>(&args),
+        Some("vu-bench") if args.iter().any(|a| a == "--lookup") => match (field_arg(&args), arg(&args, "--ext").as_deref()) {
+            (FieldKind::Goldilocks, _) => vu_bench_lookup::<GoldilocksBackend>(&args),
+            (FieldKind::BabyBear, Some("5")) => vu_bench_lookup::<verity_direct::stark::BabyBear5Backend>(&args),
+            (FieldKind::BabyBear, _) => vu_bench_lookup::<BabyBearBackend>(&args),
         },
         Some("vu-bench") => match field_arg(&args) {
             FieldKind::Goldilocks => vu_bench::<GoldilocksBackend>(&args),
@@ -431,6 +432,7 @@ where
         realisation: "limbs",
         extra: vec![],
         lookup_bits: None,
+        ext_deg: if kind.small() { 4 } else { 2 },
     });
 }
 
@@ -559,6 +561,7 @@ where
         realisation: "logup",
         extra,
         lookup_bits: Some(lookup_bits),
+        ext_deg,
     });
 }
 
@@ -586,10 +589,11 @@ struct BenchNumbers<'a> {
     realisation: &'a str,
     extra: Vec<Value>,
     lookup_bits: Option<f64>,
+    ext_deg: usize,
 }
 
 fn write_result(b: BenchNumbers) {
-    let BenchNumbers { kind, out, fri, n_vus, rows, width, committed_width, t_witness, t_prove, t_ser, t_verify, bytes, lqd, tier, root, challenge_name, challenge_bits, rounds_extra, constraints_note, realisation, extra, lookup_bits } = b;
+    let BenchNumbers { kind, out, fri, n_vus, rows, width, committed_width, t_witness, t_prove, t_ser, t_verify, bytes, lqd, tier, root, challenge_name, challenge_bits, rounds_extra, constraints_note, realisation, extra, lookup_bits, ext_deg } = b;
     let steps = STEPS as usize;
     let log_n = rows.trailing_zeros() as usize;
     let t_total = t_witness + t_prove + t_ser;
@@ -599,10 +603,6 @@ fn write_result(b: BenchNumbers) {
     let bits_conj = fri.bits_conjectured();
     let q128 = fri.queries_for_proven(128.0);
 
-    let ext_deg = match kind {
-        FieldKind::Goldilocks => 2,
-        FieldKind::BabyBear => 4,
-    };
     let committed_trace = (rows * committed_width) as u64;
     let quotient_cells = (rows * (1 << lqd) * ext_deg) as u64;
     let field_bytes = match kind {
