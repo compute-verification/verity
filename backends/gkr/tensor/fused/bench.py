@@ -135,7 +135,7 @@ def make_kernel(impl: str, device, block: int | None, warps: int | None):
 def measure_kernel(kern, n: int, deg_in: int, mode: str, repeats: int, warm: int, peaks: dict, flush, device) -> dict:
     """One kernel shape: ``mode`` in fold+eval | fold | eval (first round); ``n`` input elements per table."""
     f, g, h = (rs.FusedTable.random(n, deg_in, device, 11 + i) for i in range(3))
-    r = rs.challenge_tensor(ref.random_ext(random.Random(n)), device)
+    r = kern.challenge(ref.random_ext(random.Random(n)))
     fold = mode != "eval"
     ev = mode != "fold"
     outs = [kern.alloc_out(n // 2) for _ in range(3)] if fold else None
@@ -184,19 +184,23 @@ def layer_plan(width: int, units: int = UNITS) -> list[tuple[int, int, str]]:
 class LayerRunner:
     """Pre-allocated buffers for one layer's kernel sequence so the whole sequence can be captured in a CUDA graph."""
 
-    def __init__(self, kern, width: int, device, seed: int = 5):
-        self.kern = kern
+    def __init__(self, kern, width: int, device, seed: int = 5, fallback=None):
+        """``fallback`` (the SIMT kernel) runs the steps ``kern`` does not support (base-field input, first round)."""
         self.plan = layer_plan(width)
+        self.kerns = [kern if kern.supports(deg, mode) else fallback for (n, deg, mode) in self.plan]
+        if any(k is None for k in self.kerns):
+            raise ValueError("kernel does not support the whole layer and no fallback given")
+        self.fallback_steps = sum(k is not kern for k in self.kerns)
         n0 = self.plan[0][0]
         self.tables = [rs.FusedTable.random(n0, 1, device, seed + i) for i in range(3)]
         rng = random.Random(seed)
-        self.challenges = [rs.challenge_tensor(ref.random_ext(rng), device) for _ in self.plan]
+        self.challenges = [k.challenge(ref.random_ext(rng)) for k in self.kerns]
         self.outs = []
         self.s_bufs = []
-        for (n, deg, mode) in self.plan:
+        for (n, deg, mode), k in zip(self.plan, self.kerns):
             fold = mode != "eval"
-            self.outs.append([kern.alloc_out(n // 2) for _ in range(3)] if fold else None)
-            self.s_bufs.append(torch.zeros((kern.grid_size(n, fold), 24), dtype=torch.int64, device=device) if mode != "fold" else None)
+            self.outs.append([k.alloc_out(n // 2) for _ in range(3)] if fold else None)
+            self.s_bufs.append(torch.zeros((k.grid_size(n, fold), 24), dtype=torch.int64, device=device) if mode != "fold" else None)
         self.s_total = torch.zeros((len(self.plan), 24), dtype=torch.int64, device=device)
 
     def run(self, lo: int = 0, hi: int | None = None):
@@ -208,7 +212,7 @@ class LayerRunner:
                 break
             fold = mode != "eval"
             if i >= lo:
-                s, _ = self.kern.launch(cur[0], cur[1], cur[2], self.challenges[i] if fold else None, mode != "fold", self.outs[i], self.s_bufs[i])
+                s, _ = self.kerns[i].launch(cur[0], cur[1], cur[2], self.challenges[i] if fold else None, mode != "fold", self.outs[i], self.s_bufs[i])
                 if s is not None:
                     torch.sum(s, 0, out=self.s_total[i])
             if fold:
@@ -233,12 +237,12 @@ def graph_of(fn) -> torch.cuda.CUDAGraph:
     return g
 
 
-def measure_layers(kern, repeats: int, warm: int, peaks: dict, device, tail_log2: int = 15) -> dict:
+def measure_layers(kern, repeats: int, warm: int, peaks: dict, device, tail_log2: int = 15, fallback=None) -> dict:
     layers = []
     tot = {"eager_seconds": 0.0, "graphed_seconds": 0.0, "bytes": 0, "kernels": 0, "rounds": 0,
            "tail_eager_seconds": 0.0, "tail_graphed_seconds": 0.0, "tail_kernels": 0, "head_graphed_seconds": 0.0}
     for w in LAYER_WIDTHS:
-        L = LayerRunner(kern, w, device)
+        L = LayerRunner(kern, w, device, fallback=fallback)
         eager = median(timed(L.run, repeats, warm))
         g = graph_of(L.run)
         graphed = median(timed(g.replay, repeats, warm))
@@ -249,7 +253,7 @@ def measure_layers(kern, repeats: int, warm: int, peaks: dict, device, tail_log2
         tail_graphed = median(timed(tail_g.replay, repeats, warm))
         head_graphed = median(timed(head_g.replay, repeats, warm))
         nb = L.bytes()
-        layers.append({"width": w, "n0": L.plan[0][0], "kernels": len(L.plan), "rounds": len(L.plan) - 1, "eager_seconds": eager, "graphed_seconds": graphed,
+        layers.append({"width": w, "n0": L.plan[0][0], "kernels": len(L.plan), "fallback_steps": L.fallback_steps, "rounds": len(L.plan) - 1, "eager_seconds": eager, "graphed_seconds": graphed,
                        "bytes": nb, "gb_per_s_graphed": nb / graphed / 1e9, "hbm_floor_seconds": nb / peaks["hbm_bytes_per_s"],
                        "tail": {"first_kernel": split, "n_max": L.plan[split][0], "kernels": len(L.plan) - split, "eager_seconds": tail_eager,
                                 "graphed_seconds": tail_graphed, "bytes": L.bytes(split)},
@@ -277,7 +281,7 @@ def measure_launch(kern, repeats: int, device) -> dict:
     """Launch latency: a tiny fold+eval kernel eager (CPU launch + GPU) and as 32 graphed replays."""
     n = 64
     f, g, h = (rs.FusedTable.random(n, 6, device, i) for i in range(3))
-    r = rs.challenge_tensor(ref.random_ext(random.Random(3)), device)
+    r = kern.challenge(ref.random_ext(random.Random(3)))
     outs = [kern.alloc_out(n // 2) for _ in range(3)]
     s_buf = torch.zeros((kern.grid_size(n, True), 24), dtype=torch.int64, device=device)
     run = lambda: kern.launch(f, g, h, r, True, outs, s_buf)
@@ -376,7 +380,7 @@ def main(argv=None) -> int:
                       f"SIMT-model {m['simt_fraction_of_peak']:.2f} of INT32 peak  TC-model {m['tc_fraction_of_peak']:.3f} of INT8 peak", flush=True)
         if a.layers:
             print("  layer model:", flush=True)
-            doc["layers"][impl] = measure_layers(kern, a.repeats, a.warm, peaks, device)
+            doc["layers"][impl] = measure_layers(kern, a.repeats, a.warm, peaks, device, fallback=make_kernel("simt", device, a.block, a.warps))
             L = doc["layers"][impl]
             print(f"  {impl} 6 layers / {L['rounds']} rounds: eager {L['eager_seconds']*1e3:.2f} ms  graphed {L['graphed_seconds']*1e3:.2f} ms  "
                   f"floor {L['hbm_floor_seconds']*1e3:.2f} ms ({L['floor_multiple_graphed']:.2f}x)  tail eager {L['tail_eager_seconds']*1e3:.2f} graphed {L['tail_graphed_seconds']*1e3:.2f} ms", flush=True)

@@ -380,8 +380,11 @@ class FusedRound:
         tot = s_partials.sum(0).cpu().tolist()
         return [tuple(field.fix_s(int(tot[x * 6 + c])) for c in range(6)) for x in range(4)]
 
+    def challenge(self, r: ref.Ext):
+        return challenge_tensor(r, self.device)
+
     # convenience for tests
     def round(self, f, g, h, r_prev: ref.Ext | None, eval: bool = True):
-        r_mont = challenge_tensor(r_prev, self.device) if r_prev is not None else None
+        r_mont = self.challenge(r_prev) if r_prev is not None else None
         s, outs = self.launch(f, g, h, r_mont, eval)
         return (self.finish_s(s) if s is not None else None), outs
