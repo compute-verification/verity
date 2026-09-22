@@ -9,6 +9,9 @@ PROFILE_BY_CASE: dict[str, str] = {
     # `gen_ov_moe_olmoe` folds it as pair-major Computes).  The case scan would return wave 1's (module order); the coverage
     # runner (`cov_pod.sh run OLMOE …`) must get the constructive profile.
     "OLMOE": "gen_ov_moe_olmoe",
+    # [R19 qwen3, row #75] Qwen3-30B-A3B: the constructive MoE profile (renormalising router, E=128 pins); its `PROFILE` is the TP2 RANK
+    # profile of the row of record (`tp2_fold_match --profile gen_ov_moe_qwen3`); `build_profile(world=1)` is the TP1 one.
+    "QWEN3_30B_A3B": "gen_ov_moe_qwen3",
 }
 
 

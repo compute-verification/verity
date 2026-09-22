@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.ir.defs import bind
+from verity_vllm.registry import moe as _MOE
 from verity_vllm.registry.quarantine.ov_moe import moe as Q
 
 from ..events import ViewDesc
@@ -68,8 +69,11 @@ FUSED_MOE_PINS: dict[str, Any] = {"BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "BLOCK
 FUSED_MOE_NUM_WARPS = 4
 FUSED_MOE_NUM_STAGES = 3
 
-#: `topkGating<VPT, NUM_EXPERTS, WARPS_PER_CTA, BYTES_PER_LDG, WARP_SIZE, ...>`: values per thread at E=64 / bf16.
-ROUTER_VPT_BY_E: dict[int, int] = {64: 8}
+#: `topkGating<VPT, NUM_EXPERTS, WARPS_PER_CTA, BYTES_PER_LDG, WARP_SIZE, ...>`: values per thread for bf16 gating logits -- 16-byte loads
+#: = 8 bf16 words per thread-vector, ONE vector per thread while E <= 8 * 32 (`VECs_PER_THREAD = max(1, E / (ELTS_PER_LDG * WARP_SIZE))`), so
+#: VPT = 8 at E = 64 (OLMoE; bit-exact on the recorded topk_softmax cases) and at E = 128 (Qwen3-30B-A3B; the frontend's
+#: `vllm_moe.TOPK_SOFTMAX_VPT[bf16]`, the same 8 the Build of record bound -- `MoeRouterTopKNorm_v1{E=128,TOPK=8,VPT=8}`).
+ROUTER_VPT_BY_E: dict[int, int] = {64: 8, 128: 8}
 
 
 
@@ -106,6 +110,20 @@ class MoEFusedExperts:
     name = "moe.fused_experts.pairwise"
     config: dict[str, Any]
     router_vpt: dict[int, int] = field(default_factory=lambda: dict(ROUTER_VPT_BY_E))
+    #: [R19 qwen3] the router the scope must carry: `renormalize=False` -> `MoeRouterTopK_v1` (OLMoE, `norm_topk_prob=false`);
+    #: `renormalize=True` -> `MoeRouterTopKNorm_v1` (Qwen3-MoE, `norm_topk_prob=true`: the TOPK probabilities rescaled to sum 1, same ids).
+    #: A profile states ONE of them (the checkpoint's `norm_topk_prob`, `C["NORM_TOPK_PROB"]`); the other value observed is Unsupported.
+    renormalize: bool = False
+    #: [R19 qwen3, TP] patterns for descendants of the scope that are neither the six MoE kernels nor scope glue -- vLLM's `FusedMoE`
+    #: issues the tensor-parallel all-reduce of the routed sum INSIDE `vllm.moe_forward` when `reduce_results=True`; a rank profile puts
+    #: its `TpCollective` here so the collective is resolved (and its Compute appended after `MoeSum`) instead of making the whole scope
+    #: `unexplained child vllm.all_reduce`.  Empty for TP1 (nothing else may appear under the scope).
+    scope_patterns: tuple = ()
+    #: [R19 qwen3] the fused_moe_kernel tiling this profile pins (κ; default = the module constants).  A profile whose capture shows another
+    #: tiling pins it HERE (from the rank log), never by loosening the check: an unpinned tiling is Unsupported with the observed values.
+    fused_pins: dict[str, Any] = field(default_factory=lambda: dict(FUSED_MOE_PINS))
+    fused_num_warps: int = FUSED_MOE_NUM_WARPS
+    fused_num_stages: int = FUSED_MOE_NUM_STAGES
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or not op_name(node.op).startswith(MOE_OP_PREFIX):
@@ -115,6 +133,10 @@ class MoEFusedExperts:
         if not all(isinstance(v, int) for v in (E, TOPK, H, I)):
             return unsupported(node, "profile config lacks NUM_EXPERTS / TOPK / H / I", config={k: C.get(k) for k in ("NUM_EXPERTS", "TOPK", "H", "I")})
         ins = node.input_views()
+        sx = bound_args(node).get("shared_experts_input")
+        if sx is not None:
+            # [R19 qwen3] a shared-experts branch (Qwen2-MoE / DeepSeek-style) is not the block these Definitions state: refuse by name
+            return unsupported(node, "MoE scope has a shared_experts_input: shared experts are not modelled", shared_experts_input=repr(sx))
         hidden = next((v for v in ins if v.rank == 2 and v.shape[1] == H), None)
         if hidden is None:
             return unsupported(node, "MoE scope: no [M,H] hidden_states input", inputs=[repr(v) for v in ins])
@@ -135,6 +157,22 @@ class MoEFusedExperts:
         router, up, down, silu, msum = routers[0], launches[0], launches[1], silus[0], sums[0]
         keep = {router.id, up.id, down.id, silu.id, msum.id} | {a.id for a in aligns}
         keep |= set().union(*(set(n.ids()) for n in (router, up, down, silu, msum, *aligns)))
+        # [R19 qwen3, TP] descendants the scope patterns own (the in-scope all-reduce of a rank): resolved here, kept out of the glue walk
+        extra: list[Compute] = []
+        if self.scope_patterns:
+            for d in find_descendants(node, lambda n: n.id not in keep and not n.is_triton):
+                if d.id in keep:
+                    continue
+                for pt in self.scope_patterns:
+                    r = pt.match(d, ctx)
+                    if r is None:
+                        continue
+                    if not isinstance(r, Compute):
+                        return unsupported(node, f"scope pattern {getattr(pt, 'name', type(pt).__name__)} refused {op_name(d.op)} inside {op_name(node.op)}",
+                                           child_id=d.id, child=d.op, reason=getattr(r, "reason", None), child_detail=getattr(r, "detail", None))
+                    extra.append(r)
+                    keep |= {d.id} | set(d.ids())
+                    break
         before, bad = scope_transparents(node, ctx, keep, self.name)
         if bad is not None:
             return bad
@@ -145,9 +183,10 @@ class MoEFusedExperts:
         weights, ids, logits = a.get("topk_weights"), a.get("topk_indices"), a.get("gating_output")
         if not all(isinstance(v, ViewDesc) for v in (weights, ids, logits)):
             return unsupported(node, "topk_softmax arguments not bound as expected", args={k: repr(v) for k, v in a.items()})
-        if a.get("renormalize") is not False or a.get("bias") is not None:
-            return unsupported(node, "MoeRouterTopK_v1 is the renormalize=False, bias-free softmax router",
-                               renormalize=a.get("renormalize"), bias=repr(a.get("bias")))
+        router_def = _MOE.MoeRouterTopKNorm if self.renormalize else Q.MoeRouterTopK
+        if a.get("renormalize") is not bool(self.renormalize) or a.get("bias") is not None:
+            return unsupported(node, f"{router_def.id} is the renormalize={bool(self.renormalize)}, bias-free softmax router",
+                               renormalize=a.get("renormalize"), bias=repr(a.get("bias")), profile_renormalize=bool(self.renormalize))
         if logits.shape != (M, E) or logits.dtype != "bfloat16" or not is_row_major(logits):
             return unsupported(node, "router logits are not a row-major bf16 [M,E] view", logits=repr(logits))
         if weights.shape != (M, TOPK) or weights.dtype != "float32" or not _contig(weights):
@@ -157,7 +196,7 @@ class MoEFusedExperts:
         vpt = self.router_vpt.get(E)
         if vpt is None:
             return unsupported(node, "no pinned router reduction geometry (VPT) for this expert count", E=E, pinned=self.router_vpt)
-        router_c = Compute(bind(Q.MoeRouterTopK, E=E, TOPK=TOPK, VPT=vpt), M, (PerRow(logits),), (PerRow(weights), PerRow(ids)), (router.id,),
+        router_c = Compute(bind(router_def, E=E, TOPK=TOPK, VPT=vpt), M, (PerRow(logits),), (PerRow(weights), PerRow(ids)), (router.id,),
                            hint=f"{hint}/router", kernels=(K_ROUTER,), attribution=tuple(ctx.start.rows), pattern=self.name)
         parts: list[Compute | Transparent] = list(before) + [router_c]
 
@@ -217,6 +256,8 @@ class MoEFusedExperts:
             return unsupported(node, "moe_sum output is not a row-major bf16 [M,H] view", output=repr(out))
         parts.append(Compute(bind(Q.MoeSum, TOPK=TOPK, H=H), M, (PerRow(y),), (PerRow(out),), (msum.id,), hint=f"{hint}/moe_sum",
                              kernels=(K_SUM,), attribution=tuple(ctx.start.rows), pattern=self.name))
+        # 7. [TP] the in-scope collective(s) the scope patterns resolved (log order): the all-reduce of the routed sum, after MoeSum
+        parts.extend(sorted(extra, key=lambda c: min(c.consumed)))
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=hint, pattern=self.name)
 
     def _fused(self, node: TreeNode, launch: TreeNode, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int, P: int):
@@ -227,8 +268,8 @@ class MoEFusedExperts:
         if bad:
             return unsupported(node, "fused_moe_kernel numeric constexprs differ from the modelled bf16 unquantised kernel",
                                mismatches={k: {"observed": o, "pinned": p} for k, (o, p) in bad.items()})
-        bad = {k: (consts.get(k), v) for k, v in FUSED_MOE_PINS.items() if consts.get(k) != v}
-        if bad or e.num_warps != FUSED_MOE_NUM_WARPS or e.num_stages != FUSED_MOE_NUM_STAGES:
+        bad = {k: (consts.get(k), v) for k, v in self.fused_pins.items() if consts.get(k) != v}
+        if bad or e.num_warps != self.fused_num_warps or e.num_stages != self.fused_num_stages:
             return unsupported(node, "fused_moe_kernel tiling differs from the pinned profile",
                                mismatches={k: {"observed": o, "pinned": p} for k, (o, p) in bad.items()},
                                num_warps=e.num_warps, num_stages=e.num_stages)
@@ -288,6 +329,9 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         if not isinstance(r, Group):
             return r      # None (not the scope) or the Unsupported the pairwise checks produced: identical refusals under both constructions
         from verity_vllm.registry import moe_pad as MP  # noqa: PLC0415  (the padded Definitions register on first use, as vocab.py's kind does)
+        if self.renormalize:
+            return unsupported(node, "padded construction with renormalize=True: MoeFfnFixedL_v1 states the MoeRouterTopK_v1 (unnormalised) router only",
+                               renormalize=True)
         C = self.config
         E, TOPK, H, I = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"]
         parts = list(r.parts)
@@ -307,8 +351,11 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
                       tuple(sorted(set(router.consumed) | set(up.consumed) | set(silu.consumed) | set(down.consumed) | set(msum.consumed))),
                       hint=f"{hint}/moe_ffn_fixed", kernels=(K_ROUTER, K_FUSED, *silu.kernels, K_SUM), attribution=router.attribution,
                       pattern=self.name, roots=(None, None, _root_name(ctx, w13, "w13"), _root_name(ctx, w2, "w2")))
-        keep = [p for p in parts if not isinstance(p, Compute)]      # the scope glue (before) + the alignment noop, in order
-        return Group(tuple(keep) + (one,), r.consumed, hint=hint, pattern=self.name)
+        six = {id(router), id(up), id(silu), id(down), id(msum)}
+        keep = [p for p in parts if id(p) not in six]                 # the scope glue (before) + the alignment noop (+ a TP collective), in order
+        tail = [p for p in keep if isinstance(p, Compute)]            # [TP] the in-scope all-reduce stays AFTER the block's one Compute
+        keep = [p for p in keep if not isinstance(p, Compute)]
+        return Group(tuple(keep) + (one, *tail), r.consumed, hint=hint, pattern=self.name)
 
 
 #: The declared constructions the fold knows (the frontend's `TargetProfile.MOE_CONSTRUCTIONS` keys); the pattern each folds with.
