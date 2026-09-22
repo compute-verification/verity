@@ -1,6 +1,6 @@
 # Ligero-style direct-constraint argument for the transition unit (lane b-ligero, track B)
 
-Status: NON_ZK_PROOF_DIAGNOSTIC. Implemented in this directory (Python/torch); measured on `vy-g3` (NVIDIA L40S).
+Status: NON_ZK_PROOF_DIAGNOSTIC without `--zk`, COMPLETE_HVZK_BACKEND with it (section 8b; lane b-ligero2). Implemented in this directory (Python/torch); measured on `vy-g3` (NVIDIA L40S).
 The relation is the frozen WP2 checker (`verity_numerical.checker`): every predicate of `check_step_expr` at
 `params.REAL` is constrained; nothing is dropped (section 5 lists the two places where a predicate is *restated*
 and argues equivalence).
@@ -108,6 +108,15 @@ message `z`, which a direct-constraint B does not have).
 
 The prover's cost of 2 and 3 is one pass over the sparse constraint tables applied to `U` (index-gather, ~6 000
 terms), one Hadamard on `Q x n`, `D` reductions `Q x n -> n`, one INTT_n. No extension arithmetic.
+*Split form (lane b-ligero2, `witness.quad_p0`)*: the same `P0`, computed as the booleanity part
+`sum_{j bit/sel} rho_j (U_j^2 - U_j)` in one fused pass over those rows (3196 of the 3387 constraints; no `Q x n`
+intermediate) plus the 191 general constraints through the sparse tables of their subset. Bit-equal to the form
+above (it is the same polynomial); 122 -> 29 ms per proof at `n = 65536`, peak memory 13.7 -> 8.5 GB at 170 VUs.
+Under ZK (section 8b) both sides add the mask contributions to `P0` before / after the division by `Z_H`.
+
+Every challenge is `H(statement, transcript prefix)` with the statement digest computed by the verifier from its own
+configuration (lane b-ligero2, `statement_digest`; the pre-fix protocol derived the challenges from the transcript
+alone and was forgeable by choosing the claimed words after the challenges -- README.md "Second pass").
 
 ## 5. Where the checker is restated (relation unchanged)
 

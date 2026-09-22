@@ -42,8 +42,8 @@
    "in_range": true,
    "kernel_ok": true,
    "accepted_prefix_transcript": true,
-   "why": "accept (0.038s)",
-   "lll_seconds": 1.2270026206970215
+   "why": "accept (0.032s)",
+   "lll_seconds": 1.2412865161895752
   },
   "bound_transcript": {
    "honest_accepted": true,
@@ -52,6 +52,6 @@
   }
  },
  "ok": true,
- "seconds": 6.6009521484375,
+ "seconds": 7.293316125869751,
  "note": "pre-fix: challenges H(root), H(root,w,h,q) -- statement unbound; the adaptive_claim forgery is what it allowed.  fix: statement_digest(field, hash, system id, l/n/D/t, layout, a, b, y16 | c, y) absorbed into every challenge; sizes from the verifier's Config/System; hash name checked."
 }

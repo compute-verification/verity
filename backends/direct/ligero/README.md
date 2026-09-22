@@ -82,8 +82,29 @@ transcript; against a malicious verifier the HM96 commitment to the verifier's c
 depth 3, no arithmetic) is not implemented. Also still placeholders: the hash, the SHAKE expander (and the mask
 sampler's 2^-31 per-symbol bias).
 
-Runs: `python -m backends.direct.ligero.run bench-vu --zk --batch 16384 --total-vus 4096 --reps 3 ...`,
-`gate-vu --zk`, `python -m backends.direct.ligero.redteam_zk`, `redteam_binding`, `redteam_battery`.
+**4. The 36% term** (run `r20260922-082245-c96b`, `results/result_vu4096_split*_b16384.json`, `tests_bench.py`). The
+quadratic test was three `apply_sparse` passes producing `Q x n` intermediates (A, B, C: 3387 x 65536 int64 = 1.8 GB
+each), their product, and a D-fold combine -- for a constraint set that is 94% booleanity (`W_j^2 = W_j`: 2534 bit
+rows + 610 selectors + 52 others = 3196 of 3387). Split form (`witness.quad_p0`): the booleanity constraints as one
+fused `sum_j rho_j (U_j^2 - U_j)` pass over their rows (no intermediates), the 191 general constraints through the
+sparse tables of their subset; bit-equal to the naive form (asserted by `tests_bench`, and every gate re-run).
+**122 -> 29 ms per proof** at `n = 65536` (the booleanity pass reads 1.68 GB six times in 13 ms); on the 4096-VU
+workload (25 x 170, same parameters as above):
+
+| | non-ZK (`t = 196`, union -128.25) | HVZK (`t = 197`, union -128.05) |
+|---|---|---|
+| prover total / **ms/VU** | 5.63 s / **1.37** (was 1.95) | 6.43 s / **1.57** (was 2.14) |
+| split | hints 0.12, witness 0.27, encode 3.62, Merkle 0.07, tests 1.27, openings 0.12 | + zk masks 0.45; encode 3.84, tests 1.41 |
+| peak device | 7.9 GB (was 13.2) | 8.5 GB (was 13.7) |
+| overhead vs native 9.85 ps/VU | **1.4e8** | **1.6e8** |
+
+The ZK cost is now +14% (0.80 s: 0.45 s host SHAKE for ~1.5 M mask symbols per proof -- a device sampler would
+remove most of it; +0.2 s encode for `k = l + 256` and the 4D mask rows; +0.13 s tests). What is left: **encode is
+60%** (the int64 radix-2 NTT, 3.6-3.8 s of 5.6-6.4 s), tests 22%, everything else < 10%. The NTT is the next term
+(tensor-core DFT per section 8, or int32 Montgomery butterflies in Triton).
+
+Runs: `python -m backends.direct.ligero.run bench-vu [--zk] --batch 16384 --total-vus 4096 --reps 3 ...`,
+`gate-vu [--zk]`, `python -m backends.direct.ligero.redteam_zk`, `redteam_binding`, `redteam_battery`, `tests_bench`.
 
 ## What it is
 
