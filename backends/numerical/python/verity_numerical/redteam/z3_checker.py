@@ -323,6 +323,218 @@ def int_group_step_split(p: Params = REAL, *, timeout_ms: int = 60_000, selector
             "status": status, "seconds": seconds, "model": model}
 
 
+class LinearCtx(Z3Ctx):
+    """``Z3Ctx`` whose predicates are linearised before they reach the solver (wave 1's trick, made generic):
+
+    * a product with a Boolean factor ``b * x`` becomes a fresh ``m`` with ``(b = 0 ∧ m = 0) ∨ (b = 1 ∧ m = x)``;
+    * a product with a table-output factor ``o * x`` (``o`` from ``lookup``) becomes a fresh ``m`` with the row
+      disjunction ``∨_k (key = k ∧ m = x · o_k)``;
+
+    so every predicate of the group step is linear integer arithmetic with disjunctions (QF_LIA).  The rewriting is
+    equivalence-preserving: each fresh variable is defined by its disjunction.  Booleans are those passed to
+    ``boolean`` plus the symbolic inputs declared with range (0, 2) via ``declare_boolean``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.bools: set = set()
+        self.table_of: dict = {}          # z3 output var id -> (key, rows: list[(k, value)])
+
+    def declare_boolean(self, v) -> None:
+        self.bools.add(v.get_id())
+
+    def boolean(self, name, b) -> None:
+        if not isinstance(b, int) and z3.is_const(b):
+            self.bools.add(b.get_id())
+        super().boolean(name, b)
+
+    def lookup(self, name, table: Table, key):
+        if isinstance(key, int):
+            return super().lookup(name, table, key)
+        outs = tuple(self.fresh(f"{name}.{o}") for o in table.outs)
+        rows = [(k, table.fn(k)) for k in range(table.lo, table.hi)]
+        self._add(z3.Or([z3.And(key == k, *[o == v for o, v in zip(outs, vals)]) for k, vals in rows]))
+        for i, o in enumerate(outs):
+            self.table_of[o.get_id()] = (key, [(k, vals[i]) for k, vals in rows])
+        return outs
+
+    def _add(self, cond) -> None:
+        if isinstance(cond, bool):
+            cond = z3.BoolVal(cond)
+        self.solver.add(self._lin(cond))
+
+    def _lin(self, e):
+        if not z3.is_app(e):
+            return e
+        kids = [self._lin(c) for c in e.children()]
+        if e.decl().kind() == z3.Z3_OP_MUL and len(kids) >= 2:
+            return self._lin_mul(kids)
+        if kids:
+            return e.decl()(*kids)
+        return e
+
+    def _lin_mul(self, factors):
+        # peel one special factor at a time (Boolean or table output); constants and plain vars stay
+        rest = list(factors)
+        special = next((f for f in rest if z3.is_const(f) and f.get_id() in self.bools), None)
+        kind = "bool"
+        if special is None:
+            special = next((f for f in rest if z3.is_const(f) and f.get_id() in self.table_of), None)
+            kind = "table"
+        if special is None:
+            out = rest[0]
+            for f in rest[1:]:
+                out = out * f
+            return out
+        rest.remove(special)
+        x = self._lin_mul(rest) if len(rest) > 1 else rest[0]
+        m = self.fresh("lin")
+        if kind == "bool":
+            self.solver.add(z3.Or(z3.And(special == 0, m == 0), z3.And(special == 1, m == x)))
+        else:
+            key, rows = self.table_of[special.get_id()]
+            self.solver.add(z3.Or([z3.And(key == k, m == x * v) for k, v in rows]))
+        return m
+
+
+def linear_group_step(p: Params = REAL, *, timeout_ms: int = 60_000, concrete: dict | None = None,
+                      selectors: tuple[int, int] | None = None) -> dict[str, Any]:
+    """The two-copies symbolic group step (U2) on :class:`LinearCtx`."""
+    ctx = LinearCtx()
+    n = p.n
+    last = p.e_hi(len(p.groups) - 1)
+
+    def sym(name, lo, hi):
+        v = ctx.fresh(name)
+        ctx.solver.add(v >= lo, v < hi)
+        if (lo, hi) == (0, 2):
+            ctx.declare_boolean(v)
+        return v
+
+    s_c, e_c, M_c = sym("s_c", 0, 2), sym("e_c", p.exp_lo, last + 1), sym("M_c", 0, 2**p.acc_sig)
+    prods = [(sym(f"u{i}", 0, 2 ** (2 * p.sig)), sym(f"sp{i}", 0, 2), sym(f"ep{i}", p.exp_lo, p.ep_hi + 1)) for i in range(n)]
+    x = {"s_c": s_c, "e_c": e_c, "M_c": M_c, **{f"u{i}": u for i, (u, _, _) in enumerate(prods)},
+         **{f"sp{i}": s for i, (_, s, _) in enumerate(prods)}, **{f"ep{i}": e for i, (_, _, e) in enumerate(prods)}}
+    if concrete:
+        for k, v in concrete.items():
+            ctx.solver.add(x[k] == v)
+
+    def copy_(tag, k):
+        sel = [ctx.fresh(f"{tag}.sel{i}") for i in range(n + 2)] if k is None else [z3.IntVal(int(i == k)) for i in range(n + 2)]
+        h = {"max": {"E": ctx.fresh(f"{tag}.E"), "sel": sel},
+             "acc_align": {"q": ctx.fresh(f"{tag}.qa"), "r": ctx.fresh(f"{tag}.ra")},
+             "prod_align": [{"q": ctx.fresh(f"{tag}.q{i}"), "r": ctx.fresh(f"{tag}.r{i}")} for i in range(n)],
+             "sum": {"sgn": ctx.fresh(f"{tag}.sgn"), "z": ctx.fresh(f"{tag}.zs")},
+             "lead": {"l": ctx.fresh(f"{tag}.l")},
+             "norm": {"clamp": ctx.fresh(f"{tag}.clamp"), "M": ctx.fresh(f"{tag}.M"), "r": ctx.fresh(f"{tag}.rn")},
+             "out": {"z": ctx.fresh(f"{tag}.z"), "ovf": ctx.fresh(f"{tag}.ovf")}}
+        cands = [e_c] + [e for _, _, e in prods]
+        E, ds = GroupMax.check(ctx, p, cands, h["max"], f"{tag}.max")
+        q_acc = AlignState.check(ctx, p, M_c, ds[0], h["acc_align"], f"{tag}.align_state")
+        qs = [AlignProduct.check(ctx, p, u, d, hq, f"{tag}.align_prod[{i}]")
+              for i, ((u, _, _), d, hq) in enumerate(zip(prods, ds[1:], h["prod_align"]))]
+        terms = [(s_c, q_acc)] + [(s, q) for (_, s, _), q in zip(prods, qs)]
+        sgn, v = SignedSum.check(ctx, p, terms, h["sum"], f"{tag}.sum")
+        l = LeadingBit.check(ctx, p, v, h["lead"], f"{tag}.lead")
+        e1, M = Normalise.check(ctx, p, E, l, v, h["norm"], f"{tag}.norm")
+        return StateOut.check(ctx, p, sgn, e1, M, h["out"], f"{tag}.out"), h
+
+    out1, h1 = copy_("h1", selectors[0] if selectors else None)
+    out2, h2 = copy_("h2", selectors[1] if selectors else None)
+    ctx._add(z3.Or([a != b for a, b in zip(out1, out2)]))
+    ctx.solver.set("timeout", timeout_ms)
+    t0 = time.perf_counter()
+    status = str(ctx.solver.check())
+    seconds = round(time.perf_counter() - t0, 3)
+    model = None
+    if status == "sat":
+        model = {"inputs": _model_dict(ctx, x), "h1": _model_dict(ctx, dict(_flatten_hints(h1))),
+                 "h2": _model_dict(ctx, dict(_flatten_hints(h2))),
+                 "out1": _model_dict(ctx, {f"o{i}": o for i, o in enumerate(out1)}),
+                 "out2": _model_dict(ctx, {f"o{i}": o for i, o in enumerate(out2)})}
+    return {"query": "linearised group step, two witnesses two outputs" + (" (concrete x)" if concrete else " (symbolic x)")
+            + (f" selectors {selectors}" if selectors else ""), "status": status, "seconds": seconds, "model": model}
+
+
+def _flatten_hints(h, prefix=""):
+    if isinstance(h, dict):
+        for k, v in h.items():
+            yield from _flatten_hints(v, f"{prefix}.{k}" if prefix else k)
+    elif isinstance(h, list):
+        for i, v in enumerate(h):
+            yield from _flatten_hints(v, f"{prefix}[{i}]")
+    else:
+        yield prefix, h
+
+
+def int_group_step_vs_reference(p: Params = REAL, *, timeout_ms: int = 60_000, selector: int | None = None,
+                                concrete: dict | None = None) -> dict[str, Any]:
+    """One hint copy of the full group step against the *reference* (``search``'s ``zref`` functions composed):
+    half the size of the two-copies query.  ``selector`` fixes which candidate the one-hot picks (a case of the
+    (n+2)-way split; ``None`` = symbolic)."""
+    from verity_numerical.checker.search import (
+        _align_prod_zref,
+        _align_state_zref,
+        _lead_zref,
+        _norm_zref,
+        _out_zref,
+        _sum_zref,
+    )
+
+    ctx = Z3Ctx()
+    n = p.n
+    last = p.e_hi(len(p.groups) - 1)
+
+    def sym(name, lo, hi):
+        v = ctx.fresh(name)
+        ctx.solver.add(v >= lo, v < hi)
+        return v
+
+    s_c, e_c, M_c = sym("s_c", 0, 2), sym("e_c", p.exp_lo, last + 1), sym("M_c", 0, 2**p.acc_sig)
+    prods = [(sym(f"u{i}", 0, 2 ** (2 * p.sig)), sym(f"sp{i}", 0, 2), sym(f"ep{i}", p.exp_lo, p.ep_hi + 1)) for i in range(n)]
+    x = {"s_c": s_c, "e_c": e_c, "M_c": M_c, **{f"u{i}": u for i, (u, _, _) in enumerate(prods)},
+         **{f"sp{i}": s for i, (_, s, _) in enumerate(prods)}, **{f"ep{i}": e for i, (_, _, e) in enumerate(prods)}}
+    if concrete:
+        for k, v in concrete.items():
+            ctx.solver.add(x[k] == v)
+    sel = [ctx.fresh(f"sel{i}") for i in range(n + 2)] if selector is None else [z3.IntVal(int(i == selector)) for i in range(n + 2)]
+    h = {"max": {"E": ctx.fresh("E"), "sel": sel},
+         "acc_align": {"q": ctx.fresh("qa"), "r": ctx.fresh("ra")},
+         "prod_align": [{"q": ctx.fresh(f"q{i}"), "r": ctx.fresh(f"r{i}")} for i in range(n)],
+         "sum": {"sgn": ctx.fresh("sgn"), "z": ctx.fresh("zs")}, "lead": {"l": ctx.fresh("l")},
+         "norm": {"clamp": ctx.fresh("clamp"), "M": ctx.fresh("M"), "r": ctx.fresh("rn")},
+         "out": {"z": ctx.fresh("z"), "ovf": ctx.fresh("ovf")}}
+    cands = [e_c] + [e for _, _, e in prods]
+    E, ds = GroupMax.check(ctx, p, cands, h["max"], "max")
+    q_acc = AlignState.check(ctx, p, M_c, ds[0], h["acc_align"], "align_state")
+    qs = [AlignProduct.check(ctx, p, u, d, hq, f"align_prod[{i}]")
+          for i, ((u, _, _), d, hq) in enumerate(zip(prods, ds[1:], h["prod_align"]))]
+    terms = [(s_c, q_acc)] + [(s, q) for (_, s, _), q in zip(prods, qs)]
+    sgn, v = SignedSum.check(ctx, p, terms, h["sum"], "sum")
+    l = LeadingBit.check(ctx, p, v, h["lead"], "lead")
+    e1, M = Normalise.check(ctx, p, E, l, v, h["norm"], "norm")
+    out = StateOut.check(ctx, p, sgn, e1, M, h["out"], "out")
+    # the reference, composed from search.py's zref functions
+    E_ref = z3.IntVal(p.floor)
+    for c in cands:
+        E_ref = z3.If(c > E_ref, c, E_ref)
+    q_acc_ref = _align_state_zref(z3, p, {"M": M_c, "d": E_ref - e_c})[0]
+    qs_ref = [_align_prod_zref(z3, p, {"u": u, "d": E_ref - e})[0] for (u, _, e) in prods]
+    xs = {"s[0]": s_c, "q[0]": q_acc_ref, **{f"s[{i + 1}]": s for i, (_, s, _) in enumerate(prods)},
+          **{f"q[{i + 1}]": q for i, q in enumerate(qs_ref)}}
+    sgn_ref, v_ref = _sum_zref(z3, p, xs)
+    l_ref = _lead_zref(z3, p, {"v": v_ref})[0]
+    e1_ref, M_ref = _norm_zref(z3, p, {"E": E_ref, "l": l_ref, "v": v_ref})
+    out_ref = _out_zref(z3, p, {"sgn": sgn_ref, "e1": e1_ref, "M": M_ref})
+    ctx.solver.add(z3.Or([a != b for a, b in zip(out, out_ref)]))
+    ctx.solver.set("timeout", timeout_ms)
+    t0 = time.perf_counter()
+    status = str(ctx.solver.check())
+    seconds = round(time.perf_counter() - t0, 3)
+    model = _model_dict(ctx, x) if status == "sat" else None
+    return {"query": "int group step vs reference" + (f", selector {selector}" if selector is not None else "")
+            + (" (concrete x)" if concrete else " (symbolic x)"), "status": status, "seconds": seconds, "model": model}
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # U4: range containment along the real data flow
 # ---------------------------------------------------------------------------------------------------------------------

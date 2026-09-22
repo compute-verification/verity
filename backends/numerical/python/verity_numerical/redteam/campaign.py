@@ -305,17 +305,39 @@ def run_checker(out: Path, *, full: bool = False, seed: int = 0) -> H.Report:
     r = S.z3_group_step(REAL, timeout_ms=z3_to, concrete=S.concrete_group_inputs())
     rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 concrete input, Int encoding (checker.search)", r.status.upper(), r.seconds,
                       reproducer="verity_numerical/checker/search.py::z3_group_step(concrete)"))
-    r = ZC.bv_group_step(REAL, timeout_ms=60_000, concrete=S.concrete_group_inputs())
+    r = ZC.bv_group_step(REAL, timeout_ms=20_000, concrete=S.concrete_group_inputs())   # z3 overshoots BV timeouts (381 s at 60 s)
     rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 concrete input, 128-bit bit-vector encoding (tables as shifts)",
                       r["status"].upper(), r["seconds"], detail={"tables_agree": ZC.bv_tables_agree(REAL)},
                       reproducer=f"{HERE}/z3_checker.py::bv_group_step"))
     r = ZC.int_group_step_split(REAL, timeout_ms=z3_to if full else 60_000, selectors=(1, 1))
     rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 symbolic input, Int encoding, one-hot selectors fixed (1 of 100 cases)",
                       r["status"].upper(), r["seconds"], detail=r, reproducer=f"{HERE}/z3_checker.py::int_group_step_split"))
+    r = ZC.int_group_step_vs_reference(REAL, timeout_ms=60_000, concrete=S.concrete_group_inputs())
+    rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 concrete input, one hint copy vs the composed reference", r["status"].upper(),
+                      r["seconds"], reproducer=f"{HERE}/z3_checker.py::int_group_step_vs_reference"))
+    r = ZC.int_group_step_vs_reference(REAL, timeout_ms=z3_to if full else 60_000, selector=1)
+    rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 symbolic input, one hint copy vs reference, selector fixed (1 of 10 cases)",
+                      r["status"].upper(), r["seconds"], reproducer=f"{HERE}/z3_checker.py::int_group_step_vs_reference"))
+    r = ZC.linear_group_step(REAL, timeout_ms=60_000, concrete=S.concrete_group_inputs())
+    rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 concrete input, linearised (QF_LIA: Boolean and table-output products split)",
+                      r["status"].upper(), r["seconds"], reproducer=f"{HERE}/z3_checker.py::linear_group_step"))
+    r = ZC.linear_group_step(REAL, timeout_ms=z3_to if full else 60_000)
+    rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 symbolic input, linearised (QF_LIA)", r["status"].upper(), r["seconds"],
+                      reproducer=f"{HERE}/z3_checker.py::linear_group_step"))
     if full:
         r = ZC.bv_group_step(REAL, timeout_ms=z3_to)
         rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", "U2 symbolic input, bit-vector encoding", r["status"].upper(), r["seconds"],
                           reproducer=f"{HERE}/z3_checker.py::bv_group_step"))
+        for sel in range(REAL.n + 2):          # the exhaustive selector split, one copy vs the reference: UNSAT on all = U2 closed
+            r = ZC.int_group_step_vs_reference(REAL, timeout_ms=z3_to, selector=sel)
+            rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", f"U2 symbolic input vs reference, selector case {sel}",
+                              r["status"].upper(), r["seconds"], detail={"model": r["model"]},
+                              reproducer=f"{HERE}/z3_checker.py::int_group_step_vs_reference"))
+        for sel in range(REAL.n + 2):
+            r = ZC.linear_group_step(REAL, timeout_ms=z3_to, selectors=(sel, sel))
+            rep.add(H.Finding(nid("Z"), "checker[group_step,Z]", f"U2 symbolic input, linearised, both selectors fixed to {sel}",
+                              r["status"].upper(), r["seconds"], detail={"model": r["model"]},
+                              reproducer=f"{HERE}/z3_checker.py::linear_group_step"))
     # ---- U4 -----------------------------------------------------------------------------------------------------------
     c4 = ZC.containment(REAL)
     rep.add(H.Finding(nid("U"), "checker[contracts]", "U4 range containment along step.py's data flow (real widths)",
