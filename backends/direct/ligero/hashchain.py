@@ -58,6 +58,7 @@ class HashedRelation:
     n_base_hints: int           # hint rows the relation's own generator supplies (a prefix of sys.hints)
     extra_hint_names: list      # the appended hint rows, in sys.hints order
     census: dict
+    block_layout: bool | None = None    # memo of _block_layout (hash_hints)
 
     @property
     def steps(self) -> int:
@@ -300,13 +301,11 @@ def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: di
     vals = hr.rel.public_vectors(hr.rel.params, None, a, b, None, device=device)
     nb, k = hr.word_bits, hr.k
     shifts = torch.arange(nb, dtype=torch.int64, device=device)
-    digests = []
+    digests, bit_blocks, cap_blocks = [], [], []
     for _, nm, role in ROLES:
         w = a if nm == "a" else b
         bits = (w[:, :, None] >> shifts) & 1                      # (l, k, nb)
-        for i in range(k):
-            for j in range(nb):
-                vals[f"{nm}[{i}].b{j}"] = bits[:, i, j]
+        bit_blocks.append(bits.permute(1, 2, 0).reshape(k * nb, l))   # rows nm[i].b{j}, i major
         if sponges is not None and nm in sponges:
             cap_v, dg = sponges[nm]
             cap = torch.zeros((h2.CAPACITY, l), dtype=torch.int64, device=device)
@@ -314,11 +313,33 @@ def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: di
             dg = dg.to(device)
         else:
             cap, dg = sponge_states(w, nb, role, hr.steps * k, n_vus, hr.steps, l)
-        for x in range(h2.CAPACITY):
-            vals[f"{nm}.cap[{x}]"] = cap[x]
+        cap_blocks.append(cap)
         digests.append(dg)
-    out = torch.stack([vals[n].to(device) for n in hr.extra_hint_names])
+    n_dec = len(hr.extra_hint_names) - len(ROLES) * (k * nb + h2.CAPACITY)
+    if _block_layout(hr, n_dec):
+        # compose() appends the rows as [converted decode pins | a bits | b bits | a.cap | b.cap]: a handful of copies
+        # instead of one per row (720 rows x 13 sub-batches was ~0.1 s per 4096 VUs)
+        dec = torch.stack([vals[n].to(device) for n in hr.extra_hint_names[:n_dec]])
+        out = torch.cat([dec] + bit_blocks + cap_blocks)
+    else:
+        for (_, nm, _), bits, cap in zip(ROLES, bit_blocks, cap_blocks):
+            for i in range(k):
+                for j in range(nb):
+                    vals[f"{nm}[{i}].b{j}"] = bits[i * nb + j]
+            for x in range(h2.CAPACITY):
+                vals[f"{nm}.cap[{x}]"] = cap[x]
+        out = torch.stack([vals[n].to(device) for n in hr.extra_hint_names])
     return out, torch.cat(digests, 1)
+
+
+def _block_layout(hr: HashedRelation, n_dec: int) -> bool:
+    """Whether ``hr.extra_hint_names`` is ``[decode rows | a bits | b bits | a.cap | b.cap]`` (memoised on ``hr``)."""
+    if hr.block_layout is None:
+        names = hr.extra_hint_names
+        tail = [f"{nm}[{i}].b{j}" for _, nm, _ in ROLES for i in range(hr.k) for j in range(hr.word_bits)]
+        tail += [f"{nm}.cap[{x}]" for _, nm, _ in ROLES for x in range(h2.CAPACITY)]
+        hr.block_layout = n_dec >= 0 and names[n_dec:] == tail and all("].b" not in n for n in names[:n_dec])
+    return hr.block_layout
 
 
 def hash_public_vectors(p, c, a, b, y, device="cpu"):

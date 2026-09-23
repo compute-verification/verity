@@ -212,6 +212,14 @@ def test_precomputed_row_sponges_equal_the_per_proof_sponge(runner) -> None:
     slow = hashchain.hash_hints(R.hr, a, b, 2, l, "cpu")
     fast = hashchain.hash_hints(R.hr, a, b, 2, l, "cpu", sponges=sp)
     assert torch.equal(slow[0], fast[0]) and torch.equal(slow[1], fast[1])
+    # the block assembly of the hint rows equals the per-name one
+    assert R.hr.block_layout is True
+    R.hr.block_layout = False
+    try:
+        by_name = hashchain.hash_hints(R.hr, a, b, 2, l, "cpu", sponges=sp)
+    finally:
+        R.hr.block_layout = None
+    assert torch.equal(by_name[0], fast[0]) and torch.equal(by_name[1], fast[1])
     # claimed x rows are VU 0's and VU 2's: the words do not match -> no precomputed sponge for "a"
     other = R.auth_for([0, 2])
     sp2 = R._sponges_for(hashauth.HashAuth(auth.vu_index, other.x_index, auth.w_index, auth.trees), a, b, 2)
