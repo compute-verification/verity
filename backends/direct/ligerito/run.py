@@ -104,14 +104,14 @@ class Dump:
             root.mkdir(parents=True, exist_ok=True)
             (root / "key.bin").write_bytes(prover.key_bytes)
 
-    def add(self, stem: str, stmt: Statement, proof: Proof, expect: str, verdict: tuple, coins: str, extra=None):
+    def add(self, stem: str, stmt: Statement, proof: Proof, expect: str, verdict: tuple, coins: str, extra=None, seed: int = 1):
         if self.root is None:
             return
         sb, pb = stmt.to_bytes(), proof.to_bytes()
         (self.root / f"{stem}.stmt").write_bytes(sb)
         name = f"{stem}.lgto" if expect == "accept" else f"{stem}.lgto.neg"
         (self.root / name).write_bytes(pb)
-        e = {"proof": name, "stmt": f"{stem}.stmt", "expect": expect, "coins": coins, "proof_bytes": len(pb),
+        e = {"proof": name, "stmt": f"{stem}.stmt", "expect": expect, "coins": coins, "coins_seed": seed, "proof_bytes": len(pb),
              "proof_sha256": sha256(pb).hex(), "stmt_sha256": sha256(sb).hex(),
              "python_verdict": {"accepted": verdict[0], "reason": verdict[1]}}
         if extra:
@@ -302,7 +302,7 @@ def verify_dir(d: Path, device: str = "cuda") -> dict:
         except (ValueError, KeyError) as ex:
             ok, why, info = False, f"unreadable: {ex}", {"seconds": 0.0}
         else:
-            ok, why, info = pv.verify(st, pf, make_coins(e["coins"], 1) if e["coins"] != "live" else _file_coins(d, e))
+            ok, why, info = pv.verify(st, pf, make_coins(e["coins"], e.get("coins_seed", 1)) if e["coins"] != "live" else _file_coins(d, e))
         good = ok == (e["expect"] == "accept")
         items.append({"proof": e["proof"], "expect": e["expect"], "accepted": ok, "reason": why, "seconds": info["seconds"], "agrees": good})
         if not good:
@@ -366,7 +366,7 @@ def bench(args) -> int:
         runs.append((res, info))
         if rep == 1:
             dump.add(f"batch_{args.coins}_rep1", bt.stmt, res.proof, "accept", (ok, why), args.coins,
-                     {"prover_seconds": res.timings["total"], "vus": [0, total_vus]})
+                     {"prover_seconds": res.timings["total"], "vus": [0, total_vus]}, seed=1000 + rep)
     dump.close({"relation": rel.name, "l": args.l, "vus": total_vus, "commit": _git_commit(), "kind": "bench"})
     dumps = verify_dir(Path(args.dump_dir), args.device) if args.dump_dir else None
     rust = rust_batch(args.rust_verifier, Path(args.dump_dir)) if args.dump_dir else None
