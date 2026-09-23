@@ -6307,6 +6307,17 @@ batch = 32
 oracle = "/vault/tmp/oracle/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager"
 programs_state = "uploaded"
 
+# labelled decision (Draft 3 §7): a sanctioned difference from v1, consulted by the named check when its result differs from v1 (test_regression.py, LABELLED DECISIONS)
+# status = pending_review: labelled by the v2 query lane's gate (tests/query/gate/row67_olmoe-1b-7b_b32.json), not yet confirmed -- sanctions v2 / candidate results only
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "lane/vllm-v2-query"
+since_commit = "954d46fddda27896059ec5a30fd211dc346678c4"
+finding = "F-r19-int-24"
+status = "pending_review"
+reason = "MoeSum_v1 (FusedMoE.forward's returned tensor) is read by the next layer's fused add+norm → boundary Value under Q_module_body_v1; v1 classed it interior by name and covered the block only via kernel planes. Increases required-value rows by ~5%; same intended query, v1 omission — Daniel to confirm or reject in the morning."
+expected = { identities = 406432, only_new = 20928, promoted_member_class = "model.layers.<k>.mlp.experts/out", complete = true }
+
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".local]
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".artifacts]
@@ -8115,6 +8126,17 @@ tp = 1
 batch = 32
 oracle = "/vault/tmp/oracle/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager"
 programs_state = "uploaded"
+
+# labelled decision (Draft 3 §7): a sanctioned difference from v1, consulted by the named check when its result differs from v1 (test_regression.py, LABELLED DECISIONS)
+# status = pending_review: labelled by the v2 query lane's gate (tests/query/gate/row68_olmoe-1b-7b_b32_mixed-arrivals.json), not yet confirmed -- sanctions v2 / candidate results only
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "lane/vllm-v2-query"
+since_commit = "954d46fddda27896059ec5a30fd211dc346678c4"
+finding = "F-r19-int-24"
+status = "pending_review"
+reason = "MoeSum_v1 (FusedMoE.forward's returned tensor) is read by the next layer's fused add+norm → boundary Value under Q_module_body_v1; v1 classed it interior by name and covered the block only via kernel planes. Increases required-value rows by ~5%; same intended query, v1 omission — Daniel to confirm or reject in the morning."
+expected = { identities = 402938, only_new = 20704, promoted_member_class = "model.layers.<k>.mlp.experts/out", complete = true }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-10/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager"

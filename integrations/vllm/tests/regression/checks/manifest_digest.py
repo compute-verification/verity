@@ -19,6 +19,8 @@ boundary, flagged `promoted: true`) -- the facts a labelled decision on the fixt
 
     promoted            the count of promoted identity rows (0 on a v1-shaped manifest)
     promoted_member     the one `op_path/output_member` those rows are named as (a sorted list if several, None if none)
+    promoted_member_class  the same with the layer index folded to `<k>` (`model.layers.<k>.mlp.experts/out`): one string when the
+                        promoted rows are one member per layer (#67 / #68), else the sorted list / None -- what a decision names
     only_new            how many identities the manifest has BEYOND the v1 manifest of record with none of v1's removed -- the
                         IDENTITY_KEY set difference against the row's `manifest.json` when it resolves here (None when a v1 identity is
                         missing: not an additive difference), else the manifest's own account (= promoted); `only_new_basis` says which
@@ -72,14 +74,25 @@ def _summary(man: dict, *, with_rows: bool) -> dict:
     return out
 
 
+def _member_class(member: str) -> str:
+    """`op_path/output_member` with the layer index folded to `<k>` (the fold `verity_vllm.query.compare._sig` uses)."""
+    op, _, mem = member.rpartition("/")
+    return ".".join("<k>" if p.isdigit() else p for p in op.split(".")) + "/" + mem
+
+
+def _one_or_list(members: list[str]):
+    return members[0] if len(members) == 1 else (members or None)
+
+
 def _promotion(row: resolver.Row, man: dict) -> dict:
-    """[F-r19-int-20] The promotion facts of a built manifest (see the module docstring): `promoted`, `promoted_member`, `only_new`
-    (+ `only_new_basis`, and the set arithmetic against v1 when its manifest.json resolves)."""
+    """[F-r19-int-20] The promotion facts of a built manifest (see the module docstring): `promoted`, `promoted_member`,
+    `promoted_member_class`, `only_new` (+ `only_new_basis`, and the set arithmetic against v1 when its manifest.json resolves)."""
     rows = man.get("identities") or []
     v2 = (man.get("query") or {}).get("engine") == "v2-query"
     promoted = [r for r in rows if r.get("promoted")]
     members = sorted({f"{r.get('op_path')}/{r.get('output_member')}" for r in promoted})
-    out: dict = {"promoted": len(promoted), "promoted_member": members[0] if len(members) == 1 else (members or None)}
+    out: dict = {"promoted": len(promoted), "promoted_member": _one_or_list(members),
+                 "promoted_member_class": _one_or_list(sorted({_member_class(m) for m in members}))}
     if row.has("manifest.json"):                            # the v1 manifest of record (never the candidate's: `row.path` is the reference)
         old = {_identity_key(r) for r in row.json("manifest.json").get("identities") or []}
         new_rows = {_identity_key(r): r for r in rows}
@@ -91,7 +104,8 @@ def _promotion(row: resolver.Row, man: dict) -> dict:
             # a v2 (query) manifest promotes nothing: what v1 promoted is a boundary Value here.  Its "promoted" facts are the rows it
             # names beyond v1 -- the same set difference, so a decision labelled on v1's promotion (#57: `model/out`) reads the same
             members = sorted({f"{new_rows[k].get('op_path')}/{new_rows[k].get('output_member')}" for k in new - old})
-            out.update(promoted=added, promoted_member=members[0] if len(members) == 1 else (members or None), promoted_basis="v2-query: rows beyond v1")
+            out.update(promoted=added, promoted_member=_one_or_list(members),
+                       promoted_member_class=_one_or_list(sorted({_member_class(m) for m in members})), promoted_basis="v2-query: rows beyond v1")
     else:
         out.update(only_new=len(promoted), only_new_basis="promoted rows (v1 manifest.json not resolvable here)")
     return out
@@ -117,9 +131,9 @@ ENGINES = {"v1": "verity_capture.commit.required_manifest",       # the baseline
 def engine() -> str:
     """`VERITY_REGRESSION_ENGINE` (default `v1`): which builder the rebuild runs.  The baseline stays v1; `v2` runs the query path so
     this check gates it against the same manifest of record."""
-    e = os.environ.get("VERITY_REGRESSION_ENGINE", "v1")
+    e = resolver.engine()
     if e not in ENGINES:
-        raise ValueError(f"VERITY_REGRESSION_ENGINE={e!r}: one of {sorted(ENGINES)}")
+        raise ValueError(f"{resolver.ENGINE_ENV}={e!r}: one of {sorted(ENGINES)}")
     return e
 
 

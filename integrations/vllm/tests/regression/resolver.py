@@ -38,6 +38,14 @@ VERIFY_LIMIT = 64 * 1024 * 1024
 
 ROWS_ROOT_ENV = "VERITY_REGRESSION_ROWS_ROOT"
 CANDIDATE_ENV = "VERITY_REGRESSION_CANDIDATE"
+ENGINE_ENV = "VERITY_REGRESSION_ENGINE"        # which builder recomputes `actual` (checks/manifest_digest.py ENGINES); default = the v1 baseline
+BASELINE_ENGINE = "v1"
+
+
+def engine() -> str:
+    """`VERITY_REGRESSION_ENGINE` as set (default `v1`, the baseline the reference rows' Commits ran).  The value is validated by
+    the check that uses it (`manifest_digest.engine()`); here it only decides whether a `pending_review` decision may be consulted."""
+    return os.environ.get(ENGINE_ENV, BASELINE_ENGINE)
 
 
 class InputMismatch(AssertionError):
@@ -221,27 +229,59 @@ def diff(expected: Any, actual: Any, path: str = "$") -> list[str]:
 
 
 DECISION_FIELDS = ("check", "since", "finding", "reason", "expected")
+#: `status` of a decision: `accepted` (the default when absent: Daniel confirmed it; sanctions under every engine) or
+#: `pending_review` (labelled by a lane, not yet confirmed: sanctions ONLY a non-baseline actual -- the v2 engine or a candidate --
+#: so the v1 baseline stays untouched; the v1 engine reproducing it would be a change to the reference, FAIL).
+DECISION_STATUSES = ("accepted", "pending_review")
+
+
+def decision_status(d: dict[str, Any]) -> str:
+    return str(d.get("status") or "accepted")
+
+
+def is_baseline(act: dict[str, Any]) -> bool:
+    """True when `act` was recomputed by the v1 baseline (engine `v1`, not a candidate's document)."""
+    return engine() == BASELINE_ENGINE and act.get("source") != "candidate"
 
 
 def sanction(row: Row, check: str, act: dict[str, Any], problems: list[str]) -> list[str]:
     """Consult the row's labelled decisions for `check` once `act` differs from the v1 contract (`problems` = `diff(v1, act)`).
     A decision whose `expected` values `act` ALL reproduces sanctions the difference: returns [] and records
-    `act["sanctioned_by"] = finding`.  Otherwise the problems name both sides -- v1's and every decision's own differences -- and a
-    decision missing any of DECISION_FIELDS (or with an empty `expected`) never sanctions anything (fail closed).  Rows without a
-    decision for `check` get `problems` back unchanged."""
+    `act["sanctioned_by"] = finding` (+ `act["decision_status"]`).  Otherwise the problems name both sides -- v1's and every
+    decision's own differences -- and a decision missing any of DECISION_FIELDS (or with an empty `expected`), or with an unknown
+    `status`, never sanctions anything (fail closed).  A `pending_review` decision is not consulted for a baseline actual
+    (`is_baseline`): the v1 engine must still reproduce v1.  Rows without a decision for `check` get `problems` back unchanged."""
     decisions = row.decisions(check)
     if not problems or not decisions:
         return problems
     out = [f"v1: {p}" for p in problems]
+    baseline = is_baseline(act)
     for d in decisions:
-        label = f"decision {d.get('finding') or '?'} (since {d.get('since') or '?'})"
+        status = decision_status(d)
+        label = f"decision {d.get('finding') or '?'} (since {d.get('since') or '?'}, {status})"
         missing = [k for k in DECISION_FIELDS if not d.get(k)]
         if missing:
             out.append(f"{label}: malformed in fixtures.toml (missing {missing}); a decision without them sanctions nothing")
             continue
+        if status not in DECISION_STATUSES:
+            out.append(f"{label}: unknown status {status!r} (one of {DECISION_STATUSES}); sanctions nothing")
+            continue
+        if status == "pending_review" and baseline:
+            out.append(f"{label}: not consulted -- the {BASELINE_ENGINE} engine must reproduce the v1 reference; a pending decision sanctions v2 / candidate results only")
+            continue
         dp = diff(d["expected"], act)
         if not dp:
             act["sanctioned_by"] = d["finding"]
+            act["decision_status"] = status
             return []
         out.extend(f"{label}: {p}" for p in dp)
     return out
+
+
+def matched(act: dict[str, Any], problems: list[str]) -> str:
+    """Which side a passing check reproduced: `v1` or `decision <finding> (<status>)`; `neither` when problems remain."""
+    if problems:
+        return "neither"
+    if act.get("sanctioned_by"):
+        return f"decision {act['sanctioned_by']} ({act.get('decision_status') or 'accepted'})"
+    return "v1"

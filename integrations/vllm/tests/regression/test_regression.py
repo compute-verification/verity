@@ -47,7 +47,13 @@ ALL of one decision's `expected` reproduced -> PASS with `sanctioned_by=<finding
 neither v1 nor a decision reproduced -> FAIL naming both.  Malformed / `expected`-less decisions sanction nothing.  Today one decision:
 #57 `manifest_digest` since r19-int-22 (F-r19-int-20: `Bf16MulScalarTensor_v1`, classified interior BY NAME by v1, is a module-body
 output read by layer 0; promotion adds exactly its 432 identities -> 163484, complete) -- `test_negative_57` accepts the refusal OR it.
-Decisions are hand-written and carried over when lift_expected.py regenerates fixtures.toml.
+A decision's `status` is `accepted` (absent = accepted: Daniel confirmed it, sanctions under every engine) or `pending_review`
+(labelled by a lane, awaiting Daniel: consulted ONLY when the actual is not the v1 baseline -- `VERITY_REGRESSION_ENGINE=v2` or a
+candidate document -- so the v2 engine may reproduce v1 OR the decision, and which one is recorded as junit property `matched`; under the
+v1 engine the decision is listed as "not consulted" and the baseline must still reproduce v1).  Today two pending: #67 / #68
+`manifest_digest` (F-r19-int-24: `MoeSum_v1`, FusedMoE.forward's returned tensor, read by the next layer's fused add+norm -> boundary
+under Q_module_body_v1; v1 classed it interior by name).  Decisions are hand-written and carried over when lift_expected.py
+regenerates fixtures.toml.
 
 HOW TO RUN.  Skipped unless `VERITY_REGRESSION=1`.  Inputs resolve per `resolver.py`: a directory of row dirs (`VERITY_REGRESSION_ROWS_ROOT`),
 the recorded live paths (tp2), or the data store (`store_io.fetch` of the `fixture/v1` trees named in fixtures.toml; snapshot
@@ -131,6 +137,9 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     problems = resolver.sanction(row, check_name, act, resolver.diff(exp, act))     # a labelled decision may sanction a difference from v1
     if act.get("sanctioned_by"):
         record_property("sanctioned_by", act["sanctioned_by"])
+        record_property("decision_status", act.get("decision_status") or "accepted")
+    record_property("matched", resolver.matched(act, problems))                     # which side reproduced: v1 | decision <finding> (<status>)
+    record_property("engine", resolver.engine())
     strength = "WEAK (PASS-side / unexercised rule)" if chk.STRENGTH == "weak" else "strong"
     what = "the v1 reference" + (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
     assert not problems, (f"#{row.number} {row.key}: {check_name} [{chk.TIER}, {strength}] does not reproduce {what} "
@@ -162,3 +171,6 @@ def test_negative_57_refusal_reproduces(record_property) -> None:
     what = "nor any labelled decision on the fixture" if row.decisions(manifest_digest.NAME) else "(fixtures.toml records no decision for #57/manifest_digest)"
     assert not problems, f"#57: the current code does not reproduce the v1 refusal {what}:\n  " + "\n  ".join(problems) + f"\n  actual: {resolver.canonical(act)[:1500]}"
     record_property("sanctioned_by", act["sanctioned_by"])
+    record_property("decision_status", act.get("decision_status") or "accepted")
+    record_property("matched", resolver.matched(act, problems))
+    record_property("engine", resolver.engine())
