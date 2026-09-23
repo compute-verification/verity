@@ -30,7 +30,8 @@ Never compare across `proof_class`, and never compare two numbers that were
 not measured **at the same batch size, on the same hardware, at the same
 soundness target** (`contract.IDENTITY_FIELDS`; `benchmarks/judge.py` refuses
 otherwise). The decision workload is B=4096 K=1536 VUs of one instance set on
-one machine at 2^-128; transition-unit and small-B numbers are diagnostics of a
+one machine at 2^-128; the canonical comparison is the three frozen tables
+below. Transition-unit and small-B numbers are diagnostics of a
 candidate's own scaling, not a comparison. A non-ZK kernel is a diagnostic. An
 implementation whose privacy is honest-verifier zero knowledge is
 `COMPLETE_HVZK_BACKEND`: a valid milestone, not the target.
@@ -42,6 +43,83 @@ extra round/communication/prover cost written down and red-team reviewed. The
 expected path is: arithmetic diagnostic -> complete HVZK -> malicious-verifier
 ZK. Guest-cycle shares are not proving-time shares: measure wall time, memory,
 shards and fixed costs directly.
+
+## Canonical tables (frozen 2026-09-22)
+
+Rendered from the evidence store by `python -m verity_numerical.bench.tables
+--root <store> [--format md|json] [--snapshot]` (`verity_numerical/bench/tables.py`).
+These are the only canonical tables; everything else (memory, committed
+elements, hash bytes, verifier seconds, transcript bytes, the RTT sweep,
+coupling diagnostics) is drill-down behind a Table 2 or Table 3 cell, never
+another top-level table. Caption constants: K = 1536; B = 4096; soundness
+2^-128, target and achieved (union-bounded over sub-batches); dense execution;
+FP32 accumulation; FMA = 2 FLOP; the frozen instance set of the row's target;
+native denominator = datasheet dense peak of the exact target device
+(`Target.native_peak`); authentication = excluded (until `included` runs exist).
+
+~~~text
+Table 1  Candidate proof systems (definitional: no performance, no status)
+         Candidate | Description | ZK | Verifier model | Soundness | Setup | Interaction | Security assumptions
+         rows = tables.CANDIDATES: A-GKR (NON_ZK_PROOF), B-Ligero (COMPLETE_ZK_BACKEND; COMPLETE_HVZK_BACKEND
+         as drill-down), SP1 (any sound class); ZK is No | HVZK | Malicious-verifier ZK (two variants allowed)
+Table 2  Headline proving overhead by target (one row per verity.verification.target.TARGETS)
+         Device | Datatype / target | Native dense peak, spec | Native dense peak, measured | A-GKR | B-Ligero | SP1
+Table 3  Prover phase decomposition (one row per populated Table 2 cell, the same artifact)
+         Device / target | Candidate | Total prover time | Witness | Encoding + commitment | Arithmetic | Lookup | ZK additional | Serialization | Other
+~~~
+
+Cell = the best valid implementation of the candidate in its declared proof
+class: min `t.total` over valid results, printed as R_native_spec / R_proved
+(`2.6e7×`), R_proved = 2KB / `t.total`; R_proved and the artifact id stay in
+the JSON and in a numbered markdown footnote; `—` = no valid result. The
+measured column is `292 T (0.94)` from a `native-peak/v1` artifact (meta:
+device, dtype, accumulate fp32, method "cublas dense gemm 8192^3, median of 5",
+flop_per_second, spec_flop_per_second, fraction_of_spec, sass, driver, cuda)
+matched by normalised device + dtype; `…` when absent. `--snapshot` freezes the
+cell artifacts as a `dataset-snapshot/v1` named `tables-<UTC date>`.
+
+Same-SKU invariant: the prover ran on the row's native device, `hardware.gpu.name`
+≡ `native_peak.device` under `tables.normalise_sku` ("NVIDIA A100-SXM4-80GB" ≡
+"NVIDIA A100 SXM4 80GB", "NVIDIA H100 80GB HBM3" ≡ "NVIDIA H100 SXM5 80GB"); a
+run on any other device never populates a cell.
+Validity (`tables.reject_reasons`; empty = valid): `contract.validate()`
+empty; `profile` is the row's target; K = 1536 and B = 4096 (B_real = B when
+present); `security.target` ≤ −128 and, when present, `security.achieved_log2`
+≤ −128; `instances` equals the target's frozen ref (BF16: `bench-instances/v1`
+`vu-k1536` [0, 4096) manifest 059103cf…; FP8 Ada: `bench-instances-fp8-ada/v1`
+`vu-k1536-fp8-ada`, digest `contract.FP8_ADA_INSTANCES_DIGEST`; Hopper has no
+frozen set yet); `proof_class` is the candidate's declared class;
+authentication excluded; same SKU; **independently verified** -- a label
+`independently_verified=true` (the store's back-fill key; `verified=accepted`
+is also accepted) whose `by` is neither the producing attempt's campaign nor
+an asserter of the result's own `candidate`/`label` labels; **not
+downgraded** -- the latest `red-team-*` `proof_class` verdict on the artifact
+is not below the fingerprint's class. A candidate is recognised from
+`software.backend.name` (`verity-gkr`, `b-ligero chain…`, `sp1`); component
+benchmarks (`verity-direct`, `backends/gkr/...`, `b-encode`) are none. The
+renderer lists every rejected candidate result with its first reason.
+Table 3 identity: T_total = witness + encoding_commitment + arithmetic +
+lookup + zk_additional + serialization + other, each cell `0.41 s (37%)`,
+Other = t.total − Σ buckets − Σ joints (≥ −1 %·t.total); a fused stage
+`t.joint.a+b` prints once as `a+b: 0.41 s (37%)` in the first bucket column it
+covers and `↞` in the others.
+
+## Proof model: interactive is fine, transferability is not required
+
+Decided 2026-09-21 (user). The Verity verification is an interactive session
+with one verifier; a proof need not convince a third party afterwards. So
+**designated-verifier** protocols (VOLE/IT-MAC ZK: QuickSilver, Antman-style
+SIMD compression) are in scope and are labelled with
+`zk_mode = "designated-verifier"` in the fingerprint, never mixed with
+publicly verifiable results in one ratio. Their assumption set is: LPN with
+regular noise over a large field (the sVOLE expansion, the only assumption
+beyond symmetric-key), one batch of base oblivious transfers (any public-key
+assumption, post-quantum options exist), and a correlation-robust hash for OT
+extension; no trusted setup, no pairings, no knowledge assumptions; soundness
+of the online phase is statistical given the correlation, and the
+correlation is input-independent (preprocessable). **Pending the user's
+ratification of LPN as an acceptable assumption** before a VOLE build lane
+starts; the earlier "hash-based only" requirement is what excluded it.
 
 ## Soundness is a parameter
 
@@ -72,6 +150,40 @@ measured end-to-end wall time at RTT in {0, 0.1, 1, 10, 50} ms. The network
 floor is depth x RTT. No hard round budget yet: Candidate A may reduce its
 depth and the measurements decide.
 
+## Tensor cores are the target machine
+
+Decided 2026-09-21 (coordinator, on the user's direction). The prover runs
+on the same class of hardware as the computation it proves, and its
+first-class consumer is the **tensor core**, not the SIMT core. Consequences:
+
+- Cost models and the census are stated in tensor-core terms: a field
+  multiplication is priced as UINT8/INT8 limb products with INT32 accumulation
+  and deferred reduction (TensorZKP, USENIX Security 2026, is the calibration:
+  sumcheck and linear-time encoding as matrix multiplication), not as 64-bit
+  SIMT multiplies. A 64-bit element is 8 limbs (64 limb products per multiply),
+  a 31/32-bit element is 4 (16). The field question was therefore reopened and
+  re-priced (`note:r20-proof/tensor-cost/20260922T0450Z-report-tensor`, same day): 31-bit fields
+  win every cell (A 1.1-1.2x, B 1.6x at 2^-128) because a 2^-128 challenge is
+  24 limbs in either family while base and trace-times-challenge products are
+  4x and 2x cheaper. **Tensor-core kernel work uses BabyBear (degree-6
+  extension at 2^-128; 2^27 two-adicity; TensorZKP's layout).** The Goldilocks
+  CPU implementations stay as algorithmic diagnostics. Realistic utilisation
+  is the calibration to replace first: 0.172 of INT8 peak (TensorZKP's
+  degree-2 sumcheck) is assumed until a kernel of ours is measured.
+- A prover design must say which of its inner loops are matrix
+  multiplications (sumcheck rounds, encoding, LPN expansion, batch checks)
+  and which are not (hashing, hint generation), with the non-matmul part's
+  share of the wall time. Anything on the critical path that cannot be a
+  matmul is a cost to justify.
+- Nothing is hashed inside the circuit unless a design shows it must be; the
+  commitment layer is chosen so the Merkle hash runs natively (Blake3/SHA on
+  SIMT at tens of GB/s is fine when there is no recursion).
+- CPU measurements remain valid **diagnostics** of algorithmic scaling
+  (committed elements per VU, depth, constraint counts); the decision
+  hardware is a tensor-core GPU, and `overhead.vs_native_peak` is always
+  against the proved target's anchor tensor-core peak (`Target.native_peak`),
+  never against the prover's own card.
+
 ## Census, both candidates, same columns
 
 ~~~text
@@ -92,11 +204,17 @@ K=1536 GemmCoordinate   the architecture decision (handoff section 9.5)
 ~~~
 
 The headline statistic is throughput, `vu.per_second`, and better still
-**overhead**: prover seconds per VU divided by the native seconds the same
-VU takes on the machine being proved (`overhead.vs_native_peak`, against
-the A100's dense BF16 tensor-core peak: 9.85 ps per K=1536 VU, ~1e11 VU/s;
-`contract.NATIVE_REFERENCE`). Report it on every VU-level number; the
-question every run answers is "how many native seconds does one proved
+**overhead**: `overhead.vs_native_peak` = R_native(target) / R_proved, where
+R_proved = 2·K·B / `t.total` is the prover's own FLOP/s over the VUs it
+established (`rate.proved_flop_per_second`, K MACs = 2K FLOP per VU) and
+R_native is the datasheet dense tensor-core peak of the **proved target's**
+conformance anchor at FP32 accumulate (`rate.native_peak_flop_per_second`,
+`Target.native_peak`, `contract.native_reference(profile)`): A100 BF16
+312 TFLOPS for FIRST (9.85 ps per K=1536 VU, ~1e11 VU/s), RTX 4090 FP8
+330.3 TFLOPS for FP8_ADA_MMA, H100 FP8 1978.9 TFLOPS for FP8_HOPPER_WGMMA.
+Emit all three with `contract.rate_measurements(...)` on every VU-level
+number under the fingerprint's `profile` (the validator recomputes them);
+the question every run answers is "how many native seconds does one proved
 second buy". Peak is the conservative reference (a real decode step runs
 below peak), so the true overhead is lower than the reported one.
 

@@ -6,19 +6,18 @@
 //!   q(η_j) = Σ_i a_i(η_j) U_ij at opened j, a_i(η_j) recomputed by the verifier (a is public).
 //! No masking: the opened columns reveal witness symbols → NON_ZK_PROOF_DIAGNOSTIC.
 
-use crate::field::{Ext, Fp};
+use crate::field::{Ext, Fp, DEGREE};
 use crate::gkr::Reader;
 use crate::transcript::{Sha256, Transcript};
 
-pub struct Params { pub k: usize, pub n: usize, pub t: usize }
+pub struct Params {
+    pub k: usize,
+    pub n: usize,
+    pub t: usize,
+}
 
 fn root_of_unity(order: usize) -> Fp {
-    // 7 generates F_p^*; p - 1 = 2^32 (2^32 - 1)
-    let w32 = Fp::new(7).pow((1u64 << 32) - 1);
-    let mut w = w32;
-    let mut o = 1u64 << 32;
-    while o > order as u64 { w = w * w; o /= 2; }
-    w
+    Fp::root_of_unity(order)
 }
 
 fn bitrev(v: &mut [Fp]) {
@@ -26,17 +25,23 @@ fn bitrev(v: &mut [Fp]) {
     let bits = n.trailing_zeros();
     for i in 0..n {
         let j = i.reverse_bits() >> (usize::BITS - bits);
-        if (j as usize) > i { v.swap(i, j as usize); }
+        if (j as usize) > i {
+            v.swap(i, j as usize);
+        }
     }
 }
 
 /// In-place NTT (evaluations of the polynomial with coefficients `v` on ⟨ω_n⟩), or inverse.
 pub fn ntt(v: &mut [Fp], inverse: bool) {
     let n = v.len();
-    if n == 1 { return; }
+    if n == 1 {
+        return;
+    }
     bitrev(v);
     let mut w_n = root_of_unity(n);
-    if inverse { w_n = w_n.inv(); }
+    if inverse {
+        w_n = w_n.inv();
+    }
     let mut len = 2;
     while len <= n {
         let w_len = w_n.pow((n / len) as u64);
@@ -54,15 +59,19 @@ pub fn ntt(v: &mut [Fp], inverse: bool) {
     }
     if inverse {
         let ninv = Fp::new(n as u64).inv();
-        for x in v.iter_mut() { *x = *x * ninv; }
+        for x in v.iter_mut() {
+            *x = *x * ninv;
+        }
     }
 }
 
 pub fn ntt_ext(v: &mut [Ext], inverse: bool) {
-    for c in 0..3 {
+    for c in 0..DEGREE {
         let mut col: Vec<Fp> = v.iter().map(|x| x.0[c]).collect();
         ntt(&mut col, inverse);
-        for (x, y) in v.iter_mut().zip(col) { x.0[c] = y; }
+        for (x, y) in v.iter_mut().zip(col) {
+            x.0[c] = y;
+        }
     }
 }
 
@@ -83,9 +92,18 @@ pub fn encode_ext(row: &[Ext], n: usize) -> Vec<Ext> {
     c
 }
 
-pub struct Committed { pub rows: usize, pub codewords: Vec<Fp>, pub tree: Vec<Vec<[u8; 32]>> }
+pub struct Committed {
+    pub rows: usize,
+    pub codewords: Vec<Fp>,
+    pub tree: Vec<Vec<[u8; 32]>>,
+}
 
-fn hash_pair(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] { let mut s = Sha256::new(); s.update(a); s.update(b); s.finalize() }
+fn hash_pair(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
+    let mut s = Sha256::new();
+    s.update(a);
+    s.update(b);
+    s.finalize()
+}
 
 pub fn commit(x: &[Fp], p: &Params) -> Committed {
     let rows = x.len().div_ceil(p.k);
@@ -100,7 +118,9 @@ pub fn commit(x: &[Fp], p: &Params) -> Committed {
                     let mut row = vec![Fp::ZERO; p.k];
                     let lo = i * p.k;
                     let hi = ((i + 1) * p.k).min(x.len());
-                    if lo < hi { row[..hi - lo].copy_from_slice(&x[lo..hi]); }
+                    if lo < hi {
+                        row[..hi - lo].copy_from_slice(&x[lo..hi]);
+                    }
                     out.copy_from_slice(&encode(&row, p.n));
                 }
             });
@@ -115,7 +135,9 @@ pub fn commit(x: &[Fp], p: &Params) -> Committed {
                 for (jj, leaf) in lv.iter_mut().enumerate() {
                     let j = ci * lchunk + jj;
                     let mut h = Sha256::new();
-                    for i in 0..rows { h.update(&codewords[i * p.n + j].to_bytes()); }
+                    for i in 0..rows {
+                        h.update(&codewords[i * p.n + j].to_bytes());
+                    }
                     *leaf = h.finalize();
                 }
             });
@@ -124,30 +146,49 @@ pub fn commit(x: &[Fp], p: &Params) -> Committed {
     let mut tree = vec![leaves];
     while tree.last().unwrap().len() > 1 {
         let prev = tree.last().unwrap();
-        let next: Vec<[u8; 32]> = (0..prev.len() / 2).map(|i| hash_pair(&prev[2 * i], &prev[2 * i + 1])).collect();
+        let next: Vec<[u8; 32]> = (0..prev.len() / 2)
+            .map(|i| hash_pair(&prev[2 * i], &prev[2 * i + 1]))
+            .collect();
         tree.push(next);
     }
-    Committed { rows, codewords, tree }
+    Committed {
+        rows,
+        codewords,
+        tree,
+    }
 }
 
 impl Committed {
-    pub fn root(&self) -> [u8; 32] { self.tree.last().unwrap()[0] }
-    pub fn column(&self, j: usize, n: usize) -> Vec<Fp> { (0..self.rows).map(|i| self.codewords[i * n + j]).collect() }
+    pub fn root(&self) -> [u8; 32] {
+        self.tree.last().unwrap()[0]
+    }
+    pub fn column(&self, j: usize, n: usize) -> Vec<Fp> {
+        (0..self.rows).map(|i| self.codewords[i * n + j]).collect()
+    }
     pub fn path(&self, j: usize) -> Vec<[u8; 32]> {
         let mut out = Vec::new();
         let mut idx = j;
-        for level in &self.tree[..self.tree.len() - 1] { out.push(level[idx ^ 1]); idx /= 2; }
+        for level in &self.tree[..self.tree.len() - 1] {
+            out.push(level[idx ^ 1]);
+            idx /= 2;
+        }
         out
     }
 }
 
 fn verify_path(root: &[u8; 32], j: usize, column: &[Fp], path: &[[u8; 32]]) -> bool {
     let mut h = Sha256::new();
-    for v in column { h.update(&v.to_bytes()); }
+    for v in column {
+        h.update(&v.to_bytes());
+    }
     let mut cur = h.finalize();
     let mut idx = j;
     for sib in path {
-        cur = if idx & 1 == 0 { hash_pair(&cur, sib) } else { hash_pair(sib, &cur) };
+        cur = if idx & 1 == 0 {
+            hash_pair(&cur, sib)
+        } else {
+            hash_pair(sib, &cur)
+        };
         idx /= 2;
     }
     &cur == root
@@ -157,8 +198,10 @@ fn open_set(tr: &mut Transcript, n: usize, t: usize) -> Vec<usize> {
     let mut set = Vec::with_capacity(t);
     while set.len() < t {
         let c = tr.challenge();
-        let j = (c.0[0].0 % n as u64) as usize;
-        if !set.contains(&j) { set.push(j); }
+        let j = (c.0[0].0 as u64 % n as u64) as usize;
+        if !set.contains(&j) {
+            set.push(j);
+        }
     }
     set
 }
@@ -166,45 +209,104 @@ fn open_set(tr: &mut Transcript, n: usize, t: usize) -> Vec<usize> {
 fn row_coeffs(tr: &mut Transcript, rows: usize) -> Vec<Ext> {
     let r = tr.challenge();
     let mut v = vec![Ext::ONE];
-    for i in 1..rows { v.push(v[i - 1] * r); }
+    for i in 1..rows {
+        v.push(v[i - 1] * r);
+    }
     v
 }
 
 /// Prove ⟨a, X⟩ = b (a is public, length rows·k, zero-padded) and proximity; appends to `out` and to the byte
 /// stream `bytes` (opened columns and paths).  Message order: w (k), q coefficients (2k-1), then columns+paths.
-pub fn prove_open(cm: &Committed, a: &[Ext], p: &Params, tr: &mut Transcript, out: &mut Vec<Ext>, bytes: &mut Vec<u8>) {
+pub fn prove_open(
+    cm: &Committed,
+    mut a: Vec<Ext>,
+    p: &Params,
+    tr: &mut Transcript,
+    out: &mut Vec<Ext>,
+    bytes: &mut Vec<u8>,
+) {
     let rows = cm.rows;
-    let mut a = a.to_vec();
     a.resize(rows * p.k, Ext::ZERO);
+    tr.label("ligero.open: row-combination challenge r (coefficients r^i)");
     let r = row_coeffs(tr, rows);
-    // w = Σ r_i X_i  (message form: X_i = codeword restricted to H = positions j·(n/k))
+    // w = Σ r_i X_i  (message form: X_i = codeword restricted to H = positions j·(n/k)); q on D: Σ_i Enc(a_i)_j U_ij.
+    // Both are sums over rows: every thread accumulates its rows, the partials are added.
     let step = p.n / p.k;
+    let nthreads = crate::gkr::threads().min(rows.max(1));
+    let chunk = rows.div_ceil(nthreads).max(1);
+    let parts: Vec<(Vec<Ext>, Vec<Ext>)> = std::thread::scope(|s| {
+        let hs: Vec<_> = (0..nthreads)
+            .map(|t| {
+                let (r, a) = (&r, &a);
+                s.spawn(move || {
+                    let mut w = vec![Ext::ZERO; p.k];
+                    let mut q = vec![Ext::ZERO; p.n];
+                    for i in t * chunk..((t + 1) * chunk).min(rows) {
+                        let cw = &cm.codewords[i * p.n..(i + 1) * p.n];
+                        for m in 0..p.k {
+                            w[m] += r[i].scale(cw[m * step]);
+                        }
+                        let arow = &a[i * p.k..(i + 1) * p.k];
+                        if arow.iter().all(|x| x.is_zero()) {
+                            continue;
+                        }
+                        let ae = encode_ext(arow, p.n);
+                        for j in 0..p.n {
+                            q[j] += ae[j].scale(cw[j]);
+                        }
+                    }
+                    (w, q)
+                })
+            })
+            .collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
     let mut w = vec![Ext::ZERO; p.k];
-    for i in 0..rows { for m in 0..p.k { w[m] += r[i].scale(cm.codewords[i * p.n + m * step]); } }
-    // q on D: Σ_i Enc(a_i)_j U_ij
     let mut q = vec![Ext::ZERO; p.n];
-    for i in 0..rows {
-        let arow = &a[i * p.k..(i + 1) * p.k];
-        if arow.iter().all(|x| x.is_zero()) { continue; }
-        let ae = encode_ext(arow, p.n);
-        for j in 0..p.n { q[j] += ae[j].scale(cm.codewords[i * p.n + j]); }
+    for (pw, pq) in parts {
+        for (x, y) in w.iter_mut().zip(pw) {
+            *x += y;
+        }
+        for (x, y) in q.iter_mut().zip(pq) {
+            *x += y;
+        }
     }
     ntt_ext(&mut q, true);
-    debug_assert!(q[2 * p.k - 1..].iter().all(|x| x.is_zero()), "q degree exceeds 2k-2");
+    tr.round_trip(); // w and q go to the verifier; Q comes back (the opened columns are the final one-way message)
+    debug_assert!(
+        q[2 * p.k - 1..].iter().all(|x| x.is_zero()),
+        "q degree exceeds 2k-2"
+    );
     let qc = q[..2 * p.k - 1].to_vec();
     out.extend_from_slice(&w);
     out.extend_from_slice(&qc);
+    tr.label("ligero.open: w (k symbols)");
     tr.absorb_exts(&w);
+    tr.label("ligero.open: q coefficients (2k-1)");
     tr.absorb_exts(&qc);
+    tr.label("ligero.open: t column indices (challenge c: index = c0 mod n, repeats skipped)");
     let set = open_set(tr, p.n, p.t);
+    tr.label(&format!("ligero.open: opened column indices {set:?} (proof bytes: per column, {} base values LE then the Merkle path)", cm.rows));
     for &j in &set {
-        for v in cm.column(j, p.n) { bytes.extend_from_slice(&v.to_bytes()); }
-        for h in cm.path(j) { bytes.extend_from_slice(&h); }
+        for v in cm.column(j, p.n) {
+            bytes.extend_from_slice(&v.to_bytes());
+        }
+        for h in cm.path(j) {
+            bytes.extend_from_slice(&h);
+        }
     }
 }
 
-pub fn verify_open(root: &[u8; 32], rows: usize, a: &[Ext], b: Ext, p: &Params, tr: &mut Transcript, rd: &mut Reader, bytes: &[u8]) -> Result<(), String> {
-    let mut a = a.to_vec();
+pub fn verify_open(
+    root: &[u8; 32],
+    rows: usize,
+    mut a: Vec<Ext>,
+    b: Ext,
+    p: &Params,
+    tr: &mut Transcript,
+    rd: &mut Reader,
+    bytes: &[u8],
+) -> Result<(), String> {
     a.resize(rows * p.k, Ext::ZERO);
     let r = row_coeffs(tr, rows);
     let w = rd.take(p.k)?;
@@ -213,34 +315,83 @@ pub fn verify_open(root: &[u8; 32], rows: usize, a: &[Ext], b: Ext, p: &Params, 
     tr.absorb_exts(&qc);
     // Σ_{ζ∈H} q(ζ) = k (c_0 + c_k)
     let sum_h = (qc[0] + qc[p.k]).scale(Fp::new(p.k as u64));
-    if sum_h != b { return Err("ligero: linear functional value mismatch".into()); }
+    if sum_h != b {
+        return Err("ligero: linear functional value mismatch".into());
+    }
     let set = open_set(tr, p.n, p.t);
     let w_enc = encode_ext(&w, p.n);
     let omega = root_of_unity(p.n);
-    // a_i(η_j) for the opened columns: encode every nonzero row of a once (public work)
-    let mut a_enc: Vec<Option<Vec<Ext>>> = Vec::with_capacity(rows);
-    for i in 0..rows {
-        let arow = &a[i * p.k..(i + 1) * p.k];
-        if arow.iter().all(|x| x.is_zero()) { a_enc.push(None); } else { a_enc.push(Some(encode_ext(arow, p.n))); }
-    }
-    let col_bytes = rows * 8;
+    // a_i(η_j) for the opened columns only: encode every nonzero row of a once (public work, parallel over rows),
+    // keep the t opened positions (rows × t values, not rows × n)
+    let nthreads = crate::gkr::threads().min(rows.max(1));
+    let chunk = rows.div_ceil(nthreads).max(1);
+    let a_enc: Vec<Option<Vec<Ext>>> = {
+        let parts: Vec<Vec<Option<Vec<Ext>>>> = std::thread::scope(|s| {
+            let hs: Vec<_> = (0..nthreads)
+                .map(|t| {
+                    let (a, set) = (&a, &set);
+                    s.spawn(move || {
+                        let mut v = Vec::new();
+                        for i in t * chunk..((t + 1) * chunk).min(rows) {
+                            let arow = &a[i * p.k..(i + 1) * p.k];
+                            if arow.iter().all(|x| x.is_zero()) {
+                                v.push(None);
+                            } else {
+                                let ae = encode_ext(arow, p.n);
+                                v.push(Some(set.iter().map(|&j| ae[j]).collect()));
+                            }
+                        }
+                        v
+                    })
+                })
+                .collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        parts.into_iter().flatten().collect()
+    };
+    let fb = Fp::BYTES;
+    let col_bytes = rows * fb;
     let depth = p.n.trailing_zeros() as usize;
     let per = col_bytes + 32 * depth;
-    if bytes.len() != per * set.len() { return Err("ligero: opening size".into()); }
+    if bytes.len() != per * set.len() {
+        return Err("ligero: opening size".into());
+    }
     for (oi, &j) in set.iter().enumerate() {
         let blob = &bytes[oi * per..(oi + 1) * per];
-        let column: Vec<Fp> = (0..rows).map(|i| Fp::new(u64::from_le_bytes(blob[8 * i..8 * i + 8].try_into().unwrap()))).collect();
-        let path: Vec<[u8; 32]> = (0..depth).map(|d| blob[col_bytes + 32 * d..col_bytes + 32 * d + 32].try_into().unwrap()).collect();
-        if !verify_path(root, j, &column, &path) { return Err(format!("ligero: merkle path {j}")); }
+        let column: Vec<Fp> = (0..rows)
+            .map(|i| Fp::from_bytes(&blob[fb * i..fb * i + fb]))
+            .collect();
+        let path: Vec<[u8; 32]> = (0..depth)
+            .map(|d| {
+                blob[col_bytes + 32 * d..col_bytes + 32 * d + 32]
+                    .try_into()
+                    .unwrap()
+            })
+            .collect();
+        if !verify_path(root, j, &column, &path) {
+            return Err(format!("ligero: merkle path {j}"));
+        }
         let mut lhs = Ext::ZERO;
-        for i in 0..rows { lhs += r[i].scale(column[i]); }
-        if lhs != w_enc[j] { return Err(format!("ligero: proximity test at column {j}")); }
+        for i in 0..rows {
+            lhs += r[i].scale(column[i]);
+        }
+        if lhs != w_enc[j] {
+            return Err(format!("ligero: proximity test at column {j}"));
+        }
         let eta = Ext::from_base(omega.pow(j as u64));
         let mut qv = Ext::ZERO;
-        for c in qc.iter().rev() { qv = qv * eta + *c; }
+        for c in qc.iter().rev() {
+            qv = qv * eta + *c;
+        }
         let mut rhs = Ext::ZERO;
-        for i in 0..rows { if let Some(ae) = &a_enc[i] { rhs += ae[j].scale(column[i]); } }
-        if qv != rhs { return Err(format!("ligero: linear test at column {j}")); }
+        for i in 0..rows {
+            if let Some(ae) = &a_enc[i] {
+                rhs += ae[oi].scale(column[i]);
+            }
+        }
+        if qv != rhs {
+            return Err(format!("ligero: linear test at column {j}"));
+        }
     }
     Ok(())
 }
@@ -257,6 +408,8 @@ mod tests {
         assert_eq!(v, orig);
         // H ⊂ D: message symbol m sits at codeword position m * (n/k)
         let enc = encode(&orig, 64);
-        for m in 0..16 { assert_eq!(enc[m * 4], orig[m]); }
+        for m in 0..16 {
+            assert_eq!(enc[m * 4], orig[m]);
+        }
     }
 }

@@ -3,7 +3,7 @@ name = "verity-numerical"
 version = "0.1.0"
 description = "Campaign-side numerical work shared by the proof backends: source-close and independent references for the frozen target, the reference checker, witness generators, range lemmas and adversarial search."
 requires-python = ">=3.12"
-dependencies = ["verity", "z3-solver>=4.13"]
+dependencies = ["verity", "z3-solver>=4.13", "matplotlib>=3.8"]
 
 [build-system]
 requires = ["hatchling"]

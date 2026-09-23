@@ -1,168 +1,327 @@
 {
- "schema": "verity/discrepancy-log/v0",
- "what": "Where the paper, the pinned simulator, Verity's reference and the hardware disagree or are silent about the frozen target. An entry leaves `open` only with an explicit `resolution` and `evidence_refs`; editing the reference implementation never resolves an entry by itself (tests/verification/test_discrepancy_log.py).",
- "statuses": {
-  "open": "unresolved; a lane owns it",
-  "resolved": "settled with evidence; the resolution says what the target does",
-  "excluded": "outside the frozen target's supported domain; the resolution says why and what the evidence says anyway"
- },
- "entries": [
-  {
-   "id": "D1",
-   "profile": "first-campaign-target/2026-09-21",
-   "issue": "NaN and infinity operands/accumulators; overflow saturation",
-   "hawkeye_paper": "discusses hardware saturation qualitatively (sections 5-7); no bit-level rule for NaN payloads",
-   "hawkeye_simulator": "multiply_bfloat16_to_gfloat has no NaN/infinity branch; Gfloat::operator float masks exponent bits rather than saturating",
-   "verity_reference": "verity.ml.tc.silicon rejects any non-finite operand or accumulator (InvalidArtifact); verity.ml.tc.total defines the total step (NaN -> 0x7FFFFFFF, +-inf, saturation to inf when a group leaves the FP32 range)",
-   "hardware_evidence": "A100 (sm_80) and RTX 4090 (sm_89), mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32: 31,290 special-value cases x 3 reps per device, 0 nondeterministic, every case reproduced by verity.ml.tc.total",
-   "status": "excluded",
-   "resolution": "FIRST is the finite-domain relation: a non-finite input is rejected, not computed. The measured total semantics exist (family veritor.tensor-core.ampere_bf16_m16n8k16@3, unbound) and declaring them is a later protocol decision.",
-   "evidence_refs": [
-    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
-    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz",
-    "packages/verity/src/verity/ml/tc/total.py"
-   ],
-   "owner": "coordinator"
+  "schema": "verity/discrepancy-log/v0",
+  "what": "Where the paper, the pinned simulator, Verity's reference and the hardware disagree or are silent about the frozen target. An entry leaves `open` only with an explicit `resolution` and `evidence_refs`; editing the reference implementation never resolves an entry by itself (tests/verification/test_discrepancy_log.py).  Silicon Phase 0 (2026-09-22) extends the log beyond the frozen target: an entry's `profile` names a target of verity.verification.target.TARGETS (frozen or draft) or, for an instruction class with no target yet, an id of verity.ml.tc.instructions.INSTRUCTIONS; the `hawkeye_*` columns then hold what the nearest published model (Hawkeye's Hopper FP8 simulator; autoproof's lockfile for FP4) says.",
+  "statuses": {
+    "open": "unresolved; a lane owns it",
+    "resolved": "settled with evidence; the resolution says what the target does",
+    "excluded": "outside the frozen target's supported domain; the resolution says why and what the evidence says anyway"
   },
-  {
-   "id": "D2",
-   "profile": "first-campaign-target/2026-09-21",
-   "issue": "Ampere (sm_80) evidence for the finite-domain pipeline parameters (groups (8,8), 25-bit truncating adder, floor -132) with arbitrary incoming accumulators",
-   "hawkeye_paper": "Ampere structure recovered on A100 by targeted tests (accumulator + 8 products, normalize, + 8 products)",
-   "hawkeye_simulator": "Ampere_simulator.cpp; the matrix wrapper initialises the accumulator to zero",
-   "verity_reference": "silicon.AMPERE_BF16_M16N8K16 carries validated='Hawkeye (A100), not re-measured here'; silicon.ADA_BF16_M16N8K16 (identical parameters) was measured bit-exact on the RTX 4090 over 24,898,304 elements / 194,518 tiles incl. nonzero accumulators",
-   "hardware_evidence": "A100: the exact instruction, 31,290 structured cases of which 7,456 are all-finite and 4,565 all-finite with a nonzero accumulator (same case list as the 4090); no large finite sweep on sm_80",
-   "status": "resolved",
-   "resolution": "Resolved by measurement on sm_80: recorded run r20260921-232750-56c5 (stage wp1.probe.a100, NVIDIA A100 80GB PCIe, compute capability 8.0, driver 570.133.20, CUDA 12.4) ran tools/tc_probe with --arch sm_80: the 7,713 all-finite records of the A100 special campaign (4,565 with a nonzero accumulator) replayed on the device with 0 mismatches against their recorded words and 0 nonzero words at the other tile positions, and the finite sweep -- the same 10 families and seed 20260902 as the RTX 4090 run r20260921-231618-ea24: randn zero/random accumulators, uniform bits, subnormal, cancellation, mixed magnitude, near overflow, signed zero, tiny accumulators x zero products, zero accumulators x tiny cancelling products -- 25,698,304 elements, 12,065,535 of them with a nonzero accumulator, 0 mismatches against silicon.tc_dot (AMPERE_BF16_M16N8K16 parameters: groups (8,8), 25-bit truncating adder, floor -132) and 0 model-domain errors.  The same inputs gave the same 25,698,304 words on sm_89 (run r20260921-231618-ea24, 360/360 Ada golden records reproduced).  Raw captures: tiles_<family>.npz and capture_sample.json in the run directory. Status set by the coordinator 2026-09-21 on this evidence.",
-   "evidence_refs": [
-    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
-    "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
-    "tools/tc_probe/tc_probe.py",
-    "r20260921-231618-ea24",
-    "r20260921-232750-56c5"
-   ],
-   "owner": "WP1"
-  },
-  {
-   "id": "D3",
-   "profile": "first-campaign-target/2026-09-21",
-   "issue": "Closed-form normalisation e' = max(E + l - 25, -126), M' = floor(v * 2^(E - e' - 1)) (handoff section 4.4) versus the simulator's successive shifts",
-   "hawkeye_paper": "not stated in this form",
-   "hawkeye_simulator": "group_sum normalises by successive shifts; the formula was derived from that code, not quoted",
-   "verity_reference": "silicon.group_sum rescales to the adder width, truncates and repacks; whether it is the successive-shift form or the closed form is to be checked",
-   "hardware_evidence": "indirect: every recorded finite case agrees with silicon.tc_dot",
-   "status": "resolved",
-   "resolution": "The successive-shift normalisation -- hawkeye_close.group_sum, which is the simulator's group_sum statement for statement, and silicon.group_sum, the same statement sequence -- equals the closed form e' = max(E + l - 25, -126), M' = floor(v * 2^(E - e' - 1)) on the whole reachable domain E in [-132, 254], |S| < 2^30: an SMT proof over 32-bit bitvectors (z3; test_normalisation_d3.py::test_closed_form_equals_successive_shifts_over_the_whole_reachable_domain_by_smt, unsat in about one second, mutants of the floor or the rescale are sat), the three forms checked through the real group_sum functions exhaustively for every E in [-132, 254] x every |S| < 2^12 x both signs and for every (E, bit length 0..30) with four patterns (recorded run r20260921-230852-4f1e, step f, 0 mismatches), and the composition-of-shifts proof sketch in that test module's docstring.  The closed form is a separate function (hawkeye_close.normalise_closed_form); no reference implementation was changed. Status set by the coordinator 2026-09-21 on this evidence.",
-   "evidence_refs": [
-    "packages/verity/src/verity/ml/tc/silicon.py",
-    "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
-    "backends/numerical/tests/reference/test_normalisation_d3.py",
-    "r20260921-230852-4f1e"
-   ],
-   "owner": "WP1"
-  },
-  {
-   "id": "D4",
-   "profile": "first-campaign-target/2026-09-21",
-   "issue": "Zero results: sign of a cancellation to zero, and a nonzero magnitude truncated to zero",
-   "hawkeye_paper": "not discussed at bit level",
-   "hawkeye_simulator": "S = 0 returns the zero representation; a magnitude truncated to zero resets the exponent to -132 keeping the computed sign internally; Gfloat::operator float returns +0 whenever the significand is zero",
-   "verity_reference": "silicon.pack_fp32 encodes a zero magnitude as +0; total: the result zero is always +0 (-0 accumulators and -0 products never produce -0)",
-   "hardware_evidence": "A100 and 4090 signed_zero / cancellation families agree with +0",
-   "status": "resolved",
-   "resolution": "The FP32 result word of a zero magnitude is +0 (0x00000000) in every case; an internal sign on a zero intermediate never reaches the accumulator word. Both the simulator's final conversion and the hardware agree.",
-   "evidence_refs": [
-    "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
-    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz"
-   ],
-   "owner": "coordinator"
-  },
-  {
-   "id": "D5",
-   "profile": "first-campaign-target/2026-09-21",
-   "issue": "FP32 -> BF16 epilogue NaN word: software canonical 0x7FC0 (family @1) versus hardware cvt.rn.bf16.f32 0x7FFF (family @2)",
-   "hawkeye_paper": "not covered (the paper is about the mma step)",
-   "hawkeye_simulator": "not covered",
-   "verity_reference": "verity.ml.tc.cast: f32_to_bf16_word -> 0x7FC0, f32_to_bf16_hw_word -> 0x7FFF; the two agree on every non-NaN word",
-   "hardware_evidence": "cvt.rn.bf16.f32 measured on A100 and 4090: 4,403 words per device, 84 NaN inputs, all -> 0x7FFF",
-   "status": "excluded",
-   "resolution": "FIRST fixes family @1 and a finite domain, so a NaN never reaches the epilogue. The production epilogue is the hardware word (@2); re-versioning the target to @2 changes the family digest and is a protocol decision.",
-   "evidence_refs": [
-    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/cvt_special.json",
-    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/4090/cvt_special.json"
-   ],
-   "owner": "coordinator"
-  },
-  {
-   "id": "D6",
-   "profile": "first-campaign-target/2026-09-21",
-   "issue": "Kernel-level accumulation order: does a real GEMM launch (split-K, stream-K, tile order) realise the ascending-k single-accumulator chain the relation checks?",
-   "hawkeye_paper": "section 8: evidence concerns tested low-level configurations, not arbitrary cuBLAS scheduling",
-   "hawkeye_simulator": "matrix wrapper: zero-initialised accumulator, fixed k order",
-   "verity_reference": "GemmCoordinate<K> chains tc_dot16 in ascending k from acc = 0",
-   "hardware_evidence": "30 authenticated GEMM coordinates from the RTX 4090 vLLM eager port (K = 1536 / 8960) reproduce under the chain; the K=1536 conformance vector is one of them",
-   "status": "open",
-   "resolution": null,
-   "evidence_refs": [
-    "packages/verity/tests/ml/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"
-   ],
-   "owner": "integration (not this campaign)",
-   "to_resolve": "A frontend/integration binding question: which kernels, on which shapes, realise this chain. The numerical backend proves the chain as stated."
-  },
-  {
-   "id": "D7",
-   "profile": "first-campaign-target/2026-09-21",
-   "issue": "Arbitrary incoming accumulator c in the transition unit: the pinned wrapper only ever passes c = 0 and has finalisation logic",
-   "hawkeye_paper": "the recovered structure takes the accumulator into the first group",
-   "hawkeye_simulator": "group_sum accepts any accumulator triple; the matrix wrapper zero-initialises and finalises",
-   "verity_reference": "silicon.tc_dot takes any finite FP32 accumulator word into group 1",
-   "hardware_evidence": "A100: 4,565 all-finite nonzero-accumulator cases; 4090: 280 golden records with nonzero accumulators plus the finite sweep",
-   "status": "resolved",
-   "resolution": "The adapter is hawkeye_close.fp32_to_gfloat: an FP32 word becomes the Gfloat the simulator's group_sum would have produced for it -- zero (either sign) -> Gfloat(sign, -132, 0), subnormal -> (sign, -126, m), normal -> (sign, e - 127, 2^23 | m) -- and hawkeye_close.tc_dot16 feeds it to group_sum([c, p0..p7]) then group_sum([., p8..p15]) then Gfloat::operator float.  The wrapper's finalisation (Ampere_simulator::matrix_multiply_template) is one more group_sum over the single Gfloat the second group produced, then operator float; group_sum([g]) = g for every reachable g (a 24-bit significand rescales to 25 bits, has width 25 and shifts back; a subnormal is shifted left by 25 - l and right by 24 - l and 1), and fp32_to_gfloat is the left inverse of operator float on every such g (both checked on every subnormal significand and on 3,072 mantissa patterns per exponent, run r20260921-230852-4f1e step g), so the adapter provably omits the identity group_sum and preserves the cast.  Evidence: tc_dot16 equals silicon.tc_dot on every case with a finite result -- 60,858 structured, 1,000,000 random, every all-finite record of the A100 and RTX 4090 special campaigns (7,713 each, 4,565 with a nonzero accumulator) and the 360 golden records -- and equals the compiled pinned simulator bit for bit on the same cases, the compiled wrapper included on the zero-accumulator ones (run r20260921-230852-4f1e steps d and e).  The zero must carry -132 (the C++ maximum ranges over every term); no earlier capture distinguishes that from a zero at -126/-127 -- entry D9. Status set by the coordinator 2026-09-21 on this evidence.",
-   "evidence_refs": [
-    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
-    "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
-    "backends/numerical/tests/reference/test_hawkeye_close.py",
-    "backends/numerical/tests/reference/hawkeye_harness.cpp",
-    "r20260921-230852-4f1e"
-   ],
-   "owner": "WP1"
-  },
-  {
-   "id": "D8",
-   "profile": "first-campaign-target/2026-09-21",
-   "issue": "Finite inputs whose group result leaves the FP32 range (result exponent > 127): the pinned simulator masks and keeps computing, the hardware saturates and holds",
-   "hawkeye_paper": "not covered; section 8 scopes the evidence to the tested magnitudes",
-   "hawkeye_simulator": "Gfloat::operator float writes (exponent + 127 - [bit 23 clear]) & 0xFF into the exponent field: an exponent of 128 gives an infinity or a NaN word depending on the mantissa, 129 and above wrap into a small finite field; group_sum has no range check, so an overflowed group-1 result enters group 2 as an ordinary Gfloat and can return into range",
-   "verity_reference": "silicon.pack_fp32 returns +-inf for exponent > 127 and silicon.tc_dot returns a group's infinity at once, sticky through the remaining group (its operands are not examined); total.py: the same as a saturated infinity",
-   "hardware_evidence": "every measured case agrees with silicon: 2,197 all-finite A100 cases, the same 2,197 on the RTX 4090 and 114 golden records have an infinite result word; under the simulator's arithmetic 18 of the A100/4090 cases cancel to +0 in group 2 and one golden record returns to a finite value, where the hardware word is the infinity (test_hawkeye_close.py::test_saturation_is_where_the_simulator_and_the_hardware_part); hawkeye_close.tc_dot16 differs from the hardware on 2,161 of the 2,197 (the other 36 are exponent-128, zero-mantissa coincidences) and on all 114 golden records",
-   "status": "resolved",
-   "resolution": "FIRST's transition is silicon.tc_dot, including saturation: a finite input whose group result leaves the FP32 range yields +-inf at once, sticky through the remaining group -- the hardware's word on every measured case (2,197 A100, 2,197 RTX 4090, 114 golden records). That infinite word is a valid output of a transition and, through the epilogue, of the VU (+-inf BF16), but it is not a finite accumulator: a chain whose intermediate transition saturates is rejected at the next step (domain rule). The pinned simulator's exponent masking is outside the paper's tested magnitudes and is not the reference on these cases; hawkeye_close.tc_dot16 documents where it parts from the hardware. Coordinator decision 2026-09-21.",
-   "evidence_refs": [
-    "backends/numerical/tests/reference/test_hawkeye_close.py",
-    "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
-    "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
-    "r20260921-230852-4f1e"
-   ],
-   "owner": "coordinator"
-  },
-  {
-   "id": "D9",
-   "profile": "first-campaign-target/2026-09-21",
-   "issue": "Does a zero incoming accumulator contribute an exponent to the alignment maximum? Equivalent encodings in the simulator (zero at -132) and silicon (zeros skipped); a zero carried at its FP32 exponent (-126 or -127) would truncate differently",
-   "hawkeye_paper": "the recovered structure aligns to the maximum exponent; the accumulator's zero is not discussed",
-   "hawkeye_simulator": "every zero Gfloat carries AMPERE_ZERO_EXPONENT = -132 (multiply_bfloat16_to_gfloat, group_sum, the wrapper's start) and group_sum's maximum ranges over every term, so a zero never raises it; utils.cpp::bfloat16_to_gfloat_tensor (unused by the mma path) would decode a zero at -127",
-   "verity_reference": "silicon.group_sum skips zero-magnitude terms in the maximum: the same result as a zero at -132",
-   "hardware_evidence": "none among the earlier captures: in the 3,148 zero-accumulator all-finite A100/4090 cases and the 80 golden ones no result changes if the zero is carried at -126 or -127 (the difference needs cancelling products below 2^-145 with a zero accumulator).  RTX 4090 (sm_89), run r20260921-231618-ea24, family zero_acc_tiny_cancellation, 800,000 elements: a zero at -126 would change 163,533 results and a zero at -127 87,058; the hardware word equals the alternative in 0 of them and silicon.tc_dot in all 800,000 -- on sm_89 a zero accumulator does not enter the maximum.  A100: not measured.",
-   "status": "resolved",
-   "resolution": "Resolved by measurement on both architectures: a zero incoming accumulator does not enter the alignment maximum.  tc_probe family zero_acc_tiny_cancellation (+-0 accumulators, BF16 subnormal x [2^-27, 2^-5] products with random signs, 800,000 elements, seed 20260902): 163,533 elements would differ if the zero carried exponent -126 and 87,058 if it carried -127; the hardware word equals the -126 alternative in 0 of the 163,533 and the -127 alternative in 0 of the 87,058, and equals silicon.tc_dot (zeros skipped in the maximum, the same as the simulator's zero at -132) in all 800,000 -- identical counts on the A100 (sm_80, run r20260921-232750-56c5) and the RTX 4090 (sm_89, run r20260921-231618-ea24).  The 3,148 + 3,148 zero-accumulator all-finite special cases and the 80 golden ones do not distinguish the encodings; these two runs do. Status set by the coordinator 2026-09-21 on this evidence.",
-   "evidence_refs": [
-    "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
-    "tools/tc_probe/tc_probe.py",
-    "r20260921-231618-ea24",
-    "r20260921-232750-56c5"
-   ],
-   "owner": "WP1"
-  }
- ]
+  "entries": [
+    {
+      "id": "D1",
+      "profile": "first-campaign-target/2026-09-21",
+      "issue": "NaN and infinity operands/accumulators; overflow saturation",
+      "hawkeye_paper": "discusses hardware saturation qualitatively (sections 5-7); no bit-level rule for NaN payloads",
+      "hawkeye_simulator": "multiply_bfloat16_to_gfloat has no NaN/infinity branch; Gfloat::operator float masks exponent bits rather than saturating",
+      "verity_reference": "verity.ml.tc.silicon rejects any non-finite operand or accumulator (InvalidArtifact); verity.ml.tc.total defines the total step (NaN -> 0x7FFFFFFF, +-inf, saturation to inf when a group leaves the FP32 range)",
+      "hardware_evidence": "A100 (sm_80) and RTX 4090 (sm_89), mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32: 31,290 special-value cases x 3 reps per device, 0 nondeterministic, every case reproduced by verity.ml.tc.total",
+      "status": "excluded",
+      "resolution": "FIRST is the finite-domain relation: a non-finite input is rejected, not computed. The measured total semantics exist (family veritor.tensor-core.ampere_bf16_m16n8k16@3, unbound) and declaring them is a later protocol decision.",
+      "evidence_refs": [
+        "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+        "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz",
+        "packages/verity/src/verity/ml/tc/total.py"
+      ],
+      "owner": "coordinator"
+    },
+    {
+      "id": "D2",
+      "profile": "first-campaign-target/2026-09-21",
+      "issue": "Ampere (sm_80) evidence for the finite-domain pipeline parameters (groups (8,8), 25-bit truncating adder, floor -132) with arbitrary incoming accumulators",
+      "hawkeye_paper": "Ampere structure recovered on A100 by targeted tests (accumulator + 8 products, normalize, + 8 products)",
+      "hawkeye_simulator": "Ampere_simulator.cpp; the matrix wrapper initialises the accumulator to zero",
+      "verity_reference": "silicon.AMPERE_BF16_M16N8K16 carries validated='Hawkeye (A100), not re-measured here'; silicon.ADA_BF16_M16N8K16 (identical parameters) was measured bit-exact on the RTX 4090 over 24,898,304 elements / 194,518 tiles incl. nonzero accumulators",
+      "hardware_evidence": "A100: the exact instruction, 31,290 structured cases of which 7,456 are all-finite and 4,565 all-finite with a nonzero accumulator (same case list as the 4090); no large finite sweep on sm_80",
+      "status": "resolved",
+      "resolution": "Resolved by measurement on sm_80: recorded run r20260921-232750-56c5 (stage wp1.probe.a100, NVIDIA A100 80GB PCIe, compute capability 8.0, driver 570.133.20, CUDA 12.4) ran tools/tc_probe with --arch sm_80: the 7,713 all-finite records of the A100 special campaign (4,565 with a nonzero accumulator) replayed on the device with 0 mismatches against their recorded words and 0 nonzero words at the other tile positions, and the finite sweep -- the same 10 families and seed 20260902 as the RTX 4090 run r20260921-231618-ea24: randn zero/random accumulators, uniform bits, subnormal, cancellation, mixed magnitude, near overflow, signed zero, tiny accumulators x zero products, zero accumulators x tiny cancelling products -- 25,698,304 elements, 12,065,535 of them with a nonzero accumulator, 0 mismatches against silicon.tc_dot (AMPERE_BF16_M16N8K16 parameters: groups (8,8), 25-bit truncating adder, floor -132) and 0 model-domain errors.  The same inputs gave the same 25,698,304 words on sm_89 (run r20260921-231618-ea24, 360/360 Ada golden records reproduced).  Raw captures: tiles_<family>.npz and capture_sample.json in the run directory. Status set by the coordinator 2026-09-21 on this evidence.",
+      "evidence_refs": [
+        "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+        "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
+        "tools/tc_probe/tc_probe.py",
+        "r20260921-231618-ea24",
+        "r20260921-232750-56c5"
+      ],
+      "owner": "WP1"
+    },
+    {
+      "id": "D3",
+      "profile": "first-campaign-target/2026-09-21",
+      "issue": "Closed-form normalisation e' = max(E + l - 25, -126), M' = floor(v * 2^(E - e' - 1)) (handoff section 4.4) versus the simulator's successive shifts",
+      "hawkeye_paper": "not stated in this form",
+      "hawkeye_simulator": "group_sum normalises by successive shifts; the formula was derived from that code, not quoted",
+      "verity_reference": "silicon.group_sum rescales to the adder width, truncates and repacks; whether it is the successive-shift form or the closed form is to be checked",
+      "hardware_evidence": "indirect: every recorded finite case agrees with silicon.tc_dot",
+      "status": "resolved",
+      "resolution": "The successive-shift normalisation -- hawkeye_close.group_sum, which is the simulator's group_sum statement for statement, and silicon.group_sum, the same statement sequence -- equals the closed form e' = max(E + l - 25, -126), M' = floor(v * 2^(E - e' - 1)) on the whole reachable domain E in [-132, 254], |S| < 2^30: an SMT proof over 32-bit bitvectors (z3; test_normalisation_d3.py::test_closed_form_equals_successive_shifts_over_the_whole_reachable_domain_by_smt, unsat in about one second, mutants of the floor or the rescale are sat), the three forms checked through the real group_sum functions exhaustively for every E in [-132, 254] x every |S| < 2^12 x both signs and for every (E, bit length 0..30) with four patterns (recorded run r20260921-230852-4f1e, step f, 0 mismatches), and the composition-of-shifts proof sketch in that test module's docstring.  The closed form is a separate function (hawkeye_close.normalise_closed_form); no reference implementation was changed. Status set by the coordinator 2026-09-21 on this evidence.",
+      "evidence_refs": [
+        "packages/verity/src/verity/ml/tc/silicon.py",
+        "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
+        "backends/numerical/tests/reference/test_normalisation_d3.py",
+        "r20260921-230852-4f1e"
+      ],
+      "owner": "WP1"
+    },
+    {
+      "id": "D4",
+      "profile": "first-campaign-target/2026-09-21",
+      "issue": "Zero results: sign of a cancellation to zero, and a nonzero magnitude truncated to zero",
+      "hawkeye_paper": "not discussed at bit level",
+      "hawkeye_simulator": "S = 0 returns the zero representation; a magnitude truncated to zero resets the exponent to -132 keeping the computed sign internally; Gfloat::operator float returns +0 whenever the significand is zero",
+      "verity_reference": "silicon.pack_fp32 encodes a zero magnitude as +0; total: the result zero is always +0 (-0 accumulators and -0 products never produce -0)",
+      "hardware_evidence": "A100 and 4090 signed_zero / cancellation families agree with +0",
+      "status": "resolved",
+      "resolution": "The FP32 result word of a zero magnitude is +0 (0x00000000) in every case; an internal sign on a zero intermediate never reaches the accumulator word. Both the simulator's final conversion and the hardware agree.",
+      "evidence_refs": [
+        "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
+        "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz"
+      ],
+      "owner": "coordinator"
+    },
+    {
+      "id": "D5",
+      "profile": "first-campaign-target/2026-09-21",
+      "issue": "FP32 -> BF16 epilogue NaN word: software canonical 0x7FC0 (family @1) versus hardware cvt.rn.bf16.f32 0x7FFF (family @2)",
+      "hawkeye_paper": "not covered (the paper is about the mma step)",
+      "hawkeye_simulator": "not covered",
+      "verity_reference": "verity.ml.tc.cast: f32_to_bf16_word -> 0x7FC0, f32_to_bf16_hw_word -> 0x7FFF; the two agree on every non-NaN word",
+      "hardware_evidence": "cvt.rn.bf16.f32 measured on A100 and 4090: 4,403 words per device, 84 NaN inputs, all -> 0x7FFF",
+      "status": "excluded",
+      "resolution": "FIRST fixes family @1 and a finite domain, so a NaN never reaches the epilogue. The production epilogue is the hardware word (@2); re-versioning the target to @2 changes the family digest and is a protocol decision.",
+      "evidence_refs": [
+        "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/cvt_special.json",
+        "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/4090/cvt_special.json"
+      ],
+      "owner": "coordinator"
+    },
+    {
+      "id": "D6",
+      "profile": "first-campaign-target/2026-09-21",
+      "issue": "Kernel-level accumulation order: does a real GEMM launch (split-K, stream-K, tile order) realise the ascending-k single-accumulator chain the relation checks?",
+      "hawkeye_paper": "section 8: evidence concerns tested low-level configurations, not arbitrary cuBLAS scheduling",
+      "hawkeye_simulator": "matrix wrapper: zero-initialised accumulator, fixed k order",
+      "verity_reference": "GemmCoordinate<K> chains tc_dot16 in ascending k from acc = 0",
+      "hardware_evidence": "30 authenticated GEMM coordinates from the RTX 4090 vLLM eager port (K = 1536 / 8960) reproduce under the chain; the K=1536 conformance vector is one of them",
+      "status": "open",
+      "resolution": null,
+      "evidence_refs": [
+        "packages/verity/tests/ml/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"
+      ],
+      "owner": "integration (not this campaign)",
+      "to_resolve": "A frontend/integration binding question: which kernels, on which shapes, realise this chain. The numerical backend proves the chain as stated."
+    },
+    {
+      "id": "D7",
+      "profile": "first-campaign-target/2026-09-21",
+      "issue": "Arbitrary incoming accumulator c in the transition unit: the pinned wrapper only ever passes c = 0 and has finalisation logic",
+      "hawkeye_paper": "the recovered structure takes the accumulator into the first group",
+      "hawkeye_simulator": "group_sum accepts any accumulator triple; the matrix wrapper zero-initialises and finalises",
+      "verity_reference": "silicon.tc_dot takes any finite FP32 accumulator word into group 1",
+      "hardware_evidence": "A100: 4,565 all-finite nonzero-accumulator cases; 4090: 280 golden records with nonzero accumulators plus the finite sweep",
+      "status": "resolved",
+      "resolution": "The adapter is hawkeye_close.fp32_to_gfloat: an FP32 word becomes the Gfloat the simulator's group_sum would have produced for it -- zero (either sign) -> Gfloat(sign, -132, 0), subnormal -> (sign, -126, m), normal -> (sign, e - 127, 2^23 | m) -- and hawkeye_close.tc_dot16 feeds it to group_sum([c, p0..p7]) then group_sum([., p8..p15]) then Gfloat::operator float.  The wrapper's finalisation (Ampere_simulator::matrix_multiply_template) is one more group_sum over the single Gfloat the second group produced, then operator float; group_sum([g]) = g for every reachable g (a 24-bit significand rescales to 25 bits, has width 25 and shifts back; a subnormal is shifted left by 25 - l and right by 24 - l and 1), and fp32_to_gfloat is the left inverse of operator float on every such g (both checked on every subnormal significand and on 3,072 mantissa patterns per exponent, run r20260921-230852-4f1e step g), so the adapter provably omits the identity group_sum and preserves the cast.  Evidence: tc_dot16 equals silicon.tc_dot on every case with a finite result -- 60,858 structured, 1,000,000 random, every all-finite record of the A100 and RTX 4090 special campaigns (7,713 each, 4,565 with a nonzero accumulator) and the 360 golden records -- and equals the compiled pinned simulator bit for bit on the same cases, the compiled wrapper included on the zero-accumulator ones (run r20260921-230852-4f1e steps d and e).  The zero must carry -132 (the C++ maximum ranges over every term); no earlier capture distinguishes that from a zero at -126/-127 -- entry D9. Status set by the coordinator 2026-09-21 on this evidence.",
+      "evidence_refs": [
+        "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+        "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
+        "backends/numerical/tests/reference/test_hawkeye_close.py",
+        "backends/numerical/tests/reference/hawkeye_harness.cpp",
+        "r20260921-230852-4f1e"
+      ],
+      "owner": "WP1"
+    },
+    {
+      "id": "D8",
+      "profile": "first-campaign-target/2026-09-21",
+      "issue": "Finite inputs whose group result leaves the FP32 range (result exponent > 127): the pinned simulator masks and keeps computing, the hardware saturates and holds",
+      "hawkeye_paper": "not covered; section 8 scopes the evidence to the tested magnitudes",
+      "hawkeye_simulator": "Gfloat::operator float writes (exponent + 127 - [bit 23 clear]) & 0xFF into the exponent field: an exponent of 128 gives an infinity or a NaN word depending on the mantissa, 129 and above wrap into a small finite field; group_sum has no range check, so an overflowed group-1 result enters group 2 as an ordinary Gfloat and can return into range",
+      "verity_reference": "silicon.pack_fp32 returns +-inf for exponent > 127 and silicon.tc_dot returns a group's infinity at once, sticky through the remaining group (its operands are not examined); total.py: the same as a saturated infinity",
+      "hardware_evidence": "every measured case agrees with silicon: 2,197 all-finite A100 cases, the same 2,197 on the RTX 4090 and 114 golden records have an infinite result word; under the simulator's arithmetic 18 of the A100/4090 cases cancel to +0 in group 2 and one golden record returns to a finite value, where the hardware word is the infinity (test_hawkeye_close.py::test_saturation_is_where_the_simulator_and_the_hardware_part); hawkeye_close.tc_dot16 differs from the hardware on 2,161 of the 2,197 (the other 36 are exponent-128, zero-mantissa coincidences) and on all 114 golden records",
+      "status": "resolved",
+      "resolution": "FIRST's transition is silicon.tc_dot, including saturation: a finite input whose group result leaves the FP32 range yields +-inf at once, sticky through the remaining group -- the hardware's word on every measured case (2,197 A100, 2,197 RTX 4090, 114 golden records). That infinite word is a valid output of a transition and, through the epilogue, of the VU (+-inf BF16), but it is not a finite accumulator: a chain whose intermediate transition saturates is rejected at the next step (domain rule). The pinned simulator's exponent masking is outside the paper's tested magnitudes and is not the reference on these cases; hawkeye_close.tc_dot16 documents where it parts from the hardware. Coordinator decision 2026-09-21.",
+      "evidence_refs": [
+        "backends/numerical/tests/reference/test_hawkeye_close.py",
+        "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json",
+        "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+        "r20260921-230852-4f1e"
+      ],
+      "owner": "coordinator"
+    },
+    {
+      "id": "D9",
+      "profile": "first-campaign-target/2026-09-21",
+      "issue": "Does a zero incoming accumulator contribute an exponent to the alignment maximum? Equivalent encodings in the simulator (zero at -132) and silicon (zeros skipped); a zero carried at its FP32 exponent (-126 or -127) would truncate differently",
+      "hawkeye_paper": "the recovered structure aligns to the maximum exponent; the accumulator's zero is not discussed",
+      "hawkeye_simulator": "every zero Gfloat carries AMPERE_ZERO_EXPONENT = -132 (multiply_bfloat16_to_gfloat, group_sum, the wrapper's start) and group_sum's maximum ranges over every term, so a zero never raises it; utils.cpp::bfloat16_to_gfloat_tensor (unused by the mma path) would decode a zero at -127",
+      "verity_reference": "silicon.group_sum skips zero-magnitude terms in the maximum: the same result as a zero at -132",
+      "hardware_evidence": "none among the earlier captures: in the 3,148 zero-accumulator all-finite A100/4090 cases and the 80 golden ones no result changes if the zero is carried at -126 or -127 (the difference needs cancelling products below 2^-145 with a zero accumulator).  RTX 4090 (sm_89), run r20260921-231618-ea24, family zero_acc_tiny_cancellation, 800,000 elements: a zero at -126 would change 163,533 results and a zero at -127 87,058; the hardware word equals the alternative in 0 of them and silicon.tc_dot in all 800,000 -- on sm_89 a zero accumulator does not enter the maximum.  A100: not measured.",
+      "status": "resolved",
+      "resolution": "Resolved by measurement on both architectures: a zero incoming accumulator does not enter the alignment maximum.  tc_probe family zero_acc_tiny_cancellation (+-0 accumulators, BF16 subnormal x [2^-27, 2^-5] products with random signs, 800,000 elements, seed 20260902): 163,533 elements would differ if the zero carried exponent -126 and 87,058 if it carried -127; the hardware word equals the -126 alternative in 0 of the 163,533 and the -127 alternative in 0 of the 87,058, and equals silicon.tc_dot (zeros skipped in the maximum, the same as the simulator's zero at -132) in all 800,000 -- identical counts on the A100 (sm_80, run r20260921-232750-56c5) and the RTX 4090 (sm_89, run r20260921-231618-ea24).  The 3,148 + 3,148 zero-accumulator all-finite special cases and the 80 golden ones do not distinguish the encodings; these two runs do. Status set by the coordinator 2026-09-21 on this evidence.",
+      "evidence_refs": [
+        "backends/numerical/python/verity_numerical/reference/hawkeye_close.py",
+        "tools/tc_probe/tc_probe.py",
+        "r20260921-231618-ea24",
+        "r20260921-232750-56c5"
+      ],
+      "owner": "WP1"
+    },
+    {
+      "id": "D10",
+      "profile": "fp8-ada-mma-draft/2026-09-22",
+      "issue": "Hawkeye's Hopper FP8 simulator does not describe Ada's FP8 mma.sync; and the FP8 path truncates a pass-through accumulator to 14 significand bits even when every product is zero",
+      "hawkeye_paper": "recovers one accumulation group of 32 with a 14-bit truncating adder for Hopper FP8 (zero accumulator only); Ada is not studied; the accumulator's treatment through a group of zero products is not discussed",
+      "hawkeye_simulator": "Hopper_fp8_simulator: one group of 32, 14-bit adder, floor -139; reproduces 10,547,091 / 12,800,000 (82.40 %, 2,252,909 mismatches) of the RTX 4090 E4M3 m16n8k32 random-tile elements; the synthetic Ampere-style FP8 model HAWKEYE_AMPERE_GROUPSUM_E4M3_V0 (groups (8,8), width 25) is not measured against anything",
+      "verity_reference": "verity.ml.tc.models.ADA_E4M3_M16N8K32: two groups of 16, width 14, floor -139; GroupSum.step rescales the incoming FP32 significand to 14 bits before the grouped add, so 0x3F800001 with 32 zero products becomes 0x3F800000 (the group of zeros is not a no-op); the checker's RescaleState gadget (backends/numerical, Params.lossy) is this truncation",
+      "hardware_evidence": "RTX 4090 (sm_89, driver 580.159.03), mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32, veritor gpu/tensor-core-semantics: 24,898,304 / 24,898,304 elements bit-exact over 194,518 tiles against the two-group model (families incl. signed_zero 256 tiles and tiny_acc_zero_products 512 tiles: all-zero products, accumulator exponents 0..30); reproducing tile a=b08234bb..., b=3b382f3d..., acc=0: GPU c0c9d800, Hopper_fp8_simulator c0c9d400; neutral-subgroup measurement results/characterize_e4m3.json separates the groupings.  Hopper (H100, wgmma m64n64k32): one group of 32 -- the same adder, a different grouping (veritor tc-fp8-2026-09-08, 144,543,744 words, 0 mismatches).",
+      "status": "resolved",
+      "resolution": "Ada E4M3 mma.sync is GroupSum(groups=(16,16), width=14, floor=-139), Hopper wgmma E4M3 is GroupSum(groups=(32,), width=14, floor=-139): the same 14-bit truncating adder, a different grouping, and so different functions (36 of 48 K=1536 steps differ on shared operands, fixtures/tc/vectors).  The 14-bit rescale of the incoming accumulator applies unconditionally -- through a group of zero products too -- and is a rule of the model (GroupSum.step) and a gadget of the checker (RescaleState), not a special case.  Hawkeye's Hopper FP8 simulator is the wrong model for sm_89 and is kept only as the source of the floor constant.  Recorded by lane silicon-p0 2026-09-22 from veritor's measurements; no new hardware.",
+      "evidence_refs": [
+        "packages/verity/tests/ml/fixtures/golden/ada_e4m3_m16n8k32.json",
+        "fixtures/tc/veritor-tc-fp8-2026-09-08.json",
+        "packages/verity/src/verity/ml/tc/models.py",
+        "backends/numerical/tests/checker/test_fp8.py"
+      ],
+      "owner": "silicon-p0"
+    },
+    {
+      "id": "D11",
+      "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+      "issue": "autoproof's v0 hypothesis for Blackwell block-scaled FP4 -- a single 26-bit alignment window with truncation toward zero -- is refuted by silicon",
+      "hawkeye_paper": "not covered (Hawkeye studies Ampere/Hopper BF16/FP16/FP8); autoproof SEMANTICS.lock v0 stated the single-window NATIVE hypothesis as PENDING-PROBE",
+      "hawkeye_simulator": "autoproof's v0 NATIVE reference: one 26-bit window below the largest addend, RZ; SEMANTICS.lock.v1 records it REFUTED by PROBE-3 with 142,270 mismatching dot statements; the checked-in probes/results/probe3_1783788526.json scores it at 143,076 / 1,574,998 (scan64: 1,058 of 1,060)",
+      "verity_reference": "verity.ml.tc.models.BlockScaledAlignAdd (BLACKWELL_SM120_NVF4): four exact 16-term E2M1 group dots, UE4M3 scales as exact exponent shifts, a five-way aligned add with a 42-bit first window and a 36-bit second window riding the accumulator's exponent, RZ normalisation, and the hot-group clip at 2^-19 when both scale codes of a live group are in 0x78..0x7E -- autoproof's model5, ported from fp4-ref/src/native.rs and spec/src/dyadic.rs",
+      "hardware_evidence": "RTX 5090 (sm_120, driver 570.195.03, GPU-297048d1), kernel SASS 166a24a0..., mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3, ascending-K chains from a zero accumulator: 1,574,998 dot statements over K in {64, 128, 256} (random, extreme scale span, directed cancellation, curated); v0 mismatches 142,270 (lockfile) / 143,076 (probe3 JSON); model5 0 mismatches (lockfile).  Verity replays the 1,601 recorded sample vectors 1,601 / 1,601 and the 1,400 unscaled kind::f8f6f4 E2M1 m16n8k32 vectors of probe2 1,400 / 1,400.",
+      "status": "resolved",
+      "resolution": "The single-window W=26 model is not the Blackwell consumer (sm_120) block-scaled FP4 semantics; the five-way align-add with the 42/36-bit windows and the hot-group clip is what verity carries as BLACKWELL_SM120_NVF4, status pinned on sm_120 by autoproof's evidence.  The two mismatch counts (142,270 vs 143,076) are two scorings of v0 on the same probe (lockfile prose vs the JSON); both refute it and the difference is not pursued.  Not evidence about sm_100 (B200 tcgen05.mma): see the sm100.* unprobed instructions.  Recorded by lane silicon-p0 2026-09-22.",
+      "evidence_refs": [
+        "fixtures/tc/autoproof-SEMANTICS.lock.v1.json",
+        "fixtures/tc/autoproof-probe-vectors.json",
+        "packages/verity/tests/ml/test_models.py"
+      ],
+      "owner": "silicon-p0"
+    },
+    {
+      "id": "D12",
+      "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+      "issue": "What exactly autoproof's pin covers: the lockfile counts 1,574,998 / 1,574,998 for model5 while the checked-in probe JSON scores the clip-less model2 at 1,574,997 / 1,574,998; the pin date is 2026-07-11 (not 2026-09 as the campaign brief says); and every probe starts from a zero accumulator so only chain-reachable accumulators were exercised",
+      "hawkeye_paper": "not covered",
+      "hawkeye_simulator": "autoproof SEMANTICS.lock.v1 (status: ADOPTED at oracle-v3, human review 2026-07-11): gdfs_model MEASURED, 1,574,998/1,574,998 bitwise under model5 = model2 + hot-group clip; probes/results/probe3_1783788526.json: model2_under_test Gdfs2Config{w1 42, w2 36, ...}, total_model2_mismatches 1 -- the one mismatch that motivated the clip; notes: acc zero-init, ascending-K chain, one warp per case",
+      "verity_reference": "BLACKWELL_SM120_NVF4.validated quotes both counts and the 2026-07-11 date; INSTRUCTIONS['sm120.mma.m16n8k64.e2m1.nvf4'].status = pinned with evidence naming the zero-init limitation; the model raises on a sum leaving the binary32 range (autoproof's oracle asserts there) and on non-finite inputs",
+      "hardware_evidence": "as D11.  No probe with an arbitrary finite FP32 accumulator (only the chain's own values), no overflow, no NaN/inf operands, no UE8M0 (mxf4) scales, no sm_100.",
+      "status": "resolved",
+      "resolution": "The pin is model5 (clip on) at 1,574,998 / 1,574,998 on sm_120, dated 2026-07-11: the JSON's single model2 mismatch is the clip's evidence, not a defect of the pin, and verity's port carries the clip.  The pin's domain is chains from +0 with finite E2M1 products and UE4M3 scales; results for arbitrary incoming accumulators (the second window w2=36 rides the accumulator exponent and is exercised only where the chain put it), for overflow and for special values are the model's extrapolation and are marked so.  Recorded by lane silicon-p0 2026-09-22.",
+      "evidence_refs": [
+        "fixtures/tc/autoproof-SEMANTICS.lock.v1.json",
+        "fixtures/tc/autoproof-probe-vectors.json",
+        "packages/verity/src/verity/ml/tc/instructions.py"
+      ],
+      "owner": "silicon-p0"
+    },
+    {
+      "id": "D13",
+      "profile": "sm120.mma.m16n8k64.e2m1.mxf4",
+      "issue": "Sign of a computed zero when a nonzero exact sum lies entirely below the FP32 subnormal grid: autoproof's code (dyadic.rs::to_f32, RZ) returns a zero of the sum's sign, its lockfile prose says a computed zero normalises to +0; reachable only with UE8M0 (mxf4) scales, which autoproof never probed",
+      "hawkeye_paper": "not covered",
+      "hawkeye_simulator": "autoproof: native.rs applies the same five-way transducer to mxf4 with the hot clip off (its trigger reads the UE4M3 exponent field); dyadic.rs::to_f32(Round::Rz) of a nonzero value below 2^-149 yields -0.0 for a negative value; SEMANTICS.lock.v1 zero_handling: 'all-addends-zero firing leaves the accumulator bit-identical (incl. -0); exact cancellation normalizes to +0' -- silent on underflow",
+      "verity_reference": "two named hypotheses, identical everywhere else: BLACKWELL_SM120_MXF4 (underflow_zero='signed', as the code) and BLACKWELL_SM120_MXF4_UNDERFLOW_PLUS0 (underflow_zero='positive', as the prose); INSTRUCTIONS['sm120.mma.m16n8k64.e2m1.mxf4'] carries the first with status hypothesis and ptx=None (the kind::mxf4 mnemonic is not recorded in either source repository)",
+      "hardware_evidence": "none: autoproof probed nvfp4 (UE4M3) only, where every nonzero term is at least 2^-20 and the case is unreachable; no mxf4 measurement exists in veritor, autoproof or verity",
+      "status": "open",
+      "resolution": null,
+      "to_resolve": "Probe mma.sync kind::mxf4 (UE8M0 block-32 scales) on sm_120 with scale codes near 0 (2^-127) and negative E2M1 products whose scaled sum is nonzero and below 2^-149, from a +0 accumulator; the word 0x80000000 confirms BLACKWELL_SM120_MXF4, 0x00000000 the _UNDERFLOW_PLUS0 variant.  The same probe pins the mxf4 mnemonic and whether the hot clip is indeed absent.",
+      "evidence_refs": [
+        "fixtures/tc/autoproof-SEMANTICS.lock.v1.json",
+        "packages/verity/src/verity/ml/tc/models.py"
+      ],
+      "owner": "tc-probe-fp8"
+    },
+    {
+      "id": "D14",
+      "profile": "sm90.mma.m16n8k32.e4m3",
+      "issue": "The Hopper legacy path: does FP8 mma.sync on sm_90 run Ada's two groups of 16 or wgmma's one group of 32?",
+      "hawkeye_paper": "Hopper FP8 is characterised through wgmma-backed kernels (one group of 32); the mma.sync path on sm_90 is not distinguished",
+      "hawkeye_simulator": "Hopper_fp8_simulator: one group of 32, width 14, floor -139 -- the wgmma semantics",
+      "verity_reference": "INSTRUCTIONS['sm90.mma.m16n8k32.e4m3']: model None, status unprobed; candidates ADA_E4M3_M16N8K32 (groups (16,16)) and HOPPER_E4M3_K32 (groups (32,)), both width 14, floor -139.  The BF16 analogue sm90.mma.m16n8k16.bf16 is likewise unmeasured: only wgmma BF16 (groups (16,), width 26, floor -133) was probed on the H100.",
+      "hardware_evidence": "H100 (sm_90a, driver 570.211.01, nvcc 12.4.131), lane tc-probe-fp8 runs r20260922-184111-671e (e4m3) and r20260922-184835-4b95 (e5m2), 25,040,128 elements each. SASS: mma.sync.aligned.m16n8k32 FP8 is lowered by ptxas 12.4 to 12x F2FP.F16.<fmt>.UNPACK_B, two HMMA.16816.F32 with zero accumulators (operand halves k mod 4 in {0,1} / {2,3}), FADD of the partials, FADD with C. The composite 'HOPPER_BF16_M16N8K16 over each half + IEEE FP32 adds' gives 0 mismatches for both formats; HOPPER_E4M3_K32 (one group of 32) fails 74%/62%, ADA_E4M3_M16N8K32 ((16,16), 14-bit) fails 76%/63%. Finite families agree: zero products give D == C for 65,536/65,536 (no 14-bit accumulator truncation), acc_only_lsb_walk keeps all 32 bits, the adder-width residual survives to 2^-24..2^-26. BF16: sm90.mma.m16n8k16.bf16 (run r20260922-185339-e337, 1x HMMA.16816.F32.BF16) matches hopper_bf16_m16n8k16 0/25,698,304; ampere fails 30,927 of a 192,000 subset.",
+      "status": "resolved",
+      "resolution": "Neither. On sm_90a the legacy FP8 mma.sync is not a tensor-core FP8 instruction: it is two HMMA.16816.F32 (the Hopper BF16 K=16 pipeline: one group of 16, 26-bit adder, floor -133) over the two k-halves plus IEEE FP32 FADDs. A target over this PTX op must be modelled as that composite, not as a 14-bit FP8 pipeline; the registry entry sm90.mma.m16n8k32.e4m3 records the lowering and keeps model=None until the composite is expressed as a Model. Hopper mma.sync BF16 runs the same pipeline as wgmma BF16 (pinned).",
+      "to_resolve": "",
+      "evidence_refs": [
+        "r20260922-184111-671e",
+        "r20260922-184835-4b95",
+        "r20260922-185339-e337",
+        "tools/tc_probe/tc_probe.py"
+      ],
+      "owner": "tc-probe-fp8"
+    },
+    {
+      "id": "D15",
+      "profile": "fp8-hopper-wgmma-draft/2026-09-22",
+      "issue": "The registry id sm90.wgmma.m64n8k32.e4m3 names an n8 shape while the H100 evidence is wgmma m64n64k32; and the exponent floor of the FP8 adders (-139) is Hawkeye's constant, not pinned by measurement on either Hopper or Ada",
+      "hawkeye_paper": "FP8 Hopper: one group of 32, 14-bit adder; the floor -139 is the simulator's constant",
+      "hawkeye_simulator": "Hopper_fp8_simulator: zero exponent -139",
+      "verity_reference": "HOPPER_E4M3_K32 and ADA_E4M3_M16N8K32 carry zero_exponent=-139; FP8_HOPPER_WGMMA names instruction sm90.wgmma.m64n8k32.e4m3 whose ptx field reads m64n8k32 (the id other lanes use as a string) while its evidence string records the measured m64n64k32 -- the per-element dot semantics do not depend on N, so the model is one and the same, but the shape column is a claim about the id, not about what was measured",
+      "hardware_evidence": "H100 (sm_90, driver 580.126.09), wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 / QGMMA.64x64x32.F32.E4M3.E4M3: 144,543,744 words, 0 mismatches; the fit grid leaves groups (32,) and width 14 unique but the floor only bounded to [-152, -126] (every candidate in that range fits 262,144 words with 0 mismatches).  RTX 4090: no E4M3 term can have exponent below -126 (products >= 2^-18, FP32 subnormal accumulators at -126), so any floor <= -126 gives identical results. UPDATE 2026-09-22 (lane tc-probe-fp8, run r20260922-183435-fd5d): wgmma.mma_async.sync.aligned.m64n8k32.f32.e4m3.e4m3 measured DIRECTLY on an H100 (1x QGMMA.64x8x32.F32.E4M3.E4M3, descriptor (LBO,SBO)=(128,256)): 25,554,432 elements, 0 mismatches against HOPPER_E4M3_K32; adder-width residual survives at 2^-13 and truncates at 2^-14 in all 30 slots k=2..31 (one group of 32, 14-bit adder); zero products: D == C & ~0x3ff for 262,144/262,144 with no signed-zero exception. Part (a) of this entry is therefore settled: the id's shape is what was measured.",
+      "status": "open",
+      "resolution": null,
+      "to_resolve": "(a) SETTLED by r20260922-183435-fd5d (m64n8k32 measured directly). (b) remains: the floor is observable only when every term's exponent is below it; an FP32 subnormal accumulator with all-zero products isolates it -- the zero-products family on the H100 shows D == C & ~0x3ff for all 262,144 cases, consistent with any floor <= -126; decide whether to declare the floor unobservable in the finite domain (any value <= -126 admissible) in the FP8 targets.",
+      "evidence_refs": [
+        "fixtures/tc/veritor-tc-fp8-2026-09-08.json",
+        "packages/verity/src/verity/ml/tc/instructions.py",
+        "r20260922-183435-fd5d"
+      ],
+      "owner": "tc-probe-fp8"
+    },
+    {
+      "id": "D16",
+      "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+      "issue": "A -0 FP32 accumulator with all-zero E2M1 products returns +0 on the RTX 5090, while model5 (BlockScaledAlignAdd) returns -0",
+      "hawkeye_paper": "n/a (Hawkeye covers BF16/FP8 Ampere/Hopper; no FP4)",
+      "hawkeye_simulator": "n/a",
+      "verity_reference": "BlockScaledAlignAdd / autoproof model5 keeps the accumulator's sign when every product is zero (16,328/16,328 elements return -0 in the model)",
+      "hardware_evidence": "RTX 5090 (cc 12.0, driver 570.153.02, nvcc 12.8.93, -arch=sm_120a), mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64 ... ue4m3 / OMMA.SF UE4M3.4X: family signed_zero_acc, 16,328/16,328 elements give +0 where model5 gives -0. Run r20260922-182011-88f8 (lane fp4-5090); the same probe replays autoproof's probe3 vectors 1601/1601 and 1,736,704 swept +0-accumulator elements with 0 mismatches, so this is the only zero-accumulator-sign disagreement.",
+      "status": "open",
+      "resolution": null,
+      "to_resolve": "Decide whether the model's five-way aligned add canonicalises an all-zero sum to +0 (RZ with a +0 identity, as the Ada FP8 mma.sync does for its truncated accumulator: D-log Ada finding 'C = 0x800001a9 -> +0') or keeps the accumulator sign only when the accumulator is nonzero; probe -0 accumulator with a nonzero product that cancels exactly, and -0 with subnormal products, then fix BlockScaledAlignAdd and re-run family signed_zero_acc. Also record the same test for sm120 mxf4 (ue8m0).",
+      "evidence_refs": [
+        "r20260922-182011-88f8",
+        "tools/tc_probe_fp4/probe.py",
+        "tools/tc_probe_fp4/model5.py"
+      ],
+      "owner": "fp4-5090"
+    },
+    {
+      "id": "D17",
+      "profile": "sm120.mma.m16n8k64.e2m1.nvf4",
+      "issue": "With a nonzero accumulator of the opposite sign to the scaled group sum, whose msb lies 37-42 binades below the leading exponent, the RTX 5090 result is 1 ulp larger in magnitude than model5's",
+      "hawkeye_paper": "n/a",
+      "hawkeye_simulator": "n/a",
+      "verity_reference": "BlockScaledAlignAdd / autoproof model5: four exact 16-term group dots, UE4M3 scales as exponent shifts, five-way aligned add of the scaled groups and the accumulator in a 42-bit window truncating toward zero, then a 36-bit second window (autoproof SEMANTICS.lock.v1, pinned on zero-init accumulator chains only -- D12)",
+      "hardware_evidence": "RTX 5090, same instruction and run as D16 plus the nonzero-accumulator families: 12,790 of 1,500,000 nonzero-accumulator elements disagree, 100% of them opposite-sign accumulators at the 42-bit window edge; the hardware value is always 1 ulp larger in magnitude than model5. Neither a narrower accumulator window nor anchoring the window to the scale exponent explains every case. Captured tiles in the run's tiles_*.npz (run r20260922-182011-88f8, lane fp4-5090). Autoproof's zero-init chains never truncate the accumulator, so the regime was unobserved before this run.",
+      "status": "open",
+      "resolution": null,
+      "to_resolve": "Fit the accumulator's alignment/truncation rule from the captured tiles: candidates are (a) accumulator truncated toward zero BEFORE alignment (as the Ada FP8 mma.sync truncates its accumulator to the 14-bit adder, giving a sticky/rounding-direction difference for opposite signs), (b) a sign-magnitude adder with the accumulator's dropped bits contributing a borrow, (c) a wider or differently anchored first window. Whichever fits all 12,790 mismatches and keeps the 1,736,704 zero-accumulator agreements becomes the model; until then the nvf4 pin is 'zero-init accumulators only' (D12) and any GemmCoordinate chain with truncated accumulators over sm120 nvf4 is outside the supported domain.",
+      "evidence_refs": [
+        "r20260922-182011-88f8",
+        "tools/tc_probe_fp4/probe.py",
+        "tools/tc_probe_fp4/model5.py"
+      ],
+      "owner": "fp4-5090"
+    },
+    {
+      "id": "D18",
+      "profile": "sm120.mma.m16n8k64.e2m1.mxf4",
+      "issue": "The MXFP4 (ue8m0 scales) variant is accepted on sm_120a and captured, but the 'model5 with ue8m0 exponent shifts' hypothesis is not exact",
+      "hawkeye_paper": "n/a",
+      "hawkeye_simulator": "n/a",
+      "verity_reference": "Registry entry sm120.mma.m16n8k64.e2m1.mxf4 is a hypothesis with ptx=None (D13); the natural hypothesis is BlockScaledAlignAdd with 4 x 16-term groups and ue8m0 shifts",
+      "hardware_evidence": "RTX 5090, mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64 ... ue8m0 / OMMA.SF E8: 622,592 elements captured; the 4x16-group shift hypothesis beats a 2x32 grouping but leaves 798 of 131,072 zero-accumulator elements mismatched. Run r20260922-182548-e654 (lane fp4-5090). The PTX mnemonic (scale_vec::2X, ue8m0) and its acceptance on sm_120a resolve the D13 'mnemonic' question; the clip and underflow-sign questions remain.",
+      "status": "open",
+      "resolution": null,
+      "to_resolve": "Fit the ue8m0 path from the captured tiles: whether the scale is applied as a pure exponent shift (no ue4m3-style clip), where the window anchors when one scale is 2^-127, and the sign of an underflowed zero. Record the mnemonic in the registry (ptx field) once silicon-p0's registry is reopened.",
+      "evidence_refs": [
+        "r20260922-182548-e654",
+        "tools/tc_probe_fp4/probe.py"
+      ],
+      "owner": "fp4-5090"
+    }
+  ]
 }

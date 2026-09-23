@@ -37,3 +37,8 @@ lean-plan-bridge = []
 unsound-skip-authentication = []
 # Hash every leaf but skip only the path folding, to separate the two costs.
 unsound-skip-path-fold = []
+# Run ONLY the relation: no statement, no witness, no opening table, no leaf
+# hashing.  The guest reads a compact input (K || x || W) and commits
+# sha256(input) || sha256(output word) || 0xEE (`relation_only`).  The
+# arithmetic baseline of the zkVM path; measures nothing about verification.
+unsound-relation-only = []

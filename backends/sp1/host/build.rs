@@ -33,6 +33,10 @@ const GUEST_FEATURES: &[(&str, &str)] = &[
         "CARGO_FEATURE_UNSOUND_SKIP_PATH_FOLD",
         "unsound-skip-path-fold",
     ),
+    (
+        "CARGO_FEATURE_UNSOUND_RELATION_ONLY",
+        "unsound-relation-only",
+    ),
     ("CARGO_FEATURE_ATTRIBUTION", "attribution"),
 ];
 

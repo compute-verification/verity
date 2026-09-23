@@ -1,0 +1,272 @@
+{
+ "device": {
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "sms": 128,
+  "l2_bytes": 75497472,
+  "device_memory_bytes": 25250627584,
+  "cuda_driver_version": 13000,
+  "cuda_runtime_version": 12090,
+  "cupy": "14.2.0",
+  "numpy": "2.4.6",
+  "nvidia_smi_driver": "580.159.04"
+ },
+ "started": "2026-09-22T07:19:05Z",
+ "args": {
+  "reps": 7,
+  "out": "/workspace/research/runs/r20260922-071843-ac9a/lintest_bench.json",
+  "rows": 310602,
+  "M": [
+   1,
+   2,
+   4
+  ],
+  "exceptional": [
+   0,
+   256
+  ],
+  "chunk_rows": 1024,
+  "tc": true,
+  "baseline": true,
+  "quick": false
+ },
+ "results": [
+  {
+   "name": "linear_test_structured_M1_X0",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 1,
+   "exceptional_rows": 0,
+   "chunk_rows": 1024,
+   "ms_median": 5.668831825256348,
+   "ms_all": [
+    5.660607814788818,
+    5.694464206695557,
+    5.668831825256348,
+    5.694399833679199,
+    5.660672187805176,
+    5.6893439292907715,
+    5.665791988372803
+   ],
+   "us_per_row": 0.01825111179340876,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 12,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.09523200243711472,
+    "combine_multi": 5.657599925994873,
+    "encode_V": 0.02969600073993206,
+    "pointwise": 0.01945599913597107,
+    "exceptional_generic": 0.0
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 12003180544,
+   "fraction_of_read_floor": 0.8905741435345458
+  },
+  {
+   "name": "linear_test_structured_M1_X256",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 1,
+   "exceptional_rows": 256,
+   "chunk_rows": 1024,
+   "ms_median": 6.375423908233643,
+   "ms_all": [
+    6.367231845855713,
+    6.369279861450195,
+    6.375423908233643,
+    6.382559776306152,
+    6.368256092071533,
+    6.3856000900268555,
+    6.408192157745361
+   ],
+   "us_per_row": 0.020526023361838116,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1804,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 1.0506240129470825,
+    "combine_multi": 6.187007904052734,
+    "encode_V": 0.027615999802947044,
+    "pointwise": 0.018432000651955605,
+    "exceptional_generic": 0.14236800372600555
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5724307456,
+   "fraction_of_read_floor": 0.7918712732339355
+  },
+  {
+   "name": "linear_test_structured_M2_X0",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 2,
+   "exceptional_rows": 0,
+   "chunk_rows": 1024,
+   "ms_median": 6.639616012573242,
+   "ms_all": [
+    6.6170878410339355,
+    6.6263041496276855,
+    6.619135856628418,
+    6.639616012573242,
+    6.761472225189209,
+    6.995967864990234,
+    7.003136157989502
+   ],
+   "us_per_row": 0.02137660418340269,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 24,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.11980800330638885,
+    "combine_multi": 6.98364782333374,
+    "encode_V": 0.048128001391887665,
+    "pointwise": 0.03471999987959862,
+    "exceptional_generic": 0.0
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5724307456,
+   "fraction_of_read_floor": 0.760362502599371
+  },
+  {
+   "name": "linear_test_structured_M2_X256",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 2,
+   "exceptional_rows": 256,
+   "chunk_rows": 1024,
+   "ms_median": 6.978559970855713,
+   "ms_all": [
+    6.831103801727295,
+    6.818816184997559,
+    6.862847805023193,
+    6.978559970855713,
+    6.981632232666016,
+    7.007232189178467,
+    7.062528133392334
+   ],
+   "us_per_row": 0.022467852656633612,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1816,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.11776000261306763,
+    "combine_multi": 6.872992038726807,
+    "encode_V": 0.04710400104522705,
+    "pointwise": 0.03379200026392937,
+    "exceptional_generic": 0.024671930819749832
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5774639104,
+   "fraction_of_read_floor": 0.7234322078914509
+  },
+  {
+   "name": "linear_test_structured_M4_X0",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 4,
+   "exceptional_rows": 0,
+   "chunk_rows": 1024,
+   "ms_median": 13.593567848205566,
+   "ms_all": [
+    13.091839790344238,
+    13.47481632232666,
+    13.593567848205566,
+    13.599743843078613,
+    13.674495697021484,
+    13.61193561553955,
+    13.519871711730957
+   ],
+   "us_per_row": 0.04376522961283432,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 48,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.17919999361038208,
+    "combine_multi": 13.395071983337402,
+    "encode_V": 0.08294399827718735,
+    "pointwise": 0.06364800035953522,
+    "exceptional_generic": 0.0519038662314415
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5816582144,
+   "fraction_of_read_floor": 0.37138999150142044
+  },
+  {
+   "name": "linear_test_structured_M4_X256",
+   "bucket": "linear_test_structured",
+   "shape": "B",
+   "rows": 310602,
+   "M": 4,
+   "exceptional_rows": 256,
+   "chunk_rows": 1024,
+   "ms_median": 13.67142391204834,
+   "ms_all": [
+    13.541376113891602,
+    13.597696304321289,
+    13.598719596862793,
+    13.744128227233887,
+    13.715456008911133,
+    13.67142391204834,
+    13.67347240447998
+   ],
+   "us_per_row": 0.044015891436785144,
+   "transforms_per_row": 0,
+   "transforms_per_batch": 1840,
+   "encoder_calls_per_row": 0,
+   "split_ms": {
+    "prepare_G_once_per_batch": 0.17817600071430206,
+    "combine_multi": 13.548543930053711,
+    "encode_V": 0.08191999793052673,
+    "pointwise": 0.062463998794555664,
+    "exceptional_generic": 0.0
+   },
+   "read_floor_ms": 5.0485150476190475,
+   "device_memory_in_use_bytes": 5841747968,
+   "fraction_of_read_floor": 0.3692749987197674
+  },
+  {
+   "name": "linear_test_s256",
+   "bucket": "linear_test",
+   "shape": "B",
+   "rows": 310602,
+   "slice_rows": 256,
+   "ms_median": 149.8849334716797,
+   "ms_all": [
+    149.49069213867188,
+    149.7507781982422,
+    149.8849334716797,
+    149.8839111328125,
+    149.89407348632812,
+    149.89414978027344,
+    149.88902282714844
+   ],
+   "us_per_row": 0.48256267980141687,
+   "encoder_calls_per_row": 7,
+   "transforms_per_row": 14,
+   "rA_generation_included": false,
+   "device_memory_in_use_bytes": 22243573760
+  }
+ ],
+ "bench_kind": "bucket",
+ "bucket": "linear_test",
+ "scope": "component: B-Ligero linear test q_add through the structure of r^T A (powers-of-rho combination, per-unit constraint pattern): M fixed F_c rows + per-row F_c scalars + X exceptional rows, measured standalone on resident pseudo-random data; the r^T A scalars/pattern generation is not included (it is O(rows + |pattern|))",
+ "checks": {
+  "toy_structure_matches_dense_rta": true,
+  "toy_exceptional_rows": [
+   0,
+   5
+  ],
+  "numpy_shortcut_equals_numpy_general": true,
+  "gpu_general_equals_numpy": true,
+  "gpu_shortcut_equals_gpu_general": true,
+  "int8_tc_combine_equals_numpy": true
+ },
+ "tc_error": "RuntimeError('CUDA error: CUBLAS_STATUS_NOT_SUPPORTED when calling cublasLtMatmul with transpose_mat1 0 transpose_mat2 0 m 16384 n 32 k 32768 mat1_ld 16384 mat2_ld 310602 result_ld 16384 abType 3 cType 10 computeType 72 scaleType 10')",
+ "finished": "2026-09-22T07:19:11Z",
+ "run_id": "r20260922-071843-ac9a",
+ "all_bit_exact": true
+}

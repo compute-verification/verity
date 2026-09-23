@@ -26,6 +26,20 @@ is what requires the hidden stream.
     PYTHONPATH=. python -m verity_capture.commit.required_manifest check --manifest manifest.json --layouts layouts.json
 
 Dependency-free (json/gzip/hashlib) so bind's checker, the finalizer and tests can import it without torch.
+
+PROTOCOL SUMMARY (Commit stage: the manifest of record = the cached RequiredValues(P, Q) population)
+  Purpose: name, BEFORE the Commit runs, every logical value the collector must bind -- derived from the Build's Program
+    (instances.json.gz) under the canonical VU query (Q_module_v1), never from what the collector happened to acquire.
+  Inputs: `build --program <derive dir> --workload wl.json` (B=1) | `build-global --fixture wl.json --programs-root <row dir>
+    [--workload-digest]` (B>=2: one component Program per declared (LP, T)); `verify --manifest` rebuilds and compares after the Commit.
+  Outputs: manifest.json (SCHEMA: header program_digest / manifest_digest / query / complete / unmodelled / cross_check / guard,
+    populations{identities, by_family}, one `identities` row per required identity), manifest_verify.json; `coverage_check` for the checker.
+  Invariants: identity key = IDENTITY_KEY (program_digest, request_id, step, invocation, op_path, output_member, element_range, rank);
+    DEFAULT_ENGINE traversal, the inventory engine kept as the one-release cross-check (both are built and must agree row for row,
+    else the build fails by name); a family with no naming rule -> UnmodelledFamily -> `complete: False` -> coverage refused
+    (never a narrowed PASS); a zero-width member is never a row (MAN-02); the manifest's program_digest must equal the Build's
+    (binding.require_build_program_digest, before any engine).
+  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 

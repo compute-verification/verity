@@ -1,6 +1,6 @@
 {
  "decimal_precision": 100,
- "digest": "cea213ed30b34096f58182cb406c4a94209915bc7dd2c66333624b114722a1aa",
+ "digest": "82fd6a281c1b999ad2929c0c05a701614a5e322bfe2a92141dd77ec2af8f8e52",
  "families": {
   "GatherBf16x{V}": "292a5b258ce1fa42b6513f45967ba6739fc31d49a3d5a661daee7c967e24f271",
   "GatherF32x{V}": "c8f5a53caaa21e3bf82b99ad0dffa5ce4b647bcd20ea9eb9b62242748bc605a9"
@@ -293,7 +293,7 @@
   }
  },
  "module": "verity_vllm.registry.ref_prims",
- "module_sha256": "ac83ba131cbba25284ad41ed282129921929e36107a609466a46b457812c5723",
+ "module_sha256": "046288e134402e7b423cc02d3190719608f607fe86d0022748b5e05210b964e7",
  "schema": "verity-ir/ref-vocab/v0",
  "shared": {
   "ArgmaxStep_v1": {

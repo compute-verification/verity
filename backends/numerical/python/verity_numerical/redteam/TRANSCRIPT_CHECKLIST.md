@@ -70,7 +70,7 @@ reproducer under `redteam/`.  An unchecked box is an open question, not a pass.
 ## Review items for the build lanes' first commits (wave 2: from the WP2 checker contracts)
 
 Both candidates implement `checker/gadgets.py` `contract()`s as composed by `step.py`.  Wave 2 found no accepted
-deviation from the reference over the integers or over Goldilocks (`reports/redteam_checker.json`: mutation /
+deviation from the reference over the integers or over Goldilocks (`notes-asset:campaigns/r20-proof/assets/red-team-checker/reports/redteam_checker.json`: mutation /
 coordinated on every hint column, z3 per gadget with Boolean case splits); every SAT is a field below the checker's
 F1-F4 thresholds.  What an implementation can still get wrong is the *realisation*.  Check, per commit:
 
@@ -126,7 +126,7 @@ F1-F4 thresholds.  What an implementation can still get wrong is the *realisatio
       (one predicate removed must make the backend *accept* a forged witness -- the test that a bound is load-bearing);
       the F1 witness `leading_bit: v = 537133057, l = 19` and F2 `align_state: M = 0, d >= 25, q = 63, r = 2^25 - 1`
       replayed against the backend's range realisation (must reject); a coordinated two-column forgery
-      (`harness.run_coordinated` on the backend's `check`) at the same case count as `redteam_checker.json` (1,909
+      (`harness.run_coordinated` on the backend's `check`) at the same case count as `notes-asset:campaigns/r20-proof/assets/red-team-checker/reports/redteam_checker.json` (1,909
       attempts, PASS).
 
 ## What the transcript must not let the prover re-supply
@@ -138,3 +138,37 @@ F1-F4 thresholds.  What an implementation can still get wrong is the *realisatio
       `forge.thresholds` / `forge.max_products` for the pipeline in use.
 - [ ] `neg_t` when `total = 0` (free column) -- confirm the protocol does not expose it (it is unobservable in the
       relation but would be a distinguishing bit in a transcript).
+
+## Statement and size binding (wave 3: from the red team's B forgeries, 2026-09-22, lane soundness-fixes)
+
+- [ ] **The statement is bound, not inferred from the proof.** Every public value the verifier is asked to accept
+      (claimed output words per VU, bound operands, B, K) is (a) absorbed into the challenger before the first
+      challenge and (b) checked by the verifier against the OPENED trace: a public column is checked at ζ and ζ·g
+      against the barycentric evaluation of the verifier's own copy of it (`direct/src/statement.rs::eval_pair`), or
+      constrained via `AirBuilderWithPublicValues`. "The claimed words are committed cells" is NOT binding: a proof of
+      a different satisfying trace (all-zero VUs) verifies as any statement (`b_zero_batch_as_any_statement`, F1).
+      Pin: `direct/tests/chain.rs::statement_suite` (F1a/F1b), `BoundError::StatementColumn`.
+- [ ] **Degree / size / shape come from the verifier's configuration, never from the proof.** `degree_bits`, the
+      trace height, the number of VUs, the FRI parameters (blowup, queries, PoW bits), the field, the challenge
+      extension degree and the AIR identity (a hash of the constraint program and layout) are fixed by the verifier
+      from `(B, rows per VU, padding)` and its config, absorbed into the challenger, and any value the proof carries
+      is compared, not used. Plonky3 uni-stark 0.4.3 reads `degree_bits` from the proof: a 2-VU (256-row) proof
+      verified as 4096 VUs (`b_degree_bits_unbound`, F2). Pin: `statement_suite` (F2),
+      `BoundError::DegreeBits{expected, got}`; header contents `statement.rs::header` (domain tag `verity-direct/stmt/v1`).
+- [ ] **Every realisation of the same relation carries the binding.** A second prover/verifier pair for the same
+      AIR (B's LogUp realisation, `direct/src/lookup_stark.rs`, a fork of uni-stark with two extra rounds) shipped
+      with the pre-fix behaviour while the limb path was being fixed: no statement, `degree_bits` from the proof
+      (`redteam-logup-b` cases `zero_batch_as_any_statement`, `degree_bits_from_proof`). Binding is a property of
+      each verifier entry point, not of the AIR: enumerate the entry points (`verify`, `verify_lookup`, every
+      `--mode`) and pin each. Fixed 2026-09-22 (lane `b-bind`, PROTOCOL.md 14.7): `prove_lookup_bound` /
+      `verify_lookup_bound_bytes`, pin `direct/tests/lookup_statement.rs`. `verify_lookup` (unbound) remains as a
+      diagnostic and is labelled `statement_binding.bound = false` in every result that uses it.
+- [ ] **Preprocessed / public tables are part of the statement.** When the verifier recomputes a preprocessed
+      commitment from a public table definition, the table definition (or its digest) is also absorbed into the
+      challenger before the first challenge, so the two parties' challenges agree only if their tables do; the
+      commitment comparison alone binds the prover's `P` but not the verifier's choice of tables to the transcript.
+      Pin: `lookup_statement.rs` (substituted table row rejected both ways; `statement::table_digest`,
+      `statement::lookup_header`, tag `verity-direct/chain-air/logup/v1`).
+- [ ] **The trace height is a function of the statement AND the realisation.** The LogUp trace is at least the
+      tables' height (2^17 rows for `|P| = 116 722`), so `Statement::rows()` differs between realisations for the
+      same words (`Statement::min_rows`); a proof of the words at the wrong realisation's height is `DegreeBits`.

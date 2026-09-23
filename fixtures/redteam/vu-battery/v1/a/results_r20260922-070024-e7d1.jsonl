@@ -1,0 +1,14 @@
+{"id": "a_c0_nonzero", "mode": "pcs", "exit": 1, "verify": "Err(\"ligero: linear functional value mismatch\")"}
+{"id": "a_c0_nonzero", "mode": "clear", "exit": 1, "verify": "Err(\"chain: VU 1 unit 0 incoming word differs from the previous outgoing word\")"}
+{"id": "a_epilogue_claim", "mode": "pcs", "exit": 1, "verify": "Err(\"assertions: phase-1 round 0 sum mismatch\")"}
+{"id": "a_epilogue_claim", "mode": "clear", "exit": 1, "verify": "Err(\"assertions: phase-1 round 0 sum mismatch\")"}
+{"id": "a_epilogue_y32", "mode": "pcs", "exit": 1, "verify": "Err(\"ligero: linear functional value mismatch\")"}
+{"id": "a_epilogue_y32", "mode": "clear", "exit": 1, "verify": "Err(\"chain: VU 0 epilogue input differs from the last word\")"}
+{"id": "a_honest", "mode": "pcs", "exit": 0, "verify": "Ok(())"}
+{"id": "a_honest", "mode": "clear", "exit": 0, "verify": "Ok(())"}
+{"id": "a_public_word", "mode": "pcs", "exit": 1, "verify": "Err(\"ligero: linear functional value mismatch\")"}
+{"id": "a_public_word", "mode": "clear", "exit": 1, "verify": "Err(\"chain: VU 0 output word differs from the public word\")"}
+{"id": "a_splice", "mode": "pcs", "exit": 1, "verify": "Err(\"ligero: linear functional value mismatch\")"}
+{"id": "a_splice", "mode": "clear", "exit": 1, "verify": "Err(\"chain: VU 1 unit 40 incoming word differs from the previous outgoing word\")"}
+{"id": "a_swap_words", "mode": "pcs", "exit": 1, "verify": "Err(\"ligero: linear functional value mismatch\")"}
+{"id": "a_swap_words", "mode": "clear", "exit": 1, "verify": "Err(\"chain: VU 0 output word differs from the public word\")"}

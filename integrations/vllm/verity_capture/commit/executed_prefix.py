@@ -21,6 +21,20 @@ record's served output (capture/tokens.json of the same attempt) and the Match a
 the record's tokens.json; (c) any actual execution past the boundary FAILS (`rows_past_the_stop`).  NOT-EXECUTED-BY-RULE is an
 active-reference implementation classification only.  In the lifted fixed Program the corresponding positions are REQUIRED logical values
 assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category.
+
+PROTOCOL SUMMARY (Commit stage: the executed prefix of record -- how far each request actually ran)
+  Purpose: per request, derive the two lengths every Commit consumer counts on -- served_output_len (tokens served, EOS included) and
+    executed_prefix_len (cap on a length stop; served + LAG on an EOS stop) -- from the served tokens + the Program's DECLARED stop
+    rule (eos ids, lag), never from the trace; then accept it only when LINKED to the Match account of the same attempt.
+  Inputs: served tokens per request, caps, `eos_of_record` + `lag` (global_program.stop_rule / Workload_v1.lag), the Match account
+    (match/capture/tokens.json + global_match.json G6 via `load_match_account`), the binding map (for `rows_past_the_stop`).
+  Outputs: dicts consumed by commit_delta / binding / sampled_replay: `executed_prefix_of_record` {requests{served_output_len,
+    executed_prefix_len, cap, eos_stop}, ok, problems, any_eos_stop, lag}, `request_steps_of_record`, `rows_past_the_stop`,
+    `link_to_match_account` {ok, required, problems, tokens_equal, g6}, `executed_prefix_facts` (the named facts sampled_replay takes).
+  Invariants: LAG is never defaulted to 0 or 1 -- an early stop with no declared EOS set / LAG, a non-EOS last token, or served > cap
+    is a problem and the population stays the cap's; a prefix reduced from its cap on the committer's own count alone is never
+    accepted (R17-27 (a)); the lag must agree on every leg (declared == tokens.json == G6); a committed row past the prefix fails by name.
+  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 

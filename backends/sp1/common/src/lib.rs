@@ -108,7 +108,7 @@ pub const PUBLIC_VALUES_WITH_OBJECT_LEN: usize = 65;
 /// Whether this build skips any part of the authentication (an `unsound-*` feature is on).
 pub const UNSOUND: bool = cfg!(any(
     feature = "unsound-skip-authentication",
-    feature = "unsound-skip-path-fold"
+    feature = "unsound-skip-path-fold", feature = "unsound-relation-only" // (line count kept: the sound ELF)
 ));
 
 /// What a diagnostic build prints before anything else; `None` for a sound build.
@@ -116,9 +116,9 @@ pub const DIAGNOSTIC_BANNER: Option<&str> = if cfg!(feature = "unsound-skip-auth
     Some("UNSOUND DIAGNOSTIC BUILD: authentication skipped")
 } else if cfg!(feature = "unsound-skip-path-fold") {
     Some("UNSOUND DIAGNOSTIC BUILD: path folding skipped")
-} else {
-    None
-};
+} else if cfg!(feature = "unsound-relation-only") {
+    Some("UNSOUND DIAGNOSTIC BUILD: relation only (no statement, no openings, no authentication)")
+} else { None };
 
 /// The verdict byte for an accepted batch: `1`, or `0xEE` in a diagnostic build.
 pub const VERDICT_ACCEPT: u8 = if UNSOUND { 0xEE } else { 1 };
@@ -174,3 +174,10 @@ pub fn decode_verdict(byte: u8) -> Option<(bool, bool)> {
         _ => None,
     }
 }
+
+// Declared last, and compiled only under its feature (or for this crate's unit tests), so the
+// sound build's source lines -- and with them the panic locations baked into the guest ELF, i.e.
+// the approved identity -- are untouched.  The same reason the two edits above keep their line count.
+/// RELATION-ONLY DIAGNOSTIC (`unsound-relation-only`): the compact input, the bare gate chain, its public values.
+#[cfg(any(feature = "unsound-relation-only", test))]
+pub mod relation_only;

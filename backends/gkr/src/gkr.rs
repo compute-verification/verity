@@ -11,55 +11,108 @@ use crate::circuit::{Gate, Layer};
 use crate::field::{eq_table, eval_mle, fold_in_place, interpolate, Ext, Fp};
 use crate::transcript::Transcript;
 
-pub struct Proof { pub msgs: Vec<Ext> }
+pub struct Proof {
+    pub msgs: Vec<Ext>,
+}
 
-pub struct Reader<'a> { pub msgs: &'a [Ext], pub pos: usize }
+pub struct Reader<'a> {
+    pub msgs: &'a [Ext],
+    pub pos: usize,
+}
 impl<'a> Reader<'a> {
     pub fn next(&mut self) -> Result<Ext, String> {
-        let v = self.msgs.get(self.pos).copied().ok_or_else(|| "proof truncated".to_string())?;
+        let v = self
+            .msgs
+            .get(self.pos)
+            .copied()
+            .ok_or_else(|| "proof truncated".to_string())?;
         self.pos += 1;
         Ok(v)
     }
-    pub fn take(&mut self, n: usize) -> Result<Vec<Ext>, String> { (0..n).map(|_| self.next()).collect() }
+    pub fn take(&mut self, n: usize) -> Result<Vec<Ext>, String> {
+        (0..n).map(|_| self.next()).collect()
+    }
 }
 
 /// The values of a layer's input space for copy `c`: a slice of length >= 2^s_in (entries past the real
 /// width are zero by construction of the exporter's padding).
-pub trait LayerInput { fn row(&self, c: usize) -> &[Fp]; fn copies(&self) -> usize; }
+pub trait LayerInput {
+    fn row(&self, c: usize) -> &[Fp];
+    fn copies(&self) -> usize;
+}
 
-pub struct Strided<'a> { pub data: &'a [Fp], pub width: usize, pub copies: usize }
+pub struct Strided<'a> {
+    pub data: &'a [Fp],
+    pub width: usize,
+    pub copies: usize,
+}
 impl<'a> LayerInput for Strided<'a> {
-    fn row(&self, c: usize) -> &[Fp] { if c < self.copies { &self.data[c * self.width..(c + 1) * self.width] } else { &[] } }
-    fn copies(&self) -> usize { self.copies }
+    fn row(&self, c: usize) -> &[Fp] {
+        if c < self.copies {
+            &self.data[c * self.width..(c + 1) * self.width]
+        } else {
+            &[]
+        }
+    }
+    fn copies(&self) -> usize {
+        self.copies
+    }
 }
 
 fn eval_terms_base(terms: &[crate::circuit::Term], row: &[Fp]) -> Fp {
     let mut acc = Fp::ZERO;
-    for t in terms { if let Some(v) = row.get(t.idx as usize) { acc += t.coef * *v; } }
+    for t in terms {
+        if let Some(v) = row.get(t.idx as usize) {
+            acc += t.coef * *v;
+        }
+    }
     acc
 }
 
 fn eval_terms_ext(terms: &[crate::circuit::Term], tab: &[Ext]) -> Ext {
     let mut acc = Ext::ZERO;
-    for t in terms { acc += tab[t.idx as usize].scale(t.coef); }
+    for t in terms {
+        acc += tab[t.idx as usize].scale(t.coef);
+    }
     acc
 }
 
 pub fn eq_point(a: &[Ext], b: &[Ext]) -> Ext {
     let mut e = Ext::ONE;
-    for (x, y) in a.iter().zip(b) { e = e * (*x * *y + (Ext::ONE - *x) * (Ext::ONE - *y)); }
+    for (x, y) in a.iter().zip(b) {
+        e = e * (*x * *y + (Ext::ONE - *x) * (Ext::ONE - *y));
+    }
     e
 }
 
-pub struct LayerClaim { pub w: Vec<Ext>, pub copy_point: Vec<Ext>, pub value: Ext }
+pub struct LayerClaim {
+    pub w: Vec<Ext>,
+    pub copy_point: Vec<Ext>,
+    pub value: Ext,
+}
 
 pub fn threads() -> usize {
-    if let Ok(s) = std::env::var("VERITY_GKR_THREADS") { if let Ok(n) = s.parse::<usize>() { return n.max(1); } }
-    std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(16)
+    if let Ok(s) = std::env::var("VERITY_GKR_THREADS") {
+        if let Ok(n) = s.parse::<usize>() {
+            return n.max(1);
+        }
+    }
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .min(16)
 }
 
 /// Prover for one layer; returns the next layer's claim (or, for the last layer, the two raw claims).
-pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, claim: &LayerClaim, tr: &mut Transcript, out: &mut Vec<Ext>, last: bool) -> (LayerClaim, Option<(Vec<Ext>, Ext, Vec<Ext>, Ext)>) {
+pub fn prove_layer(
+    layer: &Layer,
+    input: &(dyn LayerInput + Sync),
+    b: usize,
+    claim: &LayerClaim,
+    tr: &mut Transcript,
+    out: &mut Vec<Ext>,
+    last: bool,
+) -> (LayerClaim, Option<(Vec<Ext>, Ext, Vec<Ext>, Ext)>) {
     let g_n = layer.gates.len();
     let copies = 1usize << b;
     // phase 1 tables
@@ -69,13 +122,21 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
         let nthreads = threads();
         let chunk = copies.div_ceil(nthreads);
         std::thread::scope(|s| {
-            for (ci, (ac, bc)) in a.chunks_mut(chunk * g_n).zip(bb.chunks_mut(chunk * g_n)).enumerate() {
+            for (ci, (ac, bc)) in a
+                .chunks_mut(chunk * g_n)
+                .zip(bb.chunks_mut(chunk * g_n))
+                .enumerate()
+            {
                 let gates = &layer.gates;
                 s.spawn(move || {
-                    for (k, (arow, brow)) in ac.chunks_mut(g_n).zip(brow_chunks(bc, g_n)).enumerate() {
+                    for (k, (arow, brow)) in
+                        ac.chunks_mut(g_n).zip(brow_chunks(bc, g_n)).enumerate()
+                    {
                         let c = ci * chunk + k;
                         let row = input.row(c);
-                        if row.is_empty() { continue; }
+                        if row.is_empty() {
+                            continue;
+                        }
                         for (g, gate) in gates.iter().enumerate() {
                             arow[g] = Ext::from_base(eval_terms_base(&gate.a, row));
                             brow[g] = Ext::from_base(eval_terms_base(&gate.b, row));
@@ -89,6 +150,10 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
     let w = &claim.w;
     let mut c_star = Vec::with_capacity(b);
     let mut len = copies;
+    tr.label(&format!(
+        "gkr layer {}: phase 1, {b} rounds h(0..3) over the copy variables",
+        layer.name
+    ));
     for _round in 0..b {
         let half = len / 2;
         // h(t) = Σ_{c<half} E_t[c] · Σ_g w[g] (a0 + t da)(b0 + t db)
@@ -127,9 +192,14 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
             }
         });
         let mut h = [Ext::ZERO; 4];
-        for p in &partial { for t in 0..4 { h[t] += p[t]; } }
+        for p in &partial {
+            for t in 0..4 {
+                h[t] += p[t];
+            }
+        }
         out.extend_from_slice(&h);
         tr.absorb_exts(&h);
+        tr.round_trip();
         let r = tr.challenge();
         c_star.push(r);
         // fold a, bb, e
@@ -145,47 +215,108 @@ pub fn prove_layer(layer: &Layer, input: &(dyn LayerInput + Sync), b: usize, cla
     let n_in = 1usize << layer.s_in;
     let ec = eq_table(&c_star);
     let mut vf = vec![Ext::ZERO; n_in];
-    for c in 0..copies {
-        let row = input.row(c);
-        if row.is_empty() { continue; }
-        let ecc = ec[c];
-        for (l, v) in row.iter().enumerate().take(n_in) { if v.0 != 0 { vf[l] += ecc.scale(*v); } }
+    {
+        let nthreads = threads();
+        let chunk = copies.div_ceil(nthreads).max(1);
+        let parts: Vec<Vec<Ext>> = std::thread::scope(|s| {
+            let hs: Vec<_> = (0..nthreads)
+                .map(|t| {
+                    let ec = &ec;
+                    s.spawn(move || {
+                        let mut acc = vec![Ext::ZERO; n_in];
+                        for c in t * chunk..((t + 1) * chunk).min(copies) {
+                            let row = input.row(c);
+                            if row.is_empty() {
+                                continue;
+                            }
+                            let ecc = ec[c];
+                            for (l, v) in row.iter().enumerate().take(n_in) {
+                                if v.0 != 0 {
+                                    acc[l] += ecc.scale(*v);
+                                }
+                            }
+                        }
+                        acc
+                    })
+                })
+                .collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for p in parts {
+            for (x, y) in vf.iter_mut().zip(p) {
+                *x += y;
+            }
+        }
     }
     let wp: Vec<Ext> = w.iter().map(|x| *x * e_star).collect();
     // phase 2a
     let mut p = vec![Ext::ZERO; n_in];
     for (g, gate) in layer.gates.iter().enumerate() {
         let wb = wp[g] * b_star[g];
-        for t in &gate.a { p[t.idx as usize] += wb.scale(t.coef); }
+        for t in &gate.a {
+            p[t.idx as usize] += wb.scale(t.coef);
+        }
     }
     let _ = a_star;
     let mut v2 = vf.clone();
+    tr.label(&format!(
+        "gkr layer {}: phase 2a, {} rounds s(0..2), then (V(l*), P(l*))",
+        layer.name, layer.s_in
+    ));
     let l_star = sumcheck_prod(&mut vf, &mut p, tr, out);
     let vl = vf[0];
     let pl = p[0];
-    out.push(vl); out.push(pl);
+    out.push(vl);
+    out.push(pl);
     tr.absorb_exts(&[vl, pl]);
     // phase 2b
     let el = eq_table(&l_star);
     let mut rr = vec![Ext::ZERO; n_in];
     for (g, gate) in layer.gates.iter().enumerate() {
         let wa = wp[g] * eval_terms_ext(&gate.a, &el);
-        for t in &gate.b { rr[t.idx as usize] += wa.scale(t.coef); }
+        for t in &gate.b {
+            rr[t.idx as usize] += wa.scale(t.coef);
+        }
     }
+    tr.label(&format!(
+        "gkr layer {}: phase 2b, {} rounds s(0..2), then V(r*)",
+        layer.name, layer.s_in
+    ));
     let r_star = sumcheck_prod(&mut v2, &mut rr, tr, out);
     let vr = v2[0];
     out.push(vr);
     tr.absorb_ext(vr);
     if last {
-        return (LayerClaim { w: vec![], copy_point: c_star.clone(), value: Ext::ZERO }, Some((l_star, vl, r_star, vr)));
+        return (
+            LayerClaim {
+                w: vec![],
+                copy_point: c_star.clone(),
+                value: Ext::ZERO,
+            },
+            Some((l_star, vl, r_star, vr)),
+        );
     }
+    tr.label(&format!(
+        "gkr layer {}: alpha (merge the two input claims)",
+        layer.name
+    ));
+    tr.round_trip();
     let alpha = tr.challenge();
     let er = eq_table(&r_star);
     let nw: Vec<Ext> = el.iter().zip(&er).map(|(x, y)| *x + alpha * *y).collect();
-    (LayerClaim { w: nw, copy_point: c_star, value: vl + alpha * vr }, None)
+    (
+        LayerClaim {
+            w: nw,
+            copy_point: c_star,
+            value: vl + alpha * vr,
+        },
+        None,
+    )
 }
 
-fn brow_chunks(b: &mut [Ext], g_n: usize) -> std::slice::ChunksMut<'_, Ext> { b.chunks_mut(g_n) }
+fn brow_chunks(b: &mut [Ext], g_n: usize) -> std::slice::ChunksMut<'_, Ext> {
+    b.chunks_mut(g_n)
+}
 
 fn fold_rows(v: &mut Vec<Ext>, width: usize, half: usize, r: Ext) {
     for c in 0..half {
@@ -199,7 +330,12 @@ fn fold_rows(v: &mut Vec<Ext>, width: usize, half: usize, r: Ext) {
 }
 
 /// Degree-2 sumcheck of Σ_x U(x) W(x); folds both in place; returns the bound point.
-fn sumcheck_prod(u: &mut Vec<Ext>, w: &mut Vec<Ext>, tr: &mut Transcript, out: &mut Vec<Ext>) -> Vec<Ext> {
+fn sumcheck_prod(
+    u: &mut Vec<Ext>,
+    w: &mut Vec<Ext>,
+    tr: &mut Transcript,
+    out: &mut Vec<Ext>,
+) -> Vec<Ext> {
     let mut point = Vec::new();
     while u.len() > 1 {
         let half = u.len() / 2;
@@ -212,6 +348,7 @@ fn sumcheck_prod(u: &mut Vec<Ext>, w: &mut Vec<Ext>, tr: &mut Transcript, out: &
         }
         out.extend_from_slice(&[s0, s1, s2]);
         tr.absorb_exts(&[s0, s1, s2]);
+        tr.round_trip();
         let r = tr.challenge();
         point.push(r);
         fold_in_place(u, r);
@@ -221,12 +358,24 @@ fn sumcheck_prod(u: &mut Vec<Ext>, w: &mut Vec<Ext>, tr: &mut Transcript, out: &
 }
 
 /// Verifier for one layer.  Returns the next claim, or the two input claims for the last layer.
-pub fn verify_layer(layer: &Layer, b: usize, claim: &LayerClaim, tr: &mut Transcript, rd: &mut Reader, last: bool) -> Result<(LayerClaim, Option<(Vec<Ext>, Ext, Vec<Ext>, Ext)>), String> {
+pub fn verify_layer(
+    layer: &Layer,
+    b: usize,
+    claim: &LayerClaim,
+    tr: &mut Transcript,
+    rd: &mut Reader,
+    last: bool,
+) -> Result<(LayerClaim, Option<(Vec<Ext>, Ext, Vec<Ext>, Ext)>), String> {
     let mut running = claim.value;
     let mut c_star = Vec::with_capacity(b);
     for round in 0..b {
         let h = rd.take(4)?;
-        if h[0] + h[1] != running { return Err(format!("{}: phase-1 round {round} sum mismatch", layer.name)); }
+        if h[0] + h[1] != running {
+            return Err(format!(
+                "{}: phase-1 round {round} sum mismatch",
+                layer.name
+            ));
+        }
         tr.absorb_exts(&h);
         let r = tr.challenge();
         running = interpolate(&h, r);
@@ -234,12 +383,21 @@ pub fn verify_layer(layer: &Layer, b: usize, claim: &LayerClaim, tr: &mut Transc
     }
     let e_star = eq_point(&claim.copy_point, &c_star);
     let wp: Vec<Ext> = claim.w.iter().map(|x| *x * e_star).collect();
-    let (l_star, after_l) = verify_sumcheck_prod(layer.s_in, running, tr, rd, &format!("{} phase-2a", layer.name))?;
+    let (l_star, after_l) = verify_sumcheck_prod(
+        layer.s_in,
+        running,
+        tr,
+        rd,
+        &format!("{} phase-2a", layer.name),
+    )?;
     let vl = rd.next()?;
     let pl = rd.next()?;
-    if vl * pl != after_l { return Err(format!("{}: phase-2a final check", layer.name)); }
+    if vl * pl != after_l {
+        return Err(format!("{}: phase-2a final check", layer.name));
+    }
     tr.absorb_exts(&[vl, pl]);
-    let (r_star, after_r) = verify_sumcheck_prod(layer.s_in, pl, tr, rd, &format!("{} phase-2b", layer.name))?;
+    let (r_star, after_r) =
+        verify_sumcheck_prod(layer.s_in, pl, tr, rd, &format!("{} phase-2b", layer.name))?;
     let vr = rd.next()?;
     tr.absorb_ext(vr);
     // R̃(r*) = Σ_g w'(g) Ã_g(l*) B̃_g(r*)
@@ -250,20 +408,44 @@ pub fn verify_layer(layer: &Layer, b: usize, claim: &LayerClaim, tr: &mut Transc
         let ga: &Gate = gate;
         rt += wp[g] * eval_terms_ext(&ga.a, &el) * eval_terms_ext(&ga.b, &er);
     }
-    if vr * rt != after_r { return Err(format!("{}: phase-2b final check (wiring)", layer.name)); }
+    if vr * rt != after_r {
+        return Err(format!("{}: phase-2b final check (wiring)", layer.name));
+    }
     if last {
-        return Ok((LayerClaim { w: vec![], copy_point: c_star, value: Ext::ZERO }, Some((l_star, vl, r_star, vr))));
+        return Ok((
+            LayerClaim {
+                w: vec![],
+                copy_point: c_star,
+                value: Ext::ZERO,
+            },
+            Some((l_star, vl, r_star, vr)),
+        ));
     }
     let alpha = tr.challenge();
     let nw: Vec<Ext> = el.iter().zip(&er).map(|(x, y)| *x + alpha * *y).collect();
-    Ok((LayerClaim { w: nw, copy_point: c_star, value: vl + alpha * vr }, None))
+    Ok((
+        LayerClaim {
+            w: nw,
+            copy_point: c_star,
+            value: vl + alpha * vr,
+        },
+        None,
+    ))
 }
 
-fn verify_sumcheck_prod(vars: usize, mut running: Ext, tr: &mut Transcript, rd: &mut Reader, what: &str) -> Result<(Vec<Ext>, Ext), String> {
+fn verify_sumcheck_prod(
+    vars: usize,
+    mut running: Ext,
+    tr: &mut Transcript,
+    rd: &mut Reader,
+    what: &str,
+) -> Result<(Vec<Ext>, Ext), String> {
     let mut point = Vec::with_capacity(vars);
     for round in 0..vars {
         let s = rd.take(3)?;
-        if s[0] + s[1] != running { return Err(format!("{what}: round {round} sum mismatch")); }
+        if s[0] + s[1] != running {
+            return Err(format!("{what}: round {round} sum mismatch"));
+        }
         tr.absorb_exts(&s);
         let r = tr.challenge();
         running = interpolate(&s, r);
@@ -273,14 +455,25 @@ fn verify_sumcheck_prod(vars: usize, mut running: Ext, tr: &mut Transcript, rd: 
 }
 
 /// The verifier's evaluation of the input layer (columns in the clear): W̃(x, c) with padding rows zero.
-pub fn eval_columns(cols: &[Fp], ncols: usize, units: usize, s_c: usize, x: &[Ext], c: &[Ext]) -> Ext {
+pub fn eval_columns(
+    cols: &[Fp],
+    ncols: usize,
+    units: usize,
+    s_c: usize,
+    x: &[Ext],
+    c: &[Ext],
+) -> Ext {
     let ec = eq_table(c);
     let ex = eq_table(x);
     let mut acc = Ext::ZERO;
     for u in 0..units {
         let row = &cols[u * ncols..(u + 1) * ncols];
         let mut inner = Ext::ZERO;
-        for (i, v) in row.iter().enumerate() { if v.0 != 0 { inner += ex[i].scale(*v); } }
+        for (i, v) in row.iter().enumerate() {
+            if v.0 != 0 {
+                inner += ex[i].scale(*v);
+            }
+        }
         acc += inner * ec[u];
     }
     debug_assert_eq!(1usize << s_c, ex.len());

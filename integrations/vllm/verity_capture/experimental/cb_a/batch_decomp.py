@@ -27,6 +27,20 @@ exit 4 so the driver (`row_pod.sh`) can derive them and rerun; refusal/mismatch 
 
     python -m verity_capture.experimental.cb_a.batch_decomp --oracle <match dir: program.json + instances.jsonl + capture/log.jsonl.gz>
         --derived <dir with descriptor.json.gz + derive-report.json + artifact.json> [--derived <dir> ...] --out decomp.json
+
+PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched fold -- X-09)
+  Purpose: attribute every instance of the batched eager fold to the request that produced it, project each request's instances into
+    its own steps, and compare that projection canonically against the Build's request-wrapper Program of the request's OWN shape.
+  Inputs: --oracle <match dir> (program.json + instances.jsonl = the fold; capture/log.jsonl.gz = RunHeader / StepStart rows);
+    --derived <build_request*> dirs (descriptor.json.gz, derive-report.json, artifact.json), one per distinct (LP, T).
+  Outputs: --out match_decomp.json {verdict PASS|FAIL|MISSING_DERIVED, requests[{canonical_equal, LP, T, steps, totals}],
+    attribution{unattributed}, xreq_total, missing_derived, within_step_criterion, reasons}.  Exit 0 PASS, 4 missing derived
+    shapes (row_pod derives them and reruns once), 3 refusal / mismatch.
+  Invariants: no instance is dropped, guessed or shared -- an AMBIGUOUS or UNATTRIBUTABLE row count refuses; a read of another
+    request's prompt or node is XREQ and fails the row; a request is compared at (LP_r, T_r) = (its prompt length, its served decode
+    steps), never at the row envelope; the operand counts are the positional comparison, the verdict follows --within-step (dag of
+    record; sequence recorded beside it).  Inside GM-01 (MATCH_PIPELINE=shared) the same decompose() writes this document via --decomp-out.
+  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 from __future__ import annotations

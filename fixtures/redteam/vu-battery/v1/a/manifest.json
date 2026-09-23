@@ -1,0 +1,199 @@
+{
+ "version": "v1",
+ "target": "verity-gkr run-vu (Candidate A full VU, PROTOCOL.md 12)",
+ "source": "vu-k1536-neg bases 0..n with their correct words (fixtures/bench-instances/v1)",
+ "field": {
+  "name": "Goldilocks",
+  "p": 18446744069414584321
+ },
+ "steps": 96,
+ "vus": 4,
+ "cases": [
+  {
+   "id": "a_honest",
+   "dir": "a_honest",
+   "expected": "accept",
+   "mechanism": "-",
+   "mutation": "untouched batch (control)",
+   "vus": 4,
+   "steps": 96,
+   "public_y16": [
+    48849,
+    16299,
+    16451,
+    48866
+   ],
+   "honest_y16": [
+    48849,
+    16299,
+    16451,
+    48866
+   ],
+   "sha256": {
+    "units.bin": "88eb03f02f82cd9dd6a985095d4bccc462a0e6e99b6453dcb63e4ab33d19e270",
+    "epilogue.bin": "c17e15a95d859d15045fca2cf52fd8d0eaa40ed185cb5827a395fee53b0e7cbe",
+    "public.bin": "608fbc9da03f5addc90448c892a7744751e6634474d54ffd57f9f913684e9bdb"
+   }
+  },
+  {
+   "id": "a_splice",
+   "dir": "a_splice",
+   "expected": "reject",
+   "mechanism": "linkage X[(1,k),c] - X[(1,k-1),y] = 0 (rho_geo-batched linear constraint in the Ligero opening)",
+   "mutation": "VU 1 unit 40: x.c := VU 0's y_39 = 0x3f261c67 (was 0xbe1a4e7f); units 40.. re-chained honestly; claimed word 0x4009 (true 0x3fab)",
+   "vus": 4,
+   "steps": 96,
+   "public_y16": [
+    48849,
+    16393,
+    16451,
+    48866
+   ],
+   "honest_y16": [
+    48849,
+    16299,
+    16451,
+    48866
+   ],
+   "sha256": {
+    "units.bin": "994164171e549184039119d8c54115f998883f8ddb833c367860d7e28593b638",
+    "epilogue.bin": "0ade054d6e5222de9ec40574b0c840241ca32223363ff4fafc68bfa23ce4ad8b",
+    "public.bin": "f7f59a258f3f2213caea6279bdc433cc06f205313ebe9c4c336bea4d41d4c3a5"
+   }
+  },
+  {
+   "id": "a_epilogue_y32",
+   "dir": "a_epilogue_y32",
+   "expected": "reject",
+   "mechanism": "linkage X_epi[0,y32] - X[(0,95),y] = 0",
+   "mutation": "VU 0 epilogue row generated from y32 = 0xbed20000 (true 0xbed13c6a); claimed word 0xbed2",
+   "vus": 4,
+   "steps": 96,
+   "public_y16": [
+    48850,
+    16299,
+    16451,
+    48866
+   ],
+   "honest_y16": [
+    48849,
+    16299,
+    16451,
+    48866
+   ],
+   "sha256": {
+    "units.bin": "88eb03f02f82cd9dd6a985095d4bccc462a0e6e99b6453dcb63e4ab33d19e270",
+    "epilogue.bin": "09eb97c26e42a91d48629a7271ad65611f323b00f62dacdc893e57a64d05952a",
+    "public.bin": "32d5467e448d1d9b3bbe47464b59e0dc72ddbd2ddc17f645abeb84fb21ac218b"
+   }
+  },
+  {
+   "id": "a_epilogue_claim",
+   "dir": "a_epilogue_claim",
+   "expected": "reject",
+   "mechanism": "epilogue circuit assertion y16 = hi + carry (GKR), not the linkage",
+   "mutation": "VU 0 epilogue hints honest for 0xbed13c6a, y16 column and public word = 0xbed2",
+   "vus": 4,
+   "steps": 96,
+   "public_y16": [
+    48850,
+    16299,
+    16451,
+    48866
+   ],
+   "honest_y16": [
+    48849,
+    16299,
+    16451,
+    48866
+   ],
+   "sha256": {
+    "units.bin": "88eb03f02f82cd9dd6a985095d4bccc462a0e6e99b6453dcb63e4ab33d19e270",
+    "epilogue.bin": "20022ecbc7bc72bc1719fdae49b63b94307be13c47d5bd8f5261ffae40dd7be2",
+    "public.bin": "32d5467e448d1d9b3bbe47464b59e0dc72ddbd2ddc17f645abeb84fb21ac218b"
+   }
+  },
+  {
+   "id": "a_public_word",
+   "dir": "a_public_word",
+   "expected": "reject",
+   "mechanism": "endpoint X_epi[0,y16] = word_0",
+   "mutation": "public word of VU 0 = 0xbed0, witness honest for 0xbed1",
+   "vus": 4,
+   "steps": 96,
+   "public_y16": [
+    48848,
+    16299,
+    16451,
+    48866
+   ],
+   "honest_y16": [
+    48849,
+    16299,
+    16451,
+    48866
+   ],
+   "sha256": {
+    "units.bin": "88eb03f02f82cd9dd6a985095d4bccc462a0e6e99b6453dcb63e4ab33d19e270",
+    "epilogue.bin": "c17e15a95d859d15045fca2cf52fd8d0eaa40ed185cb5827a395fee53b0e7cbe",
+    "public.bin": "d4e7850d994f4f18770c65fbe2809634ef739d81fd7fc6bea2d621a7523a8fa9"
+   }
+  },
+  {
+   "id": "a_swap_words",
+   "dir": "a_swap_words",
+   "expected": "reject",
+   "mechanism": "endpoint constraints of VU 0 and VU 1",
+   "mutation": "public words of VU 0 and VU 1 exchanged, witnesses honest",
+   "vus": 4,
+   "steps": 96,
+   "public_y16": [
+    16299,
+    48849,
+    16451,
+    48866
+   ],
+   "honest_y16": [
+    48849,
+    16299,
+    16451,
+    48866
+   ],
+   "sha256": {
+    "units.bin": "88eb03f02f82cd9dd6a985095d4bccc462a0e6e99b6453dcb63e4ab33d19e270",
+    "epilogue.bin": "c17e15a95d859d15045fca2cf52fd8d0eaa40ed185cb5827a395fee53b0e7cbe",
+    "public.bin": "1160e72b4bef29f36ebcfcdff672ad177edb63004250ff951b8b508bbb91db5a"
+   }
+  },
+  {
+   "id": "a_c0_nonzero",
+   "dir": "a_c0_nonzero",
+   "expected": "reject",
+   "mechanism": "start constraint X[(1,0),c] = 0",
+   "mutation": "VU 1 unit 0: x.c := VU 0's y32 = 0xbed13c6a; claimed word 0x3f6e (true 0x3fab)",
+   "vus": 4,
+   "steps": 96,
+   "public_y16": [
+    48849,
+    16238,
+    16451,
+    48866
+   ],
+   "honest_y16": [
+    48849,
+    16299,
+    16451,
+    48866
+   ],
+   "sha256": {
+    "units.bin": "526b29e44563eba3c633b8a76607c2c1e73cd216a66cd18d32e4a3c9b7a4809d",
+    "epilogue.bin": "1b10d3a4caf2e0d36859248efde97858c8e64ecb526346b291b7659cb9a403ef",
+    "public.bin": "674160cccd33cbcd05fd140c13388a43fbebb540d8f9ca4ae43a5e90199253da"
+   }
+  }
+ ],
+ "not_representable": {
+  "a_plus_p_shadow": "x.c and y are single Goldilocks columns holding a 32-bit word; c' = y + p is the same field element as y, so the BabyBear battery's `chain` class (accumulator handed over as c + j p) has no distinct witness. A non-word x.c (>= 2^32) is rejected by Fp32Decode's range checks (acc.t < 255 etc.) at witness generation."
+ },
+ "run": "for c in cases: verity-gkr run-vu --dir DIR/<id> [--clear]; expected verdicts in `expected`"
+}

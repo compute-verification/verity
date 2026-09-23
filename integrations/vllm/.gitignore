@@ -1,0 +1,5 @@
+# On-demand JIT build products (verity_vllm_numerics/_jit.py): cpu_model.py compiles libtc_model.so on first use and
+# leaves the builder's advisory lock file beside it.  libfa2_model.so / librms_triton_model.so are prebuilt and tracked
+# deliberately (tests do not build them).
+verity_vllm_numerics/cpp/libtc_model.so
+verity_vllm_numerics/cpp/*.so.lock

@@ -1,0 +1,122 @@
+{
+ "schema": "verity/result/v1",
+ "workload_fingerprint": {
+  "B": 4096,
+  "K": 1536,
+  "proof_class": "NON_ZK_PROOF_DIAGNOSTIC",
+  "field": "babybear6",
+  "hardware": {
+   "gpu": {
+    "name": "H100 80 GB (vy-g5)"
+   },
+   "verifier_cpu": "Intel(R) Xeon(R) Platinum 8480+"
+  },
+  "latency": {
+   "rtt_ms": 0.0,
+   "e2e_measured": []
+  }
+ },
+ "measurements": [
+  {
+   "name": "t.total",
+   "value": 1.8753793388605118,
+   "unit": "s"
+  },
+  {
+   "name": "verifier.seconds",
+   "value": 3.282071,
+   "unit": "s"
+  },
+  {
+   "name": "verifier.threads",
+   "value": 16,
+   "unit": "count"
+  },
+  {
+   "name": "verifier.peak_rss_bytes",
+   "value": 97280000,
+   "unit": "bytes"
+  },
+  {
+   "name": "rounds.sequential_depth",
+   "value": 438,
+   "unit": "count"
+  },
+  {
+   "name": "rounds.protocol",
+   "value": 1921,
+   "unit": "count"
+  },
+  {
+   "name": "transcript.bytes",
+   "value": 33871324,
+   "unit": "bytes"
+  },
+  {
+   "name": "mem.peak_device_bytes",
+   "value": 47924291072.0,
+   "unit": "bytes"
+  }
+ ],
+ "sources": {
+  "prover": "/tmp/apd/run4096.json",
+  "verifier": "/tmp/apd/rust4096_16t.json"
+ },
+ "latency": {
+  "rtts_ms": [
+   0.0,
+   1.0,
+   10.0,
+   50.0
+  ],
+  "bw_gbps": 10.0,
+  "rows": [
+   {
+    "rtt_ms": 0.0,
+    "prove": 1.8753793388605118,
+    "verify": 3.282071,
+    "network": 0.0,
+    "transfer": 0.0271462368,
+    "total": 5.184596575660512,
+    "network_share": 0.0,
+    "verifier_share": 0.6330426971710654
+   },
+   {
+    "rtt_ms": 1.0,
+    "prove": 1.8753793388605118,
+    "verify": 3.282071,
+    "network": 0.438,
+    "transfer": 0.0271462368,
+    "total": 5.622596575660512,
+    "network_share": 0.07789995140253259,
+    "verifier_share": 0.5837287018257112
+   },
+   {
+    "rtt_ms": 10.0,
+    "prove": 1.8753793388605118,
+    "verify": 3.282071,
+    "network": 4.38,
+    "transfer": 0.0271462368,
+    "total": 9.564596575660513,
+    "network_share": 0.4579388127196076,
+    "verifier_share": 0.34314787602772956
+   },
+   {
+    "rtt_ms": 50.0,
+    "prove": 1.8753793388605118,
+    "verify": 3.282071,
+    "network": 21.9,
+    "transfer": 0.0271462368,
+    "total": 27.084596575660512,
+    "network_share": 0.8085776702939842,
+    "verifier_share": 0.12117850789586516
+   }
+  ],
+  "overhead": {
+   "verifier_seconds_per_vu": 0.000801286865234375,
+   "verifier_overhead_vs_native": 81380697.25036621,
+   "prover_plus_verifier_overhead_vs_native": 127881726.08411151,
+   "verifier_share_of_compute": 0.6363747170322035
+  }
+ }
+}

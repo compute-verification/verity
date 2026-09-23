@@ -1,0 +1,83 @@
+{
+ "schema": "verity/tc-evidence-replica/v0",
+ "what": "Replica of autoproof's adopted semantics lockfile for Blackwell (sm_120) block-scaled FP4: the model verity.ml.tc.models.BLACKWELL_SM120_NVF4 is a port of the gdfs_model it describes.",
+ "instruction": "sm120.mma.m16n8k64.e2m1.nvf4",
+ "model": "blackwell_sm120_nvf4_m16n8k64",
+ "provenance": {
+  "source_repo": "/Users/danielreuter/projects/autoproof",
+  "source_path": "spec/SEMANTICS.lock.v1.json",
+  "source_sha256": "fc1de299c29f1a60a768163d98cfecda86a4161e4ee49d41e945cb49e5642194",
+  "imported_utc": "2026-09-22T17:27:38Z"
+ },
+ "related": [
+  {
+   "source_repo": "/Users/danielreuter/projects/autoproof",
+   "source_path": "spec/SCR.lock.v1.json",
+   "source_sha256": "df37db906faf6eef4f8af40ebeedb7d05fd57a2d2406f71f581e46ea72cc1d20",
+   "imported_utc": "2026-09-22T17:27:38Z"
+  },
+  {
+   "source_repo": "/Users/danielreuter/projects/autoproof",
+   "source_path": "fp4-ref/src/native.rs",
+   "source_sha256": "572d7237be57e0d92421c7b193b8a2ba175bc57927bfe82e6abc8e41d8c0827f",
+   "imported_utc": "2026-09-22T17:27:38Z"
+  },
+  {
+   "source_repo": "/Users/danielreuter/projects/autoproof",
+   "source_path": "spec/src/dyadic.rs",
+   "source_sha256": "ee5e0c94847f62ffde047afb97e843b5eb4d77e0d541bce3e83e8f108020c1a1",
+   "imported_utc": "2026-09-22T17:27:38Z"
+  },
+  {
+   "source_repo": "/Users/danielreuter/projects/autoproof",
+   "source_path": "spec/src/formats.rs",
+   "source_sha256": "5f8945715acd5ed0704fe073d5c7590dd16d83f0814c4297b0289e0bc8fe7977",
+   "imported_utc": "2026-09-22T17:27:38Z"
+  }
+ ],
+ "lock": {
+  "version": "v1",
+  "status": "ADOPTED at oracle-v3 (human review 2026-07-11) from the M1 worker's silicon probes on the pinned kernel (proposal: spec/SEMANTICS.lock.v1-proposed.json, branch M1-claude). Supersedes every PENDING-PROBE field of v0. The v0 NATIVE hypothesis (single 26-bit window) was REFUTED by PROBE-3: 142,270 / 1,574,998 dot statements mismatch. The model below matches silicon 1,574,998 / 1,574,998.",
+  "target_arch": "sm_120 (Blackwell, RTX 5090)",
+  "gpu_uuid_of_record": "GPU-297048d1-61e2-2bed-6557-51af35a06e05",
+  "driver_version": "570.195.03",
+  "instruction_family": "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3 (nvfp4); mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32 (unscaled fp4 core)",
+  "shapes": [
+   "m16n8k64 (nvfp4)",
+   "m16n8k32 (fp4 unscaled)"
+  ],
+  "kernel_sass_sha256": "166a24a08aea300d624d38b42157958e1e6942d2e6a51ac5bf8ff8db1afca4b8 (probe_mma.sass; probe_mma.cu bcca162a507238e47f7ee4b8f814447f574b948d2f1b8c0a017b11ffc604a31c)",
+  "k_tile_order": "monotone ascending K (as pinned in the probe kernel; PROBE-1: bit-identical across 3000 runs x 5 schedule variants)",
+  "accumulate_mode": "fp32; fast-accumulation modes DISALLOWED (C3)",
+  "split_k_policy": "disallowed \u2014 atomics forbidden (C4); PROBE-5: cuBLASLt's fastest NVFP4 algo is already splitK=1/no-reduction, tax ~0%",
+  "accumulator_init": "zeros",
+  "epilogue": "identity (FP32 out, no activation, no output quantization)",
+  "per_tensor_scale": "not applied in the probe statement (unchanged from v0; pin before serving GEMMs)",
+  "output_format": "fp32",
+  "output_scale_algorithm": "n/a while output is FP32 (RQ5)",
+  "gdfs_model": {
+   "k_per_instruction": 64,
+   "group_size": 16,
+   "structure": "five-way align-add per firing: the 4 exact scaled group terms and the carried FP32 accumulator are each truncated toward zero at a common lsb, summed exactly, then normalized RZ to binary32",
+   "addend_lsb": "max( E1 - (W1-1), acc != 0 ? ilog2(acc) - (W2-1) : -inf, hot ? -19 : -inf ) with E1 = max exponent over the nonzero addends (acc included)",
+   "w1_bits": 42,
+   "w2_bits": 36,
+   "alignment_rounding": "truncate-toward-zero (per addend, two's-complement floor never observed: PROBE-3 scans + tie_probe)",
+   "normalize_rounding": "RZ (both signs, including exact half-ulp ties: tie_probe 120/120, norm_probe 24/24; unscaled path confirmed RZ at the K=116,544 parity boundary: PROBE-2)",
+   "hot_group_clip": {
+    "trigger": "any group of the firing with (exists i: a_i * b_i != 0) AND both scale codes in 0x78..0x7E (UE4M3 exponent field 15); gd value irrelevant; misaligned nonzero elements (all products zero) do NOT trigger",
+    "effect": "every addend of that firing (4 terms and the carried accumulator) additionally truncated toward zero at 2^-19: the 2^-20 bit \u2014 the deepest reachable NVFP4 term bit (1 quarter x two minimum subnormal scales 2^-9) \u2014 is dropped, per addend, before the add",
+    "scope": "per firing; no leakage across the K chain (anchor_probe2 Q3)",
+    "interpretation": "alignment anchor is bounded from scale exponents before group dots are known; the e15+e15 bound overshoots the reachable fixed-point grid by exactly one position at the bottom; equivalently cut = (e_a + e_b) - 50, observable only at e_a + e_b = 30 because no NVFP4 term has bits below 2^-20",
+    "evidence": "probes/results/FINDINGS.md; probes/src/bin/{residual,minimal,anchor_probe,anchor_probe2,tie_probe}.rs"
+   },
+   "zero_handling": "all-addends-zero firing leaves the accumulator bit-identical (incl. -0); exact cancellation normalizes to +0",
+   "status": "MEASURED on silicon under this lockfile's kernel; 1,574,998/1,574,998 bitwise (probes/results/probe3_*.json); fp8-e4m3 fields REMOVED (de-scoped, RQ7)"
+  },
+  "unscaled_fp4_core": {
+   "instruction": "m16n8k32 kind::f8f6f4",
+   "exactness": "bit-exact vs CANON through K = 116,480 measured (13,082 dots, 0 mismatches); first lossy op past the bound is the RZ normalize (silicon votes RZ on every RNE/RZ-discriminating parity case)",
+   "status": "MEASURED (probes/results/probe2_*.json)"
+  }
+ }
+}

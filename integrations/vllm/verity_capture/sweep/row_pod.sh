@@ -18,6 +18,21 @@
 # BUILD_TIMEOUT / MATCH_TIMEOUT / COMPARE_TIMEOUT / COMMIT_TIMEOUT (s; Match ones default to B-scaled, REL-06), REQUIRED_CLASSES (REL-02: comma list passed to commit_delta --required-classes),
 # EXTRA_ENGINE_ARGS ("k=v k=v" appended to Commit).  [r18-int-3, admit] $D/admission.json = the ADVISORY host-memory plan written
 # before Build (verity_capture/telemetry/admission.py plan; per-stage reserved_bytes, named terms, verdict, short_by) -- never a stop.
+#
+# PROTOCOL SUMMARY (one row = precheck -> Build -> Match -> Commit; stop at the first FAIL; one verdict line per stage in stages.txt)
+#   Purpose: run ONE workload row (workloads/<row>.json) from the tree THIS script lives in and leave its evidence in
+#     $D = ${SWEEP_DIR:-/workspace/cp/sweep}/<row>  (the launcher puts the release/lane tag in SWEEP_DIR).
+#   Inputs: <row-id> <ROLE> <hf-repo> <revision> [stages]; workloads/<row>.json; manifests/checkpoints.json; the env knobs above.
+#   Outputs: $D/stages.txt row.log timeline.jsonl source_identity*.json target_family*.json admission.json release.json tree.json;
+#     build_step/ build_request*/ build_workload/ build_summary.json; match/ match_decomp.json|match_compare.json global_match.json
+#     match_summary.json; manifest.json commit/ commit_summary.json weights_of_record.log; $RESEARCH_RUN_DIR/result.json on EXIT.
+#   Invariants: the source-identity and target-family prechecks run before any engine and fail by name PRECHECK_FAIL_* (exit 3);
+#     the Program digest handed to the Commit is read from build_summary.json, never from the manifest; a Match verdict over a record
+#     this attempt did not produce is FAIL (freshness rule) unless MATCH_PHASE=cpu resumes it by name; a Commit never starts over a
+#     Match record missing its account files (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE, exit 14); `required_manifest verify` FAIL = Commit FAIL.
+#   Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 B>=2 global manifest not built; 3 precheck FAIL;
+#     2 bad argv / MATCH_PHASE; 128+signal when cancelled (TERM/INT/HUP is forwarded to the running stage's process group, see run_to).
+#   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 set -uo pipefail
 ROW=${1:?row-id}; ROLE=${2:?role}; REPO=${3:?hf repo}; REV=${4:?revision}; STAGES=${5:-build,match,commit}
 # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] the tree that runs is the tree THIS SCRIPT lives in -- never the environment, never a default

@@ -37,6 +37,15 @@
 //! bytes (`0xEE` / `0xEF`): the embedded guest was built with an `unsound-*`
 //! feature (listed under `guest_features` by `info`) and its verdict measures
 //! cycles, not correctness.  Nothing downstream may treat such a run as a result.
+//!
+//! RELATION-ONLY build (`--features unsound-relation-only`): the embedded guest runs only the
+//! `GemmCoordinate<K>` gate chain on a **compact input** `K || x || W`
+//! (`veritor_zk_common::relation_only`).  The `--witness` file IS that compact input; `--statement`,
+//! `--plan` and `--typed-object-digest` are accepted for CLI compatibility and ignored, and the
+//! guest gets one stdin buffer.  Its public values are `sha256(input) || sha256(output word) || 0xEE`,
+//! so in this build the reported `typed_object_digest` is the input digest and `statement_digest`
+//! the output-word digest; `verify --statement` is meaningless (`statement_match` compares the
+//! output-word digest).  The CLI surface is otherwise unchanged.
 
 use std::{
     collections::BTreeMap,
@@ -292,11 +301,10 @@ async fn serve_job<P: Prover>(
         job.plan.as_ref(),
         job.typed_object_digest.as_deref(),
     )?;
-    let statement_digest = hex::encode(sha256(&inputs.statement_bytes));
     let stdin = inputs.stdin;
     let execute_output = if job.execute {
         let output = execute(client, stdin.clone(), inputs.sizes).await?;
-        if output.outcome.statement_digest != statement_digest {
+        if !output.outcome.commits_input(&inputs.statement_bytes) {
             bail!("guest committed a digest of some other statement");
         }
         Some(output)
@@ -325,7 +333,7 @@ async fn serve_job<P: Prover>(
         None
     };
     let outcome = PublicOutcome::from_bytes(proof.public_values.as_slice())?;
-    if outcome.statement_digest != statement_digest {
+    if !outcome.commits_input(&inputs.statement_bytes) {
         bail!("proof commits a digest of some other statement");
     }
     let shards = match &proof.proof {
@@ -375,11 +383,22 @@ struct PublicOutcome {
     #[serde(skip_serializing_if = "Option::is_none")]
     typed_object_digest: Option<String>,
     verdict: bool,
-    /// The verdict byte was a DIAGNOSTIC one: the guest skipped authentication.
+    /// The verdict byte was a DIAGNOSTIC one: the guest is an `unsound-*` build.
     unsound: bool,
 }
 
 impl PublicOutcome {
+    /// The guest committed the digest of what the host sent it: `h_L = sha256(statement)` -- or, in
+    /// the relation-only build, the first 32 bytes are `sha256(compact input)`.
+    fn commits_input(&self, input: &[u8]) -> bool {
+        let digest = hex::encode(sha256(input));
+        if cfg!(feature = "unsound-relation-only") {
+            self.typed_object_digest.as_deref() == Some(digest.as_str())
+        } else {
+            self.statement_digest == digest
+        }
+    }
+
     fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let (object_digest, statement_digest, verdict_byte) = split_public_values(bytes)
             .ok_or_else(|| {
@@ -453,13 +472,34 @@ struct InfoOutput {
     guest_features: Vec<&'static str>,
 }
 
-/// The guest's three inputs: statement, witness and the (possibly empty) plan.
+/// The guest's three inputs: statement, witness and the (possibly empty) plan.  (Relation-only
+/// build: the one compact input, held in `statement_bytes` so the digest checks read as usual.)
 struct Inputs {
     stdin: SP1Stdin,
     statement_bytes: Vec<u8>,
     sizes: (usize, usize, usize),
 }
 
+/// RELATION-ONLY build: the `--witness` file is the compact input and the guest's only buffer;
+/// the statement, plan and typed object digest are accepted and ignored (module docs).
+#[cfg(feature = "unsound-relation-only")]
+fn stdin_for(
+    _statement: &PathBuf,
+    witness: &PathBuf,
+    _plan: Option<&PathBuf>,
+    _typed_object_digest: Option<&str>,
+) -> Result<Inputs> {
+    let compact = fs::read(witness).with_context(|| format!("reading {}", witness.display()))?;
+    let mut stdin = SP1Stdin::new();
+    stdin.write_vec(compact.clone());
+    Ok(Inputs {
+        stdin,
+        sizes: (0, compact.len(), 0),
+        statement_bytes: compact,
+    })
+}
+
+#[cfg(not(feature = "unsound-relation-only"))]
 fn stdin_for(
     statement: &PathBuf,
     witness: &PathBuf,
@@ -594,7 +634,7 @@ async fn main() -> Result<()> {
             let client = ProverClient::builder().mock().build().await;
             let inputs = stdin_for(&statement, &witness, plan.as_ref(), typed_object_digest.as_deref())?;
             let output = execute(&client, inputs.stdin, inputs.sizes).await?;
-            if output.outcome.statement_digest != hex::encode(sha256(&inputs.statement_bytes)) {
+            if !output.outcome.commits_input(&inputs.statement_bytes) {
                 bail!("guest committed a digest of some other statement");
             }
             emit(&output)
@@ -611,9 +651,7 @@ async fn main() -> Result<()> {
             let inputs = stdin_for(&statement, &witness, plan.as_ref(), typed_object_digest.as_deref())?;
             let stdin = inputs.stdin;
             let execute_output = execute(&client, stdin.clone(), inputs.sizes).await?;
-            if execute_output.outcome.statement_digest
-                != hex::encode(sha256(&inputs.statement_bytes))
-            {
+            if !execute_output.outcome.commits_input(&inputs.statement_bytes) {
                 bail!("guest committed a digest of some other statement");
             }
 
