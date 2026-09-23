@@ -23,7 +23,11 @@ only what depends on the private accumulator:
   proof, and the subnormal clamp is ``t = tc(E)`` when ``hid = 0``, ``t >= tc(E)`` when ``hid = 1``; the output exponent is
   ``E + t + nb - width`` in both cases.  The window carries the bits above the ``nb`` selected ones at weight ``2^nb``, so a
   selected window with a stray high bit cannot equal a value below ``2^nb``: truncation is exact and the sum stays in the
-  field.
+  field;
+* every one-hot selection is *picked*, not summed (``_pick``): the selected value is a hint row ``X`` (or the value the
+  relation already commits, ``M``) and each candidate costs one row-free quadratic ``sel_i (X - value_i) = 0`` instead of a
+  product row; the two shift hints ``delta`` / ``dacc`` are ranged by their lookups' one-hot + key-difference constraints
+  alone (``LigeroCtx.lookup(range_key=False)``) instead of a separate bit decomposition.
 
 One code path for the four relations, parametrised by ``Params`` (BF16: ``Params.from_model``) or ``FP8Params`` (the
 adder-side widths with the lossy rescale: the adder's state is the top 14 bits of the FP32 significand).  ``chain=True`` is
@@ -202,6 +206,27 @@ def _select(ctx: LigeroCtx, name: str, sels: list[Expr], values: list[Expr]) -> 
     return acc
 
 
+def _pick(ctx: LigeroCtx, name: str, sels: list[Expr], values: list[Expr], target: Expr | None = None,
+          hint: str | None = None) -> Expr:
+    """The value a one-hot selects, without product rows: ``X`` is a hint row (or the given ``target`` expression) and every
+    term is the row-free quadratic ``sel_i (X - value_i) = 0``.  Exactly one selector is 1 (the one-hot), so ``X`` equals
+    that value as a field element, hence as the integer of that value's interval (every value is an integer inside
+    ``(-p, p)``); ``X``'s interval is the hull, recorded with ``learn``.  Replaces ``sum_i sel_i value_i`` (one product row
+    per term) at the cost of denser quadratic constraints."""
+    X = target if target is not None else _hint(ctx, hint or f"{ctx.scope}.{name}")
+    lo = hi = None
+    for i, (s, v) in enumerate(zip(sels, values)):
+        _zero(ctx, f"{name}[{i}]", s, X - v)
+        iv = (v.c, v.c) if v.is_const() else ctx.interval(v)
+        if iv is None:
+            raise ValueError(f"{ctx.scope}.{name}[{i}]: value interval unknown")
+        lo = iv[0] if lo is None else min(lo, iv[0])
+        hi = iv[1] if hi is None else max(hi, iv[1])
+    if target is None:
+        ctx.learn(X, lo, hi + 1)
+    return X
+
+
 def _window(ctx: LigeroCtx, bits: list[Expr], shift: int, lo: int, hi: int, base: int = 0) -> Expr:
     """``sum 2^(pos + shift - base) bit_pos`` over the bits whose weight exponent ``pos + shift`` lies in ``[lo, hi)``."""
     e = Expr(ctx)
@@ -287,34 +312,38 @@ def compile_v2_unit(p: Params, chain: bool = False) -> System:
         else:
             Qp = [ctx.pin(f"{tag}.Q[{j}]", -qm, qm + 1) for j in range(PB)]
 
-        # the group maximum E = max(G, e_acc): delta = E - G >= 0, dacc = E - e_acc >= 0, one of them zero
+        # the group maximum E = max(G, e_acc): delta = E - G >= 0, dacc = E - e_acc >= 0, one of them zero.  The two
+        # shifts are the keys of the lookups below, whose one-hot + key-difference constraints define them as integers in
+        # [0, 2^SHIFT_BITS + top) (``range_key=False``: no separate range check).
         ctx.scope = f"{tag}.max"
         delta, dacc = _hint(ctx, f"{tag}.delta"), _hint(ctx, f"{tag}.dacc")
-        ctx.rng("delta", delta, 0, 2**SHIFT_BITS)
-        ctx.rng("dacc", dacc, 0, 2**SHIFT_BITS)
+        ctx.scope = f"{tag}.qsel"
+        (jsel,) = ctx.lookup("qsel", _clamp_table("QSEL", PB), delta, range_key=False)
+        ctx.scope = f"{tag}.acc"
+        (tsel,) = ctx.lookup("tsel", _clamp_table("TSEL", W), dacc, range_key=False)
+        ctx.scope = f"{tag}.max"
         _zero(ctx, "max", delta, dacc)
         ctx.eq("E", G + delta, e_st + dacc)
         E = G + delta
 
-        # the products' sum: Q[min(delta, PB)], Q[PB] = 0
+        # the products' sum: Q[min(delta, PB)], Q[PB] = 0 (the interval selector), picked by the lookup's one-hot
         ctx.scope = f"{tag}.qsel"
-        (jsel,) = ctx.lookup("qsel", _clamp_table("QSEL", PB), delta)
         jsels = _bit_exprs(ctx, jsel.sel_rows)                # PB + 1 selectors, the last for delta >= PB
+        zero = Expr(ctx)
         if pl.wide:
-            QL = _select(ctx, "QL", jsels[:PB], [q[0] for q in Qp])
-            QH = _select(ctx, "QH", jsels[:PB], [q[1] for q in Qp])
+            QL = _pick(ctx, "QL", jsels, [q[0] for q in Qp] + [zero], hint=f"{tag}.QL")
+            QH = _pick(ctx, "QH", jsels, [q[1] for q in Qp] + [zero], hint=f"{tag}.QH")
         else:
-            Q = _select(ctx, "Q", jsels[:PB], Qp)
+            Q = _pick(ctx, "Q", jsels, Qp + [zero], hint=f"{tag}.Q")
 
         # the accumulator's term: floor(Mt 2^ss / 2^min(dacc, W)) as the window of Mt's bits selected by min(dacc, W)
         ctx.scope = f"{tag}.acc"
-        (tsel,) = ctx.lookup("tsel", _clamp_table("TSEL", W), dacc)
         tsels = _bit_exprs(ctx, tsel.sel_rows)                # W + 1 selectors, the last for dacc >= W (term 0)
         if pl.wide:
-            qL = _select(ctx, "qL", tsels[:W], [_window(ctx, mb, ss - t, 0, LIMB) for t in range(W)])
-            qH = _select(ctx, "qH", tsels[:W], [_window(ctx, mb, ss - t, LIMB, W, LIMB) for t in range(W)])
+            qL = _pick(ctx, "qL", tsels, [_window(ctx, mb, ss - t, 0, LIMB) for t in range(W)] + [zero], hint=f"{tag}.qL")
+            qH = _pick(ctx, "qH", tsels, [_window(ctx, mb, ss - t, LIMB, W, LIMB) for t in range(W)] + [zero], hint=f"{tag}.qH")
         else:
-            q_acc = _select(ctx, "q", tsels[:W], [_window(ctx, mb, ss - t, 0, W) for t in range(W)])
+            q_acc = _pick(ctx, "q", tsels, [_window(ctx, mb, ss - t, 0, W) for t in range(W)] + [zero], hint=f"{tag}.q")
 
         # the exact signed sum S = (1 - 2 s_acc) q_acc + Q = (1 - 2 sgn) v
         ctx.scope = f"{tag}.sum"
@@ -347,8 +376,7 @@ def compile_v2_unit(p: Params, chain: bool = False) -> System:
         fo_rows = ctx._bits(fo, nb - 1, "fo")
         Mn = hid * 2 ** (nb - 1) + fo
         ctx._learn(Mn, 0, 2**nb)
-        Msel = _select(ctx, "Mn", nsels, [_norm_window(ctx, vbits, t, nb) for t in range(pl.t_lo, pl.t_hi + 1)])
-        ctx.eq("norm", Msel, Mn)
+        _pick(ctx, "Mn", nsels, [_norm_window(ctx, vbits, t, nb) for t in range(pl.t_lo, pl.t_hi + 1)], target=Mn)
         t_sel = sum((t * s for t, s in zip(range(pl.t_lo + 1, pl.t_hi + 1), nsels[1:])), pl.t_lo * nsels[0])
         ctx._learn(t_sel, pl.t_lo, pl.t_hi + 1)
         tc = p.acc_e_min - E + p.width - nb                    # the clamped shift: e1 = acc_e_min

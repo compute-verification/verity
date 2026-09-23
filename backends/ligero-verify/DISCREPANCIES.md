@@ -424,7 +424,7 @@ verifier needs (the code is the reference; PROTOCOL.md still describes the BF16 
 `bf16-hopper-v2`, `bf16-ampere-v2`, `fp8-hopper-v2`, `fp8-ada-v2` (`backends/direct/ligero/pubsel/relation.py`,
 registered in `relations.py` beside the v1 names, v1 untouched) claim exactly what their v1 counterparts claim -- the
 same pinned instruction semantics (`verity.ml.tc.models`), the same statement widths, the same chain-end word
-(`y16`, one public word per VU; `ligero-system/v1` files) -- with a different compiled unit: 466 / 703 / 281 / 516 rows
+(`y16`, one public word per VU; `ligero-system/v1` files) -- with a different compiled unit: 328 / 505 / 208 / 370 rows
 against 3292 / 3516 / 3396 / 3769.  What changes for a verifier:
 
 * **The pins are derived values, not word components.**  A v1 system pins `a[i].s|m|e` / `b[i].s|m|e` and the
@@ -448,10 +448,12 @@ against 3292 / 3516 / 3396 / 3769.  What changes for a verifier:
   refused with the decode's reason (Python: `public inputs rejected: ...`; Rust: `public inputs: ... (unit j)`).
 * **Tags and pins.**  `bf16-hopper-v2` and `bf16-ampere-v2` absorb the empty tag like the other BF16 relations (the
   statement's name and the `sys_id` in the digest distinguish them, D11); the FP8 pair absorb `|rel=fp8-hopper-v2|v1`
-  / `|rel=fp8-ada-v2|v1`.  Pinned digests (`sys_id` / table digest): `7753dc00... / 65bf9a8d...`,
-  `bbcf81fc... / a1e01742...`, `63bcecff... / 67726985...`, `cbc474ab... / f8f80bb4...` -- laptop compilations
-  from the lane tree at bee4c6d, torch-free, twice each, byte-identical, the `sys_id`s equal to `protocol.system_id`
-  under torch; fixtures under `fixtures/systems/`.
+  / `|rel=fp8-ada-v2|v1`.  Pinned digests (`sys_id` / table digest): `22789471... / 1eeb2341...`,
+  `2ce2766c... / 188aba83...`, `fbea6ee1... / 86c23ec3...`, `a8174ff5... / a2015d49...` -- laptop compilations
+  from the lane tree, torch-free, twice each, byte-identical, the `sys_id`s equal to `protocol.system_id` under
+  torch; fixtures under `fixtures/systems/`.  The units select the pinned sum, the accumulator's aligned term and the
+  normalised significand without product rows (a hint row and one row-free quadratic `sel_i (X - value_i) = 0` per
+  candidate), and the two shift hints are ranged by their lookups' one-hots alone (`LigeroCtx.lookup(range_key=False)`).
 * **`bf16-ampere-v2` is a new claim on the generic runner**, not a re-encoding of `vu.py`'s `--relation bf16` run:
   it proves the Ampere BF16 step over synthetic instances drawn like the Hopper BF16 set (`instances_dataset`
   `bench-instances-bf16-ampere/v1`), where `bf16-ampere` proves the frozen `bench-instances/v1` set through `vu.py`.

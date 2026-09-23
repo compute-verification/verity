@@ -402,9 +402,10 @@ pub static FP4_NVF4: Relation = Relation {
 
 /// The v2 public-selection relations (lane relmin-lookup, 2026-09-23): the same claims as their v1 counterparts (pinned
 /// instruction semantics, statement widths, chain end on one public word), compiled by `pubsel.relation.compile_v2_unit`
-/// -- `relations.relation(name).compile(params, True)` at lane relmin-lookup bee4c6d, laptop, torch-free, two runs each,
-/// byte-identical (`ligero-system/v1`; sha256 31cc2501... / fb03f5bc... / 8579c735... / 8e01f44d...; 466 / 703 / 281 /
-/// 516 rows; 55 / 54 / 16 / 32 pins), the `sys_id`s equal to `protocol.system_id` under torch.  `bf16-ampere-v2` is the
+/// -- `relations.relation(name).compile(params, True)` from the lane relmin-lookup tree (the picked-value selection
+/// without product rows, lookup keys ranged by their one-hots), laptop, torch-free, two runs each, byte-identical
+/// (`ligero-system/v1`; sha256 b8c98eec... / fa3ee053... / 2f74bb3a... / 6e1d87cc...; 328 / 505 / 208 / 370 rows;
+/// 55 / 54 / 16 / 32 pins), the `sys_id`s equal to `protocol.system_id` under torch.  `bf16-ampere-v2` is the
 /// Ampere BF16 pipeline on the generic chain runner (`tag` empty like the other BF16 relations; the statement names it).
 pub static BF16_HOPPER_V2: Relation = Relation {
     name: "bf16-hopper-v2",
@@ -415,8 +416,8 @@ pub static BF16_HOPPER_V2: Relation = Relation {
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_HOPPER),
     end_components: None,
-    sys_id: "7753dc00aad13c0b236350023c9b2bb856099e4ad3ec63cff939bcf3cb3c62b9",
-    table_digest: "65bf9a8d7d2822acd3ee07e6f35c024a5d171ed738a8d5a0d8263f6490c210db",
+    sys_id: "22789471b778919855abb1ee011eae6f73078b268ee5e670f85caaeac607b472",
+    table_digest: "1eeb2341cd48d9bee6cbb8c32ac34bc3ad90ff9d14abc62f222be71c4bea8999",
 };
 
 pub static BF16_AMPERE_V2: Relation = Relation {
@@ -428,8 +429,8 @@ pub static BF16_AMPERE_V2: Relation = Relation {
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_AMPERE),
     end_components: None,
-    sys_id: "bbcf81fc336208ab8f356c17a178c72ed123fdd3c0ab07ac96ae7ff15b44d360",
-    table_digest: "a1e01742728b298b1a60315a4f77b41df5d675095af529ce69ff0baf826d8dcd",
+    sys_id: "2ce2766ced6c2dafaaf316310749b507dc45a71dabcf196c9aaf0baac0760def",
+    table_digest: "188aba837767fc96449a45f1d2efa51d659c59a95cd9773ff7bc2c3290fd9f26",
 };
 
 pub static FP8_HOPPER_V2: Relation = Relation {
@@ -441,8 +442,8 @@ pub static FP8_HOPPER_V2: Relation = Relation {
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_HOPPER),
     end_components: None,
-    sys_id: "63bcecff96aa2102366056d61267d146c54da51270aaef65148b5e754fd75134",
-    table_digest: "677269857308f2b7df33665b5eff191723268bd839d029f0edb0cb2ae253ce5c",
+    sys_id: "fbea6ee16dd99c9343ef486cd99c95a8ee209f19977059b3e8ca6fa4fc427d85",
+    table_digest: "86c23ec3bd197d256d3256df1211bc58b963bf4b881610dc0341c3b7ed8e54a4",
 };
 
 pub static FP8_ADA_V2: Relation = Relation {
@@ -454,8 +455,8 @@ pub static FP8_ADA_V2: Relation = Relation {
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_ADA),
     end_components: None,
-    sys_id: "cbc474ab8989c3f2257f739aeb259c698ea3c098ba6a03529f6fb0c99b6cfefb",
-    table_digest: "f8f80bb4dcc4443f67abff6f9d390a4a29eb783d441de05672faf05bc7e8d808",
+    sys_id: "a8174ff5c88daf42d55b2d362a35324a1fe0232d8a514e7c10ad58c8f8bc1155",
+    table_digest: "a2015d492c6bfe29af219e760893e11e543e1a62402256810a9de1ec82e3a6cb",
 };
 
 pub static RELATIONS: [&Relation; 9] = [

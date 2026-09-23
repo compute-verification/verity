@@ -52,9 +52,12 @@ def step_int(p: Params, pl: Plan, c: int, a: list[int], b: list[int], y: int | N
             vL, vH = v & (2**LIMB - 1), v >> LIMB
             H[f"{tag}.vL"], H[f"{tag}.vH"] = vL, vH
             qL, QL = q_acc & (2**LIMB - 1), Q & (2**LIMB - 1)
+            H[f"{tag}.qL"], H[f"{tag}.qH"] = qL, q_acc >> LIMB
+            H[f"{tag}.QL"], H[f"{tag}.QH"] = QL, (Q - QL) >> LIMB
             H[f"{tag}.carry"] = (sign * qL + QL - (1 - 2 * sgn) * vL) >> LIMB
         else:
             H[f"{tag}.v"] = v
+            H[f"{tag}.q"], H[f"{tag}.Q"] = q_acc, Q
         l = v.bit_length()
         e1 = max(E + l - p.width, p.acc_e_min)
         tt = e1 - E + p.width - pl.nb
@@ -213,9 +216,12 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device):
             vL, vH = v & (2**LIMB - 1), v >> LIMB
             H[f"{tag}.vL"], H[f"{tag}.vH"] = vL, vH
             qL, QL = q_acc & (2**LIMB - 1), Q & (2**LIMB - 1)
+            H[f"{tag}.qL"], H[f"{tag}.qH"] = qL, q_acc >> LIMB
+            H[f"{tag}.QL"], H[f"{tag}.QH"] = QL, (Q - QL) >> LIMB
             H[f"{tag}.carry"] = (sign * qL + QL - (1 - 2 * sgn) * vL) >> LIMB
         else:
             H[f"{tag}.v"] = v
+            H[f"{tag}.q"], H[f"{tag}.Q"] = q_acc, Q
         l = _bit_length(v, pl.SB)
         e1 = torch.clamp(E + l - p.width, min=p.acc_e_min)
         tt = e1 - E + p.width - pl.nb

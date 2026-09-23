@@ -118,7 +118,7 @@ def test_census_at_most_half_of_v1(rel):
         s1 = compile_unit(rel.params, chain=True)
     c1, c2 = census(s1), census(s2)
     assert 2 * c2["rows_per_unit"] <= c1["rows_per_unit"], (c1, c2)
-    assert c2["rows_per_unit"] <= {"bf16-hopper-v2": 466, "bf16-ampere-v2": 703, "fp8-hopper-v2": 281, "fp8-ada-v2": 516}[rel.name]
+    assert c2["rows_per_unit"] <= {"bf16-hopper-v2": 328, "bf16-ampere-v2": 505, "fp8-hopper-v2": 208, "fp8-ada-v2": 370}[rel.name]
 
 
 @pytest.mark.parametrize("rel", V2, ids=lambda r: r.name)
