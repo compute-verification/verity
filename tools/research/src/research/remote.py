@@ -22,6 +22,12 @@
                     matches is adopted (READY.json written), one that does not is moved to <root>/src/.quarantine/ and re-shipped.
     request         <root>/requests/<run-id>/request.json carries the workload argv as a JSON list, its env, cwd, and harness flags.
                     Nothing is rebuilt through a shell string.
+    cwd             the request's `cwd` is the RUNNER's: the shipped tree (the store reads the closure and tool declarations there).  The
+                    WORKLOAD runs in its run dir <root>/runs/<run-id>/ (WORKLOAD_CWD_DEFAULT): every run of one commit shares
+                    <root>/src/<sha>/, so a relative `result.json` written there raced between concurrent runs.  `--cwd source` (or
+                    `source/SUB`, or a relative SUB) runs it inside the tree instead, an explicit opt-in; job.json records run.cwd and
+                    run.cwd_basis.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not into the tree.  A tree whose
+                    own research package predates this runs its workloads in the tree; the launcher says so (remote.json workload_cwd).
     claim           `research launch-request` on the machine does mkdir(<root>/runs/<run-id>) as the claim, then starts the detached
                     runner.  Re-delivering the same request finds the directory and reports its state; it never starts a second workload.
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
@@ -57,6 +63,7 @@ READY_FILE = "READY.json"                     # the only marker that makes <root
 LEGACY_COMPLETE = ".complete"                 # the pre-verification marker: never sufficient on its own
 SHIP_SOURCE_TIMEOUT_S = 600
 _RC_DIGEST = 75                               # the ship script's exit when the received archive is not the launcher's (nothing extracted)
+WORKLOAD_CWD_DEFAULT = "run_dir"              # the machine-side runner's default workload cwd; a shipped package without this line predates it
 SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl")
 TERMINAL = ("done", "failed", "cancelled")
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
@@ -507,6 +514,7 @@ def launch_request(request_path: Path) -> dict[str, Any]:
         return {"claimed": False, "run_id": run_id, "run_dir": str(run_dir), "existing": True, "state": st.get("state"),
                 "runner_pid": launch.get("runner_pid"), "refused": (refused or {}).get("reason")}
     concurrent = active_runs(runs_root, exclude=run_id)
+    src_dir = None
     try:
         remote_sec = req.get("remote") or {}
         if remote_sec.get("source_sha"):          # a shipped tree executes only from a directory verified READY for the requested identity
@@ -531,20 +539,21 @@ def launch_request(request_path: Path) -> dict[str, Any]:
     cost["concurrent_runs_at_launch"] = concurrent
     remote = dict(req.get("remote") or {})
     remote["request"] = str(request_path)
-    argv = [req.get("python") or sys.executable, "-m", "research", "run", "--runs-dir", str(runs_root), "--id", run_id, "--claimed",
-            "--cost-json", json.dumps(cost), "--remote-json", json.dumps(remote)]
-    if req.get("exclusive"):
-        argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
-    argv += [*(req.get("harness_args") or []), "--", *req["command"]]
     env = dict(os.environ)
     env.update({k: str(v) for k, v in (req.get("env") or {}).items()})
     if remote.get("source_sha"):
         # [R19 tele] the shipped tree (<root>/src/<sha>/, a git archive) has no .git: the workload's source-identity precheck reads the
         # tree's sha from here (research.result.ENV_SOURCE_SHA) when neither --sha nor EXPORT.json names it
         env["RESEARCH_SOURCE_SHA"] = str(remote["source_sha"])
+        env.setdefault("PYTHONPYCACHEPREFIX", str(runs_root.parent / "cache" / "pycache"))   # imports from the shared tree do not write into it
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
+    argv = [req.get("python") or sys.executable, "-m", "research", "run", "--runs-dir", str(runs_root), "--id", run_id, "--claimed",
+            "--cost-json", json.dumps(cost), "--remote-json", json.dumps(remote)]
+    if req.get("exclusive"):
+        argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
+    argv += [*(req.get("harness_args") or []), "--", *req["command"]]
     log = open(run_dir / "launcher.log", "ab")
     proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
     write_json_atomic(run_dir / "launch.json", {"run_id": run_id, "claimed_utc": utc_now_ms(), "runner_pid": proc.pid, "argv": argv,
@@ -553,6 +562,32 @@ def launch_request(request_path: Path) -> dict[str, Any]:
 
 
 # ---- the control side --------------------------------------------------------------------------------------------------------------------
+
+def flag_value(args: list[str], flag: str) -> str | None:
+    """The value of `flag X` / `flag=X` in an argv list (last one wins), else None."""
+    val = None
+    for i, a in enumerate(args):
+        if a == flag and i + 1 < len(args):
+            val = args[i + 1]
+        elif a.startswith(flag + "="):
+            val = a.split("=", 1)[1]
+    return val
+
+
+def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
+    """What the machine will use as the workload's cwd, for remote.json: the `--cwd` asked for, else the run dir -- unless the package
+    that runs on the machine (the shipped tree's, `tool_pkg`) predates WORKLOAD_CWD_DEFAULT and so still runs in the shared tree."""
+    asked = flag_value(harness_args, "--cwd")
+    if asked is not None:
+        return f"--cwd {asked}"
+    if tool_pkg is not None:
+        try:
+            knows = "WORKLOAD_CWD_DEFAULT" in (Path(tool_pkg) / "remote.py").read_text()
+        except OSError:
+            knows = False
+        if not knows:
+            return "source (the shipped tree's research package predates the per-run workload cwd: it runs in <root>/src/<sha>/)"
+    return WORKLOAD_CWD_DEFAULT
 
 def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, command: list[str], harness_args: list[str],
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool) -> dict[str, Any]:
@@ -569,6 +604,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         tool_pkg = source_tool_package(source)      # --source <tree> with tools/research: the tree's own package runs the run
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
+        rec["workload_cwd"] = workload_cwd(harness_args, tool_pkg)
+        if rec["workload_cwd"].startswith("source (") and source is not None:
+            print(f"research: {rec['workload_cwd']}; concurrent runs of this commit share it", file=sys.stderr)
         tree_sha = None
         src_dir = None
         ready: dict[str, Any] = {}

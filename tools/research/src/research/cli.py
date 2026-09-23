@@ -16,7 +16,9 @@
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
-to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  It exits with the workload's status; with
+to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
+with --on; `--cwd source` (or `source/SUB`, a relative SUB) runs it in the source root (the invoking directory; with --on, the shipped
+tree other runs of the commit share), an absolute --cwd as given; job.json run.cwd / run.cwd_basis record it.  It exits with the workload's status; with
 --require-result, a zero exit and a missing or invalid result.json exits 65 instead.  Harness flags pass through unchanged
 (--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).
 `--on <machine>` ships the tool (and, with --source, a clean git HEAD), stages the request, and has the machine claim the run id
@@ -96,7 +98,8 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--runs-dir", default=None, help="registry root (default $RESEARCH_RUNS or ~/.research/runs)")
     ap.add_argument("--on", default=None, metavar="MACHINE", help="run on an existing authorized machine listed in the machines file")
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
-    ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes cwd and tree_sha")
+    ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
+                                                                       "and tree_sha (the workload still runs in its run dir unless --cwd source)")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="with --on: ship this file to $RESEARCH_RUN_DIR/inputs/")
     ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or, with --on, on the machine), recorded as "
                                                                                  "the attempt's params.env (values of secret-named keys redacted)")
@@ -140,20 +143,21 @@ def cmd_run(argv: list[str]) -> int:
         return 2
     if ns.claimed and not os.environ.get("RESEARCH_STORE"):
         os.environ["RESEARCH_STORE"] = str(root.parent / "store")     # machine side: the store lives beside the runs, <root>/store (what `data pull` reads)
+    cwd_basis = _resolve_cwd(a)
     try:
         prep = _prepare_store(ns, a, command, run_id, run_dir, env_map)
     except (ImportError, LookupError, TypeError) as e:
-        print(f"research run: --tool {ns.tool}: {e}", file=sys.stderr)
+        print(f"research run: --cwd {a.cwd} / --tool {ns.tool}: {e}", file=sys.stderr)
         return 2
-    if a.cwd is None and not ns.claimed:
-        # a LOCAL workload runs in its run dir (issue 5: `> result.json` used to land in, and dirty, the source checkout); --cwd overrides.
-        # The machine side (--claimed) keeps the launcher's cwd = the shipped source tree (launch_request sets it explicitly).
+    if a.cwd is None:
+        # the workload runs in its own run dir, locally and on a machine (a relative `> result.json` used to land in the checkout, and
+        # on a machine in <root>/src/<sha>/, which every run of that commit shares: concurrent runs raced on it)
         a.cwd = str(run_dir)
     run_dir.mkdir(parents=True, exist_ok=ns.claimed)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
     remote_info = json.loads(ns.remote_json) if ns.remote_json else None
     job = record.extend_job(build_job_from(a, command), run_id=run_id, runs_root=root, expected_fingerprint=_parse_expect(ns.expect),
-                            cost=cost, remote=remote_info, store=prep["section"])
+                            cost=cost, remote=remote_info, store=prep["section"], cwd={"path": a.cwd, "basis": cwd_basis})
     from .telemetry.job import write_json_atomic
     from .telemetry.run import run as harness_run
 
@@ -187,6 +191,27 @@ def cmd_run(argv: list[str]) -> int:
         print(f"research: --require-result: the workload exited 0 but result.json is {s['result']}; exiting {EX_DATAERR}", file=sys.stderr)
         return EX_DATAERR
     return rc
+
+
+CWD_SOURCE = "source"
+
+
+def _resolve_cwd(a: argparse.Namespace) -> str:
+    """The workload's cwd, resolved in place on `a.cwd`; returns its basis for the record.
+
+    The SOURCE ROOT is this process's cwd: the invoking directory locally, the shipped tree <root>/src/<sha>/ on a machine (launch_request
+    starts the runner there; the store's closure and tool declarations are read from it).  `--cwd source` names it, `--cwd source/SUB` or
+    a relative `--cwd SUB` a directory under it (an explicit opt-in to running inside a tree other runs may share); an absolute `--cwd`
+    is taken as given.  No `--cwd`: basis `run_dir`, set by the caller once the store preparation has read the source root."""
+    if a.cwd is None:
+        return "run_dir"
+    raw = a.cwd
+    if os.path.isabs(raw):
+        return "explicit"
+    if raw == CWD_SOURCE or raw.startswith(CWD_SOURCE + "/"):
+        raw = raw[len(CWD_SOURCE):].lstrip("/")
+    a.cwd = os.path.abspath(os.path.join(os.getcwd(), raw))
+    return "source"
 
 
 def _parse_env(items: list[str]) -> dict[str, str] | None:
@@ -326,6 +351,11 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
             print(f"research run: --env wants K=V, got {kv!r}", file=sys.stderr)
             return 2
         env[k] = v
+    asked_cwd = remote.flag_value(harness_opts, "--cwd")
+    if asked_cwd is not None and not os.path.isabs(asked_cwd) and not ns.source:
+        print(f"research run --on {ns.on}: --cwd {asked_cwd} is relative to the shipped source tree, and there is none; pass --source GITDIR "
+              f"or an absolute --cwd (the default is the run dir)", file=sys.stderr)
+        return 2
     harness_args = ["--stage", ns.stage, *harness_opts]
     for e in ns.expect:
         harness_args += ["--expect", e]
