@@ -620,7 +620,12 @@ class LocalStore:
             if verify is None:
                 return out
             if verify == "head":
-                head = {"bytes": res["bytes"], "etag": res["etag"]} if res["action"] == "skipped" else r.head(key)    # the HEAD `put` did is the check
+                if res["action"] == "skipped":                          # the HEAD `put` did is the check
+                    head = {"bytes": res["bytes"], "etag": res["etag"]}
+                elif res["action"] == "created" and res.get("bytes") == size and is_md5_etag(res.get("etag")) and not res.get("multipart"):
+                    head = {"bytes": size, "etag": res["etag"]}        # the PUT response's ETag is the service's word on what it stored: a HEAD would repeat it
+                else:
+                    head = r.head(key)
                 if head is None:
                     out["error"] = f"{key}: absent after upload"
                 elif head["bytes"] != size:

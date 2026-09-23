@@ -876,7 +876,10 @@ def test_push_is_concurrent_conditional_and_verified_by_etag(fake_s3, tmp_path):
     for h, _ in m.blobs():
         assert hashlib.sha256(s.objects[f"objects/sha256/{h}"]).hexdigest() == h
     puts = s.puts()
-    assert len(puts) == 301 and all(c for _, c in puts), "every create carried If-None-Match: *"
+    assert len(puts) == 302 and all(c for _, c in puts), "every create carried If-None-Match: *, plus the session's one probe re-PUT"
+    probed = [k for k, _ in puts if [k for k, _ in puts].count(k) == 2]
+    assert len(probed) == 2 and probed[0] == probed[1], "the probe re-PUTs the first created key once (and saw the fake's 412)"
+    assert st.remote.conditional_put and st.remote.conditional_put_probed
     assert puts[-1][0] == f"manifests/{ids.hex_of(art)}.json", "the manifest is the last object to go up"
     assert [k for k, _ in puts[:-1]] != sorted(k for k, _ in puts[:-1]) or True   # completion order is arbitrary...
     assert rep["checked"] == [f"objects/sha256/{h}" for h, _ in m.blobs()] + [f"manifests/{ids.hex_of(art)}.json"], "...the report is not"
@@ -888,8 +891,11 @@ def test_push_is_concurrent_conditional_and_verified_by_etag(fake_s3, tmp_path):
     n_log = len(s.log)
     again = st.push(art, jobs=16)
     assert again["preserved"] and again["uploaded"] == 0 and again["skipped"] == 301 and again["verified"] == "etag-md5"
-    assert not [x for x in s.log[n_log:] if x[0] == "PUT"], "a present object costs one HEAD: no PUT"
-    assert [x[0] for x in s.log[n_log:]].count("GET") == 1 and len(s.log[n_log:]) == 301 + 1, "one HEAD per blob; HEAD + GET for the manifest (always read back)"
+    # PUT-first meets 412 on the first few present keys, then the adaptive window flips the client to HEAD-first (remote_s3 docstring)
+    re_puts = [x for x in s.log[n_log:] if x[0] == "PUT"]
+    assert 0 < len(re_puts) <= 16 + 16 and all(c for _, _, c in re_puts), "a handful of conditional PUTs (412) before HEAD-first takes over"
+    assert not st.remote.stats()["put_first"], "the window remembers: this remote now HEADs first"
+    assert [x[0] for x in s.log[n_log:]].count("GET") == 1 and len(s.log[n_log:]) == 301 + 1 + len(re_puts), "one HEAD per blob (+ the 412'd PUTs); HEAD + GET for the manifest (always read back)"
 
     # a racing writer: HEAD says absent, the conditional PUT says 412 -> `exists`, then the verifying HEAD confirms size + MD5
     victim = f"objects/sha256/{m.blobs()[7][0]}"
@@ -991,7 +997,7 @@ def test_push_uploads_a_blob_above_the_single_put_limit_in_parts(fake_s3, tmp_pa
     assert s.etags[key] == remote_s3.multipart_etag([p["md5"] for p in parts])
     seq = [(m_, k) for m_, k, _ in s.log if k.startswith(key)]
     assert seq[0] == ("HEAD", key) and seq[1] == ("INITIATE", key) and sorted(seq[2:5]) == [("PART", f"{key}#1"), ("PART", f"{key}#2"), ("PART", f"{key}#3")]
-    assert seq[5] == ("COMPLETE", key) and ("HEAD", f"{key}.parts.json") in seq and ("PUT", f"{key}.parts.json") in seq
+    assert seq[5] == ("COMPLETE", key) and ("PUT", f"{key}.parts.json") in seq     # the small sidecar may go PUT-first (no HEAD)
     side = json.loads(s.objects[f"{key}.parts.json"])
     assert side["schema"] == "research/parts/v1" and side["bytes"] == 9192 and side["part_bytes"] == 4096 and side["sha256"] == big_sha and side["etag"] == s.etags[key]
     assert [p["bytes"] for p in side["parts"]] == [4096, 4096, 1000] and [p["n"] for p in side["parts"]] == [1, 2, 3]
@@ -1047,27 +1053,43 @@ def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, caps
 
 def test_s3remote_session_token_is_sent_and_signed(monkeypatch, tmp_path, env):
     """A temporary credential's session token goes out as `x-amz-security-token` on every request and is part of SignedHeaders (so
-    the signature covers it, as SigV4 requires); without a token the header is absent.  The transport is faked: no network."""
-    import io
-    import urllib.request
+    the signature covers it, as SigV4 requires); without a token the header is absent.  The transport is faked at the pool: no network."""
+    import email.message
 
-    sent: list[urllib.request.Request] = []
+    sent: list[dict] = []           # {"method", "target", "headers", "data"} per request
 
-    class Resp(io.BytesIO):
-        headers = {"Content-Length": "5", "ETag": '"x"'}
+    class FakeResp:
+        status, reason, will_close, length = 200, "OK", False, 0
 
-        def __enter__(self):
-            return self
+        def __init__(self):
+            self.headers = email.message.Message()
+            self.headers["Content-Length"], self.headers["ETag"] = "5", '"x"'
 
-        def __exit__(self, *a):
-            return False
+        def read(self, n=-1):
+            return b""
 
-    def fake_open(req, timeout=None):
-        sent.append(req)
-        return Resp(b"")
+        def isclosed(self):
+            return True
+
+        def close(self):
+            pass
+
+    class FakeConn:
+        def request(self, method, target, body=None, headers=None):
+            sent.append({"method": method, "target": target, "headers": dict(headers or {}), "data": body})
+
+        def getresponse(self):
+            return FakeResp()
+
+        def close(self):
+            pass
+
+    def fake_pool(r):
+        monkeypatch.setattr(r.pool, "acquire", lambda: FakeConn())
+        monkeypatch.setattr(r.pool, "release", lambda conn: None)
 
     r = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bucket", "ak", "sk", session_token="tok/EN+123==")
-    monkeypatch.setattr(r._opener, "open", fake_open)
+    fake_pool(r)
     r.head("objects/sha256/" + "0" * 64)
     p = tmp_path / "x"
     p.write_bytes(b"12345")
@@ -1075,23 +1097,26 @@ def test_s3remote_session_token_is_sent_and_signed(monkeypatch, tmp_path, env):
         pass
     assert len(sent) == 2
     for req in sent:
-        assert req.get_header("X-amz-security-token") == "tok/EN+123=="
-        auth = req.get_header("Authorization")
+        hdrs = {k.lower(): v for k, v in req["headers"].items()}
+        assert hdrs["x-amz-security-token"] == "tok/EN+123=="
+        auth = hdrs["authorization"]
         signed = auth.split("SignedHeaders=")[1].split(",")[0].split(";")
         assert "x-amz-security-token" in signed and signed == sorted(signed)
         # the signature is reproducible from the headers that were sent (token included), i.e. it really covers the token
-        method = "PUT" if req.data is not None else "HEAD"
-        sig_headers = {k.lower(): v for k, v in req.header_items() if k.lower() != "authorization"}
+        method = req["method"]
+        sig_headers = {k: v for k, v in hdrs.items() if k != "authorization"}
         creq = remote_s3.canonical_request(method, "/bucket/" + ("k" if method == "PUT" else "objects/sha256/" + "0" * 64), {}, sig_headers,
                                            sig_headers["x-amz-content-sha256"])
         date = sig_headers["x-amz-date"]
         sts = remote_s3.string_to_sign(date, f"{date[:8]}/auto/s3/aws4_request", creq)
         assert auth.endswith("Signature=" + remote_s3.signature("sk", date[:8], "auto", sts))
+    assert sent[1]["headers"]["content-length"] == "5" and hasattr(sent[1]["data"], "read"), "a Path body streams from the open file"
     sent.clear()
     plain = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bucket", "ak", "sk")
-    monkeypatch.setattr(plain._opener, "open", fake_open)
+    fake_pool(plain)
     plain.head("k")
-    assert sent[0].get_header("X-amz-security-token") is None and "security-token" not in sent[0].get_header("Authorization")
+    hdrs = {k.lower(): v for k, v in sent[0]["headers"].items()}
+    assert "x-amz-security-token" not in hdrs and "security-token" not in hdrs["authorization"]
 
     # load_remote: the token's env var is optional in the config (default AWS_SESSION_TOKEN) and optional in the environment
     (env / "c.toml").write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://acct.r2.cloudflarestorage.com"\n'
