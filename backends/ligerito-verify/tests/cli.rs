@@ -89,8 +89,8 @@ fn sumcheck_fixture_verifies_lgsc0003_and_rejects_a_tampered_proof() {
 }
 
 /// An LGTO0001 dump in run.py's layout (key.bin, <stem>.stmt, <stem>.lgto / .lgto.neg, manifest.json with the Python
-/// verdicts): the pre-V1 fixture passes `batch` only under `--allow-legacy`; a proof listed as must-reject but accepted,
-/// or a Python verdict we disagree with, fails it.
+/// verdicts): the pre-V1 fixture verifies only under `--allow-legacy`, and even then carries no soundness and fails the
+/// batch (red-team-3 R3-1); a proof listed as must-reject but accepted, or a Python verdict we disagree with, fails it.
 #[test]
 fn batch_over_an_lgto_dump() {
     let src = fixtures().join("lgto/fp8ada_l256_legacy");
@@ -112,8 +112,18 @@ fn batch_over_an_lgto_dump() {
     let ds = d.to_str().unwrap();
     let o = run(&["batch", "--dir", ds, "--allow-legacy"]);
     let s = stdout(&o);
-    assert!(o.status.success(), "{s}");
-    for want in ["\"n_accepted\":1", "\"manifest_checked\":2", "\"problems\":[]", "\"sumcheck\":\"LGSC0002\"", "\"key_pinned\":true"] {
+    assert!(!o.status.success(), "{s}");
+    for want in [
+        "\"n_accepted\":1",
+        "\"manifest_checked\":2",
+        "\"accepted_legacy\":1",
+        "\"problems\":[\"1 pre-V1 proof(s) accepted under --allow-legacy",
+        "\"union_soundness_log2\":null",
+        "\"soundness_log2\":null,\"claimed_log2\":null,\"claim_basis\":\"none: pre-V1",
+        "\"sumcheck\":\"LGSC0002\"",
+        "\"zk_mode\":\"none\"",
+        "\"key_pinned\":true",
+    ] {
         assert!(s.contains(want), "{want} not in {s}");
     }
     let o = run(&["batch", "--dir", ds]);

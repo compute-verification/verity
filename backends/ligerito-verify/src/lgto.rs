@@ -921,6 +921,9 @@ pub fn pcs_verify(p: &Params, pf: &PcsProof, points: &[Vec<Ext>], values: &[Ext]
     if points.is_empty() || points.len() != values.len() || points.iter().any(|z| z.len() != p.n) {
         return Err("PCS: bad claim shape".into());
     }
+    if !sparse.is_empty() && p.n > 32 {
+        return Err("PCS: sparse cells are absorbed as u32".into());
+    }
     for s in sparse {
         let mut seen = std::collections::HashSet::new();
         if s.cells.is_empty() || s.cells.len() != s.weights.len() || s.cells.iter().any(|&c| c >> p.n != 0 || !seen.insert(c)) {
@@ -1072,6 +1075,9 @@ pub struct Report {
     pub claim_basis: String,
     pub sumcheck: String,
     pub zk: bool,
+    /// what the proof's masking can give (a verifier cannot check ZK): "none"; "partial" (LGSC0002/3 under the ZK PCS:
+    /// per-variable masks, cross terms bare, relation-2's `zk_partial`); "lgsc0004"; "lgsc0004-underblinded" (vf > n_c - 4)
+    pub zk_mode: String,
     pub vus: usize,
     pub sub_batches: usize,
     pub n: usize,
@@ -1226,7 +1232,11 @@ pub fn verify(
             return Err(format!("parameters give an interactive union of 2^{snd:.2} > 2^{t}"));
         }
     }
-    let (claimed_log2, claim_basis) = soundness_claim(&prm.coins, max_term);
+    let (claimed_log2, claim_basis) = if prm.zero_blocks.is_none() {
+        (None, "none: pre-V1 (no zero claims on the virtual rows)".to_string())
+    } else {
+        soundness_claim(&prm.coins, max_term)
+    };
     let rows = StmtRows::new(spec, &stmt, stmt.n_vus.len());
     rows.validate()?;
     let mut coins = coins_for(&prm.coins)?;
@@ -1238,6 +1248,7 @@ pub fn verify(
     let magic = proof.sumcheck.get(..8).ok_or("sumcheck bytes: truncated")?;
     let a = p.k(p.rounds()).saturating_sub(ZK_MASK_B);
     let mut sparse: Vec<SparseTerm> = Vec::new();
+    let mut zk_mode = if zk { "partial" } else { "none" };
     let (sc_name, claims): (&str, Vec<EvalClaim>) = if let Some(zkr) = &zk_rows {
         // provisional until ligerito-relation-2 emits LGSC0004: eval claims w(r_i, r_c), w(rho_i, rho_c), then the zero
         // claims; the three Libra claims as sparse PCS terms on f_index(row, col), in sumcheck order
@@ -1246,6 +1257,8 @@ pub fn verify(
         }
         let sp = crate::lgsc4::parse(&proof.sumcheck).map_err(|e| format!("sumcheck bytes: {e}"))?;
         let c4 = crate::lgsc4::verify(&lay, zkr, &cons, &rows, &sp, coins)?;
+        // red-team-3 R3-6: a final table over more than n_c - 4 column variables leaves Az / Bz / Cz under-blinded
+        zk_mode = if sp.vf + 4 <= lay.n_c() { "lgsc0004" } else { "lgsc0004-underblinded" };
         sparse = c4
             .sparse
             .iter()
@@ -1293,6 +1306,7 @@ pub fn verify(
         claim_basis,
         sumcheck: sc_name.into(),
         zk,
+        zk_mode: zk_mode.into(),
         vus: stmt.n_vus.iter().sum(),
         sub_batches: stmt.n_vus.len(),
         n: p.n,
@@ -1432,9 +1446,11 @@ mod tests {
         assert_eq!((rep.relation.as_str(), rep.sumcheck.as_str(), rep.vus, rep.zero_blocks), ("fp8-ada", "LGSC0002", 12, 0));
         assert!(rep.legacy && rep.key_pinned && !rep.zk);
         // Python (params.LigeritoParams.soundness + proof.soundness_claim on these parameters): union -128.0169, worst term
-        // L1 proximity -128.6616, Fiat-Shamir claim 64 - 128.6616
+        // L1 proximity -128.6616, Fiat-Shamir claim 64 - 128.6616 -- but a pre-V1 proof establishes nothing (red-team-3 R3-1)
         assert!((rep.soundness_log2 + 128.0169).abs() < 1e-3, "{}", rep.soundness_log2);
-        assert!((rep.claimed_log2.unwrap() + 64.6616).abs() < 1e-3, "{:?}", rep.claimed_log2);
+        assert_eq!(rep.claimed_log2, None);
+        assert!(rep.claim_basis.starts_with("none: pre-V1"), "{}", rep.claim_basis);
+        assert!((soundness_claim("fiat-shamir", -128.6616).0.unwrap() + 64.6616).abs() < 1e-3);
         assert_eq!(soundness_claim("live", -128.0).0, None);
         assert_eq!(soundness_claim("local", -128.0).0, None);
         let e = verify(STMT, KEY, PROOF, &mut fs, &Options { target_log2: Some(-128.0), ..Default::default() }).unwrap_err();
@@ -1511,8 +1527,9 @@ mod tests {
         assert_eq!(read_statement(V1_NEGS[4].1).unwrap().y, read_statement(STMT).unwrap().y);
         let rep = verify(STMT, KEY, V1_PROOF, &mut fs, &strict()).unwrap();
         assert_eq!((rep.sumcheck.as_str(), rep.zero_blocks, rep.legacy, rep.zk, rep.key_pinned), ("LGSC0003", 6, false, false, true));
+        assert_eq!(rep.zk_mode, "none");
         let rep = verify(STMT, KEY, V1_ZK_PROOF, &mut fs, &strict()).unwrap();
-        assert_eq!((rep.zero_blocks, rep.legacy, rep.zk), (6, false, true));
+        assert_eq!((rep.zero_blocks, rep.legacy, rep.zk, rep.zk_mode.as_str()), (6, false, true, "partial"));
         assert!(rep.soundness_log2 <= -128.0);
     }
 
@@ -1551,6 +1568,23 @@ mod tests {
                 let mut bad = st.clone();
                 if side == 0 { bad.a[0][n] = 1 } else { bad.b[0][n] = 1 }
                 assert!(v(&bad).unwrap_err().ends_with("operand word in a pad unit (non-canonical)"), "{} word {n}", st.relation);
+            }
+        }
+    }
+
+    /// The statement's `steps` (the accumulation length K per VU) is the relation's constant, not the prover's choice, even
+    /// under `--allow-any-key`: the column-uniform system and its pinned key would take any chain length.
+    #[test]
+    fn statement_steps_bound_to_the_relation() {
+        let at = 8 + 4 + u32::from_le_bytes(STMT[8..12].try_into().unwrap()) as usize + 64 + 4;
+        let steps = u32::from_le_bytes(STMT[at..at + 4].try_into().unwrap());
+        assert_eq!(steps as usize, relation_spec("fp8-ada").unwrap().steps);
+        for s in [steps / 2, steps - 1, steps + 1, steps * 2] {
+            let mut st = STMT.to_vec();
+            st[at..at + 4].copy_from_slice(&s.to_le_bytes());
+            for opt in [strict(), Options { allow_any_key: true, ..strict() }] {
+                let e = verify(&st, KEY, V1_PROOF, &mut fs, &opt).unwrap_err();
+                assert_eq!(e, "statement shape", "steps {s}");
             }
         }
     }

@@ -20,7 +20,7 @@
 //!     # proof declares them (live: <stem>.coins; local: manifest "coins_seed"), manifest {"files": [{"proof",
 //!     # "python_verdict": {"accepted"}}]} verdicts must agree.  The key must be a pinned one (--allow-any-key: any key
 //!     # the statement names, flagged); proofs without the red-team-2 V1 zero claims are rejected (--allow-legacy reads
-//!     # them, UNSOUND); local-coin proofs are verdicts only (no soundness figure; --no-local rejects them); proofs of
+//!     # them, UNSOUND: no soundness figure, and batch lists them as a problem); local-coin proofs are verdicts only (no soundness figure; --no-local rejects them); proofs of
 //!     # one statement count once in the union.  `verify --proof X.lgto [--stmt S] [--key K] [--coins C]` likewise.
 //! ligerito-verify ref-fixtures --file F.json [--neg N.json] [--json out.json] [--reps R]
 //!     # ligerito-design's ref.py fixtures (`python -m backends.direct.ligerito.ref`, format ligerito-ref/v2): every
@@ -85,6 +85,8 @@ impl Verdict {
     fn soundness_log2(&self) -> Option<f64> {
         match (&self.report, &self.lgto) {
             (Some(r), _) => Some(r.soundness_log2),
+            // a pre-V1 proof has none: any claimed output verifies (red-team-2 V1)
+            (None, Some(r)) if r.legacy => None,
             (None, Some(r)) => Some(r.soundness_log2),
             _ => None,
         }
@@ -108,15 +110,16 @@ fn verdict_json(v: &Verdict) -> String {
     };
     let lg = match &v.lgto {
         Some(r) => format!(
-            "{{\"relation\":{},\"coins\":{},\"coin_rounds\":{},\"soundness_log2\":{:.3},\"claimed_log2\":{},\"claim_basis\":{},\"sumcheck\":\"{}\",\"zk\":{},\"vus\":{},\"sub_batches\":{},\"n\":{},\"n_claims\":{},\"zero_blocks\":{},\"opened_rows\":{},\"legacy_no_zero_claims\":{},\"key_pinned\":{},\"key_sha256\":\"{}\",\"stmt_sha256\":\"{}\"}}",
+            "{{\"relation\":{},\"coins\":{},\"coin_rounds\":{},\"soundness_log2\":{},\"claimed_log2\":{},\"claim_basis\":{},\"sumcheck\":\"{}\",\"zk\":{},\"zk_mode\":\"{}\",\"vus\":{},\"sub_batches\":{},\"n\":{},\"n_claims\":{},\"zero_blocks\":{},\"opened_rows\":{},\"legacy_no_zero_claims\":{},\"key_pinned\":{},\"key_sha256\":\"{}\",\"stmt_sha256\":\"{}\"}}",
             json_str(&r.relation),
             json_str(&r.coins_kind),
             r.coins,
-            r.soundness_log2,
+            if r.legacy { "null".into() } else { format!("{:.3}", r.soundness_log2) },
             r.claimed_log2.map(|c| format!("{c:.3}")).unwrap_or_else(|| "null".into()),
             json_str(&r.claim_basis),
             r.sumcheck,
             r.zk,
+            r.zk_mode,
             r.vus,
             r.sub_batches,
             r.n,
@@ -626,6 +629,10 @@ fn main() {
                 }
             };
             let n_unpinned = verdicts.iter().filter(|v| v.accepted && v.lgto.as_ref().is_some_and(|r| !r.key_pinned)).count();
+            let n_legacy = verdicts.iter().filter(|v| v.accepted && v.lgto.as_ref().is_some_and(|r| r.legacy)).count();
+            if n_legacy > 0 {
+                problems.push(format!("{n_legacy} pre-V1 proof(s) accepted under --allow-legacy: no soundness (no zero claims on the virtual rows)"));
+            }
             if target_bits > 0.0 && union_log2 > -target_bits {
                 problems.push(format!("union soundness 2^{union_log2:.2} misses the target 2^-{target_bits} (--target-bits 0 to waive)"));
             }
@@ -651,7 +658,7 @@ fn main() {
             }
             let all = problems.is_empty();
             let js = format!(
-                "{{\"dir\":{},\"accepted\":{},\"target_bits\":{target_bits},\"n_proofs_expected\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_ref_fixtures\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"accepted_local_coins\":{n_local},\"claimed_union_log2\":{},\"accepted_unpinned_key\":{n_unpinned},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
+                "{{\"dir\":{},\"accepted\":{},\"target_bits\":{target_bits},\"n_proofs_expected\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_ref_fixtures\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"accepted_local_coins\":{n_local},\"claimed_union_log2\":{},\"accepted_unpinned_key\":{n_unpinned},\"accepted_legacy\":{n_legacy},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
                 json_str(&dir.display().to_string()),
                 all,
                 n_expected.map(|n| n.to_string()).unwrap_or_else(|| "null".into()),
