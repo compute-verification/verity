@@ -1,0 +1,343 @@
+"""The frontend's emitter of runtime correspondence (`verity_vllm.runtime_correspondence`, schema `runtime-correspondence/v1`).
+
+Runs once, after the flat body of a derivation is finished, over the derivation context: every Call the lowering rules emitted is
+mapped to the fx node it was lowered from (the source / runtime occurrence), and the Call's return Value and argument Values are
+located inside that occurrence's output / input tensors as leaf ranges.  Everything here is read off the exported graph's metadata
+(`nn_module_stack`, `meta["val"]` fake tensors), the context's alias / mutation bookkeeping and the finished body's reference
+sequences -- nothing is asserted by rule name, and no model or family name appears.  Rules stay untouched: a rule that emits
+through `Ctx.call` is covered by the explicit fx node it passes; a rule that emits through the Builder directly is covered by the
+node the translation loop was at when the Builder grew (`Ctx.note_emitted`).
+
+What the frontend can NOT populate here (and where it would come from) is stated in the lane report, not guessed at: kernel
+launch identity / grid (the runtime observation), physical addresses (the acquisition), the peer rank's own Call ids (the peer
+Program's correspondence).
+"""
+
+from __future__ import annotations
+
+import bisect
+import re
+from typing import Any
+
+import torch
+
+from verity.ir.refs import Coll, runs as _runs
+from verity.ir.types import Record
+from verity_vllm.frontend.torch_frontend import flat_types
+from verity_vllm.runtime_correspondence import NAMESPACE, SCHEMA
+
+_ROW_RE = re.compile(r"\[(\d+)\]")
+_COLLECTIVE_KINDS = {"all_reduce2": "all_reduce", "all_gather2": "all_gather"}   # op name -> collective kind (operands in rank order)
+_FROM_CAP = 8                                                                   # producers listed per argument before truncation
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# tensor views
+# ---------------------------------------------------------------------------------------------------------------------------
+
+
+def _view(val: Any) -> dict | None:
+    if not isinstance(val, torch.Tensor):
+        return None
+    d: dict[str, Any] = {"shape": [int(s) for s in val.shape], "dtype": str(val.dtype).removeprefix("torch.")}
+    try:
+        d["strides"] = [int(s) for s in val.stride()]
+        d["contiguous"] = bool(val.is_contiguous())
+        d["storage_offset"] = int(val.storage_offset())
+    except Exception:  # noqa: BLE001  (a fake tensor without stride metadata)
+        d["strides"], d["contiguous"], d["storage_offset"] = None, None, None
+    return d
+
+
+def _output_views(node) -> list[dict | None]:
+    val = node.meta.get("val")
+    if isinstance(val, (list, tuple)):
+        return [_view(v) for v in val]
+    return [_view(val)]
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# reference-sequence indexing: where a run of leaves sits inside a collection's flat leaf order
+# ---------------------------------------------------------------------------------------------------------------------------
+
+
+def _interval_index(refs) -> dict[tuple[str, int], list[tuple[int, int, int]]]:
+    """(space, idx) -> [(lo, hi, offset)] sorted by lo: the runs of `refs` with the flat leaf offset each run starts at."""
+    idx: dict[tuple[str, int], list[tuple[int, int, int]]] = {}
+    off = 0
+    for space, i, lo, hi in _runs(refs):
+        idx.setdefault((space, i), []).append((lo, hi, off))
+        off += hi - lo
+    for ivs in idx.values():
+        ivs.sort()
+    return idx
+
+
+def _locate(index: dict, space: str, i: int, lo: int, hi: int) -> tuple[int, int] | None:
+    """The flat leaf range [a, b) of `index`'s collection that holds leaves [lo, hi) of (space, i), if one run holds them all."""
+    ivs = index.get((space, i))
+    if not ivs:
+        return None
+    p = bisect.bisect_right(ivs, (lo, float("inf"), float("inf")))       # candidates: runs starting at or before `lo`
+    for j in range(p - 1, -1, -1):
+        rlo, rhi, off = ivs[j]
+        if rlo <= lo and hi <= rhi:
+            return off + (lo - rlo), off + (hi - rlo)
+    return None
+
+
+def _locate_runs(index: dict, rs: list[tuple[str, int, int, int]]) -> tuple[int, int] | None | bool:
+    """Every run of `rs` inside one collection: its contiguous flat range, `None` if covered but not contiguous, False if not covered."""
+    spans: list[tuple[int, int]] = []
+    for space, i, lo, hi in rs:
+        r = _locate(index, space, i, lo, hi)
+        if r is None:
+            return False
+        spans.append(r)
+    if not spans:
+        return False
+    a, b = spans[0]
+    for lo, hi in spans[1:]:
+        if lo != b:
+            return None
+        b = hi
+    return a, b
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# naming hints -> member / row (the frontend's own convention, parsed where it was produced)
+# ---------------------------------------------------------------------------------------------------------------------------
+
+
+def _member_row(name: str | None, base: str, node_name: str) -> tuple[str | None, int | None, str | None]:
+    """Call name -> (member, row, unparsed hint).  The frontend names a Call `<hint>` or `<hint>[row]` or `<hint>[row]/<member>`, where
+    `<hint>` is `hint_name(fx)` (`<module>/<fx>`) or, for a mid-module site, `<module>.<fx>/<fx>`; the row-less forms drop `[row]`.
+    Anything with a bracket that is not `[<int>]` (`[t=7]`) is returned raw as `hint` and NOT parsed."""
+    if not name:
+        return None, None, None
+    m = re.search(re.escape(node_name) + r"\[(\d+)\]", name)      # the LAST `<fx>[row]` -- a site name repeats `<fx>` before it
+    if m:
+        for m2 in re.finditer(re.escape(node_name) + r"\[(\d+)\]", name):
+            m = m2
+        row: int | None = int(m.group(1))
+        rest = name[m.end():]
+    elif name.startswith(base):
+        row, rest = None, name[len(base):]
+    else:
+        return None, None, name
+    if "[" in rest or "]" in rest:
+        return None, row, name
+    parts = [p for p in rest.split("/") if p]
+    return ("/".join(parts) or None), row, None
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# the emitter
+# ---------------------------------------------------------------------------------------------------------------------------
+
+
+def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> dict:
+    """The `runtime-correspondence/v1` document of the finished flat `body` derived under `ctx` (see module docstring)."""
+    params = list(body.params)
+    n_user = len(ctx.user_inputs)
+    input_names = [n for n, _ in params[:n_user]]
+    weights_index = len(params) - 1 if ctx.weights_coll is not None else None
+    field_names: list[str] = []
+    field_starts: list[int] = []
+    if weights_index is not None and isinstance(params[weights_index][1], Record):
+        off = 0
+        for fname, ft in params[weights_index][1].fields:
+            field_names.append(fname)
+            field_starts.append(off)
+            off += ft.leaves
+    from verity_vllm.frontend.derive import _mutates, fx_arg_nodes  # local: derive imports this module
+
+    def field_of(leaf: int) -> str | None:
+        j = bisect.bisect_right(field_starts, leaf) - 1
+        return field_names[j] if 0 <= j < len(field_names) else None
+
+    def field_start(leaf: int) -> int:
+        j = bisect.bisect_right(field_starts, leaf) - 1
+        return field_starts[j] if 0 <= j < len(field_starts) else 0
+
+    def producers(refs) -> tuple[list[dict], int]:
+        out: list[dict] = []
+        rs = _runs(refs)
+        for space, i, lo, hi in rs:
+            if len(out) >= _FROM_CAP:
+                break
+            if space == "n":
+                out.append({"kind": "call", "call": int(i), "leaves": [int(lo), int(hi)]})
+            elif space == "p" and i < n_user:
+                out.append({"kind": "input", "name": input_names[i], "leaves": [int(lo), int(hi)]})
+            elif space == "p" and i == weights_index:   # leaves relative to the weight field (the source tensor), not to the weights record
+                s = field_start(lo)
+                out.append({"kind": "weight", "name": field_of(lo), "leaves": [int(lo - s), int(hi - s)]})
+        return out, len(rs)
+
+    def source_of(fx_arg, v) -> tuple[str, str | None]:
+        if isinstance(v, Coll):
+            spaces = {(space, i) for space, i, _lo, _hi in _runs(v.refs)}
+            if spaces and all(s == "n" for s, _ in spaces):
+                return "call", None
+            if spaces and all(s == "p" and i < n_user for s, i in spaces):
+                return "input", input_names[next(iter(spaces))[1]] if len(spaces) == 1 else None
+            if spaces and all(s == "p" and i == weights_index for s, i in spaces):
+                los = sorted(lo for _s, _i, lo, _hi in _runs(v.refs))
+                return "weight", field_of(los[0]) if los else None
+            return "other", None
+        if type(v).__name__ in ("_LiftedConstant", "StaticIndex"):
+            return "constant", getattr(v, "name", None)
+        return "other", None
+
+    # -- occurrences: one per fx node that some Call was lowered from, in graph order ------------------------------------------
+    node_fx: dict[int, Any] = dict(getattr(ctx, "node_fx", {}))
+    by_node: dict[Any, list[int]] = {}
+    for k in range(len(body.nodes)):
+        fx = node_fx.get(k)
+        if fx is not None:
+            by_node.setdefault(fx, []).append(k)
+    order = {n: i for i, n in enumerate(ctx.ep.graph.nodes)}
+    fx_nodes = sorted(by_node, key=lambda n: order.get(n, len(order)))
+    rule_of = {a["node"]: a["rule"] for a in ctx.applications}
+    collectives = 0
+    occurrences: list[dict] = []
+    occ_index: dict[Any, int] = {}
+    occ_inputs: list[list[tuple[Any, dict]]] = []      # per occurrence: (fx arg node, interval index of its value AS READ)
+    occ_outputs: list[dict] = []                        # per occurrence: interval index over its produced / written collections, tagged by port
+    bindings: dict[Any, dict] = getattr(ctx, "occurrence_bindings", {})
+    for node in fx_nodes:
+        stack = node.meta.get("nn_module_stack") or {}
+        module = ctx.stack_path(node) if stack else ""
+        mcls = ctx.module_class(node) if stack else None
+        t = node.target
+        op = str(t) if not isinstance(t, torch._ops.OpOverload) else f"{t.namespace}.{t.__name__}"
+        frozen = bindings.get(node)                     # bindings frozen at lowering; the end-of-translation env is the fallback
+        # fx inputs: the fx-node arguments (flattened: positional, then keyword), each with its source class and view as READ
+        args_flat = fx_arg_nodes(node)
+        n_positional = sum(1 for a in node.args if isinstance(a, torch.fx.Node)) + sum(
+            sum(1 for x in a if isinstance(x, torch.fx.Node)) for a in node.args if isinstance(a, (list, tuple)))
+        kw_names: list[str] = []
+        for kname, a in node.kwargs.items():
+            if isinstance(a, torch.fx.Node):
+                kw_names.append(kname)
+            elif isinstance(a, (list, tuple)):
+                kw_names.extend(kname for x in a if isinstance(x, torch.fx.Node))
+        inputs: list[dict] = []
+        idxs: list[tuple[Any, dict]] = []
+        for j, a in args_flat:
+            v = frozen["in"].get(j) if frozen is not None else ctx.env.get(a)
+            src, nm = source_of(a, v)
+            inputs.append({"node": a.name, "arg": j if j < n_positional else None, "kwarg": kw_names[j - n_positional] if j >= n_positional else None,
+                           "source": src, "name": nm, "view": _view(a.meta.get("val"))})
+            idxs.append((a, _interval_index(v.refs) if isinstance(v, Coll) else {}))
+        # outputs: the node's value(s) as PRODUCED (fx output ports), then the arguments an in-place lowering WROTE (written ports)
+        val = frozen["out"] if frozen is not None else ctx.env.get(node)
+        outs = val if isinstance(val, (list, tuple)) else [val]
+        out_index: dict[tuple[str, int], list[tuple[int, int, int, Any]]] = {}
+        for port, c in enumerate(outs):
+            if isinstance(c, Coll):
+                for key, ivs in _interval_index(c.refs).items():
+                    out_index.setdefault(key, []).extend((lo, hi, off, port) for lo, hi, off in ivs)
+        written: list[dict] = []
+        for j, c in sorted((frozen or {}).get("written", {}).items()):
+            a = dict(args_flat)[j]
+            written.append({"arg": j, "node": a.name, "view": _view(a.meta.get("val"))})
+            if isinstance(c, Coll):
+                for key, ivs in _interval_index(c.refs).items():
+                    out_index.setdefault(key, []).extend((lo, hi, off, ("arg", j)) for lo, hi, off in ivs)
+        base = ctx.storage_base(node)
+        w = ctx.is_weight_storage(node)
+        lifetime = {"in_place": bool(_mutates(t)), "view_of": base.name if base is not node and isinstance(base, torch.fx.Node) else None,
+                    "aliases_input": ctx.is_input_storage(node), "aliases_weight": w.name if w is not None else None,
+                    "rebound": node in ctx.written_allocs, "stale": node in ctx.stale}
+        collective = None
+        if isinstance(t, torch._ops.OpOverload) and t.namespace == "verity_tp" and t.__name__.split(".")[0] in _COLLECTIVE_KINDS:
+            operands = [a for a in node.args if isinstance(a, torch.fx.Node)][:2]
+            own = [i for i, a in enumerate(operands) if ctx.is_input_storage(a) is None]
+            own_i = own[0] if len(own) == 1 else None
+            peer_i = (1 - own_i) if own_i is not None and len(operands) == 2 else None
+            collective = {"kind": _COLLECTIVE_KINDS[t.__name__.split(".")[0]], "occurrence": collectives, "operand_ranks": list(range(len(operands))),
+                          "own_operand": own_i, "peer_operand": peer_i,
+                          "peer_input": ctx.is_input_storage(operands[peer_i]) if peer_i is not None else None}
+            collectives += 1
+        occ_index[node] = len(occurrences)
+        occurrences.append({"node": node.name, "module": module, "module_class": mcls, "op": op, "rule": rule_of.get(node.name),
+                            "outputs": _output_views(node), "written": written, "inputs": inputs, "lifetime": lifetime, "collective": collective})
+        occ_inputs.append(idxs)
+        occ_outputs.append(out_index)
+
+    # -- calls: Call k -> occurrence + return slots + argument slots --------------------------------------------------------------
+    calls: list[dict] = []
+    for k, nd in enumerate(body.nodes):
+        fx = node_fx.get(k)
+        if fx is None:
+            calls.append({"occ": None, "member": None, "row": None, "hint": nd.name, "returns": [], "args": []})
+            continue
+        o = occ_index[fx]
+        member, row, hint = _member_row(nd.name, ctx.hint_name(fx), fx.name)
+        rets: list[dict] = []
+        off = 0
+        for port, ct in enumerate(flat_types(nd.out)):
+            lo, hi = off, off + ct.leaves
+            off = hi
+            slot: dict[str, Any] = {"port": port, "output": None, "leaves": None}
+            for rlo, rhi, roff, oport in occ_outputs[o].get(("n", k), ()):
+                if rlo <= lo and hi <= rhi:
+                    if isinstance(oport, tuple):        # the Value lands in the storage of a WRITTEN fx argument (an in-place lowering)
+                        slot["written_arg"] = oport[1]
+                    else:
+                        slot["output"] = oport
+                    slot["leaves"] = [roff + (lo - rlo), roff + (hi - rlo)]
+                    break
+            rets.append(slot)
+        args: list[dict] = []
+        for a in nd.args:
+            rs = _runs(a.refs)
+            found: dict[str, Any] = {"input": None, "leaves": None}
+            for j, (_fx_arg, index) in enumerate(occ_inputs[o]):
+                if not index:
+                    continue
+                r = _locate_runs(index, rs)
+                if r is False:
+                    continue
+                found["input"] = j
+                found["leaves"] = [int(r[0]), int(r[1])] if r is not None else None
+                break
+            if found["input"] is None and len(occ_inputs[o]) > 1:
+                # the Call's argument spans SEVERAL fx inputs (a collective's operand is `own ++ peer`): resolve run by run
+                spans: list[dict] = []
+                for space, i, lo, hi in rs:
+                    hit = None
+                    for j, (_fx_arg, index) in enumerate(occ_inputs[o]):
+                        r = _locate(index, space, i, lo, hi) if index else None
+                        if r is not None:
+                            hit = {"input": j, "leaves": [int(r[0]), int(r[1])]}
+                            break
+                    if hit is None:
+                        spans = []
+                        break
+                    if spans and spans[-1]["input"] == hit["input"] and spans[-1]["leaves"][1] == hit["leaves"][0]:
+                        spans[-1]["leaves"][1] = hit["leaves"][1]
+                    else:
+                        spans.append(hit)
+                if spans:
+                    found["spans"] = spans
+            prods, total = producers(a.refs)
+            found["from"] = prods
+            if total > len(prods):
+                found["from_total"] = total
+            args.append(found)
+        calls.append({"occ": o, "member": member, "row": row, "hint": hint, "returns": rets, "args": args})
+
+    return {"schema": SCHEMA, "body": "program_fn", "inputs": input_names, "weights": field_names or None,
+            "rank": {"world": int(rank[0]), "rank": int(rank[1])} if rank is not None else None,
+            "occurrences": occurrences, "calls": calls}
+
+
+def attach(program, doc: dict) -> None:
+    """Write `doc` under the one namespace of `program.annotations` (annotations are excluded from `program_digest`)."""
+    program.annotations[NAMESPACE] = doc
+
+
+__all__ = ["emit_correspondence", "attach", "NAMESPACE"]
