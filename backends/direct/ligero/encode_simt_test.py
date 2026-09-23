@@ -27,8 +27,8 @@ def _time(fn, reps: int, device) -> float:
     return (time.perf_counter() - t) / reps
 
 
-def _timing(l: int, R: int, reps: int, dev, g) -> dict:
-    n = 4 * l
+def _timing(l: int, R: int, reps: int, dev, g, nc: int = 4) -> dict:
+    n = nc * l
     W = torch.randint(0, P, (R, l), generator=g).to(dev)
     S = torch.randint(0, P, (R, ZK_T_PAD), generator=g).to(dev)
     enc = LigeroEncoderSIMT(l, n, 0, dev)
@@ -70,8 +70,8 @@ def main(argv=None) -> int:
     g = torch.Generator(device="cpu").manual_seed(1)
     report = {"exact": {}, "timing": {}}
     ok_all = True
-    for l in (256, 4096, 8192, 16384):
-        n = 4 * l
+    for l, nc in ((256, 4), (4096, 4), (8192, 4), (16384, 4), (4096, 2), (4096, 8), (16384, 2), (16384, 8)):
+        n = nc * l
         R = 64
         rows = torch.randint(0, P, (R, l), generator=g).to(dev)
         mask = torch.randint(0, P, (R, ZK_T_PAD), generator=g).to(dev)
@@ -111,7 +111,7 @@ def main(argv=None) -> int:
         encu = LigeroEncoderSIMT(l, n, ZK_T_PAD, dev, stage=not encz.stage)
         Uu, Cu = encu.encode(rows, mask, want_coefs=True)
         ok9 = torch.equal(Uu, Uz) and torch.equal(Cu, Cz) and torch.equal(encu.encode_coefs(crows), Uc)
-        report["exact"][l] = {"plain_codeword": ok1, "plain_coefs": ok2, "zk_codeword": ok3, "zk_coefs": ok4,
+        report["exact"][f"{l}x{nc}"] = {"plain_codeword": ok1, "plain_coefs": ok2, "zk_codeword": ok3, "zk_coefs": ok4,
                               "int32_rows": ok5, "coefs_out_int64_view": ok6, "coef_rows": ok7, "cf_global": ok8,
                               "other_store_path": ok9, "stage": encz.stage, "rows": R}
         ok_all &= ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7 and ok8 and ok9
@@ -120,6 +120,8 @@ def main(argv=None) -> int:
     # timing at the prover's shape
     for l in (8192, 16384):
         report["timing"][l] = _timing(l, args.rows, args.reps, dev, g)
+    for nc in (2, 8):                      # the other code rates (n = 2 l, 8 l): the operating-point sweeps
+        report["timing"][f"16384x{nc}"] = _timing(16384, args.rows, args.reps, dev, g, nc)
     report["hardware"] = torch.cuda.get_device_name(dev)
     report["verdict"] = "PASS" if ok_all else "FAIL"
     print("bit-exact:", report["verdict"])
