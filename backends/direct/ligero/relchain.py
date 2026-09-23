@@ -57,9 +57,37 @@ def _instance(args) -> tuple[list, list, list, int]:
     return a, b, accs, accs[-1]
 
 
-def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, cache: str | Path | None = None):
+def _frozen_root(root) -> Path:
+    from verity_numerical.bench import instances as frozen
+    return Path(root) if root else frozen.DEFAULT_ROOT
+
+
+def frozen_instances(rel: Relation, n: int, root=None):
+    """The first ``n`` VUs of the relation's FROZEN tier (``rel.frozen_tier``: ``bench-instances/v1`` ``vu-k1536`` under
+    ``root``, the set ``vu.py`` proves) in the runner's shape ``(a, b, accs, y_final)``: the recorded FP32 accumulators are
+    the chain's public words, the final one casts to the tier's expected BF16 word (checked).  Beyond the tier's ids the
+    instances are recycled (``i mod n_tier``), as ``vu.bench_vu`` does."""
+    from verity_numerical.bench import instances as frozen
+    vu = frozen.load(rel.frozen_tier, _frozen_root(root))
+    if vu.acc is None:
+        raise ValueError(f"{rel.frozen_tier}: the tier carries no accumulators")
+    out = []
+    for i in range(n):
+        j = i % vu.n
+        a, b, y16 = vu.instance(j)
+        accs = vu.accs(j)
+        if len(accs) != rel.steps or rel.y_public(int(accs[-1])) != y16:
+            raise ValueError(f"{rel.frozen_tier} instance {j}: {len(accs)} accumulators / final word does not cast to the expected y")
+        out.append((a, b, accs, int(accs[-1])))
+    return out
+
+
+def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, cache: str | Path | None = None, root=None):
     """``n`` VUs: (a (1536,), b (1536,), accs (steps,), y_final) with the accumulators recorded from the model.
-    Deterministic in ``(seed, index)``; ``procs > 1`` records them in parallel; ``cache`` keeps the set as an npz."""
+    Deterministic in ``(seed, index)``; ``procs > 1`` records them in parallel; ``cache`` keeps the set as an npz.
+    A relation with a ``frozen_tier`` reads its frozen set from ``root`` instead (:func:`frozen_instances`)."""
+    if rel.frozen_tier:
+        return frozen_instances(rel, n, root)
     seed = rel.instance_seed if seed is None else seed
     path = Path(cache) / f"{rel.name}-{seed}-{n}.npz" if cache else None
     if path is not None and path.exists():
@@ -79,8 +107,12 @@ def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, ca
     return out
 
 
-def instances_digest(rel: Relation, n: int, seed: int | None = None) -> str:
-    """The synthetic set's manifest digest: a function of (relation, seed, n, K) -- the set itself is."""
+def instances_digest(rel: Relation, n: int, seed: int | None = None, root=None) -> str:
+    """The synthetic set's manifest digest: a function of (relation, seed, n, K) -- the set itself is.  A frozen tier's is
+    the sha256 of its ``manifest.json`` (``instances.manifest_sha256``), the value the bare ``vu.py`` results carry."""
+    if rel.frozen_tier:
+        from verity_numerical.bench import instances as frozen
+        return frozen.manifest_sha256(_frozen_root(root))
     seed = rel.instance_seed if seed is None else seed
     return hashlib.sha256(f"{rel.name} synthetic|seed={seed}|n={n}|K={K_VU}".encode()).hexdigest()
 
@@ -690,10 +722,13 @@ def gate_hashed(args, rel: Relation) -> int:
     tile = parse_tile(getattr(args, "tile", None))
     procs = getattr(args, "instance_procs", 1)
     cache = getattr(args, "instances_cache", None)
+    root = getattr(args, "root", None)
     if tile is None:
-        data = instances(rel, args.vus, procs=procs, cache=cache)
-        R.commit_vus(data, manifest_sha256=instances_digest(rel, args.vus))
+        data = instances(rel, args.vus, procs=procs, cache=cache, root=root)
+        R.commit_vus(data, manifest_sha256=instances_digest(rel, args.vus, root=root))
     else:
+        if rel.frozen_tier:
+            raise SystemExit(f"--tile: the frozen {rel.frozen_tier} set has no tile layout (sharing = none only for {rel.name})")
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=procs, cache=cache)
         data = data[:args.vus]
         R.commit_vus(data, manifest_sha256=instances_digest(rel, len(data)), tile=tile, x_rows=x_rows, w_cols=w_cols)
@@ -769,7 +804,8 @@ def gate_vu_rel(args, rel: Relation) -> int:
               "positives": [], "negatives": []}
     failures = 0
     per_proof = args.batch // R.steps
-    data = instances(rel, args.vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
+    data = instances(rel, args.vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None),
+                     root=getattr(args, "root", None))
     for lo in range(0, args.vus, per_proof):
         vus = data[lo:lo + per_proof]
         proof, pubs, lay = R.prove_vus(vus, check=True)
@@ -825,17 +861,21 @@ def bench_vu_rel(args, rel: Relation) -> int:
     if hashed:
         print(f"{rel.name} hashed ({R.AUTH}, sharing {'none' if tile is None else 'tile%dx%d' % tile}):", json.dumps(R.hr.census))
     subs = [(lo, min(lo + per_proof, total_vus)) for lo in range(0, total_vus, per_proof)]
+    root = getattr(args, "root", None)
     t0 = time.perf_counter()
     if tile is None:
-        data = instances(rel, total_vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
+        data = instances(rel, total_vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None), root=root)
         x_rows = w_cols = None
     else:
+        if rel.frozen_tier:
+            raise SystemExit(f"--tile: the frozen {rel.frozen_tier} set has no tile layout (sharing = none only for {rel.name})")
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
-    print(f"{total_vus} synthetic VUs (model-recorded accumulators) in {time.perf_counter() - t0:.1f}s")
+    inst_digest = instances_digest(rel, total_vus, root=root)
+    print(f"{total_vus} {'frozen ' + rel.frozen_tier if rel.frozen_tier else 'synthetic'} VUs (recorded accumulators) in {time.perf_counter() - t0:.1f}s")
     commit_seconds = 0.0
     if hashed:
         t0 = time.perf_counter()
-        R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=instances_digest(rel, total_vus),
+        R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=inst_digest,
                      cache=getattr(args, "auth_cache", None), tile=tile, x_rows=x_rows, w_cols=w_cols)
         commit_seconds = time.perf_counter() - t0
         print(f"committed: x tree {R.trees['a'].count} rows, W tree {R.trees['b'].count} columns, y tree {R.trees['y'].count} words "
@@ -862,7 +902,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         _write_system(dump_dir, R, dump_manifest)
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
                                 "zk": args.zk, "mode": args.mode, "reps": args.reps, "dump_reps": dump_reps,
-                                "instances": instances_digest(rel, total_vus)}
+                                "instances": inst_digest}
     target_bits = float(getattr(args, "target_bits", 128.0) or 128.0)   # the VERIFIER's parameter (PROTOCOL.md 8c)
     # --verifier tcp://host:port: the step-0 coins of every RECORDED rep come from a LIVE verifier on another machine
     # (live.py) and every prover message is sent to it as it is produced -- the protocol is unchanged (8c), only the coin
@@ -992,10 +1032,15 @@ def bench_vu_rel(args, rel: Relation) -> int:
         omitted = "external authentication; malicious-verifier ZK outside the programmable random-oracle model"
     else:
         proof_class, zk_mode, omitted = "NON_ZK_PROOF_DIAGNOSTIC", "none", "external authentication, ZK masking"
-    inst = {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total_vus],
-            "manifest_sha256": instances_digest(rel, total_vus), "seed": rel.instance_seed}
-    if rel.instances_recipe:
-        inst["recipe"] = rel.instances_recipe
+    if rel.frozen_tier:
+        # the frozen set: the same ``instances`` block as vu.bench_vu (no seed, no recipe), so the committed column of the
+        # A100 cell names exactly the bare cell's instances
+        inst = contract.instances_ref(rel.instances_tier, 0, total_vus, inst_digest, dataset=rel.instances_dataset)
+    else:
+        inst = {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total_vus],
+                "manifest_sha256": inst_digest, "seed": rel.instance_seed}
+        if rel.instances_recipe:
+            inst["recipe"] = rel.instances_recipe
     fp = contract.fingerprint(
         profile=rel.target.name, domain=contract.DOMAIN, K=K_VU, B=total_vus, N_subbatches=n_proofs,
         proof_class=proof_class, authentication=(R.AUTH if hashed else "excluded"), zk_mode=zk_mode,
