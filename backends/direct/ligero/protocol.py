@@ -1368,13 +1368,13 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     fp_pub = chain[2] if (chain is not None and len(chain) > 2) else None
     if fp_spec is not None and fp_spec["mode"] == "public" and fp_pub is None:
         raise ValueError("fingerprint public mode: chain = (Layout, y16, FpArgs)")
-    lane_rows = None
-    if fp_spec is not None:
-        from .chain import fp_lane_rows
-        lane_rows = fp_lane_rows(sys.chain).to(device)
     # the graphs' static set (CUDA + SIMT encoder, no self-check asserts): U and coefs live in it
     st = (_tests_static(cfg, sys, tb, m, Mrows, width, chain is not None, device, chain[0].steps if chain else 0)
           if TESTS_GRAPH and cuda and enc is not None and not check else None)
+    lane_rows = None
+    if fp_spec is not None:                                       # the static set holds its own (a pageable upload syncs)
+        from .chain import fp_lane_rows
+        lane_rows = st.lane_rows if st is not None else fp_lane_rows(sys.chain).to(device)
     fw = _fused_witness(sys, device) if (st is not None and COMMIT_GRAPH and mutate is None) else None
     graph_merkle = False
     if fw is not None:
@@ -1538,8 +1538,14 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         if chain is not None:
             st.y16.copy_(chain[1].to(device))
         if st.fp_rho is not None:                                  # public fingerprints (the hash side): static inputs
-            st.fp_rho.copy_(fp_pub.rho.to(device))
-            st.fp_F.copy_(fp_pub.F.to(device))
+            # host tensors go up from the slot's pinned memory, non-blocking: a pageable copy synchronises the stream
+            for nm, dst, src_t in (("fp_rho", st.fp_rho, fp_pub.rho), ("fp_F", st.fp_F, fp_pub.F)):
+                if src_t.device.type == "cpu":
+                    nbytes = dst.numel() * dst.element_size()
+                    buf = _pin(slot, device, nm, nbytes)[:nbytes].view(dst.dtype).view(dst.shape)
+                    buf.copy_(src_t.reshape(dst.shape))
+                    src_t = buf
+                dst.copy_(src_t, non_blocking=True)
         mbuf = _pin(slot, device, "msgs", st.nbytes)[:st.nbytes]
         _tests_graph_run(st, sys, tb, cfg, mr, layout, mbuf, device)
         offs = st.offs

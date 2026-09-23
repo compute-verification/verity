@@ -77,6 +77,7 @@ class HashedRelation:
     census: dict
     leaf: leaf_base.LeafScheme  # the scheme (one instance per compose; its witness hook is on ``sys``)
     block_layout: bool | None = None    # memo of _block_layout (hash_hints)
+    dec_index: dict | None = None       # memo of private_decode's row gather per name list
 
     @property
     def steps(self) -> int:
@@ -346,11 +347,10 @@ def shared_hints(hr: HashedRelation, a, b, l: int, device) -> "torch.Tensor":
     import torch
     a = torch.as_tensor(a, dtype=torch.int64, device=device)
     b = torch.as_tensor(b, dtype=torch.int64, device=device)
-    vals = hr.rel.public_vectors(hr.rel.params, None, a, b, None, device=device)
     nb, k = hr.word_bits, hr.k
     shifts = torch.arange(nb, dtype=torch.int64, device=device)
     n_dec = len(hr.extra_hint_names) - len(ROLES) * (k * nb + h2.RATE)
-    dec = torch.stack([vals[n].to(device) for n in hr.extra_hint_names[:n_dec]])
+    dec = private_decode(hr, a, b, hr.extra_hint_names[:n_dec])
     blocks = [dec]
     for _, nm, _ in ROLES:
         w = a if nm == "a" else b
@@ -359,6 +359,39 @@ def shared_hints(hr: HashedRelation, a, b, l: int, device) -> "torch.Tensor":
         w = a if nm == "a" else b
         blocks.append(pack_lanes(w, nb).T.contiguous())
     return torch.cat(blocks)
+
+
+def private_decode(hr: HashedRelation, a, b, names: list) -> "torch.Tensor":
+    """The converted decode pins ``names`` (``<op>[<i>].<s|m|e>``) as hint rows (len(names), l) from the operand words
+    ``a``, ``b`` (l, k) on the device, by the decode the private-operand constraints of :func:`_private_operands` fix
+    (s = top bit, m = f + nz 2^frac, e = t - nz - (bias - 1)) -- no domain checks, so no host round trip (the relation's
+    ``public_vectors`` validates with ``.any()``: a device sync per call).  Equal to ``public_vectors`` on the finite
+    domain (``hashchain_test.test_private_decode_is_the_public_decode``); off it the constraints reject the witness."""
+    import torch
+    fmt = _format(hr.rel)
+    nb, frac, exp_bits, bias = fmt["bits"], fmt["frac"], fmt["exp"], fmt["bias"]
+    k = a.shape[1]
+    comps = []
+    for w in (a, b):
+        s = w >> (nb - 1)
+        t = (w >> frac) & (2**exp_bits - 1)
+        f = w & (2**frac - 1)
+        nz = (t != 0).to(torch.int64)
+        comps += [s, f + nz * 2**frac, t - nz - (bias - 1)]
+    allrows = torch.stack(comps).permute(0, 2, 1).reshape(6 * k, -1)      # (op, comp, i) major
+    key = (tuple(names), str(a.device))
+    if hr.dec_index is None:
+        hr.dec_index = {}
+    idx = hr.dec_index.get(key)
+    if idx is None:
+        where = {}
+        for o, nm in enumerate(("a", "b")):
+            for c, comp in enumerate(("s", "m", "e")):
+                for i in range(k):
+                    where[f"{nm}[{i}].{comp}"] = (3 * o + c) * k + i
+        idx = torch.as_tensor([where[n] for n in names], dtype=torch.int64).to(a.device)
+        hr.dec_index[key] = idx
+    return allrows.index_select(0, idx)
 
 
 def pack_lanes(words, nb: int):
@@ -381,26 +414,39 @@ def row_hash_hints(rh: RowHashSystem, rows, roles, n_units: int, l: int, device,
     rows = torch.as_tensor(np.asarray(rows, dtype=np.int64), device=device).reshape(n_units, rh.steps, rh.k)
     roles = torch.as_tensor(np.asarray(roles, dtype=np.int64), device=device)
     nb, k, steps = rh.word_bits, rh.k, rh.steps
+    if sponges is None:
+        words = torch.zeros((l, k), dtype=torch.int64, device=device)
+        words[:n_units * steps] = rows.reshape(n_units * steps, k)
+        cap, dg = sponge_states_roles(words, nb, roles, steps * k, n_units, steps, l)
+        hints = row_hash_witness(rh, rows, n_units, l, cap=cap)
+    else:
+        cap_u, dg = sponges
+        hints = row_hash_witness(rh, rows, n_units, l, cap_units=torch.as_tensor(cap_u, device=device))
+        dg = torch.as_tensor(dg, device=device)
+    table = torch.zeros((l, 2 + N_ROW_DIGEST), dtype=torch.int64, device=device)
+    ends = torch.arange(n_units, device=device) * steps + steps - 1
+    table[ends, 0] = 1
+    table[:n_units * steps, 1] = roles.repeat_interleave(steps)
+    table[ends, 2:] = dg
+    return hints, table, dg
+
+
+def row_hash_witness(rh: RowHashSystem, rows, n_units: int, l: int, cap_units=None, cap=None) -> "torch.Tensor":
+    """The hash side's hint rows (bits | lanes | caps) (n_hints, l) from device tensors alone (no host round trip):
+    ``rows`` (n_units, steps * k) words, the linked capacity rows either per unit ``cap_units`` (n_units, steps, 8)
+    (the committed rows' sponges, gathered) or already laid out ``cap`` (8, l)."""
+    import torch
+    nb, k, steps = rh.word_bits, rh.k, rh.steps
+    device = rows.device
     words = torch.zeros((l, k), dtype=torch.int64, device=device)
     words[:n_units * steps] = rows.reshape(n_units * steps, k)
     shifts = torch.arange(nb, dtype=torch.int64, device=device)
     bits = ((words[:, :, None] >> shifts) & 1).permute(1, 2, 0).reshape(k * nb, l)
     lanes = pack_lanes(words, nb).T.contiguous()
-    if sponges is None:
-        cap, dg = sponge_states_roles(words, nb, roles, steps * k, n_units, steps, l)
-    else:
-        cap_u, dg = sponges
+    if cap is None:
         cap = torch.zeros((h2.CAPACITY, l), dtype=torch.int64, device=device)
-        cap[:, :n_units * steps] = torch.as_tensor(cap_u, device=device).reshape(n_units * steps, h2.CAPACITY).T
-        dg = torch.as_tensor(dg, device=device)
-    hints = torch.cat([bits, lanes, cap])
-    table = torch.zeros((l, 2 + N_ROW_DIGEST), dtype=torch.int64, device=device)
-    ends = torch.arange(n_units, device=device) * steps + steps - 1
-    table[ends, 0] = 1
-    for u in range(n_units):
-        table[u * steps:(u + 1) * steps, 1] = roles[u]
-    table[ends, 2:] = dg
-    return hints, table, dg
+        cap[:, :n_units * steps] = cap_units.reshape(n_units * steps, h2.CAPACITY).T
+    return torch.cat([bits, lanes, cap])
 
 
 def row_hash_public_vectors(p, c, a, b, y, device="cpu"):
@@ -499,7 +545,6 @@ def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: di
     import torch
     a = torch.as_tensor(a, dtype=torch.int64, device=device)
     b = torch.as_tensor(b, dtype=torch.int64, device=device)
-    vals = hr.rel.public_vectors(hr.rel.params, None, a, b, None, device=device)
     nb, k, ce = hr.word_bits, hr.k, hr.leaf.carry_elems
     shifts = torch.arange(nb, dtype=torch.int64, device=device)
     digests, bit_blocks, cap_blocks, extras = [], [], [], {}
@@ -528,9 +573,10 @@ def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: di
     if not extras and _block_layout(hr, n_dec):
         # compose() appends the rows as [converted decode pins | a bits | b bits | a.cap | b.cap]: a handful of copies
         # instead of one per row (720 rows x 13 sub-batches was ~0.1 s per 4096 VUs)
-        dec = torch.stack([vals[n].to(device) for n in hr.extra_hint_names[:n_dec]])
+        dec = private_decode(hr, a, b, hr.extra_hint_names[:n_dec])
         out = torch.cat([dec] + bit_blocks + cap_blocks)
     else:
+        vals = hr.rel.public_vectors(hr.rel.params, None, a, b, None, device=device)
         for (_, nm, _), bits, cap in zip(ROLES, bit_blocks, cap_blocks):
             for i in range(k):
                 for j in range(nb):

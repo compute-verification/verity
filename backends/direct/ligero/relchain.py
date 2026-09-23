@@ -183,6 +183,13 @@ def tile_instances(rel: Relation, nx: int, nw: int, seed: int | None = None, pro
     return vus, x, w
 
 
+def tile_digest(rel: Relation, nx: int, nw: int, seed: int | None = None) -> str:
+    """The manifest digest of :func:`tile_instances` for a relation whose ``instances_digest`` names a FROZEN set (the
+    tile is a synthetic draw either way; the non-frozen relations keep ``instances_digest(rel, nx nw)``)."""
+    seed = rel.instance_seed if seed is None else seed
+    return hashlib.sha256(f"{rel.name} synthetic tile|seed={seed}|{nx}x{nw}|K={K_VU}".encode()).hexdigest()
+
+
 def tile_indices(nx: int, nw: int, lo: int, hi: int) -> tuple[list[int], list[int], list[int]]:
     """(vu_index, x_index, w_index) of the tile's VUs ``[lo, hi)``."""
     vus = list(range(lo, hi))
@@ -298,7 +305,7 @@ class RelationChainRunner:
                                          mutate=mutate, chain=(lay, bd["ypub_d"]), words={"a": bd["a"], "b": bd["b"], "y16": bd["ypub"]},
                                          coins=coins, rel=self.hooks, hints_fn=hints_fn, slot=slot)
 
-    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256):
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None):
         """``len(batches)`` sub-batches proved with up to ``depth`` in flight on their own CUDA streams (``pipeline.prove_many``):
         the host work of one sub-batch (challenge expansion, transcript copies, launch overhead) hides under the device work
         of the next.  ``coins_factory(i)`` is called per sub-batch when it starts, in order (the honest verifier's step 0);
@@ -402,6 +409,7 @@ class HashedRelationRunner(RelationChainRunner):
         self.trees = None
         self.tile = None                    # (nx, nw) of the tile workload, None for the worst case
         self.rows, self.sponges, self.sponge_seconds = None, None, 0.0
+        self._marshal_cache = {}
 
     @property
     def relation(self) -> str:
@@ -430,7 +438,112 @@ class HashedRelationRunner(RelationChainRunner):
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
         self.sponge_seconds = time.perf_counter() - t0
+        self._committed_digests()
         return cached
+
+    def _committed_digests(self):
+        """Host copies of the committed rows' digests (public: the leaves of the x / W trees) for the statement tables
+        of the pipelined prover, and device copies of the committed rows (the hash side gathers its witness from them)."""
+        self._marshal_cache = {}
+        self.dg_host = {nm: self.sponges[nm][1].cpu().numpy().astype(np.int64) for nm in self.sponges}
+        self.rows_d = {nm: torch.as_tensor(self.rows[nm], dtype=torch.int64).to(self.device) for nm in self.rows}
+
+    def marshal_hashed(self, vus: list, vu_ids, min_l: int = 256) -> dict:
+        """The sub-batch's statement (public table from the committed digests, leaf indices, authentication block, public
+        vectors) and its device-resident words, once per run (cached like :meth:`RelationChainRunner.marshal`): what
+        the pipelined prover (:meth:`prove_vus_many`) reads, so a timed sub-batch does no host marshalling.  ``gather``:
+        the committed-row indices per operand whose words ARE the committed rows (their precomputed chains are gathered
+        on the device inside the prover's clock)."""
+        vu_ids = list(vu_ids)
+        key = ("hashed", len(vus), id(vus[0]), id(vus[-1]), id(vus[len(vus) // 2]), vu_ids[0], vu_ids[-1], min_l)
+        hit = self._marshal_cache.get(key)
+        if hit is not None:
+            return hit
+        from . import hashchain
+        bd = dict(RelationChainRunner.marshal(self, vus, min_l))
+        n_vus, lay, dev = len(vus), bd["lay"], self.device
+        auth = self.auth_for(vu_ids)
+        idx = auth.indices()
+        gather = {}
+        for nm, ix in (("a", auth.x_index), ("b", auth.w_index)):
+            ix = np.asarray(ix, dtype=np.int64)
+            words = bd[nm][:n_vus * self.steps].reshape(n_vus, self.steps * self.rel.k)
+            if self.sponges is not None and len(ix) == n_vus and np.array_equal(self.rows[nm][ix], words):
+                gather[nm] = torch.as_tensor(ix).to(dev)
+        dg = np.concatenate([self.dg_host["a"][np.asarray(auth.x_index)], self.dg_host["b"][np.asarray(auth.w_index)]], 1)
+        table = hashchain.public_table(dg, n_vus, self.steps, lay.l)
+        bd.update({"auth": auth, "idx": idx, "table": table, "gather": gather, "hooks": self.hooks_for(auth),
+                   "pub": self.hooks.public_vectors(self.p, None, table, idx, None, device=dev)})
+        if str(dev).startswith("cuda"):
+            torch.cuda.synchronize(dev)
+        self._marshal_cache[key] = bd
+        return bd
+
+    def _gather_sponges(self, gather: dict) -> dict | None:
+        out = {}
+        for nm, t in gather.items():
+            sp = self.sponges[nm]
+            out[nm] = (sp[0][t], sp[1][t])
+            if len(sp) > 2:
+                out[nm] += ({n_: v[t] for n_, v in sp[2].items()},)
+        return out or None
+
+    def _prove_stages_hashed(self, bd: dict, coins, slot=None, sibs_out: list | None = None):
+        """The pipelined prover's generator for one sub-batch (``pipeline.prove_many``): the hints on the device (the
+        base generator + the leaf chains gathered from the committed set, no host round trip), ``protocol.prove_stages``,
+        then the multiproofs (host, timed ``auth_openings``)."""
+        from . import hashauth, hashchain
+        lay, dev, n_vus = bd["lay"], self.device, bd["lay"].n_vus
+
+        def hints_fn():
+            base = self.rel.hints(self.p, self._base_sys, bd["c_d"], bd["a_d"], bd["b_d"], bd["y_d"], dev)
+            extra, _ = hashchain.hash_hints(self.hr, bd["a_d"], bd["b_d"], n_vus, lay.l, dev,
+                                            sponges=self._gather_sponges(bd["gather"]))
+            return torch.cat([base, extra], 0)
+
+        proof = yield from protocol_mod.prove_stages(
+            self.p, self.sys, self.tb, self.cfg(lay.l), bd["pub"], None, dev, chain=(lay, bd["ypub_d"]),
+            words={"a": bd["table"], "b": bd["idx"], "y16": bd["ypub"]}, coins=coins, rel=bd["hooks"], hints_fn=hints_fn,
+            slot=slot)
+        t1 = time.perf_counter()
+        sibs = hashauth.open_trees(self.trees, bd["auth"])
+        proof.timings["auth_openings"] = time.perf_counter() - t1
+        if sibs_out is not None:
+            sibs_out.append(sibs)
+        return proof
+
+    def _pipelined(self, bundles: list, stage, coins_factory, depth: int):
+        """``prove_many`` over ``stage(bundle, coins, slot, sibs_out)`` generators; local coins only (a live verifier's
+        coin source would need the statement -- multiproofs included -- before the root: not wired for these runners)."""
+        from .pipeline import prove_many
+        coins_of: list = [None] * len(bundles)
+        sibs_of: list = [[] for _ in bundles]
+
+        def starter(i):
+            def start(slot):
+                c = coins_factory(i)
+                if hasattr(c, "set_statement"):
+                    raise NotImplementedError(f"--auth {self.AUTH} --pipeline: live verifier coins are not wired (local coins only)")
+                coins_of[i] = c
+                return stage(bundles[i], c, slot, sibs_of[i])
+            return start
+
+        proofs, wall = prove_many([starter(i) for i in range(len(bundles))], self.device, depth=depth)
+        return proofs, [s[0] for s in sibs_of], coins_of, wall
+
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None):
+        """:meth:`RelationChainRunner.prove_vus_many` for the hashed statement: ``vu_ids_list[i]`` the committed-set VU
+        indices of ``batches[i]`` (default: consecutive from 0).  Returns ``[(coins, proof, pubs, lay)]`` and the wall."""
+        if vu_ids_list is None:
+            vu_ids_list, at = [], 0
+            for vus in batches:
+                vu_ids_list.append(range(at, at + len(vus)))
+                at += len(vus)
+        bundles = [self.marshal_hashed(vus, ids, min_l) for vus, ids in zip(batches, vu_ids_list)]
+        proofs, sibs, coins_of, wall = self._pipelined(
+            bundles, lambda bd, c, slot, so: self._prove_stages_hashed(bd, c, slot, so), coins_factory, depth)
+        return [(coins_of[i], pf, (bd["table"], bd["idx"], bd["ypub"], bd["auth"], sibs[i]), bd["lay"])
+                for i, (pf, bd) in enumerate(zip(proofs, bundles))], wall
 
     def commit_vus(self, data: list, dataset: str = "synthetic", tier: str = "dev", manifest_sha256: str = "", cache=None, tile=None,
                    x_rows=None, w_cols=None):
@@ -641,6 +754,7 @@ class SharedHashedRunner(HashedRelationRunner):
         self.trees = None
         self.tile = None
         self.rows, self.sponges, self.sponge_seconds = None, None, 0.0
+        self._marshal_cache = {}
 
     # both proofs of a sub-batch are sized for the union over 2 n_proofs commitments (PROTOCOL.md 8c, batch verification)
     def cfg(self, l: int) -> Config:
@@ -673,7 +787,116 @@ class SharedHashedRunner(HashedRelationRunner):
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
         self.sponge_seconds = time.perf_counter() - t0
+        self._committed_digests()
         return cached
+
+    def marshal_shared(self, vus: list, vu_ids, min_l: int = 256) -> dict:
+        """The pair's statements for one sub-batch, once per run (as :meth:`marshal_hashed`): G's ``is_end`` / indices /
+        public vectors / device words; H's units, layout, public table (roles + the committed digests at the unit ends),
+        public vectors, and the device indices of its rows in the committed set (H's witness is gathered from the
+        committed rows and their precomputed sponges inside the prover's clock)."""
+        vu_ids = list(vu_ids)
+        key = ("shared", len(vus), id(vus[0]), id(vus[-1]), id(vus[len(vus) // 2]), vu_ids[0], vu_ids[-1], min_l)
+        hit = self._marshal_cache.get(key)
+        if hit is not None:
+            return hit
+        from . import hashchain
+        bd = dict(RelationChainRunner.marshal(self, vus, min_l))
+        n_vus, lay, dev, steps = len(vus), bd["lay"], self.device, self.steps
+        auth = self.auth_for(vu_ids)
+        idx = auth.indices()
+        is_end = np.zeros((lay.l, 1), dtype=np.int64)
+        is_end[np.arange(n_vus) * steps + steps - 1, 0] = 1
+        units_np, ux, uw = hashchain.shared_units(auth)
+        n_units = len(units_np)
+        lay_h = self.layout_h(n_units, lay.l)
+        rx, rw = units_np[units_np[:, 0] == 0, 1], units_np[units_np[:, 0] == 1, 1]
+        table_h = np.zeros((lay_h.l, 2 + hashchain.N_ROW_DIGEST), dtype=np.int64)
+        ends_h = np.arange(n_units) * steps + steps - 1
+        table_h[ends_h, 0] = 1
+        table_h[:n_units * steps, 1] = np.repeat(units_np[:, 0], steps)
+        table_h[ends_h, 2:] = np.concatenate([self.dg_host["a"][rx], self.dg_host["b"][rw]], 0)
+        bd.update({"auth": auth, "idx": idx, "is_end": is_end, "hooks": self.hooks_for(auth),
+                   "pub": hashchain.shared_public_vectors(self.p, None, is_end, idx, None, device=dev),
+                   "units": units_np, "ux": ux, "uw": uw, "lay_h": lay_h, "table_h": table_h,
+                   "hooks_h": self.hooks_h_for(auth),
+                   "pub_h": hashchain.row_hash_public_vectors(self.p, None, table_h, units_np, None, device=dev),
+                   "gx": torch.as_tensor(rx).to(dev), "gw": torch.as_tensor(rw).to(dev),
+                   "ypub_h": torch.zeros(lay_h.l, dtype=torch.int64), "ypub_h_d": torch.zeros(lay_h.l, dtype=torch.int64).to(dev)})
+        if str(dev).startswith("cuda"):
+            torch.cuda.synchronize(dev)
+        self._marshal_cache[key] = bd
+        return bd
+
+    def _prove_stages_shared(self, bd: dict, coins, coins_h, slot=None, sibs_out: list | None = None):
+        """The pair of one sub-batch as ONE generator for ``pipeline.prove_many``: G (hints on the device, the stages up
+        to its openings), then F_H from G's message (host, vectorised) and H (its witness gathered on the device from the
+        committed rows + sponges), then the multiproofs.  The transcripts are those of :meth:`prove_vus`."""
+        from . import hashauth, hashchain
+        from .chain import FpArgs
+        lay, lay_h, dev = bd["lay"], bd["lay_h"], self.device
+
+        def hints_g():
+            base = self.rel.hints(self.p, self._base_sys, bd["c_d"], bd["a_d"], bd["b_d"], bd["y_d"], dev)
+            return torch.cat([base, hashchain.shared_hints(self.hr, bd["a_d"], bd["b_d"], lay.l, dev)], 0)
+
+        def hints_h():
+            gx, gw = bd["gx"], bd["gw"]
+            rows = torch.cat([self.rows_d["a"][gx], self.rows_d["b"][gw]], 0)
+            cap_u = torch.cat([self.sponges["a"][0][gx], self.sponges["b"][0][gw]], 0)
+            return hashchain.row_hash_witness(self.rh, rows, lay_h.n_vus, lay_h.l, cap_units=cap_u)
+
+        proof_g = yield from protocol_mod.prove_stages(
+            self.p, self.sys, self.tb, self.cfg(lay.l), bd["pub"], None, dev, chain=(lay, bd["ypub_d"]),
+            words={"a": bd["is_end"], "b": bd["idx"], "y16": bd["ypub"]}, coins=coins, rel=bd["hooks"], hints_fn=hints_g,
+            slot=slot)
+        t0 = time.perf_counter()
+        F_h = self._fp_h(proof_g.fp.astype(np.int64), bd["ux"], bd["uw"], lay_h.n_vus, lay_h.l // self.steps)
+        if F_h is None:
+            raise ValueError("G's fingerprints disagree between VUs of one shared row")
+        fp_h = FpArgs(torch.as_tensor(proof_g.rho.astype(np.int64)), torch.as_tensor(F_h))
+        t_fp = time.perf_counter() - t0
+        proof_h = yield from protocol_mod.prove_stages(
+            self.p, self.sys_h, self.tb_h, self.cfg_h(lay_h.l), bd["pub_h"], None, dev, chain=(lay_h, bd["ypub_h_d"], fp_h),
+            words={"a": bd["table_h"], "b": bd["units"], "y16": bd["ypub_h"]}, coins=coins_h, rel=bd["hooks_h"],
+            hints_fn=hints_h, slot=slot)
+        t1 = time.perf_counter()
+        sibs = hashauth.open_trees(self.trees, bd["auth"])
+        openings = time.perf_counter() - t1
+        if sibs_out is not None:
+            sibs_out.append(sibs)
+        timings = {k: proof_g.timings.get(k, 0.0) + proof_h.timings.get(k, 0.0) for k in set(proof_g.timings) | set(proof_h.timings)}
+        timings["auth_openings"] = openings
+        timings["hints_host"] = timings.get("hints_host", 0.0) + t_fp
+        return SharedProof(proof_g, proof_h, timings, lay_h)
+
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None):
+        """The pipelined pair: ``len(batches)`` sub-batches, each ONE job (G then H on the job's stream), up to ``depth``
+        jobs in flight (``pipeline.prove_many``).  ``coins_factory(i)`` gives G's step-0 coins; H's are sampled when the
+        job starts (interactive mode).  ``timings``: the job's share of the wall; ``g_total`` / ``h_total`` split it in
+        the ratio of the two sides' event-measured clocks."""
+        if vu_ids_list is None:
+            vu_ids_list, at = [], 0
+            for vus in batches:
+                vu_ids_list.append(range(at, at + len(vus)))
+                at += len(vus)
+        bundles = [self.marshal_shared(vus, ids, min_l) for vus, ids in zip(batches, vu_ids_list)]
+
+        def stage(bd, c, slot, so):
+            ch = protocol_mod.Coins.sample() if self.interactive else None
+            return self._prove_stages_shared(bd, c, ch, slot, so)
+
+        proofs, sibs, coins_of, wall = self._pipelined(bundles, stage, coins_factory, depth)
+        out = []
+        for i, (pf, bd) in enumerate(zip(proofs, bundles)):
+            g_m = pf.g.timings.get("total", 0.0) + pf.g.timings.get("hints_host", 0.0)
+            h_m = pf.h.timings.get("total", 0.0) + pf.h.timings.get("hints_host", 0.0)
+            share = pf.timings["total"] + pf.timings.get("hints_host", 0.0)
+            pf.timings["g_total"] = share * g_m / max(g_m + h_m, 1e-12)
+            pf.timings["h_total"] = share - pf.timings["g_total"]
+            out.append((coins_of[i], pf, (bd["is_end"], bd["idx"], bd["ypub"], bd["auth"], sibs[i], bd["table_h"], bd["units"]),
+                        bd["lay"]))
+        return out, wall
 
     def _sponges_for_units(self, units_np: np.ndarray, rows: np.ndarray):
         """The precomputed sponges of the hash side's units, or None when ``rows`` are not the committed rows (overrides)."""
@@ -708,15 +931,11 @@ class SharedHashedRunner(HashedRelationRunner):
         unit sent different fingerprints (the verifier's rejection; the honest prover never hits it)."""
         C = fp_g.shape[2]
         F = np.zeros((n_slots, 1, C), dtype=np.int64)
-        seen = np.zeros(n_units, dtype=bool)
         for o, um in ((0, ux), (1, uw)):
-            for v, u in enumerate(um.tolist()):
-                if seen[u]:
-                    if not np.array_equal(F[u, 0], fp_g[v, o]):
-                        return None
-                else:
-                    F[u, 0] = fp_g[v, o]
-                    seen[u] = True
+            F[um, 0] = fp_g[:, o]
+        for o, um in ((0, ux), (1, uw)):
+            if not np.array_equal(F[um, 0], fp_g[:, o]):
+                return None
         return F
 
     def prove_vus(self, vus, check=True, mutate=None, min_l: int = 256, coins=None, vu_ids=None, auth=None, words_override=None,
@@ -1284,11 +1503,11 @@ def gate_hashed(args, rel: Relation) -> int:
         data = instances(rel, args.vus, procs=procs, cache=cache, root=root)
         R.commit_vus(data, manifest_sha256=instances_digest(rel, args.vus, root=root))
     else:
-        if rel.frozen_tier:
-            raise SystemExit(f"--tile: the frozen {rel.frozen_tier} set has no tile layout (sharing = none only for {rel.name})")
+        # a frozen-tier relation (bf16-ampere) has no tile layout in its frozen set: its tile is the synthetic draw
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=procs, cache=cache)
         data = data[:args.vus]
-        R.commit_vus(data, manifest_sha256=instances_digest(rel, len(data)), tile=tile, x_rows=x_rows, w_cols=w_cols)
+        R.commit_vus(data, manifest_sha256=(tile_digest(rel, *tile) if rel.frozen_tier else instances_digest(rel, len(data))),
+                     tile=tile, x_rows=x_rows, w_cols=w_cols)
     for lo in range(0, len(data), per_proof):
         vus = data[lo:lo + per_proof]
         proof, pubs, lay = R.prove_vus(vus, check=True, vu_ids=range(lo, lo + len(vus)))
@@ -1426,8 +1645,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
     R = make_runner(args, rel, n_proofs=n_proofs)
     hashed = isinstance(R, HashedRelationRunner)
     shared = isinstance(R, SharedHashedRunner)
-    # --pipeline N (lane hp2-host): the staged prover; the hashed runner (lane hash-relation) has no stage generator yet
-    pipeline_depth = int(getattr(args, "pipeline", 0) or 0) if not hashed else 0
+    # --pipeline N (lane hp2-host): the staged prover; the hashed runners' stage generators (marshal_hashed / marshal_shared)
+    pipeline_depth = int(getattr(args, "pipeline", 0) or 0)
     tile = parse_tile(getattr(args, "tile", None)) if hashed else None
     if tile is not None and tile[0] * tile[1] != total_vus:
         raise SystemExit(f"--tile {tile[0]}x{tile[1]} is {tile[0] * tile[1]} VUs; --total-vus {total_vus}")
@@ -1445,10 +1664,10 @@ def bench_vu_rel(args, rel: Relation) -> int:
         data = instances(rel, total_vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None), root=root)
         x_rows = w_cols = None
     else:
-        if rel.frozen_tier:
-            raise SystemExit(f"--tile: the frozen {rel.frozen_tier} set has no tile layout (sharing = none only for {rel.name})")
+        # a frozen-tier relation (bf16-ampere): its frozen set has no tile layout, the tile is the synthetic draw
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
-    inst_digest = instances_digest(rel, total_vus, root=root)
+    frozen = bool(rel.frozen_tier) and tile is None
+    inst_digest = tile_digest(rel, *tile) if (tile is not None and rel.frozen_tier) else instances_digest(rel, total_vus, root=root)
     print(f"{total_vus} {'frozen ' + rel.frozen_tier if rel.frozen_tier else 'synthetic'} VUs (recorded accumulators) in {time.perf_counter() - t0:.1f}s")
     commit_seconds = 0.0
     if hashed:
@@ -1521,7 +1740,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
             # sent on the data channel after the pass.
             local_factory = lambda i: (protocol_mod.Coins.sample() if interactive else None)  # noqa: E731
             factory = live.pipeline_factory(local_factory) if live is not None else local_factory
-            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], factory, depth=pipeline_depth, min_l=l)
+            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], factory, depth=pipeline_depth, min_l=l,
+                                           vu_ids_list=[range(lo, hi) for lo, hi in subs])
             for si, ((lo, hi), (V, proof, pubs, lay_i)) in enumerate(zip(subs, many)):
                 if live is not None:
                     V = live.proved(si, proof, V)            # PROOF si on the data channel (async); coins -> plain Coins
@@ -1544,8 +1764,15 @@ def bench_vu_rel(args, rel: Relation) -> int:
                 if pipeline_depth > 1 and args.device.startswith("cuda"):
                     # every pipeline slot once (its stream's hint graph capture, pinned buffers): untimed, like the warm-up
                     warm = subs[:pipeline_depth] + (subs[-1:] if len(subs) > pipeline_depth else [])   # + the ragged last layout
-                    R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in warm],
-                                     (lambda i: protocol_mod.Coins.sample() if interactive else None), depth=pipeline_depth, min_l=l)
+                    passes = 1
+                    if shared:
+                        # the hash side's layout varies per sub-batch (70 / 71 row units at the 64x64 tile) and the tests
+                        # graph is captured per (stream, layout): every slot must meet every layout before a timed pass
+                        warm, passes = list(subs), 3
+                    for _ in range(passes):
+                        R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in warm],
+                                         (lambda i: protocol_mod.Coins.sample() if interactive else None), depth=pipeline_depth,
+                                         min_l=l, vu_ids_list=[range(lo_, hi_) for lo_, hi_ in warm])
                 break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
         if live is not None:
             live.end_rep(rep, agg)                           # END; the verifier's session verdict (waits for its Rust verify)
@@ -1639,10 +1866,14 @@ def bench_vu_rel(args, rel: Relation) -> int:
     zk_statement = snd["zk_statement"]
     if hashed and cfg.zk:
         zk_statement = zk_statement.split("; operands a, b")[0] + privacy_note.replace("; NOTE: ", "; ", 1)
-    if rel.frozen_tier:
+    if frozen:
         # the frozen set: the same ``instances`` block as vu.bench_vu (no seed, no recipe), so the committed column of the
         # A100 cell names exactly the bare cell's instances
         inst = contract.instances_ref(rel.instances_tier, 0, total_vus, inst_digest, dataset=rel.instances_dataset)
+    elif rel.frozen_tier:
+        inst = {"dataset": "synthetic", "tier": f"tile{tile[0]}x{tile[1]}", "range": [0, total_vus], "manifest_sha256": inst_digest,
+                "seed": rel.instance_seed, "recipe": f"{rel.name} synthetic GEMM tile (relchain.tile_instances: {rel.operands.__name__} "
+                                                     f"rows / columns, model-recorded accumulators); NOT the frozen {rel.frozen_tier} set"}
     else:
         inst = {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total_vus],
                 "manifest_sha256": inst_digest, "seed": rel.instance_seed}
