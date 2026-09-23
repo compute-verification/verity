@@ -59,7 +59,9 @@ export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
 # audit from the archive on a CPU host).  In R17/R18 the dead launcher run_row.sh carried that default (`have MATCH_IMPL || ENVS+=
 # ("MATCH_IMPL=fast")`) and it did not move with row_pod.sh into the Verity tree: every R19 launch without the env ran the record checker
 # -- #73 qwen3-4b B8 GM-01 single-core 14400 s -> "match FAIL rc=0/0/124" (its FP8 twin #74 under cheap's explicit env: 12 min), #60
-# 2 h 47 min, canary #3's 2 h 32 min orphan.  The runner owns the policy now; an explicit MATCH_IMPL=record still selects the audit checker.
+# 2 h 47 min, canary #3's 2 h 32 min orphan.  The runner states the policy; since lane/vllm-v2-gm-scale the checker's CLI carries the same
+# default (a by-hand `global_match.py` rerun of the v2 acquisition's B64 record ran the record checker for 8.3 h at 47 GB and never
+# finished); an explicit MATCH_IMPL=record still selects the audit checker.
 # (MATCH_SNAP_MAX_BYTES stays as it was: unset = run_config's derived cap, D87; R18's explicit 32 MiB is the launcher's choice.)
 export MATCH_IMPL=${MATCH_IMPL:-fast} MATCH_PIPELINE=${MATCH_PIPELINE:-shared}
 PY=${PY:-/workspace/venv312/bin/python}; PY312=${PY312:-$PY}

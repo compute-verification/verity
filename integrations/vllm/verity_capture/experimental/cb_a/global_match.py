@@ -66,7 +66,8 @@ PROTOCOL SUMMARY (Match stage: the record checker -- GM-01, the runtime match ve
   Invariants: requests are named r<k> (manifest position) and the record's UUIDs are mapped through the Program's table (G1); a request
     that stopped early is compared over its executed prefix and must end on a DECLARED EOS id with the declared LAG (G6, fail closed
     without the declaration); X-09 is evidence inside G3, never the verdict; the other within-step criterion is recorded beside the verdict,
-    never merged; MATCH_IMPL selects record | fast explicitly (no silent fallback); capture/tokens.json is required on a row of record.
+    never merged; MATCH_IMPL selects fast (the Match of record, the CLI's default) | record (the audit checker) -- an unknown name is an
+    error, never a fallback; capture/tokens.json is required on a row of record.
   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
@@ -244,6 +245,31 @@ def workload_lag_static(desc: dict) -> int | None:
     return v_bind if v_bind is not None else v_ids
 
 
+def relocate_components(derived: dict, artifact_path: str) -> dict:
+    """Resolve GP-01's component dirs (`inputs.derived`: "lp,t" -> derive_step dir) beside the artifact when the recorded absolute
+    paths do not exist here.
+
+    A `vllm-build/v1` records the row directory of the pod that built it (`/workspace/cp/<sweep>/<row>/build_request_LP<lp>_T<t>`).
+    Staged on another host, or symlinked into another attempt directory (`verity_vllm/acquire/pod_match_v2.sh`), those paths dangle
+    while the same component dirs sit beside the artifact: `<dir(artifact)>/../<basename>` (the artifact lives in `<row>/build_workload/`).
+    The substitution is safe because every loaded component's digest is cross-checked against the Build's claim (G4, `program_digest`
+    of the component's own `descriptor.json.gz`): a relocation can only supply the very Program the Build named, never another.
+    A path missing at both places is kept as recorded so the loader's FileNotFoundError names it.
+
+    Returns {"derived": <resolved map>, "relocated": {"lp,t": {"from", "to"}}, "base": <dir tried>}."""
+    base = os.path.dirname(os.path.dirname(os.path.abspath(artifact_path)))
+    out: dict = {}
+    relocated: dict = {}
+    for k, d in (derived or {}).items():
+        if isinstance(d, str) and d and not os.path.isdir(d):
+            cand = os.path.join(base, os.path.basename(d.rstrip("/")))
+            if os.path.isdir(cand):
+                relocated[k] = {"from": d, "to": cand}
+                d = cand
+        out[k] = d
+    return {"derived": out, "relocated": relocated, "base": base}
+
+
 def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     """Lane gprog's `workload_program.json` (GP-01, `verity/workload-program/v1`) -> this checker's interface.  The rooted Program's
     component dirs come from `inputs.derived` ("lp,t" -> derive_step dir); its address map and chronology are carried through and
@@ -281,6 +307,8 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
                                  f"{str(desc.get('root'))[:32]}...{str(desc.get('root'))[-24:]}): the artifact's lag declaration is not the Program's (R17-1)")
             digest_verification["lag_static"] = int(static_lag)
     derived = (art.get("inputs") or {}).get("derived") or {}
+    relocation = relocate_components(derived, artifact_path)
+    derived = relocation["derived"]
     wl_path = workload_path or (art.get("inputs") or {}).get("manifest")
     wl = json.load(open(wl_path)) if wl_path and os.path.exists(wl_path) else None
     # prompts by manifest POSITION (the Program's r<k>); the manifest's own request_id is the workload (UUID) id
@@ -317,7 +345,9 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
             "lengths": art.get("lengths"),
             "moe_construction": art.get("moe_construction"),   # [R17-42 route A (3)] GP-01's declared-and-bound construction block (None pre-R17-42)
             "gprog_artifact": {"path": artifact_path, "gates": art.get("gates"), "input_gates": art.get("input_gates"), "descriptor": art.get("descriptor"),
-                               "digest_verification": digest_verification}}
+                               "digest_verification": digest_verification,
+                               # component dirs resolved beside the artifact (recorded absolute paths absent here); {} when none moved
+                               "relocated_components": relocation["relocated"]}}
 
 
 # ------------------------------------------------------------------------------------------------------ the observed record
@@ -822,7 +852,10 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
            "global_program": {"schema": gp.get("schema"), "builder": gp.get("builder"), "workload": gp.get("workload"),
                               "workload_digest": gp.get("workload_digest"), "n_requests": len(gp.get("requests") or []),
                               # [rev-pm M-0112] whether this checker recomputed the Build artifact's digest from its descriptor (from_gprog)
-                              "digest_verification": (gp.get("gprog_artifact") or {}).get("digest_verification")},
+                              "digest_verification": (gp.get("gprog_artifact") or {}).get("digest_verification"),
+                              # component dirs the Build recorded on another host, resolved beside its artifact (relocate_components); G4
+                              # cross-checks every loaded component's digest against the Build's claim, so this is traceability, not trust
+                              "relocated_components": (gp.get("gprog_artifact") or {}).get("relocated_components") or {}},
            "chronology_unit": "engine_step", "request_id_convention": "r<k> (k = manifest position; record UUIDs mapped via workload_request_id)",
            "within_step_criterion": within_step,
            "within_step_note": ("sequence: X-09 instance sequence per request step (r14-v1 verdict)" if within_step == "sequence" else
@@ -2029,15 +2062,22 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
 
 IMPL_ENV = "MATCH_IMPL"
 IMPLS = ("record", "fast")
+IMPL_DEFAULT = "fast"
 
 
 def impl_module(name: str | None = None):
-    """[R17 mfast, COORD R17-7.2] The checker implementation `MATCH_IMPL` selects: `record` (this module, the checker of record; the
-    default) or `fast` (`cb_a.global_match_fast`, the candidate).  Both expose `check(gp, oracle_dir, log_path, tokens_path, run_x09,
+    """[R17 mfast, COORD R17-7.2] The checker implementation `MATCH_IMPL` selects: `fast` (`cb_a.global_match_fast`: the same criteria
+    with compute-once memoisation, compact operand progressions and forked per-request legs -- the Match of record since R17
+    (`sweep/row_pod.sh` exports it for every row) and the CLI's default) or `record` (this module's un-memoised single-process body:
+    the audit checker the differential harness compares against).  Both expose `check(gp, oracle_dir, log_path, tokens_path, run_x09,
     within_step, record_alternate)` with the same result schema; the differential harness (`verity_capture.sweep.match_diff`) runs
     both on the same artifacts and compares verdict, per-check outcomes, populations and mismatch locations.  An unknown name is an
-    error, never a silent fallback to either implementation."""
-    name = (name if name is not None else os.environ.get(IMPL_ENV, "record")).strip().lower() or "record"
+    error, never a silent fallback to either implementation.
+
+    [lane/vllm-v2-gm-scale] The default moved from `record` to `fast`: a `global_match.py` invoked outside `row_pod.sh` (a by-hand rerun,
+    another launcher) used to get the audit checker silently -- on the B64 llama32-1b row that is 8+ h single-core at 40-50 GB against
+    ~4 min on 8 cores at 13.5 GB for the same verdict.  `MATCH_IMPL=record` still selects the audit checker explicitly."""
+    name = (name if name is not None else os.environ.get(IMPL_ENV, IMPL_DEFAULT)).strip().lower() or IMPL_DEFAULT
     if name == "record":
         import sys
         return sys.modules[__name__]
@@ -2045,6 +2085,24 @@ def impl_module(name: str | None = None):
         from . import global_match_fast
         return global_match_fast
     raise ValueError(f"{IMPL_ENV}={name!r}: not one of {IMPLS}")
+
+
+def impl_banner(mod, gp: dict | None = None) -> str:
+    """One stderr line stating, before the run, which implementation is about to run and how (workers, operand form) and which
+    component dirs were relocated -- the two facts whose absence cost the v2 acquisition lane an 8 h run (record checker by default,
+    a Build's dangling component paths noticed only at load)."""
+    name = getattr(mod, "IMPL_NAME", "record")
+    env = os.environ.get(IMPL_ENV)
+    parts = [f"# global_match impl={name}", f"({IMPL_ENV}={env!r})" if env is not None else f"({IMPL_ENV} unset -> default {IMPL_DEFAULT})"]
+    if name == "fast":
+        parts.append(f"workers={GMF.workers(1 << 30)} ({GMF.WORKERS_ENV}={os.environ.get(GMF.WORKERS_ENV) or 'default'})")
+        parts.append(f"compact_args={os.environ.get(GMF.COMPACT_ENV, '1').strip() != '0'}")
+    else:
+        parts.append("single process, no memo (the audit checker; hours and tens of GB on a batched row -- MATCH_IMPL=fast is the Match of record)")
+    reloc = ((gp or {}).get("gprog_artifact") or {}).get("relocated_components") or {}
+    if reloc:
+        parts.append(f"relocated_components={len(reloc)} (Build recorded {next(iter(reloc.values()))['from']!r} ...)")
+    return " ".join(parts)
 
 
 def impl_info(mod) -> dict:
@@ -2107,7 +2165,8 @@ def main(argv=None) -> int:
         if not a.workload:
             ap.error("--workload is required without --global-program")
         gp = mock_global_program(a.workload, a.component)
-    mod = impl_module()   # MATCH_IMPL: record (default) | fast -- never a silent fallback
+    mod = impl_module()   # MATCH_IMPL: fast (default, the Match of record) | record (the audit checker) -- never a silent fallback
+    print(impl_banner(mod, gp), file=sys.stderr, flush=True)   # what is about to run, BEFORE the hours it may take (not after)
     res = mod.check(gp, a.oracle, a.log, a.tokens, run_x09=not a.no_x09, within_step=a.within_step, record_alternate=not a.no_alternate,
                     tokens_optional=a.tokens_optional, _loaded=loaded)   # [rel r17-int-2 merge: stoch F-r17-01 --tokens-optional + mfast MATCH_IMPL dispatch; mprof P1 _loaded]
     res["impl"] = impl_info(mod)
