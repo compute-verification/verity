@@ -839,6 +839,9 @@ def bench_vu_rel(args, rel: Relation) -> int:
     the run directory is listed in ``artifacts`` so it travels with the Attempt as run-files (``vu.dump_artifacts``)."""
     from .run import _git_commit as _git_commit_repo
     from .vu import ZK_MODE, ZK_MODE_FS, ZK_MODE_HM96, ZK_VACUOUS_NOTE, dump_artifacts
+    ZK_HASHED_NOTE = ("; NOTE: authentication = included-hash: the operand rows x, W are NOT in this statement (private witness, "
+                      "hashed in-circuit); the statement publishes their Poseidon2-BabyBear row digests (deterministic, unsalted: "
+                      "hiding only up to preimage search on a row), the Merkle roots + (vu, x_index, w_index), and the words y16")
 
     def _git_commit():
         return os.environ.get("RESEARCH_GIT_COMMIT") or _git_commit_repo()
@@ -1028,14 +1031,21 @@ def bench_vu_rel(args, rel: Relation) -> int:
     sw = {"backend": {"name": rel.backend_name, "commit": _git_commit(), "hash": proof.hash_name,
                       "challenge_expander": "SHAKE-256 (placeholder)", "impl": witness_mod.IMPL, "pipeline": pipeline_depth},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
+    # The bare v4 statement publishes the operands, so vu.py's ZK_VACUOUS_NOTE applies; the hashed v5 statement does not
+    # (hash-relation final report §9): it carries the operand rows' Poseidon2 digests + the Merkle roots + y16 instead.
+    privacy_note = (ZK_HASHED_NOTE if hashed else ZK_VACUOUS_NOTE)
+    auth_omitted = ("" if hashed else "external authentication; ")
     if cfg.zk and interactive:
-        proof_class, zk_mode = "COMPLETE_ZK_BACKEND", ZK_MODE + ZK_MODE_HM96 + ZK_VACUOUS_NOTE
-        omitted = "external authentication; unopened columns hidden by Blake3 of a uniform column"
+        proof_class, zk_mode = "COMPLETE_ZK_BACKEND", ZK_MODE + ZK_MODE_HM96 + privacy_note
+        omitted = auth_omitted + "unopened columns hidden by Blake3 of a uniform column"
     elif cfg.zk:
-        proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE + ZK_MODE_FS + ZK_VACUOUS_NOTE
-        omitted = "external authentication; malicious-verifier ZK outside the programmable random-oracle model"
+        proof_class, zk_mode = "COMPLETE_HVZK_BACKEND", ZK_MODE + ZK_MODE_FS + privacy_note
+        omitted = auth_omitted + "malicious-verifier ZK outside the programmable random-oracle model"
     else:
-        proof_class, zk_mode, omitted = "NON_ZK_PROOF_DIAGNOSTIC", "none", "external authentication, ZK masking"
+        proof_class, zk_mode, omitted = "NON_ZK_PROOF_DIAGNOSTIC", "none", auth_omitted + "ZK masking"
+    zk_statement = snd["zk_statement"]
+    if hashed and cfg.zk:
+        zk_statement = zk_statement.split("; operands a, b")[0] + ZK_HASHED_NOTE.replace("; NOTE: ", "; ", 1)
     if rel.frozen_tier:
         # the frozen set: the same ``instances`` block as vu.bench_vu (no seed, no recipe), so the committed column of the
         # A100 cell names exactly the bare cell's instances
@@ -1050,7 +1060,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         proof_class=proof_class, authentication=(R.AUTH if hashed else "excluded"), zk_mode=zk_mode,
         security={"target": round(args.target), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_k": cfg.k, "rs_l": cfg.l,
                   "zk": cfg.zk, "t_pad": cfg.t_pad, "mode": cfg.mode, "bound_model": snd["bound_model"],
-                  "hash_assumption": snd["hash_assumption"], "zk_statement": snd["zk_statement"],
+                  "hash_assumption": snd["hash_assumption"], "zk_statement": zk_statement,
                   "fiat_shamir_queries_log2": snd["fiat_shamir_queries_log2"],
                   "opened_columns": cfg.t, "achieved_log2": batch["batch_log2"], "achieved_bits": -batch["batch_log2"],
                   "verifier_target_bits": target_bits, "terms_log2": snd["terms_log2"],
