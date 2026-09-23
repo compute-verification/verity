@@ -522,17 +522,33 @@ def contract_eq(A: torch.Tensor, zs: np.ndarray) -> torch.Tensor:
     """A (P, 2^k) int32 device, zs (m, k, 6) -> (m, P, 6) int64 (unreduced): sum_r A[p, r] eq(r, z_j) -- up to 4 eq tensors
     per pass over A."""
     Pn, R = A.shape
-    zs = np.asarray(zs, dtype=np.int64)
-    m = zs.shape[0]
-    outs = []
-    for a in range(0, m, 4):
-        mc = min(4, m - a)
-        B = torch.empty((D * mc, R), dtype=torch.int32, device=A.device)
-        for j in range(mc):
-            eq_table(zs[a + j], A.device, out=B[D * j:D * (j + 1)])
-        outs.append(contract_planes(A, B).view(Pn, mc, D).permute(1, 0, 2))
+    zs = np.asarray(zs, dtype=np.int64) % P
+    m, k = zs.shape[:2]
+    out = torch.empty((m, Pn, D), dtype=torch.int64, device=A.device)
+    dense = []
+    for j in range(m):
+        s = _boolean_tail(zs[j])
+        if s == k:
+            dense.append(j)
+            continue
+        b = int(sum(int(zs[j, t, 0]) << (t - s) for t in range(s, k)))      # eq(., z_j) vanishes outside rows b 2^s + [0, 2^s)
+        out[j] = contract_planes(A[:, b << s:(b + 1) << s], eq_table(zs[j, :s], A.device)).view(Pn, D)
+    for a in range(0, len(dense), 4):
+        idx = dense[a:a + 4]
+        B = torch.empty((D * len(idx), R), dtype=torch.int32, device=A.device)
+        for jj, j in enumerate(idx):
+            eq_table(zs[j], A.device, out=B[D * jj:D * (jj + 1)])
+        out[idx] = contract_planes(A, B).view(Pn, len(idx), D).permute(1, 0, 2)
         del B
-    return torch.cat(outs, dim=0)
+    return out
+
+
+def _boolean_tail(z: np.ndarray) -> int:
+    """Smallest s with z[s:] all in {0, 1} (base-field Booleans)."""
+    s = z.shape[0]
+    while s > 0 and not z[s - 1, 1:].any() and z[s - 1, 0] in (0, 1):
+        s -= 1
+    return s
 
 
 def fold_ext(M: torch.Tensor, rbar: np.ndarray) -> torch.Tensor:

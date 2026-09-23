@@ -379,14 +379,20 @@ class Encoder:
         w = root_of_unity(self.n)
         return np.array([pow(w, int(e), P) for e in self.eta_index(s)], dtype=np.int64)
 
-    def encode(self, msg: torch.Tensor, out: torch.Tensor | None = None) -> torch.Tensor:
-        """msg (Bm, R) int32/int64 in [0, p) -> U (Bm, n) int32."""
+    def encode(self, msg: torch.Tensor, out: torch.Tensor | None = None, pad: torch.Tensor | None = None) -> torch.Tensor:
+        """msg (Bm, R) int32/int64 in [0, p) -> U (Bm, n) int32.  ``pad`` (Bm, t) in [0, p): ZK column padding, the message
+        coefficients R .. R + t - 1 (R + t <= n)."""
         Bm, R = msg.shape
         assert R == self.R
-        if not self.gpu:
-            ntt = _field.ntt
-            pad = torch.zeros((Bm, self.n - R), dtype=torch.int64, device=msg.device)
-            return ntt(torch.cat((msg.to(torch.int64), pad), dim=1)).to(torch.int32)
+        tp = 0 if pad is None else pad.shape[1]
+        assert tp == 0 or (pad.shape[0] == Bm and R + tp <= self.n)
+        if not self.gpu or (tp and self.n2 == 1):
+            full = msg.to(torch.int64) if not tp else torch.cat((msg.to(torch.int64), pad.to(torch.int64)), dim=1)
+            if not self.gpu:
+                zeros = torch.zeros((Bm, self.n - R - tp), dtype=torch.int64, device=msg.device)
+                return _field.ntt(torch.cat((full, zeros), dim=1)).to(torch.int32)
+            msg, R = full.to(torch.int32).contiguous(), R + tp
+            tp = 0
         if msg.dtype != torch.int32:
             msg = msg.to(torch.int32)
         msg = msg.contiguous()
@@ -402,10 +408,71 @@ class Encoder:
         else:
             ptw = post_twiddles(n1, n2, self.device)
             ntt_axis(msg.view(Bm, R // n1, n1), n2, out=out.view(Bm, n2, n1), post_tw=ptw)
+        if tp:
+            self._add_pad(out.view(Bm, n2, n1), pad)
         # step B: (Bm n2, n1, 1) in place
         v = out.view(Bm * n2, n1, 1)
         ntt_axis(v, n1, out=v)
         return out
+
+    def _add_pad(self, X: torch.Tensor, pad: torch.Tensor) -> None:
+        """Step A's output of coefficient j = R + t alone is X[:, k2, j mod n1] = pad_t w_n^{j k2}; add it (linearity)."""
+        Bm, n2, n1 = X.shape
+        tp = pad.shape[1]
+        pad = pad.to(torch.int32).contiguous()
+        k = _pad_kernel()
+        ts = torch.cuda.current_stream(X.device)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            cs = cp.cuda.ExternalStream(ts.cuda_stream)
+        for t0 in range(0, tp, n1):                                             # n1 consecutive j: distinct slots j mod n1
+            t1 = min(tp, t0 + n1)
+            W = self._pad_twiddles(np.arange(self.R + t0, self.R + t1, dtype=np.int64))   # (n2, t1 - t0) int32
+            cnt = Bm * n2 * (t1 - t0)
+            with cs:
+                k(((cnt + 255) // 256,), (256,),
+                  (np.uint64(X.data_ptr()), np.uint64(pad.data_ptr()), np.uint64(W.data_ptr()), np.int32(Bm), np.int32(n2),
+                   np.int32(n1), np.int32(tp), np.int32(t0), np.int32(t1 - t0), np.int32((self.R + t0) % n1)))
+
+    def _pad_twiddles(self, j: np.ndarray) -> torch.Tensor:
+        key = ("padtw", self.n, self.n2, int(j[0]), len(j), str(self.device))
+        t = _TABLES.get(key)
+        if t is None:
+            w = root_of_unity(self.n)
+            e = (np.arange(self.n2, dtype=np.int64)[:, None] * j[None, :]) % self.n
+            lo_bits = 12
+            lo = _powers(w, 1 << lo_bits).astype(np.int64)
+            hi = _powers(pow(w, 1 << lo_bits, P), max(1, self.n >> lo_bits)).astype(np.int64)
+            vals = hi[e >> lo_bits] * lo[e & ((1 << lo_bits) - 1)] % P
+            t = torch.as_tensor(np.ascontiguousarray(vals).astype(np.int32), device=self.device)
+            _TABLES[key] = t
+        return t
+
+
+_PAD_SRC = r"""
+extern "C" __global__ void __launch_bounds__(256)
+pad_add(unsigned int* X, const unsigned int* pad, const unsigned int* W, int Bm, int n2, int n1, int tp, int t0, int tc, int pos0)
+{
+    const long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= (long long)Bm * n2 * tc) return;
+    const int t = (int)(i % tc);
+    const long long bk = i / tc;
+    const int k2 = (int)(bk % n2), b = (int)(bk / n2);
+    const unsigned long long P = 2013265921ull;
+    unsigned int* x = X + ((long long)b * n2 + k2) * n1 + (pos0 + t) % n1;
+    const unsigned long long v = (unsigned long long)pad[(long long)b * tp + t0 + t] * W[(long long)k2 * tc + t] % P;
+    *x = (unsigned int)((*x + v) % P);
+}
+"""
+
+
+def _pad_kernel():
+    k = _KERNELS.get("pad_add")
+    if k is None:
+        k = cp.RawKernel(_PAD_SRC, "pad_add")
+        _KERNELS["pad_add"] = k
+    return k
 
 
 def reference_encode(msg: torch.Tensor, n: int, enc: Encoder) -> torch.Tensor:
