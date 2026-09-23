@@ -1,4 +1,4 @@
-"""The plan at a GPU stage's entry (behind `ACQUIRE_ENGINE=v2`): runtime tree of the built engine -> plan from the row's required-value
+"""The plan at a GPU stage's entry (`ACQUIRE_ENGINE=v2`, the default): runtime tree of the built engine -> plan from the row's required-value
 manifest -> the CPU gate's comparison, all written beside the stage's outputs; the caller installs (`install_from_plan`) or adapts the
 committer (`apply_plan_to_committer`).
 

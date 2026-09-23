@@ -1,4 +1,4 @@
-"""The switch and the stage entry: ACQUIRE_ENGINE defaults to v1; `plan_at_stage` writes the plan documents beside a stage's outputs."""
+"""The switch and the stage entry: ACQUIRE_ENGINE defaults to v2 (v1 = the regression oracle only); `plan_at_stage` writes the plan documents beside a stage's outputs."""
 from __future__ import annotations
 
 import json
@@ -17,15 +17,15 @@ from verity_vllm.acquire.plan import load_plan  # noqa: E402
 from verity_vllm.acquire.stage import plan_at_stage  # noqa: E402
 
 
-def test_switch_defaults_to_v1(monkeypatch):
+def test_switch_defaults_to_v2(monkeypatch):
     monkeypatch.delenv(switch.ENV, raising=False)
-    assert switch.engine() == "v1" and not switch.v2()
-    monkeypatch.setenv(switch.ENV, "v2")
+    assert switch.engine() == "v2" and switch.v2()
+    monkeypatch.setenv(switch.ENV, "v1")                      # the regression oracle, selectable for one more release
+    assert not switch.v2() and switch.engine() == switch.ORACLE
+    monkeypatch.setenv(switch.ENV, " V2 ")
     assert switch.v2()
-    monkeypatch.setenv(switch.ENV, " V1 ")
-    assert not switch.v2()
     monkeypatch.setenv(switch.ENV, "")
-    assert switch.engine() == "v1"
+    assert switch.engine() == "v2"
     with pytest.raises(ValueError, match="ACQUIRE_ENGINE"):
         switch.engine("v3")
 

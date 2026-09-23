@@ -3,7 +3,8 @@
 v1 decides WHERE to observe a Value by module CLASS tables (`native_host.ACQUIRE_CLASSES`, `ACQUIRE_INPUT_CLASSES`, the `HAZARD_LEAVES` /
 flush leaf tables) plus the manifest-driven consumer-input rule for promoted Values.  v2 derives an ACQUISITION PLAN from the
 required-value manifest and the runtime correspondence (`plan.acquisition_plan`) and installs exactly the plan's hooks
-(`install.install_from_plan`, `install.apply_plan_to_committer`).  v1 stays the default; `switch.engine()` reads `ACQUIRE_ENGINE`.
+(`install.install_from_plan`, `install.apply_plan_to_committer`).  v2 IS the integration (`switch.DEFAULT`); `ACQUIRE_ENGINE=v1` stays
+selectable for one release as the regression oracle only (the frozen R19 records were acquired by it).
 
 - `correspondence`  `owning_module(call)` / `return_slot(call, port)` / `arg_slot(call, i)` over the ONE reader of where a Call lives at runtime
                     (`verity_vllm.runtime_correspondence`, the `runtime-correspondence/v1` record) when the Build carries it, else the

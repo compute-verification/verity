@@ -11,8 +11,9 @@ B>=2; `required_manifest build --program ROW/build_request --workload WL` at B=1
 Expected is lifted from `commit/manifest_verify.json` (used_digest / used_program_digest / used_identities; the v1 Commit's own
 rebuild said `ok`) and, when the recorded manifest.json is reachable, from the file itself.  STRONG: a single identity row moved,
 dropped or renamed changes the digest.  TP rows (#70, #75: rank Programs under build/rank*/) are not built by this path -> not applicable.
-The engine is the code's default (traversal, inventory cross-check on) exactly as the row's Commit ran it; `VERITY_REGRESSION_ENGINE=v2`
-rebuilds with the query path (`verity_vllm.query.cli`, same flags) so the same check gates v2 against the same manifest of record.
+The engine is the integration's (`v2`: the query path `verity_vllm.query.cli`, Q_module_body_v1 -- the same build / build-global flags
+row_pod.sh uses); `VERITY_REGRESSION_ENGINE=v1` rebuilds with the frozen reference's traversal + by-name tables (regression oracle only,
+one release) so the historical comparison stays runnable.
 
 `actual` also states what the built manifest PROMOTED ([R19 int-20, F-r19-int-20]: interior rows whose output crosses a module
 boundary, flagged `promoted: true`) -- the facts a labelled decision on the fixture may name (`resolver.sanction`; #57's decision):
@@ -122,13 +123,13 @@ def expected(row: resolver.Row) -> dict:
     return out
 
 
-ENGINES = {"v1": "verity_capture.commit.required_manifest",       # the baseline: v1's traversal + by-name tables (the row's Commit ran this)
-           "v2": "verity_vllm.query.cli"}                         # Q_module_body_v1 over the Program + correspondence (same build / build-global flags)
+ENGINES = {"v1": "verity_capture.commit.required_manifest",       # the frozen reference's engine: v1's traversal + by-name tables (oracle only)
+           "v2": "verity_vllm.query.cli"}                         # THE integration: Q_module_body_v1 over the Program + correspondence (same build / build-global flags)
 
 
 def engine() -> str:
-    """`VERITY_REGRESSION_ENGINE` (default `v1`): which builder the rebuild runs.  The baseline stays v1; `v2` runs the query path so
-    this check gates it against the same manifest of record."""
+    """`VERITY_REGRESSION_ENGINE` (default `v2`, the integration): which builder the rebuild runs.  `v1` rebuilds the way the frozen
+    reference rows' Commits did (regression oracle only)."""
     e = resolver.engine()
     if e not in ENGINES:
         raise ValueError(f"{resolver.ENGINE_ENV}={e!r}: one of {sorted(ENGINES)}")

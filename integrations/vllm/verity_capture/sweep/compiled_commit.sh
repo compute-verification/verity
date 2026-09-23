@@ -179,7 +179,7 @@ if [ "$TAPS" = kernels ] && [ -f "$D/compiled_manifest.json" ] && [ -f "$D/compi
   log "manifest verify (compiled MAN-05) rc=$rcv: $(tail -n 1 "$D/manifest_verify.log")"
   [ $rcv -ne 0 ] && [ $rcm -eq 0 ] && rcm=$rcv
 fi
-# the finalizer's row_pod-shaped view of the record (report finalize.py): commit/runs.jsonl = the instrumented arm's records (binding,
+# the row_pod-shaped view of the record (what verity_capture.commit.verdict from-record reads): commit/runs.jsonl = the instrumented arm's records (binding,
 # value_correspondence components incl. sampled_replay / boundary_linkage / weights_pin) -- compiled_merge already wrote commit/runs.jsonl
 # + commit/verdict.json; the release line for stages.txt is the lane tree's commit
 [ -n "${VERITY_TREE_COMMIT:-}" ] && log "release ${VERITY_RELEASE_TAG:-UNRELEASED lane/r15-compiled} commit=$VERITY_TREE_COMMIT"
