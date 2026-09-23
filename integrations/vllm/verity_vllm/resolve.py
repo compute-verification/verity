@@ -231,7 +231,7 @@ class _RequestCursor:
 class LiveState:
     """What a later resolution reads -- nothing else.  `owner[value id] = request index` (int32 per value; -1 unknown, -2 SHARED) is the
     dataflow channel's table; `steps` the engine steps' row tables (the rows channel's input); `cursors` the per-request step/ordinal
-    cursors; `views` the first view seen per (site, slot, spec) (`validate`'s mutated-view reference)."""
+    cursors; `views` the first view LAYOUT (shape, strides, dtype) seen per (site, slot, spec) (`validate`'s mutated-view reference)."""
 
     n_input_nodes: int
     owned_params: dict[int, str]                              # request-owned root parameter index -> request id (prompt, seed, peers)
@@ -329,7 +329,7 @@ class LiveState:
         c.ordinals[key] = c.ordinals.get(key, -1) + 1
         vk = (ref.site, ref.slot, obs.spec)
         if obs.occurrence.view is not None and vk not in self.views:
-            self.views[vk] = obs.occurrence.view
+            self.views[vk] = OB.view_layout(obs.occurrence.view)
 
 
 def is_sampling_event(spec: str | None) -> bool:
@@ -487,7 +487,7 @@ def validate(observation: OB.ValueObservation, resolved: ValueRef, *, correspond
         vf = getattr(correspondence, "view_of", None)
         if vf is not None and occ.view is not None:
             want = vf(resolved.call)
-            if want is not None and tuple(want) != tuple(occ.view):
+            if want is not None and OB.view_layout(tuple(want)) != OB.view_layout(occ.view):
                 faults.append(Fault("view-mutated", f"declared view {want!r}, observed {occ.view!r}", observation.hint_value_id))
         if expected_call_of_hint is not None and observation.hint_value_id is not None:
             want_call = expected_call_of_hint(observation.hint_value_id)
@@ -498,9 +498,11 @@ def validate(observation: OB.ValueObservation, resolved: ValueRef, *, correspond
         if want_r is not None and want_r != resolved.request:
             faults.append(Fault("hint-mismatch", f"hint names request {want_r!r}, resolution gives {resolved.request!r}", observation.hint_value_id))
     if live is not None and occ.view is not None:
+        # the layout (shape, strides, dtype) of the first occurrence at (site, slot, spec) is the reference; the storage offset is the
+        # row's address inside the launch's buffer and moves with every row (row k at k*H): not a mutation
         seen = live.views.get((resolved.site, resolved.slot, observation.spec))
-        if seen is not None and tuple(seen) != tuple(occ.view) and not any(f.kind == "view-mutated" for f in faults):
-            faults.append(Fault("view-mutated", f"first view at {resolved.site!r}/{resolved.slot!r} was {seen!r}, now {occ.view!r}", observation.hint_value_id))
+        if seen is not None and seen != OB.view_layout(occ.view) and not any(f.kind == "view-mutated" for f in faults):
+            faults.append(Fault("view-mutated", f"first layout at {resolved.site!r}/{resolved.slot!r} was {seen!r}, now {OB.view_layout(occ.view)!r}", observation.hint_value_id))
     return faults
 
 

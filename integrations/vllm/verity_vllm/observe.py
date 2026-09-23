@@ -187,6 +187,16 @@ def _view(v: Any) -> tuple | None:
     return (str(v),)
 
 
+def view_layout(view: tuple | None) -> tuple | None:
+    """The LAYOUT of a view -- (shape, strides, dtype) -- without its storage offset: the offset is the row's address inside the launch's
+    buffer (row k of an H-wide output sits at k*H) and moves with every row of a launch; a mutated view is a changed shape / stride / dtype."""
+    if view is None:
+        return None
+    if len(view) == 4:
+        return (view[0], view[1], view[3])
+    return tuple(view)
+
+
 def site_and_slot(hint: str | None, name: str | None, spec: str | None) -> tuple[str, str]:
     """(site, slot) of a fold row.  The fold's `hint` is `<module path>/<memory root>` (`model.layers.0.self_attn.qkv_proj/weight`,
     `.../rotary_emb/rope.q`) -- the module path is the site; the value observed is the instance's OUTPUT (`out`) unless the name's tail
