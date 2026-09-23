@@ -469,9 +469,23 @@ class Cell:
     overhead: float
     hardware: str | None
     phases: dict[str, Any]
+    mode: str | None = None            #: the fingerprint's ``mode`` (``interactive`` | ``fiat-shamir``), when stated
+    verified_by: str | None = None     #: who asserted the accepting verification label (a non-producer)
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
+
+    def verification_note(self) -> str:
+        """The footnote's account of the verification: who accepted, and -- for an interactive transcript -- that the file
+        verifier could only replay the runner's step-0 coins (D7: live-verifier-only evidence; the Fiat-Shamir row of the
+        same run set is the transferable one)."""
+        who = f"verified by {self.verified_by}" if self.verified_by else "verified"
+        if self.mode == "interactive":
+            return (f"{who} against the runner's step-0 coins (interactive transcript: not transferable evidence per D7; "
+                    f"the Fiat–Shamir variant is)")
+        if self.mode == "fiat-shamir":
+            return f"{who} (Fiat–Shamir transcript: transferable)"
+        return who
 
 
 @dataclass
@@ -558,13 +572,16 @@ def build(store: Any) -> Tables:
             continue
         labels = store.labels(art_id)
         reasons = reject_reasons(meta, labels, attempt, target, cand)
+        labs = _labels(labels)
+        vb = _verified_by(labs, producers(attempt, labs))
+        verified_by = vb.by if vb is not None else None
         if reasons:
             T.rejected.append({**entry, "reasons": reasons})
             for dc in cand.drilldown_classes:
                 if not reject_reasons(meta, labels, attempt, target, cand, proof_classes=(dc,)):
-                    drill.setdefault((target.name, cand.id, dc), []).append(_cell(meta, art_id, rid, target, cand))
+                    drill.setdefault((target.name, cand.id, dc), []).append(_cell(meta, art_id, rid, target, cand, verified_by))
             continue
-        valid.setdefault((target.name, cand.id), []).append(_cell(meta, art_id, rid, target, cand))
+        valid.setdefault((target.name, cand.id), []).append(_cell(meta, art_id, rid, target, cand, verified_by))
 
     for target in TARGETS.values():
         row: dict[str, Any] = {"target": target.name, "status": target.status, "device": target.native_peak.device, "dtype": dtype_of(target),
@@ -588,13 +605,30 @@ def build(store: Any) -> Tables:
     return T
 
 
-def _cell(meta: Mapping[str, Any], art_id: str, rid: str | None, target: Target, cand: Candidate) -> Cell:
+def _mode_of(fp: Mapping[str, Any]) -> str | None:
+    """``interactive`` | ``fiat-shamir`` from the fingerprint: an explicit ``mode`` when the emitter states one, else the
+    ``security.bound_model`` prefix B-Ligero's emitters write (``interactive: ...`` / ``non-interactive: ...``)."""
+    m = fp.get("mode")
+    if isinstance(m, str) and m in ("interactive", "fiat-shamir"):
+        return m
+    sec = fp.get("security") if isinstance(fp.get("security"), Mapping) else {}
+    bm = sec.get("bound_model")
+    if isinstance(bm, str):
+        if bm.startswith("interactive"):
+            return "interactive"
+        if bm.startswith("non-interactive"):
+            return "fiat-shamir"
+    return None
+
+
+def _cell(meta: Mapping[str, Any], art_id: str, rid: str | None, target: Target, cand: Candidate, verified_by: str | None = None) -> Cell:
     fp = meta["workload_fingerprint"]
     t_total = float(_measurements(meta)[contract.T_TOTAL])
     r = _rate(t_total)
     gpu = (fp.get("hardware") or {}).get("gpu") or {}
+    mode = _mode_of(fp)
     return Cell(target=target.name, candidate=cand.id, artifact=art_id, attempt=rid, proof_class=fp["proof_class"], t_total=t_total, r_proved=r,
-                overhead=target.native_peak.flop_per_second / r, hardware=gpu.get("name"), phases=phases(meta))
+                overhead=target.native_peak.flop_per_second / r, hardware=gpu.get("name"), phases=phases(meta), mode=mode, verified_by=verified_by)
 
 
 def cell_artifacts(T: Tables) -> list[str]:
@@ -704,7 +738,7 @@ def render_markdown(T: Tables) -> str:
             else:
                 line.append(fmt_overhead(c.overhead) + " " + note(
                     f"{c.artifact} — {cand.id} {c.proof_class} on {c.hardware}; attempt {c.attempt or 'unknown'}; t.total {c.t_total:.4g} s; "
-                    f"R_proved {c.r_proved:.4g} FLOP/s"))
+                    f"R_proved {c.r_proved:.4g} FLOP/s; {c.verification_note()}"))
         rows2.append(line)
     out += [_md_table(TABLE2_COLUMNS, rows2), ""]
     for d in T.drilldown:

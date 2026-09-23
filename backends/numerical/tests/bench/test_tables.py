@@ -462,3 +462,27 @@ def test_label_keys_are_the_store_vocabulary() -> None:
     assert set(vocab.SCOPES) == set(ledger.SCOPES) and set(vocab.TRACKS) == set(ledger.TRACKS)
     assert set(vocab.CANDIDATES) == {c for _, c in ledger_to_store.CANDIDATES} | {ledger_to_store.candidate("some-other-lane")}
     assert set(T.RANK) <= set(vocab.PROOF_CLASSES)
+
+
+# --- verification provenance in the footnotes (D7) -----------------------------------------------------------------------------------
+
+
+def test_footnote_names_the_verifier_and_flags_interactive_transcripts(store: LocalStore) -> None:
+    """An interactive transcript can only be replayed against the runner's step-0 coins (D7: live-verifier-only evidence); the
+    footnote says so, names the asserter, and a Fiat-Shamir transcript is called transferable.  The mode comes from
+    ``security.bound_model`` when the emitter writes no ``mode``."""
+    inter = put(store, result(t_total=4.0, security={"target": -128, "achieved_log2": -128.3, "field": "BabyBear",
+                                                     "bound_model": "interactive: statistical, live verifier coins committed at step 0 (HM96)"}))
+    tab = T.build(store)
+    c = cell(tab)
+    assert c is not None and c.artifact == inter and c.mode == "interactive" and c.verified_by == VERIFIER
+    md = T.render_markdown(tab)
+    assert f"verified by {VERIFIER} against the runner's step-0 coins (interactive transcript: not transferable evidence per D7" in md
+    fs = put(store, result(t_total=3.0, security={"target": -128, "achieved_log2": -128.3, "field": "BabyBear",
+                                                  "bound_model": "non-interactive: eps_FS <= 2^60 x eps_round (BCS16)"}))
+    tab = T.build(store)
+    c = cell(tab)
+    assert c is not None and c.artifact == fs and c.mode == "fiat-shamir"
+    assert f"verified by {VERIFIER} (Fiat–Shamir transcript: transferable)" in T.render_markdown(tab)
+    assert T._mode_of({"mode": "interactive"}) == "interactive" and T._mode_of({"mode": "fiat-shamir"}) == "fiat-shamir"
+    assert T._mode_of({"security": {"bound_model": 3}}) is None and T._mode_of({}) is None
