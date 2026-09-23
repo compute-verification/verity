@@ -58,12 +58,14 @@ __device__ __forceinline__ unsigned mont_mul(unsigned a, unsigned w) {
 /* in: (B, n_in, inner); out: (B, N, inner); transform along the middle axis; post_tw (inner, N) Montgomery or null */
 extern "C" __global__ void __launch_bounds__(T)
 ntt_axis(const unsigned* __restrict__ in, unsigned* __restrict__ out, const unsigned* __restrict__ tw,
-         const unsigned* __restrict__ post_tw, int n_in, int inner)
+         const unsigned* __restrict__ post_tw, int n_in, int inner, int swap)
 {
     extern __shared__ unsigned sh[];
     const int t = threadIdx.x;
-    const int cg = blockIdx.y * G;          /* batch on grid.x (2^31 limit), column groups on grid.y */
-    const long long b = blockIdx.x;
+    /* consecutive CTAs should walk ADJACENT column groups of the same batch (TLB locality: a batch spans n_in * inner
+       words); grid.y is limited to 65535, so when the batch count exceeds it the roles are swapped */
+    const int cg = (swap ? blockIdx.y : blockIdx.x) * G;
+    const long long b = swap ? blockIdx.x : blockIdx.y;
     const unsigned* src = in + b * (long long)n_in * inner;
     unsigned* dst = out + b * (long long)N * inner;
     for (int e = t; e < N * G; e += T) {
@@ -165,10 +167,12 @@ def ntt_axis(x: torch.Tensor, n: int, out: torch.Tensor | None = None, post_tw: 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         cs = cp.cuda.ExternalStream(ts.cuda_stream)
+    swap = B > 65535
+    grid = (B, inner // g) if swap else (inner // g, B)
     with cs:
-        k((B, inner // g), (256,),
+        k(grid, (256,),
           (np.uint64(x.data_ptr()), np.uint64(out.data_ptr()), np.uint64(tw.data_ptr()),
-           np.uint64(post_tw.data_ptr() if post_tw is not None else 0), np.int32(n_in), np.int32(inner)),
+           np.uint64(post_tw.data_ptr() if post_tw is not None else 0), np.int32(n_in), np.int32(inner), np.int32(int(swap))),
           shared_mem=4 * n * g)
     return out
 
