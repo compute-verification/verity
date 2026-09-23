@@ -513,8 +513,15 @@ pub static FP4_NVF4: Relation = Relation {
     end_components: Some(&[(31, 1), (23, 8), (0, 23)]),
     sys_id: "a825ba0b826a15366bfb8cdd720a5e9978603cbe589491abcbba7346ad35bf3c",
     table_digest: "b597b003e55b8cf1025b517a04d442d9c6d8704f38fd06df13a21b3273b2d2f6",
-    hashed_sys_id: "",
-    hashed_table_digest: "",
+    // lane fp4-decode (2026-09-23): `hashchain.compose(fp4.hashed.fp4_hashed_relation())` -- the same `compile_fp4_unit(chain=True)`
+    // unit (1583 rows) + 1122 private-operand decode rows (68 words x 4 / 8 bit rows, the 141 former pins as hint rows, the
+    // E2M1 / UE4M3 decode + group / anchor gadgets of fp4/hashed.py) + 1720 sponge rows (24-bit lanes: 72 nibbles -> 12 of the
+    // 16 rate lanes, 2 permutations per unit) + 17 digest pins = 4442 rows, 19 linked rows, `ligero-system/v3`, the chain end
+    // the bare relation's three components.  `sys_id` = the laptop's torch-free `fp4.hashed.system_id_np` of the composed
+    // system, byte-identical to the pod's `system.bin` (vy-fp4-decode-3, RTX 4090; sha256 80ac30a9...) behind
+    // `fixtures/fp4-nvf4-hash/`; the 2048-VU hashed gate passed with 92 negatives, 0 failures (run r20260923-182818-c9bc).
+    hashed_sys_id: "8c6d260c675cad40ae7263db08974f1842d04997f344cb4f9e52821e70bb25f5",
+    hashed_table_digest: "8dad2d286e92d9927464afb81846fcbdb16f09b2c01910e36fcf8aaac432fc3a",
 };
 
 /// The v2 public-selection relations (lane relmin-lookup, 2026-09-23): the same claims as their v1 counterparts (pinned

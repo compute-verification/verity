@@ -260,27 +260,41 @@ class FP4HashedRelation:
         finally:
             w._check_domain = chk
 
+    def _device_gen(self, p, l: int, device):
+        """The bare unit's device hint generator (``fp4/hints_device.py``, the bare cell's: one graph replay per sub-batch
+        yields the 141 decode pins AND the 86 hint rows).  Built on the BARE unit (its pins in compile order); the composed
+        system's base hints are that unit's hint rows in the same order (``hashchain.compose`` keeps them as the prefix)."""
+        from .hints_device import hints_device_for
+        if self._bare_sys is None:
+            self._bare_sys = compile_fp4_unit(p, chain=True)
+        return hints_device_for(self._bare_sys, l, device)
+
     def hints(self, p, sys: System, c_in, a, b, y_out, device):
-        """The base unit's 86 hint rows: the device generator of ``fp4/hints_device.py`` (the bare cell's; one graph replay
-        per sub-batch) on CUDA, ``witness.hints_fp4`` (numpy) elsewhere and for the forced negatives (``unchecked``: the
-        device path has no domain check to switch off, the numpy path is the one the negatives reason about)."""
+        """The base unit's 86 hint rows: the device generator on CUDA, ``witness.hints_fp4`` (numpy) elsewhere and for the
+        forced negatives (``unchecked``: the device path has no domain check to switch off, the numpy path is the one the
+        negatives reason about)."""
         import torch
         if str(device).startswith("cuda") and not self.unchecked:
-            from .hints_device import hints_device_for
-            # the generator is built on the BARE unit (its 141 pins in compile order); the composed system's base hints are
-            # the bare unit's 86 hint rows in the same order (hashchain.compose keeps them as the prefix) -- checked here
-            if self._bare_sys is None:
-                self._bare_sys = compile_fp4_unit(p, chain=True)
+            gen = self._device_gen(p, a.shape[0], device)
             if [n for _, n in sys.hints] != [n for _, n in self._bare_sys.hints]:
                 raise ValueError("fp4-nvf4+poseidon2: the composed system's base hints are not the bare unit's hint rows")
-            l = np.asarray(a).shape[0] if not isinstance(a, torch.Tensor) else a.shape[0]
-            _pub, H, _y = hints_device_for(self._bare_sys, l, device)(c_in, a, b, check=True)
+            _pub, H, _y = gen(c_in, a, b, check=True)
             return H
         H = self._domain_checked(hints_fp4, sys, self._np(c_in), self._np(a), self._np(b))
         return torch.as_tensor(H, dtype=torch.int64, device=device)
 
     def public_vectors(self, p, c, a, b, y, device="cpu"):
+        """The 141 decode pins of the bare unit -- hint rows of the composed system (``hashchain.hash_hints`` asks for them
+        per sub-batch): the device generator's ``pub_rows`` on CUDA (they do not depend on the accumulator: c = 0), the
+        numpy ``public_vectors_fp4`` elsewhere and for the forced negatives."""
         import torch
+        if str(device).startswith("cuda") and not self.unchecked:
+            from .hints_device import PIN_NAMES
+            a = torch.as_tensor(a, dtype=torch.int64, device=device)
+            b = torch.as_tensor(b, dtype=torch.int64, device=device)
+            gen = self._device_gen(p, a.shape[0], device)
+            pub, _H, _y = gen(torch.zeros(a.shape[0], dtype=torch.int64, device=device), a, b, check=True)
+            return {name: pub[i] for i, name in enumerate(PIN_NAMES)}
         vals = self._domain_checked(public_vectors_fp4, self._np(a), self._np(b))
         return {k: torch.as_tensor(v, dtype=torch.int64, device=device) for k, v in vals.items()}
 
