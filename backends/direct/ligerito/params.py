@@ -391,14 +391,22 @@ class LigeritoParams:
         # points per pair for the degree-2 round polynomial; later levels are ext x ext on N / wide_1 cells.
         pcs_sc = 3 * N * f.ext_base_mul_base + sum(3 * self.tall(i - 1) * f.ext_mul_base for i in range(1, self.L))
         open1 = 0 if keep_codeword else self.queries[0] * N
+        # The opened-row claims of level i-1 are tensor claims with BASE-field row parts (powers of omega_s), so at level
+        # i every one of the sum_{j<i} |S_j| carried terms costs u_t = M_i^T a_t = tall_i wide_i (ext x base) MACs: a
+        # (T x tall_i) . (tall_i x wide_i) contraction per level (proto's "recursion_contract" bucket).
+        claims = sum(sum(self.queries[:i]) * self.tall(i) * self.wide(i) * f.ext_base_mul_base for i in range(1, self.L))
         out = {"cells": N, "encode_butterflies_by_level": enc, "encode_base_ops": sum(enc.values()),
-               "merkle_hash_bytes": hash_bytes, "pcs_sumcheck_base_ops": pcs_sc, "openings_recompute_base_ops": open1,
+               "merkle_hash_bytes": hash_bytes, "pcs_sumcheck_base_ops": pcs_sc, "pcs_claims_contraction_base_ops": claims,
+               "openings_recompute_base_ops": open1,
                "codeword_bytes_L1": self.n(0) * self.wide(0) * f.base_bytes,
                "message_bytes_L1": N * f.base_bytes,
                "leaf_hash_bytes_L1": self.n(0) * f.hash_bytes,
                "formulas": {"encode": "wide_i (n_i/2) log2 n_i butterflies (x6 for extension levels); coefficient-basis RS: no INTT",
                             "merkle": "sum_i n_i wide_i elem_i bytes hashed (BLAKE3)",
                             "pcs_sumcheck": "3 N (ext x base) + sum_{i>=2} 3 tall_{i-1} (ext x ext)",
+                            "pcs_claims_contraction": "sum_{i>=2} (sum_{j<i} |S_j|) tall_i wide_i (ext x base): the carried RS-row"
+                                                      " tensor claims contracted against M_i (a GEMM; fp64-limb GEMMs are 10x"
+                                                      " slower than int32 Montgomery on a 4090)",
                             "openings": "|S_1| N multiply-adds (Horner at |S_1| points per column) unless the codeword is kept"}}
         r = self.relation
         if r is not None:
@@ -418,7 +426,8 @@ class LigeritoParams:
                 "zero_check_fold1": "cols/2 x m x (ext x base)",
                 "zero_check_later": "sum_{r>=2} cols/2^r x (3 F-evals in the extension + m ext folds) ~ cols/2 x (3 F_ext + m ext_mul)",
                 "ii_sumcheck": "nnz sparse terms x 2 row_vars rounds x ~8 evaluation points (ext)"})
-        buckets = ["encode_base_ops", "pcs_sumcheck_base_ops", "openings_recompute_base_ops", "zero_check_round1_base_ops",
+        buckets = ["encode_base_ops", "pcs_sumcheck_base_ops", "pcs_claims_contraction_base_ops", "openings_recompute_base_ops",
+                   "zero_check_round1_base_ops",
                    "zero_check_fold1_base_ops", "zero_check_later_rounds_base_ops", "ii_sumcheck_base_ops"]
         out["total_base_ops"] = sum(out.get(b, 0) for b in buckets)
         return out
