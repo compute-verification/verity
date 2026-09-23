@@ -719,6 +719,26 @@ fn main() {
             let zero = fx.claims.first().map(|c| relation::virtual_zero_claims(&fx.layout, c)).unwrap_or_default();
             let names: Vec<String> = zero.iter().map(|z| json_str(&z.name)).collect();
             out.push(format!("\"virtual_zero_claims\":[{}]", names.join(",")));
+            // a red-team V1 forgery records its change of the committed w: -delta at (row_index, col) of a virtual row, on
+            // an honest w that is zero there.  Each zero claim's true value on the forged w is then -delta eq(point, (row,
+            // col)); a non-zero one is a claim the PCS opening cannot meet, i.e. the full verifier rejects.
+            if let Some(rt) = ligerito_verify::json::parse(&text).ok().and_then(|d| d.get("redteam").cloned()) {
+                let get = |k: &str| rt.get(k).and_then(|v| v.as_usize());
+                if let (Some(row), Some(col), Some(delta)) = (get("row_index"), get("col"), get("delta")) {
+                    use ligerito_verify::field::{Ext, P};
+                    let n_i = fx.layout.n_i;
+                    let bit = |t: usize| if t < n_i { (row >> t) & 1 } else { (col >> (t - n_i)) & 1 };
+                    let caught: Vec<String> = zero
+                        .iter()
+                        .filter(|z| {
+                            let eq = z.point.iter().enumerate().fold(Ext::from_base(1), |acc, (t, x)| acc.mul(&if bit(t) == 1 { *x } else { Ext::from_base(1).sub(x) }));
+                            !eq.mul_base((P as u64 - delta as u64 % P as u64) as u32 % P).is_zero()
+                        })
+                        .map(|z| json_str(&z.name))
+                        .collect();
+                    out.push(format!("\"redteam_delta\":{{\"row\":{row},\"col\":{col},\"v1_caught\":{},\"nonzero_zero_claims\":[{}]}}", !caught.is_empty(), caught.join(",")));
+                }
+            }
             let ok = scripted.starts_with("accept, claims match") || (scripted == "absent" && local.starts_with("accept, claims match"));
             let ok = ok && local.starts_with("accept, claims match") && neg_ok == negs.len();
             println!(

@@ -127,3 +127,16 @@ fn batch_over_an_lgto_dump() {
     assert!(!run(&["batch", "--dir", ds, "--allow-legacy"]).status.success());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// red-team-ligerito-2's V1 forgery (y16[47] += 1 with w' = w - e_(3581, 47)): the sumcheck layer accepts it by
+/// construction; the zero claim on the virtual block holding row 3581 is non-zero on the forged w, so the PCS opening the
+/// full verifier demands (value 0) cannot be met.
+#[test]
+fn redteam_v1_forgery_is_caught_by_the_zero_claims() {
+    let f = fixtures().join("forged").join("virtrow_y16_lgsc0003.json");
+    let o = run(&["sumcheck-fixture", "--fixture", f.to_str().unwrap()]);
+    let s = stdout(&o);
+    for want in ["\"scripted\":\"accept, claims match\"", "\"v1_caught\":true", "\"nonzero_zero_claims\":[\"w = 0 on rows [3580, 3584)\"]"] {
+        assert!(s.contains(want), "{want} not in {s}");
+    }
+}
