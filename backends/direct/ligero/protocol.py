@@ -1252,10 +1252,17 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
                 with _cupy_ctx(device):
                     Sg = _sample_masks(cfg, m, chain is not None, device, key_dev=st.mkey)
                 cg = st.coefs
-                cg.zero_()
+                # the witness rows are written in full below (k = l + t_pad: interp_H(W) on [0, l), then Z_H s = x^l s - s
+                # with s on [l, k) and -s folded into [0, t_pad)); only the mask rows' tails need zeros
+                cg[m:].zero_()
                 _, Cg = enc.encode(Wg, Sg["W"], want_coefs=True, out=st.U[:m])
                 cg[:m, :l] = Cg
-                _add_zh_times(cg[:m], Sg["W"], l)
+                sW = Sg["W"]
+                tp_ = sW.shape[1]
+                cg[:m, :tp_] = (cg[:m, :tp_] - sW) % P                # _add_zh_times, first half
+                cg[:m, l:l + tp_] = sW                                # second half: (0 + s) % p == s (s canonical)
+                if l + tp_ < cg.shape[1]:
+                    cg[:m, l + tp_:].zero_()
                 for kind_, sl_ in mr.items():
                     blk_ = Sg[kind_]
                     cg[sl_, :blk_.shape[1]] = blk_

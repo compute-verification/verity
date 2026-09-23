@@ -44,6 +44,24 @@ def main():
         gotb = f.lincomb(C, X, square_minus=True)
         rep["exact"][f"lincomb_{R}x{cols}_{str(dt)[6:]}"] = torch.equal(ref, got)
         rep["exact"][f"boolcomb_{R}x{cols}_{str(dt)[6:]}"] = torch.equal(refb, gotb)
+        # the booleanity rows read in place through a row table (a random subset), v4 and scalar kernels vs torch
+        Rb = max(1, R // 3)
+        rows = torch.randperm(R, generator=g)[:Rb].sort().values.to(dev)
+        Cb = torch.randint(0, P, (D, Rb), generator=g).to(dev)
+        refr = torch.stack([witness._bool_row(Cb[d], X.index_select(0, rows).to(torch.int64)) for d in range(D)])
+        gotr = f.lincomb(Cb, X, square_minus=True, rows=rows)
+        vec = tests_fused.VEC_COLS
+        tests_fused.VEC_COLS = 1
+        gots = f.lincomb(Cb, X, square_minus=True, rows=rows)
+        tests_fused.VEC_COLS = vec
+        rep["exact"][f"boolcomb_rows_{Rb}x{cols}_{str(dt)[6:]}"] = torch.equal(refr, gotr) and torch.equal(refr, gots)
+        if R > 100:
+            tests_fused.VEC_COLS = 1
+            t_s = _bench(lambda C=C, X=X: f.lincomb(C, X, square_minus=True), a.reps)
+            tests_fused.VEC_COLS = vec
+            t_v = _bench(lambda C=C, X=X: f.lincomb(C, X, square_minus=True), a.reps)
+            rep["timing"][f"boolcomb_{R}x{cols}"] = {"scalar_ms": t_s, "v4_ms": t_v}
+            print(f"boolcomb {R}x{cols}: scalar {t_s:.3f} ms | v4 {t_v:.3f} ms")
         if R > 100:
             witness.USE_FUSED = False
             t_ref = _bench(lambda C=C, X=X: protocol._combine(C, X.to(torch.int64)), a.reps)

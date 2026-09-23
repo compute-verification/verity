@@ -67,6 +67,110 @@ extern "C" __global__ void boolcomb_rows_u32_D@D@(const unsigned* C, const unsig
 extern "C" __global__ void boolcomb_rows_u64_D@D@(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk, const int* rows)
 { lincomb_body<u64, @D@, 1>(C, X, out, R, cols, chunk, rows); }
 
+/* VEC = 4 adjacent columns per thread through 16-byte loads, the block's slice of C staged in shared memory (lane
+   hp2-host): the same sums as lincomb_body -- one C read per 4 products instead of per product, 4 D independent
+   accumulator chains per thread, and a reduction every 4 rows (c, x < p: 4 (p-1)^2 < 2^64).  Requires cols % 4 == 0 and
+   16-byte aligned rows (the Python side checks and falls back to the scalar kernels). */
+template <typename T> __device__ __forceinline__ void load4(const T* __restrict__ p, u64* x);
+template <> __device__ __forceinline__ void load4<unsigned>(const unsigned* __restrict__ p, u64* x)
+{
+    const uint4 q = *reinterpret_cast<const uint4*>(p);
+    x[0] = q.x; x[1] = q.y; x[2] = q.z; x[3] = q.w;
+}
+template <> __device__ __forceinline__ void load4<u64>(const u64* __restrict__ p, u64* x)
+{
+    const ulonglong2 a = *reinterpret_cast<const ulonglong2*>(p), b = *reinterpret_cast<const ulonglong2*>(p + 2);
+    x[0] = (u64)(unsigned)a.x; x[1] = (u64)(unsigned)a.y; x[2] = (u64)(unsigned)b.x; x[3] = (u64)(unsigned)b.y;
+}
+
+/* Montgomery reduction t -> t 2^-32 mod p as a value < 2^32 + p (exact: t + m p is a multiple of 2^32; the low words
+   sum to 0 or 2^32 -- the carry is (t_lo != 0)).  PPRIME = -p^-1 mod 2^32.  ~5 instructions against ~25 for a 64-bit
+   modulo by p.  The v4 kernels take C pre-scaled by 2^32 (lincomb) or 2^64 (booleanity: the row value is itself
+   reduced once) so that one reduction per lazily accumulated product sum yields the plain sum mod p. */
+#define PPRIME 0x77ffffffu
+__device__ __forceinline__ u64 mont_reduce(u64 t)
+{
+    const unsigned t_lo = (unsigned)t;
+    const unsigned m = t_lo * PPRIME;
+    const u64 mp = (u64)m * (u64)P;
+    return (t >> 32) + (mp >> 32) + (u64)(t_lo != 0u);
+}
+
+template <typename T, int D, int SQ>
+__device__ __forceinline__ void lincomb_v4_body(const unsigned* __restrict__ C, const T* __restrict__ X,
+                                                unsigned* __restrict__ partial, int R, int cols, int chunk,
+                                                const int* __restrict__ rows = nullptr)
+{
+    extern __shared__ unsigned Cs[];                                   /* [D][chunk], C pre-scaled (see mont_reduce) */
+    const int s = blockIdx.y;
+    const int j0 = s * chunk, j1 = min(R, j0 + chunk), nj = j1 - j0;
+    for (int i = threadIdx.x; i < D * nj; i += blockDim.x) {
+        const int d = i / nj, jj = i - d * nj;
+        Cs[d * chunk + jj] = C[(size_t)d * R + j0 + jj];
+    }
+    __syncthreads();
+    const int col0 = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (col0 >= cols) return;
+    u64 lazy[D][4];     /* sums of up to 4 products c w < (p-1)^2 each: < 2^64 */
+    u64 red[D][4];      /* sums of the reductions of the lazy sums: each < 2^32 + p, at most chunk / 4 <= 256 of them */
+    #pragma unroll
+    for (int d = 0; d < D; ++d) {
+        #pragma unroll
+        for (int v = 0; v < 4; ++v) { lazy[d][v] = 0; red[d][v] = 0; }
+    }
+    int cnt = 0;
+    #pragma unroll 2
+    for (int jj = 0; jj < nj; ++jj) {
+        const int j = j0 + jj;
+        u64 x[4];
+        load4<T>(X + (size_t)(rows ? rows[j] : j) * cols + col0, x);
+        if (SQ) {
+            /* w = (x^2 - x) 2^-32 mod p, canonical: t = x^2 + p - x < p^2 + p, so the reduction is < 2^30 + p + 1 < 2p */
+            #pragma unroll
+            for (int v = 0; v < 4; ++v) {
+                u64 w = mont_reduce(x[v] * x[v] + (u64)P - x[v]);
+                x[v] = (w >= (u64)P) ? w - (u64)P : w;
+            }
+        }
+        #pragma unroll
+        for (int d = 0; d < D; ++d) {
+            const u64 c = Cs[d * chunk + jj];
+            #pragma unroll
+            for (int v = 0; v < 4; ++v) lazy[d][v] += c * x[v];
+        }
+        if (++cnt == 4) {
+            cnt = 0;
+            #pragma unroll
+            for (int d = 0; d < D; ++d) {
+                #pragma unroll
+                for (int v = 0; v < 4; ++v) { red[d][v] += mont_reduce(lazy[d][v]); lazy[d][v] = 0; }
+            }
+        }
+    }
+    #pragma unroll
+    for (int d = 0; d < D; ++d) {
+        uint4 o;
+        o.x = (unsigned)((red[d][0] + mont_reduce(lazy[d][0])) % P);
+        o.y = (unsigned)((red[d][1] + mont_reduce(lazy[d][1])) % P);
+        o.z = (unsigned)((red[d][2] + mont_reduce(lazy[d][2])) % P);
+        o.w = (unsigned)((red[d][3] + mont_reduce(lazy[d][3])) % P);
+        *reinterpret_cast<uint4*>(partial + ((size_t)s * D + d) * cols + col0) = o;
+    }
+}
+
+extern "C" __global__ void lincomb_v4_u32_D@D@(const unsigned* C, const unsigned* X, unsigned* out, int R, int cols, int chunk)
+{ lincomb_v4_body<unsigned, @D@, 0>(C, X, out, R, cols, chunk); }
+extern "C" __global__ void lincomb_v4_u64_D@D@(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk)
+{ lincomb_v4_body<u64, @D@, 0>(C, X, out, R, cols, chunk); }
+extern "C" __global__ void boolcomb_v4_u32_D@D@(const unsigned* C, const unsigned* X, unsigned* out, int R, int cols, int chunk)
+{ lincomb_v4_body<unsigned, @D@, 1>(C, X, out, R, cols, chunk); }
+extern "C" __global__ void boolcomb_v4_u64_D@D@(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk)
+{ lincomb_v4_body<u64, @D@, 1>(C, X, out, R, cols, chunk); }
+extern "C" __global__ void boolcomb_rows_v4_u32_D@D@(const unsigned* C, const unsigned* X, unsigned* out, int R, int cols, int chunk, const int* rows)
+{ lincomb_v4_body<unsigned, @D@, 1>(C, X, out, R, cols, chunk, rows); }
+extern "C" __global__ void boolcomb_rows_v4_u64_D@D@(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk, const int* rows)
+{ lincomb_v4_body<u64, @D@, 1>(C, X, out, R, cols, chunk, rows); }
+
 /* general quadratic constraints from CSR tables: for side s in {a,b,c}: ptr_s[q]..ptr_s[q+1] -> (j, coef), const_s[q] */
 template <typename T>
 __device__ __forceinline__ unsigned sparse_eval(const T* __restrict__ X, int cols, int col,
@@ -128,6 +232,12 @@ extern "C" __global__ void quad_u64_D@D@(const unsigned* rho, const u64* X,
 
 THREADS = 256
 MIN_THREADS_IN_FLIGHT = 1 << 19     # split the rows until this many threads are resident (L40S: 142 SMs x 2048)
+VEC_COLS = 4                        # columns per thread in the linear combinations (4: the v4 kernels; 1: the scalar kernels, A/B)
+_R32 = (1 << 32) % P                # 2^32 mod p (Montgomery scale of C for the v4 kernels)
+_R64 = _R32 * _R32 % P              # 2^64 mod p
+assert (P * 0x77FFFFFF) % (1 << 32) == (1 << 32) - 1, "PPRIME = -p^-1 mod 2^32"
+MIN_THREADS_V4 = 1 << 17            # the v4 kernels: 4x the work per thread, so a quarter of the threads in flight
+MAX_CHUNK_V4 = 1024                 # rows per block slice (shared C: D x chunk x 4 bytes <= 24 KB)
 
 
 def available() -> bool:
@@ -147,7 +257,9 @@ class FusedTests:
         self.mod = cp.RawModule(code=_SRC.replace("@D@", str(D)), options=("-std=c++17",))
         self.k = {name: self.mod.get_function(f"{name}_D{D}")
                   for name in ("lincomb_u32", "lincomb_u64", "boolcomb_u32", "boolcomb_u64", "quad_u32", "quad_u64",
-                               "boolcomb_rows_u32", "boolcomb_rows_u64")}
+                               "boolcomb_rows_u32", "boolcomb_rows_u64",
+                               "lincomb_v4_u32", "lincomb_v4_u64", "boolcomb_v4_u32", "boolcomb_v4_u64",
+                               "boolcomb_rows_v4_u32", "boolcomb_rows_v4_u64")}
 
     def _cp(self, t: torch.Tensor):
         return self.cp.asarray(t)
@@ -166,6 +278,19 @@ class FusedTests:
         splits = -(-R // chunk)
         return (-(-cols // THREADS), splits), chunk
 
+    @staticmethod
+    def _grid_v4(cols: int, R: int):
+        threads = cols // 4
+        splits = max(1, min(R, -(-MIN_THREADS_V4 // max(threads, 1))))
+        splits = max(splits, -(-R // MAX_CHUNK_V4))
+        chunk = -(-R // splits)
+        splits = -(-R // chunk)
+        return (-(-threads // THREADS), splits), chunk
+
+    @staticmethod
+    def _v4_ok(X: torch.Tensor) -> bool:
+        return VEC_COLS == 4 and X.shape[1] % 4 == 0 and X.data_ptr() % 16 == 0
+
     def _reduce(self, partial: torch.Tensor) -> torch.Tensor:
         # (S, D, cols) uint32 partial sums -> (D, cols) int64 mod p; S <= 512 terms < 2^31 fit in int64
         return partial.to(torch.int64).sum(0) % P
@@ -179,12 +304,16 @@ class FusedTests:
         assert D == self.D and (X.shape[0] == R if rows is None else rows.shape[0] == R)
         cols = X.shape[1]
         X = X.contiguous()
-        C32 = (C % P).to(torch.int32).contiguous()
-        (gx, S), chunk = self._grid(cols, R)
-        partial = torch.empty((S, D, cols), dtype=torch.int32, device=self.device)
         if X.dtype not in (torch.int32, torch.int64):
             raise TypeError(X.dtype)
-        suffix = "_u32" if X.dtype == torch.int32 else "_u64"
+        v4 = self._v4_ok(X)
+        if v4:   # Montgomery arithmetic in the kernel: C scaled by 2^64 (the row value is reduced once too) or 2^32
+            C32 = ((C % P) * (_R64 if square_minus else _R32) % P).to(torch.int32).contiguous()
+        else:
+            C32 = (C % P).to(torch.int32).contiguous()
+        (gx, S), chunk = self._grid_v4(cols, R) if v4 else self._grid(cols, R)
+        partial = torch.empty((S, D, cols), dtype=torch.int32, device=self.device)
+        suffix = ("_v4" if v4 else "") + ("_u32" if X.dtype == torch.int32 else "_u64")
         args = [self._cp(C32), self._cp(X), self._cp(partial), np.int32(R), np.int32(cols), np.int32(chunk)]
         if rows is not None:
             if not square_minus:
@@ -194,7 +323,7 @@ class FusedTests:
         else:
             name = ("boolcomb" if square_minus else "lincomb") + suffix
         with self._stream():
-            self.k[name]((gx, S), (THREADS,), tuple(args))
+            self.k[name]((gx, S), (THREADS,), tuple(args), shared_mem=(D * chunk * 4 if v4 else 0))
         return self._reduce(partial)
 
     def quad_general(self, rho: torch.Tensor, X: torch.Tensor, csr: dict) -> torch.Tensor:

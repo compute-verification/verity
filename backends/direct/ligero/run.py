@@ -398,9 +398,10 @@ def main(argv=None) -> int:
                                          help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
     sub.choices["bench-vu"].add_argument("--dump-dir", default=None, metavar="DIR",
                                          help="write every recorded rep's sub-batch proofs (.stmt/.proof[/.coins]) + system.bin for backends/ligero-verify")
-    sub.choices["bench-vu"].add_argument("--pipeline", type=int, default=0, metavar="N",
-                                         help="registered relations: prove the sub-batches N-deep on their own CUDA streams (lane hp2-host; "
-                                              "bit-identical transcripts; 0/1 = sequential). Recorded in the result's backend block")
+    sub.choices["bench-vu"].add_argument("--pipeline", type=int, default=3, metavar="N",
+                                         help="registered relations on CUDA: prove the sub-batches N-deep on their own CUDA streams (lane hp2-host; "
+                                              "bit-identical transcripts; default 3; 0/1 = the sequential schedule, for A/B). Recorded in the "
+                                              "result's backend block")
     sub.choices["bench-vu"].add_argument("--dump-reps", type=int, default=None, metavar="N",
                                          help="with --dump-dir: dump only the first N recorded reps (default all; a 2^20-VU rep is ~14 GB of proofs)")
     sub.choices["bench-vu"].add_argument("--auth", action="store_true",
