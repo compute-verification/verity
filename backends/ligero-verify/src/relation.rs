@@ -474,8 +474,8 @@ pub static FP8_ADA: Relation = Relation {
     hashed_sys_id: "c4c4b403e07da47f7747b947ad76899ef231112bcc6d62dc0448a83ef8696618",
     hashed_table_digest: "c0e2f48119e2c83ca81cbc8eb1cbba51a676b67a600b8125d75bf438b770e05d",
     // lane ajtai-leaf: `fp8-ada+ajtai-n64` (the linear Ring-SIS leaf, 64 digest elements per row; fixtures/fp8-ada-ajtai-n64)
-    leaf_systems: &[("ajtai-n64", "9939940eba63ca738ef6ee02c89c220b84e9bfbcdc001b60aeb760349b946a41",
-                     "f7228c0c2ecb1c52ba3c7d0d2ba3bb30bb29efc0f7bf7619d6a7ba34fe70c97d")],
+    leaf_systems: &[("ajtai-n64", "8330e2d1f3018f452aca6adc9ce85977f7eebc108c6b2a956e8fd0990d1260a5",
+                     "182c90413bcb43448b724d0e578bcf046c2214946a90efd042c6f4322f25fe4b")],
 };
 
 pub static BF16_HOPPER: Relation = Relation {

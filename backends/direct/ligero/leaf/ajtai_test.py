@@ -17,13 +17,13 @@ from ..compile import P  # noqa: E402
 from ..relations import relation  # noqa: E402
 from ..relchain import HashedRelationRunner, hashed_negatives, instances, leaf_negatives  # noqa: E402
 from ..serialize import STMT_MAGIC_V5, _statement_of, read_statement, statement_bytes, verify_files  # noqa: E402
-from .ajtai import A_TAG, AjtaiLeaf, derive_matrix, derive_row, digest_rows, shift_x  # noqa: E402
+from .ajtai import B_TAG, AjtaiLeaf, derive_matrix, derive_ring_element, digest_rows, shift_x  # noqa: E402
 from .registry import join_relation, leaf_for, split_relation  # noqa: E402
 
 
 def _ref_row(i: int, m: int) -> list[int]:
-    """The design note's derivation, scalar: SHAKE-256(tag || LE32(i)), LE u32 words, & 0x7fffffff, reject >= p."""
-    out, off, buf = [], 0, hashlib.shake_256(A_TAG + i.to_bytes(4, "little")).digest(8 * m)
+    """ajtai-design's `derive_ring_element`, scalar: SHAKE-256(B_TAG || LE32(i)), LE u32 words, & 0x7fffffff, reject >= p."""
+    out, off, buf = [], 0, hashlib.shake_256(B_TAG + i.to_bytes(4, "little")).digest(8 * m)
     while len(out) < m:
         v = int.from_bytes(buf[off:off + 4], "little") & 0x7FFFFFFF
         off += 4
@@ -33,13 +33,17 @@ def _ref_row(i: int, m: int) -> list[int]:
 
 
 def test_matrix_derivation_matches_the_scalar_reference_and_is_prefix_consistent() -> None:
-    B = derive_matrix(8, 300)
-    assert B.shape == (8, 300) and B.dtype == np.int64 and (B >= 0).all() and (B < P).all()
-    for i in (0, 3, 7):
-        assert B[i].tolist() == _ref_row(i, 300)
-    assert np.array_equal(derive_matrix(4, 100), B[:4, :100])           # top-left block of the same infinite matrix
-    assert np.array_equal(derive_row(5, 20), derive_row(5, 3000)[:20])
-    assert len(set(map(tuple, B))) == 8                                # distinct rows
+    B = derive_matrix(64, 40)
+    assert B.shape == (64, 40) and B.dtype == np.int64 and (B >= 0).all() and (B < P).all()
+    for i in (0, 3, 39):
+        assert B[:, i].tolist() == _ref_row(i, 64)                      # column i = the coefficients of b_i
+    assert np.array_equal(derive_matrix(16, 8), B[:16, :8])            # prefix-consistent in n and in m
+    assert np.array_equal(derive_ring_element(5, 20), derive_ring_element(5, 3000)[:20])
+    assert len(set(map(tuple, B.T))) == 40                             # distinct ring elements
+    # the design lane's regression vector (ajtai_params_test): b_0 for n = 64 straight from the XOF, no rejection missed
+    xof = hashlib.shake_256(B_TAG + (0).to_bytes(4, "little")).digest(4096)
+    ref = [v for v in (int.from_bytes(xof[k:k + 4], "little") & 0x7FFFFFFF for k in range(0, 4096, 4)) if v < P][:64]
+    assert derive_ring_element(0, 64).tolist() == ref
 
 
 def _ref_digest(leaf: AjtaiLeaf, row: list[int], word_bits: int) -> list[int]:
@@ -90,13 +94,15 @@ def test_registry_and_relation_strings() -> None:
     assert leaf_for(None) is None and leaf_for("hash") is None and leaf_for("poseidon2") is None
     a = leaf_for("ajtai")
     assert isinstance(a, AjtaiLeaf) and a.n == 64 and a.tag == "ajtai-n64"
-    assert leaf_for("ajtai-n96").n == 96
+    assert leaf_for("ajtai-n128").n == 128
+    with pytest.raises(ValueError):
+        leaf_for("ajtai-n96")                                          # reducible ring degree (design §8)
     with pytest.raises(ValueError):
         leaf_for("sha3")
     assert split_relation("fp8-ada+ajtai-n64") == ("fp8-ada", "ajtai-n64") and split_relation("fp8-ada") == ("fp8-ada", None)
     assert join_relation("fp8-ada", a) == "fp8-ada+ajtai-n64" and join_relation("fp8-ada", None) == "fp8-ada"
-    assert a.schema == "ajtai-babybear-n64-b1/row/v1" and len(a.params_sha256) == 64
-    assert a.params_sha256 != AjtaiLeaf(96).params_sha256
+    assert a.schema == "ajtai-babybear-n64-b1-r0/row/v1" and a.salt_bits == 0 and len(a.params_sha256) == 64
+    assert a.params_sha256 != AjtaiLeaf(128).params_sha256
 
 
 def test_compose_census_and_pins() -> None:
@@ -154,7 +160,7 @@ def test_statement_v5_round_trip_and_file_verifier(runner, tmp_path) -> None:
     st2 = read_statement(raw)
     assert st2.v5 and st2.relation == "fp8-ada+ajtai-n64" and st2.digests().shape == (2, 128)
     assert np.array_equal(st2.a, st.a) and st2.hash_auth == st.hash_auth and st2.hash_sibs == st.hash_sibs
-    assert b"ajtai-babybear-n64-b1/row/v1" in raw and bytes.fromhex(R.leaf.params_sha256) in raw
+    assert b"ajtai-babybear-n64-b1-r0/row/v1" in raw and bytes.fromhex(R.leaf.params_sha256) in raw
     from ..serialize import proof_bytes
     (tmp_path / "s.stmt").write_bytes(raw)
     (tmp_path / "s.proof").write_bytes(proof_bytes(proof))
@@ -168,7 +174,7 @@ def test_statement_v5_round_trip_and_file_verifier(runner, tmp_path) -> None:
     ok, why, _ = verify_files(tmp_path / "s.stmt", tmp_path / "s.proof", "cpu", runner=P2)
     assert not ok and "relation" in why
     # the statement's digest width follows the relation string: a different n is unreadable
-    bad = raw.replace(b"fp8-ada+ajtai-n64", b"fp8-ada+ajtai-n96")
+    bad = raw.replace(b"fp8-ada+ajtai-n64", b"fp8-ada+ajtai-n32")
     with pytest.raises(ValueError):
         read_statement(bad)
 

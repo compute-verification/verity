@@ -16,11 +16,11 @@ row (same caveat as Poseidon2 today).  ``role`` is not absorbed: the x and W tre
 Injectivity needs ``n >= steps`` (degree of g_i below the ring degree: with wrap-around, X^(n+k) = -X^k makes
 ``s_a - s_b`` a coefficient and (1, 1) collides with (0, 0)); :func:`compose` enforces it.
 
-Parameters (lane ajtai-design's provisional set, 16:50Z, ``ajtai-babybear-n<N>-b1/v1``): ``n`` = ring degree = digest
-elements (their SIS analysis: 64 = a >= 2x margin over the 128/128-bit minimum, 96 the conservative pick; the coordinator
-decides, n is a parameter), ``beta = 1`` (bits), ``B`` = the top-left (n, 256) block of the design's infinite matrix
-``A``: row i = SHAKE-256(b"verity/ajtai-babybear/A/v1" || LE32(i)) read as LE u32 words masked to 31 bits, values >= p
-rejected (acceptance 15/16), prefix-consistent in both n and m.  ``leaf_bytes`` = n x LE u32.  The design's SIS bound
+Parameters (lane ajtai-design FINAL 17:10Z, ``ajtai-babybear-n<N>-b1-r0/v1``): ``n`` = ring degree = digest elements,
+a power of two -- 64 for the 48-step relations (fp8-ada, fp4), 128 for the 96-step bf16-hopper (Core-SVP classical
+285 / 563 bits under their M1 estimator; n = 96 is reducible and excluded), ``beta = 1`` (bits), ``B = [b_0 .. b_{255}]``, ``b_i`` = the
+SHAKE-256(b"verity/ajtai-babybear/B/v1" || LE32(i)) stream read as LE u32 words masked to 31 bits, values >= p rejected
+(acceptance 15/16; their ``derive_ring_element``), prefix-consistent in n.  ``leaf_bytes`` = n x LE u32.  The design's SIS bound
 carries over to this ring instance under the standard heuristic (Ring-SIS ~ SIS of the same lattice dimension n x 256
 ring elements = 16384 >= 12288 columns); the ring structure is what makes identical per-column constraints position-aware.
 """
@@ -33,36 +33,44 @@ import numpy as np
 
 from ..compile import P, Expr, Linear
 
-__all__ = ["AjtaiLeaf", "A_TAG", "DEFAULT_N", "derive_matrix", "digest_rows", "shift_x"]
+__all__ = ["AjtaiLeaf", "B_TAG", "DEFAULT_N", "derive_B", "derive_matrix", "derive_ring_element", "digest_rows", "shift_x"]
 
 DEFAULT_N = 64
-A_TAG = b"verity/ajtai-babybear/A/v1"
+B_TAG = b"verity/ajtai-babybear/B/v1"
 VERSION = "v1"
 
 
-def derive_row(i: int, m: int) -> np.ndarray:
-    """Row ``i`` of the design's matrix ``A``, its first ``m`` entries: SHAKE-256(A_TAG || LE32(i)) as LE u32 words, top
-    bit cleared, values >= p rejected (acceptance p / 2^31 = 15/16).  A longer digest has the same prefix (an XOF), so
-    the row does not depend on ``m``."""
-    h = hashlib.shake_256(A_TAG + int(i).to_bytes(4, "little"))
-    stream_len = 4 * (int(m * 1.1) + 256)
+def derive_ring_element(i: int, n: int) -> np.ndarray:
+    """``b_i`` (n coefficients): the SHAKE-256 XOF of ``B_TAG || LE32(i)`` read as LE u32 words ``u``, ``v = u & 0x7fffffff``,
+    accepted iff ``v < p`` (acceptance 15/16, no modular bias); coefficient k = the k-th accepted value.  Byte-identical to
+    lane ajtai-design's ``ajtai_params.derive_ring_element`` (their regression vector is in the tests).  Prefix-consistent
+    in n (an XOF): ``ajtai-n64`` and ``ajtai-n128`` are one family."""
+    h = hashlib.shake_256(B_TAG + int(i).to_bytes(4, "little"))
+    stream_len = 4 * (int(n * 1.2) + 64)
     while True:
         words = np.frombuffer(h.digest(stream_len), dtype="<u4").astype(np.int64) & 0x7FFFFFFF
         words = words[words < P]
-        if len(words) >= m:
-            return np.ascontiguousarray(words[:m])
+        if len(words) >= n:
+            return np.ascontiguousarray(words[:n])
         stream_len *= 2
 
 
+def derive_B(m: int, n: int) -> list[np.ndarray]:
+    """The m ring elements of the leaf, ``[b_0 .. b_{m-1}]``, one per operand bit position of a column."""
+    return [derive_ring_element(i, n) for i in range(m)]
+
+
 def derive_matrix(n: int, m: int) -> np.ndarray:
-    """``B`` (n, m) int64 in [0, p): rows 0..n of the infinite ``A``, first ``m`` entries each (the top-left block)."""
-    return np.stack([derive_row(i, m) for i in range(n)])
+    """``B`` as the (n, m) int64 matrix the gadget and the native side apply: ``B[x, i]`` = coefficient x of ``b_i``
+    (``B @ s`` = ``sum_i s_i b_i`` in R_p); the one derivation for every call site."""
+    return np.stack(derive_B(m, n), axis=1)
 
 
-def params_descriptor(n: int, m_col: int) -> bytes:
-    """What ``params_sha256`` hashes: everything the verifier needs to rebuild the scheme."""
-    return (f"ajtai-babybear/{VERSION}|p={P}|n={n}|m_col={m_col}|beta=1|ring=F_p[X]/(X^n+1)|M=X|A={A_TAG.decode()}"
-            f"|A-row=SHAKE-256(tag||LE32(i)) LE u32 &0x7fffffff reject>=p|leaf=LE u32 x n").encode()
+def params_descriptor(n: int, m_col: int, salt_bits: int = 0) -> bytes:
+    """What ``params_sha256`` hashes: everything the verifier needs to rebuild the scheme (the verifier regenerates B
+    from the seed string; it never takes B from a statement)."""
+    return (f"ajtai-babybear/{VERSION}|p={P}|n={n}|m_col={m_col}|beta=1|salt_bits={salt_bits}|ring=F_p[X]/(X^n+1)|M=X"
+            f"|B={B_TAG.decode()}|b_i=SHAKE-256(tag||LE32(i)) LE u32 &0x7fffffff reject>=p|leaf=LE u32 x n").encode()
 
 
 def shift_x(v):
@@ -135,15 +143,20 @@ class AjtaiLeaf:
     name = "ajtai"
     assumption = "Ring-SIS over F_p[X]/(X^n+1), p = BabyBear (Ajtai / SWIFFT collision resistance; lattice)"
 
-    def __init__(self, n: int = DEFAULT_N, m_col: int = 256):
+    def __init__(self, n: int = DEFAULT_N, m_col: int = 256, salt_bits: int = 0):
         if n <= 0 or m_col <= 0:
             raise ValueError("n and m_col must be positive")
-        self.n, self.m_col = int(n), int(m_col)
+        if n & (n - 1):
+            raise ValueError(f"the ring degree n = {n} must be a power of two (X^n + 1 irreducible; ajtai-design §8)")
+        if salt_bits:
+            raise NotImplementedError("the salted (hiding) variant is not built: v1 is the unsalted binding-only leaf (r0)")
+        self.n, self.m_col, self.salt_bits = int(n), int(m_col), int(salt_bits)
         self.digest_elems = self.n
         self.tag = f"ajtai-n{self.n}"
-        self.hash_name = f"ajtai-babybear-n{self.n}-b1/{VERSION}"
-        self.schema = f"ajtai-babybear-n{self.n}-b1/row/{VERSION}"
-        self.params_sha256 = hashlib.sha256(params_descriptor(self.n, self.m_col)).hexdigest()
+        # `r0`: unsalted -- binding only, NOT hiding (the digest is linear in the row's bits; ajtai-design §3 / §8)
+        self.hash_name = f"ajtai-babybear-n{self.n}-b1-r{self.salt_bits}/{VERSION}"
+        self.schema = f"ajtai-babybear-n{self.n}-b1-r{self.salt_bits}/row/{VERSION}"
+        self.params_sha256 = hashlib.sha256(params_descriptor(self.n, self.m_col, self.salt_bits)).hexdigest()
         self._B = None
 
     def __repr__(self):

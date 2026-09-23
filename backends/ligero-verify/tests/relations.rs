@@ -896,18 +896,18 @@ fn fp8_ada_hashed_system_and_version_mismatches_are_rejected() {
 // linear Ring-SIS leaf (`backends/direct/ligero/leaf/ajtai.py`): per chain column `acc' = X acc + B s` over
 // F_p[X]/(X^64 + 1), s the checker's own operand bit rows, 128 linked accumulator rows (x and W), the two 64-element
 // digests pinned at the chain end; 4858 rows against the Poseidon2 composition's 6210.  Interactive non-ZK, 20 VUs x 48
-// steps at l = 1024, one sub-batch, statement `ligero-statement/v5` (15185 bytes: 128 digest elements per VU), leaf
-// schema `ajtai-babybear-n64-b1/row/v1`, little-endian u32 leaf bytes.  Python's verifier accepted it
+// steps at l = 1024, one sub-batch, statement `ligero-statement/v5` (15188 bytes: 128 digest elements per VU), leaf
+// schema `ajtai-babybear-n64-b1-r0/row/v1`, little-endian u32 leaf bytes.  Python's verifier accepted it
 // (`verify_python.json`, 1/1).
 
 const AJTAI_SYS: &str = "fixtures/fp8-ada-ajtai-n64/system.bin";
 const AJTAI_STMT: &str = "fixtures/fp8-ada-ajtai-n64/sub_00.stmt";
 const AJTAI_PROOF: &str = "fixtures/fp8-ada-ajtai-n64/sub_00.proof";
 const AJTAI_COINS: &str = "fixtures/fp8-ada-ajtai-n64/sub_00.coins";
-const AJTAI_SYS_ID: &str = "9939940eba63ca738ef6ee02c89c220b84e9bfbcdc001b60aeb760349b946a41";
-const AJTAI_TABLE_DIGEST: &str = "f7228c0c2ecb1c52ba3c7d0d2ba3bb30bb29efc0f7bf7619d6a7ba34fe70c97d";
+const AJTAI_SYS_ID: &str = "8330e2d1f3018f452aca6adc9ce85977f7eebc108c6b2a956e8fd0990d1260a5";
+const AJTAI_TABLE_DIGEST: &str = "182c90413bcb43448b724d0e578bcf046c2214946a90efd042c6f4322f25fe4b";
 
-/// The Ajtai fixture's v5 field offsets: 2 x 64 digest elements per VU, the `ajtai-babybear-n64-b1/row/v1` schema.
+/// The Ajtai fixture's v5 field offsets: 2 x 64 digest elements per VU, the `ajtai-babybear-n64-b1-r0/row/v1` schema.
 fn v5_offsets_ajtai(st: &[u8]) -> V5 {
     assert_eq!(&st[..8], b"LIGSTM05");
     let (l, n_vus, steps, k) = (u32_at(st, 12), u32_at(st, 46), u32_at(st, 50), u32_at(st, 54));
@@ -923,7 +923,7 @@ fn v5_offsets_ajtai(st: &[u8]) -> V5 {
     let y16 = o;
     o += l * yb;
     assert_eq!(s(&mut o), b"ligero-b/auth/v2h");
-    assert_eq!(s(&mut o), b"ajtai-babybear-n64-b1/row/v1");
+    assert_eq!(s(&mut o), b"ajtai-babybear-n64-b1-r0/row/v1");
     o += 32; // the Ajtai parameter digest
     assert_eq!(u32_at(st, o), n_vus);
     o += 4;
@@ -1000,7 +1000,7 @@ fn fp8_ada_ajtai_statement_and_proof_negatives_are_rejected() {
     // refused by the parser
     let mut m = st.clone();
     m[f.indices - 4 - 32] ^= 1;
-    rej("aparams.stmt", &m, "ajtai-babybear-n64-b1/row/v1 parameters differ from the verifier's");
+    rej("aparams.stmt", &m, "ajtai-babybear-n64-b1-r0/row/v1 parameters differ from the verifier's");
     let mut m = st.clone();
     m[f.indices + 4..f.indices + 8].copy_from_slice(&20u32.to_le_bytes());
     rej("axrange.stmt", &m, "claims leaves beyond the committed count");

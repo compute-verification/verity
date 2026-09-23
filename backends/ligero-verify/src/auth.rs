@@ -153,7 +153,7 @@ pub const MAX_LEAF_LANES: usize = 1024;
 /// schema string and the 32-byte parameter digest the auth block carries (both checked at parse), the digest width per
 /// row and the leaf value framing.  Named by the statement's relation string: `<rel>` = Poseidon2 (`hashchain.py`'s
 /// sponges: 8 big-endian u32 lanes, schema `poseidon2-babybear-w24/row/v2h`), `<rel>+ajtai-n<N>` = the Ring-SIS leaf
-/// (`leaf/ajtai.py`: N little-endian u32 elements, schema `ajtai-babybear-n<N>-b1/row/v1`, parameters digest = SHA-256
+/// (`leaf/ajtai.py`: N little-endian u32 elements, schema `ajtai-babybear-n<N>-b1-r0/row/v1` (r0: unsalted, binding only), parameters digest = SHA-256
 /// of `ajtai::params_descriptor`).  The in-circuit side needs nothing here: the system file carries the constraints.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Leaf {
@@ -178,13 +178,16 @@ impl Leaf {
         if n == 0 || n > MAX_LEAF_LANES {
             return Err(format!("ajtai leaf: n = {n} outside (0, {MAX_LEAF_LANES}]"));
         }
+        if !n.is_power_of_two() {
+            return Err(format!("ajtai leaf: the ring degree n = {n} is not a power of two"));
+        }
         let m_col = 256usize;
         let desc = format!(
-            "ajtai-babybear/v1|p={}|n={n}|m_col={m_col}|beta=1|ring=F_p[X]/(X^n+1)|M=X|A=verity/ajtai-babybear/A/v1\
-             |A-row=SHAKE-256(tag||LE32(i)) LE u32 &0x7fffffff reject>=p|leaf=LE u32 x n",
+            "ajtai-babybear/v1|p={}|n={n}|m_col={m_col}|beta=1|salt_bits=0|ring=F_p[X]/(X^n+1)|M=X|B=verity/ajtai-babybear/B/v1\
+             |b_i=SHAKE-256(tag||LE32(i)) LE u32 &0x7fffffff reject>=p|leaf=LE u32 x n",
             crate::field::P
         );
-        Ok(Leaf { tag: format!("ajtai-n{n}"), schema: format!("ajtai-babybear-n{n}-b1/row/v1"), params_sha256: crate::hash::sha256(desc.as_bytes()),
+        Ok(Leaf { tag: format!("ajtai-n{n}"), schema: format!("ajtai-babybear-n{n}-b1-r0/row/v1"), params_sha256: crate::hash::sha256(desc.as_bytes()),
                   lanes: n, little_endian: true })
     }
 

@@ -20,8 +20,8 @@
   }
  },
  "batch_accepted": true,
- "seconds": 1.161551040946506,
- "wall": 1.1637750830268487,
+ "seconds": 0.4971808750415221,
+ "wall": 0.4996931670466438,
  "coins": "the transcript's own coins replayed (file verifier)",
  "items": [
   {
@@ -30,7 +30,7 @@
    "proof": "rep1/sub_00.proof",
    "accepted": true,
    "reason": "",
-   "seconds": 1.161551040946506
+   "seconds": 0.4971808750415221
   }
  ]
 }

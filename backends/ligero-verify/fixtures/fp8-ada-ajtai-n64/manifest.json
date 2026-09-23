@@ -14,7 +14,7 @@
   "rust_verifiable": false
  },
  "authentication": "included-hash",
- "commit": "ede23de5066569b13c161a60e919ae715f5e109b",
+ "commit": "a9eaaa4ede9a77b7f380104cf98618178801134e",
  "device": "cpu",
  "system": {
   "rows": 4858,
@@ -45,24 +45,24 @@
    "stmt": "rep1/sub_00.stmt",
    "proof": "rep1/sub_00.proof",
    "proof_bytes": 3844504,
-   "proof_sha256": "3e77715e3e9c17aa0b2c1da8b45012a6db3a03f1f3f3169d2cd4b698f889cc8a",
-   "stmt_bytes": 15185,
+   "proof_sha256": "73c496582518915fcd98b0a5303e457fab3e18da1599081900fd1dfaf3a587e5",
+   "stmt_bytes": 15188,
    "python_verdict": {
     "accepted": true,
     "reason": ""
    },
-   "prover_seconds": 5.4133900420274585,
+   "prover_seconds": 1.7225863330531865,
    "multiproof_bytes": 192,
-   "auth_openings_seconds": 0.00025800010189414024,
+   "auth_openings_seconds": 0.0003367919707670808,
    "coins": "rep1/sub_00.coins",
    "coins_bytes": 128,
-   "coins_sha256": "910355b18b8e9a6df2938d1cdec348fe9a9bfd081e4863f0f23c14243fe1f5ed"
+   "coins_sha256": "0e993be284a61572307347a8aa5862e1449d16e630d77e43c4b95545656f64e2"
   }
  ],
  "system_file": {
   "path": "system.bin",
-  "sha256": "4c4f3306244eb38fbd2046c8e415bb1ee6da85de11dda6c693ee59204190d4c5",
-  "sys_id": "9939940eba63ca738ef6ee02c89c220b84e9bfbcdc001b60aeb760349b946a41",
+  "sha256": "2507d2330e191361c543b93d5bfbb0e17ebe24bf313147d452654e47f04f8e90",
+  "sys_id": "8330e2d1f3018f452aca6adc9ce85977f7eebc108c6b2a956e8fd0990d1260a5",
   "bytes": 570247
  },
  "set": {
