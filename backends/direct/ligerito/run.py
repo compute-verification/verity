@@ -453,13 +453,9 @@ def bench(args) -> int:
     med_total = statistics.median(w for w, _ in runs)
     def rep_buckets(it):
         """t.* of one rep: sequential batches sum; windowed batches overlap, so the per-batch mean (the wall is the
-        joint).  The challenge stream's waits happen inside the zero-check / PCS timers: taken out of arithmetic."""
-        bs = []
-        for r, _, pc in it:
-            b = _buckets(r.timings)
-            if pc is not None:
-                b["arithmetic"] -= pc.stream.wait
-            bs.append(b)
+        joint).  Live: the challenge-stream waits stay inside the zero-check / PCS timers they happen in (reported
+        separately as live.stream_wait_seconds)."""
+        bs = [_buckets(r.timings) for r, _, _ in it]
         agg = (lambda xs: sum(xs) / len(xs)) if live and args.window > 1 else sum
         return {k: agg([b[k] for b in bs]) for k in _buckets({})}
     med_b = {k: statistics.median(rep_buckets(it)[k] for _, it in runs) for k in _buckets({})}
