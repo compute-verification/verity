@@ -57,6 +57,8 @@ _SRC = r"""
 #define K_MONT %(k_mont)du     /* l R mod p */
 #define COEF_IN %(coef_in)d    /* 1: the rows come as int64 coefficient vectors c[0 .. K + TP) (the ZK mask rows) instead of
                                   evaluations on H: cf <- l c (no INTT), the high part enters like the mask with x^l = z_c + 1 */
+#define CF_GLOBAL %(cf_global)d /* 1: the coefficient buffer cf lives in a per-CTA global scratch (L2) instead of shared memory --
+                                  for parts whose shared memory per block is < 2 l words (l = 16384 on Ada / consumer Blackwell) */
 
 /* [0, p) in, [0, p) out; the wrapped-difference min selects the reduced value (2 instructions, no predicate) */
 __device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return min(s, s - P); }
@@ -169,10 +171,15 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
                  int in_stride,                            /* row stride of `in` in 32-bit words (COEF_IN: 2 x the int64 row stride) */
                  int in_wide,                              /* 1: the evaluation rows are int64 (low words read; no int32 copy) */
                  int coef_stride,                          /* row stride of coef_out in 32-bit words */
-                 int coef_wide)                            /* 1: coef_out is int64 (low word = value, high word 0) */
+                 int coef_wide,                            /* 1: coef_out is int64 (low word = value, high word 0) */
+                 unsigned* __restrict__ cf_scratch)        /* CF_GLOBAL: gridDim.x x K words */
 {
     extern __shared__ unsigned x[];
+#if CF_GLOBAL
+    unsigned* cf = cf_scratch + (size_t)blockIdx.x * K;
+#else
     unsigned* cf = x + K;
+#endif
     unsigned r[16];
     const int t = threadIdx.x;
     for (int row = blockIdx.x; row < rows; row += gridDim.x) {
@@ -382,7 +389,8 @@ class LigeroEncoderSIMT:
     """``encode(rows (R, l) int64/int32 torch on the device, mask (R, t_pad) or None, want_coefs) -> (U (R, n) int32,
     coefs (R, l) int32 | None)`` in the protocol's domain and order."""
 
-    def __init__(self, l: int, n: int, t_pad: int = 0, device="cuda", threads: int | None = None):
+    def __init__(self, l: int, n: int, t_pad: int = 0, device="cuda", threads: int | None = None,
+                 cf_global: bool | None = None):
         import cupy as cp
 
         if n != 4 * l or l & (l - 1) or l < 256 or l > 16384:
@@ -395,8 +403,16 @@ class LigeroEncoderSIMT:
         tabs = tables(l, n, t_pad)
         self._params = {"pinv": _P_INV_MOD_R, "k": l, "logk": l.bit_length() - 1, "threads": threads,
                         "logt": threads.bit_length() - 1, "tp": t_pad, "kinv_mont": tabs["kinv_mont"],
-                        "k_mont": tabs["k_mont"], "coef_in": 0}
-        self.smem = 4 * (2 * l)               # x + cf (both bank-swizzled)
+                        "k_mont": tabs["k_mont"], "coef_in": 0, "cf_global": 0}
+        with cp.cuda.Device(self.device.index or 0):
+            props = cp.cuda.runtime.getDeviceProperties(self.device.index or 0)
+        sms = props["multiProcessorCount"]
+        # x + cf (both bank-swizzled) in shared memory when the part allows (H100 227 KiB, A100 163 KiB per block);
+        # otherwise (Ada / consumer Blackwell: 99 KiB) cf goes to a per-CTA L2-resident scratch (about +15 percent on the H100)
+        self.cf_global = bool(cf_global) if cf_global is not None else 4 * (2 * l) > props["sharedMemPerBlockOptin"]
+        self._params["cf_global"] = int(self.cf_global)
+        self.smem = 4 * (l if self.cf_global else 2 * l)
+        self.blocks = sms * (1 if self.cf_global else 4)
         self.kernel = self._compile(0)
         self._kernel_coef = None              # compiled on first use (encode_coefs)
         with cp.cuda.Device(self.device.index or 0):
@@ -405,8 +421,7 @@ class LigeroEncoderSIMT:
             self.coset = cp.asarray(tabs["coset"])
             self.mask_tw = cp.asarray(tabs["mask"])
             self.mask_tw1 = cp.asarray(tabs["mask1"])
-            sms = cp.cuda.runtime.getDeviceProperties(self.device.index or 0)["multiProcessorCount"]
-        self.blocks = sms * 4
+            self.cf_scratch = cp.empty(self.blocks * l if self.cf_global else 1, dtype=cp.uint32)
 
     def _compile(self, coef_in: int):
         k = self.cp.RawKernel(_SRC % {**self._params, "coef_in": coef_in}, "rs_encode_ligero", options=("-std=c++17",))
@@ -471,7 +486,7 @@ class LigeroEncoderSIMT:
         self._launch(self.kernel, R, (np.uint64(rows.data_ptr()), self._u32(out), coef_arg, mask_arg, self.tw_inv,
                                       self.tw_fwd, self.coset, self.mask_tw, np.int32(R),
                                       np.int32(self.l * (2 if in_wide else 1)), np.int32(int(in_wide)),
-                                      np.int32(coef_stride), np.int32(int(wide))), stream)
+                                      np.int32(coef_stride), np.int32(int(wide)), self.cf_scratch), stream)
         return out, coefs
 
     def encode_coefs(self, coefs: torch.Tensor, out: torch.Tensor | None = None,
@@ -490,8 +505,8 @@ class LigeroEncoderSIMT:
             self._kernel_coef = self._compile(1)
         self._launch(self._kernel_coef, R, (np.uint64(coefs.data_ptr()), self._u32(out), np.uint64(0), self.tw_fwd,
                                             self.tw_inv, self.tw_fwd, self.coset, self.mask_tw1, np.int32(R),
-                                            np.int32(coefs.stride(0) * 2), np.int32(1), np.int32(self.l), np.int32(0)),
-                     stream)
+                                            np.int32(coefs.stride(0) * 2), np.int32(1), np.int32(self.l), np.int32(0),
+                                            self.cf_scratch), stream)
         return out
 
 
