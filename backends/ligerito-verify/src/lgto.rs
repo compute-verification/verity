@@ -1124,6 +1124,66 @@ mod tests {
         assert!(verify(STMT, &k, PROOF, &mut fs, &any).unwrap_err().contains("another verification key"));
     }
 
+    /// ligerito-relation-2 32d3d42's gate dumps of the same statement and key with V1's six zero claims: the honest proof,
+    /// its `--zk` twin, and the five V1 must-reject negatives (`neg_fiat-shamir_06..10`, each with its own statement).
+    /// 06-09 commit `w + forge` with the forge on virtual rows and the forged sumcheck value consistent with it, so only
+    /// a zero claim can object; 10 edits a committed `next:0` row, which the shift pins.
+    const V1_PROOF: &[u8] = include_bytes!("../fixtures/lgto/fp8ada_l256_v1/honest.lgto");
+    const V1_ZK_PROOF: &[u8] = include_bytes!("../fixtures/lgto/fp8ada_l256_v1/zk_honest.lgto");
+    const V1_NEGS: [(&str, &[u8], &[u8], &str); 5] = [
+        ("end word +1 ulp", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_06.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_06.lgto.neg"), "PCS sumcheck round 1"),
+        ("operand bit flip", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_07.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_07.lgto.neg"), "PCS sumcheck round 1"),
+        ("n_vus - 1", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_08.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_08.lgto.neg"), "PCS sumcheck round 1"),
+        ("zeroed VU, y +1", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_09.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_09.lgto.neg"), "PCS sumcheck round 1"),
+        ("next:0 row edit", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_10.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_10.lgto.neg"), "combined final"),
+    ];
+
+    fn strict() -> Options {
+        Options { target_log2: Some(-128.0), ..Default::default() }
+    }
+
+    /// `V1_PROOF` with its parameter JSON's `from` replaced by `to` (the u32 length prefix before the JSON rewritten).
+    fn with_params(from: &str, to: &str) -> Vec<u8> {
+        let open = V1_PROOF.iter().position(|&b| b == b'{').unwrap();
+        let len = u32::from_le_bytes(V1_PROOF[open - 4..open].try_into().unwrap()) as usize;
+        let json = std::str::from_utf8(&V1_PROOF[open..open + len]).unwrap();
+        assert_eq!(json.matches(from).count(), 1, "{from}");
+        let json = json.replace(from, to);
+        [&V1_PROOF[..open - 4], &(json.len() as u32).to_le_bytes()[..], json.as_bytes(), &V1_PROOF[open + len..]].concat()
+    }
+
+    #[test]
+    fn v1_fixture_verifies_with_its_zero_claims() {
+        assert_eq!(read_statement(V1_NEGS[4].1).unwrap().y, read_statement(STMT).unwrap().y);
+        let rep = verify(STMT, KEY, V1_PROOF, &mut fs, &strict()).unwrap();
+        assert_eq!((rep.sumcheck.as_str(), rep.zero_blocks, rep.legacy, rep.zk, rep.key_pinned), ("LGSC0003", 6, false, false, true));
+        let rep = verify(STMT, KEY, V1_ZK_PROOF, &mut fs, &strict()).unwrap();
+        assert_eq!((rep.zero_blocks, rep.legacy, rep.zk), (6, false, true));
+        assert!(rep.soundness_log2 <= -128.0);
+    }
+
+    #[test]
+    fn v1_negatives_rejected() {
+        for (what, stmt, proof, why) in V1_NEGS {
+            let e = verify(stmt, KEY, proof, &mut fs, &strict()).unwrap_err();
+            assert!(e.contains(why), "{what}: {e}");
+            assert!(verify(stmt, KEY, V1_PROOF, &mut fs, &strict()).is_err() || stmt == STMT, "{what}: honest proof on the forged statement");
+        }
+    }
+
+    #[test]
+    fn v1_zero_block_list_must_match_the_layout() {
+        let blocks = "[[0,3577],[1,1789],[2,895],[7,28],[6,58],[0,3776]]";
+        for forged in ["[[0,3577],[1,1789],[2,895],[7,29],[6,58],[0,3776]]", "[[1,1789],[0,3577],[2,895],[7,28],[6,58],[0,3776]]", "[[0,3577],[1,1789],[2,895],[7,28],[6,58]]", "[]"] {
+            let e = verify(STMT, KEY, &with_params(blocks, forged), &mut fs, &strict()).unwrap_err();
+            assert!(e.contains("zero_blocks"), "{forged}: {e}");
+        }
+        // dropping the list makes the proof pre-V1: refused unless legacy is allowed, and then the batch no longer matches
+        let bare = with_params(&format!(",\"zero_blocks\":{blocks}"), "");
+        assert!(verify(STMT, KEY, &bare, &mut fs, &strict()).unwrap_err().contains("pre-V1"));
+        assert!(verify(STMT, KEY, &bare, &mut fs, &Options { allow_legacy: true, ..strict() }).is_err());
+    }
+
     #[test]
     fn zero_blocks_cover_exactly_the_virtual_rows() {
         let key = read_key(KEY).unwrap();

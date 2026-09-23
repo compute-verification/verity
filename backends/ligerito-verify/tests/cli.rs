@@ -128,6 +128,23 @@ fn batch_over_an_lgto_dump() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// ligerito-relation-2 32d3d42's V1 proofs in place, no manifest (statements by stem, one key): the honest proof and its
+/// `--zk` twin accepted in default mode, the five V1 forgeries rejected; both honest proofs share a statement, so the
+/// union bound counts it once.
+#[test]
+fn batch_over_the_v1_fixture() {
+    let d = fixtures().join("lgto/fp8ada_l256_v1");
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--target-bits", "128"]);
+    let s = stdout(&o);
+    assert!(o.status.success(), "{s}");
+    for want in ["\"accepted\":true", "\"n_proofs\":2", "\"n_negatives\":5", "\"n_accepted\":2", "\"problems\":[]", "\"accepted_unpinned_key\":0", "\"sumcheck\":\"LGSC0003\"", "\"zero_blocks\":6", "\"zk\":true"] {
+        assert!(s.contains(want), "{want} not in {s}");
+    }
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--target-bits", "128", "--n-proofs", "2"]);
+    // F5: as two proofs of one job each must reach 2^-129; 2^-128.02 does not
+    assert!(!o.status.success() && stdout(&o).contains("2^-128.02 > 2^-129"), "{}", stdout(&o));
+}
+
 /// red-team-ligerito-2's V1 forgery (y16[47] += 1 with w' = w - e_(3581, 47)): the sumcheck layer accepts it by
 /// construction; the zero claim on the virtual block holding row 3581 is non-zero on the forged w, so the PCS opening the
 /// full verifier demands (value 0) cannot be met.
