@@ -79,9 +79,10 @@ def _load_program(p: str) -> dict:
         return json.load(f)
 
 
-def recompute(sr: dict, programs: dict[str, dict], manifest: dict | None) -> dict:
+def recompute(sr: dict, programs: dict[str, dict], manifest: dict | None, program_dirs: dict[str, str] | None = None) -> dict:
     """The partition over `programs` (request label -> Program instances doc) with the record's stated parameters -- `sampled_replay`'s
-    population / split / draw, without the evaluations.  Returns a `sampled_replay`-shaped document (`lift` reads it)."""
+    population / split / draw, without the evaluations, under the manifest's own address rule (`address_rule_of`; `program_dirs` = the
+    Build dirs whose correspondence a v2-query manifest was built with).  Returns a `sampled_replay`-shaped document (`lift` reads it)."""
     from verity_capture.commit import sampled_replay as SR
     smp, sk = sr.get("sample") or {}, sr.get("strata_keys") or {}
     seed, per_stratum = int(smp["seed"]), int(smp.get("per_stratum") or 2)
@@ -94,11 +95,12 @@ def recompute(sr: dict, programs: dict[str, dict], manifest: dict | None) -> dic
     executed_prefix = {rid: SR.executed_prefix_of_record(rid, **{k: v for k, v in f.items() if k in FACT_KEYS}) for rid, f in facts.items() if isinstance(f, dict)} or None
     promoted = SR.promoted_addresses_of(manifest)
     padded = SR.manifest_boundary_of(manifest) == "module-pad"
+    rule = SR.address_rule_of(manifest)
     all_vus, not_ev, not_ev_fam, indices, anchors = [], Counter(), Counter(), {}, {}
     for rid, inst in programs.items():
         pi = indices.get(id(inst))
         if pi is None:
-            pi = SR.ProgramIndex(inst, padded_slots=padded, promoted=promoted)
+            pi = SR.ProgramIndex(inst, padded_slots=padded, promoted=promoted, rule=rule, program_dir=(program_dirs or {}).get(rid))
             indices[id(inst)] = pi
         anchors[rid] = SR.phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
         vus, ne, nef = SR.population(pi, rid, rank=(ranks[0] if len(ranks) == 1 else 0), arrive=arrivals.get(rid, 0), ring_slots=ring_slots,
@@ -143,6 +145,7 @@ def actual(row: resolver.Row) -> dict:
     if progs_root is None:
         raise resolver.NotResolvable(f"{row.key}: no request Programs (build_request*/instances.json.gz) reachable here")
     programs: dict[str, dict] = {}
+    dirs: dict[str, str] = {}
     loaded: dict[str, dict] = {}
     for rid, ent in (sr.get("programs") or {}).items():
         base = os.path.basename(str((ent or {}).get("dir") or "build_request"))
@@ -152,10 +155,11 @@ def actual(row: resolver.Row) -> dict:
         if p not in loaded:
             loaded[p] = _load_program(p)
         programs[str(rid)] = loaded[p]
+        dirs[str(rid)] = str(progs_root / base)
     manifest = row.json("manifest.json") if row.has("manifest.json") else None
     import time
     t0 = time.perf_counter()
-    doc = recompute(sr, programs, manifest)
+    doc = recompute(sr, programs, manifest, dirs)
     out = lift(doc)
     out["record"] = {"result": sr.get("result"), "grade": sr.get("grade")}
     out["source"] = "recomputed: sampled_replay.{ProgramIndex, population, executed_prefix_of_record, phase_anchor, split_not_executed, sample} over the Programs + manifest of record"

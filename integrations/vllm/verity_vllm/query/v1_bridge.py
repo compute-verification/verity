@@ -52,7 +52,8 @@ from .module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1
 from .program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "FLASH_ATTENTION_LAUNCHES", "COLLECTIVES",
-           "member_name", "shared_instances", "request_manifest", "compose_global", "BridgeResult", "under"]
+           "member_name", "shared_instances", "request_manifest", "compose_global", "BridgeResult", "under", "CallMember", "Population",
+           "population"]
 
 # ---------------------------------------------------------------------------------------------------------------------------------
 # protocol declarations: exact Definition ids (what a Definition IS for the protocol; never a pattern over names)
@@ -203,6 +204,115 @@ class BridgeResult:
     residual_counts: Counter = field(default_factory=Counter)
 
 
+# ---------------------------------------------------------------------------------------------------------------------------------
+# the population: RequiredValues(P, Q_module_body_v1, policy) per Call -- what the manifest counts and what the Commit addresses
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CallMember:
+    """One required Value a Call produces, spelt as the manifest names it: `member` (the v1 spelling), `width` (elements per row),
+    `dtype`, `structural` (the member the structure gives) and the named residual applied (None when the structure gave the name)."""
+
+    port: str
+    member: str
+    width: int
+    dtype: str
+    structural: str
+    residual: Residual | None
+
+
+class Population:
+    """The required values of one request Program under `Q_module_body_v1` and the policy (module docstring), with the facts every reader
+    of them needs: the step of a Call (sampling events end steps), the record-typed parameters, the boundary, and -- per Call -- the
+    required Values it produces under their manifest member names (`members_of`).  `request_manifest` groups these into identity rows;
+    the Commit's replay (`sampled_replay.ProgramIndex`) addresses a Call's committed output by the same members, so the rows a manifest
+    counts and the rows the replay reads are one computation."""
+
+    def __init__(self, P: ProgramView, corr: Correspondence, *, return_slots: bool = True) -> None:
+        self.P, self.corr, self.return_slots = P, corr, return_slots
+        self.events = [c.id for c in P.calls if c.family in SAMPLING_EVENTS]
+        if not self.events:
+            raise ValueError("Program has no sampling event: no step boundary")
+        self.record_fields: dict[ValueRef, str] = {}
+        self.record_params: list[InputView] = []
+        for p in P.params:
+            if len(p.port_table) > 1 or p.type_repr[:1] == "{":
+                self.record_params.append(p)
+                for port in p.port_table:
+                    self.record_fields[ValueRef(p.id, port.name)] = port.name
+        prescribed = frozenset(self.record_fields)
+        self.Q = Q_module_body_v1(P, corr)
+        self.B = B = boundary(P, self.Q)
+        step_of = self.step_of
+        protocol: set[ValueRef] = set()
+        if return_slots:
+            # TENSOR-RETURN: the acquisition binds the TENSORS a module returns, and a tensor is one fx node's output -- every row the
+            # Program unrolled it into, every port of its tuple.  When any Value of a node's output leaves its body (a boundary Value), the
+            # module returned that tensor, so every Value of the node's output at that step is required (the final norm's rows the logits
+            # never read, the residual slot of a fused norm nobody consumes).
+            returned_nodes: set[tuple[int, str, str]] = set()
+            for v in B.values:
+                if v.call >= 0:
+                    n = corr.name(v.call)
+                    returned_nodes.add((step_of(v.call), n.module, n.node))
+        for c in P.calls:
+            if c.family in SAMPLING_EVENTS:
+                protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
+            elif return_slots:
+                n = corr.name(c.id)
+                if n.hint or (step_of(c.id), n.module, n.node) in returned_nodes:      # RETURN-SLOT (recorded) / TENSOR-RETURN (structural)
+                    protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
+        self.policy = Policy(prescribed_inputs=prescribed, protocol_required=frozenset(protocol))
+        self.required = RequiredValues(B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
+        # (required_values() would recompute the boundary; the policy is validated the same way here)
+        known_inputs = frozenset(P.inputs)
+        for v in self.policy.prescribed_inputs:
+            if v not in known_inputs:
+                raise ValueError(f"policy prescribes {v}, which is not an input")
+        self.own_param: dict[int, bool] = {}
+        for c in P.calls:
+            m = corr.module_of(c.id)
+            self.own_param[c.id] = any(under(self.record_fields[v], m) for v in param_reads(c) if v in self.record_fields)
+        self._ports_of: dict[int, list[str]] | None = None
+
+    def step_of(self, cid: int) -> int:
+        """The step of a Call: the number of sampling events before it (the event itself belongs to the step it ends)."""
+        return bisect.bisect_left(self.events, cid)
+
+    def member(self, v: ValueRef) -> CallMember:
+        """The manifest member of the required Value `v` of a (non-sampling) Call."""
+        c = self.P.call(v.call)
+        port = c.port(v.port)
+        member, structural, resid = member_name(c, port, self.corr.name(c.id), own_parameter=self.own_param[c.id])
+        return CallMember(port.name, member, port.elems, _dtype(port.width), structural, resid)
+
+    def _ports(self) -> dict[int, list[str]]:
+        if self._ports_of is None:
+            ports: dict[int, list[str]] = defaultdict(list)
+            for v in sorted(self.required.values):
+                if v.call >= 0:
+                    ports[v.call].append(v.port)
+            self._ports_of = ports
+        return self._ports_of
+
+    def producers(self) -> list[int]:
+        """The Calls that produce at least one required Value, in body order (sampling events included)."""
+        return sorted(self._ports())
+
+    def members_of(self, cid: int) -> list[CallMember]:
+        """The required Values Call `cid` produces, in port order ([] = its outputs are interior to its module body).  A sampling
+        event's output is the protocol's `sampled_token_ids` (not a module member): [] here."""
+        if self.P.call(cid).family in SAMPLING_EVENTS:
+            return []
+        return [self.member(ValueRef(cid, p)) for p in self._ports().get(cid, ())]
+
+
+def population(P: ProgramView, corr: Correspondence, *, return_slots: bool = True) -> Population:
+    """`Population(P, corr)`: the required values of one request Program under `Q_module_body_v1` + the policy."""
+    return Population(P, corr, return_slots=return_slots)
+
+
 def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | None, dict]:
     attn_obs = res.get("attention_impls_observed") or {}
     fa = None
@@ -252,46 +362,9 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     n_seq = 1
 
     # --- the query and the policy ---------------------------------------------------------------------------------------------------
-    events = [c.id for c in P.calls if c.family in SAMPLING_EVENTS]
-    if not events:
-        raise ValueError("Program has no sampling event: no step boundary")
-    step_of = lambda cid: bisect.bisect_left(events, cid)   # noqa: E731  -- the event itself belongs to the step it ends
-
-    record_fields: dict[ValueRef, str] = {}
-    record_params: list[InputView] = []
-    for p in P.params:
-        if len(p.port_table) > 1 or p.type_repr[:1] == "{":
-            record_params.append(p)
-            for port in p.port_table:
-                record_fields[ValueRef(p.id, port.name)] = port.name
-    prescribed = frozenset(record_fields)
-    Q = Q_module_body_v1(P, corr)
-    B = boundary(P, Q)
-    protocol: set[ValueRef] = set()
-    if return_slots:
-        # TENSOR-RETURN: the acquisition binds the TENSORS a module returns, and a tensor is one fx node's output -- every row the
-        # Program unrolled it into, every port of its tuple.  When any Value of a node's output leaves its body (a boundary Value), the
-        # module returned that tensor, so every Value of the node's output at that step is required (the final norm's rows the logits
-        # never read, the residual slot of a fused norm nobody consumes).
-        returned_nodes: set[tuple[int, str, str]] = set()
-        for v in B.values:
-            if v.call >= 0:
-                n = corr.name(v.call)
-                returned_nodes.add((step_of(v.call), n.module, n.node))
-    for c in P.calls:
-        if c.family in SAMPLING_EVENTS:
-            protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
-        elif return_slots:
-            n = corr.name(c.id)
-            if n.hint or (step_of(c.id), n.module, n.node) in returned_nodes:      # RETURN-SLOT (recorded) / TENSOR-RETURN (structural)
-                protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
-    policy = Policy(prescribed_inputs=prescribed, protocol_required=frozenset(protocol))
-    req = RequiredValues(B.values, policy.prescribed_inputs, policy.protocol_required)
-    # (required_values() would recompute the boundary; the policy is validated the same way here)
-    known_inputs = frozenset(P.inputs)
-    for v in policy.prescribed_inputs:
-        if v not in known_inputs:
-            raise ValueError(f"policy prescribes {v}, which is not an input")
+    pop = population(P, corr, return_slots=return_slots)
+    events, step_of, record_fields, record_params = pop.events, pop.step_of, pop.record_fields, pop.record_params
+    B, policy, req = pop.B, pop.policy, pop.required
 
     aliases, alias_faults = shared_instances(P, corr, record_fields)
     impl = corr.implementation_path
@@ -316,11 +389,6 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             add("weights", "*", 0, impl(port.name), "weight", 0, None, dtype=_dtype(port.width, weight=True))
 
     # --- the Call-produced required Values, grouped per (step, module, member) -----------------------------------------------------
-    own_param: dict[int, bool] = {}
-    for c in P.calls:
-        m = corr.module_of(c.id)
-        own_param[c.id] = any(under(record_fields[v], m) for v in param_reads(c) if v in record_fields)
-
     groups: dict[tuple[int, str, str], dict[str, Any]] = {}
     for v in sorted(req.values):
         if v.call < 0:
@@ -336,17 +404,17 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
                     pin = P.input(r.call)
                     add(f"sampler_{pin.name}", step, 0, "runner.sampler", pin.name, 0, n_seq, dtype=_dtype(pin.port_table[0].width), spec=c.family)
             continue
-        port = c.port(v.port)
-        member, structural, resid = member_name(c, port, n, own_parameter=own_param[c.id])
+        cm = pop.member(v)
+        member, structural, resid = cm.member, cm.structural, cm.residual
         if resid is not None:
             residual_counts[f"{resid.family}:{resid.structural}->{resid.v1_member}"] += 1
         g = groups.get((step, n.module, member))
         if g is None:
-            g = groups[(step, n.module, member)] = {"rows": 0, "width": port.elems, "dtype": _dtype(port.width), "family": c.family, "spec": c.definition,
+            g = groups[(step, n.module, member)] = {"rows": 0, "width": cm.width, "dtype": cm.dtype, "family": c.family, "spec": c.definition,
                                                     "nodes": set(), "hinted": bool(n.hint), "structural": structural,
                                                     "crossing": 0, "returned": 0}
-        elif g["family"] != c.family or g["width"] != port.elems:
-            unmodelled[f"{c.family} under {impl(n.module)} ({member}: two producers {g['family']} {g['width']} / {c.family} {port.elems})"] += 1
+        elif g["family"] != c.family or g["width"] != cm.width:
+            unmodelled[f"{c.family} under {impl(n.module)} ({member}: two producers {g['family']} {g['width']} / {c.family} {cm.width})"] += 1
             continue
         g["rows"] += 1
         g["nodes"].add(n.node)

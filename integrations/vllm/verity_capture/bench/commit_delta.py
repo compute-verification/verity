@@ -2511,6 +2511,7 @@ def main(argv: list[str] | None = None) -> None:
                                                ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
                                                # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
                                                manifest=(required_manifest if isinstance(required_manifest, dict) else None),
+                                               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")},
                                                **_sr_kw)
                         sr["programs"] = {k: {"dir": _loaded[k].get("dir"), "program_digest": _digs[k]} for k in _loaded}
                         sr["executed_prefix_of_record"] = {k: {kk: vv for kk, vv in v.items() if kk in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted", "eos_stop")}
