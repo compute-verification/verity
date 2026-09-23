@@ -14,9 +14,10 @@ observer (the non-interference control) and writes tokens.json / versions.json o
 [M6] `--case B1` (or a workload file carrying `"case"`) serves Qwen2.5-1.5B; the accepted tokens come from the workload
 file's `accepted_token_ids` (see `vllm_adapter.load_workload`).
 
-PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one arm per process)
+PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one arm per process; writes the execution evidence)
   Purpose: serve the row's declared workload on a fresh vLLM engine and record what the engine did: with the observer installed
-    (TorchDispatchMode + Triton launch + module hooks) the raw observation log the fold turns into the Captured_v1 Program; with
+    (TorchDispatchMode + Triton launch + module hooks) the raw observation log -- execution evidence -- the fold turns into the Captured_v1
+    Program (one Call per observed kernel); with
     --no-observer the same workload uninstrumented (the `control` arm, whose tokens must equal the capture's).
   Inputs: --workload wl.json, --checkpoints manifests/checkpoints.json, --case ROLE, --max-num-seqs B, --snapshot-steps,
     --snapshot-max-bytes[-op], --engine-arg k=v, --target (TargetProfile); env VERITY_TIMELINE, VLLM_BATCH_INVARIANT=1.

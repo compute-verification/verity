@@ -1,6 +1,6 @@
-"""RequiredValues(P, Q) -- the deterministic, lazy traversal of a Program `P` under a declared query `Q` that names every logical value a
-Commit must bind (BRIEF R16 §7A; design handoff `out/gen/r15/REQUIRED-VALUES-HANDOFF.md`).  The manifest of `required_manifest.py` is a
-CACHED SERIALIZATION of this traversal (DECISIONS-2/-3: RequiredValues(P,Q) is the function; the manifest is its cache).
+"""RequiredValues(P, Q) -- the deterministic, lazy traversal of a Program `P` under a declared query `Q` that names every required Value a
+Commit must bind (BRIEF R16 §7A; design handoff `out/gen/r15/REQUIRED-VALUES-HANDOFF.md`).  The required-value manifest of `required_manifest.py` is a
+CACHED SERIALIZATION of this traversal (DECISIONS-2/-3: RequiredValues(P,Q) is the function; the required-value manifest is its cache).
 
 Identity key (unchanged, TABLE-RULES r14-v1):
 
@@ -8,13 +8,14 @@ Identity key (unchanged, TABLE-RULES r14-v1):
 
 What is new here, relative to `required_manifest.build_manifest` (the R14/R15 hand-maintained per-family inventory):
 
-* **lazy** -- `Traversal` is a generator over the Program's instance rows in Program order: rows are consumed once, identities are yielded
+* **lazy** -- `Traversal` is a generator over the Program's Calls (the `instances.json.gz` rows) in Program order: Calls are consumed
+  once, identities are yielded
   per engine step, and the per-step state is O(modules) (claim groups keyed by (module, family, hint, spec), attention / MoE geometry
   accumulators), never the identity list of the whole Program.  Program-wide state is three int arrays (module id, family id, boundary
-  class per row) that the dataflow audit needs; `iter_rows()` streams `instances.json.gz` without loading the row list.
-* **boundary derived from the Program's own dataflow** -- every row's `args` (operand runs `["n", producer, lo, hi]`) say which producers
-  are read OUTSIDE their own module.  A row whose output crosses a module boundary is a logical boundary value; one consumed only inside
-  its module is interior.  The traversal reports, per (family, vocabulary class), how many rows cross vs how many the vocabulary NAMES
+  class per Call) that the dataflow audit needs; `iter_rows()` streams `instances.json.gz` without loading the Call list.
+* **boundary derived from the Program's own dataflow** -- every Call's `args` (operand runs `["n", producer, lo, hi]`) say which producers
+  are read OUTSIDE their own module.  A Call whose output crosses a module boundary is a boundary value of Q_module_body_v1; one consumed
+  only inside its module is interior.  The traversal reports, per (family, vocabulary class), how many Calls cross vs how many the vocabulary NAMES
   (`boundary_audit`): a family that crosses and is named by nothing (not a declared aggregate such as the MoE block stream) is an
   `unnamed_crossing` -- the inventory-omission class the old code could not see; a named family that never crosses is `named_interior`.
   Programs without args (synthetic fixtures) report `audit.available: false`.  Tonight the audit is a REPORT beside the population, not a
@@ -23,10 +24,10 @@ What is new here, relative to `required_manifest.build_manifest` (the R14/R15 ha
   own (request_id, arrival) context; the shared prescribed inputs (weights) are yielded ONCE, the attention hidden launch once per layer
   per engine step over the co-scheduled requests (buffered per engine step, flushed as components arrive).
 * **fail closed** -- a family without a naming rule raises `UnmodelledFamily` from the vocabulary; the traversal records it and the
-  population is `complete: False` (`required_manifest.coverage_check` refuses).  A zero-width member is never yielded (MAN-02).  The
+  population is `complete: False` (`required_manifest.coverage_check` refuses).  A zero-width Value is never yielded (MAN-02).  The
   audit adds the second gate: a boundary-crossing family named by no rule is recorded in `unnamed_crossing`.
 
-The NAMING vocabulary (which output members a family's row produces, in the collector's `op_path/member` names) is `required_manifest.
+The NAMING vocabulary (which output Values a family's Call produces, in the collector's `op_path/member` occurrence keys) is `required_manifest.
 members_for` and the geometry helpers -- shared on purpose: this module owns the traversal (what runs, per step, per request, per rank,
 crossing which boundary); the vocabulary is the bridge to the collector's names and is consumed, not re-invented.
 
@@ -35,15 +36,16 @@ crossing which boundary); the vocabulary is the bridge to the collector's names 
 
 Dependency-free (json/gzip/hashlib/array) like `required_manifest`.
 
-PROTOCOL SUMMARY (Commit stage: the population function behind the manifest of record)
-  Purpose: RequiredValues(P, Q) -- walk the Build's Program `P` (instances.json.gz rows, in Program order) under the query `Q` and
-    yield every logical identity a Commit must bind, per engine step / request / rank; the DEFAULT engine of required_manifest.
+PROTOCOL SUMMARY (Commit stage: the population function behind the required-value manifest of record)
+  Purpose: RequiredValues(P, Q) -- walk the Build's Program `P` (its Calls: the instances.json.gz rows, in Program order) under the
+    verification query `Q` (Q_module_body_v1) and yield every required Value a Commit must bind, per engine step / request / rank;
+    the DEFAULT engine of required_manifest.
   Inputs: a derive dir (descriptor.json.gz + instances.json.gz; a Workload_v1 root recurses into its request components), the
     workload manifest (request ids, arrivals, caps), the naming vocabulary `required_manifest.members_for`.
   Outputs: identity rows in the TABLE-RULES key (program_digest, request_id, step, invocation, op_path, output_member,
     element_range, rank) consumed by required_manifest.build_manifest; `boundary_audit` (unnamed_crossing / named_interior classes
     per family); the CLI `audit` / `diff` documents (inventory engine vs traversal).
-  Invariants: rows are consumed once (per-step state is O(modules), never the whole identity list); a row's boundary class is derived
+  Invariants: Calls are consumed once (per-step state is O(modules), never the whole identity list); a Call's boundary class is derived
     from its own `args` (a producer read outside its module crosses), never declared by hand; a family with no naming rule raises
     UnmodelledFamily -> the population is `complete: False` (fail closed); shared prescribed inputs (weights) are yielded ONCE;
     the audit is a REPORT beside the population -- it never changes the required set.

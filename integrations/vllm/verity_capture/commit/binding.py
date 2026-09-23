@@ -1,4 +1,8 @@
-"""R14 BIND-01 — the collector binding map and the identity-coverage checker (brief §4, TABLE-RULES r14-v1 Commit column).
+"""R14 BIND-01 — the collector binding map and the required-value coverage check (`coverage`; brief §4, TABLE-RULES r14-v1 Commit column).
+
+Glossary (Draft 3 §12): `op_path` / `output_member` / `invocation` together are the occurrence key -- the serialization of a runtime
+occurrence; the `member` field names a Value of the Call at that occurrence (the field name stays); the binding map is the record of
+value acquisition (which committed bytes each required Value was taken from) and 'the manifest' is the required-value manifest.
 
 Identity key (agreed with lane manifest, TABLE-RULES v1):
     (program_digest, request_id, step, invocation, op_path, output_member, element_range, rank)
@@ -8,16 +12,16 @@ Identity key (agreed with lane manifest, TABLE-RULES v1):
 * `output_member`  `"k"` for tuple slot `/k`, `"out"` for a single tensor output, `"in"` for an acquired input, `"sampled_token_ids"`,
                    the hidden/MoE plane name (`g4x64x128/...`, `router_w`, ...).
 * `invocation`     0-based call index of `op_path` within the step (a shared RotaryEmbedding is invocation k in layer k).
-* `element_range`  `[lo, hi)` in row-major elements of the member; a map entry may cover the whole member and satisfy any contained range.
+* `element_range`  `[lo, hi)` in row-major elements of the Value; a map entry may cover the whole Value and satisfy any contained range.
 
 The BINDING MAP is built from the committer's published per-step layouts (`_layouts`: name, dtype, shape, byte offset, leaf range) + the
 run's step roots at `finalize()` -- i.e. it is fixed BEFORE the challenge exists (the challenge is derived from the run root AND the map
-digest).  The EXPECTED POPULATION is independent of the collector: model structure (module set + a fixed per-class member rule -- config,
-not observation) x the workload (requests, engine steps, TP ranks).  Lane manifest's Program/query-derived manifest has the same key and
-replaces `expected_population` when delivered (`coverage_check(pop, bmap)` takes any iterable of identities).
+digest).  The EXPECTED POPULATION is independent of the collector: model structure (module set + a fixed per-class Value rule -- config,
+not observation) x the workload (requests, engine steps, TP ranks).  Lane manifest's Program/query-derived required-value manifest has the
+same key and replaces `expected_population` when delivered (`coverage_check(pop, bmap)` takes any iterable of identities).
 
-Two separate verdicts (brief §4): `coverage_check` (every required identity has >= 1 binding; duplicates/aliases/extra bytes cannot hide a
-missing one) and `value_correspondence` (the opened bytes under an identity are the producer's bytes -- the late-read / relabel negatives;
+Two separate verdicts (brief §4): `coverage_check` = required-value coverage (every required Value has >= 1 binding; duplicates/aliases/extra
+bytes cannot hide a missing one) and `value_correspondence` (the opened bytes under an identity are the producer's bytes -- the late-read / relabel negatives;
 openings that verify against the root do NOT imply correspondence).
 """
 from __future__ import annotations

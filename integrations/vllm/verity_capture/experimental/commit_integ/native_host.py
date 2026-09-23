@@ -1,11 +1,15 @@
-"""Reference committer for the NATURALLY MATERIALISED interface class (Instance outputs in HBM + input ids + sampled ids),
-host-hashed.  EXPERIMENTAL (R9 CMT-3).  This is the "correct first, then fast" reference of DANIEL-BRIEF A2 for the class the
-census calls `HBM-materialized (native)`; it binds NOTHING hidden inside FA2 / the norm kernels (that is CMT-2's path) and its
+"""Reference committer for the NATURALLY MATERIALISED interface class (Call outputs in HBM + input ids + sampled ids),
+host-hashed.  Glossary (Draft 3 §12): value acquisition (the hooks) -> commitment (the position-identified Merkle roots); the
+class tables `ACQUIRE_CLASSES` / `FAMILY_OF_MODULE` / `HAZARD_LEAVES` are a hand-written runtime correspondence (module class ->
+Definition family) and are pinned by `tests/test_no_by_name_rules.py` until Phase 3/4 record it as data.
+
+EXPERIMENTAL (R9 CMT-3).  This is the "correct first, then fast" reference of DANIEL-BRIEF A2 for the class the census calls
+`HBM-materialized (native)`; it binds NOTHING hidden inside FA2 / the norm kernels (that is CMT-2's path) and its
 coverage declaration says so — the checker turns that into a `partial` verdict until the hidden path is wired.
 
 Construction (one-stage, binding, position-identified):
 
-  acquisition   `register_forward_hook` on every module whose output is an Instance output of the eager step (Linear family,
+  acquisition   `register_forward_hook` on every module whose output is a Call output of the eager step (Linear family,
                 RMSNorm family, SiluAndMul/GeluAndMul, RotaryEmbedding, Attention, VocabParallelEmbedding (+ its input ids),
                 LogitsProcessor (logits), Sampler (sampled token ids)); tensors are taken as raw bytes (bf16/fp32/int) — no conversion
   movement      async D2H (`copy_(non_blocking=True)` on the compute stream, so the copy is stream-ordered right after the producer)
