@@ -57,14 +57,40 @@ _TAIL = r"""
 # so every v1 system compiles to exactly the source it did before.
 TAB_THRESHOLD = 8000
 TAB_MIN_TERMS = 3
+# In table mode the program is also cut into __noinline__ device functions of CHUNK_OPS operations each and ``affine``
+# is not inlined: NVRTC's optimiser is superlinear in the size of a straight-line function (one 6k-statement kernel
+# with 1.8k inlined loops took ~9 min on the 4090 pod; ``affine`` __noinline__ 32 s; 8 chunks 36 s, 29 chunks 22 s,
+# 116 chunks 20 s -- the floor is the front end).  W is unchanged: the ops are independent except through the W rows
+# they read and write, which are in program order in both forms; ``bits`` is emitted as a loop (same residue bits).
+CHUNK_OPS = 64
 
 _AFFINE = r"""
-__device__ __forceinline__ u64 affine(const int* __restrict__ J, const unsigned* __restrict__ C, int off, int n, u64 c,
-                                      const unsigned* __restrict__ Wm, int l, int col) {
+__device__ __noinline__ u64 affine(const int* __restrict__ J, const unsigned* __restrict__ C, int off, int n, u64 c,
+                                   const unsigned* __restrict__ Wm, int l, int col) {
     u64 acc = 0;
     for (int t = off; t < off + n; ++t) acc += ((u64)Wm[(size_t)J[t] * l + col] * (u64)C[t]) % P;
     return (acc + c) % P;
 }
+#define W(j) Wm[(size_t)(j) * l + col]
+#define PUB(i) pub[(size_t)(i) * l + col]
+#define HINT(i) hints[(size_t)(i) * l + col]
+"""
+
+_CHUNK_HEAD = r"""
+__device__ __noinline__ void chunk_@K@(const i64* __restrict__ pub, const i64* __restrict__ hints,
+                                       unsigned* __restrict__ Wm, int l, int col,
+                                       const int* __restrict__ J, const unsigned* __restrict__ C)
+{
+    u64 x, y; i64 sx;
+"""
+
+_KERNEL_TAB = r"""
+extern "C" __global__ void __launch_bounds__(@THREADS@)
+witness_program(const i64* __restrict__ pub, const i64* __restrict__ hints, unsigned* __restrict__ Wm, int l,
+                const int* __restrict__ J, const unsigned* __restrict__ C)
+{
+    const int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (col >= l) return;
 """
 
 
@@ -94,14 +120,10 @@ def generate(sys: System, tab: list | None = None) -> str:
     """The kernel source; with ``tab`` (a list the caller keeps) dense operands are appended to it as (row, coef)."""
     hpos = {n: i for i, (_, n) in enumerate(sys.hints)}
     ppos = {n: i for i, (_, n) in enumerate(sys.pins)}
-    head = _HEAD.replace("@THREADS@", str(THREADS))
-    if tab is not None:
-        head = head.replace("extern \"C\" __global__", _AFFINE + "\nextern \"C\" __global__") \
-                   .replace("unsigned* __restrict__ Wm, int l)",
-                            "unsigned* __restrict__ Wm, int l, const int* __restrict__ J, const unsigned* __restrict__ C)")
-    out = [head]
+    stmts: list[list[str]] = []          # one list of C statements per program op
     for op in sys.program:
         kind = op[0]
+        out: list[str] = []
         if kind == "pin":
             _, idx, name = op
             out.append(f"    W({idx}) = (unsigned)PUB({ppos[name]});")
@@ -114,8 +136,11 @@ def generate(sys: System, tab: list | None = None) -> str:
         elif kind == "bits":
             _, row0, nbits, e = op
             out.append(f"    x = {_eval(e, tab)};")
-            for b in range(nbits):
-                out.append(f"    W({row0 + b}) = (unsigned)((x >> {b}) & 1ULL);")
+            if tab is not None:
+                out.append(f"    for (int b = 0; b < {nbits}; ++b) W({row0} + b) = (unsigned)((x >> b) & 1ULL);")
+            else:
+                for b in range(nbits):
+                    out.append(f"    W({row0 + b}) = (unsigned)((x >> {b}) & 1ULL);")
         elif kind == "sels":
             _, row0, k0s, k1s, key = op
             out.append(f"    x = {_eval(key, tab)}; sx = (x > (u64)HALF_P) ? (i64)x - (i64)P : (i64)x;")
@@ -128,8 +153,21 @@ def generate(sys: System, tab: list | None = None) -> str:
             out.append(f"    x = {_eval(x, tab)}; W({idx}) = (unsigned)modinv_p(x);")
         else:
             raise ValueError(kind)
-    out.append(_TAIL)
-    return "\n".join(out)
+        stmts.append(out)
+    if tab is None:                      # the v1 form: one straight-line kernel, source unchanged
+        head = _HEAD.replace("@THREADS@", str(THREADS))
+        return "\n".join([head, *(s for out in stmts for s in out), _TAIL])
+    pre, _, _ = _HEAD.partition("extern \"C\" __global__")
+    src = [pre, _AFFINE]
+    n_chunks = -(-len(stmts) // CHUNK_OPS) if stmts else 0
+    for k in range(n_chunks):
+        src.append(_CHUNK_HEAD.replace("@K@", str(k)))
+        src.extend(s for out in stmts[k * CHUNK_OPS:(k + 1) * CHUNK_OPS] for s in out)
+        src.append("}")
+    src.append(_KERNEL_TAB.replace("@THREADS@", str(THREADS)))
+    src.extend(f"    chunk_{k}(pub, hints, Wm, l, col, J, C);" for k in range(n_chunks))
+    src.append(_TAIL)
+    return "\n".join(src)
 
 
 def available() -> bool:
