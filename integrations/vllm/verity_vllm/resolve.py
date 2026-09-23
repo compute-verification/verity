@@ -264,6 +264,16 @@ class LiveState:
             for r in reqs:
                 owned[int(r["index"])] = str(r["request_id"])
                 cursors[str(r["request_id"])] = _RequestCursor(prompt_len=r.get("prompt_len"))
+        # the fold contract's parameter names (program.json `params`: prompt[_r], seed[_i], peers[_i], weights): a seed / peers parameter
+        # is request-owned like the prompt (BD.decompose's seed_node_of / peer_node_of: the i-th is the i-th header request's)
+        order = [str(r["request_id"]) for r in (run_header.get("workload") or {}).get("requests") or []] if run_header is not None else \
+                [str(r["request_id"]) for r in reqs]
+        for k, name in enumerate(hdr.params):
+            head, _, tail = name.partition("_")
+            if head in ("seed", "peers") and k not in owned:
+                i = int(tail) if tail.isdigit() else 0
+                if i < len(order):
+                    owned[k] = order[i]
         for k, rid in (owned_extra or {}).items():
             owned[int(k)] = rid
         weights = frozenset(k for k in range(n_in) if k not in owned) if n_in else frozenset()
@@ -509,12 +519,22 @@ class Attribution:
     fault_examples: list[str]
     n_input_nodes: int
     disagreements: int = 0
+    present_by_step: dict[int, set[str]] = field(default_factory=dict)    # engine step -> requests a resolved value of that step belongs to
+    live: LiveState | None = None                                          # the final live state (per-request cursors: prefill steps, events)
 
-    def legs(self, steps: dict[int, dict]) -> dict[str, list[int]]:
-        """Each request's node list with the weight-only values of the engine steps it has rows in merged in (BD.shared_legs)."""
+    def legs(self, steps: dict[int, dict] | None) -> dict[str, list[int]]:
+        """Each request's node list with the weight-only values of the engine steps it has rows in merged in (BD.shared_legs).  `steps`
+        (the capture log's StepStart tables) says which requests had rows in a step; without the log the stream's own statement is used
+        (`present_by_step`: the requests whose values were resolved in the step -- the same set when every row is stamped)."""
         if not self.shared_nodes:
             return dict(self.per_req)
-        return BD.shared_legs(self.per_req, self.shared_nodes, steps)
+        st = steps if steps else {s: {"rows": [(r, 0) for r in sorted(rs)], "logits_rows": []} for s, rs in self.present_by_step.items()}
+        return BD.shared_legs(self.per_req, self.shared_nodes, st)
+
+    def prefill_steps(self, rid: str) -> list[int]:
+        """The engine steps in which the request had a prompt row (its prefill chunks), from the live cursors."""
+        c = self.live.requests.get(rid) if self.live is not None else None
+        return sorted(c.prefill_steps) if c is not None else []
 
     def instance_indices(self, legs: dict[str, list[int]] | None = None) -> dict[str, list[int]]:
         """Node ids -> instance indices (`node - n_input_nodes`, the index into `compare.Prog.inst` when no root node was dropped)."""
@@ -541,6 +561,7 @@ def attribute_record(record_dir: str, *, programs: dict[str, ComponentProgram] |
     faults: collections.Counter = collections.Counter()
     examples: list[str] = []
     disagree = 0
+    present: dict[int, set[str]] = {}
     stream = observations if observations is not None else OB.iter_observations(record_dir, header=hdr)
     for obs in stream:
         occ = obs.occurrence
@@ -567,9 +588,10 @@ def attribute_record(record_dir: str, *, programs: dict[str, ComponentProgram] |
             shared.append((node, occ.step))
         else:
             per_req.setdefault(ref.request, []).append(node)
+            present.setdefault(occ.step, set()).add(ref.request)
         advance(live, obs, ref)
     return Attribution(per_req=per_req, shared_nodes=shared, unattributed=unattributed, how=how, faults=faults, fault_examples=examples,
-                       n_input_nodes=live.n_input_nodes, disagreements=disagree)
+                       n_input_nodes=live.n_input_nodes, disagreements=disagree, present_by_step=present, live=live)
 
 
 def compare_attributions(v1: dict[str, list[int]], v2: dict[str, list[int]]) -> dict[str, Any]:
