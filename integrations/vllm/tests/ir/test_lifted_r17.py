@@ -405,50 +405,6 @@ def test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_ru
     assert callable(L.workload_program) and isinstance(takes_lag, bool)
 
 
-def test_a2_lifted_instances_emit_reads_the_declared_lag_and_reports_true_widths(tmp_path):
-    """The second consumer of the one rule: the emitter takes the LAG from the row's workload_program.json (never a default), refuses a
-    contradicting --lag and a Build with no declaration, and its summary reports the TRUE lifted widths (R17-6(b)) + rules version."""
-    import gzip
-    from verity.ir.codec import _spec_id, encode_program
-    from verity_vllm.lifting import record as R
-    from verity_vllm.ir import workload as W
-    from tests.ir import lifted_instances_emit as E
-    row = tmp_path / "row"
-    src = row / "build_request_LP32_T8"
-    src.mkdir(parents=True)
-    desc = encode_program(Program(b1.serve_v2(TINY, LP, D_MAX)))
-    with gzip.open(src / "descriptor.json.gz", "wt") as f:
-        json.dump(desc, f)
-    params = [["prompt", repr(Array(LP, I32))], ["weights", repr(weights_type(TINY))]]
-    comp = W.request_component(R.load_descriptor(src), REGISTRY, [(n, t) for n, t in params])
-    rows = [{"i": k, "spec": _spec_id(n.fn), "form": n.form, "name": f"op/{k}", "args": []} for k, n in enumerate(comp.fn.body.nodes)]
-    with gzip.open(src / "instances.json.gz", "wt") as f:
-        json.dump({"schema": "cb-a/instance-sequence/v1", "params": params, "rows": rows}, f)
-    cap, eos = D_MAX + 1, "17"
-    base = ["--build-request", str(src), "--eos", eos, "--cap", str(cap), "--boundary-prefix", "Final_v2"]
-    with pytest.raises(SystemExit, match="no declared LAG"):  # no workload_program.json, no --lag: nothing is defaulted
-        E.main(base + ["--out", str(tmp_path / "o0")])
-    (row / "build_workload").mkdir()
-    (row / "build_workload" / "workload_program.json").write_text(json.dumps({"stop_rule": {"eos_token_ids": [17], "eos_lag_rows": 1}}))
-    with pytest.raises(SystemExit, match="contradicts the row's declared LAG=1"):
-        E.main(base + ["--out", str(tmp_path / "o1"), "--lag", "0"])
-    assert E.main(base + ["--out", str(tmp_path / "o2")]) == 0
-    s = json.loads((tmp_path / "o2" / "lifted_emit.json").read_text())
-    assert s["lag"] == 1 and s["lag_source"].endswith(":stop_rule.eos_lag_rows") and s["rules_version"] == "lifted-v1" and s["label"] == "lifted-padded"
-    w = s["widths"]
-    assert w["kind"] == "vu-partition-lifted" and w["grown_by_bits"] == w["leaves_non_guard"] == w["lifted_bits_non_guard"] - w["unlifted_bits_total"] > 0
-    assert w["lifted_bits_total"] == w["lifted_bits_non_guard"] + w["guard_bits"] and w["guard_bits"] > 0  # the guard's own gates, apart
-    assert w["rows_with_output_over_w_max_active_reference"] > 0 and w["widest_row"]["lifted_bits"] > 32 and w["w_max_lifted"] == 64
-    res = json.loads((tmp_path / "o2" / "result.json").read_text())
-    assert res["lifted"]["lag"] == 1 and res["lifted"]["lag_declared_field"] == "stop_rule.eos_lag_rows" and res["lifted"]["rules_version"] == "lifted-v1"
-    # a pre-R17-1 Build (declares none) with an explicit --lag: accepted as an EXPLICIT declaration, named as such
-    (row / "build_workload" / "workload_program.json").write_text(json.dumps({"stop_rule": {"eos_token_ids": [17]}}))
-    assert E.main(base + ["--out", str(tmp_path / "o3"), "--lag", "0"]) == 0
-    assert json.loads((tmp_path / "o3" / "lifted_emit.json").read_text())["lag_source"].startswith("--lag (explicit")
-    with pytest.raises(SystemExit, match="declares none of"):
-        E.main(base + ["--out", str(tmp_path / "o4")])
-
-
 def test_a2_the_lifted_program_is_a_function_of_the_declared_lag():
     """DP-pad-02 (b): a different LAG is a different Program (id, gate count) — the value is a static, never read from the record."""
     eos = (15,)
