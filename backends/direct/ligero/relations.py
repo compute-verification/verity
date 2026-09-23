@@ -327,8 +327,8 @@ def _v3_public_vectors(p, c, a, b, y, device="cpu"):
 
 
 _V3_WITNESS = ("torch hint generator (privsel/hints.py: operand word bits, product bits, the two-stage shifter's one-hots, "
-               "digits and aligned limbs, the group maximum's certificate, sign, |sum| in bits, the normalisation shift one-hot "
-               "and the normalised significand) + torch program (windows, lookups, products, inverses)")
+               "digits, aligned and signed aligned limbs, the group maximum's certificate, |sum| in bits, the normalisation "
+               "shift one-hot and the normalised significand) + torch program (windows, lookups, products, inverses)")
 _V3_BACKEND = "b-ligero chain, {name} relation (backends/direct/ligero/privsel/relation.py at {params})"
 
 
@@ -340,7 +340,10 @@ def _v3_of(v2: Relation, name: str, params_note: str) -> Relation:
         instances_dataset=v2.instances_dataset, instances_tier=v2.instances_tier, instance_seed=v2.instance_seed,
         instances_recipe=v2.instances_recipe, relation_name=v2.relation_name, model_name=v2.model_name,
         backend_name=_V3_BACKEND.format(name=name, params=params_note), witness_generation=_V3_WITNESS,
-        claim_note=v2.claim_note, reference_hints=_v3_reference_hints, rust_verifiable=False)
+        claim_note=v2.claim_note, reference_hints=_v3_reference_hints,
+        # backends/ligero-verify pins the four v3 systems (relation.rs privsel; Decode::PrivSel reads the operand words off
+        # the v4 statement and refuses a non-finite one) and verifies their dumps end to end
+        rust_verifiable=True)
     return Relation(**fields)
 
 
