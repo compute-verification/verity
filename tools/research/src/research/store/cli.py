@@ -6,7 +6,12 @@
   research data push [ART|RUN ...] [--pending] [--jobs N] [--verify head|readback]
                                                    preserve on the remote: blobs uploaded concurrently and verified, then the manifest (PRESERVED);
                                                    a run pushes its attempt + outputs
-  research data fetch ART [--to DIR]               materialise the payload (file or tree); prints the path
+  research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
+                                                   materialise the payload (file or tree, or just the files matching --path); prints the path;
+                                                   --list prints the tree's files (path, bytes, local/remote) and fetches nothing
+  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D]] [--min-mb M] [--keep-trees] [--json]
+                                                   free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
+                                                   --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
@@ -211,16 +216,68 @@ def cmd_where(argv: list[str]) -> int:
 
 
 def cmd_fetch(argv: list[str]) -> int:
+    """Materialise a payload, or with `--path GLOB` (repeatable) just the matching subtree of a tree artifact (`rep1/*`, `*.proof`,
+    a bare directory name selects its subtree); the on-disk layout under `--to` is the artifact's own.  `--list` prints the files
+    instead (path, bytes, local | remote | absent) and fetches nothing: `local` = the blob is in objects/, `remote` = the catalog
+    flags the artifact as on the remote (no per-file HEAD)."""
     ap = _ap("fetch")
     ap.add_argument("art")
     ap.add_argument("--to", default=None, metavar="DIR", help="materialise under this directory (default: the store's own cache)")
+    ap.add_argument("--path", action="append", default=[], metavar="GLOB", help="only the files matching this glob (repeatable); tree artifacts")
+    ap.add_argument("--list", action="store_true", help="list the payload files (path, bytes, local/remote) and fetch nothing")
+    ap.add_argument("--json", action="store_true", help="with --list: the rows as JSON")
     ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    if ns.list:
+        rows = st.listing(ns.art, paths=ns.path or None)
+        if ns.json:
+            _dump(rows)
+            return 0
+        for r in rows:
+            print(f"{r['path']:<60} {r['bytes']:>12}  {'local' if r['local'] else ('remote' if r['remote'] else 'ABSENT')}")
+        n_local = sum(1 for r in rows if r["local"])
+        print(f"{len(rows)} file(s), {sum(r['bytes'] for r in rows)} bytes; {n_local} local, {len(rows) - n_local} not local"
+              + ("" if not rows or rows[0]["remote"] else " (artifact not flagged on the remote)"), file=sys.stderr)
+        return 0
     to = None
     if ns.to:
         to = Path(ns.to)
         to.mkdir(parents=True, exist_ok=True)
-    print(LocalStore(ns.store).fetch(ns.art, to))
+    print(st.fetch(ns.art, to, paths=ns.path or None))
     return 0
+
+
+def cmd_evict(argv: list[str]) -> int:
+    """Free local disk by evicting copies whose bytes are PRESERVED on the remote (`evict.py`): store blobs held only by artifacts with a
+    verified remote replica (largest first) and the `trees/` cache, and with `--runs` the big files of finished run directories whose
+    `run_files` artifact is verified (oldest first).  Stops when the free space reaches `--target-free-gb`.  Never touches pending
+    objects, manifests, attempts, labels or the catalog.  `--dry-run` reports without removing anything."""
+    from . import evict as EV  # noqa: PLC0415
+
+    ap = _ap("evict")
+    ap.add_argument("--target-free-gb", required=True, type=float, metavar="N", help="stop once this much is free on the store's filesystem")
+    ap.add_argument("--dry-run", action="store_true", help="report the plan; remove nothing")
+    ap.add_argument("--min-mb", type=float, default=EV.MIN_BYTES / 2**20, metavar="M", help="only blobs / files of at least this size (default 1)")
+    ap.add_argument("--keep-trees", action="store_true", help="leave the trees/ cache alone")
+    ap.add_argument("--runs", action="store_true", help="also evict preserved big files from finished run directories (writes run-files.evicted.json)")
+    ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
+    ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 30)")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    target = EV.parse_gb(str(ns.target_free_gb))
+    min_bytes = int(ns.min_mb * 2**20)
+    say = None if ns.json else (lambda s: print(s, flush=True))
+    rep: dict = {"store": EV.evict_store(st, target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes, keep_trees=ns.keep_trees, log=say)}
+    if ns.runs:
+        from ..runs import runs_root  # noqa: PLC0415
+
+        rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
+                                    quiet_s=ns.quiet_min * 60, log=say)
+    if ns.json:
+        _dump(rep)
+    last = rep.get("runs") or rep["store"]
+    return 0 if last["reached_target"] else 1
 
 
 def cmd_verify(argv: list[str]) -> int:
@@ -570,7 +627,7 @@ def cmd_doctor(argv: list[str]) -> int:
 COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "select": cmd_select, "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
-    "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor,
+    "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor, "evict": cmd_evict,
 }
 
 
