@@ -170,6 +170,10 @@ MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     # tc_probe names the E5M2 hypotheses as the E4M3 pipeline with E5M2 products; the registry's E5M2 models are those pipelines
     "ada_e5m2_m16n8k32": ("ada_e4m3_m16n8k32+e5m2_product",),
     "hopper_e5m2_wgmma_k32": ("hopper_e4m3_wgmma_k32+e5m2_product",),
+    # lane tcgen05 tested the sm_120 models as the hypothesis on the B200 and labelled its captures with the sm_120 names; the
+    # sm_100 registry models are those parameters under an sm_100 name (verity.ml.tc.models).
+    "blackwell_sm100_tcgen05_nvf4": ("blackwell_sm120_nvf4_m16n8k64", "blackwell_sm120_nvf4"),
+    "blackwell_sm100_tcgen05_mxf4": ("blackwell_sm120_mxf4_m16n8k64", "blackwell_sm120_mxf4"),
 }
 
 
