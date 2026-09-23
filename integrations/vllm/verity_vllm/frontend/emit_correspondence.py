@@ -21,13 +21,60 @@ from typing import Any
 
 import torch
 
-from verity.ir.refs import Coll, runs as _runs
+from verity.ir.refs import Affine, Coll, Concat, Strided
 from verity.ir.types import Record
 from verity_vllm.frontend.torch_frontend import flat_types
 from verity_vllm.runtime_correspondence import NAMESPACE, SCHEMA
 
 _ROW_RE = re.compile(r"\[(\d+)\]")
 _COLLECTIVE_KINDS = {"all_reduce2": "all_reduce", "all_gather2": "all_gather"}   # op name -> collective kind (operands in rank order)
+MAX_RUNS = 1 << 16   # a reference sequence with more contiguous runs than this is not indexed (a leaf-strided view of a cache-sized
+                     # tensor has one run per leaf); its slots stay unlocated and say so -- the emitter is O(runs), never O(leaves)
+
+
+def _runs(refs, max_runs: int = MAX_RUNS) -> list[tuple[str, int, int, int]] | None:
+    """`verity.ir.refs.runs` with a budget: the maximal contiguous runs `(space, idx, lo, hi)` of `refs` in sequence order, or None
+    once more than `max_runs` runs would be produced (the walk stops there instead of enumerating leaves)."""
+    out: list[tuple[str, int, int, int]] = []
+
+    def push(space, idx, lo, hi) -> bool:
+        if out and out[-1][0] == space and out[-1][1] == idx and out[-1][3] == lo:
+            out[-1] = (space, idx, out[-1][2], hi)
+            return True
+        if len(out) >= max_runs:
+            return False
+        out.append((space, idx, lo, hi))
+        return True
+
+    def walk(r) -> bool:
+        if isinstance(r, Affine):
+            return push(r.space, r.idx, r.base, r.base + r.count) if r.count else True
+        if isinstance(r, Strided):
+            if r.inner_stride == 1 or r.inner == 1:
+                rows = r.count // r.inner
+                if rows > max_runs:                     # every row is its own run at best
+                    return False
+                for i in range(rows):
+                    b = r.base + i * r.outer_stride
+                    if not push(r.space, r.idx, b, b + r.inner):
+                        return False
+                return True
+            if r.count > max_runs:                      # one run per leaf
+                return False
+            for space, idx, leaf in r:
+                if not push(space, idx, leaf, leaf + 1):
+                    return False
+            return True
+        if isinstance(r, Concat):
+            return all(walk(p) for p in r.parts)
+        if len(r) > max_runs:
+            return False
+        for space, idx, leaf in r:
+            if not push(space, idx, leaf, leaf + 1):
+                return False
+        return True
+
+    return out if walk(refs) else None
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -60,11 +107,15 @@ def _output_views(node) -> list[dict | None]:
 # ---------------------------------------------------------------------------------------------------------------------------
 
 
-def _interval_index(refs) -> dict[tuple[str, int], list[tuple[int, int, int]]]:
-    """(space, idx) -> [(lo, hi, offset)] sorted by lo: the runs of `refs` with the flat leaf offset each run starts at."""
+def _interval_index(refs) -> dict[tuple[str, int], list[tuple[int, int, int]]] | None:
+    """(space, idx) -> [(lo, hi, offset)] sorted by lo: the runs of `refs` with the flat leaf offset each run starts at; None when the
+    sequence has more than MAX_RUNS runs (not indexed)."""
+    rs = _runs(refs)
+    if rs is None:
+        return None
     idx: dict[tuple[str, int], list[tuple[int, int, int]]] = {}
     off = 0
-    for space, i, lo, hi in _runs(refs):
+    for space, i, lo, hi in rs:
         idx.setdefault((space, i), []).append((lo, hi, off))
         off += hi - lo
     for ivs in idx.values():
@@ -72,8 +123,10 @@ def _interval_index(refs) -> dict[tuple[str, int], list[tuple[int, int, int]]]:
     return idx
 
 
-def _locate(index: dict, space: str, i: int, lo: int, hi: int) -> tuple[int, int] | None:
+def _locate(index: dict | None, space: str, i: int, lo: int, hi: int) -> tuple[int, int] | None:
     """The flat leaf range [a, b) of `index`'s collection that holds leaves [lo, hi) of (space, i), if one run holds them all."""
+    if not index:
+        return None
     ivs = index.get((space, i))
     if not ivs:
         return None
@@ -159,15 +212,19 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
     #  and is NOT repeated here: the record only locates the argument inside the occurrence's input tensors)
 
     def source_of(fx_arg, v) -> tuple[str, str | None]:
+        """Source class of an fx input from its binding: read off the FIRST and LAST reference only (O(1); a cache-sized tensor is
+        never walked here) -- `call` (another lowering's output), `input`, `weight` (+ the field), `constant`, `other` (mixed)."""
         if isinstance(v, Coll):
-            spaces = {(space, i) for space, i, _lo, _hi in _runs(v.refs)}
-            if spaces and all(s == "n" for s, _ in spaces):
+            n = len(v.refs)
+            if n == 0:
+                return "other", None
+            (s0, i0, l0), (s1, i1, _l1) = v.refs[0], v.refs[n - 1]
+            if s0 == "n" and s1 == "n":
                 return "call", None
-            if spaces and all(s == "p" and i < n_user for s, i in spaces):
-                return "input", input_names[next(iter(spaces))[1]] if len(spaces) == 1 else None
-            if spaces and all(s == "p" and i == weights_index for s, i in spaces):
-                los = sorted(lo for _s, _i, lo, _hi in _runs(v.refs))
-                return "weight", field_of(los[0]) if los else None
+            if s0 == "p" and s1 == "p" and i0 == i1 and i0 < n_user:
+                return "input", input_names[i0]
+            if s0 == "p" and s1 == "p" and i0 == i1 and i0 == weights_index:
+                return "weight", field_of(l0)
             return "other", None
         if type(v).__name__ in ("_LiftedConstant", "StaticIndex"):
             return "constant", getattr(v, "name", None)
@@ -207,28 +264,42 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
             elif isinstance(a, (list, tuple)):
                 kw_names.extend(kname for x in a if isinstance(x, torch.fx.Node))
         inputs: list[dict] = []
-        idxs: list[tuple[Any, dict]] = []
+        idxs: list[tuple[Any, Any, dict | None]] = []
         for j, a in args_flat:
             v = frozen["in"].get(j) if frozen is not None else ctx.env.get(a)
             src, nm = source_of(a, v)
-            inputs.append({"node": a.name, "arg": j if j < n_positional else None, "kwarg": kw_names[j - n_positional] if j >= n_positional else None,
-                           "source": src, "name": nm, "view": _view(a.meta.get("val"))})
-            idxs.append((a, _interval_index(v.refs) if isinstance(v, Coll) else {}))
+            index = _interval_index(v.refs) if isinstance(v, Coll) else {}
+            inp = {"node": a.name, "arg": j if j < n_positional else None, "kwarg": kw_names[j - n_positional] if j >= n_positional else None,
+                   "source": src, "name": nm, "view": _view(a.meta.get("val"))}
+            if index is None:
+                inp["unindexed"] = f"runs>{MAX_RUNS}"
+            inputs.append(inp)
+            idxs.append((a, v, index))
         # outputs: the node's value(s) as PRODUCED (fx output ports), then the arguments an in-place lowering WROTE (written ports)
         val = frozen["out"] if frozen is not None else ctx.env.get(node)
         outs = val if isinstance(val, (list, tuple)) else [val]
         out_index: dict[tuple[str, int], list[tuple[int, int, int, Any]]] = {}
+        unindexed: list[Any] = []
         for port, c in enumerate(outs):
             if isinstance(c, Coll):
-                for key, ivs in _interval_index(c.refs).items():
+                ix = _interval_index(c.refs)
+                if ix is None:
+                    unindexed.append(port)
+                    continue
+                for key, ivs in ix.items():
                     out_index.setdefault(key, []).extend((lo, hi, off, port) for lo, hi, off in ivs)
         written: list[dict] = []
         for j, c in sorted((frozen or {}).get("written", {}).items()):
             a = dict(args_flat)[j]
-            written.append({"arg": j, "node": a.name, "view": _view(a.meta.get("val"))})
+            wd = {"arg": j, "node": a.name, "view": _view(a.meta.get("val"))}
             if isinstance(c, Coll):
-                for key, ivs in _interval_index(c.refs).items():
-                    out_index.setdefault(key, []).extend((lo, hi, off, ("arg", j)) for lo, hi, off in ivs)
+                ix = _interval_index(c.refs)
+                if ix is None:
+                    wd["unindexed"] = f"runs>{MAX_RUNS}"
+                else:
+                    for key, ivs in ix.items():
+                        out_index.setdefault(key, []).extend((lo, hi, off, ("arg", j)) for lo, hi, off in ivs)
+            written.append(wd)
         base = ctx.storage_base(node)
         w = ctx.is_weight_storage(node)
         lifetime = {"in_place": bool(_mutates(t)), "view_of": base.name if base is not node and isinstance(base, torch.fx.Node) else None,
@@ -245,8 +316,11 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
                           "peer_input": ctx.is_input_storage(operands[peer_i]) if peer_i is not None else None}
             collectives += 1
         occ_index[node] = len(occurrences)
-        occurrences.append({"node": node.name, "module": module, "module_class": mcls, "op": op, "rule": rule_of.get(node.name),
-                            "outputs": _output_views(node), "written": written, "inputs": inputs, "lifetime": lifetime, "collective": collective})
+        occ = {"node": node.name, "module": module, "module_class": mcls, "op": op, "rule": rule_of.get(node.name),
+               "outputs": _output_views(node), "written": written, "inputs": inputs, "lifetime": lifetime, "collective": collective}
+        if unindexed:
+            occ["unindexed_outputs"] = unindexed
+        occurrences.append(occ)
         occ_inputs.append(idxs)
         occ_outputs.append(out_index)
 
@@ -276,9 +350,19 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
             rets.append(slot)
         args: list[dict] = []
         for a in nd.args:
-            rs = _runs(a.refs)
             found: dict[str, Any] = {"input": None, "leaves": None}
-            for j, (_fx_arg, index) in enumerate(occ_inputs[o]):
+            # fast path: the argument IS an fx input's whole binding (a weight, a pass-through): no walk at all
+            whole = next((j for j, (_fx_arg, v, _ix) in enumerate(occ_inputs[o]) if isinstance(v, Coll) and v.refs is a.refs), None)
+            if whole is not None:
+                found["input"], found["leaves"] = whole, [0, int(a.type.leaves)]
+                args.append(found)
+                continue
+            rs = _runs(a.refs)
+            if rs is None:
+                found["unlocated"] = f"runs>{MAX_RUNS}"
+                args.append(found)
+                continue
+            for j, (_fx_arg, _v, index) in enumerate(occ_inputs[o]):
                 if not index:
                     continue
                 r = _locate_runs(index, rs)
@@ -292,7 +376,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
                 spans: list[dict] = []
                 for space, i, lo, hi in rs:
                     hit = None
-                    for j, (_fx_arg, index) in enumerate(occ_inputs[o]):
+                    for j, (_fx_arg, _v, index) in enumerate(occ_inputs[o]):
                         r = _locate(index, space, i, lo, hi) if index else None
                         if r is not None:
                             hit = {"input": j, "leaves": [int(r[0]), int(r[1])]}
