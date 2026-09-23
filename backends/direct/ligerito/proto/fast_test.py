@@ -133,6 +133,30 @@ def test_soundness_of_committed_shape():
     assert not ok and "misses the target" in why
 
 
+def test_non_canonical_words_rejected():
+    import copy
+    n = 12
+    dims = Dims(n, [4, 3, 3], [12, 12, 12], 2)
+    f, z = _inst(n)
+    pf = prove(f, z, dims)
+    assert verify(pf, z)[0]
+    lift = (1 << 62) // P * P                                     # red team's wrap: g0 + g1 >= 2^63 in int64
+    for tamper in ("g+P", "g-wrap", "y+P", "v+P"):
+        bad = copy.deepcopy(pf)
+        if tamper == "g+P":
+            bad.sumcheck[1][0][0, 0] += P
+        elif tamper == "g-wrap":
+            bad.sumcheck[0][0][0, 0] += lift
+            bad.sumcheck[0][0][1, 0] += lift
+        elif tamper == "y+P":
+            bad.final_y[0, 0] += P
+        else:
+            bad.v = np.asarray(bad.v).copy()
+            bad.v.reshape(-1)[0] += P
+        ok, why = verify(bad, z)
+        assert not ok and "out of range" in why, (tamper, why)
+
+
 def test_stream_group_plan():
     from .pcs import _stream_group
     big = torch.cuda.get_device_properties(0).total_memory > (40 << 30)

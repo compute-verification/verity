@@ -236,6 +236,8 @@ def verify_column_rounds(claim: np.ndarray, messages: list[np.ndarray], rs: list
     """Check g_j(0) + g_j(1) == claim, claim <- g_j(r_j).  ``rs`` in draw order (highest bit first)."""
     cur = claim % P
     for g, r in zip(messages, rs):
+        if (np.asarray(g) < 0).any() or (np.asarray(g) >= P).any():
+            return False, cur
         if not np.array_equal(ext.add(g[0], g[1]), cur):
             return False, cur
         cur = interpolate_deg2(g[0], g[1], g[2], r)

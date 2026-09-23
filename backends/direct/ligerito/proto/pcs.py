@@ -859,6 +859,13 @@ def verify_open(proof: Proof, points: np.ndarray, values: np.ndarray | None, coi
     return True, "accept"
 
 
+def _canonical(x, what: str) -> np.ndarray:
+    x = np.asarray(x)
+    if x.dtype.kind not in "iu" or (x < 0).any() or (x >= P).any():
+        raise Reject(f"{what} word out of range")
+    return x.astype(np.int64)
+
+
 def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
     dims = pf.dims
     n, ks, kps, qs, L = dims.n, dims.k, dims.kprime, dims.queries, dims.rounds
@@ -897,7 +904,8 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
     else:                                           # root_1 (and the values) are already in the caller's transcript
         tr.absorb(b"z", _z_bytes(zs))
     # round 1
-    if np.asarray(pf.v).reshape(-1, D).shape != (m, D) or not np.array_equal(np.asarray(pf.v).reshape(-1, D) % P, vs):
+    pv = _canonical(pf.v, "claimed value").reshape(-1, D)
+    if pv.shape != (m, D) or not np.array_equal(pv, vs):
         raise Reject("claimed evaluation differs from the proof's")
     if cf:
         beta = tr.challenge(b"beta", m)
@@ -910,7 +918,7 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
     for g in pf.sumcheck[0]:
         if g.shape != (3, D):
             raise Reject("bad sumcheck message")
-        tr.absorb(b"g", _ext_bytes(g))
+        tr.absorb(b"g", _ext_bytes(_canonical(g, "sumcheck")))
         rs.append(tr.challenge(b"r", 1)[0])
     ok, running = cl.verify_column_rounds(claim, pf.sumcheck[0], rs)
     if not ok:
@@ -948,7 +956,7 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
         for g in pf.sumcheck[i]:
             if g.shape != (3, D):
                 raise Reject("bad sumcheck message")
-            tr.absorb(b"g", _ext_bytes(g))
+            tr.absorb(b"g", _ext_bytes(_canonical(g, "sumcheck")))
             rs.append(tr.challenge(b"r", 1)[0])
         ok, running = cl.verify_column_rounds(running, pf.sumcheck[i], rs)
         if not ok:
@@ -957,7 +965,7 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
         rbars.append(cl.rbar(ri))
         terms = cl.restrict_terms(terms, ks[i], ri)
     # final vector
-    y = pf.final_y % P
+    y = _canonical(pf.final_y, "final vector")
     RL = 1 << ks[-1]
     if y.shape != (RL, D):
         raise Reject("bad final vector shape")
