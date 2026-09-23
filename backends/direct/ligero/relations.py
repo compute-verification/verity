@@ -314,7 +314,8 @@ def _folded(v2: Relation, m: int) -> Relation:
     model = replace(v2.model, groups=tuple(v2.model.groups) * m, name=f"{v2.model.name}x{m}")
     params = type(v2.params).from_model(model)
     name = f"{v2.name}x{m}"
-    return replace(v2, name=name, model=model, params=params, tag=f"|rel={name}|v1".encode(),
+    # the tag follows the base relation's convention (D12: the BF16 relations absorb the empty tag, the FP8 ones their name)
+    return replace(v2, name=name, model=model, params=params, tag=v2.tag if v2.tag == b"" else f"|rel={name}|v1".encode(),
                    backend_name=_V2_BACKEND.format(name=name, params=f"{type(params).__name__}.from_model({model.name})"),
                    model_name=f"{v2.model_name} x{m} ({m} instruction steps per column, K={model.k})",
                    relation_name=f"{v2.relation_name} ({m} steps per column)", rust_verifiable=False)
