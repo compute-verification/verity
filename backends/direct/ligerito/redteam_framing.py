@@ -3,8 +3,9 @@
 The framing blob (``{"sib_len": [...], "final_len": int[, "t_pad": int]}``) is not absorbed and both readers parse it with a
 lenient JSON parser (``proof.py`` ``json.loads``; ``lgto.rs`` ``json::parse`` without the params blob's canonical check), so
 re-encoding it yields a different, still-valid proof (Fiat-Shamir included).  Writes, from a dump's ``honest_fiat-shamir``
-proof, four re-encodings (space after a colon, an unknown key, reversed key order, indented) as ``expect: reject`` entries:
-they are accepted today and should be rejected once the framing must be canonical compact JSON with known keys.
+proof, four re-encodings (space after a colon, an unknown key, reversed key order, indented) and, for a non-ZK proof, an
+explicit ``"t_pad":0`` as ``expect: reject`` entries: each parses to the honest proof, so each must be rejected (the framing
+must be the writer's exact bytes).
 Run: ``python -m backends.direct.ligerito.redteam_framing DUMP OUT [--bin ligerito-verify]``."""
 from __future__ import annotations
 
@@ -39,6 +40,11 @@ def main() -> int:
     fj = json.loads(fr)
     variants = {"space": fr.replace(":", ": ", 1), "extra_key": json.dumps({**fj, "zz": 1}, separators=(",", ":")),
                 "reordered": json.dumps(dict(reversed(list(fj.items()))), separators=(",", ":")), "indented": json.dumps(fj, indent=2)}
+    if "t_pad" not in fj:
+        # compact, known keys, writer's order, yet not the writer's bytes: the writer emits t_pad only with ZK padding, and
+        # t_pad 0 parses to the same proof (no ybar); relation-2 32e9bd59's canonical check rebuilds it, verify-rs-3 2dfbb90a
+        # rejects it
+        variants["t_pad_zero"] = json.dumps({**fj, "t_pad": 0}, separators=(",", ":"))
     os.makedirs(a.out, exist_ok=True)
     shutil.copy(os.path.join(a.dump, "key.bin"), os.path.join(a.out, "key.bin"))
     files = []
