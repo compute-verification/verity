@@ -72,6 +72,27 @@ def test_interpreter_kernel_equals_torch_program(rel_name):
     assert torch.equal(W_int.to(torch.int64), W_ref)
 
 
+@pytest.mark.parametrize("rel_name", ["bf16-hopper", "fp8-ada"])
+def test_level_interpreter_equals_sequential_interpreter(rel_name):
+    """The level-scheduled interpreter (witness_device.INTERP_LEVELS; lane blake3-leaf-3) produces the sequential
+    interpreter's W, which the test above ties to the torch program."""
+    from . import witness_device
+    R, pub, hints = _sub_batch(rel_name)
+    old = witness_device.INTERP_OPS, witness_device.INTERP_LEVELS
+    Ws = []
+    try:
+        witness_device.INTERP_OPS = 0
+        pub_rows = torch.stack([pub[name].to("cuda") for _, name in R.sys.pins]) % witness_mod.P
+        for levels in (False, True):
+            witness_device.INTERP_LEVELS = levels
+            f = witness_device.FusedWitness(R.sys, "cuda")
+            assert f.interp and bool(f.levels) == levels
+            Ws.append(f.run(pub_rows, hints))
+    finally:
+        witness_device.INTERP_OPS, witness_device.INTERP_LEVELS = old
+    assert torch.equal(Ws[0], Ws[1])
+
+
 def test_fused_witness_equals_torch_program_fp4():
     """The FP4 relation's program (fp4/relation.py: 1583 rows/unit, chain-mode system) through the same fused kernel --
     the FP4 chain runner takes the shared ``witness.build_witness`` path, so ``--impl device`` covers its witness too."""

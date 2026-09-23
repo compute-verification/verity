@@ -334,6 +334,71 @@ witness_program(const i64* __restrict__ pub, const i64* __restrict__ hints, unsi
 """
 
 
+# Level-scheduled interpreter (lane blake3-leaf-3): the sequential interpreter runs l threads, each through all ~35k ops
+# of a BLAKE3-leaf column (126 ms per l = 2048 sub-batch on the 4090 against ~5 ms of encode + Merkle: latency-bound, 8-16
+# blocks on 128 SMs).  The ops are grouped by dependency depth (level = 1 + the deepest level among the rows its operands
+# read; pins / hints are level 0) and each level is one launch over (op, column) pairs.  Same per-op arithmetic as
+# ``_KERNEL_INTERP``, and every op still reads only rows written at lower levels, so W is identical; used only when every
+# row has exactly one writer and nothing is read before it is written (else the sequential interpreter runs).
+# LIGERO_INTERP_LEVELS=0 forces the sequential interpreter.
+INTERP_LEVELS = __import__("os").environ.get("LIGERO_INTERP_LEVELS", "1") != "0"
+
+_KERNEL_LEVEL = r"""
+extern "C" __global__ void __launch_bounds__(@THREADS@)
+witness_level(const i64* __restrict__ pub, const i64* __restrict__ hints, unsigned* __restrict__ Wm, int l,
+              const int* __restrict__ J, const unsigned* __restrict__ C,
+              const int* __restrict__ OPS, int op_lo, int n_ops, const unsigned* __restrict__ OPD, const i64* __restrict__ SEL)
+{
+    const long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (t >= (long long)n_ops * l) return;
+    const int col = (int)(t % l);
+    const int* o = OPS + 6 * (op_lo + (int)(t / l));
+    const int kind = o[0], idx = o[1];
+#define EV(k) affine(J, C, (int)OPD[3 * (k)], (int)OPD[3 * (k) + 1], (u64)OPD[3 * (k) + 2], Wm, l, col)
+    switch (kind) {
+    case 0: W(idx) = (unsigned)PUB(o[2]); break;
+    case 1: W(idx) = (unsigned)modp_signed(HINT(o[2])); break;
+    case 2: { const u64 x = EV(o[2]); const u64 y = EV(o[3]); W(idx) = (unsigned)((x * y) % P); } break;
+    case 3: { const u64 x = EV(o[3]); const int nb = o[2];
+              for (int b = 0; b < nb; ++b) W(idx + b) = (unsigned)((x >> b) & 1ULL); } break;
+    case 4: { const u64 x = EV(o[3]); const i64 sx = (x > (u64)HALF_P) ? (i64)x - (i64)P : (i64)x;
+              const int ns = o[2], so = o[4];
+              for (int s = 0; s < ns; ++s) W(idx + s) = (unsigned)((sx >= SEL[2 * (so + s)]) && (sx <= SEL[2 * (so + s) + 1])); } break;
+    case 5: { const u64 x = EV(o[2]); W(idx) = (unsigned)modinv_p(x); } break;
+    default: break;
+    }
+#undef EV
+}
+"""
+
+
+def _interp_levels(ops, opd, J, m: int):
+    """``(order, counts)``: the op permutation grouped by dependency level and the ops per level, or None when some row
+    has two writers or is read before it is written (the sequential order is then the only safe one)."""
+    import numpy as np
+    lvl_row = np.zeros(m, dtype=np.int64)
+    written = np.zeros(m, dtype=bool)
+    lv = np.empty(len(ops), dtype=np.int64)
+    for i, o in enumerate(ops):
+        kind, idx = int(o[0]), int(o[1])
+        reads = () if kind in (0, 1) else (o[2], o[3]) if kind == 2 else (o[3],) if kind in (3, 4) else (o[2],)
+        lev = 0
+        for k in reads:
+            off, n = int(opd[k, 0]), int(opd[k, 1])
+            if n:
+                js = J[off:off + n]
+                if not written[js].all():
+                    return None
+                lev = max(lev, int(lvl_row[js].max()) + 1)
+        nw = int(o[2]) if kind in (3, 4) else 1
+        if written[idx:idx + nw].any():
+            return None
+        written[idx:idx + nw] = True
+        lvl_row[idx:idx + nw] = lev
+        lv[i] = lev
+    return np.argsort(lv, kind="stable"), np.bincount(lv)
+
+
 def _interp_tables(sys: System, program: list) -> tuple:
     """The interpreter's tables: ``(J, C)`` operand terms, ``OPS`` (n_ops, 6) int32, ``OPD`` (n_operands, 3) uint32 =
     (offset, n_terms, constant), ``SEL`` (n_sels, 2) int64 selector bounds."""
@@ -410,14 +475,23 @@ class FusedWitness:
         self.hooks = list(getattr(sys, "witness_hooks", None) or ())
         program = _program(sys)
         self.interp = len(program) > INTERP_OPS
+        self.levels = None
         if self.interp:
             import numpy as np
             J, C, ops, opd, sel = _interp_tables(sys, program)
-            self.src = generate_interp()
+            lv = _interp_levels(ops, opd, J, sys.m) if INTERP_LEVELS else None
+            if lv is not None:
+                order, counts = lv
+                ops = np.ascontiguousarray(ops[order])
+                starts = np.concatenate([[0], np.cumsum(counts)[:-1]])
+                self.levels = [(int(s), int(c)) for s, c in zip(starts, counts) if c]
+                self.src = generate_interp() + _KERNEL_LEVEL.replace("@THREADS@", str(THREADS))
+            else:
+                self.src = generate_interp()
             self.digest = hashlib.sha256(self.src.encode() + J.tobytes() + C.tobytes() + ops.tobytes() + opd.tobytes() +
                                          sel.tobytes()).hexdigest()
             self.mod = cp.RawModule(code=self.src, options=("-std=c++17",))
-            self.kernel = self.mod.get_function("witness_program")
+            self.kernel = self.mod.get_function("witness_level" if self.levels else "witness_program")
             with cp.cuda.Device(self.device.index or 0):
                 self.tables = (cp.asarray(J), cp.asarray(C), cp.asarray(ops.reshape(-1)), np.int32(len(ops)),
                                cp.asarray(opd.reshape(-1)), cp.asarray(sel.reshape(-1)))
@@ -452,7 +526,13 @@ class FusedWitness:
         if self.tables is not None:
             args = args + self.tables
         with stream:
-            self.kernel((-(-l // THREADS),), (THREADS,), args)
+            if self.levels:
+                J, C, ops, _n, opd, sel = self.tables
+                for lo, n in self.levels:
+                    self.kernel((-(-(n * l) // THREADS),), (THREADS,),
+                                args[:4] + (J, C, ops, np.int32(lo), np.int32(n), opd, sel))
+            else:
+                self.kernel((-(-l // THREADS),), (THREADS,), args)
             for h in self.hooks:
                 h.launch(cp, W_u32, l)
         return W
