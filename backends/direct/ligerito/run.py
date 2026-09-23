@@ -4,6 +4,7 @@
     python -m backends.direct.ligerito.run bench --relation fp8-ada --total-vus 4096 --reps 3 --coins local [--dump-dir D]
                                                  [--rust-verifier backends/ligerito-verify/target/release/ligerito-verify]
     python -m backends.direct.ligerito.run verify-dir D           # the Python file verifier on a dump (cold, from bytes)
+    python -m backends.direct.ligerito.run verify-session D S...  # a live dump's coins vs the verifier's session dirs S
 
 Dump layout (what ``ligerito-verify batch --dir`` reads): ``key.bin`` (LGVK0001), per proof ``<stem>.stmt`` (LGTS0001) +
 ``<stem>.lgto`` (LGTO0001, must ACCEPT) or ``<stem>.lgto.neg`` (must REJECT), ``<stem>.coins`` for live coins
@@ -14,6 +15,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import math
 import os
 import platform
 import statistics
@@ -32,6 +34,7 @@ from backends.direct.ligero import relchain
 from backends.direct.ligero.relchain import K_VU
 
 from . import prove as prove_mod
+from .layout import layout_for
 from .proof import Proof, Statement, read_key, read_proof, read_statement, sha256
 from .prove import Prover, Result, make_coins
 from .transcript import LiveCoins
@@ -44,7 +47,8 @@ ZK_MISSING = ("Libra masks in the three sumchecks, the shift-claim reduction and
 #: where a cold verify-dir gets each coin mode's coins from (red-team F12 (b)): only the FS transcript is the verifier's own
 COIN_PROVENANCE = {"fiat-shamir": "recomputed from the transcript (verifier-derived)",
                    "local": "rebuilt from the manifest's coins_seed (prover-side: no soundness)",
-                   "live": "the dump's .coins file, stream binding re-derived (prover-side record: no soundness without the verifier's own log)"}
+                   "live": "the dump's .coins file, stream binding re-derived (prover-side record: no soundness until verify-session "
+                           "matches it to the verifier's own session record)"}
 
 
 def instances(rel, n: int, procs: int = 8, cache=None) -> list:
@@ -125,6 +129,15 @@ def _stmt_with(stmt: Statement, **kw) -> Statement:
     return st
 
 
+def _stmt_nvus(pv: Prover, stmt: Statement, n_vus: list[int]) -> Statement:
+    """``stmt`` claiming other sub-batch sizes, kept canonical (y = 0 off the new chain ends), so the verifier gets past the
+    statement checks to the claim itself."""
+    st = _stmt_with(stmt, n_vus=n_vus)
+    lay = layout_for(pv.sys, pv.l, [nv for nv in n_vus if nv > 0], pv.steps)
+    st.y = [np.where(lay.chain_layout(s).masks("cpu")[2].numpy() != 0, y, 0) for s, y in enumerate(st.y)]
+    return st
+
+
 def _flip_operand(rel, a: np.ndarray) -> np.ndarray:
     """``a[10][1]`` with an exponent bit flipped (a word that still decodes)."""
     a = a.copy()
@@ -155,8 +168,8 @@ def v1_forgeries(pv: Prover, bt) -> list[tuple[str, dict, str]]:
     return [("end row(s): claimed word +1 ulp, true witness", dict(forge_stmt=_stmt_with(st, y=[bump(steps - 1)] + st.y[1:])), "PCS"),
             ("pub:* rows: operand a[10][1] exponent bit flipped, true witness",
              dict(forge_stmt=_stmt_with(st, a=[_flip_operand(rel, st.a[0])] + st.a[1:])), "PCS"),
-            ("start/link/end rows: statement n_vus[0] - 1 (same words), true witness",
-             dict(forge_stmt=_stmt_with(st, n_vus=[nv0 - 1] + st.n_vus[1:])), "PCS"),
+            ("start/link/end rows: statement n_vus[0] - 1 (the dropped VU's end word zeroed), true witness",
+             dict(forge_stmt=_stmt_nvus(pv, st, [nv0 - 1] + st.n_vus[1:])), "PCS"),
             ("const + every public row: last VU of sub-batch 0 all-zero in z, its y claimed +1",
              dict(forge_stmt=_stmt_with(st, y=[bump(nv0 * steps - 1)] + st.y[1:]), forge_z=zero_last_vu), "PCS"),
             ("next:0 row +12345 in column 5 committed (pinned by the shift)", dict(forge_rows={lay.virt["next:0"]: next0}),
@@ -259,12 +272,12 @@ def gate(args) -> int:
             v = pv.verify(stmt, proof, make_coins(kind, seed))
             negs.append((name, v, stmt, proof, stage))
 
-        def neg_prove(name: str, mutate=None, cheat=None, stmt=None, ypub=None):
+        def neg_prove(name: str, mutate=None, cheat=None, stmt=None, ypub=None, stage=None):
             b2 = bt if stmt is None else copy.copy(bt)
             if stmt is not None:
                 b2.stmt, b2.stmt_digest = stmt, stmt.digest()
             r2 = pv.prove(b2, make_coins(kind, 1), mutate=mutate, cheat=cheat, ypub_override=ypub)
-            neg(name, b2.stmt, r2.proof)
+            neg(name, b2.stmt, r2.proof, stage=stage)
         # (1) wrong claimed word (the prover claims it: witness honest, y16 row + statement changed)
         y0 = bt.stmt.y[0]
         for bit in (0, 7, rel.y_bits - 1):
@@ -338,7 +351,15 @@ def gate(args) -> int:
         # (6) tampered proof bytes
         for what in PROOF_TAMPERS:
             neg(f"tampered {what}", bt.stmt, _mutate_proof(res.proof, what))
-        neg("statement of another batch size (n_vus)", _stmt_with(bt.stmt, n_vus=[bt.stmt.n_vus[0] - 1] + bt.stmt.n_vus[1:]), res.proof)
+        neg("statement of another batch size (n_vus)", _stmt_nvus(pv, bt.stmt, [bt.stmt.n_vus[0] - 1] + bt.stmt.n_vus[1:]), res.proof)
+        _, _, end0 = bt.lay.chain_layout(0).masks("cpu")
+        off = np.flatnonzero(end0.numpy() == 0)
+        if off.size:
+            # the end constraint is masked there, so this proof of the altered statement is otherwise valid
+            y_off = [y.copy() for y in bt.stmt.y]
+            y_off[0][off[0]] = 1
+            neg_prove(f"statement word y[{off[0]}] = 1 off a chain end, proved for that statement (non-canonical)",
+                      stmt=_stmt_with(bt.stmt, y=y_off), ypub=y_off[0], stage="statement")
         for i, (name, (okn, whyn, _), st, pf, stage) in enumerate(negs):
             early = not okn and stage is not None and stage not in whyn
             log(f"  [{kind}] negative {name}: {'ACCEPTED (BUG)' if okn else f'REJECTED BEFORE {stage!r} (BUG)' if early else 'REJECTED'} {whyn}")
@@ -367,15 +388,19 @@ def gate(args) -> int:
 _PROVERS: dict = {}
 
 
-def verify_dir(d: Path, device: str = "cuda") -> dict:
-    man = json.loads((d / "manifest.json").read_text())
+def _dump_prover(d: Path, man: dict, device: str) -> Prover:
     key = read_key((d / "key.bin").read_bytes())
     k = (key.relation, man.get("l"), device)
     if k not in _PROVERS:
         _PROVERS[k] = Prover(key.relation, device, man["l"])
-    pv = _PROVERS[k]
-    if pv.key_bytes != (d / "key.bin").read_bytes():
+    if _PROVERS[k].key_bytes != (d / "key.bin").read_bytes():
         raise SystemExit("key.bin differs from the key this code derives from the system")
+    return _PROVERS[k]
+
+
+def verify_dir(d: Path, device: str = "cuda") -> dict:
+    man = json.loads((d / "manifest.json").read_text())
+    pv = _dump_prover(d, man, device)
     items, t0 = [], time.perf_counter()
     for e in man["files"]:
         st = read_statement((d / e["stmt"]).read_bytes())
@@ -402,7 +427,7 @@ def verify_dir(d: Path, device: str = "cuda") -> dict:
     return summ
 
 
-def _file_coins(d: Path, e: dict):
+def _file_coins(d: Path, e: dict, cls=LiveCoins):
     raw = (d / e["coins_file"]).read_bytes()
     n = int.from_bytes(raw[:4], "little")
     slots = [raw[4 + 32 * i:4 + 32 * (i + 1)] for i in range(n)]
@@ -417,7 +442,72 @@ def _file_coins(d: Path, e: dict):
                 raise ValueError(f"coin slot {k} is not the stream's")
         if len(b["openings"]) != n:
             raise ValueError("coin count differs from the stream's openings")
-    return LiveCoins(slots)
+    return cls(slots)
+
+
+def verify_session(d: Path, records: list[Path], device: str = "cuda") -> dict:
+    """Authenticate a live dump's coins against the issuing verifier's own session records (``session.json`` +
+    ``verdict.json`` of ``live.ChallengeServerSession``, one dir per session).  Per accepted live proof: the verifier batch
+    whose coin openings are the dump's; its STMT digest = this statement + params + key; every round's recorded
+    ``msg_sha256`` and label = those the proof's own absorbs give (the verifier opened coin k only after MSG k); the session
+    ACCEPTED; the proof verifies.  Only such proofs claim the interactive union, and the job the union over ``n_proofs``
+    (red-team F12, F5)."""
+    man = json.loads((d / "manifest.json").read_text())
+    pv = _dump_prover(d, man, device)
+    by_open: dict = {}
+    for r in records:
+        sd = Path(r) if Path(r).is_dir() else Path(r).parent
+        sess, verdict = json.loads((sd / "session.json").read_text()), json.loads((sd / "verdict.json").read_text())
+        for b in sess["batches"]:
+            if b.get("coins"):
+                by_open[b["coins"][0]["r"]] = (verdict.get("session_id", sd.name), b, verdict)
+    items = []
+    for e in man["files"]:
+        if e["coins"] != "live" or e["expect"] != "accept":
+            continue
+        item = {"proof": e["proof"], "authenticated": False}
+        try:
+            b = e["stream_binding"]
+            sid, rec, verdict = by_open.get(b["openings"][0][0]) or (None, None, None)
+            if rec is None:
+                raise ValueError("no verifier session batch opened these coins")
+            item["session"], item["batch"] = sid, rec["batch"]
+            if not verdict.get("accepted"):
+                raise ValueError(f"session {sid} was not accepted by its verifier: {verdict.get('errors')}")
+            st, pf = read_statement((d / e["stmt"]).read_bytes()), read_proof((d / e["proof"]).read_bytes())
+            stream_stmt = b"lgto-stmt|v1|" + sha256(pf.absorbed_params()) + st.digest() + pv.key_sha256
+            if bytes.fromhex(b["statement"]) != stream_stmt or rec.get("stmt_sha256") != sha256(stream_stmt).hex():
+                raise ValueError("the stream's STMT is not this statement / params / key")
+            if [[c["r"], c["s"]] for c in rec["coins"]] != b["openings"]:
+                raise ValueError("the dump's coin openings are not the verifier's")
+            vc = _file_coins(d, e, prove_mod.SessionReplayCoins)
+            ok, why, info = pv.verify(st, pf, vc)
+            if not ok:
+                raise ValueError(f"proof rejected: {why}")
+            if len(vc.msgs) != len(rec["rounds"]):
+                raise ValueError(f"{len(vc.msgs)} coin slots in the proof, {len(rec['rounds'])} rounds in the session")
+            for k, (m, lb, rd) in enumerate(zip(vc.msgs, vc.labels, rec["rounds"])):
+                if rd["msg_sha256"] != sha256(m).hex() or rd["label"] != lb.decode():
+                    raise ValueError(f"round {k}: the verifier opened its coin on another message than the proof's")
+            item.update(authenticated=True, rounds=len(rec["rounds"]),
+                        claim=prove_mod.soundness_claim(info["union"], "live", verifier_record=True))
+        except (ValueError, KeyError, IndexError) as ex:
+            item["why"] = str(ex)
+        items.append(item)
+    n_proofs = int(man.get("n_proofs") or 1)
+    per = [i["claim"]["claimed_log2"] for i in items if i["authenticated"]]
+    ok = bool(items) and all(i["authenticated"] for i in items)
+    out = {"checker": "backends.direct.ligerito.run verify-session (proof MSG digests vs the issuing verifier's session record)",
+           "records": [str(r) for r in records], "live_proofs": len(items), "authenticated": sum(i["authenticated"] for i in items),
+           "n_proofs": n_proofs, "per_proof_claimed_log2": max(per) if ok else None,
+           "job_claimed_log2": max(per) + math.log2(n_proofs) if ok else None, "items": items}
+    (d / "verify_session.json").write_text(json.dumps(out, indent=1, default=str))
+    for i in items:
+        print(f"  {i['proof']}: {'authenticated' if i['authenticated'] else 'NOT authenticated: ' + i['why']}"
+              f"{' (session ' + str(i.get('session')) + ' batch ' + str(i.get('batch')) + ')' if i.get('session') else ''}", flush=True)
+    print(f"verify-session {d}: {out['authenticated']}/{out['live_proofs']} live proofs authenticated; job claim "
+          f"{out['job_claimed_log2']} (n_proofs {n_proofs})", flush=True)
+    return out
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -448,7 +538,9 @@ def bench(args) -> int:
     bv = args.batch_vus or total_vus
     if total_vus % bv:
         raise SystemExit(f"--batch-vus {bv} must divide --total-vus {total_vus}")
-    bts = [pv.batch(data[i:i + bv], args.coins, zk=args.zk) for i in range(0, total_vus, bv)]
+    # an n-proof job: each proof sized for 2^-(128 + ceil log2 n) so the union over the distinct statements meets 2^-128 (F5)
+    per_proof_target = -128.0 - math.ceil(math.log2(-(-total_vus // bv)))
+    bts = [pv.batch(data[i:i + bv], args.coins, zk=args.zk, target_log2=per_proof_target) for i in range(0, total_vus, bv)]
     nb_ = len(bts)
     bt = bts[0]
     lay = bt.lay
@@ -546,9 +638,13 @@ def bench(args) -> int:
     snd = pv.soundness(bt.dims)
     peak = max(r.peak_device_bytes for _, it in runs for r, _, _ in it)
     rust_ok = bool(rust and rust["exit"] == 0)
-    live_verified = bool(live and args.verifier and (stream_info.get("verdict") or {}).get("accepted"))
+    # the verdict frame proves the round order only; the coins count once verify-session matched the proofs' messages to
+    # the verifier's own session record, which the prover does not hold during the run
+    session_accepted = bool(live and args.verifier and (stream_info.get("verdict") or {}).get("accepted"))
+    live_verified = False
     claim = prove_mod.soundness_claim(snd, args.coins, verifier_record=live_verified)
-    claimed = claim["claimed_log2"]
+    per_proof = claim["claimed_log2"]
+    claimed = None if per_proof is None else per_proof + math.log2(nb_)      # union over the job's nb_ distinct statements
     zk_on = False                                   # complete ZK: needs the sumcheck masks and the PCS column padding
     zk_partial = f"partial: {ZK_PARTIAL}; missing: {ZK_MISSING}" if args.zk else None
     if zk_on and live_verified and rust_ok:
@@ -558,7 +654,9 @@ def bench(args) -> int:
         proof_class, zk_mode = "NON_ZK_PROOF_DIAGNOSTIC", "none"
         omitted = "external authentication; ZK masking (" + (ZK_MISSING if args.zk else STUBBED) + ")"
         if live and not live_verified:
-            omitted += "; coins from live.LocalChallenges (no network verifier)" if not args.verifier else "; live session not accepted"
+            omitted += ("; coins from live.LocalChallenges (no network verifier)" if not args.verifier
+                        else "; live coins pending `run.py verify-session` against the verifier's session record" if session_accepted
+                        else "; live session not accepted")
     if claimed is None:
         omitted += f"; soundness ({claim['basis']})"
     hw = contract.probe_hardware()
@@ -585,9 +683,10 @@ def bench(args) -> int:
                   "hash_assumption": "BLAKE3 Merkle (collision resistance); Fiat-Shamir: BLAKE2b/SHAKE-256 transcript" if args.coins == "fiat-shamir"
                                      else "BLAKE3 Merkle (collision resistance); coins independent of the prover's messages",
                   "achieved_log2": claimed, "achieved_bits": None if claimed is None else -claimed, "soundness_basis": claim["basis"],
+                  "per_proof_target_log2": per_proof_target, "per_proof_claimed_log2": per_proof, "n_proofs": nb_,
                   "interactive_union_log2": snd["total_log2"], "terms_log2": snd["terms_log2"],
                   **({"fs_queries_log2": claim["queries_log2"], "fs_worst_term": claim["worst_term"]} if "worst_term" in claim else {}),
-                  "union_over": 1, "stubbed": STUBBED},
+                  "union_over": nb_, "stubbed": STUBBED},
         hardware=hw, software=sw,
         preprocessing=f"constraint compilation + layout constraints + verification key (functions of the relation only, {pv.compile_seconds:.2f}s)",
         retention="retained", instances=inst, scope="vu", omitted=omitted,
@@ -694,7 +793,14 @@ def main(argv=None) -> int:
     s = sub.add_parser("verify-dir")
     s.add_argument("dir")
     s.add_argument("--device", default="cuda")
+    s = sub.add_parser("verify-session")
+    s.add_argument("dir")
+    s.add_argument("records", nargs="+", help="the verifier's session dirs (session.json + verdict.json)")
+    s.add_argument("--device", default="cuda")
     args = ap.parse_args(argv)
+    if args.cmd == "verify-session":
+        out = verify_session(Path(args.dir), [Path(r) for r in args.records], args.device)
+        return 0 if out["live_proofs"] and out["authenticated"] == out["live_proofs"] else 1
     if args.cmd == "gate":
         if args.l is None:
             args.l = 256 if args.vus <= 64 else 16384

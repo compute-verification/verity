@@ -69,8 +69,8 @@ def _stream_for_zero_check(f: torch.Tensor, dims: Dims, dev) -> bool | None:
     need = torch.cuda.memory_allocated(dev) + (4 << dims.kprime[0]) * n1 + 64 * n1 + ZC_BYTES_PER_CELL * f.numel()
     return True if need > torch.cuda.get_device_properties(dev).total_memory - (5 << 29) else None
 
-__all__ = ["FS_QUERIES_LOG2", "Committed", "Prover", "Reject", "StreamCoins", "coins_kind", "dims_for", "make_coins", "pcs_commit",
-           "pcs_open", "pcs_verify", "soundness_claim", "statement_for_stream"]
+__all__ = ["FS_QUERIES_LOG2", "Committed", "Prover", "Reject", "SessionReplayCoins", "StreamCoins", "coins_kind", "dims_for",
+           "make_coins", "pcs_commit", "pcs_open", "pcs_verify", "soundness_claim", "statement_for_stream"]
 
 
 class Reject(Exception):
@@ -81,13 +81,16 @@ class Reject(Exception):
 # Parameters and coins
 # ---------------------------------------------------------------------------------------------------------------------
 
-def dims_for(n: int, rel_name: str | None = None, L: int | None = None) -> tuple[Dims, params_mod.LigeritoParams]:
+def dims_for(n: int, rel_name: str | None = None, L: int | None = None,
+             target_log2: float = -128.0) -> tuple[Dims, params_mod.LigeritoParams]:
     """Parameter set B for ``N = 2^n`` cells: L = 5 at batch scale (n >= 26), fewer levels on the gate's small batches;
-    |S_i| allocated by ``params.allocate_queries`` for the 2^-128 union bound."""
+    |S_i| allocated by ``params.allocate_queries`` for the ``target_log2`` union bound (2^-(128 + log2 n) per proof of an
+    n-proof job, red-team F5)."""
     shape = params_mod.RELATIONS.get(rel_name) if rel_name else None
     for L_ in ([L] if L is not None else range(5, 1, -1)):
         try:
-            p = params_mod.optimize(1 << n, L_, rate_log2=SET_B_RATES[:L_], relation=shape, zk=False, min_wide_log2=3)
+            p = params_mod.optimize(1 << n, L_, rate_log2=SET_B_RATES[:L_], relation=shape, zk=False, min_wide_log2=3,
+                                    target_log2=target_log2)
         except ValueError:
             continue
         return Dims(n, list(p.wide_log2), list(p.queries), list(p.rate_log2)), p
@@ -214,6 +217,37 @@ class StreamCoins(LiveCoins):
                 "openings": [[r.hex(), s.hex()] for r, s in self.stream.openings()], "labels": [x.decode() for x in self.labels],
                 "derivation": "slot_k = SHAKE-256(b'ligero-chal|v1|' | blake2b(b'ligero-chal-ctx|' | u32 len(stmt) | stmt | c_0..c_{R-1}) "
                               "| u32 k | u32 len(label) | label | r_k)[:32]; coin_commit(r_k, s_k) == c_k (ligero/live.py)"}
+
+
+class SessionReplayCoins(LiveCoins):
+    """The verifier's replay of a stream proof (``LiveCoins`` over the dump's slots) that also recomputes MSG k -- the
+    BLAKE2b of the proof's absorbs since slot k-1, as ``StreamCoins`` sent it -- and the label of every slot, so the proof
+    can be matched against the issuing verifier's session record (``msg_sha256`` = sha256(MSG k) per round)."""
+
+    def __init__(self, slots):
+        super().__init__(slots)
+        self.msgs: list[bytes] = []
+        self.labels: list[bytes] = []
+        self._h = hashlib.blake2b(digest_size=32)
+
+    def absorb(self, label: bytes, data: bytes) -> None:
+        self.absorbed += 1
+        self._h.update(len(label).to_bytes(4, "little") + label + len(data).to_bytes(8, "little"))
+        self._h.update(data)
+
+    def _slot(self, label: bytes) -> None:
+        self.msgs.append(self._h.digest())
+        self.labels.append(label)
+        self._h = hashlib.blake2b(digest_size=32)
+        self._next()
+
+    def challenge(self, label: bytes, n: int) -> np.ndarray:
+        self._slot(label)
+        return _ext_from_stream(self._stream(8 * n * D), n)
+
+    def indices(self, label: bytes, domain: int, count: int) -> list[int]:
+        self._slot(label)
+        return _distinct_indices(self._stream, domain, count)
 
 
 def statement_for_stream(bt, key_sha256: bytes) -> bytes:
@@ -809,7 +843,8 @@ class Prover:
         self.y_bytes = np.dtype(self.rel.y_dtype).itemsize
 
     # --- statement --------------------------------------------------------------------------------------------------
-    def batch(self, vus: list, coins_kind: str = "fiat-shamir", zk: bool = False, S: int | None = None) -> Batch:
+    def batch(self, vus: list, coins_kind: str = "fiat-shamir", zk: bool = False, S: int | None = None,
+              target_log2: float = -128.0) -> Batch:
         l, steps = self.l, self.steps
         per = l // steps
         groups = [vus[i:i + per] for i in range(0, len(vus), per)]
@@ -825,17 +860,19 @@ class Prover:
             y.append(bd["ypub"].cpu().numpy().astype(np.int64))
         stmt = Statement(self.rel.name, self.sys_id, self.key_sha256, l, steps, self.rel.k, n_vus + [0] * (lay.S - len(groups)),
                          self.word_bytes, self.y_bytes, a, b, y)
-        dims, lp = dims_for(lay.n_vars, self.rel.name)
+        dims, lp = dims_for(lay.n_vars, self.rel.name, target_log2=target_log2)
         t_pad = zk_mod.T_PAD if zk else 0
-        if zk:
-            # ZK column padding lowers every level's rate to (2^{k_i} + t_pad) / n_i: |S_i| re-derived for the padded shape
-            from .proto import pcs as ppcs
-            target = -128.0
-            while True:
-                dims = ppcs.dims_for(lay.n_vars, list(dims.kprime), list(dims.rates), target_log2=target, t_pad=t_pad)
-                if self.soundness(dims, t_pad)["total_log2"] <= -128.0:
-                    break
-                target -= 0.25
+        kprime, rates, target = list(dims.kprime), list(dims.rates), target_log2
+        while True:
+            if zk:
+                # ZK column padding lowers every level's rate to (2^{k_i} + t_pad) / n_i: |S_i| re-derived for the padded shape
+                from .proto import pcs as ppcs
+                dims = ppcs.dims_for(lay.n_vars, kprime, rates, target_log2=target, t_pad=t_pad)
+            if self.soundness(dims, t_pad)["total_log2"] <= target_log2 + 1e-9:
+                break
+            target -= 0.25                  # the relation's own terms on top of the PCS union
+            if not zk:
+                dims, lp = dims_for(lay.n_vars, self.rel.name, target_log2=target)
         splits = [list(split((1 << k) << r)) for k, r in zip(dims.k, dims.rates)]
         params = {"relation": self.rel.name, "l": l, "n": dims.n, "kprime": dims.kprime, "queries": dims.queries,
                   "rate_log2": dims.rates, "splits": splits, "order": "zk-interleaved" if zk else "row-major", "coins": coins_kind, "zk": zk,
@@ -891,6 +928,11 @@ class Prover:
                 ypub = torch.as_tensor(stmt.y[s], device=dev)
                 if bool((ypub < 0).any()) or bool((ypub >= 1 << self.rel.y_bits).any()):
                     raise Reject(f"statement sub-batch {s}: claimed word out of range")
+                # the end constraint is masked off the chain ends: a word there binds nothing, so the canonical statement
+                # has 0 (ligero-statement/v4) and any other value would make the statement bytes malleable
+                _, _, end = lay.chain_layout(s).masks(dev)
+                if bool((ypub[end.to(torch.bool).logical_not()] != 0).any()):
+                    raise Reject(f"statement sub-batch {s}: claimed word off a chain end (non-canonical)")
                 subs.append(SubBatch(None, pub, ypub, real[s]))
             else:
                 bd = self._pad() if dev == torch.device(self.device) else sc_mod._marshal_pad(self.rel, self.runner, self.l, dev)
@@ -1094,6 +1136,7 @@ class Prover:
                 pcs_verify(proof.pcs, dims, prm["splits"], points, values, coins)
             info["t_pcs"] = time.perf_counter() - t2
             info["soundness"] = soundness_claim(snd, coins_kind(coins))
+            info["union"] = snd
         except Reject as e:
             info["seconds"] = time.perf_counter() - t0
             return False, str(e), info

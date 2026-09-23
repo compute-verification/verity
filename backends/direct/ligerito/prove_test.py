@@ -95,6 +95,52 @@ def test_stream_coins_replay(fp8):
 
 
 @gpu
+def test_session_replay_reproduces_the_stream_messages(fp8):
+    """``SessionReplayCoins`` (run.verify_session's side) recomputes, from the proof alone, the label and MSG digest the
+    prover sent before every coin -- what the issuing verifier records as ``msg_sha256`` per round."""
+    from backends.direct.ligero import live
+
+    from .prove import SessionReplayCoins, StreamCoins, statement_for_stream
+
+    class Recording(live.LocalChallenges):
+        def __init__(self, *a):
+            super().__init__(*a)
+            self.sent = []
+
+        def challenge(self, label, message, n):
+            self.sent.append((label, message))
+            return super().challenge(label, message, n)
+
+    pv, data = fp8
+    bt = pv.batch(data, "live")
+    ch = Recording(256)
+    pc = StreamCoins(ch, statement_for_stream(bt, pv.key_sha256))
+    res = pv.prove(bt, pc)
+    vc = SessionReplayCoins(pc.slots_out)
+    ok, why, _ = pv.verify(read_statement(bt.stmt.to_bytes()), read_proof(res.proof.to_bytes()), vc)
+    assert ok, why
+    assert list(zip(vc.labels, vc.msgs)) == ch.sent and len(ch.sent) == pc.rounds
+
+
+@gpu
+def test_statement_words_off_the_chain_ends_are_rejected(fp8):
+    """A claimed word at a column whose end constraint is masked binds nothing (a proof for that statement is otherwise
+    valid): the canonical statement has 0 there."""
+    import copy
+
+    from .prove import make_coins
+    pv, data = fp8
+    bt = copy.copy(pv.batch(data, "fiat-shamir"))
+    _, _, end = bt.lay.chain_layout(0).masks("cpu")
+    bt.stmt = copy.deepcopy(bt.stmt)
+    bt.stmt.y[0][int(np.flatnonzero(end.numpy() == 0)[0])] = 1
+    bt.stmt_digest = bt.stmt.digest()
+    res = pv.prove(bt, make_coins("fiat-shamir", 1), ypub_override=bt.stmt.y[0])
+    ok, why, _ = pv.verify(bt.stmt, res.proof, make_coins("fiat-shamir", 1))
+    assert not ok and "non-canonical" in why, why
+
+
+@gpu
 def test_key_is_a_function_of_the_relation(fp8):
     from .prove import Prover
     pv, _ = fp8
