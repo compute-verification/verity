@@ -109,10 +109,20 @@ def _butterfly(device):
     return compiled(_butterfly_eager, device)
 
 
+CUDA_NTT = True      # CUDA int64 rows of n = 256 * N2 (8192 ... 65536): the two-kernel four-step NTT (ntt_cuda; lane hp2-host)
+
+
 def ntt(x: torch.Tensor, inverse: bool = False) -> torch.Tensor:
     """Batched NTT over the last dimension (size n, a power of two): natural order in, natural order out.
-    Forward: X[k] = sum_i x[i] w^(ik).  Inverse divides by n."""
+    Forward: X[k] = sum_i x[i] w^(ik).  Inverse divides by n.  Canonical output (the map is the same on every path)."""
     n = x.shape[-1]
+    if CUDA_NTT and x.is_cuda:
+        from . import ntt_cuda
+        if ntt_cuda.supported(x):
+            try:
+                return ntt_cuda.ntt(x, inverse)
+            except ImportError:           # no cupy: the torch chain
+                pass
     dom = Domain.get(n, x.device)
     lead = x.shape[:-1]
     x = x.index_select(-1, dom.bitrev)
