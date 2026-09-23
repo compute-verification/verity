@@ -350,7 +350,7 @@ def gate(args) -> int:
                 except ValueError as e:        # a statement the writer refuses (e.g. a word wider than its slot)
                     log(f"    (not dumped: {e})")
     report["failures"] = failures
-    dump.close({"relation": rel.name, "l": args.l, "vus": args.vus, "commit": _git_commit(), "kind": "gate"})
+    dump.close({"relation": rel.name, "l": args.l, "vus": args.vus, "commit": _git_commit(), "kind": "gate", "n_proofs": 1})
     if args.dump_dir:
         report["python_dump_verify"] = verify_dir(Path(args.dump_dir), args.device)
         report["rust"] = rust_batch(args.rust_verifier, Path(args.dump_dir))
@@ -526,7 +526,8 @@ def bench(args) -> int:
         stream_info["round_ms_median"] = statistics.median(sess.rtts) * 1e3 if sess.rtts else None
         stream_info["bytes_out"], stream_info["bytes_in"] = sess.bytes_out, sess.bytes_in
         print(f"live verdict: {stream_info['verdict']}", flush=True)
-    dump.close({"relation": rel.name, "l": args.l, "vus": total_vus, "commit": _git_commit(), "kind": "bench"})
+    # n_proofs: distinct statements of one job; each proof must reach 2^-(128 + log2 n_proofs) (red-team F5)
+    dump.close({"relation": rel.name, "l": args.l, "vus": total_vus, "commit": _git_commit(), "kind": "bench", "n_proofs": nb_})
     dumps = verify_dir(Path(args.dump_dir), args.device) if args.dump_dir else None
     rust = rust_batch(args.rust_verifier, Path(args.dump_dir)) if args.dump_dir else None
     med_total = statistics.median(w for w, _ in runs)
