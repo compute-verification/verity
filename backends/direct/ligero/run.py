@@ -352,8 +352,10 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     from .vu import bench_vu, gate_vu
 
-    # --relation fp8-ada: the Ada E4M3 unit (backends/direct/ligero/fp8); gate-vu / bench-vu dispatch there, nothing else changes
-    ap.add_argument("--relation", default="bf16", choices=("bf16", "fp8-ada"))
+    # --relation <registered>: relations.py on the generic chain runner (relchain.py); gate-vu / bench-vu dispatch there,
+    # nothing else changes for the Ampere BF16 relation (vu.py on the frozen instance set)
+    ap.add_argument("--relation", default="bf16", choices=("bf16", "bf16-hopper", "fp8-hopper", "fp8-ada"),
+                    help="bf16: the Ampere relation on the frozen instance set (vu.py); the others: relations.py on synthetic instances")
     for name, fn in (("gate", gate), ("bench", bench), ("gate-vu", gate_vu), ("bench-vu", bench_vu)):
         s = sub.add_parser(name)
         s.add_argument("--root", default=str(instances.DEFAULT_ROOT))
@@ -388,13 +390,22 @@ def main(argv=None) -> int:
                                               "leaf indices into the statement, ship and verify Merkle multiproofs of every boundary word")
     sub.choices["bench-vu"].add_argument("--auth-cache", default=None, metavar="DIR", help="--auth: directory holding the built trees (reused when the bindings match)")
     sub.choices["bench-vu"].add_argument("--auth-procs", type=int, default=None, help="--auth: processes for leaf hashing (default: all cores)")
-    sub.choices["gate-vu"].add_argument("--row-negatives", type=int, default=60, help="fp8-ada gate: witness-row mutations to try")
+    sub.choices["gate-vu"].add_argument("--row-negatives", type=int, default=60, help="non-bf16 gate: witness-row mutations to try")
+    for name in ("gate-vu", "bench-vu"):
+        sub.choices[name].add_argument("--instance-procs", type=int, default=1,
+                                       help="non-bf16 relations: processes recording the synthetic instances' accumulators")
+        sub.choices[name].add_argument("--instances-cache", default=None, metavar="DIR",
+                                       help="non-bf16 relations: keep the synthetic instance set as an .npz under DIR")
     args = ap.parse_args(argv)
-    if args.relation == "fp8-ada":
-        from .fp8.chain import bench_vu_fp8, gate_vu_fp8
+    if args.relation != "bf16":
+        from .relations import relation
+        from .relchain import bench_vu_rel, gate_vu_rel
         if args.cmd not in ("gate-vu", "bench-vu"):
-            ap.error("--relation fp8-ada supports gate-vu and bench-vu")
-        return (gate_vu_fp8 if args.cmd == "gate-vu" else bench_vu_fp8)(args)
+            ap.error(f"--relation {args.relation} supports gate-vu and bench-vu")
+        if getattr(args, "auth", False):
+            ap.error(f"--auth (authentication = included) is implemented for the bf16 relation only, not --relation {args.relation}")
+        rel = relation(args.relation)
+        return (gate_vu_rel if args.cmd == "gate-vu" else bench_vu_rel)(args, rel)
     return args.fn(args)
 
 

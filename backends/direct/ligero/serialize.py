@@ -24,12 +24,14 @@ ligero-statement/v3  magic "LIGSTM03" | the v2 body | the authentication block (
                      | 3 x tree (a, b, y): 32 B binding | u8 owner + 2 | u64 count | 32 B root
 ligero-statement/v4  magic "LIGSTM04" | the v2 header through u32 K | u8 word_bytes | u8 y_bytes | str relation
                      | l x K a | l x K b | l x y16 (u8/u16/u32 per the byte widths) | u8 has_auth | [the v3 block]
-                     The relation-named statement: the FP8 Ada relation's 8-bit operands and 22-bit public words
-                     (`relation = "fp8-ada"`, fp8/chain.py), the words hashed into the statement digest exactly as
-                     written (protocol.RelationHooks word_dtype / y16_dtype).  The BF16 relation (16/16-bit words,
-                     no name in the file) is always written as v2 / v3 so that the Rust verifier can check it.
-                     (Lane b-hopper wrote this layout under "LIGSTM03" before v3 was taken by the authentication
-                     block above; those files must be re-dumped or re-tagged as v4.)
+                     The relation-named statement: every registered relation of relations.py but the Ampere BF16
+                     unit (bf16-hopper: 16/16-bit words; fp8-hopper / fp8-ada: 8-bit operands and 22-bit public words
+                     in 32-bit slots), the words hashed into the statement digest exactly as written
+                     (protocol.RelationHooks word_dtype / y16_dtype).  The Ampere BF16 relation (`relation = "bf16"`,
+                     vu.py; no name in the file) is always written as v2 / v3 so that the Rust verifier can check it.
+                     (Lane b-hopper had written this layout under "LIGSTM03" before v3 was taken by the authentication
+                     block above; the merge lane/b-merge-h100 made every relation-named statement v4 -- b-hopper's
+                     LIGSTM03 dumps died with their pod, so no file of that layout exists.)
 ligero-proof/v1      magic "LIGPRF01" | u8 hash (1 = blake3, 2 = sha256) | u8 has_coins | u8 zk | u8 has_chain
                      | u32 D | u32 w_len | u32 h_len | u32 q_len | u32 v_len | u32 M | u32 t | u32 depth
                      | [c1 c2 r1 s1 r2 s2, 32 B each] | 32 B root | D x w_len u32 w | D x h_len u32 h
@@ -216,7 +218,7 @@ class Statement:
     b: np.ndarray      # (l, K) operand words
     y16: np.ndarray    # (l,) the chain-end public words (uint16 for the BF16 relation)
     auth: auth_mod.AuthStatement | None = None   # authentication = included: the committed-object block (v3 / v4)
-    relation: str = BF16_RELATION   # "bf16" (v2 / v3 files carry no name) | "fp8-ada" (fp8/chain.py; v4)
+    relation: str = BF16_RELATION   # "bf16" (v2 / v3 files carry no name) | a relations.py name (bf16-hopper, fp8-hopper, fp8-ada; v4)
     word_bytes: int = 2             # bytes per operand word in the file (2: v2 / v3)
     y_bytes: int = 2                # bytes per public word in the file (2: v2 / v3)
 
@@ -447,7 +449,8 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
 
 
 def _relation_of(R) -> str:
-    """The relation a runner proves: its ``relation`` attribute (``fp8.chain.FP8ChainRunner``), else the BF16 unit."""
+    """The relation a runner proves: its ``relation`` attribute (``relchain.RelationChainRunner``: the registered name),
+    else the Ampere BF16 unit (``vu.ChainRunner``)."""
     return getattr(R, "relation", BF16_RELATION)
 
 
@@ -463,11 +466,13 @@ def _runner(device: str, st: Statement | None = None):
     target = st.target_log2 if st is not None else -128.0
     mode = st.mode if st is not None else "interactive"
     name = st.relation if st is not None else BF16_RELATION
-    if name == "fp8-ada":
-        from .fp8.chain import FP8ChainRunner
-        return FP8ChainRunner(device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
     if name != BF16_RELATION:
-        raise ValueError(f"no runner for relation {name!r} (known: {BF16_RELATION!r}, 'fp8-ada')")
+        # any registered relation (relations.py: bf16-hopper, fp8-hopper, fp8-ada) runs on the generic chain runner
+        from .relations import RELATIONS
+        from .relchain import RelationChainRunner
+        if name not in RELATIONS:
+            raise ValueError(f"no runner for relation {name!r} (known: {BF16_RELATION!r}, {sorted(RELATIONS)})")
+        return RelationChainRunner(RELATIONS[name], device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
     from .vu import ChainRunner
     return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk, mode=mode)
 
@@ -482,8 +487,9 @@ def sha256_file(path: Path) -> str:
 
 def _statement_of(R, pubs, lay, cfg, n_proofs: int, mode: str | None = None, auth=None) -> Statement:
     """The statement of a runner's public inputs, in the runner's relation and word widths (``protocol.RelationHooks``):
-    16/16-bit words (the BF16 unit) are written as v2 / v3 -- the Rust verifier's formats -- and the relation is implied
-    by the system id; other relations (fp8-ada: 8-bit operands, 32-bit slots for the 22-bit public words) take v4."""
+    the Ampere BF16 unit is written as v2 / v3 -- the Rust verifier's formats -- and its relation is implied by the
+    system id; every registered relation (bf16-hopper; fp8-hopper / fp8-ada: 8-bit operands, 32-bit slots for the
+    22-bit public words) is named in the file and takes v4."""
     a, b, y16 = pubs
     hooks = _hooks_of(R)
     return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
@@ -1006,7 +1012,7 @@ def main(argv=None) -> int:
     s.add_argument("--proof", required=True)
     s.add_argument("--device", default="cpu")
     s.add_argument("--json", default=None)
-    s.add_argument("--relation", default=None, help="the relation to check against (v2 / v3 statements: bf16 unless given; v4 statements name their own)")
+    s.add_argument("--relation", default=None, help="the relations.py name to check against (v2 / v3 statements: bf16 unless given; v4 statements name their own)")
     s = sub.add_parser("dump-system")
     s.add_argument("--out", required=True)
     args = ap.parse_args(argv)

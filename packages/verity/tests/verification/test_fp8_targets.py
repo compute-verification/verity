@@ -19,7 +19,7 @@ from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.ml.tc.models import ADA_E4M3_M16N8K32, HOPPER_E4M3_K32
 from verity.verification.families import make_tensor_core_gate_set
 from verity.verification.programs import gemm_accumulator_fp8
-from verity.verification.target import FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS, TC_VECTORS, Target
+from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS, TC_VECTORS, Target
 
 ROOT = Path(__file__).resolve().parents[4]
 DRAFTS = (FP8_HOPPER_WGMMA, FP8_ADA_MMA)
@@ -41,16 +41,21 @@ def test_first_is_frozen_and_the_fp8_targets_are_drafts_over_pinned_instructions
         inst = INSTRUCTIONS[t.instruction]
         assert inst.status == "pinned" and inst.model is t.pipeline
         assert (inst.a_dtype, inst.acc_dtype) == ("e4m3", "f32")
-    assert set(TARGETS) == {FIRST.name, FP8_HOPPER_WGMMA.name, FP8_ADA_MMA.name}
+    assert set(TARGETS) == {FIRST.name, BF16_HOPPER.name, FP8_HOPPER_WGMMA.name, FP8_ADA_MMA.name}
     assert FP8_HOPPER_WGMMA.pipeline is HOPPER_E4M3_K32 and FP8_ADA_MMA.pipeline is ADA_E4M3_M16N8K32
 
 
 def test_every_target_names_its_native_peak_on_its_conformance_anchor_at_fp32_accumulate() -> None:
     """The overhead reference: the datasheet dense peak of the instruction's conformance device for the operand dtype
     at FP32 accumulate (A100 BF16 312, H100 FP8 1978.9, RTX 4090 FP8 330.3 TFLOPS -- Ada halves FP8 under FP32
-    accumulate).  One K-VU is 2K FLOP."""
+    accumulate; H100 BF16 989.4).  One K-VU is 2K FLOP."""
 
-    peaks = {FIRST: ("A100", 312e12), FP8_HOPPER_WGMMA: ("H100", 1978.9e12), FP8_ADA_MMA: ("4090", 330.3e12)}
+    peaks = {
+        FIRST: ("A100", 312e12),
+        BF16_HOPPER: ("H100", 989.4e12),
+        FP8_HOPPER_WGMMA: ("H100", 1978.9e12),
+        FP8_ADA_MMA: ("4090", 330.3e12),
+    }
     for t, (device, rate) in peaks.items():
         p = t.native_peak
         assert device in p.device and p.flop_per_second == rate and p.accumulate == "fp32" and p.source

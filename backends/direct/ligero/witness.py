@@ -46,7 +46,8 @@ def hints_tensor(p: Params, sys: System, units: list[tuple[int, list[int], list[
     out = torch.zeros((len(names), len(units)), dtype=torch.int64)
     for col, u in enumerate(units):
         c, a, b = u[:3]
-        flat = flatten_hints(p, gen_step(p, c, a, b), u[3] if len(u) > 3 else None)
+        y = u[3] if len(u) > 3 and sys.chain is not None else None      # the epilogue rows exist in chain mode only
+        flat = flatten_hints(p, gen_step(p, c, a, b), y, wide=sys.wide, unit=(c, a, b))
         for n, v in flat.items():
             out[pos[n], col] = v
     return out.to(device)

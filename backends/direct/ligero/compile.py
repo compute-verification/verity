@@ -168,6 +168,7 @@ class System:
     outputs: dict[str, Expr] = field(default_factory=dict)
     audit_log: list[str] = field(default_factory=list)
     chain: dict | None = None                                # chain mode: {"c": [3 row idx], "y": [3 Expr], "y16": Expr}
+    wide: dict = field(default_factory=dict)                 # wide groups (wide.py): group tag -> partition of the terms
 
     @property
     def m(self) -> int:
@@ -338,6 +339,16 @@ class LigeroCtx:
     def known_within(self, e: Expr, lo: int, hi: int) -> bool:
         iv = self.interval(e)
         return iv is not None and iv[0] >= lo and iv[1] < hi
+
+    def learn(self, e: Expr, lo: int, hi: int) -> None:
+        """A driver-asserted bound ``lo <= e < hi`` that is a theorem of constraints already stated (a partial sum
+        of a bit decomposition, say); logged, as the product whitelist is."""
+        self.sys.audit_log.append(f"learned in {self.scope}: {e!r} in [{lo}, {hi})")
+        self._learn(e, lo, hi)
+
+    def bit_rows(self, x: Expr, nbits: int, name: str) -> list[int]:
+        """The rows of ``x``'s ``nbits``-bit decomposition (the one ``rng(x, 0, 2^nbits)`` made, or a fresh one)."""
+        return self._bits(x, nbits, name)
 
     # --- products ----------------------------------------------------------------------------------------------------
     def whitelist_product(self, scope_suffix: str, reason: str, lo: int, hi: int) -> None:

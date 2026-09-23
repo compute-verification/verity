@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from verity.verification.target import FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS
+from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS
 from verity_numerical.bench import contract
 from verity_numerical.bench import tables as T
 
@@ -189,9 +189,10 @@ def test_frozen_instances_are_pinned() -> None:
     recipe = f"fp8-ada synthetic|seed={contract.FP8_ADA_INSTANCES_SEED}|n={T.B}|K={T.K}"
     assert contract.FP8_ADA_INSTANCES_SEED == 20260922
     assert fp8["manifest_sha256"] == contract.FP8_ADA_INSTANCES_DIGEST == hashlib.sha256(recipe.encode()).hexdigest()
-    assert T.frozen_instances(FP8_HOPPER_WGMMA) is None, "Hopper has no frozen instance set yet"
-    chain = (REPO / "backends" / "direct" / "ligero" / "fp8" / "chain.py").read_text()
-    assert "contract.FP8_ADA_INSTANCES_DATASET" in chain and "contract.FP8_ADA_INSTANCES_TIER" in chain, "chain.py must emit the frozen ref"
+    assert T.frozen_instances(FP8_HOPPER_WGMMA) is None and T.frozen_instances(BF16_HOPPER) is None, "Hopper has no frozen instance set yet"
+    # the fp8-ada emitter is relchain.py at RELATIONS["fp8-ada"] (relations.py) since lane b-hopper; fp8/chain.py is its shim
+    relations = (REPO / "backends" / "direct" / "ligero" / "relations.py").read_text()
+    assert "contract.FP8_ADA_INSTANCES_DATASET" in relations and "contract.FP8_ADA_INSTANCES_TIER" in relations, "relations.py must emit the frozen ref"
 
 
 # --- the predicate and Table 2 ----------------------------------------------------------------------------------------------------------
@@ -343,15 +344,17 @@ def test_native_measured_column(store: LocalStore) -> None:
     slow = native_peak(store, "NVIDIA A100-SXM4-80GB", "bf16", 0.90 * spec, spec)
     best = native_peak(store, "NVIDIA A100 SXM4 80GB", "bf16", 0.94 * spec, spec)
     native_peak(store, "NVIDIA A100-SXM4-80GB", "e4m3", 0.99 * spec, spec)     # another dtype: not this row
-    native_peak(store, "NVIDIA H100 80GB HBM3", "bf16", 0.95 * spec, spec)     # another device: not this row
+    h100 = native_peak(store, "NVIDIA H100 80GB HBM3", "bf16", 0.95 * spec, spec)   # another device: the Hopper BF16 row's, not FIRST's
     tab = T.build(store)
     row = next(r for r in tab.rows if r["target"] == FIRST.name)
     assert row["native_measured"]["artifact"] == best and row["native_measured"]["fraction_of_spec"] == pytest.approx(0.94)
-    assert all(r["native_measured"] is None for r in tab.rows if r["target"] != FIRST.name)
+    hopper = next(r for r in tab.rows if r["target"] == BF16_HOPPER.name)      # joined by device x dtype (lane b-hopper's target)
+    assert hopper["native_measured"]["artifact"] == h100 and hopper["native_measured"]["fraction_of_spec"] == pytest.approx(0.95)
+    assert all(r["native_measured"] is None for r in tab.rows if r["target"] not in (FIRST.name, BF16_HOPPER.name))
     md = T.render_markdown(tab)
     line = next(l for l in md.splitlines() if l.startswith(f"| {FIRST.native_peak.device} |"))
     assert f"| {0.94 * spec / 1e12:.0f} T (0.94) [1] |" in line and T.UNMEASURED in md
-    assert T.cell_artifacts(tab) == [best] and slow not in T.cell_artifacts(tab)
+    assert T.cell_artifacts(tab) == sorted([best, h100]) and slow not in T.cell_artifacts(tab)
 
 
 # --- Table 3 -------------------------------------------------------------------------------------------------------------------------
