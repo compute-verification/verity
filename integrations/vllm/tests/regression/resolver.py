@@ -9,6 +9,8 @@ extraction dir).  Nothing large is in Git: the file is an index, the bytes come 
                                                           row dirs under /workspace/cp/sweep/...; vault: /vault/tmp/oracle)
     2. [rows.<row>.local.*]/<rel>                         a recorded row-dir path that exists on THIS machine (tp2's live dirs)
     3. store_io.fetch([rows.<row>.artifacts.<role>])/<rel> the data API (records tree / programs tree), when those ids are set
+    3b. store_io.fetch([artifacts.<name>])/<row>/<rel>     the top-level shared trees, laid out `<row_id>/<rel>` (e.g. `commit_logs`:
+                                                          the `commit.log` the per-row records trees omitted, put from the oracle)
     4. nothing -> the check is SKIPPED by name ("input <rel> not resolvable here"); never a silent pass
 
 A resolved file whose recorded sha256 is known and whose size is <= VERIFY_LIMIT is hashed and must match: a reference that differs
@@ -96,13 +98,30 @@ class Row:
         art = (self.spec.get("artifacts") or {}).get(role)
         if not art:
             return None
+        return self._fetch(art, role)
+
+    def _fetch(self, art: str, label: str) -> Path:
         if art not in self._fetched:
             from . import store_io
             try:
                 self._fetched[art] = store_io.fetch(art)
             except Exception as e:  # noqa: BLE001 -- the store not being reachable is a skip, not an error
-                raise NotResolvable(f"{self.key}: store fetch of {role} {art} failed: {e}") from e
+                raise NotResolvable(f"{self.key}: store fetch of {label} {art} failed: {e}") from e
         return self._fetched[art]
+
+    def _shared_roots(self) -> list[Path]:
+        """`<fetched shared tree>/<row_id>` for every top-level `[artifacts]` entry (step 3b); trees the store cannot give are skipped."""
+        out: list[Path] = []
+        for name, art in sorted((self._fixtures.get("artifacts") or {}).items()):
+            if not art:
+                continue
+            try:
+                root = self._fetch(art, name) / self.key
+            except NotResolvable:
+                continue
+            if root.is_dir():
+                out.append(root)
+        return out
 
     def path(self, rel: str, *, verify: bool = True) -> Path:
         """The local path of `artifact://r19/<row>/<rel>` (see the module docstring for the order); InputMismatch / NotResolvable."""
@@ -115,7 +134,12 @@ class Row:
             if root is not None and (root / rel).is_file():
                 p = root / rel
                 return self._checked(rel, p) if verify else p
-        raise NotResolvable(f"{self.key}: {rel} not resolvable here (roots tried: {[str(r) for r in self._roots()]}; artifacts: {self.spec.get('artifacts')})")
+        for root in self._shared_roots():
+            if (root / rel).is_file():
+                p = root / rel
+                return self._checked(rel, p) if verify else p
+        raise NotResolvable(f"{self.key}: {rel} not resolvable here (roots tried: {[str(r) for r in self._roots()]}; artifacts: {self.spec.get('artifacts')}; "
+                            f"shared: {sorted((self._fixtures.get('artifacts') or {}).keys())})")
 
     def _checked(self, rel: str, p: Path) -> Path:
         rec = self.files.get(rel)

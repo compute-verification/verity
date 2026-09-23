@@ -62,6 +62,13 @@ def existing_decisions() -> dict[str, list[dict]]:
     return {k: v["decisions"] for k, v in (fx.get("rows") or {}).items() if v.get("decisions")}
 
 
+def existing_shared_artifacts() -> dict[str, str]:
+    """The top-level `[artifacts]` table on disk (shared `<row_id>/<rel>` trees such as `commit_logs`; carried over on regeneration)."""
+    if not resolver.FIXTURES.is_file():
+        return {}
+    return dict(resolver.load_fixtures().get("artifacts") or {})
+
+
 def role_of(rel: str) -> str:
     if rel == "manifest.json":
         return "manifest"
@@ -72,7 +79,8 @@ def role_of(rel: str) -> str:
     return "record"
 
 
-def build_fixtures(index: dict, oracle: Path, keep_roles: set[str], decisions: dict[str, list[dict]] | None = None) -> tuple[str, dict]:
+def build_fixtures(index: dict, oracle: Path, keep_roles: set[str], decisions: dict[str, list[dict]] | None = None,
+                   shared_artifacts: dict[str, str] | None = None) -> tuple[str, dict]:
     decisions = decisions or {}
     rows_out: dict[str, dict] = {}
     for key, v in sorted(index["rows"].items(), key=lambda kv: kv[1]["row"]):
@@ -106,6 +114,9 @@ def build_fixtures(index: dict, oracle: Path, keep_roles: set[str], decisions: d
              "# LABELLED DECISIONS) and are carried over verbatim when this file is regenerated.", "",
              "schema = \"verity-vllm/r19-reference-fixtures/v1\"", f"snapshot = {_toml_str(SNAPSHOT_NAME)}", "",
              "[reference]"] + [f"{k} = {_toml_str(v)}" for k, v in REFERENCE.items()] + [""]
+    if shared_artifacts:
+        lines += ["# shared fixture/v1 trees laid out `<row_id>/<rel>` (resolver.Row.path, step 3b): files the per-row `records` trees omitted",
+                  "[artifacts]"] + [f"{k} = {_toml_str(v)}" for k, v in sorted(shared_artifacts.items())] + [""]
     for key, spec in rows_out.items():
         q = _toml_str(key)
         lines.append(f"[rows.{q}]")
@@ -170,7 +181,7 @@ def main(argv=None) -> int:
     index = json.load(open(a.index))
     oracle = Path(a.oracle)
     if not a.only_expected:
-        text, _ = build_fixtures(index, oracle, set(a.roles.split(",")), decisions=existing_decisions())
+        text, _ = build_fixtures(index, oracle, set(a.roles.split(",")), decisions=existing_decisions(), shared_artifacts=existing_shared_artifacts())
         resolver.FIXTURES.write_text(text)
         print(f"[lift] wrote {resolver.FIXTURES} ({len(text) / 1024:.0f} KB)")
     resolver.EXPECTED_DIR.mkdir(exist_ok=True)

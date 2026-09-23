@@ -14,6 +14,10 @@ release = "r19-int-21"
 commit = "89af272a8c1d37a44b3e8f3253378d7a152fc281"
 branch = "lane/vllm-integration"
 
+# shared fixture/v1 trees laid out `<row_id>/<rel>` (resolver.Row.path, step 3b): files the per-row `records` trees omitted
+[artifacts]
+commit_logs = "art:9faf06256101fc73eb3bba599db773ddc3aba38f0932eab00074e7ab9461c001"   # <row_id>/commit.log x 10 rows, from /vault/tmp/oracle (23 Sep); sha256 == the frozen entries
+
 [rows."smollm2-135m__bf16__l40s__tp1__b16__i1024__o128__mixed__greedy__bi-eager"]
 row = 4
 class = "FAIL"
