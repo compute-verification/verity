@@ -1008,3 +1008,192 @@ fn bf16_ampere_hashed_negatives_and_system_mismatches_are_rejected() {
     let (code, js) = verify(AH_SYS, AH_STMT, &write_tmp("ah_proof.proof", &m), &["--coins", AH_COINS]);
     assert_eq!(code, 1, "{js}");
 }
+
+// ------------------------------------------------------------ lane ajtai-leaf: the linear Ring-SIS leaf `+ajtai-n<N>` ----
+//
+// `fixtures/fp8-ada-ajtai-n64/` and `fixtures/bf16-hopper-ajtai-n128/`: `leaf.fixtures.write_fixture` on the pod
+// (vy-ajtai-leaf, CPU) -- `hashchain.compose(rel, "ajtai-n<N>")` with `leaf/ajtai.py`: per chain column
+// `acc' = X acc + B s` over F_p[X]/(X^N + 1), `s` the compose's own 256 committed operand bit rows, N linked carry rows per
+// operand plus N `out` hint rows with the linear key rows, the two N-element digests pinned at the chain end; 4858 rows
+// (fp8-ada; the Poseidon2 composition's 6210) / 4669 (bf16-hopper).  Interactive non-ZK, 2 VUs (ids 1, 3 of 4 synthetic)
+// at l = 1024, one sub-batch, statement `ligero-statement/v5` (2 x N digest elements per VU), leaf schema
+// `ajtai-babybear-n<N>-b1-r0/row/v1`, little-endian u32 leaf bytes.  Python's verifier accepted both (`manifest.json`).
+
+struct AjtaiFx {
+    dir: &'static str,
+    rel: &'static str,
+    leaf: &'static str,
+    schema: &'static str,
+    n: usize,
+    steps: usize,
+    k_words: usize,
+    y_bytes: usize,
+    rows: usize,
+    sys_id: &'static str,
+    table_digest: &'static str,
+}
+
+const AJTAI_FX: &[AjtaiFx] = &[
+    AjtaiFx { dir: "fixtures/fp8-ada-ajtai-n64", rel: "fp8-ada", leaf: "ajtai-n64", schema: "ajtai-babybear-n64-b1-r0/row/v1", n: 64,
+              steps: 48, k_words: 1536, y_bytes: 4, rows: 4858,
+              sys_id: "AJTAI64_SYS_ID", table_digest: "AJTAI64_TABLE_DIGEST" },
+    AjtaiFx { dir: "fixtures/bf16-hopper-ajtai-n128", rel: "bf16-hopper", leaf: "ajtai-n128", schema: "ajtai-babybear-n128-b1-r0/row/v1", n: 128,
+              steps: 96, k_words: 1536, y_bytes: 2, rows: 4669,
+              sys_id: "AJTAI128_SYS_ID", table_digest: "AJTAI128_TABLE_DIGEST" },
+];
+
+impl AjtaiFx {
+    fn sys(&self) -> String { format!("{}/system.bin", self.dir) }
+    fn stmt(&self) -> String { format!("{}/sub_00.stmt", self.dir) }
+    fn proof(&self) -> String { format!("{}/sub_00.proof", self.dir) }
+    fn coins(&self) -> String { format!("{}/sub_00.coins", self.dir) }
+    fn relation(&self) -> String { format!("{}+{}", self.rel, self.leaf) }
+
+    /// The v5 field offsets of this fixture's statement (2 VUs at l = 1024; 2 x N digest elements per VU).
+    fn offsets(&self, st: &[u8]) -> V5 {
+        assert_eq!(&st[..8], b"LIGSTM05");
+        let (l, n_vus, steps, k) = (u32_at(st, 12), u32_at(st, 46), u32_at(st, 50), u32_at(st, 54));
+        assert_eq!((l, n_vus, steps, k), (1024, 2, self.steps, self.k_words), "{}", self.dir);
+        assert_eq!(st[58] as usize, self.y_bytes);
+        let mut o = 59;
+        let s = |o: &mut usize| { let n = u32_at(st, *o); let v = st[*o + 4..*o + 4 + n].to_vec(); *o += 4 + n; v };
+        assert_eq!(s(&mut o), self.relation().as_bytes());
+        assert_eq!(s(&mut o), b"included-hash");
+        let digests = o;
+        o += 4 * 2 * self.n * n_vus;
+        let y16 = o;
+        o += l * self.y_bytes;
+        assert_eq!(s(&mut o), b"ligero-b/auth/v2h");
+        assert_eq!(s(&mut o), self.schema.as_bytes());
+        o += 32; // the scheme's params digest (descriptor + the SHA-256 of the derived B)
+        assert_eq!(u32_at(st, o), n_vus);
+        o += 4;
+        let indices = o;
+        o += 12 * n_vus;
+        let trees = o;
+        o += 3 * 73;
+        V5 { digests, y16, indices, trees, multiproofs: o }
+    }
+}
+
+#[test]
+fn ajtai_v5_proofs_are_accepted_and_both_systems_are_pinned() {
+    for f in AJTAI_FX {
+        let (code, js) = verify(&f.sys(), &f.stmt(), &f.proof(), &["--coins", &f.coins()]);
+        assert_eq!(code, 0, "{}: {js}", f.dir);
+        assert_eq!(field(&js, "\"accepted\":"), "true");
+        assert_eq!(field(&js, "\"system_pinned\":"), "true");
+        assert!(js.contains(&format!("\"format\":\"ligero-statement/v5\",\"relation\":\"{}\"", f.relation())), "{js}");
+        assert!(js.contains(&format!("\"n_vus\":2,\"steps\":{},", f.steps)), "{js}");
+        assert!(js.contains("authentication: included-hash, 2 VUs, 2 x rows + 2 W columns + 2 y words under the a/b/y roots"), "{js}");
+        let (_, sd) = run(&["system-digest", "--system", &f.sys()]);
+        assert!(sd.contains(&format!("\"sys_id\":\"{}\"", f.sys_id)), "{}: {sd}", f.dir);
+        assert!(sd.contains(&format!("\"table_digest\":\"{}\"", f.table_digest)), "{sd}");
+        assert!(sd.contains(&format!("\"pinned_relation\":\"{}\"", f.relation())) && sd.contains(&format!("\"m\":{},", f.rows)), "{sd}");
+        assert!(sd.contains(&format!("\"pins\":{},", 1 + 2 * f.n)) && sd.contains("\"chain\":true"), "{sd}");
+        let (code, js) = run(&["batch", "--dir", f.dir, "--system", &f.sys(), "--threads", "2"]);
+        assert_eq!(code, 0, "{js}");
+        assert!(js.contains(&format!("\"pinned_relation\":\"{}\"", f.relation())) && js.contains("\"accepted\":1,\"rejected\":0"), "{js}");
+        // the manifest's pins row names the same digests (leaf.fixtures prints it for leaf.rs::PINS)
+        let man = std::fs::read_to_string(format!("{}/manifest.json", f.dir)).unwrap();
+        assert!(man.contains(&format!("(\\\"{}\\\", \\\"{}\\\", \\\"{}\\\", \\\"{}\\\")", f.rel, f.leaf, f.sys_id, f.table_digest)), "{man}");
+    }
+}
+
+#[test]
+fn ajtai_statement_negatives_are_rejected() {
+    for f in AJTAI_FX {
+        let st = std::fs::read(f.stmt()).unwrap();
+        let o = f.offsets(&st);
+        let rej = |name: &str, bytes: &[u8], why: &str| {
+            let (code, js) = verify(&f.sys(), &write_tmp(&format!("{}_{name}.stmt", f.leaf), bytes), &f.proof(), &["--coins", &f.coins()]);
+            assert_eq!(code, 1, "{}/{name}: {js}", f.dir);
+            assert!(js.contains(why), "{}/{name}: expected {why:?} in {js}", f.dir);
+        };
+        // a digest lane of VU 0's x digest changed: the statement digest (and so the challenges) change
+        let mut m = st.clone();
+        m[o.digests] ^= 1;
+        rej("digest", &m, "column challenge mismatch");
+        // the LAST lane of VU 1's W digest (the wider table's end)
+        let mut m = st.clone();
+        m[o.digests + 4 * 2 * f.n * 2 - 4] ^= 1;
+        rej("digest_last", &m, "column challenge mismatch");
+        // a digest lane >= p is not a canonical field element
+        let mut m = st.clone();
+        m[o.digests..o.digests + 4].copy_from_slice(&0x7800_0001u32.to_le_bytes());
+        rej("digest_noncanonical", &m, "not a canonical field element");
+        // the scheme's params digest tampered: "<schema> parameters differ from the verifier's"
+        let at = o.indices - 4 - 32;
+        let mut m = st.clone();
+        m[at] ^= 1;
+        rej("params", &m, &format!("{} parameters differ from the verifier's", f.schema));
+        // the schema string of another scheme with the Ajtai relation string
+        let sch_len_at = at - 4 - f.schema.len();
+        let mut m = st.clone();
+        let other = f.schema.replace("r0", "r1");
+        m[sch_len_at + 4..sch_len_at + 4 + f.schema.len()].copy_from_slice(other.as_bytes());
+        rej("schema", &m, "unknown hash-authentication leaf schema");
+        // the relation string renamed to an unknown family member (same length): the leaf is unknown to this build
+        let rel_at = 59 + 4;
+        let mut m = st.clone();
+        let renamed = f.relation().replace(&format!("n{}", f.n), &format!("n{}", f.n + 1));
+        m[rel_at..rel_at + renamed.len()].copy_from_slice(renamed.as_bytes());
+        rej("relation_leaf", &m, "names leaf scheme");
+        // a leaf index changed: the statement digest changes
+        let mut m = st.clone();
+        m[o.indices + 4] ^= 1;
+        rej("index", &m, "column challenge mismatch");
+        // an x root byte: the multiproof no longer opens (or the digest changes first -- either is a rejection)
+        let mut m = st.clone();
+        m[o.trees + 73 - 1] ^= 1;
+        let (code, _) = verify(&f.sys(), &write_tmp(&format!("{}_root.stmt", f.leaf), &m), &f.proof(), &["--coins", &f.coins()]);
+        assert_eq!(code, 1);
+        // a proof byte flipped
+        let pf = std::fs::read(f.proof()).unwrap();
+        let mut m = pf.clone();
+        m[pf.len() / 2] ^= 1;
+        let (code, _) = verify(&f.sys(), &f.stmt(), &write_tmp(&format!("{}_p.proof", f.leaf), &m), &["--coins", &f.coins()]);
+        assert_eq!(code, 1);
+        let _ = o.y16;
+    }
+}
+
+#[test]
+fn ajtai_system_mismatches_and_the_key_check_are_enforced() {
+    let f = &AJTAI_FX[0];
+    // the Ajtai statement against the Poseidon2 hashed fp8-ada system: the pin refuses it ...
+    let (code, js) = verify(HASH_SYS, &f.stmt(), &f.proof(), &["--coins", &f.coins()]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is the pinned hashed fp8-ada system, the statement is a hashed (ajtai-n64 leaves) fp8-ada statement"), "{js}");
+    // ... and UNPINNED the F6 key check does: that system has no rows carrying the derived B (a system built with
+    // another key -- B = 0 -- is refused the same way, before any proof byte is read)
+    let (code, js) = verify(HASH_SYS, &f.stmt(), &f.proof(), &["--coins", &f.coins(), "--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("Ajtai state rows do not carry the derived key B"), "{js}");
+    // the bare fp8-ada system too
+    let (code, js) = verify(FP8_SYS, &f.stmt(), &f.proof(), &["--coins", &f.coins(), "--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("do not carry the derived key B"), "{js}");
+    // the Poseidon2 statement against the Ajtai system: the pin refuses it
+    let (code, js) = verify(&f.sys(), HASH_STMT, HASH_PROOF, &["--coins", HASH_COINS]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is the pinned hashed (ajtai-n64 leaves) fp8-ada system, the statement is a hashed fp8-ada statement"), "{js}");
+    // the n64 statement against the n128 system (another relation's): the pin refuses it, unpinned the key check
+    // passes on neither (n128's rows carry the n128 key), the row count differs anyway
+    let g = &AJTAI_FX[1];
+    let (code, js) = verify(&g.sys(), &f.stmt(), &f.proof(), &["--coins", &f.coins()]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is the pinned hashed (ajtai-n128 leaves) bf16-hopper system"), "{js}");
+    let (code, js) = verify(&g.sys(), &f.stmt(), &f.proof(), &["--coins", &f.coins(), "--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("do not carry the derived key B"), "{js}");
+    // the two Ajtai systems are pinned apart from each other and from the Poseidon2 ones
+    let (_, sd) = run(&["system-digest", "--system", &g.sys()]);
+    assert!(sd.contains("\"pinned_relation\":\"bf16-hopper+ajtai-n128\"") && !sd.contains(f.sys_id), "{sd}");
+    // without --coins: the coins are replayed from the transcript (the conditional accept), for both
+    for f in AJTAI_FX {
+        let (code, js) = verify(&f.sys(), &f.stmt(), &f.proof(), &[]);
+        assert_eq!(code, 0, "{js}");
+        assert!(js.contains("coins replayed from the transcript"), "{js}");
+    }
+}

@@ -902,6 +902,7 @@ def leaf_negatives(R: HashedRelationRunner, data: list) -> list[tuple[str, tuple
     acc_rows = {nm: [rows[f"hash.{nm}.cap[{x}]"] for x in range(n)] for _, nm, _ in hashchain.ROLES}
     out_rows = {nm: [rows[f"hash.{leaf._out_name(role, x)}"] for x in range(n)] for _, nm, role in hashchain.ROLES}
     bit_rows = {nm: [rows[f"hash.{nm}[{i}].b{j_}"] for i in range(k) for j_ in range(nb)] for _, nm, _ in hashchain.ROLES}
+    role_of = {nm: role for _, nm, role in hashchain.ROLES}
 
     def recompute(W, nm: str, col0: int):
         """Recompute the accumulator rows of the VU holding column ``col0`` from its (mutated) bit rows: a prover that keeps
@@ -911,7 +912,7 @@ def leaf_negatives(R: HashedRelationRunner, data: list) -> list[tuple[str, tuple
         acc = torch.zeros(n, dtype=torch.int64, device=W.device)
         for s in range(steps):
             W[acc_rows[nm], v0 + s] = acc.to(W.dtype)                          # W is int32 on the device, int64 on the CPU
-            acc = leaf.step(acc, bits[s])
+            acc = leaf.step(acc, bits[s], role_of[nm])
             W[out_rows[nm], v0 + s] = acc.to(W.dtype)
 
     # 2. one bit flipped in the hashed x row of VU 0 (column 2, word 3, bit 1), state recomputed

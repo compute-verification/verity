@@ -23,7 +23,9 @@ from . import base, registry  # noqa: E402
 from . import dummy  # noqa: E402, F401  (test-only scheme: registers itself)
 from .fixtures import ligero_verify_binary, write_fixture  # noqa: E402
 
-REL = "fp8-ada"                    # k = 32 words of 8 bits, 48 columns per VU: the relation every scheme is exercised on
+#: k = 32 words of 8 bits, 48 columns per VU: the relation every scheme is exercised on (VERITY_LEAF_CONFORMANCE_REL=bf16-hopper
+#: for the 96-column relation)
+REL = os.environ.get("VERITY_LEAF_CONFORMANCE_REL", "fp8-ada")
 #: every registered scheme, plus family members named in VERITY_LEAF_CONFORMANCE (comma-separated, e.g. "ajtai-n64,ajtai-n128")
 SCHEMES = registry.names() + [n for n in os.environ.get("VERITY_LEAF_CONFORMANCE", "").split(",") if n]
 
