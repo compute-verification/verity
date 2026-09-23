@@ -7,6 +7,7 @@ the verifier chose does).
                                                 [--jobs 4] [--threads 1] [--target-bits 128]
     python -m backends.direct.ligero.live negatives --verifier tcp://HOST:PORT [--relation fp8-ada] [--device cpu]
     python -m backends.direct.ligero.live record --machine vy-live-verifier --run <prover run id> [--result art:...]
+    python -m backends.direct.ligero.live probe --verifier tcp://HOST:PORT [--mb 16 --repeat 4]   (RTT + one-flow throughput)
 
 Session (one per recorded rep of ``bench-vu``; the protocol per sub-batch is 8c, unchanged -- only the SOURCE of the coins
 moves from the runner's ``os.urandom`` to this process):
@@ -37,7 +38,11 @@ Prover-side accounting: the coin source records how long ``prove`` was blocked o
 the runner reports ``t.total_live`` = ``t.total`` + the network wait.  Pipelining: COMMIT i+1 travels with OPEN2 i (no round
 trip for step 0 after the first sub-batch); STMT i goes out before the prover's work on i starts; PROOF i is sent on a second
 connection by a sender thread while sub-batch i+1 is being proved; the two openings are the only round trips on the critical
-path (2 x RTT per sub-batch, plus the test message's transfer).
+path (2 x RTT per sub-batch, plus the test message's transfer).  Measured (4090 EUR-IS-2 -> CPU pod EU-RO-1, 70 ms RTT):
+the path carried ~115-150 Mbps for one prover, so a 4096-VU fp8-ada session (221 MB: 181 MB of proofs + 25 MB of test
+messages + statements) is bound by the TRANSFER (~12-15 s), not by the 98 round trips (~7 s); the control messages queue
+behind the proof stream in the bottleneck, which is why the measured "rtt" of an opening (~135 ms) exceeds the path's RTT.
+`live probe` measures both for a given pair of machines.
 """
 from __future__ import annotations
 
@@ -57,11 +62,18 @@ from pathlib import Path
 
 import numpy as np
 
-from . import protocol as pm
 from .serialize import proof_bytes, read_proof, read_statement
 
+try:
+    from . import protocol as pm
+except ModuleNotFoundError as _e:     # torch absent: a laptop that only runs `record` (store + ssh; no cryptography here)
+    if _e.name != "torch":
+        raise
+    pm = None  # type: ignore[assignment]
+
 WIRE_VERSION = 1
-COIN_BYTES = pm.COIN_BYTES
+COIN_BYTES = 32                       # == protocol.COIN_BYTES (asserted below when protocol is importable)
+assert pm is None or pm.COIN_BYTES == COIN_BYTES
 
 # frame kinds (one byte each)
 K_HELLO, K_WELCOME, K_COMMIT, K_ROOT, K_OPEN1, K_TESTS, K_OPEN2, K_PROOF, K_END, K_VERDICT, K_ERROR = (
@@ -696,6 +708,9 @@ class Server:
                     return
                 s.attach_data(conn)
                 return
+            if hello.get("channel") == "probe":       # path diagnostics (`live probe`): echo NOPs' sizes, no session, nothing stored
+                self._probe(conn, addr, hello)
+                return
             with self.lock:
                 live = sum(1 for s in self.sessions.values() if not s.done.is_set())
                 if live >= self.max_sessions:
@@ -711,6 +726,66 @@ class Server:
                 conn.close()
             except OSError:
                 pass
+
+    def _probe(self, conn: socket.socket, addr, hello: dict) -> None:
+        """WELCOME at once (the client's HELLO->WELCOME time is the RTT); then every NOP frame is answered with a VERDICT
+        carrying the bytes received and the server-side receive time of that frame (first byte to last byte), until END."""
+        send_frame(conn, K_WELCOME, json.dumps({"verifier": self.identity, "probe": True}).encode())
+        total, t0 = 0, time.perf_counter()
+        try:
+            while True:
+                hdr = _recv_exact(conn, _HDR.size)
+                t_first = time.perf_counter()
+                n, k = _HDR.unpack(hdr)
+                body = _recv_exact(conn, n)
+                if bytes([k]) == K_END:
+                    break
+                total += n + _HDR.size
+                send_frame(conn, K_VERDICT, json.dumps({"bytes": n, "recv_s": time.perf_counter() - t_first}).encode())
+        finally:
+            self.log(f"probe from {addr[0]}:{addr[1]}: {total} B in {time.perf_counter() - t0:.2f}s ({hello.get('note', '')})")
+            conn.close()
+
+
+def cmd_probe(args) -> int:
+    """`live probe tcp://host:port`: RTT (HELLO -> WELCOME, small frames) and the one-flow throughput of the path the
+    prover's messages will take (NOP frames of --mb MB, timed on both ends), so a lane can tell a slow path from a slow
+    prover before running: net.wait_seconds of a session ~ bytes_out / throughput when the path, not the RTT, bounds it."""
+    host, port = parse_url(args.verifier)
+    t_conn = time.perf_counter()
+    s = socket.create_connection((host, port), timeout=60)
+    t_connected = time.perf_counter()
+    _setup_socket(s)
+    hj = json.dumps({"wire": WIRE_VERSION, "channel": "probe", "note": args.note or socket.gethostname()}).encode()
+    send_frame(s, K_HELLO, struct.pack("<I", len(hj)) + hj)
+    kind, payload = recv_frame(s)
+    t_welcome = time.perf_counter()
+    if kind != K_WELCOME:
+        print(f"probe refused: {_KIND_NAME.get(kind, kind)} {payload[:200]!r}", file=sys.stderr)
+        return 2
+    out = {"verifier": _json(payload).get("verifier"), "connect_ms": (t_connected - t_conn) * 1e3,
+           "rtt_ms": (t_welcome - t_connected) * 1e3, "tcp_cc": _TCP_CC or "kernel default", "flows": []}
+    blob = os.urandom(1 << 20) * max(1, int(args.mb))
+    for i in range(int(args.repeat)):
+        t0 = time.perf_counter()
+        send_frame(s, K_NOP, blob)
+        t_sent = time.perf_counter()
+        kind, payload = recv_frame(s)
+        t_ack = time.perf_counter()
+        srv = _json(payload)
+        out["flows"].append({"bytes": len(blob), "send_s": t_sent - t0, "ack_s": t_ack - t0, "server_recv_s": srv.get("recv_s"),
+                             "mbps_to_ack": len(blob) * 8 / (t_ack - t0) / 1e6,
+                             "mbps_server_recv": len(blob) * 8 / srv["recv_s"] / 1e6 if srv.get("recv_s") else None})
+    send_frame(s, K_END)
+    s.close()
+    flows = out["flows"]
+    if flows:
+        out["mbps_median"] = sorted(f["mbps_to_ack"] for f in flows)[len(flows) // 2]
+    print(json.dumps(out, indent=1))
+    print(f"RTT {out['rtt_ms']:.1f} ms; one-flow throughput {out.get('mbps_median', 0):.0f} Mbps (median of {len(flows)} x {args.mb} MB; "
+          f"first {flows[0]['mbps_to_ack']:.0f} Mbps incl. slow start); a 4096-VU fp8-ada session sends ~221 MB -> "
+          f">= {221 * 8 / max(out.get('mbps_median', 1), 1):.1f} s of transfer at that rate", file=sys.stderr)
+    return 0
 
 
 class Session(threading.Thread):
@@ -1163,7 +1238,9 @@ def cmd_record(args) -> int:
         r = subprocess.run([*store, "data", "put", *a, "--json"], capture_output=True, text=True, cwd=args.store_cwd)
         if r.returncode:
             raise SystemExit(f"data put failed: {r.stdout[-400:]} {r.stderr[-800:]}")
-        return json.loads(r.stdout.strip().splitlines()[-1])["id"]
+        lines = r.stdout.strip().splitlines()          # `--json` is pretty-printed over several lines
+        start = max(i for i, l in enumerate(lines) if l.startswith("{"))
+        return json.loads("\n".join(lines[start:]))["id"]
 
     tree_id = put("--kind", "run-files/v1", "--tree", str(tmp), "--meta", json.dumps({"kind": "live-verifier sessions", "run": args.run,
                   "sessions": [v["session_id"] for v in verdicts]}), *(["--preserve"] if args.preserve else []))
@@ -1224,6 +1301,12 @@ def main(argv=None) -> int:
     r.add_argument("--preserve", action="store_true")
     r.add_argument("--keep", action="store_true")
     r.set_defaults(fn=cmd_record)
+    p = sub.add_parser("probe", help="GPU pod: RTT and one-flow throughput of the path to a live verifier (no session, nothing stored)")
+    p.add_argument("--verifier", required=True)
+    p.add_argument("--mb", type=int, default=16, help="MB per NOP frame")
+    p.add_argument("--repeat", type=int, default=4)
+    p.add_argument("--note", default=None, help="shows in the verifier's log line")
+    p.set_defaults(fn=cmd_probe)
     args = ap.parse_args(argv)
     return args.fn(args)
 
