@@ -1,0 +1,518 @@
+"""Ligerito polynomial commitment: prove / verify a multilinear evaluation f(z) = v of an N = 2^n coefficient vector
+over BabyBear at z in F_{p^6}^n (paper section 6, with the tensor-claim bookkeeping of ``claims.py``).
+
+Transcript (Fiat-Shamir here; every ``squeeze`` is one verifier coin in the interactive reading):
+    header, z | root_1 | v | sumcheck round 1 (k'_1 x [g_j -> r_j]) |
+    for i = 2..L:  root_i | S_{i-1} <- coin | opened rows of U_{i-1} at S_{i-1} (+ multi-path) | alpha <- coin |
+                   sumcheck round i (k'_i x [g_j -> r_j]) |
+    y_L (the final vector, 2^{k_L} extension elements) | S_L <- coin | opened rows of U_L (+ multi-path)
+
+Verifier checks: every opened row against its root (Blake3 multi-path); g_j(0) + g_j(1) = running claim and
+claim <- g_j(r_j); alpha-batching of the running claim with the |S| opened-row claims  < eta_s^x , y_{i-1} > =
+< U_{i-1}[s, :], r-bar_{i-1} >;  finally  P_{y_L}(eta_s) = < U_L[s, :], r-bar_L >  for s in S_L and
+sum_t coef_t < rowpart_t , y_L > = running claim.
+
+Prover memory: f (int32, N x 4 B), the round-1 codeword (4 N x 4 B), the round-1 Merkle tree (32 B per codeword
+row); later rounds are <= 1/64 of that.  Nothing of size N is materialised in the extension field.
+"""
+from __future__ import annotations
+
+import json
+import time
+from dataclasses import dataclass, field
+
+import numpy as np
+import torch
+
+from ._ligero import merkle as ligero_merkle
+from . import claims as cl
+from . import ext
+from . import merkle_multi
+from .dims import Dims
+from .ext import D, P
+from .kernels import col_contract, row_contract
+from .linalg import contract_columns_ext, contract_rows_ext, eq_planes, matmul_mod_p_np, powers_matrix
+from .ntt_gpu import Encoder
+from .transcript import Transcript
+
+HASH = "blake3"
+
+
+# --------------------------------------------------------------------------------------------- proof container
+
+@dataclass
+class RoundOpen:
+    rows: np.ndarray            # (|S|, W) int64 base words of the opened codeword rows (W = C_i or 6 C_i)
+    siblings: bytes             # multi-path digests (merkle_multi.plan order)
+
+
+@dataclass
+class Proof:
+    n: int
+    kprime: list[int]
+    queries: list[int]
+    rate_log2: int
+    splits: list[tuple[int, int]]           # (n1, n2) of each round's encoder (position -> eta map)
+    v: np.ndarray                           # (6,)
+    roots: list[bytes]
+    sumcheck: list[list[np.ndarray]]        # per round: k'_i messages (3, 6)
+    opens: list[RoundOpen]                  # per committed round
+    final_y: np.ndarray                     # (2^{k_L}, 6)
+    coins: int = 0
+
+    @property
+    def dims(self) -> Dims:
+        return Dims(self.n, list(self.kprime), list(self.queries), self.rate_log2)
+
+    # --- bytes ------------------------------------------------------------------------------------------
+    def to_bytes(self) -> bytes:
+        head = {"n": self.n, "kprime": self.kprime, "queries": self.queries, "rate_log2": self.rate_log2,
+                "splits": self.splits, "coins": self.coins, "hash": HASH, "beta": ext.BETA, "ext_degree": D,
+                "rows_shape": [list(o.rows.shape) for o in self.opens], "sib_len": [len(o.siblings) for o in self.opens],
+                "final_len": int(self.final_y.shape[0])}
+        hb = json.dumps(head, separators=(",", ":")).encode()
+        parts = [len(hb).to_bytes(4, "little"), hb, _ext_bytes(self.v)]
+        for i in range(len(self.kprime)):
+            parts.append(self.roots[i])
+            for g in self.sumcheck[i]:
+                parts.append(_ext_bytes(g))
+        for o in self.opens:
+            parts.append(np.ascontiguousarray(o.rows.astype(np.uint32)).tobytes())
+            parts.append(o.siblings)
+        parts.append(_ext_bytes(self.final_y))
+        return b"".join(parts)
+
+    @staticmethod
+    def from_bytes(buf: bytes) -> "Proof":
+        hl = int.from_bytes(buf[:4], "little")
+        head = json.loads(buf[4:4 + hl].decode())
+        pos = 4 + hl
+        v, pos = _ext_read(buf, pos, ())
+        L = len(head["kprime"])
+        roots, sumcheck = [], []
+        for i in range(L):
+            roots.append(buf[pos:pos + 32])
+            pos += 32
+            msgs = []
+            for _ in range(head["kprime"][i]):
+                g, pos = _ext_read(buf, pos, (3,))
+                msgs.append(g)
+            sumcheck.append(msgs)
+        opens = []
+        for shape, sl in zip(head["rows_shape"], head["sib_len"]):
+            cnt = shape[0] * shape[1]
+            rows = np.frombuffer(buf[pos:pos + 4 * cnt], dtype="<u4").astype(np.int64).reshape(shape)
+            pos += 4 * cnt
+            sib = buf[pos:pos + sl]
+            pos += sl
+            opens.append(RoundOpen(rows, sib))
+        fy, pos = _ext_read(buf, pos, (head["final_len"],))
+        assert pos == len(buf), (pos, len(buf))
+        return Proof(head["n"], head["kprime"], head["queries"], head["rate_log2"], [tuple(s) for s in head["splits"]],
+                     v, roots, sumcheck, opens, fy, head.get("coins", 0))
+
+
+def _ext_bytes(a: np.ndarray) -> bytes:
+    return np.ascontiguousarray(np.asarray(a, dtype=np.int64) % P).astype(np.uint32).tobytes()
+
+
+def _ext_read(buf: bytes, pos: int, shape) -> tuple[np.ndarray, int]:
+    cnt = D
+    for s in shape:
+        cnt *= s
+    a = np.frombuffer(buf[pos:pos + 4 * cnt], dtype="<u4").astype(np.int64).reshape(tuple(shape) + (D,))
+    return a, pos + 4 * cnt
+
+
+def _z_bytes(z: np.ndarray) -> bytes:
+    return _ext_bytes(z)
+
+
+# --------------------------------------------------------------------------------------------- timing helper
+
+class Timer:
+    def __init__(self, device):
+        self.device = device
+        self.buckets: dict[str, float] = {}
+        self.t0 = None
+        self.cur = None
+
+    def sync(self):
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+
+    def start(self, name: str):
+        self.sync()
+        self.cur, self.t0 = name, time.perf_counter()
+
+    def stop(self):
+        self.sync()
+        self.buckets[self.cur] = self.buckets.get(self.cur, 0.0) + time.perf_counter() - self.t0
+        self.cur = None
+
+
+# --------------------------------------------------------------------------------------------- prover
+
+def _open_rows(U: torch.Tensor, tree, S: list[int], depth: int) -> RoundOpen:
+    idx = torch.as_tensor(np.asarray(S, dtype=np.int64), device=U.device)
+    rows = U[:, idx].t().contiguous().to(torch.int64).cpu().numpy()        # (|S|, W)
+    return RoundOpen(rows, merkle_multi.gather(tree, S, depth))
+
+
+def _commit(U: torch.Tensor):
+    """Blake3 Merkle over the codeword rows (= the columns of the (W, n) buffer U)."""
+    if ligero_merkle._gpu_merkle is None:
+        raise RuntimeError("backends/shared/hash_gpu (cupy) is required for the GPU Merkle")
+    tree = ligero_merkle._gpu_merkle.commit(U, HASH)
+    return ligero_merkle._gpu_merkle.digest_bytes(tree.root, HASH), tree
+
+
+class _HostTree:
+    """Host fallback (laptop tests, small sizes): the same tree with the blake3 package."""
+
+    def __init__(self, U: torch.Tensor):
+        words = U.t().contiguous().cpu().numpy().astype(np.uint32)          # (n, W)
+        leaves = [merkle_multi.H(words[i].tobytes()) for i in range(words.shape[0])]
+        levels = [leaves]
+        while len(levels[-1]) > 1:
+            cur = levels[-1]
+            levels.append([merkle_multi.H(cur[i] + cur[i + 1]) for i in range(0, len(cur), 2)])
+        self.levels_b = levels
+
+    @property
+    def root(self) -> bytes:
+        return self.levels_b[-1][0]
+
+    def gather(self, S, depth) -> bytes:
+        return b"".join(self.levels_b[lv][i] for lv, i in merkle_multi.plan(S, depth))
+
+
+def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None) -> Proof:
+    """f: (N,) int32 device tensor (coefficients, [0, p)); z: (n, 6) numpy point; dims: the round structure."""
+    device = f.device
+    n = dims.n
+    N = 1 << n
+    assert f.numel() == N and z.shape == (n, D)
+    ks, kps, qs = dims.k, dims.kprime, dims.queries
+    L = dims.rounds
+    tm = timer or Timer(device)
+    gpu = device.type == "cuda" and ligero_merkle._gpu_merkle is not None
+    tr = Transcript()
+    tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": dims.rate_log2}).encode())
+    tr.absorb(b"z", _z_bytes(z))
+
+    roots: list[bytes] = []
+    sumcheck: list[list[np.ndarray]] = []
+    opens: list[RoundOpen] = []
+    splits: list[tuple[int, int]] = []
+    Us: list[torch.Tensor] = []
+    trees = []
+    encs = []
+
+    # ---------------- round 1: commit f
+    tm.start("commit_r1_encode")
+    R1, C1 = 1 << ks[0], 1 << kps[0]
+    M1 = f.view(C1, R1)
+    enc1 = Encoder(R1, device, dims.rate_log2)
+    U1 = enc1.encode(M1)
+    tm.stop()
+    tm.start("commit_r1_merkle")
+    if gpu:
+        root1, tree1 = _commit(U1)
+    else:
+        tree1 = _HostTree(U1)
+        root1 = tree1.root
+    tm.stop()
+    roots.append(root1)
+    Us.append(U1)
+    trees.append(tree1)
+    encs.append(enc1)
+    splits.append((enc1.n1, enc1.n2))
+    tr.absorb(b"root", root1)
+
+    # ---------------- round 1: evaluation claim and the column sumcheck (one eq term)
+    tm.start("sumcheck_r1_contract")
+    term0 = cl.Term(ext.one(), "eq", z=np.asarray(z, dtype=np.int64) % P, nvars=n)
+    zrow = eq_planes(z[:ks[0]], device)                                   # (6, R1)
+    u = col_contract(M1, zrow)                                            # (C1, 6)
+    tm.stop()
+    tm.start("sumcheck_host")
+    sc = cl.ColumnSumcheckProver([term0], [u], ks[0], kps[0])
+    v = sc.claim()
+    tr.absorb(b"v", _ext_bytes(v))
+    msgs = []
+    for _ in range(kps[0]):
+        g = sc.round_message()
+        tr.absorb(b"g", _ext_bytes(g))
+        r = tr.squeeze_ext(1)[0]
+        sc.fold(r)
+        msgs.append(g)
+    sumcheck.append(msgs)
+    r1 = sc.challenges()                                                  # (k'_1, 6), r[j] <-> variable k_1 + j
+    rbar = cl.rbar(r1)                                                    # (C1, 6)
+    terms = [term0.restrict(ks[0], r1)]
+    running = sc.claim()                                                  # = g_last(r)
+    tm.stop()
+    tm.start("sumcheck_r1_fold")
+    y = row_contract(M1, rbar)                                            # (6, R1) int32 planes
+    tm.stop()
+    rbars = [rbar]
+
+    # ---------------- rounds 2..L
+    for i in range(1, L):
+        R, C = 1 << ks[i], 1 << kps[i]
+        Mi = y.view(D, C, R)                                              # planes
+        tm.start("recursion_encode")
+        enc = Encoder(R, device, dims.rate_log2)
+        U = enc.encode(Mi.reshape(D * C, R))
+        tm.stop()
+        tm.start("recursion_merkle")
+        if gpu:
+            root, tree = _commit(U)
+        else:
+            tree = _HostTree(U)
+            root = tree.root
+        tm.stop()
+        roots.append(root)
+        Us.append(U)
+        trees.append(tree)
+        encs.append(enc)
+        splits.append((enc.n1, enc.n2))
+        tr.absorb(b"root", root)
+        # open the previous round at S_{i-1}
+        tm.start("serialize_openings")
+        prev = i - 1
+        n_prev = encs[prev].n
+        S = tr.squeeze_indices(n_prev, qs[prev])
+        depth = n_prev.bit_length() - 1
+        if gpu:
+            op = _open_rows(Us[prev], trees[prev], S, depth)
+        else:
+            idx = torch.as_tensor(np.asarray(S, dtype=np.int64))
+            op = RoundOpen(Us[prev][:, idx].t().contiguous().to(torch.int64).numpy(), trees[prev].gather(S, depth))
+        opens.append(op)
+        tr.absorb(b"rows", np.ascontiguousarray(op.rows.astype(np.uint32)).tobytes())
+        tr.absorb(b"sib", op.siblings)
+        tm.stop()
+        tm.start("sumcheck_host")
+        etas = encs[prev].etas(S)
+        rhs = _row_claims(op.rows, rbars[prev], base=(prev == 0))        # (|S|, 6)
+        new_terms = [cl.Term(ext.one(), "geom", eta=int(e), nvars=ks[prev]) for e in etas]
+        alpha = tr.squeeze_ext(1 + len(new_terms))                        # (1 + |S|, 6)
+        for t in terms:
+            t.coef = ext.mul(t.coef, alpha[0])
+        for j, t in enumerate(new_terms):
+            t.coef = alpha[1 + j]
+        running = ext.add(ext.mul(alpha[0], running), ext.sum_ext(ext.mul(alpha[1:], rhs), axis=0))
+        terms = terms + new_terms
+        tm.stop()
+        # contractions u_t = M~^T rowpart_t
+        tm.start("recursion_contract")
+        geom = [t for t in terms if t.kind == "geom"]
+        eqs = [t for t in terms if t.kind == "eq"]
+        assert len(eqs) == 1
+        G = powers_matrix(np.array([t.eta for t in geom], dtype=np.int64), R, device) if geom else None
+        zr = eq_planes(eqs[0].z[:ks[i]], device)
+        u_geom, u_eq = contract_columns_ext(Mi, G, zr)
+        tm.stop()
+        tm.start("sumcheck_host")
+        us = []
+        gi = 0
+        for t in terms:
+            if t.kind == "geom":
+                us.append(u_geom[gi])
+                gi += 1
+            else:
+                us.append(u_eq)
+        sc = cl.ColumnSumcheckProver(terms, us, ks[i], kps[i])
+        assert np.array_equal(sc.claim(), running), "prover-side claim mismatch"
+        msgs = []
+        for _ in range(kps[i]):
+            g = sc.round_message()
+            tr.absorb(b"g", _ext_bytes(g))
+            r = tr.squeeze_ext(1)[0]
+            sc.fold(r)
+            msgs.append(g)
+        sumcheck.append(msgs)
+        ri = sc.challenges()
+        rbar = cl.rbar(ri)
+        terms = [t.restrict(ks[i], ri) for t in terms]
+        running = sc.claim()
+        rbars.append(rbar)
+        tm.stop()
+        tm.start("recursion_fold")
+        y = contract_rows_ext(Mi, rbar)                                   # (6, R)
+        tm.stop()
+
+    # ---------------- final: y_L in full, open U_L
+    tm.start("serialize_final")
+    final_y = y.to(torch.int64).t().contiguous().cpu().numpy() % P        # (R_L, 6)
+    tr.absorb(b"y", _ext_bytes(final_y))
+    n_last = encs[-1].n
+    S = tr.squeeze_indices(n_last, qs[-1])
+    depth = n_last.bit_length() - 1
+    if gpu:
+        op = _open_rows(Us[-1], trees[-1], S, depth)
+    else:
+        idx = torch.as_tensor(np.asarray(S, dtype=np.int64))
+        op = RoundOpen(Us[-1][:, idx].t().contiguous().to(torch.int64).numpy(), trees[-1].gather(S, depth))
+    opens.append(op)
+    tm.stop()
+    return Proof(n, list(kps), list(qs), dims.rate_log2, splits, v, roots, sumcheck, opens, final_y, tr.coins)
+
+
+def _row_claims(rows: np.ndarray, rbar: np.ndarray, base: bool) -> np.ndarray:
+    """(|S|, W) opened rows -> (|S|, 6): < U[s, :], rbar >.  base: W = C base words; else W = 6 C (plane-major)."""
+    if base:
+        return matmul_mod_p_np(rows, rbar)                                 # (|S|, C) @ (C, 6)
+    S, W = rows.shape
+    C = W // D
+    planes = rows.reshape(S, D, C)                                        # [s, a, c]
+    out = np.zeros((S, D), dtype=np.int64)
+    for a in range(D):
+        part = matmul_mod_p_np(planes[:, a, :], rbar)                     # (|S|, 6): sum_c U_a[s, c] rbar[c, b]
+        for b in range(D):
+            k = a + b
+            if k >= D:
+                out[:, k - D] = (out[:, k - D] + part[:, b] * ext.BETA) % P
+            else:
+                out[:, k] = (out[:, k] + part[:, b]) % P
+    return out
+
+
+# --------------------------------------------------------------------------------------------- verifier
+
+class Reject(Exception):
+    pass
+
+
+def verify(proof: Proof, z: np.ndarray, v: np.ndarray | None = None) -> tuple[bool, str]:
+    """Returns (accepted, reason).  ``v``: the claimed evaluation (defaults to the proof's)."""
+    try:
+        _verify(proof, np.asarray(z, dtype=np.int64) % P, proof.v if v is None else np.asarray(v, dtype=np.int64) % P)
+    except Reject as e:
+        return False, str(e)
+    return True, "accept"
+
+
+def _verify(pf: Proof, z: np.ndarray, v: np.ndarray) -> None:
+    dims = pf.dims
+    n, ks, kps, qs, L = dims.n, dims.k, dims.kprime, dims.queries, dims.rounds
+    if z.shape != (n, D):
+        raise Reject("bad point shape")
+    if len(pf.roots) != L or len(pf.opens) != L or len(pf.sumcheck) != L or len(pf.splits) != L:
+        raise Reject("bad proof shape")
+    from .ntt_gpu import Encoder as _Enc
+
+    class _Map:
+        def __init__(self, R, split, rate):
+            self.n = R << rate
+            self.n1, self.n2 = split
+            if self.n1 * self.n2 != self.n:
+                raise Reject("bad encoder split")
+
+        def etas(self, s):
+            return _Enc.etas(self, s)
+
+        def eta_index(self, s):
+            return _Enc.eta_index(self, s)
+
+    maps = [_Map(1 << ks[i], pf.splits[i], pf.rate_log2) for i in range(L)]
+    tr = Transcript()
+    tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": pf.rate_log2}).encode())
+    tr.absorb(b"z", _z_bytes(z))
+    # round 1
+    tr.absorb(b"root", pf.roots[0])
+    if not np.array_equal(pf.v % P, v):
+        raise Reject("claimed evaluation differs from the proof's")
+    tr.absorb(b"v", _ext_bytes(v))
+    term0 = cl.Term(ext.one(), "eq", z=z, nvars=n)
+    rs = []
+    for g in pf.sumcheck[0]:
+        if g.shape != (3, D):
+            raise Reject("bad sumcheck message")
+        tr.absorb(b"g", _ext_bytes(g))
+        rs.append(tr.squeeze_ext(1)[0])
+    ok, running = cl.verify_column_rounds(v, pf.sumcheck[0], rs)
+    if not ok:
+        raise Reject("sumcheck round 1 failed")
+    r1 = np.stack(rs[::-1], axis=0) if rs else np.zeros((0, D), dtype=np.int64)
+    rbars = [cl.rbar(r1)]
+    terms = [term0.restrict(ks[0], r1)]
+    for i in range(1, L):
+        tr.absorb(b"root", pf.roots[i])
+        prev = i - 1
+        S = tr.squeeze_indices(maps[prev].n, qs[prev])
+        op = pf.opens[prev]
+        W = (1 << kps[prev]) * (1 if prev == 0 else D)
+        if op.rows.shape != (qs[prev], W):
+            raise Reject(f"opened rows of round {prev + 1} have shape {op.rows.shape}, expected {(qs[prev], W)}")
+        if (op.rows < 0).any() or (op.rows >= P).any():
+            raise Reject("opened row word out of range")
+        tr.absorb(b"rows", np.ascontiguousarray(op.rows.astype(np.uint32)).tobytes())
+        tr.absorb(b"sib", op.siblings)
+        depth = maps[prev].n.bit_length() - 1
+        leaves = {s: merkle_multi.leaf_digest(op.rows[j]) for j, s in enumerate(S)}
+        if not merkle_multi.verify(pf.roots[prev], leaves, op.siblings, depth):
+            raise Reject(f"Merkle multi-path of round {prev + 1} failed")
+        etas = maps[prev].etas(S)
+        rhs = _row_claims(op.rows, rbars[prev], base=(prev == 0))
+        new_terms = [cl.Term(ext.one(), "geom", eta=int(e), nvars=ks[prev]) for e in etas]
+        alpha = tr.squeeze_ext(1 + len(new_terms))
+        for t in terms:
+            t.coef = ext.mul(t.coef, alpha[0])
+        for j, t in enumerate(new_terms):
+            t.coef = alpha[1 + j]
+        running = ext.add(ext.mul(alpha[0], running), ext.sum_ext(ext.mul(alpha[1:], rhs), axis=0))
+        terms = terms + new_terms
+        rs = []
+        for g in pf.sumcheck[i]:
+            if g.shape != (3, D):
+                raise Reject("bad sumcheck message")
+            tr.absorb(b"g", _ext_bytes(g))
+            rs.append(tr.squeeze_ext(1)[0])
+        ok, running = cl.verify_column_rounds(running, pf.sumcheck[i], rs)
+        if not ok:
+            raise Reject(f"sumcheck round {i + 1} failed")
+        ri = np.stack(rs[::-1], axis=0) if rs else np.zeros((0, D), dtype=np.int64)
+        rbars.append(cl.rbar(ri))
+        terms = [t.restrict(ks[i], ri) for t in terms]
+    # final vector
+    y = pf.final_y % P
+    RL = 1 << ks[-1]
+    if y.shape != (RL, D):
+        raise Reject("bad final vector shape")
+    tr.absorb(b"y", _ext_bytes(y))
+    S = tr.squeeze_indices(maps[-1].n, qs[-1])
+    op = pf.opens[-1]
+    W = (1 << kps[-1]) * (1 if L == 1 else D)
+    if op.rows.shape != (qs[-1], W):
+        raise Reject("opened rows of the last round have a bad shape")
+    if (op.rows < 0).any() or (op.rows >= P).any():
+        raise Reject("opened row word out of range")
+    depth = maps[-1].n.bit_length() - 1
+    leaves = {s: merkle_multi.leaf_digest(op.rows[j]) for j, s in enumerate(S)}
+    if not merkle_multi.verify(pf.roots[-1], leaves, op.siblings, depth):
+        raise Reject("Merkle multi-path of the last round failed")
+    # (a) P_y(eta_s) = < U_L[s, :], rbar_L >
+    etas = maps[-1].etas(S)
+    pw = np.stack([cl.powers(int(e), RL) for e in etas], axis=0)          # (|S|, R_L)
+    lhs = matmul_mod_p_np(pw, y)                                          # (|S|, 6)
+    rhs = _row_claims(op.rows, rbars[-1], base=(L == 1))
+    if not np.array_equal(lhs, rhs):
+        raise Reject("final vector is inconsistent with the opened rows")
+    # (b) sum_t coef_t < rowpart_t , y > = running
+    geom = [t for t in terms if t.kind == "geom"]
+    eqs = [t for t in terms if t.kind == "eq"]
+    total = ext.zero()
+    if geom:
+        pw = np.stack([cl.powers(t.eta, RL) for t in geom], axis=0)       # (Tg, R_L)
+        ip = matmul_mod_p_np(pw, y)                                       # (Tg, 6)
+        coefs = np.stack([t.coef for t in geom], axis=0)
+        total = ext.add(total, ext.sum_ext(ext.mul(coefs, ip), axis=0))
+    for t in eqs:
+        vec = t.rowpart_eq(ks[-1])                                        # (R_L, 6)
+        ip = ext.sum_ext(ext.mul(vec, y), axis=0)
+        total = ext.add(total, ext.mul(t.coef, ip))
+    if not np.array_equal(total, running):
+        raise Reject("final sumcheck claim failed")
