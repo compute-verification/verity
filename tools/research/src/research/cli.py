@@ -11,6 +11,8 @@
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
   research pods create <runpod flags> [--require-reference-part]   # research.pods.runpod create, then the same verdict once sshd answers
+  research pods unpreserved <machine|pod-id>     # Attempts recorded on that machine that are NOT `preserved` (same predicate as `data preserved`); exit 1 if any
+  research pods drain <machine|pod-id> [--force --reason TEXT]      # the report, then terminate ONLY when nothing is unpreserved (override logged)
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution

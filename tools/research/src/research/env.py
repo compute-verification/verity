@@ -30,8 +30,10 @@ KEYS = (
     "source.commit", "source.tree", "source.dirty", "source.dirty_digest",
     "rt.os", "rt.kernel", "rt.python", "rt.rust", "rt.cuda", "rt.driver", "rt.torch", "rt.triton", "rt.nvcc",
     "hw.family", "hw.sku", "hw.count", "hw.vram_mb", "hw.cpu", "hw.hostname",
-    "exec.exclusive", "exec.load_start", "exec.load_end", "exec.project", "exec.campaign", "exec.runs_root",
+    "exec.exclusive", "exec.load_start", "exec.load_end", "exec.project", "exec.campaign", "exec.runs_root", "exec.machine",
 )
+# exec.machine: the machines.toml name a `research run --on <machine>` ran on (job.json run.remote.machine), indexed so that
+# `research pods unpreserved|drain <machine>` can find every Attempt recorded on a machine; hw.hostname is the container's hostname.
 LOCKFILES = ("uv.lock", "Cargo.lock")
 UNTRACKED_CAP_BYTES = 64 << 20
 
@@ -273,6 +275,7 @@ def conditions_from_job(job: dict[str, Any] | None) -> dict[str, object]:
     out["exec.project"] = own.get("project")
     out["exec.campaign"] = store.get("campaign")
     out["exec.runs_root"] = run.get("runs_root")
+    out["exec.machine"] = (run.get("remote") or {}).get("machine")
     return out
 
 
