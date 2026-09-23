@@ -507,6 +507,7 @@ def bench(args) -> int:
         statement_format="LGTS0001", proof_format="LGTO0001", key_format="LGVK0001", key_sha256=pv.key_sha256.hex(),
         note=f"{total_vus} VUs as {nb_} Ligerito batch(es) of {lay.n_sub} sub-batches x l = {args.l} columns (S = {lay.S}), N = 2^{lay.n_vars} "
              f"cells each; t.total = wall over all batches{f' ({args.window} in flight)' if live and args.window > 1 else ''}; proof bytes / verify summed; "
+             f"{'live coins: the t.* buckets include the challenge-stream waits (live.stream_wait_seconds, R x RTT per batch); ' if live else ''}"
              f"cells; prover time includes witness generation (Ligero's hints + build_witness, marshal cached across reps as in relchain); "
              f"{rel.claim_note}")
     meas = [contract.measurement(f"t.{k}", v) for k, v in med_b.items()]
