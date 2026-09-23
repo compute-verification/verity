@@ -11,6 +11,8 @@ from . import canon
 
 HEX64 = r"[0-9a-f]{64}"
 ART_RE = re.compile(rf"^art:{HEX64}$")
+SHORT_ART_MIN_HEX = 8
+SHORT_ART_RE = re.compile(rf"^art:[0-9a-f]{{{SHORT_ART_MIN_HEX},63}}$")
 DRV_RE = re.compile(rf"^drv:{HEX64}$")
 RUN_RE = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 SHA_RE = re.compile(rf"^{HEX64}$")
@@ -28,6 +30,12 @@ def drv_id(derivation_doc: dict) -> str:
 
 def is_art(s: Any) -> bool:
     return isinstance(s, str) and bool(ART_RE.match(s))
+
+
+def is_short_art(s: Any) -> bool:
+    """`art:` + 8..63 hex digits: the abbreviated form notes and reports print (`art:cc59294a`).  Only the CLI resolves it
+    (`Index.resolve_art_prefix`); the store API takes full ids."""
+    return isinstance(s, str) and bool(SHORT_ART_RE.match(s))
 
 
 def is_drv(s: Any) -> bool:

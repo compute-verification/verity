@@ -518,6 +518,32 @@ def test_run_with_tool_declaration_resolves_before_launch(tmp_path, monkeypatch)
     assert research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--tool", "nope", "--", "true"]) == 2, "an unknown tool is refused before anything runs"
 
 
+def test_declared_key_params_are_recorded_even_when_their_name_looks_secret(tmp_path, monkeypatch):
+    """`--auth included-hash` is a scientific choice the Tool declares as a key param; it was stored as `<redacted>`, so hashed and
+    bare runs were indistinguishable in the catalog.  Undeclared secret-looking flags and secret-shaped values stay redacted."""
+    src = _repo(tmp_path)
+    (src / "mytools/decl_auth.py").parent.mkdir()
+    (src / "mytools/decl_auth.py").write_text(textwrap.dedent("""
+        from research.store.tool import Tool
+        T = Tool(name="mine", version="1", command=["python", "-c"], key_params=["auth", "tile"])
+    """))
+    monkeypatch.chdir(src)
+    token = "hf_" + "a" * 24
+    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_auth:T", "--",
+                        PY, "-c", "pass", "--auth", "included-hash", "--tile=64", "--auth-token", "s3cret", "--api-key=abc"])
+    assert rc == 0
+    s = json.loads((next(p for p in (tmp_path / "runs").iterdir() if p.is_dir()) / "job.json").read_text())["store"]
+    assert s["params"]["auth"] == "included-hash" and s["key_params_resolved"]["auth"] == "included-hash"
+    assert s["params"]["auth_token"] == "<redacted>" and s["params"]["api_key"] == "<redacted>"
+    assert s["params"]["argv"][-6:] == ["--auth", "included-hash", "--tile=64", "--auth-token", "<redacted>", "--api-key=<redacted>"]
+
+    from research.cli import unredact_key_params
+    from research.telemetry.job import redact_argv
+    argv = ["x", "--auth", token, "--auth=included"]
+    assert unredact_key_params(argv, redact_argv(argv)[0], {"auth"}) == ["x", "--auth", "<redacted>", "--auth=included"], \
+        "a secret-shaped value stays redacted even under a key-param flag"
+
+
 def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     """The machine gets a `git archive` (no .git) as cwd and the research source on PYTHONPATH: `--tool tc_probe` must resolve
     there, the closure must come from the archive, and the source identity from the control side's hint."""

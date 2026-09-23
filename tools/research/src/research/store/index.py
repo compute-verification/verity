@@ -262,6 +262,11 @@ class Index:
     def artifacts(self) -> list[dict]:
         return [self._art_row(r) for r in self.db.execute("SELECT * FROM artifacts ORDER BY id")]
 
+    def resolve_art_prefix(self, prefix: str, limit: int = 2) -> list[str]:
+        """Catalogued artifact ids starting with `prefix` (`art:<hex>`), at most `limit`: a primary-key range scan (hex digits sort
+        below 'g', so [prefix, prefix + 'g') is exactly the ids with that prefix)."""
+        return [r[0] for r in self.db.execute("SELECT id FROM artifacts WHERE id >= ? AND id < ? ORDER BY id LIMIT ?", (prefix, prefix + "g", limit))]
+
     def attempt(self, run_id: str) -> dict | None:
         r = self.db.execute("SELECT manifest_json FROM attempts WHERE id=?", (run_id,)).fetchone()
         return json.loads(r[0]) if r else None

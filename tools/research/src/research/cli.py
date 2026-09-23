@@ -166,6 +166,28 @@ def cmd_run(argv: list[str]) -> int:
     return rc
 
 
+def unredact_key_params(command: list[str], redacted: list[str], key_params: set[str]) -> list[str]:
+    """`redact_argv` judges a flag by its name (`--auth` looks like a credential), but a flag the Tool declares as a key param is
+    part of the derivation identity: a scientific choice (`--auth included-hash`), never a secret.  Put those values back, token
+    for token (`redact_argv` keeps the argv's length), unless the value itself is secret-shaped."""
+    from .telemetry.job import SECRET_VALUE
+
+    def dest(flag: str) -> str:
+        return flag.lstrip("-").replace("-", "_")
+
+    out = list(redacted)
+    for i, (orig, red) in enumerate(zip(command, redacted)):
+        if orig == red:
+            continue
+        if orig.startswith("--") and "=" in orig:
+            flag, _, value = orig.partition("=")
+            if dest(flag) in key_params and not SECRET_VALUE.match(value):
+                out[i] = orig
+        elif i and command[i - 1].startswith("--") and dest(command[i - 1]) in key_params and not SECRET_VALUE.match(orig):
+            out[i] = orig
+    return out
+
+
 def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[str], run_id: str, run_dir: Path) -> dict:
     """Before launch: load the Tool (errors propagate: the user asked for it), collect conditions, resolve params and inputs to
     content identity, compute the closure manifest, derivation id and reuse_key, create --scratch dirs.  Everything after the
@@ -193,8 +215,9 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
         if tool is not None:
             conds.update(tool.tool_conditions(conds))
             params, key = tool.resolve_params(command, source_root)
-            params = {k: ("<redacted>" if SECRET_KEY.search(k) and isinstance(v, str) else v) for k, v in params.items()}
-            params["argv"] = argv_red
+            public = set(tool.key_params)
+            params = {k: ("<redacted>" if k not in public and SECRET_KEY.search(k) and isinstance(v, str) else v) for k, v in params.items()}
+            params["argv"] = unredact_key_params(command, argv_red, public)
             closure = tool.closure_manifest(source_root)
             ident = {"name": tool.name, "version": tool.version, "spec": tool.spec}
             key_params, key_conditions = list(tool.key_params), list(tool.key_conditions)

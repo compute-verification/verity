@@ -39,7 +39,8 @@
                                                    a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
   (lookup / pull / attempt are provided by cli_prov when present)
 
-Every command takes `--store ROOT` (default `$RESEARCH_STORE` or `~/.research/store`).  `COMMANDS` maps a name to
+Every command takes `--store ROOT` (default `$RESEARCH_STORE` or `~/.research/store`) and accepts abbreviated artifact ids
+(`art:cc59294a`, >= 8 hex digits, unique in the local catalog) wherever it takes an id.  `COMMANDS` maps a name to
 `fn(argv) -> int`; `main(argv)` dispatches.  Structured output has `--json` everywhere.
 """
 from __future__ import annotations
@@ -202,7 +203,8 @@ def cmd_show(argv: list[str]) -> int:
               f"source     {json.dumps(doc.get('source'), sort_keys=True)}\ninputs     {json.dumps(doc.get('inputs'), sort_keys=True)}\n"
               f"outputs    {json.dumps(doc.get('outputs'), sort_keys=True)}\nexecution  {json.dumps(doc.get('execution'), sort_keys=True)}")
         return 0
-    print(f"research data show: {ns.ref!r} is not an art:, drv: or run id", file=sys.stderr)
+    print(f"research data show: {ns.ref!r} is not an art:, drv: or run id (an abbreviated art: id needs >= {ids.SHORT_ART_MIN_HEX} hex digits)",
+          file=sys.stderr)
     return 2
 
 
@@ -753,6 +755,59 @@ def cmd_doctor(argv: list[str]) -> int:
     return 0
 
 
+_VERBATIM_AFTER = ("--meta", "--note")      # free text / JSON values: never rewritten
+_VERBATIM_COMMANDS = ("sql",)
+
+
+def _store_root_arg(argv: list[str]) -> str | None:
+    for i, t in enumerate(argv):
+        if t == "--store" and i + 1 < len(argv):
+            return argv[i + 1]
+        if t.startswith("--store="):
+            return t.split("=", 1)[1]
+    return None
+
+
+def _rewrite_token(tok: str, resolve: Callable[[str], str]) -> str:
+    """The token itself, a comma list (`--members a,b`), or `name=<comma list>` (`--ref proof=art:…`, `--where meta.k=art:…`),
+    with every abbreviated id replaced; any other token comes back unchanged."""
+    if tok.startswith("--") and "=" in tok:
+        flag, _, val = tok.partition("=")
+        return tok if flag in _VERBATIM_AFTER else f"{flag}={_rewrite_token(val, resolve)}"
+    head, sep, body = tok.partition("=") if "=" in tok else ("", "", tok)
+    parts = body.split(",")
+    if any(ids.is_short_art(p) for p in parts) and all(ids.is_art(p) or ids.is_short_art(p) for p in parts):
+        return head + sep + ",".join(resolve(p) if ids.is_short_art(p) else p for p in parts)
+    return tok
+
+
+def expand_short_ids(cmd: str, argv: list[str]) -> list[str]:
+    """Abbreviated artifact ids (`art:cc59294a`, >= 8 hex digits: the form notes and reports print) resolved against the local
+    catalog, git-style: exactly one catalogued id must start with it.  None -> the catalog may simply not know a remote-only
+    artifact (`reindex --remote`); several -> ambiguous.  Both are a ValueError naming what to do.  The catalog is opened only
+    when some token needs it."""
+    if cmd in _VERBATIM_COMMANDS:
+        return argv
+    st: LocalStore | None = None
+
+    def resolve(short: str) -> str:
+        nonlocal st
+        st = st or LocalStore(_store_root_arg(argv))
+        hits = st.index.resolve_art_prefix(short, limit=6)
+        if len(hits) == 1:
+            return hits[0]
+        if not hits:
+            raise ValueError(f"{short} matches no artifact in the local catalog ({st.root}); give the full id, or run "
+                             "`research data reindex --remote` to catalogue what the remote holds")
+        shown = ", ".join(h[:20] + "…" for h in hits[:5]) + (", …" if len(hits) > 5 else "")
+        raise ValueError(f"{short} is ambiguous ({shown}); give more digits")
+
+    out: list[str] = []
+    for i, tok in enumerate(argv):
+        out.append(tok if i and argv[i - 1] in _VERBATIM_AFTER else _rewrite_token(tok, resolve))
+    return out
+
+
 COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "preserved": cmd_preserved, "select": cmd_select,
     "snapshot": cmd_snapshot,
@@ -773,7 +828,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"research data: unknown command {cmd!r} (have: {', '.join(sorted(COMMANDS))})", file=sys.stderr)
         return 2
     try:
-        return fn(rest)
+        return fn(expand_short_ids(cmd, rest))
     except CatalogVersionError as e:                                  # the worktree is behind the catalog: say so, exit 3, no traceback
         print(f"research data {cmd}: {e}", file=sys.stderr)
         return 3
