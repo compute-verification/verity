@@ -672,9 +672,18 @@ def prover_seconds(p: LigeritoParams, gpu: GPU, keep_codeword: bool = False, wit
 RATE_GRID = ((1, 2), (1, 4), (2, 2), (2, 4))     # (level-1 rate_log2, later-level rate_log2)
 
 
-def recommend(rel: RelationShape, gpu: GPU, budget_bytes: int = 1 << 20, levels=range(3, 6), objective: str = "time") -> dict:
-    """Scan ``RATE_GRID x levels``; return the min-bytes point, the min-estimated-prover-time point under ``budget_bytes``
-    and the whole grid.  ``objective`` picks which one ``table2_cells`` reports."""
+_RECOMMEND_CACHE: dict = {}
+
+
+def recommend(rel: RelationShape, gpu: GPU, budget_bytes: int = 1 << 20, levels=range(3, 6), objective: str = "balanced") -> dict:
+    """Scan ``RATE_GRID x levels``; return the min-bytes point, the min-estimated-prover-time point under ``budget_bytes``,
+    the min-bytes point within 10 % of that time ("balanced") and the whole grid.  ``objective`` picks the one
+    ``table2_cells`` reports.  Cached per (relation, gpu, budget, levels)."""
+    key = (rel.name, gpu.name, budget_bytes, tuple(levels))
+    if key in _RECOMMEND_CACHE:
+        out = dict(_RECOMMEND_CACHE[key])
+        out["pick"] = out[{"time": "fastest", "bytes": "smallest", "balanced": "balanced"}[objective]]
+        return out
     grid = []
     for r1, r2 in RATE_GRID:
         for L in levels:
@@ -688,6 +697,7 @@ def recommend(rel: RelationShape, gpu: GPU, budget_bytes: int = 1 << 20, levels=
     fastest = min((g for g in grid if g["bytes"] <= budget_bytes), key=lambda g: g["seconds"])
     balanced = min((g for g in grid if g["seconds"] <= 1.1 * fastest["seconds"]), key=lambda g: g["bytes"])
     pick = {"time": fastest, "bytes": smallest, "balanced": balanced}[objective]
+    _RECOMMEND_CACHE[key] = {"smallest": smallest, "fastest": fastest, "balanced": balanced, "grid": grid}
     return {"smallest": smallest, "fastest": fastest, "balanced": balanced, "pick": pick, "grid": grid}
 
 
