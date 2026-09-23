@@ -35,6 +35,22 @@ own monomial (the base ones are the degree-1 ``u_0 .. u_6``, the extras have ``u
 (Schwartz-Zippel) instead of 1 / p -- for the 32 extras of a hashed chain start column: 7 / p, i.e. (7 / p)^D = 2^-169
 at D = 6, below the field term ``(n + 3) / p^D`` the accounting already books.  Systems with three linked rows are
 unchanged (no extras; byte-identical transcripts).
+
+Fingerprint constraints (``sys.chain["fp"]``, lane share-logup: ``hashchain.compose_shared`` / ``row_hash_system``).  A
+system whose operand rows are hashed ONCE per tile instead of once per VU binds every VU to its shared row by a
+post-commitment fingerprint: with ``lanes[o][i]`` the 16 lane rows of operand slot ``o`` (the 16-bit words the sponge
+absorbs) and ``rho_0 .. rho_{C-1}`` verifier coins drawn AFTER the root (``protocol._challenge1``, ``C = FP_COORDS``),
+the constraint at the END column of VU ``v`` for every ``(o, x)`` is
+
+    fp_{v,o,x} : sum_{s < steps} sum_{i < 16} rho_x^(16 s + i) lanes[o][i][steps v + s] = F[v][o][x]
+
+-- linear in the witness with rho-dependent coefficients, so it costs no witness row: it is ``2 x C`` more constraints
+per VU of the same general linear test, with the end column's monomials as their uniform coefficients (extra constraints
+``2 n_extra_links + o C + x`` in the rule above).  ``F`` is a prover MESSAGE after the coin (``Proof.fp``; the "coin" mode,
+the GEMM side) or a public input (the "public" mode, the hash side: the row unit proves the SAME fingerprint of the row
+it hashes, and the verifier matches the two).  Two different rows agree on one coordinate with probability
+<= (16 steps - 1) / p (a nonzero polynomial of degree < 16 steps in rho_x); C = 8 coordinates give (767 / p)^8 ~ 2^-171
+for steps = 48 (``protocol.soundness`` books it as ``fingerprint_collision``).
 """
 from __future__ import annotations
 
@@ -44,10 +60,14 @@ import torch
 
 from .compile import P, System
 
-__all__ = ["N_FAMILIES", "END_FAMILIES", "MAX_COMPONENT_BITS", "N_BASE_LINKS", "WORD_BITS", "ChainCoefs", "Layout",
-           "chain_coefs", "check_component", "end_terms", "extra_coef", "n_links"]
+__all__ = ["FP_COORDS", "FP_COORDS_FS", "N_FAMILIES", "END_FAMILIES", "MAX_COMPONENT_BITS", "N_BASE_LINKS", "WORD_BITS", "ChainCoefs",
+           "FpArgs", "Layout", "chain_coefs", "check_component", "end_terms", "extra_coef", "fp_lane_rows", "fp_values",
+           "n_links", "rho_powers"]
 
 N_FAMILIES = 7        # link x3, start x3, end
+FP_COORDS = 8         # fingerprint coordinates, interactive mode (module comment): (767 / p)^8 ~ 2^-171 at 48 steps
+FP_COORDS_FS = 10     # Fiat-Shamir mode: the term takes the 2^60 query factor (protocol.soundness): (767 / p)^10 ~ 2^-213
+FP_LANES = 16         # lanes per operand slot per column (the sponge's rate)
 END_FAMILIES = (6, 0, 1)   # coefficient family of end component x (see the module comment)
 N_BASE_LINKS = 3      # linked rows with their own uniform link / start families; more take monomials (module comment)
 WORD_BITS = 32             # the public word a component end is a bit field of
@@ -131,15 +151,59 @@ class ChainCoefs:
     rhs: torch.Tensor           # (D,) r^T b
 
 
-def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Tensor) -> ChainCoefs:
+@dataclass
+class FpArgs:
+    """The fingerprint constraints' public data (module comment): ``rho`` (C,) the coins, ``F`` (n_slots, n_op, C) the
+    claimed fingerprints per VU slot of the layout (``n_slots = l // steps``; slots >= n_vus are pad and ignored)."""
+    rho: torch.Tensor
+    F: torch.Tensor
+
+
+def fp_lane_rows(ch: dict) -> torch.Tensor | None:
+    """(n_op * 16,) the lane rows of a fingerprinted chain (``ch["fp"]["lanes"]``, operand-major), else None."""
+    fp = ch.get("fp")
+    if fp is None:
+        return None
+    return torch.tensor([r for op in fp["lanes"] for r in op], dtype=torch.int64)
+
+
+def rho_powers(rho: torch.Tensor, steps: int) -> torch.Tensor:
+    """(C, steps, 16): ``rho_x^(16 s + i)`` by binary exponentiation on the device (no host sync: graph-capturable)."""
+    C = rho.shape[0]
+    e = torch.arange(steps * FP_LANES, dtype=torch.int64, device=rho.device)
+    out = torch.ones((C, steps * FP_LANES), dtype=torch.int64, device=rho.device)
+    base = rho % P
+    for b in range(max(1, int(steps * FP_LANES - 1).bit_length())):
+        bit = ((e >> b) & 1)[None, :]
+        out = torch.where(bit == 1, (out * base[:, None]) % P, out)
+        base = (base * base) % P
+    return out.reshape(C, steps, FP_LANES)
+
+
+def fp_values(lanes: torch.Tensor, rho: torch.Tensor, n_op: int, steps: int, l: int) -> torch.Tensor:
+    """The honest fingerprints: ``lanes`` (n_op * 16, l) lane rows of the witness -> F (l // steps, n_op, C) with
+    ``F[v][o][x] = sum_{s,i} rho_x^(16 s + i) lanes[o][i][steps v + s]``."""
+    n_slots = l // steps
+    C = rho.shape[0]
+    pw = rho_powers(rho, steps)                                                        # (C, steps, 16)
+    L = (lanes[:, :n_slots * steps] % P).reshape(n_op, FP_LANES, n_slots, steps)       # (o, i, v, s)
+    # products < 2^62 reduced per term, then <= 768 terms of < 2^31: no overflow
+    prod = (L[:, :, :, :, None] * pw.permute(2, 1, 0)[None, :, None, :, :]) % P        # (o, i, v, s, x)
+    return (prod.sum((1, 3)) % P).permute(1, 0, 2).contiguous()                        # (v, o, x)
+
+
+def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Tensor, fp: FpArgs | None = None) -> ChainCoefs:
     """``rc``: (D, N_FAMILIES, l) uniform challenge coefficients (one per constraint; entries at masked-out
-    positions are ignored); ``y16_pub``: (l,) the claimed public words at the chain ends (0 elsewhere)."""
+    positions are ignored); ``y16_pub``: (l,) the claimed public words at the chain ends (0 elsewhere); ``fp``: the
+    fingerprint coins and values of a fingerprinted chain (``sys.chain["fp"]``; required then, refused otherwise)."""
     ch = sys.chain
     device = rc.device
     D, _, l = rc.shape
     tabs = _chain_tables(sys, layout, device)
     rows, T = tabs["rows"], tabs["terms"]
     nl = n_links(ch)
+    if (ch.get("fp") is not None) != (fp is not None):
+        raise ValueError("fingerprint data given for a chain without fingerprint constraints, or missing for one with them")
     # rm[:, v, :] = the coefficients of virtual family v masked to their constraint positions: v = 0..6 are the seven
     # families (link x3, start x3, end component 0), v = 6 + x (x >= 1) the end component x, which draws its
     # coefficients from END_FAMILIES[x] (a link family, unused at end columns) under the END mask; then, for chains with
@@ -168,6 +232,27 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
     for x, ((Y, _, _, _), yv) in enumerate(zip(end_terms(ch), y_vals)):
         r_end = rm[:, 6 + x, :]
         rhs = (rhs + ((r_end * ((yv - Y.c) % P)[None, :]) % P).sum(1)) % P
+    if fp is not None:
+        # fp_{v,o,x} at the end column of VU v (module comment): coefficient rho_x^(16 s + i) u_{v,o,x} on lane row (o, i)
+        # at column steps v + s, u the end column's monomial for extra constraint 2 n_extra_links + o C + x, masked to
+        # the real VUs (a pad slot's "end column" carries no constraint); rhs += u_{v,o,x} F[v][o][x]
+        n_op, C = len(ch["fp"]["lanes"]), int(ch["fp"]["coords"])
+        steps, n_slots = layout.steps, l // layout.steps
+        if tuple(fp.F.shape) != (n_slots, n_op, C) or fp.rho.shape != (C,):
+            raise ValueError(f"fingerprint data: F {tuple(fp.F.shape)} != {(n_slots, n_op, C)} or rho {tuple(fp.rho.shape)} != {(C,)}")
+        ends = torch.arange(n_slots, device=device) * steps + steps - 1
+        real = (torch.arange(n_slots, device=device) < layout.n_vus).to(torch.int64)
+        e0 = tabs["n_extra"]
+        u = torch.stack([extra_coef(rc, e0 + e)[:, ends] for e in range(n_op * C)], 1)     # (D, n_op C, n_slots)
+        u = (u * real[None, None, :]).reshape(D, n_op, C, n_slots) % P
+        pw = rho_powers(fp.rho.to(device), steps)                                           # (C, steps, 16)
+        # coef_lane[d, o, i, v, s] = sum_x u[d, o, x, v] pw[x, s, i]: C products of < 2^62 reduced per term, C terms summed
+        prod = (u[:, :, :, :, None, None] * pw[None, None, :, None, :, :]) % P                # (D, o, x, v, s, i)
+        lane_coef = (prod.sum(2) % P).permute(0, 1, 4, 2, 3).reshape(D, n_op * FP_LANES, n_slots * steps)
+        lane_pos = tabs["lane_pos"]
+        coef[:, lane_pos, :n_slots * steps] = (coef[:, lane_pos, :n_slots * steps] + lane_coef) % P
+        F = fp.F.to(device) % P
+        rhs = (rhs + ((u * F.permute(1, 2, 0)[None]) % P).sum((1, 2, 3))) % P
     return ChainCoefs(rows, coef, rhs)
 
 
@@ -191,6 +276,13 @@ def _chain_tables(sys: System, layout: Layout, device) -> dict:
     for e in ch["y"] + [Y for Y, _, _, _ in ends]:
         for idx in e.lin:
             involved.setdefault(idx, len(involved))
+    lane_pos = []
+    if ch.get("fp") is not None:
+        for op in ch["fp"]["lanes"]:
+            if len(op) != FP_LANES:
+                raise ValueError(f"a fingerprinted operand slot has {FP_LANES} lane rows, got {len(op)}")
+            for idx in op:
+                lane_pos.append(involved.setdefault(idx, len(involved)))
     # virtual families: 0..6 base, 7 .. 6 + n_end the end components 1.., then the link extras, then the start extras
     V_base = N_FAMILIES + len(ends) - 1
     link_fams = list(range(N_BASE_LINKS)) + [V_base + e for e in range(n_extra_links)]
@@ -212,7 +304,7 @@ def _chain_tables(sys: System, layout: Layout, device) -> dict:
                           + [link] * n_extra_links + [start] * n_extra_links)   # (V, l) 0/1
     t = lambda v: torch.tensor(v, dtype=torch.int64, device=device)  # noqa: E731
     tabs = {"rows": t(list(involved.keys())), "famsel": t(famsel), "maskmat": maskmat, "n_extra": 2 * n_extra_links,
-            "link_fams": t(link_fams), "link_fams_list": list(link_fams),
+            "lane_pos": t(lane_pos), "link_fams": t(link_fams), "link_fams_list": list(link_fams),
             "terms": {"row": t(row), "fam": t(fam), "kappa": t(kappa), "shift_row": t(shift_row)}}
     _TABLES[key] = (sys, tabs)
     return tabs

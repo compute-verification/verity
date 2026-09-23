@@ -152,7 +152,7 @@ alone and was forgeable by choosing the claimed words after the challenges -- RE
     2^-80 sensitivity point: t = 118, D = 4 (fields 2^-110..-124).
 
 `t` is `ligero_queries_for(target, n, l, l)`. The linear test sends nothing, so its query term is at most the Appendix
-C one used. The proximity-gap statement for base-field rows combined by base-field coefficients is Ligero's own
+C one used.  A row-sharing GEMM side (8e) adds the statistical term `fingerprint_collision` (2^-157 / 2^-139 per proof). The proximity-gap statement for base-field rows combined by base-field coefficients is Ligero's own
 setting (no subfield/extension assumption is needed here, since the combinations are base-field).
 
 ## 7. Communication (l = 4096, m = 3372, t = 189, D = 6)
@@ -525,9 +525,9 @@ pins the three hashed systems apart from the bare ones (`relation.rs hashed_sys_
 the path check natively (`auth.rs check_hashed`; fixture `fixtures/fp8-ada-hash`).
 
 **Sharing** (`--tile NXxNW`): a 64 x 64 GEMM tile is 4096 VUs over 64 x rows and 64 W columns; the trees have 64 + 64
-leaves and the multiproofs open every leaf (~depth siblings per distinct row, 288-480 B per sub-batch), but every VU
-still hashes its own two rows (`sharing = none` in the prover's rows; the lookup-bound "hash each distinct row once"
-version is not built).
+leaves and the multiproofs open every leaf (~depth siblings per distinct row, 288-480 B per sub-batch).  With
+`included-hash` every VU still hashes its own two rows; `included-hash-shared` (8e) hashes each distinct row once per
+sub-batch.
 
 * Merkle: `backends/shared/hash_gpu` Blake3 on the device (merged from main during the night; bit-exact with the
   host `blake3`, so `verify_path` is unchanged and the host path remains the CPU fallback). Before it, the transfer
@@ -544,6 +544,105 @@ version is not built).
 * ZK masking: section 8b, implemented by lane b-ligero2 (`--zk`); malicious-verifier ZK (HM96 coin commitment, coin-only challenges): section 8c, lanes b-zk / b-zk-fix (COMPLETE_ZK_BACKEND in the interactive mode only; the statement's operands are public, so the label is about the construction).
 * Challenge expander: SHAKE-256 with `u mod p` on the *challenges* keeps the 2^-31 per-residue bias (a factor <= 1.5
   on the `1/p^D` field terms, 2^-172 and below: immaterial); only the mask sampler was moved to rejection.
+
+## 8e. `authentication = included-hash-shared`: each committed row hashed once per sub-batch (lane share-logup)
+
+`included-hash` (8d) hashes a row once per VU: at the 64 x 64 tile every x row is hashed 64 times and every W column
+64 times (2 x 4096 sponges of 48 permutations per sub-batch of 341 VUs for ~70 distinct rows), and the hash rows
+(1720 of 6210 per unit, +65 % over the bare relation) are the whole cost of the committed-operand relation.  Sharing
+makes the hashing proportional to the **distinct** rows a sub-batch touches and leaves the GEMM proof to prove only
+that every VU's operand words *equal* a shared row -- without re-hashing and without a lookup argument.
+
+**Two mechanisms were censused.**  (a) *LogUp multiset*: a `(row_id, word)` lookup of every operand word of every VU
+into a table of the distinct rows' words -- a rational-function sum per row with a post-commitment coin and a running
+product / fraction row per VU (>= 3 rows per unit plus inverse hints, a batched inverse per column), the table proof
+being another Ligero proof over the distinct rows.  (b) *Fingerprint chain*: a coin `rho` drawn after the root and one
+linear constraint per VU, operand slot and coordinate saying "the rho-weighted sum of my 768 lane values is F"; the
+same sum over the shared row is proved on the hash side.  (b) costs **no witness row** (linear in committed rows with
+rho-dependent coefficients: it is more constraints of the general linear test the tests already run), so (b) was built.
+
+**The proof of a sub-batch is a pair.**  `G` (`hashchain.compose_shared`, the GEMM side): the chain-compiled unit with
+private operands as in 8d step 1 (704 rows for fp8-ada), the 16 lane rows per operand slot of 8d's sponge input
+(`hash.a.lane<i>` / `hash.b.lane<i>` = the packed 16-bit elements a sponge would absorb, `word_bits` bits per word
+re-established as in 8d) but **no sponge**, one public pin `hash.is_end`; 4506 rows per unit (bare 3769: +19.6 %).
+`H` (`hashchain.row_hash_system`, the hash side): one unit per DISTINCT committed row of the sub-batch (the distinct
+`x_index` values of the authentication block, then the distinct `w_index` values: `hashchain.shared_units`, a function
+of the block alone), 48 columns per unit holding the row's 256 bits, 16 lane rows, one Poseidon2 permutation per
+column (852 S-box rows), 8 linked capacity rows, and public pins `is_end`, `role` (0 = x row, 1 = W column: the sponge
+IV is `IV_x + role (IV_w - IV_x)`, so one system hashes both tensors) and the 8 digest lanes at the unit's end; 1142
+rows per unit, 70 units at the 64 x 64 tile -> `l_H = max(256, l_G / 4, next power of two >= 48 n_units)` (floored so
+the sub-batches of one batch share a layout).
+
+**The fingerprint constraints** (`chain.py` "Fingerprint constraints"; `sys.chain["fp"] = {lanes, coords C, mode}`).
+Both systems carry, for slot `v` (a VU of G, a unit of H), operand `o` (G: x, W; H: the row) and coordinate `x < C`:
+
+    fp_{v,o,x}:  sum_{s < 48} sum_{i < 16} rho_x^(16 s + i) * lane[o][i][48 v + s]  =  F[v][o][x]
+
+as extra constraints of the chain test at slot `v`'s END column, with the end column's unused monomials as their
+uniform coefficients (8d's `extra_coef` rule: extras `2 n_extra_links + o C + x`; the chain identity stays a polynomial
+of degree <= 4 in the seven families).  The lane-row coefficient at column `48 v + s` is `sum_x u_{v,o,x} rho_x^(16 s + i)`
+(one `(D, n_op, C, slots, 48, 16)` product per proof, on the device, graph-captured) and the right-hand side gains
+`sum u_{v,o,x} F[v][o][x]`; a pad slot carries none.
+
+*Coins and messages (8c holds).*  `rho_0..rho_{C-1}` are the tail of **challenge 1** of G -- `SHAKE-256(seed_1)` expands
+`C` more elements after `r | rho_lin | rho_quad | rc` (`protocol._challenge1(n_fp=C)`), so `rho` is a function of the
+verifier's coins alone (interactive: `r1`; Fiat-Shamir: the root) and is drawn AFTER the root that commits the lane
+rows.  `F_G` (`n_vus x 2 x C` field elements, `Proof.fp`, `ligero-proof/v3`) is a **prover message** sent after coin 1
+and absorbed into challenge 2 (`seed2_preimage(..., fp=)`: `|fp=` + F in Fiat-Shamir mode; in the interactive mode the
+column challenge is a function of `r2` alone, so no absorption is needed and none is done).  `H` takes `rho` and
+`F_H` as **statement values** (`statement_digest(fp=)` absorbs `|fp_rho=` rho `|fp_F=` F, so H's challenges are bound
+to them), where `F_H[unit] = F_G[v][o]` for the VUs `v` whose operand `o` is that unit -- the verifier builds `F_H`
+itself and REJECTS if two VUs of one unit sent different fingerprints.  H is proved second, on its own step-0 coins.
+
+*What the verifier checks* (`relchain.SharedHashedRunner.verify_vus`; Rust `verify.rs verify_pair`): (1) `G` with its
+own `rho` and the prover's `F_G` (the Ligero tests, the chain test with the fingerprint constraints, the public
+`is_end` pins; `verify(out=)` hands `rho` out); (2) every unit's VUs agree on `F`; (3) `H` on the statement
+`(table_H, units, rho, F_H)` -- the table's roles and `is_end` columns are the units' (`shared_units(auth)` recomputed),
+its chain ends on the constant 0 and the digest pins are 0 off the ends; (4) H's digests, expanded per VU through the
+`VU -> unit` maps, are `leaf/v2h` leaves at the block's ranks under the `a` / `b` roots and the y words under the `y`
+root (8d's `verify_hash_auth`, unchanged).  A wrong `rho` on H (replaced, degenerate) is a different H statement and
+fails H's tests; H's own coins are independent of G's.
+
+**Soundness** (`protocol.fingerprint_collision`, booked in `soundness(fp=(C, steps, n_op))` of the GEMM side; the hash
+side's `F` are statement values, so it books nothing new).  A VU whose lane words (the committed row G computes on)
+differ from the shared row H hashed, yet passes, needs `F_G[v][o] = F_H[unit]` on every coordinate: per coordinate the
+difference of the two fingerprints is a nonzero polynomial of degree < 16 x 48 = 768 in `rho_x`, and the
+Schwartz-Zippel bound is `(16 steps - 1) x max_r Pr[rho_x = r]`.  The coins are `uint32 mod p` (`_expand`, no
+rejection: a residue has at most 3 preimages of 2^32), so the maximum is `3 / 2^32` rather than `1 / p`; the `C`
+coordinates are independent; the union is over the proof's `n_op x (l / steps)` fingerprinted slots (a VU's x row and its
+W column are two events).  Per proof:
+
+    fingerprint_collision = n_op (l / steps) ((16 steps - 1) 3 / 2^32)^C
+      fp8-ada, l = 16384, 48 steps, 682 slots:  C = 8 (interactive)  2^-157.2      C = 10 (Fiat-Shamir, x 2^60)  2^-138.9
+
+It is a statistical term (rho is drawn after both rows are committed), so it takes the Fiat-Shamir factor `2^60`
+like the query terms; that is why the two modes carry different `C` (`chain.FP_COORDS = 8`, `FP_COORDS_FS = 10`:
+with `C = 8` the Fiat-Shamir term would be 2^-110.6 > 2^-128).  The rest of the pair's bound: both sides are sized
+for `2 n_proofs` commitments (`config_for(..., 2 n_proofs)`), the batch rule counts `2 N` entries (`.G`, `.H` per
+sub-batch; `verify_batch_dir`, Rust `--system-h`), and the Poseidon2 binding is 8d's (the digest of the shared row is
+what the trees commit).  What is NOT covered: a VU may equal a shared row *other than the one its index names* only
+if the prover's `F_G[v][o]` equals that row's `F_H` -- the verifier's `VU -> unit` map is the authentication block's,
+so this is the same event as above.
+
+**Privacy (red-team-leaf F8).**  `F_G` publishes `C` verifier-known random linear functionals (~31 bits each: 248 /
+310 bits) of EVERY private operand row a sub-batch touches -- x rows AND W columns -- beyond the digests of 8d, for
+every leaf.  The proof's `zk_statement` says so (`relchain ZK_SHARED_NOTE`).  Removing it means folding H's units
+into G's masked witness (one proof, `F` an internal wire never sent; "v2"): ~+1142 x 70 rows on G's `l = 16384`
+layout = +5 % of G's cells, no second transcript, no `H` statement -- not built.
+
+**Formats.**  `ligero-system/v4` (`LIGSYS04`): v3 + the fingerprint block after the chain (`u32 n_op | n_op x 16 lane
+rows | u32 C | u8 mode 0 coin / 1 public`).  `ligero-proof/v3` (`LIGPRF03`): the v1 body + `n_vus x n_op x C`
+fingerprints (G only; H is a v1 proof in `<stem>.hproof`, its coins in `<stem>.hcoins`).  `ligero-statement/v6`
+(`LIGSTM06`): the v4/v5 header, `u8 y_bytes | str relation | str "included-hash-shared" | l y words |` the hash side
+`u32 l_H n_H D_H t_H t_pad_H n_units C | n_units x (u32 role, 8 digest lanes <u4) |` the 8d authentication block; the
+units themselves are DERIVED from the block (`shared_units`) and the file's roles must agree.  Rust
+`ligero-verify verify|batch --system system.bin --system-h system_h.bin` verifies the pair (`relation.rs
+shared_systems`: the pinned `(G, H)` digests per mode).
+
+**Cost** (one RTX 4090, fp8-ada, 4096 VUs = 13 sub-batches of 341 at `l = 16384`, 64 x 64 tile, interactive; the lane
+note has the tables): per sub-batch G ~25 ms + H ~6 ms + hints ~11 ms against `included-hash` ~43 + 10 ms and the bare
+relation (`--pipeline 4`) ~12 ms; rows hashed per VU 2 -> 70 / 341 = 0.21; proof bytes G 5.2 MB + H 1.0 MB per
+sub-batch against 6.5 MB; the pair verifies in ~0.1 s (Rust).
 
 ## 9. Negative-test expectations
 

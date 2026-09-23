@@ -56,6 +56,24 @@ ligero-proof/v1      magic "LIGPRF01" | u8 hash (1 = blake3, 2 = sha256) | u8 ha
                      | t x depth x 32 B paths (leaf level first)
 ligero-proof/v2      magic "LIGPRF02" | the v1 body | 3 x (u32 n_sib | n_sib x 32 B): the Merkle multiproofs of the
                      a, b, y trees (canonical order of verity.commitments.multiproof; SHA-256 nodes)
+ligero-system/v4     magic "LIGSYS04" | the v3 body through the chain end (the chain block always in the v3 form:
+                     u32 n_links | ...) | the fingerprint block (chain.py "Fingerprint constraints"): u32 n_op
+                     | n_op x 16 u32 lane rows | u32 coords | u8 mode (0 = coin: rho from challenge 1, F a prover
+                     message; 1 = public: rho, F statement values) | 32 B sys_id.  Written for a chain with ``fp``.
+ligero-proof/v3      magic "LIGPRF03" | the v1 body | u32 n_fp | n_fp x u32 F: the fingerprint message of a coin-mode
+                     system (n_vus x n_op x coords, VU-major; protocol.Proof.fp), sent after coin 1 (interactive) /
+                     absorbed into challenge 2 (Fiat-Shamir)
+ligero-statement/v6  magic "LIGSTM06" | the v2 header through u32 K | u8 y_bytes | str relation | str authentication
+                     ("included-hash-shared": relchain.SharedHashedRunner -- the operand rows are hashed ONCE per
+                     sub-batch in a paired hash-side proof) | l x y16 (y_bytes) | the hash side's configuration
+                     u32 l_h | u32 n_h | u32 D_h | u32 t_h | u32 t_pad_h | u32 n_units | u32 coords
+                     | n_units x (u32 role, 8 u32 digest): the hash side's units (distinct x rows then distinct W
+                     columns, ascending rank: hashchain.shared_units of the block below) and their Poseidon2 digests
+                     | the hash-auth block of v5 (indices, trees, multiproofs).  Derived: the GEMM side's table
+                     [is_end] (l, 1) and index rows (n_vus, 3); the hash side's table [is_end | role | d0..d7]
+                     (l_h, 10) and units (n_units, 2).  The pair is (this, a v3 proof of the GEMM side, a v1 proof of
+                     the hash side); the verifier checks G, derives rho itself, maps F through the units and checks H
+                     on (table, units, rho, F_H), then the digests as leaf/v2h leaves under the roots.
 ~~~
 A BF16 statement without an authentication block is written as v2 and a proof without multiproofs as v1 (byte-identical
 to before these extensions); the verifier refuses an authenticated statement with a v1 proof and vice versa.
@@ -81,7 +99,12 @@ STMT_MAGIC_V3, PROOF_MAGIC_V2 = b"LIGSTM03", b"LIGPRF02"
 STMT_MAGIC_V4 = b"LIGSTM04"
 SYS_MAGIC_V3 = b"LIGSYS03"     # a chain with n_links != 3 linked rows (the hashed relation's sponge capacities)
 STMT_MAGIC_V5 = b"LIGSTM05"    # authentication = included-hash: digests + leaf indices + roots + multiproofs, no operand words
+SYS_MAGIC_V4 = b"LIGSYS04"     # a chain with fingerprint constraints (chain.py; the row-sharing systems of hashchain.py)
+PROOF_MAGIC_V3 = b"LIGPRF03"   # the fingerprint message F after the v1 body (a coin-mode fingerprinted system)
+STMT_MAGIC_V6 = b"LIGSTM06"    # authentication = included-hash-shared: the paired statement (relchain.SharedHashedRunner)
 AUTH_HASH = "included-hash"
+AUTH_SHARED = "included-hash-shared"
+FP_MODES = {"coin": 0, "public": 1}
 _DTYPES = {1: "<u1", 2: "<u2", 4: "<u4"}
 #: The relation a v2 / v3 statement (no name in the file) is: the Ampere BF16 unit of ``vu.py``.
 BF16_RELATION = "bf16"
@@ -185,7 +208,8 @@ def system_bytes(sys: System) -> bytes:
         for e in (q.a, q.b, q.c):
             _expr_w(w, e.lin, e.c)
     w.u8(1 if sys.chain is not None else 0)
-    v3 = sys.chain is not None and len(sys.chain["c"]) != 3
+    fp = sys.chain.get("fp") if sys.chain is not None else None
+    v3 = sys.chain is not None and (len(sys.chain["c"]) != 3 or fp is not None)
     if sys.chain is not None:
         if v3:
             w.u32(len(sys.chain["c"]))
@@ -204,9 +228,22 @@ def system_bytes(sys: System) -> bytes:
                 _expr_w(w, Y.lin, Y.c)
                 w.u32(int(lo))
                 w.u32(int(bits))
+        if fp is not None:
+            # ligero-system/v4: the fingerprint block (chain.py): lane rows per operand slot, coordinates, mode
+            from .chain import FP_LANES
+            w.u32(len(fp["lanes"]))
+            for op in fp["lanes"]:
+                if len(op) != FP_LANES:
+                    raise ValueError("a fingerprinted operand slot has 16 lane rows")
+                for r_ in op:
+                    w.u32(int(r_))
+            w.u32(int(fp["coords"]))
+            w.u8(FP_MODES[fp["mode"]])
     w.raw(system_id(sys))
     out = w.bytes()
-    if v3:
+    if fp is not None:
+        out = SYS_MAGIC_V4 + out[len(SYS_MAGIC):]
+    elif v3:
         out = SYS_MAGIC_V3 + out[len(SYS_MAGIC):]
     elif sys.chain is not None and sys.chain.get("y16") is None:
         out = SYS_MAGIC_V2 + out[len(SYS_MAGIC):]
@@ -216,10 +253,11 @@ def system_bytes(sys: System) -> bytes:
 def read_system(data: bytes) -> dict:
     r = _R(data)
     magic = r.take(8)
-    if magic not in (SYS_MAGIC, SYS_MAGIC_V2, SYS_MAGIC_V3):
-        raise ValueError("not a ligero-system/v1, /v2 or /v3 file")
+    if magic not in (SYS_MAGIC, SYS_MAGIC_V2, SYS_MAGIC_V3, SYS_MAGIC_V4):
+        raise ValueError("not a ligero-system/v1, /v2, /v3 or /v4 file")
     v2 = magic == SYS_MAGIC_V2
-    v3 = magic == SYS_MAGIC_V3
+    v4 = magic == SYS_MAGIC_V4
+    v3 = magic == SYS_MAGIC_V3 or v4
     m = r.u32()
     pins = [(r.s(), r.u32()) for _ in range(r.u32())]
     linear = []
@@ -250,6 +288,17 @@ def read_system(data: bytes) -> dict:
         else:
             y16 = _expr_r(r)
             chain = {"c": c_rows, "y": ys, "y16": y16}
+        if v4:
+            from .chain import FP_LANES
+            n_op = r.u32()
+            if not 1 <= n_op <= 8:
+                raise ValueError("system file: fingerprinted operand slots must be 1..8")
+            lanes = [[r.u32() for _ in range(FP_LANES)] for _ in range(n_op)]
+            coords = r.u32()
+            mode = r.u8()
+            if not 1 <= coords <= 32 or mode not in (0, 1):
+                raise ValueError("system file: fingerprint coordinates 1..32, mode 0 / 1")
+            chain["fp"] = {"lanes": lanes, "coords": coords, "mode": "coin" if mode == 0 else "public"}
     sys_id = r.take(32)
     r.done()
     return {"m": m, "pins": pins, "linear": linear, "quadratic": quadratic, "chain": chain, "sys_id": sys_id}
@@ -282,6 +331,8 @@ class Statement:
     hash_auth: object | None = None  # authentication = included-hash (v5): hashauth.HashAuth; ``a`` is then the (l, 17) public
     #                                  table [is_end | d0..d15] and ``b`` the (n_vus, 3) leaf triples (what the digest binds)
     hash_sibs: list | None = None    # v5: the three multiproofs (a, b, y), lists of 32-byte siblings
+    shared: "SharedSide | None" = None   # v6 (authentication = included-hash-shared): the hash side; ``a`` is then the
+    #                                      (l, 1) table [is_end] and ``b`` the (n_vus, 3) index rows
 
     @property
     def v4(self) -> bool:
@@ -290,10 +341,16 @@ class Statement:
 
     @property
     def v5(self) -> bool:
-        return self.hash_auth is not None
+        return self.hash_auth is not None and self.shared is None
+
+    @property
+    def v6(self) -> bool:
+        return self.shared is not None
 
     @property
     def authentication(self) -> str:
+        if self.shared is not None:
+            return AUTH_SHARED
         return AUTH_HASH if self.hash_auth is not None else "included" if self.auth is not None else "excluded"
 
     def digests(self) -> np.ndarray:
@@ -328,6 +385,41 @@ class Statement:
     def layout(self):
         from .chain import Layout
         return Layout(self.l, self.n_vus, self.steps)
+
+
+@dataclass
+class SharedSide:
+    """The hash side of a v6 statement (``relchain.SharedHashedRunner``): its configuration (the same target, rate, mode
+    and 2 n_proofs as the GEMM side, sized for its own ``l``), the units ``(n_units, 2) [role, rank]`` in the order
+    ``hashchain.shared_units`` derives from the authentication block, their digests ``(n_units, 8)`` and the fingerprint
+    coordinates ``coords`` (what the proof's F takes: (n_vus, 2, coords))."""
+    l: int
+    n: int
+    D: int
+    t: int
+    t_pad: int
+    coords: int
+    units: np.ndarray
+    digests: np.ndarray
+
+    def config(self, st: "Statement"):
+        from .protocol import Config
+        return Config(self.l, self.n, self.D, self.t, st.target_log2, st.zk, self.t_pad, st.mode)
+
+    def layout(self, steps: int):
+        from .chain import Layout
+        return Layout(self.l, len(self.units), steps)
+
+    def table(self, steps: int) -> np.ndarray:
+        """The hash side's public table (l_h, 10) ``[is_end | role | d0..d7]`` (``hashchain.row_hash_hints``)."""
+        from . import hashchain
+        n_units = len(self.units)
+        tab = np.zeros((self.l, 2 + hashchain.N_ROW_DIGEST), dtype=np.int64)
+        ends = np.arange(n_units) * steps + steps - 1
+        tab[ends, 0] = 1
+        tab[:n_units * steps, 1] = np.repeat(self.units[:, 0], steps)
+        tab[ends, 2:] = self.digests
+        return tab
 
 
 def _auth_block_w(w: _W, auth: auth_mod.AuthStatement):
@@ -416,6 +508,8 @@ def _hash_auth_block_r(r: _R, n_vus: int, scheme):
 def statement_bytes(st: Statement) -> bytes:
     if st.word_bytes not in _DTYPES or st.y_bytes not in _DTYPES:
         raise ValueError(f"statement word widths {st.word_bytes}/{st.y_bytes} bytes are not 1, 2 or 4")
+    if st.v6:
+        return _statement_bytes_v6(st)
     if st.v5:
         return _statement_bytes_v5(st)
     w = _W()
@@ -481,6 +575,56 @@ def _K_of(st: Statement) -> int:
     return K_VU
 
 
+def _statement_bytes_v6(st: Statement) -> bytes:
+    from . import hashchain
+    sh = st.shared
+    w = _W()
+    _header_w(w, st, STMT_MAGIC_V6)
+    w.u32(_K_of(st))
+    w.u8(st.y_bytes)
+    w.s(st.relation)
+    w.s(AUTH_SHARED)
+    w.arr(st.y16, _DTYPES[st.y_bytes])
+    n_units = len(sh.units)
+    for x in (sh.l, sh.n, sh.D, sh.t, sh.t_pad, n_units, sh.coords):
+        w.u32(int(x))
+    units = np.asarray(sh.units, dtype=np.int64)
+    dg = np.asarray(sh.digests, dtype=np.int64)
+    if units.shape != (n_units, 2) or dg.shape != (n_units, hashchain.N_ROW_DIGEST):
+        raise ValueError("hash side: units (n_units, 2) and digests (n_units, 8)")
+    w.arr(np.concatenate([units[:, :1], dg], 1), "<u4")
+    _hash_auth_block_w(w, st)
+    return w.bytes()
+
+
+def _read_v6(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K) -> Statement:
+    from . import hashchain
+    yb = r.u8()
+    if yb not in _DTYPES:
+        raise ValueError(f"statement word width {yb} bytes is not 1, 2 or 4")
+    relation = r.s()
+    if r.s() != AUTH_SHARED:
+        raise ValueError("v6 statement names an authentication other than included-hash-shared")
+    if n_vus * steps > l:
+        raise ValueError("layout does not fit the columns")
+    y16 = r.arr((l,), _DTYPES[yb])
+    l_h, n_h, D_h, t_h, t_pad_h, n_units, coords = (r.u32() for _ in range(7))
+    if n_units == 0 or n_units * steps > l_h or not 1 <= coords <= 32:
+        raise ValueError("hash side: units do not fit its columns, or bad fingerprint coordinates")
+    rows = r.arr((n_units, 1 + hashchain.N_ROW_DIGEST), "<u4").astype(np.int64)
+    auth, sibs = _hash_auth_block_r(r, n_vus)
+    r.done()
+    # the units are DERIVED from the block (hashchain.shared_units); the file's roles must agree
+    units, _, _ = hashchain.shared_units(auth)
+    if len(units) != n_units or not np.array_equal(units[:, 0], rows[:, 0]):
+        raise ValueError("hash side: units do not match the authentication block")
+    is_end = np.zeros((l, 1), dtype=np.int64)
+    is_end[np.arange(n_vus) * steps + steps - 1, 0] = 1
+    shared = SharedSide(l_h, n_h, D_h, t_h, t_pad_h, coords, units, rows[:, 1:])
+    return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, is_end, auth.indices(), y16,
+                     None, relation, 4, yb, auth, sibs, shared)
+
+
 def _read_v5(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K) -> Statement:
     from . import hashchain
     from .leaf import registry as leaf_registry
@@ -509,8 +653,8 @@ def _read_v5(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, s
 def read_statement(data: bytes) -> Statement:
     r = _R(data)
     magic = r.take(8)
-    if magic not in (STMT_MAGIC, STMT_MAGIC_V3, STMT_MAGIC_V4, STMT_MAGIC_V5):
-        raise ValueError("not a ligero-statement/v2, /v3, /v4 or /v5 file")
+    if magic not in (STMT_MAGIC, STMT_MAGIC_V3, STMT_MAGIC_V4, STMT_MAGIC_V5, STMT_MAGIC_V6):
+        raise ValueError("not a ligero-statement/v2, /v3, /v4, /v5 or /v6 file")
     if r.u32() != 1:
         raise ValueError("only chain mode (1) is defined")
     l, n, D, t = r.u32(), r.u32(), r.u32(), r.u32()
@@ -523,6 +667,8 @@ def read_statement(data: bytes) -> Statement:
     n_proofs, n_vus, steps, K = r.u32(), r.u32(), r.u32(), r.u32()
     if magic == STMT_MAGIC_V5:
         return _read_v5(r, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K)
+    if magic == STMT_MAGIC_V6:
+        return _read_v6(r, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K)
     relation, wb, yb = BF16_RELATION, 2, 2
     if magic == STMT_MAGIC_V4:
         wb, yb = r.u8(), r.u8()
@@ -545,7 +691,10 @@ def read_statement(data: bytes) -> Statement:
 def proof_bytes(pf) -> bytes:
     from .protocol import COIN_BYTES
     w = _W()
-    w.raw(PROOF_MAGIC if pf.auth is None else PROOF_MAGIC_V2)
+    fp = getattr(pf, "fp", None)
+    if fp is not None and pf.auth is not None:
+        raise ValueError("a fingerprint message and multiproofs in one transcript: no such format")
+    w.raw(PROOF_MAGIC_V3 if fp is not None else PROOF_MAGIC if pf.auth is None else PROOF_MAGIC_V2)
     hid = 1 if pf.hash_name.startswith("blake3") else 2 if pf.hash_name.startswith("sha256") else 0
     w.u8(hid)
     has_coins = pf.coin_commit is not None and pf.coins is not None
@@ -584,16 +733,21 @@ def proof_bytes(pf) -> bytes:
             for sib in sibs:
                 assert len(sib) == 32
                 w.raw(sib)
+    if fp is not None:
+        F = np.ascontiguousarray(np.asarray(fp, dtype=np.int64))
+        w.u32(F.size)
+        w.arr(F.reshape(-1), "<u4")
     return w.bytes()
 
 
-def read_proof(data: bytes):
-    """A ``protocol.Proof`` from the file (no canonicity checks: the verifier's job)."""
+def read_proof(data: bytes, fp_shape: tuple | None = None):
+    """A ``protocol.Proof`` from the file (no canonicity checks: the verifier's job).  ``fp_shape``: the (n_vus, n_op,
+    coords) a v3 file's fingerprint message takes (from the statement and the system; flat when None)."""
     from .protocol import Coins, Proof
     r = _R(data)
     magic = r.take(8)
-    if magic not in (PROOF_MAGIC, PROOF_MAGIC_V2):
-        raise ValueError("not a ligero-proof/v1 or /v2 file")
+    if magic not in (PROOF_MAGIC, PROOF_MAGIC_V2, PROOF_MAGIC_V3):
+        raise ValueError("not a ligero-proof/v1, /v2 or /v3 file")
     hid, has_coins, has_v, has_q = r.u8(), r.u8(), r.u8(), r.u8()
     D, w_len, h_len, q_len, v_len, M, t, depth = (r.u32() for _ in range(8))
     cc = coins = None
@@ -608,12 +762,23 @@ def read_proof(data: bytes):
     cols = [int(x) for x in r.arr((t,), "<u4")]
     opened = r.arr((M, t), "<u4")
     paths = [[r.take(32) for _ in range(depth)] for _ in range(t)]
-    auth = None
+    auth = fp = None
     if magic == PROOF_MAGIC_V2:
         auth = [[r.take(32) for _ in range(r.u32())] for _ in auth_mod.TREE_NAMES]
+    if magic == PROOF_MAGIC_V3:
+        n_fp = r.u32()
+        if n_fp > 1 << 24:
+            raise ValueError("fingerprint message too long")
+        fp = r.arr((n_fp,), "<u4")
+        if fp_shape is not None:
+            if int(np.prod(fp_shape)) != n_fp:
+                raise ValueError(f"fingerprint message holds {n_fp} words, the statement fixes {fp_shape}")
+            fp = fp.reshape(fp_shape)
     r.done()
     name = {1: "blake3 (file)", 2: "sha256 (file)"}.get(hid, "unknown (file)")
-    return Proof(root, w, h, cols, opened, paths, name, {}, q, v, cc, coins, auth)
+    pf = Proof(root, w, h, cols, opened, paths, name, {}, q, v, cc, coins, auth)
+    pf.fp = fp
+    return pf
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -648,8 +813,15 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
             return False, f"statement names relation {st.relation!r}, verifier asked for {relation!r}", 0.0
         st.relation = relation
     try:
-        pf = read_proof(Path(proof_path).read_bytes())
-    except ValueError as e:
+        pf = read_proof(Path(proof_path).read_bytes(), fp_shape=(st.n_vus, 2, st.shared.coords) if st.v6 else None)
+        if st.v6:
+            # the pair: <stem>.proof is the GEMM side (a v3 file, F after the body), <stem>.hproof the hash side (v1)
+            from .relchain import SharedProof
+            pf_h = read_proof(Path(proof_path).with_suffix(".hproof").read_bytes())
+            if pf.fp is None or pf_h.fp is not None:
+                return False, "shared pair: the GEMM side carries the fingerprint message, the hash side none", 0.0
+            pf = SharedProof(pf, pf_h, {}, st.shared.layout(st.steps))
+    except (ValueError, OSError) as e:
         return False, f"unreadable proof: {e}", 0.0
     R = runner or _runner(device, st)
     if _relation_of(R) != st.relation:
@@ -664,7 +836,19 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
         return False, "interactive transcript carries no coins", 0.0
     t0 = time.perf_counter()
     try:
-        if st.v5:
+        if st.v6:
+            # the paired statement: G on (is_end, indices, y16), the verifier's own rho, H on (table, units, rho, F_H), the
+            # digests under the roots (relchain.SharedHashedRunner.verify_vus).  ``coins``: G's (own or replayed) and H's
+            # replayed from its transcript unless given as a pair.
+            import torch
+            sh = st.shared
+            if R.cfg(st.l) != st.config():
+                R._cfg[st.l] = st.config()
+            if R.cfg_h(sh.l) != sh.config(st):
+                R._cfg_h[sh.l] = sh.config(st)
+            ok, why = R.verify_vus(pf, (st.a.astype(np.int64), st.b.astype(np.int64), torch.as_tensor(st.y16.astype(np.int64)),
+                                        st.hash_auth, st.hash_sibs, sh.table(st.steps), sh.units), st.layout(), coins=coins)
+        elif st.v5:
             # the hashed statement: R.verify_vus runs protocol.verify against the digest table (the auth block in the
             # statement digest through the hooks' tag) and then the multiproofs of the published digests (hashauth)
             import torch
@@ -715,13 +899,32 @@ def verify_batch_dir(dir: Path, device: str = "cpu", target_bits: float = 128.0)
             R = _runner(device, st)
         cp = p.with_suffix(".coins")
         own = read_coins(cp.read_bytes()) if cp.is_file() else None
+        if st.v6 and own is not None:
+            # the pair's coins: <stem>.hcoins the hash side's (replayed from its transcript when absent)
+            hp = p.with_suffix(".hcoins")
+            own = (own, read_coins(hp.read_bytes())) if hp.is_file() else own
         ok, why, secs = verify_files(sp, p, device, runner=R, own_coins=own)
+        if st.v6:
+            # the pair: G's bound with the fingerprint term and H's, each sized for 2 n_proofs (SharedHashedRunner.batch_bound)
+            sh = st.shared
+            b = [pm.soundness(st.config(), R.tb.L, R.tb.Q, 1, fp=(sh.coords, st.steps, 2))["per_proof_total_log2"],
+                 pm.soundness(sh.config(st), R.tb_h.L, R.tb_h.Q, 1)["per_proof_total_log2"]]
+            items.append({"name": p.name, "accepted": ok, "reason": why, "seconds": secs, "own_coins": own is not None,
+                          "per_proof_log2": b, "n_proofs": 2 * st.n_proofs, "pair": True})
+            continue
         b = pm.soundness(st.config(), R.tb.L, R.tb.Q, 1)["per_proof_total_log2"]
         items.append({"name": p.name, "accepted": ok, "reason": why, "seconds": secs, "own_coins": own is not None,
                       "per_proof_log2": b, "n_proofs": st.n_proofs})
-    per = [it["per_proof_log2"] for it in items]
-    claimed = [it["n_proofs"] for it in items]
-    names = [it["name"] for it in items]
+    per, claimed, names = [], [], []
+    for it in items:
+        if it.get("pair"):
+            per += it["per_proof_log2"]
+            claimed += [it["n_proofs"]] * 2
+            names += [it["name"] + ".G", it["name"] + ".H"]
+        else:
+            per.append(it["per_proof_log2"])
+            claimed.append(it["n_proofs"])
+            names.append(it["name"])
     rejected = [it for it in items if not it["accepted"]]
     if rejected:
         out = {"accepted": False, "reason": f"{rejected[0]['name']}: {rejected[0]['reason']}", "n_subbatches": len(items),
@@ -747,10 +950,14 @@ def _runner(device: str, st: Statement | None = None):
         # statement's "<rel>+<leaf>" names the leaf scheme of its hashed runner
         from .leaf import registry as leaf_registry
         from .relations import RELATIONS
-        from .relchain import HashedRelationRunner, RelationChainRunner
+        from .relchain import HashedRelationRunner, RelationChainRunner, SharedHashedRunner
         base, leaf = leaf_registry.split_relation_name(name)
         if base not in RELATIONS:
             raise ValueError(f"no runner for relation {name!r} (known: {BF16_RELATION!r}, 'fp4-nvf4', {sorted(RELATIONS)})")
+        if st is not None and st.v6:
+            if leaf != "poseidon2":     # split_relation_name canonicalises "" / "hash" to "poseidon2"
+                raise ValueError(f"relation {name!r}: row sharing (v6) hashes with Poseidon2 only (hashchain.row_hash_system)")
+            return SharedHashedRunner(RELATIONS[base], device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
         if st is not None and st.v5:
             return HashedRelationRunner(RELATIONS[base], device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode, leaf=leaf)
         if base != name:
@@ -774,6 +981,18 @@ def _statement_of(R, pubs, lay, cfg, n_proofs: int, mode: str | None = None, aut
     system id; every registered relation (bf16-hopper; fp8-hopper / fp8-ada: 8-bit operands, 32-bit slots for the
     22-bit public words) is named in the file and takes v4."""
     hooks = _hooks_of(R)
+    if len(pubs) == 7:                     # relchain.SharedHashedRunner: (is_end, indices, y16, HashAuth, multiproofs, table_h, units) -> v6
+        is_end, idx, y16, hauth, sibs, table_h, units = pubs
+        units = np.asarray(units, dtype=np.int64)
+        table_h = np.asarray(table_h, dtype=np.int64)
+        lay_h = R.layout_h(len(units), lay.l)
+        cfg_h = R.cfg_h(lay_h.l)
+        ends_h = np.arange(len(units)) * lay_h.steps + lay_h.steps - 1
+        shared = SharedSide(cfg_h.l, cfg_h.n, cfg_h.D, cfg_h.t, cfg_h.t_pad, R.fp_coords, units, table_h[ends_h, 2:])
+        return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
+                         lay.n_vus, lay.steps, np.asarray(is_end, dtype=np.int64), np.asarray(idx, dtype=np.int64),
+                         np.asarray(y16, dtype=np.int64), None, _relation_of(R), 4, np.dtype(hooks.y16_dtype).itemsize,
+                         hauth, [list(x) for x in sibs], shared)
     if len(pubs) == 5:                     # relchain.HashedRelationRunner: (table, indices, y16, HashAuth, multiproofs) -> v5
         a, b, y16, hauth, sibs = pubs
         return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
@@ -815,11 +1034,15 @@ def _manifest(out: Path, args, R, auth: bool = False) -> dict:
     hooks = _hooks_of(R)
     v4 = _relation_of(R) != BF16_RELATION or np.dtype(hooks.word_dtype).itemsize != 2 or np.dtype(hooks.y16_dtype).itemsize != 2
     v5 = getattr(R, "AUTH", None) == AUTH_HASH
+    v6 = getattr(R, "AUTH", None) == AUTH_SHARED
     sys_v2 = R.sys.chain is not None and R.sys.chain.get("y16") is None      # component chain ends (the FP4 relation)
     sys_v3 = R.sys.chain is not None and len(R.sys.chain["c"]) != 3          # more linked rows (the hashed relation)
-    fmt = {"system": "ligero-system/v3" if sys_v3 else "ligero-system/v2" if sys_v2 else "ligero-system/v1",
-           "statement": "ligero-statement/v5" if v5 else "ligero-statement/v4" if v4 else "ligero-statement/v3" if auth else "ligero-statement/v2",
-           "proof": "ligero-proof/v2" if auth else "ligero-proof/v1"}
+    sys_v4 = R.sys.chain is not None and R.sys.chain.get("fp") is not None   # fingerprint constraints (row sharing)
+    fmt = {"system": "ligero-system/v4" if sys_v4 else "ligero-system/v3" if sys_v3 else "ligero-system/v2" if sys_v2 else "ligero-system/v1",
+           "statement": "ligero-statement/v6" if v6 else "ligero-statement/v5" if v5 else "ligero-statement/v4" if v4 else "ligero-statement/v3" if auth else "ligero-statement/v2",
+           "proof": "ligero-proof/v3" if v6 else "ligero-proof/v2" if auth else "ligero-proof/v1"}
+    if v6:
+        fmt["system_h"], fmt["proof_h"] = "ligero-system/v4", "ligero-proof/v1"
     from . import witness as witness_mod
     return {"format": fmt, "relation": _relation_of(R), "authentication": getattr(R, "AUTH", "included" if auth else "excluded"),
             "commit": _git_commit(), "device": args.device, "system": R.sys.summary(),
@@ -837,6 +1060,13 @@ def _write_system(out: Path, R, man: dict):
     assert rd["m"] == R.sys.m and len(rd["quadratic"]) == len(R.sys.quadratic)
     man["system_file"] = {"path": "system.bin", "sha256": hashlib.sha256(data).hexdigest(), "sys_id": rd["sys_id"].hex(),
                           "bytes": len(data)}
+    if getattr(R, "sys_h", None) is not None:          # the pair's hash side (relchain.SharedHashedRunner)
+        data_h = system_bytes(R.sys_h)
+        (out / "system_h.bin").write_bytes(data_h)
+        rd_h = read_system(data_h)
+        assert rd_h["m"] == R.sys_h.m and rd_h["chain"]["fp"]["mode"] == "public"
+        man["system_h_file"] = {"path": "system_h.bin", "sha256": hashlib.sha256(data_h).hexdigest(), "sys_id": rd_h["sys_id"].hex(),
+                                "bytes": len(data_h)}
 
 
 def gen_set(args) -> int:

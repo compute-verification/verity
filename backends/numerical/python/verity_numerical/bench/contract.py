@@ -29,7 +29,7 @@ Fingerprint fields (all required; a sub-field whose value is not known is ``null
                     error is the union bound over them (security accounting), and the cost includes every one
     proof_class     ARITHMETIC_DIAGNOSTIC | NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF | COMPLETE_HVZK_BACKEND
                     | COMPLETE_ZK_BACKEND | NO_PROOF   (HVZK = honest-verifier privacy only: a milestone, not the target)
-    authentication  included | included-hash | excluded   (were the boundary words authenticated against the object's roots:
+    authentication  included | included-hash | included-hash-shared | excluded   (were the boundary words authenticated:
                     by the verifier on the published words, or by the proof on private words through their row digests)
     zk_mode         "none" unless proof_class is a COMPLETE_*ZK_BACKEND, whose mode names how privacy is obtained
     security        {"target": log2 of the target soundness error (-100 means 2^-100) or null, ...backend parameters}
@@ -164,8 +164,10 @@ PROOF_CLASSES = (
 ZK_CLASSES = ("COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND")
 #: ``included``: the verifier authenticates the published boundary words against the object's roots itself (auth.py: it
 #: re-hashes SHA-256 word leaves); ``included-hash``: the words are private and the PROOF establishes their Poseidon2 row
-#: digests, which the verifier authenticates as leaf/v2h leaves (hashchain.py / hashauth.py); ``excluded``: neither.
-AUTHENTICATION = ("included", "included-hash", "excluded")
+#: digests, which the verifier authenticates as leaf/v2h leaves (hashchain.py / hashauth.py); ``included-hash-shared``:
+#: as included-hash, but every operand row is hashed ONCE per sub-batch in a paired hash-side proof and each VU proves
+#: its words equal the shared row by a post-commitment fingerprint (relchain.SharedHashedRunner); ``excluded``: neither.
+AUTHENTICATION = ("included", "included-hash", "included-hash-shared", "excluded")
 RETENTION = ("retained", "streamed", "recomputed")
 ZK_NONE = "none"
 

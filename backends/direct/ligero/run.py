@@ -429,12 +429,15 @@ def main(argv=None) -> int:
     sub.choices["bench-vu"].add_argument("--dump-reps", type=int, default=None, metavar="N",
                                          help="with --dump-dir: dump only the first N recorded reps (default all; a 2^20-VU rep is ~14 GB of proofs)")
     for name in ("gate-vu", "bench-vu"):
-        sub.choices[name].add_argument("--auth", nargs="?", const="included", default=None, choices=("included", "included-hash"),
+        sub.choices[name].add_argument("--auth", nargs="?", const="included", default=None, choices=("included", "included-hash", "included-hash-shared"),
                                        help="authentication: `--auth` / `--auth included` (bf16 relation, bench-vu): commit the set's words as three "
                                             "SHA-256 word trees (auth.py), bind roots and leaf indices into the statement, ship and verify Merkle "
                                             "multiproofs of every boundary word.  `--auth included-hash` (registered relations): the operands are "
                                             "private witness wires hashed inside the relation with Poseidon2 (hashchain.py); the statement carries "
-                                            "the roots, leaf indices, published digests and SHA-256 multiproofs of the ROW leaves (leaf/v2h)")
+                                            "the roots, leaf indices, published digests and SHA-256 multiproofs of the ROW leaves (leaf/v2h).  "
+                                            "`--auth included-hash-shared`: every DISTINCT operand row of a sub-batch is hashed once in a paired "
+                                            "hash-side proof and each VU proves equality to its row by a post-commitment fingerprint "
+                                            "(relchain.SharedHashedRunner; chain.py \"Fingerprint constraints\")")
         sub.choices[name].add_argument("--leaf", default=None, metavar="SCHEME",
                                        help="--auth included-hash: the leaf scheme hashing the operand rows (backends/direct/ligero/leaf/ "
                                             "registry: poseidon2 = the default and the historical `+hash`; `hash` is its alias)")
@@ -488,15 +491,15 @@ def main(argv=None) -> int:
             ap.error(f"--relation {args.relation} supports gate-vu and bench-vu")
         if getattr(args, "auth", None) == "included":
             ap.error(f"--auth included (verifier-side word openings) is implemented for the bf16 relation only, not --relation {args.relation}")
-        if getattr(args, "auth", None) == "included-hash" and args.relation == "fp4-nvf4":
+        if getattr(args, "auth", None) in ("included-hash", "included-hash-shared") and args.relation == "fp4-nvf4":
             ap.error("--auth included-hash: the fp4-nvf4 relation's packed-nibble operands are not composed yet (see hashchain.py)")
         if args.relation == "fp4-nvf4":
             from .fp4.chain import bench_vu_fp4, gate_vu_fp4
             return (gate_vu_fp4 if args.cmd == "gate-vu" else bench_vu_fp4)(args)
         rel = relation(args.relation)
         return (gate_vu_rel if args.cmd == "gate-vu" else bench_vu_rel)(args, rel)
-    if getattr(args, "auth", None) == "included-hash":
-        ap.error("--auth included-hash is a mode of the registered relations (--relation bf16-hopper | fp8-hopper | fp8-ada)")
+    if getattr(args, "auth", None) in ("included-hash", "included-hash-shared"):
+        ap.error("--auth included-hash[-shared] is a mode of the registered relations (--relation bf16-hopper | fp8-hopper | fp8-ada)")
     return args.fn(args)
 
 

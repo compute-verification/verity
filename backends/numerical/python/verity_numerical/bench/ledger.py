@@ -82,7 +82,7 @@ def validate(e: Any) -> list[str]:
         p.append(f"scope {e['scope']!r} not in {SCOPES}")
     if e["proof_class"] not in PROOF_CLASSES:
         p.append(f"proof_class {e['proof_class']!r} not in {PROOF_CLASSES}")
-    if e["authentication"] not in ("included", "included-hash", "excluded"):
+    if e["authentication"] not in ("included", "included-hash", "included-hash-shared", "excluded"):
         p.append("authentication must be included|excluded")
     if e["overhead"] is not None and not (isinstance(e["overhead"], (int, float)) and e["overhead"] > 0):
         p.append("overhead must be a positive number or null")
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--seconds-per-unit", type=float)
     a.add_argument("--B", type=int)
     a.add_argument("--K", type=int, default=1536)
-    a.add_argument("--authentication", default="excluded", choices=("included", "included-hash", "excluded"))
+    a.add_argument("--authentication", default="excluded", choices=("included", "included-hash", "included-hash-shared", "excluded"))
     a.add_argument("--assumptions", default="", help="comma-separated, e.g. 'hash' or 'hash,LPN-regular-noise,base-OT'")
     a.add_argument("--omitted", default="", help="comma-separated omitted costs/checks")
     a.add_argument("--note", default="")
