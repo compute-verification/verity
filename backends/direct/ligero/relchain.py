@@ -590,7 +590,11 @@ def hashed_negatives(R: HashedRelationRunner, data: list, row_negatives: int = 4
     for r in picks[:max(0, row_negatives)]:
         col = int(rng.integers(0, 2 * steps))
         delta = int(rng.integers(1, 3))
-        def mutate(W, idx_=r.idx, col=col, delta=delta):
+        def mutate(W, idx_=r.idx, col=col, delta=delta, kind=r.kind):
+            if kind == "inv":
+                # t * inv = nz leaves inv FREE where t = 0 (inv = 0 there): mutate a column where it is constrained
+                nz = (W[idx_, :2 * steps] != 0).nonzero().flatten()
+                col = int(nz[col % len(nz)]) if len(nz) else col
             W[idx_, col] = (W[idx_, col] + delta) % P
         pf, pb, ly = R.prove_vus(base, check=False, mutate=mutate, vu_ids=ids)
         negs.append((f"row {r.name} ({r.kind}) +{delta} in column {col}", R.verify_vus(pf, pb, ly)))
