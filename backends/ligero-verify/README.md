@@ -24,19 +24,23 @@ check a transcript from your own session.  Fiat-Shamir files (`--mode fiat-shami
 cargo build --release
 ligero-verify verify --system system.bin --statement X.stmt --proof X.proof [--threads T] [--soundness-bits 128]
                      [--allow-any-system] [--reps R] [--json out.json] [--coins FILE]   # --coins: interactive mode only
-ligero-verify batch  --system system.bin --dir DIR [--jobs N] [--threads T] [--soundness-bits 128] [--reps R] [--json out.json]
+ligero-verify batch  --system system.bin --dir DIR [--jobs N] [--threads T] [--target-bits 128] [--reps R] [--json out.json]
                      # every DIR/*.proof with its .stmt (+ its .coins when present, = `verify --coins` for that proof), the
                      # sub-batches verified concurrently on N jobs (default: available parallelism); batch ACCEPT iff every
-                     # sub-batch accepts; agreement with DIR/manifest.json's python_verdict when present
+                     # sub-batch accepts AND the union of the verifier's own per-proof bounds over the N presented is
+                     # <= 2^-target AND every proof's n_proofs is N (PROTOCOL.md 8c "Batch verification"); agreement
+                     # with the python_verdict of DIR/manifest.json, or DIR/../manifest.json (a dump's rep dirs)
 ligero-verify system-digest --system system.bin     # sys_id, table digest and the relation they are pinned for (or null)
 cargo test --release                                 # hash vectors (hashlib / BLAKE3 spec), NTT / coset code, Barrett mul,
                                                      # the operand decodes; tests/fixture.rs: the B=1 ZK interactive fixture
                                                      # accepted, byte flips in every region rejected, a flipped statement word
                                                      # rejected, --coins checked, batch verdict + parsed statements identical at
                                                      # --jobs 1 / 8, one corrupted sub-batch rejects the batch with the same error
-                                                     # at any --jobs; tests/relations.rs: the FP8 Ada v4 fixture accepted against
-                                                     # its pinned system, every system file named by system-digest, cross-relation
-                                                     # pairs refused by the pin, --allow-any-system flagged, v4 negatives rejected
+                                                     # at any --jobs, the batch union bound and n_proofs = N enforced with the
+                                                     # Python reason strings; tests/relations.rs: the FP8 Ada v4 fixture accepted
+                                                     # against its pinned system, every system file named by system-digest,
+                                                     # cross-relation pairs refused by the pin, --allow-any-system flagged, v4
+                                                     # negatives rejected
 ~~~
 
 **Relations and pins.**  The statement names the relation it is about: `ligero-statement/v4` carries a `relation`
@@ -62,16 +66,25 @@ The compilations are torch-free and were run twice each on the laptop (byte-iden
 both digests of any `system.bin` and names the relation they are pinned for.  The full values are in `src/relation.rs`.
 
 Exit status: `verify` 0 accept, 1 reject (the reason on stdout), 2 usage / unreadable operator input.  `batch`: 0 every
-sub-batch accepted, 1 a sub-batch rejected (`batch_reason` names the first one in name order), 2 a sub-batch file
-unreadable, 3 a verdict disagrees with `manifest.json`'s Python verdict (checked first: the agreement gate).  Malformed
-*proof or statement bytes* never panic (every read is bounded and every element checked); an unreadable path given on
-the command line is reported and exits 2.
+sub-batch accepted and the batch rule met, 1 a sub-batch rejected (`batch_reason` names the first one in name order) or
+the batch rule failed (`batch: n_proofs mismatch (...)`, `batch: union bound 2^-x over N sub-batches exceeds the target
+2^-t`), 2 a sub-batch file unreadable, 3 a verdict disagrees with `manifest.json`'s Python verdict (checked first: the
+agreement gate).  Malformed *proof or statement bytes* never panic (every read is bounded and every element checked);
+an unreadable path given on the command line is reported and exits 2.
 
-**Batch mode (lane b-verify-par).**  A 4096-VU batch is `N_subbatches` (25) independently committed proofs, each with
-its own statement (its VUs' `a, b, y16`; `n_proofs` = 25 for the union bound) -- there is no batch-level statement and
-no check that spans sub-batches (PROTOCOL.md 8c; `bench-vu` dumps them as `repK/sub_XX.{stmt,proof[,coins]}`).  `batch`
-therefore verifies them on `--jobs` OS threads pulling from one queue, each sub-batch exactly as `verify` would
-(its own statement, proof, challenges, checks, `--threads` inside), and accepts the batch iff every sub-batch accepts.
+**Batch mode (lane b-verify-par; the batch rule: lane b-batch-bound).**  A 4096-VU batch is `N_subbatches` (25)
+independently committed proofs, each with its own statement (its VUs' `a, b, y16`; `n_proofs` = 25, the count the
+prover sized `t` for) -- there is no batch-level statement (PROTOCOL.md 8c; `bench-vu` dumps them as
+`repK/sub_XX.{stmt,proof[,coins]}`).  `batch` verifies them on `--jobs` OS threads pulling from one queue, each
+sub-batch exactly as `verify` would (its own statement, proof, challenges, checks, `--threads` inside) except for the
+per-proof soundness gate, and accepts the batch iff every sub-batch accepts AND `verify::batch_bound` does: the union
+`sum_i 2^-b_i` of this verifier's OWN per-proof bounds (`soundness()` from each statement's `n, k, l, t, D, mode`; never
+a prover field) over the `N` proofs presented is `<= 2^-target` (`--target-bits`, default 128; `--soundness-bits` is
+its alias here), and every proof's `n_proofs` equals `N`.  Before this rule `N` proofs each sized for `n_proofs = 1`
+(2^-128.16 each) were accepted as a batch that is only 2^-(128.16 - log2 N); DISCREPANCIES D10.  The summary reports
+`target_bits`, `batch_log2`, `batch_bits` (= `-log2 sum`), `per_proof_bits[]`, `n_proofs_claimed[]`; the Python file
+verifier (`python -m backends.direct.ligero.serialize verify-batch --dir DIR [--target-bits 128]`) applies the same
+rule with the same strings and agrees on the bits to 1e-6 (`protocol.batch_bound`).
 Shared, read-only, computed once: the parsed `system.bin` with its pinned-digest verdict, and the domain tables per
 `(l, n)` (NTT twiddles for `H` and the coset, `g^i`, `eta_c`; built by the first sub-batch that reaches them).  Results
 are reported in name order and the batch reason is the first rejected sub-batch in that order, so the verdict and the
@@ -161,7 +174,7 @@ in the JSON.
   ZK.  Interactive seeds: the coins with `|coins=` / `|r=` prefixes after `stmt`, nothing else; tags carry `|v2|`.
 * Mask-row order after the `m` witness rows: `prox, lin, qa, qb, chain_a, chain_b`, `D` rows each.
 * Statement digest text fields: `|target=` is Python's `repr(float)` (D2); `a`, `b`, `y16` are `<u2` words for the
-  BF16 relations and `<u1` / `<u1` / `<u4` for the FP8 relations (`RelationHooks.word_dtype / y16_dtype`, D10); the
+  BF16 relations and `<u1` / `<u1` / `<u4` for the FP8 relations (`RelationHooks.word_dtype / y16_dtype`, D11); the
   relation tag (`RelationHooks.tag`) follows the statement tag immediately and is not in any file.
 * The evaluation domain is the coset `31 . <w_n>`; the encoder is INTT_l, zero-pad to n, scale coefficient `i` by
   `31^i`, NTT_n.

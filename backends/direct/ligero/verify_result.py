@@ -55,6 +55,8 @@ def parse_args(argv: list[str]) -> dict:
     ap.add_argument("--reps", type=int, default=3, help="timed batch verifications per rep dir after one warm-up (default 3)")
     ap.add_argument("--verifier", required=True, help="path of the ligero-verify binary (where the check runs, not what is computed)")
     ap.add_argument("--prover-result", default=None, help="result.json of the bench-vu attempt that produced the dumps (prove_wall -> e2e_0ms)")
+    ap.add_argument("--target-bits", type=float, default=128.0,
+                    help="ligero-verify batch --target-bits: the batch union bound must meet 2^-target (PROTOCOL.md 8c; default 128)")
     return vars(ap.parse_args(argv))
 
 
@@ -89,11 +91,13 @@ def main(argv: list[str] | None = None) -> int:
     n_expected = int(dset.get("n_proofs") or 0)
     jobs_effective = None
     available = None
+    batch_bits = None
     for rd in rep_dirs:
         walls, sums, procs = [], [], []
         for k in range(a["reps"] + 1):
             out = v_dir / f"batch_{rd.name}_{k}.json"
-            cmd = [str(vbin), "batch", "--system", str(system), "--dir", str(rd), *jobs_arg, "--threads", str(a["threads"]), "--json", str(out)]
+            cmd = [str(vbin), "batch", "--system", str(system), "--dir", str(rd), *jobs_arg, "--threads", str(a["threads"]),
+                   "--target-bits", str(a["target_bits"]), "--json", str(out)]
             t0 = time.perf_counter()
             r = subprocess.run(cmd, capture_output=True, text=True)
             pw = time.perf_counter() - t0
@@ -101,9 +105,10 @@ def main(argv: list[str] | None = None) -> int:
             accepted = bool(doc.get("batch_accepted")) and r.returncode == 0 and (n_expected == 0 or doc.get("n") == n_expected)
             ok = ok and accepted
             jobs_effective, available = doc.get("jobs"), doc.get("available_parallelism")
+            batch_bits = doc.get("batch_bits", batch_bits)          # the batch union bound (binaries after b-batch-bound)
             print(f"{rd.name} run {k}{' (warm-up)' if k == 0 else ''}: {'ACCEPT' if accepted else 'REJECT'} n={doc.get('n')} jobs={doc.get('jobs')} "
                   f"wall={doc.get('wall_seconds')} sum={doc.get('verify_seconds_sum')} shared={doc.get('shared_seconds')} proc={pw:.3f}s rc={r.returncode} "
-                  f"reason={doc.get('batch_reason')!r}", flush=True)
+                  f"batch_bits={doc.get('batch_bits')} reason={doc.get('batch_reason')!r}", flush=True)
             if not accepted:
                 print(r.stderr[-2000:], file=sys.stderr)
             if k == 0:
@@ -128,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
           "per_proof_vus": dset.get("per_proof"),
           "verifier": {"name": "ligero-verify batch (backends/ligero-verify, Rust, independent)", "path": str(vbin), "sha256": _sha256(vbin),
                        "jobs": jobs_effective, "jobs_requested": a["jobs"], "threads": a["threads"], "available_parallelism": available,
+                       "target_bits": a["target_bits"], "batch_bits": batch_bits,
                        "coins": "each sub-batch's own step-0 coins (sub_XX.coins)" if dset.get("mode") == "interactive" else "n/a (Fiat-Shamir)"},
           "dumps": {"dir": str(root), "manifest_set": dset, "prover_run_id": prover.get("run_id") if prover else None,
                     "prover_commit": (prover or {}).get("workload_fingerprint", {}).get("commit"), "reps": [r.name for r in rep_dirs]},
@@ -139,6 +145,8 @@ def main(argv: list[str] | None = None) -> int:
         _m("available_parallelism", available, "count"), _m("proofs_total", n_proofs, "count"),
         _m("proofs_verified_independent", sum(r["accepted"] or 0 for r in per_rep) // max(len(per_rep), 1), "count"),
     ]
+    if batch_bits is not None:
+        meas += [_m("batch_bits", batch_bits, "bits"), _m("target_bits", a["target_bits"], "bits")]
     if prove_wall is not None:
         meas += [_m("prove_wall", prove_wall, "s"), _m("e2e_0ms", prove_wall + verify_wall, "s")]
     result = {"schema": "research/result/v0.1", "run_id": run_id, "kind": "bench-result/v1", "workload_fingerprint": fp,

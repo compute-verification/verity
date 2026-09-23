@@ -255,8 +255,11 @@ fn batch_reports_the_pin_and_reads_the_parent_manifest() {
     .unwrap();
     let dir = rep.to_string_lossy().to_string();
     let (code, js) = run(&["batch", "--system", FP8_SYS, "--dir", &dir, "--jobs", "1", "--threads", "2"]);
-    assert_eq!(code, 0, "{js}");
-    assert_eq!(field(&js, "\"batch_accepted\":"), "true", "{js}");
+    // the one sub-batch verifies (pinned), but it was sized for a 49-batch: the batch rule (D10) refuses 1 of 49
+    assert_eq!(code, 1, "{js}");
+    assert_eq!(field(&js, "\"accepted\":"), "1", "{js}");
+    assert_eq!(field(&js, "\"batch_accepted\":"), "false", "{js}");
+    assert!(js.contains("\"batch_reason\":\"batch: n_proofs mismatch (sub_00.proof: n_proofs = 49, 1 sub-batches presented)\""), "{js}");
     assert_eq!(field(&js, "\"system_pinned\":"), "true", "{js}");
     assert_eq!(field(&js, "\"pinned_relation\":"), "\"fp8-ada\"", "{js}");
     assert_eq!(field(&js, "\"own_coins\":"), "1", "{js}");

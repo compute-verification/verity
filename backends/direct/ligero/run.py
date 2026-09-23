@@ -388,6 +388,9 @@ def main(argv=None) -> int:
                                               "leaf indices into the statement, ship and verify Merkle multiproofs of every boundary word")
     sub.choices["bench-vu"].add_argument("--auth-cache", default=None, metavar="DIR", help="--auth: directory holding the built trees (reused when the bindings match)")
     sub.choices["bench-vu"].add_argument("--auth-procs", type=int, default=None, help="--auth: processes for leaf hashing (default: all cores)")
+    sub.choices["bench-vu"].add_argument("--target-bits", type=float, default=128.0,
+                                         help="the VERIFIER's batch target: reject unless sum_i 2^-b_i <= 2^-target over the sub-batches "
+                                              "presented and every proof's n_proofs is their count (PROTOCOL.md 8c; --target is the prover's)")
     sub.choices["gate-vu"].add_argument("--row-negatives", type=int, default=60, help="fp8-ada gate: witness-row mutations to try")
     args = ap.parse_args(argv)
     if args.relation == "fp8-ada":
