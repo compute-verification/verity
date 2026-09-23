@@ -27,6 +27,9 @@
 //!     # statement + proof must get ref.py's verdict; --neg = declarative tampers (fixtures/ref/negatives.json) replayed
 //!     # on them, same rule.  CONFORMANCE ONLY: no soundness target is applied here (the fixtures are 8-query toys), so
 //!     # an accept is "same verdict as ref.py", never a 2^-128 statement; use `batch` for that.
+//! ligerito-verify pcs-sparse --file X.json [--json out.json]
+//!     # a sparse-claim PCS document (tools/pcs_sparse_fixture.py, proto commit-first openings with sparse claims, t_pad
+//!     # 0 / 32): every case's honest terms verify, every listed negative is rejected.  CONFORMANCE ONLY (toy sizes).
 //! ligerito-verify sumcheck-fixture --fixture F.json [--seed fixture]   (LGSC0002 or LGSC0003, by magic)
 //!     # ligerito-sumcheck's verifier fixture (layout, constraints, public rows, LGSC0002/3 proof, claims, recorded
 //!     # transcript): verify with the recorded transcript and with LocalCoins(seed); claims must match; the fixture's
@@ -697,6 +700,28 @@ fn main() {
                 vs.iter().map(|(v, _)| verdict_json(v)).collect::<Vec<_>>().join(",")
             );
             eprintln!("{} fixtures/tampers: {} accepted, {} rejected, {}", vs.len(), vs.iter().filter(|(v, _)| v.accepted).count(), vs.iter().filter(|(v, _)| !v.accepted).count(), if all { "all agree with ref.py" } else { "DISAGREEMENTS" });
+            write_json(arg(&args, "--json"), &js);
+            std::process::exit(if all { 0 } else { 1 });
+        }
+        "pcs-sparse" => {
+            // a sparse-claim PCS document (tools/pcs_sparse_fixture.py on a GPU, or lgto's pcs_sparse_proto_bytes): every
+            // case's honest terms must verify and every negative must be rejected
+            let path = PathBuf::from(arg(&args, "--file").expect("--file X.json"));
+            let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            let (all, body) = match lgto::verify_sparse_doc(&text) {
+                Ok(cases) => {
+                    let all = cases.iter().all(|c| c.accepted == c.expect_accept);
+                    let body = cases
+                        .iter()
+                        .map(|c| format!("{{\"name\":{},\"expect_accept\":{},\"accepted\":{},\"reason\":{}}}", json_str(&c.name), c.expect_accept, c.accepted, json_str(&c.reason)))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    (all, format!("\"cases\":[{body}]"))
+                }
+                Err(e) => (false, format!("\"error\":{}", json_str(&e))),
+            };
+            let js = format!("{{\"file\":{},\"accepted\":{all},{body}}}", json_str(&path.display().to_string()));
+            println!("{js}");
             write_json(arg(&args, "--json"), &js);
             std::process::exit(if all { 0 } else { 1 });
         }

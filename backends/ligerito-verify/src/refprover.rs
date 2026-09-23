@@ -318,6 +318,40 @@ pub fn prove_commit_first(
 }
 
 /// A deterministic pseudo-random base vector.
+/// ligerito-proto's `Proof.to_bytes` for a commit-first opening (`lgto::read_proto_commit_first` reads it back).
+pub fn proto_commit_first_bytes(p: &Params, values: &[Ext], pf: &crate::lgto::PcsProof) -> Vec<u8> {
+    let list = |v: Vec<String>| format!("[{}]", v.join(","));
+    let ints = |v: &[usize]| list(v.iter().map(|x| x.to_string()).collect());
+    let l = p.rounds();
+    let t_pad = pf.ybar.first().map(|y| format!(",\"t_pad\":{}", y.len())).unwrap_or_default();
+    let head = format!(
+        "{{\"n\":{},\"kprime\":{},\"queries\":{},\"rate_log2\":{},\"splits\":{},\"coins\":0,\"hash\":\"blake3\",\"beta\":31,\"ext_degree\":6,\"rows_shape\":{},\"sib_len\":{},\"final_len\":{},\"order\":\"commit-first\",\"claims\":{}{t_pad}}}",
+        p.n,
+        ints(&p.kprime),
+        ints(&p.queries),
+        ints(&p.rate_log2),
+        list(p.splits.iter().map(|(a, b)| format!("[{a},{b}]")).collect()),
+        list((1..=l).map(|i| format!("[{},{}]", p.queries[i - 1], p.cols(i) * if i == 1 { 1 } else { crate::field::EXT_DEG })).collect()),
+        ints(&pf.openings.iter().map(|o| 32 * o.siblings.len()).collect::<Vec<_>>()),
+        pf.final_y.len(),
+        values.len()
+    );
+    let mut b = (head.len() as u32).to_le_bytes().to_vec();
+    b.extend_from_slice(head.as_bytes());
+    b.extend(ext_bytes(values));
+    for i in 0..l {
+        b.extend_from_slice(&pf.roots[i]);
+        pf.sumcheck[i].iter().for_each(|g| b.extend(ext_bytes(g)));
+    }
+    for (i, o) in pf.openings.iter().enumerate() {
+        o.rows.iter().flat_map(|row| row_words(row, i == 0)).for_each(|w| b.extend_from_slice(&w.to_le_bytes()));
+        o.siblings.iter().for_each(|s| b.extend_from_slice(s));
+    }
+    b.extend(ext_bytes(&pf.final_y));
+    pf.ybar.iter().for_each(|y| b.extend(ext_bytes(y)));
+    b
+}
+
 pub fn random_vector(n: usize, seed: u64) -> Vec<u32> {
     let mut x = seed ^ 0x9E37_79B9_7F4A_7C15;
     (0..1usize << n)

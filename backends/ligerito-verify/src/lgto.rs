@@ -615,6 +615,127 @@ pub fn read_proof(buf: &[u8]) -> Result<Proof, String> {
     Ok(Proof { params_raw, params, pcs_params: pp, sumcheck, pcs: PcsProof { roots, sumcheck: sc, openings, final_y, ybar } })
 }
 
+/// A ligerito-proto commit-first opening (`proto/pcs.py` `Proof.to_bytes` with `"order": "commit-first"`): the PCS
+/// parameters, the m claimed values and the proof (`ybar` iff the header has `t_pad`).
+pub fn read_proto_commit_first(buf: &[u8]) -> Result<(Params, Vec<Ext>, PcsProof), String> {
+    let mut r = Reader::new(buf);
+    let head = json::parse(std::str::from_utf8(read_blob(&mut r, "proto header", 1 << 20)?).map_err(|_| "proto header: not utf-8")?)?;
+    let get = |k: &str| head.get(k).ok_or_else(|| format!("proto header: {k}"));
+    let list = |k: &str| get(k).and_then(|v| v.usize_list().ok_or_else(|| format!("proto header: {k}")));
+    if get("order")?.as_str() != Some("commit-first") {
+        return Err("proto header: not a commit-first proof".into());
+    }
+    let (n, kprime, queries, rates) = (get("n")?.as_usize().ok_or("proto header: n")?, list("kprime")?, list("queries")?, list("rate_log2")?);
+    let l = kprime.len();
+    let m = get("claims")?.as_usize().filter(|&m| (1..=1 << 12).contains(&m)).ok_or("proto header: claims")?;
+    let t_pad = match head.get("t_pad") {
+        Some(v) => v.as_usize().filter(|&t| t > 0 && t <= 1 << 16).ok_or("proto header: t_pad")?,
+        None => 0,
+    };
+    let mut p = Params::with_rates(n, kprime, queries, rates);
+    p.splits = get("splits")?
+        .as_arr()
+        .ok_or("proto header: splits")?
+        .iter()
+        .map(|s| match s.usize_list().as_deref() {
+            Some(&[a, b]) => Ok((a, b)),
+            _ => Err("proto header: split".to_string()),
+        })
+        .collect::<Result<_, _>>()?;
+    p.validate()?;
+    let (sib_len, final_len) = (list("sib_len")?, get("final_len")?.as_usize().ok_or("proto header: final_len")?);
+    if sib_len.len() != l || final_len != p.final_len() {
+        return Err("proto header: sib_len / final_len".into());
+    }
+    let values = r.exts(m)?;
+    let (mut roots, mut sumcheck) = (Vec::with_capacity(l), Vec::with_capacity(l));
+    for i in 0..l {
+        roots.push(r.digest()?);
+        sumcheck.push((0..p.kprime[i]).map(|_| Ok([r.ext()?, r.ext()?, r.ext()?])).collect::<Result<Vec<_>, String>>()?);
+    }
+    let mut openings = Vec::with_capacity(l);
+    for i in 1..=l {
+        let (cols, base) = (p.cols(i), i == 1);
+        let w = cols * if base { 1 } else { EXT_DEG };
+        let rows = (0..p.queries[i - 1])
+            .map(|_| {
+                let words = (0..w).map(|_| r.base()).collect::<Result<Vec<_>, _>>()?;
+                Ok(row_from_words(&words, cols, base).unwrap())
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        if sib_len[i - 1] % 32 != 0 {
+            return Err(format!("proto: round {i} sibling bytes"));
+        }
+        let siblings = (0..sib_len[i - 1] / 32).map(|_| r.digest()).collect::<Result<Vec<_>, _>>()?;
+        openings.push(Opening { rows, siblings });
+    }
+    let final_y = r.exts(final_len)?;
+    let ybar = if t_pad > 0 { (0..l).map(|_| r.exts(t_pad)).collect::<Result<Vec<_>, _>>()? } else { Vec::new() };
+    r.finish().map_err(|e| format!("proto: {e}"))?;
+    Ok((p, values, PcsProof { roots, sumcheck, openings, final_y, ybar }))
+}
+
+pub struct SparseDocCase {
+    pub name: String,
+    pub expect_accept: bool,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+/// A sparse-claim PCS document (`tools/pcs_sparse_fixture.py` on a GPU, or `pcs_sparse_proto_bytes`): `points`, `sparse`
+/// `[{cells, weights, value}]`, either `proof_hex` + `values` (one unpadded case) or `cases` `[{t_pad, proof_hex, values}]`,
+/// optional `negatives` `{name: [terms]}`.  Coins: proto's Fiat-Shamir with the relation prefix
+/// `absorb("statement", b"relation statement")`, `absorb("root", root_1)`.
+pub fn verify_sparse_doc(text: &str) -> Result<Vec<SparseDocCase>, String> {
+    let doc = json::parse(text)?;
+    let exts = |v: &Json| -> Result<Vec<Ext>, String> { v.as_arr().ok_or("doc: ext list")?.iter().map(relation::ext_of_json).collect() };
+    let terms = |v: &Json| -> Result<Vec<SparseTerm>, String> {
+        v.as_arr()
+            .ok_or("doc: terms")?
+            .iter()
+            .map(|t| {
+                Ok(SparseTerm {
+                    cells: t.get("cells").and_then(|c| c.usize_list()).ok_or("doc: cells")?,
+                    weights: exts(t.get("weights").ok_or("doc: weights")?)?,
+                    value: relation::ext_of_json(t.get("value").ok_or("doc: value")?)?,
+                })
+            })
+            .collect()
+    };
+    let points = doc.get("points").and_then(|v| v.as_arr()).ok_or("doc: points")?.iter().map(exts).collect::<Result<Vec<_>, _>>()?;
+    let mut all = vec![("honest".to_string(), terms(doc.get("sparse").ok_or("doc: sparse")?)?, true)];
+    if let Some(Json::Obj(kv)) = doc.get("negatives") {
+        for (k, v) in kv {
+            all.push((k.clone(), terms(v)?, false));
+        }
+    }
+    let cases: Vec<(usize, &Json)> = match doc.get("cases").and_then(|c| c.as_arr()) {
+        Some(cs) => cs.iter().map(|c| (c.get("t_pad").and_then(|t| t.as_usize()).unwrap_or(0), c)).collect(),
+        None => vec![(0, &doc)],
+    };
+    let mut out = Vec::new();
+    for (t_pad, c) in cases {
+        let hx = c.get("proof_hex").and_then(|h| h.as_str()).ok_or("doc: proof_hex")?;
+        if hx.len() % 2 != 0 {
+            return Err("doc: proof_hex".into());
+        }
+        let raw = (0..hx.len() / 2).map(|i| u8::from_str_radix(&hx[2 * i..2 * i + 2], 16).map_err(|_| "doc: proof_hex".to_string())).collect::<Result<Vec<u8>, _>>()?;
+        let (p, pv, pf) = read_proto_commit_first(&raw)?;
+        let values = exts(c.get("values").ok_or("doc: values")?)?;
+        if values != pv || pf.ybar.first().map_or(0, |y| y.len()) != t_pad {
+            return Err(format!("doc: case t_pad {t_pad}: values / padding differ from the proof's"));
+        }
+        for (name, sp, want) in &all {
+            let mut coins = crate::transcript::FiatShamir::new(crate::transcript::FiatShamir::LABEL);
+            coins.absorb(b"statement", b"relation statement");
+            coins.absorb(b"root", &pf.roots[0]);
+            let r = pcs_verify(&p, &pf, &points, &values, sp, t_pad, &mut coins);
+            out.push(SparseDocCase { name: format!("t_pad {t_pad}: {name}"), expect_accept: *want, accepted: r.is_ok(), reason: r.err().unwrap_or_else(|| "ok".into()) });
+        }
+    }
+    Ok(out)
+}
+
 /// A `.coins` file: run.py's `u32 count | count x 32 B`, or this crate's repeated `(u32 len, bytes)`.
 pub fn read_coins(raw: &[u8]) -> Result<Live, String> {
     if raw.len() >= 4 {
@@ -1438,20 +1559,24 @@ mod tests {
         let mut c = FiatShamir::new(b"sparse-test");
         bind(&mut c, &pf0.roots[0]);
         pcs_verify(&p, &pf0, &points, &v0, &[], 0, &mut c).unwrap();
+        // proto's commit-first bytes round-trip, and the read proof still verifies
+        let (p2, v2, pf2) = read_proto_commit_first(&crate::refprover::proto_commit_first_bytes(&p, &values, &pf)).unwrap();
+        assert!(p2.kprime == p.kprime && p2.splits == p.splits && v2 == values && pf2.final_y == pf.final_y && pf2.openings.len() == pf.openings.len());
+        let mut c = FiatShamir::new(b"sparse-test");
+        bind(&mut c, &pf2.roots[0]);
+        pcs_verify(&p2, &pf2, &points, &v2, &good, 0, &mut c).unwrap();
+        let raw = crate::refprover::proto_commit_first_bytes(&p, &values, &pf);
+        assert!(read_proto_commit_first(&raw[..raw.len() - 1]).is_err() && read_proto_commit_first(&[&raw[..], &[0][..]].concat()).is_err());
     }
 
-    /// A `prove_commit_first` proof with sparse claims in ligerito-proto's `Proof.to_bytes` form, plus its points, values
-    /// and terms, for `tools/pcs_sparse_crosscheck.py` (proto's `verify_open` on it; the shape of `pcs_sparse_fixture.py`):
-    /// `PCS_SPARSE_PROTO_OUT=x.json cargo test --release pcs_sparse_proto_bytes -- --ignored`.
-    #[test]
-    #[ignore]
-    fn pcs_sparse_proto_bytes() {
+    /// A `prove_commit_first` proof with sparse claims as a sparse-claim PCS document (proto `Proof.to_bytes` in hex, the
+    /// points, values, terms and three negatives), the shape of one `tools/pcs_sparse_fixture.py` case.
+    fn sparse_doc() -> String {
         use crate::refprover::{prove_commit_first, random_vector};
         fn bind(c: &mut dyn Coins, root: &Digest) {
             c.absorb(b"statement", b"relation statement");
             c.absorb(b"root", root);
         }
-        let out = std::env::var("PCS_SPARSE_PROTO_OUT").expect("PCS_SPARSE_PROTO_OUT");
         let n = 16;
         let p = Params::with_rates(n, vec![4, 3, 3], vec![24, 20, 16], vec![2, 2, 2]);
         let f = random_vector(n, 7);
@@ -1465,46 +1590,44 @@ mod tests {
         let mut c = FiatShamir::new(FiatShamir::LABEL);
         bind(&mut c, &pf.roots[0]);
         pcs_verify(&p, &pf, &points, &values, &terms, 0, &mut c).unwrap();
-        let l = p.rounds();
+        let b = crate::refprover::proto_commit_first_bytes(&p, &values, &pf);
         let list = |v: Vec<String>| format!("[{}]", v.join(","));
         let ints = |v: &[usize]| list(v.iter().map(|x| x.to_string()).collect());
         let ext = |e: &Ext| list(e.0.iter().map(|x| x.to_string()).collect());
         let exts = |v: &[Ext]| list(v.iter().map(ext).collect());
-        let head = format!(
-            "{{\"n\":{n},\"kprime\":{},\"queries\":{},\"rate_log2\":{},\"splits\":{},\"coins\":0,\"ext_degree\":6,\"rows_shape\":{},\"sib_len\":{},\"final_len\":{},\"order\":\"commit-first\",\"claims\":{}}}",
-            ints(&p.kprime),
-            ints(&p.queries),
-            ints(&p.rate_log2),
-            list(p.splits.iter().map(|(a, b)| format!("[{a},{b}]")).collect()),
-            list((1..=l).map(|i| format!("[{},{}]", p.queries[i - 1], p.cols(i) * if i == 1 { 1 } else { EXT_DEG })).collect()),
-            ints(&pf.openings.iter().map(|o| 32 * o.siblings.len()).collect::<Vec<_>>()),
-            pf.final_y.len(),
-            points.len()
-        );
-        let mut b = (head.len() as u32).to_le_bytes().to_vec();
-        b.extend_from_slice(head.as_bytes());
-        values.iter().for_each(|v| b.extend_from_slice(&v.to_bytes()));
-        for i in 0..l {
-            b.extend_from_slice(&pf.roots[i]);
-            pf.sumcheck[i].iter().flatten().for_each(|e| b.extend_from_slice(&e.to_bytes()));
-        }
-        for (i, o) in pf.openings.iter().enumerate() {
-            for row in &o.rows {
-                let planes = if i == 0 { 1 } else { EXT_DEG };
-                (0..planes).for_each(|a| row.iter().for_each(|e| b.extend_from_slice(&e.0[a].to_le_bytes())));
-            }
-            o.siblings.iter().for_each(|s| b.extend_from_slice(s));
-        }
-        pf.final_y.iter().for_each(|e| b.extend_from_slice(&e.to_bytes()));
         let term = |t: &SparseTerm| format!("{{\"cells\":{},\"weights\":{},\"value\":{}}}", ints(&t.cells), exts(&t.weights), ext(&t.value));
-        let doc = format!(
-            "{{\"what\":\"ligerito-verify refprover::prove_commit_first, as proto Proof.to_bytes\",\"points\":{},\"values\":{},\"sparse\":{},\"proof_hex\":\"{}\"}}",
+        let terms_json = |ts: &[SparseTerm]| list(ts.iter().map(term).collect());
+        let (mut bad_v, mut bad_w) = (terms.clone(), terms.clone());
+        bad_v[0].value = bad_v[0].value.add(&Ext::ONE);
+        bad_w[0].weights[0] = bad_w[0].weights[0].add(&Ext::ONE);
+        format!(
+            "{{\"what\":\"ligerito-verify refprover::prove_commit_first, as proto Proof.to_bytes\",\"points\":{},\"values\":{},\"sparse\":{},\"negatives\":{{\"value+1\":{},\"weights+1\":{},\"term dropped\":{}}},\"proof_hex\":\"{}\"}}",
             list(points.iter().map(|z| exts(z)).collect()),
             exts(&values),
-            list(terms.iter().map(term).collect()),
+            terms_json(&terms),
+            terms_json(&bad_v),
+            terms_json(&bad_w),
+            terms_json(&terms[..1]),
             hex(&b)
-        );
-        std::fs::write(&out, doc).unwrap();
+        )
+    }
+
+    /// `verify_sparse_doc` (the `pcs-sparse` CLI) on it: the honest terms verify, each negative does not.
+    #[test]
+    fn sparse_doc_verifies() {
+        let cases = verify_sparse_doc(&sparse_doc()).unwrap();
+        assert_eq!(cases.len(), 4);
+        for c in &cases {
+            assert_eq!(c.accepted, c.expect_accept, "{}: {}", c.name, c.reason);
+        }
+    }
+
+    /// The document for `tools/pcs_sparse_crosscheck.py` (proto's `verify_open` on the Rust prover's bytes):
+    /// `PCS_SPARSE_PROTO_OUT=x.json cargo test --release pcs_sparse_proto_bytes -- --ignored`.
+    #[test]
+    #[ignore]
+    fn pcs_sparse_proto_bytes() {
+        std::fs::write(std::env::var("PCS_SPARSE_PROTO_OUT").expect("PCS_SPARSE_PROTO_OUT"), sparse_doc()).unwrap();
     }
 
     #[test]
