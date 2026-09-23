@@ -2,7 +2,7 @@
 //! the CLI).  Module map: `field` (BabyBear + F_{p^6}), `hash` (BLAKE3 / BLAKE2b / SHAKE-256), `merkle`
 //! (multi-openings), `transcript` (coins: Fiat-Shamir diagnostic, live coins, local), `claims` (tensor terms),
 //! `params` (dimensions + soundness), `pcs` (the PCS verifier), `format` + `json` (proof bytes), `refprover`
-//! (test oracle).
+//! (test oracle), `sumcheck` (relation-side round verification: plain deg-2 and Gruen deg-3 forms).
 
 pub mod claims;
 pub mod field;
@@ -13,6 +13,7 @@ pub mod merkle;
 pub mod params;
 pub mod pcs;
 pub mod refprover;
+pub mod sumcheck;
 pub mod transcript;
 
 #[cfg(test)]
