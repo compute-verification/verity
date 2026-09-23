@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-PROFILES = Path(__file__).resolve().parents[1] / "profiles"
+PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 B1 = ["temp07", "topk50", "topp09", "topk50_topp09", "n2", "2req_seeds", "noseed", "combo", "mixed"]
 
 

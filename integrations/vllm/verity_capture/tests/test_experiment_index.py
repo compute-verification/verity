@@ -7,7 +7,7 @@ from pathlib import Path
 from verity_capture import experiment as EXP
 
 REPO = Path(__file__).resolve().parents[2]
-WL = REPO / "verity_capture" / "profiles" / "workload_cov_b0_b8-mixed_c256.json"
+WL = REPO / "workloads" / "workload_cov_b0_b8-mixed_c256.json"
 
 
 def _spec(**over):

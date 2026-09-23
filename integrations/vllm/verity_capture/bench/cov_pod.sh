@@ -14,7 +14,7 @@
 #   bash /workspace/cp/cov_pod.sh bundle <run-name>                 # small bundle only
 #   bash /workspace/cp/cov_pod.sh queue <case> <name1> <name2> …    # run several workloads of one case serially (GPU), CPU phases in
 #                                                                   # the background (at most COV_CPU_PAR at a time, default 2)
-# <workload-name> is the stem of verity_capture/profiles/workload_<name>.json (e.g. cov_b0_b8-mixed_c256); <run-name> = <case>-<name>.
+# <workload-name> is the stem of workloads/workload_<name>.json (e.g. cov_b0_b8-mixed_c256); <run-name> = <case>-<name>.
 # Env: COV_K (tier A k, default 3), COV_PAR (replay stages in parallel, default 8), COV_SNAP_MB (snapshot cap in MiB for B8 / C1024
 # runs, default 256), COV_CPU_PAR (concurrent CPU phases in `queue`, default 2), COV_EXTRA (extra driver args for every run).
 set -uo pipefail
@@ -127,7 +127,7 @@ gpu_phase() {  # <case> <workload-name> [driver args…] -> run name on stdout
   local case=$1 wl=$2; shift 2
   local n="$case-$wl${COV_RUN_SUFFIX:-}" ck; ck=$(ckpt_dir "$case") || { say "gpu $n: $ck"; return 1; }   # COV_RUN_SUFFIX: e.g. ".ovC" for a repeat capture of the same cell
   say "gpu $n start (ckpt $ck) $(snap_args "$wl") $*"
-  drv --case "$case" --workload "verity_capture/profiles/workload_$wl.json" --out "$OUT/$n" --checkpoint-dir "$ck" --phase gpu \
+  drv --case "$case" --workload "workloads/workload_$wl.json" --out "$OUT/$n" --checkpoint-dir "$ck" --phase gpu \
       --max-num-seqs 8 $(snap_args "$wl") ${COV_EXTRA:-} "$@" > "$LOGS/$n.gpu.log" 2>&1
   local rc=$?
   say "gpu $n rc=$rc  $(grep -m1 '\[realized\]' "$LOGS/$n.gpu.log" | cut -c1-200)"

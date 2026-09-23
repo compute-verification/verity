@@ -3,7 +3,7 @@
 Two halves, one CLI:
 
   GPU pod (torch, vLLM):
-    python -m verity_capture.census --workload verity_capture/profiles/workload_32x16_1req.json --out DIR
+    python -m verity_capture.census --workload workloads/workload_32x16_1req.json --out DIR
         Builds the engine exactly like `bench/m1_capture.py` (κ, `vllm_adapter.build_engine`), runs the uninstrumented
         throwaway warm-up (Triton JIT / cuBLAS / allocator / CUPTI), then runs the workload request with **no observer, no
         Triton hook, no module hooks**: every `engine.step()` is wrapped in its own `torch.profiler.profile(activities=

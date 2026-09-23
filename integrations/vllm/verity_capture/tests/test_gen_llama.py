@@ -4,6 +4,8 @@ no hand-written static field beyond the repo id and the pinned revision.  Laptop
 at MAX_POS 131072 dominates)."""
 from __future__ import annotations
 
+import importlib
+
 import hashlib
 import json
 import shlex
@@ -17,11 +19,12 @@ import pytest
 from verity_capture import analytic
 from verity_capture.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart, TritonLaunch
 from verity_capture.patterns import GemmLaunch, members
-from verity_capture.profiles import gen_llama_llama32_1b as L
 from verity_capture.profiles import gen_llama_patterns as GP
-from verity_capture.profiles import gen_llama_qwen05 as Q
 from verity_capture.profiles import profile_for_case, profile_module_for_case
 from verity_capture.profiles import vllm_d9105ea80_sm89_eager as BASE
+
+L = importlib.import_module("verity_capture.profiles.derived_LLAMA32_1B")
+Q = importlib.import_module("verity_capture.profiles.derived_QWEN05")
 from verity_capture.resolver import Compute, PerRow, Shared, StepContext, Unsupported, resolve_step
 from verity_capture.tree import step_events
 from verity_capture.events import ViewDesc
@@ -98,7 +101,7 @@ def test_qwen05_facts_agree_with_the_hand_written_registry_config():
 
 # --- the profiles are build_profile(C): shared patterns, shared pins, per-model weight map ------------------------------------
 
-@pytest.mark.parametrize("case, module_name", [("LLAMA32_1B", "gen_llama_llama32_1b"), ("QWEN05", "gen_llama_qwen05")])
+@pytest.mark.parametrize("case, module_name", [("LLAMA32_1B", "derived_LLAMA32_1B"), ("QWEN05", "derived_QWEN05")])
 def test_profile_is_discovered_by_case_and_shares_the_base_patterns(case, module_name):
     assert profile_module_for_case(case) == module_name
     prof = profile_for_case(case)
@@ -106,19 +109,13 @@ def test_profile_is_discovered_by_case_and_shares_the_base_patterns(case, module
     assert prof is mod.PROFILE and prof.notes["case"] == case and prof.config is mod.C
     assert prof.id == mod.PROFILE_ID and prof.id != BASE.PROFILE.id
     base_names = [p.name for p in BASE.PROFILE.patterns]
-    if case == "QWEN05":
-        # configuration-only: the base pattern list, re-parameterized
-        assert [p.name for p in prof.patterns] == base_names and [type(p) for p in prof.patterns] == [type(p) for p in BASE.PROFILE.patterns]
-        assert "specializations" not in prof.notes
-    else:
-        # the one specialization the capture forced, inserted right before the base GemmLaunch; everything else the base list
-        names = [p.name for p in prof.patterns]
-        assert names == [GP.GemmLaunchTuned.name, *base_names]
-        assert names.index(GP.GemmLaunchTuned.name) == names.index("gemm.matmul_kernel_persistent") - 1
-        assert isinstance(prof.patterns[0], GP.GemmLaunchTuned) and isinstance(prof.patterns[1], GemmLaunch)
-        # [R15 moe GEMM-ADA-TABLE] the ada record pins all five vLLM keys; Llama's shapes hit (2048, 2048) only (the others are Qwen3-class)
-        assert set(prof.notes["pins"]["gemm_tuned_ada"]) == {"N=2048,K=2048", "N=2048,K=6144", "N=4096,K=2048", "N=12288,K=2048", "N=151936,K=2048"}
-        assert len(prof.notes["specializations"]) == 1
+    # [P6] every configuration-derived profile: the target's tuned-GEMM specialization right before the base GemmLaunch, then the base list
+    names = [p.name for p in prof.patterns]
+    assert names == [GP.GemmLaunchTuned.name, *base_names]
+    assert names.index(GP.GemmLaunchTuned.name) == names.index("gemm.matmul_kernel_persistent") - 1
+    assert isinstance(prof.patterns[0], GP.GemmLaunchTuned) and isinstance(prof.patterns[1], GemmLaunch)
+    # [R15 moe GEMM-ADA-TABLE] the ada record pins all five vLLM keys; Llama's shapes hit (2048, 2048) only (the others are Qwen3-class)
+    assert set(prof.notes["pins"]["gemm_tuned_ada"]) == {"N=2048,K=2048", "N=2048,K=6144", "N=4096,K=2048", "N=12288,K=2048", "N=151936,K=2048"}
     assert GP.GemmLaunchTuned.name not in base_names                                             # the base profile is untouched
     assert prof.kernel_allowlist is BASE.PROFILE.kernel_allowlist                                # the frozen census allowlist, referenced
     pins = prof.notes["pins"]
@@ -207,7 +204,7 @@ def test_qwen05_plain_table_is_self_consistent():
 def test_workload_file(case):
     from verity_capture.card import workload_summary
     mod = MODULES[case]
-    path = REPO / "verity_capture" / "profiles" / WORKLOADS[case]
+    path = REPO / "workloads" / WORKLOADS[case]
     doc = json.loads(path.read_text())
     assert doc["schema"] == "verity-vllm/workload/v1" and doc["case"] == case
     assert doc["model"] == mod.REPO_ID and doc["checkpoint_revision"] == mod.REVISION
@@ -224,9 +221,9 @@ def test_workload_file(case):
 
 # --- the sealed driver resolves the case to the profile module and the brief's invocation is well-formed ----------------------
 
-@pytest.mark.parametrize("case, module_name", [("LLAMA32_1B", "gen_llama_llama32_1b"), ("QWEN05", "gen_llama_qwen05")])
+@pytest.mark.parametrize("case, module_name", [("LLAMA32_1B", "derived_LLAMA32_1B"), ("QWEN05", "derived_QWEN05")])
 def test_run_config_dry_run_resolves_the_profile_from_the_case(case, module_name):
-    wl = f"verity_capture/profiles/{WORKLOADS[case]}"
+    wl = f"workloads/{WORKLOADS[case]}"
     out = subprocess.run([sys.executable, "-m", "verity_capture.bench.run_config", "--case", case, "--workload", wl, "--out", "/r/RUN",
                           "--cards-dir", "/r/cards", "--python-gpu", "/pod/py311", "--python-cpu", "/pod/py312", "--checkpoint-dir", "/ck/snap",
                           "--phase", "all", "--parallel", "8", "--replay-budget-leaves", "8000000", "--dry-run"],
@@ -400,7 +397,7 @@ def test_base_and_qwen05_profiles_do_not_have_the_tuned_pattern_but_pin_the_targ
     `launch_config` (the sm_89 table row for a tabled (N,K) on the default `ada` target), so the profiles without the tuned pattern
     accept the tabled launch exactly as Bet A (`gemm_pins_for`) pins it — and still refuse any other tiling."""
     consts, warps, stages = GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 32, 2048, 2048)
-    for prof in (BASE.PROFILE, Q.PROFILE):
+    for prof in (BASE.PROFILE,):                                       # [P6] the derived Qwen-0.5B profile now carries the tuned pattern too
         assert not any(isinstance(p, GP.GemmLaunchTuned) for p in prof.patterns)
         r, _ = _resolve(prof, 32, 2048, 2048, consts, warps, stages)
         g = [m for m in members(r) if isinstance(m, Compute)]

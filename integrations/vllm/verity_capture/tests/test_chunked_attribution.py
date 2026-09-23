@@ -14,7 +14,7 @@ from verity_capture.bench import gen_coverage_workloads as gw
 from verity_capture.tests.test_coverage_workloads import _LaggedStubEngine, _Out
 
 REPO = Path(__file__).resolve().parents[2]
-PROF = REPO / "verity_capture" / "profiles"
+PROF = REPO / "workloads"
 # which `run_requests_arrivals` is present: the original loop measures the output lag from the first returned output (wrong under
 # chunked prefill; `attribute()` corrects it), `lane/coverage`'s (integ, 22:12Z) derives the forwards from the scheduler / clamps
 # the lag and exposes `scheduler_of`; the attribution's RESULT is the same on both, only the `corrections` record differs

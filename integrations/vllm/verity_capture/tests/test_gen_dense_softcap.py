@@ -3,15 +3,19 @@ softcapped launch resolves to `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` with the 
 a windowed + softcapped launch (Gemma-2 even layers) goes through the inert-window rule; bad softcaps are Unsupported with a reason."""
 from __future__ import annotations
 
+import importlib
+
 import dataclasses
 import math
 
 import pytest
 
 from verity_capture.patterns import AttentionScope
-from verity_capture.profiles import gen_dense2_gemma2_2b as gemma, vllm_d9105ea80_sm89_eager as B1PROF
+from verity_capture.profiles import vllm_d9105ea80_sm89_eager as B1PROF
 from verity_capture.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
 from verity_capture.profiles.gen_dense_softcap_patterns import AttentionScopeSoftcap, with_softcap_patterns
+
+gemma = importlib.import_module("verity_capture.profiles.derived_GEMMA2_2B")
 from verity_capture.resolver import Compute, Unsupported, resolve_step
 from verity_capture.tests.test_gen_dense2 import FA2, SCOPE, _fa2_edit
 from verity_capture.tests.test_patterns_synthetic import by_spec, context, decode_step

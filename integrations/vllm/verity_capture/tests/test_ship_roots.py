@@ -1,6 +1,6 @@
 """[R17 rel2 2026-09-21, rel M-1320] `data/hf_configs` ships to pods and lives in the R17 sparse worktrees.
 
-The configuration-derived profiles (gen_moe_olmoe, gen_dense2_*, gen_ln_*, dense_generic step 4) and their tests read
+The configuration-derived profiles (`profiles.generic` since P6; before it gen_moe_olmoe, gen_dense2_*, gen_ln_*, dense_generic) and their tests read
 `data/hf_configs/<ROLE>.config.json` from the tree.  Before this fix the directory was (a) excluded from the rel sparse worktree
 (`!/out/gen/*` with no re-include) and (b) absent from `record_v5/ship.sh` ROOTS, so on every pod tree since r17-int-1
 `test_gen_ov_moe*.py` errored at collection (OLMOE.config.json absent) and `test_gen_dense2.py` / `test_gen_ln.py` skipped.

@@ -12,7 +12,7 @@ from verity_capture.bench import gen_batch_provenance as gp
 from verity_capture.card import workload_summary
 
 REPO = Path(__file__).resolve().parents[2]
-PROF = REPO / "verity_capture" / "profiles"
+PROF = REPO / "workloads"
 M1_LOG = REPO / "data" / "logs" / "m1.jsonl.gz"
 VOCAB = {"B0": 49152, "B1": 151936}
 WORKLOADS = {

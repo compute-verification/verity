@@ -7,14 +7,17 @@ pairwise (MOE-01) reading's refusals are the padded reading's refusals, verbatim
 
 from __future__ import annotations
 
+import importlib
+
 import json
 import sys
 import types
 
 import pytest
 
-from verity_capture.profiles import gen_ov_moe_olmoe as OV
 from verity_capture.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS, MoEFusedExperts, MoEFusedExpertsPadded, ov_moe_patterns
+
+OV = importlib.import_module("verity_capture.profiles.derived_OLMOE")
 from verity_capture.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from verity_capture.tests.test_gen_ov_moe import C, E, H, I, TOPK, _ctx, _start, moe_scope_events
 from verity_capture.tree import step_events

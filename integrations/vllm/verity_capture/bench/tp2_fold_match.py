@@ -5,7 +5,7 @@ CROSS-RANK leg (`tp.rank_match`) over both folds + the collective recorder rows 
 + tp2_match's stored-step provenance.  CPU only.  The rank-local legs of the ranks run CONCURRENTLY (one subprocess chain per rank,
 --rank-workers, default all): they are independent until the cross-rank leg; the record is assembled in rank order.
 
-    python -m verity_capture.bench.tp2_fold_match --capture <tp2_capture --record-collectives out> --profile gen_llama_llama32_1b_tp2rank \\
+    python -m verity_capture.bench.tp2_fold_match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
         --build-rank0 <build_request_r0> --build-rank1 <build_request_r1> [--gprog-rank0 <build_workload_r0/workload_program.json> --gprog-rank1 ...] \\
         [--derived-rank0 DIR ... --derived-rank1 DIR ...] --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
 
@@ -137,7 +137,7 @@ def links_for_rank(rank: int, build: Path, compare: dict, derived: list[str]) ->
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--capture", required=True, help="tp2_capture --record-collectives run dir: log.rank<r>.jsonl.gz, tokens.json, coll.rank<r>.jsonl")
-    ap.add_argument("--profile", required=True, help="rank profile module (verity_capture.profiles.<name>), e.g. gen_llama_llama32_1b_tp2rank")
+    ap.add_argument("--profile", required=True, help="rank profile module (verity_capture.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = 2)")
     ap.add_argument("--build-rank0", required=True)
     ap.add_argument("--build-rank1", required=True)
     ap.add_argument("--derived-rank0", action="append", default=[], help="B>1: further request Programs of rank 0 (per served (LP, T))")

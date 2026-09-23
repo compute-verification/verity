@@ -38,7 +38,7 @@ def test_shipped_dense_qwen3_config_derives_the_qk_norm_profile():
     entry = dg.checkpoint_entry("QWEN3_4B")
     assert entry is not None and entry["repo"] == "Qwen/Qwen3-4B-Instruct-2507"
     assert hashlib.sha256(cfg.read_bytes()).hexdigest() == entry["config_sha256"]
-    assert profile_module_for_case("QWEN3_4B") == "dense_QWEN3_4B"
+    assert profile_module_for_case("QWEN3_4B") == "derived_QWEN3_4B"
     p = profile_for_case("QWEN3_4B")
     C = p.config
     assert p.id == "vllm-d9105ea80-sm89-eager-bf16-qwen3_4b" and C["family"] == "qwen3" and C["QK_NORM"] == "head"
@@ -49,12 +49,10 @@ def test_shipped_dense_qwen3_config_derives_the_qk_norm_profile():
 
 
 def test_mistral_role_resolves_to_a_derived_module_without_an_allowlist_entry():
-    from verity_capture.profiles import PROFILE_BY_CASE
-    assert "MISTRAL7B" not in PROFILE_BY_CASE
-    assert profile_module_for_case("MISTRAL7B") == "dense_MISTRAL7B"
-    mod = importlib.import_module("verity_capture.profiles.dense_MISTRAL7B")
+    assert profile_module_for_case("MISTRAL7B") == "derived_MISTRAL7B"
+    mod = importlib.import_module("verity_capture.profiles.dense_MISTRAL7B")          # the X-07 name recorded runs cite: the same module
     p = mod.PROFILE
-    assert p is profile_for_case("MISTRAL7B")
+    assert p.id == profile_for_case("MISTRAL7B").id and p.config == profile_for_case("MISTRAL7B").config   # two module names, one derivation
     assert p.notes["case"] == "MISTRAL7B" and p.id == "vllm-d9105ea80-sm89-eager-bf16-mistral7b"
     C = p.config
     # every value from config.json (provenance recorded), nothing hand-written
@@ -99,27 +97,29 @@ def test_check_header_compares_facts_including_untied_embeddings():
     assert any("num_hidden_layers=33" in m for m in msgs) and any("head_dim=64" in m for m in msgs)
 
 
-def test_derived_llama_profile_equals_the_hand_authored_module():
-    """The same configuration gives the same profile whether a lane wrote a module or not (the module was never the fact)."""
+def test_x07_name_and_derived_name_are_one_profile():
+    """[P6] `dense_<ROLE>` (the X-07 name recorded runs cite) and `derived_<ROLE>` build the same profile; the hand-authored module it
+    was once compared with is gone (`profiles/expected/derived_LLAMA32_1B.json` pins what both produced)."""
     d = importlib.import_module("verity_capture.profiles.dense_LLAMA32_1B").PROFILE
-    g = importlib.import_module("verity_capture.profiles.gen_llama_llama32_1b").PROFILE
-    assert d.config == g.config
+    g = importlib.import_module("verity_capture.profiles.derived_LLAMA32_1B").PROFILE
+    assert d.config == g.config and d.id == g.id
     assert [type(x).__name__ for x in d.patterns] == [type(x).__name__ for x in g.patterns]
     assert d.kernel_allowlist == g.kernel_allowlist
     for name in ("lm_head.weight", "model.layers.5.self_attn.o_proj.weight", "model.layers.0.self_attn.rotary_emb.cos_sin_cache"):
         assert d.weight_field(name) == g.weight_field(name)
-    # hand-authored modules keep precedence (PROFILE_BY_CASE / notes["case"] scan); the derivation is the fallback
-    assert profile_module_for_case("LLAMA32_1B") == "gen_llama_llama32_1b"
-    assert profile_module_for_case("B1") == "vllm_d9105ea80_sm89_eager_qwen15"
+    assert profile_module_for_case("LLAMA32_1B") == "derived_LLAMA32_1B"
+    assert profile_module_for_case("B1") == "derived_B1"
 
 
 @pytest.mark.parametrize("patch,needle", [
-    ({"model_type": "gemma2"}, "not in the dense Llama-architecture vocabulary"),
-    ({"model_type": "olmoe"}, "not in the dense Llama-architecture vocabulary"),
+    ({"model_type": "falcon"}, "not in the family facts table"),
+    ({"model_type": "olmoe"}, "MoE family without num_experts"),
     ({"sliding_window": 4096}, "sliding_window"),
     ({"hidden_size": 4000}, "multiple of 64"),
 ])
-def test_refuses_fail_closed_outside_the_dense_vocabulary(patch, needle):
+def test_refuses_fail_closed_outside_the_family_facts_table(patch, needle):
+    """[P6] the vocabulary is the family facts table: an unknown model_type, or a known one whose structure the table does not describe
+    (a MoE type without experts, a windowed Mistral), refuses with the stated reason."""
     cfg = {**json.loads(MISTRAL_CFG.read_text()), **patch}
     with pytest.raises(ValueError, match=needle):
         dg.build_dense_profile("X", cfg)

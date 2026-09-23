@@ -17,7 +17,7 @@ log() { echo "[ov-sampling $(date -u +%FT%TZ)] $*"; }
 run_cfg() {   # $1 = phase, $2 = cfg
   local ph=$1 cfg=$2
   cd "$SRC" && PYTHONPATH=. HF_HOME=/workspace/hf $PYC -m verity_capture.bench.run_config \
-    --config-id "ov-sampling-$cfg" --case B1 --workload "verity_capture/profiles/workload_b1_sampling_$cfg.json" \
+    --config-id "ov-sampling-$cfg" --case B1 --workload "workloads/workload_b1_sampling_$cfg.json" \
     --out "$RUNS/$cfg" --cards-dir "$RUNS/cards" --python-gpu $PYG --python-cpu $PYC --checkpoint-dir "$CKPT" \
     --phase "$ph" --parallel 8 > "$RUNS/$cfg.$ph.out" 2>&1
   log "$cfg $ph rc=$?"
@@ -35,7 +35,7 @@ ovs_cfg() {   # $1 = cfg: the CPU phase again under the lane's experimental prof
   [ -e "$src/nonint" ] && cp -a "$src/nonint" "$dst/nonint"
   cp "$src/run.json" "$dst/run.json"; [ -e "$src/gpu_done.json" ] && cp "$src/gpu_done.json" "$dst/"
   cd "$SRC" && PYTHONPATH=. HF_HOME=/workspace/hf $PYC -m verity_capture.bench.run_config --run-dir "$dst" \
-    --profile gen_ov_sampling_b1 --config-id "ov-sampling-$cfg-ovs" --cards-dir "$RUNS/cards" --python-gpu $PYG --python-cpu $PYC \
+    --profile derived_B1_ovs --config-id "ov-sampling-$cfg-ovs" --cards-dir "$RUNS/cards" --python-gpu $PYG --python-cpu $PYC \
     --phase cpu --parallel 8 > "$RUNS/${cfg}_ovs.cpu.out" 2>&1
   log "${cfg}_ovs cpu rc=$?"
 }

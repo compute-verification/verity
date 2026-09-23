@@ -4,29 +4,38 @@ torch-free, no run artifacts.  The default B0 profile stays the pinned one (PROT
 
 from __future__ import annotations
 
+import importlib
+
 import json
 from pathlib import Path
 
-from verity_capture.profiles import gen_ov_sampling_b0 as OVB0, gen_ov_sampling_b1 as OVB1, profile_module_for_case, vllm_d9105ea80_sm89_eager as BASE
+from verity_capture.profiles import profile_module_for_case, vllm_d9105ea80_sm89_eager as BASE
+
+OVB0 = importlib.import_module("verity_capture.profiles.derived_B0_ovs")
+OVB1 = importlib.import_module("verity_capture.profiles.derived_B1_ovs")
 from verity_capture.profiles.gen_ov_sampling_patterns import TokenSampleGumbel
 from verity_capture.tests.test_gen_sampling import _adapter_fn
 
-PROFILES = Path(__file__).resolve().parents[1] / "profiles"
+PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 
 
 def test_b0_profile_is_the_pinned_profile_plus_the_sampler_recognizer():
     p = OVB0.PROFILE
-    assert p.id == BASE.PROFILE_ID + "+ov-sampling" and p.id != BASE.PROFILE.id and p.id != OVB1.PROFILE.id
+    # [P6] `derived_B0_ovs`: the configuration-derived B0 profile (== the pinned module's, `profiles/expected/derived_B0.json`) + the recognizer
+    assert p.id == OVB0.PROFILE_ID == "vllm-d9105ea80-sm89-eager-bf16-b0+ov-sampling" and p.id != BASE.PROFILE.id and p.id != OVB1.PROFILE.id
     assert p.accepted is False
-    assert p.config is BASE.PROFILE.config and p.notes["case"] == "B0" and p.weight_field is BASE.PROFILE.weight_field
+    assert p.notes["case"] == "B0" and {k: p.config[k] for k in ("H", "NL", "NH", "KVH", "D", "I", "V", "BN")} == {k: BASE.C[k] for k in ("H", "NL", "NH", "KVH", "D", "I", "V", "BN")}
     assert isinstance(p.patterns[0], TokenSampleGumbel) and p.patterns[0].vocab == BASE.C["V"] == 49152
-    assert [type(x) for x in p.patterns[1:]] == [type(x) for x in BASE.PROFILE.patterns]
-    assert p.kernel_allowlist is BASE.PROFILE.kernel_allowlist
+    tuned = [x for x in p.patterns[1:] if x.name == "gemm.matmul_kernel_persistent.tuned"]        # the generic list's target specialization
+    assert len(tuned) == 1 and [type(x) for x in p.patterns[1:] if x not in tuned] == [type(x) for x in BASE.PROFILE.patterns]
+    assert p.kernel_allowlist == BASE.PROFILE.kernel_allowlist
     assert "ov_sampling" in p.notes and "GumbelArgmaxBf16" in p.notes["ov_sampling"]["definition"]
 
 
-def test_default_b0_profile_is_unchanged():
-    assert profile_module_for_case("B0") == "vllm_d9105ea80_sm89_eager"
+def test_default_b0_profile_is_the_derived_one_without_the_recognizer():
+    assert profile_module_for_case("B0") == "derived_B0"
+    from verity_capture.profiles import derived_B0
+    assert not any(isinstance(x, TokenSampleGumbel) for x in derived_B0.PROFILE.patterns)
 
 
 def test_t1_workloads_load_as_seeded_temperature_one_headers():

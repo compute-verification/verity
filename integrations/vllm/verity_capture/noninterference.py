@@ -40,7 +40,7 @@ Writes DIR/noninterference.json and DIR/noninterference.md; exit status 1 on any
 
     HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. VLLM_BATCH_INVARIANT=1 VLLM_USE_V2_MODEL_RUNNER=1 \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 VLLM_USE_FLASHINFER_SAMPLER=0 /workspace/venv-cu129/bin/python -m \
-    verity_capture.noninterference --workload verity_capture/profiles/workload_32x16_1req.json --out /vol/cp/l5/nonint
+    verity_capture.noninterference --workload workloads/workload_32x16_1req.json --out /vol/cp/l5/nonint
 """
 
 from __future__ import annotations
@@ -765,7 +765,7 @@ def orchestrate(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--workload", default="verity_capture/profiles/workload_32x16_1req.json")
+    ap.add_argument("--workload", default="workloads/workload_32x16_1req.json")
     ap.add_argument("--out", required=True)
     ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
     ap.add_argument("--max-tokens", type=int, default=None)

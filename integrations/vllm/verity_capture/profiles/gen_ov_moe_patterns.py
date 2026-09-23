@@ -1,6 +1,6 @@
 """Lane `ov-moe` patterns: the OLMoE fused-MoE block as PAIR-MAJOR Computes over quarantine definitions.
 
-Wave 1 (`gen_moe_patterns.MoEBlockScope`) resolved `vllm.moe_forward*` as one recognised `Unsupported` and wrote the
+Wave 1 (`gen_moe_patterns.MoEBlockScope`, retired in P6) resolved `vllm.moe_forward*` as one recognised `Unsupported` and wrote the
 mechanism note.  This module is the constructive half of the answer to "is MoE just routing + grouped-GEMM Definitions
 under the existing Program machinery?": the block IS representable with the existing operand kinds (`PerRow`, `Gather`
 with *public* indices, `Shared`) once the unit of computation is the (token, slot) PAIR p = t*TOPK + k and the expert
@@ -41,11 +41,63 @@ from verity_vllm.registry import moe as _MOE
 from verity_vllm.registry.quarantine.ov_moe import moe as Q
 
 from ..events import ViewDesc
-from ..patterns import (SiluAndMul, bound_args, find_descendants, first, hint_of, is_int, is_row_major, op_name,
-                        scope_transparents, triton_name, unsupported)
+from ..patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, triton_name,
+                        unsupported)
 from ..resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
 from ..tree import TreeNode
-from .gen_moe_patterns import MOE_OP_PREFIX, GemmLaunchTunedAda, moe_subtree_census
+from .gen_llama_patterns import GemmLaunchTuned
+
+#: The op name prefix of the MoE custom op(s) (`vllm.moe_forward.default`, `vllm.moe_forward_shared.default`).
+MOE_OP_PREFIX = "moe_forward"
+
+#: Device kernels of the fused-MoE block on the pinned vLLM (Triton function names / CUDA kernel tokens), for the census reader.
+MOE_KERNELS_EXPECTED = ("topk_softmax", "moe_align_block_size", "fused_moe_kernel", "silu_and_mul", "moe_sum")
+
+
+def _view(v: Any) -> dict[str, Any]:
+    return {"shape": list(v.shape), "dtype": v.dtype, "strides": list(v.strides), "offset": v.offset, "alloc": v.alloc}
+
+
+def _scalar(v: Any) -> Any:
+    if isinstance(v, (bool, int, float, str)) or v is None:
+        return v
+    if isinstance(v, (list, tuple)):
+        return [_scalar(x) for x in v]
+    if hasattr(v, "shape") and hasattr(v, "strides"):
+        return _view(v)
+    return repr(v)
+
+
+def _depth(root: TreeNode, target: TreeNode) -> int:
+    def go(n: TreeNode, d: int) -> int | None:
+        if n is target:
+            return d
+        for c in n.children:
+            r = go(c, d + 1)
+            if r is not None:
+                return r
+        return None
+    return go(root, 0) or 0
+
+
+def moe_subtree_census(node: TreeNode) -> dict[str, Any]:
+    """Every event of the scope with its tensor metadata: dispatcher ops with input/output views, Triton launches with
+    grid / constexprs / num_warps / num_stages and their tensor arguments.  Serialisable (plain dicts) so it survives
+    the resolution report's JSON.  (Wave 1's `gen_moe_patterns.moe_subtree_census`, moved here when that module retired in P6.)"""
+    ops: list[dict[str, Any]] = []
+    launches: list[dict[str, Any]] = []
+    for n in node.walk():
+        if n is node:
+            continue
+        if n.is_triton:
+            e = n.enter
+            launches.append({"id": n.id, "fn": triton_name(n), "grid": list(e.grid), "constexprs": dict(e.constexprs),
+                             "num_warps": e.num_warps, "num_stages": e.num_stages,
+                             "args": {k: _scalar(v) for k, v in e.args.items() if k not in e.constexprs}})
+        else:
+            ops.append({"id": n.id, "op": n.op, "depth": _depth(node, n),
+                        "in": [_view(v) for v in n.input_views()], "out": [_view(v) for v in n.output_views()]})
+    return {"dispatcher_ops": ops, "triton_launches": launches, "n_events": len(node.ids()) - 1}
 
 #: Kineto / Triton kernel tokens the parts claim (census).
 K_ROUTER = "topkGating"
@@ -362,11 +414,15 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
 MOE_CONSTRUCTION_PATTERNS = {"indexed-read": MoEFusedExperts, "padded": MoEFusedExpertsPadded}
 
 
-def ov_moe_patterns(config: dict[str, Any], *, gemm_constexprs: dict[str, Any], gemm_num_sms: int, moe_construction: str | None = None) -> list:
-    """The lane's patterns, placed BEFORE the base list (the tuned-GEMM specialization must see `o_proj` first; the MoE
+def ov_moe_patterns(config: dict[str, Any], *, gemm_constexprs: dict[str, Any] | None = None, gemm_num_sms: int | None = None,
+                    moe_construction: str | None = None) -> list:
+    """The MoE architecture's patterns, placed BEFORE the base list (the tuned-GEMM specialization must see `o_proj` first; the MoE
     scope pattern matches the custom op no base pattern knows).  `moe_construction` (None = `indexed-read`, MOE-01) selects the
-    scope pattern: the workload's DECLARED construction, never inferred (R17-42 route A (4))."""
+    scope pattern: the workload's DECLARED construction, never inferred (R17-42 route A (4)).  [P6] the tuned GEMM is the
+    target-agnostic `gen_llama_patterns.GemmLaunchTuned` (the record target's table; `gemm_constexprs` is accepted and unused: the
+    delegate `GemmLaunch` pins the target's tiling)."""
     key = moe_construction or "indexed-read"
     if key not in MOE_CONSTRUCTION_PATTERNS:
         raise ValueError(f"moe_construction {moe_construction!r} is not one of {sorted(MOE_CONSTRUCTION_PATTERNS)}")
-    return [GemmLaunchTunedAda(base_constexprs=gemm_constexprs, num_sms=gemm_num_sms), MOE_CONSTRUCTION_PATTERNS[key](config)]
+    tuned = GemmLaunchTuned() if gemm_num_sms is None else GemmLaunchTuned(num_sms=gemm_num_sms)
+    return [tuned, MOE_CONSTRUCTION_PATTERNS[key](config)]
