@@ -353,13 +353,141 @@ def load_correspondence(descriptor_or_program: Any) -> RuntimeCorrespondence:
     return RuntimeCorrespondence.from_json(doc)
 
 
+_CHUNK = 1 << 22
+
+
+class _Stream:
+    """A JSON text read in chunks with a cursor: `raw_decode` at the cursor, refilling until the value is complete."""
+
+    def __init__(self, fh) -> None:
+        self.f, self.buf, self.pos, self.eof = fh, "", 0, False
+        self.dec = json.JSONDecoder()
+
+    def _more(self) -> bool:
+        if self.eof:
+            return False
+        chunk = self.f.read(_CHUNK)
+        if not chunk:
+            self.eof = True
+            return False
+        if self.pos > _CHUNK:
+            self.buf, self.pos = self.buf[self.pos:] + chunk, 0
+        else:
+            self.buf += chunk
+        return True
+
+    def peek(self) -> str:
+        """The next non-whitespace character (not consumed); "" at the end of the text."""
+        while True:
+            b, p = self.buf, self.pos
+            while p < len(b) and b[p] in " \n\r\t":
+                p += 1
+            self.pos = p
+            if p < len(b):
+                return b[p]
+            if not self._more():
+                return ""
+
+    def take(self, ch: str) -> None:
+        c = self.peek()
+        if c != ch:
+            raise ValueError(f"descriptor: expected {ch!r} at offset {self.pos}, found {c!r}")
+        self.pos += 1
+
+    def value(self) -> Any:
+        """One complete JSON value at the cursor, decoded by the C scanner (the text is refilled until it parses; a value ending
+        exactly at the buffer's end is re-read with more text, so a number is never cut)."""
+        self.peek()
+        while True:
+            try:
+                obj, end = self.dec.raw_decode(self.buf, self.pos)
+            except json.JSONDecodeError:
+                if not self._more():
+                    raise
+                continue
+            if end >= len(self.buf) and self._more():
+                continue
+            # a number cut inside itself (`1.5e|-07`, `123|45`) decodes as a valid prefix: what follows a complete number is never a digit / e / sign / dot
+            if type(obj) in (int, float) and end < len(self.buf) and self.buf[end] in "0123456789.eE+-":
+                if self._more():
+                    continue
+                raise ValueError(f"descriptor: malformed number at offset {self.pos}")
+            self.pos = end
+            return obj
+
+
+def _walk(s: _Stream, build: bool) -> Any:
+    """The value at the cursor: an object is walked key by key and an array element by element (each element one `raw_decode`), so
+    a container's text is never held whole; `build` assembles the value, else it is discarded as it goes."""
+    c = s.peek()
+    if c == "{":
+        s.pos += 1
+        out: dict | None = {} if build else None
+        while True:
+            c = s.peek()
+            if c == "}":
+                s.pos += 1
+                return out
+            if c == ",":
+                s.pos += 1
+                continue
+            key = s.value()
+            s.take(":")
+            v = _walk(s, build)
+            if build:
+                out[key] = v
+    if c == "[":
+        s.pos += 1
+        lst: list | None = [] if build else None
+        while True:
+            c = s.peek()
+            if c == "]":
+                s.pos += 1
+                return lst
+            if c == ",":
+                s.pos += 1
+                continue
+            v = s.value()
+            if build:
+                lst.append(v)
+    return s.value()
+
+
+def read_descriptor_annotation(desc_path: str, namespace: str = NAMESPACE) -> dict | None:
+    """`annotations[namespace]` of a descriptor file (`descriptor.json[.gz]`) WITHOUT loading the descriptor: the top-level object is
+    walked key by key, `definitions` (the Program body -- a request Program's is GBs of reference runs) is streamed through and
+    dropped, only `annotations` is built.  None when the descriptor carries no `annotations` or no such namespace.  The value is
+    exactly `json.load(f)["annotations"][namespace]` (`correspondence_digest` of it is the recorded digest)."""
+    import gzip
+    opener = gzip.open(desc_path, "rt", encoding="utf-8") if str(desc_path).endswith(".gz") else open(desc_path, encoding="utf-8")
+    with opener as fh:
+        s = _Stream(fh)
+        s.take("{")
+        found: dict | None = None
+        while True:
+            c = s.peek()
+            if c == "}":
+                break
+            if c == ",":
+                s.pos += 1
+                continue
+            key = s.value()
+            s.take(":")
+            if key == "annotations":
+                found = _walk(s, True)
+            else:
+                _walk(s, False)
+    if not isinstance(found, dict):
+        return None
+    return found.get(namespace)
+
+
 def read_program_dir(program_dir: Any) -> tuple["RuntimeCorrespondence | None", str | None, str | None]:
     """The table of one Build output dir (`derive_step`: `result.json` + `descriptor.json[.gz]`), as (table, digest, problem).
     `result.json:program.correspondence_digest` is the cheap presence test (the frontend that emits the record records its digest there):
     a Build without it is a v1-frontend Build -> (None, None, None) without decoding the descriptor.  With it, the descriptor's record is
     loaded and its digest checked against the recorded one (a mismatch is the `problem`; the table is still returned).  The ONE loader
     every consumer (acquire, query, verdict) reads a Build's correspondence through."""
-    import gzip
     import os
     d = str(program_dir)
     res_p = os.path.join(d, "result.json")
@@ -377,9 +505,7 @@ def read_program_dir(program_dir: Any) -> tuple["RuntimeCorrespondence | None", 
         desc_p = os.path.join(d, "descriptor.json")
     if not os.path.isfile(desc_p):
         return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but no descriptor is beside it"
-    with (gzip.open(desc_p, "rt") if desc_p.endswith(".gz") else open(desc_p)) as f:
-        desc = json.load(f)
-    doc = (desc.get("annotations") or {}).get(NAMESPACE)
+    doc = read_descriptor_annotation(desc_p, NAMESPACE)    # the record alone: the descriptor's body is streamed through, never held
     if doc is None:
         return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but the descriptor carries no {NAMESPACE!r} annotation"
     digest = correspondence_digest(doc)
@@ -424,4 +550,5 @@ def validate_document(doc: dict) -> list[str]:
 
 
 __all__ = ["SCHEMA", "NAMESPACE", "JSON_SCHEMA", "TensorView", "ReturnSlot", "ArgSlot", "ArgSpan", "RankOccurrence", "CollectiveOccurrence",
-           "CallCorrespondence", "RuntimeCorrespondence", "correspondence_digest", "load_correspondence", "read_program_dir", "validate_document", "canonical_json"]
+           "CallCorrespondence", "RuntimeCorrespondence", "correspondence_digest", "load_correspondence", "read_program_dir", "read_descriptor_annotation",
+           "validate_document", "canonical_json"]
