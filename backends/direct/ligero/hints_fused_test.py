@@ -35,6 +35,30 @@ def _family(name: str) -> str:
     return "v3" if "-v3" in name else "v2"
 
 
+def _drop_graphs():
+    """The torch generators cache one CUDA graph per ``(id(sys), l, k, stream)`` without holding ``sys``: a test process that
+    compiles many systems can see a freed system's id reused and replay a stale graph (a matrix of the wrong height), and
+    the graphs' private pools add up to the whole card.  Tests start from empty caches."""
+    try:
+        import torch
+    except ImportError:
+        return
+    from .privsel import hints as h3
+    from .pubsel import hints as h2
+    h2._GRAPHS.clear()
+    h3._GRAPHS.clear()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_graphs():
+    _drop_graphs()
+    yield
+    _drop_graphs()
+
+
 @pytest.mark.parametrize("chain", [True, False], ids=["chain", "unit"])
 @pytest.mark.parametrize("name", V2 + V3)
 def test_emission_order_covers_every_hint_row(name, chain):
@@ -147,6 +171,7 @@ def _diff(h1, h2, sys) -> str:
 def test_fused_equals_torch_adversarial(name):
     rel = RELATIONS[name]
     for chain in (True, False):
+        _drop_graphs()
         sys = rel.compile(rel.params, chain)
         fused, eager, graph, torch = _paths(name, sys)
         c, a, b = (torch.as_tensor(x).cuda() for x in _adversarial(rel, N_ADV, seed=7 + chain))

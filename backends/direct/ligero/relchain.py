@@ -289,7 +289,9 @@ class RelationChainRunner:
 
         def hints_fn():
             hints = self.rel.hints(self.p, self.sys, bd["c_d"], bd["a_d"], bd["b_d"], bd["y_d"], self.device)
-            if check and self.rel.reference_hints is not None:  # the gate: the torch generator must equal the checker's gen_step
+            # the gate: the device generator must equal the checker's gen_step (LIGERO_REFERENCE_HINTS=0 skips it on a bench's
+            # warm-up sub-batch only -- minutes of Python per folded sub-batch; the constraint self-check still runs)
+            if check and self.rel.reference_hints is not None and os.environ.get("LIGERO_REFERENCE_HINTS", "1") != "0":
                 ref = self.rel.reference_hints(self.p, self.sys, bd["units"], self.device)
                 assert torch.equal(ref, hints), f"{self.rel.name}: torch hints != gen_step"
             return hints
