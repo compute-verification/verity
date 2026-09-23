@@ -76,6 +76,31 @@ def test_unconfirmed_module_is_a_listed_finding_not_a_changed_site():
     assert act.chosen is not None and act.chosen.kind == "producer_output"      # the manifest's op_path stands
 
 
+def test_global_manifest_without_wrapper_prefix_determines_it_from_the_runtime_tree():
+    """A GLOBAL manifest (`build-global`) carries no `wrapper_prefix`: the prefix under which the record's `model.body...` paths are the
+    tree's `body...` modules is determined from the tree, so the confirmation is real (not 0 confirmed / all unconfirmed), and the plan's
+    provenance says where the prefix came from.  The plan's content is unchanged either way."""
+    man, rt = manifest(base_rows(), wrapper_prefix="model."), tree()
+    man = {k: v for k, v in man.items() if k != "wrapper_prefix"}                  # as compose_global writes it
+    table = RC.RuntimeCorrespondence.from_json(_record(MODULES))
+    given = AcquireCorrespondence(rt, wrapper_prefix="model.", tables={"p": table})
+    inferred = AcquireCorrespondence(rt, wrapper_prefix="", tables={"p": table})
+    assert given.wrapper_prefix_source == "manifest" and inferred.wrapper_prefix_source == "runtime_tree" and inferred.wrapper_prefix == "model."
+    assert inferred.owned_modules() == given.owned_modules() and inferred.confirmed("body.blocks.0.act") is True
+    pa, pb = P.acquisition_plan(man, given, tables=TABLES), P.acquisition_plan(man, inferred, tables=TABLES)
+    assert pa.digest == pb.digest and pb.correspondence["modules"]["unconfirmed"] == [] and pb.correspondence["modules"]["confirmed"] == pa.correspondence["modules"]["confirmed"] > 0
+    assert pb.correspondence["wrapper_prefix"] == "model." and pb.correspondence["wrapper_prefix_source"] == "runtime_tree"
+    # the fallback has no record to confirm against: no prefix is determined
+    fb = AnnotationCorrespondence(rt, wrapper_prefix="")
+    assert fb.wrapper_prefix == "" and fb.wrapper_prefix_source is None
+    # any wrapper attribute chain is determined the same way; a record whose paths meet the tree under NO prefix gets "" and every module
+    # reads unconfirmed (shown in the provenance, not hidden)
+    deep = AcquireCorrespondence(rt, wrapper_prefix="", tables={"p": RC.RuntimeCorrespondence.from_json(_record(MODULES, prefix="serve.wrapped.model."))})
+    assert deep.wrapper_prefix == "serve.wrapped.model." and deep.confirmed("body.blocks.0.act") is True
+    alien = AcquireCorrespondence(rt, wrapper_prefix="", tables={"p": RC.RuntimeCorrespondence.from_json(_record(["zz.a", "zz.b.c", ""], prefix="q."))})
+    assert alien.wrapper_prefix == "" and alien.confirmed("body.blocks.0.act") is False and alien.owned_modules() == ["", "q.zz.a", "q.zz.b.c"]
+
+
 def test_owning_module_by_call_id_reads_the_record():
     corr = AcquireCorrespondence(tree(), wrapper_prefix="model.", tables={"p": RC.RuntimeCorrespondence.from_json(_record(MODULES))},
                                  aliases={"body.blocks.0.act": ["body.blocks.0.norm_in", 1]})

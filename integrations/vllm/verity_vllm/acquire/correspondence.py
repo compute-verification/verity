@@ -65,6 +65,24 @@ def read_program_correspondence(program_dir: str | Path) -> tuple[RuntimeCorresp
     return read_program_dir(program_dir)
 
 
+def infer_wrapper_prefix(program_modules: Iterable[str], runtime: RuntimeTree) -> str:
+    """The export wrapper's attribute prefix, determined: of every dotted prefix of the record's module paths, the one under which the
+    most paths are modules of the runtime tree (`""` when the paths already are; ties to the shortest).  A record whose paths meet the
+    tree under no prefix gets `""` -- every module then reads unconfirmed, which the plan's provenance shows."""
+    votes: dict[str, int] = {}
+    for m in program_modules:
+        if not m:
+            continue
+        if runtime.has_module(m):
+            votes[""] = votes.get("", 0) + 1
+        for i, ch in enumerate(m):
+            if ch == "." and runtime.has_module(m[i + 1:]):
+                votes[m[:i + 1]] = votes.get(m[:i + 1], 0) + 1
+    if not votes:
+        return ""
+    return max(sorted(votes, key=len), key=lambda p: votes[p])
+
+
 class AcquireCorrespondence:
     """`owning_module` / `return_slot` / `arg_slot` for the plan, over the canonical record when the Build carries it (`tables`), else the
     manifest's v1-annotation reading; plus the runtime tree and the (optional) in-place facts.
@@ -85,6 +103,14 @@ class AcquireCorrespondence:
         self.absent: list[str] = list(absent)
         self.problems: list[str] = list(problems)
         self.source = "correspondence" if self.tables else "v1_annotations"
+        # the export wrapper's attribute prefix (Program `model.model.layers.0...` -> collector `model.layers.0...`): the request manifest
+        # carries it (`wrapper_prefix`); a GLOBAL manifest does not -- then it is determined from the runtime tree (the one prefix under
+        # which the record's module paths are the tree's), never assumed
+        self.wrapper_prefix_source = "manifest" if wrapper_prefix else None
+        if not wrapper_prefix and self.tables:
+            wrapper_prefix = infer_wrapper_prefix((m for t in self.tables.values() for m in t.modules()), runtime)
+            self.wrapper_prefix = wrapper_prefix
+            self.wrapper_prefix_source = "runtime_tree"
         # collector path -> the Program module paths (per table) the record owns Calls under
         self._owned: dict[str, set[tuple[str, str]]] = {}
         for label, t in self.tables.items():
@@ -166,7 +192,7 @@ class AcquireCorrespondence:
         """The plan's `correspondence` block (provenance: excluded from the plan digest)."""
         out: dict[str, Any] = {"source": self.source, "schema": SCHEMA if self.tables else None, "namespace": NAMESPACE if self.tables else None,
                                "programs": dict(sorted(self.digests.items())), "absent": list(self.absent), "problems": list(self.problems),
-                               "module_paths": len(self._owned)}
+                               "module_paths": len(self._owned), "wrapper_prefix": self.wrapper_prefix, "wrapper_prefix_source": self.wrapper_prefix_source}
         if not self.tables:
             out["fallback"] = FALLBACK_READ
         return out
