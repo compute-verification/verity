@@ -29,8 +29,12 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--relation", default="fp8-ada")
     ap.add_argument("--leaf", default="ajtai-n64")
+    ap.add_argument("--k", type=int, default=32, help="words per column: 32 for fp8, 16 for bf16")
+    ap.add_argument("--steps", type=int, default=96, help="> n (the leaf's ring degree); columns 0 and n then cancel")
     args = ap.parse_args()
-    steps, n, k = 96, 64, 32
+    from backends.direct.ligero.leaf import ajtai as A0
+    steps, n, k = args.steps, A0.degree(args.leaf) if hasattr(A0, "degree") else int(args.leaf.split("-n")[1]), args.k
+    assert steps > n, "steps must exceed n for the wrap"
 
     import backends.direct.ligero.relations as R
     from backends.direct.ligero.leaf import ajtai as A

@@ -31,12 +31,13 @@ def main() -> int:
     ap.add_argument("--steps", type=int, default=96, help="columns per VU (> n = 64 triggers the wrap; a divisor-free row is fine)")
     ap.add_argument("--relation", default="fp8-ada")
     ap.add_argument("--leaf", default="ajtai-n64")
+    ap.add_argument("--k", type=int, default=32, help="words per column: 32 for fp8 (256 bits / 8), 16 for bf16")
     args = ap.parse_args()
 
     import backends.direct.ligero.relations as R
     from backends.direct.ligero.leaf import ajtai as A
 
-    k = 32                                          # E4M3: 256 bits / 8 = 32 words per column (fixed by the pinned system)
+    k = args.k                                      # fixed by the pinned system (256-bit column / word width)
     R.K_VU = args.steps * k                          # rel.steps = K_VU // k = args.steps (a dynamic property)
     # remove the PROVER-side guard `steps <= n` (the ONLY place it is checked; the verifier has none).  The gadget uses
     # `steps` ONLY for that assert -- the per-column template (X acc_in + B s over 256 bits, n = 64 linked rows) is
@@ -56,8 +57,8 @@ def main() -> int:
     assert rel.steps == args.steps, f"rel.steps = {rel.steps}, wanted {args.steps}"
     Rn = HashedRelationRunner(rel, "cpu", -128.0, zk=False, mode="fiat-shamir", leaf=args.leaf)
     sys_id = protocol.system_id(Rn.sys).hex()
-    print(f"steps = {rel.steps} (> n = {A.derive_matrix.__globals__.get('DEFAULT_N', '?')}); committed row = {rel.steps * k} words; "
-          f"sys_id = {sys_id}")
+    print(f"{Rn.relation}: steps = {rel.steps} (leaf n = {Rn.leaf.n if hasattr(Rn.leaf, 'n') else '-'}); committed row = "
+          f"{rel.steps * k} words; sys_id = {sys_id}")
     data = instances(rel, 4)
     Rn.commit_vus(data)
     coins = None
@@ -83,7 +84,7 @@ def main() -> int:
     print(f"  reason: {js['reason'][:240]}")
     print(f"  statement.steps as the verifier read it: {js.get('statement', {}).get('steps')}")
     broke = js["accepted"] and js.get("system_pinned") is True
-    print("\n*** H1 CONFIRMED: pinned verifier accepts steps > n ***" if broke else "\n(not accepted pinned)")
+    print(f"\n*** pinned verifier accepts statement.steps = {rel.steps} (no steps bound) ***" if broke else "\n(not accepted pinned)")
     return 0 if broke else 1
 
 
