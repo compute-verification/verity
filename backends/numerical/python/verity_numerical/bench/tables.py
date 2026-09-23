@@ -298,10 +298,23 @@ def same_sku(a: Any, b: Any) -> bool:
 
 
 def dtype_of(target: Target) -> str | None:
-    """The target's operand dtype (``bf16``, ``e4m3``): the instruction registry's ``a_dtype``."""
+    """The target's operand dtype (``bf16``, ``e4m3``, ``e2m1``): the instruction registry's ``a_dtype``."""
 
     ins = INSTRUCTIONS.get(target.instruction) if target.instruction else None
     return ins.a_dtype if ins else None
+
+
+#: ``native-peak/v1`` measurement dtypes that name a block-scaled *format* over an operand dtype: ``tools/native_peak
+#: --dtype nvfp4`` times the sm_120 ``kind::mxf4nvf4`` instruction on E2M1 operands (UE4M3 block scales), so it is the
+#: measured peak of an ``e2m1`` target.
+NATIVE_DTYPE_ALIASES = {"nvfp4": "e2m1", "mxfp4": "e2m1"}
+
+
+def native_dtype(meta: dict[str, Any]) -> str | None:
+    """The operand dtype a ``native-peak/v1`` measurement is of (its ``dtype`` through ``NATIVE_DTYPE_ALIASES``)."""
+
+    d = meta.get("dtype")
+    return NATIVE_DTYPE_ALIASES.get(d, d)
 
 
 def frozen_instances(target: Target) -> dict[str, Any] | None:
@@ -561,7 +574,7 @@ def _native_measured(store: Any, target: Target) -> dict[str, Any] | None:
 
     best = None
     for art_id, meta in _artifacts(store, NATIVE_PEAK_KIND):
-        if not same_sku(meta.get("device"), target.native_peak.device) or meta.get("dtype") != dtype_of(target):
+        if not same_sku(meta.get("device"), target.native_peak.device) or native_dtype(meta) != dtype_of(target):
             continue
         acc = meta.get("accumulate")
         if acc is not None and acc != target.native_peak.accumulate:

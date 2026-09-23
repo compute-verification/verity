@@ -354,6 +354,21 @@ def test_native_measured_column(store: LocalStore) -> None:
     assert T.cell_artifacts(tab) == [best] and slow not in T.cell_artifacts(tab)
 
 
+def test_native_measured_block_scaled_format_names_its_operand_dtype(store: LocalStore) -> None:
+    """``tools/native_peak --dtype nvfp4`` measures the sm_120 block-scaled instruction on E2M1 operands: it is the measured
+    peak of the ``e2m1`` NVFP4 target (``NATIVE_DTYPE_ALIASES``), and of no other row."""
+    from verity.verification.target import NVFP4_SM120
+
+    spec = NVFP4_SM120.native_peak.flop_per_second
+    assert T.dtype_of(NVFP4_SM120) == "e2m1" and T.native_dtype({"dtype": "nvfp4"}) == "e2m1" and T.native_dtype({"dtype": "bf16"}) == "bf16"
+    art = native_peak(store, "NVIDIA GeForce RTX 5090", "nvfp4", 1.12 * spec, spec)
+    native_peak(store, "NVIDIA GeForce RTX 5090", "e4m3", 0.5 * spec, spec)     # another dtype: not this row
+    tab = T.build(store)
+    row = next(r for r in tab.rows if r["target"] == NVFP4_SM120.name)
+    assert row["native_measured"]["artifact"] == art and row["native_measured"]["fraction_of_spec"] == pytest.approx(1.12)
+    assert all(r["native_measured"] is None for r in tab.rows if r["target"] != NVFP4_SM120.name)
+
+
 # --- Table 3 -------------------------------------------------------------------------------------------------------------------------
 
 
