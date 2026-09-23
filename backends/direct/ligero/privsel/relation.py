@@ -396,7 +396,11 @@ def compile_v3_unit(p: Params, chain: bool = False) -> System:
         tc = p.acc_e_min - E + p.width - nb
         dt = t_sel - tc
         ctx.rng("dt", dt, 0, 2**CMP_BITS)
-        _zero(ctx, "clamp", 1 - hid, dt)
+        # hid = 0 -> t = tc (the subnormal grid), except at t = t_lo = -nb, where the window is 2^nb x popcount(v) and Mn < 2^nb
+        # forces v = 0 (then Mn = 0, hid = 0, z = 1 and the output is zero whatever t): the exact-zero sum with E - width >
+        # acc_e_min has tc < t_lo and no t on the grid -- found by the 1e5 differential (fp8-hopper-v3 unit 92536, y = 0).
+        # (1 - hid - nsel[0]) is 1 exactly when hid = 0 and t != t_lo; hid = 1 at t_lo is unsatisfiable, so it is never -1.
+        _zero(ctx, "clamp", 1 - hid - nsels[0], dt)
         e1 = E + t_sel + nb - p.width
         ctx.scope = f"{tag}.out"
         z, ovf = _hint(ctx, f"{tag}.z"), _hint(ctx, f"{tag}.ovf")

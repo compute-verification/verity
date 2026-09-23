@@ -99,6 +99,46 @@ def test_differential_v1_v3(rel):
     assert n_pos >= N_DIFF and n_neg > 10 * N_DIFF
 
 
+ZERO_SUM_UNIT = {   # the 1e5 differential's fp8-hopper-v3 unit 92536 (seed 93112, index 2424): c = 0, the exact sum 0, E > acc_e_min + width
+    "c": 0, "y": 0,
+    "a": [96, 233, 233, 164, 93, 20, 48, 118, 215, 181, 209, 18, 148, 226, 84, 167, 65, 129, 187, 151, 223, 224, 40, 71, 178, 195, 64, 169, 5, 218, 32, 246],
+    "b": [125, 124, 5, 34, 58, 67, 231, 70, 249, 173, 198, 97, 224, 153, 211, 39, 254, 144, 82, 7, 7, 251, 111, 26, 2, 126, 131, 76, 102, 208, 119, 174]}
+
+
+@pytest.mark.parametrize("rel", V3, ids=lambda r: r.name)
+def test_exact_zero_sum_accepted(rel):
+    """An exactly cancelling sum with a large group maximum (`tc < t_lo`): the normalisation has no shift on the subnormal grid,
+    the relation must accept the zero output at `t = t_lo` (the rule `(1 - hid - nsel[t_lo]) (t - tc) = 0`).  Constructed
+    units at every operand exponent (a w, a w against b w, b -w, the rest zero), plus the differential's own unit for E4M3."""
+    p = rel.params
+    pl = plan(p)
+    s3 = rel.compile(p, False)
+    tb3 = tables(s3, "cpu")
+    W = pl.op_word_bits
+    sign = 1 << (W - 1)
+    units = []
+    for t in range(1, 2**pl.op_exp - 1):                   # every finite exponent field
+        w = (t << pl.op_frac) | (t % (2**pl.op_frac))         # some fraction bits too
+        a = [0] * rel.k
+        b = [0] * rel.k
+        a[0] = a[1] = w
+        b[0], b[1] = w, w | sign
+        units.append((0, a, b))
+    if rel.k == len(ZERO_SUM_UNIT["a"]) and W == 8:
+        units.append((ZERO_SUM_UNIT["c"], ZERO_SUM_UNIT["a"], ZERO_SUM_UNIT["b"]))
+    c = np.array([u[0] for u in units], dtype=np.int64)
+    a = np.array([u[1] for u in units], dtype=np.int64)
+    b = np.array([u[2] for u in units], dtype=np.int64)
+    y = np.array([tc_dot(rel.model, int(c[i]), a[i].tolist(), b[i].tolist()) for i in range(len(units))], dtype=np.int64)
+    assert int((y == 0).sum()) >= len(units) - 1, "the model's word is +0 (fp8-ada's top exponent excepted: its adder does not cancel there)"
+    ok3 = _witness_accepts(s3, tb3, rel.hints, rel.public_vectors, p, c, a, b, y)
+    assert bool(ok3.all()), f"{rel.name}: honest exact-zero sums rejected at {torch.nonzero(~ok3).flatten().tolist()}"
+    _, s1, h1, pv1 = _v1_unit_of(rel)
+    assert bool(_witness_accepts(s1, tables(s1, "cpu"), h1, pv1, p, c, a, b, y).all())
+    assert torch.equal(reference_hints_v3(p, s3, [(int(c[i]), a[i].tolist(), b[i].tolist(), None) for i in range(len(units))], "cpu"),
+                       rel.hints(p, s3, c, a, b, None, "cpu"))
+
+
 @pytest.mark.parametrize("rel", V3, ids=lambda r: r.name)
 def test_off_domain_operands_refused_by_both_decodes(rel):
     p = rel.params
