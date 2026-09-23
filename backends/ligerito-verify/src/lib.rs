@@ -172,6 +172,20 @@ mod tests {
         );
     }
 
+    /// Written by this crate's `selftest --n 12 --kprime 4,3,2 --queries 16,16,16 --rate-log2 2,3,4 --emit` in proto's
+    /// container with the 7bc2fdd per-round `rate_log2` list; for the proto lane to cross-verify on the pod.
+    #[test]
+    fn rust_written_proto_container_with_per_round_rates() {
+        use crate::format::{read_point, read_proto};
+        let proof = include_bytes!("../fixtures/rust/n12_rates234.proof");
+        let z = read_point(include_bytes!("../fixtures/rust/n12_rates234.z")).unwrap();
+        let (stmt, pf) = read_proto(proof, z).unwrap();
+        assert_eq!(pf.params.rate_log2, vec![2, 3, 4]);
+        assert!(!pf.params.header_rate_scalar);
+        assert_eq!(pf.params.header_json(), "{\"n\": 12, \"kprime\": [4, 3, 2], \"queries\": [16, 16, 16], \"rate\": [2, 3, 4]}");
+        verify(&stmt, &pf, &mut fs()).unwrap();
+    }
+
     #[test]
     fn proto_fixture_n12_three_rounds() {
         proto_fixture(

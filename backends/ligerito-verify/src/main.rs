@@ -10,7 +10,7 @@
 //!     # be rejected; with DIR/manifest.json (a list, or {"proofs": [...]}, of {"proof": name, "accepted": bool,
 //!     # "reason": str}) every listed verdict must agree with ours; with --target-bits the union of the proofs' own
 //!     # soundness bounds must be <= 2^-B.  Exit 0 iff accepted.
-//! ligerito-verify selftest [--n N] [--kprime a,b,c] [--queries s,s,s] [--rate-log2 R] [--emit DIR]
+//! ligerito-verify selftest [--n N] [--kprime a,b,c] [--queries s,s,s] [--rate-log2 R|r1,r2,r3] [--emit DIR]
 //!     # reference prover -> verifier round trip (+ negatives); --emit writes the proof / coins / negatives to DIR
 //! ~~~
 
@@ -63,7 +63,7 @@ fn verdict_json(v: &Verdict) -> String {
     };
     let params = match &v.params {
         Some(p) => format!(
-            "{{\"n\":{},\"kprime\":{:?},\"queries\":{:?},\"rate_log2\":{},\"domain_shift\":{}}}",
+            "{{\"n\":{},\"kprime\":{:?},\"queries\":{:?},\"rate_log2\":{:?},\"domain_shift\":{}}}",
             p.n, p.kprime, p.queries, p.rate_log2, p.domain_shift
         ),
         None => "null".into(),
@@ -280,8 +280,10 @@ fn main() {
             let n: usize = arg(&args, "--n").map(|s| s.parse().expect("--n")).unwrap_or(12);
             let kprime = arg(&args, "--kprime").map(|s| parse_list(&s)).unwrap_or_else(|| vec![4, 3, 2]);
             let queries = arg(&args, "--queries").map(|s| parse_list(&s)).unwrap_or_else(|| vec![16; kprime.len()]);
-            let rate_log2: usize = arg(&args, "--rate-log2").map(|s| s.parse().expect("--rate-log2")).unwrap_or(2);
-            let p = Params::new(n, kprime, queries, rate_log2);
+            // --rate-log2 R or R1,R2,... (per committed round)
+            let rates: Vec<usize> = arg(&args, "--rate-log2").map(|s| parse_list(&s)).unwrap_or_else(|| vec![2]);
+            let rates = if rates.len() == 1 { vec![rates[0]; kprime.len()] } else { rates };
+            let p = Params::with_rates(n, kprime, queries, rates);
             p.validate().unwrap_or_else(|e| panic!("{e}"));
             let f = random_vector(n, 1);
             let z = random_point(n, 2);
@@ -306,7 +308,7 @@ fn main() {
             }
             let (snd, terms) = p.soundness_log2();
             println!(
-                "{{\"params\":{{\"n\":{},\"kprime\":{:?},\"queries\":{:?},\"rate_log2\":{}}},\"proof_bytes\":{},\"coins\":{},\"t_prove\":{:.4},\"t_verify\":{:.6},\"negatives\":{},\"rejected\":{},\"soundness_log2\":{:.2},\"terms\":{{{}}}}}",
+                "{{\"params\":{{\"n\":{},\"kprime\":{:?},\"queries\":{:?},\"rate_log2\":{:?}}},\"proof_bytes\":{},\"coins\":{},\"t_prove\":{:.4},\"t_verify\":{:.6},\"negatives\":{},\"rejected\":{},\"soundness_log2\":{:.2},\"terms\":{{{}}}}}",
                 p.n, p.kprime, p.queries, p.rate_log2, bytes.len(), rep.coins, t_prove, t_verify, negs.len(), rejected, snd,
                 terms.iter().map(|(k, v)| format!("\"{k}\":{v:.2}")).collect::<Vec<_>>().join(",")
             );
