@@ -364,10 +364,12 @@ def main(argv=None) -> int:
     # (backends/direct/ligero/fp4, its own chain runner); gate-vu / bench-vu dispatch there, nothing else changes for the
     # Ampere BF16 relation (vu.py on the frozen instance set)
     ap.add_argument("--relation", default="bf16", choices=("bf16", "bf16-hopper", "fp8-hopper", "fp8-ada", "fp4-nvf4",
+                                                             "bf16-ampere",
                                                              "bf16-hopper-v2", "bf16-ampere-v2", "fp8-hopper-v2", "fp8-ada-v2",
                                                              "bf16-hopper-v3", "bf16-ampere-v3", "fp8-hopper-v3", "fp8-ada-v3"),
-                    help="bf16: the Ampere relation on the frozen instance set (vu.py); fp4-nvf4: fp4/chain.py; the others: "
-                         "relations.py on synthetic instances")
+                    help="bf16: the Ampere relation on the frozen instance set (vu.py); bf16-ampere: the same unit and frozen set "
+                         "(--root) on the generic chain runner (relations.py; its --auth included-hash column); fp4-nvf4: "
+                         "fp4/chain.py; the others: relations.py on synthetic instances")
     for name, fn in (("gate", gate), ("bench", bench), ("gate-vu", gate_vu), ("bench-vu", bench_vu)):
         s = sub.add_parser(name)
         s.add_argument("--root", default=str(instances.DEFAULT_ROOT))

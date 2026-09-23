@@ -28,7 +28,9 @@ from .serialize import (  # noqa: E402
     verify_files,
 )
 
-CENSUS = {"bf16-hopper": (3292, 608, 1720), "fp8-ada": (3769, 704, 1720), "fp8-hopper": (3396, 704, 1720)}
+CENSUS = {"bf16-hopper": (3292, 608, 1720), "fp8-ada": (3769, 704, 1720), "fp8-hopper": (3396, 704, 1720),
+          # lane hash-compose: the Ampere BF16 v1 unit (== vu.py's REAL system) on the generic runner
+          "bf16-ampere": (None, 608, 1720)}
 
 
 @pytest.mark.parametrize("name", sorted(CENSUS))
@@ -36,6 +38,11 @@ def test_compose_census(name: str) -> None:
     hr = hashchain.compose(relation(name))
     base, private, hashed = CENSUS[name]
     c = hr.census
+    if base is None:                       # bf16-ampere: the bare unit's row count is vu.py's (compile_unit(REAL))
+        from .unit import compile_unit
+        from verity_numerical.checker.params import REAL
+        assert relation(name).params == REAL
+        base = compile_unit(REAL, chain=True).m
     assert (c["rows_base"], c["rows_private_operands"], c["rows_hash"], c["rows_digest_pins"]) == (base, private, hashed, 17)
     assert c["sbox_rows_per_permutation"] == 852 and c["permutations_per_unit"] == 2 and c["linked_rows"] == 19
     assert [n for _, n in hr.sys.pins] == [hashchain.HASH_PIN_END] + [hashchain.hash_pin(x) for x in range(16)]

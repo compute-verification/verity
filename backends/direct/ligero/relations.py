@@ -67,6 +67,8 @@ class Relation:
     rust_verifiable: bool = False            # backends/ligero-verify decodes the operands (BF16 words); its statement reader
     #                                          still lacks the v4 header every registered relation writes (see the module doc)
     instances_recipe: str | None = None      # how the synthetic set is drawn (the fingerprint's instances.recipe), if stated
+    frozen_tier: str | None = None           # a FROZEN VU tier (verity_numerical.bench.instances: ``vu-k1536`` of bench-instances/v1)
+    #                                          the runner proves instead of synthetic instances (relchain.instances reads it from --root)
 
     @property
     def k(self) -> int:
@@ -292,6 +294,41 @@ def _v2_of(v1: Relation, name: str, params_note: str, **over) -> Relation:
 BF16_HOPPER_V2_RELATION = _register(_v2_of(BF16_HOPPER_RELATION, "bf16-hopper-v2", "Params.from_model(HOPPER_BF16_M16N8K16)"))
 FP8_HOPPER_V2_RELATION = _register(_v2_of(FP8_HOPPER_RELATION, "fp8-hopper-v2", "FP8Params.from_model(HOPPER_E4M3_K32)"))
 FP8_ADA_V2_RELATION = _register(_v2_of(FP8_ADA_RELATION, "fp8-ada-v2", "FP8Params.from_model(ADA_E4M3_M16N8K32)"))
+
+# The Ampere BF16 v1 relation on the generic chain runner (lane hash-compose): the SAME unit as ``vu.py``'s ``--relation bf16``
+# (``compile_unit(Params.from_model(AMPERE_BF16_M16N8K16))``, ``REAL``), the same statement widths and chain-end word, proved
+# on the same frozen instance set (``frozen_tier``: ``bench-instances/v1`` ``vu-k1536``, read from ``--root``) -- registered so
+# that ``hashchain.compose`` / ``HashedRelationRunner`` give the A100 cell its committed column (``--auth included-hash``).
+# Additive: ``vu.py``'s bare path, its v2 / v3 statements and its Rust pin are untouched; this entry's bare v4 statement names
+# "bf16-ampere" and is not the Table 2 bare cell.
+BF16_AMPERE_RELATION = _register(Relation(
+    name="bf16-ampere",
+    target=FIRST,
+    model=AMPERE_BF16_M16N8K16,
+    params=Params.from_model(AMPERE_BF16_M16N8K16),
+    compile=_bf16_compile,
+    hints=_bf16_hints,
+    public_vectors=_bf16_public_vectors,
+    y_public=f32_to_bf16_word,
+    y_bits=16,
+    word_dtype="<u2",
+    y_dtype="<u2",
+    tag=b"",
+    operands=random_finite_bf16,
+    off_domain=(0x7F80, 0xFF80, 0x7FC0),
+    instances_dataset=contract.INSTANCES_DATASET,
+    instances_tier="vu-k1536",
+    instance_seed=0,                       # unused: the frozen set is read, not drawn (the fingerprint carries no seed)
+    instances_recipe=None,
+    relation_name="GemmCoordinate<1536> over sm80.mma.m16n8k16.bf16",
+    model_name="AMPERE_BF16_M16N8K16",
+    backend_name="b-ligero chain, bf16-ampere relation (backends/direct/ligero/unit.py at Params.from_model(AMPERE_BF16_M16N8K16) == REAL)",
+    witness_generation="torch hint generator (hints_torch.py, gen_step semantics at the Ampere widths) + torch program (derived rows)",
+    claim_note="public claim per VU = f32_to_bf16(final accumulator), the BF16 word the kernel stores (the frozen vu-k1536 y word)",
+    reference_hints=_bf16_reference_hints,
+    rust_verifiable=True,
+    frozen_tier="vu-k1536",
+))
 
 # The Ampere BF16 pipeline on the generic chain runner (the v1 Ampere relation is ``vu.py``'s ``--relation bf16`` on the frozen
 # instance set; this one runs on synthetic instances drawn like the Hopper BF16 set, so the two are not the same claim).

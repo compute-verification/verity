@@ -417,7 +417,7 @@ pub struct Relation {
     pub table_digest: &'static str,
     /// The same two digests of the HASHED system (`hashchain.compose`: operands private, two Poseidon2 sponges along
     /// the chain, the digests pinned at the chain end) a v5 statement (`authentication = included-hash`) is checked
-    /// against; empty when the relation is not composed (bf16-ampere, fp4-nvf4).
+    /// against; empty when the relation is not composed (fp4-nvf4).
     pub hashed_sys_id: &'static str,
     pub hashed_table_digest: &'static str,
 }
@@ -433,8 +433,13 @@ pub static BF16_AMPERE: Relation = Relation {
     end_components: None,
     sys_id: "44cb05b9e6988219beba2d66582124e67a1893aac39d0b66126ce0b9d4db89cb",
     table_digest: "c147cc4cece7d61cd3046828410d18f487dcde82f709044f4b4f97e282a73a95",
-    hashed_sys_id: "",
-    hashed_table_digest: "",
+    // lane hash-compose (2026-09-23): `hashchain.compose(relations.relation("bf16-ampere"))` -- the same `compile_unit(REAL,
+    // chain=True)` unit (3516 rows) + 608 private-operand rows + 1720 sponge rows + 17 digest pins = 5861 rows, 19 linked
+    // rows, `ligero-system/v3` (903707 bytes, sha256 94ed1580...): laptop torch-free (compile.py + hashchain.py, system_id
+    // transcribed), two runs, byte-identical to the pod's `system.bin` behind `fixtures/bf16-ampere-hash/` (vy-hash-compose,
+    // RTX 4090; the 2048-VU hashed gate on the frozen vu-k1536 set passed with 86 negatives, 0 failures on that tree).
+    hashed_sys_id: "673461ab446d96869a0ab32d1291667f4af4ba86cdf5fb6479fefaa50dbb8ed4",
+    hashed_table_digest: "3ba12207d9f221dcb2a471044cabb314cc3e05e4512a27559080f431aa7210c9",
 };
 
 pub static FP8_ADA: Relation = Relation {
@@ -901,7 +906,7 @@ mod tests {
             }
         }
         assert!(FP8_ADA.hashed_sys_id.len() == 64 && BF16_HOPPER.hashed_sys_id.len() == 64 && FP8_HOPPER.hashed_sys_id.len() == 64);
-        assert!(BF16_AMPERE.hashed_sys_id.is_empty() && FP4_NVF4.hashed_sys_id.is_empty());
+        assert!(BF16_AMPERE.hashed_sys_id.len() == 64 && FP4_NVF4.hashed_sys_id.is_empty());
         assert_eq!(for_statement(None).unwrap().name, "bf16-ampere");
         assert_eq!(for_statement(Some("bf16")).unwrap().name, "bf16-ampere");
         assert_eq!(for_statement(Some("fp4-nvf4")).unwrap().name, "fp4-nvf4");

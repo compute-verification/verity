@@ -46,6 +46,9 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--tile", default=None)                                # NXxNW: the shared-row GEMM tile workload (sharing=)
     ap.add_argument("--auth-cache", default=None)                          # where the trees are kept: how, not what
     ap.add_argument("--auth-procs", type=int, default=None)
+    # lane hash-compose: --relation bf16-ampere reads the FROZEN bench-instances/v1 set from --root; the set is pinned by
+    # its manifest sha256 in the result's instances block, the path is where it lives on the machine (not a key param)
+    ap.add_argument("--root", default=None)
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     for k in ("auth", "tile"):
@@ -53,6 +56,7 @@ def parse(argv: list[str]) -> dict:
             out.pop(k, None)
     out.pop("auth_cache", None)
     out.pop("auth_procs", None)
+    out.pop("root", None)
     out["cmd"] = argv[idx]
     out["relation"] = ns_pre.relation
     if unknown:
