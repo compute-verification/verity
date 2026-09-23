@@ -12,13 +12,14 @@ LGVK0001  key         magic | str relation | 32 B sys_id | u32 m | u32 n_i | u32
                       (layout.layout_for + layout.constraints of the system: independent of l and n_vus; the Rust verifier
                       may read it instead of re-deriving it from system.bin -- its digest is in the statement)
 LGTO0001  proof       magic | u32 len | params JSON (absorbed verbatim) | u32 len | framing JSON (not absorbed)
-                      | u32 len | sumcheck (sumcheck.py LGSC0002) | L x 32 B root_i
+                      | u32 len | sumcheck (sumcheck.py LGSC0003) | L x 32 B root_i
                       | for i < L: k'_i x (3 x 6 u32) PCS column-sumcheck messages (g(0), g(1), g(2))
                       | for i < L: |S_i| x W_i u32 opened codeword rows (W_1 = 2^{k'_1} base words; W_i = 6 * 2^{k'_i}
                         plane-major for i >= 2) | sib_len[i] bytes BLAKE3 multi-path (proto merkle_multi.plan order)
                       | 2^{k_L} x 6 u32 final vector y_L
     str               u32 len | utf-8 bytes
-    params            {"coins","l","n","kprime","order","queries","rate_log2","relation","splits","zk","n_claims"[,"t_pad"]}
+    params            {"coins","kprime","l","n","n_claims","order","queries","rate_log2","relation","splits","zero_blocks","zk"
+                       [,"t_pad"]}   (compact JSON, sorted keys; zero_blocks = [[b, pfx], ...], n_claims = 1 + n_links + |zero_blocks|)
     framing           {"sib_len": [...], "final_len": int[, "t_pad": int]}
     (zk only)         | L x (t_pad x 6 u32) ybar_i  (ligerito-pcs-fast's ZK column padding: absorbed as b"ybar" right after
                         root_{i+1}, the last after y; row checks subtract sum_t eta_s^{2^{k_i} + t} ybar_i[t])
@@ -34,13 +35,20 @@ ligerito-zk's mask rows, ``prove.zk_layout``), and the index map is ligerito-zk'
 ``x = (c mod 2^a) + 2^a i + 2^{a + n_i} (c >> a)``; claim points enter the PCS as ``zk.permute_point``:
 ``(p_c[:a] || p_i || p_c[a:])``.
 
+Claims (``J = 1 + n_links + |zero_blocks|``, in this order; points in the sumcheck's order ``(p_i || p_c)`` before the rotation
+above): ``w~(r_i, r_c) = values[0]``; ``w~(bits(c_x), rho_c) = values[1 + x]`` for each chain row ``c_x``; then per zero block
+``(b, pfx)``: ``w~(r_i[:b] || bits(pfx, n_i - b) || r_c) = 0`` (the first claim's ``r_i`` / ``r_c``; ``bits`` LSB first).  The
+blocks are the aligned cover (greedy from the low end, largest aligned block that fits) of every run of consecutive virtual rows
+(``prove.zero_blocks``; ligerito-verify ``relation::virtual_zero_claims``): the verifier adds the public rows to ``w`` itself,
+which is sound only if ``w`` is zero there.
+
 Live coins (``coins = "live"``): verifier coin slot k (32 bytes) = lane live-2's ``expand_challenge(ctx, k, label_k, r_k, 32)``;
 ``prove.StreamCoins`` records the slots (the dump's ``.coins``) and the binding (statement, commitments, openings, labels).
 
 Transcript (one Coins object, ``transcript.py``; ``FiatShamirCoins()`` default label ``ligerito-proto/v1``):
     absorb("lgto/params", params JSON bytes) | absorb("lgto/stmt", sha256(statement)) | absorb("lgto/vk", sha256(key))
     | absorb("root", root_1) | the sumcheck (sumcheck.py: challenge "zc/tau", absorbs of its messages, ..., absorb "values")
-    | absorb("z", the 1 + n_links claim points in PCS order, (J, n, 6) u32) | beta <- challenge("beta", J)
+    | absorb("z", the J claim points in PCS order, (J, n, 6) u32) | beta <- challenge("beta", J)
     | proto/pcs.py from its first column round on, with the running claim sum_j beta_j v_j and J eq terms (coef beta_j):
       k'_1 x [absorb("g", g) -> challenge("r", 1)]; for i >= 2: absorb("root", root_i) | indices("S", n_{i-1}, |S_{i-1}|)
       | absorb("rows", u32 rows) | absorb("sib", siblings) | challenge("alpha", 1 + |S|) | k'_i x [g -> r];
@@ -60,11 +68,54 @@ D = 6
 PROOF_MAGIC, STMT_MAGIC, VK_MAGIC = b"LGTO0001", b"LGTS0001", b"LGVK0001"
 HASH = "blake3"
 
-__all__ = ["Key", "PcsProof", "Proof", "Statement", "read_key", "read_proof", "read_statement", "sha256"]
+__all__ = ["Key", "PcsProof", "Proof", "Statement", "aligned_cover", "read_key", "read_proof", "read_statement", "sha256",
+           "zero_blocks", "zero_points"]
 
 
 def sha256(b: bytes) -> bytes:
     return hashlib.sha256(b).digest()
+
+
+def aligned_cover(lo: int, hi: int) -> list[tuple[int, int]]:
+    """Aligned blocks ``{i : i >> b = pfx}`` exactly covering ``[lo, hi)``, as ``(b, pfx)``, greedy from ``lo`` (the largest
+    aligned block that fits); ligerito-verify ``relation::aligned_cover``."""
+    out, i = [], lo
+    while i < hi:
+        b = 0
+        while i % (2 << b) == 0 and i + (2 << b) <= hi:
+            b += 1
+        out.append((b, i >> b))
+        i += 1 << b
+    return out
+
+
+def zero_blocks(virt: dict) -> list[tuple[int, int]]:
+    """The zero claims' blocks ``(b, pfx)`` for the virtual rows ``virt`` (name -> row; the key's or ``Layout.virt``): the
+    aligned cover of every run of consecutive rows, runs in row order (fp8-ada: 3577 | 3578-79 | 3580-83 | 3584-3711 |
+    3712-75 | 3776), ZK or not; ligerito-verify ``relation::virtual_zero_claims``."""
+    rows = sorted(set(virt.values()))
+    out, k = [], 0
+    while k < len(rows):
+        lo = rows[k]
+        while k + 1 < len(rows) and rows[k + 1] == rows[k] + 1:
+            k += 1
+        out += aligned_cover(lo, rows[k] + 1)
+        k += 1
+    return out
+
+
+def zero_points(n_i: int, point: np.ndarray, blocks: list[tuple[int, int]]) -> list[np.ndarray]:
+    """Per block ``(b, pfx)``: ``(r_i[:b] || bits(pfx) || r_c)`` in the sumcheck's order (``n_i`` row bits low -> high, then
+    the columns), ``(r_i || r_c)`` = the first claim's point ((n, 6)): ``r_i`` from the combined sumcheck, ``r_c`` from the
+    zero-check, both drawn after root_1.  The columns must not come from the combined sumcheck's ``rho``: row bit t and
+    column bit t would share a coordinate and two entries with those bits swapped cancel identically."""
+    out = []
+    for b, pfx in blocks:
+        p = np.array(point, dtype=np.int64, copy=True)
+        p[b:n_i] = 0
+        p[b:n_i, 0] = [(pfx >> t) & 1 for t in range(n_i - b)]
+        out.append(p)
+    return out
 
 
 class _W:

@@ -3,6 +3,7 @@
     witness (Ligero's generator, relchain's runner: marshal -> hints -> build_witness; nothing of Ligero's proof runs)
     -> ``layout.build_z`` -> commit ``w`` (``z`` with the virtual rows zeroed, row-major, ``proof.py``)
     -> ``sumcheck.prove`` (zero-check + rows + shift) -> 1 + n_links evaluation claims on ``w``
+    + the zero claims ``w~ = 0`` on the aligned blocks covering the virtual rows (``zero_blocks``)
     -> ONE Ligerito evaluation proof for all of them (``pcs_open``: the claims batched by a coin ``beta``).
 
 The transcript order is in ``proof.py``.  ``pcs_commit`` / ``pcs_open`` / ``pcs_verify`` are the commit / multi-claim-open
@@ -13,6 +14,8 @@ proto's single eq term with coefficient 1.
 """
 from __future__ import annotations
 
+import copy
+import dataclasses
 import hashlib
 import math
 import os
@@ -33,7 +36,7 @@ from . import params as params_mod
 from . import sumcheck as sc_mod
 from . import zk as zk_mod
 from .layout import Layout, SubBatch, build_z, constraints, end_values, layout_for, public_rows
-from .proof import Key, PcsProof, Proof, Statement, params_bytes
+from .proof import Key, PcsProof, Proof, Statement, params_bytes, zero_blocks, zero_points
 from .proto import claims as cl
 from .proto import device as pdev
 from .proto import ext, merkle_multi, stream
@@ -698,14 +701,18 @@ def pcs_verify(pf: PcsProof, dims: Dims, splits: list, points: np.ndarray, value
 # The batch prover / verifier
 # ---------------------------------------------------------------------------------------------------------------------
 
-def pcs_points(lay: Layout, claims: list, zl=None) -> tuple[np.ndarray, np.ndarray]:
-    """The sumcheck's claims ``(p_i || p_c)`` -> PCS order: ``(p_c || p_i)`` for the row-major commitment, or
-    ``zk.permute_point`` for the ZK index map ``zk.z_to_f`` (``zl``: the ``RowMaskLayout``); numpy."""
+def pcs_points(lay: Layout, claims: list, zl=None, blocks=()) -> tuple[np.ndarray, np.ndarray]:
+    """The sumcheck's claims ``(p_i || p_c)`` + the zero claims on ``blocks`` (``proof.zero_blocks``: without them the
+    prover commits non-zero virtual rows and the verifier's ``w~ + sum eq . pub~`` absorbs any change of the public rows,
+    red-team-ligerito-2 V1) -> PCS order: ``(p_c || p_i)`` for the row-major commitment, or ``zk.permute_point`` for the
+    ZK index map ``zk.z_to_f`` (``zl``: the ``RowMaskLayout``); numpy."""
+    zp = [c.point.cpu().numpy() for c in claims]
+    zp += zero_points(lay.n_i, zp[0], list(blocks))
     if zl is None:
-        pts = [torch.cat((c.point[lay.n_i:], c.point[:lay.n_i])).cpu().numpy() for c in claims]
+        pts = [np.concatenate((p[lay.n_i:], p[:lay.n_i])) for p in zp]
     else:
-        pts = [zk_mod.permute_point(c.point.cpu().numpy(), zl) for c in claims]
-    vals = [c.value.cpu().numpy() for c in claims]
+        pts = [zk_mod.permute_point(p, zl) for p in zp]
+    vals = [c.value.cpu().numpy() for c in claims] + [np.zeros(6, dtype=np.int64)] * len(blocks)
     return np.stack(pts).astype(np.int64) % P, np.stack(vals).astype(np.int64) % P
 
 
@@ -802,7 +809,8 @@ class Prover:
         splits = [list(split((1 << k) << r)) for k, r in zip(dims.k, dims.rates)]
         params = {"relation": self.rel.name, "l": l, "n": dims.n, "kprime": dims.kprime, "queries": dims.queries,
                   "rate_log2": dims.rates, "splits": splits, "order": "zk-interleaved" if zk else "row-major", "coins": coins_kind, "zk": zk,
-                  "n_claims": 1 + lay.n_links, **({"t_pad": t_pad} if zk else {})}
+                  "n_claims": 1 + lay.n_links + len(zero_blocks(lay.virt)), "zero_blocks": [list(x) for x in zero_blocks(lay.virt)],
+                  **({"t_pad": t_pad} if zk else {})}
         return Batch(groups, lay, stmt, dims, lp, params, stmt.digest())
 
     # --- witness ----------------------------------------------------------------------------------------------------
@@ -839,10 +847,72 @@ class Prover:
         n_vus = len(bt.groups[s]) if s < len(bt.groups) else 0
         return SubBatch(W, bd["pub"], bd["ypub_d"].to(dev), n_vus)
 
+    def _stmt_subs(self, stmt: Statement, lay: Layout, real: list, dev) -> list:
+        """The statement's sub-batches as the verifier decodes them (``rel.public_vectors`` raises off the domain)."""
+        subs = []
+        for s in range(lay.S):
+            if s < len(real):
+                a_d = torch.as_tensor(stmt.a[s], device=dev)
+                b_d = torch.as_tensor(stmt.b[s], device=dev)
+                try:
+                    pub = self.rel.public_vectors(self.rel.params, None, a_d, b_d, None, device=dev)
+                except ValueError as e:
+                    raise Reject(f"statement sub-batch {s}: {e}") from None
+                ypub = torch.as_tensor(stmt.y[s], device=dev)
+                if bool((ypub < 0).any()) or bool((ypub >= 1 << self.rel.y_bits).any()):
+                    raise Reject(f"statement sub-batch {s}: claimed word out of range")
+                subs.append(SubBatch(None, pub, ypub, real[s]))
+            else:
+                bd = self._pad() if dev == torch.device(self.device) else sc_mod._marshal_pad(self.rel, self.runner, self.l, dev)
+                subs.append(SubBatch(None, bd["pub"], bd["ypub_d"], 0))
+        return subs
+
+    def _forge(self, z, lay: Layout, stmt: Statement, forge_rows=None) -> dict:
+        """The committed virtual rows of a forged proof (negatives): the verifier rebuilds ``z = w + public rows`` (+ the
+        ``next:*`` claims) from ``stmt``, so a prover running the sumchecks on its own ``z`` commits ``z - public rows`` on
+        the public virtual rows (``next:*``: 0), plus ``forge_rows`` (row -> (C,) int64, added).  Returns {row: (C,) int64
+        mod p} for the rows where the committed ``w`` is non-zero."""
+        dev = z.device
+        real = [nv for nv in stmt.n_vus if nv > 0]
+        lay_c = layout_for(self.sys, self.l, real, self.steps)          # the statement's own masks (n_vus)
+        claimed = public_rows(self.sys, lay_c, self._stmt_subs(stmt, lay_c, real, dev), dev)
+        out = {lay.virt[k]: (z[lay.virt[k]].to(torch.int64) - v) % P for k, v in claimed.items()}
+        for r, d in (forge_rows or {}).items():
+            out[r] = (out.get(r, torch.zeros(lay.C, dtype=torch.int64, device=dev)) + d.to(dev)) % P
+        return {r: d for r, d in out.items() if bool(d.any())}
+
+    def _forged_sumcheck(self, lay: Layout, z, coins, forge: dict, cheat):
+        """The honest zero-check on the true ``z`` with ``values[0]`` shifted to ``w'~(r_i, r_c)`` for the committed
+        ``w' = w + forge`` (row -> (C,) int64), the shifted value absorbed in place of the honest one: the red-team V1
+        forgery (a negative; the challenges before ``values`` do not depend on it, so a copied coin state finds the point)."""
+        s1 = sc_mod.prove(lay, self.cons, z, copy.deepcopy(coins), cheat=cheat, engine=self.engine)
+        pt = s1.claims[0].point
+        rows = sorted(forge)
+        fold = sc_mod.matvec_base_ext(torch.stack([forge[r] for r in rows]), sc_mod.eq_table(pt[lay.n_i:]))
+        adj = sc_mod.mle_eval_ext(fold, sc_mod.eq_table(pt[:lay.n_i])[rows])
+        vals = s1.values.clone()
+        vals[0] = (vals[0] + adj) % P
+
+        class _Swap:
+            def __getattr__(self, k):
+                return getattr(coins, k)
+
+            def absorb(self, label, data):
+                coins.absorb(label, sc_mod._ext_bytes(vals) if label == b"values" else data)
+        scp = sc_mod.prove(lay, self.cons, z, _Swap(), cheat=cheat, engine=self.engine)
+        scp.values = vals
+        scp.claims[0] = dataclasses.replace(scp.claims[0], value=vals[0])
+        return scp
+
     # --- prove ------------------------------------------------------------------------------------------------------
-    def prove(self, bt: Batch, coins, mutate=None, cheat: str | None = None, ypub_override=None) -> Result:
+    def prove(self, bt: Batch, coins, mutate=None, cheat: str | None = None, ypub_override=None, forge_stmt=None,
+              forge_z=None, forge_rows=None) -> Result:
         """``mutate(W)``: a witness mutation on sub-batch 0 (negatives); ``cheat``: ``sumcheck.prove``'s dishonest modes;
-        ``ypub_override``: the prover claims these chain-end words for sub-batch 0 (the statement says so too)."""
+        ``ypub_override``: the prover claims these chain-end words for sub-batch 0 (the statement says so too).
+        Red-team V1 forgeries (the zero claims must reject them): the sumchecks run honestly on the prover's ``z`` (the
+        true one, or ``forge_z(z, lay)``'s in-place edit of it, virtual rows included) and the commitment carries whatever
+        makes the verifier's reconstruction from ``forge_stmt`` (default: the batch's statement) equal that ``z``, plus
+        ``forge_rows`` (row -> (C,) added to the committed ``w``)."""
         dev = torch.device(self.device)
         tm = Timer(dev)
         lay = bt.lay
@@ -857,15 +927,25 @@ class Prover:
         if ypub_override is not None:
             for name, v in end_values(self.sys, torch.as_tensor(ypub_override, device=dev, dtype=torch.int64)).items():
                 z[lay.virt[name], :lay.l] = (v % P).to(torch.int32)
+        forge = None
+        if forge_z is not None:
+            forge_z(z, lay)
+        if forge_stmt is not None or forge_z is not None or forge_rows:
+            forge = self._forge(z, lay, forge_stmt if forge_stmt is not None else stmt, forge_rows)
         tm.stop()
         tm.start("transcript")
         coins.absorb(b"lgto/params", params_bytes(bt.params))
-        coins.absorb(b"lgto/stmt", bt.stmt_digest or stmt.digest())
+        coins.absorb(b"lgto/stmt", forge_stmt.digest() if forge_stmt is not None else (bt.stmt_digest or stmt.digest()))
         coins.absorb(b"lgto/vk", self.key_sha256)
         zk_on = bool(bt.params.get("zk"))
         vr = slice(lay.m, lay.m + len(lay.virt)) if zk_on else slice(lay.m, None)
         virt = z[vr].clone()
-        z[vr] = 0
+
+        def committed_rows():
+            z[vr] = 0
+            for r, d in (forge or {}).items():
+                z[r] = d.to(z.dtype)
+        committed_rows()
         tm.stop()
         zl = None
         if zk_on:
@@ -890,11 +970,14 @@ class Prover:
         del f
         tm.start("zero_check")
         z[vr] = virt
-        scp = sc_mod.prove(lay, self.cons, z, coins, cheat=cheat, engine=self.engine)
-        z[vr] = 0
+        if forge:
+            scp = self._forged_sumcheck(lay, z, coins, forge, cheat)
+        else:
+            scp = sc_mod.prove(lay, self.cons, z, coins, cheat=cheat, engine=self.engine)
+        committed_rows()                    # the row-major commitment's M1 is a view of z: the openings read it
         del virt
         tm.stop()
-        points, values = pcs_points(lay, scp.claims, zl)
+        points, values = pcs_points(lay, scp.claims, zl, zero_blocks(lay.virt))
         if owner:
             pp = ppcs.open(com, points, None, coins, tm)
             pcs = PcsProof(list(pp.roots), [list(m_) for m_ in pp.sumcheck], [o.rows for o in pp.opens],
@@ -937,8 +1020,10 @@ class Prover:
                 raise Reject("statement S does not match its sub-batches")
             dims = Dims(prm["n"], list(prm["kprime"]), list(prm["queries"]), list(prm["rate_log2"]))
             zk_on = bool(prm.get("zk"))
+            blocks = zero_blocks(lay.virt)
             if dims.n != lay.n_vars or prm.get("order") != ("zk-interleaved" if zk_on else "row-major") \
-                    or prm.get("n_claims") != 1 + lay.n_links:
+                    or prm.get("n_claims") != 1 + lay.n_links + len(blocks) \
+                    or [tuple(x) for x in prm.get("zero_blocks", [])] != blocks:
                 raise Reject("proof parameters do not match the layout")
             if dims.k[-1] < 0 or min(dims.kprime) < 1:
                 raise Reject("bad round structure")
@@ -948,24 +1033,7 @@ class Prover:
             snd = self.soundness(dims, t_pad)
             if snd["total_log2"] > -128.0 + 1e-9:
                 raise Reject(f"parameters give 2^{snd['total_log2']:.2f} > 2^-128")
-            # public rows from the statement's words (the verifier's decode: rel.public_vectors raises off the domain)
-            subs = []
-            for s in range(lay.S):
-                if s < len(real):
-                    a_d = torch.as_tensor(stmt.a[s], device=dev)
-                    b_d = torch.as_tensor(stmt.b[s], device=dev)
-                    try:
-                        pub = self.rel.public_vectors(self.rel.params, None, a_d, b_d, None, device=dev)
-                    except ValueError as e:
-                        raise Reject(f"statement sub-batch {s}: {e}") from None
-                    ypub = torch.as_tensor(stmt.y[s], device=dev)
-                    if bool((ypub < 0).any()) or bool((ypub >= 1 << self.rel.y_bits).any()):
-                        raise Reject(f"statement sub-batch {s}: claimed word out of range")
-                    subs.append(SubBatch(None, pub, ypub, real[s]))
-                else:
-                    bd = self._pad() if dev == torch.device(self.device) else sc_mod._marshal_pad(self.rel, self.runner, self.l, dev)
-                    subs.append(SubBatch(None, bd["pub"], bd["ypub_d"], 0))
-            pub_rows = public_rows(self.sys, lay, subs, dev)
+            pub_rows = public_rows(self.sys, lay, self._stmt_subs(stmt, lay, real, dev), dev)
             info["t_public"] = time.perf_counter() - t0
             coins.absorb(b"lgto/params", proof.absorbed_params())
             coins.absorb(b"lgto/stmt", stmt.digest())
@@ -980,7 +1048,7 @@ class Prover:
             info["t_sumcheck"] = time.perf_counter() - t1
             if not ok:
                 raise Reject(why)
-            points, values = pcs_points(lay, claims, zk_layout(lay, dims) if zk_on else None)
+            points, values = pcs_points(lay, claims, zk_layout(lay, dims) if zk_on else None, blocks)
             t2 = time.perf_counter()
             if t_pad:
                 from .proto import pcs as ppcs
@@ -1010,4 +1078,9 @@ class Prover:
         lp = params_mod.LigeritoParams(tall1=1 << dims.k[0], wide_log2=tuple(dims.kprime), rate_log2=tuple(dims.rates),
                                        queries=tuple(dims.queries), zk=False, t_pad=t_pad,
                                        relation=params_mod.RELATIONS.get(self.rel.name))
-        return lp.soundness({"PCS.claim batching beta J/|F|": math.log2(1 + len(self.key.c_rows)) - lp.fields.ext_log2})
+        zb = zero_blocks(self.key.virt)             # the virtual rows are functions of the relation only
+        extra = {"PCS.claim batching beta J/|F|": math.log2(1 + len(self.key.c_rows) + len(zb)) - lp.fields.ext_log2}
+        if zb:
+            extra["zero claims on the virtual rows, sum (b + n_c)/|F|"] = \
+                math.log2(sum(b + dims.n - self.key.n_i for b, _ in zb)) - lp.fields.ext_log2
+        return lp.soundness(extra)

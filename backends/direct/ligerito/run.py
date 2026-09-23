@@ -114,6 +114,44 @@ def _stmt_with(stmt: Statement, **kw) -> Statement:
     return st
 
 
+def _flip_operand(rel, a: np.ndarray) -> np.ndarray:
+    """``a[10][1]`` with an exponent bit flipped (a word that still decodes)."""
+    a = a.copy()
+    a[10, 1] ^= 1 << (rel.params.frac if getattr(rel.params, "word_bits", 8) == 16 else 3)
+    return a
+
+
+def v1_forgeries(pv: Prover, bt) -> list[tuple[str, dict, str]]:
+    """Red-team V1 forgeries, one per virtual-row class, as ``(name, Prover.prove kwargs, stage)``: the sumchecks run honestly
+    on the prover's ``z`` and the commitment is non-zero on the virtual rows so that the verifier's reconstruction from the
+    claimed statement gives that ``z``.  ``stage``: where the verifier must reject -- the PCS (the zero claims) for every
+    public class; ``next:*`` rows are pinned by the shift, so the combined sumcheck rejects those (without the zero claims
+    the verifier accepts every forgery but the ``next:*`` one: ``redteam_v1_test.py``)."""
+    rel, steps, st, lay = pv.rel, pv.steps, bt.stmt, bt.lay
+    y0, nv0 = st.y[0], st.n_vus[0]
+
+    def bump(col: int) -> np.ndarray:
+        y = y0.copy()
+        y[col] = (int(y[col]) + 1) % 2 ** rel.y_bits
+        return y
+    vu_cols = slice((nv0 - 1) * steps, nv0 * steps)
+
+    def zero_last_vu(z, lay_):
+        z[:, vu_cols] = 0                   # all-zero columns satisfy every constraint; c_x = 0 at the neighbours' starts
+
+    next0 = torch.zeros(lay.C, dtype=torch.int64)
+    next0[5] = 12345
+    return [("end row(s): claimed word +1 ulp, true witness", dict(forge_stmt=_stmt_with(st, y=[bump(steps - 1)] + st.y[1:])), "PCS"),
+            ("pub:* rows: operand a[10][1] exponent bit flipped, true witness",
+             dict(forge_stmt=_stmt_with(st, a=[_flip_operand(rel, st.a[0])] + st.a[1:])), "PCS"),
+            ("start/link/end rows: statement n_vus[0] - 1 (same words), true witness",
+             dict(forge_stmt=_stmt_with(st, n_vus=[nv0 - 1] + st.n_vus[1:])), "PCS"),
+            ("const + every public row: last VU of sub-batch 0 all-zero in z, its y claimed +1",
+             dict(forge_stmt=_stmt_with(st, y=[bump(nv0 * steps - 1)] + st.y[1:]), forge_z=zero_last_vu), "PCS"),
+            ("next:0 row +12345 in column 5 committed (pinned by the shift)", dict(forge_rows={lay.virt["next:0"]: next0}),
+             "combined final")]
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Dumps
 # ---------------------------------------------------------------------------------------------------------------------
@@ -205,9 +243,10 @@ def gate(args) -> int:
         failures += not ok2
         negs: list[tuple[str, tuple, Statement, Proof]] = []
 
-        def neg(name: str, stmt: Statement, proof: Proof, seed: int = 1):
+        def neg(name: str, stmt: Statement, proof: Proof, seed: int = 1, stage: str | None = None):
+            """``stage``: the reject reason must contain it (a forgery rejected earlier did not test what it names)."""
             v = pv.verify(stmt, proof, make_coins(kind, seed))
-            negs.append((name, v, stmt, proof))
+            negs.append((name, v, stmt, proof, stage))
 
         def neg_prove(name: str, mutate=None, cheat=None, stmt=None, ypub=None):
             b2 = bt if stmt is None else copy.copy(bt)
@@ -228,9 +267,12 @@ def gate(args) -> int:
         a_bad = bt.stmt.a[0].copy()
         a_bad[3, 5] = rel.off_domain[0]
         neg(f"off-domain operand 0x{rel.off_domain[0]:x} in a", _stmt_with(bt.stmt, a=[a_bad] + bt.stmt.a[1:]), res.proof)
-        a_bad = bt.stmt.a[0].copy()
-        a_bad[10, 1] ^= 1 << (rel.params.frac if getattr(rel.params, "word_bits", 8) == 16 else 3)
-        neg("operand a[10][1] exponent bit flipped (honest proof)", _stmt_with(bt.stmt, a=[a_bad] + bt.stmt.a[1:]), res.proof)
+        neg("operand a[10][1] exponent bit flipped (honest proof)", _stmt_with(bt.stmt, a=[_flip_operand(rel, bt.stmt.a[0])] + bt.stmt.a[1:]),
+            res.proof)
+        # (2b) red-team V1: one forgery per virtual-row class, each must fail at its stage
+        for name, kw, stage in v1_forgeries(pv, bt):
+            r2 = pv.prove(bt, make_coins(kind, 1), **kw)
+            neg(f"V1 {name}", kw.get("forge_stmt", bt.stmt), r2.proof, stage=stage)
         # (3) chain: broken link, nonzero c_0, accumulator bits (relchain.negatives' mutations)
         c_rows = sys_.chain["c"]
 
@@ -286,10 +328,11 @@ def gate(args) -> int:
         for what in PROOF_TAMPERS:
             neg(f"tampered {what}", bt.stmt, _mutate_proof(res.proof, what))
         neg("statement of another batch size (n_vus)", _stmt_with(bt.stmt, n_vus=[bt.stmt.n_vus[0] - 1] + bt.stmt.n_vus[1:]), res.proof)
-        for i, (name, (okn, whyn, _), st, pf) in enumerate(negs):
-            log(f"  [{kind}] negative {name}: {'REJECTED' if not okn else 'ACCEPTED (BUG)'} {whyn}")
-            report["negatives"].append({"coins": kind, "name": name, "accepted": okn, "why": whyn})
-            failures += okn
+        for i, (name, (okn, whyn, _), st, pf, stage) in enumerate(negs):
+            early = not okn and stage is not None and stage not in whyn
+            log(f"  [{kind}] negative {name}: {'ACCEPTED (BUG)' if okn else f'REJECTED BEFORE {stage!r} (BUG)' if early else 'REJECTED'} {whyn}")
+            report["negatives"].append({"coins": kind, "name": name, "accepted": okn, "why": whyn, "stage": stage, "early": early})
+            failures += okn or early
             if args.dump_all_negatives or i < 64:
                 try:
                     dump.add(f"neg_{kind}_{i:02d}", st, pf, "reject", (okn, whyn), kind, {"name": name})
