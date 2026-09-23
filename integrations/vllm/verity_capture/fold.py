@@ -98,6 +98,7 @@ from verity.ir.defs import (
 )
 from verity.ir.program import Program
 from verity.ir.refs import Affine, Coll, Refs, concat, runs, tuple_of
+from verity_vllm.ir import sampling_event as SE
 from verity_vllm.registry import b1
 from verity.ir.types import Array, Record, Type, Value
 from verity.ir.types import Tuple as TupleT
@@ -1119,14 +1120,14 @@ class _Fold:
 
     def _token_select_output(self, step: int, row: int, view: ViewDesc | None = None) -> Refs | None:
         """Fallback when the sampler view is absent/unresolved: the step's instance whose output view IS the sampled row's
-        element (`view`, family-agnostic: any token-selection definition), else the step's TokenSelect instance for logits
-        row `row` (the registered greedy recognizer's single [R]-row Compute)."""
+        element (`view`, family-agnostic: any token-selection definition), else the step's sampling-event instance
+        (`sampling_event.is_sampling_event`: greedy or Gumbel token selection) for logits row `row`."""
         for m in reversed(self.instances):
             if m["step"] != step:
                 break
             if view is not None and any(ov is not None and _same_element(ov, view) for ov in m.get("output_views", ())):
                 return Affine("n", m["node"], 0, 1)
-            if m["spec"].startswith("TokenSelect_v") and m["row"] == row:
+            if SE.is_sampling_event(m["spec"]) and m["row"] == row:    # the ONE sampling-event vocabulary (verity_vllm.ir.sampling_event)
                 return Affine("n", m["node"], 0, 1)
         return None
 

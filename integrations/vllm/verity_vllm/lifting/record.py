@@ -167,8 +167,8 @@ def activity_closure(lifted, transcript: Sequence[int], eos: Sequence[int]) -> C
         in_tags = {tags[j] for j in reads}
         if k in guards:
             name = n.name or ""
-            if sid.startswith("LBot"):
-                tags[k] = B  # the named inactive constant (family Const, value enc(bot))
+            if fam == "Const" and not n.fn.params and n.fn.evaluate() == L.enc_bot(n.fn.ret.w - 1):
+                tags[k] = B  # the inactive constant: the nullary Const whose value IS enc(⊥) at its width (AGREED A3) -- not its id
             elif name == "slot=1/emit":
                 tags[k] = A  # e_1 = 1: the constant Active(1)
                 tok_val[k] = 1

@@ -186,16 +186,24 @@ def is_bound(idx: dict, ident: dict) -> bool:
     return False
 
 
-#: batch-level hidden rows (request `*` + a co-scheduled `requests` list): the Commit binds them per (request, step) as per-sequence planes
-HIDDEN_FAMILIES = ("fa2.m1/", "fa3.m1/", "moe/")
+#: batch-level hidden rows (request `*` + a co-scheduled `requests` list): the Commit binds them per (request, step) as per-sequence planes.
+#: Which manifest families are kernel-level taps is the acquisition plan's route table (`ROUTE_OF_FAMILY`: hidden_tap / moe_tap), read
+#: off the identity's own `family` field -- never the op_path string.
+TAP_ROUTES = ("hidden_tap", "moe_tap")
 BINDING_RULE_COMMIT = "commit (verity_capture.commit.binding.load_required_manifest -> coverage_check on the same manifest and map)"
 BINDING_RULE_LOCAL = "local (is_bound: exact (step, invocation, op_path, member) key or member '*'; synthetic maps only -- not the Commit's rule)"
 
 
+def is_tap_family(family: Any) -> bool:
+    """The manifest family is acquired through a kernel-level tap (the acquisition plan's `hidden_tap` / `moe_tap` routes)."""
+    from verity_vllm.acquire.plan import ROUTE_OF_FAMILY
+    return ROUTE_OF_FAMILY.get(str(family)) in TAP_ROUTES
+
+
 def is_plane(ident: dict) -> bool:
-    """A packed per-step plane row of the global manifest: request `*`, a co-scheduled `requests` list, a hidden-stream op, an engine step."""
+    """A packed per-step plane row of the global manifest: request `*`, a co-scheduled `requests` list, a tap family, an engine step."""
     return (str(ident.get("request_id")) == "*" and isinstance(ident.get("requests"), list) and bool(ident["requests"])
-            and str(ident.get("op_path")).startswith(HIDDEN_FAMILIES) and ident.get("engine_step") is not None)
+            and is_tap_family(ident.get("family")) and ident.get("engine_step") is not None)
 
 
 def plane_widths(manifest: dict, widths_by_spec_by_request: dict[str, dict[str, list[int]]] | None = None) -> dict:
@@ -410,10 +418,10 @@ def record_planes(bmap: dict | None) -> dict[tuple[str, int], list[dict[str, Any
     for e in (bmap or {}).get("entries") or []:
         i = e.get("identity") or {}
         op = str(i.get("op_path"))
-        if not op.startswith(HIDDEN_FAMILIES) or i.get("step") is None:
+        if i.get("step") is None:
             continue
         mem = str(i.get("output_member"))
-        g = parse_plane_member(mem)
+        g = parse_plane_member(mem)                      # a plane is recognised by its geometry member `[s<j>/]g<HB>x<M>x<NB>...`, not by its op_path
         if g is None:
             continue
         key = (op, int(i["step"]), mem)
@@ -539,7 +547,7 @@ def correspondence(manifest: dict, bmap: dict | None, *, commit_rid: str, a_r: i
 
     Binding column: with `commit_cov` (`commit_coverage` on the FULL manifest and the Commit's map) every row's bound / unbound is THE
     Commit's own verdict for that identity (F-r17b-15 (1)); without it and with a `bmap`, the local key match (synthetic maps), named in the
-    summary as such.  A batch-level hidden row (request `*`, co-scheduled `requests`, `HIDDEN_FAMILIES` op) is a PACKED per-step plane: it
+    summary as such.  A batch-level hidden row (request `*`, co-scheduled `requests`, a tap-family op: `is_plane`) is a PACKED per-step plane: it
     has no assignment of its own -- this request's (request, step) slice of it is one row of THIS table, taking the request's assignment at
     that step (`0||v` executed, `enc(bot)` inactive; SPEC A3.6) and the Commit's op-level per-request binding (F-r17b-15 (2)); the plane's
     other requests' slices are rows of THEIR tables."""
@@ -575,7 +583,7 @@ def correspondence(manifest: dict, bmap: dict | None, *, commit_rid: str, a_r: i
         inv = int(ident.get("invocation", 0) or 0)
         rk = int(ident.get("rank", 0) or 0)
         plane = None
-        if rid == "*" and isinstance(ident.get("requests"), list) and ident["requests"] and op.startswith(HIDDEN_FAMILIES) and ident.get("engine_step") is not None:
+        if is_plane(ident):
             # a packed per-step plane: this request's slice, or not this request's row at all
             if commit_rid not in [str(x) for x in ident["requests"]]:
                 counts["planes_not_this_request"] += 1
