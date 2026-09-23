@@ -511,10 +511,11 @@ def test_cli_smoke_every_command(env, fs_remote, tmp_path, capsys):
     assert main(["snapshot", "--name", "nightly2", "--members", tart, "--members", art, "--json"]) == 0 and json.loads(out())["members"] == sorted([art, tart])
     assert main(["snapshot", "--name", "empty", "--select", "--kind", "nothing/v1"]) == 1
 
-    assert main(["label", art, "proof_class", "COMPLETE", "--by", "red-team-1", "--ref", doc["id"]]) == 0 and out().endswith("-red-team-1.json")
-    assert main(["label", art, "proof_class", "PARTIAL", "--by", "red-team-2"]) == 0 and Path(out()).is_file()
-    assert main(["label", art, "proof_class", "COMPLETE", "--by", "red-team-2"]) == 0 and Path(out()).is_file()
-    assert main(["label", art, "score", "0.5", "--by", "bot", "--value-json"]) == 0 and Path(out()).is_file()
+    off = "--off-vocab"                                      # envelope semantics here; the vocabulary is test_store_vocab's
+    assert main(["label", art, "proof_class", "COMPLETE", "--by", "red-team-1", "--ref", doc["id"], off]) == 0 and out().endswith("-red-team-1.json")
+    assert main(["label", art, "proof_class", "PARTIAL", "--by", "red-team-2", off]) == 0 and Path(out()).is_file()
+    assert main(["label", art, "proof_class", "COMPLETE", "--by", "red-team-2", off]) == 0 and Path(out()).is_file()
+    assert main(["label", art, "score", "0.5", "--by", "bot", "--value-json", off]) == 0 and Path(out()).is_file()
     assert main(["labels", art]) == 0
     text = out()
     assert len(text.splitlines()) == 3 and "PARTIAL" not in text, "default view: latest per (key, by)"

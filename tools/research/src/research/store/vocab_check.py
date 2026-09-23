@@ -10,6 +10,7 @@ the asserters and a few example targets:
     string_typed      bool / int / number keys holding the word (`zk="true"`) instead of the value
     off_enum          enum keys holding a value outside the closed set
     ref_keys          `path` / `result_artifact` / `constructed_from_attempt` written as labels (they are refs)
+    measurement_keys  measurements / run parameters written as labels (`vocab.MEASUREMENT_KEYS`: `l`, `subbatches`, ...)
     unreadable        files that do not parse as an assertion
 
 Nothing is written; correcting is the coordinator's call (`labels` are append-only: a correction is a new assertion, never an edit).
@@ -27,7 +28,7 @@ from .model import Label
 if TYPE_CHECKING:
     from .local import LocalStore
 
-CATEGORIES = ("unknown_keys", "alias_keys", "alias_values", "string_typed", "off_enum", "ref_keys", "unreadable")
+CATEGORIES = ("unknown_keys", "alias_keys", "alias_values", "string_typed", "off_enum", "ref_keys", "measurement_keys", "unreadable")
 EXAMPLES = 3
 
 
@@ -36,6 +37,8 @@ def classify(label: Label) -> tuple[str, str] | None:
     k, v = label.key, label.value
     if k in vocab.REF_KEYS:
         return "ref_keys", k
+    if k in vocab.MEASUREMENT_KEYS:
+        return "measurement_keys", k
     if k in vocab.KEY_ALIASES:
         return "alias_keys", f"{k} -> {vocab.KEY_ALIASES[k]}"
     entry = vocab.key(k)

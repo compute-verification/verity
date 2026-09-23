@@ -22,9 +22,10 @@
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--json]
-  research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
+  research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]
                                                    writes the canonical key/spelling in the vocabulary's form (zk true -> a real boolean, batch -> B,
-                                                   candidate A -> A-GKR); warns (stderr) on a key outside the vocabulary or a value outside its enum; writes anyway
+                                                   axis -> sweep, candidate A -> A-GKR); REFUSES (exit 2) an unknown key, a measurement, a ref, an
+                                                   off-enum value or a word in a bool/int key -- --off-vocab writes it anyway
   research data vocab [--json]                     the label vocabulary (vocab.py): key, asserter group, value form, enum values
   research data vocab-check [--json] [--strict]    read-only audit of labels/: unknown keys, old spellings, strings in bool/int keys, off-enum values,
                                                    refs written as labels; counts, asserters, example targets
@@ -407,17 +408,22 @@ def cmd_label(argv: list[str]) -> int:
     ap.add_argument("--by", required=True)
     ap.add_argument("--ref", default=None)
     ap.add_argument("--value-json", action="store_true", help="parse VALUE as JSON instead of a string")
+    ap.add_argument("--off-vocab", action="store_true",
+                    help="write a key or value the vocabulary cannot place (a concept it has not learnt yet); add it to vocab.py next")
     ns = ap.parse_args(argv)
     value = json.loads(ns.value) if ns.value_json else ns.value
     key = vocab.canonical_key(ns.key)                      # hygiene (§8.1): the canonical key and spelling go in the file, the form the vocabulary
     value = vocab.coerce(key, vocab.canonical_value(key, value))   # declares (a real bool for zk / model_agrees, an int for B), never the word
+    why = vocab.check(key, value)
+    if why and not ns.off_vocab:
+        print(f"research data label: refused: {why}.  Nothing written (--off-vocab writes it anyway)", file=sys.stderr)
+        return 2
     for note in (f"key {ns.key!r} written as {key!r}" if key != ns.key else None,
                  f"value {ns.value!r} written as {json.dumps(value)}" if value != (json.loads(ns.value) if ns.value_json else ns.value) else None):
         if note:
             print(f"research data label: {note}", file=sys.stderr)
-    why = vocab.check(key, value)                          # warning only: the label is written whatever the vocabulary says
     if why:
-        print(f"research data label: warning: {why}; stored anyway", file=sys.stderr)
+        print(f"research data label: warning: {why}; stored anyway (--off-vocab)", file=sys.stderr)
     print(LocalStore(ns.store).add_label(ns.target, key, value, ns.by, ref=ns.ref))
     return 0
 
