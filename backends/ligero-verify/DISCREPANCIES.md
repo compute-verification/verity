@@ -455,7 +455,8 @@ verifiers' behaviour differs from the `included` mode of D9.
   4096 fp8-ada VUs at 13 jobs), because its chain test encodes one coefficient row per *involved* row and the capacity links'
   Y expressions involve ~80 rows instead of ~10 (`ntt` 1.0 s of 1.49 s single-threaded).  One hot spot is fixed in this lane
   (resolving the Y terms per column, 1.05 s -> 0.24 s); materialising the sponge outputs as rows would halve the rest.
-* **Reasons (D8 family).**  Python: `auth: <tree>: multiproof rejected`, `hash-auth: ...` for block shape; Rust: `auth: a|b|y:
+* **Reasons (D8 family).**  Python: `auth: <tree>: multiproof rejected`, `auth: <tree>: leaf index out of range`, `authentication
+  block does not match the statement's indices / layout`, `public table: is_end / digests off the chain ends`; Rust: `auth: a|b|y:
   multiproof rejected (root mismatch)`, `Poseidon2 parameters differ from the verifier's`, `hash-authentication block claims
   leaves beyond the committed count`, `v5 statement names an authentication other than included-hash`.  Verdicts agree on all
   13 pod dumps (python agreement 13/13, 25/25); the gate is the verdict.
