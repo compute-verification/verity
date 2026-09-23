@@ -86,7 +86,7 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
     assert _drv(m, _argv("match")) != _drv(m, _argv("match", "--snapshot-steps", "all"))
     assert _drv(m, _argv("match")) != _drv(m, _argv("match", "--within-step", "sequence"))
     c = tools_registry.load("vllm.commit", REPO)
-    assert _drv(c, _argv("commit")) == _drv(c, _argv("commit", "--pairs", "3", "--openings", "64", "--retain", "host", "--window-mb", "2048"))
+    assert _drv(c, _argv("commit")) == _drv(c, _argv("commit", "--pairs", "3", "--retain", "host", "--window-mb", "2048"))
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--pairs", "5"))
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--extra-engine-args", "max_num_batched_tokens=512"))
     build_art = "art:" + "1" * 64
@@ -100,7 +100,7 @@ def test_parse_accepts_row_pod_argv_too():
     p = RT.parse(["bash", "/workspace/src/integrations/vllm/verity_capture/sweep/row_pod.sh", ROW, "LLAMA32_1B", "repo", "rev", "build,match"], stage="build")
     assert p["stage"] == "build,match" and p["row"] == ROW and p["model"] == "repo" and p["batch"] == 1
     q = RT.parse(["bash", WRAPPER, "stage", "commit", ROW, "R", "repo", "rev", "--pairs=4", "--required-classes", "module_out"], stage="commit")
-    assert q["pairs"] == "4" and q["required_classes"] == "module_out" and q["openings"] == "64"
+    assert q["pairs"] == "4" and q["required_classes"] == "module_out" and q["replay_args"] is None
     assert RT.row_config("not-a-row") == {**{k: None for k in RT._ROW_FIELDS}, "model_tag": "not-a-row"}
 
 

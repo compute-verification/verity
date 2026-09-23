@@ -50,9 +50,15 @@ def load(spec_or_name: str, source_root: Path | str | None = None) -> Tool:
     try:
         obj = getattr(importlib.import_module(module), attr)
     except (ImportError, AttributeError) as e1:
-        try:
-            obj = _from_file(module, attr, root)
-        except (ImportError, AttributeError) as e2:
+        obj = None
+        e2: Exception = e1
+        for cand in (root, *list(root.parents)[:6]):     # `--cwd integrations/vllm`: the declaration's file sits at the repo root above
+            try:
+                obj = _from_file(module, attr, cand)
+                break
+            except (ImportError, AttributeError) as e:
+                e2 = e
+        if obj is None:
             raise ImportError(f"{spec}: {e1}; {e2}") from e2
     if not isinstance(obj, Tool):
         raise TypeError(f"{spec} is {type(obj).__name__}, not a research.store.tool.Tool")

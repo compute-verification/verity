@@ -77,7 +77,6 @@ STAGE_KEY_FLAGS: dict[str, dict[str, Any]] = {
     },
     "commit": {
         "pairs": "3",
-        "openings": "64",
         "required_classes": None,
         "replay_args": None,
         "extra_engine_args": None,
