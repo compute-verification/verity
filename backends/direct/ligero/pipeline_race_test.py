@@ -131,6 +131,48 @@ def test_encoder_scratch_not_shared_across_streams(l, t_pad):
     assert bad_trials == 0, f"l={l} t_pad={t_pad}: {bad_trials}/10 concurrent trials wrote wrong codewords ({bad_rows} rows)"
 
 
+def hints_concurrent_trials(rel_name: str, trials: int, batch: int = 4096, device: str = "cuda") -> int:
+    """Two sub-batches' hints generated at once on two streams (two in-flight sub-batches) vs. the sequential reference:
+    the number of wrong hint matrices.  The v2 / v3 generators (``pubsel.hints``, ``privsel.hints``) kept ONE CUDA graph
+    and its static input / output buffers per (system, l): the second stream's inputs landed in the first one's replay."""
+    rel = relation(rel_name)
+    R = RelationChainRunner(rel, device, -128.0, 2, zk=False, mode=protocol_mod.MODE_INTERACTIVE)
+    per = batch // rel.steps
+    data = instances(rel, 2 * per, procs=4, cache=CACHE)
+    subs = [data[i * per:(i + 1) * per] for i in range(2)]
+    bds = [R.marshal(s) for s in subs]
+
+    def gen(bd):
+        return rel.hints(R.p, R.sys, bd["c_d"], bd["a_d"], bd["b_d"], bd["y_d"], device)
+
+    ref = [gen(bd).clone() for bd in bds]
+    streams = [torch.cuda.Stream(), torch.cuda.Stream()]
+    for s, bd in zip(streams, bds):
+        with torch.cuda.stream(s):
+            gen(bd)
+    torch.cuda.synchronize()
+    bad = 0
+    for _ in range(trials):
+        outs = []
+        for i, (s, bd) in enumerate(zip(streams, bds)):
+            with torch.cuda.stream(s):
+                if i == 0:
+                    torch.cuda._sleep(5_000_000)    # the first sub-batch is still queued when the second one's inputs land
+                outs.append(gen(bd))
+        torch.cuda.synchronize()
+        bad += sum(int(not torch.equal(o, r)) for o, r in zip(outs, ref))
+    return bad
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="the pipelined prover races are a CUDA-stream matter")
+@pytest.mark.parametrize("rel_name", ["fp8-ada", "fp8-ada-v2", "fp8-ada-v3"])
+def test_hint_graphs_not_shared_across_streams(rel_name):
+    """Every hint generator's CUDA graph is per stream: concurrent generation on two streams equals the sequential hints
+    (the v3 relations failed the pipelined self-check at any depth > 1 with another sub-batch's hints)."""
+    bad = hints_concurrent_trials(rel_name, 5)
+    assert bad == 0, f"{rel_name}: {bad} of 10 concurrent hint matrices differ from the sequential ones"
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="the pipelined prover races are a CUDA-stream matter")
 @pytest.mark.parametrize("zk", [True, False])
 def test_pipeline_depth4_accepted_and_byte_identical(zk):
