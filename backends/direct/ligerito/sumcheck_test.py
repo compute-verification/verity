@@ -77,7 +77,7 @@ def test_honest_roundtrip(toy):
     p2 = sc.SumcheckProof.from_bytes(b)
     ok2, why2, _ = sc.verify(lay, cons, pubs, p2, sc.LocalCoins(b"t1"))
     assert ok2, why2
-    assert len(b) == 13 + 4 * 6 * ((lay.n_k + lay.n_c) * 3 + 3 + lay.n_i * 3 + lay.n_links + lay.n_c * 3 + 1 + lay.n_links)
+    assert len(b) == 13 + 4 * 6 * (9 + (lay.n_k + lay.n_c - 2) * 3 + 3 + lay.n_i * 3 + lay.n_links + lay.n_c * 3 + 1 + lay.n_links)
 
 
 def test_wrong_coins_reject(toy):
@@ -98,10 +98,10 @@ def _bad_witness_rejected(lay, cons, z_bad, pubs):
     proof = sc.prove(lay, cons, z_bad, sc.LocalCoins(b"n"))
     ok, why, _ = sc.verify(lay, cons, pubs, proof, sc.LocalCoins(b"n"))
     assert not ok and "round 0" in why, why
-    # a prover that fixes round 0 to pass is caught in round 1
+    # a prover that fixes the opening round to pass is caught in the next round (round 2: the opening binds two variables)
     proof = sc.prove(lay, cons, z_bad, sc.LocalCoins(b"n"), cheat="round1")
     ok, why, _ = sc.verify(lay, cons, pubs, proof, sc.LocalCoins(b"n"))
-    assert not ok and "round 1" in why, why
+    assert not ok and "round 2" in why, why
     # a prover that fixes EVERY round to pass: the final claim mismatches
     proof = sc.prove(lay, cons, z_bad, sc.LocalCoins(b"n"), cheat="all")
     ok, why, _ = sc.verify(lay, cons, pubs, proof, sc.LocalCoins(b"n"))
