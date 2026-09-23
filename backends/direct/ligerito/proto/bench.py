@@ -20,7 +20,7 @@ import torch
 from . import ext
 from .dims import Dims, choose
 from .ext import D, P
-from .pcs import Proof, Timer, prove, verify
+from .pcs import Proof, Timer, prove, prove_reference, verify
 
 try:
     import cupy as cp
@@ -28,8 +28,8 @@ except Exception:  # noqa: BLE001
     cp = None
 
 
-COMMIT = ("commit_r1_alloc", "commit_r1_encode", "commit_r1_merkle")
-RECURSION = ("sumcheck_r1_contract", "sumcheck_host", "sumcheck_r1_fold", "recursion_encode", "recursion_merkle",
+COMMIT = ("commit_r1_alloc", "commit_r1_encode", "commit_r1_merkle", "commit_r1_stream", "commit_r1_recompute")
+RECURSION = ("sumcheck_r1_contract", "sumcheck_host", "sumcheck_device", "sumcheck_r1_fold", "recursion_encode", "recursion_merkle",
              "recursion_contract", "recursion_fold")
 SERIAL = ("serialize_openings", "serialize_final", "serialize_bytes")
 
@@ -82,6 +82,9 @@ def _negatives(pf: Proof, z: np.ndarray, buf: bytes) -> dict:
     return res
 
 
+PROVE = prove
+
+
 def run_one(n: int, dims: Dims, device, reps: int, negatives: bool, seed: int) -> dict:
     N = 1 << n
     g = torch.Generator(device=device)
@@ -93,7 +96,7 @@ def run_one(n: int, dims: Dims, device, reps: int, negatives: bool, seed: int) -
     neg = None
     # untimed warm run at THIS shape: compiles the size-specialised NTT / contraction kernels, fills the twiddle caches
     fw = torch.randint(0, P, (N,), dtype=torch.int32, device=device, generator=g)
-    prove(fw, z, dims)
+    PROVE(fw, z, dims)
     del fw
     _sync()
     for rep in range(reps):
@@ -102,9 +105,13 @@ def run_one(n: int, dims: Dims, device, reps: int, negatives: bool, seed: int) -
         _mem_reset()
         tm = Timer(torch.device(device))
         t0 = time.perf_counter()
-        pf = prove(f, z, dims, timer=tm)
+        pf = PROVE(f, z, dims, timer=tm)
         _sync()
         t_prove = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        PROVE(f, z, dims)                         # untimed (no per-bucket syncs)
+        _sync()
+        t_untimed = time.perf_counter() - t0
         tm.start("serialize_bytes")
         buf = pf.to_bytes()
         tm.stop()
@@ -117,6 +124,7 @@ def run_one(n: int, dims: Dims, device, reps: int, negatives: bool, seed: int) -
         assert ok, why
         b = dict(tm.buckets)
         row = {"rep": rep, "prover_wall_s": t_prove + b.get("serialize_bytes", 0.0),
+               "prover_wall_untimed_s": t_untimed + b.get("serialize_bytes", 0.0),
                "commit_s": sum(b.get(k, 0.0) for k in COMMIT),
                "recursion_sumcheck_s": sum(b.get(k, 0.0) for k in RECURSION),
                "serialization_s": sum(b.get(k, 0.0) for k in SERIAL),
@@ -131,7 +139,7 @@ def run_one(n: int, dims: Dims, device, reps: int, negatives: bool, seed: int) -
         # (the torch caching allocator keeps its blocks between reps: a fresh 8-16 GB cudaMalloc would otherwise land
         #  inside commit_r1_encode -- an artefact of the benchmark, not of the prover)
     med = {k: statistics.median(r[k] for r in rows) for k in
-           ("prover_wall_s", "commit_s", "recursion_sumcheck_s", "serialization_s", "verify_s")}
+           ("prover_wall_s", "prover_wall_untimed_s", "commit_s", "recursion_sumcheck_s", "serialization_s", "verify_s")}
     pred = dims.predicted_bytes()
     return {"n": n, "cells": N, "dims": {"kprime": dims.kprime, "k": dims.k, "queries": dims.queries, "rate_log2": dims.rates,
                                         "rounds": dims.rounds, "final_log": dims.final_log, "describe": dims.describe()},
@@ -190,14 +198,18 @@ def main(argv=None) -> None:
     ap.add_argument("--no-negatives", action="store_true")
     ap.add_argument("--no-baseline", action="store_true")
     ap.add_argument("--seed", type=int, default=20260923)
+    ap.add_argument("--prover", choices=("fast", "reference"), default="fast",
+                    help="fast = pcs.prove (device, lane ligerito-pcs-fast); reference = the prototype prover")
     ap.add_argument("--out", default="")
     args = ap.parse_args(argv)
+    global PROVE
+    PROVE = prove if args.prover == "fast" else prove_reference
     device = "cuda"
     props = torch.cuda.get_device_properties(0)
     results = []
 
     def doc_of(results):
-        return {"schema": "bench-result/v1", "kind": "ligerito-pcs-proto", "lane": "ligerito-proto",
+        return {"schema": "bench-result/v1", "kind": "ligerito-pcs", "lane": "ligerito-pcs-fast", "prover": args.prover,
                 "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "device": {"name": props.name, "total_memory": props.total_memory, "torch": torch.__version__, "cuda": torch.version.cuda,
                            "cupy": getattr(cp, "__version__", None), "host": platform.node()},
@@ -207,7 +219,7 @@ def main(argv=None) -> None:
     # warm-up: compiles the cupy kernels / torch paths once (excluded from every timing)
     warm = Dims(16, [4, 3], [16, 16])
     fw = torch.randint(0, P, (1 << 16,), dtype=torch.int32, device=device)
-    prove(fw, np.random.default_rng(0).integers(0, P, size=(16, D), dtype=np.int64), warm)
+    PROVE(fw, np.random.default_rng(0).integers(0, P, size=(16, D), dtype=np.int64), warm)
     if not args.no_baseline:
         ligero_baseline(1 << 20, device, 1)
     del fw
@@ -239,7 +251,7 @@ def main(argv=None) -> None:
             _write(args.out, doc_of(results))
             continue
         med = r["median"]
-        print(f"   prover {med['prover_wall_s']:.3f} s = commit {med['commit_s']:.3f} + recursion/sumcheck {med['recursion_sumcheck_s']:.3f}"
+        print(f"   prover {med['prover_wall_s']:.3f} s (untimed {med['prover_wall_untimed_s']:.3f}) = commit {med['commit_s']:.3f} + recursion/sumcheck {med['recursion_sumcheck_s']:.3f}"
               f" + serialization {med['serialization_s']:.3f}; proof {r['proof_bytes'] / 1e6:.3f} MB; verify {med['verify_s']:.3f} s;"
               f" peak {r['reps'][-1]['memory']['peak_estimate'] / 2**30:.2f} GiB; coins {r['reps'][-1]['coins']}", flush=True)
         for k, v in sorted(r["reps"][-1]["buckets"].items(), key=lambda kv: -kv[1]):

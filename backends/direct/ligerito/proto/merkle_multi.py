@@ -36,6 +36,20 @@ def plan(indices, depth: int) -> list[tuple[int, int]]:
     return out
 
 
+def plan_levels(indices, depth: int) -> list[tuple[int, np.ndarray]]:
+    """``plan`` grouped by level, vectorised: [(level, sibling indices (int64, sorted))] -- the same digests in the same
+    order as ``plan`` (a missing sibling i ^ 1 sorts with i, so per-level order is the sorted order of the siblings)."""
+    cur = np.unique(np.asarray(indices, dtype=np.int64))
+    out: list[tuple[int, np.ndarray]] = []
+    for level in range(depth):
+        sib = cur ^ 1
+        miss = sib[~np.isin(sib, cur, assume_unique=True)]
+        if len(miss):
+            out.append((level, np.sort(miss)))
+        cur = np.unique(cur >> 1)
+    return out
+
+
 def gather(tree, indices, depth: int) -> bytes:
     """Concatenated 32-byte sibling digests per ``plan`` from a device tree (``levels[k]`` = (count, 8) uint32)."""
     import cupy as cp
