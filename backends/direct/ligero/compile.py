@@ -468,7 +468,12 @@ class LigeroCtx:
         self.sys.quadratic.append(Quadratic(f"{self.scope}.{name}", b, b, b))
         self._learn(b, 0, 2)
 
-    def lookup(self, name: str, table: Table, key) -> tuple:
+    def lookup(self, name: str, table: Table, key, range_key: bool = True) -> tuple:
+        """One-hot lookup of ``key`` in ``table``.  ``range_key=False`` (lane relmin-lookup) skips the key's own range check:
+        the one-hot and the key-selection constraints already fix the key as an integer -- ``key = sum_i sel_i k_i`` over
+        the singleton groups, or ``k0 + diff`` with ``diff`` range-checked when the interval group is selected -- so the
+        key is an integer in ``[table.lo, k0_interval + 2^b)`` (``[lo, hi)`` without an interval group), which is then
+        learned.  The default keeps every existing system byte-identical."""
         if isinstance(key, int):
             return table.row(key)
         memo = (table.name, key.key())
@@ -482,7 +487,8 @@ class LigeroCtx:
                 groups[-1] = (groups[-1][0], k, v)
             else:
                 groups.append((k, k, v))
-        self.rng(f"{name}.key", key, table.lo, table.hi)
+        if range_key:
+            self.rng(f"{name}.key", key, table.lo, table.hi)
         sel_rows = []
         for gi, (k0, k1, _) in enumerate(groups):
             r = self._row("sel", f"{name}.sel{gi}", 0, 2, (key, k0))
@@ -495,6 +501,8 @@ class LigeroCtx:
         intervals = [gi for gi, (k0, k1, _) in enumerate(groups) if k1 > k0]
         if not intervals:
             self._linear(f"{name}.keysel", key - kk)
+            if not range_key:
+                self.learn(key, table.lo, table.hi)
         else:
             for gi in intervals:
                 if groups[gi][1] != table.hi - 1:
@@ -502,9 +510,12 @@ class LigeroCtx:
             # key - kk >= 0 always; key - kk = 0 unless an interval group is selected (then key < hi bounds it).
             diff = key - kk
             span = max(groups[gi][1] - groups[gi][0] for gi in intervals) + 1
-            self.rng(f"{name}.keydiff", diff, 0, 2 ** math.ceil(math.log2(span)))
+            b = math.ceil(math.log2(span))
+            self.rng(f"{name}.keydiff", diff, 0, 2**b)
             not_interval = Expr(self, {sel_rows[gi]: -1 for gi in intervals}, 1)
             self.sys.quadratic.append(Quadratic(f"{self.scope}.{name}.keysel", diff, not_interval, Expr(self)))
+            if not range_key:
+                self.learn(key, table.lo, min(groups[gi][0] for gi in intervals) + 2**b)
         outs = tuple(TableOut(self, sel_rows, [g[2][o] for g in groups], [g[0] for g in groups]) for o in range(len(table.outs)))
         for o, out in enumerate(outs):
             self._known[out.key()] = (min(out.values), max(out.values) + 1)

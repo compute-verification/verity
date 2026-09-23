@@ -171,6 +171,131 @@ pub mod nvf4 {
     }
 }
 
+/// The v2 units of lane relmin-lookup (`backends/direct/ligero/pubsel/relation.py`, `public_pins_int`): the verifier does the
+/// public part of the tensor-core step itself and pins, per product group, the group maximum `g{g}.G` of the products'
+/// exponents and, for every extra alignment shift `j in [0, PB)`, the signed sum `g{g}.Q[j]` of the products aligned to
+/// `G + j` (truncating, as `AlignProduct`).  The prover's witness selects `Q[E - G]` with a lookup one-hot; what depends on
+/// the private accumulator stays in the witness.  The BF16 Hopper sum exceeds p and is pinned in two limbs `.lo` (the low
+/// `LIMB` bits) and `.hi` (the arithmetic shift, negative for a negative sum).
+pub mod pubsel {
+    use super::Operand;
+
+    /// Limb width of the wide sum (`pubsel.relation.LIMB`).
+    pub const LIMB: u32 = 16;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct PubSel {
+        pub op: Operand,
+        /// `Params.floor`: the exponent of a zero product and the least group maximum.
+        pub floor: i64,
+        /// `prod_bits` / `prod_shift`: a product enters the adder as `u 2^PS < 2^PB`.
+        pub pb: u32,
+        pub ps: u32,
+        /// The product groups of the step (`Params.groups`); K = their sum.
+        pub groups: &'static [usize],
+        /// The sum is pinned in two limbs.
+        pub wide: bool,
+    }
+
+    impl PubSel {
+        pub const fn k(&self) -> usize {
+            let mut k = 0;
+            let mut i = 0;
+            while i < self.groups.len() {
+                k += self.groups[i];
+                i += 1;
+            }
+            k
+        }
+
+        /// Pins per group: `G` and `PB` sums (two limbs each when wide).
+        pub const fn pins_per_group(&self) -> usize {
+            1 + self.pb as usize * if self.wide { 2 } else { 1 }
+        }
+
+        /// `AlignProduct`: `u 2^PS` shifted right by `d`, truncating (zero at or beyond `PB`).
+        pub fn aligned_product(&self, u: i64, d: i64) -> i64 {
+            if d <= self.ps as i64 {
+                u << (self.ps as i64 - d)
+            } else if d < self.pb as i64 {
+                u >> (d - self.ps as i64)
+            } else {
+                0
+            }
+        }
+
+        /// The pinned values of one unit from its two operand rows of K words each (`public_pins_int`), as signed
+        /// integers per group in the order `G, Q[0], .., Q[PB-1]` (`Q[j].lo, Q[j].hi` when wide); the caller picks
+        /// them by pin name (`pin_index`).  A word off the finite domain is refused with the decode's reason.
+        pub fn unit_pins(&self, a: &[u32], b: &[u32]) -> Result<Vec<i64>, String> {
+            debug_assert!(a.len() == self.k() && b.len() == self.k());
+            let mut out = Vec::with_capacity(self.groups.len() * self.pins_per_group());
+            let mut start = 0usize;
+            for &size in self.groups {
+                let mut terms: Vec<(i64, i64, i64)> = Vec::with_capacity(size);
+                for i in start..start + size {
+                    let (sa, ma, ea) = self.op.decode(a[i])?;
+                    let (sb, mb, eb) = self.op.decode(b[i])?;
+                    let u = ma as i64 * mb as i64;
+                    let e = if u != 0 { ea + eb } else { self.floor };
+                    terms.push(((sa ^ sb) as i64, u, e));
+                }
+                start += size;
+                let g = terms.iter().map(|t| t.2).fold(self.floor, i64::max);
+                out.push(g);
+                for j in 0..self.pb as i64 {
+                    let q: i64 = terms.iter().map(|&(s, u, e)| (1 - 2 * s) * self.aligned_product(u, j + g - e)).sum();
+                    if self.wide {
+                        let lo = q & ((1i64 << LIMB) - 1);
+                        out.push(lo);
+                        out.push((q - lo) >> LIMB);
+                    } else {
+                        out.push(q);
+                    }
+                }
+            }
+            Ok(out)
+        }
+
+        /// The position of a pin name in `unit_pins`' output: `g{g}.G`, `g{g}.Q[j]` (`.lo` / `.hi` when wide).
+        pub fn pin_index(&self, name: &str) -> Result<usize, String> {
+            let bad = || format!("pin {name}: not a public-selection pin of this relation");
+            let rest = name.strip_prefix('g').ok_or_else(bad)?;
+            let dot = rest.find('.').ok_or_else(bad)?;
+            let g: usize = rest[..dot].parse().map_err(|_| bad())?;
+            if g >= self.groups.len() {
+                return Err(bad());
+            }
+            let base = g * self.pins_per_group();
+            let comp = &rest[dot..];
+            if comp == ".G" {
+                return Ok(base);
+            }
+            let inner = comp.strip_prefix(".Q[").ok_or_else(bad)?;
+            let close = inner.find(']').ok_or_else(bad)?;
+            let j: usize = inner[..close].parse().map_err(|_| bad())?;
+            if j >= self.pb as usize {
+                return Err(bad());
+            }
+            match (&inner[close + 1..], self.wide) {
+                ("", false) => Ok(base + 1 + j),
+                (".lo", true) => Ok(base + 1 + 2 * j),
+                (".hi", true) => Ok(base + 2 + 2 * j),
+                _ => Err(bad()),
+            }
+        }
+    }
+
+    /// `Params.from_model(HOPPER_BF16_M16N8K16)`: one group of 16, floor -133, products `u 2^11 < 2^27`, wide sum.
+    pub static BF16_HOPPER: PubSel = PubSel { op: Operand::Bf16, floor: -133, pb: 27, ps: 11, groups: &[16], wide: true };
+    /// `Params.from_model(AMPERE_BF16_M16N8K16)`: two groups of 8, floor -132, products `u 2^10 < 2^26`.
+    pub static BF16_AMPERE: PubSel = PubSel { op: Operand::Bf16, floor: -132, pb: 26, ps: 10, groups: &[8, 8], wide: false };
+    /// `FP8Params.from_model(HOPPER_E4M3_K32)`: one group of 32, floor -139, products `u 2^7 < 2^15`.
+    pub static FP8_HOPPER: PubSel = PubSel { op: Operand::E4m3, floor: -139, pb: 15, ps: 7, groups: &[32], wide: false };
+    /// `FP8Params.from_model(ADA_E4M3_M16N8K32)`: two groups of 16, floor -139, products `u 2^7 < 2^15`.
+    pub static FP8_ADA: PubSel = PubSel { op: Operand::E4m3, floor: -139, pb: 15, ps: 7, groups: &[16, 16], wide: false };
+}
+
 /// How a relation's public pins are computed from the statement's operand words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Decode {
@@ -179,6 +304,8 @@ pub enum Decode {
     Word(Operand),
     /// The NVFP4 unit: K = 68 words per operand (64 nibbles + 4 scale bytes), pins per `nvf4::unit_pins`.
     Nvf4,
+    /// A v2 public-selection unit: K = the sum of the groups, pins per `pubsel::PubSel::unit_pins`.
+    PubSel(&'static pubsel::PubSel),
 }
 
 #[derive(Debug)]
@@ -273,7 +400,68 @@ pub static FP4_NVF4: Relation = Relation {
     table_digest: "b597b003e55b8cf1025b517a04d442d9c6d8704f38fd06df13a21b3273b2d2f6",
 };
 
-pub static RELATIONS: [&Relation; 5] = [&BF16_AMPERE, &FP8_ADA, &BF16_HOPPER, &FP8_HOPPER, &FP4_NVF4];
+/// The v2 public-selection relations (lane relmin-lookup, 2026-09-23): the same claims as their v1 counterparts (pinned
+/// instruction semantics, statement widths, chain end on one public word), compiled by `pubsel.relation.compile_v2_unit`
+/// -- `relations.relation(name).compile(params, True)` from the lane relmin-lookup tree (the picked-value selection
+/// without product rows, lookup keys ranged by their one-hots), laptop, torch-free, two runs each, byte-identical
+/// (`ligero-system/v1`; sha256 b8c98eec... / fa3ee053... / 2f74bb3a... / 6e1d87cc...; 328 / 505 / 208 / 370 rows;
+/// 55 / 54 / 16 / 32 pins), the `sys_id`s equal to `protocol.system_id` under torch.  `bf16-ampere-v2` is the
+/// Ampere BF16 pipeline on the generic chain runner (`tag` empty like the other BF16 relations; the statement names it).
+pub static BF16_HOPPER_V2: Relation = Relation {
+    name: "bf16-hopper-v2",
+    aliases: &[],
+    tag: b"",
+    word_bytes: 2,
+    y_bytes: 2,
+    y_bits: 16,
+    decode: Decode::PubSel(&pubsel::BF16_HOPPER),
+    end_components: None,
+    sys_id: "d131c745215be997f731af388d27af374fa1f6f66e0889345d788c0888c33c0a",
+    table_digest: "1205a6a09d789b5242bec247e8ef03bc032f4fcbc502ab1a5bfc655667d889fc",
+};
+
+pub static BF16_AMPERE_V2: Relation = Relation {
+    name: "bf16-ampere-v2",
+    aliases: &[],
+    tag: b"",
+    word_bytes: 2,
+    y_bytes: 2,
+    y_bits: 16,
+    decode: Decode::PubSel(&pubsel::BF16_AMPERE),
+    end_components: None,
+    sys_id: "0862669fd08d3cd80a38183dd14b3955272d04c7e682fe325139fd3751122d65",
+    table_digest: "86a982fc1330725e329222fbed459b2c71b4b35336862d2293d0299e9e320617",
+};
+
+pub static FP8_HOPPER_V2: Relation = Relation {
+    name: "fp8-hopper-v2",
+    aliases: &[],
+    tag: b"|rel=fp8-hopper-v2|v1",
+    word_bytes: 1,
+    y_bytes: 4,
+    y_bits: 22,
+    decode: Decode::PubSel(&pubsel::FP8_HOPPER),
+    end_components: None,
+    sys_id: "fbea6ee16dd99c9343ef486cd99c95a8ee209f19977059b3e8ca6fa4fc427d85",
+    table_digest: "86c23ec3bd197d256d3256df1211bc58b963bf4b881610dc0341c3b7ed8e54a4",
+};
+
+pub static FP8_ADA_V2: Relation = Relation {
+    name: "fp8-ada-v2",
+    aliases: &[],
+    tag: b"|rel=fp8-ada-v2|v1",
+    word_bytes: 1,
+    y_bytes: 4,
+    y_bits: 22,
+    decode: Decode::PubSel(&pubsel::FP8_ADA),
+    end_components: None,
+    sys_id: "a8174ff5c88daf42d55b2d362a35324a1fe0232d8a514e7c10ad58c8f8bc1155",
+    table_digest: "a2015d492c6bfe29af219e760893e11e543e1a62402256810a9de1ec82e3a6cb",
+};
+
+pub static RELATIONS: [&Relation; 9] = [
+    &BF16_AMPERE, &FP8_ADA, &BF16_HOPPER, &FP8_HOPPER, &FP4_NVF4, &BF16_HOPPER_V2, &BF16_AMPERE_V2, &FP8_HOPPER_V2, &FP8_ADA_V2,
+];
 
 /// The relation a statement names: `None` (a v2 / v3 file) is the Ampere BF16 unit; an unknown name is refused (its
 /// tag and widths are not in the file, so nothing could be checked).
@@ -406,6 +594,107 @@ mod tests {
         assert_eq!(pin_index("anc.G"), Ok(140));
         for bad in ["a[64].n", "a[0].s", "g[4].X", "c.s", "y.t", "a[0]", "anc.lsb"] {
             assert!(pin_index(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn pubsel_unit_pins_match_public_pins_int() {
+        // reference values: pubsel.relation.public_pins_int on the same words (lane relmin-lookup, bee4c6d)
+        use pubsel::{BF16_AMPERE, BF16_HOPPER, FP8_ADA, FP8_HOPPER};
+        assert_eq!((BF16_HOPPER.k(), BF16_AMPERE.k(), FP8_HOPPER.k(), FP8_ADA.k()), (16, 16, 32, 32));
+        assert_eq!((BF16_HOPPER.pins_per_group(), BF16_AMPERE.pins_per_group(), FP8_ADA.pins_per_group()), (55, 27, 16));
+        // bf16-hopper, all 1.0: 16 products 128^2 at exponent 0, G = 0, Q[j] = 16 * 2^14 * 2^(11 - j) in two 16-bit limbs
+        let one = vec![0x3F80u32; 16];
+        let v = BF16_HOPPER.unit_pins(&one, &one).unwrap();
+        assert_eq!(v.len(), 55);
+        assert_eq!(v[0], 0);
+        let q: Vec<i64> = (0..27).map(|j| v[1 + 2 * j] + (v[2 + 2 * j] << 16)).collect();
+        assert_eq!(&q[..3], &[1 << 29, 1 << 28, 1 << 27]);
+        assert_eq!(q[11], 16 * 16384, "j = PS: no shift");
+        assert_eq!(q[25], 16 * 16384 >> 14);
+        assert_eq!(q[26], 0, "beyond PB - 1 - PS + 14 bits: truncated away");
+        assert_eq!(&v[1..9], &[0, 8192, 0, 4096, 0, 2048, 0, 1024]);
+        // mixed: a[0] = -2.0, a[1] = 0 (its exponent is the floor: G is set by the others), a[2] = 2^-133 (subnormal
+        // 0x0001) x 2.0, a[3] = 1.5 x -3.0 (exponent 1 -> G = 1); a negative sum's .hi limb is negative
+        let mut a = one.clone();
+        let mut b = one.clone();
+        a[0] = 0xC000;
+        a[1] = 0x0000;
+        a[2] = 0x0001;
+        b[2] = 0x4000;
+        a[3] = 0x3FC0;
+        b[3] = 0xC040;
+        let v = BF16_HOPPER.unit_pins(&a, &b).unwrap();
+        assert_eq!(v[0], 1);
+        assert_eq!(&v[1..9], &[0, 1408, 0, 704, 0, 352, 0, 176]);
+        assert_eq!(&v[17..25], &[32768, 5, 49152, 2, 24576, 1, 45056, 0]);
+        assert_eq!(&v[49..55], &[0, 6, 0, 65533, -1, 65535, -1][1..]);
+        // all zero products: G = floor, every Q = 0
+        let v = BF16_HOPPER.unit_pins(&vec![0u32; 16], &one).unwrap();
+        assert_eq!(v[0], -133);
+        assert!(v[1..].iter().all(|&x| x == 0));
+        // all -1.0 x 1.0: Q[0] = -2^29 = lo 0, hi -8192; Q[14] = -2^15 = lo 32768, hi -1
+        let v = BF16_HOPPER.unit_pins(&vec![0xBF80u32; 16], &one).unwrap();
+        assert_eq!(&v[1..5], &[0, -8192, 0, -4096]);
+        assert_eq!(&v[29..33], &[32768, -1, 49152, -1]);
+        // bf16-ampere: group 0 all 1.0 (G = 0, Q[0] = 8 * 2^14 * 2^10), group 1 subnormal 2^-133 x 1.0 (G = -126,
+        // Q[0] = 8 * 128 * 2^10)
+        let a: Vec<u32> = vec![0x3F80; 8].into_iter().chain(vec![0x0001; 8]).collect();
+        let v = BF16_AMPERE.unit_pins(&a, &one).unwrap();
+        assert_eq!(v.len(), 54);
+        assert_eq!(v[0], 0);
+        assert_eq!(&v[1..4], &[134217728, 67108864, 33554432]);
+        assert_eq!(v[25], 8, "Q[24] = 8 products of 128^2 >> 14");
+        assert_eq!(v[26], 0);
+        assert_eq!(v[27], -126);
+        assert_eq!(&v[28..31], &[1048576, 524288, 262144]);
+        assert_eq!(v[27 + 18], 8);
+        assert!(v[27 + 19..].iter().all(|&x| x == 0));
+        // fp8-hopper, all 1.0 (0x38): 32 x 64 x 2^7 = 2^18 at G = 0; mixed: 448 x -1.0 (14 x 8 at exponent 8 -> G = 8),
+        // 2^-9 x 1.0 (1 x 8 at -6), a zero, the rest 1.0 at 0: truncation of the small terms
+        let one8 = vec![0x38u32; 32];
+        let v = FP8_HOPPER.unit_pins(&one8, &one8).unwrap();
+        assert_eq!(v.len(), 16);
+        assert_eq!(&v[..4], &[0, 262144, 131072, 65536]);
+        assert_eq!(v[15], 0);
+        let mut a = one8.clone();
+        let mut b = one8.clone();
+        a[0] = 0x7E;
+        b[0] = 0xB8;
+        a[1] = 0x01;
+        a[2] = 0x00;
+        let v = FP8_HOPPER.unit_pins(&a, &b).unwrap();
+        assert_eq!(&v[..5], &[8, -13408, -6704, -3352, -1676]);
+        assert_eq!(&v[12..16], &[-7, -3, -1, 0]);
+        // fp8-ada: the same 16 words in group 0 (its sum without the other 16 ones), group 1 all zero (G = floor)
+        let a2: Vec<u32> = a[..16].iter().copied().chain(vec![0; 16]).collect();
+        let b2: Vec<u32> = b[..16].iter().copied().chain(vec![0x38; 16]).collect();
+        let v = FP8_ADA.unit_pins(&a2, &b2).unwrap();
+        assert_eq!(v.len(), 32);
+        assert_eq!(&v[..4], &[8, -13920, -6960, -3480]);
+        assert_eq!(v[16], -139);
+        assert!(v[17..].iter().all(|&x| x == 0));
+        // off-domain words are refused with the decode's reason
+        let mut bad = one.clone();
+        bad[7] = 0x7F80;
+        assert_eq!(BF16_HOPPER.unit_pins(&one, &bad).unwrap_err(), "operand exponent field off the finite range");
+        let mut bad8 = one8.clone();
+        bad8[31] = 0xFF;
+        assert_eq!(FP8_HOPPER.unit_pins(&bad8, &one8).unwrap_err(), "E4M3 NaN operand");
+        // pin names -> positions
+        assert_eq!(BF16_HOPPER.pin_index("g0.G"), Ok(0));
+        assert_eq!(BF16_HOPPER.pin_index("g0.Q[0].lo"), Ok(1));
+        assert_eq!(BF16_HOPPER.pin_index("g0.Q[0].hi"), Ok(2));
+        assert_eq!(BF16_HOPPER.pin_index("g0.Q[26].hi"), Ok(54));
+        assert_eq!(BF16_AMPERE.pin_index("g1.G"), Ok(27));
+        assert_eq!(BF16_AMPERE.pin_index("g1.Q[25]"), Ok(53));
+        assert_eq!(FP8_ADA.pin_index("g1.Q[14]"), Ok(31));
+        assert_eq!(FP8_HOPPER.pin_index("g0.Q[14]"), Ok(15));
+        for bad in ["g0.Q[27].lo", "g1.G", "g0.Q[0]", "a[0].s", "g0.Q[0].mid", "anc.G", "g0", "gx.G"] {
+            assert!(BF16_HOPPER.pin_index(bad).is_err(), "{bad}");
+        }
+        for bad in ["g0.Q[0].lo", "g2.G", "g0.Q[26]"] {
+            assert!(BF16_AMPERE.pin_index(bad).is_err(), "{bad}");
         }
     }
 

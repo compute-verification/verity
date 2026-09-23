@@ -29,8 +29,8 @@ from typing import Callable
 
 import numpy as np
 from verity.ml.tc.cast import f32_to_bf16_word
-from verity.ml.tc.models import ADA_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, GroupSum
-from verity.verification.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
+from verity.ml.tc.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, GroupSum
+from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
 from verity_numerical.bench import contract
 from verity_numerical.checker.params import Params
 
@@ -243,6 +243,64 @@ FP8_ADA_RELATION = _register(Relation(
     witness_generation=_FP8_WITNESS,
     claim_note=_FP8_CLAIM,
 ))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The v2 relations (lane relmin-lookup): the same four pipelines compiled with public selection (pubsel/relation.py) -- the
+# verifier pins the group maximum of the products and the truncated product sums for every alignment shift, the prover
+# commits only what depends on the private accumulator.  Additive: new names beside the v1 ones, which stay the default.
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _v2_compile(p, chain):
+    from .pubsel.relation import compile_v2_unit
+    return compile_v2_unit(p, chain=chain)
+
+
+def _v2_hints(p, sys, c_in, a, b, y_out, device):
+    from .pubsel.hints import hints_v2
+    return hints_v2(p, sys, c_in, a, b, y_out, device)
+
+
+def _v2_reference_hints(p, sys, units, device):
+    from .pubsel.hints import reference_hints_v2
+    return reference_hints_v2(p, sys, units, device)
+
+
+def _v2_public_vectors(p, c, a, b, y, device="cpu"):
+    from .pubsel.relation import public_vectors_v2
+    return public_vectors_v2(p, c, a, b, y, device=device)
+
+
+_V2_WITNESS = ("torch hint generator (pubsel/hints.py: accumulator components, two shift hints, sign, |sum| in bits, the "
+               "normalisation shift one-hot and the normalised significand) + torch program (windows, selectors, products)")
+_V2_BACKEND = "b-ligero chain, {name} relation (backends/direct/ligero/pubsel/relation.py at {params})"
+
+
+def _v2_of(v1: Relation, name: str, params_note: str, **over) -> Relation:
+    fields = dict(
+        name=name, target=v1.target, model=v1.model, params=v1.params, compile=_v2_compile, hints=_v2_hints,
+        public_vectors=_v2_public_vectors, y_public=v1.y_public, y_bits=v1.y_bits, word_dtype=v1.word_dtype, y_dtype=v1.y_dtype,
+        tag=v1.tag if v1.tag == b"" else f"|rel={name}|v1".encode(), operands=v1.operands, off_domain=v1.off_domain,
+        instances_dataset=v1.instances_dataset, instances_tier=v1.instances_tier, instance_seed=v1.instance_seed,
+        instances_recipe=v1.instances_recipe, relation_name=v1.relation_name, model_name=v1.model_name,
+        backend_name=_V2_BACKEND.format(name=name, params=params_note), witness_generation=_V2_WITNESS,
+        claim_note=v1.claim_note, reference_hints=_v2_reference_hints, rust_verifiable=False)
+    fields.update(over)
+    return Relation(**fields)
+
+
+BF16_HOPPER_V2_RELATION = _register(_v2_of(BF16_HOPPER_RELATION, "bf16-hopper-v2", "Params.from_model(HOPPER_BF16_M16N8K16)"))
+FP8_HOPPER_V2_RELATION = _register(_v2_of(FP8_HOPPER_RELATION, "fp8-hopper-v2", "FP8Params.from_model(HOPPER_E4M3_K32)"))
+FP8_ADA_V2_RELATION = _register(_v2_of(FP8_ADA_RELATION, "fp8-ada-v2", "FP8Params.from_model(ADA_E4M3_M16N8K32)"))
+
+# The Ampere BF16 pipeline on the generic chain runner (the v1 Ampere relation is ``vu.py``'s ``--relation bf16`` on the frozen
+# instance set; this one runs on synthetic instances drawn like the Hopper BF16 set, so the two are not the same claim).
+BF16_AMPERE_V2_RELATION = _register(_v2_of(
+    BF16_HOPPER_RELATION, "bf16-ampere-v2", "Params.from_model(AMPERE_BF16_M16N8K16)",
+    target=FIRST, model=AMPERE_BF16_M16N8K16, params=Params.from_model(AMPERE_BF16_M16N8K16),
+    instances_dataset="bench-instances-bf16-ampere/v1", instances_tier="vu-k1536-bf16-ampere", instance_seed=20260922,
+    instances_recipe="bf16-ampere synthetic (random_finite_bf16: finite BF16 words incl. subnormals and exact zeros, model-recorded accumulators)",
+    relation_name="GemmCoordinate<1536> over sm80.mma.m16n8k16.bf16", model_name="AMPERE_BF16_M16N8K16"))
 
 
 def relation(name: str) -> Relation:

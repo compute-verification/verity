@@ -418,3 +418,53 @@ verifier needs (the code is the reference; PROTOCOL.md still describes the BF16 
  "status": "open", "owner": "b-merge-h100 (name the relation in PROTOCOL.md; confirm the bf16-hopper / fp8-hopper digests against a pod system.bin when h100-dumps-v1 lands)",
  "evidence": ["tests/relations.rs", "fixtures/fp8-ada (sub-batch 0 of art:c5dff3c6..., pinned accept)", "lane note ligero-verify-relations"]}
 ~~~
+
+## D12. The v2 public-selection relations (lane `relmin-lookup`): the verifier computes part of the step, and the pins are no longer the operand words
+
+`bf16-hopper-v2`, `bf16-ampere-v2`, `fp8-hopper-v2`, `fp8-ada-v2` (`backends/direct/ligero/pubsel/relation.py`,
+registered in `relations.py` beside the v1 names, v1 untouched) claim exactly what their v1 counterparts claim -- the
+same pinned instruction semantics (`verity.ml.tc.models`), the same statement widths, the same chain-end word
+(`y16`, one public word per VU; `ligero-system/v1` files) -- with a different compiled unit: 312 / 489 / 208 / 370 rows
+against 3292 / 3516 / 3396 / 3769.  What changes for a verifier:
+
+* **The pins are derived values, not word components.**  A v1 system pins `a[i].s|m|e` / `b[i].s|m|e` and the
+  witness re-does the whole step; a v2 system pins, per product group `g` of the step, the group maximum `g{g}.G` of
+  the products' exponents (a zero product counts as `Params.floor`; `G >= floor`) and, for every extra alignment
+  shift `j in [0, prod_bits)`, the signed sum `g{g}.Q[j]` of the products each aligned to `G + j` -- `AlignProduct`'s
+  truncation term by term, then summed (`public_pins_int`; `PubSel::unit_pins`).  The BF16 Hopper sum exceeds p and
+  is pinned as two limbs `g0.Q[j].lo` (the low 16 bits) and `g0.Q[j].hi` (the arithmetic shift; negative for a
+  negative sum), reduced mod p like every pin.  The verifier therefore performs the public half of the tensor-core
+  step itself (products, alignment, group maximum) -- O(K prod_bits) integer operations per unit -- and the prover's
+  witness selects `Q[E - G]` with a lookup one-hot.  A wrong pin value anywhere fails the linear test with
+  overwhelming probability, as before; a wrong *rule* in the verifier's public computation is a soundness bug of the
+  verifier, not of the proof -- the Rust decode is pinned against `public_pins_int` by hand-computed vectors
+  (`pubsel_unit_pins_match_public_pins_int`) and, on the Python side, by the v1-v2 differential
+  (`pubsel/relation_test.py`: both units accept exactly the model's word on random units and reject every negative
+  family).
+* **K comes from the relation, not from the pins.**  There are no `a[i]` pins to read `K` off; `K` is the sum of
+  `Params.groups` (16 / 8+8 / 32 / 16+16), fixed per relation in `relation.rs` (`PubSel::k`), and a statement whose
+  `K` differs is refused ("statement has K = 32 operands per unit, the relation's step takes 16").  Every word of every
+  column is decoded, pad columns included (all-zero operands are on the domain), so an off-domain word anywhere is
+  refused with the decode's reason (Python: `public inputs rejected: ...`; Rust: `public inputs: ... (unit j)`).
+* **Tags and pins.**  `bf16-hopper-v2` and `bf16-ampere-v2` absorb the empty tag like the other BF16 relations (the
+  statement's name and the `sys_id` in the digest distinguish them, D11); the FP8 pair absorb `|rel=fp8-hopper-v2|v1`
+  / `|rel=fp8-ada-v2|v1`.  Pinned digests (`sys_id` / table digest): `d131c745... / 1205a6a0...`,
+  `0862669f... / 86a982fc...`, `fbea6ee1... / 86c23ec3...`, `a8174ff5... / a2015d49...` -- laptop compilations
+  from the lane tree, torch-free, twice each, byte-identical, the `sys_id`s equal to `protocol.system_id` under
+  torch; fixtures under `fixtures/systems/`.  The units select the pinned sum, the accumulator's aligned term and the
+  normalised significand without product rows (a hint row and one row-free quadratic `sel_i (X - value_i) = 0` per
+  candidate), and the two shift hints are ranged by their lookups' one-hots alone (`LigeroCtx.lookup(range_key=False)`).
+* **`bf16-ampere-v2` is a new claim on the generic runner**, not a re-encoding of `vu.py`'s `--relation bf16` run:
+  it proves the Ampere BF16 step over synthetic instances drawn like the Hopper BF16 set (`instances_dataset`
+  `bench-instances-bf16-ampere/v1`), where `bf16-ampere` proves the frozen `bench-instances/v1` set through `vu.py`.
+  The unit compiled is `compile_unit(Params.from_model(AMPERE_BF16_M16N8K16))`'s claim; the statement digest and
+  the auth block differ from `vu.py`'s files.
+
+~~~json
+{"id": "BV-D12", "issue": "the v2 relations pin values the verifier computes from the operand words (group maximum, truncated product sums per shift); K is fixed by the relation; the verifier's public computation is part of the soundness surface",
+ "document": "PROTOCOL.md describes the BF16 unit only; pubsel/relation.py's module comment is the reference",
+ "code": "backends/direct/ligero/pubsel/relation.py (compile_v2_unit, public_pins_int, public_vectors_v2), relations.py (the four names)",
+ "verifier": "src/relation.rs pubsel::PubSel (unit_pins, pin_index, the four parameter sets), Decode::PubSel; verify.rs public_pins_pubsel",
+ "status": "open", "owner": "relmin-lookup (pin the digests against a pod system.bin when the fp8-ada-v2 dumps land; PROTOCOL.md section for the public-selection unit)",
+ "evidence": ["src/relation.rs tests", "tests/relations.rs system_digest_names_every_pinned_relation", "backends/direct/ligero/pubsel/relation_test.py", "lane note relmin-lookup"]}
+~~~
