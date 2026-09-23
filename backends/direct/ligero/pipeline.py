@@ -281,11 +281,12 @@ def run_to_completion(gen, slot: Slot | None = None):
 
 
 class _Job:
-    __slots__ = ("index", "gen", "waitable", "slot", "started", "done", "value")
+    __slots__ = ("index", "gen", "waitable", "slot", "started", "done", "value", "stage")
 
     def __init__(self, index, gen, slot):
         self.index, self.gen, self.slot = index, gen, slot
         self.waitable, self.started, self.done, self.value = None, False, False, None
+        self.stage = 0
 
     def step(self):
         try:
@@ -294,6 +295,7 @@ class _Job:
                 self.started = True
         except StopIteration as stop:
             self.started, self.done, self.value, self.waitable = True, True, stop.value, None
+        self.stage += 1
 
 
 def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> tuple[list, float]:
@@ -318,6 +320,7 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
     free_slots = [slot_for(device, i) for i in range(depth)]
     nxt = 0
     busy = waited = 0.0                                         # main-thread time launching vs blocked on a waitable
+    stage_busy: dict = {}                                       # main-thread time per stage index (diagnostics)
     if str(device).startswith("cuda"):
         torch.cuda.synchronize(device)
     t0 = time.perf_counter()
@@ -330,7 +333,9 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
             with stream_context(slot):
                 job.gen = starters[nxt](slot)
             job.step()
-            busy += time.perf_counter() - tb
+            dt = time.perf_counter() - tb
+            busy += dt
+            stage_busy[0] = stage_busy.get(0, 0.0) + dt
             nxt += 1
             if job.done:
                 results[job.index] = job.value
@@ -349,7 +354,9 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
         for job in ready:
             tb = time.perf_counter()
             job.step()
-            busy += time.perf_counter() - tb
+            dt = time.perf_counter() - tb
+            busy += dt
+            stage_busy[job.stage - 1] = stage_busy.get(job.stage - 1, 0.0) + dt
             if job.done:
                 results[job.index] = job.value
                 active.remove(job)
@@ -361,7 +368,8 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
     sys.setswitchinterval(prev_switch)
     SQUEEZE.active(False)
     _rescale(results, wall, timings_key)
-    LAST_STATS.update({"n": n, "depth": depth, "wall": wall, "host_busy": busy, "host_waited": waited})
+    LAST_STATS.update({"n": n, "depth": depth, "wall": wall, "host_busy": busy, "host_waited": waited,
+                       "stage_busy_ms": {k: round(v * 1e3, 2) for k, v in sorted(stage_busy.items())}})
     return results, wall
 
 

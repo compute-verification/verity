@@ -592,16 +592,19 @@ def n_rows(cfg: Config, m: int, chain: bool) -> int:
 USE_DEVICE_MASKS = True     # ChaCha20 counter-mode sampler on the device (mask_sampler.py); False = host SHAKE-256
 
 
-def _uniform_symbols(total: int, device) -> torch.Tensor:
+def _uniform_symbols(total: int, device, key_dev: torch.Tensor | None = None) -> torch.Tensor:
     """``total`` exactly uniform BabyBear symbols (int64 on ``device``), fresh randomness.  Device: ChaCha20 stream +
     rejection (mask_sampler.py).  Host fallback: SHAKE-256 stream, the same rejection (u < 2p, then u mod p) -- the
-    8b sampler's direct ``u mod p`` had a 0.11 statistical distance per symbol (mask_sampler.py docstring)."""
+    8b sampler's direct ``u mod p`` had a 0.11 statistical distance per symbol (mask_sampler.py docstring).
+    ``key_dev``: the ChaCha key already on the device (drawn by the caller; the commit graph's static input)."""
     import os
     if USE_DEVICE_MASKS and str(device).startswith("cuda"):
         from .mask_sampler import sampler_for
         s = sampler_for(device)
         if s is not None:
-            return s.uniform(total)[0]
+            return s.uniform(total, key_dev=key_dev)[0]
+    if key_dev is not None:
+        raise RuntimeError("device mask key without the device sampler")
     key = os.urandom(32)
     acc = []
     got, ctr = 0, 0
@@ -615,15 +618,16 @@ def _uniform_symbols(total: int, device) -> torch.Tensor:
     return torch.from_numpy(np.concatenate(acc)[:total]).to(device)
 
 
-def _sample_masks(cfg: Config, m: int, chain: bool, device) -> dict[str, torch.Tensor]:
-    """Fresh uniform mask coefficients: ``W`` (m, t_pad) per witness row and one (D, deg) block per mask kind."""
+def _sample_masks(cfg: Config, m: int, chain: bool, device, key_dev: torch.Tensor | None = None) -> dict[str, torch.Tensor]:
+    """Fresh uniform mask coefficients: ``W`` (m, t_pad) per witness row and one (D, deg) block per mask kind.
+    ``key_dev``: the sampler key on the device (the commit graph draws it eagerly and derives inside the graph)."""
     D, k, tp, l = cfg.D, cfg.k, cfg.t_pad, cfg.l
     shapes = {"W": (m, tp), "prox": (D, k), "lin": (D, tp), "qa": (D, k), "qb": (D, tp - 1)}
     if chain:
         shapes["chain_a"] = (D, k)
         shapes["chain_b"] = (D, l - 1)
     total = sum(a * b for a, b in shapes.values())
-    flat = _uniform_symbols(total, device)
+    flat = _uniform_symbols(total, device, key_dev)
     out, at = {}, 0
     for name, (a, b) in shapes.items():
         out[name] = flat[at:at + a * b].reshape(a, b).clone()
@@ -698,9 +702,20 @@ def _sum_over_H(coefs: torch.Tensor, l: int) -> torch.Tensor:
     return (l * coefs[:, ::l].sum(1)) % P
 
 
-def _alpha_beta(tb: Tables, rho_lin: torch.Tensor, pub: dict, m: int, l: int, device):
+def _pubmat(tb: Tables, pub: dict, device) -> torch.Tensor | None:
+    """(Lp, l) the public columns the linear constraints read, reduced mod p (None without public columns) -- the
+    per-sub-batch input of ``_alpha_beta`` (a static buffer of the tests graph receives it)."""
+    pub_q, _ = _lin_pub_index(tb, device)
+    if not pub_q:
+        return None
+    return torch.stack([pub[tb.lin_pub[q]].to(device) for q in pub_q]) % P
+
+
+def _alpha_beta(tb: Tables, rho_lin: torch.Tensor, pub: dict | None, m: int, l: int, device,
+                pubmat: torch.Tensor | None = None):
     """The batched linear test's combination alpha (D, m) over the rows and its public right-hand side beta (D, l)
-    (evaluations on H): sum_j alpha_j W[j] = beta for an honest witness."""
+    (evaluations on H): sum_j alpha_j W[j] = beta for an honest witness.  ``pubmat``: ``_pubmat(tb, pub, device)``
+    precomputed (the tests graph), else it is built from ``pub`` here."""
     D = rho_lin.shape[0]
     alpha = torch.zeros((D, m), dtype=torch.int64, device=device)
     terms = (rho_lin[:, tb.lin_q] * tb.lin_coef[None, :]) % P                 # (D, nnz)
@@ -712,7 +727,8 @@ def _alpha_beta(tb: Tables, rho_lin: torch.Tensor, pub: dict, m: int, l: int, de
     pub_q, qidx = _lin_pub_index(tb, device)
     if pub_q:
         # one stack + one reduction (was one ``% P`` kernel per public column; the index tensor is cached) -- hostphase
-        pubmat = torch.stack([pub[tb.lin_pub[q]].to(device) for q in pub_q]) % P      # (Lp, l)
+        if pubmat is None:
+            pubmat = _pubmat(tb, pub, device)                                         # (Lp, l)
         beta = (beta + _combine(rho_lin.index_select(1, qidx), pubmat)) % P
     return alpha, beta
 
@@ -935,11 +951,206 @@ def _expand_pinned(seed: bytes, count: int, device, slot, name: str):
     buf = _pin(slot, device, name, nbytes)[:nbytes]
     fut = pipeline.squeeze(seed, buf.numpy(), inline=slot is None)
 
-    def finish():
+    def finish(raw_out: torch.Tensor | None = None):
+        if raw_out is not None:                                    # the tests graph's static input: reduced in the graph
+            raw_out.copy_(buf.view(torch.int32), non_blocking=True)
+            return None
         u = buf.view(torch.int32).to(device, non_blocking=True)
         return (u.to(torch.int64) & 0xFFFFFFFF) % P
 
     return fut, finish
+
+
+def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs, U, W, pub, pubmat, y16_pub, layout,
+                   mr: dict, device, check: bool = False, nested_graphs: bool = True):
+    """The prover's tests from the challenge block ``x`` (D, width): (w, h, q, v) on the device -- the batched linear
+    test (``w``; ``v`` = alpha . p in the ZK mode), the quadratic quotient ``h`` and the chain quotient ``q`` (chain
+    mode).  Shared by the eager prover and the captured tests graph (``nested_graphs=False`` while capturing: the
+    NTT chains run eagerly inside the capture)."""
+    m, l, n, k, D = sys.m, cfg.l, cfg.n, cfg.k, cfg.D
+    M = U.shape[0]
+    l_chain = l if layout is not None else 0
+    r, rho_lin, rho_quad = x[:, :M], x[:, M:M + tb.L], x[:, M + tb.L:M + tb.L + tb.Q]
+    rc = x[:, M + tb.L + tb.Q:].reshape(D, N_FAMILIES, l_chain) if l_chain else None
+    g = (lambda name, fn, t: _graphed(name, fn, t)) if nested_graphs else (lambda name, fn, t: fn(t))
+    v = None
+    if cfg.zk:
+        r[:, mr["prox"]] = 0                                      # the proximity mask enters with coefficient 1
+        w = (_combine(r, coefs) + coefs[mr["prox"]]) % P          # (D, k) coefficients, uniform
+        alpha, _beta = _alpha_beta(tb, rho_lin, pub, m, l, device, pubmat=pubmat)
+        v = _combine(alpha, coefs[:m])                            # (D, k): alpha . p, = beta on H
+        _add_zh_times(v, coefs[mr["lin"]][:, :cfg.t_pad], l)     # + Z_H s_lin (the committed row is s_lin)
+    else:
+        w = _combine(r, W)                                        # (D, l) evaluations on H
+    # quadratic: batched A*B - C on the codeword domain (+ the mask), divided by Z_H
+    P0 = quad_p0(tb, rho_quad, U[:m])                             # (D, n): split form (witness.quad_p0)
+    zinv = _zh_inv_on_coset(n, l, device)
+    hev = (P0 * zinv) % P
+    if cfg.zk:                                                    # + s_qa + x^k s_qb  (the mask / Z_H)
+        hev = (hev + U[mr["qa"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["qb"]]) % P) % P
+    hcoef = g("intt", intt, hev)                                  # coefficients of h(g x): c_k g^k
+    hcoef = (hcoef * _ginv_powers(n, device)) % P
+    if check:
+        assert (hcoef[:, cfg.h_len:] == 0).all(), "quotient degree too high: constraints violated"
+    h = hcoef[:, :cfg.h_len]
+    q = None
+    if layout is not None:
+        cc = chain_coefs(sys, layout, rc, y16_pub)
+        R = cc.coef.shape[1]
+        penc = _simt_encoder(cfg, device, plain=True)
+        Renc = (penc.encode(cc.coef.reshape(D * R, l))[0].to(torch.int64) if penc is not None
+                else encode(cc.coef.reshape(D * R, l), n)).reshape(D, R, n)     # R_i on the codeword domain
+        Qev = ((Renc * U.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P   # (D, n)
+        if cfg.zk:                                                # + u_ca + x^k u_cb (uniform, zero sum over H)
+            Qev = (Qev + U[mr["chain_a"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["chain_b"]]) % P) % P
+        qcoef = (g("intt", intt, Qev) * _ginv_powers(n, device)) % P
+        if check:
+            assert (qcoef[:, cfg.q_len:] == 0).all(), "chain polynomial degree too high"
+            assert torch.equal(_sum_over_H(qcoef[:, :cfg.q_len], l), cc.rhs), "chain constraints violated"
+        q = qcoef[:, :cfg.q_len]
+    return w, h, q, v
+
+
+TESTS_GRAPH = True     # the whole tests chain (challenge block -> w, h, q, v in pinned memory) as ONE CUDA graph (lane hp2-host)
+_TESTS_STATIC: dict = {}
+
+
+class _TestsStatic:
+    """The static buffers of the tests graph for one (stream, configuration): the committed codeword ``U`` and the
+    coefficient rows ``coefs`` (the encoder writes them in place, so the graph reads them at fixed addresses), the
+    witness ``W`` (non-ZK: a copy), the raw challenge block ``xraw`` (the squeeze, uploaded from pinned memory), the
+    public columns ``pubmat`` and the chain ends ``y16``; the graph writes w, h, q, v into the slot's pinned ``msgs``
+    buffer (D2H memcpy nodes).  ~45 launches and ~5 ms of main-thread dispatch per sub-batch become one replay."""
+
+    def __init__(self, key, cfg: Config, sys: System, tb: Tables, m: int, Mrows: int, width: int, chain: bool, device):
+        self.key, self.sys, self.tb = key, sys, tb
+        n, k, l, D = cfg.n, cfg.k, cfg.l, cfg.D
+        self.U = torch.empty((Mrows, n), dtype=torch.int32, device=device)
+        self.coefs = torch.empty((Mrows, k), dtype=torch.int64, device=device) if cfg.zk else None
+        self.W = None if cfg.zk else torch.empty((m, l), dtype=torch.int64, device=device)
+        self.xraw = torch.empty((D * width,), dtype=torch.int32, device=device)
+        pub_q, _ = _lin_pub_index(tb, device)
+        self.pubmat = torch.empty((len(pub_q), l), dtype=torch.int64, device=device) if pub_q else None
+        self.y16 = torch.empty((l,), dtype=torch.int64, device=device) if chain else None
+        # the message layout (int32 residues, ``msgs`` pinned buffer): w | h | q | v
+        shapes = [("w", (D, k if cfg.zk else l)), ("h", (D, cfg.h_len))]
+        if chain:
+            shapes.append(("q", (D, cfg.q_len)))
+        if cfg.zk:
+            shapes.append(("v", (D, k)))
+        self.offs, at = {}, 0
+        for name, shape in shapes:
+            self.offs[name] = (at, shape)
+            at += 4 * math.prod(shape)
+        self.nbytes = at
+        # the tests graph per chain layout ((l, n_vus, steps) or None): the chain test's coefficient masks are a
+        # function of the layout (a ragged last sub-batch has its own), captured per layout on the shared buffers
+        self.graphs: dict = {}     # layout key -> (CUDAGraph | False, pinned msgs data_ptr)
+        # the commit graph's static inputs (witness kernel + masks + encoder -> U, coefs): public rows, hints, mask key
+        self.pub_rows = torch.empty((len(sys.pins), l), dtype=torch.int64, device=device)
+        self.hints = torch.empty((len(sys.hints), l), dtype=torch.int64, device=device)
+        self.mkey = torch.empty((8,), dtype=torch.int32, device=device)
+        self.commit_graph = None   # None: not captured yet; False: eager
+
+
+def _graph_run(holder, attr: str, body, device) -> None:
+    """Run ``body()`` through the CUDA graph stored at ``holder.<attr>``: captured at the first call (two eager
+    warm-ups on a side stream, then the capture), replayed afterwards; ``False`` (capture failed here) = eager."""
+    g = getattr(holder, attr)
+    if g is None:
+        try:
+            cur = torch.cuda.current_stream(device)
+            s = torch.cuda.Stream(device=device)
+            s.wait_stream(cur)
+            with torch.cuda.stream(s):
+                for _ in range(2):
+                    body()
+            cur.wait_stream(s)
+            g = torch.cuda.CUDAGraph()
+            with torch.cuda.graph(g):
+                body()
+        except Exception:  # noqa: BLE001 -- capture unsupported here: eager
+            g = False
+        setattr(holder, attr, g)
+    if g:
+        g.replay()
+    else:
+        body()
+
+
+COMMIT_GRAPH = True    # witness kernel + mask sampler + encoder + mask-row coset NTT as ONE CUDA graph per stream (lane hp2-host)
+
+
+def _fused_witness(sys: System, device):
+    """The fused witness kernel for ``sys`` when the device witness path applies (else None: no commit graph)."""
+    from . import witness as wmod
+    if wmod.IMPL != "device" or not sys.pins or not str(device).startswith("cuda"):
+        return None
+    try:
+        from .witness_device import fused_for
+        return fused_for(sys, device)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _tests_static(cfg: Config, sys: System, tb: Tables, m: int, Mrows: int, width: int, chain: bool, device):
+    """The static set of the current stream (one per stream; replaced when the configuration changes)."""
+    skey = (str(device), torch.cuda.current_stream(device).cuda_stream)
+    key = (cfg.l, cfg.n, cfg.k, cfg.D, cfg.zk, cfg.t_pad, cfg.h_len, cfg.q_len, m, Mrows, width, chain)
+    st = _TESTS_STATIC.get(skey)
+    if st is None or st.key != key or st.sys is not sys or st.tb is not tb:
+        if st is not None:
+            for g in [g_ for g_, _ in st.graphs.values()] + [st.commit_graph]:
+                if g:
+                    g.reset()
+        st = _TestsStatic(key, cfg, sys, tb, m, Mrows, width, chain, device)
+        _TESTS_STATIC[skey] = st
+    return st
+
+
+def _tests_graph_run(st: _TestsStatic, sys: System, tb: Tables, cfg: Config, mr: dict, layout, mbuf: torch.Tensor,
+                     device) -> None:
+    """Run the tests chain on the static set: replay the graph (captured at the first call for this stream and
+    configuration: two eager warm-ups on a side stream, then the capture), or eagerly if the capture failed."""
+    D = cfg.D
+
+    def body():
+        x = ((st.xraw.to(torch.int64) & 0xFFFFFFFF) % P).reshape(D, -1)
+        w, h, q, v = _tests_compute(sys, tb, cfg, x, st.coefs, st.U, st.W, None, st.pubmat, st.y16, layout, mr,
+                                    device, check=False, nested_graphs=False)
+        for name, tsr in (("w", w), ("h", h), ("q", q), ("v", v)):
+            if tsr is None:
+                continue
+            o, shape = st.offs[name]
+            mbuf[o:o + 4 * tsr.numel()].view(torch.int32).view(shape).copy_(tsr.to(torch.int32).contiguous(),
+                                                                             non_blocking=True)
+
+    lkey = (layout.l, layout.n_vus, layout.steps) if layout is not None else None
+    hit = st.graphs.get(lkey)
+    if hit is not None and hit[1] != mbuf.data_ptr():              # the pinned buffer moved (grown): re-capture
+        if hit[0]:
+            hit[0].reset()
+        hit = None
+    if hit is None:
+        try:
+            cur = torch.cuda.current_stream(device)
+            s = torch.cuda.Stream(device=device)
+            s.wait_stream(cur)
+            with torch.cuda.stream(s):
+                for _ in range(2):
+                    body()
+            cur.wait_stream(s)
+            g = torch.cuda.CUDAGraph()
+            with torch.cuda.graph(g):
+                body()
+        except Exception:  # noqa: BLE001 -- capture unsupported here: eager on the static set
+            g = False
+        hit = (g, mbuf.data_ptr())
+        st.graphs[lkey] = hit
+    if hit[0]:
+        hit[0].replay()
+    else:
+        body()
 
 
 def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints: torch.Tensor,
@@ -1004,31 +1215,75 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         hints = hints_fn()
         clk.lap("hints_host")
     assert hints.shape[1] == l
-    W = build_witness(sys, pub, hints, device)
-    clk.lap("witness")
-    if mutate is not None:
-        mutate(W)
-    if check:
-        from .witness import check_constraints
-        bad = check_constraints(sys, tb, W, pub)
-        if bad:
-            raise ValueError("witness violates constraints: " + ", ".join(bad[:5]))
-        clk.lap("self_check")
-
     k = cfg.k
     mr = mask_rows(cfg, m, chain is not None)
     Mrows = n_rows(cfg, m, chain is not None)
     enc = _simt_encoder(cfg, device)                              # None: the torch int64 NTT (CPU, or no cupy)
-    if cfg.zk:
+    l_chain = l if chain else 0
+    width = Mrows + tb.L + tb.Q + N_FAMILIES * l_chain            # the challenge block: r | rho_lin | rho_quad | rc
+    # the graphs' static set (CUDA + SIMT encoder, no self-check asserts): U and coefs live in it
+    st = (_tests_static(cfg, sys, tb, m, Mrows, width, chain is not None, device)
+          if TESTS_GRAPH and cuda and enc is not None and not check else None)
+    fw = _fused_witness(sys, device) if (st is not None and COMMIT_GRAPH and mutate is None) else None
+    if fw is not None:
+        # the commit graph: witness kernel -> (masks ->) encoder (-> mask-row coset NTT), U / coefs in the static
+        # set.  Eager part: the public rows and the hints into the static inputs, the mask key drawn here (same
+        # os.urandom order as the eager prover) and uploaded from pinned memory.
+        st.pub_rows.copy_(torch.stack([pub[name].to(device) for _, name in sys.pins]))
+        st.pub_rows %= P
+        st.hints.copy_(hints)
+        clk.lap("witness")
+        if cfg.zk:
+            import os
+            mkey = os.urandom(32)
+            kbuf = _pin(slot, device, "mkey", 32)[:32]
+            kbuf.numpy()[:] = np.frombuffer(mkey, dtype=np.uint8)
+            st.mkey.copy_(kbuf.view(torch.int32), non_blocking=True)
+        clk.lap("zk_masks")
+
+        def commit_body():
+            Wg = fw.run(st.pub_rows, st.hints)                       # (m, l) int32
+            if cfg.zk:
+                with _cupy_ctx(device):
+                    Sg = _sample_masks(cfg, m, chain is not None, device, key_dev=st.mkey)
+                cg = st.coefs
+                cg.zero_()
+                _, Cg = enc.encode(Wg, Sg["W"], want_coefs=True, out=st.U[:m])
+                cg[:m, :l] = Cg
+                _add_zh_times(cg[:m], Sg["W"], l)
+                for kind_, sl_ in mr.items():
+                    blk_ = Sg[kind_]
+                    cg[sl_, :blk_.shape[1]] = blk_
+                st.U[m:] = eval_on_coset(cg[m:], n).to(torch.int32)
+            else:
+                enc.encode(Wg, out=st.U)
+                st.W.copy_(Wg)
+
+        _graph_run(st, "commit_graph", commit_body, device)
+        W, coefs, U = st.W, st.coefs, st.U
+    else:
+        W = build_witness(sys, pub, hints, device)
+        clk.lap("witness")
+        if mutate is not None:
+            mutate(W)
+        if check:
+            from .witness import check_constraints
+            bad = check_constraints(sys, tb, W, pub)
+            if bad:
+                raise ValueError("witness violates constraints: " + ", ".join(bad[:5]))
+            clk.lap("self_check")
+    if fw is not None:
+        pass
+    elif cfg.zk:
         with _cupy_ctx(device):
             S = _sample_masks(cfg, m, chain is not None, device)
         clk.lap("zk_masks")
         # coefficient rows of every committed polynomial: witness rows interp_H(W) + Z_H s_j, then the mask rows
-        coefs = torch.zeros((Mrows, k), dtype=torch.int64, device=device)
+        coefs = st.coefs.zero_() if st is not None else torch.zeros((Mrows, k), dtype=torch.int64, device=device)
         if enc is not None:
             # SIMT kernel: codeword of interp_H(W_j) + Z_H s_j on the coset (the mask folded in per coset, 8c) and the
             # natural-order coefficients of interp_H(W_j); the 4D / 5D mask rows (degree < k) through the torch NTT
-            U = torch.empty((Mrows, n), dtype=torch.int32, device=device)
+            U = st.U if st is not None else torch.empty((Mrows, n), dtype=torch.int32, device=device)
             _, C = enc.encode(W, S["W"], want_coefs=True, out=U[:m])
             coefs[:m, :l] = C
         else:
@@ -1044,7 +1299,11 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
             U = eval_on_coset(coefs, n)                           # (M, n), the coset g <w_n> (disjoint from H)
     else:
         coefs = None
-        U = enc.encode(W)[0] if enc is not None else encode(W, n)   # (m, n); int32 from the kernel
+        if st is not None:
+            U = enc.encode(W, out=st.U)[0]
+            st.W.copy_(W)                                         # the linear test reads W (static for the graph)
+        else:
+            U = enc.encode(W)[0] if enc is not None else encode(W, n)   # (m, n); int32 from the kernel
     clk.lap("encode")
 
     gpu_hash = merkle.gpu_available() and cuda
@@ -1083,62 +1342,51 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     else:
         r1 = s1 = None
     # challenge 1: SHAKE-256 of the seed, squeezed on a worker thread into pinned memory, reduced on the device
-    l_chain = l if chain else 0
     seed1 = merkle.hash_bytes(seed1_preimage(stmt, root, ccom, r1))
-    extra = N_FAMILIES * l_chain
-    width = M + tb.L + tb.Q + extra
-    if cuda:
+    layout = chain[0] if chain is not None else None
+    if st is not None:
+        # the tests graph: the squeeze lands in the static input; ONE replay computes w, h, q, v and copies them into
+        # the pinned message buffer
         fut, finish = _expand_pinned(seed1, D * width, device, slot, "c1")
         clk.host("seed1")
         yield fut                                                  # -- wait: the squeeze (host, off-thread)
         clk.host("wait_shake")
-        x = finish().reshape(D, width)
+        finish(raw_out=st.xraw)
+        if st.pubmat is not None:
+            st.pubmat.copy_(_pubmat(tb, pub, device))
+        if chain is not None:
+            st.y16.copy_(chain[1].to(device))
+        mbuf = _pin(slot, device, "msgs", st.nbytes)[:st.nbytes]
+        _tests_graph_run(st, sys, tb, cfg, mr, layout, mbuf, device)
+        offs = st.offs
+        clk.lap("tests_w")                                         # the graph's laps: tests_w carries the replay
+        clk.lap("tests_quad")
+        clk.lap("tests_chain")
+        clk.host("launch_tests_qc")
+        yield _event(device, slot is not None)                     # -- wait: w, h, q, v reach the host
+        clk.host("wait_msgs")
+        got = {}
+        for name, (o, shape) in offs.items():
+            got[name] = mbuf[o:o + 4 * math.prod(shape)].numpy().view(np.uint32).reshape(shape).copy()
+        w_np, h_np, q_np, v_np = got["w"], got["h"], got.get("q"), got.get("v")
     else:
-        x = _expand(seed1, D * width, device).reshape(D, width)
-    r, rho_lin, rho_quad = x[:, :M], x[:, M:M + tb.L], x[:, M + tb.L:M + tb.L + tb.Q]
-    rc = x[:, M + tb.L + tb.Q:].reshape(D, N_FAMILIES, l_chain) if l_chain else None
-    v = None
-    if cfg.zk:
-        r[:, mr["prox"]] = 0                                      # the proximity mask enters with coefficient 1
-        w = (_combine(r, coefs) + coefs[mr["prox"]]) % P          # (D, k) coefficients, uniform
-        alpha, _beta = _alpha_beta(tb, rho_lin, pub, m, l, device)
-        v = _combine(alpha, coefs[:m])                            # (D, k): alpha . p, = beta on H
-        _add_zh_times(v, coefs[mr["lin"]][:, :cfg.t_pad], l)     # + Z_H s_lin (the committed row is s_lin)
-    else:
-        w = _combine(r, W)                                        # (D, l) evaluations on H
-    clk.lap("tests_w")
-    clk.host("launch_tests_w")
-    # quadratic: batched A*B - C on the codeword domain (+ the mask), divided by Z_H
-    P0 = quad_p0(tb, rho_quad, U[:m])                             # (D, n): split form (witness.quad_p0)
-    zinv = _zh_inv_on_coset(n, l, device)
-    hev = (P0 * zinv) % P
-    if cfg.zk:                                                    # + s_qa + x^k s_qb  (the mask / Z_H)
-        hev = (hev + U[mr["qa"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["qb"]]) % P) % P
-    hcoef = _graphed("intt", intt, hev)                           # coefficients of h(g x): c_k g^k
-    hcoef = (hcoef * _ginv_powers(n, device)) % P
-    if check:
-        assert (hcoef[:, cfg.h_len:] == 0).all(), "quotient degree too high: constraints violated"
-    h = hcoef[:, :cfg.h_len]
-    clk.lap("tests_quad")
-    q = None
-    if chain is not None:
-        layout, y16_pub = chain
-        cc = chain_coefs(sys, layout, rc, y16_pub)
-        R = cc.coef.shape[1]
-        penc = _simt_encoder(cfg, device, plain=True)
-        Renc = (penc.encode(cc.coef.reshape(D * R, l))[0].to(torch.int64) if penc is not None
-                else encode(cc.coef.reshape(D * R, l), n)).reshape(D, R, n)     # R_i on the codeword domain
-        Qev = ((Renc * U.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P   # (D, n)
-        if cfg.zk:                                                # + u_ca + x^k u_cb (uniform, zero sum over H)
-            Qev = (Qev + U[mr["chain_a"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["chain_b"]]) % P) % P
-        qcoef = (_graphed("intt", intt, Qev) * _ginv_powers(n, device)) % P
-        if check:
-            assert (qcoef[:, cfg.q_len:] == 0).all(), "chain polynomial degree too high"
-            assert torch.equal(_sum_over_H(qcoef[:, :cfg.q_len], l), cc.rhs), "chain constraints violated"
-        q = qcoef[:, :cfg.q_len]
+        if cuda:
+            fut, finish = _expand_pinned(seed1, D * width, device, slot, "c1")
+            clk.host("seed1")
+            yield fut                                              # -- wait: the squeeze (host, off-thread)
+            clk.host("wait_shake")
+            x = finish().reshape(D, width)
+        else:
+            x = _expand(seed1, D * width, device).reshape(D, width)
+        y16_pub = chain[1] if chain is not None else None
+        w, h, q, v = _tests_compute(sys, tb, cfg, x, coefs, U, W, pub, None, y16_pub, layout, mr, device, check=check)
+        clk.lap("tests_w")
+        clk.lap("tests_quad")
+        clk.lap("tests_chain")
+        clk.host("launch_tests_qc")
     # the test messages leave the device as ONE pinned non-blocking copy (int32: residues < p); host copies below
-    msgs = [("w", w), ("h", h)] + ([("q", q)] if q is not None else []) + ([("v", v)] if v is not None else [])
-    if cuda:
+    if st is None and cuda:
+        msgs = [("w", w), ("h", h)] + ([("q", q)] if q is not None else []) + ([("v", v)] if v is not None else [])
         offs, at = {}, 0
         for name, tsr in msgs:
             offs[name] = (at, tuple(tsr.shape))
@@ -1147,16 +1395,13 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         for name, tsr in msgs:
             o, shape = offs[name]
             mbuf[o:o + 4 * tsr.numel()].view(torch.int32).view(shape).copy_(tsr.to(torch.int32).contiguous(), non_blocking=True)
-        clk.lap("tests_chain")
-        clk.host("launch_tests_qc")
         yield _event(device, slot is not None)                                       # -- wait: w, h, q, v reach the host
         clk.host("wait_msgs")
         got = {}
         for name, (o, shape) in offs.items():
             got[name] = mbuf[o:o + 4 * math.prod(shape)].numpy().view(np.uint32).reshape(shape).copy()
         w_np, h_np, q_np, v_np = got["w"], got["h"], got.get("q"), got.get("v")
-    else:
-        clk.lap("tests_chain")
+    elif st is None:
         w_np = w.cpu().numpy().astype(np.uint32)
         h_np = h.cpu().numpy().astype(np.uint32)
         q_np = q.cpu().numpy().astype(np.uint32) if q is not None else None

@@ -28,20 +28,47 @@ def commit_device_async(U_int32: torch.Tensor):
     return _as_torch_i32(tree.root, U_int32.device), tree
 
 
+_OFFS: dict = {}
+
+
+def _level_offsets(sizes: tuple, device) -> tuple[torch.Tensor, torch.Tensor]:
+    """(offsets (depth,), shifts (depth,)) of the concatenated tree levels (cached per level-size tuple)."""
+    key = (sizes, str(device))
+    hit = _OFFS.get(key)
+    if hit is None:
+        offs, at = [], 0
+        for sz in sizes:
+            offs.append(at)
+            at += sz
+        hit = (torch.tensor(offs, dtype=torch.int64, device=device),
+               torch.arange(len(sizes), dtype=torch.int64, device=device))
+        _OFFS[key] = hit
+    return hit
+
+
 def gather_paths_device(tree, cols_t: torch.Tensor) -> torch.Tensor:
     """(t, depth, 8) int32 siblings, leaf level first: ``levels[k][(c >> k) ^ 1]`` -- on the device, on the current
-    torch stream (the tree levels are read through the CUDA array interface; no cupy launch)."""
+    torch stream (the tree levels are read through the CUDA array interface; no cupy launch).  The levels are
+    concatenated once (2n x 32 bytes) and gathered by ONE index_select with per-level offsets instead of one
+    index_select + stack per level (was 2 x depth launches)."""
     levels = tree.levels[:-1]
     t = cols_t.shape[0]
     if not levels or t == 0:
         return torch.empty((t, 0, 8), dtype=torch.int32, device=cols_t.device)
-    sib = [_as_torch_i32(lvl, cols_t.device).index_select(0, (cols_t >> k) ^ 1) for k, lvl in enumerate(levels)]
-    return torch.stack(sib, dim=1)
+    dev = cols_t.device
+    flat = torch.cat([_as_torch_i32(lvl, dev) for lvl in levels])                  # (sum_k N_k, 8)
+    offs, shifts = _level_offsets(tuple(int(lvl.shape[0]) for lvl in levels), dev)
+    idx = offs[None, :] + ((cols_t[:, None] >> shifts[None, :]) ^ 1)              # (t, depth)
+    return flat.index_select(0, idx.reshape(-1)).view(t, len(levels), 8)
 
 
 def paths_from_raw(raw: bytes, t: int, depth: int) -> list[list[bytes]]:
-    """The ``Proof.paths`` list-of-lists from the (t, depth, 8) LE-uint32 block's bytes (``merkle.open_device`` layout)."""
-    return [[raw[(c * depth + k) * 32:(c * depth + k + 1) * 32] for k in range(depth)] for c in range(t)]
+    """The ``Proof.paths`` list-of-lists from the (t, depth, 8) LE-uint32 block's bytes (``merkle.open_device`` layout).
+    numpy's void dtype keeps every byte (``S32`` would strip trailing NULs) and ``tolist`` builds the t x depth
+    ``bytes`` objects in C (was t x depth Python slices, ~1 ms per sub-batch)."""
+    if t == 0 or depth == 0:
+        return [[] for _ in range(t)]
+    return np.frombuffer(raw, dtype=np.dtype(("V", 32))).reshape(t, depth).tolist()
 
 
 def opened_from_pinned(buf_i32: torch.Tensor, M: int, t: int) -> np.ndarray:
