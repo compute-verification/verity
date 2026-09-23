@@ -181,6 +181,21 @@ def test_compose_prove_verify_publishes_the_native_digests(name: str, runners) -
 
 
 @pytest.mark.parametrize("name", SCHEMES)
+def test_pipelined_prover_publishes_the_sequential_statement(name: str, runners) -> None:
+    """``prove_vus_many`` (bench-vu-rel --pipeline N): the statement is fixed from the committer's digests before each
+    prover starts; it must be the one ``prove_vus`` publishes, and every sub-batch must verify."""
+    R, data = runners[name]
+    ids = [[0, 2], [1, 3]]
+    many, wall = R.prove_vus_many([[data[i] for i in g] for g in ids], lambda i: None, depth=2, vu_ids=ids)
+    assert len(many) == 2 and wall > 0
+    for (V, proof, pubs, lay), g in zip(many, ids):
+        assert R.verify_vus(proof, pubs, lay, coins=V) == (True, "")
+        _, ref, _ = R.prove_vus([data[i] for i in g], vu_ids=g)
+        assert np.array_equal(pubs[0], ref[0]) and np.array_equal(pubs[1], ref[1]) and pubs[3] == ref[3] and pubs[4] == ref[4]
+        assert proof.timings["auth_openings"] >= 0 and proof.timings["total"] + proof.timings.get("hints_host", 0.0) > 0
+
+
+@pytest.mark.parametrize("name", SCHEMES)
 def test_committed_operand_negatives_rejected(name: str, runners) -> None:
     R, data = runners[name]
     negs = hashed_negatives(R, [data[0], data[2]])
