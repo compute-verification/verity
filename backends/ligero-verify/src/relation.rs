@@ -433,6 +433,8 @@ pub static BF16_HOPPER_V2: Relation = Relation {
     end_components: None,
     sys_id: "066c6696b29870581148d7336ca615a83b35e9651f46e692d883e8f73fe75338",
     table_digest: "e9b1b7b428aa9bd52fde2d90cdc6636804c837eaf832172473aa8def73135131",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
 };
 
 pub static BF16_AMPERE_V2: Relation = Relation {
@@ -446,6 +448,8 @@ pub static BF16_AMPERE_V2: Relation = Relation {
     end_components: None,
     sys_id: "2a5f4378c8037f41ad9fb410cbeeebf82a65b992d7b1ead9867174667515decc",
     table_digest: "2ce5db0942965f1f6912b7316466b665d6663aff40e78fc7a6c1efe80a6f0a7f",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
 };
 
 pub static FP8_HOPPER_V2: Relation = Relation {
@@ -459,6 +463,8 @@ pub static FP8_HOPPER_V2: Relation = Relation {
     end_components: None,
     sys_id: "2cb40f21d28a6b28ce851093a9dc9b5ae0ded4f1edcd6b4fd781d649bd98511b",
     table_digest: "c214a87cecc72863537a7b4ee5a0477685abcc45372e68f0f7f6062d97ebbdc6",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
 };
 
 pub static FP8_ADA_V2: Relation = Relation {
@@ -472,6 +478,8 @@ pub static FP8_ADA_V2: Relation = Relation {
     end_components: None,
     sys_id: "11a7194bb82ed54f64a582658bea5a798548c1e736978ec9e1a83798765f74bc",
     table_digest: "215e1beb6599c23337c586ea8da1e32fcd93a75244cfa09c4d9058ecebbd35dd",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
 };
 
 pub static RELATIONS: [&Relation; 9] = [

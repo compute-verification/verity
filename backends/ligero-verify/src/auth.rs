@@ -405,7 +405,7 @@ pub fn check(auth: &AuthBlock, multiproofs: &[Vec<[u8; 32]>], a: &[u16], b: &[u1
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hash::hex;
+    use crate::hash::{hex, sha256};
 
     fn h(s: &str) -> [u8; 32] {
         let mut o = [0u8; 32];
