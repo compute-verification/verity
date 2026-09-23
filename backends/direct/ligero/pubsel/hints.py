@@ -40,7 +40,10 @@ def step_int(p: Params, pl: Plan, c: int, a: list[int], b: list[int], y: int | N
         G = max([p.floor] + [ee for _, _, ee in terms])
         E = max(G, e_st)
         delta, dacc = E - G, E - e_st
-        H[f"{tag}.delta"], H[f"{tag}.dacc"] = delta, dacc
+        H[f"{tag}.delta"] = delta
+        kc = min(max(e_st - G, -pl.W), pl.PB)                 # the one-hot over clamp(e_acc - G, -W, PB)
+        for i in range(pl.W + pl.PB + 1):
+            H[f"{tag}.sel[{i}]"] = int(kc == i - pl.W)
         Q = sum((1 - 2 * s) * aligned_product(pl, u, E - ee) for s, u, ee in terms)
         q_acc = (Mt << pl.ss) >> min(dacc, pl.W)
         sign = 1 - 2 * s_st
@@ -203,7 +206,10 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device):
         G = torch.clamp(eg.max(dim=1).values, min=p.floor)
         E = torch.maximum(G, e_st)
         delta, dacc = E - G, E - e_st
-        H[f"{tag}.delta"], H[f"{tag}.dacc"] = delta, dacc
+        H[f"{tag}.delta"] = delta
+        kc = torch.clamp(e_st - G, min=-pl.W, max=pl.PB)      # the one-hot over clamp(e_acc - G, -W, PB)
+        for i in range(pl.W + pl.PB + 1):
+            H[f"{tag}.sel[{i}]"] = (kc == i - pl.W).to(torch.int64)
         d = E[:, None] - eg
         al = torch.where(d <= pl.PS, ug << torch.clamp(pl.PS - d, min=0),
                          torch.where(d < pl.PB, ug >> torch.clamp(d - pl.PS, min=0), torch.zeros_like(ug)))

@@ -196,10 +196,10 @@ fn system_digest_names_every_pinned_relation() {
         ("fixtures/systems/fp8-hopper.system.bin", "fp8-hopper", "3396", "192"),
         (FP4_SYS, "fp4-nvf4", "1583", "141"),
         // the v2 public-selection systems (lane relmin-lookup): recompiled torch-free, sys_id == protocol.system_id
-        ("fixtures/systems/bf16-hopper-v2.system.bin", "bf16-hopper-v2", "292", "55"),
-        ("fixtures/systems/bf16-ampere-v2.system.bin", "bf16-ampere-v2", "469", "54"),
-        ("fixtures/systems/fp8-hopper-v2.system.bin", "fp8-hopper-v2", "195", "16"),
-        ("fixtures/systems/fp8-ada-v2.system.bin", "fp8-ada-v2", "357", "32"),
+        ("fixtures/systems/bf16-hopper-v2.system.bin", "bf16-hopper-v2", "282", "55"),
+        ("fixtures/systems/bf16-ampere-v2.system.bin", "bf16-ampere-v2", "449", "54"),
+        ("fixtures/systems/fp8-hopper-v2.system.bin", "fp8-hopper-v2", "185", "16"),
+        ("fixtures/systems/fp8-ada-v2.system.bin", "fp8-ada-v2", "337", "32"),
     ] {
         let (code, js) = run(&["system-digest", "--system", path]);
         assert_eq!(code, 0, "{js}");

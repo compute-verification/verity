@@ -424,7 +424,7 @@ verifier needs (the code is the reference; PROTOCOL.md still describes the BF16 
 `bf16-hopper-v2`, `bf16-ampere-v2`, `fp8-hopper-v2`, `fp8-ada-v2` (`backends/direct/ligero/pubsel/relation.py`,
 registered in `relations.py` beside the v1 names, v1 untouched) claim exactly what their v1 counterparts claim -- the
 same pinned instruction semantics (`verity.ml.tc.models`), the same statement widths, the same chain-end word
-(`y16`, one public word per VU; `ligero-system/v1` files) -- with a different compiled unit: 292 / 469 / 195 / 357 rows
+(`y16`, one public word per VU; `ligero-system/v1` files) -- with a different compiled unit: 282 / 449 / 185 / 337 rows
 against 3292 / 3516 / 3396 / 3769.  What changes for a verifier:
 
 * **The pins are derived values, not word components.**  A v1 system pins `a[i].s|m|e` / `b[i].s|m|e` and the
@@ -448,12 +448,14 @@ against 3292 / 3516 / 3396 / 3769.  What changes for a verifier:
   refused with the decode's reason (Python: `public inputs rejected: ...`; Rust: `public inputs: ... (unit j)`).
 * **Tags and pins.**  `bf16-hopper-v2` and `bf16-ampere-v2` absorb the empty tag like the other BF16 relations (the
   statement's name and the `sys_id` in the digest distinguish them, D11); the FP8 pair absorb `|rel=fp8-hopper-v2|v1`
-  / `|rel=fp8-ada-v2|v1`.  Pinned digests (`sys_id` / table digest): `066c6696... / e9b1b7b4...`,
-  `2a5f4378... / 2ce5db09...`, `2cb40f21... / c214a87c...`, `11a7194b... / 215e1beb...` -- laptop compilations
+  / `|rel=fp8-ada-v2|v1`.  Pinned digests (`sys_id` / table digest): `cf99d1ce... / bc4b95ec...`,
+  `15d793e7... / e70b77d5...`, `e2a1573b... / a473c735...`, `f23461f8... / 82b3041e...` -- laptop compilations
   from the lane tree, torch-free, twice each, byte-identical, the `sys_id`s equal to `protocol.system_id` under
   torch; fixtures under `fixtures/systems/`.  The units select the pinned sum, the accumulator's aligned term and the
   normalised significand without product rows (a hint row and one row-free quadratic `sel_i (X - value_i) = 0` per
-  candidate), and the two shift hints are ranged by their lookups' one-hots alone (`LigeroCtx.lookup(range_key=False)`).
+  candidate); the group maximum and both alignment shifts come from one one-hot over `clamp(e_acc - G, -W, PB)` (the key
+  is an affine expression of the state and the pin, so there are no shift hints; the end selectors mean `>= PB` /
+  `<= -W` through a signed key-difference range check).
   The last group of a unit commits no fraction bits: its normalised significand, hidden bit and the BF16 epilogue's
   fields are picked from the sum's bit rows by the normalisation one-hot, with the bits above the window forced to zero.
   A zero sum (the terms cancel, or every term is zero: `z = 1`) is the zero word whatever normalisation shift the one-hot

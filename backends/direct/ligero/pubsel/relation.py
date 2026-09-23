@@ -11,11 +11,14 @@ only what depends on the private accumulator:
 * the verifier pins, per group, ``G = max(floor, e_i)`` (the group maximum of the *products*) and the signed sum of the
   truncated aligned products for every possible extra shift ``j`` (``Q[j] = sum_i (1 - 2 s_i) align(u_i, j + G - e_i)``,
   ``j`` in ``[0, prod_bits)``; every term is shifted out for ``j >= prod_bits``).  With ``E = max(G, e_acc)`` the group's
-  product sum is ``Q[E - G]`` -- the prover *selects* it with a one-hot over ``delta = E - G`` (a lookup on ``delta``);
-* the group maximum needs two hints, ``delta = E - G >= 0`` and ``dacc = E - e_acc >= 0`` with ``delta dacc = 0``;
+  product sum is ``Q[E - G]``;
+* the group maximum and both alignment shifts come from ONE one-hot over ``c = clamp(k, -W, PB)`` with ``k = e_acc - G`` an
+  affine expression of the state and the pin (no shift hints): ``k >= 0`` gives ``E = G + k`` and ``Q[min(k, PB)]``
+  (``Q[PB] = 0``), ``k < 0`` gives ``E = e_acc``, ``Q[0]`` and the accumulator shifted by ``min(-k, W)``; the key constraint
+  ``k - sum_c sel_c c = diff`` with ``diff = 0`` off the ends and ``(1 - 2 sel_lo) diff`` in ``[0, 2^SHIFT_BITS)`` (one product
+  row, SHIFT_BITS bits) makes the end selectors mean ``k >= PB`` / ``k <= -W``; ``delta = E - G`` is picked from the one-hot;
 * the accumulator's aligned term ``floor(M 2^state_shift / 2^min(dacc, W))`` is a *window* of the accumulator's own bit rows
-  (the range check of the linked fraction supplies them) selected by a one-hot over ``min(dacc, W)``: no quotient, no
-  remainder, no power table;
+  (the range check of the linked fraction supplies them) selected by that one-hot: no quotient, no remainder, no power table;
 * the exact sum ``S = (1 - 2 s_acc) q_acc + Q[delta] = (1 - 2 sgn) v`` with ``v`` committed in bits (two 16-bit limbs and a
   carry when ``2^s_bits + s_max`` would reach ``p``: bf16-hopper);
 * the RZ normalisation is a window of ``v``'s bits: ``M = floor(v / 2^t)`` (``v 2^-t`` for ``t < 0``) with a one-hot over the
@@ -29,8 +32,7 @@ only what depends on the private accumulator:
   BF16 epilogue's fields; only an intermediate group (two-group units) commits its fraction, for the next alignment;
 * every one-hot selection is *picked*, not summed (``_pick``): the selected value is a hint row ``X`` (or the value the
   relation already commits, ``M``) and each candidate costs one row-free quadratic ``sel_i (X - value_i) = 0`` instead of a
-  product row; the two shift hints ``delta`` / ``dacc`` are ranged by their lookups' one-hot + key-difference constraints
-  alone (``LigeroCtx.lookup(range_key=False)``) instead of a separate bit decomposition.
+  product row.
 
 One code path for the four relations, parametrised by ``Params`` (BF16: ``Params.from_model``) or ``FP8Params`` (the
 adder-side widths with the lossy rescale: the adder's state is the top 14 bits of the FP32 significand).  ``chain=True`` is
@@ -43,7 +45,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from verity_numerical.checker.ctx import Table
 from verity_numerical.checker.params import Params
 
 from ..compile import Expr, LigeroCtx, Quadratic, System
@@ -175,40 +176,6 @@ def _zero(ctx: LigeroCtx, name: str, a: Expr, b: Expr) -> None:
     ctx.sys.quadratic.append(Quadratic(f"{ctx.scope}.{name}", a, b, Expr(ctx)))
 
 
-def _clamp_table(name: str, top: int) -> Table:
-    """key in [0, 2^SHIFT_BITS) -> min(key, top): ``top`` singleton rows and one interval row (the lookup's one-hot has
-    ``top + 1`` selectors; the interval selector stands for "shifted out")."""
-    return Table(f"{name}{top}", 0, 2**SHIFT_BITS, ("v",), lambda k: (min(k, top),))
-
-
-def _select(ctx: LigeroCtx, name: str, sels: list[Expr], values: list[Expr]) -> Expr:
-    """``sum_i sel_i value_i`` for a one-hot ``sels`` (the lookup's, or hints constrained boolean with sum 1): one product
-    row per term; the sum's integer interval is the hull of the values' (a theorem of the one-hot: exactly one selector is
-    1 as an integer, every value is an integer of its interval, and every product is inside the field), recorded with
-    ``learn`` so that the audit of the constraints using it sees the hull instead of the sum of the intervals."""
-    acc = Expr(ctx)
-    lo = hi = None
-    for i, (s, v) in enumerate(zip(sels, values)):
-        if v.is_const():
-            if v.c == 0:
-                continue
-            term = s * v.c
-            iv = (min(0, v.c), max(0, v.c))
-        else:
-            term = ctx.product(s, v)
-            iv = ctx.interval(v)
-            if iv is None:
-                raise ValueError(f"{ctx.scope}.{name}[{i}]: value interval unknown")
-            iv = (min(0, iv[0]), max(0, iv[1]))
-        acc = acc + term
-        lo = iv[0] if lo is None else min(lo, iv[0])
-        hi = iv[1] if hi is None else max(hi, iv[1])
-    if lo is None:
-        return acc
-    ctx.learn(acc, lo, hi + 1)
-    return acc
-
-
 def _pick(ctx: LigeroCtx, name: str, sels: list[Expr], values: list[Expr], target: Expr | None = None,
           hint: str | None = None) -> Expr:
     """The value a one-hot selects, without product rows: ``X`` is a hint row (or the given ``target`` expression) and every
@@ -315,33 +282,47 @@ def compile_v2_unit(p: Params, chain: bool = False) -> System:
         else:
             Qp = [ctx.pin(f"{tag}.Q[{j}]", -qm, qm + 1) for j in range(PB)]
 
-        # the group maximum E = max(G, e_acc): delta = E - G >= 0, dacc = E - e_acc >= 0, one of them zero.  The two
-        # shifts are the keys of the lookups below, whose one-hot + key-difference constraints define them as integers in
-        # [0, 2^SHIFT_BITS + top) (``range_key=False``: no separate range check).
+        # the group maximum E = max(G, e_acc) and both alignment shifts from ONE one-hot over c = clamp(k, -W, PB), where
+        # k = e_acc - G is an affine expression of the state and the pin (no shift hints).  k >= 0: E = G + k, the products'
+        # sum is Q[min(k, PB)] (0 for k >= PB, every term shifted out), the accumulator's term is its unshifted window;
+        # k < 0: E = e_acc, the sum is Q[0], the window is shifted by min(-k, W) (0 for -k >= W).  The one-hot's key
+        # constraint: diff = k - sum_c sel_c c is 0 unless an end selector is on, and (1 - 2 sel_lo) diff in [0, 2^SHIFT_BITS)
+        # (diff >= 0 at the top end, <= 0 at the bottom end: the end selectors stand for k >= PB and k <= -W, with the same
+        # bound |k| < 2^SHIFT_BITS + end as the two lookups had): one product row and SHIFT_BITS bit rows for both shifts.
+        # delta = E - G is a hint picked as k at the top end, c on the non-negative singletons, 0 below zero.
         ctx.scope = f"{tag}.max"
-        delta, dacc = _hint(ctx, f"{tag}.delta"), _hint(ctx, f"{tag}.dacc")
-        ctx.scope = f"{tag}.qsel"
-        (jsel,) = ctx.lookup("qsel", _clamp_table("QSEL", PB), delta, range_key=False)
-        ctx.scope = f"{tag}.acc"
-        (tsel,) = ctx.lookup("tsel", _clamp_table("TSEL", W), dacc, range_key=False)
-        ctx.scope = f"{tag}.max"
-        _zero(ctx, "max", delta, dacc)
-        ctx.eq("E", G + delta, e_st + dacc)
-        E = G + delta
-
-        # the products' sum: Q[min(delta, PB)], Q[PB] = 0 (the interval selector), picked by the lookup's one-hot
-        ctx.scope = f"{tag}.qsel"
-        jsels = _bit_exprs(ctx, jsel.sel_rows)                # PB + 1 selectors, the last for delta >= PB
+        k = e_st - G
+        cs = list(range(-W, PB + 1))
+        sels = [_hint(ctx, f"{tag}.sel[{i}]") for i in range(len(cs))]
+        for i, s in enumerate(sels):
+            ctx.boolean(f"sel[{i}]", s)
+        ctx.eq("onehot", sum(sels[1:], sels[0]), 1)
+        sel_lo, sel_hi = sels[0], sels[-1]
+        ksel = sum((c * s for c, s in zip(cs[1:], sels[1:])), cs[0] * sels[0])
+        ctx.learn(ksel, cs[0], cs[-1] + 1)                    # the one-hot picks one of the cs
+        diff = k - ksel
+        _zero(ctx, "keysel", diff, 1 - sel_lo - sel_hi)
+        ctx.rng("keydiff", ctx.product(1 - 2 * sel_lo, diff), 0, 2**SHIFT_BITS)
         zero = Expr(ctx)
+        delta = _pick(ctx, "delta", sels, [zero if c < 0 else (k if c == PB else zero + c) for c in cs], hint=f"{tag}.delta")
+        E = G + delta
+        sel_nonpos = sum(sels[1:W + 1], sels[0])              # c <= 0 (a bit: the one-hot's partial sum)
+        sel_nonneg = sum(sels[W + 1:], sels[W])               # c >= 0
+        ctx.learn(sel_nonpos, 0, 2)
+        ctx.learn(sel_nonneg, 0, 2)
+
+        # the products' sum: Q[max(c, 0)] with Q[PB] = 0 (the top end selector); one quadratic per distinct value
+        ctx.scope = f"{tag}.qsel"
+        jsels = [sel_nonpos] + sels[W + 1:]                    # c <= 0 -> Q[0]; c = 1..PB-1 -> Q[c]; c = PB -> 0
         if pl.wide:
             QL = _pick(ctx, "QL", jsels, [q[0] for q in Qp] + [zero], hint=f"{tag}.QL")
             QH = _pick(ctx, "QH", jsels, [q[1] for q in Qp] + [zero], hint=f"{tag}.QH")
         else:
             Q = _pick(ctx, "Q", jsels, Qp + [zero], hint=f"{tag}.Q")
 
-        # the accumulator's term: floor(Mt 2^ss / 2^min(dacc, W)) as the window of Mt's bits selected by min(dacc, W)
+        # the accumulator's term: floor(Mt 2^ss / 2^min(-c, W)) as the window of Mt's bits selected by the one-hot
         ctx.scope = f"{tag}.acc"
-        tsels = _bit_exprs(ctx, tsel.sel_rows)                # W + 1 selectors, the last for dacc >= W (term 0)
+        tsels = [sel_nonneg] + sels[W - 1:0:-1] + [sel_lo]     # shift 0 (c >= 0), 1..W-1 (c = -1..-(W-1)), W (c = -W: term 0)
         if pl.wide:
             qL = _pick(ctx, "qL", tsels, [_window(ctx, mb, ss - t, 0, LIMB) for t in range(W)] + [zero], hint=f"{tag}.qL")
             qH = _pick(ctx, "qH", tsels, [_window(ctx, mb, ss - t, LIMB, W, LIMB) for t in range(W)] + [zero], hint=f"{tag}.qH")
