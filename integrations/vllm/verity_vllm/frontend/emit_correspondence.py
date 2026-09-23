@@ -28,7 +28,6 @@ from verity_vllm.runtime_correspondence import NAMESPACE, SCHEMA
 
 _ROW_RE = re.compile(r"\[(\d+)\]")
 _COLLECTIVE_KINDS = {"all_reduce2": "all_reduce", "all_gather2": "all_gather"}   # op name -> collective kind (operands in rank order)
-_FROM_CAP = 8                                                                   # producers listed per argument before truncation
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -156,24 +155,8 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
         j = bisect.bisect_right(field_starts, leaf) - 1
         return field_names[j] if 0 <= j < len(field_names) else None
 
-    def field_start(leaf: int) -> int:
-        j = bisect.bisect_right(field_starts, leaf) - 1
-        return field_starts[j] if 0 <= j < len(field_starts) else 0
-
-    def producers(refs) -> tuple[list[dict], int]:
-        out: list[dict] = []
-        rs = _runs(refs)
-        for space, i, lo, hi in rs:
-            if len(out) >= _FROM_CAP:
-                break
-            if space == "n":
-                out.append({"kind": "call", "call": int(i), "leaves": [int(lo), int(hi)]})
-            elif space == "p" and i < n_user:
-                out.append({"kind": "input", "name": input_names[i], "leaves": [int(lo), int(hi)]})
-            elif space == "p" and i == weights_index:   # leaves relative to the weight field (the source tensor), not to the weights record
-                s = field_start(lo)
-                out.append({"kind": "weight", "name": field_of(lo), "leaves": [int(lo - s), int(hi - s)]})
-        return out, len(rs)
+    # (which Calls / inputs / weight fields an argument's leaves come from is the Program's own data -- the body's reference sequences --
+    #  and is NOT repeated here: the record only locates the argument inside the occurrence's input tensors)
 
     def source_of(fx_arg, v) -> tuple[str, str | None]:
         if isinstance(v, Coll):
@@ -323,10 +306,6 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
                         spans.append(hit)
                 if spans:
                     found["spans"] = spans
-            prods, total = producers(a.refs)
-            found["from"] = prods
-            if total > len(prods):
-                found["from_total"] = total
             args.append(found)
         calls.append({"occ": o, "member": member, "row": row, "hint": hint, "returns": rets, "args": args})
 

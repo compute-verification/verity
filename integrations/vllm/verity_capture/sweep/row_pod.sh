@@ -425,11 +425,13 @@ for w in ("step", "request"):
     a = json.load(open(art)) if os.path.exists(art) else {}
     out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "exception": r.get("exception"), "message": (r.get("message") or "")[:300],
               "program_digest": (r.get("program") or {}).get("digest") or a.get("program_digest"), "identity": a.get("identity"),
+              "correspondence_digest": (r.get("program") or {}).get("correspondence_digest") or a.get("correspondence_digest"),
               "target": (a.get("target_profile") or {}), "applicability": a.get("applicability")}
 import glob
 for p in sorted(glob.glob(f"{d}/build_request_LP*_T*/result.json")):  # [X-09] the batch's other request shapes
     r = json.load(open(p)); w = os.path.basename(os.path.dirname(p))
-    out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "message": (r.get("message") or "")[:300], "program_digest": (r.get("program") or {}).get("digest")}
+    out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "message": (r.get("message") or "")[:300], "program_digest": (r.get("program") or {}).get("digest"),
+              "correspondence_digest": (r.get("program") or {}).get("correspondence_digest")}
 json.dump(out, open(f"{d}/build_summary.json", "w"), indent=1, default=str)
 print("PASS" if all(v["ok"] for v in out.values()) else "FAIL")
 EOF

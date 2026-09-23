@@ -97,13 +97,9 @@ JSON_SCHEMA: dict[str, Any] = {
                     "input": {"type": ["integer", "null"], "description": "index into the occurrence's `inputs`; null = not one source tensor"},
                     "leaves": {"type": ["array", "null"], "items": {"type": "integer"}, "description": "[lo, hi) leaves of that input this argument reads (null = several ranges)"},
                     "spans": {"type": "array", "items": {"type": "object", "required": ["input", "leaves"], "properties": {"input": {"type": "integer"}, "leaves": _RANGE}},
-                              "description": "when the argument spans SEVERAL fx inputs (a collective's `own ++ peer` operand): in argument order, the input and leaf range of each piece"},
-                    "from": {"type": "array", "items": {"type": "object", "properties": {
-                        "kind": {"enum": ["call", "input", "weight"]}, "call": {"type": "integer"}, "name": {"type": "string"}, "leaves": _RANGE}},
-                             "description": "the logical producers (Calls / inputs / weight fields) the argument's leaves come from, in argument order, "
-                                            "capped at 8 (`from_total` = the uncapped count); `leaves` are relative to the producer (a Call's return, an "
-                                            "input, a weight FIELD)"},
-                    "from_total": {"type": "integer"}}}}}}},
+                              "description": "when the argument spans SEVERAL fx inputs (a collective's `own ++ peer` operand): in argument order, the input and leaf range of each piece"}}},
+                         "description": "one per argument of the Call, in argument order.  WHICH Calls / inputs / weight fields the argument's leaves come "
+                                        "from is the Program's own data (the body's reference sequences) and is not repeated here"}}}},
     },
 }
 
@@ -162,7 +158,6 @@ class ArgSlot:
     name: str | None
     leaves: tuple[int, int] | None
     view: TensorView | None
-    producers: tuple[dict, ...]
     spans: tuple["ArgSpan", ...] = ()     # non-empty exactly when the argument is read from several fx inputs (then node/arg/leaves are None)
 
 
@@ -252,7 +247,7 @@ class RuntimeCorrespondence:
                     spans.append(ArgSpan(si.get("node"), si.get("arg"), si.get("source"), si.get("name"), tuple(s["leaves"]), TensorView.from_json(si.get("view"))))
                 args.append(ArgSlot(k, i, (src or {}).get("node"), (src or {}).get("arg"), (src or {}).get("source"), (src or {}).get("name"),
                                     tuple(a["leaves"]) if a.get("leaves") is not None else None,
-                                    TensorView.from_json((src or {}).get("view")), tuple(a.get("from") or ()), tuple(spans)))
+                                    TensorView.from_json((src or {}).get("view")), tuple(spans)))
             coll = None
             if o and o.get("collective"):
                 cj = o["collective"]

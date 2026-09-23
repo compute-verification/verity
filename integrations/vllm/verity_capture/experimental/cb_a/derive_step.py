@@ -452,8 +452,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             t1 = time.time()
             names = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
             with torch.no_grad(), vm.fake_forward_context(cfg, ntok), torch.device("meta"), export_compat(target, model), intercept_triton_launches():
+                # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{names[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
-                                    check_registry=True)
+                                    check_registry=True, rank=(tp, rank) if tp > 1 else None)
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok
@@ -464,15 +465,23 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             json.dump(rep.provenance, open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
         else:
             from verity.ir.codec import descriptor_size, encode_program, program_digest
+            from verity_vllm.runtime_correspondence import NAMESPACE as CORR_NS, correspondence_digest
             program = rep.program
             desc = encode_program(program)
             digest = program_digest(desc)
+            # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
+            corr_digest = correspondence_digest(desc)
+            assert corr_digest == rep.correspondence_digest, (corr_digest, rep.correspondence_digest)
             raw = json.dumps(desc, sort_keys=True).encode()
             with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
                 f.write(raw)
+            corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
             res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
                               "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": descriptor_size(desc),
-                              "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None}
+                              "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
+                              "correspondence_digest": corr_digest,
+                              "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),
+                                                 "occurrences": len(corr_doc.get("occurrences") or ()), "rank": corr_doc.get("rank")} if corr_doc else None}
             res["spec_histogram"] = _spec_histogram(program)
             res["rules_applied"] = rep.provenance["rules_applied"]
             res["n_applications"] = len(rep.provenance["applications"])
@@ -483,12 +492,15 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
             json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
             with gzip.open(os.path.join(out, "instances.json.gz"), "wt") as f:
-                json.dump({"schema": "cb-a/instance-sequence/v1", "digest": digest, "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None,
+                json.dump({"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
+                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None,
                            "rows": _instance_sequence(program)}, f)
             # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
             art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
                                          applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)
             res["artifact"] = art.to_json()
+            # beside program_digest, NOT inside the identity: the correspondence is data about the Program, not part of it
+            res["artifact"]["correspondence_digest"] = corr_digest
             json.dump(res["artifact"], open(os.path.join(out, "artifact.json"), "w"), indent=1, sort_keys=True)
 
 

@@ -232,8 +232,7 @@ def test_reader_lookups_owning_module_return_slot_arg_slot():
     x = table.arg_slot(1, 0)
     assert x.source == "input" and x.name == "x" and x.arg == 0 and x.leaves == (16, 32) and x.view.shape == (3, 16) and x.view.contiguous is True
     w = table.arg_slot(1, 1)
-    assert w.source == "weight" and w.name == "layers.0.self_attn.qkv_proj.weight" and w.leaves == (0, 128)
-    assert w.producers == ({"kind": "weight", "name": "layers.0.self_attn.qkv_proj.weight", "leaves": [0, 128]},)
+    assert w.source == "weight" and w.name == "layers.0.self_attn.qkv_proj.weight" and w.leaves == (0, 128) and w.spans == ()
     rec = table.record(1)
     assert rec.rule == "Linear[profile]_v1" and rec.op == "aten.linear.default" and rec.lifetime["in_place"] is False
     with pytest.raises(KeyError):
