@@ -379,10 +379,6 @@ def compile_v2_unit(p: Params, chain: bool = False) -> System:
         _pick(ctx, "Mn", nsels, [_norm_window(ctx, vbits, t, nb) for t in range(pl.t_lo, pl.t_hi + 1)], target=Mn)
         t_sel = sum((t * s for t, s in zip(range(pl.t_lo + 1, pl.t_hi + 1), nsels[1:])), pl.t_lo * nsels[0])
         ctx._learn(t_sel, pl.t_lo, pl.t_hi + 1)
-        tc = p.acc_e_min - E + p.width - nb                    # the clamped shift: e1 = acc_e_min
-        dt = t_sel - tc
-        ctx.rng("dt", dt, 0, 2**CMP_BITS)                     # t >= tc: e1 >= acc_e_min
-        _zero(ctx, "clamp", 1 - hid, dt)                      # hid = 0 -> t = tc (the subnormal grid)
         e1 = E + t_sel + nb - p.width
         ctx.scope = f"{tag}.out"
         z, ovf = _hint(ctx, f"{tag}.z"), _hint(ctx, f"{tag}.ovf")
@@ -390,11 +386,22 @@ def compile_v2_unit(p: Params, chain: bool = False) -> System:
         ctx.boolean("ovf", ovf)
         _zero(ctx, "z0", z, Mn)
         ctx.inverse_nonzero("z1", Mn + z)                     # z = [M = 0]
-        cmp = 2 * (ovf * e1) - (2 * p.acc_e_max + 1) * ovf + p.acc_e_max - e1
-        ctx.rng("ovf.proof", cmp, 0, 2**CMP_BITS)             # ovf = [e1 > acc_e_max]
+        # The exponent the shift proves, e1 = E + t + nb - width, matters only when the sum is not zero: a zero sum (z = 1)
+        # is the zero word whatever t the one-hot picked (every window of v = 0 is 0), and no t need exist with e1 in range
+        # (E can sit anywhere in [floor, acc_e_max] when the terms cancel).  So the clamp / overflow proofs read the masked
+        # exponent e1m = e1 when z = 0, acc_e_min when z = 1 (one product z e1, shared with e_hat below).
+        ze1 = z * e1
+        e1m = e1 - ze1 + p.acc_e_min * z
+        ctx.scope = f"{tag}.norm"
+        dt = e1m - p.acc_e_min                                # = t - tc(E), tc the clamped shift (e1 = acc_e_min), when z = 0
+        ctx.rng("dt", dt, 0, 2**CMP_BITS)                     # t >= tc: e1 >= acc_e_min
+        _zero(ctx, "clamp", 1 - hid, dt)                      # hid = 0 -> t = tc (the subnormal grid)
+        ctx.scope = f"{tag}.out"
+        cmp = 2 * (ovf * e1m) - (2 * p.acc_e_max + 1) * ovf + p.acc_e_max - e1m
+        ctx.rng("ovf.proof", cmp, 0, 2**CMP_BITS)             # ovf = [e1 > acc_e_max] (ovf = 0 when z = 1)
         ovf_eff = ovf - ovf * z
         s_out = sgn - sgn * z
-        e_hat = e1 + z * (p.floor - e1)
+        e_hat = e1 + z * p.floor - ze1
         ovfs.append((ovf_eff, sgn))
         final = (s_out, e1, hid, fo, z)
         state = (s_out, e_hat, _bit_exprs(ctx, fo_rows) + [hid])

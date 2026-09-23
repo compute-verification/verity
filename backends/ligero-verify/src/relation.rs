@@ -416,8 +416,8 @@ pub static BF16_HOPPER_V2: Relation = Relation {
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_HOPPER),
     end_components: None,
-    sys_id: "d131c745215be997f731af388d27af374fa1f6f66e0889345d788c0888c33c0a",
-    table_digest: "1205a6a09d789b5242bec247e8ef03bc032f4fcbc502ab1a5bfc655667d889fc",
+    sys_id: "2a6b603f6dae4d4666f643176ecb0182faaeca78b23ca6870651336f7f15e951",
+    table_digest: "afec80046be26779bdbbf9fdfff074ca1ff28d7453f2f93638f203181423e135",
 };
 
 pub static BF16_AMPERE_V2: Relation = Relation {
@@ -429,8 +429,8 @@ pub static BF16_AMPERE_V2: Relation = Relation {
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_AMPERE),
     end_components: None,
-    sys_id: "0862669fd08d3cd80a38183dd14b3955272d04c7e682fe325139fd3751122d65",
-    table_digest: "86a982fc1330725e329222fbed459b2c71b4b35336862d2293d0299e9e320617",
+    sys_id: "f9620886dc15e36f40ec1ebbb1c3b2ddac95f40099b2195f0d9bbe9d6726b426",
+    table_digest: "686e141b0f9b703d4e86ac1f7d13ffe2badb8f1115736ebd1de0d5dfeaa6c105",
 };
 
 pub static FP8_HOPPER_V2: Relation = Relation {
@@ -442,8 +442,8 @@ pub static FP8_HOPPER_V2: Relation = Relation {
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_HOPPER),
     end_components: None,
-    sys_id: "fbea6ee16dd99c9343ef486cd99c95a8ee209f19977059b3e8ca6fa4fc427d85",
-    table_digest: "86c23ec3bd197d256d3256df1211bc58b963bf4b881610dc0341c3b7ed8e54a4",
+    sys_id: "56fdb2101f45459bb9c63e5ce105b1fe0b4239400ad6a4d418081047b96f168a",
+    table_digest: "c17cd2d2bdfde51773662815133879178479b4b5a39d158d08e3683afe6482cb",
 };
 
 pub static FP8_ADA_V2: Relation = Relation {
@@ -455,8 +455,8 @@ pub static FP8_ADA_V2: Relation = Relation {
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_ADA),
     end_components: None,
-    sys_id: "a8174ff5c88daf42d55b2d362a35324a1fe0232d8a514e7c10ad58c8f8bc1155",
-    table_digest: "a2015d492c6bfe29af219e760893e11e543e1a62402256810a9de1ec82e3a6cb",
+    sys_id: "f5df3bc74f5e7d54d481f9b2dc933c9903cba7acec4bf72a75a43d1954e22e9b",
+    table_digest: "ea503d65f7a697fff1d771e11adbe310d27587d193c50a29155ba7db69aba753",
 };
 
 pub static RELATIONS: [&Relation; 9] = [

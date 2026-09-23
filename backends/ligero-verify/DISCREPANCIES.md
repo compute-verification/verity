@@ -448,12 +448,16 @@ against 3292 / 3516 / 3396 / 3769.  What changes for a verifier:
   refused with the decode's reason (Python: `public inputs rejected: ...`; Rust: `public inputs: ... (unit j)`).
 * **Tags and pins.**  `bf16-hopper-v2` and `bf16-ampere-v2` absorb the empty tag like the other BF16 relations (the
   statement's name and the `sys_id` in the digest distinguish them, D11); the FP8 pair absorb `|rel=fp8-hopper-v2|v1`
-  / `|rel=fp8-ada-v2|v1`.  Pinned digests (`sys_id` / table digest): `d131c745... / 1205a6a0...`,
-  `0862669f... / 86a982fc...`, `fbea6ee1... / 86c23ec3...`, `a8174ff5... / a2015d49...` -- laptop compilations
+  / `|rel=fp8-ada-v2|v1`.  Pinned digests (`sys_id` / table digest): `2a6b603f... / afec8004...`,
+  `f9620886... / 686e141b...`, `56fdb210... / c17cd2d2...`, `f5df3bc7... / ea503d65...` -- laptop compilations
   from the lane tree, torch-free, twice each, byte-identical, the `sys_id`s equal to `protocol.system_id` under
   torch; fixtures under `fixtures/systems/`.  The units select the pinned sum, the accumulator's aligned term and the
   normalised significand without product rows (a hint row and one row-free quadratic `sel_i (X - value_i) = 0` per
   candidate), and the two shift hints are ranged by their lookups' one-hots alone (`LigeroCtx.lookup(range_key=False)`).
+  A zero sum (the terms cancel, or every term is zero: `z = 1`) is the zero word whatever normalisation shift the one-hot
+  picked, so the subnormal-clamp and overflow proofs read the exponent masked by `z` (`e1m = acc_e_min` when `z = 1`) --
+  the first cut of the unit demanded `t = tc(E)` for `z = 1` too and had no witness for a cancelling sum whose `E` put
+  `tc(E)` outside the shift range (found by the 1e5 differential on fp8-ada-v2; `test_zero_sums_accepted_in_unit_and_chain_mode`).
 * **`bf16-ampere-v2` is a new claim on the generic runner**, not a re-encoding of `vu.py`'s `--relation bf16` run:
   it proves the Ampere BF16 step over synthetic instances drawn like the Hopper BF16 set (`instances_dataset`
   `bench-instances-bf16-ampere/v1`), where `bf16-ampere` proves the frozen `bench-instances/v1` set through `vu.py`.

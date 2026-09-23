@@ -73,6 +73,20 @@ def _cases(rel: Relation, n: int, seed: int):
         for _ in range(int(rng.integers(1, 4))):
             cc = tc_dot(rel.model, cc, rel.operands(rng, (k,)).tolist(), rel.operands(rng, (k,)).tolist())
         c[i] = cc
+    # zero sums (one unit in 16): the products cancel pairwise (a_j b_j = -a_i b_i) on a zero accumulator, all operands zero
+    # on a zero accumulator (E = floor), or the accumulator cancels against a single product
+    zero = rng.integers(0, 16, size=n) == 0
+    kind = rng.integers(0, 3, size=n)
+    sign_bit = 1 << (plan(rel.params).op_word_bits - 1)
+    for i in np.nonzero(zero)[0]:
+        if kind[i] == 0:
+            a[i, 1::2], b[i, 1::2] = a[i, 0::2], b[i, 0::2] ^ sign_bit
+            c[i] = 0
+        elif kind[i] == 1:
+            a[i], b[i], c[i] = 0, 0, 0
+        else:
+            a[i, 1:], b[i, 1:] = 0, 0
+            c[i] = tc_dot(rel.model, 0, a[i].tolist(), (b[i] ^ sign_bit).tolist())
     y = np.zeros(n, dtype=np.int64)
     for i in range(n):
         while True:
@@ -241,3 +255,46 @@ def test_bf16_epilogue_rounds_to_nearest_even(rel):
     exp = torch.as_tensor([f32_to_bf16_word(int(v)) for v in y], dtype=torch.int64)
     assert torch.equal(got, exp)
     assert int(((y & 0xFFFF) == 0x8000).sum()) >= 8, "ties present"
+
+
+@pytest.mark.parametrize("rel", V2, ids=lambda r: r.name)
+def test_zero_sums_accepted_in_unit_and_chain_mode(rel):
+    """Exact zero sums -- the products cancel pairwise, every operand zero on a zero accumulator (E = floor), the accumulator
+    cancelling a single product, and the cancellation found by the 1e5 differential (fp8-ada-v2, c = 0xc69af800, seed 5096) --
+    are accepted with the model's zero word in both modes: the normalisation's shift proves nothing when the sum is zero, so the
+    clamp / overflow proofs read the exponent masked by z (a zero sum with E anywhere in [floor, acc_e_max] must have a witness)."""
+    p = rel.params
+    pl = plan(p)
+    rng = np.random.default_rng(11)
+    n = 256
+    a, b = rel.operands(rng, (n, rel.k)), rel.operands(rng, (n, rel.k))
+    c = _finite_fp32(rng, n)
+    sign_bit = 1 << (pl.op_word_bits - 1)
+    kind = np.arange(n) % 4
+    for i in range(n):
+        if kind[i] == 0:
+            a[i, 1::2], b[i, 1::2] = a[i, 0::2], b[i, 0::2] ^ sign_bit
+            c[i] = c[i] & (1 << 31)                          # +-0 accumulator
+        elif kind[i] == 1:
+            a[i], b[i] = 0, 0
+            c[i] = c[i] & (1 << 31)                          # E = floor
+        elif kind[i] == 2:
+            a[i, 1:], b[i, 1:] = 0, 0
+            c[i] = tc_dot(rel.model, 0, a[i].tolist(), (b[i] ^ sign_bit).tolist())
+        else:
+            a[i, 1::2], b[i, 1::2] = a[i, 0::2], b[i, 0::2] ^ sign_bit      # cancelling products on a live accumulator
+    y = np.array([tc_dot(rel.model, int(c[i]), a[i].tolist(), b[i].tolist()) for i in range(n)], dtype=np.int64)
+    fin = ((y >> 23) & 0xFF) != 0xFF
+    c, a, b, y = c[fin], a[fin], b[fin], y[fin]
+    assert int(((y & 0x7FFFFFFF) == 0).sum()) >= n // 2, "zero outputs present"
+    for chain in (False, True):
+        sys = rel.compile(p, chain)
+        tb = tables(sys, "cpu")
+        pub = rel.public_vectors(p, c, a, b, y, device="cpu")
+        W = build_witness(sys, pub, rel.hints(p, sys, c, a, b, y if chain else None, "cpu"), "cpu")
+        ok = _accepts(sys, tb, W, pub)
+        assert bool(ok.all()), f"{rel.name} chain={chain}: rejected {torch.nonzero(~ok).flatten().tolist()[:5]}"
+        if chain:
+            for k, e in ((k, e) for k, e in sys.outputs.items() if k in pub):
+                got = (sum(W[j].to(torch.int64) * v for j, v in e.lin.items()) + e.c) % P
+                assert torch.equal(got, torch.as_tensor(pub[k]) % P), f"{rel.name}: output {k}"

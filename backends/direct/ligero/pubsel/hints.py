@@ -60,14 +60,14 @@ def step_int(p: Params, pl: Plan, c: int, a: list[int], b: list[int], y: int | N
             H[f"{tag}.q"], H[f"{tag}.Q"] = q_acc, Q
         l = v.bit_length()
         e1 = max(E + l - p.width, p.acc_e_min)
-        tt = e1 - E + p.width - pl.nb
+        tt = e1 - E + p.width - pl.nb if v else pl.t_lo      # a zero sum: any shift in range (the relation masks e1 by z)
         Mn = (v >> tt) if tt >= 0 else (v << -tt)
         for i in range(pl.n_t):
             H[f"{tag}.nsel[{i}]"] = int(tt == pl.t_lo + i)
         hid, fo = Mn >> (pl.nb - 1), Mn & (2 ** (pl.nb - 1) - 1)
         H[f"{tag}.hid"], H[f"{tag}.fo"] = hid, fo
         zo = int(Mn == 0)
-        H[f"{tag}.z"], H[f"{tag}.ovf"] = zo, int(e1 > p.acc_e_max)
+        H[f"{tag}.z"], H[f"{tag}.ovf"] = zo, int(e1 > p.acc_e_max and not zo)
         s_st = sgn * (1 - zo)
         e_st = e1 + zo * (p.floor - e1)
         Mt = Mn
@@ -222,14 +222,14 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device):
             H[f"{tag}.q"], H[f"{tag}.Q"] = q_acc, Q
         l = _bit_length(v, pl.SB)
         e1 = torch.clamp(E + l - p.width, min=p.acc_e_min)
-        tt = e1 - E + p.width - pl.nb
+        tt = torch.where(v != 0, e1 - E + p.width - pl.nb, torch.full_like(v, pl.t_lo))
         Mn = torch.where(tt >= 0, v >> torch.clamp(tt, min=0), v << torch.clamp(-tt, min=0))
         for i in range(pl.n_t):
             H[f"{tag}.nsel[{i}]"] = (tt == pl.t_lo + i).to(torch.int64)
         hid, fo = Mn >> (pl.nb - 1), Mn & (2 ** (pl.nb - 1) - 1)
         H[f"{tag}.hid"], H[f"{tag}.fo"] = hid, fo
         zo = (Mn == 0).to(torch.int64)
-        H[f"{tag}.z"], H[f"{tag}.ovf"] = zo, (e1 > p.acc_e_max).to(torch.int64)
+        H[f"{tag}.z"], H[f"{tag}.ovf"] = zo, ((e1 > p.acc_e_max) & (zo == 0)).to(torch.int64)
         s_st = sgn * (1 - zo)
         e_st = e1 + zo * (p.floor - e1)
         Mt = Mn
