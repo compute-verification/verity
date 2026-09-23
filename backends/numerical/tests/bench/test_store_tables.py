@@ -101,6 +101,26 @@ def test_ts_and_ref_helpers(tmp_path: Path) -> None:
     assert L2S.ledger_ref(tmp_path / "x.jsonl", 2) == f"{tmp_path.resolve().as_posix()}/x.jsonl:2"
 
 
+def test_store_tables_shares_the_label_semantics_of_tables() -> None:
+    """One class order, one assertion shape, one canonicalisation: the like-for-like table cannot drift from the canonical tables."""
+    from verity_numerical.bench import contract, tables as T
+
+    assert ST.RANK is T.RANK and ST.Assertion is T._Label
+    assert set(T.RANK) == set(contract.PROOF_CLASSES) | {"COMPONENT"}, "every ledger class is ranked (ledger.PROOF_CLASSES = contract's + COMPONENT)"
+    assert T.RANK["COMPONENT"] < T.RANK["NO_PROOF"] < T.RANK["ARITHMETIC_DIAGNOSTIC"] < T.RANK["NON_ZK_PROOF_DIAGNOSTIC"] < T.RANK["NON_ZK_PROOF"]
+    assert T.RANK["NON_ZK_PROOF"] < T.RANK["COMPLETE_HVZK_BACKEND"] < T.RANK["COMPLETE_ZK_BACKEND"] and T.RANK.get("non-zk", -1) == -1
+    lane = [ST.Assertion("proof_class", "COMPLETE_ZK_BACKEND", "b-zk", "2026-09-22T11:00:00Z", "r1", "labels/r/2026-09-22T11:00:00Z-b-zk.json"),
+            ST.Assertion("label", "ZK interactive: 0.340 ms/VU", "b-zk", "2026-09-22T11:00:00Z", "r1", "labels/r/2026-09-22T11:00:00Z-b-zk~2.json"),
+            ST.Assertion("B", 4096, "b-zk", "2026-09-22T11:00:00Z", "r1", "labels/r/2026-09-22T11:00:00Z-b-zk~3.json")]
+    rt = [ST.Assertion("proof_class", "COMPONENT", "red-team-zk", "2026-09-22T12:00:00Z", "r2", "labels/r/2026-09-22T12:00:00Z-red-team-zk.json")]
+    assert ST.policy_proof_class(lane + rt, "b-zk", "COMPLETE_ZK_BACKEND", "red-team-*") == ("COMPONENT", rt[0]), "a COMPONENT verdict is a downgrade"
+    assert ST.policy_proof_class(lane + rt, "b-zk", "COMPLETE_ZK_BACKEND", "auditor-*") == ("COMPLETE_ZK_BACKEND", None), "policy picks the asserter"
+    assert ST.policy_proof_class(lane + rt, "b-zk", "COMPLETE_ZK_BACKEND", None) == ("COMPLETE_ZK_BACKEND", None)
+    assert T._redteam_ceiling(lane + rt, {"b-zk"}) == ("COMPONENT", rt[0]), "the same event policy the canonical tables apply"
+    assert ST.lane_row(lane, "b-zk", "ZK interactive") == {"proof_class": "COMPLETE_ZK_BACKEND", "label": "ZK interactive: 0.340 ms/VU", "B": 4096}
+    assert ST._label_order("labels/r/2026-09-22T11:00:00Z-b-zk~10.json") > ST._label_order("labels/r/2026-09-22T11:00:00Z-b-zk~9.json"), "~N sorts numerically"
+
+
 def test_diff_tables_compares_label_by_class() -> None:
     a = "| design | label | lane / run id |\n|---|---|---|\n| d | NON_ZK_PROOF_DIAGNOSTIC (red-team-zk r1; lane says X) | l / r |\n| e | X | l / r |"
     b = "| design | label | lane / run id |\n|---|---|---|\n| d | NON_ZK_PROOF_DIAGNOSTIC (hand-written prose) | l / r |\n| e | Y | l / r |"

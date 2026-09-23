@@ -159,8 +159,10 @@ PRODUCER_LABEL_KEYS = (_CANDIDATE, _LABEL)
 #: is the name the freeze spec gives it.  Either counts when the asserter is not a producer.
 VERIFIED_LABELS: tuple[tuple[str, tuple[Any, ...]], ...] = ((_INDEPENDENTLY_VERIFIED, (True, "true")), (_VERIFIED, (_VERIFIED_ACCEPTED,)))
 REDTEAM_GLOB = "red-team-*"
-#: Proof classes in order of strength; a red-team ``proof_class`` verdict below the fingerprint's class is a downgrade.
-RANK: dict[str, int] = {c: i for i, c in enumerate(("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF",
+#: Proof classes in order of strength; a red-team ``proof_class`` verdict below the fingerprint's class is a downgrade.  ``COMPONENT``
+#: is the ledger's class for a component benchmark (``bench.ledger.PROOF_CLASSES``), below every ``contract.PROOF_CLASSES`` entry; an
+#: unknown class ranks below all of them (``RANK.get(c, -1)``).  The one ordering for every table (``store_tables`` reads this one).
+RANK: dict[str, int] = {c: i for i, c in enumerate(("COMPONENT", "NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF",
                                                     "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND"))}
 SOUND_CLASSES = ("NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND")
 
@@ -353,11 +355,15 @@ def frozen_instances(target: Target) -> dict[str, Any] | None:
 
 @dataclass(frozen=True)
 class _Label:
+    """An assertion as the predicates read it (key and value canonical, see :func:`canonical_label`).  ``path`` is the assertion
+    file when the label came from the catalog (``store_tables``), None when it came as a ``Label`` object."""
+
     key: str
     value: Any
     by: str
     ts: str
     ref: str | None
+    path: str | None = None
 
 
 def _labels(labels: Iterable[Any]) -> list[_Label]:
@@ -396,12 +402,13 @@ def _verified_by(labels: Sequence[_Label], self_: set[str]) -> _Label | None:
     return None
 
 
-def _redteam_ceiling(labels: Sequence[_Label], self_: set[str]) -> tuple[str | None, _Label | None]:
-    """The class the latest red-team ``proof_class`` event granted (one event = one by + ref + ts; several assertions in it
-    grant the highest), or ``(None, None)`` when no red team spoke.  Downgrades stand, nothing is upgraded, a later
-    re-audit supersedes an earlier verdict."""
+def _redteam_ceiling(labels: Sequence[_Label], self_: set[str], by_glob: str = REDTEAM_GLOB) -> tuple[str | None, _Label | None]:
+    """The class the latest ``proof_class`` event by an asserter matching ``by_glob`` (the red team by default) granted -- one event
+    = one by + ref + ts; several assertions in it grant the highest -- or ``(None, None)`` when no such asserter spoke.  Downgrades
+    stand, nothing is upgraded, a later re-audit supersedes an earlier verdict.  ``labels`` are in ts order; asserters in ``self_``
+    (the producers) do not count."""
 
-    verdicts = [l for l in labels if l.key == _PROOF_CLASS and l.by not in self_ and fnmatch.fnmatchcase(l.by, REDTEAM_GLOB)]
+    verdicts = [l for l in labels if l.key == _PROOF_CLASS and l.by not in self_ and fnmatch.fnmatchcase(l.by, by_glob)]
     if not verdicts:
         return None, None
     latest = verdicts[-1]
