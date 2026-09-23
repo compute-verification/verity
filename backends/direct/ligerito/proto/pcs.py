@@ -24,8 +24,10 @@ from dataclasses import dataclass, field
 import numpy as np
 import torch
 
+from ._ligero import commit_gpu as _commit_gpu
 from ._ligero import merkle as ligero_merkle
 from . import claims as cl
+from . import device as dev
 from . import ext
 from . import merkle_multi
 from .dims import Dims
@@ -188,9 +190,10 @@ class _HostTree:
         return b"".join(self.levels_b[lv][i] for lv, i in merkle_multi.plan(S, depth))
 
 
-def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None) -> Proof:
-    """f: (N,) int32 device tensor (coefficients, [0, p)); z: (n, 6) numpy point; dims: the round structure;
-    coins: the Coins protocol instance (default Fiat-Shamir)."""
+def prove_reference(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None) -> Proof:
+    """The prototype's prover (lane ligerito-proto 7bc2fdd): host-side sumcheck tables, fp64-limb contractions.  Kept as the
+    byte-identity reference for ``prove`` and as the CPU path.  f: (N,) int32 tensor (coefficients, [0, p)); z: (n, 6) numpy
+    point; dims: the round structure; coins: the Coins protocol instance (default Fiat-Shamir)."""
     device = f.device
     n = dims.n
     N = 1 << n
@@ -362,6 +365,213 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     else:
         idx = torch.as_tensor(np.asarray(S, dtype=np.int64))
         op = RoundOpen(Us[-1][:, idx].t().contiguous().to(torch.int64).numpy(), trees[-1].gather(S, depth))
+    opens.append(op)
+    tm.stop()
+    return Proof(n, list(kps), list(qs), list(rates), splits, v, roots, sumcheck, opens, final_y, tr.rounds)
+
+
+class _NullTimer:
+    def start(self, name: str):
+        pass
+
+    def stop(self):
+        pass
+
+
+def _commit_fast(U: torch.Tensor):
+    """Blake3 Merkle over the codeword rows: the Ligero prover's fused 3-launch kernels (``commit_gpu``, same tree bytes as
+    ``hash_gpu``) when the leaf fits (<= 4096 words), else ``hash_gpu`` level by level."""
+    if _commit_gpu is not None and U.shape[0] <= 4096 and U.shape[1] & (U.shape[1] - 1) == 0:
+        tree = _commit_gpu.commit(U)
+        return ligero_merkle._gpu_merkle.digest_bytes(tree.root, HASH), tree
+    return _commit(U)
+
+
+def _open_fast(U: torch.Tensor, tree, S: list[int], depth: int) -> RoundOpen:
+    """Opened rows + multi-path siblings with two device gathers and two copies (no per-level syncs)."""
+    import cupy as cp
+
+    idx = torch.as_tensor(np.asarray(S, dtype=np.int64), device=U.device)
+    rows_d = U.index_select(1, idx).t().contiguous()
+    pl = merkle_multi.plan_levels(S, depth)
+    if pl:
+        flat = cp.asarray(np.concatenate([ix for _, ix in pl]))
+        parts, a = [], 0
+        for lv, ix in pl:
+            parts.append(tree.levels[lv][flat[a:a + len(ix)]])
+            a += len(ix)
+        sib = cp.asnumpy(cp.concatenate(parts, axis=0)).astype("<u4", copy=False).tobytes()
+    else:
+        sib = b""
+    rows = rows_d.cpu().numpy().astype(np.int64)
+    return RoundOpen(rows, sib)
+
+
+def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None) -> Proof:
+    """f: (N,) int32 device tensor (coefficients, [0, p)); z: (n, 6) numpy point; dims: the round structure;
+    coins: the Coins protocol instance (default Fiat-Shamir).
+
+    Device prover (lane ligerito-pcs-fast): the sumcheck tables, every contraction and fold live on the device (integer
+    kernels in ``device.py``, no fp64); the host keeps only the transcript and the O(T) batching coefficients.  Same
+    transcript and proof bytes as ``prove_reference`` for the same coins.  Falls back to ``prove_reference`` off-GPU."""
+    device = f.device
+    if not (device.type == "cuda" and dev.available(f) and ligero_merkle._gpu_merkle is not None):
+        return prove_reference(f, z, dims, timer, coins)
+    n = dims.n
+    N = 1 << n
+    assert f.numel() == N and z.shape == (n, D) and f.dtype == torch.int32
+    ks, kps, qs = dims.k, dims.kprime, dims.queries
+    L = dims.rounds
+    tm = timer or _NullTimer()
+    tr = coins if coins is not None else FiatShamirCoins()
+    rates = dims.rates
+    z = np.asarray(z, dtype=np.int64) % P
+    tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": rates}).encode())
+    tr.absorb(b"z", _z_bytes(z))
+
+    roots: list[bytes] = []
+    sumcheck: list[list[np.ndarray]] = []
+    opens: list[RoundOpen] = []
+    splits: list[tuple[int, int]] = []
+    Us: list[torch.Tensor] = []
+    trees = []
+    encs = []
+
+    # ---------------- round 1: commit f
+    R1, C1 = 1 << ks[0], 1 << kps[0]
+    M1 = f.view(C1, R1)
+    enc1 = Encoder(R1, device, rates[0])
+    tm.start("commit_r1_alloc")
+    U1 = torch.empty((C1, enc1.n), dtype=torch.int32, device=device)
+    tm.stop()
+    tm.start("commit_r1_encode")
+    enc1.encode(M1, out=U1)
+    tm.stop()
+    tm.start("commit_r1_merkle")
+    root1, tree1 = _commit_fast(U1)
+    tm.stop()
+    roots.append(root1)
+    Us.append(U1)
+    trees.append(tree1)
+    encs.append(enc1)
+    splits.append((enc1.n1, enc1.n2))
+    tr.absorb(b"root", root1)
+
+    # ---------------- round 1: evaluation claim and the column sumcheck (one eq term, host: T = 1)
+    tm.start("sumcheck_r1_contract")
+    zrow = dev.eq_table(z[:ks[0]], device)                               # (6, R1)
+    u = (dev.contract_planes(M1, zrow) % P).cpu().numpy()                # (C1, 6)
+    tm.stop()
+    tm.start("sumcheck_host")
+    term0 = cl.Term(ext.one(), "eq", z=z, nvars=n)
+    sc = cl.ColumnSumcheckProver([term0], [u], ks[0], kps[0])
+    v = sc.claim()
+    tr.absorb(b"v", _ext_bytes(v))
+    msgs = []
+    for _ in range(kps[0]):
+        g = sc.round_message()
+        tr.absorb(b"g", _ext_bytes(g))
+        r = tr.challenge(b"r", 1)[0]
+        sc.fold(r)
+        msgs.append(g)
+    sumcheck.append(msgs)
+    r1 = sc.challenges()
+    rbar = cl.rbar(r1)
+    running = sc.claim()
+    t0 = term0.restrict(ks[0], r1)
+    coef_eq, z_eq = t0.coef, t0.z                                         # the eq term (6,), (k_1, 6)
+    etas_g = np.zeros(0, dtype=np.int64)                                  # geom terms: eta (Tg,), coef (Tg, 6)
+    coef_g = ext.zero((0,))
+    tm.stop()
+    tm.start("sumcheck_r1_fold")
+    y = row_contract(M1, rbar)                                            # (6, R1) int32 planes
+    tm.stop()
+    rbars = [rbar]
+
+    # ---------------- rounds 2..L
+    for i in range(1, L):
+        R, C = 1 << ks[i], 1 << kps[i]
+        Mi = y.view(D, C, R)
+        Mflat = Mi.reshape(D * C, R)
+        tm.start("recursion_encode")
+        enc = Encoder(R, device, rates[i])
+        U = enc.encode(Mflat)
+        tm.stop()
+        tm.start("recursion_merkle")
+        root, tree = _commit_fast(U)
+        tm.stop()
+        roots.append(root)
+        Us.append(U)
+        trees.append(tree)
+        encs.append(enc)
+        splits.append((enc.n1, enc.n2))
+        tr.absorb(b"root", root)
+        tm.start("serialize_openings")
+        prev = i - 1
+        n_prev = encs[prev].n
+        S = tr.indices(b"S", n_prev, qs[prev])
+        depth = n_prev.bit_length() - 1
+        op = _open_fast(Us[prev], trees[prev], S, depth)
+        opens.append(op)
+        tr.absorb(b"rows", np.ascontiguousarray(op.rows.astype(np.uint32)).tobytes())
+        tr.absorb(b"sib", op.siblings)
+        Us[prev] = trees[prev] = None                                     # round i-1's codeword and tree are not needed any more
+        tm.stop()
+        tm.start("sumcheck_host")
+        etas = encs[prev].etas(S)
+        rhs = _row_claims(op.rows, rbars[prev], base=(prev == 0))        # (|S|, 6)
+        alpha = tr.challenge(b"alpha", 1 + len(S))                        # (1 + |S|, 6)
+        coef_eq = ext.mul(coef_eq, alpha[0])
+        coef_g = ext.mul(coef_g, alpha[0]) if len(etas_g) else coef_g
+        coef_g = np.concatenate((coef_g, alpha[1:]), axis=0)
+        etas_g = np.concatenate((etas_g, np.asarray(etas, dtype=np.int64)))
+        running = ext.add(ext.mul(alpha[0], running), ext.sum_ext(ext.mul(alpha[1:], rhs), axis=0))
+        colg = cl.geom_colparts(etas_g, ks[i], kps[i])[:, :, 0]           # (Tg, C) base
+        cole = cl.Term(ext.one(), "eq", z=z_eq, nvars=len(z_eq)).colpart(ks[i], kps[i])   # (C, 6)
+        coef = np.concatenate((coef_eq[None], coef_g), axis=0)            # (T, 6): eq first, then geom (the proto's order)
+        tm.stop()
+        tm.start("recursion_contract")
+        ug = dev.contract_geom(Mflat, etas_g)                            # (6C, Tg)
+        zr = dev.eq_table(z_eq[:ks[i]], device)                           # (6, R)
+        ue = dev.contract_planes(Mflat, zr)                               # (6C, 6)
+        dsc = dev.DeviceSumcheck(ug, ue, coef, colg, cole, C, device)
+        del ug, ue, zr
+        tm.stop()
+        tm.start("sumcheck_device")
+        msgs, rs = [], []
+        for j in range(kps[i]):
+            g = dsc.message()
+            if j == 0:
+                assert np.array_equal(ext.add(g[0], g[1]), running), "prover-side claim mismatch"
+            tr.absorb(b"g", _ext_bytes(g))
+            r = tr.challenge(b"r", 1)[0]
+            dsc.fold(r)
+            msgs.append(g)
+            rs.append(r)
+        sumcheck.append(msgs)
+        running = cl.interpolate_deg2(g[0], g[1], g[2], rs[-1])
+        ri = np.stack(rs[::-1], axis=0)
+        rbar = cl.rbar(ri)
+        tm.stop()
+        tm.start("sumcheck_host")
+        coef_eq = ext.mul(coef_eq, cl.Term(ext.one(), "eq", z=z_eq, nvars=len(z_eq)).colpart_at(ks[i], ri))
+        z_eq = z_eq[:ks[i]]
+        coef_g = ext.mul(coef_g, cl.geom_colpart_at(etas_g, ks[i], ri))
+        rbars.append(rbar)
+        del dsc
+        tm.stop()
+        tm.start("recursion_fold")
+        y = dev.fold_ext(Mi, rbar)                                        # (6, R)
+        tm.stop()
+
+    # ---------------- final: y_L in full, open U_L
+    tm.start("serialize_final")
+    final_y = y.to(torch.int64).t().contiguous().cpu().numpy() % P        # (R_L, 6)
+    tr.absorb(b"y", _ext_bytes(final_y))
+    n_last = encs[-1].n
+    S = tr.indices(b"S", n_last, qs[-1])
+    depth = n_last.bit_length() - 1
+    op = _open_fast(Us[-1], trees[-1], S, depth)
     opens.append(op)
     tm.stop()
     return Proof(n, list(kps), list(qs), list(rates), splits, v, roots, sumcheck, opens, final_y, tr.rounds)
