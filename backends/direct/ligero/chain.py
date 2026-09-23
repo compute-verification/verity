@@ -59,33 +59,62 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
     ch = sys.chain
     device = rc.device
     D, _, l = rc.shape
-    start, link, end = layout.masks(device)
+    tabs = _chain_tables(sys, layout, device)
+    rows, T = tabs["rows"], tabs["terms"]
+    # rm[:, f, :] = the family-f coefficients masked to their constraint positions (link x3, start x3, end)
+    rm = (rc * tabs["maskmat"][None, :, :]) % P                                    # (D, 7, l)
+    # every (row, family, kappa) term of r^T A at once: coef[:, row, j] += kappa rc[f][j] (masked); the link terms'
+    # W[c][j + 1] coefficient is the same sum shifted one column right.  Exact integer sums of < 2^31 residues (a few
+    # hundred terms per entry: no overflow), reduced once -- the same residues as the per-term reduction, in ~10 kernels
+    # instead of one per term (lane hostphase).
+    coef = torch.zeros((D, len(rows), l), dtype=torch.int64, device=device)
+    coef.index_add_(1, T["row"], (rm.index_select(1, T["fam"]) * T["kappa"][None, :, None]) % P)
+    coef[:, :, 1:].index_add_(1, T["shift_row"], rm[:, 0:3, :-1])
+    coef %= P
+    rhs = torch.zeros((D,), dtype=torch.int64, device=device)
+    y16 = y16_pub.to(device) % P
+    for x in range(3):
+        Y = ch["y"][x]
+        r_link = rm[:, x, :]                                                       # zero off the linked positions
+        rhs = (rhs + (r_link.sum(1) % P) * (Y.c % P)) % P                          # b = +Y.c
+    # end_j: sum_i kappa_i W[i][j] + Y16.c = y16_pub[j]
+    Y16 = ch["y16"]
+    r_end = rm[:, 6, :]
+    rhs = (rhs + ((r_end * ((y16 - Y16.c) % P)[None, :]) % P).sum(1)) % P
+    return ChainCoefs(rows, coef, rhs)
+
+
+_TABLES: dict = {}
+
+
+def _chain_tables(sys: System, layout: Layout, device) -> dict:
+    """The constant part of ``chain_coefs`` for (system, layout, device): the involved rows, the (row, family, kappa)
+    term table, the shifted link rows and the (7, l) family mask matrix."""
+    key = (id(sys), layout.l, layout.n_vus, layout.steps, str(device))
+    hit = _TABLES.get(key)
+    if hit is not None and hit[0] is sys:
+        return hit[1]
+    ch = sys.chain
     involved: dict[int, int] = {}
     for idx in ch["c"]:
         involved.setdefault(idx, len(involved))
     for e in ch["y"] + [ch["y16"]]:
         for idx in e.lin:
             involved.setdefault(idx, len(involved))
-    rows = torch.tensor(list(involved.keys()), dtype=torch.int64, device=device)
-    coef = torch.zeros((D, len(involved), l), dtype=torch.int64, device=device)
-    rhs = torch.zeros((D,), dtype=torch.int64, device=device)
-    y16 = y16_pub.to(device) % P
+    row, fam, kappa, shift_row = [], [], [], []
     for x in range(3):
         c_idx, Y = ch["c"][x], ch["y"][x]
-        r_link = (rc[:, x, :] * link[None, :]) % P            # (D, l), zero off the linked positions
-        r_start = (rc[:, 3 + x, :] * start[None, :]) % P
-        # link_j: + W[c][j+1] - sum_i kappa_i W[i][j] - Y.c = 0
         ci = involved[c_idx]
-        coef[:, ci, 1:] = (coef[:, ci, 1:] + r_link[:, :-1]) % P
-        for idx, kappa in Y.lin.items():
-            coef[:, involved[idx], :] = (coef[:, involved[idx], :] + r_link * ((-kappa) % P)) % P
-        rhs = (rhs + (r_link.sum(1) % P) * (Y.c % P)) % P                    # b = +Y.c
-        # start_j: W[c][j] = 0
-        coef[:, ci, :] = (coef[:, ci, :] + r_start) % P
-    # end_j: sum_i kappa_i W[i][j] + Y16.c = y16_pub[j]
-    Y16 = ch["y16"]
-    r_end = (rc[:, 6, :] * end[None, :]) % P
-    for idx, kappa in Y16.lin.items():
-        coef[:, involved[idx], :] = (coef[:, involved[idx], :] + r_end * (kappa % P)) % P
-    rhs = (rhs + ((r_end * ((y16 - Y16.c) % P)[None, :]) % P).sum(1)) % P
-    return ChainCoefs(rows, coef, rhs)
+        shift_row.append(ci)                                   # link_j: + W[c][j+1]  (family x, shifted)
+        for idx, kap in Y.lin.items():                         #         - sum_i kappa_i W[i][j]
+            row.append(involved[idx]); fam.append(x); kappa.append((-kap) % P)
+        row.append(ci); fam.append(3 + x); kappa.append(1)     # start_j: W[c][j] = 0
+    for idx, kap in ch["y16"].lin.items():                     # end_j: sum_i kappa_i W[i][j] + Y16.c = y16_pub[j]
+        row.append(involved[idx]); fam.append(6); kappa.append(kap % P)
+    start, link, end = layout.masks(device)
+    maskmat = torch.stack([link, link, link, start, start, start, end])           # (7, l) 0/1
+    t = lambda v: torch.tensor(v, dtype=torch.int64, device=device)  # noqa: E731
+    tabs = {"rows": t(list(involved.keys())), "maskmat": maskmat,
+            "terms": {"row": t(row), "fam": t(fam), "kappa": t(kappa), "shift_row": t(shift_row)}}
+    _TABLES[key] = (sys, tabs)
+    return tabs
