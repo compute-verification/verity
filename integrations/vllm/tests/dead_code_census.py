@@ -510,33 +510,51 @@ def build(imported: set[str] | None, with_dates: bool) -> dict:
         return "TEST-ONLY" if imported_by_tests.get(m) else "DEAD"
 
     # deletion plan ----------------------------------------------------------------------------------------------------------
-    # 1. production modules: non-LIVE and neither protected nor kept on purpose -> delete
-    deleted_mods: set[str] = set()
-    for rel, m in prod.items():
-        if m in live or protected(rel) or m in KEEP_FIXTURES:
-            continue
-        deleted_mods.add(m)
+    # Modules, tests and artifacts decide each other (a shell kept as an artifact keeps the modules it runs; a deleted test frees the
+    # JSON only it named), so the three are iterated to a fixpoint.  `arts` (one git grep per artifact) is computed once.
+    arts = artifact_refs()
     fixtures = {m for m in KEEP_FIXTURES if g.exists(m) and m not in live}
     unused_keeps = sorted(m for m in KEEP_FIXTURES if not g.exists(m) or m in live)
-    # 2. tests: a test file (or a helper under a tests dir) goes when it imports a deleted module, directly or through another
-    #    deleted test file (fixpoint); the harness dir never goes
-    deleted_tests: dict[str, str] = {}
-    changed = True
-    while changed:
-        changed = False
-        for rel, m in tests.items():
-            if rel in deleted_tests or any(rel.startswith(d + "/") for d in ENTRYPOINT_DIRS) or Path(rel).name == "__init__.py" \
-                    or rel in TRIMMED_TESTS:
+    deleted_shells: set[str] = set()
+    shell_only: dict[str, list[str]] = {}
+    while True:
+        # 1. production modules: non-LIVE, not protected, not kept on purpose, not run by a shell script that stays -> delete
+        deleted_mods: set[str] = set()
+        shell_only = {}
+        for rel, m in prod.items():
+            if m in live or protected(rel) or m in KEEP_FIXTURES:
                 continue
-            gone_prod = sorted(x for x in g.edges.get(m, ()) if x in deleted_mods)
-            gone_tests = sorted(x for x in g.edges.get(m, ()) if g.file_of[x] in deleted_tests)
-            if gone_prod or gone_tests:
-                deleted_tests[rel] = "imports deleted " + ", ".join(gone_prod + [g.file_of[x] for x in gone_tests])
-                changed = True
+            kept_shells = sorted(s for s in shell_refs.get(m, ()) if s not in deleted_shells)
+            if kept_shells:
+                shell_only[rel] = kept_shells
+                continue
+            deleted_mods.add(m)
+        # 2. tests: a test file (or a helper under a tests dir) goes when it imports a deleted module, directly or through another
+        #    deleted test file (fixpoint); the harness dir never goes
+        deleted_tests: dict[str, str] = {}
+        changed = True
+        while changed:
+            changed = False
+            for rel, m in tests.items():
+                if rel in deleted_tests or any(rel.startswith(d + "/") for d in ENTRYPOINT_DIRS) or Path(rel).name == "__init__.py" \
+                        or rel in TRIMMED_TESTS:
+                    continue
+                gone_prod = sorted(x for x in g.edges.get(m, ()) if x in deleted_mods)
+                gone_tests = sorted(x for x in g.edges.get(m, ()) if g.file_of[x] in deleted_tests)
+                if gone_prod or gone_tests:
+                    deleted_tests[rel] = "imports deleted " + ", ".join(gone_prod + [g.file_of[x] for x in gone_tests])
+                    changed = True
+        # 3. artifacts, given the files above; the shells among them feed step 1
+        deleted_files = {g.file_of[m] for m in deleted_mods} | set(deleted_tests)
+        aplan = artifact_plan(arts, deleted_files)
+        new_shells = {f for f in aplan["deleted"] if f.endswith(".sh")}
+        if new_shells == deleted_shells:
+            break
+        deleted_shells = new_shells
     kept_tests = {rel for rel in tests if rel not in deleted_tests}
     dedicated_pairs = [{"test": rel, "modules": sorted(x for x in test_imports[rel] if x in deleted_mods and dedicated(rel, x))}
                        for rel in sorted(deleted_tests) if any(x in deleted_mods and dedicated(rel, x) for x in test_imports[rel])]
-    # 3. consistency: nothing kept imports anything deleted (the graph says the tree still imports after the plan is applied)
+    # 4. consistency: nothing kept imports anything deleted (the graph says the tree still imports after the plan is applied)
     broken = []
     for rel, m in g.mod_of.items():
         if m in deleted_mods or rel in deleted_tests:
@@ -571,7 +589,8 @@ def build(imported: set[str] | None, with_dates: bool) -> dict:
             "why": g.why(roots, m) if m in live else None,
         }
         if c != "LIVE":
-            entry["plan"] = ("protected" if entry["protected"] else "keep" if m in fixtures else "delete")
+            entry["plan"] = ("protected" if entry["protected"] else "keep" if m in fixtures else "keep-shell-only" if rel in shell_only
+                             else "delete")
             if m in fixtures:
                 entry["kept_because"] = KEEP_FIXTURES[m]
         modules[rel] = entry
@@ -597,9 +616,6 @@ def build(imported: set[str] | None, with_dates: bool) -> dict:
         plan_totals["tests"]["files"] += 1
         plan_totals["tests"]["loc"] += loc(ROOT / rel)
 
-    arts = artifact_refs()
-    deleted_files = {rel for rel, e in modules.items() if e.get("plan") == "delete"} | set(deleted_tests)
-    aplan = artifact_plan(arts, deleted_files)
     return {
         "schema": "vllm-dead-code-census/v1",
         "root": "integrations/vllm",
@@ -613,6 +629,7 @@ def build(imported: set[str] | None, with_dates: bool) -> dict:
         "tests": {"kept": sorted(kept_tests), "deleted": dict(sorted(deleted_tests.items())), "kept_helpers": kept_helpers,
                   "dedicated_pairs": dedicated_pairs},
         "fixtures_kept": {m: KEEP_FIXTURES[m] for m in sorted(fixtures)},
+        "kept_shell_only": dict(sorted(shell_only.items())),
         "keep_entries_unused": unused_keeps,
         "plan_consistency_broken_imports": broken,
         "trimmed_tests": TRIMMED_TESTS,

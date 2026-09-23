@@ -167,16 +167,16 @@
  },
  "plan_totals": {
   "all": {
-   "files": 19,
-   "loc": 8432
+   "files": 15,
+   "loc": 6972
   },
   "tests": {
-   "files": 26,
-   "loc": 5542
+   "files": 24,
+   "loc": 5002
   },
   "verity_capture": {
-   "files": 16,
-   "loc": 5039
+   "files": 12,
+   "loc": 3579
   },
   "verity_vllm": {
    "files": 3,
@@ -209,7 +209,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.test_check_lifts",
+    "verity_vllm.acquire.runtime_tree",
     "verity_capture"
    ]
   },
@@ -230,7 +230,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.vllm_d9105ea80_sm89_eager",
+    "verity_capture.census",
     "verity_capture.allowlist"
    ]
   },
@@ -259,7 +259,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.weights_of_record",
+    "verity_capture.bench.run_config",
     "verity_capture.analytic"
    ]
   },
@@ -282,7 +282,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_capture.vllm_adapter",
     "verity_capture.arrivals"
    ]
@@ -312,7 +312,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.stoch_recompute",
     "verity_capture.bench"
    ]
   },
@@ -373,7 +373,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.commit.verdict",
     "verity_capture.bench.commit_verdict"
    ]
   },
@@ -397,7 +397,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": null,
-   "plan": "delete"
+   "plan": "keep-shell-only"
   },
   "verity_capture/bench/gen_adversarial.py": {
    "module": "verity_capture.bench.gen_adversarial",
@@ -829,7 +829,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_match",
+    "verity_capture.bench.tp2_capture",
     "verity_capture.bench.tp2_worker"
    ]
   },
@@ -900,7 +900,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_capture.vllm_adapter",
     "verity_capture.chunk_attribution"
    ]
@@ -930,7 +930,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.test_check_lifts",
+    "tests.regression.checks.manifest_digest",
     "verity_capture.commit"
    ]
   },
@@ -1027,7 +1027,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": null,
-   "plan": "delete"
+   "plan": "keep-shell-only"
   },
   "verity_capture/commit/executed_prefix.py": {
    "module": "verity_capture.commit.executed_prefix",
@@ -1271,7 +1271,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.test_check_lifts",
+    "verity_capture.bench.commit_delta",
     "verity_capture.commit.sampled_replay"
    ]
   },
@@ -1458,7 +1458,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.weights_of_record",
+    "verity_capture.bench.run_config",
     "verity_capture.experiment"
    ]
   },
@@ -1487,7 +1487,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_vllm.acquire.runtime_tree",
     "verity_capture.experimental"
    ]
   },
@@ -1516,7 +1516,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_vllm.acquire.runtime_tree",
     "verity_capture.experimental.cb_a"
    ]
   },
@@ -1571,7 +1571,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_match",
     "verity_capture.experimental.cb_a.compact"
    ]
   },
@@ -1714,7 +1714,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.batch_decomp",
+    "verity_capture.experimental.cb_a.global_match",
     "verity_capture.experimental.cb_a.global_match_fast"
    ]
   },
@@ -1855,7 +1855,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_vllm.acquire.runtime_tree",
     "verity_capture.experimental.cb_a.vllm_meta"
    ]
   },
@@ -2373,7 +2373,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_match",
+    "verity_capture.bench.tp2_capture",
     "verity_capture.bench.tp2_worker",
     "verity_capture.experimental.commit_integ.tp_partial_source"
    ]
@@ -2753,7 +2753,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.batch_decomp",
+    "verity_capture.experimental.cb_a.global_match",
     "verity_capture.gc_tuning"
    ]
   },
@@ -2799,7 +2799,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": null,
-   "plan": "delete"
+   "plan": "keep-shell-only"
   },
   "verity_capture/log.py": {
    "module": "verity_capture.log",
@@ -2897,7 +2897,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_capture.vllm_adapter",
     "verity_capture.observer"
    ]
@@ -2928,7 +2928,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_moe_patterns",
+    "verity_capture.profiles.gen_dense_gemma2_patterns",
     "verity_capture.patterns"
    ]
   },
@@ -3687,7 +3687,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": null,
-   "plan": "delete"
+   "plan": "keep-shell-only"
   },
   "verity_capture/provenance.py": {
    "module": "verity_capture.provenance",
@@ -3860,7 +3860,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_capture.vllm_adapter",
     "verity_capture.storage"
    ]
@@ -3890,7 +3890,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "tests.regression.checks.commit_summary",
     "verity_capture.sweep"
    ]
   },
@@ -4382,7 +4382,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_fold_match",
+    "verity_capture.bench.tp2_commit",
     "verity_capture.tp"
    ]
   },
@@ -4427,7 +4427,7 @@
    "live_only_via_profiles": true,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_llama_llama32_1b_tp2rank",
+    "verity_capture.profiles.gen_ov_moe_qwen3",
     "verity_capture.tp.collective_pattern"
    ]
   },
@@ -4470,7 +4470,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_match",
+    "verity_capture.bench.tp2_capture",
     "verity_capture.bench.tp2_worker",
     "verity_capture.tp.collective_sites"
    ]
@@ -4494,7 +4494,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_fold_match",
+    "verity_capture.bench.tp2_commit",
     "verity_capture.tp.rank_match"
    ]
   },
@@ -4524,7 +4524,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_moe_patterns",
+    "verity_capture.profiles.gen_dense_gemma2_patterns",
     "verity_capture.tree"
    ]
   },
@@ -4544,7 +4544,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_capture.vllm_adapter",
     "verity_capture.triton_adapter"
    ]
@@ -4594,7 +4594,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.fold",
+    "verity_capture.provenance",
     "verity_capture.views"
    ]
   },
@@ -4618,7 +4618,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_capture.vllm_adapter"
    ]
   },
@@ -4697,7 +4697,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "tests.regression.checks.manifest_digest",
     "verity_vllm"
    ]
   },
@@ -5189,9 +5189,9 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.stoch_recompute",
     "verity_vllm.registry.topp_split",
-    "verity_vllm_numerics.fa2_relation",
+    "verity_vllm_numerics.rms_relation",
     "verity_vllm.relations",
     "verity_vllm.description"
    ]
@@ -5243,7 +5243,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.run_config",
     "verity_vllm.frontend"
    ]
   },
@@ -5293,7 +5293,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.run_config",
     "verity_vllm.frontend",
     "verity_vllm.frontend.correspond"
    ]
@@ -5419,8 +5419,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
-    "verity_vllm.frontend.derive",
+    "verity_capture.bench.run_config",
+    "verity_vllm.frontend",
     "verity_vllm.frontend.liveness"
    ]
   },
@@ -5444,8 +5444,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
-    "verity_vllm.frontend.derive",
+    "verity_capture.bench.run_config",
+    "verity_vllm.frontend",
     "verity_vllm.frontend.provenance"
    ]
   },
@@ -5497,7 +5497,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.experimental.cb_a.derive_step",
-    "verity_vllm.frontend.rules",
+    "verity_vllm.frontend.rules.vllm_sampling",
     "verity_vllm.frontend.rules.base"
    ]
   },
@@ -5543,8 +5543,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
-    "verity_vllm.frontend.rules",
+    "verity_capture.bench.stoch_recompute",
+    "verity_capture.compare",
     "verity_vllm.frontend.rules.family"
    ]
   },
@@ -5565,7 +5565,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.experimental.cb_a.derive_step",
-    "verity_vllm.frontend.rules",
+    "verity_vllm.frontend.rules.vllm_bindings",
     "verity_vllm.frontend.rules.padding"
    ]
   },
@@ -5608,7 +5608,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.experimental.cb_a.derive_step",
-    "verity_vllm.frontend.rules",
+    "verity_vllm.frontend.rules.vllm_bindings",
     "verity_vllm.frontend.rules.profile"
    ]
   },
@@ -5888,8 +5888,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
-    "verity_vllm.frontend.rules.vllm_sampling",
+    "verity_capture.bench.run_config",
+    "verity_vllm.frontend",
     "verity_vllm.frontend.torch_frontend"
    ]
   },
@@ -5939,7 +5939,7 @@
    "why": [
     "verity_capture.bench.commit_delta",
     "verity_capture.commit.padding_steps",
-    "verity_vllm.commit",
+    "verity_vllm.commit_bench.semantic",
     "verity_vllm.identity"
    ]
   },
@@ -5968,7 +5968,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_match",
     "verity_vllm.ir"
    ]
   },
@@ -5994,8 +5994,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
-    "verity_vllm.registry",
+    "verity_capture.bench.stoch_recompute",
+    "verity_vllm.lifting.continuation",
     "verity_vllm.registry.lifted",
     "verity_vllm.ir.boundary"
    ]
@@ -6048,8 +6048,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
-    "verity_vllm.registry",
+    "verity_capture.bench.stoch_recompute",
+    "verity_vllm.lifting.continuation",
     "verity_vllm.registry.lifted",
     "verity_vllm.ir.partition"
    ]
@@ -6097,8 +6097,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
-    "verity_vllm.registry",
+    "verity_capture.bench.stoch_recompute",
+    "verity_vllm.lifting.continuation",
     "verity_vllm.registry.lifted",
     "verity_vllm.ir.query_artifact"
    ]
@@ -6119,7 +6119,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_match",
     "verity_vllm.ir.sampling_event"
    ]
   },
@@ -6487,7 +6487,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
+    "verity_capture.bench.stoch_recompute",
     "verity_vllm.registry"
    ]
   },
@@ -6516,7 +6516,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
+    "verity_capture.experimental.cb_a.compare",
     "verity_vllm.registry.b1"
    ]
   },
@@ -6540,7 +6540,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
+    "verity_capture.experimental.cb_a.derive_step",
     "verity_vllm.registry.b1_tp2"
    ]
   },
@@ -6612,7 +6612,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
+    "verity_capture.experimental.cb_a.compare",
     "verity_vllm.registry.dense"
    ]
   },
@@ -6638,8 +6638,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.test_check_lifts",
-    "verity_capture.commit.tests.test_sampled_replay",
+    "verity_capture.bench.stoch_recompute",
+    "verity_vllm.registry.sampling_rows",
     "verity_vllm.registry.derived_rows"
    ]
   },
@@ -6682,7 +6682,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
+    "verity_capture.experimental.cb_a.compare",
     "verity_vllm.registry.fp8"
    ]
   },
@@ -6706,7 +6706,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_vllm.frontend.target_profile",
     "verity_vllm.registry.gemm_targets"
    ]
   },
@@ -6731,7 +6731,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
+    "verity_capture.experimental.cb_a.compare",
     "verity_vllm.registry.hopper"
    ]
   },
@@ -6760,8 +6760,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
-    "verity_vllm.registry",
+    "verity_capture.bench.stoch_recompute",
+    "verity_vllm.lifting.continuation",
     "verity_vllm.registry.lifted"
    ]
   },
@@ -6787,7 +6787,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
+    "verity_capture.experimental.cb_a.compare",
     "verity_vllm.registry.moe"
    ]
   },
@@ -6811,7 +6811,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
+    "verity_capture.experimental.cb_a.compare",
     "verity_vllm.registry.moe_pad"
    ]
   },
@@ -6865,8 +6865,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.test_check_lifts",
-    "verity_capture.commit.tests.test_sampled_replay",
+    "verity_capture.bench.stoch_recompute",
+    "verity_vllm.registry.sampling_topp_difftest",
     "verity_vllm.registry.prims"
    ]
   },
@@ -6896,7 +6896,7 @@
    "live_only_via_profiles": true,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_dense_softcap_patterns",
+    "verity_capture.profiles.gen_dense_gemma2_patterns",
     "verity_vllm.registry.quarantine"
    ]
   },
@@ -6985,7 +6985,7 @@
    "live_only_via_profiles": true,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_dense_softcap_patterns",
+    "verity_capture.profiles.gen_dense_gemma2_patterns",
     "verity_vllm.registry.quarantine.dense"
    ]
   },
@@ -7176,7 +7176,7 @@
    "live_only_via_profiles": true,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_dense_softcap_patterns",
+    "verity_capture.profiles.gen_dense_gemma2_patterns",
     "verity_vllm.registry.quarantine.dense",
     "verity_vllm.registry.quarantine.dense.gelu_tanh_mul_bf16"
    ]
@@ -7391,7 +7391,7 @@
    "live_only_via_profiles": true,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_dense_softcap_patterns",
+    "verity_capture.profiles.gen_dense_gemma2_patterns",
     "verity_vllm.registry.quarantine.dense",
     "verity_vllm.registry.quarantine.dense.tanh_f32"
    ]
@@ -7438,7 +7438,7 @@
    "why": [
     "verity_capture.bench.run_config",
     "verity_capture.profiles.gen_ln_patterns",
-    "verity_vllm.registry.quarantine.ln.layer_norm_aten",
+    "verity_vllm.registry.quarantine.ln.gelu_erf",
     "verity_vllm.registry.quarantine.ln._common"
    ]
   },
@@ -7483,7 +7483,7 @@
    "why": [
     "verity_capture.bench.run_config",
     "verity_capture.profiles.gen_ln_patterns",
-    "verity_vllm.registry.quarantine.ln",
+    "verity_vllm.registry.quarantine.ln.gelu_erf",
     "verity_vllm.registry.quarantine.ln.gelu_erf_bf16"
    ]
   },
@@ -7507,7 +7507,7 @@
    "why": [
     "verity_capture.bench.run_config",
     "verity_capture.profiles.gen_ln_patterns",
-    "verity_vllm.registry.quarantine.ln",
+    "verity_vllm.registry.quarantine.ln.gelu_erf",
     "verity_vllm.registry.quarantine.ln.gelu_erf_bf16",
     "verity_vllm.registry.quarantine.ln.gelu_erf_table"
    ]
@@ -7668,7 +7668,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.test_check_lifts",
+    "verity_capture.bench.commit_delta",
     "verity_capture.commit.sampled_replay",
     "verity_vllm.registry.ref_prims"
    ]
@@ -7691,8 +7691,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.test_check_lifts",
-    "verity_capture.commit.tests.test_sampled_replay",
+    "verity_capture.bench.stoch_recompute",
+    "verity_vllm.registry.sampling_rows",
     "verity_vllm.registry.derived_rows",
     "verity_vllm.registry.rmsnorm_fused_sweep"
    ]
@@ -7717,7 +7717,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.required_manifest",
+    "verity_capture.experimental.cb_a.compare",
     "verity_vllm.registry.sampling"
    ]
   },
@@ -7894,7 +7894,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.stoch_recompute",
     "verity_vllm.registry.topp_split"
    ]
   },
@@ -7914,9 +7914,9 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.stoch_recompute",
     "verity_vllm.registry.topp_split",
-    "verity_vllm_numerics.fa2_relation",
+    "verity_vllm_numerics.rms_relation",
     "verity_vllm.relations"
    ]
   },
@@ -8022,7 +8022,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_vllm_adapter.profile",
     "verity_vllm_adapter.verify_bindings",
     "verity_vllm.rows"
@@ -8094,7 +8094,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_vllm_adapter"
    ]
   },
@@ -8114,7 +8114,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_vllm_adapter.profile",
     "verity_vllm_adapter.verify_bindings",
     "verity_vllm_adapter.compiled_fx"
@@ -8136,7 +8136,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_vllm_adapter.profile",
     "verity_vllm_adapter.verify_bindings",
     "verity_vllm_adapter.compiled_fx.kernels"
@@ -8178,7 +8178,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_capture.vllm_adapter",
     "verity_vllm_adapter.kernel_identity"
    ]
@@ -8202,7 +8202,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_vllm_adapter.profile"
    ]
   },
@@ -8222,7 +8222,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.bench.tp2_capture",
     "verity_vllm_adapter.profile",
     "verity_vllm_adapter.verify_bindings"
    ]
@@ -8248,8 +8248,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.test_check_lifts",
-    "verity_capture.commit.tests.test_sampled_replay",
+    "verity_capture.bench.stoch_recompute",
+    "verity_vllm.registry.topp_split",
     "verity_vllm_numerics"
    ]
   },
@@ -8339,7 +8339,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.stoch_recompute",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.fa2_model"
    ]
@@ -8362,7 +8362,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.stoch_recompute",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.fa2_relation"
    ]
@@ -8426,7 +8426,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.stoch_recompute",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.fa2_relation",
     "verity_vllm_numerics.relations",
@@ -8451,8 +8451,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.test_check_lifts",
-    "verity_capture.commit.tests.test_sampled_replay",
+    "verity_capture.bench.stoch_recompute",
+    "verity_vllm.registry.sampling_topp_difftest",
     "verity_vllm.registry.prims",
     "verity_vllm_numerics.mma"
    ]
@@ -8473,7 +8473,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.stoch_recompute",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.fa2_relation",
     "verity_vllm_numerics.relations"
@@ -8497,7 +8497,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.stoch_recompute",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.rms_relation"
    ]
@@ -8520,7 +8520,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.derive_step",
+    "verity_capture.bench.stoch_recompute",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.rms_triton_model"
    ]
@@ -8653,6 +8653,7 @@
    "verity_capture/bench/tests/test_commit_verdict_hopper_no_evaluator_gap.py",
    "verity_capture/bench/tests/test_commit_verdict_replay_seed_of_record.py",
    "verity_capture/bench/tests/test_commit_verdict_selector_no_evaluator_gap.py",
+   "verity_capture/bench/tests/test_compiled_merge_identity.py",
    "verity_capture/bench/tests/test_compiled_replay_seed_source.py",
    "verity_capture/bench/tests/test_engine_schedule.py",
    "verity_capture/bench/tests/test_execution_label.py",
@@ -8677,6 +8678,7 @@
    "verity_capture/commit/tests/test_binding_star_member_index.py",
    "verity_capture/commit/tests/test_committed_reader_shared_module.py",
    "verity_capture/commit/tests/test_committed_store_aliases.py",
+   "verity_capture/commit/tests/test_compiled_manifest.py",
    "verity_capture/commit/tests/test_executed_prefix.py",
    "verity_capture/commit/tests/test_fa2_tap_bounded.py",
    "verity_capture/commit/tests/test_form_b_collector_perturbation.py",
@@ -8844,8 +8846,6 @@
    "tests/ir/test_lifted_workload_record_padrev.py": "imports deleted verity_vllm.lifting.record, tests/ir/test_lifted_record.py",
    "tests/ir/test_lifted_workload_record_real_padrev.py": "imports deleted verity_vllm.lifting.record",
    "tests/ir/test_r17_42_missing_never_inactive_reqval.py": "imports deleted verity_vllm.lifting.record",
-   "verity_capture/bench/tests/test_compiled_merge_identity.py": "imports deleted verity_capture.bench.compiled_merge",
-   "verity_capture/commit/tests/test_compiled_manifest.py": "imports deleted verity_capture.commit.compiled_manifest",
    "verity_capture/experimental/commit_integ/tests/test_row4_derived.py": "imports deleted verity_capture.experimental.commit_integ.row4_derived",
    "verity_capture/experimental/fa2_commit/test_kernel_dump.py": "imports deleted verity_capture.experimental.fa2_commit.kernel_dump, verity_capture.experimental.fa2_commit.oracle",
    "verity_capture/experimental/fa2_commit/test_oracle.py": "imports deleted verity_capture.experimental.fa2_commit.oracle",
@@ -8883,18 +8883,6 @@
     "test": "tests/ir/test_derived_rows_torch.py",
     "modules": [
      "verity_vllm.registry.derived_rows_torch"
-    ]
-   },
-   {
-    "test": "verity_capture/bench/tests/test_compiled_merge_identity.py",
-    "modules": [
-     "verity_capture.bench.compiled_merge"
-    ]
-   },
-   {
-    "test": "verity_capture/commit/tests/test_compiled_manifest.py",
-    "modules": [
-     "verity_capture.commit.compiled_manifest"
     ]
    },
    {
@@ -8967,15 +8955,30 @@
   "verity_vllm_numerics.fa3_model": "independent CPU FA3 model cross-checked by test_composition.py / test_derived_rows.py (LIVE crosscheck / derived_rows)",
   "verity_vllm_numerics.inductor_models": "CPU bit-models cross-checked by test_composition.py"
  },
+ "kept_shell_only": {
+  "verity_capture/bench/compiled_merge.py": [
+   "verity_capture/sweep/compiled_commit.sh"
+  ],
+  "verity_capture/commit/compiled_manifest.py": [
+   "verity_capture/sweep/compiled_commit.sh"
+  ],
+  "verity_capture/holdout.py": [
+   "verity_capture/bench/cov_pod.sh",
+   "verity_capture/bench/verify_lane.sh"
+  ],
+  "verity_capture/protected.py": [
+   "verity_capture/bench/verify_lane.sh"
+  ]
+ },
  "keep_entries_unused": [],
  "plan_consistency_broken_imports": [
   [
    "tests/ir/test_lifted_r17.py",
-   "verity_vllm.lifting.record"
+   "tests.ir.lifted_instances_emit"
   ],
   [
    "tests/ir/test_lifted_r17.py",
-   "tests.ir.lifted_instances_emit"
+   "verity_vllm.lifting.record"
   ]
  ],
  "trimmed_tests": {
@@ -9026,7 +9029,6 @@
  ],
  "artifacts": {
   "deleted": {
-   "verity_capture/bench/fixtures/llama32-1b__bf16__l40s__tp2__b2__i64__o8__equal__greedy__bi-eager.json": "referenced by nothing",
    "verity_capture/bench/gen_ov_sampling_fetch.sh": "referenced by nothing",
    "verity_capture/bench/gen_ov_sampling_pod.sh": "referenced by nothing",
    "verity_capture/bench/gen_ov_sampling_verify.sh": "referenced by nothing",
@@ -9112,7 +9114,7 @@
    "verity_capture/sweep/stoch_negatives.sh": "referenced by nothing",
    "verity_capture/bench/gen_batch_pod.sh": "referenced only by deleted files: integrations/vllm/verity_capture/bench/gen_ovbatch_pod.sh"
   },
-  "deleted_bytes": 1811704,
+  "deleted_bytes": 1807259,
   "kept_by_pattern": {
    "verity_capture/profiles/workload_cov_b0_b1_c256.json": "verity_capture/tests/test_coverage_workloads.py builds the name from gw.PROFILES x gw.CTX",
    "verity_capture/profiles/workload_cov_b0_b1_c1024.json": "verity_capture/tests/test_coverage_workloads.py builds the name from gw.PROFILES x gw.CTX",
@@ -9135,138 +9137,231 @@
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_summary.json": "record of the P0 kernel dumps beside them (kernel_dump.py reads the .npz)"
   },
   "unreferenced_out_of_scope": {
-   "verity_vllm_numerics/cuda/fa2_softmax_probe.cu": 4409,
-   "verity_vllm_numerics/cuda/mma_tiles_sm80.cu": 5523
+   "tests/dead_code_census.json": 444483
   },
   "unreferenced_by_name_directory_referenced": {
    "data/census/256x64/partial.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/256x64"
    ],
    "data/census/census_frontier.json": [
-    "data"
+    "data",
+    "data/census"
    ],
    "data/census/census_small_6500x1600.json": [
-    "data"
+    "data",
+    "data/census"
    ],
    "data/census/scaling/lp100_s5.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp128_s3.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp129_s1.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp12_s12.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp130_s2.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp160_s8.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp16_s15.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp16_s2.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp16_s8.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp192_s4.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp200_s1.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp2_s1.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp2_s2.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp32_s4.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp32_s8.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp4_s1.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp4_s2.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp4_s8.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp63_s3.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp64_s1.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp65_s1.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp72_s9.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp8_s1.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp8_s15.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp8_s4.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/census/scaling/lp96_s2.json": [
-    "data"
+    "data",
+    "data/census",
+    "data/census/scaling"
    ],
    "data/contract/a56-coverage/for-a7-populations.json": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage"
    ],
    "data/contract/a56-coverage/gpu/final-pull-0606Z.txt": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage",
+    "data/contract/a56-coverage/gpu"
    ],
    "data/contract/a56-coverage/head_vu_consequence.json": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage"
    ],
    "data/contract/a56-coverage/o2_commit_cost.json": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage"
    ],
    "data/contract/a56-coverage/patches/a3-expected-attention.diff": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage",
+    "data/contract/a56-coverage/patches"
    ],
    "data/contract/a56-coverage/patches/a3-locator-attention.diff": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage",
+    "data/contract/a56-coverage/patches"
    ],
    "data/contract/a56-coverage/patches/prover-rec_p1_obligations-dispatch.diff": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage",
+    "data/contract/a56-coverage/patches"
    ],
    "data/contract/a56-coverage/pod/stages-and-info.txt": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage",
+    "data/contract/a56-coverage/pod"
    ],
    "data/contract/a56-coverage/records/forced_head_run-TINY-t2-L1-h2-after-F2.json": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage",
+    "data/contract/a56-coverage/records"
    ],
    "data/contract/a56-coverage/records/forced_head_run-TINY-t3-L0-h0.json": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage",
+    "data/contract/a56-coverage/records"
    ],
    "data/contract/a56-coverage/records/forced_head_run-TINY-t5-L0-h0.json": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage",
+    "data/contract/a56-coverage/records"
    ],
    "data/contract/a56-coverage/records/unsupported-census-32x15.json": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage",
+    "data/contract/a56-coverage/records"
    ],
    "data/contract/a56-coverage/records/unsupported-census-TINY.json": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/a56-coverage",
+    "data/contract/a56-coverage/records"
    ],
    "data/contract/ck-elem/argmax_rule/rec-p1-b0.json": [
-    "data"
+    "data",
+    "data/contract",
+    "data/contract/ck-elem"
    ],
    "data/hf_configs/QWEN15_AWQ.config.json": [
     "data",
@@ -9542,8 +9637,17 @@
    "tests/query/gate/row74_qwen3-4b-fp8_h100_b8.json": [
     "tests/query/gate"
    ],
+   "verity_capture/bench/fixtures/llama32-1b__bf16__l40s__tp2__b2__i64__o8__equal__greedy__bi-eager.json": [
+    "verity_capture/bench/fixtures"
+   ],
    "verity_capture/profiles/quarantine/PYTHIA160M.json": [
     "verity_capture/profiles/quarantine"
+   ],
+   "verity_vllm_numerics/cuda/fa2_softmax_probe.cu": [
+    "verity_vllm_numerics/cuda"
+   ],
+   "verity_vllm_numerics/cuda/mma_tiles_sm80.cu": [
+    "verity_vllm_numerics/cuda"
    ],
    "workloads/gemma2-2b__bf16__l40s__tp1__b1__i256__o15__mixed__greedy__bi-eager.json": [
     "workloads"
@@ -9833,7 +9937,8 @@
      "integrations/vllm/verity_capture/experimental/commit/engine.py"
     ],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census"
     ]
    },
    "data/census/256x64/partial.json": {
@@ -9841,7 +9946,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/256x64"
     ]
    },
    "data/census/census_frontier.json": {
@@ -9849,7 +9956,8 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census"
     ]
    },
    "data/census/census_frontier_a.json": {
@@ -9859,7 +9967,8 @@
      "integrations/vllm/data/census/census_frontier.json"
     ],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census"
     ]
    },
    "data/census/census_frontier_a_prime.json": {
@@ -9869,7 +9978,8 @@
      "integrations/vllm/data/census/census_frontier.json"
     ],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census"
     ]
    },
    "data/census/census_small.json": {
@@ -9881,7 +9991,8 @@
      "integrations/vllm/data/contract/a56-coverage/head_vu_consequence.json"
     ],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census"
     ]
    },
    "data/census/census_small_6500x1600.json": {
@@ -9889,7 +10000,8 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census"
     ]
    },
    "data/census/scaling/lp100_s5.json": {
@@ -9897,7 +10009,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp128_s3.json": {
@@ -9905,7 +10019,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp129_s1.json": {
@@ -9913,7 +10029,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp12_s12.json": {
@@ -9921,7 +10039,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp130_s2.json": {
@@ -9929,7 +10049,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp160_s8.json": {
@@ -9937,7 +10059,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp16_s15.json": {
@@ -9945,7 +10069,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp16_s2.json": {
@@ -9953,7 +10079,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp16_s8.json": {
@@ -9961,7 +10089,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp192_s4.json": {
@@ -9969,7 +10099,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp200_s1.json": {
@@ -9977,7 +10109,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp2_s1.json": {
@@ -9985,7 +10119,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp2_s2.json": {
@@ -9993,7 +10129,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp32_s4.json": {
@@ -10001,7 +10139,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp32_s8.json": {
@@ -10009,7 +10149,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp4_s1.json": {
@@ -10017,7 +10159,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp4_s2.json": {
@@ -10025,7 +10169,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp4_s8.json": {
@@ -10033,7 +10179,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp63_s3.json": {
@@ -10041,7 +10189,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp64_s1.json": {
@@ -10049,7 +10199,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp65_s1.json": {
@@ -10057,7 +10209,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp72_s9.json": {
@@ -10065,7 +10219,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp8_s1.json": {
@@ -10073,7 +10229,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp8_s15.json": {
@@ -10081,7 +10239,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp8_s4.json": {
@@ -10089,7 +10249,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/census/scaling/lp96_s2.json": {
@@ -10097,7 +10259,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/census",
+     "data/census/scaling"
     ]
    },
    "data/contract/a56-coverage/coverage.json": {
@@ -10112,7 +10276,9 @@
      "integrations/vllm/verity_capture/profiles/workload_cov_b0_b1_c1024.json"
     ],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage"
     ]
    },
    "data/contract/a56-coverage/for-a7-populations.json": {
@@ -10120,7 +10286,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage"
     ]
    },
    "data/contract/a56-coverage/gpu/approved/manifest.json": {
@@ -10135,7 +10303,11 @@
      "backends/direct/ligero/vu.py"
     ],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/gpu",
+     "data/contract/a56-coverage/gpu/approved"
     ]
    },
    "data/contract/a56-coverage/gpu/final-pull-0606Z.txt": {
@@ -10143,7 +10315,10 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/gpu"
     ]
    },
    "data/contract/a56-coverage/gpu/head/manifest.json": {
@@ -10158,7 +10333,11 @@
      "backends/direct/ligero/vu.py"
     ],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/gpu",
+     "data/contract/a56-coverage/gpu/head"
     ]
    },
    "data/contract/a56-coverage/gpu/head64/manifest.json": {
@@ -10173,7 +10352,11 @@
      "backends/direct/ligero/vu.py"
     ],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/gpu",
+     "data/contract/a56-coverage/gpu/head64"
     ]
    },
    "data/contract/a56-coverage/head_vu_consequence.json": {
@@ -10181,7 +10364,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage"
     ]
    },
    "data/contract/a56-coverage/o2_commit_cost.json": {
@@ -10189,7 +10374,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage"
     ]
    },
    "data/contract/a56-coverage/patches/a3-expected-attention.diff": {
@@ -10197,7 +10384,10 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/patches"
     ]
    },
    "data/contract/a56-coverage/patches/a3-locator-attention.diff": {
@@ -10205,7 +10395,10 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/patches"
     ]
    },
    "data/contract/a56-coverage/patches/prover-rec_p1_obligations-dispatch.diff": {
@@ -10213,7 +10406,10 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/patches"
     ]
    },
    "data/contract/a56-coverage/pod/stages-and-info.txt": {
@@ -10221,7 +10417,10 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/pod"
     ]
    },
    "data/contract/a56-coverage/records/forced_head_run-TINY-t2-L1-h2-after-F2.json": {
@@ -10229,7 +10428,10 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/records"
     ]
    },
    "data/contract/a56-coverage/records/forced_head_run-TINY-t3-L0-h0.json": {
@@ -10237,7 +10439,10 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/records"
     ]
    },
    "data/contract/a56-coverage/records/forced_head_run-TINY-t5-L0-h0.json": {
@@ -10245,7 +10450,10 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/records"
     ]
    },
    "data/contract/a56-coverage/records/unsupported-census-32x15.json": {
@@ -10253,7 +10461,10 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/records"
     ]
    },
    "data/contract/a56-coverage/records/unsupported-census-TINY.json": {
@@ -10261,7 +10472,10 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/a56-coverage",
+     "data/contract/a56-coverage/records"
     ]
    },
    "data/contract/ck-elem/argmax_rule/rec-p1-b0.json": {
@@ -10269,7 +10483,9 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/contract",
+     "data/contract/ck-elem"
     ]
    },
    "data/hf_configs/B7.config.json": {
@@ -10830,7 +11046,8 @@
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
     "directory_referenced": [
-     "data"
+     "data",
+     "data/workloads_r12"
     ]
    },
    "docs/data/ref-prims/EagerAttentionHeadRef_v1[SCALE_OP=div]-bf16.json": {
@@ -11152,7 +11369,9 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/in_qkv.npy": {
@@ -11162,7 +11381,9 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/out_k.npy": {
@@ -11172,7 +11393,9 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/out_q.npy": {
@@ -11182,7 +11405,9 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/cos_sin_cache.npy": {
@@ -11197,7 +11422,9 @@
      "integrations/vllm/verity_capture/bench/tp2_capture.py"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/in_k.npy": {
@@ -11207,7 +11434,10 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/in_positions.npy": {
@@ -11217,7 +11447,10 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/in_q.npy": {
@@ -11227,7 +11460,10 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/out_k.npy": {
@@ -11237,7 +11473,10 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/out_q.npy": {
@@ -11247,7 +11486,10 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json": {
@@ -11262,7 +11504,9 @@
      "fixtures/bench-instances/v1/seeds/seeds.json"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/B0-divergence-20260907T1604Z",
+     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
     ]
    },
    "fixtures/W11-40f0cebeb670-20260907T1800Z/mufu/mufu_ex2_delta_int8.xz": {
@@ -11273,7 +11517,8 @@
     ],
     "directory_referenced": [
      "fixtures",
-     "fixtures/W11-40f0cebeb670-20260907T1800Z"
+     "fixtures/W11-40f0cebeb670-20260907T1800Z",
+     "fixtures/W11-40f0cebeb670-20260907T1800Z/mufu"
     ]
    },
    "fixtures/W11-40f0cebeb670-20260907T1800Z/mufu/mufu_rcp_delta_int8.xz": {
@@ -11285,7 +11530,8 @@
     ],
     "directory_referenced": [
      "fixtures",
-     "fixtures/W11-40f0cebeb670-20260907T1800Z"
+     "fixtures/W11-40f0cebeb670-20260907T1800Z",
+     "fixtures/W11-40f0cebeb670-20260907T1800Z/mufu"
     ]
    },
    "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables/mufu_rcp_delta_int8.xz": {
@@ -11296,7 +11542,9 @@
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/W11C-40f0cebeb670-20260907T1900Z",
+     "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables"
     ]
    },
    "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables/mufu_rsq_delta_int8.xz": {
@@ -11307,7 +11555,9 @@
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/W11C-40f0cebeb670-20260907T1900Z",
+     "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables"
     ]
    },
    "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables/mufu_sqrt_delta_int8.xz": {
@@ -11317,7 +11567,9 @@
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/W11C-40f0cebeb670-20260907T1900Z",
+     "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables"
     ]
    },
    "fixtures/W11R-40f0cebeb670-20260907T1802Z/tables/mufu_rcp_delta_int8.xz": {
@@ -11328,7 +11580,9 @@
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/W11R-40f0cebeb670-20260907T1802Z",
+     "fixtures/W11R-40f0cebeb670-20260907T1802Z/tables"
     ]
    },
    "fixtures/W11R-40f0cebeb670-20260907T1802Z/tables/mufu_sqrt_delta_int8.xz": {
@@ -11338,7 +11592,9 @@
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
     "directory_referenced": [
-     "fixtures"
+     "fixtures",
+     "fixtures/W11R-40f0cebeb670-20260907T1802Z",
+     "fixtures/W11R-40f0cebeb670-20260907T1802Z/tables"
     ]
    },
    "manifests/checkpoints.json": {
@@ -11446,6 +11702,12 @@
      "integrations/vllm/README.md",
      "integrations/vllm/tests/test_no_by_name_rules.py"
     ],
+    "directory_referenced": []
+   },
+   "tests/dead_code_census.json": {
+    "bytes": 444483,
+    "n_referenced_by": 0,
+    "referenced_by": [],
     "directory_referenced": []
    },
    "tests/ir/data/fp8_block_operands.npz": {
@@ -11616,7 +11878,9 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json": {
     "bytes": 290050,
@@ -11624,7 +11888,9 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 77914,
@@ -11632,7 +11898,9 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 2064999,
@@ -11641,7 +11909,9 @@
      "integrations/vllm/tests/regression/fixtures.toml",
      "integrations/vllm/verity_capture/telemetry/tests/test_admission.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager.json": {
     "bytes": 4435191,
@@ -11649,7 +11919,9 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 5053240,
@@ -11657,13 +11929,17 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 1210,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json": {
     "bytes": 788434,
@@ -11671,13 +11947,17 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 1210,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 2615092,
@@ -11685,7 +11965,9 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 2867623,
@@ -11693,13 +11975,17 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/expected/smollm2-135m__bf16__l40s__tp1__b16__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 966,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "tests/regression/expected"
+    ]
    },
    "tests/regression/fixtures.toml": {
     "bytes": 617105,
@@ -11731,7 +12017,9 @@
     "bytes": 4445,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/bench/fixtures"
+    ]
    },
    "verity_capture/bench/gen_batch_pod.sh": {
     "bytes": 7315,
@@ -11838,13 +12126,19 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/commit/tests/fixtures/admission/planner_calibration.jsonl"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/commit/tests/fixtures",
+     "verity_capture/commit/tests/fixtures/admission"
+    ]
    },
    "verity_capture/commit/tests/fixtures/admission/b4.json": {
     "bytes": 3237,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/commit/tests/fixtures",
+     "verity_capture/commit/tests/fixtures/admission"
+    ]
    },
    "verity_capture/commit/tests/fixtures/admission/b8greedy_exec.json": {
     "bytes": 4015,
@@ -11853,13 +12147,19 @@
      "integrations/vllm/verity_capture/commit/tests/fixtures/admission/planner_calibration.jsonl",
      "integrations/vllm/verity_capture/commit/tests/test_admission_planner.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/commit/tests/fixtures",
+     "verity_capture/commit/tests/fixtures/admission"
+    ]
    },
    "verity_capture/commit/tests/fixtures/admission/b8stoch.json": {
     "bytes": 4044,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/commit/tests/fixtures",
+     "verity_capture/commit/tests/fixtures/admission"
+    ]
    },
    "verity_capture/commit/tests/fixtures/admission/fp8_b1_sizing.json": {
     "bytes": 1187,
@@ -11867,7 +12167,10 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/commit/tests/test_admission_planner.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/commit/tests/fixtures",
+     "verity_capture/commit/tests/fixtures/admission"
+    ]
    },
    "verity_capture/commit/tests/fixtures/admission/fp8_b1_try5_bounded_none/steps.jsonl": {
     "bytes": 68027,
@@ -11880,7 +12183,11 @@
      "integrations/vllm/verity_capture/commit/tests/test_admission.py",
      "integrations/vllm/verity_capture/commit/tests/test_admission_planner.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/commit/tests/fixtures",
+     "verity_capture/commit/tests/fixtures/admission",
+     "verity_capture/commit/tests/fixtures/admission/fp8_b1_try5_bounded_none"
+    ]
    },
    "verity_capture/commit/tests/fixtures/admission/fp8_b1_try5_bounded_none/verdict.json": {
     "bytes": 911,
@@ -11893,13 +12200,20 @@
      "integrations/vllm/tests/ir/test_lifted_record.py",
      "integrations/vllm/tests/ir/test_lifted_use_document.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/commit/tests/fixtures",
+     "verity_capture/commit/tests/fixtures/admission",
+     "verity_capture/commit/tests/fixtures/admission/fp8_b1_try5_bounded_none"
+    ]
    },
    "verity_capture/commit/tests/fixtures/admission/phi3b1.json": {
     "bytes": 3251,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/commit/tests/fixtures",
+     "verity_capture/commit/tests/fixtures/admission"
+    ]
    },
    "verity_capture/commit/tests/fixtures/admission/planner_calibration.jsonl": {
     "bytes": 2623,
@@ -11908,7 +12222,10 @@
      "integrations/vllm/verity_capture/bench/commit_delta.py",
      "integrations/vllm/verity_capture/commit/tests/test_admission_planner.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/commit/tests/fixtures",
+     "verity_capture/commit/tests/fixtures/admission"
+    ]
    },
    "verity_capture/experimental/fa2_commit/fixtures/b0_c256_attention_geometry.json": {
     "bytes": 36098,
@@ -11916,7 +12233,9 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixture.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/experimental/fa2_commit/fixtures"
+    ]
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS": {
     "bytes": 598,
@@ -11924,7 +12243,10 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/experimental/fa2_commit/fixtures",
+     "verity_capture/experimental/fa2_commit/fixtures/p0"
+    ]
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_16x32_h1kv1.npz": {
     "bytes": 129491,
@@ -11933,7 +12255,10 @@
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS",
      "integrations/vllm/verity_capture/experimental/fa2_commit/test_kernel_dump.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/experimental/fa2_commit/fixtures",
+     "verity_capture/experimental/fa2_commit/fixtures/p0"
+    ]
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_1x160_h1kv1.npz": {
     "bytes": 175551,
@@ -11942,7 +12267,10 @@
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS",
      "integrations/vllm/verity_capture/experimental/fa2_commit/test_kernel_dump.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/experimental/fa2_commit/fixtures",
+     "verity_capture/experimental/fa2_commit/fixtures/p0"
+    ]
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_1x160_h3kv1.npz": {
     "bytes": 183127,
@@ -11951,7 +12279,10 @@
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS",
      "integrations/vllm/verity_capture/experimental/fa2_commit/test_kernel_dump.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/experimental/fa2_commit/fixtures",
+     "verity_capture/experimental/fa2_commit/fixtures/p0"
+    ]
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_1x169_h3kv1.npz": {
     "bytes": 191755,
@@ -11960,7 +12291,10 @@
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS",
      "integrations/vllm/verity_capture/experimental/fa2_commit/test_kernel_dump.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/experimental/fa2_commit/fixtures",
+     "verity_capture/experimental/fa2_commit/fixtures/p0"
+    ]
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_40x200_h1kv1.npz": {
     "bytes": 373471,
@@ -11968,7 +12302,10 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/experimental/fa2_commit/fixtures",
+     "verity_capture/experimental/fa2_commit/fixtures/p0"
+    ]
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_64x128_h1kv1.npz": {
     "bytes": 346859,
@@ -11976,7 +12313,10 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/experimental/fa2_commit/fixtures",
+     "verity_capture/experimental/fa2_commit/fixtures/p0"
+    ]
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_64x300_h1kv1.npz": {
     "bytes": 649495,
@@ -11985,13 +12325,19 @@
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS",
      "integrations/vllm/verity_capture/experimental/fa2_commit/test_kernel_dump.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/experimental/fa2_commit/fixtures",
+     "verity_capture/experimental/fa2_commit/fixtures/p0"
+    ]
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_summary.json": {
     "bytes": 388,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/experimental/fa2_commit/fixtures",
+     "verity_capture/experimental/fa2_commit/fixtures/p0"
+    ]
    },
    "verity_capture/golden/corpus.json": {
     "bytes": 1439,
@@ -12047,7 +12393,9 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/tests/test_dense_generic.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/profiles/hf_configs"
+    ]
    },
    "verity_capture/profiles/hf_configs/QWEN3_4B.config.json": {
     "bytes": 727,
@@ -12055,13 +12403,17 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/tests/test_dense_generic.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/profiles/hf_configs"
+    ]
    },
    "verity_capture/profiles/hf_configs/QWEN3_4B_FP8.config.json": {
     "bytes": 4210,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/profiles/hf_configs"
+    ]
    },
    "verity_capture/profiles/quarantine/GEMMA2_2B.json": {
     "bytes": 159534,
@@ -13005,7 +13357,10 @@
      "backends/gkr/README.md",
      "backends/gkr/bench_result.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/tests/fixtures",
+     "verity_capture/tests/fixtures/tp2"
+    ]
    },
    "verity_capture/tests/fixtures/tp2/collective_shard.steps03.rank0.json.gz": {
     "bytes": 11901,
@@ -13013,7 +13368,10 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/tests/test_tp_collective.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/tests/fixtures",
+     "verity_capture/tests/fixtures/tp2"
+    ]
    },
    "verity_capture/tests/fixtures/tp2/collective_shard.steps03.rank1.json.gz": {
     "bytes": 11903,
@@ -13021,19 +13379,28 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/tests/test_tp_collective.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/tests/fixtures",
+     "verity_capture/tests/fixtures/tp2"
+    ]
    },
    "verity_capture/tests/fixtures/tp2/fold_gap.shard.rank0.json": {
     "bytes": 9467,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/tests/fixtures",
+     "verity_capture/tests/fixtures/tp2"
+    ]
    },
    "verity_capture/tests/fixtures/tp2/fold_gap.shard.rank1.json": {
     "bytes": 9467,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/tests/fixtures",
+     "verity_capture/tests/fixtures/tp2"
+    ]
    },
    "verity_capture/tests/fixtures/tp2/instances.shard.rank0.jsonl": {
     "bytes": 250,
@@ -13042,7 +13409,10 @@
      "integrations/vllm/verity_capture/tests/fixtures/tp2/README.md",
      "integrations/vllm/verity_capture/tests/test_tp_collective.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/tests/fixtures",
+     "verity_capture/tests/fixtures/tp2"
+    ]
    },
    "verity_capture/tests/fixtures/tp2/tp2_body.summary.json": {
     "bytes": 4032,
@@ -13053,7 +13423,10 @@
      "integrations/vllm/verity_capture/tp/collective_record.py",
      "integrations/vllm/verity_vllm/registry/quarantine/collective/allreduce.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_capture/tests/fixtures",
+     "verity_capture/tests/fixtures/tp2"
+    ]
    },
    "verity_vllm/acquire/pod_gate.sh": {
     "bytes": 5578,
@@ -13080,7 +13453,9 @@
      "tools/research/src/research/store/tool.py",
      "tools/research/tests/test_store_prov.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_vllm/commit_engine"
+    ]
    },
    "verity_vllm/commit_engine/Cargo.lock": {
     "bytes": 4217,
@@ -13093,7 +13468,9 @@
      "tools/research/src/research/env.py",
      "tools/research/src/research/store/README.md"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_vllm/commit_engine"
+    ]
    },
    "verity_vllm/commit_engine/Cargo.toml": {
     "bytes": 369,
@@ -13106,7 +13483,9 @@
      "backends/redteam/vu-battery-b/Cargo.toml",
      "backends/sp1/host/src/main.rs"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_vllm/commit_engine"
+    ]
    },
    "verity_vllm/commit_engine/src/main.rs": {
     "bytes": 6476,
@@ -13119,7 +13498,10 @@
      "backends/gkr/gpu/DESIGN.md",
      "backends/gkr/gpu/prover.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_vllm/commit_engine",
+     "verity_vllm/commit_engine/src"
+    ]
    },
    "verity_vllm/registry/quarantine/dense/tables/mufu_tanh_sm89.json": {
     "bytes": 37370,
@@ -13127,7 +13509,9 @@
     "referenced_by": [
      "integrations/vllm/verity_vllm/registry/prims.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_vllm/registry/quarantine/dense/tables"
+    ]
    },
    "verity_vllm/registry/quarantine/dense/tables/mufu_tanh_sm89.xzblocks": {
     "bytes": 449932,
@@ -13136,7 +13520,9 @@
      "integrations/vllm/verity_vllm/registry/prims.py",
      "integrations/vllm/verity_vllm/registry/quarantine/dense/tables/mufu_tanh_sm89.json"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_vllm/registry/quarantine/dense/tables"
+    ]
    },
    "verity_vllm_numerics/cpp/fa2_model.cpp": {
     "bytes": 18160,
@@ -13211,13 +13597,17 @@
     "bytes": 4409,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_vllm_numerics/cuda"
+    ]
    },
    "verity_vllm_numerics/cuda/mma_tiles_sm80.cu": {
     "bytes": 5523,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_vllm_numerics/cuda"
+    ]
    },
    "verity_vllm_numerics/cuda/mufu_probe.cu": {
     "bytes": 15233,
@@ -13228,7 +13618,9 @@
      "integrations/vllm/verity_vllm_numerics/cuda/rms_probe.cu",
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_vllm_numerics/cuda"
+    ]
    },
    "verity_vllm_numerics/cuda/rms_probe.cu": {
     "bytes": 15295,
@@ -13237,7 +13629,9 @@
      "integrations/vllm/verity_vllm_numerics/cpp/rms_triton_model.cpp",
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
-    "directory_referenced": []
+    "directory_referenced": [
+     "verity_vllm_numerics/cuda"
+    ]
    },
    "workloads/gemma2-2b__bf16__l40s__tp1__b1__i256__o15__mixed__greedy__bi-eager.json": {
     "bytes": 7124,
