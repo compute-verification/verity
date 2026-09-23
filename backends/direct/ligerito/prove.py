@@ -31,13 +31,16 @@ from . import sumcheck as sc_mod
 from .layout import Constraints, Layout, SubBatch, build_z, constraints, layout_for, public_rows
 from .proof import Key, PcsProof, Proof, Statement, params_bytes
 from .proto import claims as cl
-from .proto import ext, merkle_multi
+from .proto import device as pdev
+from .proto import ext, merkle_multi, stream
+from .proto._ligero import commit_gpu as _commit_gpu
 from .proto._ligero import merkle as ligero_merkle
 from .proto.dims import Dims
 from .proto.kernels import col_contract, row_contract
 from .proto.linalg import _powers_rows, contract_columns_ext, contract_rows_ext, eq_planes, matmul_mod_p_np, powers_matrix
 from .proto.ntt_gpu import Encoder, split
-from .proto.pcs import Timer, _commit, _ext_bytes, _HostTree, _open_rows, _row_claims
+from .proto.pcs import (Timer, _commit, _commit_fast, _ext_bytes, _HostTree, _open_fast, _open_recompute, _open_rows,
+                        _row_claims, _stream_group)
 from .transcript import FiatShamirCoins, LocalCoins
 
 D = 6
@@ -87,14 +90,19 @@ def make_coins(kind: str, seed: int = 0, slots=None):
 class Committed:
     dims: Dims
     M1: torch.Tensor                    # (C1, R1) int32 view of f
-    U1: torch.Tensor                    # (C1, n_1) codeword
+    U1: torch.Tensor | None             # (C1, n_1) codeword (None: streamed commit, opened rows recomputed from M1)
     tree1: object
     enc1: Encoder
     root1: bytes
+    fast: bool = False                  # pcs-fast's device path (commit_gpu tree, device contractions / sumcheck)
 
 
 def _gpu(device) -> bool:
     return torch.device(device).type == "cuda" and ligero_merkle._gpu_merkle is not None
+
+
+def _fast(f: torch.Tensor) -> bool:
+    return f.device.type == "cuda" and pdev.available(f) and ligero_merkle._gpu_merkle is not None
 
 
 def _tree(U: torch.Tensor):
@@ -112,13 +120,23 @@ def _open(U: torch.Tensor, tree, S: list[int], depth: int) -> tuple[np.ndarray, 
     return U[:, idx].t().contiguous().to(torch.int64).numpy(), tree.gather(S, depth)
 
 
-def pcs_commit(f: torch.Tensor, dims: Dims, tm: Timer) -> Committed:
-    """Round 1 of proto's ``prove``: encode the columns of ``M1 = f.view(C1, R1)`` and Merkle-commit the codeword rows."""
+def pcs_commit(f: torch.Tensor, dims: Dims, tm: Timer, fast: bool | None = None) -> Committed:
+    """Round 1 of proto's ``prove``: encode the columns of ``M1 = f.view(C1, R1)`` and Merkle-commit the codeword rows
+    (pcs-fast: streamed by column groups when the codeword does not fit the card, ``LIGERITO_STREAM``)."""
     ks, kps, rates = dims.k, dims.kprime, dims.rates
     R1, C1 = 1 << ks[0], 1 << kps[0]
     assert f.numel() == 1 << dims.n and f.dtype == torch.int32
+    fast = _fast(f) if fast is None else fast
     M1 = f.view(C1, R1)
     enc1 = Encoder(R1, f.device, rates[0])
+    if fast:
+        pdev.share_torch_allocator()
+        group = _stream_group(dims, f.device)
+        if group:
+            tm.start("commit_r1_stream")
+            root1, tree1 = stream.commit_streamed(M1, enc1, group, _commit_gpu)
+            tm.stop()
+            return Committed(dims, M1, None, tree1, enc1, root1, True)
     tm.start("commit_r1_alloc")
     U1 = torch.empty((C1, enc1.n), dtype=torch.int32, device=f.device)
     tm.stop()
@@ -126,13 +144,204 @@ def pcs_commit(f: torch.Tensor, dims: Dims, tm: Timer) -> Committed:
     U1 = enc1.encode(M1, out=U1)
     tm.stop()
     tm.start("commit_r1_merkle")
-    root1, tree1 = _tree(U1)
+    root1, tree1 = _commit_fast(U1) if fast else _tree(U1)
     tm.stop()
-    return Committed(dims, M1, U1, tree1, enc1, root1)
+    return Committed(dims, M1, U1, tree1, enc1, root1, fast)
 
 
-def pcs_open(com: Committed, points: np.ndarray, values: np.ndarray, coins, tm: Timer) -> PcsProof:
-    """The evaluation proof of ``w~(points[j]) = values[j]`` for all ``j`` (points in PCS variable order, (J, n, 6))."""
+def pcs_open(com: Committed, points: np.ndarray, values: np.ndarray, coins, tm: Timer, n_c: int = 0) -> PcsProof:
+    """The evaluation proof of ``w~(points[j]) = values[j]`` for all ``j`` (points in PCS variable order, (J, n, 6));
+    ``n_c``: the number of column variables (the low PCS variables), for the Boolean-row shortcut of round 1."""
+    if com.fast:
+        return _pcs_open_fast(com, points, values, coins, tm, n_c)
+    return pcs_open_reference(com, points, values, coins, tm)
+
+
+def _xpow_ext(u: np.ndarray) -> np.ndarray:
+    """(6, C, 6) plane contractions ``u[a, c] = <M_a[c, :], eq>`` (M = sum_a x^a M_a) -> (C, 6): sum_a x^a u[a, c]."""
+    out = ext.zero((u.shape[1],))
+    for a in range(D):
+        xa = ext.zero()
+        xa[a] = 1
+        out = ext.add(out, ext.mul(u[a], xa))
+    return out
+
+
+def _r1_eq_contract(M1: torch.Tensor, z: np.ndarray, k1: int, n_c: int) -> np.ndarray:
+    """(C1, 6) ``u[c] = sum_x M1[c, x] eq(z[:k1], x)``.  When the point's coordinates ``n_c .. k1-1`` are Boolean (the
+    chain-row claims ``w(c_x, rho)``: the low row bits of ``c_x``) the eq table is zero outside one block of ``2^n_c``
+    words per column, so only that block is read (2^{k1 - n_c} x fewer words)."""
+    C1, R1 = M1.shape
+    zl = np.asarray(z[:k1], dtype=np.int64) % P
+    tail = zl[n_c:]
+    if 0 < n_c < k1 and not tail[:, 1:].any() and np.isin(tail[:, 0], (0, 1)).all():
+        b = int(sum(int(tail[t, 0]) << t for t in range(tail.shape[0])))
+        sub = M1.view(C1, R1 >> n_c, 1 << n_c)[:, b, :]
+        u = pdev.contract_planes(sub, pdev.eq_table(zl[:n_c], M1.device))
+    else:
+        u = pdev.contract_planes(M1, pdev.eq_table(zl, M1.device))
+    return (u % P).cpu().numpy()
+
+
+def _dedupe_eq(coefs: list, zs: list) -> tuple[list, list]:
+    """Merge eq terms with the same point (their coefficients add; the claim algebra is unchanged)."""
+    oc, oz = [], []
+    for c, z in zip(coefs, zs):
+        for j, z2 in enumerate(oz):
+            if z2.shape == z.shape and np.array_equal(z2, z):
+                oc[j] = ext.add(oc[j], c)
+                break
+        else:
+            oc.append(c)
+            oz.append(z)
+    return oc, oz
+
+
+def _pcs_open_fast(com: Committed, points: np.ndarray, values: np.ndarray, coins, tm: Timer, n_c: int = 0) -> PcsProof:
+    """``pcs_open_reference``'s protocol on pcs-fast's device pieces (``proto/pcs.prove``'s loop): J eq terms instead of
+    one -- round 1's column sumcheck on the host (C_1 = 2^{k'_1} values per term), rounds >= 2 on ``DeviceSumcheck`` with
+    the extra eq terms appended as table rows.  Same transcript and proof bytes as the reference."""
+    dims, device = com.dims, com.M1.device
+    n, ks, kps, qs, L, rates = dims.n, dims.k, dims.kprime, dims.queries, dims.rounds, dims.rates
+    J = points.shape[0]
+    assert points.shape == (J, n, D) and values.shape == (J, D)
+    tr = coins
+    tr.absorb(b"z", _ext_bytes(points))
+    beta = tr.challenge(b"beta", J)
+    roots, sumcheck, rows_out, sibs = [com.root1], [], [], []
+    Us, trees, encs = [com.U1], [com.tree1], [com.enc1]
+    M1 = com.M1
+    # ---------------- round 1: J eq terms, host sumcheck
+    tm.start("sumcheck_r1_contract")
+    terms = [cl.Term(beta[j] % P, "eq", z=points[j] % P, nvars=n) for j in range(J)]
+    us = [_r1_eq_contract(M1, points[j], ks[0], n_c) for j in range(J)]
+    tm.stop()
+    tm.start("sumcheck_host")
+    sc = cl.ColumnSumcheckProver(terms, us, ks[0], kps[0])
+    msgs = []
+    for _ in range(kps[0]):
+        g = sc.round_message()
+        tr.absorb(b"g", _ext_bytes(g))
+        r = tr.challenge(b"r", 1)[0]
+        sc.fold(r)
+        msgs.append(g)
+    sumcheck.append(msgs)
+    r1 = sc.challenges()
+    rbar = cl.rbar(r1)
+    running = sc.claim()
+    eqs = [t.restrict(ks[0], r1) for t in terms]
+    coef_eq, z_eq = _dedupe_eq([t.coef for t in eqs], [t.z for t in eqs])
+    etas_g = np.zeros(0, dtype=np.int64)
+    coef_g = ext.zero((0,))
+    tm.stop()
+    tm.start("sumcheck_r1_fold")
+    y = row_contract(M1, rbar)                                           # (6, R1) int32 planes
+    tm.stop()
+    rbars = [rbar]
+    # ---------------- rounds 2..L
+    for i in range(1, L):
+        R, C = 1 << ks[i], 1 << kps[i]
+        Mi = y.view(D, C, R)
+        Mflat = Mi.reshape(D * C, R)
+        tm.start("recursion_encode")
+        enc = Encoder(R, device, rates[i])
+        U = enc.encode(Mflat)
+        tm.stop()
+        tm.start("recursion_merkle")
+        root, tree = _commit_fast(U)
+        tm.stop()
+        roots.append(root)
+        Us.append(U)
+        trees.append(tree)
+        encs.append(enc)
+        tr.absorb(b"root", root)
+        tm.start("serialize_openings")
+        prev = i - 1
+        n_prev = encs[prev].n
+        S = tr.indices(b"S", n_prev, qs[prev])
+        depth = n_prev.bit_length() - 1
+        if Us[prev] is None:
+            tm.stop()
+            tm.start("commit_r1_recompute")
+            op = _open_recompute(M1, encs[prev], trees[prev], S, depth)
+            tm.stop()
+            tm.start("serialize_openings")
+        else:
+            op = _open_fast(Us[prev], trees[prev], S, depth)
+        rows_out.append(op.rows)
+        sibs.append(op.siblings)
+        tr.absorb(b"rows", np.ascontiguousarray(op.rows.astype(np.uint32)).tobytes())
+        tr.absorb(b"sib", op.siblings)
+        Us[prev] = trees[prev] = None
+        tm.stop()
+        tm.start("sumcheck_host")
+        etas = encs[prev].etas(S)
+        rhs = _row_claims(op.rows, rbars[prev], base=(prev == 0))
+        alpha = tr.challenge(b"alpha", 1 + len(S))
+        coef_eq = [ext.mul(c, alpha[0]) for c in coef_eq]
+        coef_g = ext.mul(coef_g, alpha[0]) if len(etas_g) else coef_g
+        coef_g = np.concatenate((coef_g, alpha[1:]), axis=0)
+        etas_g = np.concatenate((etas_g, np.asarray(etas, dtype=np.int64)))
+        running = ext.add(ext.mul(alpha[0], running), ext.sum_ext(ext.mul(alpha[1:], rhs), axis=0))
+        colg = cl.geom_colparts(etas_g, ks[i], kps[i])[:, :, 0]
+        eq_terms = [cl.Term(ext.one(), "eq", z=z, nvars=len(z)) for z in z_eq]
+        coles = [t.colpart(ks[i], kps[i]) for t in eq_terms]
+        coef = np.concatenate((coef_eq[0][None], coef_g), axis=0)
+        tm.stop()
+        tm.start("recursion_contract")
+        ug = pdev.contract_geom(Mflat, etas_g)
+        ues = [pdev.contract_planes(Mflat, pdev.eq_table(z[:ks[i]], device)) for z in z_eq]
+        dsc = pdev.DeviceSumcheck(ug, ues[0], coef, colg, coles[0], C, device)
+        if len(z_eq) > 1:
+            A = [ext.mul(coef_eq[j], _xpow_ext((ues[j] % P).view(D, C, D).cpu().numpy())) for j in range(1, len(z_eq))]
+            dt = lambda a: torch.as_tensor(np.ascontiguousarray(np.stack(a) % P).astype(np.int32), device=device)  # noqa: E731
+            dsc.A = torch.cat((dsc.A, dt(A)), 0).contiguous()
+            dsc.B = torch.cat((dsc.B, dt(coles[1:])), 0).contiguous()
+            dsc.T += len(z_eq) - 1
+        del ug, ues
+        tm.stop()
+        tm.start("sumcheck_device")
+        msgs, rs = [], []
+        for j in range(kps[i]):
+            g = dsc.message()
+            if j == 0 and not np.array_equal(ext.add(g[0], g[1]), running):
+                raise AssertionError(f"PCS round {i + 1}: prover-side claim mismatch")
+            tr.absorb(b"g", _ext_bytes(g))
+            r = tr.challenge(b"r", 1)[0]
+            dsc.fold(r)
+            msgs.append(g)
+            rs.append(r)
+        sumcheck.append(msgs)
+        running = cl.interpolate_deg2(g[0], g[1], g[2], rs[-1])
+        ri = np.stack(rs[::-1], axis=0)
+        rbar = cl.rbar(ri)
+        tm.stop()
+        tm.start("sumcheck_host")
+        coef_eq = [ext.mul(c, t.colpart_at(ks[i], ri)) for c, t in zip(coef_eq, eq_terms)]
+        coef_eq, z_eq = _dedupe_eq(coef_eq, [z[:ks[i]] for z in z_eq])
+        coef_g = ext.mul(coef_g, cl.geom_colpart_at(etas_g, ks[i], ri))
+        rbars.append(rbar)
+        del dsc
+        tm.stop()
+        tm.start("recursion_fold")
+        y = pdev.fold_ext(Mi, rbar)
+        tm.stop()
+    # ---------------- final vector, open U_L
+    tm.start("serialize_final")
+    final_y = y.to(torch.int64).t().contiguous().cpu().numpy() % P
+    tr.absorb(b"y", _ext_bytes(final_y))
+    n_last = encs[-1].n
+    S = tr.indices(b"S", n_last, qs[-1])
+    depth = n_last.bit_length() - 1
+    op = _open_fast(Us[-1], trees[-1], S, depth) if Us[-1] is not None else _open_recompute(M1, encs[-1], trees[-1], S, depth)
+    rows_out.append(op.rows)
+    sibs.append(op.siblings)
+    tm.stop()
+    return PcsProof(roots, sumcheck, rows_out, sibs, final_y)
+
+
+def pcs_open_reference(com: Committed, points: np.ndarray, values: np.ndarray, coins, tm: Timer) -> PcsProof:
+    """The multi-claim open on proto's reference pieces (host column sumcheck, torch contractions)."""
     dims, device = com.dims, com.M1.device
     n, ks, kps, qs, L, rates = dims.n, dims.k, dims.kprime, dims.queries, dims.rounds, dims.rates
     J = points.shape[0]
@@ -387,6 +596,7 @@ class Batch:
     dims: Dims
     lparams: params_mod.LigeritoParams
     params: dict
+    stmt_digest: bytes = b""            # sha256(LGTS0001 bytes): the statement is fixed before the prover's clock starts
 
 
 @dataclass
@@ -407,6 +617,7 @@ class Prover:
         self.device = device
         self.l = l
         self.engine = ("cuda" if str(device).startswith("cuda") else None) if engine == "auto" else engine
+        self.pcs_fast: bool | None = None           # None: pcs-fast's device path whenever it is available
         t0 = time.perf_counter()
         self.runner = RelationChainRunner(self.rel, device, 128.0)
         self.sys = self.runner.sys
@@ -444,9 +655,16 @@ class Prover:
         params = {"relation": self.rel.name, "l": l, "n": dims.n, "kprime": dims.kprime, "queries": dims.queries,
                   "rate_log2": dims.rates, "splits": splits, "order": "row-major", "coins": coins_kind, "zk": zk,
                   "n_claims": 1 + lay.n_links}
-        return Batch(groups, lay, stmt, dims, lp, params)
+        return Batch(groups, lay, stmt, dims, lp, params, stmt.digest())
 
     # --- witness ----------------------------------------------------------------------------------------------------
+    def _pad(self) -> dict:
+        """The pad sub-batch's marshalled words (``l`` zero-word units, device-resident), once per prover like relchain's
+        marshal cache."""
+        if getattr(self, "_pad_bd", None) is None:
+            self._pad_bd = sc_mod._marshal_pad(self.rel, self.runner, self.l, self.device)
+        return self._pad_bd
+
     def _subs(self, bt: Batch, mutate=None):
         """The S sub-batches one at a time (``build_z`` iterates it): W is materialised per sub-batch and dropped."""
         prover = self
@@ -465,7 +683,7 @@ class Prover:
         if s < len(bt.groups):
             bd = self.runner.marshal(list(bt.groups[s]), min_l=l)
         else:
-            bd = sc_mod._marshal_pad(rel, self.runner, l, dev)
+            bd = self._pad()
         hints = rel.hints(rel.params, self.sys, bd["c_d"], bd["a_d"], bd["b_d"], bd["y_d"], dev)
         W = build_witness(self.sys, bd["pub"], hints, dev)
         if mutate is not None:
@@ -492,12 +710,12 @@ class Prover:
         tm.stop()
         tm.start("transcript")
         coins.absorb(b"lgto/params", params_bytes(bt.params))
-        coins.absorb(b"lgto/stmt", stmt.digest())
+        coins.absorb(b"lgto/stmt", bt.stmt_digest or stmt.digest())
         coins.absorb(b"lgto/vk", self.key_sha256)
         virt = z[lay.m:].clone()
         z[lay.m:] = 0
         tm.stop()
-        com = pcs_commit(z.view(-1), bt.dims, tm)
+        com = pcs_commit(z.view(-1), bt.dims, tm, fast=self.pcs_fast)
         coins.absorb(b"root", com.root1)
         tm.start("zero_check")
         z[lay.m:] = virt
@@ -506,7 +724,7 @@ class Prover:
         del virt
         tm.stop()
         points, values = pcs_points(lay, scp.claims)
-        pcs = pcs_open(com, points, values, coins, tm)
+        pcs = pcs_open(com, points, values, coins, tm, n_c=lay.C.bit_length() - 1)
         tm.start("serialize_proof")
         proof = Proof(bt.params, scp.to_bytes(), pcs)
         tm.stop()
@@ -564,7 +782,7 @@ class Prover:
                         raise Reject(f"statement sub-batch {s}: claimed word out of range")
                     subs.append(SubBatch(None, pub, ypub, real[s]))
                 else:
-                    bd = sc_mod._marshal_pad(self.rel, self.runner, self.l, dev)
+                    bd = self._pad() if dev == torch.device(self.device) else sc_mod._marshal_pad(self.rel, self.runner, self.l, dev)
                     subs.append(SubBatch(None, bd["pub"], bd["ypub_d"], 0))
             pub_rows = public_rows(self.sys, lay, subs, dev)
             info["t_public"] = time.perf_counter() - t0

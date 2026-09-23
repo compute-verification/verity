@@ -184,7 +184,7 @@ def gate(args) -> int:
         def neg_prove(name: str, mutate=None, cheat=None, stmt=None, ypub=None):
             b2 = bt if stmt is None else copy.copy(bt)
             if stmt is not None:
-                b2.stmt = stmt
+                b2.stmt, b2.stmt_digest = stmt, stmt.digest()
             r2 = pv.prove(b2, make_coins(kind, 1), mutate=mutate, cheat=cheat, ypub_override=ypub)
             neg(name, b2.stmt, r2.proof)
         # (1) wrong claimed word (the prover claims it: witness honest, y16 row + statement changed)
