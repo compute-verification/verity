@@ -282,8 +282,8 @@ class Statement:
     hash_auth: object | None = None  # authentication = included-hash (v5): hashauth.HashAuth; ``a`` is then the (l, 17) public
     #                                  table [is_end | d0..d15] and ``b`` the (n_vus, 3) leaf triples (what the digest binds)
     hash_sibs: list | None = None    # v5: the three multiproofs (a, b, y), lists of 32-byte siblings
-    row_words: int | None = None     # v5 as read: the header's K (words per committed row = steps x K per unit; not in the
-    #                                  statement digest, so the verifier compares it with the relation's, ``verify_files``)
+    row_words: int | None = None     # v5 as read: the header's K (``_K_of`` = K_VU; not in the statement digest, so
+    #                                  ``verify_files`` compares it with K_VU)
 
     @property
     def v4(self) -> bool:
@@ -664,9 +664,15 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
     coins = own_coins if (st.interactive and own_coins is not None) else pf.coins if (st.interactive and pf.coins is not None) else None
     if st.interactive and coins is None:
         return False, "interactive transcript carries no coins", 0.0
-    rel = getattr(R, "rel", None)
-    if st.v5 and st.row_words is not None and rel is not None and st.row_words != st.steps * rel.k:
-        return False, f"statement: K = {st.row_words} words per row is not steps ({st.steps}) x the {rel.name} unit's {rel.k}", 0.0
+    if st.v5 and st.row_words is not None:
+        from .chain import Layout
+        # the VU shape first (protocol.layout_error, as protocol.verify would), then the header K, which is not in the
+        # statement digest: every hashed writer emits K_VU (``_K_of``; for fp4-nvf4 24 x 64 codes, not steps x WORDS)
+        why = pm.layout_error(Layout(st.l, st.n_vus, st.steps), _hooks_of(R))
+        if why is None and st.row_words != _K_of(st):
+            why = f"statement: K = {st.row_words} words per row, a hashed statement's row is K = {_K_of(st)}"
+        if why is not None:
+            return False, why, 0.0
     t0 = time.perf_counter()
     try:
         if st.v5:

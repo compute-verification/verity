@@ -1249,15 +1249,14 @@ fn steps_pin_red_team_fixtures_are_refused() {
         let (code, js) = run(&["batch", "--dir", &d, "--system", &f.sys(), "--threads", "2"]);
         assert_ne!(code, 0, "{name}: {js}");
         assert!(js.contains("\"accepted\":0,\"rejected\":1"), "{name}: {js}");
-        // unpinned: the leaf's structural bound still holds; below it (steps = 32 <= 64) the digest is binding and an
-        // unpinned verdict says nothing about which relation (hence which VU shape) was proved
+        // unpinned: the leaf's structural bound still holds; below it (steps = 32 <= 64) the digest is binding, and what
+        // refuses the forgery is its header K = 32 x 32 (every hashed writer emits K = 1536)
         let (code, js) = verify(&f.sys(), &stmt, &proof, &["--allow-any-system"]);
+        assert_eq!(code, 1, "{name}: {js}");
         if steps > f.n {
-            assert_eq!(code, 1, "{name}: {js}");
             assert!(js.contains(&bound), "{name}: {js}");
         } else {
-            assert_eq!(code, 0, "{name}: {js}");
-            assert!(js.contains("\"system_pinned\":false") && js.contains("[system NOT pinned"), "{name}: {js}");
+            assert!(js.contains(&format!("statement: K = {} words per row, a hashed statement's row is K = 1536", steps * k)), "{name}: {js}");
         }
     }
     // the pairs really collide: P and Q are different statements with byte-identical a / b tree references
@@ -1306,7 +1305,7 @@ fn steps_pin_forged_steps32_proofs_are_refused_pinned() {
     assert!(js.contains(why), "{js}");
     let (code, js) = verify(HASH_SYS, &hashed.0, &hashed.1, &["--allow-any-system"]);
     assert_eq!(code, 1, "{js}");
-    assert!(js.contains("column challenge mismatch"), "{js}");
+    assert!(js.contains("statement: K = 1024 words per row, a hashed statement's row is K = 1536"), "{js}");
 }
 
 #[test]
@@ -1324,9 +1323,10 @@ fn a_statement_whose_vu_shape_is_not_the_relations_is_refused_pinned() {
         ("fp8_steps96", FP8_SYS, FP8_STMT, FP8_PROOF, &[(50, 96)], "layout does not fit".into(), true),
         ("b1_steps32", BF16_SYS, "fixtures/b1.stmt", "fixtures/b1.proof", &[(50, 32)], steps(32, "bf16-ampere", 96, 16), false),
         ("fp4_steps12", FP4_SYS, FP4_STMT, FP4_PROOF, &[(50, 12)], steps(12, "fp4-nvf4", 24, 68), false),
-        ("hash_steps32", HASH_SYS, HASH_STMT, HASH_PROOF, &[(50, 32), (54, 32 * 32)], steps(32, "fp8-ada", 48, 32), false),
-        ("hash_k16", HASH_SYS, HASH_STMT, HASH_PROOF, &[(54, 48 * 16)], "statement: K = 16 words per operand per unit, the fp8-ada relation's unit takes 32".into(), true),
-        ("ah_steps32", AH_SYS, AH_STMT, AH_PROOF, &[(50, 32), (54, 32 * 16)], steps(32, "bf16-ampere", 96, 16), false),
+        // a hashed header keeps K = 1536 (32 x 48): the steps check alone refuses it pinned
+        ("hash_steps32", HASH_SYS, HASH_STMT, HASH_PROOF, &[(50, 32)], steps(32, "fp8-ada", 48, 32), false),
+        ("hash_k16", HASH_SYS, HASH_STMT, HASH_PROOF, &[(54, 48 * 16)], "statement: K = 768 words per row, a hashed statement's row is K = 1536".into(), true),
+        ("ah_steps32", AH_SYS, AH_STMT, AH_PROOF, &[(50, 32)], steps(32, "bf16-ampere", 96, 16), false),
     ];
     for (name, sys, stmt, proof, edits, why, both_modes) in cases {
         let m = write_tmp(&format!("shape_{name}.stmt"), &set(&std::fs::read(stmt).unwrap(), edits));

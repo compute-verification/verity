@@ -1,6 +1,6 @@
 """steps-pin (red-team-leaf-3 H1 / H2): the Python verifier binds a chain statement's VU shape to the relation.  steps
 (columns per VU) must be the relation's canonical value (``Relation.steps``, fp4 ``STEPS``, vu.py ``STEPS``) and never
-exceed the leaf's structural bound (Ajtai: the ring degree n); a v5 header's K must be steps x the unit's k.  The twin
+exceed the leaf's structural bound (Ajtai: the ring degree n); a v5 header's K must be K_VU = 1536 (what every hashed writer emits).  The twin
 of ligero-verify's ``check_vu_shape`` (tests/relations.rs ``steps_pin_*`` / ``a_statement_whose_vu_shape_*``).
 
 Must-reject: the red-team collide pairs (n64 steps 96, n128 steps 192) and n64 steps 32; real steps = 32 proofs of the
@@ -113,7 +113,8 @@ HEADER = [
     ("fp4-nvf4", [(STEPS_AT, 12)], _shape(12, 24)),
     ("fp8-ada-hash", [(STEPS_AT, 32), (K_AT, 32 * 32)], _shape(32, 48)),
     ("bf16-ampere-hash", [(STEPS_AT, 32), (K_AT, 32 * 16)], _shape(32, 96)),
-    ("fp8-ada-hash", [(K_AT, 48 * 16)], "statement: K = 768 words per row is not steps (48) x the fp8-ada unit's 32"),
+    ("fp8-ada-hash", [(STEPS_AT, 32)], _shape(32, 48)),
+    ("fp8-ada-hash", [(K_AT, 48 * 16)], "statement: K = 768 words per row, a hashed statement's row is K = 1536"),
     ("fp8-ada-ajtai-n64", [(STEPS_AT, 96), (K_AT, 96 * 32)], _bound(96, 64)),
 ]
 

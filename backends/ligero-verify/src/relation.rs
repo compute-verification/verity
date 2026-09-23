@@ -405,6 +405,12 @@ pub enum Decode {
     PrivSel(&'static privsel::PrivSel),
 }
 
+/// The K a v5 (hashed) statement header carries: the GEMM reduction length of every relation (`GemmAccumulator<1536>`;
+/// Python `relations.K_VU`, written by `serialize._K_of` whatever the relation).  It is `steps x k_ops` for the
+/// Relation-registry units but NOT for fp4-nvf4 (24 x 64 codes; its bare unit takes 68 words = codes + scales), so a
+/// hashed statement is checked against this, a bare one against `k_ops`.
+pub const HASHED_ROW_K: usize = 1536;
+
 #[derive(Debug)]
 pub struct Relation {
     /// The `relation` string of a v4 statement (also the `--relation` value of `backends.direct.ligero.run`).
@@ -1187,7 +1193,7 @@ mod tests {
     fn vu_shapes_are_the_python_registry_and_match_the_decodes() {
         // relations.Relation.steps = K_VU // k (every registered relation), fp4.relation.STEPS = 1536 // 64 (68 words per
         // unit: 64 codes + 4 scale bytes)
-        const K_VU: usize = 1536;
+        const K_VU: usize = HASHED_ROW_K;
         for r in RELATIONS.iter() {
             let products = match r.decode {
                 Decode::Nvf4 => {

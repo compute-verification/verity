@@ -402,7 +402,7 @@ fn public_pins_nvf4(st: &Statement, sys: &System) -> Result<Vec<Vec<u32>>, Strin
 /// anyway, and a v5 file's K (words per row = steps x K) is not in the statement digest -- and a leaf's structural bound
 /// holds (`leaf::max_steps`: Ajtai `steps <= N`).  Pinned: `steps` is the relation's.
 fn check_vu_shape(st: &Statement, rel: &Relation, leaf: Option<&LeafScheme>, pinned: bool) -> Result<(), String> {
-    if st.k_ops != rel.k_ops {
+    if leaf.is_none() && st.k_ops != rel.k_ops {
         return Err(format!(
             "statement: K = {} words per operand per unit, the {} relation's unit takes {}", st.k_ops, rel.name, rel.k_ops
         ));
@@ -419,6 +419,13 @@ fn check_vu_shape(st: &Statement, rel: &Relation, leaf: Option<&LeafScheme>, pin
         return Err(format!(
             "statement: steps = {} columns per VU, the {} relation's VU is {} columns of K = {}",
             st.steps, rel.name, rel.steps, rel.k_ops
+        ));
+    }
+    if leaf.is_some() && st.steps * st.k_ops != crate::relation::HASHED_ROW_K {
+        return Err(format!(
+            "statement: K = {} words per row, a hashed statement's row is K = {}",
+            st.steps * st.k_ops,
+            crate::relation::HASHED_ROW_K
         ));
     }
     Ok(())
