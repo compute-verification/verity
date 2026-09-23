@@ -789,6 +789,50 @@ def _sync(device):
         torch.cuda.synchronize(device)
 
 
+NTT_GRAPHS = True      # the prover's three torch NTT chains (h, q quotients; mask-row coset evaluation) as CUDA graphs (lane hp2-host)
+_TGRAPHS: dict = {}
+
+
+class _TensorGraph:
+    """CUDA graph of ``fn(x)`` for one fixed input shape / dtype: captured once (two eager warm-up runs on a side stream,
+    then the capture), replayed as ONE launch -- the torch NTT is 16 compiled butterfly stages, each ~0.1 ms of host
+    dispatch (dynamo guards, slices, cat), i.e. 5-7 ms of main-thread time per NTT for < 1 ms of GPU work; the prover
+    runs three per sub-batch.  Keyed per stream (static buffers must not be shared by in-flight sub-batches)."""
+
+    def __init__(self, fn, x: torch.Tensor):
+        self.inp = torch.zeros_like(x)
+        s = torch.cuda.Stream(device=x.device)
+        s.wait_stream(torch.cuda.current_stream(x.device))
+        with torch.cuda.stream(s):
+            for _ in range(2):
+                fn(self.inp)
+        torch.cuda.current_stream(x.device).wait_stream(s)
+        self.graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self.graph):
+            self.out = fn(self.inp)
+
+    def run(self, x: torch.Tensor) -> torch.Tensor:
+        self.inp.copy_(x)
+        self.graph.replay()
+        return self.out.clone()
+
+
+def _graphed(name: str, fn, x: torch.Tensor) -> torch.Tensor:
+    """``fn(x)`` through a per-(name, shape, dtype, device, stream) CUDA graph on CUDA (``NTT_GRAPHS``), eagerly otherwise."""
+    if not NTT_GRAPHS or x.device.type != "cuda":
+        return fn(x)
+    key = (name, tuple(x.shape), x.dtype, str(x.device), torch.cuda.current_stream(x.device).cuda_stream)
+    g = _TGRAPHS.get(key)
+    if g is None:
+        try:
+            g = _TensorGraph(fn, x.contiguous())
+        except Exception:  # noqa: BLE001 -- capture unsupported here: eager
+            g = False
+        _TGRAPHS[key] = g
+    return g.run(x) if g else fn(x)
+
+
+HOST_TRACE = False      # ``_Clock.host`` marks: wall time between the prover's host-side points (diagnostics, timings["host_*"])
 EVENT_CLOCK = True      # phase laps as CUDA events (read once at the end) instead of a device sync per lap (lane hp2-host)
 
 
@@ -810,6 +854,13 @@ class _Clock:
             _sync(device)
         self.t0 = time.perf_counter()
         self.last = self.t0
+
+    def host(self, name: str):
+        """Host-side (wall) time since the previous host mark, as ``host_<name>`` -- only with ``HOST_TRACE`` (diagnostics)."""
+        if HOST_TRACE:
+            now = time.perf_counter()
+            self.marks["host_" + name] = self.marks.get("host_" + name, 0.0) + (now - self.last)
+            self.last = now
 
     def lap(self, name: str):
         if self.events:
@@ -854,9 +905,12 @@ def _pin(slot, device, name: str, nbytes: int) -> torch.Tensor:
     return slot.pinned(name, nbytes)
 
 
-def _event(device):
+def _event(device, blocking: bool = False):
+    """An event on the current stream.  ``blocking`` (pipelined prover): the host waits without spinning a core -- the
+    squeeze worker and the other slots' launches need the CPU; sequential prover: the default spin-wait keeps the main
+    thread's core hot for the inline squeeze that follows the root (measured 7.4 ms hot vs ~10 ms after a sleep)."""
     if str(device).startswith("cuda"):
-        ev = torch.cuda.Event()
+        ev = torch.cuda.Event(blocking=blocking)
         ev.record()
         return ev
     return None
@@ -879,7 +933,7 @@ def _expand_pinned(seed: bytes, count: int, device, slot, name: str):
     from . import pipeline
     nbytes = 4 * count
     buf = _pin(slot, device, name, nbytes)[:nbytes]
-    fut = pipeline.POOL.submit(pipeline.shake_into, seed, buf.numpy())
+    fut = pipeline.squeeze(seed, buf.numpy(), inline=slot is None)
 
     def finish():
         u = buf.view(torch.int32).to(device, non_blocking=True)
@@ -985,7 +1039,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
             coefs[sl, :blk.shape[1]] = blk
         del S
         if enc is not None:
-            U[m:] = eval_on_coset(coefs[m:], n).to(torch.int32)
+            U[m:] = _graphed("coset_masks", lambda c: eval_on_coset(c, n), coefs[m:]).to(torch.int32)
         else:
             U = eval_on_coset(coefs, n)                           # (M, n), the coset g <w_n> (disjoint from H)
     else:
@@ -1004,7 +1058,9 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         root_buf.view(torch.int32).copy_(root_dev, non_blocking=True)
         hash_name = merkle.GPU_HASH_NAME
         clk.lap("merkle")
-        yield _event(device)                                       # -- wait: the root reaches the host
+        clk.host("launch_to_merkle")
+        yield _event(device, slot is not None)                                       # -- wait: the root reaches the host
+        clk.host("wait_root")
         root = root_buf.numpy().tobytes()
     else:
         U_cols = U.t().contiguous().cpu().numpy().astype(np.uint32)
@@ -1019,6 +1075,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     if not stmt_fut.done():
         yield stmt_fut
     stmt = stmt_fut.result()
+    clk.host("wait_stmt")
     if cfg.interactive:
         r1, s1 = src.open1(root)                                  # V opens coin slot 1 (after root)
         if len(r1) != COIN_BYTES or len(s1) != COIN_BYTES or coin_commit(r1, s1) != ccom[0]:
@@ -1032,7 +1089,9 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     width = M + tb.L + tb.Q + extra
     if cuda:
         fut, finish = _expand_pinned(seed1, D * width, device, slot, "c1")
+        clk.host("seed1")
         yield fut                                                  # -- wait: the squeeze (host, off-thread)
+        clk.host("wait_shake")
         x = finish().reshape(D, width)
     else:
         x = _expand(seed1, D * width, device).reshape(D, width)
@@ -1048,13 +1107,14 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     else:
         w = _combine(r, W)                                        # (D, l) evaluations on H
     clk.lap("tests_w")
+    clk.host("launch_tests_w")
     # quadratic: batched A*B - C on the codeword domain (+ the mask), divided by Z_H
     P0 = quad_p0(tb, rho_quad, U[:m])                             # (D, n): split form (witness.quad_p0)
     zinv = _zh_inv_on_coset(n, l, device)
     hev = (P0 * zinv) % P
     if cfg.zk:                                                    # + s_qa + x^k s_qb  (the mask / Z_H)
         hev = (hev + U[mr["qa"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["qb"]]) % P) % P
-    hcoef = intt(hev)                                             # coefficients of h(g x): c_k g^k
+    hcoef = _graphed("intt", intt, hev)                           # coefficients of h(g x): c_k g^k
     hcoef = (hcoef * _ginv_powers(n, device)) % P
     if check:
         assert (hcoef[:, cfg.h_len:] == 0).all(), "quotient degree too high: constraints violated"
@@ -1071,7 +1131,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         Qev = ((Renc * U.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P   # (D, n)
         if cfg.zk:                                                # + u_ca + x^k u_cb (uniform, zero sum over H)
             Qev = (Qev + U[mr["chain_a"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["chain_b"]]) % P) % P
-        qcoef = (intt(Qev) * _ginv_powers(n, device)) % P
+        qcoef = (_graphed("intt", intt, Qev) * _ginv_powers(n, device)) % P
         if check:
             assert (qcoef[:, cfg.q_len:] == 0).all(), "chain polynomial degree too high"
             assert torch.equal(_sum_over_H(qcoef[:, :cfg.q_len], l), cc.rhs), "chain constraints violated"
@@ -1088,7 +1148,9 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
             o, shape = offs[name]
             mbuf[o:o + 4 * tsr.numel()].view(torch.int32).view(shape).copy_(tsr.to(torch.int32).contiguous(), non_blocking=True)
         clk.lap("tests_chain")
-        yield _event(device)                                       # -- wait: w, h, q, v reach the host
+        clk.host("launch_tests_qc")
+        yield _event(device, slot is not None)                                       # -- wait: w, h, q, v reach the host
+        clk.host("wait_msgs")
         got = {}
         for name, (o, shape) in offs.items():
             got[name] = mbuf[o:o + 4 * math.prod(shape)].numpy().view(np.uint32).reshape(shape).copy()
@@ -1108,6 +1170,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     else:
         r2 = s2 = None
     cols = _challenge2(stmt, root, w_np, h_np, cfg.t, n, q_np, v_np, ccom, r2)
+    clk.host("challenge2")
     t = len(cols)
     if gpu_hash:
         cbuf = _pin(slot, device, "cols", 8 * t)[:8 * t].view(torch.int64)
@@ -1122,9 +1185,12 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         if nb2:
             obuf[nb1:nb1 + nb2].view(torch.int32).view(sib.shape).copy_(sib.contiguous(), non_blocking=True)
         clk.lap("openings")
-        yield _event(device)                                       # -- wait: the openings reach the host
+        clk.host("launch_openings")
+        yield _event(device, slot is not None)                                       # -- wait: the openings reach the host
+        clk.host("wait_openings")
         opened = openings_device.opened_from_pinned(obuf[:nb1].view(torch.int32), M, t)
         paths = openings_device.paths_from_raw(obuf[nb1:nb1 + nb2].numpy().tobytes(), t, depth)
+        clk.host("unpack_openings")
     else:
         opened = U_cols[cols].T.copy()                            # (m, t)
         paths = merkle.open_columns(levels, cols)

@@ -79,17 +79,23 @@ def _libcrypto():
         return _LIB
 
 
+_TLS = threading.local()
+
+
 def _xof_libcrypto(lib, seed: bytes, out: np.ndarray) -> bool:
-    ctx = lib.EVP_MD_CTX_new()
-    if not ctx:
-        return False
-    try:
-        ok = lib.EVP_DigestInit_ex(ctx, lib.EVP_shake256(), None) == 1
-        ok = ok and lib.EVP_DigestUpdate(ctx, seed, len(seed)) == 1
-        ok = ok and lib.EVP_DigestFinalXOF(ctx, out.ctypes.data, out.nbytes) == 1
-        return ok
-    finally:
-        lib.EVP_MD_CTX_free(ctx)
+    """One EVP context per thread (created once): three ctypes calls per squeeze -- each call releases and re-acquires
+    the GIL, and a re-acquisition can wait a full switch interval behind a busy main thread (5 ms by default; see
+    ``prove_many``), so fewer calls = less GIL ping-pong."""
+    ctx = getattr(_TLS, "ctx", None)
+    if ctx is None:
+        ctx = lib.EVP_MD_CTX_new()
+        if not ctx:
+            return False
+        _TLS.ctx = ctx
+    ok = lib.EVP_DigestInit_ex(ctx, lib.EVP_shake256(), None) == 1
+    ok = ok and lib.EVP_DigestUpdate(ctx, seed, len(seed)) == 1
+    ok = ok and lib.EVP_DigestFinalXOF(ctx, out.ctypes.data, out.nbytes) == 1
+    return ok
 
 
 def shake_into(seed: bytes, out: np.ndarray) -> np.ndarray:
@@ -109,6 +115,69 @@ def shake_overlapped() -> bool:
 
 
 POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="ligero-host")
+
+
+class HotWorker:
+    """One thread for the challenge squeeze.  A pool thread that sleeps between requests runs the squeeze on a cold core
+    (measured on the EPYC pod: 11-14 ms for a 2.85 MB squeeze that takes 7.4 ms on a hot core, i.e. the ramp of the
+    frequency governor / caches); while a pipelined pass is active (``active(True)``) this thread keeps its core busy
+    between requests with GIL-free blake2b bursts (~0.3 ms each, so a request waits <= 0.3 ms), and sleeps otherwise.
+    Costs one core during a pass."""
+
+    _WARM = bytes(300_000)
+
+    def __init__(self):
+        import queue
+        self._q: queue.SimpleQueue = queue.SimpleQueue()
+        self._active = False
+        self._thread = threading.Thread(target=self._run, name="ligero-squeeze", daemon=True)
+        self._thread.start()
+
+    def active(self, on: bool) -> None:
+        self._active = on
+        if not on:
+            self._q.put(None)                    # wake the loop so it notices and goes back to sleeping gets
+
+    def submit(self, fn, *args) -> Future:
+        fut: Future = Future()
+        self._q.put((fut, fn, args))
+        return fut
+
+    def _run(self):
+        import queue
+        while True:
+            if self._active:
+                try:
+                    item = self._q.get_nowait()
+                except queue.Empty:
+                    h = hashlib.blake2b()
+                    h.update(self._WARM)         # GIL released for the hashing: the core stays hot, the main thread runs
+                    continue
+            else:
+                item = self._q.get()
+            if item is None:
+                continue
+            fut, fn, args = item
+            try:
+                fut.set_result(fn(*args))
+            except BaseException as e:  # noqa: BLE001
+                fut.set_exception(e)
+
+
+SQUEEZE = HotWorker()
+
+
+def squeeze(seed: bytes, out: np.ndarray, inline: bool) -> Future:
+    """The challenge squeeze as a Future: inline (sequential prover: the main thread would only block on it, and it is
+    the hot thread) or on the hot worker (pipelined prover: the main thread keeps launching)."""
+    if inline:
+        fut: Future = Future()
+        try:
+            fut.set_result(shake_into(seed, out))
+        except BaseException as e:  # noqa: BLE001
+            fut.set_exception(e)
+        return fut
+    return SQUEEZE.submit(shake_into, seed, out)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -235,10 +304,17 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
     Returns ``(values, wall_seconds)``; each value's ``timings`` (when it has one) is rescaled so that the per-value
     ``timings_key`` entries sum to the wall: the phases become proportional shares of the overlapped wall (the
     un-rescaled event-measured phases are kept under ``timings["measured_<phase>"]``)."""
+    import sys
     depth = max(1, int(depth))
     n = len(starters)
     results = [None] * n
     active: list[_Job] = []
+    # the worker threads (SHAKE squeeze, statement digest) re-acquire the GIL a few times per sub-batch while the main
+    # thread launches kernels: with the default 5 ms switch interval each re-acquisition can wait ~5 ms (measured: a
+    # 7.4 ms squeeze took 17.6 ms next to a busy main thread); 0.5 ms bounds the wait without measurable launch cost
+    prev_switch = sys.getswitchinterval()
+    sys.setswitchinterval(SWITCH_INTERVAL)
+    SQUEEZE.active(depth > 1)
     free_slots = [slot_for(device, i) for i in range(depth)]
     nxt = 0
     busy = waited = 0.0                                         # main-thread time launching vs blocked on a waitable
@@ -282,10 +358,14 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
     if str(device).startswith("cuda"):
         torch.cuda.synchronize(device)
     wall = time.perf_counter() - t0
+    sys.setswitchinterval(prev_switch)
+    SQUEEZE.active(False)
     _rescale(results, wall, timings_key)
     LAST_STATS.update({"n": n, "depth": depth, "wall": wall, "host_busy": busy, "host_waited": waited})
     return results, wall
 
+
+SWITCH_INTERVAL = 0.0005   # GIL switch interval during a pipelined pass (seconds)
 
 #: the last ``prove_many`` pass: wall, main-thread busy (launching / host work) and blocked time -- ``host_busy / wall``
 #: near 1 means the pass is bound by the main thread's launch + host work, not by the device.
