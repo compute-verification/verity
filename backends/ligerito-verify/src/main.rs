@@ -30,11 +30,12 @@
 //! ~~~
 
 use ligerito_verify::format::{looks_like_proto, read_pcs_v0, read_point, read_proto, write_pcs_v0};
+use ligerito_verify::lgto;
 use ligerito_verify::params::Params;
 use ligerito_verify::pcs::{verify, Report};
 use ligerito_verify::refpcs;
 use ligerito_verify::refprover::{prove, random_point, random_vector, tamper};
-use ligerito_verify::transcript::{FiatShamir, Live};
+use ligerito_verify::transcript::{Coins, FiatShamir, Live, Local};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
@@ -67,6 +68,19 @@ struct Verdict {
     bytes: usize,
     mode: &'static str,
     seconds: f64,
+    /// an LGTO0001 proof's end-to-end report (statement, relation sumchecks, zero claims, PCS)
+    lgto: Option<lgto::Report>,
+}
+
+impl Verdict {
+    /// the proof's own soundness figure, if it has one: LGTO0001 proofs under local coins have none (the seed is public)
+    fn soundness_log2(&self) -> Option<f64> {
+        match (&self.report, &self.lgto) {
+            (Some(r), _) => Some(r.soundness_log2),
+            (None, Some(r)) if r.coins_kind != "local" => Some(r.soundness_log2),
+            _ => None,
+        }
+    }
 }
 
 fn verdict_json(v: &Verdict) -> String {
@@ -84,8 +98,30 @@ fn verdict_json(v: &Verdict) -> String {
         ),
         None => "null".into(),
     };
+    let lg = match &v.lgto {
+        Some(r) => format!(
+            "{{\"relation\":{},\"coins\":{},\"coin_rounds\":{},\"soundness_log2\":{:.3},\"sumcheck\":\"{}\",\"zk\":{},\"vus\":{},\"sub_batches\":{},\"n\":{},\"n_claims\":{},\"zero_blocks\":{},\"opened_rows\":{},\"legacy_no_zero_claims\":{},\"key_pinned\":{},\"key_sha256\":\"{}\",\"stmt_sha256\":\"{}\"}}",
+            json_str(&r.relation),
+            json_str(&r.coins_kind),
+            r.coins,
+            r.soundness_log2,
+            r.sumcheck,
+            r.zk,
+            r.vus,
+            r.sub_batches,
+            r.n,
+            r.n_claims,
+            r.zero_blocks,
+            r.opened_rows,
+            r.legacy,
+            r.key_pinned,
+            r.key_sha256,
+            r.stmt_sha256
+        ),
+        None => "null".into(),
+    };
     format!(
-        "{{\"name\":{},\"accepted\":{},\"reason\":{},\"mode\":\"{}\",\"proof_bytes\":{},\"seconds\":{:.6},\"report\":{},\"params\":{}}}",
+        "{{\"name\":{},\"accepted\":{},\"reason\":{},\"mode\":\"{}\",\"proof_bytes\":{},\"seconds\":{:.6},\"report\":{},\"params\":{},\"lgto\":{}}}",
         json_str(&v.name),
         v.accepted,
         json_str(&v.reason),
@@ -93,15 +129,110 @@ fn verdict_json(v: &Verdict) -> String {
         v.bytes,
         v.seconds,
         rep,
-        params
+        params,
+        lg
     )
+}
+
+/// How LGTO0001 proofs are verified (the command-line switches).
+struct LgtoOpts {
+    opt: lgto::Options,
+    /// local coins (`LocalCoins(seed)`, seed public): verdict only, never a soundness statement; `--no-local` rejects them
+    allow_local: bool,
+    stmt: Option<PathBuf>,
+    key: Option<PathBuf>,
+    coins: Option<PathBuf>,
+}
+
+/// run.py's manifest entry for one LGTO0001 file (`{"files": [{"proof", "stmt", "coins", "coins_seed", "coins_file"}]}`).
+#[derive(Clone, Debug, Default)]
+struct LgtoEntry {
+    stmt: Option<String>,
+    coins: Option<String>,
+    seed: u64,
+    coins_file: Option<String>,
+}
+
+fn manifest_lgto_entries(dir: &Path) -> Vec<(String, LgtoEntry)> {
+    let Ok(text) = std::fs::read_to_string(dir.join("manifest.json")) else { return Vec::new() };
+    let Ok(doc) = ligerito_verify::json::parse(&text) else { return Vec::new() };
+    let list = doc.get("files").and_then(|f| f.as_arr()).unwrap_or(&[]);
+    list.iter()
+        .filter_map(|e| {
+            let s = |k: &str| e.get(k).and_then(|v| v.as_str()).map(str::to_string);
+            let seed = e.get("coins_seed").and_then(|v| v.as_usize()).unwrap_or(1) as u64;
+            Some((s("proof")?, LgtoEntry { stmt: s("stmt"), coins: s("coins"), seed, coins_file: s("coins_file") }))
+        })
+        .collect()
+}
+
+fn is_lgto(path: &Path) -> bool {
+    use std::io::Read;
+    let mut buf = [0u8; 8];
+    std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut buf)).is_ok() && &buf == lgto::MAGIC_PROOF
+}
+
+/// One LGTO0001 proof: statement `<stem>.stmt` (or the manifest's), key `DIR/key.bin`, coins as the proof declares them
+/// (live: `<stem>.coins` / the manifest's `coins_file`; local: the manifest's `coins_seed`, default 1).
+fn verify_lgto_file(proof_path: &Path, entry: Option<&LgtoEntry>, lo: &LgtoOpts, reps: usize) -> Verdict {
+    let name = proof_path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let dir = proof_path.parent().unwrap_or(Path::new("."));
+    let fail = |reason: String, bytes: usize| Verdict { name: name.clone(), accepted: false, reason, report: None, params: None, bytes, mode: "lgto", seconds: 0.0, lgto: None };
+    let proof = match std::fs::read(proof_path) {
+        Ok(b) => b,
+        Err(e) => return fail(format!("read: {e}"), 0),
+    };
+    let stmt_path = lo.stmt.clone().or_else(|| entry.and_then(|e| e.stmt.as_ref()).map(|s| dir.join(s))).or_else(|| sidecar(proof_path, "stmt"));
+    let Some(stmt_path) = stmt_path else { return fail("no statement (<stem>.stmt)".into(), proof.len()) };
+    let key_path = lo.key.clone().unwrap_or_else(|| dir.join("key.bin"));
+    let (stmt, key) = match (std::fs::read(&stmt_path), std::fs::read(&key_path)) {
+        (Ok(s), Ok(k)) => (s, k),
+        (Err(e), _) => return fail(format!("statement {}: {e}", stmt_path.display()), proof.len()),
+        (_, Err(e)) => return fail(format!("key {}: {e}", key_path.display()), proof.len()),
+    };
+    let coins_path = lo.coins.clone().or_else(|| entry.and_then(|e| e.coins_file.as_ref()).map(|s| dir.join(s))).or_else(|| sidecar(proof_path, "coins"));
+    let seed = entry.map(|e| e.seed).unwrap_or(1);
+    let declared = entry.and_then(|e| e.coins.clone());
+    let mut coins_for = |kind: &str| -> Result<Box<dyn Coins>, String> {
+        if let Some(d) = &declared {
+            if d != kind {
+                return Err(format!("the proof declares {kind} coins, the manifest {d}"));
+            }
+        }
+        match kind {
+            "fiat-shamir" => Ok(Box::new(FiatShamir::new(FiatShamir::LABEL))),
+            "local" if lo.allow_local => Ok(Box::new(Local::new(seed))),
+            "local" => Err("local coins (public seed): no soundness; --no-local rejects them".into()),
+            "live" => {
+                let p = coins_path.as_ref().ok_or("live coins: no .coins file")?;
+                lgto::read_coins(&std::fs::read(p).map_err(|e| format!("coins {}: {e}", p.display()))?).map(|c| Box::new(c) as Box<dyn Coins>)
+            }
+            _ => Err(format!("coins {kind:?}: not a kind this verifier replays")),
+        }
+    };
+    let t0 = Instant::now();
+    let mut res = Err(String::new());
+    for _ in 0..reps.max(1) {
+        res = lgto::verify(&stmt, &key, &proof, &mut coins_for, &lo.opt);
+    }
+    let seconds = t0.elapsed().as_secs_f64() / reps.max(1) as f64;
+    let mode = match &res {
+        Ok(r) if r.coins_kind == "live" => "lgto live-replay",
+        Ok(r) if r.coins_kind == "local" => "lgto local (diagnostic)",
+        Ok(_) => "lgto fiat-shamir",
+        Err(_) => "lgto",
+    };
+    match res {
+        Ok(r) => Verdict { name, accepted: true, reason: "ok".into(), report: None, params: None, bytes: proof.len(), mode, seconds, lgto: Some(r) },
+        Err(e) => Verdict { name, accepted: false, reason: e, report: None, params: None, bytes: proof.len(), mode, seconds, lgto: None },
+    }
 }
 
 /// Verify one proof file, `reps` times (timing), with replayed coins when a coins file is given.
 /// `X.proof` / `X.proof.neg` -> `X.<ext>` when it exists.
 fn sidecar(proof_path: &Path, ext: &str) -> Option<PathBuf> {
     let name = proof_path.file_name()?.to_string_lossy().to_string();
-    let stem = name.strip_suffix(".proof.neg").or_else(|| name.strip_suffix(".proof"))?;
+    let stem = [".proof.neg", ".proof", ".lgto.neg", ".lgto"].iter().find_map(|x| name.strip_suffix(x))?;
     let p = proof_path.with_file_name(format!("{stem}.{ext}"));
     if p.exists() { Some(p) } else { None }
 }
@@ -117,12 +248,14 @@ fn manifest_verdicts(dir: &Path) -> Vec<(String, bool, String)> {
         Ok(d) => d,
         Err(_) => return Vec::new(),
     };
-    let list = doc.as_arr().or_else(|| doc.get("proofs").and_then(|p| p.as_arr())).unwrap_or(&[]);
+    // run.py (LGTO0001 dumps): {"files": [{"proof", "python_verdict": {"accepted", "reason"}}]}
+    let list = doc.as_arr().or_else(|| doc.get("proofs").and_then(|p| p.as_arr())).or_else(|| doc.get("files").and_then(|p| p.as_arr())).unwrap_or(&[]);
     list.iter()
         .filter_map(|e| {
             let name = e.get("proof")?.as_str()?.to_string();
-            let acc = e.get("accepted")?.as_bool()?;
-            let why = e.get("reason").and_then(|r| r.as_str()).unwrap_or("").to_string();
+            let v = e.get("python_verdict").unwrap_or(e);
+            let acc = v.get("accepted")?.as_bool()?;
+            let why = v.get("reason").and_then(|r| r.as_str()).unwrap_or("").to_string();
             Some((name, acc, why))
         })
         .collect()
@@ -139,14 +272,14 @@ fn verify_file(proof_path: &Path, coins_path: Option<&Path>, label: &[u8], reps:
     let bytes = match std::fs::read(proof_path) {
         Ok(b) => b,
         Err(e) => {
-            return Verdict { name, accepted: false, reason: format!("read: {e}"), report: None, params: None, bytes: 0, mode: "-", seconds: 0.0 }
+            return Verdict { name, accepted: false, reason: format!("read: {e}"), report: None, params: None, bytes: 0, mode: "-", seconds: 0.0, lgto: None }
         }
     };
     let coins_raw = match coins_path {
         Some(p) => match std::fs::read(p) {
             Ok(b) => Some(b),
             Err(e) => {
-                return Verdict { name, accepted: false, reason: format!("coins: {e}"), report: None, params: None, bytes: bytes.len(), mode: "-", seconds: 0.0 }
+                return Verdict { name, accepted: false, reason: format!("coins: {e}"), report: None, params: None, bytes: bytes.len(), mode: "-", seconds: 0.0, lgto: None }
             }
         },
         None => None,
@@ -181,8 +314,8 @@ fn verify_file(proof_path: &Path, coins_path: Option<&Path>, label: &[u8], reps:
     }
     let seconds = t0.elapsed().as_secs_f64() / reps.max(1) as f64;
     match result {
-        Ok(rep) => Verdict { name, accepted: true, reason: "ok".into(), report: Some(rep), params, bytes: bytes.len(), mode, seconds },
-        Err(e) => Verdict { name, accepted: false, reason: e, report: None, params, bytes: bytes.len(), mode, seconds },
+        Ok(rep) => Verdict { name, accepted: true, reason: "ok".into(), report: Some(rep), params, bytes: bytes.len(), mode, seconds, lgto: None },
+        Err(e) => Verdict { name, accepted: false, reason: e, report: None, params, bytes: bytes.len(), mode, seconds, lgto: None },
     }
 }
 
@@ -192,11 +325,11 @@ fn ref_fixture_verdicts(fixtures_path: &Path, neg_path: Option<&Path>, reps: usi
     let file_name = fixtures_path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     let text = match std::fs::read_to_string(fixtures_path) {
         Ok(t) => t,
-        Err(e) => return vec![(Verdict { name: file_name, accepted: false, reason: format!("read: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, false)],
+        Err(e) => return vec![(Verdict { name: file_name, accepted: false, reason: format!("read: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0, lgto: None }, false)],
     };
     let fxs = match refpcs::load_fixtures(&text) {
         Ok(f) => f,
-        Err(e) => return vec![(Verdict { name: file_name, accepted: false, reason: format!("parse: {e}"), report: None, params: None, bytes: text.len(), mode: "ref.py", seconds: 0.0 }, false)],
+        Err(e) => return vec![(Verdict { name: file_name, accepted: false, reason: format!("parse: {e}"), report: None, params: None, bytes: text.len(), mode: "ref.py", seconds: 0.0, lgto: None }, false)],
     };
     let mut out = Vec::new();
     let run = |name: String, fx: &refpcs::Fixture, doc: &ligerito_verify::json::Json, expect_ok: bool, expect_reason: &str| -> (Verdict, bool) {
@@ -213,7 +346,7 @@ fn ref_fixture_verdicts(fixtures_path: &Path, neg_path: Option<&Path>, reps: usi
         let agree = accepted == expect_ok;
         let reason = if agree { reason } else { format!("{reason} -- ref.py said {} ({expect_reason})", if expect_ok { "accept" } else { "reject" }) };
         let bytes = doc.dump().len();
-        (Verdict { name, accepted, reason, report, params: None, bytes, mode: "ref.py", seconds }, agree)
+        (Verdict { name, accepted, reason, report, params: None, bytes, mode: "ref.py", seconds, lgto: None }, agree)
     };
     for fx in &fxs {
         out.push(run(format!("{file_name}#{}", fx.name), fx, &fx.proof, fx.expect_ok, &fx.expect_reason));
@@ -224,18 +357,18 @@ fn ref_fixture_verdicts(fixtures_path: &Path, neg_path: Option<&Path>, reps: usi
                 for t in &tampers {
                     let name = format!("{file_name}#{}", t.name);
                     let Some(fx) = fxs.get(t.base) else {
-                        out.push((Verdict { name, accepted: false, reason: format!("tamper base {} out of range", t.base), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, false));
+                        out.push((Verdict { name, accepted: false, reason: format!("tamper base {} out of range", t.base), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0, lgto: None }, false));
                         continue;
                     };
                     let mut doc = fx.proof.clone();
                     if let Err(e) = refpcs::apply_ops(&mut doc, &t.ops) {
-                        out.push((Verdict { name, accepted: false, reason: format!("tamper: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, false));
+                        out.push((Verdict { name, accepted: false, reason: format!("tamper: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0, lgto: None }, false));
                         continue;
                     }
                     out.push(run(name, fx, &doc, t.expect_ok, &t.expect_reason));
                 }
             }
-            Err(e) => out.push((Verdict { name: np.display().to_string(), accepted: false, reason: format!("tampers: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, false)),
+            Err(e) => out.push((Verdict { name: np.display().to_string(), accepted: false, reason: format!("tampers: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0, lgto: None }, false)),
         }
     }
     out
@@ -278,7 +411,7 @@ fn ref_file_verdicts(path: &Path, must_accept: bool, reps: usize) -> Vec<(Verdic
         std::fs::remove_file(path_used).ok();
     }
     if out.is_empty() {
-        out.push((Verdict { name: path.display().to_string(), accepted: false, reason: "empty fixture list".into(), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, !must_accept));
+        out.push((Verdict { name: path.display().to_string(), accepted: false, reason: "empty fixture list".into(), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0, lgto: None }, !must_accept));
     }
     out
 }
@@ -304,11 +437,30 @@ fn main() {
     // per proof, `batch` needs exactly N accepted proofs and their union <= 2^-B
     let n_proofs_arg: Option<usize> = arg(&args, "--n-proofs").map(|s| s.parse().expect("--n-proofs"));
     assert!(n_proofs_arg != Some(0), "--n-proofs must be positive");
+    let flag = |f: &str| args.iter().any(|a| a == f);
+    let lgto_opts = |n_proofs: usize| LgtoOpts {
+        opt: lgto::Options {
+            allow_any_key: flag("--allow-any-key"),
+            allow_legacy: flag("--allow-legacy"),
+            target_log2: if target_bits > 0.0 { Some(-(target_bits + (n_proofs as f64).log2())) } else { None },
+        },
+        allow_local: !flag("--no-local"),
+        stmt: arg(&args, "--stmt").map(PathBuf::from),
+        key: arg(&args, "--key").map(PathBuf::from),
+        coins: arg(&args, "--coins").map(PathBuf::from),
+    };
     match cmd {
         "verify" => {
             let proof = PathBuf::from(arg(&args, "--proof").expect("--proof FILE"));
             let coins = arg(&args, "--coins").map(PathBuf::from);
-            let mut v = verify_file(&proof, coins.as_deref(), label.as_bytes(), reps);
+            let mut v = if is_lgto(&proof) {
+                let dir = proof.parent().unwrap_or(Path::new(".")).to_path_buf();
+                let name = proof.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                let entry = manifest_lgto_entries(&dir).into_iter().find(|(n, _)| *n == name).map(|x| x.1);
+                verify_lgto_file(&proof, entry.as_ref(), &lgto_opts(n_proofs_arg.unwrap_or(1)), reps)
+            } else {
+                verify_file(&proof, coins.as_deref(), label.as_bytes(), reps)
+            };
             // the proof's own soundness figure (recomputed from its parameters, never prover-supplied) must meet the target,
             // union-bounded over the job's --n-proofs
             let per_proof_bits = target_bits + (n_proofs_arg.unwrap_or(1) as f64).log2();
@@ -338,9 +490,9 @@ fn main() {
                 .filter_map(|e| e.ok().map(|e| e.path()))
                 .filter_map(|p| {
                     let name = p.file_name()?.to_string_lossy().to_string();
-                    if name.ends_with(".proof") {
+                    if name.ends_with(".proof") || name.ends_with(".lgto") {
                         Some((p, true))
-                    } else if name.ends_with(".proof.neg") {
+                    } else if name.ends_with(".proof.neg") || name.ends_with(".lgto.neg") {
                         Some((p, false))
                     } else {
                         None
@@ -351,6 +503,8 @@ fn main() {
             let (json_files, bin_files): (Vec<_>, Vec<_>) = files.into_iter().partition(|(p, _)| is_json_file(p));
             let files = bin_files;
             let manifest = manifest_verdicts(&dir);
+            let entries = manifest_lgto_entries(&dir);
+            let lo = lgto_opts(n_proofs_arg.or_else(|| manifest_n_proofs(&dir)).unwrap_or(1));
             let next = AtomicUsize::new(0);
             let results: Vec<std::sync::Mutex<Option<Verdict>>> = files.iter().map(|_| std::sync::Mutex::new(None)).collect();
             let t0 = Instant::now();
@@ -362,8 +516,13 @@ fn main() {
                             break;
                         }
                         let p = &files[i].0;
-                        let coins = sidecar(p, "coins");
-                        let v = verify_file(p, coins.as_deref(), label.as_bytes(), reps);
+                        let v = if is_lgto(p) {
+                            let name = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                            verify_lgto_file(p, entries.iter().find(|(n, _)| *n == name).map(|x| &x.1), &lo, reps)
+                        } else {
+                            let coins = sidecar(p, "coins");
+                            verify_file(p, coins.as_deref(), label.as_bytes(), reps)
+                        };
                         *results[i].lock().unwrap() = Some(v);
                     });
                 }
@@ -420,11 +579,26 @@ fn main() {
                     }
                 }
             }
-            // union bound over the accepted proofs' own soundness figures
+            // union bound over the accepted proofs' own soundness figures; LGTO0001 proofs of the same statement (one batch
+            // proved under several coin kinds) count once, at their worst; local-coin proofs carry no soundness figure
             let union_log2 = {
-                let s: f64 = verdicts.iter().filter(|v| v.accepted).filter_map(|v| v.report.as_ref()).map(|r| r.soundness_log2.exp2()).sum();
+                let mut by_stmt: Vec<(String, f64)> = Vec::new();
+                let mut s = 0.0f64;
+                for v in verdicts.iter().filter(|v| v.accepted) {
+                    let Some(e) = v.soundness_log2() else { continue };
+                    match v.lgto.as_ref().map(|r| r.stmt_sha256.clone()) {
+                        Some(d) => match by_stmt.iter_mut().find(|(x, _)| *x == d) {
+                            Some(slot) => slot.1 = slot.1.max(e),
+                            None => by_stmt.push((d, e)),
+                        },
+                        None => s += e.exp2(),
+                    }
+                }
+                s += by_stmt.iter().map(|(_, e)| e.exp2()).sum::<f64>();
                 if s > 0.0 { s.log2() } else { f64::NEG_INFINITY }
             };
+            let n_local = verdicts.iter().filter(|v| v.accepted && v.lgto.as_ref().is_some_and(|r| r.coins_kind == "local")).count();
+            let n_unpinned = verdicts.iter().filter(|v| v.accepted && v.lgto.as_ref().is_some_and(|r| !r.key_pinned)).count();
             if target_bits > 0.0 && union_log2 > -target_bits {
                 problems.push(format!("union soundness 2^{union_log2:.2} misses the target 2^-{target_bits} (--target-bits 0 to waive)"));
             }
@@ -438,7 +612,7 @@ fn main() {
             }
             let all = problems.is_empty();
             let js = format!(
-                "{{\"dir\":{},\"accepted\":{},\"target_bits\":{target_bits},\"n_proofs_expected\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_ref_fixtures\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
+                "{{\"dir\":{},\"accepted\":{},\"target_bits\":{target_bits},\"n_proofs_expected\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_ref_fixtures\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"accepted_local_coins\":{n_local},\"accepted_unpinned_key\":{n_unpinned},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
                 json_str(&dir.display().to_string()),
                 all,
                 n_expected.map(|n| n.to_string()).unwrap_or_else(|| "null".into()),

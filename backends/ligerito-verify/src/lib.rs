@@ -10,6 +10,7 @@ pub mod format;
 pub mod hash;
 pub mod json;
 pub mod lgsc3;
+pub mod lgto;
 pub mod merkle;
 pub mod params;
 pub mod pcs;

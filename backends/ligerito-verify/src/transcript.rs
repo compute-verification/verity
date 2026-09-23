@@ -24,6 +24,10 @@ pub trait Coins {
     fn stream(&mut self, nbytes: usize) -> Vec<u8>;
     /// Sequential verifier messages so far.
     fn rounds(&self) -> usize;
+    /// Replayed coins left over (a live replay must use every coin it was given).
+    fn unused(&self) -> usize {
+        0
+    }
 
     /// `n` extension elements; one coin.
     fn challenge(&mut self, label: &[u8], n: usize) -> Result<Vec<Ext>, String> {
@@ -192,6 +196,10 @@ impl Coins for Live {
 
     fn rounds(&self) -> usize {
         self.next
+    }
+
+    fn unused(&self) -> usize {
+        self.coins.len() - self.next
     }
 }
 

@@ -15,7 +15,7 @@
 use crate::claims::eq_vector;
 use crate::field::{pow, Ext};
 use crate::format::Reader;
-use crate::relation::{mle_base, succ_mle, Constraints, EvalClaim, Layout};
+use crate::relation::{succ_mle, Constraints, EvalClaim, Layout, PublicRows};
 use crate::sumcheck::eq1;
 use crate::transcript::{ext_bytes, Coins};
 
@@ -126,7 +126,7 @@ fn mle_ext(vec: &[Ext], eq: &[Ext]) -> Ext {
 
 /// Verify the zero-check and the combined sumcheck; returns the `1 + n_links` evaluation claims on the committed
 /// polynomial (points `(p_i || p_c)`, as LGSC0002) that the PCS must then check.
-pub fn verify(lay: &Layout, cons: &Constraints, pub_rows: &[(String, Vec<u32>)], proof: &Proof, coins: &mut dyn Coins) -> Result<Vec<EvalClaim>, String> {
+pub fn verify(lay: &Layout, cons: &Constraints, pub_rows: &dyn PublicRows, proof: &Proof, coins: &mut dyn Coins) -> Result<Vec<EvalClaim>, String> {
     lay.validate()?;
     cons.validate(lay)?;
     let (n_k, n_c, n_i, n_links) = (lay.n_k, lay.n_c(), lay.n_i, lay.n_links());
@@ -139,13 +139,6 @@ pub fn verify(lay: &Layout, cons: &Constraints, pub_rows: &[(String, Vec<u32>)],
     if proof.final_next.len() != n_links || proof.values.len() != 1 + n_links {
         return Err("shape mismatch".into());
     }
-    let pub_row = |name: &str| -> Result<&Vec<u32>, String> {
-        let v = pub_rows.iter().find(|(nm, _)| nm == name).map(|(_, v)| v).ok_or_else(|| format!("public row {name} missing"))?;
-        if v.len() != lay.cols() || v.iter().any(|x| *x >= crate::field::P) {
-            return Err(format!("public row {name}: {} entries (C = {}) or a non-canonical entry", v.len(), lay.cols()));
-        }
-        Ok(v)
-    };
     coins.absorb(b"lgsc/header", &proof.header());
     let tau = coins.challenge(b"zc/tau", n)?;
     // ---------------------------------------------------------------- zero-check
@@ -218,7 +211,7 @@ pub fn verify(lay: &Layout, cons: &Constraints, pub_rows: &[(String, Vec<u32>)],
     let mut z_r = proof.values[0];
     for (name, row) in &lay.virt {
         if !name.starts_with("next:") {
-            z_r = z_r.add(&eq_i[*row].mul(&mle_base(pub_row(name)?, &eq_c)));
+            z_r = z_r.add(&eq_i[*row].mul(&pub_rows.mle(name, &eq_c)?));
         }
     }
     for x in 0..n_links {

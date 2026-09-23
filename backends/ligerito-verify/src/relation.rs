@@ -186,6 +186,29 @@ fn flat(m: &[[Ext; 3]; 3]) -> Vec<Ext> {
     m.iter().flat_map(|row| row.iter().copied()).collect()
 }
 
+/// The verifier's public virtual rows (everything but `next:*`), as multilinears in the column variables.
+pub trait PublicRows {
+    /// `sum_c eq_c[c] row[c]` over the `C = 2^n_c` columns.
+    fn mle(&self, name: &str, eq_c: &[Ext]) -> Result<Ext, String>;
+}
+
+/// Materialised rows (the sumcheck fixtures): `(name, C base-field entries)`.
+impl PublicRows for [(String, Vec<u32>)] {
+    fn mle(&self, name: &str, eq_c: &[Ext]) -> Result<Ext, String> {
+        let v = self.iter().find(|(nm, _)| nm == name).map(|(_, v)| v).ok_or_else(|| format!("public row {name} missing"))?;
+        if v.len() != eq_c.len() || v.iter().any(|x| *x >= P) {
+            return Err(format!("public row {name}: {} entries (C = {}) or a non-canonical entry", v.len(), eq_c.len()));
+        }
+        Ok(mle_base(v, eq_c))
+    }
+}
+
+impl PublicRows for Vec<(String, Vec<u32>)> {
+    fn mle(&self, name: &str, eq_c: &[Ext]) -> Result<Ext, String> {
+        self.as_slice().mle(name, eq_c)
+    }
+}
+
 /// `< eq(r, .), vec >` for a base-field vector of length 2^|r|.
 pub fn mle_base(vec: &[u32], eq: &[Ext]) -> Ext {
     let mut acc = Ext::ZERO;
@@ -226,7 +249,7 @@ fn label(s: &str) -> Vec<u8> {
 
 /// Verify the three sumchecks.  `pub_rows`: every virtual row that is not `next:*`, as base-field vectors of length
 /// `2^n_c`.  Returns the evaluation claims on the committed polynomial (the caller checks them against the commitment).
-pub fn verify(lay: &Layout, cons: &Constraints, pub_rows: &[(String, Vec<u32>)], proof: &SumcheckProof, coins: &mut dyn Coins) -> Result<Vec<EvalClaim>, String> {
+pub fn verify(lay: &Layout, cons: &Constraints, pub_rows: &dyn PublicRows, proof: &SumcheckProof, coins: &mut dyn Coins) -> Result<Vec<EvalClaim>, String> {
     lay.validate()?;
     cons.validate(lay)?;
     let (n_k, n_c, n_i, n_links) = (lay.n_k, lay.n_c(), lay.n_i, lay.n_links());
@@ -234,16 +257,6 @@ pub fn verify(lay: &Layout, cons: &Constraints, pub_rows: &[(String, Vec<u32>)],
     if proof.rounds1.len() != n - 2 || proof.rounds2.len() != n_i || proof.rounds3.len() != n_c || proof.next_vals.len() != n_links || proof.values.len() != 1 + n_links {
         return Err("sumcheck proof: shape mismatch with the layout".into());
     }
-    let pub_row = |name: &str| -> Result<&Vec<u32>, String> {
-        let v = pub_rows.iter().find(|(nm, _)| nm == name).map(|(_, v)| v).ok_or_else(|| format!("public row {name} missing"))?;
-        if v.len() != lay.cols() {
-            return Err(format!("public row {name}: {} entries, C = {}", v.len(), lay.cols()));
-        }
-        if v.iter().any(|x| *x >= P) {
-            return Err(format!("public row {name}: non-canonical entry"));
-        }
-        Ok(v)
-    };
     let one = Ext::ONE;
     // ---------------------------------------------------------------- 1. zero-check
     let tau = coins.challenge(b"zc/tau", n)?;
@@ -316,7 +329,7 @@ pub fn verify(lay: &Layout, cons: &Constraints, pub_rows: &[(String, Vec<u32>)],
         if name.starts_with("next:") {
             continue;
         }
-        z_r = z_r.add(&eq_i[*row].mul(&mle_base(pub_row(name)?, &eq_c)));
+        z_r = z_r.add(&eq_i[*row].mul(&pub_rows.mle(name, &eq_c)?));
     }
     for x in 0..n_links {
         let row = lay.virt_row(&format!("next:{x}")).unwrap();
@@ -408,15 +421,23 @@ pub fn virtual_zero_claims(lay: &Layout, first: &EvalClaim) -> Vec<EvalClaim> {
         while k + 1 < rows.len() && rows[k + 1] == rows[k] + 1 {
             k += 1;
         }
-        for (b, pfx) in aligned_cover(lo, rows[k] + 1) {
-            let mut pt = first.point[..b].to_vec();
-            pt.extend((0..lay.n_i - b).map(|t| Ext::from_base(((pfx >> t) & 1) as u32)));
-            pt.extend_from_slice(&first.point[lay.n_i..]);
-            out.push(EvalClaim { point: pt, value: Ext::ZERO, name: format!("w = 0 on rows [{}, {})", pfx << b, (pfx + 1) << b) });
-        }
+        out.extend(zero_claims(lay, first, &aligned_cover(lo, rows[k] + 1)));
         k += 1;
     }
     out
+}
+
+/// The zero claims on the aligned blocks `(b, pfx)` at the first claim's `(r_i || r_c)` (see `virtual_zero_claims`).
+pub fn zero_claims(lay: &Layout, first: &EvalClaim, blocks: &[(usize, usize)]) -> Vec<EvalClaim> {
+    blocks
+        .iter()
+        .map(|&(b, pfx)| {
+            let mut pt = first.point[..b].to_vec();
+            pt.extend((0..lay.n_i - b).map(|t| Ext::from_base(((pfx >> t) & 1) as u32)));
+            pt.extend_from_slice(&first.point[lay.n_i..]);
+            EvalClaim { point: pt, value: Ext::ZERO, name: format!("w = 0 on rows [{}, {})", pfx << b, (pfx + 1) << b) }
+        })
+        .collect()
 }
 
 /// ligerito-sumcheck's `sumcheck.fixture()` JSON: layout, constraints, public rows, proof, claims, recorded transcript.
@@ -562,7 +583,7 @@ mod tests {
         let fx = load_fixture(include_str!("../fixtures/sumcheck/fp8ada_l64_S2.json")).unwrap();
         let proof = parse_lgsc(&fx.proof).unwrap();
         assert_eq!(write_lgsc(&proof), fx.proof);
-        let run = |lay: &Layout, cons: &Constraints, pubs: &[(String, Vec<u32>)], pf: &SumcheckProof| {
+        let run = |lay: &Layout, cons: &Constraints, pubs: &Vec<(String, Vec<u32>)>, pf: &SumcheckProof| {
             verify(lay, cons, pubs, pf, &mut SumcheckLocal::new(b"fixture"))
         };
         let claims = run(&fx.layout, &fx.constraints, &fx.pub_rows, &proof).unwrap();

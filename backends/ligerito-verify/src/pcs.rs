@@ -185,7 +185,7 @@ pub fn verify(stmt: &Statement, proof: &Proof, coins: &mut dyn Coins) -> Result<
 
 /// Rows of round `i`'s codeword opened at `s_set`: shape, canonical base entries in round 1, the Merkle
 /// multi-opening; absorbs the rows and siblings when `coins` is given; returns the row inner products with r-bar.
-fn check_opening(
+pub(crate) fn check_opening(
     p: &Params,
     i: usize,
     op: &Opening,
