@@ -153,7 +153,8 @@ def _parse_flags(toks: list[str]) -> dict[str, Any]:
         key = key.replace("-", "_")
         if sep:
             out[key] = val
-        elif i + 1 < len(toks) and not toks[i + 1].startswith("--"):
+        elif i + 1 < len(toks) and (not toks[i + 1].startswith("--") or " " in toks[i + 1]):
+            # a value that is itself a flag list (`--commit-args "--bounded-staging --retain-exclude hidden_m1"`) has spaces; a flag never does
             out[key] = toks[i + 1]
             i += 1
         else:
