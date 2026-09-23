@@ -1,16 +1,24 @@
-//! The three files (`backends/direct/ligero/serialize.py` defines them): `ligero-system/v1`, `ligero-statement/v2`
-//! (`/v3` = v2 + the authentication block, `authentication = included`; `/v4` = the relation-named statement: byte
-//! widths of the words, the relation string, then an optional v3 block), `ligero-proof/v1` (`/v2` = v1 + one
-//! multiproof per committed tree).  Reject-first: every length is bounded by the statement before a byte of the
-//! proof body is read, every field element is checked canonical (< p) at parse.
+//! The three files (`backends/direct/ligero/serialize.py` defines them): `ligero-system/v1` (`/v2` = v1 with the
+//! chain end in components), `ligero-statement/v2` (`/v3` = v2 + the authentication block, `authentication =
+//! included`; `/v4` = the relation-named statement: byte widths of the words, the relation string, then an optional
+//! v3 block), `ligero-proof/v1` (`/v2` = v1 + one multiproof per committed tree).  Reject-first: every length is
+//! bounded by the statement before a byte of the proof body is read, every field element is checked canonical (< p)
+//! at parse.
 //!
 //! ~~~text
+//! ligero-system/v2     magic "LIGSYS02" | as v1, but the chain's trailing `expr y16` is replaced by
+//!                      u32 n_end | n_end x (expr Y, u32 lo, u32 bits): the chain end in COMPONENTS (chain.py) --
+//!                      the public word's bit fields `(y >> lo) & (2^bits - 1)`, each of at most 30 bits (so
+//!                      < 2^30 < p), because a word of more than 30 bits (the FP4 relation's FP32 accumulator) is
+//!                      not a BabyBear element
 //! ligero-statement/v4  magic "LIGSTM04" | the v2 header through u32 K | u8 word_bytes | u8 y_bytes | str relation
 //!                      | l x K a | l x K b | l x y16 (u8 / u16 / u32 per the byte widths) | u8 has_auth | [v3 block]
 //! ~~~
 //! The words are kept as `u32` whatever their width; the relation the file names decides (relation.rs) which widths
 //! are legal, how the words enter the statement digest and how the operands decode.  The authentication block's leaf
-//! schema is `u16`, so a v4 file may carry one only with 16-bit words (Python defines nothing else).
+//! schema is `u16`, so a v4 file may carry one only with 16-bit words (Python defines nothing else).  A v1 chain end
+//! is kept as the one end term `(y16, family 6, lo 0, bits 0)` -- `bits = 0` meaning "the whole word as a residue"
+//! (`chain.end_terms`), so the two formats run through one chain test.
 
 use crate::auth::{AuthBlock, TreeRef, MAX_OPENINGS, MAX_POSITIONS, MAX_PROOF_BYTES, SCHEMA, VERSION as AUTH_VERSION};
 use crate::field::P;
@@ -116,11 +124,49 @@ pub struct Linear {
     pub pub_pin: Option<usize>, // index into `pins`: sum coef W + c = pub (None: = 0)
 }
 
+/// One chain-end constraint `Y(W)[j] = value_j` at every end column (`chain.end_terms`): the whole public word as a
+/// residue (`bits = 0`, a v1 system) or the bit field `(y >> lo) & (2^bits - 1)` of the public word (a v2 system).
+#[derive(Clone, Debug)]
+pub struct EndTerm {
+    pub y: Expr,
+    /// The challenge-coefficient family this constraint draws from (`chain.END_FAMILIES = (6, 0, 1)`: the end family
+    /// for the single word / component 0, then the link families 0 and 1, which are unused at an end column).
+    pub family: usize,
+    pub lo: u32,
+    pub bits: u32,
+}
+
+impl EndTerm {
+    /// The public value this end term compares against, mod p.
+    pub fn value(&self, y: u32) -> u32 {
+        if self.bits == 0 {
+            y % P
+        } else {
+            ((y as u64 >> self.lo) & ((1u64 << self.bits) - 1)) as u32
+        }
+    }
+}
+
+/// `chain.END_FAMILIES`: the coefficient family of end component x.
+pub const END_FAMILIES: [usize; 3] = [6, 0, 1];
+
 #[derive(Clone, Debug)]
 pub struct Chain {
     pub c_rows: [u32; 3],
     pub y: [Expr; 3],
-    pub y16: Expr,
+    /// One term for a v1 system (`bits = 0`), one per component (1..=3) for a v2 system.
+    pub ends: Vec<EndTerm>,
+}
+
+impl Chain {
+    /// The `(lo, bits)` of every end component, or `None` for a single-word end (v1).
+    pub fn components(&self) -> Option<Vec<(u32, u32)>> {
+        if self.ends.len() == 1 && self.ends[0].bits == 0 {
+            None
+        } else {
+            Some(self.ends.iter().map(|e| (e.lo, e.bits)).collect())
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -131,6 +177,8 @@ pub struct System {
     pub quadratic: Vec<[Expr; 3]>,
     pub chain: Option<Chain>,
     pub sys_id: [u8; 32],
+    /// The file format: 1 (`LIGSYS01`) or 2 (`LIGSYS02`, the chain end in components).
+    pub version: u8,
 }
 
 fn read_expr(r: &mut Rd, m: usize) -> Result<Expr> {
@@ -156,9 +204,11 @@ fn read_expr(r: &mut Rd, m: usize) -> Result<Expr> {
 impl System {
     pub fn parse(d: &[u8]) -> Result<System> {
         let mut r = Rd::new(d);
-        if r.take(8)? != b"LIGSYS01" {
-            return Err("not a ligero-system/v1 file".into());
-        }
+        let version: u8 = match r.take(8)? {
+            b"LIGSYS01" => 1,
+            b"LIGSYS02" => 2,
+            _ => return Err("not a ligero-system/v1 or /v2 file".into()),
+        };
         let m = r.usize_bounded(1 << 20, "m")?;
         let n_pins = r.usize_bounded(m, "n_pins")?;
         let mut pins = Vec::with_capacity(n_pins);
@@ -189,7 +239,15 @@ impl System {
         for _ in 0..nq {
             quadratic.push([read_expr(&mut r, m)?, read_expr(&mut r, m)?, read_expr(&mut r, m)?]);
         }
-        let chain = if r.u8()? == 1 {
+        let has_chain = match r.u8()? {
+            0 => false,
+            1 => true,
+            _ => return Err("has_chain flag not 0/1".into()),
+        };
+        if version == 2 && !has_chain {
+            return Err("a ligero-system/v2 file carries no chain (the format exists for the chain end in components)".into());
+        }
+        let chain = if has_chain {
             let mut c_rows = [0u32; 3];
             for c in c_rows.iter_mut() {
                 *c = r.u32()?;
@@ -198,14 +256,36 @@ impl System {
                 }
             }
             let y = [read_expr(&mut r, m)?, read_expr(&mut r, m)?, read_expr(&mut r, m)?];
-            let y16 = read_expr(&mut r, m)?;
-            Some(Chain { c_rows, y, y16 })
+            let ends = if version == 1 {
+                vec![EndTerm { y: read_expr(&mut r, m)?, family: END_FAMILIES[0], lo: 0, bits: 0 }]
+            } else {
+                // chain.end_terms: 1..=3 components, each a bit field of the public word that fits a field element
+                let n_end = r.usize_bounded(END_FAMILIES.len(), "chain end components")?;
+                if n_end == 0 {
+                    return Err("chain end has no components".into());
+                }
+                let mut ends = Vec::with_capacity(n_end);
+                for x in 0..n_end {
+                    let y = read_expr(&mut r, m)?;
+                    let lo = r.u32()?;
+                    let bits = r.u32()?;
+                    // a component is compared mod p, so it must be an integer below p: at most 30 bits (2^30 < p < 2^31)
+                    if bits == 0 || bits > 30 || lo > 31 || lo + bits > 32 {
+                        return Err(format!(
+                            "chain end component {x}: bit field lo = {lo}, bits = {bits} is not a field of a 32-bit word below p"
+                        ));
+                    }
+                    ends.push(EndTerm { y, family: END_FAMILIES[x], lo, bits });
+                }
+                ends
+            };
+            Some(Chain { c_rows, y, ends })
         } else {
             None
         };
         let sys_id: [u8; 32] = r.take(32)?.try_into().unwrap();
         r.done()?;
-        Ok(System { m, pins, linear, quadratic, chain, sys_id })
+        Ok(System { m, pins, linear, quadratic, chain, sys_id, version })
     }
 
     /// This verifier's own digest of the tables it will enforce (BLAKE3 of the canonical file bytes without the
