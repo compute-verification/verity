@@ -13,8 +13,10 @@ proto's single eq term with coefficient 1.
 """
 from __future__ import annotations
 
+import hashlib
 import math
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -42,13 +44,14 @@ from .proto.linalg import _powers_rows, contract_columns_ext, contract_rows_ext,
 from .proto.ntt_gpu import Encoder, split
 from .proto.pcs import (Timer, _commit, _commit_fast, _ext_bytes, _HostTree, _open_fast, _open_recompute, _open_rows,
                         _row_claims, _stream_group)
-from .transcript import FiatShamirCoins, LocalCoins
+from .transcript import FiatShamirCoins, LiveCoins, LocalCoins, _distinct_indices, _ext_from_stream
 
 D = 6
 #: parameter set B (ligerito-design FINAL) at the pow2 shape: level-1 rate 1/2, later levels 1/4, 2^-128 union bound
 SET_B_RATES = (1, 2, 2, 2, 2)
 
-__all__ = ["Committed", "Prover", "Reject", "dims_for", "make_coins", "pcs_commit", "pcs_open", "pcs_verify"]
+__all__ = ["Committed", "Prover", "Reject", "StreamCoins", "dims_for", "make_coins", "pcs_commit", "pcs_open", "pcs_verify",
+           "statement_for_stream"]
 
 
 class Reject(Exception):
@@ -78,9 +81,58 @@ def make_coins(kind: str, seed: int = 0, slots=None):
     if kind == "local":
         return LocalCoins(seed)
     if kind == "live":
-        from .transcript import LiveCoins
         return LiveCoins(slots)
     raise ValueError(f"coins {kind!r}")
+
+
+class StreamCoins(LiveCoins):
+    """``transcript.LiveCoins`` fed by lane live-2's many-round challenge stream (``ligero/live.ChallengeStream`` or
+    ``LocalChallenges``): verifier coin slot k = ``expand_challenge(H(stmt, c_0..c_{R-1}), k, label, r_k, 32)`` -- the
+    verifier's k-th committed coin, opened after it received MSG k = BLAKE2b of the prover's messages absorbed since slot
+    k-1.  ``slots`` (the 32-byte slot values) replay the run in ``LiveCoins(slots)`` (the verifier side, the dump's
+    ``.coins`` file); ``binding()`` is what re-derives them from the stream's commitments and openings."""
+
+    def __init__(self, stream, statement: bytes):
+        super().__init__(iter(()))
+        self.stream = stream
+        self.statement = statement
+        self.slots_out: list[bytes] = []
+        self.labels: list[bytes] = []
+        self._h = hashlib.blake2b(digest_size=32)
+        stream.begin(statement)
+
+    def absorb(self, label: bytes, data: bytes) -> None:
+        self.absorbed += 1
+        self._h.update(len(label).to_bytes(4, "little") + label + len(data).to_bytes(8, "little"))
+        self._h.update(data)
+
+    def _slot(self, label: bytes) -> None:
+        msg = self._h.digest()
+        self._h = hashlib.blake2b(digest_size=32)
+        coin = self.stream.challenge(label, msg, 32)
+        self.slots_out.append(coin)
+        self.labels.append(label)
+        self._coin, self._sub = coin, 0
+        self.rounds += 1
+
+    def challenge(self, label: bytes, n: int) -> np.ndarray:
+        self._slot(label)
+        return _ext_from_stream(self._stream(8 * n * D), n)
+
+    def indices(self, label: bytes, domain: int, count: int) -> list[int]:
+        self._slot(label)
+        return _distinct_indices(self._stream, domain, count)
+
+    def binding(self) -> dict:
+        return {"statement": self.statement.hex(), "commitments": [c.hex() for c in self.stream.commitments()],
+                "openings": [[r.hex(), s.hex()] for r, s in self.stream.openings()], "labels": [x.decode() for x in self.labels],
+                "derivation": "slot_k = SHAKE-256(b'ligero-chal|v1|' | blake2b(b'ligero-chal-ctx|' | u32 len(stmt) | stmt | c_0..c_{R-1}) "
+                              "| u32 k | u32 len(label) | label | r_k)[:32]; coin_commit(r_k, s_k) == c_k (ligero/live.py)"}
+
+
+def statement_for_stream(bt, key_sha256: bytes) -> bytes:
+    """STMT i of the challenge stream: the batch's public claim (params, statement file, key), fixed before any coin."""
+    return b"lgto-stmt|v1|" + hashlib.sha256(params_bytes(bt.params)).digest() + (bt.stmt_digest or bt.stmt.digest()) + key_sha256
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -621,6 +673,7 @@ class Prover:
         self.pcs_fast: bool | None = None           # None: pcs-fast's device path whenever it is available
         #: "pcs-fast": lane ligerito-pcs-fast's ``proto/pcs.commit`` / ``open`` (same transcript); "own": prove.py's adapter
         self.pcs_impl = os.environ.get("LIGERITO_RELATION_PCS", "pcs-fast")
+        self._witness_lock = threading.Lock()     # windowed batches: Ligero's marshal cache is not thread-safe
         t0 = time.perf_counter()
         self.runner = RelationChainRunner(self.rel, device, 128.0)
         self.sys = self.runner.sys
@@ -706,8 +759,9 @@ class Prover:
         stmt = bt.stmt
         t_all = time.perf_counter()
         tm.start("witness")
-        subs = self._subs(bt, mutate)
-        z = build_z(self.sys, lay, subs, dev)
+        with self._witness_lock:
+            subs = self._subs(bt, mutate)
+            z = build_z(self.sys, lay, subs, dev)
         if ypub_override is not None:
             z[lay.virt["y16"], :lay.l] = torch.as_tensor(ypub_override, device=dev).to(torch.int32) % P
         tm.stop()

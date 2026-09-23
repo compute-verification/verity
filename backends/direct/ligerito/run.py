@@ -20,19 +20,23 @@ import statistics
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import torch
 
+from backends.direct.ligero import live as live_mod
 from backends.direct.ligero.compile import P
 from backends.direct.ligero.relchain import K_VU, census, instances, instances_digest
 
+from . import prove as prove_mod
 from .proof import Proof, Statement, read_key, read_proof, read_statement, sha256
 from .prove import Prover, Result, make_coins
+from .transcript import LiveCoins
 
 BACKEND = "ligerito"
-STUBBED = "zk.py not wired (no masks, no salted leaves, no Libra sumcheck masks); coins not live"
+STUBBED = "zk.py not wired (no masks, no salted leaves, no Libra sumcheck masks, no per-column RS padding)"
 
 
 def _git_commit() -> str:
@@ -103,6 +107,12 @@ class Dump:
         if root is not None:
             root.mkdir(parents=True, exist_ok=True)
             (root / "key.bin").write_bytes(prover.key_bytes)
+
+    def coins_file(self, stem: str, slots: list) -> dict:
+        if self.root is None:
+            return {}
+        (self.root / f"{stem}.coins").write_bytes(len(slots).to_bytes(4, "little") + b"".join(slots))
+        return {"coins_file": f"{stem}.coins"}
 
     def add(self, stem: str, stmt: Statement, proof: Proof, expect: str, verdict: tuple, coins: str, extra=None, seed: int = 1):
         if self.root is None:
@@ -299,10 +309,11 @@ def verify_dir(d: Path, device: str = "cuda") -> dict:
         st = read_statement((d / e["stmt"]).read_bytes())
         try:
             pf = read_proof((d / e["proof"]).read_bytes())
+            vc = make_coins(e["coins"], e.get("coins_seed", 1)) if e["coins"] != "live" else _file_coins(d, e)
         except (ValueError, KeyError) as ex:
             ok, why, info = False, f"unreadable: {ex}", {"seconds": 0.0}
         else:
-            ok, why, info = pv.verify(st, pf, make_coins(e["coins"], e.get("coins_seed", 1)) if e["coins"] != "live" else _file_coins(d, e))
+            ok, why, info = pv.verify(st, pf, vc)
         good = ok == (e["expect"] == "accept")
         items.append({"proof": e["proof"], "expect": e["expect"], "accepted": ok, "reason": why, "seconds": info["seconds"], "agrees": good})
         if not good:
@@ -315,10 +326,21 @@ def verify_dir(d: Path, device: str = "cuda") -> dict:
 
 
 def _file_coins(d: Path, e: dict):
-    from .transcript import LiveCoins
     raw = (d / e["coins_file"]).read_bytes()
     n = int.from_bytes(raw[:4], "little")
-    return LiveCoins([raw[4 + 32 * i:4 + 32 * (i + 1)] for i in range(n)])
+    slots = [raw[4 + 32 * i:4 + 32 * (i + 1)] for i in range(n)]
+    b = e.get("stream_binding")
+    if b is not None:
+        # the coins are the stream's: every slot re-derived from the verifier's commitments and openings
+        stmt, ccom = bytes.fromhex(b["statement"]), [bytes.fromhex(c) for c in b["commitments"]]
+        ctx = live_mod.batch_context(stmt, ccom)
+        for k, ((r, s_), label) in enumerate(zip(b["openings"], b["labels"])):
+            r, s_ = bytes.fromhex(r), bytes.fromhex(s_)
+            if live_mod.pm.coin_commit(r, s_) != ccom[k] or live_mod.expand_challenge(ctx, k, label.encode(), r, 32) != slots[k]:
+                raise ValueError(f"coin slot {k} is not the stream's")
+        if len(b["openings"]) != n:
+            raise ValueError("coin count differs from the stream's openings")
+    return LiveCoins(slots)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -344,49 +366,111 @@ def bench(args) -> int:
     data = instances(rel, total_vus, procs=args.instance_procs, cache=args.instances_cache)
     inst_digest = instances_digest(rel, total_vus)
     print(f"{total_vus} VUs in {time.perf_counter() - t0:.1f}s; system {pv.sys.summary()}", flush=True)
-    bt = pv.batch(data, args.coins)
+    bv = args.batch_vus or total_vus
+    if total_vus % bv:
+        raise SystemExit(f"--batch-vus {bv} must divide --total-vus {total_vus}")
+    bts = [pv.batch(data[i:i + bv], args.coins) for i in range(0, total_vus, bv)]
+    nb_ = len(bts)
+    bt = bts[0]
     lay = bt.lay
-    print(f"layout {lay.summary()}; dims {bt.dims.describe()}", flush=True)
+    print(f"{nb_} batch(es) of {bv} VUs; layout {lay.summary()}; dims {bt.dims.describe()}", flush=True)
     dump = Dump(Path(args.dump_dir) if args.dump_dir else None, pv)
-    runs = []
+    live = args.coins == "live"
+    stream_info: dict = {}
+    if live:
+        stmts = [prove_mod.statement_for_stream(b, pv.key_sha256) for b in bts]
+        # the session's round count: one local-stream proof (also the warm-up of the compiled kernels)
+        warm = prove_mod.StreamCoins(live_mod.LocalChallenges(4096), stmts[0])
+        pv.prove(bt, warm)
+        R = warm.rounds
+        sess = None
+        if args.verifier:
+            host, port = live_mod.parse_url(args.verifier)
+            sess = live_mod.ChallengeSession(host, port, {"run_id": os.environ.get("RESEARCH_RUN_ID"), "lane": "ligerito-relation",
+                                                           "prover_host": platform.node(), "prover_commit": _git_commit(),
+                                                           "note": f"ligerito {rel.name} {total_vus} VUs"},
+                                             args.reps * nb_, R, args.window)
+        stream_info = {"verifier": args.verifier or "local (live.LocalChallenges: same stream code, no network)",
+                       "rounds_per_batch": R, "window": args.window, "batches": args.reps * nb_}
+        print(f"live coins: {R} rounds per batch, window {args.window}, verifier {stream_info['verifier']}", flush=True)
+
+    def one(rep: int, j: int):
+        b = bts[j]
+        if live:
+            st = sess.stream(rep * nb_ + j) if sess is not None else live_mod.LocalChallenges(R, rep * nb_ + j)
+            pc = prove_mod.StreamCoins(st, stmts[j])
+            r = pv.prove(b, pc)
+            return r, pc
+        pc = make_coins(args.coins, 1000 + rep * nb_ + j)
+        return pv.prove(b, pc), None
+
+    runs = []          # per timed rep: (wall, [(Result, verify info, stream coins)])
     res = None
-    for rep in range(args.reps + 1):
-        pc, vc = _coins_pair(args.coins, 1000 + rep)
+    for rep in range(args.reps + (0 if live else 1)):
         if args.device.startswith("cuda"):
             torch.cuda.synchronize()
-        res = pv.prove(bt, pc)
-        ok, why, info = pv.verify(bt.stmt, res.proof, vc)
-        assert ok, why
-        b = _buckets(res.timings)
-        print(f"rep {rep}{' (warm-up)' if rep == 0 else ''}: prover {res.timings['total']:.3f}s "
-              f"{ {k: round(v, 3) for k, v in b.items()} } verifier {info['seconds']:.3f}s; {res.proof.n_bytes()['total']} B; "
-              f"peak {res.peak_device_bytes / 2**30:.1f} GiB", flush=True)
-        if rep == 0:
+        t0 = time.perf_counter()
+        if live and args.window > 1:
+            with ThreadPoolExecutor(max_workers=args.window) as ex:
+                outs = list(ex.map(lambda j: one(rep, j), range(nb_)))
+        else:
+            outs = [one(rep, j) for j in range(nb_)]
+        wall = time.perf_counter() - t0
+        items = []
+        for j, (r, pc) in enumerate(outs):
+            vc = LiveCoins(pc.slots_out) if live else make_coins(args.coins, 1000 + rep * nb_ + j)
+            ok, why, info = pv.verify(bts[j].stmt, r.proof, vc)
+            assert ok, why
+            items.append((r, info, pc))
+        res = items[0][0]
+        warmup = rep == 0 and not live
+        tb = {k: round(sum(_buckets(r.timings)[k] for r, _, _ in items), 3) for k in _buckets({})}
+        lat = [pc.stream.latency for _, _, pc in items if pc is not None and pc.stream.latency is not None]
+        print(f"rep {rep}{' (warm-up)' if warmup else ''}: wall {wall:.3f}s over {nb_} batch(es) (sum of prover totals "
+              f"{sum(r.timings['total'] for r, _, _ in items):.3f}s) {tb} verifier {sum(i['seconds'] for _, i, _ in items):.3f}s; "
+              f"{sum(r.proof.n_bytes()['total'] for r, _, _ in items)} B; peak {max(r.peak_device_bytes for r, _, _ in items) / 2**30:.1f} GiB"
+              + (f"; batch latency {max(lat):.3f}s, stream wait {sum(pc.stream.wait for _, _, pc in items):.3f}s" if lat else ""),
+              flush=True)
+        if warmup:
             continue
-        runs.append((res, info))
-        if rep == 1:
-            dump.add(f"batch_{args.coins}_rep1", bt.stmt, res.proof, "accept", (ok, why), args.coins,
-                     {"prover_seconds": res.timings["total"], "vus": [0, total_vus]}, seed=1000 + rep)
+        runs.append((wall, items))
+        if len(runs) == 1:
+            for j, (r, info, pc) in enumerate(items):
+                extra = {"prover_seconds": r.timings["total"], "vus": [j * bv, (j + 1) * bv]}
+                if pc is not None:
+                    extra.update(dump.coins_file(f"batch_{args.coins}_{j}", pc.slots_out))
+                    extra["stream_binding"] = pc.binding()
+                dump.add(f"batch_{args.coins}_{j}", bts[j].stmt, r.proof, "accept", (True, "ok"), args.coins, extra,
+                         seed=1000 + len(runs) * nb_ + j)
+    if live and sess is not None:
+        stream_info["verdict"] = sess.end({"wall_s": sum(w for w, _ in runs)})
+        stream_info["round_ms_median"] = statistics.median(sess.rtts) * 1e3 if sess.rtts else None
+        stream_info["bytes_out"], stream_info["bytes_in"] = sess.bytes_out, sess.bytes_in
+        print(f"live verdict: {stream_info['verdict']}", flush=True)
     dump.close({"relation": rel.name, "l": args.l, "vus": total_vus, "commit": _git_commit(), "kind": "bench"})
     dumps = verify_dir(Path(args.dump_dir), args.device) if args.dump_dir else None
     rust = rust_batch(args.rust_verifier, Path(args.dump_dir)) if args.dump_dir else None
-    med_total = statistics.median(r.timings["total"] for r, _ in runs)
-    med_b = {k: statistics.median(_buckets(r.timings)[k] for r, _ in runs) for k in _buckets({})}
-    vmed = statistics.median(i["seconds"] for _, i in runs)
-    nbytes = res.proof.n_bytes()
+    med_total = statistics.median(w for w, _ in runs)
+    med_b = {k: statistics.median(sum(_buckets(r.timings)[k] for r, _, _ in it) for _, it in runs) for k in _buckets({})}
+    vmed = statistics.median(sum(i["seconds"] for _, i, _ in it) for _, it in runs)
+    nbytes = {k: sum(r.proof.n_bytes()[k] for r, _, _ in runs[0][1]) for k in res.proof.n_bytes()}
     snd = pv.soundness(bt.dims)
-    peak = max(r.peak_device_bytes for r, _ in runs)
+    peak = max(r.peak_device_bytes for _, it in runs for r, _, _ in it)
     rust_ok = bool(rust and rust["exit"] == 0)
-    zk_on, live = False, args.coins == "live"
-    if zk_on and live and rust_ok:
+    live_verified = bool(live and args.verifier and (stream_info.get("verdict") or {}).get("accepted"))
+    zk_on = False
+    if zk_on and live_verified and rust_ok:
         proof_class, zk_mode = "COMPLETE_ZK_BACKEND", "ligerito-zk (masks + per-column RS padding + Libra sumcheck masks), live coins"
         omitted = "external authentication"
     else:
         proof_class, zk_mode = "NON_ZK_PROOF_DIAGNOSTIC", "none"
         omitted = "external authentication; ZK masking (" + STUBBED + ")"
+        if live and not live_verified:
+            omitted += "; coins from live.LocalChallenges (no network verifier)" if not args.verifier else "; live session not accepted"
     hw = contract.probe_hardware()
     sw = {"backend": {"name": BACKEND, "commit": _git_commit(), "hash": "blake3", "challenge_expander": "SHAKE-256",
-                      "pcs": "Ligerito (proto/pcs.py pieces; multi-claim open in prove.py)", "coins": args.coins},
+                      "pcs": "Ligerito (ligerito-pcs-fast proto/pcs.commit + open, multi-claim)" if pv.pcs_impl == "pcs-fast"
+                             else "Ligerito (proto/pcs.py pieces; multi-claim open in prove.py)", "coins": args.coins, "live": stream_info or None},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
     inst = ({"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total_vus], "manifest_sha256": inst_digest,
              "seed": rel.instance_seed} if not rel.frozen_tier else contract.instances_ref(rel.instances_tier, 0, total_vus, inst_digest,
@@ -395,7 +479,7 @@ def bench(args) -> int:
         inst["recipe"] = rel.instances_recipe
     d = bt.dims
     fp = contract.fingerprint(
-        profile=rel.target.name, domain=contract.DOMAIN, K=K_VU, B=total_vus, N_subbatches=1,
+        profile=rel.target.name, domain=contract.DOMAIN, K=K_VU, B=total_vus, N_subbatches=nb_,
         proof_class=proof_class, authentication="excluded", zk_mode=zk_mode,
         security={"target": -128, "field": "BabyBear", "challenge_field": "F_{p^6} = F_p[x]/(x^6 - 31)", "pcs": "ligerito",
                   "parameter_set": "B (pow2: level-1 rate 1/2, later 1/4)", "n": d.n, "kprime": d.kprime, "queries": d.queries,
@@ -412,7 +496,8 @@ def bench(args) -> int:
         relation=rel.relation_name, model=rel.model_name, commit=_git_commit(), step_k=rel.k, steps_per_vu=rel.steps,
         rows=pv.sys.m, committed_rows=lay.m, layout=lay.summary(), witness_generation=rel.witness_generation,
         statement_format="LGTS0001", proof_format="LGTO0001", key_format="LGVK0001", key_sha256=pv.key_sha256.hex(),
-        note=f"{total_vus} VUs as ONE Ligerito batch of {lay.n_sub} sub-batches x l = {args.l} columns (S = {lay.S}), N = 2^{lay.n_vars} "
+        note=f"{total_vus} VUs as {nb_} Ligerito batch(es) of {lay.n_sub} sub-batches x l = {args.l} columns (S = {lay.S}), N = 2^{lay.n_vars} "
+             f"cells each; t.total = wall over all batches{f' ({args.window} in flight)' if live and args.window > 1 else ''}; proof bytes / verify summed; "
              f"cells; prover time includes witness generation (Ligero's hints + build_witness, marshal cached across reps as in relchain); "
              f"{rel.claim_note}")
     meas = [contract.measurement(f"t.{k}", v) for k, v in med_b.items()]
@@ -438,7 +523,7 @@ def bench(args) -> int:
         contract.measurement("prove_wall", med_total, "s"),
         contract.measurement("verify_wall", vmed, "s"),
         contract.measurement("soundness_bits", -snd["total_log2"], "bits"),
-        contract.measurement("split.zero_check_seconds", statistics.median(r.timings.get("zero_check", 0.0) for r, _ in runs), "s"),
+        contract.measurement("split.zero_check_seconds", statistics.median(sum(r.timings.get("zero_check", 0.0) for r, _, _ in it) for _, it in runs), "s"),
         contract.measurement("split.witness_seconds", med_b["witness"], "s"),
     ]
     if rust and "json" in rust:
@@ -449,13 +534,17 @@ def bench(args) -> int:
     checker = (f"backends.direct.ligerito.run bench[{rel.name}] (the in-process Python verifier accepted every rep; shares the claim "
                "algebra with the prover" + ("; Python file verifier cold from the dumped bytes" if dumps else "")
                + (f"; ligerito-verify batch --dir exit {rust['exit']}" if rust else "") + ")")
-    detail = f"{args.reps} reps at {total_vus} VUs, coins {args.coins}; proof {nbytes['total']} B"
+    detail = f"{args.reps} reps at {total_vus} VUs ({nb_} batch(es)), coins {args.coins}; proof {nbytes['total']} B"
     result = {"schema": contract.RESULT_SCHEMA,
               "run_id": args.run_id or os.environ.get("RESEARCH_RUN_ID") or f"ligerito-{rel.name}-{args.coins}-{int(time.time())}",
               "workload_fingerprint": fp,
               "validation": {"status": status, "checker": checker, "detail": detail,
                              "evidence": {"soundness": snd, "dumps": dumps, "rust": rust,
-                                          "reps": [{"prover": r.timings, "verifier": i} for r, i in runs]}},
+                                          "live": stream_info or None,
+                                          "reps": [{"wall": w, "batches": [{"prover": r.timings, "verifier": i,
+                                                                            "stream_latency": pc.stream.latency if pc else None,
+                                                                            "stream_wait": pc.stream.wait if pc else None}
+                                                                           for r, i, pc in it]} for w, it in runs]}},
               "measurements": meas, "measurement_files": [], "artifacts": []}
     problems = contract.validate(result)
     if problems:
@@ -491,6 +580,9 @@ def main(argv=None) -> int:
             s.add_argument("--instance-procs", type=int, default=8)
             s.add_argument("--instances-cache")
             s.add_argument("--run-id")
+            s.add_argument("--batch-vus", type=int, default=None, help="split --total-vus into proofs of this many VUs")
+            s.add_argument("--verifier", help="tcp://host:port of a live challenge-stream verifier (live-2's `live serve`)")
+            s.add_argument("--window", type=int, default=1, help="live: batches in flight")
     s = sub.add_parser("verify-dir")
     s.add_argument("dir")
     s.add_argument("--device", default="cuda")
