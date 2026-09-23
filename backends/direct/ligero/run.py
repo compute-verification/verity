@@ -385,6 +385,8 @@ def main(argv=None) -> int:
                                          help="label a --zk run COMPLETE_HVZK_BACKEND even with the coin commitment on (conservative)")
     sub.choices["bench-vu"].add_argument("--dump-dir", default=None, metavar="DIR",
                                          help="write every recorded rep's sub-batch proofs (.stmt/.proof[/.coins]) + system.bin for backends/ligero-verify")
+    sub.choices["bench-vu"].add_argument("--dump-reps", type=int, default=None, metavar="N",
+                                         help="with --dump-dir: dump only the first N recorded reps (default all; a 2^20-VU rep is ~14 GB of proofs)")
     sub.choices["bench-vu"].add_argument("--auth", action="store_true",
                                          help="authentication = included: commit the set's words as three SHA-256 word trees (auth.py), bind roots and "
                                               "leaf indices into the statement, ship and verify Merkle multiproofs of every boundary word")

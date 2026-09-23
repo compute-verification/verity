@@ -18,6 +18,10 @@ which backends/ligero-verify does not read yet (it reads v2 and v3: the Ampere B
 <registered>` always uses the Python file verifier -- a self-check, not an independent verification; the wall of that
 separate process is dominated by importing torch, not by verifying.  The inner bench's `profile`, `relation`, `model`,
 `instances`, `census` and the rate / overhead measurements are carried into this result.
+
+Lane b-sweep: `--keep-proofs N` deletes every dumped sub-batch proof but the first N of each rep once the verifier has
+judged them (the manifest keeps each proof's sha256 and size, `verify/independent.json` every verdict) -- a 2^20-VU rep is
+~14 GB of proofs, more than a run tree should ship; `--dump-reps` (bench-vu) limits how many reps are written at all.
 """
 from __future__ import annotations
 
@@ -69,6 +73,37 @@ def _pop(argv: list[str], flag: str, default=None):
     return default
 
 
+def verify_cmd(vbin: Path, system: Path, stmt: Path, proof: Path, threads: int, coins: Path | None, target_log2: float) -> list[str]:
+    """`ligero-verify verify` for one sub-batch proof.  `--soundness-bits` is the bench's target (`security.target`, e.g. -80
+    -> 80): the verifier defaults to 128 and rejects any proof whose parameters do not reach the bits it was asked for,
+    so a soundness sweep below 2^-128 must tell it the target it is judging against (lane b-sweep)."""
+    cmd = [str(vbin), "verify", "--system", str(system), "--statement", str(stmt), "--proof", str(proof), "--threads", str(threads),
+           "--soundness-bits", f"{-float(target_log2):g}"]
+    if coins is not None:
+        cmd += ["--coins", str(coins)]
+    return cmd
+
+
+def prune_proofs(proofs_dir: Path, manifest: dict, keep: int) -> dict:
+    """After the independent verifier has run: delete the dumped .stmt/.proof/.coins of every sub-batch but the first
+    ``keep`` of each rep (a 2^20-VU rep is ~14 GB; the manifest keeps every proof's sha256 and byte count, the verdicts
+    stay in verify/independent.json).  Returns {"kept", "deleted", "bytes_deleted"}; manifest entries get "retained"."""
+    kept = deleted = bytes_deleted = 0
+    for e in manifest["files"]:
+        retain = e["sub"] < keep
+        e["retained"] = retain
+        if retain:
+            kept += 1
+            continue
+        for key in ("stmt", "proof", "coins"):
+            p = proofs_dir / e[key] if e.get(key) else None
+            if p is not None and p.is_file():
+                bytes_deleted += p.stat().st_size
+                p.unlink()
+        deleted += 1
+    return {"kept": kept, "deleted": deleted, "bytes_deleted": bytes_deleted}
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     run_dir = Path(os.environ.get("RESEARCH_RUN_DIR") or "backends/direct/ligero/results/bench_result")
@@ -76,6 +111,8 @@ def main(argv: list[str] | None = None) -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
     verifier = _pop(argv, "--verifier")
     threads = int(_pop(argv, "--threads", "1"))
+    keep_proofs = _pop(argv, "--keep-proofs")          # retain only this many sub-batch proofs per dumped rep after verification
+    keep_proofs = None if keep_proofs is None else int(keep_proofs)
     relation = argv[argv.index("--relation") + 1] if "--relation" in argv else "bf16"
     python_verifier = verifier == "python" or relation != "bf16"
     if python_verifier and verifier not in (None, "python"):
@@ -125,9 +162,7 @@ def main(argv: list[str] | None = None) -> int:
             cmd = [sys.executable, "-m", "backends.direct.ligero.serialize", "verify", "--statement", str(stmt), "--proof", str(proof),
                    "--device", "cpu", "--relation", relation, "--json", str(vjson)]
         else:
-            cmd = [str(vbin), "verify", "--system", str(system), "--statement", str(stmt), "--proof", str(proof), "--threads", str(threads)]
-            if e.get("coins"):
-                cmd += ["--coins", str(proofs_dir / e["coins"])]
+            cmd = verify_cmd(vbin, system, stmt, proof, threads, proofs_dir / e["coins"] if e.get("coins") else None, sec.get("target", -128.0))
         t1 = time.perf_counter()
         r = subprocess.run(cmd, capture_output=True, text=True)
         wall = time.perf_counter() - t1
@@ -171,6 +206,12 @@ def main(argv: list[str] | None = None) -> int:
     (v_dir / "independent.json").write_text(json.dumps({"verifier": verifier_label, "verifier_sha256": _sha256(vbin) if vbin and vbin.is_file() else None,
                                                        "relation": relation, "independent": not python_verifier,
                                                        "threads": threads, "items": verdicts, "auth_negatives": neg_verdicts}, indent=1))
+    pruned = None
+    if keep_proofs is not None:
+        pruned = prune_proofs(proofs_dir, man, keep_proofs)
+        man["pruned"] = pruned
+        (proofs_dir / "manifest.json").write_text(json.dumps(man, indent=1, default=str))
+        print(f"bench_result.py: kept {pruned['kept']} sub-batch proofs per rep, deleted {pruned['deleted']} ({pruned['bytes_deleted'] / 1e9:.2f} GB) after verification", flush=True)
     n_acc = sum(1 for v in verdicts if v["accepted"])
     by_rep: dict[int, float] = {}
     auth_by_rep: dict[int, float] = {}
@@ -211,6 +252,7 @@ def main(argv: list[str] | None = None) -> int:
                        "independent": True, "relation": relation,
                        "sha256": _sha256(vbin) if vbin and vbin.is_file() else None,
                        "coins": "runner's step-0 coins (--coins)" if mode == "interactive" else "n/a (Fiat-Shamir)",
+                       "soundness_bits_requested": -float(sec.get("target", -128.0)),
                        "authentication": ("SHA-256 Merkle multiproofs of every boundary word folded to the statement's roots (auth.rs), after the Ligero tests"
                                           if with_auth else "n/a (authentication = excluded)")}
     fp = {"candidate": "B-Ligero", "backend": fp_in.get("software", {}).get("backend", {}).get("name") or "backends/direct/ligero (b-zk-fix prover)",
@@ -224,7 +266,9 @@ def main(argv: list[str] | None = None) -> int:
           **{k: fp_in[k] for k in ("relation", "model", "census", "rows", "step_k", "steps_per_vu", "domain") if k in fp_in},
           "verifier": verifier_fp,
           "python_verifier": "backends.direct.ligero (live, every rep, every sub-batch; shares code with the prover)",
-          "warmup": "one sub-batch (excluded)", "reps": len(reps)}
+          "warmup": "one sub-batch (excluded)", "reps": len(reps),
+          "dumped_reps": man.get("set", {}).get("dump_reps", len(reps)),    # reps whose proofs were written out and file-verified
+          "proofs_retained": pruned, "B_real": fp_in.get("B_real")}
     meas = [
         _m("prove_wall", prove_med, "s"), _m("prove_wall_min", min(prove_reps), "s"), _m("prove_wall_max", max(prove_reps), "s"),
         _m("prove_ms_per_vu", prove_med / B * 1e3, "ms"),
