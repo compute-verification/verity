@@ -204,15 +204,19 @@ def compose(rel: Relation, leaf: str | leaf_base.LeafScheme | None = None) -> Ha
 
 def row_chain(hr: HashedRelation, rows, role: int, device) -> tuple:
     """The leaf chain of every committed row at once: ``rows`` (N, K) words -> (carry (N, steps, carry_elems): the linked
-    rows of every step, digests (N, digest_elems)).  The prover computes this once per committed set
-    (``HashedRelationRunner.commit``) and gathers per sub-batch instead of re-running 2 x steps chains per proof."""
+    rows of every step, digests (N, digest_elems)[, extras {hint name: (N, steps)}]).  The prover computes this once per
+    committed set (``HashedRelationRunner.commit``) and gathers per sub-batch instead of re-running 2 x steps chains per
+    proof.  The third item is present only when the scheme's ``chain_witness`` returns extra hint rows."""
     import torch
     rows = torch.as_tensor(np.asarray(rows, dtype=np.int64), device=device)
     n, steps, k = rows.shape[0], hr.steps, hr.k
     words = rows.reshape(n * steps, k)
     out = hr.leaf.chain_witness(words, word_bits=hr.word_bits, role=role, row_words=steps * k, n_vus=n, steps=steps, l=n * steps)
     cap, dg = out[0], out[1]
-    return cap.T.reshape(n, steps, hr.leaf.carry_elems).contiguous(), dg
+    res = (cap.T.reshape(n, steps, hr.leaf.carry_elems).contiguous(), dg)
+    if len(out) > 2 and out[2]:
+        res += ({nm: torch.as_tensor(v, dtype=torch.int64, device=device).reshape(n, steps) for nm, v in out[2].items()},)
+    return res
 
 
 row_sponges = row_chain     # the pre-registry name (Poseidon2's carried state is the sponge capacity)
@@ -221,8 +225,8 @@ row_sponges = row_chain     # the pre-registry name (Poseidon2's carried state i
 def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: dict | None = None) -> tuple:
     """The appended hint rows (len(extra_hint_names), l) for operand words ``a``, ``b`` (l, k) int64 (pad columns 0), and
     the digests (n_vus, 2 x digest_elems) the statement publishes.  ``sponges``: ``{"a": (carry (n_vus, steps, ce),
-    digests (n_vus, de)), "b": ...}`` precomputed by :func:`row_chain` for exactly these VUs' rows (the caller checked
-    the words match)."""
+    digests (n_vus, de)[, extras {name: (n_vus, steps)}]), "b": ...}`` precomputed by :func:`row_chain` and gathered for
+    exactly these VUs' rows (the caller checked the words match)."""
     import torch
     a = torch.as_tensor(a, dtype=torch.int64, device=device)
     b = torch.as_tensor(b, dtype=torch.int64, device=device)
@@ -235,10 +239,15 @@ def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: di
         bits = (w[:, :, None] >> shifts) & 1                      # (l, k, nb)
         bit_blocks.append(bits.permute(1, 2, 0).reshape(k * nb, l))   # rows nm[i].b{j}, i major
         if sponges is not None and nm in sponges:
-            cap_v, dg = sponges[nm]
+            cap_v, dg = sponges[nm][0], sponges[nm][1]
             cap = torch.zeros((ce, l), dtype=torch.int64, device=device)
             cap[:, :n_vus * hr.steps] = cap_v.to(device).reshape(n_vus * hr.steps, ce).T
             dg = dg.to(device)
+            if len(sponges[nm]) > 2:
+                for n_, v in sponges[nm][2].items():
+                    row = torch.zeros(l, dtype=torch.int64, device=device)
+                    row[:n_vus * hr.steps] = v.to(device).reshape(-1)
+                    extras[n_] = row
         else:
             out = hr.leaf.chain_witness(w, word_bits=nb, role=role, row_words=hr.steps * k, n_vus=n_vus, steps=hr.steps, l=l)
             cap, dg = out[0], out[1]

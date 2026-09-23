@@ -106,7 +106,7 @@ def test_negatives_rejected(runner) -> None:
     assert len(negs) >= 20 and accepted == []
     names = " | ".join(n for n, _ in negs)
     for must in ("digest lane", "swapped", "multiproof sibling", "root replaced", "computed on the flipped row", "W column",
-                 "hashed word", "capacity link", "out of range"):
+                 "hashed word", "carry link", "out of range"):
         assert must in names
 
 

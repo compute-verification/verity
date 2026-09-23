@@ -469,9 +469,11 @@ class HashedRelationRunner(RelationChainRunner):
             idx = np.asarray(idx, dtype=np.int64)
             words = (a if nm == "a" else b)[:n_vus * self.steps].reshape(n_vus, self.steps * self.hr.k)
             if len(idx) == n_vus and (idx < len(self.rows[nm])).all() and np.array_equal(self.rows[nm][idx], words):
-                cap, dg = self.sponges[nm]
+                cap, dg = self.sponges[nm][0], self.sponges[nm][1]
                 t = torch.as_tensor(idx, device=cap.device)
                 out[nm] = (cap[t], dg[t])
+                if len(self.sponges[nm]) > 2:
+                    out[nm] += ({n_: v[t] for n_, v in self.sponges[nm][2].items()},)
         return out or None
 
     def prove_vus(self, vus, check=True, mutate=None, min_l: int = 256, coins=None, vu_ids=None, auth=None, words_override=None):
@@ -703,7 +705,8 @@ def hashed_negatives(R: HashedRelationRunner, data: list, row_negatives: int = 4
         negs.append((name, R.verify_vus(proof, pubs, lay)))
     t = table.copy(); t[ends[0], 1] ^= 1
     V((t, idx, ypub, auth, sibs), "x digest lane 0 of VU 0 flipped")
-    t = table.copy(); t[ends[1], 9] = (t[ends[1], 9] + 1) % P
+    de = R.leaf.digest_elems
+    t = table.copy(); t[ends[1], 1 + de] = (t[ends[1], 1 + de] + 1) % P
     V((t, idx, ypub, auth, sibs), "W digest lane 0 of VU 1 changed")
     t = table.copy(); t[ends[0], 1:], t[ends[1], 1:] = table[ends[1], 1:].copy(), table[ends[0], 1:].copy()
     V((t, idx, ypub, auth, sibs), "digests of VU 0 and VU 1 swapped")
@@ -751,15 +754,16 @@ def hashed_negatives(R: HashedRelationRunner, data: list, row_negatives: int = 4
         W[hb0, 3] = (W[hb0, 3] + 1) % P
     pf, pb, ly = R.prove_vus(base, check=False, mutate=flip_hashed_bit, vu_ids=ids)
     negs.append(("bit 0 of hashed word b[0] flipped in unit 3 (computation unchanged)", R.verify_vus(pf, pb, ly)))
-    cap_rows = R.sys.chain["c"]
+    cap_rows = R.sys.chain["c"][3:]                 # the leaf chains' carried rows (after the 3 accumulator links)
+    ce = R.leaf.carry_elems
     def break_cap(W):
-        W[cap_rows[5], 7] = (W[cap_rows[5], 7] + 1) % P
+        W[cap_rows[min(5, ce - 1)], 7] = (W[cap_rows[min(5, ce - 1)], 7] + 1) % P
     pf, pb, ly = R.prove_vus(base, check=False, mutate=break_cap, vu_ids=ids)
-    negs.append(("sponge capacity link broken at unit 7", R.verify_vus(pf, pb, ly)))
+    negs.append(("leaf carry link broken at unit 7", R.verify_vus(pf, pb, ly)))
     def cap_start(W):
-        W[cap_rows[12], steps] = 5
+        W[cap_rows[ce + min(4, ce - 1)], steps] = 5
     pf, pb, ly = R.prove_vus(base, check=False, mutate=cap_start, vu_ids=ids)
-    negs.append(("nonzero sponge capacity at a chain start", R.verify_vus(pf, pb, ly)))
+    negs.append(("nonzero leaf carry at a chain start", R.verify_vus(pf, pb, ly)))
     # one witness row per (scope, class) of the added rows
     seen, picks = set(), []
     for r in R.sys.rows[R.hr.census["rows_base"]:]:
@@ -865,8 +869,11 @@ def make_runner(args, rel: Relation, **kw):
     if auth == "excluded":
         return RelationChainRunner(rel, args.device, args.target, args.rate_log2, zk=args.zk, mode=args.mode, **kw)
     if auth == HashedRelationRunner.AUTH:
-        return HashedRelationRunner(rel, args.device, args.target, args.rate_log2, zk=args.zk, mode=args.mode,
-                                    leaf=getattr(args, "leaf", None), **kw)
+        R = HashedRelationRunner(rel, args.device, args.target, args.rate_log2, zk=args.zk, mode=args.mode,
+                                 leaf=getattr(args, "leaf", None), **kw)
+        if getattr(R.leaf, "test_only", False):
+            raise SystemExit(f"leaf scheme {R.leaf.name!r} is test-only (insecure): it cannot be benched")
+        return R
     raise SystemExit(f"--auth {auth}: not a mode of the relation runner (excluded | included-hash)")
 
 
