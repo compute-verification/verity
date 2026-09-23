@@ -227,6 +227,8 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 BUCKETS = ("witness", "encoding_commitment", "arithmetic", "lookup", "zk_additional", "serialization")
 BUCKET_NAMES = tuple(f"t.{b}" for b in BUCKETS)
 T_TOTAL = "t.total"
+#: The prover's time INCLUDING its waits on a live verifier over the network (lane live-verifier); never below t.total.
+T_TOTAL_LIVE = "t.total_live"
 _JOINT_PREFIX = "t.joint."
 _JOINT_SEP = "+"
 #: Buckets and joints may exceed ``t.total`` by this fraction before it counts as double-counting.
@@ -253,6 +255,16 @@ UNITS: dict[str, str] = {
     "census.memory_passes": "count",
     "census.bytes_moved": "B",
     "verifier.seconds": "s",
+    # the live-verifier axis (lane live-verifier, additive): the prover's time INCLUDING its waits on a live verifier over
+    # the network (t.total stays the prover's own time), the network the session cost, and the verifier's own cost
+    "t.total_live": "s",
+    "net.rtt_ms": "ms",
+    "net.messages": "count",
+    "net.bytes_out": "B",
+    "net.bytes_in": "B",
+    "net.wait_seconds": "s",
+    "verify.wall_s": "s",
+    "verify.cpu_s": "s",
     "fixed.setup_seconds": "s",
     "rate.proved_flop_per_second": "FLOP/s",
     "rate.native_peak_flop_per_second": "FLOP/s",
@@ -650,6 +662,11 @@ def validate_measurements(measurements: Any, proof_class: str | None = None) -> 
                 p.append(f"vu.seconds_per_vu {numeric['vu.seconds_per_vu']:.6g} is not t.total / vu.count = {per_vu:.6g}")
             if "vu.per_second" in numeric and per_vu > 0 and abs(numeric["vu.per_second"] - 1 / per_vu) > TOLERANCE / per_vu:
                 p.append(f"vu.per_second {numeric['vu.per_second']:.6g} is not vu.count / t.total = {1 / per_vu:.6g}")
+        # t.total_live (a live verifier over the network) is t.total plus the prover's network wait: never below it
+        if T_TOTAL_LIVE in numeric and numeric[T_TOTAL_LIVE] < total * (1 - TOLERANCE):
+            p.append(f"{T_TOTAL_LIVE} {numeric[T_TOTAL_LIVE]:.6g} s is below t.total {total:.6g} s: it is t.total plus the network wait")
+    elif T_TOTAL_LIVE in numeric:
+        p.append(f"{T_TOTAL_LIVE} needs t.total (it is t.total plus the network wait)")
     if proof_class in PROOF_CLASSES and proof_class != "NO_PROOF":
         if T_TOTAL not in numeric:
             p.append(f"a {proof_class} result must report t.total")

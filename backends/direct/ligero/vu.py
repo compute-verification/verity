@@ -142,6 +142,11 @@ class ChainRunner:
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
         hints_seconds = time.perf_counter() - t0
+        if hasattr(coins, "set_statement"):
+            # a live verifier's coin source (live.LiveCoins): the statement travels with the root, so the claim is fixed
+            # before the verifier opens its first coin.  Built outside prove's clock; the protocol is unchanged.
+            from .live import set_statement
+            set_statement(coins, self, (a, b, y16), lay, self.cfg(lay.l), self.n_proofs, auth=auth_stmt)
         proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
                       chain=(lay, y16), words={"a": a, "b": b}, coins=coins, auth=auth_stmt, auth_open=auth_open)
         proof.timings["hints_host"] = hints_seconds
@@ -592,6 +597,13 @@ def bench_vu(args) -> int:
             auth_neg_report["file_mutations"] = sum(1 for e in dump_manifest["auth_negatives"] if e["kind"] == "auth_mutation")
             auth_neg_report["file_mutations_rejected"] = sum(1 for e in dump_manifest["auth_negatives"]
                                                              if e["kind"] == "auth_mutation" and not e["python_verdict"]["accepted"])
+    # --verifier tcp://host:port: the step-0 coins of every RECORDED rep come from a LIVE verifier on another machine
+    # (live.py) and every prover message is sent to it as it is produced -- the protocol is unchanged (8c), only the coin
+    # source is; the warm-up rep keeps local coins (it presents one sub-batch, not n_proofs).
+    live = None
+    if getattr(args, "verifier", None):
+        from .live import BenchLive
+        live = BenchLive(args, R, n_proofs, total_vus, "bf16-ampere", interactive)
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
@@ -602,21 +614,29 @@ def bench_vu(args) -> int:
         # prover's `tests` lap ran 3x slower on the A100 pod after each verification while every device lap was unchanged.
         proved = []
         cfgs_seen: list[Config] = []
+        if live is not None:
+            live.begin_rep(rep)
         for si, (lo, hi) in enumerate(subs):
             lay_s = Layout(l, hi - lo, STEPS)
             arrays = marshal_ids(vu, [i % vu.n for i in range(lo, hi)], lay_s)     # loader work, outside the prover timer
             V = protocol_mod.Coins.sample() if interactive else None      # the verifier's step 0 (interactive only)
+            if live is not None:
+                V = live.coins(si, V)                        # a recorded rep: the live verifier's step 0 for sub-batch si
             st_auth = None
             if with_auth:
                 proof, pubs, lay_i, st_auth = R.prove_arrays(*arrays, lay_s, check=False, coins=V, auth=(trees, list(range(lo, hi))))
             else:
                 proof, pubs, lay_i = R.prove_arrays(*arrays, lay_s, check=False, coins=V)
+            if live is not None:
+                V = live.proved(si, proof, V)                # PROOF si on the data channel (async); waits out of the clocks
             for k, v in proof.timings.items():
                 agg[k] = agg.get(k, 0.0) + v
             proved.append((si, lo, hi, V, proof, pubs, lay_i, st_auth))
             cfgs_seen.append(R.cfg(lay_i.l))
             if rep == 0:
                 break                                        # warm-up: one sub-batch (graph capture, compile)
+        if live is not None:
+            live.end_rep(rep, agg)                           # END; the verifier's session verdict (waits for its Rust verify)
         for si, lo, hi, V, proof, pubs, lay_i, st_auth in proved:
             tm_auth: dict = {}
             t0 = time.perf_counter()
@@ -786,6 +806,16 @@ def bench_vu(args) -> int:
                                  ", honest included proof accepted")
         validation["evidence"]["auth_negatives"] = auth_neg_report
         validation["evidence"]["auth_roots"] = {n: t["root"] for n, t in auth_info["trees"].items()}
+    if live is not None:
+        # t.total_live / net.* / verify.* (lane live-verifier; additive).  The live verifier's verdicts are reported as the
+        # PROVER received them; the independent record (`verified=` label) is the verifier's own dump + verdict artifact.
+        lmeas, lev, ldetail, lok = live.fields(contract, total, med)
+        meas += lmeas
+        validation["checker"] += f"; live verifier at {args.verifier}"
+        validation["detail"] += ldetail
+        validation["evidence"]["live_verifier"] = lev
+        if not lok:
+            validation["status"] = "failed"
     result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or f"b-ligero-vu-{int(time.time())}",
               "workload_fingerprint": fp, "validation": validation,
               "measurements": meas, "measurement_files": [], "artifacts": dump_artifacts(dump_dir, args.out)}

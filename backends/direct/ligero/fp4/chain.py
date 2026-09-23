@@ -200,6 +200,11 @@ class FP4ChainRunner:
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
         hints_seconds = time.perf_counter() - t0
+        if hasattr(coins, "set_statement"):
+            # a live verifier's coin source (live.LiveCoins): the statement travels with the root, so the claim is fixed
+            # before the verifier opens its first coin.  Built outside prove's clock; the protocol is unchanged.
+            from ..live import set_statement
+            set_statement(coins, self, (a, b, y32), lay, self.cfg(lay.l), self.n_proofs)
         proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
                       chain=(lay, y32), words={"a": a, "b": b}, coins=coins, rel=FP4_HOOKS)
         proof.timings["hints_host"] = hints_seconds
@@ -555,6 +560,13 @@ def bench_vu_fp4(args) -> int:
                                 "instances": _instances(total_vus)}
     dump_reps = getattr(args, "dump_reps", None)
     dump_reps = args.reps if dump_reps is None or dump_reps < 0 else dump_reps
+    # --verifier tcp://host:port: the step-0 coins of every RECORDED rep come from a LIVE verifier on another machine
+    # (live.py) and every prover message is sent to it as it is produced -- the protocol is unchanged (8c), only the coin
+    # source is; the warm-up rep keeps local coins (it presents one sub-batch, not n_proofs).
+    live = None
+    if getattr(args, "verifier", None):
+        from ..live import BenchLive
+        live = BenchLive(args, R, n_proofs, total_vus, R.relation, interactive)
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
@@ -562,15 +574,23 @@ def bench_vu_fp4(args) -> int:
         # Prove every sub-batch of the rep first, then verify (and dump) them: the verifier's host work and the file
         # round trips must not sit between two timed prover sub-batches (vu.bench_vu / fp8.chain discipline).
         proved = []
+        if live is not None:
+            live.begin_rep(rep)
         for si, (lo, hi) in enumerate(subs):
             V = protocol_mod.Coins.sample() if interactive else None
+            if live is not None:
+                V = live.coins(si, V)                        # a recorded rep: the live verifier's step 0 for sub-batch si
             proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=l, coins=V)
+            if live is not None:
+                V = live.proved(si, proof, V)                # PROOF si on the data channel (async); waits out of the clocks
             for k_, v_ in proof.timings.items():
                 agg[k_] = agg.get(k_, 0.0) + v_
             proved.append((si, lo, hi, V, proof, pubs, lay_i))
             if rep == 0:
                 break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
         wall_prove = time.perf_counter() - t_pass
+        if live is not None:
+            live.end_rep(rep, agg)                           # END; the verifier's session verdict (waits for its Rust verify)
         for si, lo, hi, V, proof, pubs, lay_i in proved:
             t1 = time.perf_counter()
             ok, why = R.verify_vus(proof, pubs, lay_i, coins=V)
@@ -689,6 +709,16 @@ def bench_vu_fp4(args) -> int:
         evidence["dumps"] = dumps
         if dumps["accepted"] != dumps["total"]:
             status = "failed"
+    live_detail = ""
+    if live is not None:
+        # t.total_live / net.* / verify.* (lane live-verifier; additive).  The live verifier's verdicts are reported as the
+        # PROVER received them; the independent record (`verified=` label) is the verifier's own dump + verdict artifact.
+        lmeas, lev, live_detail, lok = live.fields(contract, total, med)
+        meas += lmeas
+        checker += f"; live verifier at {args.verifier}"
+        evidence["live_verifier"] = lev
+        if not lok:
+            status = "failed"
     checker += ")"
     # the dump tree (relative to the run dir) travels with the result as its run-files/v1 artifact (store README §10)
     artifacts = []
@@ -699,7 +729,8 @@ def bench_vu_fp4(args) -> int:
               "workload_fingerprint": fp,
               "validation": {"status": status, "checker": checker,
                              "detail": f"{args.reps} reps, {total_vus} VUs as {n_proofs} proofs at l={l}"
-                                       + (f"; dumps: {dumps['accepted']}/{dumps['total']} accepted cold from bytes" if dumps else ""),
+                                       + (f"; dumps: {dumps['accepted']}/{dumps['total']} accepted cold from bytes" if dumps else "")
+                                       + live_detail,
                              "evidence": evidence},
               "measurements": meas, "measurement_files": [], "artifacts": artifacts}
     problems = contract.validate(result)

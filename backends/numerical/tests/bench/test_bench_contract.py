@@ -139,6 +139,21 @@ def test_vu_throughput_must_match_total(conforming: dict) -> None:
     assert contract.validate(off) == ["vu.per_second 1 is not vu.count / t.total = 0.25"]
 
 
+def test_live_verifier_fields_are_additive_and_total_live_is_at_least_total(conforming: dict) -> None:
+    # an old row (no live fields) still validates; the live fields validate with their units; t.total_live < t.total is refused
+    assert contract.validate(conforming) == []
+    live = with_measurements(conforming, contract.measurement("t.total_live", 4.7), contract.measurement("net.rtt_ms", 12.5, "ms"),
+                             contract.measurement("net.messages", 42, "count"), contract.measurement("net.bytes_out", 123456, "B"),
+                             contract.measurement("net.bytes_in", 4321, "B"), contract.measurement("net.wait_seconds", 0.7, "s"),
+                             contract.measurement("verify.wall_s", 3.2, "s"), contract.measurement("verify.cpu_s", 3.1, "s"))
+    assert contract.validate(live) == []
+    below = with_measurements(conforming, contract.measurement("t.total_live", 3.0))
+    assert contract.validate(below) == ["t.total_live 3 s is below t.total 4 s: it is t.total plus the network wait"]
+    assert contract.unit_of("t.total_live") == "s" and contract.unit_of("net.rtt_ms") == "ms" and contract.unit_of("verify.cpu_s") == "s"
+    with pytest.raises(ValueError):
+        contract.measurement("t.total_live", 4.7, "ms")
+
+
 def test_a_proof_needs_total_and_a_bucket(conforming: dict) -> None:
     problems = contract.validate({**conforming, "measurements": [contract.measurement("own_name", 1, "cycles")]})
     assert problems == ["a NON_ZK_PROOF result must report t.total", "a NON_ZK_PROOF result must report at least one timing bucket or joint stage"]

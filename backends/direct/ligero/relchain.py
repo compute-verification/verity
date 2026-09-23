@@ -162,6 +162,11 @@ class RelationChainRunner:
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
         hints_seconds = time.perf_counter() - t0
+        if hasattr(coins, "set_statement"):
+            # a live verifier's coin source (live.LiveCoins): the statement travels with the root, so the claim is fixed
+            # before the verifier opens its first coin.  Built outside prove's clock; the protocol is unchanged.
+            from .live import set_statement
+            set_statement(coins, self, (a, b, ypub), lay, self.cfg(lay.l), self.n_proofs)
         proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
                       chain=(lay, ypub), words={"a": a, "b": b}, coins=coins, rel=self.hooks)
         proof.timings["hints_host"] = hints_seconds
@@ -363,6 +368,13 @@ def bench_vu_rel(args, rel: Relation) -> int:
                                 "zk": args.zk, "mode": args.mode, "reps": args.reps, "dump_reps": dump_reps,
                                 "instances": instances_digest(rel, total_vus)}
     target_bits = float(getattr(args, "target_bits", 128.0) or 128.0)   # the VERIFIER's parameter (PROTOCOL.md 8c)
+    # --verifier tcp://host:port: the step-0 coins of every RECORDED rep come from a LIVE verifier on another machine
+    # (live.py) and every prover message is sent to it as it is produced -- the protocol is unchanged (8c), only the coin
+    # source is; the warm-up rep keeps local coins (it presents one sub-batch, not n_proofs).
+    live = None
+    if getattr(args, "verifier", None):
+        from .live import BenchLive
+        live = BenchLive(args, R, n_proofs, total_vus, rel.name, interactive)
     batch = None
     runs = []
     if args.device.startswith("cuda"):
@@ -376,15 +388,23 @@ def bench_vu_rel(args, rel: Relation) -> int:
         # between two timed prover sub-batches (vu.bench_vu since f28c13d; the same discipline here).
         proved = []
         cfgs_seen: list[Config] = []
+        if live is not None:
+            live.begin_rep(rep)
         for si, (lo, hi) in enumerate(subs):
             V = protocol_mod.Coins.sample() if interactive else None
+            if live is not None:
+                V = live.coins(si, V)                        # a recorded rep: the live verifier's step 0 for sub-batch si
             proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=l, coins=V)
+            if live is not None:
+                V = live.proved(si, proof, V)                # PROOF si on the data channel (async); waits out of the clocks
             for k_, v_ in proof.timings.items():
                 agg[k_] = agg.get(k_, 0.0) + v_
             proved.append((si, lo, hi, V, proof, pubs, lay_i))
             cfgs_seen.append(R.cfg(lay_i.l))
             if rep == 0:
                 break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
+        if live is not None:
+            live.end_rep(rep, agg)                           # END; the verifier's session verdict (waits for its Rust verify)
         for si, lo, hi, V, proof, pubs, lay_i in proved:
             t1 = time.perf_counter()
             ok, why = R.verify_vus(proof, pubs, lay_i, coins=V)
@@ -517,6 +537,9 @@ def bench_vu_rel(args, rel: Relation) -> int:
         contract.measurement("rows_per_unit", R.sys.m, "count"),
         contract.measurement("units_per_vu", steps, "count"),
     ]
+    live_fields = live.fields(contract, total, med) if live is not None else None
+    if live_fields is not None:
+        meas += live_fields[0]           # t.total_live / net.* / verify.* (lane live-verifier; additive)
     for k_, v_ in cen.items():
         if isinstance(v_, int) and not isinstance(v_, bool):
             # ``census.`` is a contract-reserved prefix: only the seven names contract.py defines may live under
@@ -540,6 +563,14 @@ def bench_vu_rel(args, rel: Relation) -> int:
                    "an independent verifier has to judge the same bytes)")
         detail += f"; dumped batch verdict per rep: {[b['reason'] for b in dumps['batch'].values()]}"
         if dumps["accepted"] != dumps["total"] or not dumps["batch_accepted"]:
+            status = "failed"
+    if live_fields is not None:
+        # the live verifier's verdicts are reported here as the PROVER received them; the verifier's own dump + verdict
+        # artifact (live.py record) is what carries the independent `verified=` label, never this producer's result
+        checker += f"; live verifier at {args.verifier}"
+        evidence["live_verifier"] = live_fields[1]
+        detail += live_fields[2]
+        if not live_fields[3]:
             status = "failed"
     checker += ")"
     result = {"schema": contract.RESULT_SCHEMA,
