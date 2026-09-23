@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import inspect
 import json
 import re
 import types
@@ -71,6 +72,11 @@ def probe_names(C: dict[str, Any]) -> list[str]:
     return out
 
 
+def _field(name: str, v: Any) -> Any:
+    # a definition's `doc` is `fn.__doc__`, which Python >= 3.13 stores dedented and 3.12 does not: pin the dedented form on both
+    return inspect.cleandoc(v) if name == "doc" and isinstance(v, str) else v
+
+
 def _jsonable(x: Any, depth: int = 0) -> Any:
     if depth > 12:
         return f"<depth>{type(x).__name__}"
@@ -90,13 +96,13 @@ def _jsonable(x: Any, depth: int = 0) -> Any:
     if isinstance(x, (types.FunctionType, types.MethodType, types.BuiltinFunctionType)):
         return {"__callable__": f"{getattr(x, '__module__', '?')}.{getattr(x, '__qualname__', repr(x))}"}
     if dataclasses.is_dataclass(x) and not isinstance(x, type):
-        return {"__type__": type(x).__name__, **{f.name: _jsonable(getattr(x, f.name), depth + 1) for f in dataclasses.fields(x)}}
+        return {"__type__": type(x).__name__, **{f.name: _jsonable(_field(f.name, getattr(x, f.name)), depth + 1) for f in dataclasses.fields(x)}}
     if hasattr(x, "__dict__"):
         d = {k: v for k, v in vars(x).items() if not k.startswith("_")}
         cls_name = getattr(type(x), "name", None)
         if "name" not in d and isinstance(cls_name, str):
             d["name"] = cls_name
-        return {"__type__": type(x).__name__, **{k: _jsonable(v, depth + 1) for k, v in sorted(d.items())}}
+        return {"__type__": type(x).__name__, **{k: _jsonable(_field(k, v), depth + 1) for k, v in sorted(d.items())}}
     return repr(x)
 
 
