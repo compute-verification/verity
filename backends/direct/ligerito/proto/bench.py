@@ -28,7 +28,7 @@ except Exception:  # noqa: BLE001
     cp = None
 
 
-COMMIT = ("commit_r1_alloc", "commit_r1_encode", "commit_r1_merkle")
+COMMIT = ("commit_r1_alloc", "commit_r1_encode", "commit_r1_merkle", "commit_r1_stream", "commit_r1_recompute")
 RECURSION = ("sumcheck_r1_contract", "sumcheck_host", "sumcheck_device", "sumcheck_r1_fold", "recursion_encode", "recursion_merkle",
              "recursion_contract", "recursion_fold")
 SERIAL = ("serialize_openings", "serialize_final", "serialize_bytes")

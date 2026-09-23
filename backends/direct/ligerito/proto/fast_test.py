@@ -41,6 +41,28 @@ def test_fast_matches_reference_bytes(n, kprime, q, rates):
     assert a.to_bytes() == b.to_bytes()
 
 
+@pytest.mark.parametrize("n,kprime,q,rates", [(14, [5, 4, 3], [24, 20, 16], [1, 2, 2]), (15, [6, 4], [30, 17], 2),
+                                              (12, [4], [9], 2), (18, [7, 4, 4], [64, 48, 24], [2, 2, 2])])
+def test_streamed_commit_matches_reference(n, kprime, q, rates, monkeypatch):
+    monkeypatch.setenv("LIGERITO_STREAM", "1")
+    dims = Dims(n, kprime, q, rates)
+    f, z = _inst(n)
+    a = prove(f, z, dims)
+    monkeypatch.setenv("LIGERITO_STREAM", "0")
+    b = prove_reference(f, z, dims)
+    assert a.to_bytes() == b.to_bytes()
+
+
+def test_stream_group_plan():
+    from .pcs import _stream_group
+    big = torch.cuda.get_device_properties(0).total_memory > (40 << 30)
+    assert _stream_group(Dims(29, [7, 4, 4, 4], [192] * 4, 2), DEV) == 0
+    if not big:     # 24 GB parts: S at 2^30 streams in 32-column groups, default at 2^30 in 128-column groups
+        assert _stream_group(Dims(30, [6, 4, 4, 3, 3], [191, 143, 143, 143, 144], [2, 4, 4, 4, 4]), DEV) == 32
+        assert _stream_group(Dims(30, [8, 4, 4, 4], [192] * 4, 2), DEV) == 128
+        assert _stream_group(Dims(30, [6, 4, 4, 3, 3], [312, 191, 193, 194, 195], [1, 2, 2, 2, 2]), DEV) == 0
+
+
 @pytest.mark.parametrize("ns,nc,n1,B", [(128, 4, 64, 3), (256, 4, 256, 2), (512, 2, 1024, 2), (1024, 4, 1024, 2),
                                         (1024, 2, 2048, 1), (2048, 2, 2048, 1), (2048, 4, 512, 2), (1024, 16, 128, 2)])
 def test_pass_a_matches_generic(ns, nc, n1, B):

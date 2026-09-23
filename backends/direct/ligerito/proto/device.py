@@ -374,8 +374,34 @@ sc_step(u32* __restrict__ A, u32* __restrict__ B, int T, int Cs, int C, int do_f
 _MODS: dict = {}
 
 
+def ext_source() -> str:
+    """``EXT_CUDA`` ready to paste into another RawModule (the %-substitution done)."""
+    return EXT_CUDA % {"pinv": PINV}
+
+
 def available(t: torch.Tensor | None = None) -> bool:
     return cp is not None and torch.cuda.is_available() and (t is None or t.is_cuda)
+
+
+_SHARED_ALLOC = False
+
+
+def share_torch_allocator() -> None:
+    """Route cupy's allocations (Merkle levels, gathers) through torch's caching allocator: one pool, so memory freed by
+    either side is reusable by the other (two pools OOM at 2^29-2^30 on 24 GB with most of the card idle in the other cache).
+    Idempotent; process-wide."""
+    global _SHARED_ALLOC
+    if _SHARED_ALLOC or cp is None:
+        return
+
+    def _alloc(size: int, device_id: int) -> int:
+        return torch.cuda.caching_allocator_alloc(size, device_id, torch.cuda.current_stream(device_id).cuda_stream)
+
+    def _free(ptr: int, device_id: int) -> None:
+        torch.cuda.caching_allocator_delete(ptr)
+
+    cp.cuda.set_allocator(cp.cuda.memory.PythonFunctionAllocator(_alloc, _free).malloc)
+    _SHARED_ALLOC = True
 
 
 def _module(mp: int = 6):

@@ -18,6 +18,7 @@ row); later rounds are <= 1/64 of that.  Nothing of size N is materialised in th
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass, field
 
@@ -30,6 +31,7 @@ from . import claims as cl
 from . import device as dev
 from . import ext
 from . import merkle_multi
+from . import stream
 from .dims import Dims
 from .ext import D, P
 from .kernels import col_contract, row_contract
@@ -387,12 +389,34 @@ def _commit_fast(U: torch.Tensor):
     return _commit(U)
 
 
-def _open_fast(U: torch.Tensor, tree, S: list[int], depth: int) -> RoundOpen:
-    """Opened rows + multi-path siblings with two device gathers and two copies (no per-level syncs)."""
+def _stream_group(dims: Dims, device) -> int:
+    """Round-1 streaming commit: 0 = materialise the codeword, else the column-group size.  ``LIGERITO_STREAM`` = auto (default:
+    stream iff the round-1 codeword + tree + round 2 would not fit the card), 1 (always), 0 (never)."""
+    mode = os.environ.get("LIGERITO_STREAM", "auto")
+    C1, R1 = 1 << dims.kprime[0], 1 << dims.k[0]
+    if mode == "0" or C1 % 16 or C1 > 256:
+        return 0
+    n1 = R1 << dims.rates[0]
+    total = torch.cuda.get_device_properties(device).total_memory
+    gib = 1 << 30
+    msg, tree = 4 * C1 * R1, 64 * n1
+    rest = 24 * R1                                                      # y_1 (6 planes)
+    if dims.rounds > 1:
+        R2, C2 = 1 << dims.k[1], 1 << dims.kprime[1]
+        n2 = R2 << dims.rates[1]
+        rest += 24 * C2 * n2 + 64 * n2
+    budget = total - int(2.5 * gib)
+    if mode != "1" and msg + 4 * C1 * n1 + tree + rest <= budget:
+        return 0
+    for g in (128, 64, 32, 16):
+        if g <= C1 and C1 % g == 0 and (g < C1 or C1 == 16) and msg + 4 * g * n1 + tree <= budget:
+            return g
+    return 16
+
+
+def _siblings(tree, S: list[int], depth: int) -> bytes:
     import cupy as cp
 
-    idx = torch.as_tensor(np.asarray(S, dtype=np.int64), device=U.device)
-    rows_d = U.index_select(1, idx).t().contiguous()
     pl = merkle_multi.plan_levels(S, depth)
     if pl:
         flat = cp.asarray(np.concatenate([ix for _, ix in pl]))
@@ -400,11 +424,21 @@ def _open_fast(U: torch.Tensor, tree, S: list[int], depth: int) -> RoundOpen:
         for lv, ix in pl:
             parts.append(tree.levels[lv][flat[a:a + len(ix)]])
             a += len(ix)
-        sib = cp.asnumpy(cp.concatenate(parts, axis=0)).astype("<u4", copy=False).tobytes()
-    else:
-        sib = b""
-    rows = rows_d.cpu().numpy().astype(np.int64)
-    return RoundOpen(rows, sib)
+        return cp.asnumpy(cp.concatenate(parts, axis=0)).astype("<u4", copy=False).tobytes()
+    return b""
+
+
+def _open_fast(U: torch.Tensor, tree, S: list[int], depth: int) -> RoundOpen:
+    """Opened rows + multi-path siblings with two device gathers and two copies (no per-level syncs)."""
+    idx = torch.as_tensor(np.asarray(S, dtype=np.int64), device=U.device)
+    rows = U.index_select(1, idx).t().contiguous().cpu().numpy().astype(np.int64)
+    return RoundOpen(rows, _siblings(tree, S, depth))
+
+
+def _open_recompute(M: torch.Tensor, enc: Encoder, tree, S: list[int], depth: int) -> RoundOpen:
+    """Streamed round 1: the opened codeword rows U[:, s] = P_c(eta_s) recomputed from the message columns (|S| N base MACs)."""
+    rows = (dev.contract_geom(M, enc.etas(S)) % P).t().contiguous().cpu().numpy()
+    return RoundOpen(rows, _siblings(tree, S, depth))
 
 
 def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None) -> Proof:
@@ -438,18 +472,26 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     encs = []
 
     # ---------------- round 1: commit f
+    dev.share_torch_allocator()
     R1, C1 = 1 << ks[0], 1 << kps[0]
     M1 = f.view(C1, R1)
     enc1 = Encoder(R1, device, rates[0])
-    tm.start("commit_r1_alloc")
-    U1 = torch.empty((C1, enc1.n), dtype=torch.int32, device=device)
-    tm.stop()
-    tm.start("commit_r1_encode")
-    enc1.encode(M1, out=U1)
-    tm.stop()
-    tm.start("commit_r1_merkle")
-    root1, tree1 = _commit_fast(U1)
-    tm.stop()
+    group = _stream_group(dims, device)
+    if group:
+        tm.start("commit_r1_stream")
+        root1, tree1 = stream.commit_streamed(M1, enc1, group, _commit_gpu)
+        U1 = None
+        tm.stop()
+    else:
+        tm.start("commit_r1_alloc")
+        U1 = torch.empty((C1, enc1.n), dtype=torch.int32, device=device)
+        tm.stop()
+        tm.start("commit_r1_encode")
+        enc1.encode(M1, out=U1)
+        tm.stop()
+        tm.start("commit_r1_merkle")
+        root1, tree1 = _commit_fast(U1)
+        tm.stop()
     roots.append(root1)
     Us.append(U1)
     trees.append(tree1)
@@ -511,7 +553,14 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
         n_prev = encs[prev].n
         S = tr.indices(b"S", n_prev, qs[prev])
         depth = n_prev.bit_length() - 1
-        op = _open_fast(Us[prev], trees[prev], S, depth)
+        if Us[prev] is None:
+            tm.stop()
+            tm.start("commit_r1_recompute")
+            op = _open_recompute(M1, encs[prev], trees[prev], S, depth)
+            tm.stop()
+            tm.start("serialize_openings")
+        else:
+            op = _open_fast(Us[prev], trees[prev], S, depth)
         opens.append(op)
         tr.absorb(b"rows", np.ascontiguousarray(op.rows.astype(np.uint32)).tobytes())
         tr.absorb(b"sib", op.siblings)
@@ -571,7 +620,7 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     n_last = encs[-1].n
     S = tr.indices(b"S", n_last, qs[-1])
     depth = n_last.bit_length() - 1
-    op = _open_fast(Us[-1], trees[-1], S, depth)
+    op = _open_fast(Us[-1], trees[-1], S, depth) if Us[-1] is not None else _open_recompute(M1, encs[-1], trees[-1], S, depth)
     opens.append(op)
     tm.stop()
     return Proof(n, list(kps), list(qs), list(rates), splits, v, roots, sumcheck, opens, final_y, tr.rounds)
