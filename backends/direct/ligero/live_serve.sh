@@ -4,8 +4,8 @@
 #
 #   research pods create --name vy-verifier-<dc> --cpu cpu3m --vcpu 8 --disk 50 --expose-port 7000 --data-center <DC of the provers>
 #   cd <worktree to serve, e.g. the integration branch>
-#   research pods sync vy-verifier-<dc> --dest /workspace/lv-src
-#   research pods ssh vy-verifier-<dc> -- bash /workspace/lv-src/backends/direct/ligero/live_serve.sh
+#   research pods sync vy-verifier-<dc> --dest /workspace/lv-src-<short sha>     # a fresh dir per commit: the old tree stays for rollback
+#   research pods ssh vy-verifier-<dc> -- bash /workspace/lv-src-<short sha>/backends/direct/ligero/live_serve.sh
 #   research pods list          # the public tcp mapping of :7000 -> the provers' --verifier tcp://IP:PORT
 #
 # Leaves on the pod:
@@ -14,7 +14,7 @@
 #   /workspace/live/start.sh      the server in a restart loop; log /workspace/live/serve.out; per-session lines in
 #                                 /workspace/live/sessions/serve.log, one line per finished session in .../index.jsonl
 #
-# Knobs (environment): LIVE_JOBS=8 (parallel ligero-verify processes; ~1 per vCPU), LIVE_PORT=7000, LIVE_TARGET_BITS=128,
+# Knobs (environment): LIVE_JOBS=$(nproc) (parallel ligero-verify processes, one per vCPU), LIVE_PORT=7000, LIVE_TARGET_BITS=128,
 #   LIVE_FORCE=1 (restart even while sessions are connected: they fail), SKIP_BUILD=1 (keep /workspace/bin/ligero-verify).
 #   The verifier identity in every verdict is live-verifier@<commit of the synced tree> (.research-source.json).
 set -uo pipefail
@@ -23,6 +23,7 @@ SRC=$(cd "$(dirname "$0")/../../.." && pwd)
 W=/workspace
 PY=$W/venv312/bin/python
 PORT=${LIVE_PORT:-7000}
+JOBS=${LIVE_JOBS:-$(nproc)}
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH" CARGO_TARGET_DIR=$W/cargo-target
 mkdir -p $W/bin $W/live/sessions
 stage() { echo "=== [$(date -u +%H:%M:%S)] $*"; }
@@ -70,7 +71,7 @@ export RESEARCH_GIT_COMMIT=\$(cat "$SRC/COMMIT")
 cd "$SRC"
 while true; do
   "$PY" -m backends.direct.ligero.live serve --listen 0.0.0.0:$PORT --out $W/live/sessions --ligero-verify $W/bin/ligero-verify \\
-      --jobs ${LIVE_JOBS:-8} --threads 1 --target-bits ${LIVE_TARGET_BITS:-128} >> $W/live/serve.out 2>&1
+      --jobs $JOBS --threads 1 --target-bits ${LIVE_TARGET_BITS:-128} >> $W/live/serve.out 2>&1
   echo "[\$(date -u +%FT%TZ)] server exited rc=\$?; restarting in 2s" >> $W/live/serve.out
   sleep 2
 done

@@ -114,6 +114,10 @@ _BUF = 8 << 20
 #: Lane live-2b (same pods, depth 4, --batch 16384): all-bbr 12/12 bf16-hopper + 6/6 fp8-ada sessions <= 1.5 s at 30-45 ms,
 #: bbr riding out sessions that retransmitted 12k segments; ctrl=cubic was as good on bf16-hopper but had 2/5 slow fp8-ada
 #: sessions (68-105 ms median openings) and RTO back-offs; same-DC (0.9 ms) the choice does not matter.  bbr stays.
+#: Lane live-2c (same 4090 EU-RO-1 prover, depth 4, t.total_live / local t.total): verifier same-DC 1.07x fp8-ada / 1.13x
+#: bf16-hopper, EU-CZ-1 (30 ms) 2.6x / 2.95x, US-MD-1 (111 ms, ~95 Mbps) 8.4x / 8.8x (depth 8: 6.6x), every session accepted
+#: with a 4-7 % spread; ctrl=cubic on the 111 ms path was worse (median opening 212 vs 126 ms, t.total_live 2.20 vs 1.63 s).
+#: bbr on both connections at every distance measured.
 _TCP_CC = os.environ.get("LIVE_TCP_CC", "bbr")
 #: ``LIVE_TCP_CC_DATA`` (default ``bbr``): the congestion control of the prover's DATA connection (the 120-200 MB proof
 #: stream of a session).  Lane live-2 (4090 EU-RO-1 -> cpu3m EU-CZ-1, 45 ms, ~530 Mbps path, `ss -tin` on both ends): under
