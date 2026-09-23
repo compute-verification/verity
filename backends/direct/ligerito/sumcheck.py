@@ -49,6 +49,7 @@ __all__ = ["EvalClaim", "LocalCoins", "Schedule", "SumcheckProof", "default_sche
            "succ_mle", "verify"]
 
 MAGIC = b"LGSC0003"
+MAGIC_ZK = b"LGSC0004"
 MAX_ARITY = 4
 
 
@@ -291,12 +292,24 @@ class Schedule:
     zc: tuple                    # arity of every zero-check message round (the first = the opening round, 3 for the CUDA engine)
     vf: int                      # variables bound by the zero-check's final (table) round
     cmb: tuple                   # arity of every combined-sumcheck round
+    rb: tuple = ()               # LGSC0004 only: arity of every row-reduction round (n_i variables)
 
     def coins(self) -> int:
-        return 1 + len(self.zc) + 1 + len(self.cmb)
+        return 1 + len(self.zc) + 1 + len(self.cmb) + len(self.rb)
 
     def header(self, n_links: int, n_values: int) -> bytes:
         return MAGIC + bytes([len(self.zc), *self.zc, self.vf, n_links, len(self.cmb), *self.cmb, n_values])
+
+    def header_zk(self, n_links: int) -> bytes:
+        return MAGIC_ZK + bytes([len(self.zc), *self.zc, self.vf, n_links, len(self.cmb), *self.cmb, len(self.rb), *self.rb])
+
+    def zk_groups(self) -> tuple:
+        """The Libra mask groups ``(sumcheck, arity)`` in g-block order: zero-check message rounds (the final table round has
+        none), combined rounds, row-reduction rounds."""
+        return tuple(("zc", v) for v in self.zc) + tuple(("cmb", v) for v in self.cmb) + tuple(("rb", v) for v in self.rb)
+
+    def zk_coeffs(self) -> int:
+        return sum(3 ** v - 1 for _, v in self.zk_groups())
 
 
 def n_cmb_of(lay: Layout) -> int:
@@ -322,6 +335,18 @@ def default_schedule(n_zc: int, n_cmb: int, big_log2: int = 20, big_arity: int =
     return Schedule(tuple(zc), vf, tuple(cmb))
 
 
+def balanced_arities(n: int, max_arity: int) -> tuple:
+    g = -(-n // max_arity)
+    return tuple(n // g + (1 if t < n % g else 0) for t in range(g))
+
+
+def zk_schedule(lay: Layout, base: Schedule | None = None, rb_arity: int = MAX_ARITY) -> Schedule:
+    """LGSC0004's schedule: ``base`` (default: ``default_schedule``) plus the row-reduction rounds (``n_i`` variables,
+    ``rb_arity`` per coin: tables of ``2^n_i`` cells, so arity 4 costs nothing and saves coins)."""
+    b = base or default_schedule(lay.n_k + lay.n_c, n_cmb_of(lay))
+    return Schedule(b.zc, b.vf, b.cmb, balanced_arities(lay.n_i, rb_arity))
+
+
 @dataclass
 class EvalClaim:
     """``w~(point) = value`` on the committed polynomial; ``point[t]`` is the coordinate of variable ``t`` = bit ``t`` of the
@@ -333,27 +358,55 @@ class EvalClaim:
 
 
 @dataclass
+class SparseClaim:
+    """``sum_t weights[t] * w[rows[t], cols[t]] = value`` on base cells of the committed polynomial (extension weights;
+    distinct cells): the Libra mask claims of LGSC0004, all on ``lay.zk.g_rows``.  The PCS index of cell ``(i, c)`` is the
+    caller's (row-major ``i + R c`` or ``zk.f_index``); ligerito-proto's ``open(..., sparse=[(cells, weights, value)])``."""
+    rows: torch.Tensor           # (T,) int64
+    cols: torch.Tensor           # (T,) int64
+    weights: torch.Tensor        # (T, 6)
+    value: torch.Tensor          # (6,)
+    name: str = ""
+
+
+@dataclass
 class SumcheckProof:
     schedule: Schedule
     zc_rounds: list              # per zero-check round: (3,)*v + (6,)
     final_abc: torch.Tensor      # (3, 2^vf, 6): Az, Bz, Cz on the last vf variables (bit t of the index <-> variable t)
-    final_next: torch.Tensor     # (n_links, 2^vf, 6): next_x(r_c_hi, .) on the same variables
+    final_next: torch.Tensor     # (n_links, 2^vf, 6): next_x(r_c_hi, .) on the same variables (LGSC0004: (0, 2^vf, 6), unsent)
     cmb_rounds: list             # per combined round: (3,)*v + (6,)
-    values: torch.Tensor         # (1 + n_links, 6): w~(r_i, r_c), then w~(bits(c_x), rho_c)
-    claims: list = field(default_factory=list)    # EvalClaim (points derived from the coins; not serialised)
+    values: torch.Tensor         # LGSC0003 (1 + n_links, 6): w~(r_i, r_c), then w~(bits(c_x), rho_c)
+                                 # LGSC0004 (3, 6): w~(r_i, r_c), V'(rho_c), the combined mask's claim
+    claims: list = field(default_factory=list)    # EvalClaim / SparseClaim (points derived from the coins; not serialised)
     timings: dict = field(default_factory=dict)
+    zk_t: torch.Tensor | None = None             # LGSC0004 (6,): the zero-check mask's claim (sent with the final tables)
+    rb_rounds: list = field(default_factory=list)  # LGSC0004: per row-reduction round (3,)*v + (6,)
+    values_b: torch.Tensor | None = None         # LGSC0004 (2, 6): w~(rho_i, rho_c), the row-reduction mask's claim
+    zk_links: int = 0
+
+    @property
+    def zk(self) -> bool:
+        return self.zk_t is not None
 
     @property
     def n_links(self) -> int:
-        return self.final_next.shape[0]
+        return self.zk_links if self.zk else self.final_next.shape[0]
 
     def header(self) -> bytes:
+        if self.zk:
+            return self.schedule.header_zk(self.zk_links)
         return self.schedule.header(self.n_links, self.values.shape[0])
 
     def n_bytes(self) -> int:
         return len(self.to_bytes())
 
     def to_bytes(self) -> bytes:
+        if self.zk:
+            parts = [self.header()] + [_ext_bytes(m) for m in self.zc_rounds] + [_ext_bytes(self.final_abc), _ext_bytes(self.zk_t)] \
+                + [_ext_bytes(m) for m in self.cmb_rounds] + [_ext_bytes(self.values)] + [_ext_bytes(m) for m in self.rb_rounds] \
+                + [_ext_bytes(self.values_b)]
+            return b"".join(parts)
         parts = [self.header()] + [_ext_bytes(m) for m in self.zc_rounds] + [_ext_bytes(self.final_abc), _ext_bytes(self.final_next)] \
             + [_ext_bytes(m) for m in self.cmb_rounds] + [_ext_bytes(self.values)]
         return b"".join(parts)
@@ -361,8 +414,10 @@ class SumcheckProof:
     @classmethod
     def from_bytes(cls, b: bytes, device="cpu") -> "SumcheckProof":
         import numpy as np
+        if b[:8] == MAGIC_ZK:
+            return cls._from_bytes_zk(b, device)
         if b[:8] != MAGIC:
-            raise ValueError("not a LGSC0003 sumcheck proof")
+            raise ValueError("not a LGSC0003 / LGSC0004 sumcheck proof")
         pos = 8
 
         def u8():
@@ -398,6 +453,48 @@ class SumcheckProof:
         if pos != len(b):
             raise ValueError("trailing bytes")
         return cls(Schedule(zc, vf, cmb), zr, fabc, fnext, cr, vals)
+
+    @classmethod
+    def _from_bytes_zk(cls, b: bytes, device="cpu") -> "SumcheckProof":
+        import numpy as np
+        pos = 8
+
+        def u8():
+            nonlocal pos
+            if pos >= len(b):
+                raise ValueError("truncated header")
+            v = b[pos]
+            pos += 1
+            return v
+        zc = tuple(u8() for _ in range(u8()))
+        vf, nl = u8(), u8()
+        cmb = tuple(u8() for _ in range(u8()))
+        rb = tuple(u8() for _ in range(u8()))
+        for a in zc + cmb + rb + (vf,):
+            if not 1 <= a <= MAX_ARITY:
+                raise ValueError(f"arity {a} out of range")
+
+        def take(shape):
+            nonlocal pos
+            n = 1
+            for s in shape:
+                n *= s
+            if pos + 4 * n > len(b):
+                raise ValueError("truncated")
+            arr = np.frombuffer(b[pos:pos + 4 * n], dtype="<u4").astype(np.int64).reshape(shape)
+            pos += 4 * n
+            return torch.from_numpy(arr.copy()).to(device)
+        zr = [take((3,) * v + (D,)) for v in zc]
+        fabc = take((3, 1 << vf, D))
+        zt = take((D,))
+        cr = [take((3,) * v + (D,)) for v in cmb]
+        vals = take((3, D))
+        rr = [take((3,) * v + (D,)) for v in rb]
+        vb = take((2, D))
+        if pos != len(b):
+            raise ValueError("trailing bytes")
+        return cls(Schedule(zc, vf, cmb, rb), zr, fabc, torch.zeros((0, 1 << vf, D), dtype=torch.int64, device=device), cr, vals,
+                   zk_t=zt, rb_rounds=rr, values_b=vb, zk_links=nl)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -456,10 +553,138 @@ class _RefPP:
 
     def round(self, v: int) -> torch.Tensor:
         X = [mixed_rep(to_corners(T, v), v) for T in self.T]
-        return (fc_mul(X[0], X[1]) + fc_mul(X[2], X[3])).sum(-2) % P
+        s = fc_mul(X[0], X[1])
+        if len(X) > 2:
+            s = s + fc_mul(X[2], X[3])
+        return s.sum(-2) % P
 
     def fold(self, r: torch.Tensor) -> None:
         self.T = [fold_top(T, r) for T in self.T]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# ZK (LGSC0004): Libra masks, one polynomial per round group
+# ---------------------------------------------------------------------------------------------------------------------
+# A masked sumcheck with round groups R (arity v_R) adds to its summand
+#     ghat(x) = sum_R (g_R(x_R) - base_R),     g_R(X) = sum_{e in {0,1,2}^v_R, e != 0} c_{R,e} prod_j X_j^{e_j}
+# with uniform extension coefficients c committed in ``lay.zk.g_rows`` (3^v_R - 1 per group: EVERY monomial of degree <= 2
+# per variable except the constant, so each round's 3^v - 1 free message entries are a bijective image of fresh uniform
+# coefficients -- the cross terms of a multi-variable round included), and base_R = the group's weighted cube sum
+# (``eq``: sum_b eq(tau_R, b) g_R(b); ``avg``: 2^-v sum_b g_R(b)).  So sum_x w(x) ghat(x) = 0 identically: the claim is
+# unchanged, no coin is spent (the coefficients are bound by the commitment before any coin), and the verifier needs one
+# linear functional of the coefficients at the end, K = sum_R (g_R(r_R) - base_R): a sparse PCS claim on the g rows.
+
+def _outer(ws: list) -> torch.Tensor:
+    """Per-axis weights ``ws[j] (3, 6)`` -> ``(3,)*v + (6,)``: ``W[e] = prod_j ws[j][e_j]``."""
+    W = ws[0]
+    for w in ws[1:]:
+        W = fc_mul(W.unsqueeze(-2), w.reshape((1,) * (W.dim() - 1) + (3, D)))
+    return W
+
+
+def _mono_weights(kind: str, pts: list, device) -> list:
+    """Per-axis weights of the monomials ``X^0, X^1, X^2``: ``eval`` at ``r`` (1, r, r^2); ``eq`` sum against ``eq(tau, .)``
+    (1, tau, tau); ``avg`` (1, 1/2, 1/2)."""
+    one = fc_one((), device)
+    if kind == "avg":
+        h = ext_of_int(pow(2, P - 2, P), device)
+        return [torch.stack((one, h, h))] * len(pts)
+    if kind == "eq":
+        return [torch.stack((one, t % P, t % P)) for t in pts]
+    return [torch.stack((one, r % P, fc_mul(r, r))) for r in pts]
+
+
+class ZkMask:
+    """The Libra mask of one sumcheck: groups of ``arities`` (round order), coefficients ``coeffs`` ``(sum 3^v - 1, 6)`` (prover;
+    None on the verifier's side), ``kind`` ``"eq"`` (zero-check: summand ``eq(tau, x) (q + ghat)``) or ``"avg"`` (plain sums),
+    ``offset`` = the index of its first coefficient in the g block."""
+
+    def __init__(self, arities: tuple, kind: str, offset: int, coeffs: torch.Tensor | None, device):
+        self.arities, self.kind, self.offset, self.device = tuple(arities), kind, offset, device
+        self.starts = [0]
+        for v in self.arities:
+            self.starts.append(self.starts[-1] + 3 ** v - 1)
+        self.coeffs = coeffs
+        self.K = torch.zeros((D,), dtype=torch.int64, device=device)
+        self.claim_w: list = []                                   # per bound group: (3^v - 1, 6) weights of K
+
+    def _c(self, t: int) -> torch.Tensor:
+        v = self.arities[t]
+        c = torch.zeros((3 ** v, D), dtype=torch.int64, device=self.device)
+        c[1:] = self.coeffs[self.starts[t]:self.starts[t + 1]]
+        return c.reshape((3,) * v + (D,))
+
+    def _base_ws(self, t: int, taus: list | None) -> list:
+        return _mono_weights(self.kind, taus if self.kind == "eq" else [None] * self.arities[t], self.device)
+
+    def message(self, t: int, taus: list | None = None, n_rest: int = 0) -> torch.Tensor:
+        """Round ``t``'s mask part in the mixed representation: ``K + g_t(X) - base_t`` (``eq``), times ``2^n_rest`` (``avg``)."""
+        v = self.arities[t]
+        c = self._c(t)
+        M = c
+        for a in range(v):                  # X^0, X^1, X^2 -> (1, 1, 0), (0, 1, 0), (0, 1, 1) in (q(0), q(1), q_inf) per axis
+            c0, c1, c2 = M.select(a, 0), M.select(a, 1), M.select(a, 2)
+            M = torch.stack((c0, (c0 + c1 + c2) % P, c2), dim=a)
+        base = contract(c, self._base_ws(t, taus))
+        ones = _outer([torch.stack((fc_one((), self.device), fc_one((), self.device),
+                                    torch.zeros((D,), dtype=torch.int64, device=self.device)))] * v)
+        M = (M + fc_mul(ones, ((self.K - base) % P).expand_as(ones))) % P
+        if self.kind == "avg" and n_rest:
+            M = fc_scalar_mul(torch.full(M.shape[:-1], pow(2, n_rest, P), dtype=torch.int64, device=self.device), M)
+        return M
+
+    def bind(self, t: int, r: torch.Tensor, taus: list | None = None) -> None:
+        """After round ``t``'s challenges ``r`` (v, 6): ``K += g_t(r) - base_t`` and record the claim weights (verifier too)."""
+        v = self.arities[t]
+        ev, bs = _mono_weights("eval", list(r), self.device), self._base_ws(t, taus)
+        W = (_outer(ev) - _outer(bs)) % P
+        self.claim_w.append(W.reshape(3 ** v, D)[1:])
+        if self.coeffs is not None:
+            self.K = (self.K + contract(self._c(t), ev) - contract(self._c(t), bs)) % P
+
+    def claim(self, lay: Layout, value: torch.Tensor, name: str) -> SparseClaim:
+        """``K = value`` as a sparse claim on the committed cells: coefficient ``u`` (global index ``offset + u``) has its
+        coordinate ``d`` at g-block cell ``6 (offset + u) + d`` with weight ``W_u x^d``."""
+        W = torch.cat(self.claim_w, 0)                                           # (n_coeffs, 6)
+        basis = torch.eye(D, dtype=torch.int64, device=self.device)
+        w = fc_mul(W[:, None, :], basis[None, :, :]).reshape(-1, D)             # (6 n_coeffs, 6)
+        cells = torch.arange(D * self.offset, D * (self.offset + W.shape[0]), dtype=torch.int64, device=self.device)
+        g_rows = torch.tensor(lay.zk.g_rows, dtype=torch.int64, device=self.device)
+        return SparseClaim(g_rows[cells // lay.C], cells % lay.C, w, value, name)
+
+
+def zk_masks(lay: Layout, sched: Schedule, z: torch.Tensor | None, device) -> tuple:
+    """The three masks (zero-check, combined, row reduction) with their coefficients read from ``z``'s g rows (prover) or
+    without (verifier, ``z = None``)."""
+    n = sched.zk_coeffs()
+    if D * n > min(lay.zk.g_cells, len(lay.zk.g_rows) * lay.C):
+        raise ValueError(f"schedule needs {D * n} Libra cells > the layout's {lay.zk.g_cells}")
+    coeffs = None
+    if z is not None:
+        g = z.index_select(0, torch.tensor(lay.zk.g_rows, dtype=torch.int64, device=z.device)).reshape(-1)[:D * n]
+        coeffs = (g.to(torch.int64) % P).reshape(n, D).to(device)
+    out, off = [], 0
+    for arities, kind in ((sched.zc, "eq"), (sched.cmb, "avg"), (sched.rb, "avg")):
+        k = sum(3 ** v - 1 for v in arities)
+        out.append(ZkMask(arities, kind, off, None if coeffs is None else coeffs[off:off + k], device))
+        off += k
+    return tuple(out)
+
+
+def zk_row_weights(lay: Layout, g3: torch.Tensor, device) -> tuple[torch.Tensor, torch.Tensor]:
+    """``(n_w, s_w)`` (R, 6): the shift's row weights -- ``n_w = sum_x g3^x e_{next_x} + g3^L e_{M_next}`` (the committed shifted
+    rows, at the zero-check's column point) and ``s_w = sum_x g3^x e_{c_x} + g3^L e_M`` (the linked rows, reduced by the
+    row-reduction sumcheck); ``L = n_links``: the mask link is one more link."""
+    L = lay.n_links
+    g3p = fc_pow_seq(g3, L + 1)
+    n_w = torch.zeros((lay.R, D), dtype=torch.int64, device=device)
+    s_w = torch.zeros((lay.R, D), dtype=torch.int64, device=device)
+    for x in range(L):
+        n_w[lay.zk.next[x]] = (n_w[lay.zk.next[x]] + g3p[x]) % P
+        s_w[lay.c_rows[x]] = (s_w[lay.c_rows[x]] + g3p[x]) % P
+    n_w[lay.zk.mask_next] = (n_w[lay.zk.mask_next] + g3p[L]) % P
+    s_w[lay.zk.mask] = (s_w[lay.zk.mask] + g3p[L]) % P
+    return n_w, s_w
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -511,7 +736,10 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
     the opening message so its check passes (caught in the next round); ``"zc"`` fixes every zero-check message and the
     final tables (the zero-check passes; the combined sumcheck's first round catches the false ``Az, Bz, Cz``); ``"all"``
     also fixes every combined round (the combined final check catches it).
-    ``engine``: ``None`` = the torch reference (small sizes); ``"cuda"`` = the fused cupy kernels (``CudaZC`` / ``CudaPP``)."""
+    ``engine``: ``None`` = the torch reference (small sizes); ``"cuda"`` = the fused cupy kernels (``CudaZC`` / ``CudaPP``).
+    A ZK layout (``lay.zk``; ``z`` after ``layout.fill_zk``) proves LGSC0004 (``_prove_zk``)."""
+    if lay.zk is not None:
+        return _prove_zk(lay, cons, z, coins, cheat, engine, schedule)
     dev = z.device
     n_k, n_c, n_i = lay.n_k, lay.n_c, lay.n_i
     n = n_k + n_c
@@ -649,6 +877,171 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
     return SumcheckProof(sched, zc_msgs, fabc, fnext, cmb_msgs, values, claims, timings)
 
 
+def _prove_zk(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | None, engine,
+              schedule: Schedule | None) -> SumcheckProof:
+    """LGSC0004: the zero-check and the combined sumcheck with Libra masks (``ZkMask``); the committed shifted rows and the mask
+    link ride in the combined sumcheck's rows part (``n_w``); then the row reduction of ``V'(rho_c) = sum_i s_w(i) w~(i, rho_c)``
+    to ONE claim at a random row point.  Claims: ``w~(r_i, r_c)``, ``w~(rho_i, rho_c)`` and three sparse mask claims."""
+    dev = z.device
+    n_k, n_c, n_i = lay.n_k, lay.n_c, lay.n_i
+    n = n_k + n_c
+    n_cmb = n_cmb_of(lay)
+    sched = schedule if schedule is not None and schedule.rb else zk_schedule(lay, schedule)
+    if sum(sched.zc) + sched.vf != n or sum(sched.cmb) != n_cmb or sum(sched.rb) != n_i or sched.vf > n_c:
+        raise ValueError(f"schedule {sched} does not fit n = {n}, n_cmb = {n_cmb}, n_i = {n_i}")
+    mz, mc, mr = zk_masks(lay, sched, z, dev)
+    tr = _Transcript(coins, dev)
+    t0 = time.perf_counter()
+    timings: dict = {}
+    one = fc_one((), dev)
+    zero = torch.zeros((D,), dtype=torch.int64, device=dev)
+    tr.absorb_bytes("lgsc/header", sched.header_zk(lay.n_links))
+    tau = tr.challenge("zc/tau", n)
+    # --- zero-check ----------------------------------------------------------------------------------------------------
+    st = CudaZC(cons, z, tau, lay) if engine == "cuda" else _RefZC(cons, z, tau, lay)
+    _sync(dev)
+    timings["zc_setup"] = time.perf_counter() - t0
+    E, claim = one.clone(), zero.clone()
+    rs: list = []
+    zc_msgs, per_round, msg_t = [], [], []
+    nrem = n
+    for t, v in enumerate(sched.zc):
+        tr_ = time.perf_counter()
+        M = st.round(v)
+        _sync(dev)
+        msg_t.append(time.perf_counter() - tr_)
+        taus = [tau[nrem - 1 - j] for j in range(v)]
+        M = (M + mz.message(t, taus)) % P
+        if cheat in ("zc", "all") or (cheat == "round1" and t == 0):
+            M = _fix_zc_round(M, taus, claim, E)
+        zc_msgs.append(M)
+        tr.absorb(f"zc/q/{t}", M)
+        r = tr.challenge(f"zc/r/{t}", v)
+        st.fold(r)
+        mz.bind(t, r, taus)
+        if cheat:
+            for j in range(v):
+                E = fc_mul(E, _eq1(taus[j], r[j]))
+            claim = fc_mul(E, eval_mixed(M, r))
+        rs += list(r)
+        nrem -= v
+        _sync(dev)
+        per_round.append(time.perf_counter() - tr_)
+    tr_ = time.perf_counter()
+    vf = sched.vf
+    fabc = st.final_tables()                                          # (3, 2^vf, 6)
+    del st
+    zk_t = mz.K.clone()
+    if cheat in ("zc", "all"):
+        eqt = eq_table(tau[:vf])
+        prod = (fc_mul(fabc[0], fabc[1]) - fabc[2]) % P
+        ones = (1 << vf) - 1
+        rest = (fc_mul(prod, eqt).sum(0) - fc_mul(prod[ones], eqt[ones])) % P
+        want = (fc_mul(claim, fc_inv(E)) - zk_t - rest) % P
+        fabc = fabc.clone()
+        fabc[2, ones] = (fc_mul(fabc[0, ones], fabc[1, ones]) - fc_mul(want, fc_inv(eqt[ones]))) % P
+    tr.absorb("zc/final", torch.cat((fabc.reshape(-1, D), zk_t[None]), 0))
+    ch = tr.challenge("zc/final", vf + 3)
+    gamma, g3, beta = ch[vf], ch[vf + 1], ch[vf + 2]
+    rs += list(ch[:vf])
+    r_var = torch.stack(rs[::-1])
+    r_c, r_k = r_var[:n_c], r_var[n_c:]
+    _sync(dev)
+    per_round.append(time.perf_counter() - tr_)
+    timings["zc"] = time.perf_counter() - t0
+    timings["zc_rounds"] = per_round
+    timings["zc_msg"] = msg_t
+    # --- combined: rows (+ committed shifted rows + M_next, at r_c) - shift (linked rows + M, over the columns) ------------
+    t2 = time.perf_counter()
+    if engine == "cuda":
+        coef = combined_coefficients_cuda(cons, lay, r_k, gamma)
+        eq_c = eq_table_cuda(r_c)
+        zc_ = matvec_base_ext_cuda(z, eq_c)
+    else:
+        coef = combined_coefficients(cons, lay, r_k, gamma)
+        eq_c = eq_table(r_c)
+        zc_ = matvec_base_ext(z, eq_c)
+    _sync(dev)
+    timings["cmb_coef_matvec"] = time.perf_counter() - t2
+    n_w, s_w = zk_row_weights(lay, g3, dev)
+    rep_i, rep_c = 1 << (n_cmb - n_i), 1 << (n_cmb - n_c)
+    P1 = ((fc_mul(coef, beta) + n_w) % P * rep_c) % P
+    g3p = fc_pow_seq(g3, lay.n_links + 1)
+    Vt = torch.zeros((lay.C, D), dtype=torch.int64, device=dev)
+    for x, cr in enumerate(list(lay.c_rows) + [lay.zk.mask]):
+        Vt = (Vt + fc_scalar_mul(z[cr].to(torch.int64), g3p[x][None, :].expand(lay.C, D))) % P
+    Ut = (torch.roll(eq_c.reshape(lay.S, lay.l, D), 1, dims=1).reshape(lay.C, D) * (P - rep_i)) % P
+    tabs = [P1.repeat(rep_i, 1), zc_.repeat(rep_i, 1), Ut.repeat(rep_c, 1), Vt.repeat(rep_c, 1)]
+    pp = CudaPP(tabs) if engine == "cuda" else _RefPP(tabs)
+    del tabs
+    if cheat:
+        eqf = eq_table(r_var[:vf])
+        abc = [mle_eval_ext(fabc[s], eqf) for s in range(3)]
+        claim2 = (abc[0] + fc_mul(gamma, abc[1]) + fc_mul(fc_mul(gamma, gamma), abc[2])) % P
+        claim2 = fc_mul(fc_mul(beta, claim2), ext_of_int(rep_i * rep_c, dev))
+    _sync(dev)
+    timings["cmb_setup"] = time.perf_counter() - t2 - timings["cmb_coef_matvec"]
+    t3 = time.perf_counter()
+    cmb_msgs, rs2 = [], []
+    nrem = n_cmb
+    for t, v in enumerate(sched.cmb):
+        M = pp.round(v)
+        nrem -= v
+        M = (M + mc.message(t, n_rest=nrem)) % P
+        if cheat == "all":
+            M = _fix_sum_round(M, claim2)
+        cmb_msgs.append(M)
+        tr.absorb(f"cmb/q/{t}", M)
+        r = tr.challenge(f"cmb/r/{t}", v)
+        pp.fold(r)
+        mc.bind(t, r)
+        if cheat:
+            claim2 = eval_mixed(M, r)
+        rs2 += list(r)
+    del pp
+    _sync(dev)
+    timings["cmb_rounds"] = time.perf_counter() - t3
+    rho = torch.stack(rs2[::-1])
+    r_i, rho_c = rho[:n_i], rho[:n_c]
+    virt = slice(lay.m, lay.m + len(lay.virt))
+    w_only = zc_.clone()
+    w_only[virt] = 0
+    eqt_ = eq_table_cuda if engine == "cuda" else eq_table
+    wr = (matvec_base_ext_cuda if engine == "cuda" else matvec_base_ext)(z, eqt_(rho_c))      # (R, 6) = z~(., rho_c)
+    wr[virt] = 0
+    v_link = fc_mul(s_w, wr).sum(0) % P
+    values = torch.stack([mle_eval_ext(w_only, eqt_(r_i)), v_link, mc.K])
+    tr.absorb("values", values)
+    _sync(dev)
+    timings["cmb"] = time.perf_counter() - t2
+    # --- row reduction: sum_i s_w(i) w~(i, rho_c) = V'(rho_c) ------------------------------------------------------------
+    t4 = time.perf_counter()
+    pr = _RefPP([s_w, wr])
+    rb_msgs, rs3 = [], []
+    nrem = n_i
+    for t, v in enumerate(sched.rb):
+        M = pr.round(v)
+        nrem -= v
+        M = (M + mr.message(t, n_rest=nrem)) % P
+        rb_msgs.append(M)
+        tr.absorb(f"rb/q/{t}", M)
+        r = tr.challenge(f"rb/r/{t}", v)
+        pr.fold(r)
+        mr.bind(t, r)
+        rs3 += list(r)
+    rho_i = torch.stack(rs3[::-1])
+    values_b = torch.stack([mle_eval_ext(wr, eqt_(rho_i)), mr.K])
+    tr.absorb("values_b", values_b)
+    _sync(dev)
+    timings["rb"] = time.perf_counter() - t4
+    timings["total"] = time.perf_counter() - t0
+    claims = [EvalClaim(torch.cat((r_i, r_c)), values[0], "w(r_i, r_c)"),
+              EvalClaim(torch.cat((rho_i, rho_c)), values_b[0], "w(rho_i, rho_c)"),
+              mz.claim(lay, zk_t, "mask(zc)"), mc.claim(lay, values[2], "mask(cmb)"), mr.claim(lay, values_b[1], "mask(rb)")]
+    return SumcheckProof(sched, zc_msgs, fabc, torch.zeros((0, 1 << vf, D), dtype=torch.int64, device=dev), cmb_msgs, values,
+                         claims, timings, zk_t=zk_t, rb_rounds=rb_msgs, values_b=values_b, zk_links=lay.n_links)
+
+
 def _bits_point(idx: int, n: int, device) -> torch.Tensor:
     out = torch.zeros((n, D), dtype=torch.int64, device=device)
     for t in range(n):
@@ -689,6 +1082,10 @@ def verify(lay: Layout, cons: Constraints, pub_rows: dict[str, torch.Tensor], pr
     """Check the zero-check and the combined sumcheck against the public data; returns ``(ok, reason, claims)`` -- the PCS
     claims the caller must have verified against the commitment for the whole thing to hold.  ``pub_rows``:
     ``layout.public_rows``.  The round schedule is read from the proof (any arities in ``1 .. MAX_ARITY`` that add up)."""
+    if (lay.zk is not None) != proof.zk:
+        return False, "ZK layout / proof format mismatch (LGSC0004 iff lay.zk)", []
+    if lay.zk is not None:
+        return _verify_zk(lay, cons, pub_rows, proof, coins, device)
     dev = torch.device(device)
     tr = _Transcript(coins, dev)
     one = fc_one((), dev)
@@ -786,6 +1183,121 @@ def verify(lay: Layout, cons: Constraints, pub_rows: dict[str, torch.Tensor], pr
     return True, "accept (sumchecks; PCS claims pending)", claims
 
 
+def _verify_zk(lay: Layout, cons: Constraints, pub_rows: dict[str, torch.Tensor], proof: SumcheckProof, coins,
+               device="cpu") -> tuple[bool, str, list]:
+    """LGSC0004's verifier (``_prove_zk``); returns the two evaluation claims and the three sparse mask claims."""
+    dev = torch.device(device)
+    tr = _Transcript(coins, dev)
+    one = fc_one((), dev)
+    n_k, n_c, n_i = lay.n_k, lay.n_c, lay.n_i
+    n = n_k + n_c
+    n_cmb = n_cmb_of(lay)
+    sch = proof.schedule
+    vf = sch.vf
+    if sum(sch.zc) + vf != n or sum(sch.cmb) != n_cmb or sum(sch.rb) != n_i or vf > n_c or not sch.zc or not sch.rb \
+            or any(not 1 <= a <= MAX_ARITY for a in sch.zc + sch.cmb + sch.rb + (vf,)) or proof.zk_links != lay.n_links:
+        return False, "schedule does not fit the layout", []
+    if D * sch.zk_coeffs() > min(lay.zk.g_cells, len(lay.zk.g_rows) * lay.C):
+        return False, "schedule needs more Libra coefficients than the layout reserves", []
+    if proof.final_abc.shape != (3, 1 << vf, D) or proof.zk_t.shape != (D,) or proof.values.shape != (3, D) \
+            or proof.values_b is None or proof.values_b.shape != (2, D) \
+            or len(proof.zc_rounds) != len(sch.zc) or any(m.shape != (3,) * a + (D,) for m, a in zip(proof.zc_rounds, sch.zc)) \
+            or len(proof.cmb_rounds) != len(sch.cmb) or any(m.shape != (3,) * a + (D,) for m, a in zip(proof.cmb_rounds, sch.cmb)) \
+            or len(proof.rb_rounds) != len(sch.rb) or any(m.shape != (3,) * a + (D,) for m, a in zip(proof.rb_rounds, sch.rb)):
+        return False, "shape mismatch", []
+    for t in list(proof.zc_rounds) + list(proof.cmb_rounds) + list(proof.rb_rounds) + \
+            [proof.final_abc, proof.zk_t, proof.values, proof.values_b]:
+        if bool((t < 0).any()) or bool((t >= P).any()):
+            return False, "non-canonical field element", []
+    mz, mc, mr = zk_masks(lay, sch, None, dev)
+    tr.absorb_bytes("lgsc/header", proof.header())
+    tau = tr.challenge("zc/tau", n)
+    # --- zero-check ----------------------------------------------------------------------------------------------------
+    E = one.clone()
+    claim = torch.zeros((D,), dtype=torch.int64, device=dev)
+    rs: list = []
+    nrem = n
+    for t, v in enumerate(sch.zc):
+        M = proof.zc_rounds[t].to(dev)
+        taus = [tau[nrem - 1 - j] for j in range(v)]
+        if not torch.equal(fc_mul(E, eq_sum_mixed(M, taus)), claim):
+            return False, f"zero-check round {t}: sum_b eq(tau, b) q(b) != claim", []
+        tr.absorb(f"zc/q/{t}", M)
+        r = tr.challenge(f"zc/r/{t}", v)
+        mz.bind(t, r, taus)
+        for j in range(v):
+            E = fc_mul(E, _eq1(taus[j], r[j]))
+        claim = fc_mul(E, eval_mixed(M, r))
+        rs += list(r)
+        nrem -= v
+    fabc, zk_t = proof.final_abc.to(dev), proof.zk_t.to(dev)
+    prod = (fc_mul(fabc[0], fabc[1]) - fabc[2]) % P
+    if not torch.equal(fc_mul(E, (mle_eval_ext(prod, eq_table(tau[:vf])) + zk_t) % P), claim):
+        return False, "zero-check final: sum_b eq(tau, b) (Az Bz - Cz)(b) + T != claim", []
+    tr.absorb("zc/final", torch.cat((fabc.reshape(-1, D), zk_t[None]), 0))
+    ch = tr.challenge("zc/final", vf + 3)
+    gamma, g3, beta = ch[vf], ch[vf + 1], ch[vf + 2]
+    rs += list(ch[:vf])
+    r_var = torch.stack(rs[::-1])
+    r_c, r_k = r_var[:n_c], r_var[n_c:]
+    eqf = eq_table(r_var[:vf])
+    abc = [mle_eval_ext(fabc[s], eqf) for s in range(3)]
+    # --- combined ------------------------------------------------------------------------------------------------------
+    gp = fc_pow_seq(gamma, 3)
+    rep_i, rep_c = 1 << (n_cmb - n_i), 1 << (n_cmb - n_c)
+    rows_claim = (abc[0] + fc_mul(gp[1], abc[1]) + fc_mul(gp[2], abc[2])) % P
+    claim = fc_mul(fc_mul(beta, rows_claim), ext_of_int(rep_i * rep_c, dev))
+    rs2: list = []
+    nrem = n_cmb
+    for t, v in enumerate(sch.cmb):
+        M = proof.cmb_rounds[t].to(dev)
+        if not torch.equal(bool_sum_mixed(M), claim):
+            return False, f"combined round {t}: sum_b q(b) != claim", []
+        tr.absorb(f"cmb/q/{t}", M)
+        r = tr.challenge(f"cmb/r/{t}", v)
+        mc.bind(t, r)
+        claim = eval_mixed(M, r)
+        rs2 += list(r)
+    rho = torch.stack(rs2[::-1])
+    r_i, rho_c = rho[:n_i], rho[:n_c]
+    n_w, s_w = zk_row_weights(lay, g3, dev)
+    eq_i = eq_table(r_i)
+    coef_r = (fc_mul(beta, mle_eval_ext(combined_coefficients(cons, lay, r_k, gamma), eq_i)) + mle_eval_ext(n_w, eq_i)) % P
+    values = proof.values.to(dev)
+    z_r = values[0].clone()
+    pub_names = list(lay.virt)
+    pub_vals = matvec_base_ext(torch.stack([pub_rows[nm].to(dev) for nm in pub_names]), eq_table(r_c))
+    for name, pv in zip(pub_names, pub_vals):
+        z_r = (z_r + fc_mul(eq_i[lay.virt[name]], pv)) % P
+    succ = succ_mle(rho_c, r_c, lay.n_j)
+    lhs = (fc_mul(fc_mul(coef_r, z_r), ext_of_int(rep_c, dev)) - fc_mul(fc_mul(succ, values[1]), ext_of_int(rep_i, dev))
+           + values[2]) % P
+    if not torch.equal(lhs, claim):
+        return False, "combined final: (beta coef + n_w)(r_i) z(r_i, r_c) - succ(rho, r_c) V'(rho) + mask != claim", []
+    tr.absorb("values", values)
+    # --- row reduction -------------------------------------------------------------------------------------------------
+    claim = values[1]
+    rs3: list = []
+    for t, v in enumerate(sch.rb):
+        M = proof.rb_rounds[t].to(dev)
+        if not torch.equal(bool_sum_mixed(M), claim):
+            return False, f"row-reduction round {t}: sum_b q(b) != claim", []
+        tr.absorb(f"rb/q/{t}", M)
+        r = tr.challenge(f"rb/r/{t}", v)
+        mr.bind(t, r)
+        claim = eval_mixed(M, r)
+        rs3 += list(r)
+    rho_i = torch.stack(rs3[::-1])
+    vb = proof.values_b.to(dev)
+    if not torch.equal((fc_mul(mle_eval_ext(s_w, eq_table(rho_i)), vb[0]) + vb[1]) % P, claim):
+        return False, "row-reduction final: s(rho_i) w(rho_i, rho_c) + mask != claim", []
+    tr.absorb("values_b", vb)
+    claims = [EvalClaim(torch.cat((r_i, r_c)), values[0], "w(r_i, r_c)"),
+              EvalClaim(torch.cat((rho_i, rho_c)), vb[0], "w(rho_i, rho_c)"),
+              mz.claim(lay, zk_t, "mask(zc)"), mc.claim(lay, values[2], "mask(cmb)"), mr.claim(lay, vb[1], "mask(rb)")]
+    return True, "accept (LGSC0004 sumchecks; PCS claims pending)", claims
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Witnesses (Ligero code produces them; nothing of its proof runs)
 # ---------------------------------------------------------------------------------------------------------------------
@@ -835,6 +1347,11 @@ def check_claims(lay: Layout, z: torch.Tensor, claims: list) -> bool:
     w = z.clone()
     w[lay.m:lay.m + len(lay.virt)] = 0
     for cl in claims:
+        if isinstance(cl, SparseClaim):
+            cells = w[cl.rows.to(w.device), cl.cols.to(w.device)].to(torch.int64)
+            if not torch.equal(fc_scalar_mul(cells, cl.weights.to(w.device)).sum(0) % P, cl.value.to(w.device)):
+                return False
+            continue
         eq_i = eq_table(cl.point[:lay.n_i])
         eq_c = eq_table(cl.point[lay.n_i:])
         v = mle_eval_ext(matvec_base_ext(w, eq_c), eq_i)
@@ -1676,7 +2193,7 @@ def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: s
         sel = [r for r in sys.rows if r.kind == "sel"]
         cases = {
             "quadratic": [(lay.row_of_sys[bit.idx], 3, 2)],
-            "chain_link": [(lay.c_rows[0], 5, None), (lay.virt["next:0"], 4, "copy")],
+            "chain_link": [(lay.c_rows[0], 5, None), (lay.next_row(0), 4, "copy")],
             "lookup": [(lay.row_of_sys[sel[0].idx], 7, 1), (lay.row_of_sys[sel[1].idx], 7, 1)],
         }
         for name, edits in cases.items():
