@@ -711,6 +711,22 @@ def _pubmat(tb: Tables, pub: dict, device) -> torch.Tensor | None:
     return torch.stack([pub[tb.lin_pub[q]].to(device) for q in pub_q]) % P
 
 
+
+def _capture_failed(e: BaseException) -> None:
+    """A CUDA-graph capture that failed falls back to eager -- but SILENTLY it hides real breaks (lane merge-val: a device
+    sync inside the captured body left torch's generator in capture state and the *other* in-flight sub-batch's replay
+    raised 'Offset increment outside graph capture').  Warn once per exception text; LIGERO_GRAPH_STRICT=1 re-raises."""
+    import os, warnings
+    if os.environ.get("LIGERO_GRAPH_STRICT"):
+        raise e
+    msg = f"CUDA graph capture failed, running eagerly: {type(e).__name__}: {str(e)[:200]}"
+    if msg not in _CAPTURE_WARNED:
+        _CAPTURE_WARNED.add(msg)
+        warnings.warn(msg, RuntimeWarning, stacklevel=3)
+
+
+_CAPTURE_WARNED: set = set()
+
 def _alpha_beta(tb: Tables, rho_lin: torch.Tensor, pub: dict | None, m: int, l: int, device,
                 pubmat: torch.Tensor | None = None):
     """The batched linear test's combination alpha (D, m) over the rows and its public right-hand side beta (D, l)
@@ -842,8 +858,9 @@ def _graphed(name: str, fn, x: torch.Tensor) -> torch.Tensor:
     if g is None:
         try:
             g = _TensorGraph(fn, x.contiguous())
-        except Exception:  # noqa: BLE001 -- capture unsupported here: eager
+        except Exception as e:  # noqa: BLE001 -- capture unsupported here: eager
             g = False
+            _capture_failed(e)
         _TGRAPHS[key] = g
     return g.run(x) if g else fn(x)
 
@@ -1071,8 +1088,9 @@ def _graph_run(holder, attr: str, body, device) -> None:
             g = torch.cuda.CUDAGraph()
             with torch.cuda.graph(g):
                 body()
-        except Exception:  # noqa: BLE001 -- capture unsupported here: eager
+        except Exception as e:  # noqa: BLE001 -- capture unsupported here: eager
             g = False
+            _capture_failed(e)
         setattr(holder, attr, g)
     if g:
         g.replay()
@@ -1145,8 +1163,9 @@ def _tests_graph_run(st: _TestsStatic, sys: System, tb: Tables, cfg: Config, mr:
             g = torch.cuda.CUDAGraph()
             with torch.cuda.graph(g):
                 body()
-        except Exception:  # noqa: BLE001 -- capture unsupported here: eager on the static set
+        except Exception as e:  # noqa: BLE001 -- capture unsupported here: eager on the static set
             g = False
+            _capture_failed(e)
         hit = (g, mbuf.data_ptr())
         st.graphs[lkey] = hit
     if hit[0]:
