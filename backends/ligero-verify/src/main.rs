@@ -24,6 +24,7 @@ mod auth;
 mod field;
 mod format;
 mod hash;
+mod leaf;
 mod relation;
 mod verify;
 
@@ -148,9 +149,14 @@ fn verdict_json(v: &verify::Verdict, name: &str, python: Option<(bool, &str)>, r
     )
 }
 
-/// `<relation>` for the relation's v1 system, `<relation>+hash` for its hashed system (authentication = included-hash).
-fn pinned_name(name: &str, hashed: bool) -> String {
-    if hashed { format!("{name}+hash") } else { name.to_string() }
+/// `<relation>` for the relation's v1 system, `<relation>+hash` for its Poseidon2 hashed system (authentication =
+/// included-hash; the historical spelling), `<relation>+<leaf>` for a hashed system with another leaf scheme.
+fn pinned_name(name: &str, leaf: Option<&leaf::LeafScheme>) -> String {
+    match leaf {
+        None => name.to_string(),
+        Some(l) if l.name == leaf::DEFAULT => format!("{name}+hash"),
+        Some(l) => format!("{name}+{}", l.name),
+    }
 }
 
 /// The system file's digests and the relation they are pinned for (`null`: none), as a JSON object.

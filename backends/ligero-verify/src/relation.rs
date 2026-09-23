@@ -428,9 +428,10 @@ pub struct Relation {
     /// The pinned `protocol.system_id` (the last 32 bytes of `system.bin`) and this verifier's own table digest.
     pub sys_id: &'static str,
     pub table_digest: &'static str,
-    /// The same two digests of the HASHED system (`hashchain.compose`: operands private, two Poseidon2 sponges along
-    /// the chain, the digests pinned at the chain end) a v5 statement (`authentication = included-hash`) is checked
-    /// against; empty when the relation is not composed (fp4-nvf4).
+    /// The same two digests of the HASHED system (`hashchain.compose` with the Poseidon2 leaf scheme: operands private,
+    /// two sponges along the chain, the digests pinned at the chain end) a v5 statement (`authentication =
+    /// included-hash`, relation `<name>` or `<name>+poseidon2`) is checked against; empty when the relation is not
+    /// composed (fp4-nvf4).  Hashed systems with OTHER leaf schemes are pinned in `leaf::PINS`.
     pub hashed_sys_id: &'static str,
     pub hashed_table_digest: &'static str,
 }
@@ -859,17 +860,18 @@ pub fn for_statement(name: Option<&str>) -> Result<&'static Relation, String> {
     }
 }
 
-/// The relation whose pinned digests a system file carries, if any, and whether it is the hashed system.
-pub fn by_digests(sys_id_hex: &str, table_digest_hex: &str) -> Option<(&'static Relation, bool)> {
+/// The relation whose pinned digests a system file carries, if any, and -- for a hashed system -- its leaf scheme
+/// (`leaf::POSEIDON2` for the relation's own `hashed_*` pins, another scheme for a `leaf::PINS` entry).
+pub fn by_digests(sys_id_hex: &str, table_digest_hex: &str) -> Option<(&'static Relation, Option<&'static crate::leaf::LeafScheme>)> {
     RELATIONS.iter().copied().find_map(|r| {
         if r.sys_id == sys_id_hex && r.table_digest == table_digest_hex {
-            Some((r, false))
+            Some((r, None))
         } else if !r.hashed_sys_id.is_empty() && r.hashed_sys_id == sys_id_hex && r.hashed_table_digest == table_digest_hex {
-            Some((r, true))
+            Some((r, Some(&crate::leaf::POSEIDON2)))
         } else {
             None
         }
-    })
+    }).or_else(|| crate::leaf::by_digests(sys_id_hex, table_digest_hex).map(|(r, l)| (r, Some(l))))
 }
 
 pub fn names() -> Vec<&'static str> {
@@ -1137,13 +1139,13 @@ mod tests {
             assert_eq!(a.table_digest.len(), 64);
             assert_eq!(for_statement(Some(a.name)).unwrap().name, a.name);
             let (r0, h0) = by_digests(a.sys_id, a.table_digest).unwrap();
-            assert!(r0.name == a.name && !h0);
+            assert!(r0.name == a.name && h0.is_none());
             if !a.hashed_sys_id.is_empty() {
                 assert_eq!(a.hashed_sys_id.len(), 64);
                 assert_eq!(a.hashed_table_digest.len(), 64);
                 assert_ne!(a.hashed_sys_id, a.sys_id);
                 let (r1, h1) = by_digests(a.hashed_sys_id, a.hashed_table_digest).unwrap();
-                assert!(r1.name == a.name && h1);
+                assert!(r1.name == a.name && h1.map(|l| l.name) == Some("poseidon2"));
             }
         }
         assert!(FP8_ADA.hashed_sys_id.len() == 64 && BF16_HOPPER.hashed_sys_id.len() == 64 && FP8_HOPPER.hashed_sys_id.len() == 64);

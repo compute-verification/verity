@@ -31,8 +31,9 @@
 //! is kept as the one end term `(y16, family 6, lo 0, bits 0)` -- `bits = 0` meaning "the whole word as a residue"
 //! (`chain.end_terms`), so the two formats run through one chain test.
 
-use crate::auth::{AuthBlock, HashAuthBlock, TreeRef, HASH_VERSION, MAX_OPENINGS, MAX_POSITIONS, MAX_PROOF_BYTES, N_DIGEST,
-                  POSEIDON2_CONSTANTS_SHA256, SCHEMA, SCHEMA_ROW, VERSION as AUTH_VERSION};
+use crate::auth::{AuthBlock, HashAuthBlock, TreeRef, HASH_VERSION, MAX_OPENINGS, MAX_POSITIONS, MAX_PROOF_BYTES, SCHEMA,
+                  VERSION as AUTH_VERSION};
+use crate::leaf::LeafScheme;
 use crate::field::P;
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -162,8 +163,9 @@ impl EndTerm {
 /// `chain.END_FAMILIES`: the coefficient family of end component x.
 pub const END_FAMILIES: [usize; 3] = [6, 0, 1];
 
-/// The most linked rows a chain may carry (3 accumulator rows + the hashed relations' 16 sponge lanes = 19).
-pub const MAX_LINKS: usize = 64;
+/// The most linked rows a chain may carry: 3 accumulator rows + the hashed relations' carry lanes (Poseidon2: 16; an
+/// Ajtai leaf carries its whole state, hundreds of rows), bounded so a hostile file cannot size the check.
+pub const MAX_LINKS: usize = 1024;
 
 #[derive(Clone, Debug)]
 pub struct Chain {
@@ -365,13 +367,16 @@ pub struct Statement {
     /// claimed under.
     pub auth: Option<AuthBlock>,
     /// `authentication = included-hash` (v5): the digests, the claimed leaf ranks, the roots and the multiproofs.  `a`
-    /// is then the (l x 17) public table `[is_end | 16 lanes]` (zeros off the chain ends) and `b` the (n_vus x 3)
-    /// index rows `(vu, x, w)` -- what the Python prover hashes into the statement digest as `<u4` words.
+    /// is then the (l x (1 + 2 digest_elems)) public table `[is_end | x lanes | W lanes]` (zeros off the chain ends)
+    /// and `b` the (n_vus x 3) index rows `(vu, x, w)` -- what the Python prover hashes into the statement digest as
+    /// `<u4` words.  The leaf scheme is `hash_auth.leaf` (named by the relation string's `+<leaf>` suffix).
     pub hash_auth: Option<HashAuthBlock>,
 }
 
-/// The public table of a hashed statement: 1 + 16 columns per Ligero column.
-pub const HASH_TABLE_COLS: usize = 1 + N_DIGEST;
+/// The public table of a hashed statement: 1 + 2 digest_elems columns per Ligero column (`hashchain.public_table`).
+pub fn hash_table_cols(leaf: &LeafScheme) -> usize {
+    1 + 2 * leaf.digest_elems
+}
 pub const AUTH_HASH: &str = "included-hash";
 
 /// The longest relation string a v4 file may carry (the names are short identifiers: `fp8-ada`, `bf16-hopper`).
@@ -441,16 +446,17 @@ fn read_tree_refs(r: &mut Rd) -> Result<[TreeRef; 3]> {
     Ok([trees[0].clone(), trees[1].clone(), trees[2].clone()])
 }
 
-/// The v5 block after the digests and the y words (`serialize._hash_auth_block_r`).
-fn read_hash_auth_block(r: &mut Rd, n_vus: usize, digests: Vec<u32>) -> Result<HashAuthBlock> {
+/// The v5 block after the digests and the y words (`serialize._hash_auth_block_r`): the schema and parameters digest
+/// must be the leaf scheme's the relation string named.
+fn read_hash_auth_block(r: &mut Rd, n_vus: usize, digests: Vec<u32>, leaf: &'static LeafScheme) -> Result<HashAuthBlock> {
     if r.str()? != HASH_VERSION {
         return Err("unknown hash-authentication block version".into());
     }
-    if r.str()? != SCHEMA_ROW {
-        return Err("unknown hash-authentication leaf schema".into());
+    if r.str()? != leaf.schema {
+        return Err(format!("unknown hash-authentication leaf schema (the relation names leaf scheme {:?})", leaf.name));
     }
-    if r.b32()? != crate::hash::unhex32(POSEIDON2_CONSTANTS_SHA256) {
-        return Err("Poseidon2 parameters differ from the verifier's".into());
+    if r.b32()? != crate::hash::unhex32(leaf.params_sha256) {
+        return Err(format!("{} parameters differ from the verifier's", leaf.display));
     }
     let n = r.usize_bounded(1 << 22, "hash-auth n_vus")?;
     if n != n_vus {
@@ -487,7 +493,7 @@ fn read_hash_auth_block(r: &mut Rd, n_vus: usize, digests: Vec<u32>) -> Result<H
         }
         multiproofs.push(sibs);
     }
-    Ok(HashAuthBlock { vu_index, x_index, w_index, trees, digests, multiproofs })
+    Ok(HashAuthBlock { leaf, vu_index, x_index, w_index, trees, digests, multiproofs })
 }
 
 impl Statement {
@@ -608,16 +614,20 @@ impl Statement {
         if r.str()? != AUTH_HASH {
             return Err("v5 statement names an authentication other than included-hash".into());
         }
-        let digests = r.fe_vec(n_vus * N_DIGEST)?;
+        // "<rel>" (Poseidon2) or "<rel>+<leaf>": the leaf scheme fixes the digest table's width and the block's framing
+        let (_, leaf) = crate::leaf::split_relation(&rel)?;
+        let nd = 2 * leaf.digest_elems;
+        let digests = r.fe_vec(n_vus * nd)?;
         let y16 = r.words(l, yb)?;
-        let hash_auth = read_hash_auth_block(&mut r, n_vus, digests)?;
+        let hash_auth = read_hash_auth_block(&mut r, n_vus, digests, leaf)?;
         r.done()?;
-        // the public table: is_end = 1 and the 16 lanes at every VU's last column, 0 elsewhere (hashchain.public_table)
-        let mut a = vec![0u32; l * HASH_TABLE_COLS];
+        // the public table: is_end = 1 and the lanes at every VU's last column, 0 elsewhere (hashchain.public_table)
+        let cols = hash_table_cols(leaf);
+        let mut a = vec![0u32; l * cols];
         for v in 0..n_vus {
             let j = v * steps + steps - 1;
-            a[j * HASH_TABLE_COLS] = 1;
-            a[j * HASH_TABLE_COLS + 1..(j + 1) * HASH_TABLE_COLS].copy_from_slice(&hash_auth.digests[v * N_DIGEST..(v + 1) * N_DIGEST]);
+            a[j * cols] = 1;
+            a[j * cols + 1..(j + 1) * cols].copy_from_slice(&hash_auth.digests[v * nd..(v + 1) * nd]);
         }
         let mut b = Vec::with_capacity(3 * n_vus);
         for v in 0..n_vus {
@@ -652,6 +662,11 @@ impl Statement {
     pub fn committed_rows(&self, m: usize) -> usize {
         m + if self.zk { 6 * self.d } else { 0 }
     }
+    /// The registered relation the statement names, without a v5 `+<leaf>` suffix (`None`: the Ampere BF16 unit).
+    pub fn base_relation(&self) -> Option<&str> {
+        self.relation.as_deref().map(|r| r.split_once('+').map_or(r, |(b, _)| b))
+    }
+
     pub fn mode_name(&self) -> &'static str {
         if self.interactive { "interactive" } else { "fiat-shamir" }
     }
