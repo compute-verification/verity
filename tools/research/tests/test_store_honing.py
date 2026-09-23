@@ -564,6 +564,97 @@ def test_dead_pod_is_a_clean_refusal_with_the_pod_name(tmp_path, monkeypatch, ca
     assert "runpod: GET /pods/p1 -> HTTP 404" in str(se.value)
 
 
+# ---- item 7: multipart upload > 5 GiB: the chunking, pure ------------------------------------------------------------------------------------------
+
+def test_multipart_chunking_is_pure_and_matches_the_service_limits(tmp_path):
+    import hashlib
+
+    from research.store import remote_s3 as S
+
+    GiB, MiB = 1 << 30, 1 << 20
+    assert S.SINGLE_PUT_MAX == 5 * GiB and S.PART_SIZE == 256 * MiB and S.MAX_PARTS == 10_000 and 5 * MiB <= S.PART_SIZE
+    # part size: 256 MiB unless that would exceed 10 000 parts, then grown in whole MiB
+    assert S.choose_part_size(5 * GiB + 1) == 256 * MiB and S.choose_part_size(2500 * GiB) == 256 * MiB   # 256 MiB x 10 000 = 2500 GiB
+    assert S.choose_part_size(2500 * GiB + 1) == 257 * MiB and S.choose_part_size(2500 * GiB + 1) * S.MAX_PARTS >= 2500 * GiB + 1
+    assert S.choose_part_size(10 * MiB, part_size=4096) == 4096 and S.choose_part_size(100 * MiB, part_size=4096) == 1 * MiB, "grown in whole MiB"
+    # the plan: every part but the last is `part_size`, numbered from 1, offsets contiguous, lengths summing to the size
+    plan = S.plan_parts(5 * GiB + 1, 256 * MiB)
+    assert len(plan) == 21 and plan[0] == (1, 0, 256 * MiB) and plan[-1] == (21, 20 * 256 * MiB, 1) and sum(n for _, _, n in plan) == 5 * GiB + 1
+    assert [p[0] for p in plan] == list(range(1, 22)) and all(plan[i][1] + plan[i][2] == plan[i + 1][1] for i in range(20))
+    assert S.plan_parts(8, 4) == [(1, 0, 4), (2, 4, 4)] and S.plan_parts(10, 4) == [(1, 0, 4), (2, 4, 4), (3, 8, 2)] and S.plan_parts(0, 4) == [(1, 0, 0)]
+    # the multipart ETag is md5 of the raw part MD5s, dash, part count -- what S3 and R2 return
+    a, b = b"a" * 4, b"bb" * 3
+    md5s = [hashlib.md5(a).hexdigest(), hashlib.md5(b).hexdigest()]
+    assert S.multipart_etag(md5s) == hashlib.md5(hashlib.md5(a).digest() + hashlib.md5(b).digest()).hexdigest() + "-2"
+    assert S.parts_of(S.multipart_etag(md5s)) == 2 and S.parts_of("0" * 32) is None and S.parts_of(None) is None and S.parts_of("abc-x") is None
+    assert not S.is_md5_etag(S.multipart_etag(md5s))
+    # hash_parts reads each part once and agrees with the plan and with whole-file hashes
+    f = tmp_path / "f"
+    f.write_bytes(a + b)
+    parts = S.hash_parts(f, 4)
+    assert [(p["n"], p["offset"], p["bytes"]) for p in parts] == [(1, 0, 4), (2, 4, 4), (3, 8, 2)]
+    assert parts[0]["md5"] == md5s[0] and parts[0]["sha256"] == hashlib.sha256(a).hexdigest() and parts[2]["sha256"] == hashlib.sha256(b"bb").hexdigest()
+    side = S.parts_sidecar("objects/sha256/x", 10, hashlib.sha256(a + b).hexdigest(), 4, parts)
+    assert side["schema"] == "research/parts/v1" and side["etag"] == S.multipart_etag([p["md5"] for p in parts]) and side["part_bytes"] == 4
+    assert [set(p) for p in side["parts"]] == [{"n", "bytes", "sha256", "md5"}] * 3 and S.sidecar_key("objects/sha256/x") == "objects/sha256/x.parts.json"
+
+
+def test_multipart_upload_is_aborted_when_the_local_file_changes_under_it(tmp_path, monkeypatch):
+    """`_upload_part` re-hashes the slice it reads: a file rewritten mid-upload is a MultipartError, and the upload is aborted."""
+    from research.store import remote_s3 as S
+
+    r = S.S3Remote("https://acct.r2.cloudflarestorage.com", "bucket", "ak", "sk")
+    f = tmp_path / "f"
+    f.write_bytes(b"x" * 10)
+    calls: list[tuple[str, str, dict]] = []
+
+    class _Resp:
+        def __init__(self, body: bytes = b"", etag: str | None = None):
+            self.body, self.headers = body, {"ETag": f'"{etag}"'} if etag else {}
+
+        def read(self):
+            return self.body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_request(method, key, query=None, body=None, headers=None, payload_hash=None):
+        calls.append((method, key, dict(query or {})))
+        if method == "POST" and "uploads" in (query or {}):
+            return _Resp(b'<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><UploadId>U1</UploadId></InitiateMultipartUploadResult>')
+        if method == "PUT":
+            import hashlib
+
+            f.write_bytes(b"y" * 10)                                    # the file changes after the parts were hashed: the NEXT part's slice differs
+            return _Resp(etag=hashlib.md5(body).hexdigest())
+        return _Resp()
+
+    monkeypatch.setattr(r, "_request", fake_request)
+    monkeypatch.setattr(r, "head", lambda key: None)
+    with pytest.raises(S.MultipartError, match="changed while uploading"):
+        r.put_multipart("k", f, part_size=4, jobs=1)
+    assert calls[0] == ("POST", "k", {"uploads": ""}) and calls[1] == ("PUT", "k", {"partNumber": "1", "uploadId": "U1"}), "initiated, part 1 up"
+    assert calls[-1] == ("DELETE", "k", {"uploadId": "U1"}) and len(calls) == 3, "part 2's slice no longer hashes as planned: aborted, never completed"
+
+    # a service whose part ETag is not the part's MD5 is caught the same way
+    f.write_bytes(b"x" * 10)
+    calls.clear()
+
+    def bad_etag(method, key, query=None, body=None, headers=None, payload_hash=None):
+        calls.append((method, key, dict(query or {})))
+        if method == "POST" and "uploads" in (query or {}):
+            return _Resp(b"<InitiateMultipartUploadResult><UploadId>U2</UploadId></InitiateMultipartUploadResult>")
+        return _Resp(etag="0" * 32) if method == "PUT" else _Resp()
+
+    monkeypatch.setattr(r, "_request", bad_etag)
+    with pytest.raises(S.MultipartError, match="service ETag 0{32} != local MD5"):
+        r.put_multipart("k", f, part_size=4, jobs=1)
+    assert calls[-1] == ("DELETE", "k", {"uploadId": "U2"})
+
+
 # ---- item 8: parallel HEADs in `where` -----------------------------------------------------------------------------------------------------------
 
 def test_where_heads_in_parallel(store, fs_remote, tmp_path, monkeypatch):

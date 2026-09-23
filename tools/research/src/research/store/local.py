@@ -36,12 +36,13 @@ from . import canon, ids, kinds
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
 from .remote import ConfigError, Remote, load_remote
-from .remote_s3 import SINGLE_PUT_MAX, is_md5_etag
+from .remote_s3 import is_md5_etag
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
 REPLICA_MAP = Path("fixtures") / "artifacts.json"
 SNAPSHOT_KIND = "dataset-snapshot/v1"
 VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"     # what a replica record's `verified` says was checked
+VERIFY_MULTIPART = "etag-multipart"                              # ... a > 5 GiB blob: the service's multipart ETag == the one the local parts yield
 VERIFY_MODES = ("head", "readback")                             # `push(verify=...)`: HEAD size + MD5 ETag, or download + sha256
 WHERE_JOBS = 16                                                 # concurrent HEADs in `where`
 _UNSET = object()
@@ -597,10 +598,7 @@ class LocalStore:
             if head["bytes"] != size:
                 rep["errors"].append(f"{key}: remote size {head['bytes']} != {size}")
                 continue
-            if size > SINGLE_PUT_MAX:
-                rep["errors"].append(f"{key}: > 5 GiB; per-part check via {key}.parts.json is not implemented")
-                continue
-            err = self._readback(r, key, sha)
+            err = self._readback(r, key, sha)                            # streamed to a temp file: a > 5 GiB (multipart) object reads back the same way
             if err:
                 rep["errors"].append(err)
             else:
@@ -632,7 +630,9 @@ class LocalStore:
                         out["verified"] = VERIFY_HEAD
                     else:
                         out["error"] = f"{key}: remote ETag {head['etag']} != local MD5 {res['md5']}"
-                else:                                                   # a multipart ETag, or a remote without one: content must be read
+                elif res.get("multipart") and head.get("etag") == res["multipart"]["etag"]:   # the multipart ETag the local parts yield
+                    out["verified"] = VERIFY_MULTIPART
+                else:                                                   # a multipart ETag we cannot reproduce, or a remote without one: content must be read
                     out["error"], out["verified"] = self._readback(r, key, sha), VERIFY_READBACK
             else:
                 out["error"], out["verified"] = self._readback(r, key, sha), VERIFY_READBACK
@@ -658,11 +658,6 @@ class LocalStore:
         files = m.payload.files if m.payload and m.payload.type == "tree" else []
         rel = {f.sha256: f.path for f in files or []}
         blobs = [(object_key(h), self._resolve_blob(h, art_id, rel.get(h)), n, h) for h, n in m.blobs()]
-        limit = getattr(r, "single_put_max", None)
-        big = [(k, n) for k, _, n, _ in blobs if limit is not None and n > limit]
-        if big:
-            raise StoreError(f"{art_id}: {big[0][0]} is {big[0][1]} bytes > {limit} (one PutObject); multipart upload is not implemented"
-                             + (f" ({len(big)} such blobs)" if len(big) > 1 else ""))
         mode = verify if preserve else None
         results: list[dict | None] = [None] * len(blobs)
         done = 0

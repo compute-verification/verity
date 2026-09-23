@@ -1,15 +1,20 @@
 """`S3Remote`: an S3-compatible bucket (Cloudflare R2, AWS) over stdlib `urllib` with hand-rolled SigV4 (README §7).
 
 Path-style addressing (`<endpoint>/<bucket>/<key>`), signed payloads (`x-amz-content-sha256` is the real sha256 of the body,
-never UNSIGNED-PAYLOAD), one PUT for objects <= 5 GiB (`SINGLE_PUT_MAX`, the service's PutObject limit).  Multipart above
-that is not implemented: the design is one `UploadPart` per 256 MiB with the per-part sha256 recorded in a sidecar key
-`<key>.parts.json` so that PRESERVED can be checked part by part (multipart ETags are not content hashes).
+never UNSIGNED-PAYLOAD), one PUT for objects <= 5 GiB (`SINGLE_PUT_MAX`, the service's PutObject limit) and a MULTIPART upload
+above that (`put_multipart`): `POST ?uploads`, one `PUT ?partNumber=N&uploadId=` per `part_size` bytes (256 MiB, grown so that
+there are never more than `MAX_PARTS` parts; every part but the last has the same size, as R2 requires), `POST ?uploadId=` to
+complete, `DELETE ?uploadId=` to abort on any failure.  A multipart ETag is not an MD5 of the object but it IS a function of
+the content: `md5(md5(part_1) .. md5(part_n))-n` (`multipart_etag`), so the client computes it from the local file and the
+service's answer must match, and a later HEAD of the key is the same check (`etag-multipart`).  A sidecar `<key>.parts.json`
+(`parts_sidecar`) records the part size and the per-part sha256/md5 so the parts can be re-checked without the local file.
 
 `put(key, path)` is a conditional create for an immutable key: HEAD first (present with the same size and, for a single-part
 ETag, the same MD5 -> `skipped`; a different size or MD5 -> RemoteConflict), else `PUT` with `If-None-Match: *`.  412 from the
 service means another writer got there first (`exists`); 400/501 means the service does not implement the header, so conditional
 PUT is switched off for the rest of this session (`conditional_put`, the reason in `conditional_put_error`) and the object goes
-up with a plain PUT.  The result dict says what happened (`action`, the local `md5`/`sha256`, the ETag seen, `fallback`).
+up with a plain PUT.  The result dict says what happened (`action`, the local `md5`/`sha256`, the ETag seen, `fallback`, and for a
+multipart upload `multipart` = {part_bytes, parts, etag}).
 
 The signing functions are pure and tested against the AWS documented vectors (`sign_headers`, `canonical_request`,
 `string_to_sign`, `signature`).  One instance may be used from several threads (`LocalStore.push` does): the opener holds no
@@ -33,6 +38,10 @@ from .remote import RemoteConflict
 
 EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 SINGLE_PUT_MAX = 5 << 30        # PutObject carries at most 5 GiB (S3 and R2 alike); above that only multipart works
+PART_SIZE = 256 << 20           # one UploadPart per 256 MiB (>= the 5 MiB minimum; 21 parts for a 5 GiB object)
+MAX_PARTS = 10_000              # the service's limit on parts per upload: `choose_part_size` grows the part above this
+PART_JOBS = 4                   # parts in flight at once (each is `part_size` bytes in memory)
+PARTS_SIDECAR_SCHEMA = "research/parts/v1"
 RETRIES = 3                     # transient 5xx / connection errors: 4 tries, 1 s, 2 s, 4 s backoff
 RETRY_BACKOFF_S = 1.0
 ALGORITHM = "AWS4-HMAC-SHA256"
@@ -130,6 +139,67 @@ def error_code(e: urllib.error.HTTPError) -> str:
         return f"HTTP {e.code}"
 
 
+# ---- multipart (pure) -------------------------------------------------------------------------------------------------------------------
+
+def choose_part_size(size: int, part_size: int = PART_SIZE, max_parts: int = MAX_PARTS) -> int:
+    """`part_size`, grown (in whole MiB) until `size` fits in `max_parts` parts."""
+    need = -(-size // max_parts)                                        # ceil
+    if need <= part_size:
+        return part_size
+    return -(-need // (1 << 20)) * (1 << 20)
+
+
+def plan_parts(size: int, part_size: int) -> list[tuple[int, int, int]]:
+    """[(part_number, offset, length)]: every part `part_size` bytes but the last, numbered from 1.  An empty file is one empty part."""
+    if size <= 0:
+        return [(1, 0, 0)]
+    return [(i + 1, off, min(part_size, size - off)) for i, off in enumerate(range(0, size, part_size))]
+
+
+def multipart_etag(part_md5s: list[str]) -> str:
+    """What S3 / R2 report for a completed multipart upload: md5 of the concatenated raw part digests, then `-<parts>`."""
+    return hashlib.md5(b"".join(bytes.fromhex(m) for m in part_md5s), usedforsecurity=False).hexdigest() + f"-{len(part_md5s)}"
+
+
+def parts_of(etag: str | None) -> int | None:
+    """`abc-21` -> 21; a single-part ETag (or none) -> None."""
+    if etag and "-" in etag:
+        n = etag.rsplit("-", 1)[1]
+        return int(n) if n.isdigit() else None
+    return None
+
+
+def hash_parts(path: Path, part_size: int) -> list[dict]:
+    """[{"n", "offset", "bytes", "sha256", "md5"}] for `plan_parts(size, part_size)`, one pass over the file."""
+    out = []
+    with open(path, "rb") as f:
+        for n, off, length in plan_parts(path.stat().st_size, part_size):
+            f.seek(off)
+            s, m, left = hashlib.sha256(), hashlib.md5(usedforsecurity=False), length
+            while left:
+                chunk = f.read(min(1 << 20, left))
+                if not chunk:
+                    raise OSError(f"{path}: short read at {off + length - left}")
+                s.update(chunk)
+                m.update(chunk)
+                left -= len(chunk)
+            out.append({"n": n, "offset": off, "bytes": length, "sha256": s.hexdigest(), "md5": m.hexdigest()})
+    return out
+
+
+def parts_sidecar(key: str, size: int, sha256: str, part_size: int, parts: list[dict]) -> dict:
+    return {"schema": PARTS_SIDECAR_SCHEMA, "key": key, "bytes": size, "sha256": sha256, "part_bytes": part_size,
+            "etag": multipart_etag([p["md5"] for p in parts]), "parts": [{k: p[k] for k in ("n", "bytes", "sha256", "md5")} for p in parts]}
+
+
+def sidecar_key(key: str) -> str:
+    return f"{key}.parts.json"
+
+
+class MultipartError(Exception):
+    """A multipart upload that did not complete as the local bytes say it should (aborted on the service when it could be)."""
+
+
 # ---- client -----------------------------------------------------------------------------------------------------------------------------
 
 class S3Remote:
@@ -137,6 +207,8 @@ class S3Remote:
     signed headers, on every request."""
 
     single_put_max = SINGLE_PUT_MAX
+    part_size = PART_SIZE
+    part_jobs = PART_JOBS
 
     def __init__(self, endpoint: str, bucket: str, access_key: str, secret_key: str, region: str = "auto", timeout: float = 120.0,
                  session_token: str | None = None):
@@ -219,7 +291,7 @@ class S3Remote:
         path = Path(path)
         sha, md5, size = hash_file(path)
         if size > self.single_put_max:
-            raise NotImplementedError(f"{key}: {size} bytes > {self.single_put_max} (one PutObject); multipart upload with a {key}.parts.json sidecar is not implemented")
+            return self.put_multipart(key, path, size=size, sha256=sha, md5=md5)
         res: dict = {"action": "created", "bytes": None, "etag": None, "md5": md5, "sha256": sha, "conditional": None, "fallback": None}
         existing = self.head(key)
         if existing is not None:
@@ -247,6 +319,101 @@ class S3Remote:
         res["conditional"] = False
         with self._request("PUT", key, body=path, payload_hash=sha) as r:
             res["etag"] = etag_value(r.headers.get("ETag"))
+        return res
+
+    # ---- multipart --------------------------------------------------------------------------------------------------------------------
+
+    def _abort_multipart(self, key: str, upload_id: str) -> None:
+        try:
+            with self._request("DELETE", key, query={"uploadId": upload_id}):
+                pass
+        except Exception:  # noqa: BLE001  best effort: an orphaned upload costs storage until the bucket's lifecycle rule clears it
+            pass
+
+    def _upload_part(self, key: str, upload_id: str, path: Path, part: dict) -> str:
+        with open(path, "rb") as f:
+            f.seek(part["offset"])
+            data = f.read(part["bytes"])
+        if len(data) != part["bytes"] or hashlib.sha256(data).hexdigest() != part["sha256"]:
+            raise MultipartError(f"{key} part {part['n']}: the local file changed while uploading")
+        with self._request("PUT", key, query={"partNumber": str(part["n"]), "uploadId": upload_id}, body=data, payload_hash=part["sha256"]) as r:
+            etag = etag_value(r.headers.get("ETag"))
+        if is_md5_etag(etag) and etag != part["md5"]:
+            raise MultipartError(f"{key} part {part['n']}: service ETag {etag} != local MD5 {part['md5']}")
+        return etag or part["md5"]
+
+    def put_multipart(self, key: str, path: Path, *, size: int | None = None, sha256: str | None = None, md5: str | None = None,
+                      part_size: int | None = None, jobs: int | None = None) -> dict:
+        """Module docstring.  Same contract as `put` (immutable key: HEAD first; `skipped` when the service already holds an object of
+        this size whose multipart ETag is the one this file yields, RemoteConflict when size or ETag differ), then initiate / parts /
+        complete, aborting the upload on any failure.  The sidecar `<key>.parts.json` is written after the object.  Result adds
+        `multipart` = {"part_bytes", "parts", "etag", "upload_id", "sidecar"}."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        path = Path(path)
+        if size is None or sha256 is None or md5 is None:
+            sha256, md5, size = hash_file(path)
+        part_size = choose_part_size(size, part_size or self.part_size)
+        parts = hash_parts(path, part_size)
+        expected = multipart_etag([p["md5"] for p in parts])
+        side = parts_sidecar(key, size, sha256, part_size, parts)
+        res: dict = {"action": "created", "bytes": None, "etag": None, "md5": md5, "sha256": sha256, "conditional": False, "fallback": None,
+                     "multipart": {"part_bytes": part_size, "parts": len(parts), "etag": expected, "upload_id": None, "sidecar": sidecar_key(key)}}
+        existing = self.head(key)
+        if existing is not None:
+            if existing["bytes"] != size:
+                raise RemoteConflict(f"{key}: remote holds {existing['bytes']} bytes, local is {size}")
+            et = existing.get("etag")
+            if et and et != expected:
+                n = parts_of(et)
+                if n is not None and n != len(parts):                    # uploaded with another part size: recompute for that count
+                    alt = -(-size // n)
+                    alt_parts = hash_parts(path, alt) if plan_parts(size, alt) and len(plan_parts(size, alt)) == n else None
+                    if alt_parts is None or multipart_etag([p["md5"] for p in alt_parts]) != et:
+                        raise RemoteConflict(f"{key}: remote multipart ETag {et} ({n} parts) is not what this file yields")
+                    expected = et
+                elif is_md5_etag(et) and et != md5:
+                    raise RemoteConflict(f"{key}: remote ETag {et} != local MD5 {md5} (same size, different bytes)")
+                elif not is_md5_etag(et):
+                    raise RemoteConflict(f"{key}: remote multipart ETag {et} != {expected} (same size, different bytes or part size)")
+            res.update(action="skipped", bytes=existing["bytes"], etag=et)
+            res["multipart"]["etag"] = expected
+            return res
+        with self._request("POST", key, query={"uploads": ""}) as r:
+            root = ET.fromstring(r.read())
+        upload_id = root.findtext(f"{S3_NS}UploadId") or root.findtext("UploadId")
+        if not upload_id:
+            raise MultipartError(f"{key}: initiate returned no UploadId")
+        res["multipart"]["upload_id"] = upload_id
+        etags: dict[int, str] = {}
+        try:
+            with ThreadPoolExecutor(max_workers=max(1, min(jobs or self.part_jobs, len(parts)))) as ex:
+                for p, et in zip(parts, ex.map(lambda p: self._upload_part(key, upload_id, path, p), parts)):
+                    etags[p["n"]] = et
+            body = ("<CompleteMultipartUpload>" + "".join(f"<Part><PartNumber>{n}</PartNumber><ETag>\"{etags[n]}\"</ETag></Part>" for n in sorted(etags))
+                    + "</CompleteMultipartUpload>").encode()
+            with self._request("POST", key, query={"uploadId": upload_id}, body=body) as r:
+                doc = ET.fromstring(r.read())
+            got = etag_value(doc.findtext(f"{S3_NS}ETag") or doc.findtext("ETag") or r.headers.get("ETag"))
+        except BaseException:
+            self._abort_multipart(key, upload_id)
+            raise
+        if got != expected:
+            head = self.head(key)
+            if head is None or head.get("etag") != expected:
+                raise MultipartError(f"{key}: completed multipart ETag {got} != {expected} computed from the local parts")
+            got = expected
+        res["etag"], res["bytes"] = got, size
+        import json as _json
+        import tempfile
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".parts.json", delete=False) as tf:
+            tf.write(_json.dumps(side, sort_keys=True, separators=(",", ":")).encode())
+            tmp = Path(tf.name)
+        try:
+            self.put(sidecar_key(key), tmp)
+        finally:
+            tmp.unlink(missing_ok=True)
         return res
 
     def get(self, key: str, path: Path) -> None:
