@@ -98,7 +98,8 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes cwd and tree_sha")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="with --on: ship this file to $RESEARCH_RUN_DIR/inputs/")
-    ap.add_argument("--env", action="append", default=[], metavar="K=V", help="with --on: environment for the workload on the machine")
+    ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or on the machine); applied AND recorded "
+                                                                                 "as the attempt's params.env (values redacted by name pattern)")
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
@@ -122,8 +123,11 @@ def cmd_run(argv: list[str]) -> int:
     root = R.runs_root(ns.runs_dir)
     run_id = ns.id or R.new_run_id()
     run_dir = root / run_id
+    env_map = _parse_env(ns.env)
+    if env_map is None:
+        return 2
     if ns.on:
-        return _run_remote(ns, run_id, run_dir, harness_opts, command)
+        return _run_remote(ns, run_id, run_dir, harness_opts, command, env_map)
     if run_dir.exists() and ((run_dir / "job.json").exists() or not ns.claimed):
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
@@ -135,10 +139,14 @@ def cmd_run(argv: list[str]) -> int:
     if ns.claimed and not os.environ.get("RESEARCH_STORE"):
         os.environ["RESEARCH_STORE"] = str(root.parent / "store")     # machine side: the store lives beside the runs, <root>/store (what `data pull` reads)
     try:
-        prep = _prepare_store(ns, a, command, run_id, run_dir)
+        prep = _prepare_store(ns, a, command, run_id, run_dir, env_map)
     except (ImportError, LookupError, TypeError) as e:
         print(f"research run: --tool {ns.tool}: {e}", file=sys.stderr)
         return 2
+    if a.cwd is None and not ns.claimed:
+        # a LOCAL workload runs in its run dir (issue 5: `> result.json` used to land in, and dirty, the source checkout); --cwd overrides.
+        # The machine side (--claimed) keeps the launcher's cwd = the shipped source tree (launch_request sets it explicitly).
+        a.cwd = str(run_dir)
     run_dir.mkdir(parents=True, exist_ok=ns.claimed)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
     remote_info = json.loads(ns.remote_json) if ns.remote_json else None
@@ -150,7 +158,8 @@ def cmd_run(argv: list[str]) -> int:
     write_json_atomic(run_dir / "job.json", job)
     os.environ.update(result.env_for(run_id, run_dir, source_sha=getattr(a, "tree_sha", None)))
     os.environ.update(prep["env"])
-    print(f"research: run {run_id} -> {run_dir}", file=sys.stderr)
+    os.environ.update(env_map)                       # --env, applied to the local workload too (issue 4: it used to be shipped only with --on)
+    print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
     try:
         rc = harness_run(a, command)
     finally:
@@ -159,6 +168,8 @@ def cmd_run(argv: list[str]) -> int:
     _publish_attempt(run_dir, prep)
     s = R.summarize(run_dir)
     line = f"research: run {run_id} {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
+    if s["result"] == "absent":
+        line += f" (looked for {run_dir / 'result.json'}: write $RESEARCH_RUN_DIR/result.json)"
     if s["validation"]:
         line += f" validation={s['validation']}"
     print(line + f"  (research inspect {run_id})", file=sys.stderr)
@@ -168,10 +179,24 @@ def cmd_run(argv: list[str]) -> int:
     return rc
 
 
-def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[str], run_id: str, run_dir: Path) -> dict:
+def _parse_env(items: list[str]) -> dict[str, str] | None:
+    """--env K=V ... -> {K: V}; None (after a message) on a malformed item."""
+    env: dict[str, str] = {}
+    for kv in items:
+        k, sep, v = kv.partition("=")
+        if not sep or not k:
+            print(f"research run: --env wants K=V, got {kv!r}", file=sys.stderr)
+            return None
+        env[k] = v
+    return env
+
+
+def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[str], run_id: str, run_dir: Path, env_map: dict[str, str] | None = None) -> dict:
     """Before launch: load the Tool (errors propagate: the user asked for it), collect conditions, resolve params and inputs to
     content identity, compute the closure manifest, derivation id and reuse_key, create --scratch dirs.  Everything after the
-    Tool load is best effort: a failure is recorded in the `store` section, never a reason not to run."""
+    Tool load is best effort: a failure is recorded in the `store` section, never a reason not to run.  `env_map` (--env) is
+    recorded as `params.env`, values redacted where the NAME matches SECRET_KEY; it is not part of the derivation (a Tool that
+    depends on an environment variable declares it as a key param)."""
     from . import env as E
     from .store import attempt as A
     from .store import derivation as D
@@ -204,6 +229,8 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
             params, key, closure = {"argv": argv_red}, {}, {}
             ident = {"name": Path(command[0]).name, "version": None, "spec": None}
             key_params, key_conditions = [], []
+        if env_map:
+            params["env"] = {k: ("<redacted>" if SECRET_KEY.search(k) else v) for k, v in env_map.items()}
         inputs = {}
         for spec in a.input:                         # harness --input name=path: a fetched artifact is an input; anything else enters the derivation
             name, _, path = spec.partition("=") if "=" in spec else (Path(spec).name, "=", spec)
@@ -265,21 +292,17 @@ def _source_identity_hint(git_dir: Path) -> dict | None:
     return {"commit": src["source.commit"], "tree": src["source.tree"], "dirty": src["source.dirty"], "dirty_digest": src["source.dirty_digest"]}
 
 
-def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str]) -> int:
+def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str], env: dict[str, str] | None = None) -> int:
     if not ns.project:
         print("research run --on: --project is required (the machine is bound to a project)", file=sys.stderr)
         return 2
     if run_dir.exists():
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
-    env = {}
-    for kv in ns.env:
-        k, sep, v = kv.partition("=")
-        if not sep or not k:
-            print(f"research run: --env wants K=V, got {kv!r}", file=sys.stderr)
-            return 2
-        env[k] = v
+    env = dict(env or {})
     harness_args = ["--stage", ns.stage, *harness_opts]
+    for k, v in env.items():                     # the machine-side `research run` records them as params.env (request.json `env` applies them)
+        harness_args += ["--env", f"{k}={v}"]
     for e in ns.expect:
         harness_args += ["--expect", e]
     if ns.require_result:
