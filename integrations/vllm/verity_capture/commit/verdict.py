@@ -148,6 +148,12 @@ OLD_TO_NEW: list[dict[str, str]] = [
     {"old": "commit_summary.tokens_equal", "where": "commit_summary.json", "new": "runtime_match/tokens_equal"},
     {"old": "commit_summary.n_runs / n_control / n_treatment", "where": "commit_summary.json", "new": "verdict.runs"},
     {"old": "stages.txt commit PASS|FAIL", "where": "row_pod.sh stage line", "new": "verdict.outcome"},
+    {"old": "stages.txt manifest_verify=", "where": "row_pod.sh stage line", "new": "required_value_coverage/manifest_of_record_verified"},
+    {"old": "manifest_verify.rebuilt_digest / manifest_verify.used_digest", "where": "commit/manifest_verify.json", "new": "required_value_coverage/manifest_of_record_verified (differences)"},
+    {"old": "binding.error / binding.map_digest / binding.program_digest", "where": "runs.jsonl commit.binding", "new": "program_source_identity/binding_context (inputs / differences)"},
+    {"old": "extra.errors", "where": "runs.jsonl commit.extra", "new": "runtime_match/collector_errors (differences.first)"},
+    {"old": "declaration_*.json", "where": "commit/ (commit_integ.api.declaration)", "new": "required_value_coverage/required_classes (inputs)"},
+    {"old": "sampled_replay_p*.json", "where": "commit/", "new": "local_replay/* (inputs: file sha256s under verdict.inputs)"},
 ]
 
 #: fields of runs.jsonl's `commit` block that are MEASUREMENTS / EXECUTION LABELS, not verdict facts (listed so the completeness test can
@@ -677,15 +683,14 @@ def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckVerdict:
     mor = _d(cov.get("manifest_of_record"))
     if mor:
         scope["manifest_of_record"] = {k: mor.get(k) for k in ("identities_n", "required_n", "not_executed_n", "edited")}
-    notes = []
+    # the manifest this grades against was built by required_manifest.members_for: a Program family with no vocabulary member is INTERIOR by name
+    notes = [_leak("required_manifest.members_for", "a Program family is INTERIOR because the vocabulary names no member for it -- by name, F-r19-int-20")]
     if not cov.get("ok", False):
         fam = cov.get("families_missing_entirely") or []
         first = _d(_first(cov.get("missing")))
         if cov.get("error") and not cov.get("missing_n"):
-            return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, inputs=inputs, differences=[{"name": "coverage_error", "error": str(cov["error"])[:400]}],
+            return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, inputs=inputs, notes=notes, differences=[{"name": "coverage_error", "error": str(cov["error"])[:400]}],
                        reason=f"manifest coverage: {cov['error']}")
-        if cov.get("error") and "unmodelled" in str(cov.get("error")):
-            notes.append(_leak("required_manifest.members_for", "a Program family is INTERIOR because the vocabulary names no member for it -- by name, F-r19-int-20"))
         return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, inputs=inputs, notes=notes,
                    differences=[{"name": "identities_uncovered", "missing_n": cov.get("missing_n"), "missing_by_family": cov.get("missing_by_family"),
                                  "families_missing_entirely": fam[:8], "first": first, "error": (str(cov.get("error"))[:300] if cov.get("error") else None)}],
@@ -1031,7 +1036,7 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckVerdict]:
         out.append(_mk(*C_PAST, commit, ctx, outcome=NOT_RUN))
     else:
         scope = {"entries_n": past.get("entries_n"), "padded_record": past.get("padded_record"), "padding_entries_n": past.get("padding_entries_n")}
-        if past.get("ok") is True and not _int(past.get("entries_n")):
+        if past.get("ok") is not False and not _int(past.get("entries_n")) and not past.get("error"):
             out.append(_mk(*C_PAST, commit, ctx, outcome=PASS, scope=scope))
         else:
             out.append(_mk(*C_PAST, commit, ctx, outcome=FAIL, scope=scope,
@@ -1165,7 +1170,12 @@ def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = 
                                "reconstructed_failing": [x.name for x in checks if x.outcome in (FAIL, INSUFFICIENT)]})
     rules = aggregate_runs(per_run)
     groups = group_checks(rules)
-    outcome = worst([g.outcome for g in groups if g.outcome != NOT_RUN]) if any(g.outcome != NOT_RUN for g in groups) else NOT_RUN
+    # commit_delta's decision (commit_pass) covers every rule EXCEPT manifest_of_record_verified, which row_pod.sh grades after the Commit
+    # (EXEC-05: a verify FAIL is a Commit FAIL); reconcile the two scopes separately, then take the worst
+    mv_rule = next((r for r in rules if r.name == "required_value_coverage/manifest_of_record_verified"), None)
+    delta_rules = [r for r in rules if r is not mv_rule]
+    graded = [r.outcome for r in delta_rules if r.outcome != NOT_RUN]
+    outcome = worst(graded) if graded else NOT_RUN
     notes: list[str] = []
     if not treatment:
         outcome = NOT_RUN
@@ -1180,6 +1190,8 @@ def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = 
     if commit_pass is not None and treatment and (outcome == PASS) != bool(commit_pass) and not (rc_v is not None and _int(rc_v) != 0):
         notes.append(f"RECONSTRUCTION MISMATCH: recorded commit_pass={commit_pass} but the rule-by-rule outcome is {outcome}; the recorded decision stands")
         outcome = PASS if commit_pass else (FAIL if outcome == PASS else outcome)
+    if mv_rule is not None and mv_rule.outcome != NOT_RUN and treatment:
+        outcome = worst([outcome, mv_rule.outcome]) if outcome != NOT_RUN else mv_rule.outcome
     sums = _d(summary)
     execution = {k: sums.get(k) for k in ("committer", "collector_variant", "retention", "engine_settings", "collector", "cmd") if k in sums}
     if vd.get("moe_source") is not None:
