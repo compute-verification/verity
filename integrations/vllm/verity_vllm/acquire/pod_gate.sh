@@ -12,7 +12,9 @@ PY=${PY:-/workspace/venv312/bin/python}
 ROWS=${ROWS:-/workspace/rows}
 OUT=${OUT:-${RESEARCH_RUN_DIR:-out}/acquire_gate}
 SCRATCH=${SCRATCH:-/workspace/acquire_gate}
-export PYTHONPATH=${PYTHONPATH:-.} HF_HOME=${HF_HOME:-/workspace/hf}
+# (the core `verity` package must be importable: without it v1's manifest builder cannot derive a promoted member's signature and writes
+#  the crossing under `unmodelled` -- #57's manifest of record, 163052 rows `complete: false`, vs 163484 `complete: true` with it)
+export PYTHONPATH=${PYTHONPATH:-.:$PWD/../../packages/verity/src} HF_HOME=${HF_HOME:-/workspace/hf}
 mkdir -p "$OUT" "$SCRATCH"
 RC=0
 if [ $# -gt 0 ]; then ROWLIST=("$@"); else ROWLIST=(); for d in "$ROWS"/*/; do ROWLIST+=("$(basename "$d")"); done; fi
