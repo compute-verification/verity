@@ -448,12 +448,21 @@ class ProgramIndex:
     def n_steps(self) -> int:
         return len(self.segs)
 
+    def ids_params(self) -> set[int]:
+        """The Program parameter(s) carrying the declared prompt ids: every parameter that is not the registered `weights` record and not a
+        sampler input (`seed`, `splits`) -- the same reading `_gather_inputs` resolves a `['p', a, k, k+1]` slice by (the committed
+        `input_token_ids` row k of the arrival step)."""
+        return {a for a, n in enumerate(self.pnames) if n not in ("weights", SEED_PARAM, RM.SPLITS_PARAM)}
+
     def embed_op_path(self) -> str | None:
-        """The op_path of the Program's Embedding rows (the `input_token_ids` identity lives under it as member `in`)."""
+        """The op_path of the Program's Embedding rows (the `input_token_ids` identity lives under it as member `in`): the first row whose
+        arguments READ the prompt-ids parameter (`ids_params`) -- the Program's own dataflow names the consumer of the declared ids; the
+        row's family name never enters (Draft 3.1 §12.4)."""
         if not hasattr(self, "_embed_op"):
             self._embed_op = None
+            ids = self.ids_params()
             for r in self.rows:
-                if RM.spec_family(r["spec"]).startswith("Embedding"):
+                if any(sl and sl[0] == "p" and int(sl[1]) in ids for g in (r.get("args") or []) for sl in g):
                     d = self.describe(r)
                     self._embed_op = d["op_path"] if d else None
                     break
@@ -559,15 +568,16 @@ class ProgramIndex:
             mem = [("sum", int(st.get("H", g.get("H", 0))), "bf16")]
             n_rows = M
         if err is None and not (0 <= ord_ < n_rows):
-            err = f"{fam} row ordinal {ord_} outside the {kind} plane of {mod!r} step {s} ({n_rows} rows = {'M' if kind in ('router', 'sum') else 'M*TOPK'})"
+            err = f"{fam} row ordinal {ord_} outside the {kind} plane of {mod!r} step {s} ({n_rows} rows = {'M' if n_rows == M else 'M*TOPK'})"
         if err is None and name_row is not None and int(name_row) != ord_:
             err = f"{fam} row ordinal {ord_} != its Program name index [{name_row}] ({mod!r} step {s}, {kind} plane)"
         if err is None and any(int(m[1]) <= 0 for m in mem):
             err = f"{fam} {kind} plane width 0 ({mod!r} step {s}: statics {st}, geometry {g})"
         if err is None:
             err = self._plane_dataflow_error(i, kind, ord_, TOPK, mod)
+        # `plane` = the plane the row PRODUCES: the first member's name (the router row produces two: router_w + router_ids)
         d = {"family": fam, "statics": st, "module": mod, "op_path": f"moe/L{layer}", "hint": hint, "row": ord_, "name_row": name_row,
-             "members": ([] if err else mem), "step": s, "plane": MOE_PLANE_OF_KIND[kind], "plane_kind": kind, "moe_module": mod}
+             "members": ([] if err else mem), "step": s, "plane": mem[0][0], "plane_kind": kind, "moe_module": mod}
         if err:
             d["plane_error"] = err
         return d
@@ -1278,11 +1288,6 @@ def _lifetime(engine_step: int, ring_slots: int | None) -> str:
     return "recycled-window" if int(engine_step) >= int(ring_slots) else "fresh-window"
 
 
-MOE_PLANE_FAMILIES = ("MoeSum", "MoeExpertGemm", "MoeRouterTopK")           # Program families whose values live in the MOE-03 planes
-#: plane kind -> the `moe_block_stream` plane the row PRODUCES (the router row produces two: router_w + router_ids)
-MOE_PLANE_OF_KIND = {"router": "router_w", "up": "up", "act": "act", "down": "down", "sum": "sum"}
-
-
 def moe_plane_kind(family: str, module: str) -> str | None:
     """[MAN-06f v3] the fused-MoE block row kinds whose values the collector commits as `moe_block_stream` PLANES (MOE-03: six planes per
     MoE layer per step, pair-major) rather than as module outputs: `router` (MoeRouterTopK / MoeRouterTopKNorm: router_w + router_ids
@@ -1302,8 +1307,8 @@ def moe_plane_kind(family: str, module: str) -> str | None:
     return None
 
 
-MOE_PRODUCER_FAMILIES = ("MoeRouterTopK", "MoeExpertGemm", "MoeSum")        # plane producers with their own relation (router / up / down / sum)
-
+#: the `moe_block_stream` address schema (`required_manifest.build_manifest` / `binding.py` write `moe/L<layer>` as the op_path of the six
+#: planes): parsed here to label the (request, step, layer) triple -- the family's own address vocabulary, not a module-path rule
 _MOE_LAYER_RE = re.compile(r"^moe/L(\d+)$")
 
 
@@ -1419,12 +1424,17 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
             return
         # [MOE-TP-02] a member committed under a second required name (the TP rank's MoeSum: part_rank<r> AND the moe/L<k>/sum plane) is
         # recorded at BOTH identities -- the same row, the same class
-        keys = [(str(d["op_path"]), str(m[0])) for m in d["members"]] + [(str(c["op_path"]), str(c["member"])) for c in d.get("copies") or []]
-        for op, mem in keys:
+        # `manifest_family`: the manifest family the address belongs to (the label build_manifest assigns), read off the address rule that
+        # produced it -- the sampler op, a plane description (`plane_kind`) / a plane copy (MOE-TP-02), else the member's own family
+        # (`required_manifest.alias_family`: a rank-local partial vs an instance output) -- never parsed back out of the op_path string
+        keys = [(str(d["op_path"]), str(m[0]), "moe_block_stream" if d.get("plane_kind") else None) for m in d["members"]] \
+            + [(str(c["op_path"]), str(c["member"]), "moe_block_stream") for c in d.get("copies") or []]
+        for op, mem, mfam in keys:
             k = (rid, int(d["step"]), op, mem)
             a = addresses.get(k)
             if a is None:
-                addresses[k] = {"spec": spec, "family": fam, "class": cls, "why": why, "rows": 1}
+                mfam = "sampled_token_ids" if op == SAMPLER_OP else (mfam or RM.alias_family(mem))
+                addresses[k] = {"spec": spec, "family": fam, "class": cls, "why": why, "rows": 1, "manifest_family": mfam}
             else:
                 a["rows"] += 1
                 if a["class"] != cls:                                            # one identity, rows of two classes: named, never averaged
@@ -1663,15 +1673,13 @@ def split_not_executed(vus: list[dict], executed_prefix: dict[str, dict] | None)
     return keep, out
 
 
-def _address_family(op_path: str, member: str) -> str:
-    """The manifest family a (op_path, member) address belongs to (the same labels build_manifest assigns)."""
-    if op_path == SAMPLER_OP:
-        return "sampled_token_ids"
-    if op_path.startswith("moe/"):
-        return "moe_block_stream"
-    if member.startswith(("part_rank", "shard_rank")):
-        return "tp_rank_partials"
-    return "instance_outputs"
+def _address_family(a: dict[str, Any]) -> str:
+    """The manifest family of a `population(..., addresses=)` record: recorded by the address rule that produced it (`manifest_family`,
+    the same labels build_manifest assigns) -- an accumulator record without it is a caller's own construction and is named as such."""
+    fam = a.get("manifest_family")
+    if not fam:
+        raise ValueError(f"population address {a.get('spec')!r} carries no manifest_family (not produced by `population`)")
+    return str(fam)
 
 
 def _manifest_engine_name(manifest: dict[str, Any]) -> str:
@@ -1745,7 +1753,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
                 non_row_idents.append(ident)
     else:
         for (rid, st, op, mem), a in addresses.items():
-            fam_total[_address_family(op, mem)] += 1
+            fam_total[_address_family(a)] += 1
     total = sum(fam_total.values())
     # --- reach: identities with >= 1 evaluable VU; evaluated: identities under an evaluated (request, step, module) -------------------
     reached: Counter = Counter()
@@ -1769,7 +1777,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
         k5 = _key(rid, st, op, mem)
         seen_keys.add(k5)
         ident = by_key.get(k5) if manifest is not None else None
-        fam = str(ident["family"]) if ident is not None else _address_family(op, mem)
+        fam = str(ident["family"]) if ident is not None else _address_family(a)
         if manifest is not None and ident is None:
             n_outside += 1
             if len(outside) < first_n:
