@@ -6,6 +6,9 @@ API touches this file only:
     fetch(artifact_id) -> Path                 materialise an artifact's payload (tree dir or file) and return its local path
     resolve_snapshot(name) -> list[artifact_id]  the member artifact ids of the dataset-snapshot/v1 artifact named `name`
     put_fixture(path, meta) -> artifact_id      store a dir (tree payload) or a file as a `fixture/v1` artifact, return its `art:` id
+    attempt(run_id) -> dict                    an attempt manifest (`r2026…` id); attempt_outputs(run_id, kinds) its outputs by kind
+    fetch_attempt(run_ids, to) -> Path         the union of the attempts' row-dir account trees (vllm-build/v1, vllm-match-record/v1,
+                                               vllm-verdict/v1, execution-evidence/v1) laid out like a v1 row dir
 
 Transport: the CLI (`python -m research.cli data ...`) in a subprocess -- the store package is stdlib-only, so `sys.executable` with
 `<repo>/tools/research/src` on PYTHONPATH is enough; the CLI's printed contract (`put` / `snapshot` print the art id, `fetch` prints the
@@ -147,3 +150,81 @@ def snapshot(name: str, members: list[str], note: str | None = None) -> str:
 def push(artifact_ids: list[str]) -> subprocess.CompletedProcess:
     """`research data push ART...` (preserve on the remote; needs credentials in the environment).  Returns the completed process."""
     return _cli("push", *artifact_ids, check=False)
+
+
+# ---- attempts (Phase 5a: a stage is an Attempt publishing typed artifacts) ---------------------------------------------------------------------
+
+ATTEMPT_RE = re.compile(r"\br[0-9]{8}-[0-9]{6}-[0-9a-f]{4}\b")
+#: the kinds whose payload trees are a row dir's account files (research_outputs.py); unioned by `fetch_attempt`
+ROW_KINDS = ("vllm-build/v1", "vllm-match-record/v1", "vllm-verdict/v1", "execution-evidence/v1")
+EVIDENCE_KIND = "execution-evidence/v1"
+
+
+def is_attempt_id(s: str) -> bool:
+    return bool(ATTEMPT_RE.fullmatch(s or ""))
+
+
+def attempt(run_id: str) -> dict:
+    """The attempt manifest (`research data show <run-id> --json`; research/attempt/v0.1)."""
+    if not is_attempt_id(run_id):
+        raise ValueError(f"not an attempt id: {run_id!r}")
+    p = _cli("show", run_id, "--json")
+    doc = json.loads(p.stdout)
+    if isinstance(doc, list):
+        doc = doc[0] if doc else {}
+    if not isinstance(doc, dict) or doc.get("id") != run_id:
+        raise StoreUnavailable(f"show {run_id}: no attempt manifest returned ({str(doc)[:200]})")
+    return doc
+
+
+def attempt_outputs(run_id: str, kinds: tuple[str, ...] | None = None) -> dict[str, dict]:
+    """{output name: {"id": art, "kind": kind, "payload": {"type": tree|file, "name": <file name>|None}}} for the attempt's `outputs`
+    (not its telemetry), optionally only those of `kinds`."""
+    doc = attempt(run_id)
+    out: dict[str, dict] = {}
+    for name, art in sorted((doc.get("outputs") or {}).items()):
+        if not isinstance(art, str) or not ART_RE.fullmatch(art):
+            continue
+        m = show(art)
+        kind = m.get("kind")
+        if kinds is None or kind in kinds:
+            payload = m.get("payload") or {}
+            out[name] = {"id": art, "kind": kind, "payload": {"type": payload.get("type"), "name": payload.get("name")}, "meta": m.get("meta") or {}}
+    return out
+
+
+def fetch_attempt(run_ids: list[str] | str, to: Path, kinds: tuple[str, ...] = ROW_KINDS) -> Path:
+    """Materialise the row-dir account files of one or more attempts (the union of their `kinds` output trees, relative paths kept:
+    `build_summary.json`, `match/...`, `commit/...`, `global_match.json`, ...) under `to`, so the harness can read them like a v1 row
+    dir.  Each stage's `execution-evidence/v1` (the cumulative `timeline.jsonl`, `stages.txt`, `admission.json`, ...) goes under
+    `evidence/<stage>/` -- the stages' copies legitimately differ.  Any other file two attempts both carry must be identical (the
+    later attempt's copy is compared, never overwrites silently).  Returns `to`; `to/ATTEMPTS.json` records what came from where."""
+    ids = [run_ids] if isinstance(run_ids, str) else list(run_ids)
+    to = Path(to)
+    to.mkdir(parents=True, exist_ok=True)
+    record: dict = {"attempts": {}, "conflicts": []}
+    for rid in ids:
+        outs = attempt_outputs(rid, kinds)
+        record["attempts"][rid] = outs
+        for name, o in outs.items():
+            src = fetch(o["id"])
+            files = sorted(x for x in src.rglob("*") if x.is_file()) if src.is_dir() else [src]
+            prefix = Path("evidence") / str(o["meta"].get("stage") or name) if o["kind"] == EVIDENCE_KIND else Path()
+            for f in files:
+                # a file payload is cached under its object hash: its name is the manifest's `payload.name`
+                rel = f.relative_to(src) if src.is_dir() else Path(o["payload"].get("name") or f.name)
+                if rel.name == ".art-id":
+                    continue
+                rel = prefix / rel
+                dst = to / rel
+                if dst.exists():
+                    if dst.read_bytes() != f.read_bytes():
+                        record["conflicts"].append({"path": str(rel), "attempt": rid, "output": name})
+                    continue
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(f, dst)
+    (to / "ATTEMPTS.json").write_text(json.dumps(record, indent=1, sort_keys=True))
+    if record["conflicts"]:
+        raise StoreUnavailable(f"fetch_attempt {ids}: {len(record['conflicts'])} file(s) differ between attempts: "
+                               + ", ".join(c["path"] for c in record["conflicts"][:5]))
+    return to

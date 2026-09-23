@@ -19,6 +19,10 @@ multi-GB fold records, 100+ MB manifests) are checked by size only unless VERITY
 `row.programs_root()` (a dir holding `build_request*/instances.json.gz`, or None), `row.candidate(rel)` (the v2 output under
 $VERITY_REGRESSION_CANDIDATE/<row>/<rel>, or None: self-check mode), `row.decisions(check)` (the labelled decisions of
 `[[rows.<row>.decisions]]` naming that check; `sanction()` consults them when a result differs from v1).
+
+$VERITY_REGRESSION_CANDIDATE may also name Attempt ids (`r2026…`, comma-separated): the v2 candidate is then what those Attempts
+published -- `row.candidate_attempts()` are their manifests (matched to the row by `params.row`), `row.candidate_root()` the union
+of their `vllm-build/v1` / `vllm-match-record/v1` / `vllm-verdict/v1` / `execution-evidence/v1` trees laid out like a row dir.
 """
 from __future__ import annotations
 
@@ -26,6 +30,9 @@ import gzip
 import hashlib
 import json
 import os
+import re
+import shutil
+import tempfile
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -37,7 +44,8 @@ EXPECTED_DIR = HERE / "expected"
 VERIFY_LIMIT = 64 * 1024 * 1024
 
 ROWS_ROOT_ENV = "VERITY_REGRESSION_ROWS_ROOT"
-CANDIDATE_ENV = "VERITY_REGRESSION_CANDIDATE"
+CANDIDATE_ENV = "VERITY_REGRESSION_CANDIDATE"             # a directory of row dirs, or attempt ids (`r2026…`, comma-separated)
+CANDIDATE_CACHE_ENV = "VERITY_REGRESSION_CANDIDATE_CACHE"  # where the attempts' output trees are unioned (default: the temp dir)
 
 
 class InputMismatch(AssertionError):
@@ -163,16 +171,47 @@ class Row:
         return None
 
     def candidate(self, rel: str) -> Path | None:
-        """The v2 candidate's file for this row (`$VERITY_REGRESSION_CANDIDATE/<row>/<rel>`), None in self-check mode."""
-        root = os.environ.get(CANDIDATE_ENV)
-        if not root:
+        """The v2 candidate's file for this row (`$VERITY_REGRESSION_CANDIDATE/<row>/<rel>`, or the same path inside the union of the
+        candidate Attempts' output trees when the variable names attempt ids), None in self-check mode."""
+        root = self.candidate_root()
+        if root is None:
             return None
-        p = Path(root) / self.key / rel
+        p = root / rel
         return p if p.is_file() else None
 
     def candidate_root(self) -> Path | None:
-        root = os.environ.get(CANDIDATE_ENV)
-        return (Path(root) / self.key) if root and (Path(root) / self.key).is_dir() else None
+        """`$VERITY_REGRESSION_CANDIDATE` is either a directory of row dirs (`<root>/<row>/`) or a comma/space-separated list of Attempt
+        ids (`r2026…`): then this row's candidate dir is the union of its attempts' `vllm-build/v1` / `vllm-match-record/v1` /
+        `vllm-verdict/v1` / `execution-evidence/v1` trees, fetched once per process under `$VERITY_REGRESSION_CANDIDATE_CACHE/<row>/`
+        (default: the temp dir).  None when nothing names this row."""
+        env = os.environ.get(CANDIDATE_ENV)
+        if not env:
+            return None
+        ids = candidate_attempt_ids()
+        if not ids:
+            return (Path(env) / self.key) if (Path(env) / self.key).is_dir() else None
+        mine = [d["id"] for d in self.candidate_attempts()]
+        if not mine:
+            return None
+        cache = Path(os.environ.get(CANDIDATE_CACHE_ENV) or (Path(tempfile.gettempdir()) / "verity-regression-candidates"))
+        dest = cache / self.key
+        marker = dest / "ATTEMPTS.json"
+        if marker.is_file():
+            try:
+                if sorted(json.loads(marker.read_text()).get("attempts", {})) == sorted(mine):
+                    return dest
+            except (OSError, ValueError):
+                pass
+            shutil.rmtree(dest, ignore_errors=True)
+        from . import store_io
+        try:
+            return store_io.fetch_attempt(mine, dest)
+        except Exception as e:  # noqa: BLE001 -- the store not being reachable is a skip, not an error
+            raise NotResolvable(f"{self.key}: candidate attempts {mine} not fetchable here: {e}") from e
+
+    def candidate_attempts(self) -> list[dict[str, Any]]:
+        """The candidate Attempt manifests naming this row (`params.row` == this row's key), in the order given."""
+        return [d for d in candidate_attempt_docs() if (d.get("params") or {}).get("row") == self.key]
 
     # ---- expected -------------------------------------------------------------------------------------------------------------
     def expected(self) -> dict[str, Any]:
@@ -186,6 +225,31 @@ class Row:
         """The labelled decisions on this row for `check` (`[[rows.<row>.decisions]]` in fixtures.toml, design rule Draft 3 §7: a
         difference from the v1 reference is sanctioned only by a recorded decision naming the finding or the changed policy)."""
         return [d for d in (self.spec.get("decisions") or []) if isinstance(d, dict) and d.get("check") == check]
+
+
+_ATTEMPT_DOCS: dict[str, dict[str, Any]] = {}
+
+
+def candidate_attempt_ids() -> list[str]:
+    """The attempt ids `$VERITY_REGRESSION_CANDIDATE` names (comma / whitespace separated); [] when it is a directory or unset."""
+    env = os.environ.get(CANDIDATE_ENV) or ""
+    toks = [t for t in re.split(r"[,\s]+", env) if t]
+    ids = [t for t in toks if re.fullmatch(r"r[0-9]{8}-[0-9]{6}-[0-9a-f]{4}", t)]
+    return ids if ids and len(ids) == len(toks) else []
+
+
+def candidate_attempt_docs() -> list[dict[str, Any]]:
+    """The manifests of the candidate attempts, fetched once per process (`store_io.attempt`); an unreachable store is NotResolvable."""
+    out = []
+    for rid in candidate_attempt_ids():
+        if rid not in _ATTEMPT_DOCS:
+            from . import store_io
+            try:
+                _ATTEMPT_DOCS[rid] = store_io.attempt(rid)
+            except Exception as e:  # noqa: BLE001
+                raise NotResolvable(f"candidate attempt {rid} not readable here: {e}") from e
+        out.append(_ATTEMPT_DOCS[rid])
+    return out
 
 
 def rows(selection: str | None = None) -> list[Row]:

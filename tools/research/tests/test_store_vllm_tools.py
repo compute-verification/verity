@@ -95,6 +95,8 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
 
 
 def test_parse_accepts_row_pod_argv_too():
+    if str(REPO) not in sys.path:
+        sys.path.insert(0, str(REPO))         # the declaration module by dotted path (tools_registry falls back to loading it by file)
     from integrations.vllm.verity_vllm import research_tools as RT
 
     p = RT.parse(["bash", "/workspace/src/integrations/vllm/verity_capture/sweep/row_pod.sh", ROW, "LLAMA32_1B", "repo", "rev", "build,match"], stage="build")
