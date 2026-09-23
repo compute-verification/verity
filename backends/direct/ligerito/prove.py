@@ -36,7 +36,7 @@ from . import params as params_mod
 from . import sumcheck as sc_mod
 from . import zk as zk_mod
 from .layout import Layout, SubBatch, build_z, constraints, end_values, layout_for, public_rows
-from .proof import Key, PcsProof, Proof, Statement, params_bytes, zero_blocks, zero_points
+from .proof import FS_QUERIES_LOG2, Key, PcsProof, Proof, Statement, params_bytes, soundness_claim, zero_blocks, zero_points
 from .proto import claims as cl
 from .proto import device as pdev
 from .proto import ext, merkle_multi, stream
@@ -54,8 +54,8 @@ D = 6
 #: parameter set B (ligerito-design FINAL) at the pow2 shape: level-1 rate 1/2, later levels 1/4, 2^-128 union bound
 SET_B_RATES = (1, 2, 2, 2, 2)
 
-__all__ = ["Committed", "Prover", "Reject", "StreamCoins", "dims_for", "make_coins", "pcs_commit", "pcs_open", "pcs_verify",
-           "statement_for_stream"]
+__all__ = ["FS_QUERIES_LOG2", "Committed", "Prover", "Reject", "StreamCoins", "coins_kind", "dims_for", "make_coins", "pcs_commit",
+           "pcs_open", "pcs_verify", "soundness_claim", "statement_for_stream"]
 
 
 class Reject(Exception):
@@ -150,6 +150,10 @@ def make_coins(kind: str, seed: int = 0, slots=None):
     if kind == "live":
         return LiveCoins(slots)
     raise ValueError(f"coins {kind!r}")
+
+
+def coins_kind(coins) -> str:
+    return {FiatShamirCoins: "fiat-shamir", LocalCoins: "local"}.get(type(coins), "live" if isinstance(coins, LiveCoins) else type(coins).__name__)
 
 
 class StreamCoins(LiveCoins):
@@ -1032,7 +1036,7 @@ class Prover:
                 raise Reject("ZK padding does not match the parameters")
             snd = self.soundness(dims, t_pad)
             if snd["total_log2"] > -128.0 + 1e-9:
-                raise Reject(f"parameters give 2^{snd['total_log2']:.2f} > 2^-128")
+                raise Reject(f"parameters give an interactive union of 2^{snd['total_log2']:.2f} > 2^-128")
             pub_rows = public_rows(self.sys, lay, self._stmt_subs(stmt, lay, real, dev), dev)
             info["t_public"] = time.perf_counter() - t0
             coins.absorb(b"lgto/params", proof.absorbed_params())
@@ -1063,7 +1067,7 @@ class Prover:
             else:
                 pcs_verify(proof.pcs, dims, prm["splits"], points, values, coins)
             info["t_pcs"] = time.perf_counter() - t2
-            info["soundness_log2"] = snd["total_log2"]
+            info["soundness"] = soundness_claim(snd, coins_kind(coins))
         except Reject as e:
             info["seconds"] = time.perf_counter() - t0
             return False, str(e), info
@@ -1073,8 +1077,9 @@ class Prover:
 
     # --- soundness --------------------------------------------------------------------------------------------------
     def soundness(self, dims: Dims, t_pad: int = 0) -> dict:
-        """The union bound over the PCS levels (paper (17) with ligerito-design's sampling base) and the three
-        sumchecks + batching coins over F_{p^6} (``params.LigeritoParams.soundness`` with the relation shape)."""
+        """The interactive union bound over the PCS levels (paper (17) with ligerito-design's sampling base) and the three
+        sumchecks + batching coins over F_{p^6} (``params.LigeritoParams.soundness`` with the relation shape); what a run
+        may claim from it depends on its coins: ``soundness_claim``."""
         lp = params_mod.LigeritoParams(tall1=1 << dims.k[0], wide_log2=tuple(dims.kprime), rate_log2=tuple(dims.rates),
                                        queries=tuple(dims.queries), zk=False, t_pad=t_pad,
                                        relation=params_mod.RELATIONS.get(self.rel.name))

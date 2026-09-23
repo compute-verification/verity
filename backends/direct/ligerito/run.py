@@ -41,6 +41,10 @@ STUBBED = "zk.py not wired (no masks, no salted leaves, no Libra sumcheck masks,
 ZK_PARTIAL = "ligerito-zk row masks (8 uniform + product triple + Libra row, in free rows) under the bit-interleaved index map z_to_f"
 ZK_MISSING = ("Libra masks in the three sumchecks, the shift-claim reduction and the product-row constraint (ligerito-sumcheck-2), "
               "per-column RS padding + sparse round-1 terms (ligerito-pcs-fast)")
+#: where a cold verify-dir gets each coin mode's coins from (red-team F12 (b)): only the FS transcript is the verifier's own
+COIN_PROVENANCE = {"fiat-shamir": "recomputed from the transcript (verifier-derived)",
+                   "local": "rebuilt from the manifest's coins_seed (prover-side: no soundness)",
+                   "live": "the dump's .coins file, stream binding re-derived (prover-side record: no soundness without the verifier's own log)"}
 
 
 def instances(rel, n: int, procs: int = 8, cache=None) -> list:
@@ -64,6 +68,13 @@ def _git_commit() -> str:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, cwd=Path(__file__).parent).strip()
     except Exception:  # noqa: BLE001
         return "unknown"
+
+
+def _claim_str(sc: dict | None) -> str:
+    if not sc:
+        return "n/a"
+    c = sc["claimed_log2"]
+    return f"{'none' if c is None else f'2^{c:.1f}'} [{sc['basis']}; interactive union 2^{sc['interactive_union_log2']:.2f}]"
 
 
 def _coins_pair(kind: str, seed: int):
@@ -231,7 +242,7 @@ def gate(args) -> int:
         ok, why, info = pv.verify(bt.stmt, res.proof, vc)
         nb = res.proof.n_bytes()
         log(f"[{kind}] honest: prover {res.timings['total']:.2f}s, {nb['total']} B, {res.coins_rounds} coins -> {ok} {why} "
-            f"(verify {info['seconds']:.3f}s)")
+            f"(verify {info['seconds']:.3f}s); soundness {_claim_str(info.get('soundness'))}")
         report["positives"].append({"coins": kind, "ok": ok, "why": why, "bytes": nb, "timings": res.timings, "verify": info})
         failures += not ok
         dump.add(f"honest_{kind}", bt.stmt, res.proof, "accept", (ok, why), kind)
@@ -376,11 +387,16 @@ def verify_dir(d: Path, device: str = "cuda") -> dict:
         else:
             ok, why, info = pv.verify(st, pf, vc)
         good = ok == (e["expect"] == "accept")
-        items.append({"proof": e["proof"], "expect": e["expect"], "accepted": ok, "reason": why, "seconds": info["seconds"], "agrees": good})
+        items.append({"proof": e["proof"], "expect": e["expect"], "accepted": ok, "reason": why, "seconds": info["seconds"], "agrees": good,
+                      "coin_provenance": COIN_PROVENANCE.get(e["coins"], e["coins"]), "soundness": info.get("soundness")})
         if not good:
             print(f"!! {e['proof']}: expected {e['expect']}, python says {ok} ({why})", flush=True)
+    kinds = sorted({e["coins"] for e in man["files"]})
     summ = {"verifier": "python (backends.direct.ligerito.prove.Prover.verify; shares the claim algebra with the prover)",
-            "independent": False, "total": len(items), "agree": sum(i["agrees"] for i in items), "wall": time.perf_counter() - t0}
+            "independent": False, "total": len(items), "agree": sum(i["agrees"] for i in items), "wall": time.perf_counter() - t0,
+            "coin_provenance": {k: COIN_PROVENANCE.get(k, k) for k in kinds}}
+    for k in kinds:
+        print(f"  coins {k}: {COIN_PROVENANCE.get(k, k)}", flush=True)
     (d / "verify_python.json").write_text(json.dumps({**summ, "items": items}, indent=1))
     print(f"python verify-dir {d}: {summ['agree']}/{summ['total']} verdicts as expected in {summ['wall']:.2f}s", flush=True)
     return summ
@@ -528,16 +544,20 @@ def bench(args) -> int:
     peak = max(r.peak_device_bytes for _, it in runs for r, _, _ in it)
     rust_ok = bool(rust and rust["exit"] == 0)
     live_verified = bool(live and args.verifier and (stream_info.get("verdict") or {}).get("accepted"))
+    claim = prove_mod.soundness_claim(snd, args.coins, verifier_record=live_verified)
+    claimed = claim["claimed_log2"]
     zk_on = False                                   # complete ZK: needs the sumcheck masks and the PCS column padding
+    zk_partial = f"partial: {ZK_PARTIAL}; missing: {ZK_MISSING}" if args.zk else None
     if zk_on and live_verified and rust_ok:
         proof_class, zk_mode = "COMPLETE_ZK_BACKEND", "ligerito-zk (masks + per-column RS padding + Libra sumcheck masks), live coins"
         omitted = "external authentication"
     else:
-        proof_class = "NON_ZK_PROOF_DIAGNOSTIC"
-        zk_mode = (f"partial: {ZK_PARTIAL}; missing: {ZK_MISSING}" if args.zk else "none")
+        proof_class, zk_mode = "NON_ZK_PROOF_DIAGNOSTIC", "none"
         omitted = "external authentication; ZK masking (" + (ZK_MISSING if args.zk else STUBBED) + ")"
         if live and not live_verified:
             omitted += "; coins from live.LocalChallenges (no network verifier)" if not args.verifier else "; live session not accepted"
+    if claimed is None:
+        omitted += f"; soundness ({claim['basis']})"
     hw = contract.probe_hardware()
     sw = {"backend": {"name": BACKEND, "commit": _git_commit(), "hash": "blake3", "challenge_expander": "SHAKE-256",
                       "pcs": "Ligerito (ligerito-pcs-fast proto/pcs.commit + open, multi-claim)" if pv.pcs_impl == "pcs-fast"
@@ -552,14 +572,18 @@ def bench(args) -> int:
     fp = contract.fingerprint(
         profile=rel.target.name, domain=contract.DOMAIN, K=K_VU, B=total_vus, N_subbatches=nb_,
         proof_class=proof_class, authentication="excluded", zk_mode=zk_mode,
-        security={"target": -128, "field": "BabyBear", "challenge_field": "F_{p^6} = F_p[x]/(x^6 - 31)", "pcs": "ligerito",
+        security={"target": -128 if claimed is not None and claimed <= -128 else None,
+                  "parameter_target": -128, "field": "BabyBear", "challenge_field": "F_{p^6} = F_p[x]/(x^6 - 31)", "pcs": "ligerito",
                   "parameter_set": "B (pow2: level-1 rate 1/2, later 1/4)", "n": d.n, "kprime": d.kprime, "queries": d.queries,
-                  "rate_log2": d.rates, "final_len": 1 << d.k[-1], "coins": args.coins, "zk": zk_on,
-                  "bound_model": "union bound: paper (17) per level with the sampling base ((1+rho)/2)^|S| + field terms, the three "
-                                 "sumchecks and the batching coins over F_{p^6} (params.LigeritoParams.soundness)",
+                  "rate_log2": d.rates, "final_len": 1 << d.k[-1], "coins": args.coins, "zk": zk_on, "zk_partial": zk_partial,
+                  "bound_model": "interactive union: paper (17) per level with the sampling base ((1+rho)/2)^|S| + field terms, the "
+                                 "three sumchecks, the batching coins and the virtual-row zero claims over F_{p^6} "
+                                 "(params.LigeritoParams.soundness); claimed per coin mode by prove.soundness_claim (red-team F12)",
                   "hash_assumption": "BLAKE3 Merkle (collision resistance); Fiat-Shamir: BLAKE2b/SHAKE-256 transcript" if args.coins == "fiat-shamir"
                                      else "BLAKE3 Merkle (collision resistance); coins independent of the prover's messages",
-                  "achieved_log2": snd["total_log2"], "achieved_bits": -snd["total_log2"], "terms_log2": snd["terms_log2"],
+                  "achieved_log2": claimed, "achieved_bits": None if claimed is None else -claimed, "soundness_basis": claim["basis"],
+                  "interactive_union_log2": snd["total_log2"], "terms_log2": snd["terms_log2"],
+                  **({"fs_queries_log2": claim["queries_log2"], "fs_worst_term": claim["worst_term"]} if "worst_term" in claim else {}),
                   "union_over": 1, "stubbed": STUBBED},
         hardware=hw, software=sw,
         preprocessing=f"constraint compilation + layout constraints + verification key (functions of the relation only, {pv.compile_seconds:.2f}s)",
@@ -594,7 +618,7 @@ def bench(args) -> int:
         contract.measurement("proof.pcs_final_bytes", nbytes["pcs_final"], "B"),
         contract.measurement("prove_wall", med_total, "s"),
         contract.measurement("verify_wall", vmed, "s"),
-        contract.measurement("soundness_bits", -snd["total_log2"], "bits"),
+        *([contract.measurement("soundness_bits", -claimed, "bits")] if claimed is not None else []),
         contract.measurement("split.zero_check_seconds", statistics.median(sum(r.timings.get("zero_check", 0.0) for r, _, _ in it) for _, it in runs), "s"),
         contract.measurement("split.witness_seconds", med_b["witness"], "s"),
     ]
@@ -618,7 +642,7 @@ def bench(args) -> int:
               "run_id": args.run_id or os.environ.get("RESEARCH_RUN_ID") or f"ligerito-{rel.name}-{args.coins}-{int(time.time())}",
               "workload_fingerprint": fp,
               "validation": {"status": status, "checker": checker, "detail": detail,
-                             "evidence": {"soundness": snd, "dumps": dumps, "rust": rust,
+                             "evidence": {"soundness": snd, "soundness_claim": claim, "dumps": dumps, "rust": rust,
                                           "live": stream_info or None,
                                           "reps": [{"wall": w, "batches": [{"prover": r.timings, "verifier": i,
                                                                             "stream_latency": pc.stream.latency if pc else None,
@@ -629,7 +653,8 @@ def bench(args) -> int:
     if problems:
         print("contract problems:", problems, flush=True)
     print(json.dumps({"relation": rel.name, "t.total": med_total, "buckets": med_b, "verifier": vmed, "bytes": nbytes,
-                      "coins": res.coins_rounds, "peak_device_bytes": peak, "soundness_log2": snd["total_log2"],
+                      "coins": res.coins_rounds, "peak_device_bytes": peak, "soundness_log2": claimed, "soundness_basis": claim["basis"],
+                      "interactive_union_log2": snd["total_log2"], "proof_class": proof_class,
                       "rust_exit": rust["exit"] if rust else None, "validation": status}, indent=1, default=str), flush=True)
     if args.out:
         Path(os.path.expandvars(args.out)).write_text(json.dumps(result, indent=1, default=str))

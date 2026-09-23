@@ -68,8 +68,8 @@ D = 6
 PROOF_MAGIC, STMT_MAGIC, VK_MAGIC = b"LGTO0001", b"LGTS0001", b"LGVK0001"
 HASH = "blake3"
 
-__all__ = ["Key", "PcsProof", "Proof", "Statement", "aligned_cover", "read_key", "read_proof", "read_statement", "sha256",
-           "zero_blocks", "zero_points"]
+__all__ = ["FS_QUERIES_LOG2", "Key", "PcsProof", "Proof", "Statement", "aligned_cover", "read_key", "read_proof", "read_statement",
+           "sha256", "soundness_claim", "zero_blocks", "zero_points"]
 
 
 def sha256(b: bytes) -> bytes:
@@ -116,6 +116,31 @@ def zero_points(n_i: int, point: np.ndarray, blocks: list[tuple[int, int]]) -> l
         p[b:n_i, 0] = [(pfx >> t) & 1 for t in range(n_i - b)]
         out.append(p)
     return out
+
+
+#: hash-query budget of the stated Fiat-Shamir bound
+FS_QUERIES_LOG2 = 64
+
+
+def soundness_claim(snd: dict, coins: str, verifier_record: bool = False) -> dict:
+    """What a run's soundness is (red-team F12).  ``snd`` (``Prover.soundness``) is the interactive union: it holds only
+    when every coin is drawn by the verifier after the prover's preceding message.  ``claimed_log2``:
+      live + ``verifier_record`` (the issuing verifier's own session accepted: the coin log is authenticated) -> the union;
+      fiat-shamir -> log2 Q + the largest term (each term bounds the round-by-round error of the rounds it covers; every
+        coin including the query sets is FS, so the query terms dominate), Q = 2^FS_QUERIES_LOG2 hash queries;
+      local, or live slots replayed from a prover-side record -> None (the prover knows / chose the coins)."""
+    union = snd["total_log2"]
+    out = {"coins": coins, "interactive_union_log2": union}
+    if coins == "live" and verifier_record:
+        return {**out, "claimed_log2": union,
+                "basis": "interactive: coins drawn by the live verifier after each prover message (its session accepted)"}
+    if coins == "fiat-shamir":
+        worst = max(snd["terms_log2"], key=snd["terms_log2"].get)
+        return {**out, "claimed_log2": FS_QUERIES_LOG2 + snd["terms_log2"][worst], "queries_log2": FS_QUERIES_LOG2,
+                "worst_term": worst, "basis": f"Fiat-Shamir: Q x the largest round-by-round term, Q = 2^{FS_QUERIES_LOG2} hash queries"}
+    why = {"local": "local-seed coins are known to the prover before it commits (diagnostic)",
+           "live": "live coin slots from a prover-side record, not authenticated by the issuing verifier"}.get(coins, f"coins {coins!r}")
+    return {**out, "claimed_log2": None, "basis": f"none: {why}"}
 
 
 class _W:
