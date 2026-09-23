@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -31,6 +33,47 @@ def test_run_records_and_inspects(tmp_path, capsys):
     assert main(["status", "--runs-dir", str(tmp_path), "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
     assert data["runs"][0]["id"] == s["id"]
+
+
+RESULT_OF_ENV = ("import os, json; json.dump({'foo': os.environ.get('RSEC_FOO'), 'tok': os.environ.get('RSEC_API_TOKEN'), 'cwd': os.getcwd()}, "
+                 "open('result.json', 'w'))")
+
+
+def test_local_env_is_applied_to_the_workload_recorded_and_scoped(tmp_path, monkeypatch):
+    src = tmp_path / "checkout"
+    src.mkdir()
+    monkeypatch.chdir(src)
+    monkeypatch.delenv("RSEC_FOO", raising=False)
+    monkeypatch.setenv("RSEC_API_TOKEN", "callers")
+    rc = main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--env", "RSEC_FOO=bar", "--env", "RSEC_API_TOKEN=s3cret",
+               "--", sys.executable, "-c", RESULT_OF_ENV])
+    assert rc == 0
+    run_dir = next((tmp_path / "runs").iterdir())
+    seen = json.loads((run_dir / "result.json").read_text())
+    assert seen["foo"] == "bar" and seen["tok"] == "s3cret", "the workload sees --env"
+    assert Path(seen["cwd"]).resolve() == run_dir.resolve() and list(src.iterdir()) == [], "default cwd is the run dir: the checkout stays clean"
+    assert "RSEC_FOO" not in os.environ and os.environ["RSEC_API_TOKEN"] == "callers", "--env is scoped to the workload"
+    params = json.loads((run_dir / "job.json").read_text())["store"]["params"]
+    assert params["env"] == {"RSEC_FOO": "bar", "RSEC_API_TOKEN": "<redacted>"}
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--no-sampler", "--env", "NOEQUALS", "--", "true"]) == 2
+
+
+def test_cwd_overrides_the_run_dir_default(tmp_path, monkeypatch):
+    src = tmp_path / "checkout"
+    src.mkdir()
+    monkeypatch.chdir(tmp_path)
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--no-sampler", "--cwd", str(src), "--", sys.executable, "-c", RESULT_OF_ENV]) == 0
+    assert Path(json.loads((src / "result.json").read_text())["cwd"]).resolve() == src.resolve()
+
+
+def test_machine_side_records_the_requests_env(tmp_path):
+    from research.cli import _request_env
+
+    req = tmp_path / "request.json"
+    req.write_text(json.dumps({"schema": "x", "env": {"A": "1", "B_TOKEN": "t"}}))
+    assert _request_env(json.dumps({"machine": "m", "request": str(req)})) == {"A": "1", "B_TOKEN": "t"}
+    assert _request_env(json.dumps({"machine": "m"})) == {} and _request_env(None) == {}
+    assert _request_env(json.dumps({"request": str(tmp_path / "absent.json")})) == {}
 
 
 def test_run_requires_separator_and_command(tmp_path):

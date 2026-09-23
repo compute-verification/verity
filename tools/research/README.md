@@ -45,7 +45,7 @@ calls the harness's `run()` directly: one execution engine, one record.
 uv sync                                  # from the verity root
 uv run pytest                            # all tests
 
-research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [harness flags] -- CMD...
+research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
 research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [...] -- CMD...
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
@@ -57,7 +57,11 @@ research data SUBCOMMAND ...             # the evidence store (below)
 ~~~
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
-`$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). Four facts
+`$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
+workload runs in its run directory unless `--cwd` says otherwise, so a relative
+`result.json` lands there and never in the checkout; `--env K=V` is set for the
+workload only and recorded as the attempt's `params.env` (values of
+secret-named keys redacted). Four facts
 stay separate in `inspect`: exited, result well-formed, validation reported
 passed, preserved. `--require-result` makes exit 0 without a valid result
 exit 65.

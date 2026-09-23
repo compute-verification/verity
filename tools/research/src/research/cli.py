@@ -98,8 +98,8 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes cwd and tree_sha")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="with --on: ship this file to $RESEARCH_RUN_DIR/inputs/")
-    ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or on the machine); applied AND recorded "
-                                                                                 "as the attempt's params.env (values redacted by name pattern)")
+    ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or, with --on, on the machine), recorded as "
+                                                                                 "the attempt's params.env (values of secret-named keys redacted)")
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
@@ -123,11 +123,13 @@ def cmd_run(argv: list[str]) -> int:
     root = R.runs_root(ns.runs_dir)
     run_id = ns.id or R.new_run_id()
     run_dir = root / run_id
+    if ns.on:
+        return _run_remote(ns, run_id, run_dir, harness_opts, command)
     env_map = _parse_env(ns.env)
     if env_map is None:
         return 2
-    if ns.on:
-        return _run_remote(ns, run_id, run_dir, harness_opts, command, env_map)
+    if ns.claimed and not env_map:
+        env_map = _request_env(ns.remote_json)
     if run_dir.exists() and ((run_dir / "job.json").exists() or not ns.claimed):
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
@@ -158,11 +160,19 @@ def cmd_run(argv: list[str]) -> int:
     write_json_atomic(run_dir / "job.json", job)
     os.environ.update(result.env_for(run_id, run_dir, source_sha=getattr(a, "tree_sha", None)))
     os.environ.update(prep["env"])
-    os.environ.update(env_map)                       # --env, applied to the local workload too (issue 4: it used to be shipped only with --on)
+    # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
+    # runs with the caller's environment (a workload-only AWS_* must not become the push credentials)
+    saved_env = {k: os.environ.get(k) for k in env_map}
+    os.environ.update(env_map)
     print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
     try:
         rc = harness_run(a, command)
     finally:
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
         if ns.exclusive_lock:
             remote.release_exclusive(Path(ns.exclusive_lock).parent, run_id)
     _publish_attempt(run_dir, prep)
@@ -189,6 +199,16 @@ def _parse_env(items: list[str]) -> dict[str, str] | None:
             return None
         env[k] = v
     return env
+
+
+def _request_env(remote_json: str | None) -> dict[str, str]:
+    """Machine side: the `env` launch-request applied to this process, read back from the request.json that --remote-json names, so the
+    attempt records it as params.env like a local --env (the values never travel on a command line); {} when unreadable."""
+    try:
+        req = json.loads(Path(json.loads(remote_json or "{}")["request"]).read_text())
+        return {str(k): str(v) for k, v in (req.get("env") or {}).items()}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {}
 
 
 def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[str], run_id: str, run_dir: Path, env_map: dict[str, str] | None = None) -> dict:
@@ -292,17 +312,21 @@ def _source_identity_hint(git_dir: Path) -> dict | None:
     return {"commit": src["source.commit"], "tree": src["source.tree"], "dirty": src["source.dirty"], "dirty_digest": src["source.dirty_digest"]}
 
 
-def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str], env: dict[str, str] | None = None) -> int:
+def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str]) -> int:
     if not ns.project:
         print("research run --on: --project is required (the machine is bound to a project)", file=sys.stderr)
         return 2
     if run_dir.exists():
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
-    env = dict(env or {})
+    env = {}
+    for kv in ns.env:
+        k, sep, v = kv.partition("=")
+        if not sep or not k:
+            print(f"research run: --env wants K=V, got {kv!r}", file=sys.stderr)
+            return 2
+        env[k] = v
     harness_args = ["--stage", ns.stage, *harness_opts]
-    for k, v in env.items():                     # the machine-side `research run` records them as params.env (request.json `env` applies them)
-        harness_args += ["--env", f"{k}={v}"]
     for e in ns.expect:
         harness_args += ["--expect", e]
     if ns.require_result:
