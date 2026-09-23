@@ -63,7 +63,10 @@ def check_pod(pod_id: str, families: dict[str, dict[str, Any]] | None = None) ->
     """Probe a RUNNING pod over ssh (read-only) and judge it.  Raises `remote.Refused` when the pod is not reachable."""
     from . import runpod
 
-    pod = runpod.get(pod_id)
+    try:
+        pod = runpod.get(pod_id)
+    except SystemExit as e:                          # runpod._request turns an HTTP error (404: terminated) into SystemExit
+        raise remote.Refused(f"pod {pod_id}: {e}") from None
     tgt = runpod.ssh_target(pod) if pod and (pod.get("desiredStatus") or "").upper() == "RUNNING" else None
     if tgt is None:
         raise remote.Refused(f"pod {pod_id} is {pod.get('desiredStatus') if pod else 'not found'} or has no ssh port yet")
