@@ -437,8 +437,9 @@ def bench_vu_rel(args, rel: Relation) -> int:
     total = med["total"] + med["hints_host"]
     per_vu = total / total_vus
     hw = contract.probe_hardware()
+    from . import witness as witness_mod
     sw = {"backend": {"name": rel.backend_name, "commit": _git_commit(), "hash": proof.hash_name,
-                      "challenge_expander": "SHAKE-256 (placeholder)"},
+                      "challenge_expander": "SHAKE-256 (placeholder)", "impl": witness_mod.IMPL},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
     if cfg.zk and interactive:
         proof_class, zk_mode = "COMPLETE_ZK_BACKEND", ZK_MODE + ZK_MODE_HM96 + ZK_VACUOUS_NOTE

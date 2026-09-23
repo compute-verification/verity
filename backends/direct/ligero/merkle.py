@@ -57,15 +57,16 @@ def open_device(tree, cols: list[int]) -> list[list[bytes]]:
     """Authentication paths as bytes (leaf level first), from the device tree."""
     import cupy as cp
 
-    paths = []
-    levels = [cp.asnumpy(lvl) for lvl in tree.levels[:-1]]        # (N_k, 8) uint32, LE words
-    for c in cols:
-        path, i = [], int(c)
-        for lvl in levels:
-            path.append(lvl[i ^ 1].astype("<u4").tobytes())
-            i >>= 1
-        paths.append(path)
-    return paths
+    levels = tree.levels[:-1]                                     # (N_k, 8) uint32 each, LE words
+    if not levels or not cols:
+        return [[] for _ in cols]
+    # the siblings gathered on the device -- (t, depth, 8) -- and copied once (was: every level of the tree copied to
+    # the host and t x depth small astype/tobytes calls; lane hostphase).  Same bytes: lvl[(c >> k) ^ 1] per level.
+    idx = cp.asarray(np.asarray([int(c) for c in cols], dtype=np.int64))
+    sib = cp.stack([lvl[(idx >> k) ^ 1] for k, lvl in enumerate(levels)], axis=1)
+    raw = cp.asnumpy(sib).astype("<u4", copy=False).tobytes()
+    depth = len(levels)
+    return [[raw[(c * depth + k) * 32:(c * depth + k + 1) * 32] for k in range(depth)] for c in range(len(cols))]
 
 
 def hash_bytes(data: bytes) -> bytes:

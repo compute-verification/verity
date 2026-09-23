@@ -92,6 +92,16 @@ class _Graph:
 
 _GRAPHS: dict = {}
 USE_CUDA_GRAPH = True
+_WIDE_IDX: dict = {}
+
+
+def _wide_index(sys, tag: str, kidx: int, idx: list[int], device) -> torch.Tensor:
+    key = (id(sys), tag, kidx, str(device))
+    hit = _WIDE_IDX.get(key)
+    if hit is None or hit[0] is not sys:
+        hit = (sys, torch.tensor(list(idx), dtype=torch.int64, device=device))
+        _WIDE_IDX[key] = hit
+    return hit[1]
 
 
 def _hints_eager(p: Params, sys: System, c, a, b, y, device) -> torch.Tensor:
@@ -178,7 +188,11 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device) -> torch.Tensor:
             SL = torch.zeros_like(S)
             SH = torch.zeros_like(S)
             for kidx, idx in enumerate(sys.wide[tag]):
-                A = signed_terms[:, idx].sum(dim=1)
+                # the partition's term indices as a cached device tensor: a Python list here is a host->device copy
+                # inside the CUDA-graph capture, which aborts it (and leaves the allocator's capture state dirty, so
+                # the witness program's capture failed after it) -- lane hostphase
+                idx_t = _wide_index(sys, tag, kidx, idx, device)
+                A = signed_terms.index_select(1, idx_t).sum(dim=1)
                 sk = (A < 0).to(torch.int64)
                 H[f"{tag}.sum.part[{kidx}].sgn"] = sk
                 vk = A.abs()

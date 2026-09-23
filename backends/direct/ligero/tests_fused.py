@@ -24,10 +24,11 @@ _SRC = r"""
 #define P 2013265921u
 typedef unsigned long long u64;
 
-/* partial[s][d][col] = sum over rows [s*chunk, (s+1)*chunk) of C[d][j] * f(X[j][col]) */
+/* partial[s][d][col] = sum over rows [s*chunk, (s+1)*chunk) of C[d][j] * f(X[rows ? rows[j] : j][col]) */
 template <typename T, int D, int SQ>
 __device__ __forceinline__ void lincomb_body(const unsigned* __restrict__ C, const T* __restrict__ X,
-                                             unsigned* __restrict__ partial, int R, int cols, int chunk)
+                                             unsigned* __restrict__ partial, int R, int cols, int chunk,
+                                             const int* __restrict__ rows = nullptr)
 {
     const int col = blockIdx.x * blockDim.x + threadIdx.x;
     const int s = blockIdx.y;
@@ -38,7 +39,7 @@ __device__ __forceinline__ void lincomb_body(const unsigned* __restrict__ C, con
     for (int d = 0; d < D; ++d) acc[d] = 0;
     int cnt = 0;
     for (int j = j0; j < j1; ++j) {
-        u64 x = (u64)(unsigned)X[(size_t)j * cols + col];
+        u64 x = (u64)(unsigned)X[(size_t)(rows ? rows[j] : j) * cols + col];
         if (SQ) x = (x * x + (u64)P - x) % P;              /* x^2 - x mod p (x < p) */
         #pragma unroll
         for (int d = 0; d < D; ++d) acc[d] += (u64)C[(size_t)d * R + j] * x;
@@ -60,6 +61,11 @@ extern "C" __global__ void boolcomb_u32_D@D@(const unsigned* C, const unsigned* 
 { lincomb_body<unsigned, @D@, 1>(C, X, out, R, cols, chunk); }
 extern "C" __global__ void boolcomb_u64_D@D@(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk)
 { lincomb_body<u64, @D@, 1>(C, X, out, R, cols, chunk); }
+/* the booleanity rows read in place through a row-index table (no index_select copy of the rows; lane hostphase) */
+extern "C" __global__ void boolcomb_rows_u32_D@D@(const unsigned* C, const unsigned* X, unsigned* out, int R, int cols, int chunk, const int* rows)
+{ lincomb_body<unsigned, @D@, 1>(C, X, out, R, cols, chunk, rows); }
+extern "C" __global__ void boolcomb_rows_u64_D@D@(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk, const int* rows)
+{ lincomb_body<u64, @D@, 1>(C, X, out, R, cols, chunk, rows); }
 
 /* general quadratic constraints from CSR tables: for side s in {a,b,c}: ptr_s[q]..ptr_s[q+1] -> (j, coef), const_s[q] */
 template <typename T>
@@ -140,7 +146,8 @@ class FusedTests:
         self.device = torch.device(device)
         self.mod = cp.RawModule(code=_SRC.replace("@D@", str(D)), options=("-std=c++17",))
         self.k = {name: self.mod.get_function(f"{name}_D{D}")
-                  for name in ("lincomb_u32", "lincomb_u64", "boolcomb_u32", "boolcomb_u64", "quad_u32", "quad_u64")}
+                  for name in ("lincomb_u32", "lincomb_u64", "boolcomb_u32", "boolcomb_u64", "quad_u32", "quad_u64",
+                               "boolcomb_rows_u32", "boolcomb_rows_u64")}
 
     def _cp(self, t: torch.Tensor):
         return self.cp.asarray(t)
@@ -163,21 +170,31 @@ class FusedTests:
         # (S, D, cols) uint32 partial sums -> (D, cols) int64 mod p; S <= 512 terms < 2^31 fit in int64
         return partial.to(torch.int64).sum(0) % P
 
-    def lincomb(self, C: torch.Tensor, X: torch.Tensor, square_minus: bool = False) -> torch.Tensor:
-        """(D, cols) int64 = C (D, R) @ f(X) (R, cols) mod p; f = identity, or x^2 - x when ``square_minus``."""
+    def lincomb(self, C: torch.Tensor, X: torch.Tensor, square_minus: bool = False,
+                rows: torch.Tensor | None = None) -> torch.Tensor:
+        """(D, cols) int64 = C (D, R) @ f(X) (R, cols) mod p; f = identity, or x^2 - x when ``square_minus``.
+        ``rows`` (R,) int: the rows of X the R combination columns refer to (read in place; ``square_minus`` only) --
+        the same result as ``lincomb(C, X.index_select(0, rows), True)`` without the copy."""
         D, R = C.shape
-        assert D == self.D and X.shape[0] == R
+        assert D == self.D and (X.shape[0] == R if rows is None else rows.shape[0] == R)
         cols = X.shape[1]
         X = X.contiguous()
         C32 = (C % P).to(torch.int32).contiguous()
         (gx, S), chunk = self._grid(cols, R)
         partial = torch.empty((S, D, cols), dtype=torch.int32, device=self.device)
-        name = ("boolcomb" if square_minus else "lincomb") + ("_u32" if X.dtype == torch.int32 else "_u64")
         if X.dtype not in (torch.int32, torch.int64):
             raise TypeError(X.dtype)
+        suffix = "_u32" if X.dtype == torch.int32 else "_u64"
+        args = [self._cp(C32), self._cp(X), self._cp(partial), np.int32(R), np.int32(cols), np.int32(chunk)]
+        if rows is not None:
+            if not square_minus:
+                raise ValueError("rows is for the booleanity combination")
+            name = "boolcomb_rows" + suffix
+            args.append(self._cp(rows.to(torch.int32).contiguous()))
+        else:
+            name = ("boolcomb" if square_minus else "lincomb") + suffix
         with self._stream():
-            self.k[name]((gx, S), (THREADS,), (self._cp(C32), self._cp(X), self._cp(partial),
-                                               np.int32(R), np.int32(cols), np.int32(chunk)))
+            self.k[name]((gx, S), (THREADS,), tuple(args))
         return self._reduce(partial)
 
     def quad_general(self, rho: torch.Tensor, X: torch.Tensor, csr: dict) -> torch.Tensor:
