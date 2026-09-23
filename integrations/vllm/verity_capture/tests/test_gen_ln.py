@@ -5,6 +5,8 @@ classes); the lane's Definitions (GeluErfBf16's measured-table facts, LayerNormA
 placement in the profile's list.  Bit-exactness of the Definitions is the pod difftest's business, not this file's."""
 from __future__ import annotations
 
+import importlib
+
 import json
 import re
 
@@ -14,9 +16,11 @@ import pytest
 from verity_capture import analytic, root_policy
 from verity_capture.compare import _f16_words_to_bf16, _layernorm_family_fields, _qkv_neox_permute
 from verity_capture.events import RunHeader
-from verity_capture.profiles import gen_ln_pythia160m as pythia, profile_module_for_case
+from verity_capture.profiles import profile_module_for_case
 from verity_capture.profiles.gen_ln_patterns import (GeluErfPattern, LayerNormAtenPattern, ResidualAddPattern,
                                                      RotaryEmbeddingPartial)
+
+pythia = importlib.import_module("verity_capture.profiles.derived_PYTHIA160M")
 from verity_capture.patterns import BiasAdd, RotaryEmbedding
 from verity_vllm.registry import b1
 from verity_vllm.registry.quarantine.ln import ALL_DEFINITIONS, ALL_PRIMITIVES, gelu_erf_bf16, gelu_erf_table, layer_norm_aten
@@ -38,14 +42,15 @@ def test_config_is_config_of_plus_the_listed_hand_fields():
         assert C[k] == base[k], k
     assert (C["H"], C["NL"], C["NH"], C["KVH"], C["D"], C["I"], C["V"]) == (768, 12, 12, 12, 64, 3072, 50304)
     assert C["BIAS"] is True and C["tie_word_embeddings"] is False and C["BN"] == b1.fa2_kblock_n(64) == 128
-    hand = sorted(k for k, v in pythia.PROVENANCE.items() if v == "hand")
-    assert hand == sorted(pythia.HAND) == pythia.PROFILE.notes["hand_fields"]
+    hand = pythia.PROFILE.notes["hand_fields"]
+    assert hand == sorted(pythia.HAND)
+    assert {k for k, v in pythia.PROVENANCE.items() if v == "hand"} <= set(hand)     # [P6] a `key` fact's value is config.json's (hf-config)
     assert set(hand) == {"model", "revision", "ROPE_THETA", "ROT", "NORM", "hidden_act", "use_parallel_residual", "layer_norms", "dense_bias"}
     assert C["ROT"] == 16 == int(64 * pythia.HF_CONFIG["rotary_pct"]) and analytic.rotary_dim(C) == 16
 
 
 def test_profile_is_discovered_by_case():
-    assert profile_module_for_case("PYTHIA160M") == "gen_ln_pythia160m"
+    assert profile_module_for_case("PYTHIA160M") == "derived_PYTHIA160M"
     assert pythia.PROFILE.notes["case"] == "PYTHIA160M" and pythia.PROFILE.id == pythia.PROFILE_ID
 
 
@@ -118,12 +123,10 @@ def test_compare_family_fields_and_checkpoint_conversions():
 # --- header check -----------------------------------------------------------------------------------------------------------
 
 def test_check_header_accepts_the_registered_config_and_reports_drift():
-    ok = RunHeader.__new__(RunHeader)
-    object.__setattr__(ok, "model", {"config": dict(pythia.HF_CONFIG)})
-    assert pythia.check_header(ok) == []
-    bad = RunHeader.__new__(RunHeader)
-    object.__setattr__(bad, "model", {"config": {**pythia.HF_CONFIG, "rotary_pct": 1.0, "use_parallel_residual": False}})
-    out = pythia.check_header(bad)
+    def header(cfg):
+        return RunHeader("verity-capture/log/v1", "2026-09-23T00:00:00Z", "pid", {}, {"repo": pythia.MODEL, "config": cfg}, {"requests": []})
+    assert pythia.check_header(header(dict(pythia.HF_CONFIG))) == []
+    out = pythia.check_header(header({**pythia.HF_CONFIG, "rotary_pct": 1.0, "use_parallel_residual": False}))
     assert any("rotary_pct" in m for m in out) and any("use_parallel_residual" in m for m in out)
 
 

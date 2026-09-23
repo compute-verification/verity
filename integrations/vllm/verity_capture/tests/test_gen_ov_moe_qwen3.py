@@ -15,6 +15,8 @@ What is proved here, CPU only (no rank log exists yet -- R17's Qwen3 TP2 rank lo
 """
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
 import pytest
 
@@ -25,9 +27,11 @@ from verity.ir.program import Program
 from verity_capture import analytic
 from verity_capture.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_capture.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
-from verity_capture.profiles import PROFILE_BY_CASE, gen_ov_moe_qwen3 as Q3, profile_module_for_case
-from verity_capture.profiles.gen_llama_llama32_1b_tp2rank import EmbeddingShardCuda
+from verity_capture.profiles import profile_module_for_case
 from verity_capture.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
+from verity_capture.tp.embedding_shard import EmbeddingShardCuda
+
+Q3 = importlib.import_module("verity_capture.profiles.derived_QWEN3_30B_A3B_tp2")
 from verity_capture.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from verity_capture.tp.collective_pattern import TpCollective
 from verity_capture.tree import step_events
@@ -57,7 +61,7 @@ def test_rank_profile_states_the_shard_configuration_and_the_rank_patterns():
     assert C["BIAS"] is False and C["tie_word_embeddings"] is False and C["QK_NORM"] == "head" and C["NORM_TOPK_PROB"] is True and C["BN"] == 64
     assert C["MOE_I_FULL"] == 768 and C["EPS"] == 1e-6 and C["ROPE_THETA"] == 1e6
     names = [type(x).__name__ for x in Q3.PROFILE.patterns]
-    assert names[:4] == ["EmbeddingShardCuda", "TpCollective", "GemmLaunchTunedAda", "MoEFusedExperts"], names[:5]
+    assert names[:4] == ["EmbeddingShardCuda", "TpCollective", "GemmLaunchTuned", "MoEFusedExperts"], names[:5]
     assert type(Q3.PROFILE.patterns[0]) is EmbeddingShardCuda and Q3.PROFILE.patterns[1].world == 2
     moe = Q3.PROFILE.patterns[3]
     assert moe.renormalize is True and moe.config is C and len(moe.scope_patterns) == 1 and isinstance(moe.scope_patterns[0], TpCollective)
@@ -125,13 +129,13 @@ def test_tp1_profile_is_the_same_module_at_world_one():
     c1 = p1.config
     assert (c1["NH"], c1["KVH"], c1["I"], c1["V"], c1["QKV"], c1["NUM_EXPERTS"]) == (32, 4, 768, 151936, 5120, 128)
     names = [type(x).__name__ for x in p1.patterns]
-    assert names[:2] == ["GemmLaunchTunedAda", "MoEFusedExperts"] and "TpCollective" not in names and "EmbeddingShardCuda" not in names
+    assert names[:2] == ["GemmLaunchTuned", "MoEFusedExperts"] and "TpCollective" not in names and "EmbeddingShardCuda" not in names
     assert p1.patterns[1].scope_patterns == () and p1.patterns[1].renormalize is True
     assert p1.id != Q3.PROFILE.id and "tp" not in p1.id
 
 
-def test_profile_by_case_names_this_module():
-    assert PROFILE_BY_CASE["QWEN3_30B_A3B"] == "gen_ov_moe_qwen3" and profile_module_for_case("QWEN3_30B_A3B") == "gen_ov_moe_qwen3"
+def test_profile_module_for_case_derives_the_rank_module_name():
+    assert profile_module_for_case("QWEN3_30B_A3B", 2) == "derived_QWEN3_30B_A3B_tp2" and profile_module_for_case("QWEN3_30B_A3B") == "derived_QWEN3_30B_A3B"
 
 
 def test_injected_fused_moe_pins_are_the_pattern_s_pins_and_are_recorded():
@@ -344,7 +348,7 @@ def test_padded_construction_refuses_under_the_renormalising_router():
 
 
 def test_olmoe_profile_is_unchanged_by_the_renormalize_and_scope_pattern_fields():
-    from verity_capture.profiles import gen_ov_moe_olmoe as OV
+    OV = importlib.import_module("verity_capture.profiles.derived_OLMOE")
     moe = next(x for x in OV.PROFILE.patterns if isinstance(x, MoEFusedExperts))
     assert moe.renormalize is False and moe.scope_patterns == () and moe.fused_pins == FUSED_MOE_PINS
 

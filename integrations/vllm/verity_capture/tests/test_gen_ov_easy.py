@@ -5,6 +5,8 @@ the model's (N, K) is a key of vLLM d9105ea80's tuned sm_89 table, so the base `
 torch-free, < 0.1 GB, a few seconds."""
 from __future__ import annotations
 
+import importlib
+
 import hashlib
 import json
 import shlex
@@ -18,18 +20,19 @@ from verity_capture import analytic
 from verity_capture.card import workload_summary
 from verity_capture.events import RunHeader
 from verity_capture.patterns import GemmLaunch
-from verity_capture.profiles import gen_llama_llama32_1b as L
 from verity_capture.profiles import gen_llama_patterns as GP
-from verity_capture.profiles import gen_llama_qwen05 as Q
-from verity_capture.profiles import gen_ov_easy_qwen25_7b as B7
 from verity_capture.profiles import profile_for_case, profile_module_for_case
 from verity_capture.profiles import vllm_d9105ea80_sm89_eager as BASE
 from verity_capture.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
+
+L = importlib.import_module("verity_capture.profiles.derived_LLAMA32_1B")
+Q = importlib.import_module("verity_capture.profiles.derived_QWEN05")
+B7 = importlib.import_module("verity_capture.profiles.derived_B7")
 from verity_vllm.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"
-WORKLOAD = "verity_capture/profiles/workload_b7_32x16_1req.json"
+WORKLOAD = "workloads/workload_b7_32x16_1req.json"
 STATIC_KEYS = ("H", "NL", "NH", "KVH", "D", "I", "V", "QKV", "GU", "EPS", "ROPE_THETA", "MAX_POS", "BIAS", "tie_word_embeddings")
 
 #: the KEY SET of `_BATCH_INVARIANT_MATMUL_TUNED_CONFIGS["ada"]` in the pinned vLLM (d9105ea80,
@@ -104,20 +107,20 @@ def test_b7_facts_are_derived_from_config_json():
 # --- the profile is build_profile(C): shared patterns, shared pins, untied weight map --------------------------------------
 
 def test_profile_is_discovered_by_case_and_is_the_base_pattern_list():
-    assert profile_module_for_case("B7") == "gen_ov_easy_qwen25_7b"
+    assert profile_module_for_case("B7") == "derived_B7"
     prof = profile_for_case("B7")
     assert prof is B7.PROFILE and prof.notes["case"] == "B7" and prof.config is B7.C and prof.id == B7.PROFILE_ID
     assert prof.id not in (BASE.PROFILE.id, Q15.PROFILE.id, L.PROFILE.id, Q.PROFILE.id)
-    # configuration-only: the base pattern list, re-parameterized (no GemmLaunchTuned: no tabled shape, see below)
-    assert [p.name for p in prof.patterns] == [p.name for p in BASE.PROFILE.patterns]
-    assert [type(p) for p in prof.patterns] == [type(p) for p in BASE.PROFILE.patterns]
-    assert "specializations" not in prof.notes
-    assert prof.kernel_allowlist is BASE.PROFILE.kernel_allowlist
+    # configuration-only: the base pattern list, re-parameterized, behind the target's tuned-GEMM sibling ([P6] every derived profile
+    # registers it; no B7 shape is a tabled key, see below, so it never fires here)
+    assert [p.name for p in prof.patterns] == ["gemm.matmul_kernel_persistent.tuned", *[p.name for p in BASE.PROFILE.patterns]]
+    assert [type(p) for p in prof.patterns[1:]] == [type(p) for p in BASE.PROFILE.patterns]
+    assert prof.kernel_allowlist == BASE.PROFILE.kernel_allowlist
     pins = prof.notes["pins"]
     assert pins["gemm"] == BASE.PROFILE.notes["pins"]["gemm"] and pins["rms_norm"] == BASE.PROFILE.notes["pins"]["rms_norm"]
     assert pins["attention"]["kBlockN"] == 64 == Q15.PROFILE.notes["pins"]["attention"]["kBlockN"]
     assert pins["kv_cache"] == BASE.PROFILE.notes["pins"]["kv_cache"]
-    assert prof.notes["engine_args"] == {"gpu_memory_utilization": 0.95} and prof.accepted is False
+    assert prof.accepted is False          # [P6] the engine arg (gpu_memory_utilization) is the workload's / the CLI's, not a profile fact
 
 
 def test_weight_field_maps_the_untied_lm_head_onto_its_own_field():
@@ -171,7 +174,7 @@ def test_no_b7_gemm_shape_is_a_tuned_table_key():
     assert set(_gemm_shapes(L.C).values()) & set(ADA_TUNED_KEYS) == {(2048, 2048)} and _gemm_shapes(L.C)["o_proj"] == (2048, 2048)
     # [R15 moe GEMM-ADA-TABLE] the registry now pins all five ada keys verbatim (block_k per key as vLLM has it), not only (2048, 2048)
     assert set(GP.ADA_TUNED_GEMM) == set(ADA_TUNED_KEYS) and all(GP.ADA_TUNED_GEMM[nk]["BLOCK_SIZE_K"] == bk for nk, bk in ADA_TUNED_KEYS.items())
-    assert isinstance(B7.PROFILE.patterns[0], GemmLaunch)                                        # base GemmLaunch first: no tuned sibling
+    assert isinstance(B7.PROFILE.patterns[1], GemmLaunch) and B7.PROFILE.patterns[0].name.endswith(".tuned")   # [P6] the target's tuned sibling first, inert on B7's shapes
 
 
 def test_every_b7_gemm_k_is_a_multiple_of_the_pinned_block_k():
@@ -193,7 +196,7 @@ def test_workload_file():
     assert len(ids) == r["prompt_len"] == 32 and r["max_tokens"] == 16 and r["index"] == 0
     assert all(isinstance(t, int) and 0 <= t < B7.C["V"] for t in ids) and len(set(ids)) > 16
     # the same 32 ids as the QWEN05 workload: the two snapshots ship a byte-identical tokenizer.json (sha in tokenizer_note)
-    q = json.loads((REPO / "verity_capture" / "profiles" / "workload_qwen05_32x16_1req.json").read_text())
+    q = json.loads((REPO / "workloads" / "workload_qwen05_32x16_1req.json").read_text())
     assert ids == q["requests"][0]["prompt_token_ids"] and r["prompt_text"] == q["requests"][0]["prompt_text"]
     assert r["request_id"] != q["requests"][0]["request_id"] and "c0382117ea329cdf" in doc["tokenizer_note"]
     assert "accepted_token_ids" not in r and "accepted_from" not in r and "accepted" not in doc    # the control run is the reference
@@ -220,7 +223,7 @@ def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
     assert "--verify-weights" in cmds["capture"]
     for st in ("resolve", "compare", "fold", "root_policy", "wiring", "replay_a", "replay_chain"):
         c = cmds[st]
-        assert c[c.index("--profile") + 1] == "gen_ov_easy_qwen25_7b", (st, c)
+        assert c[c.index("--profile") + 1] == "derived_B7", (st, c)
     assert not any(st.startswith("replay_b_step") for st in cmds)
     rp = cmds["root_policy"]
     assert rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"                 # 4 shards: model-0000{1..4}-of-00004.safetensors

@@ -763,7 +763,7 @@
   }
  },
  "probe": {
-  "n": 262
+  "n": 286
  },
  "root_class": {
   "lm_head.weight": "weight",
@@ -776,6 +776,7 @@
   "model.layers.0.mlp.gate.weight": "weight",
   "model.layers.0.mlp.shared_expert.gate_up_proj.weight": "unmodelled-moe-variant",
   "model.layers.0.post_attention_layernorm.weight": "weight",
+  "model.layers.0.self_attn.attn._prob_scale": "ignored",
   "model.layers.0.self_attn.attn._v_scale": "ignored",
   "model.layers.0.self_attn.attn.k_scale": "ignored",
   "model.layers.0.self_attn.attn.prob_scale": "ignored",
@@ -793,6 +794,7 @@
   "model.layers.1.mlp.gate.weight": "weight",
   "model.layers.1.mlp.shared_expert.gate_up_proj.weight": "unmodelled-moe-variant",
   "model.layers.1.post_attention_layernorm.weight": "weight",
+  "model.layers.1.self_attn.attn._prob_scale": "ignored",
   "model.layers.1.self_attn.attn._v_scale": "ignored",
   "model.layers.1.self_attn.attn.k_scale": "ignored",
   "model.layers.1.self_attn.attn.prob_scale": "ignored",
@@ -810,6 +812,7 @@
   "model.layers.47.mlp.gate.weight": "weight",
   "model.layers.47.mlp.shared_expert.gate_up_proj.weight": "unmodelled-moe-variant",
   "model.layers.47.post_attention_layernorm.weight": "weight",
+  "model.layers.47.self_attn.attn._prob_scale": "ignored",
   "model.layers.47.self_attn.attn._v_scale": "ignored",
   "model.layers.47.self_attn.attn.k_scale": "ignored",
   "model.layers.47.self_attn.attn.prob_scale": "ignored",

@@ -170,7 +170,15 @@ def test_moe_hand_facts_and_derived_router_vpt():
 
 # --------------------------------------------------------------------------------------------------------------------- world > 1
 
-@pytest.mark.parametrize("role", sorted(K.TP_WORLDS))
+TP2_ROLES = sorted(r for r, w in K.fixture_roles() if w == 2)
+
+
+def test_the_recorded_tp2_worlds_are_pinned():
+    """The two retired `*_tp2rank` hand modules and the Qwen3-MoE TP2 half: three roles have a TP2 fixture (data, not a table)."""
+    assert len(TP2_ROLES) == 3
+
+
+@pytest.mark.parametrize("role", TP2_ROLES)
 def test_rank_profile_is_the_world_divided_configuration(role):
     """The claim the retired `*_tp2rank` docstrings made, checked: heads / kv heads / the (expert) width / the vocabulary divided by the
     world, the head width kept, the two TP patterns first, the sampler over the FULL vocabulary."""

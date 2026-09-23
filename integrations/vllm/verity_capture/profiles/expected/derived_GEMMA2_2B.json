@@ -218,45 +218,45 @@
   },
   {
    "__type__": "EmbedScale",
-   "name": "gemma2.embed_scale"
+   "name": "dense.embed_scale"
   },
   {
    "__type__": "GeluTanhAndMul",
-   "name": "gemma2.act.gelu_tanh_and_mul"
+   "name": "dense.act.gelu_tanh_and_mul"
   },
   {
    "__type__": "MeanDimTriton",
    "block_size": 1024,
-   "name": "gemma2.mean_dim.triton_mean_kernel",
+   "name": "dense.mean_dim.triton_mean_kernel",
    "num_warps": 4
   },
   {
    "__type__": "SquarePow",
-   "name": "gemma2.square"
+   "name": "dense.square"
   },
   {
    "__type__": "RsqrtF32Pattern",
-   "name": "gemma2.rsqrt"
+   "name": "dense.rsqrt"
   },
   {
    "__type__": "ScalarAddF32",
-   "name": "gemma2.add_scalar"
+   "name": "dense.add_scalar"
   },
   {
    "__type__": "AddWidened",
-   "name": "gemma2.add_widened"
+   "name": "dense.add_widened"
   },
   {
    "__type__": "MulF32",
-   "name": "gemma2.mul_f32"
+   "name": "dense.mul_f32"
   },
   {
    "__type__": "NarrowToBf16",
-   "name": "gemma2.narrow_to_bf16"
+   "name": "dense.narrow_to_bf16"
   },
   {
    "__type__": "Bf16ScalarChain",
-   "name": "gemma2.bf16_scalar_chain"
+   "name": "dense.bf16_scalar_chain"
   },
   {
    "__type__": "BiasAdd",
@@ -779,7 +779,7 @@
   }
  },
  "probe": {
-  "n": 262
+  "n": 286
  },
  "root_class": {
   "lm_head.weight": "weight",
@@ -790,6 +790,7 @@
   "model.layers.0.post_attention_layernorm.weight": "weight",
   "model.layers.0.post_feedforward_layernorm.weight": "weight",
   "model.layers.0.pre_feedforward_layernorm.weight": "weight",
+  "model.layers.0.self_attn.attn._prob_scale": "ignored",
   "model.layers.0.self_attn.attn._v_scale": "ignored",
   "model.layers.0.self_attn.attn.k_scale": "ignored",
   "model.layers.0.self_attn.attn.prob_scale": "ignored",
@@ -803,6 +804,7 @@
   "model.layers.1.post_attention_layernorm.weight": "weight",
   "model.layers.1.post_feedforward_layernorm.weight": "weight",
   "model.layers.1.pre_feedforward_layernorm.weight": "weight",
+  "model.layers.1.self_attn.attn._prob_scale": "ignored",
   "model.layers.1.self_attn.attn._v_scale": "ignored",
   "model.layers.1.self_attn.attn.k_scale": "ignored",
   "model.layers.1.self_attn.attn.prob_scale": "ignored",
@@ -816,6 +818,7 @@
   "model.layers.25.post_attention_layernorm.weight": "weight",
   "model.layers.25.post_feedforward_layernorm.weight": "weight",
   "model.layers.25.pre_feedforward_layernorm.weight": "weight",
+  "model.layers.25.self_attn.attn._prob_scale": "ignored",
   "model.layers.25.self_attn.attn._v_scale": "ignored",
   "model.layers.25.self_attn.attn.k_scale": "ignored",
   "model.layers.25.self_attn.attn.prob_scale": "ignored",

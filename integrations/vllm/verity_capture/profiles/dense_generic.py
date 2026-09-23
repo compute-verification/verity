@@ -1,7 +1,7 @@
 """[X-07, M-NOPROFILE] Configuration-derived κ profile for ANY dense Llama-architecture checkpoint role — no per-model module.
 
 [P6, 2026-09-23] The constructor moved to `profiles.generic` (every architecture class, `world > 1`, the family facts table); this module keeps
-the HF config.json lookup (`find_hf_config`, `checkpoint_entry`), the dense vocabulary (`DENSE_FAMILIES`, `supported_family`) and the X-07
+the HF config.json lookup (`find_hf_config`, `checkpoint_entry`), the structural-refusal shim (`supported_family` -> `generic.structural_refusal`) and the X-07
 module name `dense_<ROLE>` (`role_of_module`), and delegates `build_dense_profile` / `make_module` to `generic`.
 
 Why (R12 finding M-NOPROFILE, lane dC): Mistral-7B Build passed but Match said "no profile module declares case 'MISTRAL7B'".
@@ -22,7 +22,7 @@ What decides applicability at Match time (unchanged, and the point):
     `input_layernorm`, `post_attention_layernorm`; `qkv_b` iff `C["BIAS"]`, `lm_head` iff untied) → `analytic.weights_type(C)`.
 A checkpoint whose architecture is NOT this vocabulary (MoE routing, different param names, sliding window, softcap, …) is not
 made to fit: its roots resolve as unknown / its kernels as Unsupported, and `supported_family(cfg)` refuses the derivation
-fail-closed for the `model_type`s whose vLLM implementation is known to add ops outside the dense vocabulary.
+fail-closed for the `model_type`s whose vLLM implementation is outside the family facts table.
 
 Where the config comes from (`find_hf_config(role)`, first hit wins; the source is recorded in `PROFILE.notes["hf_config"]`):
   1. `profiles/hf_configs/<ROLE>.config.json` — a byte copy shipped with the package (`record_v5/ship.sh` ships `verity_capture/`,
@@ -50,15 +50,8 @@ MANIFEST = PACKAGE_ROOT / "manifests" / "checkpoints.json"
 HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")
 OUT_HF_CONFIG_DIR = PACKAGE_ROOT / "data" / "hf_configs"
 
-#: `model_type`s whose vLLM d9105ea80 implementation is the dense Llama-architecture vocabulary the shared patterns / weight map
-#: cover (LlamaForCausalLM, Qwen2ForCausalLM, MistralForCausalLM — same kernels, same parameter names; Qwen2 adds the fused QKV
-#: bias, a `C["BIAS"]` fact).  Anything else refuses fail-closed here (Gemma-2: embedding scale / softcap / sliding window;
-#: Phi-3: fused `qkv_proj`/`gate_up_proj` under other names + LongRoPE; MoE families: routing) — those need their own mechanism
-#: record, not a silently mis-fitted profile.
-#: [R15 fp8] `qwen3` (Qwen3ForCausalLM): the same dense block plus the per-head q/k RMSNorm before RoPE -- `analytic.FAMILY_RULES["qwen3"]`
-#: records it as `C["QK_NORM"] = "head"`, `dense_layer_weights_type` adds the `q_norm`/`k_norm` `[D]` fields, and the existing
-#: `RMSNormTritonLaunch` pattern owns the launches (vLLM flattens `q.view(M, NH, D)` to `[M*NH, D]` rows for `_rms_norm_kernel`).
-DENSE_FAMILIES: tuple[str, ...] = ("llama", "qwen2", "mistral", "qwen3")
+#: [P6] the served vocabulary is `family_facts.FAMILY_FACTS` (every family's vLLM hard-codes with provenance); a configuration outside it, or
+#: with a structure the table does not describe, refuses fail-closed in `generic.structural_refusal` -- not a silently mis-fitted profile.
 
 
 def module_name(role: str) -> str:
@@ -126,23 +119,13 @@ def find_hf_config(role: str) -> tuple[Path, str, dict[str, Any] | None] | None:
 
 
 def supported_family(cfg: dict[str, Any]) -> str | None:
-    """None when the config's `model_type` is in the dense vocabulary, else the refusal reason."""
-    fam = str(cfg.get("model_type", "")).lower()
-    if fam not in DENSE_FAMILIES:
-        return f"model_type {fam!r} is not in the dense Llama-architecture vocabulary {DENSE_FAMILIES} (needs its own mechanism record)"
-    if cfg.get("sliding_window"):
-        return f"sliding_window={cfg['sliding_window']!r}: windowed attention is outside the pinned FA2 splitkv patterns"
-    if fam == "qwen3" and not cfg.get("head_dim"):
-        return "qwen3 without head_dim in config.json: the per-head q/k norm width is not derivable"
-    # [R15 fp8] a quantized checkpoint is served only under the ONE modelled scheme (block-scaled dynamic e4m3 FP8); anything else refuses
-    why = analytic.quant_refusal(cfg.get("quantization_config"))
-    if why:
-        return why
-    return None
+    """None when the family facts table describes the configuration (`generic.structural_refusal`), else the refusal reason."""
+    from . import generic
+    return generic.structural_refusal(cfg)
 
 
 def derive_config(cfg: dict[str, Any], *, repo: str | None, revision: str | None) -> tuple[dict[str, Any], dict[str, str]]:
-    """`analytic.config_of` + FA2 geometry, with the dense-vocabulary structural checks (fail-closed)."""
+    """`analytic.config_of` + FA2 geometry, with the family-facts structural checks (fail-closed)."""
     why = supported_family(cfg)
     if why:
         raise ValueError(why)

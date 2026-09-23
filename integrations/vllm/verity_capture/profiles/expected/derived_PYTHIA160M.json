@@ -703,7 +703,7 @@
   }
  },
  "probe": {
-  "n": 262
+  "n": 286
  },
  "root_class": {
   "embed_out.weight": "weight",
@@ -711,7 +711,10 @@
   "gpt_neox.final_layer_norm.bias": "weight",
   "gpt_neox.final_layer_norm.weight": "weight",
   "gpt_neox.layers.0.attention.attn._prob_scale": "ignored",
+  "gpt_neox.layers.0.attention.attn._v_scale": "ignored",
   "gpt_neox.layers.0.attention.attn.k_scale": "ignored",
+  "gpt_neox.layers.0.attention.attn.prob_scale": "ignored",
+  "gpt_neox.layers.0.attention.attn.q_scale": "ignored",
   "gpt_neox.layers.0.attention.dense.bias": "weight",
   "gpt_neox.layers.0.attention.dense.weight": "weight",
   "gpt_neox.layers.0.attention.query_key_value.bias": "weight",
@@ -726,7 +729,10 @@
   "gpt_neox.layers.0.post_attention_layernorm.bias": "weight",
   "gpt_neox.layers.0.post_attention_layernorm.weight": "weight",
   "gpt_neox.layers.1.attention.attn._prob_scale": "ignored",
+  "gpt_neox.layers.1.attention.attn._v_scale": "ignored",
   "gpt_neox.layers.1.attention.attn.k_scale": "ignored",
+  "gpt_neox.layers.1.attention.attn.prob_scale": "ignored",
+  "gpt_neox.layers.1.attention.attn.q_scale": "ignored",
   "gpt_neox.layers.1.attention.dense.bias": "weight",
   "gpt_neox.layers.1.attention.dense.weight": "weight",
   "gpt_neox.layers.1.attention.query_key_value.bias": "weight",
@@ -741,7 +747,10 @@
   "gpt_neox.layers.1.post_attention_layernorm.bias": "weight",
   "gpt_neox.layers.1.post_attention_layernorm.weight": "weight",
   "gpt_neox.layers.11.attention.attn._prob_scale": "ignored",
+  "gpt_neox.layers.11.attention.attn._v_scale": "ignored",
   "gpt_neox.layers.11.attention.attn.k_scale": "ignored",
+  "gpt_neox.layers.11.attention.attn.prob_scale": "ignored",
+  "gpt_neox.layers.11.attention.attn.q_scale": "ignored",
   "gpt_neox.layers.11.attention.dense.bias": "weight",
   "gpt_neox.layers.11.attention.dense.weight": "weight",
   "gpt_neox.layers.11.attention.query_key_value.bias": "weight",

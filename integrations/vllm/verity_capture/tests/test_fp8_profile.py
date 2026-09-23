@@ -48,7 +48,7 @@ def test_shipped_fp8_config_is_the_manifest_bytes():
 
 
 def test_qwen3_fp8_role_derives_a_profile_with_the_fp8_patterns_first():
-    assert profile_module_for_case(ROLE) == f"dense_{ROLE}"
+    assert profile_module_for_case(ROLE) == f"derived_{ROLE}"
     p = profile_for_case(ROLE)
     assert p.id == "vllm-d9105ea80-sm89-eager-fp8-block128-qwen3_4b_fp8"
     C = p.config

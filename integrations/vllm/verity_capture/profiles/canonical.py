@@ -25,35 +25,49 @@ from typing import Any
 
 from .. import analytic
 
-#: every per-layer parameter suffix any family map knows (base Llama vocabulary, Qwen3 head norms, FP8 scales, Gemma-2 extra norms,
-#: fused-MoE experts / router, OLMoE all-heads norms, GPT-NeoX LayerNorm-with-bias family) plus names none should bind
-LAYER_SUFFIXES: tuple[str, ...] = (
-    "input_layernorm.weight", "self_attn.qkv_proj.weight", "self_attn.qkv_proj.bias", "self_attn.o_proj.weight", "post_attention_layernorm.weight",
-    "mlp.gate_up_proj.weight", "mlp.down_proj.weight", "self_attn.rotary_emb.cos_sin_cache",
-    "self_attn.q_norm.weight", "self_attn.k_norm.weight",
-    "self_attn.qkv_proj.weight_scale_inv", "self_attn.o_proj.weight_scale_inv", "mlp.gate_up_proj.weight_scale_inv", "mlp.down_proj.weight_scale_inv",
-    "pre_feedforward_layernorm.weight", "post_feedforward_layernorm.weight",
-    "mlp.gate.weight", "mlp.experts.routed_experts.w13_weight", "mlp.experts.routed_experts.w2_weight",
-    "mlp.shared_expert.gate_up_proj.weight", "mlp.gate.e_score_correction_bias", "mlp.experts.expert_map",
-    "self_attn.attn.k_scale", "self_attn.attn._v_scale", "self_attn.attn.q_scale", "self_attn.attn.prob_scale",
-    "input_layernorm.bias", "attention.query_key_value.weight", "attention.query_key_value.bias", "attention.dense.weight", "attention.dense.bias",
-    "post_attention_layernorm.bias", "mlp.dense_h_to_4h.weight", "mlp.dense_h_to_4h.bias", "mlp.dense_4h_to_h.weight", "mlp.dense_4h_to_h.bias",
-    "attention.rotary_emb.cos_sin_cache", "attention.attn.k_scale", "attention.attn._prob_scale",
-    "self_attn.q_proj.weight", "mlp.up_proj.weight", "nonsense.weight",
-)
-TOP_NAMES: tuple[str, ...] = ("model.embed_tokens.weight", "lm_head.weight", "model.norm.weight", "model.normalizer",
-                              "gpt_neox.embed_in.weight", "gpt_neox.final_layer_norm.weight", "gpt_neox.final_layer_norm.bias", "embed_out.weight",
-                              "model.rotary_emb.cos_sin_cache", "nonsense")
-LAYER_PREFIXES: tuple[str, ...] = ("model.layers", "gpt_neox.layers")
+#: the names no map should bind (a probe of the maps' refusals), and the quantization / attention-scale placeholders the base map knows
+#: by shape rather than by family: the family and base vocabularies themselves are read off the maps (`probe_vocabulary`)
+_UNBOUND_PROBES: tuple[str, ...] = ("self_attn.q_proj.weight", "mlp.up_proj.weight", "nonsense.weight")
+#: one name per MoE variant `generic._UNMODELLED_MOE` refuses (shared experts, router bias, expert-parallel map)
+_MOE_VARIANT_PROBES: tuple[str, ...] = ("mlp.shared_expert.gate_up_proj.weight", "mlp.gate.e_score_correction_bias", "mlp.experts.expert_map")
+_SCALE_SUFFIX = "_scale_inv"
+_ATTN_SCALE_NAMES: tuple[str, ...] = ("k_scale", "_v_scale", "q_scale", "prob_scale", "_prob_scale")
+_TOP_PROBES: tuple[str, ...] = ("model.embed_tokens.weight", "lm_head.weight", "model.norm.weight", "model.rotary_emb.cos_sin_cache", "nonsense")
+
+
+def probe_vocabulary() -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """(layer prefixes, per-layer suffixes, top-level names): the union over the base Llama map and every family's declared parameter names
+    (`family_facts.FAMILY_FACTS[*]["params"]`), plus the FP8 block scales of the base linears, the attention-scale placeholders and the
+    unbound probes.  Derived from the maps, so a new family's names enter the probe set with its facts entry."""
+    from . import family_facts as FF, vllm_d9105ea80_sm89_eager as base
+    prefixes: list[str] = ["model.layers"]
+    suffixes: list[str] = [*base._LAYER_FIELDS, base.COS_SIN_BUFFER]
+    suffixes += [f"{k}{_SCALE_SUFFIX}" for k in base._LAYER_FIELDS if k.endswith(".weight") and "norm" not in k]
+    tops: list[str] = list(_TOP_PROBES)
+    attn_scales: list[str] = ["self_attn.attn"]
+    for F in FF.FAMILY_FACTS.values():
+        P = F.get("params") or {}
+        if P.get("layer_prefix"):
+            prefixes.append(P["layer_prefix"])
+        suffixes += list(P.get("layer") or {})
+        tops += list(P.get("top") or {})
+        if P.get("cos_sin"):
+            suffixes.append(P["cos_sin"])
+        if P.get("attn_scales"):
+            attn_scales.append(P["attn_scales"])
+    suffixes += [f"{a}.{s}" for a in attn_scales for s in _ATTN_SCALE_NAMES]
+    suffixes += [*_MOE_VARIANT_PROBES, *_UNBOUND_PROBES]
+    return tuple(dict.fromkeys(prefixes)), tuple(dict.fromkeys(suffixes)), tuple(dict.fromkeys(tops))
 
 
 def probe_names(C: dict[str, Any]) -> list[str]:
     NL = int(C["NL"])
     layers = sorted({0, 1, NL - 1})
-    out = list(TOP_NAMES)
-    for pre in LAYER_PREFIXES:
+    prefixes, suffixes, tops = probe_vocabulary()
+    out = list(tops)
+    for pre in prefixes:
         for L in layers:
-            out += [f"{pre}.{L}.{s}" for s in LAYER_SUFFIXES]
+            out += [f"{pre}.{L}.{s}" for s in suffixes]
     return out
 
 
@@ -166,15 +180,18 @@ def dumps(doc: dict[str, Any]) -> str:
 
 EXPECTED_DIR = __import__("pathlib").Path(__file__).resolve().parent / "expected"
 
-#: the tensor-parallel worlds with recorded runs (the two `*_tp2rank` hand modules and `gen_ov_moe_qwen3`'s TP2 half, retired in P6)
-TP_WORLDS: dict[str, tuple[int, ...]] = {"B1": (2,), "LLAMA32_1B": (2,), "QWEN3_30B_A3B": (2,)}
-
-
 def fixture_roles() -> list[tuple[str, int]]:
-    """Every role with a shipped HF config.json (`profiles/hf_configs/<ROLE>.config.json`), at TP1 and at the recorded TP worlds."""
-    from . import dense_generic as _dg
+    """Every role with a shipped HF config.json (`profiles/hf_configs/<ROLE>.config.json`) at TP1, plus every (role, world) a fixture
+    already pins (the tensor-parallel worlds with recorded runs are data -- the fixture files -- not a table here; pin a new world with
+    `python -m verity_capture.profiles.canonical --write ROLE:W`)."""
+    from . import dense_generic as _dg, generic
     roles = sorted(p.name[: -len(".config.json")] for p in _dg.HF_CONFIG_DIR.glob("*.config.json"))
-    return [(r, w) for r in roles for w in (1, *TP_WORLDS.get(r, ()))]
+    out = {(r, 1) for r in roles}
+    for p in EXPECTED_DIR.glob("*.json"):
+        parsed = generic.parse_module(f"verity_capture.profiles.{p.stem}")
+        if parsed is not None:
+            out.add(parsed[:2])
+    return sorted(out)
 
 
 def canonical_of_role(role: str, world: int = 1) -> dict[str, Any]:

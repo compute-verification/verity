@@ -86,7 +86,7 @@ def test_main_derives_the_cap_only_when_none_is_given_and_records_the_derivation
 
     monkeypatch.setattr(RC, "Plan", _Plan)
     monkeypatch.setattr(RC, "profile_config", lambda name: None)
-    base = ["--case", "LLAMA32_1B", "--profile", "gen_llama_llama32_1b", "--workload", str(wl), "--out", str(tmp_path / "run"),
+    base = ["--case", "LLAMA32_1B", "--profile", "derived_LLAMA32_1B", "--workload", str(wl), "--out", str(tmp_path / "run"),
             "--hf-config", str(hf), "--dry-run"]
     with pytest.raises(SystemExit):
         RC.main(base)
@@ -99,7 +99,7 @@ def test_main_derives_the_cap_only_when_none_is_given_and_records_the_derivation
     assert a2.snapshot_max_bytes == 4096 and a2.snapshot_cap_derivation is None
     # a run.json re-run (--run-dir) keeps the cap the capture ran with, never a re-derived one
     run = tmp_path / "run"; run.mkdir()
-    (run / RC.G.ARTIFACTS.get("run", "run.json")).write_text(json.dumps({"case": "LLAMA32_1B", "workload_path": str(wl), "profile": "gen_llama_llama32_1b",
+    (run / RC.G.ARTIFACTS.get("run", "run.json")).write_text(json.dumps({"case": "LLAMA32_1B", "workload_path": str(wl), "profile": "derived_LLAMA32_1B",
                                                                        "config_id": "x", "snapshot_max_bytes": 777, "snapshot_cap_derivation": {"rows": 1}}))
     with pytest.raises(SystemExit):
         RC.main(["--run-dir", str(run), "--phase", "cpu", "--dry-run"])

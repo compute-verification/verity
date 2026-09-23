@@ -114,7 +114,7 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
             "top": {"model.normalizer": ("normalizer",)},
             "provenance": f"{_GEMMA2}:217-220 (the two extra GemmaRMSNorm parameters), :277 (the 0-d `normalizer` buffer; analytic.check_normalizer validates it)",
         },
-        "patterns": ["dense2", "gemma2", "softcap"],
+        "patterns": ["dense2", "unfused-norm-chains", "softcap"],
     },
     # -------------------------------------------------------------------------------------------------------------------------- dense-ln
     "gpt_neox": {

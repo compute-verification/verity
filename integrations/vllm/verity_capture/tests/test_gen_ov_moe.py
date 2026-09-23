@@ -5,6 +5,8 @@ worktree — the end-to-end resolve / fold / VU-population facts quoted in out/g
 
 from __future__ import annotations
 
+import importlib
+
 import math
 from pathlib import Path
 
@@ -12,8 +14,9 @@ import numpy as np
 import pytest
 
 from verity_capture.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_capture.profiles import gen_ov_moe_olmoe as OV
 from verity_capture.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
+
+OV = importlib.import_module("verity_capture.profiles.derived_OLMOE")
 from verity_capture.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from verity_capture.tree import step_events
 from verity.ir.defs import bind
@@ -334,12 +337,12 @@ def test_moe_scope_declines_with_the_observed_values(kw, needle):
     assert needle in res[0].reason, res[0].reason
 
 
-def test_profile_is_wave1_plus_the_pairwise_pattern_and_not_accepted():
-    from verity_capture.profiles import gen_moe_olmoe as W1
+def test_profile_is_the_tuned_gemm_plus_the_pairwise_pattern_and_not_accepted():
+    from verity_capture.profiles import vllm_d9105ea80_sm89_eager as BASE
     names = [getattr(p, "name", type(p).__name__) for p in OV.PROFILE.patterns]
-    assert names[:2] == ["gemm.matmul_kernel_persistent.tuned_ada", "moe.fused_experts.pairwise"] and "moe_block_scope" not in names
-    assert OV.PROFILE.accepted is False and OV.PROFILE.id != W1.PROFILE_ID and OV.PROFILE.notes["case"] == "OLMOE"
-    assert OV.PROFILE.kernel_allowlist == W1.PROFILE.kernel_allowlist                       # no profile-side allowlisting of MoE kernels
+    assert names[:2] == ["gemm.matmul_kernel_persistent.tuned", "moe.fused_experts.pairwise"] and "moe_block_scope" not in names
+    assert OV.PROFILE.accepted is False and OV.PROFILE.notes["case"] == "OLMOE"
+    assert OV.PROFILE.kernel_allowlist == BASE.PROFILE.kernel_allowlist                     # no profile-side allowlisting of MoE kernels
     assert OV.weight_field("model.layers.3.mlp.experts.routed_experts.w13_weight") == ("layers", 3, "w13")
     assert isinstance(OV.PROFILE.patterns[1], MoEFusedExperts)
 

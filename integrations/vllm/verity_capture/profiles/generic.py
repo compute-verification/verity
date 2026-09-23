@@ -20,6 +20,7 @@ configuration") was checked object by object (`tests/test_profiles_generic.py`, 
 Module names (the `--profile NAME` every consumer imports as `verity_capture.profiles.NAME`, materialised by the finder in `profiles/__init__.py`):
   `derived_<ROLE>`          -- the TP1 profile of a checkpoint role (any architecture),
   `derived_<ROLE>_tp<W>`    -- ONE rank of a W-way tensor-parallel engine,
+  `derived_<ROLE>[..]_ovs`  -- the experimental sampled-row variant (`TokenSampleGumbel` first; lanes cov-difr / ov-sampling),
   `dense_<ROLE>`            -- [X-07] the pre-P6 name, still accepted for dense-architecture roles (recorded runs cite it).
 The role's HF `config.json` is `dense_generic.find_hf_config(role)`: the byte copy `profiles/hf_configs/<ROLE>.config.json` (sha256 checked against
 the manifest entry), else the manifest's local snapshot / the hub cache / `data/hf_configs`.
@@ -48,28 +49,36 @@ from .gen_dense_softcap_patterns import with_softcap_patterns
 from .gen_llama_patterns import ADA_TUNED_GEMM, with_tuned_gemm
 from .gen_ln_patterns import with_ln_patterns
 from .gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_NUMERIC_PINS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
-                                  ROUTER_VPT_BY_E)
+                                  ROUTER_VPT_BY_E, MoEFusedExperts)
 
 MODULE_PREFIX = "derived_"
-_MODULE_RE = re.compile(r"^derived_([A-Z0-9_]+?)(?:_tp(\d+))?$")
+OV_SAMPLING_SUFFIX = "_ovs"
+_MODULE_RE = re.compile(r"^derived_([A-Z0-9_]+?)(?:_tp(\d+))?(_ovs)?$")
 _LAYER_RE_FMT = r"^{prefix}\.(\d+)\.(.+)$"
 _ATTN_SCALES = r"(k_scale|v_scale|q_scale|prob_scale|_k_scale|_v_scale|_q_scale|_prob_scale)"
 
 
 # ------------------------------------------------------------------------------------------------------------------------------- names
 
-def module_name(role: str, world: int = 1) -> str:
-    return f"{MODULE_PREFIX}{role}" + (f"_tp{world}" if world > 1 else "")
+def module_name(role: str, world: int = 1, *, ov_sampling: bool = False) -> str:
+    return f"{MODULE_PREFIX}{role}" + (f"_tp{world}" if world > 1 else "") + (OV_SAMPLING_SUFFIX if ov_sampling else "")
 
 
 def parse_module(name: str) -> tuple[str, int] | None:
-    """`derived_<ROLE>[_tp<W>]` -> (ROLE, W); `dense_<ROLE>` -> (ROLE, 1) (the X-07 name); else None."""
+    """`derived_<ROLE>[_tp<W>][_ovs]` -> (ROLE, W); `dense_<ROLE>` -> (ROLE, 1) (the X-07 name); else None."""
     short = name.rsplit(".", 1)[-1]
     m = _MODULE_RE.match(short)
     if m:
         return m.group(1), int(m.group(2) or 1)
     legacy = _dg.role_of_module(short)
     return (legacy, 1) if legacy else None
+
+
+def is_ov_sampling(name: str) -> bool:
+    """`derived_<ROLE>[_tp<W>]_ovs`: the experimental sampled-row variant (`gen_ov_sampling_patterns.TokenSampleGumbel` registered first;
+    lanes cov-difr / ov-sampling; NOT an accepted profile) -- what the per-role `gen_ov_sampling_b0` / `_b1` modules were before P6."""
+    m = _MODULE_RE.match(name.rsplit(".", 1)[-1])
+    return bool(m and m.group(3))
 
 
 # ------------------------------------------------------------------------------------------------------------------------- configuration
@@ -332,8 +341,8 @@ def _dense_patterns(cfg: dict[str, Any], C: dict[str, Any], patterns: list) -> l
     out = with_tuned_gemm(patterns)                                   # the target's tuned-GEMM table rows, ahead of the base GemmLaunch
     if effective_sliding_window(cfg):
         out = with_dense2_patterns(out, C)                            # the inert-window FA2 scope decides from the LAUNCH (window >= max_seqlen_k)
-    if "gemma2" in kinds:
-        out = with_gemma2_patterns(out)                               # unfused GemmaRMSNorm / GeGLU / embed scale chains -> quarantine.dense
+    if "unfused-norm-chains" in kinds:
+        out = with_gemma2_patterns(out)                               # unfused GemmaRMSNorm(+1) / GeGLU / embed-scale scalar chains -> quarantine.dense
     if "softcap" in kinds and C.get("attn_logit_softcapping"):
         out = with_softcap_patterns(out)                              # FA2 softcap launches -> quarantine.dense.AttentionSoftcap_v1{..., CAP}
     if "ln" in kinds:
@@ -357,14 +366,15 @@ def _moe_patterns(C: dict[str, Any], patterns: list, *, world: int, moe_construc
 
 
 def build_profile(role: str, world: int = 1, *, moe_construction: str | None = None, fused_moe_pins: dict[str, Any] | None = None,
-                  fused_moe_num_warps: int | None = None, fused_moe_num_stages: int | None = None,
+                  fused_moe_num_warps: int | None = None, fused_moe_num_stages: int | None = None, ov_sampling: bool = False,
                   hf_config: dict[str, Any] | None = None, repo: str | None = None, revision: str | None = None) -> Profile:
     """The κ profile of a checkpoint role (one rank of a `world`-way engine when `world > 1`) from its HF config.json and the family facts.
 
     `moe_construction` (MoE roles): None / `indexed-read` = the MOE-01 pairwise fold; `padded` = one fixed-slot Compute per token (refused at
     fold time under a renormalising router).  `fused_moe_pins` / `..._num_warps` / `..._num_stages`: the fused_moe_kernel tiling to pin instead
     of `gen_ov_moe_patterns.FUSED_MOE_PINS` (a κ fact of the capture; never loosened, only re-pinned from a rank log).  `hf_config`: the
-    document to derive from (default: `load_hf_config(role)`; tests pass a synthetic one)."""
+    document to derive from (default: `load_hf_config(role)`; tests pass a synthetic one).  `ov_sampling`: the experimental sampled-row
+    variant (`TokenSampleGumbel` first, id `+ov-sampling`; greedy headers resolve exactly as without it)."""
     if hf_config is None:
         cfg, src = load_hf_config(role)
         repo, revision = repo or src["repo"], revision or src["revision"]
@@ -401,11 +411,26 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
         "derived_by": "profiles.generic [P6]: no per-model module; applicability = patterns (kernels) + check_header (facts); family facts = profiles.family_facts",
         "family": FF.family_of(cfg), "arch": arch, "vllm_class": fam["vllm_class"],
         "hand_facts": {k: {"value": C.get(k), "provenance": f["provenance"]} for k, f in facts.items() if k in C},
+        # the fields NOT read off config.json by `analytic.config_of`'s generic rules: the identity and the family's hand facts (a `key`
+        # fact's VALUE is config.json's; that vLLM reads the key is the family fact) -- the retired hand modules' `hand_fields`
+        "hand": {**({"model": repo} if repo else {}), **({"revision": revision} if revision else {}), **{k: C[k] for k in facts if k in C}},
+        "hand_fields": sorted([*(["model"] if repo else []), *(["revision"] if revision else []), *[k for k in facts if k in C]]),
         "family_rules": {FF.family_of(cfg): fam["rules"]}, "family_rules_provenance": fam["rules_provenance"],
         "provenance": dict(prov), "config_provenance": dict(prov),
         "hf_config": {"source": src["source"], "path": src["path"], "sha256": src["sha256"], "revision": revision},
         "root_class": "profiles.generic.make_root_class(cfg, profile.weight_field)(name)",
     })
+    names = [p.name for p in patterns]
+    notes["pattern_names"] = names
+    notes["dense2_patterns"] = [n for n in names if n == "attention.fa2_varlen_fwd.inert_window"]
+    notes["softcap_pattern"] = [n for n in names if n == "attention.fa2_varlen_fwd.softcap"]
+    if C.get("extra_layer_norms"):
+        notes["extra_layer_norms"] = list(C["extra_layer_norms"])
+    params = fam.get("params") or {}
+    if params.get("layer_prefix"):
+        notes["alias_of_cos_sin"] = rf"^{re.escape(params['layer_prefix'])}\.[1-9]\d*\.{re.escape(params['cos_sin'])}$"
+    else:
+        notes["alias_of_cos_sin"] = base.ALIAS_OF_COS_SIN.pattern
     if C.get("FP8_BLOCK"):
         notes["fp8"] = {"scheme": "block-scaled dynamic e4m3 FP8 (vLLM Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel)",
                         "weight_block_size": [C["FP8_BLOCK"], C["FP8_BLOCK"]], "activation_group": C["FP8_BLOCK"],
@@ -414,7 +439,7 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                         "env": ["VLLM_USE_DEEP_GEMM=0 (the DeepGEMM JIT path is not modelled)", "VLLM_USE_FLASHINFER_SAMPLER=0"],
                         "families": ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8Block_v1{K,N,G}"], "quantization_config": C.get("quantization_config")}
     if arch == "moe":
-        moe = next(p for p in patterns if type(p).__name__.startswith("MoEFusedExperts"))
+        moe = next(p for p in patterns if isinstance(p, MoEFusedExperts))
         E, T, I, H = C["NUM_EXPERTS"], C["TOPK"], C["I"], C["H"]
         notes["moe"] = {"status": "constructive: Computes over registry.moe definitions per step per rank",
                         "scope_pattern": f"gen_ov_moe_patterns.{type(moe).__name__} (vllm.moe_forward*), renormalize={bool(C.get('RENORMALIZE', False))}",
@@ -437,7 +462,17 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                             "collectives": "[R17 D90] vllm.all_reduce / vllm.all_gather -> AllReduce2_v1{N} / AllGather2_v1{N} per row over (own partial, "
                                            "peer partial) in rank order; the peer partial is the fold's `peers_<request>` root parameter (root class "
                                            "collective_received), linked to the other rank's committed partial by the cross-rank leg (tp2_rank_match)"}
-    return dataclasses.replace(prof, patterns=patterns, weight_field=wf, notes=notes, accepted=False)
+    pid = prof.id
+    if ov_sampling:
+        from .gen_ov_sampling_patterns import ov_sampling_patterns
+        patterns = ov_sampling_patterns(C) + patterns
+        pid = prof.id + "+ov-sampling"
+        notes["ov_sampling"] = {"pattern": "gen_ov_sampling_patterns.TokenSampleGumbel (_gumbel_sample_kernel; seeded rows at T=1 and T not in {0,1}, no top-k/top-p)",
+                                "definition": "quarantine ov-sampling/GumbelArgmaxBf16@v1 {V, SEED, POS}: argmax_v(f32(logits[v]) + g(SEED, POS)[v]); "
+                                              "GumbelArgmaxTempBf16@v1 {V, SEED, POS, T} for tempered rows (div.full.f32 quotient)",
+                                "seed_provenance": "SEED static from the run header's request record (children: parent seed + index); "
+                                                   "the device seeds buffer is not a checked fact -- PROPOSED Root(role=sampling_seed)"}
+    return dataclasses.replace(prof, id=pid, patterns=patterns, weight_field=wf, notes=notes, accepted=False)
 
 
 def with_moe_construction(profile: Profile, moe_construction: str | None) -> Profile:
@@ -456,23 +491,33 @@ def make_module(fullname: str) -> types.ModuleType:
     if parsed is None:
         raise ImportError(f"{fullname}: not a derived_<ROLE>[_tp<W>] profile name")
     role, world = parsed
+    ovs = is_ov_sampling(fullname)
     try:
         cfg, src = load_hf_config(role)
         if fullname.rsplit(".", 1)[-1].startswith(_dg.MODULE_PREFIX) and FF.FAMILY_FACTS.get(FF.family_of(cfg), {}).get("arch") != "dense":
             raise ImportError(f"{fullname}: the dense_<ROLE> name is for dense-architecture roles; use {module_name(role, world)}")
-        prof = build_profile(role, world)
+        prof = build_profile(role, world, ov_sampling=ovs)
     except ValueError as e:
         raise ImportError(f"{fullname}: {e}") from e
     mod = types.ModuleType(fullname)
     mod.__doc__ = f"[P6] configuration-derived κ profile for role {role}" + (f", one rank of TP{world}" if world > 1 else "") + f" ({src['source']}: {src['path']})"
     mod.CASE, mod.ROLE, mod.WORLD, mod.REPO_ID, mod.REVISION = role, role, world, src["repo"], src["revision"]
-    mod.CONFIG_JSON, mod.CONFIG_SHA256, mod.HF_CONFIG = src["path"], src["sha256"], cfg
+    mod.MODEL = src["repo"]                                             # the retired hand modules' name for the repo id
+    mod.HAND = dict(prof.notes["hand"])                                 # identity + the family's hand facts as resolved for this role
+    mod.HF_CONFIG_PATH = __import__("pathlib").Path(src["path"]) if src["path"] else None
+    mod.CONFIG_JSON, mod.CONFIG_SHA256, mod.HF_CONFIG = mod.HF_CONFIG_PATH, src["sha256"], cfg
+    mod.FAMILY, mod.FAMILY_RULES = FF.family_of(cfg), {FF.family_of(cfg): FF.facts_for(cfg)["rules"]}
     mod.C, mod.PROVENANCE = prof.config, prof.notes["provenance"]
     mod.PROFILE_ID, mod.PROFILE = prof.id, prof
     mod.weight_field = prof.weight_field
     mod.root_class = make_root_class(cfg, prof.weight_field)
     mod.check_header = make_check_header(cfg, prof.config, world)
-    mod.build_profile = lambda world=world, **kw: build_profile(role, world, **kw)
+    mod.build_profile = lambda world=world, moe_construction=None, **kw: build_profile(role, world, moe_construction=moe_construction,
+                                                                                       **{"ov_sampling": ovs, **kw})
+    mod.derive_config = lambda hf_config, world=1, **kw: derive_config(hf_config, repo=kw.get("repo"), revision=kw.get("revision"), world=world)
     mod.with_moe_construction = with_moe_construction if FF.facts_for(cfg)["arch"] == "moe" else None
+    if FF.facts_for(cfg)["arch"] == "dense":
+        from .gen_ov_easy_family import serve_family                    # the untied / tied serving-family reference `compare` may consult
+        mod.SERVE_FAMILY = serve_family
     mod.__file__ = __file__
     return mod

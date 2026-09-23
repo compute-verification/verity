@@ -1,7 +1,7 @@
 """[R17 tp, COORD R17-46] the TP2 RANK profiles the D90 per-rank fold Match folds a rank log with -- Llama-3.2-1B (the B1/B8 rows of record)
 and Qwen2.5-1.5B (the qwen TP2 B8 row): the rank-local shard configuration is the full configuration with heads / kv heads / intermediate /
 vocab divided by the world and the derived widths recomputed; the rank's own patterns (`EmbeddingShardCuda`, `TpCollective`) come first;
-the sampler sees the full vocabulary.  Torch-free (profile construction only)."""
+the sampler sees the full vocabulary.  Torch-free (profile construction only).  [P6] the rank profiles are `profiles.generic.build_profile(role, world=2)`."""
 from __future__ import annotations
 
 import pytest
@@ -10,8 +10,8 @@ from verity_capture.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
 
 
 @pytest.mark.parametrize("mod, shard, full_vocab, qkv, gu, bias", [
-    ("gen_llama_llama32_1b_tp2rank", dict(H=2048, NL=16, NH=16, KVH=4, D=64, I=4096, V=64128), 128256, 1536, 8192, False),
-    ("vllm_d9105ea80_sm89_eager_qwen15_tp2rank", dict(H=1536, NL=28, NH=6, KVH=1, D=128, I=4480, V=75968), 151936, 1024, 8960, True),
+    ("derived_LLAMA32_1B_tp2", dict(H=2048, NL=16, NH=16, KVH=4, D=64, I=4096, V=64128), 128256, 1536, 8192, False),
+    ("derived_B1_tp2", dict(H=1536, NL=28, NH=6, KVH=1, D=128, I=4480, V=75968), 151936, 1024, 8960, True),
 ])
 def test_rank_profile_states_the_shard_configuration_and_the_rank_patterns(mod, shard, full_vocab, qkv, gu, bias):
     import importlib
@@ -28,7 +28,10 @@ def test_rank_profile_states_the_shard_configuration_and_the_rank_patterns(mod, 
 
 
 def test_qwen_rank_profile_shares_the_llama_rank_facts_not_a_copy():
-    from verity_capture.profiles import gen_llama_llama32_1b_tp2rank as llama, vllm_d9105ea80_sm89_eager_qwen15_tp2rank as qwen
-    assert type(qwen.PROFILE.patterns[0]) is llama.EmbeddingShardCuda           # imported, not re-authored
+    import importlib
+    from verity_capture.tp.embedding_shard import EmbeddingShardCuda
+    llama = importlib.import_module("verity_capture.profiles.derived_LLAMA32_1B_tp2")
+    qwen = importlib.import_module("verity_capture.profiles.derived_B1_tp2")
+    assert type(qwen.PROFILE.patterns[0]) is type(llama.PROFILE.patterns[0]) is EmbeddingShardCuda   # one generic `world > 1` branch
     assert qwen.C["BN"] == 64 and llama.C["BN"] == 128                          # head dim 128 vs 64: FA2 kBlockN differs, nothing else is model-authored
     assert qwen.C["tie_word_embeddings"] is True

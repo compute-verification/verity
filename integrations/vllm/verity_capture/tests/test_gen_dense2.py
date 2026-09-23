@@ -4,6 +4,8 @@ one-request workload (32 prompt tokens, 16 greedy tokens, no accepted tokens); p
 lane's patterns (`gen_dense2_patterns`, when present)."""
 from __future__ import annotations
 
+import importlib
+
 import json
 from pathlib import Path
 
@@ -12,11 +14,14 @@ import pytest
 
 from verity_capture import analytic
 from verity_capture.events import RunHeader
-from verity_capture.profiles import gen_dense2_gemma2_2b as gemma, gen_dense2_phi3_mini as phi3, profile_module_for_case
+from verity_capture.profiles import profile_module_for_case
+
+gemma = importlib.import_module("verity_capture.profiles.derived_GEMMA2_2B")
+phi3 = importlib.import_module("verity_capture.profiles.derived_PHI3_MINI")
 from verity_vllm.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
-PROFILES = REPO / "verity_capture" / "profiles"
+PROFILES = REPO / "workloads"
 
 STATIC_KEYS = ("H", "NL", "NH", "KVH", "D", "I", "V", "QKV", "GU", "EPS", "ROPE_THETA", "MAX_POS", "BIAS", "tie_word_embeddings", "BN")
 
@@ -49,8 +54,9 @@ def test_gemma2_config_hand_fields_are_listed_and_only_those():
     # the one config_of default the hand fields override: no tie_word_embeddings key in config.json -> config_of says False,
     # the checkpoint has no lm_head.weight and vLLM ties (family fact)
     assert C["tie_word_embeddings"] is False and gemma.C["tie_word_embeddings"] is True
-    hand = sorted(k for k, v in gemma.PROVENANCE.items() if v == "hand")
-    assert hand == sorted(gemma.HAND) == gemma.PROFILE.notes["hand_fields"]
+    hand = gemma.PROFILE.notes["hand_fields"]
+    assert hand == sorted(gemma.HAND)
+    assert {k for k, v in gemma.PROVENANCE.items() if v == "hand"} <= set(hand)      # [P6] a `key` fact's value is config.json's (hf-config)
     assert set(hand) == {"model", "revision", "tie_word_embeddings", "attn_logit_softcapping", "final_logit_softcapping",
                          "query_pre_attn_scalar", "sliding_window", "hidden_act", "embed_normalizer", "rmsnorm_plus_one",
                          "layer_norms", "extra_layer_norms"}
@@ -60,9 +66,9 @@ def test_gemma2_config_hand_fields_are_listed_and_only_those():
 
 
 def test_profiles_are_discovered_by_case_and_ids_are_distinct():
-    assert profile_module_for_case("PHI3_MINI") == "gen_dense2_phi3_mini"
-    assert profile_module_for_case("GEMMA2_2B") == "gen_dense2_gemma2_2b"
-    assert profile_module_for_case("B1") == "vllm_d9105ea80_sm89_eager_qwen15"
+    assert profile_module_for_case("PHI3_MINI") == "derived_PHI3_MINI"
+    assert profile_module_for_case("GEMMA2_2B") == "derived_GEMMA2_2B"
+    assert profile_module_for_case("B1") == "derived_B1"
     assert phi3.PROFILE.id != gemma.PROFILE.id and phi3.PROFILE.accepted is False and gemma.PROFILE.accepted is False
     assert phi3.PROFILE.config["V"] == 32064 and gemma.PROFILE.config["V"] == 256000
 
@@ -98,9 +104,14 @@ def test_phi3_weight_field_binds_llama_fused_names_and_untied_lm_head():
     assert phi3.root_class("model.normalizer") == "unknown"
     # the fused checkpoint map covers exactly the per-layer fields of the weights Record
     layer_rec = dict(analytic.weights_type(phi3.C).fields)["layers"].elem
-    assert sorted(phi3.PHI3_LAYER_FIELDS) == sorted(f for f, _ in layer_rec.fields)
-    for f, (_cid, srcs) in phi3.PHI3_LAYER_FIELDS.items():
-        assert len(srcs) == 1 and "{L}" in srcs[0] and "_proj.weight" in srcs[0] or "layernorm" in srcs[0]
+    # [P6] the fused-name map is the base module's (`make_weight_field`): every per-layer Record field is bound by exactly one root name
+    bound = {}
+    for suffix in ("input_layernorm.weight", "self_attn.qkv_proj.weight", "self_attn.o_proj.weight", "post_attention_layernorm.weight",
+                   "mlp.gate_up_proj.weight", "mlp.down_proj.weight"):
+        path = wf(f"model.layers.0.{suffix}")
+        assert path is not None and path[:2] == ("layers", 0), suffix
+        bound[path[2]] = suffix
+    assert sorted(bound) == sorted(f for f, _ in layer_rec.fields)
 
 
 def test_gemma2_weight_field_adds_the_two_mlp_norms_and_ties_lm_head():
@@ -250,7 +261,6 @@ def test_weight_source_serves_gemma2_pre_and_post_mlp_norms_from_the_checkpoint_
     or tier A skips every GemmaRMSNorm instance that reads them ('parameter 1 leaves [...]: ln_pre_mlp').  Llama / Phi-3
     Records add no such field."""
     from verity_capture.compare import WeightSource, _extra_norm_layer_fields
-    from verity_capture.profiles import gen_dense2_phi3_mini as phi3
 
     wt = analytic.weights_type(gemma.C)
     fields = _extra_norm_layer_fields(wt)
@@ -276,8 +286,8 @@ def test_gemma2_extra_norm_fields_vs_the_shared_weights_record():
     layer_rec = dict(analytic.weights_type(gemma.C).fields)["layers"].elem
     names = [f for f, _ in layer_rec.fields]
     base = ["ln1", "qkv_w", "o_w", "ln2", "gate_up_w", "down_w"]
-    assert names in (base, base + list(gemma.EXTRA_LAYER_NORMS)), names
-    for f in gemma.EXTRA_LAYER_NORMS:
+    assert names in (base, base + list(gemma.C["extra_layer_norms"])), names
+    for f in gemma.C["extra_layer_norms"]:
         if f in dict(layer_rec.fields):
             assert dict(layer_rec.fields)[f].leaves == gemma.C["H"]
 

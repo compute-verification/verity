@@ -5,7 +5,7 @@ its attention has a logit soft cap (FA2 `Is_softcap`), or its logits are soft-ca
 
 [R15 dense, F-dense-05] PROMOTED from `verity_vllm.registry.quarantine.dense` (lane dense, 2026-09-17; the X-08 pattern): every
 Definition below is the quarantine module's body VERBATIM — same name, same version, same statics, same gates — so the
-specialization ids are those the accepted `GEMMA2_2B-cov_gemma2_2b_b1_c256.r8h` record and the eager `gen_dense2_gemma2_2b`
+specialization ids are those the accepted `GEMMA2_2B-cov_gemma2_2b_b1_c256.r8h` record and the eager Gemma-2 (`profiles.generic`, formerly `gen_dense2_gemma2_2b`)
 Match profile resolve to. The quarantine modules re-export these objects (their difftest adapters, `ALL_DEFINITIONS` and
 `SEMANTIC_ID`s are unchanged). Each section keeps the quarantine module's docstring: the ATen / Triton / CUDA source the body
 follows, the wave-1 exhaustive GPU tables and the pod difftests that are its correspondence evidence (see the `conformance=`

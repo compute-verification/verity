@@ -4,6 +4,8 @@ to the intended `quarantine.dense` specialization, the widened-bf16 operands are
 Triton `mean_kernel` child is consumed by the `aten.mean.dim` compute, and the pins reject a foreign launch geometry."""
 from __future__ import annotations
 
+import importlib
+
 import dataclasses
 
 import numpy as np
@@ -11,10 +13,11 @@ import pytest
 
 from verity_capture.events import StepEnd, ViewDesc
 from verity_capture.patterns import BiasAdd, TransparentAten
-from verity_capture.profiles import gen_dense2_gemma2_2b as gemma
 from verity_capture.profiles import vllm_d9105ea80_sm89_eager as B1PROF
 from verity_capture.profiles.gen_dense_gemma2_patterns import (Bf16ScalarChain, MeanDimTriton, NarrowToBf16, gemma2_patterns,
                                                                 with_gemma2_patterns)
+
+gemma = importlib.import_module("verity_capture.profiles.derived_GEMMA2_2B")
 from verity_capture.resolver import Compute, PerRow, Shared, Unsupported, resolve_step, spec_module
 from verity_capture.tests.test_patterns_synthetic import CUDA, Builder, bf, by_spec, context, decode_step, i64
 from verity_capture.tree import step_events

@@ -91,7 +91,7 @@ class ScalarAddF32:
     """`aten.add.Tensor(x f32 [M,N] | [N], C: float)` -> `AddScalarF32{N,C}` / `AddScalarBf16{N,C}` when x is the exact widening
     of a bf16 view (GemmaRMSNorm: `weight.float() + 1.0`, `variance + eps`)."""
 
-    name: str = "gemma2.add_scalar"
+    name: str = "dense.add_scalar"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) != "aten.add":
@@ -121,7 +121,7 @@ class ScalarAddF32:
 class SquarePow:
     """`aten.pow.Tensor_Scalar(x f32 [M,N], 2)` -> `SquareF32{N}` / `SquareBf16{N}` (x the widening of a bf16 view)."""
 
-    name: str = "gemma2.square"
+    name: str = "dense.square"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) != "aten.pow":
@@ -149,7 +149,7 @@ class MeanDimTriton:
     """`aten.mean.dim(x f32 [M,N], [-1], keepdim=True)` whose single child is the `TritonLaunch batch_invariant.mean_kernel`
     (grid=[M], BLOCK_SIZE=1024, num_warps=4, K=1) -> `MeanTriton{N}` rows=M, `[M,N] -> [M,1]`."""
 
-    name: str = "gemma2.mean_dim.triton_mean_kernel"
+    name: str = "dense.mean_dim.triton_mean_kernel"
     block_size: int = 1024
     num_warps: int = 4
 
@@ -192,7 +192,7 @@ class MeanDimTriton:
 class RsqrtF32Pattern:
     """`aten.rsqrt.default(x f32 [M,N])` -> `RsqrtF32{N}` rows=M (GemmaRMSNorm: N = 1)."""
 
-    name: str = "gemma2.rsqrt"
+    name: str = "dense.rsqrt"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) != "aten.rsqrt":
@@ -217,7 +217,7 @@ class MulF32:
     """The three f32 `aten.mul.Tensor` forms of GemmaRMSNorm:
     `x[M,N] * s[M,1]` -> `ScaleRowF32{N}` / `ScaleRowBf16{N}` (x a widening);  `x[M,N] * w[N]` -> `MulVecF32{N}`."""
 
-    name: str = "gemma2.mul_f32"
+    name: str = "dense.mul_f32"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) != "aten.mul":
@@ -250,7 +250,7 @@ class AddWidened:
     """`aten.add.Tensor(x f32 [M,N], r f32 [M,N])`, both the exact widening of bf16 views -> `AddWidenedBf16{N}` rows=M
     (the residual add of `ir.ops.fused_add_rms_norm`'s eager fallback)."""
 
-    name: str = "gemma2.add_widened"
+    name: str = "dense.add_widened"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) != "aten.add":
@@ -277,7 +277,7 @@ class NarrowToBf16:
     """`aten.to.dtype(x f32 [M,N] | [N], bfloat16)` (a fresh bf16 allocation of the same shape) -> `NarrowF32ToBf16{N}`.
     Registered ahead of `TransparentAten`, which reports a float dtype change as Unsupported."""
 
-    name: str = "gemma2.narrow_to_bf16"
+    name: str = "dense.narrow_to_bf16"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) not in ("aten.to", "aten._to_copy"):
@@ -301,7 +301,7 @@ class EmbedScale:
     -> `Bf16MulScalarTensor{N}` rows=M, `(PerRow(e), Shared(s))`.  The Root living in `s` (`model.normalizer`) keeps whatever
     class the root policy gives it; this pattern only resolves the operand."""
 
-    name: str = "gemma2.embed_scale"
+    name: str = "dense.embed_scale"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) != "aten.mul":
@@ -326,7 +326,7 @@ class EmbedScale:
 class GeluTanhAndMul:
     """`_C.gelu_tanh_and_mul(out[M,I], gu[M,2I])` -> `GeluTanhMul{I}` rows=M (mirrors the base `SiluAndMul`)."""
 
-    name: str = "gemma2.act.gelu_tanh_and_mul"
+    name: str = "dense.act.gelu_tanh_and_mul"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or op_name(node.op) != "gelu_tanh_and_mul":
@@ -350,7 +350,7 @@ class Bf16ScalarChain:
     """The final-logit softcap: `aten.div.Tensor(x bf16 [M,N], C)` -> `Bf16DivScalar{N,C}`; `aten.tanh.default(x bf16)` -> `Bf16Tanh{N}`;
     `aten.mul.Tensor(x bf16 [M,N], C)` -> `Bf16MulScalar{N,C}` (C a Python float)."""
 
-    name: str = "gemma2.bf16_scalar_chain"
+    name: str = "dense.bf16_scalar_chain"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton:

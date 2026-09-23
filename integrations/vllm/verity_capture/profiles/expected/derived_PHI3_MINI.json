@@ -684,7 +684,7 @@
   }
  },
  "probe": {
-  "n": 262
+  "n": 286
  },
  "root_class": {
   "lm_head.weight": "weight",
@@ -693,6 +693,7 @@
   "model.layers.0.mlp.down_proj.weight": "weight",
   "model.layers.0.mlp.gate_up_proj.weight": "weight",
   "model.layers.0.post_attention_layernorm.weight": "weight",
+  "model.layers.0.self_attn.attn._prob_scale": "ignored",
   "model.layers.0.self_attn.attn._v_scale": "ignored",
   "model.layers.0.self_attn.attn.k_scale": "ignored",
   "model.layers.0.self_attn.attn.prob_scale": "ignored",
@@ -704,6 +705,7 @@
   "model.layers.1.mlp.down_proj.weight": "weight",
   "model.layers.1.mlp.gate_up_proj.weight": "weight",
   "model.layers.1.post_attention_layernorm.weight": "weight",
+  "model.layers.1.self_attn.attn._prob_scale": "ignored",
   "model.layers.1.self_attn.attn._v_scale": "ignored",
   "model.layers.1.self_attn.attn.k_scale": "ignored",
   "model.layers.1.self_attn.attn.prob_scale": "ignored",
@@ -715,6 +717,7 @@
   "model.layers.31.mlp.down_proj.weight": "weight",
   "model.layers.31.mlp.gate_up_proj.weight": "weight",
   "model.layers.31.post_attention_layernorm.weight": "weight",
+  "model.layers.31.self_attn.attn._prob_scale": "ignored",
   "model.layers.31.self_attn.attn._v_scale": "ignored",
   "model.layers.31.self_attn.attn.k_scale": "ignored",
   "model.layers.31.self_attn.attn.prob_scale": "ignored",
