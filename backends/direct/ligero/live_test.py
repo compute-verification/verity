@@ -208,3 +208,54 @@ def test_fiat_shamir_session_is_refused(server):
     srv, url, out = server
     with pytest.raises(live.LiveError, match="interactive"):
         live.ProverSession(*live.parse_url(url), {"relation": "fp8-ada", "mode": "fiat-shamir", "n_proofs": 1}, b"")
+
+
+@pytest.mark.parametrize("window", [1, 4])
+def test_challenge_stream_many_rounds_windowed(server, window):
+    """The many-round challenge stream (lane live-2, for Ligerito): 6 batches x 7 rounds with ``window`` in flight against
+    the live verifier -- every batch completes, the verifier accepts (its wire checks: committed batch, STMT first, rounds
+    in order, each once), each opened coin matches its commitment, and the challenge bytes are what the verifier's record
+    of (r_k) reproduces; the local honest verifier has the same interface and the same derivation."""
+    srv, url, out = server
+    res = live.run_challenge_bench(url, 6, 7, window, msg_bytes=256, compute_ms=0.0, note=f"test-w{window}")
+    assert res["verdict"]["accepted"], res["verdict"]
+    assert res["verdict"]["complete_batches"] == 6 and res["round_ms"]["n"] == 42
+    assert res["batch_latency_s"]["median"] > 0 and res["batches_per_s"] > 0
+    rec = json.loads((out / res["session_id"] / "session.json").read_text())
+    assert [b["batch"] for b in rec["batches"]] == list(range(6))
+    assert all(len(b["rounds"]) == 7 and [r["k"] for r in b["rounds"]] == list(range(7)) for b in rec["batches"])
+    # the derivation: prover and verifier agree on the challenge bytes given the coins
+    host, port = live.parse_url(url)
+    sess = live.ChallengeSession(host, port, {"note": "derivation"}, 1, 3, 1)
+    st = sess.stream(0)
+    st.begin(b"claim")
+    got = [st.challenge(b"L%d" % k, b"m%d" % k, 16) for k in range(3)]
+    v = sess.end()
+    assert v["accepted"]
+    ctx = live.batch_context(b"claim", st.commitments())
+    assert got == [live.expand_challenge(ctx, k, b"L%d" % k, r, 16) for k, (r, s) in enumerate(st.openings())]
+    assert all(pm.coin_commit(r, s) == c for (r, s), c in zip(st.openings(), st.commitments()))
+    loc = live.LocalChallenges(3)
+    loc.begin(b"claim")
+    lc = [loc.challenge(b"L%d" % k, b"m%d" % k, 16) for k in range(3)]
+    lctx = live.batch_context(b"claim", loc.commitments())
+    assert lc == [live.expand_challenge(lctx, k, b"L%d" % k, r, 16) for k, (r, s) in enumerate(loc.openings())]
+
+
+def test_challenge_stream_refuses_out_of_order_rounds(server):
+    """MSG i 1 before MSG i 0, and a message of an uncommitted batch, are refused before any coin is opened."""
+    srv, url, out = server
+    host, port = live.parse_url(url)
+    sess = live.ChallengeSession(host, port, {"note": "neg"}, 2, 3, 1)
+    st = sess.stream(0)
+    st.begin(b"claim")
+    st.commitments()
+    sess.provide_msg(0, 1, b"L", b"skip round 0")
+    f = sess.round_future(0, 1)
+    with pytest.raises(live.LiveError):
+        f.result(timeout=10)
+    sess2 = live.ChallengeSession(host, port, {"note": "neg2"}, 2, 3, 1)
+    sess2.ccom_future(0).result(timeout=10)
+    sess2._send(live.K_MSG, live.struct.pack("<III", 1, 0, 1) + b"L" + b"uncommitted batch")
+    with pytest.raises(live.LiveError):
+        sess2.round_future(1, 0).result(timeout=10)
