@@ -1038,6 +1038,9 @@ class PythonVerifier:
         if key not in self._runners:
             self._runners[key] = _runner(self.device, st)
         own = read_coins((session_dir / f"{stem}.coins").read_bytes())
+        hc = session_dir / f"{stem}.hcoins"
+        if hc.is_file():                                   # a pair: the hash side on this verifier's own coins too
+            own = (own, read_coins(hc.read_bytes()))
         ok, why, secs = verify_files(session_dir / f"{stem}.stmt", session_dir / f"{stem}.proof", self.device,
                                      runner=self._runners[key], own_coins=own)
         v = {"accepted": ok, "reason": why, "rc": 0 if ok else 1, "wall_s": time.perf_counter() - t0,

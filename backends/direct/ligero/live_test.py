@@ -204,6 +204,61 @@ def test_four_concurrent_sessions(server):
     assert len({v["session_id"] for v in verdicts}) == 4
 
 
+def _small_shared():
+    """A committed 2x4 tile (8 VUs) under row sharing, one pair per session (lane shared-live)."""
+    from .relations import RELATIONS
+    from .relchain import SharedHashedRunner, tile_instances
+    rel = RELATIONS["fp8-ada"]
+    data, xr, wc = tile_instances(rel, 2, 4)
+    R = SharedHashedRunner(rel, "cpu", -100.0, 2, n_proofs=1, zk=False, mode=pm.MODE_INTERACTIVE)
+    R.commit_vus(data, tile=(2, 4), x_rows=xr, w_cols=wc)
+    from .serialize import system_bytes
+    sg, sh = system_bytes(R.sys), system_bytes(R.sys_h)
+    hello = {"relation": "fp8-ada", "mode": pm.MODE_INTERACTIVE, "zk": False, "target": -100.0, "target_bits": 100.0,
+             "run_id": "pair", "device": "cpu", "n_proofs": 1, "total_vus": len(data), "pair": True, "system_h_bytes": len(sh)}
+    return R, data, hello, sg + sh
+
+
+@pytest.mark.parametrize("negative", [None, "own-coins-h"])
+def test_shared_pair_every_coin_from_the_verifier(server, monkeypatch, negative):
+    """G3: a row-sharing pair takes G's AND H's coins from the live verifier (H on wire index PAIR_H); a prover that
+    proves H on its own coins (``LIVE_NEGATIVE=own-coins-h``) is refused by the live check."""
+    srv, url, out = server
+    if negative:
+        monkeypatch.setenv("LIVE_NEGATIVE", negative)
+    R, data, hello, system = _small_shared()
+    sess = live.Verifier(url, hello, system).session(1, 1)
+    coins = sess.coins(0)
+    proof, pubs, lay = R.prove_vus(data, check=False, min_l=256, coins=coins)
+    assert isinstance(coins.h, live.LiveCoins) and len(coins.rtt) == 2 and len(coins.h.rtt) == 2
+    assert coins.fp is not None                               # F went out with G's TESTS
+    sess.submit(0, proof)
+    v = sess.end()
+    sd = out / v["session_id"]
+    for f in ("system.bin", "system_h.bin", "sub_00.stmt", "sub_00.proof", "sub_00.hproof", "sub_00.coins", "sub_00.hcoins"):
+        assert (sd / f).is_file(), f
+    hcoins = (sd / "sub_00.hcoins").read_bytes()
+    if negative is None:
+        assert v["accepted"], v["reason"]
+        assert hcoins == coins.h.r1 + coins.h.s1 + coins.h.r2 + coins.h.s2
+        ph = proof.h.coins
+        assert ph.r1 + ph.s1 + ph.r2 + ph.s2 == hcoins        # H's transcript is on the verifier's coins
+    else:
+        assert not v["accepted"]
+        assert "H: coins are not this session's step-0 coins" in v["reason"], v["reason"]
+        assert v["live_rejections"]
+
+
+def test_shared_pair_refuses_prover_sampled_coins_h(server):
+    srv, url, out = server
+    R, data, hello, system = _small_shared()
+    sess = live.Verifier(url, hello, system).session(1, 1)
+    with pytest.raises(ValueError, match="prover-sampled coins_h refused"):
+        R.prove_vus(data, check=False, min_l=256, coins=sess.coins(0), coins_h=pm.Coins.sample())
+    for s in (sess.ctrl, sess.data):
+        s.close()
+
+
 def test_fiat_shamir_session_is_refused(server):
     srv, url, out = server
     with pytest.raises(live.LiveError, match="interactive"):
