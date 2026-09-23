@@ -254,3 +254,14 @@ def test_json_round_trip_and_fixture():
     fx = R.fixture(f, dims, z, seed=b"t")
     assert fx["expect"]["ok"] and fx["commitment"] == st.root.hex()
     assert fx["proof"]["hash"] == "blake3"
+
+
+def test_interop_with_proto_transcript():
+    """ref.py runs unchanged on ligerito-proto's Coins implementations (same absorb / challenge / indices / rounds surface)."""
+    T = pytest.importorskip("backends.direct.ligerito.transcript")
+    dims, f, z, w, st, pr = _instance(10, 2, False)
+    pr2 = R.prove_eval(st, w, T.FiatShamirCoins())
+    assert R.verify(st.root, w, pr2.value, pr2, T.FiatShamirCoins())[0]
+    assert not R.verify(st.root, w, pr2.value, pr2, R.FSCoins())[0]          # a different transcript hash: different coins
+    pr3 = R.prove_eval(st, w, T.LocalCoins(5))
+    assert R.verify(st.root, w, pr3.value, pr3, T.LocalCoins(5))[0]
