@@ -76,6 +76,7 @@ SCHEDULES = {
     "bivariate": "c2",
     "mixed": "3,2,1,3,3,3/4/1,2,3,3,3",
     "arity4": "3,4,4,4/4/4,4,4",
+    "lean": "lean",
     "univariate": "3," + ",".join(["1"] * 15) + "/1/" + ",".join(["1"] * 12),
 }
 
@@ -107,6 +108,8 @@ def test_default_schedule_coins():
     s = sc.default_schedule(30, 18)
     assert s.zc == (3, 2, 2, 2, 2, 3, 3, 3, 3, 3) and s.vf == 4 and s.cmb == (3,) * 6
     assert s.coins() == 18
+    lean = sc.lean_schedule(30, 18)
+    assert (lean.zc, lean.vf, lean.cmb) == ((3, 3, 3, 3, 3, 4, 4, 3), 4, (3, 3, 4, 4, 4)) and lean.coins() == 15
 
 
 def test_truncated_or_padded_bytes_reject(toy):
@@ -187,7 +190,7 @@ def test_negative_shift_inconsistent(toy):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda")
-@pytest.mark.parametrize("name", ["default", "bivariate", "mixed"])
+@pytest.mark.parametrize("name", ["default", "bivariate", "mixed", "lean"])
 def test_cuda_engine_matches_reference(toy, name):
     """The fused cupy rounds produce byte-identical messages to the torch reference path."""
     sys, lay, cons, z, pubs = toy

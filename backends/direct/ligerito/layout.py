@@ -22,6 +22,14 @@ B = Y16(W) - y16_row``.  Lookups (one-hot selectors, key selection) and range bi
 
 Constraint slots ``k in [0, 2^n_k)``: quadratics, then the non-pin linears, then the ``2 n_links + 1`` chain constraints; unused
 slots are all-zero.  The zero-check runs over ``(k, c)`` with ``c = s * l + j`` (``layout.py`` fixes the bit order everywhere).
+
+**ZK layout** (``layout_for(..., zk=True)``, sumcheck format LGSC0004; ``ZkRows``): the shifted rows ``next:<x>`` are COMMITTED
+rows (not virtual), and the free region above the virtual block holds, from the top down: ``uniform`` (``2^b`` uniform rows, every
+residue mod ``2^b``: they blind the PCS and every evaluation claim with a random row point), ``g_rows`` (the Libra coefficients of
+the three masked sumchecks, uniform after them), the product triple ``(i1, i2, i3)`` (``i1, i2`` uniform, ``i3 = i1 i2``, one
+extra constraint slot ``zk.product``: blinds the zero-check's final ``Az, Bz, Cz`` tables), the mask link ``(M, M_next)`` (``M``
+uniform, ``M_next = M`` shifted like ``next:<x>``: blinds the shift sumcheck's ``V(rho_c)``), then the ``next:<x>`` rows.  The
+virtual block stays ``[m, m + len(virt))`` (V1 zero claims cover exactly it).
 """
 from __future__ import annotations
 
@@ -32,7 +40,27 @@ import torch
 from backends.direct.ligero.chain import Layout as ChainLayout
 from backends.direct.ligero.compile import P, Expr, System
 
-__all__ = ["Constraints", "Layout", "SubBatch", "build_z", "constraints", "layout_for", "public_rows"]
+__all__ = ["Constraints", "Layout", "SubBatch", "ZkRows", "build_z", "constraints", "fill_zk", "layout_for", "public_rows"]
+
+ZK_B = 3                        # uniform rows = 2^ZK_B (the PCS's final-vector row bits; ligerito-zk's b)
+ZK_CELLS_PER_VAR = 6 * 122      # Libra coefficient cells per sumcheck variable, worst case (arity 6: (3^6 - 1) / 6 < 122 ext)
+
+
+@dataclass(frozen=True)
+class ZkRows:
+    """The committed ZK rows (all in ``[m + len(virt), R)``).  ``g_cells``: base cells reserved for the Libra coefficients
+    (row-major over ``g_rows``: cell ``t`` at ``(g_rows[t // C], t % C)``)."""
+    next: tuple                 # committed next:<x> rows
+    mask: int                   # M (uniform)
+    mask_next: int              # M_next = M shifted (cyclic per sub-batch)
+    product: tuple              # (i1, i2, i3)
+    k_product: int              # the constraint slot of i1 * i2 = i3
+    uniform: tuple              # 2^ZK_B uniform rows
+    g_rows: tuple
+    g_cells: int
+
+    def rows(self) -> tuple:
+        return tuple(self.next) + (self.mask, self.mask_next) + tuple(self.product) + tuple(self.uniform) + tuple(self.g_rows)
 
 
 def _log2(n: int) -> int:
@@ -56,6 +84,10 @@ class Layout:
     c_rows: tuple = ()          # committed row index of the linked ``c`` rows (sys.chain["c"])
     n_k: int = 0                # constraint slot bits
     K: int = 0                  # real constraints
+    zk: ZkRows | None = None    # the ZK rows (LGSC0004); None = LGSC0003 (next:<x> virtual)
+
+    def next_row(self, x: int) -> int:
+        return self.zk.next[x] if self.zk is not None else self.virt[f"next:{x}"]
 
     @property
     def S(self) -> int:
@@ -90,8 +122,13 @@ class Layout:
         return ChainLayout(self.l, self.n_vus[s] if s < self.n_sub else 0, self.steps)
 
     def summary(self) -> dict:
-        return {"m": self.m, "n_i": self.n_i, "l": self.l, "n_j": self.n_j, "n_sub": self.n_sub, "S": self.S, "n_k": self.n_k,
-                "K": self.K, "R": self.R, "C": self.C, "N_log2": self.n_vars, "virtual_rows": len(self.virt), "n_links": self.n_links}
+        out = {"m": self.m, "n_i": self.n_i, "l": self.l, "n_j": self.n_j, "n_sub": self.n_sub, "S": self.S, "n_k": self.n_k,
+               "K": self.K, "R": self.R, "C": self.C, "N_log2": self.n_vars, "virtual_rows": len(self.virt), "n_links": self.n_links}
+        if self.zk is not None:
+            z = self.zk
+            out["zk"] = {"next": list(z.next), "mask": z.mask, "mask_next": z.mask_next, "product": list(z.product),
+                         "k_product": z.k_product, "uniform": list(z.uniform), "g_rows": list(z.g_rows), "g_cells": z.g_cells}
+        return out
 
 
 def end_row_names(sys: System) -> list[str]:
@@ -110,8 +147,9 @@ def end_values(sys: System, ypub: torch.Tensor) -> dict[str, torch.Tensor]:
     return {f"y_end{e}": (ypub.to(torch.int64) >> sh) & ((1 << wd) - 1) for e, (_, sh, wd) in enumerate(sys.chain["y_end"])}
 
 
-def layout_for(sys: System, l: int, n_vus: list[int], steps: int) -> Layout:
-    """The layout of a batch of ``len(n_vus)`` sub-batches of ``l`` columns (``n_vus[s]`` VUs of ``steps`` units each)."""
+def layout_for(sys: System, l: int, n_vus: list[int], steps: int, zk: bool = False) -> Layout:
+    """The layout of a batch of ``len(n_vus)`` sub-batches of ``l`` columns (``n_vus[s]`` VUs of ``steps`` units each);
+    ``zk``: the LGSC0004 layout (``ZkRows``; ``n_i`` grows if the free region is too small)."""
     if sys.chain is None or (sys.chain.get("y16") is None and not sys.chain.get("y_end")):
         raise NotImplementedError("layout_for: a chain-compiled system with a y16 end or component ends (y_end)")
     pins = {idx for idx, _ in sys.pins}
@@ -129,14 +167,14 @@ def layout_for(sys: System, l: int, n_vus: list[int], steps: int) -> Layout:
             pub_names.append(c.pub)
     virt: dict[str, int] = {}
     nxt = m
+    n_links = len(sys.chain["c"])
     for name in ["const", "link", "start", "end"] + end_row_names(sys) + [f"pub:{n}" for n in pub_names] + \
-            [f"next:{x}" for x in range(len(sys.chain["c"]))]:
+            ([] if zk else [f"next:{x}" for x in range(n_links)]):
         virt[name] = nxt
         nxt += 1
     n_i = max(1, (nxt - 1).bit_length())
-    n_links = len(sys.chain["c"])
     n_pin_lin = sum(1 for c in sys.linear if c.name.startswith("pin:"))
-    K = len(sys.quadratic) + len(sys.linear) - n_pin_lin + 2 * n_links + len(end_row_names(sys))
+    K = len(sys.quadratic) + len(sys.linear) - n_pin_lin + 2 * n_links + len(end_row_names(sys)) + (1 if zk else 0)
     n_k = max(1, (K - 1).bit_length())
     n_sub = len(n_vus)
     n_s = max(0, (n_sub - 1).bit_length())
@@ -144,7 +182,26 @@ def layout_for(sys: System, l: int, n_vus: list[int], steps: int) -> Layout:
         if nv * steps > l:
             raise ValueError(f"sub-batch {s}: {nv} VUs x {steps} > l = {l}")
     c_rows = tuple(row_of_sys[idx] for idx in sys.chain["c"])
-    return Layout(m, n_i, l, _log2(l), n_sub, n_s, steps, tuple(n_vus), row_of_sys, virt, c_rows, n_k, K)
+    zkr = None
+    if zk:
+        n_c, C = n_s + _log2(l), (1 << n_s) * l
+        while True:
+            g_cells = ZK_CELLS_PER_VAR * (n_k + n_c + max(n_i, n_c) + n_i)
+            n_g = max(1, -(-g_cells // C))
+            if nxt + n_links + 2 + 3 + (1 << ZK_B) + n_g <= (1 << n_i):
+                break
+            n_i += 1
+        top = 1 << n_i
+        uniform = tuple(range(top - (1 << ZK_B), top))
+        top -= 1 << ZK_B
+        g_rows = tuple(range(top - n_g, top))
+        top -= n_g
+        product = (top - 3, top - 2, top - 1)
+        top -= 3
+        mask, mask_next = top - 2, top - 1
+        top -= 2
+        zkr = ZkRows(tuple(range(top - n_links, top)), mask, mask_next, product, K - 1, uniform, g_rows, g_cells)
+    return Layout(m, n_i, l, _log2(l), n_sub, n_s, steps, tuple(n_vus), row_of_sys, virt, c_rows, n_k, K, zkr)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -207,7 +264,7 @@ def constraints(sys: System, lay: Layout, device="cpu") -> Constraints:
     for x, (c_idx, Y) in enumerate(zip(ch["c"], ch["y"])):
         b = _map_expr(sys, lay, Y, pin_name)
         b = {r: (-v) % P for r, v in b.items()}
-        r = lay.virt[f"next:{x}"]
+        r = lay.next_row(x)
         b[r] = (b.get(r, 0) + 1) % P
         emit(f"chain.link{x}", {lay.virt["link"]: 1}, {r: v for r, v in b.items() if v}, {})
     for x, c_idx in enumerate(ch["c"]):
@@ -219,6 +276,10 @@ def constraints(sys: System, lay: Layout, device="cpu") -> Constraints:
         r = lay.virt[name]
         b[r] = (b.get(r, 0) - 1) % P
         emit(cname, {lay.virt["end"]: 1}, {r: v for r, v in b.items() if v}, {})
+    if lay.zk is not None:
+        i1, i2, i3 = lay.zk.product
+        assert len(names) == lay.zk.k_product
+        emit("zk.product", {i1: 1}, {i2: 1}, {i3: 1})
     assert len(names) == lay.K, (len(names), lay.K)
     coo = {}
     for side in "abc":
@@ -283,12 +344,37 @@ def fill_z(sys: System, lay: Layout, z: torch.Tensor, s: int, sb: SubBatch) -> N
         if name.startswith("pub:"):
             z[r, cols] = (sb.pub[name[4:]].to(device) % P).to(dtype)
     for x, cr in enumerate(lay.c_rows):
-        z[lay.virt[f"next:{x}"], cols] = torch.roll(z[cr, cols], -1)      # Wnext(j) = W(c_x, j + 1 mod l)
+        z[lay.next_row(x), cols] = torch.roll(z[cr, cols], -1)            # Wnext(j) = W(c_x, j + 1 mod l)
+
+
+def fill_zk(lay: Layout, z: torch.Tensor, key: bytes | None = None) -> None:
+    """Sample the ZK rows of ``z`` in place (after ``fill_z`` of every sub-batch): ``uniform``, ``g_rows``, ``i1``, ``i2``, ``M``
+    exactly uniform (ChaCha20 under ``key``, fresh ``os.urandom`` if None: ``mask_sampler``), ``i3 = i1 i2``, ``M_next`` = ``M``
+    shifted per sub-batch.  The Libra coefficients are the first ``g_cells`` cells of ``g_rows`` (``sumcheck`` reads them from
+    ``z``)."""
+    import os
+    zr = lay.zk
+    rows = list(zr.uniform) + list(zr.g_rows) + [zr.product[0], zr.product[1], zr.mask]
+    n = len(rows) * lay.C
+    key = key or os.urandom(32)
+    u = None
+    if z.device.type == "cuda":
+        from backends.direct.ligero.mask_sampler import sampler_for
+        s = sampler_for(z.device)
+        if s is not None:
+            u = s.uniform(n, key)[0]
+    if u is None:
+        from backends.direct.ligero.mask_sampler import uniform_host
+        u = torch.from_numpy(uniform_host(n, key)).to(z.device)
+    z[torch.tensor(rows, dtype=torch.int64, device=z.device)] = u.reshape(len(rows), lay.C).to(z.dtype)
+    i1, i2, i3 = zr.product
+    z[i3] = ((z[i1].to(torch.int64) * z[i2].to(torch.int64)) % P).to(z.dtype)
+    z[zr.mask_next] = torch.roll(z[zr.mask].reshape(lay.S, lay.l), -1, dims=1).reshape(-1)
 
 
 def public_rows(sys: System, lay: Layout, subs: list[SubBatch], device) -> dict[str, torch.Tensor]:
     """The verifier's side of the virtual rows: name -> (C,) int64 for every virtual row EXCEPT ``next:*`` (those are the
-    prover's claims, proved by the shift sumcheck)."""
+    prover's claims, proved by the shift sumcheck; committed rows in the ZK layout)."""
     out: dict[str, torch.Tensor] = {}
     for name, r in lay.virt.items():
         if name.startswith("next:"):
