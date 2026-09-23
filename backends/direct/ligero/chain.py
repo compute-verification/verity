@@ -45,7 +45,7 @@ import torch
 from .compile import P, System
 
 __all__ = ["N_FAMILIES", "END_FAMILIES", "MAX_COMPONENT_BITS", "N_BASE_LINKS", "WORD_BITS", "ChainCoefs", "Layout",
-           "chain_coefs", "check_component", "end_terms", "extra_coef", "n_links"]
+           "chain_coefs", "check_component", "end_terms", "extra_coef", "extra_coefs", "n_links"]
 
 N_FAMILIES = 7        # link x3, start x3, end
 END_FAMILIES = (6, 0, 1)   # coefficient family of end component x (see the module comment)
@@ -79,6 +79,24 @@ def extra_coef(rc: torch.Tensor, e: int) -> torch.Tensor:
     for _ in range(k - 1):
         pw = (pw * u6) % P
     return (rc[:, f, :] * pw) % P
+
+
+def extra_coefs(rc: torch.Tensor, n_extra: int) -> torch.Tensor:
+    """``torch.stack([extra_coef(rc, e) for e in range(n_extra)], 1)`` -- the same (D, n_extra, l) residues -- with the
+    powers ``rc[6]^k`` formed once each (K = ceil(n_extra / 6) multiplies) and one batched product, instead of the
+    e div 6 multiplies per extra of the per-``e`` form: quadratic in ``n_extra`` inside the tests graph (2 x 5.5k / 22k
+    kernels for the 256 / 512 extras of ajtai-n64 / n128; lane ajtai-leaf)."""
+    D, _, l = rc.shape
+    if n_extra <= 0:
+        return rc.new_zeros((D, 0, l))
+    K = (n_extra + 5) // 6
+    u6 = rc[:, 6, :]
+    pws = [u6]
+    for _ in range(K - 1):
+        pws.append((pws[-1] * u6) % P)
+    pw = torch.stack(pws, 1)                                             # (D, K, l): u6^(k + 1)
+    ext = (rc[:, None, :6, :] * pw[:, :, None, :]) % P                   # (D, K, 6, l): [k, f] = extra e = 6 k + f
+    return ext.reshape(D, 6 * K, l)[:, :n_extra]
 
 
 def end_terms(ch: dict) -> list[tuple[object, int, int, int]]:
@@ -146,7 +164,7 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
     # more than three linked rows, the link extras and the start extras (monomials of the seven families, module comment).
     base = rc.index_select(1, tabs["famsel"])                                     # (D, V_base, l)
     if tabs["n_extra"]:
-        extras = torch.stack([extra_coef(rc, e) for e in range(tabs["n_extra"])], 1)   # (D, n_extra, l)
+        extras = extra_coefs(rc, tabs["n_extra"])                                  # (D, n_extra, l)
         base = torch.cat([base, extras], 1)
     rm = (base * tabs["maskmat"][None, :, :]) % P                                # (D, V, l)
     # every (row, family, kappa) term of r^T A at once: coef[:, row, j] += kappa rc[f][j] (masked); the link terms'

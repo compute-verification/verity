@@ -135,6 +135,8 @@ def test_chain_tables_extend_the_three_link_case() -> None:
     lay = chain.Layout(16, 2, 8)
     rc = torch.randint(0, P, (2, chain.N_FAMILIES, lay.l), dtype=torch.int64)
     e0, e1, e6 = (chain.extra_coef(rc, e) for e in (0, 1, 6))
+    ext = chain.extra_coefs(rc, 20)
+    assert ext.shape == (rc.shape[0], 20, rc.shape[2]) and all(torch.equal(ext[:, e], chain.extra_coef(rc, e)) for e in range(20))
     assert torch.equal(e0, rc[:, 0] * rc[:, 6] % P) and torch.equal(e1, rc[:, 1] * rc[:, 6] % P)
     assert torch.equal(e6, rc[:, 0] * rc[:, 6] % P * rc[:, 6] % P)
     # the 3-link tables of a bare relation are the pre-extension ones (no extra virtual families)
