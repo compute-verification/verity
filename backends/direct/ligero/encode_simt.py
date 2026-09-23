@@ -13,10 +13,16 @@ b-encode / b-v2 lanes, 32.2 ms per 310,602 x 4096 rows on the 4090), specialised
 * optionally the natural-order coefficients ``interp_H(W_j)`` (``l^-1`` x the DIF output, bit-reversal undone on the
   store), which the ZK prover needs for the coefficient-form messages ``w`` and ``v``.
 
-Register / shared-memory layout, Montgomery arithmetic (``R = 2^32``, Plonky3-style signed reduction) and the radix-4
-stage fusion are the shared kernel's; ``K`` here is ``l`` (a power of two, ``>= 4 x threads``), ``n = 4 l``.  Shared
-memory is dynamic (``l = 16384`` needs 64 KiB > the 48 KiB static limit).  Tested bit-exact against ``field.encode``
-and ``eval_on_coset`` (``encode_simt_test``); the verifier keeps the torch encoder on its ``D`` rows.
+Montgomery arithmetic (``R = 2^32``) and the radix-4 stage fusion are the shared kernel's; ``K`` here is ``l`` (a power
+of two, ``>= 4 x threads``), ``n = 4 l``.  Lane enc-hopper (H100 tuning, bit-exact with the previous kernel):
+branch-free ``min``-trick reductions; the row's coefficients live in a second, padded shared-memory buffer (``cf``,
+``CFPAD``: the bit-reversed gathers are bank-conflict-free) instead of ``PER`` registers per thread -- the shared
+kernel's register file forced ptxas to spill at ``l = 16384``; the four coset outputs are paired in shared memory and
+stored as 8-byte words (half the L2 sector transactions of the strided 4-byte scatter); ``blocks = 4 x SMs`` grid-stride
+over the rows (at ``l = 16384`` the 192 KiB of shared memory admit ONE 1024-thread CTA per SM -- the occupancy lever
+still open).  Shared memory is dynamic (``3 l + 32`` words: ``x``, ``cf``, ``y``).
+Tested bit-exact against ``field.encode`` and ``eval_on_coset`` (``encode_simt_test``); the verifier keeps the torch
+encoder on its ``D`` rows.  ``encode(..., stream=)`` launches on that torch stream (hp2-host's pipelining).
 """
 from __future__ import annotations
 
@@ -40,20 +46,25 @@ _SRC = r"""
 #define PER (K / THREADS)
 #define TP %(tp)d             /* mask coefficients per row (0: no mask) */
 #define KINV_MONT %(kinv_mont)du
+#define CFPAD(i) ((i) + ((i) >> (LOGK - 5)))     /* coefficient buffer layout: the bit-reversed gather is conflict-free */
+#define CF_WORDS (K + 32)
 
-__device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return s >= P ? s - P : s; }
-__device__ __forceinline__ unsigned sub_p(unsigned a, unsigned b) { return a >= b ? a - b : a + P - b; }
+/* [0, p) in, [0, p) out; the wrapped-difference min selects the reduced value (2 instructions, no predicate) */
+__device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return min(s, s - P); }
+__device__ __forceinline__ unsigned sub_p(unsigned a, unsigned b) { unsigned d = a - b; return min(d, d + P); }
 /* a in [0,p), w = w' R mod p (Montgomery): a w' mod p.  x = a w < p 2^32; t = x p^{-1} mod 2^32; (x - t p) / 2^32 =
-   hi(x) - hi(t p) in (-p, p). */
+   hi(x) - hi(t p) in (-p, p): min(r, r + p) picks the representative in [0, p). */
 __device__ __forceinline__ unsigned mont_mul(unsigned a, unsigned w) {
     unsigned long long x = (unsigned long long)a * w;
     unsigned lo = (unsigned)x, hi = (unsigned)(x >> 32);
     unsigned t = lo * PINV;
     unsigned u = __umulhi(t, P);
     unsigned r = hi - u;
-    return hi < u ? r + P : r;
+    return min(r, r + P);
 }
 
+/* dynamic shared memory: x[K] (the working row), cf[CF_WORDS] (INTT coefficients, bit-reversed, unscaled, padded),
+   y[K] (the previous coset's codeword, for the paired 8-byte stores) */
 extern "C" __global__ void __launch_bounds__(THREADS)
 rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, unsigned* __restrict__ coef_out,
                  const unsigned* __restrict__ mask,
@@ -63,7 +74,9 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
                  int rows)
 {
     extern __shared__ unsigned x[];
-    unsigned r[PER], coef[PER];
+    unsigned* cf = x + K;
+    unsigned* y = cf + CF_WORDS;
+    unsigned r[PER];
     const int t = threadIdx.x;
     for (int row = blockIdx.x; row < rows; row += gridDim.x) {
         const unsigned* src = in + (size_t)row * K;
@@ -117,21 +130,24 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
             }
             __syncthreads();
         }
+        /* bit-reversed, unscaled (x l) coefficients -> cf (the registers stay free for the coset transforms) */
         #pragma unroll
-        for (int s = 0; s < PER; ++s) coef[s] = x[t + THREADS * s];      /* bit-reversed, unscaled (x l) coefficients */
-        if (coef_out != 0) {
+        for (int s = 0; s < PER; ++s) { const int pos = t + THREADS * s; cf[CFPAD(pos)] = x[pos]; }
+        __syncthreads();
+        if (coef_out != 0) {   /* natural-order l^-1 interp_H(W_j): a coalesced store, the gather through the padded cf */
             unsigned* cd = coef_out + (size_t)row * K;
             #pragma unroll
             for (int s = 0; s < PER; ++s) {
-                const int pos = t + THREADS * s;
-                cd[__brev((unsigned)pos) >> (32 - LOGK)] = mont_mul(coef[s], KINV_MONT);
+                const int j = t + THREADS * s;
+                cd[j] = mont_mul(cf[CFPAD(__brev((unsigned)j) >> (32 - LOGK))], KINV_MONT);
             }
         }
         #pragma unroll 1
         for (int c = 0; c < 4; ++c) {
             const unsigned* ct = coset_tw + (size_t)c * K;
+            if (c > 0) __syncthreads();          /* the previous coset's register stages have consumed x */
             #pragma unroll
-            for (int s = 0; s < PER; ++s) x[t + THREADS * s] = mont_mul(coef[s], __ldg(&ct[t + THREADS * s]));
+            for (int s = 0; s < PER; ++s) { const int pos = t + THREADS * s; x[pos] = mont_mul(cf[CFPAD(pos)], __ldg(&ct[pos])); }
             __syncthreads();
 #if TP > 0
             {   /* + z_c s_i (g w_n^c)^i at coefficient i < TP (bit-reversed position) */
@@ -195,10 +211,21 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
                     }
                 }
             }
-            /* natural protocol order: p(g w_n^{4 j + c}) at position 4 j + c */
-            #pragma unroll
-            for (int s = 0; s < PER; ++s) dst[((size_t)(t + THREADS * s) << 2) | c] = r[s];
+            /* natural protocol order: p(g w_n^{4 j + c}) at position 4 j + c.  Even cosets park in y; odd cosets store
+               the (c - 1, c) pair as one 8-byte word -- half the L2 sector transactions of 4-byte stores at stride 16. */
+            if ((c & 1) == 0) {
+                #pragma unroll
+                for (int s = 0; s < PER; ++s) y[t + THREADS * s] = r[s];
+            } else {
+                #pragma unroll
+                for (int s = 0; s < PER; ++s) {
+                    const int j = t + THREADS * s;
+                    const uint2 v = make_uint2(y[j], r[s]);
+                    *reinterpret_cast<uint2*>(dst + (((size_t)j) << 2) + (c - 1)) = v;
+                }
+            }
         }
+        __syncthreads();      /* x, cf, y are reused by the next row */
     }
 }
 """
@@ -285,7 +312,7 @@ class LigeroEncoderSIMT:
         params = {"pinv": _P_INV_MOD_R, "k": l, "logk": l.bit_length() - 1, "threads": threads,
                   "logt": threads.bit_length() - 1, "tp": t_pad, "kinv_mont": tabs["kinv_mont"]}
         self.kernel = cp.RawKernel(_SRC % params, "rs_encode_ligero", options=("-std=c++17",))
-        self.smem = 4 * l
+        self.smem = 4 * (3 * l + 32)          # x + cf (padded) + y
         if self.smem > 48 * 1024:
             self.kernel.max_dynamic_shared_size_bytes = self.smem
         with cp.cuda.Device(self.device.index or 0):
@@ -294,13 +321,13 @@ class LigeroEncoderSIMT:
             self.coset = cp.asarray(tabs["coset"])
             self.mask_tw = cp.asarray(tabs["mask"])
             sms = cp.cuda.runtime.getDeviceProperties(self.device.index or 0)["multiProcessorCount"]
-        self.blocks = sms * 8
+        self.blocks = sms * 4
 
     def _u32(self, t: torch.Tensor):
         return self.cp.asarray(t).view(self.cp.uint32)
 
     def encode(self, rows: torch.Tensor, mask: torch.Tensor | None = None, want_coefs: bool = False,
-               out: torch.Tensor | None = None):
+               out: torch.Tensor | None = None, stream: torch.cuda.Stream | None = None):
         cp = self.cp
         R = rows.shape[0]
         if rows.shape != (R, self.l):
@@ -322,13 +349,13 @@ class LigeroEncoderSIMT:
         else:
             mask_arg = self.tw_fwd            # unused: TP = 0
         coef_arg = self._u32(coefs) if coefs is not None else np.uint64(0)
-        # torch's current stream vs cupy's: launch on torch's stream
+        # torch's current stream vs cupy's: launch on torch's stream (or the given one -- hp2-host's pipelining)
         import warnings
-        ts = torch.cuda.current_stream(self.device)
+        ts = stream if stream is not None else torch.cuda.current_stream(self.device)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            stream = cp.cuda.ExternalStream(ts.cuda_stream)
-        with stream:
+            cstream = cp.cuda.ExternalStream(ts.cuda_stream)
+        with cstream:
             self.kernel((min(self.blocks, R),), (self.threads,),
                         (self._u32(rows32), self._u32(out), coef_arg, mask_arg, self.tw_inv, self.tw_fwd, self.coset,
                          self.mask_tw, np.int32(R)), shared_mem=self.smem)

@@ -43,13 +43,26 @@ except Exception:  # noqa: BLE001 -- no cupy / no hash_gpu: the host path stays
     GPU_HASH_NAME = None
 
 
+try:
+    from . import commit_gpu as _commit_gpu           # the protocol-specialised kernels (lane enc-hopper)
+except Exception:  # noqa: BLE001
+    _commit_gpu = None
+
+USE_FUSED_COMMIT = True      # commit_gpu (3 launches, 2.5x the shared kernels on the H100); False = hash_gpu level by level
+
+
 def gpu_available() -> bool:
     return _gpu_merkle is not None and HASH_NAME.startswith("blake3")
 
 
-def commit_device(U_int32):
-    """``U_int32``: (m, n) contiguous int32 torch tensor on the device -> (root bytes, Tree)."""
-    tree = _gpu_merkle.commit(U_int32, "blake3")
+def commit_device(U_int32, stream=None):
+    """``U_int32``: (m, n) contiguous int32 torch tensor on the device -> (root bytes, Tree).  ``stream``: the torch
+    stream to launch on (default: the current one)."""
+    n = int(U_int32.shape[1])
+    if USE_FUSED_COMMIT and _commit_gpu is not None and n & (n - 1) == 0 and U_int32.shape[0] <= 4096:
+        tree = _commit_gpu.commit(U_int32, stream=stream)
+    else:
+        tree = _gpu_merkle.commit(U_int32, "blake3")
     return _gpu_merkle.digest_bytes(tree.root, "blake3"), tree
 
 
