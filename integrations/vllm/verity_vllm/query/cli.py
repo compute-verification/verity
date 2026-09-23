@@ -150,10 +150,12 @@ def main(argv: list[str] | None = None) -> int:
         s["v1_program_digest"], s["v2_program_digest"] = m1.get("program_digest"), m2.get("program_digest")
         if a.out:
             _write(s, a.out)
-        print(json.dumps({k: s[k] for k in ("v1_identities", "v2_identities", "common", "only_v1_n", "only_v2_n")}))
+        print(json.dumps({k: s[k] for k in ("v1_identities", "v2_identities", "common", "v1_rows", "v2_rows", "multiplicity_diff_n", "only_v1_n", "only_v2_n")}))
         for k in ("member_rename", "range", "only_v1", "only_v2"):
             for line in s[k]:
                 print(f"  {k:14s} n={line['n']:6d} {line.get('op_path')}/{line.get('member')} spec={line.get('spec')} :: {line['reason'][:120]}")
+        for m in s["multiplicity"][:10]:
+            print(f"  multiplicity   v1_rows={m['v1_rows']} v2_rows={m['v2_rows']} {m['key'][:160]}")
         return 0
     return 2
 

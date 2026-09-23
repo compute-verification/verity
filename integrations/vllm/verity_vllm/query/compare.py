@@ -39,8 +39,17 @@ def compare(v1_rows: Iterable[dict[str, Any]], v2_rows: Iterable[dict[str, Any]]
         if ignore_program_digest:
             return json.dumps([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY[1:]], separators=(",", ":"))
         return identity_key(r)
-    a = {key(r): r for r in v1_rows}
-    b = {key(r): r for r in v2_rows}
+    a: dict[str, dict] = {}
+    b: dict[str, dict] = {}
+    mult_a: Counter = Counter()
+    mult_b: Counter = Counter()
+    for r in v1_rows:
+        k = key(r); a[k] = r; mult_a[k] += 1
+    for r in v2_rows:
+        k = key(r); b[k] = r; mult_b[k] += 1
+    # a global manifest repeats one IDENTITY_KEY per engine step for the request-less hidden-stream rows (key has no engine_step):
+    # the harness digests rows WITH multiplicity, so a key present on both sides with different counts is a difference too
+    multiplicity = [{"key": k, "v1_rows": mult_a[k], "v2_rows": mult_b[k]} for k in a.keys() & b.keys() if mult_a[k] != mult_b[k]]
     only_a = [a[k] for k in a.keys() - b.keys()]
     only_b = [b[k] for k in b.keys() - a.keys()]
     # pair by address
@@ -71,8 +80,9 @@ def compare(v1_rows: Iterable[dict[str, Any]], v2_rows: Iterable[dict[str, Any]]
         unpaired_a += ra
         unpaired_b += rb
     return {"v1_identities": len(a), "v2_identities": len(b), "common": len(a.keys() & b.keys()),
+            "v1_rows": sum(mult_a.values()), "v2_rows": sum(mult_b.values()), "multiplicity_diff_n": len(multiplicity),
             "only_v1_n": len(only_a), "only_v2_n": len(only_b),
-            "member_rename": renames, "range": ranges, "only_v1": unpaired_a, "only_v2": unpaired_b}
+            "member_rename": renames, "range": ranges, "only_v1": unpaired_a, "only_v2": unpaired_b, "multiplicity": multiplicity[:50]}
 
 
 def _sig(r: dict[str, Any], side: str) -> tuple:
@@ -88,7 +98,8 @@ def _sig(r: dict[str, Any], side: str) -> tuple:
 
 def summarize(cmp: dict[str, Any]) -> dict[str, Any]:
     """Fold the classified differences into counted lines with a reason each."""
-    out: dict[str, Any] = {k: cmp[k] for k in ("v1_identities", "v2_identities", "common", "only_v1_n", "only_v2_n")}
+    out: dict[str, Any] = {k: cmp[k] for k in ("v1_identities", "v2_identities", "common", "v1_rows", "v2_rows", "multiplicity_diff_n", "only_v1_n", "only_v2_n")}
+    out["multiplicity"] = cmp.get("multiplicity", [])
     ren: Counter = Counter()
     for d in cmp["member_rename"]:
         ren[(_sig(d["v1"], "v1")[:3], _sig(d["v2"], "v2"))] += 1

@@ -1,0 +1,44 @@
+{
+ "row": "57",
+ "row_id": "gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
+ "mode": "v2",
+ "build_seconds": 195,
+ "v2_identities_rows": 163484,
+ "v2_complete": true,
+ "v2_unmodelled": {},
+ "v2_manifest_digest": "d54d8efe9c2f90e7ff108a7c79a958a06392576db965b7d67ac45f7318ac34f3",
+ "v1_manifest_digest": "5c985ad47c74368f81f8e16584ec5e01c44b0c2f7fec43614657d62c694bb3f0",
+ "program_digest_equal": true,
+ "v1_identities": 160010,
+ "v2_identities": 160442,
+ "common": 160010,
+ "only_v1_n": 0,
+ "only_v2_n": 432,
+ "lines": {
+  "member_rename": [],
+  "range": [],
+  "only_v1": [],
+  "only_v2": [
+   {
+    "op_path": "model",
+    "member": "out",
+    "spec": "Bf16MulScalarTensor_v1",
+    "structural": "out",
+    "returned": "",
+    "crossing": "crossing",
+    "family": "instance_outputs",
+    "n": 432,
+    "reason": "a Value that crosses the module-body boundary in the Program's dataflow which v1's vocabulary called interior (F-r19-int-20 class)"
+   }
+  ]
+ },
+ "residuals_applied": {
+  "Gemm_v1:out->0": 431600,
+  "RoPE_v1:key->1": 107900,
+  "RoPE_v1:query->0": 107900,
+  "encoding:hidden": 11232,
+  "encoding:in": 4150,
+  "encoding:sampled_token_ids": 432
+ },
+ "aliases": 25
+}

@@ -16,9 +16,11 @@ The POLICY (`Policy`, explicit, listed in the header as `query.policy`):
 
 * prescribed inputs -- every field of the Program's record-typed parameters (the registered weights of record);
 * protocol-required -- (a) the output of every sampling event (the committed sampled id), (b) RETURN-SLOT: every Value the Build
-  recorded as a module's return slot (`<module>/<node>/<slot>[row]`): the module hands it across its boundary at runtime and the
-  acquisition binds the returned tensor whether or not the Program reads it downstream (the final norm's rows the logits never read,
-  the residual it returns and vLLM discards).  Switch it off (`return_slots=False`) to see the pure-dataflow population.
+  recorded as a module's return slot (`<module>/<node>/<slot>[row]`), (c) TENSOR-RETURN: the acquisition binds the TENSORS a module
+  returns, and a tensor is one fx node's output -- every row the Program unrolled it into, every port of its tuple; once any Value of
+  a node's output at a step leaves its body, every Value of that node's output is required (the final norm's rows the logits never
+  read, the residual slot of the final fused norm nobody consumes).  Switch (b)+(c) off (`return_slots=False`) to see the
+  pure-dataflow population.
 
 What this module cannot derive and therefore RECORDS (`NAMED_RESIDUALS`, emitted in the header, counted per row):
 
@@ -214,12 +216,15 @@ def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | No
 
 def query_header(profile: str, hidden_family: str, *, return_slots: bool) -> dict[str, Any]:
     text = Q_MODULE_BODY_TEXT + f"; policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs" + \
-        (" + recorded return slots" if return_slots else "") + f"; hidden = {hidden_family}; profile = {profile}"
+        (" + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the body boundary)"
+         if return_slots else "") + f"; hidden = {hidden_family}; profile = {profile}"
     return {"query_id": Q_MODULE_BODY_ID, "query_id_digest": hashlib.sha256(text.encode()).hexdigest(), "query_text": text,
             "engine": "v2-query", "boundary": "module-body", "profile": profile, "attention_hidden_family": hidden_family,
             "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights", hidden_family],
             "policy": {"prescribed_inputs": "every field of the Program's record-typed parameters",
-                       "protocol_required": ["sampling-event outputs"] + (["recorded return slots (RETURN-SLOT)"] if return_slots else [])},
+                       "protocol_required": ["sampling-event outputs"] +
+                       (["recorded return slots (RETURN-SLOT)", "returned tensors: all rows / ports of an fx node's output once one crosses (TENSOR-RETURN)"]
+                        if return_slots else [])},
             "named_residuals": [r.as_dict() for r in NAMED_RESIDUALS]}
 
 
@@ -259,15 +264,27 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             for port in p.port_table:
                 record_fields[ValueRef(p.id, port.name)] = port.name
     prescribed = frozenset(record_fields)
+    Q = Q_module_body_v1(P, corr)
+    B = boundary(P, Q)
     protocol: set[ValueRef] = set()
+    if return_slots:
+        # TENSOR-RETURN: the acquisition binds the TENSORS a module returns, and a tensor is one fx node's output -- every row the
+        # Program unrolled it into, every port of its tuple.  When any Value of a node's output leaves its body (a boundary Value), the
+        # module returned that tensor, so every Value of the node's output at that step is required (the final norm's rows the logits
+        # never read, the residual slot of a fused norm nobody consumes).
+        returned_nodes: set[tuple[int, str, str]] = set()
+        for v in B.values:
+            if v.call >= 0:
+                n = corr.name(v.call)
+                returned_nodes.add((step_of(v.call), n.module, n.node))
     for c in P.calls:
         if c.family in SAMPLING_EVENTS:
             protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
-        elif return_slots and corr.name(c.id).hint:
-            protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
+        elif return_slots:
+            n = corr.name(c.id)
+            if n.hint or (step_of(c.id), n.module, n.node) in returned_nodes:      # RETURN-SLOT (recorded) / TENSOR-RETURN (structural)
+                protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
     policy = Policy(prescribed_inputs=prescribed, protocol_required=frozenset(protocol))
-    Q = Q_module_body_v1(P, corr)
-    B = boundary(P, Q)
     req = RequiredValues(B.values, policy.prescribed_inputs, policy.protocol_required)
     # (required_values() would recompute the boundary; the policy is validated the same way here)
     known_inputs = frozenset(P.inputs)

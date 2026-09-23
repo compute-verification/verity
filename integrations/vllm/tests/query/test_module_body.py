@@ -145,7 +145,7 @@ def test_request_manifest_rows():
     assert all(x["step"] == 0 for x in man["identities"] if x["family"] != "weights")
     assert [x["output_member"] for x in man["identities"] if x["op_path"] == "model"] == ["out"]
     body = next(x for x in man["identities"] if x["op_path"] == "model")
-    assert body["boundary"] == {"crossing_rows": 2, "returned_rows": 0, "structural_member": "out"}
+    assert body["boundary"] == {"crossing_rows": 2, "returned_rows": 2, "structural_member": "out"}   # a crossing Value is a returned tensor too
 
 
 def test_return_slot_policy_is_switchable():
@@ -160,4 +160,25 @@ def test_return_slot_policy_is_switchable():
     without = request_manifest(P2, Correspondence(P2), res, request_id="r0", return_slots=False).manifest
     paths = lambda m: {x["op_path"] for x in m["identities"] if x["family"] == "instance_outputs"}  # noqa: E731
     assert f"{W}.norm" in paths(with_slots) and f"{W}.norm" not in paths(without)
-    assert with_slots["query"]["policy"]["protocol_required"] == ["sampling-event outputs", "recorded return slots (RETURN-SLOT)"]
+    assert with_slots["query"]["policy"]["protocol_required"][:2] == ["sampling-event outputs", "recorded return slots (RETURN-SLOT)"]
+    assert without["query"]["policy"]["protocol_required"] == ["sampling-event outputs"]
+
+
+def test_tensor_return_policy_requires_the_whole_node_output():
+    """A fused norm over 3 rows returns (normed, residual); only the last row's `0` is read (by the logits).  The module returned the
+    whole tensors: all 3 rows of `0` and of `1` are required (TENSOR-RETURN); off-policy only the crossing row is."""
+    R = ValueRef
+    w = InputView(-1, "weights", "{...}", (Port(f"{W}.lm_head.weight", 0, 4, 4, 16),))
+    h = InputView(-2, "h", "Array<3,Value<16>>", (Port("h", 0, 12, 12, 16),))
+    calls = tuple(_call(i, "FusedNorm_v1", f"{W}.norm/fused_add_rms_norm_9[{i}]", [R(-2, "h")], ports=("0", "1")) for i in range(3)) + (
+        _call(3, "Gemm_v1", f"{W}.lm_head/linear[0]", [R(2, "0"), R(-1, f"{W}.lm_head.weight")]),
+        _call(4, "ArgmaxTokenSelect_v1", "argmax[0]", [R(3, "out")], n=1))
+    P = ProgramView(calls, (w, h), (R(4, "out"),), None, "synthetic")
+    res = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [8, 9]}}}
+    on = request_manifest(P, Correspondence(P), res, request_id="r0").manifest
+    off = request_manifest(P, Correspondence(P), res, request_id="r0", return_slots=False).manifest
+    norm = lambda m: {(x["output_member"], x["rows"]) for x in m["identities"] if x["op_path"] == f"{W}.norm" and x["family"] == "instance_outputs"}  # noqa: E731
+    assert norm(on) == {("0", 3), ("1", 3)}
+    assert norm(off) == {("0", 1)}
+    row0 = next(x for x in on["identities"] if x["op_path"] == f"{W}.norm" and x["output_member"] == "0")
+    assert row0["boundary"] == {"crossing_rows": 1, "returned_rows": 3, "structural_member": "0"}
