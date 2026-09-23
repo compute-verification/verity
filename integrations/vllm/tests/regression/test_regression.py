@@ -1,8 +1,15 @@
-"""R19 REFERENCE REGRESSION -- does a NEW vLLM integration (v2) numerically reproduce the v1 reference?
+"""R19 REFERENCE REGRESSION -- does the vLLM integration (v2, the default since the flip) still reproduce its contract?
+
+THE ORACLE (`VERITY_REGRESSION_ORACLE`, `resolver.oracle()`).  `expected` (default): `expected/<row>.json`, RE-BASELINED on v2's own
+outputs (`rebaseline.py write`, reference `v2-reference`; the v1-reference block is kept under `reference.frozen`) -- a difference is a
+regression of the integration.  `frozen`: the contract is lifted from the R2 frozen v1 records themselves (`check.expected(row)`) -- the
+historical "does v2 reproduce v1" comparison, where the labelled decisions below sanction the known differences.  `python -m
+tests.regression.rebaseline run --record DIR --oracle frozen|expected` runs either and records every result for `write` / `table`.
 
 THE REFERENCE.  v1 = `lane/vllm-integration` at release tag `r19-int-21` (commit 89af272a8c1d37a44b3e8f3253378d7a152fc281, tagged
 `v1-reference`) and the R19 rows it recorded.  Twelve rows are frozen in `fixtures.toml` (row -> files -> sha256/bytes) and
-`expected/<row>.json` (the contract, lifted from each row's OWN documents by `lift_expected.py`, never typed by hand):
+`expected/<row>.json` (the contract: lifted from each row's OWN documents by `lift_expected.py`, then re-baselined on v2 by
+`rebaseline.py` -- never typed by hand):
 
     GREEN   #11 llama32-1b B1 i4096/o512 (l40s)   #23 llama32-1b B64 (l40s)   #39 qwen25-15b B1 i4096/o512 (l40s)   #60 mistral-7b B8 (l40s)
             #67 olmoe-1b-7b B32 (l40s)            #68 olmoe-1b-7b B32 mixed-arrivals (l40s)   #73 qwen3-4b B8 (h100)   #74 qwen3-4b-fp8 B8 (h100)
