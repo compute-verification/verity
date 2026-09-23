@@ -248,7 +248,6 @@ def test_chain_two_vus_cpu():
             assert not R.verify_vus(proof3, pubs3, lay3)[0], v
             exercised += 1
         assert exercised >= 2
-        del torch
 
 
 def test_contract_family_composition_matches_the_chain_recipe():
