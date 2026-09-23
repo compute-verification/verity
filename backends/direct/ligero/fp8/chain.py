@@ -74,7 +74,12 @@ def _pad_unit():
 
 
 class FP8ChainRunner:
-    """``vu.ChainRunner`` for the FP8 unit: the same protocol (``prove`` / ``verify``) on ``compile_fp8_unit(chain=True)``."""
+    """``vu.ChainRunner`` for the FP8 unit: the same protocol (``prove`` / ``verify``) on ``compile_fp8_unit(chain=True)``.
+    ``relation`` / ``hooks`` name the relation and its statement word widths for the file formats (``serialize.py``:
+    a ``ligero-statement/v4`` with 8-bit operands and 32-bit slots for the 22-bit public words)."""
+
+    relation = "fp8-ada"
+    hooks = FP8_HOOKS
 
     def __init__(self, device: str, target: float, rate_log2: int = 2, n_proofs: int = 1, zk: bool = False,
                  mode: str = protocol_mod.MODE_INTERACTIVE):
@@ -258,21 +263,53 @@ def bench_vu_fp8(args) -> int:
     if args.device.startswith("cuda"):
         torch.cuda.reset_peak_memory_stats()
     keys = None
+    # --dump-dir: every RECORDED rep's sub-batch proofs as ligero-statement/v4 + ligero-proof/v1 files (+ the runner's
+    # step-0 coins, 128 raw bytes, interactive mode), system.bin + manifest.json once -- the layout vu.bench_vu writes
+    # for BF16 (repK/sub_XX.{stmt,proof[,coins]}); written after the verifier timer, outside every measured interval.
+    dump_dir = Path(os.path.expandvars(args.dump_dir)) if getattr(args, "dump_dir", None) else None
+    dump_manifest = None
+    if dump_dir is not None:
+        from ..serialize import _manifest, _statement_of, _write_system, proof_bytes, sha256_file, statement_bytes
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        dump_manifest = _manifest(dump_dir, args, R)
+        _write_system(dump_dir, R, dump_manifest)
+        dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
+                                "zk": args.zk, "mode": args.mode, "reps": args.reps, "instances": instances_digest(total_vus)}
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
         t_pass = time.perf_counter()
-        for lo, hi in subs:
+        # Prove every sub-batch of the rep first, then verify (and dump) them: the verifier's host work must not sit
+        # between two timed prover sub-batches (vu.bench_vu since f28c13d; the same discipline here).
+        proved = []
+        for si, (lo, hi) in enumerate(subs):
             V = protocol_mod.Coins.sample() if interactive else None
             proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=l, coins=V)
+            for k_, v_ in proof.timings.items():
+                agg[k_] = agg.get(k_, 0.0) + v_
+            proved.append((si, lo, hi, V, proof, pubs, lay_i))
+            if rep == 0:
+                break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
+        for si, lo, hi, V, proof, pubs, lay_i in proved:
             t1 = time.perf_counter()
             ok, why = R.verify_vus(proof, pubs, lay_i, coins=V)
             vsum += time.perf_counter() - t1
             assert ok, f"sub-batch [{lo}, {hi}): {why}"
-            for k_, v_ in proof.timings.items():
-                agg[k_] = agg.get(k_, 0.0) + v_
-            if rep == 0:
-                break
+            if dump_dir is not None and rep > 0:
+                rd = dump_dir / f"rep{rep}"
+                rd.mkdir(exist_ok=True)
+                stem = f"sub_{si:02d}"
+                st = _statement_of(R, pubs, lay_i, R.cfg(lay_i.l), n_proofs)
+                (rd / f"{stem}.stmt").write_bytes(statement_bytes(st))
+                (rd / f"{stem}.proof").write_bytes(proof_bytes(proof))
+                entry = {"rep": rep, "sub": si, "vus": [lo, hi], "stmt": f"rep{rep}/{stem}.stmt", "proof": f"rep{rep}/{stem}.proof",
+                         "proof_bytes": (rd / f"{stem}.proof").stat().st_size, "proof_sha256": sha256_file(rd / f"{stem}.proof"),
+                         "python_verdict": {"accepted": ok, "reason": why}, "prover_seconds": proof.timings.get("total")}
+                if V is not None:
+                    (rd / f"{stem}.coins").write_bytes(V.r1 + V.s1 + V.r2 + V.s2)
+                    entry["coins"] = f"rep{rep}/{stem}.coins"
+                dump_manifest["files"].append(entry)
+        del proved
         wall = time.perf_counter() - t_pass
         if rep == 0:
             print("warm-up (one sub-batch, with the prover's self-check):", {k_: round(v_, 3) for k_, v_ in agg.items()})
@@ -281,6 +318,11 @@ def bench_vu_fp8(args) -> int:
         runs.append((agg, vsum))
         print(f"rep {rep}: prover {agg['total']:.3f}s (+hints {agg['hints_host']:.3f}s) over {n_proofs} proofs; "
               f"verifier {vsum:.3f}s; pass wall {wall:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)")
+    dumps = None
+    if dump_dir is not None:
+        (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
+        print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)
+        dumps = _verify_dumps(dump_dir, dump_manifest, R, args.device)
     med = {k_: statistics.median(r[0][k_] for r in runs) for k_ in keys}
     vmed = statistics.median(r[1] for r in runs)
     peak_dev = torch.cuda.max_memory_allocated() if args.device.startswith("cuda") else 0
@@ -373,19 +415,57 @@ def bench_vu_fp8(args) -> int:
             # ``census.`` is a contract-reserved prefix: only the seven names contract.py defines may live under
             # it (emitted above).  The relation's own per-gadget row counts go under ``relation.census.``.
             meas.append(contract.measurement(f"relation.census.{k_}", v_, "count"))
+    checker = "backends.direct.ligero.fp8.chain bench_vu_fp8 (verifier accepted every rep; prover self-check on the warm-up sub-batch"
+    status = "passed"
+    evidence = {"soundness": snd, "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]} for r in runs]}
+    if dumps is not None:
+        # the same code as the prover (the Python file verifier, cold from the dumped bytes): a self-check of the dump
+        # round trip, NOT an independent verification -- that is the `verify` lane's label, never this producer's
+        checker += "; Python file verifier (serialize.verify_files, shares code with the prover) on every dumped proof, cold from bytes"
+        evidence["dumps"] = dumps
+        if dumps["accepted"] != dumps["total"]:
+            status = "failed"
+    checker += ")"
+    # the dump tree (relative to the run dir) travels with the result as its run-files/v1 artifact (store README §10)
+    artifacts = []
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    if dump_dir is not None and run_dir and Path(run_dir).resolve() in dump_dir.resolve().parents:
+        artifacts.append(os.path.relpath(dump_dir.resolve(), Path(run_dir).resolve()))
     result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or os.environ.get("RESEARCH_RUN_ID") or f"b-ligero-fp8-vu-{int(time.time())}",
               "workload_fingerprint": fp,
-              "validation": {"status": "passed", "checker": "backends.direct.ligero.fp8.chain bench_vu_fp8 (verifier accepted every rep; "
-                                                            "prover self-check on the warm-up sub-batch)",
-                             "detail": f"{args.reps} reps, {total_vus} VUs as {n_proofs} proofs at l={l}", "evidence": {"soundness": snd}},
-              "measurements": meas, "measurement_files": [], "artifacts": []}
+              "validation": {"status": status, "checker": checker,
+                             "detail": f"{args.reps} reps, {total_vus} VUs as {n_proofs} proofs at l={l}"
+                                       + (f"; dumps: {dumps['accepted']}/{dumps['total']} accepted cold from bytes" if dumps else ""),
+                             "evidence": evidence},
+              "measurements": meas, "measurement_files": [], "artifacts": artifacts}
     problems = contract.validate(result)
     if problems:
         print("contract problems:", problems)
     print(json.dumps({"seconds_per_vu": per_vu, "prover_total": total, "verifier": vmed, "bytes": nbytes, "n_proofs": n_proofs,
                       "per_proof_vus": per_proof, "t": cfg.t, "zk": cfg.zk, "k": cfg.k, "peak_device_bytes": peak_dev,
                       "soundness_log2": snd["total_log2"], "per_proof_log2": snd["per_proof_total_log2"], "rows": R.sys.m,
-                      "medians": med}, indent=1))
+                      "medians": med, "dumps": dumps, "validation": status}, indent=1))
     if args.out:
         Path(os.path.expandvars(args.out)).write_text(json.dumps(result, indent=1, default=str))   # $RESEARCH_RUN_DIR/result.json
-    return 0
+    return 0 if status == "passed" else 1
+
+
+def _verify_dumps(dump_dir: Path, manifest: dict, R: FP8ChainRunner, device: str) -> dict:
+    """``serialize.verify_files`` on every dumped (statement, proof[, coins]) of ``manifest`` with the prover's own runner:
+    the files parse and verify cold from bytes (interactive mode: against the coins in the transcript -- a self-check, D7).
+    The verdicts go to ``<dump_dir>/verify_python.json``; returns the summary that enters ``validation.evidence.dumps``."""
+    from ..serialize import verify_files
+    items, t0 = [], time.perf_counter()
+    for e in manifest["files"]:
+        ok, why, secs = verify_files(dump_dir / e["stmt"], dump_dir / e["proof"], device, runner=R)
+        items.append({"rep": e["rep"], "sub": e["sub"], "proof": e["proof"], "accepted": ok, "reason": why, "seconds": secs})
+        if not ok:
+            print(f"!! dumped proof {e['proof']} REJECTED cold from bytes: {why}", flush=True)
+    n_ok = sum(1 for it in items if it["accepted"])
+    summary = {"verifier": "python (backends.direct.ligero.serialize.verify_files; shares code with the prover: a self-check)",
+               "independent": False, "statement_format": manifest["format"]["statement"], "accepted": n_ok, "total": len(items),
+               "seconds": sum(it["seconds"] for it in items), "wall": time.perf_counter() - t0,
+               "coins": "the transcript's own coins replayed (file verifier)" if R.interactive else "n/a (Fiat-Shamir)"}
+    (dump_dir / "verify_python.json").write_text(json.dumps({**summary, "items": items}, indent=1))
+    print(f"dumps: {n_ok}/{len(items)} accepted cold from bytes by the Python file verifier in {summary['wall']:.2f}s", flush=True)
+    return summary

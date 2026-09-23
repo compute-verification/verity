@@ -118,7 +118,7 @@ def test_table1_is_definitional_and_frozen() -> None:
         assert len(row) == len(T.TABLE1_COLUMNS) and all(isinstance(x, str) and x for x in row)
         assert c.zk == "as configured" or c.zk.startswith(T.ZK_VALUES), c.zk
     a, b, sp1 = T.CANDIDATES
-    assert a.proof_classes == ("NON_ZK_PROOF",) and a.zk == "No"
+    assert a.proof_classes == ("NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF") and a.zk == "No"
     assert b.proof_classes == ("COMPLETE_ZK_BACKEND",) and b.drilldown_classes == ("COMPLETE_HVZK_BACKEND",)
     assert b.zk.startswith("Malicious-verifier ZK (interactive") and "; HVZK (Fiat–Shamir variant" in b.zk
     assert set(sp1.proof_classes) == {"NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND"}
@@ -222,18 +222,24 @@ def test_other_device_never_populates_the_row(store: LocalStore) -> None:
 
 
 def test_diagnostic_class_is_rejected(store: LocalStore) -> None:
-    art = put(store, result(proof_class="NON_ZK_PROOF_DIAGNOSTIC"))
+    art = put(store, result(proof_class="ARITHMETIC_DIAGNOSTIC"))
     tab = T.build(store)
     assert cell(tab) is None
-    assert rejected(tab, art) == ["proof_class 'NON_ZK_PROOF_DIAGNOSTIC' is not A-GKR's declared class NON_ZK_PROOF"]
+    assert rejected(tab, art) == ["proof_class 'ARITHMETIC_DIAGNOSTIC' is not A-GKR's declared class NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF"]
+
+
+def test_a_gkr_complete_non_zk_proof_is_its_declared_class(store: LocalStore) -> None:
+    """The user's label for a complete non-ZK proof is NON_ZK_PROOF_DIAGNOSTIC; every A-GKR emitter writes it."""
+    put(store, result(proof_class="NON_ZK_PROOF_DIAGNOSTIC"))
+    assert cell(T.build(store)) is not None
 
 
 def test_redteam_downgrade_is_rejected_and_a_later_reaudit_supersedes(store: LocalStore) -> None:
-    art = put(store, result(), labels=[("proof_class", "NON_ZK_PROOF_DIAGNOSTIC", REDTEAM, "2026-09-22T11:00:00Z")])
+    art = put(store, result(), labels=[("proof_class", "ARITHMETIC_DIAGNOSTIC", REDTEAM, "2026-09-22T11:00:00Z")])
     tab = T.build(store)
     assert cell(tab) is None
     (reason,) = rejected(tab, art)
-    assert reason.startswith("downgraded: red-team-x") and "proof_class=NON_ZK_PROOF_DIAGNOSTIC, below NON_ZK_PROOF" in reason
+    assert reason.startswith("downgraded: red-team-x") and "proof_class=ARITHMETIC_DIAGNOSTIC, below NON_ZK_PROOF" in reason
     # a red team cannot upgrade; a later red-team event supersedes the verdict (latest-event-wins)
     store.add_label(art, "proof_class", "COMPLETE_ZK_BACKEND", "red-team-y", ts="2026-09-22T12:00:00Z")
     assert cell(T.build(store)) is not None
@@ -429,7 +435,7 @@ def test_snapshot_of_nothing_is_refused(store: LocalStore, capsys: pytest.Captur
 
 
 def test_markdown_has_the_three_tables_and_the_rejected_list(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> None:
-    bad = put(store, result(proof_class="NON_ZK_PROOF_DIAGNOSTIC"))
+    bad = put(store, result(proof_class="ARITHMETIC_DIAGNOSTIC"))
     assert T.main(["--root", str(store.root)]) == 0
     md = capsys.readouterr().out
     assert md.count("\n## Table ") + md.startswith("## Table ") == 3
@@ -437,7 +443,7 @@ def test_markdown_has_the_three_tables_and_the_rejected_list(store: LocalStore, 
                     "## Table 3 — Prover phase decomposition"):
         assert heading in md
     assert "K = 1536; B = 4096; soundness 2^-128" in md and "authentication = excluded" in md
-    assert f"- {bad} (A-GKR / {FIRST.name}) → proof_class 'NON_ZK_PROOF_DIAGNOSTIC'" in md
+    assert f"- {bad} (A-GKR / {FIRST.name}) → proof_class 'ARITHMETIC_DIAGNOSTIC'" in md
     assert "(no populated Table 2 cell" in md
 
 
@@ -456,3 +462,49 @@ def test_label_keys_are_the_store_vocabulary() -> None:
     assert set(vocab.SCOPES) == set(ledger.SCOPES) and set(vocab.TRACKS) == set(ledger.TRACKS)
     assert set(vocab.CANDIDATES) == {c for _, c in ledger_to_store.CANDIDATES} | {ledger_to_store.candidate("some-other-lane")}
     assert set(T.RANK) <= set(vocab.PROOF_CLASSES)
+
+
+# --- verification provenance in the footnotes (D7) -----------------------------------------------------------------------------------
+
+
+def test_footnote_names_the_verifier_and_flags_interactive_transcripts(store: LocalStore) -> None:
+    """An interactive transcript can only be replayed against the runner's step-0 coins (D7: live-verifier-only evidence); the
+    footnote says so, names the asserter, and a Fiat-Shamir transcript is called transferable.  The mode comes from
+    ``security.bound_model`` when the emitter writes no ``mode``."""
+    inter = put(store, result(t_total=4.0, security={"target": -128, "achieved_log2": -128.3, "field": "BabyBear",
+                                                     "bound_model": "interactive: statistical, live verifier coins committed at step 0 (HM96)"}))
+    tab = T.build(store)
+    c = cell(tab)
+    assert c is not None and c.artifact == inter and c.mode == "interactive" and c.verified_by == VERIFIER
+    md = T.render_markdown(tab)
+    assert f"verified by {VERIFIER} against the runner's step-0 coins (interactive transcript: not transferable evidence per D7" in md
+    fs = put(store, result(t_total=3.0, security={"target": -128, "achieved_log2": -128.3, "field": "BabyBear",
+                                                  "bound_model": "non-interactive: eps_FS <= 2^60 x eps_round (BCS16)"}))
+    tab = T.build(store)
+    c = cell(tab)
+    assert c is not None and c.artifact == fs and c.mode == "fiat-shamir"
+    assert f"verified by {VERIFIER} (Fiat–Shamir transcript: transferable)" in T.render_markdown(tab)
+    assert T._mode_of({"mode": "interactive"}) == "interactive" and T._mode_of({"mode": "fiat-shamir"}) == "fiat-shamir"
+    assert T._mode_of({"security": {"bound_model": 3}}) is None and T._mode_of({}) is None
+
+
+# --- device variants (same nvidia-smi name, not the datasheet part) ----------------------------------------------------------------
+
+
+def test_a_rememoried_board_of_the_same_name_is_not_a_cell(store: LocalStore) -> None:
+    """2026-09-22: a RunPod "RTX 4090" reported 48 GiB; the datasheet part has 24 GiB.  Same name, so ``same_sku`` passes; the
+    memory check rejects it, names both figures, and the reference part (within tolerance) still populates."""
+    hw = lambda mem: {"gpu": {"name": A100, "driver": "d", "cuda": "c", "memory_total_bytes": mem}, "cpu": {"model": "AMD EPYC 7763 64-Core Processor", "count": 256}}  # noqa: E731
+    bad = put(store, result(t_total=3.0, hardware=hw(2 * 80 * 2**30)))
+    good = put(store, result(t_total=4.0, hardware=hw(85_520_809_984)))     # what torch reports for an 80 GiB part
+    tab = T.build(store)
+    c = cell(tab)
+    assert c is not None and c.artifact == good
+    reasons = rejected(tab, bad)
+    assert len(reasons) == 1 and reasons[0].startswith("device variant: 160.0 GiB of device memory on") and "has 80 GiB" in reasons[0]
+    assert c.host == "AMD EPYC 7763 64-Core Processor x256"
+    assert f"on {A100} (host AMD EPYC 7763 64-Core Processor x256); attempt" in T.render_markdown(tab)
+    assert T.device_variant({"name": A100}, FIRST) is None                  # no memory reported: unchecked
+    assert T.device_variant({"name": A100, "memory_total_bytes": 0}, FIRST) is None
+    assert FIRST.native_peak.memory_bytes == 80 * 2**30 and FP8_ADA_MMA.native_peak.memory_bytes == 24 * 2**30
+    assert "device_variant" in T.CAPTION

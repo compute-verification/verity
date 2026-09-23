@@ -26,6 +26,7 @@ Fiat-Shamir with SHAKE-256 as the challenge expander (placeholder hash, named in
 from __future__ import annotations
 
 import hashlib
+import math
 import time
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -35,6 +36,7 @@ import torch
 from verity_numerical.checker.params import Params
 from verity_numerical.security import accounting as acc
 
+from . import auth as auth_mod
 from . import merkle, witness
 from .chain import N_FAMILIES, chain_coefs
 from .compile import P, System
@@ -52,7 +54,7 @@ from .unit import public_vectors
 from .witness import Tables, build_witness, quad_p0
 
 __all__ = ["BF16_HOOKS", "MODES", "MODE_FIAT_SHAMIR", "MODE_INTERACTIVE", "CoinOpeningError", "Coins", "Config", "Proof",
-           "RelationHooks", "coin_commit", "config_for", "prove", "soundness", "verify"]
+           "RelationHooks", "batch_bound", "coin_commit", "config_for", "log2_sum", "prove", "soundness", "verify"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -211,6 +213,56 @@ COIN_HIDING_TERM = 2 * Fraction(2**64, 2**256)      # 2 slots x q / 2^|r|, q = 2
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# Batch verification: the union bound over the sub-batches presented (PROTOCOL.md 8c, "Batch verification")
+# ---------------------------------------------------------------------------------------------------------------------
+#
+# A batch is N independently committed sub-batch proofs.  Each proof's bound 2^b_i (b_i = per_proof_total_log2 of
+# ``soundness()``, recomputed by the verifier from THAT proof's parameters) is a statement about one commitment; the
+# batch claim "sound to 2^-target" is true only through the union bound sum_i 2^b_i <= 2^-target, and a proof's
+# n_proofs is a commitment to its batch only if it equals the number of proofs actually presented.  Neither was a
+# verifier check before lane b-batch-bound: N proofs each claiming n_proofs = 1 passed on their own 2^-132.9 while the
+# batch was 2^-128.3.  The same rule, the same reason strings, in backends/ligero-verify (batch_bound in verify.rs).
+
+def _bits_str(bits: float) -> str:
+    """The target in a reason string: ``128`` for an integer, else two decimals (identical in the Rust verifier)."""
+    return f"{int(bits)}" if float(bits).is_integer() else f"{bits:.2f}"
+
+
+def log2_sum(xs: list[float]) -> float:
+    """log2(sum_i 2^x_i) without leaving the log domain (the x_i are ~ -130)."""
+    if not xs:
+        return float("-inf")
+    m = max(xs)
+    if m == float("-inf"):
+        return m
+    return m + math.log2(sum(2.0 ** (x - m) for x in xs))
+
+
+def batch_bound(per_proof_log2: list[float], n_proofs_claimed: list[int], target_bits: float = 128.0,
+                names: list[str] | None = None) -> dict:
+    """The batch verifier's accounting gate on N = len(per_proof_log2) sub-batch proofs that each verified on their own.
+    ``per_proof_log2[i]`` is the verifier's recomputation of proof i's bound (``soundness(cfg_i, ...)["per_proof_total_log2"]``,
+    never a prover-supplied number); ``n_proofs_claimed[i]`` is the count proof i's statement was sized for.  Accepts iff
+    every claimed count equals N and ``sum_i 2^b_i <= 2^-target_bits``.  ``batch_log2`` = log2 of the sum (the batch's
+    bits are its negative); reason strings are shared with the Rust verifier."""
+    N = len(per_proof_log2)
+    if N == 0 or len(n_proofs_claimed) != N:
+        raise ValueError("batch_bound needs one bound and one claimed n_proofs per sub-batch")
+    names = names or [f"sub_{i:02d}" for i in range(N)]
+    total = log2_sum([float(b) for b in per_proof_log2])
+    out = {"n_subbatches": N, "target_bits": float(target_bits), "batch_log2": total,
+           "per_proof_log2": [float(b) for b in per_proof_log2], "n_proofs_claimed": [int(k) for k in n_proofs_claimed]}
+    for name, k in zip(names, n_proofs_claimed):
+        if int(k) != N:
+            return {**out, "accepted": False, "reason": f"batch: n_proofs mismatch ({name}: n_proofs = {int(k)}, {N} sub-batches presented)"}
+    if total > -float(target_bits):
+        return {**out, "accepted": False,
+                "reason": f"batch: union bound 2^{total:.2f} over {N} sub-batches exceeds the target 2^-{_bits_str(target_bits)}"}
+    return {**out, "accepted": True,
+            "reason": f"accept: all {N} sub-batches accepted; union bound 2^{total:.2f} <= 2^-{_bits_str(target_bits)}"}
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Statement binding (red-team checklist, redteam_vu.md F1/F2 applied to this prover)
 # ---------------------------------------------------------------------------------------------------------------------
 #
@@ -279,8 +331,11 @@ def _u_bytes(x, dtype: str) -> bytes:
 
 
 def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None, y16=None,
-                     rel: RelationHooks = BF16_HOOKS) -> bytes:
-    """The public statement as the verifier sees it (see the module comment above)."""
+                     rel: RelationHooks = BF16_HOOKS, auth: auth_mod.AuthStatement | None = None) -> bytes:
+    """The public statement as the verifier sees it (see the module comment above).  ``auth`` (chain mode,
+    ``authentication = included``): the committed-object block of ``auth.py`` -- the three tree references (binding,
+    owner, count, root) and the claimed VU indices -- so the challenges are bound to "the words at these leaf indices
+    under these roots", not just to the words."""
     h = hashlib.blake2b(digest_size=32)
     h.update(STATEMENT_TAG)
     h.update(rel.tag)
@@ -298,6 +353,10 @@ def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None
     else:
         h.update(b"|c=" + _u_bytes(c, "<u4"))
         h.update(b"|y=" + _u_bytes(y, "<u4"))
+    if auth is not None:
+        if layout is None:
+            raise ValueError("authentication is defined for the chain statement only")
+        h.update(auth_mod.digest_bytes(auth))
     return h.digest()
 
 
@@ -467,12 +526,14 @@ class Proof:
     v: np.ndarray | None = None   # ZK only: (D, k) coefficients of the blinded linear-test message alpha p + Z_H s_lin
     coin_commit: tuple[bytes, bytes] | None = None   # step 0: (c1, c2)
     coins: Coins | None = None                       # the openings (r1, s1), (r2, s2) as the prover received them
+    auth: list[list[bytes]] | None = None            # authentication = included: one Merkle multiproof per tree (a, b, y)
 
     def n_bytes(self) -> dict:
         b = {"root": len(self.root), "w": self.w.nbytes, "h": self.h.nbytes, "cols": 4 * len(self.cols),
              "opened_columns": self.opened.nbytes, "merkle_paths": sum(32 * len(p) for p in self.paths),
              "q_chain": self.q.nbytes if self.q is not None else 0, "v_linear": self.v.nbytes if self.v is not None else 0,
-             "coin_commitments_and_openings": 6 * COIN_BYTES if self.coin_commit is not None else 0}
+             "coin_commitments_and_openings": 6 * COIN_BYTES if self.coin_commit is not None else 0,
+             "auth_multiproofs": sum(32 * len(s) for s in self.auth) if self.auth is not None else 0}
         b["total"] = sum(b.values())
         return b
 
@@ -723,7 +784,8 @@ class _Clock:
 
 def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints: torch.Tensor,
           device, check: bool = False, mutate=None, chain: tuple | None = None, words: dict | None = None,
-          coins: Coins | None = None, rel: RelationHooks = BF16_HOOKS) -> Proof:
+          coins: Coins | None = None, rel: RelationHooks = BF16_HOOKS, auth: auth_mod.AuthStatement | None = None,
+          auth_open=None) -> Proof:
     """``pub``: the public vectors (from ``public_vectors``); ``hints``: (n_hints, l) from ``gen_step``.
     ``words``: the public words the statement binds -- ``{"a", "b", "c", "y"}`` (units) or ``{"a", "b"}`` (chain;
     ``y16`` comes from ``chain``) -- absorbed into every challenge (``statement_digest``).
@@ -731,13 +793,17 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     negatives); an honest prover never uses it.  ``chain = (Layout, y16_pub (l,))`` runs the chain test.
     ``coins``: the verifier's step-0 coin source -- REQUIRED in the interactive mode (the verifier's own ``Coins`` or
     a malicious source with the same interface) and FORBIDDEN in the Fiat-Shamir mode (there is no step 0; the
-    challenges are hashes of the transcript).  The two modes are mutually exclusive (red team F3)."""
+    challenges are hashes of the transcript).  The two modes are mutually exclusive (red team F3).
+    ``auth`` (chain mode): the committed-object block absorbed into the statement (``auth.py``); ``auth_open()``
+    returns the three Merkle multiproofs the transcript then carries (prover work, timed as ``auth_openings``)."""
     clk = _Clock(device)
     m, l, n, D = sys.m, cfg.l, cfg.n, cfg.D
     assert hints.shape[1] == l
     assert (chain is not None) == (sys.chain is not None), "chain mode needs a chain-compiled system"
     if words is None:
         raise ValueError("prove needs the public words (statement binding)")
+    if (auth is not None) != (auth_open is not None) or (auth is not None and chain is None):
+        raise ValueError("authentication needs the chain mode, an AuthStatement and an opening function")
     if cfg.interactive:
         if coins is None:
             raise ValueError("interactive mode: prove needs the verifier's step-0 coin source (coins=...)")
@@ -749,7 +815,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
             raise ValueError("fiat-shamir mode has no step 0: coins must be None")
         src, ccom, sent = None, None, []
     if chain is not None:
-        stmt = statement_digest(sys, cfg, words["a"], words["b"], layout=chain[0], y16=chain[1], rel=rel)
+        stmt = statement_digest(sys, cfg, words["a"], words["b"], layout=chain[0], y16=chain[1], rel=rel, auth=auth)
     else:
         stmt = statement_digest(sys, cfg, words["a"], words["b"], c=words["c"], y=words["y"], rel=rel)
     clk.lap("statement")
@@ -877,11 +943,15 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         opened = U_cols[cols].T.copy()                            # (m, t)
         paths = merkle.open_columns(levels, cols)
     clk.lap("openings")
+    auth_sibs = None
+    if auth is not None:                                          # the Merkle multiproofs of the boundary words
+        auth_sibs = [list(s) for s in auth_open()]
+        clk.lap("auth_openings")
     total = clk.total()
     timings = dict(clk.marks)
     timings["total"] = total
     return Proof(root, w_np, h_np, cols, opened, paths, hash_name, timings, q_np, v_np, ccom,
-                 Coins(r1, s1, r2, s2) if cfg.interactive else None)
+                 Coins(r1, s1, r2, s2) if cfg.interactive else None, auth_sibs)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -889,17 +959,26 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
 # ---------------------------------------------------------------------------------------------------------------------
 
 def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: Proof, device,
-           chain: tuple | None = None, coins: Coins | None = None, rel: RelationHooks = BF16_HOOKS) -> tuple[bool, str]:
+           chain: tuple | None = None, coins: Coins | None = None, rel: RelationHooks = BF16_HOOKS,
+           auth: auth_mod.AuthStatement | None = None, auth_procs: int | None = None,
+           auth_timing: dict | None = None) -> tuple[bool, str]:
     """Accept/reject the claim ``y[i] = tc_dot(c[i], a[i], b[i])`` for all l units -- or, with
     ``chain = (Layout, y16_pub)`` (``c = y = None``), the claim that every VU of the layout casts to its
     ``y16_pub`` word from ``c_0 = 0`` over its 96 units.  Never touches W.
     ``coins``: interactive mode -- REQUIRED: the verifier's OWN step-0 randomness; the transcript must carry exactly
     these openings (a proof made in another verifier's session, or with prover-chosen coins, is rejected).
-    Fiat-Shamir mode -- must be ``None``: there is no step 0 and the transcript carries no coins."""
+    Fiat-Shamir mode -- must be ``None``: there is no step 0 and the transcript carries no coins.
+    ``auth`` (chain mode, ``authentication = included``): the verifier's OWN committed-object block (roots, VU
+    indices); the statement digest absorbs it and, after the Ligero tests, the transcript's three multiproofs must
+    open exactly the published words at the claimed leaf indices under the roots (``auth.verify_auth``)."""
     t0 = time.perf_counter()
     m, l, n, D, t, k = sys.m, cfg.l, cfg.n, cfg.D, cfg.t, cfg.k     # every size from the VERIFIER's configuration
     if (chain is not None) != (sys.chain is not None):
         return False, "chain mode mismatch"
+    if auth is not None and chain is None:
+        return False, "authentication is defined for the chain statement only"
+    if (auth is not None) != (proof.auth is not None):
+        return False, "authentication block / multiproofs mismatch"
     # step 0 / openings: c_i = H(r_i || s_i) for both slots; interactive: they are this verifier's own coins
     if cfg.interactive:
         if coins is None:
@@ -944,7 +1023,9 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
             return False, "malformed chain transcript"
         if len(y16_pub) != l or ((y16_pub < 0) | (y16_pub >= 2 ** (rel.y16_bits or p.word_bits))).any():
             return False, "y16 range"
-        stmt = statement_digest(sys, cfg, a, b, layout=layout, y16=y16_pub, rel=rel)
+        if auth is not None and len(auth.vu_index) != layout.n_vus:
+            return False, "authentication block does not match the layout"
+        stmt = statement_digest(sys, cfg, a, b, layout=layout, y16=y16_pub, rel=rel, auth=auth)
     elif proof.q is not None:
         return False, "unexpected chain transcript"
     else:
@@ -1006,4 +1087,17 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
         if not torch.equal(eval_on_coset(q, n)[:, cols], expect):
             return False, "chain constraints failed (opened columns)"
     _sync(device)
+    # (vi) authentication: the published words are the committed words (verifier-side openings; auth.py)
+    if auth is not None:
+        t_auth = time.perf_counter()
+        real = layout.n_vus * layout.steps
+        a_np = np.asarray(a.cpu().numpy() if isinstance(a, torch.Tensor) else a, dtype=np.int64)
+        b_np = np.asarray(b.cpu().numpy() if isinstance(b, torch.Tensor) else b, dtype=np.int64)
+        y_np = y16_pub.cpu().numpy()[layout.steps - 1:real:layout.steps]
+        ok, why = auth_mod.verify_auth(auth, proof.auth, a_words=a_np[:real].reshape(-1), b_words=b_np[:real].reshape(-1),
+                                       y_words=y_np, K=layout.steps * a_np.shape[1], steps=layout.steps, procs=auth_procs)
+        if auth_timing is not None:
+            auth_timing["seconds"] = auth_timing.get("seconds", 0.0) + (time.perf_counter() - t_auth)
+        if not ok:
+            return False, why
     return True, f"accept ({time.perf_counter() - t0:.3f}s)"

@@ -270,3 +270,151 @@ the verdict; the reasons are listed side by side in `fixtures/rust_verdicts/*.js
  "code": "protocol.py verify reasons", "verifier": "src/verify.rs / src/format.rs reasons", "status": "excluded", "owner": "b-verifier-2",
  "resolution": "verdict agreement is the gate; reasons recorded side by side", "evidence": ["fixtures/rust_verdicts/mut_*.json"]}
 ~~~
+
+## D9. `authentication = included` (lane `auth-included`): a third hash, two new file versions, and the check order
+
+The included result binds every published boundary word to three SHA-256 indexed Merkle trees of
+`verity.commitments` (`backends/direct/ligero/auth.py`: a-words, b-words, output words of the frozen instance set,
+one `u16` leaf per word, `RangeIndexedDomain(0, count)`, owner `-1 / -2 / -1`, binding = `identity_digest` of the
+dataset manifest + word range).  Facts a verifier needs that PROTOCOL.md does not state (the code is the reference):
+
+* **Hash.**  The commitments layer is SHA-256 under the `veritor/protocol/merkle/frame/v3` framing (`_hash`: frame
+  tag, `u32be(len tag) || tag`, then `u64be(len part) || part` per part) and `veritor/tagged-sha256/v1` for the domain
+  identity (canonical JSON `{"start":0,"step":1,"stop":N}`).  Neither BLAKE3 nor BLAKE2b appears in it, so the Rust
+  verifier now carries a third primitive (`src/hash.rs Sha256`, FIPS 180-4, pinned against NIST vectors) and
+  `src/auth.rs` mirrors the frame, the `domain / leaf / pad / node` frames and the minimal-big-endian integer
+  encoding.  The tree's `domain_id` includes the *range identity digest as 32 raw bytes* (`bytes.fromhex`), not the
+  hex text.  The B-Ligero column tree is unchanged (BLAKE3, D5).
+* **Files.**  `ligero-statement/v3` (`LIGSTM03`) = the v2 body + `str version | str schema | u32 n_vus | n_vus x u32
+  vu_index | 3 x (32 B binding | u8 owner + 2 | u64 count | 32 B root)`; `ligero-proof/v2` (`LIGPRF02`) = the v1 body +
+  `3 x (u32 n_siblings | n_siblings x 32 B)`.  A statement without the block is still written as v2 and a proof
+  without multiproofs as v1 (byte-identical to before); the Rust parser accepts both pairs and refuses a v2 proof
+  against a v2 statement and a v1 proof against a v3 statement ("transcript carries multiproofs but the statement
+  has no authentication block" / "... carries no multiproofs").  The multiproof lengths are bounded before reading
+  by `min(opened leaves, 2^depth) x depth` and `VerificationLimits.max_proof_bytes` (64 MiB); the block's `count` by
+  `max_positions` (10^7) and the openings by `max_openings` (10^7), the same defaults `auth.py` enforces.
+* **Digest.**  `statement_digest` absorbs `auth.digest_bytes` after `|y16=`: `|auth=ligero-b/auth/v1|schema=u16|vus=`
+  + the VU indices as `<u4`, then per tree `|<a|b|y>:binding=<32 B>|owner=<decimal>|count=<decimal>|root=<32 B>`
+  (340 bytes for two VUs; pinned in both test suites).  So the Fiat-Shamir challenges depend on the roots and the
+  indices, and a proof for the same words under another root or at another index is a different statement
+  ("column challenge mismatch" in FS mode; in interactive mode the challenges are coin-only (D7) and the change is
+  caught by the multiproof check instead).
+* **Check order.**  Both verifiers run the Ligero tests first and the authentication check last, so an `auth:`
+  rejection means "a valid B-Ligero proof over words that are not the committed ones" -- that is the negative the
+  lane's prover-side battery produces (a swapped operand word, honest words at a shifted `vu_index`, honest words
+  under a flipped root).  Leaf ranks: A/B word `o` of column `j` (step `i = j mod steps` of chain `v = j div steps`)
+  is leaf `vu_index[v] * K + 16 i + o`; the chain's output word (`y16` at the chain-end column) is leaf `vu_index[v]`
+  of the y tree.  The pairing of the fold is the library's (`multiproof._fold`: sorted known nodes, an even node
+  hashed with a known right neighbour, otherwise with the next proof sibling; the proof must be consumed exactly).
+* **Reasons (D8 family).**  Python: `auth: <tree>: multiproof rejected`; Rust: `auth: <tree>: multiproof rejected
+  (root mismatch)` / `(multiproof too short)` / `(multiproof too long)`.  Shape rejections of the block are named in
+  Rust at parse ("authentication block claims leaves beyond the committed count") and in Python inside `verify_auth`
+  ("auth: a: leaf index out of range").  Verdicts agree; the gate is the verdict.
+* **Timing.**  `timing.auth` (Rust JSON) is the leaf recomputation + the three folds; it is `0` for an excluded
+  statement.  The Python verifier reports the same as `auth_timing["seconds"]` (`protocol.verify(auth_timing=)`).
+
+~~~json
+{"id": "BV-D9", "issue": "authentication = included needs SHA-256 + the veritor merkle frame (a third hash in the verifier), the v3 statement / v2 proof layouts, the digest_bytes layout and the leaf-rank convention; none is in PROTOCOL.md",
+ "document": "PROTOCOL.md 12-14 (statement binding) say nothing about committed roots", "code": "backends/direct/ligero/auth.py, serialize.py (LIGSTM03 / LIGPRF02), protocol.py statement_digest(auth=)",
+ "verifier": "src/hash.rs Sha256; src/auth.rs frame / fold / check; format.rs v3 / v2 parsers with statement-bounded lengths; check runs after the Ligero tests",
+ "status": "open", "owner": "auth-included (fold the layouts into PROTOCOL.md section 12)",
+ "evidence": ["src/auth.rs tests (pinned against verity.commitments)", "tests/test_ligero_auth.py (same constants)", "lane note auth-included"]}
+~~~
+
+## D10. No verifier enforced the union bound across sub-batches -- RESOLVED by b-batch-bound
+
+Found by lane `b-verify-par` (`ligero-verify batch --jobs`), fixed by lane `b-batch-bound` (`main` 5a89d9d).  A
+4096-VU batch is `N_subbatches` = 25 independently committed proofs.  Each proof's soundness is a per-commitment
+number (`soundness()`'s `per_proof_total_log2`, 2^-132.9 at `t = 196`); the claim "the batch is sound to 2^-128"
+rests on the union bound `sum_i 2^-b_i` over the 25, which `config_for(..., n_proofs = 25)` sizes `t` for and
+`bench-vu` *reports* (`security.achieved_log2` = `union_over_proofs`, 2^-128.26 -- a report, not a check).  Neither
+verifier checked it.  `ligero-verify batch` accepted iff every sub-batch accepted, each gated on ITS OWN
+`union_log2 = per_proof_log2 + log2(n_proofs)` -- with `n_proofs` read from the proof's statement header, a
+prover-supplied field that is not in the statement digest (only `l, n, D, t, target, zk, k, mode` and the words are).
+The Python paths (`bench-vu`, `serialize verify`) had no batch-level check at all.  Consequences: 25 proofs each
+claiming `n_proofs = 1` at 2^-132.9 passed while the batch was only 2^-128.26 (the number that saved it is a
+coincidence of the same `t`); 25 proofs sized for a 25-batch presented as a 26-batch would have passed at 2^-128.2
+claimed as 2^-128; and the `l = 256` fixture (`t = 189`, 2^-128.16, sized for one proof) copied six times was the
+"honest batch" of the b-verify-par determinism tests, a batch that is 2^-125.57.
+
+**Fix (PROTOCOL.md 8c, "Batch verification").**  A batch verifier with target `t` bits accepts iff (1) every sub-batch
+proof verifies against its own statement with the shared system, (2) `sum_i 2^-b_i <= 2^-t` with `b_i` the
+verifier's own recomputation of proof `i`'s bound from that proof's `(n, k, l, t, D, mode, zk)`, (3) every proof's
+`n_proofs` equals the number `N` presented.  Implemented as `protocol.batch_bound` (Python; `ChainRunner.batch_bound`
+/ `verify_batch` in `bench-vu`, `serialize verify-batch --dir DIR --target-bits T` on files) and
+`verify::batch_bound` (Rust; `ligero-verify batch --target-bits T`, default 128, `--soundness-bits` its alias; the
+per-proof gate of `verify` is off in batch mode because the batch gate is the right one).  Same reason strings, same
+precedence (unreadable input, a rejected sub-batch, `batch: n_proofs mismatch (<name>: n_proofs = k, N sub-batches
+presented)`, `batch: union bound 2^-x over N sub-batches exceeds the target 2^-t`); the accept reason and the JSON
+carry the batch bits (`batch_bits = -log2 sum`; `per_proof_bits[]`, `n_proofs_claimed[]`).  `bench-vu`'s
+`security.achieved_log2` is now the verifier's `batch_log2` (asserted equal to `soundness()`'s union to 1e-6), with
+`achieved_bits` and `verifier_target_bits` beside it; `N_subbatches` and `B_proof` were already in the fingerprint.
+Rule (2) needs nothing prover-supplied: `b_i` is a function of digest-bound parameters, so relabelling `n_proofs`
+cannot move the bound -- it can only fail rule (3).  The check is arithmetic on `N` numbers inside the batch wall
+(re-timed at `--jobs 25` on the B = 4096 batch before/after: lane note `b-batch-bound`).  Both verifiers agree on the
+batch bits to 1e-6 and on every verdict and reason of the test matrix (honest 4-batch accepted at 128; the same
+proofs rejected at a target above the achieved bound; four `n_proofs = 1` proofs presented together rejected with
+the mismatch string in both).  D1 is unchanged: a single `protocol.verify` still checks the transcript only.
+
+~~~json
+{"id": "BV-D10", "issue": "the batch verdict was 'every sub-batch accepts'; the union bound over the sub-batches presented and n_proofs = N were never checked by any verifier (n_proofs is a prover-supplied header field outside the statement digest)",
+ "document": "PROTOCOL.md 8c (before b-batch-bound): the union bound stated for the prover's sizing, no batch verification rule",
+ "code": "vu.py bench_vu asserted each sub-batch and REPORTED the union; serialize.py had per-file verify only",
+ "verifier": "main.rs batch: accept iff every sub-batch accepts, each gated on its own n_proofs",
+ "status": "resolved", "owner": "b-batch-bound",
+ "resolution": "PROTOCOL.md 8c 'Batch verification'; protocol.batch_bound / verify::batch_bound, --target-bits (default 128), same reason strings; tests/fixture.rs the_batch_union_bound_and_n_proofs_are_enforced, tests/test_ligero_batch_bound.py",
+ "evidence": ["b-verify-par verifier results labelled finding=batch-union-bound-unenforced-before-<commit>", "lane note b-batch-bound (test matrix, batch bits, timing before/after)"]}
+~~~
+
+## D11. Relations beyond the Ampere BF16 unit (lane `ligero-verify-relations`): what a statement does not say, and the per-relation pin
+
+`protocol.verify` takes a `RelationHooks` (`word_dtype`, `y16_dtype`, `y16_bits`, `tag`, `public_vectors`) and the
+FP8 relations (`fp8/`, `relations.py` on lane b-hopper) supply their own; the statement file carries the words and,
+from `ligero-statement/v4` on, their byte widths and the relation's name -- but not the tag, not the range of the
+chain-end word, not the operand format, and nothing that says which compiled system the words are about.  Facts a
+verifier needs (the code is the reference; PROTOCOL.md still describes the BF16 unit only):
+
+* **Digest.**  `statement_digest` absorbs `rel.tag` immediately after `ligero-b/statement|v2` (`b""` for `bf16` and
+  `bf16-hopper`, `b"|rel=fp8-ada|v1"`, `b"|rel=fp8-hopper|v1"`), then the words as `numpy.astype(dtype).tobytes()`
+  with the RELATION's dtypes (`<u2 / <u2` BF16; `<u1 / <u4` FP8).  The widths in a v4 file are the writer's and are
+  not re-checked by the Python reader: a word wider than the relation's dtype would be silently truncated in the
+  digest (never produced by an honest writer).  The Rust verifier pins the widths per relation and refuses a file
+  whose widths differ ("word widths 2/4 bytes are not the fp8-ada relation's 1/4"), so what it absorbs is always what
+  it parsed.
+* **Which system.**  Only the `sys_id` inside the digest ties a statement to a compiled system, and the BF16 Ampere
+  and Hopper relations have the same tag and widths: a v4 statement named `bf16-hopper` over Ampere words verifies
+  against the Ampere `system.bin` byte for byte.  The pin is therefore per relation (`src/relation.rs`:
+  `relation -> (sys_id, table digest)`, chosen by the statement's name; v2 / v3 = `bf16-ampere`) and a mismatch is a
+  rejection that names both sides ("system file is the pinned bf16-ampere system, the statement is a bf16-hopper
+  statement").  `--allow-any-system` lifts it and every verdict then carries `system_pinned = false` -- an unpinned
+  accept is a statement about the system file, not about the relation.  The digests: laptop compilations from the
+  checked-in Python (main aecc298 for `bf16-ampere` / `fp8-ada`; the lane b-hopper tree at a39de82 for `bf16-hopper` /
+  `fp8-hopper`, whose `relations.py` / `wide.py` are not on main), twice each, byte-identical; `fp8-ada` also equal to
+  the pod `system.bin` of every ada-fp8-dumps run.  The Hopper pair awaits its first pod dump (`h100-dumps-v1`).
+* **Public decode.**  E4M3 (`public_vectors_fp8`): `t = (w >> 3) & 15`, `f = w & 7`, `m = f + [t != 0] 8`,
+  `e = t - [t != 0] - 6`, `s = w >> 7`; the NaN codes `0x7F / 0xFF` are rejected, the all-ones exponent field is
+  finite (448 = `0x7E`) -- unlike BF16, where `t = 255` is rejected.  The chain-end word is the FP32 accumulator with
+  its ten always-zero low bits dropped (`pack_public`: `s 2^21 + t 2^13 + f >> 10`, 22 bits), checked `< 2^22`
+  (`y16_bits`).  `K` (operands per unit: 16 / 32) is read from the system's `a[i]` pins and the statement's `K` must
+  equal it (`public_vectors*` rejects the shape mismatch).
+* **Files.**  `LIGSTM04` = the v2 header through `K`, `u8 word_bytes | u8 y_bytes | str relation`, the words at those
+  widths, `u8 has_auth`, an optional v3 block.  The authentication leaf schema is `u16`, so the Rust parser refuses a
+  v4 block over words that are not 16-bit ("authentication block (leaf schema u16) is defined for 16-bit words
+  only"); Python defines nothing else (`fp8/chain.py` always reports `authentication = excluded`).  Lane b-hopper's
+  earlier files wrote this body under the `LIGSTM03` magic (before v3 was taken by the authentication block): the FP8
+  Ada dumps of attempts r20260922-233507-7fb9 / -233617-4316 / -233711-6b9f (code 7bb0ffa1, manifest `statement:
+  ligero-statement/v3`, `relation: fp8-ada`) are such files.  They are refused by the v3 parser ("statement file:
+  truncated file": 2-byte words read over 1-byte ones, then no block) and are NOT disambiguated by a heuristic; the
+  re-dumps at a4b0ac7 (r20260922-235542-295b, -235643-98f7, -235746-0929) are v4 and verify.
+* **Reasons (D8 family).**  Python: `public inputs rejected: E4M3 NaN operand`; Rust: `public inputs: E4M3 NaN
+  operand`.  Python rejects a v4 statement naming an unknown relation in `_runner_for` ("no runner for relation");
+  Rust: "statement names relation ...; this build pins bf16-ampere, fp8-ada, bf16-hopper, fp8-hopper".  Verdicts agree
+  on every FP8 Ada dump in the store (441 / 441 sub-batch proofs, three modes).
+
+~~~json
+{"id": "BV-D11", "issue": "a statement does not name its compiled system, its digest tag, its word ranges or its operand format; the BF16 Ampere and Hopper relations are indistinguishable except by sys_id; the v4 widths are trusted by the Python reader",
+ "document": "PROTOCOL.md describes the BF16 unit only; serialize.py's docstring defines LIGSTM04", "code": "backends/direct/ligero/protocol.py RelationHooks / statement_digest, serialize.py read_statement, fp8/relation.py public_vectors_fp8, lane b-hopper relations.py",
+ "verifier": "src/relation.rs (per-relation tag, widths, y_bits, operand decode, pinned sys_id + table digest); format.rs v4 parser (widths 1/2/4, has_auth 0/1, u16-only auth block); verify.rs gate per statement, system_pinned in every verdict",
+ "status": "open", "owner": "b-merge-h100 (name the relation in PROTOCOL.md; confirm the bf16-hopper / fp8-hopper digests against a pod system.bin when h100-dumps-v1 lands)",
+ "evidence": ["tests/relations.rs", "fixtures/fp8-ada (sub-batch 0 of art:c5dff3c6..., pinned accept)", "lane note ligero-verify-relations"]}
+~~~

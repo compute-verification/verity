@@ -376,6 +376,19 @@ witness is a function of the public input and privacy is vacuous for it today.  
 a statement about the construction (masking + coins + derivation) and becomes meaningful once the operands are
 committed instead of published (auth-integration's LEAF_V2).  No private-operand statement is implemented here.
 
+*Relations (`protocol.RelationHooks`; `fp8/`, `relations.py`).*  The same protocol proves other transition units:
+the digest is `BLAKE2b("ligero-b/statement|v2" || rel.tag || "|p=..." ... "|sys=" || system_id || layout || "|a=" ||
+a.astype(rel.word_dtype) || "|b=" || b.astype(rel.word_dtype) || "|y16=" || y16.astype(rel.y16_dtype) [|| auth])`.
+The BF16 units (Ampere `REAL`, Hopper `Params.from_model(HOPPER_BF16_M16N8K16)`) use `tag = b""` and `<u2` words and
+are told apart by `system_id` alone; the E4M3 units use `tag = b"|rel=fp8-ada|v1"` / `b"|rel=fp8-hopper|v1"`, `<u1`
+operands (K = 32 per unit) and `<u4` chain-end words that are the FP32 accumulator with its ten always-zero low bits
+dropped (`pack_public`, 22 bits, `y16_bits = 22`).  The public decode is the relation's (`unit.public_vectors`:
+`t = 255` rejected; `fp8.relation.public_vectors_fp8`: the NaN codes `0x7F / 0xFF` rejected, `t = 15` finite).  The
+file form is `ligero-statement/v4` (`serialize.py`: `u8 word_bytes | u8 y_bytes | str relation` before the words,
+`u8 has_auth` after; a BF16 Ampere statement stays v2 / v3).  A file verifier must take the tag, the widths and the
+word range from the relation the statement NAMES, never from the file, and must pin the relation's compiled system
+by digest (`backends/ligero-verify/src/relation.rs`; DISCREPANCIES.md D11).
+
 **Pole redraw.** B-Ligero has no retry-on-bad-challenge path: `Z_H` is invertible on the coset by construction, there
 is no lookup helper with a public pole, and the column challenge is a deterministic rejection of repeats inside the
 SHAKE stream (`_challenge2`: public data only, no prover-controlled restart, uniform over ordered `t`-subsets given a
@@ -417,6 +430,31 @@ the torch paths (`tests_fused_test.py`). The protocol is unchanged: the same pol
 
 **Measured (README, third pass).** 4096 VUs on the L40S, 25 x 170: non-ZK 1.37 s (0.334 ms/VU), HVZK 1.43 s,
 **ZK 1.41 s (0.345 ms/VU)**; verifier 0.96 s; 122.3 MB; depth 3; union 2^-128.05; ZK cost +3%.
+
+### Batch verification: the union bound is a verifier check (lane b-batch-bound)
+
+A batch of `B` VUs is proved as `N` **independently committed** sub-batch proofs (`bench-vu`: `N = ceil(B / B_proof)`,
+25 x 170 at the decision workload).  Each sub-batch statement binds its own words and parameters (section 3/4: the
+digest is computed by the verifier from its own configuration; nothing here weakens that) plus the count `n_proofs`
+the prover sized `t` for.  Every per-proof bound `2^-b_i` (section 6, `soundness()`) is a statement about ONE
+commitment; the only thing that makes "the batch is sound to `2^-t`" true is the union bound over the `N` proofs.
+**A batch verifier with target `t` bits accepts iff**
+
+1. every sub-batch proof verifies against its own statement, with the shared system (sections 3-8c as before);
+2. `sum_i 2^-b_i <= 2^-t`, where `b_i` is the verifier's OWN recomputation of proof `i`'s bound from that proof's
+   parameters `(n, k, l, t, D, mode, zk)` -- never a prover-supplied field -- and `t` is the verifier's parameter
+   (`--target-bits`, default 128); the batch bits reported are `-log2 sum_i 2^-b_i`;
+3. every proof's `n_proofs` equals `N`, the number of sub-batches presented (a proof sized for a smaller batch is
+   rejected, reason `batch: n_proofs mismatch`; so is one sized for a larger batch -- it belongs to another batch).
+
+Rule 2 is the accounting; rule 3 is what makes a sub-batch proof's `t` a commitment to its batch rather than a
+coincidence.  Before this lane neither verifier enforced either: `N` proofs each claiming `n_proofs = 1` at
+`2^-132.9` were accepted while the batch was only `2^-128.3`, and `N` proofs of a 25-batch presented as a 26-batch
+would have passed with `2^-128.2` claimed as `2^-128`.  A single proof verified alone (`ligero-verify verify`,
+`protocol.verify`) is not a batch verdict: it checks its transcript and its per-proof accounting union-bounded over
+its OWN `n_proofs` (D1 caveat: the Python `verify()` checks the transcript only).  The reason strings are the same
+in both verifiers (`batch: n_proofs mismatch (...)`, `batch: union bound 2^-x over N sub-batches exceeds the target
+2^-t`); the accept reason carries the batch bits.  Soundness is a parameter, not a constant.
 
 ## 9. Not done / labelled
 

@@ -1,6 +1,6 @@
 """The NVFP4 unit against ``BLACKWELL_SM120_NVF4.step``: every edge family accepted (torch-free, small n), every wrong-rule
 witness variant rejected, off-domain public words refused by the decode, the ``ligero-system/v2`` and
-``ligero-statement/v3`` files round-tripping, the K=1536 reference vector replaying through the hint generator; and,
+``ligero-statement/v4`` files round-tripping, the K=1536 reference vector replaying through the hint generator; and,
 with torch + blake3 present (the pod), the 24-step chain proved and verified on the CPU (non-ZK and FS-ZK) with its
 negatives rejected.  Tiny cases only: the sweep (>= 2,000 honest VUs, >= 100 negatives) is ``gate_vu_fp4`` on the pod."""
 from __future__ import annotations
@@ -15,7 +15,7 @@ from ..compile import P, Expr
 from ..serialize import (
     BF16_RELATION,
     STMT_MAGIC,
-    STMT_MAGIC_V3,
+    STMT_MAGIC_V4,
     SYS_MAGIC_V2,
     Statement,
     read_statement,
@@ -175,26 +175,25 @@ def test_system_v2_round_trip():
     assert rd["sys_id"] == system_id(s)
 
 
-def test_statement_v3_round_trip_and_bf16_stays_v2():
+def test_statement_v4_round_trip_with_fp32_claims_and_bf16_stays_v2():
+    """The FP4 statement is a relation-named ``ligero-statement/v4``: byte operands, a full 32-bit claimed word per
+    column (the FP8 relation's 22-bit packing does not apply: nothing in the NVFP4 word is provably zero)."""
     rng = np.random.default_rng(5)
     l = 4
     a = np.concatenate([rng.integers(0, 16, (l, K)), rng.integers(0, 0x7F, (l, SCALES))], axis=1)
     b = np.concatenate([rng.integers(0, 16, (l, K)), rng.integers(0, 0x7F, (l, SCALES))], axis=1)
     y = np.array([0, 0, 0, 0xC1E0_0001], dtype=np.int64)           # a full FP32 word at the end column
-    st = Statement(l, 16, 5, 3, -128.0, True, 512, "fiat-shamir", 1, 1, 4, a, b, y, "fp4-nvf4")
+    st = Statement(l, 16, 5, 3, -128.0, True, 512, "fiat-shamir", 1, 1, 4, a, b, y, None, "fp4-nvf4", 1, 4)
+    assert st.v4
     data = statement_bytes(st)
-    assert data[:8] == STMT_MAGIC_V3
+    assert data[:8] == STMT_MAGIC_V4
     st2 = read_statement(data)
-    assert st2.relation == "fp4-nvf4" and st2.widths == (1, 4)
+    assert st2.relation == "fp4-nvf4" and (st2.word_bytes, st2.y_bytes) == (1, 4)
     assert np.array_equal(st2.a, a) and np.array_equal(st2.b, b) and np.array_equal(st2.y16, y)
     assert (st2.l, st2.n, st2.D, st2.t, st2.zk, st2.t_pad, st2.mode, st2.n_proofs, st2.n_vus, st2.steps) == (l, 16, 5, 3, True, 512, "fiat-shamir", 1, 1, 4)
-    # a claimed word that does not fit the stated width is refused at write time
-    with pytest.raises(ValueError):
-        statement_bytes(Statement(l, 16, 5, 3, -128.0, True, 512, "fiat-shamir", 1, 1, 4, a, b, y, "fp8-ada").__class__(
-            l, 16, 5, 3, -128.0, True, 512, "fiat-shamir", 1, 1, 4, a + 256, b, y, "fp4-nvf4"))
     bf = Statement(2, 8, 3, 2, -128.0, False, 0, "interactive", 1, 1, 2, np.zeros((2, 16), np.int64), np.zeros((2, 16), np.int64),
-                   np.zeros(2, np.int64), BF16_RELATION)
-    assert statement_bytes(bf)[:8] == STMT_MAGIC and read_statement(statement_bytes(bf)).relation == BF16_RELATION
+                   np.zeros(2, np.int64))
+    assert not bf.v4 and statement_bytes(bf)[:8] == STMT_MAGIC and read_statement(statement_bytes(bf)).relation == BF16_RELATION
 
 
 # --- the chain (torch) ---------------------------------------------------------------------------------------------------

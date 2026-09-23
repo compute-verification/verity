@@ -73,9 +73,10 @@ INSTANCES_DATASET = "instances_dataset"
 INSTANCES_TIER = "instances_tier"
 MISMATCHES = "mismatches"
 TARGET = "target"
+DEVICE = "device"
+INSTANCES_MANIFEST_SHA256 = "instances_manifest_sha256"
 COMPONENT = "component"
 JOBS = "jobs"
-DEVICE = "device"                                     # the physical GPU (its UUID), what verity.verification.trust counts as a device
 
 # ---- closed value sets -------------------------------------------------------------------------------------------------------------------
 
@@ -158,9 +159,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(INSTANCES_TIER, GROUP_EVIDENCE, TEXT, "the tier within the dataset, e.g. vu-k1536"),
     _k(MISMATCHES, GROUP_EVIDENCE, INT, "tiles or instances that disagreed with the reference"),
     _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity.verification.target name)"),
+    _k(DEVICE, GROUP_EVIDENCE, TEXT, "the physical GPU the capture ran on, as its UUID (nvidia-smi --query-gpu=uuid: GPU-...); the trust framework's device identity"),
+    _k(INSTANCES_MANIFEST_SHA256, GROUP_EVIDENCE, TEXT, "sha256 of the instance set's manifest (or its contract-pinned recipe digest) a replay checked"),
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
-    _k(DEVICE, GROUP_EVIDENCE, TEXT, "the physical GPU the capture or proof ran on, as its UUID (GPU-...): what trust's device criteria count, never a hostname"),
 )}
 
 KEYS = tuple(VOCAB)

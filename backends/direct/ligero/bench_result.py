@@ -100,9 +100,8 @@ def main(argv: list[str] | None = None) -> int:
     if vbin is None or not vbin.is_file():
         print(f"bench_result.py: no independent verifier at {verifier!r}; verify_wall not measured", file=sys.stderr)
     system = proofs_dir / "system.bin"
-    for e in man["files"]:
-        if vbin is None or not vbin.is_file():
-            break
+
+    def run_verifier(e: dict) -> tuple[bool, dict, float, list[str], int, str]:
         stmt, proof = proofs_dir / e["stmt"], proofs_dir / e["proof"]
         cmd = [str(vbin), "verify", "--system", str(system), "--statement", str(stmt), "--proof", str(proof), "--threads", str(threads)]
         if e.get("coins"):
@@ -120,18 +119,44 @@ def main(argv: list[str] | None = None) -> int:
                     doc = None
                 break
         accepted = bool(doc and doc.get("accepted")) and r.returncode == 0
+        return accepted, doc or {}, wall, out, r.returncode, r.stderr
+
+    for e in man["files"]:
+        if vbin is None or not vbin.is_file():
+            break
+        accepted, doc, wall, out, rc_v, err = run_verifier(e)
         verdicts.append({"rep": e["rep"], "sub": e["sub"], "proof": e["proof"], "proof_sha256": e["proof_sha256"], "proof_bytes": e["proof_bytes"],
-                         "accepted": accepted, "rc": r.returncode, "reason": (doc or {}).get("reason"), "verify_seconds": (doc or {}).get("timing", {}).get("total"),
-                         "process_wall": wall, "coins": bool(e.get("coins")), "stdout_tail": out[-1][:300] if out else r.stderr[-300:]})
-        print(f"verify rep{e['rep']} sub{e['sub']:02d}: {'accept' if accepted else 'REJECT'} {wall:.3f}s ({(doc or {}).get('reason')})", flush=True)
+                         "accepted": accepted, "rc": rc_v, "reason": doc.get("reason"), "verify_seconds": doc.get("timing", {}).get("total"),
+                         "auth_seconds": doc.get("timing", {}).get("auth"),
+                         "process_wall": wall, "coins": bool(e.get("coins")), "stdout_tail": out[-1][:300] if out else err[-300:]})
+        print(f"verify rep{e['rep']} sub{e['sub']:02d}: {'accept' if accepted else 'REJECT'} {wall:.3f}s ({doc.get('reason')})", flush=True)
+    # authentication = included: the dumped negatives (prover-side + file-level) through the same binary; every one must be
+    # rejected (the honest included proof among them accepted) -- soundness evidence, not a timing
+    neg_verdicts = []
+    for e in man.get("auth_negatives", []):
+        if vbin is None or not vbin.is_file():
+            break
+        accepted, doc, wall, out, rc_v, err = run_verifier(e)
+        neg_verdicts.append({"name": e["name"], "kind": e["kind"], "expected_accepted": e["expected_accepted"], "accepted": accepted, "rc": rc_v,
+                             "reason": doc.get("reason"), "python_accepted": e["python_verdict"]["accepted"], "python_reason": e["python_verdict"]["reason"],
+                             "mutation": e.get("mutation"), "process_wall": wall})
+        print(f"verify auth {e['kind']} {e['name']}: rust {'accept' if accepted else 'REJECT'} ({doc.get('reason')}); python "
+              f"{'accept' if e['python_verdict']['accepted'] else 'REJECT'} ({e['python_verdict']['reason']})", flush=True)
     (v_dir / "independent.json").write_text(json.dumps({"verifier": str(vbin), "verifier_sha256": _sha256(vbin) if vbin and vbin.is_file() else None,
-                                                       "threads": threads, "items": verdicts}, indent=1))
+                                                       "threads": threads, "items": verdicts, "auth_negatives": neg_verdicts}, indent=1))
     n_acc = sum(1 for v in verdicts if v["accepted"])
     by_rep: dict[int, float] = {}
+    auth_by_rep: dict[int, float] = {}
     for v in verdicts:
         by_rep[v["rep"]] = by_rep.get(v["rep"], 0.0) + (v["verify_seconds"] or v["process_wall"])
+        auth_by_rep[v["rep"]] = auth_by_rep.get(v["rep"], 0.0) + (v["auth_seconds"] or 0.0)
     rust_rep_sums = [by_rep[k] for k in sorted(by_rep)]
+    rust_auth_sums = [auth_by_rep[k] for k in sorted(auth_by_rep)]
     all_rust_ok = bool(verdicts) and n_acc == len(verdicts) and len(verdicts) == len(man["files"])
+    negs_expected = [v for v in neg_verdicts if not v["expected_accepted"]]
+    negs_rust_rejected = sum(1 for v in negs_expected if not v["accepted"])
+    negs_ok = (negs_rust_rejected == len(negs_expected) and all(v["accepted"] for v in neg_verdicts if v["expected_accepted"])
+               and len(neg_verdicts) == len(man.get("auth_negatives", [])))
     python_ok = bench["validation"]["status"] == "passed"
 
     prove_reps = [r["prover_total"] for r in reps]
@@ -145,13 +170,19 @@ def main(argv: list[str] | None = None) -> int:
     n_proofs = int(meas_in["split.subbatches"])
     B = int(meas_in["vu.count"])
     proof_class = PROOF_CLASS[(zk, mode)] if fp_in.get("proof_class") is None else fp_in["proof_class"]
+    authentication = fp_in.get("authentication", "excluded")
+    with_auth = authentication == "included"
 
     fp = {"candidate": "B-Ligero", "backend": "backends/direct/ligero (b-zk-fix prover)", "commit": source_commit(fp_in.get("software", {}).get("backend", {}).get("commit")),
           "protocol": "Ligero direct-constraint chain proof, BabyBear, PROTOCOL.md 3-8c", "mode": mode, "zk": zk, "proof_class": proof_class,
+          "authentication": authentication,
           "checker": "v1 (WP2 checker: bits + one-hot selectors)", "batch": B, "K": 1536, "n_subbatches": n_proofs,
           "per_proof_vus": int(meas_in["split.per_proof_vus"]), "security": sec, "hardware": fp_in.get("hardware"), "software": fp_in.get("software"),
+          "preprocessing": fp_in.get("preprocessing"), "instances": fp_in.get("instances"),
           "verifier": {"name": "ligero-verify (backends/ligero-verify, Rust, independent)", "path": str(vbin), "threads": threads,
-                       "sha256": _sha256(vbin) if vbin and vbin.is_file() else None, "coins": "runner's step-0 coins (--coins)" if mode == "interactive" else "n/a (Fiat-Shamir)"},
+                       "sha256": _sha256(vbin) if vbin and vbin.is_file() else None, "coins": "runner's step-0 coins (--coins)" if mode == "interactive" else "n/a (Fiat-Shamir)",
+                       "authentication": ("SHA-256 Merkle multiproofs of every boundary word folded to the statement's roots (auth.rs), after the Ligero tests"
+                                          if with_auth else "n/a (authentication = excluded)")},
           "python_verifier": "backends.direct.ligero (live, every rep, every sub-batch; shares code with the prover)",
           "warmup": "one sub-batch (excluded)", "reps": len(reps)}
     meas = [
@@ -163,21 +194,43 @@ def main(argv: list[str] | None = None) -> int:
         _m("proofs_verified_independent", n_acc, "count"), _m("proofs_total", len(man["files"]), "count"),
         _m("peak_device_bytes", meas_in["mem.peak_device_bytes"], "B"), _m("bench_wall", bench_wall, "s"),
     ]
+    if with_auth:
+        meas += [
+            _m("verify_auth_wall", statistics.median(rust_auth_sums) if rust_auth_sums else None, "s"),      # inside verify_wall
+            _m("verify_auth_python_wall", meas_in.get("auth.verifier_seconds"), "s"),                        # inside verify_python_wall
+            _m("prove_auth_openings_wall", meas_in.get("auth.openings_seconds"), "s"),                       # inside prove_wall
+            _m("auth_multiproof_bytes", meas_in.get("auth.multiproof_bytes"), "B"),                           # inside proof_bytes
+            _m("auth_commit_seconds", meas_in.get("auth.commit_seconds"), "s"),                              # once per object
+            _m("auth_opened_leaves", meas_in.get("auth.opened_leaves"), "count"),
+            _m("auth_negatives_total", len(negs_expected), "count"),
+            _m("auth_negatives_rejected_rust", negs_rust_rejected, "count"),
+            _m("auth_negatives_rejected_python", sum(1 for v in negs_expected if not v["python_accepted"]), "count"),
+        ]
     meas = [m for m in meas if m["value"] is not None]
-    status = "passed" if (python_ok and all_rust_ok) else "failed"
+    status = "passed" if (python_ok and all_rust_ok and (negs_ok or not with_auth)) else "failed"
+    detail = (f"python: {bench['validation']['status']}; rust: {n_acc}/{len(man['files'])} accepted "
+              f"({'coins from the runner' if mode == 'interactive' else 'transferable Fiat-Shamir files'}); "
+              f"reps prove {['%.3f' % v for v in prove_reps]} s, rust verify {['%.3f' % v for v in rust_rep_sums]} s")
+    if with_auth:
+        detail += (f"; authentication negatives: rust rejected {negs_rust_rejected}/{len(negs_expected)}, python rejected "
+                   f"{sum(1 for v in negs_expected if not v['python_accepted'])}/{len(negs_expected)}; honest included proof accepted by both: "
+                   f"{all(v['accepted'] and v['python_accepted'] for v in neg_verdicts if v['expected_accepted'])}")
     result = {"schema": "research/result/v0.1", "run_id": run_id, "kind": "bench-result/v1", "workload_fingerprint": fp,
               "validation": {"status": status,
-                             "checker": "backends/ligero-verify verify (independent Rust) on every recorded rep's sub-batch proof; Python verifier live per rep",
-                             "detail": f"python: {bench['validation']['status']}; rust: {n_acc}/{len(man['files'])} accepted "
-                                       f"({'coins from the runner' if mode == 'interactive' else 'transferable Fiat-Shamir files'}); "
-                                       f"reps prove {['%.3f' % v for v in prove_reps]} s, rust verify {['%.3f' % v for v in rust_rep_sums]} s",
-                             "evidence": {"reps": reps, "rust_rep_sums": rust_rep_sums, "python_verifier_reps": pyv_reps}},
+                             "checker": "backends/ligero-verify verify (independent Rust) on every recorded rep's sub-batch proof; Python verifier live per rep"
+                                        + ("; both verifiers on every authentication negative" if with_auth else ""),
+                             "detail": detail,
+                             "evidence": {"reps": reps, "rust_rep_sums": rust_rep_sums, "python_verifier_reps": pyv_reps,
+                                          **({"rust_auth_sums": rust_auth_sums, "auth_negatives": neg_verdicts,
+                                              "auth_negatives_python": bench["validation"]["evidence"].get("auth_negatives"),
+                                              "auth_roots": bench["validation"]["evidence"].get("auth_roots")} if with_auth else {})}},
               "measurements": meas, "measurement_files": ["bench_vu.json", "verify/independent.json", "proofs/manifest.json"], "artifacts": []}
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(result, indent=1, default=str))
     os.replace(tmp, run_dir / "result.json")
     print(json.dumps({"prove_wall": prove_med, "verify_wall": rust_med, "verify_python_wall": pyv_med, "proof_bytes": proof_bytes, "depth": depth,
-                      "soundness_bits": soundness_bits, "rust_accepted": f"{n_acc}/{len(man['files'])}", "status": status}, indent=1))
+                      "soundness_bits": soundness_bits, "rust_accepted": f"{n_acc}/{len(man['files'])}", "authentication": authentication,
+                      "auth_negatives_rust_rejected": f"{negs_rust_rejected}/{len(negs_expected)}", "status": status}, indent=1))
     return 0 if status == "passed" else 1
 
 

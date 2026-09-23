@@ -24,29 +24,67 @@ check a transcript from your own session.  Fiat-Shamir files (`--mode fiat-shami
 cargo build --release
 ligero-verify verify --system system.bin --statement X.stmt --proof X.proof [--threads T] [--soundness-bits 128]
                      [--allow-any-system] [--reps R] [--json out.json] [--coins FILE]   # --coins: interactive mode only
-ligero-verify batch  --system system.bin --dir DIR [--jobs N] [--threads T] [--soundness-bits 128] [--reps R] [--json out.json]
+ligero-verify batch  --system system.bin --dir DIR [--jobs N] [--threads T] [--target-bits 128] [--reps R] [--json out.json]
                      # every DIR/*.proof with its .stmt (+ its .coins when present, = `verify --coins` for that proof), the
                      # sub-batches verified concurrently on N jobs (default: available parallelism); batch ACCEPT iff every
-                     # sub-batch accepts; agreement with DIR/manifest.json's python_verdict when present
-ligero-verify system-digest --system system.bin
+                     # sub-batch accepts AND the union of the verifier's own per-proof bounds over the N presented is
+                     # <= 2^-target AND every proof's n_proofs is N (PROTOCOL.md 8c "Batch verification"); agreement
+                     # with the python_verdict of DIR/manifest.json, or DIR/../manifest.json (a dump's rep dirs)
+ligero-verify system-digest --system system.bin     # sys_id, table digest and the relation they are pinned for (or null)
 cargo test --release                                 # hash vectors (hashlib / BLAKE3 spec), NTT / coset code, Barrett mul,
-                                                     # and tests/fixture.rs: the B=1 ZK interactive fixture accepted, byte flips
-                                                     # in every region rejected, a flipped statement word rejected, --coins checked,
-                                                     # batch verdict + parsed statements identical at --jobs 1 / 8, one corrupted
-                                                     # sub-batch rejects the batch with the same error at any --jobs
+                                                     # the operand decodes; tests/fixture.rs: the B=1 ZK interactive fixture
+                                                     # accepted, byte flips in every region rejected, a flipped statement word
+                                                     # rejected, --coins checked, batch verdict + parsed statements identical at
+                                                     # --jobs 1 / 8, one corrupted sub-batch rejects the batch with the same error
+                                                     # at any --jobs, the batch union bound and n_proofs = N enforced with the
+                                                     # Python reason strings; tests/relations.rs: the FP8 Ada v4 fixture accepted
+                                                     # against its pinned system, every system file named by system-digest,
+                                                     # cross-relation pairs refused by the pin, --allow-any-system flagged, v4
+                                                     # negatives rejected
 ~~~
 
-Exit status: `verify` 0 accept, 1 reject (the reason on stdout), 2 usage / unreadable operator input.  `batch`: 0 every
-sub-batch accepted, 1 a sub-batch rejected (`batch_reason` names the first one in name order), 2 a sub-batch file
-unreadable, 3 a verdict disagrees with `manifest.json`'s Python verdict (checked first: the agreement gate).  Malformed
-*proof or statement bytes* never panic (every read is bounded and every element checked); an unreadable path given on
-the command line is reported and exits 2.
+**Relations and pins.**  The statement names the relation it is about: `ligero-statement/v4` carries a `relation`
+string (`fp8-ada`, `fp8-hopper`, `bf16-hopper`), a v2 / v3 file is the Ampere BF16 unit (`bf16-ampere`).  For each
+relation `src/relation.rs` pins the compiled constraint system by two digests -- the Python `system_id` (the last
+32 bytes of `system.bin`) and this crate's own BLAKE3 digest of the exported tables -- and mirrors what the Python
+side fixes outside `system.bin` (`protocol.RelationHooks`): the digest tag, the byte widths the words are absorbed
+with, the range of the chain-end word, the operand decode.  A `system.bin` whose digests are not the statement's
+relation's pair is refused (`system file is the pinned bf16-ampere system, the statement is a fp8-ada statement`;
+`... is not the pinned fp8-ada system (sys_id ..., table digest ...)`).  `--allow-any-system` lifts the pin, and then
+EVERY verdict carries `"system_pinned":false` (and an accept reason ending in `[system NOT pinned: --allow-any-system;
+sys_id ...]`): such an accept says the proof is valid for the system file, not that the file is the relation's system
+-- the BF16 Ampere and Hopper relations, for instance, share tag and word widths and are told apart by the pin alone.
 
-**Batch mode (lane b-verify-par).**  A 4096-VU batch is `N_subbatches` (25) independently committed proofs, each with
-its own statement (its VUs' `a, b, y16`; `n_proofs` = 25 for the union bound) -- there is no batch-level statement and
-no check that spans sub-batches (PROTOCOL.md 8c; `bench-vu` dumps them as `repK/sub_XX.{stmt,proof[,coins]}`).  `batch`
-therefore verifies them on `--jobs` OS threads pulling from one queue, each sub-batch exactly as `verify` would
-(its own statement, proof, challenges, checks, `--threads` inside), and accepts the batch iff every sub-batch accepts.
+| relation | statement | words (`a, b` / `y16`) | operands | `sys_id` (prefix) | table digest (prefix) | source of the digests |
+|---|---|---|---|---|---|---|
+| `bf16-ampere` | v2 / v3 (or v4 named `bf16` / `bf16-ampere`) | u16 / u16, `y16 < 2^16` | BF16, K = 16 | `44cb05b9e698…` | `c147cc4cece7…` | `compile_unit(REAL, chain=True)`, main aecc298 = `fixtures/system.bin` = every A100 / 4090 dump |
+| `fp8-ada` | v4 (tag `\|rel=fp8-ada\|v1`) | u8 / u32, `y16 < 2^22` | E4M3, K = 32 | `6b570eef0c7f…` | `443e4fc74c0a…` | `compile_fp8_unit(ADA, chain=True)`, main aecc298 and lane b-hopper a39de82 (byte-identical) = `proofs/system.bin` of the ada-fp8-dumps pod runs (sha256 `cba9a09f…`) |
+| `bf16-hopper` | v4 (tag empty) | u16 / u16, `y16 < 2^16` | BF16, K = 16 | `9dcc7cdc1377…` | `74ce68a2801e…` | `relations.relation("bf16-hopper").compile(params, True)`, lane b-hopper a39de82 and lane b-merge-h100 01fc64f, byte-identical (`wide.py` adder; 3292 rows); no pod `system.bin` in the store yet |
+| `fp8-hopper` | v4 (tag `\|rel=fp8-hopper\|v1`) | u8 / u32, `y16 < 2^22` | E4M3, K = 32 | `c7cbebe365cb…` | `d5b77463fee9…` | `relations.relation("fp8-hopper").compile(params, True)`, lane b-hopper a39de82 and lane b-merge-h100 01fc64f, byte-identical (3396 rows); no pod `system.bin` in the store yet |
+
+The compilations are torch-free and were run twice each on the laptop (byte-identical files); `system-digest` prints
+both digests of any `system.bin` and names the relation they are pinned for.  The full values are in `src/relation.rs`.
+
+Exit status: `verify` 0 accept, 1 reject (the reason on stdout), 2 usage / unreadable operator input.  `batch`: 0 every
+sub-batch accepted and the batch rule met, 1 a sub-batch rejected (`batch_reason` names the first one in name order) or
+the batch rule failed (`batch: n_proofs mismatch (...)`, `batch: union bound 2^-x over N sub-batches exceeds the target
+2^-t`), 2 a sub-batch file unreadable, 3 a verdict disagrees with `manifest.json`'s Python verdict (checked first: the
+agreement gate).  Malformed *proof or statement bytes* never panic (every read is bounded and every element checked);
+an unreadable path given on the command line is reported and exits 2.
+
+**Batch mode (lane b-verify-par; the batch rule: lane b-batch-bound).**  A 4096-VU batch is `N_subbatches` (25)
+independently committed proofs, each with its own statement (its VUs' `a, b, y16`; `n_proofs` = 25, the count the
+prover sized `t` for) -- there is no batch-level statement (PROTOCOL.md 8c; `bench-vu` dumps them as
+`repK/sub_XX.{stmt,proof[,coins]}`).  `batch` verifies them on `--jobs` OS threads pulling from one queue, each
+sub-batch exactly as `verify` would (its own statement, proof, challenges, checks, `--threads` inside) except for the
+per-proof soundness gate, and accepts the batch iff every sub-batch accepts AND `verify::batch_bound` does: the union
+`sum_i 2^-b_i` of this verifier's OWN per-proof bounds (`soundness()` from each statement's `n, k, l, t, D, mode`; never
+a prover field) over the `N` proofs presented is `<= 2^-target` (`--target-bits`, default 128; `--soundness-bits` is
+its alias here), and every proof's `n_proofs` equals `N`.  Before this rule `N` proofs each sized for `n_proofs = 1`
+(2^-128.16 each) were accepted as a batch that is only 2^-(128.16 - log2 N); DISCREPANCIES D10.  The summary reports
+`target_bits`, `batch_log2`, `batch_bits` (= `-log2 sum`), `per_proof_bits[]`, `n_proofs_claimed[]`; the Python file
+verifier (`python -m backends.direct.ligero.serialize verify-batch --dir DIR [--target-bits 128]`) applies the same
+rule with the same strings and agrees on the bits to 1e-6 (`protocol.batch_bound`).
 Shared, read-only, computed once: the parsed `system.bin` with its pinned-digest verdict, and the domain tables per
 `(l, n)` (NTT twiddles for `H` and the coset, `g^i`, `eta_c`; built by the first sub-batch that reaches them).  Results
 are reported in name order and the batch reason is the first rejected sub-batch in that order, so the verdict and the
@@ -65,20 +103,25 @@ Producing the files (on a machine with torch): `python -m backends.direct.ligero
 `.stmt` + `.proof` + a `manifest.json` with sha256 and the Python verdict).  The Python file verifier
 (`serialize.py verify`) replays the transcript's coins in interactive mode -- the same caveat as above.
 
-## Files (`ligero-system/v1`, `ligero-statement/v2`, `ligero-proof/v1`; defined in `backends/direct/ligero/serialize.py`)
+## Files (`ligero-system/v1`, `ligero-statement/v2..v4`, `ligero-proof/v1..v2`; defined in `backends/direct/ligero/serialize.py`)
 
 | file | what | who writes it |
 |---|---|---|
-| `system.bin` (`ligero-system/v1`) | the compiled REAL chain constraint system: pins, 347 linear + 3387 quadratic constraints as sparse affine forms, the chain rows, and the Python `system_id` | `serialize.py dump-system` / every generator |
-| `X.stmt` (`ligero-statement/v2`) | the verifier's configuration (`l, n, D, t, target, zk, t_pad, mode` byte `0 = interactive / 1 = fiat-shamir`, `n_proofs`) and the public words (`a, b` per unit, `y16` per column; chain layout `n_vus, steps`) | the prover side (`run.py gate-vu --dump-statement`, `serialize.py gen-*`) |
+| `system.bin` (`ligero-system/v1`) | a relation's compiled chain constraint system: pins, linear + quadratic constraints as sparse affine forms (347 + 3387 for the Ampere BF16 unit, 589 + 3532 for FP8 Ada), the chain rows, and the Python `system_id` | `serialize.py dump-system` / every generator / `bench-vu --dump-dir` |
+| `X.stmt` (`ligero-statement/v2`) | the verifier's configuration (`l, n, D, t, target, zk, t_pad, mode` byte `0 = interactive / 1 = fiat-shamir`, `n_proofs`) and the public words (`a, b` per unit, `y16` per column; chain layout `n_vus, steps`) as u16 -- the Ampere BF16 unit | the prover side (`run.py gate-vu --dump-statement`, `serialize.py gen-*`) |
+| `X.stmt` (`ligero-statement/v3`) | v2 + the authentication block (`authentication = included`, D9) | `run.py ... --auth` |
+| `X.stmt` (`ligero-statement/v4`) | the v2 header through `K`, then `u8 word_bytes \| u8 y_bytes \| str relation \| a \| b \| y16` at those widths `\| u8 has_auth [\| the v3 block]`: the relation-named statement (`fp8-ada`: 1-byte operands, 4-byte slots for the 22-bit chain-end words) | `run.py --relation fp8-ada bench-vu --dump-dir` |
 | `X.proof` (`ligero-proof/v1`) | the transcript: coin commitments + openings (interactive mode only; a Fiat-Shamir transcript that carries them is refused), root, `w, h, q [, v]`, the `t` column indices, the opened `M x t` columns, the Merkle paths | the prover side |
+| `X.proof` (`ligero-proof/v2`) | v1 + the three Merkle multiproofs of an authenticated statement (D9) | the prover side |
 
 The verifier reads the statement first, derives every size from it and the system (`k = l + t_pad`, `h_len = 2k - 1
 - l`, `q_len = l + k - 1`, `M = m + 6D` under ZK (`prox, lin, qa, qb, chain_a, chain_b`), depth `log2 n`), and parses the proof against those bounds: a
 header that disagrees is `malformed proof` before the body is read; every field element is checked `< p` at parse.
 The system file is a verification key: its Python `system_id` **and** this crate's own BLAKE3 digest of the exported
-tables are pinned in `verify.rs` (`PINNED_SYS_ID`, `PINNED_TABLE_DIGEST`); a different system is refused unless
-`--allow-any-system`.
+tables must be the pair `src/relation.rs` pins for the statement's relation (table above); a different system is
+refused unless `--allow-any-system`, which flags every verdict `system_pinned = false`.  A v4 statement whose word
+widths are not its relation's, or that carries an authentication block over words that are not 16-bit (the leaf
+schema is `u16`; Python defines no other), is refused at parse.
 
 ## What it checks, in order (reject-first, no panics on malformed input)
 
@@ -90,10 +133,15 @@ tables are pinned in `verify.rs` (`PINNED_SYS_ID`, `PINNED_TABLE_DIGEST`); a dif
    power-of-two `l, n`, the layout.
 2. Step 0 (interactive mode): `c_i = BLAKE2b-256("ligero-b/coin|v1|" || r_i || s_i)` for both slots; with `--coins`
    the openings must equal the verifier's own.  Fiat-Shamir mode: the transcript must carry no coins.
-3. Public inputs: BF16 decodes of every operand (`s, m, e` pins; an all-ones exponent field is rejected), `y16 <
-   2^16` by the format.
-4. Statement digest `BLAKE2b-256("ligero-b/statement|v2" | p | hash | l | n | D | t | target | zk | k | mode | sys_id |
-   chain layout | a | b | y16)`; challenge 1 -> `r (D x M)`, `rho_lin (D x L)`, `rho_quad (D x Q)`, `rc (D x 7 x l)`
+3. Public inputs: the relation's decode of every operand into the `s, m, e` pins (BF16: an all-ones exponent field
+   is rejected; E4M3: the NaN codes `0x7F / 0xFF` are rejected, the all-ones exponent field is finite), the
+   statement's `K` equal to the operands the system pins, `y16 < 2^y_bits` (16 for BF16, 22 for the packed FP32
+   claim of the FP8 relations).
+4. Statement digest `BLAKE2b-256("ligero-b/statement|v2" | relation tag | p | hash | l | n | D | t | target | zk | k |
+   mode | sys_id | chain layout | a | b | y16)`, the words at the relation's widths (`<u2` for BF16; `<u1` operands
+   and `<u4` chain-end words for FP8, exactly as `protocol._u_bytes` writes them; the tag is empty for the BF16
+   relations, `|rel=fp8-ada|v1` / `|rel=fp8-hopper|v1` for FP8);
+   challenge 1 -> `r (D x M)`, `rho_lin (D x L)`, `rho_quad (D x Q)`, `rc (D x 7 x l)`
    from SHAKE-256 of a BLAKE3 seed; challenge 2 = the `t` distinct columns by rejection from SHAKE-256(seed || ctr),
    which must equal the proof's column list.  Seeds -- interactive: `BLAKE3("ligero-b/c1|v2|" stmt |coins= c1 c2 |r= r1)`
    and `BLAKE3("ligero-b/c2|v2|" stmt |coins= c1 c2 |r= r2)` (no prover message enters); Fiat-Shamir:
@@ -125,7 +173,9 @@ in the JSON.
 * Fiat-Shamir seeds: `w`, `h`, `q` are absorbed as raw `D x len` u32 LE arrays; `v` with a `|v=` tag and only under
   ZK.  Interactive seeds: the coins with `|coins=` / `|r=` prefixes after `stmt`, nothing else; tags carry `|v2|`.
 * Mask-row order after the `m` witness rows: `prox, lin, qa, qb, chain_a, chain_b`, `D` rows each.
-* Statement digest text fields: `|target=` is Python's `repr(float)` (D2); `a`, `b`, `y16` are `<u2` words.
+* Statement digest text fields: `|target=` is Python's `repr(float)` (D2); `a`, `b`, `y16` are `<u2` words for the
+  BF16 relations and `<u1` / `<u1` / `<u4` for the FP8 relations (`RelationHooks.word_dtype / y16_dtype`, D11); the
+  relation tag (`RelationHooks.tag`) follows the statement tag immediately and is not in any file.
 * The evaluation domain is the coset `31 . <w_n>`; the encoder is INTT_l, zero-pad to n, scale coefficient `i` by
   `31^i`, NTT_n.
 
@@ -145,9 +195,11 @@ b-verify-par's note.
 
 * Unit-mode proofs (`compile_unit(chain=False)`, public accumulator per unit): not implemented (the decision workload
   is the chain).
-* It does not recompute the constraint system from the checker: the tables come from `system.bin` (pinned digests).
-  An error in the *compiler* (a constraint missing from the system) is outside this verifier's reach; `redteam_vu`
-  / `redteam_battery` cover that.
+* It does not recompute the constraint system from the checker: the tables come from `system.bin` (pinned digests,
+  one pair per relation).  An error in the *compiler* (a constraint missing from the system) is outside this
+  verifier's reach; `redteam_vu` / `redteam_battery` cover that.  Relations this build does not pin (a v4 statement
+  naming anything but `bf16[-ampere]`, `fp8-ada`, `bf16-hopper`, `fp8-hopper`) are refused: their digest tag and
+  word widths are not in the file, so nothing could be checked.
 * It verifies **soundness only**: acceptance says the transcript proves the statement under the stated parameters --
   unconditionally for Fiat-Shamir files, and *given the coins* for interactive files (D7; use `--coins`).  Nothing
   here checks zero knowledge; the `COMPLETE_ZK_BACKEND` label is lane b-zk / b-zk-fix's claim about the interactive
@@ -158,7 +210,9 @@ b-verify-par's note.
 ~~~text
 src/hash.rs     BLAKE3 (chunks, parents, root), BLAKE2b-256, SHAKE-256 -- tests against hashlib / spec vectors
 src/field.rs    BabyBear, radix-2 NTT (natural in/out), coset points, Z_H, encode / eval_on_coset -- tests vs naive
-src/format.rs   ligero-system/v1, -statement/v2, -proof/v1 parsers (statement-bounded, canonical field elements)
-src/verify.rs   soundness accounting, statement digest, challenges, Merkle, the four tests, the chain test
-src/main.rs     verify / batch / system-digest; agreement with manifest.json's Python verdicts
+src/format.rs   ligero-system/v1, -statement/v2..v4, -proof/v1..v2 parsers (statement-bounded, canonical field elements)
+src/relation.rs the pinned relations: sys_id + table digest, digest tag, word widths, y range, operand decode (BF16 / E4M3)
+src/auth.rs     authentication = included: the SHA-256 merkle frame, leaves, multiproof folds (D9)
+src/verify.rs   soundness accounting, statement digest, challenges, Merkle, the four tests, the chain test, the pin gate
+src/main.rs     verify / batch / system-digest; agreement with manifest.json's Python verdicts (DIR or DIR/..)
 ~~~

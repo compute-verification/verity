@@ -213,6 +213,10 @@ class NativePeak:
     flop_per_second: float
     accumulate: str
     source: str
+    #: The reference part's device memory in bytes (datasheet).  A board that reports a very different total is a
+    #: *variant* of the SKU (2026-09-22: a RunPod "RTX 4090" with 48 GiB -- a re-memoried AD102 board whose clocks and
+    #: power limit are not the datasheet's), and the datasheet peak is not its denominator; ``None`` = unchecked.
+    memory_bytes: int | None = None
 
     def seconds_per_vu(self, K: int) -> float:
         """Native wall seconds of one ``GemmCoordinate<K>`` (``2K`` FLOP) at this peak."""
@@ -253,6 +257,7 @@ A100_BF16_PEAK = NativePeak(
     flop_per_second=312e12,
     accumulate="fp32",
     source="NVIDIA A100 datasheet / Ampere whitepaper",
+    memory_bytes=80 * 2**30,
 )
 #: H100 SXM5 dense FP8 tensor-core peak; Hopper runs FP8 with FP32 accumulate at full rate.
 H100_FP8_PEAK = NativePeak(
@@ -261,6 +266,7 @@ H100_FP8_PEAK = NativePeak(
     flop_per_second=1978.9e12,
     accumulate="fp32",
     source="NVIDIA Hopper whitepaper (FP8 3957.8 TFLOPS with sparsity; FP32 accumulate at full rate on Hopper)",
+    memory_bytes=80 * 2**30,
 )
 #: RTX 4090 dense FP8 tensor-core peak with FP32 accumulate -- half the FP16-accumulate figure on Ada.
 RTX4090_FP8_PEAK = NativePeak(
@@ -272,6 +278,7 @@ RTX4090_FP8_PEAK = NativePeak(
         "NVIDIA Ada whitepaper (FP8 with FP32 accumulate 330.3 / 660.6 sparse TFLOPS; FP16 accumulate is 660.6 -- "
         "Ada halves FP8 throughput with FP32 accumulate)"
     ),
+    memory_bytes=24 * 2**30,
 )
 
 
@@ -289,6 +296,7 @@ FIRST = Target(
     native_peak=A100_BF16_PEAK,
     status="frozen",
     instruction="sm80.mma.m16n8k16.bf16",
+    dossier="art:997eefe82d733c30d689801236cd682a47844b52dfcfe1d4ea61d44d99c837cc",
 )
 
 _FP8_DOMAIN = (
@@ -318,6 +326,7 @@ FP8_HOPPER_WGMMA = Target(
     native_peak=H100_FP8_PEAK,
     status="draft",
     instruction="sm90.wgmma.m64n8k32.e4m3",
+    dossier="art:f5e282ad4fe3a7d8ab2777cced6a1b0e8692375529fd031f99d24b3c98035755",
 )
 
 FP8_ADA_MMA = Target(
@@ -337,6 +346,7 @@ FP8_ADA_MMA = Target(
     native_peak=RTX4090_FP8_PEAK,
     status="draft",
     instruction="sm89.mma.m16n8k32.e4m3",
+    dossier="art:2acd0d37dc729e36570bffdee35e6445d4e095d9be9f39bcd11222c439e8197c",
 )
 
 RTX5090_FP4_PEAK = NativePeak(

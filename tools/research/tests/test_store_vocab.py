@@ -41,7 +41,7 @@ RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "a
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "breakthrough")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
-                 "mismatches", "target", "component", "jobs", "device")
+                 "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs")
 
 
 def test_vocabulary_pins_every_key_by_asserter_and_form():

@@ -12,7 +12,8 @@ ligero-system/v1     magic "LIGSYS01" | u32 m | u32 n_pins | n_pins x (str name,
                      | u32 Q | Q x (expr a, expr b, expr c) | u8 has_chain | [3 x u32 c rows | 3 x expr y | expr y16]
                      | 32 B sys_id (protocol.system_id, the Python digest)
 ligero-system/v2     magic "LIGSYS02" | as v1, but the chain's trailing ``expr y16`` is replaced by
-                     u32 n_end | n_end x (expr Y, u32 lo, u32 bits): the end in components (chain.py; FP4)
+                     u32 n_end | n_end x (expr Y, u32 lo, u32 bits): the chain end in components (chain.py; the FP4
+                     relation's full FP32 word as sign / exponent / fraction bit fields, each < p)
     linear           u32 nnz | nnz x (u32 row, u32 coef) | u32 const | u32 pub_pin (0xFFFFFFFF = 0)
     expr             u32 nnz | nnz x (u32 row, u32 coef) | u32 const
     str              u32 len | utf-8 bytes
@@ -21,16 +22,27 @@ ligero-statement/v2  magic "LIGSTM02" | u32 layout (1 = chain) | u32 l | u32 n |
                      1 = fiat-shamir: no coins, challenges from the transcript; PROTOCOL.md 8c after b-zk-fix)
                      | u32 n_proofs | u32 n_vus | u32 steps | u32 K
                      | l x K u16 a | l x K u16 b | l x u16 y16
-ligero-statement/v3  magic "LIGSTM03" | as v2 through ``u32 steps``, then str relation ("fp4-nvf4") | u8 word_bytes
-                     | u8 y_bytes | u32 K | l x K a | l x K b | l x y  (little-endian unsigned of the stated widths: the
-                     operand words are bytes and the claimed word a full FP32 for the FP4 relation).  BF16 statements
-                     stay v2 byte for byte; the Rust verifier reads v2 only.
+ligero-statement/v3  magic "LIGSTM03" | the v2 body | the authentication block (authentication = included, auth.py):
+                     str version ("ligero-b/auth/v1") | str schema ("u16") | u32 n_vus | n_vus x u32 vu_index
+                     | 3 x tree (a, b, y): 32 B binding | u8 owner + 2 | u64 count | 32 B root
+ligero-statement/v4  magic "LIGSTM04" | the v2 header through u32 K | u8 word_bytes | u8 y_bytes | str relation
+                     | l x K a | l x K b | l x y16 (u8/u16/u32 per the byte widths) | u8 has_auth | [the v3 block]
+                     The relation-named statement: the FP8 Ada relation's 8-bit operands and 22-bit public words
+                     (`relation = "fp8-ada"`, fp8/chain.py), the words hashed into the statement digest exactly as
+                     written (protocol.RelationHooks word_dtype / y16_dtype).  The BF16 relation (16/16-bit words,
+                     no name in the file) is always written as v2 / v3 so that the Rust verifier can check it.
+                     (Lane b-hopper wrote this layout under "LIGSTM03" before v3 was taken by the authentication
+                     block above; those files must be re-dumped or re-tagged as v4.)
 ligero-proof/v1      magic "LIGPRF01" | u8 hash (1 = blake3, 2 = sha256) | u8 has_coins | u8 zk | u8 has_chain
                      | u32 D | u32 w_len | u32 h_len | u32 q_len | u32 v_len | u32 M | u32 t | u32 depth
                      | [c1 c2 r1 s1 r2 s2, 32 B each] | 32 B root | D x w_len u32 w | D x h_len u32 h
                      | D x q_len u32 q | D x v_len u32 v | t x u32 cols | M x t u32 opened (row-major)
                      | t x depth x 32 B paths (leaf level first)
+ligero-proof/v2      magic "LIGPRF02" | the v1 body | 3 x (u32 n_sib | n_sib x 32 B): the Merkle multiproofs of the
+                     a, b, y trees (canonical order of verity.commitments.multiproof; SHA-256 nodes)
 ~~~
+A BF16 statement without an authentication block is written as v2 and a proof without multiproofs as v1 (byte-identical
+to before these extensions); the verifier refuses an authenticated statement with a v1 proof and vice versa.
 """
 from __future__ import annotations
 
@@ -44,15 +56,16 @@ from pathlib import Path
 
 import numpy as np
 
+from . import auth as auth_mod
 from .compile import P, System
 
 SYS_MAGIC, STMT_MAGIC, PROOF_MAGIC = b"LIGSYS01", b"LIGSTM02", b"LIGPRF01"
 SYS_MAGIC_V2 = b"LIGSYS02"     # a chain system whose end is in components (chain.py): v1 with the y16 expr replaced
-STMT_MAGIC_V3 = b"LIGSTM03"    # a statement of a non-BF16 relation: named, with its own word / claim widths
+STMT_MAGIC_V3, PROOF_MAGIC_V2 = b"LIGSTM03", b"LIGPRF02"
+STMT_MAGIC_V4 = b"LIGSTM04"
+_DTYPES = {1: "<u1", 2: "<u2", 4: "<u4"}
+#: The relation a v2 / v3 statement (no name in the file) is: the Ampere BF16 unit of ``vu.py``.
 BF16_RELATION = "bf16"
-#: The relations a statement file may name and their (operand word, claimed word) byte widths; ``_runner`` builds the
-#: matching chain runner for the file-level verifier.
-RELATION_WIDTHS = {BF16_RELATION: (2, 2), "fp8-ada": (1, 4), "fp4-nvf4": (1, 4)}
 MODE_CODES = {"interactive": 0, "fiat-shamir": 1}
 MODE_NAMES = {v: k for k, v in MODE_CODES.items()}
 HASH_IDS = {"blake3": 1, "sha256": 2}
@@ -69,6 +82,7 @@ class _W:
 
     def u8(self, x): self.parts.append(struct.pack("<B", x))
     def u32(self, x): self.parts.append(struct.pack("<I", x))
+    def u64(self, x): self.parts.append(struct.pack("<Q", x))
     def f64(self, x): self.parts.append(struct.pack("<d", x))
     def raw(self, b: bytes): self.parts.append(bytes(b))
 
@@ -97,6 +111,7 @@ class _R:
 
     def u8(self): return struct.unpack("<B", self.take(1))[0]
     def u32(self): return struct.unpack("<I", self.take(4))[0]
+    def u64(self): return struct.unpack("<Q", self.take(8))[0]
     def f64(self): return struct.unpack("<d", self.take(8))[0]
     def s(self): return self.take(self.u32()).decode()
 
@@ -218,16 +233,18 @@ class Statement:
     n_proofs: int
     n_vus: int
     steps: int
-    a: np.ndarray      # (l, K) uint16 (BF16) / uint8 words (FP8, FP4)
-    b: np.ndarray      # (l, K)
-    y16: np.ndarray    # (l,) the claimed words at the end columns: uint16 (BF16) / a full FP32 word (FP4)
-    relation: str = BF16_RELATION      # v2 files are BF16; a v3 file names its relation (RELATION_WIDTHS)
+    a: np.ndarray      # (l, K) operand words (uint16 for the BF16 relation)
+    b: np.ndarray      # (l, K) operand words
+    y16: np.ndarray    # (l,) the chain-end public words (uint16 for the BF16 relation)
+    auth: auth_mod.AuthStatement | None = None   # authentication = included: the committed-object block (v3 / v4)
+    relation: str = BF16_RELATION   # "bf16" (v2 / v3 files carry no name) | "fp8-ada" (fp8/chain.py; v4)
+    word_bytes: int = 2             # bytes per operand word in the file (2: v2 / v3)
+    y_bytes: int = 2                # bytes per public word in the file (2: v2 / v3)
 
     @property
-    def widths(self) -> tuple[int, int]:
-        if self.relation not in RELATION_WIDTHS:
-            raise ValueError(f"unknown relation {self.relation!r} (known: {sorted(RELATION_WIDTHS)})")
-        return RELATION_WIDTHS[self.relation]
+    def v4(self) -> bool:
+        """Written as the relation-named ``ligero-statement/v4``: any relation but the BF16 unit's 16/16-bit words."""
+        return self.word_bytes != 2 or self.y_bytes != 2 or self.relation != BF16_RELATION
 
     def config(self):
         from .protocol import Config
@@ -242,22 +259,40 @@ class Statement:
         return Layout(self.l, self.n_vus, self.steps)
 
 
-def _u_dtype(nbytes: int) -> str:
-    if nbytes not in (1, 2, 4):
-        raise ValueError(f"word width {nbytes} bytes (1, 2 or 4)")
-    return f"<u{nbytes}"
+def _auth_block_w(w: _W, auth: auth_mod.AuthStatement):
+    w.s(auth_mod.AUTH_VERSION)
+    w.s(auth_mod.SCHEMA)
+    w.u32(len(auth.vu_index))
+    w.arr(np.asarray(auth.vu_index, dtype=np.int64), "<u4")
+    for tr in auth.trees:
+        assert len(tr.binding) == 32 and len(tr.root) == 32
+        w.raw(tr.binding)
+        w.u8(tr.owner + 2)
+        w.u64(tr.count)
+        w.raw(tr.root)
+
+
+def _auth_block_r(r: _R) -> auth_mod.AuthStatement:
+    version, schema = r.s(), r.s()
+    if version != auth_mod.AUTH_VERSION or schema != auth_mod.SCHEMA:
+        raise ValueError(f"unknown authentication block {version!r}/{schema!r}")
+    n_vus = r.u32()
+    vu_index = [int(x) for x in r.arr((n_vus,), "<u4")]
+    trees = []
+    for name in auth_mod.TREE_NAMES:
+        binding = r.take(32)
+        owner = r.u8() - 2
+        count = r.u64()
+        root = r.take(32)
+        trees.append(auth_mod.TreeRef(name, binding, owner, count, root))
+    return auth_mod.AuthStatement(tuple(vu_index), tuple(trees))
 
 
 def statement_bytes(st: Statement) -> bytes:
-    """A BF16 statement as ``ligero-statement/v2`` (byte for byte the pre-FP4 file), any other relation's as v3."""
-    v3 = st.relation != BF16_RELATION
-    wb, yb = st.widths
-    for name, arr, nb in (("a", st.a, wb), ("b", st.b, wb), ("y", st.y16, yb)):
-        x = np.asarray(arr)
-        if (x < 0).any() or (x >= 2 ** (8 * nb)).any():
-            raise ValueError(f"statement {name}: a word does not fit {nb} byte(s)")
+    if st.word_bytes not in _DTYPES or st.y_bytes not in _DTYPES:
+        raise ValueError(f"statement word widths {st.word_bytes}/{st.y_bytes} bytes are not 1, 2 or 4")
     w = _W()
-    w.raw(STMT_MAGIC_V3 if v3 else STMT_MAGIC)
+    w.raw(STMT_MAGIC_V4 if st.v4 else STMT_MAGIC if st.auth is None else STMT_MAGIC_V3)
     w.u32(1)
     for x in (st.l, st.n, st.D, st.t):
         w.u32(x)
@@ -268,24 +303,27 @@ def statement_bytes(st: Statement) -> bytes:
     w.u32(st.n_proofs)
     w.u32(st.n_vus)
     w.u32(st.steps)
-    if v3:
-        w.s(st.relation)
-        w.u8(wb)
-        w.u8(yb)
     K = int(np.asarray(st.a).shape[1])
     w.u32(K)
-    w.arr(st.a, _u_dtype(wb))
-    w.arr(st.b, _u_dtype(wb))
-    w.arr(st.y16, _u_dtype(yb))
+    if st.v4:
+        w.u8(st.word_bytes)
+        w.u8(st.y_bytes)
+        w.s(st.relation)
+    w.arr(st.a, _DTYPES[st.word_bytes])
+    w.arr(st.b, _DTYPES[st.word_bytes])
+    w.arr(st.y16, _DTYPES[st.y_bytes])
+    if st.v4:
+        w.u8(int(st.auth is not None))
+    if st.auth is not None:
+        _auth_block_w(w, st.auth)
     return w.bytes()
 
 
 def read_statement(data: bytes) -> Statement:
     r = _R(data)
     magic = r.take(8)
-    if magic not in (STMT_MAGIC, STMT_MAGIC_V3):
-        raise ValueError("not a ligero-statement/v2 or /v3 file")
-    v3 = magic == STMT_MAGIC_V3
+    if magic not in (STMT_MAGIC, STMT_MAGIC_V3, STMT_MAGIC_V4):
+        raise ValueError("not a ligero-statement/v2, /v3 or /v4 file")
     if r.u32() != 1:
         raise ValueError("only chain mode (1) is defined")
     l, n, D, t = r.u32(), r.u32(), r.u32(), r.u32()
@@ -295,20 +333,20 @@ def read_statement(data: bytes) -> Statement:
     mode_code = r.u8()
     if mode_code not in MODE_NAMES:
         raise ValueError(f"unknown mode code {mode_code}")
-    n_proofs, n_vus, steps = r.u32(), r.u32(), r.u32()
+    n_proofs, n_vus, steps, K = r.u32(), r.u32(), r.u32(), r.u32()
     relation, wb, yb = BF16_RELATION, 2, 2
-    if v3:
-        relation, wb, yb = r.s(), r.u8(), r.u8()
-        if relation == BF16_RELATION:
-            raise ValueError("a BF16 statement is a v2 file")
-        if RELATION_WIDTHS.get(relation, (wb, yb)) != (wb, yb):
-            raise ValueError(f"relation {relation!r} stated with widths {(wb, yb)}, expected {RELATION_WIDTHS[relation]}")
-    K = r.u32()
-    a = r.arr((l, K), _u_dtype(wb))
-    b = r.arr((l, K), _u_dtype(wb))
-    y16 = r.arr((l,), _u_dtype(yb))
+    if magic == STMT_MAGIC_V4:
+        wb, yb = r.u8(), r.u8()
+        if wb not in _DTYPES or yb not in _DTYPES:
+            raise ValueError(f"statement word widths {wb}/{yb} bytes are not 1, 2 or 4")
+        relation = r.s()
+    a = r.arr((l, K), _DTYPES[wb])
+    b = r.arr((l, K), _DTYPES[wb])
+    y16 = r.arr((l,), _DTYPES[yb])
+    has_auth = magic == STMT_MAGIC_V3 or (magic == STMT_MAGIC_V4 and bool(r.u8()))
+    auth = _auth_block_r(r) if has_auth else None
     r.done()
-    return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, a, b, y16, relation)
+    return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, a, b, y16, auth, relation, wb, yb)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -318,7 +356,7 @@ def read_statement(data: bytes) -> Statement:
 def proof_bytes(pf) -> bytes:
     from .protocol import COIN_BYTES
     w = _W()
-    w.raw(PROOF_MAGIC)
+    w.raw(PROOF_MAGIC if pf.auth is None else PROOF_MAGIC_V2)
     hid = 1 if pf.hash_name.startswith("blake3") else 2 if pf.hash_name.startswith("sha256") else 0
     w.u8(hid)
     has_coins = pf.coin_commit is not None and pf.coins is not None
@@ -350,6 +388,13 @@ def proof_bytes(pf) -> bytes:
         for sib in pth:
             assert len(sib) == 32
             w.raw(sib)
+    if pf.auth is not None:
+        assert len(pf.auth) == len(auth_mod.TREE_NAMES)
+        for sibs in pf.auth:
+            w.u32(len(sibs))
+            for sib in sibs:
+                assert len(sib) == 32
+                w.raw(sib)
     return w.bytes()
 
 
@@ -357,8 +402,9 @@ def read_proof(data: bytes):
     """A ``protocol.Proof`` from the file (no canonicity checks: the verifier's job)."""
     from .protocol import Coins, Proof
     r = _R(data)
-    if r.take(8) != PROOF_MAGIC:
-        raise ValueError("not a ligero-proof/v1 file")
+    magic = r.take(8)
+    if magic not in (PROOF_MAGIC, PROOF_MAGIC_V2):
+        raise ValueError("not a ligero-proof/v1 or /v2 file")
     hid, has_coins, has_v, has_q = r.u8(), r.u8(), r.u8(), r.u8()
     D, w_len, h_len, q_len, v_len, M, t, depth = (r.u32() for _ in range(8))
     cc = coins = None
@@ -373,57 +419,135 @@ def read_proof(data: bytes):
     cols = [int(x) for x in r.arr((t,), "<u4")]
     opened = r.arr((M, t), "<u4")
     paths = [[r.take(32) for _ in range(depth)] for _ in range(t)]
+    auth = None
+    if magic == PROOF_MAGIC_V2:
+        auth = [[r.take(32) for _ in range(r.u32())] for _ in auth_mod.TREE_NAMES]
     r.done()
     name = {1: "blake3 (file)", 2: "sha256 (file)"}.get(hid, "unknown (file)")
-    return Proof(root, w, h, cols, opened, paths, name, {}, q, v, cc, coins)
+    return Proof(root, w, h, cols, opened, paths, name, {}, q, v, cc, coins, auth)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
 # The Python verifier on files (the cross-check)
 # ---------------------------------------------------------------------------------------------------------------------
 
-def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=None) -> tuple[bool, str, float]:
-    """Run ``protocol.verify`` on the two files with the statement's configuration; returns (ok, reason, seconds)."""
+def read_coins(raw: bytes):
+    """A coins file as ``ligero-verify --coins`` reads it: the verifier's own ``r1 || s1 || r2 || s2``, 128 raw bytes or
+    256 hex digits (+ newline)."""
+    from .protocol import Coins
+    if len(raw) in (256, 257):
+        raw = bytes.fromhex(raw.decode().strip())
+    if len(raw) != 128:
+        raise ValueError(f"coins must hold r1 || s1 || r2 || s2 (128 bytes, raw or hex); got {len(raw)} bytes")
+    return Coins(raw[0:32], raw[32:64], raw[64:96], raw[96:128])
+
+
+def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=None,
+                 relation: str | None = None, own_coins=None) -> tuple[bool, str, float]:
+    """Run ``protocol.verify`` on the two files with the statement's configuration; returns (ok, reason, seconds).
+    ``relation``: which relation's system to check against (a v4 statement names its own; a v2 / v3 statement is the
+    Ampere BF16 relation unless told otherwise -- the system id in the statement digest rejects a mismatch either way).
+    ``own_coins`` (interactive mode): the verifier's OWN step-0 coins, as ``ligero-verify --coins``; without them the
+    transcript's openings are replayed (below)."""
     from . import protocol as pm
-    st = read_statement(Path(stmt_path).read_bytes())
+    try:
+        st = read_statement(Path(stmt_path).read_bytes())
+    except ValueError as e:
+        return False, f"unreadable statement: {e}", 0.0
+    if relation is not None:
+        if st.v4 and st.relation != relation:
+            return False, f"statement names relation {st.relation!r}, verifier asked for {relation!r}", 0.0
+        st.relation = relation
     try:
         pf = read_proof(Path(proof_path).read_bytes())
     except ValueError as e:
         return False, f"unreadable proof: {e}", 0.0
     R = runner or _runner(device, st)
+    if _relation_of(R) != st.relation:
+        return False, f"statement names relation {st.relation!r}, the runner proves {_relation_of(R)!r}", 0.0
     # Interactive mode: ``verify`` demands the verifier's OWN step-0 coins.  A verifier reading a file has none, so the
     # only thing it can do is REPLAY the transcript's openings as its coins (the "coins are not this verifier's coins"
     # check is then vacuous; what remains is c_i = H(r_i || s_i) and the coin-only challenge derivation).
-    coins = pf.coins if (st.interactive and pf.coins is not None) else None
+    coins = own_coins if (st.interactive and own_coins is not None) else pf.coins if (st.interactive and pf.coins is not None) else None
     if st.interactive and coins is None:
         return False, "interactive transcript carries no coins", 0.0
-    if getattr(R, "relation", BF16_RELATION) != st.relation:
-        return False, f"statement names relation {st.relation!r}, the verifier checks {getattr(R, 'relation', BF16_RELATION)!r}", 0.0
-    rel = getattr(R, "hooks", pm.BF16_HOOKS)          # the relation's public decode and statement widths (BF16 by default)
     t0 = time.perf_counter()
     try:
         ok, why = pm.verify(R.p, R.sys, R.tb, st.config(), None, st.a.astype(np.int64), st.b.astype(np.int64), None,
-                            pf, device, chain=(st.layout(), st.y16.astype(np.int64)), coins=coins, rel=rel)
+                            pf, device, chain=(st.layout(), st.y16.astype(np.int64)), coins=coins, rel=_hooks_of(R), auth=st.auth)
     except Exception as e:  # noqa: BLE001 -- the Python verifier is not reject-first on malformed input
         ok, why = False, f"python verifier raised {type(e).__name__}: {e}"
     return ok, why, time.perf_counter() - t0
 
 
+def _relation_of(R) -> str:
+    """The relation a runner proves: its ``relation`` attribute (``fp8.chain.FP8ChainRunner``), else the BF16 unit."""
+    return getattr(R, "relation", BF16_RELATION)
+
+
+def _hooks_of(R):
+    """The runner's ``protocol.RelationHooks`` (``BF16_HOOKS`` for ``vu.ChainRunner``, which carries none)."""
+    from .protocol import BF16_HOOKS
+    return getattr(R, "hooks", BF16_HOOKS)
+
+
+def verify_batch_dir(dir: Path, device: str = "cpu", target_bits: float = 128.0) -> dict:
+    """The Python batch verifier on files (PROTOCOL.md 8c, "Batch verification"; the cross-check of ``ligero-verify
+    batch``): every ``DIR/*.proof`` with its ``DIR/*.stmt`` (and ``DIR/*.coins`` when present: that proof's own
+    step-0 coins) through ``protocol.verify`` -- own statement, own proof, own checks; then ``protocol.batch_bound``
+    on THIS verifier's recomputation of every proof's bound (``soundness(statement.config())``) and every statement's
+    ``n_proofs`` against the number of sub-batches presented, at ``target_bits``.  The first rejected sub-batch
+    rejects the batch with ``"<name>: <reason>"`` (the accounting is reported anyway); the reason strings and their
+    precedence are those of the Rust verifier."""
+    from . import protocol as pm
+    d = Path(dir)
+    proofs = sorted(p for p in d.glob("*.proof") if not p.name.startswith("._"))
+    if not proofs:
+        raise FileNotFoundError(f"no *.proof in {d}")
+    t_all = time.perf_counter()
+    R = None
+    items: list[dict] = []
+    for p in proofs:
+        sp = p.with_suffix(".stmt")
+        st = read_statement(sp.read_bytes())
+        if R is None:
+            R = _runner(device, st)
+        cp = p.with_suffix(".coins")
+        own = read_coins(cp.read_bytes()) if cp.is_file() else None
+        ok, why, secs = verify_files(sp, p, device, runner=R, own_coins=own)
+        b = pm.soundness(st.config(), R.tb.L, R.tb.Q, 1)["per_proof_total_log2"]
+        items.append({"name": p.name, "accepted": ok, "reason": why, "seconds": secs, "own_coins": own is not None,
+                      "per_proof_log2": b, "n_proofs": st.n_proofs})
+    per = [it["per_proof_log2"] for it in items]
+    claimed = [it["n_proofs"] for it in items]
+    names = [it["name"] for it in items]
+    rejected = [it for it in items if not it["accepted"]]
+    if rejected:
+        out = {"accepted": False, "reason": f"{rejected[0]['name']}: {rejected[0]['reason']}", "n_subbatches": len(items),
+               "target_bits": float(target_bits), "batch_log2": pm.log2_sum(per), "per_proof_log2": per, "n_proofs_claimed": claimed}
+    else:
+        out = pm.batch_bound(per, claimed, target_bits, names)
+    out["batch_bits"] = -out["batch_log2"]
+    return {**out, "n_accepted": len(items) - len(rejected), "n_rejected": len(rejected), "seconds": time.perf_counter() - t_all,
+            "verifier": "python (backends.direct.ligero.protocol.verify + batch_bound)", "items": items}
+
+
 def _runner(device: str, st: Statement | None = None):
-    """The chain runner of the statement's relation (BF16 without a statement): ``vu.ChainRunner`` for BF16,
-    ``fp4.chain.FP4ChainRunner`` for ``fp4-nvf4``.  (``fp8-ada`` never wrote statement files; add its runner here when it does.)"""
     zk = st.zk if st is not None else False
     n_proofs = st.n_proofs if st is not None else 1
     target = st.target_log2 if st is not None else -128.0
     mode = st.mode if st is not None else "interactive"
-    relation = st.relation if st is not None else BF16_RELATION
-    if relation == BF16_RELATION:
-        from .vu import ChainRunner
-        return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk, mode=mode)
-    if relation == "fp4-nvf4":
+    name = st.relation if st is not None else BF16_RELATION
+    if name == "fp8-ada":
+        from .fp8.chain import FP8ChainRunner
+        return FP8ChainRunner(device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
+    if name == "fp4-nvf4":
         from .fp4.chain import FP4ChainRunner
         return FP4ChainRunner(device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
-    raise ValueError(f"no file-level verifier runner for relation {relation!r}")
+    if name != BF16_RELATION:
+        raise ValueError(f"no runner for relation {name!r} (known: {BF16_RELATION!r}, 'fp8-ada', 'fp4-nvf4')")
+    from .vu import ChainRunner
+    return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk, mode=mode)
 
 
 def sha256_file(path: Path) -> str:
@@ -434,11 +558,16 @@ def sha256_file(path: Path) -> str:
 # Generators
 # ---------------------------------------------------------------------------------------------------------------------
 
-def _statement_of(R, pubs, lay, cfg, n_proofs: int, mode: str | None = None) -> Statement:
+def _statement_of(R, pubs, lay, cfg, n_proofs: int, mode: str | None = None, auth=None) -> Statement:
+    """The statement of a runner's public inputs, in the runner's relation and word widths (``protocol.RelationHooks``):
+    16/16-bit words (the BF16 unit) are written as v2 / v3 -- the Rust verifier's formats -- and the relation is implied
+    by the system id; other relations (fp8-ada: 8-bit operands, 32-bit slots for the 22-bit public words) take v4."""
     a, b, y16 = pubs
+    hooks = _hooks_of(R)
     return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
                      lay.n_vus, lay.steps, np.asarray(a, dtype=np.int64), np.asarray(b, dtype=np.int64),
-                     np.asarray(y16, dtype=np.int64), getattr(R, "relation", BF16_RELATION))
+                     np.asarray(y16, dtype=np.int64), auth, _relation_of(R), np.dtype(hooks.word_dtype).itemsize,
+                     np.dtype(hooks.y16_dtype).itemsize)
 
 
 def _write(out: Path, stem: str, st: Statement, pf, manifest: dict, kind: str, R, device: str, extra: dict | None = None):
@@ -451,8 +580,10 @@ def _write(out: Path, stem: str, st: Statement, pf, manifest: dict, kind: str, R
     assert np.array_equal(rt.w, pf.w) and np.array_equal(rt.h, pf.h)
     assert (rt.q is None) == (pf.q is None) and (rt.q is None or np.array_equal(rt.q, pf.q))
     assert (rt.v is None) == (pf.v is None) and (rt.v is None or np.array_equal(rt.v, pf.v))
+    assert (rt.auth is None) == (pf.auth is None) and (rt.auth is None or rt.auth == [list(s) for s in pf.auth])
     st2 = read_statement(sp.read_bytes())
     assert np.array_equal(st2.a, st.a) and np.array_equal(st2.y16, st.y16) and st2.t == st.t
+    assert st2.auth == st.auth
     ok, why, secs = verify_files(sp, pp, device, runner=R)
     entry = {"kind": kind, "stmt": sp.name, "proof": pp.name, "stmt_sha256": sha256_file(sp), "proof_sha256": sha256_file(pp),
              "proof_bytes": pp.stat().st_size, "python_verdict": {"accepted": ok, "reason": why, "seconds": secs},
@@ -462,13 +593,16 @@ def _write(out: Path, stem: str, st: Statement, pf, manifest: dict, kind: str, R
     return entry
 
 
-def _manifest(out: Path, args, R) -> dict:
+def _manifest(out: Path, args, R, auth: bool = False) -> dict:
     from .run import _git_commit
-    relation = getattr(R, "relation", BF16_RELATION)
-    sys_fmt = "ligero-system/v1" if R.sys.chain is None or R.sys.chain.get("y16") is not None else "ligero-system/v2"
-    return {"format": {"system": sys_fmt, "statement": "ligero-statement/v2" if relation == BF16_RELATION else "ligero-statement/v3",
-                       "proof": "ligero-proof/v1"}, "relation": relation,
-            "commit": _git_commit(), "device": args.device, "system": R.sys.summary(), "zk": R.zk, "mode": R.mode, "files": []}
+    hooks = _hooks_of(R)
+    v4 = _relation_of(R) != BF16_RELATION or np.dtype(hooks.word_dtype).itemsize != 2 or np.dtype(hooks.y16_dtype).itemsize != 2
+    sys_v2 = R.sys.chain is not None and R.sys.chain.get("y16") is None      # component chain ends (the FP4 relation)
+    fmt = {"system": "ligero-system/v2" if sys_v2 else "ligero-system/v1",
+           "statement": "ligero-statement/v4" if v4 else "ligero-statement/v3" if auth else "ligero-statement/v2",
+           "proof": "ligero-proof/v2" if auth else "ligero-proof/v1"}
+    return {"format": fmt, "relation": _relation_of(R), "commit": _git_commit(), "device": args.device, "system": R.sys.summary(),
+            "zk": R.zk, "mode": R.mode, "files": []}
 
 
 def _save_manifest(out: Path, man: dict):
@@ -658,7 +792,86 @@ def mutations(pf, st: Statement) -> list[tuple[str, object, Statement]]:
     st2 = copy.deepcopy(st); st2.mode = "fiat-shamir" if st.interactive else "interactive"; out.append(("statement_mode_flipped", pf, st2))
     st2 = copy.deepcopy(st); st2.D = st.D - 1; out.append(("statement_D_minus_1", pf, st2))
     st2 = copy.deepcopy(st); st2.t_pad = st.t_pad + 1; out.append(("statement_t_pad_plus_1", pf, st2))
+    if st.auth is not None and pf.auth is not None:
+        out += auth_mutations(pf, st)
     return out
+
+
+def auth_mutations(pf, st: Statement) -> list[tuple[str, object, Statement]]:
+    """File-level negatives of the authentication block (``authentication = included``).  The transcript-side ones
+    leave the Ligero proof valid and break only the multiproofs (the auth check must catch them); the statement-side
+    ones change what the verifier binds (root, indices) without re-proving, so the challenge binding catches them."""
+    import copy
+
+    from .auth import AuthStatement, TreeRef
+    out = []
+
+    def P_(name):
+        return name, copy.deepcopy(pf)
+
+    n, p2 = P_("auth_multiproof_a_truncated"); p2.auth[0] = p2.auth[0][:-1]; out.append((n, p2, st))
+    n, p2 = P_("auth_multiproof_b_extended"); p2.auth[1] = p2.auth[1] + [p2.auth[1][-1]]; out.append((n, p2, st))
+    n, p2 = P_("auth_multiproof_y_sibling_flipped"); p2.auth[2][0] = _flip_byte(p2.auth[2][0]); out.append((n, p2, st))
+    n, p2 = P_("auth_multiproof_a_sibling_flipped"); p2.auth[0][0] = _flip_byte(p2.auth[0][0]); out.append((n, p2, st))
+    n, p2 = P_("auth_multiproofs_swapped_a_b"); p2.auth[0], p2.auth[1] = p2.auth[1], p2.auth[0]; out.append((n, p2, st))
+    n, p2 = P_("auth_multiproofs_stripped"); p2.auth = None; out.append((n, p2, st))
+    st2 = copy.deepcopy(st); st2.auth = None; out.append(("statement_auth_stripped", pf, st2))
+
+    def with_tree(name, i, **kw):
+        st2 = copy.deepcopy(st)
+        trees = list(st2.auth.trees)
+        d = trees[i].to_json(); d.update(kw)
+        trees[i] = TreeRef.from_json(d)
+        st2.auth = AuthStatement(st2.auth.vu_index, tuple(trees))
+        out.append((name, pf, st2))
+
+    with_tree("statement_auth_root_a_flipped", 0, root=_flip_byte(st.auth.trees[0].root).hex())
+    with_tree("statement_auth_root_b_flipped", 1, root=_flip_byte(st.auth.trees[1].root).hex())
+    with_tree("statement_auth_root_y_flipped", 2, root=_flip_byte(st.auth.trees[2].root).hex())
+    with_tree("statement_auth_binding_a_flipped", 0, binding=_flip_byte(st.auth.trees[0].binding).hex())
+    with_tree("statement_auth_count_a_plus_1", 0, count=st.auth.trees[0].count + 1)
+    with_tree("statement_auth_owner_b_as_boundary", 1, owner=-1)
+    st2 = copy.deepcopy(st)
+    st2.auth = AuthStatement(tuple(v + 1 for v in st.auth.vu_index), st.auth.trees)
+    out.append(("statement_auth_vu_index_shifted", pf, st2))
+    return out
+
+
+def gen_auth_negatives(args) -> int:
+    """``authentication = included`` negatives for both verifiers (vu.auth_negatives, on the trees of ``--total-vus``
+    VUs or the cached trees): the prover-side ones (a Ligero-valid proof over words that are not the committed words;
+    over the committed words at the wrong index; under a different root) and the file-level ``auth_mutations``.
+    The honest included proof is written too (``auth_honest``)."""
+    from verity_numerical.bench import instances
+
+    from .vu import ChainRunner, auth_negatives, auth_trees_for
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    R = ChainRunner(args.device, args.target, 2, "torch", zk=args.zk, mode=args.mode)
+    man = _manifest(out, args, R, auth=True)
+    _write_system(out, R, man)
+    vu = instances.load("vu-k1536", Path(args.root))
+    trees, info = auth_trees_for(vu, Path(args.root), args.total_vus, args.auth_cache, args.auth_procs)
+    man["auth"] = info
+    cases = auth_negatives(R, trees, vu, args.n_vus, procs=args.auth_procs)
+    for name, pf, pubs, lay, auth, meta in cases:
+        st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1, auth=auth)
+        kind = "honest" if name == "auth_honest" else "auth_negative"
+        _write(out, name, st, pf, man, kind, R, args.device, meta)
+    # the file-level mutations of the honest included proof
+    st = read_statement((out / "auth_honest.stmt").read_bytes())
+    pf = read_proof((out / "auth_honest.proof").read_bytes())
+    for name, p2, st2 in auth_mutations(pf, st):
+        sp, pp = out / f"mut_{name}.stmt", out / f"mut_{name}.proof"
+        sp.write_bytes(statement_bytes(st2))
+        pp.write_bytes(proof_bytes(p2))
+        ok, why, secs = verify_files(sp, pp, args.device, runner=R)
+        man["files"].append({"kind": "auth_mutation", "mutation": name, "stmt": sp.name, "proof": pp.name,
+                             "stmt_sha256": sha256_file(sp), "proof_sha256": sha256_file(pp),
+                             "python_verdict": {"accepted": ok, "reason": why, "seconds": secs}})
+        print(f"mut {name}: python {ok} ({why})", flush=True)
+    _save_manifest(out, man)
+    return 0
 
 
 def gen_mutations(args) -> int:
@@ -812,12 +1025,28 @@ def gen_forged_interactive(args) -> int:
 
 
 def cmd_verify(args) -> int:
-    ok, why, secs = verify_files(Path(args.statement), Path(args.proof), args.device)
-    res = {"accepted": ok, "reason": why, "seconds": secs, "verifier": "python (backends.direct.ligero.protocol.verify)"}
+    ok, why, secs = verify_files(Path(args.statement), Path(args.proof), args.device, relation=args.relation)
+    res = {"accepted": ok, "reason": why, "seconds": secs, "verifier": "python (backends.direct.ligero.protocol.verify)",
+           "relation": args.relation or "(from the statement)"}
     print(json.dumps(res))
     if args.json:
         Path(args.json).write_text(json.dumps(res, indent=1))
     return 0 if ok else 1
+
+
+def cmd_verify_batch(args) -> int:
+    res = verify_batch_dir(Path(args.dir), args.device, args.target_bits)
+    for it in res["items"]:
+        print(f"{it['name']}: {'ACCEPT' if it['accepted'] else 'reject'} ({it['reason']}) {it['seconds']:.3f}s "
+              f"per-proof 2^{it['per_proof_log2']:.2f} n_proofs={it['n_proofs']}", flush=True)
+    print(f"{res['n_subbatches']} proofs: {res['n_accepted']} accepted, {res['n_rejected']} rejected; batch "
+          f"{'ACCEPT' if res['accepted'] else 'reject'} ({res['reason']}); batch bits {res['batch_bits']:.6f} at target {res['target_bits']}",
+          flush=True)
+    if args.json:
+        Path(args.json).write_text(json.dumps(res, indent=1))
+    else:
+        print(json.dumps(res))
+    return 0 if res["accepted"] else 1
 
 
 def cmd_dump_system(args) -> int:
@@ -855,6 +1084,11 @@ def main(argv=None) -> int:
     s = sub.add_parser("gen-witness-mutations"); common(s)
     s = sub.add_parser("gen-forged-interactive"); common(s)
     s.add_argument("--negatives", action="store_true", help="also the 52 vu-k1536-neg claims")
+    s = sub.add_parser("gen-auth-negatives"); common(s)
+    s.add_argument("--total-vus", type=int, default=64, help="VUs committed in the trees (4096 = the frozen set)")
+    s.add_argument("--n-vus", type=int, default=2, help="VUs per negative proof")
+    s.add_argument("--auth-cache", default=None, help="directory of cached trees (built there when absent)")
+    s.add_argument("--auth-procs", type=int, default=None)
     s = sub.add_parser("gen-mutations")
     s.add_argument("--src", required=True)
     s.add_argument("--base", default="b1")
@@ -866,11 +1100,19 @@ def main(argv=None) -> int:
     s.add_argument("--proof", required=True)
     s.add_argument("--device", default="cpu")
     s.add_argument("--json", default=None)
+    s.add_argument("--relation", default=None, help="the relation to check against (v2 / v3 statements: bf16 unless given; v4 statements name their own)")
+    s = sub.add_parser("verify-batch", help="the Python batch verifier on DIR/*.{stmt,proof[,coins]} (PROTOCOL.md 8c); exit 1 on reject")
+    s.add_argument("--dir", required=True)
+    s.add_argument("--device", default="cpu")
+    s.add_argument("--target-bits", type=float, default=128.0, help="the batch target t: reject unless sum_i 2^-b_i <= 2^-t")
+    s.add_argument("--json", default=None)
     s = sub.add_parser("dump-system")
     s.add_argument("--out", required=True)
     args = ap.parse_args(argv)
     return {"gen-set": gen_set, "gen-negatives": gen_negatives, "gen-small": gen_small, "gen-mutations": gen_mutations,
-            "gen-witness-mutations": gen_witness_mutations, "gen-forged-interactive": gen_forged_interactive, "verify": cmd_verify, "dump-system": cmd_dump_system}[args.cmd](args)
+            "gen-witness-mutations": gen_witness_mutations, "gen-forged-interactive": gen_forged_interactive,
+            "gen-auth-negatives": gen_auth_negatives, "verify": cmd_verify, "verify-batch": cmd_verify_batch,
+            "dump-system": cmd_dump_system}[args.cmd](args)
 
 
 if __name__ == "__main__":

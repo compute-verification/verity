@@ -386,8 +386,10 @@ INSTRUCTIONS: dict[str, Instruction] = {
     for i in (
         _mma("sm80.mma.m16n8k16.bf16", "sm_80", BF16, (Model(S.AMPERE_BF16_M16N8K16),)),
         _mma("sm89.mma.m16n8k16.bf16", "sm_89", BF16, (Model(S.ADA_BF16_M16N8K16),)),
-        _mma("sm90.mma.m16n8k16.bf16", "sm_90a", BF16, (Model(S.HOPPER_BF16_M16N8K16),)),
-        _mma("sm89.mma.m16n8k32.e4m3", "sm_89", E4M3, (Model(S.ADA_E4M3_M16N8K32),)),
+    _mma("sm90.mma.m16n8k16.bf16", "sm_90a", BF16, (Model(S.HOPPER_BF16_M16N8K16),)),
+    # Blackwell consumer (RTX 5090): the registry pins the Hopper BF16 pipeline (fp4-5090 rejected the Ampere one at 2.5e7 elements).
+    _mma("sm120.mma.m16n8k16.bf16", "sm_120a", BF16, (Model(S.HOPPER_BF16_M16N8K16),)),
+    _mma("sm89.mma.m16n8k32.e4m3", "sm_89", E4M3, (Model(S.ADA_E4M3_M16N8K32),)),
         _mma("sm89.mma.m16n8k32.e5m2", "sm_89", E5M2, (_ADA_E5M2,)),
         _mma("sm90.mma.m16n8k32.e4m3", "sm_90a", E4M3,
              (Model(S.HOPPER_E4M3_K32, declared=False), Model(S.ADA_E4M3_M16N8K32, declared=False), _HOPPER_HMMA_X2_E4M3), sass_mma=2),
@@ -526,13 +528,18 @@ class Probe:
 
 
 def host_identity() -> dict:
+    """``nvidia_smi`` (name, driver, compute capability of GPU 0), ``driver``, ``hostname`` and ``gpu_uuid`` -- the board's own
+    identity (``nvidia-smi --query-gpu=uuid``; the trust framework's S1 wants the device, not the pod's hostname)."""
+
     try:
-        smi = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,compute_cap", "--format=csv,noheader"], capture_output=True, text=True)
+        smi = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,compute_cap,uuid", "--format=csv,noheader", "-i", "0"], capture_output=True, text=True)
         text = smi.stdout.strip() if smi.returncode == 0 else None
     except OSError:
         text = None
     fields = [f.strip() for f in text.split(",")] if text else []
-    return {"nvidia_smi": text, "driver": fields[1] if len(fields) >= 2 else None, "hostname": platform.node()}
+    uuid = fields[3] if len(fields) >= 4 and fields[3].startswith("GPU-") else None
+    return {"nvidia_smi": ", ".join(fields[:3]) if fields else None, "driver": fields[1] if len(fields) >= 2 else None, "hostname": platform.node(),
+            "gpu_uuid": uuid}
 
 
 # --- the finite-sweep families ---------------------------------------------------------------------------------------------------------
@@ -637,12 +644,18 @@ def families(rng, n_random, fmt: Format, M: int, K: int):
         acc = np.where(rng.random((n, M, N)) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
         yield "zero_acc_tiny_cancellation", a, b, acc, None
 
+    # 11-14: the accumulator / adder families of tc-probe-fp8, for every format (pin-bf16 extended them to BF16 with the
+    # format's own parameters; the FP8 draws are the same, in the same order, as before).
+    yield from probe_families(rng, fmt, M, K)
+
     if fp8:
         yield from fp8_families(rng, fmt, M, K)
 
 
-def fp8_families(rng, fmt: Format, M: int, K: int):
-    """The FP8-specific families (tc-probe-fp8)."""
+def probe_families(rng, fmt: Format, M: int, K: int):
+    """Families 11-14 (tc-probe-fp8 for FP8; pin-bf16 for BF16): the accumulator pass-through, the LSB walk, the special-value
+    classes and Hawkeye's adder-width probe.  The accumulator families are format-independent by construction (products are
+    zero); the specials table and the adder-width exponents come from the format (``SPECIAL_OPERANDS``, ``adder_width_parameters``)."""
 
     zero_ops = lambda n: (np.zeros((n, M, K), fmt.dtype), np.zeros((n, N, K), fmt.dtype))
 
@@ -678,11 +691,19 @@ def fp8_families(rng, fmt: Format, M: int, K: int):
     yield "specials", A, Bt, C, meta
 
     # 14. Hawkeye's adder-width probe in every k slot: +P and -P at k = 0, 1 and one residual 2^ratio * P at slot s (rows vary
-    # the slot and the residual's a exponent, columns the b exponent), ratio in [-26, -5], with a zero accumulator (variant
-    # "prod") or with the +P carried by the accumulator instead of product 0 (variant "acc").  A 14-bit adder keeps the residual
-    # iff ratio >= -13 when it is summed with the pair; a residual in a later group survives whatever the ratio.
+    # the slot and the residual's a exponent, columns the b exponent), ratio in [-26, -5] (FP8) / [-30, -3] (BF16), with a zero
+    # accumulator (variant "prod") or with the +P carried by the accumulator instead of product 0 (variant "acc").  A w-bit adder
+    # keeps the residual iff ratio >= -(w - 1) when it is summed with the pair (14 bits: -13; the BF16 pipelines: 25 bits -> -24
+    # on Ampere/Ada, 26 bits -> -25 on Hopper); a residual in a later group survives whatever the ratio.
     A, Bt, C, meta = adder_width_tiles(fmt, M, K)
     yield "adder_width_cancellation", A, Bt, C, meta
+
+
+def fp8_families(rng, fmt: Format, M: int, K: int):
+    """The FP8-only families: 15. the adder-floor probe (pin-bf16, D15(b))."""
+
+    A, Bt, C, meta = floor_probe_tiles(fmt, M, K)
+    yield "fp8_floor_probe", A, Bt, C, meta
 
 
 SPECIAL_ACC = {
@@ -701,6 +722,13 @@ SPECIAL_OPERANDS = {
               "-inf:fc", "+nan:7d", "+nan_q:7f", "-nan:fd", "+two:40", "+2^15:78"],
         "b": ["+0:00", "-0:80", "+one:3c", "-one:bc", "+inf:7c", "-inf:fc", "+nan:7e", "+max:7b"],
         "one": 0x3C,
+    },
+    # BF16 (pin-bf16): the same roles as the FP8 tables in BF16 encodings.  1.0 = 0x3F80; subnormals 0x0001..0x007F; quiet NaN 0x7FC0.
+    "bf16": {
+        "a": ["+0:0000", "-0:8000", "+sub_min:0001", "+sub_max:007f", "+min_normal:0080", "+one:3f80", "-one:bf80", "+max:7f7f",
+              "-max:ff7f", "+inf:7f80", "-inf:ff80", "+nan:7fc0", "-nan:ffc0", "+two:4000", "-sub_min:8001", "+2^64:5f80"],
+        "b": ["+0:0000", "-0:8000", "+one:3f80", "-one:bf80", "+inf:7f80", "-inf:ff80", "+nan:7fc0", "+max:7f7f"],
+        "one": 0x3F80,
     },
 }
 
@@ -729,12 +757,26 @@ def specials_tiles(fmt: Format, M: int, K: int):
     return A, Bt, C, meta
 
 
+def adder_width_parameters(fmt: Format) -> tuple[tuple[int, ...], list[int]]:
+    """``(pair exponents pa, ratios)`` of the adder-width probe.  The pair term is P = 2^(2 pa) and the residual 2^(2 pa + ratio).
+
+    FP8 (tc-probe-fp8, unchanged): pa in {0, mid, max} -- unit, mid-range and the largest square -- ratios -26..-5 around the
+    14-bit boundary (-13/-14).  BF16 (pin-bf16): the pipelines carry 25 (Ampere/Ada) or 26 (Hopper) bits, so the ratios run
+    -30..-3 to bracket both boundaries with margin; pa in {-55, 0, 32, 63} keeps every 2^pe, 2^(pe+ratio) a finite FP32 (pe <= 126,
+    pe + ratio >= -140, i.e. down into the subnormals, where a survived residual comes back as an exact subnormal word)."""
+
+    lo, hi = fmt.min_pow2_exp, fmt.max_pow2_exp
+    if fmt.bits == 8:
+        return (0, (hi + 1) // 2, hi), list(range(-26, -4))
+    return (-55, 0, 32, 63), list(range(-30, -2))
+
+
 def adder_width_tiles(fmt: Format, M: int, K: int):
     lo, hi = fmt.min_pow2_exp, fmt.max_pow2_exp
-    ratios = list(range(-26, -4))
+    pas, ratios = adder_width_parameters(fmt)
     cases = []  # (variant, pe, ratio_base, slot_base)
     for variant in ("prod", "acc"):
-        for pa in (0, (hi + 1) // 2, hi):  # pair exponent pe = 2 * pa: unit, mid, the largest square
+        for pa in pas:  # pair exponent pe = 2 * pa
             for r0 in range(ratios[0], ratios[-1] + 1, N):
                 for slot_base in range(2, K, M):
                     cases.append((variant, pa, r0, slot_base))
@@ -822,6 +864,132 @@ def specials_summary(meta: dict, D: np.ndarray, fmt: Format) -> dict:
     }
 
 
+FLOOR_PROBE_RANGE = list(range(-152, -125))  # the floors the H100 fit left open (D15(b)): every one is evaluated at run time
+
+# accumulator classes of the floor probe, one per column: (name, FP32 word)
+FLOOR_PROBE_ACC = [
+    ("+0", 0x00000000), ("+2^-149", 0x00000001), ("-2^-149", 0x80000001), ("+2^-126", 0x00800000),
+    ("-max_sub", 0x807FFFFF), ("+2^-140", 0x00000200), ("+2^-139", 0x00000400), ("+2^-133", 0x00010000),
+]
+FLOOR_PROBE_COUNTS = [1, 2, 3, 4, 7, 8, 15, 16, 31, 32]
+
+
+def floor_probe_tiles(fmt: Format, M: int, K: int):
+    """D15(b): tiles on which an adder floor f in ``FLOOR_PROBE_RANGE`` could show, if it can show at all.  Rows and columns
+    are read by ``floor_probe_summary`` through ``meta['tiles']``:
+
+    acc_bits          zero products; every single accumulator bit +-2^b, b in 0..23 (2^-149 .. 2^-126), then random subnormal
+                      words (exponent field 0), then random tiny normals (fields 1..3); one copy with random finite B (+-0 * x)
+    min_products      n same-sign minimal products p = 2^(2 min_pow2) (E4M3: 2^-18; E5M2: 2^-32), n in FLOOR_PROBE_COUNTS by row,
+                      against the tiny accumulator classes ``FLOOR_PROBE_ACC`` by column; positive and negative variants
+    cancelling_pair   +p - p against the same tiny accumulators (does the accumulator come back, or the pair's zero?)
+    product_window    one product p against accumulators p * 2^-k, k in 0..23 (the adder's window below a sub-unit product)
+
+    Deterministic (a private generator seeded by the format): a pure function of (fmt, M, K)."""
+
+    prng = np.random.default_rng(0xD15B + fmt.bits)
+    a_min, b_min = fmt.pow2(fmt.min_pow2_exp), fmt.pow2(fmt.min_pow2_exp)
+    a_min_neg = fmt.pow2(fmt.min_pow2_exp, negative=True)
+    p_exp = 2 * fmt.min_pow2_exp
+    tiles: list[dict] = []
+    As, Bts, Cs = [], [], []
+
+    def designed_acc(n_words: int) -> np.ndarray:
+        words = []
+        for b in range(24):
+            words += [1 << b, (1 << 31) | (1 << b)]
+        rest = n_words - len(words)
+        subs = prng.integers(0, 1 << 23, rest // 2).astype(np.uint32) | (prng.integers(0, 2, rest // 2).astype(np.uint32) << 31)
+        tiny = random_finite_fp32_bits(prng, rest - rest // 2, 1, 3)
+        return np.concatenate([np.array(words, np.uint32), subs, tiny])[:n_words]
+
+    # acc_bits: two zero-product tiles and one with random finite B.
+    for variant in ("zero_b", "zero_b", "random_b"):
+        A = np.zeros((M, K), fmt.dtype)
+        Bt = np.zeros((N, K), fmt.dtype) if variant == "zero_b" else fmt.random_finite_bits(prng, (N, K))
+        C = designed_acc(M * N).reshape(M, N)
+        As.append(A); Bts.append(Bt); Cs.append(C)
+        tiles.append({"kind": "acc_bits", "variant": variant, "expect": "D == C"})
+
+    # min_products: row i has n_i minimal products of one sign, column j the accumulator class.
+    for sign, a_word in (("+", a_min), ("-", a_min_neg)):
+        A = np.zeros((M, K), fmt.dtype)
+        Bt = np.zeros((N, K), fmt.dtype)
+        C = np.zeros((M, N), np.uint32)
+        counts = []
+        for i in range(M):
+            n_i = FLOOR_PROBE_COUNTS[i % len(FLOOR_PROBE_COUNTS)]
+            counts.append(n_i)
+            A[i, :n_i] = a_word
+        Bt[:, :] = b_min
+        for j, (_, w) in enumerate(FLOOR_PROBE_ACC):
+            C[:, j] = w
+        As.append(A); Bts.append(Bt); Cs.append(C)
+        expect = [int(f32_bits(np.array([(-1 if sign == "-" else 1) * n * 2.0**p_exp], np.float32))[0]) for n in counts]
+        tiles.append({"kind": "min_products", "sign": sign, "counts": counts, "acc_cols": [a for a, _ in FLOOR_PROBE_ACC],
+                      "expect_rows": [f"{w:08x}" for w in expect], "expect": "D == n * p regardless of the accumulator"})
+
+    # cancelling_pair: +p at k=0, -p at k=1.
+    A = np.zeros((M, K), fmt.dtype)
+    Bt = np.zeros((N, K), fmt.dtype)
+    C = np.zeros((M, N), np.uint32)
+    A[:, 0] = a_min
+    A[:, 1] = a_min_neg
+    Bt[:, 0] = b_min
+    Bt[:, 1] = b_min
+    for j, (_, w) in enumerate(FLOOR_PROBE_ACC):
+        C[:, j] = w
+    As.append(A); Bts.append(Bt); Cs.append(C)
+    tiles.append({"kind": "cancelling_pair", "acc_cols": [a for a, _ in FLOOR_PROBE_ACC], "expect": "D == +0 (the accumulator is below the pair's window)"})
+
+    # product_window: one product p in row i (k = 0), accumulator p * 2^-k with k = (i * N + j) % 24.
+    A = np.zeros((M, K), fmt.dtype)
+    Bt = np.zeros((N, K), fmt.dtype)
+    C = np.zeros((M, N), np.uint32)
+    A[:, 0] = a_min
+    Bt[:, 0] = b_min
+    ks = [[(i * N + j) % 24 for j in range(N)] for i in range(M)]
+    for i in range(M):
+        for j in range(N):
+            C[i, j] = f32_bits(np.array([2.0 ** (p_exp - ks[i][j])], np.float32))[0]
+    As.append(A); Bts.append(Bt); Cs.append(C)
+    tiles.append({"kind": "product_window", "k": ks, "expect": "D == p + p*2^-k while k is inside the adder's window, else p"})
+
+    meta = {"tiles": tiles, "product_exponent": p_exp, "floors": FLOOR_PROBE_RANGE}
+    return np.stack(As), np.stack(Bts), np.stack(Cs), meta
+
+
+def floor_probe_summary(meta: dict, D: np.ndarray) -> dict:
+    """Per tile kind: how many words match the designed expectation (independent of any model), and the product_window's
+    survive/truncate boundary in k."""
+
+    out: dict[str, Any] = {}
+    p_exp = meta["product_exponent"]
+    for s, t in enumerate(meta["tiles"]):
+        d = D[s]
+        if t["kind"] == "acc_bits":
+            out.setdefault("acc_bits", []).append({"variant": t["variant"], "elements": int(d.size)})
+        elif t["kind"] == "min_products":
+            expect = np.array([int(w, 16) for w in t["expect_rows"]], np.uint32)[:, None]
+            out[f"min_products{t['sign']}"] = {"elements": int(d.size), "elements_equal_to_n_p": int((d == expect).sum()),
+                                               "distinct_words_per_row_max": int(max(len(set(d[i].tolist())) for i in range(d.shape[0])))}
+        elif t["kind"] == "cancelling_pair":
+            out["cancelling_pair"] = {"elements": int(d.size), "elements_equal_to_plus_zero": int((d == 0).sum()),
+                                      "words_by_acc": {a: sorted({f"{int(w):08x}" for w in d[:, j]}) for j, a in enumerate(t["acc_cols"])}}
+        elif t["kind"] == "product_window":
+            p = 2.0**p_exp
+            surv, trunc = [], []
+            for i, row in enumerate(t["k"]):
+                for j, k in enumerate(row):
+                    want_sum = int(f32_bits(np.array([p + p * 2.0**-k], np.float32))[0])
+                    want_p = int(f32_bits(np.array([p], np.float32))[0])
+                    got = int(d[i, j])
+                    (surv if got == want_sum else trunc if got == want_p else []).append(k)
+            out["product_window"] = {"max_surviving_k": max(surv) if surv else None, "min_truncated_k": min(trunc) if trunc else None,
+                                     "unclassified": int(d.size - len(surv) - len(trunc))}
+    return out
+
+
 # --- the models, per tile, in processes ----------------------------------------------------------------------------------------------
 
 _MODELS: list[Model] = []
@@ -884,6 +1052,57 @@ def _eval_zero_alternatives(args):
                         g = H.group_sum([g] + [H.multiply_bfloat16_to_gfloat(int(A[t, i, l]), int(Bt[t, j, l])) for l in range(start, start + 8)])
                     out[k][t, i, j] = H.gfloat_to_float_bits(g)
     return out[0], out[1]
+
+
+def _eval_floor_alternatives(args):
+    """The declared pipeline's words at every floor of ``_FLOORS`` (set by ``_init_floors``): one (n, M, 8) array per floor."""
+
+    A, Bt, C = args
+    n, M, _ = A.shape
+    outs = np.zeros((len(_FLOOR_MODELS), n, M, N), np.uint32)
+    for t in range(n):
+        a_rows = [A[t, i].tolist() for i in range(M)]
+        b_rows = [Bt[t, j].tolist() for j in range(N)]
+        for i in range(M):
+            for j in range(N):
+                acc = int(C[t, i, j])
+                for f, model in enumerate(_FLOOR_MODELS):
+                    outs[f, t, i, j] = model.evaluate(acc, a_rows[i], b_rows[j])
+    return outs, np.zeros((n, M, N), np.bool_)
+
+
+_FLOOR_MODELS: list[Model] = []
+
+
+def _init_floors(desc, floors):
+    global _FLOOR_MODELS
+    import dataclasses
+
+    pname, prod, declared, lowering = desc
+    base = S.PIPELINES[pname]
+    _FLOOR_MODELS = [Model(dataclasses.replace(base, name=f"{base.name}@floor{f}", zero_exponent=f), prod, declared, lowering) for f in floors]
+
+
+def floor_alternatives(pool, model: Model, A, Bt, C, D, declared_words, procs: int, floors: list[int]) -> dict:
+    """D15(b): the declared pipeline evaluated with ``zero_exponent`` set to every floor in ``floors`` on the floor-probe tiles;
+    per floor, how many words differ from the pinned floor's and from the hardware's.  All zeros = no floor in the range is
+    observable on these tiles (the structural reason is in the lane's D15 entry: with any nonzero term the group's maximum
+    exponent is at least -126, the FP32 subnormal grid, above every floor here; with no nonzero term the sum is zero regardless)."""
+
+    desc = (model.pipeline.name, model.product, model.declared, model.lowering)
+    with mp.Pool(min(procs, 8), initializer=_init_floors, initargs=(desc, floors)) as fpool:
+        n = A.shape[0]
+        chunks = max(1, min(n, 8))
+        idx = np.array_split(np.arange(n), chunks)
+        parts = fpool.map(_eval_floor_alternatives, [(A[i], Bt[i], C[i]) for i in idx])
+    words = np.concatenate([p[0] for p in parts], axis=1)
+    per_floor = {}
+    for f, floor in enumerate(floors):
+        per_floor[str(floor)] = {"words_differing_from_pinned_floor": int(np.count_nonzero(words[f] != declared_words)),
+                                 "mismatches_vs_hardware": int(np.count_nonzero(words[f] != D))}
+    return {"pinned_floor": model.pipeline.zero_exponent, "floors": floors, "elements": int(D.size), "per_floor": per_floor,
+            "all_floors_identical": all(v["words_differing_from_pinned_floor"] == 0 for v in per_floor.values()),
+            "all_floors_match_hardware": all(v["mismatches_vs_hardware"] == 0 for v in per_floor.values())}
 
 
 # --- records ----------------------------------------------------------------------------------------------------------------------
@@ -1188,6 +1407,9 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
                 fam["summary"] = {"elements_with_D_eq_C": int(np.count_nonzero(D == C)),
                                   "elements_with_D_ne_C": int(np.count_nonzero(D != C)),
                                   "elements_with_D_eq_C_masked_to_14_bits": int(np.count_nonzero(D == (C & ~np.uint32(0x3FF))))}
+            if name == "fp8_floor_probe":
+                fam["summary"] = floor_probe_summary(meta, D)
+                fam["floor_alternatives"] = floor_alternatives(pool, ins.models[0], A, Bt, C, D, results[0][0], args.procs, meta["floors"])
             np.savez_compressed(out / f"tiles_{name}.npz", A=A, Bt=Bt, C=C, D=D)
             flat = rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)
             for f in sorted(flat.tolist()):
@@ -1386,6 +1608,8 @@ def main() -> int:
 
     run_id = os.environ.get("RESEARCH_RUN_ID")
     if run_id:
+        import canary as CANARY  # the label contract of tc-evidence/v1 lives there (no-op if --canary imported it already)
+
         checked_something = any(k in results for k in ("golden_replay", "special_replay", "instances_replay")) or (("sweep" in results or "canary" in results) and declared)
         status = "failed" if failures else ("passed" if checked_something else "not_run")
         fingerprint = {
@@ -1397,6 +1621,8 @@ def main() -> int:
             "device": identity["device"],
             "compute_capability": identity["compute_capability"],
             "driver": identity["driver"],
+            "gpu_uuid": identity.get("gpu_uuid"),
+            "hostname": identity.get("hostname"),
             "nvcc": nvcc,
             "seed": args.seed,
             "n": args.n_random,
@@ -1416,6 +1642,8 @@ def main() -> int:
             "arch": arch,
             "sku": identity["device"],
             "driver": identity["driver"],
+            "gpu_uuid": identity.get("gpu_uuid"),
+            "hostname": identity.get("hostname"),
             "nvcc": nvcc,
             "seed": args.seed,
             "n": args.n_random,
@@ -1462,6 +1690,8 @@ def main() -> int:
             for r in cn["replays"]:
                 measurements.append({"name": f"canary.replay[{Path(r['file']).name}].mismatches", "value": r["mismatches"], "unit": "records"})
             evidence["labels"] = CANARY.result_labels(ins, cn, identity)
+        elif "sweep" in results:
+            evidence["labels"] = CANARY.evidence_labels(ins, results["sweep"], identity, evidence="sweep")
         evidence["hypothesis_findings"] = findings
         artifacts = []
         if "sweep" in results:
@@ -1485,8 +1715,8 @@ def main() -> int:
             "artifacts": artifacts,
             "tc_evidence": evidence,
         })
-        if "canary" in results:
-            print("canary labels (apply to the result artifact once `research run` has stored it):", flush=True)
+        if evidence.get("labels"):
+            print("labels (apply to the result artifact once `research run` has stored it):", flush=True)
             for cmd in CANARY.label_commands("<artifact-id>", evidence["labels"], os.environ.get("RESEARCH_LANE", "<lane>")):
                 print("   ", cmd, flush=True)
     print("FAILURES" if failures else "ALL HARDWARE WORDS REPRODUCED" if not findings else "RECORDED (hypothesis findings)",
