@@ -18,6 +18,10 @@ REGISTRY: dict[str, str] = {
     "bench_vu": "backends.direct.ligero.tool:BENCH_VU",
     "a_gpu_prove": "backends.gkr.gpu.tool:A_GPU_PROVE",
     "bench_vu_fp8": "backends.direct.ligero.fp8.tool:BENCH_VU_FP8",
+    # vLLM integration sweep stages (integration-owned declarations).
+    "vllm.build": "integrations.vllm.verity_vllm.research_tools:VLLM_BUILD",
+    "vllm.match": "integrations.vllm.verity_vllm.research_tools:VLLM_MATCH",
+    "vllm.commit": "integrations.vllm.verity_vllm.research_tools:VLLM_COMMIT",
 }
 
 

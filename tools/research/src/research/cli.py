@@ -203,6 +203,9 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
         inputs = {}
         for spec in a.input:                         # harness --input name=path: a fetched artifact is an input; anything else enters the derivation
             name, _, path = spec.partition("=") if "=" in spec else (Path(spec).name, "=", spec)
+            if path.startswith("art:"):              # a store id names the input directly (no fetched copy needed on this machine)
+                inputs[name] = path
+                continue
             cid = content_identity(path, source_root)   # by content, as the key param `input.<name>` (inputs hold art: ids only)
             if isinstance(cid, str) and cid.startswith("art:"):
                 inputs[name] = cid
