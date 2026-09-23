@@ -21,18 +21,18 @@ microseconds), and determines a low-entropy row outright.  The ZK rows hide the 
 the statement publishes.  Use it where the committed rows are public or already known to the verifier, not as a hiding
 commitment.  Roles: the x and W trees are separate SHA-256 commitment domains (the tree binding and the leaf framing
 carry the tree name), so a cross-role collision opens nothing in the other tree; the digests are separated anyway
-(conformance rule; red-team NIT): every column adds ``role * b_256`` (one more seeded ring element, index 256, after the
-256 bit elements), so ``h_role(row) = h(row) + role * b_256 * sum_j X^(steps-1-j)`` -- a public affine offset per role,
-and a cross-role collision is an inhomogeneous Ring-SIS instance (no easier).  The offset is public, so it does NOT hide
-x / W row equality (subtract it and compare).
+(conformance rule; red-team NIT) by a key per role: x rows use ``b_0 .. b_255``, W columns ``b_256 .. b_511`` (the next
+256 elements of the same XOF family).  Within one tree the instance is exactly the one costed above (256 ring elements);
+a cross-role collision ``B_x s = B_W s'`` is a Ring-SIS instance over the 512 elements, and harmless besides.  (A public
+per-role constant would not do: the chain applies every Linear row at the pad columns too, whose witness is 0.)
 
 Parameters (lane ajtai-design FINAL 17:10Z; red-team-leaf FINAL 18:00Z): ``n`` = ring degree = digest elements, a power
 of two -- 64 for the 48-step relations (fp8-ada, fp4), 128 for the 96-step bf16-hopper (n = 96 is reducible and refused);
 best known attack Wagner k-tree 2^289 (n = 64) / 2^571 (n = 128), lattice floor 2^283 / 2^557 classical.  ``beta = 1``
-(bits), ``B = [b_0 .. b_{255} | b_256]``, ``b_i`` = the SHAKE-256(b"verity/ajtai-babybear/B/v1" || LE32(i)) stream read
-as LE u32 words masked to 31 bits, values >= p rejected (acceptance 15/16; ajtai-design's ``derive_ring_element``),
-prefix-consistent in n; ``b_256`` is the role element.  ``leaf_bytes`` = n x LE u32.  ``params_sha256`` hashes the
-descriptor AND the SHA-256 of the derived ``B`` (all 257 elements; F6: the Rust verifier re-derives ``B`` from the tag,
+(bits), ``B = [b_0 .. b_{255} | b_256 .. b_511]`` (x key | W key), ``b_i`` = the SHAKE-256(b"verity/ajtai-babybear/B/v1"
+|| LE32(i)) stream read as LE u32 words masked to 31 bits, values >= p rejected (acceptance 15/16; ajtai-design's
+``derive_ring_element``), prefix-consistent in n.  ``leaf_bytes`` = n x LE u32.  ``params_sha256`` hashes the
+descriptor AND the SHA-256 of the derived ``B`` (all 512 elements; F6: the Rust verifier re-derives ``B`` from the tag,
 pins the same digest and checks every ``+ajtai`` system's key rows -- a system with another key is refused even under
 ``--allow-any-system``).
 """
@@ -46,24 +46,25 @@ import numpy as np
 from ..compile import P, Expr, Linear
 from . import registry
 
-__all__ = ["AjtaiLeaf", "B_DIGEST_SHA256", "B_TAG", "DEFAULT_N", "M_COL", "ROLE_COL", "SUPPORTED_N", "derive_B", "derive_matrix",
-           "derive_ring_element", "digest_rows", "matrix_sha256", "resolve", "shift_x"]
+__all__ = ["AjtaiLeaf", "B_DIGEST_SHA256", "B_TAG", "DEFAULT_N", "M_COL", "ROLE_W", "SUPPORTED_N", "derive_B", "derive_matrix",
+           "derive_ring_element", "digest_rows", "key_offset", "matrix_sha256", "resolve", "shift_x"]
 
 DEFAULT_N = 64
 #: the ring degrees the family admits (a power of two; the Rust verifier knows exactly these)
 SUPPORTED_N = (64, 128)
 #: operand bits per chain column: k words x word_bits = 256 for every registered relation (32 x 8, 16 x 16)
 M_COL = 256
-#: the role element's index: column M_COL of the matrix (`b_256`), added `role` times per column (x: 1, W: 2)
-ROLE_COL = M_COL
+#: the W role (``poseidon2_babybear.ROLE_W``): its rows use the second key block ``b_256 .. b_511``; x (1) and the
+#: role-free chain of the tests (0) use the first
+ROLE_W = 2
 B_TAG = b"verity/ajtai-babybear/B/v1"
 VERSION = "v1"
-#: the SHA-256 of ``derive_matrix(n)`` (n x 257: the 256 bit elements and the role element) as row-major LE u32, n = 64 / 128 --
+#: the SHA-256 of ``derive_matrix(n)`` (n x 512: the x key, then the W key) as row-major LE u32, n = 64 / 128 --
 #: what ``params_sha256`` absorbs and the Rust verifier's ``leaf.rs`` re-derives (regression: a change in the derivation
 #: changes every relation string's digest)
 B_DIGEST_SHA256 = {
-    64: "a2bfc2d070231f01ea848b8aec276020abd53467855bdb022dd020423fa0d059",
-    128: "2f3be7492722e088f015aa9435c56fa5d65875c3357c9ad7b6eaec39f13df10e",
+    64: "1f3df70fd5de615f8bf3ce77fc5515057e41d2561019036399b3b4b76a68ebca",
+    128: "37eed28c0803e05c9a90335e0c011b7ba6c19717d4eb63434addaf1c8fcf92c3",
 }
 
 
@@ -90,10 +91,10 @@ def derive_B(m: int, n: int) -> list[np.ndarray]:
 _MATRICES: dict[tuple[int, int], np.ndarray] = {}
 
 
-def derive_matrix(n: int, m: int = M_COL + 1) -> np.ndarray:
+def derive_matrix(n: int, m: int = 2 * M_COL) -> np.ndarray:
     """``B`` as the (n, m) int64 matrix the gadget and the native side apply: ``B[x, i]`` = coefficient x of ``b_i``
-    (``B[:, :256] @ s`` = ``sum_i s_i b_i`` in R_p; column 256 is the role element); the one derivation for every call
-    site (memoised: 257 XOF streams)."""
+    (``B[:, o:o + 256] @ s`` = ``sum_i s_i b_{o+i}`` in R_p, ``o`` = :func:`key_offset` of the role); the one derivation
+    for every call site (memoised: 512 XOF streams)."""
     key = (int(n), int(m))
     if key not in _MATRICES:
         _MATRICES[key] = np.stack(derive_B(m, n), axis=1)
@@ -109,7 +110,7 @@ def params_descriptor(n: int, m_col: int, salt_bits: int, b_sha256: str) -> byte
     """What ``params_sha256`` hashes: everything the verifier needs to rebuild the scheme, plus the digest of the key it
     rebuilt (the verifier regenerates B from the tag; it never takes B from a statement or a system file)."""
     return (f"ajtai-babybear/{VERSION}|p={P}|n={n}|m_col={m_col}|beta=1|salt_bits={salt_bits}|ring=F_p[X]/(X^n+1)|M=X"
-            f"|B={B_TAG.decode()}|b_i=SHAKE-256(tag||LE32(i)) LE u32 &0x7fffffff reject>=p|role=role*b_{m_col}|leaf=LE u32 x n"
+            f"|B={B_TAG.decode()}|b_i=SHAKE-256(tag||LE32(i)) LE u32 &0x7fffffff reject>=p|keys=x:b_0..b_{m_col - 1},W:b_{m_col}..b_{2 * m_col - 1}|leaf=LE u32 x n"
             f"|B_sha256={b_sha256}").encode()
 
 
@@ -137,25 +138,29 @@ def _bits_of(words, word_bits: int):
     return b.reshape(*words.shape[:-1], words.shape[-1] * word_bits)
 
 
+def key_offset(role: int, m_col: int = M_COL) -> int:
+    """The first column of ``role``'s key block in ``B``: ``m_col`` for W, 0 for x (and the role-free 0)."""
+    return m_col if role == ROLE_W else 0
+
+
 def _apply_B(bits, B, role: int = 0):
-    """(..., m) bits (0/1) -> (..., n) = bits @ B[:, :m]^T + role * B[:, m] mod p, exactly: float64 products of a 0/1 by a
-    < 2^31 value, at most m = 256 terms (< 2^39 < 2^53), reduced once.  Non-binary ``bits`` (the negatives) stay exact
-    below 2^22."""
+    """(..., m) bits (0/1) -> (..., n) = bits @ B[:, o:o + m]^T mod p (``o`` = the role's key block), exactly: float64
+    products of a 0/1 by a < 2^31 value, at most m = 256 terms (< 2^39 < 2^53), reduced once.  Non-binary ``bits`` (the
+    negatives) stay exact below 2^22."""
     m = bits.shape[-1]
+    o = key_offset(role, m)
     if isinstance(bits, np.ndarray):
-        acc = bits.astype(np.float64) @ B[:, :m].astype(np.float64).T
-        acc = np.rint(acc).astype(np.int64) % P
-        return (acc + role * B[:, m]) % P if role else acc
+        acc = bits.astype(np.float64) @ B[:, o:o + m].astype(np.float64).T
+        return np.rint(acc).astype(np.int64) % P
     import torch
-    Bt = torch.as_tensor(B[:, :m], dtype=torch.float64, device=bits.device).T
-    acc = torch.round(bits.to(torch.float64) @ Bt).to(torch.int64) % P
-    return (acc + role * torch.as_tensor(B[:, m], device=bits.device)) % P if role else acc
+    Bt = torch.as_tensor(B[:, o:o + m], dtype=torch.float64, device=bits.device).T
+    return torch.round(bits.to(torch.float64) @ Bt).to(torch.int64) % P
 
 
 def digest_rows(rows, word_bits: int, B: np.ndarray, m_col: int = M_COL, role: int = 0) -> tuple:
     """``rows`` (R, n_words) -> (acc_in (R, steps, n), acc_out (R, steps, n)): the carried state entering every column
-    and leaving it; the digest is ``acc_out[:, -1]``.  numpy or torch, on the rows' device.  ``role`` adds ``role * b_256``
-    per column (0: the role-free chain of the tests)."""
+    and leaving it; the digest is ``acc_out[:, -1]``.  numpy or torch, on the rows' device.  ``role`` selects the key
+    block (W: the second; x and the role-free 0 of the tests: the first)."""
     k = m_col // word_bits
     if rows.shape[-1] % k:
         raise ValueError(f"a row of {rows.shape[-1]} words is not a whole number of {k}-word columns")
@@ -240,15 +245,15 @@ class AjtaiLeaf:
 
     @property
     def B(self) -> np.ndarray:
-        """(n, m_col + 1): the bit elements and, last, the role element."""
+        """(n, 2 m_col): the x key block, then the W key block."""
         if self._B is None:
-            self._B = derive_matrix(self.n, self.m_col + 1)
+            self._B = derive_matrix(self.n, 2 * self.m_col)
         return self._B
 
     # --- committer (native) ---------------------------------------------------------------------------------------------
     def native(self, rows, *, word_bits: int, role: int = 0):
         """(R, n) digests of ``rows`` (R, n_words) -- numpy in, numpy out; torch in, torch out (same device).  ``role``
-        (x: 1, W: 2) adds ``role * b_256`` per column (module docstring)."""
+        (x: 1, W: 2) selects the key block (module docstring)."""
         if isinstance(rows, np.ndarray):
             rows = np.ascontiguousarray(rows, dtype=np.int64)
             if rows.ndim != 2 or ((rows < 0) | (rows >= 2**word_bits)).any():
@@ -258,8 +263,8 @@ class AjtaiLeaf:
         return acc_out[:, -1]
 
     def step(self, acc, bits, role: int):
-        """One column of the state transition on arbitrary (not necessarily binary) bit values: ``X acc + B bits + role b_256``
-        mod p.  ``acc`` (..., n), ``bits`` (..., m_col) int64 numpy or torch; exact for bit values < 2^22."""
+        """One column of the state transition on arbitrary (not necessarily binary) bit values: ``X acc + B_role bits`` mod
+        p.  ``acc`` (..., n), ``bits`` (..., m_col) int64 numpy or torch; exact for bit values < 2^22."""
         return (shift_x(acc) + _apply_B(bits, self.B, role)) % P
 
     def leaf_bytes(self, digest_row) -> bytes:
@@ -279,8 +284,8 @@ class AjtaiLeaf:
         """One chain column: ``carry_in`` = the n linked ``acc_in`` rows (the chain-start constraint makes them 0 at a VU's
         first column); the column's ``m_col`` operand bits are the committed boolean rows behind ``words`` (word-major,
         LSB first: the order of ``derive_B``).  Appends n hint rows ``acc_out`` (values from :meth:`chain_witness`) and n
-        Linear constraints ``acc_out[x] - (X acc_in)[x] - sum_i B[x, i] bit_i - role B[x, 256] = 0``; returns (digest exprs
-        = acc_out, carry_out = acc_out).  Refuses a relation whose VU has more columns than the ring degree (injectivity)."""
+        Linear constraints ``acc_out[x] - (X acc_in)[x] - sum_i B[x, o + i] bit_i = 0`` (``o`` = the role's key block);
+        returns (digest exprs = acc_out, carry_out = acc_out).  Refuses a relation whose VU has more columns than the ring degree (injectivity)."""
         if len(carry_in) != self.n:
             raise ValueError(f"the Ajtai gadget carries {self.n} linked rows, got {len(carry_in)}")
         k = len(words)
@@ -293,6 +298,7 @@ class AjtaiLeaf:
         bit_rows = [r for w in words for r in _bit_rows_of_word(w, word_bits)]
         cin = [_single_row(a, "the carried state") for a in carry_in]
         B = self.B
+        off = key_offset(role, self.m_col)
         out = []
         for x in range(self.n):
             o = ctx.hint(self._out_name(role, x))
@@ -302,12 +308,11 @@ class AjtaiLeaf:
             else:
                 lin[cin[x - 1]] = P - 1
             for i, r in enumerate(bit_rows):
-                v = int(B[x, i])
+                v = int(B[x, off + i])
                 if v:
                     lin[r] = (lin.get(r, 0) + P - v) % P
             # a field identity by construction (the acc rows have no integer interval): appended without the audit
-            const = (-int(role) * int(B[x, ROLE_COL])) % P
-            ctx.sys.linear.append(Linear(f"hash.{self._out_name(role, x)}", {kk: v for kk, v in lin.items() if v}, const, None))
+            ctx.sys.linear.append(Linear(f"hash.{self._out_name(role, x)}", {kk: v for kk, v in lin.items() if v}, 0, None))
             out.append(o)
         return out, out
 
@@ -333,7 +338,7 @@ class AjtaiLeaf:
 
     def census(self) -> dict:
         return {"ajtai_n": self.n, "ajtai_m_col": self.m_col, "ajtai_linear_rows_per_unit": 2 * self.n,
-                "ajtai_terms_per_linear_row": 2 + self.m_col, "ajtai_role_element": ROLE_COL}
+                "ajtai_terms_per_linear_row": 2 + self.m_col, "ajtai_key_blocks": 2}
 
 
 def resolve(name: str) -> AjtaiLeaf | None:

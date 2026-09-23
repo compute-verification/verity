@@ -60,9 +60,9 @@ fn ajtai_leaf_bytes(lanes: &[u32]) -> Vec<u8> {
 }
 
 /// Lane ajtai-leaf: the linear Ring-SIS leaf `ajtai-n<N>` (`leaf/ajtai.py`) -- per chain column
-/// `acc' = X acc + B s + role b_256` in `F_p[X]/(X^N + 1)`, `s` the column's 256 committed operand bits, `B` the 256
-/// seeded ring elements of [`ajtai::matrix`] and `b_256` its role element (x: 1, W: 2); the digest is the state after the
-/// VU's last column, N BabyBear elements, N linked carry rows.
+/// `acc' = X acc + B_role s` in `F_p[X]/(X^N + 1)`, `s` the column's 256 committed operand bits, `B_role` the role's
+/// 256 seeded ring elements of [`ajtai::matrix`] (x: `b_0 .. b_255`, W: `b_256 .. b_511`); the digest is the state after
+/// the VU's last column, N BabyBear elements, N linked carry rows.
 /// N = 64 serves the 48-step relations (fp8-ada, fp4), N = 128 the 96-step bf16-hopper (`N >= steps`: injectivity).
 /// `params_sha256` = SHA-256 of `leaf.ajtai.params_descriptor` (which absorbs the SHA-256 of the derived `B`:
 /// [`ajtai::B_SHA256`]); the derivation is checked against it in the tests, and every hashed system a `+ajtai-n<N>`
@@ -72,7 +72,7 @@ pub static AJTAI_N64: LeafScheme = LeafScheme {
     name: "ajtai-n64",
     display: "ajtai-babybear-n64-b1-r0/row/v1",
     schema: "ajtai-babybear-n64-b1-r0/row/v1",
-    params_sha256: "8fef4a5da7622ea25a50c35417dacaec14cd6db03007ce7d3a66b2d7e8350d0e",
+    params_sha256: "0f292fbb9043f3630bf1e40848b7767c08a42ec3a77837b98f457c066aeebc69",
     digest_elems: 64,
     leaf_bytes: ajtai_leaf_bytes,
 };
@@ -81,7 +81,7 @@ pub static AJTAI_N128: LeafScheme = LeafScheme {
     name: "ajtai-n128",
     display: "ajtai-babybear-n128-b1-r0/row/v1",
     schema: "ajtai-babybear-n128-b1-r0/row/v1",
-    params_sha256: "534d08d772bf267ef2b183f9cb155ac5e27090393557f0fd9ead4cbfa2176661",
+    params_sha256: "d63a594bc0c2adeca97530eb9b71ff354b9f293d54319af99ffb8668b97f4ae3",
     digest_elems: 128,
     leaf_bytes: ajtai_leaf_bytes,
 };
@@ -96,12 +96,12 @@ pub mod ajtai {
     pub const B_TAG: &[u8] = b"verity/ajtai-babybear/B/v1";
     /// Operand bits per chain column (k words x word_bits = 256 for every registered relation).
     pub const M_COL: usize = 256;
-    /// The role element `b_256` (`leaf.ajtai.ROLE_COL`): every column adds `role * b_256` (x: 1, W: 2).
-    pub const ROLE_COL: usize = M_COL;
-    /// SHA-256 of `matrix(n)` as n x 257 row-major LE u32 (`leaf.ajtai.B_DIGEST_SHA256`): what `params_sha256` absorbs.
+    /// Key blocks (`leaf.ajtai.key_offset`): x rows use `b_0 .. b_255`, W columns `b_256 .. b_511`.
+    pub const KEYS: usize = 2;
+    /// SHA-256 of `matrix(n)` as n x 512 row-major LE u32 (`leaf.ajtai.B_DIGEST_SHA256`): what `params_sha256` absorbs.
     pub const B_SHA256: &[(usize, &str)] = &[
-        (64, "a2bfc2d070231f01ea848b8aec276020abd53467855bdb022dd020423fa0d059"),
-        (128, "2f3be7492722e088f015aa9435c56fa5d65875c3357c9ad7b6eaec39f13df10e"),
+        (64, "1f3df70fd5de615f8bf3ce77fc5515057e41d2561019036399b3b4b76a68ebca"),
+        (128, "37eed28c0803e05c9a90335e0c011b7ba6c19717d4eb63434addaf1c8fcf92c3"),
     ];
 
     /// `leaf.ajtai.derive_ring_element(i, n)`: the SHAKE-256 XOF of `B_TAG || LE32(i)` read as LE u32 words `u`,
@@ -122,16 +122,16 @@ pub mod ajtai {
         }
     }
 
-    /// `leaf.ajtai.derive_matrix(n, 257)`: `B[x][i]` = coefficient x of `b_i`, as `n` rows of 257 (the 256 bit
-    /// elements, then the role element).
+    /// `leaf.ajtai.derive_matrix(n, 512)`: `B[x][i]` = coefficient x of `b_i`, as `n` rows of 512 (the x key, then the
+    /// W key).
     pub fn matrix(n: usize) -> Vec<Vec<u32>> {
-        let cols: Vec<Vec<u32>> = (0..=ROLE_COL as u32).map(|i| ring_element(i, n)).collect();
+        let cols: Vec<Vec<u32>> = (0..(KEYS * M_COL) as u32).map(|i| ring_element(i, n)).collect();
         (0..n).map(|x| cols.iter().map(|c| c[x]).collect()).collect()
     }
 
     /// SHA-256 (hex) of `matrix(n)` as row-major LE u32.
     pub fn matrix_sha256(b: &[Vec<u32>]) -> String {
-        let mut bytes = Vec::with_capacity(4 * b.len() * (ROLE_COL + 1));
+        let mut bytes = Vec::with_capacity(4 * b.len() * KEYS * M_COL);
         for row in b {
             for v in row {
                 bytes.extend_from_slice(&v.to_le_bytes());
@@ -143,7 +143,8 @@ pub mod ajtai {
     /// `leaf.ajtai.params_descriptor(n, 256, 0, b_sha256)`: the bytes `params_sha256` is the SHA-256 of.
     pub fn params_descriptor(n: usize, b_sha256: &str) -> String {
         format!("ajtai-babybear/v1|p={P}|n={n}|m_col={M_COL}|beta=1|salt_bits=0|ring=F_p[X]/(X^n+1)|M=X|B=verity/ajtai-babybear/B/v1\
-|b_i=SHAKE-256(tag||LE32(i)) LE u32 &0x7fffffff reject>=p|role=role*b_{M_COL}|leaf=LE u32 x n|B_sha256={b_sha256}")
+|b_i=SHAKE-256(tag||LE32(i)) LE u32 &0x7fffffff reject>=p|keys=x:b_0..b_{},W:b_{M_COL}..b_{}|leaf=LE u32 x n|B_sha256={b_sha256}",
+            M_COL - 1, 2 * M_COL - 1)
     }
 
     /// The ring degree of an `ajtai-n<N>` scheme name.
@@ -153,12 +154,12 @@ pub mod ajtai {
 }
 
 /// Red-team-leaf F6: a hashed system a `+ajtai-n<N>` statement verifies against must carry the DERIVED key.  The gadget
-/// appends, per operand role r (x: 1, W: 2), N linear rows `out[x] - (X acc_in)[x] - sum_i B[x][i] bit_i - r B[x][256] = 0`
-/// whose terms (rows strictly increasing: the 256 bit rows, then the carried row, then the out row) are
-/// `[(bit_i, p - B[x][i]) for B[x][i] != 0] ++ [(acc_in, 1 or p - 1), (out, 1)]` with constant `-r B[x][256] mod p`; this
-/// finds, for every x, exactly one such row per role with the coefficient vector of `B[x]` and that role's constant.  A
-/// system built with another key (`B = 0`: trivial digests) is refused even under `--allow-any-system`.  Other schemes:
-/// nothing to check (their gadgets have no key; the system pin covers them).
+/// appends, per operand role (key block `o` = 0 for x, 256 for W), N linear rows
+/// `out[x] - (X acc_in)[x] - sum_i B[x][o + i] bit_i = 0` whose terms (rows strictly increasing: the 256 bit rows, then
+/// the carried row, then the out row) are `[(bit_i, p - B[x][o + i]) for B[x][o + i] != 0] ++ [(acc_in, 1 or p - 1),
+/// (out, 1)]`, constant 0; this finds, for every x, exactly one such row per key block.  A system built with another key
+/// (`B = 0`: trivial digests) is refused even under `--allow-any-system`.  Other schemes: nothing to check (their gadgets
+/// have no key; the system pin covers them).
 pub fn check_system_key(sys: &crate::format::System, leaf: &LeafScheme) -> Result<(), String> {
     let n = match ajtai::degree(leaf.name) {
         Some(n) => n,
@@ -175,18 +176,19 @@ pub fn check_system_key(sys: &crate::format::System, leaf: &LeafScheme) -> Resul
     if crate::hash::hex(&crate::hash::sha256(ajtai::params_descriptor(n, &b_sha).as_bytes())) != leaf.params_sha256 {
         return Err(format!("{}: params_sha256 is not the digest of the parameter descriptor (verifier build error)", leaf.display));
     }
-    let mut want: std::collections::HashMap<Vec<u32>, usize> = std::collections::HashMap::with_capacity(n);
+    let mut want: std::collections::HashMap<Vec<u32>, (usize, usize)> = std::collections::HashMap::with_capacity(ajtai::KEYS * n);
     for (x, row) in b.iter().enumerate() {
-        let coefs: Vec<u32> = row[..ajtai::M_COL].iter().filter(|&&v| v != 0).map(|&v| P - v).collect();
-        if want.insert(coefs, x).is_some() {
-            return Err(format!("{}: two rows of the derived B coincide", leaf.display));
+        for k in 0..ajtai::KEYS {
+            let blk = &row[k * ajtai::M_COL..(k + 1) * ajtai::M_COL];
+            let coefs: Vec<u32> = blk.iter().filter(|&&v| v != 0).map(|&v| P - v).collect();
+            if want.insert(coefs, (x, k)).is_some() {
+                return Err(format!("{}: two rows of the derived B coincide", leaf.display));
+            }
         }
     }
-    // the constant of role r's row x: -r * b_256[x] mod p
-    let role_const = |x: usize, r: u64| ((P as u64 - (r * b[x][ajtai::ROLE_COL] as u64) % P as u64) % P as u64) as u32;
-    let mut seen = vec![[0usize; 2]; n];
+    let mut seen = vec![[0usize; ajtai::KEYS]; n];
     for c in &sys.linear {
-        if c.pub_pin.is_some() || c.e.lin.len() < 3 {
+        if c.pub_pin.is_some() || c.e.c != 0 || c.e.lin.len() < 3 {
             continue;
         }
         let t = &c.e.lin;
@@ -195,16 +197,12 @@ pub fn check_system_key(sys: &crate::format::System, leaf: &LeafScheme) -> Resul
             continue;
         }
         let coefs: Vec<u32> = t[..t.len() - 2].iter().map(|&(_, v)| v).collect();
-        if let Some(&x) = want.get(&coefs) {
-            for r in 1..=2u64 {
-                if c.e.c == role_const(x, r) {
-                    seen[x][r as usize - 1] += 1;
-                }
-            }
+        if let Some(&(x, k)) = want.get(&coefs) {
+            seen[x][k] += 1;
         }
     }
-    if seen.iter().any(|k| *k != [1, 1]) {
-        let missing = seen.iter().filter(|k| **k != [1, 1]).count();
+    if seen.iter().any(|k| *k != [1; ajtai::KEYS]) {
+        let missing = seen.iter().filter(|k| **k != [1; ajtai::KEYS]).count();
         return Err(format!(
             "system file: {} of the {n} Ajtai state rows do not carry the derived key B (SHAKE-256 of {:?}) for both operand roles",
             missing, String::from_utf8_lossy(ajtai::B_TAG)

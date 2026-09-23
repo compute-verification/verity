@@ -46,27 +46,28 @@ def test_matrix_derivation_matches_the_scalar_reference_and_is_prefix_consistent
 
 
 def test_pinned_B_digests_are_the_derivation(n_values=(64, 128)) -> None:
-    """``B_DIGEST_SHA256`` (what ``params_sha256`` absorbs and Rust's ``leaf.rs`` re-derives) is SHA-256 of B as n x 257
-    row-major LE u32 (the 256 bit elements, then the role element); a derivation change must change these constants (and
-    every relation string's params digest)."""
+    """``B_DIGEST_SHA256`` (what ``params_sha256`` absorbs and Rust's ``leaf.rs`` re-derives) is SHA-256 of B as n x 512
+    row-major LE u32 (the x key, then the W key); a derivation change must change these constants (and every relation
+    string's params digest)."""
     for n in n_values:
-        B = derive_matrix(n, 257)
-        assert np.array_equal(AjtaiLeaf(n).B, B) and B.shape == (n, 257)
+        B = derive_matrix(n, 512)
+        assert np.array_equal(AjtaiLeaf(n).B, B) and B.shape == (n, 512)
         assert matrix_sha256(B) == B_DIGEST_SHA256[n]
         assert hashlib.sha256(B.astype("<u4").tobytes()).hexdigest() == B_DIGEST_SHA256[n]
-    assert np.array_equal(derive_matrix(64, 257), derive_matrix(128, 257)[:64])      # one family: n64 is a prefix of n128
+    assert np.array_equal(derive_matrix(64, 512), derive_matrix(128, 512)[:64])      # one family: n64 is a prefix of n128
 
 
 def _ref_digest(leaf: AjtaiLeaf, row: list[int], word_bits: int, role: int = 0) -> list[int]:
-    """The ring definition, scalar: h = sum_j X^(steps-1-j) (B s_j + role b_256) in F_p[X]/(X^n+1)."""
+    """The ring definition, scalar: h = sum_j X^(steps-1-j) B_role s_j in F_p[X]/(X^n+1) (W: the key b_256 .. b_511)."""
     n, m = leaf.n, leaf.m_col
+    o = m if role == 2 else 0
     k = m // word_bits
     steps = len(row) // k
     acc = [0] * n
     for j in range(steps):
         bits = [(row[j * k + w] >> b) & 1 for w in range(k) for b in range(word_bits)]
         shifted = [(-acc[n - 1]) % P] + acc[:n - 1]
-        acc = [(shifted[x] + sum(int(leaf.B[x, i]) * bits[i] for i in range(m)) + role * int(leaf.B[x, m])) % P for x in range(n)]
+        acc = [(shifted[x] + sum(int(leaf.B[x, o + i]) * bits[i] for i in range(m))) % P for x in range(n)]
     return acc
 
 
@@ -86,12 +87,11 @@ def test_native_digest_equals_the_scalar_ring_reference(n: int) -> None:
     # column order matters (the ring shift): swapping two columns changes the digest
     sw = rows.copy(); sw[:, :32], sw[:, 32:64] = rows[:, 32:64], rows[:, :32]
     assert not np.array_equal(leaf.native(sw, word_bits=8, role=0), d)
-    # the role element: x (1) and W (2) digests differ by the public offset role * b_256 * sum_j X^(steps-1-j)
-    for role in (1, 2):
-        dr = leaf.native(rows, word_bits=8, role=role)
-        assert not np.array_equal(dr, d) and dr[0].tolist() == _ref_digest(leaf, rows[0].tolist(), 8, role)
-        off = leaf.native(np.zeros((1, rows.shape[1]), dtype=np.int64), word_bits=8, role=role)[0]
-        assert np.array_equal(dr, (d + off) % P)
+    # a key per role: x (1) uses the first block (= the role-free chain), W (2) the second
+    assert np.array_equal(leaf.native(rows, word_bits=8, role=1), d)
+    dw = leaf.native(rows, word_bits=8, role=2)
+    assert not np.array_equal(dw, d) and dw[0].tolist() == _ref_digest(leaf, rows[0].tolist(), 8, 2)
+    assert not leaf.native(np.zeros((1, rows.shape[1]), dtype=np.int64), word_bits=8, role=2).any()     # no constant term
     # leaf bytes: n x LE u32, from an array, a list or a tuple
     lb = leaf.leaf_bytes(d[0])
     assert len(lb) == 4 * n and np.frombuffer(lb, dtype="<u4").astype(np.int64).tolist() == d[0].tolist()
@@ -144,9 +144,10 @@ def test_compose_census_and_pins() -> None:
     assert sum(1 for L in hr.sys.linear if L.name.startswith("hash.ajtai.") and ".out[" in L.name) == 2 * 64
     assert all(len(L.lin) == 2 + 256 for L in hr.sys.linear if L.name.startswith("hash.ajtai."))     # out, acc_in[x-1], 256 bits
     B = hr.leaf.B
-    for role in (1, 2):                                                   # the role element is the constant: -role * b_256[x]
-        consts = [L.c for L in hr.sys.linear if L.name.startswith(f"hash.ajtai.r{role}.out[")]
-        assert consts == [(-role * int(B[x, 256])) % P for x in range(64)]
+    for role, o in ((1, 0), (2, 256)):                                    # the role's key block, no constant (pad columns are 0)
+        rows_ = [L for L in hr.sys.linear if L.name.startswith(f"hash.ajtai.r{role}.out[")]
+        assert len(rows_) == 64 and all(L.c == 0 for L in rows_)
+        assert list(rows_[5].lin.values())[2:] == [(P - int(B[5, o + i])) % P for i in range(256)]    # out, acc_in, then the bits
     assert hr.n_digest == 128 and hr.name == "fp8-ada+ajtai-n64"
     assert [n for _, n in hr.sys.pins] == [hashchain.HASH_PIN_END] + [hashchain.hash_pin(x) for x in range(128)]
     assert len(hr.sys.chain["c"]) == len(hr.sys.chain["y"]) == 131
