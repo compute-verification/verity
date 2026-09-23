@@ -1,0 +1,241 @@
+"""[lane vllm-tp-n] Tensor parallelism at world N (synthetic world 3, offline): the world-parametric Definitions, their identities (world 2
+keeps `AllReduce2_v1{N}` / `AllGather2_v1{N}` -- every recorded rank Program's digest unchanged), the registry-derived family selectors
+the consumers use instead of spelled prefixes, the N-ary collective bus (one peer input per (collective, peer rank), rank order), the
+`tp_links.json` v1 -> v2 reader, the three-rank collective linkage, and the three-rank cross-rank check / commit binding."""
+from __future__ import annotations
+
+import json
+
+import numpy as np
+import pytest
+
+from verity.ir.defs import bind
+from verity.ir.evaluate import evaluate_region
+from verity.ir.layout import resolve
+from verity.ir.program import Program
+from verity_vllm.registry import b1_tp2 as TP2
+from verity_vllm.registry import prims as P
+
+
+# --- helpers --------------------------------------------------------------------------------------------------------------
+
+def _eval(prog: Program, inputs: list[list[int]]) -> list[int]:
+    Cc = prog.circuit
+    t: dict[int, int] = {}
+    for pi, vals in enumerate(inputs):
+        coll = prog.input_coll(pi)
+        assert coll.type.leaves == len(vals)
+        for j, v in enumerate(vals):
+            t[resolve(Cc.root_scope, coll.refs[j])] = v
+    evaluate_region(Cc, Cc[0:prog.gates], t)
+    return [t[g] for g in Cc.root_outputs()]
+
+
+def _bf16_words(a) -> list[int]:
+    return [int(x) >> 16 for x in np.asarray(a, dtype=np.float32).view(np.uint32).ravel()]
+
+
+def _rand_words(rng, N: int) -> list[int]:
+    return _bf16_words(rng.standard_normal(N) * rng.choice([1e-3, 1.0, 64.0, 2.0 ** 20], N))
+
+
+# --- the Definitions and their identities ---------------------------------------------------------------------------------
+
+def test_world_2_selectors_keep_the_recorded_identities():
+    """The family NAME is part of a Definition's identity (`Name_vN{statics}`), so world 2 MUST still bind the `*2` composites."""
+    assert TP2.all_reduce(2, 2048).id == "AllReduce2_v1{N=2048}" == bind(TP2.AllReduce2, N=2048).id
+    assert TP2.all_gather(2, 512).id == "AllGather2_v1{N=512}" == bind(TP2.AllGather2, N=512).id
+    assert TP2.all_reduce(3, 2048).id == "AllReduce_v1{WORLD=3,N=2048}"
+    assert TP2.all_gather(4, 512).id == "AllGather_v1{WORLD=4,N=512}"
+    for bad in (0, 1):
+        with pytest.raises(ValueError):
+            TP2.all_reduce(bad, 8)
+        with pytest.raises(ValueError):
+            TP2.all_gather(bad, 8)
+
+
+@pytest.mark.parametrize("W,N", [(3, 16), (4, 5), (3, 1)])
+def test_allreduce_world_n_is_the_sequential_rank_order_bf16_chain(W, N):
+    sp = TP2.all_reduce(W, N)
+    params, ret = sp.signature()
+    assert [n for n, _ in params] == ["parts"] and params[0][1].leaves == W * N and ret.leaves == N
+    rng = np.random.default_rng(20260923 + W * 100 + N)
+    parts = [_rand_words(rng, N) for _ in range(W)]
+    out = _eval(Program(sp), [sum(parts, [])])
+    # the stated order: acc = parts[0]; acc = Bf16Add(acc, parts[r]) for r = 1..W-1, one RNE rounding per hop
+    exp = list(parts[0])
+    for r in range(1, W):
+        exp = [P.Bf16Add.evaluate(a, b) for a, b in zip(exp, parts[r])]
+    assert out == exp
+    # a different hop order is a DIFFERENT value in general (per-hop rounding) -- the Definition states one order; the Match checks it
+    if W >= 3:
+        alt = list(parts[W - 1])
+        for r in range(W - 2, -1, -1):
+            alt = [P.Bf16Add.evaluate(a, b) for a, b in zip(alt, parts[r])]
+        # (equality here would be a coincidence of the draw; we only assert the chain is well-defined and reproducible)
+        assert _eval(Program(sp), [sum(parts, [])]) == out
+        assert len(alt) == N
+
+
+def test_allreduce_world_2_parametric_body_equals_allreduce2_bitwise():
+    """The parametric body at WORLD=2 is one Bf16Add per element == `AllReduce2_v1` (the identity world 2 keeps)."""
+    N = 64
+    rng = np.random.default_rng(7)
+    x0, x1 = _rand_words(rng, N), _rand_words(rng, N)
+    assert _eval(Program(bind(TP2.AllReduce, WORLD=2, N=N)), [x0 + x1]) == _eval(Program(bind(TP2.AllReduce2, N=N)), [x0 + x1])
+
+
+@pytest.mark.parametrize("W,N", [(3, 8), (4, 3)])
+def test_allgather_world_n_is_the_rank_order_concatenation(W, N):
+    sp = TP2.all_gather(W, N)
+    params, ret = sp.signature()
+    assert params[0][1].leaves == W * N and ret.leaves == W * N
+    rng = np.random.default_rng(11)
+    parts = [_rand_words(rng, N) for _ in range(W)]
+    assert _eval(Program(sp), [sum(parts, [])]) == sum(parts, [])
+    assert sp.gates == 0
+
+
+def test_registry_derived_family_selectors():
+    """Consumers (required_manifest, required_values, sampled_replay, tp/worker, tp/commit) ask the registry, never a spelled prefix."""
+    assert TP2.collective_kind("AllReduce2_v1{N=8}") == "all_reduce" == TP2.collective_kind("AllReduce_v1{WORLD=3,N=8}")
+    assert TP2.collective_kind("AllGather2_v1") == "all_gather" == TP2.collective_kind("AllGather_v1{WORLD=4,N=8}")
+    assert TP2.collective_kind("Gemm_v1{K=1,N=2}") is None and TP2.collective_kind("") is None
+    assert TP2.cross_rank_families(2) == {"AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"}
+    assert TP2.cross_rank_families(3) == {"AllReduce_v1", "AllGather_v1", "EmbeddingShard_v1"}
+    from verity_capture.commit import required_manifest as RM
+    from verity_capture.commit import xrank_collectives as XC
+    assert RM.collective_kind("AllGather_v1{WORLD=3,N=8}") == "all_gather"
+    assert XC.collective_family("all_reduce", 2) == "AllReduce2_v1" and XC.collective_family("all_reduce", 3) == "AllReduce_v1"
+    assert XC.collective_family("all_gather", 4) == "AllGather_v1"
+
+
+# --- the N-ary collective bus (peer inputs per (collective, peer rank), rank order) -------------------------------------------
+
+def test_collective_bus_world_3_peer_layout_and_rank_order():
+    torch = pytest.importorskip("torch")
+    from verity_capture.experimental.cb_a.tp_ops import CollectiveBus, ensure_ops
+    ensure_ops()
+    W, rank = 3, 1
+    probe = CollectiveBus(rank=rank, world=W, mode="probe")
+    x = torch.zeros(2, 4, dtype=torch.bfloat16)
+    probe.all_reduce(x)
+    probe.all_gather(x)
+    assert probe.peer_ranks == [0, 2] and [r["kind"] for r in probe.record] == ["all_reduce", "all_gather"]
+    peers = probe.example_peers(device="cpu")
+    assert len(peers) == 2 * (W - 1)                      # world-1 peer inputs per collective, flat index k*(world-1) + j
+    # replay: peers carry rank-tagged constants; the own partial is placed at index `rank` of `parts`
+    own = torch.full((2, 4), 10.0, dtype=torch.bfloat16)
+    p0 = torch.full((2, 4), 1.0, dtype=torch.bfloat16)
+    p2 = torch.full((2, 4), 100.0, dtype=torch.bfloat16)
+    bus = CollectiveBus(rank=rank, world=W, mode="trace", peers=[p0, p2, p0, p2], record=list(probe.record))
+    ar = bus.all_reduce(own)
+    assert torch.equal(ar, torch.full((2, 4), 111.0, dtype=torch.bfloat16))
+    ag = bus.all_gather(own)
+    assert ag.shape == (2, 12) and ag[0, :4].tolist() == [1.0] * 4 and ag[0, 4:8].tolist() == [10.0] * 4 and ag[0, 8:].tolist() == [100.0] * 4
+
+
+# --- tp_links.json: v2 schema at world N, v1 files read as v2 ----------------------------------------------------------------
+
+def test_read_tp_links_upgrades_v1_and_accepts_v2(tmp_path):
+    from verity_capture.experimental.cb_a.derive_step import read_tp_links
+    v1 = {"schema": "cb-a/tp_links/v1", "world": 2, "rank": 0, "links": [{"k": 0, "kind": "all_reduce", "peer_input": "peers_0", "peer_rank": 1}]}
+    (tmp_path / "v1.json").write_text(json.dumps(v1))
+    d = read_tp_links(str(tmp_path / "v1.json"))
+    assert d["peer_ranks"] == [1] and d["links"][0]["peers"] == [{"rank": 1, "input": "peers_0", "operand": "part_rank1", "collective_k": 0}]
+    v2 = {"schema": "cb-a/tp_links/v2", "world": 3, "rank": 1, "peer_ranks": [0, 2],
+          "links": [{"k": 0, "kind": "all_reduce", "own_operand": "part_rank1",
+                     "peers": [{"rank": 0, "input": "peers_0", "operand": "part_rank0", "collective_k": 0}, {"rank": 2, "input": "peers_1", "operand": "part_rank2", "collective_k": 0}]}]}
+    (tmp_path / "v2.json").write_text(json.dumps(v2))
+    d = read_tp_links(str(tmp_path / "v2.json"))
+    assert d["peer_ranks"] == [0, 2] and [p["rank"] for p in d["links"][0]["peers"]] == [0, 2]
+
+
+# --- three-rank collective linkage over the capture logs -----------------------------------------------------------------------
+
+def _rank_events(rank: int, world: int, *, ar_shape=(4, 8), steps=(0,)):
+    from verity_capture.events import DispatchEnter, DispatchExit, RunHeader, StorageAlloc, TritonLaunch, ViewDesc
+
+    def _v(a, shape, dtype="bfloat16"):
+        strides = tuple(int(np.prod(shape[i + 1:])) for i in range(len(shape)))
+        return ViewDesc(a, 0, tuple(shape), strides, dtype, "cuda:0")
+
+    stream = 1000 + rank
+    hdr = RunHeader("verity-capture/log/v1", "2026-09-23T00:00:00Z", "pid", {"parallelism": {"tensor_parallel_size": world}}, {"repo": "x"},
+                    {"requests": []}, notes={"tp2": {"rank": rank, "world_size": world}})
+    evs = [hdr]
+    eid, alloc = 10, 100
+    for step in steps:
+        a_out, a_res, a_g, a_gres = alloc, alloc + 1, alloc + 2, alloc + 3
+        alloc += 10
+        evs += [
+            StorageAlloc(a_out, 0x100 + a_out, 4 * 8 * 2, "cuda:0", 0, "op"),
+            TritonLaunch(eid, None, step, "forward", "vllm.model_executor.determinism.batch_invariant.matmul_kernel_persistent", "sha",
+                         {"a_ptr": _v(50, (4, 4)), "b_ptr": _v(1, (8, 4)), "c_ptr": _v(a_out, ar_shape)}, {}, [1], 4, 3, stream, "model.layers.0.self_attn.o_proj"),
+            DispatchEnter(eid + 1, None, step, "forward", "vllm.all_reduce.default", "vllm::all_reduce(Tensor tensor, str group_name) -> Tensor",
+                          [_v(a_out, ar_shape), "tp:0"], {}, stream, "model.layers.0.self_attn.o_proj"),
+            StorageAlloc(a_res, 0x100 + a_res, 4 * 8 * 2, "cuda:0", 0, "op"),
+            DispatchExit(eid + 1, _v(a_res, ar_shape)),
+            StorageAlloc(a_g, 0x100 + a_g, 1 * 8 * 2, "cuda:0", 0, "op"),
+            TritonLaunch(eid + 2, None, step, "forward", "vllm.model_executor.determinism.batch_invariant.matmul_kernel_persistent", "sha",
+                         {"a_ptr": _v(63, (1, 8)), "b_ptr": _v(1, (8, 8)), "c_ptr": _v(a_g, (1, 8))}, {}, [1], 4, 3, stream, "lm_head"),
+            DispatchEnter(eid + 3, None, step, "forward", "vllm.all_gather.default", "vllm::all_gather(Tensor tensor, int dim, int world_size, str group_name) -> Tensor",
+                          [_v(a_g, (1, 8)), -1, world, "tp:0"], {}, stream, "logits_processor"),
+            StorageAlloc(a_gres, 0x100 + a_gres, 1 * 8 * world * 2, "cuda:0", 0, "op"),
+            DispatchExit(eid + 3, _v(a_gres, (1, 8 * world))),
+        ]
+        eid += 4
+    return evs
+
+
+def test_link_three_synthetic_ranks():
+    from verity_capture.tp import collective_link as CL
+    W = 3
+    sh = {r: CL.extract_rank_shard(_rank_events(r, W), rank=r) for r in range(W)}
+    for r in range(W):
+        assert sh[r]["world_size"] == W and sh[r]["rows_by_kind"] == {"all_reduce": 1, "all_gather": 1}
+    link = CL.link_shards(sh)
+    assert link["ranks"] == [0, 1, 2] and link["world_size"] == 3 and link["by_status"] == {"linked": 2}
+    ar, ag = link["links"]
+    assert ar["definition"]["id"] == "AllReduceSumBf16_v1{N=32,R=3}" and set(ar["required_writes"]) == {"0", "1", "2"}
+    assert ag["definition"]["id"] == "AllGather_v1{WORLD=3,N=8}"
+    # world 2 of the same synthetic run keeps the recorded gather identity
+    sh2 = {r: CL.extract_rank_shard(_rank_events(r, 2), rank=r) for r in range(2)}
+    assert CL.link_shards(sh2)["links"][1]["definition"]["id"] == "AllGather2_v1{N=8}"
+    # a missing rank is a named status, never a silent two-rank link
+    part = CL.link_shards({r: sh[r] for r in (0, 2)})
+    assert part["by_status"] == {"missing-rank": 2} and part["world_size"] == 3
+
+
+# --- three-rank cross-rank check (rank_match) --------------------------------------------------------------------------------
+
+def _colls(rank: int, world: int, *, N: int = 8, steps: int = 2):
+    """One rank's fold `collectives` for `rank_match.cross_rank_check`: per step one all_reduce (k 0) and one all_gather (k 1), one peers
+    field per (collective, peer rank) as `fold._collective_prepare` lays them out (world 2: `s<s>_k<k>`; world > 2: `s<s>_k<k>_r<peer>`)."""
+    peers = [r for r in range(world) if r != rank]
+    out = []
+    for s in range(steps):
+        for k, kind, site in ((0, "all_reduce", "model.layers.0.self_attn.o_proj"), (1, "all_gather", "lm_head")):
+            fields = [{"request": "r0", "param": 1, "field": (f"s{s}_k{k}" if world == 2 else f"s{s}_k{k}_r{p}"), "ordinal": 2 * s + k, "rows": 1, "offset": 0, "peer_rank": p}
+                      for p in peers]
+            out.append({"step": s, "k": k, "kind": kind, "site": site, "rows": 1, "N": N, "rank": rank, "world": world, "event": 10 * s + k,
+                        "own_view": {"alloc": 100 + k}, "fields": fields})
+    return out
+
+
+def test_cross_rank_check_world_3_passes_and_names_a_missing_rank():
+    from verity_capture.tp import rank_match as RMx
+    W = 3
+    res = RMx.cross_rank_check({r: _colls(r, W) for r in range(W)})
+    assert res["world"] == 3 and res["ranks"] == [0, 1, 2]
+    failed = [c for c in res["checks"] if c["name"] in ("count", "order", "op", "segmentation", "site", "shard_linkage") and not c["pass"]]
+    assert not failed, failed
+    # ranks 0 and 2 only: not a world -- refused by name, never folded into a two-rank check
+    bad = RMx.cross_rank_check({0: _colls(0, W), 2: _colls(2, W)})
+    assert bad["verdict"] == "FAIL" and bad["checks"][0]["name"] == "ranks"
+    # a rank that issued one collective fewer is named
+    short = {r: _colls(r, W) for r in range(W)}
+    short[2] = short[2][:-1]
+    res2 = RMx.cross_rank_check(short)
+    cnt = next(c for c in res2["checks"] if c["name"] == "count")
+    assert not cnt["pass"] and any("rank" in f for f in cnt["fails"])
