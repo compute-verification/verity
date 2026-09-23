@@ -25,6 +25,10 @@ ligero-statement/v2  magic "LIGSTM02" | u32 layout (1 = chain) | u32 l | u32 n |
 ligero-statement/v3  magic "LIGSTM03" | the v2 body | the authentication block (authentication = included, auth.py):
                      str version ("ligero-b/auth/v1") | str schema ("u16") | u32 n_vus | n_vus x u32 vu_index
                      | 3 x tree (a, b, y): 32 B binding | u8 owner + 2 | u64 count | 32 B root
+ligero-system/v3     magic "LIGSYS03" | as v2, but the chain block is u32 n_links | n_links x u32 c | n_links x expr y
+                     | u8 has_y16 | [expr y16] or [u32 n_end | n_end x (expr Y, u32 lo, u32 bits)]: a chain with more
+                     than the accumulator's three linked rows (hashchain.py: + 16 sponge capacity lanes; chain.py gives
+                     the extra links monomial coefficients).  Written only when n_links != 3 (v1 / v2 otherwise).
 ligero-statement/v4  magic "LIGSTM04" | the v2 header through u32 K | u8 word_bytes | u8 y_bytes | str relation
                      | l x K a | l x K b | l x y16 (u8/u16/u32 per the byte widths) | u8 has_auth | [the v3 block]
                      The relation-named statement: every registered relation of relations.py but the Ampere BF16
@@ -35,6 +39,16 @@ ligero-statement/v4  magic "LIGSTM04" | the v2 header through u32 K | u8 word_by
                      (Lane b-hopper had written this layout under "LIGSTM03" before v3 was taken by the authentication
                      block above; the merge lane/b-merge-h100 made every relation-named statement v4 -- b-hopper's
                      LIGSTM03 dumps died with their pod, so no file of that layout exists.)
+ligero-statement/v5  magic "LIGSTM05" | the v2 header through u32 K | u8 y_bytes | str relation | str authentication
+                     ("included-hash": hashchain.py / hashauth.py -- the operand words are NOT in the statement)
+                     | n_vus x 16 u32 digests (per VU: the x row's 8 Poseidon2 lanes, then the W column's; the public
+                     table the proof pins is derived: is_end = 1 and these lanes at the VU's last column, 0 elsewhere)
+                     | l x y16 (y_bytes) | the hash-auth block: str version ("ligero-b/auth/v2h") | str schema
+                     ("poseidon2-babybear-w24/row/v2h") | 32 B Poseidon2 constants digest | u32 n_vus
+                     | n_vus x (u32 vu_index, u32 x_index, u32 w_index) | 3 x tree (a, b, y) as in v3
+                     | 3 x (u32 n_sib | n_sib x 32 B): the SHA-256 multiproofs of the a, b, y trees (in the STATEMENT:
+                     the proof file is untouched).  The verifier checks the Ligero proof against the digest table,
+                     then the digests as leaf/v2h leaves at the claimed ranks under the roots.
 ligero-proof/v1      magic "LIGPRF01" | u8 hash (1 = blake3, 2 = sha256) | u8 has_coins | u8 zk | u8 has_chain
                      | u32 D | u32 w_len | u32 h_len | u32 q_len | u32 v_len | u32 M | u32 t | u32 depth
                      | [c1 c2 r1 s1 r2 s2, 32 B each] | 32 B root | D x w_len u32 w | D x h_len u32 h
@@ -65,6 +79,9 @@ SYS_MAGIC, STMT_MAGIC, PROOF_MAGIC = b"LIGSYS01", b"LIGSTM02", b"LIGPRF01"
 SYS_MAGIC_V2 = b"LIGSYS02"     # a chain system whose end is in components (chain.py): v1 with the y16 expr replaced
 STMT_MAGIC_V3, PROOF_MAGIC_V2 = b"LIGSTM03", b"LIGPRF02"
 STMT_MAGIC_V4 = b"LIGSTM04"
+SYS_MAGIC_V3 = b"LIGSYS03"     # a chain with n_links != 3 linked rows (the hashed relation's sponge capacities)
+STMT_MAGIC_V5 = b"LIGSTM05"    # authentication = included-hash: digests + leaf indices + roots + multiproofs, no operand words
+AUTH_HASH = "included-hash"
 _DTYPES = {1: "<u1", 2: "<u2", 4: "<u4"}
 #: The relation a v2 / v3 statement (no name in the file) is: the Ampere BF16 unit of ``vu.py``.
 BF16_RELATION = "bf16"
@@ -168,11 +185,16 @@ def system_bytes(sys: System) -> bytes:
         for e in (q.a, q.b, q.c):
             _expr_w(w, e.lin, e.c)
     w.u8(1 if sys.chain is not None else 0)
+    v3 = sys.chain is not None and len(sys.chain["c"]) != 3
     if sys.chain is not None:
+        if v3:
+            w.u32(len(sys.chain["c"]))
         for idx in sys.chain["c"]:
             w.u32(idx)
         for e in sys.chain["y"]:
             _expr_w(w, e.lin, e.c)
+        if v3:
+            w.u8(1 if sys.chain.get("y16") is not None else 0)
         if sys.chain.get("y16") is not None:
             _expr_w(w, sys.chain["y16"].lin, sys.chain["y16"].c)
         else:
@@ -184,7 +206,9 @@ def system_bytes(sys: System) -> bytes:
                 w.u32(int(bits))
     w.raw(system_id(sys))
     out = w.bytes()
-    if sys.chain is not None and sys.chain.get("y16") is None:
+    if v3:
+        out = SYS_MAGIC_V3 + out[len(SYS_MAGIC):]
+    elif sys.chain is not None and sys.chain.get("y16") is None:
         out = SYS_MAGIC_V2 + out[len(SYS_MAGIC):]
     return out
 
@@ -192,9 +216,10 @@ def system_bytes(sys: System) -> bytes:
 def read_system(data: bytes) -> dict:
     r = _R(data)
     magic = r.take(8)
-    if magic not in (SYS_MAGIC, SYS_MAGIC_V2):
-        raise ValueError("not a ligero-system/v1 or /v2 file")
+    if magic not in (SYS_MAGIC, SYS_MAGIC_V2, SYS_MAGIC_V3):
+        raise ValueError("not a ligero-system/v1, /v2 or /v3 file")
     v2 = magic == SYS_MAGIC_V2
+    v3 = magic == SYS_MAGIC_V3
     m = r.u32()
     pins = [(r.s(), r.u32()) for _ in range(r.u32())]
     linear = []
@@ -205,8 +230,11 @@ def read_system(data: bytes) -> dict:
     quadratic = [tuple(_expr_r(r) for _ in range(3)) for _ in range(r.u32())]
     chain = None
     if r.u8():
-        c_rows = [r.u32() for _ in range(3)]
-        ys = [_expr_r(r) for _ in range(3)]
+        n_links = r.u32() if v3 else 3
+        c_rows = [r.u32() for _ in range(n_links)]
+        ys = [_expr_r(r) for _ in range(n_links)]
+        if v3:
+            v2 = not bool(r.u8())
         if v2:
             y_end = [(_expr_r(r), r.u32(), r.u32()) for _ in range(r.u32())]
             chain = {"c": c_rows, "y": ys, "y16": None, "y_end": y_end}
@@ -242,11 +270,27 @@ class Statement:
     relation: str = BF16_RELATION   # "bf16" (v2 / v3 files carry no name) | a relations.py name (bf16-hopper, fp8-hopper, fp8-ada; v4)
     word_bytes: int = 2             # bytes per operand word in the file (2: v2 / v3)
     y_bytes: int = 2                # bytes per public word in the file (2: v2 / v3)
+    hash_auth: object | None = None  # authentication = included-hash (v5): hashauth.HashAuth; ``a`` is then the (l, 17) public
+    #                                  table [is_end | d0..d15] and ``b`` the (n_vus, 3) leaf triples (what the digest binds)
+    hash_sibs: list | None = None    # v5: the three multiproofs (a, b, y), lists of 32-byte siblings
 
     @property
     def v4(self) -> bool:
         """Written as the relation-named ``ligero-statement/v4``: any relation but the BF16 unit's 16/16-bit words."""
-        return self.word_bytes != 2 or self.y_bytes != 2 or self.relation != BF16_RELATION
+        return self.hash_auth is None and (self.word_bytes != 2 or self.y_bytes != 2 or self.relation != BF16_RELATION)
+
+    @property
+    def v5(self) -> bool:
+        return self.hash_auth is not None
+
+    @property
+    def authentication(self) -> str:
+        return AUTH_HASH if self.hash_auth is not None else "included" if self.auth is not None else "excluded"
+
+    def digests(self) -> np.ndarray:
+        """v5: (n_vus, 16) the published digest lanes (from the public table's chain-end columns)."""
+        ends = np.arange(self.n_vus) * self.steps + self.steps - 1
+        return np.asarray(self.a, dtype=np.int64)[ends, 1:]
 
     def config(self):
         from .protocol import Config
@@ -290,9 +334,66 @@ def _auth_block_r(r: _R) -> auth_mod.AuthStatement:
     return auth_mod.AuthStatement(tuple(vu_index), tuple(trees))
 
 
+def _hash_auth_block_w(w: _W, st: Statement):
+    from . import hashauth
+    from verity.commitments import poseidon2_babybear as h2
+    auth = st.hash_auth
+    w.s(hashauth.HASH_AUTH_VERSION)
+    w.s(hashauth.SCHEMA_ROW)
+    w.raw(bytes.fromhex(h2.CONSTANTS_SHA256))
+    w.u32(auth.n_vus)
+    w.arr(auth.indices(), "<u4")
+    for tr in auth.trees:
+        assert len(tr.binding) == 32 and len(tr.root) == 32
+        w.raw(tr.binding)
+        w.u8(tr.owner + 2)
+        w.u64(tr.count)
+        w.raw(tr.root)
+    sibs = st.hash_sibs if st.hash_sibs is not None else [[], [], []]
+    if len(sibs) != 3:
+        raise ValueError("three multiproofs (a, b, y)")
+    for sb in sibs:
+        w.u32(len(sb))
+        for x in sb:
+            if len(x) != 32:
+                raise ValueError("malformed sibling")
+            w.raw(x)
+
+
+def _hash_auth_block_r(r: _R, n_vus: int):
+    from . import hashauth
+    from verity.commitments import poseidon2_babybear as h2
+    version, schema = r.s(), r.s()
+    if version != hashauth.HASH_AUTH_VERSION or schema != hashauth.SCHEMA_ROW:
+        raise ValueError(f"unknown authentication block {version!r}/{schema!r}")
+    if r.take(32) != bytes.fromhex(h2.CONSTANTS_SHA256):
+        raise ValueError("Poseidon2 parameters differ from the verifier's")
+    if r.u32() != n_vus:
+        raise ValueError("authentication block does not match the layout")
+    idx = r.arr((n_vus, 3), "<u4").astype(np.int64)
+    trees = []
+    for name in auth_mod.TREE_NAMES:
+        binding = r.take(32)
+        owner = r.u8() - 2
+        count = r.u64()
+        root = r.take(32)
+        trees.append(auth_mod.TreeRef(name, binding, owner, count, root))
+    auth = hashauth.HashAuth(tuple(int(v) for v in idx[:, 0]), tuple(int(v) for v in idx[:, 1]), tuple(int(v) for v in idx[:, 2]),
+                             tuple(trees))
+    sibs = []
+    for _ in range(3):
+        n = r.u32()
+        if n > 1 << 24:
+            raise ValueError("multiproof too long")
+        sibs.append([r.take(32) for _ in range(n)])
+    return auth, sibs
+
+
 def statement_bytes(st: Statement) -> bytes:
     if st.word_bytes not in _DTYPES or st.y_bytes not in _DTYPES:
         raise ValueError(f"statement word widths {st.word_bytes}/{st.y_bytes} bytes are not 1, 2 or 4")
+    if st.v5:
+        return _statement_bytes_v5(st)
     w = _W()
     w.raw(STMT_MAGIC_V4 if st.v4 else STMT_MAGIC if st.auth is None else STMT_MAGIC_V3)
     w.u32(1)
@@ -321,11 +422,66 @@ def statement_bytes(st: Statement) -> bytes:
     return w.bytes()
 
 
+def _header_w(w: _W, st: Statement, magic: bytes):
+    w.raw(magic)
+    w.u32(1)
+    for x in (st.l, st.n, st.D, st.t):
+        w.u32(x)
+    w.f64(st.target_log2)
+    w.u8(int(st.zk))
+    w.u32(st.t_pad)
+    w.u8(MODE_CODES[st.mode])
+    w.u32(st.n_proofs)
+    w.u32(st.n_vus)
+    w.u32(st.steps)
+
+
+def _statement_bytes_v5(st: Statement) -> bytes:
+    from . import hashchain
+    w = _W()
+    _header_w(w, st, STMT_MAGIC_V5)
+    w.u32(_K_of(st))
+    w.u8(st.y_bytes)
+    w.s(st.relation)
+    w.s(AUTH_HASH)
+    d = st.digests()
+    if d.shape != (st.n_vus, hashchain.N_DIGEST):
+        raise ValueError("digest table shape")
+    w.arr(d, "<u4")
+    w.arr(st.y16, _DTYPES[st.y_bytes])
+    _hash_auth_block_w(w, st)
+    return w.bytes()
+
+
+def _K_of(st: Statement) -> int:
+    from .relations import K_VU
+    return K_VU
+
+
+def _read_v5(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K) -> Statement:
+    from . import hashchain
+    yb = r.u8()
+    if yb not in _DTYPES:
+        raise ValueError(f"statement word width {yb} bytes is not 1, 2 or 4")
+    relation = r.s()
+    if r.s() != AUTH_HASH:
+        raise ValueError("v5 statement names an authentication other than included-hash")
+    if n_vus * steps > l:
+        raise ValueError("layout does not fit the columns")
+    d = r.arr((n_vus, hashchain.N_DIGEST), "<u4").astype(np.int64)
+    y16 = r.arr((l,), _DTYPES[yb])
+    auth, sibs = _hash_auth_block_r(r, n_vus)
+    r.done()
+    table = hashchain.public_table(d, n_vus, steps, l)
+    return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, table, auth.indices(), y16,
+                     None, relation, 4, yb, auth, sibs)
+
+
 def read_statement(data: bytes) -> Statement:
     r = _R(data)
     magic = r.take(8)
-    if magic not in (STMT_MAGIC, STMT_MAGIC_V3, STMT_MAGIC_V4):
-        raise ValueError("not a ligero-statement/v2, /v3 or /v4 file")
+    if magic not in (STMT_MAGIC, STMT_MAGIC_V3, STMT_MAGIC_V4, STMT_MAGIC_V5):
+        raise ValueError("not a ligero-statement/v2, /v3, /v4 or /v5 file")
     if r.u32() != 1:
         raise ValueError("only chain mode (1) is defined")
     l, n, D, t = r.u32(), r.u32(), r.u32(), r.u32()
@@ -336,6 +492,8 @@ def read_statement(data: bytes) -> Statement:
     if mode_code not in MODE_NAMES:
         raise ValueError(f"unknown mode code {mode_code}")
     n_proofs, n_vus, steps, K = r.u32(), r.u32(), r.u32(), r.u32()
+    if magic == STMT_MAGIC_V5:
+        return _read_v5(r, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K)
     relation, wb, yb = BF16_RELATION, 2, 2
     if magic == STMT_MAGIC_V4:
         wb, yb = r.u8(), r.u8()
@@ -467,6 +625,8 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
     R = runner or _runner(device, st)
     if _relation_of(R) != st.relation:
         return False, f"statement names relation {st.relation!r}, the runner proves {_relation_of(R)!r}", 0.0
+    if st.authentication != getattr(R, "AUTH", "excluded" if st.auth is None else st.authentication):
+        return False, f"statement authentication {st.authentication!r}, the runner proves {getattr(R, 'AUTH', 'excluded')!r}", 0.0
     # Interactive mode: ``verify`` demands the verifier's OWN step-0 coins.  A verifier reading a file has none, so the
     # only thing it can do is REPLAY the transcript's openings as its coins (the "coins are not this verifier's coins"
     # check is then vacuous; what remains is c_i = H(r_i || s_i) and the coin-only challenge derivation).
@@ -475,8 +635,17 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
         return False, "interactive transcript carries no coins", 0.0
     t0 = time.perf_counter()
     try:
-        ok, why = pm.verify(R.p, R.sys, R.tb, st.config(), None, st.a.astype(np.int64), st.b.astype(np.int64), None,
-                            pf, device, chain=(st.layout(), st.y16.astype(np.int64)), coins=coins, rel=_hooks_of(R), auth=st.auth)
+        if st.v5:
+            # the hashed statement: R.verify_vus runs protocol.verify against the digest table (the auth block in the
+            # statement digest through the hooks' tag) and then the multiproofs of the published digests (hashauth)
+            import torch
+            if R.cfg(st.l) != st.config():
+                R._cfg[st.l] = st.config()
+            ok, why = R.verify_vus(pf, (st.a.astype(np.int64), st.b.astype(np.int64), torch.as_tensor(st.y16.astype(np.int64)),
+                                        st.hash_auth, st.hash_sibs), st.layout(), coins=coins)
+        else:
+            ok, why = pm.verify(R.p, R.sys, R.tb, st.config(), None, st.a.astype(np.int64), st.b.astype(np.int64), None,
+                                pf, device, chain=(st.layout(), st.y16.astype(np.int64)), coins=coins, rel=_hooks_of(R), auth=st.auth)
     except Exception as e:  # noqa: BLE001 -- the Python verifier is not reject-first on malformed input
         ok, why = False, f"python verifier raised {type(e).__name__}: {e}"
     return ok, why, time.perf_counter() - t0
@@ -547,9 +716,11 @@ def _runner(device: str, st: Statement | None = None):
     if name != BF16_RELATION:
         # any registered relation (relations.py: bf16-hopper, fp8-hopper, fp8-ada) runs on the generic chain runner
         from .relations import RELATIONS
-        from .relchain import RelationChainRunner
+        from .relchain import HashedRelationRunner, RelationChainRunner
         if name not in RELATIONS:
             raise ValueError(f"no runner for relation {name!r} (known: {BF16_RELATION!r}, 'fp4-nvf4', {sorted(RELATIONS)})")
+        if st is not None and st.v5:
+            return HashedRelationRunner(RELATIONS[name], device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
         return RelationChainRunner(RELATIONS[name], device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
     from .vu import ChainRunner
     return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk, mode=mode)
@@ -568,8 +739,14 @@ def _statement_of(R, pubs, lay, cfg, n_proofs: int, mode: str | None = None, aut
     the Ampere BF16 unit is written as v2 / v3 -- the Rust verifier's formats -- and its relation is implied by the
     system id; every registered relation (bf16-hopper; fp8-hopper / fp8-ada: 8-bit operands, 32-bit slots for the
     22-bit public words) is named in the file and takes v4."""
-    a, b, y16 = pubs
     hooks = _hooks_of(R)
+    if len(pubs) == 5:                     # relchain.HashedRelationRunner: (table, indices, y16, HashAuth, multiproofs) -> v5
+        a, b, y16, hauth, sibs = pubs
+        return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
+                         lay.n_vus, lay.steps, np.asarray(a, dtype=np.int64), np.asarray(b, dtype=np.int64),
+                         np.asarray(y16, dtype=np.int64), None, _relation_of(R), 4, np.dtype(hooks.y16_dtype).itemsize,
+                         hauth, [list(x) for x in sibs])
+    a, b, y16 = pubs
     return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
                      lay.n_vus, lay.steps, np.asarray(a, dtype=np.int64), np.asarray(b, dtype=np.int64),
                      np.asarray(y16, dtype=np.int64), auth, _relation_of(R), np.dtype(hooks.word_dtype).itemsize,
@@ -603,12 +780,15 @@ def _manifest(out: Path, args, R, auth: bool = False) -> dict:
     from .run import _git_commit
     hooks = _hooks_of(R)
     v4 = _relation_of(R) != BF16_RELATION or np.dtype(hooks.word_dtype).itemsize != 2 or np.dtype(hooks.y16_dtype).itemsize != 2
+    v5 = getattr(R, "AUTH", None) == AUTH_HASH
     sys_v2 = R.sys.chain is not None and R.sys.chain.get("y16") is None      # component chain ends (the FP4 relation)
-    fmt = {"system": "ligero-system/v2" if sys_v2 else "ligero-system/v1",
-           "statement": "ligero-statement/v4" if v4 else "ligero-statement/v3" if auth else "ligero-statement/v2",
+    sys_v3 = R.sys.chain is not None and len(R.sys.chain["c"]) != 3          # more linked rows (the hashed relation)
+    fmt = {"system": "ligero-system/v3" if sys_v3 else "ligero-system/v2" if sys_v2 else "ligero-system/v1",
+           "statement": "ligero-statement/v5" if v5 else "ligero-statement/v4" if v4 else "ligero-statement/v3" if auth else "ligero-statement/v2",
            "proof": "ligero-proof/v2" if auth else "ligero-proof/v1"}
     from . import witness as witness_mod
-    return {"format": fmt, "relation": _relation_of(R), "commit": _git_commit(), "device": args.device, "system": R.sys.summary(),
+    return {"format": fmt, "relation": _relation_of(R), "authentication": getattr(R, "AUTH", "included" if auth else "excluded"),
+            "commit": _git_commit(), "device": args.device, "system": R.sys.summary(),
             "zk": R.zk, "mode": R.mode, "impl": getattr(args, "impl", witness_mod.IMPL), "files": []}
 
 

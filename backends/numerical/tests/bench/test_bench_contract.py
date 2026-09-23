@@ -86,6 +86,16 @@ def test_each_fingerprint_rule(conforming: dict, field: str, value, fragment: st
     assert len(problems) == 1 and fragment in problems[0], problems
 
 
+def test_authentication_included_hash_is_a_recognised_column(conforming: dict) -> None:
+    """``authentication = included-hash`` (the operands hashed inside the proof, lane hash-relation) validates and is a
+    different identity from ``excluded`` (the judge never compares the two columns as one)."""
+    fp = conforming["workload_fingerprint"]
+    hashed = {**conforming, "workload_fingerprint": {**fp, "authentication": "included-hash"}}
+    assert contract.validate(hashed) == []
+    assert [f for f, _, _ in contract.incomparable(fp, hashed["workload_fingerprint"])] == ["authentication"]
+    assert "included-hash" in contract.AUTHENTICATION and "authentication" in contract.IDENTITY_FIELDS
+
+
 def test_b_real_is_optional_but_bounded(conforming: dict) -> None:
     fp = conforming["workload_fingerprint"]
     assert contract.validate_fingerprint({**fp, "B": 8, "B_real": 5}) == []

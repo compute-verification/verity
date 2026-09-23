@@ -191,9 +191,10 @@ class RelationChainRunner:
     def _pad_unit(self):
         return (0, [0] * self.rel.k, [0] * self.rel.k, 0)
 
-    def prove_vus(self, vus: list[tuple[list, list, list, int]], check=True, mutate=None, min_l: int = 256, coins=None):
+    def prove_vus(self, vus: list[tuple[list, list, list, int]], check=True, mutate=None, min_l: int = 256, coins=None, vu_ids=None):
         """``vus``: (a, b, accs, y_final) per VU.  The public claim per VU is ``rel.y_public(y_final)`` at its last column.
-        Interactive mode with ``coins=None``: the runner plays the honest verifier's step 0 (``Coins.sample()``)."""
+        Interactive mode with ``coins=None``: the runner plays the honest verifier's step 0 (``Coins.sample()``).
+        ``vu_ids`` (the VUs' indices in the committed set) is what the hashed runner binds; the bare statement ignores it."""
         if coins is None and self.interactive:
             coins = protocol_mod.Coins.sample()
         lay = self.layout(len(vus), min_l)
@@ -708,13 +709,31 @@ def bench_vu_rel(args, rel: Relation) -> int:
     n_proofs = -(-total_vus // per_proof)
     interactive = args.mode == protocol_mod.MODE_INTERACTIVE
     depth = 3 if interactive else 1
-    R = RelationChainRunner(rel, args.device, args.target, args.rate_log2, n_proofs=n_proofs, zk=args.zk, mode=args.mode)
+    R = make_runner(args, rel, n_proofs=n_proofs)
+    hashed = isinstance(R, HashedRelationRunner)
+    tile = parse_tile(getattr(args, "tile", None)) if hashed else None
+    if tile is not None and tile[0] * tile[1] != total_vus:
+        raise SystemExit(f"--tile {tile[0]}x{tile[1]} is {tile[0] * tile[1]} VUs; --total-vus {total_vus}")
     cen = census(R.sys)
     print(f"{rel.name} census:", json.dumps(cen))
+    if hashed:
+        print(f"{rel.name} hashed ({R.AUTH}, sharing {'none' if tile is None else 'tile%dx%d' % tile}):", json.dumps(R.hr.census))
     subs = [(lo, min(lo + per_proof, total_vus)) for lo in range(0, total_vus, per_proof)]
     t0 = time.perf_counter()
-    data = instances(rel, total_vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
+    if tile is None:
+        data = instances(rel, total_vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
+        x_rows = w_cols = None
+    else:
+        data, x_rows, w_cols = tile_instances(rel, *tile, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
     print(f"{total_vus} synthetic VUs (model-recorded accumulators) in {time.perf_counter() - t0:.1f}s")
+    commit_seconds = 0.0
+    if hashed:
+        t0 = time.perf_counter()
+        R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=instances_digest(rel, total_vus),
+                     cache=getattr(args, "auth_cache", None), tile=tile, x_rows=x_rows, w_cols=w_cols)
+        commit_seconds = time.perf_counter() - t0
+        print(f"committed: x tree {R.trees['a'].count} rows, W tree {R.trees['b'].count} columns, y tree {R.trees['y'].count} words "
+              f"(leaf/v2h Poseidon2 + SHA-256) in {commit_seconds:.1f}s; roots a={R.trees['a'].root.hex()[:16]} b={R.trees['b'].root.hex()[:16]}")
     lay = R.layout(per_proof)
     l = lay.l
     cfg = R.cfg(l)
@@ -753,7 +772,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         cfgs_seen: list[Config] = []
         for si, (lo, hi) in enumerate(subs):
             V = protocol_mod.Coins.sample() if interactive else None
-            proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=l, coins=V)
+            proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=l, coins=V, vu_ids=range(lo, hi))
             for k_, v_ in proof.timings.items():
                 agg[k_] = agg.get(k_, 0.0) + v_
             proved.append((si, lo, hi, V, proof, pubs, lay_i))
@@ -774,7 +793,11 @@ def bench_vu_rel(args, rel: Relation) -> int:
                 (rd / f"{stem}.proof").write_bytes(proof_bytes(proof))
                 entry = {"rep": rep, "sub": si, "vus": [lo, hi], "stmt": f"rep{rep}/{stem}.stmt", "proof": f"rep{rep}/{stem}.proof",
                          "proof_bytes": (rd / f"{stem}.proof").stat().st_size, "proof_sha256": sha256_file(rd / f"{stem}.proof"),
+                         "stmt_bytes": (rd / f"{stem}.stmt").stat().st_size,
                          "python_verdict": {"accepted": ok, "reason": why}, "prover_seconds": proof.timings.get("total")}
+                if hashed:
+                    entry["multiproof_bytes"] = 32 * sum(len(x) for x in pubs[4])
+                    entry["auth_openings_seconds"] = proof.timings.get("auth_openings")
                 if V is not None:
                     (rd / f"{stem}.coins").write_bytes(V.r1 + V.s1 + V.r2 + V.s2)
                     entry["coins"] = f"rep{rep}/{stem}.coins"
@@ -830,7 +853,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         inst["recipe"] = rel.instances_recipe
     fp = contract.fingerprint(
         profile=rel.target.name, domain=contract.DOMAIN, K=K_VU, B=total_vus, N_subbatches=n_proofs,
-        proof_class=proof_class, authentication="excluded", zk_mode=zk_mode,
+        proof_class=proof_class, authentication=(R.AUTH if hashed else "excluded"), zk_mode=zk_mode,
         security={"target": round(args.target), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_k": cfg.k, "rs_l": cfg.l,
                   "zk": cfg.zk, "t_pad": cfg.t_pad, "mode": cfg.mode, "bound_model": snd["bound_model"],
                   "hash_assumption": snd["hash_assumption"], "zk_statement": snd["zk_statement"],
@@ -847,11 +870,21 @@ def bench_vu_rel(args, rel: Relation) -> int:
         relation=rel.relation_name, model=rel.model_name, commit=_git_commit(), step_k=rel.k, steps_per_vu=steps,
         rows=R.sys.m, committed_rows=n_rows(cfg, R.sys.m, True), linear_constraints=R.tb.L, quadratic_constraints=R.tb.Q,
         census=cen, witness_generation=rel.witness_generation, B_proof=per_proof,
-        statement_format="ligero-statement/v4",              # what --dump-dir writes: the relation-named statement (serialize.py)
+        statement_format="ligero-statement/v5" if hashed else "ligero-statement/v4",   # what --dump-dir writes (serialize.py)
         note=f"{total_vus} VUs as {n_proofs} independently committed proofs of <= {per_proof} VUs each (l = {l} columns, "
              f"{l - per_proof * steps} pad columns per proof); prover time = sum over the proofs; soundness = union bound; "
-             f"{rel.claim_note}",
+             f"{rel.claim_note}"
+             + (f"; authentication = {R.AUTH}: the operand words are private witness wires, each unit hashes its 16 lanes of "
+                f"x and of W with Poseidon2 (BabyBear, width 24, rate 16, x^7; Plonky3 constants {R.hr.census['sbox_rows_per_permutation']} "
+                f"product rows per permutation) along the chain, the digests are chain-end pins and leaf/v2h leaves under the "
+                f"x / W roots; sharing = {'none' if tile is None else 'tile%dx%d' % tile} ({R.trees['a'].count} x rows + "
+                f"{R.trees['b'].count} W columns committed for {total_vus} VUs); the statement carries digests, leaf indices, "
+                f"roots and SHA-256 multiproofs instead of the operand words; hash = poseidon2-babybear-w24" if hashed else ""),
     )
+    if hashed:
+        fp["hash"] = "poseidon2-babybear-w24"
+        fp["sharing"] = "none" if tile is None else f"tile{tile[0]}x{tile[1]}"
+        fp["committed_rows"] = {"x": R.trees["a"].count, "w": R.trees["b"].count, "y": R.trees["y"].count}
     meas = [
         contract.measurement("t.witness", med["witness"] + med["hints_host"]),
         contract.measurement("t.encoding_commitment", med["encode"] + med["transfer"] + med["merkle"]),
@@ -892,6 +925,21 @@ def bench_vu_rel(args, rel: Relation) -> int:
         contract.measurement("rows_per_unit", R.sys.m, "count"),
         contract.measurement("units_per_vu", steps, "count"),
     ]
+    if hashed:
+        meas += [contract.measurement("relation.hash.rows_added_per_unit", R.hr.census["rows_added"], "count"),
+                 contract.measurement("relation.hash.permutations_per_unit", R.hr.census["permutations_per_unit"], "count"),
+                 contract.measurement("relation.hash.linked_rows", R.hr.census["linked_rows"], "count"),
+                 contract.measurement("relation.hash.commit_seconds", commit_seconds, "s"),
+                 contract.measurement("relation.hash.auth_openings_seconds", med.get("auth_openings", 0.0), "s"),
+                 contract.measurement("relation.hash.committed_x_rows", R.trees["a"].count, "count"),
+                 contract.measurement("relation.hash.committed_w_cols", R.trees["b"].count, "count")]
+        if dump_manifest is not None and dump_manifest["files"]:
+            fs = [e for e in dump_manifest["files"] if e["rep"] == 1]
+            meas += [contract.measurement("relation.hash.statement_bytes_total", sum(e["stmt_bytes"] for e in fs), "B"),
+                     contract.measurement("relation.hash.multiproof_bytes_total", sum(e["multiproof_bytes"] for e in fs), "B")]
+    elif dump_manifest is not None and dump_manifest["files"]:
+        fs = [e for e in dump_manifest["files"] if e["rep"] == 1]
+        meas += [contract.measurement("relation.statement_bytes_total", sum(e["stmt_bytes"] for e in fs), "B")]
     for k_, v_ in cen.items():
         if isinstance(v_, int) and not isinstance(v_, bool):
             # ``census.`` is a contract-reserved prefix: only the seven names contract.py defines may live under
