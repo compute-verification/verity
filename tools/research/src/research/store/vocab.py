@@ -75,6 +75,7 @@ MISMATCHES = "mismatches"
 TARGET = "target"
 COMPONENT = "component"
 JOBS = "jobs"
+DEVICE = "device"                                     # the physical GPU (its UUID), what verity.verification.trust counts as a device
 
 # ---- closed value sets -------------------------------------------------------------------------------------------------------------------
 
@@ -159,6 +160,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity.verification.target name)"),
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
+    _k(DEVICE, GROUP_EVIDENCE, TEXT, "the physical GPU the capture or proof ran on, as its UUID (GPU-...): what trust's device criteria count, never a hostname"),
 )}
 
 KEYS = tuple(VOCAB)
