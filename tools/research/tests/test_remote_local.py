@@ -70,7 +70,7 @@ def test_exclusive_refuses_a_live_holder_and_reclaims_a_dead_one(tmp_path):
     assert out["claimed"] and out["started"] is False and "exclusively held by run hold" in out["refused"]
     assert (runs_root / "second" / "refused.json").exists() and not (runs_root / "second" / "job.json").exists()
     s2 = R.summarize(runs_root / "second")
-    assert s2["state"] in ("submitted", "unknown")                 # never invented as "failed" by the runner: it never ran
+    assert s2["state"] == "refused"                                # never invented as "failed" by the runner: it never ran
     s = _wait_terminal(runs_root / "hold")
     assert s["state"] == "done" and not (runs_root / ".exclusive.lock").exists(), "the runner releases its own lock"
     req3, _ = _request(tmp_path, "third", [PY, "-c", "print('yes')"], exclusive=True)

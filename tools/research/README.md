@@ -83,7 +83,14 @@ python = "python3"
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
-runs via `PYTHONPATH`; no pip, no credentials on the machine. `--source` ships
+runs via `PYTHONPATH`; no pip, no credentials on the machine. The machine
+checks that the `research` package that answers is the one shipped (its content
+identity): `launch-request` checks before it claims the run, and the runner
+checks again before the workload starts. On a mismatch the run is refused
+with `ResearchVersionMismatch`, naming the running package's path. A package
+too old to know the check fails closed. The one exception: a `--source`
+tree's own older package runs unverified, and the launcher says so. job.json
+records `run.remote.tool_running`. `--source` ships
 `git archive HEAD` of a clean checkout to `<root>/src/<sha>/` (a dirty tree is
 refused, not mislabeled). The ship is verified before anything may run from
 it: the archive lands in `<sha>.partial-<nonce>/`, its sha256 is compared on

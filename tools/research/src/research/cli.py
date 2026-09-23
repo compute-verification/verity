@@ -166,6 +166,22 @@ def cmd_run(argv: list[str]) -> int:
     run_dir.mkdir(parents=True, exist_ok=ns.claimed)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
     remote_info = json.loads(ns.remote_json) if ns.remote_json else None
+    if ns.claimed and remote_info is not None:
+        try:
+            remote_info["tool_running"] = remote.check_tool(remote_info.get("tool_identity"))
+        except remote.ResearchVersionMismatch as e:
+            from .telemetry.events import utc_now_ms
+            from .telemetry.job import write_json_atomic
+
+            write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "fault": type(e).__name__, "at_utc": utc_now_ms()})
+            print(f"research run: refused: {e}", file=sys.stderr)
+            if ns.exclusive_lock:
+                remote.release_exclusive(Path(ns.exclusive_lock).parent, run_id)
+            if mem_reservation:
+                from .mem import release
+
+                release(mem_reservation, run_id)
+            return 3
     job = record.extend_job(build_job_from(a, command), run_id=run_id, runs_root=root, expected_fingerprint=_parse_expect(ns.expect),
                             cost=cost, remote=remote_info, store=prep["section"], cwd={"path": a.cwd, "basis": cwd_basis})
     from .telemetry.job import write_json_atomic
@@ -482,12 +498,14 @@ def cmd_env(argv: list[str]) -> int:
 
 def cmd_launch_request(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research launch-request")
+    ap.add_argument("--expect-tool", default=None, metavar="IDENTITY", help="the launcher's remote.tool_identity of the package it shipped")
     ap.add_argument("request")
     ns = ap.parse_args(argv)
     try:
+        remote.check_tool(ns.expect_tool)                 # before the claim: a mismatched package must not interpret the request
         out = remote.launch_request(Path(ns.request))
     except remote.Refused as e:
-        print(json.dumps({"claimed": False, "refused": str(e)}))
+        print(json.dumps({"claimed": False, "refused": str(e), "fault": type(e).__name__}))
         return 3
     print(json.dumps(out))
     return 0

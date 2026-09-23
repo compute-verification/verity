@@ -10,6 +10,12 @@
                     A machine not in the file, or bound to another project, is refused before anything is touched.
     tool snapshot   the research package source is shipped to <root>/tool/<content-sha>/ and run via PYTHONPATH; the run records
                     which snapshot ran.  No pip, no editable install, no credentials on the machine.
+    version check   PYTHONPATH does not guarantee which `research` answers (a wrapper python, a `research/` earlier on sys.path, an
+                    altered snapshot).  The launcher sends tool_identity() of the package it shipped: `launch-request --expect-tool ID`
+                    refuses before the claim, and the runner again before the workload, with ResearchVersionMismatch naming the
+                    running package's path and identity; a package that predates the flag fails closed on argparse and the
+                    launcher names it the same way.  A --source tree whose own package predates the check runs unverified, and
+                    the launcher says so (remote.json tool_checked=false).  job.json run.remote.tool_running = what ran.
     source          --source <git dir> ships `git archive HEAD` of a CLEAN checkout to <root>/src/<identity>/ (the run's cwd, tree_sha);
                     the identity is the commit sha.  A dirty tree is refused rather than mislabeled.  Untracked inputs go with --send.
                     The ship is VERIFIED before it may execute (r20 incident: a stalled transfer left a half-tree that later runs used):
@@ -81,6 +87,11 @@ class Refused(Exception):
 class SourceNotReady(Refused):
     """A shipped source tree that is not verified READY (truncated transfer, digest mismatch, missing or foreign READY.json).
     Nothing executes from it."""
+
+
+class ResearchVersionMismatch(Refused):
+    """The research package answering on the machine is not the one the launcher shipped (its content identity differs, or it
+    predates the check).  Nothing started."""
 
 
 class MemoryNotAvailable(Refused):
@@ -190,6 +201,56 @@ def tool_tarball(src: Path | None = None) -> tuple[bytes, str]:
                 tf.addfile(ti, f)
     data = buf.getvalue()
     return data, hashlib.sha256(data).hexdigest()[:16]
+
+
+def tool_identity(pkg: Path | str | None = None) -> str:
+    """Content identity of a research package: sha256 over (relative path, sha256 of bytes) of every file tool_tarball ships.  File
+    modes and mtimes do not enter (an extracted snapshot keeps its bytes, not necessarily its modes)."""
+    src = Path(pkg).resolve() if pkg is not None else Path(__file__).resolve().parent
+    h = hashlib.sha256()
+    for p in sorted(src.rglob("*")):
+        if p.is_dir() or "__pycache__" in p.parts or p.suffix == ".pyc":
+            continue
+        h.update(f"{p.relative_to(src).as_posix()}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n".encode())
+    return h.hexdigest()[:16]
+
+
+def knows_version_check(pkg: Path | None) -> bool:
+    """Whether a shipped research package (a --source tree's) verifies `launch-request --expect-tool`; the launcher's own always does."""
+    if pkg is None:
+        return True
+    try:
+        return "def tool_identity" in (Path(pkg) / "remote.py").read_text()
+    except OSError:
+        return False
+
+
+def check_tool(expected: str | None) -> dict[str, str]:
+    """The running package's identity and path; ResearchVersionMismatch when `expected` is given and differs."""
+    here = str(Path(__file__).resolve().parent)
+    got = tool_identity(here)
+    if expected and got != expected:
+        raise ResearchVersionMismatch(f"the research package running on this machine ({here}, identity {got}) is not the one the launcher "
+                                      f"shipped (identity {expected}): another `research` shadows the snapshot on sys.path, or the snapshot "
+                                      f"was altered; nothing started")
+    return {"identity": got, "path": here}
+
+
+def launch_request_failure(rc: int, stdout: bytes, stderr: bytes) -> Refused:
+    """The named fault for a failed `research launch-request` (a refusal JSON on stdout, or an argparse error from an old package)."""
+    err = stderr.decode(errors="replace")
+    for line in reversed(stdout.decode(errors="replace").strip().splitlines()):
+        try:
+            doc = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(doc, dict) and doc.get("refused"):
+            cls = {"ResearchVersionMismatch": ResearchVersionMismatch}.get(str(doc.get("fault")), Refused)
+            return cls(str(doc["refused"]))
+    if rc == 2 and "--expect-tool" in err:
+        return ResearchVersionMismatch("the research package that answered `launch-request` on the machine predates the version check, so it "
+                                       f"is not the snapshot the launcher shipped (another `research` shadows it on sys.path?): {err.strip()[-300:]}")
+    return Refused(f"launch-request failed on the machine: {err[-400:]}")
 
 
 def ship_tool(ssh: list[str], root: str, src: Path | None = None) -> str:
@@ -640,6 +701,11 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                           f"ignore the reservation.  Commit a tree that has it, or drop --mem-gb")
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
+        rec["tool_identity"] = tool_identity(tool_pkg)
+        rec["tool_checked"] = knows_version_check(tool_pkg)
+        if not rec["tool_checked"]:
+            print(f"research: the machine runs {tool_pkg}'s research package (identity {rec['tool_identity']}; this launcher's is "
+                  f"{tool_identity()}), which predates the version check: it is not verified on the machine", file=sys.stderr)
         rec["workload_cwd"] = workload_cwd(harness_args, tool_pkg)
         if rec["workload_cwd"].startswith("source (") and source is not None:
             print(f"research: {rec['workload_cwd']}; concurrent runs of this commit share it", file=sys.stderr)
@@ -658,7 +724,8 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "cost": {"provider": "runpod", "pod_id": m["pod_id"], "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
                    "remote": {"machine": machine_name, "pod_id": m["pod_id"], "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],
-                              "root": m["root"], "tool": tool_dir, "source_sha": tree_sha, "source_dir": src_dir,
+                              "root": m["root"], "tool": tool_dir, "tool_identity": rec["tool_identity"] if rec["tool_checked"] else None,
+                              "source_sha": tree_sha, "source_dir": src_dir,
                               "source_archive_sha256": ready.get("archive_sha256"), "source_files": ready.get("files"),
                               "source_verified": ready.get("verified"), "launched_from": os.uname().nodename}}
         req_path = stage_request(ssh, m["root"], run_id, request, sends)
@@ -666,14 +733,16 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    source_archive_sha256=ready.get("archive_sha256"), rate_usd_per_hour=tgt["cost_per_hr"])
         write_json_atomic(local_dir / "remote.json", rec)
         last_err = None
+        expect = ["--expect-tool", rec["tool_identity"]] if rec["tool_checked"] else []
         for attempt in range(3):
-            r = ssh_run(ssh, ["env", f"PYTHONPATH={tool_dir}", m["python"], "-m", "research", "launch-request", req_path], timeout=120 + (mem_wait_s or 0))
+            r = ssh_run(ssh, ["env", f"PYTHONPATH={tool_dir}", m["python"], "-m", "research", "launch-request", *expect, req_path],
+                        timeout=120 + (mem_wait_s or 0))
             if r.returncode == 0:
                 out = json.loads(r.stdout.decode().strip().splitlines()[-1])
                 break
             last_err = r.stderr.decode(errors="replace")[-400:]
             if r.returncode != 255:            # 255 = ssh transport failure: re-deliver the SAME request (idempotent claim)
-                raise Refused(f"launch-request failed on the machine: {last_err}")
+                raise launch_request_failure(r.returncode, r.stdout, r.stderr)
             time.sleep(3 * (attempt + 1))
         else:
             rec.update(phase="unknown", note=f"ssh failed 3 times after staging; the request may or may not have started: {last_err}")
