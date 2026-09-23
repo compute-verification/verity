@@ -2234,7 +2234,7 @@ class NativeHostCommitter:
             numel = int(math.prod(m.shape)) if m.shape else 0
             if m.name == "runner.sampler/sampled_token_ids":
                 n_seq = numel
-            elif m.name.endswith("/in") and tokens is None and str(m.dtype).lstrip("torch.") in ("int32", "int64", "i32", "i64", "long", "int"):
+            elif m.name.endswith("/in") and tokens is None and str(m.dtype).replace("torch.", "") in ("int32", "int64", "i32", "i64", "long", "int"):
                 tokens = numel
         if n_seq is None or tokens is None:
             return None
