@@ -374,11 +374,23 @@ class _RefState:
         return torch.stack([T.reshape(D) for T in (self.A, self.B, self.C)])
 
 
-def _sumcheck_deg2(U: torch.Tensor, V: torch.Tensor, coins, label: str):
-    """Reference degree-2 sumcheck of ``sum_x U(x) V(x)`` over ext tables ``(2^n, 6)``, top bit first.  Returns
-    ``(rounds (n, 3, 6), r (n, 6) in VARIABLE order (r[t] <-> bit t), U(r), V(r))``."""
+def _sumcheck_deg2(U: torch.Tensor, V: torch.Tensor, coins, label: str, engine=None):
+    """Degree-2 sumcheck of ``sum_x U(x) V(x)`` over ext tables ``(2^n, 6)``, top bit first (torch reference, or the CUDA
+    kernels with uniform weights).  Returns ``(rounds (n, 3, 6), r (n, 6) in VARIABLE order (r[t] <-> bit t), U(r), V(r))``."""
     n = U.shape[0].bit_length() - 1
     rounds, rs = [], []
+    if engine == "cuda":
+        st = CudaState.from_ext(U, V)
+        for t in range(n):
+            msg = st.round()
+            rounds.append(msg)
+            coins.absorb(f"{label}/q/{t}", msg)
+            r = coins.challenge(f"{label}/r/{t}", 1)[0]
+            rs.append(r)
+            st.fold(r)
+        fin = st.final()
+        r_var = torch.stack(rs[::-1]) if rs else torch.zeros((0, D), dtype=torch.int64, device=U.device)
+        return torch.stack(rounds), r_var, fin[0], fin[1]
     for t in range(n):
         h = U.shape[0] // 2
         q0 = fc_mul(U[:h], V[:h]).sum(0) % P
@@ -468,13 +480,19 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
     t2 = time.perf_counter()
     gamma = coins.challenge("rows/gamma", 1)[0]
     coef = combined_coefficients(cons, lay, r_k, gamma)                       # (R, 6)
-    eq_c = eq_table(r_c)                                                      # (C, 6)
+    _sync(dev)
+    timings["sumcheck2_coef"] = time.perf_counter() - t2
+    eq_c = (eq_table_cuda if engine == "cuda" else eq_table)(r_c)             # (C, 6)
+    _sync(dev)
+    timings["sumcheck2_eq"] = time.perf_counter() - t2 - timings["sumcheck2_coef"]
     zc = (matvec_base_ext_cuda if engine == "cuda" else matvec_base_ext)(z, eq_c)      # (R, 6) = z~(., r_c)
-    rounds2, r_i, coef_r, zc_r = _sumcheck_deg2(coef, zc, coins, "rows")
+    _sync(dev)
+    timings["sumcheck2_matvec"] = time.perf_counter() - t2 - timings["sumcheck2_coef"] - timings["sumcheck2_eq"]
+    rounds2, r_i, coef_r, zc_r = _sumcheck_deg2(coef, zc, coins, "rows", engine)
     # the committed part only: rows >= m are zero in the commitment
     w_only = zc.clone()
     w_only[lay.m:] = 0
-    w_val = mle_eval_ext(w_only, eq_table(r_i))
+    w_val = mle_eval_ext(w_only, (eq_table_cuda if engine == "cuda" else eq_table)(r_i))
     next_vals = torch.stack([zc[lay.virt[f"next:{x}"]] for x in range(lay.n_links)]) if lay.n_links else \
         torch.zeros((0, D), dtype=torch.int64, device=dev)
     coins.absorb("rows/next", next_vals)
@@ -487,9 +505,12 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
     for x, cr in enumerate(lay.c_rows):
         V = (V + fc_scalar_mul(z[cr].to(torch.int64), g3p[x][None, :].expand(lay.C, D))) % P
     U = torch.roll(eq_c.reshape(lay.S, lay.l, D), 1, dims=1).reshape(lay.C, D)      # U[c] = eq_c[pred(c)]
-    rounds3, rho, U_r, V_r = _sumcheck_deg2(U, V, coins, "shift")
-    eq_rho = eq_table(rho)
-    vals = [w_val] + [mle_eval_base(z[cr].to(torch.int64), eq_rho) for cr in lay.c_rows]
+    rounds3, rho, U_r, V_r = _sumcheck_deg2(U, V, coins, "shift", engine)
+    eq_rho = (eq_table_cuda if engine == "cuda" else eq_table)(rho)
+    if engine == "cuda":
+        vals = [w_val] + list(matvec_base_ext_cuda(z.index_select(0, torch.tensor(lay.c_rows, device=dev)), eq_rho))
+    else:
+        vals = [w_val] + [mle_eval_base(z[cr].to(torch.int64), eq_rho) for cr in lay.c_rows]
     values = torch.stack(vals)
     coins.absorb("values", values)
     timings["sumcheck3"] = time.perf_counter() - t3
@@ -733,6 +754,7 @@ _SRC = r"""
 #define NP 2013265919u
 #define R2 1172168163u
 #define NR 31ULL
+#define R1 268435454u
 typedef unsigned long long u64;
 typedef unsigned int u32;
 
@@ -957,6 +979,28 @@ extern "C" __global__ void sc_fold2(
         }
     }
 }
+
+// eq table: out[x] = prod_t (x_t ? tau[t] : 1 - tau[t]) for x < 2^n; tau planes (6, n) and (1 - tau) planes (6, n) in Montgomery form; out (x, 6) normal int64
+extern "C" __global__ void sc_eq(const u32* __restrict__ tm, const u32* __restrict__ om, long long* __restrict__ out, int n)
+{
+    const long long N = 1LL << n;
+    for (long long x = (long long)blockIdx.x * blockDim.x + threadIdx.x; x < N; x += (long long)gridDim.x * blockDim.x) {
+        u32 acc[6], f[6], tmp[6];
+        acc[0] = R1; 
+        #pragma unroll
+        for (int p = 1; p < 6; p++) acc[p] = 0;
+        for (int t = 0; t < n; t++) {
+            const u32* src = ((x >> t) & 1) ? tm : om;
+            #pragma unroll
+            for (int p = 0; p < 6; p++) f[p] = src[p * n + t];
+            ext_mul(acc, f, tmp);
+            #pragma unroll
+            for (int p = 0; p < 6; p++) acc[p] = tmp[p];
+        }
+        #pragma unroll
+        for (int p = 0; p < 6; p++) out[x * 6 + p] = (long long)mont(acc[p], 1u);      // mont(a_m, 1) = a
+    }
+}
 // base x ext matvec: out[i] = sum_c M[i, c] * e[c]   (e in Montgomery planes (6, C); out normal form, int64 (R, 6)); one block per row
 extern "C" __global__ void sc_matvec(
     const int* __restrict__ M, const u32* __restrict__ e, long long* __restrict__ out, long long C)
@@ -988,12 +1032,12 @@ extern "C" __global__ void sc_gather(
     const int* __restrict__ z, const int* __restrict__ ptr, const int* __restrict__ row, const int* __restrict__ val,
     int* __restrict__ T, long long K, long long C)
 {
-    const long long n = K * C;
-    for (long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x; idx < n; idx += (long long)gridDim.x * blockDim.x) {
-        const long long k = idx / C, c = idx - k * C;
+    const long long k = blockIdx.y;                                   // grid (ceil(C / 256), K)
+    const int e0 = ptr[k], e1 = ptr[k + 1];
+    for (long long c = (long long)blockIdx.x * blockDim.x + threadIdx.x; c < C; c += (long long)gridDim.x * blockDim.x) {
         u64 acc = 0;
-        for (int e = ptr[k]; e < ptr[k + 1]; e++) acc += ((u64)(u32)val[e] * (u64)(u32)z[(long long)row[e] * C + c]) % P64;
-        T[idx] = (int)(acc % P64);
+        for (int e = e0; e < e1; e++) acc += ((u64)(u32)val[e] * (u64)(u32)z[(long long)row[e] * C + c]) % P64;
+        T[k * C + c] = (int)(acc % P64);
     }
 }
 """
@@ -1029,11 +1073,24 @@ def build_tables_cuda(cons: Constraints, z: torch.Tensor) -> dict[str, torch.Ten
         ptr = torch.zeros((K + 1,), dtype=torch.int64, device=dev)
         ptr[1:] = torch.cumsum(torch.bincount(ks_s, minlength=K), 0)
         T = torch.empty((K, C), dtype=torch.int32, device=dev)
-        n = K * C
-        blocks = int(min(1 << 16, (n + 255) // 256))
-        kern((blocks,), (256,), (_cp(z), _cp(ptr.to(torch.int32)), _cp(rs_s.to(torch.int32)), _cp((vs_s % P).to(torch.int32)),
-                                 _cp(T), cp.int64(K), cp.int64(C)))
+        kern((int(min(1024, (C + 255) // 256)), K), (256,), (_cp(z), _cp(ptr.to(torch.int32)), _cp(rs_s.to(torch.int32)),
+                                                            _cp((vs_s % P).to(torch.int32)), _cp(T), cp.int64(K), cp.int64(C)))
         out[side] = T
+    return out
+
+
+def eq_table_cuda(tau: torch.Tensor) -> torch.Tensor:
+    """``eq_table`` as one kernel (``(2^n, 6)`` int64, normal form)."""
+    import cupy as cp
+    n = tau.shape[0]
+    dev = tau.device
+    one = fc_one((), dev)
+    tm = mont_planes(tau % P)
+    om = mont_planes((one - tau) % P)
+    out = torch.empty((1 << n, D), dtype=torch.int64, device=dev)
+    kern = _kernel("sc_eq", False)
+    blocks = int(min(4096, ((1 << n) + 255) // 256))
+    kern((blocks,), (256,), (_cp(tm), _cp(om), _cp(out), cp.int32(n)))
     return out
 
 
@@ -1138,6 +1195,22 @@ class CudaState:
             self.T, self.ps, self.base = out, ps_out, False
         self.R = hR
 
+    @classmethod
+    def from_ext(cls, U: torch.Tensor, V: torch.Tensor) -> "CudaState":
+        """A degree-2 sumcheck ``sum_x U(x) V(x)`` over ext tables ``(2^n, 6)`` with uniform weights (``C = 0``): the same
+        kernels, column phase from the start."""
+        self = cls.__new__(cls)
+        dev = U.device
+        n = U.shape[0]
+        self.dev, self.R, self.Cc, self.base, self.phase, self.ps = dev, n, 1, False, "cols", n
+        self.T = {"a": mont_planes(U).reshape(D, n, 1), "b": mont_planes(V).reshape(D, n, 1),
+                  "c": torch.zeros((D, n, 1), dtype=torch.int32, device=dev)}
+        ones = torch.zeros((D, n), dtype=torch.int32, device=dev)
+        ones[0] = R_MONT
+        self.wr_cols = [ones[:, :1 << t].contiguous() for t in range(n.bit_length())]
+        self.one_col = ones[:, :1].contiguous()
+        return self
+
     def round2(self) -> torch.Tensor:
         import cupy as cp
         assert self.base and self.phase == "rows" and self.R >= 4
@@ -1201,12 +1274,13 @@ def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: s
     if dev.type == "cuda":
         torch.cuda.reset_peak_memory_stats(dev)
         base_mem = torch.cuda.memory_allocated(dev)
-    coins = LocalCoins(b"bench")
-    proof = prove(lay, cons, z, coins, engine=engine)
+    proof = prove(lay, cons, z, LocalCoins(b"bench"), engine=engine)
+    out["timings_cold"] = proof.timings                      # first prove in the process: includes the cupy import / kernel load
+    proof = prove(lay, cons, z, LocalCoins(b"bench"), engine=engine)
     if dev.type == "cuda":
         out["peak_mem_gb"] = (torch.cuda.max_memory_allocated(dev)) / 1e9
         out["base_mem_gb"] = base_mem / 1e9
-    out["timings"] = proof.timings
+    out["timings"] = proof.timings                           # steady state
     out["bytes"] = proof.n_bytes()
     t2 = time.perf_counter()
     pubs = public_rows(runner.sys, lay, pub_subs, device)
@@ -1244,6 +1318,54 @@ def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: s
     return out
 
 
+class RecordingCoins:
+    """Wraps a coins object and records every draw ``(label, values)`` and absorb ``(label, hex)`` in order (fixtures)."""
+
+    def __init__(self, inner):
+        self.inner, self.log = inner, []
+
+    def absorb(self, label: bytes, data: bytes) -> None:
+        self.log.append({"absorb": label.decode(), "bytes": data.hex()})
+        self.inner.absorb(label, data)
+
+    def challenge(self, label: bytes, n: int):
+        v = self.inner.challenge(label, n)
+        self.log.append({"challenge": label.decode(), "n": n, "values": [[int(x) for x in row] for row in v]})
+        return v
+
+
+def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int = 2, seed: int = 7, device: str = "cpu") -> dict:
+    """A complete verifier fixture for ligerito-verify-rs: layout, constraint COO triples, public rows, proof bytes (hex), the
+    claims, and the transcript (every absorb and every challenge, in order) of an honest run with ``LocalCoins(b"fixture")``."""
+    from backends.direct.ligero.relations import relation
+    from backends.direct.ligero.relchain import RelationChainRunner, instances
+    from .layout import build_z, constraints, layout_for, public_rows
+    rel = relation(relation_name)
+    runner = RelationChainRunner(rel, device, -128.0)
+    vus = instances(rel, n_vus, seed=seed)
+    subs, nv = ligero_subbatches(rel, runner, vus, l, S, device)
+    lay = layout_for(runner.sys, l, nv, rel.steps)
+    cons = constraints(runner.sys, lay, device)
+    z = build_z(runner.sys, lay, subs, device)
+    pubs = public_rows(runner.sys, lay, [s.public() for s in subs], device)
+    coins = RecordingCoins(LocalCoins(b"fixture"))
+    proof = prove(lay, cons, z, coins)
+    ok, why, claims = verify(lay, cons, pubs, proof, LocalCoins(b"fixture"), device=device)
+    assert ok, why
+    return {
+        "relation": relation_name, "l": l, "S": S, "n_vus": nv, "seed": seed, "coins": "LocalCoins(b'fixture')",
+        "layout": {**lay.summary(), "m": lay.m, "virt": lay.virt, "c_rows": list(lay.c_rows), "n_j": lay.n_j, "n_s": lay.n_s,
+                   "row_of_sys": {int(k): int(v) for k, v in lay.row_of_sys.items()}},
+        "constraints": {"K_pad": cons.K_pad, "names": cons.names,
+                        **{side: [[int(a) for a in t.tolist()] for t in cons.coo[side]] for side in "abc"}},
+        "public_rows": {name: [int(x) for x in v.tolist()] for name, v in pubs.items()},
+        "proof_hex": proof.to_bytes().hex(),
+        "claims": [{"name": c.name, "point": [[int(x) for x in row] for row in c.point.tolist()], "value": [int(x) for x in c.value.tolist()]}
+                   for c in claims],
+        "transcript": coins.log,
+    }
+
+
 def _main():
     import argparse
     import json
@@ -1256,7 +1378,12 @@ def _main():
     ap.add_argument("--engine", default=None)
     ap.add_argument("--negatives", action="store_true")
     ap.add_argument("--json", default=None)
+    ap.add_argument("--fixture", default=None, help="write the toy-size verifier fixture (fp8-ada, l = 64, S = 2, CPU) to this path and exit")
     a = ap.parse_args()
+    if a.fixture:
+        with open(a.fixture, "w") as f:
+            json.dump(fixture(), f)
+        return
     res = bench(a.relation, a.vus, a.l, a.S, a.device, a.engine, a.negatives)
     s = json.dumps(res, indent=1, default=str)
     print(s)
