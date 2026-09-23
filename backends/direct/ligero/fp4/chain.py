@@ -151,18 +151,24 @@ def _pad_unit():
 HINTS_MODES = ("device", "numpy")
 
 
-def _unit_arrays(vus: list[tuple], l: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """The l columns of a sub-batch as arrays -- ``a`` / ``b`` (l, 68) int64, ``c_in`` (l,) -- VU v's 24 steps at
-    columns [24 v, 24 v + 24) with the chain fed forward (``c_in`` of step s = the recorded accumulator of step s - 1,
-    0 at a start), the rest pad units (``_pad_unit``: zero operands, c_in = 0).  Vectorised (one stack per operand
-    instead of one Python tuple per unit)."""
+def _unit_arrays(vus: list[tuple], l: int, dtype=np.int64, validate: bool = True) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The l columns of a sub-batch as arrays -- ``a`` / ``b`` (l, 68) of ``dtype``, ``c_in`` (l,) int64 -- VU v's 24
+    steps at columns [24 v, 24 v + 24) with the chain fed forward (``c_in`` of step s = the recorded accumulator of step
+    s - 1, 0 at a start), the rest pad units (``_pad_unit``: zero operands, c_in = 0).  Vectorised (one stack per operand
+    instead of one Python tuple per unit).  ``dtype=np.uint8`` is the device hint generator's input format (8x less host
+    memory traffic than int64, no conversion inside the timed hint phase); ``validate`` asserts every operand word is a byte
+    before the narrowing cast (the words of an honest instance are E2M1 codes < 16 and UE4M3 bytes < 128; a word that is
+    not a byte is not a public input the verifier's decode accepts) -- this runs before the prover's clock starts."""
     n = len(vus)
-    a = np.zeros((l, WORDS), dtype=np.int64)
-    b = np.zeros((l, WORDS), dtype=np.int64)
+    a = np.zeros((l, WORDS), dtype=dtype)
+    b = np.zeros((l, WORDS), dtype=dtype)
     c_in = np.zeros(l, dtype=np.int64)
     if n:
-        a[:n * STEPS] = np.stack([np.asarray(A, dtype=np.int64) for A, _, _, _ in vus]).reshape(n * STEPS, WORDS)
-        b[:n * STEPS] = np.stack([np.asarray(B, dtype=np.int64) for _, B, _, _ in vus]).reshape(n * STEPS, WORDS)
+        for dst, idx in ((a, 0), (b, 1)):
+            w = np.stack([np.asarray(vu[idx], dtype=np.int64) for vu in vus]).reshape(n * STEPS, WORDS)
+            if validate and dtype != np.int64 and (w.min() < 0 or w.max() >= 2 ** (8 * np.dtype(dtype).itemsize)):
+                raise ValueError("public inputs rejected: an operand word is not a byte")
+            dst[:n * STEPS] = w
         accs = np.asarray([accs for _, _, accs, _ in vus], dtype=np.int64).reshape(n, STEPS)
         c_in[:n * STEPS] = np.concatenate([np.zeros((n, 1), dtype=np.int64), accs[:, :-1]], axis=1).reshape(-1)
     return a, b, c_in
@@ -208,9 +214,10 @@ class FP4ChainRunner:
         lay = self.layout(len(vus), min_l)
         y32 = torch.zeros(lay.l, dtype=torch.int64)
         y32[STEPS - 1:STEPS * len(vus):STEPS] = torch.as_tensor([int(y) for _, _, _, y in vus], dtype=torch.int64)
-        a, b, c_in = _unit_arrays(vus, lay.l)
+        device_hints = variant is None and self.hints_mode == "device"
+        a, b, c_in = _unit_arrays(vus, lay.l, dtype=np.uint8 if device_hints else np.int64)   # marshalling: before the clock
         t0 = time.perf_counter()
-        if variant is None and self.hints_mode == "device":
+        if device_hints:
             # the decode and the hints on the device (one graph replay; ``check``: also against the numpy path)
             from .hints_device import PIN_NAMES, hints_device_for
             pub_rows, hints, _y = hints_device_for(self.sys, lay.l, self.device)(c_in, a, b, check=check)
