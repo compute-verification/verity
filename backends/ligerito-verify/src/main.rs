@@ -5,8 +5,11 @@
 //!     # one PCS proof: LGRTOPV0 (statement embedded) or proto/pcs.py bytes (point in X.z); --coins = the
 //!     # verifier's coins of a live session (u32 LE length + bytes each; interactive replay; default: Fiat-Shamir
 //!     # diagnostic with transcript label L, default "ligerito-proto/v1")
-//! ligerito-verify batch --dir DIR [--jobs N] [--json out.json] [--label L]
-//!     # every DIR/*.proof (with DIR/<name>.coins when present); accepted iff every proof is
+//! ligerito-verify batch --dir DIR [--jobs N] [--json out.json] [--label L] [--target-bits B]
+//!     # every DIR/*.proof (with DIR/<name>.z / <name>.coins when present) must verify and every DIR/*.proof.neg must
+//!     # be rejected; with DIR/manifest.json (a list, or {"proofs": [...]}, of {"proof": name, "accepted": bool,
+//!     # "reason": str}) every listed verdict must agree with ours; with --target-bits the union of the proofs' own
+//!     # soundness bounds must be <= 2^-B.  Exit 0 iff accepted.
 //! ligerito-verify selftest [--n N] [--kprime a,b,c] [--queries s,s,s] [--rate-log2 R] [--emit DIR]
 //!     # reference prover -> verifier round trip (+ negatives); --emit writes the proof / coins / negatives to DIR
 //! ~~~
@@ -79,6 +82,36 @@ fn verdict_json(v: &Verdict) -> String {
 }
 
 /// Verify one proof file, `reps` times (timing), with replayed coins when a coins file is given.
+/// `X.proof` / `X.proof.neg` -> `X.<ext>` when it exists.
+fn sidecar(proof_path: &Path, ext: &str) -> Option<PathBuf> {
+    let name = proof_path.file_name()?.to_string_lossy().to_string();
+    let stem = name.strip_suffix(".proof.neg").or_else(|| name.strip_suffix(".proof"))?;
+    let p = proof_path.with_file_name(format!("{stem}.{ext}"));
+    if p.exists() { Some(p) } else { None }
+}
+
+/// DIR/manifest.json: a JSON list (or an object with a "proofs" list) of {"proof": name, "accepted": bool, "reason": str}
+/// -- the Python verifier's verdicts, matched by file name.  Missing or unparsable manifest: no entries.
+fn manifest_verdicts(dir: &Path) -> Vec<(String, bool, String)> {
+    let text = match std::fs::read_to_string(dir.join("manifest.json")) {
+        Ok(t) => t,
+        Err(_) => return Vec::new(),
+    };
+    let doc = match ligerito_verify::json::parse(&text) {
+        Ok(d) => d,
+        Err(_) => return Vec::new(),
+    };
+    let list = doc.as_arr().or_else(|| doc.get("proofs").and_then(|p| p.as_arr())).unwrap_or(&[]);
+    list.iter()
+        .filter_map(|e| {
+            let name = e.get("proof")?.as_str()?.to_string();
+            let acc = e.get("accepted")?.as_bool()?;
+            let why = e.get("reason").and_then(|r| r.as_str()).unwrap_or("").to_string();
+            Some((name, acc, why))
+        })
+        .collect()
+}
+
 fn verify_file(proof_path: &Path, coins_path: Option<&Path>, label: &[u8], reps: usize) -> Verdict {
     let name = proof_path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     let bytes = match std::fs::read(proof_path) {
@@ -103,7 +136,7 @@ fn verify_file(proof_path: &Path, coins_path: Option<&Path>, label: &[u8], reps:
     for _ in 0..reps.max(1) {
         result = (|| {
             let (stmt, proof) = if looks_like_proto(&bytes) {
-                let zp = proof_path.with_extension("z");
+                let zp = sidecar(proof_path, "z").unwrap_or_else(|| proof_path.with_extension("z"));
                 let zraw = std::fs::read(&zp).map_err(|e| format!("proto proof needs its point {}: {e}", zp.display()))?;
                 read_proto(&bytes, read_point(&zraw)?)?
             } else {
@@ -161,38 +194,81 @@ fn main() {
             let jobs: usize = arg(&args, "--jobs")
                 .map(|s| s.parse().expect("--jobs"))
                 .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1));
-            let mut proofs: Vec<PathBuf> = std::fs::read_dir(&dir)
+            let target_bits: Option<f64> = arg(&args, "--target-bits").map(|s| s.parse().expect("--target-bits"));
+            // *.proof must verify; *.proof.neg must be rejected
+            let mut files: Vec<(PathBuf, bool)> = std::fs::read_dir(&dir)
                 .unwrap_or_else(|e| panic!("--dir {}: {e}", dir.display()))
                 .filter_map(|e| e.ok().map(|e| e.path()))
-                .filter(|p| p.extension().map_or(false, |x| x == "proof"))
+                .filter_map(|p| {
+                    let name = p.file_name()?.to_string_lossy().to_string();
+                    if name.ends_with(".proof") {
+                        Some((p, true))
+                    } else if name.ends_with(".proof.neg") {
+                        Some((p, false))
+                    } else {
+                        None
+                    }
+                })
                 .collect();
-            proofs.sort();
+            files.sort();
+            let manifest = manifest_verdicts(&dir);
             let next = AtomicUsize::new(0);
-            let results: Vec<std::sync::Mutex<Option<Verdict>>> = proofs.iter().map(|_| std::sync::Mutex::new(None)).collect();
+            let results: Vec<std::sync::Mutex<Option<Verdict>>> = files.iter().map(|_| std::sync::Mutex::new(None)).collect();
             let t0 = Instant::now();
             std::thread::scope(|sc| {
-                for _ in 0..jobs.max(1).min(proofs.len().max(1)) {
+                for _ in 0..jobs.max(1).min(files.len().max(1)) {
                     sc.spawn(|| loop {
                         let i = next.fetch_add(1, Ordering::SeqCst);
-                        if i >= proofs.len() {
+                        if i >= files.len() {
                             break;
                         }
-                        let p = &proofs[i];
-                        let coins = p.with_extension("coins");
-                        let coins = if coins.exists() { Some(coins) } else { None };
+                        let p = &files[i].0;
+                        let coins = sidecar(p, "coins");
                         let v = verify_file(p, coins.as_deref(), label.as_bytes(), reps);
                         *results[i].lock().unwrap() = Some(v);
                     });
                 }
             });
             let verdicts: Vec<Verdict> = results.into_iter().map(|m| m.into_inner().unwrap().unwrap()).collect();
-            let all = !verdicts.is_empty() && verdicts.iter().all(|v| v.accepted);
+            let mut problems: Vec<String> = Vec::new();
+            if verdicts.is_empty() {
+                problems.push("no *.proof in the directory".into());
+            }
+            for (v, (_, expect)) in verdicts.iter().zip(&files) {
+                if v.accepted != *expect {
+                    problems.push(format!("{}: {} but expected {}", v.name, if v.accepted { "accepted" } else { "rejected" }, if *expect { "acceptance" } else { "rejection" }));
+                }
+            }
+            let mut manifest_checked = 0usize;
+            for (name, py_accepted, py_reason) in &manifest {
+                if let Some(v) = verdicts.iter().find(|v| &v.name == name) {
+                    manifest_checked += 1;
+                    if v.accepted != *py_accepted {
+                        problems.push(format!("{name}: python_verdict {py_accepted} ({py_reason}) but ours is {} ({})", v.accepted, v.reason));
+                    }
+                }
+            }
+            // union bound over the accepted proofs' own soundness figures
+            let union_log2 = {
+                let s: f64 = verdicts.iter().filter(|v| v.accepted).filter_map(|v| v.report.as_ref()).map(|r| r.soundness_log2.exp2()).sum();
+                if s > 0.0 { s.log2() } else { f64::NEG_INFINITY }
+            };
+            if let Some(b) = target_bits {
+                if union_log2 > -b {
+                    problems.push(format!("union soundness 2^{union_log2:.2} exceeds the target 2^-{b}"));
+                }
+            }
+            let all = problems.is_empty();
             let js = format!(
-                "{{\"dir\":{},\"accepted\":{},\"n_proofs\":{},\"n_accepted\":{},\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
+                "{{\"dir\":{},\"accepted\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
                 json_str(&dir.display().to_string()),
                 all,
-                verdicts.len(),
+                files.iter().filter(|f| f.1).count(),
+                files.iter().filter(|f| !f.1).count(),
                 verdicts.iter().filter(|v| v.accepted).count(),
+                manifest_checked,
+                if union_log2.is_finite() { format!("{union_log2:.3}") } else { "null".into() },
+                problems.iter().map(|p| json_str(p)).collect::<Vec<_>>().join(","),
                 t0.elapsed().as_secs_f64(),
                 verdicts.iter().map(verdict_json).collect::<Vec<_>>().join(",")
             );
@@ -242,12 +318,17 @@ fn main() {
                 std::fs::write(dir.join("live.coins"), Live::serialize(&coins)).unwrap();
                 std::fs::write(dir.join("proto.proof"), ligerito_verify::format::write_proto(&stmt, &proof, rep.coins)).unwrap();
                 std::fs::write(dir.join("proto.z"), ligerito_verify::transcript::ext_bytes(&stmt.z)).unwrap();
+                let mut written = 0;
                 for (j, (what, s, pf)) in negs.iter().enumerate() {
                     let b = write_pcs_v0(s, pf);
+                    if b == bytes {
+                        continue; // an in-memory tamper the container cannot express (e.g. an ext entry in a base row)
+                    }
                     std::fs::write(dir.join(format!("neg{j:02}.proof.neg")), &b).unwrap();
                     std::fs::write(dir.join(format!("neg{j:02}.what")), what).unwrap();
+                    written += 1;
                 }
-                eprintln!("wrote {} (honest.proof, live.proof/.coins, proto.proof/.z + {} negatives as *.proof.neg)", dir.display(), negs.len());
+                eprintln!("wrote {} (honest.proof, live.proof/.coins, proto.proof/.z + {written} negatives as *.proof.neg)", dir.display());
             }
             std::process::exit(if rejected == negs.len() { 0 } else { 1 });
         }
