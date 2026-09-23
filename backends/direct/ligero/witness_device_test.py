@@ -48,6 +48,30 @@ def test_fused_witness_equals_torch_program(rel_name):
     assert torch.equal(W_dev.to(torch.int64), W_ref)
 
 
+@pytest.mark.parametrize("rel_name", ["bf16-hopper", "fp8-ada"])
+def test_interpreter_kernel_equals_torch_program(rel_name):
+    """The program-independent interpreter kernel (witness_device.INTERP_OPS; lane blake3-leaf, for the 38k-op BLAKE3
+    leaf systems) forced on a small system: value for value the torch program, and the same W as the codegen kernel."""
+    from . import witness_device
+    R, pub, hints = _sub_batch(rel_name)
+    old_ops, old_impl = witness_device.INTERP_OPS, witness_mod.IMPL
+    try:
+        witness_device.INTERP_OPS = 0
+        f = witness_device.FusedWitness(R.sys, "cuda")
+        assert f.interp
+        pub_rows = torch.stack([pub[name].to("cuda") for _, name in R.sys.pins]) % witness_mod.P
+        W_int = f.run(pub_rows, hints)
+    finally:
+        witness_device.INTERP_OPS = old_ops
+    try:
+        witness_mod.IMPL = "legacy"
+        W_ref = witness_mod.build_witness(R.sys, pub, hints, "cuda")
+    finally:
+        witness_mod.IMPL = old_impl
+    assert W_int.shape == W_ref.shape
+    assert torch.equal(W_int.to(torch.int64), W_ref)
+
+
 def test_fused_witness_equals_torch_program_fp4():
     """The FP4 relation's program (fp4/relation.py: 1583 rows/unit, chain-mode system) through the same fused kernel --
     the FP4 chain runner takes the shared ``witness.build_witness`` path, so ``--impl device`` covers its witness too."""

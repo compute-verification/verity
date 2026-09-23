@@ -296,6 +296,97 @@ def _generate_tab(sys: System, tab: list, program: list | None = None) -> str:
 
 
 
+# Very large programs (lane blake3-leaf: the BLAKE3 leaf is 38k ops / 1.8M operand terms per column; the chunked table
+# form above is a 5 MB source that NVRTC did not finish in 12 minutes at 26 GB) run as ONE program-independent
+# interpreter kernel: the ops themselves are tables (kind, output row, operand indices, sizes) and every operand is an
+# ``affine`` loop, so the source is a few dozen lines and compiles in a second.  Same residue per term and per op as the
+# table form (the ops execute in program order in every thread), so W is identical; the mode switches on only above
+# INTERP_OPS operations, which no earlier system reaches (the Poseidon2-hashed fp8-ada program is ~6k ops).
+INTERP_OPS = 16384
+
+_KERNEL_INTERP = r"""
+extern "C" __global__ void __launch_bounds__(@THREADS@)
+witness_program(const i64* __restrict__ pub, const i64* __restrict__ hints, unsigned* __restrict__ Wm, int l,
+                const int* __restrict__ J, const unsigned* __restrict__ C,
+                const int* __restrict__ OPS, int n_ops, const unsigned* __restrict__ OPD, const i64* __restrict__ SEL)
+{
+    const int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (col >= l) return;
+#define EV(k) affine(J, C, (int)OPD[3 * (k)], (int)OPD[3 * (k) + 1], (u64)OPD[3 * (k) + 2], Wm, l, col)
+    for (int i = 0; i < n_ops; ++i) {
+        const int* o = OPS + 6 * i;
+        const int kind = o[0], idx = o[1];
+        switch (kind) {
+        case 0: W(idx) = (unsigned)PUB(o[2]); break;
+        case 1: W(idx) = (unsigned)modp_signed(HINT(o[2])); break;
+        case 2: { const u64 x = EV(o[2]); const u64 y = EV(o[3]); W(idx) = (unsigned)((x * y) % P); } break;
+        case 3: { const u64 x = EV(o[3]); const int nb = o[2];
+                  for (int b = 0; b < nb; ++b) W(idx + b) = (unsigned)((x >> b) & 1ULL); } break;
+        case 4: { const u64 x = EV(o[3]); const i64 sx = (x > (u64)HALF_P) ? (i64)x - (i64)P : (i64)x;
+                  const int ns = o[2], so = o[4];
+                  for (int s = 0; s < ns; ++s) W(idx + s) = (unsigned)((sx >= SEL[2 * (so + s)]) && (sx <= SEL[2 * (so + s) + 1])); } break;
+        case 5: { const u64 x = EV(o[2]); W(idx) = (unsigned)modinv_p(x); } break;
+        default: break;
+        }
+    }
+#undef EV
+}
+"""
+
+
+def _interp_tables(sys: System, program: list) -> tuple:
+    """The interpreter's tables: ``(J, C)`` operand terms, ``OPS`` (n_ops, 6) int32, ``OPD`` (n_operands, 3) uint32 =
+    (offset, n_terms, constant), ``SEL`` (n_sels, 2) int64 selector bounds."""
+    import numpy as np
+    hpos = {n: i for i, (_, n) in enumerate(sys.hints)}
+    ppos = {n: i for i, (_, n) in enumerate(sys.pins)}
+    J: list[int] = []
+    Cc: list[int] = []
+    opd: list[tuple[int, int, int]] = []
+    sel: list[tuple[int, int]] = []
+    ops: list[tuple[int, ...]] = []
+
+    def operand(e: Expr) -> int:
+        k = len(opd)
+        opd.append((len(J), len(e.lin), e.c % P))
+        for j, v in e.lin.items():
+            J.append(j)
+            Cc.append(v % P)
+        return k
+
+    for op in program:
+        kind = op[0]
+        if kind == "pin":
+            ops.append((0, op[1], ppos[op[2]], 0, 0, 0))
+        elif kind == "hint":
+            ops.append((1, op[1], hpos[op[2]], 0, 0, 0))
+        elif kind == "prod":
+            ops.append((2, op[1], operand(op[2]), operand(op[3]), 0, 0))
+        elif kind == "bits":
+            ops.append((3, op[1], op[2], operand(op[3]), 0, 0))
+        elif kind == "sels":
+            _, row0, k0s, k1s, key = op
+            so = len(sel)
+            for k0, k1 in zip(k0s, k1s):
+                if not (-(2**63) <= k0 < 2**63 and -(2**63) <= k1 < 2**63):
+                    raise ValueError("selector bound outside int64")
+                sel.append((int(k0), int(k1)))
+            ops.append((4, row0, len(k0s), operand(key), so, 0))
+        elif kind == "inv":
+            ops.append((5, op[1], operand(op[2]), 0, 0, 0))
+        else:
+            raise ValueError(kind)
+    return (np.array(J, dtype=np.int32), np.array(Cc, dtype=np.uint32),
+            np.array(ops, dtype=np.int32).reshape(-1, 6), np.array(opd, dtype=np.uint32).reshape(-1, 3),
+            np.array(sel if sel else [(0, 0)], dtype=np.int64).reshape(-1, 2))
+
+
+def generate_interp() -> str:
+    """The interpreter kernel's source (independent of the program)."""
+    pre, _, _ = _HEAD.partition("extern \"C\" __global__")
+    return "\n".join([pre, _AFFINE, _KERNEL_INTERP.replace("@THREADS@", str(THREADS))])
+
+
 def generate(sys: System, tab: list | None = None, program: list | None = None) -> str:
     """The kernel source: the register-row straight-line form, or -- when ``tab`` is given (programs over TAB_THRESHOLD
     terms, the hashed relations) -- the table-driven chunked form."""
@@ -318,6 +409,19 @@ class FusedWitness:
         self.cp, self.sys, self.device = cp, sys, torch.device(device)
         self.hooks = list(getattr(sys, "witness_hooks", None) or ())
         program = _program(sys)
+        self.interp = len(program) > INTERP_OPS
+        if self.interp:
+            import numpy as np
+            J, C, ops, opd, sel = _interp_tables(sys, program)
+            self.src = generate_interp()
+            self.digest = hashlib.sha256(self.src.encode() + J.tobytes() + C.tobytes() + ops.tobytes() + opd.tobytes() +
+                                         sel.tobytes()).hexdigest()
+            self.mod = cp.RawModule(code=self.src, options=("-std=c++17",))
+            self.kernel = self.mod.get_function("witness_program")
+            with cp.cuda.Device(self.device.index or 0):
+                self.tables = (cp.asarray(J), cp.asarray(C), cp.asarray(ops.reshape(-1)), np.int32(len(ops)),
+                               cp.asarray(opd.reshape(-1)), cp.asarray(sel.reshape(-1)))
+            return
         tab: list | None = [] if _n_terms(program) > TAB_THRESHOLD else None
         self.src = generate(sys, tab, program)
         self.digest = hashlib.sha256(self.src.encode()).hexdigest()
