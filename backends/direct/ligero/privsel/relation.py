@@ -175,8 +175,8 @@ def _decode_word(ctx: LigeroCtx, pl: Plan, name: str):
 
 
 def _align(ctx: LigeroCtx, pl: Plan, sp: ShiftPlan, scope: str, ubits: list[Expr], u: Expr, E: Expr, e_i: Expr):
-    """One product's alignment: returns (X or (XL, XH), sels) with the exponent constraint stated.  ``E - e_i = PS - R + RB c``
-    (live), ``= PB + (RB - 1 - R) + RB K`` (dead), unconstrained when ``u = 0`` (zero)."""
+    """One product's alignment: returns (X or (XL, XH), X as one full-width form) with the exponent constraint stated.
+    ``E - e_i = PS - R + RB c`` (live), ``= PB + (RB - 1 - R) + RB K`` (dead), unconstrained when ``u = 0``."""
     RB, PS, PB = sp.RB, pl.PS, pl.PB
     ctx.scope = scope
     rsel = _onehot(ctx, f"{scope}.r", RB)
