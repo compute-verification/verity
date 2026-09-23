@@ -1055,6 +1055,10 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         for xx in 0..n_links {
             let ci = involved.iter().position(|r| *r == chain.c_rows[xx]).unwrap();
             let yx = &chain.y[xx];
+            // the terms of Y_x resolved to involved-row positions once (a hashed system's capacity links are 24-term
+            // affine forms over ~200 involved rows: resolving per column cost 1 s per proof)
+            let terms: Vec<(usize, u32)> = yx.lin.iter()
+                .map(|(row, kappa)| (involved.iter().position(|r| r == row).unwrap(), neg(*kappa))).collect();
             let mut sum_link = 0u32;
             for j in 0..l {
                 let rl = if !is_link(j) { 0 } else if xx < 3 { rc(xx, j) } else { extra(xx - 3, j) };
@@ -1065,10 +1069,9 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
                         let a = &mut coef[cf(ci) + j + 1];
                         *a = add(*a, rl);
                     }
-                    for (row, kappa) in &yx.lin {
-                        let ri = involved.iter().position(|r| r == row).unwrap();
+                    for &(ri, nk) in &terms {
                         let a = &mut coef[cf(ri) + j];
-                        *a = add(*a, mul(rl, neg(*kappa)));
+                        *a = add(*a, mul(rl, nk));
                     }
                     sum_link = add(sum_link, rl);
                 }
@@ -1081,16 +1084,18 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         }
         // end_j, one constraint per end term (chain.py): Y_x(W)[j] = the public word (v1, family 6) or its bit field
         // (v2 components: families 6, 0, 1 -- the link families are unused at an end column)
+        let end_terms: Vec<Vec<(usize, u32)>> = chain.ends.iter()
+            .map(|term| term.y.lin.iter().map(|(row, kappa)| (involved.iter().position(|r| r == row).unwrap(), *kappa)).collect())
+            .collect();
         for j in 0..l {
             if !is_end(j) {
                 continue;
             }
-            for term in &chain.ends {
+            for (term, terms) in chain.ends.iter().zip(&end_terms) {
                 let re = rc(term.family, j);
-                for (row, kappa) in &term.y.lin {
-                    let ri = involved.iter().position(|r| r == row).unwrap();
+                for &(ri, kappa) in terms {
                     let a = &mut coef[cf(ri) + j];
-                    *a = add(*a, mul(re, *kappa));
+                    *a = add(*a, mul(re, kappa));
                 }
                 rhs[dd] = add(rhs[dd], mul(re, sub(term.value(st.y16[j]), term.y.c)));
             }

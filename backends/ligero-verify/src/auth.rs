@@ -20,7 +20,7 @@
 //! Leaf ranks of the statement's column-major words: A/B word `o` of column `j` (step `i = j % steps` of chain
 //! `v = j / steps`) is leaf `vu_index[v] * K + i * 16 + o`; the chain's output word is leaf `vu_index[v]` of tree y.
 
-use crate::hash::{sha256, Sha256};
+use crate::hash::Sha256;
 
 pub const FRAME: &[u8] = b"veritor/protocol/merkle/frame/v3\0";
 pub const TAGGED_PREFIX: &[u8] = b"veritor/tagged-sha256/v1\0";
