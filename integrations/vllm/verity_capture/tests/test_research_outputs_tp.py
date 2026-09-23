@@ -76,6 +76,59 @@ def test_tp_build_and_match_outputs_take_the_rank_files(tmp_path):
     assert (tmp_path / "run_m" / "outputs" / "match" / "match" / "tp2_match.json").is_file()
 
 
+def _commit_line(d: Path, word: str) -> None:
+    with open(d / "stages.txt", "a") as f:
+        f.write(f"commit {word} 2026-09-23T00:00:02Z rc=0\n")
+
+
+def test_tp_commit_reads_tp_commit_summary(tmp_path):
+    d = _tp_dir(tmp_path)
+    _w(d / "commit" / "summary.json", {"pass": True, "tokens_equal": True, "pairs": 3})
+    _commit_line(d, "PASS")
+    doc = ro.build_outputs(d, ROW, "commit", tmp_path / "run_c", {"build": "art:" + "f" * 64, "match": "art:" + "e" * 64})
+    v = next(e for e in doc["outputs"] if e["name"] == "verdict")
+    assert v["meta"]["decision_record"] == "commit/summary.json"
+    assert (v["meta"]["tp_pass"], v["meta"]["tokens_equal"], v["meta"]["pairs"]) == (True, True, 3)
+    assert "decision_record_missing" not in v["meta"]
+
+
+def test_commit_pass_without_its_decision_document_is_refused(tmp_path):
+    d = _tp_dir(tmp_path)
+    _commit_line(d, "PASS")
+    try:
+        ro.build_outputs(d, ROW, "commit", tmp_path / "run_c", {})
+    except ValueError as e:
+        assert "commit/summary.json" in str(e)
+    else:
+        raise AssertionError("a PASS Commit without commit/summary.json published")
+    t1 = tmp_path / "t1"
+    _w(t1 / "stages.txt", "commit PASS 2026-09-23T00:00:02Z rc=0\n")
+    _w(t1 / "commit" / "verdict.json", {"verdict": "PASS"})
+    try:
+        ro.build_outputs(t1, "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager", "commit", tmp_path / "run_t1", {})
+    except ValueError as e:
+        assert "verdict.json" in str(e)
+    else:
+        raise AssertionError("a PASS TP1 Commit without verdict.json published")
+
+
+def test_failed_commit_names_the_missing_decision_document(tmp_path):
+    d = _tp_dir(tmp_path)
+    _commit_line(d, "FAIL")
+    _w(d / "commit.log", "log")
+    doc = ro.build_outputs(d, ROW, "commit", tmp_path / "run_c", {})
+    assert all(e["name"] != "verdict" or e["meta"]["decision_record_missing"] == "commit/summary.json" for e in doc["outputs"])
+
+
+def test_tp1_commit_reads_the_verdict_of_record(tmp_path):
+    d = tmp_path / "row"
+    _w(d / "stages.txt", "commit PASS 2026-09-23T00:00:02Z rc=0\n")
+    _w(d / "verdict.json", {"outcome": "PASS", "runs": {"instrumented": 3, "control": 3, "failed": 0}})
+    doc = ro.build_outputs(d, "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager", "commit", tmp_path / "run", {})
+    v = next(e for e in doc["outputs"] if e["name"] == "verdict")
+    assert (v["meta"]["decision_record"], v["meta"]["outcome"], v["meta"]["n_runs"], v["meta"]["runs_failed"]) == ("verdict.json", "PASS", 6, 0)
+
+
 def test_tp1_layout_unchanged(tmp_path):
     d = tmp_path / "row"
     _w(d / "build_summary.json", {"request": {"program_digest": "r" * 64}, "step": {"program_digest": "s" * 64}})

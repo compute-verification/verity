@@ -24,8 +24,10 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
 
 A tensor-parallel row (tp_stage.sh; build_summary.json carries `tp.world` and `ranks`) keeps its Build per rank under build/rank<r>/:
 the build entry takes each rank's build_step/, build_request*/ and build_workload/workload_program.json, the match entry tp.match's
-match/tp2_match.json (+ the fold Match's), and `program_digest` is the TP manifest's key digest -- the `tp-ranks` fold of the rank
-workload digests (required_manifest's rank merge), with `rank_workload_digests` beside it.
+match/tp2_match.json (+ the fold Match's), the verdict entry tp.commit's commit/ (its decision document is commit/summary.json: a TP
+Commit writes no verdict.json), and `program_digest` is the TP manifest's key digest -- the `tp-ranks` fold of the rank workload
+digests (the manifest's rank merge), with `rank_workload_digests` beside it.  A Commit stage that reported PASS without its decision
+document is refused by name (no outputs.json), never published with empty fields.
 
 Files larger than MAX_FILE are left out and named in meta.skipped (the raw planes and folds stay on the volume; the kind says so).
 Stdlib only; never raises out of `main` (an outputs.json that could not be written is reported, the stage's own exit status stands).
@@ -199,13 +201,26 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
         e = _entry("match", KINDS[stage], meta, run_dir, d, present, skipped, refs={k: refs[k] for k in ("build",) if k in refs}, optional=not passed)
     elif stage == "commit":
         present, skipped = _collect(d, COMMIT_FILES, ["commit"])
-        vr = _read_json(d / "verdict.json") or {}                    # the verdict of record (vllm-verdict/v1)
-        vd = _read_json(d / "commit" / "verdict.json") or {}          # commit_delta's own decision document
-        runs_ = (vr.get("runs") or {}) if isinstance(vr, dict) else {}
-        meta = {**base_meta, "verdict": (vd.get("verdict") if isinstance(vd, dict) else None) or status,
-                "outcome": vr.get("outcome") if isinstance(vr, dict) else None,
-                "n_runs": (int(runs_.get("instrumented") or 0) + int(runs_.get("control") or 0)) if runs_ else None,
-                "runs_failed": runs_.get("failed") if runs_ else None}
+        # the Commit's decision document: verdict.json (vllm-verdict/v1) at TP1; tp.commit's commit/summary.json on a TP row (no
+        # vllm-verdict/v1 grades a tp.commit record: commit.verdict reads commit_delta's documents).  A PASS stage without it is refused
+        # by name; a stage that did not pass records the absence (`decision_record_missing`), never an empty document
+        rel = "commit/summary.json" if tp else "verdict.json"
+        doc = _read_json(d / rel)
+        if not isinstance(doc, dict):
+            if passed:
+                raise ValueError(f"commit stage PASS but its decision document {rel} is absent or unreadable under {d}")
+            doc = None
+        vd = _read_json(d / "commit" / "verdict.json") or {}          # commit_delta's own decision document (TP1)
+        meta = {**base_meta, "verdict": (vd.get("verdict") if isinstance(vd, dict) else None) or status, "decision_record": rel}
+        if doc is None:
+            meta["decision_record_missing"] = rel
+        elif tp:
+            meta.update(tp_pass=doc.get("pass"), tokens_equal=doc.get("tokens_equal"), pairs=doc.get("pairs"))
+        else:
+            runs_ = doc.get("runs") or {}
+            meta.update(outcome=doc.get("outcome"),
+                        n_runs=(int(runs_.get("instrumented") or 0) + int(runs_.get("control") or 0)) if runs_ else None,
+                        runs_failed=runs_.get("failed") if runs_ else None)
         e = _entry("verdict", KINDS[stage], meta, run_dir, d, present, skipped, refs=refs, optional=not passed)
     else:
         raise ValueError(f"unknown stage {stage!r}")
