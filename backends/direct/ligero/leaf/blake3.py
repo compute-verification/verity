@@ -473,61 +473,71 @@ class Blake3Leaf:
         if len(carry_in) != CARRY_ELEMS:
             raise ValueError(f"gadget: {len(carry_in)} carried rows, the scheme carries {CARRY_ELEMS}")
         k = len(words)
-        if row_words % k or (row_words * word_bits // 8) % BLOCK_LEN:
-            raise ValueError(f"gadget: {row_words} words of {word_bits} bits are not whole columns of {k}")
+        col_bytes = k * word_bits // 8
+        if row_words % k or col_bytes % BLOCK_LEN or (col_bytes // BLOCK_LEN) & (col_bytes // BLOCK_LEN - 1):
+            raise ValueError(f"gadget: a column must carry a power of two of 64-byte blocks per operand, not {col_bytes} bytes")
+        nblk = col_bytes // BLOCK_LEN                         # blocks per column: 1 (x2 fold), 2 (x4 fold)
+        if nblk > 16:
+            raise ValueError("gadget: at most one chunk per column")
         steps = row_words // k
         nch = n_chunks(word_bits, row_words)
         if not 2 <= nch <= N_CHUNKS_MAX:
             raise ValueError(f"gadget: rows of {nch} chunks are outside 2..{N_CHUNKS_MAX}")
         fl = block_flags(word_bits, row_words)
-        if len(fl) != steps:
-            raise ValueError("gadget: one block per column")
+        if len(fl) != steps * nblk:
+            raise ValueError("gadget: the row's blocks do not tile the columns")
         scope = f"blake3.{ROLE_NAMES[role]}"
         one, zero = _const(ctx, 1), _const(ctx, 0)
-        # --- layout from the carried position -----------------------------------------------------------------------
+        key = key_words()
+        # --- layout from the carried column position: block j = pos * nblk + t -----------------------------------------
         pos = carry_in[CARRY_ELEMS - 1]
         npb = max(5, (steps - 1).bit_length())              # 24 columns: 5 bits; 48: 6
         pbits = _bits_raw(ctx, pos, npb, f"{scope}.pos")
         memo: dict = {}
         ind = lambda value: _indicator(ctx, pbits, value, memo, scope)  # noqa: E731
-        starts = [j for j, (_, f) in enumerate(fl) if f & CHUNK_START]
-        ends = [j for j, (_, f) in enumerate(fl) if f & CHUNK_END]
-        cs = sum((ind(j) for j in starts), zero)              # disjoint indicators: the sum is boolean
-        ce = sum((ind(j) for j in ends), zero)
-        counter = _W32(list(pbits[4:]) + [zero] * (32 - (npb - 4)))     # chunk index = pos >> 4
-        # --- chaining value in: cs ? KEY : carried (limbs); words 4..7 need bits (round 1's b ^= c) -------------------
-        key = key_words()
-        cv_in = []
-        for w in range(8):
-            lo_c, hi_c = key[w] & 0xFFFF, key[w] >> 16
-            lo = carry_in[2 * w] + lo_c * cs - _prod(ctx, cs, carry_in[2 * w], scope + ".cvsel")
-            hi = carry_in[2 * w + 1] + hi_c * cs - _prod(ctx, cs, carry_in[2 * w + 1], scope + ".cvsel")
-            if w < 4:
-                cv_in.append(_W32(limbs=(lo, hi)))
-            else:
-                bits = _bits_raw(ctx, lo, 16, f"{scope}.cv{w}.lo") + _bits_raw(ctx, hi, 16, f"{scope}.cv{w}.hi")
-                cv_in.append(_W32(bits))
-        flags = _W32([cs, ce, zero, zero, one] + [zero] * 27)          # CHUNK_START | CHUNK_END | KEYED_HASH
-        msg = _message_words(ctx, words, word_bits)
-        v = compress_gadget(ctx, cv_in, msg, counter, _W32.const(ctx, BLOCK_LEN), flags, scope)
-        # output chaining value h_i = v_i ^ v_{i+8}, copied into single rows (the links and the digest read one row each)
-        h_out = []
-        for w in range(8):
-            lo, hi = _xor(ctx, v[w], v[w + 8], scope + ".fin").limbs
-            h_out.append(_prod(ctx, lo, one, scope + ".hout"))
-            h_out.append(_prod(ctx, hi, one, scope + ".hout"))
-        carry_out = list(h_out)
+        lg = nblk.bit_length() - 1
+        cnt_bits = list(pbits[4 - lg:]) + [zero] * (32 - (npb - (4 - lg)))     # chunk index = j >> 4 = pos >> (4 - lg)
+        counter = _W32(cnt_bits)
+        h_in = [_W32(limbs=(carry_in[2 * w], carry_in[2 * w + 1])) for w in range(8)]   # the carried CV (limbs)
+        h_out: list[Expr] = []
         digest = [_const(ctx, nch)]
-        slots = []
+        hold_out = [list(carry_in[16 * (c + 1):16 * (c + 2)]) for c in range(N_CHUNKS_MAX - 1)]
+        for t in range(nblk):
+            blocks_t = range(t, steps * nblk, nblk)          # the blocks this sub-column position processes
+            cs = sum((ind(j // nblk) for j in blocks_t if fl[j][1] & CHUNK_START), zero)   # disjoint: boolean
+            ce = sum((ind(j // nblk) for j in blocks_t if fl[j][1] & CHUNK_END), zero)
+            sc = f"{scope}.blk{t}"
+            # chaining value in: cs ? KEY : previous (limbs); words 4..7 need bits (round 1's b ^= c)
+            cv_in = []
+            for w in range(8):
+                lo_c, hi_c = key[w] & 0xFFFF, key[w] >> 16
+                lo_p, hi_p = h_in[w].limbs
+                lo = lo_p + lo_c * cs - _prod(ctx, cs, lo_p, sc + ".cvsel")
+                hi = hi_p + hi_c * cs - _prod(ctx, cs, hi_p, sc + ".cvsel")
+                if w < 4:
+                    cv_in.append(_W32(limbs=(lo, hi)))
+                else:
+                    cv_in.append(_W32(_bits_raw(ctx, lo, 16, f"{sc}.cv{w}.lo") + _bits_raw(ctx, hi, 16, f"{sc}.cv{w}.hi")))
+            flags = _W32([cs, ce, zero, zero, one] + [zero] * 27)      # CHUNK_START | CHUNK_END | KEYED_HASH
+            msg = _message_words(ctx, words[t * k // nblk:(t + 1) * k // nblk], word_bits)
+            v = compress_gadget(ctx, cv_in, msg, counter, _W32.const(ctx, BLOCK_LEN), flags, sc)
+            # output chaining value h_i = v_i ^ v_{i+8}, copied into single rows (the links / digest read one row each)
+            h_out = []
+            for w in range(8):
+                lo, hi = _xor(ctx, v[w], v[w + 8], sc + ".fin").limbs
+                h_out.append(_prod(ctx, lo, one, sc + ".hout"))
+                h_out.append(_prod(ctx, hi, one, sc + ".hout"))
+            h_in = [_W32(limbs=(h_out[2 * w], h_out[2 * w + 1])) for w in range(8)]
+            # a chunk (but the last) ending at this block parks its CV in its hold slot
+            for c in range(nch - 1):
+                end_c = max(j for j, (cc, _) in enumerate(fl) if cc == c)
+                if end_c % nblk == t:
+                    e_c = ind(end_c // nblk)
+                    hold_out[c] = [h + _prod(ctx, e_c, h_out[i] - h, sc + f".hold{c}") for i, h in enumerate(hold_out[c])]
+        carry_out = list(h_out)
+        slots = hold_out                                     # unused slots: carried unchanged (0 from the chain start)
         for c in range(N_CHUNKS_MAX - 1):
-            held = list(carry_in[16 * (c + 1):16 * (c + 2)])
-            if c < nch - 1:
-                e_c = ind(ends[c])
-                hold_out = [h + _prod(ctx, e_c, h_out[i] - h, scope + f".hold{c}") for i, h in enumerate(held)]
-            else:
-                hold_out = held                              # an unused slot: carried unchanged (0 from the chain start)
-            carry_out += hold_out
-            slots.append(hold_out)
+            carry_out += hold_out[c]
         carry_out.append(pos + 1)
         for c in range(N_CHUNKS_MAX):
             if c < nch - 1:
@@ -545,14 +555,15 @@ class Blake3Leaf:
         row_words = rows.shape[1]
         out_blocks, cvs = chunk_cvs_np(rows, word_bits, role)
         R, nb = out_blocks.shape[:2]
-        if nb != steps:
-            raise ValueError("one block per column")
+        if nb % steps:
+            raise ValueError("whole blocks per column")
+        nblk = nb // steps
         car = np.zeros((R, steps, CARRY_ELEMS), dtype=np.int64)
-        prev = out_blocks[:, :-1, :].astype(np.int64)                    # (R, steps-1, 8)
+        prev = out_blocks[:, nblk - 1:-1:nblk, :].astype(np.int64)      # (R, steps-1, 8): the CV after each column's last block
         car[:, 1:, 0:16] = np.stack([prev & 0xFFFF, prev >> 16], -1).reshape(R, steps - 1, 16)
         fl = block_flags(word_bits, row_words)
         for c in range(n_chunks(word_bits, row_words) - 1):
-            end = max(j for j, (cc, f) in enumerate(fl) if cc == c)
+            end = max(j for j, (cc, f) in enumerate(fl) if cc == c) // nblk        # the column that ends chunk c
             cv = cvs[:, c, :].astype(np.int64)
             limbs = np.stack([cv & 0xFFFF, cv >> 16], -1).reshape(R, 16)
             car[:, end + 1:, 16 * (c + 1):16 * (c + 2)] = limbs[:, None, :]

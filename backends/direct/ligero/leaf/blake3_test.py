@@ -80,11 +80,11 @@ def test_leaf_bytes_rejects_out_of_range_limbs():
         L.leaf_bytes([2] + [0] * 32)                                   # wrong length
 
 
-def _column_system(word_bits: int, role: int):
+def _column_system(word_bits: int, role: int, nblk: int = 1):
     leaf = L.Blake3Leaf()
     ctx = LigeroCtx(FP8_ADA_RELATION.params)
     ctx.scope = "t"
-    k = 8 * L.BLOCK_LEN // word_bits
+    k = nblk * 8 * L.BLOCK_LEN // word_bits
     words = [ctx.hint(f"w[{i}]") for i in range(k)]
     carry = [ctx.hint(f"carry[{i}]") for i in range(L.CARRY_ELEMS)]
     digest, carry_out = leaf.gadget(ctx, words, word_bits=word_bits, role=role, row_words=L.K_VU, carry_in=carry)
@@ -92,9 +92,9 @@ def _column_system(word_bits: int, role: int):
     return leaf, ctx.sys, words, carry, digest, carry_out
 
 
-def _one_row_inputs(leaf, sys, word_bits: int, role: int, seed: int):
-    steps = L.K_VU * word_bits // 8 // L.BLOCK_LEN
-    k = 8 * L.BLOCK_LEN // word_bits
+def _one_row_inputs(leaf, sys, word_bits: int, role: int, seed: int, nblk: int = 1):
+    steps = L.K_VU * word_bits // 8 // L.BLOCK_LEN // nblk
+    k = nblk * 8 * L.BLOCK_LEN // word_bits
     rng = np.random.default_rng(seed)
     rows = rng.integers(0, 1 << word_bits, size=(1, L.K_VU), dtype=np.int64)
     car = leaf.carry_values(rows, word_bits=word_bits, role=role, steps=steps)          # (1, steps, CARRY_ELEMS)
@@ -107,13 +107,14 @@ def _one_row_inputs(leaf, sys, word_bits: int, role: int, seed: int):
     return rows, steps, car, pub, hints
 
 
+@pytest.mark.parametrize("nblk", [1, 2])
 @pytest.mark.parametrize("word_bits", [8, 16])
-def test_gadget_equals_native_along_one_row(word_bits):
+def test_gadget_equals_native_along_one_row(word_bits, nblk):
     """One VU row over its `steps` columns (l = steps): the program's rows satisfy every constraint, the carried rows
     chain (carry_out[j] == carry_in[j + 1]), and the digest expressions at the last column are the native chunk CVs."""
     role = 1
-    leaf, sys, words, carry, digest, carry_out = _column_system(word_bits, role)
-    rows, steps, car, pub, hints = _one_row_inputs(leaf, sys, word_bits, role, 11 + word_bits)
+    leaf, sys, words, carry, digest, carry_out = _column_system(word_bits, role, nblk)
+    rows, steps, car, pub, hints = _one_row_inputs(leaf, sys, word_bits, role, 11 + word_bits + nblk, nblk)
     W = run_program_np(sys, pub, hints)
     assert failing_constraints(sys, W, pub) == []
     outs = np.stack([_eval(e, W) for e in carry_out])                                    # (CARRY_ELEMS, steps)
