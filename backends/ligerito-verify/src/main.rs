@@ -21,8 +21,10 @@
 //!     # on them, same rule.  CONFORMANCE ONLY: no soundness target is applied here (the fixtures are 8-query toys), so
 //!     # an accept is "same verdict as ref.py", never a 2^-128 statement; use `batch` for that.
 //! ligerito-verify sumcheck-fixture --fixture F.json [--seed fixture]   (LGSC0002 or LGSC0003, by magic)
-//!     # ligerito-sumcheck's verifier fixture (layout, constraints, public rows, LGSC0002 proof, claims, recorded
-//!     # transcript): verify with the recorded transcript and with LocalCoins(seed); claims must match
+//!     # ligerito-sumcheck's verifier fixture (layout, constraints, public rows, LGSC0002/3 proof, claims, recorded
+//!     # transcript): verify with the recorded transcript and with LocalCoins(seed); claims must match; the fixture's
+//!     # "negatives" must be rejected in the stage Python names; lists the virtual-row zero claims (red-team-2 V1)
+//!     # the PCS must add -- the sumcheck layer alone accepts a proof with non-zero virtual rows by construction
 //! ligerito-verify selftest [--n N] [--kprime a,b,c] [--queries s,s,s] [--rate-log2 R|r1,r2,r3] [--emit DIR]
 //!     # reference prover -> verifier round trip (+ negatives); --emit writes the proof / coins / negatives to DIR
 //! ~~~
