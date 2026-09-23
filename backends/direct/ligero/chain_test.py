@@ -83,3 +83,38 @@ def test_component_ends_fp4():
     assert sys.chain.get("y16") is None and len(sys.chain["y_end"]) == 3
     _check(sys, STEPS, 2, 64, 32)
     _check(sys, STEPS, 5, 128, 32, seed=4)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA")
+def test_fused_fp_lanes_and_chain_quotient_are_the_torch_sums() -> None:
+    """tests_fused.fp_lanes / chain_quotient equal the torch expressions of chain_coefs / protocol._tests_compute residue
+    for residue, at P - 1 everywhere and at random, C = 8 and 10, int32 and int64 codewords."""
+    from . import tests_fused
+    D, dev = 6, torch.device("cuda")
+    ft = tests_fused.fused_for(D, dev)
+    assert ft is not None
+    g = torch.Generator().manual_seed(11)
+    for C, n_op, n_slots, steps, extreme in ((8, 2, 341, 48, False), (10, 2, 85, 48, True), (8, 1, 18, 48, False)):
+        R, l = 50, n_slots * steps + 7
+        u = torch.randint(0, P, (D, n_op, C, n_slots), generator=g, dtype=torch.int64)
+        pw = torch.randint(0, P, (C, steps, 16), generator=g, dtype=torch.int64)
+        coef = torch.randint(0, P, (D, R, l), generator=g, dtype=torch.int64)
+        if extreme:
+            u.fill_(P - 1); pw.fill_(P - 1); coef.fill_(P - 1)
+        lane_pos = torch.randperm(R, generator=g)[:n_op * 16]
+        prod = (u[:, :, :, :, None, None] * pw[None, None, :, None, :, :]) % P
+        lane = (prod.sum(2) % P).permute(0, 1, 4, 2, 3).reshape(D, n_op * 16, n_slots * steps)
+        ref = coef.clone()
+        ref[:, lane_pos, :n_slots * steps] = (ref[:, lane_pos, :n_slots * steps] + lane) % P
+        got = coef.to(dev)
+        ft.fp_lanes(u.to(dev), pw.to(dev), lane_pos.to(dev), got, steps)
+        assert torch.equal(got.cpu(), ref)
+    for R, M, n, dt, extreme in ((42, 60, 4096, torch.int32, False), (5, 9, 1000, torch.int64, False), (17, 17, 512, torch.int32, True)):
+        Renc = torch.randint(0, P, (D, R, n), generator=g, dtype=torch.int64)
+        U = torch.randint(0, P, (M, n), generator=g, dtype=torch.int64)
+        if extreme:
+            Renc.fill_(P - 1); U.fill_(P - 1)
+        rows = torch.randint(0, M, (R,), generator=g)
+        ref = ((Renc * U.index_select(0, rows)[None]) % P).sum(1) % P
+        got = ft.chain_quotient(Renc.to(dt).to(dev), U.to(torch.int32).to(dev), rows.to(dev))
+        assert torch.equal(got.cpu(), ref)

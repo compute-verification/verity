@@ -1049,6 +1049,16 @@ def _fp_setup(sys: System, x: torch.Tensor, M: int, tb: Tables, l_chain: int, la
     return fp_pub, None
 
 
+FUSED_CHAINQ = True     # the chain quotient's codeword-domain sum through tests_fused.chain_quotient (bit-exact)
+
+
+def _fused_chainq(D: int, U: torch.Tensor):
+    if not (FUSED_CHAINQ and witness.USE_FUSED and U.is_cuda and U.dtype == torch.int32):
+        return None
+    from . import tests_fused
+    return tests_fused.fused_for(D, U.device)
+
+
 def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs, U, W, pub, pubmat, y16_pub, layout,
                    mr: dict, device, check: bool = False, nested_graphs: bool = True, lanes=None, fp_pub=None):
     """The prover's tests from the challenge block ``x`` (D, width): (w, h, q, v, F) on the device -- the batched linear
@@ -1089,9 +1099,13 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
         cc = chain_coefs(sys, layout, rc, y16_pub, fp)
         R = cc.coef.shape[1]
         penc = _simt_encoder(cfg, device, plain=True)
-        Renc = (penc.encode(cc.coef.reshape(D * R, l))[0].to(torch.int64) if penc is not None
-                else encode(cc.coef.reshape(D * R, l), n)).reshape(D, R, n)     # R_i on the codeword domain
-        Qev = ((Renc * U.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P   # (D, n)
+        ft = _fused_chainq(D, U)
+        if ft is not None and penc is not None:                   # R_i on the codeword domain (int32), one fused pass
+            Qev = ft.chain_quotient(penc.encode(cc.coef.reshape(D * R, l))[0].reshape(D, R, n), U, cc.rows)
+        else:
+            Renc = (penc.encode(cc.coef.reshape(D * R, l))[0].to(torch.int64) if penc is not None
+                    else encode(cc.coef.reshape(D * R, l), n)).reshape(D, R, n)     # R_i on the codeword domain
+            Qev = ((Renc * U.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P   # (D, n)
         if cfg.zk:                                                # + u_ca + x^k u_cb (uniform, zero sum over H)
             Qev = (Qev + U[mr["chain_a"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["chain_b"]]) % P) % P
         qcoef = (g("intt", intt, Qev) * _ginv_powers(n, device)) % P

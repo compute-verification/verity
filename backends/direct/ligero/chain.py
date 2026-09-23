@@ -192,6 +192,16 @@ def fp_values(lanes: torch.Tensor, rho: torch.Tensor, n_op: int, steps: int, l: 
     return (prod.sum((1, 3)) % P).permute(1, 0, 2).contiguous()                        # (v, o, x)
 
 
+FUSED_FP = True     # the fingerprint lane coefficients through tests_fused.fp_lanes on CUDA (bit-exact; False: torch)
+
+
+def _fused_tests(D: int, device):
+    if not FUSED_FP or not str(device).startswith("cuda"):
+        return None
+    from . import tests_fused
+    return tests_fused.fused_for(D, device)
+
+
 def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Tensor, fp: FpArgs | None = None) -> ChainCoefs:
     """``rc``: (D, N_FAMILIES, l) uniform challenge coefficients (one per constraint; entries at masked-out
     positions are ignored); ``y16_pub``: (l,) the claimed public words at the chain ends (0 elsewhere); ``fp``: the
@@ -246,11 +256,15 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
         u = torch.stack([extra_coef(rc, e0 + e)[:, ends] for e in range(n_op * C)], 1)     # (D, n_op C, n_slots)
         u = (u * real[None, None, :]).reshape(D, n_op, C, n_slots) % P
         pw = rho_powers(fp.rho.to(device), steps)                                           # (C, steps, 16)
-        # coef_lane[d, o, i, v, s] = sum_x u[d, o, x, v] pw[x, s, i]: C products of < 2^62 reduced per term, C terms summed
-        prod = (u[:, :, :, :, None, None] * pw[None, None, :, None, :, :]) % P                # (D, o, x, v, s, i)
-        lane_coef = (prod.sum(2) % P).permute(0, 1, 4, 2, 3).reshape(D, n_op * FP_LANES, n_slots * steps)
         lane_pos = tabs["lane_pos"]
-        coef[:, lane_pos, :n_slots * steps] = (coef[:, lane_pos, :n_slots * steps] + lane_coef) % P
+        ft = _fused_tests(D, device)
+        if ft is not None:
+            ft.fp_lanes(u, pw, lane_pos, coef, steps)
+        else:
+            # coef_lane[d, o, i, v, s] = sum_x u[d, o, x, v] pw[x, s, i]: C products of < 2^62 reduced per term, C terms summed
+            prod = (u[:, :, :, :, None, None] * pw[None, None, :, None, :, :]) % P            # (D, o, x, v, s, i)
+            lane_coef = (prod.sum(2) % P).permute(0, 1, 4, 2, 3).reshape(D, n_op * FP_LANES, n_slots * steps)
+            coef[:, lane_pos, :n_slots * steps] = (coef[:, lane_pos, :n_slots * steps] + lane_coef) % P
         F = fp.F.to(device) % P
         rhs = (rhs + ((u * F.permute(1, 2, 0)[None]) % P).sum((1, 2, 3))) % P
     return ChainCoefs(rows, coef, rhs)
