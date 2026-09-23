@@ -4,16 +4,9 @@ the step-0 committed coins, wired through every hook of ``zk.py`` exactly as ``p
 negatives, the simulator and the mask-free control -- before the real modules land; it is NOT a prover for real sizes
 (pure numpy, Python Merkle trees) and is meant to be deleted once ``pcs.py``/``sumcheck.py`` carry the hooks.
 
-Toy relation (mirrors the real layout's structure: padding rows inside every round-1 column, an unconstrained region
-at the top): cells ``x`` of ``f`` (N = 2^n) are indexed ``[plane (2 bits) | col_rest | flag (1 bit) | row_low (k1-1 bits)]``;
-for every ``z = (col_rest, flag = 0, row_low)`` the constraint ``f(0,0,z) f(0,1,z) - f(1,0,z) = 0`` holds (a . b = c);
-``flag = 1`` rows are padding (the A-cells sit there), plane 3 is unreferenced (the mask column is its top round-1
-column).  Zero-check: ``sum_z eq(tau', z) (a(z) b(z) - c(z)) = 0`` over ALL ``n - 2`` variables (padding rows
-included) with ``tau'_flag = 0`` so the padding rows have weight ``(1 - z_flag) = 0``: degree stays 3, the honest sum is
-0 whatever the padding rows hold, and the final eq-claims ``a(r), b(r), c(r)`` are at a point whose flag coordinate is
-an extension element -- so each plane's A-cells enter the claim with nonzero weight (this is the requirement the design
-puts on ``sumcheck.py``: the eval claims must reach the mask cells; a claim restricted to the constrained sub-cube would
-be a bare functional of the witness).
+Toy relation (mirrors ligerito-sumcheck's layout: rows = the HIGH bits, zero rows at both ends): see ``Toy``.  Two
+sumchecks with Libra masks (the zero-check over the column bits, degree 3; the rows sumcheck, degree 2) ending in ONE
+eval claim ``w~(r_i, r_c)`` at a fully-extension point, plus two block claims for ``g_s(r)``.
 
 Ligerito (paper section 6, proto's conventions): round ``i`` commits ``M~_i`` (``2^{k_i}`` x ``2^{k'_i}``, column-major),
 coefficient-basis RS along the tall axis on ``<w_{n_i}>``, ``n_i = 4 . 2^{k_i}``; claims are tensor terms; the partial
@@ -65,10 +58,21 @@ def ntt_cols(msg: np.ndarray, n: int) -> np.ndarray:
 
 @dataclass(frozen=True)
 class Toy:
-    n: int                       # log2 cells
-    kprimes: tuple               # column bits per committed round
+    """Cells ``x = row << n_c | c`` (rows = the HIGH bits, as ligerito-sumcheck's layout).  Rows: ``[0, rb)`` free (the
+    bottom mask column, ``rb = 2^{n_i - k'_1}`` layout rows per round-1 column), rows ``rb, rb+1, rb+2`` = the tables
+    ``a, b, c`` with ``a(c) b(c) = c(c)`` for every column, rows ``[rb+3, R - 8 rb)`` zero, the top ``8 rb`` rows = the top
+    mask block.  Sumcheck 1 (zero-check over the ``n_c`` column bits, degree 3) ends in ``a(r_c), b(r_c), c(r_c)``;
+    sumcheck 2 (rows, ``n_i`` bits, degree 2) batches them by ``gamma`` into ONE claim ``w~(r_i, r_c)`` at a fully
+    extension point -- the PCS eval claim, which therefore reaches the mask rows."""
+    n_i: int
+    n_c: int
+    kprimes: tuple               # column bits per committed round (kprimes[0] <= n_i)
     n_rows_open: int             # |S| per round
     t_pad: int
+
+    @property
+    def n(self):
+        return self.n_i + self.n_c
 
     @property
     def k1(self):
@@ -87,62 +91,68 @@ class Toy:
         return self.ks[-1]
 
     @property
-    def n_sc(self):
-        return self.n - 2
+    def rb(self) -> int:
+        return 1 << (self.n_i - self.kprimes[0])
 
     @property
-    def flag_var(self) -> int:
-        """Index (highest first) of the flag bit among the n_sc zero-check variables."""
-        return self.n_sc - self.k1
+    def R(self) -> int:
+        return 1 << self.n_i
+
+    @property
+    def C(self) -> int:
+        return 1 << self.n_c
+
+    @property
+    def mask_rows(self) -> tuple:
+        """(i1, i2, i3) inside the top block (not the last column, where the G-blocks live)."""
+        top = self.R - 8 * self.rb
+        return (top, top + 1, top + 2)
 
     def zk_params(self, enabled=True) -> ZkParams:
-        return ZkParams(self.n, self.k1, self.kprimes[0], t_pad=self.t_pad, degree=3, n_sumcheck=self.n_sc,
-                        q=(1 << self.k1) - 8, enabled=enabled)
+        return ZkParams(self.n, self.k1, self.kprimes[0], sumchecks=(("zc", 1 + self.n_c, 3), ("rows", self.n_i, 2)),
+                        t_pad=self.t_pad, enabled=enabled, n_c=self.n_c, product_rows=(self.mask_rows,) if enabled else ())
 
-    # cell index of (plane, z, flag): bits [plane | col_rest | flag | row_low]; z over the n_sc = n - 2 low bits
-    def cell(self, plane: int, z: np.ndarray, flag: int | None = None) -> np.ndarray:
-        k1 = self.k1
-        if flag is None:
-            return (plane << (self.n - 2)) | z
-        row_low = z & ((1 << (k1 - 1)) - 1)
-        col_rest = z >> k1
-        return (plane << (self.n - 2)) | (col_rest << k1) | (flag << (k1 - 1)) | row_low
+    def slot_rows(self, zp: ZkParams) -> list:
+        """Constraint slot k -> (row_A, row_B, row_C): slot 0 the relation, slot 1 the trivial mask constraint (ZK) or a
+        copy of slot 0 (no ZK: keeps the shapes equal)."""
+        s0 = (self.rb, self.rb + 1, self.rb + 2)
+        return [s0, self.mask_rows if zp.enabled else s0]
+
+    def alpha_tilde(self, zp: ZkParams, gamma: np.ndarray, r_k: np.ndarray, r_i: np.ndarray) -> np.ndarray:
+        """``alpha~(r_i) = sum_t gamma^t sum_k eq(r_k, k) eq(r_i, row_t(k))``."""
+        acc, gp = ext_zero(), ext_one()
+        for t in range(3):
+            for k, rows in enumerate(self.slot_rows(zp)):
+                w = ext_mul(eq_eval(r_k, ext_from_base([k])), eq_eval(r_i, self.row_bits(rows[t])))
+                acc = (acc + ext_mul(gp, w)) % P
+            gp = ext_mul(gp, gamma)
+        return acc
+
+    def cell(self, row: int, c) -> np.ndarray:
+        return (row << self.n_c) | np.asarray(c, dtype=np.int64)
 
     def referenced(self) -> np.ndarray:
         ref = np.zeros(1 << self.n, dtype=bool)
-        z = np.arange(1 << (self.n_sc - 1))
-        for plane in (0, 1, 2):
-            ref[self.cell(plane, z, 0)] = True
+        for row in (self.rb, self.rb + 1, self.rb + 2):
+            ref[self.cell(row, np.arange(self.C))] = True
         return ref
 
     def witness(self, rng: np.random.Generator, trivial: bool = False) -> np.ndarray:
-        """A structured witness (constant rows, small values -- what leaks in the clear) or the all-zero one."""
+        """A structured witness (constant stretches, small values -- what leaks in the clear) or the all-zero one."""
         f = np.zeros(1 << self.n, dtype=np.int64)
         if trivial:
             return f
-        z = np.arange(1 << (self.n_sc - 1))
-        a = rng.integers(0, 16, size=z.size)                    # small operands (like FP8 codes)
-        a[: z.size // 4] = 3                                    # a constant stretch (like a constant row)
-        b = rng.integers(0, 16, size=z.size)
-        f[self.cell(0, z, 0)] = a
-        f[self.cell(1, z, 0)] = b
-        f[self.cell(2, z, 0)] = a * b % P
+        c = np.arange(self.C)
+        a = rng.integers(0, 16, size=c.size)                    # small operands (like FP8 codes)
+        a[: c.size // 4] = 3                                    # a constant stretch (like a constant row)
+        b = rng.integers(0, 16, size=c.size)
+        f[self.cell(self.rb, c)] = a
+        f[self.cell(self.rb + 1, c)] = b
+        f[self.cell(self.rb + 2, c)] = a * b % P
         return f
 
-    def claim_point(self, plane: int, r_sc: np.ndarray) -> np.ndarray:
-        """The f-point (n, 6) of a(r) / b(r) / c(r): bits high -> low: plane (boolean), then r_sc (all n - 2 low bits,
-        the flag coordinate included).  ``r_sc`` (n_sc, 6) is ordered highest bit first."""
-        pt = ext_zero((self.n,))
-        pt[0, 0], pt[1, 0] = plane >> 1, plane & 1
-        pt[2:] = r_sc
-        return pt
-
-    def weights(self, tau: np.ndarray) -> np.ndarray:
-        """tau' = tau with the flag coordinate set to 0: eq(tau', z) vanishes on the padding rows."""
-        t = tau.copy()
-        t[self.flag_var] = 0
-        return t
-
+    def row_bits(self, row: int) -> np.ndarray:
+        return ext_from_base([(row >> (self.n_i - 1 - j)) & 1 for j in range(self.n_i)])
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Tensor terms (eq / geom / block) over a vector of 2^m cells, bits highest first
@@ -293,9 +303,10 @@ class Merkle:
 @dataclass
 class Proof:
     roots: list = field(default_factory=list)
-    G: np.ndarray | None = None
-    zc_msgs: list = field(default_factory=list)          # (4, 6) per round
-    evals: dict = field(default_factory=dict)            # a, b, c, g
+    G: dict = field(default_factory=dict)                # per sumcheck: sum of the Libra mask
+    zc_msgs: list = field(default_factory=list)          # (4, 6) per zero-check round
+    row_msgs: list = field(default_factory=list)         # (3, 6) per rows round
+    evals: dict = field(default_factory=dict)            # a, b, c, g_zc, w, g_rows
     pcs_msgs: list = field(default_factory=list)         # per round: list of (3, 6)
     ybars: list = field(default_factory=list)            # per committed round: (t_pad, 6)
     opened: list = field(default_factory=list)           # per committed round: (rows (|S|, C[,6]), paths)
@@ -305,6 +316,7 @@ class Proof:
     def components(self) -> dict:
         """Flattened numeric components (for the distinguisher statistics)."""
         out = {"zc_msgs": np.concatenate([m.reshape(-1) for m in self.zc_msgs]) if self.zc_msgs else np.zeros(0),
+               "row_msgs": np.concatenate([m.reshape(-1) for m in self.row_msgs]) if self.row_msgs else np.zeros(0),
                "evals": np.concatenate([np.asarray(v).reshape(-1) for v in self.evals.values()]) if self.evals else np.zeros(0),
                "pcs_msgs": np.concatenate([np.asarray(m).reshape(-1) for rd in self.pcs_msgs for m in rd]) if self.pcs_msgs else np.zeros(0),
                "final": self.final.reshape(-1) if self.final is not None else np.zeros(0)}
@@ -413,7 +425,7 @@ def prove(toy: Toy, f: np.ndarray, zp: ZkParams, verifier: zk.CommittedCoins, st
           zc_override=None, masks: zk.Masks | None = None, evals_override=None) -> Proof:
     """The toy prover.  ``zc_override``: (messages, evals) the simulator substitutes for the zero-check; ``masks``: the
     masks to use (the simulator's solved tableau) instead of fresh ones."""
-    n, n_sc = toy.n, toy.n_sc
+    n = toy.n
     pr = Proof()
     sched = zk.coin_schedule(zp, list(toy.kprimes))
     coins = zk.ProverCoins(stmt, sched, verifier.commitments(), verifier)
@@ -422,7 +434,6 @@ def prove(toy: Toy, f: np.ndarray, zp: ZkParams, verifier: zk.CommittedCoins, st
         fh = f.copy() % P
         masks = zk.sample_masks(zp) if masks is None else masks
         zk.apply_masks(fh, masks, zp)
-        gmask = zk.SumcheckMask(zp, masks.g_coeffs) if zp.enabled else None
         ks = toy.ks
         M1 = _to_matrix(fh, ks[0])                                  # (2^k1, C1) base
         msg1, mu1 = zk.pad_columns(zp, M1)
@@ -431,21 +442,22 @@ def prove(toy: Toy, f: np.ndarray, zp: ZkParams, verifier: zk.CommittedCoins, st
         T1 = Merkle(U1)
         pr.roots.append(T1.root)
         coins.send("root1", T1.root)
-        # ---- zero-check
-        tau = coins.next("zc/batch", n_sc)
+        # ---- sumcheck 1: the zero-check over the column bits
+        gm = [zk.SumcheckMask(zp, i, masks.g_coeffs[i]) for i in range(len(zp.sumchecks))] if zp.enabled else None
+        tau = coins.next("zc/setup", 1 + toy.n_c)
+        rho1 = None
         if zp.enabled:
-            pr.G = gmask.total_sum()
-            coins.send("G", pr.G.tobytes())
-            rho = coins.next("zc/rho", 1)[0]
-        z = np.arange(1 << n_sc)
-        a = ext_from_base(fh[toy.cell(0, z)])
-        b = ext_from_base(fh[toy.cell(1, z)])
-        c = ext_from_base(fh[toy.cell(2, z)])
-        eqt = rbar_of(list(toy.weights(tau)))                      # eq(tau', z), z bits highest first <-> tau order
-        rs_sc = []
-        for j in range(n_sc):
+            pr.G["zc"] = gm[0].total_sum()
+            coins.send("G_zc", pr.G["zc"].tobytes())
+            rho1 = coins.next("zc/rho", 1)[0]
+        c_all = np.arange(toy.C)
+        slots = toy.slot_rows(zp)
+        a, b, c = [ext_from_base(np.concatenate([fh[toy.cell(rows[t], c_all)] for rows in slots])) for t in range(3)]
+        eqt = rbar_of(list(tau))                                                       # over (k, c): k the high bit
+        rs_c = []
+        for j in range(1 + toy.n_c):
             if zc_override is not None:
-                msg = zc_override[0][j]
+                msg = zc_override["zc_msgs"][j]
             else:
                 h = a.shape[0] // 2
                 vals = []
@@ -456,28 +468,75 @@ def prove(toy: Toy, f: np.ndarray, zp: ZkParams, verifier: zk.CommittedCoins, st
                     vals.append(ext_sum(ext_mul(e_, (ext_mul(a_, b_) - c_) % P), axis=0))
                 msg = np.stack(vals)
                 if zp.enabled:
-                    msg = (msg + ext_mul(rho, gmask.round_values(j, np.array(rs_sc).reshape(-1, D)))) % P
+                    msg = (msg + ext_mul(rho1, gm[0].round_values(j, np.array(rs_c).reshape(-1, D)))) % P
             pr.zc_msgs.append(msg)
             coins.send(f"zc_msg{j}", msg.tobytes())
             r = coins.next(f"zc/r{j}", 1)[0]
-            rs_sc.append(r)
+            rs_c.append(r)
             h = a.shape[0] // 2
             om = (ext_one() - r) % P
             eqt, a, b, c = [(ext_mul(T[:h], om) + ext_mul(T[h:], r)) % P for T in (eqt, a, b, c)]
-        r_sc = np.array(rs_sc)
-        pts = {name: toy.claim_point(plane, r_sc) for name, plane in (("a", 0), ("b", 1), ("c", 2))}
-        if evals_override is not None:
-            pr.evals = dict(evals_override)
+        r_kc = np.array(rs_c)
+        r_k, r_c = r_kc[:1], r_kc[1:]
+        if zc_override is not None:
+            pr.evals = dict(zc_override["evals"])
         else:
             pr.evals = {"a": a[0], "b": b[0], "c": c[0]}
             if zp.enabled:
-                pr.evals["g"] = gmask.final_value(r_sc)
-        coins.send("evals", b"".join(v.tobytes() for v in pr.evals.values()))
+                pr.evals["g_zc"] = gm[0].final_value(r_kc)
+        coins.send("evals", b"".join(pr.evals[k].tobytes() for k in ("a", "b", "c") + (("g_zc",) if zp.enabled else ())))
+        # ---- sumcheck 2: the rows, batching the three sub-cube claims into w~(r_i, r_c)
+        gamma = coins.next("rows/setup", 1)[0]
+        rho2 = None
+        if zp.enabled:
+            pr.G["rows"] = gm[1].total_sum()
+            coins.send("G_rows", pr.G["rows"].tobytes())
+            rho2 = coins.next("rows/rho", 1)[0]
+        eq_c = rbar_of(list(r_c))                                                      # (C, 6)
+        F = fh.reshape(toy.R, toy.C)
+        T = _matmul_safe(F, eq_c) % P                                                  # w~(i, r_c) for every row i
+        alpha = ext_zero((toy.R,))
+        gp = ext_one()
+        for t in range(3):
+            for k, rows in enumerate(slots):
+                alpha[rows[t]] = (alpha[rows[t]] + ext_mul(gp, eq_eval(r_k, ext_from_base([k])))) % P
+            gp = ext_mul(gp, gamma)
+        rs_i = []
+        for j in range(toy.n_i):
+            if zc_override is not None:
+                msg = zc_override["row_msgs"][j]
+            else:
+                h = T.shape[0] // 2
+                vals = []
+                for X in (0, 1, 2):
+                    def at(V):
+                        return (V[:h] + ext_mul_base(V[h:] - V[:h], X)) % P
+                    vals.append(ext_sum(ext_mul(at(alpha), at(T)), axis=0))
+                msg = np.stack(vals)
+                if zp.enabled:
+                    msg = (msg + ext_mul(rho2, gm[1].round_values(j, np.array(rs_i).reshape(-1, D)))) % P
+            pr.row_msgs.append(msg)
+            coins.send(f"row_msg{j}", msg.tobytes())
+            r = coins.next(f"rows/r{j}", 1)[0]
+            rs_i.append(r)
+            h = T.shape[0] // 2
+            om = (ext_one() - r) % P
+            alpha, T = [(ext_mul(V[:h], om) + ext_mul(V[h:], r)) % P for V in (alpha, T)]
+        r_i = np.array(rs_i)
+        if zc_override is not None:
+            pr.evals.update(zc_override["evals2"])
+        else:
+            pr.evals["w"] = T[0]
+            if zp.enabled:
+                pr.evals["g_rows"] = gm[1].final_value(r_i)
+        coins.send("evals2", b"".join(pr.evals[k].tobytes() for k in ("w",) + (("g_rows",) if zp.enabled else ())))
+        z_pt = np.concatenate([r_i, r_c])
         # ---- PCS rounds.  Claims are GROUPS (list of tensor terms, value); the batching coin weights group g by
         # alpha^g; after a round the reduced claim is one group (all the terms, value = the last message at r).
-        groups = [([eq_term(pts[nm], label=nm)], pr.evals[nm]) for nm in ("a", "b", "c")]
+        groups = [([eq_term(z_pt, label="w")], pr.evals["w"])]
         if zp.enabled:
-            groups.append(([block_term(gmask.claim(r_sc), n)], pr.evals["g"]))
+            groups.append(([block_term(gm[0].claim(r_kc), n)], pr.evals["g_zc"]))
+            groups.append(([block_term(gm[1].claim(r_i), n)], pr.evals["g_rows"]))
         M, mu, U, T = M1, mu1, U1, T1
         prev_rbar = None
         for i, kp in enumerate(toy.kprimes, start=1):
@@ -542,38 +601,60 @@ def prove(toy: Toy, f: np.ndarray, zp: ZkParams, verifier: zk.CommittedCoins, st
 def verify(toy: Toy, pr: Proof, zp: ZkParams, coins: zk.CommittedCoins, stmt: bytes) -> tuple[bool, str]:
     if pr.aborted is not None:
         return False, "prover aborted"
-    n, n_sc, ks = toy.n, toy.n_sc, toy.ks
+    n, ks = toy.n, toy.ks
     sched = zk.coin_schedule(zp, list(toy.kprimes))
     slot = {lab: k for k, lab in enumerate(sched)}
     ch = lambda lab, cnt, ni=None: coins.challenge(stmt, slot[lab], cnt, ni)   # noqa: E731
-    tau = ch("zc/batch", n_sc)
+    ev = pr.evals
+    # sumcheck 1
+    tau = ch("zc/setup", 1 + toy.n_c)
+    cur = ext_zero()
     if zp.enabled:
-        rho = ch("zc/rho", 1)[0]
-        cur = ext_mul(rho, pr.G)
-    else:
-        cur = ext_zero()
-    rs_sc = []
-    for j in range(n_sc):
+        rho1 = ch("zc/rho", 1)[0]
+        cur = ext_mul(rho1, pr.G["zc"])
+    rs_c = []
+    for j in range(1 + toy.n_c):
         m = pr.zc_msgs[j]
         if not np.array_equal((m[0] + m[1]) % P, cur):
             return False, f"zero-check round {j}: h(0)+h(1) != claim"
         r = ch(f"zc/r{j}", 1)[0]
-        rs_sc.append(r)
+        rs_c.append(r)
         cur = lagrange_at(m, r)
-    r_sc = np.array(rs_sc)
-    ev = pr.evals
-    lhs = ext_mul(eq_eval(toy.weights(tau), r_sc), (ext_mul(ev["a"], ev["b"]) - ev["c"]) % P)
+    r_kc = np.array(rs_c)
+    r_k, r_c = r_kc[:1], r_kc[1:]
+    lhs = ext_mul(eq_eval(tau, r_kc), (ext_mul(ev["a"], ev["b"]) - ev["c"]) % P)
     if zp.enabled:
-        lhs = (lhs + ext_mul(rho, ev["g"])) % P
+        lhs = (lhs + ext_mul(rho1, ev["g_zc"])) % P
     if not np.array_equal(lhs % P, cur):
         return False, "zero-check final check failed"
-    pts = {name: toy.claim_point(plane, r_sc) for name, plane in (("a", 0), ("b", 1), ("c", 2))}
-    groups = [([eq_term(pts[nm])], ev[nm]) for nm in ("a", "b", "c")]
+    # sumcheck 2
+    gamma = ch("rows/setup", 1)[0]
+    cur = (ev["a"] + ext_mul(gamma, ev["b"]) + ext_mul(ext_mul(gamma, gamma), ev["c"])) % P
     if zp.enabled:
-        # the verifier builds the block claim's weights itself from r (public), value = the prover's g(r)
-        dummy = zk.SumcheckMask(zp, np.zeros((zp.g_coeffs, D), dtype=np.int64))
-        bc = dummy.claim(r_sc)
-        groups.append(([block_term(zk.BlockClaim(bc.cells, bc.weights, ev["g"]), n)], ev["g"]))
+        rho2 = ch("rows/rho", 1)[0]
+        cur = (cur + ext_mul(rho2, pr.G["rows"])) % P
+    rs_i = []
+    for j in range(toy.n_i):
+        m = pr.row_msgs[j]
+        if not np.array_equal((m[0] + m[1]) % P, cur):
+            return False, f"rows round {j}: h(0)+h(1) != claim"
+        r = ch(f"rows/r{j}", 1)[0]
+        rs_i.append(r)
+        cur = lagrange_at(m, r)
+    r_i = np.array(rs_i)
+    lhs = ext_mul(toy.alpha_tilde(zp, gamma, r_k, r_i), ev["w"])
+    if zp.enabled:
+        lhs = (lhs + ext_mul(rho2, ev["g_rows"])) % P
+    if not np.array_equal(lhs % P, cur):
+        return False, "rows final check failed"
+    z_pt = np.concatenate([r_i, r_c])
+    groups = [([eq_term(z_pt)], ev["w"])]
+    if zp.enabled:
+        # the verifier builds the block claims' weights itself from r (public), values = the prover's g(r)
+        for idx, (r_, key) in enumerate(((r_kc, "g_zc"), (r_i, "g_rows"))):
+            dummy = zk.SumcheckMask(zp, idx, np.zeros((zp.g_coeffs(idx), D), dtype=np.int64))
+            bc = dummy.claim(r_)
+            groups.append(([block_term(zk.BlockClaim(bc.cells, bc.weights, ev[key]), n)], ev[key]))
     prev_rbar = None
     for i, kp in enumerate(toy.kprimes, start=1):
         k = ks[i - 1]
@@ -660,12 +741,10 @@ class PublicCheckVerifier(zk.AbortingCoins):
 
     def _pred(self, k, transcript):
         msgs = [np.frombuffer(d, dtype=np.int64).reshape(4, D) for lab, d in transcript if lab.startswith("zc_msg")]
-        if not msgs:
+        G = [np.frombuffer(d, dtype=np.int64) for lab, d in transcript if lab == "G_zc"]
+        if not msgs or not G:
             return False
         slot = {lab: kk for kk, lab in enumerate(self.schedule)}
-        G = [np.frombuffer(d, dtype=np.int64) for lab, d in transcript if lab == "G"]
-        if not G:
-            return False
         rho = self.challenge(self.stmt, slot["zc/rho"], 1)[0]
         cur = ext_mul(rho, G[0])
         for j, m in enumerate(msgs):
@@ -684,67 +763,97 @@ def simulate(toy: Toy, zp: ZkParams, verifier: zk.CommittedCoins, stmt: bytes, r
              max_rewinds: int = 8) -> Proof:
     """The simulator of the note's section 2, against the coin object ``verifier`` (honest or malicious).  Returns the
     transcript it outputs (an aborted one if V* aborts)."""
-    n, n_sc = toy.n, toy.n_sc
-    sched = zk.coin_schedule(zp, list(toy.kprimes))
-    # 1. dummy run: a random tableau with fresh masks, honest prover algorithm on it, honest-observable zero-check
+    n = toy.n
+    # 1. dummy run: a random tableau with fresh masks, honest prover algorithm on it, honest-observable sumcheck
     #    messages (uniform on the consistency lines).  Extracts the openings (or an abort).
     fake = rng.integers(0, P, size=1 << n, dtype=np.int64)
     dummy_masks = zk.sample_masks(zp)
-    gm = zk.SumcheckMask(zp, dummy_masks.g_coeffs)
     probe = _ProbeCoins(verifier)
-    zc_msgs, evals = _sample_zero_check(toy, zp, gm.total_sum(), probe, stmt, rng)
-    pr0 = prove(toy, fake, zp, probe, stmt, zc_override=(zc_msgs, evals), masks=dummy_masks)
+    ov = _sample_sumchecks(toy, zp, dummy_masks, probe, stmt, rng)
+    pr0 = prove(toy, fake, zp, probe, stmt, zc_override=ov, masks=dummy_masks)
     if pr0.aborted is not None:
         return pr0
     # 2. rewind: all coins known (probe.opened); build the fake tableau consistent with a fresh honest-observable
-    #    zero-check transcript and run the honest prover on it.
-    slot = {lab: k for k, lab in enumerate(sched)}
+    #    sumcheck transcript and run the honest prover on it.
     known = _KnownCoins(verifier, probe.opened)
     for _ in range(max_rewinds):
         masks = zk.sample_masks(zp)
-        gm = zk.SumcheckMask(zp, masks.g_coeffs)
-        G = gm.total_sum()
-        zc_msgs, evals, r_sc, rho = _sample_zero_check(toy, zp, G, known, stmt, rng, return_r=True)
-        # g*(r) must equal evals["g"]: shift a_{0,1} by +delta1 and a_{0,2} by -delta1 (keeps G)
-        delta = (evals["g"] - gm.final_value(r_sc)) % P
-        r0 = r_sc[0]
-        denom = (r0 - ext_mul(r0, r0)) % P
-        d1 = ext_mul(delta, ext_inv(denom))
-        coeffs = np.concatenate([gm.a0[None], gm.a.reshape(-1, D)])
-        coeffs[1] = (coeffs[1] + d1) % P
-        coeffs[2] = (coeffs[2] - d1) % P
-        masks.g_coeffs = coeffs
-        g0 = masks.block.shape[0] - zp.rows1
-        masks.block[g0:g0 + zp.g_block_cells] = coeffs.reshape(-1)
-        gm = zk.SumcheckMask(zp, coeffs)
-        assert np.array_equal(gm.total_sum(), G) and np.array_equal(gm.final_value(r_sc), evals["g"])
-        # f^*(z_a) = v_a etc.: solve three mask-column cells (outside the G-block)
+        ov = _sample_sumchecks(toy, zp, masks, known, stmt, rng)
+        # g_s*(r) must equal the sampled claim: shift a_{0,1} by +delta1 and a_{0,2} by -delta1 (keeps G_s)
+        for idx, (r_, key) in enumerate(((ov["r_kc"], "g_zc"), (ov["r_i"], "g_rows"))):
+            gm = zk.SumcheckMask(zp, idx, masks.g_coeffs[idx])
+            target = ov["evals"][key] if key in ov["evals"] else ov["evals2"][key]
+            delta = (target - gm.final_value(r_)) % P
+            r0 = r_[0]
+            d1 = ext_mul(delta, ext_inv((r0 - ext_mul(r0, r0)) % P))
+            coeffs = masks.g_coeffs[idx].copy()
+            coeffs[1] = (coeffs[1] + d1) % P
+            coeffs[2] = (coeffs[2] - d1) % P
+            zk.set_g_coeffs(masks, zp, idx, coeffs)
+            gm = zk.SumcheckMask(zp, idx, coeffs)
+            assert np.array_equal(gm.total_sum(), ov["G"][idx]) and np.array_equal(gm.final_value(r_), target)
+        # f^*(z) = v_w: solve 8 cells of the bottom mask column (a 3-bit sub-cube: row 0, columns 0..7)
         fh = fake.copy()
         zk.apply_masks(fh, masks, zp)
-        pts = {nm: toy.claim_point(pl, r_sc) for nm, pl in (("a", 0), ("b", 1), ("c", 2))}
-        mc = zk.mask_cells(zp)
-        # the claim of plane p only sees plane-p cells: solve, per plane, its A-cells (base field, 8 cells, extension
-        # weights eq(z_p, cell) -- a 6 x 8 F_p system; the rank event is the simulator's O(1/p) distance term)
-        ok = True
-        for pl, nm in ((0, "a"), (1, "b"), (2, "c")):
-            pt = pts[nm]
-            lo, hi = pl << (n - 2), (pl + 1) << (n - 2)
-            cells = mc.a_cells[(mc.a_cells >= lo) & (mc.a_cells < hi)][:8]
-            bits = np.array([[(int(x) >> (n - 1 - b)) & 1 for b in range(n)] for x in cells])
-            W = np.stack([eq_eval(pt, ext_from_base(bits[j])) for j in range(len(cells))])      # (8, 6)
-            fh_zero = fh.copy()
-            fh_zero[cells] = 0
-            target = (evals[nm] - _mle_eval(fh_zero, pt)) % P
-            sol = _solve_base(W.T, target)                                                      # W^T m = target
-            if sol is None:
-                ok = False
-                break
-            fh[cells] = sol
-            masks.a_cells[np.searchsorted(mc.a_cells, cells)] = sol
-        if not ok:
-            continue
-        return prove(toy, fake, zp, known, stmt, zc_override=(zc_msgs, evals), masks=masks)
-    raise RuntimeError("simulator: no base-field solution for the eval cells after max_rewinds resamples")
+        z_pt = np.concatenate([ov["r_i"], ov["r_c"]])
+        cells = toy.cell(0, np.arange(8))
+        bits = np.array([[(int(x) >> (n - 1 - b)) & 1 for b in range(n)] for x in cells])
+        W = np.stack([eq_eval(z_pt, ext_from_base(bits[j])) for j in range(8)])                # (8, 6)
+        fh_zero = fh.copy()
+        fh_zero[cells] = 0
+        target = (ov["evals2"]["w"] - _mle_eval(fh_zero, z_pt)) % P
+        sol = _solve_base(W.T, target)
+        if sol is None:
+            continue                                                                            # rank event: resample
+        masks.low[cells] = sol
+        return prove(toy, fake, zp, known, stmt, zc_override=ov, masks=masks)
+    raise RuntimeError("simulator: rank event persisted over max_rewinds resamples")
+
+
+def _sample_sumchecks(toy, zp, masks, coins, stmt, rng) -> dict:
+    """Honest-observable sumcheck transcripts without a witness: messages uniform on h(0)+h(1) = claim, evaluation
+    claims uniform, g_s(r) solved from each final check.  Coins are queried through ``coins.peek``."""
+    sched = zk.coin_schedule(zp, list(toy.kprimes))
+    slot = {lab: k for k, lab in enumerate(sched)}
+    gms = [zk.SumcheckMask(zp, i, masks.g_coeffs[i]) for i in range(2)]
+    G = [g.total_sum() for g in gms]
+    out = {"G": G}
+    # sumcheck 1
+    tau = coins.peek(stmt, slot["zc/setup"], 1 + toy.n_c)
+    rho1 = coins.peek(stmt, slot["zc/rho"], 1)[0]
+    cur = ext_mul(rho1, G[0])
+    msgs, rs = [], []
+    for j in range(1 + toy.n_c):
+        m = _uniform_ext(4, rng)
+        m[1] = (cur - m[0]) % P
+        msgs.append(m)
+        r = coins.peek(stmt, slot[f"zc/r{j}"], 1)[0]
+        rs.append(r)
+        cur = lagrange_at(m, r)
+    r_kc = np.array(rs)
+    r_k, r_c = r_kc[:1], r_kc[1:]
+    ev = {nm: _uniform_ext(1, rng)[0] for nm in ("a", "b", "c")}
+    rest = ext_mul(eq_eval(tau, r_kc), (ext_mul(ev["a"], ev["b"]) - ev["c"]) % P)
+    ev["g_zc"] = ext_mul((cur - rest) % P, ext_inv(rho1))
+    out.update(zc_msgs=msgs, evals=ev, r_c=r_c, r_kc=r_kc)
+    # sumcheck 2
+    gamma = coins.peek(stmt, slot["rows/setup"], 1)[0]
+    rho2 = coins.peek(stmt, slot["rows/rho"], 1)[0]
+    cur = (ev["a"] + ext_mul(gamma, ev["b"]) + ext_mul(ext_mul(gamma, gamma), ev["c"]) + ext_mul(rho2, G[1])) % P
+    msgs, rs = [], []
+    for j in range(toy.n_i):
+        m = _uniform_ext(3, rng)
+        m[1] = (cur - m[0]) % P
+        msgs.append(m)
+        r = coins.peek(stmt, slot[f"rows/r{j}"], 1)[0]
+        rs.append(r)
+        cur = lagrange_at(m, r)
+    r_i = np.array(rs)
+    ev2 = {"w": _uniform_ext(1, rng)[0]}
+    rest = ext_mul(toy.alpha_tilde(zp, gamma, r_k, r_i), ev2["w"])
+    ev2["g_rows"] = ext_mul((cur - rest) % P, ext_inv(rho2))
+    out.update(row_msgs=msgs, evals2=ev2, r_i=r_i)
+    return out
 
 
 def _mle_eval(vec: np.ndarray, pt: np.ndarray) -> np.ndarray:
@@ -798,31 +907,6 @@ def _solve_ext(A: np.ndarray, b: np.ndarray) -> np.ndarray:
                 A[r] = (A[r] - ext_mul(fct, A[col])) % P
                 b[r] = (b[r] - ext_mul(fct, b[col])) % P
     return b
-
-
-def _sample_zero_check(toy, zp, G, coins, stmt, rng, return_r=False):
-    """Honest-observable zero-check transcript without a witness: messages uniform on h(0)+h(1) = claim, evaluation
-    claims uniform, g(r) solved from the final check.  Needs the coins (they are queried through ``coins``)."""
-    sched = zk.coin_schedule(zp, list(toy.kprimes))
-    slot = {lab: k for k, lab in enumerate(sched)}
-    tau = coins.peek(stmt, slot["zc/batch"], toy.n_sc)
-    rho = coins.peek(stmt, slot["zc/rho"], 1)[0]
-    cur = ext_mul(rho, G)
-    msgs, rs = [], []
-    for j in range(toy.n_sc):
-        m = _uniform_ext(4, rng)
-        m[1] = (cur - m[0]) % P
-        msgs.append(m)
-        r = coins.peek(stmt, slot[f"zc/r{j}"], 1)[0]
-        rs.append(r)
-        cur = lagrange_at(m, r)
-    r_sc = np.array(rs)
-    ev = {nm: _uniform_ext(1, rng)[0] for nm in ("a", "b", "c")}
-    rest = ext_mul(eq_eval(toy.weights(tau), r_sc), (ext_mul(ev["a"], ev["b"]) - ev["c"]) % P)
-    ev["g"] = ext_mul((cur - rest) % P, ext_inv(rho))
-    if return_r:
-        return msgs, ev, r_sc, rho
-    return msgs, ev
 
 
 class _ProbeCoins(zk.CommittedCoins):
@@ -908,4 +992,4 @@ def compare(proofs_x: list[Proof], proofs_y: list[Proof]) -> dict:
     return out
 
 
-DEFAULT_TOY = Toy(n=16, kprimes=(5, 1, 1), n_rows_open=16, t_pad=24)     # 2^11 x 32, then 2^10 x 2, 2^9 x 2 (ext)
+DEFAULT_TOY = Toy(n_i=6, n_c=9, kprimes=(4, 1, 1), n_rows_open=16, t_pad=24)   # 2^11 x 16 (cols 0 + 8..15 masks), 2^10 x 2, 2^9 x 2
