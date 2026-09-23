@@ -1488,6 +1488,30 @@ def main(argv: list[str] | None = None) -> None:
                       f"{', '.join(f'{op}: {p['spec']} width {p['width']} {p['dtype']} at {p['consumer']}' for op, p in sorted(_pia['producers'].items()))})", flush=True)
                 if _absent:
                     print(f"[delta] NOTE: {len(_absent)} promoted-member consumer(s) are not modules of the built model ({_absent[:3]}): their identities stay unbound (coverage names them)", flush=True)
+        # [v2 acquire, Phase 4a] ACQUIRE_ENGINE=v2: the committer's hook sets come from the ACQUISITION PLAN (required-value manifest x the
+        # built engine's runtime tree), not from the class tables above -- the plan, v1's decision and their comparison are written into the
+        # attempt dir first; an UNSUPPORTED Value refuses by name.  Unset / v1 (the default): nothing here runs.
+        from verity_vllm.acquire import switch as _acq_switch
+
+        if _acq_switch.v2():
+            if required_manifest is None or not hasattr(com, "_modules") or getattr(com, "model", None) is None:
+                print(f"[delta] REFUSE: {_acq_switch.ENV}=v2 needs --required-manifest and a hooking committer (got {kind})", flush=True)
+                sys.exit(3)
+            from verity_vllm.acquire.install import IncompletePlan as _IncompletePlan, apply_plan_to_committer as _apply_plan
+            from verity_vllm.acquire.stage import plan_at_stage as _plan_at_stage
+
+            try:
+                _docs = _plan_at_stage(com.model, getattr(eng, "runner", None), required_manifest, out, source=f"commit_delta {kind}",
+                                       row_id=(required_manifest.get("workload") or {}).get("row_id") if isinstance(required_manifest.get("workload"), dict) else None)
+                for _ln in _docs.log_lines("delta"):
+                    print(_ln, flush=True)
+                _rec = _apply_plan(com, _docs.plan)
+            except _IncompletePlan as e:
+                print(f"[delta] REFUSE: acquisition plan: {e}", flush=True)
+                sys.exit(3)
+            (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _docs.plan.digest, **_rec}, indent=1) + "\n")
+            print(f"[delta] committer {com.name}: {len(_rec['modules_after'])} module output hooks from the plan (v1 tables would hook {len(_rec['modules_before'])}), "
+                  f"consumer inputs {_rec['plan_inputs']}, deferred sites {len(_rec['deferred_sites'])}", flush=True)
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None and not (args.arena_unchecked and args.arena_mb):
             # X-02: size the device staging block from the workload envelope (refuses here, with needed vs available bytes, if it cannot fit)
             envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
