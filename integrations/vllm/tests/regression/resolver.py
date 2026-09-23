@@ -345,16 +345,33 @@ def candidate_attempt_ids() -> list[str]:
 
 
 def candidate_attempt_docs() -> list[dict[str, Any]]:
-    """The manifests of the candidate attempts, fetched once per process (`store_io.attempt`); an unreachable store is NotResolvable."""
-    out = []
-    for rid in candidate_attempt_ids():
+    """The manifests of the candidate attempts, fetched once per process (`store_io.attempt`), plus the chain they cite: an attempt's
+    `inputs` name artifacts (`build=art:…`, `match=art:…`) whose manifests carry the publishing attempt in `meta.run_id` -- naming the
+    Commit attempt alone resolves the Match and Build attempts behind it.  An unreachable store is NotResolvable."""
+    from . import store_io
+    out: list[dict[str, Any]] = []
+    queue = list(candidate_attempt_ids())
+    seen: set[str] = set()
+    while queue:
+        rid = queue.pop(0)
+        if rid in seen:
+            continue
+        seen.add(rid)
         if rid not in _ATTEMPT_DOCS:
-            from . import store_io
             try:
                 _ATTEMPT_DOCS[rid] = store_io.attempt(rid)
             except Exception as e:  # noqa: BLE001
                 raise NotResolvable(f"candidate attempt {rid} not readable here: {e}") from e
-        out.append(_ATTEMPT_DOCS[rid])
+        doc = _ATTEMPT_DOCS[rid]
+        out.append(doc)
+        for art in (doc.get("inputs") or {}).values():
+            if isinstance(art, str) and art.startswith("art:"):
+                try:
+                    up = (store_io.show(art).get("meta") or {}).get("run_id")
+                except Exception:  # noqa: BLE001 -- a cited artifact nobody can read is a broken chain: attempt_provenance names it
+                    continue
+                if isinstance(up, str) and re.fullmatch(r"r[0-9]{8}-[0-9]{6}-[0-9a-f]{4}", up) and up not in seen:
+                    queue.append(up)
     return out
 
 

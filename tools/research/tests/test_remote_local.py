@@ -107,6 +107,29 @@ def test_tool_tarball_is_deterministic_and_excludes_caches():
     assert not any("__pycache__" in n or n.endswith(".pyc") for n in names)
 
 
+def test_source_tree_research_package_is_the_tool_that_ships(tmp_path, monkeypatch, capsys):
+    """`research run --on M --source <tree>`: when the tree carries tools/research/src/research, THAT package is tarred as the tool
+    (the machine executes it), not the launcher's own install; without one the launcher's package ships, and a `--tool` it does not
+    know is refused before anything is shipped."""
+    assert remote.source_tool_package(None) is None
+    assert remote.source_tool_package(tmp_path) is None                       # no tools/research in this tree
+    pkg = tmp_path / "tools" / "research" / "src" / "research"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "marker_only_in_the_tree.py").write_text("X = 1\n")
+    assert remote.source_tool_package(tmp_path) == pkg
+    import io, tarfile
+    data, sha = remote.tool_tarball(pkg)
+    names = tarfile.open(fileobj=io.BytesIO(data)).getnames()
+    assert "research/marker_only_in_the_tree.py" in names and "research/cli.py" not in names
+    assert sha != remote.tool_tarball()[1]                                    # a different package is a different tool identity
+    # the refusal: the launcher's registry does not know `nope.tool` and no --source package would replace it
+    from research import cli
+    rc = cli.main(["run", "--on", "m", "--project", "p", "--tool", "nope.tool", "--", "true"])
+    err = capsys.readouterr().err
+    assert rc == 3 and "launcher research package does not know tool 'nope.tool'" in err and "--source with tools/research" in err
+
+
 def test_machines_resolution(tmp_path, monkeypatch):
     f = tmp_path / "m.toml"
     f.write_text('[machines.a]\nprovider="runpod"\npod_id="p"\nprojects=["verity","x"]\n[machines.b]\nprovider="runpod"\npod_id="q"\nproject="veritor"\n')

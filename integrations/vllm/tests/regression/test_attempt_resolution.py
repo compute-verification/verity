@@ -166,6 +166,18 @@ def test_candidate_env_names_attempt_ids_or_a_directory(monkeypatch, tmp_path):
     assert _row().candidate_root() is None and _row().candidate("global_match.json") is None
 
 
+def test_naming_the_commit_attempt_resolves_the_chain_behind_it(store, monkeypatch):
+    """`VERITY_REGRESSION_CANDIDATE=<commit attempt>`: its inputs cite the Match and Build artifacts, whose `meta.run_id` (stamped by
+    `typed_outputs`) names the attempts that published them -- all three become the row's candidate attempts."""
+    monkeypatch.setenv(resolver.CANDIDATE_ENV, IDS["commit"])
+    assert [d["id"] for d in resolver.candidate_attempt_docs()] == [IDS["commit"], IDS["build"], IDS["match"]]
+    row = _row()
+    assert sorted(d["id"] for d in row.candidate_attempts()) == sorted(IDS.values())
+    root = row.candidate_root()
+    assert root is not None and row.candidate("global_match.json") is not None and row.candidate("build_summary.json") is not None
+    assert row.candidate("commit/commit_verdict.json") is not None
+
+
 def test_row_candidate_is_the_union_of_its_attempts(store, monkeypatch):
     monkeypatch.setenv(resolver.CANDIDATE_ENV, ",".join(IDS.values()))
     row = _row()

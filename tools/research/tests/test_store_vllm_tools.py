@@ -103,6 +103,10 @@ def test_parse_accepts_row_pod_argv_too():
     assert p["stage"] == "build,match" and p["row"] == ROW and p["model"] == "repo" and p["batch"] == 1
     q = RT.parse(["bash", WRAPPER, "stage", "commit", ROW, "R", "repo", "rev", "--pairs=4", "--required-classes", "module_out"], stage="commit")
     assert q["pairs"] == "4" and q["required_classes"] == "module_out" and q["replay_args"] is None
+    # a value that is itself a flag list is a value (the R19 admit fix (a) commit flags), not a bare `--commit-args` switch
+    c = RT.parse(_argv("commit", "--commit-args", "--bounded-staging --retain-exclude hidden_m1", "--pairs", "3"), stage="commit")
+    assert c["commit_args"] == "--bounded-staging --retain-exclude hidden_m1" and c["pairs"] == "3"
+    assert RT.parse(_argv("commit", "--commit-args", "--pairs", "3"), stage="commit")["commit_args"] is True   # a real switch stays one
     assert RT.row_config("not-a-row") == {**{k: None for k in RT._ROW_FIELDS}, "model_tag": "not-a-row"}
 
 
