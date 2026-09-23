@@ -21,12 +21,18 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
     (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
+A tensor-parallel row (tp_stage.sh; build_summary.json carries `tp.world` and `ranks`) keeps its Build per rank under build/rank<r>/:
+the build entry takes each rank's build_step/, build_request*/ and build_workload/workload_program.json, the match entry tp.match's
+match/tp2_match.json (+ the fold Match's), and `program_digest` is the TP manifest's key digest -- the `tp-ranks` fold of the rank
+workload digests (required_manifest's rank merge), with `rank_workload_digests` beside it.
+
 Files larger than MAX_FILE are left out and named in meta.skipped (the raw planes and folds stay on the volume; the kind says so).
 Stdlib only; never raises out of `main` (an outputs.json that could not be written is reported, the stage's own exit status stands).
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -46,7 +52,11 @@ BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "ma
                "admission.json", "source_identity.json", "tree.json", "release.json", "build_request/digest.txt"]
 MATCH_FILES = ["match/instances.jsonl", "match/program.json", "match/run.json", "match/versions.json", "match/control/tokens.json",
                "match/capture/tokens.json", "global_match.json", "match_summary.json", "match_compare.json", "match_decomp.json",
-               "match_shape.json", "match/fold_summary.json", "match_stoch.json"]
+               "match_shape.json", "match/fold_summary.json", "match_stoch.json",
+               "match/tp2_match.json", "match/fold_match/tp2_fold_match.json", "match/capture/topology.json", "match/control/topology.json",
+               "match/capture/versions.json", "match/control/versions.json"]
+TP_BUILD_GLOBS = ["build/rank*/build_step", "build/rank*/build_request*", "build/rank*/build_workload/workload_program.json"]
+TP_LOG_GLOBS = ["build/rank*/*.log", "match/*.log"]
 COMMIT_FILES = ["commit_summary.json", "weights_of_record.log", "manifest.log", "manifest_verify.log"]
 EVIDENCE_FILES = ["timeline.jsonl", "stages.txt", "admission.json", "timeline_report.json"]
 
@@ -74,12 +84,27 @@ def row_batch(row: str) -> int:
     return int(m.group(1)) if m else 1
 
 
+def tp_world(build_summary: Any) -> int:
+    """The tensor-parallel world of a tp_stage.sh Build (`tp.world` of build_summary.json), 1 for a TP1 Build."""
+    tp = build_summary.get("tp") if isinstance(build_summary, dict) else None
+    return int(tp.get("world") or 1) if isinstance(tp, dict) else 1
+
+
 def program_digest(d: Path, row: str = "") -> dict[str, Any]:
     """The Build's digests of record, from build_summary.json (never from the manifest): `program_digest` = the request Program's at
     B=1, GP-01's workload Program digest at B>=2 (the harness's `program_digest_of_record`); the step and workload digests beside."""
     s = _read_json(d / "build_summary.json") or {}
     if not isinstance(s, dict):
         s = {}
+    world = tp_world(s)
+    if world > 1:
+        ranks = s.get("ranks") if isinstance(s.get("ranks"), dict) else {}
+        wds = [((ranks.get(f"rank{r}") or {}).get("workload") or {}).get("workload_digest") for r in range(world)]
+        step = (ranks.get("rank0") or {}).get("build_step") or {}
+        # must equal required_manifest's rank merge (`tp-ranks-fold`): the digest the TP manifest's identities are keyed by
+        of_record = hashlib.sha256(("tp-ranks/" + ",".join(sorted(wds))).encode()).hexdigest() if all(wds) else None
+        return {"program_digest": of_record, "request_digest": None, "step_digest": step.get("program_digest"), "workload_digest": None,
+                "rank_workload_digests": wds, "tp": world}
     req = s.get("request") if isinstance(s.get("request"), dict) else {}
     step = s.get("step") if isinstance(s.get("step"), dict) else {}
     wl = s.get("workload") if isinstance(s.get("workload"), dict) else {}
@@ -156,8 +181,9 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
     refs = {k: a for k, a in inputs.items() if k in ("build", "match") and isinstance(a, str) and a.startswith("art:")}
     entries: list[dict[str, Any]] = []
     passed = status == "PASS"                 # a failed stage still publishes its evidence + logs; its account artifact is then optional
+    tp = digests.get("tp", 1) > 1
     if stage == "build":
-        present, skipped = _collect(d, BUILD_FILES, ["build_request*", "build_step"])
+        present, skipped = _collect(d, BUILD_FILES, ["build_request*", "build_step", *(TP_BUILD_GLOBS if tp else [])])
         present = [r for r in present if not r.endswith("instances.json.gz")]
         meta = {**base_meta, "required_manifest": (d / "manifest.json").is_file(), "precheck": v.get("precheck", (None, ""))[0]}
         e = _entry("build", KINDS[stage], meta, run_dir, d, present, skipped, optional=not passed)
@@ -166,10 +192,13 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
         gm = _read_json(d / "global_match.json") or {}
         meta = {**base_meta, "global_match_ok": gm.get("ok") if isinstance(gm, dict) else None,
                 "within_step": gm.get("within_step") if isinstance(gm, dict) else None}
+        if tp:
+            tm = _read_json(d / "match" / "tp2_match.json") or {}
+            meta["tp_match_ok"] = tm.get("pass") if isinstance(tm, dict) else None
         e = _entry("match", KINDS[stage], meta, run_dir, d, present, skipped, refs={k: refs[k] for k in ("build",) if k in refs}, optional=not passed)
     elif stage == "commit":
         present, skipped = _collect(d, COMMIT_FILES, ["commit"])
-        cs = _read_json(d / "commit_summary.json") or {}
+        cs = _read_json(d / "commit_summary.json") or (_read_json(d / "commit" / "summary.json") if tp else None) or {}
         vd = _read_json(d / "commit" / "verdict.json") or {}
         meta = {**base_meta, "verdict": (vd.get("verdict") if isinstance(vd, dict) else None) or status,
                 "tokens_equal": cs.get("tokens_equal") if isinstance(cs, dict) else None,
@@ -183,7 +212,7 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
     e = _entry("evidence", "execution-evidence/v1", {"row": row, "stage": stage, "stage_status": status}, run_dir, d, present, skipped, optional=True)
     if e is not None:
         entries.append(e)
-    present, skipped = _collect(d, ["row.log"], ["*.log"])
+    present, skipped = _collect(d, ["row.log"], ["*.log", *(TP_LOG_GLOBS if tp else [])])
     e = _entry("logs", "run-files/v1", {"row": row, "stage": stage}, run_dir, d, present, skipped, optional=True)
     if e is not None:
         entries.append(e)
