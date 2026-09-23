@@ -41,9 +41,11 @@ from .transcript import LiveCoins
 
 BACKEND = "ligerito"
 STUBBED = "zk.py not wired (no masks, no salted leaves, no Libra sumcheck masks, no per-column RS padding)"
-ZK_PARTIAL = "ligerito-zk row masks (8 uniform + product triple + Libra row, in free rows) under the bit-interleaved index map z_to_f"
-ZK_MISSING = ("Libra masks in the three sumchecks, the shift-claim reduction and the product-row constraint (ligerito-sumcheck-2), "
-              "per-column RS padding + sparse round-1 terms (ligerito-pcs-fast)")
+ZK_PARTIAL = ("LGSC0004 (ligerito-sumcheck-3): Libra masks on every monomial of the zero-check, combined and row-reduction rounds, "
+              "committed next rows + mask link, the enforced product triple i1 i2 = i3; ligerito-zk's 8 uniform rows and per-column "
+              "RS padding (t_pad) under the bit-interleaved index map z_to_f; the three mask claims as sparse PCS terms")
+ZK_MISSING = ("a PCS zero-knowledge argument that covers the V1 zero claims (boolean high row bits: they never reach the uniform "
+              "rows) and LGSC0004's sparse claims on the g rows (red-team-ligerito-3, LGSC0004 checklist item 5)")
 #: where a cold verify-dir gets each coin mode's coins from (red-team F12 (b)): only the FS transcript is the verifier's own
 COIN_PROVENANCE = {"fiat-shamir": "recomputed from the transcript (verifier-derived)",
                    "local": "rebuilt from the manifest's coins_seed (prover-side: no soundness)",
@@ -166,17 +168,32 @@ def v1_forgeries(pv: Prover, bt) -> list[tuple[str, dict, str]]:
     def zero_last_vu(z, lay_):
         z[:, vu_cols] = 0                   # all-zero columns satisfy every constraint; c_x = 0 at the neighbours' starts
 
-    next0 = torch.zeros(lay.C, dtype=torch.int64)
-    next0[5] = 12345
+    if lay.zk is None:
+        next0 = torch.zeros(lay.C, dtype=torch.int64)
+        next0[5] = 12345
+        shift = [("next:0 row +12345 in column 5 committed (pinned by the shift)", dict(forge_rows={lay.virt["next:0"]: next0}),
+                  "combined final")]
+    else:
+        # LGSC0004 commits next:<x> and the mask link M_next; the shift pins both (red-team-ligerito-3's ZK must-rejects).
+        # next:0 is edited where link = 0 (a VU's last unit), so the zero-check's link constraint cannot see it
+        col = int(np.flatnonzero(lay.chain_layout(0).masks("cpu")[1].numpy() == 0)[0])
+
+        def bump_row(row_of, c, d):
+            def edit(z, lay_):
+                r = row_of(lay_)
+                z[r, c] = ((z[r, c].to(torch.int64) + d) % P).to(z.dtype)
+            return edit
+        shift = [(f"committed next:0 +12345 in column {col} (link = 0 there: only the shift pins it)",
+                  dict(edit_zk=bump_row(lambda l_: l_.zk.next[0], col, 12345)), "combined"),
+                 ("committed M_next +1 in column 5 (the mask link: only the shift pins it)",
+                  dict(edit_zk=bump_row(lambda l_: l_.zk.mask_next, 5, 1)), "combined")]
     return [("end row(s): claimed word +1 ulp, true witness", dict(forge_stmt=_stmt_with(st, y=[bump(steps - 1)] + st.y[1:])), "PCS"),
             ("pub:* rows: operand a[10][1] exponent bit flipped, true witness",
              dict(forge_stmt=_stmt_with(st, a=[_flip_operand(rel, st.a[0])] + st.a[1:])), "PCS"),
             ("start/link/end rows: statement n_vus[0] - 1 (the dropped VU's end word zeroed), true witness",
              dict(forge_stmt=_stmt_nvus(pv, st, [nv0 - 1] + st.n_vus[1:])), "PCS"),
             ("const + every public row: last VU of sub-batch 0 all-zero in z, its y claimed +1",
-             dict(forge_stmt=_stmt_with(st, y=[bump(nv0 * steps - 1)] + st.y[1:]), forge_z=zero_last_vu), "PCS"),
-            ("next:0 row +12345 in column 5 committed (pinned by the shift)", dict(forge_rows={lay.virt["next:0"]: next0}),
-             "combined final")]
+             dict(forge_stmt=_stmt_with(st, y=[bump(nv0 * steps - 1)] + st.y[1:]), forge_z=zero_last_vu), "PCS")] + shift
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -184,12 +201,20 @@ def v1_forgeries(pv: Prover, bt) -> list[tuple[str, dict, str]]:
 # ---------------------------------------------------------------------------------------------------------------------
 
 class Dump:
-    def __init__(self, root: Path | None, prover: Prover):
+    def __init__(self, root: Path | None):
         self.root = root
         self.files: list[dict] = []
+        self.key: bytes | None = None
         if root is not None:
             root.mkdir(parents=True, exist_ok=True)
-            (root / "key.bin").write_bytes(prover.key_bytes)
+
+    def set_key(self, key_bytes: bytes) -> None:
+        """The batches' key (``Batch.key_bytes``): one per dump, since the reader pins one ``key.bin``."""
+        if self.key is not None and self.key != key_bytes:
+            raise ValueError("batches with different keys in one dump")
+        self.key = key_bytes
+        if self.root is not None:
+            (self.root / "key.bin").write_bytes(key_bytes)
 
     def coins_file(self, stem: str, slots: list) -> dict:
         if self.root is None:
@@ -249,11 +274,12 @@ def gate(args) -> int:
     log(f"{rel.name}: system {sys_.summary()}; key {pv.key_sha256.hex()[:16]} (m={pv.key.m}, n_i={pv.key.n_i}, n_k={pv.key.n_k}, "
         f"K={pv.key.K}); compiled {pv.compile_seconds:.2f}s")
     data = instances(rel, args.vus)
-    dump = Dump(Path(args.dump_dir) if args.dump_dir else None, pv)
+    dump = Dump(Path(args.dump_dir) if args.dump_dir else None)
     report = {"relation": rel.name, "l": args.l, "vus": args.vus, "positives": [], "negatives": [], "system": sys_.summary()}
     failures = 0
     for kind in args.coins:
         bt = pv.batch(data, kind, zk=args.zk)
+        dump.set_key(bt.key_bytes)
         lay = bt.lay
         log(f"[{kind}] layout {lay.summary()}; dims {bt.dims.describe()}")
         pc, vc = _coins_pair(kind, 1)
@@ -405,9 +431,14 @@ def _dump_prover(d: Path, man: dict, device: str) -> Prover:
     k = (key.relation, man.get("l"), device)
     if k not in _PROVERS:
         _PROVERS[k] = Prover(key.relation, device, man["l"])
-    if _PROVERS[k].key_bytes != (d / "key.bin").read_bytes():
-        raise SystemExit("key.bin differs from the key this code derives from the system")
-    return _PROVERS[k]
+    pv, kb = _PROVERS[k], (d / "key.bin").read_bytes()
+    if kb != pv.key_bytes:
+        # a ZK key (no next:* virtual rows) follows the batch's column count: derive it from the first statement's layout
+        first = next((e for e in man.get("files", []) if e.get("expect") == "accept"), None)
+        zk = not any(n.startswith("next:") for n in key.virt)
+        if not (zk and first and pv.key_for(pv.stmt_layout(read_statement((d / first["stmt"]).read_bytes()), True))[2] == kb):
+            raise SystemExit("key.bin differs from the key this code derives from the system")
+    return pv
 
 
 def verify_dir(d: Path, device: str = "cuda") -> dict:
@@ -487,7 +518,8 @@ def verify_session(d: Path, records: list[Path], device: str = "cuda") -> dict:
             if not verdict.get("accepted"):
                 raise ValueError(f"session {sid} was not accepted by its verifier: {verdict.get('errors')}")
             st, pf = read_statement((d / e["stmt"]).read_bytes()), read_proof((d / e["proof"]).read_bytes())
-            stream_stmt = b"lgto-stmt|v1|" + sha256(pf.absorbed_params()) + st.digest() + pv.key_sha256
+            key_sha = pv.key_for(pv.stmt_layout(st, bool(pf.params.get("zk"))))[3]
+            stream_stmt = b"lgto-stmt|v1|" + sha256(pf.absorbed_params()) + st.digest() + key_sha
             if bytes.fromhex(b["statement"]) != stream_stmt or rec.get("stmt_sha256") != sha256(stream_stmt).hex():
                 raise ValueError("the stream's STMT is not this statement / params / key")
             if [[c["r"], c["s"]] for c in rec["coins"]] != b["openings"]:
@@ -557,11 +589,12 @@ def bench(args) -> int:
     bt = bts[0]
     lay = bt.lay
     print(f"{nb_} batch(es) of {bv} VUs; layout {lay.summary()}; dims {bt.dims.describe()}", flush=True)
-    dump = Dump(Path(args.dump_dir) if args.dump_dir else None, pv)
+    dump = Dump(Path(args.dump_dir) if args.dump_dir else None)
+    dump.set_key(bt.key_bytes)
     live = args.coins == "live"
     stream_info: dict = {}
     if live:
-        stmts = [prove_mod.statement_for_stream(b, pv.key_sha256) for b in bts]
+        stmts = [prove_mod.statement_for_stream(b, b.key_sha256) for b in bts]
         # the session's round count: one local-stream proof (also the warm-up of the compiled kernels)
         warm = prove_mod.StreamCoins(live_mod.LocalChallenges(4096), stmts[0])
         pv.prove(bt, warm)
@@ -647,7 +680,7 @@ def bench(args) -> int:
     med_lat = statistics.median(max(pc.stream.latency or 0.0 for _, _, pc in it) for _, it in runs) if live else None
     vmed = statistics.median(sum(i["seconds"] for _, i, _ in it) for _, it in runs)
     nbytes = {k: sum(r.proof.n_bytes()[k] for r, _, _ in runs[0][1]) for k in res.proof.n_bytes()}
-    snd = pv.soundness(bt.dims)
+    snd = pv.soundness(bt.dims, int(bt.params.get("t_pad", 0)), bt.lay)
     peak = max(r.peak_device_bytes for _, it in runs for r, _, _ in it)
     rust_ok = bool(rust and rust["exit"] == 0)
     # the verdict frame proves the round order only; the coins count once verify-session matched the proofs' messages to
@@ -704,7 +737,7 @@ def bench(args) -> int:
         retention="retained", instances=inst, scope="vu", omitted=omitted,
         relation=rel.relation_name, model=rel.model_name, commit=_git_commit(), step_k=rel.k, steps_per_vu=rel.steps,
         rows=pv.sys.m, committed_rows=lay.m, layout=lay.summary(), witness_generation=rel.witness_generation,
-        statement_format="LGTS0001", proof_format="LGTO0001", key_format="LGVK0001", key_sha256=pv.key_sha256.hex(),
+        statement_format="LGTS0001", proof_format="LGTO0001", key_format="LGVK0001", key_sha256=bt.key_sha256.hex(),
         note=f"{total_vus} VUs as {nb_} Ligerito batch(es) of {lay.n_sub} sub-batches x l = {args.l} columns (S = {lay.S}), N = 2^{lay.n_vars} "
              f"cells each; t.total = wall over all batches{f' ({args.window} in flight)' if live and args.window > 1 else ''}; proof bytes / verify summed; "
              f"{'live coins: the t.* buckets include the challenge-stream waits (live.stream_wait_seconds, R x RTT per batch); ' if live else ''}"

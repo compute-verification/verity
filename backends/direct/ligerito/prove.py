@@ -35,7 +35,7 @@ from backends.direct.ligero.witness import build_witness
 from . import params as params_mod
 from . import sumcheck as sc_mod
 from . import zk as zk_mod
-from .layout import Layout, SubBatch, build_z, constraints, end_values, layout_for, public_rows
+from .layout import ZK_B, Layout, SubBatch, build_z, constraints, end_values, fill_zk, layout_for, public_rows
 from .proof import FS_QUERIES_LOG2, Key, PcsProof, Proof, Statement, params_bytes, soundness_claim, zero_blocks, zero_points
 from .proto import claims as cl
 from .proto import device as pdev
@@ -780,18 +780,32 @@ def pcs_points(lay: Layout, claims: list, zl=None, blocks=()) -> tuple[np.ndarra
     return np.stack(pts).astype(np.int64) % P, np.stack(vals).astype(np.int64) % P
 
 
+def n_eval_claims(lay: Layout) -> int:
+    """The sumcheck's evaluation claims on ``w``: LGSC0003 ``w~(r_i, r_c)`` + one per link; LGSC0004 ``w~(r_i, r_c)`` and
+    ``w~(rho_i, rho_c)`` (its three mask claims are sparse PCS terms, not points)."""
+    return 2 if lay.zk is not None else 1 + lay.n_links
+
+
+def split_claims(claims: list) -> tuple[list, list]:
+    """LGSC0004's claims -> (evaluation claims, sparse mask claims); LGSC0003 has no sparse ones."""
+    return ([c for c in claims if isinstance(c, sc_mod.EvalClaim)], [c for c in claims if isinstance(c, sc_mod.SparseClaim)])
+
+
+def pcs_sparse(claims: list, zl) -> list:
+    """LGSC0004's sparse mask claims (mask(zc), mask(cmb), mask(rb), in that order) as proto ``open``'s sparse terms: the
+    relation cells ``(rows, cols)`` through the ZK index map (``zk.f_index``)."""
+    return [(np.asarray(zk_mod.f_index(c.rows.cpu().numpy().astype(np.int64), c.cols.cpu().numpy().astype(np.int64), zl)),
+             c.weights.cpu().numpy().astype(np.int64) % P, c.value.cpu().numpy().astype(np.int64) % P) for c in claims]
+
+
 def zk_layout(lay: Layout, dims: Dims):
-    """The ZK mask rows of a batch (lane ligerito-zk's ``RowMaskLayout``), all in the free region ``[m + n_virt, R)``:
-    the ``2^b`` uniform rows on top, below them the product triple and the Libra row.  (ligerito-zk puts the product and
-    Libra rows among the committed rows with the trivial constraint ``i1 i2 = i3``; until layout.py reserves them they
-    sit in the free region and the product constraint is not enforced.)"""
-    R, nv = lay.R, len(lay.virt)
-    free_from, b = lay.m + nv, 3
-    if R - free_from < (1 << b) + 4:
-        raise ValueError(f"{R - free_from} free rows: not enough for the ZK mask rows")
-    top = R - (1 << b)
-    return zk_mod.RowMaskLayout(lay.n_i, lay.C.bit_length() - 1, dims.k[-1], tuple(range(top, R)),
-                                ((top - 4, top - 3, top - 2),), top - 1, b=b)
+    """The PCS's view of LGSC0004's ZK rows (lane ligerito-zk's ``RowMaskLayout``: the index map interleaves ``k_L - b``
+    column bits below the row bits): ``lay.zk``'s uniform rows, product triple and first Libra row.  The Libra
+    coefficients are LGSC0004's (its sparse claims on ``lay.zk.g_rows``), so no PCS-side sumcheck masks (``sumchecks=()``):
+    two mask systems on the same g cells would correlate their messages (red-team-ligerito-3)."""
+    zr = lay.zk
+    return zk_mod.RowMaskLayout(lay.n_i, lay.n_c, dims.k[-1], tuple(zr.uniform), (tuple(zr.product),), zr.g_rows[0],
+                                sumchecks=(), b=ZK_B)
 
 
 @dataclass
@@ -803,6 +817,8 @@ class Batch:
     lparams: params_mod.LigeritoParams
     params: dict
     stmt_digest: bytes = b""            # sha256(LGTS0001 bytes): the statement is fixed before the prover's clock starts
+    key_bytes: bytes = b""              # the layout's LGVK0001 key (``Prover.key_for``)
+    key_sha256: bytes = b""
 
 
 @dataclass
@@ -838,9 +854,27 @@ class Prover:
                        {s: tuple(t.cpu().numpy() for t in self.cons.coo[s]) for s in "abc"})
         self.key_bytes = self.key.to_bytes()
         self.key_sha256 = self.key.digest()
+        self._zk_keys: dict = {}
         self.compile_seconds = time.perf_counter() - t0
         self.word_bytes = np.dtype(self.rel.word_dtype).itemsize
         self.y_bytes = np.dtype(self.rel.y_dtype).itemsize
+
+    def key_for(self, lay: Layout) -> tuple:
+        """``(constraints, Key, key bytes, sha256)`` of a layout.  LGSC0003: one key per relation.  ZK (LGSC0004): the
+        committed next / mask / product rows sit below the Libra rows, whose count is ``ceil(g_cells / C)``, so the
+        constraint rows and the key follow the column count C: one key per (relation, C), cached."""
+        if lay.zk is None:
+            return self.cons, self.key, self.key_bytes, self.key_sha256
+        hit = self._zk_keys.get(lay.C)
+        if hit is None:
+            cons = constraints(self.sys, lay, self.device)
+            key = Key(self.rel.name, self.sys_id, lay.m, lay.n_i, lay.n_k, lay.K, list(lay.c_rows), dict(lay.virt),
+                      {s: tuple(t.cpu().numpy() for t in cons.coo[s]) for s in "abc"})
+            hit = self._zk_keys[lay.C] = (cons, key, key.to_bytes(), key.digest())
+        return hit
+
+    def stmt_layout(self, stmt: Statement, zk: bool) -> Layout:
+        return layout_for(self.sys, self.l, [nv for nv in stmt.n_vus if nv > 0], self.steps, zk=zk)
 
     # --- statement --------------------------------------------------------------------------------------------------
     def batch(self, vus: list, coins_kind: str = "fiat-shamir", zk: bool = False, S: int | None = None,
@@ -849,7 +883,8 @@ class Prover:
         per = l // steps
         groups = [vus[i:i + per] for i in range(0, len(vus), per)]
         n_vus = [len(g) for g in groups]
-        lay = layout_for(self.sys, l, n_vus, steps)
+        lay = layout_for(self.sys, l, n_vus, steps, zk=zk)
+        _, _, key_bytes, key_sha = self.key_for(lay)
         if S is not None and S != lay.S:
             raise ValueError(f"{len(vus)} VUs make S = {lay.S}, asked {S}")
         a, b, y = [], [], []
@@ -858,7 +893,7 @@ class Prover:
             a.append(np.asarray(bd["a"], dtype=np.int64))
             b.append(np.asarray(bd["b"], dtype=np.int64))
             y.append(bd["ypub"].cpu().numpy().astype(np.int64))
-        stmt = Statement(self.rel.name, self.sys_id, self.key_sha256, l, steps, self.rel.k, n_vus + [0] * (lay.S - len(groups)),
+        stmt = Statement(self.rel.name, self.sys_id, key_sha, l, steps, self.rel.k, n_vus + [0] * (lay.S - len(groups)),
                          self.word_bytes, self.y_bytes, a, b, y)
         dims, lp = dims_for(lay.n_vars, self.rel.name, target_log2=target_log2)
         t_pad = zk_mod.T_PAD if zk else 0
@@ -868,7 +903,7 @@ class Prover:
                 # ZK column padding lowers every level's rate to (2^{k_i} + t_pad) / n_i: |S_i| re-derived for the padded shape
                 from .proto import pcs as ppcs
                 dims = ppcs.dims_for(lay.n_vars, kprime, rates, target_log2=target, t_pad=t_pad)
-            if self.soundness(dims, t_pad)["total_log2"] <= target_log2 + 1e-9:
+            if self.soundness(dims, t_pad, lay)["total_log2"] <= target_log2 + 1e-9:
                 break
             target -= 0.25                  # the relation's own terms on top of the PCS union
             if not zk:
@@ -876,9 +911,9 @@ class Prover:
         splits = [list(split((1 << k) << r)) for k, r in zip(dims.k, dims.rates)]
         params = {"relation": self.rel.name, "l": l, "n": dims.n, "kprime": dims.kprime, "queries": dims.queries,
                   "rate_log2": dims.rates, "splits": splits, "order": "zk-interleaved" if zk else "row-major", "coins": coins_kind, "zk": zk,
-                  "n_claims": 1 + lay.n_links + len(zero_blocks(lay.virt)), "zero_blocks": [list(x) for x in zero_blocks(lay.virt)],
+                  "n_claims": n_eval_claims(lay) + len(zero_blocks(lay.virt)), "zero_blocks": [list(x) for x in zero_blocks(lay.virt)],
                   **({"t_pad": t_pad} if zk else {})}
-        return Batch(groups, lay, stmt, dims, lp, params, stmt.digest())
+        return Batch(groups, lay, stmt, dims, lp, params, stmt.digest(), key_bytes, key_sha)
 
     # --- witness ----------------------------------------------------------------------------------------------------
     def _pad(self) -> dict:
@@ -950,18 +985,18 @@ class Prover:
         mod p} for the rows where the committed ``w`` is non-zero."""
         dev = z.device
         real = [nv for nv in stmt.n_vus if nv > 0]
-        lay_c = layout_for(self.sys, self.l, real, self.steps)          # the statement's own masks (n_vus)
+        lay_c = layout_for(self.sys, self.l, real, self.steps, zk=lay.zk is not None)   # the statement's own masks (n_vus)
         claimed = public_rows(self.sys, lay_c, self._stmt_subs(stmt, lay_c, real, dev), dev)
         out = {lay.virt[k]: (z[lay.virt[k]].to(torch.int64) - v) % P for k, v in claimed.items()}
         for r, d in (forge_rows or {}).items():
             out[r] = (out.get(r, torch.zeros(lay.C, dtype=torch.int64, device=dev)) + d.to(dev)) % P
         return {r: d for r, d in out.items() if bool(d.any())}
 
-    def _forged_sumcheck(self, lay: Layout, z, coins, forge: dict, cheat):
+    def _forged_sumcheck(self, lay: Layout, cons, z, coins, forge: dict, cheat):
         """The honest zero-check on the true ``z`` with ``values[0]`` shifted to ``w'~(r_i, r_c)`` for the committed
         ``w' = w + forge`` (row -> (C,) int64), the shifted value absorbed in place of the honest one: the red-team V1
         forgery (a negative; the challenges before ``values`` do not depend on it, so a copied coin state finds the point)."""
-        s1 = sc_mod.prove(lay, self.cons, z, copy.deepcopy(coins), cheat=cheat, engine=self.engine)
+        s1 = sc_mod.prove(lay, cons, z, copy.deepcopy(coins), cheat=cheat, engine=self.engine)
         pt = s1.claims[0].point
         rows = sorted(forge)
         fold = sc_mod.matvec_base_ext(torch.stack([forge[r] for r in rows]), sc_mod.eq_table(pt[lay.n_i:]))
@@ -975,23 +1010,28 @@ class Prover:
 
             def absorb(self, label, data):
                 coins.absorb(label, sc_mod._ext_bytes(vals) if label == b"values" else data)
-        scp = sc_mod.prove(lay, self.cons, z, _Swap(), cheat=cheat, engine=self.engine)
+        scp = sc_mod.prove(lay, cons, z, _Swap(), cheat=cheat, engine=self.engine)
         scp.values = vals
         scp.claims[0] = dataclasses.replace(scp.claims[0], value=vals[0])
         return scp
 
     # --- prove ------------------------------------------------------------------------------------------------------
     def prove(self, bt: Batch, coins, mutate=None, cheat: str | None = None, ypub_override=None, forge_stmt=None,
-              forge_z=None, forge_rows=None) -> Result:
+              forge_z=None, forge_rows=None, edit_zk=None) -> Result:
         """``mutate(W)``: a witness mutation on sub-batch 0 (negatives); ``cheat``: ``sumcheck.prove``'s dishonest modes;
         ``ypub_override``: the prover claims these chain-end words for sub-batch 0 (the statement says so too).
         Red-team V1 forgeries (the zero claims must reject them): the sumchecks run honestly on the prover's ``z`` (the
         true one, or ``forge_z(z, lay)``'s in-place edit of it, virtual rows included) and the commitment carries whatever
         makes the verifier's reconstruction from ``forge_stmt`` (default: the batch's statement) equal that ``z``, plus
-        ``forge_rows`` (row -> (C,) added to the committed ``w``)."""
+        ``forge_rows`` (row -> (C,) added to the committed ``w``).  ``edit_zk(z, lay)``: an in-place edit of the committed
+        ZK rows after the masks are sampled (negatives: committed and proved as edited)."""
         dev = torch.device(self.device)
         tm = Timer(dev)
         lay = bt.lay
+        cons = self.key_for(lay)[0]
+        zk_on = lay.zk is not None
+        if zk_on != bool(bt.params.get("zk")):
+            raise ValueError("the batch's layout and its zk parameter disagree")
         if dev.type == "cuda":
             torch.cuda.reset_peak_memory_stats(dev)
         stmt = bt.stmt
@@ -1009,11 +1049,16 @@ class Prover:
         if forge_stmt is not None or forge_z is not None or forge_rows:
             forge = self._forge(z, lay, forge_stmt if forge_stmt is not None else stmt, forge_rows)
         tm.stop()
+        if zk_on:
+            tm.start("zk_masks")
+            fill_zk(lay, z)                 # a fresh os.urandom key per proof (mask_sampler)
+            if edit_zk is not None:
+                edit_zk(z, lay)
+            tm.stop()
         tm.start("transcript")
         coins.absorb(b"lgto/params", params_bytes(bt.params))
         coins.absorb(b"lgto/stmt", forge_stmt.digest() if forge_stmt is not None else (bt.stmt_digest or stmt.digest()))
-        coins.absorb(b"lgto/vk", self.key_sha256)
-        zk_on = bool(bt.params.get("zk"))
+        coins.absorb(b"lgto/vk", bt.key_sha256 or self.key_for(lay)[3])
         vr = slice(lay.m, lay.m + len(lay.virt)) if zk_on else slice(lay.m, None)
         virt = z[vr].clone()
 
@@ -1027,7 +1072,6 @@ class Prover:
         if zk_on:
             tm.start("zk_masks")
             zl = zk_layout(lay, bt.dims)
-            zk_mod.fill_mask_rows(z, zl, dev)
             f = zk_mod.z_to_f(z, zl).contiguous()
             tm.stop()
         else:
@@ -1047,18 +1091,21 @@ class Prover:
         tm.start("zero_check")
         z[vr] = virt
         if forge:
-            scp = self._forged_sumcheck(lay, z, coins, forge, cheat)
+            scp = self._forged_sumcheck(lay, cons, z, coins, forge, cheat)
         else:
-            scp = sc_mod.prove(lay, self.cons, z, coins, cheat=cheat, engine=self.engine)
+            scp = sc_mod.prove(lay, cons, z, coins, cheat=cheat, engine=self.engine)
         committed_rows()                    # the row-major commitment's M1 is a view of z: the openings read it
         del virt
         tm.stop()
-        points, values = pcs_points(lay, scp.claims, zl, zero_blocks(lay.virt))
+        evals, sparse = split_claims(scp.claims)
+        points, values = pcs_points(lay, evals, zl, zero_blocks(lay.virt))
         if owner:
-            pp = ppcs.open(com, points, None, coins, tm)
+            pp = ppcs.open(com, points, None, coins, tm, sparse=pcs_sparse(sparse, zl) if sparse else None)
             pcs = PcsProof(list(pp.roots), [list(m_) for m_ in pp.sumcheck], [o.rows for o in pp.opens],
                            [o.siblings for o in pp.opens], pp.final_y, list(pp.ybar))
         else:
+            if sparse:
+                raise ValueError("LGSC0004's sparse mask claims need ligerito-pcs-fast's device PCS (pcs.open(sparse=))")
             pcs = pcs_open(com, points, values, coins, tm, n_c=0 if zk_on else lay.C.bit_length() - 1)
         tm.start("serialize_proof")
         proof = Proof(bt.params, scp.to_bytes(), pcs)
@@ -1084,21 +1131,22 @@ class Prover:
                 raise Reject("relation mismatch")
             if stmt.sys_id != self.sys_id:
                 raise Reject("statement names another system")
-            if stmt.vk_sha256 != self.key_sha256:
-                raise Reject("statement names another verification key")
             if stmt.l != self.l or prm.get("l") != self.l or stmt.steps != self.steps or stmt.K != self.rel.k:
                 raise Reject("statement shape")
             real = [nv for nv in stmt.n_vus if nv > 0]
             if stmt.n_vus[:len(real)] != real or any(nv * self.steps > self.l for nv in real) or not real:
                 raise Reject("statement sub-batch list")
-            lay = layout_for(self.sys, self.l, real, self.steps)
+            zk_on = bool(prm.get("zk"))
+            lay = layout_for(self.sys, self.l, real, self.steps, zk=zk_on)
             if lay.S != stmt.S:
                 raise Reject("statement S does not match its sub-batches")
+            cons, _, _, key_sha = self.key_for(lay)
+            if stmt.vk_sha256 != key_sha:
+                raise Reject("statement names another verification key")
             dims = Dims(prm["n"], list(prm["kprime"]), list(prm["queries"]), list(prm["rate_log2"]))
-            zk_on = bool(prm.get("zk"))
             blocks = zero_blocks(lay.virt)
             if dims.n != lay.n_vars or prm.get("order") != ("zk-interleaved" if zk_on else "row-major") \
-                    or prm.get("n_claims") != 1 + lay.n_links + len(blocks) \
+                    or prm.get("n_claims") != n_eval_claims(lay) + len(blocks) \
                     or [tuple(x) for x in prm.get("zero_blocks", [])] != blocks:
                 raise Reject("proof parameters do not match the layout")
             if dims.k[-1] < 0 or min(dims.kprime) < 1:
@@ -1106,25 +1154,29 @@ class Prover:
             t_pad = int(prm.get("t_pad", 0))
             if zk_on != bool(t_pad) or (t_pad and t_pad != zk_mod.T_PAD):
                 raise Reject("ZK padding does not match the parameters")
-            snd = self.soundness(dims, t_pad)
+            snd = self.soundness(dims, t_pad, lay)
             if snd["total_log2"] > -128.0 + 1e-9:
                 raise Reject(f"parameters give an interactive union of 2^{snd['total_log2']:.2f} > 2^-128")
             pub_rows = public_rows(self.sys, lay, self._stmt_subs(stmt, lay, real, dev), dev)
             info["t_public"] = time.perf_counter() - t0
             coins.absorb(b"lgto/params", proof.absorbed_params())
             coins.absorb(b"lgto/stmt", stmt.digest())
-            coins.absorb(b"lgto/vk", self.key_sha256)
+            coins.absorb(b"lgto/vk", key_sha)
             coins.absorb(b"root", proof.pcs.roots[0])
             try:
                 scp = sc_mod.SumcheckProof.from_bytes(proof.sc_bytes, device=dev)
             except (ValueError, IndexError) as e:
                 raise Reject(f"sumcheck bytes: {e}") from None
             t1 = time.perf_counter()
-            ok, why, claims = sc_mod.verify(lay, self.cons, pub_rows, scp, coins, device=dev)
+            ok, why, claims = sc_mod.verify(lay, cons, pub_rows, scp, coins, device=dev)
             info["t_sumcheck"] = time.perf_counter() - t1
             if not ok:
                 raise Reject(why)
-            points, values = pcs_points(lay, claims, zk_layout(lay, dims) if zk_on else None, blocks)
+            zl = zk_layout(lay, dims) if zk_on else None
+            evals, sparse = split_claims(claims)
+            points, values = pcs_points(lay, evals, zl, blocks)
+            if sparse and not t_pad:
+                raise Reject("sparse mask claims without the ZK PCS")
             t2 = time.perf_counter()
             if t_pad:
                 from .proto import pcs as ppcs
@@ -1133,7 +1185,8 @@ class Prover:
                                 [ppcs.RoundOpen(np.asarray(r_, dtype=np.int64), s_) for r_, s_ in zip(proof.pcs.rows, proof.pcs.siblings)],
                                 np.asarray(proof.pcs.final_y, dtype=np.int64), order=ppcs.COMMIT_FIRST,
                                 ybar=[np.asarray(y_, dtype=np.int64) for y_ in proof.pcs.ybar])
-                ok_p, why_p = ppcs.verify_open(pp, points, values, coins, t_pad=t_pad)
+                ok_p, why_p = ppcs.verify_open(pp, points, values, coins, t_pad=t_pad,
+                                               sparse=pcs_sparse(sparse, zl) if sparse else None)
                 if not ok_p:
                     raise Reject(f"PCS: {why_p}")
             else:
@@ -1149,16 +1202,21 @@ class Prover:
         return True, "accept", info
 
     # --- soundness --------------------------------------------------------------------------------------------------
-    def soundness(self, dims: Dims, t_pad: int = 0) -> dict:
+    def soundness(self, dims: Dims, t_pad: int = 0, lay: Layout | None = None) -> dict:
         """The interactive union bound over the PCS levels (paper (17) with ligerito-design's sampling base) and the three
         sumchecks + batching coins over F_{p^6} (``params.LigeritoParams.soundness`` with the relation shape); what a run
-        may claim from it depends on its coins: ``soundness_claim``."""
+        may claim from it depends on its coins: ``soundness_claim``.  ``lay``: the batch's layout (default: the relation's
+        LGSC0003 key).  A ZK layout batches LGSC0004's 2 points + 3 sparse terms; its sumcheck terms (184/|F|) are counted
+        as LGSC0003's (153/|F|): both ~2^-178."""
         lp = params_mod.LigeritoParams(tall1=1 << dims.k[0], wide_log2=tuple(dims.kprime), rate_log2=tuple(dims.rates),
                                        queries=tuple(dims.queries), zk=False, t_pad=t_pad,
                                        relation=params_mod.RELATIONS.get(self.rel.name))
-        zb = zero_blocks(self.key.virt)             # the virtual rows are functions of the relation only
-        extra = {"PCS.claim batching beta J/|F|": math.log2(1 + len(self.key.c_rows) + len(zb)) - lp.fields.ext_log2}
+        zk = lay is not None and lay.zk is not None
+        virt, n_i = (lay.virt, lay.n_i) if lay is not None else (self.key.virt, self.key.n_i)
+        zb = zero_blocks(virt)                      # the virtual rows are functions of the relation only
+        J = (2 + 3 if zk else 1 + len(self.key.c_rows)) + len(zb)
+        extra = {"PCS.claim batching beta J/|F|": math.log2(J) - lp.fields.ext_log2}
         if zb:
             extra["zero claims on the virtual rows, sum (b + n_c)/|F|"] = \
-                math.log2(sum(b + dims.n - self.key.n_i for b, _ in zb)) - lp.fields.ext_log2
+                math.log2(sum(b + dims.n - n_i for b, _ in zb)) - lp.fields.ext_log2
         return lp.soundness(extra)
