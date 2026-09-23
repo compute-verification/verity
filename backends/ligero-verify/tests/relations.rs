@@ -1019,7 +1019,7 @@ fn bf16_ampere_hashed_negatives_and_system_mismatches_are_rejected() {
 // `ligero-system/v3`.  The v5 header's K is the relation's K = 1536 (`serialize._K_of`: 24 steps x 64 E2M1 ELEMENTS, the
 // GemmAccumulator<1536> dot length), read here as 64 operands per unit -- the committed row itself carries 24 x 68 = 1632
 // words (the 4 UE4M3 scale bytes per operand ride along); nothing in the v5 verdict depends on the header K (the leaves
-// are whole rows), so this is the first relation where the two readings of the field differ (noted in DISCREPANCIES.md).  Python's verifier accepted it (`verify_python.json`, 1/1).
+// are whole rows), so this is the first relation where the two readings of the field differ (D-style note in lane fp4-decode's report; DISCREPANCIES.md is at its cap).  Python's verifier accepted it (`verify_python.json`, 1/1).
 
 const FH_SYS: &str = "fixtures/fp4-nvf4-hash/system.bin";
 const FH_STMT: &str = "fixtures/fp4-nvf4-hash/sub_00.stmt";
