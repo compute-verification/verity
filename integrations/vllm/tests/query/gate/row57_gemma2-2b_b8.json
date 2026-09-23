@@ -2,7 +2,7 @@
  "row": "57",
  "row_id": "gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
  "mode": "v2",
- "build_seconds": 195,
+ "build_seconds": 172,
  "v2_identities_rows": 163484,
  "v2_complete": true,
  "v2_unmodelled": {},
@@ -12,6 +12,9 @@
  "v1_identities": 160010,
  "v2_identities": 160442,
  "common": 160010,
+ "v1_rows": 163052,
+ "v2_rows": 163484,
+ "multiplicity_diff_n": 0,
  "only_v1_n": 0,
  "only_v2_n": 432,
  "lines": {
@@ -24,7 +27,7 @@
     "member": "out",
     "spec": "Bf16MulScalarTensor_v1",
     "structural": "out",
-    "returned": "",
+    "returned": "returned",
     "crossing": "crossing",
     "family": "instance_outputs",
     "n": 432,
@@ -32,6 +35,7 @@
    }
   ]
  },
+ "multiplicity": [],
  "residuals_applied": {
   "Gemm_v1:out->0": 431600,
   "RoPE_v1:key->1": 107900,
