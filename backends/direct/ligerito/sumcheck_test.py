@@ -66,9 +66,31 @@ def test_matvec_exact():
     assert torch.equal(sc.matvec_base_ext(M, e), ref)
 
 
-def test_honest_roundtrip(toy):
+def _expected_bytes(lay, sched):
+    ext = sum(3 ** v for v in sched.zc) + (3 + lay.n_links) * (1 << sched.vf) + sum(3 ** v for v in sched.cmb) + 1 + lay.n_links
+    return len(sched.header(lay.n_links, 1 + lay.n_links)) + 4 * 6 * ext
+
+
+SCHEDULES = {
+    "default": None,
+    "bivariate": "c2",
+    "mixed": "3,2,1,3,3,3/4/1,2,3,3,3",
+    "arity4": "3,4,4,4/4/4,4,4",
+    "univariate": "3," + ",".join(["1"] * 15) + "/1/" + ",".join(["1"] * 12),
+}
+
+
+def _sched(lay, name):
+    return sc._schedule_arg(SCHEDULES[name], lay)
+
+
+@pytest.mark.parametrize("name", list(SCHEDULES))
+def test_honest_roundtrip(toy, name):
     sys, lay, cons, z, pubs = toy
-    proof = sc.prove(lay, cons, z, sc.LocalCoins(b"t1"))
+    sched = _sched(lay, name)
+    coins = sc.LocalCoins(b"t1")
+    proof = sc.prove(lay, cons, z, coins, schedule=sched)
+    assert coins.rounds == sched.coins()
     ok, why, claims = sc.verify(lay, cons, pubs, proof, sc.LocalCoins(b"t1"))
     assert ok, why
     assert len(claims) == 1 + lay.n_links
@@ -77,7 +99,22 @@ def test_honest_roundtrip(toy):
     p2 = sc.SumcheckProof.from_bytes(b)
     ok2, why2, _ = sc.verify(lay, cons, pubs, p2, sc.LocalCoins(b"t1"))
     assert ok2, why2
-    assert len(b) == 13 + 4 * 6 * (9 + (lay.n_k + lay.n_c - 2) * 3 + 3 + lay.n_i * 3 + lay.n_links + lay.n_c * 3 + 1 + lay.n_links)
+    assert len(b) == _expected_bytes(lay, sched)
+
+
+def test_default_schedule_coins():
+    # real N: n_k = 12, n_c = 18 (4096 VUs, l = 16384, S = 16), n_i = 12
+    s = sc.default_schedule(30, 18)
+    assert s.zc == (3, 2, 2, 2, 2, 3, 3, 3, 3, 3) and s.vf == 4 and s.cmb == (3,) * 6
+    assert s.coins() == 18
+
+
+def test_truncated_or_padded_bytes_reject(toy):
+    sys, lay, cons, z, pubs = toy
+    b = sc.prove(lay, cons, z, sc.LocalCoins(b"t1")).to_bytes()
+    for bad in (b[:-1], b + b"\0", b[:9]):
+        with pytest.raises(ValueError):
+            sc.SumcheckProof.from_bytes(bad)
 
 
 def test_wrong_coins_reject(toy):
@@ -97,15 +134,19 @@ def _bad_witness_rejected(lay, cons, z_bad, pubs):
     # honest prover on the bad witness: the sum is not zero -> the very first check fails
     proof = sc.prove(lay, cons, z_bad, sc.LocalCoins(b"n"))
     ok, why, _ = sc.verify(lay, cons, pubs, proof, sc.LocalCoins(b"n"))
-    assert not ok and "round 0" in why, why
-    # a prover that fixes the opening round to pass is caught in the next round (round 2: the opening binds two variables)
+    assert not ok and "zero-check round 0" in why, why
+    # a prover that fixes the opening round to pass is caught in the next round
     proof = sc.prove(lay, cons, z_bad, sc.LocalCoins(b"n"), cheat="round1")
     ok, why, _ = sc.verify(lay, cons, pubs, proof, sc.LocalCoins(b"n"))
-    assert not ok and "round 2" in why, why
-    # a prover that fixes EVERY round to pass: the final claim mismatches
+    assert not ok and "zero-check round 1" in why, why
+    # every zero-check message and the final tables fixed: the combined sumcheck's first round catches the false Az, Bz, Cz
+    proof = sc.prove(lay, cons, z_bad, sc.LocalCoins(b"n"), cheat="zc")
+    ok, why, _ = sc.verify(lay, cons, pubs, proof, sc.LocalCoins(b"n"))
+    assert not ok and "combined round 0" in why, why
+    # every round fixed: the combined final check mismatches
     proof = sc.prove(lay, cons, z_bad, sc.LocalCoins(b"n"), cheat="all")
     ok, why, _ = sc.verify(lay, cons, pubs, proof, sc.LocalCoins(b"n"))
-    assert not ok and "final" in why, why
+    assert not ok and "combined final" in why, why
     return why
 
 
@@ -146,16 +187,31 @@ def test_negative_shift_inconsistent(toy):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda")
-def test_cuda_engine_matches_reference(toy):
+@pytest.mark.parametrize("name", ["default", "bivariate", "mixed"])
+def test_cuda_engine_matches_reference(toy, name):
     """The fused cupy rounds produce byte-identical messages to the torch reference path."""
     sys, lay, cons, z, pubs = toy
+    sched = _sched(lay, name)
     zc = z.to("cuda")
     consc = type(cons)(cons.K_pad, cons.R, {s: tuple(t.to("cuda") for t in v) for s, v in cons.coo.items()}, cons.names)
-    ref = sc.prove(lay, cons, z, sc.LocalCoins(b"g"))
-    cu = sc.prove(lay, consc, zc, sc.LocalCoins(b"g", device="cuda"), engine="cuda")
+    ref = sc.prove(lay, cons, z, sc.LocalCoins(b"g"), schedule=sched)
+    cu = sc.prove(lay, consc, zc, sc.LocalCoins(b"g", device="cuda"), engine="cuda", schedule=sched)
     assert ref.to_bytes() == cu.to_bytes()
     ok, why, _ = sc.verify(lay, consc, {k: v.to("cuda") for k, v in pubs.items()}, cu, sc.LocalCoins(b"g", device="cuda"), device="cuda")
     assert ok, why
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda")
+def test_cuda_helpers_match(toy):
+    sys, lay, cons, z, pubs = toy
+    torch.manual_seed(3)
+    r_k = torch.randint(0, P, (lay.n_k, 6), dtype=torch.int64)
+    g = torch.randint(0, P, (6,), dtype=torch.int64)
+    consc = type(cons)(cons.K_pad, cons.R, {s: tuple(t.to("cuda") for t in v) for s, v in cons.coo.items()}, cons.names)
+    assert torch.equal(sc.combined_coefficients(cons, lay, r_k, g), sc.combined_coefficients_cuda(consc, lay, r_k.cuda(), g.cuda()).cpu())
+    assert torch.equal(sc.eq_table(r_k), sc.eq_table_cuda(r_k.cuda()).cpu())
+    e = torch.randint(0, P, (lay.C, 6), dtype=torch.int64)
+    assert torch.equal(sc.matvec_base_ext(z, e), sc.matvec_base_ext_cuda(z.cuda(), e.cuda()).cpu())
 
 
 def test_negative_lookup(toy):

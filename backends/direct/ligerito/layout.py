@@ -239,25 +239,31 @@ def build_z(sys: System, lay: Layout, subs: list[SubBatch], device, dtype=torch.
     if len(subs) != lay.S:
         raise ValueError(f"build_z: {len(subs)} sub-batches, layout has S = {lay.S}")
     z = torch.zeros((lay.R, lay.C), dtype=dtype, device=device)
-    sys_rows = torch.tensor(sorted(lay.row_of_sys, key=lay.row_of_sys.get), dtype=torch.int64, device=device)
     for s, sb in enumerate(subs):
-        W = sb.W.to(device)
-        if W.shape != (sys.m, lay.l):
-            raise ValueError(f"sub-batch {s}: W {tuple(W.shape)} != {(sys.m, lay.l)}")
-        cols = slice(s * lay.l, (s + 1) * lay.l)
-        z[: lay.m, cols] = (W.index_select(0, sys_rows) % P).to(dtype)
-        z[lay.virt["const"], cols] = 1
-        start, link, end = _masks(lay, s, device)
-        z[lay.virt["link"], cols] = link.to(dtype)
-        z[lay.virt["start"], cols] = start.to(dtype)
-        z[lay.virt["end"], cols] = end.to(dtype)
-        z[lay.virt["y16"], cols] = (sb.ypub.to(device) % P).to(dtype)
-        for name, r in lay.virt.items():
-            if name.startswith("pub:"):
-                z[r, cols] = (sb.pub[name[4:]].to(device) % P).to(dtype)
-        for x, cr in enumerate(lay.c_rows):
-            z[lay.virt[f"next:{x}"], cols] = torch.roll(z[cr, cols], -1)      # Wnext(j) = W(c_x, j + 1 mod l)
+        fill_z(sys, lay, z, s, sb)
     return z
+
+
+def fill_z(sys: System, lay: Layout, z: torch.Tensor, s: int, sb: SubBatch) -> None:
+    """Write sub-batch ``s``'s columns of ``z`` (``build_z`` one sub-batch at a time: the caller may drop ``sb.W`` after)."""
+    device, dtype = z.device, z.dtype
+    sys_rows = torch.tensor(sorted(lay.row_of_sys, key=lay.row_of_sys.get), dtype=torch.int64, device=device)
+    W = sb.W.to(device)
+    if W.shape != (sys.m, lay.l):
+        raise ValueError(f"sub-batch {s}: W {tuple(W.shape)} != {(sys.m, lay.l)}")
+    cols = slice(s * lay.l, (s + 1) * lay.l)
+    z[: lay.m, cols] = (W.index_select(0, sys_rows) % P).to(dtype)
+    z[lay.virt["const"], cols] = 1
+    start, link, end = _masks(lay, s, device)
+    z[lay.virt["link"], cols] = link.to(dtype)
+    z[lay.virt["start"], cols] = start.to(dtype)
+    z[lay.virt["end"], cols] = end.to(dtype)
+    z[lay.virt["y16"], cols] = (sb.ypub.to(device) % P).to(dtype)
+    for name, r in lay.virt.items():
+        if name.startswith("pub:"):
+            z[r, cols] = (sb.pub[name[4:]].to(device) % P).to(dtype)
+    for x, cr in enumerate(lay.c_rows):
+        z[lay.virt[f"next:{x}"], cols] = torch.roll(z[cr, cols], -1)      # Wnext(j) = W(c_x, j + 1 mod l)
 
 
 def public_rows(sys: System, lay: Layout, subs: list[SubBatch], device) -> dict[str, torch.Tensor]:
