@@ -374,6 +374,51 @@ pub fn verify(lay: &Layout, cons: &Constraints, pub_rows: &[(String, Vec<u32>)],
 
 // ---------------------------------------------------------------------------------------------------------- fixture
 
+/// Aligned blocks `{i : i >> b = pfx}` exactly covering `[lo, hi)`, as `(b, pfx)`, greedy from `lo`.
+pub fn aligned_cover(lo: usize, hi: usize) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    let mut i = lo;
+    while i < hi {
+        let mut b = if i == 0 { 63 } else { i.trailing_zeros() as usize };
+        while b > 0 && (b >= 63 || i + (1usize << b) > hi) {
+            b -= 1;
+        }
+        out.push((b, i >> b));
+        i += 1 << b;
+    }
+    out
+}
+
+/// Red-team-2 V1: the verifier adds the public rows itself (`z = w + Σ_v e_v ⊗ pub_v`, `next:x` likewise), so every claim
+/// above is sound only if the committed `w` is ZERO on the virtual rows, and nothing in the sumchecks or the PCS forces that.
+/// The fix: for every aligned block `(b, pfx)` covering a run of virtual rows the PCS batch also checks
+/// `w~(p_i[..b] || bits(pfx) || p_c) = 0`, with `(p_i || p_c) = (r_i || r_c)` the first claim's point.  If `w` is non-zero on
+/// the block, its restriction is a non-zero multilinear in `b + n_c` INDEPENDENT coordinates (`r_i` from the rows / combined
+/// sumcheck, `r_c` from the zero-check, both after the commitment): false w.p. <= `(b + n_c) / p^6` each.  The row and column
+/// coordinates must not share coins: with `(ρ[..b] || bits(pfx) || ρ[..n_c])` two entries with a row bit and a column bit
+/// swapped cancel identically (`x0 (1 - y0) - (1 - x0) y0 = 0` on `x0 = y0`; test `zero_claim_columns_must_be_independent`).
+pub fn virtual_zero_claims(lay: &Layout, first: &EvalClaim) -> Vec<EvalClaim> {
+    let mut rows: Vec<usize> = lay.virt.iter().map(|(_, r)| *r).collect();
+    rows.sort_unstable();
+    rows.dedup();
+    let mut out = Vec::new();
+    let mut k = 0;
+    while k < rows.len() {
+        let lo = rows[k];
+        while k + 1 < rows.len() && rows[k + 1] == rows[k] + 1 {
+            k += 1;
+        }
+        for (b, pfx) in aligned_cover(lo, rows[k] + 1) {
+            let mut pt = first.point[..b].to_vec();
+            pt.extend((0..lay.n_i - b).map(|t| Ext::from_base(((pfx >> t) & 1) as u32)));
+            pt.extend_from_slice(&first.point[lay.n_i..]);
+            out.push(EvalClaim { point: pt, value: Ext::ZERO, name: format!("w = 0 on rows [{}, {})", pfx << b, (pfx + 1) << b) });
+        }
+        k += 1;
+    }
+    out
+}
+
 /// ligerito-sumcheck's `sumcheck.fixture()` JSON: layout, constraints, public rows, proof, claims, recorded transcript.
 pub struct Fixture {
     pub layout: Layout,
@@ -573,5 +618,56 @@ mod tests {
         b2.extend_from_slice(&P.to_le_bytes());
         b2.extend_from_slice(&[0u8; 9 * 24 + 3 * 24 - 4]);
         assert!(parse_lgsc(&b2).is_err());
+    }
+
+    fn eq_at(p: &[Ext], idx: usize) -> Ext {
+        p.iter().enumerate().fold(Ext::ONE, |acc, (t, x)| acc.mul(&if (idx >> t) & 1 == 1 { *x } else { Ext::ONE.sub(x) }))
+    }
+
+    /// `w~(point)` for a sparse `w` given as `(row, col, value)`.
+    fn eval_sparse(w: &[(usize, usize, Ext)], pt: &[Ext], n_i: usize) -> Ext {
+        w.iter().fold(Ext::ZERO, |acc, (r, c, v)| acc.add(&v.mul(&eq_at(&pt[..n_i], *r)).mul(&eq_at(&pt[n_i..], *c))))
+    }
+
+    /// V1 on the fp8-ada toy (virtual rows 3577..3776): 6 zero claims (the red team's cover); the red team's forgery
+    /// `w' = w - e_(y16 = 3581, col 47)` makes exactly its block's claim non-zero, so the PCS must reject it.
+    #[test]
+    fn virtual_rows_get_zero_claims() {
+        assert_eq!(aligned_cover(3577, 3777), vec![(0, 3577), (1, 1789), (2, 895), (7, 28), (6, 58), (0, 3776)]);
+        assert_eq!(aligned_cover(0, 8), vec![(3, 0)]);
+        assert_eq!(aligned_cover(5, 5), vec![]);
+        let fx = load_fixture(include_str!("../fixtures/sumcheck/fp8ada_l64_S2.json")).unwrap();
+        let (lay, first) = (&fx.layout, &fx.claims[0]);
+        let zc = virtual_zero_claims(lay, first);
+        assert_eq!(zc.len(), 6);
+        assert_eq!(lay.virt_row("y16"), Some(3581));
+        for z in &zc {
+            assert_eq!((z.point.len(), z.value), (first.point.len(), Ext::ZERO));
+            assert_eq!(&z.point[lay.n_i..], &first.point[lay.n_i..]);
+        }
+        let forged = [(3581usize, 47usize, Ext::ONE)];
+        let nonzero: Vec<&str> = zc.iter().filter(|z| eval_sparse(&forged, &z.point, lay.n_i) != Ext::ZERO).map(|z| z.name.as_str()).collect();
+        assert_eq!(nonzero, vec!["w = 0 on rows [3580, 3584)"]);
+        // the committed rows [0, m) never enter a zero claim
+        assert!(zc.iter().all(|z| eval_sparse(&[(3576, 5, Ext::ONE), (0, 0, Ext::ONE)], &z.point, lay.n_i) == Ext::ZERO));
+    }
+
+    /// Why the zero claims take their columns from the zero-check (`r_c`) and not from the combined sumcheck's `ρ`: the
+    /// row bit 6 / column bit 6 swap `+Δ e_(3584 + 0, 64) - Δ e_(3584 + 64, 0)` is non-zero on the block {3584..3711} but
+    /// its multilinear vanishes on every `(ρ[..7] || bits(28) || ρ[..7])`; on `(ρ[..7] || bits(28) || r_c)` it does not.
+    #[test]
+    fn zero_claim_columns_must_be_independent() {
+        let fx = load_fixture(include_str!("../fixtures/sumcheck/fp8ada_l64_S2.json")).unwrap();
+        let (lay, first) = (&fx.layout, &fx.claims[0]);
+        let (n_i, n_c) = (lay.n_i, lay.n_c());
+        let d = Ext::from_base(12345);
+        let w = [(3584 + 0, 64, d), (3584 + 64, 0, Ext::ZERO.sub(&d))];
+        let z = virtual_zero_claims(lay, first).into_iter().find(|z| z.name == "w = 0 on rows [3584, 3712)").unwrap();
+        assert_ne!(eval_sparse(&w, &z.point, n_i), Ext::ZERO);
+        let rho = &first.point[..n_i];
+        let mut diag = rho[..7].to_vec();
+        diag.extend((0..n_i - 7).map(|t| Ext::from_base(((28 >> t) & 1) as u32)));
+        diag.extend_from_slice(&rho[..n_c]);
+        assert_eq!(eval_sparse(&w, &diag, n_i), Ext::ZERO);
     }
 }

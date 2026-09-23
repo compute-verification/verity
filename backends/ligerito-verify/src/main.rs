@@ -532,6 +532,10 @@ fn main() {
             out.push(format!("\"scripted\":{}", json_str(&scripted)));
             out.push(format!("\"local_coins\":{}", json_str(&local)));
             out.push(format!("\"negatives\":{},\"negatives_rejected_same_stage\":{}", negs.len(), neg_ok));
+            // red-team-2 V1: the PCS batch must also open these (value 0); the sumcheck layer alone cannot see them
+            let zero = fx.claims.first().map(|c| relation::virtual_zero_claims(&fx.layout, c)).unwrap_or_default();
+            let names: Vec<String> = zero.iter().map(|z| json_str(&z.name)).collect();
+            out.push(format!("\"virtual_zero_claims\":[{}]", names.join(",")));
             let ok = scripted.starts_with("accept, claims match") || (scripted == "absent" && local.starts_with("accept, claims match"));
             let ok = ok && local.starts_with("accept, claims match") && neg_ok == negs.len();
             println!(
