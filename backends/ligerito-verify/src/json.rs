@@ -50,6 +50,57 @@ impl Json {
     pub fn usize_list(&self) -> Option<Vec<usize>> {
         self.as_arr()?.iter().map(|x| x.as_usize()).collect()
     }
+
+    /// Compact serialisation (integers without a fraction print as integers).
+    pub fn dump(&self) -> String {
+        let mut o = String::new();
+        self.dump_into(&mut o);
+        o
+    }
+
+    fn dump_into(&self, o: &mut String) {
+        match self {
+            Json::Null => o.push_str("null"),
+            Json::Bool(b) => o.push_str(if *b { "true" } else { "false" }),
+            Json::Num(x) if x.fract() == 0.0 && x.abs() < 1e18 => o.push_str(&format!("{}", *x as i64)),
+            Json::Num(x) => o.push_str(&format!("{x}")),
+            Json::Str(s) => {
+                o.push('"');
+                for ch in s.chars() {
+                    match ch {
+                        '"' => o.push_str("\\\""),
+                        '\\' => o.push_str("\\\\"),
+                        '\n' => o.push_str("\\n"),
+                        c if (c as u32) < 0x20 => o.push_str(&format!("\\u{:04x}", c as u32)),
+                        c => o.push(c),
+                    }
+                }
+                o.push('"');
+            }
+            Json::Arr(a) => {
+                o.push('[');
+                for (i, x) in a.iter().enumerate() {
+                    if i > 0 {
+                        o.push(',');
+                    }
+                    x.dump_into(o);
+                }
+                o.push(']');
+            }
+            Json::Obj(kv) => {
+                o.push('{');
+                for (i, (k, v)) in kv.iter().enumerate() {
+                    if i > 0 {
+                        o.push(',');
+                    }
+                    Json::Str(k.clone()).dump_into(o);
+                    o.push(':');
+                    v.dump_into(o);
+                }
+                o.push('}');
+            }
+        }
+    }
 }
 
 pub fn parse(text: &str) -> Result<Json, String> {

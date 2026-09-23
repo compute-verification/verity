@@ -65,8 +65,35 @@ fn words_of(block: &[u8]) -> [u32; 16] {
     w
 }
 
-/// Chaining value of one chunk (<= 1024 bytes); `root` adds the ROOT flag to its last block.
-fn b3_chunk(chunk: &[u8], counter: u64, root: bool) -> [u32; 8] {
+/// The node whose compression produces a chaining value / the hash: the XOF re-compresses the root node per 64-byte
+/// output block with the output-block counter.
+struct B3Output {
+    cv: [u32; 8],
+    block: [u32; 16],
+    block_len: u32,
+    flags: u32,
+    counter: u64,
+}
+
+impl B3Output {
+    fn chain(&self) -> [u32; 8] {
+        let out = b3_compress(&self.cv, &self.block, self.counter, self.block_len, self.flags);
+        let mut cv = [0u32; 8];
+        cv.copy_from_slice(&out[..8]);
+        cv
+    }
+    fn root_bytes(&self, t: u64) -> [u8; 64] {
+        let out = b3_compress(&self.cv, &self.block, t, self.block_len, self.flags | ROOT);
+        let mut b = [0u8; 64];
+        for i in 0..16 {
+            b[4 * i..4 * i + 4].copy_from_slice(&out[i].to_le_bytes());
+        }
+        b
+    }
+}
+
+/// One chunk (<= 1024 bytes) as an output node: its last block over the chaining value of the blocks before it.
+fn b3_chunk(chunk: &[u8], counter: u64) -> B3Output {
     let mut cv = B3_IV;
     let nblocks = if chunk.is_empty() { 1 } else { (chunk.len() + 63) / 64 };
     for i in 0..nblocks {
@@ -79,43 +106,49 @@ fn b3_chunk(chunk: &[u8], counter: u64, root: bool) -> [u32; 8] {
         }
         if i == nblocks - 1 {
             flags |= CHUNK_END;
-            if root {
-                flags |= ROOT;
-            }
+            return B3Output { cv, block: words_of(block), block_len: block.len() as u32, flags, counter };
         }
         let out = b3_compress(&cv, &words_of(block), counter, block.len() as u32, flags);
         cv.copy_from_slice(&out[..8]);
     }
-    cv
+    unreachable!()
 }
 
-fn b3_subtree(data: &[u8], first_chunk: u64, root: bool) -> [u32; 8] {
+/// The output node of `data` whose first chunk has counter `first_chunk` (0 for the whole message).
+fn b3_node(data: &[u8], first_chunk: u64) -> B3Output {
     let nchunks = (data.len() + 1023) / 1024;
     if nchunks <= 1 {
-        return b3_chunk(data, first_chunk, root);
+        return b3_chunk(data, first_chunk);
     }
     // left subtree: the largest power of two strictly below nchunks
     let mut left = 1usize;
     while left * 2 < nchunks {
         left *= 2;
     }
-    let l = b3_subtree(&data[..left * 1024], first_chunk, false);
-    let r = b3_subtree(&data[left * 1024..], first_chunk + left as u64, false);
+    let l = b3_node(&data[..left * 1024], first_chunk).chain();
+    let r = b3_node(&data[left * 1024..], first_chunk + left as u64).chain();
     let mut block = [0u32; 16];
     block[..8].copy_from_slice(&l);
     block[8..].copy_from_slice(&r);
-    let out = b3_compress(&B3_IV, &block, 0, 64, PARENT | if root { ROOT } else { 0 });
-    let mut cv = [0u32; 8];
-    cv.copy_from_slice(&out[..8]);
-    cv
+    B3Output { cv: B3_IV, block, block_len: 64, flags: PARENT, counter: 0 }
 }
 
 pub fn blake3(data: &[u8]) -> [u8; 32] {
-    let cv = b3_subtree(data, 0, true);
     let mut out = [0u8; 32];
-    for i in 0..8 {
-        out[4 * i..4 * i + 4].copy_from_slice(&cv[i].to_le_bytes());
+    out.copy_from_slice(&b3_node(data, 0).root_bytes(0)[..32]);
+    out
+}
+
+/// BLAKE3 extended output: the first `out_len` bytes of the XOF (`blake3.blake3(data).digest(length=out_len)`).
+pub fn blake3_xof(data: &[u8], out_len: usize) -> Vec<u8> {
+    let node = b3_node(data, 0);
+    let mut out = Vec::with_capacity(out_len + 64);
+    let mut t = 0u64;
+    while out.len() < out_len {
+        out.extend_from_slice(&node.root_bytes(t));
+        t += 1;
     }
+    out.truncate(out_len);
     out
 }
 

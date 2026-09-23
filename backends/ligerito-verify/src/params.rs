@@ -173,7 +173,9 @@ impl Params {
     /// log2 of the soundness error, eq. (17) with the Reed-Solomon unique-decoding term written as
     /// ((1 + rho)/2)^|S| where rho = 2^k / m -- (17) prints (m - 2^k - 1)/(2m) = (1 - rho)/2 for that base, which
     /// contradicts the paper's own numerics (|S| = 148 <-> 2^-100 needs (5/8)^148) and the asymptotics section's
-    /// log((1 + rho)/2); the row-sampling argument gives (1 - d/(2m))^|S| = ((1 + rho)/2)^|S| up to the +1/m.
+    /// log((1 + rho)/2).  Per query a >= d/2-far matrix passes w.p. <= 1 - (floor((m - k)/2) + 1)/m <= (m + k - 1)/(2m)
+    /// < (1 + rho)/2 (red-team-ligerito 18:30Z, BCIKS20 Thm 4.1 + Diamond-Gruen Thm 2, unique decoding): we use (1 + rho)/2
+    /// exactly as params.py does, so the two implementations print the same figure.
     /// Field terms: (2 k'_i + |S_{i-1}| + 1 + m_i k'_i) / |F| per round, |F| = p^6.  Returns (total, per-term list).
     pub fn soundness_log2(&self) -> (f64, Vec<(String, f64)>) {
         let log2_f = 6.0 * (P as f64).log2();
@@ -185,8 +187,8 @@ impl Params {
             let rows = self.rows(i) as f64;
             let s = self.queries[i - 1] as f64;
             let kp = self.kprime[i - 1] as f64;
-            // rows agreeing with the (unique) close codeword when the matrix is >= d/2-far
-            let p_rs = ((m + rows + 1.0) / (2.0 * m)).log2() * s;
+            // rows agreeing with the (unique) close codeword when the matrix is >= d/2-far: ((1 + rho)/2)^|S|
+            let p_rs = ((m + rows) / (2.0 * m)).log2() * s;
             let prev_s = if i >= 2 { self.queries[i - 2] as f64 } else { 0.0 };
             let field = (2.0 * kp + prev_s + 1.0 + m * kp).log2() - log2_f;
             terms.push((format!("round{i}_rs"), p_rs));
@@ -227,6 +229,13 @@ mod tests {
         let p = Params::new(29, vec![9, 8, 6], vec![192, 192, 192], 2);
         let (tot, _) = p.soundness_log2();
         assert!(tot < -128.0 && tot > -131.0, "{tot}");
+        // pcs-fast's B-pow2 point (k' 6,4,4,3,3, rates 1,2,2,2,2, |S| 312,191,193,194,195): params.py says 2^-128.0x
+        let p = Params::with_rates(29, vec![6, 4, 4, 3, 3], vec![312, 191, 193, 194, 195], vec![1, 2, 2, 2, 2]);
+        let (tot, _) = p.soundness_log2();
+        assert!(tot < -128.0 && tot > -128.1, "{tot}");
+        // and the same shape at n = 26 (laptop selftest) is within 0.01 bits of it (the base no longer depends on m)
+        let p = Params::with_rates(26, vec![6, 4, 4, 3, 3], vec![312, 191, 193, 194, 195], vec![1, 2, 2, 2, 2]);
+        assert!((p.soundness_log2().0 - tot).abs() < 0.01);
     }
 
     #[test]

@@ -1,0 +1,1741 @@
+[
+{
+"name": "n8L1/value",
+"base": 0,
+"ops": [
+{
+"path": [
+"value",
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: sumcheck round 0: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n8L1/root0",
+"base": 0,
+"ops": [
+{
+"path": [
+"roots",
+0
+],
+"op": "set",
+"v": "0000000000000000000000000000000000000000000000000000000000000000"
+}
+],
+"expect": {
+"ok": false,
+"reason": "roots / levels shape or commitment mismatch"
+}
+},
+{
+"name": "n8L1/rootL",
+"base": 0,
+"ops": [
+{
+"path": [
+"roots",
+0
+],
+"op": "set",
+"v": "f67f947d0a16fa3f3f99f11f6681ce57a71b75e4911a8be516de9fb0a1c5042a"
+}
+],
+"expect": {
+"ok": false,
+"reason": "roots / levels shape or commitment mismatch"
+}
+},
+{
+"name": "n8L1/row",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+2,
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n8L1/rowL",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+0,
+1
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n8L1/sib",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"siblings",
+0
+],
+"op": "set",
+"v": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n8L1/sib_drop",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"siblings"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n8L1/sib_extra",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"siblings"
+],
+"op": "dup0"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n8L1/sc_c0",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"sumcheck",
+0,
+0,
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: sumcheck round 0: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n8L1/sc_c2",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"sumcheck",
+-1,
+2,
+1
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: sumcheck round 3: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n8L1/sc_keepsum",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"sumcheck",
+0,
+1,
+0
+],
+"op": "add",
+"v": 1
+},
+{
+"path": [
+"levels",
+0,
+"sumcheck",
+0,
+2,
+0
+],
+"op": "add",
+"v": 2013265920
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: sumcheck round 1: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n8L1/final",
+"base": 0,
+"ops": [
+{
+"path": [
+"final",
+3,
+1
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n8L1/idx",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_idx",
+0
+],
+"op": "xor",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n8L1/idx_dup",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_idx",
+1
+],
+"op": "set",
+"v": 61
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n8L1/queries",
+"base": 0,
+"ops": [
+{
+"path": [
+"dims",
+"queries",
+0
+],
+"op": "add",
+"v": 2013265920
+},
+{
+"path": [
+"levels",
+0,
+"opened_idx"
+],
+"op": "pop"
+},
+{
+"path": [
+"levels",
+0,
+"opened_rows"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n8L1/rows_short",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n8L1/ext_in_base",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+0,
+0
+],
+"op": "set",
+"v": [
+1927194926,
+0,
+0,
+0,
+0,
+0
+]
+}
+],
+"expect": {
+"ok": false,
+"reason": "exception: ValueError"
+}
+},
+{
+"name": "n8L1/final_shape",
+"base": 0,
+"ops": [
+{
+"path": [
+"final"
+],
+"op": "push",
+"v": [
+0,
+0,
+0,
+0,
+0,
+0
+]
+}
+],
+"expect": {
+"ok": false,
+"reason": "final vector shape"
+}
+},
+{
+"name": "n8L1/nlog",
+"base": 0,
+"ops": [
+{
+"path": [
+"dims",
+"n_log2",
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n8L1/noncanon",
+"base": 0,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+2,
+0
+],
+"op": "addraw",
+"v": 2013265921
+}
+],
+"expect": {
+"ok": true,
+"reason": "ok"
+}
+},
+{
+"name": "n10L2/value",
+"base": 1,
+"ops": [
+{
+"path": [
+"value",
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: sumcheck round 0: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n10L2/root0",
+"base": 1,
+"ops": [
+{
+"path": [
+"roots",
+0
+],
+"op": "set",
+"v": "0000000000000000000000000000000000000000000000000000000000000000"
+}
+],
+"expect": {
+"ok": false,
+"reason": "roots / levels shape or commitment mismatch"
+}
+},
+{
+"name": "n10L2/rootL",
+"base": 1,
+"ops": [
+{
+"path": [
+"roots",
+1
+],
+"op": "set",
+"v": "bc2f4af48c04bea4cd47f69d5bb5af779a33e4e851f2aab9de5d2bb94caa13ee"
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2/row",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+2,
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: Merkle multi-opening of level 0 rejected"
+}
+},
+{
+"name": "n10L2/rowL",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"opened_rows",
+0,
+1,
+3
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n10L2/sib",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"siblings",
+0
+],
+"op": "set",
+"v": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n10L2/sib_drop",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"siblings"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: Merkle multi-opening of level 0 rejected"
+}
+},
+{
+"name": "n10L2/sib_extra",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"siblings"
+],
+"op": "dup0"
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: Merkle multi-opening of level 0 rejected"
+}
+},
+{
+"name": "n10L2/sc_c0",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"sumcheck",
+0,
+0,
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: sumcheck round 0: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n10L2/sc_c2",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"sumcheck",
+-1,
+2,
+1
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 2: sumcheck round 2: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n10L2/sc_keepsum",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"sumcheck",
+0,
+1,
+0
+],
+"op": "add",
+"v": 1
+},
+{
+"path": [
+"levels",
+1,
+"sumcheck",
+0,
+2,
+0
+],
+"op": "add",
+"v": 2013265920
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 2: sumcheck round 1: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n10L2/final",
+"base": 1,
+"ops": [
+{
+"path": [
+"final",
+3,
+1
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2/idx",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"opened_idx",
+0
+],
+"op": "xor",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2/idx_dup",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"opened_idx",
+1
+],
+"op": "set",
+"v": 24
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2/queries",
+"base": 1,
+"ops": [
+{
+"path": [
+"dims",
+"queries",
+1
+],
+"op": "add",
+"v": 2013265920
+},
+{
+"path": [
+"levels",
+1,
+"opened_idx"
+],
+"op": "pop"
+},
+{
+"path": [
+"levels",
+1,
+"opened_rows"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2/rows_short",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"opened_rows"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2/ext_in_base",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+0,
+0
+],
+"op": "set",
+"v": [
+1001075669,
+0,
+0,
+0,
+0,
+0
+]
+}
+],
+"expect": {
+"ok": false,
+"reason": "exception: ValueError"
+}
+},
+{
+"name": "n10L2/final_shape",
+"base": 1,
+"ops": [
+{
+"path": [
+"final"
+],
+"op": "push",
+"v": [
+0,
+0,
+0,
+0,
+0,
+0
+]
+}
+],
+"expect": {
+"ok": false,
+"reason": "final vector shape"
+}
+},
+{
+"name": "n10L2/nlog",
+"base": 1,
+"ops": [
+{
+"path": [
+"dims",
+"n_log2",
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2/noncanon",
+"base": 1,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+2,
+0
+],
+"op": "addraw",
+"v": 2013265921
+}
+],
+"expect": {
+"ok": true,
+"reason": "ok"
+}
+},
+{
+"name": "n12L3/value",
+"base": 2,
+"ops": [
+{
+"path": [
+"value",
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: sumcheck round 0: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n12L3/root0",
+"base": 2,
+"ops": [
+{
+"path": [
+"roots",
+0
+],
+"op": "set",
+"v": "0000000000000000000000000000000000000000000000000000000000000000"
+}
+],
+"expect": {
+"ok": false,
+"reason": "roots / levels shape or commitment mismatch"
+}
+},
+{
+"name": "n12L3/rootL",
+"base": 2,
+"ops": [
+{
+"path": [
+"roots",
+2
+],
+"op": "set",
+"v": "956b00cd74804aab199cfb7320da3e027654fa13d43cdcdc3705ba8bc4aafb44"
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 2: opened indices are not the verifier's"
+}
+},
+{
+"name": "n12L3/row",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+2,
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: Merkle multi-opening of level 0 rejected"
+}
+},
+{
+"name": "n12L3/rowL",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+2,
+"opened_rows",
+0,
+1,
+3
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n12L3/sib",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+2,
+"siblings",
+0
+],
+"op": "set",
+"v": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n12L3/sib_drop",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"siblings"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: Merkle multi-opening of level 0 rejected"
+}
+},
+{
+"name": "n12L3/sib_extra",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"siblings"
+],
+"op": "dup0"
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: Merkle multi-opening of level 0 rejected"
+}
+},
+{
+"name": "n12L3/sc_c0",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"sumcheck",
+0,
+0,
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: sumcheck round 0: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n12L3/sc_c2",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+2,
+"sumcheck",
+-1,
+2,
+1
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 3: sumcheck round 2: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n12L3/sc_keepsum",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+2,
+"sumcheck",
+0,
+1,
+0
+],
+"op": "add",
+"v": 1
+},
+{
+"path": [
+"levels",
+2,
+"sumcheck",
+0,
+2,
+0
+],
+"op": "add",
+"v": 2013265920
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 3: sumcheck round 1: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n12L3/final",
+"base": 2,
+"ops": [
+{
+"path": [
+"final",
+3,
+1
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n12L3/idx",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+2,
+"opened_idx",
+0
+],
+"op": "xor",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n12L3/idx_dup",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+2,
+"opened_idx",
+1
+],
+"op": "set",
+"v": 26
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n12L3/queries",
+"base": 2,
+"ops": [
+{
+"path": [
+"dims",
+"queries",
+2
+],
+"op": "add",
+"v": 2013265920
+},
+{
+"path": [
+"levels",
+2,
+"opened_idx"
+],
+"op": "pop"
+},
+{
+"path": [
+"levels",
+2,
+"opened_rows"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n12L3/rows_short",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+2,
+"opened_rows"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n12L3/ext_in_base",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+0,
+0
+],
+"op": "set",
+"v": [
+1542313358,
+0,
+0,
+0,
+0,
+0
+]
+}
+],
+"expect": {
+"ok": false,
+"reason": "exception: ValueError"
+}
+},
+{
+"name": "n12L3/final_shape",
+"base": 2,
+"ops": [
+{
+"path": [
+"final"
+],
+"op": "push",
+"v": [
+0,
+0,
+0,
+0,
+0,
+0
+]
+}
+],
+"expect": {
+"ok": false,
+"reason": "final vector shape"
+}
+},
+{
+"name": "n12L3/nlog",
+"base": 2,
+"ops": [
+{
+"path": [
+"dims",
+"n_log2",
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: opened indices are not the verifier's"
+}
+},
+{
+"name": "n12L3/noncanon",
+"base": 2,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+2,
+0
+],
+"op": "addraw",
+"v": 2013265921
+}
+],
+"expect": {
+"ok": true,
+"reason": "ok"
+}
+},
+{
+"name": "n10L2x3/value",
+"base": 3,
+"ops": [
+{
+"path": [
+"value",
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: sumcheck round 0: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n10L2x3/root0",
+"base": 3,
+"ops": [
+{
+"path": [
+"roots",
+0
+],
+"op": "set",
+"v": "0000000000000000000000000000000000000000000000000000000000000000"
+}
+],
+"expect": {
+"ok": false,
+"reason": "roots / levels shape or commitment mismatch"
+}
+},
+{
+"name": "n10L2x3/rootL",
+"base": 3,
+"ops": [
+{
+"path": [
+"roots",
+1
+],
+"op": "set",
+"v": "59fffbadc2c7ec352c17569538a3bae4c6ab2aac86c0f6ed0708c0f995e45116"
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2x3/row",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+2,
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: Merkle multi-opening of level 0 rejected"
+}
+},
+{
+"name": "n10L2x3/rowL",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"opened_rows",
+0,
+1,
+3
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n10L2x3/sib",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"siblings",
+0
+],
+"op": "set",
+"v": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: Merkle multi-opening rejected"
+}
+},
+{
+"name": "n10L2x3/sib_drop",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"siblings"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: Merkle multi-opening of level 0 rejected"
+}
+},
+{
+"name": "n10L2x3/sib_extra",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"siblings"
+],
+"op": "dup0"
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: Merkle multi-opening of level 0 rejected"
+}
+},
+{
+"name": "n10L2x3/sc_c0",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"sumcheck",
+0,
+0,
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: sumcheck round 0: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n10L2x3/sc_c2",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"sumcheck",
+-1,
+2,
+1
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 2: sumcheck round 2: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n10L2x3/sc_keepsum",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"sumcheck",
+0,
+1,
+0
+],
+"op": "add",
+"v": 1
+},
+{
+"path": [
+"levels",
+1,
+"sumcheck",
+0,
+2,
+0
+],
+"op": "add",
+"v": 2013265920
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 2: sumcheck round 1: g(0) + g(1) != claim"
+}
+},
+{
+"name": "n10L2x3/final",
+"base": 3,
+"ops": [
+{
+"path": [
+"final",
+3,
+1
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2x3/idx",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"opened_idx",
+0
+],
+"op": "xor",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2x3/idx_dup",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"opened_idx",
+1
+],
+"op": "set",
+"v": 217
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2x3/queries",
+"base": 3,
+"ops": [
+{
+"path": [
+"dims",
+"queries",
+1
+],
+"op": "add",
+"v": 2013265920
+},
+{
+"path": [
+"levels",
+1,
+"opened_idx"
+],
+"op": "pop"
+},
+{
+"path": [
+"levels",
+1,
+"opened_rows"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2x3/rows_short",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+1,
+"opened_rows"
+],
+"op": "pop"
+}
+],
+"expect": {
+"ok": false,
+"reason": "last level: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2x3/ext_in_base",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+0,
+0
+],
+"op": "set",
+"v": [
+1784785512,
+0,
+0,
+0,
+0,
+0
+]
+}
+],
+"expect": {
+"ok": false,
+"reason": "exception: ValueError"
+}
+},
+{
+"name": "n10L2x3/final_shape",
+"base": 3,
+"ops": [
+{
+"path": [
+"final"
+],
+"op": "push",
+"v": [
+0,
+0,
+0,
+0,
+0,
+0
+]
+}
+],
+"expect": {
+"ok": false,
+"reason": "final vector shape"
+}
+},
+{
+"name": "n10L2x3/nlog",
+"base": 3,
+"ops": [
+{
+"path": [
+"dims",
+"n_log2",
+0
+],
+"op": "add",
+"v": 1
+}
+],
+"expect": {
+"ok": false,
+"reason": "level 1: opened indices are not the verifier's"
+}
+},
+{
+"name": "n10L2x3/noncanon",
+"base": 3,
+"ops": [
+{
+"path": [
+"levels",
+0,
+"opened_rows",
+2,
+0
+],
+"op": "addraw",
+"v": 2013265921
+}
+],
+"expect": {
+"ok": true,
+"reason": "ok"
+}
+}
+]
