@@ -759,7 +759,14 @@ def bench_vu_fp4(args) -> int:
         (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
         print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)
         dumps = _verify_dumps(dump_dir, dump_manifest, R, args.device)
-    med = {k_: statistics.median(r[0][k_] for r in runs) for k_ in keys}
+    # the reported row is the rep with the median wall total (prover + host hints), phases included, so the contract
+    # buckets sum to t.total exactly; a per-phase median across reps would mix reps and, with --pipeline (phase times =
+    # shares of a pass wall that fluctuates), sum to more than the median total. per-phase medians stay in `medians`.
+    per_key_med = {k_: statistics.median(r[0][k_] for r in runs) for k_ in keys}
+    med_rep = sorted(runs, key=lambda r: r[0]["total"] + r[0]["hints_host"])[len(runs) // 2][0]
+    med = dict(med_rep)
+    if not cfg.zk:
+        med["zk_masks"] = 0.0  # no zero-knowledge work in a non-ZK proof; the lap is an empty event pair (~10 us)
     vmed = statistics.median(r[1] for r in runs)
     peak_dev = torch.cuda.max_memory_allocated() if args.device.startswith("cuda") else 0
     nbytes = {k_: v_ * n_proofs for k_, v_ in proof.n_bytes().items()}
