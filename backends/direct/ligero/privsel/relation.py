@@ -42,9 +42,18 @@ from dataclasses import dataclass
 
 from verity_numerical.checker.params import Params
 
+from verity_numerical.checker.ctx import Table
+
 from ..compile import Expr, LigeroCtx, Quadratic, System
-from ..pubsel.relation import (ACC_FRAC, CMP_BITS, LIMB, Y_PACK_BITS, Plan, _bit_exprs, _clamp_table, _hint, _norm_window,
+from ..pubsel.relation import (ACC_FRAC, CMP_BITS, LIMB, SHIFT_BITS, Y_PACK_BITS, Plan, _bit_exprs, _hint, _norm_window,
                                _pick, _window, _zero, plan)
+
+
+def _clamp_table(name: str, top: int) -> Table:
+    """key in [0, 2^SHIFT_BITS) -> min(key, top): ``top`` singleton rows and one interval row (the lookup's one-hot has
+    ``top + 1`` selectors; the interval selector stands for "shifted out").  Verbatim the pubsel helper that relmin-lookup
+    2ef2409 removed from ``pubsel.relation`` (v2 no longer uses it); kept here so the v3 systems are unchanged."""
+    return Table(f"{name}{top}", 0, 2**SHIFT_BITS, ("v",), lambda k: (min(k, top),))
 
 __all__ = ["ShiftPlan", "compile_v3_unit", "public_vectors_v3", "shift_plan"]
 
