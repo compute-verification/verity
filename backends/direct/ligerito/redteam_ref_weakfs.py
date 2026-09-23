@@ -96,8 +96,14 @@ def forge(state: R.ProverState, value_star: np.ndarray, rng, seed: bytes):
 
 
 def main():
+    import argparse
+    import json
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dump", help="write the forgeries as ref-fixtures JSON (expect: reject) for ligerito-verify")
+    a = ap.parse_args()
     rng = np.random.default_rng(1830)
     seed = b"ligerito-ref/v1"
+    fixtures = []
     for L, odd3 in ((1, False), (2, True)):
         dims = R.Dims.toy(10, L, queries=8, odd3=odd3)
         f = rng.integers(0, P, size=dims.N, dtype=np.int64)
@@ -108,6 +114,13 @@ def main():
         true_v = R.tensor_eval(f, w)
         print(f"L={L} radix3={odd3} dims={dims}: ref.verify -> {ok} ({why}); claimed value != <f, w(z)>: "
               f"{not np.array_equal(true_v % P, value_star % P)}")
+        fixtures.append({"name": f"redteam-weakfs/L{L}{'-radix3' if odd3 else ''}", "seed": seed.decode(), "f": f.tolist(),
+                         "z": z.tolist(), "commitment": st.root.hex(), "proof": R.proof_to_dict(proof),
+                         "expect": {"ok": False, "reason": "forgery: z chosen after the sumcheck challenges"}})
+    if a.dump:
+        with open(a.dump, "w") as fh:
+            json.dump(fixtures, fh)
+        print(f"wrote {len(fixtures)} fixtures to {a.dump} (hash: {R.HASH_NAME})")
     # dims come from the proof: an honest proof at |S| = 1 per level verifies (no floor on the queries)
     dims1 = R.Dims.toy(10, 2, queries=1)
     f = rng.integers(0, P, size=dims1.N, dtype=np.int64)

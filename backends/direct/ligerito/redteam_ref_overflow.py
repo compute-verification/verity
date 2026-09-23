@@ -37,7 +37,7 @@ def lift(x: int, lo: int, hi: int) -> int:
     return y
 
 
-def ref_forgery(rng, seed: bytes):
+def ref_forgery(rng, seed: bytes, bind: bool = True):
     out = []
     for L, odd3 in ((1, False), (2, True), (3, False)):
         dims = R.Dims.toy(12 if L == 3 else 10, L, queries=8, odd3=odd3)
@@ -50,17 +50,23 @@ def ref_forgery(rng, seed: bytes):
         v_star[0] = (v_star[0] - K) % P
         stmt = b"".join(R.row_bytes(t) for t in w) + R.row_bytes(v_star)
         cp = R.FSCoins(seed)
-        cp.absorb(b"stmt", stmt)
+        if bind:
+            cp.absorb(b"stmt", stmt)
         pf = R.prove_eval(st, w, cp)                       # honest messages for the TRUE value
         msgs = np.array(pf.levels[0].sumcheck, dtype=np.int64)
         msgs[0, 0, 0] = lift(int(msgs[0, 0, 0]), 1 << 62, (1 << 63) - P)
         pf.levels[0].sumcheck = msgs
         pf.value = v_star
-        pf = R.proof_from_dict(json.loads(json.dumps(R.proof_to_dict(pf))))   # through the wire format
+        d = R.proof_to_dict(pf)
+        pf = R.proof_from_dict(json.loads(json.dumps(d)))  # through the wire format
         cv = R.FSCoins(seed)
-        cv.absorb(b"stmt", stmt)
+        if bind:
+            cv.absorb(b"stmt", stmt)
         ok, why = R.verify(st.root, w, v_star, pf, cv)
-        out.append((dims, ok, why, not np.array_equal(v_star, v)))
+        fx = {"name": f"redteam-overflow/L{L}{'-radix3' if odd3 else ''}", "seed": seed.decode(), "f": f.tolist(),
+              "z": z.tolist(), "commitment": st.root.hex(), "proof": d,
+              "expect": {"ok": False, "reason": "forgery: non-canonical sumcheck word (int64 wrap shifts the round check by K)"}}
+        out.append((dims, ok, why, not np.array_equal(v_star, v), fx))
     return out
 
 
@@ -101,12 +107,19 @@ def pcs_fast_rounds(rng, cl, k: int = 6):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pcs-fast", default=str(Path.home() / "projects/verity-main-wt/ligerito-pcs-fast"))
+    ap.add_argument("--dump", help="write unbound-transcript variants (ref.py's own transcript) as ref-fixtures JSON")
     a = ap.parse_args()
     rng = np.random.default_rng(1905)
     print(f"K = 2^64 mod p = {K}")
-    for dims, ok, why, false in ref_forgery(rng, b"ligerito-ref/v1"):
+    for dims, ok, why, false, _ in ref_forgery(rng, b"ligerito-ref/v1"):
         print(f"ref.verify  L={dims.L} tall={dims.tall}: statement (w, v - K e0) bound before coin 1, one lifted c0 "
               f"word -> {ok} ({why}); claim false: {false}")
+    if a.dump:
+        res = ref_forgery(rng, b"ligerito-ref/v1", bind=False)
+        assert all(ok for _, ok, _, _, _ in res)
+        with open(a.dump, "w") as fh:
+            json.dump([fx for *_, fx in res], fh)
+        print(f"wrote {len(res)} fixtures (ref.py accepts all) to {a.dump} (hash: {R.HASH_NAME})")
     root = Path(a.pcs_fast)
     if (root / "backends/direct/ligerito/proto/claims.py").exists():
         cl = load_pcs_fast_claims(root)
