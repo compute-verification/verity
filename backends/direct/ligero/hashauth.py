@@ -57,15 +57,22 @@ class LeafParams:
 POSEIDON2 = LeafParams(SCHEMA_ROW, h2.CONSTANTS_SHA256, h2.OUT, h2.hash_rows_np, row_leaf_value)
 
 
-def leaf_params(leaf=None) -> LeafParams:
-    """``None`` -> Poseidon2 (today's tree, byte for byte); a ``leaf/`` scheme object -> its parameters."""
+def leaf_params(leaf=None, device=None) -> LeafParams:
+    """``None`` -> Poseidon2 (today's tree, byte for byte); a ``leaf/`` scheme object -> its parameters.  ``device``: where
+    the scheme's ``native`` digests the committed rows (a torch device string; the tree itself is host SHA-256)."""
     if leaf is None:
         return POSEIDON2
     if isinstance(leaf, LeafParams):
         return leaf
-    return LeafParams(leaf.schema, leaf.params_sha256, leaf.digest_elems,
-                      lambda rows, word_bits, role: np.asarray(leaf.native(rows, word_bits=word_bits, role=role), dtype=np.int64),
-                      leaf.leaf_bytes)
+
+    def native(rows, word_bits, role):
+        if device is not None and str(device) != "cpu":
+            import torch
+            t = torch.as_tensor(np.ascontiguousarray(rows, dtype=np.int64), device=device)
+            return leaf.native(t, word_bits=word_bits, role=role).cpu().numpy().astype(np.int64)
+        return np.asarray(leaf.native(rows, word_bits=word_bits, role=role), dtype=np.int64)
+
+    return LeafParams(leaf.schema, leaf.params_sha256, leaf.digest_elems, native, leaf.leaf_bytes)
 
 
 def word_schema(y_bits: int) -> tuple[str, int]:

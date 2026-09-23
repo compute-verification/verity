@@ -388,7 +388,7 @@ class HashedRelationRunner(RelationChainRunner):
         t0 = time.perf_counter()
         self.hr = hashchain.compose(rel, leaf)
         self.leaf = leaf
-        self.leafp = hashauth.leaf_params(leaf)
+        self.leafp = hashauth.leaf_params(leaf, device=device)
         self.sys = self.hr.sys
         self.tb = tables(self.sys, self.device)
         self.compile_seconds = time.perf_counter() - t0
