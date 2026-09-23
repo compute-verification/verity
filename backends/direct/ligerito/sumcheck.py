@@ -353,17 +353,22 @@ def _tail_arities(log_table: int, n_vars: int, small_log2: int, max_arity: int =
     return out + list(balanced_arities(n_vars, max_arity) if n_vars else ())
 
 
+def lean_schedule(n_zc: int, n_cmb: int) -> Schedule:
+    """LGSC0003 with fewer coins (``--schedule lean``; the default is unchanged): arity 3 (``zc_msg3``) down to 2^16 cells,
+    then arity <= 4 (the engines' flat path), a final table round of 4 variables; combined: arity 3 down to 2^12 cells,
+    then <= 4.  fp8-ada: zc 3,3,3,3,3,4,4,3 / vf 4 / cmb 3,3,4,4,4 = 15 coins (default 18)."""
+    vf = min(4, n_zc - 4)
+    zc = [3] + _tail_arities(n_zc - 3, n_zc - 3 - vf, 16, MAX_ARITY)
+    return Schedule(tuple(zc), vf, tuple(_tail_arities(n_cmb, n_cmb, 12, MAX_ARITY)))
+
+
 def zk_default_schedule(lay: Layout, vf: int = 10) -> Schedule:
     """LGSC0004's default (coins first: one round trip ~ 0.1 s live; a coin is worth ~30 ms of prover time and ~20 KB): the
-    opening round, bivariate rounds while the table has more than 2^26 cells (arity 3 there costs 2.4x on the 4090), arity 3
-    down to 2^16 cells, then arity <= 6; a final table round of ``vf`` variables (``<= n_c - 4``: every final-table entry
-    keeps >= 16 product-row cells); combined: arity 3 down to 2^18 cells, then <= 6; row reduction <= 6.
-    fp8-ada: zc 3,2,3,3,3,6 / vf 10 / cmb 6,6,6 / rb 6,6 = 13 coins."""
+    opening round, arity 3 (``zc_msg3``) down to 2^16 cells, then arity <= 6; a final table round of ``vf`` variables
+    (``<= n_c - 4``: every final-table entry keeps >= 16 product-row cells); combined: arity 3 down to 2^18 cells, then
+    <= 6; row reduction <= 6.  fp8-ada: zc 3,3,3,3,3,5 / vf 10 / cmb 6,6,6 / rb 6,6 = 13 coins."""
     n, n_cmb = lay.n_k + lay.n_c, n_cmb_of(lay)
     zc, rem = [3], n - 3
-    while rem > 26 and rem - 2 > vf:
-        zc.append(2)
-        rem -= 2
     vf = max(1, min(vf, lay.n_c - 4, rem - 1, ZK_MAX_VF))
     zc += _tail_arities(rem, rem - vf, 16)
     return Schedule(tuple(zc), vf, tuple(_tail_arities(n_cmb, n_cmb, 18)), balanced_arities(lay.n_i, ZK_MAX_ARITY))
@@ -1720,6 +1725,64 @@ extern "C" __global__ void zc_msg2(
     block_reduce_add<54>(s, acc);
 }
 
+// ---- trivariate round on big ext tables: blockIdx.y = the X1 entry a1 (0, 1, inf); a thread takes the X1 slice of its
+// group's 8 corners (inf: T(X1=1) - T(X1=0)) and forms the 9 (X2, X3) entries as zc_msg2 does.  Corners x + b nq,
+// b = 4 X1 + 2 X2 + X3.  Output (3, 3, 3, 6) Montgomery.  (zc_red3 re-reads the corners and re-forms w for each of the 27.)
+extern "C" __global__ void zc_msg3(
+    const int* __restrict__ A, const int* __restrict__ B, const int* __restrict__ Cm,
+    const u32* __restrict__ wr, const u32* __restrict__ wc, u64* acc,
+    long long nq, int cb, long long nwr, long long nwc, long long ps)
+{
+    const int a1 = blockIdx.y;
+    u32 s[54];
+    #pragma unroll
+    for (int q = 0; q < 54; q++) s[q] = 0;
+    const long long cmask = (1LL << cb) - 1;
+    for (long long x = (long long)blockIdx.x * blockDim.x + threadIdx.x; x < nq; x += (long long)gridDim.x * blockDim.x) {
+        const long long k2 = x >> cb, c2 = x & cmask;
+        u32 wa[6], wb[6], w[6];
+        #pragma unroll
+        for (int p = 0; p < 6; p++) { wa[p] = __ldg(wr + p * nwr + k2); wb[p] = __ldg(wc + p * nwc + c2); }
+        ext_mul(wa, wb, w);
+        u32 a[4][6], b[4][6], c[4][6];
+        #pragma unroll
+        for (int q = 0; q < 4; q++) {
+            #pragma unroll
+            for (int p = 0; p < 6; p++) {
+                const long long o0 = p * ps + x + q * nq, o1 = o0 + 4 * nq;
+                if (a1 == 0) {
+                    a[q][p] = (u32)A[o0]; b[q][p] = (u32)B[o0]; c[q][p] = (u32)Cm[o0];
+                } else if (a1 == 1) {
+                    a[q][p] = (u32)A[o1]; b[q][p] = (u32)B[o1]; c[q][p] = (u32)Cm[o1];
+                } else {
+                    a[q][p] = submod((u32)A[o1], (u32)A[o0]); b[q][p] = submod((u32)B[o1], (u32)B[o0]); c[q][p] = 0;
+                }
+            }
+        }
+        #pragma unroll
+        for (int a2 = 0; a2 < 3; a2++) {
+            #pragma unroll
+            for (int a3 = 0; a3 < 3; a3++) {
+                u32 ah[6], bh[6], f[6], t[6];
+                #pragma unroll
+                for (int p = 0; p < 6; p++) {
+                    ah[p] = mix1(mix1(a[0][p], a[1][p], a3), mix1(a[2][p], a[3][p], a3), a2);
+                    bh[p] = mix1(mix1(b[0][p], b[1][p], a3), mix1(b[2][p], b[3][p], a3), a2);
+                }
+                ext_mul(ah, bh, f);
+                if (a1 < 2 && a2 < 2 && a3 < 2) {
+                    #pragma unroll
+                    for (int p = 0; p < 6; p++) f[p] = submod(f[p], mix1(mix1(c[0][p], c[1][p], a3), mix1(c[2][p], c[3][p], a3), a2));
+                }
+                ext_mul(w, f, t);
+                #pragma unroll
+                for (int p = 0; p < 6; p++) s[(a2 * 3 + a3) * 6 + p] = addmod(s[(a2 * 3 + a3) * 6 + p], t[p]);
+            }
+        }
+    }
+    block_reduce_add<54>(s, acc + 54 * a1);
+}
+
 // mixed-representation entry e (sum_j a_j 3^(v-1-j)) of a table's 2^v corners at group x (ext, Montgomery)
 template <int V>
 __device__ __forceinline__ void mixed_at(const int* __restrict__ T, long long ps, long long x, long long nq, int e, u32* out) {
@@ -2116,6 +2179,12 @@ class CudaZC:
             _kernel("zc_msg2")(grid, block, (_cp(A), _cp(B), _cp(Cm), _cp(wr), _cp(wc), _cp(acc), cp.int64(nq), cp.int32(cb),
                                              cp.int64(wr.shape[1]), cp.int64(wc.shape[1]), cp.int64(ps)))
             return from_mont(acc).reshape(3, 3, D)
+        if v == 3 and nq >= (1 << 12):
+            acc = torch.zeros((162,), dtype=torch.int64, device=self.dev)
+            (gx,), block = _launch(nq, self.THREADS, 1536)
+            _kernel("zc_msg3")((gx, 3), block, (_cp(A), _cp(B), _cp(Cm), _cp(wr), _cp(wc), _cp(acc), cp.int64(nq), cp.int32(cb),
+                                                cp.int64(wr.shape[1]), cp.int64(wc.shape[1]), cp.int64(ps)))
+            return from_mont(acc).reshape(3, 3, 3, D)
         if v > 3:
             raise ValueError(f"CudaZC: arity {v} > 3")
         ne = 3 ** v
@@ -2248,8 +2317,8 @@ def matvec_base_ext_cuda(M: torch.Tensor, e: torch.Tensor) -> torch.Tensor:
 
 def _schedule_arg(s: str | None, lay: Layout) -> Schedule | None:
     """``--schedule "3,2,2,2,2,3,3,3,3,3/4/3,3,3,3,3,3"`` (zc rounds / final / combined rounds [/ row-reduction rounds]) or a
-    preset: ``default`` | ``c2`` | ``c3`` (LGSC0003), ``zk`` (LGSC0004's default), ``zk-small`` (the LGSC0003 default + rb
-    4,4,4: 21 coins, fewest bytes)."""
+    preset: ``default`` | ``c2`` | ``c3`` | ``lean`` (LGSC0003), ``zk`` (LGSC0004's default), ``zk-small`` (the LGSC0003
+    default + rb 4,4,4: 21 coins, fewest bytes)."""
     n, n_cmb = lay.n_k + lay.n_c, n_cmb_of(lay)
     if s is None or s == "default":
         return default_schedule(n, n_cmb)
@@ -2257,6 +2326,8 @@ def _schedule_arg(s: str | None, lay: Layout) -> Schedule | None:
         return default_schedule(n, n_cmb, small_arity=2, max_final=3)
     if s == "c3":
         return default_schedule(n, n_cmb, big_log2=0, big_arity=3)
+    if s == "lean":
+        return lean_schedule(n, n_cmb)
     if s == "zk":
         return zk_default_schedule(lay)
     if s == "zk-small":
@@ -2491,7 +2562,7 @@ def _main():
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--engine", default=None)
     ap.add_argument("--schedule", default=None,
-                    help="default | c2 | c3 | zk | zk-small | 'zc,arities/vf/cmb,arities[/rb,arities]' (LGSC0004 default: zk)")
+                    help="default | c2 | c3 | lean | zk | zk-small | 'zc,arities/vf/cmb,arities[/rb,arities]' (LGSC0004 default: zk)")
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--negatives", action="store_true")
     ap.add_argument("--json", default=None)
