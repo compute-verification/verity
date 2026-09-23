@@ -771,8 +771,9 @@ USE_SIMT_ENCODER = True     # the int32 Montgomery radix-4 kernel (encode_simt.p
 
 def _simt_encoder(cfg: Config, device, plain: bool = False):
     """The SIMT encoder for this configuration (``plain``: no mask fold-in, for the chain's R_i rows), or None when
-    it does not apply (CPU, no cupy, or n != 4 l -- the small-l ZK configurations double n)."""
-    if not USE_SIMT_ENCODER or not str(device).startswith("cuda") or cfg.n != 4 * cfg.l or cfg.l < 256:
+    it does not apply (CPU, no cupy, or n/l not in {2, 4, 8}, l outside [256, 16384])."""
+    if (not USE_SIMT_ENCODER or not str(device).startswith("cuda") or cfg.n not in (2 * cfg.l, 4 * cfg.l, 8 * cfg.l)
+            or cfg.l < 256 or cfg.l > 16384):
         return None
     try:
         from . import encode_simt
