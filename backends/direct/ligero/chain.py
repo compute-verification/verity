@@ -158,8 +158,8 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
     coef[:, :, 1:].index_add_(1, T["shift_row"], rm.index_select(1, tabs["link_fams"])[:, :, :-1])
     coef %= P
     rhs = torch.zeros((D,), dtype=torch.int64, device=device)
-    link_fams = tabs["link_fams"].tolist()
-    for x in range(nl):
+    link_fams = tabs["link_fams_list"]        # the host list (a .tolist() here is a device sync: not permitted inside the
+    for x in range(nl):                        # pipelined prover's CUDA-graph capture of the tests stage; lane merge-val)
         Y = ch["y"][x]
         r_link = rm[:, link_fams[x], :]                                            # zero off the linked positions
         rhs = (rhs + (r_link.sum(1) % P) * (Y.c % P)) % P                          # b = +Y.c
@@ -212,7 +212,7 @@ def _chain_tables(sys: System, layout: Layout, device) -> dict:
                           + [link] * n_extra_links + [start] * n_extra_links)   # (V, l) 0/1
     t = lambda v: torch.tensor(v, dtype=torch.int64, device=device)  # noqa: E731
     tabs = {"rows": t(list(involved.keys())), "famsel": t(famsel), "maskmat": maskmat, "n_extra": 2 * n_extra_links,
-            "link_fams": t(link_fams),
+            "link_fams": t(link_fams), "link_fams_list": list(link_fams),
             "terms": {"row": t(row), "fam": t(fam), "kappa": t(kappa), "shift_row": t(shift_row)}}
     _TABLES[key] = (sys, tabs)
     return tabs
