@@ -110,6 +110,8 @@ KEEP_FIXTURES: dict[str, str] = {
     "verity_vllm_numerics.fa3_model": "independent CPU FA3 model cross-checked by test_composition.py / test_derived_rows.py (LIVE crosscheck / derived_rows)",
     "verity_vllm_numerics.inductor_models": "CPU bit-models cross-checked by test_composition.py",
     "verity_vllm.correspondence.program": "used by tests/ir/test_derive_negative.py (LIVE frontend.derive negatives)",
+    "verity_capture.sweep.fa2_attn_oracle": "the P0 FA2 tap oracle (R8): verity_capture/tests/test_fa2_tap_geometry.py loads it by file name beside the LIVE "
+                                            "commit_integ.hidden_source checks (softcap params vs flash_api, MUFU.TANH rules)",
     "verity_capture.tp.collective_link": "TP2 path kept by the brief (`tp/`); statically unreachable from row_pod_tp2.sh -- verity_capture/tests/test_tp_collective.py",
     "verity_capture.tp.collective_record": "TP2 path kept by the brief (`tp/`); statically unreachable from row_pod_tp2.sh -- test_tp_collective.py",
     "verity_capture.bench.tp2_analyze": "TP2 path kept by the brief (`tp2_*`); statically unreachable from row_pod_tp2.sh -- test_tp2_analyze.py / test_tp_collective.py",
@@ -205,6 +207,10 @@ class Graph:
             m = modname(p)
             self.mod_of[rel] = m
             self.file_of[m] = rel
+        self.by_basename: dict[str, list[str]] = defaultdict(list)   # "x.py" -> modules with that file name (non-__init__)
+        for rel, m in self.mod_of.items():
+            if Path(rel).name != "__init__.py":
+                self.by_basename[Path(rel).name].append(m)
         self.edges: dict[str, set[str]] = defaultdict(set)      # module -> modules it imports (resolved, existing)
         self.edge_kinds: dict[tuple[str, str], set[str]] = defaultdict(set)
         for p in self.files:
@@ -268,6 +274,9 @@ class Graph:
                 self.add(src_mod, s, "string-literal")
             elif PATH_LITERAL_RE.match(s) and s in self.mod_of:
                 self.add(src_mod, self.mod_of[s], "path-literal")
+            elif s.endswith(".py") and "/" not in s and s in self.by_basename and len(self.by_basename[s]) == 1:
+                # a file name joined at runtime (os.path.join(REPO, "verity_capture", "sweep", "fa2_attn_oracle.py")): unique basename
+                self.add(src_mod, self.by_basename[s][0], "basename-literal")
         for pre in fprefixes:
             if not pre.endswith("."):
                 continue
@@ -387,10 +396,9 @@ def artifact_refs() -> dict[str, dict]:
     it -- by basename, or by one of its ancestor directories (data read by directory / glob).  `referenced_by == []` = a deletion
     candidate (reviewed by hand: the census lists, the commit decides)."""
     files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split("\n")
-    files = [f for f in files if f and not f.endswith(".py")]
-    out: dict[str, dict] = {}
-
     self_files = {"integrations/vllm/tests/dead_code_census.json", "integrations/vllm/tests/dead_code_census.py"}
+    files = [f for f in files if f and not f.endswith(".py") and f"integrations/vllm/{f}" not in self_files]
+    out: dict[str, dict] = {}
 
     def grep(needle: str) -> list[str]:
         r = subprocess.run(["git", "grep", "-l", "-I", "-F", "--", needle], cwd=REPO, capture_output=True, text=True, check=False)
