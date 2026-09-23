@@ -34,7 +34,7 @@ __device__ __forceinline__ u64 modinv_p(u64 x) {   /* Fermat: x^(p-2) mod p; 0 -
     return result;
 }
 
-extern "C" __global__ void __launch_bounds__(%(threads)d)
+extern "C" __global__ void __launch_bounds__(@THREADS@)
 witness_program(const i64* __restrict__ pub, const i64* __restrict__ hints, unsigned* __restrict__ Wm, int l)
 {
     const int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -62,7 +62,7 @@ def _eval(e: Expr) -> str:
 def generate(sys: System) -> str:
     hpos = {n: i for i, (_, n) in enumerate(sys.hints)}
     ppos = {n: i for i, (_, n) in enumerate(sys.pins)}
-    out = [_HEAD % {"threads": THREADS}]
+    out = [_HEAD.replace("@THREADS@", str(THREADS))]
     for op in sys.program:
         kind = op[0]
         if kind == "pin":
