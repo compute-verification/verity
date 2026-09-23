@@ -27,6 +27,14 @@ The committed polynomial is ``w`` = the layout's ``z`` with the virtual rows ``[
 n_c`` is column bit ``t`` and ``t >= n_c`` is row bit ``t - n_c``.  The sumcheck's claim points ``(p_i || p_c)`` enter the PCS
 as ``(p_c || p_i)``.
 
+``zk = true`` (``order = "zk-interleaved"``): only the virtual rows ``[m, m + n_virt)`` are zeroed (the free rows above hold
+ligerito-zk's mask rows, ``prove.zk_layout``), and the index map is ligerito-zk's ``f_index``: with ``a = k_L - 3``,
+``x = (c mod 2^a) + 2^a i + 2^{a + n_i} (c >> a)``; claim points enter the PCS as ``zk.permute_point``:
+``(p_c[:a] || p_i || p_c[a:])``.
+
+Live coins (``coins = "live"``): verifier coin slot k (32 bytes) = lane live-2's ``expand_challenge(ctx, k, label_k, r_k, 32)``;
+``prove.StreamCoins`` records the slots (the dump's ``.coins``) and the binding (statement, commitments, openings, labels).
+
 Transcript (one Coins object, ``transcript.py``; ``FiatShamirCoins()`` default label ``ligerito-proto/v1``):
     absorb("lgto/params", params JSON bytes) | absorb("lgto/stmt", sha256(statement)) | absorb("lgto/vk", sha256(key))
     | absorb("root", root_1) | the sumcheck (sumcheck.py: challenge "zc/tau", absorbs of its messages, ..., absorb "values")

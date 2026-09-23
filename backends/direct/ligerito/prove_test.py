@@ -70,6 +70,31 @@ def test_honest_verifies_from_bytes(fp8):
 
 
 @gpu
+def test_stream_coins_replay(fp8):
+    """Live coins from live-2's stream (played locally): the verifier replays the recorded slots, and every slot is the
+    stream's ``expand_challenge`` of an opening that matches its commitment."""
+    from backends.direct.ligero import live
+
+    from .prove import StreamCoins, statement_for_stream
+    from .transcript import LiveCoins
+    pv, data = fp8
+    bt = pv.batch(data, "live")
+    pc = StreamCoins(live.LocalChallenges(256), statement_for_stream(bt, pv.key_sha256))
+    res = pv.prove(bt, pc)
+    ok, why, _ = pv.verify(read_statement(bt.stmt.to_bytes()), read_proof(res.proof.to_bytes()), LiveCoins(pc.slots_out))
+    assert ok, why
+    b = pc.binding()
+    ctx = live.batch_context(bytes.fromhex(b["statement"]), [bytes.fromhex(c) for c in b["commitments"]])
+    for k, ((r, s), label) in enumerate(zip(b["openings"], b["labels"])):
+        c = bytes.fromhex(b["commitments"][k])
+        assert live.pm.coin_commit(bytes.fromhex(r), bytes.fromhex(s)) == c
+        assert live.expand_challenge(ctx, k, label.encode(), bytes.fromhex(r), 32) == pc.slots_out[k]
+    slots = list(pc.slots_out)
+    slots[-1] = bytes(32)
+    assert not pv.verify(bt.stmt, res.proof, LiveCoins(slots))[0]
+
+
+@gpu
 def test_key_is_a_function_of_the_relation(fp8):
     from .prove import Prover
     pv, _ = fp8
