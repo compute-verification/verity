@@ -1165,29 +1165,29 @@ fn ajtai_system_mismatches_and_the_key_check_are_enforced() {
     let (code, js) = verify(HASH_SYS, &f.stmt(), &f.proof(), &["--coins", &f.coins()]);
     assert_eq!(code, 1, "{js}");
     assert!(js.contains("system file is the pinned hashed fp8-ada system, the statement is a hashed (ajtai-n64 leaves) fp8-ada statement"), "{js}");
-    // ... and UNPINNED the F6 key check does: that system has no rows carrying the derived B (a system built with
-    // another key -- B = 0 -- is refused the same way, before any proof byte is read)
+    // ... and UNPINNED the key check does: that system's digest lanes lead to no chain on the derived B (a system built
+    // with another key -- B = 0 -- is refused the same way, before any proof byte is read)
     let (code, js) = verify(HASH_SYS, &f.stmt(), &f.proof(), &["--coins", &f.coins(), "--allow-any-system"]);
     assert_eq!(code, 1, "{js}");
-    assert!(js.contains("Ajtai state rows do not carry the derived key B"), "{js}");
+    assert!(js.contains("does not use the derived key B") && js.contains("hash.d[16] is not pinned"), "{js}");
     // the bare fp8-ada system too
     let (code, js) = verify(FP8_SYS, &f.stmt(), &f.proof(), &["--coins", &f.coins(), "--allow-any-system"]);
     assert_eq!(code, 1, "{js}");
-    assert!(js.contains("do not carry the derived key B"), "{js}");
+    assert!(js.contains("does not use the derived key B") && js.contains("hash.is_end is not pinned"), "{js}");
     // the Poseidon2 statement against the Ajtai system: the pin refuses it
     let (code, js) = verify(&f.sys(), HASH_STMT, HASH_PROOF, &["--coins", HASH_COINS]);
     assert_eq!(code, 1, "{js}");
     assert!(js.contains("system file is the pinned hashed (ajtai-n64 leaves) fp8-ada system, the statement is a hashed fp8-ada statement"), "{js}");
-    // the n64 statement against the n128 system (another relation's): the pin refuses it.  Unpinned, the n64 key check
-    // PASSES there -- b_i's first 64 coefficients are the same SHAKE prefix for n = 64 and 128, so rows x < 64 of the
-    // n128 system do carry B_64 -- and the structure refuses it (the proof's row count is not the system's)
+    // the n64 statement against the n128 system (another relation's): the pin refuses it.  Unpinned, the key check does
+    // (b_i's first 64 coefficients are the same SHAKE prefix for n = 64 and 128, so a pattern scan found B_64 in rows
+    // x < 64 of the n128 system; following the digest lanes finds 256 of them, not 128)
     let g = &AJTAI_FX[1];
     let (code, js) = verify(&g.sys(), &f.stmt(), &f.proof(), &["--coins", &f.coins()]);
     assert_eq!(code, 1, "{js}");
     assert!(js.contains("system file is the pinned hashed (ajtai-n128 leaves) bf16-hopper system"), "{js}");
     let (code, js) = verify(&g.sys(), &f.stmt(), &f.proof(), &["--coins", &f.coins(), "--allow-any-system"]);
     assert_eq!(code, 1, "{js}");
-    assert!(!js.contains("derived key B") && js.contains(&format!("malformed proof: header M = {}, the statement fixes {}", f.rows, g.rows)), "{js}");
+    assert!(js.contains("does not use the derived key B") && js.contains("pin hash.d[128]: not one of the 128 digest lanes"), "{js}");
     // the two Ajtai systems are pinned apart from each other and from the Poseidon2 ones
     let (_, sd) = run(&["system-digest", "--system", &g.sys()]);
     assert!(sd.contains("\"pinned_relation\":\"bf16-hopper+ajtai-n128\"") && !sd.contains(f.sys_id), "{sd}");

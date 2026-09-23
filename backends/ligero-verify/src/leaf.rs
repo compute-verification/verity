@@ -155,11 +155,10 @@ pub mod ajtai {
 
 /// Red-team-leaf F6: a hashed system a `+ajtai-n<N>` statement verifies against must carry the DERIVED key.  The gadget
 /// appends, per operand role (key block `o` = 0 for x, 256 for W), N linear rows
-/// `out[x] - (X acc_in)[x] - sum_i B[x][o + i] bit_i = 0` whose terms (rows strictly increasing: the 256 bit rows, then
-/// the carried row, then the out row) are `[(bit_i, p - B[x][o + i]) for B[x][o + i] != 0] ++ [(acc_in, 1 or p - 1),
-/// (out, 1)]`, constant 0; this finds, for every x, exactly one such row per key block.  A system built with another key
-/// (`B = 0`: trivial digests) is refused even under `--allow-any-system`.  Other schemes: nothing to check (their gadgets
-/// have no key; the system pin covers them).
+/// `out[x] - (X acc_in)[x] - sum_i B[x][o + i] bit_i = 0`; [`chain_key`] follows the statement's digest lanes to exactly
+/// those rows (red-team-leaf-2 G1: not a pattern scan) and checks every coefficient.  A system whose digests come from
+/// another key (`B = 0`: trivial digests), with or without decoy rows carrying the derived key, is refused even under
+/// `--allow-any-system`.  Other schemes: nothing to check (their gadgets have no key; the system pin covers them).
 pub fn check_system_key(sys: &crate::format::System, leaf: &LeafScheme) -> Result<(), String> {
     let n = match ajtai::degree(leaf.name) {
         Some(n) => n,
@@ -176,39 +175,170 @@ pub fn check_system_key(sys: &crate::format::System, leaf: &LeafScheme) -> Resul
     if crate::hash::hex(&crate::hash::sha256(ajtai::params_descriptor(n, &b_sha).as_bytes())) != leaf.params_sha256 {
         return Err(format!("{}: params_sha256 is not the digest of the parameter descriptor (verifier build error)", leaf.display));
     }
-    let mut want: std::collections::HashMap<Vec<u32>, (usize, usize)> = std::collections::HashMap::with_capacity(ajtai::KEYS * n);
-    for (x, row) in b.iter().enumerate() {
-        for k in 0..ajtai::KEYS {
-            let blk = &row[k * ajtai::M_COL..(k + 1) * ajtai::M_COL];
-            let coefs: Vec<u32> = blk.iter().filter(|&&v| v != 0).map(|&v| P - v).collect();
-            if want.insert(coefs, (x, k)).is_some() {
-                return Err(format!("{}: two rows of the derived B coincide", leaf.display));
+    chain_key(sys, n, &b).map(|_| ()).map_err(|e| {
+        format!("system file: the Ajtai chain the digests come from does not use the derived key B (SHAKE-256 of {:?}): {e}",
+            String::from_utf8_lossy(ajtai::B_TAG))
+    })
+}
+
+/// Red-team-leaf-2 G1: the key rows are found by following the digests the statement publishes into the system, never
+/// by their coefficient pattern (a pattern scan accepts a chain on `B = 0` plus decoy rows carrying the derived key over
+/// rows nothing else reads).  From each public lane `hash.d[x]` (x < N: the x digest, else the W digest): the one
+/// linear row `W[pin row] = d[x]`; the one quadratic touching that row, `is_end * (out - d) = 0` (`hashchain.compose`);
+/// the one linear row touching `out`, which must be lane x's key row `out - (X acc_in)[x mod N] - sum_i B[x mod N][o +
+/// i] bit_i` with `acc_in` the linked row the chain carries the NEIGHBOUR lane's `out` into (`y = out`, 0 at a chain
+/// start) and `o` the lane's key block; the bit rows are the same 256 rows (one per bit position) in all N key rows
+/// of a role, increasing in bit position (word-major, LSB first: the compose's allocation order), boolean-constrained,
+/// and disjoint from the other role's and from every chain / pin row.  Returns the two roles' bit rows.
+/// Scope: under `--allow-any-system` this proves the published digests are the derived-key Ring-SIS digests of those
+/// boolean rows; that the rows are the operands the relation multiplies is the system pin's job.
+pub fn chain_key(sys: &crate::format::System, n: usize, b: &[Vec<u32>]) -> Result<[Vec<u32>; ajtai::KEYS], String> {
+    use std::collections::{HashMap, HashSet};
+    let nd = ajtai::KEYS * n;
+    let single = |e: &crate::format::Expr| -> Option<u32> {
+        (e.c == 0 && e.lin.len() == 1 && e.lin[0].1 == 1).then(|| e.lin[0].0)
+    };
+    // (1) the public lanes and the one linear row that carries each onto its pin row
+    let mut end_pin = None;
+    let mut d_pin = vec![None; nd];
+    for (pi, (name, _)) in sys.pins.iter().enumerate() {
+        if name == "hash.is_end" {
+            if end_pin.replace(pi).is_some() {
+                return Err("hash.is_end is pinned twice".into());
+            }
+        } else if let Some(x) = name.strip_prefix("hash.d[").and_then(|s| s.strip_suffix(']')).and_then(|s| s.parse::<usize>().ok()) {
+            if x >= nd || d_pin[x].replace(pi).is_some() {
+                return Err(format!("pin {name}: not one of the {nd} digest lanes, or pinned twice"));
             }
         }
     }
-    let mut seen = vec![[0usize; ajtai::KEYS]; n];
+    let mut carried: Vec<Vec<u32>> = vec![Vec::new(); sys.pins.len()];
     for c in &sys.linear {
-        if c.pub_pin.is_some() || c.e.c != 0 || c.e.lin.len() < 3 {
-            continue;
-        }
-        let t = &c.e.lin;
-        let (acc, out) = (t[t.len() - 2].1, t[t.len() - 1].1);
-        if out != 1 || (acc != 1 && acc != P - 1) {
-            continue;
-        }
-        let coefs: Vec<u32> = t[..t.len() - 2].iter().map(|&(_, v)| v).collect();
-        if let Some(&(x, k)) = want.get(&coefs) {
-            seen[x][k] += 1;
+        if let Some(pi) = c.pub_pin {
+            carried[pi].push(single(&c.e).filter(|&r| r == sys.pins[pi].1).unwrap_or(u32::MAX));
         }
     }
-    if seen.iter().any(|k| *k != [1; ajtai::KEYS]) {
-        let missing = seen.iter().filter(|k| **k != [1; ajtai::KEYS]).count();
-        return Err(format!(
-            "system file: {} of the {n} Ajtai state rows do not carry the derived key B (SHAKE-256 of {:?}) for both operand roles",
-            missing, String::from_utf8_lossy(ajtai::B_TAG)
-        ));
+    let pin_row = |pi: Option<usize>, what: &str| -> Result<u32, String> {
+        let pi = pi.ok_or_else(|| format!("{what} is not pinned"))?;
+        match carried[pi][..] {
+            [r] if r != u32::MAX => Ok(r),
+            _ => Err(format!("{what} does not enter through exactly one constraint W[pin row] = pub")),
+        }
+    };
+    let end_row = pin_row(end_pin, "hash.is_end")?;
+    let d_row: Vec<u32> = (0..nd).map(|x| pin_row(d_pin[x], &format!("hash.d[{x}]"))).collect::<Result<_, _>>()?;
+    let lane_of: HashMap<u32, usize> = d_row.iter().enumerate().map(|(x, &r)| (r, x)).collect();
+    if lane_of.len() != nd || lane_of.contains_key(&end_row) {
+        return Err("two public lanes share a pin row".into());
     }
-    Ok(())
+    // (2) the end tie of each lane: the one quadratic touching its pin row is is_end * (out - d) = 0
+    let mut out: Vec<Option<u32>> = vec![None; nd];
+    for q in &sys.quadratic {
+        let lanes: Vec<usize> = q.iter().flat_map(|e| e.lin.iter()).filter_map(|(r, _)| lane_of.get(r).copied()).collect();
+        let x = match lanes[..] {
+            [] => continue,
+            [x] => x,
+            _ => return Err("a quadratic constraint touches two digest lanes".into()),
+        };
+        let dr = d_row[x];
+        let tie = single(&q[0]) == Some(end_row) && q[2].c == 0 && q[2].lin.is_empty() && q[1].c == 0 && q[1].lin.len() == 2
+            && q[1].lin.iter().any(|&t| t == (dr, P - 1));
+        let o = q[1].lin.iter().find(|&&(r, v)| r != dr && v == 1).map(|&(r, _)| r);
+        match (tie, o) {
+            (true, Some(o)) if out[x].is_none() => out[x] = Some(o),
+            _ => return Err(format!("hash.d[{x}]: not tied by exactly one is_end * (out - d) = 0")),
+        }
+    }
+    let out: Vec<u32> = out.iter().enumerate().map(|(x, o)| o.ok_or_else(|| format!("hash.d[{x}] is tied to no chain row")))
+        .collect::<Result<_, _>>()?;
+    let out_set: HashSet<u32> = out.iter().copied().collect();
+    if out_set.len() != nd || out_set.contains(&end_row) || out.iter().any(|r| lane_of.contains_key(r)) {
+        return Err("two digest lanes are tied to one row, or to a pin row".into());
+    }
+    // (3) the linked row each out is carried into (acc_in at the next column; 0 at a chain start)
+    let chain = sys.chain.as_ref().ok_or("the hashed system has no chain")?;
+    let mut acc_of: HashMap<u32, u32> = HashMap::with_capacity(nd);
+    for (&c, y) in chain.c_rows.iter().zip(&chain.y) {
+        if let Some(o) = single(y).filter(|o| out_set.contains(o)) {
+            if acc_of.insert(o, c).is_some() {
+                return Err(format!("chain row {o} is linked twice"));
+            }
+        }
+    }
+    let acc: Vec<u32> = out.iter().map(|o| acc_of.get(o).copied().ok_or_else(|| format!("chain row {o} is tied to a digest lane but never linked")))
+        .collect::<Result<_, _>>()?;
+    let acc_set: HashSet<u32> = acc.iter().copied().collect();
+    if acc_set.len() != nd || acc_set.iter().any(|r| out_set.contains(r) || lane_of.contains_key(r) || *r == end_row) {
+        return Err("the carried rows of two lanes coincide, or a carried row is a digest / pin row".into());
+    }
+    // (4) the one linear row touching each out: lane x's key row, exactly
+    let mut defs: HashMap<u32, Vec<usize>> = HashMap::with_capacity(nd);
+    for (qi, c) in sys.linear.iter().enumerate() {
+        for (r, _) in &c.e.lin {
+            if out_set.contains(r) {
+                defs.entry(*r).or_default().push(qi);
+            }
+        }
+    }
+    let boolean: HashSet<u32> = sys.quadratic.iter().filter_map(|q| {
+        let r = single(&q[0])?;
+        (single(&q[1]) == Some(r) && single(&q[2]) == Some(r)).then_some(r)
+    }).collect();
+    let mut all_bits: HashSet<u32> = HashSet::with_capacity(ajtai::KEYS * ajtai::M_COL);
+    let mut roles: [Vec<u32>; ajtai::KEYS] = Default::default();
+    for (k, role_bits) in roles.iter_mut().enumerate() {
+        let mut bit_row: Vec<Option<u32>> = vec![None; ajtai::M_COL];
+        for xx in 0..n {
+            let x = k * n + xx;
+            let (o, (prev, prev_coef)) = (out[x], if xx == 0 { (acc[k * n + n - 1], 1) } else { (acc[x - 1], P - 1) });
+            let c = match defs.get(&o).map(|v| &v[..]) {
+                Some([qi]) => &sys.linear[*qi],
+                _ => return Err(format!("hash.d[{x}]: its chain row is not defined by exactly one linear constraint")),
+            };
+            if c.pub_pin.is_some() || c.e.c != 0 {
+                return Err(format!("hash.d[{x}]: the key row has a constant or a public right-hand side"));
+            }
+            let blk = &b[xx][k * ajtai::M_COL..(k + 1) * ajtai::M_COL];
+            let pos: HashMap<u32, usize> = blk.iter().enumerate().filter(|(_, &v)| v != 0).map(|(i, &v)| (P - v, i)).collect();
+            if pos.len() != blk.iter().filter(|&&v| v != 0).count() {
+                return Err(format!("row {xx} of the derived B repeats a coefficient (verifier build error)"));
+            }
+            let (mut seen_o, mut seen_prev, mut nbits) = (false, false, 0usize);
+            for &(r, v) in &c.e.lin {
+                if r == o && v == 1 {
+                    seen_o = true;
+                } else if r == prev && v == prev_coef {
+                    seen_prev = true;
+                } else {
+                    let i = *pos.get(&v).ok_or_else(|| format!("hash.d[{x}]: row {r} has coefficient {v}, not an entry of the derived key row"))?;
+                    match bit_row[i] {
+                        None => bit_row[i] = Some(r),
+                        Some(r0) if r0 == r => {}
+                        Some(r0) => return Err(format!("key role {k}: bit position {i} is row {r0} in one key row and {r} in another")),
+                    }
+                    nbits += 1;
+                }
+            }
+            if !(seen_o && seen_prev && nbits == pos.len()) {
+                return Err(format!("hash.d[{x}]: the key row is not out - (X acc_in)[{xx}] - B[{xx}] bits over the linked neighbour"));
+            }
+        }
+        *role_bits = bit_row.iter().enumerate().map(|(i, r)| r.ok_or_else(|| format!("key role {k}: bit position {i} is never keyed")))
+            .collect::<Result<_, _>>()?;
+        if role_bits.windows(2).any(|w| w[0] >= w[1]) {
+            return Err(format!("key role {k}: the bit rows are not in bit-position order"));
+        }
+        for r in role_bits.iter() {
+            if !boolean.contains(r) {
+                return Err(format!("key role {k}: bit row {r} is not boolean-constrained"));
+            }
+            if !all_bits.insert(*r) || out_set.contains(r) || acc_set.contains(r) || lane_of.contains_key(r) || *r == end_row
+                || chain.c_rows.contains(r) {
+                return Err(format!("key role {k}: bit row {r} is shared with the other role or is a chain / pin row"));
+            }
+        }
+    }
+    Ok(roles)
 }
 
 /// `leaf.registry.DEFAULT` / `ALIASES`: a relation string without a suffix, or with `+hash`, names Poseidon2.
@@ -307,6 +437,125 @@ mod tests {
         assert_eq!(split_relation("fp8-ada+ajtai-n64").unwrap().1.name, "ajtai-n64");
         assert_eq!(relation_name("bf16-hopper", &AJTAI_N128), "bf16-hopper+ajtai-n128");
         assert!(split_relation("fp8-ada+ajtai-n96").is_err());
+    }
+
+    fn fixture_system(dir: &str) -> crate::format::System {
+        crate::format::System::parse(&std::fs::read(format!("fixtures/{dir}/system.bin")).unwrap()).unwrap()
+    }
+
+    /// The indices of the linear rows that key a role's bits (terms over its bit rows).
+    fn key_rows(sys: &crate::format::System, bits: &[u32]) -> Vec<usize> {
+        let set: std::collections::HashSet<u32> = bits.iter().copied().collect();
+        (0..sys.linear.len()).filter(|&q| sys.linear[q].e.lin.iter().any(|(r, _)| set.contains(r))
+            && sys.linear[q].e.lin.len() > 200).collect()
+    }
+
+    #[test]
+    fn ajtai_chain_key_follows_the_digest_lanes_in_both_pinned_systems() {
+        for (dir, n) in [("fp8-ada-ajtai-n64", 64), ("bf16-hopper-ajtai-n128", 128)] {
+            let sys = fixture_system(dir);
+            let b = ajtai::matrix(n);
+            let roles = chain_key(&sys, n, &b).unwrap_or_else(|e| panic!("{dir}: {e}"));
+            for bits in &roles {
+                assert_eq!(bits.len(), ajtai::M_COL);
+                assert_eq!(key_rows(&sys, bits).len(), n, "{dir}");
+            }
+            assert!(check_system_key(&sys, by_name(&format!("ajtai-n{n}")).unwrap()).is_ok());
+            // the other degree's key over this system: refused on the lanes (2 x 64 vs 2 x 128)
+            let m = if n == 64 { 128 } else { 64 };
+            assert!(chain_key(&sys, m, &ajtai::matrix(m)).is_err(), "{dir}");
+        }
+    }
+
+    /// Red-team-leaf-2 G1 in memory: the chain the digests come from keyed by B = 0 (bit terms dropped from the real key
+    /// rows) plus 2n decoy rows carrying the derived key over fresh rows -- the old pattern scan accepted exactly this.
+    #[test]
+    fn ajtai_chain_key_refuses_a_zero_key_chain_with_decoy_key_rows() {
+        let n = 64;
+        let b = ajtai::matrix(n);
+        let honest = fixture_system("fp8-ada-ajtai-n64");
+        let roles = chain_key(&honest, n, &b).unwrap();
+        let mut sys = honest.clone();
+        let fresh0 = sys.m as u32;
+        sys.m += 2 * (ajtai::M_COL + 2) * n;
+        let zeros: Vec<u32> = (0..ajtai::M_COL as u32).map(|i| fresh0 + i).collect();
+        let mut next = fresh0 + ajtai::M_COL as u32;
+        for bits in &roles {
+            let set: std::collections::HashSet<u32> = bits.iter().copied().collect();
+            for q in key_rows(&honest, bits) {
+                let orig = sys.linear[q].clone();
+                sys.linear[q].e.lin.retain(|(r, _)| !set.contains(r));
+                let mut decoy = orig.clone();
+                decoy.e.lin = orig.e.lin.iter().map(|&(r, v)| match bits.iter().position(|&x| x == r) {
+                    Some(i) => (zeros[i], v),
+                    None => {
+                        next += 1;
+                        (next, v)
+                    }
+                }).collect();
+                decoy.e.lin.sort();
+                sys.linear.push(decoy);
+            }
+        }
+        let e = chain_key(&sys, n, &b).unwrap_err();
+        assert!(e.contains("the key row is not out - (X acc_in)"), "{e}");
+        let e = check_system_key(&sys, &AJTAI_N64).unwrap_err();
+        assert!(e.contains("does not use the derived key B"), "{e}");
+    }
+
+    #[test]
+    fn ajtai_chain_key_refuses_moved_bits_scaled_keys_and_rerouted_ties() {
+        let n = 64;
+        let b = ajtai::matrix(n);
+        let honest = fixture_system("fp8-ada-ajtai-n64");
+        let roles = chain_key(&honest, n, &b).unwrap();
+        let rows0 = key_rows(&honest, &roles[0]);
+        // one key row reads bit position 5 off another row (the W role's bit 5)
+        let mut sys = honest.clone();
+        let q = rows0[3];
+        for t in sys.linear[q].e.lin.iter_mut() {
+            if t.0 == roles[0][5] {
+                t.0 = roles[1][5];
+            }
+        }
+        sys.linear[q].e.lin.sort();
+        let e = chain_key(&sys, n, &b).unwrap_err();
+        assert!(e.contains("bit position 5 is row"), "{e}");
+        // every key row of the x role reads bit 5 off the W role's bit 5: consistent, but shared across the roles
+        let mut sys = honest.clone();
+        for &q in &rows0 {
+            for t in sys.linear[q].e.lin.iter_mut() {
+                if t.0 == roles[0][5] {
+                    t.0 = roles[1][5];
+                }
+            }
+            sys.linear[q].e.lin.sort();
+        }
+        assert!(chain_key(&sys, n, &b).is_err());
+        // the key doubled on one row
+        let mut sys = honest.clone();
+        let set: std::collections::HashSet<u32> = roles[0].iter().copied().collect();
+        for t in sys.linear[rows0[0]].e.lin.iter_mut() {
+            if set.contains(&t.0) {
+                t.1 = ((2 * t.1 as u64) % P as u64) as u32;
+            }
+        }
+        let e = chain_key(&sys, n, &b).unwrap_err();
+        assert!(e.contains("not an entry of the derived key row"), "{e}");
+        // lane 0's end tie rerouted to a fresh row (the digest no longer comes from the keyed chain)
+        let mut sys = honest.clone();
+        let fresh = sys.m as u32;
+        sys.m += 1;
+        let d0 = sys.pins.iter().find(|(nm, _)| nm == "hash.d[0]").unwrap().1;
+        let qi = sys.quadratic.iter().position(|q| q[1].lin.iter().any(|&(r, _)| r == d0)).unwrap();
+        sys.quadratic[qi][1].lin = vec![(fresh.min(d0), if fresh < d0 { 1 } else { P - 1 }), (fresh.max(d0), if fresh < d0 { P - 1 } else { 1 })];
+        let e = chain_key(&sys, n, &b).unwrap_err();
+        assert!(e.contains("never linked"), "{e}");
+        // a second tie on lane 0
+        let mut sys = honest.clone();
+        let dup = sys.quadratic[qi].clone();
+        sys.quadratic.push(dup);
+        assert!(chain_key(&sys, n, &b).unwrap_err().contains("hash.d[0]: not tied by exactly one"));
     }
 
     #[test]
