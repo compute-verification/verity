@@ -91,22 +91,54 @@ def vu_units(A: np.ndarray, B: np.ndarray, accs: list[int]) -> list[tuple]:
     return units
 
 
-def _variant_base(data: list[tuple], variant: str) -> tuple[int, int] | None:
-    """(VU index, first step) of the first VU in ``data`` on which the wrong rule ``variant`` produces a word that differs
-    from the model's (honest accumulators in, the variant's word out), or None when it never does."""
-    for i, (A, B, accs, _y) in enumerate(data):
-        units = vu_units(A, B, accs)
-        c_in = np.asarray([u[0] for u in units], dtype=np.int64)
-        a = np.stack([np.asarray(u[1], dtype=np.int64) for u in units])
-        b = np.stack([np.asarray(u[2], dtype=np.int64) for u in units])
+def _variant_chains(data: list[tuple], variant: str) -> tuple[np.ndarray, np.ndarray]:
+    """Every VU of ``data`` as a prover following the wrong rule ``variant`` computes it: the accumulator fed forward under
+    the wrong rule from c_0 = 0.  Returns the wrong accumulators (n, STEPS) and a mask of the VUs on which the wrong rule
+    could not form a witness at some step (its hints leave the relation's shape)."""
+    n = len(data)
+    A = np.stack([np.asarray(d[0], dtype=np.int64) for d in data])
+    B = np.stack([np.asarray(d[1], dtype=np.int64) for d in data])
+    c, bad = np.zeros(n, dtype=np.int64), np.zeros(n, dtype=bool)
+    accs = np.zeros((n, STEPS), dtype=np.int64)
+    for s in range(STEPS):
         try:
-            _, yv = unit_hints(c_in, a, b, variant=variant)
+            _, yv = unit_hints(c, A[:, s], B[:, s], variant=variant)
         except (AssertionError, ValueError):
-            return i, -1                                          # no witness at all in the relation's shape: still a negative
-        diff = np.nonzero(yv != np.asarray(accs, dtype=np.int64))[0]
-        if len(diff):
-            return i, int(diff[0])
-    return None
+            yv = np.zeros(n, dtype=np.int64)
+            for i in range(n):                                    # isolate the offenders
+                if bad[i]:
+                    continue
+                try:
+                    _, yi = unit_hints(c[i:i + 1], A[i:i + 1, s], B[i:i + 1, s], variant=variant)
+                    yv[i] = yi[0]
+                except (AssertionError, ValueError):
+                    bad[i] = True
+        accs[:, s] = np.where(bad, 0, yv)
+        c = accs[:, s]
+    return accs, bad
+
+
+def _variant_base(data: list[tuple], variant: str) -> tuple[list[tuple], int, int] | None:
+    """A pair of VUs as a prover following the wrong rule ``variant`` would present them -- wrong accumulators fed forward,
+    the wrong FINAL word as the claim -- with (VU index, first differing step) of the first VU whose final word differs from
+    the model's (a finite one when there is one), or None when the wrong rule reaches the model's final word on every VU
+    (then the claim is true and no chain-level negative exists; the unit tier exercises the rule)."""
+    accs_v, bad = _variant_chains(data, variant)
+    honest = np.stack([np.asarray(d[2], dtype=np.int64) for d in data])
+    final_differs = (accs_v[:, -1] != honest[:, -1]) & ~bad
+    finite = ((accs_v[:, -1] >> 23) & 0xFF) != 0xFF
+    cands = np.nonzero(final_differs & finite)[0]
+    if not len(cands):
+        cands = np.nonzero(final_differs)[0]
+    if not len(cands):
+        return None
+    i = int(cands[0])
+    step = int(np.nonzero(accs_v[i] != honest[i])[0][0])
+    j = next((k for k in range(len(data)) if k != i and not bad[k]), None)
+    vus = [(data[i][0], data[i][1], [int(x) for x in accs_v[i]], int(accs_v[i, -1]))]
+    if j is not None:
+        vus.append((data[j][0], data[j][1], [int(x) for x in accs_v[j]], int(accs_v[j, -1])))
+    return vus, i, step
 
 
 def _pad_unit():
@@ -294,24 +326,25 @@ def gate_vu_fp4(args) -> int:
         W[c_rows[2], 30] = (W[c_rows[2], 30] ^ (1 << 12)) % P
     proof2, pubs2, lay2 = R.prove_vus(base, check=False, mutate=acc_bit)
     negs.append(("accumulator fraction bit 12 flipped in a linked unit", R.verify_vus(proof2, pubs2, lay2)))
-    # (6) wrong-rule witnesses: the hints a prover following a WRONG model line would produce, honest claim and links.  Built
-    #     on a VU where the wrong rule changes at least one word (elsewhere its witness IS the honest one: no negative).
+    # (6) wrong-rule witnesses, own claim: a prover following a WRONG model line feeds its accumulator forward and claims
+    #     ITS final word -- on a VU where that word differs from the model's (where it agrees the claim is true, and a
+    #     witness whose hints differ only in bits the relation ignores, e.g. the sign of a zero, is rightly accepted).
     not_exercised = []
     for v in VARIANTS:
         vb = _variant_base(data, v)
         if vb is None:
             not_exercised.append(v)
             continue
-        vu_i, step = vb
+        vus_v, vu_i, step = vb
+        name = f"wrong-rule witness, own claim: {v} (VU {vu_i}, first differing step {step})"
         try:
-            proof2, pubs2, lay2 = R.prove_vus([data[vu_i], data[(vu_i + 1) % len(data)]], check=False, variant=v)
-            negs.append((f"wrong-rule witness: {v} (VU {vu_i}, first differing step {step})", R.verify_vus(proof2, pubs2, lay2)))
-        except (AssertionError, ValueError) as e:          # the wrong rule has no witness in the relation's shape
-            negs.append((f"wrong-rule witness: {v} (VU {vu_i}, first differing step {step})",
-                         (False, f"prover cannot form a witness: {type(e).__name__}: {str(e)[:80]}")))
+            proof2, pubs2, lay2 = R.prove_vus(vus_v, check=False, variant=v)
+            negs.append((name, R.verify_vus(proof2, pubs2, lay2)))
+        except (AssertionError, ValueError) as e:          # no witness in the relation's shape / the claim is off-domain
+            negs.append((name, (False, f"rejected before the linear test: {type(e).__name__}: {str(e)[:80]}")))
     if not_exercised:
-        log(f"wrong-rule variants that agree with the model on every synthetic VU (no chain-level negative; the unit tier "
-            f"exercises them): {not_exercised}")
+        log(f"wrong-rule variants that reach the model's final word on every synthetic VU (no chain-level negative; the unit "
+            f"tier exercises them): {not_exercised}")
     report["variants_not_exercised_at_chain_level"] = not_exercised
     # (7) one witness row per (gadget scope, row class), as gate_vu does
     seen, picks = set(), []
@@ -457,7 +490,8 @@ def _gate_result(args, R, cen, agg, honest_ok, detail, report, failures) -> dict
     for k_, v_ in cen.items():
         if isinstance(v_, int) and not isinstance(v_, bool):
             meas.append(contract.measurement(f"relation.census.{k_}", v_, "count"))
-    result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or os.environ.get("RESEARCH_RUN_ID") or f"b-ligero-fp4-gate-{int(time.time())}",
+    result = {"schema": contract.RESULT_SCHEMA,
+              "run_id": getattr(args, "run_id", None) or os.environ.get("RESEARCH_RUN_ID") or f"b-ligero-fp4-gate-{int(time.time())}",
               "workload_fingerprint": fp,
               "validation": {"status": "passed" if not failures else "failed",
                              "checker": "backends.direct.ligero.fp4.chain gate_vu_fp4 (prove+verify every honest sub-batch with the prover's "

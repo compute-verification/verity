@@ -229,16 +229,19 @@ def test_chain_two_vus_cpu():
             W[c_rows[1], STEPS] = 1
         proof2, pubs2, lay2 = R.prove_vus(vus, check=False, mutate=nonzero_c0)
         assert not R.verify_vus(proof2, pubs2, lay2)[0]
-        # wrong-rule witnesses with the honest claim and links, on a VU where the wrong rule changes a word (where it does not,
-        # its witness is the honest one -- the gate skips those variants at chain level and reports them)
+        # wrong-rule witnesses with their OWN claim (the wrong accumulator fed forward, the wrong final word claimed), on a
+        # VU where that word differs from the model's (where it does not the claim is true -- the gate skips the variant at
+        # chain level and reports it; the unit tier exercises it)
         from .chain import _variant_base
         exercised = 0
         for v in ("acc-exp+1", "wrong-sign-acc", "drop-group3", "scale-exp+1", "negzero", "floor-align"):
             vb = _variant_base(vus, v)
             if vb is None:
                 continue
+            vus_v, _i, _step = vb
+            assert vus_v[0][3] != vus[_i][3]
             try:
-                proof3, pubs3, lay3 = R.prove_vus(vus, check=False, variant=v)
+                proof3, pubs3, lay3 = R.prove_vus(vus_v, check=False, variant=v)
             except (AssertionError, ValueError):
                 exercised += 1                                  # no witness of the relation's shape at all
                 continue
