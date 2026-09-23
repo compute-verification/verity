@@ -354,7 +354,7 @@ verifier needs (the code is the reference; PROTOCOL.md still describes the BF16 
 ## D12. The v2 public-selection relations (lane `relmin-lookup`): the verifier computes part of the step, and the pins are no longer the operand words
 
 `bf16-hopper-v2`, `bf16-ampere-v2`, `fp8-hopper-v2`, `fp8-ada-v2` (`backends/direct/ligero/pubsel/relation.py`) claim what
-their v1 counterparts claim with 292 / 469 / 195 / 357 rows per unit (v1: 3292 / 3516 / 3396 / 3769) by moving the public
+their v1 counterparts claim with 282 / 449 / 185 / 337 rows per unit (2ef2409) (v1: 3292 / 3516 / 3396 / 3769) by moving the public
 half of the tensor-core step to the verifier: the pins are per-group maxima `g{g}.G` and truncated product sums `g{g}.Q[j]`
 that the verifier computes from the operand words (`public_pins_int`; Rust `relation::pubsel::PubSel::unit_pins`), so the
 verifier does O(K prod_bits) integer work per unit and the relations are unusable with private operands (not a Table 2
