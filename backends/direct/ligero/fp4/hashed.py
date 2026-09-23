@@ -244,23 +244,65 @@ class FP4HashedRelation:
         import torch
         return x.cpu().numpy().astype(dtype) if isinstance(x, torch.Tensor) else np.asarray(x, dtype=dtype)
 
+    def _domain_checked(self, fn, *args):
+        """``fn(*args)`` with ``witness._check_domain`` disabled while ``unchecked`` (the negatives force the prover on)."""
+        if not self.unchecked:
+            return fn(*args)
+        from . import witness as w
+        chk, w._check_domain = w._check_domain, lambda *a: None
+        try:
+            return fn(*args)
+        finally:
+            w._check_domain = chk
+
     def hints(self, p, sys: System, c_in, a, b, y_out, device):
         import torch
-        return torch.as_tensor(hints_fp4(sys, self._np(c_in), self._np(a), self._np(b)), dtype=torch.int64, device=device)
+        H = self._domain_checked(hints_fp4, sys, self._np(c_in), self._np(a), self._np(b))
+        return torch.as_tensor(H, dtype=torch.int64, device=device)
 
     def public_vectors(self, p, c, a, b, y, device="cpu"):
         import torch
-        a, b = self._np(a), self._np(b)
-        if self.unchecked:
-            from . import witness as w
-            chk, w._check_domain = w._check_domain, lambda *args: None
-            try:
-                vals = public_vectors_fp4(a, b)
-            finally:
-                w._check_domain = chk
-        else:
-            vals = public_vectors_fp4(a, b)
+        vals = self._domain_checked(public_vectors_fp4, self._np(a), self._np(b))
         return {k: torch.as_tensor(v, dtype=torch.int64, device=device) for k, v in vals.items()}
+
+    # --- the gate's FP4 negative family (relchain.gate_hashed calls ``extra_negatives``) --------------------------------
+    #: (name, word index in the a row of step 0, forged byte): malformed UE4M3 / E2M1 encodings and a wrong (valid) scale
+    MALFORMED = (("UE4M3 NaN scale byte 0x7F", K, 0x7F),
+                 ("UE4M3 scale byte with the padding bit set (0x80)", K, 0x80),
+                 ("scale byte 0xFF (padding bit + NaN mantissa)", K + 1, 0xFF),
+                 ("E2M1 code word 16 (a fifth bit)", 0, 16),
+                 ("E2M1 code word 0xFF", 1, 0xFF))
+
+    def extra_negatives(self, R, base: list) -> list[tuple[str, tuple[bool, str]]]:
+        """Malformed encodings the prover is FORCED to compute on (``unchecked``: the hint generator's domain check off, the
+        model's accumulators recomputed where the model accepts the bytes, the committed ones kept otherwise) -- the
+        verifier alone must reject each; plus a wrong scale: a valid UE4M3 byte other than the committed one, the chain
+        recomputed consistently on it (a forged computation on operands other than the committed row)."""
+        a0, b0, accs0, _ = base[0]
+        a0 = list(int(x) for x in a0)
+        s_alt = 0x44 if a0[K + 2] != 0x44 else 0x45
+        cases = list(self.MALFORMED) + [(f"wrong scale: committed byte 0x{a0[K + 2]:02x} proved as 0x{s_alt:02x} (valid UE4M3)", K + 2, s_alt)]
+        negs = []
+        self.unchecked = True
+        try:
+            for name, idx, val in cases:
+                a = list(a0)
+                a[idx] = val
+                accs, c = [], 0
+                try:
+                    for s in range(STEPS):
+                        c = MODEL.step(c, a[WORDS * s:WORDS * (s + 1)], b0[WORDS * s:WORDS * (s + 1)])
+                        accs.append(int(c))
+                except Exception:
+                    accs = list(accs0)
+                try:
+                    pf, pb, ly = R.prove_vus([(a, b0, accs, accs[-1]), base[1]], check=False, vu_ids=[0, 1])
+                    negs.append((name, R.verify_vus(pf, pb, ly)))
+                except Exception as e:                      # the forced hint generator still cannot build the row: a rejection too
+                    negs.append((name, (False, f"prover: {type(e).__name__}: {e}")))
+        finally:
+            self.unchecked = False
+        return negs
 
     # --- instances: the synthetic edge families of fp4/chain.py, flattened to the runner's (a, b, accs, y) rows ---------
     @staticmethod

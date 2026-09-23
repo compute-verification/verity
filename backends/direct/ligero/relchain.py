@@ -842,6 +842,8 @@ def gate_hashed(args, rel: Relation) -> int:
         negs.append((f"off-domain operand 0x{rel.off_domain[0]:x} computed on", R.verify_vus(pf, pb, ly)))
     except Exception as e:                                  # the hint generator itself refuses the word: also a rejection
         negs.append((f"off-domain operand 0x{rel.off_domain[0]:x} computed on", (False, f"prover: {type(e).__name__}: {e}")))
+    if getattr(rel, "extra_negatives", None) is not None:     # the relation's own family (fp4/hashed.py: malformed encodings, a wrong scale)
+        negs += rel.extra_negatives(R, base)
     negs += hashed_negatives(R, data, getattr(args, "row_negatives", 40))
     for name, (ok, why) in negs:
         log(f"  negative {name}: {'REJECTED' if not ok else 'ACCEPTED (BUG)'} {why}")
