@@ -541,7 +541,7 @@ fn fp4_nvf4_proof_and_coins_negatives_are_rejected() {
         rejected(&format!("{name}.proof"), &m, &[], reason);
     }
     // a truncated transcript; a transcript whose header is another statement's
-    rejected("short.proof", &pf[..pf.len() - 1], &[], "proof file: truncated file");
+    rejected("fp4_short.proof", &pf[..pf.len() - 1], &[], "proof file: truncated file");   // not "short.proof": fp8_ada_negatives writes that name concurrently
     let (code, js) = verify(FP4_SYS, FP4_STMT, FP8_PROOF, &[]);
     assert_eq!(code, 1, "{js}");
     assert!(js.contains("malformed proof: header M = 3769, the statement fixes 1583"), "{js}");
@@ -1015,8 +1015,11 @@ fn bf16_ampere_hashed_negatives_and_system_mismatches_are_rejected() {
 // operand words (64 E2M1 codes + 4 UE4M3 scales per operand) private, decoded in-circuit (the 141 former pins as hint rows,
 // the bit rows and the E2M1 / UE4M3 gadgets), and the two Poseidon2 sponges over 24-bit lanes (72 nibbles -> 12 rate lanes,
 // two permutations per unit): 4442 rows, 19 linked rows, the chain end the bare relation's three FP32 components.
-// Interactive non-ZK, 40 VUs x 24 steps at l = 1024 (K = 1632 = 24 x 68 words per committed row), one sub-batch, statement
-// `ligero-statement/v5` (32-bit y words), system `ligero-system/v3`.  Python's verifier accepted it (`verify_python.json`, 1/1).
+// Interactive non-ZK, 40 VUs x 24 steps at l = 1024, one sub-batch, statement `ligero-statement/v5` (32-bit y words), system
+// `ligero-system/v3`.  The v5 header's K is the relation's K = 1536 (`serialize._K_of`: 24 steps x 64 E2M1 ELEMENTS, the
+// GemmAccumulator<1536> dot length), read here as 64 operands per unit -- the committed row itself carries 24 x 68 = 1632
+// words (the 4 UE4M3 scale bytes per operand ride along); nothing in the v5 verdict depends on the header K (the leaves
+// are whole rows), so this is the first relation where the two readings of the field differ (noted in DISCREPANCIES.md).  Python's verifier accepted it (`verify_python.json`, 1/1).
 
 const FH_SYS: &str = "fixtures/fp4-nvf4-hash/system.bin";
 const FH_STMT: &str = "fixtures/fp4-nvf4-hash/sub_00.stmt";
@@ -1025,11 +1028,11 @@ const FH_COINS: &str = "fixtures/fp4-nvf4-hash/sub_00.coins";
 const FH_SYS_ID: &str = "8c6d260c675cad40ae7263db08974f1842d04997f344cb4f9e52821e70bb25f5";
 const FH_TABLE_DIGEST: &str = "8dad2d286e92d9927464afb81846fcbdb16f09b2c01910e36fcf8aaac432fc3a";
 
-/// The v5 fixture's field offsets for the NVFP4 widths (y_bytes = 4, K = steps x 68).
+/// The v5 fixture's field offsets for the NVFP4 widths (y_bytes = 4; header K = 1536, see above).
 fn fh_offsets(st: &[u8]) -> V5 {
     assert_eq!(&st[..8], b"LIGSTM05");
     let (l, n_vus, steps, k) = (u32_at(st, 12), u32_at(st, 46), u32_at(st, 50), u32_at(st, 54));
-    assert_eq!((l, n_vus, steps, k), (1024, 40, 24, 24 * 68));
+    assert_eq!((l, n_vus, steps, k), (1024, 40, 24, 1536));
     let yb = st[58] as usize;
     assert_eq!(yb, 4);
     let mut o = 59;
@@ -1059,7 +1062,7 @@ fn fp4_nvf4_hashed_v5_proof_is_accepted_and_the_hashed_system_is_pinned() {
     assert_eq!(field(&js, "\"accepted\":"), "true");
     assert_eq!(field(&js, "\"system_pinned\":"), "true");
     assert!(js.contains("\"format\":\"ligero-statement/v5\",\"relation\":\"fp4-nvf4\""), "{js}");
-    assert!(js.contains("\"n_vus\":40,\"steps\":24,\"K\":68"), "{js}");
+    assert!(js.contains("\"n_vus\":40,\"steps\":24,\"K\":64"), "{js}");
     assert!(js.contains("authentication: included-hash, 40 VUs, 40 x rows + 40 W columns + 40 y words under the a/b/y roots"), "{js}");
     assert!(js.contains("coins are this verifier's step-0 coins"), "{js}");
     let (_, sd) = run(&["system-digest", "--system", FH_SYS]);
