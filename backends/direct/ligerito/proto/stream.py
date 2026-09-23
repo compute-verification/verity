@@ -73,15 +73,16 @@ def leaf_absorb(Ug: torch.Tensor, lv, first: bool, last: bool) -> None:
                                                lv, np.int32(int(first)), np.int32(int(last))))
 
 
-def commit_streamed(M: torch.Tensor, enc, group: int, commit_gpu):
-    """Round-1 commit of M (C, R) without materialising U: -> (root bytes, tree).  ``commit_gpu`` = Ligero's module (tree levels)."""
+def commit_streamed(M: torch.Tensor, enc, group: int, commit_gpu, pad: torch.Tensor | None = None):
+    """Round-1 commit of M (C, R) without materialising U: -> (root bytes, tree).  ``commit_gpu`` = Ligero's module (tree levels);
+    ``pad`` (C, t): ZK padding coefficients per column."""
     C, R = M.shape
     assert C % group == 0 and group % 16 == 0 and C <= 256
     n = enc.n
     lv = cp.empty((n, 8), dtype=cp.uint32)
     buf = torch.empty((group, n), dtype=torch.int32, device=M.device)
     for q0 in range(0, C, group):
-        enc.encode(M[q0:q0 + group], out=buf)
+        enc.encode(M[q0:q0 + group], out=buf, pad=None if pad is None else pad[q0:q0 + group])
         leaf_absorb(buf, lv, first=(q0 == 0), last=(q0 + group == C))
     del buf
     levels = [lv] + (commit_gpu.tree_levels(lv) if n > 1 else [])

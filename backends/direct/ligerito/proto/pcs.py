@@ -65,6 +65,7 @@ class Proof:
     final_y: np.ndarray                     # (2^{k_L}, 6)
     coins: int = 0
     order: str | None = None                # None = the fused order of ``prove``; "commit-first" = ``commit`` + ``open``
+    ybar: list[np.ndarray] = field(default_factory=list)   # ZK padding: per committed round (t_pad, 6); [] without padding
 
     @property
     def dims(self) -> Dims:
@@ -79,6 +80,8 @@ class Proof:
         if self.order is not None:
             head["order"] = self.order
             head["claims"] = int(np.asarray(self.v).reshape(-1, D).shape[0])
+        if self.ybar:
+            head["t_pad"] = int(self.ybar[0].shape[0])
         hb = json.dumps(head, separators=(",", ":")).encode()
         parts = [len(hb).to_bytes(4, "little"), hb, _ext_bytes(self.v)]
         for i in range(len(self.kprime)):
@@ -89,6 +92,7 @@ class Proof:
             parts.append(np.ascontiguousarray(o.rows.astype(np.uint32)).tobytes())
             parts.append(o.siblings)
         parts.append(_ext_bytes(self.final_y))
+        parts.extend(_ext_bytes(yb) for yb in self.ybar)
         return b"".join(parts)
 
     @staticmethod
@@ -117,9 +121,13 @@ class Proof:
             pos += sl
             opens.append(RoundOpen(rows, sib))
         fy, pos = _ext_read(buf, pos, (head["final_len"],))
+        ybar = []
+        for _ in range(L if head.get("t_pad") else 0):
+            yb, pos = _ext_read(buf, pos, (head["t_pad"],))
+            ybar.append(yb)
         assert pos == len(buf), (pos, len(buf))
         return Proof(head["n"], head["kprime"], head["queries"], head["rate_log2"], [tuple(s) for s in head["splits"]],
-                     v, roots, sumcheck, opens, fy, head.get("coins", 0), order)
+                     v, roots, sumcheck, opens, fy, head.get("coins", 0), order, ybar)
 
 
 def _ext_bytes(a: np.ndarray) -> bytes:
@@ -441,10 +449,113 @@ def _open_fast(U: torch.Tensor, tree, S: list[int], depth: int) -> RoundOpen:
     return RoundOpen(rows, _siblings(tree, S, depth))
 
 
-def _open_recompute(M: torch.Tensor, enc: Encoder, tree, S: list[int], depth: int) -> RoundOpen:
-    """Streamed round 1: the opened codeword rows U[:, s] = P_c(eta_s) recomputed from the message columns (|S| N base MACs)."""
-    rows = (dev.contract_geom(M, enc.etas(S)) % P).t().contiguous().cpu().numpy()
+def _open_recompute(M: torch.Tensor, enc: Encoder, tree, S: list[int], depth: int, pad: torch.Tensor | None = None) -> RoundOpen:
+    """Streamed round 1: the opened codeword rows U[:, s] = P_c(eta_s) recomputed from the message columns (|S| N base MACs)
+    (+ the ZK padding coefficients R .. R + t - 1)."""
+    etas = enc.etas(S)
+    rows = (dev.contract_geom(M, etas) % P).t().contiguous().cpu().numpy()
+    if pad is not None:
+        rows = (rows + matmul_mod_p_np(_pad_powers(etas, enc.R, pad.shape[1]), pad.cpu().numpy().T)) % P
     return RoundOpen(rows, _siblings(tree, S, depth))
+
+
+# --------------------------------------------------------------------------------------------- ZK hooks: padding, sparse terms
+
+def _mask(rows: int, cols: int, device) -> torch.Tensor:
+    """(rows, cols) exactly uniform int64 symbols on the device (ChaCha20 under a fresh key; ligero/mask_sampler.py)."""
+    from backends.direct.ligero.mask_sampler import sampler_for
+    s = sampler_for(device)
+    if s is not None:
+        return s.uniform(rows * cols)[0].view(rows, cols)
+    from backends.direct.ligero.mask_sampler import uniform_host
+    return torch.as_tensor(uniform_host(rows * cols, os.urandom(32)).reshape(rows, cols), device=device)
+
+
+def _pad_powers(etas, R: int, tp: int) -> np.ndarray:
+    """(|S|, tp): eta_s^{R + t}."""
+    etas = np.asarray(etas, dtype=np.int64) % P
+    out = np.empty((len(etas), tp), dtype=np.int64)
+    out[:, 0] = [pow(int(e), R, P) for e in etas]
+    for t in range(1, tp):
+        out[:, t] = out[:, t - 1] * etas % P
+    return out
+
+
+def _pad_correction(etas, R: int, ybar: np.ndarray) -> np.ndarray:
+    """(|S|, 6): sum_t eta_s^{R + t} ybar[t] -- the padding's share of < U[s, :], rbar >."""
+    if ybar is None or len(ybar) == 0:
+        return ext.zero((len(etas),))
+    return matmul_mod_p_np(_pad_powers(etas, R, ybar.shape[0]), np.asarray(ybar, dtype=np.int64) % P)
+
+
+def _ybar(pad: torch.Tensor, rbar: np.ndarray, base: bool) -> np.ndarray:
+    """(t, 6): ybar[t] = sum_c mu~[c, t] rbar[c]  (pad (C, t) base, or (6C, t) plane-major extension)."""
+    return _row_claims(pad.cpu().numpy().T.astype(np.int64), rbar, base)
+
+
+def _check_sparse(sparse, n: int):
+    out = []
+    for cells, w, val in sparse or ():
+        cells = np.asarray(cells, dtype=np.int64).reshape(-1)
+        w = np.asarray(w, dtype=np.int64).reshape(-1, D) % P
+        val = np.asarray(val, dtype=np.int64).reshape(D) % P
+        if cells.shape[0] != w.shape[0] or cells.shape[0] == 0 or (cells < 0).any() or (cells >= 1 << n).any() \
+                or len(np.unique(cells)) != len(cells):
+            raise ValueError("sparse term: cells must be distinct indices in [0, N), one weight each")
+        out.append((cells, w, val))
+    return out
+
+
+def _absorb_sparse(tr: Coins, sparse) -> None:
+    for cells, w, _ in sparse:
+        tr.absorb(b"sparse", cells.astype("<u4").tobytes() + _ext_bytes(w))
+
+
+def _bits_eq(c: np.ndarray, r: np.ndarray) -> np.ndarray:
+    """(T, 6): eq(bits(c_t), r) = prod_j (r_j if bit j of c_t else 1 - r_j), r (kp, 6), r_j <-> bit j."""
+    return cl.rbar(r)[c]
+
+
+class _Sparse:
+    """The sparse claims sum_t w_t y[idx_t] on the current round's vector (after the batching coefficients), recursed through the
+    rounds: grouped by column c = idx >> k they are eq-like terms (a one-hot column part, the contraction sum_t w_t M[:, r_t]); after
+    the column challenges r: w_t *= eq(bits(c_t), r), idx_t = r_t."""
+
+    def __init__(self, sparse, coefs: np.ndarray):
+        self.idx = np.concatenate([c for c, _, _ in sparse]) if sparse else np.zeros(0, dtype=np.int64)
+        self.w = np.concatenate([ext.mul(w, coefs[j][None]) for j, (_, w, _) in enumerate(sparse)], axis=0) \
+            if sparse else ext.zero((0,))
+
+    def __bool__(self):
+        return len(self.idx) > 0
+
+    def groups(self, k: int):
+        c = self.idx >> k
+        return [(int(g), np.nonzero(c == g)[0]) for g in np.unique(c)]
+
+    def scale(self, a: np.ndarray) -> None:
+        self.w = ext.mul(self.w, a[None])
+
+    def restrict(self, k: int, r: np.ndarray) -> None:
+        self.w = ext.mul(self.w, _bits_eq(self.idx >> k, r))
+        self.idx = self.idx & ((1 << k) - 1)
+
+    def contract(self, Mflat: torch.Tensor, k: int, C: int):
+        """-> (ue (G, W, 6) int64 device, cole (G, C, 6)) for the groups (Mflat (W, 2^k) int32: W = C base or 6C planes)."""
+        gs = self.groups(k)
+        cols = torch.as_tensor(self.idx & ((1 << k) - 1), device=Mflat.device)
+        Mg = Mflat.index_select(1, cols).to(torch.int64).cpu().numpy()                # (W, T)
+        ue = np.stack([matmul_mod_p_np(Mg[:, ix], self.w[ix]) for _, ix in gs], axis=0)
+        cole = np.zeros((len(gs), C, D), dtype=np.int64)
+        for j, (g, _) in enumerate(gs):
+            cole[j, g, 0] = 1
+        return torch.as_tensor(ue, device=Mflat.device), cole
+
+    def value(self, y: np.ndarray) -> np.ndarray:
+        """sum_t w_t y[idx_t] for the final vector y (R_L, 6)."""
+        if not self:
+            return ext.zero()
+        return ext.sum_ext(ext.mul(self.w, y[self.idx]), axis=0)
 
 
 # --------------------------------------------------------------------------------------------- soundness of the committed shape
@@ -498,6 +609,8 @@ class Commitment:
     U1: torch.Tensor | None
     tree1: object
     cache: tuple | None = None              # ``evaluate``'s (points bytes, round-1 contractions, values), reused by ``open``
+    t_pad: int = 0                          # ZK column padding (every round); mu1 = round 1's (C_1, t_pad) padding
+    mu1: torch.Tensor | None = None
 
 
 def _header(dims: Dims, order: str | None) -> bytes:
@@ -507,20 +620,21 @@ def _header(dims: Dims, order: str | None) -> bytes:
     return json.dumps(h).encode()
 
 
-def absorb_statement(coins: Coins, dims: Dims, root: bytes, values: np.ndarray) -> None:
+def absorb_statement(coins: Coins, dims: Dims, root: bytes, values: np.ndarray, sparse_values=()) -> None:
     """The standalone commit-first prefix (``prove_commit_first``, and ``verify`` of a commit-first proof): header (with
-    ``"order": "commit-first"``), root_1, the claimed values (m ext).  Inside a relation, the relation's transcript binds root_1
-    and the values instead and this is not used."""
+    ``"order": "commit-first"``), root_1, the claimed values (m ext, then the sparse claims' values).  Inside a relation, the
+    relation's transcript binds root_1 and the values instead and this is not used."""
     coins.absorb(b"header", _header(dims, COMMIT_FIRST))
     coins.absorb(b"root", root)
-    coins.absorb(b"v", _ext_bytes(np.asarray(values).reshape(-1, D)))
+    vals = [np.asarray(values).reshape(-1, D)] + [np.asarray(v).reshape(-1, D) for v in sparse_values]
+    coins.absorb(b"v", _ext_bytes(np.concatenate(vals, axis=0)))
 
 
 def _device_ok(f: torch.Tensor) -> bool:
     return f.device.type == "cuda" and dev.available(f) and ligero_merkle._gpu_merkle is not None
 
 
-def _commit_r1(f: torch.Tensor, dims: Dims, tm, stream_mode: bool | None = None):
+def _commit_r1(f: torch.Tensor, dims: Dims, tm, stream_mode: bool | None = None, mu1: torch.Tensor | None = None):
     device = f.device
     assert f.numel() == 1 << dims.n and f.dtype == torch.int32
     dev.share_torch_allocator()
@@ -530,7 +644,7 @@ def _commit_r1(f: torch.Tensor, dims: Dims, tm, stream_mode: bool | None = None)
     group = _stream_group(dims, device, stream_mode)
     if group:
         tm.start("commit_r1_stream")
-        root1, tree1 = stream.commit_streamed(M1, enc1, group, _commit_gpu)
+        root1, tree1 = stream.commit_streamed(M1, enc1, group, _commit_gpu, pad=mu1)
         U1 = None
         tm.stop()
     else:
@@ -538,7 +652,7 @@ def _commit_r1(f: torch.Tensor, dims: Dims, tm, stream_mode: bool | None = None)
         U1 = torch.empty((C1, enc1.n), dtype=torch.int32, device=device)
         tm.stop()
         tm.start("commit_r1_encode")
-        enc1.encode(M1, out=U1)
+        enc1.encode(M1, out=U1, pad=mu1)
         tm.stop()
         tm.start("commit_r1_merkle")
         root1, tree1 = _commit_fast(U1)
@@ -546,17 +660,30 @@ def _commit_r1(f: torch.Tensor, dims: Dims, tm, stream_mode: bool | None = None)
     return M1, enc1, U1, tree1, root1
 
 
+def _zk_t_pad(t_pad: int, zk) -> int:
+    if zk is not None:
+        return int(zk.t_pad) if getattr(zk, "enabled", True) else 0
+    return int(t_pad)
+
+
 def commit(f: torch.Tensor, dims: Dims, timer: Timer | None = None, stream: bool | None = None,
-           target_log2: float | None = None, t_pad: int = 0) -> Commitment:
+           target_log2: float | None = None, t_pad: int = 0, zk=None) -> Commitment:
     """Commit-first API, step 1 (no transcript effect): encode + Merkle-commit f ((N,) int32 CUDA tensor, [0, p)).
     ``stream``: None = auto (stream the round-1 codeword iff it would not fit the card), True = never keep the codeword (``open``
     recomputes the |S_1| opened rows; frees 4 C_1 n_1 bytes while the caller's own rounds run), False = keep it.
+    ``t_pad`` (or ``zk``: a ``zk.ZkParams``, its ``t_pad`` if enabled): ZK column padding -- every committed column at every round
+    gets t_pad uniform message coefficients x^{R_i} .. x^{R_i + t_pad - 1} (ligerito-zk item 4b); ``open`` sends ybar_i.
     ``target_log2``: raise ValueError unless ``soundness_log2(dims, t_pad)`` meets it."""
+    t_pad = _zk_t_pad(t_pad, zk)
     _check_target(dims, target_log2, t_pad)
+    for i in range(dims.rounds):
+        if (1 << dims.k[i]) + t_pad > (1 << (dims.k[i] + dims.rates[i])):
+            raise ValueError(f"round {i + 1}: padded message 2^{dims.k[i]} + {t_pad} exceeds the codeword")
     if not _device_ok(f):
         raise RuntimeError("pcs.commit needs the CUDA device path (cupy + hash_gpu)")
-    M1, enc1, U1, tree1, root1 = _commit_r1(f, dims, timer or _NullTimer(), stream)
-    return Commitment(dims, root1, M1, enc1, U1, tree1)
+    mu1 = _mask(1 << dims.kprime[0], t_pad, f.device) if t_pad else None
+    M1, enc1, U1, tree1, root1 = _commit_r1(f, dims, timer or _NullTimer(), stream, mu1)
+    return Commitment(dims, root1, M1, enc1, U1, tree1, t_pad=t_pad, mu1=mu1)
 
 
 def _points(dims: Dims, points: np.ndarray) -> np.ndarray:
@@ -610,29 +737,37 @@ def evaluate(com: Commitment, points: np.ndarray, timer: Timer | None = None) ->
 
 
 def open(com: Commitment, points: np.ndarray, values: np.ndarray | None, coins: Coins,  # noqa: A001 -- the relation's name
-         timer: Timer | None = None) -> Proof:
+         timer: Timer | None = None, sparse=None) -> Proof:
     """Commit-first API, step 2: ONE evaluation proof of f~(points[j]) = values[j] for all j (points (m, n, 6) or (n, 6), PCS
     variable order).  ``coins`` already holds root_1 and whatever fixed the points and values (the caller's transcript).
     Transcript: absorb z (m n ext); beta <- challenge(b"beta", m) (always, also m = 1); round 1's claim is sum_j beta_j v_j; then
     the rounds exactly as ``prove``.  This is lane ligerito-relation's ``pcs_open`` transcript (prove.py @ 3592bd0).  ``values``
-    (m, 6) are asserted against the prover's own (None: not checked).  ``proof.v`` = the values (m, 6)."""
+    (m, 6) are asserted against the prover's own (None: not checked).  ``proof.v`` = the values (m, 6).
+
+    ``sparse``: extra claims [(cells (T,) PCS indices, weights (T, 6), value (6,)), ...] meaning sum_t w_t f[cells_t] = value
+    (ligerito-zk's Libra block claims): after z, each is absorbed as b"sparse" (cells u32 || weights ext); beta then has m + K
+    entries, beta[m + k] for sparse claim k.  With padding (``commit(t_pad=...)``): ybar_i (t_pad ext) is absorbed as b"ybar" right
+    after root_{i+1} (after y for the last round), before S_i."""
     zs = _points(com.dims, points)
+    sp = _check_sparse(sparse, com.dims.n)
     tm = timer or _NullTimer()
     coins.absorb(b"z", _z_bytes(zs))
+    _absorb_sparse(coins, sp)
     pre = com.cache[1:] if com.cache is not None and com.cache[0] == zs.tobytes() else None
     com.cache = None
-    return _prove_rounds(com.M1, com.enc1, com.U1, com.tree1, com.root, com.dims, zs, coins, tm, COMMIT_FIRST, pre, values)
+    return _prove_rounds(com.M1, com.enc1, com.U1, com.tree1, com.root, com.dims, zs, coins, tm, COMMIT_FIRST, pre, values,
+                         sparse=sp, t_pad=com.t_pad, mu1=com.mu1)
 
 
 def prove_commit_first(f: torch.Tensor, points: np.ndarray, dims: Dims, coins: Coins | None = None,
-                       timer: Timer | None = None, stream: bool | None = None) -> Proof:
+                       timer: Timer | None = None, stream: bool | None = None, t_pad: int = 0, sparse=None) -> Proof:
     """A standalone commit-first proof (tests, bench): ``commit``, ``evaluate``, ``absorb_statement`` (header, root_1, v), ``open``.
-    Verify with ``verify(proof, points)``."""
+    Verify with ``verify(proof, points, t_pad=..., sparse=...)``."""
     tr = coins if coins is not None else FiatShamirCoins()
-    com = commit(f, dims, timer, stream)
+    com = commit(f, dims, timer, stream, t_pad=t_pad)
     vs = evaluate(com, points, timer)
-    absorb_statement(tr, dims, com.root, vs)
-    return open(com, points, vs, tr, timer)
+    absorb_statement(tr, dims, com.root, vs, [val for _, _, val in (sparse or ())])
+    return open(com, points, vs, tr, timer, sparse)
 
 
 def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None,
@@ -659,14 +794,17 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
 
 
 def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Coins, tm, order: str | None,
-                  pre=None, values=None) -> Proof:
+                  pre=None, values=None, sparse=(), t_pad: int = 0, mu1=None) -> Proof:
     """Everything after root_1: the claims, round 1's column sumcheck, rounds 2..L, the final vector."""
     device = M1.device
     n = dims.n
     ks, kps, qs, rates = dims.k, dims.kprime, dims.queries, dims.rates
     L = dims.rounds
     m = zs.shape[0]
+    K = len(sparse)
     roots, Us, trees, encs = [root1], [U1], [tree1], [enc1]
+    mus = [mu1]
+    ybars: list[np.ndarray] = []
     splits = [(enc1.n1, enc1.n2)]
     sumcheck: list[list[np.ndarray]] = []
     opens: list[RoundOpen] = []
@@ -677,11 +815,25 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
     if order == COMMIT_FIRST:
         if values is not None:
             assert np.array_equal(np.asarray(values, dtype=np.int64).reshape(m, D) % P, vs), "claimed values differ from f~(z)"
-        beta = tr.challenge(b"beta", m)
+        beta = tr.challenge(b"beta", m + K)
     else:
+        assert not K and not t_pad
         tr.absorb(b"v", _ext_bytes(vs))
         beta = ext.one()[None]
     terms0 = [cl.Term(beta[j], "eq", z=zs[j], nvars=n) for j in range(m)]
+    sps = _Sparse(sparse, beta[m:])
+    us = list(us)
+    if sps:
+        for cells, w, val in sparse:
+            got = matmul_mod_p_np(M1.view(-1).index_select(0, torch.as_tensor(cells, device=device)).to(torch.int64)
+                                  .cpu().numpy()[None], w)[0]
+            assert np.array_equal(got, val), "sparse claim value differs from sum_t w_t f[cells_t]"
+        ue_s, cole_s = sps.contract(M1, ks[0], 1 << kps[0])
+        for g in range(ue_s.shape[0]):
+            zb = ext.zero((n,))
+            zb[ks[0]:ks[0] + kps[0], 0] = (int(np.nonzero(cole_s[g, :, 0])[0][0]) >> np.arange(kps[0])) & 1
+            terms0.append(cl.Term(ext.one(), "eq", z=zb, nvars=n))
+            us.append(ue_s[g].cpu().numpy())
     sc = cl.ColumnSumcheckProver(terms0, us, ks[0], kps[0])
     msgs = []
     for _ in range(kps[0]):
@@ -694,8 +846,11 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
     r1 = sc.challenges()
     rbar = cl.rbar(r1)
     running = sc.claim()
-    coef_eq = ext.mul(beta, _eq_colpart_at(zs, ks[0], r1))               # (m, 6): the eq terms restricted to the rows
+    coef_eq = ext.mul(beta[:m], _eq_colpart_at(zs, ks[0], r1))           # (m, 6): the eq terms restricted to the rows
     z_eq = zs[:, :ks[0]]                                                  # (m, k_1, 6)
+    sps.restrict(ks[0], r1)
+    if t_pad:
+        ybars.append(_ybar(mu1, rbar, base=True))
     etas_g = np.zeros(0, dtype=np.int64)                                  # geom terms: eta (Tg,), coef (Tg, 6)
     coef_g = ext.zero((0,))
     tm.stop()
@@ -711,7 +866,8 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
         Mflat = Mi.reshape(D * C, R)
         tm.start("recursion_encode")
         enc = Encoder(R, device, rates[i])
-        U = enc.encode(Mflat)
+        mu = _mask(D * C, t_pad, device) if t_pad else None
+        U = enc.encode(Mflat, pad=mu)
         tm.stop()
         tm.start("recursion_merkle")
         root, tree = _commit_fast(U)
@@ -720,17 +876,20 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
         Us.append(U)
         trees.append(tree)
         encs.append(enc)
+        mus.append(mu)
         splits.append((enc.n1, enc.n2))
         tr.absorb(b"root", root)
-        tm.start("serialize_openings")
         prev = i - 1
+        if t_pad:
+            tr.absorb(b"ybar", _ext_bytes(ybars[prev]))
+        tm.start("serialize_openings")
         n_prev = encs[prev].n
         S = tr.indices(b"S", n_prev, qs[prev])
         depth = n_prev.bit_length() - 1
         if Us[prev] is None:
             tm.stop()
             tm.start("commit_r1_recompute")
-            op = _open_recompute(M1, encs[prev], trees[prev], S, depth)
+            op = _open_recompute(M1, encs[prev], trees[prev], S, depth, mus[prev])
             tm.stop()
             tm.start("serialize_openings")
         else:
@@ -743,8 +902,11 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
         tm.start("sumcheck_host")
         etas = encs[prev].etas(S)
         rhs = _row_claims(op.rows, rbars[prev], base=(prev == 0))        # (|S|, 6)
+        if t_pad:
+            rhs = ext.sub(rhs, _pad_correction(etas, encs[prev].R, ybars[prev]))
         alpha = tr.challenge(b"alpha", 1 + len(S))                        # (1 + |S|, 6)
         coef_eq = ext.mul(coef_eq, alpha[0])
+        sps.scale(alpha[0])
         coef_g = ext.mul(coef_g, alpha[0]) if len(etas_g) else coef_g
         coef_g = np.concatenate((coef_g, alpha[1:]), axis=0)
         etas_g = np.concatenate((etas_g, np.asarray(etas, dtype=np.int64)))
@@ -756,6 +918,11 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
         tm.start("recursion_contract")
         ug = dev.contract_geom(Mflat, etas_g)                            # (6C, Tg)
         ue = dev.contract_eq(Mflat, z_eq[:, :ks[i]])                       # (m, 6C, 6)
+        if sps:
+            ue_s, cole_s = sps.contract(Mflat, ks[i], C)                  # the sparse groups: eq-like rows after the m eq terms
+            ue = torch.cat((ue, ue_s), dim=0)
+            cole = np.concatenate((cole, cole_s), axis=0)
+            coef = np.concatenate((coef[:m], ext.one((ue_s.shape[0],)), coef[m:]), axis=0)
         dsc = dev.DeviceSumcheck(ug, ue, coef, colg, cole, C, device)
         del ug, ue
         tm.stop()
@@ -779,6 +946,9 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
         coef_eq = ext.mul(coef_eq, _eq_colpart_at(z_eq, ks[i], ri))
         z_eq = z_eq[:, :ks[i]]
         coef_g = ext.mul(coef_g, cl.geom_colpart_at(etas_g, ks[i], ri))
+        sps.restrict(ks[i], ri)
+        if t_pad:
+            ybars.append(_ybar(mu, rbar, base=False))
         rbars.append(rbar)
         del dsc
         tm.stop()
@@ -790,14 +960,17 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
     tm.start("serialize_final")
     final_y = y.to(torch.int64).t().contiguous().cpu().numpy() % P        # (R_L, 6)
     tr.absorb(b"y", _ext_bytes(final_y))
+    if t_pad:
+        tr.absorb(b"ybar", _ext_bytes(ybars[-1]))
     n_last = encs[-1].n
     S = tr.indices(b"S", n_last, qs[-1])
     depth = n_last.bit_length() - 1
-    op = _open_fast(Us[-1], trees[-1], S, depth) if Us[-1] is not None else _open_recompute(M1, encs[-1], trees[-1], S, depth)
+    op = _open_fast(Us[-1], trees[-1], S, depth) if Us[-1] is not None \
+        else _open_recompute(M1, encs[-1], trees[-1], S, depth, mus[-1])
     opens.append(op)
     tm.stop()
     v = vs if order == COMMIT_FIRST else vs[0]
-    return Proof(n, list(kps), list(qs), list(rates), splits, v, roots, sumcheck, opens, final_y, tr.rounds, order)
+    return Proof(n, list(kps), list(qs), list(rates), splits, v, roots, sumcheck, opens, final_y, tr.rounds, order, ybars)
 
 
 def _row_claims(rows: np.ndarray, rbar: np.ndarray, base: bool) -> np.ndarray:
@@ -826,37 +999,49 @@ class Reject(Exception):
 
 
 def verify(proof: Proof, z: np.ndarray, v: np.ndarray | None = None, coins: Coins | None = None,
-           target_log2: float | None = None, t_pad: int = 0) -> tuple[bool, str]:
+           target_log2: float | None = None, t_pad: int = 0, sparse=None) -> tuple[bool, str]:
     """Returns (accepted, reason).  ``v``: the claimed evaluation (defaults to the proof's); ``coins``: must replay the
-    prover's (default Fiat-Shamir); ``target_log2``: reject a proof whose shape (|S_i|, rates, t_pad) misses it."""
+    prover's (default Fiat-Shamir); ``target_log2``: reject a proof whose shape (|S_i|, rates, t_pad) misses it.
+    ``t_pad`` / ``sparse``: a standalone commit-first proof's padding and sparse claims (``prove_commit_first``)."""
     try:
         _check_target(proof.dims, target_log2, t_pad, Reject)
         tr = coins if coins is not None else FiatShamirCoins()
         vv = proof.v if v is None else np.asarray(v, dtype=np.int64) % P
+        sp = _sparse_or_reject(sparse, proof.n)
         if proof.order == COMMIT_FIRST:
             if len(proof.roots) == 0:
                 raise Reject("bad proof shape")
-            absorb_statement(tr, proof.dims, proof.roots[0], vv)
-        _verify(proof, np.asarray(z, dtype=np.int64) % P, vv, tr)
+            absorb_statement(tr, proof.dims, proof.roots[0], vv, [val for _, _, val in sp])
+        _verify(proof, np.asarray(z, dtype=np.int64) % P, vv, tr, t_pad, sp)
     except Reject as e:
         return False, str(e)
     return True, "accept"
 
 
 def verify_open(proof: Proof, points: np.ndarray, values: np.ndarray | None, coins: Coins,
-                target_log2: float | None = None, t_pad: int = 0) -> tuple[bool, str]:
+                target_log2: float | None = None, t_pad: int = 0, sparse=None, zk=None) -> tuple[bool, str]:
     """``open``'s proofs inside a relation: ``coins`` holds root_1 and the relation's transcript so far (as ``open`` saw it);
     points (m, n, 6) or (n, 6); values (m, 6) (None: the proof's).  lane ligerito-relation's ``pcs_verify`` transcript.
+    ``t_pad`` / ``zk``: the ZK column padding the proof must carry (as in ``commit``); ``sparse``: the same claims as ``open``'s.
     ``target_log2``: reject a proof whose shape (|S_i|, rates, t_pad) misses it."""
     try:
+        t_pad = _zk_t_pad(t_pad, zk)
         _check_target(proof.dims, target_log2, t_pad, Reject)
         if proof.order != COMMIT_FIRST:
             raise Reject("not a commit-first proof")
+        sp = _sparse_or_reject(sparse, proof.n)
         _verify(proof, np.asarray(points, dtype=np.int64) % P,
-                proof.v if values is None else np.asarray(values, dtype=np.int64) % P, coins)
+                proof.v if values is None else np.asarray(values, dtype=np.int64) % P, coins, t_pad, sp)
     except Reject as e:
         return False, str(e)
     return True, "accept"
+
+
+def _sparse_or_reject(sparse, n: int):
+    try:
+        return _check_sparse(sparse, n)
+    except ValueError as e:
+        raise Reject(str(e)) from None
 
 
 def _canonical(x, what: str) -> np.ndarray:
@@ -866,12 +1051,23 @@ def _canonical(x, what: str) -> np.ndarray:
     return x.astype(np.int64)
 
 
-def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
+def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins, t_pad: int = 0, sparse=()) -> None:
     dims = pf.dims
     n, ks, kps, qs, L = dims.n, dims.k, dims.kprime, dims.queries, dims.rounds
     cf = pf.order == COMMIT_FIRST
     if pf.order not in (None, COMMIT_FIRST):
         raise Reject("unknown transcript order")
+    if (t_pad or sparse) and not cf:
+        raise Reject("padding / sparse claims need the commit-first order")
+    if len(pf.ybar) != (L if t_pad else 0):
+        raise Reject(f"expected ZK padding t_pad = {t_pad}")
+    ybar = [_canonical(yb, "ybar") for yb in pf.ybar]
+    if any(yb.shape != (t_pad, D) for yb in ybar):
+        raise Reject("bad ybar shape")
+    for i in range(L):
+        if (1 << ks[i]) + t_pad > (1 << (ks[i] + dims.rates[i])):
+            raise Reject("padded message exceeds the codeword")
+    K = len(sparse)
     zs = z[None] if z.ndim == 2 else z
     vs = v.reshape(-1, D) if v.ndim >= 1 else v
     m = zs.shape[0]
@@ -903,17 +1099,21 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
         tr.absorb(b"root", pf.roots[0])
     else:                                           # root_1 (and the values) are already in the caller's transcript
         tr.absorb(b"z", _z_bytes(zs))
+        _absorb_sparse(tr, sparse)
     # round 1
     pv = _canonical(pf.v, "claimed value").reshape(-1, D)
     if pv.shape != (m, D) or not np.array_equal(pv, vs):
         raise Reject("claimed evaluation differs from the proof's")
     if cf:
-        beta = tr.challenge(b"beta", m)
+        beta = tr.challenge(b"beta", m + K)
     else:
         tr.absorb(b"v", _ext_bytes(vs))
         beta = ext.one()[None]
     terms0 = [cl.Term(beta[j], "eq", z=zs[j], nvars=n) for j in range(m)]
-    claim = ext.sum_ext(ext.mul(beta, vs), axis=0)
+    claim = ext.sum_ext(ext.mul(beta[:m], vs), axis=0)
+    for k, (_, _, val) in enumerate(sparse):
+        claim = ext.add(claim, ext.mul(beta[m + k], val))
+    sps = _Sparse(sparse, beta[m:])
     rs = []
     for g in pf.sumcheck[0]:
         if g.shape != (3, D):
@@ -926,9 +1126,12 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
     r1 = np.stack(rs[::-1], axis=0) if rs else np.zeros((0, D), dtype=np.int64)
     rbars = [cl.rbar(r1)]
     terms = [t.restrict(ks[0], r1) for t in terms0]
+    sps.restrict(ks[0], r1)
     for i in range(1, L):
         tr.absorb(b"root", pf.roots[i])
         prev = i - 1
+        if t_pad:
+            tr.absorb(b"ybar", _ext_bytes(ybar[prev]))
         S = tr.indices(b"S", maps[prev].n, qs[prev])
         op = pf.opens[prev]
         W = (1 << kps[prev]) * (1 if prev == 0 else D)
@@ -944,8 +1147,11 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
             raise Reject(f"Merkle multi-path of round {prev + 1} failed")
         etas = maps[prev].etas(S)
         rhs = _row_claims(op.rows, rbars[prev], base=(prev == 0))
+        if t_pad:
+            rhs = ext.sub(rhs, _pad_correction(etas, 1 << ks[prev], ybar[prev]))
         new_terms = [cl.Term(ext.one(), "geom", eta=int(e), nvars=ks[prev]) for e in etas]
         alpha = tr.challenge(b"alpha", 1 + len(new_terms))
+        sps.scale(alpha[0])
         for t in terms:
             t.coef = ext.mul(t.coef, alpha[0])
         for j, t in enumerate(new_terms):
@@ -964,12 +1170,15 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
         ri = np.stack(rs[::-1], axis=0) if rs else np.zeros((0, D), dtype=np.int64)
         rbars.append(cl.rbar(ri))
         terms = cl.restrict_terms(terms, ks[i], ri)
+        sps.restrict(ks[i], ri)
     # final vector
     y = _canonical(pf.final_y, "final vector")
     RL = 1 << ks[-1]
     if y.shape != (RL, D):
         raise Reject("bad final vector shape")
     tr.absorb(b"y", _ext_bytes(y))
+    if t_pad:
+        tr.absorb(b"ybar", _ext_bytes(ybar[-1]))
     S = tr.indices(b"S", maps[-1].n, qs[-1])
     op = pf.opens[-1]
     W = (1 << kps[-1]) * (1 if L == 1 else D)
@@ -986,6 +1195,8 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
     pw = _powers_rows_np(np.asarray(etas, dtype=np.int64), RL)         # (|S|, R_L)
     lhs = matmul_mod_p_np(pw, y)                                          # (|S|, 6)
     rhs = _row_claims(op.rows, rbars[-1], base=(L == 1))
+    if t_pad:
+        rhs = ext.sub(rhs, _pad_correction(etas, RL, ybar[-1]))
     if not np.array_equal(lhs, rhs):
         raise Reject("final vector is inconsistent with the opened rows")
     # (b) sum_t coef_t < rowpart_t , y > = running
@@ -1001,5 +1212,6 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
         vec = t.rowpart_eq(ks[-1])                                        # (R_L, 6)
         ip = ext.sum_ext(ext.mul(vec, y), axis=0)
         total = ext.add(total, ext.mul(t.coef, ip))
+    total = ext.add(total, sps.value(y))
     if not np.array_equal(total, running):
         raise Reject("final sumcheck claim failed")

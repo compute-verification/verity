@@ -113,6 +113,63 @@ def test_commit_first_standalone(m):
     assert not verify(pf, zs, v=(pf.v + 1) % P)[0]
 
 
+@pytest.mark.parametrize("R,rate,tp", [(1 << 12, 2, 32), (1 << 12, 1, 300), (256, 2, 40), (1 << 14, 1, 256)])
+def test_encode_padding_matches_reference(R, rate, tp):
+    from .ntt_gpu import Encoder, reference_encode
+    enc = Encoder(R, DEV, rate)
+    msg = torch.randint(0, P, (16, R), dtype=torch.int64, device=DEV).to(torch.int32)
+    pad = torch.randint(0, P, (16, tp), dtype=torch.int64, device=DEV)
+    ref = reference_encode(torch.cat((msg.to(torch.int64), pad), dim=1), enc.n, enc)
+    assert torch.equal(enc.encode(msg, pad=pad), ref)
+
+
+def _sparse_claims(f: torch.Tensor, n: int, k1: int):
+    """Two sparse claims: one inside round-1 column 3 (the Libra block shape), one spread over columns."""
+    fv = f.to(torch.int64).cpu().numpy()
+    out = []
+    for cells in (3 * (1 << k1) + RNG.choice(1 << k1, size=40, replace=False),
+                  RNG.choice(1 << n, size=25, replace=False)):
+        w = RNG.integers(0, P, size=(len(cells), D), dtype=np.int64)
+        val = ext.sum_ext(ext.mul(w, fv[cells][:, None] * np.array([1, 0, 0, 0, 0, 0])), axis=0)
+        out.append((cells, w, val))
+    return out
+
+
+@pytest.mark.parametrize("stream,tp", [(False, 32), (True, 32), (False, 0), (True, 100)])
+def test_zk_padding_and_sparse_claims(stream, tp):
+    from .pcs import commit, evaluate, open as pcs_open, prove_commit_first, verify_open
+    n = 16
+    dims = Dims(n, [4, 3, 3], [24, 20, 16], 2)
+    f, _ = _inst(n)
+    zs = RNG.integers(0, P, size=(3, n, D), dtype=np.int64)
+    sp = _sparse_claims(f, n, dims.k[0])
+    com = commit(f, dims, stream=stream, t_pad=tp)
+    values = evaluate(com, zs)
+    pf = Proof.from_bytes(pcs_open(com, zs, values, _relation_coins(com.root), sparse=sp).to_bytes())
+    assert len(pf.ybar) == (dims.rounds if tp else 0)
+    ok, why = verify_open(pf, zs, values, _relation_coins(pf.roots[0]), t_pad=tp, sparse=sp)
+    assert ok, why
+    # the padding is fresh per commitment: same f, different root
+    if tp:
+        assert commit(f, dims, stream=stream, t_pad=tp).root != com.root
+    # negatives: a wrong sparse value / weight / cell, a missing claim, the wrong t_pad, a tampered ybar
+    cells, w, val = sp[0]
+    for bad in ([(cells, w, (val + 1) % P), sp[1]], [(cells, (w + 1) % P, val), sp[1]],
+                [(cells[::-1].copy(), w, val), sp[1]], sp[:1]):
+        assert not verify_open(pf, zs, values, _relation_coins(pf.roots[0]), t_pad=tp, sparse=bad)[0]
+    assert not verify_open(pf, zs, values, _relation_coins(pf.roots[0]), t_pad=tp + 1, sparse=sp)[0]
+    if tp:
+        assert not verify_open(pf, zs, values, _relation_coins(pf.roots[0]), t_pad=0, sparse=sp)[0]
+        for i in range(dims.rounds):
+            bad = Proof.from_bytes(pf.to_bytes())
+            bad.ybar[i][0, 0] = (bad.ybar[i][0, 0] + 1) % P
+            assert not verify_open(bad, zs, values, _relation_coins(pf.roots[0]), t_pad=tp, sparse=sp)[0], i
+    # the standalone form
+    pfs = prove_commit_first(f, zs, dims, stream=stream, t_pad=tp, sparse=sp)
+    assert verify(pfs, zs, t_pad=tp, sparse=sp)[0]
+    assert not verify(pfs, zs, t_pad=tp, sparse=[(cells, w, (val + 1) % P), sp[1]])[0]
+
+
 def test_soundness_of_committed_shape():
     from .pcs import dims_for, prove, soundness_log2
     shape = ([6, 4, 4, 3, 3], [1, 2, 2, 2, 2])
