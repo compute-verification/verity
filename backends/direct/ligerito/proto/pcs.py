@@ -474,11 +474,7 @@ def _mask(rows: int, cols: int, device) -> torch.Tensor:
 def _pad_powers(etas, R: int, tp: int) -> np.ndarray:
     """(|S|, tp): eta_s^{R + t}."""
     etas = np.asarray(etas, dtype=np.int64) % P
-    out = np.empty((len(etas), tp), dtype=np.int64)
-    out[:, 0] = [pow(int(e), R, P) for e in etas]
-    for t in range(1, tp):
-        out[:, t] = out[:, t - 1] * etas % P
-    return out
+    return _powers_rows_np(etas, tp) * cl._pow_vec(etas, R)[:, None] % P
 
 
 def _pad_correction(etas, R: int, ybar: np.ndarray) -> np.ndarray:
@@ -543,13 +539,20 @@ class _Sparse:
     def contract(self, Mflat: torch.Tensor, k: int, C: int):
         """-> (ue (G, W, 6) int64 device, cole (G, C, 6)) for the groups (Mflat (W, 2^k) int32: W = C base or 6C planes)."""
         gs = self.groups(k)
-        cols = torch.as_tensor(self.idx & ((1 << k) - 1), device=Mflat.device)
-        Mg = Mflat.index_select(1, cols).to(torch.int64).cpu().numpy()                # (W, T)
-        ue = np.stack([matmul_mod_p_np(Mg[:, ix], self.w[ix]) for _, ix in gs], axis=0)
+        d = Mflat.device
+        Mg = Mflat.index_select(1, torch.as_tensor(self.idx & ((1 << k) - 1), device=d))    # (W, T) int32
+        wp = torch.as_tensor(np.ascontiguousarray(self.w.T).astype(np.int32), device=d)     # (6, T) planes
+        ue = torch.empty((len(gs), Mflat.shape[0], D), dtype=torch.int64, device=d)
         cole = np.zeros((len(gs), C, D), dtype=np.int64)
-        for j, (g, _) in enumerate(gs):
+        for j, (g, ix) in enumerate(gs):
+            if len(gs) == 1:
+                a, b = Mg, wp
+            else:
+                ixd = torch.as_tensor(ix, device=d)
+                a, b = Mg.index_select(1, ixd), wp.index_select(1, ixd)
+            dev.contract_planes(a, b, out=ue[j].zero_())
             cole[j, g, 0] = 1
-        return torch.as_tensor(ue, device=Mflat.device), cole
+        return ue.remainder_(P), cole
 
     def value(self, y: np.ndarray) -> np.ndarray:
         """sum_t w_t y[idx_t] for the final vector y (R_L, 6)."""
