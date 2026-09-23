@@ -142,19 +142,96 @@ pub const SCHEMA_ROW: &str = "poseidon2-babybear-w24/row/v2h";
 /// `poseidon2_babybear.CONSTANTS_SHA256`: SHA-256 of the Plonky3 width-24 BabyBear round constants and the internal
 /// diagonal, as the Python module pins them.  A statement whose parameters digest differs is refused at parse.
 pub const POSEIDON2_CONSTANTS_SHA256: &str = "0b81af1cdcd7e5b1e0e510b632cc692d3c7c0d5923c4f3e0036bc58f69543321";
+/// Poseidon2's digest widths (the default leaf): 8 lanes per row, 16 per VU (x then W).
 pub const N_DIGEST: usize = 16;
 pub const DIGEST_LANES: usize = 8;
 
+/// The largest per-row digest a leaf scheme may declare (Ajtai's ring degree `n`): bounds the statement's table.
+pub const MAX_LEAF_LANES: usize = 1024;
+
+/// The row-digest scheme of a hashed statement (`backends/direct/ligero/leaf/`): what the tree side needs -- the leaf
+/// schema string and the 32-byte parameter digest the auth block carries (both checked at parse), the digest width per
+/// row and the leaf value framing.  Named by the statement's relation string: `<rel>` = Poseidon2 (`hashchain.py`'s
+/// sponges: 8 big-endian u32 lanes, schema `poseidon2-babybear-w24/row/v2h`), `<rel>+ajtai-n<N>` = the Ring-SIS leaf
+/// (`leaf/ajtai.py`: N little-endian u32 elements, schema `ajtai-babybear-n<N>-b1/row/v1`, parameters digest = SHA-256
+/// of `ajtai::params_descriptor`).  The in-circuit side needs nothing here: the system file carries the constraints.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Leaf {
+    /// The relation-string suffix (`"hash"` for Poseidon2, `"ajtai-n64"`, ...).
+    pub tag: String,
+    pub schema: String,
+    pub params_sha256: [u8; 32],
+    /// BabyBear elements per row digest.
+    pub lanes: usize,
+    /// Leaf value framing of a lane: little-endian (Ajtai) or big-endian (Poseidon2) u32.
+    pub little_endian: bool,
+}
+
+impl Leaf {
+    pub fn poseidon2() -> Leaf {
+        Leaf { tag: "hash".into(), schema: SCHEMA_ROW.into(), params_sha256: crate::hash::unhex32(POSEIDON2_CONSTANTS_SHA256),
+               lanes: DIGEST_LANES, little_endian: false }
+    }
+
+    /// `leaf/ajtai.py`: `AjtaiLeaf(n, m_col = 256)` -- schema, parameters descriptor (byte for byte the Python's).
+    pub fn ajtai(n: usize) -> Result<Leaf, String> {
+        if n == 0 || n > MAX_LEAF_LANES {
+            return Err(format!("ajtai leaf: n = {n} outside (0, {MAX_LEAF_LANES}]"));
+        }
+        let m_col = 256usize;
+        let desc = format!(
+            "ajtai-babybear/v1|p={}|n={n}|m_col={m_col}|beta=1|ring=F_p[X]/(X^n+1)|M=X|A=verity/ajtai-babybear/A/v1\
+             |A-row=SHAKE-256(tag||LE32(i)) LE u32 &0x7fffffff reject>=p|leaf=LE u32 x n",
+            crate::field::P
+        );
+        Ok(Leaf { tag: format!("ajtai-n{n}"), schema: format!("ajtai-babybear-n{n}-b1/row/v1"), params_sha256: crate::hash::sha256(desc.as_bytes()),
+                  lanes: n, little_endian: true })
+    }
+
+    /// `leaf.registry.split_relation` + `leaf_for`: `"fp8-ada+ajtai-n64"` -> (`"fp8-ada"`, the Ajtai leaf); no suffix (or
+    /// `+hash` / `+poseidon2`) -> Poseidon2.  An unknown suffix is refused.
+    pub fn of_relation(relation: &str) -> Result<(&str, Leaf), String> {
+        let (base, suffix) = match relation.find('+') {
+            Some(i) => (&relation[..i], Some(&relation[i + 1..])),
+            None => (relation, None),
+        };
+        match suffix {
+            None | Some("hash") | Some("poseidon2") | Some("poseidon2-babybear-w24") => Ok((base, Leaf::poseidon2())),
+            Some("ajtai") => Ok((base, Leaf::ajtai(64)?)),
+            Some(s) if s.starts_with("ajtai-n") => {
+                let n: usize = s["ajtai-n".len()..].parse().map_err(|_| format!("relation {relation:?}: bad ajtai leaf size"))?;
+                Ok((base, Leaf::ajtai(n)?))
+            }
+            Some(s) => Err(format!("relation {relation:?}: unknown leaf scheme {s:?} (known: hash | poseidon2, ajtai[-n<N>])")),
+        }
+    }
+
+    /// Digest lanes per VU in the statement (x row then W column).
+    pub fn n_digest(&self) -> usize {
+        2 * self.lanes
+    }
+
+    /// The leaf value of one row digest (`rowleaf.row_leaf_value` / `AjtaiLeaf.leaf_bytes`).
+    pub fn leaf_value(&self, lanes: &[u32]) -> Vec<u8> {
+        let mut v = Vec::with_capacity(4 * self.lanes);
+        for x in lanes.iter().take(self.lanes) {
+            v.extend_from_slice(&if self.little_endian { x.to_le_bytes() } else { x.to_be_bytes() });
+        }
+        v
+    }
+}
+
 /// The statement's hash-authentication block (`hashauth.HashAuth` + the three multiproofs, which a v5 statement carries
-/// itself) and the published digests: per VU the x row's 8 lanes then the W column's.
+/// itself) and the published digests: per VU the x row's `leaf.lanes` lanes then the W column's.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HashAuthBlock {
     pub vu_index: Vec<u32>, // strictly increasing
     pub x_index: Vec<u32>,  // the x row (leaf rank in tree a) VU v computed on
     pub w_index: Vec<u32>,  // the W column (leaf rank in tree b)
     pub trees: [TreeRef; 3],
-    pub digests: Vec<u32>,  // n_vus x 16 canonical lanes
+    pub digests: Vec<u32>,  // n_vus x leaf.n_digest() canonical lanes
     pub multiproofs: Vec<Vec<[u8; 32]>>,
+    pub leaf: Leaf,
 }
 
 /// What `statement_digest` absorbs for a hashed statement, byte-identical to `hashauth.digest_bytes` (it is appended to
@@ -165,9 +242,9 @@ pub fn hash_digest_bytes(a: &HashAuthBlock) -> Vec<u8> {
     out.extend_from_slice(b"|auth=");
     out.extend_from_slice(HASH_VERSION.as_bytes());
     out.extend_from_slice(b"|schema=");
-    out.extend_from_slice(SCHEMA_ROW.as_bytes());
+    out.extend_from_slice(a.leaf.schema.as_bytes());
     out.extend_from_slice(b"|p2=");
-    out.extend_from_slice(&crate::hash::unhex32(POSEIDON2_CONSTANTS_SHA256));
+    out.extend_from_slice(&a.leaf.params_sha256);
     out.extend_from_slice(b"|idx=");
     for v in 0..a.vu_index.len() {
         out.extend_from_slice(&a.vu_index[v].to_le_bytes());
@@ -187,15 +264,6 @@ pub fn hash_digest_bytes(a: &HashAuthBlock) -> Vec<u8> {
     out
 }
 
-/// `rowleaf.row_leaf_value`: the 8 lanes as big-endian u32s.
-pub fn row_leaf_value(lanes: &[u32]) -> [u8; 32] {
-    let mut v = [0u8; 32];
-    for (i, x) in lanes.iter().enumerate().take(DIGEST_LANES) {
-        v[4 * i..4 * i + 4].copy_from_slice(&x.to_be_bytes());
-    }
-    v
-}
-
 /// A leaf of schema `schema` with an arbitrary big-endian value (`CommitmentDomain.leaf(rank, rank, schema, value)`).
 pub fn leaf_value(domain: &[u8; 32], rank: u64, schema: &str, value: &[u8]) -> [u8; 32] {
     let r = uint(rank);
@@ -207,11 +275,15 @@ pub fn leaf_value(domain: &[u8; 32], rank: u64, schema: &str, value: &[u8]) -> [
 /// published one digest.  `y_words`: one per VU (the chain-end columns' words).
 pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: usize) -> Result<(), String> {
     let n = a.vu_index.len();
+    let (lanes, n_digest) = (a.leaf.lanes, a.leaf.n_digest());
     if a.multiproofs.len() != 3 {
         return Err("auth: expected one multiproof per tree".into());
     }
-    if a.digests.len() != n * N_DIGEST || y_words.len() != n {
+    if a.digests.len() != n * n_digest || y_words.len() != n {
         return Err("auth: digest / word table does not match the VU count".into());
+    }
+    if a.digests.iter().any(|&d| d >= crate::field::P) {
+        return Err("auth: digest lane out of the field".into());
     }
     let (y_schema, y_bytes) = if y_bits <= 16 { ("u16", 2usize) } else { ("u32", 4usize) };
     if y_words.iter().any(|&w| (w as u64) >> y_bits != 0) {
@@ -236,9 +308,9 @@ pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: us
             }
         } else {
             let ranks = if ti == 0 { &a.x_index } else { &a.w_index };
-            let lane0 = if ti == 0 { 0 } else { DIGEST_LANES };
-            let mut per: Vec<(u64, [u8; 32])> = (0..n)
-                .map(|v| (ranks[v] as u64, row_leaf_value(&a.digests[v * N_DIGEST + lane0..v * N_DIGEST + lane0 + DIGEST_LANES])))
+            let lane0 = if ti == 0 { 0 } else { lanes };
+            let mut per: Vec<(u64, Vec<u8>)> = (0..n)
+                .map(|v| (ranks[v] as u64, a.leaf.leaf_value(&a.digests[v * n_digest + lane0..v * n_digest + lane0 + lanes])))
                 .collect();
             per.sort_by_key(|e| e.0);
             for (r, val) in per {
@@ -248,7 +320,7 @@ pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: us
                             return Err(format!("auth: {name}: VUs claiming leaf {r} published different digests"));
                         }
                     }
-                    _ => entries.push((r, val.to_vec())),
+                    _ => entries.push((r, val)),
                 }
             }
         }
@@ -261,7 +333,7 @@ pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: us
         if entries.len() as u64 > MAX_OPENINGS {
             return Err(format!("auth: {name}: openings {} exceed the limit {MAX_OPENINGS}", entries.len()));
         }
-        let schema = if ti == 2 { y_schema } else { SCHEMA_ROW };
+        let schema = if ti == 2 { y_schema } else { a.leaf.schema.as_str() };
         let leaves: Vec<(u64, [u8; 32])> =
             crate::verify::par_for(entries.len(), threads, |i| (entries[i].0, leaf_value(&dom, entries[i].0, schema, &entries[i].1)));
         match fold_multiproof(&dom, tree.count, &leaves, sibs, threads) {

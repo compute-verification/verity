@@ -1,0 +1,79 @@
+{
+ "format": {
+  "system": "ligero-system/v3",
+  "statement": "ligero-statement/v5",
+  "proof": "ligero-proof/v1"
+ },
+ "relation": {
+  "name": "fp8-ada",
+  "model": "ADA_E4M3_M16N8K32",
+  "profile": "fp8-ada-mma-draft/2026-09-22",
+  "word_dtype": "<u1",
+  "y_dtype": "<u4",
+  "y_bits": 22,
+  "rust_verifiable": false
+ },
+ "authentication": "included-hash",
+ "commit": "ede23de5066569b13c161a60e919ae715f5e109b",
+ "device": "cpu",
+ "system": {
+  "rows": 4858,
+  "by_kind": {
+   "hint": 1121,
+   "bit": 2474,
+   "prod": 365,
+   "inv": 129,
+   "sel": 640,
+   "pin": 129
+  },
+  "linear": 846,
+  "quadratic": 4428,
+  "pins": 129,
+  "hints": 1121
+ },
+ "zk": false,
+ "mode": "interactive",
+ "impl": "device",
+ "files": [
+  {
+   "rep": 1,
+   "sub": 0,
+   "vus": [
+    0,
+    20
+   ],
+   "stmt": "rep1/sub_00.stmt",
+   "proof": "rep1/sub_00.proof",
+   "proof_bytes": 3844504,
+   "proof_sha256": "3e77715e3e9c17aa0b2c1da8b45012a6db3a03f1f3f3169d2cd4b698f889cc8a",
+   "stmt_bytes": 15185,
+   "python_verdict": {
+    "accepted": true,
+    "reason": ""
+   },
+   "prover_seconds": 5.4133900420274585,
+   "multiproof_bytes": 192,
+   "auth_openings_seconds": 0.00025800010189414024,
+   "coins": "rep1/sub_00.coins",
+   "coins_bytes": 128,
+   "coins_sha256": "910355b18b8e9a6df2938d1cdec348fe9a9bfd081e4863f0f23c14243fe1f5ed"
+  }
+ ],
+ "system_file": {
+  "path": "system.bin",
+  "sha256": "4c4f3306244eb38fbd2046c8e415bb1ee6da85de11dda6c693ee59204190d4c5",
+  "sys_id": "9939940eba63ca738ef6ee02c89c220b84e9bfbcdc001b60aeb760349b946a41",
+  "bytes": 570247
+ },
+ "set": {
+  "total_vus": 20,
+  "batch": 1024,
+  "per_proof": 21,
+  "n_proofs": 1,
+  "zk": false,
+  "mode": "interactive",
+  "reps": 1,
+  "dump_reps": 1,
+  "instances": "811e168812b49935e03a3cc0b7f0ef79f320706e3884508bdf6c60d73c5d1691"
+ }
+}

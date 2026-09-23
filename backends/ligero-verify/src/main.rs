@@ -148,9 +148,10 @@ fn verdict_json(v: &verify::Verdict, name: &str, python: Option<(bool, &str)>, r
     )
 }
 
-/// `<relation>` for the relation's v1 system, `<relation>+hash` for its hashed system (authentication = included-hash).
-fn pinned_name(name: &str, hashed: bool) -> String {
-    if hashed { format!("{name}+hash") } else { name.to_string() }
+/// `<relation>` for the relation's v1 system, `<relation>+hash` for its Poseidon2-hashed system (authentication =
+/// included-hash), `<relation>+<leaf tag>` for another leaf scheme's composition (`+ajtai-n64`, ...).
+fn pinned_name(name: &str, hashed: Option<&str>) -> String {
+    match hashed { Some(tag) => format!("{name}+{tag}"), None => name.to_string() }
 }
 
 /// The system file's digests and the relation they are pinned for (`null`: none), as a JSON object.
