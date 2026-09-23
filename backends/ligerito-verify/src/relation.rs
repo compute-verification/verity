@@ -187,7 +187,7 @@ fn flat(m: &[[Ext; 3]; 3]) -> Vec<Ext> {
 }
 
 /// `< eq(r, .), vec >` for a base-field vector of length 2^|r|.
-fn mle_base(vec: &[u32], eq: &[Ext]) -> Ext {
+pub fn mle_base(vec: &[u32], eq: &[Ext]) -> Ext {
     let mut acc = Ext::ZERO;
     for (v, e) in vec.iter().zip(eq) {
         if *v != 0 {
@@ -384,7 +384,7 @@ pub struct Fixture {
     pub transcript: Vec<crate::transcript::Recorded>,
 }
 
-fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
+pub fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
     if s.len() % 2 != 0 {
         return Err("hex: odd length".into());
     }

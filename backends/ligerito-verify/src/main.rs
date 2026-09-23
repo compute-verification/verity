@@ -20,7 +20,7 @@
 //!     # statement + proof must get ref.py's verdict; --neg = declarative tampers (fixtures/ref/negatives.json) replayed
 //!     # on them, same rule.  CONFORMANCE ONLY: no soundness target is applied here (the fixtures are 8-query toys), so
 //!     # an accept is "same verdict as ref.py", never a 2^-128 statement; use `batch` for that.
-//! ligerito-verify sumcheck-fixture --fixture F.json [--seed fixture]
+//! ligerito-verify sumcheck-fixture --fixture F.json [--seed fixture]   (LGSC0002 or LGSC0003, by magic)
 //!     # ligerito-sumcheck's verifier fixture (layout, constraints, public rows, LGSC0002 proof, claims, recorded
 //!     # transcript): verify with the recorded transcript and with LocalCoins(seed); claims must match
 //! ligerito-verify selftest [--n N] [--kprime a,b,c] [--queries s,s,s] [--rate-log2 R|r1,r2,r3] [--emit DIR]
@@ -487,14 +487,22 @@ fn main() {
             let t0 = Instant::now();
             let fx = ligerito_verify::relation::load_fixture(&text).unwrap_or_else(|e| panic!("{e}"));
             let t_load = t0.elapsed().as_secs_f64();
-            let proof = ligerito_verify::relation::parse_lgsc(&fx.proof).unwrap_or_else(|e| panic!("{e}"));
-            let mut out = Vec::new();
+            use ligerito_verify::{lgsc3, relation};
+            let run = |bytes: &[u8], coins: &mut dyn ligerito_verify::transcript::Coins| -> Result<Vec<relation::EvalClaim>, String> {
+                if bytes.starts_with(lgsc3::MAGIC) {
+                    lgsc3::verify(&fx.layout, &fx.constraints, &fx.pub_rows, &lgsc3::parse(bytes)?, coins)
+                } else {
+                    relation::verify(&fx.layout, &fx.constraints, &fx.pub_rows, &relation::parse_lgsc(bytes)?, coins)
+                }
+            };
+            let format = String::from_utf8_lossy(&fx.proof[..fx.proof.len().min(8)]).to_string();
+            let mut out = vec![format!("\"format\":{}", json_str(&format))];
             let t1 = Instant::now();
             let scripted = if fx.transcript.is_empty() {
                 "absent".to_string()
             } else {
-                let mut sc = ligerito_verify::transcript::Scripted::new(fx.transcript);
-                match ligerito_verify::relation::verify(&fx.layout, &fx.constraints, &fx.pub_rows, &proof, &mut sc) {
+                let mut sc = ligerito_verify::transcript::Scripted::new(fx.transcript.clone());
+                match run(&fx.proof, &mut sc) {
                     Ok(cl) => match sc.finish() {
                         Ok(()) if cl == fx.claims => "accept, claims match".to_string(),
                         Ok(()) => "accept but the claims differ".to_string(),
@@ -506,16 +514,26 @@ fn main() {
             let t_scripted = t1.elapsed().as_secs_f64();
             let t2 = Instant::now();
             let mut lc = ligerito_verify::transcript::SumcheckLocal::new(seed.as_bytes());
-            let local = match ligerito_verify::relation::verify(&fx.layout, &fx.constraints, &fx.pub_rows, &proof, &mut lc) {
+            let local = match run(&fx.proof, &mut lc) {
                 Ok(cl) if cl == fx.claims => "accept, claims match".to_string(),
                 Ok(_) => "accept but the claims differ".to_string(),
                 Err(e) => format!("reject: {e}"),
             };
             let t_local = t2.elapsed().as_secs_f64();
+            // the fixture's recorded must-reject proofs: each rejected in the stage the Python verifier names
+            let negs = lgsc3::fixture_negatives(&text).unwrap_or_else(|e| panic!("{e}"));
+            let neg_ok = negs
+                .iter()
+                .filter(|(b, why)| {
+                    let got = run(b, &mut ligerito_verify::transcript::SumcheckLocal::new(seed.as_bytes()));
+                    got.is_err_and(|e| e.starts_with(why.split(':').next().unwrap_or("")))
+                })
+                .count();
             out.push(format!("\"scripted\":{}", json_str(&scripted)));
             out.push(format!("\"local_coins\":{}", json_str(&local)));
+            out.push(format!("\"negatives\":{},\"negatives_rejected_same_stage\":{}", negs.len(), neg_ok));
             let ok = scripted.starts_with("accept, claims match") || (scripted == "absent" && local.starts_with("accept, claims match"));
-            let ok = ok && local.starts_with("accept, claims match");
+            let ok = ok && local.starts_with("accept, claims match") && neg_ok == negs.len();
             println!(
                 "{{\"fixture\":{},\"accepted\":{},{},\"proof_bytes\":{},\"n_i\":{},\"n_k\":{},\"n_c\":{},\"n_links\":{},\"nnz\":{},\"claims\":{},\"seconds_load\":{:.4},\"seconds_verify_scripted\":{:.6},\"seconds_verify_local\":{:.6}}}",
                 json_str(&path.display().to_string()),

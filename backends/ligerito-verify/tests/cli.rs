@@ -67,3 +67,23 @@ fn n_proofs_tightens_verify_and_is_checked_by_batch() {
     assert!(!run(&["batch", "--dir", ds, "--target-bits", "0"]).status.success());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn sumcheck_fixture_verifies_lgsc0003_and_rejects_a_tampered_proof() {
+    let f = fixtures().join("sumcheck").join("lgsc0003_fp8ada_l64_S2.json");
+    let o = run(&["sumcheck-fixture", "--fixture", f.to_str().unwrap()]);
+    let s = stdout(&o);
+    assert!(o.status.success(), "{s}");
+    for want in ["\"accepted\":true", "\"format\":\"LGSC0003\"", "\"scripted\":\"accept, claims match\"", "\"negatives\":6,\"negatives_rejected_same_stage\":6"] {
+        assert!(s.contains(want), "{want} not in {s}");
+    }
+    // one hex digit of the first zero-check message changed
+    let text = std::fs::read_to_string(&f).unwrap();
+    let at = text.find("\"proof_hex\": \"").unwrap() + "\"proof_hex\": \"".len() + 2 * 22 + 1;
+    let flipped = if &text[at..at + 1] == "0" { "1" } else { "0" };
+    let bad = scratch("lgsc3").join("tampered.json");
+    std::fs::write(&bad, format!("{}{}{}", &text[..at], flipped, &text[at + 1..])).unwrap();
+    let o = run(&["sumcheck-fixture", "--fixture", bad.to_str().unwrap()]);
+    let s = stdout(&o);
+    assert!(!o.status.success() && s.contains("\"accepted\":false") && s.contains("zero-check round 0"), "{s}");
+}

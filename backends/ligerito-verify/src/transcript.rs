@@ -279,6 +279,7 @@ impl Coins for SumcheckLocal {
 /// A recorded transcript (ligerito-sumcheck's `RecordingCoins` log): every `absorb` must match the recorded label and
 /// bytes, every `challenge` returns the recorded values.  The first mismatch is reported by the next coin draw (and by
 /// `finish`), so a verifier that absorbs the wrong bytes is caught even though `absorb` cannot fail.
+#[derive(Clone, Debug)]
 pub enum Recorded {
     Absorb { label: Vec<u8>, data: Vec<u8> },
     Challenge { label: Vec<u8>, values: Vec<Ext> },
