@@ -29,7 +29,7 @@ import sys
 import time
 from pathlib import Path
 
-from verity_capture.experimental.cb_a.derive_step import read_tp_links
+from verity_capture.experimental.cb_a.derive_step import read_tp_links, same_module_path
 
 
 def _engine_main(args) -> None:
@@ -124,7 +124,8 @@ def _check_main(args) -> int:
         # [R15 rev-pm M-0398] site identity per k: the link's module_path ('inner.model.<path> (<Class>)') must equal the record's
         # hooked module ('<path>'), so 96 width-H all-reduces are checked as the Program's SITES in the Program's ORDER, not as a
         # (kind, width) sequence that any interleaving / doubled hook / order swap would also produce.
-        sig_sites = [_link_site(l) for l in links["links"]]
+        sig_sites = [l.get("module") for l in links["links"]]     # [lane vllm-tp-n] recorder vocabulary, from the recorded model_root (read_tp_links)
+        sites_exact = bool(links.get("model_root"))              # a v1 file has no recorded root: dotted-suffix identity (same_module_path)
         if int(links["rank"]) != r or int(links["world"]) != world:
             raise SystemExit(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
         if any(len(l["peers"]) != world - 1 for l in links["links"]):
@@ -142,7 +143,7 @@ def _check_main(args) -> int:
             got_sites = [x.get("module") for x in xs]
             # [rev-pm M-0470] fail CLOSED by absence: a link without module_path or a record without a module is a site mismatch at that
             # k (None == None never counts as equal), and the step passes only when every k is a NAMED equal pair.
-            named_equal = sum(1 for g, e in zip(got_sites, sig_sites) if g is not None and e is not None and g == e)
+            named_equal = sum(1 for g, e in zip(got_sites, sig_sites) if g is not None and e is not None and (g == e if sites_exact else same_module_path(g, e)))
             ok_sites = (len(got_sites) == len(sig_sites)) and named_equal == len(sig_sites)
             per_step[s] = {"n": len(xs), "rows_all_reduce": rows_ar, "rows_all_gather": rows_ag, "equal_signature": ok, "equal_sites": ok_sites,
                            "sites_named_equal": named_equal}
@@ -150,13 +151,17 @@ def _check_main(args) -> int:
                 bad.append(s)
             if not ok_sites:
                 bad_sites.append({"step": s, "sites_named_equal": named_equal, "first_mismatch": next(
-                    ({"k": k, "record": g, "link": e} for k, (g, e) in enumerate(zip(got_sites, sig_sites)) if g is None or e is None or g != e),
+                    ({"k": k, "record": g, "link": e} for k, (g, e) in enumerate(zip(got_sites, sig_sites))
+                     if g is None or e is None or not (g == e if sites_exact else same_module_path(g, e))),
                     {"k": min(len(got_sites), len(sig_sites)), "record": None, "link": None, "note": "length mismatch"})})
         struct["per_rank"][r] = {"build_signature_len": len(sig), "build_digest": links["program_digest"], "n_steps": len(steps),
                                  "n_collectives": len(recs[r]), "steps_mismatching": bad,
                                  "sites_checked_per_step": len(sig_sites), "steps_site_mismatching": bad_sites[:5], "n_steps_site_mismatching": len(bad_sites),
-                                 "site_rule": "record.module == link.module_path minus 'inner.model.' prefix and ' (Class)' suffix, per k; "
-                                              "a None on either side is a mismatch (fail closed by absence, rev-pm M-0470)",
+                                 "site_rule": ("record.module == link.module (link.module_path minus the derive's RECORDED model_root, ' (Class)' dropped), per k; "
+                                               if sites_exact else
+                                               "record.module is a dotted suffix of link.module_path (v1 tp_links: no recorded model_root), per k; ")
+                                              + "a None on either side is a mismatch (fail closed by absence, rev-pm M-0470)",
+                                 "model_root": links.get("model_root"),
                                  "links_without_module_path": sum(1 for e in sig_sites if e is None),
                                  "prefill": per_step[steps[0]] if steps else None,
                                  "decode_rows_all_reduce": sorted({tuple(per_step[s]["rows_all_reduce"]) for s in steps[1:]}) if len(steps) > 1 else None,
@@ -293,14 +298,6 @@ def _build_dirs(args) -> list[str]:
         raise SystemExit("check arm: --build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
     return [args.build_rank0, args.build_rank1]
 
-
-def _link_site(link: dict) -> str | None:
-    """Module path a tp_links link names, in the recorder's spelling: 'inner.model.model.layers.0.mlp (X)' -> 'model.layers.0.mlp'."""
-    mp = link.get("module_path")
-    if not isinstance(mp, str):
-        return None
-    mp = mp.split(" (", 1)[0]
-    return mp[len("inner.model."):] if mp.startswith("inner.model.") else mp
 
 
 def _count(xs) -> dict:

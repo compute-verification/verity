@@ -46,15 +46,16 @@ def _site_class(module_path: str | None) -> str | None:
 
 
 def _norm_site(s: str | None) -> str:
-    """The derive's link `module_path` names the module under its wrapper -- `inner.model.<named_modules path> (<class>)`:
-    `inner.model.model.layers.0.self_attn.o_proj (RowParallelLinear)` -> `model.layers.0.self_attn.o_proj`, `inner.model.logits_processor
-    (LogitsProcessor)` -> `logits_processor`; the observer's / recorder's module path (`model.named_modules()`) is already in that form."""
-    s = (s or "").split(" (")[0].strip()
-    if s.startswith("inner."):
-        s = s[len("inner."):]
-        if s.startswith("model."):
-            s = s[len("model."):]
-    return s
+    """A module path with its ` (<Class>)` suffix dropped, as the recorder / fold spell sites (`model.named_modules()` vocabulary)."""
+    return (s or "").split(" (")[0].strip()
+
+
+def _same_site(a: str | None, b: str | None) -> bool:
+    """[lane vllm-tp-n] The derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive wrote
+    by object identity) vs the fold's / recorder's site: equal, or a dotted suffix of one another (a v1 tp_links without a recorded root
+    spells the traced wrapper's path).  No vocabulary prefix is spelled here (`derive_step.same_module_path`)."""
+    from verity_capture.experimental.cb_a.derive_step import same_module_path
+    return same_module_path(a, b)
 
 
 def collectives_from_summary(summary: dict) -> list[dict]:
@@ -280,7 +281,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                 x, col = rows[key], by_key[r][key]
                 if x["kind"] != col["kind"]:
                     c.fail(f"rank {r} {key}: recorder kind {x['kind']} vs fold {col['kind']}")
-                if _norm_site(x.get("module")) != _norm_site(col["site"]):
+                if not _same_site(x.get("module"), col["site"]):
                     c.fail(f"rank {r} {key}: recorder module {x.get('module')!r} vs fold site {col['site']!r}")
                 if list(x.get("shape") or []) != [int(col["rows"]), int(col["N"])]:
                     c.fail(f"rank {r} {key}: recorder partial shape {x.get('shape')} vs fold [{col['rows']}, {col['N']}]")
@@ -381,8 +382,8 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                     rows_q = int(col["rows"]) if q == "*" else int(next(f["rows"] for f in col["fields"] if f["request"] == q))
                     if list(ln.get("shape") or []) != [rows_q, int(col["N"])]:
                         c.fail(f"{tag} link {k}: shape {ln.get('shape')} vs fold [{rows_q}, {col['N']}]")
-                    if _norm_site(ln.get("module_path")) != _norm_site(col["site"]):
-                        c.fail(f"{tag} link {k}: module {ln.get('module_path')!r} vs fold site {col['site']!r}")
+                    if not _same_site(ln.get("module", ln.get("module_path")), col["site"]):
+                        c.fail(f"{tag} link {k}: module {ln.get('module', ln.get('module_path'))!r} vs fold site {col['site']!r}")
                     cls = _site_class(ln.get("module_path"))
                     want = PRODUCER_BY_SITE_CLASS.get(cls or "")
                     if want and producers is not None:

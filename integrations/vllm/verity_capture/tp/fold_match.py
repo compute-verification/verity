@@ -51,6 +51,16 @@ def _load(p: Path) -> dict | None:
         return None
 
 
+def _load_links(p: Path) -> dict | None:
+    """[lane vllm-tp-n] a rank's tp_links.json through `read_tp_links` (v1 -> v2 in memory; every link carries `peers` and `module`, the
+    recorder-vocabulary module path from the derive's recorded model root)."""
+    try:
+        from verity_capture.experimental.cb_a.derive_step import read_tp_links
+        return read_tp_links(str(p))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _link(dst: Path, src: Path) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.is_symlink() or dst.exists():
@@ -120,14 +130,14 @@ def links_for_rank(rank: int, build: Path, compare: dict, derived: list[str]) ->
     """B1: the rank Program's tp_links.json `links`.  B>1: {request_id: links of the request's Program} from the batch decomposition's
     per-request derived dir (each derived dir of a rank carries its own tp_links.json)."""
     if not derived:
-        doc = _load(build / "tp_links.json")
+        doc = _load_links(build / "tp_links.json")
         return list(doc["links"]) if doc and isinstance(doc.get("links"), list) else None
     out: dict[str, list[dict]] = {}
     for r in compare.get("per_request") or []:
         d = r.get("derived")
         if not d:
             return None
-        doc = _load(Path(d) / "tp_links.json")
+        doc = _load_links(Path(d) / "tp_links.json")
         if not doc:
             return None
         out[str(r["request_id"])] = list(doc["links"])

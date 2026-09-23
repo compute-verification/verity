@@ -487,7 +487,11 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["n_applications"] = len(rep.provenance["applications"])
             res["weights"] = {"n_fields": len(rep.provenance["weights"]), "roles": rep.provenance.get("weight_roles")}
             if tp > 1:
-                res["tp"]["links"] = _write_tp_links(out, res, program, rep, tp, rank)
+                # [lane vllm-tp-n] the model's path INSIDE the traced wrapper, by object identity (`WithPeers.inner` -> wrapper `.model`):
+                # the derive's module paths are the wrapper's `named_modules()` vocabulary, the recorder's are `model.named_modules()`;
+                # the root is recorded as DATA so no reader spells the wrapper prefix
+                model_root = next((n for n, m in mod.named_modules() if m is model), None)
+                res["tp"]["links"] = _write_tp_links(out, res, program, rep, tp, rank, model_root=model_root)
             res["mutation_effects"] = rep.provenance["mutation_effects"]
             res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
             json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
@@ -530,7 +534,33 @@ def _sharded_param_summary(model) -> dict:
     return {"n_params": n_params, "n_elements": n_elems, "by_class": by_cls}
 
 
-def _write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int) -> dict:
+def module_in_model_vocabulary(module_path: str | None, model_root: str | None) -> str | None:
+    """[lane vllm-tp-n] A derive module path (`<model_root>.<path> (<Class>)`, the traced wrapper's `named_modules()` spelling) in the
+    recorder's vocabulary (`model.named_modules()`): the class suffix dropped and the RECORDED model root removed.  `model_root` is data
+    the derive wrote (by object identity), never a spelled prefix; without it (a v1 file) the path is returned as spelled, class dropped,
+    and consumers compare by `same_module_path` (dotted-suffix identity)."""
+    if not isinstance(module_path, str):
+        return None
+    mp = module_path.split(" (", 1)[0].strip()
+    if model_root:
+        if mp == model_root:
+            return ""
+        head = model_root + "."
+        if mp.startswith(head):
+            return mp[len(head):]
+    return mp
+
+
+def same_module_path(a: str | None, b: str | None) -> bool:
+    """[lane vllm-tp-n] Two dotted module paths name the same module when equal, or when one is the other's dotted suffix (the same
+    `named_modules()` path read from a wrapper's root vs the model's root).  Structural: no vocabulary prefix is spelled."""
+    if a is None or b is None:
+        return False
+    a, b = a.split(" (", 1)[0].strip(), b.split(" (", 1)[0].strip()
+    return a == b or a.endswith("." + b) or b.endswith("." + a)
+
+
+def _write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_root: str | None = None) -> dict:
     """[R13 tp] `tp_links.json`: how this rank's Program is bound to the other rank's.  Peer input k (the (k+1)-th user Input after the
     prompt) is NOT a fresh trusted input: it is bound to collective k of rank 1-r — the value that rank's Program computes as its own
     partial (`part_rank{1-r}` of ITS k-th `all_reduce2`/`all_gather2` call), a committed value of that rank.  The Match of rank r binds
@@ -548,11 +578,15 @@ def _write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int) -> di
     for k, (p, a) in enumerate(zip(probe, apps)):
         peers = [{"rank": pr, "input": peer_names[k * len(peer_ranks) + j], "operand": f"part_rank{pr}", "collective_k": k} for j, pr in enumerate(peer_ranks)]
         ln = {"k": k, "kind": p["kind"], "shape": p["shape"], "dtype": p["dtype"], "peer_collective_k": k, "own_operand": f"part_rank{rank}",
-              "peers": peers, "node": a["node"], "module_path": a.get("module_path"), "emitted": a.get("emitted")}
+              "peers": peers, "node": a["node"], "module_path": a.get("module_path"), "emitted": a.get("emitted"),
+              "module": module_in_model_vocabulary(a.get("module_path"), model_root)}      # recorder vocabulary (`model.named_modules()`)
         if tp == 2:   # the v1 fields, kept verbatim for the two-rank readers (one peer)
             ln.update({"peer_input": peers[0]["input"], "peer_rank": peers[0]["rank"], "peer_operand": peers[0]["operand"]})
         links.append(ln)
     doc = {"schema": "cb-a/tp_links/v2", "world": tp, "rank": rank, "peer_ranks": peer_ranks, "program_digest": res["program"]["digest"], "user_inputs": user,
+           "model_root": model_root,
+           "module_vocabulary": "link.module_path: the traced wrapper's named_modules() path + ' (Class)'; link.module: the same module in the "
+                                "recorder's model.named_modules() vocabulary = module_path minus model_root (recorded by object identity)",
            "prompt_inputs": user[:len(user) - n_peer], "peer_inputs": peer_names,
            "peer_input_layout": "peer input k*(world-1)+j of rank r := the j-th other rank's (rank order) partial of collective k",
            "binding": "each peer input of collective k of rank r := part_rank(p) of collective k of rank p (that rank's committed partial); the received "
@@ -572,7 +606,10 @@ def read_tp_links(path: str) -> dict:
     doc = json.load(open(path))
     world, rank = int(doc.get("world") or 2), int(doc.get("rank") or 0)
     doc.setdefault("peer_ranks", [r for r in range(world) if r != rank])
+    root = doc.get("model_root")
     for ln in doc.get("links") or []:
+        if "module" not in ln:    # v1 / early v2: no recorded model root -> the path as spelled (class dropped); readers use same_module_path
+            ln["module"] = module_in_model_vocabulary(ln.get("module_path"), root)
         if "peers" not in ln:
             ln["peers"] = [{"rank": int(ln.get("peer_rank", 1 - rank)), "input": ln.get("peer_input"), "operand": ln.get("peer_operand", f"part_rank{1 - rank}"),
                             "collective_k": int(ln.get("peer_collective_k", ln.get("k", 0)))}]
