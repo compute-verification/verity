@@ -592,16 +592,19 @@ def n_rows(cfg: Config, m: int, chain: bool) -> int:
 USE_DEVICE_MASKS = True     # ChaCha20 counter-mode sampler on the device (mask_sampler.py); False = host SHAKE-256
 
 
-def _uniform_symbols(total: int, device) -> torch.Tensor:
+def _uniform_symbols(total: int, device, key_dev: torch.Tensor | None = None) -> torch.Tensor:
     """``total`` exactly uniform BabyBear symbols (int64 on ``device``), fresh randomness.  Device: ChaCha20 stream +
     rejection (mask_sampler.py).  Host fallback: SHAKE-256 stream, the same rejection (u < 2p, then u mod p) -- the
-    8b sampler's direct ``u mod p`` had a 0.11 statistical distance per symbol (mask_sampler.py docstring)."""
+    8b sampler's direct ``u mod p`` had a 0.11 statistical distance per symbol (mask_sampler.py docstring).
+    ``key_dev``: the ChaCha key already on the device (drawn by the caller; the commit graph's static input)."""
     import os
     if USE_DEVICE_MASKS and str(device).startswith("cuda"):
         from .mask_sampler import sampler_for
         s = sampler_for(device)
         if s is not None:
-            return s.uniform(total)[0]
+            return s.uniform(total, key_dev=key_dev)[0]
+    if key_dev is not None:
+        raise RuntimeError("device mask key without the device sampler")
     key = os.urandom(32)
     acc = []
     got, ctr = 0, 0
@@ -615,15 +618,16 @@ def _uniform_symbols(total: int, device) -> torch.Tensor:
     return torch.from_numpy(np.concatenate(acc)[:total]).to(device)
 
 
-def _sample_masks(cfg: Config, m: int, chain: bool, device) -> dict[str, torch.Tensor]:
-    """Fresh uniform mask coefficients: ``W`` (m, t_pad) per witness row and one (D, deg) block per mask kind."""
+def _sample_masks(cfg: Config, m: int, chain: bool, device, key_dev: torch.Tensor | None = None) -> dict[str, torch.Tensor]:
+    """Fresh uniform mask coefficients: ``W`` (m, t_pad) per witness row and one (D, deg) block per mask kind.
+    ``key_dev``: the sampler key on the device (the commit graph draws it eagerly and derives inside the graph)."""
     D, k, tp, l = cfg.D, cfg.k, cfg.t_pad, cfg.l
     shapes = {"W": (m, tp), "prox": (D, k), "lin": (D, tp), "qa": (D, k), "qb": (D, tp - 1)}
     if chain:
         shapes["chain_a"] = (D, k)
         shapes["chain_b"] = (D, l - 1)
     total = sum(a * b for a, b in shapes.values())
-    flat = _uniform_symbols(total, device)
+    flat = _uniform_symbols(total, device, key_dev)
     out, at = {}, 0
     for name, (a, b) in shapes.items():
         out[name] = flat[at:at + a * b].reshape(a, b).clone()
@@ -1039,8 +1043,54 @@ class _TestsStatic:
             self.offs[name] = (at, shape)
             at += 4 * math.prod(shape)
         self.nbytes = at
-        self.graph = None          # None: not captured yet; False: capture failed here -> eager
-        self.mbuf_ptr = None
+        # the tests graph per chain layout ((l, n_vus, steps) or None): the chain test's coefficient masks are a
+        # function of the layout (a ragged last sub-batch has its own), captured per layout on the shared buffers
+        self.graphs: dict = {}     # layout key -> (CUDAGraph | False, pinned msgs data_ptr)
+        # the commit graph's static inputs (witness kernel + masks + encoder -> U, coefs): public rows, hints, mask key
+        self.pub_rows = torch.empty((len(sys.pins), l), dtype=torch.int64, device=device)
+        self.hints = torch.empty((len(sys.hints), l), dtype=torch.int64, device=device)
+        self.mkey = torch.empty((8,), dtype=torch.int32, device=device)
+        self.commit_graph = None   # None: not captured yet; False: eager
+
+
+def _graph_run(holder, attr: str, body, device) -> None:
+    """Run ``body()`` through the CUDA graph stored at ``holder.<attr>``: captured at the first call (two eager
+    warm-ups on a side stream, then the capture), replayed afterwards; ``False`` (capture failed here) = eager."""
+    g = getattr(holder, attr)
+    if g is None:
+        try:
+            cur = torch.cuda.current_stream(device)
+            s = torch.cuda.Stream(device=device)
+            s.wait_stream(cur)
+            with torch.cuda.stream(s):
+                for _ in range(2):
+                    body()
+            cur.wait_stream(s)
+            g = torch.cuda.CUDAGraph()
+            with torch.cuda.graph(g):
+                body()
+        except Exception:  # noqa: BLE001 -- capture unsupported here: eager
+            g = False
+        setattr(holder, attr, g)
+    if g:
+        g.replay()
+    else:
+        body()
+
+
+COMMIT_GRAPH = True    # witness kernel + mask sampler + encoder + mask-row coset NTT as ONE CUDA graph per stream (lane hp2-host)
+
+
+def _fused_witness(sys: System, device):
+    """The fused witness kernel for ``sys`` when the device witness path applies (else None: no commit graph)."""
+    from . import witness as wmod
+    if wmod.IMPL != "device" or not sys.pins or not str(device).startswith("cuda"):
+        return None
+    try:
+        from .witness_device import fused_for
+        return fused_for(sys, device)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _tests_static(cfg: Config, sys: System, tb: Tables, m: int, Mrows: int, width: int, chain: bool, device):
@@ -1049,8 +1099,10 @@ def _tests_static(cfg: Config, sys: System, tb: Tables, m: int, Mrows: int, widt
     key = (cfg.l, cfg.n, cfg.k, cfg.D, cfg.zk, cfg.t_pad, cfg.h_len, cfg.q_len, m, Mrows, width, chain)
     st = _TESTS_STATIC.get(skey)
     if st is None or st.key != key or st.sys is not sys or st.tb is not tb:
-        if st is not None and st.graph:
-            st.graph.reset()
+        if st is not None:
+            for g in [g_ for g_, _ in st.graphs.values()] + [st.commit_graph]:
+                if g:
+                    g.reset()
         st = _TestsStatic(key, cfg, sys, tb, m, Mrows, width, chain, device)
         _TESTS_STATIC[skey] = st
     return st
@@ -1073,12 +1125,13 @@ def _tests_graph_run(st: _TestsStatic, sys: System, tb: Tables, cfg: Config, mr:
             mbuf[o:o + 4 * tsr.numel()].view(torch.int32).view(shape).copy_(tsr.to(torch.int32).contiguous(),
                                                                              non_blocking=True)
 
-    if st.graph is not None and st.mbuf_ptr != mbuf.data_ptr():   # the pinned buffer moved (grown): re-capture
-        if st.graph:
-            st.graph.reset()
-        st.graph = None
-    if st.graph is None:
-        st.mbuf_ptr = mbuf.data_ptr()
+    lkey = (layout.l, layout.n_vus, layout.steps) if layout is not None else None
+    hit = st.graphs.get(lkey)
+    if hit is not None and hit[1] != mbuf.data_ptr():              # the pinned buffer moved (grown): re-capture
+        if hit[0]:
+            hit[0].reset()
+        hit = None
+    if hit is None:
         try:
             cur = torch.cuda.current_stream(device)
             s = torch.cuda.Stream(device=device)
@@ -1090,11 +1143,12 @@ def _tests_graph_run(st: _TestsStatic, sys: System, tb: Tables, cfg: Config, mr:
             g = torch.cuda.CUDAGraph()
             with torch.cuda.graph(g):
                 body()
-            st.graph = g
         except Exception:  # noqa: BLE001 -- capture unsupported here: eager on the static set
-            st.graph = False
-    if st.graph:
-        st.graph.replay()
+            g = False
+        hit = (g, mbuf.data_ptr())
+        st.graphs[lkey] = hit
+    if hit[0]:
+        hit[0].replay()
     else:
         body()
 
@@ -1161,27 +1215,66 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         hints = hints_fn()
         clk.lap("hints_host")
     assert hints.shape[1] == l
-    W = build_witness(sys, pub, hints, device)
-    clk.lap("witness")
-    if mutate is not None:
-        mutate(W)
-    if check:
-        from .witness import check_constraints
-        bad = check_constraints(sys, tb, W, pub)
-        if bad:
-            raise ValueError("witness violates constraints: " + ", ".join(bad[:5]))
-        clk.lap("self_check")
-
     k = cfg.k
     mr = mask_rows(cfg, m, chain is not None)
     Mrows = n_rows(cfg, m, chain is not None)
     enc = _simt_encoder(cfg, device)                              # None: the torch int64 NTT (CPU, or no cupy)
     l_chain = l if chain else 0
     width = Mrows + tb.L + tb.Q + N_FAMILIES * l_chain            # the challenge block: r | rho_lin | rho_quad | rc
-    # the tests graph's static set (CUDA + SIMT encoder, no self-check asserts): U and coefs live in it
+    # the graphs' static set (CUDA + SIMT encoder, no self-check asserts): U and coefs live in it
     st = (_tests_static(cfg, sys, tb, m, Mrows, width, chain is not None, device)
           if TESTS_GRAPH and cuda and enc is not None and not check else None)
-    if cfg.zk:
+    fw = _fused_witness(sys, device) if (st is not None and COMMIT_GRAPH and mutate is None) else None
+    if fw is not None:
+        # the commit graph: witness kernel -> (masks ->) encoder (-> mask-row coset NTT), U / coefs in the static
+        # set.  Eager part: the public rows and the hints into the static inputs, the mask key drawn here (same
+        # os.urandom order as the eager prover) and uploaded from pinned memory.
+        st.pub_rows.copy_(torch.stack([pub[name].to(device) for _, name in sys.pins]))
+        st.pub_rows %= P
+        st.hints.copy_(hints)
+        clk.lap("witness")
+        if cfg.zk:
+            import os
+            mkey = os.urandom(32)
+            kbuf = _pin(slot, device, "mkey", 32)[:32]
+            kbuf.numpy()[:] = np.frombuffer(mkey, dtype=np.uint8)
+            st.mkey.copy_(kbuf.view(torch.int32), non_blocking=True)
+        clk.lap("zk_masks")
+
+        def commit_body():
+            Wg = fw.run(st.pub_rows, st.hints)                       # (m, l) int32
+            if cfg.zk:
+                with _cupy_ctx(device):
+                    Sg = _sample_masks(cfg, m, chain is not None, device, key_dev=st.mkey)
+                cg = st.coefs
+                cg.zero_()
+                _, Cg = enc.encode(Wg, Sg["W"], want_coefs=True, out=st.U[:m])
+                cg[:m, :l] = Cg
+                _add_zh_times(cg[:m], Sg["W"], l)
+                for kind_, sl_ in mr.items():
+                    blk_ = Sg[kind_]
+                    cg[sl_, :blk_.shape[1]] = blk_
+                st.U[m:] = eval_on_coset(cg[m:], n).to(torch.int32)
+            else:
+                enc.encode(Wg, out=st.U)
+                st.W.copy_(Wg)
+
+        _graph_run(st, "commit_graph", commit_body, device)
+        W, coefs, U = st.W, st.coefs, st.U
+    else:
+        W = build_witness(sys, pub, hints, device)
+        clk.lap("witness")
+        if mutate is not None:
+            mutate(W)
+        if check:
+            from .witness import check_constraints
+            bad = check_constraints(sys, tb, W, pub)
+            if bad:
+                raise ValueError("witness violates constraints: " + ", ".join(bad[:5]))
+            clk.lap("self_check")
+    if fw is not None:
+        pass
+    elif cfg.zk:
         with _cupy_ctx(device):
             S = _sample_masks(cfg, m, chain is not None, device)
         clk.lap("zk_masks")

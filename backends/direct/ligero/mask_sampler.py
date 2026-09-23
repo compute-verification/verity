@@ -145,26 +145,36 @@ class ChaChaMaskSampler:
         self._ring_ev[i] = ev
         return self.cp.asarray(dev).view(self.cp.uint32), dev
 
-    def stream(self, key: bytes, nblocks: int, counter0: int = 0) -> torch.Tensor:
+    def stream(self, key: bytes | None, nblocks: int, counter0: int = 0,
+               key_dev: torch.Tensor | None = None) -> torch.Tensor:
         """``nblocks`` x 16 uint32 words of keystream as an int64 torch tensor (values < 2^32).  Launched on cupy's
-        current stream: callers on a torch side stream wrap the call in ``pipeline.cupy_stream_context()``."""
+        current stream: callers on a torch side stream wrap the call in ``pipeline.cupy_stream_context()``.
+        ``key_dev``: the key already on the device as 8 int32 words (a static input of a CUDA graph) instead of
+        ``key``.  The output is a torch allocation (graph-capturable; ``cp.empty`` would go to cupy's pool)."""
         cp = self.cp
-        key8, _keep = self._key_device(key)
-        out = cp.empty(nblocks * 16, dtype=cp.uint32)
+        if key_dev is not None:
+            key8 = cp.asarray(key_dev).view(cp.uint32)
+        else:
+            key8, _keep = self._key_device(key)
+        out_t = torch.empty(nblocks * 16, dtype=torch.int32, device=self.device)
+        out = cp.asarray(out_t).view(cp.uint32)
         threads = 256
         self.kernel(((nblocks + threads - 1) // threads,), (threads,),
                     (key8, self.nonce, np.uint32(counter0), out, np.uint32(nblocks)))
-        return torch.as_tensor(out.view(cp.int32), device=self.device).to(torch.int64) & 0xFFFFFFFF
+        return out_t.to(torch.int64) & 0xFFFFFFFF
 
     SYNC_FREE = True    # rejection compaction by cumsum + scatter (no host sync); False = boolean indexing + top-up loop
 
-    def uniform(self, count: int, key: bytes | None = None) -> tuple[torch.Tensor, bytes]:
+    def uniform(self, count: int, key: bytes | None = None,
+                key_dev: torch.Tensor | None = None) -> tuple[torch.Tensor, bytes | None]:
         """``count`` exactly uniform BabyBear symbols (int64, on the device) and the key used: the first ``count``
-        accepted words (u < 2p) of the stream, reduced mod p."""
-        key = key or os.urandom(32)
+        accepted words (u < 2p) of the stream, reduced mod p.  ``key_dev``: the key as a device tensor (no host
+        key; the caller drew it -- the prover's commit graph), returned key None."""
+        if key_dev is None:
+            key = key or os.urandom(32)
         need_words = int(count * 1.08) + 4096
         nblocks = (need_words + 15) // 16
-        words = self.stream(key, nblocks)
+        words = self.stream(key, nblocks, key_dev=key_dev)
         if self.SYNC_FREE:
             # the same first-``count``-accepted-words selection without a host sync: rank every accepted word among the
             # accepted ones (cumsum) and scatter it to its rank; rejected words and accepted words of rank >= count go
@@ -181,7 +191,7 @@ class ChaChaMaskSampler:
         acc = words[words < TWO_P] % P
         ctr = nblocks
         while acc.shape[0] < count:                   # top-up: probability < 2^-100 at the prover's sizes
-            more = self.stream(key, 4096, ctr)
+            more = self.stream(key, 4096, ctr, key_dev=key_dev)
             ctr += 4096
             acc = torch.cat((acc, more[more < TWO_P] % P))
         return acc[:count], key

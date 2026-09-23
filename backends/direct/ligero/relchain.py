@@ -445,7 +445,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
             if rep == 0:
                 if pipeline_depth > 1 and args.device.startswith("cuda"):
                     # every pipeline slot once (its stream's hint graph capture, pinned buffers): untimed, like the warm-up
-                    R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in subs[:pipeline_depth]],
+                    warm = subs[:pipeline_depth] + (subs[-1:] if len(subs) > pipeline_depth else [])   # + the ragged last layout
+                    R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in warm],
                                      (lambda: protocol_mod.Coins.sample() if interactive else None), depth=pipeline_depth, min_l=l)
                 break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
         for si, lo, hi, V, proof, pubs, lay_i in proved:
