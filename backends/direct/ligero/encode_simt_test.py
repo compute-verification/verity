@@ -45,12 +45,15 @@ def _timing(l: int, R: int, reps: int, dev, g) -> dict:
         return eval_on_coset(coefs, n)
     t_torch_zk = _time(torch_zk, reps, dev)
     t_simt_zk = _time(lambda: encz.encode(W, S, out=out, want_coefs=True), reps, dev)
+    encg = LigeroEncoderSIMT(l, n, 0, dev, cf_global=True)
+    t_simt_g = _time(lambda: encg.encode(W, out=out), reps, dev)
     gb = R * n * 4 / 1e9
     print(f"l={l}: {R} rows -> {n}: torch int64 {t_torch*1e3:.1f} ms | SIMT {t_simt*1e3:.2f} ms ({gb/t_simt:.0f} GB/s of codeword) "
-          f"| SIMT+coefs {t_simt_c*1e3:.2f} | ZK: torch {t_torch_zk*1e3:.1f} ms, SIMT {t_simt_zk*1e3:.2f} ms")
+          f"| SIMT+coefs {t_simt_c*1e3:.2f} | ZK: torch {t_torch_zk*1e3:.1f} ms, SIMT {t_simt_zk*1e3:.2f} ms "
+          f"| cf-in-L2 variant {t_simt_g*1e3:.2f} ms")
     return {"rows": R, "n": n, "torch_int64_ms": t_torch * 1e3, "simt_ms": t_simt * 1e3,
             "simt_with_coefs_ms": t_simt_c * 1e3, "torch_zk_ms": t_torch_zk * 1e3, "simt_zk_ms": t_simt_zk * 1e3,
-            "codeword_GB": gb, "simt_GBps_codeword": gb / t_simt}
+            "simt_cf_global_ms": t_simt_g * 1e3, "codeword_GB": gb, "simt_GBps_codeword": gb / t_simt}
 
 
 def main(argv=None) -> int:
@@ -84,9 +87,28 @@ def main(argv=None) -> int:
         refz = eval_on_coset(coefs, n)
         ok3 = torch.equal(Uz.to(torch.int64), refz)
         ok4 = torch.equal(Cz.to(torch.int64), intt(rows))
-        report["exact"][l] = {"plain_codeword": ok1, "plain_coefs": ok2, "zk_codeword": ok3, "zk_coefs": ok4, "rows": R}
-        ok_all &= ok1 and ok2 and ok3 and ok4
-        print(f"l={l:6d} n={n:6d}: plain {ok1} coefs {ok2} | zk (mask fold-in) {ok3} coefs {ok4}")
+        # int32 input rows (read as 4-byte words) == int64 rows (read in place)
+        ok5 = torch.equal(encz.encode(rows.to(torch.int32), mask)[0], Uz)
+        # the prover's layout: int64 coefficients written straight into the [:, :l] view of an (R, l + t_pad) matrix
+        k = l + ZK_T_PAD
+        cbuf = torch.full((R, k), -1, dtype=torch.int64, device=dev)
+        U2, C2 = encz.encode(rows, mask, out=torch.empty((R, n), dtype=torch.int32, device=dev), coefs_out=cbuf[:, :l])
+        ok6 = torch.equal(U2, Uz) and torch.equal(cbuf[:, :l], intt(rows)) and bool(torch.all(cbuf[:, l:] == -1))
+        # coefficient rows of degree < k (the ZK mask rows): kernel == eval_on_coset
+        crows = torch.randint(0, P, (R, k), generator=g).to(dev)
+        big = torch.zeros((2 * R, k), dtype=torch.int64, device=dev)          # a strided view: rows R.. of a taller matrix
+        big[R:] = crows
+        Uc = encz.encode_coefs(big[R:], out=torch.empty((R, n), dtype=torch.int32, device=dev))
+        ok7 = torch.equal(Uc.to(torch.int64), eval_on_coset(crows, n))
+        # the small-shared-memory variant (cf in an L2 scratch: Ada / consumer Blackwell at l = 16384), forced here
+        encg = LigeroEncoderSIMT(l, n, ZK_T_PAD, dev, cf_global=True)
+        Ug, Cg = encg.encode(rows, mask, want_coefs=True)
+        ok8 = torch.equal(Ug, Uz) and torch.equal(Cg, Cz) and torch.equal(encg.encode_coefs(crows), Uc)
+        report["exact"][l] = {"plain_codeword": ok1, "plain_coefs": ok2, "zk_codeword": ok3, "zk_coefs": ok4,
+                              "int32_rows": ok5, "coefs_out_int64_view": ok6, "coef_rows": ok7, "cf_global": ok8, "rows": R}
+        ok_all &= ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7 and ok8
+        print(f"l={l:6d} n={n:6d}: plain {ok1} coefs {ok2} | zk (mask fold-in) {ok3} coefs {ok4} | int32 in {ok5} "
+              f"int64 coefs view {ok6} | coefficient rows {ok7} | cf in L2 {ok8}")
     # timing at the prover's shape
     for l in (8192, 16384):
         report["timing"][l] = _timing(l, args.rows, args.reps, dev, g)

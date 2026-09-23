@@ -1298,11 +1298,11 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         coefs = st.coefs.zero_() if st is not None else torch.zeros((Mrows, k), dtype=torch.int64, device=device)
         if enc is not None:
             # SIMT kernel: codeword of interp_H(W_j) + Z_H s_j on the coset (the mask folded in per coset, 8c) and the
-            # natural-order coefficients of interp_H(W_j); the 4D / 5D mask rows (degree < k) through the torch NTT
+            # natural-order coefficients of interp_H(W_j) written as int64 straight into coefs[:m, :l] (slot buffers reused)
             U = st.U if st is not None else torch.empty((Mrows, n), dtype=torch.int32, device=device)
-            _, C = enc.encode(W, S["W"], want_coefs=True, out=U[:m])
-            coefs[:m, :l] = C
+            enc.encode(W, S["W"], out=U[:m], coefs_out=coefs[:m, :l])
         else:
+            coefs = torch.zeros((Mrows, k), dtype=torch.int64, device=device)
             coefs[:m, :l] = intt(W % P)
         _add_zh_times(coefs[:m], S["W"], l)
         for kind, sl in mr.items():
@@ -1310,7 +1310,8 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
             coefs[sl, :blk.shape[1]] = blk
         del S
         if enc is not None:
-            U[m:] = _graphed("coset_masks", lambda c: eval_on_coset(c, n), coefs[m:].to(torch.int64)).to(torch.int32)
+            if Mrows > m:
+                enc.encode_coefs(coefs[m:], out=U[m:])            # the 4D / 5D mask rows (degree < k), same kernel
         else:
             U = eval_on_coset(coefs, n)                           # (M, n), the coset g <w_n> (disjoint from H)
     else:
