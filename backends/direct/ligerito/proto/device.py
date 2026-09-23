@@ -256,24 +256,25 @@ eq_table(const u32* __restrict__ lo, int logL, const u32* __restrict__ hi, long 
     for (int d = 0; d < 6; ++d) out[(long long)d * n + x] = c[d];
 }
 
-/* ------------------------------------------------------------------ sumcheck tables (T, Cs, 6): term 0 = eq, terms 1.. = geom
-   A[t][c] = coef[t] u_t[c];  u_eq[c]_k = sum_{a+b=k} ue[aC+c][b] + 31 sum_{a+b=k+6} ...;  u_geom(t)[c]_a = ug[aC+c][t-1];
-   B[0][c] = cole[c], B[t][c] = (colg[t-1][c], 0, ..) */
+/* ------------------------------------------------------------------ sumcheck tables (T, Cs, 6): terms 0..Te-1 = eq, Te.. = geom
+   A[t][c] = coef[t] u_t[c];  u_eq(t)[c]_k = sum_{a+b=k} ue[t][aC+c][b] + 31 sum_{a+b=k+6} ...;  u_geom(t)[c]_a = ug[aC+c][t-Te];
+   B[t < Te][c] = cole[t][c], B[t][c] = (colg[t-Te][c], 0, ..) */
 extern "C" __global__ void __launch_bounds__(256)
-build_tables(const u64* __restrict__ ug, int Tg, const u64* __restrict__ ue, const u32* __restrict__ coef,
+build_tables(const u64* __restrict__ ug, int Tg, const u64* __restrict__ ue, int Te, const u32* __restrict__ coef,
              const u32* __restrict__ colg, const u32* __restrict__ cole, int T, int C, u32* __restrict__ A, u32* __restrict__ B)
 {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= T * C) return;
     const int t = i / C, c = i - t * C;
     u32 u[6], cf[6], out[6];
-    if (t == 0) {
+    if (t < Te) {
+        const u64* uet = ue + (long long)t * 36 * C;
         u64 lo[6] = {0, 0, 0, 0, 0, 0}, hi[5] = {0, 0, 0, 0, 0};
         #pragma unroll
         for (int a = 0; a < 6; ++a)
             #pragma unroll
             for (int b = 0; b < 6; ++b) {
-                const u64 v = ue[((long long)a * C + c) * 6 + b] %% PL;
+                const u64 v = uet[((long long)a * C + c) * 6 + b] %% PL;
                 if (a + b < 6) lo[a + b] += v; else hi[a + b - 6] += v;
             }
         #pragma unroll
@@ -283,11 +284,11 @@ build_tables(const u64* __restrict__ ug, int Tg, const u64* __restrict__ ue, con
             u[k] = (u32)(v %% PL);
         }
         #pragma unroll
-        for (int d = 0; d < 6; ++d) B[(long long)i * 6 + d] = cole[c * 6 + d];
+        for (int d = 0; d < 6; ++d) B[(long long)i * 6 + d] = cole[((long long)t * C + c) * 6 + d];
     } else {
         #pragma unroll
-        for (int a = 0; a < 6; ++a) u[a] = (u32)(ug[((long long)a * C + c) * Tg + (t - 1)] %% PL);
-        B[(long long)i * 6] = colg[(long long)(t - 1) * C + c];
+        for (int a = 0; a < 6; ++a) u[a] = (u32)(ug[((long long)a * C + c) * Tg + (t - Te)] %% PL);
+        B[(long long)i * 6] = colg[(long long)(t - Te) * C + c];
         #pragma unroll
         for (int d = 1; d < 6; ++d) B[(long long)i * 6 + d] = 0u;
     }
@@ -514,13 +515,16 @@ def eq_table(z: np.ndarray, device) -> torch.Tensor:
 # ------------------------------------------------------------------------------------------------ device column sumcheck
 
 class DeviceSumcheck:
-    """The k' column rounds of one committed round on (T, C, 6) device tables (term 0 = the eq term, 1.. = geom terms).
+    """The k' column rounds of one committed round on (T, C, 6) device tables (terms 0..Te-1 = eq terms, then the geom terms).
+    ``ue``: (6C, 6) for one eq term or (Te, 6C, 6); ``cole``: (C, 6) or (Te, C, 6); ``coef``: (Te + Tg, 6).
     ``message()`` -> (3, 6) numpy (the first call: the top variable's g; later calls fold with the previous challenge first)."""
 
     def __init__(self, ug: torch.Tensor | None, ue: torch.Tensor, coef: np.ndarray, colg: np.ndarray | None,
                  cole: np.ndarray, C: int, device):
         T = coef.shape[0]
-        Tg = T - 1
+        Te = 1 if ue.dim() == 2 else ue.shape[0]
+        Tg = T - Te
+        ue = ue.contiguous()
         self.T, self.Cs, self.C, self.device = T, C, C, device
         self.A = torch.empty((T, C, D), dtype=torch.int32, device=device)
         self.B = torch.empty((T, C, D), dtype=torch.int32, device=device)
@@ -535,7 +539,7 @@ class DeviceSumcheck:
             colg_d = cole_d
             ug_p = _ptr(ue)
         n = T * C
-        _launch("build_tables", ((n + 255) // 256,), (256,), (ug_p, np.int32(Tg), _ptr(ue), _ptr(coef_d), _ptr(colg_d),
+        _launch("build_tables", ((n + 255) // 256,), (256,), (ug_p, np.int32(Tg), _ptr(ue), np.int32(Te), _ptr(coef_d), _ptr(colg_d),
                                                               _ptr(cole_d), np.int32(T), np.int32(C), _ptr(self.A), _ptr(self.B)))
         self._keep = (coef_d, cole_d, colg_d)
         self.r = None

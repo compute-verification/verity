@@ -58,12 +58,13 @@ class Proof:
     queries: list[int]
     rate_log2: list[int]                    # per committed round
     splits: list[tuple[int, int]]           # (n1, n2) of each round's encoder (position -> eta map)
-    v: np.ndarray                           # (6,)
+    v: np.ndarray                           # (6,); commit-first: (m, 6), one per evaluation point
     roots: list[bytes]
     sumcheck: list[list[np.ndarray]]        # per round: k'_i messages (3, 6)
     opens: list[RoundOpen]                  # per committed round
     final_y: np.ndarray                     # (2^{k_L}, 6)
     coins: int = 0
+    order: str | None = None                # None = the fused order of ``prove``; "commit-first" = ``commit`` + ``prove_eval``
 
     @property
     def dims(self) -> Dims:
@@ -75,6 +76,9 @@ class Proof:
                 "splits": self.splits, "coins": self.coins, "hash": HASH, "beta": ext.BETA, "ext_degree": D,
                 "rows_shape": [list(o.rows.shape) for o in self.opens], "sib_len": [len(o.siblings) for o in self.opens],
                 "final_len": int(self.final_y.shape[0])}
+        if self.order is not None:
+            head["order"] = self.order
+            head["claims"] = int(np.asarray(self.v).reshape(-1, D).shape[0])
         hb = json.dumps(head, separators=(",", ":")).encode()
         parts = [len(hb).to_bytes(4, "little"), hb, _ext_bytes(self.v)]
         for i in range(len(self.kprime)):
@@ -92,7 +96,8 @@ class Proof:
         hl = int.from_bytes(buf[:4], "little")
         head = json.loads(buf[4:4 + hl].decode())
         pos = 4 + hl
-        v, pos = _ext_read(buf, pos, ())
+        order = head.get("order")
+        v, pos = _ext_read(buf, pos, (head["claims"],) if order is not None else ())
         L = len(head["kprime"])
         roots, sumcheck = [], []
         for i in range(L):
@@ -114,7 +119,7 @@ class Proof:
         fy, pos = _ext_read(buf, pos, (head["final_len"],))
         assert pos == len(buf), (pos, len(buf))
         return Proof(head["n"], head["kprime"], head["queries"], head["rate_log2"], [tuple(s) for s in head["splits"]],
-                     v, roots, sumcheck, opens, fy, head.get("coins", 0))
+                     v, roots, sumcheck, opens, fy, head.get("coins", 0), order)
 
 
 def _ext_bytes(a: np.ndarray) -> bytes:
@@ -441,41 +446,46 @@ def _open_recompute(M: torch.Tensor, enc: Encoder, tree, S: list[int], depth: in
     return RoundOpen(rows, _siblings(tree, S, depth))
 
 
-def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None) -> Proof:
-    """f: (N,) int32 device tensor (coefficients, [0, p)); z: (n, 6) numpy point; dims: the round structure;
-    coins: the Coins protocol instance (default Fiat-Shamir).
+COMMIT_FIRST = "commit-first"
 
-    Device prover (lane ligerito-pcs-fast): the sumcheck tables, every contraction and fold live on the device (integer
-    kernels in ``device.py``, no fp64); the host keeps only the transcript and the O(T) batching coefficients.  Same
-    transcript and proof bytes as ``prove_reference`` for the same coins.  Falls back to ``prove_reference`` off-GPU."""
+
+@dataclass
+class Commitment:
+    """``commit``'s output: ``root`` is the commitment (absorbed into ``coins``); the rest is prover state for ``prove_eval``
+    (the round-1 message view, its codeword -- None when streamed -- and Merkle tree).  Drop it after ``prove_eval``."""
+    dims: Dims
+    root: bytes
+    coins: Coins
+    M1: torch.Tensor
+    enc1: Encoder
+    U1: torch.Tensor | None
+    tree1: object
+
+
+def _header(dims: Dims, order: str | None) -> bytes:
+    h = {"n": dims.n, "kprime": list(dims.kprime), "queries": list(dims.queries), "rate": list(dims.rates)}
+    if order is not None:
+        h["order"] = order
+    return json.dumps(h).encode()
+
+
+def absorb_commitment(coins: Coins, dims: Dims, root: bytes) -> None:
+    """The commit-first transcript prefix (prover and verifier): header (with ``"order": "commit-first"``), root_1."""
+    coins.absorb(b"header", _header(dims, COMMIT_FIRST))
+    coins.absorb(b"root", root)
+
+
+def _device_ok(f: torch.Tensor) -> bool:
+    return f.device.type == "cuda" and dev.available(f) and ligero_merkle._gpu_merkle is not None
+
+
+def _commit_r1(f: torch.Tensor, dims: Dims, tm):
     device = f.device
-    if not (device.type == "cuda" and dev.available(f) and ligero_merkle._gpu_merkle is not None):
-        return prove_reference(f, z, dims, timer, coins)
-    n = dims.n
-    N = 1 << n
-    assert f.numel() == N and z.shape == (n, D) and f.dtype == torch.int32
-    ks, kps, qs = dims.k, dims.kprime, dims.queries
-    L = dims.rounds
-    tm = timer or _NullTimer()
-    tr = coins if coins is not None else FiatShamirCoins()
-    rates = dims.rates
-    z = np.asarray(z, dtype=np.int64) % P
-    tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": rates}).encode())
-    tr.absorb(b"z", _z_bytes(z))
-
-    roots: list[bytes] = []
-    sumcheck: list[list[np.ndarray]] = []
-    opens: list[RoundOpen] = []
-    splits: list[tuple[int, int]] = []
-    Us: list[torch.Tensor] = []
-    trees = []
-    encs = []
-
-    # ---------------- round 1: commit f
+    assert f.numel() == 1 << dims.n and f.dtype == torch.int32
     dev.share_torch_allocator()
-    R1, C1 = 1 << ks[0], 1 << kps[0]
+    R1, C1 = 1 << dims.k[0], 1 << dims.kprime[0]
     M1 = f.view(C1, R1)
-    enc1 = Encoder(R1, device, rates[0])
+    enc1 = Encoder(R1, device, dims.rates[0])
     group = _stream_group(dims, device)
     if group:
         tm.start("commit_r1_stream")
@@ -492,23 +502,79 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
         tm.start("commit_r1_merkle")
         root1, tree1 = _commit_fast(U1)
         tm.stop()
-    roots.append(root1)
-    Us.append(U1)
-    trees.append(tree1)
-    encs.append(enc1)
-    splits.append((enc1.n1, enc1.n2))
-    tr.absorb(b"root", root1)
+    return M1, enc1, U1, tree1, root1
 
-    # ---------------- round 1: evaluation claim and the column sumcheck (one eq term, host: T = 1)
+
+def commit(f: torch.Tensor, dims: Dims, coins: Coins | None = None, timer: Timer | None = None) -> Commitment:
+    """Commit-first API (for a relation prover whose evaluation points depend on the commitment): encode + Merkle-commit f
+    ((N,) int32 CUDA tensor, [0, p)) and absorb the header + root into ``coins``.  Then run the relation's rounds on the same
+    coins, then ``prove_eval``."""
+    if not _device_ok(f):
+        raise RuntimeError("pcs.commit needs the CUDA device path (cupy + hash_gpu)")
+    tm = timer or _NullTimer()
+    tr = coins if coins is not None else FiatShamirCoins()
+    M1, enc1, U1, tree1, root1 = _commit_r1(f, dims, tm)
+    absorb_commitment(tr, dims, root1)
+    return Commitment(dims, root1, tr, M1, enc1, U1, tree1)
+
+
+def prove_eval(com: Commitment, z: np.ndarray, coins: Coins | None = None, timer: Timer | None = None) -> Proof:
+    """Evaluation proof for the committed f at m points: ``z`` (n, 6) or (m, n, 6).  Transcript (continuing ``commit``'s):
+    absorb z (m n ext), absorb v (m ext), [m > 1: beta <- challenge(m); the round-1 claim is sum_j beta_j v_j], then the
+    rounds exactly as ``prove``.  ``proof.v`` is (m, 6)."""
+    zs = np.asarray(z, dtype=np.int64) % P
+    if zs.ndim == 2:
+        zs = zs[None]
+    assert zs.shape[1:] == (com.dims.n, D)
+    tr = coins if coins is not None else com.coins
+    tm = timer or _NullTimer()
+    tr.absorb(b"z", _z_bytes(zs))
+    return _prove_rounds(com.M1, com.enc1, com.U1, com.tree1, com.root, com.dims, zs, tr, tm, COMMIT_FIRST)
+
+
+def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None) -> Proof:
+    """f: (N,) int32 device tensor (coefficients, [0, p)); z: (n, 6) numpy point; dims: the round structure;
+    coins: the Coins protocol instance (default Fiat-Shamir).  Fused order (proto 7bc2fdd): header, z, root_1, v, ...
+
+    Device prover (lane ligerito-pcs-fast): the sumcheck tables, every contraction and fold live on the device (integer
+    kernels in ``device.py``, no fp64); the host keeps only the transcript and the O(T) batching coefficients.  Same
+    transcript and proof bytes as ``prove_reference`` for the same coins.  Falls back to ``prove_reference`` off-GPU."""
+    if not _device_ok(f):
+        return prove_reference(f, z, dims, timer, coins)
+    assert z.shape == (dims.n, D)
+    tm = timer or _NullTimer()
+    tr = coins if coins is not None else FiatShamirCoins()
+    z = np.asarray(z, dtype=np.int64) % P
+    tr.absorb(b"header", _header(dims, None))
+    tr.absorb(b"z", _z_bytes(z))
+    M1, enc1, U1, tree1, root1 = _commit_r1(f, dims, tm)
+    tr.absorb(b"root", root1)
+    return _prove_rounds(M1, enc1, U1, tree1, root1, dims, z[None], tr, tm, None)
+
+
+def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Coins, tm, order: str | None) -> Proof:
+    """Everything after root_1: the claims, round 1's column sumcheck, rounds 2..L, the final vector."""
+    device = M1.device
+    n = dims.n
+    ks, kps, qs, rates = dims.k, dims.kprime, dims.queries, dims.rates
+    L = dims.rounds
+    m = zs.shape[0]
+    roots, Us, trees, encs = [root1], [U1], [tree1], [enc1]
+    splits = [(enc1.n1, enc1.n2)]
+    sumcheck: list[list[np.ndarray]] = []
+    opens: list[RoundOpen] = []
+
+    # ---------------- round 1: evaluation claims and the column sumcheck (m eq terms, host tables)
     tm.start("sumcheck_r1_contract")
-    zrow = dev.eq_table(z[:ks[0]], device)                               # (6, R1)
-    u = (dev.contract_planes(M1, zrow) % P).cpu().numpy()                # (C1, 6)
+    us = [(dev.contract_planes(M1, dev.eq_table(zj[:ks[0]], device)) % P).cpu().numpy() for zj in zs]   # m x (C1, 6)
     tm.stop()
     tm.start("sumcheck_host")
-    term0 = cl.Term(ext.one(), "eq", z=z, nvars=n)
-    sc = cl.ColumnSumcheckProver([term0], [u], ks[0], kps[0])
-    v = sc.claim()
-    tr.absorb(b"v", _ext_bytes(v))
+    vs = np.stack([cl.ColumnSumcheckProver([cl.Term(ext.one(), "eq", z=zj, nvars=n)], [uj], ks[0], kps[0]).claim()
+                   for zj, uj in zip(zs, us)], axis=0)                     # (m, 6)
+    tr.absorb(b"v", _ext_bytes(vs))
+    beta = tr.challenge(b"beta", m) if m > 1 else ext.one()[None]
+    terms0 = [cl.Term(beta[j], "eq", z=zs[j], nvars=n) for j in range(m)]
+    sc = cl.ColumnSumcheckProver(terms0, us, ks[0], kps[0])
     msgs = []
     for _ in range(kps[0]):
         g = sc.round_message()
@@ -520,8 +586,9 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     r1 = sc.challenges()
     rbar = cl.rbar(r1)
     running = sc.claim()
-    t0 = term0.restrict(ks[0], r1)
-    coef_eq, z_eq = t0.coef, t0.z                                         # the eq term (6,), (k_1, 6)
+    rest = [t.restrict(ks[0], r1) for t in terms0]
+    coef_eq = np.stack([t.coef for t in rest], axis=0)                   # (m, 6)
+    z_eq = np.stack([t.z for t in rest], axis=0)                         # (m, k_1, 6)
     etas_g = np.zeros(0, dtype=np.int64)                                  # geom terms: eta (Tg,), coef (Tg, 6)
     coef_g = ext.zero((0,))
     tm.stop()
@@ -576,15 +643,15 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
         etas_g = np.concatenate((etas_g, np.asarray(etas, dtype=np.int64)))
         running = ext.add(ext.mul(alpha[0], running), ext.sum_ext(ext.mul(alpha[1:], rhs), axis=0))
         colg = cl.geom_colparts(etas_g, ks[i], kps[i])[:, :, 0]           # (Tg, C) base
-        cole = cl.Term(ext.one(), "eq", z=z_eq, nvars=len(z_eq)).colpart(ks[i], kps[i])   # (C, 6)
-        coef = np.concatenate((coef_eq[None], coef_g), axis=0)            # (T, 6): eq first, then geom (the proto's order)
+        eqt = [cl.Term(ext.one(), "eq", z=zj, nvars=zj.shape[0]) for zj in z_eq]
+        cole = np.stack([t.colpart(ks[i], kps[i]) for t in eqt], axis=0)  # (m, C, 6)
+        coef = np.concatenate((coef_eq, coef_g), axis=0)                  # (m + Tg, 6): eq terms first, then geom (the proto's order)
         tm.stop()
         tm.start("recursion_contract")
         ug = dev.contract_geom(Mflat, etas_g)                            # (6C, Tg)
-        zr = dev.eq_table(z_eq[:ks[i]], device)                           # (6, R)
-        ue = dev.contract_planes(Mflat, zr)                               # (6C, 6)
+        ue = torch.stack([dev.contract_planes(Mflat, dev.eq_table(zj[:ks[i]], device)) for zj in z_eq], dim=0)   # (m, 6C, 6)
         dsc = dev.DeviceSumcheck(ug, ue, coef, colg, cole, C, device)
-        del ug, ue, zr
+        del ug, ue
         tm.stop()
         tm.start("sumcheck_device")
         msgs, rs = [], []
@@ -603,8 +670,8 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
         rbar = cl.rbar(ri)
         tm.stop()
         tm.start("sumcheck_host")
-        coef_eq = ext.mul(coef_eq, cl.Term(ext.one(), "eq", z=z_eq, nvars=len(z_eq)).colpart_at(ks[i], ri))
-        z_eq = z_eq[:ks[i]]
+        coef_eq = np.stack([ext.mul(coef_eq[j], eqt[j].colpart_at(ks[i], ri)) for j in range(m)], axis=0)
+        z_eq = z_eq[:, :ks[i]]
         coef_g = ext.mul(coef_g, cl.geom_colpart_at(etas_g, ks[i], ri))
         rbars.append(rbar)
         del dsc
@@ -623,7 +690,8 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     op = _open_fast(Us[-1], trees[-1], S, depth) if Us[-1] is not None else _open_recompute(M1, encs[-1], trees[-1], S, depth)
     opens.append(op)
     tm.stop()
-    return Proof(n, list(kps), list(qs), list(rates), splits, v, roots, sumcheck, opens, final_y, tr.rounds)
+    v = vs if order == COMMIT_FIRST else vs[0]
+    return Proof(n, list(kps), list(qs), list(rates), splits, v, roots, sumcheck, opens, final_y, tr.rounds, order)
 
 
 def _row_claims(rows: np.ndarray, rbar: np.ndarray, base: bool) -> np.ndarray:
@@ -655,16 +723,39 @@ def verify(proof: Proof, z: np.ndarray, v: np.ndarray | None = None, coins: Coin
     """Returns (accepted, reason).  ``v``: the claimed evaluation (defaults to the proof's); ``coins``: must replay the
     prover's (default Fiat-Shamir)."""
     try:
+        tr = coins if coins is not None else FiatShamirCoins()
+        if proof.order == COMMIT_FIRST:
+            if len(proof.roots) == 0:
+                raise Reject("bad proof shape")
+            absorb_commitment(tr, proof.dims, proof.roots[0])
+        _verify(proof, np.asarray(z, dtype=np.int64) % P, proof.v if v is None else np.asarray(v, dtype=np.int64) % P, tr)
+    except Reject as e:
+        return False, str(e)
+    return True, "accept"
+
+
+def verify_eval(proof: Proof, z: np.ndarray, v: np.ndarray | None = None, coins: Coins | None = None) -> tuple[bool, str]:
+    """Commit-first proofs inside a larger transcript: ``coins`` already holds ``absorb_commitment(coins, dims, root)`` and
+    whatever the relation absorbed/drew after it; ``z`` (m, n, 6) or (n, 6); ``v`` (m, 6) (default: the proof's)."""
+    try:
+        if proof.order != COMMIT_FIRST:
+            raise Reject("not a commit-first proof")
         _verify(proof, np.asarray(z, dtype=np.int64) % P, proof.v if v is None else np.asarray(v, dtype=np.int64) % P, coins)
     except Reject as e:
         return False, str(e)
     return True, "accept"
 
 
-def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, coins: Coins | None = None) -> None:
+def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
     dims = pf.dims
     n, ks, kps, qs, L = dims.n, dims.k, dims.kprime, dims.queries, dims.rounds
-    if z.shape != (n, D):
+    cf = pf.order == COMMIT_FIRST
+    if pf.order not in (None, COMMIT_FIRST):
+        raise Reject("unknown transcript order")
+    zs = z[None] if z.ndim == 2 else z
+    vs = v.reshape(-1, D) if v.ndim >= 1 else v
+    m = zs.shape[0]
+    if zs.shape[1:] != (n, D) or (not cf and m != 1) or vs.shape != (m, D) or m < 1:
         raise Reject("bad point shape")
     if len(pf.roots) != L or len(pf.opens) != L or len(pf.sumcheck) != L or len(pf.splits) != L or len(dims.rates) != L:
         raise Reject("bad proof shape")
@@ -684,27 +775,33 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, coins: Coins | None = None)
             return _Enc.eta_index(self, s)
 
     maps = [_Map(1 << ks[i], pf.splits[i], dims.rates[i]) for i in range(L)]
-    tr = coins if coins is not None else FiatShamirCoins()
-    tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": dims.rates}).encode())
-    tr.absorb(b"z", _z_bytes(z))
+    if tr is None:
+        tr = FiatShamirCoins()
+    if cf:                                          # header + root_1 were absorbed by absorb_commitment
+        tr.absorb(b"z", _z_bytes(zs))
+    else:
+        tr.absorb(b"header", _header(dims, None))
+        tr.absorb(b"z", _z_bytes(zs[0]))
+        tr.absorb(b"root", pf.roots[0])
     # round 1
-    tr.absorb(b"root", pf.roots[0])
-    if not np.array_equal(pf.v % P, v):
+    if np.asarray(pf.v).reshape(-1, D).shape != (m, D) or not np.array_equal(np.asarray(pf.v).reshape(-1, D) % P, vs):
         raise Reject("claimed evaluation differs from the proof's")
-    tr.absorb(b"v", _ext_bytes(v))
-    term0 = cl.Term(ext.one(), "eq", z=z, nvars=n)
+    tr.absorb(b"v", _ext_bytes(vs))
+    beta = tr.challenge(b"beta", m) if m > 1 else ext.one()[None]
+    terms0 = [cl.Term(beta[j], "eq", z=zs[j], nvars=n) for j in range(m)]
+    claim = ext.sum_ext(ext.mul(beta, vs), axis=0)
     rs = []
     for g in pf.sumcheck[0]:
         if g.shape != (3, D):
             raise Reject("bad sumcheck message")
         tr.absorb(b"g", _ext_bytes(g))
         rs.append(tr.challenge(b"r", 1)[0])
-    ok, running = cl.verify_column_rounds(v, pf.sumcheck[0], rs)
+    ok, running = cl.verify_column_rounds(claim, pf.sumcheck[0], rs)
     if not ok:
         raise Reject("sumcheck round 1 failed")
     r1 = np.stack(rs[::-1], axis=0) if rs else np.zeros((0, D), dtype=np.int64)
     rbars = [cl.rbar(r1)]
-    terms = [term0.restrict(ks[0], r1)]
+    terms = [t.restrict(ks[0], r1) for t in terms0]
     for i in range(1, L):
         tr.absorb(b"root", pf.roots[i])
         prev = i - 1

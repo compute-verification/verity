@@ -53,6 +53,64 @@ def test_streamed_commit_matches_reference(n, kprime, q, rates, monkeypatch):
     assert a.to_bytes() == b.to_bytes()
 
 
+def _mle(f: torch.Tensor, z: np.ndarray) -> np.ndarray:
+    e = cl.eq_vector(z)                                                   # (N, 6), x little-endian
+    fv = f.to(torch.int64).cpu().numpy()
+    return ext.sum_ext(ext.mul(e, fv[:, None] * np.array([1, 0, 0, 0, 0, 0])), axis=0)
+
+
+@pytest.mark.parametrize("m,stream", [(1, "0"), (4, "0"), (3, "1"), (2, "0")])
+def test_commit_first_multi_claim(m, stream, monkeypatch):
+    from .pcs import absorb_commitment, commit, prove_eval, verify_eval
+    from .transcript import FiatShamirCoins
+    monkeypatch.setenv("LIGERITO_STREAM", stream)
+    n = 14
+    dims = Dims(n, [5, 4, 3], [24, 20, 16], [1, 2, 2])
+    f, _ = _inst(n)
+    zs = RNG.integers(0, P, size=(m, n, D), dtype=np.int64)
+    # the relation's view: commit, its own rounds on the same coins, then the evaluation proof
+    tr = FiatShamirCoins()
+    com = commit(f, dims, coins=tr)
+    tr.absorb(b"relation", b"zero-check messages")
+    tr.challenge(b"tau", 3)
+    pf = prove_eval(com, zs, coins=tr)
+    del com
+    assert pf.v.shape == (m, D)
+    for j in range(m):
+        assert np.array_equal(pf.v[j], _mle(f, zs[j]))
+    pf2 = Proof.from_bytes(pf.to_bytes())
+    assert pf2.to_bytes() == pf.to_bytes() and pf2.order == "commit-first"
+    vt = FiatShamirCoins()
+    absorb_commitment(vt, pf2.dims, pf2.roots[0])
+    vt.absorb(b"relation", b"zero-check messages")
+    vt.challenge(b"tau", 3)
+    ok, why = verify_eval(pf2, zs, coins=vt)
+    assert ok, why
+    # negatives: a wrong value, a wrong point, the relation transcript skipped, the legacy verifier
+    bad = pf2.v.copy()
+    bad[m - 1, 0] = (bad[m - 1, 0] + 1) % P
+    for zz, vv, skip in ((zs, bad, False), (zs[::-1] if m > 1 else zs + 1, None, False), (zs, None, True)):
+        vt = FiatShamirCoins()
+        absorb_commitment(vt, pf2.dims, pf2.roots[0])
+        if not skip:
+            vt.absorb(b"relation", b"zero-check messages")
+            vt.challenge(b"tau", 3)
+        ok, _ = verify_eval(pf2, zz, v=vv, coins=vt)
+        assert not ok
+    assert not verify(pf2, zs)[0]                                        # the relation's absorbs are part of the transcript
+
+
+def test_commit_first_standalone_verify():
+    from .pcs import commit, prove_eval
+    n = 12
+    dims = Dims(n, [4, 3, 3], [12, 12, 12], 2)
+    f, z = _inst(n)
+    pf = prove_eval(commit(f, dims), z)
+    ok, why = verify(Proof.from_bytes(pf.to_bytes()), z)
+    assert ok, why
+    assert pf.v.shape == (1, D)
+
+
 def test_stream_group_plan():
     from .pcs import _stream_group
     big = torch.cuda.get_device_properties(0).total_memory > (40 << 30)
