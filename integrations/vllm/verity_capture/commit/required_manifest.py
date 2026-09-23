@@ -35,9 +35,11 @@ the module BODIES of the served model (one verification unit per module call; th
 are units of their own), so the boundary values are the union of every module body's inputs and outputs and the required values
 are those plus the prescribed inputs (weights, prompt ids) and the protocol-required values (sampled ids).  The serialized id in
 the manifest header (`query`) and in every manifest_digest stays `Q_module_v1` until a labelled decision renames it -- changing
-the string changes the digest of every manifest of record.  The query IMPLEMENTATION (the generic query interface over a Program:
-units, in(V) / out(V), the boundary set) lands in `verity_vllm` in Phase 2 (Draft 3.1 §12.1 / §12.3); `members_for` and the
-by-name tables below are its hand-maintained predecessor and are pinned by `tests/test_no_by_name_rules.py` until then.
+the string changes the digest of every manifest of record.  The query IMPLEMENTATION is `verity_vllm.query` (`query.cli build` builds
+the manifest; `sampled_replay.ProgramIndex` addresses a v2-query manifest from `v1_bridge.population`).  `members_for` and the by-name
+tables below are its hand-maintained predecessor, still needed for (a) TP rank Programs -- the v2 query names no rank-local partials and
+`compose_global` has no rank merge (TP-04) -- and (b) re-deriving v1 records of record (the harness's v1 engine, `replay_partition`'s
+recompute of a record whose `addresses.rule` is v1).  They retire when both are gone; `tests/test_no_by_name_rules.py` pins them until then.
 The words in this module: an 'identity row' is one required Value's manifest entry; `op_path` + `output_member` + `invocation`
 are the occurrence key (the serialization of a runtime occurrence); 'the manifest' always means the required-value manifest.
 
