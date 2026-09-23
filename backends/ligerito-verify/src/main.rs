@@ -7,9 +7,13 @@
 //!     # diagnostic with transcript label L, default "ligerito-proto/v1")
 //! ligerito-verify batch --dir DIR [--jobs N] [--json out.json] [--label L] [--target-bits B]
 //!     # every DIR/*.proof (with DIR/<name>.z / <name>.coins when present) must verify and every DIR/*.proof.neg must
-//!     # be rejected; with DIR/manifest.json (a list, or {"proofs": [...]}, of {"proof": name, "accepted": bool,
+//!     # be rejected; every entry of DIR/*.ref.json (ref.py fixtures; tampers in DIR/<name>.ref.neg.json) must get
+//!     # ref.py's verdict; with DIR/manifest.json (a list, or {"proofs": [...]}, of {"proof": name, "accepted": bool,
 //!     # "reason": str}) every listed verdict must agree with ours; with --target-bits the union of the proofs' own
 //!     # soundness bounds must be <= 2^-B.  Exit 0 iff accepted.
+//! ligerito-verify ref-fixtures --file F.json [--neg N.json] [--json out.json] [--reps R]
+//!     # ligerito-design's ref.py fixtures (`python -m backends.direct.ligerito.ref`): every statement + proof must get
+//!     # ref.py's verdict; --neg = declarative tampers (fixtures/ref/negatives.json) replayed on them, same rule
 //! ligerito-verify sumcheck-fixture --fixture F.json [--seed fixture]
 //!     # ligerito-sumcheck's verifier fixture (layout, constraints, public rows, LGSC0002 proof, claims, recorded
 //!     # transcript): verify with the recorded transcript and with LocalCoins(seed); claims must match
@@ -20,6 +24,7 @@
 use ligerito_verify::format::{looks_like_proto, read_pcs_v0, read_point, read_proto, write_pcs_v0};
 use ligerito_verify::params::Params;
 use ligerito_verify::pcs::{verify, Report};
+use ligerito_verify::refpcs;
 use ligerito_verify::refprover::{prove, random_point, random_vector, tamper};
 use ligerito_verify::transcript::{FiatShamir, Live};
 use std::path::{Path, PathBuf};
@@ -167,6 +172,63 @@ fn verify_file(proof_path: &Path, coins_path: Option<&Path>, label: &[u8], reps:
     }
 }
 
+/// ref.py fixtures (+ optional tampers): one verdict per statement, `accepted` = ours, plus whether it agrees with
+/// ref.py's recorded verdict (a disagreement is a problem for the caller).
+fn ref_fixture_verdicts(fixtures_path: &Path, neg_path: Option<&Path>, reps: usize) -> Vec<(Verdict, bool)> {
+    let file_name = fixtures_path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let text = match std::fs::read_to_string(fixtures_path) {
+        Ok(t) => t,
+        Err(e) => return vec![(Verdict { name: file_name, accepted: false, reason: format!("read: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, false)],
+    };
+    let fxs = match refpcs::load_fixtures(&text) {
+        Ok(f) => f,
+        Err(e) => return vec![(Verdict { name: file_name, accepted: false, reason: format!("parse: {e}"), report: None, params: None, bytes: text.len(), mode: "ref.py", seconds: 0.0 }, false)],
+    };
+    let mut out = Vec::new();
+    let run = |name: String, fx: &refpcs::Fixture, doc: &ligerito_verify::json::Json, expect_ok: bool, expect_reason: &str| -> (Verdict, bool) {
+        let t0 = Instant::now();
+        let mut res = Err(String::new());
+        for _ in 0..reps.max(1) {
+            res = refpcs::verify_fixture(fx, doc);
+        }
+        let seconds = t0.elapsed().as_secs_f64() / reps.max(1) as f64;
+        let (accepted, reason, report) = match res {
+            Ok(r) => (true, "ok".to_string(), Some(r)),
+            Err(e) => (false, e, None),
+        };
+        let agree = accepted == expect_ok;
+        let reason = if agree { reason } else { format!("{reason} -- ref.py said {} ({expect_reason})", if expect_ok { "accept" } else { "reject" }) };
+        let bytes = doc.dump().len();
+        (Verdict { name, accepted, reason, report, params: None, bytes, mode: "ref.py", seconds }, agree)
+    };
+    for fx in &fxs {
+        out.push(run(format!("{file_name}#{}", fx.name), fx, &fx.proof, fx.expect_ok, &fx.expect_reason));
+    }
+    if let Some(np) = neg_path {
+        match std::fs::read_to_string(np).map_err(|e| e.to_string()).and_then(|t| refpcs::load_tampers(&t)) {
+            Ok(tampers) => {
+                for t in &tampers {
+                    let name = format!("{file_name}#{}", t.name);
+                    let Some(fx) = fxs.get(t.base) else {
+                        out.push((Verdict { name, accepted: false, reason: format!("tamper base {} out of range", t.base), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, false));
+                        continue;
+                    };
+                    let mut doc = fx.proof.clone();
+                    if let Err(e) = refpcs::apply_ops(&mut doc, &t.ops) {
+                        out.push((Verdict { name, accepted: false, reason: format!("tamper: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, false));
+                        continue;
+                    }
+                    // ref.py hashes row entries mod p; we reject non-canonical encodings, so that tamper must be rejected here
+                    let expect_ok = t.expect_ok && !t.name.ends_with("/noncanon");
+                    out.push(run(name, fx, &doc, expect_ok, &t.expect_reason));
+                }
+            }
+            Err(e) => out.push((Verdict { name: np.display().to_string(), accepted: false, reason: format!("tampers: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, false)),
+        }
+    }
+    out
+}
+
 fn write_json(path: Option<String>, text: &str) {
     if let Some(p) = path {
         std::fs::write(&p, text).unwrap_or_else(|e| panic!("--json {p}: {e}"));
@@ -232,12 +294,31 @@ fn main() {
                     });
                 }
             });
-            let verdicts: Vec<Verdict> = results.into_iter().map(|m| m.into_inner().unwrap().unwrap()).collect();
+            let mut verdicts: Vec<Verdict> = results.into_iter().map(|m| m.into_inner().unwrap().unwrap()).collect();
             let mut problems: Vec<String> = Vec::new();
+            // ref.py fixture lists: DIR/X.ref.json (+ DIR/X.ref.neg.json tampers), each entry must get ref.py's verdict
+            let mut ref_files: Vec<PathBuf> = std::fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.file_name().map(|n| n.to_string_lossy().ends_with(".ref.json")).unwrap_or(false))
+                .collect();
+            ref_files.sort();
+            let mut n_ref = 0usize;
+            for rf in &ref_files {
+                let neg = rf.with_file_name(rf.file_name().unwrap().to_string_lossy().replace(".ref.json", ".ref.neg.json"));
+                for (v, agree) in ref_fixture_verdicts(rf, if neg.exists() { Some(neg.as_path()) } else { None }, reps) {
+                    n_ref += 1;
+                    if !agree {
+                        problems.push(format!("{}: {}", v.name, v.reason));
+                    }
+                    verdicts.push(v);
+                }
+            }
             if verdicts.is_empty() {
-                problems.push("no *.proof in the directory".into());
+                problems.push("no *.proof or *.ref.json in the directory".into());
             }
             for (v, (_, expect)) in verdicts.iter().zip(&files) {
+                // (ref.py entries come after `files` and were checked above)
                 if v.accepted != *expect {
                     problems.push(format!("{}: {} but expected {}", v.name, if v.accepted { "accepted" } else { "rejected" }, if *expect { "acceptance" } else { "rejection" }));
                 }
@@ -263,11 +344,12 @@ fn main() {
             }
             let all = problems.is_empty();
             let js = format!(
-                "{{\"dir\":{},\"accepted\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
+                "{{\"dir\":{},\"accepted\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_ref_fixtures\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
                 json_str(&dir.display().to_string()),
                 all,
                 files.iter().filter(|f| f.1).count(),
                 files.iter().filter(|f| !f.1).count(),
+                n_ref,
                 verdicts.iter().filter(|v| v.accepted).count(),
                 manifest_checked,
                 if union_log2.is_finite() { format!("{union_log2:.3}") } else { "null".into() },
@@ -276,6 +358,29 @@ fn main() {
                 verdicts.iter().map(verdict_json).collect::<Vec<_>>().join(",")
             );
             println!("{js}");
+            write_json(arg(&args, "--json"), &js);
+            std::process::exit(if all { 0 } else { 1 });
+        }
+        "ref-fixtures" => {
+            let file = PathBuf::from(arg(&args, "--file").expect("--file F.json"));
+            let neg = arg(&args, "--neg").map(PathBuf::from);
+            let t0 = Instant::now();
+            let vs = ref_fixture_verdicts(&file, neg.as_deref(), reps);
+            let all = vs.iter().all(|(_, agree)| *agree);
+            for (v, agree) in &vs {
+                println!("{:60} {} {:8.3} ms  {}", v.name, if v.accepted { "accept" } else { "reject" }, v.seconds * 1e3, if *agree { "" } else { "DISAGREES WITH ref.py" });
+            }
+            let js = format!(
+                "{{\"file\":{},\"accepted\":{},\"n\":{},\"n_accepted\":{},\"n_rejected\":{},\"wall_seconds\":{:.6},\"verdicts\":[{}]}}",
+                json_str(&file.display().to_string()),
+                all,
+                vs.len(),
+                vs.iter().filter(|(v, _)| v.accepted).count(),
+                vs.iter().filter(|(v, _)| !v.accepted).count(),
+                t0.elapsed().as_secs_f64(),
+                vs.iter().map(|(v, _)| verdict_json(v)).collect::<Vec<_>>().join(",")
+            );
+            eprintln!("{} fixtures/tampers: {} accepted, {} rejected, {}", vs.len(), vs.iter().filter(|(v, _)| v.accepted).count(), vs.iter().filter(|(v, _)| !v.accepted).count(), if all { "all agree with ref.py" } else { "DISAGREEMENTS" });
             write_json(arg(&args, "--json"), &js);
             std::process::exit(if all { 0 } else { 1 });
         }
