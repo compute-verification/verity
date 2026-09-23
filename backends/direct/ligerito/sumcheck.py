@@ -1032,12 +1032,12 @@ extern "C" __global__ void sc_gather(
     const int* __restrict__ z, const int* __restrict__ ptr, const int* __restrict__ row, const int* __restrict__ val,
     int* __restrict__ T, long long K, long long C)
 {
-    const long long n = K * C;
-    for (long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x; idx < n; idx += (long long)gridDim.x * blockDim.x) {
-        const long long k = idx / C, c = idx - k * C;
+    const long long k = blockIdx.y;                                   // grid (ceil(C / 256), K)
+    const int e0 = ptr[k], e1 = ptr[k + 1];
+    for (long long c = (long long)blockIdx.x * blockDim.x + threadIdx.x; c < C; c += (long long)gridDim.x * blockDim.x) {
         u64 acc = 0;
-        for (int e = ptr[k]; e < ptr[k + 1]; e++) acc += ((u64)(u32)val[e] * (u64)(u32)z[(long long)row[e] * C + c]) % P64;
-        T[idx] = (int)(acc % P64);
+        for (int e = e0; e < e1; e++) acc += ((u64)(u32)val[e] * (u64)(u32)z[(long long)row[e] * C + c]) % P64;
+        T[k * C + c] = (int)(acc % P64);
     }
 }
 """
@@ -1073,10 +1073,8 @@ def build_tables_cuda(cons: Constraints, z: torch.Tensor) -> dict[str, torch.Ten
         ptr = torch.zeros((K + 1,), dtype=torch.int64, device=dev)
         ptr[1:] = torch.cumsum(torch.bincount(ks_s, minlength=K), 0)
         T = torch.empty((K, C), dtype=torch.int32, device=dev)
-        n = K * C
-        blocks = int(min(1 << 16, (n + 255) // 256))
-        kern((blocks,), (256,), (_cp(z), _cp(ptr.to(torch.int32)), _cp(rs_s.to(torch.int32)), _cp((vs_s % P).to(torch.int32)),
-                                 _cp(T), cp.int64(K), cp.int64(C)))
+        kern((int(min(1024, (C + 255) // 256)), K), (256,), (_cp(z), _cp(ptr.to(torch.int32)), _cp(rs_s.to(torch.int32)),
+                                                            _cp((vs_s % P).to(torch.int32)), _cp(T), cp.int64(K), cp.int64(C)))
         out[side] = T
     return out
 
