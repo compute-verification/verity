@@ -667,7 +667,7 @@ _FP4_RE_MXF4 = (
 _FP4_RE_EDGES = (
     "outside the model (record-only family `specials`): a NaN accumulator of either sign and any payload returns "
     "0x7FFFFFFF, +-inf returns itself, a sum leaving binary32 returns +-inf of its sign (ue8m0 only; nvf4 cannot "
-    "overflow); NOT validated on sm_100 (B200 tcgen05)"
+    "overflow); the same words observed on the B200 (sm_100 tcgen05, lane tcgen05: record-only family `specials` of every run)"
 )
 
 BLACKWELL_SM120_NVF4 = BlockScaledAlignAdd(
@@ -728,6 +728,60 @@ BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED = BlockScaledAlignAdd(
 )
 
 
+# Blackwell datacenter (sm_100, B200): ``tcgen05.mma`` is a different instruction (tensor-memory accumulators, M = 128 minimum,
+# issued by one thread, completion through an mbarrier) and lane fp4-re refused to assume it computes the sm_120 words.  Lane
+# tcgen05 measured it: the sm_120 constants, unchanged, reproduce every word.  These are separate model objects so the registry
+# names the architecture it was measured on; their parameters are BLACKWELL_SM120_*'s to the bit.
+_TCGEN05_PIN = (
+    "lane tcgen05 2026-09-23, NVIDIA B200 (sm_100, cc 10.0, driver 580.126.09, nvcc 12.9.86 -gencode compute_100a/sm_100a, "
+    "GPU-d1d0c3f4), CUTLASS-free probe kernel tools/tc_probe_fp4/tcgen05_fp4.cu: ONE tcgen05.mma.cta_group::1 (M128 N8 K64, "
+    "SASS UTCOMMA) per tile with the 16 harness rows replicated into all 8 groups of 16 TMEM lanes (every replica agreed), "
+    "arbitrary FP32 accumulators preloaded into TMEM with tcgen05.st and enable_input_d = 1 (all-+0 accumulators also run with "
+    "enable_input_d = 0 and through the TMEM path: identical), K-major no-swizzle smem descriptors, scale factors in TMEM; the "
+    "same 20 families as the sm_120 pin plus a K=128 chain (two MMAs on one TMEM accumulator)"
+)
+BLACKWELL_SM100_NVF4 = BlockScaledAlignAdd(
+    name="blackwell_sm100_tcgen05_nvf4",
+    arch="sm_100",
+    dtype="e2m1",
+    operand_bits=4,
+    scale="ue4m3",
+    k_per_instruction=64,
+    group=16,
+    frac_bits=27,
+    acc_window=36,
+    grid_floor=-174,
+    underflow_zero="positive",
+    validated=(
+        "B200 (sm_100) tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X, SASS UTCOMMA.4X: " + _TCGEN05_PIN
+        + "; 0 mismatches over 16,461,824 elements: r20260923-001528-f5c5 (303,104), r20260923-001759-d869 (6,463,488; autoproof "
+        "probe3 vectors replayed 1,601 / 1,601 through the TMEM accumulator, K=128/256 cases as dependent MMAs), "
+        "r20260923-001856-7d63 (1,134,592; K=128 chain), r20260923-002315-b793 (8,560,640); model5 (autoproof's control) "
+        "misses 140,102 / 165,355 of the two big runs exactly as on the RTX 5090. The parameters are BLACKWELL_SM120_NVF4's."
+    ),
+)
+BLACKWELL_SM100_MXF4 = BlockScaledAlignAdd(
+    name="blackwell_sm100_tcgen05_mxf4",
+    arch="sm_100",
+    dtype="e2m1",
+    operand_bits=4,
+    scale="ue8m0",
+    k_per_instruction=64,
+    group=16,
+    frac_bits=27,
+    acc_window=36,
+    grid_floor=-174,
+    underflow_zero="positive",
+    validated=(
+        "B200 (sm_100) tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X (the mnemonic CUTLASS 3.9.2's "
+        "SM100_MMA_MXF4_SS emits for UE8M0) and kind::mxf4nvf4.block_scale.scale_vec::2X, both SASS UTCOMMA: " + _TCGEN05_PIN
+        + "; 0 mismatches over 12,898,304 elements: kind::mxf4 r20260923-001838-42a4 (3,956,736) and r20260923-002320-6fbf "
+        "(3,956,736); kind::mxf4nvf4 2X r20260923-001832-17dc (3,956,736) and r20260923-001903-c420 (1,028,096; K=128 chain); "
+        "the signed-underflow alternative misses 14,710 / 14,384 / 14,734 / 5,535 (D13 holds on sm_100 too). The parameters "
+        "are BLACKWELL_SM120_MXF4's."
+    ),
+)
+
 #: Every model instance by name -- the grouped-sum pipelines and the block-scaled hypotheses alike.
 MODELS: dict[str, Model] = {
     m.name: m
@@ -738,5 +792,7 @@ MODELS: dict[str, Model] = {
         BLACKWELL_SM120_NVF4,
         BLACKWELL_SM120_MXF4,
         BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
+        BLACKWELL_SM100_NVF4,
+        BLACKWELL_SM100_MXF4,
     )
 }

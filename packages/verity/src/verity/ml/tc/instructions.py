@@ -32,6 +32,8 @@ from .models import (
     ADA_E4M3_M16N8K32,
     ADA_E5M2_M16N8K32,
     AMPERE_BF16_M16N8K16,
+    BLACKWELL_SM100_MXF4,
+    BLACKWELL_SM100_NVF4,
     BLACKWELL_SM120_MXF4,
     BLACKWELL_SM120_NVF4,
     HOPPER_BF16_M16N8K16,
@@ -143,6 +145,23 @@ _AUTOPROOF = (
 _AUTOPROOF_UNSCALED = (
     "autoproof probes/results/probe2_1783788240.json: mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1"
     ".f32 (unscaled FP4), 13,082 dots, 0 mismatches, RZ at the K=116,544 parity boundary"
+)
+_B200_TCGEN05 = (
+    "lane tcgen05 2026-09-23, NVIDIA B200 cc 10.0, driver 580.126.09, nvcc/ptxas 12.9.86 (-gencode arch=compute_100a,code=sm_100a; "
+    "nvcc 12.9's plain -arch=sm_100a also emits compute_100 PTX, which refuses every tcgen05 mnemonic): tools/tc_probe_fp4/"
+    "tcgen05_fp4.cu issues ONE tcgen05.mma.cta_group::1 (M128 N8 K64) per tile from one thread, accumulator preloaded into "
+    "tensor memory (tcgen05.st, enable_input_d = 1; all-+0 accumulators also with enable_input_d = 0), scale factors in TMEM, "
+    "completion via tcgen05.commit -> mbarrier, readback tcgen05.ld; the 16 harness rows replicated into the 8 lane groups "
+    "agreed word for word. The sm_120 model (scale anchor -27, window 36, floor 2^-174, zero -> +0, truncation) reproduced "
+    "every gated word of the same 20 families, the K=128 chain and autoproof's probe3 vectors; the refuted alternatives "
+    "(model5, signed underflow) miss on the B200 by the same counts as on the RTX 5090"
+)
+_B200_STAGE0 = (
+    "stage 0 r20260923-001336-5a50: ptxas 12.9 refuses mma.sync kind::mxf4nvf4 / .block_scale / kind::f8f6f4 for sm_100a "
+    "('mma with block scale not supported on .target sm_100a'; the same PTX assembles for sm_120a), so the consumer "
+    "instruction does not exist on the B200; CUTLASS 3.9.2 example 72a (nvfp4 GEMM, sm_100a) lowers to UTCOMMA.2CTA.4X "
+    "(cta_group::2) with UTMALDG/UTCCP/UTCBAR -- the probe's cta_group::1 UTCOMMA is the single-CTA form of the same opcode; "
+    "cta_group::2 itself is not probed"
 )
 
 
@@ -290,18 +309,33 @@ INSTRUCTIONS: dict[str, Instruction] = {
         _i(
             id="sm100.tcgen05.mma.e2m1.nvf4",
             sm="sm_100",
-            ptx=None, shape=None,
+            ptx="tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X [d_tmem], a_desc, b_desc, idesc(e2m1 x e2m1 -> f32, "
+                "ue4m3, M128 N8 K64, K-major), [sfa_tmem], [sfb_tmem], enable_input_d",
+            shape=(128, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
-            model=None, status="unprobed",
-            evidence=("tcgen05.mma kind::mxf4nvf4 on B200 -- no measurement; sm_120's model is NOT assumed to carry over",),
+            model=BLACKWELL_SM100_NVF4,
+            status="pinned",  # verity.verification.trust computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
+            evidence=(_B200_TCGEN05, _B200_STAGE0,
+                      "SASS UTCOMMA.4X, one per tile kernel; 0 mismatches over 16,461,824 elements: r20260923-001528-f5c5 (303,104), "
+                      "r20260923-001759-d869 (6,463,488 + probe3 1,601/1,601), r20260923-001856-7d63 (1,134,592, K=128 chain), "
+                      "r20260923-002315-b793 (8,560,640); the sm_120 model's parameters carry over unchanged"),
         ),
         _i(
+            # CUTLASS 3.9.2's SM100_MMA_MXF4_SS emits kind::mxf4 with scale_vec::2X for UE8M0 (and kind::mxf4nvf4 4X for UE4M3);
+            # kind::mxf4nvf4 with scale_vec::2X and UE8M0 is also legal PTX and was measured as well: the same words.
             id="sm100.tcgen05.mma.e2m1.mxf4",
             sm="sm_100",
-            ptx=None, shape=None,
+            ptx="tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X [d_tmem], a_desc, b_desc, idesc(e2m1 x e2m1 -> f32, "
+                "ue8m0, M128 N8 K64, K-major), [sfa_tmem], [sfb_tmem], enable_input_d",
+            shape=(128, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue8m0",
-            model=None, status="unprobed",
-            evidence=("tcgen05.mma kind::mxf4 on B200 -- no measurement",),
+            model=BLACKWELL_SM100_MXF4,
+            status="pinned",  # verity.verification.trust computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
+            evidence=(_B200_TCGEN05, _B200_STAGE0,
+                      "SASS UTCOMMA, one per tile kernel; 0 mismatches over 12,898,304 elements: kind::mxf4 r20260923-001838-42a4 "
+                      "(3,956,736) and r20260923-002320-6fbf (3,956,736), kind::mxf4nvf4 2X r20260923-001832-17dc (3,956,736) and "
+                      "r20260923-001903-c420 (1,028,096, K=128 chain); the signed-underflow alternative misses 14,710 / 14,384 / "
+                      "14,734 / 5,535 (D13 holds on sm_100)"),
         ),
         _i(
             id="sm100.tcgen05.mma.bf16",

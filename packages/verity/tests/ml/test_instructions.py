@@ -9,6 +9,8 @@ from verity.ml.tc.models import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
     AMPERE_BF16_M16N8K16,
+    BLACKWELL_SM100_MXF4,
+    BLACKWELL_SM100_NVF4,
     BLACKWELL_SM120_NVF4,
     BLACKWELL_SM120_MXF4,
     HOPPER_E4M3_K32,
@@ -58,6 +60,8 @@ def test_pinned_instructions_and_their_models() -> None:
         "sm120.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,          # lane fp4-5090: the 5090 keeps Hopper's BF16 datapath
         "sm120.mma.m16n8k64.e2m1.nvf4": BLACKWELL_SM120_NVF4,      # lane fp4-re 2026-09-22: 8.3M, 0 mismatches, any FP32 acc
         "sm120.mma.m16n8k64.e2m1.mxf4": BLACKWELL_SM120_MXF4,      # lane fp4-re 2026-09-22: 7.4M, 0 mismatches (D13/D18/D19)
+        "sm100.tcgen05.mma.e2m1.nvf4": BLACKWELL_SM100_NVF4,       # lane tcgen05 2026-09-23: B200, 16.5M, 0 mismatches, any FP32 acc
+        "sm100.tcgen05.mma.e2m1.mxf4": BLACKWELL_SM100_MXF4,       # lane tcgen05 2026-09-23: B200, 12.9M, 0 mismatches (both kinds)
     }
 
 
@@ -90,7 +94,11 @@ def test_mnemonics_come_from_the_source_repos_or_are_none() -> None:
     assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.nvf4"].ptx == (
         "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3"
     )
-    for ins_id in ("sm100.tcgen05.mma.e2m1.nvf4", "sm100.tcgen05.mma.e2m1.mxf4", "sm100.tcgen05.mma.bf16", "sm100.tcgen05.mma.e4m3"):
+    # the tcgen05 mnemonics carry descriptors, not register lists: recorded as the PTX ISA spells the instruction plus the
+    # descriptor fields the probe kernel set (tools/tc_probe_fp4/tcgen05_fp4.cu)
+    assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.nvf4"].ptx.startswith("tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X")
+    assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.mxf4"].ptx.startswith("tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X")
+    for ins_id in ("sm100.tcgen05.mma.bf16", "sm100.tcgen05.mma.e4m3"):
         ins = INSTRUCTIONS[ins_id]
         assert ins.status == "unprobed" and ins.model is None and ins.ptx is None and ins.shape is None
 
@@ -103,6 +111,21 @@ def test_block_scaled_ids_carry_their_scale_format() -> None:
     assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].model is BLACKWELL_SM120_MXF4
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.nvf4"].scale == "ue4m3"
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.mxf4"].scale == "ue8m0"
+    assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.nvf4"].shape == INSTRUCTIONS["sm100.tcgen05.mma.e2m1.mxf4"].shape == (128, 8, 64)
+
+
+def test_sm100_models_are_the_sm120_parameters_under_their_own_name() -> None:
+    """Lane tcgen05's finding: the B200's tcgen05.mma computes the RTX 5090's words.  The registry keeps separate model objects
+    (named for the architecture they were measured on); this pins that their numerics are identical field by field."""
+    from dataclasses import fields
+
+    for sm100, sm120 in ((BLACKWELL_SM100_NVF4, BLACKWELL_SM120_NVF4), (BLACKWELL_SM100_MXF4, BLACKWELL_SM120_MXF4)):
+        assert type(sm100) is type(sm120)
+        for f in fields(sm100):
+            if f.name in ("name", "arch", "validated"):
+                continue
+            assert getattr(sm100, f.name) == getattr(sm120, f.name), f.name
+        assert sm100.arch == "sm_100" and sm120.arch == "sm_120"
 
 
 def test_instructions_for_filters_by_model() -> None:
