@@ -669,3 +669,170 @@ fn v4_named_bf16_statement_is_the_v2_statement_and_the_hopper_name_is_pinned_apa
     assert_eq!(code, 1, "{js}");
     assert!(js.contains("has_auth flag not 0/1"), "{js}");
 }
+
+// ------------------------------------------------------------------- lane hash-relation: authentication = included-hash ----
+//
+// `fixtures/fp8-ada-hash/`: a laptop (CPU) dump of the HASHED fp8-ada relation (`hashchain.compose`: operands private, two
+// Poseidon2-BabyBear width-24 sponges along the chain, the 16 digest lanes pinned at every VU's last column), lane
+// hash-relation commit 6516efc: interactive non-ZK, 20 VUs x 48 steps at l = 1024, one sub-batch, statement
+// `ligero-statement/v5` (6217 bytes: roots + indices + digests + y words + three multiproofs, no operand words), system
+// `ligero-system/v3` (19 linked rows).  Python's verifier accepted it (manifest `verify_python.json`, 1/1).
+
+const HASH_SYS: &str = "fixtures/fp8-ada-hash/system.bin";
+const HASH_STMT: &str = "fixtures/fp8-ada-hash/sub_00.stmt";
+const HASH_PROOF: &str = "fixtures/fp8-ada-hash/sub_00.proof";
+const HASH_COINS: &str = "fixtures/fp8-ada-hash/sub_00.coins";
+const HASH_SYS_ID: &str = "c4c4b403e07da47f7747b947ad76899ef231112bcc6d62dc0448a83ef8696618";
+const HASH_TABLE_DIGEST: &str = "c0e2f48119e2c83ca81cbc8eb1cbba51a676b67a600b8125d75bf438b770e05d";
+
+/// Byte offsets of the v5 fixture's fields (`serialize._statement_bytes_v5`; asserted against the header below).
+struct V5 {
+    digests: usize,   // n_vus x 16 canonical field elements, 4 bytes each
+    y16: usize,       // l words of y_bytes
+    indices: usize,   // n_vus x (vu, x, w) u32 triples
+    trees: usize,     // 3 x (binding 32, owner 1, count u64, root 32)
+    multiproofs: usize,
+}
+
+fn v5_offsets(st: &[u8]) -> V5 {
+    assert_eq!(&st[..8], b"LIGSTM05");
+    let (l, n_vus, steps, k) = (u32_at(st, 12), u32_at(st, 46), u32_at(st, 50), u32_at(st, 54));
+    assert_eq!((l, n_vus, steps, k), (1024, 20, 48, 1536));
+    let yb = st[58] as usize;
+    assert_eq!(yb, 4);
+    let mut o = 59;
+    let s = |o: &mut usize| { let n = u32_at(st, *o); let v = st[*o + 4..*o + 4 + n].to_vec(); *o += 4 + n; v };
+    assert_eq!(s(&mut o), b"fp8-ada");
+    assert_eq!(s(&mut o), b"included-hash");
+    let digests = o;
+    o += 4 * 16 * n_vus;
+    let y16 = o;
+    o += l * yb;
+    assert_eq!(s(&mut o), b"ligero-b/auth/v2h");
+    assert_eq!(s(&mut o), b"poseidon2-babybear-w24/row/v2h");
+    o += 32; // the Poseidon2 constants digest
+    assert_eq!(u32_at(st, o), n_vus);
+    o += 4;
+    let indices = o;
+    o += 12 * n_vus;
+    let trees = o;
+    o += 3 * 73;
+    V5 { digests, y16, indices, trees, multiproofs: o }
+}
+
+#[test]
+fn fp8_ada_hashed_v5_proof_is_accepted_and_the_hashed_system_is_pinned() {
+    let (code, js) = verify(HASH_SYS, HASH_STMT, HASH_PROOF, &["--coins", HASH_COINS]);
+    assert_eq!(code, 0, "{js}");
+    assert_eq!(field(&js, "\"accepted\":"), "true");
+    assert_eq!(field(&js, "\"system_pinned\":"), "true");
+    assert!(js.contains("\"format\":\"ligero-statement/v5\",\"relation\":\"fp8-ada\""), "{js}");
+    assert!(js.contains("\"l\":1024,\"n\":4096,\"D\":6,\"t\":189,\"zk\":false,\"mode\":\"interactive\",\"n_proofs\":1,\"n_vus\":20,\"steps\":48,\"K\":32"), "{js}");
+    assert!(js.contains("authentication: included-hash, 20 VUs, 20 x rows + 20 W columns + 20 y words under the a/b/y roots"), "{js}");
+    assert!(js.contains("coins are this verifier's step-0 coins"), "{js}");
+    let (_, sd) = run(&["system-digest", "--system", HASH_SYS]);
+    assert!(sd.contains(&format!("\"sys_id\":\"{HASH_SYS_ID}\"")), "{sd}");
+    assert!(sd.contains(&format!("\"table_digest\":\"{HASH_TABLE_DIGEST}\"")), "{sd}");
+    assert!(sd.contains("\"pinned_relation\":\"fp8-ada+hash\"") && sd.contains("\"format\":\"ligero-system/v3\""), "{sd}");
+    // the batch command over the fixture directory reports the hashed pin and the authentication
+    let (code, js) = run(&["batch", "--dir", "fixtures/fp8-ada-hash", "--system", HASH_SYS, "--threads", "2"]);
+    assert_eq!(code, 0, "{js}");
+    assert!(js.contains("\"pinned_relation\":\"fp8-ada+hash\"") && js.contains("\"accepted\":1,\"rejected\":0"), "{js}");
+}
+
+#[test]
+fn fp8_ada_hashed_statement_negatives_are_rejected() {
+    // Every field of the v5 statement is bound by the statement digest (the relation tag absorbs the authentication
+    // block, the body the digests and the y words), so a statement FILE mutated after the fact fails on the transcript's
+    // challenges before the path check runs -- "column challenge mismatch" -- exactly as a mutated v4 statement does.
+    // The path check itself is exercised on the parsed block in `auth::tests::hashed_fixture_block_folds_and_every_
+    // mutation_is_refused` (wrong digest, wrong path, other root, swapped W column, foreign x row, y word, ranges).
+    let st = std::fs::read(HASH_STMT).unwrap();
+    let f = v5_offsets(&st);
+    let rej = |name: &str, m: &[u8], expect: &str| {
+        let (code, js) = verify(HASH_SYS, &write_tmp(name, m), HASH_PROOF, &["--coins", HASH_COINS]);
+        assert_eq!(code, 1, "{name}: {js}");
+        assert!(js.contains(expect), "{name}: expected {expect:?} in {js}");
+    };
+    let bound = "column challenge mismatch";
+    // (1) a wrong digest exposed: lane 0 of VU 0's x digest; (2) VU 3's W digest (lanes 8..16 are the b sponge's)
+    let mut m = st.clone();
+    m[f.digests] ^= 1;
+    rej("digest.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.digests + 4 * (16 * 3 + 8)] ^= 1;
+    rej("wdigest.stmt", &m, bound);
+    // (3) a wrong path: the multiproof siblings are auxiliary (not absorbed by the digest -- the roots and ranks are),
+    // so the Ligero tests pass and the path check itself refuses the statement; (4) a path to a different x root;
+    // (5) another y root
+    let mut m = st.clone();
+    m[f.multiproofs + 4 + 5] ^= 1;
+    rej("path.stmt", &m, "auth: a: multiproof rejected (root mismatch)");
+    let mut m = st.clone();
+    m[f.trees + 41] ^= 1;
+    rej("root.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.trees + 2 * 73 + 41] ^= 1;
+    rej("yroot.stmt", &m, bound);
+    // (6) a swapped W row: VU 0 claims W column 1; (7) an x row of another VU; (8) a y word
+    let mut m = st.clone();
+    m[f.indices + 8..f.indices + 12].copy_from_slice(&1u32.to_le_bytes());
+    rej("wswap.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.indices + 4..f.indices + 8].copy_from_slice(&5u32.to_le_bytes());
+    rej("xswap.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.y16 + 4 * 47] ^= 1;
+    rej("y.stmt", &m, bound);
+    // (9) the ids-tree binding; (10) another Poseidon2 parameter set and (11) an index beyond the committed count and
+    // (12) a non-canonical digest lane are refused by the parser, before any challenge is derived
+    let mut m = st.clone();
+    m[f.trees] ^= 1;
+    rej("binding.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.indices - 4 - 32] ^= 1;
+    rej("p2.stmt", &m, "Poseidon2 parameters differ from the verifier's");
+    let mut m = st.clone();
+    m[f.indices + 4..f.indices + 8].copy_from_slice(&20u32.to_le_bytes());
+    rej("xrange.stmt", &m, "claims leaves beyond the committed count");
+    let mut m = st.clone();
+    m[f.digests..f.digests + 4].copy_from_slice(&0x7800_0001u32.to_le_bytes());
+    rej("noncanon.stmt", &m, "non-canonical field element");
+    // (13) the authentication name: a v5 statement is included-hash by definition
+    let mut m = st.clone();
+    m[f.digests - 1] ^= 1;
+    rej("authname.stmt", &m, "names an authentication other than included-hash");
+}
+
+#[test]
+fn fp8_ada_hashed_system_and_version_mismatches_are_rejected() {
+    // the hashed statement against the BARE fp8-ada system (both are "fp8-ada"): the pin refuses it; unpinned, the
+    // proof carries the hashed system's 6210 rows where the bare system fixes 3769
+    let (code, js) = verify(FP8_SYS, HASH_STMT, HASH_PROOF, &["--coins", HASH_COINS]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is the pinned fp8-ada system, the statement is a hashed fp8-ada statement"), "{js}");
+    let (code, js) = verify(FP8_SYS, HASH_STMT, HASH_PROOF, &["--coins", HASH_COINS, "--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("malformed proof: header M = 6210, the statement fixes 3769"), "{js}");
+    // the bare v4 statement against the hashed system: the pin refuses it (and unpinned the row count does)
+    let (code, js) = verify(HASH_SYS, FP8_STMT, FP8_PROOF, &["--coins", FP8_COINS]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is the pinned hashed fp8-ada system, the statement is a fp8-ada statement"), "{js}");
+    let (code, js) = verify(HASH_SYS, FP8_STMT, FP8_PROOF, &["--coins", FP8_COINS, "--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("malformed proof: header M = 3769, the statement fixes 6210"), "{js}");
+    // the two systems' digests are pinned apart
+    let (_, bare) = run(&["system-digest", "--system", FP8_SYS]);
+    assert!(bare.contains("\"pinned_relation\":\"fp8-ada\"") && !bare.contains(HASH_SYS_ID), "{bare}");
+    // a proof byte flipped: the hashed relation's tests catch it like any other
+    let pf = std::fs::read(HASH_PROOF).unwrap();
+    let mut m = pf.clone();
+    let mid = m.len() / 2;
+    m[mid] ^= 1;
+    let (code, js) = verify(HASH_SYS, HASH_STMT, &write_tmp("hproof.proof", &m), &["--coins", HASH_COINS]);
+    assert_eq!(code, 1, "{js}");
+    // the hashed proof without --coins: the coins are replayed from the transcript (the conditional accept)
+    let (code, js) = verify(HASH_SYS, HASH_STMT, HASH_PROOF, &[]);
+    assert_eq!(code, 0, "{js}");
+    assert!(js.contains("coins replayed from the transcript"), "{js}");
+}

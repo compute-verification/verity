@@ -582,4 +582,40 @@ mod tests {
         let blk4 = AuthBlock { vu_index: vec![0, 3], ..blk.clone() };
         assert_eq!(check(&blk4, &mp, &a, &b, &y16, 2, 2, 2, 1).unwrap_err(), "auth: a: leaf index out of range");
     }
+
+    /// The hashed fixture's authentication block (`fixtures/fp8-ada-hash/sub_00.stmt`, 20 VUs on 20 x rows / 20 W
+    /// columns / 20 y words) folds to its roots; every single-field mutation the statement-level tests cannot
+    /// isolate (the statement digest binds the block, so a mutated FILE fails on the challenges first) is refused
+    /// here by the path check itself.
+    #[test]
+    fn hashed_fixture_block_folds_and_every_mutation_is_refused() {
+        let st = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/fp8-ada-hash/sub_00.stmt")).unwrap();
+        let st = crate::format::Statement::parse(&st).unwrap();
+        let ha = st.hash_auth.clone().expect("v5 block");
+        let y: Vec<u32> = (0..st.n_vus).map(|v| st.y16[v * st.steps + st.steps - 1]).collect();
+        assert_eq!((ha.vu_index.len(), ha.trees[0].count, ha.trees[1].count, ha.trees[2].count), (20, 20, 20, 20));
+        assert_eq!(ha.digests.len(), 20 * N_DIGEST);
+        check_hashed(&ha, &y, 22, 1).expect("the fixture block");
+        check_hashed(&ha, &y, 22, 4).expect("the fixture block, 4 threads");
+        let refuse = |what: &str, f: &dyn Fn(&mut HashAuthBlock, &mut Vec<u32>), expect: &str| {
+            let (mut b, mut yy) = (ha.clone(), y.clone());
+            f(&mut b, &mut yy);
+            let e = check_hashed(&b, &yy, 22, 1).expect_err(what);
+            assert!(e.contains(expect), "{what}: {e}");
+        };
+        refuse("x digest lane", &|b, _| b.digests[0] ^= 1, "auth: a: multiproof rejected (root mismatch)");
+        refuse("W digest lane", &|b, _| b.digests[3 * N_DIGEST + 8] ^= 1, "auth: b: multiproof rejected (root mismatch)");
+        refuse("x sibling", &|b, _| b.multiproofs[0][0][5] ^= 1, "auth: a: multiproof rejected (root mismatch)");
+        refuse("W sibling dropped", &|b, _| { b.multiproofs[1].pop(); }, "auth: b: multiproof rejected");
+        refuse("x root", &|b, _| b.trees[0].root[0] ^= 1, "auth: a: multiproof rejected (root mismatch)");
+        refuse("y root", &|b, _| b.trees[2].root[31] ^= 1, "auth: y: multiproof rejected (root mismatch)");
+        refuse("tree binding", &|b, _| b.trees[1].binding[0] ^= 1, "auth: b: multiproof rejected (root mismatch)");
+        refuse("swapped W column", &|b, _| b.w_index.swap(0, 1), "auth: b: ");
+        refuse("x row of another VU", &|b, _| b.x_index[0] = 5, "auth: a: ");
+        refuse("y word", &|_, yy| yy[7] ^= 1, "auth: y: multiproof rejected (root mismatch)");
+        refuse("y word out of range", &|_, yy| yy[0] = 1 << 22, "auth: y word out of range");
+        refuse("leaf beyond the count", &|b, _| b.x_index[19] = 20, "auth: a: leaf index out of range");
+        refuse("one multiproof short", &|b, _| { b.multiproofs.pop(); }, "expected one multiproof per tree");
+        refuse("VU dropped", &|b, _| { b.vu_index.pop(); }, "does not match the VU count");
+    }
 }
