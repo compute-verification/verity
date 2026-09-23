@@ -30,9 +30,25 @@ CONNECTIONS.  Every request runs on a pooled keep-alive TLS connection (`_Pool`:
 whole; a connection the service closed, or that failed mid-request, is dropped and the request retried on a fresh one).  Before
 this (r20) each request opened its own TLS connection: 259,030 blobs / 46 GB took 1.9 h at ~27 blobs/s.  `jobs` (default 32) is
 the bounded thread pool `put_many` / `head_many` / `get_many` / `delete_many` run on; `LocalStore.push` brings its own pool, of
-the same size, over `put`.  Measured against R2 from a laptop, 10k x 4 KiB objects: see the bench figures in the r20 report
-(`research data ...` docs); a PACK format for many-small-file trees is not implemented: the pooled client with PUT-first clears
-the 300 blobs/s threshold the r20 plan set for it (`PACK_THRESHOLD_BLOBS_PER_S`), so one object per blob stays the storage unit.
+the same size, over `put`.
+
+MEASURED (2026-09-23, runpod pod vyv-v2cpu3 -> R2, 10k x 4 KiB blobs pushed through `LocalStore.push`, then re-pushed, then fetched,
+plus one 512 MiB blob; `tools/research/bench` figures in the r20 report):
+
+    client              first push        re-push (all skipped)   get           512 MiB put / get
+    old (TLS/request)   21.1 blobs/s       85 blobs/s              55 blobs/s     25 MB/s / 43 MB/s
+    pooled, jobs=32     47.6 blobs/s      145 blobs/s              72 blobs/s     47 MB/s / 22 MB/s  (multipart 16 x 32 MiB)
+    pooled, jobs=128   151.3 blobs/s      568 blobs/s             292 blobs/s     51 MB/s / 42 MB/s
+    pooled, jobs=256   320.6 blobs/s      292 blobs/s             502 blobs/s     45 MB/s / 39 MB/s
+
+The first-push rate scales almost linearly with `jobs` because the cost is per-request latency to R2 from that pod (~0.8 s per
+4 KiB PUT, 1.01 requests per blob with conditional PUT + the ETag from the PUT response), not connection setup any more; the
+pool opened 32 / 155 / 398 connections for the three runs.  The r20 plan's threshold for switching to a PACK format for
+many-small-file trees (`PACK_THRESHOLD_BLOBS_PER_S` = 300) is cleared at `jobs` >= 256 (`store.toml [remote] jobs = 256`,
+`max_pool_connections` >= jobs), so a pack format is not implemented and one object per blob stays the storage unit.  Below that
+the pooled client is 2.3x (32) .. 7x (128) the old one.  Re-push at 256 came in below 128 because the adaptive PUT-first window
+flips to HEAD-first once more than half of the last `ADAPT_WINDOW` small objects existed already, and HEADs are no cheaper than
+PUTs at this latency (the run-to-run spread on the pod is also large).
 
 The signing functions are pure and tested against the AWS documented vectors (`sign_headers`, `canonical_request`,
 `string_to_sign`, `signature`).  One instance may be used from several threads (`LocalStore.push` does): the pool is locked, a
