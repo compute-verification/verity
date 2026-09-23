@@ -54,6 +54,9 @@ _SRC = r"""
 #define LOGT %(logt)d          /* K = 16 THREADS: 16 elements per thread in every phase */
 #define TP %(tp)d              /* mask coefficients per row (0: no mask) */
 #define KINV_MONT %(kinv_mont)du
+#define K_MONT %(k_mont)du     /* l R mod p */
+#define COEF_IN %(coef_in)d    /* 1: the rows come as int64 coefficient vectors c[0 .. K + TP) (the ZK mask rows) instead of
+                                  evaluations on H: cf <- l c (no INTT), the high part enters like the mask with x^l = z_c + 1 */
 
 /* [0, p) in, [0, p) out; the wrapped-difference min selects the reduced value (2 instructions, no predicate) */
 __device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return min(s, s - P); }
@@ -161,19 +164,34 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
                  const unsigned* __restrict__ mask,
                  const unsigned* __restrict__ tw_inv, const unsigned* __restrict__ tw_fwd,
                  const unsigned* __restrict__ coset_tw,   /* 4 x K: l^{-1} (g w_n^c)^i at bit-reversed position, Montgomery */
-                 const unsigned* __restrict__ mask_tw,    /* 4 x TP: z_c (g w_n^c)^i, Montgomery */
-                 int rows)
+                 const unsigned* __restrict__ mask_tw,    /* 4 x TP: z_c (g w_n^c)^i, Montgomery (COEF_IN: (z_c + 1) (g w_n^c)^i) */
+                 int rows,
+                 int in_stride,                            /* row stride of `in` in 32-bit words (COEF_IN: 2 x the int64 row stride) */
+                 int in_wide,                              /* 1: the evaluation rows are int64 (low words read; no int32 copy) */
+                 int coef_stride,                          /* row stride of coef_out in 32-bit words */
+                 int coef_wide)                            /* 1: coef_out is int64 (low word = value, high word 0) */
 {
     extern __shared__ unsigned x[];
     unsigned* cf = x + K;
     unsigned r[16];
     const int t = threadIdx.x;
     for (int row = blockIdx.x; row < rows; row += gridDim.x) {
-        const unsigned* src = in + (size_t)row * K;
+        const unsigned* src = in + (size_t)row * in_stride;
         unsigned* dst = out + (size_t)row * (4 * K);
+#if COEF_IN
+        /* coefficient rows: cf[brev(j)] = l c_j -- what the INTT of the row's evaluations would have left (unscaled,
+           bit-reversed); the stores scatter (a few rows: the ZK mask rows), the loads are coalesced 8-byte strides */
+        #pragma unroll
+        for (int s = 0; s < 16; ++s) {
+            const int j = t + THREADS * s;
+            cf[SWZ(__brev((unsigned)j) >> (32 - LOGK))] = mont_mul(__ldg(&src[2 * j]), K_MONT);
+        }
+        const int st = SWZ(t);
+        __syncthreads();
+#else
         /* ---- INTT (DIF): register stages m = K/2 .. THREADS on the 16 elements t + THREADS s ---- */
         #pragma unroll
-        for (int s = 0; s < 16; ++s) r[s] = __ldg(&src[t + THREADS * s]);
+        for (int s = 0; s < 16; ++s) r[s] = __ldg(&src[(t + THREADS * s) << in_wide]);
         stages_dif<4, LOGT, LOGK - 1, true>(r, t, tw_inv);
         const int st = SWZ(t);
         #pragma unroll
@@ -194,9 +212,10 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
         __syncthreads();
         if (coef_out != 0) {
             /* natural-order l^-1 interp_H(W_j): each lane stores 4 consecutive coefficients as one uint4 (8 lanes = 128
-               contiguous bytes); the gather cf[brev(j)] is conflict-free under SWZ with lanes on bits 0-2 and
-               LOGK-4, LOGK-3 of the vector index (fixed lane -> J mapping for THREADS >= 32) */
-            unsigned* cd = coef_out + (size_t)row * K;
+               contiguous bytes; int64 output: two uint4 with zero high words, 256 bytes); the gather cf[brev(j)] is
+               conflict-free under SWZ with lanes on bits 0-2 and LOGK-4, LOGK-3 of the vector index (fixed lane -> J
+               mapping for THREADS >= 32) */
+            unsigned* cd = coef_out + (size_t)row * coef_stride;
             #pragma unroll
             for (int s = 0; s < 4; ++s) {
                 int J;
@@ -206,9 +225,15 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
                 const int sp = SWZ(__brev((unsigned)(4 * J)) >> (32 - LOGK));
                 #pragma unroll
                 for (int w = 0; w < 4; ++w) v[w] = mont_mul(cf[sp ^ SWZ((((w & 1) << 1) | (w >> 1)) << (LOGK - 2))], KINV_MONT);   /* brev(w) */
-                *reinterpret_cast<uint4*>(cd + 4 * J) = make_uint4(v[0], v[1], v[2], v[3]);
+                if (coef_wide) {
+                    *reinterpret_cast<uint4*>(cd + 8 * J) = make_uint4(v[0], 0u, v[1], 0u);
+                    *reinterpret_cast<uint4*>(cd + 8 * J + 4) = make_uint4(v[2], 0u, v[3], 0u);
+                } else {
+                    *reinterpret_cast<uint4*>(cd + 4 * J) = make_uint4(v[0], v[1], v[2], v[3]);
+                }
             }
         }
+#endif
         /* ---- the four coset NTTs (DIT) ---- */
         #pragma unroll 1
         for (int c = 0; c < 4; ++c) {
@@ -228,21 +253,28 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
                 }
 #if TP > 0
                 {
+#if COEF_IN
+                    const unsigned* mk = src + 2 * K;      /* c[K + i]: the int64 row's high part, low words */
+#define MASKLD(i) __ldg(&mk[2 * (i)])
+#else
                     const unsigned* mk = mask + (size_t)row * TP;
+#define MASKLD(i) __ldg(&mk[i])
+#endif
                     const unsigned* mt = mask_tw + (size_t)c * TP;
 #if (TP & (TP - 1)) == 0 && TP <= K / 16
                     /* i = brev(pos) < TP  <=>  pos mod (K / TP) == 0: only element 0 of every (K / TP / 16)-th thread */
                     if ((base & (K / TP - 1)) == 0) {
                         const int i = __brev((unsigned)base) >> (32 - LOGK);
-                        e[0] = add_p(e[0], mont_mul(__ldg(&mk[i]), __ldg(&mt[i])));
+                        e[0] = add_p(e[0], mont_mul(MASKLD(i), __ldg(&mt[i])));
                     }
 #else
                     #pragma unroll
                     for (int k = 0; k < 16; ++k) {
                         const int i = __brev((unsigned)(base + k)) >> (32 - LOGK);
-                        if (i < TP) e[k] = add_p(e[k], mont_mul(__ldg(&mk[i]), __ldg(&mt[i])));
+                        if (i < TP) e[k] = add_p(e[k], mont_mul(MASKLD(i), __ldg(&mt[i])));
                     }
 #endif
+#undef MASKLD
                 }
 #endif
                 stages_dit<4, 0, 0, false>(e, base, tw_fwd);
@@ -320,18 +352,22 @@ def tables(l: int, n: int, t_pad: int) -> dict[str, np.ndarray]:
         m *= 2
     rev = _bitrev(l)
     linv = pow(l, -1, P)
-    cos, msk = [], []
+    cos, msk, msk1 = [], [], []
     for c in range(4):
         base = GEN * pow(wn, c, P) % P
         pw = _powers(base, l)
         cos.append(((pw * np.uint64(linv)) % np.uint64(P))[rev])
         if t_pad:
-            z_c = (pow(base, l, P) - 1) % P
+            xl = pow(base, l, P)                  # x^l on coset c (constant: w_l^{j l} = 1)
+            z_c = (xl - 1) % P                    # Z_H(x) = x^l - 1
             assert z_c != 0
             msk.append((pw[:t_pad] * np.uint64(z_c)) % np.uint64(P))
+            msk1.append((pw[:t_pad] * np.uint64(xl)) % np.uint64(P))    # coefficient rows: c_lo(x) + x^l c_hi(x)
     return {"tw_fwd": _mont(tw_fwd), "tw_inv": _mont(tw_inv), "coset": _mont(np.concatenate(cos)),
             "mask": _mont(np.concatenate(msk)) if t_pad else np.zeros(1, dtype=np.uint32),
-            "kinv_mont": int(_mont(np.array([linv], dtype=np.uint64))[0])}
+            "mask1": _mont(np.concatenate(msk1)) if t_pad else np.zeros(1, dtype=np.uint32),
+            "kinv_mont": int(_mont(np.array([linv], dtype=np.uint64))[0]),
+            "k_mont": int(_mont(np.array([l], dtype=np.uint64))[0])}
 
 
 def available() -> bool:
@@ -357,38 +393,69 @@ class LigeroEncoderSIMT:
             raise ValueError("the kernel holds 16 elements per thread: threads = l / 16")
         self.threads = threads
         tabs = tables(l, n, t_pad)
-        params = {"pinv": _P_INV_MOD_R, "k": l, "logk": l.bit_length() - 1, "threads": threads,
-                  "logt": threads.bit_length() - 1, "tp": t_pad, "kinv_mont": tabs["kinv_mont"]}
-        self.kernel = cp.RawKernel(_SRC % params, "rs_encode_ligero", options=("-std=c++17",))
+        self._params = {"pinv": _P_INV_MOD_R, "k": l, "logk": l.bit_length() - 1, "threads": threads,
+                        "logt": threads.bit_length() - 1, "tp": t_pad, "kinv_mont": tabs["kinv_mont"],
+                        "k_mont": tabs["k_mont"], "coef_in": 0}
         self.smem = 4 * (2 * l)               # x + cf (both bank-swizzled)
-        if self.smem > 48 * 1024:
-            self.kernel.max_dynamic_shared_size_bytes = self.smem
+        self.kernel = self._compile(0)
+        self._kernel_coef = None              # compiled on first use (encode_coefs)
         with cp.cuda.Device(self.device.index or 0):
             self.tw_fwd = cp.asarray(tabs["tw_fwd"])
             self.tw_inv = cp.asarray(tabs["tw_inv"])
             self.coset = cp.asarray(tabs["coset"])
             self.mask_tw = cp.asarray(tabs["mask"])
+            self.mask_tw1 = cp.asarray(tabs["mask1"])
             sms = cp.cuda.runtime.getDeviceProperties(self.device.index or 0)["multiProcessorCount"]
         self.blocks = sms * 4
+
+    def _compile(self, coef_in: int):
+        k = self.cp.RawKernel(_SRC % {**self._params, "coef_in": coef_in}, "rs_encode_ligero", options=("-std=c++17",))
+        if self.smem > 48 * 1024:
+            k.max_dynamic_shared_size_bytes = self.smem
+        return k
 
     def _u32(self, t: torch.Tensor):
         return self.cp.asarray(t).view(self.cp.uint32)
 
+    def _launch(self, kernel, R: int, args, stream):
+        # torch's current stream vs cupy's: launch on torch's stream (or the given one -- hp2-host's pipelining)
+        import warnings
+        ts = stream if stream is not None else torch.cuda.current_stream(self.device)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            cstream = self.cp.cuda.ExternalStream(ts.cuda_stream)
+        with cstream:
+            kernel((min(self.blocks, R),), (self.threads,), args, shared_mem=self.smem)
+
+    def _check_out(self, out: torch.Tensor | None, R: int) -> torch.Tensor:
+        if out is None:
+            out = torch.empty((R, self.n), dtype=torch.int32, device=self.device)
+        elif out.shape != (R, self.n) or out.dtype != torch.int32 or not out.is_contiguous():
+            raise ValueError("out must be a contiguous (R, n) int32 tensor")
+        return out
+
     def encode(self, rows: torch.Tensor, mask: torch.Tensor | None = None, want_coefs: bool = False,
-               out: torch.Tensor | None = None, stream: torch.cuda.Stream | None = None):
-        cp = self.cp
+               out: torch.Tensor | None = None, stream: torch.cuda.Stream | None = None,
+               coefs_out: torch.Tensor | None = None):
+        """``coefs_out``: optional (R, l) int32 or int64 tensor for the natural-order coefficients (rows contiguous,
+        any row stride -- e.g. the ``[:m, :l]`` view of the prover's (M, k) int64 coefficient matrix, so that no
+        int32 -> int64 copy follows); implies ``want_coefs``."""
         R = rows.shape[0]
         if rows.shape != (R, self.l):
             raise ValueError(rows.shape)
         if (mask is not None) != (self.t_pad > 0):
             raise ValueError("mask must be given iff the encoder was built with t_pad > 0")
-        rows32 = rows if rows.dtype == torch.int32 else rows.to(torch.int32)      # values < p < 2^31
-        rows32 = rows32.contiguous()
-        if out is None:
-            out = torch.empty((R, self.n), dtype=torch.int32, device=self.device)
-        elif out.shape != (R, self.n) or out.dtype != torch.int32 or not out.is_contiguous():
-            raise ValueError("out must be a contiguous (R, n) int32 tensor")
-        coefs = torch.empty((R, self.l), dtype=torch.int32, device=self.device) if want_coefs else None
+        if rows.dtype not in (torch.int32, torch.int64):
+            rows = rows.to(torch.int64)
+        rows = rows.contiguous()                  # int64 rows are read in place (low words: values < p < 2^31)
+        in_wide = rows.dtype == torch.int64
+        out = self._check_out(out, R)
+        if coefs_out is not None:
+            if coefs_out.shape != (R, self.l) or coefs_out.stride(1) != 1 or coefs_out.dtype not in (torch.int32, torch.int64):
+                raise ValueError("coefs_out must be an (R, l) int32/int64 tensor with contiguous rows")
+            coefs = coefs_out
+        else:
+            coefs = torch.empty((R, self.l), dtype=torch.int32, device=self.device) if want_coefs else None
         if mask is not None:
             if mask.shape != (R, self.t_pad):
                 raise ValueError(mask.shape)
@@ -396,18 +463,36 @@ class LigeroEncoderSIMT:
             mask_arg = self._u32(mask32)
         else:
             mask_arg = self.tw_fwd            # unused: TP = 0
-        coef_arg = self._u32(coefs) if coefs is not None else np.uint64(0)
-        # torch's current stream vs cupy's: launch on torch's stream (or the given one -- hp2-host's pipelining)
-        import warnings
-        ts = stream if stream is not None else torch.cuda.current_stream(self.device)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            cstream = cp.cuda.ExternalStream(ts.cuda_stream)
-        with cstream:
-            self.kernel((min(self.blocks, R),), (self.threads,),
-                        (self._u32(rows32), self._u32(out), coef_arg, mask_arg, self.tw_inv, self.tw_fwd, self.coset,
-                         self.mask_tw, np.int32(R)), shared_mem=self.smem)
+        if coefs is not None:
+            wide = coefs.dtype == torch.int64
+            coef_arg, coef_stride = np.uint64(coefs.data_ptr()), coefs.stride(0) * (2 if wide else 1)
+        else:
+            coef_arg, coef_stride, wide = np.uint64(0), self.l, False
+        self._launch(self.kernel, R, (np.uint64(rows.data_ptr()), self._u32(out), coef_arg, mask_arg, self.tw_inv,
+                                      self.tw_fwd, self.coset, self.mask_tw, np.int32(R),
+                                      np.int32(self.l * (2 if in_wide else 1)), np.int32(int(in_wide)),
+                                      np.int32(coef_stride), np.int32(int(wide))), stream)
         return out, coefs
+
+    def encode_coefs(self, coefs: torch.Tensor, out: torch.Tensor | None = None,
+                     stream: torch.cuda.Stream | None = None) -> torch.Tensor:
+        """Evaluate coefficient rows on the code's domain: ``coefs`` (R, l + t_pad) int64 on the device (rows contiguous,
+        any row stride), degree < k -- the ZK mask rows -- -> ``out`` (R, n) int32, bit-exact with
+        ``eval_on_coset(coefs, n)``.  On coset ``c`` the high part enters as ``x^l c_hi(x)`` with the constant
+        ``x^l = z_c + 1`` (the same fold-in as the witness mask, one table apart); no INTT."""
+        R = coefs.shape[0]
+        if coefs.shape != (R, self.l + self.t_pad) or coefs.stride(1) != 1:
+            raise ValueError("coefs must be (R, l + t_pad) with contiguous rows")
+        if coefs.dtype != torch.int64:
+            coefs = coefs.to(torch.int64)
+        out = self._check_out(out, R)
+        if self._kernel_coef is None:
+            self._kernel_coef = self._compile(1)
+        self._launch(self._kernel_coef, R, (np.uint64(coefs.data_ptr()), self._u32(out), np.uint64(0), self.tw_fwd,
+                                            self.tw_inv, self.tw_fwd, self.coset, self.mask_tw1, np.int32(R),
+                                            np.int32(coefs.stride(0) * 2), np.int32(1), np.int32(self.l), np.int32(0)),
+                     stream)
+        return out
 
 
 _ENC: dict = {}

@@ -868,14 +868,16 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         S = _sample_masks(cfg, m, chain is not None, device)
         clk.lap("zk_masks")
         # coefficient rows of every committed polynomial: witness rows interp_H(W) + Z_H s_j, then the mask rows
-        coefs = torch.zeros((Mrows, k), dtype=torch.int64, device=device)
         if enc is not None:
             # SIMT kernel: codeword of interp_H(W_j) + Z_H s_j on the coset (the mask folded in per coset, 8c) and the
-            # natural-order coefficients of interp_H(W_j); the 4D / 5D mask rows (degree < k) through the torch NTT
+            # natural-order coefficients of interp_H(W_j) written as int64 straight into coefs[:m, :l]
             U = torch.empty((Mrows, n), dtype=torch.int32, device=device)
-            _, C = enc.encode(W, S["W"], want_coefs=True, out=U[:m])
-            coefs[:m, :l] = C
+            coefs = torch.empty((Mrows, k), dtype=torch.int64, device=device)
+            coefs[:m, l:] = 0
+            coefs[m:] = 0
+            enc.encode(W, S["W"], out=U[:m], coefs_out=coefs[:m, :l])
         else:
+            coefs = torch.zeros((Mrows, k), dtype=torch.int64, device=device)
             coefs[:m, :l] = intt(W % P)
         _add_zh_times(coefs[:m], S["W"], l)
         for kind, sl in mr.items():
@@ -883,7 +885,8 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
             coefs[sl, :blk.shape[1]] = blk
         del S
         if enc is not None:
-            U[m:] = eval_on_coset(coefs[m:], n).to(torch.int32)
+            if Mrows > m:
+                enc.encode_coefs(coefs[m:], out=U[m:])            # the 4D / 5D mask rows (degree < k), same kernel
         else:
             U = eval_on_coset(coefs, n)                           # (M, n), the coset g <w_n> (disjoint from H)
     else:

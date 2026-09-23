@@ -84,9 +84,24 @@ def main(argv=None) -> int:
         refz = eval_on_coset(coefs, n)
         ok3 = torch.equal(Uz.to(torch.int64), refz)
         ok4 = torch.equal(Cz.to(torch.int64), intt(rows))
-        report["exact"][l] = {"plain_codeword": ok1, "plain_coefs": ok2, "zk_codeword": ok3, "zk_coefs": ok4, "rows": R}
-        ok_all &= ok1 and ok2 and ok3 and ok4
-        print(f"l={l:6d} n={n:6d}: plain {ok1} coefs {ok2} | zk (mask fold-in) {ok3} coefs {ok4}")
+        # int32 input rows (read as 4-byte words) == int64 rows (read in place)
+        ok5 = torch.equal(encz.encode(rows.to(torch.int32), mask)[0], Uz)
+        # the prover's layout: int64 coefficients written straight into the [:, :l] view of an (R, l + t_pad) matrix
+        k = l + ZK_T_PAD
+        cbuf = torch.full((R, k), -1, dtype=torch.int64, device=dev)
+        U2, C2 = encz.encode(rows, mask, out=torch.empty((R, n), dtype=torch.int32, device=dev), coefs_out=cbuf[:, :l])
+        ok6 = torch.equal(U2, Uz) and torch.equal(cbuf[:, :l], intt(rows)) and bool(torch.all(cbuf[:, l:] == -1))
+        # coefficient rows of degree < k (the ZK mask rows): kernel == eval_on_coset
+        crows = torch.randint(0, P, (R, k), generator=g).to(dev)
+        big = torch.zeros((2 * R, k), dtype=torch.int64, device=dev)          # a strided view: rows R.. of a taller matrix
+        big[R:] = crows
+        Uc = encz.encode_coefs(big[R:], out=torch.empty((R, n), dtype=torch.int32, device=dev))
+        ok7 = torch.equal(Uc.to(torch.int64), eval_on_coset(crows, n))
+        report["exact"][l] = {"plain_codeword": ok1, "plain_coefs": ok2, "zk_codeword": ok3, "zk_coefs": ok4,
+                              "int32_rows": ok5, "coefs_out_int64_view": ok6, "coef_rows": ok7, "rows": R}
+        ok_all &= ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7
+        print(f"l={l:6d} n={n:6d}: plain {ok1} coefs {ok2} | zk (mask fold-in) {ok3} coefs {ok4} | int32 in {ok5} "
+              f"int64 coefs view {ok6} | coefficient rows {ok7}")
     # timing at the prover's shape
     for l in (8192, 16384):
         report["timing"][l] = _timing(l, args.rows, args.reps, dev, g)
