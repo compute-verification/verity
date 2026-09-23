@@ -1026,8 +1026,10 @@ class _TestsStatic:
         self.key, self.sys, self.tb = key, sys, tb
         n, k, l, D = cfg.n, cfg.k, cfg.l, cfg.D
         self.U = torch.empty((Mrows, n), dtype=torch.int32, device=device)
-        self.coefs = torch.empty((Mrows, k), dtype=torch.int64, device=device) if cfg.zk else None
-        self.W = None if cfg.zk else torch.empty((m, l), dtype=torch.int64, device=device)
+        # int32 residues (< p < 2^31): the encoder returns int32 coefficients, the fused tests read u32 -- half the
+        # traffic of int64 for the 431 MB coefficient matrix (the copy into it and the three combinations over it)
+        self.coefs = torch.empty((Mrows, k), dtype=torch.int32, device=device) if cfg.zk else None
+        self.W = None if cfg.zk else torch.empty((m, l), dtype=torch.int32, device=device)
         self.xraw = torch.empty((D * width,), dtype=torch.int32, device=device)
         pub_q, _ = _lin_pub_index(tb, device)
         self.pubmat = torch.empty((len(pub_q), l), dtype=torch.int64, device=device) if pub_q else None
@@ -1266,7 +1268,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
                 for kind_, sl_ in mr.items():
                     blk_ = Sg[kind_]
                     cg[sl_, :blk_.shape[1]] = blk_
-                st.U[m:] = eval_on_coset(cg[m:], n).to(torch.int32)
+                st.U[m:] = eval_on_coset(cg[m:].to(torch.int64), n).to(torch.int32)
             else:
                 enc.encode(Wg, out=st.U)
                 st.W.copy_(Wg)
@@ -1308,7 +1310,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
             coefs[sl, :blk.shape[1]] = blk
         del S
         if enc is not None:
-            U[m:] = _graphed("coset_masks", lambda c: eval_on_coset(c, n), coefs[m:]).to(torch.int32)
+            U[m:] = _graphed("coset_masks", lambda c: eval_on_coset(c, n), coefs[m:].to(torch.int64)).to(torch.int32)
         else:
             U = eval_on_coset(coefs, n)                           # (M, n), the coset g <w_n> (disjoint from H)
     else:
