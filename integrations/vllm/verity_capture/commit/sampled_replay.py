@@ -1673,13 +1673,17 @@ def split_not_executed(vus: list[dict], executed_prefix: dict[str, dict] | None)
     return keep, out
 
 
-def _address_family(a: dict[str, Any]) -> str:
+def _address_family(op: str, member: str, a: dict[str, Any]) -> str:
     """The manifest family of a `population(..., addresses=)` record: recorded by the address rule that produced it (`manifest_family`,
-    the same labels build_manifest assigns) -- an accumulator record without it is a caller's own construction and is named as such."""
+    the same labels build_manifest assigns).  A record built without the label (a caller's own accumulator, e.g. the tests') is named by
+    the address SCHEMA it was written in: the sampler op, a `moe/L<k>` plane address (`_MOE_LAYER_RE`, the moe_block_stream op_path
+    vocabulary), else the member's own family (`required_manifest.alias_family`)."""
     fam = a.get("manifest_family")
-    if not fam:
-        raise ValueError(f"population address {a.get('spec')!r} carries no manifest_family (not produced by `population`)")
-    return str(fam)
+    if fam:
+        return str(fam)
+    if op == SAMPLER_OP:
+        return "sampled_token_ids"
+    return "moe_block_stream" if _MOE_LAYER_RE.match(op) else RM.alias_family(member)
 
 
 def _manifest_engine_name(manifest: dict[str, Any]) -> str:
@@ -1753,7 +1757,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
                 non_row_idents.append(ident)
     else:
         for (rid, st, op, mem), a in addresses.items():
-            fam_total[_address_family(a)] += 1
+            fam_total[_address_family(op, mem, a)] += 1
     total = sum(fam_total.values())
     # --- reach: identities with >= 1 evaluable VU; evaluated: identities under an evaluated (request, step, module) -------------------
     reached: Counter = Counter()
@@ -1777,7 +1781,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
         k5 = _key(rid, st, op, mem)
         seen_keys.add(k5)
         ident = by_key.get(k5) if manifest is not None else None
-        fam = str(ident["family"]) if ident is not None else _address_family(a)
+        fam = str(ident["family"]) if ident is not None else _address_family(op, mem, a)
         if manifest is not None and ident is None:
             n_outside += 1
             if len(outside) < first_n:
