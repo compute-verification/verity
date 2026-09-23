@@ -300,6 +300,79 @@ def test_zero_sums_accepted_in_unit_and_chain_mode(rel):
                 assert torch.equal(got, torch.as_tensor(pub[k]) % P), f"{rel.name}: output {k}"
 
 
+# relmin-private's 1e5 differential hit (fp8-hopper, seed 3000 + 90112, index 2424): two live products cancel exactly at the
+# group maximum, the other 30 are dead there; the model's word is +0.  The pubsel of 02c3321 (before the z-masked clamp)
+# rejected its honest witness at g0.norm.clamp.
+UNIT_92536 = {"c": 0,
+              "a": [96, 233, 233, 164, 93, 20, 48, 118, 215, 181, 209, 18, 148, 226, 84, 167, 65, 129, 187, 151, 223, 224, 40, 71,
+                    178, 195, 64, 169, 5, 218, 32, 246],
+              "b": [125, 124, 5, 34, 58, 67, 231, 70, 249, 173, 198, 97, 224, 153, 211, 39, 254, 144, 82, 7, 7, 251, 111, 26, 2, 126,
+                    131, 76, 102, 208, 119, 174]}
+
+
+def _cancelling_at_large_maximum(rel: Relation, n: int, seed: int):
+    """(c, a, b): c = +-0; ``a_0 b_0`` near the top of the operand range and ``a_j b_j = -a_0 b_0`` at a random position j;
+    every other product zero or tiny (subnormal / smallest-normal operands), i.e. shifted out at the group maximum.  The
+    sum of a group holding both is exactly zero at E far above ``acc_e_min + width``: no normalisation shift reaches the
+    subnormal grid's ``tc(E)``, so only a clamp that ignores zero sums admits the honest witness."""
+    pl = plan(rel.params)
+    rng = np.random.default_rng(seed)
+    sign, ef, top = 1 << (pl.op_word_bits - 1), pl.op_frac, 2**pl.op_exp - 2
+    a = np.zeros((n, rel.k), dtype=np.int64)
+    b = np.zeros_like(a)
+    for i in range(n):
+        a[i, 0] = (int(rng.integers(top - 3, top + 1)) << ef) | int(rng.integers(0, 2**ef))
+        b[i, 0] = (int(rng.integers(top - 3, top + 1)) << ef) | int(rng.integers(0, 2**ef))
+        j = int(rng.integers(1, rel.k))
+        a[i, j], b[i, j] = a[i, 0], b[i, 0] ^ sign
+        for q in range(1, rel.k):
+            if q != j and rng.random() < 0.7:
+                a[i, q] = (int(rng.integers(0, 2)) << (pl.op_word_bits - 1)) | int(rng.integers(0, 2 * 2**ef))
+                b[i, q] = int(rng.integers(0, 2 * 2**ef))
+    c = np.where(rng.integers(0, 2, size=n) == 1, 1 << 31, 0).astype(np.int64)
+    return c, a, b
+
+
+@pytest.mark.parametrize("rel", V2 + [RELATIONS[n] for n in ("bf16-hopper-v2x4", "bf16-ampere-v2x4", "fp8-hopper-v2x4",
+                                                              "fp8-ada-v2x4")], ids=lambda r: r.name)
+def test_cancelling_sum_at_large_group_maximum_accepted(rel):
+    """Exact cancellation at a large group maximum with every other product dead (unit 92536 for the k = 32 E4M3 units, 256
+    constructed units each): the honest witness is accepted in unit and chain mode, every flipped claim is refused, and the
+    v1 unit (where registered) agrees on both."""
+    p = rel.params
+    pl = plan(p)
+    c, a, b = _cancelling_at_large_maximum(rel, 256, seed=92536)
+    if pl.fp8 and rel.k == len(UNIT_92536["a"]):
+        c = np.concatenate([[UNIT_92536["c"]], c])
+        a = np.concatenate([[UNIT_92536["a"]], a])
+        b = np.concatenate([[UNIT_92536["b"]], b])
+    y = np.array([tc_dot(rel.model, int(c[i]), a[i].tolist(), b[i].tolist()) for i in range(len(c))], dtype=np.int64)
+    fin = ((y >> 23) & 0xFF) != 0xFF
+    c, a, b, y = c[fin], a[fin], b[fin], y[fin]
+    assert len(y) >= 16 and int(((y & 0x7FFFFFFF) == 0).sum()) >= 16, "zero words at a large maximum present"
+    if pl.fp8 and rel.k == len(UNIT_92536["a"]) and rel.name == "fp8-hopper-v2":
+        assert int(y[0]) == 0, "unit 92536 is the +0 word"
+    for chain in (False, True):
+        sys = rel.compile(p, chain)
+        tb = tables(sys, "cpu")
+        pub = rel.public_vectors(p, c, a, b, y, device="cpu")
+        W = build_witness(sys, pub, rel.hints(p, sys, c, a, b, y if chain else None, "cpu"), "cpu")
+        ok = _accepts(sys, tb, W, pub)
+        assert bool(ok.all()), f"{rel.name} chain={chain}: honest units rejected {torch.nonzero(~ok).flatten().tolist()[:5]}"
+    s2 = rel.compile(p, False)
+    tb2 = tables(s2, "cpu")
+    lo = pl.drop if pl.fp8 else 0
+    yb = y ^ (1 << np.random.default_rng(5).integers(lo, 31, size=len(y)))
+    fb = ((yb >> 23) & 0xFF) != 0xFF
+    bad = _witness_accepts(s2, tb2, rel.hints, rel.public_vectors, p, c[fb], a[fb], b[fb], yb[fb])
+    assert not bool(bad.any()), f"{rel.name}: flipped claims accepted {torch.nonzero(bad).flatten().tolist()[:5]}"
+    if rel.name in V1_OF:
+        v1, s1, h1, pv1 = _v1_unit(rel)
+        tb1 = tables(s1, "cpu")
+        assert bool(_witness_accepts(s1, tb1, h1, pv1, p, c, a, b, y).all()), f"{rel.name}: v1 rejects an honest unit"
+        assert not bool(_witness_accepts(s1, tb1, h1, pv1, p, c[fb], a[fb], b[fb], yb[fb]).any())
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # The folded x4 units: four instruction steps per column (experimental: census + CPU evidence; the GPU gate is pending)
 # ---------------------------------------------------------------------------------------------------------------------
