@@ -335,9 +335,34 @@ def test_best_of_two_is_min_t_total(store: LocalStore) -> None:
     fast = put(store, result(t_total=3.0))
     tab = T.build(store)
     assert cell(tab).artifact == fast and cell(tab).t_total == 3.0
-    assert tab.also_valid == [{"artifact": slow, "candidate": "A-GKR", "target": FIRST.name, "t_total": 5.0, "best": fast}]
+    assert tab.also_valid == [{"artifact": slow, "candidate": "A-GKR", "target": FIRST.name, "authentication": "excluded", "t_total": 5.0,
+                               "best": fast}]
     assert len(tab.cells) == 1 and tab.rejected == []
     assert "Valid but not the best" in T.render_markdown(tab)
+
+
+def test_included_hash_fills_its_own_column(store: LocalStore) -> None:
+    """An ``authentication = included-hash`` result is a second Table 2 column (``<candidate> + in-proof hash``), never the bare
+    cell; the column only appears once such a cell exists; Table 3 labels the committed row."""
+    bare = put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=1.0))
+    tab = T.build(store)
+    assert T.table2_columns(tab) == T.TABLE2_COLUMNS and T.committed_candidates(tab) == []
+    doc = result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=2.5)
+    doc["workload_fingerprint"].update(authentication="included-hash", hash="poseidon2-babybear-w24", sharing="none")
+    com = put(store, doc)
+    tab = T.build(store)
+    row = next(r for r in tab.rows if r["target"] == FP8_ADA_MMA.name)
+    assert row["cells"]["B-Ligero"].artifact == bare and row["committed"]["B-Ligero"].artifact == com
+    assert row["committed"]["B-Ligero"].authentication == "included-hash" and row["committed"]["B-Ligero"].hash_name == "poseidon2-babybear-w24"
+    assert T.table2_columns(tab) == (*T.TABLE2_COLUMNS, "B-Ligero + in-proof hash") and tab.rejected == []
+    md = T.render_markdown(tab)
+    assert "B-Ligero + in-proof hash" in md and "authentication included-hash (hash poseidon2-babybear-w24, sharing none)" in md
+    js = T.render_json(tab)
+    assert js["table2"]["columns"][-1] == "B-Ligero + in-proof hash" and js["table2"]["authentication_modes"] == ["excluded", "included-hash"]
+    assert {c.artifact for c in tab.cells} == {bare, com}
+    # a committed result never fills the bare cell, even when it is the only result
+    store2_bare_missing = [r for r in tab.rows if r["target"] == FP8_ADA_MMA.name][0]["cells"]["B-Ligero"]
+    assert store2_bare_missing.artifact == bare
 
 
 def test_fp8_ada_row_and_hvzk_drilldown(store: LocalStore) -> None:

@@ -44,6 +44,7 @@ except ImportError:  # pragma: no cover  -- the same spellings, so the predicate
 
 __all__ = [
     "AUTHENTICATION",
+    "AUTH_MODES",
     "B",
     "BF16_INSTANCES_MANIFEST_SHA256",
     "CANDIDATES",
@@ -94,6 +95,11 @@ B = 4096
 #: log2 of the soundness error: the target AND the achieved (union-bounded over sub-batches) must both be <= this.
 SOUNDNESS_LOG2 = -128
 AUTHENTICATION = "excluded"
+#: Table 2 prints one column per candidate per authentication mode that has a valid cell: ``excluded`` (the bare relation) and
+#: ``included-hash`` (the operand rows hashed INSIDE the proof with Poseidon2-BabyBear, the digests bound to the Merkle roots;
+#: lane hash-relation, user decision 2026-09-23 05:39Z: "ZK-friendly hashes as part of the proof").
+AUTH_MODES: tuple[str, ...] = (AUTHENTICATION, "included-hash")
+AUTH_COLUMN_SUFFIX = {AUTHENTICATION: "", "included-hash": " + in-proof hash"}
 CAPTION: dict[str, Any] = {
     "K": K,
     "B": B,
@@ -103,7 +109,8 @@ CAPTION: dict[str, Any] = {
     "flop_per_fma": 2,
     "instances": "the frozen instance set of the row's target (FROZEN_INSTANCES)",
     "native_denominator": "datasheet dense tensor-core peak of the exact target device (Target.native_peak)",
-    "authentication": AUTHENTICATION + " (stated here until `included` runs exist)",
+    "authentication": "excluded (bare columns) | included-hash (columns ' + in-proof hash': Poseidon2-BabyBear row hashing inside the proof, "
+                      "digests checked against the operand Merkle roots; x, W private)",
     "cell": "best valid implementation of the candidate in its declared proof class: min t.total; printed as R_native_spec / R_proved, R_proved = 2KB / t.total",
     "same_sku": "the prover ran on the same physical device SKU as the row's native device (hardware.gpu.name ~ native_peak.device)",
     "device_variant": "the board is the reference part: hardware.gpu.memory_total_bytes within 12 % of native_peak.memory_bytes (a same-named re-memoried board is not)",
@@ -407,7 +414,7 @@ def _measurements(result: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def reject_reasons(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapping[str, Any] | None, target: Target,
-                   candidate: Candidate, proof_classes: Sequence[str] | None = None) -> list[str]:
+                   candidate: Candidate, proof_classes: Sequence[str] | None = None, authentication: str = AUTHENTICATION) -> list[str]:
     """Every reason ``result`` (a ``bench-result/v1`` meta: the result.json) is NOT a valid Table 2 cell for ``target`` x
     ``candidate``; ``[]`` means valid.  ``proof_classes`` overrides the candidate's declared classes (drill-down).  Frozen:
 
@@ -452,8 +459,8 @@ def reject_reasons(result: Mapping[str, Any], labels: Iterable[Any], attempt: Ma
     pc = fp.get("proof_class")
     if pc not in classes:
         p.append(f"proof_class {pc!r} is not {candidate.id}'s declared class {' | '.join(classes)}")
-    if fp.get("authentication") != AUTHENTICATION:
-        p.append(f"authentication {fp.get('authentication')!r}: the caption states {AUTHENTICATION!r}")
+    if fp.get("authentication") != authentication:
+        p.append(f"authentication {fp.get('authentication')!r}: this column is {authentication!r} (Table 2 columns: {' | '.join(AUTH_MODES)})")
     hw = fp.get("hardware") if isinstance(fp.get("hardware"), Mapping) else {}
     gpu = hw.get("gpu") if isinstance(hw.get("gpu"), Mapping) else None
     gpu_name = gpu.get("name") if gpu else None
@@ -522,6 +529,9 @@ class Cell:
     mode: str | None = None            #: the fingerprint's ``mode`` (``interactive`` | ``fiat-shamir``), when stated
     verified_by: str | None = None     #: who asserted the accepting verification label (a non-producer)
     host: str | None = None            #: the pod's host CPU (``hardware.cpu``): host-side prover phases are paid there
+    authentication: str = AUTHENTICATION  #: the fingerprint's ``authentication`` (which Table 2 column the cell fills)
+    hash_name: str | None = None       #: ``included-hash``: the fingerprint's ``hash`` (e.g. poseidon2-babybear-w24)
+    sharing: str | None = None         #: ``included-hash``: the fingerprint's ``sharing`` (none | tile64x64)
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -531,6 +541,9 @@ class Cell:
         verifier could only replay the runner's step-0 coins (D7: live-verifier-only evidence; the Fiat-Shamir row of the
         same run set is the transferable one)."""
         who = f"verified by {self.verified_by}" if self.verified_by else "verified"
+        if self.mode == "interactive" and self.verified_by and self.verified_by.startswith("live-verifier"):
+            return (f"accepted by the LIVE verifier {self.verified_by} (its own step-0 coins, independent of the prover; session "
+                    f"recorded); interactive transcript, so the dump is evidence only together with that session (D7)")
         if self.mode == "interactive":
             return (f"{who} against the runner's step-0 coins (interactive transcript: not transferable evidence per D7; "
                     f"the Fiat–Shamir variant is)")
@@ -629,7 +642,7 @@ def build(store: Any) -> Tables:
 
     T = Tables()
     results = _artifacts(store, RESULT_KIND)
-    valid: dict[tuple[str, str], list[Cell]] = {}
+    valid: dict[tuple[str, str, str], list[Cell]] = {}     # (target, candidate, authentication)
     drill: dict[tuple[str, str, str], list[Cell]] = {}
     for art_id, meta in results:
         fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
@@ -648,32 +661,35 @@ def build(store: Any) -> Tables:
                                + ([_contract_reason(problems)] if problems else [])})
             continue
         labels = store.labels(art_id)
-        reasons = reject_reasons(meta, labels, attempt, target, cand)
+        auth = fp.get("authentication") if fp.get("authentication") in AUTH_MODES else AUTHENTICATION
+        reasons = reject_reasons(meta, labels, attempt, target, cand, authentication=auth)
         labs = _labels(labels)
         vb = _verified_by(labs, producers(attempt, labs))
         verified_by = vb.by if vb is not None else None
         if reasons:
             T.rejected.append({**entry, "reasons": reasons})
             for dc in cand.drilldown_classes:
-                if not reject_reasons(meta, labels, attempt, target, cand, proof_classes=(dc,)):
+                if not reject_reasons(meta, labels, attempt, target, cand, proof_classes=(dc,), authentication=auth):
                     drill.setdefault((target.name, cand.id, dc), []).append(_cell(meta, art_id, rid, target, cand, verified_by))
             continue
-        valid.setdefault((target.name, cand.id), []).append(_cell(meta, art_id, rid, target, cand, verified_by))
+        valid.setdefault((target.name, cand.id, auth), []).append(_cell(meta, art_id, rid, target, cand, verified_by))
 
     for target in TARGETS.values():
         row: dict[str, Any] = {"target": target.name, "status": target.status, "device": target.native_peak.device, "dtype": dtype_of(target),
                                "instruction": target.instruction, "native_spec_flop_per_second": target.native_peak.flop_per_second,
-                               "native_measured": _native_measured(store, target), "cells": {}}
+                               "native_measured": _native_measured(store, target), "cells": {}, "committed": {}}
         for cand in CANDIDATES:
-            pool = sorted(valid.get((target.name, cand.id), []), key=lambda c: (c.t_total, c.artifact))
-            if pool:
-                row["cells"][cand.id] = pool[0]
-                T.cells.append(pool[0])
-                for c in pool[1:]:
-                    T.also_valid.append({"artifact": c.artifact, "candidate": cand.id, "target": target.name, "t_total": c.t_total,
-                                         "best": pool[0].artifact})
-            else:
-                row["cells"][cand.id] = None
+            for auth in AUTH_MODES:
+                slot = row["cells"] if auth == AUTHENTICATION else row["committed"]
+                pool = sorted(valid.get((target.name, cand.id, auth), []), key=lambda c: (c.t_total, c.artifact))
+                if pool:
+                    slot[cand.id] = pool[0]
+                    T.cells.append(pool[0])
+                    for c in pool[1:]:
+                        T.also_valid.append({"artifact": c.artifact, "candidate": cand.id, "target": target.name, "authentication": auth,
+                                             "t_total": c.t_total, "best": pool[0].artifact})
+                else:
+                    slot[cand.id] = None
             for dc in cand.drilldown_classes:
                 dpool = sorted(drill.get((target.name, cand.id, dc), []), key=lambda c: (c.t_total, c.artifact))
                 if dpool:
@@ -708,9 +724,11 @@ def _cell(meta: Mapping[str, Any], art_id: str, rid: str | None, target: Target,
     host = None
     if isinstance(cpu, Mapping) and isinstance(cpu.get("model"), str):
         host = cpu["model"] + (f" x{cpu['count']}" if _num(cpu.get("count")) else "")
+    auth = fp.get("authentication") if fp.get("authentication") in AUTH_MODES else AUTHENTICATION
     return Cell(target=target.name, candidate=cand.id, artifact=art_id, attempt=rid, proof_class=fp["proof_class"], t_total=t_total, r_proved=r,
                 overhead=target.native_peak.flop_per_second / r, hardware=gpu.get("name"), phases=phases(meta), mode=mode, verified_by=verified_by,
-                host=host)
+                host=host, authentication=auth, hash_name=fp.get("hash") if isinstance(fp.get("hash"), str) else None,
+                sharing=fp.get("sharing") if isinstance(fp.get("sharing"), str) else None)
 
 
 def cell_artifacts(T: Tables) -> list[str]:
@@ -728,6 +746,16 @@ def snapshot_name(now: _dt.datetime | None = None) -> str:
 # --- rendering ------------------------------------------------------------------------------------------------------------------------
 
 TABLE2_COLUMNS = ("Device", "Datatype / target", "Native dense peak, spec", "Native dense peak, measured", *(c.id for c in CANDIDATES))
+
+
+def committed_candidates(T: "Tables") -> list["Candidate"]:
+    """The candidates with at least one populated ``included-hash`` cell: each gets a ``<id> + in-proof hash`` column after the
+    bare columns (a candidate without committed runs does not get an empty column)."""
+    return [c for c in CANDIDATES if any(r["committed"].get(c.id) for r in T.rows)]
+
+
+def table2_columns(T: "Tables") -> tuple[str, ...]:
+    return (*TABLE2_COLUMNS, *(c.id + AUTH_COLUMN_SUFFIX["included-hash"] for c in committed_candidates(T)))
 TABLE3_COLUMNS = ("Device / target", "Candidate", "Total prover time", "Witness", "Encoding + commitment", "Arithmetic", "Lookup",
                   "ZK additional", "Serialization", "Other")
 _BUCKET_COLUMN = dict(zip(contract.BUCKETS, TABLE3_COLUMNS[3:9]))
@@ -788,7 +816,9 @@ def _phase_cells(ph: Mapping[str, Any]) -> list[str]:
 def caption_text() -> str:
     return (f"K = {K}; B = {B}; soundness 2^{SOUNDNESS_LOG2} (target and achieved, union-bounded over sub-batches); dense execution; "
             f"FP32 accumulation; FMA = 2 FLOP; the frozen instance set of the row's target; native denominator = datasheet dense peak of the "
-            f"exact target device (`Target.native_peak`); authentication = {AUTHENTICATION}. Cell = best valid implementation of the "
+            f"exact target device (`Target.native_peak`); authentication = {AUTHENTICATION} in the candidate columns, included-hash in the "
+            f"' + in-proof hash' columns (Poseidon2-BabyBear hashing of the operand rows inside the proof, digests bound to the Merkle roots; "
+            f"x, W private). Cell = best valid implementation of the "
             f"candidate in its declared proof class (min `t.total`), run on the row's device SKU, printed as R_native_spec / R_proved with "
             f"R_proved = 2KB / t.total. Native measured = `{NATIVE_PEAK_KIND}` ({NATIVE_PEAK_METHOD}), `{UNMEASURED}` when absent; "
             f"`{EMPTY}` = no valid result.")
@@ -816,16 +846,22 @@ def render_markdown(T: Tables) -> str:
                 f"{nm['artifact']} — native peak of {nm['device']} {nm['dtype']}: {nm['flop_per_second']:.4g} FLOP/s, {how}")
         line = [r["device"], f"{(r['dtype'] or '?').upper()} {r['instruction'] or ''} · {r['target']}".strip(),
                 _fmt_tflops(r["native_spec_flop_per_second"]), measured]
-        for cand in CANDIDATES:
-            c: Cell | None = r["cells"].get(cand.id)
+        def cell_text(c: Cell | None, cand: Candidate) -> str:
             if c is None:
-                line.append(EMPTY)
-            else:
-                line.append(fmt_overhead(c.overhead) + " " + note(
-                    f"{c.artifact} — {cand.id} {c.proof_class} on {c.hardware}" + (f" (host {c.host})" if c.host else "") +
-                    f"; attempt {c.attempt or 'unknown'}; t.total {c.t_total:.4g} s; R_proved {c.r_proved:.4g} FLOP/s; {c.verification_note()}"))
+                return EMPTY
+            extra = ""
+            if c.authentication != AUTHENTICATION:
+                extra = f"; authentication {c.authentication} (hash {c.hash_name or '?'}, sharing {c.sharing or '?'})"
+            return fmt_overhead(c.overhead) + " " + note(
+                f"{c.artifact} — {cand.id} {c.proof_class} on {c.hardware}" + (f" (host {c.host})" if c.host else "") +
+                f"; attempt {c.attempt or 'unknown'}; t.total {c.t_total:.4g} s; R_proved {c.r_proved:.4g} FLOP/s{extra}; {c.verification_note()}")
+
+        for cand in CANDIDATES:
+            line.append(cell_text(r["cells"].get(cand.id), cand))
+        for cand in committed_candidates(T):
+            line.append(cell_text(r["committed"].get(cand.id), cand))
         rows2.append(line)
-    out += [_md_table(TABLE2_COLUMNS, rows2), ""]
+    out += [_md_table(table2_columns(T), rows2), ""]
     for d in T.drilldown:
         out.append(f"- drill-down {d['candidate']} {d['proof_class']} on {d['target']}: {fmt_overhead(d['overhead'])} "
                    f"({d['artifact']}, t.total {d['t_total']:.4g} s)")
@@ -838,7 +874,8 @@ def render_markdown(T: Tables) -> str:
     rows3 = []
     by_target = {r["target"]: r for r in T.rows}
     for c in T.cells:
-        rows3.append([f"{by_target[c.target]['device']} / {c.target}", c.candidate, fmt_seconds(c.t_total), *_phase_cells(c.phases)])
+        rows3.append([f"{by_target[c.target]['device']} / {c.target}", c.candidate + AUTH_COLUMN_SUFFIX.get(c.authentication, ""),
+                      fmt_seconds(c.t_total), *_phase_cells(c.phases)])
     out += [_md_table(TABLE3_COLUMNS, rows3) if rows3 else f"(no populated Table 2 cell {EMPTY} nothing to decompose)", ""]
     if notes:
         out += ["Footnotes:", *[f"[{i}] {n}" for i, n in enumerate(notes, 1)], ""]
@@ -864,7 +901,9 @@ def render_markdown(T: Tables) -> str:
 def render_json(T: Tables) -> dict[str, Any]:
     rows = []
     for r in T.rows:
-        rows.append({**{k: v for k, v in r.items() if k != "cells"}, "cells": {k: (c.to_json() if c else None) for k, c in r["cells"].items()}})
+        rows.append({**{k: v for k, v in r.items() if k not in ("cells", "committed")},
+                     "cells": {k: (c.to_json() if c else None) for k, c in r["cells"].items()},
+                     "committed": {k: (c.to_json() if c else None) for k, c in r["committed"].items()}})
     return {
         "schema": "verity/canonical-tables/v1",
         "frozen": FROZEN_ON,
@@ -873,7 +912,7 @@ def render_json(T: Tables) -> dict[str, Any]:
         "table1": {"columns": list(TABLE1_COLUMNS), "rows": [c.table1_row() for c in CANDIDATES],
                    "candidates": [{"id": c.id, "proof_classes": list(c.proof_classes), "drilldown_classes": list(c.drilldown_classes),
                                    "backend_names": list(c.backend_names)} for c in CANDIDATES]},
-        "table2": {"columns": list(TABLE2_COLUMNS), "rows": rows},
+        "table2": {"columns": list(table2_columns(T)), "rows": rows, "authentication_modes": list(AUTH_MODES)},
         "table3": {"columns": list(TABLE3_COLUMNS), "identity": "T_total = witness + encoding_commitment + arithmetic + lookup + zk_additional + serialization + other",
                    "rows": [{"target": c.target, "candidate": c.candidate, "artifact": c.artifact, **c.phases} for c in T.cells]},
         "drilldown": T.drilldown,
