@@ -256,7 +256,6 @@
   {"file": "verity_capture/experimental/commit_integ/tp_partial_source.py", "kind": "table", "symbol": "MOE_SITE_CLASSES", "pattern": "^MOE_SITE_CLASSES$", "class": "S", "retires": "P4", "tag": "TP-08 F-r19-moe-1", "inventory": "A64, A65"},
   {"file": "verity_capture/experimental/commit_integ/value_check.py", "kind": "path-predicate", "symbol": "compare", "pattern": "^mc\\ in\\ REEXEC_CLASSES$", "class": "S", "retires": "P4", "tag": "", "inventory": "A32"},
   {"file": "verity_capture/experimental/commit_integ/value_check.py", "kind": "table", "symbol": "REEXEC_CLASSES", "pattern": "^REEXEC_CLASSES$", "class": "S", "retires": "P4", "tag": "", "inventory": "A32"},
-  {"file": "verity_capture/fold.py", "kind": "path-predicate", "symbol": "_token_select_output", "pattern": "^m\\[\"spec\"\\]\\.startswith\\(\"TokenSelect_v\"\\)$", "class": "S", "retires": "P2", "tag": "", "inventory": "A86"},
   {"file": "verity_capture/gates.py", "kind": "table", "symbol": "FOLD_SUMMARY_FIELDS", "pattern": "^FOLD_SUMMARY_FIELDS$", "class": "P", "retires": "stays", "tag": "", "inventory": "—"},
   {"file": "verity_capture/noninterference.py", "kind": "model-name", "symbol": "<module>", "pattern": "^\\^\\(\\?:model\\|gpt_neox\\)\\\\\\.layers\\\\\\.\\(\\\\d\\+\\)\\$$", "class": "S", "retires": "P3", "tag": "", "inventory": "A85"},
   {"file": "verity_capture/noninterference.py", "kind": "model-name", "symbol": "<module>", "pattern": "^\\^gpt_neox\\\\\\.layers\\\\\\.\\(\\\\d\\+\\)\\$$", "class": "S", "retires": "P3", "tag": "", "inventory": "A85"},
