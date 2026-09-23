@@ -629,7 +629,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
                                        eos_of_record=(stop or {}).get("eos"), lag=(stop or {}).get("lag"))
     n_exec = {k: int(epr["requests"][k]["executed_prefix_len"]) for k in caps}
     if epr["any_eos_stop"] or not epr["ok"]:
-        print(f"[delta] executed prefix of record (pair {pair}): " + ", ".join(
+        print(f"[delta] execution_extent: executed prefix of record (pair {pair}): " + ", ".join(
             f"{k} served {v['served_output_len']} / executed {v['executed_prefix_len']} / cap {v['cap']}" + (" (EOS stop)" if v.get("eos_stop") else "")
             for k, v in epr["requests"].items()) + f"; LAG {epr['lag']}; EOS {epr['eos_of_record']}"
               + (f"; PROBLEMS {epr['problems'][:3]}" if epr["problems"] else ""), flush=True)
@@ -697,7 +697,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
                                     served_tokens=served_by_rid)                   # rev S-r17-23 (c): the FULL served list per request
     cov["match_account_link"] = link
     if link["required"] or link["problems"]:
-        print(f"[delta] executed prefix <-> Match account (pair {pair}): {'LINKED' if link['ok'] else 'NOT LINKED'} tokens_equal {link.get('tokens_equal')} "
+        print(f"[delta] execution_extent: executed prefix <-> Match account (pair {pair}): {'LINKED' if link['ok'] else 'NOT LINKED'} tokens_equal {link.get('tokens_equal')} "
               f"gm {((link.get('global_match') or {}).get('verdict'))}" + (f"; PROBLEMS {link['problems'][:3]}" if link["problems"] else ""), flush=True)
     if comp is not None:
         cov["composition"] = {k: v for k, v in comp.items() if k != "problems"} | {"problems": (comp.get("problems") or [])[:3]}
@@ -1777,7 +1777,7 @@ def main(argv: list[str] | None = None) -> None:
                                "expect": "weights pin FAIL naming the field; Commit FAIL rc 3"}
             if flip_weight_rec["after"] == _before:
                 raise SystemExit(f"--flip-weight did not change the element ({_before} -> {flip_weight_rec['after']}): pick another value")
-            print(f"[delta] FLIP-WEIGHT NEGATIVE TEST ({kind}): {flip_weight_rec} -- the weights pin MUST FAIL naming {_fw[0]}", flush=True)
+            print(f"[delta] FLIP-WEIGHT NEGATIVE TEST ({kind}): {flip_weight_rec} -- checkpoint_binding (the weights pin) MUST FAIL naming {_fw[0]}", flush=True)
         with TL.span("prep.register_weights", kind=kind):
             w = com.register_weights()
         TL.end("prep.committer_setup", kind=kind)
@@ -2034,7 +2034,7 @@ def main(argv: list[str] | None = None) -> None:
                         print(f"[delta] COMPOSITION (pair {pair}): {'OK' if cmp_.get('ok') else 'FAIL'} engine steps {cmp_.get('checked_steps')} problem steps {cmp_.get('problem_steps_n', 0)}"
                               f"{(' ' + str(cmp_.get('skipped'))) if cmp_.get('skipped') else ''}{(' -- ' + str(cmp_.get('error'))) if cmp_.get('error') else ''}", flush=True)
                     if b["coverage"].get("error"):
-                        print(f"[delta] COVERAGE ERROR (pair {pair}): {b['coverage']['error']}", flush=True)
+                        print(f"[delta] required_value_coverage: identity coverage ERROR (pair {pair}): {b['coverage']['error']}", flush=True)
                     if b["coverage"]["missing"]:
                         print(f"[delta]   first missing: {b['coverage']['missing'][:3]}", flush=True)
                 except Exception as e:  # noqa: BLE001
@@ -2144,7 +2144,7 @@ def main(argv: list[str] | None = None) -> None:
                             cov["ok"], cov["error"] = False, "executed prefix of record: " + "; ".join(_epr_cov["problems"][:3])   # in place: row + rc.extra alias it
                     with _gz.open(out / f"layouts_pair{pair}_{arm}.json.gz", "wt") as f:
                         json.dump(lay, f)
-                    print(f"[delta] MANIFEST COVERAGE (pair {pair}, {arm}): {'OK' if cov['ok'] else 'FAIL'} checked {cov['checked']} missing {cov['missing_n']} "
+                    print(f"[delta] required_value_coverage: MANIFEST COVERAGE (pair {pair}, {arm}): {'OK' if cov['ok'] else 'FAIL'} checked {cov['checked']} missing {cov['missing_n']} "
                           f"{cov['missing_by_family']} families-missing-entirely {cov['families_missing_entirely']} unmatched-committed {cov['committed_unmatched_n']}", flush=True)
                     TL.end("validate.manifest_coverage", pair=pair, ok=bool(cov.get("ok")), n=cov.get("checked"))
                 # COORD 17:35Z (5): value correspondence is a separate, labelled check -- never folded into the coverage verdict
@@ -2619,7 +2619,7 @@ def main(argv: list[str] | None = None) -> None:
                           f"not-evaluable {(sr.get('population') or {}).get('not_evaluable')}{(' -- ' + str(sr.get('why'))) if sr.get('why') else ''}", flush=True)
                     if _smp.get("mismatch_n") and isinstance(sr.get("mismatch_by"), dict):        # [moe F-moe-r17-06] every mismatch by name
                         print(f"[delta] C2 SAMPLED REPLAY (pair {pair}): mismatches by family|request|phase {sr['mismatch_by'].get('by_family_request_phase')}", flush=True)
-                    print(f"[delta] C2 BOUNDARY LINKAGE (pair {pair}): {'OK' if lk.get('result') else ('FAIL' if lk.get('result') is False else 'NOT RUN')} "
+                    print(f"[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair {pair}): {'OK' if lk.get('result') else ('FAIL' if lk.get('result') is False else 'NOT RUN')} "
                           f"{lk.get('linked')}/{lk.get('pairs')} (step, request) boundaries linked{(' -- ' + str(lk.get('why'))) if lk.get('why') else ''}", flush=True)
                     # [FLUSH-03 fact of record; rev M-0494 (3)] one line: the committed up plane != the committed down plane, per (request, step, layer)
                     _ac = (sr.get("moe_planes") or {}).get("alias_check") or {}
@@ -2666,7 +2666,7 @@ def main(argv: list[str] | None = None) -> None:
                     # the record was derived for, so a row.log alone tells which pin was compared
                     _wp_cls = ("ok" if _wp.get("result") else ("missing" if _wp.get("result") is False and (_wp.get("missing") or []) and not (_wp.get("mismatched") or [])
                                                             else ("mismatch" if _wp.get("result") is False else "not evaluated")))
-                    print(f"[delta] WEIGHTS PIN (pair {pair}): {'OK' if _wp.get('result') else ('FAIL' if _wp.get('result') is False else 'NOT EVALUATED')} [{_wp_cls}] "
+                    print(f"[delta] checkpoint_binding (WEIGHTS PIN, pair {pair}): {'OK' if _wp.get('result') else ('FAIL' if _wp.get('result') is False else 'NOT EVALUATED')} [{_wp_cls}] "
                           f"root {str(_wp.get('root_of_record') or '?')[:16]} (record for Program {str((_wor_rec or {}).get('program_digest') or '?')[:16]}) "
                           f"compared {_wp.get('compared')} mismatched {len(_wp.get('mismatched') or [])} missing {len(_wp.get('missing') or [])} unpinned {len(_wp.get('unpinned') or [])} "
                           f"shards pinned {_wp.get('all_shards_pinned')}{(' -- ' + str(_wp.get('why'))) if _wp.get('why') else ''}", flush=True)

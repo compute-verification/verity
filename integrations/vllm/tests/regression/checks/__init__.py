@@ -16,7 +16,7 @@ from __future__ import annotations
 from importlib import import_module
 from types import ModuleType
 
-ORDER = ("manifest_digest", "program_digest", "global_match_checks", "executed_prefix", "coverage", "commit_summary",
+ORDER = ("manifest_digest", "program_digest", "global_match_checks", "executed_prefix", "coverage", "commit_summary", "verdict",
          "decomp_hashes", "replay_partition")
 
 
