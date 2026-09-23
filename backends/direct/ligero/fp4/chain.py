@@ -715,8 +715,11 @@ def bench_vu_fp4(args) -> int:
             proved.append((si, lo, hi, V, proof, pubs, lay_i))
             if rep == 0 and si + 1 >= warmup_subs:
                 if pipeline_depth > 1:
-                    # every pipeline slot once (its stream's hint graph capture, pinned buffers): untimed, like the warm-up
-                    R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in subs[:pipeline_depth]], coins_factory, depth=pipeline_depth, min_l=l)
+                    # a full pipelined pass, untimed: every slot's stream captures its graphs (hints; main's commit and
+                    # tests graphs are keyed per stream AND per (l, n_vus), so the short tail sub-batch must be met on
+                    # the slot it lands on) -- with only the first `depth` sub-batches warmed, timed rep 1 paid ~0.2 s
+                    # of captures on the tail (r20260923-091019-38d8: reps 0.255 / 0.065 / 0.068).
+                    R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in subs], coins_factory, depth=pipeline_depth, min_l=l)
                 break                                        # warm-up: --warmup-subs sub-batches (compile, graph capture, self-check on the first)
         wall_prove = time.perf_counter() - t_pass
         for si, lo, hi, V, proof, pubs, lay_i in proved:
