@@ -291,8 +291,11 @@ class HintsDevice:
 _CACHE: dict = {}
 
 
-def hints_device_for(sys: System, l: int, device, graph: bool = True) -> HintsDevice:
-    key = (id(sys), l, str(device), graph)
+def hints_device_for(sys: System, l: int, device, graph: bool = True, slot=None) -> HintsDevice:
+    """The cached generator for (system, l, device[, slot]).  ``slot``: a pipeline slot index -- sub-batches in flight
+    on different streams need their own instance (the graph's static input / output buffers are not shareable); the
+    graph is captured on the caller's current stream context and replays on the current stream."""
+    key = (id(sys), l, str(device), graph, slot)
     hit = _CACHE.get(key)
     if hit is None or hit[0] is not sys:
         hit = (sys, HintsDevice(sys, l, device, graph=graph))

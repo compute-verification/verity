@@ -425,6 +425,9 @@ def main(argv=None) -> int:
                                        help="non-bf16 relations: keep the synthetic instance set as an .npz under DIR")
     sub.choices["gate-vu"].add_argument("--unit-negatives", type=int, default=48,
                                         help="fp4-nvf4 gate: units per edge family for the wrong-rule witness battery (tu-k64-neg)")
+    sub.choices["bench-vu"].add_argument("--warmup-subs", type=int, default=1,
+                                         help="fp4-nvf4: sub-batches proven in the untimed warm-up rep 0 (default 1, main's harness; "
+                                              "n_proofs = a full rep). Recorded in the result's note")
     for name in ("gate-vu", "bench-vu"):
         sub.choices[name].add_argument("--fp4-hints", default="device", choices=("device", "numpy"),
                                        help="fp4-nvf4: the decode + hint generator -- device (fp4/hints_device.py: torch on the prover's "

@@ -149,20 +149,30 @@ def _pad_unit():
 #: torch int64 on the prover's device, one captured CUDA graph per (system, l) (``hints_device``; bit-identical to the
 #: numpy path, the default); ``numpy`` = ``witness.hints_fp4`` on the host (fp4-proof's path, kept for A/B).
 HINTS_MODES = ("device", "numpy")
+#: The tree's protocol exposes the prover as a stage generator (``protocol.prove_stages`` + ``pipeline``, lane hp2-host):
+#: then ``prove_vus`` runs the generator to completion and ``prove_vus_many`` / ``bench-vu --pipeline N`` interleave
+#: sub-batches on their own streams.  Before that merge the runner calls ``prove`` directly (the same transcript).
+_STAGED = hasattr(protocol_mod, "prove_stages")
 
 
-def _unit_arrays(vus: list[tuple], l: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """The l columns of a sub-batch as arrays -- ``a`` / ``b`` (l, 68) int64, ``c_in`` (l,) -- VU v's 24 steps at
-    columns [24 v, 24 v + 24) with the chain fed forward (``c_in`` of step s = the recorded accumulator of step s - 1,
-    0 at a start), the rest pad units (``_pad_unit``: zero operands, c_in = 0).  Vectorised (one stack per operand
-    instead of one Python tuple per unit)."""
+def _unit_arrays(vus: list[tuple], l: int, dtype=np.int64, validate: bool = True) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The l columns of a sub-batch as arrays -- ``a`` / ``b`` (l, 68) of ``dtype``, ``c_in`` (l,) int64 -- VU v's 24
+    steps at columns [24 v, 24 v + 24) with the chain fed forward (``c_in`` of step s = the recorded accumulator of step
+    s - 1, 0 at a start), the rest pad units (``_pad_unit``: zero operands, c_in = 0).  Vectorised (one stack per operand
+    instead of one Python tuple per unit).  ``dtype=np.uint8`` is the device hint generator's input format (8x less host
+    memory traffic than int64, no conversion inside the timed hint phase); ``validate`` asserts every operand word is a byte
+    before the narrowing cast (the words of an honest instance are E2M1 codes < 16 and UE4M3 bytes < 128; a word that is
+    not a byte is not a public input the verifier's decode accepts) -- this runs before the prover's clock starts."""
     n = len(vus)
-    a = np.zeros((l, WORDS), dtype=np.int64)
-    b = np.zeros((l, WORDS), dtype=np.int64)
+    a = np.zeros((l, WORDS), dtype=dtype)
+    b = np.zeros((l, WORDS), dtype=dtype)
     c_in = np.zeros(l, dtype=np.int64)
     if n:
-        a[:n * STEPS] = np.stack([np.asarray(A, dtype=np.int64) for A, _, _, _ in vus]).reshape(n * STEPS, WORDS)
-        b[:n * STEPS] = np.stack([np.asarray(B, dtype=np.int64) for _, B, _, _ in vus]).reshape(n * STEPS, WORDS)
+        for dst, idx in ((a, 0), (b, 1)):
+            w = np.stack([np.asarray(vu[idx], dtype=np.int64) for vu in vus]).reshape(n * STEPS, WORDS)
+            if validate and dtype != np.int64 and (w.min() < 0 or w.max() >= 2 ** (8 * np.dtype(dtype).itemsize)):
+                raise ValueError("public inputs rejected: an operand word is not a byte")
+            dst[:n * STEPS] = w
         accs = np.asarray([accs for _, _, accs, _ in vus], dtype=np.int64).reshape(n, STEPS)
         c_in[:n * STEPS] = np.concatenate([np.zeros((n, 1), dtype=np.int64), accs[:, :-1]], axis=1).reshape(-1)
     return a, b, c_in
@@ -186,6 +196,7 @@ class FP4ChainRunner:
         self.tb = tables(self.sys, self.device)
         self.compile_seconds = time.perf_counter() - t0
         self._cfg: dict[int, Config] = {}
+        self._marshal_cache: dict = {}
 
     def cfg(self, l: int) -> Config:
         if l not in self._cfg:
@@ -200,46 +211,111 @@ class FP4ChainRunner:
         l = max(min_l, 1 << (n_vus * STEPS - 1).bit_length())
         return Layout(l, n_vus, STEPS)
 
-    def prove_vus(self, vus: list[tuple], check=True, mutate=None, min_l: int = 256, coins=None, variant: str | None = None):
-        """``vus``: (A, B, accs, y_final) per VU.  The public claim per VU is its final FP32 word at its last column.
-        ``variant``: hints generated under a WRONG rule (``witness.VARIANTS``; a negative), the claim and links honest."""
-        if coins is None and self.interactive:
-            coins = protocol_mod.Coins.sample()
+    def marshal(self, vus: list[tuple], min_l: int = 256, variant: str | None = None) -> dict:
+        """The sub-batch's public words as arrays, once per sub-batch for the run: ``a`` / ``b`` (l, 68) -- bytes for the
+        device hint generator, int64 for the numpy path and the wrong-rule variants -- ``c_in`` (l,) and the claimed words
+        ``y32`` (l,) at every VU's last column.  Cached on the identity of the VU tuples (``relchain.marshal``'s key; the
+        bundle keeps ``vus`` alive so the ids cannot be recycled), so a timed sub-batch does no list -> numpy marshalling;
+        the wrong-rule variants (gate negatives) are not cached."""
+        key = None if variant is not None else (len(vus), id(vus[0]), id(vus[-1]), id(vus[len(vus) // 2]), min_l, self.hints_mode)
+        hit = self._marshal_cache.get(key) if key is not None else None
+        if hit is not None:
+            return hit
         lay = self.layout(len(vus), min_l)
         y32 = torch.zeros(lay.l, dtype=torch.int64)
         y32[STEPS - 1:STEPS * len(vus):STEPS] = torch.as_tensor([int(y) for _, _, _, y in vus], dtype=torch.int64)
-        a, b, c_in = _unit_arrays(vus, lay.l)
-        t0 = time.perf_counter()
+        device_hints = variant is None and self.hints_mode == "device"
+        a, b, c_in = _unit_arrays(vus, lay.l, dtype=np.uint8 if device_hints else np.int64)
+        bd = {"lay": lay, "a": a, "b": b, "c_in": c_in, "y32": y32, "vus": vus, "variant": variant}
+        if key is not None:
+            self._marshal_cache[key] = bd
+        return bd
+
+    def _hints(self, bd: dict, pub: dict, check: bool, slot=None) -> torch.Tensor:
+        """The decode (``pub``, filled in place) and the hints of a marshalled sub-batch on the prover's device -- the
+        timed ``hints_host`` phase.  Device mode: one graph replay (``hints_device_for``, one instance per pipeline
+        slot: the graph's static buffers must not be shared by sub-batches in flight on different streams); ``check``
+        also runs the numpy path and asserts equality.  Numpy mode / a wrong-rule variant: ``witness.hints_fp4`` /
+        ``unit_hints`` on the host."""
+        lay, a, b, c_in, variant = bd["lay"], bd["a"], bd["b"], bd["c_in"], bd["variant"]
         if variant is None and self.hints_mode == "device":
-            # the decode and the hints on the device (one graph replay; ``check``: also against the numpy path)
             from .hints_device import PIN_NAMES, hints_device_for
-            pub_rows, hints, _y = hints_device_for(self.sys, lay.l, self.device)(c_in, a, b, check=check)
-            pub = {name: pub_rows[i] for i, name in enumerate(PIN_NAMES)}
+            hd = hints_device_for(self.sys, lay.l, self.device, slot=None if slot is None else slot.index)
+            pub_rows, hints, _y = hd(c_in, a, b, check=check)
+            pub.update({name: pub_rows[i] for i, name in enumerate(PIN_NAMES)})
             if check:
                 ref = torch.as_tensor(hints_fp4(self.sys, c_in, a, b), dtype=torch.int64, device=self.device)
                 assert torch.equal(hints, ref), "device hints != numpy hints"
                 ref_pub = _public_vectors_torch(self.p, None, a, b, None, device=self.device)
                 assert all(torch.equal(pub[n], ref_pub[n]) for n in PIN_NAMES), "device public rows != numpy decode"
+            return hints
+        pub.update(_public_vectors_torch(self.p, None, a, b, None, device=self.device))
+        if variant is None:
+            hints_np = hints_fp4(self.sys, c_in, a, b)
         else:
-            pub = _public_vectors_torch(self.p, None, a, b, None, device=self.device)
-            if variant is None:
-                hints_np = hints_fp4(self.sys, c_in, a, b)
-            else:
-                H, _ = unit_hints(c_in, a, b, variant=variant)
-                hints_np = np.stack([H[n] for _, n in self.sys.hints])
-            hints = torch.as_tensor(hints_np, dtype=torch.int64, device=self.device)
-        if str(self.device).startswith("cuda"):
-            torch.cuda.synchronize()
-        hints_seconds = time.perf_counter() - t0
+            H, _ = unit_hints(c_in, a, b, variant=variant)
+            hints_np = np.stack([H[n] for _, n in self.sys.hints])
+        return torch.as_tensor(hints_np, dtype=torch.int64, device=self.device)
+
+    def _prove_stages(self, bd: dict, coins, check=False, mutate=None, slot=None):
+        """The prover as a stage generator for one marshalled sub-batch (``pipeline.prove_many`` drives several at
+        once on their own streams): ``protocol.prove_stages`` with the hints produced inside (``hints_fn``, timed
+        ``hints_host``), the public rows filled into ``pub`` by that call -- the device generator computes the decode
+        and the hints in one graph, and ``prove_stages`` first reads ``pub`` after ``hints_fn`` (build_witness)."""
+        lay, pub = bd["lay"], {}
+        return protocol_mod.prove_stages(self.p, self.sys, self.tb, self.cfg(lay.l), pub, None, self.device, check=check,
+                                         mutate=mutate, chain=(lay, bd["y32"]), words={"a": bd["a"], "b": bd["b"]}, coins=coins,
+                                         rel=FP4_HOOKS, hints_fn=lambda: self._hints(bd, pub, check, slot), slot=slot)
+
+    def prove_vus(self, vus: list[tuple], check=True, mutate=None, min_l: int = 256, coins=None, variant: str | None = None):
+        """``vus``: (A, B, accs, y_final) per VU.  The public claim per VU is its final FP32 word at its last column.
+        ``variant``: hints generated under a WRONG rule (``witness.VARIANTS``; a negative), the claim and links honest."""
+        if coins is None and self.interactive:
+            coins = protocol_mod.Coins.sample()
+        bd = self.marshal(vus, min_l, variant)                                   # marshalling: before the clock
+        lay = bd["lay"]
         if hasattr(coins, "set_statement"):
-            # a live verifier's coin source (live.LiveCoins): the statement travels with the root, so the claim is fixed
-            # before the verifier opens its first coin.  Built outside prove's clock; the protocol is unchanged.
+            # a live verifier's coin source (live.LiveCoins, lane live-verifier): the statement travels with the root, so
+            # the claim is fixed before the verifier opens its first coin.  Built outside prove's clock; protocol unchanged.
             from ..live import set_statement
-            set_statement(coins, self, (a, b, y32), lay, self.cfg(lay.l), self.n_proofs)
-        proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
-                      chain=(lay, y32), words={"a": a, "b": b}, coins=coins, rel=FP4_HOOKS)
-        proof.timings["hints_host"] = hints_seconds
-        return proof, (a, b, y32), lay
+            set_statement(coins, self, (bd["a"], bd["b"], bd["y32"]), lay, self.cfg(lay.l), self.n_proofs)
+        if _STAGED:
+            from ..pipeline import run_to_completion
+            proof = run_to_completion(self._prove_stages(bd, coins, check=check, mutate=mutate, slot=None))
+        else:
+            # the tree's protocol has no stage generator (before lane hp2-host): hints then ``prove``, as fp4-proof did
+            pub: dict = {}
+            t0 = time.perf_counter()
+            hints = self._hints(bd, pub, check)
+            if str(self.device).startswith("cuda"):
+                torch.cuda.synchronize()
+            hints_seconds = time.perf_counter() - t0
+            proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
+                          chain=(lay, bd["y32"]), words={"a": bd["a"], "b": bd["b"]}, coins=coins, rel=FP4_HOOKS)
+            proof.timings["hints_host"] = hints_seconds
+        return proof, (bd["a"], bd["b"], bd["y32"]), lay
+
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256):
+        """``len(batches)`` sub-batches proved with up to ``depth`` in flight on their own CUDA streams
+        (``pipeline.prove_many``, lane hp2-host): the host work of one sub-batch (the SHAKE-256 challenge squeeze, the
+        statement digest, transcript copies, launches) hides under the device work of the next.  ``coins_factory()`` is
+        called per sub-batch as it starts, in order (the honest verifier's step 0), so the transcripts equal the
+        sequential ones under the same coin / mask-key stream.  Returns ``[(coins, proof, pubs, lay)]`` in order and the
+        pass wall; each proof's ``timings`` is its share of the wall (``pipeline._rescale``)."""
+        if not _STAGED:
+            raise RuntimeError("this tree's protocol has no stage generator (pipeline.prove_many): sequential prove_vus only")
+        from ..pipeline import prove_many
+        bundles = [self.marshal(vus, min_l) for vus in batches]
+        coins_of: list = [None] * len(batches)
+
+        def starter(i):
+            def start(slot):
+                coins_of[i] = coins_factory()
+                return self._prove_stages(bundles[i], coins_of[i], check=False, mutate=None, slot=slot)
+            return start
+
+        proofs, wall = prove_many([starter(i) for i in range(len(batches))], self.device, depth=depth)
+        return [(coins_of[i], pf, (bd["a"], bd["b"], bd["y32"]), bd["lay"]) for i, (pf, bd) in enumerate(zip(proofs, bundles))], wall
 
     def verify_vus(self, proof, pubs, lay: Layout, coins=None):
         a, b, y32 = pubs
@@ -289,14 +365,15 @@ def _witness_generation(R) -> str:
     return f"{hg} + {wp}"
 
 
-def _software(R, proof) -> dict:
+def _software(R, proof, pipeline: int = 0) -> dict:
     from .. import witness as witness_mod
     # the witness goes through the shared witness.build_witness (--impl device: the fused kernel; legacy: the torch
     # program); the FP4 decode + hint generator is fp4/hints_device.py on the device (--fp4-hints device, the default) or
-    # fp4/witness.hints_fp4 in numpy on the host (--fp4-hints numpy, fp4-proof's path)
+    # fp4/witness.hints_fp4 in numpy on the host (--fp4-hints numpy, fp4-proof's path); ``pipeline`` = sub-batches in
+    # flight per timed rep (bench-vu --pipeline N; 0 = sequential), the registered relations' field (relchain.py)
     return {"backend": {"name": "b-ligero chain, fp4-nvf4 relation (backends/direct/ligero/fp4)", "commit": _git_commit(),
                         "hash": proof.hash_name, "challenge_expander": "SHAKE-256 (placeholder)", "impl": witness_mod.IMPL,
-                        "hints": _hints_desc(R)},
+                        "hints": _hints_desc(R), "pipeline": pipeline},
             "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
 
 
@@ -616,6 +693,14 @@ def bench_vu_fp4(args) -> int:
     if getattr(args, "verifier", None):
         from ..live import BenchLive
         live = BenchLive(args, R, n_proofs, total_vus, R.relation, interactive)
+    # rep 0 is the warm-up (untimed): 1 sub-batch by default (main's harness); --warmup-subs N proves N (a full rep at N =
+    # n_proofs) so that the caching allocator / kernel caches are warm before the timed reps -- at l = 16384 a rep is only 7
+    # sub-batches and rep 1 still runs ~15 % slower than rep 3 after a one-sub-batch warm-up.  Recorded in the result's note.
+    warmup_subs = max(1, min(int(getattr(args, "warmup_subs", 1) or 1), n_proofs))
+    # --pipeline N (the bench-vu flag lane hp2-host added for the registered relations): the sub-batches of a timed rep
+    # interleaved N-deep on their own streams (prove_vus_many); needs the staged protocol, else sequential (recorded).
+    pipeline_depth = int(getattr(args, "pipeline", 0) or 0) if _STAGED and args.device.startswith("cuda") else 0
+    coins_factory = (lambda: protocol_mod.Coins.sample()) if interactive else (lambda: None)
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
@@ -625,8 +710,15 @@ def bench_vu_fp4(args) -> int:
         proved = []
         if live is not None:
             live.begin_rep(rep)
-        for si, (lo, hi) in enumerate(subs):
-            V = protocol_mod.Coins.sample() if interactive else None
+        if pipeline_depth > 1 and rep > 0 and live is None:
+            # (with --verifier the sub-batches stay sequential: each one's coins come from the live verifier in order)
+            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], coins_factory, depth=pipeline_depth, min_l=l)
+            for si, ((lo, hi), (V, proof, pubs, lay_i)) in enumerate(zip(subs, many)):
+                for k_, v_ in proof.timings.items():
+                    agg[k_] = agg.get(k_, 0.0) + v_
+                proved.append((si, lo, hi, V, proof, pubs, lay_i))
+        for si, (lo, hi) in enumerate(subs if not proved else []):
+            V = coins_factory()
             if live is not None:
                 V = live.coins(si, V)                        # a recorded rep: the live verifier's step 0 for sub-batch si
             proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=l, coins=V)
@@ -635,8 +727,11 @@ def bench_vu_fp4(args) -> int:
             for k_, v_ in proof.timings.items():
                 agg[k_] = agg.get(k_, 0.0) + v_
             proved.append((si, lo, hi, V, proof, pubs, lay_i))
-            if rep == 0:
-                break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
+            if rep == 0 and si + 1 >= warmup_subs:
+                if pipeline_depth > 1:
+                    # every pipeline slot once (its stream's hint graph capture, pinned buffers): untimed, like the warm-up
+                    R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in subs[:pipeline_depth]], coins_factory, depth=pipeline_depth, min_l=l)
+                break                                        # warm-up: --warmup-subs sub-batches (compile, graph capture, self-check on the first)
         wall_prove = time.perf_counter() - t_pass
         if live is not None:
             live.end_rep(rep, agg)                           # END; the verifier's session verdict (waits for its Rust verify)
@@ -669,7 +764,7 @@ def bench_vu_fp4(args) -> int:
                 dump_manifest["files"].append(entry)
         del proved
         if rep == 0:
-            print("warm-up (one sub-batch, with the prover's self-check):", {k_: round(v_, 3) for k_, v_ in agg.items()})
+            print(f"warm-up ({warmup_subs} sub-batch(es), the prover's self-check on the first):", {k_: round(v_, 3) for k_, v_ in agg.items()})
             continue
         keys = agg.keys()
         runs.append((agg, vsum))
@@ -692,7 +787,7 @@ def bench_vu_fp4(args) -> int:
     fp = contract.fingerprint(
         profile=NVFP4_SM120.name, domain=contract.DOMAIN, K=K * STEPS, B=total_vus, N_subbatches=n_proofs,
         proof_class=proof_class, authentication="excluded", zk_mode=zk_mode,
-        security=_security(cfg, snd, n_proofs, args.target), hardware=hw, software=_software(R, proof),
+        security=_security(cfg, snd, n_proofs, args.target), hardware=hw, software=_software(R, proof, pipeline_depth),
         preprocessing=f"constraint compilation (a function of NVFP4Params only, {R.compile_seconds:.2f}s)",
         retention="retained",
         # the frozen NVFP4 set (contract.NVFP4_INSTANCES_*): the canonical tables accept exactly this dataset/tier at
@@ -708,7 +803,10 @@ def bench_vu_fp4(args) -> int:
                                                    "formats": dump_manifest["format"], "system_sha256": dump_manifest["system_file"]["sha256"]},
         note=f"{total_vus} VUs as {n_proofs} independently committed proofs of <= {per_proof} VUs each (l = {l} columns, "
              f"{l - per_proof * STEPS} pad columns per proof); prover time = sum over the proofs; soundness = union bound; "
-             f"public claim per VU = the final FP32 word, compared as three bit-field components (sign, exponent, fraction)",
+             f"warm-up rep 0 = {warmup_subs} untimed sub-batch(es); "
+             + (f"timed reps: {pipeline_depth} sub-batches in flight on their own streams (--pipeline; phase times = shares of the pass wall); "
+                if pipeline_depth > 1 else "timed reps: sub-batches sequential; ") +
+             "public claim per VU = the final FP32 word, compared as three bit-field components (sign, exponent, fraction)",
     )
     meas = [
         contract.measurement("t.witness", med["witness"] + med["hints_host"]),
@@ -812,9 +910,9 @@ def _verify_dumps(dump_dir: Path, manifest: dict, R: FP4ChainRunner, device: str
                "independent": False, "statement_format": manifest["format"]["statement"], "system_format": manifest["format"].get("system"),
                "accepted": n_ok, "total": len(items), "seconds": sum(it["seconds"] for it in items), "wall": time.perf_counter() - t0,
                "coins": "the transcript's own coins replayed (file verifier)" if R.interactive else "n/a (Fiat-Shamir)",
-               "rust_ligero_verify": "cannot verify this relation: pins bf16-ampere / fp8-ada / bf16-hopper / fp8-hopper only, parses "
-                                     "ligero-system/v1 only (this system is /v2: component chain ends for the FP32 word), has no E2M1 / "
-                                     "UE4M3 public decode (backends/ligero-verify/src/relation.rs, format.rs)"}
+               "rust_ligero_verify": "not run by this harness; backends/ligero-verify pins fp4-nvf4 (lane ligero-verify-fp4: ligero-system/v2 "
+                                     "component chain ends, E2M1 / UE4M3 decode) -- verify these files with `ligero-verify batch --system "
+                                     "system.bin --dir repN --target-bits 128` (an independent check when run by a non-producer)"}
     (dump_dir / "verify_python.json").write_text(json.dumps({**summary, "items": items}, indent=1))
     print(f"dumps: {n_ok}/{len(items)} accepted cold from bytes by the Python file verifier in {summary['wall']:.2f}s", flush=True)
     return summary
