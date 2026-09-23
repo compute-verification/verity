@@ -49,6 +49,13 @@ ligero-statement/v5  magic "LIGSTM05" | the v2 header through u32 K | u8 y_bytes
                      | 3 x (u32 n_sib | n_sib x 32 B): the SHA-256 multiproofs of the a, b, y trees (in the STATEMENT:
                      the proof file is untouched).  The verifier checks the Ligero proof against the digest table,
                      then the digests as leaf/v2h leaves at the claimed ranks under the roots.
+ligero-statement/v6  magic "LIGSTM06" | the v5 layout with the ``l x y16`` vector replaced by ``n_vus x y`` (y_bytes): the
+                     chain-end words in VU order (lane tier0-bytes).  The public y16 vector of a hashed relation is zero
+                     off the chain ends (relchain.HashedRelationRunner), so the reader rebuilds it as
+                     y16[v * steps + steps - 1] = y[v], 0 elsewhere -- the statement digest, the challenges and the proof
+                     bytes are those of the v5 file (the writer refuses a y16 with a nonzero word off the ends).  At
+                     l = 16384 / 341 VUs this is 91 -> 27 kB per sub-batch.  Written by default for hashed relations
+                     (``LIGERO_STMT_TRIM=0`` writes v5); v5 files are still read.
 ligero-proof/v1      magic "LIGPRF01" | u8 hash (1 = blake3, 2 = sha256) | u8 has_coins | u8 zk | u8 has_chain
                      | u32 D | u32 w_len | u32 h_len | u32 q_len | u32 v_len | u32 M | u32 t | u32 depth
                      | [c1 c2 r1 s1 r2 s2, 32 B each] | 32 B root | D x w_len u32 w | D x h_len u32 h
@@ -65,6 +72,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import struct
 import time
 from dataclasses import dataclass
@@ -81,6 +89,9 @@ STMT_MAGIC_V3, PROOF_MAGIC_V2 = b"LIGSTM03", b"LIGPRF02"
 STMT_MAGIC_V4 = b"LIGSTM04"
 SYS_MAGIC_V3 = b"LIGSYS03"     # a chain with n_links != 3 linked rows (the hashed relation's sponge capacities)
 STMT_MAGIC_V5 = b"LIGSTM05"    # authentication = included-hash: digests + leaf indices + roots + multiproofs, no operand words
+STMT_MAGIC_V6 = b"LIGSTM06"    # v5 with the chain-end words only (n_vus, not l): the trimmed hashed statement (lane tier0-bytes)
+#: Hashed relations write ``ligero-statement/v6`` unless ``LIGERO_STMT_TRIM=0`` (then the v5 layout, byte-identical to before).
+HASHED_STATEMENT_TRIMMED = os.environ.get("LIGERO_STMT_TRIM", "1") != "0"
 AUTH_HASH = "included-hash"
 _DTYPES = {1: "<u1", 2: "<u2", 4: "<u4"}
 #: The relation a v2 / v3 statement (no name in the file) is: the Ampere BF16 unit of ``vu.py``.
@@ -282,6 +293,7 @@ class Statement:
     hash_auth: object | None = None  # authentication = included-hash (v5): hashauth.HashAuth; ``a`` is then the (l, 17) public
     #                                  table [is_end | d0..d15] and ``b`` the (n_vus, 3) leaf triples (what the digest binds)
     hash_sibs: list | None = None    # v5: the three multiproofs (a, b, y), lists of 32-byte siblings
+    trimmed: bool = False            # hashed statement written as v6 (chain-end words only) instead of v5 (the l-vector)
 
     @property
     def v4(self) -> bool:
@@ -300,6 +312,17 @@ class Statement:
         """v5: (n_vus, 16) the published digest lanes (from the public table's chain-end columns)."""
         ends = np.arange(self.n_vus) * self.steps + self.steps - 1
         return np.asarray(self.a, dtype=np.int64)[ends, 1:]
+
+    def y_words(self) -> np.ndarray:
+        """v6: (n_vus,) the chain-end public words; refuses a y16 vector with a nonzero word off the ends (the v6 file
+        could not represent it, and the statement digest hashes the whole vector)."""
+        ends = np.arange(self.n_vus) * self.steps + self.steps - 1
+        y = np.asarray(self.y16, dtype=np.int64)
+        mask = np.ones(len(y), dtype=bool)
+        mask[ends] = False
+        if (y[mask] != 0).any():
+            raise ValueError("trimmed statement: y16 has a nonzero word off the chain ends")
+        return y[ends]
 
     def config(self):
         from .protocol import Config
@@ -402,7 +425,7 @@ def statement_bytes(st: Statement) -> bytes:
     if st.word_bytes not in _DTYPES or st.y_bytes not in _DTYPES:
         raise ValueError(f"statement word widths {st.word_bytes}/{st.y_bytes} bytes are not 1, 2 or 4")
     if st.v5:
-        return _statement_bytes_v5(st)
+        return _statement_bytes_v5(st, trimmed=st.trimmed)
     w = _W()
     w.raw(STMT_MAGIC_V4 if st.v4 else STMT_MAGIC if st.auth is None else STMT_MAGIC_V3)
     w.u32(1)
@@ -445,10 +468,11 @@ def _header_w(w: _W, st: Statement, magic: bytes):
     w.u32(st.steps)
 
 
-def _statement_bytes_v5(st: Statement) -> bytes:
+def _statement_bytes_v5(st: Statement, trimmed: bool = False) -> bytes:
+    """The hashed statement: v5 (the l-vector y16) or, ``trimmed``, v6 (the n_vus chain-end words; same digest)."""
     from . import hashchain
     w = _W()
-    _header_w(w, st, STMT_MAGIC_V5)
+    _header_w(w, st, STMT_MAGIC_V6 if trimmed else STMT_MAGIC_V5)
     w.u32(_K_of(st))
     w.u8(st.y_bytes)
     w.s(st.relation)
@@ -457,7 +481,7 @@ def _statement_bytes_v5(st: Statement) -> bytes:
     if d.shape != (st.n_vus, hashchain.N_DIGEST):
         raise ValueError("digest table shape")
     w.arr(d, "<u4")
-    w.arr(st.y16, _DTYPES[st.y_bytes])
+    w.arr(st.y_words() if trimmed else st.y16, _DTYPES[st.y_bytes])
     _hash_auth_block_w(w, st)
     return w.bytes()
 
@@ -467,7 +491,12 @@ def _K_of(st: Statement) -> int:
     return K_VU
 
 
-def _read_v5(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K) -> Statement:
+def hashed_statement_format() -> str:
+    """The format name the dump path writes for a hashed relation (``relchain.bench_vu``'s ``statement_format``)."""
+    return "ligero-statement/v6" if HASHED_STATEMENT_TRIMMED else "ligero-statement/v5"
+
+
+def _read_v5(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K, trimmed: bool = False) -> Statement:
     from . import hashchain
     yb = r.u8()
     if yb not in _DTYPES:
@@ -478,19 +507,25 @@ def _read_v5(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, s
     if n_vus * steps > l:
         raise ValueError("layout does not fit the columns")
     d = r.arr((n_vus, hashchain.N_DIGEST), "<u4").astype(np.int64)
-    y16 = r.arr((l,), _DTYPES[yb])
+    if trimmed:
+        # v6: the n_vus chain-end words; the public vector is zero off the ends (relchain.HashedRelationRunner)
+        yw = r.arr((n_vus,), _DTYPES[yb])
+        y16 = np.zeros(l, dtype=yw.dtype)
+        y16[np.arange(n_vus) * steps + steps - 1] = yw
+    else:
+        y16 = r.arr((l,), _DTYPES[yb])
     auth, sibs = _hash_auth_block_r(r, n_vus)
     r.done()
     table = hashchain.public_table(d, n_vus, steps, l)
     return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, table, auth.indices(), y16,
-                     None, relation, 4, yb, auth, sibs)
+                     None, relation, 4, yb, auth, sibs, trimmed=trimmed)
 
 
 def read_statement(data: bytes) -> Statement:
     r = _R(data)
     magic = r.take(8)
-    if magic not in (STMT_MAGIC, STMT_MAGIC_V3, STMT_MAGIC_V4, STMT_MAGIC_V5):
-        raise ValueError("not a ligero-statement/v2, /v3, /v4 or /v5 file")
+    if magic not in (STMT_MAGIC, STMT_MAGIC_V3, STMT_MAGIC_V4, STMT_MAGIC_V5, STMT_MAGIC_V6):
+        raise ValueError("not a ligero-statement/v2, /v3, /v4, /v5 or /v6 file")
     if r.u32() != 1:
         raise ValueError("only chain mode (1) is defined")
     l, n, D, t = r.u32(), r.u32(), r.u32(), r.u32()
@@ -501,8 +536,8 @@ def read_statement(data: bytes) -> Statement:
     if mode_code not in MODE_NAMES:
         raise ValueError(f"unknown mode code {mode_code}")
     n_proofs, n_vus, steps, K = r.u32(), r.u32(), r.u32(), r.u32()
-    if magic == STMT_MAGIC_V5:
-        return _read_v5(r, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K)
+    if magic in (STMT_MAGIC_V5, STMT_MAGIC_V6):
+        return _read_v5(r, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K, trimmed=magic == STMT_MAGIC_V6)
     relation, wb, yb = BF16_RELATION, 2, 2
     if magic == STMT_MAGIC_V4:
         wb, yb = r.u8(), r.u8()
@@ -754,7 +789,7 @@ def _statement_of(R, pubs, lay, cfg, n_proofs: int, mode: str | None = None, aut
         return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
                          lay.n_vus, lay.steps, np.asarray(a, dtype=np.int64), np.asarray(b, dtype=np.int64),
                          np.asarray(y16, dtype=np.int64), None, _relation_of(R), 4, np.dtype(hooks.y16_dtype).itemsize,
-                         hauth, [list(x) for x in sibs])
+                         hauth, [list(x) for x in sibs], trimmed=HASHED_STATEMENT_TRIMMED)
     a, b, y16 = pubs
     return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
                      lay.n_vus, lay.steps, np.asarray(a, dtype=np.int64), np.asarray(b, dtype=np.int64),
@@ -793,7 +828,7 @@ def _manifest(out: Path, args, R, auth: bool = False) -> dict:
     sys_v2 = R.sys.chain is not None and R.sys.chain.get("y16") is None      # component chain ends (the FP4 relation)
     sys_v3 = R.sys.chain is not None and len(R.sys.chain["c"]) != 3          # more linked rows (the hashed relation)
     fmt = {"system": "ligero-system/v3" if sys_v3 else "ligero-system/v2" if sys_v2 else "ligero-system/v1",
-           "statement": "ligero-statement/v5" if v5 else "ligero-statement/v4" if v4 else "ligero-statement/v3" if auth else "ligero-statement/v2",
+           "statement": hashed_statement_format() if v5 else "ligero-statement/v4" if v4 else "ligero-statement/v3" if auth else "ligero-statement/v2",
            "proof": "ligero-proof/v2" if auth else "ligero-proof/v1"}
     from . import witness as witness_mod
     return {"format": fmt, "relation": _relation_of(R), "authentication": getattr(R, "AUTH", "included" if auth else "excluded"),

@@ -1008,3 +1008,88 @@ fn bf16_ampere_hashed_negatives_and_system_mismatches_are_rejected() {
     let (code, js) = verify(AH_SYS, AH_STMT, &write_tmp("ah_proof.proof", &m), &["--coins", AH_COINS]);
     assert_eq!(code, 1, "{js}");
 }
+
+// ------------------------------------------------------------------- lane tier0-bytes: the trimmed hashed statement (v6) ----
+//
+// `fixtures/fp8-ada-hash/sub_00_v6.stmt`: the v5 fixture re-serialized by `serialize.statement_bytes(trimmed=True)`
+// (2201 bytes: the l x y16 vector replaced by the n_vus chain-end words).  Same digest, same challenges, same proof.
+
+const HASH_STMT_V6: &str = "fixtures/fp8-ada-hash/sub_00_v6.stmt";
+
+/// The v5 fixture's bytes rewritten as v6 by hand (what `serialize._statement_bytes_v5(trimmed=True)` writes).
+fn v5_to_v6(st: &[u8]) -> Vec<u8> {
+    let f = v5_offsets(st);
+    let (l, n_vus, steps, yb) = (1024usize, 20usize, 48usize, 4usize);
+    let mut out = Vec::with_capacity(st.len() - (l - n_vus) * yb);
+    out.extend_from_slice(b"LIGSTM06");
+    out.extend_from_slice(&st[8..f.y16]);
+    for v in 0..n_vus {
+        let j = v * steps + steps - 1;
+        out.extend_from_slice(&st[f.y16 + yb * j..f.y16 + yb * (j + 1)]);
+    }
+    out.extend_from_slice(&st[f.y16 + yb * l..]);
+    out
+}
+
+#[test]
+fn fp8_ada_hashed_v6_statement_is_the_v5_statement_without_the_zero_y_words() {
+    let st5 = std::fs::read(HASH_STMT).unwrap();
+    let st6 = std::fs::read(HASH_STMT_V6).unwrap();
+    assert_eq!(st6.len(), 2201);
+    assert_eq!(v5_to_v6(&st5), st6, "the Python writer and the format description disagree");
+    // accepted with the v5 fixture's proof, coins and reason strings; the format is reported as v6
+    let (code, js) = verify(HASH_SYS, HASH_STMT_V6, HASH_PROOF, &["--coins", HASH_COINS]);
+    assert_eq!(code, 0, "{js}");
+    assert_eq!(field(&js, "\"accepted\":"), "true");
+    assert_eq!(field(&js, "\"system_pinned\":"), "true");
+    assert!(js.contains("\"format\":\"ligero-statement/v6\",\"relation\":\"fp8-ada\""), "{js}");
+    assert!(js.contains("authentication: included-hash, 20 VUs, 20 x rows + 20 W columns + 20 y words under the a/b/y roots"), "{js}");
+    // the batch command pairs a v6 statement with its proof like any other
+    let dir = tmp("v6batch");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(HASH_STMT_V6, dir.join("sub_00.stmt")).unwrap();
+    std::fs::copy(HASH_PROOF, dir.join("sub_00.proof")).unwrap();
+    std::fs::copy(HASH_COINS, dir.join("sub_00.coins")).unwrap();
+    let (code, js) = run(&["batch", "--dir", dir.to_str().unwrap(), "--system", HASH_SYS, "--threads", "2"]);
+    assert_eq!(code, 0, "{js}");
+    assert!(js.contains("\"pinned_relation\":\"fp8-ada+hash\"") && js.contains("\"accepted\":1,\"rejected\":0"), "{js}");
+}
+
+#[test]
+fn fp8_ada_hashed_v6_statement_negatives_are_rejected() {
+    let st5 = std::fs::read(HASH_STMT).unwrap();
+    let f = v5_offsets(&st5);
+    let st6 = v5_to_v6(&st5);
+    let rej = |name: &str, m: &[u8], expect: &str| {
+        let (code, js) = verify(HASH_SYS, &write_tmp(name, m), HASH_PROOF, &["--coins", HASH_COINS]);
+        assert_eq!(code, 1, "{name}: {js}");
+        assert!(js.contains(expect), "{name}: expected {expect:?} in {js}");
+    };
+    let bound = "column challenge mismatch";
+    // the y words sit where the l-vector was: VU 0's word, VU 19's word -- both bound by the statement digest
+    let mut m = st6.clone();
+    m[f.y16] ^= 1;
+    rej("v6_y0.stmt", &m, bound);
+    let mut m = st6.clone();
+    m[f.y16 + 4 * 19] ^= 1;
+    rej("v6_y19.stmt", &m, bound);
+    // a digest lane and a root: bound as in v5 (the block after the y words is byte-identical)
+    let mut m = st6.clone();
+    m[f.digests] ^= 1;
+    rej("v6_digest.stmt", &m, bound);
+    let mut m = st6.clone();
+    m[f.trees - (1024 - 20) * 4 + 41] ^= 1;
+    rej("v6_root.stmt", &m, bound);
+    // a v5 body under the v6 magic (l words where n_vus are expected) is malformed, as is a v6 body under the v5 magic
+    let mut m = st5.clone();
+    m[..8].copy_from_slice(b"LIGSTM06");
+    rej("v6_full_vector.stmt", &m, "statement file: unknown hash-authentication block version");
+    let mut m = st6.clone();
+    m[..8].copy_from_slice(b"LIGSTM05");
+    rej("v5_trimmed_vector.stmt", &m, "statement file: truncated file");
+    // one y word short
+    let mut m = st6.clone();
+    m.drain(f.y16 + 4 * 19..f.y16 + 4 * 20);
+    rej("v6_short.stmt", &m, "statement file: ");
+}

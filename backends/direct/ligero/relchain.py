@@ -35,6 +35,7 @@ from .compile import P
 from .fp8.census import census
 from .protocol import Config, config_for, n_rows, prove, soundness, verify
 from .relations import K_VU, Relation, relation
+from .serialize import hashed_statement_format
 from .witness import tables
 
 __all__ = ["RelationChainRunner", "bench_vu_rel", "gate_vu_rel", "instances", "instances_digest", "vu_units"]
@@ -1139,7 +1140,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         relation=rel.relation_name, model=rel.model_name, commit=_git_commit(), step_k=rel.k, steps_per_vu=steps,
         rows=R.sys.m, committed_rows=n_rows(cfg, R.sys.m, True), linear_constraints=R.tb.L, quadratic_constraints=R.tb.Q,
         census=cen, witness_generation=rel.witness_generation, B_proof=per_proof,
-        statement_format="ligero-statement/v5" if hashed else "ligero-statement/v4",   # what --dump-dir writes (serialize.py)
+        statement_format=hashed_statement_format() if hashed else "ligero-statement/v4",   # what --dump-dir writes (serialize.py)
         note=f"{total_vus} VUs as {n_proofs} independently committed proofs of <= {per_proof} VUs each (l = {l} columns, "
              f"{l - per_proof * steps} pad columns per proof); prover time = sum over the proofs; soundness = union bound; "
              f"{rel.claim_note}"

@@ -24,6 +24,10 @@
 //!                      constants digest | u32 n_vus | n_vus x (u32 vu_index, u32 x_index, u32 w_index) | 3 x tree (a,
 //!                      b, y) as in v3 | 3 x (u32 n_sib | n_sib x 32 B) SHA-256 multiproofs.  No operand words: the
 //!                      proof's public rows are the digest table (is_end, 16 lanes at every VU's last column).
+//! ligero-statement/v6  magic "LIGSTM06" | the v5 layout with `l x y16` replaced by `n_vus x y` (y_bytes): the chain-end
+//!                      words in VU order (lane tier0-bytes).  The reader rebuilds the l-vector (y16[v*steps+steps-1] =
+//!                      y[v], 0 elsewhere -- what the hashed prover's public vector is), so the statement digest and
+//!                      every check are those of the v5 file; 91 -> 27 kB per sub-batch at l = 16384.
 //! ~~~
 //! The words are kept as `u32` whatever their width; the relation the file names decides (relation.rs) which widths
 //! are legal, how the words enter the statement digest and how the operands decode.  The authentication block's leaf
@@ -351,7 +355,7 @@ pub struct Statement {
     pub n_vus: usize,
     pub steps: usize,
     pub k_ops: usize,   // operands per unit (16 for the BF16 relations, 32 for E4M3)
-    /// The file format: 2, 3 or 4.
+    /// The file format: 2, 3, 4, 5 (hashed) or 6 (hashed, trimmed y words).
     pub version: u8,
     /// The relation string of a v4 file (`None`: a v2 / v3 file, the Ampere BF16 unit).
     pub relation: Option<String>,
@@ -499,8 +503,10 @@ impl Statement {
             b"LIGSTM03" => 3,
             b"LIGSTM04" => 4,
             b"LIGSTM05" => 5,
-            _ => return Err("not a ligero-statement/v2, /v3, /v4 or /v5 file".into()),
+            b"LIGSTM06" => 6,
+            _ => return Err("not a ligero-statement/v2, /v3, /v4, /v5 or /v6 file".into()),
         };
+        let hashed = version >= 5;
         if r.u32()? != 1 {
             return Err("statement mode is not chain (1)".into());
         }
@@ -523,11 +529,11 @@ impl Statement {
         let n_proofs = r.usize_bounded(1 << 20, "n_proofs")?;
         let n_vus = r.usize_bounded(1 << 22, "n_vus")?;
         let steps = r.usize_bounded(1 << 16, "steps")?;
-        // v2..v4: K = operands per unit; v5: K = words per committed row (steps * operands per unit)
-        let k_hdr = r.usize_bounded(if version == 5 { 1 << 16 } else { 1 << 8 }, "K")?;
-        let k_ops = if version == 5 {
+        // v2..v4: K = operands per unit; v5 / v6: K = words per committed row (steps * operands per unit)
+        let k_hdr = r.usize_bounded(if hashed { 1 << 16 } else { 1 << 8 }, "K")?;
+        let k_ops = if hashed {
             if steps == 0 || k_hdr % steps != 0 || k_hdr / steps == 0 || k_hdr / steps > 256 {
-                return Err(format!("v5 statement: K = {k_hdr} words per row is not steps ({steps}) x operands per unit"));
+                return Err(format!("v{version} statement: K = {k_hdr} words per row is not steps ({steps}) x operands per unit"));
             }
             k_hdr / steps
         } else {
@@ -548,8 +554,8 @@ impl Statement {
         if !target_log2.is_finite() || target_log2 >= 0.0 {
             return Err("target_log2 must be a finite negative number".into());
         }
-        if version == 5 {
-            return Self::parse_v5(r, l, n, dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops);
+        if hashed {
+            return Self::parse_hashed(r, version, l, n, dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops);
         }
         // v4: the widths and the relation name come before the words; v2 / v3 are 16-bit BF16 words, unnamed
         let (word_bytes, y_bytes, relation) = if version == 4 {
@@ -592,10 +598,11 @@ impl Statement {
         })
     }
 
-    /// The v5 body after the header (`serialize._read_v5`): `a` becomes the derived public table, `b` the index rows.
+    /// The v5 / v6 body after the header (`serialize._read_v5`): `a` becomes the derived public table, `b` the index
+    /// rows.  v6 carries the n_vus chain-end words instead of the l-vector; the vector is rebuilt with zeros off the ends.
     #[allow(clippy::too_many_arguments)]
-    fn parse_v5(mut r: Rd, l: usize, n: usize, dd: usize, t: usize, target_log2: f64, zk: bool, t_pad: usize, interactive: bool,
-                n_proofs: usize, n_vus: usize, steps: usize, k_ops: usize) -> Result<Statement> {
+    fn parse_hashed(mut r: Rd, version: u8, l: usize, n: usize, dd: usize, t: usize, target_log2: f64, zk: bool, t_pad: usize,
+                    interactive: bool, n_proofs: usize, n_vus: usize, steps: usize, k_ops: usize) -> Result<Statement> {
         let yb = r.u8()?;
         if !matches!(yb, 1 | 2 | 4) {
             return Err(format!("statement word width {yb} bytes is not 1, 2 or 4"));
@@ -603,13 +610,22 @@ impl Statement {
         let n_rel = r.usize_bounded(MAX_RELATION_LEN, "relation name length")?;
         let rel = String::from_utf8(r.take(n_rel)?.to_vec()).map_err(|_| "relation name: bad utf-8".to_string())?;
         if rel.is_empty() {
-            return Err("v5 statement names no relation".into());
+            return Err(format!("v{version} statement names no relation"));
         }
         if r.str()? != AUTH_HASH {
-            return Err("v5 statement names an authentication other than included-hash".into());
+            return Err(format!("v{version} statement names an authentication other than included-hash"));
         }
         let digests = r.fe_vec(n_vus * N_DIGEST)?;
-        let y16 = r.words(l, yb)?;
+        let y16 = if version == 6 {
+            let y_words = r.words(n_vus, yb)?;
+            let mut y16 = vec![0u32; l];
+            for (v, &y) in y_words.iter().enumerate() {
+                y16[v * steps + steps - 1] = y;
+            }
+            y16
+        } else {
+            r.words(l, yb)?
+        };
         let hash_auth = read_hash_auth_block(&mut r, n_vus, digests)?;
         r.done()?;
         // the public table: is_end = 1 and the 16 lanes at every VU's last column, 0 elsewhere (hashchain.public_table)
@@ -625,7 +641,7 @@ impl Statement {
         }
         Ok(Statement {
             l, n, d: dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops,
-            version: 5, relation: Some(rel), word_bytes: 4, y_bytes: yb, a, b, y16, auth: None, hash_auth: Some(hash_auth),
+            version, relation: Some(rel), word_bytes: 4, y_bytes: yb, a, b, y16, auth: None, hash_auth: Some(hash_auth),
         })
     }
 
