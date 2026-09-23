@@ -28,6 +28,16 @@ typedef unsigned long long u64;
 typedef long long i64;
 
 __device__ __forceinline__ u64 modp_signed(i64 v) { i64 r = v % (i64)P; return (u64)(r < 0 ? r + (i64)P : r); }
+/* x v mod p for a residue x < p and a compile-time constant v < p with vp = floor(v 2^32 / p) (Shoup): q = floor(x vp / 2^32)
+   is the true quotient or one less, so r = x v - q p lies in [0, 2p) < 2^32 and the wrapping 32-bit arithmetic is exact. */
+__device__ __forceinline__ u64 mulc(u64 x, unsigned v, unsigned vp) {
+    const unsigned xx = (unsigned)x;
+    const unsigned q = __umulhi(xx, vp);
+    const unsigned r = xx * v - q * (unsigned)P;
+    return (u64)(r >= (unsigned)P ? r - (unsigned)P : r);
+}
+/* a + b mod p for residues a, b < p */
+__device__ __forceinline__ u64 addp(u64 a, u64 b) { const u64 s = a + b; return s >= P ? s - P : s; }
 __device__ __forceinline__ u64 modinv_p(u64 x) {   /* Fermat: x^(p-2) mod p; 0 -> 0 like batch_modinv */
     u64 result = 1, base = x % P; u64 e = P - 2;
     while (e) { if (e & 1) result = (result * base) % P; base = (base * base) % P; e >>= 1; }
@@ -50,45 +60,104 @@ _TAIL = r"""
 """
 
 
-def _eval(e: Expr) -> str:
-    """The C expression of an affine ``Expr`` on the column: exact residue in [0, p)."""
-    c = e.c % P
-    if not e.lin:
-        return f"{c}ULL"
-    terms = " + ".join(f"((u64)W({j}) * {v % P}ULL) % P" for j, v in e.lin.items())
-    return f"(({terms}) + {c}ULL) % P"
+REGISTER_ROWS = True     # rows read by later ops live in registers (no store -> reload through W, which the compiler must
+                         # serialise: W(i) and W(j) may alias for all it knows); Shoup constant products (mulc) instead of
+                         # 64-bit modulos.  False = the original codegen (A/B).
+
+
+class _Gen:
+    """Code generation state: which rows are already produced (readable from their register), the row-read set."""
+
+    def __init__(self, sys: System):
+        self.reads: set[int] = set()
+        for op in sys.program:
+            for e in op[1:]:
+                if isinstance(e, Expr):
+                    self.reads.update(e.lin.keys())
+        self.produced: set[int] = set()
+        self.derived: dict[int, str] = {}   # row -> expression recomputing it from a kept register (bits, selectors)
+
+    def ref(self, j: int) -> str:
+        if REGISTER_ROWS and j in self.produced:
+            return self.derived.get(j, f"r{j}")
+        return f"(u64)W({j})"
+
+    def store(self, j: int, expr: str, derived: str | None = None) -> str:
+        """Emit row j = expr (a residue in [0, p) as u64): into W, and into its own register when read later -- unless
+        ``derived`` recomputes it from a register already kept (a bit of ``x``, a selector of ``sx``: 2-3 instructions
+        on read instead of one live u64 per row; the bit and selector rows are ~90 % of the rows)."""
+        self.produced.add(j)
+        if REGISTER_ROWS and j in self.reads:
+            if derived is not None:
+                self.derived[j] = derived
+                return f"    W({j}) = (unsigned)({expr});"
+            return f"    const u64 r{j} = {expr}; W({j}) = (unsigned)r{j};"
+        return f"    W({j}) = (unsigned)({expr});"
+
+    def eval(self, e: Expr) -> str:
+        """The C expression of an affine ``Expr`` on the column: exact residue in [0, p)."""
+        c = e.c % P
+        if not e.lin:
+            return f"{c}ULL"
+        if not REGISTER_ROWS:
+            terms = " + ".join(f"({self.ref(j)} * {v % P}ULL) % P" for j, v in e.lin.items())
+            return f"(({terms}) + {c}ULL) % P"
+        terms = []
+        for j, v in e.lin.items():
+            v %= P
+            if v == 1:
+                terms.append(self.ref(j))
+            else:
+                terms.append(f"mulc({self.ref(j)}, {v}u, {(v << 32) // P}u)")
+        if c:
+            terms.append(f"{c}ULL")
+        acc = terms[0]
+        for t in terms[1:]:
+            acc = f"addp({acc}, {t})"
+        return acc
 
 
 def generate(sys: System) -> str:
     hpos = {n: i for i, (_, n) in enumerate(sys.hints)}
     ppos = {n: i for i, (_, n) in enumerate(sys.pins)}
+    g = _Gen(sys)
     out = [_HEAD.replace("@THREADS@", str(THREADS))]
     for op in sys.program:
         kind = op[0]
         if kind == "pin":
             _, idx, name = op
-            out.append(f"    W({idx}) = (unsigned)PUB({ppos[name]});")
+            out.append(g.store(idx, f"(u64)(unsigned)PUB({ppos[name]})"))
         elif kind == "hint":
             _, idx, name = op
-            out.append(f"    W({idx}) = (unsigned)modp_signed(HINT({hpos[name]}));")
+            out.append(g.store(idx, f"modp_signed(HINT({hpos[name]}))"))
         elif kind == "prod":
             _, idx, a, b = op
-            out.append(f"    x = {_eval(a)}; y = {_eval(b)}; W({idx}) = (unsigned)((x * y) % P);")
+            out.append(f"    x = {g.eval(a)}; y = {g.eval(b)};")
+            out.append(g.store(idx, "(x * y) % P"))
         elif kind == "bits":
             _, row0, nbits, e = op
-            out.append(f"    x = {_eval(e)};")
+            keep = REGISTER_ROWS and any(row0 + b in g.reads for b in range(nbits))
+            if keep:   # the decomposed value stays in a register; its bits are re-derived on read
+                out.append(f"    const u64 xb{row0} = {g.eval(e)}; x = xb{row0};")
+            else:
+                out.append(f"    x = {g.eval(e)};")
             for b in range(nbits):
-                out.append(f"    W({row0 + b}) = (unsigned)((x >> {b}) & 1ULL);")
+                out.append(g.store(row0 + b, f"(x >> {b}) & 1ULL", derived=(f"((xb{row0} >> {b}) & 1ULL)" if keep else None)))
         elif kind == "sels":
             _, row0, k0s, k1s, key = op
-            out.append(f"    x = {_eval(key)}; sx = (x > (u64)HALF_P) ? (i64)x - (i64)P : (i64)x;")
+            keep = REGISTER_ROWS and any(row0 + i in g.reads for i in range(len(k0s)))
+            out.append(f"    x = {g.eval(key)}; sx = (x > (u64)HALF_P) ? (i64)x - (i64)P : (i64)x;")
+            if keep:
+                out.append(f"    const i64 sx{row0} = sx;")
             for i, (k0, k1) in enumerate(zip(k0s, k1s)):
                 if not (-(2**63) <= k0 < 2**63 and -(2**63) <= k1 < 2**63):
                     raise ValueError("selector bound outside int64")
-                out.append(f"    W({row0 + i}) = (unsigned)((sx >= {int(k0)}LL) && (sx <= {int(k1)}LL));")
+                out.append(g.store(row0 + i, f"(u64)((sx >= {int(k0)}LL) && (sx <= {int(k1)}LL))",
+                                   derived=(f"((u64)((sx{row0} >= {int(k0)}LL) && (sx{row0} <= {int(k1)}LL)))" if keep else None)))
         elif kind == "inv":
             _, idx, x = op
-            out.append(f"    x = {_eval(x)}; W({idx}) = (unsigned)modinv_p(x);")
+            out.append(f"    x = {g.eval(x)};")
+            out.append(g.store(idx, "modinv_p(x)"))
         else:
             raise ValueError(kind)
     out.append(_TAIL)
