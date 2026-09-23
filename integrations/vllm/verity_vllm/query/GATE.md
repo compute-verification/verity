@@ -23,7 +23,12 @@ The per-row records are `tests/query/gate/row<N>_*.json` (the `compare` summary 
 | #60 | mistral-7b bf16 L40S tp1 B8 | 201,400 (205,144) | 201,400 (205,144) | 0 | 0 | EQUAL `085985ae…` | 274 s |
 | #73 | qwen3-4b bf16 H100 tp1 B8 (FA3) | 243,115 (247,327) | 243,115 (247,327) | 0 | 0 | EQUAL `a2aaa282…` | 493 s |
 | #74 | qwen3-4b-fp8 fp8 H100 tp1 B8 (FA3, blockwise FP8) | 258,637 (262,885) | 258,637 (262,885) | 0 | 0 | EQUAL `ecb28d4e…` | 492 s |
-| #67 | olmoe-1b-7b bf16 L40S tp1 B32 (MoE) | see `gate/row67_*.json` | | | | | |
+| #67 | olmoe-1b-7b bf16 L40S tp1 B32 (MoE) | 383,968 (385,504) | 404,896 (406,432) | 0 | 20,928 | v1 + `(layers.k.mlp.experts, out)` -- see below | 222 s |
+
+Not run on the laptop (this session): #68 (olmoe B32 mixed-arrivals; same model as #67), #23 (llama32-1b B64: 247 MB Programs +
+222 MB manifest of record), #11 / #39 (B=1, 4096 x 512: one 922 MB / 1.6 GB Program each -- the flat body is ~10^7 Calls, past
+what the laptop's 24 GB and the 5-hour budget allow), #70 / #75 (TP2 rank Programs: v1's TP encoding -- `tp_rank_partials` rows,
+`tp_peer_binding`, the rank fold -- is a separate bridge not written here; #75 also has no manifest of record).
 
 "identities" = distinct IDENTITY_KEY tuples; "rows" = manifest rows (a global manifest repeats one request-less hidden-stream key per
 engine step; the harness digests rows with multiplicity, so both are compared).  `program_digest` equal on every row (the workload
@@ -44,6 +49,15 @@ fused norm (`RMSNormFusedCuda_v2`, ports `0` normed / `1` residual, no recorded 
 and the logits read one row of port `0`; v1 requires every row of both ports because the collector binds the two TENSORS the module
 returns.  The policy states that: once any Value of an fx node's output at a step crosses the body boundary, every Value of that
 node's output (all rows, all ports) is protocol-required.  With it the row is byte-equal; #57 is unchanged by it.
+
+### #67: the one difference, explained (F-r19-int-20 class, MoE)
+
+`only_v2 = 20,928 x (model.layers.<k>.mlp.experts, out)`, spec `MoeSum_v1` = 16 layers x 1,308 (request, step) pairs, one per MoE
+block per step; `only_v1 = 0`, every v1 identity present (the 125,568 `moe_block_stream` plane rows included).  `MoeSum_v1` is the
+last Call of the `mlp.experts` body (vLLM `FusedMoE.forward`'s returned `final_hidden_states`); its output is read by
+`layers.<k+1>.input_layernorm` (the fused add+norm of the next layer) -- another module's body -- so it is a boundary Value.  v1's
+vocabulary classed the family interior by name and covered the MoE block only through the kernel-side planes.  This is the same class
+as #57's decision (a v1 by-name claim the dataflow contradicts), a candidate for a labelled decision on #67 / #68; not a v2 gap.
 
 ## Named residuals (v1 spellings the structure does not give)
 
