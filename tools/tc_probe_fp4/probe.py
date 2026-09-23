@@ -137,10 +137,19 @@ def nvcc_bin() -> str:
     return shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc"
 
 
+def arch_flags(arch: str) -> list[str]:
+    """nvcc target flags.  For an arch-specific target (sm_100a, sm_103a, sm_120a) name the compute_XXXa PTX explicitly: nvcc 12.9's
+    ``-arch=sm_100a`` also embeds a plain ``compute_100`` PTX, and the tcgen05 mnemonics do not assemble for that target."""
+    m = re.fullmatch(r"sm_(\d+)a", arch)
+    if m:
+        return [f"-gencode=arch=compute_{m.group(1)}a,code=sm_{m.group(1)}a"]
+    return [f"-arch={arch}"]
+
+
 def build(arch: str, out: Path, source: str = "mma_fp4.cu") -> tuple[Path, str]:
     so = out / f"lib{Path(source).stem}_{arch}.so"
     nvcc = subprocess.run([nvcc_bin(), "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
-    subprocess.run([nvcc_bin(), "-O2", f"-arch={arch}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / source)], check=True)
+    subprocess.run([nvcc_bin(), "-O2", *arch_flags(arch), "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / source)], check=True)
     return so, " / ".join(line.strip() for line in nvcc)
 
 
@@ -188,11 +197,13 @@ class Probe:
             self.smem = dict(TCGEN05_SMEM)
             self.replica_disagreements = 0  # words of TMEM lanes 16..127 that differ from their replica in lanes 0..15 (reset by the caller)
             self.path_tiles = {"acc_disabled": 0, "acc_tmem": 0}
+            self.last_Dall = None  # the last call's full 128-lane TMEM readback (layout-check diagnostics)
         else:
             for name, argc in (("mma_nvfp4_tiles", 6), ("mma_mxfp4_tiles", 6), ("mma_fp4raw_tiles", 4), ("mma_bf16_tiles", 4)):
                 fn = getattr(self.lib, name)
                 fn.restype = ctypes.c_int
                 fn.argtypes = [P] * argc + [ctypes.c_int]
+        self.debug_dir = None  # set by main(): where a failing layout check dumps its operands
         self.lib.has_mxf4.restype = ctypes.c_int
         ident = self.lib.device_identity
         ident.restype = ctypes.c_int
@@ -222,6 +233,7 @@ class Probe:
                 raise RuntimeError(f"CUDA error {rc} in the {instr} tcgen05 tile kernel")
             D[s:e] = dall[:, :16, :]
             self.replica_disagreements += int(np.count_nonzero(dall[:, 16:, :] != np.tile(dall[:, :16, :], (1, 7, 1))))
+            self.last_Dall = dall
         self.path_tiles["acc_disabled"] += int(np.count_nonzero(enable == 0))
         self.path_tiles["acc_tmem"] += int(np.count_nonzero(enable != 0))
         return D
@@ -319,6 +331,21 @@ def random_bf16_bits(rng, shape, exp_lo=1, exp_hi=254) -> np.ndarray:
 # --- layout checks (exact small integers: any fragment / scale-lane error shows up) -----------------------------------------------
 
 
+def _layout_fail(probe: Probe, instr: str, label: str, want: np.ndarray, got: np.ndarray, **arrays: np.ndarray) -> None:
+    """Report a layout-check failure with the first differing words (and, when the probe has a debug dir, every operand as npz)."""
+    bad = int(np.count_nonzero(want != got))
+    idx = np.argwhere(want != got)[:8]
+    ex = "; ".join(f"t{t} r{i} c{j}: want {want[t, i, j]:08x} ({np.array([want[t, i, j]], np.uint32).view(np.float32)[0]:.9g}) "
+                   f"got {got[t, i, j]:08x} ({np.array([got[t, i, j]], np.uint32).view(np.float32)[0]:.9g})" for t, i, j in idx)
+    debug_dir = getattr(probe, "debug_dir", None)
+    if debug_dir is not None:
+        extra = {}
+        if getattr(probe, "last_Dall", None) is not None:
+            extra["Dall"] = probe.last_Dall
+        np.savez(Path(debug_dir) / f"layout_debug_{instr}_{label.replace(' ', '_')}.npz", want=want, got=got, **arrays, **extra)
+    raise RuntimeError(f"layout check ({label}) failed for {instr}: {bad}/{want.size} elements differ; first: {ex}")
+
+
 def layout_check(probe: Probe, instr: str) -> str:
     rng = np.random.default_rng(1)
     n = 64
@@ -356,18 +383,18 @@ def layout_check(probe: Probe, instr: str) -> str:
             if instr in TCGEN05_KIND:
                 # the accumulator-disabled path (enable_input_d = 0: D = A.B) on the same operands, and the K=128 chain
                 want0 = f32_bits(np.einsum("nijg,nig,njg->nij", prod, pa, pb))
+                if not np.array_equal(want, got):
+                    _layout_fail(probe, instr, "accumulator enabled", want, got, a=a, b=b, c=c, sfa=sfa, sfb=sfb)
                 got0 = probe.tiles(instr, e2m1_encode_ints(a), e2m1_encode_ints(b), np.zeros((n, 16, 8), np.uint32), sfa, sfb)
                 if not np.array_equal(want0, got0):
-                    bad = int(np.count_nonzero(want0 != got0))
-                    raise RuntimeError(f"layout check (accumulator disabled) failed for {instr}: {bad}/{want0.size} elements differ from A.Bt")
+                    _layout_fail(probe, instr, "accumulator disabled", want0, got0, a=a, b=b, sfa=sfa, sfb=sfb)
                 h = n // 2
                 a2, b2 = np.concatenate([a[:h], a[h:2 * h]], axis=2), np.concatenate([b[:h], b[h:2 * h]], axis=2)
                 sfa2, sfb2 = np.concatenate([sfa[:h], sfa[h:2 * h]], axis=2), np.concatenate([sfb[:h], sfb[h:2 * h]], axis=2)
                 want2 = f32_bits(c[:h] + np.einsum("nijg,nig,njg->nij", prod[:h], pa[:h], pb[:h]) + np.einsum("nijg,nig,njg->nij", prod[h:2 * h], pa[h:2 * h], pb[h:2 * h]))
                 got2 = probe.tiles(instr, e2m1_encode_ints(a2), e2m1_encode_ints(b2), f32_bits(c[:h]), sfa2, sfb2, steps=2)
                 if not np.array_equal(want2, got2):
-                    bad = int(np.count_nonzero(want2 != got2))
-                    raise RuntimeError(f"layout check (K=128 chain) failed for {instr}: {bad}/{want2.size} elements differ from C + A.Bt")
+                    _layout_fail(probe, instr, "K=128 chain", want2, got2, a=a2, b=b2, c=c[:h], sfa=sfa2, sfb=sfb2)
                 if probe.replica_disagreements:
                     raise RuntimeError(f"layout check for {instr}: {probe.replica_disagreements} replica words (TMEM lanes 16..127) differ from lanes 0..15")
         else:
@@ -1003,6 +1030,7 @@ def main() -> int:
     if instr == "mxf4" and not identity["has_mxf4"]:
         failures.append("mxf4 kernel not compiled")
     else:
+        probe.debug_dir = out
         results["layout_check"] = layout_check(probe, instr)
         print("layout_check", instr, results["layout_check"], flush=True)
 

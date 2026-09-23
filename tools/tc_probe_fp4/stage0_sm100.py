@@ -59,6 +59,12 @@ def cuda_bin(name: str) -> str:
     return shutil.which(name) or f"/usr/local/cuda/bin/{name}"
 
 
+def gencode(arch: str) -> str:
+    """explicit compute_XXXa PTX + sm_XXXa SASS (nvcc 12.9's -arch=sm_100a also embeds compute_100 PTX, which tcgen05 refuses)"""
+    m = re.fullmatch(r"sm_(\d+)a", arch)
+    return f"-gencode=arch=compute_{m.group(1)}a,code=sm_{m.group(1)}a" if m else f"-arch={arch}"
+
+
 def sass_opcodes(cubin_or_so: Path) -> dict:
     """{function: {mma_count, mma_opcodes, tcgen05_opcodes, instructions}} from cuobjdump -sass."""
     text = subprocess.run([cuda_bin("cuobjdump"), "-sass", str(cubin_or_so)], capture_output=True, text=True).stdout
@@ -109,21 +115,24 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
         # (a) the sm_120 kernel source against the datacenter target: expected to be refused by ptxas
-        rec["mma_sync_kernel_on_arch"] = run([cuda_bin("nvcc"), "-O2", f"-arch={args.arch}", "-Xcompiler", "-fPIC", "-shared",
+        rec["mma_sync_kernel_on_arch"] = run([cuda_bin("nvcc"), "-O2", gencode(args.arch), "-Xcompiler", "-fPIC", "-shared",
                                               "-o", str(tdp / "mma_fp4.so"), str(HERE / "mma_fp4.cu")])
         # (b) one mma.sync instruction as PTX through ptxas: datacenter target, then the sm_120a control
         for target in (args.arch, "sm_120a"):
             ptx = tdp / f"mma_{target}.ptx"
             ptx.write_text(MMA_SYNC_PTX.format(target=target))
             rec[f"ptxas_mma_sync_{target}"] = run([cuda_bin("ptxas"), f"-arch={target}", str(ptx), "-o", str(tdp / f"mma_{target}.cubin")])
-        # (c) the tcgen05 probe kernel on this target: must build; its SASS is the instruction under test
+        # (c) the tcgen05 probe kernel on this target: must build; its SASS is the instruction under test.  Also recorded: what the
+        #     plain `-arch=<arch>` spelling does with this nvcc (12.9 adds a compute_100 PTX stage that refuses tcgen05).
+        rec["tcgen05_kernel_build_plain_arch"] = run([cuda_bin("nvcc"), "-O2", f"-arch={args.arch}", "-Xcompiler", "-fPIC", "-shared",
+                                                      "-o", str(tdp / "plain.so"), str(HERE / "tcgen05_fp4.cu")])
         so = out / f"libtcgen05_fp4_{args.arch}.so"
-        rec["tcgen05_kernel_build"] = run([cuda_bin("nvcc"), "-O2", f"-arch={args.arch}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so),
+        rec["tcgen05_kernel_build"] = run([cuda_bin("nvcc"), "-O2", gencode(args.arch), "-Xcompiler", "-fPIC", "-shared", "-o", str(so),
                                            str(HERE / "tcgen05_fp4.cu")])
         if rec["tcgen05_kernel_build"]["rc"] == 0:
             rec["tcgen05_kernel_sass"] = sass_opcodes(so)
             ptx_out = out / f"tcgen05_fp4_{args.arch}.ptx"
-            run([cuda_bin("nvcc"), "-O2", f"-arch={args.arch}", "-ptx", "-o", str(ptx_out), str(HERE / "tcgen05_fp4.cu")])
+            run([cuda_bin("nvcc"), "-O2", gencode(args.arch), "-ptx", "-o", str(ptx_out), str(HERE / "tcgen05_fp4.cu")])
             if ptx_out.exists():
                 rec["tcgen05_kernel_ptx_mnemonics"] = sorted({m.group(0) for m in re.finditer(r"tcgen05\.[A-Za-z0-9_.:]+", ptx_out.read_text())})
         # (d) CUTLASS example 72a: the production block-scaled GEMM's SASS
@@ -132,7 +141,7 @@ def main() -> int:
             src = cut / "examples/72_blackwell_narrow_precision_gemm/72a_blackwell_nvfp4_bf16_gemm.cu"
             if src.exists():
                 obj = tdp / "72a.o"
-                rec["cutlass_72a_build"] = run([cuda_bin("nvcc"), "-O2", f"-arch={args.arch}", "-std=c++17", "--expt-relaxed-constexpr",
+                rec["cutlass_72a_build"] = run([cuda_bin("nvcc"), "-O2", gencode(args.arch), "-std=c++17", "--expt-relaxed-constexpr",
                                                 "-I", str(cut / "include"), "-I", str(cut / "tools/util/include"), "-I", str(cut / "examples/common"),
                                                 "-c", "-o", str(obj), str(src)], timeout=3600)
                 if rec["cutlass_72a_build"]["rc"] == 0:
@@ -155,6 +164,8 @@ def main() -> int:
         "mma_sync_kernel_builds_for_arch": rec["mma_sync_kernel_on_arch"]["rc"] == 0,
         "ptxas_diagnostic_on_arch": (rec[f"ptxas_mma_sync_{args.arch}"].get("stderr") or "").strip().splitlines()[:3],
         "tcgen05_kernel_builds": rec["tcgen05_kernel_build"]["rc"] == 0,
+        "tcgen05_kernel_builds_with_plain_arch_flag": rec["tcgen05_kernel_build_plain_arch"]["rc"] == 0,
+        "plain_arch_first_diagnostic": (rec["tcgen05_kernel_build_plain_arch"].get("stderr") or "").strip().splitlines()[:1],
         "tcgen05_kernel_sass": {fn: {"mma_count": v["mma_count"], "mma_opcodes": v["mma_opcodes"], "tcgen05_opcodes": v["tcgen05_opcodes"]}
                                 for fn, v in rec.get("tcgen05_kernel_sass", {}).items()},
         "cutlass_72a_mma_opcodes": sorted({op for v in rec.get("cutlass_72a_sass", {}).values() for op in v["mma_opcodes"]}) if "cutlass_72a_sass" in rec else None,
