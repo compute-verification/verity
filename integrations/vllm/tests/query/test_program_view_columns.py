@@ -1,0 +1,162 @@
+"""The columnar `ProgramView` (F-r19-int-25) reads exactly what the materialized reader read.
+
+`from_instances` streams the rows of `instances.json.gz` into flat int columns and hands out `CallView`s / `ValueRef`s lazily; the
+oracle below is the reader it replaced (`json.load` of the document, a `CallView` per row with a tuple of `ValueRef`s), kept here
+verbatim so every Value, its order within a Call, the dedup of a producer's two runs (an attention row's K and V of one token), the
+multi-port overlap resolution and the record-field resolution are checked Call for Call -- on a document, on a streamed file (small
+chunks: buffer refills mid-row), on a file whose rows are not in body order (the fallback), and through `boundary()`."""
+from __future__ import annotations
+
+import gzip
+import json
+
+import pytest
+from verity.verification.query import ValueRef, boundary, partition_by
+from verity_vllm.query import program_view as pv
+from verity_vllm.query.program_view import CallView, ProgramView, from_instances, param_reads, reads_any_of
+
+EPS = '{"f64":"0x1p-17"}'
+PARAMS = [["prompt", "Array<4,Value<32>>"],
+          ["weights", "{m.a.weight: Array<4,Array<8,Value<16>>>, m.b.weight: Array<8,Array<4,Value<16>>>, m.n.weight: Array<4,Value<16>>}"]]
+# weights leaves: m.a.weight [0, 32), m.b.weight [32, 64), m.n.weight [64, 68)
+ROWS = [
+    {"i": 0, "spec": "Embedding_v1{V=8,H=4}", "form": "call", "name": "m.embed/embedding[0]", "args": [[["p", 0, 0, 1]], [["p", 1, 0, 32]]]},
+    {"i": 1, "spec": "Gemm_v1{K=4,N=8}", "form": "call", "name": "m.a/linear[0]", "args": [[["n", 0, 0, 4]], [["p", 1, 0, 32]]]},
+    # a fused norm: TWO ports ("0" = normed, "1" = residual); reads Call 1 and the norm weight (a range inside the record)
+    {"i": 2, "spec": f"RMSNormFusedCuda_v2{{N=4,EPS={EPS}}}", "form": "call", "name": "m.n/fused[0]", "args": [[["n", 1, 0, 4]], [["n", 0, 0, 4]], [["p", 1, 64, 68]]]},
+    # reads port "1" of the fused norm only (leaves [4, 8)), then port "0"; and Call 1's K and V halves as two runs -> ONE Value
+    {"i": 3, "spec": "Attention_v3{T=1,NH=2,KVH=1,D=4,BN=16}", "form": "call", "name": "m.attn/attn[t=0]", "args": [[["n", 2, 4, 8]], [["n", 1, 0, 4], ["n", 1, 4, 8]], [["n", 2, 0, 4]]]},
+    # a run spanning both ports of the norm (leaves [2, 6)) -> both Values, in port order
+    {"i": 4, "spec": "Gemm_v1{K=8,N=4}", "form": "call", "name": "m.b/linear[0]", "args": [[["n", 2, 2, 6]], [["p", 1, 32, 64]]]},
+    {"i": 5, "spec": "SiluMul_v1{I=4}", "form": "call", "name": "m.act/silu[0]", "args": [[["n", 4, 0, 4]]]},
+    {"i": 6, "spec": "TokenSelect_v1{V=4}", "form": "call", "name": "argmax[0]", "args": [[["n", 5, 0, 4]]]},
+    {"i": 7, "spec": "Embedding_v1{V=8,H=4}", "form": "call", "name": "m.embed/embedding[1]", "args": [[["n", 6, 0, 1]], [["p", 1, 0, 32]]]},
+]
+
+
+def doc(rows=ROWS) -> dict:
+    return {"schema": "cb-a/instance-sequence/v1", "digest": "d" * 64, "params": PARAMS, "rows": rows}
+
+
+# --- the reader this replaced (verbatim), as the oracle ----------------------------------------------------------------------------
+
+def _resolve_reads_ref(args, port_of, params, forms, out):
+    seen = set()
+    for operand in args:
+        for run in operand:
+            space, idx, lo, hi = run[0], int(run[1]), int(run[2]), int(run[3])
+            if space == "n":
+                table = port_of[idx]
+                if len(table) == 1:
+                    vs = (ValueRef(idx, table[0].name),)
+                else:
+                    vs = tuple(ValueRef(idx, p.name) for p in table if p.lo < hi and lo < p.hi)
+                    if not vs and forms[idx] == "batch":
+                        vs = (ValueRef(idx, table[0].name),)
+            elif space == "p":
+                p_ = params[idx]
+                table = p_.port_table
+                if len(table) == 1:
+                    vs = (ValueRef(p_.id, table[0].name),)
+                else:
+                    vs = tuple(ValueRef(p_.id, p.name) for p in table if p.lo < hi and lo < p.hi)
+            else:
+                continue
+            for v in vs:
+                if v not in seen:
+                    seen.add(v)
+                    out.append(v)
+
+
+def reference_from_instances(d: dict) -> ProgramView:
+    params = pv._params_view(d.get("params") or [])
+    rows = d["rows"]
+    port_of = [()] * len(rows)
+    forms = [""] * len(rows)
+    for r in rows:
+        i = int(r["i"])
+        port_of[i] = pv.definition_ports(r["spec"])
+        forms[i] = str(r.get("form") or "call")
+    calls = []
+    for r in rows:
+        i = int(r["i"])
+        reads: list[ValueRef] = []
+        _resolve_reads_ref(r.get("args") or (), port_of, params, forms, reads)
+        spec = r["spec"]
+        calls.append(CallView(i, spec, pv.spec_base(spec), forms[i], str(r.get("name") or ""), port_of[i], tuple(reads)))
+    calls.sort(key=lambda c: c.id)
+    return ProgramView(tuple(calls), params, (), d.get("digest"), "instances")
+
+
+def assert_same_view(P: ProgramView, R: ProgramView) -> None:
+    assert len(P.calls) == len(R.calls) and P.params == R.params and P.outputs == R.outputs and P.digest == R.digest and P.source == R.source
+    for c, r in zip(P.calls, R.calls):
+        assert (c.id, c.definition, c.family, c.form, c.name, c.port_table) == (r.id, r.definition, r.family, r.form, r.name, r.port_table)
+        assert tuple(c.reads) == r.reads, c.id
+        assert c.reads == r.reads and c == r                # the lazy sequence compares equal to the tuple; the CallViews compare equal
+        assert tuple(param_reads(c)) == tuple(v for v in r.reads if v.call < 0)
+
+
+def test_columnar_view_equals_the_materialized_reader_on_a_document():
+    P, R = from_instances(doc()), reference_from_instances(doc())
+    assert P.columns is not None and R.columns is None
+    assert_same_view(P, R)
+    # the cases the rows were written for
+    assert tuple(P.call(3).reads) == (ValueRef(2, "1"), ValueRef(1, "out"), ValueRef(2, "0"))       # K and V runs of Call 1 -> one Value
+    assert tuple(P.call(4).reads) == (ValueRef(2, "0"), ValueRef(2, "1"), ValueRef(-2, "m.b.weight"))
+    assert tuple(P.call(2).reads) == (ValueRef(1, "out"), ValueRef(0, "out"), ValueRef(-2, "m.n.weight"))
+    assert tuple(P.call(0).reads) == (ValueRef(-1, "out"), ValueRef(-2, "m.a.weight"))
+    assert P.columns.nbytes() < 1000
+
+
+def test_streamed_file_with_small_chunks_equals_the_document(tmp_path, monkeypatch):
+    p = tmp_path / "instances.json.gz"
+    with gzip.open(p, "wt") as f:
+        json.dump(doc(), f)
+    monkeypatch.setattr(pv, "_CHUNK", 64)                   # every row straddles chunk boundaries
+    P = from_instances(str(p))
+    assert_same_view(P, reference_from_instances(doc()))
+    assert [r["i"] for r in pv.iter_instance_rows(str(p))] == list(range(len(ROWS)))
+    monkeypatch.setattr(pv, "_CHUNK", 1 << 22)
+    assert_same_view(from_instances(str(p)), reference_from_instances(doc()))
+
+
+def test_rows_out_of_body_order_are_read_as_a_document(tmp_path):
+    rows = [ROWS[3], ROWS[0], ROWS[7], ROWS[1], ROWS[2], ROWS[5], ROWS[4], ROWS[6]]
+    P = from_instances(doc(rows))                             # a document: sorted
+    assert_same_view(P, reference_from_instances(doc(rows)))
+    p = tmp_path / "instances.json.gz"
+    with gzip.open(p, "wt") as f:
+        json.dump(doc(rows), f)
+    assert_same_view(from_instances(str(p)), reference_from_instances(doc(rows)))     # a file: the fallback
+    bad = [dict(r, i=r["i"] + 1) for r in ROWS]              # ids are not body positions at all
+    with pytest.raises(ValueError):
+        from_instances(doc(bad))
+
+
+def test_lazy_sequences_behave_as_tuples():
+    P = from_instances(doc())
+    calls = P.calls
+    assert len(calls) == 8 and calls[-1].id == 7 and calls[2:4] == (calls[2], calls[3]) and isinstance(calls[2:4], tuple)
+    assert calls[1] in calls and list(reversed(calls))[0].id == 7 and calls.index(calls[5]) == 5
+    with pytest.raises(IndexError):
+        calls[8]
+    assert (calls[:2] + (calls[7],)) == (calls[0], calls[1], calls[7])
+    r = P.call(3).reads
+    assert len(r) == 3 and r[0] == ValueRef(2, "1") and r[-1] == ValueRef(2, "0") and r[1:] == (ValueRef(1, "out"), ValueRef(2, "0"))
+    assert ValueRef(1, "out") in r and hash(r) == hash(tuple(r))
+    with pytest.raises(IndexError):
+        r[3]
+    assert P.call(7).id == 7 and P.calls[7].name == "m.embed/embedding[1]"
+    assert reads_any_of(P.call(7), {6}) and not reads_any_of(P.call(7), {5}) and not reads_any_of(P.call(0), {6})
+    assert tuple(param_reads(P.call(3))) == () and tuple(param_reads(P.call(7))) == (ValueRef(-2, "m.a.weight"),)
+
+
+def test_boundary_over_the_columnar_view_equals_the_materialized_one():
+    P, R = from_instances(doc()), reference_from_instances(doc())
+    Q = partition_by(lambda c: c.name.split("/")[0] if "/" in c.name else "")
+    a, b = boundary(P, Q), boundary(R, Q)
+    assert a.values == b.values and a.produced_in == b.produced_in and a.read_by == b.read_by
+    assert [(u.id, u.calls) for u in a.units] == [(u.id, u.calls) for u in b.units]
+    assert a.values == {ValueRef(-1, "out"), ValueRef(-2, "m.a.weight"), ValueRef(-2, "m.b.weight"), ValueRef(-2, "m.n.weight"),
+                        ValueRef(0, "out"), ValueRef(1, "out"), ValueRef(2, "0"), ValueRef(2, "1"), ValueRef(4, "out"), ValueRef(5, "out"), ValueRef(6, "out")}
