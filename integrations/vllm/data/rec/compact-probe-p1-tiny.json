@@ -1,0 +1,351 @@
+{
+ "schema": "veritor/summary-probe/v1",
+ "label": "MEASURED",
+ "host": "Daniels-MacBook-Pro.local",
+ "platform": "macOS-26.5.1-arm64-arm-64bit",
+ "python": "3.12.11",
+ "args": {
+  "case": "TINY",
+  "lp": 4,
+  "steps": 8,
+  "nl": 0,
+  "set": [],
+  "plans": "P1/cu=operator,P1/cu=whole",
+  "modes": "compact",
+  "policies": "1/2:1/8:1/1000000",
+  "cache": "",
+  "out": "/tmp/rec_probe_p1_tiny",
+  "recursion_limit": 100000
+ },
+ "stages": [
+  {
+   "stage": "program",
+   "inputs": {
+    "case": "TINY",
+    "LP": 4,
+    "STEPS": 8
+   },
+   "seconds": 0.036,
+   "rss_before_mb": 39.4,
+   "rss_after_mb": 44.0,
+   "maxrss_mb": 44.0
+  },
+  {
+   "stage": "adapt",
+   "inputs": {
+    "gates": 71245
+   },
+   "seconds": 0.017,
+   "rss_before_mb": 44.0,
+   "rss_after_mb": 44.8,
+   "maxrss_mb": 44.8
+  },
+  {
+   "stage": "circuit",
+   "inputs": {
+    "root_nodes": 95
+   },
+   "seconds": 0.0,
+   "rss_before_mb": 44.8,
+   "rss_after_mb": 44.8,
+   "maxrss_mb": 44.8
+  },
+  {
+   "stage": "plan P1/cu=operator[compact]",
+   "inputs": {},
+   "seconds": 0.025,
+   "rss_before_mb": 45.0,
+   "rss_after_mb": 47.4,
+   "maxrss_mb": 47.4
+  },
+  {
+   "stage": "validate P1/cu=operator[compact]",
+   "inputs": {
+    "vus": 53113,
+    "cus": 305
+   },
+   "seconds": 3.384,
+   "rss_before_mb": 67.0,
+   "rss_after_mb": 237.4,
+   "maxrss_mb": 237.4
+  },
+  {
+   "stage": "table P1/cu=operator[compact]",
+   "inputs": {
+    "vus": 53113
+   },
+   "seconds": 2.354,
+   "rss_before_mb": 237.4,
+   "rss_after_mb": 261.2,
+   "maxrss_mb": 261.2
+  },
+  {
+   "stage": "summarize P1/cu=operator[compact]",
+   "inputs": {
+    "cached": false
+   },
+   "seconds": 0.265,
+   "rss_before_mb": 261.2,
+   "rss_after_mb": 261.2,
+   "maxrss_mb": 261.2
+  },
+  {
+   "stage": "evaluate P1/cu=operator[compact]",
+   "inputs": {
+    "points": 1
+   },
+   "seconds": 1.978,
+   "rss_before_mb": 261.2,
+   "rss_after_mb": 278.7,
+   "maxrss_mb": 278.7
+  },
+  {
+   "stage": "plan P1/cu=whole[compact]",
+   "inputs": {},
+   "seconds": 0.023,
+   "rss_before_mb": 278.7,
+   "rss_after_mb": 278.7,
+   "maxrss_mb": 278.7
+  },
+  {
+   "stage": "validate P1/cu=whole[compact]",
+   "inputs": {
+    "vus": 53113,
+    "cus": 1
+   },
+   "seconds": 4.154,
+   "rss_before_mb": 278.7,
+   "rss_after_mb": 278.7,
+   "maxrss_mb": 278.7
+  },
+  {
+   "stage": "table P1/cu=whole[compact]",
+   "inputs": {
+    "vus": 53113
+   },
+   "seconds": 2.479,
+   "rss_before_mb": 278.7,
+   "rss_after_mb": 278.8,
+   "maxrss_mb": 278.8
+  },
+  {
+   "stage": "summarize P1/cu=whole[compact]",
+   "inputs": {
+    "cached": false
+   },
+   "seconds": 0.263,
+   "rss_before_mb": 278.8,
+   "rss_after_mb": 278.8,
+   "maxrss_mb": 278.8
+  },
+  {
+   "stage": "evaluate P1/cu=whole[compact]",
+   "inputs": {
+    "points": 1
+   },
+   "seconds": 0.096,
+   "rss_before_mb": 278.8,
+   "rss_after_mb": 278.8,
+   "maxrss_mb": 278.8
+  }
+ ],
+ "config": {
+  "model": "tiny",
+  "revision": null,
+  "H": 32,
+  "NL": 2,
+  "NH": 2,
+  "KVH": 1,
+  "D": 16,
+  "I": 32,
+  "V": 64,
+  "QKV": 64,
+  "GU": 64,
+  "EPS": 1e-05,
+  "ROPE_THETA": 10000.0,
+  "MAX_POS": 16,
+  "BIAS": true,
+  "tie_word_embeddings": true
+ },
+ "program": {
+  "gates": 71245,
+  "input_gates": 14884,
+  "root_nodes": 95,
+  "function": "Serve_v1{C={b60e37f2db33},LP=4,STEPS=8}",
+  "digest": "e1dc003bbe8388e8f94f9235c7321232589d875299bc062b4435dd65f8605db4",
+  "digest_seconds": 0.02
+ },
+ "ir": {
+  "definitions": 56,
+  "nodes": 2010,
+  "ref_runs": 5095,
+  "ref_leaves": 403246
+ },
+ "circuit_size": 71245,
+ "plans": {
+  "P1/cu=operator": {
+   "compact": {
+    "plan": "P1/cu=operator",
+    "mode": "compact",
+    "vus": 53113,
+    "cus": 305,
+    "vu_level": "coordinate",
+    "cu_strategy": "operator",
+    "constructor": "veritor.plans.canonical",
+    "vu_runs": 16568,
+    "cu_runs": 305,
+    "plan_digest": {
+     "kind": "plan-rule/v1",
+     "digest": "e8101be342caba00a56a309e5d66cc93c56e741c647c14ed7a6da111bbb71564"
+    },
+    "status": "valid",
+    "codes": [],
+    "vu_edges": 430983,
+    "cu_edges": 906,
+    "escape_steps": 301562,
+    "reasons": [],
+    "table_digest": "dc20d226c7884406e496dc29a93f6e508f4a90e57328e43f699e0ff85fbfe3a1",
+    "rows": 749,
+    "summary": {
+     "digest": "baec3ee8d738fb271d0de81716a175ecca2d0d083a0859c9039686989d8bf2f9",
+     "cache_hit": null,
+     "N_V": {
+      "value": 53113,
+      "exactness": "exact",
+      "note": "N_V = \u03a3_k n_k"
+     },
+     "N_R": {
+      "value": 305,
+      "exactness": "exact",
+      "note": "N_R = \u03a3_a B_a"
+     },
+     "v_max": 14880,
+     "W_out": 288,
+     "vu_kinds": 537,
+     "ru_kinds": 133,
+     "M_t": {
+      "0": 305,
+      "1": 305,
+      "2": 305,
+      "4": 304,
+      "8": 304,
+      "16": 280,
+      "32": 172,
+      "64": 91,
+      "128": 82,
+      "256": 64,
+      "512": 13,
+      "1024": 1,
+      "2048": 1,
+      "4096": 1,
+      "8192": 1,
+      "14880": 0
+     },
+     "boundary": {
+      "vu_boundary_gates": 484632,
+      "vu_boundary_runs": 146098,
+      "cu_boundary_gates": 239193,
+      "cu_boundary_runs": 11213,
+      "cu_export_positions": 27405,
+      "cu_interior_positions": 25128,
+      "vu_edges": 430983,
+      "cu_edges": 906
+     },
+     "json_bytes": 513679
+    },
+    "bounds": [
+     {
+      "q": "1/2",
+      "s": "1/8",
+      "delta": "1/1000000",
+      "U_bits": 288.0,
+      "capped": true
+     }
+    ]
+   }
+  },
+  "P1/cu=whole": {
+   "compact": {
+    "plan": "P1/cu=whole",
+    "mode": "compact",
+    "vus": 53113,
+    "cus": 1,
+    "vu_level": "coordinate",
+    "cu_strategy": "whole",
+    "constructor": "veritor.plans.canonical",
+    "vu_runs": 16568,
+    "plan_digest": {
+     "kind": "plan-rule/v1",
+     "digest": "b9bd72b0ec077f31d56f9b201c464b2d2d292d3a6891bd3f38b32458827f7d69"
+    },
+    "status": "valid",
+    "codes": [],
+    "vu_edges": 430983,
+    "cu_edges": 0,
+    "escape_steps": 1008416,
+    "reasons": [],
+    "table_digest": "6fa1743eef06f7c039dffa012bf3468f597da5ce40cf2d741a75ec969006ee5d",
+    "rows": 757,
+    "summary": {
+     "digest": "e213e785b3169cb4ed098ed7abfea20053fda0b4a72384ac127c21621e4fe940",
+     "cache_hit": null,
+     "N_V": {
+      "value": 53113,
+      "exactness": "exact",
+      "note": "N_V = \u03a3_k n_k"
+     },
+     "N_R": {
+      "value": 1,
+      "exactness": "exact",
+      "note": "N_R = \u03a3_a B_a"
+     },
+     "v_max": 53113,
+     "W_out": 288,
+     "vu_kinds": 537,
+     "ru_kinds": 1,
+     "M_t": {
+      "0": 1,
+      "1": 1,
+      "2": 1,
+      "4": 1,
+      "8": 1,
+      "16": 1,
+      "32": 1,
+      "64": 1,
+      "128": 1,
+      "256": 1,
+      "512": 1,
+      "1024": 1,
+      "2048": 1,
+      "4096": 1,
+      "8192": 1,
+      "16384": 1,
+      "32768": 1,
+      "53113": 0
+     },
+     "boundary": {
+      "vu_boundary_gates": 484632,
+      "vu_boundary_runs": 146098,
+      "cu_boundary_gates": 9,
+      "cu_boundary_runs": 9,
+      "cu_export_positions": 9,
+      "cu_interior_positions": 52524,
+      "vu_edges": 430983,
+      "cu_edges": 0
+     },
+     "json_bytes": 494736
+    },
+    "bounds": [
+     {
+      "q": "1/2",
+      "s": "1/8",
+      "delta": "1/1000000",
+      "U_bits": 288.0,
+      "capped": true
+     }
+    ]
+   }
+  }
+ },
+ "maxrss_mb": 278.8
+}

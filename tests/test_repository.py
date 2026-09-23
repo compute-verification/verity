@@ -1,6 +1,7 @@
 """Repository invariants (AGENTS.md "Where writing goes"): the tree holds executable code, tests, small fixtures and a
 few maintained current-truth documents.  Lane reports, handoffs, findings, drafts and their evidence (explore JSON,
-plots, gate outputs, run results) live in the notes store (``~/.research/notes``), never in Git.
+plots, gate outputs, run results) live in the notes store (``~/.research/notes``), never in Git.  Experimental evidence,
+run outputs and model weights live in artifact storage: every tracked blob stays under ``BLOB_LIMIT`` bytes.
 
 Enforced here rather than remembered.  ``.gitignore`` keeps the report-genre paths out of ``git add``; this test is the
 backstop for anything that slips past it.
@@ -50,6 +51,7 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 128 * 1024
+BLOB_LIMIT = 5 * 1024 * 1024  # 5 MiB; the largest fixture today is 4.5 MB
 
 
 def _tracked() -> list[str]:
@@ -112,3 +114,18 @@ def test_markdown_size_caps() -> None:
         if size > cap:
             offenders.append(f"{p}: {size / 1024:.0f} KB > {cap // 1024} KB")
     assert not offenders, "maintained documents are small; move detail to the notes store:\n" + "\n".join(offenders)
+
+
+def test_no_tracked_blob_exceeds_limit() -> None:
+    offenders = []
+    for p in _tracked():
+        try:
+            size = os.path.getsize(ROOT / p)
+        except FileNotFoundError:  # tracked but deleted in the working tree
+            continue
+        if size > BLOB_LIMIT:
+            offenders.append(f"{p}: {size / 1048576:.1f} MiB")
+    assert not offenders, (
+        "tracked files over the blob limit (evidence and run outputs belong in artifact storage, not Git):\n"
+        + "\n".join(offenders)
+    )

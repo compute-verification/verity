@@ -45,6 +45,8 @@ REQUEST_SCHEMA = "research/request/v0.1"
 PRESERVED_SCHEMA = "research/preserved/v0.1"
 SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl")
 TERMINAL = ("done", "failed", "cancelled")
+POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
+POD_TARGET_RETRY_S = 2.0
 
 
 class Refused(Exception):
@@ -99,6 +101,15 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
     if not pod or (pod.get("desiredStatus") or "").upper() != "RUNNING":
         raise Refused(f"{who} is {pod.get('desiredStatus') if pod else 'not found'}; no implicit provisioning")
     tgt = runpod.ssh_target(pod)
+    # The REST API intermittently answers a RUNNING pod's GET with publicIp="" / portMappings=None (observed 2026-09-22 on
+    # s00kzu0nisihgr: alternating answers within seconds while ssh worked throughout).  Re-read a few times before refusing;
+    # a mapping that never appears is still refused, by the same name.
+    for _ in range(POD_TARGET_RETRIES):
+        if tgt is not None:
+            break
+        time.sleep(POD_TARGET_RETRY_S)
+        pod = runpod.get(machine["pod_id"]) or pod
+        tgt = runpod.ssh_target(pod)
     if tgt is None:
         raise Refused(f"{who} has no ssh port mapped yet")
     return {"host": tgt[0], "port": tgt[1], "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
@@ -120,9 +131,18 @@ def ssh_run(ssh: list[str], remote_argv: list[str], *, stdin: bytes | None = Non
 
 # ---- snapshots --------------------------------------------------------------------------------------------------------------------------
 
-def tool_tarball() -> tuple[bytes, str]:
+def source_tool_package(source: Path | None) -> Path | None:
+    """The `research` package a shipped source tree carries (tools/research/src/research), or None.  When present it is the tool the
+    machine runs: the launcher's own install may be older (a venv elsewhere) and know neither the tree's tools nor its CLI verbs."""
+    if source is None:
+        return None
+    cand = Path(source).expanduser() / "tools" / "research" / "src" / "research"
+    return cand if (cand / "__init__.py").is_file() else None
+
+
+def tool_tarball(src: Path | None = None) -> tuple[bytes, str]:
     """Deterministic tar of the research package source (no tests, no caches); sha256 of the tar is the tool identity."""
-    src = Path(__file__).resolve().parent
+    src = Path(src).resolve() if src is not None else Path(__file__).resolve().parent
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
         for p in sorted(src.rglob("*")):
@@ -138,8 +158,8 @@ def tool_tarball() -> tuple[bytes, str]:
     return data, hashlib.sha256(data).hexdigest()[:16]
 
 
-def ship_tool(ssh: list[str], root: str) -> str:
-    data, sha = tool_tarball()
+def ship_tool(ssh: list[str], root: str, src: Path | None = None) -> str:
+    data, sha = tool_tarball(src)
     dest = f"{root}/tool/{sha}"
     probe = ssh_run(ssh, ["test", "-f", f"{dest}/.complete"])
     if probe.returncode == 0:
@@ -329,6 +349,10 @@ def launch_request(request_path: Path) -> dict[str, Any]:
     argv += [*(req.get("harness_args") or []), "--", *req["command"]]
     env = dict(os.environ)
     env.update({k: str(v) for k, v in (req.get("env") or {}).items()})
+    if remote.get("source_sha"):
+        # [R19 tele] the shipped tree (<root>/src/<sha>/, a git archive) has no .git: the workload's source-identity precheck reads the
+        # tree's sha from here (research.result.ENV_SOURCE_SHA) when neither --sha nor EXPORT.json names it
+        env["RESEARCH_SOURCE_SHA"] = str(remote["source_sha"])
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
@@ -353,7 +377,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         ssh = ssh_argv(tgt["host"], tgt["port"])
         rec.update(pod_id=m["pod_id"], host=tgt["host"], port=tgt["port"], root=m["root"], phase="shipping")
         write_json_atomic(local_dir / "remote.json", rec)
-        tool_dir = ship_tool(ssh, m["root"])
+        tool_pkg = source_tool_package(source)      # --source <tree> with tools/research: the tree's own package runs the run
+        tool_dir = ship_tool(ssh, m["root"], tool_pkg)
+        rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         tree_sha = None
         remote_cwd = cwd
         if source is not None:

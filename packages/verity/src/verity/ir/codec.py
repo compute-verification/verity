@@ -268,12 +268,18 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     defs: dict[str, dict] = {}
     seen: dict[str, FunctionDefinition] = {}
     duplicates: list[tuple[str, FunctionDefinition]] = []
+    # One entry per distinct duplicate OBJECT, not per visit: a workload Program composed from request components decoded
+    # separately refers to every shared definition through a re-decoded object from EVERY node that calls it, so the per-visit
+    # list held one entry per node (OLMoE B2: 146,523 visits of 95 distinct objects) and the identity check below re-encoded
+    # the definitions verbatim that many times (compose > 45 min; 8 s with the dedup; same descriptor).  [veritor R15 GP01-DUP]
+    dup_objects: set[tuple[str, int]] = set()
 
     def visit(fn: FunctionDefinition) -> None:
         fid = _spec_id(fn)
         prev = seen.get(fid)
         if prev is not None:
-            if prev is not fn:
+            if prev is not fn and (fid, id(fn)) not in dup_objects:
+                dup_objects.add((fid, id(fn)))
                 duplicates.append((fid, fn))
             return
         seen[fid] = fn
@@ -408,10 +414,15 @@ def _record_function_ids(fid: str) -> list[str]:
     return out
 
 
-def _lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
+def lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
     """`registry[fid]`, materialising the on-demand families (`Input<w>`, `Const<w>[bits]`, `GatherBf16x<V>`)
     when a descriptor is decoded in a process that has not built the program (their evaluators are total
-    functions of the id)."""
+    functions of the id).  Public so a semantics package's lazy-family makers (`register_lazy_family`) can
+    resolve the primitive they lift or wrap by id."""
+    return _lookup_primitive(registry, fid)
+
+
+def _lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
     if fid in registry:
         return registry[fid]  # type: ignore[return-value]
     for pat, make in _LAZY_PRIMITIVE_FAMILIES:

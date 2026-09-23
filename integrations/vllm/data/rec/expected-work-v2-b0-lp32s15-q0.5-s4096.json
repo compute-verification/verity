@@ -1,0 +1,1170 @@
+{
+ "E_J": {
+  "N_R": 4,
+  "formula": "q * N_R",
+  "label": "DERIVED",
+  "value": 2.0
+ },
+ "E_Q": {
+  "N_V": 166196840,
+  "budget_3sigma": 82006,
+  "formula": "q * s * N_V * instances",
+  "label": "DERIVED",
+  "note": "a Bernoulli draw realises |Q| ~ Binomial(N_V*instances, q*s) -- never a fixed size",
+  "value": 81150.801
+ },
+ "by_predicate_status": {
+  "ADAPTER": {
+   "E_Q": 13.219,
+   "kinds": 1,
+   "priced_gpu_s": 0.0
+  },
+  "MIXED(ADAPTER:1824/REFUSED:768)": {
+   "E_Q": 1194.188,
+   "kinds": 1,
+   "priced_gpu_s": 3746.44
+  },
+  "REFUSED": {
+   "E_Q": 10053.162,
+   "kinds": 33,
+   "priced_gpu_s": 0.0
+  },
+  "SUPPORTED": {
+   "E_Q": 69890.234,
+   "kinds": 3,
+   "priced_gpu_s": 9438.88
+  }
+ },
+ "coefficients_source": "docs/data/table3a/B0-serve-lp32-s15.json",
+ "instances": 4,
+ "label": "DERIVED (E = rate x count; counts as labelled in population.label; coefficients MEASURED/DERIVED as labelled in Table 3(a))",
+ "note": "UNPRICED kinds have NO cost estimate (not zero): the priced total is a lower bound on the proving work only if every selected UNPRICED VU is refused or otherwise handled; e2e.predicates says which kinds are REFUSED today",
+ "population": {
+  "input_vus": 135039328,
+  "label": "DERIVED (Table 3(a) census: exact structural coordinate census of the body; Input leaves from the manifest)",
+  "program": "program digest `d4f4b1f1b4d592d697eef5b6c9c803108bdf02d0ef24c945eace6e705832e1b8` (`verity-ir/program_digest`), 518,837,608 gates of which 135,039,328 Input gates (committed leaves) and 383,798,280 relation gates; descriptor sha256 `71150bfe\u2026`",
+  "relation_vus": 31157512,
+  "source": "docs/data/table3a/B0-serve-lp32-s15.json",
+  "vu_count": 166196840,
+  "workload": "B0-serve-lp32-s15"
+ },
+ "q": "1/2",
+ "rows": [
+  {
+   "E_Q": 65937.172,
+   "N_V_per_instance": 135039328,
+   "budget_3sigma": 66708,
+   "cost_source": "UNPRICED: no Table 3(a) row for this kind",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "instances": 4,
+   "kind": "Input|batch",
+   "predicate": {
+    "operators": {
+     "Input": {
+      "checker": "input-equation",
+      "reason": "",
+      "status": "SUPPORTED"
+     }
+    },
+    "outcomes": {
+     "SUPPORTED": 14884
+    },
+    "status": "SUPPORTED"
+   },
+   "priced": false
+  },
+  {
+   "E_Q": 3556.5,
+   "N_V_per_instance": 7283712,
+   "budget_3sigma": 3736,
+   "cost_source": "Table 3(a) gemm-coord-K576: core 1.979 + compression 0.388 GPU-s per VU (RTX 4090 (BATCH, SECURE cloud, SP1 6.4.0 cuda); approved ELF `73081b7b\u2026` (vk `0x006ecb51\u2026`), statement format 2, plan-validated multiproof witness; labels {'prep': 'D', 'core': 'M', 'compression': 'M', 'cycles': 'M', 'overhead': 'U'})",
+   "expected_gpu_h": 2.3374,
+   "expected_gpu_s": 8414.78,
+   "expected_prep_cpu_s": 20.07,
+   "gpu_s_per_obligation": 2.366,
+   "group": "proj",
+   "instances": 4,
+   "kind": "GemmCoordinate_v2{K=576,DOT=AmpereBF16TcDot16_v1}|batch",
+   "matched_by": "kind",
+   "predicate": {
+    "matched_by": "family (GemmCoordinate{K=32}|batch)",
+    "operators": {
+     "Gemm_v1": {
+      "checker": "gemm-coordinate",
+      "reason": "",
+      "status": "SUPPORTED"
+     }
+    },
+    "outcomes": {
+     "SUPPORTED": 5184
+    },
+    "status": "SUPPORTED"
+   },
+   "prep_cpu_s_per_obligation": 0.005642505886954918,
+   "priced": true,
+   "table3a_row": "gemm-coord-K576"
+  },
+  {
+   "E_Q": 1595.25,
+   "N_V_per_instance": 3267072,
+   "budget_3sigma": 1716,
+   "cost_source": "UNPRICED (norm-mul): UNPRICED at scalar granularity \u2014 no coordinate kind program for the elementwise gate; the cone measurement on the normalize-coordinate row includes these gates for the selected coordinate; the row-level `residual_add/h576` anchor is a 576-coordinate row relation.",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "F32Mul|batch",
+   "predicate": {
+    "operators": {
+     "RMSNormFusedCuda_v2": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the ope",
+      "status": "REFUSED"
+     },
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 3648
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-mul"
+  },
+  {
+   "E_Q": 1595.25,
+   "N_V_per_instance": 3267072,
+   "budget_3sigma": 1716,
+   "cost_source": "UNPRICED (norm-castup): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "Bf16ToF32|batch",
+   "predicate": {
+    "operators": {
+     "RMSNormFusedCuda_v2": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the ope",
+      "status": "REFUSED"
+     },
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 1 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 3648
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-castup"
+  },
+  {
+   "E_Q": 1194.188,
+   "N_V_per_instance": 2445696,
+   "budget_3sigma": 1298,
+   "cost_source": "Table 3(a) norm-out-cast: core 2.450 + compression 0.687 GPU-s per VU (RTX 4090 (BATCH); approved ELF `73081b7b\u2026`, format 2; kind = the coordinate CONE of `RMSNormFusedCuda_v2{N=576}` (BATCH-2, bench-only kind, not registered); labels {'prep': 'D', 'core': 'M+', 'compression': 'M+', 'cycles': 'M+', 'overhead': 'U'})",
+   "expected_gpu_h": 1.0407,
+   "expected_gpu_s": 3746.44,
+   "expected_prep_cpu_s": 5.51,
+   "gpu_s_per_obligation": 3.1372,
+   "group": "norm",
+   "instances": 4,
+   "kind": "F2fpBf16|batch",
+   "matched_by": "kind",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     },
+     "RMSNormFusedCuda_v2": {
+      "checker": "rmsnorm-cone",
+      "reason": "",
+      "status": "ADAPTER"
+     },
+     "RMSNormTriton_v1": {
+      "checker": "rmsnorm-cone",
+      "reason": "",
+      "status": "ADAPTER"
+     }
+    },
+    "outcomes": {
+     "ADAPTER": 1824,
+     "REFUSED": 768
+    },
+    "status": "MIXED(ADAPTER:1824/REFUSED:768)"
+   },
+   "prep_cpu_s_per_obligation": 0.004617230877140436,
+   "priced": true,
+   "table3a_row": "norm-out-cast"
+  },
+  {
+   "E_Q": 1057.5,
+   "N_V_per_instance": 2165760,
+   "budget_3sigma": 1156,
+   "cost_source": "UNPRICED (silu-mul-coord): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "act",
+   "instances": 4,
+   "kind": "SiluMulBf16|batch",
+   "predicate": {
+    "operators": {
+     "SiluMul_v1": {
+      "checker": null,
+      "reason": "interface committed but no approved checker takes kind program 'SiluMulBf16_v1' (batch) in operator SiluMul_v1{I=32}",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 768
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "silu-mul-coord"
+  },
+  {
+   "E_Q": 799.186,
+   "N_V_per_instance": 1636732,
+   "budget_3sigma": 884,
+   "cost_source": "UNPRICED (norm-redadd): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "F32Add|primitive",
+   "predicate": {
+    "operators": {
+     "RMSNormFusedCuda_v2": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the ope",
+      "status": "REFUSED"
+     },
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 9168
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-redadd"
+  },
+  {
+   "E_Q": 786.082,
+   "N_V_per_instance": 1609895,
+   "budget_3sigma": 871,
+   "cost_source": "UNPRICED (norm-mul): UNPRICED at scalar granularity \u2014 no coordinate kind program for the elementwise gate; the cone measurement on the normalize-coordinate row includes these gates for the selected coordinate; the row-level `residual_add/h576` anchor is a 576-coordinate row relation.",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "F32Mul|primitive",
+   "predicate": {
+    "operators": {
+     "RMSNormFusedCuda_v2": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the ope",
+      "status": "REFUSED"
+     },
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 1500
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-mul"
+  },
+  {
+   "E_Q": 784.688,
+   "N_V_per_instance": 1607040,
+   "budget_3sigma": 869,
+   "cost_source": "UNPRICED (attn-pv-dot16): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "AmpereBF16TcDot16|batch",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 768
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-pv-dot16"
+  },
+  {
+   "E_Q": 784.406,
+   "N_V_per_instance": 1606464,
+   "budget_3sigma": 869,
+   "cost_source": "UNPRICED (norm-resadd): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "Bf16AddF2fp|batch",
+   "predicate": {
+    "operators": {
+     "RMSNormFusedCuda_v2": {
+      "checker": null,
+      "reason": "interface committed but no approved checker takes kind program 'Bf16AddF2fp_v1' (batch) in operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 1440
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-resadd"
+  },
+  {
+   "E_Q": 405.657,
+   "N_V_per_instance": 830785,
+   "budget_3sigma": 467,
+   "cost_source": "UNPRICED (const-zero): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "const",
+   "instances": 4,
+   "kind": "Const32[0x00000000]|primitive",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface committed but no approved checker takes kind program 'Const32[0x00000000]_v1' (primitive) in operator Attention_v1{T=1,NH=2,KVH=1,D=16}",
+      "status": "REFUSED"
+     },
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     },
+     "TokenSelect_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator TokenSelect_v1{V=64}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's ",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 2373
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "const-zero"
+  },
+  {
+   "E_Q": 396.562,
+   "N_V_per_instance": 812160,
+   "budget_3sigma": 457,
+   "cost_source": "Table 3(a) gemm-coord-K1536: core 1.941 + compression 0.641 GPU-s per VU (H100 80GB HBM3 (PB2, SP1 6.4.0 cuda) \u2014 DIFFERENT hardware from the K=576 row; frozen ELF `08298f55\u2026` (PB2 R1/R2; format 2, plan-validated) \u2014 the register's frozen GEMM ELF, not in `approved_guests.json`; labels {'prep': 'D', 'core': 'M', 'compression': 'M', 'cycles': 'D', 'overhead': 'M*'})",
+   "expected_gpu_h": 0.2845,
+   "expected_gpu_s": 1024.1,
+   "expected_prep_cpu_s": 5.96,
+   "gpu_s_per_obligation": 2.5825,
+   "group": "proj",
+   "instances": 4,
+   "kind": "GemmCoordinate_v2{K=1536,DOT=AmpereBF16TcDot16_v1}|batch",
+   "matched_by": "kind",
+   "predicate": {
+    "matched_by": "family (GemmCoordinate{K=32}|batch)",
+    "operators": {
+     "Gemm_v1": {
+      "checker": "gemm-coordinate",
+      "reason": "",
+      "status": "SUPPORTED"
+     }
+    },
+    "outcomes": {
+     "SUPPORTED": 5184
+    },
+    "status": "SUPPORTED"
+   },
+   "prep_cpu_s_per_obligation": 0.015038526097669092,
+   "priced": true,
+   "table3a_row": "gemm-coord-K1536"
+  },
+  {
+   "E_Q": 396.562,
+   "N_V_per_instance": 812160,
+   "budget_3sigma": 457,
+   "cost_source": "UNPRICED (attn-rescale-mul): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "F32MulFtz|batch",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 768
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-rescale-mul"
+  },
+  {
+   "E_Q": 383.992,
+   "N_V_per_instance": 786416,
+   "budget_3sigma": 443,
+   "cost_source": "UNPRICED (argmax-step): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "tokensel",
+   "instances": 4,
+   "kind": "ArgmaxStep_v1|scan",
+   "predicate": {
+    "operators": {
+     "TokenSelect_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator TokenSelect_v1{V=64}: 2 of 4 inputs and 3 of 3 outputs are not boundary values of the operator; today's ",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 567
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "argmax-step"
+  },
+  {
+   "E_Q": 264.375,
+   "N_V_per_instance": 541440,
+   "budget_3sigma": 314,
+   "cost_source": "UNPRICED (rope-coord): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "rope",
+   "instances": 4,
+   "kind": "RopeOut|batch",
+   "predicate": {
+    "operators": {
+     "RoPE_v1": {
+      "checker": null,
+      "reason": "interface committed but no approved checker takes kind program 'RopeOut_v1' (batch) in operator RoPE_v1{NHEADS=2,D=16}",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 576
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "rope-coord"
+  },
+  {
+   "E_Q": 264.375,
+   "N_V_per_instance": 541440,
+   "budget_3sigma": 314,
+   "cost_source": "UNPRICED (rope-coord): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "rope",
+   "instances": 4,
+   "kind": "RopeOutAdd|batch",
+   "predicate": {
+    "operators": {
+     "RoPE_v1": {
+      "checker": null,
+      "reason": "interface committed but no approved checker takes kind program 'RopeOutAdd_v1' (batch) in operator RoPE_v1{NHEADS=2,D=16}",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 576
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "rope-coord"
+  },
+  {
+   "E_Q": 148.711,
+   "N_V_per_instance": 304560,
+   "budget_3sigma": 186,
+   "cost_source": "UNPRICED (attn-qk-dot-K64): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "DotBf16_v2{K=64,DOT=AmpereBF16TcDot16_v1}|call",
+   "predicate": {
+    "matched_by": "family (DotBf16{K=16}|call)",
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 312
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-qk-dot-K64"
+  },
+  {
+   "E_Q": 148.711,
+   "N_V_per_instance": 304560,
+   "budget_3sigma": 186,
+   "cost_source": "UNPRICED (attn-fmasub): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "F32FmaSubFtz|primitive",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 312
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-fmasub"
+  },
+  {
+   "E_Q": 148.711,
+   "N_V_per_instance": 304560,
+   "budget_3sigma": 186,
+   "cost_source": "UNPRICED (attn-exp2): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "MufuEx2Ftz|primitive",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 312
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-exp2"
+  },
+  {
+   "E_Q": 148.711,
+   "N_V_per_instance": 304560,
+   "budget_3sigma": 186,
+   "cost_source": "UNPRICED (attn-p-cast): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "F2fpBf16|primitive",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 312
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-p-cast"
+  },
+  {
+   "E_Q": 144.097,
+   "N_V_per_instance": 295110,
+   "budget_3sigma": 181,
+   "cost_source": "UNPRICED (attn-lsum): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "F32AddFtz|primitive",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 312
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-lsum"
+  },
+  {
+   "E_Q": 142.515,
+   "N_V_per_instance": 291870,
+   "budget_3sigma": 179,
+   "cost_source": "UNPRICED (attn-rowmax): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "F32Max|primitive",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 264
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-rowmax"
+  },
+  {
+   "E_Q": 13.219,
+   "N_V_per_instance": 27072,
+   "budget_3sigma": 25,
+   "cost_source": "UNPRICED (embed-coord-V49152): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "embed",
+   "instances": 4,
+   "kind": "GatherBf16x49152|batch",
+   "predicate": {
+    "matched_by": "family (GatherBf16x64|batch)",
+    "operators": {
+     "Embedding_v1": {
+      "checker": "embedding-row",
+      "reason": "",
+      "status": "ADAPTER"
+     }
+    },
+    "outcomes": {
+     "ADAPTER": 384
+    },
+    "status": "ADAPTER"
+   },
+   "priced": false,
+   "table3a_row": "embed-coord-V49152"
+  },
+  {
+   "E_Q": 12.393,
+   "N_V_per_instance": 25380,
+   "budget_3sigma": 23,
+   "cost_source": "UNPRICED (attn-const): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "Const16[0x0000]|primitive",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 96
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-const"
+  },
+  {
+   "E_Q": 11.589,
+   "N_V_per_instance": 23735,
+   "budget_3sigma": 22,
+   "cost_source": "UNPRICED (norm-triton): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "F32Fma|primitive",
+   "predicate": {
+    "operators": {
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 348
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-triton"
+  },
+  {
+   "E_Q": 6.196,
+   "N_V_per_instance": 12690,
+   "budget_3sigma": 14,
+   "cost_source": "UNPRICED (attn-rescale-mul): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "F32MulFtz|primitive",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 48
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-rescale-mul"
+  },
+  {
+   "E_Q": 6.196,
+   "N_V_per_instance": 12690,
+   "budget_3sigma": 14,
+   "cost_source": "UNPRICED (attn-const): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "Const32[0x3e38aa3b]|primitive",
+   "predicate": {
+    "matched_by": "family (Const32[0x00000000]|primitive)",
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface committed but no approved checker takes kind program 'Const32[0x00000000]_v1' (primitive) in operator Attention_v1{T=1,NH=2,KVH=1,D=16}",
+      "status": "REFUSED"
+     },
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     },
+     "TokenSelect_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator TokenSelect_v1{V=64}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's ",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 2373
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-const"
+  },
+  {
+   "E_Q": 6.196,
+   "N_V_per_instance": 12690,
+   "budget_3sigma": 14,
+   "cost_source": "UNPRICED (attn-guard): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "GuardNegInfZero|primitive",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 48
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-guard"
+  },
+  {
+   "E_Q": 6.196,
+   "N_V_per_instance": 12690,
+   "budget_3sigma": 14,
+   "cost_source": "UNPRICED (attn-invsum): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "attn",
+   "instances": 4,
+   "kind": "Fa2InvSum|primitive",
+   "predicate": {
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface not committed; pending S55 (the attention VU definition is unresolved: security-choices-2026-09-09.md S55; no head-row cone is substituted)",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 48
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "attn-invsum"
+  },
+  {
+   "E_Q": 1.385,
+   "N_V_per_instance": 2836,
+   "budget_3sigma": 5,
+   "cost_source": "UNPRICED (norm-const): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "Const32[0x44100000]|primitive",
+   "predicate": {
+    "matched_by": "family (Const32[0x00000000]|primitive)",
+    "operators": {
+     "Attention_v1": {
+      "checker": null,
+      "reason": "interface committed but no approved checker takes kind program 'Const32[0x00000000]_v1' (primitive) in operator Attention_v1{T=1,NH=2,KVH=1,D=16}",
+      "status": "REFUSED"
+     },
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     },
+     "TokenSelect_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator TokenSelect_v1{V=64}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's ",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 2373
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-const"
+  },
+  {
+   "E_Q": 1.385,
+   "N_V_per_instance": 2836,
+   "budget_3sigma": 5,
+   "cost_source": "UNPRICED (norm-const): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "Const32[0x3727c5ac]|primitive",
+   "predicate": {
+    "operators": {
+     "RMSNormFusedCuda_v2": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the ope",
+      "status": "REFUSED"
+     },
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 57
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-const"
+  },
+  {
+   "E_Q": 1.362,
+   "N_V_per_instance": 2789,
+   "budget_3sigma": 5,
+   "cost_source": "UNPRICED (norm-mean): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "F32Div|primitive",
+   "predicate": {
+    "operators": {
+     "RMSNormFusedCuda_v2": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the ope",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 45
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-mean"
+  },
+  {
+   "E_Q": 1.362,
+   "N_V_per_instance": 2789,
+   "budget_3sigma": 5,
+   "cost_source": "UNPRICED (norm-rsqrt): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "RsqrtApprox|primitive",
+   "predicate": {
+    "operators": {
+     "RMSNormFusedCuda_v2": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormFusedCuda_v2{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the ope",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 45
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-rsqrt"
+  },
+  {
+   "E_Q": 0.046,
+   "N_V_per_instance": 94,
+   "budget_3sigma": 1,
+   "cost_source": "UNPRICED (norm-triton): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "DivFullRcp|primitive",
+   "predicate": {
+    "operators": {
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 24
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-triton"
+  },
+  {
+   "E_Q": 0.023,
+   "N_V_per_instance": 47,
+   "budget_3sigma": 1,
+   "cost_source": "UNPRICED (norm-triton): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "MufuSqrtFtz|primitive",
+   "predicate": {
+    "operators": {
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 1 of 1 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 12
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-triton"
+  },
+  {
+   "E_Q": 0.023,
+   "N_V_per_instance": 47,
+   "budget_3sigma": 1,
+   "cost_source": "UNPRICED (norm-triton): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "Const32[0x3f800000]|primitive",
+   "predicate": {
+    "operators": {
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 12
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-triton"
+  },
+  {
+   "E_Q": 0.023,
+   "N_V_per_instance": 47,
+   "budget_3sigma": 1,
+   "cost_source": "UNPRICED (norm-triton): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "norm",
+   "instances": 4,
+   "kind": "DivFullScaleA|primitive",
+   "predicate": {
+    "operators": {
+     "RMSNormTriton_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator RMSNormTriton_v1{N=32,EPS=1e-05}: 2 of 2 inputs and 1 of 1 outputs are not boundary values of the operat",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 12
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "norm-triton"
+  },
+  {
+   "E_Q": 0.008,
+   "N_V_per_instance": 16,
+   "budget_3sigma": 1,
+   "cost_source": "UNPRICED (tokensel-const): UNPRICED in Table 3(a) (no measured coefficient for this kind; the row lists why in table3a.md)",
+   "expected_gpu_h": null,
+   "expected_gpu_s": null,
+   "gpu_s_per_obligation": null,
+   "group": "tokensel",
+   "instances": 4,
+   "kind": "Const32[0x00000001]|primitive",
+   "predicate": {
+    "operators": {
+     "TokenSelect_v1": {
+      "checker": null,
+      "reason": "interface not committed (the VU is interior to operator TokenSelect_v1{V=64}: 0 of 0 inputs and 1 of 1 outputs are not boundary values of the operator; today's ",
+      "status": "REFUSED"
+     }
+    },
+    "outcomes": {
+     "REFUSED": 9
+    },
+    "status": "REFUSED"
+   },
+   "priced": false,
+   "table3a_row": "tokensel-const"
+  }
+ ],
+ "s": "1/4096",
+ "schema": "veritor/rec-expected-work/v2",
+ "totals": {
+  "priced_E_Q": 5147.25,
+  "priced_gpu_h": 3.6626,
+  "priced_gpu_s": 13185.32,
+  "priced_kinds": 3,
+  "unpriced_E_Q": 76003.553,
+  "unpriced_kinds": 35,
+  "unpriced_share_of_E_Q": 0.9366
+ }
+}

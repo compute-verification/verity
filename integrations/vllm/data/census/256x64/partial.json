@@ -1,0 +1,105 @@
+{
+ "schema": "e6/census-partial/v1",
+ "instance_id": "E6-B0-256x63-r1-f299411e-t84cf6bc1-l57129503",
+ "partition_digest": "f299411ee39f3957375df1ae53d16ad2ffb921e1cc48b96752e8c38a7b6b3fd1",
+ "population_sha256": "c9ed7a9856d3cc2b95be8526cc65a751d0316e2ecaa22a2bc9b1b48f873b3014",
+ "instance_sha256": "cd34e4493a59f83bebd096e40a9b056319c447f6e949a2f14333437d2eea50c2",
+ "tree": {
+  "label": "54e3414f"
+ },
+ "utc_last_observed": "2026-09-13T02:37:11Z",
+ "stopped_utc": "2026-09-13T02:45:14Z",
+ "stopped_by": "integrator D53 (cost ~$13.5 projected = the $18 scaling line; ETA 08:00Z past D51's 06:00Z gate)",
+ "rows_mode": "sampled",
+ "picks_per_row": 6,
+ "shards": 8,
+ "totals": {
+  "vus": 22973911,
+  "N_V": 326735010,
+  "fraction": 0.0703,
+  "uncovered": 0,
+  "final_verdict_checked_vus": {
+   "ok": 22973911
+  }
+ },
+ "rows_seen": 1954637,
+ "vus_evaluated": 3898903,
+ "nonuniform_rows": 5637,
+ "shape_keys_per_shard": "64-68 (of the 75 the 128x64 census found; no new key)",
+ "coverage": {
+  "complete": false
+ },
+ "kinds_table_full_check": {
+  "equals_pinned_rule": true,
+  "kinds": 32,
+  "method": "population_v3.compare(expected, population.v2.json, self_check='full') == [] at the freeze 22:57-23:00Z over all 32,762,705 rows; legacy_minus_inputs_v2.check == []",
+  "kind_table_digest": "12906552a6e102f2a304b38c49934be017c6a224498bc4b92feb3645a5670475"
+ },
+ "measured": {
+  "label": "MEASURED",
+  "vus_per_s_aggregate_steady": 16000,
+  "vus_per_s_per_shard_steady": "1400-2000",
+  "evaluated_per_s_per_shard_steady": 300,
+  "maxrss_gb_per_shard": 14.18,
+  "rss_total_gb": 105.4,
+  "pod": "sc-e6-cen256 704j8clx1vf2xg cpu5m 32 vCPU/256 GB $2.08/h 01:36:53Z-02:45:14Z"
+ },
+ "per_shard": [
+  {
+   "shard": "0/8",
+   "vus": 3585069,
+   "evaluated": 510127,
+   "rows": 265105,
+   "nonuniform": 672
+  },
+  {
+   "shard": "1/8",
+   "vus": 2442996,
+   "evaluated": 446770,
+   "rows": 230007,
+   "nonuniform": 594
+  },
+  {
+   "shard": "2/8",
+   "vus": 2217328,
+   "evaluated": 421217,
+   "rows": 220599,
+   "nonuniform": 532
+  },
+  {
+   "shard": "3/8",
+   "vus": 2474349,
+   "evaluated": 472482,
+   "rows": 242502,
+   "nonuniform": 630
+  },
+  {
+   "shard": "4/8",
+   "vus": 2671908,
+   "evaluated": 515486,
+   "rows": 228225,
+   "nonuniform": 1009
+  },
+  {
+   "shard": "5/8",
+   "vus": 3301603,
+   "evaluated": 577140,
+   "rows": 271205,
+   "nonuniform": 988
+  },
+  {
+   "shard": "6/8",
+   "vus": 3155962,
+   "evaluated": 498663,
+   "rows": 265127,
+   "nonuniform": 594
+  },
+  {
+   "shard": "7/8",
+   "vus": 3124696,
+   "evaluated": 457018,
+   "rows": 231867,
+   "nonuniform": 618
+  }
+ ]
+}

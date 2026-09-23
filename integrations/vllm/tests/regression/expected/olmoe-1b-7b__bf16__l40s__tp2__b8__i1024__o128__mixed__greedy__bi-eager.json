@@ -1,0 +1,7 @@
+{
+ "checks": {"commit_summary":{"applies":false,"why":"no commit_summary.json on this row (Commit never closed)"},"coverage":{"applies":false,"why":"no instrumented layouts on this row (Commit never ran)"},"decomp_hashes":{"applies":false,"why":"no match_decomp.json (B=1 rows have no decomposition; FAIL rows never reached it)"},"executed_prefix":{"applies":false,"why":"no GP-01 workload_program.json (declared EOS / LAG) on this row"},"global_match_checks":{"applies":false,"why":"no global_match.json on this row (Match never reached GM-01)"},"manifest_digest":{"applies":false,"why":"TP row: rank Programs (build/rank*/) are merged by row_pod_tp2.sh, not by build/build-global"},"program_digest":{"applies":true,"strength":"strong","tier":"T2"},"replay_partition":{"applies":false,"why":"no sampled_replay record on this row"}},
+ "class": "FAIL",
+ "program_digest": {"batch":8,"build_summary":{"request":null,"shapes":{},"step":"da3a3e14885216ad9ab664041184be09efb01f86658fd888f93c50b6e07b2b48","workload":null},"program_digest_of_record":null},
+ "reference": {"branch":"lane/vllm-integration","commit":"89af272a8c1d37a44b3e8f3253378d7a152fc281","release":"r19-int-21","tag":"v1-reference"},
+ "row": 70
+}

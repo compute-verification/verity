@@ -31,12 +31,89 @@ def _tele_argv() -> list[str]:
     return [sys.executable, "-m", "research.telemetry"]
 
 
+def _tele_env() -> dict[str, str]:
+    """[R18 infra, r18-int-2; F-r18-infra-1] the sidecar is `python -m research.telemetry` in a NEW process: launched through a script
+    that put its import root on sys.path in-process only, the child found no package -- the r18-int-1 canary's sampler.log reads
+    'No module named telemetry' and no resources.jsonl was written (the workload ran; Level 0 did not).  The package's IMPORT ROOT goes
+    first on the child's PYTHONPATH, so the sidecar resolves the SAME package that runs it.  For research/telemetry/run.py that root is
+    `src/` = parents[2] (research/telemetry/run.py -> telemetry -> research -> src); veritor's parents[1] would name `research/` and
+    reproduce the bug silently (the regression test in tests/test_telemetry.py is the check)."""
+    root = str(Path(__file__).resolve().parents[2])
+    env = dict(os.environ)
+    pp = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = root if not pp else (root + os.pathsep + pp if root not in pp.split(os.pathsep) else pp)
+    return env
+
+
 def _marker(attempt_dir: Path, actor: str, target_pid: int | None, target_pgid: int | None, sig: int, reason: str, starttime: int | None,
             deliver: bool, job: str | None) -> int:
     ns = argparse.Namespace(actor=actor, reason=reason, signal=sig, target_pid=target_pid, target_pgid=target_pgid, target_pod=None,
                             attempt_dir=str(attempt_dir), fallback=None, expect_starttime=starttime, expect_comm=None, expect_nonempty=False,
                             deliver=deliver, confirm_exit_s=0.0, project=None, job=job, attempt=None, controller="tele-run")
     return cancel_run(ns)
+
+
+CONTROL_TIMEOUT = Path("control") / "timeout_s"     # attempt-dir relative; written by `tele set-timeout`, re-read by the run loop
+
+
+class _TimeoutControl:
+    """`<attempt-dir>/control/timeout_s` -- JSON {"timeout_s": <seconds or null>, "actor": ..., "reason": ...} (a bare number is accepted).
+    poll() re-reads the file only when its mtime/size changed and returns the parsed document, or None when absent/unchanged/unparseable
+    (an unparseable file is reported once on stderr and otherwise ignored: the control surface never becomes the reason a workload stops)."""
+
+    def __init__(self, attempt_dir: Path):
+        self.path = attempt_dir / CONTROL_TIMEOUT
+        self._sig: tuple[int, int] | None = None
+        self._bad: str | None = None
+
+    def poll(self) -> dict[str, Any] | None:
+        try:
+            st = self.path.stat()
+        except OSError:
+            return None
+        sig = (st.st_mtime_ns, st.st_size)
+        if sig == self._sig:
+            return None
+        self._sig = sig
+        raw = ""
+        try:
+            raw = self.path.read_text().strip()
+            doc = json.loads(raw)
+            if not isinstance(doc, dict):
+                doc = {"timeout_s": doc}
+            v = doc.get("timeout_s")
+            if v is not None:
+                v = float(v)
+                if v <= 0:
+                    raise ValueError("timeout_s must be > 0 or null")
+            doc["timeout_s"] = v
+            return doc
+        except (OSError, ValueError, TypeError) as e:
+            if raw != self._bad:
+                print(f"[tele run] ignoring unparseable {self.path}: {e}", file=sys.stderr)
+                self._bad = raw
+            return None
+
+
+def set_timeout(attempt_dir: str | Path, timeout_s: float | None, actor: str, reason: str) -> Path:
+    """Write the control file atomically (the run loop picks it up within one poll interval) and return its path."""
+    p = Path(attempt_dir) / CONTROL_TIMEOUT
+    p.parent.mkdir(parents=True, exist_ok=True)
+    write_json_atomic(p, {"timeout_s": timeout_s, "actor": actor, "reason": reason, "set_utc": utc_now_ms()})
+    return p
+
+
+def set_timeout_main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="tele set-timeout", description="raise/lower/clear a running attempt's stage timeout (recorded as a mark by its tele run)")
+    ap.add_argument("--attempt-dir", required=True)
+    ap.add_argument("--timeout-s", required=True, help="seconds, or 'none' to clear the timeout")
+    ap.add_argument("--actor", default="manual", choices=sorted(CANCEL_ACTORS))
+    ap.add_argument("--reason", required=True)
+    a = ap.parse_args(argv)
+    v = None if a.timeout_s.lower() in ("none", "null", "0") else float(a.timeout_s)
+    p = set_timeout(a.attempt_dir, v, a.actor, a.reason)
+    print(f"[tele set-timeout] {p}: timeout_s={v} actor={a.actor}", file=sys.stderr)
+    return 0
 
 
 def run(a: argparse.Namespace, cmd: list[str]) -> int:
@@ -85,13 +162,15 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         sargs = _tele_argv() + ["sample", "--attempt-dir", str(d), "--cadence", str(a.cadence), "--root-pid", str(proc.pid), "--pss-every", str(a.pss_every),
                                 "--linger", str(a.linger)] + sum((["--mount", m] for m in a.mount), [])
         try:
-            sampler = subprocess.Popen(sargs, start_new_session=True, stdout=open(d / "sampler.log", "ab"), stderr=subprocess.STDOUT)
+            sampler = subprocess.Popen(sargs, start_new_session=True, stdout=open(d / "sampler.log", "ab"), stderr=subprocess.STDOUT, env=_tele_env())
         except OSError as e:
             em.emit("mark", stage=a.stage, name="sampler_start_failed", error=str(e))
             sampler = None
     sid = em.span_start(a.stage, pid=proc.pid, pgid=proc.pid, cmd0=Path(cmd[0]).name)
     timed_out = False
     rc: int | None = None
+    timeout = a.timeout
+    ctl = _TimeoutControl(d)
     try:
         while True:
             try:
@@ -99,9 +178,17 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 break
             except subprocess.TimeoutExpired:
                 pass
-            if a.timeout and time.monotonic() - t_start >= a.timeout and not timed_out:
+            new = ctl.poll()
+            if new is not None and new["timeout_s"] != timeout:
+                # [r19-int-8, F-r19-int-8] the launch value is not the last word: an operator who sized --timeout on Build alone can raise
+                # (or lower) it while the row runs, and the change is a recorded mark beside the launch value -- not a paused watchdog.
+                em.mark(a.stage, "timeout_changed", old_timeout_s=timeout, new_timeout_s=new["timeout_s"], actor=new.get("actor"), reason=new.get("reason"),
+                        elapsed_s=round(time.monotonic() - t_start, 3), control=str(ctl.path))
+                timeout = new["timeout_s"]
+                set_status(d, "running", timeout_s=timeout, timeout_changed_utc=utc_now_ms())
+            if timeout and time.monotonic() - t_start >= timeout and not timed_out:
                 timed_out = True
-                _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={a.timeout}", None, True, a.job)
+                _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout}", None, True, a.job)
                 try:
                     rc = proc.wait(timeout=a.grace)
                     break

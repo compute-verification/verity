@@ -4,6 +4,7 @@
   event         spans / marks / holds / queue timeline       sample        Level-0 sidecar
   cancel-intent cancellation marker (+ optional delivery)    classify      failure.json
   run           reference harness (sampler + spans + timeout markers + classify)
+  set-timeout   raise/lower/clear a RUNNING attempt's stage timeout (control/timeout_s; the run loop records a mark)
   render-rules  policy.toml -> RULES.md                      check-rules   verify a RULES.md is the render of a policy
   read          dump merged events / span accounting / holds of an attempt dir (for fixtures and humans)
 """
@@ -56,6 +57,7 @@ def cmd_init(argv: list[str]) -> int:
     ap.add_argument("--reservation-host-memory-bytes", type=int, default=None)
     ap.add_argument("--policy", default=None)
     ap.add_argument("--policy-version", default=None)
+    ap.add_argument("--source-identity", default=None, help="source_identity.json written by the runner's precheck (F-r17-tp-06); embedded in job.json computation.source_identity")
     ap.add_argument("--cadence", type=float, default=1.0)
     ap.add_argument("--pss-every", type=float, default=5.0)
     ap.add_argument("--force", action="store_true")
@@ -74,7 +76,8 @@ def cmd_init(argv: list[str]) -> int:
                     release_tag=a.release_tag, workload_digest=a.workload_digest, stage=a.stage, inputs=[input_ref(x) for x in a.input],
                     profile={k: os.environ.get(k) for k in a.profile_key if k in os.environ}, command=a.command, declared_outputs=a.declared_output,
                     timeout_s=a.timeout, reservation={"gpu": a.reservation_gpu, "host_memory_bytes": a.reservation_host_memory_bytes},
-                    policy_version=pv, policy_sha256=ps, instruments=["cgroup", "process", "pss", "gpu", "storage"], cadence_s=a.cadence, pss_every_s=a.pss_every)
+                    policy_version=pv, policy_sha256=ps, instruments=["cgroup", "process", "pss", "gpu", "storage"], cadence_s=a.cadence, pss_every_s=a.pss_every,
+                    source_identity=(json.loads(Path(a.source_identity).read_text()) if a.source_identity and Path(a.source_identity).exists() else None))
     Path(a.attempt_dir).mkdir(parents=True, exist_ok=True)
     write_json_atomic(p, doc)
     print(p)
@@ -108,7 +111,10 @@ def cmd_event(argv: list[str]) -> int:
     ap.add_argument("--proc", default=None, help="process label (default: the calling program's name)")
     ap.add_argument("--stages-txt", default=None, help="also append a `<stage> START|END <utc> ...` line to this file")
     ap.add_argument("kv", nargs="*", help="extra k=v fields")
-    a = ap.parse_args(argv)
+    # [R18 infra, r18-int-2; arch M-0025] `tele event submitted --stage S row=.. role=..` puts the k=v positionals AFTER the options:
+    # Python <= 3.11 argparse.parse_args rejects them ("unrecognized arguments"), 3.12 accepts; the pods run 3.11 (system python3) and
+    # 3.12 (venv-py312) side by side.  parse_intermixed_args accepts the shape on every version the pods carry.
+    a = ap.parse_intermixed_args(argv)
     if not a.attempt_dir:
         ap.error("--attempt-dir required (or export TELE_ATTEMPT_DIR)")
     em = Emitter(a.attempt_dir, proc=a.proc or os.environ.get("TELEMETRY_PROC") or "shell")
@@ -204,6 +210,9 @@ def main(argv: list[str] | None = None) -> int:
         return m(rest)
     if cmd == "run":
         from .run import main as m
+        return m(rest)
+    if cmd == "set-timeout":
+        from .run import set_timeout_main as m
         return m(rest)
     if cmd in ("render-rules", "check-rules"):
         from .policy import main as m

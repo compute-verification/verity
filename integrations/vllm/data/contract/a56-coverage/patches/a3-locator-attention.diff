@@ -1,0 +1,41 @@
+--- a/vllm-poc/e2e/verifier_v3/locator.py
++++ b/vllm-poc/e2e/verifier_v3/locator.py
+@@ -30,6 +30,25 @@
+ GEMM_OPS = {("pre", 0): ("self_attn.qkv_proj.gemm", "gemm"), ("post", 0): ("self_attn.o_proj.gemm", "gemm"),
+             ("post", 1): ("mlp.gate_up_proj.gemm", "gemm"), ("post", 2): ("mlp.down_proj.gemm", "gemm"), ("final", 0): (None, "lm_head")}
+ 
++#: [A5/6 patch] kinds located in the attention body (coverage_v1.interior_layout.INTERIOR_KINDS + the head unit, base id)
++def _attention_kinds() -> frozenset:
++    try:
++        from e2e.coverage_v1.attn_head_builder import HEAD_KIND
++        from e2e.coverage_v1.interior_layout import INTERIOR_KINDS
++
++        return frozenset(INTERIOR_KINDS) | {HEAD_KIND}
++    except ImportError:  # pragma: no cover
++        return frozenset()
++
++
++ATTENTION_KINDS = _attention_kinds()
++
++
++def _base_kind(kind: str) -> str:
++    import re
++
++    return re.sub(r"\{[^}]*\}", "", kind)
++
+ #: The unit fields the expectation deriver (``e2e.verifier_v3.expected.Deriver``) reads; a prover file must agree on all of them.
+ LOCATE_FIELDS = ("vu_index", "ru", "request_id", "kind", "class", "gate_interval", "locate")
+ 
+@@ -202,6 +221,12 @@
+             u["locate"] = loc.locate_gemm_coordinate(int(lo), int(hi))
+         elif cls.startswith("input unit"):
+             u["locate"] = loc.locate_input(int(lo))
++        elif kind in ATTENTION_KINDS or _base_kind(kind) in ATTENTION_KINDS:
++            # [A5/6 patch] attention-body kinds and the (flagged, PROPOSED) head unit: (t, layer, head) from the program's
++            # structural map -- coverage_v1.attn_locator; the located unit carries `unit` = "head" | "interior" and the call chain
++            from e2e.coverage_v1.attn_locator import locate_attention
++
++            u["locate"] = locate_attention(loc, int(lo), int(hi))
+         else:
+             u["locate"] = None
+         units.append(u)

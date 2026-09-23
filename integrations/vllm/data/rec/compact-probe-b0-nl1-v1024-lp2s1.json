@@ -1,0 +1,332 @@
+{
+ "schema": "veritor/summary-probe/v1",
+ "label": "MEASURED",
+ "host": "Daniels-MacBook-Pro.local",
+ "platform": "macOS-26.5.1-arm64-arm-64bit",
+ "python": "3.12.11",
+ "args": {
+  "case": "B0",
+  "lp": 2,
+  "steps": 1,
+  "nl": 1,
+  "set": [
+   "V=1024"
+  ],
+  "plans": "P3/cu=block,P3/cu=whole",
+  "modes": "compact",
+  "policies": "1/2:1/4096:1/1000000",
+  "cache": "",
+  "out": "/tmp/rec_probe_nl1",
+  "recursion_limit": 100000
+ },
+ "stages": [
+  {
+   "stage": "program",
+   "inputs": {
+    "case": "B0",
+    "LP": 2,
+    "STEPS": 1
+   },
+   "seconds": 0.053,
+   "rss_before_mb": 43.9,
+   "rss_after_mb": 50.1,
+   "maxrss_mb": 50.1
+  },
+  {
+   "stage": "adapt",
+   "inputs": {
+    "gates": 5489429
+   },
+   "seconds": 0.055,
+   "rss_before_mb": 50.1,
+   "rss_after_mb": 50.1,
+   "maxrss_mb": 50.1
+  },
+  {
+   "stage": "circuit",
+   "inputs": {
+    "root_nodes": 16
+   },
+   "seconds": 0.0,
+   "rss_before_mb": 50.1,
+   "rss_after_mb": 50.1,
+   "maxrss_mb": 50.1
+  },
+  {
+   "stage": "plan P3/cu=block[compact]",
+   "inputs": {},
+   "seconds": 0.001,
+   "rss_before_mb": 50.4,
+   "rss_after_mb": 50.4,
+   "maxrss_mb": 50.4
+  },
+  {
+   "stage": "validate P3/cu=block[compact]",
+   "inputs": {
+    "vus": 41,
+    "cus": 16
+   },
+   "seconds": 0.445,
+   "rss_before_mb": 50.4,
+   "rss_after_mb": 55.4,
+   "maxrss_mb": 55.4
+  },
+  {
+   "stage": "table P3/cu=block[compact]",
+   "inputs": {
+    "vus": 41
+   },
+   "seconds": 27.876,
+   "rss_before_mb": 55.4,
+   "rss_after_mb": 112.9,
+   "maxrss_mb": 112.9
+  },
+  {
+   "stage": "summarize P3/cu=block[compact]",
+   "inputs": {
+    "cached": false
+   },
+   "seconds": 0.021,
+   "rss_before_mb": 112.9,
+   "rss_after_mb": 112.9,
+   "maxrss_mb": 112.9
+  },
+  {
+   "stage": "evaluate P3/cu=block[compact]",
+   "inputs": {
+    "points": 1
+   },
+   "seconds": 0.31,
+   "rss_before_mb": 112.9,
+   "rss_after_mb": 137.2,
+   "maxrss_mb": 137.2
+  },
+  {
+   "stage": "plan P3/cu=whole[compact]",
+   "inputs": {},
+   "seconds": 0.0,
+   "rss_before_mb": 137.2,
+   "rss_after_mb": 137.2,
+   "maxrss_mb": 137.2
+  },
+  {
+   "stage": "validate P3/cu=whole[compact]",
+   "inputs": {
+    "vus": 41,
+    "cus": 1
+   },
+   "seconds": 174.465,
+   "rss_before_mb": 137.2,
+   "rss_after_mb": 1187.9,
+   "maxrss_mb": 1187.9
+  },
+  {
+   "stage": "table P3/cu=whole[compact]",
+   "inputs": {
+    "vus": 41
+   },
+   "seconds": 37.704,
+   "rss_before_mb": 1187.9,
+   "rss_after_mb": 1187.9,
+   "maxrss_mb": 1187.9
+  },
+  {
+   "stage": "summarize P3/cu=whole[compact]",
+   "inputs": {
+    "cached": false
+   },
+   "seconds": 0.034,
+   "rss_before_mb": 1187.9,
+   "rss_after_mb": 1187.9,
+   "maxrss_mb": 1187.9
+  },
+  {
+   "stage": "evaluate P3/cu=whole[compact]",
+   "inputs": {
+    "points": 1
+   },
+   "seconds": 0.022,
+   "rss_before_mb": 1187.9,
+   "rss_after_mb": 1187.9,
+   "maxrss_mb": 1187.9
+  }
+ ],
+ "config": {
+  "model": "HuggingFaceTB/SmolLM2-135M",
+  "revision": null,
+  "H": 576,
+  "NL": 1,
+  "NH": 9,
+  "KVH": 3,
+  "D": 64,
+  "I": 1536,
+  "V": 1024,
+  "QKV": 960,
+  "GU": 3072,
+  "EPS": 1e-05,
+  "ROPE_THETA": 100000.0,
+  "MAX_POS": 8192,
+  "BIAS": false,
+  "tie_word_embeddings": true
+ },
+ "program": {
+  "gates": 5489429,
+  "input_gates": 4654786,
+  "root_nodes": 16,
+  "function": "Serve_v1{C={dd9040b892bb},LP=2,STEPS=1}",
+  "digest": "a1216a440f3a56f0ad012b212676b1a49d9d167e63209ecd45bcecb9b9c23062",
+  "digest_seconds": 0.04
+ },
+ "ir": {
+  "definitions": 32,
+  "nodes": 3112,
+  "ref_runs": 5899,
+  "ref_leaves": 28408344
+ },
+ "circuit_size": 5489429,
+ "plans": {
+  "P3/cu=block": {
+   "compact": {
+    "plan": "P3/cu=block",
+    "mode": "compact",
+    "vus": 41,
+    "cus": 16,
+    "vu_level": "operator",
+    "cu_strategy": "block",
+    "constructor": "veritor.plans.canonical",
+    "vu_runs": 41,
+    "cu_runs": 16,
+    "plan_digest": {
+     "kind": "plan-rule/v1",
+     "digest": "ef7a55823f143e1856e7ba4bd180aefef944dd0113a98c112227afc79548c677"
+    },
+    "status": "valid",
+    "codes": [],
+    "vu_edges": 87,
+    "cu_edges": 31,
+    "escape_steps": 141624,
+    "reasons": [],
+    "table_digest": "f3c11688d1d840a5b32a7ae1d712d15adab20a98f8757c03666ae6cf37a17cb2",
+    "rows": 53,
+    "summary": {
+     "digest": "23b882ce4529bd37287f172eaf3df4b7e1c88c6eb5b9b5c2e54de781562bf0c1",
+     "cache_hit": null,
+     "N_V": {
+      "value": 41,
+      "exactness": "exact",
+      "note": "N_V = \u03a3_k n_k"
+     },
+     "N_R": {
+      "value": 16,
+      "exactness": "exact",
+      "note": "N_R = \u03a3_a B_a"
+     },
+     "v_max": 5,
+     "W_out": 64,
+     "vu_kinds": 37,
+     "ru_kinds": 15,
+     "M_t": {
+      "0": 16,
+      "1": 8,
+      "2": 8,
+      "4": 3,
+      "5": 0
+     },
+     "boundary": {
+      "vu_boundary_gates": 17770823,
+      "vu_boundary_runs": 34760,
+      "cu_boundary_gates": 17721607,
+      "cu_boundary_runs": 4125,
+      "cu_export_positions": 4139332,
+      "cu_interior_positions": 24512,
+      "vu_edges": 87,
+      "cu_edges": 31
+     },
+     "json_bytes": 38336
+    },
+    "bounds": [
+     {
+      "q": "1/2",
+      "s": "1/4096",
+      "delta": "1/1000000",
+      "U_bits": 64.0,
+      "capped": true
+     }
+    ]
+   }
+  },
+  "P3/cu=whole": {
+   "compact": {
+    "plan": "P3/cu=whole",
+    "mode": "compact",
+    "vus": 41,
+    "cus": 1,
+    "vu_level": "operator",
+    "cu_strategy": "whole",
+    "constructor": "veritor.plans.canonical",
+    "vu_runs": 41,
+    "plan_digest": {
+     "kind": "plan-rule/v1",
+     "digest": "bfa79e48580afd27c205c23eb111b05e98966717536d440b2b5696fb9efe46b7"
+    },
+    "status": "valid",
+    "codes": [],
+    "vu_edges": 87,
+    "cu_edges": 0,
+    "escape_steps": 50902554,
+    "reasons": [],
+    "table_digest": "e79be3b9741b39adcc8ce2067655b9dae05afbccd98c3d9fa4122fd9c5c18aab",
+    "rows": 47,
+    "summary": {
+     "digest": "f69f7b48f76126b4660b7ae2834cbcc4363eb858bc80e89879c386ad0272e290",
+     "cache_hit": null,
+     "N_V": {
+      "value": 41,
+      "exactness": "exact",
+      "note": "N_V = \u03a3_k n_k"
+     },
+     "N_R": {
+      "value": 1,
+      "exactness": "exact",
+      "note": "N_R = \u03a3_a B_a"
+     },
+     "v_max": 41,
+     "W_out": 64,
+     "vu_kinds": 37,
+     "ru_kinds": 1,
+     "M_t": {
+      "0": 1,
+      "1": 1,
+      "2": 1,
+      "4": 1,
+      "8": 1,
+      "16": 1,
+      "32": 1,
+      "41": 0
+     },
+     "boundary": {
+      "vu_boundary_gates": 17770823,
+      "vu_boundary_runs": 34760,
+      "cu_boundary_gates": 2,
+      "cu_boundary_runs": 2,
+      "cu_export_positions": 2,
+      "cu_interior_positions": 4163842,
+      "vu_edges": 87,
+      "cu_edges": 0
+     },
+     "json_bytes": 33218
+    },
+    "bounds": [
+     {
+      "q": "1/2",
+      "s": "1/4096",
+      "delta": "1/1000000",
+      "U_bits": 64.0,
+      "capped": true
+     }
+    ]
+   }
+  }
+ },
+ "maxrss_mb": 1187.9
+}

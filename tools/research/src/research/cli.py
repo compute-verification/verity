@@ -146,7 +146,7 @@ def cmd_run(argv: list[str]) -> int:
     from .telemetry.run import run as harness_run
 
     write_json_atomic(run_dir / "job.json", job)
-    os.environ.update(result.env_for(run_id, run_dir))
+    os.environ.update(result.env_for(run_id, run_dir, source_sha=getattr(a, "tree_sha", None)))
     os.environ.update(prep["env"])
     print(f"research: run {run_id} -> {run_dir}", file=sys.stderr)
     try:
@@ -205,6 +205,9 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
         inputs = {}
         for spec in a.input:                         # harness --input name=path: a fetched artifact is an input; anything else enters the derivation
             name, _, path = spec.partition("=") if "=" in spec else (Path(spec).name, "=", spec)
+            if path.startswith("art:"):              # a store id names the input directly (no fetched copy needed on this machine)
+                inputs[name] = path
+                continue
             cid = content_identity(path, source_root)   # by content, as the key param `input.<name>` (inputs hold art: ids only)
             if isinstance(cid, str) and cid.startswith("art:"):
                 inputs[name] = cid
@@ -281,6 +284,13 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         harness_args.append("--require-result")
     # the store flags travel as `research run` flags: the machine-side runner computes derivation/reuse_key in the shipped source tree
     if ns.tool:
+        # the machine runs the shipped tree's research package when --source carries one, else THIS launcher's: that one must know the tool
+        from .store import tools_registry
+        if remote.source_tool_package(Path(ns.source).expanduser() if ns.source else None) is None and ":" not in ns.tool \
+                and ns.tool not in tools_registry.REGISTRY:
+            print(f"research run --on {ns.on}: launcher research package does not know tool {ns.tool!r}; pass --source with tools/research "
+                  f"(registered here: {', '.join(sorted(tools_registry.REGISTRY))})", file=sys.stderr)
+            return 3
         harness_args += ["--tool", ns.tool]
     for s in ns.scratch:
         harness_args += ["--scratch", s]

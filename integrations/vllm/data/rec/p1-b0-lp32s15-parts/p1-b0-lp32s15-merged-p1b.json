@@ -1,0 +1,4896 @@
+{
+ "schema": "veritor/compact-p1-validation/v1",
+ "label": "MEASURED",
+ "utc": "2026-09-10T03:59:31Z",
+ "host": "da0af265a59a",
+ "platform": "Linux-6.8.0-101-generic-x86_64-with-glibc2.35",
+ "cpu": "AMD EPYC 9655 96-Core Processor",
+ "cpus": 192,
+ "python": "3.12.14",
+ "args": {
+  "case": "B0",
+  "lp": 32,
+  "steps": 15,
+  "nl": 0,
+  "set": [],
+  "plan": "P1/cu=whole",
+  "workers": 8,
+  "chunks": 24,
+  "reverse": false,
+  "skip_plan_digest": false,
+  "census": "docs/data/table3a/B0-serve-lp32-s15.json",
+  "no_validate": false,
+  "recursion_limit": 100000,
+  "out": "results/p1-b0-lp32s15.json"
+ },
+ "stages": [
+  {
+   "stage": "program",
+   "inputs": {
+    "case": "B0",
+    "LP": 32,
+    "STEPS": 15
+   },
+   "seconds": 0.525,
+   "rss_before_mb": 42.2,
+   "rss_after_mb": 92.4,
+   "maxrss_mb": 94.5
+  },
+  {
+   "stage": "adapt",
+   "inputs": {
+    "gates": 518837608
+   },
+   "seconds": 0.987,
+   "rss_before_mb": 67.9,
+   "rss_after_mb": 161.0,
+   "maxrss_mb": 159.1
+  },
+  {
+   "stage": "circuit",
+   "inputs": {
+    "root_nodes": 4295
+   },
+   "seconds": 0.0,
+   "rss_before_mb": 161.0,
+   "rss_after_mb": 161.0,
+   "maxrss_mb": 159.1
+  },
+  {
+   "stage": "plan[compact]",
+   "inputs": {},
+   "seconds": 10.031,
+   "rss_before_mb": 161.0,
+   "rss_after_mb": 1615.9,
+   "maxrss_mb": 1613.0
+  },
+  {
+   "stage": "plan_digest",
+   "inputs": {
+    "runs": 6102438
+   },
+   "seconds": 68.386,
+   "rss_before_mb": 1569.3,
+   "rss_after_mb": 1578.9,
+   "maxrss_mb": 8954.2
+  },
+  {
+   "stage": "partition_digest",
+   "inputs": {
+    "vus": 166196840
+   },
+   "seconds": 57.544,
+   "rss_before_mb": 1575.4,
+   "rss_after_mb": 1575.4,
+   "maxrss_mb": 8954.2
+  },
+  {
+   "stage": "kind_counts",
+   "inputs": {
+    "runs": 6102438
+   },
+   "seconds": 5.902,
+   "rss_before_mb": 1575.4,
+   "rss_after_mb": 1575.4,
+   "maxrss_mb": 8954.2
+  }
+ ],
+ "config": {
+  "model": "HuggingFaceTB/SmolLM2-135M",
+  "revision": null,
+  "H": 576,
+  "NL": 30,
+  "NH": 9,
+  "KVH": 3,
+  "D": 64,
+  "I": 1536,
+  "V": 49152,
+  "QKV": 960,
+  "GU": 3072,
+  "EPS": 1e-05,
+  "ROPE_THETA": 100000.0,
+  "MAX_POS": 8192,
+  "BIAS": false,
+  "tie_word_embeddings": true
+ },
+ "program": {
+  "gates": 518837608,
+  "input_gates": 135039328,
+  "root_nodes": 4295,
+  "function": "Serve_v1{C={6f196795e564},LP=32,STEPS=15}",
+  "digest": "d4f4b1f1b4d592d697eef5b6c9c803108bdf02d0ef24c945eace6e705832e1b8",
+  "digest_seconds": 0.33
+ },
+ "plan": {
+  "name": "P1/cu=whole",
+  "vu_level": "coordinate",
+  "cu_strategy": "whole",
+  "constructor": "veritor.plans.canonical(compact=True)",
+  "vus": 166196840,
+  "cus": 1,
+  "vu_runs": 6102438,
+  "cu_runs": null,
+  "plan_digest": {
+   "kind": "plan-rule/v1",
+   "digest": "13f706a556aeb82f292872a115c4cf8384f7308e094ea5e9bd096270865e55ff"
+  },
+  "partition_digest": "56ebcdf53f302040870776981860ffcfafd161b1b962c759df8833057aa75b9a",
+  "partition_digest_kind": "partition-intervals/v1",
+  "kind_counts": {
+   "AmpereBF16TcDot16_v1|batch": 1607040,
+   "ArgmaxStep_v1|scan": 786416,
+   "Bf16AddF2fp_v1|batch": 1606464,
+   "Bf16ToF32_v1|batch": 3267072,
+   "Const16[0x0000]_v1|primitive": 25380,
+   "Const32[0x00000000]_v1|primitive": 830785,
+   "Const32[0x00000001]_v1|primitive": 16,
+   "Const32[0x3727c5ac]_v1|primitive": 2836,
+   "Const32[0x3e38aa3b]_v1|primitive": 12690,
+   "Const32[0x3f800000]_v1|primitive": 47,
+   "Const32[0x44100000]_v1|primitive": 2836,
+   "DivFullRcp_v1|primitive": 94,
+   "DivFullScaleA_v1|primitive": 47,
+   "DotBf16_v1{K=64}|call": 304560,
+   "F2fpBf16_v1|batch": 2445696,
+   "F2fpBf16_v1|primitive": 304560,
+   "F32AddFtz_v1|primitive": 295110,
+   "F32Add_v1|primitive": 1636732,
+   "F32Div_v1|primitive": 2789,
+   "F32FmaSubFtz_v1|primitive": 304560,
+   "F32Fma_v1|primitive": 23735,
+   "F32Max_v1|primitive": 291870,
+   "F32MulFtz_v1|batch": 812160,
+   "F32MulFtz_v1|primitive": 12690,
+   "F32Mul_v1|batch": 3267072,
+   "F32Mul_v1|primitive": 1609895,
+   "Fa2InvSum_v1|primitive": 12690,
+   "GatherBf16x49152_v1|batch": 27072,
+   "GemmCoordinate_v1{K=1536}|batch": 812160,
+   "GemmCoordinate_v1{K=576}|batch": 7283712,
+   "GuardNegInfZero_v1|primitive": 12690,
+   "Input|batch": 135039328,
+   "MufuEx2Ftz_v1|primitive": 304560,
+   "MufuSqrtFtz_v1|primitive": 47,
+   "RopeOutAdd_v1|batch": 541440,
+   "RopeOut_v1|batch": 541440,
+   "RsqrtApprox_v1|primitive": 2789,
+   "SiluMulBf16_v1|batch": 2165760
+  },
+  "input_units": 135039328,
+  "non_input_units": 31157512,
+  "census": {
+   "census": "docs/data/table3a/B0-serve-lp32-s15.json",
+   "census_N_V": 31157512,
+   "plan_non_input_units": 31157512,
+   "plan_input_units": 135039328,
+   "kinds_census": 37,
+   "kinds_plan_non_input": 37,
+   "key": "kind_key(fn|form): version suffix and DOT parameter dropped",
+   "per_kind": {
+    "AmpereBF16TcDot16|batch": {
+     "plan": 1607040,
+     "census": 1607040
+    },
+    "ArgmaxStep|scan": {
+     "plan": 786416,
+     "census": 786416
+    },
+    "Bf16AddF2fp|batch": {
+     "plan": 1606464,
+     "census": 1606464
+    },
+    "Bf16ToF32|batch": {
+     "plan": 3267072,
+     "census": 3267072
+    },
+    "Const16[0x0000]|primitive": {
+     "plan": 25380,
+     "census": 25380
+    },
+    "Const32[0x00000000]|primitive": {
+     "plan": 830785,
+     "census": 830785
+    },
+    "Const32[0x00000001]|primitive": {
+     "plan": 16,
+     "census": 16
+    },
+    "Const32[0x3727c5ac]|primitive": {
+     "plan": 2836,
+     "census": 2836
+    },
+    "Const32[0x3e38aa3b]|primitive": {
+     "plan": 12690,
+     "census": 12690
+    },
+    "Const32[0x3f800000]|primitive": {
+     "plan": 47,
+     "census": 47
+    },
+    "Const32[0x44100000]|primitive": {
+     "plan": 2836,
+     "census": 2836
+    },
+    "DivFullRcp|primitive": {
+     "plan": 94,
+     "census": 94
+    },
+    "DivFullScaleA|primitive": {
+     "plan": 47,
+     "census": 47
+    },
+    "DotBf16{K=64}|call": {
+     "plan": 304560,
+     "census": 304560
+    },
+    "F2fpBf16|batch": {
+     "plan": 2445696,
+     "census": 2445696
+    },
+    "F2fpBf16|primitive": {
+     "plan": 304560,
+     "census": 304560
+    },
+    "F32AddFtz|primitive": {
+     "plan": 295110,
+     "census": 295110
+    },
+    "F32Add|primitive": {
+     "plan": 1636732,
+     "census": 1636732
+    },
+    "F32Div|primitive": {
+     "plan": 2789,
+     "census": 2789
+    },
+    "F32FmaSubFtz|primitive": {
+     "plan": 304560,
+     "census": 304560
+    },
+    "F32Fma|primitive": {
+     "plan": 23735,
+     "census": 23735
+    },
+    "F32Max|primitive": {
+     "plan": 291870,
+     "census": 291870
+    },
+    "F32MulFtz|batch": {
+     "plan": 812160,
+     "census": 812160
+    },
+    "F32MulFtz|primitive": {
+     "plan": 12690,
+     "census": 12690
+    },
+    "F32Mul|batch": {
+     "plan": 3267072,
+     "census": 3267072
+    },
+    "F32Mul|primitive": {
+     "plan": 1609895,
+     "census": 1609895
+    },
+    "Fa2InvSum|primitive": {
+     "plan": 12690,
+     "census": 12690
+    },
+    "GatherBf16x49152|batch": {
+     "plan": 27072,
+     "census": 27072
+    },
+    "GemmCoordinate{K=1536}|batch": {
+     "plan": 812160,
+     "census": 812160
+    },
+    "GemmCoordinate{K=576}|batch": {
+     "plan": 7283712,
+     "census": 7283712
+    },
+    "GuardNegInfZero|primitive": {
+     "plan": 12690,
+     "census": 12690
+    },
+    "MufuEx2Ftz|primitive": {
+     "plan": 304560,
+     "census": 304560
+    },
+    "MufuSqrtFtz|primitive": {
+     "plan": 47,
+     "census": 47
+    },
+    "RopeOutAdd|batch": {
+     "plan": 541440,
+     "census": 541440
+    },
+    "RopeOut|batch": {
+     "plan": 541440,
+     "census": 541440
+    },
+    "RsqrtApprox|primitive": {
+     "plan": 2789,
+     "census": 2789
+    },
+    "SiluMulBf16|batch": {
+     "plan": 2165760,
+     "census": 2165760
+    }
+   },
+   "mismatches": {},
+   "agree": true
+  }
+ },
+ "maxrss_mb": 8954.2,
+ "validation": {
+  "mode": "sharded over 7 machines: 136 ranges chosen of 136 finished ({'docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl': 16, 'docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl': 19, 'docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl': 65, 'docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl': 11, 'docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl': 14, 'docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl': 10, 'docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-L.parts.jsonl': 1})",
+  "bounds": null,
+  "status": "valid",
+  "reasons": [],
+  "vu_edges": 12332598469,
+  "cu_edges": 0,
+  "escape_steps": 6187105999,
+  "cu_escape_steps": 38845299,
+  "vu_stats": {
+   "units": 166196840,
+   "gates": 12501382175,
+   "runs": 1579343098,
+   "outputs": 167210906,
+   "in_bits": 197690710688,
+   "out_bits": 2934122368
+  },
+  "cu_stats": {
+   "units": 1,
+   "gates": 16,
+   "runs": 16,
+   "outputs": 16,
+   "in_bits": 0,
+   "out_bits": 512
+  },
+  "seconds": null,
+  "worker_seconds_sum": 167002.092,
+  "workers": [
+   {
+    "worker": 15,
+    "range": [
+     0,
+     4002935
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851137,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002935,
+     "gates": 4002935,
+     "runs": 4002935,
+     "outputs": 4002935,
+     "in_bits": 0,
+     "out_bits": 64047472
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 257.205,
+    "maxrss_mb": 2959.7,
+    "pid": 707,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 14,
+    "range": [
+     4002935,
+     8005871
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851171,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 226.862,
+    "maxrss_mb": 2959.5,
+    "pid": 704,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 13,
+    "range": [
+     8005871,
+     12008807
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851171,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 275.654,
+    "maxrss_mb": 2960.6,
+    "pid": 705,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 12,
+    "range": [
+     12008807,
+     16011743
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851171,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 252.689,
+    "maxrss_mb": 2961.2,
+    "pid": 708,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 11,
+    "range": [
+     16011743,
+     20014679
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851171,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 274.968,
+    "maxrss_mb": 2959.5,
+    "pid": 706,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 10,
+    "range": [
+     20014679,
+     24017614
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851169,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002935,
+     "gates": 4002935,
+     "runs": 4002935,
+     "outputs": 4002935,
+     "in_bits": 0,
+     "out_bits": 64046960
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 292.146,
+    "maxrss_mb": 2959.5,
+    "pid": 707,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 9,
+    "range": [
+     24017614,
+     28020550
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 46851171,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 270.975,
+    "maxrss_mb": 2959.6,
+    "pid": 708,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 8,
+    "range": [
+     28020550,
+     32023486
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 237991011,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 791.783,
+    "maxrss_mb": 2959.6,
+    "pid": 709,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 7,
+    "range": [
+     32023486,
+     36026422
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 243182051,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 837.49,
+    "maxrss_mb": 2923.6,
+    "pid": 709,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 6,
+    "range": [
+     36026422,
+     40029358
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612771,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 994.159,
+    "maxrss_mb": 2923.6,
+    "pid": 708,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 5,
+    "range": [
+     40029358,
+     44032293
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612705,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002935,
+     "gates": 4002935,
+     "runs": 4002935,
+     "outputs": 4002935,
+     "in_bits": 0,
+     "out_bits": 64046960
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1105.986,
+    "maxrss_mb": 2923.6,
+    "pid": 707,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 4,
+    "range": [
+     44032293,
+     48035229
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612771,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1190.101,
+    "maxrss_mb": 2923.6,
+    "pid": 706,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 3,
+    "range": [
+     48035229,
+     52038165
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612771,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1289.404,
+    "maxrss_mb": 2924.8,
+    "pid": 705,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 2,
+    "range": [
+     52038165,
+     56041101
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612771,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1390.628,
+    "maxrss_mb": 2923.6,
+    "pid": 704,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 1,
+    "range": [
+     56041101,
+     60044037
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 267612771,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1492.381,
+    "maxrss_mb": 2923.6,
+    "pid": 703,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 0,
+    "range": [
+     60044037,
+     64046973
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 246209315,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 4002936,
+     "gates": 4002936,
+     "runs": 4002936,
+     "outputs": 4002936,
+     "in_bits": 0,
+     "out_bits": 64046976
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1529.193,
+    "maxrss_mb": 2923.6,
+    "pid": 702,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl"
+   },
+   {
+    "worker": 4,
+    "range": [
+     64046973,
+     66048440
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 156919273,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001467,
+     "gates": 2001467,
+     "runs": 2001467,
+     "outputs": 2001467,
+     "in_bits": 0,
+     "out_bits": 32023472
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 978.524,
+    "maxrss_mb": 2921.8,
+    "pid": 778,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 5,
+    "range": [
+     66048440,
+     68049908
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 926.843,
+    "maxrss_mb": 2925.0,
+    "pid": 779,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 6,
+    "range": [
+     68049908,
+     70051376
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 170942187,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1053.793,
+    "maxrss_mb": 2923.6,
+    "pid": 780,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 7,
+    "range": [
+     70051376,
+     72052844
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 991.833,
+    "maxrss_mb": 2922.0,
+    "pid": 781,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 8,
+    "range": [
+     72052844,
+     74054312
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 170942187,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1101.595,
+    "maxrss_mb": 2962.2,
+    "pid": 779,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 9,
+    "range": [
+     74054312,
+     76055780
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1057.122,
+    "maxrss_mb": 2958.8,
+    "pid": 778,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 10,
+    "range": [
+     76055780,
+     78057248
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 159145707,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1119.814,
+    "maxrss_mb": 2959.1,
+    "pid": 781,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 11,
+    "range": [
+     78057248,
+     80058716
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 147312363,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1124.304,
+    "maxrss_mb": 2961.2,
+    "pid": 780,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 12,
+    "range": [
+     80058716,
+     82060184
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1101.086,
+    "maxrss_mb": 2958.7,
+    "pid": 775,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 13,
+    "range": [
+     82060184,
+     84061652
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 170942187,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1180.957,
+    "maxrss_mb": 2960.3,
+    "pid": 774,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 14,
+    "range": [
+     84061652,
+     86063120
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1141.124,
+    "maxrss_mb": 2962.6,
+    "pid": 776,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 15,
+    "range": [
+     86063120,
+     88064588
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 170942187,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1254.762,
+    "maxrss_mb": 2962.2,
+    "pid": 779,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 16,
+    "range": [
+     88064588,
+     90066056
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1212.685,
+    "maxrss_mb": 2958.8,
+    "pid": 778,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 17,
+    "range": [
+     90066056,
+     92067524
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 168752619,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1298.86,
+    "maxrss_mb": 2959.1,
+    "pid": 781,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 18,
+    "range": [
+     92067524,
+     94068992
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 137705451,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1261.392,
+    "maxrss_mb": 2961.3,
+    "pid": 780,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 19,
+    "range": [
+     94068992,
+     96070460
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 139130859,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1303.441,
+    "maxrss_mb": 2958.7,
+    "pid": 775,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 50,
+    "range": [
+     96070460,
+     97946836
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 159071139,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1801.357,
+    "maxrss_mb": 2981.1,
+    "pid": 715,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 51,
+    "range": [
+     97946836,
+     99823212
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 127259811,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1717.536,
+    "maxrss_mb": 2989.2,
+    "pid": 717,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 52,
+    "range": [
+     99823212,
+     101699588
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 162686115,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2109.819,
+    "maxrss_mb": 2974.1,
+    "pid": 712,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 53,
+    "range": [
+     101699588,
+     103575964
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 127259811,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1835.694,
+    "maxrss_mb": 2990.8,
+    "pid": 713,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 54,
+    "range": [
+     103575964,
+     105452340
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 162686115,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2040.451,
+    "maxrss_mb": 2980.6,
+    "pid": 714,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 55,
+    "range": [
+     105452340,
+     107328717
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 127259877,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876377,
+     "gates": 1876377,
+     "runs": 1876377,
+     "outputs": 1876377,
+     "in_bits": 0,
+     "out_bits": 30022032
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1945.348,
+    "maxrss_mb": 2984.2,
+    "pid": 716,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 56,
+    "range": [
+     107328717,
+     109205093
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 162686115,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2864.469,
+    "maxrss_mb": 2981.3,
+    "pid": 711,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 57,
+    "range": [
+     109205093,
+     111081469
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 127259811,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2433.347,
+    "maxrss_mb": 2989.2,
+    "pid": 717,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 58,
+    "range": [
+     111081469,
+     112957845
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 162686115,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2457.72,
+    "maxrss_mb": 2981.1,
+    "pid": 715,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 59,
+    "range": [
+     112957845,
+     114834221
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 127259811,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2517.759,
+    "maxrss_mb": 2990.8,
+    "pid": 713,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 60,
+    "range": [
+     114834221,
+     116710598
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 162686181,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876377,
+     "gates": 1876377,
+     "runs": 1876377,
+     "outputs": 1876377,
+     "in_bits": 0,
+     "out_bits": 30022032
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2390.743,
+    "maxrss_mb": 2980.6,
+    "pid": 714,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 61,
+    "range": [
+     116710598,
+     118586974
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 127259811,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2319.312,
+    "maxrss_mb": 2974.1,
+    "pid": 712,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 62,
+    "range": [
+     118586974,
+     120463350
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 155692835,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2200.795,
+    "maxrss_mb": 2984.2,
+    "pid": 716,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 63,
+    "range": [
+     120463350,
+     122339726
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 134253091,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1698.581,
+    "maxrss_mb": 2982.3,
+    "pid": 711,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 64,
+    "range": [
+     122339726,
+     124216102
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 142082851,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876376,
+     "gates": 1876376,
+     "runs": 1876376,
+     "outputs": 1876376,
+     "in_bits": 0,
+     "out_bits": 30022016
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1137.041,
+    "maxrss_mb": 2989.2,
+    "pid": 717,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 65,
+    "range": [
+     124216102,
+     126092479
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 147863141,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1876377,
+     "gates": 1876377,
+     "runs": 1876377,
+     "outputs": 1876377,
+     "in_bits": 0,
+     "out_bits": 30022032
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1303.624,
+    "maxrss_mb": 2982.4,
+    "pid": 715,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 10,
+    "range": [
+     126092479,
+     128093947
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 135515883,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2001468,
+     "gates": 2001468,
+     "runs": 2001468,
+     "outputs": 2001468,
+     "in_bits": 0,
+     "out_bits": 32023488
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2308.978,
+    "maxrss_mb": 3036.7,
+    "pid": 964,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 0,
+    "range": [
+     128093947,
+     130147523
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 174381315,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2053576,
+     "gates": 2053576,
+     "runs": 2053576,
+     "outputs": 2053576,
+     "in_bits": 0,
+     "out_bits": 32857216
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1869.45,
+    "maxrss_mb": 2923.1,
+    "pid": 774,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 1,
+    "range": [
+     130147523,
+     132201099
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 138955011,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2053576,
+     "gates": 2053576,
+     "runs": 2053576,
+     "outputs": 2053576,
+     "in_bits": 0,
+     "out_bits": 32857216
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1826.122,
+    "maxrss_mb": 2921.6,
+    "pid": 775,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 2,
+    "range": [
+     132201099,
+     134254675
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 174381315,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 2053576,
+     "gates": 2053576,
+     "runs": 2053576,
+     "outputs": 2053576,
+     "in_bits": 0,
+     "out_bits": 32857216
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1934.193,
+    "maxrss_mb": 2922.3,
+    "pid": 776,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl"
+   },
+   {
+    "worker": 48,
+    "range": [
+     134254675,
+     134647001
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 55998541,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 392326,
+     "gates": 263373,
+     "runs": 263373,
+     "outputs": 263373,
+     "in_bits": 0,
+     "out_bits": 4213968
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 511.699,
+    "maxrss_mb": 2984.2,
+    "pid": 716,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 49,
+    "range": [
+     134647001,
+     135039328
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 0,
+    "escape_steps": 38845299,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 392327,
+     "gates": 0,
+     "runs": 0,
+     "outputs": 0,
+     "in_bits": 0,
+     "out_bits": 0
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 573.41,
+    "maxrss_mb": 2981.3,
+    "pid": 711,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 0,
+    "range": [
+     135039328,
+     135041216
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 92800864,
+    "escape_steps": 38852851,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 92802752,
+     "runs": 92802752,
+     "outputs": 1888,
+     "in_bits": 1484844032,
+     "out_bits": 30208
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2358.195,
+    "maxrss_mb": 2938.1,
+    "pid": 936,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 1,
+    "range": [
+     135041216,
+     135043104
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 92800864,
+    "escape_steps": 38852851,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 92802752,
+     "runs": 92802752,
+     "outputs": 1888,
+     "in_bits": 1484844032,
+     "out_bits": 30208
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2125.512,
+    "maxrss_mb": 2939.1,
+    "pid": 937,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 2,
+    "range": [
+     135043104,
+     135044992
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 92800864,
+    "escape_steps": 38852851,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 92802752,
+     "runs": 92802752,
+     "outputs": 1888,
+     "in_bits": 1484844032,
+     "out_bits": 30208
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2299.146,
+    "maxrss_mb": 2937.8,
+    "pid": 938,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 3,
+    "range": [
+     135044992,
+     135046880
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 92800864,
+    "escape_steps": 38852851,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 92802752,
+     "runs": 92802752,
+     "outputs": 1888,
+     "in_bits": 1484844032,
+     "out_bits": 30208
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1879.512,
+    "maxrss_mb": 2937.9,
+    "pid": 939,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 4,
+    "range": [
+     135046880,
+     135048769
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 92850017,
+    "escape_steps": 38852855,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1889,
+     "gates": 92851906,
+     "runs": 92851906,
+     "outputs": 1889,
+     "in_bits": 1485630496,
+     "out_bits": 30224
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2387.662,
+    "maxrss_mb": 2935.2,
+    "pid": 940,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 5,
+    "range": [
+     135048769,
+     135050657
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 92800864,
+    "escape_steps": 38852851,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 92802752,
+     "runs": 92802752,
+     "outputs": 1888,
+     "in_bits": 1484844032,
+     "out_bits": 30208
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2387.022,
+    "maxrss_mb": 2940.5,
+    "pid": 941,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 6,
+    "range": [
+     135050657,
+     135052545
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 92800864,
+    "escape_steps": 38852851,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 92802752,
+     "runs": 92802752,
+     "outputs": 1888,
+     "in_bits": 1484844032,
+     "out_bits": 30208
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2274.149,
+    "maxrss_mb": 2937.8,
+    "pid": 942,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 7,
+    "range": [
+     135052545,
+     135054433
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 92800864,
+    "escape_steps": 38852851,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 92802752,
+     "runs": 92802752,
+     "outputs": 1888,
+     "in_bits": 1484844032,
+     "out_bits": 30208
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1991.888,
+    "maxrss_mb": 2974.8,
+    "pid": 939,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 8,
+    "range": [
+     135054433,
+     135056321
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 92800864,
+    "escape_steps": 38852851,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 92802752,
+     "runs": 92802752,
+     "outputs": 1888,
+     "in_bits": 1484844032,
+     "out_bits": 30208
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1728.226,
+    "maxrss_mb": 2974.9,
+    "pid": 937,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 9,
+    "range": [
+     135056321,
+     135058210
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 70731617,
+    "escape_steps": 38851505,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1889,
+     "gates": 70733506,
+     "runs": 70733506,
+     "outputs": 1889,
+     "in_bits": 1131728896,
+     "out_bits": 37424
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1534.312,
+    "maxrss_mb": 2967.4,
+    "pid": 942,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 10,
+    "range": [
+     135058210,
+     135060098
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 2980,
+    "escape_steps": 38848825,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 4744,
+     "runs": 4611,
+     "outputs": 1764,
+     "in_bits": 85728,
+     "out_bits": 56448
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 413.31,
+    "maxrss_mb": 2969.7,
+    "pid": 938,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 11,
+    "range": [
+     135060098,
+     135061986
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 72100,
+    "escape_steps": 38850407,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 73988,
+     "runs": 4988,
+     "outputs": 1888,
+     "in_bits": 1199680,
+     "out_bits": 50240
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 415.395,
+    "maxrss_mb": 2970.2,
+    "pid": 936,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 12,
+    "range": [
+     135061986,
+     135063874
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 1040092,
+    "escape_steps": 38856547,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1888,
+     "gates": 1041980,
+     "runs": 6980,
+     "outputs": 1888,
+     "in_bits": 16641472,
+     "out_bits": 33728
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 383.489,
+    "maxrss_mb": 2966.2,
+    "pid": 941,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 13,
+    "range": [
+     135063874,
+     135065763
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 2981,
+    "escape_steps": 38848597,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1889,
+     "gates": 4746,
+     "runs": 4613,
+     "outputs": 1765,
+     "in_bits": 85744,
+     "out_bits": 56480
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 391.593,
+    "maxrss_mb": 2964.2,
+    "pid": 940,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+   },
+   {
+    "worker": 1,
+    "range": [
+     135065763,
+     135092199
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 5389873,
+    "escape_steps": 38935098,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 5415813,
+     "runs": 75831,
+     "outputs": 25940,
+     "in_bits": 86620560,
+     "out_bits": 660560
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 202.092,
+    "maxrss_mb": 2921.2,
+    "pid": 711,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 2,
+    "range": [
+     135092199,
+     135118635
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 4648571,
+    "escape_steps": 38936160,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 4674387,
+     "runs": 77172,
+     "outputs": 25816,
+     "in_bits": 74751696,
+     "out_bits": 663856
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 200.529,
+    "maxrss_mb": 2921.6,
+    "pid": 712,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 3,
+    "range": [
+     135118635,
+     135145071
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 5189599,
+    "escape_steps": 38934506,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 5215539,
+     "runs": 75657,
+     "outputs": 25940,
+     "in_bits": 83416176,
+     "out_bits": 663344
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 201.471,
+    "maxrss_mb": 2924.1,
+    "pid": 713,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 4,
+    "range": [
+     135145071,
+     135171507
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 4848754,
+    "escape_steps": 38936783,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 4874601,
+     "runs": 77323,
+     "outputs": 25847,
+     "in_bits": 77951552,
+     "out_bits": 662064
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 195.393,
+    "maxrss_mb": 2925.5,
+    "pid": 714,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 5,
+    "range": [
+     135171507,
+     135197943
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 4989416,
+    "escape_steps": 38933953,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 5015325,
+     "runs": 75506,
+     "outputs": 25909,
+     "in_bits": 80216320,
+     "out_bits": 665136
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 199.107,
+    "maxrss_mb": 2922.6,
+    "pid": 715,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 6,
+    "range": [
+     135197943,
+     135224379
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 5048918,
+    "escape_steps": 38937336,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 5074796,
+     "runs": 77450,
+     "outputs": 25878,
+     "in_bits": 81149632,
+     "out_bits": 660272
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 200.161,
+    "maxrss_mb": 2921.2,
+    "pid": 716,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 7,
+    "range": [
+     135224379,
+     135250815
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 5130567,
+    "escape_steps": 38974315,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 5156560,
+     "runs": 80563,
+     "outputs": 25993,
+     "in_bits": 82438368,
+     "out_bits": 656240
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 198.327,
+    "maxrss_mb": 2922.0,
+    "pid": 717,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 8,
+    "range": [
+     135250815,
+     135277251
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 11983791,
+    "escape_steps": 39013539,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12010209,
+     "runs": 82296,
+     "outputs": 26418,
+     "in_bits": 191985120,
+     "out_bits": 604464
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 230.452,
+    "maxrss_mb": 2965.0,
+    "pid": 714,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 9,
+    "range": [
+     135277251,
+     135303687
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 11993050,
+    "escape_steps": 39011235,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12019468,
+     "runs": 84759,
+     "outputs": 26418,
+     "in_bits": 192130848,
+     "out_bits": 603888
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 235.298,
+    "maxrss_mb": 2963.4,
+    "pid": 717,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 10,
+    "range": [
+     135303687,
+     135330123
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12002119,
+    "escape_steps": 39008931,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12028537,
+     "runs": 87210,
+     "outputs": 26418,
+     "in_bits": 192272320,
+     "out_bits": 603312
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 233.457,
+    "maxrss_mb": 2961.8,
+    "pid": 715,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 11,
+    "range": [
+     135330123,
+     135356559
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12011443,
+    "escape_steps": 39006663,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12037861,
+     "runs": 89649,
+     "outputs": 26418,
+     "in_bits": 192426400,
+     "out_bits": 602736
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 232.631,
+    "maxrss_mb": 2964.3,
+    "pid": 716,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 12,
+    "range": [
+     135356559,
+     135382994
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12020766,
+    "escape_steps": 39004357,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26435,
+     "gates": 12047183,
+     "runs": 92104,
+     "outputs": 26417,
+     "in_bits": 192580752,
+     "out_bits": 602128
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 233.199,
+    "maxrss_mb": 2963.3,
+    "pid": 712,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 13,
+    "range": [
+     135382994,
+     135409430
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12030091,
+    "escape_steps": 39002055,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12056509,
+     "runs": 94554,
+     "outputs": 26418,
+     "in_bits": 192735136,
+     "out_bits": 601584
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 235.825,
+    "maxrss_mb": 2967.7,
+    "pid": 713,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 14,
+    "range": [
+     135409430,
+     135435866
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12038895,
+    "escape_steps": 38999751,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12065313,
+     "runs": 96987,
+     "outputs": 26418,
+     "in_bits": 192864464,
+     "out_bits": 601008
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 229.176,
+    "maxrss_mb": 2964.3,
+    "pid": 711,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 15,
+    "range": [
+     135435866,
+     135462302
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12047375,
+    "escape_steps": 39025662,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12073775,
+     "runs": 99275,
+     "outputs": 26400,
+     "in_bits": 193020288,
+     "out_bits": 602656
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 233.399,
+    "maxrss_mb": 2969.9,
+    "pid": 714,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 16,
+    "range": [
+     135462302,
+     135488738
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 11381976,
+    "escape_steps": 38986139,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 11408396,
+     "runs": 93044,
+     "outputs": 26420,
+     "in_bits": 182378336,
+     "out_bits": 619584
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 226.175,
+    "maxrss_mb": 2971.5,
+    "pid": 711,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 17,
+    "range": [
+     135488738,
+     135515174
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12038298,
+    "escape_steps": 38976649,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12064721,
+     "runs": 97057,
+     "outputs": 26423,
+     "in_bits": 192863040,
+     "out_bits": 606816
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 229.753,
+    "maxrss_mb": 2974.0,
+    "pid": 715,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 18,
+    "range": [
+     135515174,
+     135541610
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 10293498,
+    "escape_steps": 38979943,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 10319918,
+     "runs": 103104,
+     "outputs": 26420,
+     "in_bits": 164981632,
+     "out_bits": 631728
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 224.365,
+    "maxrss_mb": 2970.0,
+    "pid": 716,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 19,
+    "range": [
+     135541610,
+     135568046
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 9159977,
+    "escape_steps": 38981453,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 9186395,
+     "runs": 106474,
+     "outputs": 26418,
+     "in_bits": 146860256,
+     "out_bits": 641552
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 222.274,
+    "maxrss_mb": 2969.8,
+    "pid": 717,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 20,
+    "range": [
+     135568046,
+     135594482
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 11474842,
+    "escape_steps": 38984325,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 11501260,
+     "runs": 109917,
+     "outputs": 26418,
+     "in_bits": 183854912,
+     "out_bits": 615600
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 226.979,
+    "maxrss_mb": 2971.1,
+    "pid": 712,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 21,
+    "range": [
+     135594482,
+     135620918
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 11432242,
+    "escape_steps": 38983175,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 11458660,
+     "runs": 106314,
+     "outputs": 26418,
+     "in_bits": 183196224,
+     "out_bits": 616720
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 228.335,
+    "maxrss_mb": 2975.2,
+    "pid": 713,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 22,
+    "range": [
+     135620918,
+     135647354
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12057752,
+    "escape_steps": 38963693,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12084177,
+     "runs": 102875,
+     "outputs": 26425,
+     "in_bits": 193176320,
+     "out_bits": 607664
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 223.49,
+    "maxrss_mb": 2982.1,
+    "pid": 717,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 23,
+    "range": [
+     135647354,
+     135673790
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 9801845,
+    "escape_steps": 38968832,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 9828265,
+     "runs": 110784,
+     "outputs": 26420,
+     "in_bits": 157132448,
+     "out_bits": 639616
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 216.094,
+    "maxrss_mb": 2978.9,
+    "pid": 716,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 24,
+    "range": [
+     135673790,
+     135700225
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 9479722,
+    "escape_steps": 38972497,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26435,
+     "gates": 9506130,
+     "runs": 93794,
+     "outputs": 26408,
+     "in_bits": 151938352,
+     "out_bits": 624240
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 218.371,
+    "maxrss_mb": 2976.0,
+    "pid": 711,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 25,
+    "range": [
+     135700225,
+     135726661
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 4465397,
+    "escape_steps": 38931963,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 4491833,
+     "runs": 73593,
+     "outputs": 26436,
+     "in_bits": 71763632,
+     "out_bits": 661632
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 205.367,
+    "maxrss_mb": 2969.9,
+    "pid": 714,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 26,
+    "range": [
+     135726661,
+     135753097
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 4512354,
+    "escape_steps": 38933238,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 4538790,
+     "runs": 73400,
+     "outputs": 26436,
+     "in_bits": 72516672,
+     "out_bits": 651760
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 201.226,
+    "maxrss_mb": 2971.1,
+    "pid": 712,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 27,
+    "range": [
+     135753097,
+     135779533
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 5522944,
+    "escape_steps": 38936046,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 5549380,
+     "runs": 74290,
+     "outputs": 26436,
+     "in_bits": 88662208,
+     "out_bits": 644416
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 204.804,
+    "maxrss_mb": 2974.0,
+    "pid": 715,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 28,
+    "range": [
+     135779533,
+     135805969
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 4467002,
+    "escape_steps": 38935629,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 4493438,
+     "runs": 75198,
+     "outputs": 26436,
+     "in_bits": 71767136,
+     "out_bits": 644416
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 202.768,
+    "maxrss_mb": 2975.3,
+    "pid": 713,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 29,
+    "range": [
+     135805969,
+     135832405
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 4464815,
+    "escape_steps": 38931387,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 4491251,
+     "runs": 73011,
+     "outputs": 26436,
+     "in_bits": 71738368,
+     "out_bits": 659856
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 208.228,
+    "maxrss_mb": 2972.0,
+    "pid": 712,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 30,
+    "range": [
+     135832405,
+     135858841
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 4465279,
+    "escape_steps": 38931963,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 4491715,
+     "runs": 72915,
+     "outputs": 26436,
+     "in_bits": 71761040,
+     "out_bits": 661632
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 209.956,
+    "maxrss_mb": 2969.9,
+    "pid": 714,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 31,
+    "range": [
+     135858841,
+     135885277
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 4465513,
+    "escape_steps": 38931963,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 4491949,
+     "runs": 73709,
+     "outputs": 26436,
+     "in_bits": 71769200,
+     "out_bits": 661632
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 206.54,
+    "maxrss_mb": 2974.0,
+    "pid": 715,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 32,
+    "range": [
+     135885277,
+     135911713
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 8887952,
+    "escape_steps": 39015843,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 8914370,
+     "runs": 83353,
+     "outputs": 26418,
+     "in_bits": 142460416,
+     "out_bits": 613968
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 227.025,
+    "maxrss_mb": 2977.3,
+    "pid": 713,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 33,
+    "range": [
+     135911713,
+     135938149
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 11988482,
+    "escape_steps": 39012387,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12014900,
+     "runs": 83520,
+     "outputs": 26418,
+     "in_bits": 192061504,
+     "out_bits": 604176
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 222.06,
+    "maxrss_mb": 2981.0,
+    "pid": 716,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 34,
+    "range": [
+     135938149,
+     135964585
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 11997683,
+    "escape_steps": 39010083,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12024101,
+     "runs": 85983,
+     "outputs": 26418,
+     "in_bits": 192206352,
+     "out_bits": 603600
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 227.105,
+    "maxrss_mb": 2977.9,
+    "pid": 711,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 35,
+    "range": [
+     135964585,
+     135991021
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12006781,
+    "escape_steps": 39007779,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12033199,
+     "runs": 88434,
+     "outputs": 26418,
+     "in_bits": 192349216,
+     "out_bits": 603024
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 225.545,
+    "maxrss_mb": 2983.6,
+    "pid": 717,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 36,
+    "range": [
+     135991021,
+     136017456
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12016104,
+    "escape_steps": 39005509,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26435,
+     "gates": 12042521,
+     "runs": 90871,
+     "outputs": 26417,
+     "in_bits": 192503568,
+     "out_bits": 602416
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 234.429,
+    "maxrss_mb": 2972.0,
+    "pid": 712,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 37,
+    "range": [
+     136017456,
+     136043892
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12025429,
+    "escape_steps": 39003207,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12051847,
+     "runs": 93330,
+     "outputs": 26418,
+     "in_bits": 192657952,
+     "out_bits": 601872
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 228.715,
+    "maxrss_mb": 2975.3,
+    "pid": 715,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 38,
+    "range": [
+     136043892,
+     136070328
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12034330,
+    "escape_steps": 39000903,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12060748,
+     "runs": 95763,
+     "outputs": 26418,
+     "in_bits": 192791936,
+     "out_bits": 601296
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 231.365,
+    "maxrss_mb": 2973.5,
+    "pid": 714,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 39,
+    "range": [
+     136070328,
+     136096764
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12042773,
+    "escape_steps": 39026238,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12069173,
+     "runs": 97632,
+     "outputs": 26400,
+     "in_bits": 192932512,
+     "out_bits": 600432
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 226.111,
+    "maxrss_mb": 2984.2,
+    "pid": 716,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 40,
+    "range": [
+     136096764,
+     136123200
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 11387362,
+    "escape_steps": 38994695,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 11413780,
+     "runs": 94668,
+     "outputs": 26418,
+     "in_bits": 182476864,
+     "out_bits": 619600
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 224.81,
+    "maxrss_mb": 2981.9,
+    "pid": 713,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 41,
+    "range": [
+     136123200,
+     136149636
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12035993,
+    "escape_steps": 38977241,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12062416,
+     "runs": 96465,
+     "outputs": 26423,
+     "in_bits": 192826144,
+     "out_bits": 606608
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 225.683,
+    "maxrss_mb": 2980.3,
+    "pid": 711,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 42,
+    "range": [
+     136149636,
+     136176072
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 10279656,
+    "escape_steps": 38976353,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 10306078,
+     "runs": 99906,
+     "outputs": 26422,
+     "in_bits": 164740576,
+     "out_bits": 618336
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 209.536,
+    "maxrss_mb": 2989.1,
+    "pid": 717,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 43,
+    "range": [
+     136176072,
+     136202508
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 10488273,
+    "escape_steps": 38983980,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 10514691,
+     "runs": 105358,
+     "outputs": 26418,
+     "in_bits": 168110400,
+     "out_bits": 640112
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 208.756,
+    "maxrss_mb": 2981.1,
+    "pid": 715,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 44,
+    "range": [
+     136202508,
+     136228944
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 10136857,
+    "escape_steps": 38982000,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 10163275,
+     "runs": 108166,
+     "outputs": 26418,
+     "in_bits": 162466592,
+     "out_bits": 634432
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 220.89,
+    "maxrss_mb": 2974.1,
+    "pid": 712,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 45,
+    "range": [
+     136228944,
+     136255380
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 12094072,
+    "escape_steps": 38986503,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 12120490,
+     "runs": 112115,
+     "outputs": 26418,
+     "in_bits": 193766112,
+     "out_bits": 599072
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 224.89,
+    "maxrss_mb": 2980.6,
+    "pid": 714,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 46,
+    "range": [
+     136255380,
+     136281816
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 11409195,
+    "escape_steps": 38970390,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 11435617,
+     "runs": 100170,
+     "outputs": 26422,
+     "in_bits": 182819520,
+     "out_bits": 621120
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 204.63,
+    "maxrss_mb": 2989.2,
+    "pid": 717,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 47,
+    "range": [
+     136281816,
+     136308252
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 10303318,
+    "escape_steps": 38965218,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 26436,
+     "gates": 10329741,
+     "runs": 105533,
+     "outputs": 26423,
+     "in_bits": 165126784,
+     "out_bits": 619936
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 206.584,
+    "maxrss_mb": 2990.8,
+    "pid": 713,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl"
+   },
+   {
+    "worker": 3,
+    "range": [
+     136308252,
+     137731518
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 487649156,
+    "escape_steps": 45731526,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 489071738,
+     "runs": 4815651,
+     "outputs": 1422582,
+     "in_bits": 7817290624,
+     "out_bits": 33770544
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2157.332,
+    "maxrss_mb": 2996.3,
+    "pid": 1188,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 4,
+    "range": [
+     137731518,
+     139154784
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 483242086,
+    "escape_steps": 45748251,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 484664686,
+     "runs": 4781531,
+     "outputs": 1422600,
+     "in_bits": 7746824384,
+     "out_bits": 33797008
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2127.928,
+    "maxrss_mb": 2996.6,
+    "pid": 1189,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 5,
+    "range": [
+     139154784,
+     140578050
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 516455328,
+    "escape_steps": 46046595,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 517877856,
+     "runs": 4849528,
+     "outputs": 1422528,
+     "in_bits": 8277891072,
+     "out_bits": 33540368
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2260.902,
+    "maxrss_mb": 2996.9,
+    "pid": 1190,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 6,
+    "range": [
+     140578050,
+     142001316
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 511255107,
+    "escape_steps": 45972960,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 512677626,
+     "runs": 4888287,
+     "outputs": 1422519,
+     "in_bits": 8194827360,
+     "out_bits": 33631824
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2209.402,
+    "maxrss_mb": 2997.2,
+    "pid": 1191,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 7,
+    "range": [
+     142001316,
+     143424582
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 510762817,
+    "escape_steps": 45891705,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 512185356,
+     "runs": 4929371,
+     "outputs": 1422539,
+     "in_bits": 8187003552,
+     "out_bits": 33643040
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2282.422,
+    "maxrss_mb": 2995.3,
+    "pid": 1192,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 8,
+    "range": [
+     143424582,
+     144847848
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 489650617,
+    "escape_steps": 45734118,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 491073197,
+     "runs": 4822565,
+     "outputs": 1422580,
+     "in_bits": 7849307296,
+     "out_bits": 33764464
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2046.41,
+    "maxrss_mb": 3033.2,
+    "pid": 1189,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 9,
+    "range": [
+     144847848,
+     146271114
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 482195584,
+    "escape_steps": 45714228,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 483618193,
+     "runs": 4778856,
+     "outputs": 1422609,
+     "in_bits": 7730069504,
+     "out_bits": 33787808
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1964.544,
+    "maxrss_mb": 3033.7,
+    "pid": 1188,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 10,
+    "range": [
+     146271114,
+     147694380
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 513720838,
+    "escape_steps": 46045358,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 515143366,
+     "runs": 4842218,
+     "outputs": 1422528,
+     "in_bits": 8234191040,
+     "out_bits": 33578928
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2095.876,
+    "maxrss_mb": 3034.7,
+    "pid": 1191,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 11,
+    "range": [
+     147694380,
+     149117647
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 513957782,
+    "escape_steps": 45986325,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423267,
+     "gates": 515380302,
+     "runs": 4884368,
+     "outputs": 1422520,
+     "in_bits": 8238025408,
+     "out_bits": 33586656
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2139.746,
+    "maxrss_mb": 3034.3,
+    "pid": 1190,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 12,
+    "range": [
+     149117647,
+     150540913
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 508697758,
+    "escape_steps": 45895596,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 510120295,
+     "runs": 4931526,
+     "outputs": 1422537,
+     "in_bits": 8153961376,
+     "out_bits": 33668832
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2106.632,
+    "maxrss_mb": 3032.7,
+    "pid": 1192,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl"
+   },
+   {
+    "worker": 0,
+    "range": [
+     150540913,
+     151964179
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 493898548,
+    "escape_steps": 45757038,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 495321121,
+     "runs": 4835430,
+     "outputs": 1422573,
+     "in_bits": 7917261280,
+     "out_bits": 33728608
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 1559.12,
+    "maxrss_mb": 3047.6,
+    "pid": 25185,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-L.parts.jsonl"
+   },
+   {
+    "worker": 9,
+    "range": [
+     151964179,
+     153387445
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 479338004,
+    "escape_steps": 45674175,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 480760622,
+     "runs": 4775604,
+     "outputs": 1422618,
+     "in_bits": 7684356608,
+     "out_bits": 33805216
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 2559.661,
+    "maxrss_mb": 2997.4,
+    "pid": 964,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 8,
+    "range": [
+     153387445,
+     154810711
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 579293926,
+    "escape_steps": 46039795,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 580895072,
+     "runs": 33509113,
+     "outputs": 1502846,
+     "in_bits": 9285601952,
+     "out_bits": 35716208
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 4618.251,
+    "maxrss_mb": 3015.2,
+    "pid": 963,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 7,
+    "range": [
+     154810711,
+     156233977
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 565874069,
+    "escape_steps": 45050699,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 567689785,
+     "runs": 62287276,
+     "outputs": 1619116,
+     "in_bits": 9074106400,
+     "out_bits": 39195552
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 3549.858,
+    "maxrss_mb": 2949.3,
+    "pid": 962,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 6,
+    "range": [
+     156233977,
+     157657243
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 565382745,
+    "escape_steps": 44973381,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 567198468,
+     "runs": 62325127,
+     "outputs": 1619123,
+     "in_bits": 9066294784,
+     "out_bits": 39211456
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 4496.316,
+    "maxrss_mb": 2945.3,
+    "pid": 961,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 5,
+    "range": [
+     157657243,
+     159080509
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 512910472,
+    "escape_steps": 44761553,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 514529683,
+     "runs": 33956260,
+     "outputs": 1520911,
+     "in_bits": 8224716384,
+     "out_bits": 36879792
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 4155.27,
+    "maxrss_mb": 2943.9,
+    "pid": 960,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 4,
+    "range": [
+     159080509,
+     160503775
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 561630552,
+    "escape_steps": 44829303,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 563446279,
+     "runs": 62430432,
+     "outputs": 1619127,
+     "in_bits": 9006408096,
+     "out_bits": 39271120
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 4311.536,
+    "maxrss_mb": 2944.3,
+    "pid": 959,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 3,
+    "range": [
+     160503775,
+     161927041
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 559643319,
+    "escape_steps": 44759575,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 561459047,
+     "runs": 62492312,
+     "outputs": 1619128,
+     "in_bits": 8974680608,
+     "out_bits": 39308992
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 3529.204,
+    "maxrss_mb": 2954.0,
+    "pid": 958,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 2,
+    "range": [
+     161927041,
+     163350307
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 559156360,
+    "escape_steps": 44694399,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 560972092,
+     "runs": 62530602,
+     "outputs": 1619132,
+     "in_bits": 8966950976,
+     "out_bits": 39321536
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 3775.324,
+    "maxrss_mb": 2955.4,
+    "pid": 957,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 1,
+    "range": [
+     163350307,
+     164773573
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 558673931,
+    "escape_steps": 44632445,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423266,
+     "gates": 560489666,
+     "runs": 62570251,
+     "outputs": 1619135,
+     "in_bits": 8959286432,
+     "out_bits": 39332640
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 4052.345,
+    "maxrss_mb": 2955.4,
+    "pid": 956,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   },
+   {
+    "worker": 0,
+    "range": [
+     164773573,
+     166196840
+    ],
+    "status": "valid",
+    "reasons": [],
+    "vu_edges": 530111827,
+    "escape_steps": 44565817,
+    "cu_escape_steps": 38845299,
+    "vu_stats": {
+     "units": 1423267,
+     "gates": 531927690,
+     "runs": 34313040,
+     "outputs": 1619263,
+     "in_bits": 8502315424,
+     "out_bits": 39354176
+    },
+    "cu_stats": {
+     "units": 1,
+     "gates": 16,
+     "runs": 16,
+     "outputs": 16,
+     "in_bits": 0,
+     "out_bits": 512
+    },
+    "cu_edges": 0,
+    "seconds": 3794.019,
+    "maxrss_mb": 2943.1,
+    "pid": 955,
+    "source": "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl"
+   }
+  ],
+  "worker_maxrss_mb": 3047.6,
+  "worker_maxrss_sum_mb": 403389.2,
+  "validated": true,
+  "vus_validated": 166196840
+ },
+ "merged_from": {
+  "plans": [
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.plan.json",
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.plan.json",
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.plan.json",
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.plan.json",
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.plan.json"
+  ],
+  "parts": [
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl",
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl",
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl",
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-L.parts.jsonl",
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl",
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl",
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl"
+  ],
+  "parts_seen_per_source": {
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-B.parts.jsonl": 11,
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-C.parts.jsonl": 19,
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-D.parts.jsonl": 16,
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-L.parts.jsonl": 1,
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15.parts.jsonl": 10,
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b.parts.jsonl": 65,
+   "docs/data/rec/p1-b0-lp32s15-parts/p1-b0-lp32s15-P1b2.parts.jsonl": 14
+  },
+  "ranges_chosen": 136,
+  "ranges_finished": 136
+ },
+ "worker_maxrss_mb": 3047.6
+}

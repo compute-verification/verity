@@ -1,0 +1,17 @@
+{
+ "store": "/workspace/ta1-store/B1/ta1eager/commit",
+ "totals": {
+  "bfloat16/inf_words": 0,
+  "bfloat16/leaves": 271278,
+  "bfloat16/nan_words": 0,
+  "bfloat16/words": 916168704,
+  "int32/leaves": 72,
+  "int32/words": 288
+ },
+ "leaves_with_nan": 0,
+ "leaves_with_inf": 0,
+ "distinct_nan_words": {},
+ "ops_with_nan": {},
+ "nan_leaf_examples": [],
+ "inf_leaf_examples": []
+}

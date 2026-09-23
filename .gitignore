@@ -3,6 +3,17 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# Run outputs, evidence, and shipped source snapshots live in artifact storage (tests/test_repository.py is the backstop).
+out/
+runs/
+*.tgz
+*.tar
+*.tar.gz
+*.bundle
+*.safetensors
+*.pt
+*.ckpt
+
 # Rust build artifacts anywhere (e958a0b accidentally committed backends/ligero-verify/target, 20.8 MB)
 **/target/
 

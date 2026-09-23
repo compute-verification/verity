@@ -16,6 +16,9 @@
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
+  research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
+                                                   the durability gate: exit 0 iff every output artifact of each attempt (and the attempt
+                                                   manifest) is verifiably on the remote; otherwise lists what is not (preserved.py)
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--json]
@@ -301,6 +304,31 @@ def cmd_verify(argv: list[str]) -> int:
         print(f"{ns.art} PRESERVED on {rep['remote']} at {rep['verified_utc']} ({len(rep['checked'])} objects read back)")
     else:
         print(f"{ns.art} NOT preserved: {rep.get('reason') or '; '.join(rep['errors'])}")
+    return 0 if rep["preserved"] else 1
+
+
+def cmd_preserved(argv: list[str]) -> int:
+    """The durability gate (F7, `preserved.py`): every artifact an attempt names (outputs + telemetry) and its attempt manifest
+    must be verifiably on the remote.  Exit 0 iff so for every target; else 1 and the list of what is not.  Exit 2 on a usage
+    error (no targets)."""
+    from . import preserved as P
+
+    ap = _ap("preserved")
+    ap.add_argument("targets", nargs="*", help="run ids and/or art:<hex>")
+    ap.add_argument("--mode", choices=list(P.MODES), default="head",
+                    help="head: size + MD5 ETag per blob (read-back when unavailable), manifest read back (default); "
+                         "readback: every object read back; recorded: trust the local catalog's verified remote replica (offline)")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    if not ns.targets:
+        print("research data preserved: give at least one run id or art: id", file=sys.stderr)
+        return 2
+    rep = P.check(LocalStore(ns.store), ns.targets, mode=ns.mode)
+    if ns.json:
+        _dump(rep)
+    else:
+        for line in P.format_report(rep):
+            print(line)
     return 0 if rep["preserved"] else 1
 
 
@@ -726,7 +754,8 @@ def cmd_doctor(argv: list[str]) -> int:
 
 
 COMMANDS: dict[str, Callable[[list[str]], int]] = {
-    "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "select": cmd_select, "snapshot": cmd_snapshot,
+    "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "preserved": cmd_preserved, "select": cmd_select,
+    "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check,

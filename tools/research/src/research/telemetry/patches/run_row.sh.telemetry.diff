@@ -1,12 +1,14 @@
 --- run_row.sh	2026-09-21 07:36:28
 +++ run_row.telemetry.sh	2026-09-21 08:22:44
-@@ -40,6 +40,11 @@
+@@ -40,6 +40,13 @@
  have MATCH_IMPL || ENVS+=("MATCH_IMPL=fast")
  Q=/workspace/cp/r17exec; LOG=$Q/queue.log; D=/workspace/cp/sweep/$ROW; mkdir -p $Q
  log() { echo "$(date -u +%FT%TZ) [r17exec] $*" | tee -a $LOG; }
 +# [telemetry v0.1, R17-49 increment A] shell-callable telemetry: queue/hold events, job identity, Level-0 sidecar, status, classifier.
 +# TELEMETRY=0 disables everything below; a missing package is a logged no-op -- telemetry never blocks or fails a row (brief §4, §8).
-+TELE_DIR=${TELE_DIR:-/workspace/cp/telemetry/zk/campaign}; TELE_POLICY=${TELE_POLICY:-$TELE_DIR/telemetry/policy/r17-rules-1.toml}
++# [R18 infra, r18-int-1] the telemetry package ships INSIDE the release tree (zk/campaign): TELE_DIR defaults to the tree this runner
++# launches (export VERITOR_REPO=<that tree> before this point; row_pod.sh re-derives it from its own location and refuses a mismatch).
++TELE_DIR=${TELE_DIR:-${VERITOR_REPO:-/workspace/cp/veritor}/zk/campaign}; TELE_POLICY=${TELE_POLICY:-$TELE_DIR/telemetry/policy/r17-rules-1.toml}
 +tele() { if [ "${TELEMETRY:-1}" = 1 ] && [ -f "$TELE_DIR/tele" ]; then python3 "$TELE_DIR/tele" "$@" 2>>$Q/telemetry_errors.log || true; fi; }
 +mkdir -p "$D"; tele event --attempt-dir "$D" --proc run_row submitted --stage "$STAGES" row="$ROW" role="$ROLE"
  if [ -e $Q/NO_ROWS ]; then log "$ROW [$STAGES]: REFUSED -- NO_ROWS marker (coordinator stop)"; exit 0; fi

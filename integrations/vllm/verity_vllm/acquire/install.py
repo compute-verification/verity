@@ -1,0 +1,211 @@
+"""Install EXACTLY the plan's hooks (module path -> hook kind -> slot) on a built module tree, and the collector adapter behind the switch.
+
+    inst = install_from_plan(plan, model, runner, sink=...)     forward hooks (producer_output), forward pre-hooks (consumer_input), the
+                                                               runner `sample()` wrap (runner_return); `inst.installed` lists what went in,
+                                                               `inst.deferred` the plan's sites of other kinds (taps, registered inputs,
+                                                               runner state, launch proxies, prescribed): those belong to their sources
+    inst.remove()
+
+    apply_plan_to_committer(committer, plan)                    v1's `NativeHostCommitter` (and its native_collect subclass) takes its
+                                                               module set and consumer-input set from the plan instead of the class tables;
+                                                               the rest of the committer (arena, hashing, roots, sources) is untouched
+
+A plan with an UNSUPPORTED Value is refused by name (`IncompletePlan`) unless the caller says `refuse_incomplete=False` -- fail closed.
+`sink(site_key, tensor)` receives the observed tensor at each site; `OccurrenceSink` counts occurrences and records shapes only (no
+value reads, no synchronisation): the GPU gate's non-interference observer.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Callable, Mapping
+
+from verity_vllm.acquire.runtime_tree import RUNNER_PATH
+from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, Site, hooks_of_doc
+
+Sink = Callable[[tuple[str, str, str], Any], None]
+
+
+class IncompletePlan(RuntimeError):
+    """The plan names UNSUPPORTED Values: nothing is installed."""
+
+
+def _sites_of(plan: AcquisitionPlan | Mapping[str, Any]) -> tuple[list[Site], list[Site], list[dict[str, Any]]]:
+    """(hook sites, deferred sites, unsupported) of a plan object or its serialised document."""
+    if isinstance(plan, AcquisitionPlan):
+        chosen = plan.chosen_sites()
+        unsupported = [{"value": v.value_id, "why": v.why} for v in plan.unsupported]
+    else:
+        chosen = [Site(s["kind"], s["module"], s["slot"], s.get("lifetime", "n/a"), s.get("derived_from", "")) for s in (plan.get("sites") or [])]
+        unsupported = list(plan.get("unsupported") or [])
+        assert [s.key() for s in chosen if s.kind in HOOK_KINDS] == hooks_of_doc(plan)
+    return [s for s in chosen if s.kind in HOOK_KINDS], [s for s in chosen if s.kind not in HOOK_KINDS], unsupported
+
+
+def _slot_of_output(output: Any, slot: str) -> Any:
+    if slot == "out":
+        return output
+    if slot.isdigit():
+        k = int(slot)
+        return output[k] if isinstance(output, (tuple, list)) and k < len(output) else None
+    return None
+
+
+def _slot_of_args(args: tuple, slot: str) -> Any:
+    if slot.startswith("in[") and slot.endswith("]"):
+        i = int(slot[3:-1])
+        return args[i] if i < len(args) else None
+    return None
+
+
+@dataclass
+class Installation:
+    installed: list[Site] = field(default_factory=list)
+    deferred: list[Site] = field(default_factory=list)
+    missing: list[Site] = field(default_factory=list)        # hook sites whose module is not in the built tree (fail: the plan was made for another runtime)
+    handles: list = field(default_factory=list)
+    _runner: Any = None
+    _orig_sample: Any = None
+    _had_sample: bool = False
+
+    def keys(self) -> list[tuple[str, str, str]]:
+        return sorted(s.key() for s in self.installed)
+
+    def remove(self) -> None:
+        for h in self.handles:
+            h.remove()
+        self.handles = []
+        if self._runner is not None and self._orig_sample is not None:
+            if self._had_sample:
+                setattr(self._runner, "sample", self._orig_sample)
+            else:
+                try:
+                    delattr(self._runner, "sample")
+                except AttributeError:
+                    pass
+            self._runner, self._orig_sample = None, None
+
+
+class OccurrenceSink:
+    """Counts runtime occurrences per site and records (shape, dtype, device) of what was seen; never reads a value."""
+
+    def __init__(self) -> None:
+        self.counts: dict[tuple[str, str, str], int] = {}
+        self.shapes: dict[tuple[str, str, str], list[list[int]]] = {}
+        self.dtypes: dict[tuple[str, str, str], set[str]] = {}
+        self.non_tensor: dict[tuple[str, str, str], int] = {}
+
+    def __call__(self, key: tuple[str, str, str], t: Any) -> None:
+        self.counts[key] = self.counts.get(key, 0) + 1
+        shape = getattr(t, "shape", None)
+        if shape is None:
+            self.non_tensor[key] = self.non_tensor.get(key, 0) + 1
+            return
+        sh = [int(x) for x in shape]
+        lst = self.shapes.setdefault(key, [])
+        if sh not in lst and len(lst) < 64:
+            lst.append(sh)
+        self.dtypes.setdefault(key, set()).add(str(getattr(t, "dtype", "?")).replace("torch.", ""))
+
+    def to_json(self) -> dict[str, Any]:
+        keys = sorted(set(self.counts) | set(self.non_tensor))
+        return {"schema": "verity-vllm/acquisition-observed/v1", "sites": [
+            {"module": k[0], "kind": k[1], "slot": k[2], "occurrences": self.counts.get(k, 0), "shapes": self.shapes.get(k, []),
+             "dtypes": sorted(self.dtypes.get(k, ())), "non_tensor": self.non_tensor.get(k, 0)} for k in keys]}
+
+
+def install_from_plan(plan: AcquisitionPlan | Mapping[str, Any], model: Any, runner: Any = None, *, sink: Sink | None = None,
+                      refuse_incomplete: bool = True) -> Installation:
+    hooks, deferred, unsupported = _sites_of(plan)
+    if unsupported and refuse_incomplete:
+        raise IncompletePlan(f"{len(unsupported)} unsupported Value(s): " + "; ".join(f"{u.get('value')}: {u.get('why')}" for u in unsupported[:6]))
+    sink = sink or (lambda key, t: None)
+    inst = Installation(deferred=list(deferred))
+    mods = dict(model.named_modules()) if model is not None else {}
+    for s in hooks:
+        key = s.key()
+        if s.kind == "producer_output":
+            m = mods.get(s.module)
+            if m is None:
+                inst.missing.append(s)
+                continue
+
+            def hook(_m, _args, output, *, _key=key, _slot=s.slot):
+                t = _slot_of_output(output, _slot)
+                if t is not None:
+                    sink(_key, t)
+
+            inst.handles.append(m.register_forward_hook(hook))
+            inst.installed.append(s)
+        elif s.kind == "consumer_input":
+            m = mods.get(s.module)
+            if m is None:
+                inst.missing.append(s)
+                continue
+
+            def pre(_m, args, *, _key=key, _slot=s.slot):
+                t = _slot_of_args(args, _slot)
+                if t is not None:
+                    sink(_key, t)
+
+            inst.handles.append(m.register_forward_pre_hook(pre))
+            inst.installed.append(s)
+        elif s.kind == "runner_return":
+            if s.module != RUNNER_PATH or runner is None or not hasattr(runner, "sample"):
+                inst.missing.append(s)
+                continue
+            if inst._runner is None:
+                inst._runner = runner
+                inst._had_sample = "sample" in getattr(runner, "__dict__", {})
+                inst._orig_sample = runner.sample
+                attrs: list[tuple[tuple[str, str, str], str]] = []
+
+                def sample(*a, _orig=inst._orig_sample, _attrs=attrs, **kw):
+                    res = _orig(*a, **kw)
+                    so = res[0] if isinstance(res, tuple) else res
+                    for k, attr in _attrs:
+                        t = getattr(so, attr, None)
+                        if t is not None:
+                            sink(k, t)
+                    return res
+
+                runner.sample = sample
+                inst._attrs = attrs  # type: ignore[attr-defined]
+            inst._attrs.append((key, s.slot.lstrip(".")))  # type: ignore[attr-defined]
+            inst.installed.append(s)
+    if inst.missing:
+        inst.remove()
+        raise IncompletePlan("plan hook sites not in the built runtime: " + ", ".join(f"{s.module}[{s.kind}/{s.slot}]" for s in inst.missing[:8]))
+    return inst
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# the collector adapter (ACQUIRE_ENGINE=v2): v1's committer takes its hook sets from the plan
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str, Any]) -> dict[str, Any]:
+    """Replace the committer's class-table decisions with the plan's: `_modules` = the producer_output sites' modules (runtime order),
+    `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token, `promoted_input_bindings`)
+    stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.  Returns a record."""
+    hooks, deferred, unsupported = _sites_of(plan)
+    if unsupported:
+        raise IncompletePlan(f"{len(unsupported)} unsupported Value(s): " + "; ".join(f"{u.get('value')}: {u.get('why')}" for u in unsupported[:6]))
+    model = getattr(committer, "model", None)
+    if model is None:
+        raise IncompletePlan("the committer has no model to install on")
+    mods = dict(model.named_modules())
+    out_mods = [s.module for s in hooks if s.kind == "producer_output"]
+    in_mods = {s.module for s in hooks if s.kind == "consumer_input"}
+    absent = sorted(m for m in out_mods if m not in mods) + sorted(m for m in in_mods if m not in mods)
+    if absent:
+        raise IncompletePlan(f"plan hook sites not in the built model: {absent[:8]}")
+    armed = set(getattr(committer, "acquire_inputs", {}) or {})
+    if not armed <= in_mods:
+        raise IncompletePlan(f"the manifest arms consumer inputs the plan does not name: {sorted(armed - in_mods)[:8]}")
+    order = {name: i for i, (name, _m) in enumerate(model.named_modules())}
+    selected = [(m, mods[m]) for m in sorted(set(out_mods), key=lambda n: order[n])]
+    before = [n for n, _m in committer._modules]
+    committer._modules = selected
+    committer.plan_inputs = set(in_mods)
+    committer.name = f"{committer.name}+plan"
+    return {"engine": "v2", "modules_before": before, "modules_after": [n for n, _m in selected], "plan_inputs": sorted(in_mods),
+            "deferred_sites": [s.key() for s in deferred], "runner_return_sites": [s.key() for s in hooks if s.kind == "runner_return"]}

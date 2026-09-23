@@ -492,3 +492,112 @@ def test_d6_deferred_hash_records_identity_at_launch_and_completes_at_preserve(t
     doc["computation"]["inputs"][0]["sha256"] = None
     (tmp_path / "job.json").write_text(json.dumps(doc))
     assert job.hash_inputs(tmp_path)[0]["stat_changed_since_launch"] is True
+
+
+# ---- R18 infra regressions (ported from veritor r18-int-3) -------------------------------------------------------------------------------------
+
+def test_event_accepts_kv_positionals_after_options_on_every_python(tmp_path):
+    """[r18-int-2, arch M-0025] run_row.sh writes `tele event ... submitted --stage S row=.. role=..`; 3.11 parse_args rejected the k=v
+    tail ('unrecognized arguments') and the event was silently lost to telemetry_errors.log; parse_intermixed_args takes it everywhere."""
+    env = dict(os.environ, PYTHONPATH=str(PKG_ROOT))
+    r = subprocess.run([sys.executable, "-m", "research.telemetry", "event", "--attempt-dir", str(tmp_path), "--proc", "run_row", "submitted",
+                        "--stage", "build,match", "row=r1", "role=B0"], capture_output=True, text=True, env=env, cwd=str(tmp_path))
+    assert r.returncode == 0, r.stderr
+    recs = [json.loads(l) for l in (tmp_path / "events.jsonl").read_text().splitlines() if l.strip()]
+    ev = [x for x in recs if x.get("kind") == "queue" or x.get("what") == "submitted" or "submitted" in json.dumps(x)]
+    assert ev, recs
+    assert json.dumps(ev[-1]).count("r1") >= 1 and json.dumps(ev[-1]).count("B0") >= 1
+
+
+def test_tele_run_launched_through_the_script_starts_a_sampler_that_finds_the_package(tmp_path):
+    """[r18-int-2, F-r18-infra-1] r18-int-1 canary: `zk/campaign/tele run ...` -> sampler.log '/usr/bin/python3: No module named telemetry',
+    no resources.jsonl.  The launcher below is that script's shape: the import root goes on sys.path IN-PROCESS only, the environment
+    carries no PYTHONPATH and the cwd is elsewhere.  The sidecar (`python -m research.telemetry sample`, a new process) must still
+    resolve the same package -- run._tele_env() puts `src/` (parents[2] of research/telemetry/run.py) on the child's PYTHONPATH.
+
+    The package under test is a COPY of research/ in tmp_path whose __main__ records its own __file__: the interpreter running these
+    tests may have `research` installed (editable) in site-packages, which would let a sidecar that lost the PYTHONPATH import the
+    installed copy and hide the bug (parents[1] passes the naive form of this test for exactly that reason)."""
+    import shutil
+    root = tmp_path / "root"
+    shutil.copytree(PKG_ROOT / "research", root / "research", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    main_py = root / "research" / "telemetry" / "__main__.py"
+    mark = tmp_path / "sidecar_module_file.txt"
+    main_py.write_text(f"import pathlib\npathlib.Path({str(mark)!r}).write_text(__file__)\n" + main_py.read_text())
+    launcher = tmp_path / "tele"
+    launcher.write_text("import sys\n"
+                        f"sys.path.insert(0, {str(root)!r})\n"
+                        "from research.telemetry.cli import main\n"
+                        "sys.exit(main())\n")
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    r = subprocess.run([sys.executable, str(launcher), "run", "--attempt-dir", str(tmp_path / "a"), "--stage", "t", "--cadence", "0.2", "--linger", "0.5",
+                        "--", "sleep", "1.5"], capture_output=True, text=True, env=env, cwd=str(tmp_path))
+    assert r.returncode == 0, r.stderr
+    log = (tmp_path / "a" / "sampler.log").read_text() if (tmp_path / "a" / "sampler.log").exists() else ""
+    assert "No module named" not in log, log
+    assert (tmp_path / "a" / "resources.jsonl").exists(), sorted(p.name for p in (tmp_path / "a").iterdir())
+    assert (tmp_path / "a" / "resources.jsonl").read_text().strip(), "no sample written"
+    assert mark.exists(), "the sidecar did not run the launcher's package (an installed `research` elsewhere may have been imported instead)"
+    assert Path(mark.read_text()).resolve() == main_py.resolve()
+
+
+def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tmp_path):
+    """[r19-int-8, F-r19-int-8] Seven R19 rows were launched with --timeout sized on Build alone; tele run held the value in memory and
+    would have SIGTERMed healthy Match/Commit stages.  `tele set-timeout` writes control/timeout_s; the run loop re-reads it (mtime/size
+    change), emits a `timeout_changed` mark carrying old/new/actor/reason and updates status.json.  Here: a 1 s launch timeout is raised
+    to 60 s at t~0.4 s, the 2.5 s workload finishes with rc 0 and no timeout marker; then the reverse -- a 60 s launch timeout lowered to
+    0.5 s ends the workload with the ordinary timeout cancel-intent naming the NEW value."""
+    import threading
+    from research.telemetry import run as trun
+
+    def go(d, timeout, cmd):
+        return subprocess.run([sys.executable, "-m", "research.telemetry", "run", "--attempt-dir", str(d), "--stage", "t", "--timeout", str(timeout),
+                               "--no-sampler", "--no-classify", "--grace", "1", "--", *cmd], capture_output=True, text=True,
+                              env={**os.environ, "PYTHONPATH": str(PKG_ROOT)}, cwd=str(tmp_path))
+
+    d = tmp_path / "raise"
+    d.mkdir()
+    threading.Timer(0.4, trun.set_timeout, args=(d, 60.0, "manual", "sized on Build alone")).start()
+    r = go(d, 1.0, ["sleep", "2.5"])
+    assert r.returncode == 0, r.stderr
+    recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
+    marks = [x for x in recs if x.get("kind") == "mark" and x.get("name") == "timeout_changed"]
+    assert len(marks) == 1 and marks[0]["old_timeout_s"] == 1.0 and marks[0]["new_timeout_s"] == 60.0
+    assert marks[0]["actor"] == "manual" and marks[0]["reason"] == "sized on Build alone"
+    assert not [x for x in recs if x.get("kind") == "cancel_intent"]
+    st = json.loads((d / "status.json").read_text())
+    assert st["state"] == "done" and st["timeout_s"] == 60.0 and st.get("timed_out") is False
+
+    d2 = tmp_path / "lower"
+    d2.mkdir()
+    threading.Timer(0.4, trun.set_timeout, args=(d2, 0.5, "manual", "abort")).start()
+    r = go(d2, 60.0, ["sleep", "20"])
+    assert r.returncode != 0
+    recs = [json.loads(l) for l in (d2 / "events.jsonl").read_text().splitlines() if l.strip()]
+    ci = [x for x in recs if x.get("kind") == "cancel_intent"]
+    assert ci and ci[0]["actor"] == "timeout" and "timeout_s=0.5" in ci[0]["reason"]
+    st = json.loads((d2 / "status.json").read_text())
+    assert st["state"] == "cancelled" and st["timed_out"] is True
+
+    # a bare number and an unparseable file: the first is accepted, the second is ignored (never the reason a workload stops)
+    d3 = tmp_path / "bare"
+    d3.mkdir()
+    (d3 / "control").mkdir()
+    (d3 / "control" / "timeout_s").write_text("not json")
+    threading.Timer(0.4, lambda: (d3 / "control" / "timeout_s").write_text("30")).start()
+    r = go(d3, 1.0, ["sleep", "2.0"])
+    assert r.returncode == 0, r.stderr
+    assert "ignoring unparseable" in r.stderr
+    recs = [json.loads(l) for l in (d3 / "events.jsonl").read_text().splitlines() if l.strip()]
+    assert [x["new_timeout_s"] for x in recs if x.get("kind") == "mark" and x.get("name") == "timeout_changed"] == [30.0]
+
+
+def test_set_timeout_cli_writes_the_control_file():
+    from research.telemetry.cli import main
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        assert main(["set-timeout", "--attempt-dir", td, "--timeout-s", "14400", "--reason", "x"]) == 0
+        doc = json.loads((Path(td) / "control" / "timeout_s").read_text())
+        assert doc["timeout_s"] == 14400.0 and doc["actor"] == "manual" and doc["reason"] == "x" and doc["set_utc"]
+        assert main(["set-timeout", "--attempt-dir", td, "--timeout-s", "none", "--reason", "clear"]) == 0
+        assert json.loads((Path(td) / "control" / "timeout_s").read_text())["timeout_s"] is None

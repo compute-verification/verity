@@ -107,6 +107,29 @@ def test_tool_tarball_is_deterministic_and_excludes_caches():
     assert not any("__pycache__" in n or n.endswith(".pyc") for n in names)
 
 
+def test_source_tree_research_package_is_the_tool_that_ships(tmp_path, monkeypatch, capsys):
+    """`research run --on M --source <tree>`: when the tree carries tools/research/src/research, THAT package is tarred as the tool
+    (the machine executes it), not the launcher's own install; without one the launcher's package ships, and a `--tool` it does not
+    know is refused before anything is shipped."""
+    assert remote.source_tool_package(None) is None
+    assert remote.source_tool_package(tmp_path) is None                       # no tools/research in this tree
+    pkg = tmp_path / "tools" / "research" / "src" / "research"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "marker_only_in_the_tree.py").write_text("X = 1\n")
+    assert remote.source_tool_package(tmp_path) == pkg
+    import io, tarfile
+    data, sha = remote.tool_tarball(pkg)
+    names = tarfile.open(fileobj=io.BytesIO(data)).getnames()
+    assert "research/marker_only_in_the_tree.py" in names and "research/cli.py" not in names
+    assert sha != remote.tool_tarball()[1]                                    # a different package is a different tool identity
+    # the refusal: the launcher's registry does not know `nope.tool` and no --source package would replace it
+    from research import cli
+    rc = cli.main(["run", "--on", "m", "--project", "p", "--tool", "nope.tool", "--", "true"])
+    err = capsys.readouterr().err
+    assert rc == 3 and "launcher research package does not know tool 'nope.tool'" in err and "--source with tools/research" in err
+
+
 def test_machines_resolution(tmp_path, monkeypatch):
     f = tmp_path / "m.toml"
     f.write_text('[machines.a]\nprovider="runpod"\npod_id="p"\nprojects=["verity","x"]\n[machines.b]\nprovider="runpod"\npod_id="q"\nproject="veritor"\n')
@@ -146,3 +169,40 @@ def test_snapshot_identity_reaches_the_record(tmp_path):
     _wait_terminal(runs_root / "snap")
     job = json.loads((runs_root / "snap" / "job.json").read_text())
     assert job["tool"]["research_snapshot"] == Path(SRC).name
+
+
+def test_source_sha_reaches_the_workload_as_research_source_sha(tmp_path):
+    """[R19 tele, F-r17-tp-06] a `--source` run executes from <root>/src/<sha>/, a `git archive` export with no .git: the workload's
+    source-identity precheck learns the tree's sha from RESEARCH_SOURCE_SHA (request.json remote.source_sha).  A run without a shipped
+    tree does not carry the variable."""
+    probe = "import os; print(os.environ.get('RESEARCH_SOURCE_SHA', '<unset>'))"
+    req, runs_root = _request(tmp_path, "s1", [PY, "-c", probe])
+    d = json.loads(req.read_text())
+    d["remote"]["source_sha"] = "a" * 40
+    req.write_text(json.dumps(d))
+    assert remote.launch_request(req)["started"]
+    s = _wait_terminal(runs_root / "s1")
+    assert s["state"] == "done" and (runs_root / "s1" / "stdout.log").read_text().strip() == "a" * 40
+    req2, _ = _request(tmp_path, "s2", [PY, "-c", probe])
+    assert remote.launch_request(req2)["started"]
+    _wait_terminal(runs_root / "s2")
+    assert (runs_root / "s2" / "stdout.log").read_text().strip() == "<unset>"
+
+
+def test_pod_target_rereads_a_running_pod_whose_mapping_flaps(monkeypatch):
+    """RunPod's REST GET /pods/{id} intermittently answers a RUNNING pod with publicIp='' / portMappings=None (2026-09-22,
+    s00kzu0nisihgr: alternating answers within seconds while ssh worked).  pod_target re-reads before refusing; a mapping that never
+    appears is still refused by name."""
+    from research.pods import runpod
+
+    answers = iter([{"desiredStatus": "RUNNING", "publicIp": "", "portMappings": None, "name": "p"},
+                    {"desiredStatus": "RUNNING", "publicIp": "", "portMappings": None, "name": "p"},
+                    {"desiredStatus": "RUNNING", "publicIp": "10.0.0.1", "portMappings": {"22": 2222}, "name": "p", "costPerHr": 1.0}])
+    monkeypatch.setattr(runpod, "get", lambda pid: next(answers))
+    monkeypatch.setattr(remote, "POD_TARGET_RETRY_S", 0.0)
+    tgt = remote.pod_target({"provider": "runpod", "pod_id": "x"})
+    assert (tgt["host"], tgt["port"]) == ("10.0.0.1", 2222)
+
+    monkeypatch.setattr(runpod, "get", lambda pid: {"desiredStatus": "RUNNING", "publicIp": "", "portMappings": None})
+    with pytest.raises(remote.Refused, match="no ssh port mapped yet"):
+        remote.pod_target({"provider": "runpod", "pod_id": "x"})

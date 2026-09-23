@@ -231,6 +231,41 @@ def concat(parts: list[Refs]) -> Refs:
     return Explicit(tuple(items))
 
 
+def runs(refs: Refs) -> list[tuple[str, int, int, int]]:
+    """Maximal contiguous runs `(space, idx, lo, hi)` of a reference sequence, in sequence order (pure; used by
+    the derivation frontend, program families and the capture fold — none of which need torch for it)."""
+    out: list[tuple[str, int, int, int]] = []
+
+    def push(space, idx, lo, hi):
+        if out and out[-1][0] == space and out[-1][1] == idx and out[-1][3] == lo:
+            out[-1] = (space, idx, out[-1][2], hi)
+        else:
+            out.append((space, idx, lo, hi))
+
+    def walk(r):
+        if isinstance(r, Affine):
+            if r.count:
+                push(r.space, r.idx, r.base, r.base + r.count)
+        elif isinstance(r, Strided):
+            if r.inner_stride == 1 or r.inner == 1:
+                rows = r.count // r.inner
+                for i in range(rows):
+                    b = r.base + i * r.outer_stride
+                    push(r.space, r.idx, b, b + r.inner)
+            else:
+                for space, idx, leaf in r:
+                    push(space, idx, leaf, leaf + 1)
+        elif isinstance(r, Concat):
+            for p in r.parts:
+                walk(p)
+        else:
+            for space, idx, leaf in r:
+                push(space, idx, leaf, leaf + 1)
+
+    walk(refs)
+    return out
+
+
 def strided_view(c, base: int, inner: int, outer_stride: int, inner_stride: int, count: int) -> Refs:
     """A `Strided` over the leaves of a Coll whose refs are a single `Affine` run (parameter or node output)."""
     r = c.refs

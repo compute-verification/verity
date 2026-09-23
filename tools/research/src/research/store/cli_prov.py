@@ -110,6 +110,7 @@ def cmd_lookup(argv: list[str]) -> int:
     missing = [k for k in tool.key_conditions if k not in conds]
     if missing:
         here = E.conditions(source_root=root)
+        here.update(tool.tool_conditions(here))          # the Tool's own probe (`tool.<name>.*`), as the runner records it
         conds.update({k: here.get(k) for k in missing})
     drv = D.derivation_id(tool.identity(), inputs, key, conds, tool.key_conditions)
     st = A.open_store(None, ns.store)
