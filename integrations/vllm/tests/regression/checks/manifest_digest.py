@@ -11,7 +11,8 @@ B>=2; `required_manifest build --program ROW/build_request --workload WL` at B=1
 Expected is lifted from `commit/manifest_verify.json` (used_digest / used_program_digest / used_identities; the v1 Commit's own
 rebuild said `ok`) and, when the recorded manifest.json is reachable, from the file itself.  STRONG: a single identity row moved,
 dropped or renamed changes the digest.  TP rows (#70, #75: rank Programs under build/rank*/) are not built by this path -> not applicable.
-The engine is the code's default (traversal, inventory cross-check on) exactly as the row's Commit ran it.
+The engine is the code's default (traversal, inventory cross-check on) exactly as the row's Commit ran it; `VERITY_REGRESSION_ENGINE=v2`
+rebuilds with the query path (`verity_vllm.query.cli`, same flags) so the same check gates v2 against the same manifest of record.
 
 `actual` also states what the built manifest PROMOTED ([R19 int-20, F-r19-int-20]: interior rows whose output crosses a module
 boundary, flagged `promoted: true`) -- the facts a labelled decision on the fixture may name (`resolver.sanction`; #57's decision):
@@ -75,15 +76,22 @@ def _promotion(row: resolver.Row, man: dict) -> dict:
     """[F-r19-int-20] The promotion facts of a built manifest (see the module docstring): `promoted`, `promoted_member`, `only_new`
     (+ `only_new_basis`, and the set arithmetic against v1 when its manifest.json resolves)."""
     rows = man.get("identities") or []
+    v2 = (man.get("query") or {}).get("engine") == "v2-query"
     promoted = [r for r in rows if r.get("promoted")]
     members = sorted({f"{r.get('op_path')}/{r.get('output_member')}" for r in promoted})
     out: dict = {"promoted": len(promoted), "promoted_member": members[0] if len(members) == 1 else (members or None)}
     if row.has("manifest.json"):                            # the v1 manifest of record (never the candidate's: `row.path` is the reference)
         old = {_identity_key(r) for r in row.json("manifest.json").get("identities") or []}
-        new = {_identity_key(r) for r in rows}
+        new_rows = {_identity_key(r): r for r in rows}
+        new = set(new_rows)
         added, removed = len(new - old), len(old - new)
         out.update(only_new=added if not removed else None, only_new_basis="IDENTITY_KEY set difference vs the v1 manifest.json",
                    v1_identities=len(old), added_n=added, removed_n=removed)
+        if v2:
+            # a v2 (query) manifest promotes nothing: what v1 promoted is a boundary Value here.  Its "promoted" facts are the rows it
+            # names beyond v1 -- the same set difference, so a decision labelled on v1's promotion (#57: `model/out`) reads the same
+            members = sorted({f"{new_rows[k].get('op_path')}/{new_rows[k].get('output_member')}" for k in new - old})
+            out.update(promoted=added, promoted_member=members[0] if len(members) == 1 else (members or None), promoted_basis="v2-query: rows beyond v1")
     else:
         out.update(only_new=len(promoted), only_new_basis="promoted rows (v1 manifest.json not resolvable here)")
     return out
@@ -102,11 +110,24 @@ def expected(row: resolver.Row) -> dict:
     return out
 
 
+ENGINES = {"v1": "verity_capture.commit.required_manifest",       # the baseline: v1's traversal + by-name tables (the row's Commit ran this)
+           "v2": "verity_vllm.query.cli"}                         # Q_module_body_v1 over the Program + correspondence (same build / build-global flags)
+
+
+def engine() -> str:
+    """`VERITY_REGRESSION_ENGINE` (default `v1`): which builder the rebuild runs.  The baseline stays v1; `v2` runs the query path so
+    this check gates it against the same manifest of record."""
+    e = os.environ.get("VERITY_REGRESSION_ENGINE", "v1")
+    if e not in ENGINES:
+        raise ValueError(f"VERITY_REGRESSION_ENGINE={e!r}: one of {sorted(ENGINES)}")
+    return e
+
+
 def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str]:
     wl = row.workload()
     fx = json.load(open(wl))
     b = len(fx.get("requests") or [])
-    base = [sys.executable, "-m", "verity_capture.commit.required_manifest"]
+    base = [sys.executable, "-m", ENGINES[engine()]]
     if b > 1:
         bs = row.json("build_summary.json")
         wd = ((bs.get("workload") or {}).get("workload_digest")) or None
@@ -136,5 +157,5 @@ def actual(row: resolver.Row) -> dict:
         return {"rebuild_rc": p.returncode, "rebuild_argv": argv, "rebuild_tail": (p.stdout + p.stderr).strip()[-1500:], "source": "rebuild"}
     man = json.load(open(out))
     res = dict(_summary(man, with_rows=True), **_promotion(row, man), source="rebuild", rebuild_rc=0,
-               rebuild_engine=(man.get("engine") or man.get("populations", {}).get("engine")))
+               rebuild_engine=(man.get("engine") or man.get("populations", {}).get("engine") or (man.get("query") or {}).get("engine") or engine()))
     return res
