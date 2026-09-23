@@ -353,6 +353,40 @@ def load_correspondence(descriptor_or_program: Any) -> RuntimeCorrespondence:
     return RuntimeCorrespondence.from_json(doc)
 
 
+def read_program_dir(program_dir: Any) -> tuple["RuntimeCorrespondence | None", str | None, str | None]:
+    """The table of one Build output dir (`derive_step`: `result.json` + `descriptor.json[.gz]`), as (table, digest, problem).
+    `result.json:program.correspondence_digest` is the cheap presence test (the frontend that emits the record records its digest there):
+    a Build without it is a v1-frontend Build -> (None, None, None) without decoding the descriptor.  With it, the descriptor's record is
+    loaded and its digest checked against the recorded one (a mismatch is the `problem`; the table is still returned).  The ONE loader
+    every consumer (acquire, query, verdict) reads a Build's correspondence through."""
+    import gzip
+    import os
+    d = str(program_dir)
+    res_p = os.path.join(d, "result.json")
+    recorded = None
+    if os.path.isfile(res_p):
+        try:
+            with open(res_p) as f:
+                recorded = (json.load(f).get("program") or {}).get("correspondence_digest")
+        except (OSError, ValueError) as e:
+            return None, None, f"{res_p}: unreadable ({e})"
+        if recorded is None:
+            return None, None, None
+    desc_p = os.path.join(d, "descriptor.json.gz")
+    if not os.path.isfile(desc_p):
+        desc_p = os.path.join(d, "descriptor.json")
+    if not os.path.isfile(desc_p):
+        return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but no descriptor is beside it"
+    with (gzip.open(desc_p, "rt") if desc_p.endswith(".gz") else open(desc_p)) as f:
+        desc = json.load(f)
+    doc = (desc.get("annotations") or {}).get(NAMESPACE)
+    if doc is None:
+        return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but the descriptor carries no {NAMESPACE!r} annotation"
+    digest = correspondence_digest(doc)
+    problem = None if recorded in (None, digest) else f"{d}: correspondence_digest {digest[:16]} != result.json's {str(recorded)[:16]}"
+    return RuntimeCorrespondence.from_json(doc), digest, problem
+
+
 def validate_document(doc: dict) -> list[str]:
     """Structural check of a document against the parts of JSON_SCHEMA a stdlib validator can state (required keys, the enum of
     `source`, integer ranks, dense `calls`); returns the problems (empty = valid).  A full JSON-Schema validator is not a dependency."""
@@ -390,4 +424,4 @@ def validate_document(doc: dict) -> list[str]:
 
 
 __all__ = ["SCHEMA", "NAMESPACE", "JSON_SCHEMA", "TensorView", "ReturnSlot", "ArgSlot", "ArgSpan", "RankOccurrence", "CollectiveOccurrence",
-           "CallCorrespondence", "RuntimeCorrespondence", "correspondence_digest", "load_correspondence", "validate_document", "canonical_json"]
+           "CallCorrespondence", "RuntimeCorrespondence", "correspondence_digest", "load_correspondence", "read_program_dir", "validate_document", "canonical_json"]

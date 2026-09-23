@@ -24,8 +24,6 @@ The runtime side is `runtime_tree.RuntimeTree` (module-tree facts: which modules
 """
 from __future__ import annotations
 
-import gzip
-import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,7 +31,7 @@ from typing import Any, Iterable, Mapping
 
 from verity_capture.commit.required_manifest import collector_path, split_name
 from verity_vllm.acquire.runtime_tree import RUNNER_PATH, RUNTIME_TREE_SCHEMA, RuntimeTree, mro_names, runtime_tree_from_paths, runtime_tree_of
-from verity_vllm.runtime_correspondence import NAMESPACE, SCHEMA, RuntimeCorrespondence, correspondence_digest, load_correspondence
+from verity_vllm.runtime_correspondence import NAMESPACE, SCHEMA, RuntimeCorrespondence, read_program_dir
 
 SOURCES = ("correspondence", "v1_annotations")
 FALLBACK_READ = "the identity row's op_path: required_manifest.split_name(annotations.node_hints)[0] -> collector_path(wrapper_prefix) -> op_path_aliases"
@@ -61,34 +59,10 @@ class ArgSlot:
 
 
 def read_program_correspondence(program_dir: str | Path) -> tuple[RuntimeCorrespondence | None, str | None, str | None]:
-    """The `runtime-correspondence/v1` table of one derive_step output dir, (table, digest, problem).  `result.json:program.correspondence_digest`
-    is the cheap presence test (the frontend that emits the record records its digest there): a Build without it is a v1-frontend Build
-    -> (None, None, None) without touching the descriptor.  With it, the descriptor's record is loaded and its digest checked against the
-    recorded one (a mismatch is a `problem`, the table still returned)."""
-    d = Path(program_dir)
-    res_p = d / "result.json"
-    recorded = None
-    if res_p.is_file():
-        try:
-            recorded = ((json.loads(res_p.read_text()).get("program") or {}).get("correspondence_digest"))
-        except (OSError, ValueError) as e:  # noqa: PERF203
-            return None, None, f"{res_p}: unreadable ({e})"
-        if recorded is None:
-            return None, None, None
-    desc_p = d / "descriptor.json.gz"
-    if not desc_p.is_file():
-        desc_p = d / "descriptor.json"
-    if not desc_p.is_file():
-        return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but no descriptor is beside it"
-    opener = gzip.open if desc_p.suffix == ".gz" else open
-    with opener(desc_p, "rt") as f:
-        desc = json.load(f)
-    doc = (desc.get("annotations") or {}).get(NAMESPACE)
-    if doc is None:
-        return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but the descriptor carries no {NAMESPACE!r} annotation"
-    digest = correspondence_digest(doc)
-    problem = None if recorded in (None, digest) else f"{d}: correspondence_digest {digest[:16]} != result.json's {str(recorded)[:16]}"
-    return load_correspondence(doc), digest, problem
+    """The `runtime-correspondence/v1` table of one derive_step output dir, (table, digest, problem) -- `runtime_correspondence.read_program_dir`,
+    the one loader: `result.json:program.correspondence_digest` is the presence test (a v1-frontend Build -> (None, None, None) without
+    decoding the descriptor); with it the record is loaded and its digest checked against the recorded one."""
+    return read_program_dir(program_dir)
 
 
 class AcquireCorrespondence:

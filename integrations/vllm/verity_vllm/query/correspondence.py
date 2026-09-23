@@ -1,21 +1,29 @@
-"""The per-Call runtime-correspondence annotations of a derived Program, read -- not invented.
+"""The per-Call runtime correspondence of a derived Program for the query: ONE reader, an explicit fallback.
 
-Today the frontend records ONE annotation per Call: its naming hint (`derive.Ctx.hint_name` + the rule's member / row suffix),
-carried as `annotations["node_hints"][k]` in the descriptor and as `name` in the instance sequence::
+`Correspondence.module_of(cid)` -- the owning module path (the body the Call was lowered from, in the SOURCE module's own vocabulary:
+`named_modules()` of the export wrapper; "" = the root body) -- is what `Q_module_body_v1` partitions by.  `Correspondence.name(cid)`
+is the frontend's naming of the Call (module, fx node, return-slot hint, row) the v1 bridge's member naming reads.  Where they come from:
 
-    <module path>/<fx node>[/<member hint>][<row>]        model.model.layers.0.self_attn.rotary_emb/rotary_embedding/query[7]
-    <fx node>[<row>]                                       argmax_2[0]            (a Call outside every module: the root body)
+  correspondence   `source = "correspondence"`: the `runtime-correspondence/v1` record the frontend emitted into the descriptor's
+                   `annotations["correspondence"]` (`verity_vllm.runtime_correspondence`, read through its one loader
+                   `read_program_dir(program_dir)`): `owning_module(cid)` and the record's `node` / `member` / `row` (its raw `hint`
+                   when the record did not parse the naming suffix, parsed here exactly as the fallback parses a name).
+  v1_annotations   `source = "v1_annotations"`: a v1-frontend Build (no such namespace): the ONE annotation those Builds record per Call,
+                   its naming hint (`annotations["node_hints"][k]` in the descriptor, `name` in the instance sequence), parsed::
 
-`<module path>` is the owning module in the SOURCE module's own vocabulary (`named_modules()` of the export wrapper), from the fx
-node's `nn_module_stack`; `<member hint>` is the slot the module RETURNS the value as, when the rule knew it (`out`, `0`, `1`,
-`query`, `key`); `<row>` is the token row (`[7]`) or the attention position (`[t=3]`) the Call is the instance for.  A collective's
-row name ends in `/all_reduce` after the row (`...[i]/all_reduce`).
+                       <module path>/<fx node>[/<member hint>][<row>]        model.model.layers.0.self_attn.rotary_emb/rotary_embedding/query[7]
+                       <fx node>[<row>]                                       argmax_2[0]            (a Call outside every module: the root body)
 
-The second correspondence fact is the map from a Program module path to the IMPLEMENTATION's path (the collector's
-`named_modules()` name): the export wrapper holds the served model under an attribute, so `model.model.layers.0...` in the Program
-is `model.layers.0...` at the collector.  It is determined from the Build's observed implementation paths
-(`result.json: attention_impls_observed`, keys = implementation module paths) by suffix match against the Program's module paths --
-the one prefix every observed path is a suffix under -- never assumed.  Phase 3 records both facts as first-class annotations.
+                   `<row>` is the token row (`[7]`) or the attention position (`[t=3]`); a collective's row name ends in `/all_reduce`.
+
+The fallback is taken ONLY when the record is absent, and which reader served is recorded (`source`, `digest`) in the manifests the
+bridge writes -- never silent.
+
+The second correspondence fact is the map from a Program module path to the IMPLEMENTATION's path (the collector's `named_modules()`
+name): the export wrapper holds the served model under an attribute, so `model.model.layers.0...` in the Program is `model.layers.0...` at
+the collector.  It is determined from the Build's observed implementation paths (`result.json: attention_impls_observed`, keys =
+implementation module paths) by suffix match against the Program's module paths -- the one prefix every observed path is a suffix under
+-- never assumed.
 """
 
 from __future__ import annotations
@@ -25,10 +33,13 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Iterable, Mapping
 
+from verity_vllm.runtime_correspondence import SCHEMA, CallCorrespondence, RuntimeCorrespondence, correspondence_digest, read_program_dir
+
 from .program_view import ProgramView
 
-__all__ = ["CallName", "parse_call_name", "Correspondence", "implementation_prefix"]
+__all__ = ["CallName", "parse_call_name", "Correspondence", "implementation_prefix", "SOURCES"]
 
+SOURCES = ("correspondence", "v1_annotations")
 _ROW_RE = re.compile(r"\[([^\[\]]*)\]$")
 
 
@@ -62,6 +73,16 @@ def parse_call_name(name: str) -> CallName:
     return CallName(module, node, hint, row, suffix)
 
 
+def call_name_of(rec: CallCorrespondence) -> CallName:
+    """The record's naming of a Call as a CallName.  When the record kept the frontend's naming suffix RAW (`hint`: a form it did not parse
+    into member / row -- `.../<fx>/<member>[row]`, `[t=3]`, a Call lowered from no source node) it is parsed here exactly as the fallback
+    parses a name, the owning module always the record's."""
+    if rec.hint:
+        n = parse_call_name(rec.hint)
+        return CallName(rec.module, n.node, n.hint, n.row, n.suffix)
+    return CallName(rec.module, rec.node or "", rec.member or "", str(rec.row) if rec.row is not None else None, "")
+
+
 def implementation_prefix(program_modules: Iterable[str], implementation_paths: Iterable[str]) -> str:
     """The wrapper prefix `p` such that an observed implementation path `a` is the Program module path `p + a`: the shortest prefix
     under which EVERY observed path is found as a suffix of some Program module path.  "" when nothing is observed or the
@@ -86,18 +107,49 @@ def implementation_prefix(program_modules: Iterable[str], implementation_paths: 
 
 
 class Correspondence:
-    """The correspondence table of one ProgramView: Call id -> CallName, plus the implementation-path map."""
+    """The correspondence table of one ProgramView: Call id -> CallName (module first), plus the implementation-path map.
 
-    def __init__(self, P: ProgramView, *, implementation_paths: Iterable[str] = ()) -> None:
+    `table`: the Program's `runtime-correspondence/v1` record (`source = correspondence`); None = the v1-annotation fallback (the Calls'
+    names).  `Correspondence.of(P, program_dir)` reads the Build dir and picks."""
+
+    def __init__(self, P: ProgramView, *, implementation_paths: Iterable[str] = (), table: RuntimeCorrespondence | None = None,
+                 digest: str | None = None, problem: str | None = None) -> None:
         self.P = P
-        self.names: dict[int, CallName] = {c.id: parse_call_name(c.name) for c in P.calls}
         self._impl_paths = tuple(implementation_paths)
+        self.table = table
+        self.problem = problem
+        if table is not None:
+            if len(table) != len(P.calls):
+                raise ValueError(f"correspondence record has {len(table)} Calls, the Program {len(P.calls)}: the record is of another Program")
+            self.names: dict[int, CallName] = {c.id: call_name_of(table.record(c.id)) for c in P.calls}
+            self.source = "correspondence"
+            self.digest: str | None = digest or correspondence_digest(table.doc)
+        else:
+            self.names = {c.id: parse_call_name(c.name) for c in P.calls}
+            self.source = "v1_annotations"
+            self.digest = None
+
+    @classmethod
+    def of(cls, P: ProgramView, program_dir: str | None, *, implementation_paths: Iterable[str] = ()) -> "Correspondence":
+        """The Program's correspondence from its Build dir: the record when the Build carries it, else the v1-annotation fallback.  A
+        record that fails to load / mismatches its recorded digest is a `problem` carried on the table (and into the manifest header)."""
+        table, digest, problem = read_program_dir(program_dir) if program_dir else (None, None, None)
+        return cls(P, implementation_paths=implementation_paths, table=table, digest=digest, problem=problem)
 
     def module_of(self, cid: int) -> str:
         return self.names[cid].module
 
     def name(self, cid: int) -> CallName:
         return self.names[cid]
+
+    def provenance(self) -> dict[str, Any]:
+        """What served the owning modules: recorded in the manifest header (`correspondence`)."""
+        out: dict[str, Any] = {"source": self.source, "schema": SCHEMA if self.table is not None else None, "digest": self.digest}
+        if self.table is None:
+            out["fallback"] = "annotations.node_hints / instance names parsed as <module>/<fx>[/<member>][<row>]"
+        if self.problem:
+            out["problem"] = self.problem
+        return out
 
     @cached_property
     def modules(self) -> tuple[str, ...]:
