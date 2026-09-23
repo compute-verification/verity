@@ -39,9 +39,23 @@ SSH_KEY = Path.home() / ".runpod" / "ssh" / "runpodctl-ssh-key"
 DEFAULT_IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
 
 
+class PodError(RuntimeError):
+    """The provider could not answer for a pod: an HTTP error (404 = the pod no longer exists), no API config, no network, sshd never
+    answering.  `code` is the HTTP status when there is one.  A library caller (`research.remote`) turns it into its own refusal; the
+    standalone CLI (`main`) prints it and exits 1.  Never `SystemExit` from library code: that took `research fetch` / `status
+    --refresh` down whole on a terminated pod."""
+
+    def __init__(self, message: str, *, code: int | None = None, pod_id: str | None = None):
+        super().__init__(message)
+        self.code, self.pod_id = code, pod_id
+
+
 def _config() -> dict[str, Any]:
-    with CONFIG.open("rb") as handle:
-        return tomllib.load(handle)
+    try:
+        with CONFIG.open("rb") as handle:
+            return tomllib.load(handle)
+    except FileNotFoundError:
+        raise PodError(f"no RunPod API config at {CONFIG}") from None
 
 
 def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
@@ -57,12 +71,16 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
             "User-Agent": "veritor-campaign/0.1",
         },
     )
+    pod_id = path[len("/pods/"):].split("/", 1)[0] if path.startswith("/pods/") else None
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
             raw = response.read()
     except urllib.error.HTTPError as error:
         detail = error.read()[:500].decode(errors="replace")
-        raise SystemExit(f"{method} {path} -> HTTP {error.code}: {detail}") from None
+        what = "not found (terminated, or never existed)" if error.code == 404 else detail
+        raise PodError(f"{method} {path} -> HTTP {error.code}: {what}", code=error.code, pod_id=pod_id) from None
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise PodError(f"{method} {path}: {type(error).__name__}: {getattr(error, 'reason', None) or error}", pod_id=pod_id) from None
     return json.loads(raw) if raw else None
 
 
@@ -222,7 +240,7 @@ def wait_ssh(pod_id: str, timeout_s: int = 1800) -> tuple[str, int]:
             if probe.returncode == 0:
                 return target
         time.sleep(15)
-    raise SystemExit(f"pod {pod_id}: sshd did not answer within {timeout_s}s")
+    raise PodError(f"pod {pod_id}: sshd did not answer within {timeout_s}s", pod_id=pod_id)
 
 
 def terminate(pod_id: str) -> None:
@@ -270,28 +288,31 @@ def main() -> None:
     w.add_argument("--hours", type=float, default=9.0)
     args = parser.parse_args()
 
-    if args.command == "balance":
-        balance()
-    elif args.command == "gpus":
-        gpus()
-    elif args.command == "create":
-        create(args)
-    elif args.command == "list":
-        list_pods()
-    elif args.command == "get":
-        print(json.dumps(get(args.pod_id), indent=2))
-    elif args.command == "ssh":
-        target = ssh_target(get(args.pod_id))
-        if target is None:
-            raise SystemExit("port 22 not mapped yet")
-        print(" ".join(ssh_command(*target)))
-    elif args.command == "wait-ssh":
-        host, port = wait_ssh(args.pod_id)
-        print(" ".join(ssh_command(host, port)))
-    elif args.command == "terminate":
-        terminate(args.pod_id)
-    elif args.command == "watchdog":
-        watchdog(args.pod_id, args.hours)
+    try:
+        if args.command == "balance":
+            balance()
+        elif args.command == "gpus":
+            gpus()
+        elif args.command == "create":
+            create(args)
+        elif args.command == "list":
+            list_pods()
+        elif args.command == "get":
+            print(json.dumps(get(args.pod_id), indent=2))
+        elif args.command == "ssh":
+            target = ssh_target(get(args.pod_id))
+            if target is None:
+                raise SystemExit("port 22 not mapped yet")
+            print(" ".join(ssh_command(*target)))
+        elif args.command == "wait-ssh":
+            host, port = wait_ssh(args.pod_id)
+            print(" ".join(ssh_command(host, port)))
+        elif args.command == "terminate":
+            terminate(args.pod_id)
+        elif args.command == "watchdog":
+            watchdog(args.pod_id, args.hours)
+    except PodError as e:                       # the standalone CLI: one line, exit 1, no traceback
+        raise SystemExit(f"runpod: {e}") from None
 
 
 if __name__ == "__main__":

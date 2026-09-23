@@ -65,7 +65,7 @@ def check_pod(pod_id: str, families: dict[str, dict[str, Any]] | None = None) ->
 
     try:
         pod = runpod.get(pod_id)
-    except SystemExit as e:                          # runpod._request turns an HTTP error (404: terminated) into SystemExit
+    except runpod.PodError as e:                     # an HTTP error (404: terminated), no API config, no network
         raise remote.Refused(f"pod {pod_id}: {e}") from None
     tgt = runpod.ssh_target(pod) if pod and (pod.get("desiredStatus") or "").upper() == "RUNNING" else None
     if tgt is None:

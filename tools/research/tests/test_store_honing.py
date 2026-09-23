@@ -423,6 +423,147 @@ def test_vocab_check_reads_the_files_and_reports_every_category(store, tmp_path,
     assert capsys.readouterr().out.strip() == "1 assertion file(s); 0 off the vocabulary"
 
 
+# ---- item 5: `data pull` of a run-files tree with thousands of small files -------------------------------------------------------------------------
+
+def _fake_ssh(monkeypatch, tmp_path, log: list):
+    """`pull --from m` against a "machine" whose store is `tmp_path/machine/store`, over a local shell instead of ssh."""
+    import subprocess
+
+    from research.store import cli_prov
+
+    def ssh_run(ssh, remote_argv, *, stdin=None, timeout=120):
+        log.append((remote_argv, len(stdin or b"")))
+        if remote_argv[0] == "cat":
+            p = Path(remote_argv[1])
+            return subprocess.CompletedProcess(remote_argv, 0 if p.is_file() else 1, p.read_bytes() if p.is_file() else b"", b"" if p.is_file() else b"no such file")
+        assert remote_argv[:4] == ["tar", "-cf", "-", "-C"] and remote_argv[-2:] == ["-T", "-"], "blob paths travel on tar's stdin, not in the argv"
+        assert sum(len(a) for a in remote_argv) < 4096
+        return subprocess.run(remote_argv, input=stdin, capture_output=True)
+
+    monkeypatch.setattr(cli_prov.remote, "ssh_run", ssh_run)
+    monkeypatch.setattr(cli_prov.remote, "resolve_machine", lambda name, project, machines=None: {"name": name, "root": str(tmp_path / "machine"), "python": "python3"})
+    monkeypatch.setattr(cli_prov.remote, "pod_target", lambda m: {"host": "h", "port": 22})
+    monkeypatch.setattr(cli_prov.remote, "ssh_argv", lambda host, port, **k: ["ssh", host])
+    return cli_prov
+
+
+def test_pull_streams_ten_thousand_small_files_in_a_few_tars_with_identical_layout(tmp_path, monkeypatch, capsys):
+    from research.store import cli_prov as CP
+
+    N = 10_000
+    machine = LocalStore(tmp_path / "machine" / "store")
+    tree = _tree(tmp_path / "tree", {f"rep{i % 4}/proof-{i:05d}.bin": f"proof {i}\n".encode() * (1 + i % 3) for i in range(N)} | {"summary.json": b"{}"})
+    art = machine.put_artifact("run-files/v1", {"run": RUN}, tree=tree)
+    machine.put_attempt(_attempt(outputs={"run_files": art}))
+    log: list = []
+    cli_prov = _fake_ssh(monkeypatch, tmp_path, log)
+    monkeypatch.setattr(CP.A, "open_store", lambda store=None, root=None: LocalStore(tmp_path / "local"))
+    monkeypatch.setattr(CP, "PULL_BATCH_FILES", 3000)
+    t0 = time.monotonic()
+    rc = cli_prov.main(["pull", "--from", "m", RUN, "--project", "verity", "--json"])
+    dt = time.monotonic() - t0
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0, out
+    tars = [a for a, _ in log if a[0] == "tar"]
+    p = out["pulled"][0]
+    assert p["id"] == art and p["blobs"] == N + 1 and p["batches"] == len(tars) == 4 and p["fetched"] == N + 1 and p["reused"] == 0, p   # 10001 distinct blobs / 3000 per tar
+    assert dt < 180, f"{N} files took {dt:.1f}s over a local shell"   # ~15 s on a laptop (4-5 s of it is bsdtar); a hang guard, not a benchmark
+    local = LocalStore(tmp_path / "local")
+    got = local.fetch(art)
+    assert sorted(q.relative_to(got).as_posix() for q in got.rglob("*") if q.is_file()) == sorted(q.relative_to(tree).as_posix() for q in tree.rglob("*") if q.is_file())
+    assert (got / "rep3/proof-09999.bin").read_bytes() == (tree / "rep3/proof-09999.bin").read_bytes() and (got / "summary.json").read_bytes() == b"{}"
+    assert local.get_attempt(RUN) == machine.get_attempt(RUN) and local.has_local(art)
+    assert not list((tmp_path / "local" / "scratch").iterdir()), "the pull's staging dir under scratch/ is gone"
+
+    # a second artifact sharing most blobs: only the new ones cross the wire
+    tree2 = _tree(tmp_path / "tree2", {f"rep0/proof-{i:05d}.bin": f"proof {i}\n".encode() * (1 + i % 3) for i in range(100)} | {"new.bin": b"new"})
+    art2 = machine.put_artifact("run-files/v1", {"run": RUN + "x"}, tree=tree2)
+    machine.put_attempt(_attempt(run_id="r20260922-105906-2022", outputs={"run_files": art2}))
+    log.clear()
+    rc = cli_prov.main(["pull", "--from", "m", "r20260922-105906-2022", "--project", "verity", "--json"])
+    p = json.loads(capsys.readouterr().out)["pulled"][0]
+    assert rc == 0 and p["fetched"] == 1 and p["reused"] == 100 and p["batches"] == 1
+    assert [a for a, _ in log if a[0] == "tar"][0][-2:] == ["-T", "-"]
+    assert LocalStore(tmp_path / "local").fetch(art2).joinpath("new.bin").read_bytes() == b"new"
+
+
+def test_pull_batches_by_count_and_by_bytes():
+    from research.store import cli_prov as CP
+
+    hexes = [f"{i:064x}" for i in range(10)]
+    assert CP._batches([], None) == []
+    assert CP._batches(hexes, None) == [hexes]
+    sizes = {h: 200 * 2**20 for h in hexes}               # 200 MiB each: two per 512 MiB batch
+    assert [len(b) for b in CP._batches(hexes, sizes)] == [2, 2, 2, 2, 2]
+    sizes[hexes[0]] = 5 * 2**30                           # one blob over the byte cap still travels, alone
+    assert [len(b) for b in CP._batches(hexes, sizes)] == [1, 2, 2, 2, 2, 1]
+    assert [h for b in CP._batches(hexes, sizes) for h in b] == hexes, "order preserved"
+
+
+# ---- item 6: a dead pod is a refusal, not a SystemExit -------------------------------------------------------------------------------------------
+
+def _http_error(code: int, body: bytes = b"") -> Exception:
+    import io
+    import urllib.error
+
+    return urllib.error.HTTPError("https://rest.runpod.io/v1/pods/p1", code, "x", {}, io.BytesIO(body))
+
+
+def test_dead_pod_is_a_clean_refusal_with_the_pod_name(tmp_path, monkeypatch, capsys):
+    import urllib.error
+
+    from research import remote
+    from research.cli import main as research_main
+    from research.pods import part, runpod
+
+    monkeypatch.setattr(runpod, "CONFIG", tmp_path / "config.toml")
+    (tmp_path / "config.toml").write_text('apikey = "k"\napiurl = "https://api.runpod.io/graphql"\n')
+    calls: list[tuple[str, str]] = []
+
+    def urlopen(request, timeout=0):
+        calls.append((request.get_method(), request.full_url))
+        raise _http_error(404, b'{"error":"pod not found"}')
+
+    monkeypatch.setattr(runpod.urllib.request, "urlopen", urlopen)
+    with pytest.raises(runpod.PodError) as ei:
+        runpod.get("p1")
+    assert ei.value.code == 404 and ei.value.pod_id == "p1" and "HTTP 404" in str(ei.value) and "terminated" in str(ei.value)
+    assert not isinstance(ei.value, SystemExit) and calls == [("GET", "https://rest.runpod.io/v1/pods/p1")]
+
+    machine = {"provider": "runpod", "pod_id": "p1", "name": "pod-x"}
+    with pytest.raises(remote.Refused, match=r"pod p1 \(machine pod-x\) no longer exists on runpod \(HTTP 404"):
+        remote.pod_target(machine)
+    with pytest.raises(remote.Refused, match=r"pod p1: GET /pods/p1 -> HTTP 404"):
+        part.check_pod("p1")
+
+    def urlopen_down(request, timeout=0):
+        raise urllib.error.URLError(ConnectionRefusedError(61, "Connection refused"))
+
+    monkeypatch.setattr(runpod.urllib.request, "urlopen", urlopen_down)
+    with pytest.raises(remote.Refused, match=r"pod p1 \(machine pod-x\): runpod API unavailable: GET /pods/p1: URLError"):
+        remote.pod_target(machine)
+    monkeypatch.setattr(runpod, "CONFIG", tmp_path / "absent.toml")
+    with pytest.raises(remote.Refused, match="no RunPod API config"):
+        remote.pod_target(machine)
+    monkeypatch.setattr(runpod, "CONFIG", tmp_path / "config.toml")
+    monkeypatch.setattr(runpod.urllib.request, "urlopen", urlopen)
+
+    # the CLI: `research run --on <dead pod>` is exit 3 with the pod's name on stderr and no traceback; the run is recorded as refused
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    (tmp_path / "machines.toml").write_text('[machines.pod-x]\nprovider = "runpod"\npod_id = "p1"\nproject = "verity"\n')
+    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "pod-x", "--project", "verity", "--", "true"])
+    err = capsys.readouterr().err
+    assert rc == 3 and "refused: pod p1 (machine pod-x) no longer exists on runpod (HTTP 404: terminated?)" in err and "Traceback" not in err
+    runs = list((tmp_path / "runs").iterdir())
+    assert len(runs) == 1 and json.loads((runs[0] / "remote.json").read_text())["phase"] == "refused"
+
+    # the standalone runpod CLI keeps its one-line exit (SystemExit raised there, and only there)
+    monkeypatch.setattr("sys.argv", ["runpod", "get", "p1"])
+    with pytest.raises(SystemExit) as se:
+        runpod.main()
+    assert "runpod: GET /pods/p1 -> HTTP 404" in str(se.value)
+
+
 # ---- item 8: parallel HEADs in `where` -----------------------------------------------------------------------------------------------------------
 
 def test_where_heads_in_parallel(store, fs_remote, tmp_path, monkeypatch):

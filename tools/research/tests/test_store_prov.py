@@ -640,8 +640,8 @@ def test_pull_copies_attempt_and_verified_outputs_over_fake_ssh(tmp_path, monkey
         if remote_argv[0] == "cat":
             p = Path(remote_argv[1])
             return subprocess.CompletedProcess(remote_argv, 0 if p.is_file() else 1, p.read_bytes() if p.is_file() else b"", b"" if p.is_file() else b"no such file")
-        assert remote_argv[:4] == ["tar", "-cf", "-", "-C"]
-        return subprocess.run(remote_argv, capture_output=True)
+        assert remote_argv[:4] == ["tar", "-cf", "-", "-C"] and remote_argv[-2:] == ["-T", "-"] and stdin, "the blob list travels on stdin, never in the argv"
+        return subprocess.run(remote_argv, input=stdin, capture_output=True)
 
     monkeypatch.setattr(cli_prov.remote, "ssh_run", fake_ssh_run)
     monkeypatch.setattr(cli_prov.remote, "resolve_machine", lambda name, project, machines=None: {"name": name, "root": str(tmp_path / "machine"), "python": "python3"})
