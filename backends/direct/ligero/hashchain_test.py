@@ -190,12 +190,61 @@ def test_fused_witness_source_modes() -> None:
     rel = relation("fp8-ada")
     base = rel.compile(rel.params, True)
     hs = hashchain.compose(rel).sys
-    assert wd._n_terms(base) <= wd.TAB_THRESHOLD < wd._n_terms(hs)
+    assert wd._n_terms(base.program) <= wd.TAB_THRESHOLD < wd._n_terms(hs.program)
     assert wd.generate(base) == wd.generate(base, None)
     tab: list = []
     src = wd.generate(hs, tab)
     assert len(tab) > 50_000 and "affine(J, C," in src and len(src) < 1_000_000
     assert all(0 <= j < hs.m and 0 <= v < P for j, v in tab)
+    # with the Poseidon2 witness hook the fused program loses exactly the 1704 S-box product rows and is v1-sized again
+    hook, = hs.witness_hooks
+    prog = wd._program(hs)
+    assert len(hook.rows) == 1704 and len(hs.program) - len(prog) == 1704
+    assert all(not (op[0] == "prod" and op[1] in hook.rows) for op in prog)
+    assert wd._n_terms(prog) <= wd.TAB_THRESHOLD
+    assert {r.kind for r in hs.rows if r.idx in hook.rows} == {"prod"}
+
+
+def test_sponge_kernel_source_is_the_permutation() -> None:
+    """The straight-line CUDA statements the device hook emits, executed in Python, are Poseidon2 (KAT) and store
+    x^2, x^3, x^4, x^7 of each S-box input; the source names every S-box row of the compiled sponges."""
+    import re
+    em: list = []
+    state = [hashchain._Sym(em, f"s[{i}]", P - 1) for i in range(h2.WIDTH)]
+    stores: list = []
+
+    def reduce(x):
+        if isinstance(x, hashchain._Sym):
+            return x if x.bound < P else x._new(f"{x.var} % P", P - 1)
+        return int(x) % P
+
+    def sbox(x):
+        x2 = x._new(f"({x.var} * {x.var}) % P", P - 1)
+        x3 = x._new(f"({x2.var} * {x.var}) % P", P - 1)
+        x4 = x._new(f"({x2.var} * {x2.var}) % P", P - 1)
+        x7 = x._new(f"({x4.var} * {x3.var}) % P", P - 1)
+        stores.append((x.var, x2.var, x3.var, x4.var, x7.var))
+        return x7
+
+    out = h2.permute_ring(state, sbox, reduce)
+    inp, exp = h2.KAT_24
+    env = {f"s{i}": v for i, v in enumerate(inp)}
+    pat = re.compile(r"\s*u64 (t\d+) = (.*);")
+    for line in em:
+        m = pat.match(line)
+        assert m, line
+        expr = re.sub(r"s\[(\d+)\]", r"s\1", m.group(2).replace("ULL", ""))
+        val = eval(expr, {"P": P}, env)  # noqa: S307 -- our own emitted statements
+        assert 0 <= val < 2**64
+        env[m.group(1)] = val
+    assert [env[o.var] for o in out] == list(exp)
+    assert len(stores) == 213
+    for x, x2, x3, x4, x7 in stores:
+        assert env[x7] == pow(env[x], 7, P) and env[x2] == env[x] ** 2 % P and env[x3] == env[x] ** 3 % P and env[x4] == env[x] ** 4 % P
+    src = hashchain.sponge_kernel_source(8, 2, 213)
+    assert "poseidon2_rows" in src and src.count("W[(size_t)rows[") == 4 * 213
+    with pytest.raises(ValueError):
+        hashchain.sponge_kernel_source(8, 2, 212)
 
 
 def test_precomputed_row_sponges_equal_the_per_proof_sponge(runner) -> None:

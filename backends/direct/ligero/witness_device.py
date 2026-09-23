@@ -127,9 +127,9 @@ REGISTER_ROWS = True     # rows read by later ops live in registers (no store ->
 class _Gen:
     """Code generation state: which rows are already produced (readable from their register), the row-read set."""
 
-    def __init__(self, sys: System):
+    def __init__(self, sys: System, program: list | None = None):
         self.reads: set[int] = set()
-        for op in sys.program:
+        for op in (sys.program if program is None else program):
             for e in op[1:]:
                 if isinstance(e, Expr):
                     self.reads.update(e.lin.keys())
@@ -176,13 +176,13 @@ class _Gen:
         return acc
 
 
-def _generate_regs(sys: System) -> str:
+def _generate_regs(sys: System, program: list | None = None) -> str:
     """Register-row form (lane hp2-host): one straight-line kernel, rows read later kept in registers."""
     hpos = {n: i for i, (_, n) in enumerate(sys.hints)}
     ppos = {n: i for i, (_, n) in enumerate(sys.pins)}
-    g = _Gen(sys)
+    g = _Gen(sys, program)
     out = [_HEAD.replace("@THREADS@", str(THREADS))]
-    for op in sys.program:
+    for op in (sys.program if program is None else program):
         kind = op[0]
         if kind == "pin":
             _, idx, name = op
@@ -224,9 +224,18 @@ def _generate_regs(sys: System) -> str:
     return "\n".join(out)
 
 
-def _n_terms(sys: System) -> int:
+def _program(sys: System) -> list:
+    """``sys.program`` without the product rows a witness hook writes (``sys.witness_hooks``: objects with ``rows``,
+    the row indices they fill, and ``launch(cp, W_u32, l)`` run after the program on the same stream; hashchain.py's
+    Poseidon2 kernel).  Nothing in the program reads a hook's rows, so the order is immaterial."""
+    hooks = getattr(sys, "witness_hooks", None) or ()
+    skip = set().union(*(h.rows for h in hooks)) if hooks else set()
+    return [op for op in sys.program if not (op[0] == "prod" and op[1] in skip)]
+
+
+def _n_terms(program: list) -> int:
     n = 0
-    for op in sys.program:
+    for op in program:
         for x in op[2:]:
             if isinstance(x, Expr):
                 n += len(x.lin)
@@ -234,13 +243,13 @@ def _n_terms(sys: System) -> int:
 
 
 
-def _generate_tab(sys: System, tab: list) -> str:
+def _generate_tab(sys: System, tab: list, program: list | None = None) -> str:
     """Table mode (lane hash-relation): dense operands appended to ``tab`` (a list the caller keeps) as (row, coef);
     the program cut into ``CHUNK_OPS``-op __noinline__ chunks.  Plain W stores (no register rows)."""
     hpos = {n: i for i, (_, n) in enumerate(sys.hints)}
     ppos = {n: i for i, (_, n) in enumerate(sys.pins)}
     stmts: list[list[str]] = []          # one list of C statements per program op
-    for op in sys.program:
+    for op in (sys.program if program is None else program):
         kind = op[0]
         out: list[str] = []
         if kind == "pin":
@@ -287,10 +296,10 @@ def _generate_tab(sys: System, tab: list) -> str:
 
 
 
-def generate(sys: System, tab: list | None = None) -> str:
+def generate(sys: System, tab: list | None = None, program: list | None = None) -> str:
     """The kernel source: the register-row straight-line form, or -- when ``tab`` is given (programs over TAB_THRESHOLD
     terms, the hashed relations) -- the table-driven chunked form."""
-    return _generate_regs(sys) if tab is None else _generate_tab(sys, tab)
+    return _generate_regs(sys, program) if tab is None else _generate_tab(sys, tab, program)
 
 
 def available() -> bool:
@@ -307,8 +316,10 @@ class FusedWitness:
     def __init__(self, sys: System, device):
         import cupy as cp
         self.cp, self.sys, self.device = cp, sys, torch.device(device)
-        tab: list | None = [] if _n_terms(sys) > TAB_THRESHOLD else None
-        self.src = generate(sys, tab)
+        self.hooks = list(getattr(sys, "witness_hooks", None) or ())
+        program = _program(sys)
+        tab: list | None = [] if _n_terms(program) > TAB_THRESHOLD else None
+        self.src = generate(sys, tab, program)
         self.digest = hashlib.sha256(self.src.encode()).hexdigest()
         self.mod = cp.RawModule(code=self.src, options=("-std=c++17",))
         self.kernel = self.mod.get_function("witness_program")
@@ -332,11 +343,14 @@ class FusedWitness:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             stream = cp.cuda.ExternalStream(ts.cuda_stream)
-        args = (cp.asarray(pub_rows), cp.asarray(hints), cp.asarray(W).view(cp.uint32), np.int32(l))
+        W_u32 = cp.asarray(W).view(cp.uint32)
+        args = (cp.asarray(pub_rows), cp.asarray(hints), W_u32, np.int32(l))
         if self.tables is not None:
             args = args + self.tables
         with stream:
             self.kernel((-(-l // THREADS),), (THREADS,), args)
+            for h in self.hooks:
+                h.launch(cp, W_u32, l)
         return W
 
 
