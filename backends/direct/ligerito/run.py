@@ -33,6 +33,7 @@ from backends.direct.ligero.compile import P
 from backends.direct.ligero import relchain
 from backends.direct.ligero.relchain import K_VU
 
+from . import proof as proof_mod
 from . import prove as prove_mod
 from .layout import layout_for
 from .proof import Proof, Statement, read_key, read_proof, read_statement, sha256
@@ -122,6 +123,20 @@ def _mutate_proof(proof: Proof, what: str) -> Proof:
 
 PROOF_TAMPERS = ("opened row (round 1)", "opened row (last round)", "root 1", "root 2", "final vector", "Merkle sibling",
                  "PCS sumcheck message", "zero-check message", "claim value")
+
+
+def _reencode_framing(pb: bytes) -> bytes:
+    """The same proof with its (unabsorbed) framing JSON re-encoded: an explicit ``"t_pad":0`` without ZK padding (the
+    red-team's ``framing_t_pad_zero``), the keys reordered with it."""
+    r = proof_mod._R(pb)
+    r.take(8)
+    r.blob()
+    at = r.pos
+    fraw = r.blob()
+    fr = json.loads(fraw)
+    alt = json.dumps({"final_len": fr["final_len"], "sib_len": fr["sib_len"], "t_pad": fr.get("t_pad", 0)},
+                     separators=(",", ":")).encode()
+    return pb[:at] + len(alt).to_bytes(4, "little") + alt + pb[at + 4 + len(fraw):]
 
 
 def _stmt_with(stmt: Statement, **kw) -> Statement:
@@ -222,10 +237,11 @@ class Dump:
         (self.root / f"{stem}.coins").write_bytes(len(slots).to_bytes(4, "little") + b"".join(slots))
         return {"coins_file": f"{stem}.coins"}
 
-    def add(self, stem: str, stmt: Statement, proof: Proof, expect: str, verdict: tuple, coins: str, extra=None, seed: int = 1):
+    def add(self, stem: str, stmt: Statement, proof: Proof | bytes, expect: str, verdict: tuple, coins: str, extra=None,
+            seed: int = 1):
         if self.root is None:
             return
-        sb, pb = stmt.to_bytes(), proof.to_bytes()
+        sb, pb = stmt.to_bytes(), proof if isinstance(proof, bytes) else proof.to_bytes()
         (self.root / f"{stem}.stmt").write_bytes(sb)
         name = f"{stem}.lgto" if expect == "accept" else f"{stem}.lgto.neg"
         (self.root / name).write_bytes(pb)
@@ -299,9 +315,16 @@ def gate(args) -> int:
         failures += not ok2
         negs: list[tuple[str, tuple, Statement, Proof]] = []
 
-        def neg(name: str, stmt: Statement, proof: Proof, seed: int = 1, stage: str | None = None):
-            """``stage``: the reject reason must contain it (a forgery rejected earlier did not test what it names)."""
-            v = pv.verify(stmt, proof, make_coins(kind, seed))
+        def neg(name: str, stmt: Statement, proof: Proof | bytes, seed: int = 1, stage: str | None = None):
+            """``stage``: the reject reason must contain it (a forgery rejected earlier did not test what it names).
+            ``proof`` as bytes: a file the writer would not produce (read through ``read_proof`` as ``verify-dir`` does)."""
+            if isinstance(proof, bytes):
+                try:
+                    v = pv.verify(stmt, read_proof(proof), make_coins(kind, seed))
+                except ValueError as e:
+                    v = (False, f"unreadable: {e}", {})
+            else:
+                v = pv.verify(stmt, proof, make_coins(kind, seed))
             negs.append((name, v, stmt, proof, stage))
 
         def neg_prove(name: str, mutate=None, cheat=None, stmt=None, ypub=None, stage=None):
@@ -398,6 +421,12 @@ def gate(args) -> int:
             a_pad[0][pc, 0] = 1
             neg(f"statement operand a[{pc}][0] = 1 in a pad unit (non-canonical)", _stmt_with(bt.stmt, a=a_pad), res.proof,
                 stage="statement")
+        # (7) second encodings of the same proof / statement (red-team-ligerito-3 R3-2, R3-8): both readers must refuse them
+        neg("framing JSON re-encoded (same values; not absorbed)", bt.stmt, _reencode_framing(res.proof.to_bytes()),
+            stage="framing")
+        if pv.word_bytes < 4:
+            neg(f"statement words re-encoded at {2 * pv.word_bytes} bytes (same values)",
+                _stmt_with(bt.stmt, word_bytes=2 * pv.word_bytes), res.proof, stage="statement shape")
         for i, (name, (okn, whyn, _), st, pf, stage) in enumerate(negs):
             early = not okn and stage is not None and stage not in whyn
             log(f"  [{kind}] negative {name}: {'ACCEPTED (BUG)' if okn else f'REJECTED BEFORE {stage!r} (BUG)' if early else 'REJECTED'} {whyn}")
