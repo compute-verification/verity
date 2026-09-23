@@ -371,12 +371,33 @@ def compile_v2_unit(p: Params, chain: bool = False) -> System:
         for i, s in enumerate(nsels):
             ctx.boolean(f"nsel[{i}]", s)
         ctx.eq("nsel.onehot", sum(nsels[1:], nsels[0]), 1)
-        hid, fo = _hint(ctx, f"{tag}.hid"), _hint(ctx, f"{tag}.fo")
+        ts = range(pl.t_lo, pl.t_hi + 1)
+        hid = _hint(ctx, f"{tag}.hid")
         ctx.boolean("hid", hid)
-        fo_rows = ctx._bits(fo, nb - 1, "fo")
-        Mn = hid * 2 ** (nb - 1) + fo
-        ctx._learn(Mn, 0, 2**nb)
-        _pick(ctx, "Mn", nsels, [_norm_window(ctx, vbits, t, nb) for t in range(pl.t_lo, pl.t_hi + 1)], target=Mn)
+        if g + 1 < len(pl.groups):
+            # an intermediate group: the next group's alignment window reads the state's bits, so the fraction is committed
+            fo = _hint(ctx, f"{tag}.fo")
+            fo_rows = ctx._bits(fo, nb - 1, "fo")
+            Mn = hid * 2 ** (nb - 1) + fo
+            ctx._learn(Mn, 0, 2**nb)
+            _pick(ctx, "Mn", nsels, [_norm_window(ctx, vbits, t, nb) for t in ts], target=Mn)
+        else:
+            # the last group: no fraction bits.  M is picked from the nb-bit windows of v alone, the bits of v above the
+            # selected window are forced to zero (sel_t H_t = 0 with H_t their positive sum), and hid is picked from the
+            # window's top bit; so M = floor(v / 2^t) < 2^nb and f = M - hid 2^(nb-1) in [0, 2^(nb-1)) as integers, from
+            # v's bit rows and the one-hot alone
+            fo_rows = None
+            Mn = _hint(ctx, f"{tag}.M")
+            _pick(ctx, "Mn", nsels, [_window(ctx, vbits, -t, 0, nb) for t in ts], target=Mn)
+            for i, (t, sl) in enumerate(zip(ts, nsels)):
+                high = _window(ctx, vbits, -t, nb, 10**9, nb)
+                if high.lin:
+                    _zero(ctx, f"Mhi[{i}]", sl, high)
+            ctx.learn(Mn, 0, 2**nb)
+            _pick(ctx, "hid", nsels, [vbits[t + nb - 1] if 0 <= t + nb - 1 < len(vbits) else Expr(ctx) for t in ts], target=hid)
+            fo = Mn - hid * 2 ** (nb - 1)
+            ctx.learn(fo, 0, 2 ** (nb - 1))
+            last_norm = (nsels, vbits)
         t_sel = sum((t * s for t, s in zip(range(pl.t_lo + 1, pl.t_hi + 1), nsels[1:])), pl.t_lo * nsels[0])
         ctx._learn(t_sel, pl.t_lo, pl.t_hi + 1)
         e1 = E + t_sel + nb - p.width
@@ -404,7 +425,8 @@ def compile_v2_unit(p: Params, chain: bool = False) -> System:
         e_hat = e1 + z * p.floor - ze1
         ovfs.append((ovf_eff, sgn))
         final = (s_out, e1, hid, fo, z)
-        state = (s_out, e_hat, _bit_exprs(ctx, fo_rows) + [hid])
+        if fo_rows is not None:
+            state = (s_out, e_hat, _bit_exprs(ctx, fo_rows) + [hid])
 
     # --- pack, component-wise -----------------------------------------------------------------------------------------
     ctx.scope = "pack"
@@ -430,22 +452,28 @@ def compile_v2_unit(p: Params, chain: bool = False) -> System:
     if pl.fp8:
         y16 = ys * 2 ** (Y_PACK_BITS - 1) + yt * 2 ** (Y_PACK_BITS - 1 - p.acc_exp) + yf_hi
     else:
-        # --- epilogue: f32_to_bf16 (RN-even) on the components.  The kept high part of the fraction is a window of the
-        # output fraction's own bit rows (fo's), masked by ``live`` like the fraction itself; the round-up bit is
-        # carry = [lo + lsb >= 2^(L-1) + 1] = half AND NOT [rest + lsb = 0] on the unmasked bits (half = bit L-1 of fo, rest
-        # = fo mod 2^(L-1), lsb = bit L), the zero flag by the usual zero-product + inverse pair, masked by ``live`` at the end
-        # (a zero or infinite output does not round).  No remainder, no second bit decomposition.
+        # --- epilogue: f32_to_bf16 (RN-even) on the components.  The kept high part of the fraction, the half bit and the
+        # sticky sum are picked from the sum's bit rows with the normalisation one-hot like M itself (fhi = bits [L, nb-1) of
+        # the window, half = bit L-1, sticky = rest + lsb = bits below L-1 plus bit L: each an exact function of v's bits and
+        # the selected shift, so they need no consistency constraint among themselves); the round-up bit is
+        # carry = [lo + lsb >= 2^(L-1) + 1] = half AND NOT [sticky = 0], the zero flag by the usual zero-product + inverse
+        # pair; fhi and carry masked by ``live`` (a zero or infinite output does not round).  No remainder, no bit rows.
         ctx.scope = "epi"
         L = ACC_FRAC - p.frac
-        fbits = _bit_exprs(ctx, fo_rows)
-        fhi = live * _window(ctx, fbits, 0, L, ACC_FRAC, L)
+        nsels, vbits = last_norm
+        ts = range(pl.t_lo, pl.t_hi + 1)
+        fhi = live * _pick(ctx, "fhi", nsels, [_window(ctx, vbits, -t, L, nb - 1, L) for t in ts], hint="epi.fhi")
+        half = _pick(ctx, "half", nsels, [vbits[t + L - 1] if 0 <= t + L - 1 < len(vbits) else Expr(ctx) for t in ts],
+                     hint="epi.half")
+        sticky = _pick(ctx, "sticky", nsels,
+                       [_window(ctx, vbits, -t, 0, L - 1) + (vbits[t + L] if 0 <= t + L < len(vbits) else Expr(ctx)) for t in ts],
+                       hint="epi.sticky")                     # rest + lsb in [0, 2^(L-1)]
         hi = ys * 2 ** (p.word_bits - 1) + yt * 2**p.frac + fhi
-        sticky = _window(ctx, fbits, 0, 0, L - 1) + fbits[L]  # rest + lsb in [0, 2^(L-1)]
         zl = _hint(ctx, "epi.zl")
         ctx.boolean("zl", zl)
         _zero(ctx, "zl0", zl, sticky)
-        ctx.inverse_nonzero("zl1", sticky + zl)               # zl = [rest + lsb = 0]
-        carry = live * ctx.product(fbits[L - 1], 1 - zl)
+        ctx.inverse_nonzero("zl1", sticky + zl)               # zl = [sticky = 0]
+        carry = live * ctx.product(half, 1 - zl)
         y16 = hi + carry
     ctx.sys.outputs["y16"] = y16
     names = {n: i for i, n in ctx.sys.hints}
