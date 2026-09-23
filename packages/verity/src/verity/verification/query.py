@@ -31,17 +31,17 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import NamedTuple, Protocol, runtime_checkable
 
 __all__ = ["ValueRef", "Call", "Program", "VerificationUnit", "Query", "Partition", "partition_by", "unit_boundary",
            "boundary_values", "Policy", "RequiredValues", "required_values", "admissibility", "PartitionError"]
 
 
-@dataclass(frozen=True, order=True)
-class ValueRef:
+class ValueRef(NamedTuple):
     """One logical Value: the ``port`` of producer ``call``.  ``call`` is a Call id of the Program, or the id of one of its
     prescribed inputs (``Program.inputs`` says which); ``port`` names the output collection it leaves by (``"out"`` for a
-    Definition returning one collection, ``"0"``/``"1"``/... for the slots of a tuple, a field name for a record input)."""
+    Definition returning one collection, ``"0"``/``"1"``/... for the slots of a tuple, a field name for a record input).
+    A tuple, so millions of them hash and compare at C speed (a derived request Program has 10^6 Calls)."""
 
     call: int
     port: str
@@ -186,21 +186,26 @@ def boundary(P: Program, Q: Partition) -> Boundary:
     """One pass over the Program: the crossing Values of ``Q(P)`` with their producing and reading units."""
     units = tuple(Q(P))
     owner = _check_partition(P, units)
-    by_id, _inputs = _index(P)
+    _index(P)
     produced_in: dict[ValueRef, str | None] = {}
     read_by: dict[ValueRef, list[str]] = {}
+    owner_get = owner.get
     for c in P.calls:
         me = owner[c.id]
         for v in c.reads:
-            if v.call in by_id and owner[v.call] == me:
+            producer = owner_get(v[0])                   # None: a prescribed input (never interior)
+            if producer == me:
                 continue                                 # interior to the unit: not a boundary Value
-            produced_in.setdefault(v, owner.get(v.call))
-            rb = read_by.setdefault(v, [])
-            if me not in rb:
+            rb = read_by.get(v)
+            if rb is None:
+                produced_in[v] = producer
+                read_by[v] = [me]
+            elif me not in rb:
                 rb.append(me)
     for v in P.outputs:                                  # a Program output leaves its unit whoever reads it
-        produced_in.setdefault(v, owner.get(v.call))
-        read_by.setdefault(v, [])
+        if v not in read_by:
+            produced_in[v] = owner_get(v[0])
+            read_by[v] = []
     return Boundary(frozenset(produced_in), produced_in, {v: tuple(r) for v, r in read_by.items()}, units, owner)
 
 

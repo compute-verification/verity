@@ -155,21 +155,19 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
             f = record_fields.get(v)
             if f is not None:
                 reads[m].add(f)
-    groups: dict[frozenset[str], list[str]] = defaultdict(list)
+    groups: dict[tuple[frozenset[str], tuple], list[str]] = defaultdict(list)
     for m, fs in reads.items():
         if fs and m:
-            groups[frozenset(fs)].append(m)
+            # keyed by (parameters read, body signature): a body with another signature reading the same parameter is a different
+            # logical producer (a tied embedding read by the logits Gemm), never an invocation of this one
+            groups[(frozenset(fs), tuple(sorted(sig[m].items())))].append(m)
     out: dict[str, tuple[str, int]] = {}
     faults: list[str] = []
-    for fs, mods in groups.items():
+    for (fs, _sig), mods in groups.items():
         if len(mods) < 2:
             continue
         mods = sorted(mods, key=first.__getitem__)
         canon = [m for m in mods if any(under(f, m) for f in fs)]
-        sigs = {tuple(sorted(sig[m].items())) for m in mods}
-        if len(sigs) != 1:
-            # different logical producers sharing a parameter (a tied embedding read by the logits Gemm): not one instance
-            continue
         if len(canon) != 1:
             faults.append(f"shared parameters {sorted(fs)[:2]} read by {len(mods)} identical bodies with {len(canon)} registered owner(s): not aliased")
             continue

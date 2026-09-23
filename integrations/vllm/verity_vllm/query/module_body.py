@@ -1,8 +1,8 @@
 """`Q_module_body_v1`: units = module BODIES.
 
 A unit is the maximal set of Calls whose recorded owning module path (the correspondence's `module`) is identical.  A non-leaf
-module's own Calls -- the ones its forward issues itself, not through a child -- form their own body (Gemma2Model's `embed *
-normalizer` under `model`, beside the bodies of `model.layers.0.input_layernorm`, ...); Calls with no module form the root body
+module's own Calls -- the ones its forward issues itself, not through a child -- form their own body (a decoder's own `embed *
+scale` under `model`, beside the bodies of `model.layers.0.input_layernorm`, ...); Calls with no module form the root body
 (unit id "").  Nothing about a module's class, name or family enters: two modules with identical paths are one body because the
 correspondence says the same module issued their Calls.
 
