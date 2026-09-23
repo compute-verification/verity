@@ -1,12 +1,14 @@
 //! ligerito-verify: the independent verifier for the Ligerito backend.
 //!
 //! ~~~text
-//! ligerito-verify verify --proof X.proof [--coins X.coins] [--label L] [--json out.json] [--reps R] [--target-bits B]
+//! ligerito-verify verify --proof X.proof [--coins X.coins] [--label L] [--json out.json] [--reps R] [--target-bits B] [--n-proofs N]
 //!     # one PCS proof: LGRTOPV0 (statement embedded) or proto/pcs.py bytes (point in X.z); --coins = the
 //!     # verifier's coins of a live session (u32 LE length + bytes each; interactive replay; default: Fiat-Shamir
 //!     # diagnostic with transcript label L, default "ligerito-proto/v1").  The proof's own soundness figure (paper
-//!     # (17) recomputed from its parameters) must be <= 2^-B, default B = 128; --target-bits 0 waives it (toys)
-//! ligerito-verify batch --dir DIR [--jobs N] [--json out.json] [--label L] [--target-bits B]
+//!     # (17) recomputed from its parameters) must be <= 2^-(B + log2 N), default B = 128, N = 1 (N = the number of
+//!     # proofs the job was split into: the batch union bound); --target-bits 0 waives it (toys)
+//! ligerito-verify batch --dir DIR [--jobs N] [--json out.json] [--label L] [--target-bits B] [--n-proofs N]
+//!     # --n-proofs (else DIR/manifest.json "n_proofs"): the job's proof count; exactly N proofs must be accepted
 //!     # every DIR/*.proof (with DIR/<name>.z / <name>.coins when present) must verify and every DIR/*.proof.neg must
 //!     # be rejected -- a JSON *.proof / *.proof.neg is a ref.py (ligerito-ref/v2) fixture list and the rule applies
 //!     # to every entry; every entry of DIR/*.ref.json (ref.py fixtures; tampers in DIR/<name>.ref.neg.json) must get
@@ -122,6 +124,12 @@ fn manifest_verdicts(dir: &Path) -> Vec<(String, bool, String)> {
             Some((name, acc, why))
         })
         .collect()
+}
+
+/// DIR/manifest.json's `"n_proofs"` (an object manifest), the number of proofs the job was split into.
+fn manifest_n_proofs(dir: &Path) -> Option<usize> {
+    let text = std::fs::read_to_string(dir.join("manifest.json")).ok()?;
+    ligerito_verify::json::parse(&text).ok()?.get("n_proofs")?.as_usize()
 }
 
 fn verify_file(proof_path: &Path, coins_path: Option<&Path>, label: &[u8], reps: usize) -> Verdict {
@@ -290,16 +298,26 @@ fn main() {
     let reps: usize = arg(&args, "--reps").map(|s| s.parse().expect("--reps")).unwrap_or(1);
     // soundness target enforced by `verify` (per proof) and `batch` (union bound); 0 waives it (toy fixtures, conformance runs)
     let target_bits: f64 = arg(&args, "--target-bits").map(|s| s.parse().expect("--target-bits")).unwrap_or(128.0);
+    // red-team F5: a job split into N proofs (Ligerito proofs carry no n_proofs) -- `verify` then needs 2^-(B + log2 N)
+    // per proof, `batch` needs exactly N accepted proofs and their union <= 2^-B
+    let n_proofs_arg: Option<usize> = arg(&args, "--n-proofs").map(|s| s.parse().expect("--n-proofs"));
+    assert!(n_proofs_arg != Some(0), "--n-proofs must be positive");
     match cmd {
         "verify" => {
             let proof = PathBuf::from(arg(&args, "--proof").expect("--proof FILE"));
             let coins = arg(&args, "--coins").map(PathBuf::from);
             let mut v = verify_file(&proof, coins.as_deref(), label.as_bytes(), reps);
-            // the proof's own soundness figure (recomputed from its parameters, never prover-supplied) must meet the target
+            // the proof's own soundness figure (recomputed from its parameters, never prover-supplied) must meet the target,
+            // union-bounded over the job's --n-proofs
+            let per_proof_bits = target_bits + (n_proofs_arg.unwrap_or(1) as f64).log2();
             if let (true, Some(r)) = (v.accepted, v.report.as_ref()) {
-                if target_bits > 0.0 && r.soundness_log2 > -target_bits {
+                if target_bits > 0.0 && r.soundness_log2 > -per_proof_bits {
                     v.accepted = false;
-                    v.reason = format!("verifies, but its soundness 2^{:.2} misses the target 2^-{target_bits} (--target-bits 0 to waive)", r.soundness_log2);
+                    v.reason = format!(
+                        "verifies, but its soundness 2^{:.2} misses the target 2^-{per_proof_bits:.3} (2^-{target_bits} over {} proof(s); --target-bits 0 to waive)",
+                        r.soundness_log2,
+                        n_proofs_arg.unwrap_or(1)
+                    );
                 }
             }
             let js = verdict_json(&v);
@@ -408,11 +426,20 @@ fn main() {
             if target_bits > 0.0 && union_log2 > -target_bits {
                 problems.push(format!("union soundness 2^{union_log2:.2} misses the target 2^-{target_bits} (--target-bits 0 to waive)"));
             }
+            // the job's proof count (--n-proofs, else DIR/manifest.json "n_proofs"): exactly that many proofs accepted
+            let n_expected = n_proofs_arg.or_else(|| manifest_n_proofs(&dir));
+            let n_acc = verdicts.iter().filter(|v| v.accepted).count();
+            if let Some(n) = n_expected {
+                if n_acc != n {
+                    problems.push(format!("batch: n_proofs mismatch ({n_acc} proofs accepted, the job has n_proofs = {n})"));
+                }
+            }
             let all = problems.is_empty();
             let js = format!(
-                "{{\"dir\":{},\"accepted\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_ref_fixtures\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
+                "{{\"dir\":{},\"accepted\":{},\"target_bits\":{target_bits},\"n_proofs_expected\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_ref_fixtures\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
                 json_str(&dir.display().to_string()),
                 all,
+                n_expected.map(|n| n.to_string()).unwrap_or_else(|| "null".into()),
                 files.iter().filter(|f| f.1).count() + n_json_pos,
                 files.iter().filter(|f| !f.1).count() + n_json_neg,
                 n_ref,
