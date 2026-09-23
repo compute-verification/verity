@@ -20,6 +20,8 @@ KINDS: dict[str, str] = {
     "proof/v1": "payload = proof bytes; meta {statement_digest, backend, params}",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
     "run-files/v1": "the files a result.json pointed at, as one tree",
+    "labels-backup/v1": "a tarball of the local labels/ directory (every assertion file) -- interim durability until push carries labels; "
+                        "meta {targets, files, taken_utc, host}",
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
