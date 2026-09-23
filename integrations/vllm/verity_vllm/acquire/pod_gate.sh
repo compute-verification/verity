@@ -60,9 +60,12 @@ EOF
   else
     echo "[pod_gate] $ROW: runtime tree (meta) FAILED (see runtime_tree.log)"; tail -n 8 "$O/runtime_tree.log"; RC=1; continue
   fi
-  # 3. the gate
+  # 3. the gate (--programs-root: the owning modules come off the row's request Programs' runtime-correspondence/v1 records when the Build
+  #    carries them, else off the manifest's v1 annotations -- the source is in acquisition_plan.json / site_compare.json `correspondence`;
+  #    AGAINST=<dir of acquisition_plan.json per row>: compare this plan Value by Value with that run's -> plan_compare.json)
   T0=$(date +%s)
-  if $PY -m verity_vllm.acquire.gate --manifest "$MAN" --runtime "$O/runtime_tree.json" --out "$O" --row-id "$ROW" > "$O/gate.log" 2>&1; then
+  AG=(); [ -n "${AGAINST:-}" ] && [ -f "$AGAINST/$ROW/acquisition_plan.json" ] && AG=(--against "$AGAINST/$ROW/acquisition_plan.json")
+  if $PY -m verity_vllm.acquire.gate --manifest "$MAN" --runtime "$O/runtime_tree.json" --out "$O" --row-id "$ROW" --programs-root "$RD" ${AG[@]+"${AG[@]}"} > "$O/gate.log" 2>&1; then
     echo "[pod_gate] $ROW: GATE PASS in $(( $(date +%s) - T0 )) s"
   else
     echo "[pod_gate] $ROW: GATE rc=$? in $(( $(date +%s) - T0 )) s"; RC=1

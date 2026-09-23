@@ -3,9 +3,11 @@
     acquisition_plan(required_value_manifest, correspondence) -> AcquisitionPlan       serialised as `acquisition-plan/v1`, digested
 
 Inputs are STRUCTURE only: the required-value manifest (`verity_capture.commit.required_manifest`: one identity per required Value,
-`op_path` / `output_member` / `family` / `promoted` / `consumers`) and the runtime correspondence (`correspondence.AnnotationCorrespondence`:
-`owning_module`, `return_slot`, `arg_slot` + the runtime module tree).  Nothing here reads a module CLASS table to decide a site; the v1
-tables are consulted only to name RESIDUALS (`plan.residuals`): v1 hooks the plan cannot derive from structure yet, each with its table.
+`op_path` / `output_member` / `family` / `promoted` / `consumers`) and the runtime correspondence (`correspondence.AcquireCorrespondence`:
+`owning_module`, `return_slot`, `arg_slot` over the `runtime-correspondence/v1` record when the Build carries it, else the manifest's
+v1-annotation reading -- `source` recorded in the plan's `correspondence` block + the runtime module tree).  Nothing here reads a module
+CLASS table to decide a site; the v1 tables are consulted only to name RESIDUALS (`plan.residuals`): v1 hooks the plan cannot derive from
+structure yet, each with its table.
 
 Sites (`SITE_KINDS`):
   producer_output   forward hook on the owning module, return slot = the Value's port (`out` = the whole return, `k` = tuple slot k)
@@ -30,7 +32,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from verity_vllm.acquire.correspondence import RUNNER_PATH, AnnotationCorrespondence, ReturnSlot, RuntimeTree
+from verity_vllm.acquire.correspondence import RUNNER_PATH, AcquireCorrespondence, ReturnSlot, RuntimeTree
+
+AnnotationCorrespondence = AcquireCorrespondence
 
 SCHEMA = "acquisition-plan/v1"
 SITE_KINDS = ("producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "launch_proxy", "registered_input", "analytic_table", "prescribed")
@@ -119,6 +123,7 @@ class AcquisitionPlan:
     values: list[ValuePlan]
     residuals: list[Residual] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    correspondence: dict[str, Any] = field(default_factory=dict)   # provenance: which reader gave the owning modules (`AcquireCorrespondence.provenance()`)
 
     @property
     def unsupported(self) -> list[ValuePlan]:
@@ -151,7 +156,7 @@ class AcquisitionPlan:
     def body(self) -> dict[str, Any]:
         by_kind = self.sites_by_kind()
         return {"schema": SCHEMA, "program_digest": self.program_digest, "manifest_digest": self.manifest_digest, "runtime_source": self.runtime_source,
-                "policy": POLICY, "site_kinds": list(SITE_KINDS), "hook_kinds": list(HOOK_KINDS), "complete": self.complete,
+                "correspondence": dict(self.correspondence), "policy": POLICY, "site_kinds": list(SITE_KINDS), "hook_kinds": list(HOOK_KINDS), "complete": self.complete,
                 "counts": {"values": len(self.values), "identities": sum(v.identities for v in self.values), "chosen": len(self.values) - len(self.unsupported),
                            "unsupported": len(self.unsupported), "sites": len(self.chosen_sites()), "hooks": len(self.hooks()), "residuals": len(self.residuals),
                            "sites_by_kind": {k: len(v) for k, v in sorted(by_kind.items())}},
@@ -176,13 +181,17 @@ class AcquisitionPlan:
         return d["plan_digest"]
 
 
-PROVENANCE_KEYS = ("plan_digest", "runtime_source")   # not content: where the runtime tree came from (meta instantiation vs a live engine)
+#: not content: where the runtime tree came from (meta instantiation vs a live engine) and which reader gave the owning modules (the
+#: `runtime-correspondence/v1` record vs the v1 annotations): the same Program, manifest and tree must give the same digest under both
+PROVENANCE_KEYS = ("plan_digest", "runtime_source", "correspondence")
 
 
 def plan_digest(body: Mapping[str, Any]) -> str:
     """sha256 over the canonical JSON of the plan body (sorted keys, compact separators), the provenance keys excluded: the same Program,
     manifest and runtime module tree give the same digest whether the tree was read off the meta-instantiated model or a live engine
-    (the two agreed Value for Value on the reference row; only `runtime_source` differed)."""
+    (the two agreed Value for Value on the reference row; only `runtime_source` differed), and whether the owning modules were read off
+    the correspondence record or the v1 annotations (`correspondence.source`; a Value whose site differs between the two is a finding
+    `gate.compare_plans` lists by Value)."""
     doc = {k: v for k, v in body.items() if k not in PROVENANCE_KEYS}
     return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
@@ -238,7 +247,7 @@ def _slot_label(rs: ReturnSlot | None) -> str:
     return "in" if rs is None else rs.label()
 
 
-def sites_of(v: ValuePlan, corr: AnnotationCorrespondence) -> tuple[list[Site], list[dict[str, str]]]:
+def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], list[dict[str, str]]]:
     """The legal sites of one Value class and the refused candidates (each with its reason).  Structure only."""
     rt: RuntimeTree = corr.runtime
     call = {"op_path": v.op_path, "output_member": v.output_member}
@@ -414,7 +423,27 @@ def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, 
 # the plan
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-def acquisition_plan(manifest: Mapping[str, Any], correspondence: AnnotationCorrespondence, *, tables: Mapping[str, Any] | None = None,
+def confirm_modules(values: Iterable[ValuePlan], corr: AcquireCorrespondence) -> dict[str, Any]:
+    """Under `source = correspondence`: every module-site Value (a module's output / input, its consumers) checked against the record --
+    its owning module is a module the record owns Calls under (`confirmed`) or not (`unconfirmed`, listed by Value: a finding, the
+    manifest's op_path stands).  Under the fallback: nothing to confirm against (`{}` counts, `applicable: False`)."""
+    if corr.source != "correspondence":
+        return {"applicable": False, "confirmed": 0, "unconfirmed": []}
+    confirmed = 0
+    unconfirmed: list[dict[str, str]] = []
+    for v in values:
+        if v.family not in MODULE_OUTPUT_FAMILIES and v.family not in INPUT_FAMILIES:
+            continue
+        module = corr.owning_module({"op_path": v.op_path, "output_member": v.output_member})
+        for m, role in [(module, "owning module")] + [(c, f"consumer {i}") for i, c in enumerate(v.consumers)]:
+            if corr.confirmed(m):
+                confirmed += 1
+            else:
+                unconfirmed.append({"value": v.value_id, "module": m, "role": role, "why": "not a module the correspondence record owns Calls under"})
+    return {"applicable": True, "confirmed": confirmed, "unconfirmed": unconfirmed}
+
+
+def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorrespondence, *, tables: Mapping[str, Any] | None = None,
                      with_residuals: bool = True, padding_identities: Iterable[Mapping[str, Any]] = ()) -> AcquisitionPlan:
     values = value_classes(manifest, padding_identities)
     for v in values:
@@ -424,6 +453,8 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AnnotationCorr
         v.chosen = chosen
         v.status = "chosen" if chosen is not None else "unsupported"
         v.why = why if chosen is not None else ("no legal site: " + "; ".join(f"{r['kind']} at {r['module']}/{r['slot']}: {r['why']}" for r in refused))
+    prov = correspondence.provenance()
+    prov["modules"] = confirm_modules(values, correspondence)
     rt = correspondence.runtime
     if with_residuals:
         tabs = tables if tables is not None else _v1_tables()
@@ -438,7 +469,7 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AnnotationCorr
              "the plan's runtime sites are for the executed steps"]
     pdig = str(manifest.get("program_digest") or "")
     mdig = str(manifest.get("manifest_digest") or "")
-    return AcquisitionPlan(program_digest=pdig, manifest_digest=mdig, runtime_source=rt.source, values=values, residuals=residuals, notes=notes)
+    return AcquisitionPlan(program_digest=pdig, manifest_digest=mdig, runtime_source=rt.source, values=values, residuals=residuals, notes=notes, correspondence=prov)
 
 
 def load_plan(path: str | Path) -> dict[str, Any]:

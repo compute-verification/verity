@@ -1,31 +1,42 @@
-"""Runtime correspondence for the acquisition plan: a TINY adapter over today's annotations.
+"""Runtime correspondence for the acquisition plan: ONE reader, an explicit fallback.
 
-Today a Program Call's module path and fx node are recovered from its instance name (`required_manifest.split_name(name)[0]`, then
-`collector_path` under the export wrapper prefix) and the manifest identity row already carries them as `op_path` / `output_member`.
-The parallel correspondence lane adds a `correspondence` namespace with exactly the three functions below; this module has the same
-three names and signatures so the swap is one import (`from verity_vllm.correspondence import ...` for `AnnotationCorrespondence`).
+The plan asks three things of a required Value: `owning_module(call)` (the runtime module path whose forward produced / consumes it),
+`return_slot(call, port)` (where on that module's return it sits: the whole return `out`, tuple slot `k`, an attribute of the runner's
+`SamplerOutput`) and `arg_slot(call, i)` (the i-th positional argument of the module's forward).  `call` is a required-value manifest
+identity row (`op_path`, `output_member`, ...), a Program instance row (`name`, `spec`[, `i`]) or `{"call": k[, "program": label]}`.
 
-    owning_module(call) -> str            the runtime module path (`named_modules()` name) that owns the Call
-    return_slot(call, port) -> ReturnSlot  where the Call's output `port` is on the module's return: the whole return (`out`), tuple slot k
-                                          (`0`, `1`), an attribute of a returned object (`sampled_token_ids`), or None (the port is no return)
-    arg_slot(call, i) -> ArgSlot           the i-th positional argument of the module's forward
+WHERE the owning module comes from -- `source`:
 
-`call` is a required-value manifest identity row (dict: `op_path`, `output_member`, ...) or a Program instance row (dict: `name`, `spec`).
-The RUNTIME side is `RuntimeTree`: the built model's module paths with their class MRO names + buffers + the runner's facts, taken from a
-live engine (`runtime_tree_of`) or from a model instantiated on the meta device as Build does; serialisable so the CPU gate can run off-pod.
-No model or family name appears here: every fact comes from the tree or the manifest.
+  correspondence   the `runtime-correspondence/v1` record the frontend emitted into `annotations["correspondence"]` of the Build's request
+                   Program descriptors (`verity_vllm.runtime_correspondence.load_correspondence`; one table per component Program).  A
+                   Value's module path is the record's owning module (`occurrences[occ].module`, the source module's own vocabulary)
+                   mapped to the implementation's `named_modules()` name by the manifest's `wrapper_prefix` (`collector_path`) and
+                   `op_path_aliases` -- the SAME mapping the manifest applied to the naming hints.
+  v1_annotations   a v1-frontend Build (no such namespace): the identity row's `op_path` as `required_manifest` read it off the naming
+                   hints (`annotations["node_hints"]`: `split_name(name)[0]` -> `collector_path`) -- what this adapter read before the
+                   record existed.  Chosen ONLY when the record is absent, and recorded (`AcquisitionPlan.correspondence`), never silent.
+
+Under `correspondence` every module-site Value is CONFIRMED against the record (its op_path is a module the record owns Calls under) or
+listed `unconfirmed` in the plan -- a finding, not a changed site: the manifest's op_path stands either way, so the plan's content is the
+same under both sources and the plan digest (which excludes the `correspondence` provenance block) says whether anything changed.
+
+The runtime side is `runtime_tree.RuntimeTree` (module-tree facts: which modules the runtime HAS; re-exported here for callers).
 """
 from __future__ import annotations
 
+import gzip
 import json
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from verity_capture.commit.required_manifest import collector_path, split_name
+from verity_vllm.acquire.runtime_tree import RUNNER_PATH, RUNTIME_TREE_SCHEMA, RuntimeTree, mro_names, runtime_tree_from_paths, runtime_tree_of
+from verity_vllm.runtime_correspondence import NAMESPACE, SCHEMA, RuntimeCorrespondence, correspondence_digest, load_correspondence
 
-RUNTIME_TREE_SCHEMA = "verity-vllm/runtime-tree/v1"
-RUNNER_PATH = "runner.sampler"          # v1's path of the sampler's Values (the runner's `sample()` return, not a module hook)
+SOURCES = ("correspondence", "v1_annotations")
+FALLBACK_READ = "the identity row's op_path: required_manifest.split_name(annotations.node_hints)[0] -> collector_path(wrapper_prefix) -> op_path_aliases"
 
 
 @dataclass(frozen=True)
@@ -49,92 +60,105 @@ class ArgSlot:
         return f"in[{self.index}]"
 
 
-@dataclass
-class RuntimeTree:
-    """The runtime's module tree: `modules[path] = [class names of the MRO]`, `buffers` = named buffers, `runner` facts."""
-    modules: dict[str, list[str]] = field(default_factory=dict)
-    buffers: list[str] = field(default_factory=list)
-    runner: dict[str, Any] = field(default_factory=dict)      # {"sample": bool, "sampler_module": bool, "source": str}
-    source: str = ""
-
-    def has_module(self, path: str) -> bool:
-        return path in self.modules
-
-    def classes(self, path: str) -> set[str]:
-        return set(self.modules.get(path) or ())
-
-    def class_name(self, path: str) -> str | None:
-        m = self.modules.get(path)
-        return m[0] if m else None
-
-    def to_json(self) -> dict[str, Any]:
-        return {"schema": RUNTIME_TREE_SCHEMA, "source": self.source, "runner": dict(self.runner), "modules": {k: list(v) for k, v in sorted(self.modules.items())},
-                "buffers": sorted(self.buffers)}
-
-    @classmethod
-    def from_json(cls, d: Mapping[str, Any]) -> "RuntimeTree":
-        if d.get("schema") not in (None, RUNTIME_TREE_SCHEMA):
-            raise ValueError(f"runtime tree schema {d.get('schema')!r} != {RUNTIME_TREE_SCHEMA}")
-        return cls(modules={str(k): [str(c) for c in v] for k, v in (d.get("modules") or {}).items()}, buffers=[str(b) for b in (d.get("buffers") or [])],
-                   runner=dict(d.get("runner") or {}), source=str(d.get("source") or ""))
-
-    @classmethod
-    def load(cls, path: str | Path) -> "RuntimeTree":
-        return cls.from_json(json.loads(Path(path).read_text()))
-
-    def save(self, path: str | Path) -> None:
-        Path(path).write_text(json.dumps(self.to_json(), indent=1) + "\n")
-
-
-def mro_names(m: Any) -> list[str]:
-    return [c.__name__ for c in type(m).__mro__]
-
-
-def runtime_tree_of(model: Any, runner: Any = None, *, source: str = "live") -> RuntimeTree:
-    """The tree of a built `torch.nn.Module` (+ the engine's runner).  The root module (`named_modules()` name "") is kept under its
-    name "" so a Value produced in the root's forward body has an owning module in the tree."""
-    mods = {name: mro_names(m) for name, m in model.named_modules()}
-    bufs = [name for name, _b in model.named_buffers()]
-    r: dict[str, Any] = {"sample": bool(runner is not None and hasattr(runner, "sample")), "sampler_module": False, "source": "engine runner" if runner is not None else "no runner"}
-    if runner is not None:
-        smp = getattr(runner, "sampler", None)
+def read_program_correspondence(program_dir: str | Path) -> tuple[RuntimeCorrespondence | None, str | None, str | None]:
+    """The `runtime-correspondence/v1` table of one derive_step output dir, (table, digest, problem).  `result.json:program.correspondence_digest`
+    is the cheap presence test (the frontend that emits the record records its digest there): a Build without it is a v1-frontend Build
+    -> (None, None, None) without touching the descriptor.  With it, the descriptor's record is loaded and its digest checked against the
+    recorded one (a mismatch is a `problem`, the table still returned)."""
+    d = Path(program_dir)
+    res_p = d / "result.json"
+    recorded = None
+    if res_p.is_file():
         try:
-            import torch
-            r["sampler_module"] = isinstance(smp, torch.nn.Module)
-        except ImportError:                                                        # pragma: no cover
-            r["sampler_module"] = smp is not None
-        if r["sampler_module"]:
-            r["sampler_class"] = mro_names(smp)
-    return RuntimeTree(modules=mods, buffers=bufs, runner=r, source=source)
+            recorded = ((json.loads(res_p.read_text()).get("program") or {}).get("correspondence_digest"))
+        except (OSError, ValueError) as e:  # noqa: PERF203
+            return None, None, f"{res_p}: unreadable ({e})"
+        if recorded is None:
+            return None, None, None
+    desc_p = d / "descriptor.json.gz"
+    if not desc_p.is_file():
+        desc_p = d / "descriptor.json"
+    if not desc_p.is_file():
+        return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but no descriptor is beside it"
+    opener = gzip.open if desc_p.suffix == ".gz" else open
+    with opener(desc_p, "rt") as f:
+        desc = json.load(f)
+    doc = (desc.get("annotations") or {}).get(NAMESPACE)
+    if doc is None:
+        return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but the descriptor carries no {NAMESPACE!r} annotation"
+    digest = correspondence_digest(doc)
+    problem = None if recorded in (None, digest) else f"{d}: correspondence_digest {digest[:16]} != result.json's {str(recorded)[:16]}"
+    return load_correspondence(doc), digest, problem
 
 
-def runtime_tree_from_paths(paths: Mapping[str, Iterable[str]], *, buffers: Iterable[str] = (), runner: Mapping[str, Any] | None = None, source: str = "synthetic") -> RuntimeTree:
-    """A tree from `{module path: [class names]}` (tests, fixtures)."""
-    return RuntimeTree(modules={str(k): [str(c) for c in v] for k, v in paths.items()}, buffers=[str(b) for b in buffers], runner=dict(runner or {}), source=source)
+class AcquireCorrespondence:
+    """`owning_module` / `return_slot` / `arg_slot` for the plan, over the canonical record when the Build carries it (`tables`), else the
+    manifest's v1-annotation reading; plus the runtime tree and the (optional) in-place facts.
 
-
-class AnnotationCorrespondence:
-    """`owning_module` / `return_slot` / `arg_slot` over today's annotations, plus the runtime tree and the (optional) in-place facts.
-
-    `inplace_facts`: {module path: {"mutates_input": bool, "output_mutated_after": bool}} -- alias / in-place facts the annotations may
-    carry one day; today none do, so a consumer-input site's lifetime is `unknown` unless a fact says the input is left unmutated."""
+    `tables`: {program label: RuntimeCorrespondence} -- one per component request Program of the manifest (a global manifest has one per
+    request shape).  `inplace_facts`: {module path: {"mutates_input": bool, "output_mutated_after": bool}} -- alias / in-place facts;
+    today none are read, so a consumer-input site's lifetime is `unknown` unless a fact says the input is left unmutated."""
 
     def __init__(self, runtime: RuntimeTree, *, wrapper_prefix: str = "", aliases: Mapping[str, Any] | None = None,
-                 inplace_facts: Mapping[str, Mapping[str, Any]] | None = None) -> None:
+                 inplace_facts: Mapping[str, Mapping[str, Any]] | None = None, tables: Mapping[str, RuntimeCorrespondence] | None = None,
+                 digests: Mapping[str, str] | None = None, absent: Iterable[str] = (), problems: Iterable[str] = ()) -> None:
         self.runtime = runtime
         self.wrapper_prefix = wrapper_prefix
         self.aliases = dict(aliases or {})                      # program op_path -> [canonical op_path, invocation] (`op_path_aliases`)
         self.inplace_facts = {str(k): dict(v) for k, v in (inplace_facts or {}).items()}
+        self.tables: dict[str, RuntimeCorrespondence] = dict(tables or {})
+        self.digests: dict[str, str] = dict(digests or {})
+        self.absent: list[str] = list(absent)
+        self.problems: list[str] = list(problems)
+        self.source = "correspondence" if self.tables else "v1_annotations"
+        # collector path -> the Program module paths (per table) the record owns Calls under
+        self._owned: dict[str, set[tuple[str, str]]] = {}
+        for label, t in self.tables.items():
+            for m in t.modules():
+                op = collector_path(m, wrapper_prefix)
+                alias = self.aliases.get(op)
+                self._owned.setdefault(str(alias[0]) if alias else op, set()).add((label, m))
+
+    # -- construction from a Build --------------------------------------------------------------------------------------------------
+
+    @classmethod
+    def from_programs(cls, runtime: RuntimeTree, programs: Iterable[str | Path], *, wrapper_prefix: str = "", aliases: Mapping[str, Any] | None = None,
+                      inplace_facts: Mapping[str, Mapping[str, Any]] | None = None) -> "AcquireCorrespondence":
+        """Read the record of every component Program dir.  `source` is `correspondence` only when EVERY program carries it; a Build with
+        the record on some components and not others falls back as a whole (uniform decision), the components lacking it listed `absent`."""
+        tables: dict[str, RuntimeCorrespondence] = {}
+        digests: dict[str, str] = {}
+        absent: list[str] = []
+        problems: list[str] = []
+        for p in programs:
+            label = os.path.basename(os.path.normpath(str(p)))
+            t, dg, prob = read_program_correspondence(p)
+            if prob:
+                problems.append(prob)
+            if t is None:
+                absent.append(label)
+            else:
+                tables[label] = t
+                digests[label] = dg or ""
+        if absent and tables:
+            problems.append(f"{len(absent)} of {len(absent) + len(tables)} component Programs carry no {SCHEMA} record: the plan falls back to v1_annotations as a whole")
+            tables, digests = {}, {}
+        return cls(runtime, wrapper_prefix=wrapper_prefix, aliases=aliases, inplace_facts=inplace_facts, tables=tables, digests=digests, absent=absent, problems=problems)
 
     # -- the three functions of the correspondence namespace ------------------------------------------------------------------
 
     def owning_module(self, call: Mapping[str, Any]) -> str:
         if "op_path" in call:
             op = str(call["op_path"])
+        elif "call" in call and self.tables:
+            label = str(call.get("program") or next(iter(self.tables)))
+            op = collector_path(self.tables[label].owning_module(int(call["call"])), self.wrapper_prefix)
+        elif "i" in call and "name" in call and len(self.tables) == 1:
+            op = collector_path(next(iter(self.tables.values())).owning_module(int(call["i"])), self.wrapper_prefix)
         elif "name" in call:
             op = collector_path(split_name(str(call["name"]))[0], self.wrapper_prefix)
         else:
-            raise KeyError("call carries neither op_path nor name")
+            raise KeyError("call carries neither op_path, call nor name")
         alias = self.aliases.get(op)
         return str(alias[0]) if alias else op
 
@@ -153,6 +177,26 @@ class AnnotationCorrespondence:
     def arg_slot(self, call: Mapping[str, Any], i: int = 0) -> ArgSlot:
         return ArgSlot(index=int(i))
 
+    # -- confirmation against the record ---------------------------------------------------------------------------------------------
+
+    def confirmed(self, module: str) -> bool | None:
+        """Under `correspondence`: does the record own Calls under this (collector-vocabulary) module path?  None under the fallback."""
+        if not self.tables:
+            return None
+        return module in self._owned
+
+    def owned_modules(self) -> list[str]:
+        return sorted(self._owned)
+
+    def provenance(self) -> dict[str, Any]:
+        """The plan's `correspondence` block (provenance: excluded from the plan digest)."""
+        out: dict[str, Any] = {"source": self.source, "schema": SCHEMA if self.tables else None, "namespace": NAMESPACE if self.tables else None,
+                               "programs": dict(sorted(self.digests.items())), "absent": list(self.absent), "problems": list(self.problems),
+                               "module_paths": len(self._owned)}
+        if not self.tables:
+            out["fallback"] = FALLBACK_READ
+        return out
+
     # -- lifetime facts -------------------------------------------------------------------------------------------------------------
 
     def input_lifetime(self, consumer: str) -> str:
@@ -166,3 +210,9 @@ class AnnotationCorrespondence:
         if f is None:
             return "unknown"
         return "unmutated" if not f.get("output_mutated_after", True) else "mutated-after-hook"
+
+
+AnnotationCorrespondence = AcquireCorrespondence      # the adapter's former name (callers written against it keep working)
+
+__all__ = ["SOURCES", "FALLBACK_READ", "ReturnSlot", "ArgSlot", "AcquireCorrespondence", "AnnotationCorrespondence", "read_program_correspondence",
+           "RuntimeTree", "RUNTIME_TREE_SCHEMA", "RUNNER_PATH", "mro_names", "runtime_tree_of", "runtime_tree_from_paths", "RuntimeCorrespondence"]

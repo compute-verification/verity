@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from verity_capture.commit.required_manifest import promoted_observation
-from verity_vllm.acquire.correspondence import RUNNER_PATH, RuntimeTree
+from verity_vllm.acquire.runtime_tree import RUNNER_PATH, RuntimeTree
 from verity_vllm.acquire.plan import HIDDEN_FAMILIES, MOE_FAMILY, TP_FAMILY, _v1_tables
 
 
