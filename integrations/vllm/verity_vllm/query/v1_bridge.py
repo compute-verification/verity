@@ -48,7 +48,7 @@ from verity_vllm.ir.sampling_event import SAMPLING_EVENT_FAMILIES
 
 from .correspondence import CallName, Correspondence
 from .module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1
-from .program_view import CallView, InputView, Port, ProgramView
+from .program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "FLASH_ATTENTION_LAUNCHES", "COLLECTIVES",
            "member_name", "shared_instances", "request_manifest", "compose_global", "BridgeResult", "under"]
@@ -153,7 +153,7 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
         m = corr.module_of(c.id)
         first.setdefault(m, c.id)
         sig[m][(c.definition, corr.name(c.id).hint)] += 1
-        for v in c.reads:
+        for v in param_reads(c):                          # record_fields keys are prescribed-input Values: only those reads can hit
             f = record_fields.get(v)
             if f is not None:
                 reads[m].add(f)
@@ -318,7 +318,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     own_param: dict[int, bool] = {}
     for c in P.calls:
         m = corr.module_of(c.id)
-        own_param[c.id] = any(under(record_fields[v], m) for v in c.reads if v in record_fields)
+        own_param[c.id] = any(under(record_fields[v], m) for v in param_reads(c) if v in record_fields)
 
     groups: dict[tuple[int, str, str], dict[str, Any]] = {}
     for v in sorted(req.values):
@@ -368,14 +368,14 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
 
     # --- the token ids a module body consumes: prompt input or a sampling event's output -------------------------------------------
     ids_rows: Counter = Counter()
+    event_set = frozenset(events)
     for c in P.calls:
         m = corr.module_of(c.id)
         if not m:
             continue
-        for r in c.reads:
-            if (r.call < 0 and r not in record_fields) or (r.call >= 0 and P.call(r.call).family in SAMPLING_EVENTS):
-                ids_rows[(step_of(c.id), m)] += 1
-                break
+        # a non-weight prescribed input (the prompt ids) or a sampling event's output among the reads
+        if any(r not in record_fields for r in param_reads(c)) or reads_any_of(c, event_set):
+            ids_rows[(step_of(c.id), m)] += 1
     for (step, mod), rows in sorted(ids_rows.items()):
         add("input_token_ids", step, 0, impl(mod), "in", 0, rows, rows=rows, width=1, dtype="i32")
         residual_counts["encoding:in"] += rows
