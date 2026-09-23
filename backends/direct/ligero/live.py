@@ -72,9 +72,12 @@ _KIND_NAME = {K_HELLO: "HELLO", K_WELCOME: "WELCOME", K_COMMIT: "COMMIT", K_ROOT
 _HDR = struct.Struct("<IB")
 _MAX_FRAME = 1 << 31
 _BUF = 8 << 20
-#: ``LIVE_TCP_CC=cubic|bbr|...``: the congestion control of the prover's and the server's sockets (an experiment knob: the
-#: control channel carries one ~0.3-0.5 MB message per round trip after an idle gap, where the CC's restart behaviour shows).
-_TCP_CC = os.environ.get("LIVE_TCP_CC")
+#: ``LIVE_TCP_CC=cubic|bbr|...`` (default ``cubic``; empty = leave the kernel default): the congestion control of the prover's
+#: and the server's sockets. The control channel carries one ~0.3-0.5 MB message per round trip after an idle gap, where the
+#: CC's restart behaviour shows: measured 4090 (EUR-IS-2) -> verifier (EU-RO-1), raw RTT 70 ms, the two openings of a
+#: sub-batch took a median 138.6 ms each under the pods' default bbr and 87.0 ms under cubic (net wait 12.0 s -> 8.0 s over
+#: 49 sub-batches). Ignored where the kernel does not offer the algorithm.
+_TCP_CC = os.environ.get("LIVE_TCP_CC", "cubic")
 
 
 class LiveError(RuntimeError):
