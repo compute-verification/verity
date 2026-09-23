@@ -60,10 +60,27 @@ class HashedRelation:
     extra_hint_names: list      # the appended hint rows, in sys.hints order
     census: dict
     block_layout: bool | None = None    # memo of _block_layout (hash_hints)
+    leaf: object | None = None          # the leaf scheme (leaf/registry.py); None = the built-in Poseidon2 sponges
+    n_digest: int = N_DIGEST            # public digest lanes per VU (x digest then W digest)
 
     @property
     def steps(self) -> int:
         return self.rel.steps
+
+    @property
+    def lanes(self) -> int:
+        """Digest elements per operand row (8 for Poseidon2, n for Ajtai)."""
+        return self.n_digest // 2
+
+    @property
+    def hash_name(self) -> str:
+        return "poseidon2-babybear-w24" if self.leaf is None else self.leaf.hash_name
+
+    @property
+    def relation_name(self) -> str:
+        """The relation string statements carry: the bare name for Poseidon2 (unchanged), ``<rel>+<leaf tag>`` else."""
+        from .leaf.registry import join_relation
+        return join_relation(self.rel.name, self.leaf)
 
 
 def _reduce(e):
@@ -239,8 +256,10 @@ def _format(rel: Relation) -> dict:
     raise ValueError(f"{rel.name}: no private decode for operand dtype {rel.word_dtype}")
 
 
-def compose(rel: Relation) -> HashedRelation:
-    """The hashed, private relation of ``rel`` (see the module doc).  Compiles ``rel`` afresh."""
+def compose(rel: Relation, leaf=None) -> HashedRelation:
+    """The hashed, private relation of ``rel`` (see the module doc).  Compiles ``rel`` afresh.  ``leaf``: a scheme of
+    ``leaf/`` (e.g. ``AjtaiLeaf``) replacing step 2's Poseidon2 sponges by its own gadget on the same committed bit rows;
+    ``None`` keeps today's system byte for byte."""
     p = rel.params
     sys = rel.compile(p, True)
     fmt = _format(rel)
@@ -298,6 +317,8 @@ def compose(rel: Relation) -> HashedRelation:
             ctx.eq(f"{tag}.e", E(pins[f"{tag}.e"]), t - nz - (bias - 1))
             rows_private += nb + 3
     m1 = sys.m
+    if leaf is not None:
+        return _compose_leaf(rel, leaf, sys, ctx, words, bit_rows, nb, k, m0, m1, l0, q0, h0)
     # --- 2. the sponges ------------------------------------------------------------------------------------------------
     sbox_rows: list[tuple] = []
     sbox = _sbox_gadget(ctx, sbox_rows)
@@ -338,6 +359,45 @@ def compose(rel: Relation) -> HashedRelation:
               "linked_rows": len(sys.chain["c"]), "word_bits": nb, "k": k}
     extra = [n for _, n in sys.hints[h0:]]
     return HashedRelation(rel, sys, nb, k, h0, extra, census)
+
+
+def _compose_leaf(rel: Relation, leaf, sys: System, ctx: LigeroCtx, words: dict, bit_rows: dict, nb: int, k: int,
+                  m0: int, m1: int, l0: int, q0: int, h0: int) -> HashedRelation:
+    """Steps 2 and 3 of :func:`compose` for a ``leaf/`` scheme: per operand the gadget absorbs the column's committed
+    bit rows (step 1's ``<nm>[i].b<j>``) into ``leaf.digest_elems`` linked carry rows ``<nm>.acc[x]`` (0 at a chain start,
+    linked to the gadget's carry-out at the next column), then ``2 * digest_elems`` digest pins tied at the chain end."""
+    n = leaf.digest_elems
+    if k * nb != getattr(leaf, "m_col", k * nb):
+        raise ValueError(f"{rel.name}: {k * nb} operand bits per column, the leaf hashes {leaf.m_col}")
+    if n < rel.steps and leaf.name == "ajtai":
+        raise ValueError(f"{rel.name}: {rel.steps} columns per VU exceed the ring degree n = {n} (the digest is not injective "
+                         f"in the bits when a VU's polynomial wraps around X^n + 1); use ajtai-n{rel.steps} or more")
+    ends: list[Expr] = []
+    for _, nm, role in ROLES:
+        carry = [ctx.hint(f"{nm}.acc[{x}]") for x in range(n)]
+        bits = [Expr(ctx, {r: 1}, 0) for r in bit_rows[nm]]
+        digest, carry_out = leaf.gadget(ctx, words[nm], word_bits=nb, role=role, carry_in=carry, first=True, last=True,
+                                        bits=bits, scope=nm)
+        if len(carry_out) != n or len(digest) != n:
+            raise ValueError(f"leaf {leaf.tag}: gadget returned {len(carry_out)} carries / {len(digest)} digest elements, expected {n}")
+        sys.chain["c"] += [next(iter(c.lin)) for c in carry]
+        sys.chain["y"] += [_reduce(e) for e in carry_out]
+        ends += digest
+    m2 = sys.m
+    hook = leaf.witness()
+    if hook is not None:
+        sys.witness_hooks = [hook]
+    ctx.scope = ""
+    is_end = ctx.pin(HASH_PIN_END, 0, 2)
+    for x, st in enumerate(ends):
+        d = ctx.pin(hash_pin(x), 0, P)
+        sys.quadratic.append(Quadratic(f"hash.end[{x}]", is_end, _reduce(st - d), Expr(ctx)))
+    census = {"rows_base": m0, "rows_private_operands": m1 - m0, "rows_hash": m2 - m1, "rows_digest_pins": sys.m - m2,
+              "rows_total": sys.m, "rows_added": sys.m - m0, "linear_added": len(sys.linear) - l0,
+              "quadratic_added": len(sys.quadratic) - q0, "hints_added": len(sys.hints) - h0,
+              "leaf": leaf.tag, "digest_elems": n, "linked_rows": len(sys.chain["c"]), "word_bits": nb, "k": k}
+    extra = [nm for _, nm in sys.hints[h0:]]
+    return HashedRelation(rel, sys, nb, k, h0, extra, census, leaf=leaf, n_digest=2 * n)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -447,6 +507,8 @@ def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: di
     vals = hr.rel.public_vectors(hr.rel.params, None, a, b, None, device=device)
     nb, k = hr.word_bits, hr.k
     shifts = torch.arange(nb, dtype=torch.int64, device=device)
+    if hr.leaf is not None:
+        return _leaf_hints(hr, vals, a, b, n_vus, l, device)
     digests, bit_blocks, cap_blocks = [], [], []
     for _, nm, role in ROLES:
         w = a if nm == "a" else b
@@ -478,6 +540,37 @@ def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: di
     return out, torch.cat(digests, 1)
 
 
+def _leaf_hints(hr: HashedRelation, vals: dict, a, b, n_vus: int, l: int, device) -> tuple:
+    """The appended hint rows of a ``leaf/`` composition: ``[decode rows | a bits | b bits | a.acc[0..n) | a's gadget rows
+    | b.acc | b's gadget rows]`` (the order :func:`_compose_leaf` created them in, asserted by name), and the digests
+    (n_vus, 2n).  The carried state of every VU is 0 at its first column and the gadget's carry-out after each; pad
+    columns carry 0."""
+    import torch
+    leaf, nb, k, steps, n = hr.leaf, hr.word_bits, hr.k, hr.steps, hr.leaf.digest_elems
+    shifts = torch.arange(nb, dtype=torch.int64, device=device)
+    names = hr.extra_hint_names
+    n_dec = len(names) - len(ROLES) * (k * nb + 2 * n)
+    want = [f"{nm}[{i}].b{j}" for _, nm, _ in ROLES for i in range(k) for j in range(nb)]
+    for _, nm, _ in ROLES:
+        want += [f"{nm}.acc[{x}]" for x in range(n)] + [f"{nm}.acc_out[{x}]" for x in range(n)]
+    if n_dec < 0 or names[n_dec:] != want:
+        raise ValueError("leaf composition: unexpected hint row layout")
+    blocks = [torch.stack([vals[nm].to(device) for nm in names[:n_dec]])]
+    digests, states = [], []
+    for _, nm, _ in ROLES:
+        w = a if nm == "a" else b
+        bits = (w[:, :, None] >> shifts) & 1                                  # (l, k, nb)
+        blocks.append(bits.permute(1, 2, 0).reshape(k * nb, l))
+        cols = w[:n_vus * steps].reshape(n_vus, steps * k)
+        acc_in, acc_out = leaf.states(cols, word_bits=nb)                   # (n_vus, steps, n) each
+        st = torch.zeros((2, n, l), dtype=torch.int64, device=device)
+        st[0, :, :n_vus * steps] = acc_in.reshape(n_vus * steps, n).T
+        st[1, :, :n_vus * steps] = acc_out.reshape(n_vus * steps, n).T
+        states.append(st.reshape(2 * n, l))
+        digests.append(acc_out[:, -1])
+    return torch.cat(blocks + states), torch.cat(digests, 1)
+
+
 def _block_layout(hr: HashedRelation, n_dec: int) -> bool:
     """Whether ``hr.extra_hint_names`` is ``[decode rows | a bits | b bits | a.cap | b.cap]`` (memoised on ``hr``)."""
     if hr.block_layout is None:
@@ -488,23 +581,34 @@ def _block_layout(hr: HashedRelation, n_dec: int) -> bool:
     return hr.block_layout
 
 
-def hash_public_vectors(p, c, a, b, y, device="cpu"):
-    """The verifier's public vectors of a hashed statement: ``a`` is the (l, 17) public table ``[is_end | d[0..15]]``
-    (zeros off the chain ends), ``b`` the per-VU leaf indices (not per-column: only hashed into the statement)."""
+def hash_public_vectors(p, c, a, b, y, device="cpu", n_digest: int = N_DIGEST):
+    """The verifier's public vectors of a hashed statement: ``a`` is the (l, 1 + n_digest) public table ``[is_end |
+    d[0..n_digest)]`` (zeros off the chain ends; 17 columns for Poseidon2), ``b`` the per-VU leaf indices (not per-column:
+    only hashed into the statement)."""
     import torch
     t = torch.as_tensor(a, dtype=torch.int64, device=device)
-    if t.ndim != 2 or t.shape[1] != 1 + N_DIGEST:
-        raise ValueError("hashed statement: public table must be (l, 17)")
+    if t.ndim != 2 or t.shape[1] != 1 + n_digest:
+        raise ValueError(f"hashed statement: public table must be (l, {1 + n_digest})")
     if ((t < 0) | (t >= P)).any() or ((t[:, 0] != 0) & (t[:, 0] != 1)).any():
         raise ValueError("hashed statement: public table out of range")
     out = {HASH_PIN_END: t[:, 0]}
-    for x in range(N_DIGEST):
+    for x in range(n_digest):
         out[hash_pin(x)] = t[:, 1 + x]
     return out
 
 
-def public_table(digests, n_vus: int, steps: int, l: int) -> np.ndarray:
-    """(l, 17) int64: ``is_end`` and the 16 digest lanes at every VU's last column, 0 elsewhere."""
+def public_vectors_for(hr: HashedRelation):
+    """``hash_public_vectors`` bound to a composition's digest width (a ``RelationHooks.public_vectors``)."""
+    nd = hr.n_digest
+
+    def pv(p, c, a, b, y, device="cpu"):
+        return hash_public_vectors(p, c, a, b, y, device=device, n_digest=nd)
+    return pv
+
+
+def public_table(digests, n_vus: int, steps: int, l: int, n_digest: int = N_DIGEST) -> np.ndarray:
+    """(l, 1 + n_digest) int64: ``is_end`` and the digest lanes at every VU's last column, 0 elsewhere."""
+    N_DIGEST = n_digest  # noqa: N806
     d = np.asarray(digests, dtype=np.int64).reshape(n_vus, N_DIGEST)
     tab = np.zeros((l, 1 + N_DIGEST), dtype=np.int64)
     ends = np.arange(n_vus) * steps + steps - 1

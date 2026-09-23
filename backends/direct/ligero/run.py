@@ -421,6 +421,10 @@ def main(argv=None) -> int:
                                             "multiproofs of every boundary word.  `--auth included-hash` (registered relations): the operands are "
                                             "private witness wires hashed inside the relation with Poseidon2 (hashchain.py); the statement carries "
                                             "the roots, leaf indices, published digests and SHA-256 multiproofs of the ROW leaves (leaf/v2h)")
+        sub.choices[name].add_argument("--leaf", default=None, metavar="SCHEME",
+                                       help="--auth included-hash: the row-digest scheme of the leaf campaign (leaf/registry.py): "
+                                            "`hash` / `poseidon2` (default, today's sponges) or `ajtai` / `ajtai-n<N>` (the linear "
+                                            "Ring-SIS leaf, N digest elements per row; the relation is then named `<rel>+ajtai-n<N>`)")
         sub.choices[name].add_argument("--tile", default=None, metavar="NXxNW",
                                        help="--auth included-hash: the committed workload is a GEMM tile of NX distinct x rows by NW distinct W "
                                             "columns (every pair one VU; sharing = tileNXxNW) instead of every VU its own rows (sharing = none)")
@@ -460,6 +464,8 @@ def main(argv=None) -> int:
             ap.error(f"--auth included (verifier-side word openings) is implemented for the bf16 relation only, not --relation {args.relation}")
         if getattr(args, "auth", None) == "included-hash" and args.relation == "fp4-nvf4":
             ap.error("--auth included-hash: the fp4-nvf4 relation's packed-nibble operands are not composed yet (see hashchain.py)")
+        if getattr(args, "leaf", None) and getattr(args, "auth", None) != "included-hash":
+            ap.error("--leaf is a parameter of --auth included-hash")
         if args.relation == "fp4-nvf4":
             from .fp4.chain import bench_vu_fp4, gate_vu_fp4
             return (gate_vu_fp4 if args.cmd == "gate-vu" else bench_vu_fp4)(args)

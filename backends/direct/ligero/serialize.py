@@ -343,13 +343,22 @@ def _auth_block_r(r: _R) -> auth_mod.AuthStatement:
     return auth_mod.AuthStatement(tuple(vu_index), tuple(trees))
 
 
+def _leaf_params_of(relation: str):
+    """The ``hashauth.LeafParams`` a v5 statement's relation string names: ``<rel>`` -> Poseidon2 (16 digest lanes,
+    ``poseidon2-babybear-w24/row/v2h``, the Poseidon2 constants digest); ``<rel>+ajtai-n<N>`` -> the Ajtai leaf (2N lanes)."""
+    from . import hashauth
+    from .leaf.registry import leaf_for, split_relation
+    _, suffix = split_relation(relation)
+    return hashauth.leaf_params(leaf_for(suffix))
+
+
 def _hash_auth_block_w(w: _W, st: Statement):
     from . import hashauth
-    from verity.commitments import poseidon2_babybear as h2
     auth = st.hash_auth
+    leaf = _leaf_params_of(st.relation)
     w.s(hashauth.HASH_AUTH_VERSION)
-    w.s(hashauth.SCHEMA_ROW)
-    w.raw(bytes.fromhex(h2.CONSTANTS_SHA256))
+    w.s(leaf.schema)
+    w.raw(bytes.fromhex(leaf.params_sha256))
     w.u32(auth.n_vus)
     w.arr(auth.indices(), "<u4")
     for tr in auth.trees:
@@ -369,14 +378,13 @@ def _hash_auth_block_w(w: _W, st: Statement):
             w.raw(x)
 
 
-def _hash_auth_block_r(r: _R, n_vus: int):
+def _hash_auth_block_r(r: _R, n_vus: int, leaf):
     from . import hashauth
-    from verity.commitments import poseidon2_babybear as h2
     version, schema = r.s(), r.s()
-    if version != hashauth.HASH_AUTH_VERSION or schema != hashauth.SCHEMA_ROW:
-        raise ValueError(f"unknown authentication block {version!r}/{schema!r}")
-    if r.take(32) != bytes.fromhex(h2.CONSTANTS_SHA256):
-        raise ValueError("Poseidon2 parameters differ from the verifier's")
+    if version != hashauth.HASH_AUTH_VERSION or schema != leaf.schema:
+        raise ValueError(f"unknown authentication block {version!r}/{schema!r} (the relation's leaf is {leaf.schema!r})")
+    if r.take(32) != bytes.fromhex(leaf.params_sha256):
+        raise ValueError(f"{schema} parameters differ from the verifier's")
     if r.u32() != n_vus:
         raise ValueError("authentication block does not match the layout")
     idx = r.arr((n_vus, 3), "<u4").astype(np.int64)
@@ -454,7 +462,7 @@ def _statement_bytes_v5(st: Statement) -> bytes:
     w.s(st.relation)
     w.s(AUTH_HASH)
     d = st.digests()
-    if d.shape != (st.n_vus, hashchain.N_DIGEST):
+    if d.shape != (st.n_vus, _leaf_params_of(st.relation).n_digest):
         raise ValueError("digest table shape")
     w.arr(d, "<u4")
     w.arr(st.y16, _DTYPES[st.y_bytes])
@@ -477,11 +485,15 @@ def _read_v5(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, s
         raise ValueError("v5 statement names an authentication other than included-hash")
     if n_vus * steps > l:
         raise ValueError("layout does not fit the columns")
-    d = r.arr((n_vus, hashchain.N_DIGEST), "<u4").astype(np.int64)
+    try:
+        leaf = _leaf_params_of(relation)
+    except ValueError as e:
+        raise ValueError(f"v5 statement: {e}") from None
+    d = r.arr((n_vus, leaf.n_digest), "<u4").astype(np.int64)
     y16 = r.arr((l,), _DTYPES[yb])
-    auth, sibs = _hash_auth_block_r(r, n_vus)
+    auth, sibs = _hash_auth_block_r(r, n_vus, leaf)
     r.done()
-    table = hashchain.public_table(d, n_vus, steps, l)
+    table = hashchain.public_table(d, n_vus, steps, l, leaf.n_digest)
     return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, table, auth.indices(), y16,
                      None, relation, 4, yb, auth, sibs)
 
@@ -723,14 +735,19 @@ def _runner(device: str, st: Statement | None = None):
         from .fp4.chain import FP4ChainRunner
         return FP4ChainRunner(device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
     if name != BF16_RELATION:
-        # any registered relation (relations.py: bf16-hopper, fp8-hopper, fp8-ada) runs on the generic chain runner
+        # any registered relation (relations.py: bf16-hopper, fp8-hopper, fp8-ada) runs on the generic chain runner; a v5
+        # statement's ``<rel>+<leaf>`` names the hashed relation's leaf scheme (leaf/registry.py; no suffix = Poseidon2)
+        from .leaf.registry import leaf_for, split_relation
         from .relations import RELATIONS
         from .relchain import HashedRelationRunner, RelationChainRunner
-        if name not in RELATIONS:
+        base, suffix = split_relation(name)
+        if base not in RELATIONS:
             raise ValueError(f"no runner for relation {name!r} (known: {BF16_RELATION!r}, 'fp4-nvf4', {sorted(RELATIONS)})")
         if st is not None and st.v5:
-            return HashedRelationRunner(RELATIONS[name], device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
-        return RelationChainRunner(RELATIONS[name], device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
+            return HashedRelationRunner(RELATIONS[base], device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode, leaf=leaf_for(suffix))
+        if suffix is not None:
+            raise ValueError(f"relation {name!r}: a leaf suffix names a hashed (v5) relation, the statement is not v5")
+        return RelationChainRunner(RELATIONS[base], device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
     from .vu import ChainRunner
     return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk, mode=mode)
 

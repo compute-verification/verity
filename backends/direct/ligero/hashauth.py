@@ -31,11 +31,41 @@ from .auth import LIMITS, OWNER, TREE_NAMES, TreeRef, WordTree, _chunks, _node_c
 from .auth import build_word_tree as _build_word_tree_u16
 from verity.errors import ResourceLimit
 
-__all__ = ["BINDING_TAG", "HASH_AUTH_VERSION", "HashAuth", "binding_digest", "build_row_tree", "build_trees", "digest_bytes",
-           "load_or_build_trees", "open_trees", "verify_hash_auth", "word_schema"]
+__all__ = ["BINDING_TAG", "HASH_AUTH_VERSION", "POSEIDON2", "HashAuth", "LeafParams", "binding_digest", "build_row_tree",
+           "build_trees", "digest_bytes", "leaf_params", "load_or_build_trees", "open_trees", "verify_hash_auth", "word_schema"]
 
 HASH_AUTH_VERSION = "ligero-b/auth/v2h"
 BINDING_TAG = "verity/ligero-b/auth-binding/v2h"
+
+
+@dataclass(frozen=True)
+class LeafParams:
+    """What the tree side needs of a row-digest scheme: the leaf schema string, the 32-byte parameter digest the auth
+    block carries, the digest width, and the two functions (rows -> digests; digest -> leaf value bytes)."""
+
+    schema: str
+    params_sha256: str          # hex, 32 bytes
+    lanes: int                  # BabyBear elements per row digest
+    native: object              # (rows (R, n_words) int64, word_bits, role) -> (R, lanes) int64
+    leaf_bytes: object          # digest row -> bytes
+
+    @property
+    def n_digest(self) -> int:
+        return 2 * self.lanes
+
+
+POSEIDON2 = LeafParams(SCHEMA_ROW, h2.CONSTANTS_SHA256, h2.OUT, h2.hash_rows_np, row_leaf_value)
+
+
+def leaf_params(leaf=None) -> LeafParams:
+    """``None`` -> Poseidon2 (today's tree, byte for byte); a ``leaf/`` scheme object -> its parameters."""
+    if leaf is None:
+        return POSEIDON2
+    if isinstance(leaf, LeafParams):
+        return leaf
+    return LeafParams(leaf.schema, leaf.params_sha256, leaf.digest_elems,
+                      lambda rows, word_bits, role: np.asarray(leaf.native(rows, word_bits=word_bits, role=role), dtype=np.int64),
+                      leaf.leaf_bytes)
 
 
 def word_schema(y_bits: int) -> tuple[str, int]:
@@ -74,16 +104,17 @@ def _levels(domain, leaves: list[bytes], count: int) -> list[np.ndarray]:
     return levels
 
 
-def build_row_tree(name: str, binding: bytes, rows: np.ndarray, word_bits: int, role: int) -> tuple[WordTree, np.ndarray]:
-    """Commit ``rows`` (count, n_words) of ``word_bits``-bit words as ``leaf/v2h`` leaves: the Poseidon2 digest of each
-    row (``role``: ``h2.ROLE_X`` / ``ROLE_W``, the sponge's domain tag) under the SHA-256 tree.  Returns the tree and the
-    digests (count, 8)."""
+def build_row_tree(name: str, binding: bytes, rows: np.ndarray, word_bits: int, role: int,
+                   leaf: LeafParams = POSEIDON2) -> tuple[WordTree, np.ndarray]:
+    """Commit ``rows`` (count, n_words) of ``word_bits``-bit words as ``leaf/v2h`` leaves: the ``leaf`` digest (Poseidon2
+    by default) of each row (``role``: ``h2.ROLE_X`` / ``ROLE_W``, the sponge's domain tag) under the SHA-256 tree.
+    Returns the tree and the digests (count, leaf.lanes)."""
     rows = np.ascontiguousarray(rows, dtype=np.int64)
     count = int(rows.shape[0])
     LIMITS.enforce("max_positions", count)
     domain = domain_for(binding, OWNER[name], count)
-    digests = h2.hash_rows_np(rows, word_bits, role)
-    leaves = [domain.leaf(r, r, SCHEMA_ROW, row_leaf_value(digests[r])) for r in range(count)]
+    digests = leaf.native(rows, word_bits, role)
+    leaves = [domain.leaf(r, r, leaf.schema, leaf.leaf_bytes(digests[r])) for r in range(count)]
     levels = _levels(domain, leaves, count)
     ref = TreeRef(name, bytes(binding), OWNER[name], count, levels[-1][0].tobytes())
     return WordTree(ref, levels), digests
@@ -103,23 +134,25 @@ def build_word_tree(name: str, binding: bytes, words: np.ndarray, y_bits: int) -
 
 
 def build_trees(*, x_rows: np.ndarray, w_cols: np.ndarray, y_words: np.ndarray, word_bits: int, y_bits: int,
-                bindings: Mapping[str, bytes]) -> tuple[dict[str, WordTree], dict[str, np.ndarray]]:
+                bindings: Mapping[str, bytes], leaf: LeafParams = POSEIDON2) -> tuple[dict[str, WordTree], dict[str, np.ndarray]]:
     """The three trees of a committed instance set; also the operand digests (what the honest prover will publish)."""
-    ta, da = build_row_tree("a", bindings["a"], x_rows, word_bits, h2.ROLE_X)
-    tb, db = build_row_tree("b", bindings["b"], w_cols, word_bits, h2.ROLE_W)
+    ta, da = build_row_tree("a", bindings["a"], x_rows, word_bits, h2.ROLE_X, leaf)
+    tb, db = build_row_tree("b", bindings["b"], w_cols, word_bits, h2.ROLE_W, leaf)
     ty = build_word_tree("y", bindings["y"], y_words, y_bits)
     return {"a": ta, "b": tb, "y": ty}, {"a": da, "b": db}
 
 
 def load_or_build_trees(cache: Path | None, **kw) -> tuple[dict[str, WordTree], dict[str, np.ndarray], bool]:
     bindings = kw["bindings"]
+    lanes = kw.get("leaf", POSEIDON2).lanes
     if cache is not None:
         cache = Path(cache)
         try:
             trees = {n: WordTree.load(cache, n) for n in TREE_NAMES}
             if all(trees[n].ref.binding == bytes(bindings[n]) for n in TREE_NAMES):
                 dig = {n: np.load(cache / f"{n}.digests.npy") for n in ("a", "b")}
-                return trees, dig, True
+                if all(dig[n].ndim == 2 and dig[n].shape[1] == lanes for n in ("a", "b")):
+                    return trees, dig, True
         except (OSError, ValueError, KeyError, json.JSONDecodeError):
             pass
     trees, dig = build_trees(**kw)
@@ -185,9 +218,11 @@ class HashAuth:
         return np.stack([np.asarray(self.vu_index), np.asarray(self.x_index), np.asarray(self.w_index)], 1).astype(np.int64)
 
 
-def digest_bytes(auth: HashAuth) -> bytes:
-    out = bytearray(b"|auth=" + HASH_AUTH_VERSION.encode() + b"|schema=" + SCHEMA_ROW.encode() + b"|p2=" +
-                    bytes.fromhex(h2.CONSTANTS_SHA256) + b"|idx=")
+def digest_bytes(auth: HashAuth, leaf: LeafParams = POSEIDON2) -> bytes:
+    """The auth block's contribution to the statement digest (the relation hooks' tag).  Poseidon2's bytes are those of
+    the lane hash-relation format; another leaf changes the schema string and the parameter digest after ``|p2=``."""
+    out = bytearray(b"|auth=" + HASH_AUTH_VERSION.encode() + b"|schema=" + leaf.schema.encode() + b"|p2=" +
+                    bytes.fromhex(leaf.params_sha256) + b"|idx=")
     out += auth.indices().astype("<u4").tobytes()
     for t in auth.trees:
         out += b"|" + t.name.encode() + b":binding=" + t.binding + b"|owner=" + str(t.owner).encode()
@@ -207,14 +242,15 @@ def open_trees(trees: Mapping[str, WordTree], auth: HashAuth) -> list[list[bytes
 
 
 def verify_hash_auth(auth: HashAuth, siblings: Sequence[Sequence[bytes]], *, digests: np.ndarray, y_words: np.ndarray,
-                     y_bits: int) -> tuple[bool, str]:
-    """``digests`` (n_vus, 16): the x digest lanes then the W digest lanes every VU published (the relation proved them);
-    ``y_words`` (n_vus,).  Every VU's leaves must open under the roots; two VUs claiming the same leaf must have
-    published the same digest.  Every failure is a rejection (no exceptions)."""
+                     y_bits: int, leaf: LeafParams = POSEIDON2) -> tuple[bool, str]:
+    """``digests`` (n_vus, 2 * leaf.lanes): the x digest lanes then the W digest lanes every VU published (the relation
+    proved them); ``y_words`` (n_vus,).  Every VU's leaves must open under the roots; two VUs claiming the same leaf must
+    have published the same digest.  Every failure is a rejection (no exceptions)."""
     digests = np.asarray(digests, dtype=np.int64)
     y_words = np.asarray(y_words, dtype=np.int64).ravel()
     n = auth.n_vus
-    if digests.shape != (n, 2 * h2.OUT) or y_words.shape != (n,):
+    lanes = leaf.lanes
+    if digests.shape != (n, 2 * lanes) or y_words.shape != (n,):
         return False, "auth: digest / word table does not match the VU count"
     if len(siblings) != len(TREE_NAMES):
         return False, "auth: expected one multiproof per tree"
@@ -223,8 +259,8 @@ def verify_hash_auth(auth: HashAuth, siblings: Sequence[Sequence[bytes]], *, dig
     yschema, ybytes = word_schema(y_bits)
     if ((y_words < 0) | (y_words >= 2**y_bits)).any():
         return False, "auth: y word out of range"
-    per_vu = {"a": (np.asarray(auth.x_index, dtype=np.int64), digests[:, :h2.OUT]),
-              "b": (np.asarray(auth.w_index, dtype=np.int64), digests[:, h2.OUT:])}
+    per_vu = {"a": (np.asarray(auth.x_index, dtype=np.int64), digests[:, :lanes]),
+              "b": (np.asarray(auth.w_index, dtype=np.int64), digests[:, lanes:])}
     for name, sibs in zip(TREE_NAMES, siblings):
         ref = auth.tree(name)
         domain = ref.domain()
@@ -242,10 +278,10 @@ def verify_hash_auth(auth: HashAuth, siblings: Sequence[Sequence[bytes]], *, dig
             vals: dict[int, bytes] = {}
             for v in range(n):
                 r = int(ranks[v])
-                val = row_leaf_value(dg[v])
+                val = leaf.leaf_bytes(dg[v])
                 if vals.setdefault(r, val) != val:
                     return False, f"auth: {name}: VUs claiming leaf {r} published different digests"
-            leaves = {r: domain.leaf(r, r, SCHEMA_ROW, val) for r, val in vals.items()}
+            leaves = {r: domain.leaf(r, r, leaf.schema, val) for r, val in vals.items()}
         try:
             LIMITS.enforce("max_positions", int(ref.count))
             LIMITS.enforce("max_openings", len(leaves))
