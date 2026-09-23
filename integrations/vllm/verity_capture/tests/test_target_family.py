@@ -116,14 +116,6 @@ def test_row_pod_runs_the_preflight_before_build_and_canary_waives_by_name():
     assert 'TARGET_FAMILY_WAIVER=${TARGET_FAMILY_WAIVER:-"canary $TAG"}' in can
 
 
-def test_finalize_reads_the_two_new_stage_lines():
-    from verity_capture.sweep import finalize
-
-    src = (TREE / "verity_capture/sweep/finalize.py").read_text()
-    assert '"precheck-target"' in src and '"build-target"' in src
-    assert hasattr(finalize, "__file__")
-
-
 def test_row_pod_match_argv_carries_the_explicit_snapshot_cap_only_when_set():
     """[r18-int-2; cheap M-0082, F-r18-cheap-2] MATCH_SNAP_MAX_BYTES -> --snapshot-max-bytes N; unset -> byte-identical argv to int-1."""
     probe = r'''

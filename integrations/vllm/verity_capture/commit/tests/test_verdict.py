@@ -7,7 +7,8 @@ record and one-fault mutations of it, `run_outcome(run_checks(...)) == PASS` iff
 INSUFFICIENT_EVIDENCE, not FAIL: the Match account leg(s) absent beside the Commit (`account_missing`, F-r19-int-19) grade
 `execution_extent` INSUFFICIENT_EVIDENCE while the overall verdict is still not PASS (v1 fails the same record by name); (5) X-03's
 per-layer uniformity finding is carried as the named difference `fa2_layers_bad` under `program_source_identity/identity_layout`;
-(6) `from_record` over a row dir + `commit_summary.summarize` carries the deprecation marker; (7) the by-name tables today's checks
+(6) `from_record` over a row dir reads the execution configuration from the Commit's own evidence (`execution_of_record`; a pre-P5
+row's `commit_summary.json` still supplies `rc` / execution when present -- the writer is retired, P5); (7) the by-name tables today's checks
 lean on are marked `structural_leak: <table>` on the verdict, never silently."""
 from __future__ import annotations
 
@@ -280,15 +281,14 @@ def _row_dir(tmp_path, commit: dict, *, commit_pass: bool, rc: int, manifest_ver
     if manifest_verify_ok is not None:
         (d / "commit" / "manifest_verify.json").write_text(json.dumps({"ok": manifest_verify_ok, "manifest_digest": "cd" * 32}))
     (d / "global_match.json").write_text(json.dumps({"verdict": "PASS"}))
-    from verity_capture.sweep.commit_summary import summarize
-    s = summarize(str(d), rc)
-    (d / "commit_summary.json").write_text(json.dumps(s, default=str))
-    return d, s
+    ex = V.execution_of_record(d)
+    return d, ex
 
 
-def test_from_record_pass_row_and_commit_summary_deprecation(tmp_path):
-    d, s = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
-    assert s["pass"] is True and s["deprecated"] == "F-r19-int-21; see verdict.json"
+def test_from_record_pass_row_reads_its_own_execution_configuration(tmp_path):
+    d, ex = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
+    assert ex["committer"] == "native_collect_v2b" and ex["engine_settings"]["openings"] == 64 and ex["engine_settings"]["required_manifest"] is True
+    assert not (d / "commit_summary.json").exists()                     # P5: nothing writes the pre-P5 summary
     v = V.from_record(d, rc=0, stage_ok="PASS")
     assert v.outcome == V.PASS and v.compat["commit_pass"] is True and v.compat["stage_ok"] == "PASS" and not v.notes
     assert v.inputs["commit/verdict.json"] and v.inputs["commit/runs.jsonl"] and "global_match.json" in v.inputs
@@ -298,6 +298,18 @@ def test_from_record_pass_row_and_commit_summary_deprecation(tmp_path):
     assert v.execution["engine_settings"]["openings"] == 64 and v.execution["committer"] == "native_collect_v2b"
     out = V.main(["from-record", str(d), "--rc", "0", "--stage-ok", "PASS", "--quiet"])
     assert out == 0 and V.Verdict.load(d / "verdict.json").outcome == V.PASS
+
+
+def test_from_record_pre_p5_row_takes_rc_and_execution_from_its_commit_summary(tmp_path):
+    """An old record (commit_summary.json present, commit.log absent): its summary still supplies `rc` and the execution fields."""
+    d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
+    (d / "commit.log").unlink()
+    (d / "commit_summary.json").write_text(json.dumps({"rc": 0, "pass": True, "committer": "native_collect_v2b", "collector_variant": "windowed",
+                                                       "retention": "host", "engine_settings": {"openings": 64, "pairs": 1, "required_manifest": True},
+                                                       "cmd": "python -m verity_capture.bench.commit_delta --openings 64", "deprecated": "F-r19-int-21; see verdict.json"}))
+    v = V.from_record(d, stage_ok="PASS")
+    assert v.outcome == V.PASS and v.compat["rc"] == 0 and v.compat["commit_summary_pass"] is True
+    assert v.execution["committer"] == "native_collect_v2b" and v.execution["engine_settings"]["openings"] == 64
 
 
 def test_from_record_manifest_verify_fail_is_required_value_coverage_fail(tmp_path):

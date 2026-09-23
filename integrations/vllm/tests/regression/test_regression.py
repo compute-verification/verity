@@ -1,8 +1,15 @@
-"""R19 REFERENCE REGRESSION -- does a NEW vLLM integration (v2) numerically reproduce the v1 reference?
+"""R19 REFERENCE REGRESSION -- does the vLLM integration (v2, the default since the flip) still reproduce its contract?
+
+THE ORACLE (`VERITY_REGRESSION_ORACLE`, `resolver.oracle()`).  `expected` (default): `expected/<row>.json`, RE-BASELINED on v2's own
+outputs (`rebaseline.py write`, reference `v2-reference`; the v1-reference block is kept under `reference.frozen`) -- a difference is a
+regression of the integration.  `frozen`: the contract is lifted from the R2 frozen v1 records themselves (`check.expected(row)`) -- the
+historical "does v2 reproduce v1" comparison, where the labelled decisions below sanction the known differences.  `python -m
+tests.regression.rebaseline run --record DIR --oracle frozen|expected` runs either and records every result for `write` / `table`.
 
 THE REFERENCE.  v1 = `lane/vllm-integration` at release tag `r19-int-21` (commit 89af272a8c1d37a44b3e8f3253378d7a152fc281, tagged
 `v1-reference`) and the R19 rows it recorded.  Twelve rows are frozen in `fixtures.toml` (row -> files -> sha256/bytes) and
-`expected/<row>.json` (the contract, lifted from each row's OWN documents by `lift_expected.py`, never typed by hand):
+`expected/<row>.json` (the contract: lifted from each row's OWN documents by `lift_expected.py`, then re-baselined on v2 by
+`rebaseline.py` -- never typed by hand):
 
     GREEN   #11 llama32-1b B1 i4096/o512 (l40s)   #23 llama32-1b B64 (l40s)   #39 qwen25-15b B1 i4096/o512 (l40s)   #60 mistral-7b B8 (l40s)
             #67 olmoe-1b-7b B32 (l40s)            #68 olmoe-1b-7b B32 mixed-arrivals (l40s)   #73 qwen3-4b B8 (h100)   #74 qwen3-4b-fp8 B8 (h100)
@@ -130,8 +137,8 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     why = chk.applies(row)
     if why:
         pytest.skip(f"{check_name} does not apply to #{row.number}: {why}")
-    exp = row.expected().get(check_name)
-    if exp is None:
+    exp = row.expected().get(check_name) if resolver.oracle() == "expected" else None
+    if exp is None:                                          # `--oracle frozen`, or a check expected/ never froze: lift from the R2 record
         try:
             exp = chk.expected(row)
         except resolver.NotResolvable as e:
@@ -143,6 +150,8 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     except resolver.NotResolvable as e:
         pytest.skip(str(e))
     problems = resolver.sanction(row, check_name, act, resolver.diff(exp, act))     # a labelled decision may sanction a difference from v1
+    resolver.record_result(row.key, check_name, exp, act, problems)                  # $VERITY_REGRESSION_RECORD_ACTUAL: rebaseline.py's input
+    record_property("oracle", resolver.oracle())
     if act.get("sanctioned_by"):
         record_property("sanctioned_by", act["sanctioned_by"])
         record_property("decision_status", act.get("decision_status") or "accepted")
@@ -154,7 +163,8 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     if na:
         record_property("not_applicable", "; ".join(na))                                 # leaves the candidate declared inapplicable, by key and reason
     strength = "WEAK (PASS-side / unexercised rule)" if chk.STRENGTH == "weak" else "strong"
-    what = "the v1 reference" + (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
+    what = ("the expected contract (expected/<row>.json)" if resolver.oracle() == "expected" else "the frozen v1 reference") + \
+        (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
     assert not problems, (f"#{row.number} {row.key}: {check_name} [{chk.TIER}, {strength}] does not reproduce {what} "
                           f"(source={act.get('source')}):\n  " + "\n  ".join(problems[:40]) + f"\n  actual: {resolver.canonical(act)[:1500]}")
 
