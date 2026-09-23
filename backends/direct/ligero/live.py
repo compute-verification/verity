@@ -12,9 +12,12 @@ the verifier chose does).
 Session (one per recorded rep of ``bench-vu``; the protocol per sub-batch is 8c, unchanged -- only the SOURCE of the coins
 moves from the runner's ``os.urandom`` to this process):
 
-    P -> V   HELLO      relation, mode, zk, n_proofs, target_bits, run id, system.bin      (metadata + the public system)
+    P -> V   HELLO      relation, mode, zk, n_proofs, target_bits, run id, [window], system.bin   (metadata + the public system)
     V -> P   WELCOME    session id, verifier identity
     V -> P   COMMIT i   c1, c2 = coin_commit(r_j, s_j) of FRESH coins for sub-batch i   -- BEFORE any prover message of i
+                        (the first ``window`` sub-batches at once -- window = the prover's --pipeline depth, default 1 --
+                        then one more behind every OPEN2, so ``window`` sub-batches may be in flight; each still runs the
+                        sequence below in its own order and only a committed sub-batch may be spoken about)
     P -> V   STMT i     the statement bytes (the public claim: instance, not a protocol message; sent at step 0 so its
                         transfer overlaps the prover's work up to the root; fixed before the coin is opened either way)
     P -> V   ROOT i     root (32 bytes; an older prover appends the statement here instead of STMT)
@@ -38,7 +41,12 @@ Prover-side accounting: the coin source records how long ``prove`` was blocked o
 the runner reports ``t.total_live`` = ``t.total`` + the network wait.  Pipelining: COMMIT i+1 travels with OPEN2 i (no round
 trip for step 0 after the first sub-batch); STMT i goes out before the prover's work on i starts; PROOF i is sent on a second
 connection by a sender thread while sub-batch i+1 is being proved; the two openings are the only round trips on the critical
-path (2 x RTT per sub-batch, plus the test message's transfer).  Measured (4090 EUR-IS-2 -> CPU pod EU-RO-1, 70 ms RTT):
+path (2 x RTT per sub-batch, plus the test message's transfer -- strictly in sub-batch order, so a session's network floor is
+n_proofs x 2 x RTT whatever the prover overlaps).  ``bench-vu --pipeline N --verifier`` (lane live-pipeline) lifts that
+floor: the prover's stages yield the exchanges as futures (``protocol._coin_future``), the session sends every message as soon
+as 8c allows and reads the replies on a thread, and HELLO ``window = N`` asks the verifier to commit N sub-batches ahead, so
+N openings are in flight together and the floor becomes ~n_proofs / N x 2 x RTT (against a verifier without the window the
+stream degrades to the sequential order: ROOT i+1 waits for COMMIT i+1).  Measured (4090 EUR-IS-2 -> CPU pod EU-RO-1, 70 ms RTT):
 the path carried ~115-150 Mbps for one prover, so a 4096-VU fp8-ada session (221 MB: 181 MB of proofs + 25 MB of test
 messages + statements) is bound by the TRANSFER (~12-15 s), not by the 98 round trips (~7 s); the control messages queue
 behind the proof stream in the bottleneck, which is why the measured "rtt" of an opening (~135 ms) exceeds the path's RTT.
@@ -246,12 +254,13 @@ class LiveCoins:
         the verifier opens its first coin)."""
         self.stmt = stmt
         if getattr(self.session, "pipelined", False):
-            self.session.provide_stmt(self.sub, stmt)          # the network thread sends STMT i in sub-batch order
+            self.session.provide_stmt(self.sub, stmt)          # STMT i goes out as soon as COMMIT i is in
 
     # -- non-blocking variant (``--pipeline N --verifier``): the coin exchanges are futures the prover STAGE yields to
-    # ``pipeline.prove_many`` instead of blocking on the socket; a per-session network thread (``ProverSession``) sends
-    # the messages in sub-batch order and fulfils the futures when the verifier replies.  Each returns ``None`` when the
-    # session is NOT pipelined, so ``protocol._coin_future`` falls back to the blocking calls below (the sequential path).
+    # ``pipeline.prove_many`` instead of blocking on the socket; the session (``ProverSession.start_pipeline``) sends each
+    # message as soon as 8c allows it and a reader thread fulfils the futures when the verifier replies.  Each returns
+    # ``None`` when the session is NOT pipelined, so ``protocol._coin_future`` falls back to the blocking calls below (the
+    # sequential path).
     def commitments_future(self):
         if not getattr(self.session, "pipelined", False):
             return None
@@ -430,22 +439,27 @@ class ProverSession:
     def coins(self, sub: int) -> LiveCoins:
         return LiveCoins(self, sub)
 
-    # -- pipelined coin exchange (``--pipeline N --verifier``): one network thread owns the control connection and runs
-    # the SAME wire sequence the verifier expects (STMT/ROOT/TESTS per sub-batch, in order; COMMIT i+1 pipelined behind
-    # OPEN2 i) while the prover proves several sub-batches at once.  The prover's stages never touch the socket -- they
-    # hand the root / test message over and wait on a Future the network thread fulfils, so the two openings of sub-batch
-    # i overlap the device work (and the other openings) of sub-batches i +- 1.
+    # -- pipelined coin exchange (``--pipeline N --verifier``): the prover's stages never touch the socket -- they hand the
+    # root / test message over (``provide_root`` / ``provide_tests``, sent at once when the protocol allows) and wait on a
+    # Future that a reader thread fulfils from the verifier's replies, so the two openings of sub-batch i overlap the device
+    # work (and the other openings) of sub-batches i +- 1.  Per sub-batch the wire order is 8c's (STMT j, ROOT j after
+    # COMMIT j, TESTS j after OPEN1 j); ACROSS sub-batches the messages go out as soon as they are ready, so with a verifier
+    # that committed W sub-batches ahead (HELLO "window": W = the pipeline depth) up to W openings are in flight at once and
+    # the session's network critical path is ~n/W x 2 x RTT.  A verifier that commits one sub-batch at a time (COMMIT i+1
+    # behind OPEN2 i) gets exactly the old sequential byte stream: ROOT i+1 waits for COMMIT i+1.
     def start_pipeline(self, n: int) -> None:
         self.pipelined = True
         self.pn = n
-        self._cv = threading.Condition()
-        self._stmt_box: dict[int, bytes] = {}
-        self._root_box: dict[int, bytes] = {}
-        self._tests_box: dict[int, bytes] = {}
+        self._cv = threading.Condition()                 # guards the boxes and the futures
+        self._send_lock = threading.Lock()               # one control frame at a time (driver thread and reader thread send)
+        self._stmt_box: dict[int, bytes] = {}            # STMT j not yet sent (goes right before ROOT j)
+        self._root_box: dict[int, bytes] = {}            # ROOT j ready before COMMIT j arrived (sent by the reader on COMMIT j)
+        self._have_commit: set[int] = set(self._commits)
+        self._t_sent: dict[tuple[bytes, int], float] = {}
         self._reply: dict[tuple[bytes, int], Future] = {}
         self._net_err: BaseException | None = None
         self._net_stop = threading.Event()
-        self._net = threading.Thread(target=self._pipeline_net_loop, name="live-coins-net", daemon=True)
+        self._net = threading.Thread(target=self._pipeline_reader, name="live-coins-net", daemon=True)
         self._net.start()
 
     def _reply_future(self, kind: bytes, sub: int) -> Future:
@@ -467,71 +481,88 @@ class ProverSession:
     def open2_future(self, sub: int) -> Future:
         return self._reply_future(K_OPEN2, sub)
 
+    def _check_net(self) -> None:
+        if self._net_err is not None:
+            raise LiveError(f"pipeline network thread failed: {self._net_err!r}")
+
     def provide_stmt(self, sub: int, stmt: bytes) -> None:
+        """The statement of sub-batch ``sub`` (the runner sets it before proving): sent as soon as COMMIT ``sub`` is in
+        (its transfer overlaps the prover's work up to the root, as on the sequential path), else with ROOT ``sub``."""
+        self._check_net()
         with self._cv:
-            self._stmt_box[sub] = stmt
-            self._cv.notify_all()
+            if sub not in self._have_commit:
+                self._stmt_box[sub] = stmt
+                return
+        with self._send_lock:
+            self.send_stmt(sub, stmt)
 
     def provide_root(self, sub: int, root: bytes) -> None:
+        """ROOT ``sub`` (with its STMT ahead if still unsent): sent now when COMMIT ``sub`` is in, else by the reader when
+        it arrives."""
+        self._check_net()
         with self._cv:
-            self._root_box[sub] = root
-            self._cv.notify_all()
+            if sub not in self._have_commit:
+                self._root_box[sub] = root
+                return
+        self._send_root(sub, root)
+
+    def _send_root(self, sub: int, root: bytes) -> None:
+        with self._send_lock:
+            with self._cv:
+                stmt = self._stmt_box.pop(sub, None)
+            if stmt is not None:
+                self.send_stmt(sub, stmt)                                 # STMT j ahead of ROOT j
+            self._t_sent[(K_ROOT, sub)] = time.perf_counter()
+            self._send(self.ctrl, K_ROOT, struct.pack("<I", sub) + root)
 
     def provide_tests(self, sub: int, packed: bytes) -> None:
-        with self._cv:
-            self._tests_box[sub] = packed
-            self._cv.notify_all()
-
-    def _await_box(self, box: dict[int, bytes], sub: int) -> bytes:
-        with self._cv:
-            while sub not in box:
-                if self._net_stop.is_set():
-                    raise LiveError("pipeline aborted before the prover provided its message")
-                self._cv.wait(0.5)
-            return box[sub]
+        """TESTS ``sub`` (the stage has OPEN1 ``sub`` by construction): sent now."""
+        self._check_net()
+        with self._send_lock:
+            self._t_sent[(K_TESTS, sub)] = time.perf_counter()
+            self._send(self.ctrl, K_TESTS, struct.pack("<I", sub) + packed)
 
     def _fulfil(self, kind: bytes, sub: int, val: tuple[bytes, bytes]) -> None:
         f = self._reply_future(kind, sub)
         if not f.done():
             f.set_result(val)
 
-    def _recv_ctrl_expect(self, kind: bytes, sub: int) -> tuple[bytes, bytes]:
-        k, payload = self._recv(self.ctrl)
-        if k == K_ERROR:
-            raise LiveError(f"verifier: {_json(payload).get('error')}")
-        if k != kind:
-            raise LiveError(f"expected {_KIND_NAME[kind]} {sub}, got {_KIND_NAME.get(k, k)}")
-        (i,) = struct.unpack_from("<I", payload)
-        if i != sub:
-            raise LiveError(f"{_KIND_NAME[kind]} for sub-batch {i}, expected {sub}")
-        return payload[4:36], payload[36:68]
-
-    def _pipeline_net_loop(self) -> None:
-        """The wire sequence, sub-batch in order (identical bytes to the sequential prover): COMMIT 0 is already here;
-        per i, send STMT i then ROOT i, read OPEN1 i, send TESTS i, read OPEN2 i, then read COMMIT i+1 (pipelined)."""
+    def _pipeline_reader(self) -> None:
+        """The reader of the control connection while the pipeline runs: every frame is dispatched by (kind, sub-batch) to
+        the Future the stage waits on; a COMMIT releases a root that was ready before it; returns after the last OPEN2
+        (``end`` then sends END and reads the VERDICT itself)."""
         try:
-            c1c2 = self._recv_ctrl_expect(K_COMMIT, 0)
-            self._fulfil(K_COMMIT, 0, c1c2)
-            for i in range(self.pn):
-                stmt = self._await_box(self._stmt_box, i)
-                self.send_stmt(i, stmt)                                  # STMT i (ahead of the root; off the critical path)
-                root = self._await_box(self._root_box, i)
-                t0 = time.perf_counter()
-                self._send(self.ctrl, K_ROOT, struct.pack("<I", i) + root)
-                r1s1 = self._recv_ctrl_expect(K_OPEN1, i)                # V opens slot 1
-                dt = time.perf_counter() - t0
-                self.rtts.append(dt)
-                self._fulfil(K_OPEN1, i, r1s1)
-                tests = self._await_box(self._tests_box, i)
-                t1 = time.perf_counter()
-                self._send(self.ctrl, K_TESTS, struct.pack("<I", i) + tests)
-                r2s2 = self._recv_ctrl_expect(K_OPEN2, i)               # V opens slot 2
-                dt = time.perf_counter() - t1
-                self.rtts.append(dt)
-                self._fulfil(K_OPEN2, i, r2s2)
-                if i + 1 < self.pn:
-                    c = self._recv_ctrl_expect(K_COMMIT, i + 1)         # step 0 of the next sub-batch, pipelined behind OPEN2 i
-                    self._fulfil(K_COMMIT, i + 1, c)
+            opened = 0
+            while opened < self.pn:
+                k, payload = self._recv(self.ctrl)
+                if k == K_ERROR:
+                    raise LiveError(f"verifier: {_json(payload).get('error')}")
+                if k == K_NOP:
+                    continue
+                if k not in (K_COMMIT, K_OPEN1, K_OPEN2) or len(payload) < 68:
+                    raise LiveError(f"expected COMMIT/OPEN1/OPEN2, got {_KIND_NAME.get(k, k)} ({len(payload)} B)")
+                (i,) = struct.unpack_from("<I", payload)
+                val = (payload[4:36], payload[36:68])
+                if k == K_COMMIT:
+                    with self._cv:
+                        self._have_commit.add(i)
+                        root = self._root_box.pop(i, None)
+                        stmt = self._stmt_box.pop(i, None) if root is None else None
+                    self._fulfil(K_COMMIT, i, val)
+                    if root is not None:
+                        self._send_root(i, root)                          # ROOT i (+ STMT i) was ready before its commitment
+                    elif stmt is not None:
+                        with self._send_lock:
+                            self.send_stmt(i, stmt)                       # STMT i now; ROOT i follows when the stage has it
+                    continue
+                want = K_ROOT if k == K_OPEN1 else K_TESTS
+                t0 = self._t_sent.pop((want, i), None)
+                if t0 is None:
+                    raise LiveError(f"{_KIND_NAME[k]} {i} without a {_KIND_NAME[want]} {i} sent")
+                self.rtts.append(time.perf_counter() - t0)                # the opening's round trip
+                self._fulfil(k, i, val)
+                if k == K_OPEN2:
+                    opened += 1
         except BaseException as e:  # noqa: BLE001 -- reported to the driver via the futures and end()
             self._net_err = e
             self._net_stop.set()
@@ -614,10 +645,14 @@ class BenchLive:
         self.n_proofs = n_proofs
         self.verifier = Verifier(args.verifier, hello_for(args, R, n_proofs, total_vus, relation), system_bytes(R.sys))
         self.sess: ProverSession | None = None
+        # the runner sets ``window`` = its pipeline depth when it will prove the recorded reps with ``prove_vus_many``: the
+        # verifier then commits that many sub-batches ahead (HELLO "window"), so their openings can be in flight together
+        self.window = 1
         print(f"live verifier {args.verifier}: one session per recorded rep, {n_proofs} sub-batches each", flush=True)
 
     def begin_rep(self, rep: int) -> None:
-        self.sess = self.verifier.session(self.n_proofs, rep) if rep > 0 else None
+        extra = {"window": int(self.window)} if self.window > 1 else None
+        self.sess = self.verifier.session(self.n_proofs, rep, extra) if rep > 0 else None
 
     def coins(self, si: int, local):
         """The coin source for sub-batch ``si``: live in a recorded rep, ``local`` (the runner's own sample) otherwise."""
@@ -684,13 +719,17 @@ def adjust_timings(proof, coins) -> dict:
     if not isinstance(coins, LiveCoins):
         return proof.timings
     t = proof.timings
+    # under ``--pipeline N`` the stages never block: ``pipeline.prove_many`` already took the driver's idle-on-the-verifier
+    # time out of ``total`` and left this sub-batch's share in ``net_wait`` (0 on the sequential path, where the waits below
+    # are the blocking calls' own)
+    pipelined = t.get("net_wait", 0.0)
     for key, w in (("statement", coins.wait_commit), ("tests_w", coins.wait_open1), ("tests", coins.wait_open1),
                    ("openings", coins.wait_open2)):
         if key in t:
             t[key] = max(0.0, t[key] - w)
     t["total"] = max(0.0, t["total"] - coins.wait)
-    coins.session.wait += coins.wait
-    t["net_wait"] = t.get("net_wait", 0.0) + coins.wait
+    coins.session.wait += coins.wait + pipelined
+    t["net_wait"] = pipelined + coins.wait
     t["net_wait_commit"] = t.get("net_wait_commit", 0.0) + coins.wait_commit
     t["net_wait_open1"] = t.get("net_wait_open1", 0.0) + coins.wait_open1
     t["net_wait_open2"] = t.get("net_wait_open2", 0.0) + coins.wait_open2
@@ -1085,44 +1124,64 @@ class Session(threading.Thread):
                                                      "verifier_host": socket.gethostname(),
                                                      "verifier_core": "ligero-verify" if isinstance(self.server.rust, RustVerifier) else "python",
                                                      "ligero_verify_sha256": self.server.rust.sha256}).encode())
-        # step 0 of sub-batch 0: before anything from the prover
-        self._commit(0)
-        for i in range(self.n_proofs):
-            rec = self.sub[i]
-            # STMT i (the statement ahead of the root; optional -- an older prover sends it inline with ROOT), then ROOT i
+        # step 0: the coin commitments of the first ``window`` sub-batches, before anything from the prover.  ``window`` is the
+        # prover's pipeline depth (HELLO "window"; 1 when absent = the strictly sequential session): with W sub-batches
+        # committed ahead a pipelining prover has W of them in flight and their ROOT / TESTS arrive interleaved.  Each
+        # sub-batch still runs 8c in its own order -- COMMIT j before anything of j, OPEN1 j only after ROOT j, OPEN2 j only
+        # after TESTS j -- and the prover may only speak about COMMITTED sub-batches; every OPEN2 commits the next one, so W
+        # stay outstanding.  W = 1 is byte-for-byte the old sequence (COMMIT i+1 right behind OPEN2 i).
+        window = max(1, min(int(h.get("window") or 1), self.n_proofs))
+        self.window = window
+        committed = 0
+        while committed < window:
+            self._commit(committed)
+            committed += 1
+        rooted: set[int] = set()
+        opened = 0
+        while opened < self.n_proofs:
             kind, payload = self._recv_ctrl()
+            if kind not in (K_STMT, K_ROOT, K_TESTS) or len(payload) < 4:
+                raise LiveError(f"expected STMT/ROOT/TESTS of a committed sub-batch, got {_KIND_NAME.get(kind, kind)}")
             (j,) = struct.unpack_from("<I", payload)
+            if j >= committed:
+                raise LiveError(f"{_KIND_NAME[kind]} {j} before its coin commitment (committed: sub-batches < {committed})")
+            rec = self.sub[j]
             if kind == K_STMT:
-                if j != i:
-                    raise LiveError(f"expected STMT/ROOT {i}, got STMT {j}")
+                # the statement ahead of the root (optional -- an older prover sends it inline with ROOT)
+                if j in rooted:
+                    raise LiveError(f"STMT {j} after ROOT {j}")
                 rec["t_stmt_recv"] = time.time()
                 rec["stmt"] = payload[4:]
                 rec["bytes_stmt"] = len(payload)
-                kind, payload = self._recv_ctrl()
-                (j,) = struct.unpack_from("<I", payload)
-            if kind != K_ROOT or j != i:
-                raise LiveError(f"expected ROOT {i}, got {_KIND_NAME.get(kind, kind)} {j}")
-            rec["t_root_recv"] = time.time()
-            rec["root"] = payload[4:36]
-            if len(payload) > 36:
-                rec["stmt"] = payload[36:]
-            if not rec.get("stmt"):
-                raise LiveError(f"ROOT {i} without a statement (no STMT {i} before it, nothing inline)")
-            rec["bytes_root"] = len(payload)
-            c = self.coins[i]
-            self._send(self.conn, K_OPEN1, struct.pack("<I", i) + c.r1 + c.s1)
-            rec["t_open1_sent"] = time.time()
-            kind, payload = self._recv_ctrl()
-            (j,) = struct.unpack_from("<I", payload)
-            if kind != K_TESTS or j != i:
-                raise LiveError(f"expected TESTS {i}, got {_KIND_NAME.get(kind, kind)} {j}")
+                continue
+            if kind == K_ROOT:
+                if j in rooted:
+                    raise LiveError(f"ROOT {j} twice")
+                rooted.add(j)
+                rec["t_root_recv"] = time.time()
+                rec["root"] = payload[4:36]
+                if len(payload) > 36:
+                    rec["stmt"] = payload[36:]
+                if not rec.get("stmt"):
+                    raise LiveError(f"ROOT {j} without a statement (no STMT {j} before it, nothing inline)")
+                rec["bytes_root"] = len(payload)
+                c = self.coins[j]
+                self._send(self.conn, K_OPEN1, struct.pack("<I", j) + c.r1 + c.s1)
+                rec["t_open1_sent"] = time.time()
+                continue
+            # TESTS j: only after ROOT j (slot 1 open), once
+            if j not in rooted or "tests" in rec:
+                raise LiveError(f"TESTS {j} {'before ROOT ' + str(j) if j not in rooted else 'twice'}")
             rec["t_tests_recv"] = time.time()
             rec["tests"] = _unpack_arrays(payload[4:])
             rec["bytes_tests"] = len(payload)
-            self._send(self.conn, K_OPEN2, struct.pack("<I", i) + c.r2 + c.s2)
+            c = self.coins[j]
+            self._send(self.conn, K_OPEN2, struct.pack("<I", j) + c.r2 + c.s2)
             rec["t_open2_sent"] = time.time()
-            if i + 1 < self.n_proofs:
-                self._commit(i + 1)                       # pipelined: step 0 of the next sub-batch rides behind OPEN2
+            opened += 1
+            if committed < self.n_proofs:
+                self._commit(committed)                   # pipelined: the next sub-batch's step 0 rides behind OPEN2
+                committed += 1
         kind, payload = self._recv_ctrl()
         if kind != K_END:
             raise LiveError(f"expected END, got {_KIND_NAME.get(kind, kind)}")

@@ -871,6 +871,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
     if getattr(args, "verifier", None):
         from .live import BenchLive
         live = BenchLive(args, R, n_proofs, total_vus, rel.name, interactive)
+        if pipeline_depth > 1 and args.device.startswith("cuda"):
+            live.window = pipeline_depth                 # the verifier commits N sub-batches ahead (N openings in flight)
     batch = None
     runs = []
     if args.device.startswith("cuda"):
@@ -891,7 +893,9 @@ def bench_vu_rel(args, rel: Relation) -> int:
             # sub-batch's share of the pass wall, so their sum is the wall.  Coins are sampled per sub-batch as it starts.
             # With --verifier the factory hands out the LIVE verifier's coins in sub-batch order and the coin exchange is
             # non-blocking (lane live-pipeline): the network waits of sub-batch i overlap the device work of i +- 1, so
-            # net_wait falls from n_proofs x 2 x RTT to ~2 x RTT.  PROOF i is sent on the data channel after the pass.
+            # the prover's work hides under the wire time and t.total_live -> the session's network critical path (the
+            # verifier opens the sub-batches strictly in order, 2 x RTT each, on one control connection).  PROOF i is
+            # sent on the data channel after the pass.
             local_factory = lambda i: (protocol_mod.Coins.sample() if interactive else None)  # noqa: E731
             factory = live.pipeline_factory(local_factory) if live is not None else local_factory
             many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], factory, depth=pipeline_depth, min_l=l)
