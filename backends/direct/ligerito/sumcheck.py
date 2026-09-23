@@ -609,6 +609,9 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
         for x in range(lay.n_links):
             sh = (sh + fc_mul(g3p[x], nv[x])) % P
         claim2 = (claim2 + fc_mul(sh, ext_of_int(rep_c, dev))) % P
+    _sync(dev)
+    timings["cmb_setup"] = time.perf_counter() - t2 - timings["cmb_coef_matvec"]
+    t3 = time.perf_counter()
     cmb_msgs, rs2 = [], []
     for t, v in enumerate(sched.cmb):
         M = pp.round(v)
@@ -622,6 +625,8 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
             claim2 = eval_mixed(M, r)
         rs2 += list(r)
     del pp
+    _sync(dev)
+    timings["cmb_rounds"] = time.perf_counter() - t3
     rho = torch.stack(rs2[::-1])                                      # rho[t] <-> variable t of y
     r_i, rho_c = rho[:n_i], rho[:n_c]
     w_only = zc_.clone()
@@ -1293,31 +1298,46 @@ extern "C" __global__ void sc_eq(const u32* __restrict__ tm, const u32* __restri
         for (int p = 0; p < 6; p++) out[x * 6 + p] = (long long)mont(acc[p], 1u);      // mont(a_m, 1) = a
     }
 }
-// base x ext matvec: out[i] = sum_c M[i, c] * e[c]   (e in Montgomery planes (6, C); out normal form, int64 (R, 6)); one block per row
+// base x ext matvec: out[i] = sum_c M[i, c] * e[c]   (e in Montgomery planes (6, C); out normal form, int64 (R, 6));
+// MV_ROWS rows per block so every e load serves MV_ROWS rows
+#define MV_ROWS 8
 extern "C" __global__ void sc_matvec(
-    const int* __restrict__ M, const u32* __restrict__ e, long long* __restrict__ out, long long C)
+    const int* __restrict__ M, const u32* __restrict__ e, long long* __restrict__ out, long long R, long long C)
 {
-    __shared__ u64 sh[6][256];
-    const long long i = blockIdx.x;
-    u64 acc[6];
+    __shared__ u64 sh[MV_ROWS * 6][8];
+    const long long i0 = (long long)blockIdx.x * MV_ROWS;
+    u32 acc[MV_ROWS][6];
     #pragma unroll
-    for (int p = 0; p < 6; p++) acc[p] = 0;
-    for (long long c = threadIdx.x; c < C; c += blockDim.x) {
-        const u32 m = (u32)M[i * C + c];
+    for (int r = 0; r < MV_ROWS; r++) {
         #pragma unroll
-        for (int p = 0; p < 6; p++) acc[p] += mont(e[p * C + c], m);
+        for (int p = 0; p < 6; p++) acc[r][p] = 0;
     }
-    #pragma unroll
-    for (int p = 0; p < 6; p++) sh[p][threadIdx.x] = acc[p] % P64;
-    __syncthreads();
-    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (threadIdx.x < stride) {
-            #pragma unroll
-            for (int p = 0; p < 6; p++) sh[p][threadIdx.x] += sh[p][threadIdx.x + stride];
+    for (long long c = threadIdx.x; c < C; c += blockDim.x) {
+        u32 ev[6];
+        #pragma unroll
+        for (int p = 0; p < 6; p++) ev[p] = __ldg(e + p * C + c);
+        #pragma unroll
+        for (int r = 0; r < MV_ROWS; r++) {
+            if (i0 + r < R) {
+                const u32 m = (u32)__ldg(M + (i0 + r) * C + c);
+                #pragma unroll
+                for (int p = 0; p < 6; p++) acc[r][p] = addmod(acc[r][p], mont(ev[p], m));
+            }
         }
-        __syncthreads();
     }
-    if (threadIdx.x < 6) out[i * 6 + threadIdx.x] = (long long)(sh[threadIdx.x][0] % P64);
+    const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+    #pragma unroll
+    for (int q = 0; q < MV_ROWS * 6; q++) {
+        u64 v = acc[q / 6][q % 6];
+        for (int o = 16; o > 0; o >>= 1) v += __shfl_down_sync(0xffffffffu, v, o);
+        if (lane == 0) sh[q][warp] = v;
+    }
+    __syncthreads();
+    if (threadIdx.x < MV_ROWS * 6 && i0 + threadIdx.x / 6 < R) {
+        u64 t = 0;
+        for (int w = 0; w < 8; w++) t += sh[threadIdx.x][w];
+        out[(i0 + threadIdx.x / 6) * 6 + threadIdx.x % 6] = (long long)(t % P64);
+    }
 }
 """
 
@@ -1568,7 +1588,7 @@ def matvec_base_ext_cuda(M: torch.Tensor, e: torch.Tensor) -> torch.Tensor:
         M = (M.to(torch.int64) % P).to(torch.int32)
     R, C = M.shape
     out = torch.empty((R, D), dtype=torch.int64, device=M.device)
-    _kernel("sc_matvec")((R,), (256,), (_cp(M), _cp(mont_planes(e)), _cp(out), cp.int64(C)))
+    _kernel("sc_matvec")((-(-R // 8),), (256,), (_cp(M), _cp(mont_planes(e)), _cp(out), cp.int64(R), cp.int64(C)))
     return out
 
 
