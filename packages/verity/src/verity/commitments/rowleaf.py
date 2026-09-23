@@ -9,16 +9,15 @@ SHA-256 ``node`` / pad framing, so a verifier that has the digest checks a ``lea
 
 Why a hash and not the words: the B-Ligero relation (``backends/direct/ligero/hashchain.py``) evaluates exactly this
 sponge on its private operand wires and publishes the digest, so a proof binds its operands to a committed row without
-the verifier seeing a word.  The gadget and this committer are the same function (:func:`poseidon2_babybear.hash_row`).
+the verifier seeing a word.  The gadget and this committer are the same function (:func:`poseidon2_babybear.hash_row`; the vectorised
+committer over many rows is ``backends.direct.ligero.poseidon2.row_digests``, this package stays standard-library only).
 """
 from __future__ import annotations
-
-import numpy as np
 
 from . import poseidon2_babybear as h2
 from .merkle import CommitmentDomain
 
-__all__ = ["SCHEMA_ROW", "row_digest", "row_digests", "row_leaf", "row_leaf_value"]
+__all__ = ["SCHEMA_ROW", "row_digest", "row_leaf", "row_leaf_value"]
 
 SCHEMA_ROW = "poseidon2-babybear-w24/row/v2h"
 
@@ -34,11 +33,6 @@ def row_leaf_value(digest) -> bytes:
 def row_digest(words, word_bits: int, role: int) -> list[int]:
     """Poseidon2 digest (8 lanes) of one row of ``word_bits``-bit words (``role``: ``h2.ROLE_X`` or ``h2.ROLE_W``)."""
     return h2.hash_row(words, word_bits, role)
-
-
-def row_digests(rows: np.ndarray, word_bits: int, role: int) -> np.ndarray:
-    """(count, n_words) -> (count, 8) digests, all rows in lockstep."""
-    return h2.hash_rows_np(np.asarray(rows, dtype=np.int64), word_bits, role)
 
 
 def row_leaf(domain: CommitmentDomain, rank: int, digest) -> bytes:

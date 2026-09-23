@@ -34,7 +34,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from verity.commitments import poseidon2_babybear as h2
+from . import poseidon2 as h2
 from .compile import Expr, LigeroCtx, Linear, P, Quadratic, System
 from .relations import Relation
 
@@ -262,7 +262,7 @@ def sponge_states(words, word_bits: int, role: int, n_words: int, n_vus: int, st
     digests (n_vus, 8)) by running the sponge of every VU along its ``steps`` columns, all VUs in lockstep."""
     import torch
     dev = words.device
-    el = torch.as_tensor(h2.pack_words(words.cpu().numpy(), word_bits), dtype=torch.int64, device=dev)   # (l, 16)
+    el = torch.as_tensor(h2.pack_words_np(words.cpu().numpy(), word_bits), dtype=torch.int64, device=dev)   # (l, 16)
     iv = h2.IV(role, word_bits, n_words)
     cap_in = torch.zeros((h2.CAPACITY, l), dtype=torch.int64, device=dev)
     st = torch.zeros((h2.WIDTH, n_vus), dtype=torch.int64, device=dev)

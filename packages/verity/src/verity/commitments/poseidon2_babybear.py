@@ -1,4 +1,4 @@
-"""Poseidon2 over BabyBear, width 24 (``verity.commitments`` reference; the Ligero gadget imports it as ``backends.direct.ligero.poseidon2``) (Plonky3 parameters), as (a) a scalar reference, (b) a numpy row-vectorised
+"""Poseidon2 over BabyBear, width 24 (``verity.commitments`` reference; the Ligero gadget imports it as ``backends.direct.ligero.poseidon2``) (Plonky3 parameters), as (a) a scalar reference (the numpy row-vectorised committer and the torch witness path live in ``backends/direct/ligero/poseidon2.py`` / ``hashchain.py``: this package imports nothing outside the standard library),
 permutation for the committer, and (c) a generic ring evaluation the Ligero gadget runs on affine ``Expr`` values.
 
 Parameters (``Plonky3/baby-bear/src/poseidon2.rs``, fetched 2026-09-23; pinned by ``CONSTANTS_SHA256`` below):
@@ -23,8 +23,6 @@ from __future__ import annotations
 
 import hashlib
 
-import numpy as np
-
 P = 15 * 2**27 + 1
 WIDTH = 24
 RATE = 16
@@ -35,7 +33,7 @@ PARTIAL_ROUNDS = 21
 LANE_BITS = 16                 # bits of operand data per absorbed element
 
 __all__ = ["CAPACITY", "CONSTANTS_SHA256", "DIAG", "HALF_FULL_ROUNDS", "IV", "KAT_24", "LANE_BITS", "M4", "OUT", "P", "PARTIAL_ROUNDS", "RC_EXTERNAL_FINAL", "RC_EXTERNAL_INITIAL", "RC_INTERNAL",
-           "RATE", "ROLE_W", "ROLE_X", "WIDTH", "hash_row", "hash_rows_np", "pack_words", "permute", "permute_np", "permute_ring"]
+           "RATE", "ROLE_W", "ROLE_X", "WIDTH", "hash_row", "pack_words", "permute", "permute_ring"]
 
 # --- round constants (Plonky3 BABYBEAR_POSEIDON2_RC_24_EXTERNAL_INITIAL / _FINAL / _INTERNAL, canonical) --------------
 RC_EXTERNAL_INITIAL = [
@@ -160,20 +158,6 @@ def permute(state: list[int]) -> list[int]:
     return permute_ring([int(x) % P for x in state], _sbox_int, lambda x: x % P)
 
 
-def _sbox_np(x: np.ndarray) -> np.ndarray:
-    x2 = (x * x) % P
-    x4 = (x2 * x2) % P
-    x3 = (x2 * x) % P
-    return (x4 * x3) % P
-
-
-def permute_np(state: np.ndarray) -> np.ndarray:
-    """(24, N) int64 states in [0, p) -> (24, N): N permutations at once (every product of two residues fits int64)."""
-    st = np.asarray(state, dtype=np.int64) % P
-    if st.shape[0] != WIDTH:
-        raise ValueError("state must be (24, N)")
-    out = permute_ring([st[i] for i in range(WIDTH)], _sbox_np, lambda x: x % P)
-    return np.stack(out)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -191,49 +175,29 @@ def IV(role: int, word_bits: int, n_words: int) -> list[int]:
     return [0] * RATE + cap
 
 
-def pack_words(words, word_bits: int) -> np.ndarray:
-    """(..., n_words) words of ``word_bits`` bits -> (..., n_words * word_bits / 16) elements of 16 bits each: consecutive
-    words in little-endian order (``w0 + 2^word_bits w1 + ...``)."""
-    w = np.asarray(words, dtype=np.int64)
+def pack_words(words, word_bits: int) -> list[int]:
+    """``n_words`` words of ``word_bits`` bits (a sequence of ints) -> ``n_words * word_bits / 16`` elements of 16 bits
+    each: consecutive words in little-endian order (``w0 + 2^word_bits w1 + ...``).  Pure Python; the vectorised
+    committer / witness paths (``backends/direct/ligero/poseidon2.py``) implement the same map on arrays."""
+    w = [int(x) for x in words]
     per = LANE_BITS // word_bits
-    if LANE_BITS % word_bits or w.shape[-1] % per:
-        raise ValueError(f"{word_bits}-bit words do not tile 16-bit lanes over {w.shape[-1]} words")
-    if ((w < 0) | (w >= 2**word_bits)).any():
+    if LANE_BITS % word_bits or len(w) % per:
+        raise ValueError(f"{word_bits}-bit words do not tile 16-bit lanes over {len(w)} words")
+    if any(x < 0 or x >= 2**word_bits for x in w):
         raise ValueError("word out of range")
-    g = w.reshape(*w.shape[:-1], w.shape[-1] // per, per)
-    weights = (2 ** (word_bits * np.arange(per, dtype=np.int64)))
-    return (g * weights).sum(-1)
+    return [sum(w[i + q] << (word_bits * q) for q in range(per)) for i in range(0, len(w), per)]
 
 
 def hash_row(words, word_bits: int, role: int) -> list[int]:
     """Scalar reference of the row digest: 8 elements."""
-    el = pack_words(np.asarray(words, dtype=np.int64), word_bits).tolist()
+    el = pack_words(words, word_bits)
     if len(el) % RATE:
         raise ValueError("row does not tile the rate")
-    s = IV(role, word_bits, len(words))
+    s = IV(role, word_bits, len(el) * (LANE_BITS // word_bits))
     for i in range(0, len(el), RATE):
         s = el[i:i + RATE] + s[RATE:]
         s = permute(s)
     return s[:OUT]
-
-
-def hash_rows_np(words: np.ndarray, word_bits: int, role: int) -> np.ndarray:
-    """(N, n_words) rows -> (N, 8) digests, all rows in lockstep (the committer)."""
-    w = np.asarray(words, dtype=np.int64)
-    if w.ndim != 2:
-        raise ValueError("rows must be (N, n_words)")
-    el = pack_words(w, word_bits)                            # (N, E)
-    N, E = el.shape
-    if E % RATE:
-        raise ValueError("row does not tile the rate")
-    iv = IV(role, word_bits, w.shape[1])
-    st = np.zeros((WIDTH, N), dtype=np.int64)
-    for i in range(CAPACITY):
-        st[RATE + i] = iv[RATE + i]
-    for blk in range(0, E, RATE):
-        st[:RATE] = el[:, blk:blk + RATE].T
-        st = permute_np(st)
-    return st[:OUT].T.copy()
 
 
 def digest_bytes(d) -> bytes:

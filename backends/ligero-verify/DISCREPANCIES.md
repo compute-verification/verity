@@ -73,31 +73,9 @@ target as an integer of milli-bits (or the IEEE bytes), and write the digest lay
 
 ## D3. HVZK-mode proofs carry coin commitments and openings that nothing binds -- RESOLVED by b-zk-fix
 
-**Post b-zk-fix.**  `_COMMIT_COINS` is gone; the mode is a `Config` field bound into the statement digest, `prove`
-refuses coins in Fiat-Shamir mode and `verify` rejects a Fiat-Shamir transcript that carries them ("fiat-shamir
-transcript must not carry coins").  The Rust verifier does the same from the statement's mode byte
-(`mut_fiat-shamir_*/coins_planted_in_fs_transcript`, `statement_mode_flipped`: both verifiers reject, same reason).
-The text below is the pre-fix record.
-
-`_COMMIT_COINS` is a module global (`protocol.py`, "red-team control ONLY").  When it is `False` (the campaign's
-HVZK mode, `--no-coin-commitment`) the prover still draws `r_i, s_i`, computes `c_i`, and the transcript still carries
-all six 32-byte values; `_coin_prefix` / `_coin_open` return `b""` so **none of them enters any challenge**, and the
-Python verifier ignores them.  The document (8c) presents the commitment as the ZK-mode step and says nothing about
-the HVZK transcript.  Consequence: 192 bytes of the HVZK proof are free for the prover -- harmless for soundness, but a
-verifier that read the header's "coins present" flag as "coins are committed" would be wrong, and a mutation of them is
-accepted by both verifiers (`mut_hvzk`: `coin_*` cases, 4 of 35 accepted by both -- the agreement holds, the mutation
-is not a forgery).  The Rust verifier takes the *mode* from the verifier's statement (`coin_commitment`), requires the
-coins when it is on, and parses-but-ignores them when it is off, exactly like Python; the proof-file header flag is
-checked for consistency only.
-
-~~~json
-{"id": "BV-D3", "issue": "HVZK proofs contain coin commitments/openings bound to nothing",
- "document": "PROTOCOL.md 8c: commitment is the ZK step; HVZK transcript unspecified",
- "code": "protocol.py _COMMIT_COINS global; prover emits coins in every mode; verifier ignores them when off",
- "verifier": "mode from the statement byte; coins required in interactive mode, refused in fiat-shamir mode", "status": "resolved",
- "owner": "b-zk-fix", "resolution": "Config.mode bound into the digest; the two modes are mutually exclusive in prove/verify (main a52441c)",
- "evidence": ["fixtures/rust_verdicts/mut_fiat-shamir_zk.json (coins_planted_in_fs_transcript, statement_mode_flipped)"]}
-~~~
+Resolved: the mode is a `Config` field bound into the statement digest; `prove` refuses coins in Fiat-Shamir mode and both
+verifiers reject a Fiat-Shamir transcript that carries them ("fiat-shamir transcript must not carry coins";
+`statement_mode_flipped`).  Full history and evidence: `note:r20-proof/coordinator/20260923T0929Z-finding-ligero-verify-resolved-discrepancies`.
 
 ## D4. The Python verifier is interactive; a file verifier checks a Fiat-Shamir transcript -- SUPERSEDED by D7
 
@@ -347,48 +325,11 @@ dataset manifest + word range).  Facts a verifier needs that PROTOCOL.md does no
 
 ## D10. No verifier enforced the union bound across sub-batches -- RESOLVED by b-batch-bound
 
-Found by lane `b-verify-par` (`ligero-verify batch --jobs`), fixed by lane `b-batch-bound` (`main` 5a89d9d).  A
-4096-VU batch is `N_subbatches` = 25 independently committed proofs.  Each proof's soundness is a per-commitment
-number (`soundness()`'s `per_proof_total_log2`, 2^-132.9 at `t = 196`); the claim "the batch is sound to 2^-128"
-rests on the union bound `sum_i 2^-b_i` over the 25, which `config_for(..., n_proofs = 25)` sizes `t` for and
-`bench-vu` *reports* (`security.achieved_log2` = `union_over_proofs`, 2^-128.26 -- a report, not a check).  Neither
-verifier checked it.  `ligero-verify batch` accepted iff every sub-batch accepted, each gated on ITS OWN
-`union_log2 = per_proof_log2 + log2(n_proofs)` -- with `n_proofs` read from the proof's statement header, a
-prover-supplied field that is not in the statement digest (only `l, n, D, t, target, zk, k, mode` and the words are).
-The Python paths (`bench-vu`, `serialize verify`) had no batch-level check at all.  Consequences: 25 proofs each
-claiming `n_proofs = 1` at 2^-132.9 passed while the batch was only 2^-128.26 (the number that saved it is a
-coincidence of the same `t`); 25 proofs sized for a 25-batch presented as a 26-batch would have passed at 2^-128.2
-claimed as 2^-128; and the `l = 256` fixture (`t = 189`, 2^-128.16, sized for one proof) copied six times was the
-"honest batch" of the b-verify-par determinism tests, a batch that is 2^-125.57.
-
-**Fix (PROTOCOL.md 8c, "Batch verification").**  A batch verifier with target `t` bits accepts iff (1) every sub-batch
-proof verifies against its own statement with the shared system, (2) `sum_i 2^-b_i <= 2^-t` with `b_i` the
-verifier's own recomputation of proof `i`'s bound from that proof's `(n, k, l, t, D, mode, zk)`, (3) every proof's
-`n_proofs` equals the number `N` presented.  Implemented as `protocol.batch_bound` (Python; `ChainRunner.batch_bound`
-/ `verify_batch` in `bench-vu`, `serialize verify-batch --dir DIR --target-bits T` on files) and
-`verify::batch_bound` (Rust; `ligero-verify batch --target-bits T`, default 128, `--soundness-bits` its alias; the
-per-proof gate of `verify` is off in batch mode because the batch gate is the right one).  Same reason strings, same
-precedence (unreadable input, a rejected sub-batch, `batch: n_proofs mismatch (<name>: n_proofs = k, N sub-batches
-presented)`, `batch: union bound 2^-x over N sub-batches exceeds the target 2^-t`); the accept reason and the JSON
-carry the batch bits (`batch_bits = -log2 sum`; `per_proof_bits[]`, `n_proofs_claimed[]`).  `bench-vu`'s
-`security.achieved_log2` is now the verifier's `batch_log2` (asserted equal to `soundness()`'s union to 1e-6), with
-`achieved_bits` and `verifier_target_bits` beside it; `N_subbatches` and `B_proof` were already in the fingerprint.
-Rule (2) needs nothing prover-supplied: `b_i` is a function of digest-bound parameters, so relabelling `n_proofs`
-cannot move the bound -- it can only fail rule (3).  The check is arithmetic on `N` numbers inside the batch wall
-(re-timed at `--jobs 25` on the B = 4096 batch before/after: lane note `b-batch-bound`).  Both verifiers agree on the
-batch bits to 1e-6 and on every verdict and reason of the test matrix (honest 4-batch accepted at 128; the same
-proofs rejected at a target above the achieved bound; four `n_proofs = 1` proofs presented together rejected with
-the mismatch string in both).  D1 is unchanged: a single `protocol.verify` still checks the transcript only.
-
-~~~json
-{"id": "BV-D10", "issue": "the batch verdict was 'every sub-batch accepts'; the union bound over the sub-batches presented and n_proofs = N were never checked by any verifier (n_proofs is a prover-supplied header field outside the statement digest)",
- "document": "PROTOCOL.md 8c (before b-batch-bound): the union bound stated for the prover's sizing, no batch verification rule",
- "code": "vu.py bench_vu asserted each sub-batch and REPORTED the union; serialize.py had per-file verify only",
- "verifier": "main.rs batch: accept iff every sub-batch accepts, each gated on its own n_proofs",
- "status": "resolved", "owner": "b-batch-bound",
- "resolution": "PROTOCOL.md 8c 'Batch verification'; protocol.batch_bound / verify::batch_bound, --target-bits (default 128), same reason strings; tests/fixture.rs the_batch_union_bound_and_n_proofs_are_enforced, tests/test_ligero_batch_bound.py",
- "evidence": ["b-verify-par verifier results labelled finding=batch-union-bound-unenforced-before-<commit>", "lane note b-batch-bound (test matrix, batch bits, timing before/after)"]}
-~~~
+Resolved: both verifiers check the union bound `union_log2 = per_proof_log2 + log2(n_proofs)` over the `N` sub-batches
+presented, with `n_proofs` read from the statement header and required to equal `N` (`protocol.batch_bound` /
+`verify_batch`, `serialize verify-batch --dir DIR --target-bits T`; Rust `verify::batch_bound`, `ligero-verify batch
+--target-bits T`, default 128).  Full text and evidence:
+`note:r20-proof/coordinator/20260923T0929Z-finding-ligero-verify-resolved-discrepancies`.
 
 ## D11. Relations beyond the Ampere BF16 unit (lane `ligero-verify-relations`): what a statement does not say, and the per-relation pin
 

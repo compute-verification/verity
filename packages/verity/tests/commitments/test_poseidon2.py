@@ -15,7 +15,6 @@ from verity.commitments import rowleaf
 def test_known_answer_plonky3_width_24() -> None:
     inp, out = h2.KAT_24
     assert h2.permute(inp) == out
-    assert h2.permute_np(np.asarray(inp, dtype=np.int64)[:, None])[:, 0].tolist() == out
 
 
 def test_constants_pinned_by_digest() -> None:
@@ -30,18 +29,12 @@ def test_ring_evaluation_is_the_scalar_permutation() -> None:
     st = [int(x) for x in rng.integers(0, h2.P, size=h2.WIDTH)]
     ring = h2.permute_ring(list(st), lambda x: pow(x, 7, h2.P), lambda x: x % h2.P)
     assert ring == h2.permute(st)
-    cols = rng.integers(0, h2.P, size=(h2.WIDTH, 5)).astype(np.int64)
-    vec = h2.permute_np(cols)
-    for j in range(5):
-        assert vec[:, j].tolist() == h2.permute([int(x) for x in cols[:, j]])
 
 
 def test_sponge_rows_scalar_equals_vectorised_and_separates_roles() -> None:
     rng = np.random.default_rng(2)
-    rows = rng.integers(0, 2**16, size=(7, 1536)).astype(np.int64)
-    vec = h2.hash_rows_np(rows, 16, h2.ROLE_X)
-    for i in range(7):
-        assert vec[i].tolist() == h2.hash_row(rows[i].tolist(), 16, h2.ROLE_X)
+    rows = rng.integers(0, 2**16, size=(2, 1536)).astype(np.int64)
+    assert h2.hash_row(rows[0].tolist(), 16, h2.ROLE_X) != h2.hash_row(rows[1].tolist(), 16, h2.ROLE_X)
     assert h2.hash_row(rows[0].tolist(), 16, h2.ROLE_W) != h2.hash_row(rows[0].tolist(), 16, h2.ROLE_X)
     # the same bytes as 8-bit words are another object (different IV: word width and count)
     bytes8 = rng.integers(0, 256, size=(1536,)).astype(np.int64)
@@ -54,13 +47,13 @@ def test_sponge_rows_scalar_equals_vectorised_and_separates_roles() -> None:
 def test_pack_words_is_injective_and_below_p() -> None:
     rng = np.random.default_rng(3)
     for bits, per in ((16, 1), (8, 2), (4, 4)):
-        words = rng.integers(0, 2**bits, size=(50, 16 * per)).astype(np.int64)
+        words = rng.integers(0, 2**bits, size=(16 * per,)).astype(np.int64).tolist()
         el = h2.pack_words(words, bits)
-        assert el.shape == (50, 16) and el.max() < 2**16 < h2.P
-        back = np.stack([(el >> (bits * q)) & (2**bits - 1) for q in range(per)], 2).reshape(50, 16 * per)
-        assert np.array_equal(back, words)
+        assert len(el) == 16 and max(el) < 2**16 < h2.P
+        back = [(e >> (bits * q)) & (2**bits - 1) for e in el for q in range(per)]
+        assert back == words
     with pytest.raises(ValueError):
-        h2.pack_words(np.array([[2**16]]), 16)
+        h2.pack_words([2**16], 16)
 
 
 def test_one_word_changes_the_digest() -> None:
@@ -81,6 +74,5 @@ def test_row_leaf_value_and_leaf_hash() -> None:
     assert leaf == dom.leaf(5, 5, rowleaf.SCHEMA_ROW, val) and leaf != rowleaf.row_leaf(dom, 6, d)
     with pytest.raises(ValueError):
         rowleaf.row_leaf_value(d[:7])
-    assert np.array_equal(rowleaf.row_digests(np.tile(np.arange(1536), (2, 1)), 16, h2.ROLE_W)[0], np.asarray(d))
     # the digest text is stable (a regression pin of the sponge on a fixed row)
     assert hashlib.sha256(val).hexdigest() == hashlib.sha256(rowleaf.row_leaf_value(rowleaf.row_digest(list(range(1536)), 16, h2.ROLE_W))).hexdigest()
