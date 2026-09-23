@@ -2,6 +2,9 @@
 
     python tools/native_peak/measure.py --dtype bf16  [--sizes 8192,16384] [--warmup 3] [--reps 5] [--sustain-s 2.0]
     python tools/native_peak/measure.py --dtype e4m3   # FP8 e4m3 inputs, FP32 accumulate (torch._scaled_mm); skips cleanly where unsupported
+    python tools/native_peak/measure.py --dtype nvfp4  # sm_120 only: the block-scaled FP4 mma.sync instruction itself (mma_peak_fp4.cu),
+                                                       # register-resident operands, every warp of every SM -- an instruction peak, not a GEMM;
+                                                       # a cuBLASLt NVFP4 GEMM through torch._scaled_mm is attempted beside it and recorded
 
 One run = one dtype = one artifact.  For each square size n the tool runs `--warmup` untimed GEMMs, a `--sustain-s` phase of
 back-to-back GEMMs (so clocks and power settle where they will sit under load, sampled by `nvidia-smi` every 100 ms), then
@@ -33,16 +36,26 @@ from pathlib import Path
 
 RESULT_SCHEMA = "research/result/v0.1"
 KIND = "native-peak/v1"
-DTYPES = ("bf16", "e4m3")
+DTYPES = ("bf16", "e4m3", "nvfp4")
 
 #: Datasheet dense tensor-core peaks (flop/s) with FP32 accumulate, keyed by a regex on `torch.cuda.get_device_name`.  First match
 #: wins.  RTX 4090: NVIDIA Ada GPU architecture whitepaper (BF16 with FP32 acc 165.2 TFLOPS, FP8 with FP32 acc 330.3 TFLOPS,
-#: boost clock, dense).  A100 SXM4 / PCIe 80GB: NVIDIA A100 datasheet (BF16 312 TFLOPS dense; no FP8 tensor cores).
+#: boost clock, dense).  A100 SXM4 / PCIe 80GB: NVIDIA A100 datasheet (BF16 312 TFLOPS dense; no FP8 tensor cores).  RTX 5090:
+#: NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A table "GeForce RTX 5090 vs RTX 4090 vs RTX 3090" -- BF16 with FP32
+#: accumulate 209.5, FP8 with FP32 accumulate 419, "Peak FP4 Tensor TFLOPS with FP32 Accumulate (FP4 AI TOPS)" 1676 dense / 3352
+#: with 2:4 sparsity (the card's headline "3352 AI TOPS" is the sparse figure), all at the 2407 MHz boost clock.
 SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
-    (r"RTX\s*4090", {"bf16": 165.2e12, "e4m3": 330.3e12}, "NVIDIA Ada GPU Architecture whitepaper, RTX 4090 dense, FP32 accumulate"),
-    (r"A100-SXM4", {"bf16": 312.0e12, "e4m3": None}, "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB), BF16 dense; Ampere has no FP8"),
-    (r"A100.*PCIe", {"bf16": 312.0e12, "e4m3": None}, "NVIDIA A100 Tensor Core GPU datasheet (PCIe 80GB), BF16 dense; Ampere has no FP8"),
+    (r"RTX\s*4090", {"bf16": 165.2e12, "e4m3": 330.3e12, "nvfp4": None}, "NVIDIA Ada GPU Architecture whitepaper, RTX 4090 dense, FP32 accumulate; Ada has no FP4"),
+    (r"A100-SXM4", {"bf16": 312.0e12, "e4m3": None, "nvfp4": None}, "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB), BF16 dense; Ampere has no FP8"),
+    (r"A100.*PCIe", {"bf16": 312.0e12, "e4m3": None, "nvfp4": None}, "NVIDIA A100 Tensor Core GPU datasheet (PCIe 80GB), BF16 dense; Ampere has no FP8"),
+    (r"RTX\s*5090", {"bf16": 209.5e12, "e4m3": 419.0e12, "nvfp4": 1676.0e12},
+     "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, RTX 5090 dense with FP32 accumulate (FP4: 1676 dense, 3352 sparse)"),
 ]
+
+#: --dtype nvfp4: the block-scaled FP4 instruction itself (`mma_peak_fp4.cu`) -- see `measure_nvfp4_mma`.
+NVFP4_MMA_FLOP = 2 * 16 * 8 * 64          # one mma.sync m16n8k64
+NVFP4_SOURCE = "mma_peak_fp4.cu"
+NVFP4_ARCH = "sm_120a"
 
 SMI_FIELDS = ("timestamp", "clocks.sm", "clocks.mem", "power.draw", "temperature.gpu", "clocks_throttle_reasons.active")
 
@@ -261,6 +274,195 @@ def measure_size(n: int, dtype: str, device: str, warmup: int, reps: int, sustai
             "check": check, "kernels": names, "peak_device_bytes": peak_mem}
 
 
+# ---- nvfp4: the instruction peak ------------------------------------------------------------------------------------------------------------
+
+HERE = Path(__file__).resolve().parent
+
+
+def nvcc_bin() -> str | None:
+    return shutil.which("nvcc") or ("/usr/local/cuda/bin/nvcc" if Path("/usr/local/cuda/bin/nvcc").is_file() else None)
+
+
+def build_nvfp4(out: Path) -> tuple[Path, str]:
+    """nvcc the microbenchmark for sm_120a (compute_120a PTX named explicitly, as the probe does: ptxas refuses `.block_scale`
+    on plain sm_120); returns (path of the .so, nvcc version line)."""
+    nvcc = nvcc_bin()
+    if nvcc is None:
+        raise FileNotFoundError("nvcc not found (PATH or /usr/local/cuda/bin)")
+    so = out / f"lib{Path(NVFP4_SOURCE).stem}_{NVFP4_ARCH}.so"
+    ver = subprocess.run([nvcc, "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
+    subprocess.run([nvcc, "-O2", f"-gencode=arch=compute_{NVFP4_ARCH[3:]},code={NVFP4_ARCH}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so),
+                    str(HERE / NVFP4_SOURCE)], check=True)
+    return so, " / ".join(line.strip() for line in ver)
+
+
+def nvfp4_sass(so: Path) -> dict:
+    """`cuobjdump -sass` on the microbenchmark: the MMA opcodes and their static count in the loop body (NSETS x NACC = 32 in
+    the unrolled body + nothing else that is an MMA).  The same opcode name the probe records (OMMA.16864.F32.E2M1.E2M1.UE4M3)."""
+    nvcc = nvcc_bin()
+    cuobjdump = str(Path(nvcc).parent / "cuobjdump") if nvcc else shutil.which("cuobjdump")
+    if not cuobjdump or not Path(cuobjdump).is_file():
+        return {"sass": "not captured", "opcodes": [], "mma_count": 0, "error": "cuobjdump not found"}
+    text = subprocess.run([cuobjdump, "-sass", str(so)], capture_output=True, text=True, check=True).stdout
+    ops: dict[str, int] = {}
+    for line in text.splitlines():
+        m = re.search(r"\b((?:H|Q|I|O|D|B)?G?MMA(?:\.[A-Z0-9_]+)*)\b", line)
+        if m and "*/" in line:
+            ops[m.group(1)] = ops.get(m.group(1), 0) + 1
+    return {"sass": ", ".join(sorted(ops)) if ops else "not captured", "opcodes": sorted(ops), "mma_count": sum(ops.values()),
+            "per_opcode": ops, "error": None if ops else "no MMA opcode in cuobjdump -sass"}
+
+
+def nvfp4_fragments(nwarps: int, words_per_lane: int, seed: int = 20260922):
+    """Random register fragments per lane: E2M1 nibbles for a[4] / b[2] (every code, both signs), UE4M3 scale bytes for sfa / sfb
+    drawn from the finite codes around 1 (0x30..0x47: 2^-3 .. 2^4 x mantissa) -- toggling operand bits, as a GEMM would, and
+    accumulators that stay finite over any run length this tool uses."""
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    nsets = words_per_lane // 8
+    frags = np.zeros((nwarps * 32, nsets, 8), dtype=np.uint32)
+    frags[:, :, :6] = rng.integers(0, 2**32, size=(nwarps * 32, nsets, 6), dtype=np.uint64).astype(np.uint32)
+    scales = rng.integers(0x30, 0x48, size=(nwarps * 32, nsets, 2, 4), dtype=np.uint32)
+    packed = scales[..., 0] | (scales[..., 1] << 8) | (scales[..., 2] << 16) | (scales[..., 3] << 24)
+    frags[:, :, 6:8] = packed
+    return np.ascontiguousarray(frags.reshape(-1))
+
+
+def measure_nvfp4_mma(device: str, warmup: int, reps: int, sustain_s: float, out_dir: Path, warps_per_sm: int = 16,
+                      target_rep_s: float = 0.25) -> dict:
+    """The sustained issue rate of `mma.sync.kind::mxf4nvf4 ... e2m1.e2m1.f32.ue4m3` from every warp of every SM with
+    register-resident operands (`mma_peak_fp4.cu`): flop = launches x warps x iterations x 32 MMAs x 16,384.  Same protocol as
+    `measure_size`: `warmup` untimed launches, >= `sustain_s` of back-to-back launches, then `reps` event-timed launches
+    (median).  The `check` is finiteness + bit-identical outputs across two launches + the SASS opcode count."""
+    import ctypes
+
+    import numpy as np
+    import torch
+
+    so, nvcc_ver = build_nvfp4(out_dir)
+    lib = ctypes.CDLL(str(so))
+    lib.nvfp4_peak_device.argtypes = [ctypes.POINTER(ctypes.c_int)] * 4
+    lib.nvfp4_peak_setup.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    lib.nvfp4_peak_run.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_longlong, ctypes.POINTER(ctypes.c_float), ctypes.c_void_p]
+    sms, maxthr, major, minor = (ctypes.c_int() for _ in range(4))
+    rc = lib.nvfp4_peak_device(sms, maxthr, major, minor)
+    if rc:
+        raise RuntimeError(f"nvfp4_peak_device rc={rc}")
+    warps_per_block = 4
+    blocks_per_sm = warps_per_sm // warps_per_block
+    nblocks = sms.value * blocks_per_sm
+    nwarps = nblocks * warps_per_block
+    words = lib.nvfp4_peak_words_per_lane()
+    mmas_per_iter = lib.nvfp4_peak_mmas_per_iter()
+    frags = nvfp4_fragments(nwarps, words)
+    rc = lib.nvfp4_peak_setup(frags.ctypes.data, nwarps)
+    if rc:
+        raise RuntimeError(f"nvfp4_peak_setup rc={rc} (cuda error)")
+    ms = ctypes.c_float()
+    sink = np.zeros(nwarps * 32 * 4, dtype=np.float32)
+
+    def run(iters: int, want_sink: bool = False) -> float:
+        rc = lib.nvfp4_peak_run(nblocks, warps_per_block, iters, ms, sink.ctypes.data if want_sink else None)
+        if rc:
+            raise RuntimeError(f"nvfp4_peak_run rc={rc} (cuda error)")
+        return ms.value / 1e3
+
+    flop_per_iter = float(nwarps) * mmas_per_iter * NVFP4_MMA_FLOP
+    # calibrate the iteration count to ~target_rep_s per launch
+    t_cal = run(2000)
+    iters = max(2000, int(2000 * target_rep_s / max(t_cal, 1e-6)))
+    for _ in range(warmup):
+        run(iters)
+    t_sus0 = time.time()
+    k, sus_secs = 0, 0.0
+    while True:
+        sus_secs += run(iters)
+        k += 1
+        if time.time() - t_sus0 >= sustain_s:
+            break
+    t_rep0 = time.time()
+    times = [run(iters) for _ in range(reps)]
+    t_rep1 = time.time()
+    med = statistics.median(times)
+    flop = flop_per_iter * iters
+    # check: finite, deterministic across two launches, expected SASS
+    run(iters, want_sink=True)
+    first = sink.copy()
+    run(iters, want_sink=True)
+    finite = bool(np.isfinite(first).all())
+    same = bool(np.array_equal(first.view(np.uint32), sink.view(np.uint32)))
+    sass = nvfp4_sass(so)
+    ok = finite and same and sass["mma_count"] == mmas_per_iter and all("E2M1" in op for op in sass["opcodes"])
+    check = {"ok": ok, "finite": finite, "deterministic": same, "sass_mma_count": sass["mma_count"], "expected_mma_count": mmas_per_iter,
+             "opcodes": sass["opcodes"], "tolerance": 0.0, "max_rel_err": 0.0,
+             "what": "outputs finite and bit-identical across two launches; cuobjdump counts exactly NSETS x NACC E2M1 MMAs in the kernel"}
+    lib.nvfp4_peak_teardown()
+    label = f"mma_m16n8k64_x{iters}"
+    return {"n": None, "m": 16, "k": 64, "label": label, "instruction": "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3",
+            "grid": {"sms": sms.value, "blocks": nblocks, "warps_per_block": warps_per_block, "warps": nwarps, "mmas_per_iteration": mmas_per_iter,
+                     "iterations": iters, "accumulator_chains": 8, "operand_sets": words // 8}, "cc": f"{major.value}.{minor.value}", "nvcc": nvcc_ver,
+            "so": so.name, "flop": flop, "warmup": warmup, "reps": reps, "seconds_all": times, "seconds_median": med, "seconds_min": min(times),
+            "seconds_max": max(times), "flop_per_second": flop / med,
+            "sustain": {"seconds": sus_secs, "iterations": k, "flop_per_second": flop * k / sus_secs},
+            "smi_window": {"t0": t_sus0, "t1": t_rep1, "sustain_s": t_rep0 - t_sus0, "timed_s": t_rep1 - t_rep0},
+            "check": check, "kernels": ["nvfp4_peak_kernel"], "sass": sass, "peak_device_bytes": int(frags.nbytes + sink.nbytes)}
+
+
+def try_nvfp4_cublaslt_gemm(n: int, device: str, warmup: int, reps: int) -> dict:
+    """Best-effort: an NVFP4 GEMM through `torch._scaled_mm` (cuBLASLt's block-scaled FP4 path; torch >= 2.8 exposes
+    float4_e2m1fn_x2 operands with 1x16 float8_e4m3fn block scales).  Records what the toolchain does; never raises."""
+    import torch
+
+    rec: dict = {"attempted": True, "n": n, "supported": False, "reason": None, "flop_per_second": None, "seconds_median": None}
+    try:
+        if not hasattr(torch, "float4_e2m1fn_x2"):
+            rec["reason"] = f"torch {torch.__version__} has no float4_e2m1fn_x2 dtype"
+            return rec
+        blk = 16
+        a = torch.randint(0, 256, (n, n // 2), device=device, dtype=torch.uint8).view(torch.float4_e2m1fn_x2)
+        b = torch.randint(0, 256, (n, n // 2), device=device, dtype=torch.uint8).view(torch.float4_e2m1fn_x2).t()
+        sa = torch.full((n, n // blk), 0x38, device=device, dtype=torch.uint8).view(torch.float8_e4m3fn)     # 1.0 scales, 1x16 blocks
+        sb = torch.full((n, n // blk), 0x38, device=device, dtype=torch.uint8).view(torch.float8_e4m3fn)
+        fn = None
+        err = []
+        variants = []
+        if hasattr(torch, "_scaled_mm_v2") and hasattr(torch, "ScalingType"):
+            variants.append(("_scaled_mm_v2 BlockWise1x16", lambda: torch._scaled_mm_v2(a, b, [sa], [sb], [torch.ScalingType.BlockWise1x16],
+                                                                                          [torch.ScalingType.BlockWise1x16], None, torch.float32)))
+        variants.append(("_scaled_mm blockwise scales", lambda: torch._scaled_mm(a, b, scale_a=sa, scale_b=sb, out_dtype=torch.float32)))
+        for name, cand in variants:
+            try:
+                out = cand()
+                torch.cuda.synchronize()
+                fn, rec["variant"] = cand, name
+                break
+            except Exception as ex:  # noqa: BLE001
+                err.append(f"{name}: {type(ex).__name__}: {str(ex)[:300]}")
+        if fn is None:
+            rec["reason"] = "; ".join(err)
+            return rec
+        for _ in range(warmup):
+            fn()
+        torch.cuda.synchronize()
+        times = []
+        for _ in range(reps):
+            s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            s.record()
+            fn()
+            e.record()
+            e.synchronize()
+            times.append(s.elapsed_time(e) / 1e3)
+        med = statistics.median(times)
+        rec.update({"supported": True, "seconds_all": times, "seconds_median": med, "flop_per_second": 2.0 * n ** 3 / med,
+                    "kernels": kernel_names(fn), "note": "unit scales, random nibbles; throughput only (no numerical check)"})
+    except Exception as ex:  # noqa: BLE001
+        rec["reason"] = f"{type(ex).__name__}: {str(ex)[:300]}"
+    finally:
+        torch.cuda.empty_cache()
+    return rec
+
+
 # ---- SASS (only with tools already present) ------------------------------------------------------------------------------------------------
 
 def capture_sass(dtype: str, n: int, device: str, out_dir: Path, timeout_s: float = 240.0) -> dict:
@@ -333,14 +535,19 @@ def source_commit() -> str | None:
 
 # ---- result.json -------------------------------------------------------------------------------------------------------------------------------
 
+def _label(s: dict) -> str:
+    return s["label"] if s.get("label") else f"{s['n']}^3"
+
+
 def build_result(run_id: str, dtype: str, envd: dict, sizes: list[dict], sass: dict, smi_all: dict, skipped: str | None, elapsed: float,
-                 measurement_files: list[str]) -> dict:
-    """The `native-peak/v1` document: headline = the best size's median-of-reps throughput."""
+                 measurement_files: list[str], gemm_attempt: dict | None = None) -> dict:
+    """The `native-peak/v1` document: headline = the best size's median-of-reps throughput (nvfp4: the instruction loop; the
+    cuBLASLt GEMM attempt, when the toolchain supports one, is recorded beside it as `gemm_attempt`)."""
     spec, spec_src = spec_peak(envd.get("device") or "", dtype)
     best = max(sizes, key=lambda s: s["flop_per_second"]) if sizes else None
     fps = best["flop_per_second"] if best else None
     frac = (fps / spec) if (fps and spec) else None
-    per_size = {f"{s['n']}^3": {"seconds_median": s["seconds_median"], "seconds_all": s["seconds_all"], "flop_per_second": s["flop_per_second"],
+    per_size = {_label(s): {"seconds_median": s["seconds_median"], "seconds_all": s["seconds_all"], "flop_per_second": s["flop_per_second"],
                                "fraction_of_spec": (s["flop_per_second"] / spec) if spec else None, "sustained_flop_per_second": s["sustain"]["flop_per_second"],
                                "sustain_iterations": s["sustain"]["iterations"], "check_ok": s["check"]["ok"], "max_rel_err": s["check"]["max_rel_err"],
                                "kernels": s["kernels"], "clocks_mhz": s.get("smi", {}).get("clocks_sm_mhz"), "clocks_mem_mhz": s.get("smi", {}).get("clocks_mem_mhz"),
@@ -349,12 +556,25 @@ def build_result(run_id: str, dtype: str, envd: dict, sizes: list[dict], sass: d
     head_smi = best.get("smi", {}) if best else {}
     clocks = (head_smi.get("clocks_sm_mhz") or {}).get("median") if head_smi else None
     power = (head_smi.get("power_w") or {}).get("median") if head_smi else None
-    method = (f"cublas dense gemm {best['n']}^3, median of {best['reps']} (after {best['warmup']} warmups + {best['sustain']['seconds']:.1f} s sustained), "
-              f"{'torch.matmul bf16' if dtype == 'bf16' else 'torch._scaled_mm e4m3 x e4m3 -> fp32, unit scales'}" if best else
-              f"skipped: {skipped}")
+    if dtype == "nvfp4" and best:
+        g = best["grid"]
+        method = (f"instruction microbenchmark: {best['instruction']} issued back to back from {g['warps']} warps ({g['warps_per_block']}/block x "
+                  f"{g['blocks']} blocks on {g['sms']} SMs), {g['accumulator_chains']} independent accumulator chains x {g['operand_sets']} register-resident "
+                  f"operand sets, {g['iterations']} x {g['mmas_per_iteration']} MMAs per launch, median of {best['reps']} event-timed launches (after "
+                  f"{best['warmup']} warmups + {best['sustain']['seconds']:.1f} s sustained); no memory traffic -- an upper bound on any GEMM built from it")
+    else:
+        method = (f"cublas dense gemm {best['n']}^3, median of {best['reps']} (after {best['warmup']} warmups + {best['sustain']['seconds']:.1f} s sustained), "
+                  f"{'torch.matmul bf16' if dtype == 'bf16' else 'torch._scaled_mm e4m3 x e4m3 -> fp32, unit scales'}" if best else
+                  f"skipped: {skipped}")
     checks_ok = bool(sizes) and all(s["check"]["ok"] for s in sizes)
     if skipped:
         validation = {"status": "not_run", "checker": "fp32 reference sub-block", "detail": f"skipped: {skipped}", "evidence": []}
+    elif dtype == "nvfp4":
+        c = best["check"]
+        validation = {"status": "passed" if checks_ok else "failed",
+                      "checker": "outputs finite and bit-identical across two launches; cuobjdump -sass counts exactly the unrolled body's E2M1 MMAs",
+                      "detail": f"finite={c['finite']} deterministic={c['deterministic']} sass {c['sass_mma_count']}/{c['expected_mma_count']} {c['opcodes']} "
+                                f"{'ok' if c['ok'] else 'FAIL'}", "evidence": measurement_files[:1]}
     else:
         validation = {"status": "passed" if checks_ok else "failed", "checker": "fp32 reference on a 256x256 sub-block of every timed product",
                       "detail": "; ".join(f"{s['n']}^3 max_rel_err {s['check']['max_rel_err']:.2e} (tol {s['check']['tolerance']:.0e}) {'ok' if s['check']['ok'] else 'FAIL'}" for s in sizes),
@@ -365,9 +585,12 @@ def build_result(run_id: str, dtype: str, envd: dict, sizes: list[dict], sass: d
         if frac is not None:
             meas += [{"name": "fraction_of_spec", "value": frac, "unit": "ratio"}]
         for s in sizes:
-            meas += [{"name": f"gemm_{s['n']}_seconds", "value": s["seconds_median"], "unit": "s"},
-                     {"name": f"gemm_{s['n']}_flop_per_second", "value": s["flop_per_second"], "unit": "flop/s"},
-                     {"name": f"gemm_{s['n']}_sustained_flop_per_second", "value": s["sustain"]["flop_per_second"], "unit": "flop/s"}]
+            stem = s["label"] if s.get("label") else f"gemm_{s['n']}"
+            meas += [{"name": f"{stem}_seconds", "value": s["seconds_median"], "unit": "s"},
+                     {"name": f"{stem}_flop_per_second", "value": s["flop_per_second"], "unit": "flop/s"},
+                     {"name": f"{stem}_sustained_flop_per_second", "value": s["sustain"]["flop_per_second"], "unit": "flop/s"}]
+        if gemm_attempt and gemm_attempt.get("supported"):
+            meas += [{"name": f"cublaslt_gemm_{gemm_attempt['n']}_flop_per_second", "value": gemm_attempt["flop_per_second"], "unit": "flop/s"}]
         if clocks is not None:
             meas += [{"name": "clocks_sm_mhz_median", "value": clocks, "unit": "MHz"}]
         if power is not None:
@@ -378,6 +601,13 @@ def build_result(run_id: str, dtype: str, envd: dict, sizes: list[dict], sass: d
            "kernel": (best["kernels"] if best else None), "driver": envd.get("driver"), "cuda": envd.get("cuda"), "torch": envd.get("torch"),
            "clocks_mhz": clocks, "power_w": power, "smi_headline_window": head_smi or None, "smi_whole_run": smi_all, "sizes": per_size,
            "skipped": skipped, "environment": envd}
+    if dtype == "nvfp4":
+        top["instruction"] = best["instruction"] if best else None
+        top["grid"] = best["grid"] if best else None
+        top["gemm_attempt"] = gemm_attempt
+        if best:
+            top["sass"] = best["sass"]["sass"]
+            top["sass_detail"] = best["sass"]
     fp = {"tool": "native_peak", "version": "1", "device": envd.get("device"), "sm": envd.get("sm"), "dtype": dtype, "accumulate": "fp32", "method": method,
           "sizes": [s["n"] for s in sizes], "warmup": sizes[0]["warmup"] if sizes else None, "reps": sizes[0]["reps"] if sizes else None,
           "torch": envd.get("torch"), "cuda": envd.get("cuda"), "driver": envd.get("driver"), "commit": source_commit(), "spec_flop_per_second": spec}
@@ -440,13 +670,40 @@ def main(argv: list[str] | None = None) -> int:
                     torch.cuda.synchronize()
                 except Exception as ex:  # noqa: BLE001
                     skipped = f"torch._scaled_mm e4m3 unsupported here: {type(ex).__name__}: {str(ex)[:200]}"
+    if a.dtype == "nvfp4":
+        major, minor = torch.cuda.get_device_capability(idx)
+        if (major, minor) != (12, 0):
+            skipped = f"the sm_120 mma.sync kind::mxf4nvf4 instruction needs cc 12.0; this card is sm_{major}{minor} ({envd['device']})"
+        elif nvcc_bin() is None:
+            skipped = "nvcc not found (PATH or /usr/local/cuda/bin): cannot build mma_peak_fp4.cu"
 
     files: list[str] = []
     results: list[dict] = []
+    gemm_attempt = None
     smi_path = run_dir / "nvidia_smi_samples.csv"
     sampler = SmiSampler(smi_path)
     if skipped:
         print(f"native_peak: SKIP {a.dtype}: {skipped}", flush=True)
+    elif a.dtype == "nvfp4":
+        sampler.start()
+        time.sleep(0.3)
+        r = measure_nvfp4_mma(a.device, a.warmup, a.reps, a.sustain_s, run_dir)
+        results.append(r)
+        print(f"native_peak nvfp4 {r['label']}: median {r['seconds_median'] * 1e3:.3f} ms = {r['flop_per_second'] / 1e12:.1f} TFLOP/s "
+              f"(sustained {r['sustain']['flop_per_second'] / 1e12:.1f} over {r['sustain']['iterations']} launches), check {'ok' if r['check']['ok'] else 'FAIL'} "
+              f"{r['check']['opcodes']} x{r['check']['sass_mma_count']}", flush=True)
+        time.sleep(0.3)
+        sampler.stop()
+        r["smi"] = sampler.window(r["smi_window"]["t0"], r["smi_window"]["t1"])
+        c, p = r["smi"].get("clocks_sm_mhz"), r["smi"].get("power_w")
+        print(f"  smi: {r['smi']['n_samples']} samples, sm clock median {c and c['median']} MHz, power median {p and p['median']} W, "
+              f"throttle {r['smi']['throttle_reasons']}", flush=True)
+        if smi_path.is_file():
+            files.append(smi_path.name)
+        gemm_attempt = try_nvfp4_cublaslt_gemm(sizes[0], a.device, a.warmup, a.reps)
+        print(f"native_peak nvfp4 cuBLASLt GEMM {sizes[0]}^3 via torch._scaled_mm: "
+              + (f"{gemm_attempt['flop_per_second'] / 1e12:.1f} TFLOP/s ({gemm_attempt.get('variant')})" if gemm_attempt["supported"] else
+                 f"unsupported -- {gemm_attempt['reason']}"), flush=True)
     else:
         sampler.start()
         time.sleep(0.3)
@@ -475,16 +732,18 @@ def main(argv: list[str] | None = None) -> int:
             files.append(smi_path.name)
     smi_all = summarize_samples(sampler.rows) if sampler.rows else {"n_samples": 0}
     sass = {"sass": "not captured", "error": "skipped (--no-sass or nothing measured)", "tools_present": {t: bool(shutil.which(t)) for t in ("ncu", "nsys", "cuobjdump")}}
-    if results and not a.no_sass:
+    if results and a.dtype == "nvfp4":
+        sass = results[0]["sass"]                              # cuobjdump on our own kernel: no ncu needed
+    elif results and not a.no_sass:
         sass = capture_sass(a.dtype, results[0]["n"], a.device, run_dir)
         if sass.get("raw_file"):
             files.append(sass["raw_file"])
     print(f"native_peak: sass = {sass['sass']}" + (f" ({sass.get('error')})" if sass.get("error") else ""), flush=True)
     detail = {"run_id": run_id, "dtype": a.dtype, "environment": envd, "sizes": results, "sass": sass, "smi_whole_run": smi_all, "skipped": skipped,
-              "args": vars(a)}
+              "gemm_attempt": gemm_attempt, "args": vars(a)}
     (run_dir / "native_peak.json").write_text(json.dumps(detail, indent=1, default=str) + "\n")
     files.insert(0, "native_peak.json")
-    doc = build_result(run_id, a.dtype, envd, results, sass, smi_all, skipped, time.time() - t0, files)
+    doc = build_result(run_id, a.dtype, envd, results, sass, smi_all, skipped, time.time() - t0, files, gemm_attempt)
     write_result(run_dir, doc)
     print(json.dumps({k: doc[k] for k in ("device", "dtype", "flop_per_second", "spec_flop_per_second", "fraction_of_spec", "sass", "clocks_mhz", "power_w")},
                      indent=1), flush=True)

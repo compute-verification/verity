@@ -45,6 +45,9 @@ def test_spec_table_and_size_parsing():
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "e4m3") == (None, m.SPEC_PEAKS[1][2])
     assert m.spec_peak("NVIDIA A100 80GB PCIe", "bf16")[0] == 312.0e12
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16") == (None, None)
+    # RTX 5090 (lane fp4-proof): the whitepaper's dense FP4-with-FP32-accumulate figure, not the sparse headline 3352
+    assert m.spec_peak("NVIDIA GeForce RTX 5090", "nvfp4")[0] == 1676.0e12 and m.spec_peak("NVIDIA GeForce RTX 5090", "e4m3")[0] == 419.0e12
+    assert m.spec_peak("NVIDIA GeForce RTX 4090", "nvfp4")[0] is None and "nvfp4" in m.DTYPES
     assert m.parse_sizes("8192, 16384") == [8192, 16384]
     with pytest.raises(ValueError):
         m.parse_sizes("100")
@@ -84,6 +87,36 @@ def test_result_document_is_a_valid_envelope_with_headline_fields(tmp_path):
                              "FP8 tensor cores need sm_89+", 1.0, [])
     assert R.check_doc(tmp_path, skipped, "r20260922-000000-abcd").valid
     assert skipped["validation"]["status"] == "not_run" and skipped["flop_per_second"] is None and skipped["spec_flop_per_second"] is None
+
+
+def test_nvfp4_instruction_result_document(tmp_path):
+    """--dtype nvfp4 records the instruction microbenchmark as the headline (label instead of n^3), the SASS from cuobjdump,
+    and the cuBLASLt GEMM attempt beside it; the envelope stays valid."""
+    m = _measure()
+    envd = {"device": "NVIDIA GeForce RTX 5090", "sm": "12.0", "driver": "570.195.03", "cuda": "12.8", "torch": "2.8.0+cu128"}
+    grid = {"sms": 170, "blocks": 680, "warps_per_block": 4, "warps": 2720, "mmas_per_iteration": 32, "iterations": 100000, "accumulator_chains": 8,
+            "operand_sets": 4}
+    flop = 2720.0 * 32 * 100000 * m.NVFP4_MMA_FLOP
+    sass = {"sass": "OMMA.16864.F32.E2M1.E2M1.UE4M3", "opcodes": ["OMMA.16864.F32.E2M1.E2M1.UE4M3"], "mma_count": 32, "per_opcode": {}, "error": None}
+    rec = {"n": None, "m": 16, "k": 64, "label": "mma_m16n8k64_x100000", "instruction": "mma.sync.aligned.kind::mxf4nvf4...ue4m3", "grid": grid,
+           "cc": "12.0", "nvcc": "12.8", "so": "x.so", "flop": flop, "warmup": 3, "reps": 5, "seconds_all": [1.0] * 5, "seconds_median": 1.0,
+           "seconds_min": 1.0, "seconds_max": 1.0, "flop_per_second": flop, "sustain": {"seconds": 2.0, "iterations": 2, "flop_per_second": flop},
+           "smi_window": {"t0": 0, "t1": 1},
+           "check": {"ok": True, "finite": True, "deterministic": True, "sass_mma_count": 32, "expected_mma_count": 32, "opcodes": sass["opcodes"],
+                     "tolerance": 0.0, "max_rel_err": 0.0}, "kernels": ["nvfp4_peak_kernel"], "sass": sass, "peak_device_bytes": 1 << 20,
+           "smi": {"n_samples": 20, "clocks_sm_mhz": {"median": 2400.0, "min": 2300.0, "max": 2400.0, "n": 20}, "clocks_mem_mhz": None,
+                   "power_w": {"median": 500.0, "min": 400.0, "max": 575.0, "n": 20}, "temperature_c": None, "throttle_reasons": []}}
+    gemm = {"attempted": True, "n": 8192, "supported": False, "reason": "torch has no float4_e2m1fn_x2", "flop_per_second": None}
+    (tmp_path / "native_peak.json").write_text("{}")
+    doc = m.build_result("r20260923-000000-abcd", "nvfp4", envd, [rec], sass, {"n_samples": 20}, None, 30.0, ["native_peak.json"], gemm)
+    chk = R.check_doc(tmp_path, doc, "r20260923-000000-abcd")
+    assert chk.valid, chk.errors
+    assert doc["dtype"] == "nvfp4" and doc["spec_flop_per_second"] == 1676.0e12 and doc["flop_per_second"] == flop
+    assert abs(doc["fraction_of_spec"] - flop / 1676.0e12) < 1e-12 and doc["sass"] == sass["sass"] and doc["gemm_attempt"] is gemm
+    assert doc["method"].startswith("instruction microbenchmark: mma.sync") and "mma_m16n8k64_x100000" in doc["sizes"]
+    assert doc["validation"]["status"] == "passed" and "sass 32/32" in doc["validation"]["detail"]
+    assert {x["name"] for x in doc["measurements"]} >= {"flop_per_second", "fraction_of_spec", "mma_m16n8k64_x100000_seconds"}
+    json.dumps(doc)
 
 
 def test_measure_bf16_small_on_cuda(tmp_path, monkeypatch):
