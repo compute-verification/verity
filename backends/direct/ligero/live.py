@@ -277,6 +277,22 @@ def source_commit() -> str | None:
         return None
 
 
+def pod_dc() -> str | None:
+    """The RunPod data center this process runs in (``RUNPOD_DC_ID``; an ssh shell on a pod does not inherit it, so fall back
+    to PID 1's environment), None off RunPod.  Recorded on both ends of a session: prover and verifier in the same DC is
+    the difference between a ~1 ms and a 30-70 ms opening."""
+    dc = os.environ.get("RUNPOD_DC_ID")
+    if dc:
+        return dc
+    try:
+        for kv in Path("/proc/1/environ").read_bytes().split(b"\0"):
+            if kv.startswith(b"RUNPOD_DC_ID="):
+                return kv.split(b"=", 1)[1].decode() or None
+    except OSError:
+        pass
+    return None
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Prover side: the coin source that talks to the live verifier
 # ---------------------------------------------------------------------------------------------------------------------
@@ -743,6 +759,7 @@ class BenchLive:
         # the runner sets ``window`` = its pipeline depth when it will prove the recorded reps with ``prove_vus_many``: the
         # verifier then commits that many sub-batches ahead (HELLO "window"), so their openings can be in flight together
         self.window = 1
+        self.per_rep: list[dict] = []        # one entry per live session: its own t.total / t.total_live / round-trip spread
         print(f"live verifier {args.verifier}: one session per recorded rep, {n_proofs} sub-batches each", flush=True)
 
     def begin_rep(self, rep: int) -> None:
@@ -777,10 +794,19 @@ class BenchLive:
         import statistics
         s = self.sess
         v = s.end({"rep": rep, "prover_total": agg.get("total")})
+        rtts = sorted(s.rtts)
+        total = agg.get("total", 0.0) + agg.get("hints_host", 0.0)
+        self.per_rep.append({
+            "rep": rep, "session_id": s.session_id, "accepted": bool(v.get("accepted")), "t_total": total,
+            "net_wait": agg.get("net_wait", 0.0), "t_total_live": total + agg.get("net_wait", 0.0),
+            "rtt_ms_median": statistics.median(rtts) * 1e3 if rtts else None,
+            "rtt_ms_p90": rtts[int(0.9 * (len(rtts) - 1))] * 1e3 if rtts else None, "rtt_ms_max": rtts[-1] * 1e3 if rtts else None,
+            "session_wall_s": getattr(s, "wall", None), "verify_wall_s": v["verify"]["wall_s"], "verify_cpu_s": v["verify"]["cpu_s"]})
         print(f"rep {rep}: live verifier {'ACCEPTED' if v['accepted'] else 'REJECTED'} {v['accepted_subbatches']}/{self.n_proofs} "
               f"({v['reason'][:160]}); net wait {s.wait:.3f}s over {len(s.rtts)} round trips (median rtt "
-              f"{statistics.median(s.rtts) * 1e3 if s.rtts else float('nan'):.1f} ms); verifier wall {v['verify']['wall_s']:.2f}s "
-              f"cpu {v['verify']['cpu_s']:.2f}s; t.total_live {agg.get('total', 0.0) + agg.get('hints_host', 0.0) + agg.get('net_wait', 0.0):.3f}s", flush=True)
+              f"{statistics.median(s.rtts) * 1e3 if s.rtts else float('nan'):.1f} ms, p90 "
+              f"{self.per_rep[-1]['rtt_ms_p90'] or float('nan'):.1f} ms); verifier wall {v['verify']['wall_s']:.2f}s "
+              f"cpu {v['verify']['cpu_s']:.2f}s; t.total_live {self.per_rep[-1]['t_total_live']:.3f}s", flush=True)
         return v
 
     def fields(self, contract, total: float, med: dict) -> tuple[list, dict, str, bool]:
@@ -789,6 +815,7 @@ class BenchLive:
         clocks (medians over the sessions' verdicts)."""
         ev = net_measurements(self.verifier.sessions, self.n_proofs)
         ev["url"] = self.url
+        ev["per_rep"] = self.per_rep
         wait = med.get("net_wait", 0.0)
         meas = [contract.measurement("t.total_live", total + wait),
                 contract.measurement("net.rtt_ms", ev["rtt_ms_median"] or 0.0, "ms"),
@@ -837,7 +864,7 @@ def hello_for(args, R, n_proofs: int, total_vus: int, relation: str) -> dict:
             "target": float(args.target), "target_bits": float(getattr(args, "target_bits", 128.0) or 128.0),
             "run_id": os.environ.get("RESEARCH_RUN_ID") or getattr(args, "run_id", None),
             "lane": os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_CAMPAIGN"), "prover_host": socket.gethostname(),
-            "prover_commit": source_commit(), "device": args.device, "n_proofs": n_proofs}
+            "prover_dc": pod_dc(), "prover_commit": source_commit(), "device": args.device, "n_proofs": n_proofs}
 
 
 def net_measurements(sessions: list[ProverSession], proofs_per_session: int) -> dict:
@@ -857,6 +884,7 @@ def net_measurements(sessions: list[ProverSession], proofs_per_session: int) -> 
            "ctrl_queue_seconds": [s.ctrl_queue_seconds for s in sessions],
            "sndbuf": [s.sndbuf for s in sessions],
            "tcp_cc": [getattr(s, "tcp_cc", None) for s in sessions],
+           "prover_dc": pod_dc(), "verifier_dc": next((s.welcome.get("verifier_dc") for s in sessions if s.welcome), None),
            "session_wall_seconds": [getattr(s, "wall", None) for s in sessions],
            "verify_wall_s": statistics.median(v["verify"]["wall_s"] for v in verdicts) if verdicts else None,
            "verify_cpu_s": statistics.median(v["verify"]["cpu_s"] for v in verdicts) if verdicts else None,
@@ -1072,7 +1100,7 @@ class Server:
     def _probe(self, conn: socket.socket, addr, hello: dict) -> None:
         """WELCOME at once (the client's HELLO->WELCOME time is the RTT); then every NOP frame is answered with a VERDICT
         carrying the bytes received and the server-side receive time of that frame (first byte to last byte), until END."""
-        send_frame(conn, K_WELCOME, json.dumps({"verifier": self.identity, "probe": True}).encode())
+        send_frame(conn, K_WELCOME, json.dumps({"verifier": self.identity, "verifier_dc": pod_dc(), "probe": True}).encode())
         total, t0 = 0, time.perf_counter()
         try:
             while True:
@@ -1104,7 +1132,8 @@ def cmd_probe(args) -> int:
     if kind != K_WELCOME:
         print(f"probe refused: {_KIND_NAME.get(kind, kind)} {payload[:200]!r}", file=sys.stderr)
         return 2
-    out = {"verifier": _json(payload).get("verifier"), "connect_ms": (t_connected - t_conn) * 1e3,
+    out = {"verifier": _json(payload).get("verifier"), "verifier_dc": _json(payload).get("verifier_dc"), "prover_dc": pod_dc(),
+           "connect_ms": (t_connected - t_conn) * 1e3,
            "rtt_ms": (t_welcome - t_connected) * 1e3, "tcp_cc": _TCP_CC or "kernel default", "flows": []}
     blob = os.urandom(max(1, int(float(args.mb) * (1 << 20))))
     for i in range(int(args.repeat)):
@@ -1232,7 +1261,7 @@ class Session(threading.Thread):
         (self.dir / "hello.json").write_text(json.dumps({**h, "peer": list(self.addr), "session_id": self.id,
                                                           "system_sha256": hashlib.sha256(self.system).hexdigest()}, indent=1))
         self._send(self.conn, K_WELCOME, json.dumps({"session_id": self.id, "verifier": self.server.identity,
-                                                     "verifier_host": socket.gethostname(),
+                                                     "verifier_host": socket.gethostname(), "verifier_dc": pod_dc(),
                                                      "verifier_core": "ligero-verify" if isinstance(self.server.rust, RustVerifier) else "python",
                                                      "ligero_verify_sha256": self.server.rust.sha256}).encode())
         # step 0: the coin commitments of the first ``window`` sub-batches, before anything from the prover.  ``window`` is the
@@ -1405,7 +1434,8 @@ class Session(threading.Thread):
             "schema": "live-verifier-session/v1", "session_id": self.id, "accepted": accepted, "reason": reason,
             "independent": rust, "verifier": self.server.identity, "verifier_commit": self.server.commit,
             "verifier_core": ("ligero-verify" if rust else "python (serialize.verify_files -- NOT independent)"),
-            "ligero_verify_sha256": self.server.rust.sha256, "verifier_host": socket.gethostname(), "mode": "interactive",
+            "ligero_verify_sha256": self.server.rust.sha256, "verifier_host": socket.gethostname(), "verifier_dc": pod_dc(),
+            "mode": "interactive",
             "coins": "generated by this verifier (os.urandom), committed before the prover's first message, one fresh pair per sub-batch",
             "n_proofs": self.n_proofs, "proofs_received": self.n_proof_frames, "accepted_subbatches": n_acc,
             "live_rejections": self.rejected_live, "errors": self.errors,
@@ -1880,7 +1910,8 @@ class ChallengeServerSession(threading.Thread):
             raise LiveError("HELLO needs n_batches >= 1 and rounds >= 1")
         (self.dir / "hello.json").write_text(json.dumps({**h, "peer": list(self.addr), "session_id": self.id}, indent=1))
         self._send(K_WELCOME, json.dumps({"session_id": self.id, "verifier": self.server.identity,
-                                          "verifier_host": socket.gethostname(), "proto": "challenge-stream"}).encode())
+                                          "verifier_host": socket.gethostname(), "verifier_dc": pod_dc(),
+                                          "proto": "challenge-stream"}).encode())
         committed = 0
         while committed < self.window:
             self._commit(committed)
