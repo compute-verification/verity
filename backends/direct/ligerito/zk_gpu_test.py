@@ -56,9 +56,12 @@ def test_apply_masks_torch_path():
     mc = zk.mask_cells(zp)
     fc = f.cpu().numpy()
     assert np.array_equal(fc[mc.low.start:mc.low.stop], masks.low)
-    assert np.array_equal(fc[mc.high.start:mc.high.stop][: zp.rows1], masks.high[: zp.rows1])
     L = 1 << zp.n_c
     i1, i2, i3 = zp.product_rows[0]
+    hi = fc[mc.high.start:mc.high.stop]
+    keep = np.ones(hi.shape[0], dtype=bool)
+    keep[(i3 * L - mc.high.start):((i3 + 1) * L - mc.high.start)] = False     # the derived product row differs
+    assert np.array_equal(hi[keep], masks.high[keep])
     assert np.array_equal(fc[i3 * L:(i3 + 1) * L], fc[i1 * L:(i1 + 1) * L] * fc[i2 * L:(i2 + 1) * L] % zk.P)
     assert np.array_equal(fc[mc.g_blocks[0]], masks.g_coeffs[0].reshape(-1))
 
