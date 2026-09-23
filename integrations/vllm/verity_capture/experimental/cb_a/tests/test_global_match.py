@@ -16,6 +16,7 @@ import pytest
 from verity_capture.bench.run_config import persist_program
 from verity_capture.events import DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc, TritonLaunch, ViewDesc
 from verity_capture.experimental.cb_a import global_match as gm
+from verity_capture.experimental.cb_a import global_match_fast as GMF
 from verity_capture.experimental.cb_a.tests import test_batch_decomp_e2e as e2e
 from verity_capture.experimental.cb_a.tests.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
                                                                             BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
@@ -847,6 +848,70 @@ def test_from_gprog_recomputes_the_build_digest_from_the_descriptor_and_refuses_
     (d / "descriptor.json.gz").unlink()
     gp = gm.from_gprog(str(p))
     assert gp["gprog_artifact"]["digest_verification"]["verified"] is False
+
+
+def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_path):
+    """[lane/vllm-v2-gm-scale] A `vllm-build/v1` records the building pod's absolute component paths (`/workspace/cp/<sweep>/<row>/
+    build_request_LP<lp>_T<t>`).  Staged elsewhere (another pod; pod_match_v2.sh's symlinked attempt dir) those paths dangle while the
+    same dirs sit beside the artifact -- the v2 acquisition's B64 GM-01 died on exactly this FileNotFoundError.  from_gprog resolves them
+    beside `<row>/build_workload/workload_program.json`, records what moved, and leaves an existing path / a path missing at both places
+    alone (the loader's error must still name the recorded path)."""
+    from verity.ir.codec import canonical_json, program_digest
+    desc = {"schema": "toy/descriptor", "definitions": [{"name": "D0"}], "root": {"body": []}}
+    row = tmp_path / "staged" / "row"
+    bw = row / "build_workload"
+    bw.mkdir(parents=True)
+    with gzip.open(bw / "descriptor.json.gz", "wb") as f:
+        f.write(canonical_json(desc))
+    (row / "build_request_LP1024_T127").mkdir()            # beside the artifact: the component the Build named
+    present = tmp_path / "elsewhere" / "build_request_LP7_T3"   # a recorded path that DOES exist here: untouched
+    present.mkdir(parents=True)
+    derived = {"1024,127": "/workspace/cp/sweep-v2-5a/row/build_request_LP1024_T127",   # dangling -> relocated
+               "7,3": str(present),                                                       # exists -> kept
+               "5,1": "/workspace/cp/sweep-v2-5a/row/build_request_LP5_T1"}              # missing at both places -> kept as recorded
+    art = {"schema": "verity/workload-program/v1", "ok": True, "workload_digest": program_digest(desc), "requests": [],
+           "inputs": {"derived": derived}, "address_map": {"requests": [], "convention": "toy"}, "chronology": {"requests": []}}
+    p = bw / "workload_program.json"
+    p.write_text(json.dumps(art))
+    gp = gm.from_gprog(str(p))
+    reloc = gp["gprog_artifact"]["relocated_components"]
+    assert set(reloc) == {"1024,127"}
+    assert reloc["1024,127"] == {"from": derived["1024,127"], "to": str(row / "build_request_LP1024_T127")}
+    # the same resolution the requests' component dirs get (from_gprog looks the "lp,t" key up in the resolved map)
+    r = gm.relocate_components(derived, str(p))
+    assert r["derived"]["1024,127"] == str(row / "build_request_LP1024_T127")
+    assert r["derived"]["7,3"] == str(present) and r["derived"]["5,1"] == derived["5,1"]
+    assert r["base"] == str(row)
+    # pod_match_v2.sh's layout: the attempt dir holds SYMLINKS to the staged build_* dirs; abspath (not realpath) keeps the artifact's
+    # own directory as the base, so the symlinked siblings are the ones found
+    attempt = tmp_path / "attempt"
+    attempt.mkdir()
+    for name in ("build_workload", "build_request_LP1024_T127"):
+        os.symlink(row / name, attempt / name)
+    r2 = gm.relocate_components(derived, str(attempt / "build_workload" / "workload_program.json"))
+    assert r2["derived"]["1024,127"] == str(attempt / "build_request_LP1024_T127")
+    # nothing to move -> an empty record (a document of a Build read where it was built is unchanged in content)
+    assert gm.relocate_components({"7,3": str(present)}, str(p))["relocated"] == {}
+
+
+def test_impl_module_defaults_to_the_match_of_record_and_names_what_runs(monkeypatch):
+    """[lane/vllm-v2-gm-scale] MATCH_IMPL unset -> `fast` (the Match of record, row_pod.sh's export); `record` still selects the audit
+    checker explicitly; an unknown name is an error.  The CLI banner names the implementation before the run."""
+    monkeypatch.delenv(gm.IMPL_ENV, raising=False)
+    assert gm.IMPL_DEFAULT == "fast"
+    assert gm.impl_module() is GMF
+    assert gm.impl_module("record") is gm and gm.impl_module("fast") is GMF
+    monkeypatch.setenv(gm.IMPL_ENV, "record")
+    assert gm.impl_module() is gm
+    monkeypatch.setenv(gm.IMPL_ENV, "")
+    assert gm.impl_module() is GMF                       # empty = unset
+    monkeypatch.setenv(gm.IMPL_ENV, "quick")
+    with pytest.raises(ValueError, match="not one of"):
+        gm.impl_module()
+    monkeypatch.delenv(gm.IMPL_ENV, raising=False)
+    b = gm.impl_banner(GMF, {"gprog_artifact": {"relocated_components": {"1024,127": {"from": "/workspace/cp/x/build_request_LP1024_T127", "to": "/y"}}}})
+    assert b.startswith("# global_match impl=fast") and "unset -> default fast" in b and "workers=" in b and "relocated_components=1" in b
+    assert gm.impl_banner(gm).startswith("# global_match impl=record") and "audit checker" in gm.impl_banner(gm)
 
 
 def _real_workload_descriptor(lag: int | None):
