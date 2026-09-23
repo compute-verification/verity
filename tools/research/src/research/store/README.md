@@ -27,7 +27,7 @@ ints are unbounded; keys must be `str`. `canon.sha256(obj) -> hex`.
 ~~~text
 art:<sha256 hex of the canonical artifact manifest>     the manifest embeds payload digests, so the id covers the bytes
 drv:<sha256 hex of the canonical derivation document>   no source revision inside (see §6)
-reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identity>})   None for dirty trees
+reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identity>})   None for dirty trees and undeclared runs
 attempt id = run id (r20260922-105905-2021)
 ~~~
 
@@ -125,8 +125,11 @@ redacted argv, `execution.run_dir` is where the attempt executed (the machine's 
 derivation by content as the key param `input.<name> = sha256:<hex>` (`inputs` holds `art:` ids only).
 
 Without a Tool declaration (`research run -- CMD` with no `--tool`): `tool = {"name": "<argv[0] basename>", "version": null}`,
-`key_params = []`, `key_conditions = []`, so `derivation = drv(H(tool name, inputs, {}, {}))` — a real but coarse
-derivation; `reuse_key` is still computed (clean tree) so `lookup` is honest. `params` then holds `{"argv": argv}`.
+`key_params = ["argv"]`, `key_conditions = []`, so `derivation = drv(H(tool name, inputs, {"argv": redacted argv}, {}))`: the
+whole command line is the request, and `reuse_key` is `null` whatever the tree (argv cannot name the files, environment or data
+the command reads, so nothing may be served as its reuse). `params` then holds `{"argv": argv}`. The rule used to be
+`key_params = []` with a reuse key: every undeclared `python …` run of one clean tree shared one derivation and one reuse key.
+Publishing applies the rule to a record written by an older runner (or with no `store` section): it is re-derived.
 
 `research run` writes everything it computed before launch into job.json's optional `store` section (`tool {name, version, spec}`,
 `derivation`, `reuse_key`, `key_params`, `key_conditions`, `params`, `key_params_resolved`, `inputs`, `closure`, `conditions`, `scratch`,
@@ -242,7 +245,8 @@ The Triton cache incident (W=31 binaries served to a W=22 tree) is why.
 
 ### 6.5 Scratch / caches
 
-`d.scratch(name)` -> `<store>/scratch/<reuse_key>/<name>/` (for dirty trees: `<store>/scratch/dirty-<run id>/<name>/`).
+`d.scratch(name)` -> `<store>/scratch/<reuse_key>/<name>/` (no reuse key -- a dirty tree, or no declared Tool:
+`<store>/scratch/run-<run id>/<name>/`).
 `research run --scratch triton` exports `TRITON_CACHE_DIR` there; `--scratch <name>` exports `RESEARCH_SCRATCH_<NAME>`.
 Keyed by reuse_key ON PURPOSE: every commit gets a cold cache; the recompile cost is the price of the safe bias. Do not
 "fix" this to derivation_id or a source-independent key without a measured reason and a per-tool `cache_scope` declaration.

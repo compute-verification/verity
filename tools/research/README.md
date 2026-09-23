@@ -148,11 +148,13 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   loads the `Tool` declaration, parses the workload argv into params, replaces
   path-valued key params by the content they point at, hashes the declared
   closure, and computes the derivation id and the `reuse_key` (`None` on a
-  dirty tree). All of it goes into `job.json` as the optional `store` section.
+  dirty tree). Without `--tool` the derivation is the whole redacted argv and
+  the `reuse_key` is `None`. All of it goes into `job.json` as the optional
+  `store` section.
   An unknown tool exits 2 before anything runs; any other failure in this step
   is recorded in `store.error` and the workload still runs.
 - `--scratch NAME` (repeatable) creates `<store>/scratch/<reuse_key>/NAME/`
-  (`dirty-<run id>` on a dirty tree) and exports `TRITON_CACHE_DIR` for
+  (`run-<run id>` without a reuse key) and exports `TRITON_CACHE_DIR` for
   `triton`, `RESEARCH_SCRATCH_<NAME>` otherwise. Cold per commit, on purpose.
 - `--campaign C` (default `$RESEARCH_CAMPAIGN`) is recorded in the conditions
   and exported to the workload.

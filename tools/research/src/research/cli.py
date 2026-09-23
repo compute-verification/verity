@@ -273,9 +273,11 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
             ident = {"name": tool.name, "version": tool.version, "spec": tool.spec}
             key_params, key_conditions = list(tool.key_params), list(tool.key_conditions)
         else:
-            params, key, closure = {"argv": argv_red}, {}, {}
+            # undeclared: the whole (redacted) command line is the request, and nothing is reusable (reuse_key None below):
+            # argv cannot name the files, environment or data the command reads
+            params, key, closure = {"argv": argv_red}, {"argv": argv_red}, {}
             ident = {"name": Path(command[0]).name, "version": None, "spec": None}
-            key_params, key_conditions = [], []
+            key_params, key_conditions = ["argv"], []
         if env_map:
             params["env"] = {k: ("<redacted>" if SECRET_KEY.search(k) else v) for k, v in env_map.items()}
         inputs = {}
@@ -290,7 +292,7 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
             else:
                 key[f"input.{name}"] = cid
         drv = D.derivation_id(ident, inputs, key, conds, key_conditions)
-        rk = D.reuse_key(drv, conds)
+        rk = D.reuse_key(drv, conds) if tool is not None else None
         sroot = A.store_root()
         scratch = {}
         for name in ns.scratch:

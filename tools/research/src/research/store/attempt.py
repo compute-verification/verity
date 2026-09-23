@@ -106,8 +106,22 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
     if campaign is not None:
         conds["exec.campaign"] = campaign
     closure = closure if closure is not None else (store_sec.get("closure") or {})
-    drv = derivation or store_sec.get("derivation") or D.derivation_id(ident, inputs, key_params_resolved, conds, key_conditions)
-    rk = reuse_key if reuse_key is not ... else (store_sec["reuse_key"] if "reuse_key" in store_sec else D.reuse_key(drv, conds))
+    declared = tool is not None or bool((store_sec.get("tool") or {}).get("spec"))
+    recorded_drv = store_sec.get("derivation")
+    if not declared and "argv" not in key_params_resolved:
+        # an undeclared request is its whole redacted command line (research run's rule); a record from an older runner, or one
+        # with no store section, would otherwise share one derivation with every other run of the same executable
+        from ..telemetry.job import redact_argv
+
+        key_params_resolved = {**key_params_resolved, "argv": redact_argv(argv)[0]}
+        key_params, recorded_drv = ["argv"], None
+    drv = derivation or recorded_drv or D.derivation_id(ident, inputs, key_params_resolved, conds, key_conditions)
+    if reuse_key is not ...:
+        rk = reuse_key
+    elif not declared:
+        rk = None                                                # no declared Tool, no reuse claim
+    else:
+        rk = store_sec["reuse_key"] if "reuse_key" in store_sec else D.reuse_key(drv, conds)
     res = result.check(d, run_id)
     transitions = status.get("transitions") or []
     start = status.get("started_utc") or next((t.get("t_utc") for t in transitions if t.get("state") == "running"), None)
