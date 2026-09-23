@@ -145,6 +145,29 @@ def _pad_unit():
     return (0, np.zeros(WORDS, dtype=np.int64), np.zeros(WORDS, dtype=np.int64), 0)
 
 
+#: Hint generators (``FP4ChainRunner(hints=...)``, ``run.py --fp4-hints``): ``device`` = the public rows and hints as
+#: torch int64 on the prover's device, one captured CUDA graph per (system, l) (``hints_device``; bit-identical to the
+#: numpy path, the default); ``numpy`` = ``witness.hints_fp4`` on the host (fp4-proof's path, kept for A/B).
+HINTS_MODES = ("device", "numpy")
+
+
+def _unit_arrays(vus: list[tuple], l: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The l columns of a sub-batch as arrays -- ``a`` / ``b`` (l, 68) int64, ``c_in`` (l,) -- VU v's 24 steps at
+    columns [24 v, 24 v + 24) with the chain fed forward (``c_in`` of step s = the recorded accumulator of step s - 1,
+    0 at a start), the rest pad units (``_pad_unit``: zero operands, c_in = 0).  Vectorised (one stack per operand
+    instead of one Python tuple per unit)."""
+    n = len(vus)
+    a = np.zeros((l, WORDS), dtype=np.int64)
+    b = np.zeros((l, WORDS), dtype=np.int64)
+    c_in = np.zeros(l, dtype=np.int64)
+    if n:
+        a[:n * STEPS] = np.stack([np.asarray(A, dtype=np.int64) for A, _, _, _ in vus]).reshape(n * STEPS, WORDS)
+        b[:n * STEPS] = np.stack([np.asarray(B, dtype=np.int64) for _, B, _, _ in vus]).reshape(n * STEPS, WORDS)
+        accs = np.asarray([accs for _, _, accs, _ in vus], dtype=np.int64).reshape(n, STEPS)
+        c_in[:n * STEPS] = np.concatenate([np.zeros((n, 1), dtype=np.int64), accs[:, :-1]], axis=1).reshape(-1)
+    return a, b, c_in
+
+
 class FP4ChainRunner:
     """``vu.ChainRunner`` for the NVFP4 unit: the same protocol (``prove`` / ``verify``) on ``compile_fp4_unit(chain=True)``."""
 
@@ -152,9 +175,12 @@ class FP4ChainRunner:
     relation = "fp4-nvf4"
 
     def __init__(self, device: str, target: float, rate_log2: int = 2, n_proofs: int = 1, zk: bool = False,
-                 mode: str = protocol_mod.MODE_INTERACTIVE):
+                 mode: str = protocol_mod.MODE_INTERACTIVE, hints: str = "device"):
+        if hints not in HINTS_MODES:
+            raise ValueError(f"hints: one of {HINTS_MODES}, got {hints!r}")
         self.p = NVFP4
         self.zk, self.mode, self.device, self.target, self.rate_log2, self.n_proofs = zk, mode, device, target, rate_log2, n_proofs
+        self.hints_mode = hints
         t0 = time.perf_counter()
         self.sys = compile_fp4_unit(self.p, chain=True)
         self.tb = tables(self.sys, self.device)
@@ -180,23 +206,28 @@ class FP4ChainRunner:
         if coins is None and self.interactive:
             coins = protocol_mod.Coins.sample()
         lay = self.layout(len(vus), min_l)
-        units, y32 = [], torch.zeros(lay.l, dtype=torch.int64)
-        for v, (A, B, accs, y) in enumerate(vus):
-            units += vu_units(A, B, accs)
-            y32[STEPS * v + STEPS - 1] = int(y)
-        while len(units) < lay.l:
-            units.append(_pad_unit())
-        a = np.stack([np.asarray(u[1], dtype=np.int64) for u in units])
-        b = np.stack([np.asarray(u[2], dtype=np.int64) for u in units])
-        c_in = np.asarray([u[0] for u in units], dtype=np.int64)
+        y32 = torch.zeros(lay.l, dtype=torch.int64)
+        y32[STEPS - 1:STEPS * len(vus):STEPS] = torch.as_tensor([int(y) for _, _, _, y in vus], dtype=torch.int64)
+        a, b, c_in = _unit_arrays(vus, lay.l)
         t0 = time.perf_counter()
-        pub = _public_vectors_torch(self.p, None, a, b, None, device=self.device)
-        if variant is None:
-            hints_np = hints_fp4(self.sys, c_in, a, b)
+        if variant is None and self.hints_mode == "device":
+            # the decode and the hints on the device (one graph replay; ``check``: also against the numpy path)
+            from .hints_device import PIN_NAMES, hints_device_for
+            pub_rows, hints, _y = hints_device_for(self.sys, lay.l, self.device)(c_in, a, b, check=check)
+            pub = {name: pub_rows[i] for i, name in enumerate(PIN_NAMES)}
+            if check:
+                ref = torch.as_tensor(hints_fp4(self.sys, c_in, a, b), dtype=torch.int64, device=self.device)
+                assert torch.equal(hints, ref), "device hints != numpy hints"
+                ref_pub = _public_vectors_torch(self.p, None, a, b, None, device=self.device)
+                assert all(torch.equal(pub[n], ref_pub[n]) for n in PIN_NAMES), "device public rows != numpy decode"
         else:
-            H, _ = unit_hints(c_in, a, b, variant=variant)
-            hints_np = np.stack([H[n] for _, n in self.sys.hints])
-        hints = torch.as_tensor(hints_np, dtype=torch.int64, device=self.device)
+            pub = _public_vectors_torch(self.p, None, a, b, None, device=self.device)
+            if variant is None:
+                hints_np = hints_fp4(self.sys, c_in, a, b)
+            else:
+                H, _ = unit_hints(c_in, a, b, variant=variant)
+                hints_np = np.stack([H[n] for _, n in self.sys.hints])
+            hints = torch.as_tensor(hints_np, dtype=torch.int64, device=self.device)
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
         hints_seconds = time.perf_counter() - t0
@@ -243,13 +274,29 @@ def _proof_class(cfg, interactive: bool):
     return "NON_ZK_PROOF_DIAGNOSTIC", "none", "external authentication, ZK masking"
 
 
+def _hints_desc(R) -> str:
+    """What generated the public rows and hints (``software.backend.hints``, the dump manifest)."""
+    if R.hints_mode == "device":
+        return "torch on the prover's device, one CUDA graph per (system, l) (fp4/hints_device.py; bit-identical to numpy)"
+    return "numpy (host)"
+
+
+def _witness_generation(R) -> str:
+    from .. import witness as witness_mod
+    hg = ("device hint generator (fp4/hints_device.py: the numpy lines as torch on the device, one CUDA graph)" if R.hints_mode == "device"
+          else "numpy hint generator (fp4/witness.py, one line per constraint)")
+    wp = "fused CUDA witness kernel (witness_device.py; derived rows)" if witness_mod.IMPL == "device" else "torch program (derived rows)"
+    return f"{hg} + {wp}"
+
+
 def _software(R, proof) -> dict:
     from .. import witness as witness_mod
     # the witness goes through the shared witness.build_witness (--impl device: the fused kernel; legacy: the torch
-    # program); the FP4 hint generator is numpy on the host either way (fp4/witness.hints_fp4)
+    # program); the FP4 decode + hint generator is fp4/hints_device.py on the device (--fp4-hints device, the default) or
+    # fp4/witness.hints_fp4 in numpy on the host (--fp4-hints numpy, fp4-proof's path)
     return {"backend": {"name": "b-ligero chain, fp4-nvf4 relation (backends/direct/ligero/fp4)", "commit": _git_commit(),
                         "hash": proof.hash_name, "challenge_expander": "SHAKE-256 (placeholder)", "impl": witness_mod.IMPL,
-                        "hints": "numpy (host)"},
+                        "hints": _hints_desc(R)},
             "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
 
 
@@ -274,7 +321,7 @@ def _instances(total_vus: int) -> dict:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def gate_vu_fp4(args) -> int:
-    R = FP4ChainRunner(args.device, args.target, args.rate_log2, zk=args.zk, mode=args.mode)
+    R = FP4ChainRunner(args.device, args.target, args.rate_log2, zk=args.zk, mode=args.mode, hints=getattr(args, "fp4_hints", "device"))
     log = print
     log(f"fp4 chain system: {R.sys.summary()} compiled in {R.compile_seconds:.2f}s; device {args.device}")
     cen = census_fp4(R.sys)
@@ -478,7 +525,7 @@ def _gate_result(args, R, cen, agg, honest_ok, detail, report, failures) -> dict
         relation=RELATION_NAME, model=MODEL_NAME, instruction=NVFP4_SM120.instruction, commit=_git_commit(), step_k=K, steps_per_vu=STEPS,
         rows=R.sys.m, committed_rows=n_rows(cfg, R.sys.m, True), linear_constraints=R.tb.L, quadratic_constraints=R.tb.Q,
         census=cen, checker="prove+verify (b-ligero chain) + constraint tables on wrong-rule witnesses",
-        witness_generation="numpy hint generator (fp4/witness.py, one line per constraint) + torch program (derived rows)",
+        witness_generation=_witness_generation(R),
         B_proof=args.batch // STEPS,
         negatives={"chain": [n["name"] for n in report["negatives"]], "unit_variants": report["unit_negatives"].get("by_variant")},
         note=f"gate: {args.vus} honest VUs of {len(VU_FAMILIES)} edge families proved and verified as {n_proofs} proofs; "
@@ -532,7 +579,8 @@ def bench_vu_fp4(args) -> int:
     n_proofs = -(-total_vus // per_proof)
     interactive = args.mode == protocol_mod.MODE_INTERACTIVE
     depth = 3 if interactive else 1
-    R = FP4ChainRunner(args.device, args.target, args.rate_log2, n_proofs=n_proofs, zk=args.zk, mode=args.mode)
+    R = FP4ChainRunner(args.device, args.target, args.rate_log2, n_proofs=n_proofs, zk=args.zk, mode=args.mode,
+                       hints=getattr(args, "fp4_hints", "device"))
     cen = census_fp4(R.sys)
     print("census:", json.dumps(cen))
     subs = [(lo, min(lo + per_proof, total_vus)) for lo in range(0, total_vus, per_proof)]
@@ -554,6 +602,7 @@ def bench_vu_fp4(args) -> int:
         dump_dir.mkdir(parents=True, exist_ok=True)
         dump_manifest = _manifest(dump_dir, args, R)
         dump_manifest["commit"] = dump_manifest["commit"] or _git_commit()
+        dump_manifest["hints"] = R.hints_mode                             # device (fp4/hints_device) | numpy (fp4/witness)
         _write_system(dump_dir, R, dump_manifest)
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
                                 "zk": args.zk, "mode": args.mode, "reps": args.reps, "relation": R.relation,
@@ -615,6 +664,8 @@ def bench_vu_fp4(args) -> int:
                 if V is not None:
                     (rd / f"{stem}.coins").write_bytes(V.r1 + V.s1 + V.r2 + V.s2)
                     entry["coins"] = f"rep{rep}/{stem}.coins"
+                    entry["coins_bytes"] = (rd / f"{stem}.coins").stat().st_size
+                    entry["coins_sha256"] = sha256_file(rd / f"{stem}.coins")     # D7: the step-0 coins' custody
                 dump_manifest["files"].append(entry)
         del proved
         if rep == 0:
@@ -651,7 +702,7 @@ def bench_vu_fp4(args) -> int:
         relation=RELATION_NAME, model=MODEL_NAME, instruction=NVFP4_SM120.instruction, commit=_git_commit(), step_k=K, steps_per_vu=STEPS,
         rows=R.sys.m, committed_rows=n_rows(cfg, R.sys.m, True), linear_constraints=R.tb.L, quadratic_constraints=R.tb.Q,
         census=cen,
-        witness_generation="numpy hint generator (fp4/witness.py, one line per constraint) + torch program (derived rows)",
+        witness_generation=_witness_generation(R),
         B_proof=per_proof,
         proof_dumps=None if dump_dir is None else {"dir": str(dump_dir), "files": len(dump_manifest["files"]),
                                                    "formats": dump_manifest["format"], "system_sha256": dump_manifest["system_file"]["sha256"]},

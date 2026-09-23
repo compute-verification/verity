@@ -423,6 +423,11 @@ def main(argv=None) -> int:
                                        help="non-bf16 relations: keep the synthetic instance set as an .npz under DIR")
     sub.choices["gate-vu"].add_argument("--unit-negatives", type=int, default=48,
                                         help="fp4-nvf4 gate: units per edge family for the wrong-rule witness battery (tu-k64-neg)")
+    for name in ("gate-vu", "bench-vu"):
+        sub.choices[name].add_argument("--fp4-hints", default="device", choices=("device", "numpy"),
+                                       help="fp4-nvf4: the decode + hint generator -- device (fp4/hints_device.py: torch on the prover's "
+                                            "device, one CUDA graph per (system, l); bit-identical) or numpy (fp4/witness.py on the host, "
+                                            "lane fp4-proof's path). Recorded in the result and the dump manifest")
     args = ap.parse_args(argv)
     set_impl(getattr(args, "impl", "device"))
     if args.relation != "bf16":

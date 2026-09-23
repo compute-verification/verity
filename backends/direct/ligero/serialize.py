@@ -208,7 +208,16 @@ def read_system(data: bytes) -> dict:
         c_rows = [r.u32() for _ in range(3)]
         ys = [_expr_r(r) for _ in range(3)]
         if v2:
-            y_end = [(_expr_r(r), r.u32(), r.u32()) for _ in range(r.u32())]
+            # component ends: 1..3 of them, each a bit field of a 32-bit word below p (chain.check_component, the Rust
+            # parser's rule) -- a file with any other widths is refused here, not at proof time
+            from .chain import END_FAMILIES, check_component
+            n_end = r.u32()
+            if not 1 <= n_end <= len(END_FAMILIES):
+                raise ValueError(f"system file: a chain end has 1..{len(END_FAMILIES)} components, got {n_end}")
+            y_end = []
+            for x in range(n_end):
+                Y = _expr_r(r)
+                y_end.append((Y, *check_component(x, r.u32(), r.u32())))
             chain = {"c": c_rows, "y": ys, "y16": None, "y_end": y_end}
         else:
             y16 = _expr_r(r)

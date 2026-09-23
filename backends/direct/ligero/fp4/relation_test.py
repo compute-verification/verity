@@ -175,6 +175,33 @@ def test_system_v2_round_trip():
     assert rd["sys_id"] == system_id(s)
 
 
+@pytest.mark.parametrize("bad", [
+    [(31, 1), (23, 8), (0, 31)],       # fraction widened to 31 bits: 2^31 > p, w and w - p alias (chain.py module comment)
+    [(31, 1), (23, 10), (0, 23)],      # lo + bits = 33 > 32: not a field of the 32-bit word
+    [(31, 1), (23, 8), (0, 0)],        # a 0-bit component (bits = 0 is the single-word residue end, never a component)
+    [(31, 1), (23, 8), (0, 23), (0, 1)],   # four components: only three coefficient families (6, 0, 1)
+    [],                                # no components
+])
+def test_system_v2_rejects_malformed_component_widths(bad):
+    """A component end must be a bit field of a 32-bit word below p -- 1 <= bits <= 30, lo + bits <= 32 -- exactly the
+    Rust parser's rule (ligero-verify refuses such a file at parse), so a malformed system is refused by BOTH
+    ``chain.end_terms`` (the prover / in-process verifier) and ``serialize.read_system`` (the file reader), not silently
+    verified against aliased residues.  The honest fp4-nvf4 widths (31/1, 23/8, 0/23) pass (the round trip above)."""
+    pytest.importorskip("torch")
+    import dataclasses
+
+    from ..chain import end_terms
+    s = compile_fp4_unit(NVFP4, chain=True)
+    Y = s.chain["y_end"][0][0]
+    bad_chain = dict(s.chain, y_end=[(Y, lo, bits) for lo, bits in bad])
+    with pytest.raises(ValueError, match="chain end"):
+        end_terms(bad_chain)
+    data = system_bytes(dataclasses.replace(s, chain=bad_chain))      # system_id does not police widths: the file exists
+    assert data[:8] == SYS_MAGIC_V2
+    with pytest.raises(ValueError, match="chain end"):
+        read_system(data)
+
+
 def test_statement_v4_round_trip_with_fp32_claims_and_bf16_stays_v2():
     """The FP4 statement is a relation-named ``ligero-statement/v4``: byte operands, a full 32-bit claimed word per
     column (the FP8 relation's 22-bit packing does not apply: nothing in the NVFP4 word is provably zero)."""
