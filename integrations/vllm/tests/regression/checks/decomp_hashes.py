@@ -39,7 +39,8 @@ def actual(row: resolver.Row) -> dict:
     if cand is not None:                                   # the candidate's decomposition, lifted field for field like the record's
         import json
         from types import SimpleNamespace
-        d = json.load(open(cand))
-        fake = SimpleNamespace(json=lambda rel: d, has=lambda rel: rel == "match_decomp.json", key=row.key)
+        gm = row.candidate("global_match.json")           # the fold-record pins live in the candidate's global_match.json (impl.fold_load)
+        docs = {"match_decomp.json": json.load(open(cand)), **({"global_match.json": json.load(open(gm))} if gm is not None else {})}
+        fake = SimpleNamespace(json=lambda rel: docs[rel], has=lambda rel: rel in docs, key=row.key)
         return dict(expected(fake), source="candidate")  # type: ignore[arg-type]
     raise NotImplementedError("decomp_hashes: recomputation over the multi-GB fold record is T1 (pod) and not implemented yet")
