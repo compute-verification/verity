@@ -91,6 +91,8 @@ def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, ca
     A relation with a ``frozen_tier`` reads its frozen set from ``root`` instead (:func:`frozen_instances`)."""
     if rel.frozen_tier:
         return frozen_instances(rel, n, root)
+    if getattr(rel, "instances_fn", None) is not None:       # a relation with its own instance families (fp4/hashed.py)
+        return rel.instances_fn(n, seed=seed, procs=procs, cache=cache, root=root)
     seed = rel.instance_seed if seed is None else seed
     path = Path(cache) / f"{rel.name}-{seed}-{n}.npz" if cache else None
     if path is not None and path.exists():
@@ -122,6 +124,8 @@ def instances_digest(rel: Relation, n: int, seed: int | None = None, root=None) 
     if rel.frozen_tier:
         from verity_numerical.bench import instances as frozen
         return frozen.manifest_sha256(_frozen_root(root))
+    if getattr(rel, "instances_digest_fn", None) is not None:
+        return rel.instances_digest_fn(n, seed=seed, root=root)
     seed = rel.instance_seed if seed is None else seed
     return hashlib.sha256(f"{rel.name} synthetic|seed={seed}|n={n}|K={K_VU}".encode()).hexdigest()
 
@@ -410,8 +414,8 @@ class HashedRelationRunner(RelationChainRunner):
         from . import hashauth, hashchain
         x_rows, w_cols = np.asarray(x_rows, dtype=np.int64), np.asarray(w_cols, dtype=np.int64)
         self.trees, self.digests, cached = hashauth.load_or_build_trees(
-            cache, x_rows=x_rows, w_cols=w_cols,
-            y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings)
+            cache, x_rows=x_rows, w_cols=w_cols, y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits,
+            y_bits=self.rel.y_bits, bindings=bindings, digest_fn=self.hr.native_digests)
         self.tile = tile
         # the sponges of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus)
         t0 = time.perf_counter()
@@ -434,7 +438,8 @@ class HashedRelationRunner(RelationChainRunner):
             w_cols = [v[1] for v in data]
         ysch, _ = hashauth.word_schema(self.rel.y_bits)
         bindings = {n: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=0, hi=len(data),
-                                               K=K_VU, tree=n, schema=(SCHEMA_ROW if n != "y" else ysch)) for n in ("a", "b", "y")}
+                                               K=self.steps * self.rel.k, tree=n, schema=(SCHEMA_ROW if n != "y" else ysch))
+                    for n in ("a", "b", "y")}
         return self.commit(x_rows=x_rows, w_cols=w_cols, y_words=y, bindings=bindings, cache=cache, tile=tile)
 
     def auth_for(self, vu_ids: list[int]):
@@ -824,7 +829,7 @@ def gate_hashed(args, rel: Relation) -> int:
         W[c_rows[2], 30] = (W[c_rows[2], 30] ^ (1 << 12)) % P
     pf, pb, ly = R.prove_vus(base, check=False, mutate=acc_bit, vu_ids=[0, 1])
     negs.append(("accumulator fraction bit 12 flipped in a linked unit", R.verify_vus(pf, pb, ly)))
-    off = list(base[0][0]); off[4] = rel.off_domain[0]
+    off = list(base[0][0]); off[getattr(rel, "off_domain_index", 4)] = rel.off_domain[0]
     k, accs, c = rel.k, [], 0
     for s in range(rel.steps):     # the model on an off-domain word: whatever it records, the private decode must reject the word
         try:

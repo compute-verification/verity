@@ -31,6 +31,8 @@ import hashlib
 
 import numpy as np
 
+from verity.verification.target import NVFP4_SM120
+
 from .. import poseidon2 as h2
 from ..compile import Expr, LigeroCtx, P, Quadratic, System
 from .relation import FRAC_BITS, GRID_FLOOR, GROUP, GROUPS, K, NUMERATOR, NVFP4, SCALES, STEPS, WORDS, compile_fp4_unit
@@ -213,8 +215,14 @@ class FP4HashedRelation:
     fold = 1
     folded_from = None
     frozen_tier = None
+    target = NVFP4_SM120
+    rust_verifiable = True
+    backend_name = ("b-ligero chain, fp4-nvf4 relation (backends/direct/ligero/fp4/relation.py) with the in-circuit operand "
+                    "decode + Poseidon2 sponges of fp4/hashed.py (hashchain.compose)")
     instances_dataset = "synthetic"
     instances_tier = "dev"
+    instances_recipe = ("fp4-nvf4 synthetic (fp4/chain.py instances_fp4: VU i draws its 24 steps' operands from edge family "
+                        "VU_FAMILIES[i % 14] of seed 20260922, accumulators recorded by BLACKWELL_SM120_NVF4.step)")
     instance_seed = INSTANCE_SEED
     reference_hints = None
     hash_format = FP4Format()
