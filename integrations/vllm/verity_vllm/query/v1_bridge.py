@@ -350,6 +350,11 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     prog_world, prog_rank = int(tpinfo.get("world") or 1), int(tpinfo.get("rank") or 0)
     if (prog_world > 1 or ranks > 1) and (int(ranks) != prog_world or int(rank) != prog_rank):
         raise ValueError(f"rank Program mismatch: Program is rank {prog_rank} of world {prog_world}, manifest requested rank {rank} of {ranks}")
+    # TP HOOK: delete this refusal when Q_module_body_v1's policy names the rank-local partials and compose_global merges ranks
+    if prog_world > 1:
+        raise ValueError(f"TP rank Program (rank {prog_rank} of {prog_world}): the v2 query requires no rank-local partials (a row-parallel Gemm's "
+                         "part_rank<r> / lm_head's shard_rank<r> is interior to its module body) and compose_global has no rank merge / "
+                         "tp_peer_binding (TP-04); build TP manifests with required_manifest build-global --programs-root <rank dir> --rank r ... --ranks W")
     sweep = (workload or {}).get("sweep") or {}
     wr = (workload or {}).get("requests") or []
     workload_request_id = wr[0].get("request_id") if wr and isinstance(wr[0], dict) else None

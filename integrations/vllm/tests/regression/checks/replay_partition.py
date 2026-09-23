@@ -81,8 +81,9 @@ def _load_program(p: str) -> dict:
 
 def recompute(sr: dict, programs: dict[str, dict], manifest: dict | None, program_dirs: dict[str, str] | None = None) -> dict:
     """The partition over `programs` (request label -> Program instances doc) with the record's stated parameters -- `sampled_replay`'s
-    population / split / draw, without the evaluations, under the manifest's own address rule (`address_rule_of`; `program_dirs` = the
-    Build dirs whose correspondence a v2-query manifest was built with).  Returns a `sampled_replay`-shaped document (`lift` reads it)."""
+    population / split / draw, without the evaluations, under the address rule the record states (`addresses.rule`; a record without
+    it predates the v2 rule and was addressed by v1, whatever its manifest's engine; `program_dirs` = the Build dirs whose correspondence
+    a v2-query manifest was built with).  Returns a `sampled_replay`-shaped document (`lift` reads it)."""
     from verity_capture.commit import sampled_replay as SR
     smp, sk = sr.get("sample") or {}, sr.get("strata_keys") or {}
     seed, per_stratum = int(smp["seed"]), int(smp.get("per_stratum") or 2)
@@ -95,7 +96,7 @@ def recompute(sr: dict, programs: dict[str, dict], manifest: dict | None, progra
     executed_prefix = {rid: SR.executed_prefix_of_record(rid, **{k: v for k, v in f.items() if k in FACT_KEYS}) for rid, f in facts.items() if isinstance(f, dict)} or None
     promoted = SR.promoted_addresses_of(manifest)
     padded = SR.manifest_boundary_of(manifest) == "module-pad"
-    rule = SR.address_rule_of(manifest)
+    rule = str((sr.get("addresses") or {}).get("rule") or "v1")
     all_vus, not_ev, not_ev_fam, indices, anchors = [], Counter(), Counter(), {}, {}
     for rid, inst in programs.items():
         pi = indices.get(id(inst))
