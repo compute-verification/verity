@@ -526,14 +526,25 @@ def row_sponges(hr: HashedRelation, rows, role: int, device) -> tuple:
     return cap.T.reshape(n, steps, h2.CAPACITY).contiguous(), dg
 
 
-def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: dict | None = None) -> tuple:
+def call_with_slot(fn, slot, *args, **kw):
+    """``fn(*args, **kw)``, plus ``slot=slot.index`` when a pipeline slot is given and ``fn`` takes one (a relation whose
+    device hint generator keeps per-stream static buffers: ``fp4/hashed.py``); relations without the parameter are
+    called as before."""
+    import inspect
+    if slot is not None and "slot" in inspect.signature(fn).parameters:
+        kw["slot"] = slot.index
+    return fn(*args, **kw)
+
+
+def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: dict | None = None, slot=None) -> tuple:
     """The appended hint rows (len(extra_hint_names), l) for operand words ``a``, ``b`` (l, k) int64 (pad columns 0), and
     the digests (n_vus, 16) the statement publishes.  ``sponges``: ``{"a": (cap (n_vus, steps, 8), digests (n_vus, 8)),
-    "b": ...}`` precomputed by :func:`row_sponges` for exactly these VUs' rows (the caller checked the words match)."""
+    "b": ...}`` precomputed by :func:`row_sponges` for exactly these VUs' rows (the caller checked the words match).
+    ``slot``: the pipeline slot this sub-batch runs on (``pipeline.prove_many``), forwarded to the relation's decode."""
     import torch
     a = torch.as_tensor(a, dtype=torch.int64, device=device)
     b = torch.as_tensor(b, dtype=torch.int64, device=device)
-    vals = hr.rel.public_vectors(hr.rel.params, None, a, b, None, device=device)
+    vals = call_with_slot(hr.rel.public_vectors, slot, hr.rel.params, None, a, b, None, device=device)
     fmt, k = hr.fmt, hr.k
     n_bits = sum(fmt.bit_layout)
     digests, bit_blocks, cap_blocks = [], [], []

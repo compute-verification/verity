@@ -301,14 +301,15 @@ class RelationChainRunner:
                                          mutate=mutate, chain=(lay, bd["ypub_d"]), words={"a": bd["a"], "b": bd["b"], "y16": bd["ypub"]},
                                          coins=coins, rel=self.hooks, hints_fn=hints_fn, slot=slot)
 
-    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256):
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids=None):
         """``len(batches)`` sub-batches proved with up to ``depth`` in flight on their own CUDA streams (``pipeline.prove_many``):
         the host work of one sub-batch (challenge expansion, transcript copies, launch overhead) hides under the device work
         of the next.  ``coins_factory(i)`` is called per sub-batch when it starts, in order (the honest verifier's step 0);
         with a live verifier (``coins`` exposing ``set_statement``) the statement is fixed per sub-batch before proving, and
         the coin exchange is non-blocking (the stage yields a Future the pipeline driver polls -- ``live.LiveCoins``).
         Returns ``[(coins, proof, pubs, lay)]`` in sub-batch order and the pass wall; each proof's ``timings`` is the
-        sub-batch's share of the wall (see ``pipeline._rescale``)."""
+        sub-batch's share of the wall (see ``pipeline._rescale``).  ``vu_ids`` is the hashed runner's (the bare
+        statement binds no committed set) and ignored here."""
         from .pipeline import prove_many
         bundles = [self.marshal(vus, min_l) for vus in batches]
         coins_of: list = [None] * len(batches)
@@ -470,15 +471,15 @@ class HashedRelationRunner(RelationChainRunner):
                 out[nm] = (cap[t], dg[t])
         return out or None
 
-    def prove_vus(self, vus, check=True, mutate=None, min_l: int = 256, coins=None, vu_ids=None, auth=None, words_override=None):
-        """As the base runner; ``vu_ids`` (default ``range(len(vus))``) are the committed set's VU indices.  ``auth`` overrides
-        the block (negatives); ``words_override(a, b)`` edits the operand words the prover computes on AFTER the units
-        are formed (negatives: "computed on another row")."""
-        from . import hashauth, hashchain
-        if coins is None and self.interactive:
-            coins = protocol_mod.Coins.sample()
-        vu_ids = list(range(len(vus))) if vu_ids is None else list(vu_ids)
-        auth = self.auth_for(vu_ids) if auth is None else auth
+    @property
+    def pipelined(self) -> bool:
+        """Whether ``bench_vu_rel`` may drive this relation through :meth:`prove_vus_many` (``--pipeline N``): only
+        relations that declare ``pipeline_hashed`` (their hint generator is safe with several sub-batches in flight on
+        different streams); the others keep the sequential schedule."""
+        return bool(getattr(self.rel, "pipeline_hashed", False))
+
+    def _words(self, vus, min_l: int):
+        """The sub-batch's units as host arrays: ``(lay, a, b, c_in, y_out, ypub)`` (pad columns 0)."""
         lay = self.layout(len(vus), min_l)
         units, ypub = [], torch.zeros(lay.l, dtype=torch.int64)
         for v, (a, b, accs, y) in enumerate(vus):
@@ -490,6 +491,18 @@ class HashedRelationRunner(RelationChainRunner):
         b = np.asarray([u[2] for u in units], dtype=np.int64)
         c_in = np.asarray([u[0] for u in units], dtype=np.int64)
         y_out = np.asarray([u[3] for u in units], dtype=np.int64)
+        return lay, a, b, c_in, y_out, ypub
+
+    def prove_vus(self, vus, check=True, mutate=None, min_l: int = 256, coins=None, vu_ids=None, auth=None, words_override=None):
+        """As the base runner; ``vu_ids`` (default ``range(len(vus))``) are the committed set's VU indices.  ``auth`` overrides
+        the block (negatives); ``words_override(a, b)`` edits the operand words the prover computes on AFTER the units
+        are formed (negatives: "computed on another row")."""
+        from . import hashauth, hashchain
+        if coins is None and self.interactive:
+            coins = protocol_mod.Coins.sample()
+        vu_ids = list(range(len(vus))) if vu_ids is None else list(vu_ids)
+        auth = self.auth_for(vu_ids) if auth is None else auth
+        lay, a, b, c_in, y_out, ypub = self._words(vus, min_l)
         if words_override is not None:
             a, b = words_override(a, b)
         t0 = time.perf_counter()
@@ -522,6 +535,89 @@ class HashedRelationRunner(RelationChainRunner):
         proof.timings["auth_openings"] = openings
         proof.timings["hints_host"] = hints_seconds
         return proof, (table, idx, ypub, auth, sibs), lay
+
+    def _marshal_hashed(self, vus, vu_ids, min_l: int = 256) -> dict:
+        """One sub-batch for the staged prover, before the clock: the units' words, the authentication block, the
+        statement (the public table = the committed rows' digests at the VUs' chain ends, from the commit-time sponges;
+        the leaf indices; the chain-end words) and the verifier's public vectors of it.  The prover's private work --
+        the base hints and the hash hint rows -- runs inside the clock (:meth:`_hashed_hints`)."""
+        from . import hashchain
+        auth = self.auth_for(list(vu_ids))
+        lay, a, b, c_in, y_out, ypub = self._words(vus, min_l)
+        n = len(vus)
+        sp = self._sponges_for(auth, a, b, n)
+        if sp is not None and all(nm in sp for _, nm, _ in hashchain.ROLES):
+            digests = torch.cat([sp[nm][1] for _, nm, _ in hashchain.ROLES], 1).cpu().numpy()
+        else:
+            digests = hashchain.hash_hints(self.hr, a, b, n, lay.l, self.device, sponges=sp)[1].cpu().numpy()
+        table = hashchain.public_table(digests, n, self.steps, lay.l)
+        idx = auth.indices()
+        pub = hashchain.hash_public_vectors(self.p, None, table, idx, None, device=self.device)
+        return {"lay": lay, "a": a, "b": b, "c_in": c_in, "y_out": y_out, "ypub": ypub, "auth": auth, "table": table,
+                "idx": idx, "pub": pub, "hooks": self.hooks_for(auth)}
+
+    def _hashed_hints(self, bd: dict, slot=None) -> torch.Tensor:
+        """The sub-batch's hint rows on the prover's device (the timed ``hints_host`` phase of the staged prover): the
+        relation's base hints, then the hash hint rows gathered from the committed rows' sponges -- as :meth:`prove_vus`."""
+        from . import hashchain
+        lay, a, b = bd["lay"], bd["a"], bd["b"]
+        base = hashchain.call_with_slot(self.rel.hints, slot, self.p, self._base_sys, bd["c_in"], a, b, bd["y_out"], self.device)
+        extra, _ = hashchain.hash_hints(self.hr, a, b, lay.n_vus, lay.l, self.device,
+                                        sponges=self._sponges_for(bd["auth"], a, b, lay.n_vus), slot=slot)
+        return torch.cat([base, extra], 0)
+
+    def _prove_stages_hashed(self, bd: dict, coins, slot=None):
+        lay = bd["lay"]
+        return protocol_mod.prove_stages(self.p, self.sys, self.tb, self.cfg(lay.l), bd["pub"], None, self.device, check=False,
+                                         mutate=None, chain=(lay, bd["ypub"]), words={"a": bd["table"], "b": bd["idx"]},
+                                         coins=coins, rel=bd["hooks"], hints_fn=lambda: self._hashed_hints(bd, slot), slot=slot)
+
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids=None):
+        """The base runner's ``prove_vus_many`` for the committed set (relations with ``pipeline_hashed`` only):
+        ``vu_ids[i]`` are sub-batch i's indices in the committed set (default: consecutive from 0).  The Merkle openings
+        are taken after the pass (``auth_openings``, outside ``total + hints_host`` as in :meth:`prove_vus`), or before
+        a sub-batch starts when a live verifier needs them in the statement."""
+        from . import hashauth
+        from .pipeline import prove_many
+        if not self.pipelined:
+            raise RuntimeError(f"{self.rel.name}+hash: no validated stage generator (pipeline_hashed); use prove_vus")
+        if vu_ids is None:
+            starts = np.cumsum([0] + [len(v) for v in batches])
+            vu_ids = [range(int(lo), int(hi)) for lo, hi in zip(starts[:-1], starts[1:])]
+        bundles = [self._marshal_hashed(vus, ids, min_l) for vus, ids in zip(batches, vu_ids)]
+        coins_of: list = [None] * len(batches)
+        sibs_of: list = [None] * len(batches)
+        open_s = [0.0] * len(batches)
+
+        def pubs(i):
+            bd = bundles[i]
+            return (bd["table"], bd["idx"], bd["ypub"], bd["auth"], sibs_of[i])
+
+        def open_(i):
+            t1 = time.perf_counter()
+            sibs_of[i] = hashauth.open_trees(self.trees, bundles[i]["auth"])
+            open_s[i] = time.perf_counter() - t1
+
+        def starter(i):
+            def start(slot):
+                c = coins_factory(i)
+                coins_of[i] = c
+                if hasattr(c, "set_statement"):
+                    # live verifier: the v5 statement (multiproofs included) is fixed before its first coin is opened
+                    from .live import set_statement
+                    open_(i)
+                    set_statement(c, self, pubs(i), bundles[i]["lay"], self.cfg(bundles[i]["lay"].l), self.n_proofs)
+                return self._prove_stages_hashed(bundles[i], c, slot=slot)
+            return start
+
+        proofs, wall = prove_many([starter(i) for i in range(len(batches))], self.device, depth=depth)
+        out = []
+        for i, pf in enumerate(proofs):
+            if sibs_of[i] is None:
+                open_(i)
+            pf.timings["auth_openings"] = open_s[i]
+            out.append((coins_of[i], pf, pubs(i), bundles[i]["lay"]))
+        return out, wall
 
     def verify_vus(self, proof, pubs, lay: Layout, coins=None, auth_timing: dict | None = None):
         from . import hashauth, hashchain
@@ -926,8 +1022,9 @@ def bench_vu_rel(args, rel: Relation) -> int:
     depth = 3 if interactive else 1
     R = make_runner(args, rel, n_proofs=n_proofs)
     hashed = isinstance(R, HashedRelationRunner)
-    # --pipeline N (lane hp2-host): the staged prover; the hashed runner (lane hash-relation) has no stage generator yet
-    pipeline_depth = int(getattr(args, "pipeline", 0) or 0) if not hashed else 0
+    # --pipeline N (lane hp2-host): the staged prover; the hashed runner only for relations that declare pipeline_hashed
+    # (fp4-nvf4+poseidon2), the other committed relations stay sequential
+    pipeline_depth = int(getattr(args, "pipeline", 0) or 0) if (not hashed or R.pipelined) else 0
     tile = parse_tile(getattr(args, "tile", None)) if hashed else None
     if tile is not None and tile[0] * tile[1] != total_vus:
         raise SystemExit(f"--tile {tile[0]}x{tile[1]} is {tile[0] * tile[1]} VUs; --total-vus {total_vus}")
@@ -1013,7 +1110,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
             # sent on the data channel after the pass.
             local_factory = lambda i: (protocol_mod.Coins.sample() if interactive else None)  # noqa: E731
             factory = live.pipeline_factory(local_factory) if live is not None else local_factory
-            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], factory, depth=pipeline_depth, min_l=l)
+            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], factory, depth=pipeline_depth, min_l=l,
+                                           vu_ids=[range(lo, hi) for lo, hi in subs])
             for si, ((lo, hi), (V, proof, pubs, lay_i)) in enumerate(zip(subs, many)):
                 if live is not None:
                     V = live.proved(si, proof, V)            # PROOF si on the data channel (async); coins -> plain Coins
@@ -1037,7 +1135,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
                     # every pipeline slot once (its stream's hint graph capture, pinned buffers): untimed, like the warm-up
                     warm = subs[:pipeline_depth] + (subs[-1:] if len(subs) > pipeline_depth else [])   # + the ragged last layout
                     R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in warm],
-                                     (lambda i: protocol_mod.Coins.sample() if interactive else None), depth=pipeline_depth, min_l=l)
+                                     (lambda i: protocol_mod.Coins.sample() if interactive else None), depth=pipeline_depth, min_l=l,
+                                     vu_ids=[range(lo_, hi_) for lo_, hi_ in warm])
                 break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
         if live is not None:
             live.end_rep(rep, agg)                           # END; the verifier's session verdict (waits for its Rust verify)
