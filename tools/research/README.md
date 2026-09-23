@@ -97,7 +97,12 @@ and `source_archive_sha256`. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs
 used to race there. `--cwd source` (or `source/SUB`) is the explicit opt-in to
-run inside the tree; job.json records `run.cwd` and `run.cwd_basis`. The machine claims the run directory by run id and
+run inside the tree; job.json records `run.cwd` and `run.cwd_basis`. The
+runner and the workload get the tree's `PYTHONPATH` derived from its root
+`pyproject.toml` workspace members and each member's build config
+(`src/`, `python/`, flat), with a user `--env PYTHONPATH` appended; job.json
+records it (`run.remote.pythonpath`). `research env --source TREE` prints the
+same line for a local checkout. The machine claims the run directory by run id and
 starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.

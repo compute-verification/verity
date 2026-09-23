@@ -546,6 +546,12 @@ def launch_request(request_path: Path) -> dict[str, Any]:
         # tree's sha from here (research.result.ENV_SOURCE_SHA) when neither --sha nor EXPORT.json names it
         env["RESEARCH_SOURCE_SHA"] = str(remote["source_sha"])
         env.setdefault("PYTHONPYCACHEPREFIX", str(runs_root.parent / "cache" / "pycache"))   # imports from the shared tree do not write into it
+        from .pythonpath import import_roots_dir, pythonpath
+
+        derived = import_roots_dir(src_dir)                 # the tree's own workspace declaration, not a hand list (pythonpath.py)
+        env["PYTHONPATH"] = pythonpath(src_dir, derived, extra=env.get("PYTHONPATH"))
+        remote["pythonpath"] = [p for p in env["PYTHONPATH"].split(":") if p]
+        remote["pythonpath_derived"] = {"roots": derived["roots"], "missing": derived["missing"], "source": derived["source"]}
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name

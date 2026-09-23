@@ -13,6 +13,7 @@
   research pods create <runpod flags> [--require-reference-part]   # research.pods.runpod create, then the same verdict once sshd answers
   research pods unpreserved <machine|pod-id>     # Attempts recorded on that machine that are NOT `preserved` (same predicate as `data preserved`); exit 1 if any
   research pods drain <machine|pod-id> [--force --reason TEXT]      # the report, then terminate ONLY when nothing is unpreserved (override logged)
+  research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
@@ -166,8 +167,9 @@ def cmd_run(argv: list[str]) -> int:
     os.environ.update(prep["env"])
     # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
     # runs with the caller's environment (a workload-only AWS_* must not become the push credentials)
-    saved_env = {k: os.environ.get(k) for k in env_map}
-    os.environ.update(env_map)
+    apply_env = {k: v for k, v in env_map.items() if not (ns.claimed and k == "PYTHONPATH")}   # launch_request composed it: tool, tree roots, then this
+    saved_env = {k: os.environ.get(k) for k in apply_env}
+    os.environ.update(apply_env)
     print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
     try:
         rc = harness_run(a, command)
@@ -437,6 +439,32 @@ def cmd_compare(argv: list[str]) -> int:
     return 0
 
 
+def cmd_env(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="research env", description="the PYTHONPATH a source tree's workspace declares (research.pythonpath)")
+    ap.add_argument("--source", required=True, metavar="TREE", help="a checkout or shipped tree with a root pyproject.toml [tool.uv.workspace]")
+    ap.add_argument("--rev", default=None, help="read this git revision of TREE instead of its files")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    from .pythonpath import import_roots_dir, import_roots_git, pythonpath
+
+    tree = Path(ns.source).expanduser().resolve()
+    try:
+        derived = import_roots_git(tree, ns.rev) if ns.rev else import_roots_dir(tree)
+    except LookupError as e:
+        print(f"research env: {e}", file=sys.stderr)
+        return 1
+    if ns.json:
+        print(json.dumps({**derived, "tree": str(tree), "pythonpath": pythonpath(str(tree), derived)}, indent=2))
+    else:
+        print(f"export PYTHONPATH={pythonpath(str(tree), derived)}")
+    for m in derived["missing"]:
+        print(f"research env: declared but absent: {m}", file=sys.stderr)
+    if not derived["roots"]:
+        print(f"research env: {tree}: no import roots ({derived['source']})", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_launch_request(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research launch-request")
     ap.add_argument("request")
@@ -602,6 +630,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_compare(rest)
     if cmd == "launch-request":
         return cmd_launch_request(rest)
+    if cmd == "env":
+        return cmd_env(rest)
     if cmd == "tele":
         from .telemetry.cli import main as tele_main
 
