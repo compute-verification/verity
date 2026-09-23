@@ -376,6 +376,19 @@ witness is a function of the public input and privacy is vacuous for it today.  
 a statement about the construction (masking + coins + derivation) and becomes meaningful once the operands are
 committed instead of published (auth-integration's LEAF_V2).  No private-operand statement is implemented here.
 
+*Relations (`protocol.RelationHooks`; `fp8/`, `relations.py`).*  The same protocol proves other transition units:
+the digest is `BLAKE2b("ligero-b/statement|v2" || rel.tag || "|p=..." ... "|sys=" || system_id || layout || "|a=" ||
+a.astype(rel.word_dtype) || "|b=" || b.astype(rel.word_dtype) || "|y16=" || y16.astype(rel.y16_dtype) [|| auth])`.
+The BF16 units (Ampere `REAL`, Hopper `Params.from_model(HOPPER_BF16_M16N8K16)`) use `tag = b""` and `<u2` words and
+are told apart by `system_id` alone; the E4M3 units use `tag = b"|rel=fp8-ada|v1"` / `b"|rel=fp8-hopper|v1"`, `<u1`
+operands (K = 32 per unit) and `<u4` chain-end words that are the FP32 accumulator with its ten always-zero low bits
+dropped (`pack_public`, 22 bits, `y16_bits = 22`).  The public decode is the relation's (`unit.public_vectors`:
+`t = 255` rejected; `fp8.relation.public_vectors_fp8`: the NaN codes `0x7F / 0xFF` rejected, `t = 15` finite).  The
+file form is `ligero-statement/v4` (`serialize.py`: `u8 word_bytes | u8 y_bytes | str relation` before the words,
+`u8 has_auth` after; a BF16 Ampere statement stays v2 / v3).  A file verifier must take the tag, the widths and the
+word range from the relation the statement NAMES, never from the file, and must pin the relation's compiled system
+by digest (`backends/ligero-verify/src/relation.rs`; DISCREPANCIES.md D11).
+
 **Pole redraw.** B-Ligero has no retry-on-bad-challenge path: `Z_H` is invertible on the coset by construction, there
 is no lookup helper with a public pole, and the column challenge is a deterministic rejection of repeats inside the
 SHAKE stream (`_challenge2`: public data only, no prover-controlled restart, uniform over ordered `t`-subsets given a
