@@ -1026,8 +1026,10 @@ class _TestsStatic:
         self.key, self.sys, self.tb = key, sys, tb
         n, k, l, D = cfg.n, cfg.k, cfg.l, cfg.D
         self.U = torch.empty((Mrows, n), dtype=torch.int32, device=device)
-        self.coefs = torch.empty((Mrows, k), dtype=torch.int64, device=device) if cfg.zk else None
-        self.W = None if cfg.zk else torch.empty((m, l), dtype=torch.int64, device=device)
+        # int32 residues (< p < 2^31): the encoder returns int32 coefficients, the fused tests read u32 -- half the
+        # traffic of int64 for the 431 MB coefficient matrix (the copy into it and the three combinations over it)
+        self.coefs = torch.empty((Mrows, k), dtype=torch.int32, device=device) if cfg.zk else None
+        self.W = None if cfg.zk else torch.empty((m, l), dtype=torch.int32, device=device)
         self.xraw = torch.empty((D * width,), dtype=torch.int32, device=device)
         pub_q, _ = _lin_pub_index(tb, device)
         self.pubmat = torch.empty((len(pub_q), l), dtype=torch.int64, device=device) if pub_q else None
@@ -1184,7 +1186,10 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
                   check=False, mutate=None, chain=None, words=None, coins=None, rel: RelationHooks = BF16_HOOKS,
                   auth=None, auth_open=None, hints_fn=None, slot=None):
     from . import pipeline
+    _t_enter = time.perf_counter()
     clk = _Clock(device)
+    if HOST_TRACE:
+        clk.marks["host_clock_init"] = time.perf_counter() - _t_enter
     m, l, n, D = sys.m, cfg.l, cfg.n, cfg.D
     assert (chain is not None) == (sys.chain is not None), "chain mode needs a chain-compiled system"
     if words is None:
@@ -1211,9 +1216,11 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     else:
         stmt_fut = pipeline.POOL.submit(statement_digest, sys, cfg, words["a"], words["b"], c=words["c"], y=words["y"], rel=rel)
     clk.lap("statement")
+    clk.host("stmt_submit")
     if hints is None:
         hints = hints_fn()
         clk.lap("hints_host")
+    clk.host("hints")
     assert hints.shape[1] == l
     k = cfg.k
     mr = mask_rows(cfg, m, chain is not None)
@@ -1247,19 +1254,28 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
                 with _cupy_ctx(device):
                     Sg = _sample_masks(cfg, m, chain is not None, device, key_dev=st.mkey)
                 cg = st.coefs
-                cg.zero_()
+                # the witness rows are written in full below (k = l + t_pad: interp_H(W) on [0, l), then Z_H s = x^l s - s
+                # with s on [l, k) and -s folded into [0, t_pad)); only the mask rows' tails need zeros
+                cg[m:].zero_()
                 _, Cg = enc.encode(Wg, Sg["W"], want_coefs=True, out=st.U[:m])
                 cg[:m, :l] = Cg
-                _add_zh_times(cg[:m], Sg["W"], l)
+                sW = Sg["W"]
+                tp_ = sW.shape[1]
+                cg[:m, :tp_] = (cg[:m, :tp_] - sW) % P                # _add_zh_times, first half
+                cg[:m, l:l + tp_] = sW                                # second half: (0 + s) % p == s (s canonical)
+                if l + tp_ < cg.shape[1]:
+                    cg[:m, l + tp_:].zero_()
                 for kind_, sl_ in mr.items():
                     blk_ = Sg[kind_]
                     cg[sl_, :blk_.shape[1]] = blk_
-                st.U[m:] = eval_on_coset(cg[m:], n).to(torch.int32)
+                st.U[m:] = eval_on_coset(cg[m:].to(torch.int64), n).to(torch.int32)
             else:
                 enc.encode(Wg, out=st.U)
                 st.W.copy_(Wg)
 
+        clk.host("commit_prep")
         _graph_run(st, "commit_graph", commit_body, device)
+        clk.host("commit_replay")
         W, coefs, U = st.W, st.coefs, st.U
     else:
         W = build_witness(sys, pub, hints, device)
@@ -1294,7 +1310,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
             coefs[sl, :blk.shape[1]] = blk
         del S
         if enc is not None:
-            U[m:] = _graphed("coset_masks", lambda c: eval_on_coset(c, n), coefs[m:]).to(torch.int32)
+            U[m:] = _graphed("coset_masks", lambda c: eval_on_coset(c, n), coefs[m:].to(torch.int64)).to(torch.int32)
         else:
             U = eval_on_coset(coefs, n)                           # (M, n), the coset g <w_n> (disjoint from H)
     else:

@@ -332,10 +332,12 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
             tb = time.perf_counter()
             with stream_context(slot):
                 job.gen = starters[nxt](slot)
+            ts_ = time.perf_counter()
             job.step()
             dt = time.perf_counter() - tb
             busy += dt
             stage_busy[0] = stage_busy.get(0, 0.0) + dt
+            stage_busy[-1] = stage_busy.get(-1, 0.0) + (ts_ - tb)      # of which: the starter (coins, marshal lookup)
             nxt += 1
             if job.done:
                 results[job.index] = job.value
@@ -393,7 +395,8 @@ def _rescale(results, wall: float, key: str) -> None:
         tm = getattr(r, "timings", None)
         if not isinstance(tm, dict) or key not in tm:
             continue
-        leaf = {k: v for k, v in tm.items() if k != key and k not in _DERIVED and not k.startswith("measured_")}
+        leaf = {k: v for k, v in tm.items()
+                if k != key and k not in _DERIVED and not k.startswith("measured_") and not k.startswith("host_")}
         s = sum(leaf.values())
         scale = share / s if s > 0 else 0.0
         for k, v in leaf.items():
