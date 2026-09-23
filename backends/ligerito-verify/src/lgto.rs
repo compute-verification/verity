@@ -149,7 +149,7 @@ pub static RELATIONS: [RelSpec; 4] = [
         y_bits: 16,
         quad: 3164,
         lin: 339,
-        pins: &[],
+        pins: BF16_HOPPER_PINS,
     },
     RelSpec {
         name: "fp8-hopper",
@@ -161,7 +161,7 @@ pub static RELATIONS: [RelSpec; 4] = [
         y_bits: 22,
         quad: 3164,
         lin: 554,
-        pins: &[],
+        pins: FP8_HOPPER_PINS,
     },
     RelSpec {
         name: "bf16-ampere",
@@ -177,9 +177,17 @@ pub static RELATIONS: [RelSpec; 4] = [
     },
 ];
 
-/// fp8-ada: ligerito-relation 3592bd0 (the 18:55Z and 20:20Z fixtures' statements and key.bin).
+// The system ids equal ligero-verify's `relation.rs` pins of the same systems (checked there against `system.bin`); the
+// key digests are the LGVK0001 key.bin of ligerito-relation's gate dumps (the key is a function of the system alone).
+/// fp8-ada: key of ligerito-relation 3592bd0 (18:55Z / 20:20Z fixtures), unchanged at ligerito-relation-2 32d3d42.
 pub const FP8_ADA_PINS: &[(&str, &str)] =
     &[("6b570eef0c7faa07ccd1dddb2508e2699bd5367b108b15920469d46d16073d37", "da27387bb23ff60a60b4b21ef99f180c84c17456edf41efa31e5797aaed9227b")];
+/// bf16-hopper: key of ligerito-relation-2 32d3d42's gate dump.
+pub const BF16_HOPPER_PINS: &[(&str, &str)] =
+    &[("9dcc7cdc1377a00d877440cc01a0dcdb73b3e989d86df8244eccb35a81be0df4", "1726c3be0bd163ebfba38cc8e9fcaed0d74b76f3b592db0748e6be254b946846")];
+/// fp8-hopper: key of ligerito-relation-2 32d3d42's gate dump.
+pub const FP8_HOPPER_PINS: &[(&str, &str)] =
+    &[("c7cbebe365cb5f773a679bc13b5382fb45714511b1912e4e4ab7fb48accd4bc3", "ea793f49d4c0015d835d886df3bab65949189f20a8f35222e653482dc7d65d60")];
 
 pub fn relation_spec(name: &str) -> Option<&'static RelSpec> {
     RELATIONS.iter().find(|r| r.name == name)
