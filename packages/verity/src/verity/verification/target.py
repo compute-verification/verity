@@ -199,6 +199,10 @@ class NativePeak:
     flop_per_second: float
     accumulate: str
     source: str
+    #: The reference part's device memory in bytes (datasheet).  A board that reports a very different total is a
+    #: *variant* of the SKU (2026-09-22: a RunPod "RTX 4090" with 48 GiB -- a re-memoried AD102 board whose clocks and
+    #: power limit are not the datasheet's), and the datasheet peak is not its denominator; ``None`` = unchecked.
+    memory_bytes: int | None = None
 
     def seconds_per_vu(self, K: int) -> float:
         """Native wall seconds of one ``GemmCoordinate<K>`` (``2K`` FLOP) at this peak."""
@@ -239,6 +243,7 @@ A100_BF16_PEAK = NativePeak(
     flop_per_second=312e12,
     accumulate="fp32",
     source="NVIDIA A100 datasheet / Ampere whitepaper",
+    memory_bytes=80 * 2**30,
 )
 #: H100 SXM5 dense FP8 tensor-core peak; Hopper runs FP8 with FP32 accumulate at full rate.
 H100_FP8_PEAK = NativePeak(
@@ -247,6 +252,7 @@ H100_FP8_PEAK = NativePeak(
     flop_per_second=1978.9e12,
     accumulate="fp32",
     source="NVIDIA Hopper whitepaper (FP8 3957.8 TFLOPS with sparsity; FP32 accumulate at full rate on Hopper)",
+    memory_bytes=80 * 2**30,
 )
 #: RTX 4090 dense FP8 tensor-core peak with FP32 accumulate -- half the FP16-accumulate figure on Ada.
 RTX4090_FP8_PEAK = NativePeak(
@@ -258,6 +264,7 @@ RTX4090_FP8_PEAK = NativePeak(
         "NVIDIA Ada whitepaper (FP8 with FP32 accumulate 330.3 / 660.6 sparse TFLOPS; FP16 accumulate is 660.6 -- "
         "Ada halves FP8 throughput with FP32 accumulate)"
     ),
+    memory_bytes=24 * 2**30,
 )
 
 

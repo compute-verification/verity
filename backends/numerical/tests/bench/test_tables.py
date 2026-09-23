@@ -486,3 +486,25 @@ def test_footnote_names_the_verifier_and_flags_interactive_transcripts(store: Lo
     assert f"verified by {VERIFIER} (Fiat–Shamir transcript: transferable)" in T.render_markdown(tab)
     assert T._mode_of({"mode": "interactive"}) == "interactive" and T._mode_of({"mode": "fiat-shamir"}) == "fiat-shamir"
     assert T._mode_of({"security": {"bound_model": 3}}) is None and T._mode_of({}) is None
+
+
+# --- device variants (same nvidia-smi name, not the datasheet part) ----------------------------------------------------------------
+
+
+def test_a_rememoried_board_of_the_same_name_is_not_a_cell(store: LocalStore) -> None:
+    """2026-09-22: a RunPod "RTX 4090" reported 48 GiB; the datasheet part has 24 GiB.  Same name, so ``same_sku`` passes; the
+    memory check rejects it, names both figures, and the reference part (within tolerance) still populates."""
+    hw = lambda mem: {"gpu": {"name": A100, "driver": "d", "cuda": "c", "memory_total_bytes": mem}, "cpu": {"model": "AMD EPYC 7763 64-Core Processor", "count": 256}}  # noqa: E731
+    bad = put(store, result(t_total=3.0, hardware=hw(2 * 80 * 2**30)))
+    good = put(store, result(t_total=4.0, hardware=hw(85_520_809_984)))     # what torch reports for an 80 GiB part
+    tab = T.build(store)
+    c = cell(tab)
+    assert c is not None and c.artifact == good
+    reasons = rejected(tab, bad)
+    assert len(reasons) == 1 and reasons[0].startswith("device variant: 160.0 GiB of device memory on") and "has 80 GiB" in reasons[0]
+    assert c.host == "AMD EPYC 7763 64-Core Processor x256"
+    assert f"on {A100} (host AMD EPYC 7763 64-Core Processor x256); attempt" in T.render_markdown(tab)
+    assert T.device_variant({"name": A100}, FIRST) is None                  # no memory reported: unchecked
+    assert T.device_variant({"name": A100, "memory_total_bytes": 0}, FIRST) is None
+    assert FIRST.native_peak.memory_bytes == 80 * 2**30 and FP8_ADA_MMA.native_peak.memory_bytes == 24 * 2**30
+    assert "device_variant" in T.CAPTION
