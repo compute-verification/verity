@@ -94,10 +94,26 @@ class Layout:
                 "K": self.K, "R": self.R, "C": self.C, "N_log2": self.n_vars, "virtual_rows": len(self.virt), "n_links": self.n_links}
 
 
+def end_row_names(sys: System) -> list[str]:
+    """The claimed chain-end rows: ``y16`` (one field element), or ``y_end0..`` for a claim wider than the field whose end
+    binds components (``sys.chain["y_end"] = [(expr, shift, width), ...]``, e.g. fp4-nvf4's FP32 word: sign, exponent,
+    fraction)."""
+    if sys.chain.get("y16") is not None:
+        return ["y16"]
+    return [f"y_end{e}" for e in range(len(sys.chain["y_end"]))]
+
+
+def end_values(sys: System, ypub: torch.Tensor) -> dict[str, torch.Tensor]:
+    """The end rows' values from the claimed words ``ypub`` (int64; 0 off the ends): the word itself, or its components."""
+    if sys.chain.get("y16") is not None:
+        return {"y16": ypub}
+    return {f"y_end{e}": (ypub.to(torch.int64) >> sh) & ((1 << wd) - 1) for e, (_, sh, wd) in enumerate(sys.chain["y_end"])}
+
+
 def layout_for(sys: System, l: int, n_vus: list[int], steps: int) -> Layout:
     """The layout of a batch of ``len(n_vus)`` sub-batches of ``l`` columns (``n_vus[s]`` VUs of ``steps`` units each)."""
-    if sys.chain is None or sys.chain.get("y16") is None:
-        raise NotImplementedError("layout_for: a chain-compiled system with a single y16 end (component ends: not yet)")
+    if sys.chain is None or (sys.chain.get("y16") is None and not sys.chain.get("y_end")):
+        raise NotImplementedError("layout_for: a chain-compiled system with a y16 end or component ends (y_end)")
     pins = {idx for idx, _ in sys.pins}
     row_of_sys: dict[int, int] = {}
     for r in sys.rows:
@@ -113,14 +129,14 @@ def layout_for(sys: System, l: int, n_vus: list[int], steps: int) -> Layout:
             pub_names.append(c.pub)
     virt: dict[str, int] = {}
     nxt = m
-    for name in ["const", "link", "start", "end", "y16"] + [f"pub:{n}" for n in pub_names] + \
+    for name in ["const", "link", "start", "end"] + end_row_names(sys) + [f"pub:{n}" for n in pub_names] + \
             [f"next:{x}" for x in range(len(sys.chain["c"]))]:
         virt[name] = nxt
         nxt += 1
     n_i = max(1, (nxt - 1).bit_length())
     n_links = len(sys.chain["c"])
     n_pin_lin = sum(1 for c in sys.linear if c.name.startswith("pin:"))
-    K = len(sys.quadratic) + len(sys.linear) - n_pin_lin + 2 * n_links + 1
+    K = len(sys.quadratic) + len(sys.linear) - n_pin_lin + 2 * n_links + len(end_row_names(sys))
     n_k = max(1, (K - 1).bit_length())
     n_sub = len(n_vus)
     n_s = max(0, (n_sub - 1).bit_length())
@@ -196,10 +212,13 @@ def constraints(sys: System, lay: Layout, device="cpu") -> Constraints:
         emit(f"chain.link{x}", {lay.virt["link"]: 1}, {r: v for r, v in b.items() if v}, {})
     for x, c_idx in enumerate(ch["c"]):
         emit(f"chain.start{x}", {lay.virt["start"]: 1}, {lay.row_of_sys[c_idx]: 1}, {})
-    b = _map_expr(sys, lay, ch["y16"], pin_name)
-    r = lay.virt["y16"]
-    b[r] = (b.get(r, 0) - 1) % P
-    emit("chain.end", {lay.virt["end"]: 1}, {r: v for r, v in b.items() if v}, {})
+    ends = [(ch["y16"], "y16", "chain.end")] if ch.get("y16") is not None else \
+        [(Y, f"y_end{e}", f"chain.end{e}") for e, (Y, _, _) in enumerate(ch["y_end"])]
+    for Y, name, cname in ends:
+        b = _map_expr(sys, lay, Y, pin_name)
+        r = lay.virt[name]
+        b[r] = (b.get(r, 0) - 1) % P
+        emit(cname, {lay.virt["end"]: 1}, {r: v for r, v in b.items() if v}, {})
     assert len(names) == lay.K, (len(names), lay.K)
     coo = {}
     for side in "abc":
@@ -258,7 +277,8 @@ def fill_z(sys: System, lay: Layout, z: torch.Tensor, s: int, sb: SubBatch) -> N
     z[lay.virt["link"], cols] = link.to(dtype)
     z[lay.virt["start"], cols] = start.to(dtype)
     z[lay.virt["end"], cols] = end.to(dtype)
-    z[lay.virt["y16"], cols] = (sb.ypub.to(device) % P).to(dtype)
+    for name, v in end_values(sys, sb.ypub.to(device)).items():
+        z[lay.virt[name], cols] = (v % P).to(dtype)
     for name, r in lay.virt.items():
         if name.startswith("pub:"):
             z[r, cols] = (sb.pub[name[4:]].to(device) % P).to(dtype)
@@ -281,8 +301,8 @@ def public_rows(sys: System, lay: Layout, subs: list[SubBatch], device) -> dict[
             elif name in ("link", "start", "end"):
                 start, link, end = _masks(lay, s, device)
                 v[cols] = {"link": link, "start": start, "end": end}[name]
-            elif name == "y16":
-                v[cols] = sb.ypub.to(device) % P
+            elif name == "y16" or name.startswith("y_end"):
+                v[cols] = end_values(sys, sb.ypub.to(device))[name] % P
             else:
                 v[cols] = sb.pub[name[4:]].to(device) % P
         out[name] = v

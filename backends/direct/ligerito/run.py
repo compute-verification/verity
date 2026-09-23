@@ -28,7 +28,8 @@ import torch
 
 from backends.direct.ligero import live as live_mod
 from backends.direct.ligero.compile import P
-from backends.direct.ligero.relchain import K_VU, census, instances, instances_digest
+from backends.direct.ligero import relchain
+from backends.direct.ligero.relchain import K_VU
 
 from . import prove as prove_mod
 from .proof import Proof, Statement, read_key, read_proof, read_statement, sha256
@@ -40,6 +41,20 @@ STUBBED = "zk.py not wired (no masks, no salted leaves, no Libra sumcheck masks,
 ZK_PARTIAL = "ligerito-zk row masks (8 uniform + product triple + Libra row, in free rows) under the bit-interleaved index map z_to_f"
 ZK_MISSING = ("Libra masks in the three sumchecks, the shift-claim reduction and the product-row constraint (ligerito-sumcheck-2), "
               "per-column RS padding + sparse round-1 terms (ligerito-pcs-fast)")
+
+
+def instances(rel, n: int, procs: int = 8, cache=None) -> list:
+    if rel.name == "fp4-nvf4":
+        from backends.direct.ligero.fp4.chain import instances_fp4
+        return instances_fp4(n)
+    return relchain.instances(rel, n, procs=procs, cache=cache)
+
+
+def instances_digest(rel, n: int) -> str:
+    if rel.name == "fp4-nvf4":
+        from backends.direct.ligero.fp4 import chain as fc
+        return fc.instances_digest(n)
+    return relchain.instances_digest(rel, n)
 
 
 def _git_commit() -> str:
@@ -214,7 +229,7 @@ def gate(args) -> int:
         a_bad[3, 5] = rel.off_domain[0]
         neg(f"off-domain operand 0x{rel.off_domain[0]:x} in a", _stmt_with(bt.stmt, a=[a_bad] + bt.stmt.a[1:]), res.proof)
         a_bad = bt.stmt.a[0].copy()
-        a_bad[10, 1] ^= 1 << (rel.params.frac if rel.params.word_bits == 16 else 3)
+        a_bad[10, 1] ^= 1 << (rel.params.frac if getattr(rel.params, "word_bits", 8) == 16 else 3)
         neg("operand a[10][1] exponent bit flipped (honest proof)", _stmt_with(bt.stmt, a=[a_bad] + bt.stmt.a[1:]), res.proof)
         # (3) chain: broken link, nonzero c_0, accumulator bits (relchain.negatives' mutations)
         c_rows = sys_.chain["c"]

@@ -32,7 +32,7 @@ from backends.direct.ligero.witness import build_witness
 from . import params as params_mod
 from . import sumcheck as sc_mod
 from . import zk as zk_mod
-from .layout import Constraints, Layout, SubBatch, build_z, constraints, layout_for, public_rows
+from .layout import Layout, SubBatch, build_z, constraints, end_values, layout_for, public_rows
 from .proof import Key, PcsProof, Proof, Statement, params_bytes
 from .proto import claims as cl
 from .proto import device as pdev
@@ -74,6 +74,69 @@ def dims_for(n: int, rel_name: str | None = None, L: int | None = None) -> tuple
             continue
         return Dims(n, list(p.wide_log2), list(p.queries), list(p.rate_log2)), p
     raise ValueError(f"no parameter-set-B dims for N = 2^{n} (the queries do not fit the codewords)")
+
+
+class _FP4Relation:
+    """The ``relations.Relation`` fields this backend reads, for fp4-nvf4 (its Ligero runner is ``fp4/chain.FP4ChainRunner``,
+    not ``relations.py``): 24 chained NVFP4 units per VU, 68 byte words per operand, the claim an FP32 word bound as
+    components (``sys.chain["y_end"]``)."""
+
+    name = "fp4-nvf4"
+    y_bits, word_dtype, y_dtype = 32, "<u1", "<u4"
+    off_domain = (0xFF,)
+    instances_dataset, instances_tier, frozen_tier = "synthetic", "fp4-nvf4 synthetic (fp4/chain.instances_fp4)", None
+
+    def __init__(self):
+        from verity.verification.target import NVFP4_SM120
+
+        from backends.direct.ligero.fp4 import chain as fc
+        from backends.direct.ligero.fp4 import relation as fr
+        self.params, self.target, self.k, self.steps = fr.NVFP4, NVFP4_SM120, fr.WORDS, fr.STEPS
+        self.instance_seed = fc.INSTANCE_SEED
+        self.relation_name, self.model_name = fc.RELATION_NAME, fc.MODEL_NAME
+        self.instances_recipe = f"instances_fp4(seed {fc.INSTANCE_SEED}): VU i from family {list(fc.VU_FAMILIES)}[i % 14]"
+        self.witness_generation = "fp4/witness.hints_fp4 (numpy) + ligero build_witness; accumulators from BLACKWELL_SM120_NVF4.step"
+        self.claim_note = "the claim per VU is its final FP32 accumulator word, bound as sign / exponent / fraction (3 end rows)"
+
+    def public_vectors(self, p, c, a, b, y, device="cpu"):
+        from backends.direct.ligero.fp4.witness import public_vectors_fp4
+        host = lambda x: None if x is None else (x.cpu().numpy() if torch.is_tensor(x) else np.asarray(x))  # noqa: E731
+        out = public_vectors_fp4(host(a), host(b), host(c), host(y))
+        return {k: torch.as_tensor(v, dtype=torch.int64, device=device) for k, v in out.items()}
+
+    def hints(self, p, sys, c_d, a_d, b_d, y_d, device):
+        from backends.direct.ligero.fp4.witness import hints_fp4
+        h = hints_fp4(sys, c_d.cpu().numpy(), a_d.cpu().numpy(), b_d.cpu().numpy())
+        return torch.as_tensor(h, dtype=torch.int64, device=device)
+
+
+class _FP4Runner:
+    """``RelationChainRunner``'s ``sys`` / ``p`` / ``marshal`` / ``_pad_unit`` over ``FP4ChainRunner`` (its prover never runs)."""
+
+    def __init__(self, rel: _FP4Relation, device: str):
+        from backends.direct.ligero.fp4.chain import FP4ChainRunner
+        self.rel, self.device = rel, device
+        self.inner = FP4ChainRunner(device, -128.0, 2, hints="numpy")
+        self.sys, self.p = self.inner.sys, self.inner.p
+        self._cache: dict = {}
+
+    def _pad_unit(self):
+        from backends.direct.ligero.fp4.chain import _pad_unit
+        return _pad_unit()
+
+    def marshal(self, vus: list, min_l: int = 256) -> dict:
+        key = (len(vus), id(vus[0]), id(vus[-1]), id(vus[len(vus) // 2]), min_l)
+        if key in self._cache:
+            return self._cache[key]
+        bd = self.inner.marshal(vus, min_l)
+        dev = self.device
+        to_dev = lambda x: torch.as_tensor(np.asarray(x, dtype=np.int64)).to(dev)  # noqa: E731
+        out = {"lay": bd["lay"], "a": bd["a"], "b": bd["b"], "c_in": bd["c_in"], "ypub": bd["y32"],
+               "a_d": to_dev(bd["a"]), "b_d": to_dev(bd["b"]), "c_d": to_dev(bd["c_in"]),
+               "y_d": torch.zeros(bd["lay"].l, dtype=torch.int64, device=dev), "ypub_d": bd["y32"].to(dev)}
+        out["pub"] = self.rel.public_vectors(self.p, None, out["a_d"], out["b_d"], None, device=dev)
+        self._cache[key] = out
+        return out
 
 
 def make_coins(kind: str, seed: int = 0, slots=None):
@@ -685,7 +748,7 @@ class Prover:
     ``build_witness`` -- its prover never runs), the layout constraints and the verification key."""
 
     def __init__(self, rel_name: str, device: str = "cuda", l: int = 16384, engine: str | None = "auto"):
-        self.rel = get_relation(rel_name)
+        self.rel = _FP4Relation() if rel_name == "fp4-nvf4" else get_relation(rel_name)
         self.device = device
         self.l = l
         self.engine = ("cuda" if str(device).startswith("cuda") else None) if engine == "auto" else engine
@@ -694,7 +757,7 @@ class Prover:
         self.pcs_impl = os.environ.get("LIGERITO_RELATION_PCS", "pcs-fast")
         self._witness_lock = threading.Lock()     # windowed batches: Ligero's marshal cache is not thread-safe
         t0 = time.perf_counter()
-        self.runner = RelationChainRunner(self.rel, device, 128.0)
+        self.runner = _FP4Runner(self.rel, device) if rel_name == "fp4-nvf4" else RelationChainRunner(self.rel, device, 128.0)
         self.sys = self.runner.sys
         self.sys_id = protocol_mod.system_id(self.sys)
         self.steps = self.rel.steps
@@ -792,7 +855,8 @@ class Prover:
             subs = self._subs(bt, mutate)
             z = build_z(self.sys, lay, subs, dev)
         if ypub_override is not None:
-            z[lay.virt["y16"], :lay.l] = torch.as_tensor(ypub_override, device=dev).to(torch.int32) % P
+            for name, v in end_values(self.sys, torch.as_tensor(ypub_override, device=dev, dtype=torch.int64)).items():
+                z[lay.virt[name], :lay.l] = (v % P).to(torch.int32)
         tm.stop()
         tm.start("transcript")
         coins.absorb(b"lgto/params", params_bytes(bt.params))
