@@ -421,8 +421,8 @@ PROMOTION_RULE = ("an INTERIOR-classified row (the vocabulary `members_for` name
                   "a Program without operand runs promotes nothing (the audit is not armed).  Fail closed by name: a member the registry cannot size "
                   f"({UNDERIVABLE}), two promoted families on one member, a promoted member colliding with a vocabulary member, a partially crossing "
                   "group, an unrooted producer path whose consumers are not under it (MAN-08)")
-#: the integration's registry modules whose composites a Program row can name (imported once, on the first promotion; verity_vllm/lifting/record.py
-#: imports the same set to populate the registry); an import error is recorded and REPORTED with the fault, never swallowed as 'not registered'
+#: the integration's registry modules whose composites a Program row can name (imported once, on the first promotion); an import error is
+#: recorded and REPORTED with the fault, never swallowed as 'not registered'
 _REGISTRY_MODULES = ("b1", "dense", "fp8", "moe", "sampling", "b1_tp2", "moe_pad")
 _registry_cache: dict[str, Any] = {}
 
