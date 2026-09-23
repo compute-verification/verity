@@ -557,7 +557,7 @@ def _registry():
         try:
             from verity.ir.defs import REGISTRY
         except Exception as e:  # noqa: BLE001  -- the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
-            from verity_capture.commit.required_manifest import RegistryUnavailable
+            from verity_capture.commit.manifest_format import RegistryUnavailable
             raise RegistryUnavailable(e) from e
         errors = []
         for m in REGISTRY_MODULES:

@@ -148,6 +148,16 @@ def test_request_manifest_rows():
     assert body["boundary"] == {"crossing_rows": 2, "returned_rows": 2, "structural_member": "out"}   # a crossing Value is a returned tensor too
 
 
+def test_request_manifest_refuses_a_tp_rank_program():
+    """A rank Program's population of record names its rank-local partials (TP-04); the v2 query does not, so it refuses by name."""
+    P = program()
+    res = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [8, 9]}}, "tp": {"world": 2, "rank": 1}}
+    with pytest.raises(ValueError, match="TP rank Program .*required_manifest build-global"):
+        request_manifest(P, Correspondence(P), res, request_id="r0", rank=1, ranks=2)
+    with pytest.raises(ValueError, match="rank Program mismatch"):
+        request_manifest(P, Correspondence(P), res, request_id="r0")
+
+
 def test_return_slot_policy_is_switchable():
     """A recorded return slot the dataflow never reads is required only under the RETURN-SLOT policy."""
     P = program()

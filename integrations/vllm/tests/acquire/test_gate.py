@@ -7,6 +7,7 @@ import pytest
 torch = pytest.importorskip("torch")
 nn = torch.nn
 
+from verity_capture.commit import manifest_format as MF  # noqa: E402
 from verity_capture.commit import required_manifest as RM  # noqa: E402
 from verity_capture.experimental.commit_integ.native_host import ACQUIRE_CLASSES, ACQUIRE_INPUT_CLASSES, SKIP_CLASSES, NativeHostCommitter  # noqa: E402
 from verity_vllm.acquire import gate as G  # noqa: E402
@@ -100,7 +101,7 @@ def test_v1_decision_matches_committer():
                                  row("instance_outputs", "layers.1.mixer", RM.PROMOTED_MEMBER, **RM.promoted_annotations({"rows": 1, "width": 4, "dtype": "bf16", "spec": "Add_v1", "consumers": ["layers.1.mixer"]}))]
     man2 = manifest(rows)
     d2 = v1_decision(rt, man2)
-    pia = RM.promoted_observation(man2)
+    pia = MF.promoted_observation(man2)
     c2 = offline_committer(model, runner, acquire_inputs=pia["consumers"])
     assert d2.inputs == [n for n, m in c2._modules if c2._acquires_input(n, m)] + [n for n, _m in c2._input_only_modules()]
     assert "layers.0.post" in d2.inputs and "layers.1.mixer" in d2.inputs                      # a consumer of an acquire class, and one of none
@@ -152,7 +153,7 @@ def test_apply_plan_to_committer_replaces_the_class_tables():
     man = manifest(rows)
     plan = acquisition_plan(man, AnnotationCorrespondence(rt))
     assert plan.complete
-    c = offline_committer(model, runner, acquire_inputs=RM.promoted_observation(man)["consumers"])
+    c = offline_committer(model, runner, acquire_inputs=MF.promoted_observation(man)["consumers"])
     before = [n for n, _m in c._modules]
     assert "norm" in before and c.plan_inputs is None
     rec = apply_plan_to_committer(c, plan)

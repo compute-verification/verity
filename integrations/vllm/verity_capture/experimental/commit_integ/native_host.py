@@ -58,6 +58,7 @@ ROOT_TAG_RUN = b"verity/cmt-integ/run-root/v0"
 DEFAULT_CHUNK = 4096
 BLOCK_BYTES = 64 << 20
 
+# P4 remains: under v2 the plan replaces this selection (apply_plan_to_committer); the tables stay for the ACQUIRE_ENGINE=v1 oracle and compiled_source
 # module classes whose forward OUTPUT is an Instance output (census §3 `HBM-materialized (native)`); matched on the MRO class names
 ACQUIRE_CLASSES = {
     "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear", "LinearBase",
@@ -1561,6 +1562,7 @@ class NativeHostCommitter:
     #   o_proj / down_proj   : fused_add_rms_norm writes the normalised output into its input buffer x
     #   RMSNorm output[1]    : the residual buffer, overwritten by the next fused norm
     #   embedding output     : becomes the layer-0 residual (same in-place fate)
+    # declared lifetime facts: the correspondence annotations carry no alias / in-place facts to derive them from (plan.py: a residual)
     HAZARD_LEAVES = ("qkv_proj", "o_proj", "down_proj", "embed_tokens", "sampler")
 
     def _hazard(self, name: str) -> bool:

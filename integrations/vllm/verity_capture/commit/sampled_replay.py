@@ -8,8 +8,9 @@ where `tau` reads the COMMITTED bytes of the Values the Program's dataflow names
 registered relation of the Call's Definition evaluated by the registry's own reference (`verity_vllm.registry.derived_rows`,
 the same numpy models the Match stage's fold checks use).  Nothing here reads the collector's emissions to decide WHAT is
 required or WHERE an input lives: the population is the Program (its Calls, the instances.json.gz rows), the addresses are the required-value
-manifest's Value rule (`required_manifest.members_for`, the cache of R(P, Q)) and the binding map fixed at finalize (occurrence
-resolution: a Call's Value -> its occurrence key -> committed bytes).
+manifest's Value rule -- the rule the manifest of record was built with (`address_rule_of`: the v2 query's population
+`v1_bridge.Population.members_of`, or `required_manifest.members_for` for a v1-built manifest) -- and the binding map fixed at finalize
+(occurrence resolution: a Call's Value -> its occurrence key -> committed bytes).
 
     row.args = [[["n", j, lo, hi]], [["p", 1, lo, hi]]]
         "n" j lo hi -> producer Call j's OUTPUT element slice [lo, hi) -> its occurrence key (op_path, member, request-local row) -> committed bytes
@@ -55,7 +56,8 @@ from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
-from verity_capture.commit import required_manifest as RM
+from verity_capture.commit import manifest_format as RM
+from verity_capture.commit import required_manifest as V1   # the v1 address rule stays for v1-built manifests: TP rank Programs (until TP=N), pre-flip records
 from verity_capture.commit.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
@@ -318,11 +320,32 @@ def promoted_addresses_of(manifest: dict[str, Any] | None) -> dict[tuple[int, st
     return out
 
 
+#: the query engine whose population addresses a Call's committed output when the manifest of record was built by it (`address_rule_of`)
+V2_QUERY = "v2-query"
+
+
+def address_rule_of(manifest: dict[str, Any] | None) -> str:
+    """The rule the replay addresses a Program row's committed output by: the rule the manifest of record was built with, read from ITS
+    header (`query.engine`).  `v2-query` = the v2 query's population (`verity_vllm.query.v1_bridge.Population.members_of`: the required
+    Values a Call produces under `Q_module_body_v1` + the policy, the rows the manifest counts); `v1` = `required_manifest.members_for`
+    (a v1-built manifest -- TP rank manifests, records from before the flip -- or no manifest)."""
+    q = (manifest.get("query") or {}) if isinstance(manifest, dict) else {}
+    return V2_QUERY if isinstance(q, dict) and q.get("engine") == V2_QUERY else "v1"
+
+
 class ProgramIndex:
-    """The Program's rows with their manifest addresses: (op_path, member, request-relative step, request-local row) per output slice."""
+    """The Program's rows with their manifest addresses: (op_path, member, request-relative step, request-local row) per output slice.
+
+    `rule` (`address_rule_of(manifest)`): `v2-query` names a row's members from the v2 query's population of the SAME Program, read with
+    the correspondence of its Build dir (`program_dir`; without one, the rows' recorded names -- the v1-annotation reader); `v1` from
+    `required_manifest.members_for` with the epilogue / hinted / promoted rules below."""
 
     def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
-                 padded_slots: bool = False, promoted: dict[tuple[int, str], dict[str, Any]] | None = None):
+                 padded_slots: bool = False, promoted: dict[tuple[int, str], dict[str, Any]] | None = None, rule: str = "v1",
+                 program_dir: str | None = None):
+        if rule not in (V2_QUERY, "v1"):
+            raise ValueError(f"unknown address rule {rule!r} (one of {V2_QUERY!r}, 'v1')")
+        self.rule = rule
         self.rows: list[dict] = list(inst["rows"])
         # [Q_module_pad_v1, revb S-r17b-51 (b)] the manifest's boundary decides whether a padded fixed-slot MoE row (MoeFfnFixedL_v1) names
         # its slot units beside `out` (members_for padded_slots) -- the SAME vocabulary the manifest was built with, read from ITS header,
@@ -340,6 +363,30 @@ class ProgramIndex:
         # output.  Without this context members_for describes the Gemm as member "0" (= the all-reduced output) and every row-parallel
         # relation is a false mismatch (measured: 256/911 on Llama TP2 B1, first o_proj/0 row 0).  `tp` = {"rank": r, "world": W}.
         self.tp: dict[str, Any] | None = (dict(rank=int(tp.get("rank", 0)), world=int(tp.get("world", 1))) if tp and int(tp.get("world", 1) or 1) > 1 else None)
+        # [v2 flip, P2] the v2 query's population of this Program: Call id -> [(member, width, dtype)] of the required Values it produces,
+        # and its owning module (the correspondence's).  A TP rank Program has no v2 population: the v2 query names no rank-local partials
+        # (TP-04), so a TP manifest is v1-built and a v2 rule on a rank Program is refused, never approximated.
+        self._v2: dict[int, list[tuple[str, int, str]]] = {}
+        self._v2_module: dict[int, str] = {}
+        self._v2_fault: dict[int, str] = {}
+        self.correspondence: dict[str, Any] | None = None
+        if rule == V2_QUERY:
+            if self.tp:
+                raise ValueError(f"TP rank Program (rank {self.tp['rank']} of {self.tp['world']}) under a {V2_QUERY} manifest: the v2 query names no "
+                                 "rank-local partials (TP-04); TP manifests are built by required_manifest")
+            from verity_vllm.query.correspondence import Correspondence
+            from verity_vllm.query.program_view import from_instances
+            from verity_vllm.query.v1_bridge import population
+            P = from_instances(inst)
+            corr = Correspondence.of(P, program_dir, implementation_paths=attention_paths or ())
+            pop = population(P, corr)
+            for cid in pop.producers():
+                mem = pop.members_of(cid)
+                if mem:
+                    self._v2[cid] = [(m.member, m.width, m.dtype) for m in mem]
+                    self._v2_module[cid] = corr.module_of(cid)
+            self.correspondence = corr.provenance()
+            del P, corr, pop
         self.params: list[list] = [list(p) for p in inst.get("params", [])]
         self.prefix = RM.wrapper_prefix_of(self.rows, attention_paths or []) if prefix is None else prefix
         self.segs = RM.segment_steps(self.rows)
@@ -360,7 +407,7 @@ class ProgramIndex:
         # order -- the manifest's `rows` count (build_manifest) is this ordinal's population; the `[k]` name suffix agrees where present but
         # attention rows are named `[t=<position>]` (the visible-keys count), not `[k]`
         # [MAN-07] modules whose step carries an epilogue row (BiasAdd): their Gemm rows are interior, the epilogue produces member 0
-        self._epi: list[set[str]] = [RM.epilogue_modules(self.rows[lo: hi + 1]) for lo, hi in self.segs]
+        self._epi: list[set[str]] = [V1.epilogue_modules(self.rows[lo: hi + 1]) for lo, hi in self.segs]
         # [TP-08d] per step: module -> the collective it issues (mirror of build_manifest's `coll_of`), only for a rank Program
         self._coll: list[dict[str, str]] = []
         for lo, hi in self.segs:
@@ -411,10 +458,26 @@ class ProgramIndex:
 
         for r in self.rows:
             i = int(r["i"])
-            mod, _node, hint, _row = RM.split_name(r.get("name") or "")
             s = self.step_of(i)
+            if rule == V2_QUERY:
+                # the request-local ROW of a v2-addressed Call = its ordinal among the Calls producing the same (module, member) in its
+                # step, Program order -- exactly the rows `v1_bridge.request_manifest` counts per identity; a Call whose members would sit
+                # at different rows is not one addressable row (named, never read at a guessed row)
+                mem2 = self._v2.get(i)
+                if mem2:
+                    ords = []
+                    for m in mem2:
+                        k2 = (self._v2_module[i], m[0], s)
+                        ords.append(counts.get(k2, 0))
+                        counts[k2] = ords[-1] + 1
+                    if len(set(ords)) == 1:
+                        self._ordinal[i] = ords[0]
+                    else:
+                        self._v2_fault[i] = f"members {[m[0] for m in mem2]} sit at request-local rows {ords}: not one row"
+                continue
+            mod, _node, hint, _row = RM.split_name(r.get("name") or "")
             fam0 = RM.spec_family(r["spec"])
-            if RM.is_epilogue_interior(fam0, mod, self._epi[s]):
+            if V1.is_epilogue_interior(fam0, mod, self._epi[s]):
                 promote(i, s, mod, fam0)
                 continue                                                     # interior rows claim no member: not in the manifest's row count
             # [R16 fp8] a row whose family claims NO member (Fp8GroupQuant / Fp8GroupScale: the activation quant interior to the FP8
@@ -427,8 +490,8 @@ class ProgramIndex:
             if empty is None:
                 try:
                     tpc0 = None if not self.tp else dict(self.tp, collective=ck[3])
-                    empty = not RM.members_for(fam0, RM.spec_statics(r["spec"]), mod, hint, tp=tpc0, padded_slots=self.padded_slots)
-                except RM.UnmodelledFamily:
+                    empty = not V1.members_for(fam0, RM.spec_statics(r["spec"]), mod, hint, tp=tpc0, padded_slots=self.padded_slots)
+                except V1.UnmodelledFamily:
                     empty = False
                 memberless[ck] = empty
             if empty:
@@ -439,9 +502,9 @@ class ProgramIndex:
             counts[key] = self._ordinal[i] + 1
             if hint:
                 try:
-                    if any(m[0] == hint for m in RM.members_for(RM.spec_family(r["spec"]), RM.spec_statics(r["spec"]), mod, hint)):
+                    if any(m[0] == hint for m in V1.members_for(RM.spec_family(r["spec"]), RM.spec_statics(r["spec"]), mod, hint)):
                         self._hinted.add((mod, hint, self.step_of(i)))
-                except RM.UnmodelledFamily:
+                except V1.UnmodelledFamily:
                     pass
 
     @property
@@ -481,7 +544,11 @@ class ProgramIndex:
         mod, node, hint, row = RM.split_name(r.get("name") or "")
         d: dict | None
         kind = moe_plane_kind(fam, mod)
-        tp_sum = kind == "sum" and bool(self.tp) and self._coll[self.step_of(i)].get(mod) == "all_reduce"
+        if self.rule == V2_QUERY:
+            # [F-r19-int-24] FusedMoE.forward returns the MoeSum: a boundary Value (`<experts>/out`) beside its plane copy (MOE-TP-02 below)
+            tp_sum = kind == "sum" and bool(self._v2.get(i))
+        else:
+            tp_sum = kind == "sum" and bool(self.tp) and self._coll[self.step_of(i)].get(mod) == "all_reduce"
         if tp_sum:
             kind = None                                                          # [TP-06] the rank's MoeSum is the all-reduce's partial member (members_for)
         if RM.is_token_select(fam):
@@ -489,6 +556,11 @@ class ProgramIndex:
                  "members": [(SAMPLED_MEMBER, 1, "i64")], "step": self.step_of(i)}
         elif kind is not None:
             d = self._describe_plane(i, fam, st, mod, hint, row, kind)
+        elif self.rule == V2_QUERY:
+            fault = self._v2_fault.get(i)
+            mod2 = self._v2_module.get(i, mod)
+            d = None if fault else {"family": fam, "statics": st, "module": mod2, "op_path": RM.collector_path(mod2, self.prefix), "hint": hint,
+                                    "row": int(self._ordinal.get(i, 0)), "name_row": row, "members": list(self._v2.get(i, ())), "step": self.step_of(i)}
         elif i in self._promoted_rows:
             # [R19 int-20] a row the vocabulary calls interior whose (step, module, family) the manifest PROMOTED (its output crosses a module
             # boundary): addressed at (module, PROMOTED_MEMBER) with the manifest's signature; its request-local row is its ordinal among the
@@ -500,32 +572,35 @@ class ProgramIndex:
         else:
             try:
                 tpc = None if not self.tp else dict(self.tp, collective=self._coll[self.step_of(i)].get(mod))
-                mem = [tuple(m[:3]) for m in RM.members_for(fam, st, mod, hint, tp=tpc, padded_slots=self.padded_slots)]
-                if RM.is_epilogue_interior(fam, mod, self._epi[self.step_of(i)]):
+                mem = [tuple(m[:3]) for m in V1.members_for(fam, st, mod, hint, tp=tpc, padded_slots=self.padded_slots)]
+                if V1.is_epilogue_interior(fam, mod, self._epi[self.step_of(i)]):
                     mem = []                                                     # the pre-bias Gemm output: interior (composed by the replay)
-            except RM.UnmodelledFamily:
+            except V1.UnmodelledFamily:
                 mem = None
             if mem is not None and not hint:
                 # a DEFAULT claim on a member another row of this module names explicitly is interior (build_manifest's rule; see __init__)
                 mem = [m for m in mem if (mod, m[0], self.step_of(i)) not in self._hinted]
             d = None if mem is None else {"family": fam, "statics": st, "module": mod, "op_path": RM.collector_path(mod, self.prefix), "hint": hint,
                                           "row": int(self._ordinal.get(i, row or 0)), "name_row": row, "members": mem, "step": self.step_of(i)}
-            if tp_sum and d is not None and d["members"]:
-                # [MOE-TP-02 / moe, tp M-1528] on a TP rank the MoeSum row's ONE output is committed under TWO required names: the module's
-                # `part_rank<r>` (tp_rank_partials, TP-04/TP-06: the all-reduce input) AND the MOE-01 plane `moe/L<k>/sum` (moe_block_stream,
-                # staged by MoeBlockSource on the rank exactly as at TP1).  The manifest requires both (required_manifest TP-06 test); the
-                # replay addressed the row at the partial only, so F-r17b-38's reconciliation read every `moe/L<k>/sum` identity as
-                # `identities_without_rows` (OLMoE TP2 B8 int-6: 6,944 per rank, COMMIT FAIL).  `copies` = the plane address of the same
-                # output: recorded in the population under the plane identity AND read back and compared against the same evaluated words
-                # (two committed copies, one relation, both checked).  The plane mapping is the checked one (_describe_plane: geometry,
-                # ordinal, dataflow); a mapping failure is NAMED here and the plane identity stays without rows -- fail closed, never aliased.
-                pd = self._describe_plane(i, fam, st, mod, hint, row, "sum")
-                if pd.get("plane_error") or not pd["members"]:
-                    d["copy_error"] = pd.get("plane_error") or "sum plane has no member"
-                else:
-                    pm = pd["members"][0]
-                    d["copies"] = [{"op_path": pd["op_path"], "member": pm[0], "width": int(pm[1]), "dtype": str(pm[2]), "row": int(pd["row"]),
-                                    "of": d["members"][0][0], "why": "MOE-TP-02: the rank's MoeSum output = its part_rank member = its moe_block_stream sum plane"}]
+        if tp_sum and d is not None and d["members"]:
+            # [MOE-TP-02 / moe, tp M-1528] on a TP rank the MoeSum row's ONE output is committed under TWO required names: the module's
+            # `part_rank<r>` (tp_rank_partials, TP-04/TP-06: the all-reduce input) AND the MOE-01 plane `moe/L<k>/sum` (moe_block_stream,
+            # staged by MoeBlockSource on the rank exactly as at TP1).  The manifest requires both (required_manifest TP-06 test); the
+            # replay addressed the row at the partial only, so F-r17b-38's reconciliation read every `moe/L<k>/sum` identity as
+            # `identities_without_rows` (OLMoE TP2 B8 int-6: 6,944 per rank, COMMIT FAIL).  `copies` = the plane address of the same
+            # output: recorded in the population under the plane identity AND read back and compared against the same evaluated words
+            # (two committed copies, one relation, both checked).  The plane mapping is the checked one (_describe_plane: geometry,
+            # ordinal, dataflow); a mapping failure is NAMED here and the plane identity stays without rows -- fail closed, never aliased.
+            # Under a v2-query manifest the same holds at TP1: the MoeSum is the module's returned tensor `<experts>/out` (F-r19-int-24).
+            pd = self._describe_plane(i, fam, st, mod, hint, row, "sum")
+            if pd.get("plane_error") or not pd["members"]:
+                d["copy_error"] = pd.get("plane_error") or "sum plane has no member"
+            else:
+                pm = pd["members"][0]
+                why = ("F-r19-int-24: the MoeSum output = the MoE module's returned tensor (a boundary Value) = its moe_block_stream sum plane"
+                       if self.rule == V2_QUERY else "MOE-TP-02: the rank's MoeSum output = its part_rank member = its moe_block_stream sum plane")
+                d["copies"] = [{"op_path": pd["op_path"], "member": pm[0], "width": int(pm[1]), "dtype": str(pm[2]), "row": int(pd["row"]),
+                                "of": d["members"][0][0], "why": why}]
         self._desc[i] = d
         return d
 
@@ -542,7 +617,7 @@ class ProgramIndex:
         (population), never a silent read of another pair's words."""
         s = self.step_of(i)
         g = self._moe_geo[s].get(mod) or {}
-        layer = RM._layer_of(mod)
+        layer = RM.layer_of(mod)
         M, TOPK = int(g.get("M", 0) or 0), int(g.get("TOPK", 0) or 0)
         ord_ = int(self._moe_ord.get(i, -1))
         err: str | None = None
@@ -2656,7 +2731,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    seed: int = 0, seed_source: str = "caller", max_evaluate: int = 2000, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
                    weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None,
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
-                   manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None) -> dict[str, Any]:
+                   manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
+                   program_dirs: dict[str, str] | None = None) -> dict[str, Any]:
     """C2 of record.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
@@ -2666,6 +2742,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     M-0411 O5) -- `equal` False fails the replay by name; None is recorded as 'by reference, unverified at replay'.
     `max_evaluate` caps the stratified sample but never below one VU per stratum (round-robin order; the effective cap is recorded);
     `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap).
+    Addresses: `address_rule_of(manifest)` (the manifest's own engine); under `v2-query` a request's Build dir (`program_dirs`: request
+    label -> dir) supplies the correspondence the manifest was built with (recorded as `addresses`).
     Result: True = every sampled VU replays bit-exactly and every non-empty stratum was evaluated; False = a mismatch (named);
     None = nothing evaluable / a stratum could not be evaluated (partial, never PASS)."""
     t_start = time.perf_counter()
@@ -2676,11 +2754,16 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     addresses: dict[tuple, dict] = {}                                             # [R17-3] manifest address -> class of the rows producing it
     anchors: dict[str, dict] = {}                                                 # [F-r17b-39] per request: the step `last` is anchored to, named
     promoted = promoted_addresses_of(manifest)                                    # [R19 int-20] the manifest's promoted (step, module) addresses
+    rule = address_rule_of(manifest)
+    addr_rec: dict[str, Any] = {"rule": rule, "correspondence": {}}
     for rid, inst in programs.items():
         pi = indices.get(id(inst))
         if pi is None:
-            pi = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, padded_slots=manifest_boundary_of(manifest) == "module-pad", promoted=promoted)
+            pi = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, padded_slots=manifest_boundary_of(manifest) == "module-pad", promoted=promoted,
+                              rule=rule, program_dir=(program_dirs or {}).get(rid))
             indices[id(inst)] = pi
+        if pi.correspondence is not None:
+            addr_rec["correspondence"][str(rid)] = pi.correspondence
         # [tp M-0523 (1)] a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
         # multi-rank map is replayed as rank 0's module outputs at v1 (named below)
         # [revb F-r17b-39] the `last` phase is anchored to the request's last EXECUTED step (n_exec - 1 under the executed prefix = the
@@ -2834,6 +2917,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                                                                          for k, n in sorted(Counter(v["stratum"] for v in not_exec_vus).items())}),
                            "uncovered_identities": qpop["uncovered_identities"], "controller": qpop.get("controller"),   # [R4] the lifted controller, by name
                            "query_checks": qpop["query_checks"], "scope": qpop["scope"]},
+            "addresses": addr_rec,
             "sample": {"per_stratum": int(per_stratum), "seed": int(seed), "seed_source": seed_source,
                        # [R16 rev M-0600 / F-r16-23] under the verifier-challenge form the FULL challenge is on the record: a reader recomputes
                        # sha256(challenge|run_root)[:8] (challenge_seed) as a fact -- the source text alone (challenge[:16], repr) cannot be
