@@ -1,6 +1,6 @@
 """The v3 (private-operand) units against the v1 units and the instruction model.
 
-* census: rows per unit at most the recorded count (the BF16 units at most half of v1's);
+* census: rows per unit at most the recorded count, and at most half of v1's for every relation;
 * differential (``RELMIN_DIFF_N`` units per relation, default 3000; the lane ran 1e5): on random units inside the domain v1 and
   v3 accept the honest claim and both reject every wrong claim of the negative families (every claimed bit flipped, +-1 ulp,
   the other pipeline's word where it differs); the public decodes refuse the same off-domain operands;
@@ -33,7 +33,7 @@ V1_OF = {"bf16-hopper-v3": RELATIONS["bf16-hopper"], "fp8-hopper-v3": RELATIONS[
          "bf16-ampere-v3": None}
 OTHER = {"bf16-hopper-v3": AMPERE_BF16_M16N8K16, "bf16-ampere-v3": HOPPER_BF16_M16N8K16, "fp8-hopper-v3": ADA_E4M3_M16N8K32,
          "fp8-ada-v3": HOPPER_E4M3_K32}
-ROWS = {"bf16-hopper-v3": 1535, "bf16-ampere-v3": 1645, "fp8-hopper-v3": 1705, "fp8-ada-v3": 1838}
+ROWS = {"bf16-hopper-v3": 1519, "bf16-ampere-v3": 1629, "fp8-hopper-v3": 1673, "fp8-ada-v3": 1806}
 N_DIFF = int(os.environ.get("RELMIN_DIFF_N", "3000"))
 BATCH = 4096
 
@@ -54,8 +54,7 @@ def test_census(rel):
         s1 = compile_unit(rel.params, chain=True)
     c1, c3 = census(s1), census(s3)
     assert c3["rows_per_unit"] <= ROWS[rel.name], (c1, c3)
-    if not plan(rel.params).fp8:
-        assert 2 * c3["rows_per_unit"] <= c1["rows_per_unit"], (c1, c3)
+    assert 2 * c3["rows_per_unit"] <= c1["rows_per_unit"], (c1, c3)      # at most half of v1's rows, every relation
     assert c3["pin_rows"] == 2 * -(-rel.k // shift_plan(rel.params, plan(rel.params)).words_per_pin)   # the operand words are the only pins
     assert all(n.startswith(("a[", "b[")) for _, n in s3.pins)
 

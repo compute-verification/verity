@@ -3,9 +3,11 @@ epilogue all proven in the relation) on **private** operand words, in the fewest
 
 Where v2 (``pubsel``) hands every function of the public operands to the verifier, v3 keeps the operand words as
 committed witness wires ``a_words[i]`` / ``b_words[i]`` (the sum of their hint-bit rows) and proves everything from
-them; the public words enter only through one pin row per word (``a[i]``, ``b[i]``) and the linear ``a_words[i] = a[i]``
-(the "pin variant"; lane hash-relation replaces those pin rows by a Poseidon2 sponge over the same wires).  Row-free
-techniques throughout:
+them; the public words enter only through pin rows holding the words themselves -- one word per pin (``a[i]``) for BF16,
+the run of ``ShiftPlan.words_per_pin`` = 3 E4M3 words packed little-endian per pin (``a[lo:hi]``) for FP8 -- and the
+linear ``sum_j a_words[j] 2^(8 (j - lo)) = a[lo:hi]`` (the "pin variant"; lane hash-relation replaces those pin rows by a
+Poseidon2 sponge over the same ``a_words`` / ``b_words`` wires: the words are already committed witness wires, so the
+sponge's rate rows absorb them without any change to the rest of the unit).  Row-free techniques throughout:
 
 * operand decode: the word's 16 (8) bits are hint bits ``s``, ``x[j]`` (8 / 4 bits of ``x = t - nz``), ``f[j]`` plus the
   hidden-bit flag ``nz``; ``nz = 0 -> x = 0`` by a zero-product, and ``x`` off the top by ONE inverse (BF16: ``floor(x/2) !=
@@ -17,10 +19,13 @@ techniques throughout:
 * alignment (``AlignProduct``: ``X = floor(u 2^(PS - d))``, ``d = E - e_i``, zero above ``d >= PB``): two stages of
   one-hot selection.  Fine: ``R in [0, RB)`` picks the radix-``2^RB`` digits ``D_k`` of ``Y = u 2^R`` as windows of ``u``'s
   bits; coarse: ``c in {-1, 0, 1, 2}`` picks ``X = floor(Y / 2^(RB c))`` -- a digit selection, affine in the ``D_k`` -- so
-  ``L = PS - d = R - RB c``; two more coarse options ``dead`` (``d >= PB``: ``d = PB + (RB - 1 - R) + RB K``, ``K`` a
-  short range) and ``zero`` (``u = 0``: no exponent constraint, the product's exponent does not enter the maximum, as
-  in v1).  ``(c = -1, R)`` pairs with ``R + RB > PS`` are forbidden (row-free products of selectors).  The sign is the
-  XOR of the operands' signs (one hint, one row-free quadratic) applied by one product row.
+  ``L = PS - d = R - RB c``; one more coarse option ``dead`` (``d >= PB``: ``d = PB + (RB - 1 - R) + RB K``, ``K`` a
+  short range of ``kb`` hint bits).  The exponent constraint of every option is multiplied by ``u`` -- ``u (E - e_i - d)
+  = 0`` -- so a zero product (``u = 0``) takes any option and its exponent does not enter the maximum, as in v1, without
+  an option of its own.  ``(c = -1, R)`` pairs with ``R + RB > PS`` are forbidden (row-free products of selectors).  The
+  sign is the XOR of the operands' signs (one hint, one row-free quadratic) applied by one product row.  For FP8
+  (``ShiftPlan.hi_thr``) a group flag ``hi`` caps ``E_eff = min(E, hi_thr)``: above the threshold every product is dead,
+  and the dead range is proven against the capped value (fewer ``K`` bits).
 * group maximum: ``E`` is a hint; ``E >= e_i`` for every nonzero product is a theorem of its alignment one-hot, ``E >=
   e_acc`` of the accumulator's shift lookup; ``E`` equals a candidate by a one-hot ``which`` over {accumulator, products}
   (``_pick`` with target ``E``) whose chosen product must be nonzero: ``C = pick(which, [1, X_1, ..., X_k])`` is inverted.
@@ -96,6 +101,20 @@ def pin_name(operand: str, lo: int, hi: int) -> str:
 def _quad(ctx: LigeroCtx, name: str, a: Expr, b: Expr, c: Expr) -> None:
     """``a * b = c`` as one quadratic constraint on affine forms (no product row)."""
     ctx.sys.quadratic.append(Quadratic(f"{ctx.scope}.{name}", a, b, c))
+
+
+def _signed(ctx: LigeroCtx, name: str, x: Expr, sa: Expr, sb: Expr) -> Expr:
+    """``(1 - 2 (sa xor sb)) x`` as one hint row ``xs`` under two row-free quadratics on the sign bits ``sa``, ``sb``:
+    ``(xs - x) (1 - sa - sb) = 0`` (the signs agree: the factor is +-1, so ``xs = x``) and ``(xs + x) (sa - sb) = 0``
+    (they differ: the factor is +-1, so ``xs = -x``); exactly one of the two factors is nonzero for every sign pair.
+    The row's integer interval is ``x``'s made symmetric (``x`` in ``[0, hi)``: ``xs`` in ``(-hi, hi)``)."""
+    xs = _hint(ctx, name)
+    _quad(ctx, f"{name.rsplit('.', 1)[-1]}.same", xs - x, 1 - sa - sb, Expr(ctx))
+    _quad(ctx, f"{name.rsplit('.', 1)[-1]}.diff", xs + x, sa - sb, Expr(ctx))
+    lo, hi = ctx.interval(x)
+    assert lo >= 0
+    ctx.learn(xs, -hi, hi + 1)
+    return xs
 
 
 def _hint_bit(ctx: LigeroCtx, name: str) -> Expr:
@@ -301,12 +320,10 @@ def compile_v3_unit(p: Params, chain: bool = False) -> System:
             e_i = ea + eb
             X, Xfull = _align(ctx, pl, sp, scope, ubits, u, E_eff, e_i)
             ctx.scope = scope
-            s_i = _hint_bit(ctx, f"{scope}.s")
-            _quad(ctx, "xor", sa, 1 - 2 * sb, s_i - sb)           # s_i = s_a xor s_b
-            if pl.wide:
-                sX.append((X[0] - 2 * ctx.product(s_i, X[0]), X[1] - 2 * ctx.product(s_i, X[1])))
-            else:
-                sX.append(X - 2 * ctx.product(s_i, X))
+            # the signed aligned product (1 - 2 (s_a xor s_b)) X as a hint: equal to X when the signs agree
+            # ((1 - s_a - s_b) = +-1 then), to -X when they differ ((s_a - s_b) = +-1 then); no sign row, no product row
+            sX.append(tuple(_signed(ctx, f"{scope}.{n}", x, sa, sb) for n, x in zip(("XsL", "XsH"), X)) if pl.wide
+                      else _signed(ctx, f"{scope}.Xs", X, sa, sb))
             Xs.append(Xfull)
             es.append(e_i)
 

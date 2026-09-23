@@ -99,7 +99,10 @@ def step_int(p: Params, pl: Plan, c: int, a: list[int], b: list[int], y: int | N
                 H[f"{scope}.X"] = X
             for jj in range(sp.kb):
                 H[f"{scope}.K[{jj}]"] = (K >> jj) & 1
-            H[f"{scope}.s"] = s
+            if pl.wide:
+                H[f"{scope}.XsL"], H[f"{scope}.XsH"] = (1 - 2 * s) * (X & (2**LIMB - 1)), (1 - 2 * s) * (X >> LIMB)
+            else:
+                H[f"{scope}.Xs"] = (1 - 2 * s) * X
             if which == j + 1:
                 H[f"{tag}.C"] = X
             Q += (1 - 2 * s) * X
@@ -318,7 +321,11 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device):
                 H[f"{scope}.X"] = X[:, j]
             for jj in range(sp.kb):
                 H[f"{scope}.K[{jj}]"] = (K[:, j] >> jj) & 1
-            H[f"{scope}.s"] = sg[:, j]
+            if pl.wide:
+                H[f"{scope}.XsL"] = (1 - 2 * sg[:, j]) * (X[:, j] & (2**LIMB - 1))
+                H[f"{scope}.XsH"] = (1 - 2 * sg[:, j]) * (X[:, j] >> LIMB)
+            else:
+                H[f"{scope}.Xs"] = (1 - 2 * sg[:, j]) * X[:, j]
         H[f"{tag}.C"] = first[:, 0] + (first[:, 1:] * X).sum(dim=1)
         sX = (1 - 2 * sg) * X
         Q = sX.sum(dim=1)
