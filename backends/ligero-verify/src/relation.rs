@@ -430,7 +430,7 @@ pub struct Relation {
     pub table_digest: &'static str,
     /// The same two digests of the HASHED system (`hashchain.compose`: operands private, two Poseidon2 sponges along
     /// the chain, the digests pinned at the chain end) a v5 statement (`authentication = included-hash`) is checked
-    /// against; empty when the relation is not composed (fp4-nvf4).
+    /// against; empty when the relation is not composed.
     pub hashed_sys_id: &'static str,
     pub hashed_table_digest: &'static str,
 }
@@ -1154,7 +1154,7 @@ mod tests {
             }
         }
         assert!(FP8_ADA.hashed_sys_id.len() == 64 && BF16_HOPPER.hashed_sys_id.len() == 64 && FP8_HOPPER.hashed_sys_id.len() == 64);
-        assert!(BF16_AMPERE.hashed_sys_id.len() == 64 && FP4_NVF4.hashed_sys_id.is_empty());
+        assert!(BF16_AMPERE.hashed_sys_id.len() == 64 && FP4_NVF4.hashed_sys_id.len() == 64);
         assert_eq!(for_statement(None).unwrap().name, "bf16-ampere");
         assert_eq!(for_statement(Some("bf16")).unwrap().name, "bf16-ampere");
         assert_eq!(for_statement(Some("fp4-nvf4")).unwrap().name, "fp4-nvf4");
