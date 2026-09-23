@@ -66,6 +66,17 @@ def test_single_word_end_bf16_hopper():
     _check(sys, 96, 2, 256, 16)
 
 
+def test_check_component_is_the_rust_rule():
+    """1 <= bits <= 30, lo + bits <= 32 (ligero-verify's parser): the boundaries, both sides."""
+    from .chain import MAX_COMPONENT_BITS, WORD_BITS, check_component
+    assert (MAX_COMPONENT_BITS, WORD_BITS) == (30, 32) and 2 ** 30 < P < 2 ** 31
+    for lo, bits in ((0, 30), (2, 30), (31, 1), (0, 1), (23, 8), (0, 23), (1, 31 - 1)):
+        assert check_component(0, lo, bits) == (lo, bits)
+    for lo, bits in ((0, 31), (3, 30), (32, 1), (-1, 1), (0, 0), (31, 2), (0, 32)):
+        with pytest.raises(ValueError, match="chain end component 1"):
+            check_component(1, lo, bits)
+
+
 def test_component_ends_fp4():
     from .fp4.relation import NVFP4, STEPS, compile_fp4_unit
     sys = compile_fp4_unit(NVFP4, chain=True)

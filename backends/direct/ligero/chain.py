@@ -15,7 +15,10 @@ Chain ends in components (``sys.chain["y_end"]``, the FP4 relation).  A public w
 compared to a single field element (2^32 > p: the word w and w + p are the same residue), so a relation whose claimed
 word is a full FP32 may end its chain on up to three bounded COMPONENTS instead: ``y_end = [(Y_x, lo_x, bits_x)]``,
 one constraint ``Y_x(W)[j] = (y_pub[j] >> lo_x) & (2^bits_x - 1)`` per component at every end column j.  Each
-component is < 2^31 < p, so equality mod p is integer equality once the relation range-constrains the row.  The
+component is a bit field of a 32-bit word of at most 30 bits (``check_component``: 1 <= bits <= 30, lo + bits <= 32;
+2^30 < p = 15 * 2^27 + 1 < 2^31, so a 31-bit component in [p, 2^31) would alias w - p), hence an integer below p, so
+equality mod p is integer equality once the relation range-constrains the row -- the same rule the Rust verifier's
+parser enforces (``ligero-verify``: a component that is not such a field refuses the file).  The
 coefficients: component 0 uses the end family (6) and components 1, 2 the link families (0, 1), which are unused at
 end columns (an end column has no successor in its VU: the link mask is 0 there), so every constraint still has its
 own uniform coefficient and nothing is sampled beyond the seven families.  Single-``y16`` systems (BF16, FP8) keep
@@ -29,21 +32,36 @@ import torch
 
 from .compile import P, System
 
-__all__ = ["N_FAMILIES", "END_FAMILIES", "ChainCoefs", "Layout", "chain_coefs", "end_terms"]
+__all__ = ["N_FAMILIES", "END_FAMILIES", "MAX_COMPONENT_BITS", "WORD_BITS", "ChainCoefs", "Layout", "chain_coefs",
+           "check_component", "end_terms"]
 
 N_FAMILIES = 7        # link x3, start x3, end
 END_FAMILIES = (6, 0, 1)   # coefficient family of end component x (see the module comment)
+WORD_BITS = 32             # the public word a component end is a bit field of
+MAX_COMPONENT_BITS = 30    # 2^30 < p < 2^31: the widest bit field that is an integer below p (the Rust parser's cap)
+
+
+def check_component(x: int, lo: int, bits: int) -> tuple[int, int]:
+    """``(lo, bits)`` of end component ``x`` as ints, or ``ValueError`` unless it is a bit field of a 32-bit word that is
+    an integer below p: ``1 <= bits <= 30``, ``0 <= lo``, ``lo + bits <= 32`` (the Rust verifier's rule, so both sides
+    refuse the same files)."""
+    lo, bits = int(lo), int(bits)
+    if not (1 <= bits <= MAX_COMPONENT_BITS and 0 <= lo and lo + bits <= WORD_BITS):
+        raise ValueError(f"chain end component {x}: bit field lo = {lo}, bits = {bits} is not a field of a "
+                         f"{WORD_BITS}-bit word below p (1 <= bits <= {MAX_COMPONENT_BITS}, lo + bits <= {WORD_BITS})")
+    return lo, bits
 
 
 def end_terms(ch: dict) -> list[tuple[object, int, int, int]]:
     """The chain-end constraints of a compiled chain as ``(Expr, family, lo, bits)``: one ``(y16, 6, 0, 0)`` for a
-    single-word end (``bits = 0``: the whole public word, compared as a residue), else one per component."""
+    single-word end (``bits = 0``: the whole public word, compared as a residue), else one per component, each a
+    valid bit field (``check_component``)."""
     if ch.get("y16") is not None:
         return [(ch["y16"], END_FAMILIES[0], 0, 0)]
     comps = ch["y_end"]
     if not 1 <= len(comps) <= len(END_FAMILIES):
         raise ValueError(f"a chain end has 1..{len(END_FAMILIES)} components, got {len(comps)}")
-    return [(Y, END_FAMILIES[x], int(lo), int(bits)) for x, (Y, lo, bits) in enumerate(comps)]
+    return [(Y, END_FAMILIES[x], *check_component(x, lo, bits)) for x, (Y, lo, bits) in enumerate(comps)]
 
 
 def end_values(ch: dict, y_pub: torch.Tensor) -> list[torch.Tensor]:

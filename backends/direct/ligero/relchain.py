@@ -403,6 +403,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
                 if V is not None:
                     (rd / f"{stem}.coins").write_bytes(V.r1 + V.s1 + V.r2 + V.s2)
                     entry["coins"] = f"rep{rep}/{stem}.coins"
+                    entry["coins_bytes"] = (rd / f"{stem}.coins").stat().st_size
+                    entry["coins_sha256"] = sha256_file(rd / f"{stem}.coins")     # D7: the step-0 coins' custody, like proof_sha256
                 dump_manifest["files"].append(entry)
         del proved
         if rep > 0:
