@@ -174,9 +174,11 @@ BF16_HOPPER_RELATION = _register(Relation(
     tag=b"",
     operands=random_finite_bf16,
     off_domain=(0x7F80, 0xFF80, 0x7FC0),
-    instances_dataset="bench-instances-bf16-hopper/v1",
-    instances_tier="vu-k1536-bf16-hopper",
-    instance_seed=20260922,
+    # the frozen BF16 Hopper set (contract.BF16_HOPPER_INSTANCES_*): the canonical tables accept exactly this dataset/tier at
+    # range [0, 4096) with manifest_sha256 == contract.BF16_HOPPER_INSTANCES_DIGEST == relchain.instances_digest(bf16-hopper, 4096)
+    instances_dataset=contract.BF16_HOPPER_INSTANCES_DATASET,
+    instances_tier=contract.BF16_HOPPER_INSTANCES_TIER,
+    instance_seed=contract.BF16_HOPPER_INSTANCES_SEED,
     instances_recipe="bf16-hopper synthetic (random_finite_bf16: finite BF16 words incl. subnormals and exact zeros, model-recorded accumulators)",
     relation_name="GemmCoordinate<1536> over sm90.mma.m16n8k16.bf16",
     model_name="HOPPER_BF16_M16N8K16",
@@ -202,9 +204,10 @@ FP8_HOPPER_RELATION = _register(Relation(
     tag=b"|rel=fp8-hopper|v1",
     operands=_fp8_operands,
     off_domain=(0x7F, 0xFF),
-    instances_dataset="bench-instances-fp8-hopper/v1",
-    instances_tier="vu-k1536-fp8-hopper",
-    instance_seed=20260922,
+    # the frozen FP8 Hopper set (contract.FP8_HOPPER_INSTANCES_*), pinned like the Ada one below
+    instances_dataset=contract.FP8_HOPPER_INSTANCES_DATASET,
+    instances_tier=contract.FP8_HOPPER_INSTANCES_TIER,
+    instance_seed=contract.FP8_HOPPER_INSTANCES_SEED,
     instances_recipe="fp8-hopper synthetic (uniform finite E4M3 bytes, model-recorded accumulators)",
     relation_name="GemmAccumulator<1536> over sm90.wgmma.m64n8k32.e4m3",
     model_name="HOPPER_E4M3_K32",

@@ -4,6 +4,7 @@ identity and joint display, the SKU normaliser, the JSON round trip and the snap
 from __future__ import annotations
 
 import copy
+import dataclasses
 import hashlib
 import json
 import re
@@ -189,10 +190,21 @@ def test_frozen_instances_are_pinned() -> None:
     recipe = f"fp8-ada synthetic|seed={contract.FP8_ADA_INSTANCES_SEED}|n={T.B}|K={T.K}"
     assert contract.FP8_ADA_INSTANCES_SEED == 20260922
     assert fp8["manifest_sha256"] == contract.FP8_ADA_INSTANCES_DIGEST == hashlib.sha256(recipe.encode()).hexdigest()
-    assert T.frozen_instances(FP8_HOPPER_WGMMA) is None and T.frozen_instances(BF16_HOPPER) is None, "Hopper has no frozen instance set yet"
-    # the fp8-ada emitter is relchain.py at RELATIONS["fp8-ada"] (relations.py) since lane b-hopper; fp8/chain.py is its shim
+    # the two Hopper synthetic sets (lane b-hopper's relations, frozen by lane b-merge-h100 with the dumped rows): the same
+    # recipe digest, relchain.instances_digest(rel, 4096) = sha256("<relation> synthetic|seed=20260922|n=4096|K=1536")
+    for target, rel, prefix in ((BF16_HOPPER, "bf16-hopper", "BF16_HOPPER"), (FP8_HOPPER_WGMMA, "fp8-hopper", "FP8_HOPPER")):
+        ref = T.FROZEN_INSTANCES[target.name]
+        dataset, tier, seed, digest = (getattr(contract, f"{prefix}_INSTANCES_{k}") for k in ("DATASET", "TIER", "SEED", "DIGEST"))
+        assert ref["dataset"] == dataset == f"bench-instances-{rel}/v1" and ref["tier"] == tier == f"vu-k1536-{rel}" and ref["range"] == [0, 4096]
+        assert seed == 20260922
+        assert ref["manifest_sha256"] == digest == hashlib.sha256(f"{rel} synthetic|seed={seed}|n={T.B}|K={T.K}".encode()).hexdigest()
+    assert T.frozen_instances(BF16_HOPPER) is not None and T.frozen_instances(FP8_HOPPER_WGMMA) is not None
+    # the fp8-ada / bf16-hopper / fp8-hopper emitter is relchain.py at RELATIONS[...] (relations.py) since lane b-hopper; fp8/chain.py
+    # is its shim.  relations.py must emit exactly the pinned refs (dataset + tier from the contract; the digest is the recipe's).
     relations = (REPO / "backends" / "direct" / "ligero" / "relations.py").read_text()
-    assert "contract.FP8_ADA_INSTANCES_DATASET" in relations and "contract.FP8_ADA_INSTANCES_TIER" in relations, "relations.py must emit the frozen ref"
+    for prefix in ("FP8_ADA", "BF16_HOPPER", "FP8_HOPPER"):
+        assert f"contract.{prefix}_INSTANCES_DATASET" in relations and f"contract.{prefix}_INSTANCES_TIER" in relations, \
+            f"relations.py must emit the frozen {prefix} ref"
 
 
 # --- the predicate and Table 2 ----------------------------------------------------------------------------------------------------------
@@ -292,9 +304,30 @@ def test_every_frozen_constant_is_checked(store: LocalStore) -> None:
     assert rejected(T.build(store), art)[0].startswith("contract: ")
 
 
-def test_hopper_has_no_frozen_set_yet(store: LocalStore) -> None:
+def test_hopper_rows_need_the_frozen_synthetic_set(store: LocalStore) -> None:
+    # a Hopper result that does not name its instances is rejected for that (the sets ARE frozen now: the recipe digests)
     art = put(store, result(target=FP8_HOPPER_WGMMA, gpu="NVIDIA H100 80GB HBM3", instances=None))
-    assert any("has no frozen instance set yet" in r for r in rejected(T.build(store), art))
+    reasons = rejected(T.build(store), art)
+    assert any("instances is null" in r for r in reasons) and not any("has no frozen instance set" in r for r in reasons)
+    # ... one on another seed's set differs from the frozen ref on its digest ...
+    other = dict(T.FROZEN_INSTANCES[BF16_HOPPER.name], manifest_sha256="ab" * 32)
+    art2 = put(store, result(target=BF16_HOPPER, gpu="NVIDIA H100 80GB HBM3", instances=other))
+    assert any("instances differ from the frozen set on manifest_sha256" in r for r in rejected(T.build(store), art2))
+    # ... one carrying the pinned ref on the row's SKU without a verifier's acceptance is left with that requirement only ...
+    art3 = put(store, result(target=BF16_HOPPER, gpu="NVIDIA H100 80GB HBM3", candidate="B-Ligero", proof_class="COMPLETE_ZK_BACKEND"),
+               verified_by=None)
+    reasons3 = rejected(T.build(store), art3)
+    assert len(reasons3) == 1 and reasons3[0].startswith("not independently verified"), reasons3
+    # ... and, accepted by a non-producer, it populates the Hopper BF16 x B-Ligero cell
+    art4 = put(store, result(target=BF16_HOPPER, gpu="NVIDIA H100 80GB HBM3", candidate="B-Ligero", proof_class="COMPLETE_ZK_BACKEND", t_total=1.6))
+    c = cell(T.build(store), BF16_HOPPER, "B-Ligero")
+    assert c is not None and c.artifact == art4 and c.overhead == pytest.approx(BF16_HOPPER.native_peak.flop_per_second / (2 * T.K * T.B / 1.6))
+    # a target with no frozen set at all still says so (the predicate's own wording, on a target outside FROZEN_INSTANCES)
+    unfrozen = dataclasses.replace(FP8_HOPPER_WGMMA, name="no-frozen-set/2026-09-23")
+    assert T.frozen_instances(unfrozen) is None
+    res = result(target=FP8_HOPPER_WGMMA, gpu="NVIDIA H100 80GB HBM3")
+    cand = T.candidate_for(res["workload_fingerprint"]["software"]["backend"]["name"])
+    assert any("has no frozen instance set yet" in r for r in T.reject_reasons(res, [], None, unfrozen, cand))
 
 
 def test_best_of_two_is_min_t_total(store: LocalStore) -> None:

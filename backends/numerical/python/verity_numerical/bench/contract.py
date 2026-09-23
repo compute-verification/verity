@@ -86,6 +86,10 @@ from verity.verification.target import FIRST, TARGETS, NativePeak
 
 __all__ = [
     "AUTHENTICATION",
+    "BF16_HOPPER_INSTANCES_DATASET",
+    "BF16_HOPPER_INSTANCES_DIGEST",
+    "BF16_HOPPER_INSTANCES_SEED",
+    "BF16_HOPPER_INSTANCES_TIER",
     "BUCKETS",
     "BUCKET_NAMES",
     "DOMAIN",
@@ -93,6 +97,10 @@ __all__ = [
     "FP8_ADA_INSTANCES_DIGEST",
     "FP8_ADA_INSTANCES_SEED",
     "FP8_ADA_INSTANCES_TIER",
+    "FP8_HOPPER_INSTANCES_DATASET",
+    "FP8_HOPPER_INSTANCES_DIGEST",
+    "FP8_HOPPER_INSTANCES_SEED",
+    "FP8_HOPPER_INSTANCES_TIER",
     "IDENTITY_FIELDS",
     "INSTANCES_DATASET",
     "INSTANCES_FIELD",
@@ -176,6 +184,21 @@ FP8_ADA_INSTANCES_DATASET = "bench-instances-fp8-ada/v1"
 FP8_ADA_INSTANCES_TIER = "vu-k1536-fp8-ada"
 FP8_ADA_INSTANCES_SEED = 20260922
 FP8_ADA_INSTANCES_DIGEST = "e66ff0f21c8e67d13b4b2d4cee2afa35b8345656b314da80e6b342ba051f078d"
+#: The frozen Hopper instance sets (``bf16-hopper-mma-draft/2026-09-22``, ``fp8-hopper-wgmma-draft/2026-09-22``): the synthetic
+#: VUs ``backends/direct/ligero/relchain.py`` draws for the ``bf16-hopper`` / ``fp8-hopper`` relations (``relations.py``; lane
+#: b-hopper) -- ``random_finite_bf16`` words resp. uniform finite E4M3 bytes from the same seed, model-recorded accumulators
+#: (``tools/tc_probe/instances_hw.py`` regenerates them from the recipe).  The digests are ``relchain.instances_digest(rel, 4096)``
+#: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-23, lane b-merge-h100, after
+#: the rows with preserved proof dumps) so the canonical tables recognise the sets without importing the prover; a change to a
+#: recipe is a new tier.
+BF16_HOPPER_INSTANCES_DATASET = "bench-instances-bf16-hopper/v1"
+BF16_HOPPER_INSTANCES_TIER = "vu-k1536-bf16-hopper"
+BF16_HOPPER_INSTANCES_SEED = 20260922
+BF16_HOPPER_INSTANCES_DIGEST = "2a5babca16e82727611ae483a125b8d853e27e4c9deedda7c35927cc1e456869"
+FP8_HOPPER_INSTANCES_DATASET = "bench-instances-fp8-hopper/v1"
+FP8_HOPPER_INSTANCES_TIER = "vu-k1536-fp8-hopper"
+FP8_HOPPER_INSTANCES_SEED = 20260922
+FP8_HOPPER_INSTANCES_DIGEST = "0ff750026b8d8df0418d3ec360ed6ade683a33b8264d66973021cbfbff7945bc"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 BUCKETS = ("witness", "encoding_commitment", "arithmetic", "lookup", "zk_additional", "serialization")
