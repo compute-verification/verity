@@ -34,7 +34,7 @@ HALF_FULL_ROUNDS = 4
 PARTIAL_ROUNDS = 21
 LANE_BITS = 16                 # bits of operand data per absorbed element
 
-__all__ = ["CAPACITY", "CONSTANTS_SHA256", "HALF_FULL_ROUNDS", "IV", "KAT_24", "LANE_BITS", "OUT", "P", "PARTIAL_ROUNDS",
+__all__ = ["CAPACITY", "CONSTANTS_SHA256", "DIAG", "HALF_FULL_ROUNDS", "IV", "KAT_24", "LANE_BITS", "M4", "OUT", "P", "PARTIAL_ROUNDS", "RC_EXTERNAL_FINAL", "RC_EXTERNAL_INITIAL", "RC_INTERNAL",
            "RATE", "ROLE_W", "ROLE_X", "WIDTH", "hash_row", "hash_rows_np", "pack_words", "permute", "permute_np", "permute_ring"]
 
 # --- round constants (Plonky3 BABYBEAR_POSEIDON2_RC_24_EXTERNAL_INITIAL / _FINAL / _INTERNAL, canonical) --------------

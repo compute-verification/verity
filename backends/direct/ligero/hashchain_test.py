@@ -138,3 +138,28 @@ def test_chain_tables_extend_the_three_link_case() -> None:
     hr = hashchain.compose(relation("fp8-ada"))
     tabs19 = chain._chain_tables(hr.sys, lay, "cpu")
     assert tabs19["n_extra"] == 32 and tabs19["link_fams"].tolist() == [0, 1, 2] + list(range(7, 23))
+
+
+def test_permute_torch_matches_numpy_and_kat() -> None:
+    """The whole-state torch permutation (the witness side) is ``permute_np`` / the Plonky3 KAT lane for lane."""
+    rng = np.random.default_rng(7)
+    st = rng.integers(0, P, size=(h2.WIDTH, 37), dtype=np.int64)
+    inp, out = h2.KAT_24
+    st[:, 0] = inp
+    got = hashchain.permute_torch(torch.as_tensor(st)).numpy()
+    assert got[:, 0].tolist() == list(out)
+    assert np.array_equal(got, h2.permute_np(st))
+
+
+def test_fused_witness_source_modes() -> None:
+    """Dense programs (the hashed systems) take the table-driven kernel; the v1 units' source is untouched."""
+    from . import witness_device as wd
+    rel = relation("fp8-ada")
+    base = rel.compile(rel.params, True)
+    hs = hashchain.compose(rel).sys
+    assert wd._n_terms(base) <= wd.TAB_THRESHOLD < wd._n_terms(hs)
+    assert wd.generate(base) == wd.generate(base, None)
+    tab: list = []
+    src = wd.generate(hs, tab)
+    assert len(tab) > 50_000 and "affine(J, C," in src and len(src) < 1_000_000
+    assert all(0 <= j < hs.m and 0 <= v < P for j, v in tab)

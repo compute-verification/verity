@@ -34,7 +34,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import poseidon2 as h2
+from verity.commitments import poseidon2_babybear as h2
 from .compile import Expr, LigeroCtx, Linear, P, Quadratic, System
 from .relations import Relation
 
@@ -204,6 +204,59 @@ def _sbox_t(x):
     return (x4 * x3) % P
 
 
+def _external_matrix() -> list[list[int]]:
+    """circ(2 M4, M4, ..., M4) as a 24 x 24 integer matrix (column i = the layer on unit vector i; entries <= 6)."""
+    cols = []
+    for i in range(h2.WIDTH):
+        e = [0] * h2.WIDTH
+        e[i] = 1
+        cols.append(h2._external_layer(e, lambda v: v))
+    return [[cols[j][i] for j in range(h2.WIDTH)] for i in range(h2.WIDTH)]
+
+
+_MEXT = _external_matrix()
+_TORCH_CONST: dict = {}
+
+
+def _torch_consts(device):
+    """(M_ext as float64 (24, 24), DIAG (24, 1) int64, initial/final round constants (4, 24) int64, internal (21,))."""
+    import torch
+    key = str(device)
+    hit = _TORCH_CONST.get(key)
+    if hit is None:
+        hit = (torch.tensor(_MEXT, dtype=torch.float64, device=device),
+               torch.tensor(h2.DIAG, dtype=torch.int64, device=device)[:, None],
+               torch.tensor(h2.RC_EXTERNAL_INITIAL, dtype=torch.int64, device=device),
+               torch.tensor(h2.RC_EXTERNAL_FINAL, dtype=torch.int64, device=device),
+               torch.tensor(h2.RC_INTERNAL, dtype=torch.int64, device=device))
+        _TORCH_CONST[key] = hit
+    return hit
+
+
+def permute_torch(st):
+    """(24, N) int64 states in [0, p) -> (24, N): ``poseidon2_babybear.permute_np`` on a torch tensor, whole-state ops
+    (the external layer as one exact float64 matmul: entries <= 6, residues < 2^31, 24 terms < 2^39 < 2^53)."""
+    import torch
+    mext, diag, rc_i, rc_f, rc_int = _torch_consts(st.device)
+
+    def ext(s):
+        return torch.round(mext @ s.to(torch.float64)).to(torch.int64) % P
+
+    def internal(s):
+        return (s * diag + s.sum(0, keepdim=True)) % P
+
+    s = ext(st % P)
+    for r in range(h2.HALF_FULL_ROUNDS):
+        s = ext(_sbox_t((s + rc_i[r][:, None]) % P))
+    for r in range(h2.PARTIAL_ROUNDS):
+        s = s.clone()
+        s[0] = _sbox_t((s[0] + rc_int[r]) % P)
+        s = internal(s)
+    for r in range(h2.HALF_FULL_ROUNDS):
+        s = ext(_sbox_t((s + rc_f[r][:, None]) % P))
+    return s
+
+
 def sponge_states(words, word_bits: int, role: int, n_words: int, n_vus: int, steps: int, l: int):
     """``words`` (l, k) int64 torch tensor (pad columns 0) -> (cap_in (8, l): the linked rows ``cap - IV`` per column,
     digests (n_vus, 8)) by running the sponge of every VU along its ``steps`` columns, all VUs in lockstep."""
@@ -221,8 +274,7 @@ def sponge_states(words, word_bits: int, role: int, n_words: int, n_vus: int, st
         for x in range(h2.CAPACITY):
             cap_in[h2.RATE - h2.RATE + x, cols] = (st[h2.RATE + x] - iv[h2.RATE + x]) % P
         st = torch.cat([el[cols].T, st[h2.RATE:]], 0)
-        out = h2.permute_ring([st[i] for i in range(h2.WIDTH)], _sbox_t, lambda x: x % P)
-        st = torch.stack(out)
+        st = permute_torch(st)
     return cap_in, st[:h2.OUT].T.contiguous()
 
 
