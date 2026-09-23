@@ -19,8 +19,10 @@
 //!   of the pod dumps of lane ada-fp8-dumps (attempts r20260922-235542-295b, -235643-98f7, -235746-0929 at a4b0ac7,
 //!   and r20260922-233711-6b9f at 7bb0ffa1; manifest `system_file.sha256` cba9a09f..., `sys_id` 6b570eef...).
 //! * `bf16-hopper`, `fp8-hopper`: `relations.relation(name).compile(params, True)` from the lane b-hopper tree at
-//!   a39de82 (laptop, torch-free, two runs byte-identical; row counts equal the lane's report: 3292 / 3396 rows).
-//!   Not yet cross-checked against a pod `system.bin`: lane b-merge-h100's `h100-dumps-v1` had not landed.
+//!   a39de82 AND from the lane b-merge-h100 tree at 01fc64f (the merge that lands them on main): laptop, torch-free,
+//!   two runs each, all four files byte-identical per relation (sha256 5bba40df... / 968d99d6...; 3292 / 3396 rows,
+//!   the lane's reported counts).  Not yet cross-checked against a pod `system.bin`: b-hopper's own H100 dumps died
+//!   with their pod and lane b-merge-h100's `h100-dumps-v1` had not landed when this was written.
 
 /// The operand word format: how a public word becomes the pinned `(s, m, e)` (`unit.public_vectors` for BF16,
 /// `public_vectors_fp8` for E4M3), and which words are off the finite domain.
