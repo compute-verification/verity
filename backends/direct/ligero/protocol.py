@@ -1313,9 +1313,9 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     return pipeline.run_to_completion(gen)
 
 
-def prove_stages(*args, slot=None, **kw):
-    """The prover as a stage generator for ``pipeline.prove_many`` (same arguments as ``prove`` plus ``slot``)."""
-    return _prove_stages(*args, **kw, slot=slot)
+def prove_stages(*args, slot=None, fp_sink=None, **kw):
+    """The prover as a stage generator for ``pipeline.prove_many`` (same arguments as ``prove`` plus ``slot``, ``fp_sink``)."""
+    return _prove_stages(*args, **kw, slot=slot, fp_sink=fp_sink)
 
 
 def _coin_future(src, name: str, *args):
@@ -1329,7 +1329,11 @@ def _coin_future(src, name: str, *args):
 
 def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints, device,
                   check=False, mutate=None, chain=None, words=None, coins=None, rel: RelationHooks = BF16_HOOKS,
-                  auth=None, auth_open=None, hints_fn=None, slot=None):
+                  auth=None, auth_open=None, hints_fn=None, slot=None, fp_sink=None):
+    """``chain[2]`` (a fingerprinted chain's public ``FpArgs``) may be a ``Future``: it is awaited after the root (the
+    commitment does not depend on it; the statement digest and the tests do).  ``fp_sink``: a ``Future`` set to
+    ``(rho, F)`` as soon as a coin-mode fingerprint message is on the host (before the openings)."""
+    from concurrent.futures import Future
     from . import pipeline
     _t_enter = time.perf_counter()
     clk = _Clock(device)
@@ -1357,11 +1361,15 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     cuda = str(device).startswith("cuda")
     # the statement digest (blake2b of the public words, ~1.6 ms of host hashing) on a worker thread; needed at
     # challenge 1 only.  ``words["y16"]`` (a host copy of the chain's y16) keeps the worker off the device.
+    fp_later = chain is not None and len(chain) > 2 and isinstance(chain[2], Future)
     if chain is not None:
         y16_for_digest = words.get("y16", chain[1])
-        fp_for_digest = chain[2] if len(chain) > 2 and (sys.chain.get("fp") or {}).get("mode") == "public" else None
-        stmt_fut = pipeline.POOL.submit(statement_digest, sys, cfg, words["a"], words["b"], layout=chain[0],
-                                        y16=y16_for_digest, rel=rel, auth=auth, fp=fp_for_digest)
+        fp_public = len(chain) > 2 and (sys.chain.get("fp") or {}).get("mode") == "public"
+
+        def submit_stmt(fp_args):
+            return pipeline.POOL.submit(statement_digest, sys, cfg, words["a"], words["b"], layout=chain[0],
+                                        y16=y16_for_digest, rel=rel, auth=auth, fp=fp_args if fp_public else None)
+        stmt_fut = None if fp_later else submit_stmt(chain[2] if len(chain) > 2 else None)
     else:
         stmt_fut = pipeline.POOL.submit(statement_digest, sys, cfg, words["a"], words["b"], c=words["c"], y=words["y"], rel=rel)
     clk.lap("statement")
@@ -1520,6 +1528,12 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
 
     M = U.shape[0]
     sent.append("root")
+    if fp_later:
+        if not fp_pub.done():
+            yield fp_pub                                           # -- wait: the fingerprint statement (the other proof)
+        fp_pub = fp_pub.result()
+        stmt_fut = submit_stmt(fp_pub)
+        clk.host("wait_fp")
     if not stmt_fut.done():
         yield stmt_fut
     stmt = stmt_fut.result()
@@ -1621,6 +1635,8 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
             rho_np = ((st.xraw.reshape(-1)[width - n_fp:width].to(torch.int64) & 0xFFFFFFFF) % P).cpu().numpy().astype(np.uint32)
         else:
             rho_np = x[0, width - n_fp:].cpu().numpy().astype(np.uint32)
+        if fp_sink is not None:
+            fp_sink.set_result((rho_np, fp_np))
 
     sent.append("w, h" + (", q" if q_np is not None else "") + (", v" if v_np is not None else "") + (", fp" if fp_np is not None else ""))
     if cfg.interactive:

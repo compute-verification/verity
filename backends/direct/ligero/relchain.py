@@ -666,6 +666,10 @@ class HashedRelationRunner(RelationChainRunner):
         return ok, why
 
 
+INTERLEAVE_PAIR = True      # the pipelined pair: H on its own slot, interleaved with G (False: G then H on one slot)
+H_SLOT_BASE = 64            # pipeline.slot_for index of the hash side's slot for job slot i: H_SLOT_BASE + i
+
+
 @dataclasses.dataclass
 class SharedProof:
     """The paired transcript of one sub-batch under ``authentication = included-hash-shared``: ``g`` the GEMM side
@@ -829,9 +833,89 @@ class SharedHashedRunner(HashedRelationRunner):
         return bd
 
     def _prove_stages_shared(self, bd: dict, coins, coins_h, slot=None, sibs_out: list | None = None):
-        """The pair of one sub-batch as ONE generator for ``pipeline.prove_many``: G (hints on the device, the stages up
-        to its openings), then F_H from G's message (host, vectorised) and H (its witness gathered on the device from the
-        committed rows + sponges), then the multiproofs.  The transcripts are those of :meth:`prove_vus`."""
+        """The pair of one sub-batch as ONE generator for ``pipeline.prove_many``, the two provers interleaved: H (its
+        witness gathered on the device from the committed rows + sponges; its commitment does not depend on G) starts
+        first on its own slot -- stream and pinned buffers -- and waits after its root for its fingerprint statement;
+        G (hints on the device) runs on the job's slot and hands ``(rho, F_G)`` over as soon as its messages are on the
+        host; F_H (host, vectorised) resolves H's statement; the multiproofs are opened on a pool thread meanwhile.
+        The transcripts are those of :meth:`prove_vus` (H's root is committed before rho is drawn instead of after:
+        the witness it commits to is a function of the committed rows alone)."""
+        from concurrent.futures import Future
+
+        from . import hashauth, hashchain, pipeline
+        from .chain import FpArgs
+        lay, lay_h, dev = bd["lay"], bd["lay_h"], self.device
+        if slot is None or not INTERLEAVE_PAIR:
+            return (yield from self._prove_stages_shared_seq(bd, coins, coins_h, slot, sibs_out))
+        slot_h = pipeline.slot_for(dev, H_SLOT_BASE + slot.index)
+
+        def hints_g():
+            base = self.rel.hints(self.p, self._base_sys, bd["c_d"], bd["a_d"], bd["b_d"], bd["y_d"], dev)
+            return torch.cat([base, hashchain.shared_hints(self.hr, bd["a_d"], bd["b_d"], lay.l, dev)], 0)
+
+        def hints_h():
+            gx, gw = bd["gx"], bd["gw"]
+            rows = torch.cat([self.rows_d["a"][gx], self.rows_d["b"][gw]], 0)
+            cap_u = torch.cat([self.sponges["a"][0][gx], self.sponges["b"][0][gw]], 0)
+            return hashchain.row_hash_witness(self.rh, rows, lay_h.n_vus, lay_h.l, cap_units=cap_u)
+
+        sibs_fut = pipeline.POOL.submit(hashauth.open_trees, self.trees, bd["auth"])
+        fp_sink, fp_h = Future(), Future()
+        gen_h = protocol_mod.prove_stages(
+            self.p, self.sys_h, self.tb_h, self.cfg_h(lay_h.l), bd["pub_h"], None, dev, chain=(lay_h, bd["ypub_h_d"], fp_h),
+            words={"a": bd["table_h"], "b": bd["units"], "y16": bd["ypub_h"]}, coins=coins_h, rel=bd["hooks_h"],
+            hints_fn=hints_h, slot=slot_h)
+        gen_g = protocol_mod.prove_stages(
+            self.p, self.sys, self.tb, self.cfg(lay.l), bd["pub"], None, dev, chain=(lay, bd["ypub_d"]),
+            words={"a": bd["is_end"], "b": bd["idx"], "y16": bd["ypub"]}, coins=coins, rel=bd["hooks"], hints_fn=hints_g,
+            slot=slot, fp_sink=fp_sink)
+        t_fp = 0.0
+        gens = {"h": (gen_h, slot_h), "g": (gen_g, slot)}
+        out, waits = {}, {"h": None, "g": None}           # H first: its commitment launches ahead of G's
+        started = set()
+
+        def step(name):
+            gen, s = gens[name]
+            with pipeline.stream_context(s):
+                if name in started:
+                    return gen.send(None)
+                started.add(name)
+                return next(gen)
+
+        while waits:
+            if fp_sink.done() and not fp_h.done():
+                t0 = time.perf_counter()
+                rho_np, fp_np = fp_sink.result()
+                F_h = self._fp_h(fp_np.astype(np.int64), bd["ux"], bd["uw"], lay_h.n_vus, lay_h.l // self.steps)
+                if F_h is None:
+                    raise ValueError("G's fingerprints disagree between VUs of one shared row")
+                fp_h.set_result(FpArgs(torch.as_tensor(rho_np.astype(np.int64)), torch.as_tensor(F_h)))
+                t_fp += time.perf_counter() - t0
+            ready = [nm for nm, w in waits.items() if pipeline._is_ready(w)]
+            if not ready:
+                yield pipeline.AnyOf(waits.values())
+                continue
+            for nm in ready:
+                try:
+                    waits[nm] = step(nm)
+                except StopIteration as stop:
+                    out[nm] = stop.value
+                    del waits[nm]
+        proof_g, proof_h = out["g"], out["h"]
+        t1 = time.perf_counter()
+        if not sibs_fut.done():
+            yield sibs_fut
+        sibs = sibs_fut.result()
+        if sibs_out is not None:
+            sibs_out.append(sibs)
+        timings = {k: proof_g.timings.get(k, 0.0) + proof_h.timings.get(k, 0.0) for k in set(proof_g.timings) | set(proof_h.timings)}
+        timings["auth_openings"] = time.perf_counter() - t1
+        timings["hints_host"] = timings.get("hints_host", 0.0) + t_fp
+        return SharedProof(proof_g, proof_h, timings, lay_h)
+
+    def _prove_stages_shared_seq(self, bd: dict, coins, coins_h, slot=None, sibs_out: list | None = None):
+        """The pair of one sub-batch as ONE generator, the two provers in sequence on one slot: G (hints on the device,
+        the stages up to its openings), then F_H from G's message (host, vectorised) and H, then the multiproofs."""
         from . import hashauth, hashchain
         from .chain import FpArgs
         lay, lay_h, dev = bd["lay"], bd["lay_h"], self.device
