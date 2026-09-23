@@ -29,10 +29,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 from .. import resolver
@@ -161,8 +159,7 @@ def actual(row: resolver.Row) -> dict:
     root = row.programs_root()
     if root is None:
         raise resolver.NotResolvable(f"{row.key}: no request Programs (build_request*/instances.json.gz) reachable here")
-    scratch = Path(os.environ.get("VERITY_REGRESSION_SCRATCH") or tempfile.gettempdir()) / "r19-regress" / row.key
-    scratch.mkdir(parents=True, exist_ok=True)
+    scratch = resolver.scratch(row)
     out = scratch / "manifest.rebuilt.json"
     argv = _rebuild_argv(row, root, out)
     p = subprocess.run(argv, cwd=str(resolver.VLLM_ROOT), capture_output=True, text=True)

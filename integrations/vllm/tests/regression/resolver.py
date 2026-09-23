@@ -157,18 +157,50 @@ class Row:
         return p
 
     def programs_root(self) -> Path | None:
-        """A directory holding the row's request Programs (`build_request*/instances.json.gz`) -- the live row dir or the fetched
-        programs tree -- or None when none is reachable."""
-        for root in self._roots():
-            if any(root.glob("build_request*/instances.json.gz")):
-                return root
-        try:
-            root = self._store_root("programs")
-        except NotResolvable:
-            root = None
-        if root is not None and any(root.glob("build_request*/instances.json.gz")):
-            return root
-        return None
+        """A directory holding the row's request Programs (`build_request*/instances.json.gz` beside the derive's `result.json`) -- the
+        live row dir, or, when the Programs and the records live in different trees (the store's `programs` / `records` artifacts,
+        the pod's staged programs dir: `instances.json.gz` + `manifest.json` only), a merged view assembled under the scratch dir: one
+        symlink per frozen `build_request*/…` file of fixtures.toml, each resolved through `path()` (sha / size checked).  None when no
+        Programs are reachable.  Both engines read `result.json` (attention impls observed) beside the instances, so a split layout
+        must be re-joined here, from the frozen index, never by guessing."""
+        root: Path | None = None
+        for r in self._roots():
+            if any(r.glob("build_request*/instances.json.gz")):
+                root = r
+                break
+        if root is None:
+            try:
+                root = self._store_root("programs")
+            except NotResolvable:
+                root = None
+            if root is None or not any(root.glob("build_request*/instances.json.gz")):
+                return None
+        if all((d / "result.json").is_file() for d in root.glob("build_request*") if (d / "instances.json.gz").is_file()):
+            return root                                    # the live layout: everything the builders read is beside the instances
+        return self._merged_programs_view()
+
+    def _merged_programs_view(self) -> Path:
+        """`<scratch>/programs/<rel>` -> the resolved reference file, for every frozen `build_request*/…` (and `build/rank*/build_request*/…`)
+        entry of this row; rebuilt idempotently (stale links replaced)."""
+        view = scratch(self) / "programs"
+        view.mkdir(parents=True, exist_ok=True)
+        n = 0
+        for rel in sorted(self.files):
+            if not (rel.startswith("build_request") or rel.startswith("build/")) or "/" not in rel:
+                continue
+            try:
+                src = self.path(rel)
+            except NotResolvable:
+                continue                                   # a frozen file no replica holds here: the builder names it if it needs it
+            dst = view / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if dst.is_symlink() or dst.exists():
+                dst.unlink()
+            dst.symlink_to(src)
+            n += 1
+        if not any(view.glob("build_request*/instances.json.gz")) and not any(view.glob("build/rank*/build_request*/instances.json.gz")):
+            raise NotResolvable(f"{self.key}: merged Programs view has no instances.json.gz ({n} files linked under {view})")
+        return view
 
     def candidate(self, rel: str) -> Path | None:
         """The v2 candidate's file for this row (`$VERITY_REGRESSION_CANDIDATE/<row>/<rel>`), None in self-check mode."""
@@ -194,6 +226,17 @@ class Row:
         """The labelled decisions on this row for `check` (`[[rows.<row>.decisions]]` in fixtures.toml, design rule Draft 3 §7: a
         difference from the v1 reference is sanctioned only by a recorded decision naming the finding or the changed policy)."""
         return [d for d in (self.spec.get("decisions") or []) if isinstance(d, dict) and d.get("check") == check]
+
+
+SCRATCH_ENV = "VERITY_REGRESSION_SCRATCH"
+
+
+def scratch(row: Row) -> Path:
+    """`$VERITY_REGRESSION_SCRATCH/r19-regress/<row>` (default: the system temp dir): rebuilt manifests, their logs, the merged Programs view."""
+    import tempfile
+    p = Path(os.environ.get(SCRATCH_ENV) or tempfile.gettempdir()) / "r19-regress" / row.key
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 def rows(selection: str | None = None) -> list[Row]:
