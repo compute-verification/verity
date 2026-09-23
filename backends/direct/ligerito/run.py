@@ -451,7 +451,20 @@ def bench(args) -> int:
     dumps = verify_dir(Path(args.dump_dir), args.device) if args.dump_dir else None
     rust = rust_batch(args.rust_verifier, Path(args.dump_dir)) if args.dump_dir else None
     med_total = statistics.median(w for w, _ in runs)
-    med_b = {k: statistics.median(sum(_buckets(r.timings)[k] for r, _, _ in it) for _, it in runs) for k in _buckets({})}
+    def rep_buckets(it):
+        """t.* of one rep: sequential batches sum; windowed batches overlap, so the per-batch mean (the wall is the
+        joint).  The challenge stream's waits happen inside the zero-check / PCS timers: taken out of arithmetic."""
+        bs = []
+        for r, _, pc in it:
+            b = _buckets(r.timings)
+            if pc is not None:
+                b["arithmetic"] -= pc.stream.wait
+            bs.append(b)
+        agg = (lambda xs: sum(xs) / len(xs)) if live and args.window > 1 else sum
+        return {k: agg([b[k] for b in bs]) for k in _buckets({})}
+    med_b = {k: statistics.median(rep_buckets(it)[k] for _, it in runs) for k in _buckets({})}
+    med_wait = statistics.median(max(pc.stream.wait for _, _, pc in it) for _, it in runs) if live else 0.0
+    med_lat = statistics.median(max(pc.stream.latency or 0.0 for _, _, pc in it) for _, it in runs) if live else None
     vmed = statistics.median(sum(i["seconds"] for _, i, _ in it) for _, it in runs)
     nbytes = {k: sum(r.proof.n_bytes()[k] for r, _, _ in runs[0][1]) for k in res.proof.n_bytes()}
     snd = pv.soundness(bt.dims)
@@ -526,6 +539,13 @@ def bench(args) -> int:
         contract.measurement("split.zero_check_seconds", statistics.median(sum(r.timings.get("zero_check", 0.0) for r, _, _ in it) for _, it in runs), "s"),
         contract.measurement("split.witness_seconds", med_b["witness"], "s"),
     ]
+    if live:
+        meas += [contract.measurement("live.stream_wait_seconds", med_wait, "s"),
+                 contract.measurement("live.batch_latency_seconds", med_lat, "s"),
+                 contract.measurement("live.rounds_per_batch", stream_info["rounds_per_batch"], "count"),
+                 contract.measurement("live.window", args.window, "count")]
+        if stream_info.get("round_ms_median") is not None:
+            meas.append(contract.measurement("live.round_trip_ms_median", stream_info["round_ms_median"], "ms"))
     if rust and "json" in rust:
         secs = [it.get("seconds") for it in rust["json"].get("items", []) if isinstance(it, dict) and it.get("seconds") is not None]
         if secs:
