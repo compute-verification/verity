@@ -435,6 +435,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
            "program": {"dir": program_dir, "function": res["program"].get("function"), "wrapper": res.get("wrapper"), "LP": res.get("LP"), "T": res.get("T"),
                        "model_pin": res.get("model_pin"), "artifact_identity": (artifact or {}).get("identity"), "instances": len(P.calls),
                        "instances_digest": P.digest, "source": P.source},
+           "correspondence": corr.provenance(),                 # which reader gave the owning modules: the runtime-correspondence/v1 record or the v1 annotations
            "workload": {"row_id": sweep.get("row_id"), "batch": sweep.get("batch"), "request_id": request_id, "workload_request_id": workload_request_id,
                         "arrive_step": arrive} if workload else None,
            "query": q, "wrapper_prefix": corr.prefix, "op_path_aliases": alias_out, "target": ((res.get("target") or {}).get("declared") or {}),
@@ -522,7 +523,11 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
                        | ({"row_id": fixture["sweep"].get("row_id"), "seed": fixture["sweep"].get("seed")} if isinstance(fixture.get("sweep"), dict) else {}),
             "requests_declared": [{k: r.get(k) for k in ("request_id", "workload_request_id", "index", "prompt_len", "max_tokens", "arrive_step")} for r in reqs],
             "components": {rid: {"program_digest": p["program_digest"], "steps": len(p["steps"]), "LP": p["program"]["LP"], "T": p["program"]["T"],
-                                 "workload_request_id": next(r.get("workload_request_id") for r in reqs if r["request_id"] == rid)} for rid, p in parts.items()},
+                                 "workload_request_id": next(r.get("workload_request_id") for r in reqs if r["request_id"] == rid),
+                                 "correspondence": p.get("correspondence")} for rid, p in parts.items()},
+            # the source of the owning modules across the components: one source (the record on every component, or the fallback on every one)
+            "correspondence": {"source": sorted({(p.get("correspondence") or {}).get("source", "v1_annotations") for p in parts.values()}),
+                               "digests": sorted({d for p in parts.values() if (d := (p.get("correspondence") or {}).get("digest"))})},
             "complete": all(p.get("complete", True) for p in parts.values()),
             "unmodelled": {k: v for p in parts.values() for k, v in (p.get("unmodelled") or {}).items()},
             "query": dict(q0, residuals_applied=dict(sorted(applied.items()))), "op_path_aliases": parts[reqs[0]["request_id"]]["op_path_aliases"],

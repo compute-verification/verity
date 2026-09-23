@@ -899,6 +899,9 @@ class NativeHostCommitter:
         # input as `<consumer>/in` -- the same mechanism as the embedding's ids, no longer restricted to a module class -- and the binding map
         # binds that tensor to the producer's identity (binding.promoted_input_acquisition).  Set by commit_delta before install / size_arena.
         self.acquire_inputs: dict[str, int] = {}
+        # [v2 acquire, Phase 4a] ACQUIRE_ENGINE=v2: the consumer-input pre-hook set comes from the ACQUISITION PLAN (verity_vllm.acquire.install
+        # .apply_plan_to_committer sets it) instead of ACQUIRE_INPUT_CLASSES; None (v1, the default) = the class table + `acquire_inputs`.
+        self.plan_inputs: set[str] | None = None
         self._side = None                           # the worker's CUDA side stream (created lazily on the worker thread)
         if engine is not None:
             self._geo_digest = geo_digest or self._model_geo_digest()
@@ -1064,18 +1067,24 @@ class NativeHostCommitter:
 
     def _acquires_input(self, name: str, m: Any) -> bool:
         """Whether module `name`'s first positional tensor argument is acquired as `<name>/in`: by class (the embedding's ids,
-        ACQUIRE_INPUT_CLASSES) or [R19 int-20] because the required manifest names it as a promoted member's consumer (`acquire_inputs`)."""
+        ACQUIRE_INPUT_CLASSES) or [R19 int-20] because the required manifest names it as a promoted member's consumer (`acquire_inputs`).
+        [v2 acquire] under a plan (`plan_inputs` set) the plan's consumer-input sites decide, the class table is not consulted."""
+        if self.plan_inputs is not None:
+            return name in self.plan_inputs
         return bool(_mro_names(m) & ACQUIRE_INPUT_CLASSES) or name in self.acquire_inputs
 
     def _input_only_modules(self) -> list[tuple[str, Any]]:
         """[R19 int-20] the manifest's consumer modules the committer did NOT select (no acquire class): their input is acquired, their
         output is not (it is no identity of the Program).  Sorted by name; a consumer that is not a module of the built model is skipped
-        here and left unbound (coverage names it)."""
-        if not self.acquire_inputs or getattr(self, "model", None) is None:
+        here and left unbound (coverage names it).  [v2 acquire] under a plan: the plan's consumer-input sites not among the selected modules."""
+        if getattr(self, "model", None) is None:
+            return []
+        wanted = self.plan_inputs if self.plan_inputs is not None else set(self.acquire_inputs)
+        if not wanted:
             return []
         selected = {n for n, _m in self._modules}
         mods = dict(self.model.named_modules())
-        return [(n, mods[n]) for n in sorted(self.acquire_inputs) if n not in selected and n in mods]
+        return [(n, mods[n]) for n in sorted(wanted) if n not in selected and n in mods]
 
     @staticmethod
     def layout_digest(metas: list[TensorMeta]) -> bytes:

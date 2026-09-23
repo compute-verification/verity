@@ -238,6 +238,8 @@ class Ctx:
         self.applications: list[dict] = []
         self.node_hints: dict[int, str] = {}  # verity node index -> naming hint
         self.node_sources: dict[int, str] = {}  # verity node index -> fx node name
+        self.node_fx: dict[int, Any] = {}  # verity node index -> the fx node it was lowered from (runtime correspondence; `emit_correspondence`)
+        self.occurrence_bindings: dict[Any, dict] = {}  # fx node -> {"in", "out", "written"} bindings frozen at lowering (`note_emitted`)
         self.state: dict[str, Any] = {}  # StateRule scratch (cache ownership etc.)
         self.weight_roles: dict[str, dict] = {}  # weight field name -> {rule, role, statics} (first use)
         self.current: Any = None  # fx node being translated
@@ -391,7 +393,23 @@ class Ctx:
         k = len(self.B.nodes) - 1
         self.node_hints[k] = name or self.hint_name(node)
         self.node_sources[k] = node.name
+        self.node_fx[k] = node
         return out
+
+    def begin_emit(self, node) -> tuple[int, dict[int, Any]]:
+        """Before a rule lowers fx `node`: the Builder length and the bindings of its fx arguments AS READ (runtime correspondence)."""
+        return len(self.B.nodes), {j: self.env.get(a) for j, a in fx_arg_nodes(node)}
+
+    def note_emitted(self, node, k0: int, before: dict[int, Any] | None = None) -> None:
+        """After a rule lowered fx `node`: every Builder node from index `k0` on was lowered from it (rules that emit through `self.B`
+        directly, not `call`), and the occurrence's bindings are frozen for the runtime correspondence -- `in`: the arguments as read,
+        `out`: the node's value as PRODUCED (a later in-place op may rebind `env[node]`), `written`: the arguments whose binding the
+        lowering replaced (the storages an in-place op wrote)."""
+        for k in range(k0, len(self.B.nodes)):
+            self.node_fx.setdefault(k, node)
+        if before is not None:
+            written = {j: self.env.get(a) for j, a in fx_arg_nodes(node) if self.env.get(a) is not before.get(j)}
+            self.occurrence_bindings[node] = {"in": before, "out": self.env.get(node), "written": written}
 
     def record(self, rule: Rule, node, preconditions: dict[str, Any], emitted: str | None = None, **extra) -> None:
         self.applications.append({"rule": rule.rule_id, "version": rule.info.version, "kind": rule.info.kind, "node": node.name, "op": str(node.target),
@@ -472,6 +490,7 @@ class DeriveReport:
     flat_root: str | None = None
     family: dict | None = None
     flat_definition: Any = None  # the flat leaf-level SpecializedDefinition (rules' direct output)
+    correspondence_digest: str | None = None  # sha256 of the runtime correspondence document (`annotations["correspondence"]`), digested apart from the Program
 
     @property
     def result(self) -> Program | Unsupported:
@@ -483,23 +502,29 @@ class DeriveReport:
 
     def to_json(self) -> dict:
         return {"ok": self.ok, "digest": self.digest, "root": self.root, "gates": self.gates, "flat_digest": self.flat_digest,
-                "flat_root": self.flat_root, "unsupported": self.unsupported.to_json() if self.unsupported else None,
+                "flat_root": self.flat_root, "correspondence_digest": self.correspondence_digest,
+                "unsupported": self.unsupported.to_json() if self.unsupported else None,
                 "dead_gates": self.dead.to_json() if self.dead else None, "family": self.family, "provenance": self.provenance}
 
 
 def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
            rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
-           check_registry: bool = True) -> Program | Unsupported:
+           check_registry: bool = True, rank: tuple[int, int] | None = None) -> Program | Unsupported:
     """Derive a `Program` from an unannotated module/callable, or return `Unsupported`. See module docstring."""
     return derive_report(source, example_inputs, mode=mode, profile=profile, config=config, rules=rules, allowed_dims=allowed_dims,
-                         name=name, check_registry=check_registry).result
+                         name=name, check_registry=check_registry, rank=rank).result
 
 
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
-                  check_registry: bool = True) -> DeriveReport:
+                  check_registry: bool = True, rank: tuple[int, int] | None = None) -> DeriveReport:
+    """`rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
+    (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
+    (`program_digest`) does not depend on it."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
+    if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
+        raise ValueError(f"rank must be (world, rank) with 0 <= rank < world, got {rank!r}")
     from verity_vllm.frontend.rules import DEFAULT_RULES, vocabulary_for
     ruleset = rules if rules is not None else DEFAULT_RULES
     vocab = vocabulary_for(mode, profile)
@@ -522,7 +547,13 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         prov["mutation_effects"] = ctx.mutation_effects
         prov["returned_inputs"] = ctx.returned_inputs
         prov["rules_applied"] = sorted({a["rule"] for a in ctx.applications})
-        flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}})
+        # runtime correspondence (`runtime-correspondence/v1`): per Call the owning module, the source occurrence and the return /
+        # argument slots -- data beside the Program, under ONE annotation namespace, digested apart (annotations never enter program_digest)
+        from verity_vllm.frontend.emit_correspondence import NAMESPACE as _CORR, emit_correspondence
+        from verity_vllm.runtime_correspondence import correspondence_digest
+        corr_doc = emit_correspondence(ctx, flat_sd.body, rank=rank)
+        corr_digest = correspondence_digest(corr_doc)
+        flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}, _CORR: corr_doc})
         check_identity(flat_program, check_registry=check_registry)
         flat_digest = program_digest(flat_program)
         program, family_report = flat_program, None
@@ -544,10 +575,15 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
                 family_report = None
         digest = program_digest(program)
         dead = _dead_gates(program, limit=32)
+        # a family claim replaces the flat body by the family's: the correspondence describes the FLAT Calls and stays with the flat root
+        corr_applies = program is flat_program
         prov["result"] = {"root": _spec_id(program.fn), "digest": digest, "gates": program.gates, "flat_root": _spec_id(flat_sd),
-                          "flat_digest": flat_digest, "dead_gates": dead.total}
+                          "flat_digest": flat_digest, "dead_gates": dead.total,
+                          "correspondence_digest": corr_digest if corr_applies else None,
+                          "correspondence": {"schema": corr_doc["schema"], "calls": len(corr_doc["calls"]), "occurrences": len(corr_doc["occurrences"]),
+                                             "applies_to": "program_fn" if corr_applies else f"flat body only ({_spec_id(flat_sd)}); not attached", "digest": corr_digest}}
         return DeriveReport(program, None, prov, digest, _spec_id(program.fn), program.gates, dead, flat_digest, _spec_id(flat_sd),
-                            prov.get("family"), flat_sd)
+                            prov.get("family"), flat_sd, corr_digest if corr_applies else None)
     except Refuse as e:
         prov["unsupported"] = e.u.to_json()
         _record_partial(prov, holder)
@@ -838,7 +874,9 @@ def _translate_node(ctx: Ctx, node) -> None:
     for rule in ctx.ruleset.for_target(t, ctx.mode):
         verdict = rule.applies(node, ctx)
         if verdict is True:
+            k0, before = ctx.begin_emit(node)
             rule.emit(node, ctx)
+            ctx.note_emitted(node, k0, before)
             if node not in ctx.env and not isinstance(rule, (InPlaceRule, StateRule)):
                 refuse("shape", node, ctx.module_path(node), f"{rule.rule_id} accepted the node but bound no value (internal)")
             if node not in ctx.env:
@@ -896,6 +934,23 @@ def _mutates(t) -> bool:
     if schema is None:
         return False
     return any(arg.alias_info is not None and arg.alias_info.is_write for arg in schema.arguments)
+
+
+def fx_arg_nodes(node) -> list[tuple[int, Any]]:
+    """The fx-node arguments of `node`, flattened, as (flat index, fx node): positional arguments first (nodes inside a list / tuple
+    argument in order), then keyword arguments in order.  The flat index is the runtime correspondence's `inputs[j]` coordinate."""
+    out: list[Any] = []
+    for a in node.args:
+        if isinstance(a, torch.fx.Node):
+            out.append(a)
+        elif isinstance(a, (list, tuple)):
+            out.extend(x for x in a if isinstance(x, torch.fx.Node))
+    for a in node.kwargs.values():
+        if isinstance(a, torch.fx.Node):
+            out.append(a)
+        elif isinstance(a, (list, tuple)):
+            out.extend(x for x in a if isinstance(x, torch.fx.Node))
+    return list(enumerate(out))
 
 
 _CONTROL_FLOW_HOPS = {"cond", "while_loop", "map", "map_impl", "scan", "associative_scan", "flat_apply"}

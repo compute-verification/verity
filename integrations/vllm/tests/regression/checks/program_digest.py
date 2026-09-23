@@ -56,7 +56,14 @@ def actual(row: resolver.Row) -> dict:
         bs = json.load(open(cand))
         d = _digests_of(bs)
         b = len(json.load(open(row.workload())).get("requests") or [])
-        return {"build_summary": d, "program_digest_of_record": d["workload"] if b > 1 else d["request"], "batch": b, "source": "candidate"}
+        out = {"build_summary": d, "program_digest_of_record": d["workload"] if b > 1 else d["request"], "batch": b, "source": "candidate"}
+        # the two keys `expected()` lifts from the record's commit/ and build_workload/: from the candidate's own documents when it has
+        # them, else declared not applicable (a Build-only rebuild has no Commit to key a binding by) -- never lifted from the record
+        mv = row.candidate("commit/manifest_verify.json")
+        out["commit_keyed_by"] = json.load(open(mv)).get("used_program_digest") if mv is not None else resolver.not_applicable("the candidate ran no Commit: no commit/manifest_verify.json")
+        wp = row.candidate("build_workload/workload_program.json")
+        out["workload_program_digest"] = json.load(open(wp)).get("workload_digest") if wp is not None else resolver.not_applicable("the candidate has no build_workload/workload_program.json")
+        return out
     # self-check: the chain read from the Build's own per-shape artifacts, independent of build_summary.json's copy
     exp = expected(row)
     arts: dict[str, str | None] = {}

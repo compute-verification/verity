@@ -291,7 +291,8 @@ def test_from_record_pass_row_and_commit_summary_deprecation(tmp_path):
     assert s["pass"] is True and s["deprecated"] == "F-r19-int-21; see verdict.json"
     v = V.from_record(d, rc=0, stage_ok="PASS")
     assert v.outcome == V.PASS and v.compat["commit_pass"] is True and v.compat["stage_ok"] == "PASS" and not v.notes
-    assert v.inputs["commit/verdict.json"] and v.inputs["commit/runs.jsonl"] and v.correspondence_digest == v.inputs["global_match.json"]
+    assert v.inputs["commit/verdict.json"] and v.inputs["commit/runs.jsonl"] and "global_match.json" in v.inputs
+    assert v.correspondence_digest is None and v.correspondence_digest_source == "absent" and v.correspondence_digests == {}   # a v1-frontend row: never a stand-in hash
     assert v.check("required_value_coverage/manifest_of_record_verified").outcome == V.PASS
     assert v.runs == {"instrumented": 1, "failed": 0, "control": 1, "not_pass_by_reconstruction": 0, "pairs": [0]}
     assert v.execution["engine_settings"]["openings"] == 64 and v.execution["committer"] == "native_collect_v2b"
@@ -324,3 +325,31 @@ def test_structural_leaks_are_named_on_the_verdict():
     for table in ("native_host.ACQUIRE_CLASSES", "required_manifest.members_for", "weights_of_record.FUSED / EXPERTS / EXPERTS_MIXTRAL",
                   "sampled_replay.EVALUATORS / NOT_YET", "oracle_compare.NO_ORACLE_FAMILY_PREFIXES"):
         assert table in leaks, (table, leaks)
+
+
+# ---------------------------------------------------------------------------------------------------------------- (8) correspondence digest
+
+def test_correspondence_digest_is_the_builds_own_or_absent(tmp_path):
+    d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
+    step, req, shape = "e6" * 32, "fc" * 32, "ab" * 32
+    (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": step},
+                                                      "request": {"ok": True, "program_digest": "p2" * 32, "correspondence_digest": req},
+                                                      "build_request_LP9_T1": {"ok": True, "program_digest": "p3" * 32, "correspondence_digest": shape}}))
+    v = V.from_record(d, rc=0, stage_ok="PASS")
+    assert v.correspondence_digest == step and v.correspondence_digest_source == "build_summary.json:step"
+    assert v.correspondence_digests == {"build_request_LP9_T1": shape, "request": req, "step": step}
+    assert v.inputs["build_summary.json"] and v.correspondence_digest != v.inputs["global_match.json"]
+    assert V.Verdict.from_dict(json.loads(v.dumps())).correspondence_digest == step
+    # a build_summary.json of a v1-frontend Build (no correspondence_digest per wrapper): absent, null
+    (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": None}, "request": {"ok": True, "program_digest": "p2" * 32}}))
+    v = V.from_record(d, rc=0, stage_ok="PASS")
+    assert v.correspondence_digest is None and v.correspondence_digest_source == "absent" and v.correspondence_digests == {}
+    # no build_summary.json: the wrappers' own result.json
+    (d / "build_summary.json").unlink()
+    for w, dg in (("build_step", step), ("build_request", req)):
+        (d / w).mkdir()
+        (d / w / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "p" * 64, "correspondence_digest": dg}}))
+    v = V.from_record(d, rc=0, stage_ok="PASS")
+    assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step" and v.correspondence_digests == {"request": req, "step": step}
+    assert V.correspondence_of_build(None) == (None, "absent", {})
+    assert V.correspondence_of_build({"request": {"correspondence_digest": req}}) == (req, "build_summary.json:request", {"request": req})

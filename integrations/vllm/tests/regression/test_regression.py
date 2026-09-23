@@ -150,6 +150,9 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     record_property("engine", resolver.engine())
     for rel, by in sorted(row.pinned_by.items()):                                     # an INPUT resolved by a decision's pin, not v1's
         record_property("pinned_by", f"{rel}: {by}")
+    na = resolver.not_applicable_keys(act)
+    if na:
+        record_property("not_applicable", "; ".join(na))                                 # leaves the candidate declared inapplicable, by key and reason
     strength = "WEAK (PASS-side / unexercised rule)" if chk.STRENGTH == "weak" else "strong"
     what = "the v1 reference" + (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
     assert not problems, (f"#{row.number} {row.key}: {check_name} [{chk.TIER}, {strength}] does not reproduce {what} "

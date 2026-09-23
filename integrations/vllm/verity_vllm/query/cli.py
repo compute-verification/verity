@@ -40,13 +40,13 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
     res = _load_json(os.path.join(program_dir, "result.json"))
     art_p = os.path.join(program_dir, "artifact.json")
     art = _load_json(art_p) if os.path.exists(art_p) else None
-    corr = Correspondence(P, implementation_paths=Correspondence.implementation_paths_of(res))
+    corr = Correspondence.of(P, program_dir, implementation_paths=Correspondence.implementation_paths_of(res))   # the record when the Build carries it, else v1 annotations
     r = request_manifest(P, corr, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, rank=rank, ranks=ranks,
                          profile=profile, return_slots=return_slots)
     if log:
         pop = r.manifest["populations"]
         log(f"  {os.path.basename(program_dir)}: {len(P.calls)} calls -> {pop['identities']} identities ({pop['steps']} steps, {pop['units']} units, "
-            f"{pop['boundary_values']} boundary values) complete={r.manifest['complete']} in {time.time() - t0:.1f}s")
+            f"{pop['boundary_values']} boundary values) complete={r.manifest['complete']} correspondence={corr.source} in {time.time() - t0:.1f}s")
     return r.manifest
 
 
@@ -94,6 +94,53 @@ def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest
     return compose_global(fixture, parts, reqs, workload_digest=workload_digest, rank=rank, ranks=ranks)
 
 
+def check_correspondence(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, manifest: bool = True, log=None) -> dict[str, Any]:
+    """`Q_module_body_v1` under the record vs under the v1-annotation fallback on ONE Build dir that carries the record: the owning
+    module per Call, the Call names the bridge reads, the partition (unit ids), the boundary Values and -- `manifest` -- the bridge's
+    manifest digest, each equal or listed.  A Build without the record has nothing to check against (`applicable: False`)."""
+    from verity.verification.query import boundary_values
+
+    from .module_body import Q_module_body_v1
+    t0 = time.time()
+    P = from_instances(os.path.join(program_dir, "instances.json.gz"))
+    res = _load_json(os.path.join(program_dir, "result.json"))
+    impl = Correspondence.implementation_paths_of(res)
+    canon = Correspondence.of(P, program_dir, implementation_paths=impl)
+    out: dict[str, Any] = {"schema": "vllm-v2/query-correspondence-check/v1", "program_dir": program_dir, "wrapper": res.get("wrapper"), "calls": len(P.calls),
+                           "program_digest": (res.get("program") or {}).get("digest"), "correspondence_digest": canon.digest, "source": canon.source, "problem": canon.problem}
+    if canon.source != "correspondence":
+        out.update(applicable=False, why="the Build carries no runtime-correspondence/v1 record: only the fallback reads it")
+        return out
+    fallback = Correspondence(P, implementation_paths=impl)
+    module_diffs = [{"call": c.id, "record": canon.module_of(c.id), "v1_annotations": fallback.module_of(c.id), "name": c.name} for c in P.calls if canon.module_of(c.id) != fallback.module_of(c.id)]
+    name_diffs = [{"call": c.id, "record": str(canon.name(c.id)), "v1_annotations": str(fallback.name(c.id)), "name": c.name} for c in P.calls if canon.name(c.id) != fallback.name(c.id)]
+    Qa, Qb = Q_module_body_v1(P, canon), Q_module_body_v1(P, fallback)
+    units_a = {u.id: u.calls for u in Qa(P)}
+    units_b = {u.id: u.calls for u in Qb(P)}
+    sa, sb = set(boundary_values(P, Qa)), set(boundary_values(P, Qb))
+    out.update(applicable=True, module_paths={"record": len(canon.modules), "v1_annotations": len(fallback.modules)}, implementation_prefix={"record": canon.prefix, "v1_annotations": fallback.prefix},
+               module_diffs_n=len(module_diffs), module_diffs=module_diffs[:50], name_diffs_n=len(name_diffs), name_diffs=name_diffs[:50],
+               partition_equal=(units_a == units_b), units={"record": len(units_a), "v1_annotations": len(units_b)},
+               boundary_values={"record": len(sa), "v1_annotations": len(sb), "equal": sa == sb, "only_record": len(sa - sb), "only_v1_annotations": len(sb - sa)})
+    if manifest:
+        try:
+            art_p = os.path.join(program_dir, "artifact.json")
+            art = _load_json(art_p) if os.path.exists(art_p) else None
+            ma = request_manifest(P, canon, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir).manifest
+            mb = request_manifest(P, fallback, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir).manifest
+            out["manifest"] = {"record": {"digest": ma["manifest_digest"], "identities": ma["populations"]["identities"], "complete": ma["complete"], "correspondence": ma["correspondence"]},
+                               "v1_annotations": {"digest": mb["manifest_digest"], "identities": mb["populations"]["identities"], "complete": mb["complete"], "correspondence": mb["correspondence"]},
+                               "digest_equal": ma["manifest_digest"] == mb["manifest_digest"], "wrapper_prefix": [ma["wrapper_prefix"], mb["wrapper_prefix"]]}
+        except Exception as e:  # noqa: BLE001  -- a step wrapper is not a request Program; the partition comparison above still stands
+            out["manifest"] = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
+    out["identical"] = not module_diffs and not name_diffs and out["partition_equal"] and out["boundary_values"]["equal"] and (out.get("manifest", {}).get("digest_equal", True) is True)
+    out["seconds"] = round(time.time() - t0, 1)
+    if log:
+        log(f"  {os.path.basename(program_dir)} ({res.get('wrapper')}): {len(P.calls)} calls, module diffs {len(module_diffs)}, name diffs {len(name_diffs)}, partition_equal {out['partition_equal']}, "
+            f"boundary equal {out['boundary_values']['equal']}, manifest {out.get('manifest', {}).get('digest_equal', out.get('manifest'))} in {out['seconds']}s")
+    return out
+
+
 def _write(man: dict[str, Any], out: str) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w") as f:
@@ -126,8 +173,22 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--v2", required=True)
     c.add_argument("--ignore-program-digest", action="store_true")
     c.add_argument("--out", default=None)
+    k = sub.add_parser("check-correspondence", help="Q_module_body_v1 under the runtime-correspondence/v1 record vs under the v1-annotation fallback on one Build dir")
+    k.add_argument("--program", required=True)
+    k.add_argument("--workload", default=None)
+    k.add_argument("--request-id", default=None)
+    k.add_argument("--no-manifest", action="store_true")
+    k.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    if a.cmd == "check-correspondence":
+        wl = _load_json(a.workload) if a.workload else None
+        r = check_correspondence(a.program, workload=wl, request_id=a.request_id, manifest=not a.no_manifest, log=log)
+        if a.out:
+            _write(r, a.out)
+        print(json.dumps({kk: r.get(kk) for kk in ("wrapper", "calls", "source", "applicable", "module_diffs_n", "name_diffs_n", "partition_equal", "boundary_values", "identical", "correspondence_digest")}
+                         | {"manifest_digest_equal": (r.get("manifest") or {}).get("digest_equal"), "manifest_digests": [(r.get("manifest") or {}).get(s, {}).get("digest") for s in ("record", "v1_annotations")]}))
+        return 0 if (r.get("identical") or not r.get("applicable")) else 1
     if a.cmd == "build":
         wl = _load_json(a.workload) if a.workload else None
         man = build(a.program, workload=wl, request_id=a.request_id, rank=a.rank, ranks=a.ranks, profile=a.profile, return_slots=not a.no_return_slots, log=log)
