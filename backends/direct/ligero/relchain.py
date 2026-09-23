@@ -174,6 +174,38 @@ class RelationChainRunner:
         return verify(self.p, self.sys, self.tb, self.cfg(lay.l), None, a, b, None, proof, self.device, chain=(lay, ypub),
                       coins=coins, rel=self.hooks)
 
+    def batch_bound(self, cfgs: list[Config], n_proofs_claimed: list[int], target_bits: float = 128.0,
+                    names: list[str] | None = None) -> dict:
+        """The batch accounting gate (PROTOCOL.md 8c, "Batch verification"; lane b-batch-bound, D10) for this relation's
+        sub-batch proofs that each verified: the verifier's OWN bound of every proof from its configuration (one commitment
+        each), union-bounded over the ``len(cfgs)`` presented, against ``target_bits``; every proof's ``n_proofs`` (the count
+        its ``t`` was sized for) against that number.  The same rule and reason strings as ``vu.ChainRunner.batch_bound``
+        and ``ligero-verify batch``: the union bound is enforced for every relation, not only Ampere BF16."""
+        per = [soundness(c, self.tb.L, self.tb.Q, 1)["per_proof_total_log2"] for c in cfgs]
+        return protocol_mod.batch_bound(per, n_proofs_claimed, target_bits, names)
+
+    def verify_batch(self, items: list[tuple], target_bits: float = 128.0, n_proofs_claimed: list[int] | None = None) -> dict:
+        """The Python batch verifier on in-memory proofs of this relation: ``items`` = ``(proof, pubs, lay[, coins])`` per
+        sub-batch presented together, each verified as :meth:`verify_vus` does (own statement, own coins); a rejected
+        sub-batch rejects the batch with ``"<sub_XX>: <reason>"``; then :meth:`batch_bound` with ``n_proofs_claimed``
+        (default: this runner's ``n_proofs`` for every proof)."""
+        names = [f"sub_{i:02d}" for i in range(len(items))]
+        cfgs, verdicts = [], []
+        for name, it in zip(names, items):
+            proof, pubs, lay = it[0], it[1], it[2]
+            coins = it[3] if len(it) > 3 else None
+            ok, why = self.verify_vus(proof, pubs, lay, coins=coins)
+            verdicts.append({"name": name, "accepted": ok, "reason": why})
+            cfgs.append(self.cfg(lay.l))
+        claimed = list(n_proofs_claimed) if n_proofs_claimed is not None else [self.n_proofs] * len(items)
+        for v in verdicts:
+            if not v["accepted"]:
+                per = [soundness(c, self.tb.L, self.tb.Q, 1)["per_proof_total_log2"] for c in cfgs]
+                return {"accepted": False, "reason": f"{v['name']}: {v['reason']}", "n_subbatches": len(items),
+                        "target_bits": float(target_bits), "batch_log2": protocol_mod.log2_sum(per), "per_proof_log2": per,
+                        "n_proofs_claimed": claimed, "items": verdicts}
+        return {**self.batch_bound(cfgs, claimed, target_bits, names), "items": verdicts}
+
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Gate: honest VUs accepted, a negative battery rejected (on the device)
@@ -330,6 +362,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
                                 "zk": args.zk, "mode": args.mode, "reps": args.reps, "dump_reps": dump_reps,
                                 "instances": instances_digest(rel, total_vus)}
+    target_bits = float(getattr(args, "target_bits", 128.0) or 128.0)   # the VERIFIER's parameter (PROTOCOL.md 8c)
+    batch = None
     runs = []
     if args.device.startswith("cuda"):
         torch.cuda.reset_peak_memory_stats()
@@ -341,12 +375,14 @@ def bench_vu_rel(args, rel: Relation) -> int:
         # Prove every sub-batch of the rep first, then verify (and dump) them: the verifier's host work must not sit
         # between two timed prover sub-batches (vu.bench_vu since f28c13d; the same discipline here).
         proved = []
+        cfgs_seen: list[Config] = []
         for si, (lo, hi) in enumerate(subs):
             V = protocol_mod.Coins.sample() if interactive else None
             proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=l, coins=V)
             for k_, v_ in proof.timings.items():
                 agg[k_] = agg.get(k_, 0.0) + v_
             proved.append((si, lo, hi, V, proof, pubs, lay_i))
+            cfgs_seen.append(R.cfg(lay_i.l))
             if rep == 0:
                 break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
         for si, lo, hi, V, proof, pubs, lay_i in proved:
@@ -369,6 +405,14 @@ def bench_vu_rel(args, rel: Relation) -> int:
                     entry["coins"] = f"rep{rep}/{stem}.coins"
                 dump_manifest["files"].append(entry)
         del proved
+        if rep > 0:
+            # the batch verdict (PROTOCOL.md 8c, "Batch verification"; D10): every sub-batch verified above; now the union
+            # bound of this verifier's own per-proof bounds over the n_proofs presented, and each proof's n_proofs (what
+            # config_for sized t for) against that count.  Arithmetic on n_proofs numbers, inside the verifier time.
+            t0 = time.perf_counter()
+            batch = R.batch_bound(cfgs_seen, [n_proofs] * len(cfgs_seen), target_bits)
+            vsum += time.perf_counter() - t0
+            assert batch["accepted"], batch["reason"]
         wall = time.perf_counter() - t_pass
         if rep == 0:
             print("warm-up (one sub-batch, with the prover's self-check):", {k_: round(v_, 3) for k_, v_ in agg.items()})
@@ -381,12 +425,15 @@ def bench_vu_rel(args, rel: Relation) -> int:
     if dump_dir is not None:
         (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
         print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)
-        dumps = _verify_dumps(dump_dir, dump_manifest, R, args.device)
+        dumps = _verify_dumps(dump_dir, dump_manifest, R, args.device, target_bits)
     med = {k_: statistics.median(r[0][k_] for r in runs) for k_ in keys}
     vmed = statistics.median(r[1] for r in runs)
     peak_dev = torch.cuda.max_memory_allocated() if args.device.startswith("cuda") else 0
     nbytes = {k_: v_ * n_proofs for k_, v_ in proof.n_bytes().items()}
     snd = soundness(cfg, R.tb.L, R.tb.Q, n_proofs)
+    # security.achieved_log2 is the BATCH bound -log2 sum_i 2^b_i as the verifier's batch_bound computed it (vu.bench_vu since
+    # lane b-batch-bound); the prover-side soundness() of the same n_proofs must agree with it to the last bit.
+    assert batch is not None and abs(batch["batch_log2"] - snd["total_log2"]) < 1e-6, (batch, snd["total_log2"])
     total = med["total"] + med["hints_host"]
     per_vu = total / total_vus
     hw = contract.probe_hardware()
@@ -412,7 +459,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
                   "zk": cfg.zk, "t_pad": cfg.t_pad, "mode": cfg.mode, "bound_model": snd["bound_model"],
                   "hash_assumption": snd["hash_assumption"], "zk_statement": snd["zk_statement"],
                   "fiat_shamir_queries_log2": snd["fiat_shamir_queries_log2"],
-                  "opened_columns": cfg.t, "achieved_log2": snd["total_log2"], "terms_log2": snd["terms_log2"],
+                  "opened_columns": cfg.t, "achieved_log2": batch["batch_log2"], "achieved_bits": -batch["batch_log2"],
+                  "verifier_target_bits": target_bits, "terms_log2": snd["terms_log2"],
                   "per_proof_target_log2": snd["per_proof_target_log2"], "per_proof_total_log2": snd["per_proof_total_log2"],
                   "union_over": n_proofs, "hash_placeholder": True},
         hardware=hw, software=sw,
@@ -476,10 +524,11 @@ def bench_vu_rel(args, rel: Relation) -> int:
     checker = (f"backends.direct.ligero.relchain bench_vu_rel[{rel.name}] (verifier accepted every rep; prover self-check on the "
                "warm-up sub-batch")
     status = "passed"
-    evidence = {"soundness": snd, "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]} for r in runs],
+    evidence = {"soundness": snd, "batch": batch,
+                "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]} for r in runs],
                 "verify_wall": "the live in-process Python verifier, median over the reps of the sum over the sub-batches (shares code "
-                               "with the prover); not a file verifier's process wall"}
-    detail = f"{args.reps} reps, {total_vus} VUs as {n_proofs} proofs at l={l}"
+                               "with the prover), batch verdict included; not a file verifier's process wall"}
+    detail = f"{args.reps} reps, {total_vus} VUs as {n_proofs} proofs at l={l}; batch {batch['reason']}"
     if dumps is not None:
         # the same code as the prover (the Python file verifier, cold from the dumped bytes): a self-check of the dump
         # round trip, NOT an independent verification -- that is the `verify` lane's label, never this producer's
@@ -488,7 +537,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
         detail += (f"; dumps: {dumps['accepted']}/{dumps['total']} accepted cold from bytes ({dumps['statement_format']}) by the Python file "
                    f"verifier in {dumps['wall']:.2f}s wall on {args.device}, in-process (a self-check: it shares code with the prover; "
                    "an independent verifier has to judge the same bytes)")
-        if dumps["accepted"] != dumps["total"]:
+        detail += f"; dumped batch verdict per rep: {[b['reason'] for b in dumps['batch'].values()]}"
+        if dumps["accepted"] != dumps["total"] or not dumps["batch_accepted"]:
             status = "failed"
     checker += ")"
     result = {"schema": contract.RESULT_SCHEMA,
@@ -509,22 +559,36 @@ def bench_vu_rel(args, rel: Relation) -> int:
     return 0 if status == "passed" else 1
 
 
-def _verify_dumps(dump_dir: Path, manifest: dict, R: RelationChainRunner, device: str) -> dict:
+def _verify_dumps(dump_dir: Path, manifest: dict, R: RelationChainRunner, device: str, target_bits: float = 128.0) -> dict:
     """``serialize.verify_files`` on every dumped (statement, proof[, coins]) of ``manifest`` with the prover's own runner:
-    the files parse and verify cold from bytes (interactive mode: against the coins in the transcript -- a self-check, D7).
-    The verdicts go to ``<dump_dir>/verify_python.json``; returns the summary that enters ``validation.evidence.dumps``."""
-    from .serialize import verify_files
+    the files parse and verify cold from bytes (interactive mode: against the coins in the transcript -- a self-check, D7);
+    then, per dumped rep, the batch verdict (PROTOCOL.md 8c, D10) on the STATEMENTS' configurations and ``n_proofs`` --
+    what ``serialize.verify_batch_dir`` / ``ligero-verify batch`` recompute on the same tree.  The verdicts go to
+    ``<dump_dir>/verify_python.json``; returns the summary that enters ``validation.evidence.dumps``."""
+    from .serialize import read_statement, verify_files
     items, t0 = [], time.perf_counter()
+    per_rep: dict[int, list] = {}
     for e in manifest["files"]:
         ok, why, secs = verify_files(dump_dir / e["stmt"], dump_dir / e["proof"], device, runner=R)
         items.append({"rep": e["rep"], "sub": e["sub"], "proof": e["proof"], "accepted": ok, "reason": why, "seconds": secs})
         if not ok:
             print(f"!! dumped proof {e['proof']} REJECTED cold from bytes: {why}", flush=True)
+        per_rep.setdefault(e["rep"], []).append(read_statement((dump_dir / e["stmt"]).read_bytes()))
+    batches = {}
+    for rep, sts in sorted(per_rep.items()):
+        b = R.batch_bound([st.config() for st in sts], [st.n_proofs for st in sts], target_bits, [f"sub_{st_i:02d}" for st_i in range(len(sts))])
+        batches[str(rep)] = b
+        if not b["accepted"]:
+            print(f"!! dumped rep {rep}: batch verdict REJECTED: {b['reason']}", flush=True)
     n_ok = sum(1 for it in items if it["accepted"])
+    batch_ok = all(b["accepted"] for b in batches.values())
     summary = {"verifier": "python (backends.direct.ligero.serialize.verify_files; shares code with the prover: a self-check)",
-               "independent": False, "statement_format": manifest["format"]["statement"], "accepted": n_ok, "total": len(items),
+               "independent": False, "statement_format": manifest["format"]["statement"],
+               "accepted": n_ok, "total": len(items),
+               "batch": batches, "batch_accepted": batch_ok,
                "seconds": sum(it["seconds"] for it in items), "wall": time.perf_counter() - t0,
                "coins": "the transcript's own coins replayed (file verifier)" if R.interactive else "n/a (Fiat-Shamir)"}
     (dump_dir / "verify_python.json").write_text(json.dumps({**summary, "items": items}, indent=1))
-    print(f"dumps: {n_ok}/{len(items)} accepted cold from bytes by the Python file verifier in {summary['wall']:.2f}s", flush=True)
+    print(f"dumps: {n_ok}/{len(items)} accepted cold from bytes by the Python file verifier in {summary['wall']:.2f}s; "
+          f"batch verdict per rep: {[b['reason'] for b in batches.values()]}", flush=True)
     return summary

@@ -412,11 +412,24 @@ def read_proof(data: bytes):
 # The Python verifier on files (the cross-check)
 # ---------------------------------------------------------------------------------------------------------------------
 
+def read_coins(raw: bytes):
+    """A coins file as ``ligero-verify --coins`` reads it: the verifier's own ``r1 || s1 || r2 || s2``, 128 raw bytes or
+    256 hex digits (+ newline)."""
+    from .protocol import Coins
+    if len(raw) in (256, 257):
+        raw = bytes.fromhex(raw.decode().strip())
+    if len(raw) != 128:
+        raise ValueError(f"coins must hold r1 || s1 || r2 || s2 (128 bytes, raw or hex); got {len(raw)} bytes")
+    return Coins(raw[0:32], raw[32:64], raw[64:96], raw[96:128])
+
+
 def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=None,
-                 relation: str | None = None) -> tuple[bool, str, float]:
+                 relation: str | None = None, own_coins=None) -> tuple[bool, str, float]:
     """Run ``protocol.verify`` on the two files with the statement's configuration; returns (ok, reason, seconds).
     ``relation``: which relation's system to check against (a v4 statement names its own; a v2 / v3 statement is the
-    Ampere BF16 relation unless told otherwise -- the system id in the statement digest rejects a mismatch either way)."""
+    Ampere BF16 relation unless told otherwise -- the system id in the statement digest rejects a mismatch either way).
+    ``own_coins`` (interactive mode): the verifier's OWN step-0 coins, as ``ligero-verify --coins``; without them the
+    transcript's openings are replayed (below)."""
     from . import protocol as pm
     try:
         st = read_statement(Path(stmt_path).read_bytes())
@@ -436,7 +449,7 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
     # Interactive mode: ``verify`` demands the verifier's OWN step-0 coins.  A verifier reading a file has none, so the
     # only thing it can do is REPLAY the transcript's openings as its coins (the "coins are not this verifier's coins"
     # check is then vacuous; what remains is c_i = H(r_i || s_i) and the coin-only challenge derivation).
-    coins = pf.coins if (st.interactive and pf.coins is not None) else None
+    coins = own_coins if (st.interactive and own_coins is not None) else pf.coins if (st.interactive and pf.coins is not None) else None
     if st.interactive and coins is None:
         return False, "interactive transcript carries no coins", 0.0
     t0 = time.perf_counter()
@@ -458,6 +471,47 @@ def _hooks_of(R):
     """The runner's ``protocol.RelationHooks`` (``BF16_HOOKS`` for ``vu.ChainRunner``, which carries none)."""
     from .protocol import BF16_HOOKS
     return getattr(R, "hooks", BF16_HOOKS)
+
+
+def verify_batch_dir(dir: Path, device: str = "cpu", target_bits: float = 128.0) -> dict:
+    """The Python batch verifier on files (PROTOCOL.md 8c, "Batch verification"; the cross-check of ``ligero-verify
+    batch``): every ``DIR/*.proof`` with its ``DIR/*.stmt`` (and ``DIR/*.coins`` when present: that proof's own
+    step-0 coins) through ``protocol.verify`` -- own statement, own proof, own checks; then ``protocol.batch_bound``
+    on THIS verifier's recomputation of every proof's bound (``soundness(statement.config())``) and every statement's
+    ``n_proofs`` against the number of sub-batches presented, at ``target_bits``.  The first rejected sub-batch
+    rejects the batch with ``"<name>: <reason>"`` (the accounting is reported anyway); the reason strings and their
+    precedence are those of the Rust verifier."""
+    from . import protocol as pm
+    d = Path(dir)
+    proofs = sorted(p for p in d.glob("*.proof") if not p.name.startswith("._"))
+    if not proofs:
+        raise FileNotFoundError(f"no *.proof in {d}")
+    t_all = time.perf_counter()
+    R = None
+    items: list[dict] = []
+    for p in proofs:
+        sp = p.with_suffix(".stmt")
+        st = read_statement(sp.read_bytes())
+        if R is None:
+            R = _runner(device, st)
+        cp = p.with_suffix(".coins")
+        own = read_coins(cp.read_bytes()) if cp.is_file() else None
+        ok, why, secs = verify_files(sp, p, device, runner=R, own_coins=own)
+        b = pm.soundness(st.config(), R.tb.L, R.tb.Q, 1)["per_proof_total_log2"]
+        items.append({"name": p.name, "accepted": ok, "reason": why, "seconds": secs, "own_coins": own is not None,
+                      "per_proof_log2": b, "n_proofs": st.n_proofs})
+    per = [it["per_proof_log2"] for it in items]
+    claimed = [it["n_proofs"] for it in items]
+    names = [it["name"] for it in items]
+    rejected = [it for it in items if not it["accepted"]]
+    if rejected:
+        out = {"accepted": False, "reason": f"{rejected[0]['name']}: {rejected[0]['reason']}", "n_subbatches": len(items),
+               "target_bits": float(target_bits), "batch_log2": pm.log2_sum(per), "per_proof_log2": per, "n_proofs_claimed": claimed}
+    else:
+        out = pm.batch_bound(per, claimed, target_bits, names)
+    out["batch_bits"] = -out["batch_log2"]
+    return {**out, "n_accepted": len(items) - len(rejected), "n_rejected": len(rejected), "seconds": time.perf_counter() - t_all,
+            "verifier": "python (backends.direct.ligero.protocol.verify + batch_bound)", "items": items}
 
 
 def _runner(device: str, st: Statement | None = None):
@@ -961,6 +1015,21 @@ def cmd_verify(args) -> int:
     return 0 if ok else 1
 
 
+def cmd_verify_batch(args) -> int:
+    res = verify_batch_dir(Path(args.dir), args.device, args.target_bits)
+    for it in res["items"]:
+        print(f"{it['name']}: {'ACCEPT' if it['accepted'] else 'reject'} ({it['reason']}) {it['seconds']:.3f}s "
+              f"per-proof 2^{it['per_proof_log2']:.2f} n_proofs={it['n_proofs']}", flush=True)
+    print(f"{res['n_subbatches']} proofs: {res['n_accepted']} accepted, {res['n_rejected']} rejected; batch "
+          f"{'ACCEPT' if res['accepted'] else 'reject'} ({res['reason']}); batch bits {res['batch_bits']:.6f} at target {res['target_bits']}",
+          flush=True)
+    if args.json:
+        Path(args.json).write_text(json.dumps(res, indent=1))
+    else:
+        print(json.dumps(res))
+    return 0 if res["accepted"] else 1
+
+
 def cmd_dump_system(args) -> int:
     from verity_numerical.checker.params import REAL
 
@@ -1013,12 +1082,18 @@ def main(argv=None) -> int:
     s.add_argument("--device", default="cpu")
     s.add_argument("--json", default=None)
     s.add_argument("--relation", default=None, help="the relations.py name to check against (v2 / v3 statements: bf16 unless given; v4 statements name their own)")
+    s = sub.add_parser("verify-batch", help="the Python batch verifier on DIR/*.{stmt,proof[,coins]} (PROTOCOL.md 8c); exit 1 on reject")
+    s.add_argument("--dir", required=True)
+    s.add_argument("--device", default="cpu")
+    s.add_argument("--target-bits", type=float, default=128.0, help="the batch target t: reject unless sum_i 2^-b_i <= 2^-t")
+    s.add_argument("--json", default=None)
     s = sub.add_parser("dump-system")
     s.add_argument("--out", required=True)
     args = ap.parse_args(argv)
     return {"gen-set": gen_set, "gen-negatives": gen_negatives, "gen-small": gen_small, "gen-mutations": gen_mutations,
             "gen-witness-mutations": gen_witness_mutations, "gen-forged-interactive": gen_forged_interactive,
-            "gen-auth-negatives": gen_auth_negatives, "verify": cmd_verify, "dump-system": cmd_dump_system}[args.cmd](args)
+            "gen-auth-negatives": gen_auth_negatives, "verify": cmd_verify, "verify-batch": cmd_verify_batch,
+            "dump-system": cmd_dump_system}[args.cmd](args)
 
 
 if __name__ == "__main__":

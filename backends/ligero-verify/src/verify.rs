@@ -5,6 +5,7 @@
 use crate::field::{self as f, add, mul, mul_acc, neg, sub, Ntt, P};
 use crate::format::{Expr, Proof, Statement, System};
 use crate::hash::{blake2b_256, blake3, shake256};
+use crate::relation::{self, Relation};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -20,17 +21,9 @@ pub const CHALLENGE2_TAG_IA: &[u8] = b"ligero-b/c2|v2|";
 /// The campaign's Fiat-Shamir rule (ZK_CONSTRUCTION.md 3.3): eps_FS <= 2^60 x eps_round on every statistical term.
 pub const FS_QUERIES_LOG2: f64 = 60.0;
 
-/// The frozen REAL chain system (`compile_unit(REAL, chain=True)`): the Python `system_id` and this verifier's own
-/// digest of the exported tables.  A system file with other digests is refused unless `--allow-any-system`.
-pub const PINNED_SYS_ID: Option<&str> = Some("44cb05b9e6988219beba2d66582124e67a1893aac39d0b66126ce0b9d4db89cb");
-pub const PINNED_TABLE_DIGEST: Option<&str> = Some("c147cc4cece7d61cd3046828410d18f487dcde82f709044f4b4f97e282a73a95");
-
-// BF16 operand format of the frozen target (Params.REAL): sig 8, exp 8 -> frac 7, bias 127, t_finite 255.
-const OP_FRAC: u32 = 7;
-const OP_EXP_BITS: u32 = 8;
-const OP_BIAS: i64 = 127;
-const OP_T_FINITE: u32 = 255;
-const OP_WORD_BITS: u32 = 16;
+// The pinned constraint systems (one per relation: `sys_id` = the Python `system_id`, plus this verifier's own digest
+// of the exported tables) and everything else a relation fixes outside `system.bin` live in relation.rs.  A system
+// file whose digests are not the statement's relation's pinned pair is refused unless `--allow-any-system`.
 
 #[derive(Default, Debug, Clone)]
 pub struct Timing {
@@ -54,7 +47,10 @@ pub struct Timing {
 #[derive(Clone)]
 pub struct Options {
     pub threads: usize,
-    pub soundness_bits: f64,
+    /// `verify` (one proof on its own): reject unless the proof's parameters give at most `2^-bits` union-bounded over
+    /// its OWN `n_proofs`.  `None` in `batch`: there the gate is `batch_bound` -- the union over the sub-batches actually
+    /// presented, at `--target-bits` (PROTOCOL.md 8c, "Batch verification").
+    pub soundness_bits: Option<f64>,
     pub allow_any_system: bool,
     /// Interactive mode only: the verifier's OWN step-0 randomness `r1 || s1 || r2 || s2` (128 bytes).  Without it a
     /// file verifier can only REPLAY the transcript's openings, and an interactive-mode accept is conditional on those
@@ -112,12 +108,73 @@ pub fn soundness(st: &Statement) -> Result<Soundness, String> {
     Ok(Soundness { per_proof_log2: per, union_log2: per + (st.n_proofs as f64).log2(), terms })
 }
 
+/// The batch verifier's accounting verdict (PROTOCOL.md 8c, "Batch verification").
+pub struct BatchBound {
+    pub accepted: bool,
+    pub reason: String,
+    /// `log2 sum_i 2^b_i` over the sub-batches presented; the batch's bits are its negative.
+    pub batch_log2: f64,
+}
+
+/// `128` for an integral target, else two decimals -- `protocol._bits_str`, so the reason strings match byte for byte.
+fn bits_str(bits: f64) -> String {
+    if bits.fract() == 0.0 {
+        format!("{}", bits as i64)
+    } else {
+        format!("{bits:.2}")
+    }
+}
+
+/// The batch rule on `N = per_proof_log2.len()` sub-batch proofs that each verified on their own (`protocol.batch_bound`,
+/// same reason strings, same precedence): `per_proof_log2[i]` is THIS verifier's bound of proof `i` (`soundness()` from
+/// the proof's own statement, never a prover-supplied number) and `n_proofs_claimed[i]` the count its `t` was sized for.
+/// Accept iff every claimed count equals `N` and `sum_i 2^b_i <= 2^-target_bits`.  Each per-proof bound is a statement
+/// about ONE commitment; the union bound is what makes "the batch is sound to 2^-target" true, and `n_proofs = N` is
+/// what makes a sub-batch's `t` a commitment to this batch rather than a coincidence.
+pub fn batch_bound(per_proof_log2: &[f64], n_proofs_claimed: &[usize], target_bits: f64, names: &[String]) -> BatchBound {
+    let n = per_proof_log2.len();
+    assert!(n > 0 && n_proofs_claimed.len() == n && names.len() == n, "batch_bound: one bound, one n_proofs, one name per sub-batch");
+    let total = log2_sum(per_proof_log2);
+    for (name, &k) in names.iter().zip(n_proofs_claimed) {
+        if k != n {
+            return BatchBound {
+                accepted: false,
+                reason: format!("batch: n_proofs mismatch ({name}: n_proofs = {k}, {n} sub-batches presented)"),
+                batch_log2: total,
+            };
+        }
+    }
+    if total > -target_bits {
+        return BatchBound {
+            accepted: false,
+            reason: format!("batch: union bound 2^{total:.2} over {n} sub-batches exceeds the target 2^-{}", bits_str(target_bits)),
+            batch_log2: total,
+        };
+    }
+    BatchBound {
+        accepted: true,
+        reason: format!("accept: all {n} sub-batches accepted; union bound 2^{total:.2} <= 2^-{}", bits_str(target_bits)),
+        batch_log2: total,
+    }
+}
+
 // ------------------------------------------------------------------------------------------- public statement ----
 
-fn statement_digest(st: &Statement, sys_id: &[u8; 32]) -> Result<Vec<u8>, String> {
+/// The words as `protocol._u_bytes(x, dtype)` writes them: `numpy.astype("<uN").tobytes()`, N = the relation's width
+/// (the statement's width equals it, checked before this is called; a wider word would have been truncated by numpy,
+/// which is exactly why the widths are pinned per relation instead of trusted from the file).
+fn absorb_words(h: &mut Vec<u8>, words: &[u32], width: u8) {
+    for &x in words {
+        h.extend_from_slice(&x.to_le_bytes()[..width as usize]);
+    }
+}
+
+fn statement_digest(st: &Statement, rel: &Relation, sys_id: &[u8; 32]) -> Result<Vec<u8>, String> {
     let k = st.k();
     let mut h = Vec::new();
     h.extend_from_slice(STATEMENT_TAG);
+    // protocol.statement_digest: the relation tag right after the statement tag (b"" for the BF16 relations)
+    h.extend_from_slice(rel.tag);
     // Python: f"|p={P}|hash=blake3|l={l}|n={n}|D={D}|t={t}|target={target!r}" -- repr of a float
     h.extend_from_slice(
         format!("|p={}|hash=blake3|l={}|n={}|D={}|t={}|target={}", P, st.l, st.n, st.d, st.t, py_float_repr(st.target_log2)?)
@@ -128,17 +185,11 @@ fn statement_digest(st: &Statement, sys_id: &[u8; 32]) -> Result<Vec<u8>, String
     h.extend_from_slice(sys_id);
     h.extend_from_slice(format!("|mode=chain|l={}|n_vus={}|steps={}", st.l, st.n_vus, st.steps).as_bytes());
     h.extend_from_slice(b"|a=");
-    for x in &st.a {
-        h.extend_from_slice(&x.to_le_bytes());
-    }
+    absorb_words(&mut h, &st.a, rel.word_bytes);
     h.extend_from_slice(b"|b=");
-    for x in &st.b {
-        h.extend_from_slice(&x.to_le_bytes());
-    }
+    absorb_words(&mut h, &st.b, rel.word_bytes);
     h.extend_from_slice(b"|y16=");
-    for x in &st.y16 {
-        h.extend_from_slice(&x.to_le_bytes());
-    }
+    absorb_words(&mut h, &st.y16, rel.y_bytes);
     // authentication = included: `auth.digest_bytes` (version, schema, VU indices, the three tree references) --
     // the challenges are bound to "the words at these indices under these roots"
     if let Some(ab) = &st.auth {
@@ -158,45 +209,59 @@ fn py_float_repr(x: f64) -> Result<String, String> {
     Ok(s)
 }
 
-/// The pinned decodes of the public operands (`unit.public_vectors`, chain mode): per pin name `a[i].s|m|e` /
-/// `b[i].s|m|e` the (l,) vector mod p; rejects an operand whose exponent field is all ones (off the finite domain).
-fn public_pins(st: &Statement, sys: &System) -> Result<Vec<Vec<u32>>, String> {
-    let l = st.l;
-    let dec = |w: u16| -> Result<(u32, u32, u32), String> {
-        let w = w as u32;
-        let t = (w >> OP_FRAC) & ((1 << OP_EXP_BITS) - 1);
-        if t == OP_T_FINITE {
-            return Err("operand exponent field off the finite range".into());
-        }
-        let fr = w & ((1 << OP_FRAC) - 1);
-        let nz = (t != 0) as u32;
-        let m = fr + nz * (1 << OP_FRAC);
-        let e = t as i64 - nz as i64 - (OP_BIAS - 1);
-        let s = w >> (OP_WORD_BITS - 1);
-        Ok((s, m, (e.rem_euclid(P as i64)) as u32))
+/// The pin name `"<a|b>[<i>].<s|m|e>"` -> (operand array, index, component).
+fn pin_name(name: &str) -> Result<(char, usize, &str), String> {
+    let (arr, rest) = name.split_at(1);
+    let arr = match arr {
+        "a" => 'a',
+        "b" => 'b',
+        _ => return Err(format!("pin {name}: not an operand pin (unit-mode systems are not supported)")),
     };
+    let close = rest.find(']').ok_or_else(|| format!("pin {name}: bad name"))?;
+    if !rest.starts_with('[') {
+        return Err(format!("pin {name}: bad name"));
+    }
+    let i: usize = rest[1..close].parse().map_err(|_| format!("pin {name}: bad index"))?;
+    Ok((arr, i, &rest[close + 1..]))
+}
+
+/// The operands per unit the SYSTEM was compiled for: `1 + max i` over its `a[i]` / `b[i]` pins (16 for the BF16
+/// units, 32 for E4M3).  The statement's K must equal it (`public_vectors*`: `a.shape[1] != k` is a rejection).
+fn system_k(sys: &System) -> Result<usize, String> {
+    let mut k = 0usize;
+    for (name, _) in &sys.pins {
+        let (_, i, _) = pin_name(name)?;
+        k = k.max(i + 1);
+    }
+    if k == 0 {
+        return Err("system has no operand pins".into());
+    }
+    Ok(k)
+}
+
+/// The pinned decodes of the public operands (`unit.public_vectors` / `public_vectors_fp8`, chain mode): per pin name
+/// `a[i].s|m|e` / `b[i].s|m|e` the (l,) vector mod p, decoded per the relation's operand format; rejects a word off
+/// the finite domain and a statement whose K is not the system's.
+fn public_pins(st: &Statement, sys: &System, rel: &Relation) -> Result<Vec<Vec<u32>>, String> {
+    let l = st.l;
+    let k_sys = system_k(sys)?;
+    if st.k_ops != k_sys {
+        return Err(format!("statement has K = {} operands per unit, the system pins {k_sys}", st.k_ops));
+    }
     let mut out = Vec::with_capacity(sys.pins.len());
     for (name, _row) in &sys.pins {
-        // name = "<a|b>[<i>].<s|m|e>"
-        let (arr, rest) = name.split_at(1);
-        let src = match arr {
-            "a" => &st.a,
-            "b" => &st.b,
-            _ => return Err(format!("pin {name}: not an operand pin (unit-mode systems are not supported)")),
-        };
-        let close = rest.find(']').ok_or_else(|| format!("pin {name}: bad name"))?;
-        let i: usize = rest[1..close].parse().map_err(|_| format!("pin {name}: bad index"))?;
+        let (arr, i, comp) = pin_name(name)?;
+        let src = if arr == 'a' { &st.a } else { &st.b };
         if i >= st.k_ops {
             return Err(format!("pin {name}: operand index >= K"));
         }
-        let comp = &rest[close + 1..];
         let mut v = Vec::with_capacity(l);
         for j in 0..l {
-            let (s, m, e) = dec(src[j * st.k_ops + i])?;
+            let (s, m, e) = rel.operand.decode(src[j * st.k_ops + i])?;
             v.push(match comp {
                 ".s" => s,
                 ".m" => m,
-                ".e" => e,
+                ".e" => e.rem_euclid(P as i64) as u32,
                 _ => return Err(format!("pin {name}: bad component")),
             });
         }
@@ -310,31 +375,47 @@ impl Tables {
     }
 }
 
-/// What every verification of a batch shares and none of them changes: the parsed system file with its pinned-digest
-/// verdict (computed once; each verification still rejects with the same reason and in the same place as before), and
+/// What every verification of a batch shares and none of them changes: the parsed system file with its two digests
+/// (computed once; the pinned-digest verdict itself is per statement, since the statement names the relation), and
 /// the domain tables per `(l, n)` -- one instance, built by the first verification that needs it.  Everything else
 /// (statement, proof, challenges, every check) is per verification, so sub-batches stay independent.
 pub struct Shared {
     sys: Result<System, String>,
-    /// The pinned-system rejection reason, when the system file is not the pinned REAL chain system.
-    sys_gate: Option<String>,
+    /// The system file's digests: the Python `sys_id` (trailing 32 bytes) and this verifier's table digest, hex.
+    pub sys_id_hex: String,
+    pub table_digest_hex: String,
+    /// The relation whose pinned pair the system file carries, if any.
+    pub pinned_relation: Option<&'static Relation>,
     tables: Mutex<HashMap<(usize, usize), Arc<Tables>>>,
 }
 
 impl Shared {
-    pub fn new(sys_bytes: &[u8], opt: &Options) -> Shared {
+    pub fn new(sys_bytes: &[u8], _opt: &Options) -> Shared {
         let sys = System::parse(sys_bytes).map_err(|e| format!("system file: {e}"));
-        let mut sys_gate = None;
-        if let (Ok(s), false) = (&sys, opt.allow_any_system) {
-            let sid = crate::hash::hex(&s.sys_id);
-            let td = crate::hash::hex(&System::table_digest(sys_bytes));
-            sys_gate = match (PINNED_SYS_ID, PINNED_TABLE_DIGEST) {
-                (Some(a), Some(b)) if a == sid && b == td => None,
-                (Some(_), Some(_)) => Some("system file is not the pinned REAL chain system".to_string()),
-                _ => Some("no pinned system digest in this build; pass --allow-any-system".to_string()),
-            };
+        let (sys_id_hex, table_digest_hex) = match &sys {
+            Ok(s) => (crate::hash::hex(&s.sys_id), crate::hash::hex(&System::table_digest(sys_bytes))),
+            Err(_) => (String::new(), String::new()),
+        };
+        let pinned_relation = relation::by_digests(&sys_id_hex, &table_digest_hex);
+        Shared { sys, sys_id_hex, table_digest_hex, pinned_relation, tables: Mutex::new(HashMap::new()) }
+    }
+
+    /// The pinned-system gate for a statement of relation `rel`: `Err` unless the system file carries the relation's
+    /// pinned digests (skipped under `--allow-any-system`, which the verdict then reports as `system_pinned = false`).
+    fn gate(&self, rel: &Relation) -> Result<(), String> {
+        if self.sys_id_hex == rel.sys_id && self.table_digest_hex == rel.table_digest {
+            return Ok(());
         }
-        Shared { sys, sys_gate, tables: Mutex::new(HashMap::new()) }
+        Err(match self.pinned_relation {
+            Some(other) => format!(
+                "system file is the pinned {} system, the statement is a {} statement (sys_id {}..., table digest {}...)",
+                other.name, rel.name, &self.sys_id_hex[..16], &self.table_digest_hex[..16]
+            ),
+            None => format!(
+                "system file is not the pinned {} system (sys_id {}..., table digest {}...; pinned {}... / {}...); pass --allow-any-system to verify against it unpinned",
+                rel.name, &self.sys_id_hex[..16], &self.table_digest_hex[..16], &rel.sys_id[..16], &rel.table_digest[..16]
+            ),
+        })
     }
 
     /// The tables of `(l, n)`, built on first use.  The lock is held while building so a second verification of the
@@ -402,11 +483,16 @@ pub struct StatementInfo {
     pub n_proofs: usize,
     pub n_vus: usize,
     pub steps: usize,
+    pub k_ops: usize,
+    /// The file format (2, 3, 4) and the relation the statement is checked as (the canonical name of relation.rs; a
+    /// v2 / v3 file is `bf16-ampere`).
+    pub format_version: u8,
+    pub relation: String,
     pub digest: Option<String>,
 }
 
 impl StatementInfo {
-    fn of(st: &Statement) -> StatementInfo {
+    fn of(st: &Statement, rel: &Relation) -> StatementInfo {
         StatementInfo {
             l: st.l,
             n: st.n,
@@ -417,6 +503,9 @@ impl StatementInfo {
             n_proofs: st.n_proofs,
             n_vus: st.n_vus,
             steps: st.steps,
+            k_ops: st.k_ops,
+            format_version: st.version,
+            relation: rel.name.to_string(),
             digest: None,
         }
     }
@@ -427,12 +516,15 @@ pub struct Verdict {
     pub reason: String,
     pub timing: Timing,
     pub soundness: Option<Soundness>,
-    /// `None` when the statement file did not parse.
+    /// `None` when the statement file did not parse (or named no relation this build pins).
     pub statement: Option<StatementInfo>,
+    /// The system file was required to carry the relation's pinned digests (false under `--allow-any-system`: the
+    /// verdict then says nothing about WHICH relation was proved).
+    pub system_pinned: bool,
 }
 
 fn reject(reason: &str, timing: Timing, snd: Option<Soundness>, st: Option<StatementInfo>) -> Verdict {
-    Verdict { accepted: false, reason: reason.to_string(), timing, soundness: snd, statement: st }
+    Verdict { accepted: false, reason: reason.to_string(), timing, soundness: snd, statement: st, system_pinned: false }
 }
 
 /// Verify one (system, statement, proof) triple on its own: the system is parsed and the tables built for this one
@@ -444,6 +536,7 @@ pub fn verify(sys_bytes: &[u8], st_bytes: &[u8], pf_bytes: &[u8], opt: &Options)
     let mut v = verify_inner(&shared, st_bytes, pf_bytes, opt);
     v.timing.shared = t_shared + v.timing.shared;
     v.timing.total = t_start.elapsed().as_secs_f64();
+    v.system_pinned = !opt.allow_any_system;
     v
 }
 
@@ -453,6 +546,7 @@ pub fn verify_with(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Opti
     let t_start = Instant::now();
     let mut v = verify_inner(shared, st_bytes, pf_bytes, opt);
     v.timing.total = t_start.elapsed().as_secs_f64();
+    v.system_pinned = !opt.allow_any_system;
     v
 }
 
@@ -471,9 +565,6 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         Ok(s) => s,
         Err(e) => return reject(e, tm, None, None),
     };
-    if let Some(gate) = &shared.sys_gate {
-        return reject(gate, tm, None, None);
-    }
     let chain = match &sys.chain {
         Some(c) => c,
         None => return reject("system has no chain rows (unit-mode systems are not supported)", tm, None, None),
@@ -482,7 +573,24 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         Ok(s) => s,
         Err(e) => return reject(&format!("statement file: {e}"), tm, None, None),
     };
-    let mut info = StatementInfo::of(&st);
+    // ---- the relation: named by the statement (v4) or the Ampere BF16 unit (v2 / v3); its pinned system ----
+    let rel = match relation::for_statement(st.relation.as_deref()) {
+        Ok(r) => r,
+        Err(e) => return reject(&format!("statement file: {e}"), tm, None, None),
+    };
+    let mut info = StatementInfo::of(&st, rel);
+    if (st.word_bytes, st.y_bytes) != (rel.word_bytes, rel.y_bytes) {
+        let r = format!(
+            "statement file: word widths {}/{} bytes are not the {} relation's {}/{}",
+            st.word_bytes, st.y_bytes, rel.name, rel.word_bytes, rel.y_bytes
+        );
+        return reject(&r, tm, None, Some(info));
+    }
+    if !opt.allow_any_system {
+        if let Err(gate) = shared.gate(rel) {
+            return reject(&gate, tm, None, Some(info));
+        }
+    }
     let m = sys.m;
     let pf = match Proof::parse(pf_bytes, &st, m) {
         Ok(p) => p,
@@ -495,12 +603,16 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         Ok(s) => s,
         Err(e) => return reject(&e, tm, None, Some(info)),
     };
-    if snd.union_log2 > -opt.soundness_bits {
-        let r = format!(
-            "parameters give 2^{:.2} over {} sub-batches (per proof 2^{:.2}); requested 2^-{}",
-            snd.union_log2, st.n_proofs, snd.per_proof_log2, opt.soundness_bits
-        );
-        return reject(&r, tm, Some(snd), Some(info));
+    // `verify`: the proof's own accounting, union-bounded over the n_proofs IT claims.  `batch` (soundness_bits = None)
+    // gates on the union over the sub-batches actually presented instead (batch_bound, in main.rs after every verdict).
+    if let Some(bits) = opt.soundness_bits {
+        if snd.union_log2 > -bits {
+            let r = format!(
+                "parameters give 2^{:.2} over {} sub-batches (per proof 2^{:.2}); requested 2^-{}",
+                snd.union_log2, st.n_proofs, snd.per_proof_log2, bits
+            );
+            return reject(&r, tm, Some(snd), Some(info));
+        }
     }
     tm.soundness = lap(&mut clk);
 
@@ -530,11 +642,16 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     }
 
     // ---- statement: public decodes and digest ----
-    let pins = match public_pins(&st, sys) {
+    let pins = match public_pins(&st, sys, rel) {
         Ok(p) => p,
         Err(e) => return reject(&format!("public inputs: {e}"), tm, Some(snd), Some(info)),
     };
-    let stmt = match statement_digest(&st, &sys.sys_id) {
+    // the chain-end public words are in [0, 2^y_bits) (protocol.verify: `y16_pub >= 2 ** rel.y16_bits` rejects)
+    if let Some(j) = st.y16.iter().position(|&y| y >> rel.y_bits != 0) {
+        let r = format!("public inputs: chain-end word {j} = {} is not a {}-bit word", st.y16[j], rel.y_bits);
+        return reject(&r, tm, Some(snd), Some(info));
+    }
+    let stmt = match statement_digest(&st, rel, &sys.sys_id) {
         Ok(d) => d,
         Err(e) => return reject(&e, tm, Some(snd), Some(info)),
     };
@@ -843,7 +960,7 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
                 let a = &mut coef[cf(ri) + j];
                 *a = add(*a, mul(re, *kappa));
             }
-            rhs[dd] = add(rhs[dd], mul(re, sub(st.y16[j] as u32 % P, y16_c)));
+            rhs[dd] = add(rhs[dd], mul(re, sub(st.y16[j] % P, y16_c)));
         }
     }
     // sum over H: l * sum_{l | j} q_j = r^T b
@@ -896,7 +1013,9 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
             Some(m) => m,
             None => return reject("auth: transcript carries no multiproofs", tm, Some(snd), Some(info)),
         };
-        if let Err(e) = crate::auth::check(ab, mps, &st.a, &st.b, &st.y16, st.n_vus, st.steps, st.k_ops, opt.threads) {
+        // the leaf schema is u16: the parser admits an authentication block with 2-byte words only
+        let (a16, b16, y16) = (Statement::words_u16(&st.a), Statement::words_u16(&st.b), Statement::words_u16(&st.y16));
+        if let Err(e) = crate::auth::check(ab, mps, &a16, &b16, &y16, st.n_vus, st.steps, st.k_ops, opt.threads) {
             tm.auth += lap(&mut clk);
             return reject(&e, tm, Some(snd), Some(info));
         }
@@ -904,12 +1023,19 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         auth_note = format!(" (authentication: {} VUs, {} + {} + {} leaves under the a/b/y roots)", ab.vu_index.len(),
                             st.n_vus * st.steps * st.k_ops, st.n_vus * st.steps * st.k_ops, st.n_vus);
     }
-    let reason = if !st.interactive {
-        format!("accept{auth_note}")
-    } else if opt.own_coins.is_some() {
-        format!("accept (interactive: coins are this verifier's step-0 coins){auth_note}")
+    // an accept under --allow-any-system says the proof is valid for the system FILE, not that the file is the
+    // relation's pinned system: say so in the reason as well as in `system_pinned`
+    let pin_note = if opt.allow_any_system {
+        format!(" [system NOT pinned: --allow-any-system; sys_id {}...]", &shared.sys_id_hex[..16])
     } else {
-        format!("accept (interactive: coins replayed from the transcript; sound only if they were the verifier's step-0 coins){auth_note}")
+        String::new()
     };
-    Verdict { accepted: true, reason, timing: tm, soundness: Some(snd), statement: Some(info) }
+    let reason = if !st.interactive {
+        format!("accept{auth_note}{pin_note}")
+    } else if opt.own_coins.is_some() {
+        format!("accept (interactive: coins are this verifier's step-0 coins){auth_note}{pin_note}")
+    } else {
+        format!("accept (interactive: coins replayed from the transcript; sound only if they were the verifier's step-0 coins){auth_note}{pin_note}")
+    };
+    Verdict { accepted: true, reason, timing: tm, soundness: Some(snd), statement: Some(info), system_pinned: !opt.allow_any_system }
 }
