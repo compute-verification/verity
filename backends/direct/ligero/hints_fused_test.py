@@ -6,7 +6,8 @@
   - in-domain random units in unit mode (``pubsel.relation_test._cases``: zeros, subnormals, chained states, zero sums);
   - adversarial columns: operand words uniform over the whole word range (NaN, inf, off-domain words included), the
     accumulator uniform over all 2^32 words plus every FP32 class (+-0, subnormals, the extremes, inf, NaN), all-zero and
-    all-maximal operands, exact cancellations, exponent-extreme words (``HINTS_FUSED_N`` columns, default 16384);
+    all-maximal operands, exact cancellations, exponent-extreme words (``HINTS_FUSED_N`` columns, default 16384, for each of
+    ``HINTS_FUSED_SEEDS`` seeds, default 1);
 * the Python-integer reference (``reference_hints``) on an in-domain subset;
 * per-stream safety: two sub-batches' hints generated at once on two streams equal the sequential ones.
 """
@@ -24,6 +25,7 @@ V2 = ["bf16-hopper-v2", "bf16-ampere-v2", "fp8-hopper-v2", "fp8-ada-v2",
 V3 = ["bf16-hopper-v3", "bf16-ampere-v3", "fp8-hopper-v3", "fp8-ada-v3",
       "bf16-hopper-v3x4", "bf16-ampere-v3x4", "fp8-hopper-v3x4", "fp8-ada-v3x4"]
 N_ADV = int(os.environ.get("HINTS_FUSED_N", "16384"))
+SEEDS_ADV = int(os.environ.get("HINTS_FUSED_SEEDS", "1"))
 CACHE = os.environ.get("LIGERO_INSTANCES_CACHE")
 
 FP32_SPECIALS = [0x00000000, 0x80000000, 0x00000001, 0x80000001, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x80800000,
@@ -174,11 +176,14 @@ def test_fused_equals_torch_adversarial(name):
         _drop_graphs()
         sys = rel.compile(rel.params, chain)
         fused, eager, graph, torch = _paths(name, sys)
-        c, a, b = (torch.as_tensor(x).cuda() for x in _adversarial(rel, N_ADV, seed=7 + chain))
-        hf, he = fused(c, a, b), eager(c, a, b)
-        assert torch.equal(hf, he), f"{name} chain={chain} adversarial: fused != eager: {_diff(hf, he, sys)}"
-        hg = graph(c, a, b)
-        assert torch.equal(hf, hg), f"{name} chain={chain} adversarial: fused != graph: {_diff(hf, hg, sys)}"
+        for s in range(SEEDS_ADV):
+            seed = 7 + chain + 2 * s
+            c, a, b = (torch.as_tensor(x).cuda() for x in _adversarial(rel, N_ADV, seed=seed))
+            hf, he = fused(c, a, b), eager(c, a, b)
+            assert torch.equal(hf, he), f"{name} chain={chain} seed={seed} adversarial: fused != eager: {_diff(hf, he, sys)}"
+            hg = graph(c, a, b)
+            assert torch.equal(hf, hg), f"{name} chain={chain} seed={seed} adversarial: fused != graph: {_diff(hf, hg, sys)}"
+            del hf, he, hg
 
 
 @pytest.mark.skipif(not _cuda_ok(), reason="the fused kernel is CUDA (cupy / NVRTC)")
