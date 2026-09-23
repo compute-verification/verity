@@ -24,12 +24,16 @@ Montgomery arithmetic (``R = 2^32``) is the shared kernel's; ``K`` here is ``l``
   gather are bank-conflict-free, with 16-byte vector accesses in the contiguous pass;
 * branch-free ``min``-trick reductions; twiddles from the read-only tables via ``__ldg``; ``__launch_bounds__`` caps the
   registers at 64 (one 1024-thread CTA per SM at ``l = 16384``, two 512-thread CTAs at ``l = 8192``);
-* the natural-order store (position ``4 j + c``) is 4 bytes per lane at a 16-byte stride, i.e. 16 sectors x 8 bytes
-  per warp store: the partial lines are kept in L2 (``evict_last``) until the other cosets complete them.  This store
-  pattern is the remaining gap to the coset-major layout (~0.45 ms of 1.95 ms per 3328 x 16384 rows on the H100).
+* the natural-order store (position ``4 j + c``) would be 4 bytes per lane at a 16-byte stride (16 sectors x 8 bytes
+  per warp store, ~0.45 ms of 1.95 ms per 3328 x 16384 rows on the H100).  ``STAGE`` (sm_80+, default): cosets 0-2 are
+  parked coset-major in a per-CTA staging buffer that stays in L2 (``evict_last``; the grid is exactly the resident
+  CTAs, 25 MB at l = 16384), and the coset-3 pass reads them back and writes each position's four values as one
+  16-byte store (``evict_first``): every sector written once, complete.  1.99 -> 1.77 ms (the coset-major layout runs
+  at 1.58); ``stage=False`` keeps the 4-byte stores with ``evict_last`` partial lines.
 
-``blocks = 4 x SMs`` grid-stride over the rows.  Shared memory is dynamic (``2 l`` words: ``x``, ``cf``).  H100, 3328
-rows x l = 16384: 4.55 ms (shared kernel) -> 1.95 ms plain / 2.19 ms ZK + coefficients (0.44 TB/s of codeword).
+Grid-stride over the rows (``blocks`` = the resident CTAs with ``STAGE``, ``4 x SMs`` otherwise).  Shared memory is
+dynamic (``2 l`` words: ``x``, ``cf``).  H100, 3328 rows x l = 16384: 4.55 ms (shared kernel) -> 1.77 ms plain /
+1.90 ms ZK + coefficients (0.49 TB/s of codeword).
 Tested bit-exact against ``field.encode`` and ``eval_on_coset`` (``encode_simt_test``); the verifier keeps the torch
 encoder on its ``D`` rows.  ``encode(..., stream=)`` launches on that torch stream (hp2-host's pipelining).
 """
@@ -59,6 +63,9 @@ _SRC = r"""
                                   evaluations on H: cf <- l c (no INTT), the high part enters like the mask with x^l = z_c + 1 */
 #define CF_GLOBAL %(cf_global)d /* 1: the coefficient buffer cf lives in a per-CTA global scratch (L2) instead of shared memory --
                                   for parts whose shared memory per block is < 2 l words (l = 16384 on Ada / consumer Blackwell) */
+#define STAGE %(stage)d        /* 1: cosets 0-2 are parked coset-major in a per-CTA L2-resident staging buffer (full sectors,
+                                  evict_last); coset 3 reads them back and writes every position's 4 cosets as one 16-byte
+                                  store (full sectors, evict_first) -- instead of 4-byte stores at a 16-byte stride */
 
 /* [0, p) in, [0, p) out; the wrapped-difference min selects the reduced value (2 instructions, no predicate) */
 __device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return min(s, s - P); }
@@ -172,7 +179,8 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
                  int in_wide,                              /* 1: the evaluation rows are int64 (low words read; no int32 copy) */
                  int coef_stride,                          /* row stride of coef_out in 32-bit words */
                  int coef_wide,                            /* 1: coef_out is int64 (low word = value, high word 0) */
-                 unsigned* __restrict__ cf_scratch)        /* CF_GLOBAL: gridDim.x x K words */
+                 unsigned* __restrict__ cf_scratch,        /* CF_GLOBAL: gridDim.x x K words */
+                 unsigned* __restrict__ stg)               /* STAGE: gridDim.x x 3 K words */
 {
     extern __shared__ unsigned x[];
 #if CF_GLOBAL
@@ -296,10 +304,35 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
             #pragma unroll
             for (int s = 0; s < 16; ++s) r[s] = x[st ^ SWZ(THREADS * s)];
             stages_dit<4, LOGT, LOGT, false>(r, t, tw_fwd);
-            /* natural protocol order: p(g w_n^{4 j + c}) at position 4 j + c.  Each warp store touches 16 sectors
-               with 8 B each; the sector is completed by the other three cosets ~100 us later, so keep the partial
-               lines in L2 (evict_last) instead of writing them back three times (-5%% on the H100). */
-#if __CUDA_ARCH__ >= 800
+            /* natural protocol order: p(g w_n^{4 j + c}) at position 4 j + c. */
+#if STAGE && __CUDA_ARCH__ >= 800
+            /* cosets 0-2: coset-major into this CTA's staging buffer (a warp store = 128 contiguous bytes, kept in
+               L2); coset 3: the same thread reads its own three staged values back (same addresses, program order)
+               and writes the position's four cosets as one 16-byte store -> every sector written once, complete */
+            unsigned* sg = stg + (size_t)blockIdx.x * (3 * K);
+            unsigned long long pol;
+            if (c < 3) {
+                asm volatile("createpolicy.fractional.L2::evict_last.b64 %%0, 1.0;" : "=l"(pol));
+                #pragma unroll
+                for (int s = 0; s < 16; ++s) {
+                    unsigned* a = sg + c * K + t + THREADS * s;
+                    asm volatile("st.global.L2::cache_hint.u32 [%%0], %%1, %%2;" :: "l"(a), "r"(r[s]), "l"(pol) : "memory");
+                }
+            } else {
+                asm volatile("createpolicy.fractional.L2::evict_first.b64 %%0, 1.0;" : "=l"(pol));
+                #pragma unroll 4                 /* 12 loads in flight per group; the full unroll spills (64-register cap) */
+                for (int s = 0; s < 16; ++s) {
+                    const int i = t + THREADS * s;
+                    const unsigned v0 = sg[i], v1 = sg[K + i], v2 = sg[2 * K + i];
+                    unsigned* a = dst + ((size_t)i << 2);
+                    asm volatile("st.global.L2::cache_hint.v4.u32 [%%0], {%%1, %%2, %%3, %%4}, %%5;"
+                                 :: "l"(a), "r"(v0), "r"(v1), "r"(v2), "r"(r[s]), "l"(pol) : "memory");
+                }
+            }
+#elif __CUDA_ARCH__ >= 800
+            /* Each warp store touches 16 sectors with 8 B each; the sector is completed by the other three cosets
+               ~100 us later, so keep the partial lines in L2 (evict_last) instead of writing them back three times
+               (-5%% on the H100). */
             unsigned long long pol;
             asm volatile("createpolicy.fractional.L2::evict_last.b64 %%0, 1.0;" : "=l"(pol));
             #pragma unroll
@@ -390,7 +423,7 @@ class LigeroEncoderSIMT:
     coefs (R, l) int32 | None)`` in the protocol's domain and order."""
 
     def __init__(self, l: int, n: int, t_pad: int = 0, device="cuda", threads: int | None = None,
-                 cf_global: bool | None = None):
+                 cf_global: bool | None = None, stage: bool | None = None):
         import cupy as cp
 
         if n != 4 * l or l & (l - 1) or l < 256 or l > 16384:
@@ -403,7 +436,7 @@ class LigeroEncoderSIMT:
         tabs = tables(l, n, t_pad)
         self._params = {"pinv": _P_INV_MOD_R, "k": l, "logk": l.bit_length() - 1, "threads": threads,
                         "logt": threads.bit_length() - 1, "tp": t_pad, "kinv_mont": tabs["kinv_mont"],
-                        "k_mont": tabs["k_mont"], "coef_in": 0, "cf_global": 0}
+                        "k_mont": tabs["k_mont"], "coef_in": 0, "cf_global": 0, "stage": 0}
         with cp.cuda.Device(self.device.index or 0):
             props = cp.cuda.runtime.getDeviceProperties(self.device.index or 0)
         sms = props["multiProcessorCount"]
@@ -412,7 +445,12 @@ class LigeroEncoderSIMT:
         self.cf_global = bool(cf_global) if cf_global is not None else 4 * (2 * l) > props["sharedMemPerBlockOptin"]
         self._params["cf_global"] = int(self.cf_global)
         self.smem = 4 * (l if self.cf_global else 2 * l)
-        self.blocks = sms * (1 if self.cf_global else 4)
+        # STAGE (sm_80+): the staging buffer must stay L2-resident, so the grid is exactly the resident CTAs (one
+        # 1024-thread CTA per SM, two of <= 512 threads): 3 l words each, 25 MB at l = 16384 on the H100 (50 MB L2)
+        self.stage = (bool(stage) if stage is not None else props["major"] >= 8)
+        self._params["stage"] = int(self.stage)
+        resident = 1 if threads > 512 else 2
+        self.blocks = sms * (resident if self.stage else (1 if self.cf_global else 4))
         self.kernel = self._compile(0)
         self._kernel_coef = None              # compiled on first use (encode_coefs)
         with cp.cuda.Device(self.device.index or 0):
@@ -422,6 +460,7 @@ class LigeroEncoderSIMT:
             self.mask_tw = cp.asarray(tabs["mask"])
             self.mask_tw1 = cp.asarray(tabs["mask1"])
             self.cf_scratch = cp.empty(self.blocks * l if self.cf_global else 1, dtype=cp.uint32)
+            self.stg = cp.empty(self.blocks * 3 * l if self.stage else 1, dtype=cp.uint32)
 
     def _compile(self, coef_in: int):
         k = self.cp.RawKernel(_SRC % {**self._params, "coef_in": coef_in}, "rs_encode_ligero", options=("-std=c++17",))
@@ -486,7 +525,7 @@ class LigeroEncoderSIMT:
         self._launch(self.kernel, R, (np.uint64(rows.data_ptr()), self._u32(out), coef_arg, mask_arg, self.tw_inv,
                                       self.tw_fwd, self.coset, self.mask_tw, np.int32(R),
                                       np.int32(self.l * (2 if in_wide else 1)), np.int32(int(in_wide)),
-                                      np.int32(coef_stride), np.int32(int(wide)), self.cf_scratch), stream)
+                                      np.int32(coef_stride), np.int32(int(wide)), self.cf_scratch, self.stg), stream)
         return out, coefs
 
     def encode_coefs(self, coefs: torch.Tensor, out: torch.Tensor | None = None,
@@ -506,7 +545,7 @@ class LigeroEncoderSIMT:
         self._launch(self._kernel_coef, R, (np.uint64(coefs.data_ptr()), self._u32(out), np.uint64(0), self.tw_fwd,
                                             self.tw_inv, self.tw_fwd, self.coset, self.mask_tw1, np.int32(R),
                                             np.int32(coefs.stride(0) * 2), np.int32(1), np.int32(self.l), np.int32(0),
-                                            self.cf_scratch), stream)
+                                            self.cf_scratch, self.stg), stream)
         return out
 
 

@@ -47,13 +47,16 @@ def _timing(l: int, R: int, reps: int, dev, g) -> dict:
     t_simt_zk = _time(lambda: encz.encode(W, S, out=out, want_coefs=True), reps, dev)
     encg = LigeroEncoderSIMT(l, n, 0, dev, cf_global=True)
     t_simt_g = _time(lambda: encg.encode(W, out=out), reps, dev)
+    encu = LigeroEncoderSIMT(l, n, 0, dev, stage=not enc.stage)
+    t_simt_u = _time(lambda: encu.encode(W, out=out), reps, dev)
     gb = R * n * 4 / 1e9
-    print(f"l={l}: {R} rows -> {n}: torch int64 {t_torch*1e3:.1f} ms | SIMT {t_simt*1e3:.2f} ms ({gb/t_simt:.0f} GB/s of codeword) "
-          f"| SIMT+coefs {t_simt_c*1e3:.2f} | ZK: torch {t_torch_zk*1e3:.1f} ms, SIMT {t_simt_zk*1e3:.2f} ms "
-          f"| cf-in-L2 variant {t_simt_g*1e3:.2f} ms")
-    return {"rows": R, "n": n, "torch_int64_ms": t_torch * 1e3, "simt_ms": t_simt * 1e3,
+    print(f"l={l}: {R} rows -> {n}: torch int64 {t_torch*1e3:.1f} ms | SIMT {t_simt*1e3:.2f} ms ({gb/t_simt:.0f} GB/s of codeword"
+          f", staged store {enc.stage}) | SIMT+coefs {t_simt_c*1e3:.2f} | ZK: torch {t_torch_zk*1e3:.1f} ms, SIMT {t_simt_zk*1e3:.2f} ms "
+          f"| cf-in-L2 variant {t_simt_g*1e3:.2f} ms | staged store {encu.stage}: {t_simt_u*1e3:.2f} ms")
+    return {"rows": R, "n": n, "torch_int64_ms": t_torch * 1e3, "simt_ms": t_simt * 1e3, "simt_stage": enc.stage,
             "simt_with_coefs_ms": t_simt_c * 1e3, "torch_zk_ms": t_torch_zk * 1e3, "simt_zk_ms": t_simt_zk * 1e3,
-            "simt_cf_global_ms": t_simt_g * 1e3, "codeword_GB": gb, "simt_GBps_codeword": gb / t_simt}
+            "simt_cf_global_ms": t_simt_g * 1e3, "simt_other_stage_ms": t_simt_u * 1e3,
+            "codeword_GB": gb, "simt_GBps_codeword": gb / t_simt}
 
 
 def main(argv=None) -> int:
@@ -104,11 +107,16 @@ def main(argv=None) -> int:
         encg = LigeroEncoderSIMT(l, n, ZK_T_PAD, dev, cf_global=True)
         Ug, Cg = encg.encode(rows, mask, want_coefs=True)
         ok8 = torch.equal(Ug, Uz) and torch.equal(Cg, Cz) and torch.equal(encg.encode_coefs(crows), Uc)
+        # the other codeword-store path (staged 16-byte stores vs 4-byte stores at stride 16), forced
+        encu = LigeroEncoderSIMT(l, n, ZK_T_PAD, dev, stage=not encz.stage)
+        Uu, Cu = encu.encode(rows, mask, want_coefs=True)
+        ok9 = torch.equal(Uu, Uz) and torch.equal(Cu, Cz) and torch.equal(encu.encode_coefs(crows), Uc)
         report["exact"][l] = {"plain_codeword": ok1, "plain_coefs": ok2, "zk_codeword": ok3, "zk_coefs": ok4,
-                              "int32_rows": ok5, "coefs_out_int64_view": ok6, "coef_rows": ok7, "cf_global": ok8, "rows": R}
-        ok_all &= ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7 and ok8
+                              "int32_rows": ok5, "coefs_out_int64_view": ok6, "coef_rows": ok7, "cf_global": ok8,
+                              "other_store_path": ok9, "stage": encz.stage, "rows": R}
+        ok_all &= ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7 and ok8 and ok9
         print(f"l={l:6d} n={n:6d}: plain {ok1} coefs {ok2} | zk (mask fold-in) {ok3} coefs {ok4} | int32 in {ok5} "
-              f"int64 coefs view {ok6} | coefficient rows {ok7} | cf in L2 {ok8}")
+              f"int64 coefs view {ok6} | coefficient rows {ok7} | cf in L2 {ok8} | store path staged={not encz.stage} {ok9}")
     # timing at the prover's shape
     for l in (8192, 16384):
         report["timing"][l] = _timing(l, args.rows, args.reps, dev, g)
