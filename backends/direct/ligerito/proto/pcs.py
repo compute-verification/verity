@@ -447,6 +447,42 @@ def _open_recompute(M: torch.Tensor, enc: Encoder, tree, S: list[int], depth: in
     return RoundOpen(rows, _siblings(tree, S, depth))
 
 
+# --------------------------------------------------------------------------------------------- soundness of the committed shape
+
+def _lparams(dims: Dims, t_pad: int = 0):
+    from .. import params as pm
+    return pm.LigeritoParams(tall1=1 << dims.k[0], wide_log2=tuple(dims.kprime), rate_log2=tuple(dims.rates),
+                             queries=tuple(dims.queries), t_pad=t_pad)
+
+
+def soundness_log2(dims: Dims, t_pad: int = 0) -> float:
+    """``params.py``'s union bound (paper (17) per level, pure PCS terms) for THIS committed shape: tall_i = 2^{k_i},
+    n_i = 2^{k_i + rate_i}, and under ZK column padding the rate (2^{k_i} + t_pad) / n_i.  The relation adds its own terms."""
+    return _lparams(dims, t_pad).soundness()["total_log2"]
+
+
+def dims_for(n: int, kprime: list[int], rates: list[int] | int, target_log2: float = -128.0, t_pad: int = 0) -> Dims:
+    """|S_i| for this shape from ``params.allocate_queries`` (min bytes, proximity union at the target), then topped up until
+    the full union meets it.  Derive the queries per committed shape; a parameter set's |S| do not transfer between shapes."""
+    from dataclasses import replace
+    from .. import params as pm
+    rates = [rates] * len(kprime) if isinstance(rates, int) else list(rates)
+    base = Dims(n, list(kprime), [1] * len(kprime), rates)
+    q = list(pm.allocate_queries(replace(_lparams(base, t_pad), target_log2=target_log2)).queries)
+    i = len(q) - 1
+    while soundness_log2(Dims(n, list(kprime), q, rates), t_pad) > target_log2:
+        q[i] += 1
+        i = (i - 1) % len(q)
+    return Dims(n, list(kprime), q, rates)
+
+
+def _check_target(dims: Dims, target_log2: float | None, t_pad: int, exc=ValueError) -> None:
+    if target_log2 is not None:
+        s = soundness_log2(dims, t_pad)
+        if not s <= target_log2:
+            raise exc(f"soundness 2^{s:.2f} of this shape (t_pad {t_pad}) misses the target 2^{target_log2}")
+
+
 COMMIT_FIRST = "commit-first"
 
 
@@ -510,10 +546,13 @@ def _commit_r1(f: torch.Tensor, dims: Dims, tm, stream_mode: bool | None = None)
     return M1, enc1, U1, tree1, root1
 
 
-def commit(f: torch.Tensor, dims: Dims, timer: Timer | None = None, stream: bool | None = None) -> Commitment:
+def commit(f: torch.Tensor, dims: Dims, timer: Timer | None = None, stream: bool | None = None,
+           target_log2: float | None = None, t_pad: int = 0) -> Commitment:
     """Commit-first API, step 1 (no transcript effect): encode + Merkle-commit f ((N,) int32 CUDA tensor, [0, p)).
     ``stream``: None = auto (stream the round-1 codeword iff it would not fit the card), True = never keep the codeword (``open``
-    recomputes the |S_1| opened rows; frees 4 C_1 n_1 bytes while the caller's own rounds run), False = keep it."""
+    recomputes the |S_1| opened rows; frees 4 C_1 n_1 bytes while the caller's own rounds run), False = keep it.
+    ``target_log2``: raise ValueError unless ``soundness_log2(dims, t_pad)`` meets it."""
+    _check_target(dims, target_log2, t_pad)
     if not _device_ok(f):
         raise RuntimeError("pcs.commit needs the CUDA device path (cupy + hash_gpu)")
     M1, enc1, U1, tree1, root1 = _commit_r1(f, dims, timer or _NullTimer(), stream)
@@ -596,13 +635,16 @@ def prove_commit_first(f: torch.Tensor, points: np.ndarray, dims: Dims, coins: C
     return open(com, points, vs, tr, timer)
 
 
-def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None) -> Proof:
+def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None,
+          target_log2: float | None = None, t_pad: int = 0) -> Proof:
     """f: (N,) int32 device tensor (coefficients, [0, p)); z: (n, 6) numpy point; dims: the round structure;
     coins: the Coins protocol instance (default Fiat-Shamir).  Fused order (proto 7bc2fdd): header, z, root_1, v, ...
 
     Device prover (lane ligerito-pcs-fast): the sumcheck tables, every contraction and fold live on the device (integer
     kernels in ``device.py``, no fp64); the host keeps only the transcript and the O(T) batching coefficients.  Same
-    transcript and proof bytes as ``prove_reference`` for the same coins.  Falls back to ``prove_reference`` off-GPU."""
+    transcript and proof bytes as ``prove_reference`` for the same coins.  Falls back to ``prove_reference`` off-GPU.
+    ``target_log2``: raise ValueError unless ``soundness_log2(dims, t_pad)`` meets it."""
+    _check_target(dims, target_log2, t_pad)
     if not _device_ok(f):
         return prove_reference(f, z, dims, timer, coins)
     assert z.shape == (dims.n, D)
@@ -783,10 +825,12 @@ class Reject(Exception):
     pass
 
 
-def verify(proof: Proof, z: np.ndarray, v: np.ndarray | None = None, coins: Coins | None = None) -> tuple[bool, str]:
+def verify(proof: Proof, z: np.ndarray, v: np.ndarray | None = None, coins: Coins | None = None,
+           target_log2: float | None = None, t_pad: int = 0) -> tuple[bool, str]:
     """Returns (accepted, reason).  ``v``: the claimed evaluation (defaults to the proof's); ``coins``: must replay the
-    prover's (default Fiat-Shamir)."""
+    prover's (default Fiat-Shamir); ``target_log2``: reject a proof whose shape (|S_i|, rates, t_pad) misses it."""
     try:
+        _check_target(proof.dims, target_log2, t_pad, Reject)
         tr = coins if coins is not None else FiatShamirCoins()
         vv = proof.v if v is None else np.asarray(v, dtype=np.int64) % P
         if proof.order == COMMIT_FIRST:
@@ -799,10 +843,13 @@ def verify(proof: Proof, z: np.ndarray, v: np.ndarray | None = None, coins: Coin
     return True, "accept"
 
 
-def verify_open(proof: Proof, points: np.ndarray, values: np.ndarray | None, coins: Coins) -> tuple[bool, str]:
+def verify_open(proof: Proof, points: np.ndarray, values: np.ndarray | None, coins: Coins,
+                target_log2: float | None = None, t_pad: int = 0) -> tuple[bool, str]:
     """``open``'s proofs inside a relation: ``coins`` holds root_1 and the relation's transcript so far (as ``open`` saw it);
-    points (m, n, 6) or (n, 6); values (m, 6) (None: the proof's).  lane ligerito-relation's ``pcs_verify`` transcript."""
+    points (m, n, 6) or (n, 6); values (m, 6) (None: the proof's).  lane ligerito-relation's ``pcs_verify`` transcript.
+    ``target_log2``: reject a proof whose shape (|S_i|, rates, t_pad) misses it."""
     try:
+        _check_target(proof.dims, target_log2, t_pad, Reject)
         if proof.order != COMMIT_FIRST:
             raise Reject("not a commit-first proof")
         _verify(proof, np.asarray(points, dtype=np.int64) % P,

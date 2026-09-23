@@ -203,6 +203,9 @@ class LigeritoParams:
     ii_radix_log2: int = 4                  # variables per round in the sparse (i, i') quadratic-form sumcheck
     #: the number of first-level rows the ZK padding needs is |S_1|; the mask cells live in the pad rows (free)
     mask_cells: int = 256
+    #: ZK per-column RS padding (ligerito-zk ``T_PAD``): message coefficients appended to every committed column at every
+    #: level.  Same n_i; the code rate becomes (tall_i + t_pad) / n_i, and the proof carries t_pad ext of ``ybar`` per level.
+    t_pad: int = 0
 
     # --- shape ------------------------------------------------------------------------------------------------------
     @property
@@ -233,7 +236,7 @@ class LigeritoParams:
         return _next_pow2(self.tall(i)) << self.rate_log2[i]
 
     def rate(self, i: int) -> float:
-        return self.tall(i) / self.n(i)
+        return (self.tall(i) + self.t_pad) / self.n(i)
 
     @property
     def final_len(self) -> int:
@@ -248,7 +251,7 @@ class LigeritoParams:
         for i in range(self.L):
             if self.queries[i] < 1 or self.queries[i] > self.n(i):
                 raise ValueError(f"level {i + 1}: |S| = {self.queries[i]} not in [1, n = {self.n(i)}]")
-            if self.n(i) <= self.tall(i):
+            if self.n(i) <= self.tall(i) + self.t_pad:
                 raise ValueError(f"level {i + 1}: rate >= 1")
             if self.n(i) > 2**27 and self.fields is OUR_FIELDS:
                 raise ValueError(f"level {i + 1}: n = 2^{math.log2(self.n(i)):.0f} exceeds BabyBear's 2-adicity 27")
@@ -289,10 +292,11 @@ class LigeritoParams:
             sc += lv_sc
         final = self.final_len * f.ext_bytes
         roots = self.L * f.hash_bytes
+        ybar = self.L * self.t_pad * f.ext_bytes
         rel = self.relation_bytes()
-        total = rows + merkle + ysym + sc + final + roots + rel["bytes"]
+        total = rows + merkle + ysym + sc + final + roots + ybar + rel["bytes"]
         out.update({"rows_bytes": rows, "merkle_bytes": merkle, "y_bytes": ysym, "pcs_sumcheck_bytes": sc, "final_bytes": final,
-                    "roots_bytes": roots, "relation_bytes": rel["bytes"], "relation": rel, "total_bytes": total,
+                    "roots_bytes": roots, "ybar_bytes": ybar, "relation_bytes": rel["bytes"], "relation": rel, "total_bytes": total,
                     "total_kib": total / KiB,
                     "formula": "sum_i (|S_i| wide_i elem_i + E[siblings](n_i, |S_i|) H [+ |S_i| H salt] [+ (|S_i|+1) ext if"
                                " expected symbols are sent] + coeffs_i ext) + tall_L ext + L H + relation messages"})

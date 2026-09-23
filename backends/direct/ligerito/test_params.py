@@ -138,3 +138,21 @@ def test_coins_and_latency_pipelining():
     lat = c["latency"]
     assert lat["wait_s"] == pytest.approx(c["coins"] * 0.030, rel=0.01)
     assert lat["depth_needed"] >= 2                                # a single batch in flight cannot hide 30 ms x coins
+
+
+# --- the shape actually committed: ZK column padding and pow2 (red-team-ligerito 18:50Z F1 / F2) ---------------------
+
+def _pcs_union(tall1, wide, rates, S, t_pad=0):
+    return P.LigeritoParams(tall1=tall1, wide_log2=wide, rate_log2=rates, queries=S, t_pad=t_pad).soundness()["total_log2"]
+
+
+def test_set_b_needs_its_exact_shape():
+    B = dict(tall1=3 << 22, wide=(6, 4, 4, 3, 3), rates=(1, 2, 2, 2, 2))
+    assert _pcs_union(S=(239, 173, 174, 174, 176), **B) == pytest.approx(-128.01, abs=0.02)            # radix-3, no padding
+    assert _pcs_union(S=(239, 173, 174, 174, 176), t_pad=256, **B) == pytest.approx(-119.34, abs=0.05)  # + ZK t_pad: broken
+    assert _pcs_union(S=(240, 173, 174, 176, 194), t_pad=256, **B) <= -128.0                          # red team's fix
+    pow2 = dict(tall1=1 << 24, wide=(6, 4, 4, 3, 3), rates=(1, 2, 2, 2, 2))
+    assert _pcs_union(S=(239, 173, 174, 174, 176), **pow2) == pytest.approx(-99.19, abs=0.05)           # pow2: broken
+    assert _pcs_union(S=(312, 191, 193, 194, 195), **pow2) <= -128.0
+    p = P.LigeritoParams(tall1=3 << 22, wide_log2=B["wide"], rate_log2=B["rates"], queries=(240, 173, 174, 176, 194), t_pad=256)
+    assert p.proof_bytes()["ybar_bytes"] == 5 * 256 * 24
