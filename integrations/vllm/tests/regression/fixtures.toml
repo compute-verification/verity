@@ -4668,6 +4668,15 @@ expected = { identities = 163484, only_new = 432, promoted_member = "model/out",
 # that read manifest.json as an INPUT (coverage, replay_partition) accept it in place of the frozen v1 pin (74448863 B / 5043dff5…)
 pins = { "manifest.json" = { bytes = 74683155, sha256 = "5814ab908a810d3d780851e6e0a38dd8a9478acfe67450534e2d1bc0b30fb249" } }
 
+# labelled decision (Draft 3 §7): F-r19-int-20's second consequence, on the sampled-replay PARTITION (same finding, accepted)
+[[rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "replay_partition"
+since = "r19-int-22"
+since_commit = "492dc51cc0dec3e26a7e8c5a8590343e6477de9b"
+finding = "F-r19-int-20"
+reason = "r19-int-22 names Bf16MulScalarTensor_v1 (F-r19-int-20: hinted rows, an evaluator, dataflow promotion). Over the v1 manifest of record (incomplete, nothing promoted) its 4150 rows stay NOT evaluable -- they are not identities -- but the partition now states why by the composition rule ('interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor') where v1 said 'structure / interior: no identity'. One bucket relabelled, same 4150 rows: by_family, vus 651982, strata_n 5846, the 18 not-evaluable buckets (sum 3748888), strata, sample, lifetime, executed_prefix and phase_anchor are equal to the record. Nothing moved to the evaluable population on this manifest (run r20260923-084413-3dd4, both engines)."
+expected = { population = { vus = 651982, strata_n = 5846, by_family = { Embedding_v1 = 4150, Gemm_v1 = 431600, RoPE_v1 = 215800, TokenSelect_v1 = 432 }, not_evaluable_by_family = { "Bf16MulScalarTensor_v1 (interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor)" = 4150 } } }
+
 # labelled decision (Draft 3 §7): a sanctioned difference from v1, consulted by the named check when its result differs from v1 (test_regression.py, LABELLED DECISIONS)
 [[rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
 check = "coverage"
