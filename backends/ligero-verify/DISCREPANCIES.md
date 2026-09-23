@@ -419,7 +419,7 @@ verifier needs (the code is the reference; PROTOCOL.md still describes the BF16 
  "evidence": ["tests/relations.rs", "fixtures/fp8-ada (sub-batch 0 of art:c5dff3c6..., pinned accept)", "lane note ligero-verify-relations"]}
 ~~~
 
-## D12. `authentication = included-hash` (lane `hash-relation`): the operands leave the statement, Poseidon2 enters the relation
+## D13. `authentication = included-hash` (lane `hash-relation`): the operands leave the statement, Poseidon2 enters the relation
 
 PROTOCOL.md 8d describes the construction; these are the facts a verifier needs that only the code fixes, and where the two
 verifiers' behaviour differs from the `included` mode of D9.
@@ -462,7 +462,7 @@ verifiers' behaviour differs from the `included` mode of D9.
   13 pod dumps (python agreement 13/13, 25/25); the gate is the verdict.
 
 ~~~json
-{"id": "BV-D12", "issue": "included-hash: operands private, digests public; the statement digest binds the block but not the siblings; the bare and hashed relations share a name and are told apart by the pin only; v3 system files with n_links != 3; the Rust chain test scales with the involved rows",
+{"id": "BV-D13", "issue": "included-hash: operands private, digests public; the statement digest binds the block but not the siblings; the bare and hashed relations share a name and are told apart by the pin only; v3 system files with n_links != 3; the Rust chain test scales with the involved rows",
  "document": "PROTOCOL.md 8d (this lane)", "code": "backends/direct/ligero/hashchain.py, hashauth.py, serialize.py (LIGSTM05 / LIGSYS03), chain.py extra_coef, relchain.HashedRelationRunner",
  "verifier": "src/format.rs v5 / v3 parsers; src/relation.rs hashed pins; src/verify.rs hashed digest, pins, n-link chain test; src/auth.rs check_hashed",
  "status": "open", "owner": "hash-relation (materialise cap_out rows; store n_vus y words in the statement; compose bf16-ampere / fp4-nvf4)",
