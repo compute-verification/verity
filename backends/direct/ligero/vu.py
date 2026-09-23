@@ -517,7 +517,7 @@ def bench_vu(args) -> int:
     # ligero-statement/v2 + ligero-proof/v1 files (+ the runner's step-0 coins, 128 raw bytes, interactive mode) for the
     # independent verifier (backends/ligero-verify); written after the verifier timer, outside every measured interval.
     # system.bin + manifest.json once.
-    dump_dir = Path(args.dump_dir) if getattr(args, "dump_dir", None) else None
+    dump_dir = Path(os.path.expandvars(args.dump_dir)) if getattr(args, "dump_dir", None) else None   # $RESEARCH_RUN_DIR/proofs, as the other runners
     dump_reps = getattr(args, "dump_reps", None)
     dump_reps = args.reps if dump_reps is None else min(dump_reps, args.reps)
     dump_manifest = None
@@ -816,7 +816,8 @@ def bench_vu(args) -> int:
         validation["evidence"]["live_verifier"] = lev
         if not lok:
             validation["status"] = "failed"
-    result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or f"b-ligero-vu-{int(time.time())}",
+    result = {"schema": contract.RESULT_SCHEMA,
+              "run_id": args.run_id or os.environ.get("RESEARCH_RUN_ID") or f"b-ligero-vu-{int(time.time())}",   # as relchain.py
               "workload_fingerprint": fp, "validation": validation,
               "measurements": meas, "measurement_files": [], "artifacts": dump_artifacts(dump_dir, args.out)}
     problems = contract.validate(result)
@@ -827,5 +828,5 @@ def bench_vu(args) -> int:
                       "per_proof_log2": snd["per_proof_total_log2"], "batch_bits": -batch["batch_log2"], "target_bits": target_bits,
                       "batch_reason": batch["reason"], "medians": med}, indent=1))
     if args.out:
-        Path(args.out).write_text(json.dumps(result, indent=1, default=str))
+        Path(os.path.expandvars(args.out)).write_text(json.dumps(result, indent=1, default=str))   # $RESEARCH_RUN_DIR/result.json
     return 0
