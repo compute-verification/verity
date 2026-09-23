@@ -432,6 +432,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
     if getattr(args, "verifier", None):
         from .live import BenchLive
         live = BenchLive(args, R, n_proofs, total_vus, rel.name, interactive)
+        if pipeline_depth > 1 and args.device.startswith("cuda"):
+            live.window = pipeline_depth                 # the verifier commits N sub-batches ahead (N openings in flight)
     batch = None
     runs = []
     if args.device.startswith("cuda"):

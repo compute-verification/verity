@@ -129,11 +129,14 @@ def test_live_hook_does_not_change_the_transcript(server):
     assert live.adjust_timings(proof_local, replay) is proof_local.timings   # a local Coins: untouched
 
 
-def test_pipelined_live_matches_sequential_and_is_accepted(server):
+@pytest.mark.parametrize("window", [1, 2])
+def test_pipelined_live_matches_sequential_and_is_accepted(server, window):
     """``--pipeline N --verifier`` (lane live-pipeline): several sub-batches proved at once, their coin exchanges
-    non-blocking (the stage yields a Future the pipeline driver polls; a session network thread runs the wire sequence
-    in sub-batch order).  The verifier accepts every sub-batch (a strict-order wire check), and each pipelined proof is
-    byte-identical to the sequential proof with the same (verifier-chosen) coins.  CPU, small l: runs in CI on the pod."""
+    non-blocking (the stage yields a Future the pipeline driver polls; the session sends each message as soon as 8c allows
+    and a reader thread fulfils the futures).  ``window`` = the HELLO field: 1 is a verifier that commits one sub-batch at
+    a time (the stream degrades to the sequential order), 2 commits two ahead so two openings are in flight.  The verifier
+    accepts every sub-batch (its wire checks: only committed sub-batches, ROOT before TESTS, each once), and each pipelined
+    proof is byte-identical to the sequential proof with the same (verifier-chosen) coins.  CPU, small l: runs in CI."""
     srv, url, out = server
     from .relations import RELATIONS
     from .relchain import RelationChainRunner, instances
@@ -149,7 +152,7 @@ def test_pipelined_live_matches_sequential_and_is_accepted(server):
     batches = [data[lo:hi] for lo, hi in subs]
     hello = {"relation": "fp8-ada", "mode": pm.MODE_INTERACTIVE, "zk": False, "batch": 2 * R.steps, "target": -100.0,
              "target_bits": 96.0, "run_id": "pipelined", "device": "cpu", "n_proofs": n_proofs, "total_vus": 2 * n_proofs}
-    sess = live.Verifier(url, hello, system_bytes(R.sys)).session(n_proofs, 1)
+    sess = live.Verifier(url, hello, system_bytes(R.sys)).session(n_proofs, 1, {"window": window} if window > 1 else None)
     sess.start_pipeline(n_proofs)
     many, wall = R.prove_vus_many(batches, lambda i: sess.coins(i), depth=2, min_l=256)
     assert len(many) == n_proofs
@@ -159,6 +162,17 @@ def test_pipelined_live_matches_sequential_and_is_accepted(server):
     assert verdict["accepted"], verdict["reason"]
     assert verdict["accepted_subbatches"] == n_proofs
     assert not verdict.get("live_rejections")
+    assert len(sess.rtts) == 2 * n_proofs                    # every opening's round trip was timed
+    # the verifier's own timeline: with window 2, COMMIT 1 went out before ROOT 0 came in (two sub-batches in flight);
+    # with window 1, COMMIT 1 only after OPEN2 0 (the sequential order)
+    sj = json.loads((out / verdict["session_id"] / "session.json").read_text())
+    sub = {s["sub"]: s for s in sj["subbatches"]}
+    if window > 1:
+        assert sub[1]["t_commit_sent"] <= sub[0]["t_root_recv"]
+    else:
+        assert sub[1]["t_commit_sent"] >= sub[0]["t_open2_sent"]
+    for i in range(n_proofs):                                # 8c's order per sub-batch, whatever the interleaving
+        assert sub[i]["t_commit_sent"] <= sub[i]["t_root_recv"] <= sub[i]["t_open1_sent"] <= sub[i]["t_tests_recv"] <= sub[i]["t_open2_sent"]
     # byte-identity: re-prove each sub-batch sequentially with the verifier's coins (replayed as a local Coins)
     for si, (coins, proof, _pubs, _lay) in enumerate(many):
         replay = coins.opened()
