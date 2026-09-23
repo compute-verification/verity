@@ -139,15 +139,16 @@ fn batch_over_an_lgto_dump() {
 }
 
 /// ligerito-relation-2 32d3d42's V1 proofs in place, no manifest (statements by stem, one key): the honest proof and its
-/// `--zk` twin accepted in default mode, the five V1 forgeries rejected; both honest proofs share a statement, so the
-/// union bound counts it once.
+/// `--zk` twin accepted in default mode, the five V1 forgeries and 32e9bd5's proof for a non-canonical statement
+/// rejected; both honest proofs share a statement, so the union bound counts it once.
 #[test]
 fn batch_over_the_v1_fixture() {
     let d = fixtures().join("lgto/fp8ada_l256_v1");
     let o = run(&["batch", "--dir", d.to_str().unwrap(), "--target-bits", "128"]);
     let s = stdout(&o);
     assert!(o.status.success(), "{s}");
-    for want in ["\"accepted\":true", "\"n_proofs\":2", "\"n_negatives\":5", "\"n_accepted\":2", "\"problems\":[]", "\"accepted_unpinned_key\":0", "\"sumcheck\":\"LGSC0003\"", "\"zero_blocks\":6", "\"zk\":true"] {
+    assert!(s.contains("{\"name\":\"canon_y_offend.lgto.neg\",\"accepted\":false,\"reason\":\"statement sub-batch 0: claimed word off a chain end (non-canonical)\""), "{s}");
+    for want in ["\"accepted\":true", "\"n_proofs\":2", "\"n_negatives\":6", "\"n_accepted\":2", "\"problems\":[]", "\"accepted_unpinned_key\":0", "\"sumcheck\":\"LGSC0003\"", "\"zero_blocks\":6", "\"zk\":true"] {
         assert!(s.contains(want), "{want} not in {s}");
     }
     // relation-2's manifests (e3ad950) count distinct statements: the two honest proofs share one
