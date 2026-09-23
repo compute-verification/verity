@@ -327,10 +327,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
     monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
     docs = {}
     for impl in ("record", "fast"):
-        if impl == "fast":
-            monkeypatch.setenv(GMF.FLAG, "fast")
-        else:
-            monkeypatch.delenv(GMF.FLAG, raising=False)
+        monkeypatch.setenv(GMF.FLAG, impl)
         for tag, (gp, o) in (("v1", (gp1, o1)), ("v2", (gp2, o2))):
             gpp = tmp_path / f"gp_{tag}.json"; gpp.write_text(json.dumps(gp))
             out = tmp_path / f"gm_{impl}_{tag}.json"
