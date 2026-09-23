@@ -64,7 +64,7 @@ __all__ = ["BETA", "COIN_BYTES", "D", "MASK_COLS_HIGH_LOG2", "MASK_COLS_LOW_LOG2
            "challenge_from", "check_layout", "coin_commit", "coin_schedule", "mask_cells", "omitted", "pad_columns",
            "padding_combination", "queries_for", "rate", "row_check_rhs", "sample_masks", "set_g_coeffs", "uniform_symbols",
            "verify_opening", "zk_statement",
-           "EqSumcheckMask", "RowMaskLayout", "RowMasks", "default_row_mask_layout", "f_index", "fill_mask_rows", "libra_block_claim",
+           "EqSumcheckMask", "RowMaskLayout", "RowMasks", "zk_mode_rows", "default_row_mask_layout", "f_index", "fill_mask_rows", "libra_block_claim",
            "permute_point", "z_to_f"]
 
 
@@ -1058,6 +1058,25 @@ ZK_MODE = ("Ligerito ZK: mask rows in the committed polynomial (round-1 columns 
            "{g} F_p^6 coefficients committed in the G-blocks) each with a post-G coin; malicious-verifier: every verifier "
            "message is a step-0 committed slot (K = {K}), challenges are functions of the coins alone, prover aborts publicly "
            "on a mismatched opening; simulator by rewinding V* after step 0 (CRH only)")
+
+ZK_MODE_ROWS = ("Ligerito ZK (relation layout, f = z with {a} column bits interleaved below the {n_i} row bits): {u} uniform "
+                "mask rows in the free region covering every residue mod 2^{b} (so every fold entry, round contraction, final-"
+                "vector entry and fully-extension eval claim is a functional of >= 6 uniform base cells with F_p-spanning "
+                "tensor weights), 3 committed mask rows under the trivial constraint m1 . m2 = m3 (masks the zero-check's "
+                "Az, Bz, Cz claims), one committed Libra row ({g} F_p^6 coefficients: eq-weighted masks g with a 2 x 2 cross "
+                "block for the bivariate opening round, one per sumcheck over witness tables: {scs}), t_pad = {t_pad} uniform RS "
+                "padding coefficients per committed column with ybar_i in the clear (opened rows uniform for |S_i| <= t_pad); "
+                "malicious-verifier: every verifier message is a step-0 committed slot (K = {K}), challenges are functions of "
+                "the coins alone, prover aborts publicly on a mismatched opening; simulator by rewinding V* after step 0 (CRH only)")
+
+
+def zk_mode_rows(lay: "RowMaskLayout", t_pad: int = T_PAD, K: int | None = None) -> str:
+    """The ``relchain.zk_mode`` text for the real layout."""
+    return ZK_MODE_ROWS.format(a=lay.a, n_i=lay.n_i, u=len(lay.uniform_rows), b=lay.b, g=lay.g_cells // D,
+                               scs=", ".join(f"{sc[0]}({sc[1]} vars, d={sc[2]}{', cross' if len(sc) > 3 and sc[3] else ''})"
+                                             for sc in lay.sumchecks),
+                               t_pad=t_pad, K=K if K is not None else "per coin_schedule")
+
 
 OMITTED_ZK = ("unopened Merkle leaves hidden by Blake3 of a (marginally) uniform row -- random-oracle-flavoured, "
               "salted leaves not implemented; GK rewinding capped in the demonstrated simulator")
