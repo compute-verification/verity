@@ -173,7 +173,7 @@ pub static RELATIONS: [RelSpec; 4] = [
         y_bits: 16,
         quad: 3387,
         lin: 347,
-        pins: &[],
+        pins: BF16_AMPERE_PINS,
     },
 ];
 
@@ -185,6 +185,9 @@ pub const FP8_ADA_PINS: &[(&str, &str)] =
 /// bf16-hopper: key of ligerito-relation-2 32d3d42's gate dump.
 pub const BF16_HOPPER_PINS: &[(&str, &str)] =
     &[("9dcc7cdc1377a00d877440cc01a0dcdb73b3e989d86df8244eccb35a81be0df4", "1726c3be0bd163ebfba38cc8e9fcaed0d74b76f3b592db0748e6be254b946846")];
+/// bf16-ampere: key of ligerito-relation-2 32d3d42's gate dump.
+pub const BF16_AMPERE_PINS: &[(&str, &str)] =
+    &[("44cb05b9e6988219beba2d66582124e67a1893aac39d0b66126ce0b9d4db89cb", "e0059e7009ba368dc1119abdc923dfcf6e06b81d4424e81106fdd01721a30eb6")];
 /// fp8-hopper: key of ligerito-relation-2 32d3d42's gate dump.
 pub const FP8_HOPPER_PINS: &[(&str, &str)] =
     &[("c7cbebe365cb5f773a679bc13b5382fb45714511b1912e4e4ab7fb48accd4bc3", "ea793f49d4c0015d835d886df3bab65949189f20a8f35222e653482dc7d65d60")];
