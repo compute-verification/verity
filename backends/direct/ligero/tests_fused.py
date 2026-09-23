@@ -102,11 +102,16 @@ __device__ __forceinline__ void lincomb_v4_body(const unsigned* __restrict__ C, 
                                                 const int* __restrict__ rows = nullptr)
 {
     extern __shared__ unsigned Cs[];                                   /* [D][chunk], C pre-scaled (see mont_reduce) */
+    int* Rs = reinterpret_cast<int*>(Cs + D * chunk);                  /* [chunk] row indices (rows variant) */
     const int s = blockIdx.y;
     const int j0 = s * chunk, j1 = min(R, j0 + chunk), nj = j1 - j0;
     for (int i = threadIdx.x; i < D * nj; i += blockDim.x) {
         const int d = i / nj, jj = i - d * nj;
         Cs[d * chunk + jj] = C[(size_t)d * R + j0 + jj];
+    }
+    if (rows) {   /* staged once per block: the loop's row address then comes from shared memory, not a dependent
+                     global load per row (measured: the rows variant ran 0.84-0.96 ms vs 0.72 for the gathered one) */
+        for (int i = threadIdx.x; i < nj; i += blockDim.x) Rs[i] = rows[j0 + i];
     }
     __syncthreads();
     const int col0 = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
@@ -119,17 +124,20 @@ __device__ __forceinline__ void lincomb_v4_body(const unsigned* __restrict__ C, 
         for (int v = 0; v < 4; ++v) { lazy[d][v] = 0; red[d][v] = 0; }
     }
     int cnt = 0;
-    #pragma unroll 2
+    #pragma unroll 4
     for (int jj = 0; jj < nj; ++jj) {
         const int j = j0 + jj;
         u64 x[4];
-        load4<T>(X + (size_t)(rows ? rows[j] : j) * cols + col0, x);
+        load4<T>(X + (size_t)(rows ? Rs[jj] : j) * cols + col0, x);
         if (SQ) {
-            /* w = (x^2 - x) 2^-32 mod p, canonical: t = x^2 + p - x < p^2 + p, so the reduction is < 2^30 + p + 1 < 2p */
+            /* w = (x^2 - x) 2^-32 mod p, canonical: t = x^2 + p - x < p^2 + p, so the reduction is < 2^30 + p + 1 < 2p.
+               The (unsigned) truncation is exact (w < p < 2^31) and tells the compiler the high word is zero, so the
+               products below are one 32x32->64 IMAD each instead of a 64x64 multiply (x's provenance is a 64-bit
+               conditional subtract, which it cannot range-analyse; the non-SQ x comes zero-extended from load4). */
             #pragma unroll
             for (int v = 0; v < 4; ++v) {
-                u64 w = mont_reduce(x[v] * x[v] + (u64)P - x[v]);
-                x[v] = (w >= (u64)P) ? w - (u64)P : w;
+                const u64 w = mont_reduce(x[v] * x[v] + (u64)P - x[v]);
+                x[v] = (u64)(unsigned)((w >= (u64)P) ? w - (u64)P : w);
             }
         }
         #pragma unroll
@@ -205,9 +213,9 @@ __device__ __forceinline__ void quad_body(const unsigned* __restrict__ rho, cons
         u64 a = sparse_eval<T>(X, cols, col, pa, ja, ca, ka[q], q);
         u64 b = sparse_eval<T>(X, cols, col, pb, jb, cb, kb[q], q);
         u64 c = sparse_eval<T>(X, cols, col, pc, jc, ccn, kc[q], q);
-        u64 t = (a * b + (u64)P - c) % P;
+        const unsigned t = (unsigned)((a * b + (u64)P - c) % P);      /* < p: 32-bit multiplicand (one IMAD below) */
         #pragma unroll
-        for (int d = 0; d < D; ++d) acc[d] += (u64)rho[(size_t)d * Q + q] * t;
+        for (int d = 0; d < D; ++d) acc[d] += (u64)rho[(size_t)d * Q + q] * (u64)t;
         if (++cnt == 3) {
             cnt = 0;
             #pragma unroll
@@ -322,8 +330,9 @@ class FusedTests:
             args.append(self._cp(rows.to(torch.int32).contiguous()))
         else:
             name = ("boolcomb" if square_minus else "lincomb") + suffix
+        smem = ((D + (1 if rows is not None else 0)) * chunk * 4) if v4 else 0     # C slice (+ the row indices)
         with self._stream():
-            self.k[name]((gx, S), (THREADS,), tuple(args), shared_mem=(D * chunk * 4 if v4 else 0))
+            self.k[name]((gx, S), (THREADS,), tuple(args), shared_mem=smem)
         return self._reduce(partial)
 
     def quad_general(self, rho: torch.Tensor, X: torch.Tensor, csr: dict) -> torch.Tensor:

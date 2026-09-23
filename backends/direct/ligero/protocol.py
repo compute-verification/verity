@@ -1070,6 +1070,12 @@ class _TestsStatic:
         self.hints = torch.empty((len(sys.hints), l), dtype=torch.int64, device=device)
         self.mkey = torch.empty((8,), dtype=torch.int32, device=device)
         self.commit_graph = None   # None: not captured yet; False: eager
+        # the Merkle commit inside the commit graph (MERKLE_GRAPH): static tree buffers + the pinned root it lands in
+        self.merkle = self.root_pin = None
+        if MERKLE_GRAPH and merkle.gpu_available():
+            from . import openings_device
+            self.merkle = openings_device.StaticMerkle(Mrows, n, device)
+            self.root_pin = torch.empty((32,), dtype=torch.uint8, pin_memory=True)
 
 
 def _graph_run(holder, attr: str, body, device) -> None:
@@ -1099,6 +1105,7 @@ def _graph_run(holder, attr: str, body, device) -> None:
 
 
 COMMIT_GRAPH = True    # witness kernel + mask sampler + encoder + mask-row coset NTT as ONE CUDA graph per stream (lane hp2-host)
+MERKLE_GRAPH = True    # ... + the Blake3 Merkle commit and the root's D2H copy in the same graph (21 launches + 1 memcpy node)
 
 
 def _fused_witness(sys: System, device):
@@ -1263,6 +1270,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     st = (_tests_static(cfg, sys, tb, m, Mrows, width, chain is not None, device)
           if TESTS_GRAPH and cuda and enc is not None and not check else None)
     fw = _fused_witness(sys, device) if (st is not None and COMMIT_GRAPH and mutate is None) else None
+    graph_merkle = False
     if fw is not None:
         # the commit graph: witness kernel -> (masks ->) encoder (-> mask-row coset NTT), U / coefs in the static
         # set.  Eager part: the public rows and the hints into the static inputs, the mask key drawn here (same
@@ -1303,7 +1311,12 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
             else:
                 enc.encode(Wg, out=st.U)
                 st.W.copy_(Wg)
+            if graph_merkle:
+                with _cupy_ctx(device):
+                    st.merkle.run(st.U)                               # the tree into the static levels
+                st.root_pin.view(torch.int32).copy_(st.merkle.root, non_blocking=True)   # D2H memcpy node
 
+        graph_merkle = st.merkle is not None and merkle.gpu_available()
         clk.host("commit_prep")
         _graph_run(st, "commit_graph", commit_body, device)
         clk.host("commit_replay")
@@ -1357,12 +1370,16 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     gpu_hash = merkle.gpu_available() and cuda
     if gpu_hash:
         from . import openings_device
-        U32 = U.to(torch.int32).contiguous()                       # elements < p < 2^31
-        clk.lap("transfer")                                        # nothing leaves the device here
-        with _cupy_ctx(device):
-            root_dev, tree = openings_device.commit_device_async(U32)
-        root_buf = _pin(slot, device, "root", 32)[:32]
-        root_buf.view(torch.int32).copy_(root_dev, non_blocking=True)
+        if graph_merkle:                                           # committed inside the commit graph (MERKLE_GRAPH)
+            U32, tree, root_buf = st.U, st.merkle, st.root_pin
+            clk.lap("transfer")
+        else:
+            U32 = U.to(torch.int32).contiguous()                   # elements < p < 2^31
+            clk.lap("transfer")                                    # nothing leaves the device here
+            with _cupy_ctx(device):
+                root_dev, tree = openings_device.commit_device_async(U32)
+            root_buf = _pin(slot, device, "root", 32)[:32]
+            root_buf.view(torch.int32).copy_(root_dev, non_blocking=True)
         hash_name = merkle.GPU_HASH_NAME
         clk.lap("merkle")
         clk.host("launch_to_merkle")

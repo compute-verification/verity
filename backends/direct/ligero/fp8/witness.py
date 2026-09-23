@@ -39,10 +39,52 @@ def _decode_fp32(p: FP8Params, c: torch.Tensor):
 
 
 def hints_fp8(p: FP8Params, sys: System, c, a, b, device="cpu") -> torch.Tensor:
-    """``c`` (l,) FP32 words, ``a``/``b`` (l, 32) E4M3 bytes -> (n_hints, l) int64 in the order of ``sys.hints``."""
+    """``c`` (l,) FP32 words, ``a``/``b`` (l, 32) E4M3 bytes -> (n_hints, l) int64 in the order of ``sys.hints``.
+    On CUDA the ~280 small kernels are captured once per (system, l, k, stream) as a CUDA graph and replayed (as
+    ``hints_torch``; lane hp2-host) -- the same ops on the same values, so the hints are identical."""
     # numpy / list / torch (host or already on ``device``: relchain.marshal keeps the instance arrays device-resident)
     as_i64 = lambda x: (x if isinstance(x, torch.Tensor) else torch.as_tensor(np.asarray(x))).to(dtype=torch.int64, device=device)  # noqa: E731
     c, a, b = as_i64(c), as_i64(a), as_i64(b)
+    if USE_CUDA_GRAPH and str(device).startswith("cuda"):
+        key = (id(sys), c.shape[0], a.shape[1], str(device), torch.cuda.current_stream(device).cuda_stream)
+        g = _GRAPHS.get(key)
+        if g is None:
+            try:
+                g = _Graph(p, sys, c, a, b, device)
+            except Exception:  # noqa: BLE001 -- capture unsupported here: eager
+                g = False
+            _GRAPHS[key] = g
+        if g:
+            return g.run(c, a, b)
+    return _hints_fp8_eager(p, sys, c, a, b, device)
+
+
+class _Graph:
+    def __init__(self, p, sys, c, a, b, device):
+        self.c, self.a, self.b = torch.zeros_like(c), torch.zeros_like(a), torch.zeros_like(b)
+        s = torch.cuda.Stream()
+        s.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(s):
+            for _ in range(2):
+                _hints_fp8_eager(p, sys, self.c, self.a, self.b, device)
+        torch.cuda.current_stream().wait_stream(s)
+        self.graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self.graph):
+            self.out = _hints_fp8_eager(p, sys, self.c, self.a, self.b, device)
+
+    def run(self, c, a, b):
+        self.c.copy_(c)
+        self.a.copy_(a)
+        self.b.copy_(b)
+        self.graph.replay()
+        return self.out.clone()
+
+
+_GRAPHS: dict = {}
+USE_CUDA_GRAPH = True
+
+
+def _hints_fp8_eager(p: FP8Params, sys: System, c, a, b, device) -> torch.Tensor:
     l, k = c.shape[0], a.shape[1]
     H: dict[str, torch.Tensor] = {}
     acc, state = _decode_fp32(p, c)
