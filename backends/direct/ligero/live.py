@@ -85,10 +85,14 @@ _HDR = struct.Struct("<IB")
 _MAX_FRAME = 1 << 31
 _BUF = 8 << 20
 #: ``LIVE_TCP_CC=cubic|bbr|...`` (default ``cubic``; empty = leave the kernel default): the congestion control of the prover's
-#: and the server's sockets. The control channel carries one ~0.3-0.5 MB message per round trip after an idle gap, where the
-#: CC's restart behaviour shows: measured 4090 (EUR-IS-2) -> verifier (EU-RO-1), raw RTT 70 ms, the two openings of a
-#: sub-batch took a median 138.6 ms each under the pods' default bbr and 87.0 ms under cubic (net wait 12.0 s -> 8.0 s over
-#: 49 sub-batches). Ignored where the kernel does not offer the algorithm.
+#: and the server's sockets, set BEFORE connect / listen.  Why it matters (measured 4090 EUR-IS-2 -> verifier EU-RO-1, RTT
+#: 70 ms, `ss -tin` during a session): the protocol's flows are bursty and application-limited (one 0.5 MB test message and
+#: one 3.7 MB proof per sub-batch, then silence), so the congestion window never grows past ~one burst, and with the pods'
+#: default bbr the kernel PACES every socket (bbr sets SK_PACING_NEEDED at connection setup; it stays on even after a
+#: later switch to cubic, whose pacing rate is then 1.2 x cwnd / RTT ~ 100 Mbps for a 0.7 MB window) -- a 0.5 MB message
+#: is then smeared over ~40 ms and each opening cost ~2 RTTs (median 138 ms) instead of one.  A socket that is cubic
+#: from the start is never paced (no fq qdisc in the pods): the opening costs the RTT plus the wire time.
+#: Ignored where the kernel does not offer the algorithm.
 _TCP_CC = os.environ.get("LIVE_TCP_CC", "cubic")
 
 
@@ -101,6 +105,8 @@ class LiveError(RuntimeError):
 # ---------------------------------------------------------------------------------------------------------------------
 
 def _setup_socket(s: socket.socket) -> None:
+    """Socket options; call on a socket BEFORE connect() / listen() so the congestion control (and with it the kernel's
+    pacing decision) is the chosen one from the handshake on -- see ``_TCP_CC``."""
     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     for opt in (socket.SO_SNDBUF, socket.SO_RCVBUF):
         try:
@@ -112,6 +118,23 @@ def _setup_socket(s: socket.socket) -> None:
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_CONGESTION, _TCP_CC.encode())
         except OSError:
             pass
+
+
+def _connect(host: str, port: int, timeout: float) -> socket.socket:
+    """``socket.create_connection`` with the options applied before the handshake (an option set after connect() would
+    leave the connection paced under the pods' default bbr)."""
+    err: Exception | None = None
+    for family, socktype, proto, _canon, addr in socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM):
+        s = socket.socket(family, socktype, proto)
+        try:
+            _setup_socket(s)
+            s.settimeout(timeout)
+            s.connect(addr)
+            return s
+        except OSError as e:
+            err = e
+            s.close()
+    raise err or OSError(f"cannot connect to {host}:{port}")
 
 
 def _recv_exact(s: socket.socket, n: int) -> bytes:
@@ -272,8 +295,7 @@ class ProverSession:
         self.bytes_out = self.bytes_in = 0
         self.messages = 0
         self.t_open = time.perf_counter()
-        self.ctrl = socket.create_connection((host, port), timeout=timeout)
-        _setup_socket(self.ctrl)
+        self.ctrl = _connect(host, port, timeout)
         hj = json.dumps({**hello, "wire": WIRE_VERSION, "channel": "ctrl"}).encode()
         self._send(self.ctrl, K_HELLO, struct.pack("<I", len(hj)) + hj + system)
         kind, payload = self._recv(self.ctrl)
@@ -283,8 +305,7 @@ class ProverSession:
             raise LiveError(f"expected WELCOME, got {_KIND_NAME.get(kind, kind)}")
         self.welcome = _json(payload)
         self.session_id = self.welcome["session_id"]
-        self.data = socket.create_connection((host, port), timeout=timeout)
-        _setup_socket(self.data)
+        self.data = _connect(host, port, timeout)
         dj = json.dumps({"wire": WIRE_VERSION, "channel": "data", "session_id": self.session_id}).encode()
         self._send(self.data, K_HELLO, struct.pack("<I", len(dj)) + dj)
         kind, payload = self._recv(self.data)
@@ -667,6 +688,7 @@ class Server:
     def serve_forever(self) -> None:
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        _setup_socket(srv)                    # accepted sockets inherit the options (the CC from the handshake on)
         srv.bind((self.host, self.port))
         srv.listen(64)
         srv.settimeout(1.0)
@@ -679,7 +701,6 @@ class Server:
                     conn, addr = srv.accept()
                 except socket.timeout:
                     continue
-                _setup_socket(conn)
                 conn.settimeout(900.0)
                 threading.Thread(target=self._accept, args=(conn, addr), daemon=True).start()
         finally:
@@ -753,9 +774,8 @@ def cmd_probe(args) -> int:
     prover before running: net.wait_seconds of a session ~ bytes_out / throughput when the path, not the RTT, bounds it."""
     host, port = parse_url(args.verifier)
     t_conn = time.perf_counter()
-    s = socket.create_connection((host, port), timeout=60)
+    s = _connect(host, port, 60)
     t_connected = time.perf_counter()
-    _setup_socket(s)
     hj = json.dumps({"wire": WIRE_VERSION, "channel": "probe", "note": args.note or socket.gethostname()}).encode()
     send_frame(s, K_HELLO, struct.pack("<I", len(hj)) + hj)
     kind, payload = recv_frame(s)
@@ -765,7 +785,7 @@ def cmd_probe(args) -> int:
         return 2
     out = {"verifier": _json(payload).get("verifier"), "connect_ms": (t_connected - t_conn) * 1e3,
            "rtt_ms": (t_welcome - t_connected) * 1e3, "tcp_cc": _TCP_CC or "kernel default", "flows": []}
-    blob = os.urandom(1 << 20) * max(1, int(args.mb))
+    blob = os.urandom(max(1, int(float(args.mb) * (1 << 20))))
     for i in range(int(args.repeat)):
         t0 = time.perf_counter()
         send_frame(s, K_NOP, blob)
@@ -1303,7 +1323,7 @@ def main(argv=None) -> int:
     r.set_defaults(fn=cmd_record)
     p = sub.add_parser("probe", help="GPU pod: RTT and one-flow throughput of the path to a live verifier (no session, nothing stored)")
     p.add_argument("--verifier", required=True)
-    p.add_argument("--mb", type=int, default=16, help="MB per NOP frame")
+    p.add_argument("--mb", type=float, default=16, help="MB per NOP frame (0.5 mimics a test message, 3.7 a proof)")
     p.add_argument("--repeat", type=int, default=4)
     p.add_argument("--note", default=None, help="shows in the verifier's log line")
     p.set_defaults(fn=cmd_probe)
