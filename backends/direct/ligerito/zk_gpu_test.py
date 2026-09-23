@@ -40,11 +40,14 @@ def test_device_sampler_matches_spec():
     from backends.direct.ligero.mask_sampler import sampler_for
     s = sampler_for(DEV)
     assert s is not None and s.check()
-    u = zk.uniform_symbols_device(1 << 20, DEV)
-    assert u.shape == (1 << 20,) and int(u.min()) >= 0 and int(u.max()) < zk.P
-    counts = torch.bincount((u * 64 // zk.P).to(torch.int64), minlength=64).cpu().numpy()
-    e = u.numel() / 64
-    assert ((counts - e) ** 2 / e).sum() < 120                        # chi2(63) at ~1e-5
+    tot = 0.0
+    for _ in range(4):                                                 # pooled: chi2(4 x 63 = 252) -- 350 is ~1e-5
+        u = zk.uniform_symbols_device(1 << 20, DEV)
+        assert u.shape == (1 << 20,) and int(u.min()) >= 0 and int(u.max()) < zk.P
+        counts = torch.bincount((u * 64 // zk.P).to(torch.int64), minlength=64).cpu().numpy()
+        e = u.numel() / 64
+        tot += ((counts - e) ** 2 / e).sum()
+    assert tot < 350, tot
 
 
 def test_apply_masks_torch_path():
