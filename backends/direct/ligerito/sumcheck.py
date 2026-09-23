@@ -622,7 +622,7 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
     rho = torch.stack(rs2[::-1])                                      # rho[t] <-> variable t of y
     r_i, rho_c = rho[:n_i], rho[:n_c]
     w_only = zc_.clone()
-    w_only[lay.m:] = 0                                                # rows >= m are zero in the commitment
+    w_only[lay.m:lay.m + len(lay.virt)] = 0                           # the virtual rows are not committed (free rows above are)
     eq_i = (eq_table_cuda if engine == "cuda" else eq_table)(r_i)
     eq_rho = (eq_table_cuda if engine == "cuda" else eq_table)(rho_c)
     crow = z.index_select(0, torch.tensor(lay.c_rows, dtype=torch.int64, device=dev))
@@ -825,7 +825,7 @@ def _marshal_pad(rel, runner, l: int, device) -> dict:
 def check_claims(lay: Layout, z: torch.Tensor, claims: list) -> bool:
     """Diagnostic: evaluate the committed polynomial (``z`` with the virtual rows zeroed) at every claim point."""
     w = z.clone()
-    w[lay.m:] = 0
+    w[lay.m:lay.m + len(lay.virt)] = 0
     for cl in claims:
         eq_i = eq_table(cl.point[:lay.n_i])
         eq_c = eq_table(cl.point[lay.n_i:])
@@ -1519,6 +1519,8 @@ def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: s
         out["mem_before_prove_gb"] = torch.cuda.memory_allocated(dev) / 1e9
     runs = []
     for _ in range(max(1, reps)):
+        if dev.type == "cuda":
+            torch.cuda.empty_cache()
         coins = LocalCoins(b"bench")
         proof = prove(lay, cons, z, coins, engine=engine, schedule=sched)
         runs.append(proof.timings)
@@ -1557,6 +1559,8 @@ def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: s
                     z[row, col] = val
             res = {}
             for cheat in (None, "zc", "all"):
+                if dev.type == "cuda":
+                    torch.cuda.empty_cache()
                 pr = prove(lay, cons, z, LocalCoins(b"neg"), cheat=cheat, engine=engine, schedule=sched)
                 ok_n, why_n, _ = verify(lay, cons, pubs, pr, LocalCoins(b"neg"), device=device)
                 res[cheat or "honest"] = (ok_n, why_n)
