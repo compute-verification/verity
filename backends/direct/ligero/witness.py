@@ -275,13 +275,25 @@ def _combine_row_w(c: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
     return ((c[:, None] * M) % P).sum(0) % P
 
 
+#: elements of the (n_terms, cols) int64 scratch of :func:`apply_sparse` per pass (2 GiB): systems with ~10^6 constraint
+#: terms (the BLAKE3 leaf: 0.87 M linear / 1.8 M quadratic terms per column) are applied in column slices instead of one
+#: 28 GiB tensor; a slice is the same computation on fewer columns, so the result is identical
+SPARSE_BUDGET = 1 << 28
+
+
 def apply_sparse(triples, consts: torch.Tensor, n_out: int, M: torch.Tensor) -> torch.Tensor:
     """(n_out, cols) = sum_j coef * M[j] + const for each output row (M: (m, cols) mod p)."""
     qq, jj, cc = triples
-    out = torch.zeros((n_out, M.shape[1]), dtype=torch.int64, device=M.device)
+    cols = M.shape[1]
+    out = torch.zeros((n_out, cols), dtype=torch.int64, device=M.device)
     if jj.numel():
-        terms = compiled(_scaled_rows, M.device)(M, jj, cc)
-        out.index_add_(0, qq, terms)
+        f = compiled(_scaled_rows, M.device)
+        step = max(1, min(cols, SPARSE_BUDGET // max(1, int(jj.numel()))))
+        if step >= cols:
+            out.index_add_(0, qq, f(M, jj, cc))
+        else:
+            for c0 in range(0, cols, step):
+                out[:, c0:c0 + step].index_add_(0, qq, f(M[:, c0:c0 + step].contiguous(), jj, cc))
     return (out + consts[:, None]) % P
 
 
