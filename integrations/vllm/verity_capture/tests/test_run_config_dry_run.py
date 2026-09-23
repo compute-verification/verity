@@ -164,7 +164,7 @@ def test_run_stage_timeout(tmp_path):
 def test_local_cpu_stages_on_m1(tmp_path):
     run = tmp_path / "RUN"
     cmd = [sys.executable, "-m", "verity_capture.bench.run_config", "--config-id", "m1-local", "--profile", "vllm_d9105ea80_sm89_eager",
-           "--workload", "verity_capture/profiles/workload_32x16_1req.json", "--case", "B0", "--out", str(run), "--phase", "cpu", "--laptop",
+           "--workload", "workloads/workload_32x16_1req.json", "--case", "B0", "--out", str(run), "--phase", "cpu", "--laptop",
            "--log", str(M1_LOG), "--snapshots", str(M1_DIR), "--control-tokens", str(M1_CTL),
            "--skip", "replay,compare,census,nonint,root_policy,golden", "--cards-dir", str(tmp_path / "cards")]
     p = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT, timeout=170)

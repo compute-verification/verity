@@ -21,7 +21,7 @@ Outputs (DIR): runs.jsonl (one row per run), steps.jsonl (one row per step), sum
 versions.json.  Every number is MEASURED unless the key says otherwise.
 
     PYTHONPATH=. /workspace/venv-cu129/bin/python -m verity_capture.bench.commit_delta \
-        --workload verity_capture/profiles/workload_cov_b0_b1_c256.json --pairs 5 --committer native_host --out /workspace/cp/cmt3/b0_b1
+        --workload workloads/workload_cov_b0_b1_c256.json --pairs 5 --committer native_host --out /workspace/cp/cmt3/b0_b1
 
 PROTOCOL SUMMARY (Commit stage entry: the instrumented runs + the fail-closed X-03 verdict)
   Purpose: run the row's workload on ONE engine in interleaved (control, instrumented) pairs; the instrumented arm commits every
@@ -997,7 +997,7 @@ def main(argv: list[str] | None = None) -> None:
 
         faulthandler.dump_traceback_later(float(os.environ["VERITY_TRACEDUMP"]), repeat=True)
     ap = argparse.ArgumentParser()
-    ap.add_argument("--workload", default="verity_capture/profiles/workload_cov_b0_b1_c256.json")
+    ap.add_argument("--workload", default="workloads/workload_cov_b0_b1_c256.json")
     ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
     ap.add_argument("--case", default=None)
     ap.add_argument("--out", required=True)

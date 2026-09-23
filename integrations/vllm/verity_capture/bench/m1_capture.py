@@ -2,7 +2,7 @@
 
     HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. VLLM_BATCH_INVARIANT=1 VLLM_USE_V2_MODEL_RUNNER=1 \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 VLLM_USE_FLASHINFER_SAMPLER=0 /workspace/venv-cu129/bin/python -m \
-    verity_capture.bench.m1_capture --workload verity_capture/profiles/workload_32x16_1req.json --out /vol/cp/l1/m1 \
+    verity_capture.bench.m1_capture --workload workloads/workload_32x16_1req.json --out /vol/cp/l1/m1 \
     [--snapshot-steps 0,1,8] [--no-observer] [--max-tokens 16]
 
 Writes DIR/log.jsonl.gz (the raw observation log), DIR/tokens.json (prompt ids, generated ids, per-step sampled
@@ -119,7 +119,7 @@ def parse_steps(s: str | None) -> frozenset[int]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--workload", default="verity_capture/profiles/workload_32x16_1req.json")
+    ap.add_argument("--workload", default="workloads/workload_32x16_1req.json")
     ap.add_argument("--out", required=True)
     ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
     ap.add_argument("--snapshot-steps", default=None, help="comma-separated engine steps to snapshot, e.g. 0,1,8")

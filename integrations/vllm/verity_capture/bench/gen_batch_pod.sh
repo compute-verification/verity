@@ -24,13 +24,13 @@ drv() { $PY312 -m verity_capture.bench.run_config --python-gpu $PY311 --python-c
 run() {  # run <workload-name> <case> <checkpoint-dir> [driver args...]
   local name=$1 case=$2 ck=$3; shift 3
   say "gpu $name start ($*)"
-  drv --case "$case" --workload "verity_capture/profiles/workload_$name.json" --out "$OUT/$name" --checkpoint-dir "$ck" --phase gpu \
+  drv --case "$case" --workload "workloads/workload_$name.json" --out "$OUT/$name" --checkpoint-dir "$ck" --phase gpu \
       --max-num-seqs 8 "$@" > "$LOGS/$name.gpu.log" 2>&1
   say "gpu $name rc=$?"
   ( drv --run-dir "$OUT/$name" --phase cpu --parallel 4 --replay-budget-leaves 8000000 > "$LOGS/$name.cpu.log" 2>&1
     say "cpu $name rc=$?"
     $PY312 -m verity_capture.bench.gen_batch_attribution --log "$OUT/$name/capture/log.jsonl.gz" \
-        --workload "verity_capture/profiles/workload_$name.json" --run-dir "$OUT/$name" >> "$LOGS/$name.cpu.log" 2>&1
+        --workload "workloads/workload_$name.json" --run-dir "$OUT/$name" >> "$LOGS/$name.cpu.log" 2>&1
     say "attribution $name rc=$?" ) &
 }
 
@@ -68,7 +68,7 @@ cpu_only() {  # CPU phase of an existing run (background)
   local name=$1
   ( drv --run-dir "$OUT/$name" --phase cpu --parallel 4 --replay-budget-leaves 8000000 > "$LOGS/$name.cpu.log" 2>&1; say "cpu $name rc=$?"
     $PY312 -m verity_capture.bench.gen_batch_attribution --log "$OUT/$name/capture/log.jsonl.gz" \
-        --workload "verity_capture/profiles/workload_$name.json" --run-dir "$OUT/$name" >> "$LOGS/$name.cpu.log" 2>&1; say "attribution $name rc=$?" ) &
+        --workload "workloads/workload_$name.json" --run-dir "$OUT/$name" >> "$LOGS/$name.cpu.log" 2>&1; say "attribution $name rc=$?" ) &
 }
 
 fix_nonint() {  # re-run only the nonint GPU stage of an existing run (after the HashOnlyCapture fix landed), then the CPU stages that read it

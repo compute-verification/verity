@@ -82,7 +82,7 @@ ACCEPTED_RECORD = ACCEPTED["B0"]["record"]
 
 
 def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
-    """The workload file (`verity_capture/profiles/workload_32x16_1req.json`, `workload_qwen15_32x16_1req.json`) ->
+    """The workload file (`workloads/workload_32x16_1req.json`, `workload_qwen15_32x16_1req.json`) ->
     {"requests": [...], "sampling": {...}, "case": <checkpoint role or None>, "accepted": {request_id: accepted token ids}}.
     The accepted tokens come from the file's `accepted_token_ids` per request (M6) or `ACCEPTED_TOKENS` of the case."""
     doc = json.loads(Path(path).read_text())

@@ -10,7 +10,7 @@ from verity_capture import prefix_cache as PC
 from verity_capture.events import RunHeader, StepEnd, StepStart
 from verity_capture.log import LogWriter, read_log
 
-PROFILES = Path(__file__).resolve().parents[1] / "profiles"
+PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 BS = 16
 
 

@@ -41,14 +41,14 @@ cpu_preview() {  # <name>: CPU phase (--k 3, seed 0) + the lane's torch-free ste
   local n=$1
   drv --run-dir "$OUT/$n" --phase cpu --parallel 8 --k 3 --seed 0 > "$LOGS/$n.cpu.log" 2>&1; say "cpu $n rc=$?"
   $PY312 -m verity_capture.bench.gen_batch_attribution --log "$OUT/$n/capture/log.jsonl.gz" \
-      --workload "verity_capture/profiles/workload_$n.json" --run-dir "$OUT/$n" >> "$LOGS/$n.cpu.log" 2>&1; say "attribution $n rc=$?"
+      --workload "workloads/workload_$n.json" --run-dir "$OUT/$n" >> "$LOGS/$n.cpu.log" 2>&1; say "attribution $n rc=$?"
   sync_small "$n"
 }
 
 run() {  # run <workload-name> <case> <checkpoint-dir> [driver args...]
   local name=$1 case=$2 ck=$3; shift 3
   say "gpu $name start ($*)"
-  drv --case "$case" --workload "verity_capture/profiles/workload_$name.json" --out "$OUT/$name" --checkpoint-dir "$ck" --phase gpu \
+  drv --case "$case" --workload "workloads/workload_$name.json" --out "$OUT/$name" --checkpoint-dir "$ck" --phase gpu \
       --max-num-seqs 8 "$@" > "$LOGS/$name.gpu.log" 2>&1
   say "gpu $name rc=$?"
   durable_gpu "$name"

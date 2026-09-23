@@ -172,7 +172,7 @@ def env_identity() -> dict[str, str]:
 
 
 def engine_identity(argv: list[str]) -> dict[str, Any]:
-    wl_path = _argval(argv, "--workload", "verity_capture/profiles/workload_cov_b0_b1_c256.json")
+    wl_path = _argval(argv, "--workload", "workloads/workload_cov_b0_b1_c256.json")
     wl: dict[str, Any] = {}
     with contextlib.suppress(Exception):
         wl = json.loads(Path(wl_path).read_text())

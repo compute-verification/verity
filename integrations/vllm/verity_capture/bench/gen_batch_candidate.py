@@ -15,7 +15,7 @@ workload file), so nothing is folded on the laptop:
      chunked prefill) — the runtime facts `StepStart.seq_lens` / `logits_rows` are in `attribution.json`.
 
     uv run python -m verity_capture.bench.gen_batch_candidate --run-dir out/gen/lanes/ov-batch/runs/b0_prefix64_2req \
-        --workload verity_capture/profiles/workload_b0_prefix64_2req.json --out out/gen/lanes/ov-batch/runs/b0_prefix64_2req/candidate.md
+        --workload workloads/workload_b0_prefix64_2req.json --out out/gen/lanes/ov-batch/runs/b0_prefix64_2req/candidate.md
 
 Laptop cost: B0 prefix64 (38 k instances) ~0.3 GB / 5 s; Qwen conc4 (82 k) ~0.6 GB / 15 s.  DIAGNOSTIC only (RULES §1: not a gate).
 """

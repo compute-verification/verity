@@ -1,7 +1,7 @@
 """bench/gen_coverage_workloads.py — the coverage campaign's workloads (D87): serving profile × context class, seeded lengths.
 
     python -m verity_capture.bench.gen_coverage_workloads --case B0 --tokenizer <dir-or-tokenizer.json> \\
-        [--profiles B1,B8-static,B8-mixed] [--ctx C256,C1024] [--seed 0] [--out-dir verity_capture/profiles]
+        [--profiles B1,B8-static,B8-mixed] [--ctx C256,C1024] [--seed 0] [--out-dir workloads]
 
 Dimensions (out/gen/COVERAGE-20260917.md):
   serving profile   B1         one request, admitted at step 0
@@ -371,7 +371,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--profiles", default=",".join(PROFILES))
     ap.add_argument("--ctx", default=",".join(sorted(CTX)))
     ap.add_argument("--seed", type=int, default=0, help="length seed (the draws depend on (profile, ctx, seed) only)")
-    ap.add_argument("--out-dir", default=str(REPO / "verity_capture" / "profiles"))
+    ap.add_argument("--out-dir", default=str(REPO / "workloads"))
     ap.add_argument("--checkpoints", default=str(REPO / "manifests" / "checkpoints.json"))
     ap.add_argument("--replicate", type=int, default=0, help="r > 0: same length draws, prompts from prompt seed seed+1000r; file suffix _r<r>")
     ap.add_argument("--variant", action="append", default=[],

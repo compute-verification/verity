@@ -4,7 +4,7 @@
         [--sampling greedy|stoch-t0.8-p0.95] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
         [--lengths-only] [--check] --out workloads/<row-id>.json
 
-Output = the existing request-list workload format (`verity-vllm/workload/v1`, see `verity_capture/profiles/workload_cov_*.json`) that
+Output = the existing request-list workload format (`verity-vllm/workload/v1`, see `workloads/workload_cov_*.json`) that
 `verity_capture.vllm_adapter.load_workload` / `bench/commit_delta.py` / `zk/bench/e2e_commit_run.py` / the eager capture consume unchanged,
 plus one extra top-level key `sweep` (row id, seed, the length/cap/seed/arrival vectors, the plan) that existing loaders ignore.
 

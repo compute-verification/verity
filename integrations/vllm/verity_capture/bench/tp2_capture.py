@@ -1,7 +1,7 @@
 """Lane tp2 (mechanism prototype): the M1 capture driven through vLLM's multiprocess executor at `tensor_parallel_size > 1`.
 
     HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. /workspace/venv-cu129/bin/python -m verity_capture.bench.tp2_capture \
-        --workload verity_capture/profiles/workload_qwen15_32x16_1req.json --case B1 --tp 2 --out /vol/cp/tp2/runs/<name>/capture \
+        --workload workloads/workload_qwen15_32x16_1req.json --case B1 --tp 2 --out /vol/cp/tp2/runs/<name>/capture \
         [--snapshot-steps all|0,1,2,3] [--no-observer] [--census] [--verify-weights] [--engine-arg key=value ...]
 
 Same κ as `bench/m1_capture.py` (`profile.apply_env()`, `engine_kwargs(cp, enforce_eager=True)`, `enable_prefix_caching=False`,
@@ -64,7 +64,7 @@ def parse_steps(s: str | None, max_tokens: int | None) -> list[int]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--workload", default="verity_capture/profiles/workload_qwen15_32x16_1req.json")
+    ap.add_argument("--workload", default="workloads/workload_qwen15_32x16_1req.json")
     ap.add_argument("--out", required=True)
     ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
     ap.add_argument("--case", default=None)
