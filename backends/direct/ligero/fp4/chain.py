@@ -51,7 +51,8 @@ def _public_vectors_torch(p, c, a, b, y, device="cpu") -> dict[str, torch.Tensor
     return {k: torch.as_tensor(v, dtype=torch.int64, device=device) for k, v in public_vectors_fp4(a, b, c, y).items()}
 
 
-FP4_HOOKS = RelationHooks(_public_vectors_torch, word_dtype="<u1", y16_dtype="<u4", y16_bits=32, tag=b"|rel=fp4-nvf4|v1")
+FP4_HOOKS = RelationHooks(_public_vectors_torch, word_dtype="<u1", y16_dtype="<u4", y16_bits=32, tag=b"|rel=fp4-nvf4|v1",
+                          steps=STEPS)
 
 
 def vu_operands(rng: np.random.Generator, family: str) -> tuple[np.ndarray, np.ndarray]:

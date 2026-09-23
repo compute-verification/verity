@@ -397,6 +397,12 @@ class AjtaiLeaf:
         p.  ``acc`` (..., n), ``bits`` (..., m_col) int64 numpy or torch; exact for bit values < 2^22."""
         return (shift_x(acc) + _apply_B(bits, self.B, role)) % P
 
+    @property
+    def max_steps(self) -> int:
+        """The most columns a VU row may span (the verifier's structural bound, ``RelationHooks.max_steps``): the digest
+        ``sum_j X^(steps-1-j) B s_j`` wraps column j onto j + n with the opposite sign once steps > n (red-team-leaf-3 H1)."""
+        return self.n
+
     def leaf_bytes(self, digest_row) -> bytes:
         """The n elements as little-endian u32 (4n bytes; the design note's framing)."""
         d = np.asarray([int(x) for x in digest_row] if not isinstance(digest_row, np.ndarray) else digest_row, dtype=np.int64).ravel()

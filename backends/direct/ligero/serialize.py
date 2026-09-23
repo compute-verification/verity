@@ -282,6 +282,8 @@ class Statement:
     hash_auth: object | None = None  # authentication = included-hash (v5): hashauth.HashAuth; ``a`` is then the (l, 17) public
     #                                  table [is_end | d0..d15] and ``b`` the (n_vus, 3) leaf triples (what the digest binds)
     hash_sibs: list | None = None    # v5: the three multiproofs (a, b, y), lists of 32-byte siblings
+    row_words: int | None = None     # v5 as read: the header's K (words per committed row = steps x K per unit; not in the
+    #                                  statement digest, so the verifier compares it with the relation's, ``verify_files``)
 
     @property
     def v4(self) -> bool:
@@ -503,7 +505,7 @@ def _read_v5(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, s
     r.done()
     table = hashchain.public_table(d, n_vus, steps, l)
     return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, table, auth.indices(), y16,
-                     None, relation, 4, yb, auth, sibs)
+                     None, relation, 4, yb, auth, sibs, row_words=K)
 
 
 def read_statement(data: bytes) -> Statement:
@@ -662,6 +664,9 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
     coins = own_coins if (st.interactive and own_coins is not None) else pf.coins if (st.interactive and pf.coins is not None) else None
     if st.interactive and coins is None:
         return False, "interactive transcript carries no coins", 0.0
+    rel = getattr(R, "rel", None)
+    if st.v5 and st.row_words is not None and rel is not None and st.row_words != st.steps * rel.k:
+        return False, f"statement: K = {st.row_words} words per row is not steps ({st.steps}) x the {rel.name} unit's {rel.k}", 0.0
     t0 = time.perf_counter()
     try:
         if st.v5:

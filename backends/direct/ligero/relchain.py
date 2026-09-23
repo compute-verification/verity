@@ -398,7 +398,8 @@ class HashedRelationRunner(RelationChainRunner):
         self._base_sys = dataclasses.replace(self.sys, hints=self.sys.hints[:self.hr.n_base_hints])
         self.base_tag = b"hash/v2h|" + rel.tag
         self.hooks = RelationHooks(functools.partial(hashchain.hash_public_vectors, n_digest=2 * self.leaf.digest_elems),
-                                   word_dtype="<u4", y16_dtype=rel.y_dtype, y16_bits=rel.y_bits, tag=self.base_tag)
+                                   word_dtype="<u4", y16_dtype=rel.y_dtype, y16_bits=rel.y_bits, tag=self.base_tag,
+                                   steps=rel.steps, max_steps=getattr(self.leaf, "max_steps", None))
         self.trees = None
         self.tile = None                    # (nx, nw) of the tile workload, None for the worst case
         self.rows, self.sponges, self.sponge_seconds = None, None, 0.0

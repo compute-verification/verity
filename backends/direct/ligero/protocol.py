@@ -287,9 +287,25 @@ class RelationHooks:
     y16_dtype: str = "<u2"         # the chain-end public words
     y16_bits: int | None = None    # range of the chain-end words (None: 2^p.word_bits)
     tag: bytes = b""               # domain separation of a non-default relation (b"" for BF16)
+    # The VU shape (red-team-leaf-3 H1 / H2; verifier-only, never absorbed): the compiled system is column-uniform, so it
+    # does not fix how many columns a VU spans.  ``steps``: the relation's columns per VU (``Relation.steps``); a chain
+    # statement with another layout is refused.  ``max_steps``: the leaf's structural bound (``AjtaiLeaf.max_steps`` = n:
+    # past it the negacyclic digest is not injective).  None: unchecked (the unit-mode / test systems).
+    steps: int | None = None
+    max_steps: int | None = None
 
 
 BF16_HOOKS = RelationHooks(public_vectors)
+
+
+def layout_error(layout, rel: RelationHooks) -> str | None:
+    """The chain statement's layout against the relation's VU shape (the Rust verifier's ``check_vu_shape``)."""
+    if rel.max_steps is not None and layout.steps > rel.max_steps:
+        return (f"statement: steps = {layout.steps} columns per VU exceeds the leaf's bound {rel.max_steps} "
+                "(ring degree: the digest is not binding beyond it)")
+    if rel.steps is not None and layout.steps != rel.steps:
+        return f"statement: steps = {layout.steps} columns per VU, the relation's VU is {rel.steps} columns"
+    return None
 
 # Red-team hook ONLY: when False the challenges are derived from the transcript alone (the pre-fix protocol).  The
 # binding fixture (``redteam_binding.py``) uses it to show the adaptive-statement forgery the fix closes.  An honest
@@ -1558,6 +1574,10 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
     m, l, n, D, t, k = sys.m, cfg.l, cfg.n, cfg.D, cfg.t, cfg.k     # every size from the VERIFIER's configuration
     if (chain is not None) != (sys.chain is not None):
         return False, "chain mode mismatch"
+    if chain is not None:
+        why = layout_error(chain[0], rel)
+        if why is not None:
+            return False, why
     if auth is not None and chain is None:
         return False, "authentication is defined for the chain statement only"
     if (auth is not None) != (proof.auth is not None):
