@@ -308,6 +308,17 @@ def _sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, 
     return sr_comp, lk_comp
 
 
+def _build_dirs(args) -> dict[int, str]:
+    """[lane vllm-tp-n] rank -> Build dir from `--build-rank <dir>` repeated in rank order (world N) or the two-rank `--build-rank0/1` spelling."""
+    if args.build_rank:
+        if args.build_rank0 or args.build_rank1:
+            raise SystemExit("--build-rank (rank order) and --build-rank0/1 are alternative spellings; give one")
+        if len(args.build_rank) != int(args.tp):
+            raise SystemExit(f"--build-rank given {len(args.build_rank)} time(s) for a world of {args.tp}: one Build dir per rank, in rank order")
+        return {r: str(d) for r, d in enumerate(args.build_rank)}
+    return {r: d for r, d in ((0, args.build_rank0), (1, args.build_rank1)) if d}
+
+
 def main() -> int:
     from verity_vllm_adapter import profile as prof
 
@@ -342,6 +353,8 @@ def main() -> int:
     ap.add_argument("--rpc-timeout", type=float, default=3600.0)
     ap.add_argument("--build-rank0", default=None, help="derive_step out dir of rank 0's Program (result.json) -> program_digest for the binding map / population")
     ap.add_argument("--build-rank1", default=None)
+    ap.add_argument("--build-rank", action="append", default=[], help="[lane vllm-tp-n] rank r's Build dir, repeated in RANK order (world = --tp); the world-N spelling of --build-rank0/1")
+    ap.add_argument("--world", type=int, default=None, help="alias of --tp (the communicator size)")
     ap.add_argument("--no-tp-partials", action="store_true", help="NEGATIVE (R14 TP-03): collect collective outputs only (the R13 state); the required class tp_rank_partials must fail the verdict")
     ap.add_argument("--omit-rank", type=int, default=None, help="NEGATIVE (brief §4 'omit one TP rank'): drop this rank's entry from the commitment vector before the verdict; must fail closed")
     ap.add_argument("--required-manifest", default=None, help="[R15 TP-04] manbind's merged TP manifest (required_manifest build --program r0 --rank 0 --program r1 --rank 1 --ranks 2): the population of record per rank (rows with rank=r)")
@@ -392,6 +405,8 @@ def main() -> int:
                                                             "seed = sha256(challenge | that rank's run root)[:8]; without it the seed is the rank's run root (honest-prover measurement)")
     ap.add_argument("--replay-target", action="append", default=None, help="<op_path>[@<step>]: add every VU of a module to every rank's sample")
     args = ap.parse_args()
+    if args.world is not None:
+        args.tp = int(args.world)
     relabel = None
     if args.relabel_rank:
         a, b = args.relabel_rank.split(":")
@@ -475,7 +490,8 @@ def main() -> int:
             return json.loads((P / "result.json").read_text())["program"]["digest"]
         except Exception:  # noqa: BLE001
             return None
-    pds = {0: _pd(args.build_rank0, 0), 1: _pd(args.build_rank1, 1)}
+    builds = _build_dirs(args)
+    pds = {r: _pd(builds.get(r), r) for r in range(world)}
     versions["build_program_digest_kind"] = {str(k): v for k, v in pd_kind.items()}
     versions["build_program_digest"] = {str(k): v for k, v in pds.items()}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
@@ -525,7 +541,6 @@ def main() -> int:
     # (B1: the request Program itself) and, at B>=2, the component digests the GP-01 workload_program of that rank composed (its workload
     # digest is the manifest's per-rank digest, checked above) -- the worker refuses any loaded Program outside this set BY NAME
     replay_cfg = None
-    builds = {0: args.build_rank0, 1: args.build_rank1}
     if args.required_manifest and not args.no_sampled_replay:
         import re as _re
         of_record: dict[str, list[str]] = {}
@@ -589,6 +604,12 @@ def main() -> int:
     if len(made) != world:
         raise SystemExit(f"fail-closed: committer constructed on {len(made)}/{world} ranks")
     (out / "committer_make.json").write_text(json.dumps(made, indent=1, default=str) + "\n")
+    # [lane vllm-tp-n / x03] the per-rank attention plane classes (fa2_plane_classes on THIS rank's Program record) -- said per rank
+    for m in made:
+        apc = m.get("attention_plane_classes") or {}
+        print(f"[tp2commit] rank {m.get('rank')}: X-03 attention plane classes: {apc.get('declarations', 0)} layer declaration(s) from {apc.get('source')} "
+              f"-> classes {apc.get('classes')} heads(NH,KVH,D) {apc.get('per_rank_heads')}; {apc.get('rule')}" + (f"; ERROR {apc['error']}" if apc.get("error") else ""), flush=True)
+    versions["attention_plane_classes"] = {str(m.get("rank")): {k: v for k, v in (m.get("attention_plane_classes") or {}).items() if k != "rank"} for m in made}
     # [R15 moe TP-MOE-SRC] an MoE model's bound block is a required class of every rank (REL-02, as commit_delta): the ranks report the
     # attached MoeBlockSource; all ranks must agree (a rank without MoE layers on an MoE model is a named refusal, not a silent hole)
     moe_ranks = [int(m["rank"]) for m in made if isinstance(m.get("moe_source"), dict) and int((m["moe_source"] or {}).get("layers") or 0) > 0]

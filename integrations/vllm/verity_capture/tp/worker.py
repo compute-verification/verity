@@ -826,6 +826,26 @@ class TP2CaptureWorkerExtension:
                 else:
                     swap_rule = None
             res["swap_requests_applied"] = swapped
+        # [lane vllm-tp-n; x03 F-r19-int-22 on the TP record] the per-layer attention plane class is DERIVED from THIS RANK's Program record
+        # (`attention_impls_observed` of the rank Build: the rank-local NH/world, KVH/world, D and window each rank Call's Definition was
+        # selected from) x the step's active sequences -- exactly commit_delta's wiring, on the rank's own record: a GQA layer that folds
+        # on decode at world 1 (NH > KVH) may be MHA-shaped at a world where NH/world == KVH/world, so the class is per rank, never copied.
+        # Without a rank record the committer keeps the R13 uniformity rule and the result says so (named, not assumed).
+        res["attention_plane_classes"] = {"rank": rank, "declarations": 0, "source": None, "rule": "R13 uniformity (no rank Build record with attention_impls_observed)"}
+        if hasattr(com, "identity_check"):
+            try:
+                from verity_capture.experimental.commit_integ import fa2_plane_classes as FP
+                _pdir = ((replay or {}).get("programs") or {}).get(str(rank)) or ((weights_pin or {}).get("program_dirs") or {}).get(str(rank))
+                _impls, _impls_path = FP.attention_impls_of_record(program_dir=_pdir, programs_root=_pdir) if _pdir else (None, None)
+                _decls = FP.declarations_from_attention_impls(_impls) if _impls else []
+                if _decls:
+                    com.attention_layer_decls = _decls
+                    _classes = sorted(set(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha") for d in _decls))
+                    res["attention_plane_classes"] = {"rank": rank, "declarations": len(_decls), "source": _impls_path, "classes": _classes,
+                                                      "per_rank_heads": sorted({(d.NH, d.KVH, d.D) for d in _decls}),
+                                                      "rule": "per-layer plane class derived per step from the rank Program's attention statics (fa2_plane_classes)"}
+            except Exception as e:  # noqa: BLE001
+                res["attention_plane_classes"]["error"] = repr(e)[:300]
         self._tp2_commit = {"com": com, "eng": eng, "base": baseline_state(eng), "rank": rank, "rc": None, "program_digest": program_digest,
                             "tps": (tps if tp_partials else None), "world": int(facts["tp"]["world_size"]), "n_requests": int(n_requests),
                             "required_manifest": required_manifest, "request_order": list(request_order or []), "arrivals": dict(arrivals or {}),
