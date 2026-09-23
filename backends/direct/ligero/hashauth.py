@@ -24,9 +24,9 @@ from pathlib import Path
 
 import numpy as np
 from verity.commitments import identity_digest, verify_multiproof
-from verity.commitments import poseidon2_babybear as h2
 from verity.commitments.rowleaf import SCHEMA_ROW, row_leaf_value
 
+from . import poseidon2 as h2
 from .auth import LIMITS, OWNER, TREE_NAMES, TreeRef, WordTree, _chunks, _node_chunk, _pad_chunk, domain_for, multiproof_siblings
 from .auth import build_word_tree as _build_word_tree_u16
 from verity.errors import ResourceLimit

@@ -9,7 +9,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.commitments import poseidon2_babybear as h2  # noqa: E402
+from . import poseidon2 as h2  # noqa: E402  (the reference + the numpy row-vectorised evaluations)
 
 from . import chain, hashauth, hashchain  # noqa: E402
 from .compile import P  # noqa: E402
@@ -149,6 +149,32 @@ def test_permute_torch_matches_numpy_and_kat() -> None:
     got = hashchain.permute_torch(torch.as_tensor(st)).numpy()
     assert got[:, 0].tolist() == list(out)
     assert np.array_equal(got, h2.permute_np(st))
+
+
+def test_numpy_vectorised_poseidon2_equals_the_scalar_reference() -> None:
+    """``poseidon2.permute_np`` / ``hash_rows_np`` / ``pack_words_np`` / ``row_digests`` (the committer's numpy paths, kept
+    out of ``verity.commitments`` by the package boundary) are the scalar reference lane for lane, row for row."""
+    inp, out = h2.KAT_24
+    assert h2.permute_np(np.asarray(inp, dtype=np.int64)[:, None])[:, 0].tolist() == list(out)
+    rng = np.random.default_rng(11)
+    cols = rng.integers(0, P, size=(h2.WIDTH, 5)).astype(np.int64)
+    vec = h2.permute_np(cols)
+    for j in range(5):
+        assert vec[:, j].tolist() == h2.permute([int(x) for x in cols[:, j]])
+    rows = rng.integers(0, 2**16, size=(7, 1536)).astype(np.int64)
+    vec = h2.hash_rows_np(rows, 16, h2.ROLE_X)
+    for i in range(7):
+        assert vec[i].tolist() == h2.hash_row(rows[i].tolist(), 16, h2.ROLE_X)
+    assert np.array_equal(h2.row_digests(rows, 16, h2.ROLE_X), vec)
+    for bits, per in ((16, 1), (8, 2), (4, 4)):
+        words = rng.integers(0, 2**bits, size=(50, 16 * per)).astype(np.int64)
+        el = h2.pack_words_np(words, bits)
+        assert el.shape == (50, 16) and el.max() < 2**16 < P
+        assert el[3].tolist() == h2.pack_words(words[3].tolist(), bits)
+        back = np.stack([(el >> (bits * q)) & (2**bits - 1) for q in range(per)], 2).reshape(50, 16 * per)
+        assert np.array_equal(back, words)
+    with pytest.raises(ValueError):
+        h2.pack_words_np(np.array([[2**16]]), 16)
 
 
 def test_fused_witness_source_modes() -> None:
