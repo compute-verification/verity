@@ -178,13 +178,13 @@ def ntt_axis(x: torch.Tensor, n: int, out: torch.Tensor | None = None, post_tw: 
 
 
 def split(n: int) -> tuple[int, int]:
-    """(n1, n2) with n1 n2 = n, both <= 4096, n1 >= n2 (n <= 4096: (n, 1))."""
+    """(n1, n2) with n1 n2 = n, both <= 16384 (64 KiB shared memory at G = 1), n1 >= n2 (n <= 4096: (n, 1))."""
     if n <= 4096:
         return n, 1
     logn = n.bit_length() - 1
     log1 = (logn + 1) // 2
     n1, n2 = 1 << log1, 1 << (logn - log1)
-    assert n1 <= 4096 and n2 <= 4096, f"codeword length {n} needs three factors (not implemented)"
+    assert n1 <= 16384 and n2 <= 16384, f"codeword length {n} needs three factors (not implemented)"
     return n1, n2
 
 

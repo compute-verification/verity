@@ -52,7 +52,7 @@ class Proof:
     n: int
     kprime: list[int]
     queries: list[int]
-    rate_log2: int
+    rate_log2: list[int]                    # per committed round
     splits: list[tuple[int, int]]           # (n1, n2) of each round's encoder (position -> eta map)
     v: np.ndarray                           # (6,)
     roots: list[bytes]
@@ -63,7 +63,7 @@ class Proof:
 
     @property
     def dims(self) -> Dims:
-        return Dims(self.n, list(self.kprime), list(self.queries), self.rate_log2)
+        return Dims(self.n, list(self.kprime), list(self.queries), list(self.rate_log2))
 
     # --- bytes ------------------------------------------------------------------------------------------
     def to_bytes(self) -> bytes:
@@ -200,7 +200,8 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     tm = timer or Timer(device)
     gpu = device.type == "cuda" and ligero_merkle._gpu_merkle is not None
     tr = coins if coins is not None else FiatShamirCoins()
-    tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": dims.rate_log2}).encode())
+    rates = dims.rates
+    tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": rates}).encode())
     tr.absorb(b"z", _z_bytes(z))
 
     roots: list[bytes] = []
@@ -214,7 +215,7 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     # ---------------- round 1: commit f
     R1, C1 = 1 << ks[0], 1 << kps[0]
     M1 = f.view(C1, R1)
-    enc1 = Encoder(R1, device, dims.rate_log2)
+    enc1 = Encoder(R1, device, rates[0])
     tm.start("commit_r1_alloc")                                           # the codeword buffer (a persistent buffer in a real prover)
     U1 = torch.empty((C1, enc1.n), dtype=torch.int32, device=device)
     tm.stop()
@@ -268,7 +269,7 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
         R, C = 1 << ks[i], 1 << kps[i]
         Mi = y.view(D, C, R)                                              # planes
         tm.start("recursion_encode")
-        enc = Encoder(R, device, dims.rate_log2)
+        enc = Encoder(R, device, rates[i])
         U = enc.encode(Mi.reshape(D * C, R))
         tm.stop()
         tm.start("recursion_merkle")
@@ -363,7 +364,7 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
         op = RoundOpen(Us[-1][:, idx].t().contiguous().to(torch.int64).numpy(), trees[-1].gather(S, depth))
     opens.append(op)
     tm.stop()
-    return Proof(n, list(kps), list(qs), dims.rate_log2, splits, v, roots, sumcheck, opens, final_y, tr.rounds)
+    return Proof(n, list(kps), list(qs), list(rates), splits, v, roots, sumcheck, opens, final_y, tr.rounds)
 
 
 def _row_claims(rows: np.ndarray, rbar: np.ndarray, base: bool) -> np.ndarray:
@@ -406,7 +407,7 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, coins: Coins | None = None)
     n, ks, kps, qs, L = dims.n, dims.k, dims.kprime, dims.queries, dims.rounds
     if z.shape != (n, D):
         raise Reject("bad point shape")
-    if len(pf.roots) != L or len(pf.opens) != L or len(pf.sumcheck) != L or len(pf.splits) != L:
+    if len(pf.roots) != L or len(pf.opens) != L or len(pf.sumcheck) != L or len(pf.splits) != L or len(dims.rates) != L:
         raise Reject("bad proof shape")
     from .ntt_gpu import Encoder as _Enc
 
@@ -423,9 +424,9 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, coins: Coins | None = None)
         def eta_index(self, s):
             return _Enc.eta_index(self, s)
 
-    maps = [_Map(1 << ks[i], pf.splits[i], pf.rate_log2) for i in range(L)]
+    maps = [_Map(1 << ks[i], pf.splits[i], dims.rates[i]) for i in range(L)]
     tr = coins if coins is not None else FiatShamirCoins()
-    tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": pf.rate_log2}).encode())
+    tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": dims.rates}).encode())
     tr.absorb(b"z", _z_bytes(z))
     # round 1
     tr.absorb(b"root", pf.roots[0])

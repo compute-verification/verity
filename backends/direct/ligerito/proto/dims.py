@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 EXT_BYTES = 24
 BASE_BYTES = 4
 HASH_BYTES = 32
-MAX_LOG_CODEWORD = 24
+MAX_LOG_CODEWORD = 24          # for make/choose (the measured q192 configs); explicit Dims may go to 2^28 (NTT factors <= 16384)
 MIN_LOG_COLS = 3
 
 
@@ -24,7 +24,12 @@ class Dims:
     n: int                              # log2 N
     kprime: list[int]                   # k'_i, i = 1..L  (L committed rounds)
     queries: list[int]                  # |S_i| per committed round
-    rate_log2: int = 2
+    rate_log2: int | list[int] = 2     # per committed round (an int = the same rate everywhere)
+
+    @property
+    def rates(self) -> list[int]:
+        r = self.rate_log2
+        return [r] * len(self.kprime) if isinstance(r, int) else list(r)
 
     @property
     def rounds(self) -> int:
@@ -44,7 +49,7 @@ class Dims:
         return self.k[-1]
 
     def codeword_log(self, i: int) -> int:
-        return self.k[i] + self.rate_log2
+        return self.k[i] + self.rates[i]
 
     def predicted_bytes(self) -> dict:
         ks = self.k
@@ -62,7 +67,7 @@ class Dims:
 
     def describe(self) -> str:
         ks = self.k
-        parts = [f"round {i + 1}: M~ 2^{ks[i]} x 2^{kp} (codeword 2^{self.codeword_log(i)}, |S| = {q})"
+        parts = [f"round {i + 1}: M~ 2^{ks[i]} x 2^{kp} (codeword 2^{self.codeword_log(i)}, rate 2^-{self.rates[i]}, |S| = {q})"
                  for i, (kp, q) in enumerate(zip(self.kprime, self.queries))]
         parts.append(f"final vector 2^{ks[-1]} ext")
         return "; ".join(parts)

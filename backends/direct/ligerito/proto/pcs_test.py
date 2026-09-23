@@ -217,3 +217,17 @@ def test_vectorised_terms_match_scalar():
     for t, g in zip(terms, got):
         s = t.restrict(k, r)
         assert np.array_equal(g.coef, s.coef) and g.kind == s.kind and g.eta == s.eta and g.nvars == s.nvars
+
+
+def test_per_round_rates():
+    n = 12
+    dims = Dims(n, [4, 3], [12, 12], [1, 3])          # rate 1/2 then 1/8
+    assert dims.codeword_log(0) == 9 and dims.codeword_log(1) == 8
+    f_np, f, z = _instance(n, dims)
+    pf = prove(f, z, dims)
+    assert np.array_equal(pf.v, eval_multilinear(f_np, z))
+    ok, why = verify(pf, z)
+    assert ok, why
+    pf2 = Proof.from_bytes(pf.to_bytes())
+    assert pf2.rate_log2 == [1, 3]
+    assert verify(pf2, z)[0]

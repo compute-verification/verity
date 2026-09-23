@@ -133,7 +133,7 @@ def run_one(n: int, dims: Dims, device, reps: int, negatives: bool, seed: int) -
     med = {k: statistics.median(r[k] for r in rows) for k in
            ("prover_wall_s", "commit_s", "recursion_sumcheck_s", "serialization_s", "verify_s")}
     pred = dims.predicted_bytes()
-    return {"n": n, "cells": N, "dims": {"kprime": dims.kprime, "k": dims.k, "queries": dims.queries, "rate_log2": dims.rate_log2,
+    return {"n": n, "cells": N, "dims": {"kprime": dims.kprime, "k": dims.k, "queries": dims.queries, "rate_log2": dims.rates,
                                         "rounds": dims.rounds, "final_log": dims.final_log, "describe": dims.describe()},
             "predicted_bytes": pred, "proof_bytes": proof_bytes, "median": med, "reps": rows, "negatives": neg}
 
@@ -181,7 +181,9 @@ def ligero_baseline(cells: int, device, reps: int, l: int = 4096, rate_log2: int
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, nargs="+", default=[26])
-    ap.add_argument("--queries", type=int, default=192)
+    ap.add_argument("--queries", type=int, nargs="+", default=[192], help="|S| (one value, or one per committed round with --kprime)")
+    ap.add_argument("--rates", type=int, nargs="*", default=None, help="rate log2 per committed round with --kprime (default 2)")
+    ap.add_argument("--tag", default="", help="free-text tag recorded in the JSON (e.g. 'ligerito-design F point')")
     ap.add_argument("--ell", type=int, default=0, help="force ell (0 = the predicted-bytes optimum among 3..6)")
     ap.add_argument("--kprime", type=int, nargs="*", default=None, help="override the k'_i (one value per committed round)")
     ap.add_argument("--reps", type=int, default=2)
@@ -199,7 +201,7 @@ def main(argv=None) -> None:
                 "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "device": {"name": props.name, "total_memory": props.total_memory, "torch": torch.__version__, "cuda": torch.version.cuda,
                            "cupy": getattr(cp, "__version__", None), "host": platform.node()},
-                "field": {"p": P, "ext_degree": D, "beta": ext.BETA}, "hash": "blake3", "rate_log2": 2, "queries": args.queries,
+                "field": {"p": P, "ext_degree": D, "beta": ext.BETA}, "hash": "blake3", "tag": args.tag,
                 "argv": vars(args), "results": results}
 
     # warm-up: compiles the cupy kernels / torch paths once (excluded from every timing)
@@ -211,13 +213,18 @@ def main(argv=None) -> None:
     del fw
     _sync()
     for n in args.n:
+        q0 = args.queries[0]
         if args.kprime:
-            dims = Dims(n, list(args.kprime), [args.queries] * len(args.kprime))
+            L = len(args.kprime)
+            qs = list(args.queries) if len(args.queries) == L else [q0] * L
+            rates = list(args.rates) if args.rates else [2] * L
+            assert len(rates) == L
+            dims = Dims(n, list(args.kprime), qs, rates)
         elif args.ell:
             from .dims import make
-            dims = make(n, args.ell, args.queries)
+            dims = make(n, args.ell, q0)
         else:
-            dims = choose(n, args.queries)
+            dims = choose(n, q0)
         print(f"== n = {n}: {dims.describe()}; predicted {dims.predicted_bytes()['total_nodedup'] / 1e6:.3f} MB", flush=True)
         try:
             r = run_one(n, dims, device, args.reps, not args.no_negatives, args.seed)
