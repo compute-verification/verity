@@ -1,0 +1,317 @@
+"""Asynchronous plumbing for the B-Ligero prover (lane hp2-host): the prover is a generator of *stages* separated by
+the points where the host must wait for the device (the Merkle root; the test messages; the openings) or for a host
+computation that runs off the main thread (the SHAKE-256 challenge expansion, the statement digest).  Running one
+generator to completion (``run_to_completion``) is the plain prover; ``prove_many`` interleaves several sub-batches
+on their own CUDA streams so that the host work of sub-batch i (the ~2.9 MB sequential SHAKE-256 squeeze, ~5-8 ms
+of CPU; the blake2b statement digest; Python launch overhead) hides under the device work of sub-batch i + 1.
+
+The protocol is untouched: every sub-batch is an independent session (own coins, own transcript), each message is
+still computed only after the coin it must follow has been opened, and the bytes are those of the sequential
+prover (``bitexact`` harness of lane hostphase / hp2-host).
+
+Waitables a stage may ``yield``: a ``torch.cuda.Event`` (recorded on the stage's stream), a ``concurrent.futures.Future``,
+or ``None`` (a cooperative yield point).  ``Slot``: per-pipeline-position resources -- a CUDA stream and reusable
+pinned host buffers for the challenge bytes, the transcript messages and the openings (one D2H copy each).
+
+SHAKE-256 is squeezed by OpenSSL's ``EVP_DigestFinalXOF`` through ``ctypes`` (the same library CPython's ``hashlib``
+wraps, so the stream is byte-identical) because a ``ctypes`` call releases the GIL and can run on a worker thread
+while the main thread launches kernels; ``hashlib``'s XOF ``digest()`` holds the GIL.  Without ``libcrypto`` the
+squeeze falls back to ``hashlib`` on the calling thread (correct, not overlapped).
+"""
+from __future__ import annotations
+
+import ctypes
+import ctypes.util
+import hashlib
+import threading
+import time
+from concurrent.futures import Future, ThreadPoolExecutor
+
+import numpy as np
+import torch
+
+__all__ = ["Slot", "POOL", "prove_many", "run_to_completion", "shake_into", "slot_for", "stream_context"]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# SHAKE-256 squeeze off the main thread
+# ---------------------------------------------------------------------------------------------------------------------
+
+_LIB = None
+_LIB_TRIED = False
+_LIB_LOCK = threading.Lock()
+
+
+def _libcrypto():
+    global _LIB, _LIB_TRIED
+    if _LIB_TRIED:
+        return _LIB
+    with _LIB_LOCK:
+        if _LIB_TRIED:
+            return _LIB
+        lib = None
+        for name in ("libcrypto.so.3", "libcrypto.so", "libcrypto.3.dylib", "libcrypto.dylib", ctypes.util.find_library("crypto")):
+            if not name:
+                continue
+            try:
+                cand = ctypes.CDLL(name)
+                for fn in ("EVP_MD_CTX_new", "EVP_shake256", "EVP_DigestInit_ex", "EVP_DigestUpdate", "EVP_DigestFinalXOF", "EVP_MD_CTX_free"):
+                    getattr(cand, fn)
+            except (OSError, AttributeError):
+                continue
+            cand.EVP_MD_CTX_new.restype = ctypes.c_void_p
+            cand.EVP_shake256.restype = ctypes.c_void_p
+            cand.EVP_DigestInit_ex.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+            cand.EVP_DigestInit_ex.restype = ctypes.c_int
+            cand.EVP_DigestUpdate.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
+            cand.EVP_DigestUpdate.restype = ctypes.c_int
+            cand.EVP_DigestFinalXOF.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
+            cand.EVP_DigestFinalXOF.restype = ctypes.c_int
+            cand.EVP_MD_CTX_free.argtypes = [ctypes.c_void_p]
+            cand.EVP_MD_CTX_free.restype = None
+            # self-check against hashlib once: the two must be the same stream
+            probe = np.empty(4096, dtype=np.uint8)
+            if _xof_libcrypto(cand, b"ligero-b/pipeline-selftest", probe) and bytes(probe) == hashlib.shake_256(b"ligero-b/pipeline-selftest").digest(4096):
+                lib = cand
+                break
+        _LIB = lib
+        _LIB_TRIED = True
+        return _LIB
+
+
+def _xof_libcrypto(lib, seed: bytes, out: np.ndarray) -> bool:
+    ctx = lib.EVP_MD_CTX_new()
+    if not ctx:
+        return False
+    try:
+        ok = lib.EVP_DigestInit_ex(ctx, lib.EVP_shake256(), None) == 1
+        ok = ok and lib.EVP_DigestUpdate(ctx, seed, len(seed)) == 1
+        ok = ok and lib.EVP_DigestFinalXOF(ctx, out.ctypes.data, out.nbytes) == 1
+        return ok
+    finally:
+        lib.EVP_MD_CTX_free(ctx)
+
+
+def shake_into(seed: bytes, out: np.ndarray) -> np.ndarray:
+    """``out[:] = SHAKE-256(seed)`` (``out``: contiguous uint8), identical to ``hashlib.shake_256(seed).digest(len(out))``.
+    libcrypto through ctypes when available (GIL released for the squeeze), else hashlib."""
+    assert out.dtype == np.uint8 and out.flags.c_contiguous
+    lib = _libcrypto()
+    if lib is not None and _xof_libcrypto(lib, seed, out):
+        return out
+    out[:] = np.frombuffer(hashlib.shake_256(seed).digest(out.nbytes), dtype=np.uint8)
+    return out
+
+
+def shake_overlapped() -> bool:
+    """Whether the squeeze runs GIL-free (libcrypto found and self-checked)."""
+    return _libcrypto() is not None
+
+
+POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="ligero-host")
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Streams and pinned buffers per pipeline position
+# ---------------------------------------------------------------------------------------------------------------------
+
+class Slot:
+    """One pipeline position: a CUDA stream and reusable pinned host buffers (``pinned(name, nbytes)`` returns a
+    uint8 pinned tensor of at least ``nbytes``, grown on demand; a buffer is reused by the next sub-batch in the same
+    slot, so consumers copy out of it before the stage that refills it runs)."""
+
+    def __init__(self, index: int, device):
+        self.index = index
+        self.device = torch.device(device) if device is not None else None
+        self.cuda = self.device is not None and self.device.type == "cuda"
+        self.stream = torch.cuda.Stream(device=self.device) if self.cuda else None
+        self._pinned: dict[str, torch.Tensor] = {}
+
+    def pinned(self, name: str, nbytes: int) -> torch.Tensor:
+        buf = self._pinned.get(name)
+        if buf is None or buf.numel() < nbytes:
+            buf = torch.empty(max(nbytes, 1), dtype=torch.uint8, pin_memory=self.cuda)
+            self._pinned[name] = buf
+        return buf
+
+    def __repr__(self):
+        return f"Slot({self.index}, {self.device})"
+
+
+_SLOTS: dict = {}
+_DEFAULT_SLOT: dict = {}
+
+
+def slot_for(device, index: int = 0) -> Slot:
+    key = (str(device), index)
+    s = _SLOTS.get(key)
+    if s is None:
+        s = Slot(index, device)
+        _SLOTS[key] = s
+    return s
+
+
+class _NullContext:
+    def __enter__(self):
+        return None
+
+    def __exit__(self, *a):
+        return False
+
+
+def stream_context(slot: Slot | None):
+    """``torch.cuda.stream(slot.stream)`` for a CUDA slot, a no-op context otherwise (CPU, or the caller's stream)."""
+    if slot is not None and slot.cuda and slot.stream is not None:
+        return torch.cuda.stream(slot.stream)
+    return _NullContext()
+
+
+def cupy_stream_context():
+    """cupy launches (encoder, Merkle, mask sampler, fused tests) follow torch's CURRENT stream inside this context."""
+    import warnings
+
+    import cupy as cp
+    ts = torch.cuda.current_stream()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        return cp.cuda.ExternalStream(ts.cuda_stream)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Running stage generators
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _is_ready(w) -> bool:
+    if w is None:
+        return True
+    if isinstance(w, Future):
+        return w.done()
+    return bool(w.query())          # torch.cuda.Event
+
+
+def _wait(w) -> None:
+    if w is None:
+        return
+    if isinstance(w, Future):
+        w.result()
+    else:
+        w.synchronize()
+
+
+def run_to_completion(gen, slot: Slot | None = None):
+    """Drive one stage generator to its return value on the calling thread (the plain, sequential prover)."""
+    try:
+        with stream_context(slot):
+            w = next(gen)
+        while True:
+            _wait(w)
+            with stream_context(slot):
+                w = gen.send(None)
+    except StopIteration as stop:
+        return stop.value
+
+
+class _Job:
+    __slots__ = ("index", "gen", "waitable", "slot", "started", "done", "value")
+
+    def __init__(self, index, gen, slot):
+        self.index, self.gen, self.slot = index, gen, slot
+        self.waitable, self.started, self.done, self.value = None, False, False, None
+
+    def step(self):
+        try:
+            with stream_context(self.slot):
+                self.waitable = self.gen.send(None) if self.started else next(self.gen)
+                self.started = True
+        except StopIteration as stop:
+            self.started, self.done, self.value, self.waitable = True, True, stop.value, None
+
+
+def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> tuple[list, float]:
+    """Run ``len(starters)`` stage generators with at most ``depth`` in flight, each on its own slot (stream + pinned
+    buffers), interleaving them: a job advances when its waitable is ready; when none is, the scheduler blocks on the
+    oldest.  ``starters[i](slot)`` must return the generator of sub-batch i (it is called when the job STARTS, so
+    per-sub-batch randomness -- the verifier's coins, the mask keys -- is drawn in sub-batch order, as sequentially).
+    Returns ``(values, wall_seconds)``; each value's ``timings`` (when it has one) is rescaled so that the per-value
+    ``timings_key`` entries sum to the wall: the phases become proportional shares of the overlapped wall (the
+    un-rescaled event-measured phases are kept under ``timings["measured_<phase>"]``)."""
+    depth = max(1, int(depth))
+    n = len(starters)
+    results = [None] * n
+    active: list[_Job] = []
+    free_slots = [slot_for(device, i) for i in range(depth)]
+    nxt = 0
+    busy = waited = 0.0                                         # main-thread time launching vs blocked on a waitable
+    if str(device).startswith("cuda"):
+        torch.cuda.synchronize(device)
+    t0 = time.perf_counter()
+    while nxt < n or active:
+        # start jobs while slots are free (their first stage launches device work immediately)
+        while nxt < n and free_slots:
+            slot = free_slots.pop(0)
+            job = _Job(nxt, None, slot)
+            tb = time.perf_counter()
+            with stream_context(slot):
+                job.gen = starters[nxt](slot)
+            job.step()
+            busy += time.perf_counter() - tb
+            nxt += 1
+            if job.done:
+                results[job.index] = job.value
+                free_slots.append(slot)
+            else:
+                active.append(job)
+        if not active:
+            continue
+        ready = [j for j in active if _is_ready(j.waitable)]
+        if not ready:
+            oldest = active[0]
+            tw = time.perf_counter()
+            _wait(oldest.waitable)
+            waited += time.perf_counter() - tw
+            ready = [oldest]
+        for job in ready:
+            tb = time.perf_counter()
+            job.step()
+            busy += time.perf_counter() - tb
+            if job.done:
+                results[job.index] = job.value
+                active.remove(job)
+                free_slots.append(job.slot)
+                free_slots.sort(key=lambda s: s.index)
+    if str(device).startswith("cuda"):
+        torch.cuda.synchronize(device)
+    wall = time.perf_counter() - t0
+    _rescale(results, wall, timings_key)
+    LAST_STATS.update({"n": n, "depth": depth, "wall": wall, "host_busy": busy, "host_waited": waited})
+    return results, wall
+
+
+#: the last ``prove_many`` pass: wall, main-thread busy (launching / host work) and blocked time -- ``host_busy / wall``
+#: near 1 means the pass is bound by the main thread's launch + host work, not by the device.
+LAST_STATS: dict = {}
+
+
+_DERIVED = ("tests",)      # buckets re-derived from leaves after rescaling
+
+
+def _rescale(results, wall: float, key: str) -> None:
+    """Pipelined attribution: each result's leaf phases (event-measured, overlapped) are scaled by a common factor so
+    that they sum to this sub-batch's share of the wall (wall / n); ``key`` (``total``) becomes share - hints_host so
+    that ``total + hints_host`` (the runners' prover time) equals the share.  The event-measured values are kept as
+    ``measured_<phase>`` (their sum over the sub-batches exceeds the wall by the overlap)."""
+    share = wall / max(1, len(results))
+    for r in results:
+        tm = getattr(r, "timings", None)
+        if not isinstance(tm, dict) or key not in tm:
+            continue
+        leaf = {k: v for k, v in tm.items() if k != key and k not in _DERIVED and not k.startswith("measured_")}
+        s = sum(leaf.values())
+        scale = share / s if s > 0 else 0.0
+        for k, v in leaf.items():
+            tm["measured_" + k] = v
+            tm[k] = v * scale
+        tm["measured_" + key] = tm[key]
+        tm[key] = share - tm.get("hints_host", 0.0)
+        if all(k in tm for k in ("tests_w", "tests_quad", "tests_chain")):
+            tm["tests"] = tm["tests_w"] + tm["tests_quad"] + tm["tests_chain"]

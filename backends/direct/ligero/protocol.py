@@ -789,33 +789,109 @@ def _sync(device):
         torch.cuda.synchronize(device)
 
 
+EVENT_CLOCK = True      # phase laps as CUDA events (read once at the end) instead of a device sync per lap (lane hp2-host)
+
+
 class _Clock:
+    """Phase timer.  CUDA with ``EVENT_CLOCK``: every lap records an event on the current stream and the phase times are
+    read once at ``total()`` (event-to-event = the stream's timeline between the marks, host gaps included; ``total`` is
+    wall-clock after one stream sync) -- no host sync per phase, so the phases of a sub-batch can overlap.  Otherwise
+    (CPU, or ``EVENT_CLOCK = False``): the legacy sync-per-lap timer."""
+
     def __init__(self, device):
         self.device = device
-        self.marks = {}
-        _sync(device)
+        self.marks: dict[str, float] = {}
+        self.events = str(device).startswith("cuda") and EVENT_CLOCK
+        self._laps: list = []
+        if self.events:
+            self._last_ev = torch.cuda.Event(enable_timing=True)
+            self._last_ev.record()
+        else:
+            _sync(device)
         self.t0 = time.perf_counter()
         self.last = self.t0
 
     def lap(self, name: str):
+        if self.events:
+            ev = torch.cuda.Event(enable_timing=True)
+            ev.record()
+            self._laps.append((name, self._last_ev, ev))
+            self._last_ev = ev
+            return
         _sync(self.device)
         now = time.perf_counter()
         self.marks[name] = self.marks.get(name, 0.0) + (now - self.last)
         self.last = now
 
     def total(self):
-        _sync(self.device)
+        if self.events:
+            torch.cuda.current_stream(self.device).synchronize()
+            for name, a, b in self._laps:
+                self.marks[name] = self.marks.get(name, 0.0) + a.elapsed_time(b) / 1e3
+            self._laps = []
+        else:
+            _sync(self.device)
         return time.perf_counter() - self.t0
 
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Prover
 # ---------------------------------------------------------------------------------------------------------------------
+#
+# ``prove`` runs ``_prove_stages`` -- the prover as a generator that yields at the points where the host must wait for
+# something (pipeline.py): the root's D2H copy; the SHAKE-256 challenge expansion (squeezed on a worker thread into
+# pinned memory); the test messages' D2H copy; the openings' D2H copy.  Sequentially (``prove``) the generator is driven
+# to completion on the caller's stream: the same transcript as before, with the per-object ``.cpu()`` syncs replaced by
+# one pinned non-blocking copy per message and the phase clock replaced by events.  ``pipeline.prove_many`` interleaves
+# several sub-batches' generators on their own streams (lane hp2-host).  Bit-exactness: every value that reaches the
+# transcript is the same tensor as before, copied through pinned memory (int32 <-> uint32 bit patterns of residues < p).
+
+def _pin(slot, device, name: str, nbytes: int) -> torch.Tensor:
+    """A pinned uint8 buffer of >= ``nbytes`` for ``name`` in this slot (the caller's slot, or the device's default slot)."""
+    from . import pipeline
+    if slot is None:
+        slot = pipeline.slot_for(device, 0)
+    return slot.pinned(name, nbytes)
+
+
+def _event(device):
+    if str(device).startswith("cuda"):
+        ev = torch.cuda.Event()
+        ev.record()
+        return ev
+    return None
+
+
+def _cupy_ctx(device):
+    from . import pipeline
+    if str(device).startswith("cuda"):
+        try:
+            return pipeline.cupy_stream_context()
+        except Exception:  # noqa: BLE001 -- no cupy: nothing to redirect
+            pass
+    return pipeline._NullContext()
+
+
+def _expand_pinned(seed: bytes, count: int, device, slot, name: str):
+    """(future, finish): ``future`` completes when SHAKE-256(seed) has been squeezed into pinned memory (worker thread,
+    GIL released -- pipeline.shake_into); ``finish()`` then uploads it (non-blocking) and reduces mod p on the device:
+    the same ``uint32 -> int64 & 0xFFFFFFFF % p`` map as ``_expand``."""
+    from . import pipeline
+    nbytes = 4 * count
+    buf = _pin(slot, device, name, nbytes)[:nbytes]
+    fut = pipeline.POOL.submit(pipeline.shake_into, seed, buf.numpy())
+
+    def finish():
+        u = buf.view(torch.int32).to(device, non_blocking=True)
+        return (u.to(torch.int64) & 0xFFFFFFFF) % P
+
+    return fut, finish
+
 
 def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints: torch.Tensor,
           device, check: bool = False, mutate=None, chain: tuple | None = None, words: dict | None = None,
           coins: Coins | None = None, rel: RelationHooks = BF16_HOOKS, auth: auth_mod.AuthStatement | None = None,
-          auth_open=None) -> Proof:
+          auth_open=None, hints_fn=None) -> Proof:
     """``pub``: the public vectors (from ``public_vectors``); ``hints``: (n_hints, l) from ``gen_step``.
     ``words``: the public words the statement binds -- ``{"a", "b", "c", "y"}`` (units) or ``{"a", "b"}`` (chain;
     ``y16`` comes from ``chain``) -- absorbed into every challenge (``statement_digest``).
@@ -825,10 +901,26 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     a malicious source with the same interface) and FORBIDDEN in the Fiat-Shamir mode (there is no step 0; the
     challenges are hashes of the transcript).  The two modes are mutually exclusive (red team F3).
     ``auth`` (chain mode): the committed-object block absorbed into the statement (``auth.py``); ``auth_open()``
-    returns the three Merkle multiproofs the transcript then carries (prover work, timed as ``auth_openings``)."""
+    returns the three Merkle multiproofs the transcript then carries (prover work, timed as ``auth_openings``).
+    ``hints_fn``: with ``hints=None``, a callable producing the hints inside the prover (timed ``hints_host``, excluded
+    from ``timings["total"]`` as the runners' separately measured hints were)."""
+    from . import pipeline
+    gen = _prove_stages(p, sys, tb, cfg, pub, hints, device, check, mutate, chain, words, coins, rel, auth, auth_open,
+                        hints_fn, None)
+    return pipeline.run_to_completion(gen)
+
+
+def prove_stages(*args, slot=None, **kw):
+    """The prover as a stage generator for ``pipeline.prove_many`` (same arguments as ``prove`` plus ``slot``)."""
+    return _prove_stages(*args, **kw, slot=slot)
+
+
+def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints, device,
+                  check=False, mutate=None, chain=None, words=None, coins=None, rel: RelationHooks = BF16_HOOKS,
+                  auth=None, auth_open=None, hints_fn=None, slot=None):
+    from . import pipeline
     clk = _Clock(device)
     m, l, n, D = sys.m, cfg.l, cfg.n, cfg.D
-    assert hints.shape[1] == l
     assert (chain is not None) == (sys.chain is not None), "chain mode needs a chain-compiled system"
     if words is None:
         raise ValueError("prove needs the public words (statement binding)")
@@ -844,11 +936,20 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         if coins is not None:
             raise ValueError("fiat-shamir mode has no step 0: coins must be None")
         src, ccom, sent = None, None, []
+    cuda = str(device).startswith("cuda")
+    # the statement digest (blake2b of the public words, ~1.6 ms of host hashing) on a worker thread; needed at
+    # challenge 1 only.  ``words["y16"]`` (a host copy of the chain's y16) keeps the worker off the device.
     if chain is not None:
-        stmt = statement_digest(sys, cfg, words["a"], words["b"], layout=chain[0], y16=chain[1], rel=rel, auth=auth)
+        y16_for_digest = words.get("y16", chain[1])
+        stmt_fut = pipeline.POOL.submit(statement_digest, sys, cfg, words["a"], words["b"], layout=chain[0],
+                                        y16=y16_for_digest, rel=rel, auth=auth)
     else:
-        stmt = statement_digest(sys, cfg, words["a"], words["b"], c=words["c"], y=words["y"], rel=rel)
+        stmt_fut = pipeline.POOL.submit(statement_digest, sys, cfg, words["a"], words["b"], c=words["c"], y=words["y"], rel=rel)
     clk.lap("statement")
+    if hints is None:
+        hints = hints_fn()
+        clk.lap("hints_host")
+    assert hints.shape[1] == l
     W = build_witness(sys, pub, hints, device)
     clk.lap("witness")
     if mutate is not None:
@@ -865,7 +966,8 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     Mrows = n_rows(cfg, m, chain is not None)
     enc = _simt_encoder(cfg, device)                              # None: the torch int64 NTT (CPU, or no cupy)
     if cfg.zk:
-        S = _sample_masks(cfg, m, chain is not None, device)
+        with _cupy_ctx(device):
+            S = _sample_masks(cfg, m, chain is not None, device)
         clk.lap("zk_masks")
         # coefficient rows of every committed polynomial: witness rows interp_H(W) + Z_H s_j, then the mask rows
         coefs = torch.zeros((Mrows, k), dtype=torch.int64, device=device)
@@ -891,36 +993,58 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         U = enc.encode(W)[0] if enc is not None else encode(W, n)   # (m, n); int32 from the kernel
     clk.lap("encode")
 
-    gpu_hash = merkle.gpu_available() and str(device).startswith("cuda")
+    gpu_hash = merkle.gpu_available() and cuda
     if gpu_hash:
+        from . import openings_device
         U32 = U.to(torch.int32).contiguous()                       # elements < p < 2^31
         clk.lap("transfer")                                        # nothing leaves the device here
-        root, tree = merkle.commit_device(U32)
+        with _cupy_ctx(device):
+            root_dev, tree = openings_device.commit_device_async(U32)
+        root_buf = _pin(slot, device, "root", 32)[:32]
+        root_buf.view(torch.int32).copy_(root_dev, non_blocking=True)
         hash_name = merkle.GPU_HASH_NAME
+        clk.lap("merkle")
+        yield _event(device)                                       # -- wait: the root reaches the host
+        root = root_buf.numpy().tobytes()
     else:
         U_cols = U.t().contiguous().cpu().numpy().astype(np.uint32)
         clk.lap("transfer")
         root, levels = merkle.commit(U_cols)
         hash_name = merkle.HASH_NAME
-    clk.lap("merkle")
+        clk.lap("merkle")
+        yield None
 
     M = U.shape[0]
     sent.append("root")
+    if not stmt_fut.done():
+        yield stmt_fut
+    stmt = stmt_fut.result()
     if cfg.interactive:
         r1, s1 = src.open1(root)                                  # V opens coin slot 1 (after root)
         if len(r1) != COIN_BYTES or len(s1) != COIN_BYTES or coin_commit(r1, s1) != ccom[0]:
             raise CoinOpeningError(1, sent)                       # public-data abort, before any coin-dependent message
     else:
         r1 = s1 = None
-    r, rho_lin, rho_quad, rc = _challenge1(stmt, root, D, M, tb.L, tb.Q, device, l if chain else 0, ccom, r1)
-    v_np = None
+    # challenge 1: SHAKE-256 of the seed, squeezed on a worker thread into pinned memory, reduced on the device
+    l_chain = l if chain else 0
+    seed1 = merkle.hash_bytes(seed1_preimage(stmt, root, ccom, r1))
+    extra = N_FAMILIES * l_chain
+    width = M + tb.L + tb.Q + extra
+    if cuda:
+        fut, finish = _expand_pinned(seed1, D * width, device, slot, "c1")
+        yield fut                                                  # -- wait: the squeeze (host, off-thread)
+        x = finish().reshape(D, width)
+    else:
+        x = _expand(seed1, D * width, device).reshape(D, width)
+    r, rho_lin, rho_quad = x[:, :M], x[:, M:M + tb.L], x[:, M + tb.L:M + tb.L + tb.Q]
+    rc = x[:, M + tb.L + tb.Q:].reshape(D, N_FAMILIES, l_chain) if l_chain else None
+    v = None
     if cfg.zk:
         r[:, mr["prox"]] = 0                                      # the proximity mask enters with coefficient 1
         w = (_combine(r, coefs) + coefs[mr["prox"]]) % P          # (D, k) coefficients, uniform
         alpha, _beta = _alpha_beta(tb, rho_lin, pub, m, l, device)
         v = _combine(alpha, coefs[:m])                            # (D, k): alpha . p, = beta on H
         _add_zh_times(v, coefs[mr["lin"]][:, :cfg.t_pad], l)     # + Z_H s_lin (the committed row is s_lin)
-        v_np = v.cpu().numpy().astype(np.uint32)
     else:
         w = _combine(r, W)                                        # (D, l) evaluations on H
     clk.lap("tests_w")
@@ -936,7 +1060,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         assert (hcoef[:, cfg.h_len:] == 0).all(), "quotient degree too high: constraints violated"
     h = hcoef[:, :cfg.h_len]
     clk.lap("tests_quad")
-    q_np = None
+    q = None
     if chain is not None:
         layout, y16_pub = chain
         cc = chain_coefs(sys, layout, rc, y16_pub)
@@ -951,12 +1075,31 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
         if check:
             assert (qcoef[:, cfg.q_len:] == 0).all(), "chain polynomial degree too high"
             assert torch.equal(_sum_over_H(qcoef[:, :cfg.q_len], l), cc.rhs), "chain constraints violated"
-        q_np = qcoef[:, :cfg.q_len].cpu().numpy().astype(np.uint32)
-    clk.lap("tests_chain")
-    clk.marks["tests"] = clk.marks["tests_w"] + clk.marks["tests_quad"] + clk.marks["tests_chain"]   # the bucket
+        q = qcoef[:, :cfg.q_len]
+    # the test messages leave the device as ONE pinned non-blocking copy (int32: residues < p); host copies below
+    msgs = [("w", w), ("h", h)] + ([("q", q)] if q is not None else []) + ([("v", v)] if v is not None else [])
+    if cuda:
+        offs, at = {}, 0
+        for name, tsr in msgs:
+            offs[name] = (at, tuple(tsr.shape))
+            at += 4 * tsr.numel()
+        mbuf = _pin(slot, device, "msgs", at)[:at]
+        for name, tsr in msgs:
+            o, shape = offs[name]
+            mbuf[o:o + 4 * tsr.numel()].view(torch.int32).view(shape).copy_(tsr.to(torch.int32).contiguous(), non_blocking=True)
+        clk.lap("tests_chain")
+        yield _event(device)                                       # -- wait: w, h, q, v reach the host
+        got = {}
+        for name, (o, shape) in offs.items():
+            got[name] = mbuf[o:o + 4 * math.prod(shape)].numpy().view(np.uint32).reshape(shape).copy()
+        w_np, h_np, q_np, v_np = got["w"], got["h"], got.get("q"), got.get("v")
+    else:
+        clk.lap("tests_chain")
+        w_np = w.cpu().numpy().astype(np.uint32)
+        h_np = h.cpu().numpy().astype(np.uint32)
+        q_np = q.cpu().numpy().astype(np.uint32) if q is not None else None
+        v_np = v.cpu().numpy().astype(np.uint32) if v is not None else None
 
-    w_np = w.cpu().numpy().astype(np.uint32)
-    h_np = h.cpu().numpy().astype(np.uint32)
     sent.append("w, h" + (", q" if q_np is not None else "") + (", v" if v_np is not None else ""))
     if cfg.interactive:
         r2, s2 = src.open2(root, w_np, h_np, q_np, v_np)          # V opens coin slot 2 (after the test messages)
@@ -965,21 +1108,35 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     else:
         r2 = s2 = None
     cols = _challenge2(stmt, root, w_np, h_np, cfg.t, n, q_np, v_np, ccom, r2)
+    t = len(cols)
     if gpu_hash:
-        cols_t = torch.tensor(cols, dtype=torch.int64, device=device)
-        opened = U32.index_select(1, cols_t).cpu().numpy().astype(np.uint32)   # (m, t): the only U bytes that leave
-        paths = merkle.open_device(tree, cols)
+        cbuf = _pin(slot, device, "cols", 8 * t)[:8 * t].view(torch.int64)
+        cbuf.numpy()[:] = cols
+        cols_t = cbuf.to(device, non_blocking=True)
+        opened_dev = U32.index_select(1, cols_t)                  # (M, t) int32: the only U bytes that leave
+        sib = openings_device.gather_paths_device(tree, cols_t)   # (t, depth, 8) int32
+        depth = sib.shape[1]
+        nb1, nb2 = 4 * M * t, 4 * sib.numel()
+        obuf = _pin(slot, device, "open", nb1 + nb2)[:nb1 + nb2]
+        obuf[:nb1].view(torch.int32).view(M, t).copy_(opened_dev.contiguous(), non_blocking=True)
+        if nb2:
+            obuf[nb1:nb1 + nb2].view(torch.int32).view(sib.shape).copy_(sib.contiguous(), non_blocking=True)
+        clk.lap("openings")
+        yield _event(device)                                       # -- wait: the openings reach the host
+        opened = openings_device.opened_from_pinned(obuf[:nb1].view(torch.int32), M, t)
+        paths = openings_device.paths_from_raw(obuf[nb1:nb1 + nb2].numpy().tobytes(), t, depth)
     else:
         opened = U_cols[cols].T.copy()                            # (m, t)
         paths = merkle.open_columns(levels, cols)
-    clk.lap("openings")
+        clk.lap("openings")
     auth_sibs = None
     if auth is not None:                                          # the Merkle multiproofs of the boundary words
         auth_sibs = [list(s) for s in auth_open()]
         clk.lap("auth_openings")
     total = clk.total()
     timings = dict(clk.marks)
-    timings["total"] = total
+    timings["tests"] = timings.get("tests_w", 0.0) + timings.get("tests_quad", 0.0) + timings.get("tests_chain", 0.0)
+    timings["total"] = total - timings.get("hints_host", 0.0)
     return Proof(root, w_np, h_np, cols, opened, paths, hash_name, timings, q_np, v_np, ccom,
                  Coins(r1, s1, r2, s2) if cfg.interactive else None, auth_sibs)
 

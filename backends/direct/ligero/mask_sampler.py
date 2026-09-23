@@ -123,22 +123,61 @@ class ChaChaMaskSampler:
         self.kernel = cp.RawKernel(_SRC, "chacha20_blocks", options=("-std=c++17",))
         self.nonce = cp.asarray(np.frombuffer(NONCE, dtype="<u4"))
 
+    _KEY_RING = 8
+
+    def _key_device(self, key: bytes):
+        """The 32-byte key on the device as a cupy uint32 view, uploaded from a small ring of pinned buffers with a
+        non-blocking copy on the current torch stream (``cp.asarray(numpy)`` from pageable memory would stall the host
+        until the stream drains; lane hp2-host).  A ring entry is reused only after its previous copy completed."""
+        if not hasattr(self, "_ring"):
+            self._ring = [torch.empty(32, dtype=torch.uint8, pin_memory=True) for _ in range(self._KEY_RING)]
+            self._ring_ev: list = [None] * self._KEY_RING
+            self._ring_at = 0
+        i = self._ring_at
+        self._ring_at = (i + 1) % self._KEY_RING
+        if self._ring_ev[i] is not None:
+            self._ring_ev[i].synchronize()
+        buf = self._ring[i]
+        buf.numpy()[:] = np.frombuffer(key, dtype=np.uint8)
+        dev = buf.view(torch.int32).to(self.device, non_blocking=True)
+        ev = torch.cuda.Event()
+        ev.record()
+        self._ring_ev[i] = ev
+        return self.cp.asarray(dev).view(self.cp.uint32), dev
+
     def stream(self, key: bytes, nblocks: int, counter0: int = 0) -> torch.Tensor:
-        """``nblocks`` x 16 uint32 words of keystream as an int64 torch tensor (values < 2^32)."""
+        """``nblocks`` x 16 uint32 words of keystream as an int64 torch tensor (values < 2^32).  Launched on cupy's
+        current stream: callers on a torch side stream wrap the call in ``pipeline.cupy_stream_context()``."""
         cp = self.cp
-        key8 = cp.asarray(np.frombuffer(key, dtype="<u4"))
+        key8, _keep = self._key_device(key)
         out = cp.empty(nblocks * 16, dtype=cp.uint32)
         threads = 256
         self.kernel(((nblocks + threads - 1) // threads,), (threads,),
                     (key8, self.nonce, np.uint32(counter0), out, np.uint32(nblocks)))
         return torch.as_tensor(out.view(cp.int32), device=self.device).to(torch.int64) & 0xFFFFFFFF
 
+    SYNC_FREE = True    # rejection compaction by cumsum + scatter (no host sync); False = boolean indexing + top-up loop
+
     def uniform(self, count: int, key: bytes | None = None) -> tuple[torch.Tensor, bytes]:
-        """``count`` exactly uniform BabyBear symbols (int64, on the device) and the key used."""
+        """``count`` exactly uniform BabyBear symbols (int64, on the device) and the key used: the first ``count``
+        accepted words (u < 2p) of the stream, reduced mod p."""
         key = key or os.urandom(32)
         need_words = int(count * 1.08) + 4096
         nblocks = (need_words + 15) // 16
         words = self.stream(key, nblocks)
+        if self.SYNC_FREE:
+            # the same first-``count``-accepted-words selection without a host sync: rank every accepted word among the
+            # accepted ones (cumsum) and scatter it to its rank; rejected words and accepted words of rank >= count go
+            # to a discarded sentinel slot.  Shortfall (fewer than ``count`` acceptances among 1.08 count + 4096 words at
+            # acceptance rate 2p / 2^32 = 0.9375) has probability < 2^-100 at the prover's sizes -- the legacy top-up loop
+            # covered it with a sync; here the sentinel slot would leave zeros (never observed; not a soundness or ZK
+            # issue for the honest prover beyond the probability itself).
+            keep = words < TWO_P
+            rank = torch.cumsum(keep.to(torch.int64), 0) - 1
+            tgt = torch.where(keep & (rank < count), rank, torch.full_like(rank, count))
+            out = torch.zeros(count + 1, dtype=torch.int64, device=words.device)
+            out.scatter_(0, tgt, words % P)
+            return out[:count], key
         acc = words[words < TWO_P] % P
         ctr = nblocks
         while acc.shape[0] < count:                   # top-up: probability < 2^-100 at the prover's sizes
