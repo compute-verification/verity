@@ -202,10 +202,35 @@ def canonical(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False, default=str)
 
 
+NOT_APPLICABLE = "not_applicable"
+
+
+def not_applicable(why: str) -> dict[str, str]:
+    """A check's declaration that a leaf the record carries does not apply to the candidate (a Build-only candidate has no Commit to key a
+    binding by): `{"not_applicable": why}` in `actual`.  `diff` does not count it as a difference and `is_not_applicable` finds them so the
+    test records what was declared inapplicable, by key and reason."""
+    return {NOT_APPLICABLE: why}
+
+
+def is_not_applicable(x: Any) -> bool:
+    return isinstance(x, dict) and set(x) == {NOT_APPLICABLE} and isinstance(x[NOT_APPLICABLE], str)
+
+
+def not_applicable_keys(actual: Any, path: str = "$") -> list[str]:
+    if is_not_applicable(actual):
+        return [f"{path}: {actual[NOT_APPLICABLE]}"]
+    if isinstance(actual, dict):
+        return [s for k, v in actual.items() for s in not_applicable_keys(v, f"{path}.{k}")]
+    return []
+
+
 def diff(expected: Any, actual: Any, path: str = "$") -> list[str]:
     """Every leaf of `expected` that `actual` lacks or disagrees on (keys `actual` has beyond `expected` are not a difference: the
-    expected document is the contract, lifted from the record).  Lists are compared whole."""
+    expected document is the contract, lifted from the record; a leaf `actual` declares `not_applicable(why)` is not a difference either
+    -- the declaration is recorded by the test).  Lists are compared whole."""
     out: list[str] = []
+    if is_not_applicable(actual):
+        return out
     if isinstance(expected, dict):
         if not isinstance(actual, dict):
             return [f"{path}: expected object, got {type(actual).__name__}"]

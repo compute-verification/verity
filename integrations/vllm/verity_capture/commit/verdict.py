@@ -48,7 +48,7 @@ import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from verity_capture.bench import commit_verdict as CV
 
@@ -203,7 +203,9 @@ class Verdict:
     program_digest: str | None = None
     manifest_digest: str | None = None
     query_id: str | None = None
-    correspondence_digest: str | None = None          # reserved for the runtime-correspondence lane (none on v1 records)
+    correspondence_digest: str | None = None          # the Build's `runtime-correspondence/v1` digest (build_summary.json / result.json); None on v1-frontend Builds
+    correspondence_digest_source: str = "absent"      # `build_summary.json:<wrapper>` | `result.json:<wrapper>` | `absent` -- never a stand-in hash
+    correspondence_digests: dict[str, str] = field(default_factory=dict)   # every wrapper's (step, request, per-shape) digest the Build recorded
     schema: str = SCHEMA
     row: str | None = None
     run_roots: list[str] = field(default_factory=list)
@@ -1130,10 +1132,41 @@ def group_checks(rules: list[CheckVerdict]) -> list[CheckVerdict]:
 
 # ---------------------------------------------------------------------------------------------------------------------- building
 
+#: the Build wrapper whose correspondence digest is THE row's `correspondence_digest` (the step Program is the one every row Builds; the
+#: request / per-shape digests are carried beside it in `correspondence_digests`)
+CORRESPONDENCE_WRAPPER = "step"
+
+
+def correspondence_of_build(build_summary: dict | None, *, result_jsons: Mapping[str, dict] | None = None) -> tuple[str | None, str, dict[str, str]]:
+    """(correspondence_digest, source, {wrapper: digest}) from the Build's own record: `build_summary.json` (row_pod.sh's build.summary
+    lifts `result.json:program.correspondence_digest` per wrapper), else the wrappers' `result.json` directly.  A Build made with the
+    v1 frontend records none -> (None, "absent", {}): never a stand-in hash (the row's global_match.json digest is an INPUT, `inputs`)."""
+    digests: dict[str, str] = {}
+    source = "absent"
+    for w, v in (build_summary or {}).items():
+        if isinstance(v, dict) and v.get("correspondence_digest"):
+            digests[w] = str(v["correspondence_digest"])
+    if digests:
+        source = "build_summary.json"
+    else:
+        for w, r in (result_jsons or {}).items():
+            d = ((r or {}).get("program") or {}).get("correspondence_digest")
+            if d:
+                digests[w] = str(d)
+        if digests:
+            source = "result.json"
+    if not digests:
+        return None, "absent", {}
+    w = CORRESPONDENCE_WRAPPER if CORRESPONDENCE_WRAPPER in digests else sorted(digests)[0]
+    return digests[w], f"{source}:{w}", dict(sorted(digests.items()))
+
+
 def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = None, manifest_verify: dict | None = None, file_digests: dict[str, str] | None = None,
-          row: str | None = None, min_openings: int | None = None, declaration: dict | None = None, rc: int | None = None) -> Verdict:
+          row: str | None = None, min_openings: int | None = None, declaration: dict | None = None, rc: int | None = None,
+          build_summary: dict | None = None, build_results: Mapping[str, dict] | None = None) -> Verdict:
     """The Verdict from the Commit's own documents: `rows` = runs.jsonl entries (control + instrumented), `verdict_doc` = commit/verdict.json,
-    `summary` = commit_summary.json, `manifest_verify` = commit/manifest_verify.json.  `declaration` defaults to the run's own `commit.classes`."""
+    `summary` = commit_summary.json, `manifest_verify` = commit/manifest_verify.json.  `declaration` defaults to the run's own `commit.classes`.
+    `build_summary` (build_summary.json) / `build_results` ({wrapper: result.json}) give the Build's `runtime-correspondence/v1` digest."""
     vd = _d(verdict_doc)
     rm = _d(vd.get("required_manifest"))
     program_digest = rm.get("program_digest")
@@ -1209,13 +1242,15 @@ def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = 
               "negatives": vd.get("negatives"), "reconstruction_mismatch": mismatches or None, "only_arm": vd.get("only_arm")}
     runs_ = {"instrumented": len(treatment), "failed": sum(1 for _, rec, _ in recorded if rec is False), "control": sum(1 for r in rows if r.get("arm") == "control"),
              "not_pass_by_reconstruction": sum(1 for _, ch in per_run if run_outcome(ch) != PASS), "pairs": [p for p, _ in per_run]}
+    cdig, csrc, cdigs = correspondence_of_build(build_summary, result_jsons=build_results)
     return Verdict(checks=groups + rules, outcome=outcome, program_digest=ctx.get("program_digest"), manifest_digest=ctx.get("manifest_digest"), query_id=query_id,
-                   # the runtime-correspondence record of the row (Match: global_match.json) by file digest; the correspondence lane will replace this with its own digest
-                   correspondence_digest=(file_digests or {}).get("global_match.json"), row=row, run_roots=list(dict.fromkeys(str(x) for x in (vd.get("run_roots") or [r["commit"].get("run_root") for r in treatment]) if x)),
+                   correspondence_digest=cdig, correspondence_digest_source=csrc, correspondence_digests=cdigs,
+                   row=row, run_roots=list(dict.fromkeys(str(x) for x in (vd.get("run_roots") or [r["commit"].get("run_root") for r in treatment]) if x)),
                    runs=runs_, inputs=dict(file_digests or {}), execution=execution, compat=compat, notes=notes)
 
 
-RECORD_FILES = ("commit/verdict.json", "commit/runs.jsonl", "commit_summary.json", "commit/manifest_verify.json", "commit/summary.json", "global_match.json", "match_summary.json")
+RECORD_FILES = ("commit/verdict.json", "commit/runs.jsonl", "commit_summary.json", "commit/manifest_verify.json", "commit/summary.json", "global_match.json", "match_summary.json",
+                "build_summary.json")
 
 
 def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: str | None = None) -> Verdict:
@@ -1236,7 +1271,16 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
     vd = json.load(open(d / "commit" / "verdict.json")) if (d / "commit" / "verdict.json").is_file() else None
     summ = json.load(open(d / "commit_summary.json")) if (d / "commit_summary.json").is_file() else None
     mv = json.load(open(d / "commit" / "manifest_verify.json")) if (d / "commit" / "manifest_verify.json").is_file() else None
-    v = build(rows, vd, summary=summ, manifest_verify=mv, file_digests=digests, row=d.name, rc=rc)
+    bs = json.load(open(d / "build_summary.json")) if (d / "build_summary.json").is_file() else None
+    results: dict[str, dict] = {}
+    if bs is None:                                    # no build.summary on the row: the wrappers' own result.json (build_step/, build_request*/)
+        for p in sorted(glob.glob(str(d / "build_*" / "result.json"))):
+            w = os.path.basename(os.path.dirname(p))
+            try:
+                results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.load(open(p))
+            except (OSError, ValueError):
+                continue
+    v = build(rows, vd, summary=summ, manifest_verify=mv, file_digests=digests, row=d.name, rc=rc, build_summary=bs, build_results=results)
     missing = [rel for rel in ("commit/verdict.json", "commit/runs.jsonl") if rel not in digests]
     if missing:
         v.notes.append(f"record incomplete: {', '.join(missing)} not on the row (Commit never closed / never ran)")

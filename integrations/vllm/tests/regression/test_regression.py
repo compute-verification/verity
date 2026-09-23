@@ -131,6 +131,9 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     problems = resolver.sanction(row, check_name, act, resolver.diff(exp, act))     # a labelled decision may sanction a difference from v1
     if act.get("sanctioned_by"):
         record_property("sanctioned_by", act["sanctioned_by"])
+    na = resolver.not_applicable_keys(act)
+    if na:
+        record_property("not_applicable", "; ".join(na))                                 # leaves the candidate declared inapplicable, by key and reason
     strength = "WEAK (PASS-side / unexercised rule)" if chk.STRENGTH == "weak" else "strong"
     what = "the v1 reference" + (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
     assert not problems, (f"#{row.number} {row.key}: {check_name} [{chk.TIER}, {strength}] does not reproduce {what} "
