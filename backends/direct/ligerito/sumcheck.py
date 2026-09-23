@@ -232,15 +232,22 @@ class SumcheckProof:
 # Prover
 # ---------------------------------------------------------------------------------------------------------------------
 
-def build_tables(cons: Constraints, z: torch.Tensor, chunk: int = 64) -> dict[str, torch.Tensor]:
-    """``Az, Bz, Cz`` ``(K_pad, C)`` int64 base tables from the COO matrices (gathers of rows of ``z``)."""
+def build_tables(cons: Constraints, z: torch.Tensor, chunk: int = 64, dtype=torch.int64, col_chunk: int = 1 << 16) -> dict[str, torch.Tensor]:
+    """``Az, Bz, Cz`` ``(K_pad, C)`` base tables from the COO matrices (gathers of rows of ``z``); ``dtype`` int32 for the
+    CUDA path (accumulated in int64 per column chunk)."""
     out = {}
+    C = z.shape[1]
     for side, (ks, rs, vs) in cons.coo.items():
-        T = torch.zeros((cons.K_pad, z.shape[1]), dtype=torch.int64, device=z.device)
-        for i0 in range(0, ks.numel(), chunk):
-            k, r, v = ks[i0:i0 + chunk], rs[i0:i0 + chunk], vs[i0:i0 + chunk]
-            T.index_add_(0, k, (z.index_select(0, r).to(torch.int64) * v[:, None]) % P)
-        out[side] = T % P
+        ks, rs, vs = (t.to(z.device) for t in (ks, rs, vs))
+        T = torch.zeros((cons.K_pad, C), dtype=dtype, device=z.device)
+        for c0 in range(0, C, col_chunk):
+            zc = z[:, c0:c0 + col_chunk]
+            acc = torch.zeros((cons.K_pad, zc.shape[1]), dtype=torch.int64, device=z.device)
+            for i0 in range(0, ks.numel(), chunk):
+                k, r, v = ks[i0:i0 + chunk], rs[i0:i0 + chunk], vs[i0:i0 + chunk]
+                acc.index_add_(0, k, (zc.index_select(0, r).to(torch.int64) * v[:, None]) % P)
+            T[:, c0:c0 + col_chunk] = (acc % P).to(dtype)
+        out[side] = T
     return out
 
 
@@ -314,7 +321,7 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
     n_k, n_c, n_i = lay.n_k, lay.n_c, lay.n_i
     tau = coins.challenge("zc/tau", n_k + n_c).to(dev)                      # tau[t] <-> variable t; k bits are the top n_k
     tau_cols, tau_rows = tau[:n_c], tau[n_c:]
-    tabs = build_tables(cons, z)
+    tabs = build_tables(cons, z, dtype=torch.int32 if engine == "cuda" else torch.int64)
     _sync(dev)
     timings["tables"] = time.perf_counter() - t0
     # --- sumcheck 1: the zero-check --------------------------------------------------------------------------------
@@ -548,3 +555,105 @@ def check_claims(lay: Layout, z: torch.Tensor, claims: list) -> bool:
         if not torch.equal(v, cl.value.to(v.device)):
             return False
     return True
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Measurement harness: ``python -m backends.direct.ligerito.sumcheck --relation fp8-ada --vus 4096 --engine cuda``
+# ---------------------------------------------------------------------------------------------------------------------
+
+def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: str | None, negatives: bool,
+          seed: int = 7) -> dict:
+    """Witnesses via the Ligero code (produce only), the three sumchecks, the verifier, bytes, peak memory; optional
+    negatives (violated quadratic row / chain link / lookup: the honest prover on the bad witness fails round 0, the
+    cheating prover reaches the final claim and mismatches)."""
+    from backends.direct.ligero.relations import relation
+    from backends.direct.ligero.relchain import RelationChainRunner, instances
+    from .layout import build_z, constraints, layout_for, public_rows
+    dev = torch.device(device)
+    out: dict = {"relation": relation_name, "vus": n_vus, "l": l, "S": S, "engine": engine or "ref"}
+    t0 = time.perf_counter()
+    rel = relation(relation_name)
+    runner = RelationChainRunner(rel, device, -128.0)
+    vus = instances(rel, n_vus, seed=seed)
+    subs, nv = ligero_subbatches(rel, runner, vus, l, S, device)
+    _sync(dev)
+    out["t_witness"] = time.perf_counter() - t0
+    lay = layout_for(runner.sys, l, nv, rel.steps)
+    cons = constraints(runner.sys, lay, device)
+    out.update(m=lay.m, R=lay.R, C=lay.C, K=lay.K, K_pad=cons.K_pad, n_k=lay.n_k, n_c=lay.n_c, n_i=lay.n_i,
+               n_links=lay.n_links, nnz=cons.nnz(), n_sub=len([n for n in nv if n]))
+    t1 = time.perf_counter()
+    z = build_z(runner.sys, lay, subs, device)
+    pub_subs = [s.public() for s in subs]
+    del subs
+    _sync(dev)
+    out["t_build_z"] = time.perf_counter() - t1
+    if dev.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(dev)
+        base_mem = torch.cuda.memory_allocated(dev)
+    coins = LocalCoins(b"bench")
+    proof = prove(lay, cons, z, coins, engine=engine)
+    if dev.type == "cuda":
+        out["peak_mem_gb"] = (torch.cuda.max_memory_allocated(dev)) / 1e9
+        out["base_mem_gb"] = base_mem / 1e9
+    out["timings"] = proof.timings
+    out["bytes"] = proof.n_bytes()
+    t2 = time.perf_counter()
+    pubs = public_rows(runner.sys, lay, pub_subs, device)
+    ok, why, claims = verify(lay, cons, pubs, proof, LocalCoins(b"bench"), device=device)
+    _sync(dev)
+    out["t_verify"] = time.perf_counter() - t2
+    out["verify_ok"], out["verify_why"] = ok, why
+    if negatives:
+        neg = {}
+        sys = runner.sys
+        bit = next(r for r in sys.rows if r.kind == "bit")
+        sel = [r for r in sys.rows if r.kind == "sel"]
+        cases = {
+            "quadratic": [(lay.row_of_sys[bit.idx], 3, 2)],
+            "chain_link": [(lay.c_rows[0], 5, None), (lay.virt["next:0"], 4, "copy")],
+            "lookup": [(lay.row_of_sys[sel[0].idx], 7, 1), (lay.row_of_sys[sel[1].idx], 7, 1)],
+        }
+        for name, edits in cases.items():
+            zb = z.clone()
+            for row, col, val in edits:
+                if val is None:
+                    zb[row, col] = (int(zb[row, col]) + 1) % P
+                elif val == "copy":
+                    zb[row, col] = zb[lay.c_rows[0], col + 1]
+                else:
+                    zb[row, col] = val
+            res = {}
+            for cheat in (None, "all"):
+                pr = prove(lay, cons, zb, LocalCoins(b"neg"), cheat=cheat, engine=engine)
+                ok_n, why_n, _ = verify(lay, cons, pubs, pr, LocalCoins(b"neg"), device=device)
+                res[cheat or "honest"] = (ok_n, why_n)
+            neg[name] = res
+            del zb
+        out["negatives"] = neg
+    return out
+
+
+def _main():
+    import argparse
+    import json
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--relation", default="fp8-ada")
+    ap.add_argument("--vus", type=int, default=4096)
+    ap.add_argument("--l", type=int, default=16384)
+    ap.add_argument("--S", type=int, default=16)
+    ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--engine", default=None)
+    ap.add_argument("--negatives", action="store_true")
+    ap.add_argument("--json", default=None)
+    a = ap.parse_args()
+    res = bench(a.relation, a.vus, a.l, a.S, a.device, a.engine, a.negatives)
+    s = json.dumps(res, indent=1, default=str)
+    print(s)
+    if a.json:
+        with open(a.json, "w") as f:
+            f.write(s)
+
+
+if __name__ == "__main__":
+    _main()

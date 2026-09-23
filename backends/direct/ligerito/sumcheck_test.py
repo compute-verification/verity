@@ -145,6 +145,19 @@ def test_negative_shift_inconsistent(toy):
     assert not ok, why
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda")
+def test_cuda_engine_matches_reference(toy):
+    """The fused cupy rounds produce byte-identical messages to the torch reference path."""
+    sys, lay, cons, z, pubs = toy
+    zc = z.to("cuda")
+    consc = type(cons)(cons.K_pad, cons.R, {s: tuple(t.to("cuda") for t in v) for s, v in cons.coo.items()}, cons.names)
+    ref = sc.prove(lay, cons, z, sc.LocalCoins(b"g"))
+    cu = sc.prove(lay, consc, zc, sc.LocalCoins(b"g", device="cuda"), engine="cuda")
+    assert ref.to_bytes() == cu.to_bytes()
+    ok, why, _ = sc.verify(lay, consc, {k: v.to("cuda") for k, v in pubs.items()}, cu, sc.LocalCoins(b"g", device="cuda"), device="cuda")
+    assert ok, why
+
+
 def test_negative_lookup(toy):
     sys, lay, cons, z, pubs = toy
     sel = [r for r in sys.rows if r.kind == "sel"]
