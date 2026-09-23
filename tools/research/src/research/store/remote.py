@@ -147,5 +147,9 @@ def load_remote(path: Path | str | None = None) -> Remote | None:
             raise ConfigError(f"{p}: credentials env vars {r['access_key_id_env']} / {r['secret_access_key_env']} are not set")
         # a temporary credential (README §7) has a third part; its env var is optional in the config and optional in the environment
         token = os.environ.get(r.get("session_token_env") or "AWS_SESSION_TOKEN") or None
-        return S3Remote(endpoint=r["endpoint"], bucket=r["bucket"], access_key=ak, secret_key=sk, region=r.get("region", "auto"), session_token=token)
+        extra = {}
+        for k in ("jobs", "max_pool_connections", "timeout"):        # optional tuning (remote_s3 module docstring); the defaults suit R2
+            if r.get(k) is not None:
+                extra[k] = r[k]
+        return S3Remote(endpoint=r["endpoint"], bucket=r["bucket"], access_key=ak, secret_key=sk, region=r.get("region", "auto"), session_token=token, **extra)
     raise ConfigError(f"{p}: unknown [remote] type {t!r} (fs | s3)")

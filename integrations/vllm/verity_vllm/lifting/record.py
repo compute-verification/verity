@@ -41,6 +41,7 @@ from typing import Any, Sequence
 from verity.ir.codec import _spec_id
 from verity.ir.defs import REGISTRY
 from verity.ir.refs import Affine, Concat, Explicit, Refs, Strided
+from verity_vllm import build_paths as BP
 from verity_vllm.registry import lifted as L
 
 # rev S-r17-29 n2: where the EOS set the tool checks against CAME FROM.  Of record = the Program's pinned constant as the Build declared it
@@ -1874,20 +1875,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not eos:
             ap.error("no declared EOS set: neither --eos nor workload_program.json stop_rule.eos_token_ids (nothing is defaulted)")
         uuids = ((wp.get("request_ids") or {}).get("workload_request_ids") or {})
-        derived = (wp.get("inputs") or {}).get("derived") or {}
         reqs = []
         for r in wp["requests"]:
             rid = str(r["request_id"])
             if rid not in uuids:
                 ap.error(f"{rid}: no engine request id in request_ids.workload_request_ids (the Build's own declared mapping; nothing is inferred)")
             lp, cap = int(r["prompt_len"]), int(r["cap"])
-            src_dir = derived.get(f"{lp},{cap - 1}")
+            src_dir = BP.declared_component(wp, lp, cap - 1)
             if not src_dir:  # F-pad-26(b): a component the Build never declared is not read by a naming convention -- refused by name
                 ap.error(f"{rid}: inputs.derived has no entry '{lp},{cap - 1}' (the Build's own record of the component it composed; the "
                          f"dir-name convention build_request_LP{lp}_T{cap - 1} is NOT a source; nothing is inferred)")
-            comp_dir = row / Path(src_dir).name
+            # layout 1.1 relative path under the row, else the build machine's absolute path, else its basename under the row (build_paths)
+            comp_dir = BP.component_dir(wp, lp, cap - 1, row) or row / Path(src_dir).name
             if not (comp_dir / "descriptor.json.gz").exists():
-                ap.error(f"{rid}: component dir {comp_dir} has no descriptor.json.gz (inputs.derived['{lp},{cap - 1}'] = {src_dir})")
+                ap.error(f"{rid}: component dir {comp_dir} has no descriptor.json.gz (inputs.derived['{lp},{cap - 1}'] = {src_dir}; "
+                         f"layout {BP.layout_version(wp)})")
             params = None
             ip = comp_dir / "instances.json.gz"
             if ip.exists():

@@ -101,6 +101,8 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
                                                           else E.conditions_from_job(job))
     for k in E.KEYS:
         conds.setdefault(k, None)
+    if conds.get("exec.machine") is None and (run_sec.get("remote") or {}).get("machine"):     # a `--on <machine>` run: the machines.toml name
+        conds["exec.machine"] = run_sec["remote"]["machine"]
     if campaign is not None:
         conds["exec.campaign"] = campaign
     closure = closure if closure is not None else (store_sec.get("closure") or {})
@@ -133,6 +135,7 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
         "execution": {"start_utc": start, "end_utc": end, "wall_s": status.get("wall_s"), "exclusive": exclusive,
                       "load_start": conds.get("exec.load_start"), "load_end": conds.get("exec.load_end"),
                       "host": conds.get("hw.hostname") or (job.get("environment") or {}).get("hostname") or launch.get("hostname"),
+                      "machine": conds.get("exec.machine"),          # the machines.toml name (indexed as exec.machine); host is the container's
                       "project": own.get("project") or conds.get("exec.project"), "campaign": conds.get("exec.campaign"),
                       "run_dir": executed_dir, "stage": (job.get("computation") or {}).get("stage"),
                       # source_sha is the verified source identity the machine executed from; source_archive_sha256 the digest of the archive
