@@ -53,6 +53,16 @@ impl Layout {
         self.virt.iter().find(|(n, _)| n == name).map(|(_, r)| *r)
     }
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_rows()?;
+        for x in 0..self.n_links() {
+            if self.virt_row(&format!("next:{x}")).is_none() {
+                return Err(format!("layout: no virtual row next:{x}"));
+            }
+        }
+        Ok(())
+    }
+    /// Everything but the `next:x` virtual rows (a ZK layout commits them instead, [`crate::lgsc4::ZkRows`]).
+    pub fn validate_rows(&self) -> Result<(), String> {
         if self.n_i == 0 || self.n_i > 30 || self.n_k == 0 || self.n_k > 30 || self.n_c() == 0 || self.n_c() > 40 {
             return Err("layout: bits out of range".into());
         }
@@ -70,9 +80,6 @@ impl Layout {
         for x in 0..self.n_links() {
             if self.c_rows[x] >= self.m {
                 return Err(format!("layout: linked row {} is not committed", self.c_rows[x]));
-            }
-            if self.virt_row(&format!("next:{x}")).is_none() {
-                return Err(format!("layout: no virtual row next:{x}"));
             }
         }
         Ok(())
@@ -457,7 +464,7 @@ pub fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
     (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).map_err(|e| format!("hex: {e}"))).collect()
 }
 
-fn ext_of_json(v: &crate::json::Json) -> Result<Ext, String> {
+pub fn ext_of_json(v: &crate::json::Json) -> Result<Ext, String> {
     let c = v.usize_list().ok_or("fixture: ext element")?;
     if c.len() != EXT_DEG {
         return Err("fixture: ext element has the wrong degree".into());
@@ -520,6 +527,7 @@ pub fn load_fixture(text: &str) -> Result<Fixture, String> {
         .as_arr()
         .ok_or("fixture: claims")?
         .iter()
+        .filter(|c| c.get("kind").and_then(|k| k.as_str()) != Some("sparse"))
         .map(|c| {
             let point = get(c, "point")?.as_arr().ok_or("fixture: point")?.iter().map(ext_of_json).collect::<Result<Vec<_>, _>>()?;
             Ok(EvalClaim { point, value: ext_of_json(&get(c, "value")?)?, name: get(c, "name")?.as_str().unwrap_or("").to_string() })

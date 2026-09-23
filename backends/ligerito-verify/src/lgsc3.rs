@@ -38,7 +38,7 @@ pub struct Proof {
     pub values: Vec<Ext>,
 }
 
-fn pow3(v: usize) -> usize {
+pub(crate) fn pow3(v: usize) -> usize {
     3usize.pow(v as u32)
 }
 
@@ -97,7 +97,7 @@ pub fn write(p: &Proof) -> Vec<u8> {
 }
 
 /// Contract a `(3,)*v` mixed-representation message axis by axis (axis 0 = `X_1`, outermost) with `ws[j]`.
-fn contract(m: &[Ext], ws: &[[Ext; 3]]) -> Ext {
+pub(crate) fn contract(m: &[Ext], ws: &[[Ext; 3]]) -> Ext {
     let mut cur = m.to_vec();
     for w in ws {
         let s = cur.len() / 3;
@@ -106,21 +106,21 @@ fn contract(m: &[Ext], ws: &[[Ext; 3]]) -> Ext {
     cur[0]
 }
 
-fn eval_mixed(m: &[Ext], r: &[Ext]) -> Ext {
+pub(crate) fn eval_mixed(m: &[Ext], r: &[Ext]) -> Ext {
     let ws: Vec<[Ext; 3]> = r.iter().map(|x| [Ext::ONE.sub(x), *x, x.mul(&x.sub(&Ext::ONE))]).collect();
     contract(m, &ws)
 }
 
-fn eq_sum_mixed(m: &[Ext], taus: &[Ext]) -> Ext {
+pub(crate) fn eq_sum_mixed(m: &[Ext], taus: &[Ext]) -> Ext {
     let ws: Vec<[Ext; 3]> = taus.iter().map(|t| [Ext::ONE.sub(t), *t, Ext::ZERO]).collect();
     contract(m, &ws)
 }
 
-fn bool_sum_mixed(m: &[Ext], v: usize) -> Ext {
+pub(crate) fn bool_sum_mixed(m: &[Ext], v: usize) -> Ext {
     contract(m, &vec![[Ext::ONE, Ext::ONE, Ext::ZERO]; v])
 }
 
-fn mle_ext(vec: &[Ext], eq: &[Ext]) -> Ext {
+pub(crate) fn mle_ext(vec: &[Ext], eq: &[Ext]) -> Ext {
     vec.iter().zip(eq).fold(Ext::ZERO, |acc, (v, e)| acc.add(&v.mul(e)))
 }
 
