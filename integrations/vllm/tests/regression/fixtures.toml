@@ -4683,8 +4683,11 @@ check = "coverage"
 since = "lane/vllm-v2"
 since_commit = "841b16378ca3d099a85b0d862b4ca45500015eeb"
 finding = "MAN-02 (#57)"
-status = "pending_review"
-reason = "MAN-02: a manifest with unmodelled Program families (Bf16MulScalarTensor_v1 unnamed crossing, complete = false) is not a population, so coverage_check refuses and counts every identity of the v1 manifest of record missing (163052 / 163052) where v1 recorded the same refusal error with missing_n = 0. Coverage under the completed manifest (F-r19-int-20's promotion, 163484 identities) is the acceptance Commit r20260923-001230-f1c8: 163168 checked / 0 missing. Policy difference, not a v2 regression — Daniel to confirm."
+status = "accepted"
+accepted_by = "Daniel Reuter"
+accepted_at = "2026-09-23T16:26Z"
+ruling = "The old missing_n=0 was vacuous (coverage over an incomplete manifest); the new result is the accurately scoped statement. Not to be confused with the post-fix #57 Commit pass."
+reason = "MAN-02: a manifest with unmodelled Program families (Bf16MulScalarTensor_v1 unnamed crossing, complete = false) is not a population, so coverage_check refuses and counts every identity of the v1 manifest of record missing (163052 / 163052) where v1 recorded the same refusal error with missing_n = 0. Coverage under the completed manifest (F-r19-int-20's promotion, 163484 identities) is the acceptance Commit r20260923-001230-f1c8: 163168 checked / 0 missing. Policy difference, not a v2 regression — accepted by Daniel 2026-09-23T16:26Z (ruling above)."
 expected = { checked = 163052, missing_n = 163052, committed_extras_n = 0, committed_unmatched_n = 0, duplicate_names_n = 0 }
 
 [rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
@@ -6334,14 +6337,17 @@ oracle = "/vault/tmp/oracle/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixe
 programs_state = "uploaded"
 
 # labelled decision (Draft 3 §7): a sanctioned difference from v1, consulted by the named check when its result differs from v1 (test_regression.py, LABELLED DECISIONS)
-# status = pending_review: labelled by the v2 query lane's gate (tests/query/gate/row67_olmoe-1b-7b_b32.json), not yet confirmed -- sanctions v2 / candidate results only
+# labelled by the v2 query lane's gate (tests/query/gate/row67_olmoe-1b-7b_b32.json); accepted by Daniel 2026-09-23T16:26Z (F-r19-int-24) -- sanctions under every engine
 [[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".decisions]]
 check = "manifest_digest"
 since = "lane/vllm-v2-query"
 since_commit = "954d46fddda27896059ec5a30fd211dc346678c4"
 finding = "F-r19-int-24"
-status = "pending_review"
-reason = "MoeSum_v1 (FusedMoE.forward's returned tensor) is read by the next layer's fused add+norm → boundary Value under Q_module_body_v1; v1 classed it interior by name and covered the block only via kernel planes. Increases required-value rows by ~5%; same intended query, v1 omission — Daniel to confirm or reject in the morning."
+status = "accepted"
+accepted_by = "Daniel Reuter"
+accepted_at = "2026-09-23T16:26Z"
+ruling = "Under Q_module_body_v1, a MoeSum_v1 Value consumed by the next layer's normalization body is a boundary Value by construction; the old manifest missing it is the by-name structural bug v2 removes."
+reason = "MoeSum_v1 (FusedMoE.forward's returned tensor) is read by the next layer's fused add+norm → boundary Value under Q_module_body_v1; v1 classed it interior by name and covered the block only via kernel planes. Increases required-value rows by ~5%; same intended query, v1 omission — accepted by Daniel 2026-09-23T16:26Z (ruling above)."
 expected = { identities = 406432, only_new = 20928, promoted_member_class = "model.layers.<k>.mlp.experts/out", complete = true }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".local]
@@ -8154,14 +8160,17 @@ oracle = "/vault/tmp/oracle/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixe
 programs_state = "uploaded"
 
 # labelled decision (Draft 3 §7): a sanctioned difference from v1, consulted by the named check when its result differs from v1 (test_regression.py, LABELLED DECISIONS)
-# status = pending_review: labelled by the v2 query lane's gate (tests/query/gate/row68_olmoe-1b-7b_b32_mixed-arrivals.json), not yet confirmed -- sanctions v2 / candidate results only
+# labelled by the v2 query lane's gate (tests/query/gate/row68_olmoe-1b-7b_b32_mixed-arrivals.json); accepted by Daniel 2026-09-23T16:26Z (F-r19-int-24) -- sanctions under every engine
 [[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".decisions]]
 check = "manifest_digest"
 since = "lane/vllm-v2-query"
 since_commit = "954d46fddda27896059ec5a30fd211dc346678c4"
 finding = "F-r19-int-24"
-status = "pending_review"
-reason = "MoeSum_v1 (FusedMoE.forward's returned tensor) is read by the next layer's fused add+norm → boundary Value under Q_module_body_v1; v1 classed it interior by name and covered the block only via kernel planes. Increases required-value rows by ~5%; same intended query, v1 omission — Daniel to confirm or reject in the morning."
+status = "accepted"
+accepted_by = "Daniel Reuter"
+accepted_at = "2026-09-23T16:26Z"
+ruling = "Under Q_module_body_v1, a MoeSum_v1 Value consumed by the next layer's normalization body is a boundary Value by construction; the old manifest missing it is the by-name structural bug v2 removes."
+reason = "MoeSum_v1 (FusedMoE.forward's returned tensor) is read by the next layer's fused add+norm → boundary Value under Q_module_body_v1; v1 classed it interior by name and covered the block only via kernel planes. Increases required-value rows by ~5%; same intended query, v1 omission — accepted by Daniel 2026-09-23T16:26Z (ruling above)."
 expected = { identities = 402938, only_new = 20704, promoted_member_class = "model.layers.<k>.mlp.experts/out", complete = true }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".local]
