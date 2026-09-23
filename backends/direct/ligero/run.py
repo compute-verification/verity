@@ -422,7 +422,7 @@ def main(argv=None) -> int:
     sub.choices["bench-vu"].add_argument("--dump-dir", default=None, metavar="DIR",
                                          help="write every recorded rep's sub-batch proofs (.stmt/.proof[/.coins]) + system.bin for backends/ligero-verify")
     sub.choices["bench-vu"].add_argument("--pipeline", type=int, default=4, metavar="N",
-                                         help="registered relations on CUDA: prove the sub-batches N-deep on their own CUDA streams (lane hp2-host; "
+                                         help="registered relations and bf16/bf16-ampere (vu.py, lane live-2) on CUDA: prove the sub-batches N-deep on their own CUDA streams (lane hp2-host; "
                                               "bit-identical transcripts at every depth; default 4 -- 9-17 %% faster than 3 on the H100 and 4090, "
                                               "+1.2 GB of device memory per extra slot; 0/1 = the sequential schedule, for A/B). Recorded in the "
                                               "result's backend block")
