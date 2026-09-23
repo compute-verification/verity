@@ -678,7 +678,7 @@ class FakeS3:
     `uploads` holds the in-flight uploads, `aborted` the ids that were cleaned up."""
 
     def __init__(self, reject_conditional: int | None = None, corrupt: set[str] = frozenset(), head_404_once: set[str] = frozenset(),
-                 fail_part: int | None = None):
+                 fail_part: int | None = None, throttle_once: set[str] = frozenset()):
         import http.server
         import threading
         import urllib.parse
@@ -690,6 +690,7 @@ class FakeS3:
         self.log: list[tuple[str, str, bool]] = []
         self.lock = threading.Lock()
         self.reject_conditional, self.corrupt, self.head_404_once, self.fail_part = reject_conditional, set(corrupt), set(head_404_once), fail_part
+        self.throttle_once = set(throttle_once)     # keys whose first PUT answers 429 SlowDown (R2 under load), Retry-After: 0
         state = self
 
         def etag_of(key: str) -> str:
@@ -731,6 +732,9 @@ class FakeS3:
                         up[1][n] = body
                         return self._reply(200, headers={"ETag": f'"{hashlib.md5(body).hexdigest()}"'})
                     state.log.append(("PUT", key, cond))
+                    if key in state.throttle_once:
+                        state.throttle_once.discard(key)
+                        return self._reply(429, b"<Error><Code>SlowDown</Code></Error>", headers={"Retry-After": "0"})
                     if self.headers["x-amz-content-sha256"] != hashlib.sha256(body).hexdigest():
                         return self._reply(400, b"<Error><Code>XAmzContentSHA256Mismatch</Code></Error>")
                     if cond and state.reject_conditional:
@@ -1027,6 +1031,20 @@ def test_push_uploads_a_blob_above_the_single_put_limit_in_parts(fake_s3, tmp_pa
 
     with pytest.raises(ValueError, match="verify must be"):
         st.push(art, verify="etag")
+
+
+def test_throttled_put_is_retried_not_failed(fake_s3, tmp_path, monkeypatch):
+    # R2 answers 429 under load (the vyv-v2cpu3 bench saw 4 per 10k small PUTs): retried like a 5xx, Retry-After honoured and capped
+    s = fake_s3(throttle_once={"bench/a", "bench/b"})
+    monkeypatch.setattr(remote_s3, "RETRY_BACKOFF_S", 0.0)
+    r = s.remote()
+    f = tmp_path / "a.bin"
+    f.write_bytes(os.urandom(4096))
+    res = r.put_many([("bench/a", f), ("bench/b", f)], jobs=2)
+    assert [x["action"] for x in res] == ["created", "created"] and s.objects["bench/a"] == f.read_bytes()
+    assert [k for k, _ in s.puts("bench/a")].count("bench/a") >= 2, "the throttled PUT was sent again"
+    assert remote_s3.retry_delay("0", 0) == 0.0 and remote_s3.retry_delay("3600", 0) == remote_s3.RETRY_AFTER_MAX_S
+    assert remote_s3.retry_delay("Wed, 21 Oct 2026 07:28:00 GMT", 2) == 0.0 and remote_s3.retry_delay(None, 1) == 0.0
 
 
 def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, capsys):

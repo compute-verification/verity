@@ -43,12 +43,20 @@ plus one 512 MiB blob; `tools/research/bench` figures in the r20 report):
 
 The first-push rate scales almost linearly with `jobs` because the cost is per-request latency to R2 from that pod (~0.8 s per
 4 KiB PUT, 1.01 requests per blob with conditional PUT + the ETag from the PUT response), not connection setup any more; the
-pool opened 32 / 155 / 398 connections for the three runs.  The r20 plan's threshold for switching to a PACK format for
-many-small-file trees (`PACK_THRESHOLD_BLOBS_PER_S` = 300) is cleared at `jobs` >= 256 (`store.toml [remote] jobs = 256`,
-`max_pool_connections` >= jobs), so a pack format is not implemented and one object per blob stays the storage unit.  Below that
-the pooled client is 2.3x (32) .. 7x (128) the old one.  Re-push at 256 came in below 128 because the adaptive PUT-first window
-flips to HEAD-first once more than half of the last `ADAPT_WINDOW` small objects existed already, and HEADs are no cheaper than
-PUTs at this latency (the run-to-run spread on the pod is also large).
+pool opened 32 / 155 / 398 connections for the three runs.  The pooled client is 2.3x (32) .. 7x (128) the old one.  Re-push at
+256 came in below 128 because the adaptive PUT-first window flips to HEAD-first once more than half of the last `ADAPT_WINDOW`
+small objects existed already, and HEADs are no cheaper than PUTs at this latency (the run-to-run spread on the pod is also large).
+
+Re-run on the same pod 18:17-18:42Z (load 130-170 on 32 vCPUs; `put` driven directly by a 32-thread pool, no store in the loop,
+two interleaved rounds): old 25.1 / 22.2 blobs/s, pooled 45.9 / 51.0 blobs/s (32 connections for 10,033 requests); 512 MiB old
+single PUT 24.2 MB/s, pooled multipart (16 x 32 MiB, 8 in flight) 8.5 / 9.0 MB/s -- slower than one PUT in that window, against
+47 MB/s in the table above; not diagnosed (the pod was terminated mid-run).  R2 answered 429 to 1 (old) and 4 (pooled) of 10k
+PUTs at jobs=32; a 429 is retried like a 5xx since (`retry_delay`: Retry-After, capped).
+
+PACK FORMAT.  The r20 plan's threshold (`PACK_THRESHOLD_BLOBS_PER_S` = 300) is not met at the default `jobs` = 32 (46-51 blobs/s
+in both runs); it is reached only at `jobs` = 256 on a first push (320.6; re-push 292), the concurrency at which R2 throttles.  By
+that plan a pack format for many-small-file trees is warranted; it is not implemented, and one object per blob stays the storage
+unit until it is.  Raising `store.toml [remote] jobs` (with `max_pool_connections` >= jobs) is the interim lever.
 
 The signing functions are pure and tested against the AWS documented vectors (`sign_headers`, `canonical_request`,
 `string_to_sign`, `signature`).  One instance may be used from several threads (`LocalStore.push` does): the pool is locked, a
@@ -89,11 +97,12 @@ MAX_PARTS = 10_000              # the service's limit on parts per upload: `choo
 PART_JOBS = 8                   # parts in flight at once (each is `part_size` bytes in memory) ...
 PART_MEM_BUDGET = 1 << 30       # ... but never more than this many bytes of parts in flight
 PARTS_SIDECAR_SCHEMA = "research/parts/v1"
-RETRIES = 3                     # transient 5xx / connection errors: 4 tries, 1 s, 2 s, 4 s backoff
+RETRIES = 3                     # transient 5xx / 429 / connection errors: 4 tries, 1 s, 2 s, 4 s backoff (or the service's Retry-After)
 RETRY_BACKOFF_S = 1.0
+RETRY_AFTER_MAX_S = 30.0        # a Retry-After above this is capped (the try budget stays bounded)
 JOBS = 32                       # the bounded thread pool behind put_many / head_many / get_many / delete_many
 MAX_POOL_CONNECTIONS = 64       # idle keep-alive connections kept per instance
-PACK_THRESHOLD_BLOBS_PER_S = 300   # below this, the r20 plan called for a pack format for many-small-file trees (not needed: see docstring)
+PACK_THRESHOLD_BLOBS_PER_S = 300   # below this, the r20 plan called for a pack format for many-small-file trees (not met at jobs=32: docstring)
 ALGORITHM = "AWS4-HMAC-SHA256"
 S3_NS = "{http://s3.amazonaws.com/doc/2006-03-01/}"
 
@@ -190,6 +199,16 @@ def error_code(e: urllib.error.HTTPError) -> str:
 
 
 # ---- multipart (pure) -------------------------------------------------------------------------------------------------------------------
+
+def retry_delay(retry_after: str | None, attempt: int) -> float:
+    """Seconds before try `attempt + 1`: the service's Retry-After (delta-seconds, capped at RETRY_AFTER_MAX_S), else 1 s, 2 s, 4 s."""
+    try:
+        if retry_after is not None:
+            return max(0.0, min(float(retry_after), RETRY_AFTER_MAX_S))
+    except ValueError:                      # an HTTP-date Retry-After: fall back to the exponential backoff
+        pass
+    return RETRY_BACKOFF_S * (2**attempt)
+
 
 def choose_part_size(size: int, part_size: int = PART_SIZE, max_parts: int = MAX_PARTS) -> int:
     """`part_size`, grown (in whole MiB) until `size` fits in `max_parts` parts."""
@@ -421,7 +440,7 @@ class S3Remote:
 
     def _request(self, method: str, key: str, query: dict[str, str] | None = None, body: bytes | Path | None = None, headers: dict[str, str] | None = None,
                  payload_hash: str | None = None) -> _Response:
-        """One signed request on a pooled connection, with retries on 5xx / connection errors (each try re-signed with a fresh
+        """One signed request on a pooled connection, with retries on 5xx / 429 / connection errors (each try re-signed with a fresh
         timestamp, a file body re-read from the start, a failed connection discarded).  `payload_hash` (sha256 hex of a Path body)
         skips re-hashing when the caller already has it.  A status >= 400 raises `urllib.error.HTTPError` (the body read, so
         `error_code` can parse it); the returned `_Response` is a context manager that recycles the connection."""
@@ -463,10 +482,10 @@ class S3Remote:
                     return out
                 with out:
                     err_body = out.read()
-                if resp.status >= 500 and attempt < RETRIES:
-                    time.sleep(RETRY_BACKOFF_S * (2**attempt))
+                if (resp.status >= 500 or resp.status == 429) and attempt < RETRIES:
+                    time.sleep(retry_delay(resp.headers.get("Retry-After"), attempt))
                     continue
-                raise urllib.error.HTTPError(url, resp.status, resp.reason, resp.headers, io.BytesIO(err_body))   # 4xx are the caller's (404 = absent, 403 = credentials)
+                raise urllib.error.HTTPError(url, resp.status, resp.reason, resp.headers, io.BytesIO(err_body))   # other 4xx are the caller's (404 = absent, 403 = credentials)
         finally:
             if isinstance(body, Path):
                 data.close()
