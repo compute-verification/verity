@@ -26,7 +26,7 @@
 # (FA2 target: inert; r17 passed none, so the r17 digests reproduce); (3) row_pod.sh's conventions: source-identity + target-family precheck,
 # stages.txt / row.log / timeline.jsonl, research_result.py on EXIT, SWEEP_DIR per release tag.  Env: PY, GPU_UTIL (0.6), COMMIT_GPU_UTIL (=GPU_UTIL),
 # PAIRS (3), REPLAY_WORKERS (32), BUILD_JOBS (max concurrent derives, default 2 x shapes), BUILD_TIMEOUT / MATCH_TIMEOUT / FOLD_TIMEOUT /
-# COMMIT_TIMEOUT (s), FOLD_PROFILE (rank profile module; default from the case table below, empty = collective-level Match only, named so),
+# COMMIT_TIMEOUT (s), FOLD_PROFILE (rank profile module; default derived_<ROLE>_tp<W>, empty = collective-level Match only, named so),
 # HIDDEN_SO, EXTRA_COMMIT_ARGS (verbatim tp.commit flags).
 set -uo pipefail
 ROW=${1:?row-id}; ROLE=${2:?role}; REPO=${3:?hf repo}; REV=${4:?revision}; STAGES=${5:-build,match,commit}
@@ -108,8 +108,9 @@ SHAPES=$($PY -c "import json,sys;s=json.load(open(sys.argv[1]))['sweep'];print('
 MML=$($PY -c "import json,sys;w=json.load(open(sys.argv[1]));print((w.get('engine_args_required') or {}).get('max_model_len') or int(sys.argv[2])+int(sys.argv[3]))" "$WL" "$I" "$O")
 MNBT=$($PY -c "import json,sys;w=json.load(open(sys.argv[1]));print((w.get('engine_args_required') or {}).get('max_num_batched_tokens') or int(sys.argv[2]))" "$WL" "$MML")
 TGT=$($PY -c 'import json,sys; t=json.load(open(sys.argv[1])).get("target"); print(json.dumps(t, sort_keys=True) if t else "")' "$WL"); TGT_ARGS=(); [ -n "$TGT" ] && TGT_ARGS=(--target "$TGT")
-# the TP RANK profile of the fold Match, per case (a lane adds its module + this line; empty = collective-level Match only, named in the verdict)
-case "${FOLD_PROFILE-unset}" in unset) case "$ROLE" in QWEN3_30B_A3B) FOLD_PROFILE=gen_ov_moe_qwen3 ;; *) FOLD_PROFILE="" ;; esac ;; esac
+# the RANK profile of the fold Match: [P6] configuration-derived for every role (`profiles.generic.build_profile(ROLE, world)`, module
+# `derived_<ROLE>_tp<W>`); FOLD_PROFILE="" = collective-level Match only, named in the verdict
+case "${FOLD_PROFILE-unset}" in unset) FOLD_PROFILE="derived_${ROLE}_tp${WORLD}" ;; esac
 ENGINE=(--engine-arg "max_model_len=$MML" --engine-arg "max_num_batched_tokens=$MNBT" --engine-arg disable_custom_all_reduce=true)
 CODE9=$(python3 -c "import json;print(json.load(open('EXPORT.json'))['commit'][:9])" 2>/dev/null)
 log "start tp=$WORLD B=$BATCH I=$I O=$O MML=$MML mnbt=$MNBT shapes=[$SHAPES] ckpt=$CK stages=$STAGES fold_profile=${FOLD_PROFILE:-none} gpu_util=$GPU_UTIL hidden_so=$HIDDEN_SO code=$CODE9"
