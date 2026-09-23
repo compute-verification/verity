@@ -226,6 +226,144 @@ impl Coins for Local {
     }
 }
 
+/// ligerito-sumcheck's diagnostic `sumcheck.LocalCoins(seed)`: `challenge(label, n)` = shake256(seed || b"|" || label || b"|" ||
+/// rounds_le32) squeezed to 8 n 6 bytes, each coordinate reduced UNSIGNED (`astype(object) % P`); absorbs ignored.  Its
+/// `indices` is not used by the sumchecks.  Only for that lane's fixtures.
+pub struct SumcheckLocal {
+    seed: Vec<u8>,
+    rounds: u32,
+    label: Vec<u8>,
+}
+
+impl SumcheckLocal {
+    pub fn new(seed: &[u8]) -> SumcheckLocal {
+        SumcheckLocal { seed: seed.to_vec(), rounds: 0, label: Vec::new() }
+    }
+}
+
+impl Coins for SumcheckLocal {
+    fn absorb(&mut self, _label: &[u8], _data: &[u8]) {}
+    fn begin_round(&mut self, _kind: &[u8], label: &[u8], _extra: &[u8]) -> Result<(), String> {
+        self.label = label.to_vec();
+        Ok(())
+    }
+    fn stream(&mut self, nbytes: usize) -> Vec<u8> {
+        let mut buf = self.seed.clone();
+        buf.push(b'|');
+        buf.extend_from_slice(&self.label);
+        buf.push(b'|');
+        buf.extend_from_slice(&self.rounds.to_le_bytes());
+        self.rounds += 1;
+        shake256(&buf, nbytes)
+    }
+    fn rounds(&self) -> usize {
+        self.rounds as usize
+    }
+    fn challenge(&mut self, label: &[u8], n: usize) -> Result<Vec<Ext>, String> {
+        self.begin_round(b"challenge", label, &[])?;
+        let raw = self.stream(8 * n * EXT_DEG);
+        Ok((0..n)
+            .map(|i| {
+                let mut c = [0u32; EXT_DEG];
+                for d in 0..EXT_DEG {
+                    let o = 8 * (i * EXT_DEG + d);
+                    let u = u64::from_le_bytes(raw[o..o + 8].try_into().unwrap());
+                    c[d] = (u % P as u64) as u32;
+                }
+                Ext(c)
+            })
+            .collect())
+    }
+}
+
+/// A recorded transcript (ligerito-sumcheck's `RecordingCoins` log): every `absorb` must match the recorded label and
+/// bytes, every `challenge` returns the recorded values.  The first mismatch is reported by the next coin draw (and by
+/// `finish`), so a verifier that absorbs the wrong bytes is caught even though `absorb` cannot fail.
+pub enum Recorded {
+    Absorb { label: Vec<u8>, data: Vec<u8> },
+    Challenge { label: Vec<u8>, values: Vec<Ext> },
+}
+
+pub struct Scripted {
+    log: Vec<Recorded>,
+    pos: usize,
+    rounds: usize,
+    error: Option<String>,
+}
+
+impl Scripted {
+    pub fn new(log: Vec<Recorded>) -> Scripted {
+        Scripted { log, pos: 0, rounds: 0, error: None }
+    }
+
+    /// Ok iff every recorded entry was consumed and every absorb matched.
+    pub fn finish(&self) -> Result<(), String> {
+        if let Some(e) = &self.error {
+            return Err(e.clone());
+        }
+        if self.pos != self.log.len() {
+            return Err(format!("scripted coins: {} of {} entries consumed", self.pos, self.log.len()));
+        }
+        Ok(())
+    }
+}
+
+impl Coins for Scripted {
+    fn absorb(&mut self, label: &[u8], data: &[u8]) {
+        if self.error.is_some() {
+            return;
+        }
+        match self.log.get(self.pos) {
+            Some(Recorded::Absorb { label: l, data: d }) if l == label && d == data => self.pos += 1,
+            Some(Recorded::Absorb { label: l, data: d }) => {
+                self.error = Some(format!(
+                    "scripted coins: absorb {:?} ({} bytes) at entry {} but the record has {:?} ({} bytes){}",
+                    String::from_utf8_lossy(label),
+                    data.len(),
+                    self.pos,
+                    String::from_utf8_lossy(l),
+                    d.len(),
+                    if l == label { " -- bytes differ" } else { "" }
+                ))
+            }
+            Some(Recorded::Challenge { label: l, .. }) => {
+                self.error = Some(format!("scripted coins: absorb {:?} at entry {} where the record draws {:?}", String::from_utf8_lossy(label), self.pos, String::from_utf8_lossy(l)))
+            }
+            None => self.error = Some(format!("scripted coins: absorb {:?} after the end of the record", String::from_utf8_lossy(label))),
+        }
+    }
+    fn begin_round(&mut self, _kind: &[u8], _label: &[u8], _extra: &[u8]) -> Result<(), String> {
+        Err("scripted coins: only challenge() is recorded".into())
+    }
+    fn stream(&mut self, _nbytes: usize) -> Vec<u8> {
+        Vec::new()
+    }
+    fn rounds(&self) -> usize {
+        self.rounds
+    }
+    fn challenge(&mut self, label: &[u8], n: usize) -> Result<Vec<Ext>, String> {
+        if let Some(e) = &self.error {
+            return Err(e.clone());
+        }
+        match self.log.get(self.pos) {
+            Some(Recorded::Challenge { label: l, values }) if l == label && values.len() == n => {
+                self.pos += 1;
+                self.rounds += 1;
+                Ok(values.clone())
+            }
+            Some(Recorded::Challenge { label: l, values }) => Err(format!(
+                "scripted coins: challenge {:?} x{n} at entry {} but the record has {:?} x{}",
+                String::from_utf8_lossy(label),
+                self.pos,
+                String::from_utf8_lossy(l),
+                values.len()
+            )),
+            Some(Recorded::Absorb { label: l, .. }) => Err(format!("scripted coins: challenge {:?} at entry {} where the record absorbs {:?}", String::from_utf8_lossy(label), self.pos, String::from_utf8_lossy(l))),
+            None => Err(format!("scripted coins: challenge {:?} after the end of the record", String::from_utf8_lossy(label))),
+        }
+    }
+}
+
 /// Little-endian u32 serialization of extension elements (`_ext_bytes`).
 pub fn ext_bytes(v: &[Ext]) -> Vec<u8> {
     let mut out = Vec::with_capacity(24 * v.len());

@@ -13,7 +13,7 @@
 //! ~~~text
 //! LGRTOPV0:
 //! magic "LGRTOPV0"
-//! u32 n, u32 L, u32 rate_log2, u32 domain_shift, u32 kprime[L], u32 queries[L], (u32 n1, u32 n2)[L]
+//! u32 n, u32 L, u32 domain_shift, u32 kprime[L], u32 queries[L], u32 rate_log2[L], (u32 n1, u32 n2)[L]
 //! z: n x ext(24 B), v: ext
 //! roots: L x 32 B
 //! for i = 1..L: k'_i x 3 x ext (g(0), g(1), g(2))
@@ -179,15 +179,15 @@ pub fn read_pcs_v0(buf: &[u8]) -> Result<(Statement, Proof), String> {
     }
     let n = r.count("n", 40)?;
     let l = r.count("rounds", 16)?;
-    let rate_log2 = r.count("rate", 8)?;
     let domain_shift = r.u32()?;
     let kprime = (0..l).map(|_| r.count("k'", 40)).collect::<Result<Vec<_>, _>>()?;
     let queries = (0..l).map(|_| r.count("|S|", MAX_QUERIES)).collect::<Result<Vec<_>, _>>()?;
+    let rate_log2 = (0..l).map(|_| r.count("rate", 8)).collect::<Result<Vec<_>, _>>()?;
     let mut splits = Vec::with_capacity(l);
     for _ in 0..l {
         splits.push((r.count("n1", 1 << 27)?, r.count("n2", 1 << 27)?));
     }
-    let params = Params { n, kprime, queries, rate_log2, domain_shift, splits };
+    let params = Params { n, kprime, queries, rate_log2, header_rate_scalar: false, domain_shift, splits };
     params.validate()?;
     let z = r.exts(n)?;
     let v = r.ext()?;
@@ -216,13 +216,15 @@ pub fn write_pcs_v0(stmt: &Statement, proof: &Proof) -> Vec<u8> {
     w.buf.extend_from_slice(MAGIC_PCS_V0);
     w.u32(p.n as u32);
     w.u32(l as u32);
-    w.u32(p.rate_log2 as u32);
     w.u32(p.domain_shift);
     for &k in &p.kprime {
         w.u32(k as u32);
     }
     for &q in &p.queries {
         w.u32(q as u32);
+    }
+    for &r in &p.rate_log2 {
+        w.u32(r as u32);
     }
     for &(n1, n2) in &p.splits {
         w.u32(n1 as u32);
@@ -260,7 +262,12 @@ pub fn read_proto(buf: &[u8], z: Vec<Ext>) -> Result<(Statement, Proof), String>
     let n = field("n")?.as_usize().ok_or("proto header: n")?;
     let kprime = field("kprime")?.usize_list().ok_or("proto header: kprime")?;
     let queries = field("queries")?.usize_list().ok_or("proto header: queries")?;
-    let rate_log2 = field("rate_log2")?.as_usize().ok_or("proto header: rate_log2")?;
+    // b4d7e12 wrote one integer (and absorbed `"rate": r`); 7bc2fdd writes a per-round list (and absorbs the list)
+    let rate_field = field("rate_log2")?;
+    let (rate_log2, rate_scalar) = match rate_field.as_usize() {
+        Some(r) => (vec![r; kprime.len()], true),
+        None => (rate_field.usize_list().ok_or("proto header: rate_log2")?, false),
+    };
     if let Some(hash) = h.get("hash") {
         if hash.as_str() != Some("blake3") {
             return Err(format!("proto header: hash {hash:?} (this verifier: blake3)"));
@@ -292,7 +299,8 @@ pub fn read_proto(buf: &[u8], z: Vec<Ext>) -> Result<(Statement, Proof), String>
             .collect::<Result<_, String>>()?,
         None => Vec::new(),
     };
-    let mut params = Params::new(n, kprime, queries, rate_log2);
+    let mut params = Params::with_rates(n, kprime, queries, rate_log2);
+    params.header_rate_scalar = rate_scalar;
     if !splits.is_empty() {
         params.splits = splits;
     }
@@ -369,7 +377,7 @@ pub fn write_proto(stmt: &Statement, proof: &Proof, coins: usize) -> Vec<u8> {
         p.n,
         list(&p.kprime),
         list(&p.queries),
-        p.rate_log2,
+        if p.header_rate_scalar { p.rate_log2[0].to_string() } else { format!("[{}]", list(&p.rate_log2)) },
         splits,
         coins,
         BETA,

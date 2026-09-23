@@ -1,8 +1,9 @@
 //! Round dimensions and the soundness bound (paper section 6.3, eq. (17)) -- the Rust mirror of
 //! `backends/direct/ligerito/params.py` (lane ligerito-design).  Until params.py lands the shapes follow
 //! `proto/dims.py`: `n = log2 N`; L committed rounds with k'_i column bits each; k_i = k_{i-1} - k'_i (k_0 = n);
-//! round i commits R_i = 2^{k_i} rows x C_i = 2^{k'_i} columns, codeword length m_i = 2^{k_i + rate_log2} along the
-//! tall axis; the final vector y has 2^{k_L} entries.  Field terms are over |F| = p^6 ~ 2^186.
+//! round i commits R_i = 2^{k_i} rows x C_i = 2^{k'_i} columns, codeword length m_i = 2^{k_i + rate_log2[i]} along the
+//! tall axis (the RS rate is per committed round since proto 7bc2fdd: ligerito-design's S point uses 1/4 at round 1
+//! and 1/16 afterwards); the final vector y has 2^{k_L} entries.  Field terms are over |F| = p^6 ~ 2^186.
 
 use crate::field::{pow, root_of_unity, P};
 
@@ -11,7 +12,11 @@ pub struct Params {
     pub n: usize,
     pub kprime: Vec<usize>,
     pub queries: Vec<usize>,
-    pub rate_log2: usize,
+    /// log2 of the inverse RS rate, per committed round.
+    pub rate_log2: Vec<usize>,
+    /// Legacy header form: proto b4d7e12 absorbed `"rate": 2` (one integer); 7bc2fdd absorbs `"rate": [2, 2, 2]`.
+    /// Set by the proto reader from the header's own type so both generations verify bit-for-bit.
+    pub header_rate_scalar: bool,
     /// Multiplicative shift of the evaluation domain: 1 = the subgroup <w_m> (proto), 31 = the Ligero coset g<w_m>.
     pub domain_shift: u32,
     /// Per round, the (n1, n2) factorisation of the codeword length used by the prover's 4-step NTT: codeword
@@ -33,7 +38,12 @@ pub fn canonical_split(m: usize) -> (usize, usize) {
 
 impl Params {
     pub fn new(n: usize, kprime: Vec<usize>, queries: Vec<usize>, rate_log2: usize) -> Params {
-        let mut p = Params { n, kprime, queries, rate_log2, domain_shift: 1, splits: Vec::new() };
+        let rates = vec![rate_log2; kprime.len()];
+        Params::with_rates(n, kprime, queries, rates)
+    }
+
+    pub fn with_rates(n: usize, kprime: Vec<usize>, queries: Vec<usize>, rate_log2: Vec<usize>) -> Params {
+        let mut p = Params { n, kprime, queries, rate_log2, header_rate_scalar: false, domain_shift: 1, splits: Vec::new() };
         if p.validate_shape().is_ok() {
             p.splits = (1..=p.rounds()).map(|i| canonical_split(p.m(i))).collect();
         }
@@ -43,12 +53,17 @@ impl Params {
     /// The header the Fiat-Shamir transcript absorbs first (`json.dumps` with default separators).
     pub fn header_json(&self) -> String {
         let list = |v: &[usize]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
+        let rate = if self.header_rate_scalar {
+            self.rate_log2.first().map_or(0, |r| *r).to_string()
+        } else {
+            format!("[{}]", list(&self.rate_log2))
+        };
         format!(
             "{{\"n\": {}, \"kprime\": [{}], \"queries\": [{}], \"rate\": {}}}",
             self.n,
             list(&self.kprime),
             list(&self.queries),
-            self.rate_log2
+            rate
         )
     }
 
@@ -72,11 +87,16 @@ impl Params {
 
     /// Codeword length (Merkle leaves) of round i.
     pub fn m(&self, i: usize) -> usize {
-        1 << (self.k(i) + self.rate_log2)
+        1 << self.depth(i)
+    }
+
+    /// log2 of the inverse rate of round i (1-based).
+    pub fn rate(&self, i: usize) -> usize {
+        self.rate_log2[i - 1]
     }
 
     pub fn depth(&self, i: usize) -> usize {
-        self.k(i) + self.rate_log2
+        self.k(i) + self.rate(i)
     }
 
     pub fn final_len(&self) -> usize {
@@ -109,6 +129,12 @@ impl Params {
         if self.queries.len() != l {
             return Err(format!("params: {} query counts for {l} rounds", self.queries.len()));
         }
+        if self.rate_log2.len() != l {
+            return Err(format!("params: {} rates for {l} rounds", self.rate_log2.len()));
+        }
+        if self.header_rate_scalar && self.rate_log2.iter().any(|r| *r != self.rate_log2[0]) {
+            return Err("params: a scalar-rate header with different per-round rates".into());
+        }
         if self.n == 0 || self.n > 40 {
             return Err(format!("params: n = {} out of range", self.n));
         }
@@ -118,15 +144,16 @@ impl Params {
                 return Err(format!("params: k'_{} = {kp} with k_{} = {k}", i + 1, i));
             }
             k -= kp;
-            if k + self.rate_log2 > crate::field::TWO_ADICITY as usize {
-                return Err(format!("params: codeword 2^{} exceeds the 2-adicity", k + self.rate_log2));
+            let rate = self.rate_log2[i];
+            if rate == 0 {
+                return Err(format!("params: round {} rate 1 has no distance", i + 1));
             }
-            if self.queries[i] == 0 || self.queries[i] > (1usize << (k + self.rate_log2)) {
-                return Err(format!("params: |S_{}| = {} for m = 2^{}", i + 1, self.queries[i], k + self.rate_log2));
+            if k + rate > crate::field::TWO_ADICITY as usize {
+                return Err(format!("params: codeword 2^{} exceeds the 2-adicity", k + rate));
             }
-        }
-        if self.rate_log2 == 0 {
-            return Err("params: rate 1 has no distance".into());
+            if self.queries[i] == 0 || self.queries[i] > (1usize << (k + rate)) {
+                return Err(format!("params: |S_{}| = {} for m = 2^{}", i + 1, self.queries[i], k + rate));
+            }
         }
         Ok(())
     }
@@ -229,7 +256,15 @@ mod tests {
 
     #[test]
     fn header_json_matches_json_dumps() {
-        let p = Params::new(12, vec![4, 3, 2], vec![16, 16, 16], 2);
+        let mut p = Params::new(12, vec![4, 3, 2], vec![16, 16, 16], 2);
+        assert_eq!(p.header_json(), "{\"n\": 12, \"kprime\": [4, 3, 2], \"queries\": [16, 16, 16], \"rate\": [2, 2, 2]}");
+        p.header_rate_scalar = true;
         assert_eq!(p.header_json(), "{\"n\": 12, \"kprime\": [4, 3, 2], \"queries\": [16, 16, 16], \"rate\": 2}");
+        let q = Params::with_rates(12, vec![4, 3, 2], vec![16, 16, 16], vec![2, 4, 4]);
+        q.validate().unwrap();
+        assert_eq!(q.header_json(), "{\"n\": 12, \"kprime\": [4, 3, 2], \"queries\": [16, 16, 16], \"rate\": [2, 4, 4]}");
+        assert_eq!(q.m(1), 1 << 10);
+        assert_eq!(q.m(2), 1 << 9);
+        assert_eq!(q.m(3), 1 << 7);
     }
 }
