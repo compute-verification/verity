@@ -96,16 +96,35 @@ _KIND_NAME = {K_HELLO: "HELLO", K_WELCOME: "WELCOME", K_COMMIT: "COMMIT", K_ROOT
 _HDR = struct.Struct("<IB")
 _MAX_FRAME = 1 << 31
 _BUF = 8 << 20
-#: ``LIVE_TCP_CC=cubic|bbr|...`` (default ``cubic``; empty = leave the kernel default): the congestion control of the prover's
-#: and the server's sockets, set BEFORE connect / listen.  Why it matters (measured 4090 EUR-IS-2 -> verifier EU-RO-1, RTT
-#: 70 ms, `ss -tin` during a session): the protocol's flows are bursty and application-limited (one 0.5 MB test message and
-#: one 3.7 MB proof per sub-batch, then silence), so the congestion window never grows past ~one burst, and with the pods'
-#: default bbr the kernel PACES every socket (bbr sets SK_PACING_NEEDED at connection setup; it stays on even after a
-#: later switch to cubic, whose pacing rate is then 1.2 x cwnd / RTT ~ 100 Mbps for a 0.7 MB window) -- a 0.5 MB message
-#: is then smeared over ~40 ms and each opening cost ~2 RTTs (median 138 ms) instead of one.  A socket that is cubic
-#: from the start is never paced (no fq qdisc in the pods): the opening costs the RTT plus the wire time.
-#: Ignored where the kernel does not offer the algorithm.
-_TCP_CC = os.environ.get("LIVE_TCP_CC", "cubic")
+#: ``LIVE_TCP_CC=bbr|cubic|...`` (default ``bbr``; empty = leave the kernel default): the congestion control of the prover's
+#: and the server's sockets, set BEFORE connect / listen (a socket that starts under bbr stays paced for life, so the choice
+#: must be made at the handshake).  History: lane live-verifier (4090 EUR-IS-2 -> verifier EU-RO-1, 70 ms, ~115-150 Mbps
+#: path) found the pods' default bbr pacing the small application-limited ctrl bursts (one 0.5 MB test message per
+#: sub-batch) at ~1.2 x cwnd / RTT ~ 100 Mbps, so each opening cost ~2 RTTs, and made cubic the default (never paced without
+#: an fq qdisc: the opening costs the RTT plus the wire time).  Lane live-2 (4090 EU-RO-1 -> cpu3m EU-CZ-1, 45 ms, ~530 Mbps
+#: path, `ss -tin` on both ends every 0.25 s) found the OPPOSITE failure on a faster path with bigger frames (bf16-hopper
+#: l=16384: 1 MB STMT + 2 MB TESTS per sub-batch, 77 MB of ctrl per session): cubic bursts at line rate into a shallow
+#: bottleneck queue (mss 1398, overlay), loses 250-1400 segments per session, and once in that state its cwnd sits at 1-81
+#: segments for the rest of the session (79 MB in 118 s; opening round trips with a median of 2.9 s and RTO back-off) --
+#: the "27-s depth-2 sessions" of dev-h100-2, reproduced here at depth 2 (110 s) and depth 4 (25-42 s) with the same
+#: verifier; bbr on the same path in the same minutes: 0 retransmits on 118 MB of proofs and 77 MB of ctrl per session,
+#: opening round trips at the path's RTT (44 ms median), t.total_live 1.0 s for the same session.  bbr's pacing costs the
+#: small-message path some latency; cubic's bursts cost the large-message path the whole session.  Default bbr; `live probe`
+#: + `net.rtt_ms` vs the probe's RTT tell whether a pair of machines is in the small-message regime (then LIVE_TCP_CC=cubic).
+_TCP_CC = os.environ.get("LIVE_TCP_CC", "bbr")
+#: ``LIVE_TCP_CC_DATA`` (default ``bbr``): the congestion control of the prover's DATA connection (the 120-200 MB proof
+#: stream of a session).  Lane live-2 (4090 EU-RO-1 -> cpu3m EU-CZ-1, 45 ms, ~530 Mbps path, `ss -tin` on both ends): under
+#: cubic the proof stream lost 1000-1400 segments per session, its cwnd collapsed to 1-9 segments (pacing 1-20 Mbps) and
+#: the transfer crawled for 30-90 s while the queue it built inflated every control round trip; the losses are the path
+#: dropping cubic's line-rate bursts (cwnd up to 11500 segments = 16 MB in flight against a 3 MB BDP).  bbr paces the bulk
+#: stream at its bandwidth estimate and does not collapse on loss.  With ctrl on bbr too (the default above), data=bbr +
+#: ctrl=cubic was also measured: the ctrl stream alone still fell into the same loss state (11 s and 5 s sessions).
+_TCP_CC_DATA = os.environ.get("LIVE_TCP_CC_DATA", "bbr")
+#: ``LIVE_PACING_MBPS`` (default 0 = off): ``SO_MAX_PACING_RATE`` on the prover's sockets, a hard cap on the send rate the
+#: kernel enforces packet by packet (internal TCP pacing; no fq qdisc needed).  Measured: cubic + 400 Mbps cap on the
+#: 530 Mbps path did NOT avoid the loss state (a 57 s session); kept as a knob, not a fix.
+_PACING_MBPS = float(os.environ.get("LIVE_PACING_MBPS", "0") or 0)
+_SO_MAX_PACING_RATE = getattr(socket, "SO_MAX_PACING_RATE", 47)     # Linux; ignored elsewhere
 
 
 class LiveError(RuntimeError):
@@ -116,20 +135,35 @@ class LiveError(RuntimeError):
 # Frames
 # ---------------------------------------------------------------------------------------------------------------------
 
-def _setup_socket(s: socket.socket) -> None:
+def _setup_socket(s: socket.socket, cc: str | None = None, pacing_mbps: float | None = None) -> None:
     """Socket options; call on a socket BEFORE connect() / listen() so the congestion control (and with it the kernel's
-    pacing decision) is the chosen one from the handshake on -- see ``_TCP_CC``."""
+    pacing decision) is the chosen one from the handshake on -- see ``_TCP_CC`` (``cc`` overrides it: the data connection
+    uses ``_TCP_CC_DATA``).  ``pacing_mbps`` (default ``_PACING_MBPS``) > 0 caps the socket's send rate."""
     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     for opt in (socket.SO_SNDBUF, socket.SO_RCVBUF):
         try:
             s.setsockopt(socket.SOL_SOCKET, opt, _BUF)
         except OSError:
             pass
-    if _TCP_CC and hasattr(socket, "TCP_CONGESTION"):
+    cc = _TCP_CC if cc is None else cc
+    if cc and hasattr(socket, "TCP_CONGESTION"):
         try:
-            s.setsockopt(socket.IPPROTO_TCP, socket.TCP_CONGESTION, _TCP_CC.encode())
+            s.setsockopt(socket.IPPROTO_TCP, socket.TCP_CONGESTION, cc.encode())
         except OSError:
             pass
+    pacing_mbps = _PACING_MBPS if pacing_mbps is None else pacing_mbps
+    if pacing_mbps and pacing_mbps > 0:
+        try:
+            s.setsockopt(socket.SOL_SOCKET, _SO_MAX_PACING_RATE, int(pacing_mbps * 1e6 / 8))
+        except OSError:
+            pass
+
+
+def _sock_cc(s: socket.socket) -> str | None:
+    try:
+        return s.getsockopt(socket.IPPROTO_TCP, socket.TCP_CONGESTION, 16).split(b"\0", 1)[0].decode() or None
+    except (OSError, AttributeError):
+        return None
 
 
 def _sockopt(s: socket.socket, opt: int) -> int | None:
@@ -139,14 +173,14 @@ def _sockopt(s: socket.socket, opt: int) -> int | None:
         return None
 
 
-def _connect(host: str, port: int, timeout: float) -> socket.socket:
+def _connect(host: str, port: int, timeout: float, cc: str | None = None) -> socket.socket:
     """``socket.create_connection`` with the options applied before the handshake (an option set after connect() would
     leave the connection paced under the pods' default bbr)."""
     err: Exception | None = None
     for family, socktype, proto, _canon, addr in socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM):
         s = socket.socket(family, socktype, proto)
         try:
-            _setup_socket(s)
+            _setup_socket(s, cc=cc)
             s.settimeout(timeout)
             s.connect(addr)
             return s
@@ -372,7 +406,7 @@ class ProverSession:
             raise LiveError(f"expected WELCOME, got {_KIND_NAME.get(kind, kind)}")
         self.welcome = _json(payload)
         self.session_id = self.welcome["session_id"]
-        self.data = _connect(host, port, timeout)
+        self.data = _connect(host, port, timeout, cc=_TCP_CC_DATA)       # the bulk proof stream: bbr by default (see _TCP_CC_DATA)
         dj = json.dumps({"wire": WIRE_VERSION, "channel": "data", "session_id": self.session_id}).encode()
         self._send(self.data, K_HELLO, struct.pack("<I", len(dj)) + dj)
         kind, payload = self._recv(self.data)
@@ -390,6 +424,7 @@ class ProverSession:
         self.ctrl_send_seconds = 0.0                 # the ctrl sender's sendall time (pipelined sessions)
         self.ctrl_queue_seconds = 0.0                # frames' wait in the ctrl queue before their sendall started
         self.sndbuf = _sockopt(self.ctrl, socket.SO_SNDBUF)    # the EFFECTIVE send buffer (the kernel caps _BUF at wmem_max)
+        self.tcp_cc = {"ctrl": _sock_cc(self.ctrl), "data": _sock_cc(self.data), "pacing_mbps": _PACING_MBPS or None}
         self.verdict: dict | None = None
         self.pipelined = False               # set by start_pipeline (--pipeline N --verifier): a network thread owns ctrl
 
@@ -821,6 +856,7 @@ def net_measurements(sessions: list[ProverSession], proofs_per_session: int) -> 
            "ctrl_send_seconds": [s.ctrl_send_seconds for s in sessions],
            "ctrl_queue_seconds": [s.ctrl_queue_seconds for s in sessions],
            "sndbuf": [s.sndbuf for s in sessions],
+           "tcp_cc": [getattr(s, "tcp_cc", None) for s in sessions],
            "session_wall_seconds": [getattr(s, "wall", None) for s in sessions],
            "verify_wall_s": statistics.median(v["verify"]["wall_s"] for v in verdicts) if verdicts else None,
            "verify_cpu_s": statistics.median(v["verify"]["cpu_s"] for v in verdicts) if verdicts else None,
