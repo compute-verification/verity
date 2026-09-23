@@ -116,6 +116,75 @@ def AllGather2(B, S, parts):
     return parts.reshape(Array(2 * S.N, BF16))
 
 
+# ---------------------------------------------------------------------------------------------------------
+# [lane vllm-tp-n] world-parametric collectives.  IDENTITY RULE: a Definition's identity is `Name_vN{statics}` (defs.SpecializedDefinition.id),
+# so the family NAME is part of every recorded Program's digest.  `AllReduce2_v1{N}` / `AllGather2_v1{N}` therefore stay the identities of
+# every world-2 collective (the frozen #70 / #75 rank Programs name them); `AllReduce_v1{WORLD,N}` / `AllGather_v1{WORLD,N}` are the
+# identities for WORLD > 2 only.  `all_reduce(world)` / `all_gather(world)` are the ONE place a caller picks the family: world 2 -> the
+# `*2` composites (bit-identical body: one Bf16Add per element), world > 2 -> the parametric ones.  Nothing in the two-rank path changes.
+# ---------------------------------------------------------------------------------------------------------
+
+
+@composite("AllReduce", 1, ["WORLD", "N"], lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))),), Array(S.N, BF16)),
+           conformance="model-untested (WORLD>2): NCCL reduces in the datatype, one bf16 rounding per hop; the hop ORDER is NCCL's "
+                       "algorithm/topology (ring: per-chunk start rank; tree: leaves->root), not recorded in the capture -- this body STATES "
+                       "the sequential rank order 0->WORLD-1 and the Match value leg (tp.match provenance) checks it bit-exactly against the "
+                       "received bytes; a mismatch is a named finding, never relabelled.  WORLD=2 is AllReduce2_v1 (exact-model-tested).")
+def AllReduce(B, S, parts):
+    """`ncclAllReduce(ncclSum, ncclBfloat16)` over WORLD ranks' bf16 vectors: `acc = parts[0]; acc = Bf16Add(acc, parts[r])` for r = 1..WORLD-1
+    (one RNE rounding per addition, as NCCL's `FuncSum<__nv_bfloat16>`), the accumulation order being the sequential rank order.  For
+    WORLD = 2 this is one commutative addition per element -- the body of `AllReduce2` (kept as the world-2 identity)."""
+    W = int(S.WORLD)
+    if W < 2:
+        raise ValueError(f"AllReduce{{WORLD={W}}}: an all-reduce needs at least two ranks")
+    acc = parts[0]
+    for r in range(1, W):
+        acc = B.batch(P.Bf16Add, acc, parts[r], axes=(0, 0))
+    return acc
+
+
+@composite("AllGather", 1, ["WORLD", "N"], lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))),), Array(int(S.WORLD) * S.N, BF16)),
+           conformance="exact-model-tested (WORLD=2 as AllGather2_v1); WORLD>2: a reference rearrangement, no gates")
+def AllGather(B, S, parts):
+    """`torch.ops.vllm.all_gather` along the trailing axis over WORLD ranks: rank r's `[N]` becomes columns r*N..(r+1)*N of every rank's
+    `[WORLD*N]`.  A copy: the output IS the concatenation of the parts in rank order (no gate)."""
+    return parts.reshape(Array(int(S.WORLD) * S.N, BF16))
+
+
+def all_reduce(world: int, N: int):
+    """The all-reduce Definition bound for a `world`-rank communicator: `AllReduce2_v1{N}` at world 2 (the recorded identity), else
+    `AllReduce_v1{WORLD,N}`.  Both take ONE `parts` operand `Array<world, Array<N, bf16>>` in rank order."""
+    world = int(world)
+    if world < 2:
+        raise ValueError(f"all_reduce(world={world}): an all-reduce needs at least two ranks")
+    return bind(AllReduce2, N=N) if world == 2 else bind(AllReduce, WORLD=world, N=N)
+
+
+def all_gather(world: int, N: int):
+    """The all-gather Definition for a `world`-rank communicator: `AllGather2_v1{N}` at world 2, else `AllGather_v1{WORLD,N}`."""
+    world = int(world)
+    if world < 2:
+        raise ValueError(f"all_gather(world={world}): an all-gather needs at least two ranks")
+    return bind(AllGather2, N=N) if world == 2 else bind(AllGather, WORLD=world, N=N)
+
+
+def collective_world(spec_id: str) -> int | None:
+    """The world size a collective spec id states: 2 for `AllReduce2_v1{..}` / `AllGather2_v1{..}`, WORLD for `AllReduce_v1{WORLD=..}` /
+    `AllGather_v1{WORLD=..}`, None for any other id."""
+    base = spec_id.split("{", 1)[0]
+    if base in ("AllReduce2_v1", "AllGather2_v1"):
+        return 2
+    if base in ("AllReduce_v1", "AllGather_v1") and "{" in spec_id:
+        for kv in spec_id[spec_id.index("{") + 1:].rstrip("}").split(","):
+            if kv.startswith("WORLD="):
+                return int(kv[6:])
+    return None
+
+
+COLLECTIVE_BASE_IDS = ("AllReduce2_v1", "AllGather2_v1", "AllReduce_v1", "AllGather_v1")
+COLLECTIVE_KIND_OF_BASE = {"AllReduce2_v1": "all_reduce", "AllGather2_v1": "all_gather", "AllReduce_v1": "all_reduce", "AllGather_v1": "all_gather"}
+
+
 @composite("EmbeddingShard", 1, ["VS", "H", "START"],
            lambda S: ((("tok", I32), ("table", Array(S.VS, Array(S.H, BF16)))), Array(S.H, BF16)),
            conformance="exact-model-tested")
@@ -323,6 +392,8 @@ def ServeTP2(B, S, prompt, weights):
 
 
 TP2_COMPOSITES = [AllReduce2, AllGather2, EmbeddingShard, EmbeddingTP2, LayerPreTP2, AttentionTP2, LayerPostTP2, FinalTP2, ServeTP2]
+#: [lane vllm-tp-n] the world-parametric families (identities for WORLD > 2 only; see `all_reduce` / `all_gather`)
+TP_N_COMPOSITES = [AllReduce, AllGather]
 
 
 def serve_tp2(LP: int, STEPS: int, C: dict[str, Any] | None = None):

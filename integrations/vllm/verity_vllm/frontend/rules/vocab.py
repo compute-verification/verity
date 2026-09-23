@@ -265,6 +265,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # rank's masked vocab-shard gather.  A TP>2 world needs an `AllReduceN` whose NCCL tree order is part of the Definition.
            "all_reduce2": lambda N: ir_bind(TP2.AllReduce2, N=N),
            "all_gather2": lambda N: ir_bind(TP2.AllGather2, N=N),
+           # [lane vllm-tp-n] the WORLD-parametric families for a world > 2 (identities `AllReduce_v1{WORLD,N}` / `AllGather_v1{WORLD,N}`; world 2
+           # keeps the `*2` identities above -- `b1_tp2.all_reduce(world, N)` is the selector)
+           "all_reduce": lambda WORLD, N: ir_bind(TP2.AllReduce, WORLD=WORLD, N=N),
+           "all_gather": lambda WORLD, N: ir_bind(TP2.AllGather, WORLD=WORLD, N=N),
            "embedding_shard": lambda VS, H, START: ir_bind(TP2.EmbeddingShard, VS=VS, H=H, START=START),
            # [R15 stoch] the seeded temperature + top-p token select (registry.sampling: TemperatureScale -> TopPMask{V} -> GumbelSelectF32,
            # exact to vLLM d9105ea80 `_temperature_kernel` -> `_apply_topp_split` (S splits) -> `_gumbel_sample_kernel` + argmax; the seed, pos,
@@ -300,6 +304,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                             "reading of the same launches; lift of record LMoeFfnL_v1 (hand-authored, unselected slots DISABLED)",
            "all_reduce2": "AllReduce2_v1{N}: pynccl ncclSum bf16 of two ranks' partials = bf16(f32(a)+f32(b)) per element (b1_tp2)",
            "all_gather2": "AllGather2_v1{N}: vllm.all_gather of two [N] shards along the trailing axis = the [2N] concatenation (b1_tp2)",
+           "all_reduce": "AllReduce_v1{WORLD,N}: pynccl ncclSum bf16 over WORLD>2 ranks' partials as the sequential rank-order chain of one-rounding bf16 adds (b1_tp2)",
+           "all_gather": "AllGather_v1{WORLD,N}: vllm.all_gather of WORLD>2 [N] shards along the trailing axis = the [WORLD*N] concatenation (b1_tp2)",
            "embedding_shard": "EmbeddingShard_v1{VS,H,START}: one rank of VocabParallelEmbedding — shard[id-START] if START<=id<START+VS else 0 (b1_tp2)",
            "fp8_group_quant": "Fp8GroupQuant_v1{K,G}: _C.per_token_group_fp8_quant on one bf16 row -> (x_q e4m3[K], x_s f32[K/G]); per group absmax fmaxf-fold "
                               "from eps 1e-10, s = absmax/448 (div.rn), q = e4m3(clamp(f32(x)/s, ±448)); both outputs computed",

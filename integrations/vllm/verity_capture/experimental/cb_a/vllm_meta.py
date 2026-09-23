@@ -67,8 +67,8 @@ class WithPeers(nn.Module):
     def forward(self, prompt: torch.Tensor, *peers: torch.Tensor):
         self.bus.reset("trace", list(peers))
         out = self.inner(prompt)
-        if self.bus.cursor != len(peers):
-            raise RuntimeError(f"rank {self.bus.rank}: {self.bus.cursor} collectives consumed, {len(peers)} peer inputs given")
+        if self.bus.cursor * (self.bus.world - 1) != len(peers):    # [lane vllm-tp-n] world-1 peer inputs per collective
+            raise RuntimeError(f"rank {self.bus.rank}: {self.bus.cursor} collectives consumed x {self.bus.world - 1} peers, {len(peers)} peer inputs given")
         return out
 
 

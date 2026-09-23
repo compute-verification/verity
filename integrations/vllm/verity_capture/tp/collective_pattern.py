@@ -15,7 +15,6 @@ rank Program binds through `vllm_bindings.AllReduce2Rule` / `AllGather2Rule`, so
 
 from __future__ import annotations
 
-from verity.ir.defs import bind
 from verity_vllm.registry import b1_tp2
 
 from ..events import ViewDesc
@@ -30,7 +29,10 @@ KINDS = {ALL_REDUCE_OP: "all_reduce", ALL_GATHER_OP: "all_gather"}
 
 class TpCollective:
     """`vllm.all_reduce(tensor [M,N] bf16, group) -> [M,N]`   -> `Compute(AllReduce2_v1{N}, rows=M, (Collective(own=tensor, "all_reduce", site),), (PerRow(out),))`
-    `vllm.all_gather(tensor [M,N] bf16, dim, world, group) -> [M, world*N]` -> `Compute(AllGather2_v1{N}, rows=M, (Collective(own, "all_gather", site),), (PerRow(out),))`."""
+    `vllm.all_gather(tensor [M,N] bf16, dim, world, group) -> [M, world*N]` -> `Compute(AllGather2_v1{N}, rows=M, (Collective(own, "all_gather", site),), (PerRow(out),))`.
+    [lane vllm-tp-n] `world` is the profile's communicator size: 2 binds the `*2` identities above, > 2 binds `AllReduce_v1{WORLD,N}` /
+    `AllGather_v1{WORLD,N}` (`b1_tp2.all_reduce` / `all_gather`); the `parts` operand is `Array<world, Array<N, bf16>>` in rank order and
+    the fold fills every peer rank's row from the request's `peers` root (one field per (collective, peer rank))."""
 
     name: str = "tp.collective"
 
@@ -62,16 +64,16 @@ class TpCollective:
             if not isinstance(dim, int) or not isinstance(world, int):
                 return unsupported(node, "all_gather: dim/world_size not bound as ints", dim=repr(dim), world_size=repr(world))
             if world != self.world:
-                return unsupported(node, f"all_gather: world_size {world} != {self.world} (only the two-rank AllGather2_v1 is registered)", world_size=world)
+                return unsupported(node, f"all_gather: world_size {world} != the profile's world {self.world}", world_size=world)
             if dim not in (-1, 1):
                 return unsupported(node, f"all_gather: gathers along dim {dim}; AllGather2_v1 states the trailing axis only", dim=dim)
             if out.shape != (M, self.world * N) or out.dtype != "bfloat16" or not is_row_major(out):
                 return unsupported(node, f"all_gather: received view is not a row-major bf16 [{M},{self.world * N}] view", received=repr(out))
-            spec = bind(b1_tp2.AllGather2, N=N)
+            spec = b1_tp2.all_gather(self.world, N)      # [lane vllm-tp-n] AllGather2_v1{N} at world 2, AllGather_v1{WORLD,N} beyond
         else:
             if out.shape != (M, N) or out.dtype != "bfloat16" or not is_row_major(out):
                 return unsupported(node, f"all_reduce: received view is not a row-major bf16 [{M},{N}] view", received=repr(out))
-            spec = bind(b1_tp2.AllReduce2, N=N)
+            spec = b1_tp2.all_reduce(self.world, N)      # [lane vllm-tp-n] AllReduce2_v1{N} at world 2, AllReduce_v1{WORLD,N} beyond
         if out.alloc == x.alloc:
             return unsupported(node, f"{kind}: in-place collective (received storage is the partial's); the fold states a fresh received storage", partial=repr(x), received=repr(out))
         return Compute(spec, M, (Collective(x, kind, site),), (PerRow(out),), tuple(sorted(node.ids())),

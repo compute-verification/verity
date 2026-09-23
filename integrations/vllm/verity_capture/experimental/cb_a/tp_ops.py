@@ -55,6 +55,28 @@ def ensure_ops() -> None:
     def _(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.empty(tuple(a.shape[:-1]) + (a.shape[-1] + b.shape[-1],), dtype=a.dtype, device=a.device)
 
+    # [lane vllm-tp-n] the WORLD-ary collectives (world > 2): `parts` in RANK order; bound by `AllReduceRule` / `AllGatherRule` to
+    # `AllReduce_v1{WORLD,N}` / `AllGather_v1{WORLD,N}`.  World 2 keeps the binary ops above (recorded identities).
+    @torch.library.custom_op("verity_tp::all_reduce", mutates_args=())
+    def all_reduce(parts: list[torch.Tensor]) -> torch.Tensor:
+        acc = parts[0]
+        for p in parts[1:]:
+            acc = acc + p       # sequential rank order, one bf16 rounding per addition (the Definition's stated order)
+        return acc
+
+    @all_reduce.register_fake
+    def _(parts: list[torch.Tensor]) -> torch.Tensor:
+        return torch.empty_like(parts[0])
+
+    @torch.library.custom_op("verity_tp::all_gather", mutates_args=())
+    def all_gather(parts: list[torch.Tensor]) -> torch.Tensor:
+        return torch.cat(list(parts), dim=-1)
+
+    @all_gather.register_fake
+    def _(parts: list[torch.Tensor]) -> torch.Tensor:
+        a = parts[0]
+        return torch.empty(tuple(a.shape[:-1]) + (a.shape[-1] * len(parts),), dtype=a.dtype, device=a.device)
+
     @torch.library.custom_op("verity_tp::embedding_shard", mutates_args=())
     def embedding_shard(ids: torch.Tensor, table: torch.Tensor, start: int, end: int) -> torch.Tensor:
         own = (ids >= start) & (ids < end)
@@ -79,44 +101,62 @@ class CollectiveBus:
     record: list[dict] = field(default_factory=list)
     cursor: int = 0
 
-    def _peer(self, kind: str, x: torch.Tensor, out_shape: tuple) -> torch.Tensor | None:
+    @property
+    def peer_ranks(self) -> list[int]:
+        """The other ranks in rank order: collective k's peer inputs are `peers[k*(world-1) + j]` for j-th of these."""
+        return [r for r in range(self.world) if r != self.rank]
+
+    def _peers_of(self, kind: str, x: torch.Tensor, out_shape: tuple) -> list[torch.Tensor] | None:
+        """Collective k's `world-1` peer partials (the other ranks', in rank order), or None in probe mode.  [lane vllm-tp-n] the flat peer
+        input list is `k*(world-1) + j`: at world 2 exactly the old one-peer-per-collective layout (`peers_<k>`), so world-2 Program
+        parameter names and digests are unchanged."""
         k = self.cursor
         self.cursor += 1
         if self.mode == "probe":
             self.record.append({"k": k, "kind": kind, "shape": list(x.shape), "dtype": str(x.dtype).replace("torch.", ""), "out_shape": list(out_shape)})
             return None
-        if k >= len(self.peers):
-            raise RuntimeError(f"collective #{k} ({kind}, {tuple(x.shape)}) has no peer input: the probe recorded {len(self.peers)} collectives")
-        p = self.peers[k]
-        if tuple(p.shape) != tuple(x.shape) or p.dtype != x.dtype:
-            raise RuntimeError(f"collective #{k} ({kind}): peer {tuple(p.shape)} {p.dtype} != partial {tuple(x.shape)} {x.dtype}")
-        return p
+        W1 = self.world - 1
+        if (k + 1) * W1 > len(self.peers):
+            raise RuntimeError(f"collective #{k} ({kind}, {tuple(x.shape)}) has no peer input: the probe recorded {len(self.peers) // W1} collectives")
+        ps = self.peers[k * W1:(k + 1) * W1]
+        for j, p in enumerate(ps):
+            if tuple(p.shape) != tuple(x.shape) or p.dtype != x.dtype:
+                raise RuntimeError(f"collective #{k} ({kind}): peer {self.peer_ranks[j]} {tuple(p.shape)} {p.dtype} != partial {tuple(x.shape)} {x.dtype}")
+        return ps
+
+    def _parts(self, x: torch.Tensor, peers: list[torch.Tensor]) -> list[torch.Tensor]:
+        """The world partials in RANK order: this rank's `x` at index `rank`, the peers at theirs."""
+        parts = list(peers)
+        parts.insert(self.rank, x)
+        return parts
 
     def all_reduce(self, x: torch.Tensor) -> torch.Tensor:
-        if self.world != 2:
-            raise NotImplementedError(f"AllReduce2 binds world size 2; world {self.world} (NCCL tree order becomes part of the Definition)")
-        p = self._peer("all_reduce", x, tuple(x.shape))
-        if p is None:
+        peers = self._peers_of("all_reduce", x, tuple(x.shape))
+        if peers is None:
             return torch.empty_like(x)
         ensure_ops()
-        a, b = (x, p) if self.rank == 0 else (p, x)
-        return torch.ops.verity_tp.all_reduce2(a, b)
+        parts = self._parts(x, peers)
+        if self.world == 2:
+            return torch.ops.verity_tp.all_reduce2(parts[0], parts[1])
+        return torch.ops.verity_tp.all_reduce(parts)
 
     def all_gather(self, x: torch.Tensor, dim: int = -1) -> torch.Tensor:
-        if self.world != 2:
-            raise NotImplementedError("AllGather2 binds world size 2")
         if dim not in (-1, x.ndim - 1):
-            raise NotImplementedError(f"all_gather along dim {dim} (AllGather2 concatenates the trailing axis)")
+            raise NotImplementedError(f"all_gather along dim {dim} (AllGather concatenates the trailing axis)")
         out_shape = tuple(x.shape[:-1]) + (x.shape[-1] * self.world,)
-        p = self._peer("all_gather", x, out_shape)
-        if p is None:
+        peers = self._peers_of("all_gather", x, out_shape)
+        if peers is None:
             return torch.empty(out_shape, dtype=x.dtype, device=x.device)
         ensure_ops()
-        a, b = (x, p) if self.rank == 0 else (p, x)
-        return torch.ops.verity_tp.all_gather2(a, b)
+        parts = self._parts(x, peers)
+        if self.world == 2:
+            return torch.ops.verity_tp.all_gather2(parts[0], parts[1])
+        return torch.ops.verity_tp.all_gather(parts)
 
     def example_peers(self, device: str = "meta") -> tuple[torch.Tensor, ...]:
-        return tuple(torch.empty(tuple(r["shape"]), dtype=getattr(torch, r["dtype"]), device=device) for r in self.record)
+        """One example peer tensor per (collective k, peer rank j) in flat order `k*(world-1) + j`."""
+        return tuple(torch.empty(tuple(r["shape"]), dtype=getattr(torch, r["dtype"]), device=device)
+                     for r in self.record for _j in range(self.world - 1))
 
     def reset(self, mode: str, peers: list[torch.Tensor] | None = None) -> None:
         self.mode, self.cursor = mode, 0

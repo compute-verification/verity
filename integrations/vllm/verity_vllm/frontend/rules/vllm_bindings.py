@@ -1659,7 +1659,8 @@ def _collective_hint(node, ctx) -> str:
     if not own_mod:
         return base
     producers: set[str] = set()
-    for a in node.args[:2]:
+    operands = list(node.args[0]) if isinstance(node.args[0], (list, tuple)) else list(node.args[:2])   # WORLD-ary op: one list arg
+    for a in operands:
         if not isinstance(a, torch.fx.Node) or ctx.is_input_storage(a) is not None:
             continue
         rows, _lead = rows_of(ctx.coll(a))
@@ -1741,6 +1742,90 @@ class AllGather2Rule(OpRule):
         ctx.record(self, node, {"N": N, "rows": len(ra), "world": 2}, emitted=f"{fn.id} x{len(ra)}")
 
 
+def _tp_parts(node) -> list:
+    """The `parts` list argument of a WORLD-ary `verity_tp::all_reduce` / `all_gather` node (fx: a list of Nodes), in rank order."""
+    a = node.args[0]
+    return list(a) if isinstance(a, (list, tuple)) else [a]
+
+
+class AllReduceRule(OpRule):
+    """[lane vllm-tp-n] `verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_reduce{WORLD=W, N}` (`AllReduce_v1{WORLD,N}`:
+    the sequential rank-order chain of one-rounding bf16 additions) per row, for a world of W > 2 ranks (world 2 is `AllReduce2Rule`,
+    the recorded identity).  Exactly one operand is this rank's own partial; the other W-1 are PEER INPUTS bound by `tp_links.json` to
+    the other ranks' committed partials."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("AllReduce[tp]", 1, "op-binding", applies_to="verity_tp::all_reduce([a_0 .. a_{W-1}] each [.., N] bf16) (rank order), W > 2",
+                    preconditions=("every operand is a bf16 value collection of identical shape", "world size > 2"),
+                    evidence_domain="structural; numerics: AllReduce_v1{WORLD,N} states the sequential rank-order bf16 chain; the Match value leg checks it")
+
+    def targets(self):
+        return _tp_op("all_reduce")
+
+    def applies(self, node, ctx):
+        parts = _tp_parts(node)
+        if len(parts) <= 2:
+            return f"world {len(parts)}: the two-rank collective is AllReduce2 (recorded identity)"
+        for i, a in enumerate(parts):
+            r = _row_value(ctx, a, f"part_rank{i}")
+            if r:
+                return r
+        shapes = {shape(ctx, a) for a in parts}
+        if len(shapes) != 1:
+            return f"partials differ in shape ({sorted(map(str, shapes))})"
+        return True
+
+    def emit(self, node, ctx):
+        parts = _tp_parts(node)
+        W = len(parts)
+        colls = [ctx.coll(a, f"part_rank{i}") for i, a in enumerate(parts)]
+        rows, lead = zip(*(rows_of(c) for c in colls))
+        rows = list(rows)
+        N = rows[0][0].type.n
+        fn = ctx.kind("all_reduce", node, WORLD=W, N=N)
+        hint = _collective_hint(node, ctx)
+        outs = [ctx.call(fn, array_of(list(xs)), node=node, rule=self, name=f"{hint}[{i}]/all_reduce") for i, xs in enumerate(zip(*rows))]
+        ctx.define(node, from_rows(outs, lead[0]))
+        ctx.record(self, node, {"N": N, "rows": len(rows[0]), "world": W}, emitted=f"{fn.id} x{len(rows[0])}")
+
+
+class AllGatherRule(OpRule):
+    """[lane vllm-tp-n] `verity_tp::all_gather([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_gather{WORLD=W, N}` (`AllGather_v1{WORLD,N}`:
+    the [W*N] row IS the W shards side by side, a copy) per row, W > 2 (world 2 is `AllGather2Rule`)."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("AllGather[tp]", 1, "op-binding", applies_to="verity_tp::all_gather([a_0 .. a_{W-1}] each [.., N] bf16) (rank order, trailing axis), W > 2",
+                    preconditions=("every operand is a bf16 value collection of identical shape", "world size > 2"),
+                    evidence_domain="structural; numerics: AllGather_v1{WORLD,N} (concatenation; no gates)")
+
+    def targets(self):
+        return _tp_op("all_gather")
+
+    def applies(self, node, ctx):
+        parts = _tp_parts(node)
+        if len(parts) <= 2:
+            return f"world {len(parts)}: the two-rank collective is AllGather2 (recorded identity)"
+        for i, a in enumerate(parts):
+            r = _row_value(ctx, a, f"part_rank{i}")
+            if r:
+                return r
+        shapes = {shape(ctx, a) for a in parts}
+        if len(shapes) != 1:
+            return f"shards differ in shape ({sorted(map(str, shapes))})"
+        return True
+
+    def emit(self, node, ctx):
+        parts = _tp_parts(node)
+        W = len(parts)
+        colls = [ctx.coll(a, f"part_rank{i}") for i, a in enumerate(parts)]
+        rows, lead = zip(*(rows_of(c) for c in colls))
+        rows = list(rows)
+        N = rows[0][0].type.n
+        fn = ctx.kind("all_gather", node, WORLD=W, N=N)
+        hint = _collective_hint(node, ctx)
+        outs = [ctx.call(fn, array_of(list(xs)), node=node, rule=self, name=f"{hint}[{i}]/all_gather") for i, xs in enumerate(zip(*rows))]
+        ctx.define(node, from_rows(outs, lead[0]))
+        ctx.record(self, node, {"N": N, "rows": len(rows[0]), "world": W}, emitted=f"{fn.id} x{len(rows[0])}")
+
+
 class EmbeddingShardRule(OpRule):
     """`verity_tp::embedding_shard(ids, shard [VS, H] bf16, START, END)` -> `embedding_shard{VS,H,START}` (`EmbeddingShard_v1`: the row
     `shard[id - START]` if START <= id < END else zeros) per token — one rank of vLLM's `VocabParallelEmbedding` (`_C.vocab_parallel_embedding`);
@@ -1793,7 +1878,7 @@ VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), KvCacheUpdateRule()
                       # [R15 dense] the unfused norm chain (forward_native norms as ATen on an f32 copy)
                       WidenBf16ToF32Rule(), NarrowF32ToBf16Rule(), SquareRule(), MeanDimBIRule(), RsqrtRule(), AddScalarRule(), AddWidenedRule(),
                       MulF32Rule(),
-                      AllReduce2Rule(), AllGather2Rule(), EmbeddingShardRule(),
+                      AllReduce2Rule(), AllGather2Rule(), AllReduceRule(), AllGatherRule(), EmbeddingShardRule(),   # [lane vllm-tp-n] WORLD-ary rules after the world-2 ones
                       # [R15 fp8] the block-scaled FP8 linear (Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel) + the same-dtype cast it ends with
                       PerTokenGroupFp8QuantRule(), CutlassScaledMmFp8BlockRule(), SameDtypeCastRule()]
 

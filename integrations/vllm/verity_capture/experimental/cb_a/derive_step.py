@@ -538,24 +538,45 @@ def _write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int) -> di
     params = [(n, str(t)) for n, t in program.fn.body.params]
     user = [n for n, _ in params if n != "weights"]
     probe = res["tp"]["collectives"]["record"]
-    peer_names = user[len(user) - len(probe):]
-    apps = [a for a in rep.provenance["applications"] if a["rule"].startswith(("AllReduce2", "AllGather2"))]
+    peer_ranks = [r for r in range(tp) if r != rank]                       # [lane vllm-tp-n] world-1 peers per collective, in rank order
+    n_peer = len(probe) * len(peer_ranks)
+    peer_names = user[len(user) - n_peer:]
+    apps = [a for a in rep.provenance["applications"] if a["rule"].startswith(("AllReduce", "AllGather"))]
     if len(apps) != len(probe):
         raise RuntimeError(f"tp_links: {len(apps)} collective rule applications vs {len(probe)} probed collectives")
     links = []
     for k, (p, a) in enumerate(zip(probe, apps)):
-        links.append({"k": k, "kind": p["kind"], "shape": p["shape"], "dtype": p["dtype"], "peer_input": peer_names[k], "peer_rank": 1 - rank,
-                      "peer_collective_k": k, "own_operand": f"part_rank{rank}", "peer_operand": f"part_rank{1 - rank}",
-                      "node": a["node"], "module_path": a.get("module_path"), "emitted": a.get("emitted")})
-    doc = {"schema": "cb-a/tp_links/v1", "world": tp, "rank": rank, "program_digest": res["program"]["digest"], "user_inputs": user,
-           "prompt_inputs": user[:len(user) - len(probe)], "peer_inputs": peer_names,
-           "binding": "peer input k of rank r := part_rank(1-r) of collective k of rank 1-r (the other rank's committed partial); the received "
-                      "collective output of rank r is AllReduce2/AllGather2(part_rank0, part_rank1) — never a fresh trusted input",
+        peers = [{"rank": pr, "input": peer_names[k * len(peer_ranks) + j], "operand": f"part_rank{pr}", "collective_k": k} for j, pr in enumerate(peer_ranks)]
+        ln = {"k": k, "kind": p["kind"], "shape": p["shape"], "dtype": p["dtype"], "peer_collective_k": k, "own_operand": f"part_rank{rank}",
+              "peers": peers, "node": a["node"], "module_path": a.get("module_path"), "emitted": a.get("emitted")}
+        if tp == 2:   # the v1 fields, kept verbatim for the two-rank readers (one peer)
+            ln.update({"peer_input": peers[0]["input"], "peer_rank": peers[0]["rank"], "peer_operand": peers[0]["operand"]})
+        links.append(ln)
+    doc = {"schema": "cb-a/tp_links/v2", "world": tp, "rank": rank, "peer_ranks": peer_ranks, "program_digest": res["program"]["digest"], "user_inputs": user,
+           "prompt_inputs": user[:len(user) - n_peer], "peer_inputs": peer_names,
+           "peer_input_layout": "peer input k*(world-1)+j of rank r := the j-th other rank's (rank order) partial of collective k",
+           "binding": "each peer input of collective k of rank r := part_rank(p) of collective k of rank p (that rank's committed partial); the received "
+                      "collective output of rank r is AllReduce/AllGather(part_rank0, .., part_rank{world-1}) in rank order — never a fresh trusted input"
+                      + (" (world 2: AllReduce2/AllGather2, the recorded identities)" if tp == 2 else ""),
            "weight_shards": "the `weights` record of this Program holds THIS rank's shards (shapes in result.tp.sharded_params); the rank's "
-                            "weight root commits to the shard, the run root binds both ranks' weight roots (rank-tagged)",
+                            "weight root commits to the shard, the run root binds every rank's weight root (rank-tagged)",
            "links": links}
     json.dump(doc, open(os.path.join(out, "tp_links.json"), "w"), indent=1)
-    return {"n_peer_inputs": len(peer_names), "n_prompt_inputs": len(user) - len(probe), "file": "tp_links.json"}
+    return {"n_peer_inputs": len(peer_names), "n_prompt_inputs": len(user) - n_peer, "file": "tp_links.json"}
+
+
+def read_tp_links(path: str) -> dict:
+    """[lane vllm-tp-n] Load a `tp_links.json` of schema v1 (world 2, one `peer_input`/`peer_rank` per link) or v2 (`peers` per link), returning
+    the v2 shape: every link carries `peers = [{rank, input, operand, collective_k}]` and the doc `peer_ranks`.  A v1 file is upgraded in
+    memory (world 2: the single peer is rank 1-r); nothing is rewritten on disk."""
+    doc = json.load(open(path))
+    world, rank = int(doc.get("world") or 2), int(doc.get("rank") or 0)
+    doc.setdefault("peer_ranks", [r for r in range(world) if r != rank])
+    for ln in doc.get("links") or []:
+        if "peers" not in ln:
+            ln["peers"] = [{"rank": int(ln.get("peer_rank", 1 - rank)), "input": ln.get("peer_input"), "operand": ln.get("peer_operand", f"part_rank{1 - rank}"),
+                            "collective_k": int(ln.get("peer_collective_k", ln.get("k", 0)))}]
+    return doc
 
 
 def _finish(out: str, res: dict, t_start: float) -> dict:
