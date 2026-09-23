@@ -52,6 +52,9 @@ research fetch RUN [--all]               # records only, or every file sha256-ve
 research status [--refresh] [--all] [--json]
 research inspect RUN [--json]
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
+research pods create|list|terminate|check-part ...                # RunPod lifecycle (pods/runpod.py, pods/part.py)
+research pods ssh TARGET [--print] [-- CMD...]                    # TARGET = machines.toml name | pod id | pod name (pods/connect.py)
+research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree's git-visible files -> DIR (default /workspace/src)
 research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 ~~~
