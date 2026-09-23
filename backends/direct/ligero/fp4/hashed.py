@@ -203,7 +203,11 @@ class FP4HashedRelation:
     generator (``fp4/witness.py``) and its synthetic instance families (``fp4/chain.py``)."""
 
     name = "fp4-nvf4"
+    relation_name = "GemmAccumulator<1536> over sm120.mma.m16n8k64.e2m1.nvf4"      # fp4/chain.py RELATION_NAME
     model_name = MODEL.name
+    witness_generation = ("fp4/hints_device.py device hint generator (one graph replay per sub-batch; witness.hints_fp4 numpy "
+                          "on cpu) + hashchain.hash_hints (operand bit rows, Poseidon2 sponges of fp4/hashed.py FP4Format)")
+    claim_note = "public claim per VU = the final FP32 accumulator word (three chain-end components: sign, exponent, fraction)"
     model = MODEL
     params = NVFP4
     k = WORDS                       # operand words per unit (the chain step)
@@ -256,7 +260,15 @@ class FP4HashedRelation:
             w._check_domain = chk
 
     def hints(self, p, sys: System, c_in, a, b, y_out, device):
+        """The base unit's 86 hint rows: the device generator of ``fp4/hints_device.py`` (the bare cell's; one graph replay
+        per sub-batch) on CUDA, ``witness.hints_fp4`` (numpy) elsewhere and for the forced negatives (``unchecked``: the
+        device path has no domain check to switch off, the numpy path is the one the negatives reason about)."""
         import torch
+        if str(device).startswith("cuda") and not self.unchecked:
+            from .hints_device import hints_device_for
+            l = np.asarray(a).shape[0] if not isinstance(a, torch.Tensor) else a.shape[0]
+            _pub, H, _y = hints_device_for(sys, l, device)(c_in, a, b, check=True)
+            return H
         H = self._domain_checked(hints_fp4, sys, self._np(c_in), self._np(a), self._np(b))
         return torch.as_tensor(H, dtype=torch.int64, device=device)
 
