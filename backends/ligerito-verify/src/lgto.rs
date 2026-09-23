@@ -1165,7 +1165,7 @@ pub fn verify(
         let sp = relation::parse_lgsc(&proof.sumcheck).map_err(|e| format!("sumcheck bytes: {e}"))?;
         ("LGSC0002", relation::verify(&lay, &cons, &rows, &sp, coins)?)
     } else {
-        return Err("sumcheck bytes: unknown magic".into());
+        return Err(format!("sumcheck bytes: magic {:?} not implemented (LGSC0002 / LGSC0003)", String::from_utf8_lossy(magic)));
     };
     let mut all = claims.clone();
     all.extend(zero_claims(&lay, &claims[0], &blocks));
