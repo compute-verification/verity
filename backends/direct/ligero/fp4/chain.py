@@ -295,17 +295,20 @@ class FP4ChainRunner:
             proof.timings["hints_host"] = hints_seconds
         return proof, (bd["a"], bd["b"], bd["y32"]), lay
 
-    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256):
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int | list[int] = 256):
         """``len(batches)`` sub-batches proved with up to ``depth`` in flight on their own CUDA streams
         (``pipeline.prove_many``, lane hp2-host): the host work of one sub-batch (the SHAKE-256 challenge squeeze, the
         statement digest, transcript copies, launches) hides under the device work of the next.  ``coins_factory()`` is
         called per sub-batch as it starts, in order (the honest verifier's step 0), so the transcripts equal the
         sequential ones under the same coin / mask-key stream.  Returns ``[(coins, proof, pubs, lay)]`` in order and the
-        pass wall; each proof's ``timings`` is its share of the wall (``pipeline._rescale``)."""
+        pass wall; each proof's ``timings`` is its share of the wall (``pipeline._rescale``).  ``min_l``: one value for
+        every sub-batch, or one per sub-batch (a short tail at its own l: every proof carries its l in its statement)."""
         if not _STAGED:
             raise RuntimeError("this tree's protocol has no stage generator (pipeline.prove_many): sequential prove_vus only")
         from ..pipeline import prove_many
-        bundles = [self.marshal(vus, min_l) for vus in batches]
+        min_ls = list(min_l) if isinstance(min_l, (list, tuple)) else [min_l] * len(batches)
+        assert len(min_ls) == len(batches)
+        bundles = [self.marshal(vus, ml) for vus, ml in zip(batches, min_ls)]
         coins_of: list = [None] * len(batches)
 
         def starter(i):
@@ -667,7 +670,17 @@ def bench_vu_fp4(args) -> int:
     lay = R.layout(per_proof)
     l = lay.l
     cfg = R.cfg(l)
-    print(f"config {cfg}; layout {lay}; zk {cfg.zk}, mode {cfg.mode}; system {R.sys.summary()}; {total_vus} VUs as {n_proofs} sub-batches of <= {per_proof}")
+    # --tail-l natural: the short last sub-batch (total_vus mod per_proof VUs) is proved at ITS OWN l (R.layout's smallest
+    # power of two >= its columns, >= 256) instead of the full l -- a full-l proof costs the same on the device whatever
+    # its VU count (the matrix is m x l), so at l = 16384 the 4-VU tail of 4096 VUs was 1/7 of the pass.  Every proof
+    # carries its l in its statement (ligero-statement/v4; the Rust verifier reads it per proof), the union bound is per
+    # proof; `security` below describes the dominant l, the batch verdicts (Python file verifier, Rust) are per statement.
+    # Default fixed = every sub-batch at l (the runs before 2026-09-23 10:30Z).
+    tail_l = getattr(args, "tail_l", "fixed") or "fixed"
+    min_l_of = [l if (tail_l == "fixed" or hi - lo == per_proof) else 256 for lo, hi in subs]
+    tail_lays = {R.layout(hi - lo, ml).l for (lo, hi), ml in zip(subs, min_l_of) if hi - lo != per_proof}
+    print(f"config {cfg}; layout {lay}; zk {cfg.zk}, mode {cfg.mode}; system {R.sys.summary()}; {total_vus} VUs as {n_proofs} sub-batches of <= {per_proof}"
+          + (f"; tail sub-batch at its own l {sorted(tail_lays)} (--tail-l natural)" if tail_l != "fixed" and tail_lays else ""))
     runs = []
     if args.device.startswith("cuda"):
         torch.cuda.reset_peak_memory_stats()
@@ -702,14 +715,14 @@ def bench_vu_fp4(args) -> int:
         # round trips must not sit between two timed prover sub-batches (vu.bench_vu / fp8.chain discipline).
         proved = []
         if pipeline_depth > 1 and rep > 0:
-            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], coins_factory, depth=pipeline_depth, min_l=l)
+            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], coins_factory, depth=pipeline_depth, min_l=min_l_of)
             for si, ((lo, hi), (V, proof, pubs, lay_i)) in enumerate(zip(subs, many)):
                 for k_, v_ in proof.timings.items():
                     agg[k_] = agg.get(k_, 0.0) + v_
                 proved.append((si, lo, hi, V, proof, pubs, lay_i))
         for si, (lo, hi) in enumerate(subs if not proved else []):
             V = coins_factory()
-            proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=l, coins=V)
+            proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=min_l_of[si], coins=V)
             for k_, v_ in proof.timings.items():
                 agg[k_] = agg.get(k_, 0.0) + v_
             proved.append((si, lo, hi, V, proof, pubs, lay_i))
@@ -719,7 +732,7 @@ def bench_vu_fp4(args) -> int:
                     # tests graphs are keyed per stream AND per (l, n_vus), so the short tail sub-batch must be met on
                     # the slot it lands on) -- with only the first `depth` sub-batches warmed, timed rep 1 paid ~0.2 s
                     # of captures on the tail (r20260923-091019-38d8: reps 0.255 / 0.065 / 0.068).
-                    R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in subs], coins_factory, depth=pipeline_depth, min_l=l)
+                    R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in subs], coins_factory, depth=pipeline_depth, min_l=min_l_of)
                 break                                        # warm-up: --warmup-subs sub-batches (compile, graph capture, self-check on the first)
         wall_prove = time.perf_counter() - t_pass
         for si, lo, hi, V, proof, pubs, lay_i in proved:
@@ -796,7 +809,10 @@ def bench_vu_fp4(args) -> int:
         proof_dumps=None if dump_dir is None else {"dir": str(dump_dir), "files": len(dump_manifest["files"]),
                                                    "formats": dump_manifest["format"], "system_sha256": dump_manifest["system_file"]["sha256"]},
         note=f"{total_vus} VUs as {n_proofs} independently committed proofs of <= {per_proof} VUs each (l = {l} columns, "
-             f"{l - per_proof * STEPS} pad columns per proof); prover time = sum over the proofs; soundness = union bound; "
+             f"{l - per_proof * STEPS} pad columns per proof"
+             + (f"; the {total_vus % per_proof}-VU tail sub-batch at its own l = {sorted(tail_lays)} (--tail-l natural; security below is the dominant l's, "
+                f"the per-statement verdicts are the authority)" if tail_l != "fixed" and tail_lays else "")
+             + "); prover time = sum over the proofs; soundness = union bound; "
              f"warm-up rep 0 = {warmup_subs} untimed sub-batch(es); "
              + (f"timed reps: {pipeline_depth} sub-batches in flight on their own streams (--pipeline; phase times = shares of the pass wall); "
                 if pipeline_depth > 1 else "timed reps: sub-batches sequential; ") +
@@ -823,6 +839,7 @@ def bench_vu_fp4(args) -> int:
         *contract.rate_measurements(total, total_vus, K * STEPS, NVFP4_SM120.name),
         contract.measurement("split.subbatches", n_proofs, "count"),
         contract.measurement("split.per_proof_vus", per_proof, "count"),
+        contract.measurement("split.tail_l", (sorted(tail_lays)[0] if (tail_l != "fixed" and tail_lays) else l), "count"),
         contract.measurement("split.hints_seconds", med["hints_host"], "s"),
         contract.measurement("split.witness_torch_seconds", med["witness"], "s"),
         contract.measurement("split.encode_seconds", med["encode"], "s"),

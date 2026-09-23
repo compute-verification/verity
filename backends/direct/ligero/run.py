@@ -419,6 +419,10 @@ def main(argv=None) -> int:
     sub.choices["bench-vu"].add_argument("--warmup-subs", type=int, default=1,
                                          help="fp4-nvf4: sub-batches proven in the untimed warm-up rep 0 (default 1, main's harness; "
                                               "n_proofs = a full rep). Recorded in the result's note")
+    sub.choices["bench-vu"].add_argument("--tail-l", default="fixed", choices=("fixed", "natural"),
+                                         help="fp4-nvf4: the short last sub-batch (total-vus mod VUs-per-proof) at the full l (fixed, default) "
+                                              "or at its own smallest l (natural: a full-l proof costs the same on the device whatever its VU "
+                                              "count; every statement carries its l). Recorded in the result's note and split.tail_l")
     for name in ("gate-vu", "bench-vu"):
         sub.choices[name].add_argument("--fp4-hints", default="device", choices=("device", "numpy"),
                                        help="fp4-nvf4: the decode + hint generator -- device (fp4/hints_device.py: torch on the prover's "
