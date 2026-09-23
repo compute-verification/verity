@@ -24,8 +24,9 @@ The per-row records are `tests/query/gate/row<N>_*.json` (the `compare` summary 
 | #73 | qwen3-4b bf16 H100 tp1 B8 (FA3) | 243,115 (247,327) | 243,115 (247,327) | 0 | 0 | EQUAL `a2aaa282…` | 493 s |
 | #74 | qwen3-4b-fp8 fp8 H100 tp1 B8 (FA3, blockwise FP8) | 258,637 (262,885) | 258,637 (262,885) | 0 | 0 | EQUAL `ecb28d4e…` | 492 s |
 | #67 | olmoe-1b-7b bf16 L40S tp1 B32 (MoE) | 383,968 (385,504) | 404,896 (406,432) | 0 | 20,928 | v1 + `(layers.k.mlp.experts, out)` -- see below | 222 s |
+| #68 | olmoe-1b-7b bf16 L40S tp1 B32 mixed-arrivals (MoE) | 380,250 (382,234) | 400,954 (402,938) | 0 | 20,704 | v1 + `(layers.k.mlp.experts, out)` = 16 x 1,294 | 295 s |
 
-Not run on the laptop (this session): #68 (olmoe B32 mixed-arrivals; same model as #67), #23 (llama32-1b B64: 247 MB Programs +
+Not run on the laptop (this session): #23 (llama32-1b B64: 247 MB Programs +
 222 MB manifest of record), #11 / #39 (B=1, 4096 x 512: one 922 MB / 1.6 GB Program each -- the flat body is ~10^7 Calls, past
 what the laptop's 24 GB and the 5-hour budget allow), #70 / #75 (TP2 rank Programs: v1's TP encoding -- `tp_rank_partials` rows,
 `tp_peer_binding`, the rank fold -- is a separate bridge not written here; #75 also has no manifest of record).
