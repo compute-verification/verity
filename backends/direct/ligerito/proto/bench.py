@@ -20,7 +20,7 @@ import torch
 from . import ext
 from .dims import Dims, choose
 from .ext import D, P
-from .pcs import Proof, Timer, prove, prove_reference, verify
+from .pcs import Proof, Timer, prove, prove_commit_first, prove_reference, verify
 
 try:
     import cupy as cp
@@ -83,6 +83,7 @@ def _negatives(pf: Proof, z: np.ndarray, buf: bytes) -> dict:
 
 
 PROVE = prove
+CLAIMS = 0
 
 
 def run_one(n: int, dims: Dims, device, reps: int, negatives: bool, seed: int) -> dict:
@@ -90,7 +91,7 @@ def run_one(n: int, dims: Dims, device, reps: int, negatives: bool, seed: int) -
     g = torch.Generator(device=device)
     g.manual_seed(seed)
     rng = np.random.default_rng(seed)
-    z = rng.integers(0, P, size=(n, D), dtype=np.int64)
+    z = rng.integers(0, P, size=(CLAIMS, n, D) if CLAIMS else (n, D), dtype=np.int64)
     rows = []
     proof_bytes = None
     neg = None
@@ -200,10 +201,17 @@ def main(argv=None) -> None:
     ap.add_argument("--seed", type=int, default=20260923)
     ap.add_argument("--prover", choices=("fast", "reference"), default="fast",
                     help="fast = pcs.prove (device, lane ligerito-pcs-fast); reference = the prototype prover")
+    ap.add_argument("--claims", type=int, default=0,
+                    help="m > 0: a standalone commit-first proof (pcs.commit, evaluate, open) at m evaluation points")
     ap.add_argument("--out", default="")
     args = ap.parse_args(argv)
-    global PROVE
+    global PROVE, CLAIMS
     PROVE = prove if args.prover == "fast" else prove_reference
+    if args.claims:
+        CLAIMS = args.claims
+
+        def PROVE(f, z, dims, timer=None):                  # noqa: N802
+            return prove_commit_first(f, z, dims, timer=timer)
     device = "cuda"
     props = torch.cuda.get_device_properties(0)
     results = []

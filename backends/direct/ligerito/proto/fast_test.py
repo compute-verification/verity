@@ -53,6 +53,66 @@ def test_streamed_commit_matches_reference(n, kprime, q, rates, monkeypatch):
     assert a.to_bytes() == b.to_bytes()
 
 
+def _mle(f: torch.Tensor, z: np.ndarray) -> np.ndarray:
+    e = cl.eq_vector(z)                                                   # (N, 6), x little-endian
+    fv = f.to(torch.int64).cpu().numpy()
+    return ext.sum_ext(ext.mul(e, fv[:, None] * np.array([1, 0, 0, 0, 0, 0])), axis=0)
+
+
+def _relation_coins(root: bytes):
+    from .transcript import FiatShamirCoins
+    tr = FiatShamirCoins()
+    tr.absorb(b"statement", b"relation statement")
+    tr.absorb(b"root", root)
+    tr.absorb(b"relation", b"zero-check messages")
+    tr.challenge(b"tau", 3)
+    return tr
+
+
+@pytest.mark.parametrize("m,stream", [(1, False), (4, False), (3, True), (2, None)])
+def test_commit_first_multi_claim(m, stream):
+    from .pcs import commit, evaluate, open as pcs_open, verify_open
+    n = 14
+    dims = Dims(n, [5, 4, 3], [24, 20, 16], [1, 2, 2])
+    f, _ = _inst(n)
+    zs = RNG.integers(0, P, size=(m, n, D), dtype=np.int64)
+    # the relation's view: commit, bind the root and its own rounds, then ONE evaluation proof for all claims
+    com = commit(f, dims, stream=stream)
+    assert (com.U1 is None) == bool(stream)
+    values = evaluate(com, zs)
+    for j in range(m):
+        assert np.array_equal(values[j], _mle(f, zs[j]))
+    pf = pcs_open(com, zs, values, _relation_coins(com.root))
+    pf_nocache = pcs_open(com, zs, None, _relation_coins(com.root))           # without evaluate's cached contractions
+    assert pf_nocache.to_bytes() == pf.to_bytes()
+    assert pf.v.shape == (m, D) and np.array_equal(pf.v, values)
+    pf2 = Proof.from_bytes(pf.to_bytes())
+    assert pf2.to_bytes() == pf.to_bytes() and pf2.order == "commit-first"
+    ok, why = verify_open(pf2, zs, values, _relation_coins(pf2.roots[0]))
+    assert ok, why
+    # negatives: a wrong value, wrong points, a different relation transcript, the standalone prefix, the legacy verifier path
+    bad = values.copy()
+    bad[m - 1, 0] = (bad[m - 1, 0] + 1) % P
+    assert not verify_open(pf2, zs, bad, _relation_coins(pf2.roots[0]))[0]
+    assert not verify_open(pf2, zs[::-1] if m > 1 else (zs + 1) % P, values, _relation_coins(pf2.roots[0]))[0]
+    assert not verify_open(pf2, zs, values, _relation_coins(b"\0" * 32))[0]
+    assert not verify(pf2, zs)[0]
+
+
+@pytest.mark.parametrize("m", [1, 3])
+def test_commit_first_standalone(m):
+    from .pcs import prove_commit_first
+    n = 12
+    dims = Dims(n, [4, 3, 3], [12, 12, 12], 2)
+    f, _ = _inst(n)
+    zs = RNG.integers(0, P, size=(m, n, D), dtype=np.int64)
+    pf = Proof.from_bytes(prove_commit_first(f, zs, dims).to_bytes())
+    ok, why = verify(pf, zs)
+    assert ok, why
+    assert pf.v.shape == (m, D)
+    assert not verify(pf, zs, v=(pf.v + 1) % P)[0]
+
+
 def test_stream_group_plan():
     from .pcs import _stream_group
     big = torch.cuda.get_device_properties(0).total_memory > (40 << 30)
@@ -84,10 +144,31 @@ def test_contract_geom_and_planes():
         from .linalg import matmul_mod_p_np
         ref = matmul_mod_p_np(A.to(torch.int64).cpu().numpy(), G)
         assert np.array_equal(got, ref), (Pn, R, T)
-        Bp = torch.randint(0, P, (D, R), dtype=torch.int64, device=DEV).to(torch.int32)
-        got = (dv.contract_planes(A, Bp) % P).cpu().numpy()
-        ref = matmul_mod_p_np(A.to(torch.int64).cpu().numpy(), Bp.to(torch.int64).cpu().numpy().T)
-        assert np.array_equal(got, ref)
+        for W in (6, 12, 18, 24):
+            Bp = torch.randint(0, P, (W, R), dtype=torch.int64, device=DEV).to(torch.int32)
+            got = (dv.contract_planes(A, Bp) % P).cpu().numpy()
+            ref = matmul_mod_p_np(A.to(torch.int64).cpu().numpy(), Bp.to(torch.int64).cpu().numpy().T)
+            assert np.array_equal(got, ref), (Pn, R, W)
+
+
+@pytest.mark.parametrize("k", [3, 6, 7, 11, 13, 16])
+def test_eq_table_matches_host(k):
+    from . import device as dv
+    z = RNG.integers(0, P, size=(k, D), dtype=np.int64)
+    assert np.array_equal(dv.eq_table(z, DEV).cpu().numpy().astype(np.int64), cl.eq_vector(z).T)
+
+
+def test_contract_eq_multi():
+    from . import device as dv
+    from .linalg import matmul_mod_p_np
+    for Pn, k, m in ((96, 12, 1), (40, 11, 3), (128, 9, 5), (16, 13, 9)):
+        A = torch.randint(0, P, (Pn, 1 << k), dtype=torch.int64, device=DEV).to(torch.int32)
+        zs = RNG.integers(0, P, size=(m, k, D), dtype=np.int64)
+        got = (dv.contract_eq(A, zs) % P).cpu().numpy()
+        An = A.to(torch.int64).cpu().numpy()
+        for j in range(m):
+            ref = matmul_mod_p_np(An, cl.eq_vector(zs[j]))                   # (P, 6)
+            assert np.array_equal(got[j], ref), (Pn, k, m, j)
 
 
 def test_fold_ext_and_eq_table():
