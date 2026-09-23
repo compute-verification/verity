@@ -41,6 +41,17 @@ def test_fast_matches_reference_bytes(n, kprime, q, rates):
     assert a.to_bytes() == b.to_bytes()
 
 
+@pytest.mark.parametrize("ns,nc,n1,B", [(128, 4, 64, 3), (256, 4, 256, 2), (512, 2, 1024, 2), (1024, 4, 1024, 2),
+                                        (1024, 2, 2048, 1), (2048, 2, 2048, 1), (2048, 4, 512, 2), (1024, 16, 128, 2)])
+def test_pass_a_matches_generic(ns, nc, n1, B):
+    from .ntt_gpu import ntt_axis, ntt_pass_a, post_twiddles
+    n2 = ns * nc
+    x = torch.randint(0, P, (B, ns, n1), dtype=torch.int64, device=DEV).to(torch.int32)
+    ref = ntt_axis(x, n2, out=torch.empty((B, n2, n1), dtype=torch.int32, device=DEV), post_tw=post_twiddles(n1, n2, DEV))
+    got = ntt_pass_a(x, n2, n1 * n2, out=torch.empty((B, n2, n1), dtype=torch.int32, device=DEV))
+    assert torch.equal(got, ref)
+
+
 def test_contract_geom_and_planes():
     from . import device as dv
     for Pn, R, T in ((96, 1 << 12, 70), (192, 1 << 10, 130), (48, 1 << 9, 5), (128, 1 << 13, 64)):

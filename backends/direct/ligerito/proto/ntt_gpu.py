@@ -100,8 +100,181 @@ ntt_axis(const unsigned* __restrict__ in, unsigned* __restrict__ out, const unsi
 }
 """
 
+_SRC_A = r"""
+#define P 2013265921u
+#define PINV %(pinv)du
+#define ONE_M 268435454u              /* 1 in Montgomery form (2^32 mod p) */
+#define NS %(ns)d                     /* sub-transform length = message rows per column (n2 / NC) */
+#define LNS %(lns)d
+#define G 8                           /* adjacent inner columns per CTA: one 32-byte sector per row */
+#define T %(threads)d
+#define TC (T / G)                    /* threads per column */
+#define LTC %(ltc)d
+#define E (NS / TC)                   /* elements per thread; E >= TC */
+#define LE %(le)d
+#define NC %(nc)d                     /* cosets = n2 / NS = 2^rate */
+
+__device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return min(s, s - P); }
+__device__ __forceinline__ unsigned sub_p(unsigned a, unsigned b) { unsigned d = a - b; return min(d, d + P); }
+__device__ __forceinline__ unsigned mont_mul(unsigned a, unsigned w) {
+    unsigned long long x = (unsigned long long)a * w;
+    unsigned lo = (unsigned)x, hi = (unsigned)(x >> 32);
+    unsigned t = lo * PINV;
+    unsigned u = __umulhi(t, P);
+    unsigned r = hi - u;
+    return min(r, r + P);
+}
+__device__ __forceinline__ unsigned pow_mont(unsigned b, unsigned e) {
+    unsigned r = ONE_M;
+    while (e) { if (e & 1u) r = mont_mul(r, b); b = mont_mul(b, b); e >>= 1; }
+    return r;
+}
+/* bank-conflict-free for the scatter (bit-reversed rows), the E-contiguous phase and the stride-E phase */
+__device__ __forceinline__ unsigned swz(unsigned r) { return r ^ ((r >> LE) & 3u); }
+
+/* Step A of the 4-step, specialised to a zero-padded input: in (B, NS, inner) -> out (B, NC NS, inner), transform along the
+   middle axis, x w_n^{j1 k'} fused into the store.  X[NC k0 + c] = NTT_NS(x_j w_{n2}^{j c})[k0]: the NS-point transform once per
+   coset c with the input kept in registers; each transform is two register phases (LE stages on E-contiguous positions, LTC stages
+   on stride-E positions) around one shared-memory transpose. */
+extern "C" __global__ void __launch_bounds__(T)
+ntt_pass_a(const unsigned* __restrict__ in, unsigned* __restrict__ out, const unsigned* __restrict__ tw_ns,
+           const unsigned* __restrict__ tw_n2, unsigned wn_mont, int inner)
+{
+    extern __shared__ unsigned sh[];
+    unsigned* stw = sh + NS * G;
+    const int t = threadIdx.x;
+    const int cg = blockIdx.x * G;
+    const long long b = blockIdx.y;
+    for (int i = t; i < NS; i += T) stw[i] = tw_ns[i];
+    const int gl = t & (G - 1);
+    const int ul = (((t >> 3) & 3) << (LTC - 2)) | (t >> 5);
+    const unsigned* src = in + b * (long long)NS * inner + cg + gl;
+    unsigned x[E];
+    #pragma unroll
+    for (int s = 0; s < E; ++s) x[s] = __ldg(src + (long long)(ul + TC * s) * inner);
+    const int g = t & (G - 1), u = t >> 3;
+    const unsigned a = pow_mont(wn_mont, (unsigned)(cg + g));
+    const unsigned st = pow_mont(a, (unsigned)(NC * E));
+    unsigned* dst = out + b * (long long)(NS * NC) * inner + cg + g;
+    #pragma unroll 1
+    for (int c = 0; c < NC; ++c) {
+        __syncthreads();
+        {
+            unsigned wr = ONE_M, ws = ONE_M;
+            if (c) { wr = __ldg(tw_n2 + ((ul * c) & (NS * NC - 1))); ws = __ldg(tw_n2 + ((TC * c) & (NS * NC - 1))); }
+            #pragma unroll
+            for (int s = 0; s < E; ++s) {
+                unsigned v = x[s];
+                if (c) { v = mont_mul(v, wr); wr = mont_mul(wr, ws); }
+                const unsigned r = __brev((unsigned)(ul + TC * s)) >> (32 - LNS);
+                sh[swz(r) * G + gl] = v;
+            }
+        }
+        __syncthreads();
+        {
+            unsigned z[E];
+            #pragma unroll
+            for (int s = 0; s < E; ++s) z[s] = sh[swz(E * u + s) * G + g];
+            #pragma unroll
+            for (int lm = 0; lm < LE; ++lm) {
+                const int m = 1 << lm;
+                #pragma unroll
+                for (int q = 0; q < E / 2; ++q) {
+                    const int jj = q & (m - 1);
+                    const int k = ((q >> lm) << (lm + 1)) + jj;
+                    const unsigned aa = z[k], cc = mont_mul(z[k + m], stw[m + jj]);
+                    z[k] = add_p(aa, cc);
+                    z[k + m] = sub_p(aa, cc);
+                }
+            }
+            #pragma unroll
+            for (int s = 0; s < E; ++s) sh[swz(E * u + s) * G + g] = z[s];
+        }
+        __syncthreads();
+        #pragma unroll
+        for (int q = 0; q < E / TC; ++q) {
+            const int lo = u + TC * q;
+            unsigned y[TC];
+            #pragma unroll
+            for (int h = 0; h < TC; ++h) y[h] = sh[swz(lo + E * h) * G + g];
+            #pragma unroll
+            for (int lm = 0; lm < LTC; ++lm) {
+                const int mh = 1 << lm;
+                #pragma unroll
+                for (int p = 0; p < TC / 2; ++p) {
+                    const int jh = p & (mh - 1);
+                    const int k = ((p >> lm) << (lm + 1)) + jh;
+                    const unsigned aa = y[k], cc = mont_mul(y[k + mh], stw[E * mh + lo + E * jh]);
+                    y[k] = add_p(aa, cc);
+                    y[k + mh] = sub_p(aa, cc);
+                }
+            }
+            unsigned w = pow_mont(a, (unsigned)(NC * lo + c));
+            #pragma unroll
+            for (int h = 0; h < TC; ++h) {
+                dst[((long long)NC * (lo + E * h) + c) * inner] = mont_mul(y[h], w);
+                w = mont_mul(w, st);
+            }
+        }
+    }
+}
+"""
+
 _KERNELS: dict = {}
 _TABLES: dict = {}
+_PASS_A_THREADS = {128: 64, 256: 128, 512: 128, 1024: 256, 2048: 256}
+
+
+def _kernel_a(ns: int, nc: int):
+    key = ("A", ns, nc)
+    k = _KERNELS.get(key)
+    if k is None:
+        th = _PASS_A_THREADS[ns]
+        tc = th // 8
+        e = ns // tc
+        src = _SRC_A % {"pinv": _P_INV_MOD_R, "ns": ns, "lns": ns.bit_length() - 1, "threads": th,
+                        "ltc": tc.bit_length() - 1, "le": e.bit_length() - 1, "nc": nc}
+        k = cp.RawKernel(src, "ntt_pass_a", options=("-std=c++17",))
+        smem = 4 * (ns * 8 + ns)
+        if smem > 48 * 1024:
+            k.max_dynamic_shared_size_bytes = smem
+        _KERNELS[key] = (k, th, smem)
+    return _KERNELS[key]
+
+
+def pass_a_supported(ns: int, nc: int, inner: int) -> bool:
+    return cp is not None and ns in _PASS_A_THREADS and 1 <= nc <= 16 and inner % 8 == 0
+
+
+def root_powers(n: int, device) -> torch.Tensor:
+    """(n,): w_n^q (Montgomery), int32 on ``device``."""
+    key = ("pow", n, str(device))
+    t = _TABLES.get(key)
+    if t is None:
+        t = torch.from_numpy(_mont(_powers(root_of_unity(n), n)).view(np.int32)).to(device)
+        _TABLES[key] = t
+    return t
+
+
+def ntt_pass_a(x: torch.Tensor, n2: int, n: int, out: torch.Tensor, stream: torch.cuda.Stream | None = None) -> torch.Tensor:
+    """x (B, NS, inner) -> out (B, n2, inner): the 4-step's step A (NTT along the middle axis zero-padded to n2, times
+    w_n^{j1 k'}), same output as ``ntt_axis(x, n2, out, post_twiddles(inner, n2))`` with inner = n1 = n / n2."""
+    B, ns, inner = x.shape
+    nc = n2 // ns
+    k, th, smem = _kernel_a(ns, nc)
+    tw = stage_twiddles(ns, x.device)
+    tw2 = root_powers(n2, x.device)
+    wn = int(_mont(np.array([root_of_unity(n)], dtype=np.uint64))[0])
+    ts = stream if stream is not None else torch.cuda.current_stream(x.device)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        cs = cp.cuda.ExternalStream(ts.cuda_stream)
+    with cs:
+        k((inner // 8, B), (th,),
+          (np.uint64(x.data_ptr()), np.uint64(out.data_ptr()), np.uint64(tw.data_ptr()), np.uint64(tw2.data_ptr()),
+           np.uint32(wn), np.int32(inner)), shared_mem=smem)
+    return out
 
 
 def _kernel(n: int, g: int, threads: int = 256):
@@ -224,8 +397,11 @@ class Encoder:
             ntt_axis(msg.view(Bm * 1, R, 1), self.n, out=out.view(Bm, self.n, 1))
             return out
         # step A: (Bm, R / n1, n1) -> (Bm, n2, n1) with the post twiddle
-        ptw = post_twiddles(n1, n2, self.device)
-        ntt_axis(msg.view(Bm, R // n1, n1), n2, out=out.view(Bm, n2, n1), post_tw=ptw)
+        if pass_a_supported(R // n1, n2 // (R // n1), n1):
+            ntt_pass_a(msg.view(Bm, R // n1, n1), n2, self.n, out=out.view(Bm, n2, n1))
+        else:
+            ptw = post_twiddles(n1, n2, self.device)
+            ntt_axis(msg.view(Bm, R // n1, n1), n2, out=out.view(Bm, n2, n1), post_tw=ptw)
         # step B: (Bm n2, n1, 1) in place
         v = out.view(Bm * n2, n1, 1)
         ntt_axis(v, n1, out=v)
