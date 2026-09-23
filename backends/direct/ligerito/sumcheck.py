@@ -354,18 +354,19 @@ def _tail_arities(log_table: int, n_vars: int, small_log2: int, max_arity: int =
 
 
 def zk_default_schedule(lay: Layout, vf: int = 10) -> Schedule:
-    """LGSC0004's default (coins first: one round trip ~ 0.1 s live, bytes are cheap): the LGSC0003 opening and bivariate
-    rounds over the big tables, then arity 3 down to 2^16 cells and arity <= 6 after; a final table round of ``vf``
-    variables (``<= n_c - 4``: every final-table entry keeps >= 16 product-row cells); combined: arity 3 down to 2^12, then
-    <= 6; row reduction <= 6.  fp8-ada: zc 3,2,2,2,2,3,6 / vf 10 / cmb 3,3,6,6 / rb 6,6 = 15 coins."""
+    """LGSC0004's default (coins first: one round trip ~ 0.1 s live; a coin is worth ~30 ms of prover time and ~20 KB): the
+    opening round, bivariate rounds while the table has more than 2^26 cells (arity 3 there costs 2.4x on the 4090), arity 3
+    down to 2^16 cells, then arity <= 6; a final table round of ``vf`` variables (``<= n_c - 4``: every final-table entry
+    keeps >= 16 product-row cells); combined: arity 3 down to 2^18 cells, then <= 6; row reduction <= 6.
+    fp8-ada: zc 3,2,3,3,3,6 / vf 10 / cmb 6,6,6 / rb 6,6 = 13 coins."""
     n, n_cmb = lay.n_k + lay.n_c, n_cmb_of(lay)
     zc, rem = [3], n - 3
-    while rem > 20 and rem - 2 > vf:
+    while rem > 26 and rem - 2 > vf:
         zc.append(2)
         rem -= 2
     vf = max(1, min(vf, lay.n_c - 4, rem - 1, ZK_MAX_VF))
     zc += _tail_arities(rem, rem - vf, 16)
-    return Schedule(tuple(zc), vf, tuple(_tail_arities(n_cmb, n_cmb, 12)), balanced_arities(lay.n_i, ZK_MAX_ARITY))
+    return Schedule(tuple(zc), vf, tuple(_tail_arities(n_cmb, n_cmb, 18)), balanced_arities(lay.n_i, ZK_MAX_ARITY))
 
 
 def zk_schedule(lay: Layout, base: Schedule | None = None, rb_arity: int = ZK_MAX_ARITY) -> Schedule:
@@ -592,24 +593,33 @@ class _RefPP:
         self.T = [fold_top(T, r) for T in self.T]
 
 
-class _RowRed:
-    """LGSC0004's row reduction ``sum_i s_w(i) wr(i)``: two ``(R, 6)`` tables, any arity; launch-bound, so ``_fm``."""
-
-    def __init__(self, s_w: torch.Tensor, wr: torch.Tensor):
-        self.T = [s_w, wr]
+class _FlatPP(_RefPP):
+    """``_RefPP`` with ``_fm``: the CUDA engines' tail once a round of arity > 3 runs (small tables, launch-bound)."""
 
     def round(self, v: int) -> torch.Tensor:
         X = [mixed_rep(to_corners(T, v), v) for T in self.T]
-        return _fm(X[0], X[1]).sum(-2) % P
+        s = _fm(X[0], X[1])
+        if len(X) > 2:
+            s = s + _fm(X[2], X[3])
+        return s.sum(-2) % P
 
     def fold(self, r: torch.Tensor) -> None:
-        out = []
-        for T in self.T:
-            Tc = to_corners(T, r.shape[0])
-            for j in range(r.shape[0]):
-                Tc = (Tc[0] + _fm((Tc[1] - Tc[0]) % P, r[j])) % P
-            out.append(Tc)
-        self.T = out
+        self.T = [_fold_fm(T, r) for T in self.T]
+
+
+class _RowRed(_FlatPP):
+    """LGSC0004's row reduction ``sum_i s_w(i) wr(i)``: two ``(R, 6)`` tables, any arity; launch-bound, so ``_fm``."""
+
+    def __init__(self, s_w: torch.Tensor, wr: torch.Tensor):
+        super().__init__([s_w, wr])
+
+
+def _fold_fm(T: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
+    """``fold_top`` with ``_fm``."""
+    Tc = to_corners(T, r.shape[0])
+    for j in range(r.shape[0]):
+        Tc = (Tc[0] + _fm((Tc[1] - Tc[0]) % P, r[j])) % P
+    return Tc
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -631,6 +641,8 @@ def _fm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """``fc_mul`` in four torch ops, for the mask algebra's tiny (launch-bound) tensors: every product reduced, then the
     36 -> 6 fold by ``X^6 = 31`` as one weighted sum (terms < 31 p, 36 of them: < 2^42)."""
     a, b = torch.broadcast_tensors(a, b)
+    if a.numel() > D << 15:
+        return _fm_big(a, b)
     W = _FOLD.get(a.device)
     if W is None:
         W = torch.zeros((D, D * D), dtype=torch.int64)
@@ -640,6 +652,16 @@ def _fm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         W = _FOLD[a.device] = W.to(a.device)
     pr = (a[..., :, None] * b[..., None, :]) % P
     return (pr.reshape(pr.shape[:-2] + (1, D * D)) * W).sum(-1) % P
+
+
+def _fm_big(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """``_fm`` for large tensors (bandwidth-bound): six products of ``a_i`` with ``b`` rotated by ``i`` (the wrapped part
+    times 31), 6 temporaries per element instead of 216."""
+    b31 = (b * 31) % P
+    acc = (a[..., :1] * b) % P
+    for i in range(1, D):
+        acc += (a[..., i:i + 1] * torch.cat((b31[..., D - i:], b[..., :D - i]), -1)) % P
+    return acc % P
 
 
 def _outer(ws: list) -> torch.Tensor:
@@ -2044,9 +2066,9 @@ class CudaZC:
 
     def _flat_round(self, v: int) -> torch.Tensor:
         Ah, Bh, Ch = (mixed_rep(to_corners(T, v), v) for T in self.F)
-        q = (fc_mul(Ah, Bh) - Ch * noinf_mask(v, self.dev)[(...,) + (None, None)]) % P
+        q = (_fm(Ah, Bh) - Ch * noinf_mask(v, self.dev)[(...,) + (None, None)]) % P
         w = eq_table_cuda(self.tau[:self.logn - v]) if self.logn > v else fc_one((1,), self.dev)
-        return fc_mul(q, w).sum(-2) % P
+        return _fm(q, w).sum(-2) % P
 
     def _plane(self, which: str, t: int) -> torch.Tensor:
         """``eq_table(tau_part[:t])`` as Montgomery planes ``(6, 2^t)`` (built on first use)."""
@@ -2107,7 +2129,7 @@ class CudaZC:
         import cupy as cp
         v = r.shape[0]
         if self.F is not None:
-            self.F = [fold_top(T, r) for T in self.F]
+            self.F = [_fold_fm(T, r) for T in self.F]
             self.logn -= v
             return
         if self.T is None:
@@ -2141,13 +2163,13 @@ class CudaPP:
         self.dev = tabs[0].device
         self.T = torch.stack([mont_planes(t) for t in tabs]).contiguous()
         self.logn = tabs[0].shape[0].bit_length() - 1
-        self.F = None                    # a _RefPP on the flat tables once a round of arity > 3 (a small table) has run
+        self.F = None                    # a _FlatPP on the flat tables once a round of arity > 3 (a small table) has run
 
     def round(self, v: int) -> torch.Tensor:
         import cupy as cp
         if self.F is None and v > 3:
             n = 1 << self.logn
-            self.F = _RefPP([from_mont(self.T[k, :, :n].t()) for k in range(4)])
+            self.F = _FlatPP([from_mont(self.T[k, :, :n].t()) for k in range(4)])
             self.T = None
         if self.F is not None:
             return self.F.round(v)
@@ -2383,7 +2405,7 @@ def _claim_json(c, zk: bool) -> dict:
 
 
 def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int = 2, seed: int = 7, device: str = "cpu",
-            schedule: Schedule | None = None, zk: bool = False) -> dict:
+            schedule: Schedule | str | None = None, zk: bool = False) -> dict:
     """A complete verifier fixture for ligerito-verify-rs: layout, constraint COO triples, public rows, proof bytes (hex), the
     claims, and the transcript (every absorb and every challenge, in order) of an honest run with ``LocalCoins(b"fixture")``,
     plus negatives (proof bytes that must be rejected, with the Python verifier's reason).  ``zk``: LGSC0004 (masks from the
@@ -2398,6 +2420,8 @@ def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int 
     lay = layout_for(runner.sys, l, nv, rel.steps, zk=zk)
     cons = constraints(runner.sys, lay, device)
     z = build_z(runner.sys, lay, subs, device)
+    if isinstance(schedule, str):
+        schedule = _schedule_arg(schedule, lay)
     if zk:
         fill_zk(lay, z, hashlib.sha256(b"fixture-masks").digest())
         schedule = zk_schedule(lay, schedule)
@@ -2476,7 +2500,7 @@ def _main():
     a = ap.parse_args()
     if a.fixture:
         with open(a.fixture, "w") as f:
-            json.dump(fixture(zk=a.zk), f)
+            json.dump(fixture(schedule=a.schedule, zk=a.zk), f)
         return
     res = bench(a.relation, a.vus, a.l, a.S, a.device, a.engine, a.negatives, schedule=a.schedule, reps=a.reps, zk=a.zk)
     s = json.dumps(res, indent=1, default=str)

@@ -95,12 +95,22 @@ def test_zk_roundtrip(zk_toy, name):
         assert all(bool((c.point[t, 1:] != 0).any()) or int(c.point[t, 0]) not in (0, 1) for t in range(lay.n_i))
 
 
+def test_fm_matches_fc_mul():
+    from backends.direct.ligero.v2.fc import fc_mul
+    g = torch.Generator().manual_seed(1)
+    a = torch.randint(0, P, (3, 1 << 14, 6), generator=g)
+    b = torch.randint(0, P, (1 << 14, 6), generator=g)
+    ref = fc_mul(a, b)
+    assert torch.equal(sc._fm(a[:1, :8], b[:8]), ref[:1, :8])     # the small (one weighted sum) path
+    assert torch.equal(sc._fm(a, b), ref)                          # _fm_big
+
+
 def test_zk_default_coins_real_n():
     from types import SimpleNamespace
     from .layout import ZK_CELLS_PER_VAR
     lay = SimpleNamespace(n_k=12, n_c=18, n_i=12)                 # fp8-ada / bf16-hopper, one N = 2^30 batch
     s = sc.zk_default_schedule(lay)
-    assert (s.zc, s.vf, s.cmb, s.rb) == ((3, 2, 2, 2, 2, 3, 6), 10, (3, 3, 6, 6), (6, 6)) and s.coins() == 15
+    assert (s.zc, s.vf, s.cmb, s.rb) == ((3, 2, 3, 3, 3, 6), 10, (6, 6, 6), (6, 6)) and s.coins() == 13
     small = sc.zk_schedule(lay, sc.default_schedule(30, 18), rb_arity=4)
     assert small.rb == (4, 4, 4) and small.coins() == 21
     for t in (s, small):                                          # one g row at C = 2^18, inside the layout's reservation
