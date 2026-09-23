@@ -176,9 +176,14 @@ class AcquisitionPlan:
         return d["plan_digest"]
 
 
+PROVENANCE_KEYS = ("plan_digest", "runtime_source")   # not content: where the runtime tree came from (meta instantiation vs a live engine)
+
+
 def plan_digest(body: Mapping[str, Any]) -> str:
-    """sha256 over the canonical JSON of the plan body (sorted keys, compact separators; the digest field itself excluded)."""
-    doc = {k: v for k, v in body.items() if k != "plan_digest"}
+    """sha256 over the canonical JSON of the plan body (sorted keys, compact separators), the provenance keys excluded: the same Program,
+    manifest and runtime module tree give the same digest whether the tree was read off the meta-instantiated model or a live engine
+    (the two agreed Value for Value on the reference row; only `runtime_source` differed)."""
+    doc = {k: v for k, v in body.items() if k not in PROVENANCE_KEYS}
     return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
 

@@ -231,7 +231,9 @@ def test_plan_digest_stable_and_order_independent(tmp_path):
     path.write_text(json.dumps(bad))
     with pytest.raises(ValueError):
         P.load_plan(path)
-    # the digest is over the canonical body: the runtime source string is part of it (a plan is for one runtime)
+    # the digest is over the plan's CONTENT: the runtime tree's provenance string is not part of it -- the meta-instantiated model and the
+    # live engine of the same row give the same sites (they did, Value for Value, on the reference row) and so the same digest
     rt = tree(); rt.source = "other"
     p4, _, _ = make_plan(rows, rt=rt)
-    assert p4.digest != p1.digest and p4.body()["hooks"] == p1.body()["hooks"]
+    assert p4.digest == p1.digest and p4.body()["runtime_source"] == "other" != p1.body()["runtime_source"]
+    assert P.plan_digest(p1.to_json()) == p1.digest                     # the saved document re-digests to itself (load_plan's check)
