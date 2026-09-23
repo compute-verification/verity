@@ -113,6 +113,26 @@ def test_commit_first_standalone(m):
     assert not verify(pf, zs, v=(pf.v + 1) % P)[0]
 
 
+def test_soundness_of_committed_shape():
+    from .pcs import dims_for, prove, soundness_log2
+    shape = ([6, 4, 4, 3, 3], [1, 2, 2, 2, 2])
+    assert soundness_log2(Dims(30, shape[0], [239, 173, 174, 174, 176], shape[1])) == pytest.approx(-99.19, abs=0.05)
+    assert soundness_log2(Dims(30, shape[0], [312, 191, 193, 194, 195], shape[1])) <= -128.0
+    for t_pad in (0, 256):
+        d = dims_for(30, *shape, target_log2=-128.0, t_pad=t_pad)
+        assert soundness_log2(d, t_pad) <= -128.0
+        assert soundness_log2(Dims(30, shape[0], [q - 1 for q in d.queries], shape[1]), t_pad) > -128.0
+    n = 12
+    dims = Dims(n, [4, 3, 3], [12, 12, 12], 2)
+    f, z = _inst(n)
+    with pytest.raises(ValueError):
+        prove(f, z, dims, target_log2=-128.0)
+    pf = prove(f, z, dims)
+    assert verify(pf, z, target_log2=-4.0)[0]                           # the toy shape: ~2^-6.5
+    ok, why = verify(pf, z, target_log2=-128.0)
+    assert not ok and "misses the target" in why
+
+
 def test_stream_group_plan():
     from .pcs import _stream_group
     big = torch.cuda.get_device_properties(0).total_memory > (40 << 30)
