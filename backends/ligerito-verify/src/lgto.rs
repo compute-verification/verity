@@ -51,19 +51,23 @@ pub enum Operand {
     Bf16,
     /// sign 1 | exponent 4 | fraction 3, bias 7; the NaN codes 0x7F / 0xFF are off the domain.
     E4m3,
+    /// NVFP4 units of `nvf4::WORDS` byte words (64 E2M1 codes + 4 UE4M3 scales): the pins are functions of the whole
+    /// unit (`nvf4::unit_pins`), not of one word.
+    Nvf4,
 }
 
 impl Operand {
     pub fn word_bits(self) -> u32 {
         match self {
             Operand::Bf16 => 16,
-            Operand::E4m3 => 8,
+            Operand::E4m3 | Operand::Nvf4 => 8,
         }
     }
 
     /// `(s, m, e)` with `e` a signed integer (reduced mod p by the caller); `Err` off the finite domain.
     pub fn decode(self, w: u32) -> Result<(u32, u32, i64), String> {
         match self {
+            Operand::Nvf4 => Err("NVFP4 words decode per unit".into()),
             Operand::Bf16 => {
                 if w >> 16 != 0 {
                     return Err("x.a/x.b range".into());
@@ -94,6 +98,88 @@ fn signed_mod_p(x: i64) -> u32 {
     x.rem_euclid(P as i64) as u32
 }
 
+/// The NVFP4 unit's public decode (`fp4/witness.py public_vectors_fp4`; ligero-verify `relation::nvf4`, same code).
+pub mod nvf4 {
+    /// E2M1 codes per operand per step, codes per scale block, blocks, words per operand per step (the statement's K).
+    pub const K: usize = 64;
+    pub const GROUP: usize = 16;
+    pub const GROUPS: usize = K / GROUP;
+    pub const WORDS: usize = K + GROUPS;
+    /// pins per unit: `a[0..K].n, b[0..K].n, g[0..GROUPS].(sm, X, part), anc.G`
+    pub const PINS: usize = 2 * K + 3 * GROUPS + 1;
+    /// adder bits below the leading participating group's unit weight, and the grid floor (`relation.py`)
+    pub const FRAC_BITS: i64 = 27;
+    pub const GRID_FLOOR: i64 = -174;
+    /// E2M1 magnitudes in halves: 0, .5, 1, 1.5, 2, 3, 4, 6.
+    const NUMERATOR: [i64; 8] = [0, 1, 2, 3, 4, 6, 8, 12];
+
+    pub fn numerator(code: u32) -> Result<i64, String> {
+        if code >= 16 {
+            return Err("E2M1 code outside 4 bits".into());
+        }
+        let n = NUMERATOR[(code & 7) as usize];
+        Ok(if code & 8 != 0 { -n } else { n })
+    }
+
+    /// UE4M3 as `(mantissa, exponent)`: `m 2^-9` at exponent field 0, else `(8 + m) 2^(e - 10)`; bit 7 and 0x7F are off
+    /// the domain.
+    pub fn scale(byte: u32) -> Result<(i64, i64), String> {
+        if byte >= 128 {
+            return Err("UE4M3 scale byte with the padding bit set (PTX ISA: invalid)".into());
+        }
+        if byte == 0x7F {
+            return Err("UE4M3 NaN scale".into());
+        }
+        let (e, m) = (((byte >> 3) & 0xF) as i64, (byte & 7) as i64);
+        Ok(if e == 0 { (m, -9) } else { (8 + m, e - 10) })
+    }
+
+    /// One unit's pins from its `a` / `b` rows of `WORDS` words, in `pin_index` order.
+    pub fn unit_pins(a: &[u32], b: &[u32]) -> Result<[i64; PINS], String> {
+        let mut out = [0i64; PINS];
+        for i in 0..K {
+            out[i] = numerator(a[i])?;
+            out[K + i] = numerator(b[i])?;
+        }
+        let mut anchor = GRID_FLOOR;
+        for g in 0..GROUPS {
+            let (ma, ea) = scale(a[K + g])?;
+            let (mb, eb) = scale(b[K + g])?;
+            let part = (GROUP * g..GROUP * (g + 1)).any(|i| out[i] * out[K + i] != 0) && ma != 0 && mb != 0;
+            let x = -2 + ea + eb;
+            out[2 * K + 3 * g..2 * K + 3 * g + 3].copy_from_slice(&[ma * mb, x, part as i64]);
+            if part {
+                anchor = anchor.max(x - FRAC_BITS);
+            }
+        }
+        out[PINS - 1] = anchor;
+        Ok(out)
+    }
+
+    /// `a[i].n`, `b[i].n`, `g[g].sm` / `.X` / `.part`, `anc.G` (canonical decimal indices only)
+    pub fn pin_index(name: &str) -> Option<usize> {
+        if name == "anc.G" {
+            return Some(PINS - 1);
+        }
+        let (arr, rest) = name.split_at_checked(1)?;
+        let rest = rest.strip_prefix('[')?;
+        let close = rest.find(']')?;
+        let digits = &rest[..close];
+        if digits.is_empty() || (digits.len() > 1 && digits.starts_with('0')) || !digits.bytes().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        let i: usize = digits.parse().ok()?;
+        match (arr, &rest[close + 1..]) {
+            ("a", ".n") if i < K => Some(i),
+            ("b", ".n") if i < K => Some(K + i),
+            ("g", ".sm") if i < GROUPS => Some(2 * K + 3 * i),
+            ("g", ".X") if i < GROUPS => Some(2 * K + 3 * i + 1),
+            ("g", ".part") if i < GROUPS => Some(2 * K + 3 * i + 2),
+            _ => None,
+        }
+    }
+}
+
 /// One relation the reader accepts: statement widths, the chain shape, `params.RELATIONS`' shape (the relation terms of
 /// the soundness bound are those of the 4096-VU cell, as in `prove.soundness`), and the pinned system / key digests.
 #[derive(Clone, Debug)]
@@ -109,24 +195,29 @@ pub struct RelSpec {
     pub y_bits: u32,
     pub quad: usize,
     pub lin: usize,
+    /// `RelationShape.row_vars` (log2 rows_pad)
+    pub row_vars: usize,
+    /// the claimed word's chain-end components `(shift, width)` (`sys.chain["y_end"]`, rows `y_end0..`); empty: the word
+    /// itself is the one end row `y16`
+    pub ends: &'static [(u32, u32)],
     /// accepted `(protocol.system_id(sys), sha256(key.bin))` pairs; empty = not pinned yet (only `--allow-any-key`
     /// verifies it)
     pub pins: &'static [(&'static str, &'static str)],
 }
 
 impl RelSpec {
-    /// `RelationShape.col_vars` / `has_radix3` at 4096 VUs (`cols = steps * 4096`) and `row_vars` (rows_pad 4096).
+    /// `RelationShape.col_vars` / `has_radix3` at 4096 VUs (`cols = steps * 4096`) and `row_vars`.
     fn shape_vars(&self) -> (usize, bool, usize) {
         let cols = self.steps * 4096;
         let mut c = cols;
         while c % 3 == 0 {
             c /= 3;
         }
-        ((usize::BITS - c.leading_zeros()) as usize - 1, cols % 3 == 0, 12)
+        ((usize::BITS - c.leading_zeros()) as usize - 1, cols % 3 == 0, self.row_vars)
     }
 }
 
-pub static RELATIONS: [RelSpec; 4] = [
+pub static RELATIONS: [RelSpec; 5] = [
     RelSpec {
         name: "fp8-ada",
         op: Operand::E4m3,
@@ -137,6 +228,8 @@ pub static RELATIONS: [RelSpec; 4] = [
         y_bits: 22,
         quad: 3532,
         lin: 589,
+        row_vars: 12,
+        ends: &[],
         pins: FP8_ADA_PINS,
     },
     RelSpec {
@@ -149,6 +242,8 @@ pub static RELATIONS: [RelSpec; 4] = [
         y_bits: 16,
         quad: 3164,
         lin: 339,
+        row_vars: 12,
+        ends: &[],
         pins: BF16_HOPPER_PINS,
     },
     RelSpec {
@@ -161,6 +256,8 @@ pub static RELATIONS: [RelSpec; 4] = [
         y_bits: 22,
         quad: 3164,
         lin: 554,
+        row_vars: 12,
+        ends: &[],
         pins: FP8_HOPPER_PINS,
     },
     RelSpec {
@@ -173,7 +270,25 @@ pub static RELATIONS: [RelSpec; 4] = [
         y_bits: 16,
         quad: 3387,
         lin: 347,
+        row_vars: 12,
+        ends: &[],
         pins: BF16_AMPERE_PINS,
+    },
+    // prove._FP4Relation: 24 chained NVFP4 units per VU, 68 byte words per operand, the claim an FP32 word bound as sign /
+    // exponent field / fraction (`fp4/relation.py` y_end, ligero-verify's `compile_fp4_unit` ends)
+    RelSpec {
+        name: "fp4-nvf4",
+        op: Operand::Nvf4,
+        k: nvf4::WORDS,
+        steps: 24,
+        word_bytes: 1,
+        y_bytes: 4,
+        y_bits: 32,
+        quad: 1389,
+        lin: 306,
+        row_vars: 11,
+        ends: &[(31, 1), (23, 8), (0, 23)],
+        pins: FP4_NVF4_PINS,
     },
 ];
 
@@ -188,6 +303,9 @@ pub const BF16_HOPPER_PINS: &[(&str, &str)] =
 /// bf16-ampere: key of ligerito-relation-2 32d3d42's gate dump.
 pub const BF16_AMPERE_PINS: &[(&str, &str)] =
     &[("44cb05b9e6988219beba2d66582124e67a1893aac39d0b66126ce0b9d4db89cb", "e0059e7009ba368dc1119abdc923dfcf6e06b81d4424e81106fdd01721a30eb6")];
+/// fp4-nvf4: key of ligerito-relation-2 32d3d42's gate dump.
+pub const FP4_NVF4_PINS: &[(&str, &str)] =
+    &[("a825ba0b826a15366bfb8cdd720a5e9978603cbe589491abcbba7346ad35bf3c", "ac61d99e195150a4c23ccc9d3d5ff73cd72248b7236843ae5339a07c4708928e")];
 /// fp8-hopper: key of ligerito-relation-2 32d3d42's gate dump.
 pub const FP8_HOPPER_PINS: &[(&str, &str)] =
     &[("c7cbebe365cb5f773a679bc13b5382fb45714511b1912e4e4ab7fb48accd4bc3", "ea793f49d4c0015d835d886df3bab65949189f20a8f35222e653482dc7d65d60")];
@@ -509,8 +627,8 @@ pub struct StmtRows<'a> {
     stmt: &'a Statement,
     /// sub-batches S (real ones first, then pads: zero words, y = 0, no VUs)
     s: usize,
-    /// (eq_c fingerprint, per operand side a/b and index i: the (s, m, e) row values at r_c)
-    cache: RefCell<Option<((usize, usize, [u32; EXT_DEG]), Vec<[Ext; 3]>)>>,
+    /// (eq_c fingerprint, the operand pins at r_c: `(side K + i) 3 + field` for word relations, `nvf4::pin_index`)
+    cache: RefCell<Option<((usize, usize, [u32; EXT_DEG]), Vec<Ext>)>>,
 }
 
 impl<'a> StmtRows<'a> {
@@ -518,14 +636,23 @@ impl<'a> StmtRows<'a> {
         StmtRows { spec, stmt, s, cache: RefCell::new(None) }
     }
 
-    /// Every word decodes and every claimed word fits `y_bits` (`prove._stmt_subs`).
+    /// Every word decodes (NVFP4: by its position in the unit) and every claimed word fits `y_bits` (`prove._stmt_subs`).
     pub fn validate(&self) -> Result<(), String> {
+        let k = self.stmt.k;
         for (s, (a, b)) in self.stmt.a.iter().zip(&self.stmt.b).enumerate() {
             let mut bad: Vec<String> = Vec::new();
-            for w in a.iter().chain(b) {
-                if let Err(e) = self.spec.op.decode(*w) {
-                    if !bad.contains(&e) {
-                        bad.push(e);
+            for (side, words) in [("a", a), ("b", b)] {
+                for (n, &w) in words.iter().enumerate() {
+                    let r = match self.spec.op {
+                        Operand::Nvf4 if n % k < nvf4::K => nvf4::numerator(w).map(|_| ()),
+                        Operand::Nvf4 => nvf4::scale(w).map(|_| ()),
+                        op => op.decode(w).map(|_| ()),
+                    };
+                    if let Err(e) = r {
+                        let e = format!("{side}: {e}");
+                        if !bad.contains(&e) {
+                            bad.push(e);
+                        }
                     }
                 }
             }
@@ -539,10 +666,10 @@ impl<'a> StmtRows<'a> {
         Ok(())
     }
 
-    fn operand_rows(&self, eq_c: &[Ext]) -> Vec<[Ext; 3]> {
+    fn operand_rows(&self, eq_c: &[Ext]) -> Vec<Ext> {
         let (l, k, op) = (self.stmt.l, self.stmt.k, self.spec.op);
         let n_real = self.stmt.a.len();
-        let mut out = Vec::with_capacity(2 * k);
+        let mut out = Vec::with_capacity(6 * k);
         let mut hist = vec![Ext::ZERO; 1 << op.word_bits()];
         // the pad sub-batches' columns all hold word 0
         let pad_mass = eq_c[n_real * l..].iter().fold(Ext::ZERO, |acc, e| acc.add(e));
@@ -566,10 +693,36 @@ impl<'a> StmtRows<'a> {
                     acc[1] = acc[1].add(&h.mul_base(m));
                     acc[2] = acc[2].add(&h.mul_base(signed_mod_p(e)));
                 }
-                out.push(acc);
+                out.extend(acc);
             }
         }
         out
+    }
+
+    /// The NVFP4 pins at r_c, unit by unit (a pin reads the whole unit, so no per-word histogram).
+    fn nvf4_rows(&self, eq_c: &[Ext]) -> Vec<Ext> {
+        let (l, k) = (self.stmt.l, self.stmt.k);
+        debug_assert_eq!(k, nvf4::WORDS);
+        let n_real = self.stmt.a.len();
+        let mut acc = vec![Ext::ZERO; nvf4::PINS];
+        let mut add = |e: &Ext, pins: &[i64; nvf4::PINS]| {
+            for (a, &v) in acc.iter_mut().zip(pins) {
+                if v != 0 {
+                    *a = a.add(&e.mul_base(signed_mod_p(v)));
+                }
+            }
+        };
+        for s in 0..n_real {
+            let (a, b) = (&self.stmt.a[s], &self.stmt.b[s]);
+            for j in 0..l {
+                add(&eq_c[s * l + j], &nvf4::unit_pins(&a[j * k..(j + 1) * k], &b[j * k..(j + 1) * k]).expect("validated statement"));
+            }
+        }
+        // the pad sub-batches' units are all-zero words (`fp4/chain._pad_unit`), whose pins are not all zero
+        let pad_mass = eq_c[n_real * l..].iter().fold(Ext::ZERO, |acc, e| acc.add(e));
+        let zeros = [0u32; nvf4::WORDS];
+        add(&pad_mass, &nvf4::unit_pins(&zeros, &zeros).unwrap());
+        acc
     }
 
     fn per_column(&self, eq_c: &[Ext], f: impl Fn(usize, usize) -> u32) -> Ext {
@@ -585,6 +738,14 @@ impl<'a> StmtRows<'a> {
         }
         acc
     }
+}
+
+/// `"12"` -> 12 (decimal, no sign, no leading zero)
+fn canonical_index(digits: &str) -> Option<usize> {
+    if digits.is_empty() || (digits.len() > 1 && digits.starts_with('0')) || !digits.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 /// `pub:a[12].m` -> (0, 12, 1)
@@ -621,21 +782,35 @@ impl PublicRows for StmtRows<'_> {
             return Err(format!("public rows: {} columns, S l = {}", eq_c.len(), self.s * l));
         }
         let nv = |s: usize| self.stmt.n_vus.get(s).copied().unwrap_or(0);
+        let unknown = || format!("public row {name}: not a row this verifier derives");
         match name {
             "const" => Ok(eq_c.iter().fold(Ext::ZERO, |acc, e| acc.add(e))),
             // ligero/chain.py ChainLayout.masks
             "start" => Ok(self.per_column(eq_c, |s, j| (j >= steps * nv(s) || j % steps == 0) as u32)),
             "link" => Ok(self.per_column(eq_c, |s, j| (j < steps * nv(s) && j % steps != steps - 1) as u32)),
             "end" => Ok(self.per_column(eq_c, |s, j| (j < steps * nv(s) && j % steps == steps - 1) as u32)),
-            "y16" => Ok(self.per_column(eq_c, |s, j| self.stmt.y.get(s).map_or(0, |y| y[j]))),
+            "y16" if self.spec.ends.is_empty() => Ok(self.per_column(eq_c, |s, j| self.stmt.y.get(s).map_or(0, |y| y[j]))),
+            _ if name.starts_with("y_end") => {
+                let (sh, wd) = canonical_index(&name[5..]).and_then(|e| self.spec.ends.get(e).copied()).ok_or_else(unknown)?;
+                let mask = ((1u64 << wd) - 1) as u32;
+                Ok(self.per_column(eq_c, |s, j| self.stmt.y.get(s).map_or(0, |y| (y[j] >> sh) & mask)))
+            }
             _ => {
-                let (side, i, field) = parse_pub(name, self.stmt.k).ok_or_else(|| format!("public row {name}: not a row this verifier derives"))?;
+                let idx = match self.spec.op {
+                    Operand::Nvf4 => name.strip_prefix("pub:").and_then(nvf4::pin_index),
+                    _ => parse_pub(name, self.stmt.k).map(|(side, i, field)| (side * self.stmt.k + i) * 3 + field),
+                }
+                .ok_or_else(unknown)?;
                 let fp = (eq_c.len(), eq_c.as_ptr() as usize, eq_c[eq_c.len() - 1].0);
                 let mut cache = self.cache.borrow_mut();
                 if cache.as_ref().map(|(f, _)| *f != fp).unwrap_or(true) {
-                    *cache = Some((fp, self.operand_rows(eq_c)));
+                    let rows = match self.spec.op {
+                        Operand::Nvf4 => self.nvf4_rows(eq_c),
+                        _ => self.operand_rows(eq_c),
+                    };
+                    *cache = Some((fp, rows));
                 }
-                Ok(cache.as_ref().unwrap().1[side * self.stmt.k + i][field])
+                Ok(cache.as_ref().unwrap().1[idx])
             }
         }
     }
@@ -1185,6 +1360,88 @@ mod tests {
         let bare = with_params(&format!(",\"zero_blocks\":{blocks}"), "");
         assert!(verify(STMT, KEY, &bare, &mut fs, &strict()).unwrap_err().contains("pre-V1"));
         assert!(verify(STMT, KEY, &bare, &mut fs, &Options { allow_legacy: true, ..strict() }).is_err());
+    }
+
+    /// ligerito-relation-2 32d3d42's fp4-nvf4 gate dump (12 VUs, l = 256, Fiat-Shamir, 9 zero blocks): honest, and the
+    /// negatives `wrong y: claimed word bit 31 flipped (proved)` (the sign end row `y_end0`), `off-domain operand 0xff in
+    /// a` (a code word), `V1 end row(s): claimed word +1 ulp, true witness`.
+    const FP4_KEY: &[u8] = include_bytes!("../fixtures/lgto/fp4nvf4_l256_v1/key.bin");
+    const FP4_STMT: &[u8] = include_bytes!("../fixtures/lgto/fp4nvf4_l256_v1/honest.stmt");
+    const FP4_PROOF: &[u8] = include_bytes!("../fixtures/lgto/fp4nvf4_l256_v1/honest.lgto");
+    const FP4_NEGS: [(&[u8], &[u8], &str); 3] = [
+        (include_bytes!("../fixtures/lgto/fp4nvf4_l256_v1/neg_02.stmt"), include_bytes!("../fixtures/lgto/fp4nvf4_l256_v1/neg_02.lgto.neg"), "zero-check round 0"),
+        (include_bytes!("../fixtures/lgto/fp4nvf4_l256_v1/neg_04.stmt"), include_bytes!("../fixtures/lgto/fp4nvf4_l256_v1/neg_04.lgto.neg"), "a: E2M1 code outside 4 bits"),
+        (include_bytes!("../fixtures/lgto/fp4nvf4_l256_v1/neg_06.stmt"), include_bytes!("../fixtures/lgto/fp4nvf4_l256_v1/neg_06.lgto.neg"), "PCS sumcheck round 1"),
+    ];
+
+    #[test]
+    fn fp4_fixture_verifies_and_its_negatives_do_not() {
+        let rep = verify(FP4_STMT, FP4_KEY, FP4_PROOF, &mut fs, &strict()).unwrap();
+        assert_eq!((rep.relation.as_str(), rep.zero_blocks, rep.legacy, rep.key_pinned), ("fp4-nvf4", 9, false, true));
+        // Python (gate_fp4-nvf4.json, the FS positive): union -128.02495, claim -64.66162
+        assert!((rep.soundness_log2 + 128.02495).abs() < 1e-3, "{}", rep.soundness_log2);
+        assert!((rep.claimed_log2.unwrap() + 64.66162).abs() < 1e-3, "{:?}", rep.claimed_log2);
+        for (stmt, proof, why) in FP4_NEGS {
+            let e = verify(stmt, FP4_KEY, proof, &mut fs, &strict()).unwrap_err();
+            assert!(e.contains(why), "{why}: {e}");
+        }
+        // the honest proof against a claimed word with one component changed: sign, exponent field, fraction
+        // (sub-batches are laid out a | b | y, so the last one's claimed words close the file)
+        let st = read_statement(FP4_STMT).unwrap();
+        let j = st.steps - 1;
+        let at = FP4_STMT.len() - st.l * 4 + j * 4;
+        assert_eq!(u32::from_le_bytes(FP4_STMT[at..at + 4].try_into().unwrap()), st.y[st.y.len() - 1][j]);
+        assert_ne!(st.y[st.y.len() - 1][j], 0, "an end column");
+        for bit in [31, 23, 0] {
+            let mut b = FP4_STMT.to_vec();
+            b[at + bit / 8] ^= 1 << (bit % 8);
+            assert!(verify(&b, FP4_KEY, FP4_PROOF, &mut fs, &Options { allow_any_key: true, ..strict() }).is_err(), "y bit {bit}");
+        }
+    }
+
+    #[test]
+    fn nvf4_decode() {
+        let zeros = [0u32; nvf4::WORDS];
+        let p = nvf4::unit_pins(&zeros, &zeros).unwrap();
+        // zero scales are subnormal m = 0 at 2^-9: sm = 0, X = -2 - 9 - 9, no group participates, the anchor at the floor
+        assert!(p[..2 * nvf4::K].iter().all(|&v| v == 0));
+        assert_eq!(&p[2 * nvf4::K..], &[0, -20, 0, 0, -20, 0, 0, -20, 0, 0, -20, 0, -174]);
+        // every code 1.0 (0x2, two halves), every scale 1.0 (0x38 = 8 2^-3); b's code 0 in group 3 -> it does not participate
+        let mut a = [0x2u32; nvf4::WORDS];
+        a[nvf4::K..].fill(0x38);
+        let mut b = a;
+        b[48..64].fill(0x8);
+        let p = nvf4::unit_pins(&a, &b).unwrap();
+        assert_eq!((p[0], p[nvf4::K + 48]), (2, 0), "-0 is 0");
+        assert_eq!(&p[2 * nvf4::K..], &[64, -8, 1, 64, -8, 1, 64, -8, 1, 64, -8, 0, -35]);
+        assert_eq!((nvf4::numerator(0xF), nvf4::scale(0x7E), nvf4::scale(0x01)), (Ok(-12), Ok((14, 5)), Ok((1, -9))));
+        assert!(nvf4::numerator(16).is_err() && nvf4::scale(0x7F).is_err() && nvf4::scale(0x80).is_err());
+        for (name, idx) in [("a[0].n", 0), ("b[63].n", 127), ("g[0].sm", 128), ("g[3].part", 139), ("anc.G", 140)] {
+            assert_eq!(nvf4::pin_index(name), Some(idx), "{name}");
+        }
+        for name in ["a[64].n", "a[01].n", "g[4].X", "g[0].s", "c[0].n", "a[].n", "anc.g"] {
+            assert_eq!(nvf4::pin_index(name), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn nvf4_statement_words_are_checked_by_position() {
+        let st = read_statement(FP4_STMT).unwrap();
+        let spec = relation_spec("fp4-nvf4").unwrap();
+        assert!(StmtRows::new(spec, &st, 2).validate().is_ok());
+        // a scale value in a code slot and vice versa: 0x38 is a fine scale but not a code; 0x7F is neither
+        for (pos, w, ok) in [(0, 0x0F, true), (0, 0x10, false), (nvf4::K, 0x7E, true), (nvf4::K, 0x7F, false), (nvf4::K, 0x80, false), (3 * nvf4::WORDS + 1, 0x38, false)] {
+            let mut s2 = read_statement(FP4_STMT).unwrap();
+            s2.b[1][pos] = w;
+            assert_eq!(StmtRows::new(spec, &s2, 2).validate().is_ok(), ok, "b word {pos} = {w:#x}");
+        }
+        // the pad sub-batch's zero units carry X = -20 and anc.G = -174 (not zero rows)
+        let s1 = Statement { a: st.a[..1].to_vec(), b: st.b[..1].to_vec(), y: st.y[..1].to_vec(), n_vus: st.n_vus[..1].to_vec(), ..st.clone() };
+        let eq_c = eq_vector(&random_point(st.l.trailing_zeros() as usize + 1, 7));
+        let rows = StmtRows::new(spec, &s1, 2);
+        let pad = eq_c[st.l..].iter().fold(Ext::ZERO, |acc, e| acc.add(e));
+        let real_only = StmtRows::new(spec, &s1, 1).mle("pub:anc.G", &eq_c[..st.l]).unwrap();
+        assert_eq!(rows.mle("pub:anc.G", &eq_c).unwrap(), real_only.add(&pad.mul_base(signed_mod_p(-174))));
     }
 
     #[test]
