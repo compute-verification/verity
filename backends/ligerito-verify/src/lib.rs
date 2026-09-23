@@ -13,6 +13,7 @@ pub mod merkle;
 pub mod params;
 pub mod pcs;
 pub mod refprover;
+pub mod relation;
 pub mod sumcheck;
 pub mod transcript;
 

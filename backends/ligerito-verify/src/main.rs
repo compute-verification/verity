@@ -10,6 +10,9 @@
 //!     # be rejected; with DIR/manifest.json (a list, or {"proofs": [...]}, of {"proof": name, "accepted": bool,
 //!     # "reason": str}) every listed verdict must agree with ours; with --target-bits the union of the proofs' own
 //!     # soundness bounds must be <= 2^-B.  Exit 0 iff accepted.
+//! ligerito-verify sumcheck-fixture --fixture F.json [--seed fixture]
+//!     # ligerito-sumcheck's verifier fixture (layout, constraints, public rows, LGSC0002 proof, claims, recorded
+//!     # transcript): verify with the recorded transcript and with LocalCoins(seed); claims must match
 //! ligerito-verify selftest [--n N] [--kprime a,b,c] [--queries s,s,s] [--rate-log2 R|r1,r2,r3] [--emit DIR]
 //!     # reference prover -> verifier round trip (+ negatives); --emit writes the proof / coins / negatives to DIR
 //! ~~~
@@ -275,6 +278,63 @@ fn main() {
             println!("{js}");
             write_json(arg(&args, "--json"), &js);
             std::process::exit(if all { 0 } else { 1 });
+        }
+        "sumcheck-fixture" => {
+            // ligerito-sumcheck's `python -m backends.direct.ligerito.sumcheck --fixture F.json` (optionally gzip-free):
+            // verify the LGSC0002 proof against the layout / constraints / public rows twice -- with the recorded transcript
+            // (every absorb byte-checked) and with the lane's LocalCoins(seed) -- and compare the claims.
+            let path = PathBuf::from(arg(&args, "--fixture").expect("--fixture F.json"));
+            let seed = arg(&args, "--seed").unwrap_or_else(|| "fixture".into());
+            let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            let t0 = Instant::now();
+            let fx = ligerito_verify::relation::load_fixture(&text).unwrap_or_else(|e| panic!("{e}"));
+            let t_load = t0.elapsed().as_secs_f64();
+            let proof = ligerito_verify::relation::parse_lgsc(&fx.proof).unwrap_or_else(|e| panic!("{e}"));
+            let mut out = Vec::new();
+            let t1 = Instant::now();
+            let scripted = if fx.transcript.is_empty() {
+                "absent".to_string()
+            } else {
+                let mut sc = ligerito_verify::transcript::Scripted::new(fx.transcript);
+                match ligerito_verify::relation::verify(&fx.layout, &fx.constraints, &fx.pub_rows, &proof, &mut sc) {
+                    Ok(cl) => match sc.finish() {
+                        Ok(()) if cl == fx.claims => "accept, claims match".to_string(),
+                        Ok(()) => "accept but the claims differ".to_string(),
+                        Err(e) => format!("accept but {e}"),
+                    },
+                    Err(e) => format!("reject: {e}"),
+                }
+            };
+            let t_scripted = t1.elapsed().as_secs_f64();
+            let t2 = Instant::now();
+            let mut lc = ligerito_verify::transcript::SumcheckLocal::new(seed.as_bytes());
+            let local = match ligerito_verify::relation::verify(&fx.layout, &fx.constraints, &fx.pub_rows, &proof, &mut lc) {
+                Ok(cl) if cl == fx.claims => "accept, claims match".to_string(),
+                Ok(_) => "accept but the claims differ".to_string(),
+                Err(e) => format!("reject: {e}"),
+            };
+            let t_local = t2.elapsed().as_secs_f64();
+            out.push(format!("\"scripted\":{}", json_str(&scripted)));
+            out.push(format!("\"local_coins\":{}", json_str(&local)));
+            let ok = scripted.starts_with("accept, claims match") || (scripted == "absent" && local.starts_with("accept, claims match"));
+            let ok = ok && local.starts_with("accept, claims match");
+            println!(
+                "{{\"fixture\":{},\"accepted\":{},{},\"proof_bytes\":{},\"n_i\":{},\"n_k\":{},\"n_c\":{},\"n_links\":{},\"nnz\":{},\"claims\":{},\"seconds_load\":{:.4},\"seconds_verify_scripted\":{:.6},\"seconds_verify_local\":{:.6}}}",
+                json_str(&path.display().to_string()),
+                ok,
+                out.join(","),
+                fx.proof.len(),
+                fx.layout.n_i,
+                fx.layout.n_k,
+                fx.layout.n_c(),
+                fx.layout.n_links(),
+                fx.constraints.a.len() + fx.constraints.b.len() + fx.constraints.c.len(),
+                fx.claims.len(),
+                t_load,
+                t_scripted,
+                t_local
+            );
+            std::process::exit(if ok { 0 } else { 1 });
         }
         "selftest" => {
             let n: usize = arg(&args, "--n").map(|s| s.parse().expect("--n")).unwrap_or(12);
