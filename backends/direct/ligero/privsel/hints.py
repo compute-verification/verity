@@ -30,10 +30,11 @@ def _word_hints(H: dict, pl: Plan, name: str, w: int) -> None:
 
 
 def _align_choice(pl: Plan, sp: ShiftPlan, u: int, d: int) -> tuple[int, int, int, int]:
-    """(R, coarse index, K, X) of one product: coarse index 0..3 = c in {-1, 0, 1, 2}, 4 = dead, 5 = zero."""
+    """(R, coarse index, K, X) of one product: coarse index 0..3 = c in {-1, 0, 1, 2}, 4 = dead.  A zero product takes
+    ``c = 0`` (its exponent constraint is vacuous, every option gives X = 0)."""
     RB = sp.RB
     if u == 0:
-        return 0, 5, 0, 0
+        return 0, 1, 0, 0
     if d >= pl.PB:
         R = RB - 1 - ((d - pl.PB) % RB)
         return R, 4, (d - pl.PB) // RB, 0
@@ -72,6 +73,10 @@ def step_int(p: Params, pl: Plan, c: int, a: list[int], b: list[int], y: int | N
         start += size
         E = max([e_st] + [ee for _, _, u, ee in terms if u])
         H[f"{tag}.E"] = E
+        E_eff = E
+        if sp.hi_thr is not None:
+            H[f"{tag}.hi"] = int(E >= sp.hi_thr)
+            E_eff = min(E, sp.hi_thr)
         which = 0 if e_st == E else 1 + next(j for j, (_, _, u, ee) in enumerate(terms) if u and ee == E)
         for j in range(size + 1):
             H[f"{tag}.which[{j}]"] = int(j == which)
@@ -80,7 +85,7 @@ def step_int(p: Params, pl: Plan, c: int, a: list[int], b: list[int], y: int | N
             scope = f"{tag}.p[{i}]"
             for jj in range(UB):
                 H[f"{scope}.u[{jj}]"] = (u >> jj) & 1
-            R, ci, K, X = _align_choice(pl, sp, u, E - ee)
+            R, ci, K, X = _align_choice(pl, sp, u, E_eff - ee)
             for r in range(RB):
                 H[f"{scope}.r[{r}]"] = int(r == R)
             Y = u << R
@@ -92,7 +97,8 @@ def step_int(p: Params, pl: Plan, c: int, a: list[int], b: list[int], y: int | N
                 H[f"{scope}.XL"], H[f"{scope}.XH"] = X & (2**LIMB - 1), X >> LIMB
             else:
                 H[f"{scope}.X"] = X
-            H[f"{scope}.K"] = K
+            for jj in range(sp.kb):
+                H[f"{scope}.K[{jj}]"] = (K >> jj) & 1
             H[f"{scope}.s"] = s
             if which == j + 1:
                 H[f"{tag}.C"] = X
@@ -272,13 +278,18 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device):
         cands = torch.cat([e_st[:, None], torch.where(ug != 0, eg, torch.full_like(eg, NEG))], dim=1)   # (l, size + 1)
         E = cands.max(dim=1).values
         H[f"{tag}.E"] = E
+        E_eff = E
+        if sp.hi_thr is not None:
+            hi = (E >= sp.hi_thr).to(torch.int64)
+            H[f"{tag}.hi"] = hi
+            E_eff = torch.clamp(E, max=sp.hi_thr)
         first = (cands == E[:, None]).to(torch.int64)
         first = first * (first.cumsum(dim=1) == 1).to(torch.int64)      # the first candidate equal to E
         for j in range(size + 1):
             H[f"{tag}.which[{j}]"] = first[:, j]
-        d = E[:, None] - eg
-        dead = (d >= pl.PB) & (ug != 0)
+        d = E_eff[:, None] - eg
         zero = ug == 0
+        dead = (d >= pl.PB) & ~zero
         live = ~dead & ~zero
         L = pl.PS - d
         cfl = torch.div(L, RB, rounding_mode="floor")
@@ -286,7 +297,7 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device):
         R_dead = RB - 1 - torch.remainder(d - pl.PB, RB)
         R = torch.where(live, R_live, torch.where(dead, R_dead, torch.zeros_like(d)))
         K = torch.where(dead, torch.div(d - pl.PB, RB, rounding_mode="floor"), torch.zeros_like(d))
-        ci = torch.where(live, 1 - cfl, torch.where(dead, torch.full_like(d, 4), torch.full_like(d, 5)))
+        ci = torch.where(live, 1 - cfl, torch.where(dead, torch.full_like(d, 4), torch.ones_like(d)))
         Y = ug << R
         X = torch.where(d <= pl.PS, ug << torch.clamp(pl.PS - d, min=0),
                         torch.where(d < pl.PB, ug >> torch.clamp(d - pl.PS, min=0), torch.zeros_like(ug)))
@@ -305,7 +316,8 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device):
                 H[f"{scope}.XL"], H[f"{scope}.XH"] = X[:, j] & (2**LIMB - 1), X[:, j] >> LIMB
             else:
                 H[f"{scope}.X"] = X[:, j]
-            H[f"{scope}.K"] = K[:, j]
+            for jj in range(sp.kb):
+                H[f"{scope}.K[{jj}]"] = (K[:, j] >> jj) & 1
             H[f"{scope}.s"] = sg[:, j]
         H[f"{tag}.C"] = first[:, 0] + (first[:, 1:] * X).sum(dim=1)
         sX = (1 - 2 * sg) * X

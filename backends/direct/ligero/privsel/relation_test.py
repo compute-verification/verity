@@ -26,14 +26,14 @@ from ..relations import RELATIONS, Relation
 from ..relchain import RelationChainRunner, instances, negatives, vu_units
 from ..witness import build_witness, tables
 from .hints import reference_hints_v3
-from .relation import plan
+from .relation import plan, shift_plan
 
 V3 = [RELATIONS[n] for n in ("bf16-hopper-v3", "bf16-ampere-v3", "fp8-hopper-v3", "fp8-ada-v3")]
 V1_OF = {"bf16-hopper-v3": RELATIONS["bf16-hopper"], "fp8-hopper-v3": RELATIONS["fp8-hopper"], "fp8-ada-v3": RELATIONS["fp8-ada"],
          "bf16-ampere-v3": None}
 OTHER = {"bf16-hopper-v3": AMPERE_BF16_M16N8K16, "bf16-ampere-v3": HOPPER_BF16_M16N8K16, "fp8-hopper-v3": ADA_E4M3_M16N8K32,
          "fp8-ada-v3": HOPPER_E4M3_K32}
-ROWS = {"bf16-hopper-v3": 1567, "bf16-ampere-v3": 1677, "fp8-hopper-v3": 1864, "fp8-ada-v3": 1986}
+ROWS = {"bf16-hopper-v3": 1535, "bf16-ampere-v3": 1645, "fp8-hopper-v3": 1705, "fp8-ada-v3": 1838}
 N_DIFF = int(os.environ.get("RELMIN_DIFF_N", "3000"))
 BATCH = 4096
 
@@ -56,7 +56,7 @@ def test_census(rel):
     assert c3["rows_per_unit"] <= ROWS[rel.name], (c1, c3)
     if not plan(rel.params).fp8:
         assert 2 * c3["rows_per_unit"] <= c1["rows_per_unit"], (c1, c3)
-    assert c3["pin_rows"] == 2 * rel.k                        # one pin row per operand word, nothing else public per unit
+    assert c3["pin_rows"] == 2 * -(-rel.k // shift_plan(rel.params, plan(rel.params)).words_per_pin)   # the operand words are the only pins
     assert all(n.startswith(("a[", "b[")) for _, n in s3.pins)
 
 

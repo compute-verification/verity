@@ -54,12 +54,14 @@ class ShiftPlan:
     RB: int             # radix bits of the digits = the fine range R in [0, RB)
     ND: int             # digits of Y = u 2^R
     kb: int             # bits of the dead range's quotient K
-    d_max: int          # the largest E - e_i
+    d_max: int          # the largest E_eff - e_i
     forbidden: tuple[int, ...]   # fine positions R that cannot pair with c = -1 (L = R + RB > PS)
+    hi_thr: int | None  # when E >= hi_thr every product is dead: the group flag ``hi`` caps E_eff = min(E, hi_thr) (FP8)
+    words_per_pin: int  # operand words packed into one pin row (their concatenation stays below p)
 
     @property
     def ncoarse(self) -> int:
-        return 6        # c in {-1, 0, 1, 2}, dead, zero
+        return 5        # c in {-1, 0, 1, 2}, dead (a zero product may take any option: its exponent constraint is vacuous)
 
 
 def shift_plan(p: Params, pl: Plan) -> ShiftPlan:
@@ -70,11 +72,21 @@ def shift_plan(p: Params, pl: Plan) -> ShiftPlan:
     if pl.wide and LIMB % RB:
         raise ValueError("the wide limb must be a whole number of digits")
     ND = math.ceil((UB + RB - 1) / RB)
-    d_max = max(p.ep_hi, p.acc_e_max) - p.ep_lo
+    e_hi = max(p.ep_hi, p.acc_e_max)
+    thr = p.ep_hi + pl.PB                     # E >= thr -> d >= PB for every product
+    hi_thr = thr if thr <= e_hi else None
+    d_max = (hi_thr if hi_thr is not None else e_hi) - p.ep_lo
     # dead: d = PB + (RB - 1 - R) + RB K covers [PB, PB + RB - 1 + RB (2^kb - 1)]
     kb = max(1, math.ceil(math.log2((d_max - pl.PB - (RB - 1)) / RB + 1)))
     forbidden = tuple(r for r in range(RB) if r + RB > pl.PS)
-    return ShiftPlan(UB=UB, RB=RB, ND=ND, kb=kb, d_max=d_max, forbidden=forbidden)
+    return ShiftPlan(UB=UB, RB=RB, ND=ND, kb=kb, d_max=d_max, forbidden=forbidden, hi_thr=hi_thr,
+                     words_per_pin=max(1, 30 // pl.op_word_bits))
+
+
+def pin_name(operand: str, lo: int, hi: int) -> str:
+    """The pin row of operand words ``[lo, hi)`` of ``a`` / ``b``: ``a[i]`` for one word, ``a[lo:hi]`` for a packed run
+    (``sum_j w_j 2^(word_bits (j - lo))``)."""
+    return f"{operand}[{lo}]" if hi == lo + 1 else f"{operand}[{lo}:{hi}]"
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -136,7 +148,7 @@ def _decode_word(ctx: LigeroCtx, pl: Plan, name: str):
         # x not in {2^exp - 2, 2^exp - 1}: t != 2^exp - 1 (inf / NaN) and t != 2^exp (overflow into s), one inverse
         ctx.inverse_nonzero("top", _weighted(ctx, xb[1:]) - (2 ** (pl.op_exp - 1) - 1))
     word = s * 2 ** (pl.op_word_bits - 1) + (x + nz) * 2**pl.op_frac + f
-    ctx._learn(word, 0, 2**pl.op_word_bits + 2**pl.op_frac)
+    ctx.learn(word, 0, 2**pl.op_word_bits)                       # t = x + nz <= 2^exp - 1 by the inverse: no overflow
     m = f + nz * 2**pl.op_frac
     ctx._learn(m, 0, 2 ** (pl.op_frac + 1))
     e = x - (pl.op_bias - 1)
@@ -153,7 +165,7 @@ def _align(ctx: LigeroCtx, pl: Plan, sp: ShiftPlan, scope: str, ubits: list[Expr
     D = [_pick(ctx, f"D{k}", rsel, [_window(ctx, ubits, r, k * RB, (k + 1) * RB, k * RB) for r in range(RB)],
                hint=f"{scope}.D{k}") for k in range(sp.ND)]
     csel = _onehot(ctx, f"{scope}.c", sp.ncoarse)
-    c_live, dead, zero = csel[:4], csel[4], csel[5]
+    c_live, dead = csel[:4], csel[4]
     cval = -c_live[0] + c_live[2] + 2 * c_live[3]
     zero_e = Expr(ctx)
 
@@ -173,25 +185,25 @@ def _align(ctx: LigeroCtx, pl: Plan, sp: ShiftPlan, scope: str, ubits: list[Expr
     # X = floor(u 2^L) < 2^PB since L <= PS (the forbidden pairs); the candidates' hull is looser (it does not see the
     # coupling of R and c), so the theorem is asserted (logged) for the sum's audit.
     if pl.wide:
-        XL = _pick(ctx, "XL", csel, [digits(c, 0, LIMB) for c in (-1, 0, 1, 2)] + [zero_e, zero_e], hint=f"{scope}.XL")
-        XH = _pick(ctx, "XH", csel, [digits(c, LIMB, PB + RB) for c in (-1, 0, 1, 2)] + [zero_e, zero_e], hint=f"{scope}.XH")
+        XL = _pick(ctx, "XL", csel, [digits(c, 0, LIMB) for c in (-1, 0, 1, 2)] + [zero_e], hint=f"{scope}.XL")
+        XH = _pick(ctx, "XH", csel, [digits(c, LIMB, PB + RB) for c in (-1, 0, 1, 2)] + [zero_e], hint=f"{scope}.XH")
         ctx.learn(XL, 0, 2**LIMB)
         ctx.learn(XH, 0, 2 ** (PB - LIMB))
         X: Expr | tuple = (XL, XH)
         Xfull = XL + XH * 2**LIMB
         ctx._learn(Xfull, 0, 2**PB)
     else:
-        X = _pick(ctx, "X", csel, [digits(c, 0, PB + RB) for c in (-1, 0, 1, 2)] + [zero_e, zero_e], hint=f"{scope}.X")
+        X = _pick(ctx, "X", csel, [digits(c, 0, PB + RB) for c in (-1, 0, 1, 2)] + [zero_e], hint=f"{scope}.X")
         ctx.learn(X, 0, 2**PB)
         Xfull = X
     for r in sp.forbidden:
         _zero(ctx, f"forbid{r}", c_live[0], rsel[r])
-    _zero(ctx, "zero", zero, u)                                   # the zero option needs u = 0
-    K = _hint(ctx, f"{scope}.K")
-    ctx.rng("K", K, 0, 2**sp.kb)
+    K = _weighted(ctx, _hint_bits(ctx, f"{scope}.K", sp.kb))     # the dead range's quotient, in bits
     _zero(ctx, "Kdead", 1 - dead, K)                              # K = 0 unless dead
     d_expr = PS - R + RB * cval + dead * (PB + RB - 1 - PS) + RB * K
-    _quad(ctx, "exp", 1 - zero, E - e_i - d_expr, zero_e)         # (1 - zero) (E - e_i - d) = 0
+    # u (E - e_i - d) = 0: exact for a nonzero product (|E - e_i - d| < 2^12, u < 2^UB: the integer product is inside the
+    # field), vacuous for a zero one (whose exponent does not enter the maximum, as in v1; its X is 0 on every option)
+    _quad(ctx, "exp", u, E - e_i - d_expr, zero_e)
     return X, Xfull
 
 
@@ -232,16 +244,23 @@ def compile_v3_unit(p: Params, chain: bool = False) -> System:
         mbits = _bit_exprs(ctx, ctx._bits(Mt, nb, "Mt"))
     state = (s_c, e_c, mbits)
 
-    # --- the operands: committed words (hint bits) pinned to the public words -----------------------------------------
+    # --- the operands: committed words (hint bits) pinned to the public words, ``words_per_pin`` of them per pin row ----
     ops = []
+    words = {"a": [], "b": []}
     for i in range(k):
         wa, sa, ma, ea = _decode_word(ctx, pl, f"a_words[{i}]")
-        pin = ctx.pin(f"a[{i}]", 0, 2**pl.op_word_bits)
-        ctx.eq("pin", wa, pin)
         wb, sb, mb, eb = _decode_word(ctx, pl, f"b_words[{i}]")
-        pin = ctx.pin(f"b[{i}]", 0, 2**pl.op_word_bits)
-        ctx.eq("pin", wb, pin)
+        words["a"].append(wa)
+        words["b"].append(wb)
         ops.append((sa, ma, ea, sb, mb, eb))
+    wpp = sp.words_per_pin
+    for name in ("a", "b"):
+        for lo in range(0, k, wpp):
+            hi = min(k, lo + wpp)
+            ctx.scope = f"{name}_words"
+            packed = sum((words[name][j] * 2 ** (pl.op_word_bits * (j - lo)) for j in range(lo + 1, hi)), words[name][lo])
+            pin = ctx.pin(pin_name(name, lo, hi), 0, 2 ** (pl.op_word_bits * (hi - lo)))
+            ctx.eq(f"pin[{lo}]", packed, pin)
 
     # --- the groups --------------------------------------------------------------------------------------------------
     ovfs = []
@@ -258,6 +277,17 @@ def compile_v3_unit(p: Params, chain: bool = False) -> System:
         ctx.scope = f"{tag}.max"
         E = _hint(ctx, f"{tag}.E")
         ctx.learn(E, p.floor, e_hi + 1)
+        if sp.hi_thr is not None:
+            # hi = [E >= thr]: above thr every product is dead whatever its exponent, so the alignments read E_eff =
+            # min(E, thr) and the dead range stays short.  One range check proves both directions of the flag.
+            hi = _hint_bit(ctx, f"{tag}.hi")
+            thr = sp.hi_thr
+            pe = ctx.product(hi, E - thr)
+            ctx.rng("hi.proof", (thr - 1 - E) + 2 * pe + hi, 0, 2**CMP_BITS)   # hi (E - thr) + (1 - hi) (thr - 1 - E) >= 0
+            E_eff = E - pe
+            ctx.learn(E_eff, p.floor, thr + 1)
+        else:
+            E_eff = E
 
         # the products: u = m_a m_b in bits, sign, alignment to E
         sX, Xs, es = [], [], []
@@ -269,7 +299,7 @@ def compile_v3_unit(p: Params, chain: bool = False) -> System:
             u = _weighted(ctx, ubits)
             _quad(ctx, "u", ma, mb_, u)                           # m_a m_b = u (< 2^UB < p)
             e_i = ea + eb
-            X, Xfull = _align(ctx, pl, sp, scope, ubits, u, E, e_i)
+            X, Xfull = _align(ctx, pl, sp, scope, ubits, u, E_eff, e_i)
             ctx.scope = scope
             s_i = _hint_bit(ctx, f"{scope}.s")
             _quad(ctx, "xor", sa, 1 - 2 * sb, s_i - sb)           # s_i = s_a xor s_b
@@ -421,9 +451,14 @@ def public_vectors_v3(p: Params, c, a, b, y, device="cpu"):
     _decode_operands(pl, a, bad, "a")
     _decode_operands(pl, b, bad, "b")
     out: dict = {}
-    for i in range(k):
-        out[f"a[{i}]"] = a[:, i]
-        out[f"b[{i}]"] = b[:, i]
+    wpp = shift_plan(p, pl).words_per_pin
+    for name, w in (("a", a), ("b", b)):
+        for lo in range(0, k, wpp):
+            hi = min(k, lo + wpp)
+            packed = w[:, lo].clone()
+            for j in range(lo + 1, hi):
+                packed = packed + w[:, j] * 2 ** (pl.op_word_bits * (j - lo))
+            out[pin_name(name, lo, hi)] = packed
     if c is not None:
         c = torch.as_tensor(c, dtype=torch.int64, device=device)
         y = torch.as_tensor(y, dtype=torch.int64, device=device)
