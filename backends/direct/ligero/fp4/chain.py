@@ -239,8 +239,12 @@ def _proof_class(cfg, interactive: bool):
 
 
 def _software(R, proof) -> dict:
+    from .. import witness as witness_mod
+    # the witness goes through the shared witness.build_witness (--impl device: the fused kernel; legacy: the torch
+    # program); the FP4 hint generator is numpy on the host either way (fp4/witness.hints_fp4)
     return {"backend": {"name": "b-ligero chain, fp4-nvf4 relation (backends/direct/ligero/fp4)", "commit": _git_commit(),
-                        "hash": proof.hash_name, "challenge_expander": "SHAKE-256 (placeholder)"},
+                        "hash": proof.hash_name, "challenge_expander": "SHAKE-256 (placeholder)", "impl": witness_mod.IMPL,
+                        "hints": "numpy (host)"},
             "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
 
 
