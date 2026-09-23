@@ -1016,27 +1016,27 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     let is_start = |j: usize| !in_vu(j) || j % steps == 0;
     let is_end = |j: usize| in_vu(j) && j % steps == steps - 1;
     let is_link = |j: usize| in_vu(j) && j % steps != steps - 1;
-    let mut involved: Vec<u32> = Vec::new();
-    let pos = |row: u32, inv: &mut Vec<u32>| -> usize {
-        match inv.iter().position(|r| *r == row) {
-            Some(p) => p,
-            None => {
-                inv.push(row);
-                inv.len() - 1
-            }
-        }
-    };
     let n_links = chain.c_rows.len();
     let n_extra = n_links.saturating_sub(3); // linked rows beyond the accumulator's three: monomial coefficients (chain.py)
-    for &cr in &chain.c_rows {
-        pos(cr, &mut involved);
+    // The test is sum_j [ r_link_x(j) (W[c_x][j+1] - Y_x(W)[j]) + r_start_x(j) W[c_x][j] + r_end(j) Y_end(W)[j] ] = rhs.
+    // Encoding is linear, so instead of one coefficient row per *witness row* the linear form touches (a hashed
+    // system's 16 capacity links are 24-term forms over the last S-box layer: ~80 rows, D x 80 NTT pairs per proof)
+    // the verifier encodes one row per *term* -- 2 per link (the shifted link + start coefficients on W[c_x], the
+    // link coefficients on Y_x) and one per end term -- and evaluates Y_x / Y_end on the opened column values, as the
+    // quadratic test does.  Same field value as the per-row sum, so the same decision; ~half the NTTs.
+    enum Ev {
+        Row(u32),
+        Lin(Vec<(u32, u32)>), // sum kappa_i U[i][c]
     }
-    for e in chain.y.iter().chain(chain.ends.iter().map(|t| &t.y)) {
-        for (row, _) in &e.lin {
-            pos(*row, &mut involved);
-        }
+    let mut evs: Vec<Ev> = Vec::with_capacity(2 * n_links + chain.ends.len());
+    for xx in 0..n_links {
+        evs.push(Ev::Row(chain.c_rows[xx]));
+        evs.push(Ev::Lin(chain.y[xx].lin.iter().map(|(row, kappa)| (*row, neg(*kappa))).collect()));
     }
-    let nr = involved.len();
+    for term in &chain.ends {
+        evs.push(Ev::Lin(term.y.lin.iter().map(|(row, kappa)| (*row, *kappa)).collect()));
+    }
+    let nr = evs.len();
     let mut coef = vec![0u32; d * nr * l]; // (D, R, l) evaluations on H
     let mut rhs = vec![0u32; d];
     for dd in 0..d {
@@ -1053,12 +1053,8 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         };
         let cf = |r: usize| dd * nr * l + r * l;
         for xx in 0..n_links {
-            let ci = involved.iter().position(|r| *r == chain.c_rows[xx]).unwrap();
             let yx = &chain.y[xx];
-            // the terms of Y_x resolved to involved-row positions once (a hashed system's capacity links are 24-term
-            // affine forms over ~200 involved rows: resolving per column cost 1 s per proof)
-            let terms: Vec<(usize, u32)> = yx.lin.iter()
-                .map(|(row, kappa)| (involved.iter().position(|r| r == row).unwrap(), neg(*kappa))).collect();
+            let (row_c, row_y) = (cf(2 * xx), cf(2 * xx + 1));
             let mut sum_link = 0u32;
             for j in 0..l {
                 let rl = if !is_link(j) { 0 } else if xx < 3 { rc(xx, j) } else { extra(xx - 3, j) };
@@ -1066,17 +1062,14 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
                 if rl != 0 {
                     // link_j: + W[c][j+1] - sum kappa_i W[i][j] = Y.c
                     if j + 1 < l {
-                        let a = &mut coef[cf(ci) + j + 1];
+                        let a = &mut coef[row_c + j + 1];
                         *a = add(*a, rl);
                     }
-                    for &(ri, nk) in &terms {
-                        let a = &mut coef[cf(ri) + j];
-                        *a = add(*a, mul(rl, nk));
-                    }
+                    coef[row_y + j] = rl;
                     sum_link = add(sum_link, rl);
                 }
                 if rs != 0 {
-                    let a = &mut coef[cf(ci) + j];
+                    let a = &mut coef[row_c + j];
                     *a = add(*a, rs);
                 }
             }
@@ -1084,19 +1077,13 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         }
         // end_j, one constraint per end term (chain.py): Y_x(W)[j] = the public word (v1, family 6) or its bit field
         // (v2 components: families 6, 0, 1 -- the link families are unused at an end column)
-        let end_terms: Vec<Vec<(usize, u32)>> = chain.ends.iter()
-            .map(|term| term.y.lin.iter().map(|(row, kappa)| (involved.iter().position(|r| r == row).unwrap(), *kappa)).collect())
-            .collect();
         for j in 0..l {
             if !is_end(j) {
                 continue;
             }
-            for (term, terms) in chain.ends.iter().zip(&end_terms) {
+            for (e, term) in chain.ends.iter().enumerate() {
                 let re = rc(term.family, j);
-                for &(ri, kappa) in terms {
-                    let a = &mut coef[cf(ri) + j];
-                    *a = add(*a, mul(re, kappa));
-                }
+                coef[cf(2 * n_links + e) + j] = re;
                 rhs[dd] = add(rhs[dd], mul(re, sub(term.value(st.y16[j]), term.y.c)));
             }
         }
@@ -1122,10 +1109,23 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     tm.ntt += lap(&mut clk);
     for dd in 0..d {
         let mut expect = vec![0u64; t];
-        for (ri, &row) in involved.iter().enumerate() {
+        for (ri, ev) in evs.iter().enumerate() {
             let rr = &r_at[dd * nr + ri];
-            for c in 0..t {
-                expect[c] = mul_acc(expect[c], rr[c], uo[row as usize * t + c]);
+            match ev {
+                Ev::Row(row) => {
+                    for c in 0..t {
+                        expect[c] = mul_acc(expect[c], rr[c], uo[*row as usize * t + c]);
+                    }
+                }
+                Ev::Lin(terms) => {
+                    for c in 0..t {
+                        let mut v = 0u64;
+                        for &(row, kappa) in terms {
+                            v = mul_acc(v, kappa, uo[row as usize * t + c]);
+                        }
+                        expect[c] = mul_acc(expect[c], rr[c], v as u32);
+                    }
+                }
             }
         }
         for c in 0..t {
