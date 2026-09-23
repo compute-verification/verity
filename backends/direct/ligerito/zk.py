@@ -63,7 +63,9 @@ __all__ = ["BETA", "COIN_BYTES", "D", "MASK_COLS_HIGH_LOG2", "MASK_COLS_LOW_LOG2
            "CommittedCoins", "EquivocatingCoins", "MaskCells", "Masks", "SumcheckMask", "ZkParams", "apply_masks",
            "challenge_from", "check_layout", "coin_commit", "coin_schedule", "mask_cells", "omitted", "pad_columns",
            "padding_combination", "queries_for", "rate", "row_check_rhs", "sample_masks", "set_g_coeffs", "uniform_symbols",
-           "verify_opening", "zk_statement"]
+           "verify_opening", "zk_statement",
+           "RowMaskLayout", "RowMasks", "default_row_mask_layout", "f_index", "fill_mask_rows", "libra_block_claim",
+           "permute_point", "z_to_f"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -170,13 +172,14 @@ class ZkParams:
     mask_cols_low_log2: int = MASK_COLS_LOW_LOG2
     n_c: int | None = None             # layout column bits (a layout ROW = 2^{n_c} cells; rows are the high bits)
     product_rows: tuple = ()           # (i1, i2, i3) triples of layout rows: i1, i2 uniform masks, i3 := i1 * i2 pointwise
+    row_layout: bool = False           # True: masks are relation ROWS (RowMaskLayout); no column blocks in f
 
     def __post_init__(self):
         if self.k1 + self.kp1 != self.n:
             raise ValueError(f"round-1 shape 2^{self.k1} x 2^{self.kp1} does not cover 2^{self.n} cells")
-        if self.enabled and (1 << self.k1) < self.g_block_cells + 2:
+        if self.enabled and not self.row_layout and (1 << self.k1) < self.g_block_cells + 2:
             raise ValueError("the mask columns are too short for the G-blocks")
-        if self.enabled and (1 << self.kp1) <= self.mask_cols_high + self.mask_cols_low:
+        if self.enabled and not self.row_layout and (1 << self.kp1) <= self.mask_cols_high + self.mask_cols_low:
             raise ValueError("round 1 needs more columns than the mask blocks")
         names = [nm for nm, _, _ in self.sumchecks]
         if len(set(names)) != len(names):
@@ -228,11 +231,11 @@ class ZkParams:
 
     @property
     def mask_cols_high(self) -> int:
-        return 1 << self.mask_cols_high_log2
+        return 0 if self.row_layout else 1 << self.mask_cols_high_log2
 
     @property
     def mask_cols_low(self) -> int:
-        return 1 << self.mask_cols_low_log2
+        return 0 if self.row_layout else 1 << self.mask_cols_low_log2
 
     @property
     def mask_cell_count(self) -> int:
@@ -257,7 +260,7 @@ class MaskCells:
 def mask_cells(zp: ZkParams) -> MaskCells:
     """The reserved cells: the bottom block ``[0, 2^low . 2^{k1})``, the top block ``[N - 2^high . 2^{k1}, N)``; the
     G-blocks are consecutive at the START of the last column (rows ``0 ..`` of column ``C_1 - 1``)."""
-    if not zp.enabled:
+    if not zp.enabled or zp.row_layout:
         return MaskCells(range(0, 0), range(0, 0), ())
     low = range(0, zp.mask_cols_low * zp.rows1)
     high = range(zp.N - zp.mask_cols_high * zp.rows1, zp.N)
@@ -265,6 +268,159 @@ def mask_cells(zp: ZkParams) -> MaskCells:
     gb = tuple(np.arange(g0 + zp.g_block_offset(i), g0 + zp.g_block_offset(i) + D * zp.g_coeffs(i), dtype=np.int64)
                for i in range(len(zp.sumchecks)))
     return MaskCells(low, high, gb)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 1b. Mask ROWS in the relation's table (the real layout; ligerito-sumcheck's z (R, C), f = z with the bits interleaved)
+# ---------------------------------------------------------------------------------------------------------------------
+# ligerito-sumcheck commits ``f[i + R c] = z[i, c]`` (row bits LOW), every column ``c`` is a constrained unit column (pad
+# sub-batches hold valid pad witnesses), and rows ``[m + 200, R)`` are free.  So a round-1 PCS "column" (the top k'_1 bits
+# of x = a slice of 2^{n_c - k'_1} relation columns, ALL rows) cannot be uniform -- only its free rows can; the primitive
+# is a MASK ROW: a free relation row filled with 2^{n_c} uniform base cells.  What mask rows reach (weights = tensor
+# products of the challenges, generic on every cell):
+#   * every round-i column contraction ``u_i[c]`` and both halves of every column-sumcheck split (a relation row meets
+#     every PCS column of every round) -- covers the round messages of the PCS recursion;
+#   * the eval claims at fully-extension points (``w~(r_i, r_c)`` of the rows sumcheck), the block claims;
+#   * the FINAL VECTOR ``y_L[rho]``, indexed by the LOW k_L bits of x: with row bits low, ``rho`` is a function of the row
+#     index ``i mod 2^{k_L}`` -- 2^{k_L} mask rows would be needed (k_L = 10..13: impossible in 319 free rows).  Fix (a
+#     relabelling of the PCS variables, done by the relation lane when it builds f and permutes the claim points):
+#     interleave ``a = k_L - b`` column bits BELOW the row bits, ``x = (c mod 2^a) + 2^a i + 2^{a + n_i} (c >> a)``; then
+#     ``rho = (c mod 2^a, i mod 2^b)`` and 2^b mask rows with distinct residues mod 2^b cover every final entry with
+#     ``2^{n_c - a}`` uniform cells each.  ``b = 3`` -> 8 mask rows.  PCS round-1 columns are still the top k'_1 bits of
+#     ``c`` (unchanged), the sumcheck lane's row-bits-first points are permuted by ``permute_point``.
+#   * the zero-check's final ``Az(r), Bz(r), Cz(r)``: bare witness functionals (A, B, C vanish on free rows) -> the
+#     trivial constraint ``w(i1) w(i2) = w(i3)`` on three COMMITTED mask rows (``product_rows``; the relation adds the row).
+#   * the shift sumcheck's claims ``w~(bits(c_x) || rho)`` have BOOLEAN row coordinates -> bare functionals of row c_x;
+#     they must be reduced by a rows-type sumcheck to an extension row point first (``## For ligerito-relation``).
+# Cost at fp8-ada (R = 4096, C = 2^18): (8 + 3 + 1) rows = 12 . 2^18 = 3.1 M cells = 0.29 % of N; the sampler does that
+# in < 1 ms; the 8 uniform rows live in the free region (0 extra rows), the 3 product rows + 1 Libra row are committed
+# rows (4 of the 296 spare committed rows).
+
+@dataclass(frozen=True)
+class RowMaskLayout:
+    """Which relation rows are masks.  ``uniform_rows``: free rows, uniform cells (>= 2^b of them, all residues mod 2^b
+    present); ``product_rows``: (i1, i2, i3) committed rows with the trivial quadratic constraint ``i1 . i2 = i3``;
+    ``g_row``: the committed row whose first ``6 . sum(dn + 1)`` cells hold the Libra coefficients of ``sumchecks``
+    (rest uniform); ``a``: column bits interleaved below the row bits in f (``k_L - b``)."""
+    n_i: int
+    n_c: int
+    k_L: int
+    uniform_rows: tuple
+    product_rows: tuple
+    g_row: int
+    sumchecks: tuple = (("zc", 30, 3), ("rows", 12, 2), ("shift", 18, 2))
+    b: int = 3
+
+    def __post_init__(self):
+        rows = list(self.uniform_rows) + [i for t in self.product_rows for i in t] + [self.g_row]
+        if len(set(rows)) != len(rows):
+            raise ValueError("mask rows must be distinct")
+        if any(not (0 <= i < (1 << self.n_i)) for i in rows):
+            raise ValueError("mask row out of range")
+        if self.a < 0 or self.a > self.n_c:
+            raise ValueError(f"k_L - b = {self.a} column bits cannot be interleaved (n_c = {self.n_c})")
+        residues = {i % (1 << self.b) for i in self.uniform_rows}
+        if len(residues) != (1 << self.b):
+            raise ValueError(f"uniform_rows must cover every residue mod 2^{self.b} (the final vector's row bits); "
+                             f"got {sorted(residues)}")
+        if (1 << self.n_c) < self.g_cells:
+            raise ValueError("a row is too short for the Libra coefficients")
+
+    @property
+    def a(self) -> int:
+        return self.k_L - self.b
+
+    @property
+    def g_cells(self) -> int:
+        return D * sum(d * n + 1 for _, n, d in self.sumchecks)
+
+    def g_offset(self, idx: int) -> int:
+        return D * sum(d * n + 1 for _, n, d in self.sumchecks[:idx])
+
+    @property
+    def all_rows(self) -> tuple:
+        return tuple(self.uniform_rows) + tuple(i for t in self.product_rows for i in t) + (self.g_row,)
+
+    @property
+    def cells(self) -> int:
+        return len(self.all_rows) << self.n_c
+
+    def zk_params(self, n: int, k1: int, kp1: int, t_pad: int = T_PAD) -> ZkParams:
+        """The ``ZkParams`` the padding / Libra / coin helpers take (no column blocks: those are the toy's layout)."""
+        return ZkParams(n, k1, kp1, sumchecks=self.sumchecks, t_pad=t_pad, row_layout=True)
+
+
+def default_row_mask_layout(n_i: int, n_c: int, k_L: int, m: int, free_from: int, b: int = 3,
+                            sumchecks=(("zc", 30, 3), ("rows", 12, 2), ("shift", 18, 2))) -> RowMaskLayout:
+    """fp8-ada: ``m`` committed rows, free rows ``[free_from, 2^n_i)``: the 2^b uniform rows are the top free rows, the
+    product rows and the Libra row the last four committed rows ``[m - 4, m)`` (the relation must leave them
+    unconstrained except for the trivial constraint)."""
+    R = 1 << n_i
+    if R - free_from < (1 << b):
+        raise ValueError("not enough free rows")
+    return RowMaskLayout(n_i, n_c, k_L, tuple(range(R - (1 << b), R)), ((m - 4, m - 3, m - 2),), m - 1, sumchecks, b)
+
+
+def f_index(i, c, lay: RowMaskLayout):
+    """The PCS cell of relation cell ``(i, c)``: ``x = (c mod 2^a) + 2^a i + 2^{a + n_i} (c >> a)`` (numpy-broadcastable)."""
+    a = lay.a
+    return (c & ((1 << a) - 1)) + (i << a) + ((c >> a) << (a + lay.n_i))
+
+
+def z_to_f(z, lay: RowMaskLayout):
+    """``f`` (R C,) from ``z`` (R, C) (numpy or torch, any dtype): one transpose of the (2^{n_c - a}, R, 2^a) view."""
+    R, C = z.shape
+    a = lay.a
+    v = z.reshape(R, C >> a, 1 << a)
+    v = v.transpose(1, 0, 2) if isinstance(v, np.ndarray) else v.permute(1, 0, 2)
+    return v.reshape(-1)
+
+
+def permute_point(point, lay: RowMaskLayout):
+    """A claim point in ligerito-sumcheck's order (row bits ``0..n_i-1`` then column bits) -> PCS variable order for
+    ``f = z_to_f(z)`` (column bits ``0..a-1``, row bits, column bits ``a..``).  ``point`` (n_i + n_c, 6); numpy or torch."""
+    n_i, a = lay.n_i, lay.a
+    parts = [point[n_i:n_i + a], point[:n_i], point[n_i + a:]]
+    return np.concatenate(parts, axis=0) if isinstance(point, np.ndarray) else __import__("torch").cat(parts, dim=0)
+
+
+@dataclass
+class RowMasks:
+    g_coeffs: list                # per sumcheck: (dn + 1, 6) Libra coefficients (numpy)
+    cells: int
+
+
+def fill_mask_rows(z, lay: RowMaskLayout, device=None) -> RowMasks:
+    """Write the masks into ``z`` (R, C) in place (numpy int64 or torch int32/int64 on ``device``): uniform rows, the
+    Libra row (coefficients first, uniform after), ``i3 := i1 . i2`` for every product triple.  Returns the Libra
+    coefficients (the prover's ``SumcheckMask`` inputs).  ``2^{n_c}`` symbols per row from one sampler call."""
+    C = 1 << lay.n_c
+    rows = list(lay.uniform_rows) + [i for (i1, i2, _) in lay.product_rows for i in (i1, i2)] + [lay.g_row]
+    if isinstance(z, np.ndarray):
+        u = uniform_symbols(len(rows) * C, None).reshape(len(rows), C)
+        z[rows, :] = u
+        for i1, i2, i3 in lay.product_rows:
+            z[i3, :] = (z[i1, :].astype(np.int64) * z[i2, :].astype(np.int64)) % P
+        grow = z[lay.g_row, :lay.g_cells].astype(np.int64)
+    else:
+        import torch
+        u = uniform_symbols_device(len(rows) * C, device).reshape(len(rows), C).to(z.dtype)
+        z[torch.as_tensor(rows, device=z.device), :] = u
+        for i1, i2, i3 in lay.product_rows:
+            z[i3, :] = ((z[i1, :].to(torch.int64) * z[i2, :].to(torch.int64)) % P).to(z.dtype)
+        grow = z[lay.g_row, :lay.g_cells].to(torch.int64).cpu().numpy()
+    gs = [grow[lay.g_offset(k): lay.g_offset(k) + D * (d * n + 1)].reshape(d * n + 1, D).copy()
+          for k, (_, n, d) in enumerate(lay.sumchecks)]
+    return RowMasks(gs, len(lay.all_rows) * C)
+
+
+def libra_block_claim(lay: RowMaskLayout, idx: int, gm: "SumcheckMask", r) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The block claim ``<W, f> = g(r)`` on the real layout: ``(cells (6(dn+1),) PCS indices, weights (6(dn+1), 6), value)``
+    -- a SPARSE round-1 term for the PCS (one relation row, 6(dn + 1) consecutive relation columns)."""
+    bc = gm.claim(r)
+    d_n = len(bc.weights)
+    cols = np.arange(lay.g_offset(idx), lay.g_offset(idx) + d_n, dtype=np.int64)
+    return f_index(lay.g_row, cols, lay), bc.weights, bc.value
 
 
 def check_layout(zp: ZkParams, referenced) -> None:
@@ -557,7 +713,8 @@ class SumcheckMask:
                 w[t] = ext_mul(basis, rp[None, :])
                 rp = ext_mul(rp, r[i])
                 t += 1
-        return BlockClaim(mc.g_blocks[self.idx].copy(), w.reshape(-1, D), self.final_value(r))
+        cells = mc.g_blocks[self.idx].copy() if mc.g_blocks else np.arange(D * self.zp.g_coeffs(self.idx), dtype=np.int64)
+        return BlockClaim(cells, w.reshape(-1, D), self.final_value(r))
 
 
 # ---------------------------------------------------------------------------------------------------------------------

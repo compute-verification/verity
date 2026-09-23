@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from . import zk, zk_stub as st
-from .zk import D, P, ext_from_base, ext_mul, ext_one, ext_sum, ext_zero
+from .zk import D, P, ext_from_base, ext_mul, ext_mul_base, ext_one, ext_sum, ext_zero
 
 TOY = st.Toy(n_i=6, n_c=9, kprimes=(4, 1, 1), n_rows_open=16, t_pad=24)   # 2^11 x 16 (mask cols 0, 8..15), 2^10 x 2, 2^9 x 2
 STMT = b"toy-statement"
@@ -331,3 +331,51 @@ def _rank_mod_p(A: np.ndarray) -> int:
         row += 1
         rank += 1
     return rank
+
+
+def _mle(vec, pt):
+    acc = ext_from_base(vec)
+    for t in range(pt.shape[0]):
+        acc = acc.reshape(-1, 2, D)
+        acc = (ext_mul(acc[:, 0], (ext_one() - pt[t]) % P) + ext_mul(acc[:, 1], pt[t])) % P
+    return acc.reshape(D)
+
+
+def test_row_mask_layout_index_map_and_masks():
+    """The real layout (ligerito-sumcheck's z (R, C), row bits low): f = z_to_f(z) is the bit-interleaved table, the
+    sumcheck lane's row-bits-first claim points permute to it, the mask rows and the Libra block claim read back."""
+    rng = np.random.default_rng(0)
+    lay = zk.RowMaskLayout(n_i=4, n_c=6, k_L=5, uniform_rows=tuple(range(8, 16)), product_rows=((3, 4, 5),), g_row=6,
+                           sumchecks=(("zc", 4, 2),), b=3)
+    assert lay.a == 2 and lay.cells == 12 * 64
+    z = rng.integers(0, P, size=(16, 64), dtype=np.int64)
+    f = zk.z_to_f(z, lay)
+    i, c = np.arange(16)[:, None], np.arange(64)[None, :]
+    assert np.array_equal(f[zk.f_index(i, c, lay)], z)
+    pt = rng.integers(0, P, size=(10, 6), dtype=np.int64)                # row bits first, then column bits
+    zflat = np.zeros(1024, dtype=np.int64)
+    zflat[i + 16 * c] = z                                                  # the sumcheck lane's f[i + R c]
+    assert np.array_equal(_mle(zflat, pt), _mle(f, zk.permute_point(pt, lay)))
+    # final-vector cover: the low k_L bits of x are (c mod 2^a, i mod 2^b); every residue has a uniform row
+    rho = zk.f_index(np.array(lay.uniform_rows)[:, None], c, lay) & ((1 << lay.k_L) - 1)
+    assert len(set(rho.reshape(-1).tolist())) == 1 << lay.k_L
+    zm = z.copy()
+    rm = zk.fill_mask_rows(zm, lay)
+    assert np.array_equal(zm[:3], z[:3]) and np.array_equal(zm[7], z[7])
+    assert np.array_equal(zm[5], zm[3] * zm[4] % P)
+    zp = lay.zk_params(10, 6, 4)
+    assert zp.row_layout and zp.mask_cell_count == 0 and zk.mask_cells(zp).count == 0
+    gm = zk.SumcheckMask(zp, 0, rm.g_coeffs[0])
+    r = rng.integers(0, P, size=(4, 6), dtype=np.int64)
+    cells, w, v = zk.libra_block_claim(lay, 0, gm, r)
+    fm = zk.z_to_f(zm, lay)
+    assert np.array_equal(ext_sum(ext_mul_base(w, fm[cells]), axis=0), v)
+    # fp8-ada numbers: 12 rows, 0.29 % of N; the 918 Libra cells sit in relation columns [0, 918) of one row, i.e. inside
+    # PCS round-1 column 0 (2^{n_c - k'_1} = 2^10 relation columns per PCS column) -- one sparse round-1 term
+    real = zk.default_row_mask_layout(n_i=12, n_c=18, k_L=10, m=3777, free_from=3977)
+    assert real.cells == 12 << 18 and real.cells / 2 ** 30 < 0.003
+    assert real.g_cells == 918 < (1 << (18 - 8))
+    cells_real = zk.f_index(real.g_row, np.arange(real.g_cells), real)
+    assert len(set((cells_real >> (30 - 8)).tolist())) == 1
+    with pytest.raises(ValueError):
+        zk.RowMaskLayout(4, 6, 5, uniform_rows=(8, 9, 10, 11, 12, 13, 14, 8), product_rows=(), g_row=6, b=3)
