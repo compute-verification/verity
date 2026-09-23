@@ -59,56 +59,58 @@ def _mle(f: torch.Tensor, z: np.ndarray) -> np.ndarray:
     return ext.sum_ext(ext.mul(e, fv[:, None] * np.array([1, 0, 0, 0, 0, 0])), axis=0)
 
 
-@pytest.mark.parametrize("m,stream", [(1, "0"), (4, "0"), (3, "1"), (2, "0")])
-def test_commit_first_multi_claim(m, stream, monkeypatch):
-    from .pcs import absorb_commitment, commit, prove_eval, verify_eval
+def _relation_coins(root: bytes):
     from .transcript import FiatShamirCoins
-    monkeypatch.setenv("LIGERITO_STREAM", stream)
+    tr = FiatShamirCoins()
+    tr.absorb(b"statement", b"relation statement")
+    tr.absorb(b"root", root)
+    tr.absorb(b"relation", b"zero-check messages")
+    tr.challenge(b"tau", 3)
+    return tr
+
+
+@pytest.mark.parametrize("m,stream", [(1, False), (4, False), (3, True), (2, None)])
+def test_commit_first_multi_claim(m, stream):
+    from .pcs import commit, evaluate, open as pcs_open, verify_open
     n = 14
     dims = Dims(n, [5, 4, 3], [24, 20, 16], [1, 2, 2])
     f, _ = _inst(n)
     zs = RNG.integers(0, P, size=(m, n, D), dtype=np.int64)
-    # the relation's view: commit, its own rounds on the same coins, then the evaluation proof
-    tr = FiatShamirCoins()
-    com = commit(f, dims, coins=tr)
-    tr.absorb(b"relation", b"zero-check messages")
-    tr.challenge(b"tau", 3)
-    pf = prove_eval(com, zs, coins=tr)
-    del com
-    assert pf.v.shape == (m, D)
+    # the relation's view: commit, bind the root and its own rounds, then ONE evaluation proof for all claims
+    com = commit(f, dims, stream=stream)
+    assert (com.U1 is None) == bool(stream)
+    values = evaluate(com, zs)
     for j in range(m):
-        assert np.array_equal(pf.v[j], _mle(f, zs[j]))
+        assert np.array_equal(values[j], _mle(f, zs[j]))
+    pf = pcs_open(com, zs, values, _relation_coins(com.root))
+    pf_nocache = pcs_open(com, zs, None, _relation_coins(com.root))           # without evaluate's cached contractions
+    assert pf_nocache.to_bytes() == pf.to_bytes()
+    assert pf.v.shape == (m, D) and np.array_equal(pf.v, values)
     pf2 = Proof.from_bytes(pf.to_bytes())
     assert pf2.to_bytes() == pf.to_bytes() and pf2.order == "commit-first"
-    vt = FiatShamirCoins()
-    absorb_commitment(vt, pf2.dims, pf2.roots[0])
-    vt.absorb(b"relation", b"zero-check messages")
-    vt.challenge(b"tau", 3)
-    ok, why = verify_eval(pf2, zs, coins=vt)
+    ok, why = verify_open(pf2, zs, values, _relation_coins(pf2.roots[0]))
     assert ok, why
-    # negatives: a wrong value, a wrong point, the relation transcript skipped, the legacy verifier
-    bad = pf2.v.copy()
+    # negatives: a wrong value, wrong points, a different relation transcript, the standalone prefix, the legacy verifier path
+    bad = values.copy()
     bad[m - 1, 0] = (bad[m - 1, 0] + 1) % P
-    for zz, vv, skip in ((zs, bad, False), (zs[::-1] if m > 1 else zs + 1, None, False), (zs, None, True)):
-        vt = FiatShamirCoins()
-        absorb_commitment(vt, pf2.dims, pf2.roots[0])
-        if not skip:
-            vt.absorb(b"relation", b"zero-check messages")
-            vt.challenge(b"tau", 3)
-        ok, _ = verify_eval(pf2, zz, v=vv, coins=vt)
-        assert not ok
-    assert not verify(pf2, zs)[0]                                        # the relation's absorbs are part of the transcript
+    assert not verify_open(pf2, zs, bad, _relation_coins(pf2.roots[0]))[0]
+    assert not verify_open(pf2, zs[::-1] if m > 1 else (zs + 1) % P, values, _relation_coins(pf2.roots[0]))[0]
+    assert not verify_open(pf2, zs, values, _relation_coins(b"\0" * 32))[0]
+    assert not verify(pf2, zs)[0]
 
 
-def test_commit_first_standalone_verify():
-    from .pcs import commit, prove_eval
+@pytest.mark.parametrize("m", [1, 3])
+def test_commit_first_standalone(m):
+    from .pcs import prove_commit_first
     n = 12
     dims = Dims(n, [4, 3, 3], [12, 12, 12], 2)
-    f, z = _inst(n)
-    pf = prove_eval(commit(f, dims), z)
-    ok, why = verify(Proof.from_bytes(pf.to_bytes()), z)
+    f, _ = _inst(n)
+    zs = RNG.integers(0, P, size=(m, n, D), dtype=np.int64)
+    pf = Proof.from_bytes(prove_commit_first(f, zs, dims).to_bytes())
+    ok, why = verify(pf, zs)
     assert ok, why
-    assert pf.v.shape == (1, D)
+    assert pf.v.shape == (m, D)
+    assert not verify(pf, zs, v=(pf.v + 1) % P)[0]
 
 
 def test_stream_group_plan():
@@ -142,10 +144,24 @@ def test_contract_geom_and_planes():
         from .linalg import matmul_mod_p_np
         ref = matmul_mod_p_np(A.to(torch.int64).cpu().numpy(), G)
         assert np.array_equal(got, ref), (Pn, R, T)
-        Bp = torch.randint(0, P, (D, R), dtype=torch.int64, device=DEV).to(torch.int32)
-        got = (dv.contract_planes(A, Bp) % P).cpu().numpy()
-        ref = matmul_mod_p_np(A.to(torch.int64).cpu().numpy(), Bp.to(torch.int64).cpu().numpy().T)
-        assert np.array_equal(got, ref)
+        for W in (6, 12, 18, 24):
+            Bp = torch.randint(0, P, (W, R), dtype=torch.int64, device=DEV).to(torch.int32)
+            got = (dv.contract_planes(A, Bp) % P).cpu().numpy()
+            ref = matmul_mod_p_np(A.to(torch.int64).cpu().numpy(), Bp.to(torch.int64).cpu().numpy().T)
+            assert np.array_equal(got, ref), (Pn, R, W)
+
+
+def test_contract_eq_multi():
+    from . import device as dv
+    from .linalg import matmul_mod_p_np
+    for Pn, k, m in ((96, 12, 1), (40, 11, 3), (128, 9, 5), (16, 13, 9)):
+        A = torch.randint(0, P, (Pn, 1 << k), dtype=torch.int64, device=DEV).to(torch.int32)
+        zs = RNG.integers(0, P, size=(m, k, D), dtype=np.int64)
+        got = (dv.contract_eq(A, zs) % P).cpu().numpy()
+        An = A.to(torch.int64).cpu().numpy()
+        for j in range(m):
+            ref = matmul_mod_p_np(An, cl.eq_vector(zs[j]))                   # (P, 6)
+            assert np.array_equal(got[j], ref), (Pn, k, m, j)
 
 
 def test_fold_ext_and_eq_table():

@@ -5,7 +5,8 @@ the column sumcheck, and every contraction of the recursion -- exact mod-p arith
   x^6 - 31 over BabyBear, coordinates in [0, p).  Self-contained; other lanes may paste it into their own kernels.
 * ``contract_geom(A, etas)``: ``out[p, t] = sum_r A[p, r] eta_t^r`` -- a tiled SIMT GEMM whose right factor (the RS generator rows of the
   opened positions) is generated on the fly (one Montgomery multiply per tile element), u64 accumulators folded every 4 products.
-* ``contract_planes(A, Bp)``: ``out[p, d] = sum_r A[p, r] Bp[d, r]`` for d < 6 (an eq tensor as 6 planes).
+* ``contract_planes(A, Bp)``: ``out[p, w] = sum_r A[p, r] Bp[w, r]`` for w < 6 m (m <= 4 eq tensors as 6 planes each);
+  ``contract_eq(A, zs)`` wraps it for m evaluation points.
 * ``fold_ext(M, rbar)``: ``y[r] = sum_c M~[c, r] rbar[c]`` for an F_{p^6} matrix kept as 6 planes.
 * ``eq_table(lo, hi)``: the eq tensor ``lo[x_lo] hi[x_hi]`` as 6 planes.
 * ``build_tables`` + ``sc_step``: the column sumcheck on (T, C, 6) tables resident on the device; one single-block launch per sumcheck
@@ -155,60 +156,60 @@ contract_geom(const u32* __restrict__ A, long long lda, int Ptot, int R, int rch
     }
 }
 
-/* ------------------------------------------------------------------ planes: out[p, d] += sum_r A[p, r] Bp[d, r], d < 6
-   grid (R chunks, P tiles of PT); block 256; thread: rows r0 + tid + 256 i; PT x 6 u64 accumulators */
-#define PT 8
-extern "C" __global__ void __launch_bounds__(256)
-contract_planes(const u32* __restrict__ A, long long lda, int Ptot, int R, int rchunk,
-                const u32* __restrict__ Bp, long long ldb, u64* __restrict__ out)
+/* ------------------------------------------------------------------ planes: out[p, w] += sum_r A[p, r] Bp[w, r], w < W
+   (W = 6 m: m eq tensors as 6 planes each, one pass over A).  grid (P tiles of 8 PT, R chunks); block 256 = 8 warps; warp g owns
+   rows p0 + g PT + i (i < PT), its lanes stride r by 32 (coalesced A and Bp rows; the 8 warps share each Bp line through L1);
+   PT x W u64 accumulators folded every 4 products, warp-shuffle reduced, one atomic per (row, w) per block */
+template <int W, int PT>
+__device__ __forceinline__ void planes_body(const u32* __restrict__ A, long long lda, int Ptot, int R, int rchunk,
+                                            const u32* __restrict__ Bp, long long ldb, u64* __restrict__ out)
 {
-    const int tid = threadIdx.x;
-    const int r_begin = blockIdx.x * rchunk, r_end = min(R, r_begin + rchunk);
-    const int p0 = blockIdx.y * PT;
-    u64 acc[PT][6];
+    const int lane = threadIdx.x & 31, g = threadIdx.x >> 5;
+    const int r_begin = blockIdx.y * rchunk, r_end = min(R, r_begin + rchunk);
+    const int p0 = blockIdx.x * (8 * PT) + g * PT;
+    u64 acc[PT][W];
     #pragma unroll
     for (int i = 0; i < PT; ++i)
         #pragma unroll
-        for (int d = 0; d < 6; ++d) acc[i][d] = 0ull;
+        for (int w = 0; w < W; ++w) acc[i][w] = 0ull;
     int cnt = 0;
-    for (int r = r_begin + tid; r < r_end; r += 256) {
-        u32 b[6];
+    for (int r = r_begin + lane; r < r_end; r += 32) {
+        u32 a[PT];
         #pragma unroll
-        for (int d = 0; d < 6; ++d) b[d] = Bp[(long long)d * ldb + r];
+        for (int i = 0; i < PT; ++i) a[i] = (p0 + i < Ptot) ? A[(long long)(p0 + i) * lda + r] : 0u;
         #pragma unroll
-        for (int i = 0; i < PT; ++i) {
-            const u64 a = (p0 + i < Ptot) ? A[(long long)(p0 + i) * lda + r] : 0u;
+        for (int w = 0; w < W; ++w) {
+            const u64 b = Bp[(long long)w * ldb + r];
             #pragma unroll
-            for (int d = 0; d < 6; ++d) acc[i][d] += a * b[d];
+            for (int i = 0; i < PT; ++i) acc[i][w] += (u64)a[i] * b;
         }
         if (++cnt == 4) {
             cnt = 0;
             #pragma unroll
             for (int i = 0; i < PT; ++i)
                 #pragma unroll
-                for (int d = 0; d < 6; ++d) acc[i][d] = fold(acc[i][d]);
+                for (int w = 0; w < W; ++w) acc[i][w] = fold(acc[i][w]);
         }
     }
-    __shared__ u64 red[8][PT * 6];
-    const int lane = tid & 31, warp = tid >> 5;
     #pragma unroll
     for (int i = 0; i < PT; ++i)
         #pragma unroll
-        for (int d = 0; d < 6; ++d) {
-            u64 v = acc[i][d] %% PL;
+        for (int w = 0; w < W; ++w) {
+            u64 v = acc[i][w] %% PL;
             #pragma unroll
             for (int o = 16; o > 0; o >>= 1) v += __shfl_down_sync(0xffffffffu, v, o);
-            if (lane == 0) red[warp][i * 6 + d] = v;
+            if (lane == 0 && p0 + i < Ptot) atomicAdd(&out[(long long)(p0 + i) * W + w], v %% PL);
         }
-    __syncthreads();
-    if (tid < PT * 6) {
-        u64 v = 0;
-        #pragma unroll
-        for (int w = 0; w < 8; ++w) v += red[w][tid];
-        const int i = tid / 6, d = tid - 6 * (tid / 6);
-        if (p0 + i < Ptot) atomicAdd(&out[(long long)(p0 + i) * 6 + d], v %% PL);
-    }
 }
+#define PLANES(W, PT) \
+extern "C" __global__ void __launch_bounds__(256) \
+contract_planes_w##W(const u32* __restrict__ A, long long lda, int Ptot, int R, int rchunk, \
+                     const u32* __restrict__ Bp, long long ldb, u64* __restrict__ out) \
+{ planes_body<W, PT>(A, lda, Ptot, R, rchunk, Bp, ldb, out); }
+PLANES(6, 8)
+PLANES(12, 4)
+PLANES(18, 2)
+PLANES(24, 2)
 
 /* ------------------------------------------------------------------ ext fold: y[k][r] = sum_c sum_{a+b} M[a C + c][r] rbar[c][b] */
 extern "C" __global__ void __launch_bounds__(256)
@@ -470,19 +471,42 @@ def contract_geom(A: torch.Tensor, etas: np.ndarray, out: torch.Tensor | None = 
     return out
 
 
+_PLANES_PT = {6: 8, 12: 4, 18: 2, 24: 2}
+
+
 def contract_planes(A: torch.Tensor, Bp: torch.Tensor, out: torch.Tensor | None = None) -> torch.Tensor:
-    """A (P, R) int32 device, Bp (6, R) int32 device (standard form) -> (P, 6) int64: sum_r A[p, r] Bp[d, r] (unreduced; % p)."""
+    """A (P, R) int32 device, Bp (W, R) int32 device (standard form), W in {6, 12, 18, 24} -> (P, W) int64:
+    sum_r A[p, r] Bp[w, r] (unreduced; % p)."""
     Pn, R = A.shape
-    assert A.stride(1) == 1 and Bp.stride(1) == 1 and Bp.shape == (D, R)
+    W = Bp.shape[0]
+    assert A.stride(1) == 1 and Bp.stride(1) == 1 and Bp.shape[1] == R and W in _PLANES_PT
+    pt = _PLANES_PT[W]
     if out is None:
-        out = torch.zeros((Pn, D), dtype=torch.int64, device=A.device)
-    ptiles = (Pn + 7) // 8
+        out = torch.zeros((Pn, W), dtype=torch.int64, device=A.device)
+    ptiles = (Pn + 8 * pt - 1) // (8 * pt)
     want = max(1, 1024 // ptiles)
-    rchunk = max(1024, ((R + want - 1) // want + 255) // 256 * 256)
-    grid = ((R + rchunk - 1) // rchunk, ptiles)
-    _launch("contract_planes", grid, (256,), (_ptr(A), np.int64(A.stride(0)), np.int32(Pn), np.int32(R), np.int32(rchunk),
-                                              _ptr(Bp), np.int64(Bp.stride(0)), _ptr(out)))
+    rchunk = max(512, ((R + want - 1) // want + 127) // 128 * 128)
+    grid = (ptiles, (R + rchunk - 1) // rchunk)
+    _launch("contract_planes_w%d" % W, grid, (256,), (_ptr(A), np.int64(A.stride(0)), np.int32(Pn), np.int32(R),
+                                                      np.int32(rchunk), _ptr(Bp), np.int64(Bp.stride(0)), _ptr(out)))
     return out
+
+
+def contract_eq(A: torch.Tensor, zs: np.ndarray) -> torch.Tensor:
+    """A (P, 2^k) int32 device, zs (m, k, 6) -> (m, P, 6) int64 (unreduced): sum_r A[p, r] eq(r, z_j) -- up to 4 eq tensors
+    per pass over A."""
+    Pn, R = A.shape
+    zs = np.asarray(zs, dtype=np.int64)
+    m = zs.shape[0]
+    outs = []
+    for a in range(0, m, 4):
+        mc = min(4, m - a)
+        B = torch.empty((D * mc, R), dtype=torch.int32, device=A.device)
+        for j in range(mc):
+            eq_table(zs[a + j], A.device, out=B[D * j:D * (j + 1)])
+        outs.append(contract_planes(A, B).view(Pn, mc, D).permute(1, 0, 2))
+        del B
+    return torch.cat(outs, dim=0)
 
 
 def fold_ext(M: torch.Tensor, rbar: np.ndarray) -> torch.Tensor:
@@ -495,19 +519,25 @@ def fold_ext(M: torch.Tensor, rbar: np.ndarray) -> torch.Tensor:
     return y
 
 
-def eq_table(z: np.ndarray, device) -> torch.Tensor:
-    """z (k, 6) -> (6, 2^k) int32 planes of eq(x, z), bit j of x <-> z_j (same values as ``linalg.eq_planes``)."""
+def eq_table(z: np.ndarray, device, out: torch.Tensor | None = None) -> torch.Tensor:
+    """z (k, 6) -> (6, 2^k) int32 planes of eq(x, z), bit j of x <-> z_j (same values as ``linalg.eq_planes``); ``out``: a
+    contiguous (6, 2^k) int32 destination."""
     from .claims import eq_vector
     z = np.asarray(z, dtype=np.int64) % P
     k = z.shape[0]
     if k <= 10:
-        vec = eq_vector(z)
-        return torch.as_tensor(np.ascontiguousarray(vec.T).astype(np.int32), device=device)
+        vec = torch.as_tensor(np.ascontiguousarray(eq_vector(z).T).astype(np.int32), device=device)
+        if out is None:
+            return vec
+        out.copy_(vec)
+        return out
     h = (k + 1) // 2
     lo = torch.as_tensor(eq_vector(z[:h]).astype(np.int32), device=device)          # (2^h, 6)
     hi = torch.as_tensor(eq_vector(z[h:]).astype(np.int32), device=device)          # (2^{k-h}, 6)
     n = 1 << k
-    out = torch.empty((D, n), dtype=torch.int32, device=device)
+    if out is None:
+        out = torch.empty((D, n), dtype=torch.int32, device=device)
+    assert out.shape == (D, n) and out.is_contiguous()
     _launch("eq_table", ((n + 255) // 256,), (256,), (_ptr(lo), np.int32(h), _ptr(hi), np.int64(n), _ptr(out)))
     return out
 

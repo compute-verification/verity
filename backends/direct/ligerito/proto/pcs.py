@@ -64,7 +64,7 @@ class Proof:
     opens: list[RoundOpen]                  # per committed round
     final_y: np.ndarray                     # (2^{k_L}, 6)
     coins: int = 0
-    order: str | None = None                # None = the fused order of ``prove``; "commit-first" = ``commit`` + ``prove_eval``
+    order: str | None = None                # None = the fused order of ``prove``; "commit-first" = ``commit`` + ``open``
 
     @property
     def dims(self) -> Dims:
@@ -394,10 +394,11 @@ def _commit_fast(U: torch.Tensor):
     return _commit(U)
 
 
-def _stream_group(dims: Dims, device) -> int:
-    """Round-1 streaming commit: 0 = materialise the codeword, else the column-group size.  ``LIGERITO_STREAM`` = auto (default:
-    stream iff the round-1 codeword + tree + round 2 would not fit the card), 1 (always), 0 (never)."""
-    mode = os.environ.get("LIGERITO_STREAM", "auto")
+def _stream_group(dims: Dims, device, force: bool | None = None) -> int:
+    """Round-1 streaming commit: 0 = materialise the codeword, else the column-group size.  ``force`` True / False, else
+    ``LIGERITO_STREAM`` = auto (default: stream iff the round-1 codeword + tree + round 2 would not fit the card), 1 (always),
+    0 (never)."""
+    mode = {True: "1", False: "0"}.get(force) or os.environ.get("LIGERITO_STREAM", "auto")
     C1, R1 = 1 << dims.kprime[0], 1 << dims.k[0]
     if mode == "0" or C1 % 16 or C1 > 256:
         return 0
@@ -451,15 +452,16 @@ COMMIT_FIRST = "commit-first"
 
 @dataclass
 class Commitment:
-    """``commit``'s output: ``root`` is the commitment (absorbed into ``coins``); the rest is prover state for ``prove_eval``
-    (the round-1 message view, its codeword -- None when streamed -- and Merkle tree).  Drop it after ``prove_eval``."""
+    """``commit``'s output.  ``root`` is the commitment: the caller absorbs it (label ``b"root"``) where its own transcript says.
+    The rest is prover state for ``open`` (the round-1 message view, its codeword -- None when streamed -- and Merkle tree).
+    Drop it after ``open``."""
     dims: Dims
     root: bytes
-    coins: Coins
     M1: torch.Tensor
     enc1: Encoder
     U1: torch.Tensor | None
     tree1: object
+    cache: tuple | None = None              # ``evaluate``'s (points bytes, round-1 contractions, values), reused by ``open``
 
 
 def _header(dims: Dims, order: str | None) -> bytes:
@@ -469,24 +471,27 @@ def _header(dims: Dims, order: str | None) -> bytes:
     return json.dumps(h).encode()
 
 
-def absorb_commitment(coins: Coins, dims: Dims, root: bytes) -> None:
-    """The commit-first transcript prefix (prover and verifier): header (with ``"order": "commit-first"``), root_1."""
+def absorb_statement(coins: Coins, dims: Dims, root: bytes, values: np.ndarray) -> None:
+    """The standalone commit-first prefix (``prove_commit_first``, and ``verify`` of a commit-first proof): header (with
+    ``"order": "commit-first"``), root_1, the claimed values (m ext).  Inside a relation, the relation's transcript binds root_1
+    and the values instead and this is not used."""
     coins.absorb(b"header", _header(dims, COMMIT_FIRST))
     coins.absorb(b"root", root)
+    coins.absorb(b"v", _ext_bytes(np.asarray(values).reshape(-1, D)))
 
 
 def _device_ok(f: torch.Tensor) -> bool:
     return f.device.type == "cuda" and dev.available(f) and ligero_merkle._gpu_merkle is not None
 
 
-def _commit_r1(f: torch.Tensor, dims: Dims, tm):
+def _commit_r1(f: torch.Tensor, dims: Dims, tm, stream_mode: bool | None = None):
     device = f.device
     assert f.numel() == 1 << dims.n and f.dtype == torch.int32
     dev.share_torch_allocator()
     R1, C1 = 1 << dims.k[0], 1 << dims.kprime[0]
     M1 = f.view(C1, R1)
     enc1 = Encoder(R1, device, dims.rates[0])
-    group = _stream_group(dims, device)
+    group = _stream_group(dims, device, stream_mode)
     if group:
         tm.start("commit_r1_stream")
         root1, tree1 = stream.commit_streamed(M1, enc1, group, _commit_gpu)
@@ -505,31 +510,69 @@ def _commit_r1(f: torch.Tensor, dims: Dims, tm):
     return M1, enc1, U1, tree1, root1
 
 
-def commit(f: torch.Tensor, dims: Dims, coins: Coins | None = None, timer: Timer | None = None) -> Commitment:
-    """Commit-first API (for a relation prover whose evaluation points depend on the commitment): encode + Merkle-commit f
-    ((N,) int32 CUDA tensor, [0, p)) and absorb the header + root into ``coins``.  Then run the relation's rounds on the same
-    coins, then ``prove_eval``."""
+def commit(f: torch.Tensor, dims: Dims, timer: Timer | None = None, stream: bool | None = None) -> Commitment:
+    """Commit-first API, step 1 (no transcript effect): encode + Merkle-commit f ((N,) int32 CUDA tensor, [0, p)).
+    ``stream``: None = auto (stream the round-1 codeword iff it would not fit the card), True = never keep the codeword (``open``
+    recomputes the |S_1| opened rows; frees 4 C_1 n_1 bytes while the caller's own rounds run), False = keep it."""
     if not _device_ok(f):
         raise RuntimeError("pcs.commit needs the CUDA device path (cupy + hash_gpu)")
-    tm = timer or _NullTimer()
-    tr = coins if coins is not None else FiatShamirCoins()
-    M1, enc1, U1, tree1, root1 = _commit_r1(f, dims, tm)
-    absorb_commitment(tr, dims, root1)
-    return Commitment(dims, root1, tr, M1, enc1, U1, tree1)
+    M1, enc1, U1, tree1, root1 = _commit_r1(f, dims, timer or _NullTimer(), stream)
+    return Commitment(dims, root1, M1, enc1, U1, tree1)
 
 
-def prove_eval(com: Commitment, z: np.ndarray, coins: Coins | None = None, timer: Timer | None = None) -> Proof:
-    """Evaluation proof for the committed f at m points: ``z`` (n, 6) or (m, n, 6).  Transcript (continuing ``commit``'s):
-    absorb z (m n ext), absorb v (m ext), [m > 1: beta <- challenge(m); the round-1 claim is sum_j beta_j v_j], then the
-    rounds exactly as ``prove``.  ``proof.v`` is (m, 6)."""
-    zs = np.asarray(z, dtype=np.int64) % P
+def _points(dims: Dims, points: np.ndarray) -> np.ndarray:
+    zs = np.asarray(points, dtype=np.int64) % P
     if zs.ndim == 2:
         zs = zs[None]
-    assert zs.shape[1:] == (com.dims.n, D)
-    tr = coins if coins is not None else com.coins
+    assert zs.ndim == 3 and zs.shape[0] >= 1 and zs.shape[1:] == (dims.n, D), zs.shape
+    return zs
+
+
+def _claims_r1(M1: torch.Tensor, zs: np.ndarray, dims: Dims, tm):
+    """Round 1's contractions u_j = M1 . eq(z_j[:k_1]) ((C_1, 6) each) and the values v_j = f~(z_j)."""
+    tm.start("sumcheck_r1_contract")
+    us = list((dev.contract_eq(M1, zs[:, :dims.k[0]]) % P).cpu().numpy())
+    tm.stop()
+    tm.start("sumcheck_host")
+    vs = np.stack([cl.ColumnSumcheckProver([cl.Term(ext.one(), "eq", z=zj, nvars=dims.n)], [uj], dims.k[0], dims.kprime[0]).claim()
+                   for zj, uj in zip(zs, us)], axis=0)                     # (m, 6)
+    tm.stop()
+    return us, vs
+
+
+def evaluate(com: Commitment, points: np.ndarray, timer: Timer | None = None) -> np.ndarray:
+    """f~(z_j) of the committed f at points (m, n, 6) or (n, 6) -> (m, 6).  Caches the round-1 contractions for ``open`` at the
+    same points."""
+    zs = _points(com.dims, points)
+    us, vs = _claims_r1(com.M1, zs, com.dims, timer or _NullTimer())
+    com.cache = (zs.tobytes(), us, vs)
+    return vs
+
+
+def open(com: Commitment, points: np.ndarray, values: np.ndarray | None, coins: Coins,  # noqa: A001 -- the relation's name
+         timer: Timer | None = None) -> Proof:
+    """Commit-first API, step 2: ONE evaluation proof of f~(points[j]) = values[j] for all j (points (m, n, 6) or (n, 6), PCS
+    variable order).  ``coins`` already holds root_1 and whatever fixed the points and values (the caller's transcript).
+    Transcript: absorb z (m n ext); beta <- challenge(b"beta", m) (always, also m = 1); round 1's claim is sum_j beta_j v_j; then
+    the rounds exactly as ``prove``.  This is lane ligerito-relation's ``pcs_open`` transcript (prove.py @ 3592bd0).  ``values``
+    (m, 6) are asserted against the prover's own (None: not checked).  ``proof.v`` = the values (m, 6)."""
+    zs = _points(com.dims, points)
     tm = timer or _NullTimer()
-    tr.absorb(b"z", _z_bytes(zs))
-    return _prove_rounds(com.M1, com.enc1, com.U1, com.tree1, com.root, com.dims, zs, tr, tm, COMMIT_FIRST)
+    coins.absorb(b"z", _z_bytes(zs))
+    pre = com.cache[1:] if com.cache is not None and com.cache[0] == zs.tobytes() else None
+    com.cache = None
+    return _prove_rounds(com.M1, com.enc1, com.U1, com.tree1, com.root, com.dims, zs, coins, tm, COMMIT_FIRST, pre, values)
+
+
+def prove_commit_first(f: torch.Tensor, points: np.ndarray, dims: Dims, coins: Coins | None = None,
+                       timer: Timer | None = None, stream: bool | None = None) -> Proof:
+    """A standalone commit-first proof (tests, bench): ``commit``, ``evaluate``, ``absorb_statement`` (header, root_1, v), ``open``.
+    Verify with ``verify(proof, points)``."""
+    tr = coins if coins is not None else FiatShamirCoins()
+    com = commit(f, dims, timer, stream)
+    vs = evaluate(com, points, timer)
+    absorb_statement(tr, dims, com.root, vs)
+    return open(com, points, vs, tr, timer)
 
 
 def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None) -> Proof:
@@ -552,7 +595,8 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     return _prove_rounds(M1, enc1, U1, tree1, root1, dims, z[None], tr, tm, None)
 
 
-def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Coins, tm, order: str | None) -> Proof:
+def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Coins, tm, order: str | None,
+                  pre=None, values=None) -> Proof:
     """Everything after root_1: the claims, round 1's column sumcheck, rounds 2..L, the final vector."""
     device = M1.device
     n = dims.n
@@ -565,14 +609,15 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
     opens: list[RoundOpen] = []
 
     # ---------------- round 1: evaluation claims and the column sumcheck (m eq terms, host tables)
-    tm.start("sumcheck_r1_contract")
-    us = [(dev.contract_planes(M1, dev.eq_table(zj[:ks[0]], device)) % P).cpu().numpy() for zj in zs]   # m x (C1, 6)
-    tm.stop()
+    us, vs = pre if pre is not None else _claims_r1(M1, zs, dims, tm)
     tm.start("sumcheck_host")
-    vs = np.stack([cl.ColumnSumcheckProver([cl.Term(ext.one(), "eq", z=zj, nvars=n)], [uj], ks[0], kps[0]).claim()
-                   for zj, uj in zip(zs, us)], axis=0)                     # (m, 6)
-    tr.absorb(b"v", _ext_bytes(vs))
-    beta = tr.challenge(b"beta", m) if m > 1 else ext.one()[None]
+    if order == COMMIT_FIRST:
+        if values is not None:
+            assert np.array_equal(np.asarray(values, dtype=np.int64).reshape(m, D) % P, vs), "claimed values differ from f~(z)"
+        beta = tr.challenge(b"beta", m)
+    else:
+        tr.absorb(b"v", _ext_bytes(vs))
+        beta = ext.one()[None]
     terms0 = [cl.Term(beta[j], "eq", z=zs[j], nvars=n) for j in range(m)]
     sc = cl.ColumnSumcheckProver(terms0, us, ks[0], kps[0])
     msgs = []
@@ -649,7 +694,7 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
         tm.stop()
         tm.start("recursion_contract")
         ug = dev.contract_geom(Mflat, etas_g)                            # (6C, Tg)
-        ue = torch.stack([dev.contract_planes(Mflat, dev.eq_table(zj[:ks[i]], device)) for zj in z_eq], dim=0)   # (m, 6C, 6)
+        ue = dev.contract_eq(Mflat, z_eq[:, :ks[i]])                       # (m, 6C, 6)
         dsc = dev.DeviceSumcheck(ug, ue, coef, colg, cole, C, device)
         del ug, ue
         tm.stop()
@@ -724,23 +769,25 @@ def verify(proof: Proof, z: np.ndarray, v: np.ndarray | None = None, coins: Coin
     prover's (default Fiat-Shamir)."""
     try:
         tr = coins if coins is not None else FiatShamirCoins()
+        vv = proof.v if v is None else np.asarray(v, dtype=np.int64) % P
         if proof.order == COMMIT_FIRST:
             if len(proof.roots) == 0:
                 raise Reject("bad proof shape")
-            absorb_commitment(tr, proof.dims, proof.roots[0])
-        _verify(proof, np.asarray(z, dtype=np.int64) % P, proof.v if v is None else np.asarray(v, dtype=np.int64) % P, tr)
+            absorb_statement(tr, proof.dims, proof.roots[0], vv)
+        _verify(proof, np.asarray(z, dtype=np.int64) % P, vv, tr)
     except Reject as e:
         return False, str(e)
     return True, "accept"
 
 
-def verify_eval(proof: Proof, z: np.ndarray, v: np.ndarray | None = None, coins: Coins | None = None) -> tuple[bool, str]:
-    """Commit-first proofs inside a larger transcript: ``coins`` already holds ``absorb_commitment(coins, dims, root)`` and
-    whatever the relation absorbed/drew after it; ``z`` (m, n, 6) or (n, 6); ``v`` (m, 6) (default: the proof's)."""
+def verify_open(proof: Proof, points: np.ndarray, values: np.ndarray | None, coins: Coins) -> tuple[bool, str]:
+    """``open``'s proofs inside a relation: ``coins`` holds root_1 and the relation's transcript so far (as ``open`` saw it);
+    points (m, n, 6) or (n, 6); values (m, 6) (None: the proof's).  lane ligerito-relation's ``pcs_verify`` transcript."""
     try:
         if proof.order != COMMIT_FIRST:
             raise Reject("not a commit-first proof")
-        _verify(proof, np.asarray(z, dtype=np.int64) % P, proof.v if v is None else np.asarray(v, dtype=np.int64) % P, coins)
+        _verify(proof, np.asarray(points, dtype=np.int64) % P,
+                proof.v if values is None else np.asarray(values, dtype=np.int64) % P, coins)
     except Reject as e:
         return False, str(e)
     return True, "accept"
@@ -777,17 +824,20 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, tr: Coins) -> None:
     maps = [_Map(1 << ks[i], pf.splits[i], dims.rates[i]) for i in range(L)]
     if tr is None:
         tr = FiatShamirCoins()
-    if cf:                                          # header + root_1 were absorbed by absorb_commitment
-        tr.absorb(b"z", _z_bytes(zs))
-    else:
+    if not cf:
         tr.absorb(b"header", _header(dims, None))
         tr.absorb(b"z", _z_bytes(zs[0]))
         tr.absorb(b"root", pf.roots[0])
+    else:                                           # root_1 (and the values) are already in the caller's transcript
+        tr.absorb(b"z", _z_bytes(zs))
     # round 1
     if np.asarray(pf.v).reshape(-1, D).shape != (m, D) or not np.array_equal(np.asarray(pf.v).reshape(-1, D) % P, vs):
         raise Reject("claimed evaluation differs from the proof's")
-    tr.absorb(b"v", _ext_bytes(vs))
-    beta = tr.challenge(b"beta", m) if m > 1 else ext.one()[None]
+    if cf:
+        beta = tr.challenge(b"beta", m)
+    else:
+        tr.absorb(b"v", _ext_bytes(vs))
+        beta = ext.one()[None]
     terms0 = [cl.Term(beta[j], "eq", z=zs[j], nvars=n) for j in range(m)]
     claim = ext.sum_ext(ext.mul(beta, vs), axis=0)
     rs = []
