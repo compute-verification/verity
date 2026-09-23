@@ -1,9 +1,11 @@
 """red-team-ligerito-3: statement-tamper must-reject fixtures for LGTO0001 dumps (no prover needed).
 
 From a gate dump's ``honest_local.{lgto,stmt}`` + ``key.bin``, write copies of the honest proof next to LGTS0001
-statements edited in one field each: a non-end claimed word (forced 0 by the end constraint), an out-of-range claimed word,
-the first pad unit's operand a / b words and claimed word, the first end word +1, one real operand word.  Every entry must be
-rejected (the proof binds the statement through the relation's public rows even under local coins).  The output directory
+statements edited in one field each: a non-end claimed word, an out-of-range claimed word, the first pad unit's operand
+a / b words and claimed word, the first end word +1, one real operand word.  Every entry must be rejected: the public rows
+enter ``z(r_i, r_c)`` directly, so an honest proof never survives a statement edit, even under local coins.  This does NOT
+show the edited field is constrained: the end constraint is masked off the chain ends, so a proof MADE for a statement with a
+nonzero off-end word verifies unless the statement check rejects it (relation-2 0db857a9 added that check).  The output directory
 is a ``ligerito-verify batch --dir`` dump (``manifest.json`` files with ``expect: reject``; no Python verdicts: the laptop has
 no torch).  Run: ``python -m backends.direct.ligerito.redteam_stmt_tamper DUMP OUT [--bin ligerito-verify]``."""
 from __future__ import annotations
@@ -44,7 +46,7 @@ def tampers(raw: bytes, st: dict) -> list:
     ends = [v * steps + steps - 1 for v in range(nv)]
     rd = lambda off, w: int.from_bytes(raw[off:off + w], "little")
     nonend = next(j for j in range(l) if j not in ends)
-    out = [("y_nonend_1", "claimed word 1 at a non-end column (end constraint forces 0)", [(sub["y"] + nonend * yb, yb, 1)]),
+    out = [("y_nonend_1", "claimed word 1 at a non-end column (honest proof made for 0 there)", [(sub["y"] + nonend * yb, yb, 1)]),
            ("y_out_of_range", "claimed word 2^(8 y_bytes) - 1 at a non-end column", [(sub["y"] + nonend * yb, yb, (1 << (8 * yb)) - 1)]),
            ("y_end_plus1", "first end column's claimed word + 1", [(sub["y"] + ends[0] * yb, yb, (rd(sub["y"] + ends[0] * yb, yb) + 1) % (1 << (8 * yb)))]),
            ("a_real_plus1", "operand a word of unit 0, operand 0, + 1", [(sub["a"], wb, (rd(sub["a"], wb) + 1) % (1 << (8 * wb)))])]
