@@ -1,16 +1,17 @@
 //! ligerito-verify: the independent verifier for the Ligerito backend.
 //!
 //! ~~~text
-//! ligerito-verify verify --proof X.proof [--coins X.coins] [--label L] [--json out.json] [--reps R]
+//! ligerito-verify verify --proof X.proof [--coins X.coins] [--label L] [--json out.json] [--reps R] [--target-bits B]
 //!     # one PCS proof: LGRTOPV0 (statement embedded) or proto/pcs.py bytes (point in X.z); --coins = the
 //!     # verifier's coins of a live session (u32 LE length + bytes each; interactive replay; default: Fiat-Shamir
-//!     # diagnostic with transcript label L, default "ligerito-proto/v1")
+//!     # diagnostic with transcript label L, default "ligerito-proto/v1").  The proof's own soundness figure (paper
+//!     # (17) recomputed from its parameters) must be <= 2^-B, default B = 128; --target-bits 0 waives it (toys)
 //! ligerito-verify batch --dir DIR [--jobs N] [--json out.json] [--label L] [--target-bits B]
 //!     # every DIR/*.proof (with DIR/<name>.z / <name>.coins when present) must verify and every DIR/*.proof.neg must
 //!     # be rejected; every entry of DIR/*.ref.json (ref.py fixtures; tampers in DIR/<name>.ref.neg.json) must get
 //!     # ref.py's verdict; with DIR/manifest.json (a list, or {"proofs": [...]}, of {"proof": name, "accepted": bool,
-//!     # "reason": str}) every listed verdict must agree with ours; with --target-bits the union of the proofs' own
-//!     # soundness bounds must be <= 2^-B.  Exit 0 iff accepted.
+//!     # "reason": str}) every listed verdict must agree with ours; the union of the accepted proofs' own soundness
+//!     # bounds must be <= 2^-B (default 128; --target-bits 0 waives it).  Exit 0 iff accepted.
 //! ligerito-verify ref-fixtures --file F.json [--neg N.json] [--json out.json] [--reps R]
 //!     # ligerito-design's ref.py fixtures (`python -m backends.direct.ligerito.ref`): every statement + proof must get
 //!     # ref.py's verdict; --neg = declarative tampers (fixtures/ref/negatives.json) replayed on them, same rule
@@ -244,11 +245,20 @@ fn main() {
     let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("");
     let label = arg(&args, "--label").unwrap_or_else(|| String::from_utf8_lossy(FiatShamir::LABEL).to_string());
     let reps: usize = arg(&args, "--reps").map(|s| s.parse().expect("--reps")).unwrap_or(1);
+    // soundness target enforced by `verify` (per proof) and `batch` (union bound); 0 waives it (toy fixtures, conformance runs)
+    let target_bits: f64 = arg(&args, "--target-bits").map(|s| s.parse().expect("--target-bits")).unwrap_or(128.0);
     match cmd {
         "verify" => {
             let proof = PathBuf::from(arg(&args, "--proof").expect("--proof FILE"));
             let coins = arg(&args, "--coins").map(PathBuf::from);
-            let v = verify_file(&proof, coins.as_deref(), label.as_bytes(), reps);
+            let mut v = verify_file(&proof, coins.as_deref(), label.as_bytes(), reps);
+            // the proof's own soundness figure (recomputed from its parameters, never prover-supplied) must meet the target
+            if let (true, Some(r)) = (v.accepted, v.report.as_ref()) {
+                if target_bits > 0.0 && r.soundness_log2 > -target_bits {
+                    v.accepted = false;
+                    v.reason = format!("verifies, but its soundness 2^{:.2} misses the target 2^-{target_bits} (--target-bits 0 to waive)", r.soundness_log2);
+                }
+            }
             let js = verdict_json(&v);
             println!("{js}");
             write_json(arg(&args, "--json"), &js);
@@ -259,7 +269,6 @@ fn main() {
             let jobs: usize = arg(&args, "--jobs")
                 .map(|s| s.parse().expect("--jobs"))
                 .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1));
-            let target_bits: Option<f64> = arg(&args, "--target-bits").map(|s| s.parse().expect("--target-bits"));
             // *.proof must verify; *.proof.neg must be rejected
             let mut files: Vec<(PathBuf, bool)> = std::fs::read_dir(&dir)
                 .unwrap_or_else(|e| panic!("--dir {}: {e}", dir.display()))
@@ -337,10 +346,8 @@ fn main() {
                 let s: f64 = verdicts.iter().filter(|v| v.accepted).filter_map(|v| v.report.as_ref()).map(|r| r.soundness_log2.exp2()).sum();
                 if s > 0.0 { s.log2() } else { f64::NEG_INFINITY }
             };
-            if let Some(b) = target_bits {
-                if union_log2 > -b {
-                    problems.push(format!("union soundness 2^{union_log2:.2} exceeds the target 2^-{b}"));
-                }
+            if target_bits > 0.0 && union_log2 > -target_bits {
+                problems.push(format!("union soundness 2^{union_log2:.2} misses the target 2^-{target_bits} (--target-bits 0 to waive)"));
             }
             let all = problems.is_empty();
             let js = format!(
