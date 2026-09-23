@@ -2,7 +2,9 @@
 
 From a gate dump's ``honest_local.{lgto,stmt}`` + ``key.bin``, write copies of the honest proof next to LGTS0001
 statements edited in one field each: a non-end claimed word, an out-of-range claimed word, the first pad unit's operand
-a / b words and claimed word, the first end word +1, one real operand word.  Every entry must be rejected: the public rows
+a / b words and claimed word, the first end word +1, one real operand word, the same words re-encoded at twice the
+relation's word_bytes (Python verify does not compare word_bytes / y_bytes with the relation; Rust does, lgto.rs "statement
+shape").  Every entry must be rejected: the public rows
 enter ``z(r_i, r_c)`` directly, so an honest proof never survives a statement edit, even under local coins.  This does NOT
 show the edited field is constrained: the end constraint is masked off the chain ends, so a proof MADE for a statement with a
 nonzero off-end word verifies unless the statement check rejects it (relation-2 0db857a9 added that check).  The output directory
@@ -55,7 +57,29 @@ def tampers(raw: bytes, st: dict) -> list:
         out += [("pad_a", f"first pad unit {pad0}: operand a[0] = 1", [(sub["a"] + pad0 * K * wb, wb, 1)]),
                 ("pad_b", f"first pad unit {pad0}: operand b[1] = 1", [(sub["b"] + (pad0 * K + 1) * wb, wb, 1)]),
                 ("pad_y", f"first pad unit {pad0}: claimed word 7", [(sub["y"] + pad0 * yb, yb, 7)])]
-    return out
+    res = []
+    for name, what, edits in out:
+        b = bytearray(raw)
+        for off, w, val in edits:
+            b[off:off + w] = val.to_bytes(w, "little")
+        res.append((name, what, bytes(b)))
+    if wb < 4:
+        res.append(("words_widened", f"same words re-encoded at word_bytes {2 * wb} (the relation's is {wb})",
+                    widen(raw, st, 2 * wb, yb)))
+    return res
+
+
+def widen(raw: bytes, st: dict, wb2: int, yb2: int) -> bytes:
+    """The same statement (every word unchanged) with word_bytes / y_bytes = wb2 / yb2."""
+    l, K, wb, yb = st["l"], st["K"], st["wb"], st["yb"]
+    head = st["subs"][0]["a"] - 2
+    out = bytearray(raw[:head]) + bytes([wb2, yb2])
+    word = lambda off, w: int.from_bytes(raw[off:off + w], "little")
+    for sub in st["subs"]:
+        for side, n, w, w2 in (("a", l * K, wb, wb2), ("b", l * K, wb, wb2), ("y", l, yb, yb2)):
+            for i in range(n):
+                out += word(sub[side] + i * w, w).to_bytes(w2, "little")
+    return bytes(out)
 
 
 def main() -> int:
@@ -72,10 +96,7 @@ def main() -> int:
     os.makedirs(a.out, exist_ok=True)
     shutil.copy(os.path.join(a.dump, "key.bin"), os.path.join(a.out, "key.bin"))
     files, bad = [], 0
-    for name, what, edits in tampers(raw, st):
-        b = bytearray(raw)
-        for off, w, val in edits:
-            b[off:off + w] = val.to_bytes(w, "little")
+    for name, what, b in tampers(raw, st):
         stem = f"tamper_{name}"
         open(os.path.join(a.out, f"{stem}.stmt"), "wb").write(b)
         open(os.path.join(a.out, f"{stem}.lgto.neg"), "wb").write(proof)
