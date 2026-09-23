@@ -119,26 +119,35 @@ def AllGather2(B, S, parts):
 # ---------------------------------------------------------------------------------------------------------
 # [lane vllm-tp-n] world-parametric collectives.  IDENTITY RULE: a Definition's identity is `Name_vN{statics}` (defs.SpecializedDefinition.id),
 # so the family NAME is part of every recorded Program's digest.  `AllReduce2_v1{N}` / `AllGather2_v1{N}` therefore stay the identities of
-# every world-2 collective (the frozen #70 / #75 rank Programs name them); `AllReduce_v1{WORLD,N}` / `AllGather_v1{WORLD,N}` are the
+# every world-2 collective (the frozen #70 / #75 rank Programs name them); `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}` are the
 # identities for WORLD > 2 only.  `all_reduce(world)` / `all_gather(world)` are the ONE place a caller picks the family: world 2 -> the
 # `*2` composites (bit-identical body: one Bf16Add per element), world > 2 -> the parametric ones.  Nothing in the two-rank path changes.
 # ---------------------------------------------------------------------------------------------------------
 
 
-@composite("AllReduce", 1, ["WORLD", "N"], lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))),), Array(S.N, BF16)),
-           conformance="model-untested (WORLD>2): NCCL reduces in the datatype, one bf16 rounding per hop; the hop ORDER is NCCL's "
-                       "algorithm/topology (ring: per-chunk start rank; tree: leaves->root), not recorded in the capture -- this body STATES "
-                       "the sequential rank order 0->WORLD-1 and the Match value leg (tp.match provenance) checks it bit-exactly against the "
-                       "received bytes; a mismatch is a named finding, never relabelled.  WORLD=2 is AllReduce2_v1 (exact-model-tested).")
+def allreduce_order(world: int) -> tuple[int, ...]:
+    """The hop order of the WORLD-rank all-reduce, `(WORLD-1, .., 1, 0)`: vLLM's batch-invariant mode pins `NCCL_ALGO=allreduce:tree`
+    `NCCL_PROTO=Simple`, and NCCL's tree inside one node is a chain rooted at rank 0 that the reduce climbs from the leaf -- `acc =
+    parts[WORLD-1]; acc = Bf16Add(acc, parts[r])` for r = WORLD-2..0.  The ONE statement of the order: the Definition body, the traced
+    op, the Match value leg and the Commit's cross-rank pass all read it here."""
+    return tuple(range(int(world) - 1, -1, -1))
+
+
+@composite("AllReduce", 2, ["WORLD", "N"], lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))),), Array(S.N, BF16)),
+           conformance="exact-model-tested WORLD=4 (4x L40S, SYS topology, NCCL_P2P_DISABLE=1, batch-invariant NCCL tree/Simple): 1056 of "
+                       "1056 received all-reduces of a llama32-1b TP4 B8 capture equal this chain bit-exactly (32 of 1056 the ascending chain "
+                       "of AllReduce_v1).  The chain is NCCL's intra-node tree in its topology order; the Match value leg (tp.match "
+                       "provenance) checks every collective, so another topology's order is a named mismatch.  WORLD=2 is AllReduce2_v1.")
 def AllReduce(B, S, parts):
-    """`ncclAllReduce(ncclSum, ncclBfloat16)` over WORLD ranks' bf16 vectors: `acc = parts[0]; acc = Bf16Add(acc, parts[r])` for r = 1..WORLD-1
-    (one RNE rounding per addition, as NCCL's `FuncSum<__nv_bfloat16>`), the accumulation order being the sequential rank order.  For
-    WORLD = 2 this is one commutative addition per element -- the body of `AllReduce2` (kept as the world-2 identity)."""
+    """`ncclAllReduce(ncclSum, ncclBfloat16)` over WORLD ranks' bf16 vectors in `allreduce_order(WORLD)`: one RNE rounding per addition, as
+    NCCL's `FuncSum<__nv_bfloat16>`.  For WORLD = 2 this is one commutative addition per element -- the body of `AllReduce2` (kept as
+    the world-2 identity)."""
     W = int(S.WORLD)
     if W < 2:
         raise ValueError(f"AllReduce{{WORLD={W}}}: an all-reduce needs at least two ranks")
-    acc = parts[0]
-    for r in range(1, W):
+    order = allreduce_order(W)
+    acc = parts[order[0]]
+    for r in order[1:]:
         acc = B.batch(P.Bf16Add, acc, parts[r], axes=(0, 0))
     return acc
 
@@ -153,7 +162,7 @@ def AllGather(B, S, parts):
 
 def all_reduce(world: int, N: int):
     """The all-reduce Definition bound for a `world`-rank communicator: `AllReduce2_v1{N}` at world 2 (the recorded identity), else
-    `AllReduce_v1{WORLD,N}`.  Both take ONE `parts` operand `Array<world, Array<N, bf16>>` in rank order."""
+    `AllReduce_v2{WORLD,N}`.  Both take ONE `parts` operand `Array<world, Array<N, bf16>>` in rank order."""
     world = int(world)
     if world < 2:
         raise ValueError(f"all_reduce(world={world}): an all-reduce needs at least two ranks")
@@ -385,7 +394,7 @@ TP_N_COMPOSITES = [AllReduce, AllGather]
 
 
 def collective_kind(family_or_id: str) -> str | None:
-    """[lane vllm-tp-n] `"all_reduce"` / `"all_gather"` for a collective Definition family or id of ANY world (`AllReduce2_v1`, `AllReduce_v1{WORLD,N}`,
+    """[lane vllm-tp-n] `"all_reduce"` / `"all_gather"` for a collective Definition family or id of ANY world (`AllReduce2_v1`, `AllReduce_v2{WORLD,N}`,
     `AllGather2_v1`, `AllGather_v1{WORLD,N}`), else None -- from the registry's composites, so a consumer never spells a family prefix."""
     fam = str(family_or_id or "").split("{", 1)[0]
     return _COLLECTIVE_KIND.get(fam)

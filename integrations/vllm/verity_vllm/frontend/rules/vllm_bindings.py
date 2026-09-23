@@ -1749,14 +1749,14 @@ def _tp_parts(node) -> list:
 
 
 class AllReduceRule(OpRule):
-    """[lane vllm-tp-n] `verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_reduce{WORLD=W, N}` (`AllReduce_v1{WORLD,N}`:
-    the sequential rank-order chain of one-rounding bf16 additions) per row, for a world of W > 2 ranks (world 2 is `AllReduce2Rule`,
+    """[lane vllm-tp-n] `verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_reduce{WORLD=W, N}` (`AllReduce_v2{WORLD,N}`:
+    the chain of one-rounding bf16 additions in `b1_tp2.allreduce_order`) per row, for a world of W > 2 ranks (world 2 is `AllReduce2Rule`,
     the recorded identity).  Exactly one operand is this rank's own partial; the other W-1 are PEER INPUTS bound by `tp_links.json` to
     the other ranks' committed partials."""
     modes = frozenset({"profile"})
     info = RuleInfo("AllReduce[tp]", 1, "op-binding", applies_to="verity_tp::all_reduce([a_0 .. a_{W-1}] each [.., N] bf16) (rank order), W > 2",
                     preconditions=("every operand is a bf16 value collection of identical shape", "world size > 2"),
-                    evidence_domain="structural; numerics: AllReduce_v1{WORLD,N} states the sequential rank-order bf16 chain; the Match value leg checks it")
+                    evidence_domain="structural; numerics: AllReduce_v2{WORLD,N} states NCCL's intra-node tree chain (b1_tp2.allreduce_order); the Match value leg checks it")
 
     def targets(self):
         return _tp_op("all_reduce")

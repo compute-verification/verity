@@ -45,7 +45,7 @@ def test_world_2_selectors_keep_the_recorded_identities():
     """The family NAME is part of a Definition's identity (`Name_vN{statics}`), so world 2 MUST still bind the `*2` composites."""
     assert TP2.all_reduce(2, 2048).id == "AllReduce2_v1{N=2048}" == bind(TP2.AllReduce2, N=2048).id
     assert TP2.all_gather(2, 512).id == "AllGather2_v1{N=512}" == bind(TP2.AllGather2, N=512).id
-    assert TP2.all_reduce(3, 2048).id == "AllReduce_v1{WORLD=3,N=2048}"
+    assert TP2.all_reduce(3, 2048).id == "AllReduce_v2{WORLD=3,N=2048}"
     assert TP2.all_gather(4, 512).id == "AllGather_v1{WORLD=4,N=512}"
     for bad in (0, 1):
         with pytest.raises(ValueError):
@@ -54,27 +54,31 @@ def test_world_2_selectors_keep_the_recorded_identities():
             TP2.all_gather(bad, 8)
 
 
-@pytest.mark.parametrize("W,N", [(3, 16), (4, 5), (3, 1)])
-def test_allreduce_world_n_is_the_sequential_rank_order_bf16_chain(W, N):
+def _chain(parts: list[list[int]], order) -> list[int]:
+    acc = list(parts[order[0]])
+    for r in order[1:]:
+        acc = [P.Bf16Add.evaluate(a, b) for a, b in zip(acc, parts[r])]
+    return acc
+
+
+def test_allreduce_order_is_the_leaf_to_root_tree_chain():
+    assert TP2.allreduce_order(2) == (1, 0)
+    assert TP2.allreduce_order(4) == (3, 2, 1, 0)
+
+
+@pytest.mark.parametrize("W,N", [(3, 16), (4, 5), (3, 1), (4, 256)])
+def test_allreduce_world_n_is_the_descending_rank_bf16_chain(W, N):
     sp = TP2.all_reduce(W, N)
     params, ret = sp.signature()
     assert [n for n, _ in params] == ["parts"] and params[0][1].leaves == W * N and ret.leaves == N
     rng = np.random.default_rng(20260923 + W * 100 + N)
     parts = [_rand_words(rng, N) for _ in range(W)]
     out = _eval(Program(sp), [sum(parts, [])])
-    # the stated order: acc = parts[0]; acc = Bf16Add(acc, parts[r]) for r = 1..W-1, one RNE rounding per hop
-    exp = list(parts[0])
-    for r in range(1, W):
-        exp = [P.Bf16Add.evaluate(a, b) for a, b in zip(exp, parts[r])]
-    assert out == exp
-    # a different hop order is a DIFFERENT value in general (per-hop rounding) -- the Definition states one order; the Match checks it
-    if W >= 3:
-        alt = list(parts[W - 1])
-        for r in range(W - 2, -1, -1):
-            alt = [P.Bf16Add.evaluate(a, b) for a, b in zip(alt, parts[r])]
-        # (equality here would be a coincidence of the draw; we only assert the chain is well-defined and reproducible)
-        assert _eval(Program(sp), [sum(parts, [])]) == out
-        assert len(alt) == N
+    # acc = parts[W-1]; acc = Bf16Add(acc, parts[r]) for r = W-2..0, one RNE rounding per hop
+    assert out == _chain(parts, range(W - 1, -1, -1))
+    if N >= 256:
+        # per-hop rounding makes the order observable: the ascending chain (AllReduce_v1's) differs on this draw
+        assert out != _chain(parts, range(W))
 
 
 def test_allreduce_world_2_parametric_body_equals_allreduce2_bitwise():
@@ -98,15 +102,15 @@ def test_allgather_world_n_is_the_rank_order_concatenation(W, N):
 
 def test_registry_derived_family_selectors():
     """Consumers (required_manifest, required_values, sampled_replay, tp/worker, tp/commit) ask the registry, never a spelled prefix."""
-    assert TP2.collective_kind("AllReduce2_v1{N=8}") == "all_reduce" == TP2.collective_kind("AllReduce_v1{WORLD=3,N=8}")
+    assert TP2.collective_kind("AllReduce2_v1{N=8}") == "all_reduce" == TP2.collective_kind("AllReduce_v2{WORLD=3,N=8}")
     assert TP2.collective_kind("AllGather2_v1") == "all_gather" == TP2.collective_kind("AllGather_v1{WORLD=4,N=8}")
     assert TP2.collective_kind("Gemm_v1{K=1,N=2}") is None and TP2.collective_kind("") is None
     assert TP2.cross_rank_families(2) == {"AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"}
-    assert TP2.cross_rank_families(3) == {"AllReduce_v1", "AllGather_v1", "EmbeddingShard_v1"}
+    assert TP2.cross_rank_families(3) == {"AllReduce_v2", "AllGather_v1", "EmbeddingShard_v1"}
     from verity_capture.commit import required_manifest as RM
     from verity_capture.commit import xrank_collectives as XC
     assert RM.collective_kind("AllGather_v1{WORLD=3,N=8}") == "all_gather"
-    assert XC.collective_family("all_reduce", 2) == "AllReduce2_v1" and XC.collective_family("all_reduce", 3) == "AllReduce_v1"
+    assert XC.collective_family("all_reduce", 2) == "AllReduce2_v1" and XC.collective_family("all_reduce", 3) == "AllReduce_v2"
     assert XC.collective_family("all_gather", 4) == "AllGather_v1"
 
 

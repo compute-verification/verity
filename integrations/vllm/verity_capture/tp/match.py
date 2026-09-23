@@ -201,11 +201,15 @@ def _check_main(args) -> int:
         if len(prov["digest_mismatches"]) < 20:
             prov["digest_mismatches"].append({"rank": rank, "step": s, "k": k, "tensor": what, "why": why})
 
-    # [lane vllm-tp-n] world > 2: the Definition states the SEQUENTIAL rank-order chain of one-rounding bf16 adds (AllReduce_v1{WORLD,N});
-    # NCCL's ring/tree order is not recorded, so a mismatch is a named finding.  Diagnostics travel with it: how many received values
-    # equal the f32-accumulate-then-round-once alternative (`alt_f32_once_equal`) -- never a relabel, a fact for the finding.
-    prov["definition_order"] = "world 2: bf16(f32(part0) + f32(part1)); world > 2: acc = part0; acc = bf16(f32(acc) + f32(part_r)) for r = 1..world-1"
+    # [lane vllm-tp-n] world > 2: the Definition's chain of one-rounding bf16 adds in `allreduce_order(world)` (AllReduce_v2{WORLD,N});
+    # a mismatch is a named finding.  Diagnostics travel with it: how many received values equal the f32-accumulate-then-round-once
+    # alternative (`alt_f32_once_equal`) and the ascending rank-order chain (`alt_ascending_equal`) -- never a relabel, facts for the finding.
+    from verity_vllm.registry.b1_tp2 import allreduce_order
+    order = allreduce_order(world)
+    prov["definition_order"] = ("world 2: bf16(f32(part0) + f32(part1)); world > 2: acc = part[order[0]]; acc = bf16(f32(acc) + f32(part[r])) "
+                                f"for r in order[1:], order = {list(order)} (b1_tp2.allreduce_order)")
     prov["alt_f32_once_equal"] = 0
+    prov["alt_ascending_equal"] = 0
     for s in steps:
         pts = [cap / f"coll.rank{r}.step{s}.pt" for r in ranks]
         if not all(p.exists() for p in pts):
@@ -237,13 +241,17 @@ def _check_main(args) -> int:
                     _digest_fail(rank, s, k, "key", f"recorder row keyed (step {xr.get('step')}, k {xr.get('k')}) at position {k} of step {s}")
             kind = x0[k]["kind"]
             if kind == "all_reduce":
-                exp = parts[0]
-                for pr in parts[1:]:
-                    exp = (exp.float() + pr.float()).to(torch.bfloat16)      # world 2: exactly the R13 rule bf16(f32(a) + f32(b))
+                exp = parts[order[0]]
+                for r_ in order[1:]:
+                    exp = (exp.float() + parts[r_].float()).to(torch.bfloat16)      # world 2: exactly the R13 rule bf16(f32(a) + f32(b))
                 prov["all_reduce_checked"] += 1
                 if world > 2:
                     alt = sum(pr.float() for pr in parts).to(torch.bfloat16)
                     prov["alt_f32_once_equal"] += int(all(torch.equal(o, alt) for o in outs))
+                    asc = parts[0]
+                    for pr in parts[1:]:
+                        asc = (asc.float() + pr.float()).to(torch.bfloat16)
+                    prov["alt_ascending_equal"] += int(all(torch.equal(o, asc) for o in outs))
             elif kind == "all_gather":
                 exp = torch.cat(parts, dim=-1)
                 prov["all_gather_checked"] += 1

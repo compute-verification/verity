@@ -56,12 +56,14 @@ def ensure_ops() -> None:
         return torch.empty(tuple(a.shape[:-1]) + (a.shape[-1] + b.shape[-1],), dtype=a.dtype, device=a.device)
 
     # [lane vllm-tp-n] the WORLD-ary collectives (world > 2): `parts` in RANK order; bound by `AllReduceRule` / `AllGatherRule` to
-    # `AllReduce_v1{WORLD,N}` / `AllGather_v1{WORLD,N}`.  World 2 keeps the binary ops above (recorded identities).
+    # `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}`.  World 2 keeps the binary ops above (recorded identities).
     @torch.library.custom_op("verity_tp::all_reduce", mutates_args=())
     def all_reduce(parts: list[torch.Tensor]) -> torch.Tensor:
-        acc = parts[0]
-        for p in parts[1:]:
-            acc = acc + p       # sequential rank order, one bf16 rounding per addition (the Definition's stated order)
+        from verity_vllm.registry.b1_tp2 import allreduce_order
+        order = allreduce_order(len(parts))
+        acc = parts[order[0]]
+        for r in order[1:]:
+            acc = acc + parts[r]       # one bf16 rounding per addition, in the Definition's order
         return acc
 
     @all_reduce.register_fake

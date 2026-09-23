@@ -30,7 +30,7 @@ KINDS = {ALL_REDUCE_OP: "all_reduce", ALL_GATHER_OP: "all_gather"}
 class TpCollective:
     """`vllm.all_reduce(tensor [M,N] bf16, group) -> [M,N]`   -> `Compute(AllReduce2_v1{N}, rows=M, (Collective(own=tensor, "all_reduce", site),), (PerRow(out),))`
     `vllm.all_gather(tensor [M,N] bf16, dim, world, group) -> [M, world*N]` -> `Compute(AllGather2_v1{N}, rows=M, (Collective(own, "all_gather", site),), (PerRow(out),))`.
-    [lane vllm-tp-n] `world` is the profile's communicator size: 2 binds the `*2` identities above, > 2 binds `AllReduce_v1{WORLD,N}` /
+    [lane vllm-tp-n] `world` is the profile's communicator size: 2 binds the `*2` identities above, > 2 binds `AllReduce_v2{WORLD,N}` /
     `AllGather_v1{WORLD,N}` (`b1_tp2.all_reduce` / `all_gather`); the `parts` operand is `Array<world, Array<N, bf16>>` in rank order and
     the fold fills every peer rank's row from the request's `peers` root (one field per (collective, peer rank))."""
 
@@ -73,7 +73,7 @@ class TpCollective:
         else:
             if out.shape != (M, N) or out.dtype != "bfloat16" or not is_row_major(out):
                 return unsupported(node, f"all_reduce: received view is not a row-major bf16 [{M},{N}] view", received=repr(out))
-            spec = b1_tp2.all_reduce(self.world, N)      # [lane vllm-tp-n] AllReduce2_v1{N} at world 2, AllReduce_v1{WORLD,N} beyond
+            spec = b1_tp2.all_reduce(self.world, N)      # [lane vllm-tp-n] AllReduce2_v1{N} at world 2, AllReduce_v2{WORLD,N} beyond
         if out.alloc == x.alloc:
             return unsupported(node, f"{kind}: in-place collective (received storage is the partial's); the fold states a fresh received storage", partial=repr(x), received=repr(out))
         return Compute(spec, M, (Collective(x, kind, site),), (PerRow(out),), tuple(sorted(node.ids())),

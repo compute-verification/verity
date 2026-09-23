@@ -446,7 +446,7 @@ class _Fold:
                 raise FoldError("RunHeader.notes.tp2 has world_size > 1 but no rank")
             self.tp = {"rank": int(tp["rank"]), "world": int(tp["world_size"])}
             # [lane vllm-tp-n] any world >= 2: world 2 binds AllReduce2_v1 / AllGather2_v1 (the recorded identities), world > 2 the
-            # world-parametric AllReduce_v1{WORLD,N} / AllGather_v1{WORLD,N} (b1_tp2.all_reduce / all_gather); a rank outside the world is refused
+            # world-parametric AllReduce_v2{WORLD,N} / AllGather_v1{WORLD,N} (b1_tp2.all_reduce / all_gather); a rank outside the world is refused
             if self.tp["world"] < 2 or not 0 <= self.tp["rank"] < self.tp["world"]:
                 raise FoldError(f"tensor-parallel world {self.tp['world']} rank {self.tp['rank']}: rank must be in [0, world) with world >= 2; refused")
             self.tp_peer_ranks = [r for r in range(self.tp["world"]) if r != self.tp["rank"]]

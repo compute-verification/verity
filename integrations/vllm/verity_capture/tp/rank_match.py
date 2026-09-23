@@ -188,7 +188,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                 c.fail(f"(step {key[0]}, k {key[1]}): rank0 {by_key[0][key]['kind']} vs rank{r} {by_key[r][key]['kind']}")
     c.close()
 
-    c = _Check(res, "op", "same N (AllReduce2_v1{N} / AllGather2_v1{N}; AllReduce_v1{WORLD,N} / AllGather_v1{WORLD,N} beyond world 2) on every rank")
+    c = _Check(res, "op", "same N (AllReduce2_v1{N} / AllGather2_v1{N}; AllReduce_v2{WORLD,N} / AllGather_v1{WORLD,N} beyond world 2) on every rank")
     for key in common:
         for r in ranks[1:]:
             if int(by_key[0][key]["N"]) != int(by_key[r][key]["N"]):
