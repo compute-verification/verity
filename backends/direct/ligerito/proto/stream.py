@@ -5,7 +5,6 @@ equal ``hash_gpu.merkle.leaves(U)`` bit for bit while only g/C of the codeword i
 after the query coin as RS evaluations of the message columns (``device.contract_geom``)."""
 from __future__ import annotations
 
-import importlib
 import warnings
 
 import numpy as np
@@ -26,21 +25,27 @@ leaf_absorb(const u32* __restrict__ U, long long ld, int nblk, long long n, u32*
     if (s >= n) return;
     u32 cv[8];
     if (first) {
-        #pragma unroll
-        for (int i = 0; i < 8; ++i) cv[i] = IV[i];
+        iv(cv);
     } else {
         const uint4* p = reinterpret_cast<const uint4*>(cv_io + s * 8);
         const uint4 a = p[0], b = p[1];
         cv[0] = a.x; cv[1] = a.y; cv[2] = a.z; cv[3] = a.w; cv[4] = b.x; cv[5] = b.y; cv[6] = b.z; cv[7] = b.w;
     }
+    u32 block[16];
+    #pragma unroll
+    for (int j = 0; j < 16; ++j) block[j] = __ldg(U + (long long)j * ld + s);
     for (int b = 0; b < nblk; ++b) {
-        u32 block[16];
-        #pragma unroll
-        for (int j = 0; j < 16; ++j) block[j] = U[(long long)(b * 16 + j) * ld + s];
+        u32 nxt[16];
+        if (b + 1 < nblk) {                             /* the next block's loads in flight while this one compresses */
+            #pragma unroll
+            for (int j = 0; j < 16; ++j) nxt[j] = __ldg(U + (long long)((b + 1) * 16 + j) * ld + s);
+        }
         u32 flags = 0u;
         if (first && b == 0) flags |= CHUNK_START;
         if (last && b == nblk - 1) flags |= CHUNK_END | ROOT;
         compress(cv, block, 0ull, 64u, flags);
+        #pragma unroll
+        for (int j = 0; j < 16; ++j) block[j] = nxt[j];
     }
     uint4* q = reinterpret_cast<uint4*>(cv_io + s * 8);
     q[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
@@ -54,8 +59,9 @@ _MOD = None
 def _module():
     global _MOD
     if _MOD is None:
-        b3 = importlib.import_module(ligero_merkle._gpu_merkle.__name__.rsplit(".", 1)[0] + ".blake3_cuda")
-        _MOD = cp.RawModule(code=b3.SRC + _SRC, options=("-std=c++17",))
+        # Ligero's compress (constexpr message schedule, block in registers; the shared hash_gpu one spills it to local memory)
+        from ._ligero import commit_gpu
+        _MOD = cp.RawModule(code=commit_gpu._SRC + _SRC, options=("-std=c++17", "-DPREFETCH=1"))
     return _MOD
 
 
