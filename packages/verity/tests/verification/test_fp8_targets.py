@@ -41,7 +41,7 @@ def test_first_is_frozen_and_the_fp8_targets_are_drafts_over_pinned_instructions
         inst = INSTRUCTIONS[t.instruction]
         assert inst.status == "pinned" and inst.model is t.pipeline
         assert (inst.a_dtype, inst.acc_dtype) == ("e4m3", "f32")
-    assert set(TARGETS) == {FIRST.name, BF16_HOPPER.name, FP8_HOPPER_WGMMA.name, FP8_ADA_MMA.name}
+    assert set(TARGETS) == {FIRST.name, BF16_HOPPER.name, FP8_HOPPER_WGMMA.name, FP8_ADA_MMA.name, "nvfp4-sm120-mma-draft/2026-09-22"}
     assert FP8_HOPPER_WGMMA.pipeline is HOPPER_E4M3_K32 and FP8_ADA_MMA.pipeline is ADA_E4M3_M16N8K32
 
 

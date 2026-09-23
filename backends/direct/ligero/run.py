@@ -360,10 +360,12 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     from .vu import bench_vu, gate_vu
 
-    # --relation <registered>: relations.py on the generic chain runner (relchain.py); gate-vu / bench-vu dispatch there,
-    # nothing else changes for the Ampere BF16 relation (vu.py on the frozen instance set)
-    ap.add_argument("--relation", default="bf16", choices=("bf16", "bf16-hopper", "fp8-hopper", "fp8-ada"),
-                    help="bf16: the Ampere relation on the frozen instance set (vu.py); the others: relations.py on synthetic instances")
+    # --relation <registered>: relations.py on the generic chain runner (relchain.py); fp4-nvf4: the sm_120 NVFP4 unit
+    # (backends/direct/ligero/fp4, its own chain runner); gate-vu / bench-vu dispatch there, nothing else changes for the
+    # Ampere BF16 relation (vu.py on the frozen instance set)
+    ap.add_argument("--relation", default="bf16", choices=("bf16", "bf16-hopper", "fp8-hopper", "fp8-ada", "fp4-nvf4"),
+                    help="bf16: the Ampere relation on the frozen instance set (vu.py); fp4-nvf4: fp4/chain.py; the others: "
+                         "relations.py on synthetic instances")
     for name, fn in (("gate", gate), ("bench", bench), ("gate-vu", gate_vu), ("bench-vu", bench_vu)):
         s = sub.add_parser(name)
         s.add_argument("--root", default=str(instances.DEFAULT_ROOT))
@@ -412,6 +414,8 @@ def main(argv=None) -> int:
                                        help="non-bf16 relations: processes recording the synthetic instances' accumulators")
         sub.choices[name].add_argument("--instances-cache", default=None, metavar="DIR",
                                        help="non-bf16 relations: keep the synthetic instance set as an .npz under DIR")
+    sub.choices["gate-vu"].add_argument("--unit-negatives", type=int, default=48,
+                                        help="fp4-nvf4 gate: units per edge family for the wrong-rule witness battery (tu-k64-neg)")
     args = ap.parse_args(argv)
     set_impl(getattr(args, "impl", "device"))
     if args.relation != "bf16":
@@ -421,6 +425,9 @@ def main(argv=None) -> int:
             ap.error(f"--relation {args.relation} supports gate-vu and bench-vu")
         if getattr(args, "auth", False):
             ap.error(f"--auth (authentication = included) is implemented for the bf16 relation only, not --relation {args.relation}")
+        if args.relation == "fp4-nvf4":
+            from .fp4.chain import bench_vu_fp4, gate_vu_fp4
+            return (gate_vu_fp4 if args.cmd == "gate-vu" else bench_vu_fp4)(args)
         rel = relation(args.relation)
         return (gate_vu_rel if args.cmd == "gate-vu" else bench_vu_rel)(args, rel)
     return args.fn(args)

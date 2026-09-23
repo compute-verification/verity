@@ -48,6 +48,33 @@ def test_fused_witness_equals_torch_program(rel_name):
     assert torch.equal(W_dev.to(torch.int64), W_ref)
 
 
+def test_fused_witness_equals_torch_program_fp4():
+    """The FP4 relation's program (fp4/relation.py: 1583 rows/unit, chain-mode system) through the same fused kernel --
+    the FP4 chain runner takes the shared ``witness.build_witness`` path, so ``--impl device`` covers its witness too."""
+    from . import witness_device
+    from .fp4.chain import _public_vectors_torch
+    from .fp4.relation import NVFP4, compile_fp4_unit
+    from .fp4.witness import FAMILIES, hints_fp4, random_units
+    s = compile_fp4_unit(NVFP4, chain=True)
+    rng = np.random.default_rng(11)
+    cs, as_, bs = zip(*(random_units(rng, 8, fam) for fam in FAMILIES))
+    c, a, b = np.concatenate(cs), np.concatenate(as_), np.concatenate(bs)
+    pub = _public_vectors_torch(NVFP4, None, a, b, None, device="cuda")
+    hints = torch.as_tensor(hints_fp4(s, c, a, b), dtype=torch.int64, device="cuda")
+    f = witness_device.fused_for(s, "cuda")
+    assert f is not None, "NVRTC / cupy unavailable"
+    old = witness_mod.IMPL
+    try:
+        witness_mod.IMPL = "legacy"
+        W_ref = witness_mod.build_witness(s, pub, hints, "cuda")
+        witness_mod.IMPL = "device"
+        W_dev = witness_mod.build_witness(s, pub, hints, "cuda")
+    finally:
+        witness_mod.IMPL = old
+    assert W_dev.shape == W_ref.shape
+    assert torch.equal(W_dev.to(torch.int64), W_ref)
+
+
 def test_hints_graph_captures():
     from . import hints_torch
     if not hints_torch.USE_CUDA_GRAPH:

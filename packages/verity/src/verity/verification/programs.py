@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from .typed_obligation import GATE, IN, INPUT, Definition, Gate, Subcircuit, subcircuit_digest
 
 __all__ = ["TC_K", "GEMM_WITHIN", "GateSpec", "input_gate", "make_subcircuit", "gemm_coordinate", "gemm_accumulator_fp8",
-           "input_equation", "elementwise"]
+           "gemm_accumulator_nvfp4", "input_equation", "elementwise"]
 
 #: The ``k`` extent of one Ampere BF16 tensor-core step.
 TC_K = 16
@@ -133,6 +133,38 @@ def gemm_accumulator_fp8(k: int, *, step_k: int = 32) -> Subcircuit:
         gates.append((f"tc_dot{step_k}", [(GATE, step - 1), *a, *b]))
     definition = Definition("GemmAccumulator", (("K", k),), GEMM_WITHIN)
     return make_subcircuit([8] * (2 * k), gates, [steps - 1], definition)
+
+
+def gemm_accumulator_nvfp4(k: int, *, step_k: int = 64, block: int = 16) -> Subcircuit:
+    """``GemmAccumulator<K>`` over ``k`` (a multiple of ``step_k``) for the NVFP4 draft target
+    (:data:`verity.verification.target.NVFP4_SM120`): the bare block-scaled dot with the FP32 word outgoing.
+
+    Incoming values: ``0 .. k`` the A element codes (4-bit E2M1), ``k .. k + k/block`` the A scale bytes (8-bit UE4M3,
+    one per ``block`` codes, ascending), then the same two runs for B (``k + k/block .. 2k + k/block`` codes,
+    ``2k + k/block .. 2(k + k/block)`` scales).  Gate ``s`` is ``tc_dot{step_k}[_0](acc, a codes[s], a scales[s], b codes[s],
+    b scales[s])`` -- one operand of a step is its ``step_k`` codes followed by its ``step_k / block`` scale bytes, the
+    argument order ``BlockScaledAlignAdd.step`` takes (:func:`verity.verification.families.tensor_core_gates`).  No
+    epilogue cast (the production NVFP4 store -- scale, then quantise -- is a separate relation).  Draft: no guest
+    checks this family yet.
+    """
+
+    if k <= 0 or k % step_k or step_k % block:
+        raise ValueError(f"k={k} must be a positive multiple of {step_k} (a multiple of the block {block})")
+    steps, spb = k // step_k, step_k // block            # scale bytes per step
+    nsc = k // block                                     # scale bytes per operand
+    a0, as0, b0, bs0 = 0, k, k + nsc, 2 * k + nsc        # where each run of incoming values starts
+
+    def operand(codes0: int, scales0: int, step: int) -> list[tuple[str, int]]:
+        codes = [(IN, codes0 + step_k * step + i) for i in range(step_k)]
+        scales = [(IN, scales0 + spb * step + j) for j in range(spb)]
+        return codes + scales
+
+    gates: list[GateSpec] = [(f"tc_dot{step_k}_0", operand(a0, as0, 0) + operand(b0, bs0, 0))]
+    for step in range(1, steps):
+        gates.append((f"tc_dot{step_k}", [(GATE, step - 1), *operand(a0, as0, step), *operand(b0, bs0, step)]))
+    definition = Definition("GemmAccumulator", (("K", k),), GEMM_WITHIN)
+    widths = [4] * k + [8] * nsc
+    return make_subcircuit(widths * 2, gates, [steps - 1], definition)
 
 
 def input_equation(expected: int, width: int = 16) -> Subcircuit:
