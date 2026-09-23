@@ -111,7 +111,9 @@ def create(args: argparse.Namespace) -> None:
         "computeType": "GPU",
         "containerDiskInGb": args.disk,
         "volumeInGb": 0,
-        "ports": ["22/tcp"],
+        # 22/tcp always; --expose-port adds raw TCP ports (a live verifier's listen port: lane live-verifier).  RunPod maps
+        # each to a random public port (`portMappings`, `research pods list`); the pod-side process listens on the inner one.
+        "ports": ["22/tcp", *(f"{p}/tcp" for p in (getattr(args, "expose_port", None) or []))],
         "supportPublicIp": True,
         "env": {"PUBLIC_KEY": public_key},
     }
@@ -155,6 +157,8 @@ def create_args(c: argparse.ArgumentParser) -> None:
     c.add_argument("--network-volume", default="", help="RunPod network volume id to mount (REST networkVolumeId); pins the pod to the volume's DC")
     c.add_argument("--volume-mount", default="/workspace", help="mount path of --network-volume (default /workspace)")
     c.add_argument("--data-center", default="", help="restrict to one data center id (e.g. EU-RO-1)")
+    c.add_argument("--expose-port", action="append", type=int, default=[], metavar="PORT",
+                   help="also expose this TCP port (repeatable; e.g. a live verifier's listen port). Public mapping: `pods list`")
 
 
 def list_pods() -> None:
