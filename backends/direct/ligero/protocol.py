@@ -1646,6 +1646,9 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
 
     sent.append("w, h" + (", q" if q_np is not None else "") + (", v" if v_np is not None else "") + (", fp" if fp_np is not None else ""))
     if cfg.interactive:
+        if fp_np is not None and hasattr(src, "provide_fp"):
+            # a live verifier takes F with the test message: fixed before slot 2 here and before the paired side's slot 1
+            src.provide_fp(fp_np)
         fut = _coin_future(src, "open2", root, w_np, h_np, q_np, v_np)   # V opens coin slot 2 (after the test messages)
         if fut is not None:
             yield fut                                              # -- wait: the verifier's OPEN2 (network, off the driver)

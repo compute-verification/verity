@@ -304,18 +304,49 @@ def pod_dc() -> str | None:
 # Prover side: the coin source that talks to the live verifier
 # ---------------------------------------------------------------------------------------------------------------------
 
+#: Row sharing (``authentication = included-hash-shared``, HELLO ``pair``): sub-batch i is a PAIR of proofs, G (the GEMM
+#: side) on wire index i and H (the hash side) on ``i + PAIR_H``, each with its own fresh coin commitment from the verifier.
+#: G's TESTS carries the fingerprint message F as a fifth array; the verifier opens H's slot 1 only after ROOT_H AND G's
+#: TESTS (F -- and so H's statement values rho, F_H -- fixed before any coin of H is known; rho is G's slot-1 coin).
+PAIR_H = 1 << 30
+
+
 class LiveCoins:
     """``protocol.prove(coins=...)``'s CoinSource, backed by a live verifier session: ``commitments()`` is the verifier's
     COMMIT for this sub-batch, ``open1`` sends the root (with the statement) and returns the verifier's opening of slot 1,
-    ``open2`` sends the test message and returns slot 2.  Records the time ``prove`` spent blocked on each exchange."""
+    ``open2`` sends the test message and returns slot 2.  Records the time ``prove`` spent blocked on each exchange.
+    ``needs_stmt=False``: the hash side of a pair (its statement is the pair's, sent once by G's source)."""
 
-    def __init__(self, session: ProverSession, sub: int):
+    def __init__(self, session: ProverSession, sub: int, needs_stmt: bool = True):
         self.session, self.sub = session, sub
+        self.needs_stmt = needs_stmt
         self.stmt: bytes | None = None
+        self.fp: np.ndarray | None = None   # G of a pair: the fingerprint message F, sent with TESTS
+        self.h: LiveCoins | None = None     # G of a pair: the hash side's source (h_coins)
         self.wait_commit = self.wait_open1 = self.wait_open2 = 0.0
         self.rtt = []                       # seconds per round trip (open1, open2)
         self._cc = None
         self.r1 = self.s1 = self.r2 = self.s2 = None
+
+    def h_coins(self) -> LiveCoins:
+        """The hash side's coin source of this pair (wire index ``sub + PAIR_H``): the verifier's own coins, never the
+        prover's.  ``LIVE_NEGATIVE=own-coins-h`` (a red-team run only): a source that talks to the verifier but proves
+        H on prover-sampled coins -- the verifier must reject the session."""
+        if self.h is None:
+            if os.environ.get("LIVE_NEGATIVE") == "own-coins-h":
+                self.h = ForwardingCoins(self.session, self.sub + PAIR_H, pm.Coins.sample(), needs_stmt=False)
+            else:
+                self.h = LiveCoins(self.session, self.sub + PAIR_H, needs_stmt=False)
+        return self.h
+
+    def provide_fp(self, fp: np.ndarray) -> None:
+        self.fp = np.ascontiguousarray(fp, dtype=np.uint32)
+
+    def _tests_payload(self, w, h, q, v) -> bytes:
+        arrs = [w, h, q, v]
+        if self.fp is not None:
+            arrs.append(self.fp.reshape(self.fp.shape[0], -1))
+        return _pack_arrays(arrs)
 
     def set_statement(self, stmt: bytes) -> None:
         """The runner sets the statement bytes before ``prove``: they travel with the root (the claim is fixed before
@@ -347,7 +378,7 @@ class LiveCoins:
     def open2_future(self, root: bytes, w, h, q, v):
         if not getattr(self.session, "pipelined", False):
             return None
-        self.session.provide_tests(self.sub, _pack_arrays([w, h, q, v]))
+        self.session.provide_tests(self.sub, self._tests_payload(w, h, q, v))
         fut = self.session.open2_future(self.sub)
         fut.add_done_callback(self._set_open2)
         return fut
@@ -374,10 +405,11 @@ class LiveCoins:
         """Step 0.  The statement (the public claim; known before proving starts) goes out first as STMT i -- no reply, so
         its transfer overlaps the prover's work up to the root and ROOT i is 32 bytes on the critical path -- then the
         verifier's COMMIT i is awaited (already here from OPEN2 i-1's pipelining except for the first sub-batch)."""
-        if self.stmt is None:
+        if self.stmt is None and self.needs_stmt:
             raise LiveError("LiveCoins: the runner did not set the statement (set_statement) before prove")
         t0 = time.perf_counter()
-        self.session.send_stmt(self.sub, self.stmt)
+        if self.needs_stmt:
+            self.session.send_stmt(self.sub, self.stmt)
         self._cc = self.session.recv_commit(self.sub)
         self.wait_commit += time.perf_counter() - t0
         return self._cc
@@ -394,7 +426,7 @@ class LiveCoins:
 
     def open2(self, root: bytes, w, h, q, v) -> tuple[bytes, bytes]:
         t0 = time.perf_counter()
-        r2, s2 = self.session.exchange(K_TESTS, self.sub, _pack_arrays([w, h, q, v]), K_OPEN2)
+        r2, s2 = self.session.exchange(K_TESTS, self.sub, self._tests_payload(w, h, q, v), K_OPEN2)
         dt = time.perf_counter() - t0
         self.wait_open2 += dt
         self.rtt.append(dt)
@@ -472,7 +504,11 @@ class ProverSession:
                     return
                 sub, meta, proof = item
                 t0 = time.perf_counter()
-                pb = proof if isinstance(proof, (bytes, bytearray)) else proof_bytes(proof)
+                if hasattr(proof, "g") and hasattr(proof, "h"):          # a row-sharing pair: G's bytes then H's
+                    gb, hb = proof_bytes(proof.g), proof_bytes(proof.h)
+                    pb, meta = gb + hb, {**(meta or {}), "pair_bytes": [len(gb), len(hb)]}
+                else:
+                    pb = proof if isinstance(proof, (bytes, bytearray)) else proof_bytes(proof)
                 mj = json.dumps(meta or {}).encode()
                 payload = struct.pack("<II", sub, len(mj)) + mj + pb
                 t1 = time.perf_counter()
@@ -761,7 +797,14 @@ class BenchLive:
             raise SystemExit("--verifier needs --mode interactive (a Fiat-Shamir proof has no verifier coins)")
         self.url = args.verifier
         self.n_proofs = n_proofs
-        self.verifier = Verifier(args.verifier, hello_for(args, R, n_proofs, total_vus, relation), system_bytes(R.sys))
+        hello, system = hello_for(args, R, n_proofs, total_vus, relation), system_bytes(R.sys)
+        # a row-sharing runner proves a PAIR per sub-batch (PAIR_H): the verifier gets both systems and coins both sides
+        self.pair = getattr(R, "AUTH", None) == "included-hash-shared"
+        if self.pair:
+            system_h = system_bytes(R.sys_h)
+            hello.update({"pair": True, "system_h_bytes": len(system_h)})
+            system += system_h
+        self.verifier = Verifier(args.verifier, hello, system)
         self.sess: ProverSession | None = None
         # the runner sets ``window`` = its pipeline depth when it will prove the recorded reps with ``prove_vus_many``: the
         # verifier then commits that many sub-batches ahead (HELLO "window"), so their openings can be in flight together
@@ -783,16 +826,23 @@ class BenchLive:
         non-recorded rep (no live session)."""
         if self.sess is None:
             return local_factory
-        self.sess.start_pipeline(self.n_proofs)
+        self.sess.start_pipeline(self.n_proofs * (2 if self.pair else 1))   # the reader's count of OPEN2 frames
         return lambda i: self.sess.coins(i)
 
     def proved(self, si: int, proof, coins):
         """After ``prove``: PROOF ``si`` goes out on the data channel (async), the waits leave the phase clocks; returns
-        the coins as a plain ``Coins`` (what the runner's own verify / dump use)."""
+        the coins as a plain ``Coins`` (what the runner's own verify / dump use; a pair's H coins stay in ``proof.h``)."""
         if self.sess is None or not isinstance(coins, LiveCoins):
             return coins
+        if self.pair and not isinstance(coins.h, LiveCoins):
+            raise LiveError(f"sub-batch {si}: the hash side was not proved on the live verifier's coins")
         self.sess.submit(si, proof, {"prover_seconds": proof.timings.get("total")})
         adjust_timings(proof, coins)
+        if coins.h is not None and coins.h.wait:
+            t = proof.timings                               # the hash side's blocking waits (sequential path)
+            t["total"] = max(0.0, t["total"] - coins.h.wait)
+            t["net_wait"] = t.get("net_wait", 0.0) + coins.h.wait
+            coins.session.wait += coins.h.wait
         return coins.opened()
 
     def end_rep(self, rep: int, agg: dict) -> dict | None:
@@ -937,6 +987,8 @@ class RustVerifier:
     def verify_one(self, session_dir: Path, stem: str, soundness_bits: float) -> dict:
         argv = [self.binary, "verify", "--system", "system.bin", "--statement", f"{stem}.stmt", "--proof", f"{stem}.proof",
                 "--coins", f"{stem}.coins", "--threads", str(self.threads), "--soundness-bits", str(soundness_bits)]
+        if (session_dir / "system_h.bin").is_file():       # a row-sharing pair: X.hproof on this verifier's X.hcoins
+            argv += ["--system-h", "system_h.bin", "--proof-h", f"{stem}.hproof", "--coins-h", f"{stem}.hcoins"]
         rc, out, err, wall, cpu = self._run_wait4(argv, session_dir)
         try:
             js = json.loads(out.strip().splitlines()[-1]) if out.strip() else {}
@@ -950,6 +1002,8 @@ class RustVerifier:
     def batch(self, session_dir: Path, target_bits: float, jobs: int) -> dict:
         argv = [self.binary, "batch", "--system", "system.bin", "--dir", ".", "--jobs", str(jobs), "--threads", str(self.threads),
                 "--target-bits", str(target_bits), "--json", "rust_batch.json"]
+        if (session_dir / "system_h.bin").is_file():
+            argv += ["--system-h", "system_h.bin"]
         rc, out, err, wall, cpu = self._run_wait4(argv, session_dir)
         js = {}
         p = session_dir / "rust_batch.json"
@@ -1175,6 +1229,13 @@ class Session(threading.Thread):
     def __init__(self, server: Server, conn: socket.socket, addr, hello: dict, system: bytes):
         super().__init__(name="live-session", daemon=True)
         self.server, self.conn, self.addr, self.hello = server, conn, addr, hello
+        self.pair = bool(hello.get("pair"))            # row sharing: sub-batch i = G (index i) + H (index i + PAIR_H)
+        self.system_h = None
+        if self.pair:
+            n_h = int(hello.get("system_h_bytes") or 0)
+            if not 0 < n_h < len(system):
+                raise LiveError("pair HELLO: system_h_bytes must split the system blob")
+            system, self.system_h = system[:-n_h], system[-n_h:]
         self.system = system
         self.n_proofs = int(hello.get("n_proofs") or 0)
         self.target_bits = float(hello.get("target_bits") or server.target_bits)
@@ -1231,12 +1292,15 @@ class Session(threading.Thread):
 
     # -- step 0 for sub-batch i: fresh coins, commitments sent
     def _commit(self, i: int) -> None:
-        c = pm.Coins.sample()
-        self.coins[i] = c
-        c1, c2 = c.commitments()
         rec = self.sub.setdefault(i, {"sub": i})
         rec["t_commit_sent"] = time.time()
-        self._send(self.conn, K_COMMIT, struct.pack("<I", i) + c1 + c2)
+        for j in ((i, i + PAIR_H) if self.pair else (i,)):     # a pair: fresh coins for G AND for H, both before anything of i
+            c = pm.Coins.sample()
+            self.coins[j] = c
+            c1, c2 = c.commitments()
+            self._send(self.conn, K_COMMIT, struct.pack("<I", j) + c1 + c2)
+        if self.pair:
+            rec["h"] = {}
 
     def run(self) -> None:
         try:
@@ -1268,8 +1332,12 @@ class Session(threading.Thread):
         if h.get("mode") != pm.MODE_INTERACTIVE:
             raise LiveError("the live verifier plays the interactive protocol (8c); fiat-shamir sessions have no verifier coins")
         (self.dir / "system.bin").write_bytes(self.system)
+        if self.pair:
+            (self.dir / "system_h.bin").write_bytes(self.system_h)
         (self.dir / "hello.json").write_text(json.dumps({**h, "peer": list(self.addr), "session_id": self.id,
-                                                          "system_sha256": hashlib.sha256(self.system).hexdigest()}, indent=1))
+                                                          "system_sha256": hashlib.sha256(self.system).hexdigest(),
+                                                          "system_h_sha256": self.system_h and hashlib.sha256(self.system_h).hexdigest()},
+                                                         indent=1))
         self._send(self.conn, K_WELCOME, json.dumps({"session_id": self.id, "verifier": self.server.identity,
                                                      "verifier_host": socket.gethostname(), "verifier_dc": pod_dc(),
                                                      "verifier_core": "ligero-verify" if isinstance(self.server.rust, RustVerifier) else "python",
@@ -1293,6 +1361,38 @@ class Session(threading.Thread):
             if kind not in (K_STMT, K_ROOT, K_TESTS) or len(payload) < 4:
                 raise LiveError(f"expected STMT/ROOT/TESTS of a committed sub-batch, got {_KIND_NAME.get(kind, kind)}")
             (j,) = struct.unpack_from("<I", payload)
+            if self.pair and j >= PAIR_H:
+                # the hash side of pair j - PAIR_H: ROOT_H / TESTS_H only (the pair's statement came as STMT of G)
+                i = j - PAIR_H
+                if i >= committed:
+                    raise LiveError(f"{_KIND_NAME[kind]} H{i} before its coin commitment (committed: sub-batches < {committed})")
+                rec, hr = self.sub[i], self.sub[i]["h"]
+                c = self.coins[j]
+                if kind == K_ROOT:
+                    if "root" in hr:
+                        raise LiveError(f"ROOT H{i} twice")
+                    if not rec.get("stmt") and "stmt_sha256" not in rec:
+                        raise LiveError(f"ROOT H{i} before the pair's statement (STMT {i})")
+                    hr["t_root_recv"] = time.time()
+                    hr["root"] = payload[4:36]
+                    hr["bytes_root"] = len(payload)
+                    if "fp" in rec:                   # G's F is in: H's statement values are fixed, open H's slot 1
+                        self._send(self.conn, K_OPEN1, struct.pack("<I", j) + c.r1 + c.s1)
+                        hr["t_open1_sent"] = time.time()
+                    continue
+                if kind != K_TESTS or "t_open1_sent" not in hr or "tests" in hr:
+                    raise LiveError(f"{_KIND_NAME[kind]} H{i} out of order (slot 1 of H {'open' if 't_open1_sent' in hr else 'not open'})")
+                hr["t_tests_recv"] = time.time()
+                hr["tests"] = _unpack_arrays(payload[4:])
+                hr["bytes_tests"] = len(payload)
+                self._send(self.conn, K_OPEN2, struct.pack("<I", j) + c.r2 + c.s2)
+                hr["t_open2_sent"] = time.time()
+                if "t_open2_sent" in rec:
+                    opened += 1
+                    if committed < self.n_proofs:
+                        self._commit(committed)
+                        committed += 1
+                continue
             if j >= committed:
                 raise LiveError(f"{_KIND_NAME[kind]} {j} before its coin commitment (committed: sub-batches < {committed})")
             rec = self.sub[j]
@@ -1323,11 +1423,26 @@ class Session(threading.Thread):
             if j not in rooted or "tests" in rec:
                 raise LiveError(f"TESTS {j} {'before ROOT ' + str(j) if j not in rooted else 'twice'}")
             rec["t_tests_recv"] = time.time()
-            rec["tests"] = _unpack_arrays(payload[4:])
+            if self.pair:
+                # G of a pair: (w, h, q, v, F) -- the fingerprint message is part of the test message
+                arrs = _unpack_arrays(payload[4:], count=5)
+                if arrs[4] is None:
+                    raise LiveError(f"TESTS {j}: a pair's G side must send its fingerprint message F with the test message")
+                rec["tests"], rec["fp"] = arrs[:4], arrs[4]
+            else:
+                rec["tests"] = _unpack_arrays(payload[4:])
             rec["bytes_tests"] = len(payload)
             c = self.coins[j]
             self._send(self.conn, K_OPEN2, struct.pack("<I", j) + c.r2 + c.s2)
             rec["t_open2_sent"] = time.time()
+            if self.pair:
+                hr = rec["h"]
+                if "root" in hr and "t_open1_sent" not in hr:     # ROOT_H came first: H's slot 1 opens now that F is fixed
+                    ch = self.coins[j + PAIR_H]
+                    self._send(self.conn, K_OPEN1, struct.pack("<I", j + PAIR_H) + ch.r1 + ch.s1)
+                    hr["t_open1_sent"] = time.time()
+                if "t_open2_sent" not in hr:
+                    continue
             opened += 1
             if committed < self.n_proofs:
                 self._commit(committed)                   # pipelined: the next sub-batch's step 0 rides behind OPEN2
@@ -1371,25 +1486,64 @@ class Session(threading.Thread):
         # the live checks: this session's coins, the committed root, the committed test message
         c = self.coins[i]
         why = None
-        try:
-            pf = read_proof(pb)
-        except ValueError as e:
-            pf, why = None, f"unreadable proof: {e}"
-        if pf is not None:
-            if pf.coin_commit is None or pf.coins is None:
-                why = "transcript carries no coins (interactive session)"
-            elif tuple(pf.coin_commit) != c.commitments() or (pf.coins.r1, pf.coins.s1, pf.coins.r2, pf.coins.s2) != (c.r1, c.s1, c.r2, c.s2):
-                why = "coins are not this session's step-0 coins (replayed / prover-chosen coins)"
-            elif pf.root != rec["root"]:
-                why = "proof root differs from the root committed before coin slot 1 was opened"
+        pb_h = None
+        if self.pair:
+            hr = rec.get("h") or {}
+            nb = meta.get("pair_bytes")
+            if "t_open2_sent" not in hr:
+                raise LiveError(f"PROOF {i} before OPEN2 H{i} (the pair's hash side was never opened)")
+            if not (isinstance(nb, list) and len(nb) == 2 and nb[0] + nb[1] == len(pb)):
+                why = "pair PROOF frame: meta pair_bytes does not split the payload into G and H"
             else:
-                w, h, q, v = rec["tests"]
-                if not (_arr_eq(pf.w, w) and _arr_eq(pf.h, h) and _arr_eq(pf.q, q) and _arr_eq(pf.v, v)):
-                    why = "test message (w, h, q, v) differs from the one committed before coin slot 2 was opened"
+                pb, pb_h = pb[:nb[0]], pb[nb[0]:]
+        fp_shape = None
+        if self.pair and why is None:
+            try:
+                st = read_statement(rec["stmt"])
+                fp_shape = (st.n_vus, 2, st.shared.coords) if st.v6 else None
+                if fp_shape is None:
+                    why = "pair session: the statement is not a row-sharing (v6) statement"
+            except (ValueError, AttributeError) as e:
+                why = f"unreadable pair statement: {e}"
+
+        def check(pf_bytes, cc, root, tests, fp_shape_=None, fp_sent=None):
+            try:
+                pf = read_proof(pf_bytes, fp_shape=fp_shape_) if fp_shape_ is not None else read_proof(pf_bytes)
+            except ValueError as e:
+                return f"unreadable proof: {e}"
+            if pf.coin_commit is None or pf.coins is None:
+                return "transcript carries no coins (interactive session)"
+            if tuple(pf.coin_commit) != cc.commitments() or (pf.coins.r1, pf.coins.s1, pf.coins.r2, pf.coins.s2) != (cc.r1, cc.s1, cc.r2, cc.s2):
+                return "coins are not this session's step-0 coins (replayed / prover-chosen coins)"
+            if pf.root != root:
+                return "proof root differs from the root committed before coin slot 1 was opened"
+            w, h, q, v = tests
+            if not (_arr_eq(pf.w, w) and _arr_eq(pf.h, h) and _arr_eq(pf.q, q) and _arr_eq(pf.v, v)):
+                return "test message (w, h, q, v) differs from the one committed before coin slot 2 was opened"
+            if fp_sent is not None and (pf.fp is None or not _arr_eq(np.asarray(pf.fp).reshape(pf.fp.shape[0], -1), fp_sent)):
+                return "fingerprint message F differs from the one sent with the test message (before slot 2 / H's slot 1)"
+            return None
+
+        if why is None:
+            why = check(pb, c, rec["root"], rec["tests"], fp_shape, rec.get("fp") if self.pair else None)
+            if why is None and self.pair:
+                hr = rec["h"]
+                why_h = check(pb_h, self.coins[i + PAIR_H], hr["root"], hr["tests"])
+                why = None if why_h is None else f"H: {why_h}"
         stem = f"sub_{i:02d}"
         (self.dir / f"{stem}.stmt").write_bytes(rec["stmt"])
         (self.dir / f"{stem}.proof").write_bytes(pb)
         (self.dir / f"{stem}.coins").write_bytes(c.r1 + c.s1 + c.r2 + c.s2)
+        if self.pair:
+            ch = self.coins[i + PAIR_H]
+            if pb_h is not None:
+                (self.dir / f"{stem}.hproof").write_bytes(pb_h)
+            (self.dir / f"{stem}.hcoins").write_bytes(ch.r1 + ch.s1 + ch.r2 + ch.s2)
+            hr = rec["h"]
+            hr.pop("tests", None)
+            if isinstance(hr.get("root"), bytes):
+                hr["root"] = hr["root"].hex()
+            rec.pop("fp", None)
         rec["stmt_sha256"] = hashlib.sha256(rec["stmt"]).hexdigest()
         del rec["stmt"]
         del rec["tests"]
@@ -2086,9 +2240,35 @@ class ForwardingCoins(LiveCoins):
     """A prover that talks to the live verifier but derives its challenges from OTHER coins (its own, or a stale set
     from an earlier session): the transcript then carries coins that are not this session's."""
 
-    def __init__(self, session: ProverSession, sub: int, own: pm.Coins):
-        super().__init__(session, sub)
+    def __init__(self, session: ProverSession, sub: int, own: pm.Coins, needs_stmt: bool = True):
+        super().__init__(session, sub, needs_stmt=needs_stmt)
         self.own = own
+
+    @staticmethod
+    def _own_after(fut, val):
+        """The pipelined variant: resolves to the prover's own value once the verifier's reply is in."""
+        if fut is None:
+            return None
+        out = Future()
+        out.net = True
+
+        def done(f):
+            e = f.exception()
+            if e is not None:
+                out.set_exception(e)
+            else:
+                out.set_result(val)
+        fut.add_done_callback(done)
+        return out
+
+    def commitments_future(self):
+        return self._own_after(super().commitments_future(), self.own.commitments())
+
+    def open1_future(self, root):
+        return self._own_after(super().open1_future(root), (self.own.r1, self.own.s1))
+
+    def open2_future(self, root, w, h, q, v):
+        return self._own_after(super().open2_future(root, w, h, q, v), (self.own.r2, self.own.s2))
 
     def commitments(self):
         super().commitments()                              # receive (and ignore) the verifier's step 0

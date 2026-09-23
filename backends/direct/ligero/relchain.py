@@ -512,9 +512,10 @@ class HashedRelationRunner(RelationChainRunner):
             sibs_out.append(sibs)
         return proof
 
-    def _pipelined(self, bundles: list, stage, coins_factory, depth: int):
-        """``prove_many`` over ``stage(bundle, coins, slot, sibs_out)`` generators; local coins only (a live verifier's
-        coin source would need the statement -- multiproofs included -- before the root: not wired for these runners)."""
+    def _pipelined(self, bundles: list, stage, coins_factory, depth: int, live_statement=None):
+        """``prove_many`` over ``stage(bundle, coins, slot, sibs_out)`` generators.  Local coins, or -- when the runner
+        passes ``live_statement(bundle, coins)`` (the statement, multiproofs included, handed to the live source before
+        the root) -- a live verifier's coins; without it a live source is refused."""
         from .pipeline import prove_many
         coins_of: list = [None] * len(bundles)
         sibs_of: list = [[] for _ in bundles]
@@ -523,7 +524,9 @@ class HashedRelationRunner(RelationChainRunner):
             def start(slot):
                 c = coins_factory(i)
                 if hasattr(c, "set_statement"):
-                    raise NotImplementedError(f"--auth {self.AUTH} --pipeline: live verifier coins are not wired (local coins only)")
+                    if live_statement is None:
+                        raise NotImplementedError(f"--auth {self.AUTH} --pipeline: live verifier coins are not wired (local coins only)")
+                    live_statement(bundles[i], c)
                 coins_of[i] = c
                 return stage(bundles[i], c, slot, sibs_of[i])
             return start
@@ -832,7 +835,7 @@ class SharedHashedRunner(HashedRelationRunner):
         self._marshal_cache[key] = bd
         return bd
 
-    def _prove_stages_shared(self, bd: dict, coins, coins_h, slot=None, sibs_out: list | None = None):
+    def _prove_stages_shared(self, bd: dict, coins, coins_h, slot=None, sibs_out: list | None = None, sibs_fut=None):
         """The pair of one sub-batch as ONE generator for ``pipeline.prove_many``, the two provers interleaved: H (its
         witness gathered on the device from the committed rows + sponges; its commitment does not depend on G) starts
         first on its own slot -- stream and pinned buffers -- and waits after its root for its fingerprint statement;
@@ -846,7 +849,7 @@ class SharedHashedRunner(HashedRelationRunner):
         from .chain import FpArgs
         lay, lay_h, dev = bd["lay"], bd["lay_h"], self.device
         if slot is None or not INTERLEAVE_PAIR:
-            return (yield from self._prove_stages_shared_seq(bd, coins, coins_h, slot, sibs_out))
+            return (yield from self._prove_stages_shared_seq(bd, coins, coins_h, slot, sibs_out, sibs_fut=sibs_fut))
         slot_h = pipeline.slot_for(dev, H_SLOT_BASE + slot.index)
 
         def hints_g():
@@ -859,7 +862,8 @@ class SharedHashedRunner(HashedRelationRunner):
             cap_u = torch.cat([self.sponges["a"][0][gx], self.sponges["b"][0][gw]], 0)
             return hashchain.row_hash_witness(self.rh, rows, lay_h.n_vus, lay_h.l, cap_units=cap_u)
 
-        sibs_fut = pipeline.POOL.submit(hashauth.open_trees, self.trees, bd["auth"])
+        if sibs_fut is None:
+            sibs_fut = pipeline.POOL.submit(hashauth.open_trees, self.trees, bd["auth"])
         fp_sink, fp_h = Future(), Future()
         gen_h = protocol_mod.prove_stages(
             self.p, self.sys_h, self.tb_h, self.cfg_h(lay_h.l), bd["pub_h"], None, dev, chain=(lay_h, bd["ypub_h_d"], fp_h),
@@ -913,7 +917,7 @@ class SharedHashedRunner(HashedRelationRunner):
         timings["hints_host"] = timings.get("hints_host", 0.0) + t_fp
         return SharedProof(proof_g, proof_h, timings, lay_h)
 
-    def _prove_stages_shared_seq(self, bd: dict, coins, coins_h, slot=None, sibs_out: list | None = None):
+    def _prove_stages_shared_seq(self, bd: dict, coins, coins_h, slot=None, sibs_out: list | None = None, sibs_fut=None):
         """The pair of one sub-batch as ONE generator, the two provers in sequence on one slot: G (hints on the device,
         the stages up to its openings), then F_H from G's message (host, vectorised) and H, then the multiproofs."""
         from . import hashauth, hashchain
@@ -945,7 +949,7 @@ class SharedHashedRunner(HashedRelationRunner):
             words={"a": bd["table_h"], "b": bd["units"], "y16": bd["ypub_h"]}, coins=coins_h, rel=bd["hooks_h"],
             hints_fn=hints_h, slot=slot)
         t1 = time.perf_counter()
-        sibs = hashauth.open_trees(self.trees, bd["auth"])
+        sibs = sibs_fut.result() if sibs_fut is not None else hashauth.open_trees(self.trees, bd["auth"])
         openings = time.perf_counter() - t1
         if sibs_out is not None:
             sibs_out.append(sibs)
@@ -965,12 +969,25 @@ class SharedHashedRunner(HashedRelationRunner):
                 vu_ids_list.append(range(at, at + len(vus)))
                 at += len(vus)
         bundles = [self.marshal_shared(vus, ids, min_l) for vus, ids in zip(batches, vu_ids_list)]
+        live_sibs: dict[int, object] = {}
+
+        def live_statement(bd, c):
+            # the pair's v6 statement (multiproofs included) on the pool, before either root; the stage reuses the openings
+            from . import hashauth, pipeline
+            from .serialize import _statement_of, statement_bytes
+            sibs_fut = pipeline.POOL.submit(hashauth.open_trees, self.trees, bd["auth"])
+            live_sibs[id(bd)] = sibs_fut
+
+            def build():
+                pubs = (bd["is_end"], bd["idx"], bd["ypub"], bd["auth"], sibs_fut.result(), bd["table_h"], bd["units"])
+                return statement_bytes(_statement_of(self, pubs, bd["lay"], self.cfg(bd["lay"].l), self.n_proofs))
+            c.set_statement(pipeline.POOL.submit(build) if getattr(c.session, "pipelined", False) else build())
 
         def stage(bd, c, slot, so):
-            ch = protocol_mod.Coins.sample() if self.interactive else None
-            return self._prove_stages_shared(bd, c, ch, slot, so)
+            ch = self._coins_h_for(c)
+            return self._prove_stages_shared(bd, c, ch, slot, so, sibs_fut=live_sibs.pop(id(bd), None))
 
-        proofs, sibs, coins_of, wall = self._pipelined(bundles, stage, coins_factory, depth)
+        proofs, sibs, coins_of, wall = self._pipelined(bundles, stage, coins_factory, depth, live_statement=live_statement)
         out = []
         for i, (pf, bd) in enumerate(zip(proofs, bundles)):
             g_m = pf.g.timings.get("total", 0.0) + pf.g.timings.get("hints_host", 0.0)
@@ -981,6 +998,20 @@ class SharedHashedRunner(HashedRelationRunner):
             out.append((coins_of[i], pf, (bd["is_end"], bd["idx"], bd["ypub"], bd["auth"], sibs[i], bd["table_h"], bd["units"]),
                         bd["lay"]))
         return out, wall
+
+    def _coins_h_for(self, coins, coins_h=None):
+        """The hash side's step-0 coin source.  G's source live (``live.LiveCoins``): H's is the SAME verifier's second
+        coin set of this pair (``coins.h_coins()``) and a prover-sampled one is refused -- in an interactive proof every
+        coin comes from the verifier.  Local G coins: ``coins_h`` or a fresh local sample (interactive mode)."""
+        if hasattr(coins, "set_statement"):
+            if coins_h is None:
+                coins_h = coins.h_coins()
+            if not hasattr(coins_h, "set_statement") or getattr(coins_h, "session", None) is not coins.session:
+                raise ValueError("live verifier: the hash side's coins must come from the same live session (prover-sampled coins_h refused)")
+            return coins_h
+        if coins_h is None and self.interactive:
+            coins_h = protocol_mod.Coins.sample()
+        return coins_h
 
     def _sponges_for_units(self, units_np: np.ndarray, rows: np.ndarray):
         """The precomputed sponges of the hash side's units, or None when ``rows`` are not the committed rows (overrides)."""
@@ -1032,10 +1063,18 @@ class SharedHashedRunner(HashedRelationRunner):
         from .chain import FpArgs
         if self.interactive:
             coins = protocol_mod.Coins.sample() if coins is None else coins
-            coins_h = protocol_mod.Coins.sample() if coins_h is None else coins_h
+            coins_h = self._coins_h_for(coins, coins_h)
         vu_ids = list(range(len(vus))) if vu_ids is None else list(vu_ids)
         auth = self.auth_for(vu_ids) if auth is None else auth
         lay = self.layout(len(vus), min_l)
+        live_sibs = None
+        if hasattr(coins, "set_statement"):
+            # a live verifier: the pair's v6 statement (multiproofs included) travels ahead of G's root; outside the clocks
+            from .live import set_statement
+            bd = self.marshal_shared(vus, vu_ids, min_l)
+            live_sibs = hashauth.open_trees(self.trees, auth)
+            set_statement(coins, self, (bd["is_end"], bd["idx"], bd["ypub"], auth, live_sibs, bd["table_h"], bd["units"]),
+                          lay, self.cfg(lay.l), self.n_proofs)
         units_np, ux, uw = hashchain.shared_units(auth)
         n_units = len(units_np)
         lay_h = self.layout_h(n_units, lay.l)                # from the authentication block and G's l alone (the verifier's derivation)
@@ -1087,7 +1126,7 @@ class SharedHashedRunner(HashedRelationRunner):
         proof_h = prove(self.p, self.sys_h, self.tb_h, self.cfg_h(lay_h.l), pub_h, hints_h, self.device, check=check, mutate=mutate_h,
                         chain=(lay_h, ypub_h, fp_h), words={"a": table_h_np, "b": units_np}, coins=coins_h, rel=self.hooks_h_for(auth))
         t1 = time.perf_counter()
-        sibs = hashauth.open_trees(self.trees, auth)
+        sibs = hashauth.open_trees(self.trees, auth) if live_sibs is None else live_sibs
         openings = time.perf_counter() - t1
         timings = {k: proof_g.timings.get(k, 0.0) + proof_h.timings.get(k, 0.0) for k in set(proof_g.timings) | set(proof_h.timings)}
         timings["auth_openings"] = openings
@@ -1890,7 +1929,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
                     entry["coins_bytes"] = (rd / f"{stem}.coins").stat().st_size
                     entry["coins_sha256"] = sha256_file(rd / f"{stem}.coins")     # D7: the step-0 coins' custody, like proof_sha256
                     if shared and proof.h.coins is not None:
-                        Vh = proof.h.coins                                      # the hash side's coins (sampled by prove_vus)
+                        Vh = proof.h.coins                                      # the hash side's coins (the live verifier's under --verifier)
                         (rd / f"{stem}.hcoins").write_bytes(Vh.r1 + Vh.s1 + Vh.r2 + Vh.s2)
                         entry["coins_h"] = f"rep{rep}/{stem}.hcoins"
                 dump_manifest["files"].append(entry)
