@@ -183,6 +183,198 @@ def test_fetch_subtree_and_listing(store, fs_remote, tmp_path, capsys):
     assert sorted(p.relative_to(tmp_path / "cli").as_posix() for p in (tmp_path / "cli").rglob("*") if p.is_file()) == ["rep1/sub_00.proof", "rep1/sub_01.proof", "system.bin"]
 
 
+# ---- item 2: labels durability -------------------------------------------------------------------------------------------------------------------
+
+def _labels_by_hash(st: LocalStore) -> dict[str, dict]:
+    from research.store import labels_sync as LS
+
+    return {h: lab.to_doc() for h, (_, lab) in LS.local_labels(st).items()}
+
+
+def test_labels_sync_is_a_union_that_never_overwrites(env, fs_remote, tmp_path, capsys):
+    from research.store import labels_sync as LS
+
+    a, b = LocalStore(tmp_path / "A"), LocalStore(tmp_path / "B")
+    art = "art:" + "1" * 64
+    a.add_label(art, "status", "verified", "alice", ts="2026-09-23T01:00:00Z")
+    a.add_label(art, "note", "first", "alice", ts="2026-09-23T01:00:00Z")            # same second, same by -> ~2 locally
+    b.add_label(art, "status", "rejected", "alice", ts="2026-09-23T01:00:00Z")        # same second, same by, DIFFERENT assertion on another machine
+    b.add_label(RUN, "grade", "A", "bob")
+    assert (a.labels_dir(art) / "20260923T010000Z-alice.json").exists() and (b.labels_dir(art) / "20260923T010000Z-alice.json").exists()
+
+    ra = LS.sync(a)
+    assert ra["local"] == 2 and ra["remote_before"] == 0 and len(ra["pushed"]) == 2 and ra["pulled"] == [] and ra["bad"] == []
+    keys = sorted(p.relative_to(fs_remote).as_posix() for p in fs_remote.rglob("*.json"))
+    assert len(keys) == 2 and all(LS.KEY_RE.match(k) and k.startswith(f"labels/art_{'1' * 64}/") for k in keys), keys
+    rb = LS.sync(b)
+    assert len(rb["pushed"]) == 2 and len(rb["pulled"]) == 2 and rb["already"] == 0
+    ra2 = LS.sync(a)
+    assert ra2["pushed"] == [] and len(ra2["pulled"]) == 2 and ra2["already"] == 2
+    assert _labels_by_hash(a) == _labels_by_hash(b) and len(_labels_by_hash(a)) == 4, "both stores hold the union"
+    assert sorted(p.relative_to(fs_remote).as_posix() for p in fs_remote.rglob("*.json")).__len__() == 4, "one immutable key per assertion"
+    assert [(l.value, l.by) for l in a.labels(art, key="status")] == [("verified", "alice"), ("rejected", "alice")]
+    assert [(l.value, l.by) for l in b.labels(art, key="status")] == [("rejected", "alice"), ("verified", "alice")], "history order: ts, then arrival"
+    assert a.index.labels(art, key="status").__len__() == 2 and b.index.labels(RUN)[0]["value"] == "A", "pulled labels are indexed"
+    assert LS.sync(a) == {**LS.sync(b), "local": 4} | {"pushed": [], "pulled": [], "already": 4, "bad": [], "local": 4, "remote_before": 4, "remote": f"fs:{fs_remote}"}, "idempotent"
+    assert a.labels(RUN)[0].ts == b.labels(RUN)[0].ts and a.labels(RUN)[0].ref is None
+
+    # a hand-formatted local file hashes like its canonical form and goes up as canonical bytes; a tampered remote key is refused, not landed
+    (a.labels_dir(RUN)).mkdir(exist_ok=True)
+    (a.labels_dir(RUN) / "20260923T020000Z-carol.json").write_text(json.dumps(
+        {"schema": "research/label/v0.1", "target": RUN, "key": "note", "value": "pretty", "by": "carol", "ts": "2026-09-23T02:00:00Z", "ref": None}, indent=2))
+    ra3 = LS.sync(a)
+    assert len(ra3["pushed"]) == 1
+    up = fs_remote / LS.PREFIX / RUN / f"{ra3['pushed'][0]}.json"
+    assert up.read_bytes() == json.dumps({"by": "carol", "key": "note", "ref": None, "schema": "research/label/v0.1", "target": RUN, "ts": "2026-09-23T02:00:00Z",
+                                          "value": "pretty"}, separators=(",", ":")).encode()
+    bad = fs_remote / LS.PREFIX / RUN / f"{'f' * 64}.json"
+    bad.write_bytes(json.dumps({"schema": "research/label/v0.1", "target": RUN, "key": "grade", "value": "F", "by": "mallory", "ts": "2026-09-23T03:00:00Z", "ref": None}).encode())
+    rb2 = LS.sync(b)
+    assert len(rb2["pulled"]) == 1 and len(rb2["bad"]) == 1 and "not its name" in rb2["bad"][0]
+    assert [l.value for l in b.labels(RUN, key="grade")] == ["A"], "the tampered assertion never lands"
+
+    assert main(["labels-sync", "--store", str(tmp_path / "A")]) == 1, "bad remote keys -> exit 1"
+    out, err = capsys.readouterr()
+    assert "5 local, 6 on fs:" in out and "1 bad remote key" in out and "not its name" in err
+    assert main(["labels-sync", "--store", str(tmp_path / "A"), "--pull-only", "--json"]) == 1
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["pushed"] == [] and rep["pulled"] == [] and rep["already"] == 5
+
+
+def test_push_pending_carries_labels_and_reindex_remote_pulls_them(env, fs_remote, tmp_path, capsys):
+    a = LocalStore(tmp_path / "A")
+    art = a.put_artifact("proof/v1", {"n": 1}, file=_tree(tmp_path / "p", {"p.bin": b"proof"}) / "p.bin")
+    a.add_label(art, "status", "verified", "alice", ref=RUN)
+    a.add_label(RUN, "note", "x", "alice")
+    assert main(["push", "--store", str(tmp_path / "A"), "--pending", "--no-labels"]) == 0
+    assert "labels:" not in capsys.readouterr().out and not (fs_remote / "labels").exists()
+    assert main(["push", "--store", str(tmp_path / "A"), "--pending"]) == 0
+    out = capsys.readouterr().out
+    assert "labels: 2 pushed, 0 already there" in out
+    assert main(["push", "--store", str(tmp_path / "A"), "--pending", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["labels"]["already"] == 2
+
+    c = LocalStore(tmp_path / "C")                                                    # a fresh machine: reindex --remote brings labels down with the manifests
+    assert c.labels(art) == []
+    assert main(["reindex", "--store", str(tmp_path / "C"), "--remote"]) == 0
+    assert "2 labels (2 pulled from the remote)" in capsys.readouterr().out
+    assert [(l.key, l.value, l.ref) for l in c.labels(art)] == [("status", "verified", RUN)] and c.get_manifest(art).kind == "proof/v1"
+    assert c.index.labels(art)[0]["value"] == "verified"
+
+
+def test_labels_backup_tarball_and_directory_import_by_union(env, tmp_path, capsys):
+    import tarfile
+
+    from research.store import labels_sync as LS
+
+    a = LocalStore(tmp_path / "A")
+    art = "art:" + "2" * 64
+    a.add_label(art, "status", "verified", "alice", ts="2026-09-23T01:00:00Z")
+    a.add_label(art, "note", "n", "alice", ts="2026-09-23T01:00:00Z")
+    a.add_label(RUN, "grade", "B", "bob")
+    tgz = tmp_path / "labels-backup.tgz"
+    with tarfile.open(tgz, "w:gz") as tf:
+        tf.add(a.root / "labels", arcname="labels")
+    backup = a.put_artifact("labels-backup/v1", {"files": 3, "targets": 2, "taken_utc": "2026-09-23T01:38:50Z", "host": "laptop"}, file=tgz)
+
+    d = LocalStore(tmp_path / "D")
+    d.add_label(RUN, "grade", "B", "bob", ts=a.labels(RUN)[0].ts)                      # the same assertion already here -> skipped, not duplicated
+    d.add_label(RUN, "grade", "C", "dave")
+    (d.root / "manifests").mkdir(exist_ok=True)
+    import shutil
+    shutil.copy(a.manifest_path(ids.hex_of(backup)), d.manifest_path(ids.hex_of(backup)))
+    shutil.copy(a.object_path(a.get_manifest(backup).payload.sha256), d.object_path(a.get_manifest(backup).payload.sha256))
+    d.reindex()
+    rep = LS.import_backup(d, backup)
+    assert rep == {"seen": 3, "added": 2, "already": 1, "bad": 0}
+    assert _labels_by_hash(d).keys() >= _labels_by_hash(a).keys() and len(_labels_by_hash(d)) == 4
+    assert [l.value for l in d.labels(RUN, key="grade")].__len__() == 2
+    assert LS.import_backup(d, backup) == {"seen": 3, "added": 0, "already": 3, "bad": 0}, "idempotent"
+    with pytest.raises(ValueError, match="not labels-backup/v1"):
+        LS.import_backup(d, d.put_artifact("proof/v1", {}, file=tgz))
+
+    e = LocalStore(tmp_path / "E")
+    (a.labels_dir(art) / "junk.json").write_text("{not json")
+    assert main(["labels-sync", "--store", str(tmp_path / "E"), "--from-dir", str(a.root / "labels")]) == 0
+    out, err = capsys.readouterr()
+    assert "4 in " in out and "3 added, 0 already here, 1 unreadable" in out and "junk.json" in err
+    assert _labels_by_hash(e).keys() == _labels_by_hash(a).keys()
+
+
+# ---- item 3: catalog schema version --------------------------------------------------------------------------------------------------------------
+
+def test_catalog_schema_version_forward_migration_and_refusal_of_newer(env, tmp_path, monkeypatch, capsys):
+    import sqlite3
+
+    from research.store import index as IX
+
+    p = tmp_path / "store" / "catalog.sqlite"
+    p.parent.mkdir(parents=True)
+    db = sqlite3.connect(p)                                                                     # a v0 catalog as the 2026-09-22 code left it
+    db.executescript(IX.SCHEMA.replace("CREATE TABLE IF NOT EXISTS replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, PRIMARY KEY(id, location));",
+                                       "CREATE TABLE IF NOT EXISTS replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, verified TEXT, PRIMARY KEY(id, location));"))
+    db.execute("INSERT INTO replicas VALUES ('art:a', 'remote', '2026-09-22T00:00:00Z', 'fs:x', 'etag-md5')")
+    db.execute("INSERT INTO replicas VALUES ('art:b', 'remote', NULL, 'fs:x', NULL)")
+    db.execute("INSERT INTO artifacts VALUES ('art:a', 'proof/v1', 1, 'file', '{}', 1, 1, NULL)")
+    db.commit()
+    assert IX.catalog_version(db) == 0
+    db.close()
+
+    ix = IX.Index(p)
+    assert ix.migration == {"from": 0, "to": IX.SCHEMA_VERSION, "steps": ["v0->v1"]} and ix.version == IX.SCHEMA_VERSION == 1
+    assert [r[1] for r in ix.db.execute("PRAGMA table_info(replicas)")] == ["id", "location", "verified_utc", "detail"]
+    assert ix.replicas("art:a") == {"remote": {"verified_utc": "2026-09-22T00:00:00Z", "detail": "fs:x", "verified": "etag-md5"}}
+    assert ix.replicas("art:b")["remote"]["verified"] is None and ix.artifact("art:a")["kind"] == "proof/v1"
+    info = ix.info()
+    assert info["schema_version"] == 1 and info["code_version"] == 1 and info["tables"]["replicas"] == 2 and info["tables"]["replica_checks"] == 1
+    ix.close()
+    ix2 = IX.Index(p)
+    assert ix2.migration == {"from": 1, "to": 1, "steps": []}, "a current catalog is left alone"
+    ix2.close()
+    assert main(["catalog", "--store", str(p.parent)]) == 0
+    out = capsys.readouterr().out
+    assert "schema v1 (code v1); current" in out and "replicas                    2 rows" in out
+
+    fresh = IX.Index(tmp_path / "fresh" / "catalog.sqlite")                                     # a brand-new catalog is stamped, not "migrated"
+    assert fresh.version == IX.SCHEMA_VERSION and fresh.migration["from"] == 0
+    fresh.close()
+
+    db = sqlite3.connect(p)                                                                     # a catalog written by code from the future
+    db.execute(f"PRAGMA user_version = {IX.SCHEMA_VERSION + 1}")
+    db.execute("CREATE TABLE future_only(x)")
+    db.commit()
+    db.close()
+    with pytest.raises(IX.CatalogVersionError, match=rf"schema v{IX.SCHEMA_VERSION + 1}; this `research` code knows v{IX.SCHEMA_VERSION}.*OLDER.*RESEARCH_CATALOG_IGNORE_VERSION"):
+        IX.Index(p)
+    assert main(["catalog", "--store", str(p.parent)]) == 3 and main(["select", "--store", str(p.parent), "--kind", "proof/v1"]) == 3
+    err = capsys.readouterr().err
+    assert "research data catalog:" in err and "Traceback" not in err and str(p) in err
+    monkeypatch.setenv(IX.IGNORE_VERSION_ENV, "1")
+    ix3 = IX.Index(p)
+    assert ix3.version == IX.SCHEMA_VERSION + 1 and ix3.migration.get("ignored") and ix3.artifact("art:a")["kind"] == "proof/v1", "escape hatch: opened, not downgraded"
+    ix3.close()
+    assert main(["catalog", "--store", str(p.parent)]) == 0 and "opened under RESEARCH_CATALOG_IGNORE_VERSION" in capsys.readouterr().out
+
+    monkeypatch.delenv(IX.IGNORE_VERSION_ENV)
+    monkeypatch.setattr(IX, "SCHEMA_VERSION", 3)                                                # a future code version chains the steps
+    monkeypatch.setitem(IX.MIGRATIONS, 1, lambda db: db.execute("CREATE TABLE side_one(x)"))
+    monkeypatch.setitem(IX.MIGRATIONS, 2, lambda db: db.execute("CREATE TABLE side_two(x)"))
+    db = sqlite3.connect(p)
+    db.execute("PRAGMA user_version = 1")
+    db.commit()
+    db.close()
+    ix4 = IX.Index(p)
+    assert ix4.migration == {"from": 1, "to": 3, "steps": ["v1->v2", "v2->v3"]} and "side_two" in ix4.info()["tables"]
+    ix4.close()
+    monkeypatch.setitem(IX.MIGRATIONS, 3, lambda db: db.execute("CREATE TABLE boom(x); INSERT INTO nope VALUES (1)"))
+    monkeypatch.setattr(IX, "SCHEMA_VERSION", 4)
+    with pytest.raises(sqlite3.Error):
+        IX.Index(p)
+    db = sqlite3.connect(p)
+    assert IX.catalog_version(db) == 3 and not db.execute("SELECT name FROM sqlite_master WHERE name='boom'").fetchall(), "a failed step rolls back whole"
+    db.close()
+
+
 # ---- item 8: parallel HEADs in `where` -----------------------------------------------------------------------------------------------------------
 
 def test_where_heads_in_parallel(store, fs_remote, tmp_path, monkeypatch):

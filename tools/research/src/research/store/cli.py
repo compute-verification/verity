@@ -3,9 +3,12 @@
   research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
   research data show ART|ATTEMPT|DRV [--json]      manifest / attempt / attempts with that derivation
   research data where ART [--json]                 replicas: local / repo / remote (+ verified_utc)
-  research data push [ART|RUN ...] [--pending] [--jobs N] [--verify head|readback]
+  research data push [ART|RUN ...] [--pending [--no-labels]] [--jobs N] [--verify head|readback]
                                                    preserve on the remote: blobs uploaded concurrently and verified, then the manifest (PRESERVED);
-                                                   a run pushes its attempt + outputs
+                                                   a run pushes its attempt + outputs; --pending also pushes the local assertions the remote lacks
+  research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
+                                                   union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
+                                                   --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
   research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
@@ -22,7 +25,9 @@
   research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR]
                                                    re-register every fixtures/artifacts.json entry whose bytes changed; old id kept under `previous`
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
-  research data reindex [--remote]
+  research data reindex [--remote]                 rebuild the catalog; --remote first pulls the manifests/attempts/labels the remote has and we lack
+  research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
+                                                   refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
   research data sql "SELECT ..." [--json]          read-only connection
   research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
                                                    a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
@@ -41,6 +46,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import ids, vocab
+from .index import IGNORE_VERSION_ENV, CatalogVersionError
 from .local import LocalStore, StoreError
 from .remote import ConfigError, RemoteConflict
 
@@ -377,6 +383,37 @@ def cmd_label(argv: list[str]) -> int:
     return 0
 
 
+def cmd_labels_sync(argv: list[str]) -> int:
+    """Union the local labels/ with the remote's `labels/` prefix (`labels_sync.py`): every assertion goes up under its content hash
+    (`labels/<target>/<sha256>.json`, immutable, so two machines never overwrite each other), and every remote assertion we lack comes
+    down into the store's own layout.  `--from-backup ART` unions a `labels-backup/v1` tarball instead; `--from-dir DIR` any directory of
+    assertion files (another store's labels/).  Read-only for the remote with `--pull-only`; nothing is ever deleted or rewritten."""
+    from . import labels_sync as LS  # noqa: PLC0415
+
+    ap = _ap("labels-sync")
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument("--push-only", action="store_true", help="only upload local assertions the remote lacks")
+    g.add_argument("--pull-only", action="store_true", help="only download remote assertions this store lacks")
+    g.add_argument("--from-backup", metavar="ART", help="union a labels-backup/v1 artifact's tarball into labels/ (no remote needed)")
+    g.add_argument("--from-dir", metavar="DIR", help="union a directory of assertion files into labels/ (no remote needed)")
+    ap.add_argument("--jobs", type=int, default=LS.SYNC_JOBS, metavar="N")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    warn = None if ns.json else (lambda s: print(s, file=sys.stderr))
+    if ns.from_backup or ns.from_dir:
+        rep = LS.import_backup(st, ns.from_backup, warn=warn) if ns.from_backup else LS.import_dir(st, Path(ns.from_dir), warn=warn)
+        _dump(rep) if ns.json else print(f"labels: {rep['seen']} in {ns.from_backup or ns.from_dir}: {rep['added']} added, {rep['already']} already here, {rep['bad']} unreadable")
+        return 0
+    rep = LS.sync(st, push=not ns.pull_only, pull=not ns.push_only, jobs=max(1, ns.jobs), log=warn)
+    if ns.json:
+        _dump(rep)
+    else:
+        print(f"labels: {rep['local']} local, {rep['remote_before']} on {rep['remote']}: {len(rep['pushed'])} pushed, {len(rep['pulled'])} pulled, "
+              f"{rep['already']} already on both" + (f", {len(rep['bad'])} bad remote key(s) skipped" if rep["bad"] else ""))
+    return 1 if rep["bad"] else 0
+
+
 def cmd_vocab(argv: list[str]) -> int:
     ap = _ap("vocab")
     ap.add_argument("--json", action="store_true")
@@ -390,12 +427,40 @@ def cmd_vocab(argv: list[str]) -> int:
 
 def cmd_reindex(argv: list[str]) -> int:
     ap = _ap("reindex")
-    ap.add_argument("--remote", action="store_true", help="also list the remote; fetch manifests/attempts it has and we lack")
+    ap.add_argument("--remote", action="store_true", help="also list the remote; fetch manifests/attempts/labels it has and we lack")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
+    pulled = None
+    if ns.remote and st.remote is not None:                         # labels first: the rebuild below then indexes them with everything else
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        pulled = len(LS.sync(st, push=False, pull=True, log=None if ns.json else (lambda s: print(s, file=sys.stderr)))["pulled"])
     n = st.reindex(remote=ns.remote)
-    _dump(n) if ns.json else print(f"reindexed {st.root}: {n['artifacts']} artifacts, {n['attempts']} attempts, {n['labels']} labels")
+    if pulled is not None:
+        n["labels_pulled"] = pulled
+    _dump(n) if ns.json else print(f"reindexed {st.root}: {n['artifacts']} artifacts, {n['attempts']} attempts, {n['labels']} labels"
+                                   + (f" ({pulled} pulled from the remote)" if pulled is not None else ""))
+    return 0
+
+
+def cmd_catalog(argv: list[str]) -> int:
+    """The catalog's schema version against this code's, what opening it just migrated (older catalogs are brought forward on every
+    open, in one transaction), and row counts per table.  Exit 0 when current, 3 (before printing) when the catalog is NEWER than
+    the code -- see `CatalogVersionError`."""
+    ap = _ap("catalog")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    info = LocalStore(ns.store).index.info()
+    if ns.json:
+        _dump(info)
+        return 0
+    mig = info["migration"]
+    did = (f"migrated {' , '.join(mig['steps'])} on this open" if mig["steps"] else
+           ("opened under " + IGNORE_VERSION_ENV if mig.get("ignored") else "current"))
+    print(f"{info['path']}: schema v{info['schema_version']} (code v{info['code_version']}); {did}; {info['bytes'] / 1e6:.1f} MB")
+    for t, n in info["tables"].items():
+        print(f"  {t:<20} {n:>8} rows")
     return 0
 
 
@@ -446,6 +511,7 @@ def cmd_push(argv: list[str]) -> int:
     ap.add_argument("--jobs", type=int, default=32, metavar="N", help="concurrent uploads per artifact (default 32)")
     ap.add_argument("--verify", choices=["head", "readback"], default="head",
                     help="per-object check: head = Content-Length + single-part ETag == MD5 (default); readback = download + sha256")
+    ap.add_argument("--no-labels", action="store_true", help="with --pending: do not push the local assertions the remote lacks")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if ns.jobs < 1:
@@ -495,15 +561,26 @@ def cmd_push(argv: list[str]) -> int:
                 if note not in notes_seen:                             # e.g. the remote switching conditional PUT off: said once
                     notes_seen.add(note)
                     print(f"research data push: note: {note}", file=sys.stderr)
+    labels_rep = None
+    if ns.pending and not ns.no_labels:                             # labels are assertions about what was just pushed: they travel with it
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        try:
+            labels_rep = LS.sync(st, push=True, pull=False, jobs=ns.jobs)
+        except Exception as e:  # noqa: BLE001
+            labels_rep = {"error": f"{type(e).__name__}: {e}", "pushed": [], "local": None, "already": None}
     bad = [x for x in reports if not x["preserved"]]
     if ns.json:
-        _dump({"remote": r.describe(), "pushed": reports, "not_preserved": len(bad)})
+        _dump({"remote": r.describe(), "pushed": reports, "not_preserved": len(bad), "labels": labels_rep})
     else:
         for x in reports:
             if x["kind"] == "attempt":
                 print(f"{x['id']}  attempt  {'PRESERVED' if x['preserved'] else 'NOT preserved: ' + '; '.join(x.get('errors') or ['absent'])}")
         print(f"{len(reports) - len(bad)}/{len(reports)} preserved on {r.describe()}")
-    return 1 if bad else 0
+        if labels_rep is not None:
+            print(f"labels: {len(labels_rep['pushed'])} pushed, {labels_rep['already']} already there" if "error" not in labels_rep
+                  else f"labels: NOT pushed: {labels_rep['error']}")
+    return 1 if bad or (labels_rep and "error" in labels_rep) else 0
 
 
 def cmd_mint_credential(argv: list[str]) -> int:
@@ -627,7 +704,8 @@ def cmd_doctor(argv: list[str]) -> int:
 COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "select": cmd_select, "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
-    "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor, "evict": cmd_evict,
+    "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
+    "catalog": cmd_catalog,
 }
 
 
@@ -643,6 +721,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         return fn(rest)
+    except CatalogVersionError as e:                                  # the worktree is behind the catalog: say so, exit 3, no traceback
+        print(f"research data {cmd}: {e}", file=sys.stderr)
+        return 3
     except (StoreError, ConfigError, RemoteConflict, ValueError, OSError, NotImplementedError, sqlite3.Error) as e:
         print(f"research data {cmd}: {e}", file=sys.stderr)
         return 1
