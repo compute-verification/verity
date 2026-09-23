@@ -263,7 +263,11 @@ def system_id(sys: System) -> bytes:
     h.update(repr(sys.hints).encode())
     if sys.chain is not None:
         h.update(repr(sys.chain["c"]).encode())
-        h.update(repr([e.key() for e in sys.chain["y"]] + [sys.chain["y16"].key()]).encode())
+        if sys.chain.get("y16") is not None:
+            h.update(repr([e.key() for e in sys.chain["y"]] + [sys.chain["y16"].key()]).encode())
+        else:   # component ends (chain.py): the expression AND the bit field it is compared against
+            h.update(repr([e.key() for e in sys.chain["y"]]).encode())
+            h.update(repr([("end", Y.key(), int(lo), int(bits)) for Y, lo, bits in sys.chain["y_end"]]).encode())
     d = h.digest()
     _SYS_ID[key] = (sys, d)
     return d

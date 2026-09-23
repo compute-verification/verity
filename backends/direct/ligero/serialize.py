@@ -11,6 +11,8 @@ verifier does).  Layout (every array is written without a length prefix when the
 ligero-system/v1     magic "LIGSYS01" | u32 m | u32 n_pins | n_pins x (str name, u32 row) | u32 L | L x linear
                      | u32 Q | Q x (expr a, expr b, expr c) | u8 has_chain | [3 x u32 c rows | 3 x expr y | expr y16]
                      | 32 B sys_id (protocol.system_id, the Python digest)
+ligero-system/v2     magic "LIGSYS02" | as v1, but the chain's trailing ``expr y16`` is replaced by
+                     u32 n_end | n_end x (expr Y, u32 lo, u32 bits): the end in components (chain.py; FP4)
     linear           u32 nnz | nnz x (u32 row, u32 coef) | u32 const | u32 pub_pin (0xFFFFFFFF = 0)
     expr             u32 nnz | nnz x (u32 row, u32 coef) | u32 const
     str              u32 len | utf-8 bytes
@@ -41,6 +43,7 @@ import numpy as np
 from .compile import P, System
 
 SYS_MAGIC, STMT_MAGIC, PROOF_MAGIC = b"LIGSYS01", b"LIGSTM02", b"LIGPRF01"
+SYS_MAGIC_V2 = b"LIGSYS02"     # a chain system whose end is in components (chain.py): v1 with the y16 expr replaced
 MODE_CODES = {"interactive": 0, "fiat-shamir": 1}
 MODE_NAMES = {v: k for k, v in MODE_CODES.items()}
 HASH_IDS = {"blake3": 1, "sha256": 2}
@@ -144,15 +147,28 @@ def system_bytes(sys: System) -> bytes:
             w.u32(idx)
         for e in sys.chain["y"]:
             _expr_w(w, e.lin, e.c)
-        _expr_w(w, sys.chain["y16"].lin, sys.chain["y16"].c)
+        if sys.chain.get("y16") is not None:
+            _expr_w(w, sys.chain["y16"].lin, sys.chain["y16"].c)
+        else:
+            # component ends (chain.py; only ``ligero-system/v2`` files carry them): u32 n_end | n_end x (expr, u32 lo, u32 bits)
+            w.u32(len(sys.chain["y_end"]))
+            for Y, lo, bits in sys.chain["y_end"]:
+                _expr_w(w, Y.lin, Y.c)
+                w.u32(int(lo))
+                w.u32(int(bits))
     w.raw(system_id(sys))
-    return w.bytes()
+    out = w.bytes()
+    if sys.chain is not None and sys.chain.get("y16") is None:
+        out = SYS_MAGIC_V2 + out[len(SYS_MAGIC):]
+    return out
 
 
 def read_system(data: bytes) -> dict:
     r = _R(data)
-    if r.take(8) != SYS_MAGIC:
-        raise ValueError("not a ligero-system/v1 file")
+    magic = r.take(8)
+    if magic not in (SYS_MAGIC, SYS_MAGIC_V2):
+        raise ValueError("not a ligero-system/v1 or /v2 file")
+    v2 = magic == SYS_MAGIC_V2
     m = r.u32()
     pins = [(r.s(), r.u32()) for _ in range(r.u32())]
     linear = []
@@ -165,8 +181,12 @@ def read_system(data: bytes) -> dict:
     if r.u8():
         c_rows = [r.u32() for _ in range(3)]
         ys = [_expr_r(r) for _ in range(3)]
-        y16 = _expr_r(r)
-        chain = {"c": c_rows, "y": ys, "y16": y16}
+        if v2:
+            y_end = [(_expr_r(r), r.u32(), r.u32()) for _ in range(r.u32())]
+            chain = {"c": c_rows, "y": ys, "y16": None, "y_end": y_end}
+        else:
+            y16 = _expr_r(r)
+            chain = {"c": c_rows, "y": ys, "y16": y16}
     sys_id = r.take(32)
     r.done()
     return {"m": m, "pins": pins, "linear": linear, "quadratic": quadratic, "chain": chain, "sys_id": sys_id}

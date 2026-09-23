@@ -10,6 +10,16 @@ are one linear system A w = b over the flattened witness.  The verifier draws on
 prover sends q(X) = sum_i R_i(X) p_i(X) (degree < 2l - 1); the verifier checks sum_{H} q = r^T b, i.e.
 l (q_0 + q_l) = r^T b, and q(eta_c) = sum_i R_i(eta_c) U_i[c] at the opened columns.  Nothing is rotated or opened
 beyond the t columns; the soundness term is the linear test's ((k + l)/n)^t with k = l (Appendix C).
+
+Chain ends in components (``sys.chain["y_end"]``, the FP4 relation).  A public word of more than 30 bits cannot be
+compared to a single field element (2^32 > p: the word w and w + p are the same residue), so a relation whose claimed
+word is a full FP32 may end its chain on up to three bounded COMPONENTS instead: ``y_end = [(Y_x, lo_x, bits_x)]``,
+one constraint ``Y_x(W)[j] = (y_pub[j] >> lo_x) & (2^bits_x - 1)`` per component at every end column j.  Each
+component is < 2^31 < p, so equality mod p is integer equality once the relation range-constrains the row.  The
+coefficients: component 0 uses the end family (6) and components 1, 2 the link families (0, 1), which are unused at
+end columns (an end column has no successor in its VU: the link mask is 0 there), so every constraint still has its
+own uniform coefficient and nothing is sampled beyond the seven families.  Single-``y16`` systems (BF16, FP8) keep
+their transcripts byte for byte.
 """
 from __future__ import annotations
 
@@ -19,9 +29,30 @@ import torch
 
 from .compile import P, System
 
-__all__ = ["N_FAMILIES", "ChainCoefs", "Layout", "chain_coefs"]
+__all__ = ["N_FAMILIES", "END_FAMILIES", "ChainCoefs", "Layout", "chain_coefs", "end_terms"]
 
 N_FAMILIES = 7        # link x3, start x3, end
+END_FAMILIES = (6, 0, 1)   # coefficient family of end component x (see the module comment)
+
+
+def end_terms(ch: dict) -> list[tuple[object, int, int, int]]:
+    """The chain-end constraints of a compiled chain as ``(Expr, family, lo, bits)``: one ``(y16, 6, 0, 0)`` for a
+    single-word end (``bits = 0``: the whole public word, compared as a residue), else one per component."""
+    if ch.get("y16") is not None:
+        return [(ch["y16"], END_FAMILIES[0], 0, 0)]
+    comps = ch["y_end"]
+    if not 1 <= len(comps) <= len(END_FAMILIES):
+        raise ValueError(f"a chain end has 1..{len(END_FAMILIES)} components, got {len(comps)}")
+    return [(Y, END_FAMILIES[x], int(lo), int(bits)) for x, (Y, lo, bits) in enumerate(comps)]
+
+
+def end_values(ch: dict, y_pub: torch.Tensor) -> list[torch.Tensor]:
+    """The public value each end constraint compares against, per column: ``y_pub`` (l,) as a residue for a
+    single-word end, else the bit field ``(y_pub >> lo) & (2^bits - 1)`` of every component."""
+    out = []
+    for _, _, lo, bits in end_terms(ch):
+        out.append(y_pub % P if bits == 0 else (y_pub >> lo) & (2 ** bits - 1))
+    return out
 
 
 @dataclass(frozen=True)
@@ -60,16 +91,17 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
     device = rc.device
     D, _, l = rc.shape
     start, link, end = layout.masks(device)
+    ends = end_terms(ch)
     involved: dict[int, int] = {}
     for idx in ch["c"]:
         involved.setdefault(idx, len(involved))
-    for e in ch["y"] + [ch["y16"]]:
+    for e in ch["y"] + [Y for Y, _, _, _ in ends]:
         for idx in e.lin:
             involved.setdefault(idx, len(involved))
     rows = torch.tensor(list(involved.keys()), dtype=torch.int64, device=device)
     coef = torch.zeros((D, len(involved), l), dtype=torch.int64, device=device)
     rhs = torch.zeros((D,), dtype=torch.int64, device=device)
-    y16 = y16_pub.to(device) % P
+    y_vals = end_values(ch, y16_pub.to(device))
     for x in range(3):
         c_idx, Y = ch["c"][x], ch["y"][x]
         r_link = (rc[:, x, :] * link[None, :]) % P            # (D, l), zero off the linked positions
@@ -82,10 +114,10 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
         rhs = (rhs + (r_link.sum(1) % P) * (Y.c % P)) % P                    # b = +Y.c
         # start_j: W[c][j] = 0
         coef[:, ci, :] = (coef[:, ci, :] + r_start) % P
-    # end_j: sum_i kappa_i W[i][j] + Y16.c = y16_pub[j]
-    Y16 = ch["y16"]
-    r_end = (rc[:, 6, :] * end[None, :]) % P
-    for idx, kappa in Y16.lin.items():
-        coef[:, involved[idx], :] = (coef[:, involved[idx], :] + r_end * (kappa % P)) % P
-    rhs = (rhs + ((r_end * ((y16 - Y16.c) % P)[None, :]) % P).sum(1)) % P
+    # end_j: sum_i kappa_i W[i][j] + Y.c = y_pub[j] (one constraint per end component)
+    for (Y, fam, _, _), yv in zip(ends, y_vals):
+        r_end = (rc[:, fam, :] * end[None, :]) % P
+        for idx, kappa in Y.lin.items():
+            coef[:, involved[idx], :] = (coef[:, involved[idx], :] + r_end * (kappa % P)) % P
+        rhs = (rhs + ((r_end * ((yv - Y.c) % P)[None, :]) % P).sum(1)) % P
     return ChainCoefs(rows, coef, rhs)
