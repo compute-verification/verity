@@ -1,44 +1,6 @@
 {
- "checks": {
-  "commit_summary": {
-   "applies": false,
-   "why": "no commit_summary.json on this row (Commit never closed)"
-  },
-  "coverage": {
-   "applies": false,
-   "why": "no instrumented layouts on this row (Commit never ran)"
-  },
-  "decomp_hashes": {
-   "applies": false,
-   "why": "no match_decomp.json (B=1 rows have no decomposition; FAIL rows never reached it)"
-  },
-  "executed_prefix": {
-   "applies": false,
-   "why": "no tokens.json (served tokens) on this row"
-  },
-  "global_match_checks": {
-   "applies": false,
-   "why": "no global_match.json on this row (Match never reached GM-01)"
-  },
-  "manifest_digest": {
-   "applies": false,
-   "why": "no manifest of record on this row (Commit never built one)"
-  },
-  "program_digest": {
-   "applies": false,
-   "why": "no build_summary.json on this row"
-  },
-  "replay_partition": {
-   "applies": false,
-   "why": "no sampled_replay record on this row"
-  }
- },
+ "checks": {"commit_summary":{"applies":false,"why":"no commit_summary.json on this row (Commit never closed)"},"coverage":{"applies":false,"why":"no instrumented layouts on this row (Commit never ran)"},"decomp_hashes":{"applies":false,"why":"no match_decomp.json (B=1 rows have no decomposition; FAIL rows never reached it)"},"executed_prefix":{"applies":false,"why":"no tokens.json (served tokens) on this row"},"global_match_checks":{"applies":false,"why":"no global_match.json on this row (Match never reached GM-01)"},"manifest_digest":{"applies":false,"why":"no manifest of record on this row (Commit never built one)"},"program_digest":{"applies":false,"why":"no build_summary.json on this row"},"replay_partition":{"applies":false,"why":"no sampled_replay record on this row"}},
  "class": "FAIL",
- "reference": {
-  "branch": "lane/vllm-integration",
-  "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
-  "release": "r19-int-21",
-  "tag": "v1-reference"
- },
+ "reference": {"branch":"lane/vllm-integration","commit":"89af272a8c1d37a44b3e8f3253378d7a152fc281","release":"r19-int-21","tag":"v1-reference"},
  "row": 4
 }

@@ -37,6 +37,17 @@ def _toml_str(s: str) -> str:
     return json.dumps(s, ensure_ascii=False)
 
 
+def dumps_expected(doc: dict) -> str:
+    """The serialisation of `expected/<row>.json`: sorted keys, one top-level check per line, the check's document COMPACT (a
+    `replay_partition.strata` contract is ~5 MB of numbers; `tests/test_repository.py` BLOB_LIMIT is 5 MiB -- indentation is not content)."""
+    lines = ["{"]
+    keys = sorted(doc)
+    for i, k in enumerate(keys):
+        lines.append(f" {json.dumps(k)}: {json.dumps(doc[k], sort_keys=True, separators=(',', ':'), default=str)}" + ("," if i < len(keys) - 1 else ""))
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
 def _toml_val(v) -> str:
     if isinstance(v, bool):
         return "true" if v else "false"
@@ -188,7 +199,7 @@ def main(argv=None) -> int:
     docs = lift_expected(oracle)
     for key, doc in docs.items():
         p = resolver.EXPECTED_DIR / f"{key}.json"
-        p.write_text(json.dumps(doc, indent=1, sort_keys=True, default=str) + "\n")
+        p.write_text(dumps_expected(doc))
         lifted = [k for k, v in doc["checks"].items() if v.get("applies") and v.get("lifted", True)]
         print(f"[lift] #{doc['row']:>2} {key[:48]:<48} lifted {len(lifted)}/{len(doc['checks'])}: {', '.join(lifted)}")
     return 0
