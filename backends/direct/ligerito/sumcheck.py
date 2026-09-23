@@ -1274,12 +1274,13 @@ def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: s
     if dev.type == "cuda":
         torch.cuda.reset_peak_memory_stats(dev)
         base_mem = torch.cuda.memory_allocated(dev)
-    coins = LocalCoins(b"bench")
-    proof = prove(lay, cons, z, coins, engine=engine)
+    proof = prove(lay, cons, z, LocalCoins(b"bench"), engine=engine)
+    out["timings_cold"] = proof.timings                      # first prove in the process: includes the cupy import / kernel load
+    proof = prove(lay, cons, z, LocalCoins(b"bench"), engine=engine)
     if dev.type == "cuda":
         out["peak_mem_gb"] = (torch.cuda.max_memory_allocated(dev)) / 1e9
         out["base_mem_gb"] = base_mem / 1e9
-    out["timings"] = proof.timings
+    out["timings"] = proof.timings                           # steady state
     out["bytes"] = proof.n_bytes()
     t2 = time.perf_counter()
     pubs = public_rows(runner.sys, lay, pub_subs, device)
