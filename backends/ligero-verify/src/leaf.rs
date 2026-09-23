@@ -192,10 +192,15 @@ const ALIASES: &[(&str, &str)] = &[("hash", "poseidon2")];
 /// The `(sys_id, table_digest)` pins of hashed systems composed with a scheme OTHER than Poseidon2 (whose pins live on
 /// the `Relation` itself: `hashed_sys_id` / `hashed_table_digest`): `(relation name, leaf name, sys_id, table_digest)`.
 pub static PINS: &[(&str, &str, &str, &str)] = &[
-    // lane blake3-leaf: `hashchain.compose(fp8-ada-x4, "blake3")` (2 compressions per role per column), gated 2048 VUs +
-    // 86 negatives on vy-blake3-leaf 2026-09-23 18:00Z
-    ("fp8-ada-x4", "blake3", "ac88040054781359fbc51bd9355495fc67e5efd072b341d04c9c8017a46931f1",
-     "120e4a98c27ffc9488b4a6c8e0fcdf510605205beb7fca98d9bc62bedcc8edf6"),
+    // lane blake3-leaf-2, schema `blake3-keyed/row/v2`: `hashchain.compose(<rel>, "blake3")`, each gated 2048 VUs + 86
+    // negatives on vy-blake3-leaf 2026-09-23 21:00Z.  x1 relations: half a block per operand per column (paired columns).
+    ("fp8-ada", "blake3", "71f39e447b62fc8cc510c29bc1b9d35a0e53fbf71d59b5fac919a240dd326932",
+     "bbacbe7a1567142eaaf79c40c34df6f6bdaa0c8d65c9bb7a43ff0e082e37fc52"),
+    ("bf16-hopper", "blake3", "58ef7097798f138e0740f850bab9ad9af458f53ee60636f4547cff91c60caf47",
+     "c681b7a15f97eb9c1a5f4e5f95ba8c0b3dc1f8cbbb328da315d50d2a38e03c84"),
+    // the x4 fold: 2 compressions per role per column
+    ("fp8-ada-x4", "blake3", "1168788f2cf6ab7deaa0974f17ddd981ae972aedccd5c851c99017ae957b705b",
+     "43e0eea0e07a9a9de151867609aef4ae4a99b8b7ff26a5394f59bac67cecd6f1"),
 ];
 
 pub fn names() -> Vec<&'static str> {
