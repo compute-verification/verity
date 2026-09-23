@@ -246,6 +246,15 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
     occ_inputs: list[list[tuple[Any, dict]]] = []      # per occurrence: (fx arg node, interval index of its value AS READ)
     occ_outputs: list[dict] = []                        # per occurrence: interval index over its produced / written collections, tagged by port
     bindings: dict[Any, dict] = getattr(ctx, "occurrence_bindings", {})
+    index_memo: dict[int, tuple[Any, dict | None]] = {}   # id(refs) -> (refs kept alive, its interval index): a cache read by many
+                                                          # occurrences is indexed once
+
+    def indexed(refs) -> dict | None:
+        hit = index_memo.get(id(refs))
+        if hit is None or hit[0] is not refs:
+            hit = index_memo[id(refs)] = (refs, _interval_index(refs))
+        return hit[1]
+
     for node in fx_nodes:
         stack = node.meta.get("nn_module_stack") or {}
         module = ctx.stack_path(node) if stack else ""
@@ -268,7 +277,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
         for j, a in args_flat:
             v = frozen["in"].get(j) if frozen is not None else ctx.env.get(a)
             src, nm = source_of(a, v)
-            index = _interval_index(v.refs) if isinstance(v, Coll) else {}
+            index = indexed(v.refs) if isinstance(v, Coll) else {}
             inp = {"node": a.name, "arg": j if j < n_positional else None, "kwarg": kw_names[j - n_positional] if j >= n_positional else None,
                    "source": src, "name": nm, "view": _view(a.meta.get("val"))}
             if index is None:
@@ -282,7 +291,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
         unindexed: list[Any] = []
         for port, c in enumerate(outs):
             if isinstance(c, Coll):
-                ix = _interval_index(c.refs)
+                ix = indexed(c.refs)
                 if ix is None:
                     unindexed.append(port)
                     continue
@@ -293,7 +302,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
             a = dict(args_flat)[j]
             wd = {"arg": j, "node": a.name, "view": _view(a.meta.get("val"))}
             if isinstance(c, Coll):
-                ix = _interval_index(c.refs)
+                ix = indexed(c.refs)
                 if ix is None:
                     wd["unindexed"] = f"runs>{MAX_RUNS}"
                 else:
