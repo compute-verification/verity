@@ -3,7 +3,7 @@
 # d9105ea80, numpy, safetensors),
 # the native taps (hidden_gpu chunk tree, FA2 matReq tap; FA3 on sm_90), the pinned checkpoints, and a readiness record.
 #
-#   research run --on <machine> --project verity --source <verity checkout> -- bash -c "cd integrations/vllm && bash pod_bootstrap.sh [--cases B0[,B1]] [--out DIR]"
+#   research run --on <machine> --project verity --source <verity checkout> -- bash -c "cd integrations/vllm && bash pod_bootstrap.sh [--cases B0[,B1]] [--out DIR] [--cpu|--gpu] [--dry-run]"
 #
 # Idempotent: every step checks before it builds.  Runs from this directory (the shipped tree's integrations/vllm).  Fails closed with
 # a named class (BOOTSTRAP_FAIL_<step>) and exits 3; the readiness record (readiness.json) is written whether or not every check passed.
@@ -13,7 +13,13 @@
 #   Purpose: make a fresh pod able to run rows from THIS shipped tree: venv312 (Python 3.12) + the sha256-pinned vLLM d9105ea80 cu129
 #     wheel + torch cu129, the pinned checkpoints (manifests/checkpoints.json: sha256 per safetensors shard), the native taps
 #     (hidden_gpu chunk tree, FA2 matReq tap, FA3 tap on cc 9.0) and a mechanical readiness record.
-#   Inputs: --cases B0[,B1] (checkpoint roles of checkpoints.json), --out DIR; the env above.
+#   Inputs: --cases B0[,B1] (checkpoint roles of checkpoints.json), --out DIR, --cpu | --gpu (force a mode), --dry-run; the env above.
+#   Modes: gpu (default when `nvidia-smi` is on PATH) runs every step.  cpu (`--cpu`, or auto-selected when `nvidia-smi` is absent --
+#     until 2026-09-23 a GPU-less pod died at step 4 with BOOTSTRAP_FAIL_CUDA, before readiness.json existed, and the fleet operator
+#     hand-wrote the record) runs steps 1-3 unchanged, skips the native taps (step 4), and writes the same readiness record with the
+#     GPU checks (torch_cuda, hidden_gpu_so, fa2_tap_so, fa3_tap_so) replaced by torch_cpu, plus "mode": "cpu",
+#     "cuda_available": <torch.cuda.is_available()> and a cpu{nproc, model} measurement; `ok` = AND of the CPU checks.  The gpu-mode
+#     record is unchanged (no "mode" key = gpu).  `--dry-run` prints the resolved mode and the steps it would run, touches nothing, exits 0.
 #   Outputs: $OUT/readiness.json (schema verity-vllm/readiness/v1: checks{ok, value|error}, identities, measurements network/disk/memory),
 #     $OUT/{pip,checkpoints,hidden_gpu,fa2_tap,fa3_tap}.log, $OUT/bootstrap.fail on a failure; the last stdout line is BOOTSTRAP-OK.
 #   Invariants: idempotent (every step checks before it builds); a failing step exits 3 with the named class BOOTSTRAP_FAIL_<STEP>;
@@ -29,8 +35,16 @@ WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export HF_HOME=${HF_HOME:-$WORK/hf}
 export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}
 export VERITOR_REPO=$ROOT
-CASES=B0; OUT=$ROOT/out/bootstrap
-while [ $# -gt 0 ]; do case "$1" in --cases) CASES=$2; shift 2;; --out) OUT=$2; shift 2;; *) echo "unknown arg $1" >&2; exit 2;; esac; done
+CASES=B0; OUT=$ROOT/out/bootstrap; MODE=auto; DRY_RUN=0
+while [ $# -gt 0 ]; do case "$1" in --cases) CASES=$2; shift 2;; --out) OUT=$2; shift 2;; --cpu) MODE=cpu; shift;; --gpu) MODE=gpu; shift;; --dry-run) DRY_RUN=1; shift;; *) echo "unknown arg $1" >&2; exit 2;; esac; done
+if [ "$MODE" = auto ]; then
+  if command -v nvidia-smi >/dev/null 2>&1; then MODE=gpu; else MODE=cpu; echo "[bootstrap] no nvidia-smi on PATH: cpu mode (--gpu forces the GPU path, --cpu forces this one)"; fi
+fi
+if [ "$DRY_RUN" = 1 ]; then
+  echo "mode=$MODE cases=$CASES out=$OUT venv=$VENV"
+  echo "steps: 1 venv312; 2 vLLM d9105ea80 + torch cu129; 3 checkpoints $CASES; $([ "$MODE" = gpu ] && echo '4 native taps (hidden_gpu, fa2_tap, fa3_tap on cc 9.0); ' || echo '4 native taps SKIPPED (cpu mode); ')5 readiness.json ($MODE)"
+  echo BOOTSTRAP-DRY-RUN; exit 0
+fi
 mkdir -p "$OUT" "$WORK/wheels"
 log() { echo "[bootstrap] $(date -u +%FT%TZ) $*"; }
 fail() { echo "BOOTSTRAP_FAIL_$1: ${*:2}" | tee -a "$OUT/bootstrap.fail" >&2; exit 3; }
@@ -100,6 +114,7 @@ EOF
 done
 
 # ---- 4. native taps (built by the scripts the sweep already uses; VENV points them at the 3.12 environment) ----------------------
+if [ "$MODE" = gpu ]; then
 CC=$($PY -c "import torch; cc=torch.cuda.get_device_capability(0); print(f'{cc[0]}.{cc[1]}')" 2>/dev/null) || fail CUDA "torch sees no CUDA device ($($PY -c 'import torch;print(torch.__version__)' 2>&1))"
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
 VENV=$VENV bash verity_capture/sweep/pod_hidden_gpu.sh >"$OUT/hidden_gpu.log" 2>&1; grep -q '^HIDDEN-GPU-OK' "$OUT/hidden_gpu.log" || fail HIDDEN_GPU "$(tail -2 "$OUT/hidden_gpu.log")"
@@ -110,13 +125,19 @@ if [ "$CC" = "9.0" ]; then
   VENV=$VENV bash verity_capture/sweep/pod_fa3_tap.sh >"$OUT/fa3_tap.log" 2>&1; grep -q '^FA3-TAP-OK' "$OUT/fa3_tap.log" || fail FA3_TAP "$(tail -2 "$OUT/fa3_tap.log")"
   log "$(grep '^FA3-TAP-OK' "$OUT/fa3_tap.log" | tail -1)"
 fi
+else
+CC=""; HG_LINE=""; log "cpu mode: native taps (hidden_gpu, fa2_tap, fa3_tap) skipped"
+fi
 
 # ---- 5. readiness: prove the environment mechanically and record the identities --------------------------------------------------
 HG_SO=$(echo "$HG_LINE" | awk '{print $3}')
-$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$HG_SO" "$CC" "$RESEARCH" <<'EOF' || fail READINESS "see $OUT/readiness.json"
+$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$HG_SO" "$CC" "$RESEARCH" "$MODE" <<'EOF' || fail READINESS "see $OUT/readiness.json"
 import hashlib, importlib, json, os, platform, subprocess, sys
-root, core, out, hg_so, cc, research = sys.argv[1:7]
+root, core, out, hg_so, cc, research, mode = sys.argv[1:8]
+gpu = mode == "gpu"
 r = {"schema": "verity-vllm/readiness/v1", "checks": {}, "identities": {}}
+if not gpu:
+    r["mode"] = mode
 def check(name, fn):
     try:
         r["checks"][name] = {"ok": True, "value": fn()}
@@ -130,7 +151,11 @@ def under(mod, top):
         raise RuntimeError(f"{mod} resolved from {f}, not from {top}")
     return f
 check("python_3_12", lambda: (sys.version_info[:2] == (3, 12)) or (_ for _ in ()).throw(RuntimeError(sys.version)))
-check("torch_cuda", lambda: {"torch": __import__("torch").__version__, "cuda": __import__("torch").version.cuda, "device": __import__("torch").cuda.get_device_name(0), "cc": cc})
+if gpu:
+    check("torch_cuda", lambda: {"torch": __import__("torch").__version__, "cuda": __import__("torch").version.cuda, "device": __import__("torch").cuda.get_device_name(0), "cc": cc})
+else:  # cpu mode: torch must import and run on the host; whether it also sees a CUDA device is recorded, not required
+    check("torch_cpu", lambda: {"torch": __import__("torch").__version__, "cuda_available": bool(__import__("torch").cuda.is_available()), "threads": __import__("torch").get_num_threads()})
+    r["cuda_available"] = bool((r["checks"]["torch_cpu"].get("value") or {}).get("cuda_available", False))
 check("vllm_import", lambda: __import__("vllm").__version__)
 check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__version__) or (_ for _ in ()).throw(RuntimeError(__import__("vllm").__version__)))
 check("verity_from_tree", lambda: under("verity.ir", core))
@@ -139,20 +164,27 @@ check("verity_capture_from_tree", lambda: under("verity_capture", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
 check("numpy_import", lambda: __import__("numpy").__version__)
 check("no_old_tree_on_path", lambda: [p for p in sys.path if "/workspace/cp/veritor" in p or p.endswith("/vllm-poc")] == [] or (_ for _ in ()).throw(RuntimeError(str(sys.path))))
-check("hidden_gpu_so", lambda: {"path": hg_so, "sha256": sha(hg_so)})
+if gpu:
+    check("hidden_gpu_so", lambda: {"path": hg_so, "sha256": sha(hg_so)})
 fa2 = "/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so"
 def fa2_check():
     import torch
     torch.ops.load_library(fa2); ns = torch.ops.verity_fa2_matReq
     return {"path": fa2, "sha256": sha(fa2), "tap_mode": int(ns.verity_tap_mode()), "hdims_mask": int(ns.verity_tap_hdims())}
-check("fa2_tap_so", fa2_check)
+if gpu:
+    check("fa2_tap_so", fa2_check)
 if cc == "9.0":
     fa3 = "/workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so"
     check("fa3_tap_so", lambda: {"path": fa3, "sha256": sha(fa3)})
 def nvsmi(q):
+    if not gpu:  # cpu mode: a pod without nvidia-smi records null, it does not fail the readiness record
+        try:
+            return subprocess.run(["nvidia-smi", f"--query-gpu={q}", "--format=csv,noheader"], capture_output=True, text=True, timeout=20).stdout.strip() or None
+        except (OSError, subprocess.SubprocessError):
+            return None
     return subprocess.run(["nvidia-smi", f"--query-gpu={q}", "--format=csv,noheader"], capture_output=True, text=True, timeout=20).stdout.strip()
 r["identities"] = {"python": sys.version.split()[0], "executable": sys.executable, "platform": platform.platform(),
-                   "torch": r["checks"]["torch_cuda"].get("value"), "vllm": r["checks"]["vllm_import"].get("value"),
+                   "torch": r["checks"]["torch_cuda" if gpu else "torch_cpu"].get("value"), "vllm": r["checks"]["vllm_import"].get("value"),
                    "driver": nvsmi("driver_version"), "gpu": nvsmi("name"), "cuda_home": os.environ.get("CUDA_HOME"),
                    "nvcc": subprocess.run(["bash", "-lc", "nvcc --version | tail -1"], capture_output=True, text=True).stdout.strip(),
                    "tree": {"integration_root": root, "verity_core": core, "research": research},
@@ -191,8 +223,11 @@ def memory():
         except OSError:
             pass
     return m
+def cpu():
+    model = subprocess.run(["bash", "-lc", "lscpu 2>/dev/null | grep 'Model name' | sed 's/.*: *//'"], capture_output=True, text=True).stdout.strip()
+    return {"nproc": os.cpu_count(), "affinity": len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None, "model": model or None}
 r["measurements"] = {}
-for name, fn in (("network", net), ("disk", disk), ("memory", memory)):
+for name, fn in (("network", net), ("disk", disk), ("memory", memory)) + ((("cpu", cpu),) if not gpu else ()):
     try:
         r["measurements"][name] = fn()
     except Exception as e:  # noqa: BLE001
