@@ -235,6 +235,7 @@ class FP4HashedRelation:
     off_domain = (0x7F, 0xFF, 0x80)
     off_domain_index = K
     unchecked = False               # True: the prover's decode does NOT refuse an off-domain word (the negatives prove it)
+    _bare_sys = None                # memo: the bare unit the device hint generator is keyed on (``hints``)
 
     @staticmethod
     def y_public(y: int) -> int:
@@ -266,8 +267,14 @@ class FP4HashedRelation:
         import torch
         if str(device).startswith("cuda") and not self.unchecked:
             from .hints_device import hints_device_for
+            # the generator is built on the BARE unit (its 141 pins in compile order); the composed system's base hints are
+            # the bare unit's 86 hint rows in the same order (hashchain.compose keeps them as the prefix) -- checked here
+            if self._bare_sys is None:
+                self._bare_sys = compile_fp4_unit(p, chain=True)
+            if [n for _, n in sys.hints] != [n for _, n in self._bare_sys.hints]:
+                raise ValueError("fp4-nvf4+poseidon2: the composed system's base hints are not the bare unit's hint rows")
             l = np.asarray(a).shape[0] if not isinstance(a, torch.Tensor) else a.shape[0]
-            _pub, H, _y = hints_device_for(sys, l, device)(c_in, a, b, check=True)
+            _pub, H, _y = hints_device_for(self._bare_sys, l, device)(c_in, a, b, check=True)
             return H
         H = self._domain_checked(hints_fp4, sys, self._np(c_in), self._np(a), self._np(b))
         return torch.as_tensor(H, dtype=torch.int64, device=device)
