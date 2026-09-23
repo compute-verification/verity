@@ -207,9 +207,11 @@ def lp_for(name, S=None) -> PM.LigeritoParams:
                              relation=PM.RELATIONS[b["rel"]])
 
 
-def proof_bytes(name, S=None, t_pad=0) -> float:
+def proof_bytes(name, S=None, t_pad=0, pow2=False) -> float:
     """params.py byte model + the ZK padding combination ybar_i (t_pad ext per committed level) it does not count."""
     p = lp_for(name, S)
+    if pow2:
+        p = replace(p, tall1=nextpow2(p.tall1))
     return p.proof_bytes()["total_bytes"] + (t_pad * 24 * p.L if t_pad else 0)
 
 
@@ -306,6 +308,15 @@ def report():
         for N in (2, 4):
             Sn, unf = fix_queries(lv, "params", target=TARGET - math.log2(N), other_log2=relu, cost=cost)
             print(f"     (f) job split into N = {N} proofs: per-proof |S| = {Sn} (2^{unf:.2f} each); bytes/proof {proof_bytes(name, Sn) / 1024:.1f} KiB")
+        # (g) the shape that ships: pow2 layout (relation dims_for) + ZK t_pad, at 2^-128 and with a 1-bit margin
+        lvpz = shape_levels(b["tall1"], b["wide"], b["rates"], b["S"], t_pad=T_PAD, pow2_tall=True)
+        for tgt in (TARGET, TARGET - 1):
+            Sg, ugf = fix_queries(lvpz, "params", target=tgt, other_log2=relu, cost=cost)
+            Sg0, ug0 = fix_queries(lvp, "params", target=tgt, other_log2=relu, cost=cost)
+            print(f"     (g) pow2 target 2^{tgt:.0f}: no ZK |S| = {Sg0} -> 2^{ug0:.3f}, {proof_bytes(name, Sg0, pow2=True) / 1024:.1f} KiB;"
+                  f" + ZK t_pad |S| = {Sg} -> 2^{ugf:.3f}, {proof_bytes(name, Sg, t_pad=T_PAD, pow2=True) / 1024:.1f} KiB")
+        Sh, uhf = fix_queries(lv, "params", target=TARGET - 1, other_log2=relu, cost=cost)
+        print(f"     (h) radix-3 as specified, target 2^-129: |S| = {Sh} -> 2^{uhf:.3f}; bytes {proof_bytes(name, Sh) / 1024:.1f} KiB")
 
     print("\n== 4. Fiat-Shamir readings (fp8 set B)")
     b = SET_B["fp8"]
