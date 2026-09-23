@@ -393,10 +393,24 @@ def padding_combination(mu: np.ndarray, rbar: np.ndarray) -> np.ndarray:
     (C, 6).  Sent in the clear with the next commitment."""
     rbar = np.asarray(rbar, dtype=np.int64) % P
     if mu.ndim == 2:                                                   # base padding x extension weights
-        mu = np.asarray(mu, dtype=np.int64) % P
-        return ((mu[:, :, None] * rbar[None, :, :]) % P).sum(axis=1) % P   # (tp, C, 6) summed over C (< 2^40)
-    mu_ext = np.transpose(np.asarray(mu, dtype=np.int64) % P, (1, 2, 0))  # (tp, C, 6)
-    return ext_mul(mu_ext, rbar[None, :, :]).sum(axis=1) % P              # products < P, C <= 2^8 terms
+        return _limb_matmul(np.asarray(mu, dtype=np.int64) % P, rbar)
+    mu = np.asarray(mu, dtype=np.int64) % P                            # (6, tp, C) planes
+    out = np.zeros((mu.shape[1], D), dtype=np.int64)
+    for i in range(D):                                                 # plane i of mu times rbar: shift by x^i, fold x^6 = beta
+        pi = _limb_matmul(mu[i], rbar)                                 # (tp, 6): coefficient j of sum_c mu_i[:, c] rbar[c]
+        out[:, i:] += pi[:, :D - i]
+        if i:
+            out[:, :i] += pi[:, D - i:] * BETA
+    return out % P
+
+
+def _limb_matmul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """``(a @ b) mod p`` exactly for base matrices ``a`` (m, C), ``b`` (C, k) in [0, p): 16-bit limbs of ``b`` keep the
+    int64 partial sums below ``C 2^47`` (C <= 2^16)."""
+    if a.shape[1] > (1 << 16):
+        raise ValueError("limb matmul: C <= 2^16")
+    lo, hi = b & 0xFFFF, b >> 16
+    return ((a @ lo) % P + ((a @ hi) % P) * 65536) % P
 
 
 def row_check_rhs(zp: ZkParams, k: int, eta_s: int, ybar: np.ndarray) -> np.ndarray:
