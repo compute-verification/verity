@@ -38,15 +38,36 @@ try:
     from hash_gpu import merkle as _gpu_merkle
 
     GPU_HASH_NAME = "blake3 (GPU, backends/shared/hash_gpu)"
-except Exception:  # noqa: BLE001 -- no cupy / no hash_gpu: the host path stays
+except Exception as _e:  # noqa: BLE001 -- no cupy / no hash_gpu: the host path stays
     _gpu_merkle = None
     GPU_HASH_NAME = None
+    # Loud, not silent (dev-4090 11:23Z: a tree shipped without backends/shared ran every gate green on a ~35x slower
+    # host Merkle).  LIGERO_GPU_STRICT=1 turns the fallback into an error.
+    import os as _os
+    import warnings as _warnings
+
+    try:
+        import cupy as _cp_probe  # noqa: F401  -- cupy present => a GPU host whose tree lacks backends/shared/hash_gpu
+        _has_cupy = True
+    except Exception:  # noqa: BLE001
+        _has_cupy = False
+    if _has_cupy or _os.environ.get("LIGERO_GPU_STRICT"):
+        if _os.environ.get("LIGERO_GPU_STRICT"):
+            raise
+        _warnings.warn(f"merkle: GPU Merkle unavailable on a cupy host ({type(_e).__name__}: {_e}); falling back to the HOST "
+                       f"Blake3 Merkle (~35x slower). Ship backends/shared, or set LIGERO_GPU_STRICT=1 to fail instead.",
+                       RuntimeWarning, stacklevel=1)
 
 
 try:
     from . import commit_gpu as _commit_gpu           # the protocol-specialised kernels (lane enc-hopper)
-except Exception:  # noqa: BLE001
+except Exception as _e:  # noqa: BLE001
     _commit_gpu = None
+    if _gpu_merkle is not None:   # cupy is there, so this is a real breakage of the fused path, not a CPU-only host
+        import warnings as _warnings
+
+        _warnings.warn(f"merkle: commit_gpu unavailable ({type(_e).__name__}: {_e}); using hash_gpu level by level (2.5x slower)",
+                       RuntimeWarning, stacklevel=1)
 
 USE_FUSED_COMMIT = True      # commit_gpu (3 launches, 2.5x the shared kernels on the H100); False = hash_gpu level by level
 
