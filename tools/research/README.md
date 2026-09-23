@@ -129,8 +129,13 @@ admission (`run.remote.mem`) and the attempt records
 `execution.mem_gb_reserved`. `research mem` prints the reading on the machine.
 
 Limitations, stated: until `fetch --all` completes, the only copy of the
-evidence is on the machine. Budget enforcement is the project's deadman
-(`pods/budget_cap.py`), not this command. Provisioning is a separate,
+evidence is on the machine. Budget enforcement is `research pods guard`
+(`pods/guard.py`; its docstring is the contract), not this command: scoped to
+a pod-name prefix, sticky trips on deadline / cap / balance floor that
+terminate every scoped pod (the guard's host last), and `--rate-max` shedding
+that terminates the newest scoped pods first and never the guard's host. It
+replaces the loops of `pods/budget_cap.py` and `pods/sh/deadline.sh`, which
+stay verbatim until the fleet switches over. Provisioning is a separate,
 explicit act; `--on` never creates a pod.
 
 ### research data

@@ -127,6 +127,10 @@ def main(argv: list[str]) -> int:
         from .drain import main as drain_main                 # teardown gated on `preserved` (drain.py)
 
         return drain_main(argv)
+    if argv[:1] == ["guard"]:
+        from .guard import main as guard_main                 # the fleet budget guard (guard.py)
+
+        return guard_main(argv[1:])
     sys.argv = ["research pods", *argv]
     runpod.main()
     return 0
