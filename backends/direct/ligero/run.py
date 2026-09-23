@@ -366,7 +366,9 @@ def main(argv=None) -> int:
     ap.add_argument("--relation", default="bf16", choices=("bf16", "bf16-hopper", "fp8-hopper", "fp8-ada", "fp4-nvf4",
                                                              "bf16-ampere",
                                                              "bf16-hopper-v2", "bf16-ampere-v2", "fp8-hopper-v2", "fp8-ada-v2",
-                                                             "bf16-hopper-v3", "bf16-ampere-v3", "fp8-hopper-v3", "fp8-ada-v3"),
+                                                             "bf16-hopper-v3", "bf16-ampere-v3", "fp8-hopper-v3", "fp8-ada-v3",
+                                                             "bf16-hopper-v2x4", "bf16-ampere-v2x4", "fp8-hopper-v2x4",
+                                                             "fp8-ada-v2x4"),
                     help="bf16: the Ampere relation on the frozen instance set (vu.py); bf16-ampere: the same unit and frozen set "
                          "(--root) on the generic chain runner (relations.py; its --auth included-hash column); fp4-nvf4: "
                          "fp4/chain.py; the others: relations.py on synthetic instances")

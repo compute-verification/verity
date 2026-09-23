@@ -298,3 +298,86 @@ def test_zero_sums_accepted_in_unit_and_chain_mode(rel):
             for k, e in ((k, e) for k, e in sys.outputs.items() if k in pub):
                 got = (sum(W[j].to(torch.int64) * v for j, v in e.lin.items()) + e.c) % P
                 assert torch.equal(got, torch.as_tensor(pub[k]) % P), f"{rel.name}: output {k}"
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The folded x4 units: four instruction steps per column (experimental: census + CPU evidence; the GPU gate is pending)
+# ---------------------------------------------------------------------------------------------------------------------
+
+X4 = [RELATIONS[n] for n in ("bf16-hopper-v2x4", "bf16-ampere-v2x4", "fp8-hopper-v2x4", "fp8-ada-v2x4")]
+N_FOLD = int(os.environ.get("RELMIN_FOLD_N", "1500"))
+
+
+def _base(rel: Relation) -> Relation:
+    return RELATIONS[rel.name[: -len("x4")]]
+
+
+@pytest.mark.parametrize("rel", X4, ids=lambda r: r.name)
+def test_folded_model_equals_four_chained_steps(rel):
+    """``GroupSum(groups x 4).step`` is four chained steps of the base model: the FP32 pack / decode between steps is the
+    identity on the adder-side state.  Random chains with accumulators at the products' scale: +-0, the model's one- and
+    two-step states, and words whose exponent sits within +-12 of a one-step result (alignment, cancellation, zero sums)."""
+    base = _base(rel)
+    k, n = base.k, N_FOLD
+    rng = np.random.default_rng(31)
+    a, b = rel.operands(rng, (n, 4 * k)), rel.operands(rng, (n, 4 * k))
+    a0, b0 = rel.operands(rng, (n, k)), rel.operands(rng, (n, k))
+    for i in range(n):
+        y = tc_dot(base.model, 0, a0[i].tolist(), b0[i].tolist())
+        q = i % 5
+        if q == 0:
+            c = 0 if i % 2 else 0x80000000
+        elif q in (1, 2):
+            c = y
+        elif q == 3:
+            c = tc_dot(base.model, y, b0[i].tolist(), a0[i].tolist())
+        else:
+            e = (y >> 23) & 0xFF
+            c = y if e in (0, 0xFF) else (y & 0x807FFFFF) | (int(np.clip(e + rng.integers(-12, 13), 1, 254)) << 23)
+        if (c >> 23) & 0xFF == 0xFF:
+            c = 0
+        chained = c
+        for s in range(4):
+            chained = tc_dot(base.model, chained, a[i, k * s:k * s + k].tolist(), b[i, k * s:k * s + k].tolist())
+        assert tc_dot(rel.model, c, a[i].tolist(), b[i].tolist()) == chained, f"{rel.name}: chain {i} c={c:08x}"
+
+
+@pytest.mark.parametrize("rel", X4, ids=lambda r: r.name)
+def test_folded_unit_accepts_exactly_the_model_word(rel):
+    """Unit mode: the honest witness is accepted with the folded model's word and refused with any bit of it flipped;
+    the census: fewer rows than four base units (the accumulator decode is shared), four times the pins."""
+    base = _base(rel)
+    p = rel.params
+    sys = rel.compile(p, False)
+    tb = tables(sys, "cpu")
+    c, a, b, y = _cases(rel, 256, seed=11)
+    c, a, b, y = (torch.as_tensor(x, dtype=torch.int64) for x in (c, a, b, y))
+    ok = _witness_accepts(sys, tb, rel.hints, rel.public_vectors, p, c, a, b, y)
+    assert bool(ok.all()), f"{rel.name}: honest units rejected {torch.nonzero(~ok).flatten().tolist()[:5]}"
+    lo = 10 if plan(p).fp8 else 0
+    bits = torch.as_tensor(np.random.default_rng(3).integers(lo, 32, size=len(y)))
+    bad = _witness_accepts(sys, tb, rel.hints, rel.public_vectors, p, c, a, b, y ^ (1 << bits))
+    assert not bool(bad.any()), f"{rel.name}: flipped claims accepted {torch.nonzero(bad).flatten().tolist()[:5]}"
+    c4, c1 = census(rel.compile(p, True)), census(base.compile(base.params, True))
+    assert c4["pin_rows"] == 4 * c1["pin_rows"] and c4["rows_per_unit"] < 4 * c1["rows_per_unit"], (c4, c1)
+    assert rel.k == 4 * base.k and rel.steps * 4 == base.steps
+
+
+@pytest.mark.parametrize("rel", X4, ids=lambda r: r.name)
+def test_folded_chain_is_the_base_claim_cpu(rel):
+    """The chain runner: the same synthetic VUs (operands and final words) as the base relation, proved with a quarter of
+    the columns; two VUs proved + verified (interactive, non-ZK), the negative battery rejected."""
+    base = _base(rel)
+    vus, vb = instances(rel, 2, seed=5), instances(base, 2, seed=5)
+    assert all(v[0] == w[0] and v[1] == w[1] and v[3] == w[3] for v, w in zip(vus, vb))
+    assert all(v[2][3::4] == w[2] for v, w in zip(vb, vus)), "the folded accumulators are every fourth base accumulator"
+    R = RelationChainRunner(rel, "cpu", -128.0, zk=False, mode=protocol_mod.MODE_INTERACTIVE)
+    proof, pubs, lay = R.prove_vus(vus, check=True)
+    ok, why = R.verify_vus(proof, pubs, lay)
+    assert ok, why
+    _, _, ypub = pubs
+    assert int(ypub[rel.steps - 1]) == rel.y_public(vus[0][3]) and int(ypub[2 * rel.steps - 1]) == rel.y_public(vus[1][3])
+    R = RelationChainRunner(rel, "cpu", -128.0, zk=False, mode=protocol_mod.MODE_FIAT_SHAMIR)
+    negs = negatives(R, vus, row_negatives=20)
+    accepted = [name for name, (ok, _) in negs if ok]
+    assert accepted == [], f"{rel.name}: negatives accepted: {accepted}"

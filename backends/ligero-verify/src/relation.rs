@@ -294,6 +294,13 @@ pub mod pubsel {
     pub static FP8_HOPPER: PubSel = PubSel { op: Operand::E4m3, floor: -139, pb: 15, ps: 7, groups: &[32], wide: false };
     /// `FP8Params.from_model(ADA_E4M3_M16N8K32)`: two groups of 16, floor -139, products `u 2^7 < 2^15`.
     pub static FP8_ADA: PubSel = PubSel { op: Operand::E4m3, floor: -139, pb: 15, ps: 7, groups: &[16, 16], wide: false };
+    /// The folded x4 units (lane relmin-lookup, EXPERIMENTAL: four instruction steps of the model per column, K = 4 x the
+    /// step's K; `GroupSum(groups x 4).step` == four chained steps, so the VU claim is the base relation's): the same
+    /// decode with the groups repeated.
+    pub static BF16_HOPPER_X4: PubSel = PubSel { op: Operand::Bf16, floor: -133, pb: 27, ps: 11, groups: &[16, 16, 16, 16], wide: true };
+    pub static BF16_AMPERE_X4: PubSel = PubSel { op: Operand::Bf16, floor: -132, pb: 26, ps: 10, groups: &[8, 8, 8, 8, 8, 8, 8, 8], wide: false };
+    pub static FP8_HOPPER_X4: PubSel = PubSel { op: Operand::E4m3, floor: -139, pb: 15, ps: 7, groups: &[32, 32, 32, 32], wide: false };
+    pub static FP8_ADA_X4: PubSel = PubSel { op: Operand::E4m3, floor: -139, pb: 15, ps: 7, groups: &[16, 16, 16, 16, 16, 16, 16, 16], wide: false };
 }
 
 /// The v3 units of lane relmin-private (`backends/direct/ligero/privsel/relation.py`, `public_vectors_v3`): the operand
@@ -636,9 +643,72 @@ pub static FP8_ADA_V3: Relation = Relation {
     hashed_table_digest: "",
 };
 
-pub static RELATIONS: [&Relation; 13] = [
+/// The folded x4 units (EXPERIMENTAL, lane relmin-lookup): four instruction steps per column, the base v2 relation's
+/// claim; census + CPU tests only until their GPU gate has run.
+pub static BF16_HOPPER_V2X4: Relation = Relation {
+    name: "bf16-hopper-v2x4",
+    aliases: &[],
+    tag: b"",
+    word_bytes: 2,
+    y_bytes: 2,
+    y_bits: 16,
+    decode: Decode::PubSel(&pubsel::BF16_HOPPER_X4),
+    end_components: None,
+    sys_id: "f1211dba4dab2014eb446a41b15ac0196e700ba0aee97644746a17a75371d17d",
+    table_digest: "dbb924084b89e760324c9e63b1ab6716aa8c17a8874e8db8e0d8d1aab4c9ad16",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static BF16_AMPERE_V2X4: Relation = Relation {
+    name: "bf16-ampere-v2x4",
+    aliases: &[],
+    tag: b"",
+    word_bytes: 2,
+    y_bytes: 2,
+    y_bits: 16,
+    decode: Decode::PubSel(&pubsel::BF16_AMPERE_X4),
+    end_components: None,
+    sys_id: "8ce6ca344ecb6c2e03b4798e0a009f38d92a6100a9947ca4d72ed0f88c2f7684",
+    table_digest: "c9611303089dc521262d8401d182760ea6995e4b977e5f4d51acc5cdefa9d645",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static FP8_HOPPER_V2X4: Relation = Relation {
+    name: "fp8-hopper-v2x4",
+    aliases: &[],
+    tag: b"|rel=fp8-hopper-v2x4|v1",
+    word_bytes: 1,
+    y_bytes: 4,
+    y_bits: 22,
+    decode: Decode::PubSel(&pubsel::FP8_HOPPER_X4),
+    end_components: None,
+    sys_id: "3463ce9f5391ac211c5ef58b88b634c70cbdd72db8c1635d138f72659e792c28",
+    table_digest: "8d6795475a40a6a0b1c115318ee9629cbdd1183658b38b2e3d20dc8ef0c2d3e1",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static FP8_ADA_V2X4: Relation = Relation {
+    name: "fp8-ada-v2x4",
+    aliases: &[],
+    tag: b"|rel=fp8-ada-v2x4|v1",
+    word_bytes: 1,
+    y_bytes: 4,
+    y_bits: 22,
+    decode: Decode::PubSel(&pubsel::FP8_ADA_X4),
+    end_components: None,
+    sys_id: "d2272d3fee342813f40e56db6da9bfb7261bdd311fb34cd6cae02bf6b946612a",
+    table_digest: "87be1aead4ba410e81ab387510c721e3eac7dd6c760137564a22c7d5a038d3a2",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static RELATIONS: [&Relation; 17] = [
     &BF16_AMPERE, &FP8_ADA, &BF16_HOPPER, &FP8_HOPPER, &FP4_NVF4, &BF16_HOPPER_V2, &BF16_AMPERE_V2, &FP8_HOPPER_V2, &FP8_ADA_V2,
     &BF16_HOPPER_V3, &BF16_AMPERE_V3, &FP8_HOPPER_V3, &FP8_ADA_V3,
+    &BF16_HOPPER_V2X4, &BF16_AMPERE_V2X4, &FP8_HOPPER_V2X4, &FP8_ADA_V2X4,
 ];
 
 /// The relation a statement names: `None` (a v2 / v3 file) is the Ampere BF16 unit; an unknown name is refused (its

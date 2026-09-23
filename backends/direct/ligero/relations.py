@@ -24,7 +24,7 @@ file verifier (``serialize.verify_files``: shares code with the prover, a self-c
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 import numpy as np
@@ -388,6 +388,30 @@ BF16_HOPPER_V3_RELATION = _register(_v3_of(BF16_HOPPER_V2_RELATION, "bf16-hopper
 BF16_AMPERE_V3_RELATION = _register(_v3_of(BF16_AMPERE_V2_RELATION, "bf16-ampere-v3", "Params.from_model(AMPERE_BF16_M16N8K16)"))
 FP8_HOPPER_V3_RELATION = _register(_v3_of(FP8_HOPPER_V2_RELATION, "fp8-hopper-v3", "FP8Params.from_model(HOPPER_E4M3_K32)"))
 FP8_ADA_V3_RELATION = _register(_v3_of(FP8_ADA_V2_RELATION, "fp8-ada-v3", "FP8Params.from_model(ADA_E4M3_M16N8K32)"))
+
+
+def _folded(v2: Relation, m: int) -> Relation:
+    """``m`` instruction steps of ``v2``'s model per column (``K = m x model.k``, ``1536 / K`` columns per VU).  The claim
+    is the same VU (same operands, same final word): ``GroupSum(groups x m).step`` equals ``m`` chained steps of the model
+    (the FP32 pack / decode between steps is the identity on the adder-side state, and a group that leaves the FP32 range
+    saturates in both), so the intermediate accumulators are private -- the v2 intermediate-group path -- and only the
+    column boundary moves.  Rows per column grow sub-linearly in ``m`` (the accumulator decode is shared) while the number
+    of sub-batches, which is what the prover's per-sub-batch fixed cost counts, shrinks ``m``-fold.  EXPERIMENTAL: census
+    and CPU tests only until the GPU gate has run."""
+    model = replace(v2.model, groups=tuple(v2.model.groups) * m, name=f"{v2.model.name}x{m}")
+    params = type(v2.params).from_model(model)
+    name = f"{v2.name}x{m}"
+    # the tag follows the base relation's convention (D12: the BF16 relations absorb the empty tag, the FP8 ones their name)
+    return replace(v2, name=name, model=model, params=params, tag=v2.tag if v2.tag == b"" else f"|rel={name}|v1".encode(),
+                   backend_name=_V2_BACKEND.format(name=name, params=f"{type(params).__name__}.from_model({model.name})"),
+                   model_name=f"{v2.model_name} x{m} ({m} instruction steps per column, K={model.k})",
+                   relation_name=f"{v2.relation_name} ({m} steps per column)", rust_verifiable=False)
+
+
+BF16_HOPPER_V2X4_RELATION = _register(_folded(BF16_HOPPER_V2_RELATION, 4))
+BF16_AMPERE_V2X4_RELATION = _register(_folded(BF16_AMPERE_V2_RELATION, 4))
+FP8_HOPPER_V2X4_RELATION = _register(_folded(FP8_HOPPER_V2_RELATION, 4))
+FP8_ADA_V2X4_RELATION = _register(_folded(FP8_ADA_V2_RELATION, 4))
 
 
 def relation(name: str) -> Relation:

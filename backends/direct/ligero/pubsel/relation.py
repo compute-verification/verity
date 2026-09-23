@@ -80,6 +80,7 @@ class Plan:
     op_word_bits: int
     e4m3: bool           # operand NaN rule: e4m3 (0x7f / 0xff) or ieee (all-ones exponent)
     groups: tuple[int, ...]
+    shift_bits: int = SHIFT_BITS   # the key-difference range: |e_acc - G| < 2^shift_bits (9 for every registered unit)
 
     @property
     def n_t(self) -> int:
@@ -93,15 +94,16 @@ class Plan:
 def plan(p: Params) -> Plan:
     fp8 = hasattr(p, "op_exp")
     nb = p.norm_bits
-    if p.shift_rows > 2**SHIFT_BITS:
-        raise ValueError(f"shift range {p.shift_rows} exceeds 2^{SHIFT_BITS}")
+    # the key difference |e_acc - G| is bounded by the relation's shift range; 9 bits for every registered unit, wider only
+    # for folded multi-step units (several instruction steps per column) whose conservative exponent range passes 512
+    shift_bits = max(SHIFT_BITS, (p.shift_rows - 1).bit_length())
     if fp8:
         op = (p.op_exp, p.op_frac, p.op_bias, 1 + p.op_exp + p.op_frac, True)
     else:
         op = (p.exp, p.frac, p.bias, p.word_bits, p.op_nan_rule == "e4m3")
     return Plan(fp8=fp8, nb=nb, drop=ACC_FRAC + 1 - nb, W=p.acc_bits, ss=p.state_shift, PB=p.prod_bits, PS=p.prod_shift,
                 SB=p.s_bits, wide=needs_wide(p), t_lo=-nb, t_hi=-p.k_lo, op_exp=op[0], op_frac=op[1], op_bias=op[2],
-                op_word_bits=op[3], e4m3=op[4], groups=tuple(p.groups))
+                op_word_bits=op[3], e4m3=op[4], groups=tuple(p.groups), shift_bits=shift_bits)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -302,7 +304,7 @@ def compile_v2_unit(p: Params, chain: bool = False) -> System:
         ctx.learn(ksel, cs[0], cs[-1] + 1)                    # the one-hot picks one of the cs
         diff = k - ksel
         _zero(ctx, "keysel", diff, 1 - sel_lo - sel_hi)
-        ctx.rng("keydiff", ctx.product(1 - 2 * sel_lo, diff), 0, 2**SHIFT_BITS)
+        ctx.rng("keydiff", ctx.product(1 - 2 * sel_lo, diff), 0, 2**pl.shift_bits)
         zero = Expr(ctx)
         delta = _pick(ctx, "delta", sels, [zero if c < 0 else (k if c == PB else zero + c) for c in cs], hint=f"{tag}.delta")
         E = G + delta

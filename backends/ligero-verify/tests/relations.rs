@@ -205,6 +205,11 @@ fn system_digest_names_every_pinned_relation() {
         ("fixtures/systems/bf16-ampere-v3.system.bin", "bf16-ampere-v3", "1629", "32"),
         ("fixtures/systems/fp8-hopper-v3.system.bin", "fp8-hopper-v3", "1673", "22"),
         ("fixtures/systems/fp8-ada-v3.system.bin", "fp8-ada-v3", "1806", "22"),
+        // the folded x4 units (four instruction steps per column; experimental)
+        ("fixtures/systems/bf16-hopper-v2x4.system.bin", "bf16-hopper-v2x4", "1045", "220"),
+        ("fixtures/systems/bf16-ampere-v2x4.system.bin", "bf16-ampere-v2x4", "1717", "216"),
+        ("fixtures/systems/fp8-hopper-v2x4.system.bin", "fp8-hopper-v2x4", "647", "64"),
+        ("fixtures/systems/fp8-ada-v2x4.system.bin", "fp8-ada-v2x4", "1255", "128"),
     ] {
         let (code, js) = run(&["system-digest", "--system", path]);
         assert_eq!(code, 0, "{js}");
@@ -480,7 +485,7 @@ fn fp4_nvf4_statement_negatives_are_rejected() {
     rejected("y2.stmt", &encode(&s, 4, "fp4-nvf4", 1, 2, None), "word widths 1/2 bytes are not the fp4-nvf4 relation's 1/4");
     let (code, js) = verify(FP4_SYS, &write_tmp("blackwell.stmt", &encode(&s, 4, "fp4-blackwell", 1, 4, None)), FP4_PROOF, &[]);
     assert_eq!(code, 1, "{js}");
-    assert!(js.contains("statement names relation \\\"fp4-blackwell\\\"; this build pins bf16-ampere, fp8-ada, bf16-hopper, fp8-hopper, fp4-nvf4, bf16-hopper-v2, bf16-ampere-v2, fp8-hopper-v2, fp8-ada-v2, bf16-hopper-v3, bf16-ampere-v3, fp8-hopper-v3, fp8-ada-v3"), "{js}");
+    assert!(js.contains("statement names relation \\\"fp4-blackwell\\\"; this build pins bf16-ampere, fp8-ada, bf16-hopper, fp8-hopper, fp4-nvf4, bf16-hopper-v2, bf16-ampere-v2, fp8-hopper-v2, fp8-ada-v2, bf16-hopper-v3, bf16-ampere-v3, fp8-hopper-v3, fp8-ada-v3, bf16-hopper-v2x4, bf16-ampere-v2x4, fp8-hopper-v2x4, fp8-ada-v2x4"), "{js}");
     // the FP8 Ada words (K = 32, 1-byte words) named fp4-nvf4 with t and n_proofs patched to the fp4 fixture's, so the
     // proof header and the soundness gate pass: refused at the public decode for the K
     let fp8 = std::fs::read(FP8_STMT).unwrap();

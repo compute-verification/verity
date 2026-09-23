@@ -360,6 +360,7 @@ that the verifier computes from the operand words (`public_pins_int`; Rust `rela
 verifier does O(K prod_bits) integer work per unit and the relations are unusable with private operands (not a Table 2
 headline; a finding).  Full text (K, decode, tags, digests, the zero-sum fix, `bf16-ampere-v2` as a new claim):
 `note:r20-proof/coordinator/20260923T0929Z-finding-ligero-verify-resolved-discrepancies` (appendix) and the relmin-lookup lane note.
+  Post-checkpoint (6b79b06 / 87c94b6): the folded `-v2x4` relations (`bf16-hopper-v2x4` 1045 rows / 24 columns per VU, `bf16-ampere-v2x4` 1717 / 24, `fp8-hopper-v2x4` 647 / 12, `fp8-ada-v2x4` 1255 / 12) put four instruction steps in one column (`GroupSum(groups x 4).step` == four chained steps, tested); same claim as the base v2 VU, the three intermediate accumulators private; the BF16 folded units take the empty tag like their base; pinned `f1211dba / dbb92408`, `8ce6ca34 / c9611303`, `3463ce9f / 8d679547`, `d2272d3f / 87be1aea`; GPU gates r20260923-104801-fc96 (0 failures).  Full text in the relmin-lookup report note.
 
 ~~~json
 {"id": "BV-D12", "issue": "v2 pins are verifier-computed group maxima / truncated sums; K fixed by the relation; unusable with private operands",
