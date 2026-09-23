@@ -383,18 +383,23 @@ prints the table; the groups are:
   B-Ligero, C, SP1, shared), `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
-  `omitted` (list), `breakthrough` (bool).
+  `omitted` (list), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
+  `source`, `superseded_by`, `hash`, `sharing`, `fold` (int), `pipeline` (int).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
-  no-dumps), `verifier`, `verifier_seconds`; `independently_verified` (bool) is the back-fill's spelling of `verified` —
-  accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and carries no verdict — ignored.
+  no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `outcome`; `independently_verified` (bool) is the back-fill's
+  spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
+  carries no verdict — ignored.
 - **evidence** — probe captures and instance sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
-  `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`.
+  `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`.
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and
-`"true"` are one word and `"True"` is another. `research data label` warns on stderr, one line, when the key is outside the
-vocabulary or the value outside its enum — and writes the label regardless: the vocabulary is a shared spelling, not a gate, and
-a worktree on an older `main` keeps working. Consumers (`bench.tables`, the trust module) import the constants; the store
-imports no consumer.
+`"true"` are one word and `"True"` is another. `research data label` writes the canonical spelling of an old key or value
+(`axis` -> `sweep`, `tree` -> `source`, `batch` -> `B`) and refuses — exit 2, nothing written, the reason on stderr — an unknown key
+(naming the nearest known one), a measurement (`l`, `subbatches`, `rtt_ms_path`, ...: the number belongs in the result or the
+artifact's meta), a ref written as a label, a value outside its enum, or a word where the form is bool / int / number.
+`--off-vocab` writes it anyway, for a concept the vocabulary has not learnt yet; add the word to `vocab.py` next. Readers stay
+lenient: whatever older writers stored is still read, old spellings as their canonical key. Consumers (`bench.tables`, the trust
+module) import the constants; the store imports no consumer.
 
 ## 9. CLI (v0.1)
 
@@ -417,7 +422,7 @@ research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--c
 research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
 research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
 research data labels TARGET [--history] [--key K] [--by PAT] [--json]
-research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]      warns (stderr) outside the vocabulary (§8.1); writes anyway
+research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7): put as a bare

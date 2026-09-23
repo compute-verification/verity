@@ -109,7 +109,7 @@ research data show ART|RUN|DRV [--json]      research data where ART        rese
 research data verify ART                     # PRESERVED = remote size + full read-back sha256; exit 1 otherwise
 research data select --kind K --where meta.k=v --label k=v --tool T --derivation D --attempt R [--json|--ids]
 research data snapshot --name N --members art:a,art:b | --select <select flags>   # dataset-snapshot/v1; identity = content
-research data label ART proof_class COMPLETE --by red-team-1 [--ref RUN]          research data labels ART [--history]
+research data label ART verified accepted --by red-team-1 [--ref RUN]              research data labels ART [--history]
 research data reindex [--remote]             research data sql "SELECT ..."       # read-only connection
 ~~~
 
