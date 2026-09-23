@@ -8,13 +8,16 @@
 //!     # (17) recomputed from its parameters) must be <= 2^-B, default B = 128; --target-bits 0 waives it (toys)
 //! ligerito-verify batch --dir DIR [--jobs N] [--json out.json] [--label L] [--target-bits B]
 //!     # every DIR/*.proof (with DIR/<name>.z / <name>.coins when present) must verify and every DIR/*.proof.neg must
-//!     # be rejected; every entry of DIR/*.ref.json (ref.py fixtures; tampers in DIR/<name>.ref.neg.json) must get
+//!     # be rejected -- a JSON *.proof / *.proof.neg is a ref.py (ligerito-ref/v2) fixture list and the rule applies
+//!     # to every entry; every entry of DIR/*.ref.json (ref.py fixtures; tampers in DIR/<name>.ref.neg.json) must get
 //!     # ref.py's verdict; with DIR/manifest.json (a list, or {"proofs": [...]}, of {"proof": name, "accepted": bool,
 //!     # "reason": str}) every listed verdict must agree with ours; the union of the accepted proofs' own soundness
 //!     # bounds must be <= 2^-B (default 128; --target-bits 0 waives it).  Exit 0 iff accepted.
 //! ligerito-verify ref-fixtures --file F.json [--neg N.json] [--json out.json] [--reps R]
-//!     # ligerito-design's ref.py fixtures (`python -m backends.direct.ligerito.ref`): every statement + proof must get
-//!     # ref.py's verdict; --neg = declarative tampers (fixtures/ref/negatives.json) replayed on them, same rule
+//!     # ligerito-design's ref.py fixtures (`python -m backends.direct.ligerito.ref`, format ligerito-ref/v2): every
+//!     # statement + proof must get ref.py's verdict; --neg = declarative tampers (fixtures/ref/negatives.json) replayed
+//!     # on them, same rule.  CONFORMANCE ONLY: no soundness target is applied here (the fixtures are 8-query toys), so
+//!     # an accept is "same verdict as ref.py", never a 2^-128 statement; use `batch` for that.
 //! ligerito-verify sumcheck-fixture --fixture F.json [--seed fixture]
 //!     # ligerito-sumcheck's verifier fixture (layout, constraints, public rows, LGSC0002 proof, claims, recorded
 //!     # transcript): verify with the recorded transcript and with LocalCoins(seed); claims must match
@@ -219,13 +222,53 @@ fn ref_fixture_verdicts(fixtures_path: &Path, neg_path: Option<&Path>, reps: usi
                         out.push((Verdict { name, accepted: false, reason: format!("tamper: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, false));
                         continue;
                     }
-                    // ref.py hashes row entries mod p; we reject non-canonical encodings, so that tamper must be rejected here
-                    let expect_ok = t.expect_ok && !t.name.ends_with("/noncanon");
-                    out.push(run(name, fx, &doc, expect_ok, &t.expect_reason));
+                    out.push(run(name, fx, &doc, t.expect_ok, &t.expect_reason));
                 }
             }
             Err(e) => out.push((Verdict { name: np.display().to_string(), accepted: false, reason: format!("tampers: {e}"), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, false)),
         }
+    }
+    out
+}
+
+/// A `*.proof` / `*.proof.neg` whose content is JSON is a ref.py (`ligerito-ref/v2`) fixture list (or one fixture):
+/// every entry must be accepted (`.proof`) or rejected (`.proof.neg`), whatever its recorded `expect`.
+fn is_json_file(path: &Path) -> bool {
+    use std::io::Read;
+    let mut buf = [0u8; 64];
+    let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut buf)).unwrap_or(0);
+    matches!(buf[..n].iter().find(|b| !b.is_ascii_whitespace()), Some(b'[') | Some(b'{'))
+}
+
+fn ref_file_verdicts(path: &Path, must_accept: bool, reps: usize) -> Vec<(Verdict, bool)> {
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let wrapped;
+    let path_used = if text.trim_start().starts_with('{') {
+        // a single fixture object: wrap it in a list next to the original
+        wrapped = std::env::temp_dir().join(format!("ligerito-verify-{}-{}.json", std::process::id(), path.file_name().unwrap().to_string_lossy()));
+        std::fs::write(&wrapped, format!("[{text}]")).ok();
+        wrapped.as_path()
+    } else {
+        path
+    };
+    let mut out: Vec<(Verdict, bool)> = ref_fixture_verdicts(path_used, None, reps)
+        .into_iter()
+        .map(|(mut v, _)| {
+            let agree = v.accepted == must_accept;
+            if let Some(base) = path.file_name() {
+                v.name = format!("{}#{}", base.to_string_lossy(), v.name.split_once('#').map(|x| x.1).unwrap_or(&v.name));
+            }
+            if !agree {
+                v.reason = format!("{} but the file suffix says {}", if v.accepted { "accepted" } else { v.reason.as_str() }, if must_accept { "accept" } else { "reject" });
+            }
+            (v, agree)
+        })
+        .collect();
+    if path_used != path {
+        std::fs::remove_file(path_used).ok();
+    }
+    if out.is_empty() {
+        out.push((Verdict { name: path.display().to_string(), accepted: false, reason: "empty fixture list".into(), report: None, params: None, bytes: 0, mode: "ref.py", seconds: 0.0 }, !must_accept));
     }
     out
 }
@@ -269,7 +312,7 @@ fn main() {
             let jobs: usize = arg(&args, "--jobs")
                 .map(|s| s.parse().expect("--jobs"))
                 .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1));
-            // *.proof must verify; *.proof.neg must be rejected
+            // *.proof must verify; *.proof.neg must be rejected (JSON ones are ref.py fixture lists, handled below)
             let mut files: Vec<(PathBuf, bool)> = std::fs::read_dir(&dir)
                 .unwrap_or_else(|e| panic!("--dir {}: {e}", dir.display()))
                 .filter_map(|e| e.ok().map(|e| e.path()))
@@ -285,6 +328,8 @@ fn main() {
                 })
                 .collect();
             files.sort();
+            let (json_files, bin_files): (Vec<_>, Vec<_>) = files.into_iter().partition(|(p, _)| is_json_file(p));
+            let files = bin_files;
             let manifest = manifest_verdicts(&dir);
             let next = AtomicUsize::new(0);
             let results: Vec<std::sync::Mutex<Option<Verdict>>> = files.iter().map(|_| std::sync::Mutex::new(None)).collect();
@@ -313,6 +358,20 @@ fn main() {
                 .collect();
             ref_files.sort();
             let mut n_ref = 0usize;
+            let (mut n_json_pos, mut n_json_neg) = (0usize, 0usize);
+            for (jf, must_accept) in &json_files {
+                for (v, agree) in ref_file_verdicts(jf, *must_accept, reps) {
+                    if *must_accept {
+                        n_json_pos += 1;
+                    } else {
+                        n_json_neg += 1;
+                    }
+                    if !agree {
+                        problems.push(format!("{}: {}", v.name, v.reason));
+                    }
+                    verdicts.push(v);
+                }
+            }
             for rf in &ref_files {
                 let neg = rf.with_file_name(rf.file_name().unwrap().to_string_lossy().replace(".ref.json", ".ref.neg.json"));
                 for (v, agree) in ref_fixture_verdicts(rf, if neg.exists() { Some(neg.as_path()) } else { None }, reps) {
@@ -354,8 +413,8 @@ fn main() {
                 "{{\"dir\":{},\"accepted\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_ref_fixtures\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
                 json_str(&dir.display().to_string()),
                 all,
-                files.iter().filter(|f| f.1).count(),
-                files.iter().filter(|f| !f.1).count(),
+                files.iter().filter(|f| f.1).count() + n_json_pos,
+                files.iter().filter(|f| !f.1).count() + n_json_neg,
                 n_ref,
                 verdicts.iter().filter(|v| v.accepted).count(),
                 manifest_checked,

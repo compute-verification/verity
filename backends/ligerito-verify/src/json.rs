@@ -5,7 +5,10 @@
 pub enum Json {
     Null,
     Bool(bool),
+    /// A plain integer literal (`0` or `-?[1-9][0-9]*`).
     Num(f64),
+    /// Any other number token (`5.0`, `5e0`, `-0`, `007`): never accepted where an integer is expected.
+    Real(f64),
     Str(String),
     Arr(Vec<Json>),
     Obj(Vec<(String, Json)>),
@@ -64,6 +67,8 @@ impl Json {
             Json::Bool(b) => o.push_str(if *b { "true" } else { "false" }),
             Json::Num(x) if x.fract() == 0.0 && x.abs() < 1e18 => o.push_str(&format!("{}", *x as i64)),
             Json::Num(x) => o.push_str(&format!("{x}")),
+            Json::Real(x) if x.fract() == 0.0 && x.abs() < 1e18 => o.push_str(&format!("{x:.1}")),
+            Json::Real(x) => o.push_str(&format!("{x:e}")),
             Json::Str(s) => {
                 o.push('"');
                 for ch in s.chars() {
@@ -208,7 +213,10 @@ impl<'a> Parser<'a> {
                     self.pos += 1;
                 }
                 let t = std::str::from_utf8(&self.s[start..self.pos]).map_err(|_| "json: number")?;
-                t.parse::<f64>().map(Json::Num).map_err(|_| format!("json: bad number '{t}'"))
+                let x = t.parse::<f64>().map_err(|_| format!("json: bad number '{t}'"))?;
+                let d = t.strip_prefix('-').unwrap_or(t);
+                let plain = !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()) && (d == "0" || !d.starts_with('0')) && t != "-0";
+                Ok(if plain { Json::Num(x) } else { Json::Real(x) })
             }
             Some(c) => Err(format!("json: unexpected '{}' at {}", c as char, self.pos)),
         }
@@ -273,6 +281,15 @@ mod tests {
         assert_eq!(splits[0], vec![1024, 1]);
         assert!(parse("{\"a\": [1, 2,]}").is_err());
         assert!(parse("{\"a\": 1} x").is_err());
-        assert_eq!(parse(" [true, null, \"a\\n\", -1.5e2] ").unwrap(), Json::Arr(vec![Json::Bool(true), Json::Null, Json::Str("a\n".into()), Json::Num(-150.0)]));
+        assert_eq!(parse(" [true, null, \"a\\n\", -1.5e2] ").unwrap(), Json::Arr(vec![Json::Bool(true), Json::Null, Json::Str("a\n".into()), Json::Real(-150.0)]));
+    }
+
+    #[test]
+    fn only_plain_integer_literals_are_integers() {
+        for (t, int) in [("0", true), ("17", true), ("-3", true), ("5.0", false), ("5e0", false), ("-0", false), ("007", false), ("1E2", false)] {
+            let j = parse(t).unwrap();
+            assert_eq!(matches!(j, Json::Num(_)), int, "{t}");
+        }
+        assert_eq!(parse("5.0").unwrap().as_usize(), None);
     }
 }

@@ -32,11 +32,19 @@ Conventions (agreed with ligerito-proto 17:45Z):
   ``alpha`` (one per claim) into level ``i + 1``'s term list.  The last vector ``v_L`` is sent in the clear; its claims and the
   level-``L`` opened rows are checked directly.
 
-Coin order (one ``coins`` round trip each; the transcript IS the protocol): per level ``i``: ``absorb(root_i)``; if ``i >= 2``:
+Coin order (one ``coins`` round trip each; the transcript IS the protocol).  Format ``ligerito-ref/v2`` first binds the
+statement, before any coin (``absorb_statement``; v1 did not, so a prover could pick the point after the challenges -- red-team
+F10): ``absorb("stmt/dims", u32 L || L x (u32 tall_i, u32 wide_log2_i, u32 n_log2_i, u32 queries_i))``, ``absorb("stmt/w",
+u32 D || D x (u32 radix_j || radix_j x 6 u32, element-major))`` (the claim tensor; for ``f~(z) = v`` it is ``point_tensor(z)``,
+so it binds ``z``), ``absorb("stmt/value", 6 u32)``.  Then per level ``i``: ``absorb(root_i)``; if ``i >= 2``:
 ``indices(S_{i-1})``, ``absorb(opened rows_{i-1} || siblings_{i-1})``, ``challenge(1 + |S_{i-1}|) = alpha``; then ``k'_i x``
 (``absorb(3 coefficients)``, ``challenge(1) = r_j``).  After level ``L``: ``absorb(v_L)``, ``indices(S_L)``, ``absorb(opened
 rows_L || siblings_L)``.  ``FSCoins`` is the Fiat-Shamir instance used for the fixtures (BLAKE3 chain + BLAKE3 XOF, u64 mod p
 sampling); any object with the same four methods (the proto's ``LiveCoins``) can be passed instead.
+
+Encoding: every field word in a proof, statement or claim tensor is an integer in ``[0, p)``; ``verify`` and
+``proof_from_dict`` reject anything else (a lifted ``x + t p`` hashes like ``x`` but wraps int64 in the round check -- red-team
+F11).
 
 Soundness (paper (17), unique decoding): per level ``((1 + rate_i)/2)^{|S_i|} + (k'_i n_i + 2 k'_i + |S_{i-1}| + 1)/|F|`` --
 sized by ``params.py``; the toy query counts in the tests are NOT sound parameters.
@@ -62,8 +70,11 @@ except ImportError:                                   # pragma: no cover - the f
 
     HASH_NAME = "shake256 (blake3 missing: fixtures NOT comparable)"
 
-__all__ = ["P", "BETA", "Dims", "FSCoins", "Proof", "commit", "prove_eval", "verify", "eq_tensor", "lagrange3",
-           "mle_eval", "tensor_eval", "proof_to_dict", "proof_from_dict", "encode", "ntt", "emul", "eadd", "epow"]
+__all__ = ["P", "BETA", "FORMAT", "Dims", "FSCoins", "Proof", "commit", "prove_eval", "verify", "absorb_statement",
+           "eq_tensor", "lagrange3", "mle_eval", "tensor_eval", "proof_to_dict", "proof_from_dict", "encode", "ntt", "emul",
+           "eadd", "epow"]
+
+FORMAT = "ligerito-ref/v2"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Fields
@@ -348,7 +359,7 @@ class FSCoins:
     skipping repeats, until ``count`` distinct; every challenge/indices call then advances ``state <- BLAKE3(state || label
     || 0x02)`` and counts one round."""
 
-    def __init__(self, seed: bytes = b"ligerito-ref/v1"):
+    def __init__(self, seed: bytes = b"ligerito-ref/v2"):
         self.state = H(seed)
         self.rounds = 0
 
@@ -423,9 +434,12 @@ class Dims:
 
     def validate(self) -> None:
         assert len(self.wide_log2) == len(self.n_log2) == len(self.queries) == self.L >= 1
+        ints = tuple(self.tall) + tuple(self.wide_log2) + tuple(self.n_log2) + tuple(self.queries)
+        assert all(isinstance(x, (int, np.integer)) and not isinstance(x, bool) and 0 <= x < 2**32 for x in ints)
+        assert all(t >= 1 for t in self.tall) and all(k <= 27 for k in self.n_log2)
         for i in range(self.L):
             self.row_radices(i)
-            assert self.n(i) >= self.tall[i] and self.queries[i] <= self.n(i)
+            assert self.n(i) >= self.tall[i] and 1 <= self.queries[i] <= self.n(i)
             if i + 1 < self.L:
                 assert self.tall[i] == self.tall[i + 1] << self.wide_log2[i + 1], (i, self.tall)
 
@@ -505,6 +519,34 @@ def _absorb_opening(coins, rows: list[np.ndarray], sibs: list[bytes]) -> None:
     coins.absorb(b"opened", b"".join(row_bytes(r) for r in rows) + b"".join(sibs))
 
 
+def _u32(*xs: int) -> bytes:
+    return b"".join(int(x).to_bytes(4, "little") for x in xs)
+
+
+def absorb_statement(coins, dims: Dims, w: Tensor, value: np.ndarray) -> None:
+    """Bind ``(dims, w, value)`` before the first coin (``ligerito-ref/v2``; byte layout in the module docstring)."""
+    coins.absorb(b"stmt/dims", _u32(dims.L) + b"".join(_u32(dims.tall[i], dims.wide_log2[i], dims.n_log2[i], dims.queries[i])
+                                                    for i in range(dims.L)))
+    coins.absorb(b"stmt/w", _u32(len(w)) + b"".join(_u32(len(t)) + row_bytes(t) for t in w))
+    coins.absorb(b"stmt/value", row_bytes(value))
+
+
+def _canonical(a) -> bool:
+    """An integer array with every word in [0, p) (no floats, no lifts ``x + t p``, no int64 wrap)."""
+    a = np.asarray(a)
+    return a.dtype.kind in "iu" and (a.size == 0 or (int(a.min()) >= 0 and int(a.max()) < P))
+
+
+def _words_canonical(x) -> bool:
+    """Every leaf of a nested JSON list is a Python ``int`` (not ``bool`` / ``float``) in [0, p)."""
+    if isinstance(x, list):
+        return all(_words_canonical(y) for y in x)
+    return type(x) is int and 0 <= x < P
+
+
+NONCANON = "non-canonical field element (every word must be an integer in [0, p))"
+
+
 def _batch_terms(coins, dims: Dims, i: int, carried, carried_total, rows: list[np.ndarray], idx: list[int], rbar_prev: np.ndarray):
     """Level ``i >= 1``: fold the carried claims and the opened rows of level ``i - 1`` into one term list with fresh alphas."""
     alpha = coins.challenge(b"batch", 1 + len(idx))
@@ -568,6 +610,7 @@ def prove_eval(state: ProverState, w: Tensor, coins) -> Proof:
     dims = state.dims
     assert [len(t) for t in w] == dims.radices, "point tensor radices must match dims.radices"
     value = tensor_eval(state.f, w)
+    absorb_statement(coins, dims, w, value)
     ra, ca = split(w, dims.tall[0])
     terms, total = [(ext_one(), ra, ca)], value
     M, U, tree = state.M1, state.U1, state.tree1
@@ -610,14 +653,21 @@ def verify(root: bytes, w: Tensor, value: np.ndarray, proof: Proof, coins) -> tu
         dims.validate()
     except AssertionError as e:
         return False, f"dims: {e}"
+    words = [value, proof.value, proof.final, *w]
+    for lp in proof.levels:
+        words += [lp.sumcheck, *lp.opened_rows]
+    if not all(_canonical(x) for x in words):
+        return False, NONCANON
     if [len(t) for t in w] != dims.radices:
         return False, "point tensor radices do not match dims"
     if len(proof.roots) != dims.L or len(proof.levels) != dims.L or proof.roots[0] != root:
         return False, "roots / levels shape or commitment mismatch"
-    if not np.array_equal(np.asarray(value, dtype=I64) % P, proof.value % P):
+    if np.asarray(value).shape != (EXT,) or not np.array_equal(np.asarray(value, dtype=I64), proof.value):
         return False, "claimed value differs from the proof's value"
+    value = np.asarray(value, dtype=I64)
+    absorb_statement(coins, dims, w, value)
     ra, ca = split(w, dims.tall[0])
-    terms, total = [(ext_one(), ra, ca)], np.asarray(value, dtype=I64) % P
+    terms, total = [(ext_one(), ra, ca)], value
     rbar = None
     for i in range(dims.L):
         coins.absorb(b"root", proof.roots[i])
@@ -677,7 +727,7 @@ def verify(root: bytes, w: Tensor, value: np.ndarray, proof: Proof, coins) -> tu
 def proof_to_dict(proof: Proof) -> dict:
     d = proof.dims
     return {
-        "format": "ligerito-ref/v1", "hash": HASH_NAME, "field": {"p": P, "ext": "x^6 - 31"},
+        "format": FORMAT, "hash": HASH_NAME, "field": {"p": P, "ext": "x^6 - 31"},
         "dims": {"tall": list(d.tall), "wide_log2": list(d.wide_log2), "n_log2": list(d.n_log2), "queries": list(d.queries)},
         "roots": [r.hex() for r in proof.roots],
         "levels": [{"sumcheck": np.asarray(l.sumcheck).tolist(), "opened_idx": list(map(int, l.opened_idx)),
@@ -688,6 +738,10 @@ def proof_to_dict(proof: Proof) -> dict:
 
 
 def proof_from_dict(d: dict) -> Proof:
+    if d.get("format") != FORMAT:
+        raise ValueError(f"format {d.get('format')!r} is not {FORMAT} (v1 does not bind the statement: withdrawn)")
+    if not all(_words_canonical(x) for x in [d["final"], d["value"]] + [l[k] for l in d["levels"] for k in ("sumcheck", "opened_rows")]):
+        raise ValueError(NONCANON)
     dims = Dims(tuple(d["dims"]["tall"]), tuple(d["dims"]["wide_log2"]), tuple(d["dims"]["n_log2"]), tuple(d["dims"]["queries"]))
     levels = [LevelProof(np.array(l["sumcheck"], dtype=I64).reshape(-1, 3, EXT), list(l["opened_idx"]),
                          [np.array(r, dtype=I64) for r in l["opened_rows"]], [bytes.fromhex(s) for s in l["siblings"]])
@@ -702,7 +756,7 @@ def fixture(f: np.ndarray, dims: Dims, z: np.ndarray, seed: bytes = b"fixture") 
     pr = prove_eval(st, w, FSCoins(seed))
     ok, why = verify(st.root, w, pr.value, pr, FSCoins(seed))
     return {"seed": seed.decode(), "f": f.tolist(), "z": np.asarray(z).tolist(), "commitment": st.root.hex(),
-            "proof": proof_to_dict(pr), "expect": {"ok": ok, "reason": why}}
+            "value": np.asarray(pr.value).tolist(), "proof": proof_to_dict(pr), "expect": {"ok": ok, "reason": why}}
 
 
 def main() -> None:                                                             # pragma: no cover

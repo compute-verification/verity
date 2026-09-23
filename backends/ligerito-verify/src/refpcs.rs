@@ -1,4 +1,4 @@
-//! Verifier for the `ligerito-design` reference protocol (`backends/direct/ligerito/ref.py`, format `ligerito-ref/v1`).
+//! Verifier for the `ligerito-design` reference protocol (`backends/direct/ligerito/ref.py`, format `ligerito-ref/v2`).
 //!
 //! `ref.py` is the SPEC of the campaign's Ligerito PCS and differs from the `proto/pcs.py` dialect in [`crate::pcs`]:
 //! mixed-radix indices with digit 0 least significant and an optional TERNARY digit 0 (tall dimension `3 * 2^k`); the
@@ -8,14 +8,17 @@
 //! polynomial, low column digit first; every opened row of level `i` becomes the tensor claim `<(omega^{s r})_r, v_i>`
 //! with weights `(1, omega^s, omega^{2s})` on the ternary digit; the query set and all claims on `v_i` are batched with
 //! one fresh `alpha` per claim; and its Fiat-Shamir instance is BLAKE3 only ([`FsBlake3`]).  The coin order is the
-//! transcript: `absorb(root_i)`; for `i >= 2`: `indices(S_{i-1})`, `absorb(rows || siblings)`, `challenge(1 + |S|)`;
-//! then per column digit `absorb(c0 c1 c2)`, `challenge(1)`; after level `L`: `absorb(v_L)`, `indices(S_L)`,
+//! transcript.  First the statement ([`absorb_statement`], v2; v1 skipped it, so a prover could choose the point after
+//! the challenges -- red-team F10): `absorb("stmt/dims", u32 L || L x (u32 tall, u32 wide_log2, u32 n_log2, u32
+//! queries))`, `absorb("stmt/w", u32 D || D x (u32 radix || radix x 6 u32))`, `absorb("stmt/value", 6 u32)`.  Then per
+//! level `absorb(root_i)`; for `i >= 2`: `indices(S_{i-1})`, `absorb(rows || siblings)`, `challenge(1 + |S|)`; then per
+//! column digit `absorb(c0 c1 c2)`, `challenge(1)`; after level `L`: `absorb(v_L)`, `indices(S_L)`,
 //! `absorb(rows || siblings)`.
 //!
 //! The JSON fixtures `python -m backends.direct.ligerito.ref` prints are accepted bit for bit by [`load_fixtures`] +
 //! [`verify`]; [`apply_ops`] replays the declarative tampers of `fixtures/ref/negatives.json` so the Rust verdict is
-//! compared with `ref.verify`'s on every one.  One deliberate divergence: `ref.py` reduces row entries mod p when hashing
-//! (so `x + p` verifies like `x`); this verifier rejects any non-canonical field element.
+//! compared with `ref.verify`'s on every one.  Every field word must be a plain JSON integer in `[0, p)` (red-team F11:
+//! a lifted `x + t p` hashes like `x`, and v1 `ref.py` wrapped int64 on it); `ref.py` v2 enforces the same rule.
 
 use crate::field::{pow, root_of_unity, Ext, EXT_DEG, P};
 use crate::hash::{blake3, blake3_xof, hex};
@@ -42,8 +45,11 @@ pub struct FsBlake3 {
     rounds: usize,
 }
 
+pub const FORMAT: &str = "ligerito-ref/v2";
+pub const NONCANON: &str = "non-canonical field element (every word must be an integer in [0, p))";
+
 impl FsBlake3 {
-    pub const DEFAULT_SEED: &'static [u8] = b"ligerito-ref/v1";
+    pub const DEFAULT_SEED: &'static [u8] = b"ligerito-ref/v2";
 
     pub fn new(seed: &[u8]) -> FsBlake3 {
         FsBlake3 { state: blake3(seed), rounds: 0 }
@@ -357,10 +363,44 @@ fn merkle_check(root: &Digest, depth: usize, idx: &[usize], rows: &[Row], sibs: 
     merkle::verify_multi(root, &leaves, sibs, depth)
 }
 
+/// Bind the statement `(dims, w, value)` before the first coin (`ligerito-ref/v2`, byte layout in the module doc).
+pub fn absorb_statement(coins: &mut dyn RefCoins, dims: &Dims, w: &[Vec<Ext>], value: &Ext) {
+    let mut d = (dims.levels() as u32).to_le_bytes().to_vec();
+    for i in 0..dims.levels() {
+        for x in [dims.tall[i], dims.wide_log2[i], dims.n_log2[i], dims.queries[i]] {
+            d.extend_from_slice(&(x as u32).to_le_bytes());
+        }
+    }
+    coins.absorb(b"stmt/dims", &d);
+    let mut b = (w.len() as u32).to_le_bytes().to_vec();
+    for t in w {
+        b.extend_from_slice(&(t.len() as u32).to_le_bytes());
+        b.extend(ext_bytes(t));
+    }
+    coins.absorb(b"stmt/w", &b);
+    coins.absorb(b"stmt/value", &value.to_bytes());
+}
+
+fn canonical(proof: &RefProof, w: &[Vec<Ext>], value: &Ext) -> bool {
+    let ext_ok = |e: &Ext| e.0.iter().all(|&c| c < P);
+    let row_ok = |r: &Row| match r {
+        Row::Base(v) => v.iter().all(|&c| c < P),
+        Row::Ext(v) => v.iter().all(ext_ok),
+    };
+    ext_ok(value)
+        && ext_ok(&proof.value)
+        && proof.final_vec.iter().all(ext_ok)
+        && w.iter().flatten().all(ext_ok)
+        && proof.levels.iter().all(|lv| lv.sumcheck.iter().flatten().all(ext_ok) && lv.opened_rows.iter().all(row_ok))
+}
+
 /// Verify `<f, w> = value` against the commitment `root`.  `Err(reason)` mirrors `ref.verify`'s reasons.
 pub fn verify(root: &Digest, w: &[Vec<Ext>], value: &Ext, proof: &RefProof, coins: &mut dyn RefCoins) -> Result<(), String> {
     let dims = &proof.dims;
     dims.validate()?;
+    if !canonical(proof, w, value) {
+        return Err(NONCANON.into());
+    }
     let l = dims.levels();
     let radices = dims.radices()?;
     if w.iter().map(|t| t.len()).collect::<Vec<_>>() != radices {
@@ -372,6 +412,7 @@ pub fn verify(root: &Digest, w: &[Vec<Ext>], value: &Ext, proof: &RefProof, coin
     if &proof.value != value {
         return Err("claimed value differs from the proof's value".into());
     }
+    absorb_statement(coins, dims, w, value);
     // a term: (gamma, row tensor, column tensor)
     let (ra, ca) = split(w, dims.tall[0])?;
     let mut terms: Vec<(Ext, Tensor, Tensor)> = vec![(Ext::ONE, ra, ca)];
@@ -486,9 +527,10 @@ pub fn soundness_bits(dims: &Dims) -> f64 {
 
 // ------------------------------------------------------------------------------------------------- JSON --------
 
+/// A plain non-negative JSON integer literal (`5.0`, `5e0`, `-0` are [`Json::Real`] and never match).
 fn num_u64(j: &Json) -> Option<u64> {
     match j {
-        Json::Num(x) if *x >= 0.0 && x.fract() == 0.0 && *x < 1.8e19 => Some(*x as u64),
+        Json::Num(x) if *x >= 0.0 && !x.is_sign_negative() && x.fract() == 0.0 && *x < 1.8e19 => Some(*x as u64),
         _ => None,
     }
 }
@@ -496,7 +538,7 @@ fn num_u64(j: &Json) -> Option<u64> {
 fn field_elem(j: &Json) -> Result<u32, String> {
     match num_u64(j) {
         Some(v) if v < P as u64 => Ok(v as u32),
-        _ => Err("field element is not a canonical integer in [0, p)".into()),
+        _ => Err(NONCANON.into()),
     }
 }
 
@@ -526,7 +568,7 @@ fn digest_of(j: &Json) -> Result<Digest, String> {
 
 fn row_of(j: &Json) -> Result<Row, String> {
     let a = j.as_arr().ok_or("opened row is not a list")?;
-    if a.iter().all(|x| matches!(x, Json::Num(_))) {
+    if a.iter().all(|x| matches!(x, Json::Num(_) | Json::Real(_))) {
         Ok(Row::Base(a.iter().map(field_elem).collect::<Result<_, _>>()?))
     } else {
         Ok(Row::Ext(a.iter().map(ext_of).collect::<Result<_, _>>()?))
@@ -536,8 +578,9 @@ fn row_of(j: &Json) -> Result<Row, String> {
 /// `ref.proof_to_dict` output.
 pub fn proof_from_json(j: &Json) -> Result<RefProof, String> {
     let get = |k: &str| j.get(k).ok_or(format!("proof: missing {k}"));
-    if get("format")?.as_str() != Some("ligerito-ref/v1") {
-        return Err("proof: format is not ligerito-ref/v1".into());
+    match get("format")?.as_str() {
+        Some(FORMAT) => {}
+        f => return Err(format!("format '{}' is not {FORMAT} (v1 does not bind the statement: withdrawn)", f.unwrap_or("?"))),
     }
     if get("hash")?.as_str() != Some("blake3") {
         return Err("proof: hash is not blake3 (ref.py ran without the blake3 package)".into());
@@ -577,6 +620,10 @@ pub struct Fixture {
     pub seed: Vec<u8>,
     pub z: Vec<Ext>,
     pub commitment: Digest,
+    /// The statement's claimed value (v2 fixtures carry it; absent = the proof's own `value`).
+    pub value: Option<Ext>,
+    /// Set when the statement's `z` / `value` is not canonical: the entry is rejected with this reason.
+    pub stmt_error: Option<String>,
     pub proof: Json,
     pub expect_ok: bool,
     pub expect_reason: String,
@@ -590,11 +637,17 @@ pub fn load_fixtures(text: &str) -> Result<Vec<Fixture>, String> {
         .map(|(i, f)| {
             let get = |k: &str| f.get(k).ok_or(format!("fixture {i}: missing {k}"));
             let expect = get("expect")?;
+            let (z, value, stmt_error) = match (ext_list(get("z")?), f.get("value").map(ext_of).transpose()) {
+                (Ok(z), Ok(v)) => (z, v, None),
+                (Err(e), _) | (_, Err(e)) => (Vec::new(), None, Some(e)),
+            };
             Ok(Fixture {
                 name: f.get("name").and_then(|x| x.as_str()).unwrap_or(&format!("fixture[{i}]")).to_string(),
                 seed: get("seed")?.as_str().ok_or("seed")?.as_bytes().to_vec(),
-                z: ext_list(get("z")?)?,
+                z,
                 commitment: digest_of(get("commitment")?)?,
+                value,
+                stmt_error,
                 proof: get("proof")?.clone(),
                 expect_ok: expect.get("ok").and_then(|x| x.as_bool()).ok_or("expect.ok")?,
                 expect_reason: expect.get("reason").and_then(|x| x.as_str()).unwrap_or("").to_string(),
@@ -607,9 +660,12 @@ pub fn load_fixtures(text: &str) -> Result<Vec<Fixture>, String> {
 /// on acceptance the coin count, the paper's soundness figure and the opened-row count.
 pub fn verify_fixture(fx: &Fixture, proof_json: &Json) -> Result<crate::pcs::Report, String> {
     let proof = proof_from_json(proof_json)?;
+    if let Some(e) = &fx.stmt_error {
+        return Err(e.clone());
+    }
     let w = point_tensor(&fx.z, &proof.dims.radices()?)?;
     let mut coins = FsBlake3::new(&fx.seed);
-    verify(&fx.commitment, &w, &proof.value, &proof, &mut coins)?;
+    verify(&fx.commitment, &w, fx.value.as_ref().unwrap_or(&proof.value), &proof, &mut coins)?;
     Ok(crate::pcs::Report {
         coins: coins.rounds(),
         soundness_log2: -soundness_bits(&proof.dims),
@@ -793,18 +849,111 @@ mod tests {
             let mut doc = fx.proof.clone();
             apply_ops(&mut doc, &t.ops).unwrap_or_else(|e| panic!("{}: {e}", t.name));
             let got = verify_fixture(fx, &doc);
-            // ref.py reduces row entries mod p when hashing; we reject non-canonical encodings instead
-            let expect_ok = t.expect_ok && !t.name.ends_with("/noncanon");
-            assert_eq!(got.is_ok(), expect_ok, "{}: rust {:?}, python {} ({})", t.name, got, t.expect_ok, t.expect_reason);
-            if !expect_ok {
+            assert_eq!(got.is_ok(), t.expect_ok, "{}: rust {:?}, python {} ({})", t.name, got, t.expect_ok, t.expect_reason);
+            if !t.expect_ok {
                 rejected += 1;
-                if !t.name.ends_with("/noncanon") && !t.expect_reason.starts_with("exception") {
-                    // the reason should name the same stage as ref.py's (ref.py raised while deserialising ragged rows)
-                    let stage = t.expect_reason.split(':').next().unwrap();
-                    assert!(got.as_ref().unwrap_err().starts_with(stage), "{}: {:?} vs {}", t.name, got, t.expect_reason);
-                }
+                assert_same_stage(&t.name, &got, &t.expect_reason);
             }
         }
         assert_eq!(rejected, tampers.len());
+    }
+
+    /// The Rust reason names the same stage as ref.py's (up to the first ':'); ref.py exceptions (ragged rows while
+    /// deserialising) have no Rust twin.
+    fn assert_same_stage(name: &str, got: &Result<crate::pcs::Report, String>, py: &str) {
+        if !py.starts_with("exception") {
+            let stage = py.split(':').next().unwrap();
+            assert!(got.as_ref().unwrap_err().starts_with(stage), "{name}: {got:?} vs ref.py {py}");
+        }
+    }
+
+    #[test]
+    fn statement_is_bound_before_the_first_coin() {
+        // F10: the same honest proof against another point / value / dims is rejected by the transcript, not by luck
+        let fx = &fixtures()[1];
+        let proof = proof_from_json(&fx.proof).unwrap();
+        let rad = proof.dims.radices().unwrap();
+        let w = point_tensor(&fx.z, &rad).unwrap();
+        let v = fx.value.unwrap();
+        assert!(verify(&fx.commitment, &w, &v, &proof, &mut FsBlake3::new(&fx.seed)).is_ok());
+        let mut z2 = fx.z.clone();
+        z2[0] = z2[0].add(&Ext::ONE);
+        let e = verify(&fx.commitment, &point_tensor(&z2, &rad).unwrap(), &v, &proof, &mut FsBlake3::new(&fx.seed)).unwrap_err();
+        assert!(e.starts_with("level 1: sumcheck round"), "{e}");
+        let mut p2 = proof.clone();
+        p2.value = v.add(&Ext::ONE);
+        let e = verify(&fx.commitment, &w, &p2.value, &p2, &mut FsBlake3::new(&fx.seed)).unwrap_err();
+        assert!(e.starts_with("level 1: sumcheck round 0"), "{e}");
+        // the statement bytes: dims, then w, then value, each under its own label
+        struct Log(Vec<(Vec<u8>, usize)>);
+        impl RefCoins for Log {
+            fn absorb(&mut self, label: &[u8], data: &[u8]) {
+                self.0.push((label.to_vec(), data.len()));
+            }
+            fn challenge(&mut self, _: &[u8], n: usize) -> Vec<Ext> {
+                vec![Ext::ONE; n]
+            }
+            fn indices(&mut self, _: &[u8], _: usize, c: usize) -> Vec<usize> {
+                (0..c).collect()
+            }
+            fn rounds(&self) -> usize {
+                0
+            }
+        }
+        let mut log = Log(Vec::new());
+        absorb_statement(&mut log, &proof.dims, &w, &v);
+        let l = proof.dims.levels();
+        let wbytes = 4 + rad.iter().map(|r| 4 + 24 * r).sum::<usize>();
+        assert_eq!(log.0, vec![(b"stmt/dims".to_vec(), 4 + 16 * l), (b"stmt/w".to_vec(), wbytes), (b"stmt/value".to_vec(), 24)]);
+    }
+
+    #[test]
+    fn noncanonical_words_are_rejected_in_memory_and_on_the_wire() {
+        // F11: a lifted word (x + p) is rejected before any arithmetic, and no JSON spelling but a plain integer is a word
+        let fx = &fixtures()[0];
+        let proof = proof_from_json(&fx.proof).unwrap();
+        let w = point_tensor(&fx.z, &proof.dims.radices().unwrap()).unwrap();
+        let mut p2 = proof.clone();
+        p2.levels[0].sumcheck[0][0].0[0] += P;
+        assert_eq!(verify(&fx.commitment, &w, &p2.value, &p2, &mut FsBlake3::new(&fx.seed)).unwrap_err(), NONCANON);
+        let mut w2 = w.clone();
+        w2[0][0].0[0] += P;
+        assert_eq!(verify(&fx.commitment, &w2, &proof.value, &proof, &mut FsBlake3::new(&fx.seed)).unwrap_err(), NONCANON);
+        for bad in ["2013265921", "5.0", "5e0", "-0", "-1", "18446744073709551621"] {
+            let mut doc = fx.proof.clone();
+            let text = doc.dump();
+            let x = format!("{}", proof.final_vec[0].0[0]);
+            doc = crate::json::parse(&text.replacen(&format!("\"final\":[[{x},"), &format!("\"final\":[[{bad},"), 1)).unwrap();
+            assert_ne!(doc.dump(), text, "{bad}: substitution did not apply");
+            assert_eq!(proof_from_json(&doc).unwrap_err(), NONCANON, "{bad}");
+        }
+    }
+
+    #[test]
+    fn forged_fixtures_are_rejected_and_honest_ones_accepted() {
+        // fixtures/forged: red-team F10 (weak FS, v1 verbatim + relabelled v2 + re-run against v2), F11 (int64 wrap),
+        // statement substitutions and non-canonical encodings; every entry must be rejected, in ref.py's stage
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/forged");
+        let (mut n_neg, mut n_pos) = (0, 0);
+        for e in std::fs::read_dir(&dir).unwrap() {
+            let path = e.unwrap().path();
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            let must_accept = name.ends_with(".proof");
+            if !must_accept && !name.ends_with(".proof.neg") {
+                continue;
+            }
+            for fx in load_fixtures(&std::fs::read_to_string(&path).unwrap()).unwrap() {
+                let got = verify_fixture(&fx, &fx.proof);
+                assert_eq!(got.is_ok(), must_accept, "{name}#{}: {got:?} (ref.py: {})", fx.name, fx.expect_reason);
+                assert_eq!(fx.expect_ok, must_accept, "{name}#{}: ref.py's recorded verdict", fx.name);
+                if must_accept {
+                    n_pos += 1;
+                } else {
+                    n_neg += 1;
+                    assert_same_stage(&fx.name, &got, &fx.expect_reason);
+                }
+            }
+        }
+        assert!(n_pos >= 3 && n_neg >= 40, "{n_pos} honest, {n_neg} forged");
     }
 }

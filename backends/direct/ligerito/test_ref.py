@@ -254,3 +254,71 @@ def test_json_round_trip_and_fixture():
     fx = R.fixture(f, dims, z, seed=b"t")
     assert fx["expect"]["ok"] and fx["commitment"] == st.root.hex()
     assert fx["proof"]["hash"] == "blake3"
+
+
+# --- red-team F10 / F11 (ligerito-ref/v2) ------------------------------------------------------------------------------
+
+def test_statement_bound_before_first_coin():
+    """F10: dims, w, value are absorbed before the first coin, so the same proof fails for any other statement in the
+    sumcheck (the transcript diverges), and a v1 proof is refused outright."""
+    dims, f, z, w, st, pr = _instance(10, 2, True)
+    z2 = z.copy()
+    z2[-1, 0] = (z2[-1, 0] + 1) % R.P
+    ok, why = R.verify(st.root, R.point_tensor(z2, dims.radices), pr.value, pr, R.FSCoins())
+    assert not ok and why.startswith("level 1: sumcheck round"), why
+    pr2 = copy.deepcopy(pr)
+    pr2.value = R.eadd(pr.value, R.ext_one())
+    ok, why = R.verify(st.root, w, pr2.value, pr2, R.FSCoins())
+    assert not ok and why.startswith("level 1: sumcheck round 0"), why
+    log = []
+
+    class Log(R.FSCoins):
+        def absorb(self, label, data):
+            log.append(label)
+            super().absorb(label, data)
+
+    assert R.verify(st.root, w, pr.value, pr, Log())[0]
+    assert log[:4] == [b"stmt/dims", b"stmt/w", b"stmt/value", b"root"]
+    d = R.proof_to_dict(pr)
+    d["format"] = "ligerito-ref/v1"
+    with pytest.raises(ValueError, match="withdrawn"):
+        R.proof_from_dict(d)
+
+
+def test_noncanonical_words_rejected():
+    """F11: a lifted word x + p (which v1 hashed as x and wrapped in int64) and non-integer JSON numbers are rejected."""
+    dims, f, z, w, st, pr = _instance(10, 1, False)
+    pr2 = copy.deepcopy(pr)
+    pr2.levels[0].sumcheck = np.array(pr.levels[0].sumcheck, dtype=np.int64)
+    pr2.levels[0].sumcheck[0, 0, 0] += R.P * ((1 << 62) // R.P + 1)
+    assert R.verify(st.root, w, pr2.value, pr2, R.FSCoins()) == (False, R.NONCANON)
+    w2 = [t.copy() for t in w]
+    w2[0][0, 0] += R.P
+    assert R.verify(st.root, w2, pr.value, pr, R.FSCoins()) == (False, R.NONCANON)
+    for bad in (R.P, 5.0, -1, True, 1 << 64):
+        d = json.loads(json.dumps(R.proof_to_dict(pr)))
+        d["final"][0][0] = bad
+        with pytest.raises(ValueError, match="non-canonical"):
+            R.proof_from_dict(d)
+
+
+def test_forged_fixtures_rejected():
+    """The must-reject set the Rust verifier pins (``backends/ligerito-verify/fixtures/forged``): ref.py v2 agrees."""
+    from pathlib import Path
+    forged = Path(__file__).resolve().parents[2] / "ligerito-verify/fixtures/forged"
+    files = sorted(forged.glob("*.proof*"))
+    assert len(files) >= 5
+    n = 0
+    for fp in files:
+        want = fp.name.endswith(".proof")
+        for fx in json.loads(fp.read_text()):
+            try:
+                pf = R.proof_from_dict(fx["proof"])
+                w = R.point_tensor(np.array(fx["z"], dtype=np.int64), pf.dims.radices)
+                value = np.array(fx["value"], dtype=np.int64) if "value" in fx else pf.value
+                ok = R.verify(bytes.fromhex(fx["commitment"]), w, value, pf, R.FSCoins(fx["seed"].encode()))[0]
+            except (ValueError, AssertionError, OverflowError):
+                ok = False
+            assert ok == want, (fp.name, fx["name"])
+            n += 1
+    assert n >= 50
