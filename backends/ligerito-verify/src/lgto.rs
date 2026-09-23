@@ -1440,6 +1440,73 @@ mod tests {
         pcs_verify(&p, &pf0, &points, &v0, &[], 0, &mut c).unwrap();
     }
 
+    /// A `prove_commit_first` proof with sparse claims in ligerito-proto's `Proof.to_bytes` form, plus its points, values
+    /// and terms, for `tools/pcs_sparse_crosscheck.py` (proto's `verify_open` on it; the shape of `pcs_sparse_fixture.py`):
+    /// `PCS_SPARSE_PROTO_OUT=x.json cargo test --release pcs_sparse_proto_bytes -- --ignored`.
+    #[test]
+    #[ignore]
+    fn pcs_sparse_proto_bytes() {
+        use crate::refprover::{prove_commit_first, random_vector};
+        fn bind(c: &mut dyn Coins, root: &Digest) {
+            c.absorb(b"statement", b"relation statement");
+            c.absorb(b"root", root);
+        }
+        let out = std::env::var("PCS_SPARSE_PROTO_OUT").expect("PCS_SPARSE_PROTO_OUT");
+        let n = 16;
+        let p = Params::with_rates(n, vec![4, 3, 3], vec![24, 20, 16], vec![2, 2, 2]);
+        let f = random_vector(n, 7);
+        let points: Vec<Vec<Ext>> = (0..3).map(|j| random_point(n, 20 + j)).collect();
+        let r1 = 1usize << p.k(1);
+        let col3: Vec<usize> = (0..40).map(|t| 3 * r1 + (t * 37 + 11) % r1).collect();
+        let spread: Vec<usize> = (0..25).map(|t| (t * 2731 + 5) % (1 << n)).collect();
+        let sparse = vec![(col3, random_point(40, 3)), (spread, random_point(25, 4))];
+        let (values, svals, pf) = prove_commit_first(&p, &f, &points, &sparse, &mut FiatShamir::new(FiatShamir::LABEL), &mut bind);
+        let terms: Vec<SparseTerm> = sparse.iter().zip(&svals).map(|((c, w), v)| SparseTerm { cells: c.clone(), weights: w.clone(), value: *v }).collect();
+        let mut c = FiatShamir::new(FiatShamir::LABEL);
+        bind(&mut c, &pf.roots[0]);
+        pcs_verify(&p, &pf, &points, &values, &terms, 0, &mut c).unwrap();
+        let l = p.rounds();
+        let list = |v: Vec<String>| format!("[{}]", v.join(","));
+        let ints = |v: &[usize]| list(v.iter().map(|x| x.to_string()).collect());
+        let ext = |e: &Ext| list(e.0.iter().map(|x| x.to_string()).collect());
+        let exts = |v: &[Ext]| list(v.iter().map(ext).collect());
+        let head = format!(
+            "{{\"n\":{n},\"kprime\":{},\"queries\":{},\"rate_log2\":{},\"splits\":{},\"coins\":0,\"ext_degree\":6,\"rows_shape\":{},\"sib_len\":{},\"final_len\":{},\"order\":\"commit-first\",\"claims\":{}}}",
+            ints(&p.kprime),
+            ints(&p.queries),
+            ints(&p.rate_log2),
+            list(p.splits.iter().map(|(a, b)| format!("[{a},{b}]")).collect()),
+            list((1..=l).map(|i| format!("[{},{}]", p.queries[i - 1], p.cols(i) * if i == 1 { 1 } else { EXT_DEG })).collect()),
+            ints(&pf.openings.iter().map(|o| 32 * o.siblings.len()).collect::<Vec<_>>()),
+            pf.final_y.len(),
+            points.len()
+        );
+        let mut b = (head.len() as u32).to_le_bytes().to_vec();
+        b.extend_from_slice(head.as_bytes());
+        values.iter().for_each(|v| b.extend_from_slice(&v.to_bytes()));
+        for i in 0..l {
+            b.extend_from_slice(&pf.roots[i]);
+            pf.sumcheck[i].iter().flatten().for_each(|e| b.extend_from_slice(&e.to_bytes()));
+        }
+        for (i, o) in pf.openings.iter().enumerate() {
+            for row in &o.rows {
+                let planes = if i == 0 { 1 } else { EXT_DEG };
+                (0..planes).for_each(|a| row.iter().for_each(|e| b.extend_from_slice(&e.0[a].to_le_bytes())));
+            }
+            o.siblings.iter().for_each(|s| b.extend_from_slice(s));
+        }
+        pf.final_y.iter().for_each(|e| b.extend_from_slice(&e.to_bytes()));
+        let term = |t: &SparseTerm| format!("{{\"cells\":{},\"weights\":{},\"value\":{}}}", ints(&t.cells), exts(&t.weights), ext(&t.value));
+        let doc = format!(
+            "{{\"what\":\"ligerito-verify refprover::prove_commit_first, as proto Proof.to_bytes\",\"points\":{},\"values\":{},\"sparse\":{},\"proof_hex\":\"{}\"}}",
+            list(points.iter().map(|z| exts(z)).collect()),
+            exts(&values),
+            list(terms.iter().map(term).collect()),
+            hex(&b)
+        );
+        std::fs::write(&out, doc).unwrap();
+    }
+
     #[test]
     fn legacy_fixture_verifies_only_as_legacy() {
         let rep = verify(STMT, KEY, PROOF, &mut fs, &legacy()).unwrap();
