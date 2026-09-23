@@ -10,6 +10,7 @@ import json
 import subprocess
 
 import numpy as np
+import os
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -23,7 +24,8 @@ from . import dummy  # noqa: E402, F401  (test-only scheme: registers itself)
 from .fixtures import ligero_verify_binary, write_fixture  # noqa: E402
 
 REL = "fp8-ada"                    # k = 32 words of 8 bits, 48 columns per VU: the relation every scheme is exercised on
-SCHEMES = registry.names()
+#: every registered scheme, plus family members named in VERITY_LEAF_CONFORMANCE (comma-separated, e.g. "ajtai-n64,ajtai-n128")
+SCHEMES = registry.names() + [n for n in os.environ.get("VERITY_LEAF_CONFORMANCE", "").split(",") if n]
 
 
 @pytest.fixture(scope="module")
@@ -48,11 +50,13 @@ def test_static_contract(name: str) -> None:
     s = registry.get(name)
     base.check_scheme(s)
     assert isinstance(s, base.LeafScheme)
-    assert s.name == name == registry.canonical(name) and "+" not in name and name not in registry.ALIASES
-    assert 1 <= s.digest_elems <= 64 and 0 <= s.carry_elems <= 1024 - 3      # Rust MAX_LINKS bounds the linked rows
+    assert registry.suffix_of(s) == name == registry.canonical(name) and "+" not in name and name not in registry.ALIASES
+    assert name.startswith(s.name)                                            # a family member "ajtai-n64" has name "ajtai"
+    assert 1 <= s.digest_elems and s.digest_elems + s.carry_elems <= 1024 - 3  # Rust MAX_LINKS bounds the linked rows
     assert len(s.params_sha256) == 64 and int(s.params_sha256, 16) >= 0
     assert s.schema and s.assumption and s.hash_name
-    assert registry.by_schema(s.schema).name == name
+    if name in registry.names():
+        assert registry.by_schema(s.schema).name == name
     assert registry.get(name) is not registry.get(name)                        # fresh instances (gadgets hold state)
     others = [registry.get(n) for n in SCHEMES if n != name]
     assert all(o.schema != s.schema and o.params_sha256 != s.params_sha256 for o in others), "schema / params must identify the scheme"

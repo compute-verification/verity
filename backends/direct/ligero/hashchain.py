@@ -87,7 +87,7 @@ class HashedRelation:
     @property
     def name(self) -> str:
         """The relation string of the statement: ``<rel>`` for the default scheme, ``<rel>+<leaf>`` otherwise."""
-        return leaf_registry.relation_name(self.rel.name, self.leaf.name)
+        return leaf_registry.relation_name(self.rel.name, self.leaf)
 
 
 def _reduce(e):

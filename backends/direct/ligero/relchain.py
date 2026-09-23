@@ -390,7 +390,7 @@ class HashedRelationRunner(RelationChainRunner):
         t0 = time.perf_counter()
         self.hr = hashchain.compose(rel, leaf)
         self.leaf = self.hr.leaf
-        self.leaf_name = leaf_registry.canonical(self.leaf.name)
+        self.leaf_name = leaf_registry.suffix_of(self.leaf)     # the relation suffix ("poseidon2", "blake3", "ajtai-n64")
         self.sys = self.hr.sys
         self.tb = tables(self.sys, self.device)
         self.compile_seconds = time.perf_counter() - t0

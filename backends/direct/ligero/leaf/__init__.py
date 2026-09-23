@@ -8,7 +8,8 @@ is what every scheme must pass.
 from __future__ import annotations
 
 from .base import LeafScheme, WitnessHook
-from .registry import DEFAULT, by_schema, canonical, get, names, register, relation_name, split_relation_name
+from .registry import (DEFAULT, by_schema, canonical, get, names, register, register_family, relation_name, split_relation_name,
+                       suffix_of)
 
-__all__ = ["DEFAULT", "LeafScheme", "WitnessHook", "by_schema", "canonical", "get", "names", "register", "relation_name",
-           "split_relation_name"]
+__all__ = ["DEFAULT", "LeafScheme", "WitnessHook", "by_schema", "canonical", "get", "names", "register", "register_family",
+           "relation_name", "split_relation_name", "suffix_of"]
