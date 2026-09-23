@@ -11,9 +11,9 @@ What this does NOT recompute: the VU evaluations themselves (the `evaluated` / `
 The record's own `result` / `grade` are carried as facts beside the partition, not recomputed.
 
 Inputs: `commit/sampled_replay_p0.json` (records), `manifest.json` + `build_request*/instances.json.gz` (programs; the B=1 Programs are
-0.9-1.7 GB compressed: a pod).  Only the B=1 rows (#11, #39) have a sampled-replay record on the reference set (the B>=2 rows' Commit
-did not reach C2 or archived it to the vault).  `sampled_replay_p1/p2.json` on those rows are `reused_from` p0 (the same run root, seed and
-code): the partition is p0's.
+0.9-1.7 GB compressed and need 120-250 GB of RAM as Python objects: a big pod; the B>=2 rows' request Programs are small).  Every GREEN
+row and #57 carry a sampled-replay record; the FAIL rows #4, #70, #75 never reached C2.  `sampled_replay_p1/p2.json` are `reused_from`
+p0 on the B=1 rows (the same run root, seed and code): the partition is p0's; the B>=2 rows' further pairs are not compared here.
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ FACT_KEYS = ("a_r", "a_r_source", "lag", "cap", "arrive", "eos_declared", "serve
 
 
 def applies(row: resolver.Row) -> str | None:
-    return None if row.has("commit/sampled_replay_p0.json") else "no sampled_replay record on this row (only the B=1 rows' Commit reached C2 on the reference set)"
+    return None if row.has("commit/sampled_replay_p0.json") else "no sampled_replay record on this row (the row's Commit never reached C2)"
 
 
 def _body(doc: dict) -> dict:
