@@ -38,6 +38,7 @@ unchanged (no extras; byte-identical transcripts).
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 import torch
@@ -52,6 +53,7 @@ END_FAMILIES = (6, 0, 1)   # coefficient family of end component x (see the modu
 N_BASE_LINKS = 3      # linked rows with their own uniform link / start families; more take monomials (module comment)
 WORD_BITS = 32             # the public word a component end is a bit field of
 MAX_COMPONENT_BITS = 30    # 2^30 < p < 2^31: the widest bit field that is an integer below p (the Rust parser's cap)
+CHAIN_TERM_CHUNK = int(os.environ.get("LIGERO_CHAIN_TERM_CHUNK", "64"))   # chain_coefs terms per index_add (memory bound)
 
 
 def check_component(x: int, lo: int, bits: int) -> tuple[int, int]:
@@ -164,15 +166,18 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
     # more than three linked rows, the link extras and the start extras (monomials of the seven families, module comment).
     base = rc.index_select(1, tabs["famsel"])                                     # (D, V_base, l)
     if tabs["n_extra"]:
-        extras = extra_coefs(rc, tabs["n_extra"])                                  # (D, n_extra, l)
-        base = torch.cat([base, extras], 1)
-    rm = (base * tabs["maskmat"][None, :, :]) % P                                # (D, V, l)
-    # every (row, family, kappa) term of r^T A at once: coef[:, row, j] += kappa rc[f][j] (masked); the link terms'
+        base = torch.cat([base, extra_coefs(rc, tabs["n_extra"])], 1)
+    rm = base.mul_(tabs["maskmat"][None, :, :]).remainder_(P)                    # (D, V, l), in place
+    # every (row, family, kappa) term of r^T A: coef[:, row, j] += kappa rc[f][j] (masked); the link terms'
     # W[c][j + 1] coefficient is the same sum shifted one column right.  Exact integer sums of < 2^31 residues (a few
     # hundred terms per entry: no overflow), reduced once -- the same residues as the per-term reduction, in ~10 kernels
-    # instead of one per term (lane hostphase).
+    # instead of one per term (lane hostphase); the terms in chunks of CHAIN_TERM_CHUNK so a wide chain's (D, T, l)
+    # temporaries stay bounded per pipelined stream (ajtai-n64 / n128 link 131 / 259 rows).
     coef = torch.zeros((D, len(rows), l), dtype=torch.int64, device=device)
-    coef.index_add_(1, T["row"], (rm.index_select(1, T["fam"]) * T["kappa"][None, :, None]) % P)
+    nt = T["row"].shape[0]
+    for t0 in range(0, nt, CHAIN_TERM_CHUNK):
+        t1 = min(nt, t0 + CHAIN_TERM_CHUNK)
+        coef.index_add_(1, T["row"][t0:t1], (rm.index_select(1, T["fam"][t0:t1]) * T["kappa"][None, t0:t1, None]) % P)
     coef[:, :, 1:].index_add_(1, T["shift_row"], rm.index_select(1, tabs["link_fams"])[:, :, :-1])
     coef %= P
     rhs = torch.zeros((D,), dtype=torch.int64, device=device)

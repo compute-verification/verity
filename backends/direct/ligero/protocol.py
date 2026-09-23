@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import time
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -1035,7 +1036,7 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
     return w, h, q, v
 
 
-CHAIN_ENC_CHUNK = 64   # chain-test coefficient rows encoded per chunk (lane ajtai-leaf: bounded memory for wide chains)
+CHAIN_ENC_CHUNK = int(os.environ.get("LIGERO_CHAIN_ENC_CHUNK", "64"))   # chain-test coefficient rows encoded per chunk (bounded memory for wide chains)
 TESTS_GRAPH = True     # the whole tests chain (challenge block -> w, h, q, v in pinned memory) as ONE CUDA graph (lane hp2-host)
 _TESTS_STATIC: dict = {}
 
