@@ -372,6 +372,12 @@ def test_unusable_remote_degrades_to_local(env, monkeypatch):
     assert st.get_manifest(art).kind == "dataset-snapshot/v1"
     with pytest.raises(Exception, match="T_AK_ABSENT"):
         st.push(art)
+    src = env / "payload.bin"
+    src.write_bytes(b"evicted later")
+    blob_art = st.put_artifact("fixture/v1", {}, {}, file=src)
+    st.object_path(st.get_manifest(blob_art).payload.sha256).unlink()             # an evicted blob: only the remote could supply it
+    with pytest.raises(NotFound, match="configured remote is unusable here: .*T_AK_ABSENT"):
+        st.fetch(blob_art, env / "out")
     monkeypatch.setenv("T_AK_ABSENT", "id")
     monkeypatch.setenv("T_SK_ABSENT", "secret")
     assert isinstance(LocalStore(env / "degraded", config_path=env / "s3.toml").remote, remote_s3.S3Remote)
