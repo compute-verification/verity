@@ -512,8 +512,11 @@ def hashed_negatives(R: HashedRelationRunner, data: list, row_negatives: int = 4
     from . import hashchain
     from .auth import TreeRef
     rel, steps = R.rel, R.steps
-    base = data[:2]
-    ids = [0, 1]
+    # the second VU is the first whose x row AND W column both differ from VU 0's (in a tile VUs 0 and 1 share the x row,
+    # so "computed on VU 1's x row" would be an honest proof there)
+    j = next((i for i in range(1, len(data)) if list(data[i][0]) != list(data[0][0]) and list(data[i][1]) != list(data[0][1])), 1)
+    base = [data[0], data[j]]
+    ids = [0, j]
     negs = []
     proof, (table, idx, ypub, auth, sibs), lay = R.prove_vus(base, check=False, vu_ids=ids)
     ends = [steps - 1, 2 * steps - 1]
@@ -541,8 +544,8 @@ def hashed_negatives(R: HashedRelationRunner, data: list, row_negatives: int = 4
     V((table, idx, ypub, other, sibs), "x root replaced by the W root (verifier's statement)")
     other = dataclasses.replace(auth, trees=(TreeRef("a", rb.binding, ra.owner, ra.count, ra.root), rb, ry))
     V((table, idx, ypub, other, sibs), "x tree binding changed (verifier's statement)")
-    idx2 = idx.copy(); idx2[0, 1] = 1
-    other = dataclasses.replace(auth, x_index=(1, 1))
+    idx2 = idx.copy(); idx2[0, 1] = auth.x_index[1]
+    other = dataclasses.replace(auth, x_index=(auth.x_index[1], auth.x_index[1]))
     V((table, idx2, ypub, other, sibs), "VU 0 claims VU 1's x row (two VUs, one leaf, different digests)")
     other = dataclasses.replace(auth, w_index=(auth.w_index[0], ra.count))
     idx2 = idx.copy(); idx2[1, 2] = ra.count
