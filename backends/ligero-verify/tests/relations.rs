@@ -210,6 +210,15 @@ fn system_digest_names_every_pinned_relation() {
         ("fixtures/systems/bf16-ampere-v2x4.system.bin", "bf16-ampere-v2x4", "1717", "216"),
         ("fixtures/systems/fp8-hopper-v2x4.system.bin", "fp8-hopper-v2x4", "647", "64"),
         ("fixtures/systems/fp8-ada-v2x4.system.bin", "fp8-ada-v2x4", "1255", "128"),
+        // the private-operand-safe folds (lane fold-private): v3 x4 and v1 x4, recompiled torch-free, sys_id == system_id
+        ("fixtures/systems/bf16-hopper-v3x4.system.bin", "bf16-hopper-v3x4", "5929", "128"),
+        ("fixtures/systems/bf16-ampere-v3x4.system.bin", "bf16-ampere-v3x4", "6369", "128"),
+        ("fixtures/systems/fp8-hopper-v3x4.system.bin", "fp8-hopper-v3x4", "6558", "86"),
+        ("fixtures/systems/fp8-ada-v3x4.system.bin", "fp8-ada-v3x4", "7090", "86"),
+        ("fixtures/systems/bf16-hopper-x4.system.bin", "bf16-hopper-x4", "12792", "384"),
+        ("fixtures/systems/bf16-ampere-x4.system.bin", "bf16-ampere-x4", "14576", "384"),
+        ("fixtures/systems/fp8-hopper-x4.system.bin", "fp8-hopper-x4", "13383", "768"),
+        ("fixtures/systems/fp8-ada-x4.system.bin", "fp8-ada-x4", "14875", "768"),
     ] {
         let (code, js) = run(&["system-digest", "--system", path]);
         assert_eq!(code, 0, "{js}");

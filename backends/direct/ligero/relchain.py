@@ -76,6 +76,9 @@ def frozen_instances(rel: Relation, n: int, root=None):
         j = i % vu.n
         a, b, y16 = vu.instance(j)
         accs = vu.accs(j)
+        if rel.fold > 1:
+            # a folded relation's columns end on every ``fold``-th recorded accumulator (the intermediate ones are private)
+            accs = accs[rel.fold - 1::rel.fold]
         if len(accs) != rel.steps or rel.y_public(int(accs[-1])) != y16:
             raise ValueError(f"{rel.frozen_tier} instance {j}: {len(accs)} accumulators / final word does not cast to the expected y")
         out.append((a, b, accs, int(accs[-1])))
@@ -93,6 +96,12 @@ def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, ca
     if path is not None and path.exists():
         with np.load(path) as z:  # materialise each array once (indexing the lazy NpzFile re-reads the member every time)
             a, b, accs = z["a"], z["b"], z["accs"]
+        return [(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)]
+    if path is not None and rel.fold > 1 and rel.folded_from and (Path(cache) / f"{rel.folded_from}-{seed}-{n}.npz").exists():
+        # the fold's VUs ARE the base's (same operands from the same (seed, i) streams, the same chain): every ``fold``-th
+        # recorded accumulator is a column's end, the others are the words the fold keeps private
+        with np.load(Path(cache) / f"{rel.folded_from}-{seed}-{n}.npz") as z:
+            a, b, accs = z["a"], z["b"], z["accs"][:, rel.fold - 1::rel.fold]
         return [(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)]
     jobs = [(rel.name, seed, i) for i in range(n)]
     if procs > 1 and n > 1:
@@ -565,6 +574,62 @@ def negatives(R: RelationChainRunner, base: list, row_negatives: int = 60) -> li
     a_bad = a.copy()
     a_bad[10, 1] ^= 1 << (rel.params.frac if rel.params.word_bits == 16 else 3)   # an exponent bit
     negs.append(("operand a[10][1] exponent bit flipped", R.verify_vus(proof, (a_bad, b, ypub), lay)))
+    # (4b) folded relations (``rel.fold`` instruction steps per column): the column boundary is where the fold could leak --
+    # claim the intermediate word of the last column (the state after fold - 1 of its steps, which the base relation would
+    # publish and the folded one keeps private), and swap the two operand words on either side of a column boundary while
+    # keeping the original claim (a different chain, the same statement layout)
+    if rel.fold > 1:
+        # relation-level: the prover PROVES the bad VU (check=False), so the constraints -- not the statement digest --
+        # have to reject it (the proof's transcript is consistent with the bad statement)
+        from dataclasses import replace as _replace
+        base_model = _replace(rel.model, groups=tuple(rel.model.groups)[: len(rel.model.groups) // rel.fold])
+        kb, K = base_model.k, rel.k
+        # the boundary VU: VU 0's words in its LAST column only (zeros before it), so the accumulator entering that column
+        # is +0 and each of the column's fold steps moves the word -- a K = 1536 chain's accumulator has grown past the
+        # adder's window by its last column and later products truncate away, which would make every negative below vacuous
+        a_vu, b_vu = [0] * (K * (steps - 1)) + list(base[0][0][K * (steps - 1):]), [0] * (K * (steps - 1)) + list(base[0][1][K * (steps - 1):])
+        accs, c_in = [], 0
+        for s in range(steps):
+            c_in = tc_dot(rel.model, c_in, a_vu[K * s:K * s + K], b_vu[K * s:K * s + K])
+            accs.append(c_in)
+        # NOTE: ``marshal`` caches sub-batch bundles by ``id()`` of the VU tuples, so every VU built here is kept alive in
+        # ``keep`` until the battery is done -- a freed temporary's id can be reused and would replay the previous bundle
+        keep = []
+
+        def prove(vu):
+            keep.append(vu)
+            pf, pb, ly = R.prove_vus([vu, base[1]], check=False)
+            return R.verify_vus(pf, pb, ly)
+        ok, why = prove((a_vu, b_vu, accs, accs[-1]))
+        negs.append(("folded boundary VU (honest control: must ACCEPT)", (not ok, "honest boundary VU accepted" if ok else why)))
+        y_end, mid = rel.y_public(accs[-1]), accs[-2] if steps > 1 else 0
+        for s in range(rel.fold - 1):                       # the state after 1 .. fold - 1 of the last column's steps: the
+            lo = K * (steps - 1) + kb * s                   # words the base relation publishes and the fold keeps private
+            mid = tc_dot(base_model, mid, a_vu[lo:lo + kb], b_vu[lo:lo + kb])
+            if rel.y_public(mid) != y_end:
+                negs.append((f"folded boundary: proved the {s + 1}-step intermediate of the last column as the final word",
+                             prove((a_vu, b_vu, accs[:-1] + [mid], mid))))
+        for nm, words in (("a", a_vu), ("b", b_vu)):
+            for s in range(1, rel.fold):                    # across a base-step boundary inside the last column
+                w2 = list(words)
+                i = K * (steps - 1) + kb * s
+                w2[i - 1], w2[i] = w2[i], w2[i - 1]
+                vu2 = (w2, b_vu, accs, accs[-1]) if nm == "a" else (a_vu, w2, accs, accs[-1])
+                if rel.y_public(tc_dot(rel.model, accs[-2] if steps > 1 else 0, vu2[0][K * (steps - 1):], vu2[1][K * (steps - 1):])) != y_end:
+                    negs.append((f"folded boundary: {nm} words {i - 1} and {i} swapped across base step {s} of the last column, original claim",
+                                 prove(vu2)))
+                    break
+        c2 = accs[-3] if steps > 2 else 0
+        for d in range(1, kb + 1):                          # across the column boundary (a swap of two dead / zero products
+            w2 = list(a_vu)                                 # changes nothing: take the first offset whose swap moves the word)
+            i, j = K * (steps - 1) - d, K * (steps - 1) + d - 1
+            w2[i], w2[j] = w2[j], w2[i]
+            m2 = tc_dot(rel.model, c2, w2[K * (steps - 2):K * (steps - 1)], b_vu[K * (steps - 2):K * (steps - 1)])
+            m3 = tc_dot(rel.model, m2, w2[K * (steps - 1):K * steps], b_vu[K * (steps - 1):K * steps])
+            if rel.y_public(m3) != y_end:
+                negs.append((f"folded boundary: a words {i} and {j} swapped across columns {steps - 2}|{steps - 1}, original claim",
+                             prove((w2, b_vu, accs, accs[-1]))))
+                break
     # (5) chain: broken link, nonzero c_0, accumulator bits of a linked word
     c_rows = R.sys.chain["c"]
 

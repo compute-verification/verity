@@ -383,6 +383,12 @@ pub mod privsel {
     pub static BF16_AMPERE: PrivSel = PrivSel { op: Operand::Bf16, k: 16, words_per_pin: 1 };
     pub static FP8_HOPPER: PrivSel = PrivSel { op: Operand::E4m3, k: 32, words_per_pin: 3 };
     pub static FP8_ADA: PrivSel = PrivSel { op: Operand::E4m3, k: 32, words_per_pin: 3 };
+    /// The folded x4 v3 units (lane fold-private): four instruction steps per column, K = 4 x the base K; the pins are
+    /// the same packed runs over the longer operand rows (the base statics refuse a K = 4k statement and these a K = k one).
+    pub static BF16_HOPPER_X4: PrivSel = PrivSel { op: Operand::Bf16, k: 64, words_per_pin: 1 };
+    pub static BF16_AMPERE_X4: PrivSel = PrivSel { op: Operand::Bf16, k: 64, words_per_pin: 1 };
+    pub static FP8_HOPPER_X4: PrivSel = PrivSel { op: Operand::E4m3, k: 128, words_per_pin: 3 };
+    pub static FP8_ADA_X4: PrivSel = PrivSel { op: Operand::E4m3, k: 128, words_per_pin: 3 };
 }
 
 /// How a relation's public pins are computed from the statement's operand words.
@@ -705,10 +711,139 @@ pub static FP8_ADA_V2X4: Relation = Relation {
     hashed_table_digest: "",
 };
 
-pub static RELATIONS: [&Relation; 17] = [
+/// The PRIVATE-operand-safe folds (lane fold-private, 2026-09-23): the v3 units and the v1 units with four instruction
+/// steps per column (`relations._folded`; the same VU claim as the base relation, the three intermediate accumulators
+/// private).  v3 folds: `Decode::PrivSel` with K = 4k (the base statics refuse the folded K and vice versa); v1 folds:
+/// `Decode::Word`, K read off the folded system's word pins (`system_k` = 128 / 64), so a base-named statement with K = 4k
+/// fails the pin count and a folded-named one with K = k fails it the other way.  Digests: laptop torch-free compilations
+/// (`relation.compile(params, chain=True)`, twice, byte-identical), fixtures `fixtures/systems/<name>.system.bin`.
+pub static BF16_HOPPER_V3X4: Relation = Relation {
+    name: "bf16-hopper-v3x4",
+    aliases: &[],
+    tag: b"|rel=bf16-hopper-v3x4|v1",   // the v3 convention: every v3 relation absorbs its name (unlike the BF16 v1 / v2 units)
+    word_bytes: 2,
+    y_bytes: 2,
+    y_bits: 16,
+    decode: Decode::PrivSel(&privsel::BF16_HOPPER_X4),
+    end_components: None,
+    sys_id: "7a61e78e0cc2e86592aaae9d7d55cc6877cf50582f5569f646708fdf5717b38b",
+    table_digest: "3c25420ef94ddbfc9cbf73f837237f5a157cccfbece3e4057f682f232357e877",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static BF16_AMPERE_V3X4: Relation = Relation {
+    name: "bf16-ampere-v3x4",
+    aliases: &[],
+    tag: b"|rel=bf16-ampere-v3x4|v1",
+    word_bytes: 2,
+    y_bytes: 2,
+    y_bits: 16,
+    decode: Decode::PrivSel(&privsel::BF16_AMPERE_X4),
+    end_components: None,
+    sys_id: "ae66575fa98270d7db32380dd0815ab95e35524a464f5393d1f20b63aa89f1e1",
+    table_digest: "c464e86b2031128caba3b69f17b9d7951a8b2872640b9d380e91712bf8d948ea",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static FP8_HOPPER_V3X4: Relation = Relation {
+    name: "fp8-hopper-v3x4",
+    aliases: &[],
+    tag: b"|rel=fp8-hopper-v3x4|v1",
+    word_bytes: 1,
+    y_bytes: 4,
+    y_bits: 22,
+    decode: Decode::PrivSel(&privsel::FP8_HOPPER_X4),
+    end_components: None,
+    sys_id: "023c022373f4ea45efc141aadf2a4540474f6da50e91ec41746fbee82a9e6f63",
+    table_digest: "5fb0491ce4cb1241559a9e70baaf90d103bb911c253cf25b294f3797d25bff77",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static FP8_ADA_V3X4: Relation = Relation {
+    name: "fp8-ada-v3x4",
+    aliases: &[],
+    tag: b"|rel=fp8-ada-v3x4|v1",
+    word_bytes: 1,
+    y_bytes: 4,
+    y_bits: 22,
+    decode: Decode::PrivSel(&privsel::FP8_ADA_X4),
+    end_components: None,
+    sys_id: "727b2076042cc6ef300f0daeb4989004caf5d3950ab36ba7639fa2a564e8a8d9",
+    table_digest: "a03283b894b958b5e7b084c8d235a8c6d13d147da15bc185ca347190797dcde2",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static BF16_HOPPER_X4: Relation = Relation {
+    name: "bf16-hopper-x4",
+    aliases: &[],
+    tag: b"",
+    word_bytes: 2,
+    y_bytes: 2,
+    y_bits: 16,
+    decode: Decode::Word(Operand::Bf16),
+    end_components: None,
+    sys_id: "6f17f7080dbbfa5c37beb801b9bbe10c0633642442d02715d2a95bfb6696cef8",
+    table_digest: "650f3ede18f377054e0139873188ca74d531a817700d676e648e37bac8f16d54",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+/// The frozen `vu-k1536` set's claim (every fourth recorded accumulator; `relchain.frozen_instances`).
+pub static BF16_AMPERE_X4: Relation = Relation {
+    name: "bf16-ampere-x4",
+    aliases: &[],
+    tag: b"",
+    word_bytes: 2,
+    y_bytes: 2,
+    y_bits: 16,
+    decode: Decode::Word(Operand::Bf16),
+    end_components: None,
+    sys_id: "9bb37c89238c524f99d143efb6d7a727a95c534c2d063d03bcf28bd81b2ccd93",
+    table_digest: "ca8407d1273880fbea221f3bed92f05312e83d2a880567c4e46a8d24fb1d3385",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static FP8_HOPPER_X4: Relation = Relation {
+    name: "fp8-hopper-x4",
+    aliases: &[],
+    tag: b"|rel=fp8-hopper-x4|v1",
+    word_bytes: 1,
+    y_bytes: 4,
+    y_bits: 22,
+    decode: Decode::Word(Operand::E4m3),
+    end_components: None,
+    sys_id: "32704bc7283c4d667f4c1ef9e0531eceff19268344232e66d0dad234caadf41f",
+    table_digest: "76e131cc48c44ed7e3e91f16177f6cc9ba3504364a1769e6cec7777b0ec5a175",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static FP8_ADA_X4: Relation = Relation {
+    name: "fp8-ada-x4",
+    aliases: &[],
+    tag: b"|rel=fp8-ada-x4|v1",
+    word_bytes: 1,
+    y_bytes: 4,
+    y_bits: 22,
+    decode: Decode::Word(Operand::E4m3),
+    end_components: None,
+    sys_id: "d521baca9371467ea9cf8a4d09f9534db3232220eaedf050466745ecb9d48357",
+    table_digest: "fcad97cc1a75e452f314ef8e9795fbe1532dc7731b0725570225338239731aa3",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
+};
+
+pub static RELATIONS: [&Relation; 25] = [
     &BF16_AMPERE, &FP8_ADA, &BF16_HOPPER, &FP8_HOPPER, &FP4_NVF4, &BF16_HOPPER_V2, &BF16_AMPERE_V2, &FP8_HOPPER_V2, &FP8_ADA_V2,
     &BF16_HOPPER_V3, &BF16_AMPERE_V3, &FP8_HOPPER_V3, &FP8_ADA_V3,
     &BF16_HOPPER_V2X4, &BF16_AMPERE_V2X4, &FP8_HOPPER_V2X4, &FP8_ADA_V2X4,
+    &BF16_HOPPER_V3X4, &BF16_AMPERE_V3X4, &FP8_HOPPER_V3X4, &FP8_ADA_V3X4,
+    &BF16_HOPPER_X4, &BF16_AMPERE_X4, &FP8_HOPPER_X4, &FP8_ADA_X4,
 ];
 
 /// The relation a statement names: `None` (a v2 / v3 file) is the Ampere BF16 unit; an unknown name is refused (its
@@ -952,6 +1087,42 @@ mod tests {
         for bad in ["g0.Q[0].lo", "g2.G", "g0.Q[26]"] {
             assert!(BF16_AMPERE.pin_index(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn folded_privsel_pins_take_k_4k_and_refuse_the_base_k() {
+        // lane fold-private: the x4 v3 statics read 4k words per operand (the same packed runs, four times as many pins);
+        // the base statics refuse a 4k unit and the folded ones a k unit -- the K rule the v2 pins apply the other way round
+        use super::privsel::{BF16_HOPPER, BF16_HOPPER_X4, FP8_ADA, FP8_ADA_X4, FP8_HOPPER_X4};
+        assert_eq!((BF16_HOPPER_X4.k, FP8_ADA_X4.k, FP8_HOPPER_X4.k), (64, 128, 128));
+        assert_eq!((BF16_HOPPER_X4.pins(), FP8_ADA_X4.pins()), (128, 86));
+        let one16 = vec![0x3F80u32; 64];
+        let v = BF16_HOPPER_X4.unit_pins(&one16, &one16).unwrap();
+        assert_eq!(v.len(), 128);
+        assert!(v.iter().all(|&x| x == 0x3F80));
+        assert!(BF16_HOPPER.unit_pins(&one16, &one16).is_err(), "base k = 16 refuses 64 words");
+        assert!(BF16_HOPPER_X4.unit_pins(&one16[..16], &one16[..16]).is_err(), "folded k = 64 refuses 16 words");
+        assert_eq!(BF16_HOPPER_X4.pin_index("a[63]"), Ok(63));
+        assert_eq!(BF16_HOPPER_X4.pin_index("b[0]"), Ok(64));
+        assert!(BF16_HOPPER.pin_index("a[16]").is_err() && BF16_HOPPER_X4.pin_index("a[64]").is_err());
+        // fp8: 128 bytes = 42 runs of 3 + one of 2 per operand (`a[126:128]`), as the base's `a[30:32]`
+        let one8: Vec<u32> = (0..128u32).map(|i| 0x38 + (i % 7)).collect();
+        let v = FP8_ADA_X4.unit_pins(&one8, &one8).unwrap();
+        assert_eq!(v.len(), 86);
+        assert_eq!(v[0], (0x38 + (0x39 << 8) + (0x3A << 16)) as i64);
+        assert_eq!(v[42], (one8[126] + (one8[127] << 8)) as i64);
+        assert_eq!(FP8_ADA_X4.pin_index("a[126:128]"), Ok(42));
+        assert_eq!(FP8_ADA_X4.pin_index("b[0:3]"), Ok(43));
+        assert!(FP8_ADA_X4.pin_index("a[30:32]").is_err(), "the base's last run is a full run here");
+        assert!(FP8_ADA.unit_pins(&one8, &one8).is_err(), "base k = 32 refuses 128 bytes");
+        assert!(FP8_ADA_X4.unit_pins(&one8[..32], &one8[..32]).is_err(), "folded k = 128 refuses 32 bytes");
+        let mut nan = one8.clone();
+        nan[127] = 0x7F;
+        assert!(FP8_ADA_X4.unit_pins(&nan, &one8).is_err(), "a NaN in the last run is refused");
+        // the v1 folds decode words (K off the system's pins): the same Decode as the base, another pinned system
+        assert_eq!(super::FP8_ADA_X4.decode, super::FP8_ADA.decode);
+        assert_eq!(super::BF16_HOPPER_X4.decode, super::BF16_HOPPER.decode);
+        assert_ne!(super::FP8_ADA_X4.sys_id, super::FP8_ADA.sys_id);
     }
 
     #[test]

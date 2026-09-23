@@ -69,6 +69,8 @@ class Relation:
     instances_recipe: str | None = None      # how the synthetic set is drawn (the fingerprint's instances.recipe), if stated
     frozen_tier: str | None = None           # a FROZEN VU tier (verity_numerical.bench.instances: ``vu-k1536`` of bench-instances/v1)
     #                                          the runner proves instead of synthetic instances (relchain.instances reads it from --root)
+    fold: int = 1                            # instruction steps of the base model per column (``_folded``); 1 = one step per unit
+    folded_from: str = ""                    # the base relation's name when ``fold > 1`` (its synthetic instance set is this one's)
 
     @property
     def k(self) -> int:
@@ -390,28 +392,51 @@ FP8_HOPPER_V3_RELATION = _register(_v3_of(FP8_HOPPER_V2_RELATION, "fp8-hopper-v3
 FP8_ADA_V3_RELATION = _register(_v3_of(FP8_ADA_V2_RELATION, "fp8-ada-v3", "FP8Params.from_model(ADA_E4M3_M16N8K32)"))
 
 
-def _folded(v2: Relation, m: int) -> Relation:
-    """``m`` instruction steps of ``v2``'s model per column (``K = m x model.k``, ``1536 / K`` columns per VU).  The claim
+def _folded(base: Relation, m: int, name: str | None = None, rust_verifiable: bool = False) -> Relation:
+    """``m`` instruction steps of ``base``'s model per column (``K = m x model.k``, ``1536 / K`` columns per VU).  The claim
     is the same VU (same operands, same final word): ``GroupSum(groups x m).step`` equals ``m`` chained steps of the model
     (the FP32 pack / decode between steps is the identity on the adder-side state, and a group that leaves the FP32 range
-    saturates in both), so the intermediate accumulators are private -- the v2 intermediate-group path -- and only the
-    column boundary moves.  Rows per column grow sub-linearly in ``m`` (the accumulator decode is shared) while the number
-    of sub-batches, which is what the prover's per-sub-batch fixed cost counts, shrinks ``m``-fold.  EXPERIMENTAL: census
-    and CPU tests only until the GPU gate has run."""
-    model = replace(v2.model, groups=tuple(v2.model.groups) * m, name=f"{v2.model.name}x{m}")
-    params = type(v2.params).from_model(model)
-    name = f"{v2.name}x{m}"
+    saturates in both), so the intermediate accumulators are private -- the compiler's intermediate-group path -- and only
+    the column boundary moves.  Rows per column grow sub-linearly in ``m`` (the accumulator decode is shared) while the
+    number of sub-batches, which is what the prover's per-sub-batch fixed cost counts, shrinks ``m``-fold.  Works for any
+    of the three unit compilers (v1 ``unit.py`` / ``fp8``, v2 ``pubsel``, v3 ``privsel``: each loops over ``params.groups``);
+    ``name`` defaults to ``<base>x<m>`` (``fp8-ada-v2x4``, ``fp8-ada-v3x4``), the v1 folds are named ``<base>-x<m>``.
+    ``fold`` records ``m`` so the negative battery can claim an intermediate step's word (``relchain.negatives``)."""
+    model = replace(base.model, groups=tuple(base.model.groups) * m, name=f"{base.model.name}x{m}")
+    params = type(base.params).from_model(model)
+    name = name or f"{base.name}x{m}"
+    params_note = f"{type(params).__name__}.from_model({model.name})"
+    if base.compile is _v2_compile:
+        backend = _V2_BACKEND.format(name=name, params=params_note)
+    elif base.compile is _v3_compile:
+        backend = _V3_BACKEND.format(name=name, params=params_note)
+    else:
+        backend = f"{base.backend_name}; folded: {m} instruction steps per column at {params_note}"
     # the tag follows the base relation's convention (D12: the BF16 relations absorb the empty tag, the FP8 ones their name)
-    return replace(v2, name=name, model=model, params=params, tag=v2.tag if v2.tag == b"" else f"|rel={name}|v1".encode(),
-                   backend_name=_V2_BACKEND.format(name=name, params=f"{type(params).__name__}.from_model({model.name})"),
-                   model_name=f"{v2.model_name} x{m} ({m} instruction steps per column, K={model.k})",
-                   relation_name=f"{v2.relation_name} ({m} steps per column)", rust_verifiable=False)
+    return replace(base, name=name, model=model, params=params, tag=base.tag if base.tag == b"" else f"|rel={name}|v1".encode(),
+                   backend_name=backend,
+                   model_name=f"{base.model_name} x{m} ({m} instruction steps per column, K={model.k})",
+                   relation_name=f"{base.relation_name} ({m} steps per column)", rust_verifiable=rust_verifiable, fold=m,
+                   folded_from=base.name)
 
 
 BF16_HOPPER_V2X4_RELATION = _register(_folded(BF16_HOPPER_V2_RELATION, 4))
 BF16_AMPERE_V2X4_RELATION = _register(_folded(BF16_AMPERE_V2_RELATION, 4))
 FP8_HOPPER_V2X4_RELATION = _register(_folded(FP8_HOPPER_V2_RELATION, 4))
 FP8_ADA_V2X4_RELATION = _register(_folded(FP8_ADA_V2_RELATION, 4))
+
+# --- the PRIVATE-operand-safe folds (lane fold-private): the v3 units (operands committed, pinned as words) and the v1
+# units (the Table 2 headline systems) with four instruction steps per column.  Same VU claim, base systems untouched;
+# backends/ligero-verify pins all eight (privsel::*_X4 with K = 4k; the v1 folds read K off the word pins of the system).
+BF16_HOPPER_V3X4_RELATION = _register(_folded(BF16_HOPPER_V3_RELATION, 4, rust_verifiable=True))
+BF16_AMPERE_V3X4_RELATION = _register(_folded(BF16_AMPERE_V3_RELATION, 4, rust_verifiable=True))
+FP8_HOPPER_V3X4_RELATION = _register(_folded(FP8_HOPPER_V3_RELATION, 4, rust_verifiable=True))
+FP8_ADA_V3X4_RELATION = _register(_folded(FP8_ADA_V3_RELATION, 4, rust_verifiable=True))
+BF16_HOPPER_X4_RELATION = _register(_folded(BF16_HOPPER_RELATION, 4, name="bf16-hopper-x4", rust_verifiable=True))
+# the frozen vu-k1536 set (--root), every fourth recorded accumulator (relchain.frozen_instances): the same claim as bf16-ampere
+BF16_AMPERE_X4_RELATION = _register(_folded(BF16_AMPERE_RELATION, 4, name="bf16-ampere-x4", rust_verifiable=True))
+FP8_HOPPER_X4_RELATION = _register(_folded(FP8_HOPPER_RELATION, 4, name="fp8-hopper-x4", rust_verifiable=True))
+FP8_ADA_X4_RELATION = _register(_folded(FP8_ADA_RELATION, 4, name="fp8-ada-x4", rust_verifiable=True))
 
 
 def relation(name: str) -> Relation:

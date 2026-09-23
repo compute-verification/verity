@@ -79,21 +79,8 @@ verifiers reject a Fiat-Shamir transcript that carries them ("fiat-shamir transc
 
 ## D4. The Python verifier is interactive; a file verifier checks a Fiat-Shamir transcript -- SUPERSEDED by D7
 
-**Post b-zk-fix.**  The reading below ("with prover-chosen coins the transcript is a plain Fiat-Shamir transcript
-over `stmt || c1 c2 || root || r1` ...") was true of the pre-fix derivation, in which `root` and `w, h, q, v` entered
-the hashes.  It is FALSE after F2: the interactive-mode challenges are functions of `(stmt, c1, c2, r_i)` alone, so a
-transcript whose coins the prover chose has no soundness at all as a file -- see D7.  Fiat-Shamir mode (`--mode
-fiat-shamir`) is now the transferable protocol and the one this entry's argument applies to.
-
-`verify()` refuses `coins are not this verifier's step-0 coins`: it compares the proof's `(r_i, s_i)` with the ones it
-drew itself.  A verifier reading a proof from disk has no coins of its own, so the coin *values* are prover-supplied
-data as far as it is concerned.  What it can and does check is what the document's soundness argument actually uses:
-`c_i = BLAKE2b(tag || r_i || s_i)`, the `c_i` absorbed before the root and the `r_i` absorbed after the message of
-their round, both derived challenges recomputed.  With prover-chosen coins the transcript is a plain Fiat-Shamir
-transcript over `stmt || c1 c2 || root || r1` and `... || w h q [v] || r2`, and its soundness is the FS soundness of
-the same hash chain.  This is a scoping statement, not a bug: the malicious-verifier ZK claim (b-zk's
-`COMPLETE_ZK_BACKEND`) is about the *interactive* session and is not something this lane verifies -- it verifies
-soundness only.
+Superseded by D7 after b-zk-fix F2: interactive-mode challenges are functions of `(stmt, c1, c2, r_i)` alone, so a
+prover-chosen-coins file has no soundness.  Full text: this file at `cc885b2`.
 
 ~~~json
 {"id": "BV-D4", "issue": "the transferable-proof verifier cannot check 'coins are this verifier's coins'; it checks the FS chain",
@@ -479,4 +466,24 @@ that are committed witness wires.  What a verifier sees:
  "verifier": "src/relation.rs privsel::PrivSel (unit_pins, pin_index, pins; the four parameter sets), Decode::PrivSel; verify.rs public_pins_privsel",
  "status": "open", "owner": "relmin-private (PROTOCOL.md section for the private-operand unit; the sponge variant's NaN exclusion is lane hash-relation's)",
  "evidence": ["src/relation.rs tests (privsel_unit_pins_match_public_vectors_v3)", "tests/relations.rs system_digest_names_every_pinned_relation", "backends/direct/ligero/privsel/relation_test.py", "lane note relmin-private"]}
+~~~
+
+## D15. Folded (x4) private-operand-safe relations (lane `fold-private`): same VU claim, four steps per column, K = 4k
+
+`relations._folded(base, 4)` (`Relation.fold`, `folded_from`) gives eight additive relations: v3 folds `fp8-ada-v3x4`,
+`fp8-hopper-v3x4`, `bf16-hopper-v3x4`, `bf16-ampere-v3x4`; v1 folds `fp8-ada-x4`, `fp8-hopper-x4`, `bf16-hopper-x4`,
+`bf16-ampere-x4`.  Base systems byte-identical to their fixtures.  A folded unit's statement carries the
+column's K = 4·k_base operands (128 FP8 / 64 BF16 words; the v3 `PrivSel` decoders take that k and refuse the base k,
+FP8 packed 3 words / pin as in D14) and the column-end accumulator; the three intermediate accumulators are witness
+rows (the statement says less than 4 base statements, D11).  The fold is exactly 4 chained base steps; the folded-boundary negatives reject an intermediate
+word claimed as final and operand swaps across base-step / column edges.  Test hazard: `relchain.marshal` caches
+bundles by `id()` of the VU tuples; fresh temporaries can replay the previous bundle.
+
+~~~json
+{"id": "BV-D15", "issue": "folded x4 relations pin K = 4k operand words and the column-end word only; intermediates private",
+ "document": "PROTOCOL.md: one step per unit; relations._folded docstring is the reference",
+ "code": "relations.py (_folded), relchain.py (folded-boundary negatives, frozen_instances, cache reuse), fold_test.py",
+ "verifier": "src/relation.rs (8 folded statics; PrivSel k=64/128), tests/relations.rs (folded k rules)",
+ "status": "open", "owner": "fold-private (PROTOCOL.md folded-column section; marshal id() cache key)",
+ "evidence": ["tests/relations.rs (25 pinned)", "fold_test.py", "lane note fold-private"]}
 ~~~
