@@ -353,6 +353,14 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
                 st.push_attempt(run_id)
                 out["preserved"] = all(r.get("preserved") for r in reports)
                 out["preserved_artifacts"] = {r["id"]: bool(r.get("preserved")) for r in reports}
+                if hasattr(st, "push_labels"):                          # the third leg: assertions already made about this attempt, its
+                    from . import labels_sync as LS                     # derivation or its outputs (a re-publish after `label`) travel too
+
+                    lrep = st.push_labels(LS.attempt_targets(doc))
+                    out["labels"] = {"local": lrep["local"], "pushed": len(lrep["pushed"]), "already": lrep["already"], "failed": lrep["failed"]}
+                    if lrep["failed"]:
+                        out["preserved"] = False
+                        out["preserve_error"] = f"labels: {len(lrep['failed'])} assertion(s) not pushed ({lrep['failed'][0]})"
             except Exception as e:  # noqa: BLE001
                 out["preserved"] = False
                 out["preserve_error"] = f"{type(e).__name__}: {e}"

@@ -703,6 +703,19 @@ class LocalStore:
             raise NotFound(f"attempt {run_id} is not local")
         r.put(attempt_key(run_id), p)
 
+    def push_labels(self, targets: list[str], *, jobs: int = 16) -> dict:
+        """Push the assertions about `targets` (art / drv / run ids) the remote lacks, each under `labels/<target>/<content sha256>.json`
+        (`labels_sync.push_targets`).  Per-assertion failures are in the report's `failed`, never raised; a missing remote is."""
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        return LS.push_targets(self, targets, jobs=jobs)
+
+    def labels_durable(self, targets: list[str]) -> dict:
+        """The labels leg of the durability gate (`labels_sync.verify_targets`): every local assertion of every target listed on the remote."""
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        return LS.verify_targets(self, targets)
+
     # ---- index --------------------------------------------------------------------------------------------------------------------------
 
     def reindex(self, remote: bool = False) -> dict:

@@ -15,6 +15,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -267,8 +268,34 @@ def pull_artifact(ssh: list[str], store_root: str, art_id: str, st: Any) -> dict
     return {"id": art_id, "kind": manifest["kind"], "blobs": n, **stats}
 
 
+def pull_labels(ssh: list[str], store_root: str, targets: list[str], st: Any) -> dict[str, Any]:
+    """The machine's `labels/<target>/` directories for `targets`, in one tar (the same `tar -cf - -C ROOT -T -` form as the blobs, paths on
+    stdin), unioned into this store (`labels_sync.import_dir`: content names, nothing overwritten).  A target the machine never labelled
+    is a directory tar cannot stat -- a warning and a non-zero rc with a complete archive on stdout, so the archive's parse, not the rc,
+    decides: an unparseable tar is a transport failure.  A store without a labels layout (a test double) is skipped."""
+    from . import ids
+    from . import labels_sync as LS
+
+    if not hasattr(st, "labels_dir"):
+        return {"seen": 0, "added": 0, "already": 0, "bad": 0, "skipped": "store has no labels layout"}
+    listing = "".join(f"labels/{ids.target_dirname(t)}\n" for t in dict.fromkeys(targets)).encode()
+    r = remote.ssh_run(ssh, ["tar", "-cf", "-", "-C", store_root, "-T", "-"], stdin=listing, timeout=600)
+    with tempfile.TemporaryDirectory(prefix="research-pull-labels-") as tmp:
+        if r.stdout.strip(b"\0"):
+            try:
+                with tarfile.open(fileobj=io.BytesIO(r.stdout), mode="r:") as tf:
+                    members = [m for m in tf.getmembers() if m.isfile() and m.name.endswith(".json") and not Path(m.name).name.startswith("._")   # (bsdtar AppleDouble)
+                               and ".." not in Path(m.name).parts and not Path(m.name).is_absolute()]
+                    tf.extractall(tmp, members=members, filter="data")
+            except tarfile.TarError as e:
+                raise remote.Refused(f"fetching labels failed (rc {r.returncode}): {e}: {r.stderr.decode(errors='replace').strip()[-300:]}") from None
+        elif r.returncode not in (0, 1, 2):
+            raise remote.Refused(f"fetching labels failed (rc {r.returncode}): {r.stderr.decode(errors='replace').strip()[-300:]}")
+        return LS.import_dir(st, Path(tmp), warn=lambda s: print(f"research data pull: {s}", file=sys.stderr))
+
+
 def cmd_pull(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="research data pull", description="copy an attempt and its outputs from a machine's local store into this one")
+    ap = argparse.ArgumentParser(prog="research data pull", description="copy an attempt, its outputs and the assertions about them from a machine's local store into this one")
     ap.add_argument("run", metavar="RUN")
     ap.add_argument("--from", dest="machine", required=True, metavar="MACHINE")
     ap.add_argument("--project", default=os.environ.get("RESEARCH_PROJECT"), help="the project the machine is bound to (default $RESEARCH_PROJECT)")
@@ -291,13 +318,17 @@ def cmd_pull(argv: list[str]) -> int:
             st.put_attempt(doc)
         elif existing != doc:
             raise remote.Refused(f"attempt {doc['id']} already exists here with different content; not overwritten")
+        from . import labels_sync as LS                             # the assertions the pod made about the attempt, its derivation, its outputs
+
+        labels = pull_labels(ssh, store_root, LS.attempt_targets(doc), st)
     except (remote.Refused, ValueError, KeyError, OSError) as e:
         print(f"research data pull: {e}", file=sys.stderr)
         return 1
     if ns.json:
-        print(json.dumps({"attempt": doc["id"], "machine": ns.machine, "pulled": pulled}, indent=2, sort_keys=True))
+        print(json.dumps({"attempt": doc["id"], "machine": ns.machine, "pulled": pulled, "labels": labels}, indent=2, sort_keys=True))
     else:
-        print(f"pulled attempt {doc['id']} from {ns.machine}: " + (", ".join(f"{p['name']}={p['id']} ({p['blobs']} blob{'s' if p['blobs'] != 1 else ''})" for p in pulled) or "no outputs"))
+        print(f"pulled attempt {doc['id']} from {ns.machine}: " + (", ".join(f"{p['name']}={p['id']} ({p['blobs']} blob{'s' if p['blobs'] != 1 else ''})" for p in pulled) or "no outputs")
+              + f"; labels: {labels['added']} added, {labels['already']} already here" + (f", {labels['bad']} unreadable" if labels["bad"] else ""))
     return 0
 
 
