@@ -7,6 +7,7 @@ the verifier chose does).
                                                 [--jobs 4] [--threads 1] [--target-bits 128]
     python -m backends.direct.ligero.live negatives --verifier tcp://HOST:PORT [--relation fp8-ada] [--device cpu]
     python -m backends.direct.ligero.live record --machine vy-live-verifier --run <prover run id> [--result art:...]
+    python -m backends.direct.ligero.live probe --verifier tcp://HOST:PORT [--mb 16 --repeat 4]   (RTT + one-flow throughput)
 
 Session (one per recorded rep of ``bench-vu``; the protocol per sub-batch is 8c, unchanged -- only the SOURCE of the coins
 moves from the runner's ``os.urandom`` to this process):
@@ -14,7 +15,9 @@ moves from the runner's ``os.urandom`` to this process):
     P -> V   HELLO      relation, mode, zk, n_proofs, target_bits, run id, system.bin      (metadata + the public system)
     V -> P   WELCOME    session id, verifier identity
     V -> P   COMMIT i   c1, c2 = coin_commit(r_j, s_j) of FRESH coins for sub-batch i   -- BEFORE any prover message of i
-    P -> V   ROOT i     root, statement bytes (the public claim, fixed before the coin is opened)
+    P -> V   STMT i     the statement bytes (the public claim: instance, not a protocol message; sent at step 0 so its
+                        transfer overlaps the prover's work up to the root; fixed before the coin is opened either way)
+    P -> V   ROOT i     root (32 bytes; an older prover appends the statement here instead of STMT)
     V -> P   OPEN1 i    r1, s1
     P -> V   TESTS i    w, h [, q] [, v]
     V -> P   OPEN2 i    r2, s2          (+ COMMIT i+1 right behind it: the next sub-batch's step 0 is pipelined)
@@ -33,8 +36,13 @@ batch --target-bits`` on the whole session directory (the union bound, PROTOCOL.
 Prover-side accounting: the coin source records how long ``prove`` was blocked on the network (commit / open1 / open2) --
 ``adjust_timings`` subtracts it from the prover's phase clocks (``t.total`` stays comparable to the local-coins numbers) and
 the runner reports ``t.total_live`` = ``t.total`` + the network wait.  Pipelining: COMMIT i+1 travels with OPEN2 i (no round
-trip for step 0 after the first sub-batch); PROOF i is sent on a second connection by a sender thread while sub-batch i+1 is
-being proved; the two openings are the only round trips on the critical path (2 x RTT per sub-batch).
+trip for step 0 after the first sub-batch); STMT i goes out before the prover's work on i starts; PROOF i is sent on a second
+connection by a sender thread while sub-batch i+1 is being proved; the two openings are the only round trips on the critical
+path (2 x RTT per sub-batch, plus the test message's transfer).  Measured (4090 EUR-IS-2 -> CPU pod EU-RO-1, 70 ms RTT):
+the path carried ~115-150 Mbps for one prover, so a 4096-VU fp8-ada session (221 MB: 181 MB of proofs + 25 MB of test
+messages + statements) is bound by the TRANSFER (~12-15 s), not by the 98 round trips (~7 s); the control messages queue
+behind the proof stream in the bottleneck, which is why the measured "rtt" of an opening (~135 ms) exceeds the path's RTT.
+`live probe` measures both for a given pair of machines.
 """
 from __future__ import annotations
 
@@ -54,20 +62,38 @@ from pathlib import Path
 
 import numpy as np
 
-from . import protocol as pm
 from .serialize import proof_bytes, read_proof, read_statement
 
+try:
+    from . import protocol as pm
+except ModuleNotFoundError as _e:     # torch absent: a laptop that only runs `record` (store + ssh; no cryptography here)
+    if _e.name != "torch":
+        raise
+    pm = None  # type: ignore[assignment]
+
 WIRE_VERSION = 1
-COIN_BYTES = pm.COIN_BYTES
+COIN_BYTES = 32                       # == protocol.COIN_BYTES (asserted below when protocol is importable)
+assert pm is None or pm.COIN_BYTES == COIN_BYTES
 
 # frame kinds (one byte each)
 K_HELLO, K_WELCOME, K_COMMIT, K_ROOT, K_OPEN1, K_TESTS, K_OPEN2, K_PROOF, K_END, K_VERDICT, K_ERROR = (
     b"H", b"W", b"C", b"R", b"1", b"T", b"2", b"P", b"E", b"V", b"X")
+K_STMT, K_NOP = b"S", b"N"     # STMT i: the statement ahead of ROOT i (sent at step 0, off the critical path); NOP: ignored
 _KIND_NAME = {K_HELLO: "HELLO", K_WELCOME: "WELCOME", K_COMMIT: "COMMIT", K_ROOT: "ROOT", K_OPEN1: "OPEN1", K_TESTS: "TESTS",
-              K_OPEN2: "OPEN2", K_PROOF: "PROOF", K_END: "END", K_VERDICT: "VERDICT", K_ERROR: "ERROR"}
+              K_OPEN2: "OPEN2", K_PROOF: "PROOF", K_END: "END", K_VERDICT: "VERDICT", K_ERROR: "ERROR", K_STMT: "STMT", K_NOP: "NOP"}
 _HDR = struct.Struct("<IB")
 _MAX_FRAME = 1 << 31
 _BUF = 8 << 20
+#: ``LIVE_TCP_CC=cubic|bbr|...`` (default ``cubic``; empty = leave the kernel default): the congestion control of the prover's
+#: and the server's sockets, set BEFORE connect / listen.  Why it matters (measured 4090 EUR-IS-2 -> verifier EU-RO-1, RTT
+#: 70 ms, `ss -tin` during a session): the protocol's flows are bursty and application-limited (one 0.5 MB test message and
+#: one 3.7 MB proof per sub-batch, then silence), so the congestion window never grows past ~one burst, and with the pods'
+#: default bbr the kernel PACES every socket (bbr sets SK_PACING_NEEDED at connection setup; it stays on even after a
+#: later switch to cubic, whose pacing rate is then 1.2 x cwnd / RTT ~ 100 Mbps for a 0.7 MB window) -- a 0.5 MB message
+#: is then smeared over ~40 ms and each opening cost ~2 RTTs (median 138 ms) instead of one.  A socket that is cubic
+#: from the start is never paced (no fq qdisc in the pods): the opening costs the RTT plus the wire time.
+#: Ignored where the kernel does not offer the algorithm.
+_TCP_CC = os.environ.get("LIVE_TCP_CC", "cubic")
 
 
 class LiveError(RuntimeError):
@@ -79,12 +105,36 @@ class LiveError(RuntimeError):
 # ---------------------------------------------------------------------------------------------------------------------
 
 def _setup_socket(s: socket.socket) -> None:
+    """Socket options; call on a socket BEFORE connect() / listen() so the congestion control (and with it the kernel's
+    pacing decision) is the chosen one from the handshake on -- see ``_TCP_CC``."""
     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     for opt in (socket.SO_SNDBUF, socket.SO_RCVBUF):
         try:
             s.setsockopt(socket.SOL_SOCKET, opt, _BUF)
         except OSError:
             pass
+    if _TCP_CC and hasattr(socket, "TCP_CONGESTION"):
+        try:
+            s.setsockopt(socket.IPPROTO_TCP, socket.TCP_CONGESTION, _TCP_CC.encode())
+        except OSError:
+            pass
+
+
+def _connect(host: str, port: int, timeout: float) -> socket.socket:
+    """``socket.create_connection`` with the options applied before the handshake (an option set after connect() would
+    leave the connection paced under the pods' default bbr)."""
+    err: Exception | None = None
+    for family, socktype, proto, _canon, addr in socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM):
+        s = socket.socket(family, socktype, proto)
+        try:
+            _setup_socket(s)
+            s.settimeout(timeout)
+            s.connect(addr)
+            return s
+        except OSError as e:
+            err = e
+            s.close()
+    raise err or OSError(f"cannot connect to {host}:{port}")
 
 
 def _recv_exact(s: socket.socket, n: int) -> bytes:
@@ -197,16 +247,20 @@ class LiveCoins:
         self.stmt = stmt
 
     def commitments(self) -> tuple[bytes, bytes]:
+        """Step 0.  The statement (the public claim; known before proving starts) goes out first as STMT i -- no reply, so
+        its transfer overlaps the prover's work up to the root and ROOT i is 32 bytes on the critical path -- then the
+        verifier's COMMIT i is awaited (already here from OPEN2 i-1's pipelining except for the first sub-batch)."""
+        if self.stmt is None:
+            raise LiveError("LiveCoins: the runner did not set the statement (set_statement) before prove")
         t0 = time.perf_counter()
+        self.session.send_stmt(self.sub, self.stmt)
         self._cc = self.session.recv_commit(self.sub)
         self.wait_commit += time.perf_counter() - t0
         return self._cc
 
     def open1(self, root: bytes) -> tuple[bytes, bytes]:
-        if self.stmt is None:
-            raise LiveError("LiveCoins.open1: the runner did not set the statement (set_statement) before prove")
         t0 = time.perf_counter()
-        r1, s1 = self.session.exchange(K_ROOT, self.sub, root + self.stmt, K_OPEN1)
+        r1, s1 = self.session.exchange(K_ROOT, self.sub, root, K_OPEN1)
         dt = time.perf_counter() - t0
         self.wait_open1 += dt
         self.rtt.append(dt)
@@ -241,8 +295,7 @@ class ProverSession:
         self.bytes_out = self.bytes_in = 0
         self.messages = 0
         self.t_open = time.perf_counter()
-        self.ctrl = socket.create_connection((host, port), timeout=timeout)
-        _setup_socket(self.ctrl)
+        self.ctrl = _connect(host, port, timeout)
         hj = json.dumps({**hello, "wire": WIRE_VERSION, "channel": "ctrl"}).encode()
         self._send(self.ctrl, K_HELLO, struct.pack("<I", len(hj)) + hj + system)
         kind, payload = self._recv(self.ctrl)
@@ -252,8 +305,7 @@ class ProverSession:
             raise LiveError(f"expected WELCOME, got {_KIND_NAME.get(kind, kind)}")
         self.welcome = _json(payload)
         self.session_id = self.welcome["session_id"]
-        self.data = socket.create_connection((host, port), timeout=timeout)
-        _setup_socket(self.data)
+        self.data = _connect(host, port, timeout)
         dj = json.dumps({"wire": WIRE_VERSION, "channel": "data", "session_id": self.session_id}).encode()
         self._send(self.data, K_HELLO, struct.pack("<I", len(dj)) + dj)
         kind, payload = self._recv(self.data)
@@ -299,6 +351,9 @@ class ProverSession:
         if kind == K_ERROR:
             raise LiveError(f"verifier: {_json(payload).get('error')}")
         return kind, payload
+
+    def send_stmt(self, sub: int, stmt: bytes) -> None:
+        self._send(self.ctrl, K_STMT, struct.pack("<I", sub) + stmt)
 
     def recv_commit(self, sub: int) -> tuple[bytes, bytes]:
         while sub not in self._commits:
@@ -633,6 +688,7 @@ class Server:
     def serve_forever(self) -> None:
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        _setup_socket(srv)                    # accepted sockets inherit the options (the CC from the handshake on)
         srv.bind((self.host, self.port))
         srv.listen(64)
         srv.settimeout(1.0)
@@ -645,7 +701,6 @@ class Server:
                     conn, addr = srv.accept()
                 except socket.timeout:
                     continue
-                _setup_socket(conn)
                 conn.settimeout(900.0)
                 threading.Thread(target=self._accept, args=(conn, addr), daemon=True).start()
         finally:
@@ -674,6 +729,9 @@ class Server:
                     return
                 s.attach_data(conn)
                 return
+            if hello.get("channel") == "probe":       # path diagnostics (`live probe`): echo NOPs' sizes, no session, nothing stored
+                self._probe(conn, addr, hello)
+                return
             with self.lock:
                 live = sum(1 for s in self.sessions.values() if not s.done.is_set())
                 if live >= self.max_sessions:
@@ -689,6 +747,65 @@ class Server:
                 conn.close()
             except OSError:
                 pass
+
+    def _probe(self, conn: socket.socket, addr, hello: dict) -> None:
+        """WELCOME at once (the client's HELLO->WELCOME time is the RTT); then every NOP frame is answered with a VERDICT
+        carrying the bytes received and the server-side receive time of that frame (first byte to last byte), until END."""
+        send_frame(conn, K_WELCOME, json.dumps({"verifier": self.identity, "probe": True}).encode())
+        total, t0 = 0, time.perf_counter()
+        try:
+            while True:
+                hdr = _recv_exact(conn, _HDR.size)
+                t_first = time.perf_counter()
+                n, k = _HDR.unpack(hdr)
+                body = _recv_exact(conn, n)
+                if bytes([k]) == K_END:
+                    break
+                total += n + _HDR.size
+                send_frame(conn, K_VERDICT, json.dumps({"bytes": n, "recv_s": time.perf_counter() - t_first}).encode())
+        finally:
+            self.log(f"probe from {addr[0]}:{addr[1]}: {total} B in {time.perf_counter() - t0:.2f}s ({hello.get('note', '')})")
+            conn.close()
+
+
+def cmd_probe(args) -> int:
+    """`live probe tcp://host:port`: RTT (HELLO -> WELCOME, small frames) and the one-flow throughput of the path the
+    prover's messages will take (NOP frames of --mb MB, timed on both ends), so a lane can tell a slow path from a slow
+    prover before running: net.wait_seconds of a session ~ bytes_out / throughput when the path, not the RTT, bounds it."""
+    host, port = parse_url(args.verifier)
+    t_conn = time.perf_counter()
+    s = _connect(host, port, 60)
+    t_connected = time.perf_counter()
+    hj = json.dumps({"wire": WIRE_VERSION, "channel": "probe", "note": args.note or socket.gethostname()}).encode()
+    send_frame(s, K_HELLO, struct.pack("<I", len(hj)) + hj)
+    kind, payload = recv_frame(s)
+    t_welcome = time.perf_counter()
+    if kind != K_WELCOME:
+        print(f"probe refused: {_KIND_NAME.get(kind, kind)} {payload[:200]!r}", file=sys.stderr)
+        return 2
+    out = {"verifier": _json(payload).get("verifier"), "connect_ms": (t_connected - t_conn) * 1e3,
+           "rtt_ms": (t_welcome - t_connected) * 1e3, "tcp_cc": _TCP_CC or "kernel default", "flows": []}
+    blob = os.urandom(max(1, int(float(args.mb) * (1 << 20))))
+    for i in range(int(args.repeat)):
+        t0 = time.perf_counter()
+        send_frame(s, K_NOP, blob)
+        t_sent = time.perf_counter()
+        kind, payload = recv_frame(s)
+        t_ack = time.perf_counter()
+        srv = _json(payload)
+        out["flows"].append({"bytes": len(blob), "send_s": t_sent - t0, "ack_s": t_ack - t0, "server_recv_s": srv.get("recv_s"),
+                             "mbps_to_ack": len(blob) * 8 / (t_ack - t0) / 1e6,
+                             "mbps_server_recv": len(blob) * 8 / srv["recv_s"] / 1e6 if srv.get("recv_s") else None})
+    send_frame(s, K_END)
+    s.close()
+    flows = out["flows"]
+    if flows:
+        out["mbps_median"] = sorted(f["mbps_to_ack"] for f in flows)[len(flows) // 2]
+    print(json.dumps(out, indent=1))
+    print(f"RTT {out['rtt_ms']:.1f} ms; one-flow throughput {out.get('mbps_median', 0):.0f} Mbps (median of {len(flows)} x {args.mb} MB; "
+          f"first {flows[0]['mbps_to_ack']:.0f} Mbps incl. slow start); a 4096-VU fp8-ada session sends ~221 MB -> "
+          f">= {221 * 8 / max(out.get('mbps_median', 1), 1):.1f} s of transfer at that rate", file=sys.stderr)
+    return 0
 
 
 class Session(threading.Thread):
@@ -727,6 +844,13 @@ class Session(threading.Thread):
         kind, payload = recv_frame(s)
         self.bytes_in += _HDR.size + len(payload)
         return kind, payload
+
+    def _recv_ctrl(self) -> tuple[bytes, bytes]:
+        """The next control frame that is not a NOP (a prover may send NOPs to keep the connection's congestion state warm)."""
+        while True:
+            kind, payload = self._recv(self.conn)
+            if kind != K_NOP:
+                return kind, payload
 
     def log(self, msg: str) -> None:
         self.server.log(f"{self.id} {msg}")
@@ -794,18 +918,30 @@ class Session(threading.Thread):
         self._commit(0)
         for i in range(self.n_proofs):
             rec = self.sub[i]
-            kind, payload = self._recv(self.conn)
+            # STMT i (the statement ahead of the root; optional -- an older prover sends it inline with ROOT), then ROOT i
+            kind, payload = self._recv_ctrl()
             (j,) = struct.unpack_from("<I", payload)
+            if kind == K_STMT:
+                if j != i:
+                    raise LiveError(f"expected STMT/ROOT {i}, got STMT {j}")
+                rec["t_stmt_recv"] = time.time()
+                rec["stmt"] = payload[4:]
+                rec["bytes_stmt"] = len(payload)
+                kind, payload = self._recv_ctrl()
+                (j,) = struct.unpack_from("<I", payload)
             if kind != K_ROOT or j != i:
                 raise LiveError(f"expected ROOT {i}, got {_KIND_NAME.get(kind, kind)} {j}")
             rec["t_root_recv"] = time.time()
             rec["root"] = payload[4:36]
-            rec["stmt"] = payload[36:]
+            if len(payload) > 36:
+                rec["stmt"] = payload[36:]
+            if not rec.get("stmt"):
+                raise LiveError(f"ROOT {i} without a statement (no STMT {i} before it, nothing inline)")
             rec["bytes_root"] = len(payload)
             c = self.coins[i]
             self._send(self.conn, K_OPEN1, struct.pack("<I", i) + c.r1 + c.s1)
             rec["t_open1_sent"] = time.time()
-            kind, payload = self._recv(self.conn)
+            kind, payload = self._recv_ctrl()
             (j,) = struct.unpack_from("<I", payload)
             if kind != K_TESTS or j != i:
                 raise LiveError(f"expected TESTS {i}, got {_KIND_NAME.get(kind, kind)} {j}")
@@ -816,7 +952,7 @@ class Session(threading.Thread):
             rec["t_open2_sent"] = time.time()
             if i + 1 < self.n_proofs:
                 self._commit(i + 1)                       # pipelined: step 0 of the next sub-batch rides behind OPEN2
-        kind, payload = self._recv(self.conn)
+        kind, payload = self._recv_ctrl()
         if kind != K_END:
             raise LiveError(f"expected END, got {_KIND_NAME.get(kind, kind)}")
         self.end_summary = _json(payload) if payload else {}
@@ -1122,7 +1258,9 @@ def cmd_record(args) -> int:
         r = subprocess.run([*store, "data", "put", *a, "--json"], capture_output=True, text=True, cwd=args.store_cwd)
         if r.returncode:
             raise SystemExit(f"data put failed: {r.stdout[-400:]} {r.stderr[-800:]}")
-        return json.loads(r.stdout.strip().splitlines()[-1])["id"]
+        lines = r.stdout.strip().splitlines()          # `--json` is pretty-printed over several lines
+        start = max(i for i, l in enumerate(lines) if l.startswith("{"))
+        return json.loads("\n".join(lines[start:]))["id"]
 
     tree_id = put("--kind", "run-files/v1", "--tree", str(tmp), "--meta", json.dumps({"kind": "live-verifier sessions", "run": args.run,
                   "sessions": [v["session_id"] for v in verdicts]}), *(["--preserve"] if args.preserve else []))
@@ -1183,6 +1321,12 @@ def main(argv=None) -> int:
     r.add_argument("--preserve", action="store_true")
     r.add_argument("--keep", action="store_true")
     r.set_defaults(fn=cmd_record)
+    p = sub.add_parser("probe", help="GPU pod: RTT and one-flow throughput of the path to a live verifier (no session, nothing stored)")
+    p.add_argument("--verifier", required=True)
+    p.add_argument("--mb", type=float, default=16, help="MB per NOP frame (0.5 mimics a test message, 3.7 a proof)")
+    p.add_argument("--repeat", type=int, default=4)
+    p.add_argument("--note", default=None, help="shows in the verifier's log line")
+    p.set_defaults(fn=cmd_probe)
     args = ap.parse_args(argv)
     return args.fn(args)
 

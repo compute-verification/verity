@@ -244,6 +244,30 @@ Consequences and what this lane did about it:
   (the ledger's `COMPLETE_ZK_BACKEND` row is an interactive session; a stored transcript of it certifies nothing),
   and a trap for any archive / audit pipeline that stores `bench-vu --mode interactive` transcripts as proofs.
 
+**The live session (lane `live-verifier`, `backends/direct/ligero/live.py`).**  The verifier the document names is now a
+process on another machine: `python -m backends.direct.ligero.live serve` plays 8c against `bench-vu --verifier
+tcp://host:port`.  Per sub-batch it samples the coins itself (`Coins.sample()`, `os.urandom`) and sends `c1, c2`
+BEFORE the prover's first message; it receives the statement (STMT, sent at step 0) and the root, opens slot 1,
+receives `(w, h, q, v)`, opens slot 2, receives the `ligero-proof/v1` bytes on a second connection; it refuses -- before
+any cryptography -- a transcript whose coin commitments / openings are not the ones it generated for that sub-batch,
+whose root is not the ROOT it received before opening slot 1, or whose test message is not the TESTS it received before
+opening slot 2; then **this** Rust verifier decides: `ligero-verify verify --coins <own>` per sub-batch on the files it
+wrote (`<session>/sub_NN.{stmt,proof,coins}`) and `ligero-verify batch --target-bits` on the session directory at END
+(the union bound, D10).  The transcript is byte-identical to the local-coins path with the same coins (the coin
+*source* moved, not the protocol; `live_test.py`), so the session directory is an ordinary dump that `ligero-verify
+batch` re-verifies -- and now the `.coins` files beside the proofs are the verifier's, so "accept (interactive: coins
+are this verifier's step-0 coins)" is what it prints, and the verdict is transferable *as this verifier's statement*
+(`verification-verdict/v1`, `independent = true`, `verifier = live-verifier@<sha>`, `mode = interactive`), which is what
+D7 asks for.  The prover's own result still only reports the verdicts as it received them; the `verified=` label comes
+from the verifier's record (`live.py record`).  Measured (RTX 4090 in EUR-IS-2 -> CPU pod in EU-RO-1, 70 ms RTT,
+fp8-ada int-ZK, 4096 VUs as 49 sub-batches): the prover's own time is unchanged (`t.total` ~1.0-1.7 s), the session adds
+the two openings per sub-batch -- 98 round trips at the path's RTT, ~8 s of `net.wait_seconds`, `t.total_live` ~9.6 s --
+and the verifier spends ~0.09 s wall / CPU per sub-batch (one `ligero-verify` process each, 6 in parallel) plus ~1.3 s
+wall for the session's `batch`.  Until the sockets were configured before the handshake the same session cost ~12 s:
+under the pods' default bbr the kernel paces every connection for life, and the protocol's bursty, application-limited
+flows (one 0.5 MB test message, one 3.7 MB proof per sub-batch) never grow a window past one burst, so each opening
+cost ~2 RTTs (`live.py`, `_TCP_CC`).
+
 ~~~json
 {"id": "BV-D7", "issue": "interactive-mode transcripts verify against their own carried coins; a prover that chose the coins knows r and cols before committing, and the b-zk-fix simulator run as a cheating prover produces accepted files for false statements (49/49, real hash)",
  "document": "PROTOCOL.md 8c: 'no non-interactive reading of this mode; verify(coins=own) is the only verifier'",
