@@ -9,6 +9,8 @@
   research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
+  research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
+  research pods create <runpod flags> [--require-reference-part]   # research.pods.runpod create, then the same verdict once sshd answers
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
@@ -518,6 +520,10 @@ def main(argv: list[str] | None = None) -> int:
         from .store.cli import main as data_main
 
         return data_main(rest)
+    if cmd == "pods":
+        from .pods.part import main as pods_main
+
+        return pods_main(rest)
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 

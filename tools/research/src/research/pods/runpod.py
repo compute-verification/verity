@@ -137,6 +137,24 @@ def create(args: argparse.Namespace) -> None:
             body.pop(key, None)
     pod = _request("POST", "/pods", body)
     print(json.dumps(pod, indent=2))
+    return pod
+
+
+def create_args(c: argparse.ArgumentParser) -> None:
+    """The `create` flags, shared with `research pods create` (research.pods.part)."""
+    c.add_argument("--name", required=True)
+    c.add_argument("--gpu", default="NVIDIA GeForce RTX 4090")
+    c.add_argument("--image", default=DEFAULT_IMAGE)
+    c.add_argument("--disk", type=int, default=100)
+    c.add_argument("--gpu-count", type=int, default=1, help="GPUs per pod (tensor-parallel lanes)")
+    c.add_argument("--cloud", default="SECURE", choices=["SECURE", "COMMUNITY"])
+    c.add_argument("--min-vcpu", type=int, default=0)
+    c.add_argument("--min-ram", type=int, default=0)
+    c.add_argument("--cpu", default="", help="CPU pod flavor (cpu3m/cpu5m = 8 GB RAM per vCPU); no GPU")
+    c.add_argument("--vcpu", type=int, default=16, help="vCPUs for a CPU pod (RAM = flavor GB/vCPU x this)")
+    c.add_argument("--network-volume", default="", help="RunPod network volume id to mount (REST networkVolumeId); pins the pod to the volume's DC")
+    c.add_argument("--volume-mount", default="/workspace", help="mount path of --network-volume (default /workspace)")
+    c.add_argument("--data-center", default="", help="restrict to one data center id (e.g. EU-RO-1)")
 
 
 def list_pods() -> None:
@@ -242,20 +260,7 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("balance")
     sub.add_parser("gpus")
-    c = sub.add_parser("create")
-    c.add_argument("--name", required=True)
-    c.add_argument("--gpu", default="NVIDIA GeForce RTX 4090")
-    c.add_argument("--image", default=DEFAULT_IMAGE)
-    c.add_argument("--disk", type=int, default=100)
-    c.add_argument("--gpu-count", type=int, default=1, help="GPUs per pod (tensor-parallel lanes)")
-    c.add_argument("--cloud", default="SECURE", choices=["SECURE", "COMMUNITY"])
-    c.add_argument("--min-vcpu", type=int, default=0)
-    c.add_argument("--min-ram", type=int, default=0)
-    c.add_argument("--cpu", default="", help="CPU pod flavor (cpu3m/cpu5m = 8 GB RAM per vCPU); no GPU")
-    c.add_argument("--vcpu", type=int, default=16, help="vCPUs for a CPU pod (RAM = flavor GB/vCPU x this)")
-    c.add_argument("--network-volume", default="", help="RunPod network volume id to mount (REST networkVolumeId); pins the pod to the volume's DC")
-    c.add_argument("--volume-mount", default="/workspace", help="mount path of --network-volume (default /workspace)")
-    c.add_argument("--data-center", default="", help="restrict to one data center id (e.g. EU-RO-1)")
+    create_args(sub.add_parser("create"))
     sub.add_parser("list")
     for name in ("get", "ssh", "wait-ssh", "terminate"):
         p = sub.add_parser(name)
