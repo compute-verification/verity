@@ -130,11 +130,14 @@ def _stmt_with(stmt: Statement, **kw) -> Statement:
 
 
 def _stmt_nvus(pv: Prover, stmt: Statement, n_vus: list[int]) -> Statement:
-    """``stmt`` claiming other sub-batch sizes, kept canonical (y = 0 off the new chain ends), so the verifier gets past the
-    statement checks to the claim itself."""
+    """``stmt`` claiming other sub-batch sizes, kept canonical (y = 0 off the new chain ends, operand words 0 in the new pad
+    units), so the verifier gets past the statement checks to the claim itself."""
     st = _stmt_with(stmt, n_vus=n_vus)
     lay = layout_for(pv.sys, pv.l, [nv for nv in n_vus if nv > 0], pv.steps)
     st.y = [np.where(lay.chain_layout(s).masks("cpu")[2].numpy() != 0, y, 0) for s, y in enumerate(st.y)]
+    for s, nv in enumerate(n_vus[:len(st.a)]):
+        st.a[s][nv * pv.steps:] = 0
+        st.b[s][nv * pv.steps:] = 0
     return st
 
 
@@ -228,7 +231,10 @@ def rust_batch(verifier: str | None, d: Path) -> dict | None:
             res["json"] = json.loads(out.read_text())
         except ValueError:
             pass
-    print(f"rust batch --dir {d}: exit {p.returncode} in {res['wall']:.2f}s", flush=True)
+    j = res.get("json") or {}
+    res["summary"] = {k: j.get(k) for k in ("accepted", "n_proofs", "n_accepted", "n_negatives", "manifest_checked",
+                                            "union_soundness_log2", "claimed_union_log2", "problems")}
+    print(f"rust batch --dir {d}: exit {p.returncode} in {res['wall']:.2f}s {res['summary']}", flush=True)
     return res
 
 
@@ -360,6 +366,12 @@ def gate(args) -> int:
             y_off[0][off[0]] = 1
             neg_prove(f"statement word y[{off[0]}] = 1 off a chain end, proved for that statement (non-canonical)",
                       stmt=_stmt_with(bt.stmt, y=y_off), ypub=y_off[0], stage="statement")
+        pc = bt.stmt.n_vus[0] * steps
+        if pc < args.l:
+            a_pad = [a.copy() for a in bt.stmt.a]
+            a_pad[0][pc, 0] = 1
+            neg(f"statement operand a[{pc}][0] = 1 in a pad unit (non-canonical)", _stmt_with(bt.stmt, a=a_pad), res.proof,
+                stage="statement")
         for i, (name, (okn, whyn, _), st, pf, stage) in enumerate(negs):
             early = not okn and stage is not None and stage not in whyn
             log(f"  [{kind}] negative {name}: {'ACCEPTED (BUG)' if okn else f'REJECTED BEFORE {stage!r} (BUG)' if early else 'REJECTED'} {whyn}")
@@ -732,7 +744,8 @@ def bench(args) -> int:
         if stream_info.get("round_ms_median") is not None:
             meas.append(contract.measurement("live.round_trip_ms_median", stream_info["round_ms_median"], "ms"))
     if rust and "json" in rust:
-        secs = [it.get("seconds") for it in rust["json"].get("items", []) if isinstance(it, dict) and it.get("seconds") is not None]
+        secs = [it.get("seconds") for it in rust["json"].get("proofs", []) if isinstance(it, dict) and it.get("seconds") is not None
+                and it.get("accepted")]
         if secs:
             meas.append(contract.measurement("verify_rust_seconds", statistics.median(secs), "s"))
     status = "passed" if (dumps is None or dumps["agree"] == dumps["total"]) else "failed"

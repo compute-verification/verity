@@ -919,6 +919,10 @@ class Prover:
         subs = []
         for s in range(lay.S):
             if s < len(real):
+                # pad units (columns past the sub-batch's chains) feed no output: the canonical words there are 0
+                pc = real[s] * self.steps
+                if np.any(np.asarray(stmt.a[s])[pc:] != 0) or np.any(np.asarray(stmt.b[s])[pc:] != 0):
+                    raise Reject(f"statement sub-batch {s}: operand word in a pad unit (non-canonical)")
                 a_d = torch.as_tensor(stmt.a[s], device=dev)
                 b_d = torch.as_tensor(stmt.b[s], device=dev)
                 try:

@@ -187,3 +187,10 @@ def test_proof_round_trip_and_framing():
     assert nb["total"] == len(b) and nb["header"] > 0
     with pytest.raises(ValueError):
         read_proof(b[:-1])
+    # the framing is not absorbed: a re-encoding of the same values must not be a second valid proof (red-team-3 R3-2)
+    fr = b'{"sib_len":[64,96],"final_len":16}'
+    at = b.index(len(fr).to_bytes(4, "little") + fr)
+    for alt in (b'{"sib_len": [64, 96], "final_len": 16}', b'{"final_len":16,"sib_len":[64,96]}',
+                b'{"sib_len":[64,96],"final_len":16.0}', b'{"sib_len":[64,96],"final_len":16,"x":0}'):
+        with pytest.raises(ValueError, match="framing"):
+            read_proof(b[:at] + len(alt).to_bytes(4, "little") + alt + b[at + 4 + len(fr):])

@@ -417,7 +417,14 @@ def read_proof(buf: bytes) -> Proof:
         raise ValueError("not an LGTO0001 proof")
     praw = r.blob()
     params = json.loads(praw.decode())
-    framing = json.loads(r.blob().decode())
+    fraw = r.blob()
+    framing = json.loads(fraw.decode())
+    # the framing is not absorbed: only the writer's exact bytes are accepted, or a re-encoding is another valid proof
+    canon = {"sib_len": [int(x) for x in framing.get("sib_len", [])], "final_len": int(framing.get("final_len", -1))}
+    if "t_pad" in framing:
+        canon["t_pad"] = int(framing["t_pad"])
+    if json.dumps(canon, separators=(",", ":")).encode() != fraw:
+        raise ValueError("non-canonical proof framing")
     sc = r.blob()
     kps, qs = params["kprime"], params["queries"]
     L = len(kps)
