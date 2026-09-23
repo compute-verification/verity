@@ -74,15 +74,17 @@ def _levels(domain, leaves: list[bytes], count: int) -> list[np.ndarray]:
     return levels
 
 
-def build_row_tree(name: str, binding: bytes, rows: np.ndarray, word_bits: int, role: int) -> tuple[WordTree, np.ndarray]:
+def build_row_tree(name: str, binding: bytes, rows: np.ndarray, word_bits: int, role: int,
+                   digest_fn=None) -> tuple[WordTree, np.ndarray]:
     """Commit ``rows`` (count, n_words) of ``word_bits``-bit words as ``leaf/v2h`` leaves: the Poseidon2 digest of each
     row (``role``: ``h2.ROLE_X`` / ``ROLE_W``, the sponge's domain tag) under the SHA-256 tree.  Returns the tree and the
-    digests (count, 8)."""
+    digests (count, 8).  ``digest_fn(rows, role) -> (count, 8)`` replaces the 16-bit-lane row hash for another row format
+    (``hashchain.HashedRelation.native_digests``: the NVFP4 nibble rows on 24-bit lanes); the leaf framing is the same."""
     rows = np.ascontiguousarray(rows, dtype=np.int64)
     count = int(rows.shape[0])
     LIMITS.enforce("max_positions", count)
     domain = domain_for(binding, OWNER[name], count)
-    digests = h2.hash_rows_np(rows, word_bits, role)
+    digests = h2.hash_rows_np(rows, word_bits, role) if digest_fn is None else np.asarray(digest_fn(rows, role), dtype=np.int64)
     leaves = [domain.leaf(r, r, SCHEMA_ROW, row_leaf_value(digests[r])) for r in range(count)]
     levels = _levels(domain, leaves, count)
     ref = TreeRef(name, bytes(binding), OWNER[name], count, levels[-1][0].tobytes())
@@ -103,10 +105,10 @@ def build_word_tree(name: str, binding: bytes, words: np.ndarray, y_bits: int) -
 
 
 def build_trees(*, x_rows: np.ndarray, w_cols: np.ndarray, y_words: np.ndarray, word_bits: int, y_bits: int,
-                bindings: Mapping[str, bytes]) -> tuple[dict[str, WordTree], dict[str, np.ndarray]]:
+                bindings: Mapping[str, bytes], digest_fn=None) -> tuple[dict[str, WordTree], dict[str, np.ndarray]]:
     """The three trees of a committed instance set; also the operand digests (what the honest prover will publish)."""
-    ta, da = build_row_tree("a", bindings["a"], x_rows, word_bits, h2.ROLE_X)
-    tb, db = build_row_tree("b", bindings["b"], w_cols, word_bits, h2.ROLE_W)
+    ta, da = build_row_tree("a", bindings["a"], x_rows, word_bits, h2.ROLE_X, digest_fn)
+    tb, db = build_row_tree("b", bindings["b"], w_cols, word_bits, h2.ROLE_W, digest_fn)
     ty = build_word_tree("y", bindings["y"], y_words, y_bits)
     return {"a": ta, "b": tb, "y": ty}, {"a": da, "b": db}
 
