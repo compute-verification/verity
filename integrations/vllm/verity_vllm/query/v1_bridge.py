@@ -4,7 +4,8 @@ What this module DECIDES (structure + correspondence, no by-name table):
 
 * WHICH Values are required: `verity.verification.query.required_values(P, Q_module_body_v1, policy)` -- every Value that crosses a
   module-body boundary in the Program's own dataflow, plus the policy below.  v1's "promotion" of interior rows whose output another
-  module reads (F-r19-int-20) is not a pass here: such a Value crosses the boundary and is required by definition.
+  module reads (F-r19-int-20) is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
+  that reads no Value, `module_body.literal_calls`) is the descriptor's: never a boundary Value, never protocol-required.
 * WHERE a Value lives: the producing Call's recorded owning module (correspondence), mapped to the implementation's path.
 * WHAT the member is called, structurally: the port name when the Definition returns a tuple; else the recorded return-slot hint
   when the Build recorded one; else `out`.
@@ -42,12 +43,12 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from verity.verification.query import Policy, RequiredValues, ValueRef, boundary, required_values
+from verity.verification.query import Policy, RequiredValues, ValueRef, required_values
 from verity_capture.commit import required_manifest as v1
 from verity_vllm.ir.sampling_event import SAMPLING_EVENT_FAMILIES
 
 from .correspondence import CallName, Correspondence
-from .module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1
+from .module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, literal_calls, module_body_boundary
 from .program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "FLASH_ATTENTION_LAUNCHES", "COLLECTIVES",
@@ -264,8 +265,8 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             for port in p.port_table:
                 record_fields[ValueRef(p.id, port.name)] = port.name
     prescribed = frozenset(record_fields)
-    Q = Q_module_body_v1(P, corr)
-    B = boundary(P, Q)
+    literals = literal_calls(P)
+    B = module_body_boundary(P, corr, literals)
     protocol: set[ValueRef] = set()
     if return_slots:
         # TENSOR-RETURN: the acquisition binds the TENSORS a module returns, and a tensor is one fx node's output -- every row the
@@ -278,6 +279,8 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
                 n = corr.name(v.call)
                 returned_nodes.add((step_of(v.call), n.module, n.node))
     for c in P.calls:
+        if c.id in literals:            # never protocol-required, whatever node / hint it is named under (a pad guard's `<node>/eos` beside its I32Eq rows)
+            continue
         if c.family in SAMPLING_EVENTS:
             protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
         elif return_slots:
@@ -443,7 +446,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
            "steps": list(range(len(events))), "engine_steps": [arrive + s for s in range(len(events))], "requests": [request_id],
            "populations": {"identities": len(identities), "by_family": dict(fam_counts), "steps": len(events),
                            "attention_layers": len(attn_bodies), "units": len(B.units), "boundary_values": len(B.values),
-                           "required_values": len(req.values)},
+                           "required_values": len(req.values), "literal_calls": len(literals)},
            "complete": not unmodelled, "unmodelled": dict(unmodelled),
            "manifest_digest": v1.manifest_digest(identities), "identities": identities}
     return BridgeResult(man, req, residual_counts)

@@ -98,9 +98,7 @@ def check_correspondence(program_dir: str, *, workload: dict[str, Any] | None = 
     """`Q_module_body_v1` under the record vs under the v1-annotation fallback on ONE Build dir that carries the record: the owning
     module per Call, the Call names the bridge reads, the partition (unit ids), the boundary Values and -- `manifest` -- the bridge's
     manifest digest, each equal or listed.  A Build without the record has nothing to check against (`applicable: False`)."""
-    from verity.verification.query import boundary_values
-
-    from .module_body import Q_module_body_v1
+    from .module_body import Q_module_body_v1, literal_calls, module_body_boundary
     t0 = time.time()
     P = from_instances(os.path.join(program_dir, "instances.json.gz"))
     res = _load_json(os.path.join(program_dir, "result.json"))
@@ -117,7 +115,8 @@ def check_correspondence(program_dir: str, *, workload: dict[str, Any] | None = 
     Qa, Qb = Q_module_body_v1(P, canon), Q_module_body_v1(P, fallback)
     units_a = {u.id: u.calls for u in Qa(P)}
     units_b = {u.id: u.calls for u in Qb(P)}
-    sa, sb = set(boundary_values(P, Qa)), set(boundary_values(P, Qb))
+    literals = literal_calls(P)
+    sa, sb = set(module_body_boundary(P, canon, literals).values), set(module_body_boundary(P, fallback, literals).values)
     out.update(applicable=True, module_paths={"record": len(canon.modules), "v1_annotations": len(fallback.modules)}, implementation_prefix={"record": canon.prefix, "v1_annotations": fallback.prefix},
                module_diffs_n=len(module_diffs), module_diffs=module_diffs[:50], name_diffs_n=len(name_diffs), name_diffs=name_diffs[:50],
                partition_equal=(units_a == units_b), units={"record": len(units_a), "v1_annotations": len(units_b)},
