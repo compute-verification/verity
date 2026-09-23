@@ -531,11 +531,13 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
     timings["zc_setup"] = time.perf_counter() - t0
     E, claim = one.clone(), torch.zeros((D,), dtype=torch.int64, device=dev)
     rs: list = []
-    zc_msgs, per_round = [], []
+    zc_msgs, per_round, msg_t = [], [], []
     nrem = n
     for t, v in enumerate(sched.zc):
         tr_ = time.perf_counter()
         M = st.round(v)
+        _sync(dev)
+        msg_t.append(time.perf_counter() - tr_)
         taus = [tau[nrem - 1 - j] for j in range(v)]
         if cheat in ("zc", "all") or (cheat == "round1" and t == 0):
             M = _fix_zc_round(M, taus, claim, E)
@@ -575,6 +577,7 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
     per_round.append(time.perf_counter() - tr_)
     timings["zc"] = time.perf_counter() - t0
     timings["zc_rounds"] = per_round
+    timings["zc_msg"] = msg_t
     # --- combined rows + shift sumcheck --------------------------------------------------------------------------------
     t2 = time.perf_counter()
     if engine == "cuda":
@@ -606,6 +609,9 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
         for x in range(lay.n_links):
             sh = (sh + fc_mul(g3p[x], nv[x])) % P
         claim2 = (claim2 + fc_mul(sh, ext_of_int(rep_c, dev))) % P
+    _sync(dev)
+    timings["cmb_setup"] = time.perf_counter() - t2 - timings["cmb_coef_matvec"]
+    t3 = time.perf_counter()
     cmb_msgs, rs2 = [], []
     for t, v in enumerate(sched.cmb):
         M = pp.round(v)
@@ -619,6 +625,8 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
             claim2 = eval_mixed(M, r)
         rs2 += list(r)
     del pp
+    _sync(dev)
+    timings["cmb_rounds"] = time.perf_counter() - t3
     rho = torch.stack(rs2[::-1])                                      # rho[t] <-> variable t of y
     r_i, rho_c = rho[:n_i], rho[:n_c]
     w_only = zc_.clone()
@@ -862,6 +870,8 @@ _SRC = r"""
 #define R2 1172168163u
 #define NR 31ULL
 #define R1 268435454u
+#define OPEN_CPT 8
+#define OPEN_T 128
 typedef unsigned long long u64;
 typedef unsigned int u32;
 
@@ -875,6 +885,16 @@ __device__ __forceinline__ u32 mont(u32 a, u32 b) {
 __device__ __forceinline__ u32 to_mont(u32 a) { return mont(a, R2); }
 __device__ __forceinline__ u32 addmod(u32 a, u32 b) { u32 s = a + b; return s >= P ? s - P : s; }
 __device__ __forceinline__ u32 submod(u32 a, u32 b) { return a >= b ? a - b : a + P - b; }
+
+// v < 2^39 -> v mod p: two folds by 2^32 = R1 (mod p), then at most 4p -> [0, p)
+__device__ __forceinline__ u32 red39(u64 v) {
+    u64 x = (v >> 32) * (u64)R1 + (v & 0xffffffffULL);
+    x = (x >> 32) * (u64)R1 + (x & 0xffffffffULL);
+    if (x >= 2 * P64) x -= 2 * P64;
+    if (x >= 2 * P64) x -= 2 * P64;
+    if (x >= P64) x -= P64;
+    return (u32)x;
+}
 
 // ext product (x^6 = 31): 36 mont + 6 u64 reductions; mont(a, b_m) = a b, mont(a_m, b_m) = (a b)_m
 __device__ __forceinline__ void ext_mul(const u32* a, const u32* b, u32* out) {
@@ -890,7 +910,7 @@ __device__ __forceinline__ void ext_mul(const u32* a, const u32* b, u32* out) {
     for (int c = 0; c < 6; c++) {
         u64 v = t[c];
         if (c + 6 < 11) v += t[c + 6] * NR;
-        out[c] = (u32)(v % P64);
+        out[c] = red39(v);
     }
 }
 
@@ -927,18 +947,23 @@ __device__ __forceinline__ u32 gather(const int* __restrict__ z, const int* __re
 // ---- opening round: the top 3 k bits, straight from z.  Slot k = kk + K8 * j, j = 4 X1 + 2 X2 + X3.
 // block (x: column chunk, y: kk * 3 + a1); each thread: the 9 entries M[a1][a2][a3] of its columns, weighted by wc[c]
 // (normal-form sums), times wr[kk] at the end; output normal form.
-extern "C" __global__ void zc_open3_msg(
+extern "C" __global__ void __launch_bounds__(OPEN_T) zc_open3_msg(
     const int* __restrict__ z,
     const int* __restrict__ pa, const int* __restrict__ ra, const u32* __restrict__ va,
     const int* __restrict__ pb, const int* __restrict__ rb, const u32* __restrict__ vb,
     const int* __restrict__ pc, const int* __restrict__ rc, const u32* __restrict__ vc,
     const u32* __restrict__ wr, const u32* __restrict__ wc, u64* acc, long long K8, long long C)
 {
-    const int kk = blockIdx.y / 3, a1 = blockIdx.y - 3 * (blockIdx.y / 3);
-    u32 s[54];
+    // blockIdx.x = kk * 3 + a1 (fast), blockIdx.y = stripe of OPEN_CPT * OPEN_T columns (consecutive blocks share it in L2);
+    // the 54 per-thread accumulators live in shared memory (registers: occupancy)
+    const int kk = blockIdx.x / 3, a1 = blockIdx.x - 3 * (blockIdx.x / 3);
+    __shared__ u32 sacc[54][OPEN_T];
     #pragma unroll
-    for (int q = 0; q < 54; q++) s[q] = 0;
-    for (long long c = (long long)blockIdx.x * blockDim.x + threadIdx.x; c < C; c += (long long)gridDim.x * blockDim.x) {
+    for (int q = 0; q < 54; q++) sacc[q][threadIdx.x] = 0;
+    const long long c0 = (long long)blockIdx.y * OPEN_CPT * OPEN_T + threadIdx.x;
+    for (int it = 0; it < OPEN_CPT; it++) {
+        const long long c = c0 + (long long)it * OPEN_T;
+        if (c >= C) break;
         u32 A4[4], B4[4], C4[4];
         #pragma unroll
         for (int j = 0; j < 4; j++) {
@@ -965,20 +990,30 @@ extern "C" __global__ void zc_open3_msg(
                 u32 f = mont(to_mont(ah), bh);
                 if (a2 < 2 && a3 < 2) f = submod(f, mix1(mix1(C4[0], C4[1], a3), mix1(C4[2], C4[3], a3), a2));
                 #pragma unroll
-                for (int p = 0; p < 6; p++) s[(a2 * 3 + a3) * 6 + p] = addmod(s[(a2 * 3 + a3) * 6 + p], mont(w[p], f));
+                for (int p = 0; p < 6; p++) {
+                    u32& sl = sacc[(a2 * 3 + a3) * 6 + p][threadIdx.x];
+                    sl = addmod(sl, mont(w[p], f));
+                }
             }
         }
     }
-    u32 wrr[6], tmp[6];
-    #pragma unroll
-    for (int p = 0; p < 6; p++) wrr[p] = __ldg(wr + (long long)p * K8 + kk);
-    #pragma unroll
-    for (int e = 0; e < 9; e++) {
-        ext_mul(s + 6 * e, wrr, tmp);
-        #pragma unroll
-        for (int p = 0; p < 6; p++) s[6 * e + p] = tmp[p];
+    __syncthreads();
+    // column sums of sacc (normal form) -> times wr[kk] -> atomics
+    __shared__ u32 tot[54];
+    if (threadIdx.x < 54) {
+        u64 t = 0;
+        for (int i = 0; i < OPEN_T; i++) t += sacc[threadIdx.x][i];
+        tot[threadIdx.x] = (u32)(t % P64);
     }
-    block_reduce_add<54>(s, acc + 54 * a1);
+    __syncthreads();
+    if (threadIdx.x < 9) {
+        u32 wrr[6], sv[6], o[6];
+        #pragma unroll
+        for (int p = 0; p < 6; p++) { wrr[p] = __ldg(wr + (long long)p * K8 + kk); sv[p] = tot[threadIdx.x * 6 + p]; }
+        ext_mul(sv, wrr, o);
+        #pragma unroll
+        for (int p = 0; p < 6; p++) atomicAdd(&acc[54 * a1 + threadIdx.x * 6 + p], (u64)o[p]);
+    }
 }
 
 // opening fold: T(r)[kk, c] = sum_j eq_j T[kk + K8 j, c]; eqr (8, 6) = eq(r, j) R^2 so the output is Montgomery form.
@@ -992,10 +1027,12 @@ extern "C" __global__ void zc_open3_fold(
     __shared__ u32 eqs[48];
     if (threadIdx.x < 48) eqs[threadIdx.x] = eqr[threadIdx.x];
     __syncthreads();
-    const long long n = K8 * C;
-    for (long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x; idx < n; idx += (long long)gridDim.x * blockDim.x) {
-        const int kk = (int)(idx / C);
-        const long long c = idx - (long long)kk * C;
+    // blockIdx.x = kk (fast), blockIdx.y = 256-column stripe: consecutive blocks reuse the stripe of z from L2
+    const int kk = blockIdx.x;
+    {
+        const long long c = (long long)blockIdx.y * blockDim.x + threadIdx.x;
+        if (c >= C) return;
+        const long long idx = (long long)kk * C + c;
         #pragma unroll
         for (int s = 0; s < 3; s++) {
             const int* ptr = s == 0 ? pa : (s == 1 ? pb : pc);
@@ -1123,6 +1160,61 @@ __device__ void zc_small_body(const int* __restrict__ A, const int* __restrict__
         }
     }
 }
+// the same entries reduced in-kernel: grid (x-blocks, 3^V); acc (3^V, 6) u64, Montgomery after % p
+template <int V>
+__device__ void zc_red_body(const int* __restrict__ A, const int* __restrict__ B, const int* __restrict__ Cm,
+                            const u32* __restrict__ wr, const u32* __restrict__ wc, u64* acc,
+                            long long nq, int cb, long long nwr, long long nwc, long long ps)
+{
+    const int e = blockIdx.y;
+    const bool ni = noinf<V>(e);
+    const long long cmask = (1LL << cb) - 1;
+    u32 s[6] = {0, 0, 0, 0, 0, 0};
+    for (long long x = (long long)blockIdx.x * blockDim.x + threadIdx.x; x < nq; x += (long long)gridDim.x * blockDim.x) {
+        u32 wa[6], wb[6], w[6], ah[6], bh[6], ch[6], f[6], t[6];
+        #pragma unroll
+        for (int p = 0; p < 6; p++) { wa[p] = __ldg(wr + p * nwr + (x >> cb)); wb[p] = __ldg(wc + p * nwc + (x & cmask)); }
+        ext_mul(wa, wb, w);
+        mixed_at<V>(A, ps, x, nq, e, ah);
+        mixed_at<V>(B, ps, x, nq, e, bh);
+        ext_mul(ah, bh, f);
+        if (ni) {
+            mixed_at<V>(Cm, ps, x, nq, e, ch);
+            #pragma unroll
+            for (int p = 0; p < 6; p++) f[p] = submod(f[p], ch[p]);
+        }
+        ext_mul(w, f, t);
+        #pragma unroll
+        for (int p = 0; p < 6; p++) s[p] = addmod(s[p], t[p]);
+    }
+    block_reduce_add<6>(s, acc + 6 * e);
+}
+extern "C" __global__ void zc_red1(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<1>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
+extern "C" __global__ void zc_red2(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<2>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
+extern "C" __global__ void zc_red3(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<3>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
+
+template <int V>
+__device__ void pp_red_body(const int* __restrict__ T, u64* acc, long long nq, long long ps)
+{
+    const int e = blockIdx.y;
+    u32 s[6] = {0, 0, 0, 0, 0, 0};
+    for (long long x = (long long)blockIdx.x * blockDim.x + threadIdx.x; x < nq; x += (long long)gridDim.x * blockDim.x) {
+        u32 u1[6], v1[6], u2[6], v2[6], f[6], g[6];
+        mixed_at<V>(T, ps, x, nq, e, u1);
+        mixed_at<V>(T + 6 * ps, ps, x, nq, e, v1);
+        mixed_at<V>(T + 12 * ps, ps, x, nq, e, u2);
+        mixed_at<V>(T + 18 * ps, ps, x, nq, e, v2);
+        ext_mul(u1, v1, f);
+        ext_mul(u2, v2, g);
+        #pragma unroll
+        for (int p = 0; p < 6; p++) s[p] = addmod(s[p], addmod(f[p], g[p]));
+    }
+    block_reduce_add<6>(s, acc + 6 * e);
+}
+extern "C" __global__ void pp_red1(const int* T, u64* acc, long long nq, long long ps) { pp_red_body<1>(T, acc, nq, ps); }
+extern "C" __global__ void pp_red2(const int* T, u64* acc, long long nq, long long ps) { pp_red_body<2>(T, acc, nq, ps); }
+extern "C" __global__ void pp_red3(const int* T, u64* acc, long long nq, long long ps) { pp_red_body<3>(T, acc, nq, ps); }
+
 extern "C" __global__ void zc_small1(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u32* out, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_small_body<1>(A, B, Cm, wr, wc, out, nq, cb, nwr, nwc, ps); }
 extern "C" __global__ void zc_small2(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u32* out, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_small_body<2>(A, B, Cm, wr, wc, out, nq, cb, nwr, nwc, ps); }
 extern "C" __global__ void zc_small3(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u32* out, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_small_body<3>(A, B, Cm, wr, wc, out, nq, cb, nwr, nwc, ps); }
@@ -1206,31 +1298,46 @@ extern "C" __global__ void sc_eq(const u32* __restrict__ tm, const u32* __restri
         for (int p = 0; p < 6; p++) out[x * 6 + p] = (long long)mont(acc[p], 1u);      // mont(a_m, 1) = a
     }
 }
-// base x ext matvec: out[i] = sum_c M[i, c] * e[c]   (e in Montgomery planes (6, C); out normal form, int64 (R, 6)); one block per row
+// base x ext matvec: out[i] = sum_c M[i, c] * e[c]   (e in Montgomery planes (6, C); out normal form, int64 (R, 6));
+// MV_ROWS rows per block so every e load serves MV_ROWS rows
+#define MV_ROWS 8
 extern "C" __global__ void sc_matvec(
-    const int* __restrict__ M, const u32* __restrict__ e, long long* __restrict__ out, long long C)
+    const int* __restrict__ M, const u32* __restrict__ e, long long* __restrict__ out, long long R, long long C)
 {
-    __shared__ u64 sh[6][256];
-    const long long i = blockIdx.x;
-    u64 acc[6];
+    __shared__ u64 sh[MV_ROWS * 6][8];
+    const long long i0 = (long long)blockIdx.x * MV_ROWS;
+    u32 acc[MV_ROWS][6];
     #pragma unroll
-    for (int p = 0; p < 6; p++) acc[p] = 0;
-    for (long long c = threadIdx.x; c < C; c += blockDim.x) {
-        const u32 m = (u32)M[i * C + c];
+    for (int r = 0; r < MV_ROWS; r++) {
         #pragma unroll
-        for (int p = 0; p < 6; p++) acc[p] += mont(e[p * C + c], m);
+        for (int p = 0; p < 6; p++) acc[r][p] = 0;
     }
-    #pragma unroll
-    for (int p = 0; p < 6; p++) sh[p][threadIdx.x] = acc[p] % P64;
-    __syncthreads();
-    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (threadIdx.x < stride) {
-            #pragma unroll
-            for (int p = 0; p < 6; p++) sh[p][threadIdx.x] += sh[p][threadIdx.x + stride];
+    for (long long c = threadIdx.x; c < C; c += blockDim.x) {
+        u32 ev[6];
+        #pragma unroll
+        for (int p = 0; p < 6; p++) ev[p] = __ldg(e + p * C + c);
+        #pragma unroll
+        for (int r = 0; r < MV_ROWS; r++) {
+            if (i0 + r < R) {
+                const u32 m = (u32)__ldg(M + (i0 + r) * C + c);
+                #pragma unroll
+                for (int p = 0; p < 6; p++) acc[r][p] = addmod(acc[r][p], mont(ev[p], m));
+            }
         }
-        __syncthreads();
     }
-    if (threadIdx.x < 6) out[i * 6 + threadIdx.x] = (long long)(sh[threadIdx.x][0] % P64);
+    const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+    #pragma unroll
+    for (int q = 0; q < MV_ROWS * 6; q++) {
+        u64 v = acc[q / 6][q % 6];
+        for (int o = 16; o > 0; o >>= 1) v += __shfl_down_sync(0xffffffffu, v, o);
+        if (lane == 0) sh[q][warp] = v;
+    }
+    __syncthreads();
+    if (threadIdx.x < MV_ROWS * 6 && i0 + threadIdx.x / 6 < R) {
+        u64 t = 0;
+        for (int w = 0; w < 8; w++) t += sh[threadIdx.x][w];
+        out[(i0 + threadIdx.x / 6) * 6 + threadIdx.x % 6] = (long long)(t % P64);
+    }
 }
 """
 
@@ -1277,9 +1384,24 @@ def eq_prefix_planes(tau: torch.Tensor) -> list[torch.Tensor]:
     return out
 
 
+def _pymul(a: list, b: list) -> list:
+    t = [0] * (2 * D - 1)
+    for i in range(D):
+        for j in range(D):
+            t[i + j] += a[i] * b[j]
+    return [(t[c] + 31 * t[c + D]) % P if c + D < 2 * D - 1 else t[c] % P for c in range(D)]
+
+
 def _corner_eq(r: torch.Tensor) -> torch.Tensor:
-    """``(2^v, 6)`` normal: ``eq(r, X(b))`` with ``b = sum_j X_{j+1} 2^(v-1-j)`` (``r[j]`` <-> ``X_{j+1}``)."""
-    return eq_table(r.flip(0))
+    """``(2^v, 6)`` normal: ``eq(r, X(b))`` with ``b = sum_j X_{j+1} 2^(v-1-j)`` (``r[j]`` <-> ``X_{j+1}``); host arithmetic
+    (the round's tiny weight table: a few hundred torch launches on the device otherwise)."""
+    rs = [[int(x) % P for x in row] for row in r.tolist()]
+    vec = [[1, 0, 0, 0, 0, 0]]
+    for rj in reversed(rs):                     # each variable becomes the new top bit: X_1 last
+        om = [(-x) % P for x in rj]
+        om[0] = (om[0] + 1) % P
+        vec = [_pymul(e, om) for e in vec] + [_pymul(e, rj) for e in vec]
+    return torch.tensor(vec, dtype=torch.int64, device=r.device)
 
 
 def _csr(cons: Constraints, dev) -> dict:
@@ -1312,15 +1434,24 @@ class CudaZC:
         self.C, self.K = z.shape[1], cons.K_pad
         self.n_c, self.n_k = lay.n_c, lay.n_k
         self.csr = _csr(cons, self.dev)
-        self.wr = eq_prefix_planes(tau[self.n_c:])      # [t] = eq(tau_rows[:t]) planes (6, 2^t)
-        self.wc = eq_prefix_planes(tau[:self.n_c])
+        self.tau_r, self.tau_c = tau[self.n_c:], tau[:self.n_c]
+        self._planes: dict = {}
         self.T = None
         self.logn = self.n_k + self.n_c
+
+    def _plane(self, which: str, t: int) -> torch.Tensor:
+        """``eq_table(tau_part[:t])`` as Montgomery planes ``(6, 2^t)`` (built on first use)."""
+        key = (which, t)
+        if key not in self._planes:
+            tau = self.tau_r if which == "r" else self.tau_c
+            tab = eq_table_cuda(tau[:t]) if t else fc_one((1,), self.dev)
+            self._planes[key] = mont_planes(tab)
+        return self._planes[key]
 
     def _weights(self, log_after: int):
         cb = min(self.n_c, log_after)
         rb = log_after - cb
-        return self.wr[rb], self.wc[cb], cb
+        return self._plane("r", rb), self._plane("c", cb), cb
 
     def _csr_args(self):
         return tuple(_cp(t) for s in "abc" for t in self.csr[s])
@@ -1334,9 +1465,9 @@ class CudaZC:
             acc = torch.zeros((54 * 3,), dtype=torch.int64, device=self.dev)
             wr, wc, _ = self._weights(self.logn - 3)
             assert wr.shape[1] == K8 and wc.shape[1] == self.C
-            cols_per_block = self.THREADS * 16
-            grid = (max(1, self.C // cols_per_block), K8 * 3)
-            _kernel("zc_open3_msg")(grid, (self.THREADS,), (_cp(self.z),) + self._csr_args() + (
+            cols_per_block = 128 * 8                                               # OPEN_T * OPEN_CPT
+            grid = (K8 * 3, -(-self.C // cols_per_block))
+            _kernel("zc_open3_msg")(grid, (128,), (_cp(self.z),) + self._csr_args() + (
                 _cp(wr), _cp(wc), _cp(acc), cp.int64(K8), cp.int64(self.C)))
             return (acc % P).reshape(3, 3, 3, D)
         log_after = self.logn - v
@@ -1350,14 +1481,14 @@ class CudaZC:
             _kernel("zc_msg2")(grid, block, (_cp(A), _cp(B), _cp(Cm), _cp(wr), _cp(wc), _cp(acc), cp.int64(nq), cp.int32(cb),
                                              cp.int64(wr.shape[1]), cp.int64(wc.shape[1]), cp.int64(ps)))
             return from_mont(acc).reshape(3, 3, D)
-        if v > 3 or nq * (3 ** v) * D * 4 > (1 << 30):
-            raise ValueError(f"CudaZC: arity {v} on 2^{log_after} groups is not supported (use 2 per coin while the tables are large)")
+        if v > 3:
+            raise ValueError(f"CudaZC: arity {v} > 3")
         ne = 3 ** v
-        out = torch.empty((nq, ne, D), dtype=torch.int32, device=self.dev)
-        grid, block = _launch(nq, 128)
-        _kernel(f"zc_small{v}")(grid, block, (_cp(A), _cp(B), _cp(Cm), _cp(wr), _cp(wc), _cp(out), cp.int64(nq), cp.int32(cb),
-                                              cp.int64(wr.shape[1]), cp.int64(wc.shape[1]), cp.int64(ps)))
-        return from_mont(out.to(torch.int64).sum(0) % P).reshape((3,) * v + (D,))
+        acc = torch.zeros((ne * D,), dtype=torch.int64, device=self.dev)
+        (gx,), block = _launch(nq, 256, max(1, 2048 // ne))
+        _kernel(f"zc_red{v}")((gx, ne), block, (_cp(A), _cp(B), _cp(Cm), _cp(wr), _cp(wc), _cp(acc), cp.int64(nq), cp.int32(cb),
+                                               cp.int64(wr.shape[1]), cp.int64(wc.shape[1]), cp.int64(ps)))
+        return from_mont(acc % P).reshape((3,) * v + (D,))
 
     def fold(self, r: torch.Tensor) -> None:
         import cupy as cp
@@ -1367,7 +1498,7 @@ class CudaZC:
             n0 = K8 * self.C
             self.T = torch.empty((3, D, n0), dtype=torch.int32, device=self.dev)
             eqr = to_mont(to_mont(_corner_eq(r))).to(torch.int32).contiguous()          # eq * R^2: Montgomery output
-            grid, block = _launch(n0, self.THREADS, 16384)
+            grid, block = (K8, -(-self.C // self.THREADS)), (self.THREADS,)
             _kernel("zc_open3_fold")(grid, block, (_cp(self.z),) + self._csr_args() + (
                 _cp(eqr), _cp(self.T), cp.int64(K8), cp.int64(self.C), cp.int64(n0)))
             self.logn -= 3
@@ -1398,10 +1529,10 @@ class CudaPP:
             raise ValueError("CudaPP: arity <= 3")
         nq = 1 << (self.logn - v)
         ne = 3 ** v
-        out = torch.empty((nq, ne, D), dtype=torch.int32, device=self.dev)
-        grid, block = _launch(nq, 128)
-        _kernel(f"pp_small{v}")(grid, block, (_cp(self.T), _cp(out), cp.int64(nq), cp.int64(self.T.shape[2])))
-        return from_mont(out.to(torch.int64).sum(0) % P).reshape((3,) * v + (D,))
+        acc = torch.zeros((ne * D,), dtype=torch.int64, device=self.dev)
+        (gx,), block = _launch(nq, 256, max(1, 2048 // ne))
+        _kernel(f"pp_red{v}")((gx, ne), block, (_cp(self.T), _cp(acc), cp.int64(nq), cp.int64(self.T.shape[2])))
+        return from_mont(acc % P).reshape((3,) * v + (D,))
 
     def fold(self, r: torch.Tensor) -> None:
         import cupy as cp
@@ -1457,7 +1588,7 @@ def matvec_base_ext_cuda(M: torch.Tensor, e: torch.Tensor) -> torch.Tensor:
         M = (M.to(torch.int64) % P).to(torch.int32)
     R, C = M.shape
     out = torch.empty((R, D), dtype=torch.int64, device=M.device)
-    _kernel("sc_matvec")((R,), (256,), (_cp(M), _cp(mont_planes(e)), _cp(out), cp.int64(C)))
+    _kernel("sc_matvec")((-(-R // 8),), (256,), (_cp(M), _cp(mont_planes(e)), _cp(out), cp.int64(R), cp.int64(C)))
     return out
 
 
@@ -1519,8 +1650,6 @@ def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: s
         out["mem_before_prove_gb"] = torch.cuda.memory_allocated(dev) / 1e9
     runs = []
     for _ in range(max(1, reps)):
-        if dev.type == "cuda":
-            torch.cuda.empty_cache()
         coins = LocalCoins(b"bench")
         proof = prove(lay, cons, z, coins, engine=engine, schedule=sched)
         runs.append(proof.timings)
@@ -1532,6 +1661,8 @@ def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: s
         out["peak_mem_gb"] = torch.cuda.max_memory_allocated(dev) / 1e9
         out["peak_reserved_gb"] = torch.cuda.max_memory_reserved(dev) / 1e9
     out["bytes"] = proof.n_bytes()
+    if dev.type == "cuda":
+        torch.cuda.empty_cache()
     t2 = time.perf_counter()
     pubs = public_rows(runner.sys, lay, pub_subs, device)
     ok, why, claims = verify(lay, cons, pubs, proof, LocalCoins(b"bench"), device=device)
