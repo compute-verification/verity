@@ -1,4 +1,6 @@
-"""cb_a.global_match/v1 -- the GLOBAL Match of a batched execution against one rooted workload Program (R14 lane gmatch, GM-01).
+"""cb_a.global_match/v1 -- the GLOBAL Match of a batched execution against one rooted workload Program (R14 lane gmatch, GM-01): the
+runtime match check of record.  Glossary (Draft 3 §12): a fold 'instance' is a Call, 'attribution' is occurrence resolution, and the
+capture log (RunHeader / StepStart / SampleEnd / StepLink rows) is execution evidence.
 
 X-09 (`batch_decomp`) establishes, per request, that the request's projection of the batched eager fold is canonical-equal to its
 request-wrapper component Program.  That is evidence INSIDE this check, not the verdict.  The global check consumes
@@ -30,7 +32,7 @@ and establishes (each a named check with PASS / FAIL and evidence; the verdict i
                            feeds the request's next input row (StepLink / StepStart.input_token_ids), and the event count respects
                            the bounded output interface (== max_tokens on `length`, < on EOS).
   G7 vu_population         the population the global query exposes (every instance of every component over its executed steps)
-                           equals the fold's attributed population; probes on both sides of every request boundary inside a shared
+                           equals the fold's resolved population; probes on both sides of every request boundary inside a shared
                            engine step resolve to the right owner / local identity / spec.
   G8 within_step_order     M-ARRIVAL-ORDER: inside an engine step the order of one request's own instances must be its component's
                            order (checked by G3); the interleaving of DIFFERENT requests' rows is the runtime's batch layout
@@ -40,7 +42,7 @@ and establishes (each a named check with PASS / FAIL and evidence; the verdict i
 Time unit of the chronology: the ENGINE STEP (one model forward), counted from 0 = the first forward of the run.  Ordering
 convention: programmed dependencies and step indices only -- no statement about elapsed time is made or implied.
 
-Request identity [R15 COORD ruling 2]: the Program, the manifest and every check name requests `r<k>` (k = manifest position).
+Request identity [R15 COORD ruling 2]: the Program, the workload manifest and every check name requests `r<k>` (k = manifest position).
 The record (RunHeader / StepStart rows / tokens.json / fold meta) names them by the manifest's UUID -- the id vLLM served them
 under; the checker maps those through the global Program's `workload_request_id` table (G1 verifies the UUID set == manifest).
 
@@ -48,11 +50,11 @@ Within-step order [R15 DECISION M-0021 -> COORD ruling M-0177]: `within_step="da
 a request's step as an order-insensitive Merkle DAG multiset with structural canonical addresses; `within_step="sequence"` (the r14-v1
 verdicts) compares it as X-09's instance SEQUENCE (spec + wiring by position). The other criterion's verdict is recorded beside the
 verdict of record (`alternate_verdict`) and never merged into it. The dag criterion uses X-09's chunked-prefill Merkle multiset
-(`batch_decomp.dag_hashes`) and addresses every fold instance by the canonical index of its structurally identical component instance, so the fold's emission order (AttentionScope: one group per
+(`batch_decomp.dag_hashes`) and addresses every fold Call by the canonical index of its structurally identical component Call, so the fold's emission order (AttentionScope: one group per
 distinct T in first-occurrence order over the batch) is recorded in G8 as batch layout, never used as an address and never
-re-sorted; a consumer emitted before its producer, a wiring change or a missing/extra instance still FAILS G3.
+re-sorted; a consumer emitted before its producer, a wiring change or a missing/extra Call still FAILS G3.
 
-PROTOCOL SUMMARY (Match stage: the record checker -- GM-01, the Match verdict of record for any B >= 1)
+PROTOCOL SUMMARY (Match stage: the record checker -- GM-01, the runtime match verdict of record for any B >= 1)
   Purpose: establish that THIS row's Build workload Program (GP-01: weights once, one component per declared request, declared arrivals,
     caps, stop rule + LAG) corresponds to the batched execution the Match stage recorded -- all requests, all executed steps, global I/O
     associations and chronology -- as eight named checks G1..G8, each PASS/FAIL with evidence; the verdict is PASS iff every check passes.

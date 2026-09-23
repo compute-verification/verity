@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Pod runtime for the Verity x vLLM integration: ONE Python 3.12 environment (torch cu129, vLLM d9105ea80, numpy, safetensors),
+# Pod runtime for the Verity x vLLM integration (research/infra; no Verity semantics): ONE Python 3.12 environment (torch cu129, vLLM
+# d9105ea80, numpy, safetensors),
 # the native taps (hidden_gpu chunk tree, FA2 matReq tap; FA3 on sm_90), the pinned checkpoints, and a readiness record.
 #
 #   research run --on <machine> --project verity --source <verity checkout> -- bash -c "cd integrations/vllm && bash pod_bootstrap.sh [--cases B0[,B1]] [--out DIR]"

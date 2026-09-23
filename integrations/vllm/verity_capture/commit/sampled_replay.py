@@ -1,40 +1,41 @@
-"""Sampled exact VU replay -- the C2 (correspondence) check of record (DECISIONS-2 §4 C2; board M-0356 (1), M-0394).
+"""Sampled exact VU replay -- the local replay check of record (serialized as `C2`; DECISIONS-2 §4 C2; board M-0356 (1), M-0394).
 
-For a sampled VU `V` (one Program instance row) the check is
+For a sampled VU `V` (one Call of the Program) the check is
 
     F_V( tau(in(V)) ) == tau(out(V))      bit-for-bit,
 
-where `tau` reads the COMMITTED bytes of the identities the Program's dataflow names (the row's `args`), and `F_V` is the
-registered relation of the row's Definition evaluated by the registry's own reference (`verity_vllm.registry.derived_rows`,
+where `tau` reads the COMMITTED bytes of the Values the Program's dataflow names (the Call's `args`), and `F_V` is the
+registered relation of the Call's Definition evaluated by the registry's own reference (`verity_vllm.registry.derived_rows`,
 the same numpy models the Match stage's fold checks use).  Nothing here reads the collector's emissions to decide WHAT is
-required or WHERE an input lives: the population is the Program (instances.json.gz rows), the addresses are the manifest's
-member rule (`required_manifest.members_for`, the cache of R(P, Q)) and the binding map fixed at finalize.
+required or WHERE an input lives: the population is the Program (its Calls, the instances.json.gz rows), the addresses are the required-value
+manifest's Value rule (`required_manifest.members_for`, the cache of R(P, Q)) and the binding map fixed at finalize (occurrence
+resolution: a Call's Value -> its occurrence key -> committed bytes).
 
     row.args = [[["n", j, lo, hi]], [["p", 1, lo, hi]]]
-        "n" j lo hi -> producer row j's OUTPUT element slice [lo, hi) -> its (op_path, member, request-local row) -> committed bytes
+        "n" j lo hi -> producer Call j's OUTPUT element slice [lo, hi) -> its occurrence key (op_path, member, request-local row) -> committed bytes
         "p" 1 lo hi -> a slice of the registered `weights` parameter (bound by reference: read from the model's parameters)
         "p" 0 k k+1 -> the declared prompt id k -> committed `input_token_ids` row k of the request's arrival step
-        a TokenSelect producer -> committed `sampled_token_ids` of THAT row's step (the previous step's designated output)
+        a TokenSelect producer -> committed `sampled_token_ids` of THAT Call's step (the previous step's designated output)
 
 Strata (recorded): (spec incl. shape, request, phase in {prefill, first-decode, mid, last}; `last` = the last EXECUTED step, F-r17b-39) x `per_stratum`, seeded -- distinct
-numerical mechanisms x requests x lifetime boundaries.  Not-evaluable rows are counted by reason (never silently skipped); see NOT_YET.
-Attention_v2/v3 rows ARE evaluated (R17-11): the query at position T-1 over the T committed K/V members the Program names by ref -- the
+numerical mechanisms x requests x lifetime boundaries.  Not-evaluable Calls are counted by reason (never silently skipped); see NOT_YET.
+Attention_v2/v3 Calls ARE evaluated (R17-11): the query at position T-1 over the T committed K/V Values the Program names by ref -- the
 resolver reads every producer at its own step, so the request's history is committed words, never a cache.
 
-Ordered boundary linkage (exhaustive, NOT sampled): every request's committed `input_token_ids` at its arrival step == the DECLARED
+Ordered boundary linkage (the `linkage` check; exhaustive, NOT sampled): every request's committed `input_token_ids` at its arrival step == the DECLARED
 prompt (workload manifest), and at every later step == that request's committed `sampled_token_ids` of the previous step.  This is
-the prescribed-input / designated-output linkage of §4 and replaces the Match-oracle attribution gate at B>=2 (F-cb-23).
+the prescribed-input / designated-output linkage of §4 and replaces the Match-oracle occurrence-resolution gate at B>=2 (F-cb-23).
 
-PROTOCOL SUMMARY (Commit stage: C2 of record = sampled exact VU replay + exhaustive ordered boundary linkage)
-  Purpose: from the COMMITTED bytes alone (binding map + committed reader), re-evaluate a stratified sample of Program rows with the
+PROTOCOL SUMMARY (Commit stage: local replay (`C2`) of record = sampled exact VU replay + exhaustive boundary linkage (`linkage`))
+  Purpose: from the COMMITTED bytes alone (binding map + committed reader), re-evaluate a stratified sample of Calls with the
     registry's own relations and require bit equality; link every request's committed input ids to its declared prompt and to its
     own previous-step sampled ids over the executed prefix.  Needs no Match record.
   Inputs: the request Programs' instances docs (ProgramIndex), the binding map, `committed(step, op_path, member, rank)`, the weights
-    reader, arrivals, the manifest (Q(P) of record), `executed_prefix` facts per request, the seed (+ an optional verifier challenge).
+    reader, arrivals, the required-value manifest (Q(P) of record), `executed_prefix` facts per request, the seed (+ an optional verifier challenge).
   Outputs: the replay record {result True|False|None, grade, sample{seed, seed_source, challenge}, strata, population{query_total,
     not_executed_by_rule, ...}, uncovered_by_name, query_checks, catch_probability}; the linkage record {result, why, pairs, linked, unlinked}.
   Invariants: result True only if EVERY sampled VU replays bit-exactly AND every non-empty stratum was evaluated (None = partial,
-    never PASS); the seed is never prover-choosable in advance (run root after commitment, or sha256(challenge|root)[:8]); rows at
+    never PASS); the seed is never prover-choosable in advance (run root after commitment, or sha256(challenge|root)[:8]); Calls at
     request-relative steps >= n_exec leave the pool into a NAMED class before any draw; a request linked over fewer steps than its
     cap must end on a declared EOS id at steps[-1 - lag] (undeclared EOS / unattested lag = unlinked by name); weights_check.equal
     False fails the replay by name.

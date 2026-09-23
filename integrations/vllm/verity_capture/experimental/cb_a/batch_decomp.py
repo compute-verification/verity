@@ -1,43 +1,44 @@
 """Batch decomposition (M-BATCH-DECOMP, R13 X-09): Match at B>1 by projecting the batched eager fold onto its requests.
 
-Under batch invariance a batched instance (one GEMM with M = Σ tokens of the co-scheduled requests, one fused norm over
-the step's rows, ...) is the row-wise union of the per-request instances the padded per-request Programs describe. The
-fold already emits ONE instance per row (`fold.py`, "Per-row emission"), so the batched execution IS a sequence of
-per-row instances; what Match lacked was the attribution of each instance to its request and a per-request comparison.
+Under batch invariance a batched kernel launch (one GEMM with M = Σ tokens of the co-scheduled requests, one fused norm over
+the step's token rows, ...) is the token-row-wise union of the per-request Calls the padded per-request Programs describe. The
+fold already emits ONE Call per token row (`fold.py`, "Per-row emission"), so the batched execution IS a sequence of
+per-token-row Calls; what Match lacked was the occurrence resolution of each Call to its request and a per-request comparison.
 
-Attribution (the fold's own naming rule, `fold._name` / `patterns.attribution_for`): an instance with `rows == num_tokens`
-of its engine step is token row `row` -> `StepStart.rows[row] = (request, position)`; with `rows == len(logits_rows)` it is
-logits row `row` -> `StepStart.logits_rows[row]`. When both counts coincide (a pure decode step) the two attributions must
-name the same request, else the instance is AMBIGUOUS. Any other row count is UNATTRIBUTABLE. Both refuse (fail-closed):
-no instance is dropped, guessed or shared.
+Occurrence resolution (glossary; the code still says 'attribution': the fold's own naming rule, `fold._name` /
+`patterns.attribution_for`): a Call with `rows == num_tokens` of its engine step is token row `row` -> `StepStart.rows[row] =
+(request, position)`; with `rows == len(logits_rows)` it is logits row `row` -> `StepStart.logits_rows[row]`. When both counts
+coincide (a pure decode step) the two resolutions must
+name the same request, else the Call is AMBIGUOUS. Any other row count is UNATTRIBUTABLE. Both refuse (fail-closed):
+no Call is dropped, guessed or shared.
 
-Projection: request r's instances in fold order, segmented at r's own `TokenSelect` instances into r's steps (prefill,
+Projection: request r's Calls in fold order, segmented at r's own `TokenSelect` Calls into r's steps (prefill,
 then one per decode). Operand sources are canonicalised exactly as `compare.Prog.canon` does, relative to the projection:
 `(TOK, lo, hi)` for r's OWN prompt parameter, `(W, field, lo, hi)` for weights, `(N, step_r, index_r, lo, hi)` for a node
-produced by one of r's instances. A read of ANOTHER request's prompt parameter or of a node attributed to another request
-is a cross-request dependency (`XREQ`): it is counted, reported with examples, and fails the row — row independence is
+produced by one of r's Calls. A read of ANOTHER request's prompt parameter or of a node resolved to another request
+is a cross-request dependency (`XREQ`): it is counted, reported with examples, and fails the sweep row — token-row independence is
 exactly what BI guarantees, so such a read is either a non-row-separable op (must be listed explicitly) or a defect.
 
 Comparison: each projection against the derived request-wrapper Program for the request's OWN shape `(LP_r, T_r)` —
 `LP_r` = its prompt length (RunHeader), `T_r` = its TokenSelect count − 1 (decode steps actually served) — with
 `compare.compare_steps` (spec sequence per step, 1:1 wiring, canonical sha256). One derivation per distinct `(LP, T)`,
-reusable across requests and rows. The verdict is PASS iff every request is canonical-equal AND every instance is
-attributed AND no XREQ AND every needed derivation is present. Missing derivations are listed (`missing_derived`) and
+reusable across requests and rows. The verdict is PASS iff every request is canonical-equal AND every Call is
+resolved AND no XREQ AND every needed derivation is present. Missing derivations are listed (`missing_derived`) and
 exit 4 so the driver (`row_pod.sh`) can derive them and rerun; refusal/mismatch exits 3.
 
     python -m verity_capture.experimental.cb_a.batch_decomp --oracle <match dir: program.json + instances.jsonl + capture/log.jsonl.gz>
         --derived <dir with descriptor.json.gz + derive-report.json + artifact.json> [--derived <dir> ...] --out decomp.json
 
-PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched fold -- X-09)
-  Purpose: attribute every instance of the batched eager fold to the request that produced it, project each request's instances into
+PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched fold -- X-09; occurrence resolution at B>1)
+  Purpose: resolve every Call of the batched eager fold to the request that produced it, project each request's Calls into
     its own steps, and compare that projection canonically against the Build's request-wrapper Program of the request's OWN shape.
   Inputs: --oracle <match dir> (program.json + instances.jsonl = the fold; capture/log.jsonl.gz = RunHeader / StepStart rows);
     --derived <build_request*> dirs (descriptor.json.gz, derive-report.json, artifact.json), one per distinct (LP, T).
   Outputs: --out match_decomp.json {verdict PASS|FAIL|MISSING_DERIVED, requests[{canonical_equal, LP, T, steps, totals}],
     attribution{unattributed}, xreq_total, missing_derived, within_step_criterion, reasons}.  Exit 0 PASS, 4 missing derived
     shapes (row_pod derives them and reruns once), 3 refusal / mismatch.
-  Invariants: no instance is dropped, guessed or shared -- an AMBIGUOUS or UNATTRIBUTABLE row count refuses; a read of another
-    request's prompt or node is XREQ and fails the row; a request is compared at (LP_r, T_r) = (its prompt length, its served decode
+  Invariants: no Call is dropped, guessed or shared -- an AMBIGUOUS or UNATTRIBUTABLE token-row count refuses; a read of another
+    request's prompt or node is XREQ and fails the sweep row; a request is compared at (LP_r, T_r) = (its prompt length, its served decode
     steps), never at the row envelope; the operand counts are the positional comparison, the verdict follows --within-step (dag of
     record; sequence recorded beside it).  Inside GM-01 (MATCH_PIPELINE=shared) the same decompose() writes this document via --decomp-out.
   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".

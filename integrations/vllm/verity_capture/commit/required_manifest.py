@@ -1,24 +1,27 @@
-"""R14 lane manifest (MAN-01): the EXPECTED required-value population, derived from the Program and the fixed canonical VU query --
+"""R14 lane manifest (MAN-01): the REQUIRED-VALUE MANIFEST -- the expected required-value population, derived from the Program and the
+fixed canonical VU query --
 never from the collector's attempted acquisitions and never from the first observed step (reviewer R-14: a producer that never ran
-contributed zero to both "expected" and "committed"; F-rev-01: dropping output member `/1` and binding `/0` twice keeps counts + classes).
+contributed zero to both "expected" and "committed"; F-rev-01: dropping output Value `/1` and binding `/0` twice keeps counts + classes).
 
-One row per required logical identity, in the key agreed with lane bind (`out/gen/r14/TABLE-RULES.md`):
+One identity row per required Value (glossary: required values = boundary values ∪ prescribed inputs ∪ protocol-required values),
+in the key agreed with lane bind (`out/gen/r14/TABLE-RULES.md`):
 
     (program_digest, request_id, step, invocation, op_path, output_member, element_range, rank)
 
 `op_path` is the producing module's path in the implementation's vocabulary (`model.layers.3.self_attn.qkv_proj`; the collector's
 `named_modules()` names), hidden families use the tap's path (`fa2.m1/L3`, `fa3.m1/L3`), the sampler `runner.sampler`.  `output_member`
 is `k` for tuple slot k, `out` for a single tensor, `in` for the acquired embedding ids, `sampled_token_ids`, or the hidden stream's
-geometry name (`g<HB>x<M>x<NB>[x<BN>x<D>]`).  `element_range` is `[lo, hi)` in row-major elements of that member -- compact: one row
-covers a whole member (rows x width), never a gate.  Every row carries a `family` label so "omit a whole producer family" and "omit one
-request / step / rank" are coverage failures by construction (the checker walks the manifest).
+geometry name (`g<HB>x<M>x<NB>[x<BN>x<D>]`).  `element_range` is `[lo, hi)` in row-major elements of that Value -- compact: one identity row
+covers a whole Value (rows x width), never a gate.  Every identity row carries a `family` label so "omit a whole producer family" and "omit one
+request / step / rank" are coverage failures by construction (the required-value coverage check walks the manifest).
 
-Derivation (single-request Program, `derive_step --wrapper request`): the flat instance sequence (`instances.json.gz`, the comparator's
-unit) is segmented into engine steps at `TokenSelect` boundaries (exactly as `cb_a.compare`), every instance name carries the module path
-(`nn_module_stack`) + fx node + row index, and the registry spec statics give the member widths (Gemm N, RMSNorm N, RoPE NHEADS*D,
-SiluMul I, Attention NH*D, Embedding H, TokenSelect V).  The attention hidden family's geometry per (layer, step) is the FA2/FA3 launch the
+Derivation (single-request Program, `derive_step --wrapper request`): the flat Call sequence (`instances.json.gz`, the comparator's
+unit) is segmented into engine steps at `TokenSelect` boundaries (exactly as `cb_a.compare`), every Call name carries the module path
+(`nn_module_stack`) + fx node + row index (the runtime correspondence, recorded by hand here), and the registry spec statics give the
+Value widths (Gemm N, RMSNorm N, RoPE NHEADS*D, SiluMul I, Attention NH*D, Embedding H, TokenSelect V).  The attention hidden
+family's geometry per (layer, step) is the FA2/FA3 launch the
 Program's `Attention_v3{T,NH,KVH,D,BN}` rows imply (`hidden_source.fa2_kblock_n` / `fa3_tile`, `mat_total_words`), so a tap that never
-fires is a MISSING identity, not a zero.  The canonical VU query (`verity_capture.vu_canonical`) decides which families are required:
+fires is a MISSING identity, not a zero.  The canonical VU query (`verity_capture.vu_canonical`; the verification query) decides which families are required:
 every family it names or defaults is required in full; the attention override (`AttnBlock` interiors: s[c] dots, PV chains, max chain)
 is what requires the hidden stream.
 
@@ -27,17 +30,30 @@ is what requires the hidden stream.
 
 Dependency-free (json/gzip/hashlib) so bind's checker, the finalizer and tests can import it without torch.
 
-PROTOCOL SUMMARY (Commit stage: the manifest of record = the cached RequiredValues(P, Q) population)
-  Purpose: name, BEFORE the Commit runs, every logical value the collector must bind -- derived from the Build's Program
-    (instances.json.gz) under the canonical VU query (Q_module_v1), never from what the collector happened to acquire.
+Vocabulary (Draft 3 §12, frozen): `Q_module_v1` is called **Q_module_body_v1** in prose -- the verification query whose units are
+the module BODIES of the served model (one verification unit per module call; the submodule calls inside a body are excluded and
+are units of their own), so the boundary values are the union of every module body's inputs and outputs and the required values
+are those plus the prescribed inputs (weights, prompt ids) and the protocol-required values (sampled ids).  The serialized id in
+the manifest header (`query`) and in every manifest_digest stays `Q_module_v1` until a labelled decision renames it -- changing
+the string changes the digest of every manifest of record.  The query IMPLEMENTATION (the generic query interface over a Program:
+units, in(V) / out(V), the boundary set) lands in `verity_vllm` in Phase 2 (Draft 3.1 §12.1 / §12.3); `members_for` and the
+by-name tables below are its hand-maintained predecessor and are pinned by `tests/test_no_by_name_rules.py` until then.
+The words in this module: an 'identity row' is one required Value's manifest entry; `op_path` + `output_member` + `invocation`
+are the occurrence key (the serialization of a runtime occurrence); 'the manifest' always means the required-value manifest.
+
+PROTOCOL SUMMARY (Commit stage: the required-value manifest of record = the cached RequiredValues(P, Q) population)
+  Purpose: name, BEFORE the Commit runs, every required Value the collector must bind -- derived from the Build's Program
+    (instances.json.gz Calls) under the verification query Q_module_body_v1 (serialized `Q_module_v1`), never from what value
+    acquisition happened to observe.
   Inputs: `build --program <derive dir> --workload wl.json` (B=1) | `build-global --fixture wl.json --programs-root <row dir>
     [--workload-digest]` (B>=2: one component Program per declared (LP, T)); `verify --manifest` rebuilds and compares after the Commit.
   Outputs: manifest.json (SCHEMA: header program_digest / manifest_digest / query / complete / unmodelled / cross_check / guard,
-    populations{identities, by_family}, one `identities` row per required identity), manifest_verify.json; `coverage_check` for the checker.
+    populations{identities, by_family}, one `identities` row per required identity), manifest_verify.json;
+    `coverage_check` = the required-value coverage check (`coverage`).
   Invariants: identity key = IDENTITY_KEY (program_digest, request_id, step, invocation, op_path, output_member, element_range, rank);
     DEFAULT_ENGINE traversal, the inventory engine kept as the one-release cross-check (both are built and must agree row for row,
     else the build fails by name); a family with no naming rule -> UnmodelledFamily -> `complete: False` -> coverage refused
-    (never a narrowed PASS); a zero-width member is never a row (MAN-02); the manifest's program_digest must equal the Build's
+    (never a narrowed PASS); a zero-width Value is never an identity row (MAN-02); the manifest's program_digest must equal the Build's
     (binding.require_build_program_digest, before any engine).
   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """

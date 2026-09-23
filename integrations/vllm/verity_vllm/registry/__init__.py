@@ -13,6 +13,9 @@
 `conformance` — the separate conformance record: which production kernels implement which registered
            definitions, and each definition's conformance status.
 
+Glossary (Draft 3 §12): a registered definition is a Definition; a Program is a sequence of Calls of Definitions; the Value<w>
+above is the encoding-level value type, and a Call's inputs/outputs are its Values.
+
 PROTOCOL SUMMARY (Build stage: the registry = the closed vocabulary every Program is written in)
   Purpose: the registered function library the frontend binds vLLM's traced ATen ops to (Build), the fold names captured kernels with
     (Match) and the replay evaluates bit-exactly with (Commit): primitives with total evaluators on encodings (`prims`), the B1 eager

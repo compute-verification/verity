@@ -1,11 +1,12 @@
-"""[R17-1 / F-moe-r17-03 (moe M-0283)] the EXECUTED PREFIX OF RECORD of every request -- the one fact the Commit's consumers count on.
+"""[R17-1 / F-moe-r17-03 (moe M-0283)] the EXECUTED PREFIX OF RECORD of every request -- the execution extent check (`executed_prefix`),
+the one fact the Commit's consumers count on.
 
 BRIEF s4 / COORD R17-1: a request has TWO lengths.  `served_output_len` a_r = the tokens the driver served (its EOS included);
 `executed_prefix_len` = the engine rows that ran for it = the cap when the request generated its cap (length stop), a_r + LAG when it
 stopped by EOS before the cap -- the LAG row(s) after the EOS are active internal computation (their VUs are required) whose sampled token
 is not served.  LAG is the workload Program's DECLARED specialization parameter (Workload_v1{..., lag}); the served tokens are the driver's;
 NOTHING is read from the trace.  Positions >= executed_prefix_len are programmed-but-unexecuted: not required of the record, and a committed
-row there is 'execution past the stop' (the caller checks the binding map against `request_steps`).
+Call there is 'execution past the stop' (the caller checks the binding map against `request_steps`).
 
 Fail closed, by name: an early stop (a_r < cap) with no declared stop rule, no declared LAG, or a last served token that is not a declared
 EOS id (F-pm-24) is a problem -- the population then stays the cap's (nothing is accepted) and `ok` is False.  Never default LAG 0 or 1.
@@ -22,7 +23,7 @@ the record's tokens.json; (c) any actual execution past the boundary FAILS (`row
 active-reference implementation classification only.  In the lifted fixed Program the corresponding positions are REQUIRED logical values
 assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category.
 
-PROTOCOL SUMMARY (Commit stage: the executed prefix of record -- how far each request actually ran)
+PROTOCOL SUMMARY (Commit stage: the execution extent check (`executed_prefix`) -- how far each request actually ran)
   Purpose: per request, derive the two lengths every Commit consumer counts on -- served_output_len (tokens served, EOS included) and
     executed_prefix_len (cap on a length stop; served + LAG on an EOS stop) -- from the served tokens + the Program's DECLARED stop
     rule (eos ids, lag), never from the trace; then accept it only when LINKED to the Match account of the same attempt.
@@ -33,7 +34,7 @@ PROTOCOL SUMMARY (Commit stage: the executed prefix of record -- how far each re
     `link_to_match_account` {ok, required, problems, tokens_equal, g6}, `executed_prefix_facts` (the named facts sampled_replay takes).
   Invariants: LAG is never defaulted to 0 or 1 -- an early stop with no declared EOS set / LAG, a non-EOS last token, or served > cap
     is a problem and the population stays the cap's; a prefix reduced from its cap on the committer's own count alone is never
-    accepted (R17-27 (a)); the lag must agree on every leg (declared == tokens.json == G6); a committed row past the prefix fails by name.
+    accepted (R17-27 (a)); the lag must agree on every leg (declared == tokens.json == G6); a committed Call past the prefix fails by name.
   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations

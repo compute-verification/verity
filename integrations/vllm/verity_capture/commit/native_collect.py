@@ -1,4 +1,7 @@
 """Candidate arm 3 (R10 acq-native): native collection at the existing hook boundaries — same committed values, same layout as CMT-3.
+Glossary (Draft 3 §12): this module is VALUE ACQUISITION (taking each required Value's bytes at its runtime occurrence, the module
+hook) feeding the commitment; the `_flush_*` / `*_LEAVES` tables below are the hand-written runtime correspondence (which module
+leaf produces which Value, and when its bytes are stable) that Phase 3/4 replace with recorded correspondence + an acquisition plan.
 
 What changes vs the frozen R9 complete path (`native_host_fast+hidden_m1_gputree`, arm 2) -- ONLY the serving-thread acquisition:
 
@@ -34,8 +37,8 @@ Stress / negative-test knobs (never in headline runs; recorded when used):
                                   retained copy and takes the copy only after the ring refilled the slot (native wait_slot_reused):
                                   tree correct, retained bytes wrong -> openings (after release) FAIL named; until R15 the flag was a
                                   silent no-op there (the windowed branch returned before the fault check).
-  VERITY_FAULT=drop1_dup0         DELIBERATE identity bug (R14 BIND-01 negative, F-rev-01): every layer>0 input_layernorm binds member /0 twice and drops /1
-                                  -> counts and classes unchanged; the identity-coverage check MUST fail (Python wrappers are used for every module)
+  VERITY_FAULT=drop1_dup0         DELIBERATE identity bug (R14 BIND-01 negative, F-rev-01): every layer>0 input_layernorm binds Value /0 twice and drops /1
+                                  -> counts and classes unchanged; the required-value coverage check MUST fail (Python wrappers are used for every module)
   VERITY_FAULT=skip_copy:<k>      DELIBERATE value bug: the k-th snapshot of every step is not issued (stale arena bytes) -> the root must differ
                                   from arm 2 (root-equality gate) while the tree stays self-consistent (openings alone cannot see it)
   VERITY_FAULT=hang_after_dead    [R16 sys, F-stoch-03] DELIBERATE hang: after the slot-wait timeout declared the collector dead, finalize

@@ -2,6 +2,8 @@
 # sweep/row_pod.sh — pod-side runner of ONE sweep row (SCHEMA §6): Build (Bet A step + request) -> Match (eager capture + fold ->
 # cb_a.compare, control tokens) -> Commit + overhead (commit_delta --pairs 3, native_collect_v2b, FA2 matReq tap, 64 openings).
 # Early stop at the first failing stage.  Evidence under /workspace/cp/sweep/<row-id>/; a one-line verdict per stage in stages.txt.
+# Glossary (Draft 3 §12): a sweep 'row' here is one workload of the qualification table (not a Program Call); timeline.jsonl is the
+# execution evidence; manifest.json is the required-value manifest; the checks' verdicts are in commit_summary.json.
 #
 #   bash verity_capture/sweep/row_pod.sh <row-id> <ROLE> <hf-repo> <revision> [stages=build,match,commit]
 #
@@ -27,7 +29,7 @@
 #     build_step/ build_request*/ build_workload/ build_summary.json; match/ match_decomp.json|match_compare.json global_match.json
 #     match_summary.json; manifest.json commit/ commit_summary.json weights_of_record.log; $RESEARCH_RUN_DIR/result.json on EXIT.
 #   Invariants: the source-identity and target-family prechecks run before any engine and fail by name PRECHECK_FAIL_* (exit 3);
-#     the Program digest handed to the Commit is read from build_summary.json, never from the manifest; a Match verdict over a record
+#     the Program digest handed to the Commit is read from build_summary.json, never from the required-value manifest; a Match verdict over a record
 #     this attempt did not produce is FAIL (freshness rule) unless MATCH_PHASE=cpu resumes it by name; a Commit never starts over a
 #     Match record missing its account files (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE, exit 14); `required_manifest verify` FAIL = Commit FAIL.
 #   Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 B>=2 global manifest not built; 3 precheck FAIL;
