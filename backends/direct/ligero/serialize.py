@@ -11,6 +11,9 @@ verifier does).  Layout (every array is written without a length prefix when the
 ligero-system/v1     magic "LIGSYS01" | u32 m | u32 n_pins | n_pins x (str name, u32 row) | u32 L | L x linear
                      | u32 Q | Q x (expr a, expr b, expr c) | u8 has_chain | [3 x u32 c rows | 3 x expr y | expr y16]
                      | 32 B sys_id (protocol.system_id, the Python digest)
+ligero-system/v2     magic "LIGSYS02" | as v1, but the chain's trailing ``expr y16`` is replaced by
+                     u32 n_end | n_end x (expr Y, u32 lo, u32 bits): the chain end in components (chain.py; the FP4
+                     relation's full FP32 word as sign / exponent / fraction bit fields, each < p)
     linear           u32 nnz | nnz x (u32 row, u32 coef) | u32 const | u32 pub_pin (0xFFFFFFFF = 0)
     expr             u32 nnz | nnz x (u32 row, u32 coef) | u32 const
     str              u32 len | utf-8 bytes
@@ -59,6 +62,7 @@ from . import auth as auth_mod
 from .compile import P, System
 
 SYS_MAGIC, STMT_MAGIC, PROOF_MAGIC = b"LIGSYS01", b"LIGSTM02", b"LIGPRF01"
+SYS_MAGIC_V2 = b"LIGSYS02"     # a chain system whose end is in components (chain.py): v1 with the y16 expr replaced
 STMT_MAGIC_V3, PROOF_MAGIC_V2 = b"LIGSTM03", b"LIGPRF02"
 STMT_MAGIC_V4 = b"LIGSTM04"
 _DTYPES = {1: "<u1", 2: "<u2", 4: "<u4"}
@@ -169,15 +173,28 @@ def system_bytes(sys: System) -> bytes:
             w.u32(idx)
         for e in sys.chain["y"]:
             _expr_w(w, e.lin, e.c)
-        _expr_w(w, sys.chain["y16"].lin, sys.chain["y16"].c)
+        if sys.chain.get("y16") is not None:
+            _expr_w(w, sys.chain["y16"].lin, sys.chain["y16"].c)
+        else:
+            # component ends (chain.py; only ``ligero-system/v2`` files carry them): u32 n_end | n_end x (expr, u32 lo, u32 bits)
+            w.u32(len(sys.chain["y_end"]))
+            for Y, lo, bits in sys.chain["y_end"]:
+                _expr_w(w, Y.lin, Y.c)
+                w.u32(int(lo))
+                w.u32(int(bits))
     w.raw(system_id(sys))
-    return w.bytes()
+    out = w.bytes()
+    if sys.chain is not None and sys.chain.get("y16") is None:
+        out = SYS_MAGIC_V2 + out[len(SYS_MAGIC):]
+    return out
 
 
 def read_system(data: bytes) -> dict:
     r = _R(data)
-    if r.take(8) != SYS_MAGIC:
-        raise ValueError("not a ligero-system/v1 file")
+    magic = r.take(8)
+    if magic not in (SYS_MAGIC, SYS_MAGIC_V2):
+        raise ValueError("not a ligero-system/v1 or /v2 file")
+    v2 = magic == SYS_MAGIC_V2
     m = r.u32()
     pins = [(r.s(), r.u32()) for _ in range(r.u32())]
     linear = []
@@ -190,8 +207,12 @@ def read_system(data: bytes) -> dict:
     if r.u8():
         c_rows = [r.u32() for _ in range(3)]
         ys = [_expr_r(r) for _ in range(3)]
-        y16 = _expr_r(r)
-        chain = {"c": c_rows, "y": ys, "y16": y16}
+        if v2:
+            y_end = [(_expr_r(r), r.u32(), r.u32()) for _ in range(r.u32())]
+            chain = {"c": c_rows, "y": ys, "y16": None, "y_end": y_end}
+        else:
+            y16 = _expr_r(r)
+            chain = {"c": c_rows, "y": ys, "y16": y16}
     sys_id = r.take(32)
     r.done()
     return {"m": m, "pins": pins, "linear": linear, "quadratic": quadratic, "chain": chain, "sys_id": sys_id}
@@ -520,12 +541,15 @@ def _runner(device: str, st: Statement | None = None):
     target = st.target_log2 if st is not None else -128.0
     mode = st.mode if st is not None else "interactive"
     name = st.relation if st is not None else BF16_RELATION
+    if name == "fp4-nvf4":
+        from .fp4.chain import FP4ChainRunner
+        return FP4ChainRunner(device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
     if name != BF16_RELATION:
         # any registered relation (relations.py: bf16-hopper, fp8-hopper, fp8-ada) runs on the generic chain runner
         from .relations import RELATIONS
         from .relchain import RelationChainRunner
         if name not in RELATIONS:
-            raise ValueError(f"no runner for relation {name!r} (known: {BF16_RELATION!r}, {sorted(RELATIONS)})")
+            raise ValueError(f"no runner for relation {name!r} (known: {BF16_RELATION!r}, 'fp4-nvf4', {sorted(RELATIONS)})")
         return RelationChainRunner(RELATIONS[name], device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
     from .vu import ChainRunner
     return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk, mode=mode)
@@ -579,7 +603,8 @@ def _manifest(out: Path, args, R, auth: bool = False) -> dict:
     from .run import _git_commit
     hooks = _hooks_of(R)
     v4 = _relation_of(R) != BF16_RELATION or np.dtype(hooks.word_dtype).itemsize != 2 or np.dtype(hooks.y16_dtype).itemsize != 2
-    fmt = {"system": "ligero-system/v1",
+    sys_v2 = R.sys.chain is not None and R.sys.chain.get("y16") is None      # component chain ends (the FP4 relation)
+    fmt = {"system": "ligero-system/v2" if sys_v2 else "ligero-system/v1",
            "statement": "ligero-statement/v4" if v4 else "ligero-statement/v3" if auth else "ligero-statement/v2",
            "proof": "ligero-proof/v2" if auth else "ligero-proof/v1"}
     return {"format": fmt, "relation": _relation_of(R), "commit": _git_commit(), "device": args.device, "system": R.sys.summary(),

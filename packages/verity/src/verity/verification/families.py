@@ -65,19 +65,23 @@ def tensor_core_gates(pipeline: Pipeline) -> tuple[Gate, Gate]:
     """``tc_dot{k}`` and ``tc_dot{k}_0``: one ``mma`` step with, and without, an incoming accumulator."""
 
     k = pipeline.k
-    ob = pipeline.operand_bits
+    # One operand of a step is ``words_per_step`` words: the ``k`` element codes and, for a block-scaled pipeline
+    # (``BlockScaledAlignAdd``: ``scale`` set), its ``k / block`` 8-bit scale bytes after them.  A grouped-sum pipeline
+    # has ``words_per_step == k`` and no scales, so its gates (and the family digests) are unchanged.
+    n = pipeline.words_per_step
+    widths = (pipeline.operand_bits,) * k + (8,) * (n - k)
 
     def evaluate(args: tuple[int, ...]) -> int:
-        return tc_dot(pipeline, args[0], args[1 : 1 + k], args[1 + k :])
+        return tc_dot(pipeline, args[0], args[1 : 1 + n], args[1 + n :])
 
     def evaluate_zero(args: tuple[int, ...]) -> int:
-        return tc_dot(pipeline, 0, args[:k], args[k:])
+        return tc_dot(pipeline, 0, args[:n], args[n:])
 
     return (
-        Gate(f"tc_dot{k}", 1 + 2 * k, 32, replay_cost=k, proof_cost=k, evaluate=evaluate,
-             arg_widths=(32, *([ob] * (2 * k)))),
-        Gate(f"tc_dot{k}_0", 2 * k, 32, replay_cost=k, proof_cost=k, evaluate=evaluate_zero,
-             arg_widths=(ob,) * (2 * k)),
+        Gate(f"tc_dot{k}", 1 + 2 * n, 32, replay_cost=k, proof_cost=k, evaluate=evaluate,
+             arg_widths=(32, *(widths * 2))),
+        Gate(f"tc_dot{k}_0", 2 * n, 32, replay_cost=k, proof_cost=k, evaluate=evaluate_zero,
+             arg_widths=widths * 2),
     )
 
 

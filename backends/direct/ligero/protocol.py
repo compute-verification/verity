@@ -315,7 +315,11 @@ def system_id(sys: System) -> bytes:
     h.update(repr(sys.hints).encode())
     if sys.chain is not None:
         h.update(repr(sys.chain["c"]).encode())
-        h.update(repr([e.key() for e in sys.chain["y"]] + [sys.chain["y16"].key()]).encode())
+        if sys.chain.get("y16") is not None:
+            h.update(repr([e.key() for e in sys.chain["y"]] + [sys.chain["y16"].key()]).encode())
+        else:   # component ends (chain.py): the expression AND the bit field it is compared against
+            h.update(repr([e.key() for e in sys.chain["y"]]).encode())
+            h.update(repr([("end", Y.key(), int(lo), int(bits)) for Y, lo, bits in sys.chain["y_end"]]).encode())
     d = h.digest()
     _SYS_ID[key] = (sys, d)
     return d
@@ -1000,7 +1004,7 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
         pub = rel.public_vectors(p, c, a, b, y, device=device)
     except ValueError as e:
         return False, f"public inputs: {e}"
-    if len(pub["a[0].s"]) != l:
+    if sys.pins and len(pub[sys.pins[0][1]]) != l:          # the first pinned vector (a[0].s for BF16/FP8, a[0].n for FP4)
         return False, "wrong number of units"
     # shapes and ranges of the transcript
     w_shape = (D, k) if cfg.zk else (D, l)

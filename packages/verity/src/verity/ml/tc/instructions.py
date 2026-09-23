@@ -164,6 +164,14 @@ _B200_STAGE0 = (
     "cta_group::2 itself is not probed"
 )
 
+_PIN_FP4 = (
+    "lane fp4-proof (2026-09-22): fresh-seed tc_probe_fp4 sweeps on a second RTX 5090 die (GPU-1257f022-5d0f-1ea9-7922-bc7bc7959672, "
+    "driver 570.195.03, -arch=sm_120a; label device=), all 20 probe families plus fp4-re's D16/D17 tiles and specials: nvf4 "
+    "r20260922-234714-0fc0 10,657,792 elements, 0 mismatches for BlockScaledAlignAdd (autoproof-model5 misses 192,196), "
+    "mxf4 r20260922-235348-a405 9,658,368 elements, 0 mismatches; with fp4-re's runs the anchor totals 17.29M (nvf4) and 14.42M "
+    "(mxf4) zero-mismatch elements, so P2 (>= 1e7) holds and the trust assessment computed PINNED for both.  This is "
+    "mma.sync kind::mxf4nvf4 on a consumer die; B200 tcgen05.mma is a separate instruction (sm100.*, lane tcgen05)"
+)
 _PIN_BF16 = (
     "lane pin-bf16 (2026-09-22): full canonical family set -- randn/uniform/subnormal/cancellation/mixed/near-overflow/signed-zero, "
     "tiny_acc_zero_products, zero_acc_tiny_cancellation, zero_products_nonzero_acc, acc_only_lsb_walk, specials, adder_width_cancellation -- "
@@ -304,11 +312,14 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(16, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM120_NVF4,
-            # Model BlockScaledAlignAdd (lane fp4-re) reproduces every word of 8.34M sweeps; the computed level is HYPOTHESIS only
-            # because P2 (>= 1e7 zero-mismatch elements on the anchor) is 3.4M short -- lane fp4-proof's fresh-seed sweep closes it,
-            # then this becomes "pinned" (registry <= computed level, lane pin-bf16).
-            status="hypothesis",
-            evidence=(_RTX5090_FP4_RE, _AUTOPROOF, _AUTOPROOF_UNSCALED, _RTX5090_NVF4,
+            # Model BlockScaledAlignAdd (lane fp4-re) reproduces every word of 8.34M sweeps; lane fp4-proof's fresh-seed sweep
+            # (_PIN_FP4) supplied P2's missing 3.4M elements and verity.verification.trust computed PINNED (P1-P5) on 2026-09-23
+            # before this flip (registry <= computed level, lane pin-bf16).  Re-published once lane fp4-proof's B-Ligero
+            # relation supplied Tc (2,048 honest VUs / 3,131 negatives, art:098c184a...): still PINNED, Ta and Tc now PASS,
+            # Td (hardware-in-the-loop replay of the frozen instance set) open.  Previous: art:de42d6cad7c63a387d64535efc...
+            status="pinned",
+            dossier="art:3e02931df28cccd398de4219f9d977371a58cdc6e8addfb7ff0a6269e5481b0e",
+            evidence=(_RTX5090_FP4_RE, _AUTOPROOF, _AUTOPROOF_UNSCALED, _RTX5090_NVF4, _PIN_FP4,
                       "model agrees for arbitrary finite FP32 accumulators (D12's zero-init limitation lifted; D16 and D17 resolved by "
                       "lane fp4-re); NaN/inf accumulators and sums leaving binary32 are outside the model's domain (recorded)"),
         ),
@@ -321,9 +332,10 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(16, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue8m0",
             model=BLACKWELL_SM120_MXF4,
-            # As nvf4: 0 mismatches over 7.39M words (fp4-re), computed HYPOTHESIS until fp4-proof's sweep supplies P2's elements.
-            status="hypothesis",
-            evidence=(_RTX5090_FP4_RE,
+            # As nvf4: 0 mismatches over 7.39M words (fp4-re) + 9.66M (fp4-proof, _PIN_FP4); trust computed PINNED on 2026-09-23.
+            status="pinned",
+            dossier="art:d8d4d1b602c9fde61df218c315430535fe5181882ab6b26c2b95dd81dc1b5d92",
+            evidence=(_RTX5090_FP4_RE, _PIN_FP4,
                       "the same adder as nvf4 with the UE8M0 scale 2^(code-127) written as mantissa 8 at 2^(code-130) (D18); a "
                       "nonzero sum below the subnormal grid is +0 (D13: BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED refuted); the "
                       "accumulator window anchors on the exponent field and the grid never drops below 2^-174 (D19)"),

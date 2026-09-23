@@ -30,7 +30,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from verity.ml.tc.instructions import INSTRUCTIONS
-from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS, Target
+from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import contract
 
 try:  # the label keys are pinned with the store (`research.store.vocab`, tools/research); verity-numerical does not depend on that package
@@ -125,6 +125,8 @@ FROZEN_INSTANCES: dict[str, dict[str, Any]] = {
                                              dataset=contract.BF16_HOPPER_INSTANCES_DATASET),
     FP8_HOPPER_WGMMA.name: contract.instances_ref(contract.FP8_HOPPER_INSTANCES_TIER, 0, B, contract.FP8_HOPPER_INSTANCES_DIGEST,
                                                   dataset=contract.FP8_HOPPER_INSTANCES_DATASET),
+    NVFP4_SM120.name: contract.instances_ref(contract.NVFP4_INSTANCES_TIER, 0, B, contract.NVFP4_INSTANCES_DIGEST,
+                                             dataset=contract.NVFP4_INSTANCES_DATASET),
 }
 
 #: Label keys whose asserter is the *producer* of a result (the lane's own row labels, ``ledger_to_store``); a verification
@@ -301,10 +303,23 @@ def same_sku(a: Any, b: Any) -> bool:
 
 
 def dtype_of(target: Target) -> str | None:
-    """The target's operand dtype (``bf16``, ``e4m3``): the instruction registry's ``a_dtype``."""
+    """The target's operand dtype (``bf16``, ``e4m3``, ``e2m1``): the instruction registry's ``a_dtype``."""
 
     ins = INSTRUCTIONS.get(target.instruction) if target.instruction else None
     return ins.a_dtype if ins else None
+
+
+#: ``native-peak/v1`` measurement dtypes that name a block-scaled *format* over an operand dtype: ``tools/native_peak
+#: --dtype nvfp4`` times the sm_120 ``kind::mxf4nvf4`` instruction on E2M1 operands (UE4M3 block scales), so it is the
+#: measured peak of an ``e2m1`` target.
+NATIVE_DTYPE_ALIASES = {"nvfp4": "e2m1", "mxfp4": "e2m1"}
+
+
+def native_dtype(meta: dict[str, Any]) -> str | None:
+    """The operand dtype a ``native-peak/v1`` measurement is of (its ``dtype`` through ``NATIVE_DTYPE_ALIASES``)."""
+
+    d = meta.get("dtype")
+    return NATIVE_DTYPE_ALIASES.get(d, d)
 
 
 def frozen_instances(target: Target) -> dict[str, Any] | None:
@@ -564,7 +579,7 @@ def _native_measured(store: Any, target: Target) -> dict[str, Any] | None:
 
     best = None
     for art_id, meta in _artifacts(store, NATIVE_PEAK_KIND):
-        if not same_sku(meta.get("device"), target.native_peak.device) or meta.get("dtype") != dtype_of(target):
+        if not same_sku(meta.get("device"), target.native_peak.device) or native_dtype(meta) != dtype_of(target):
             continue
         acc = meta.get("accumulate")
         if acc is not None and acc != target.native_peak.accumulate:

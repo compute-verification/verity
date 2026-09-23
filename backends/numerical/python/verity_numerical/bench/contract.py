@@ -105,6 +105,11 @@ __all__ = [
     "INSTANCES_DATASET",
     "INSTANCES_FIELD",
     "INSTANCES_TIERS",
+    "NVFP4_INSTANCES_DATASET",
+    "NVFP4_INSTANCES_DIGEST",
+    "NVFP4_INSTANCES_FAMILIES",
+    "NVFP4_INSTANCES_SEED",
+    "NVFP4_INSTANCES_TIER",
     "MISSING",
     "OVERHEAD",
     "PROFILE",
@@ -199,6 +204,24 @@ FP8_HOPPER_INSTANCES_DATASET = "bench-instances-fp8-hopper/v1"
 FP8_HOPPER_INSTANCES_TIER = "vu-k1536-fp8-hopper"
 FP8_HOPPER_INSTANCES_SEED = 20260922
 FP8_HOPPER_INSTANCES_DIGEST = "0ff750026b8d8df0418d3ec360ed6ade683a33b8264d66973021cbfbff7945bc"
+#: The frozen NVFP4 sm_120 instance set (``nvfp4-sm120-mma-draft/2026-09-22``): the synthetic VUs
+#: ``backends/direct/ligero/fp4/chain.py`` draws (``instances_fp4``: VU ``i`` from edge family ``VU_FAMILIES[i % 14]`` --
+#: uniform / zero / subnormal / top / spanning scales, sparse / saturated codes, exact cancellation, per-step mixtures --
+#: from seed :data:`NVFP4_INSTANCES_SEED`, model-recorded accumulators).  :data:`NVFP4_INSTANCES_DIGEST` is
+#: ``chain.instances_digest(4096)`` = sha256 of ``"fp4-nvf4 synthetic|seed=20260922|n=4096|K=1536|families=<the 14>"``,
+#: pinned here (frozen 2026-09-22); a change to the recipe or the family list is a new tier.
+NVFP4_INSTANCES_DATASET = "bench-instances-nvfp4-sm120/v1"
+NVFP4_INSTANCES_TIER = "vu-k1536-nvfp4-sm120"
+NVFP4_INSTANCES_SEED = 20260922
+NVFP4_INSTANCES_DIGEST = "d2d65f6523b49e673847746d725fbce3282f2734b0b424637c01e88f188a240a"
+#: The recipe's family composition at the frozen tier size (4096 VUs; VU ``i`` is of family ``i % 14``): the corner families
+#: ``verity.verification.trust`` criterion Tc asks the honest set to include (a contract-pinned set has no fixture manifest to
+#: carry them).  Every family but ``random`` is an edge family of ``BlockScaledAlignAdd``.
+NVFP4_INSTANCES_FAMILIES = {
+    "random": 293, "zero-scales": 293, "subnormal-scales": 293, "top-scales": 293, "top-scales-zero-acc": 293, "span-scales": 293,
+    "sparse": 293, "sparse-subnormal-acc": 293, "all-zero-codes": 292, "half-codes": 292, "max-codes": 292, "cancel": 292,
+    "cancel-acc": 292, "mixed": 292,
+}
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 BUCKETS = ("witness", "encoding_commitment", "arithmetic", "lookup", "zk_additional", "serialization")

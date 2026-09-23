@@ -126,9 +126,19 @@ much hardware stands behind the model the target computes with.
   table is the same function as the Ampere row up to the step; the family is
   ``veritor.tc-bf16.hopper_bf16_m16n8k16@1`` (:func:`verity.verification.families.make_tc_bf16_gate_set`), FIRST's
   vocabulary with the steps on the Hopper pipeline.  Native peak: the H100 SXM5 dense BF16 rate (989.4 TFLOPS).
+* :data:`NVFP4_SM120` -- ``sm120.mma.m16n8k64.e2m1.nvf4`` (pinned: RTX 5090, lanes fp4-re / fp4-proof), model
+  :data:`verity.ml.tc.models.BLACKWELL_SM120_NVF4` (``BlockScaledAlignAdd``: exact E2M1 x E2M1 group dots over four
+  groups of 16, one UE4M3 scale byte per 16-element block on A and on B, the five-way align-add anchored on the leading
+  participating group's scale exponent (27 fraction bits), the accumulator's 36-bit window, truncation toward zero,
+  every zero result +0).  Program ``GemmAccumulator<K>`` (:func:`verity.verification.programs.gemm_accumulator_nvfp4`),
+  ``K`` a multiple of 64 (K = 1536 is 24 steps = 96 blocks): ``tc_dot64_0`` then chained ``tc_dot64`` in ascending
+  ``k``, the FP32 accumulator word public.  Domain: every E2M1 nibble, UE4M3 scale bytes with the padding bit clear
+  and not the NaN code ``0x7F``, finite FP32 accumulators at every step (D20: NaN / inf accumulators and sums leaving
+  binary32 are outside; an NVFP4 chain from ``c_0 = 0`` cannot leave binary32).  Consumer die: the evidence is
+  ``mma.sync kind::mxf4nvf4`` on the RTX 5090; B200 ``tcgen05.mma`` cannot be assumed.
 * Not covered by any draft: ``sm90.mma.m16n8k32.e4m3`` (the Hopper legacy path -- unprobed; whether it is Hopper's
-  one group of 32 or Ada's two of 16 is the probe lane's first question), E5M2 (hypotheses only), and the
-  Blackwell block-scaled FP4 path (a model exists, :class:`verity.ml.tc.models.BlockScaledAlignAdd`, no target).
+  one group of 32 or Ada's two of 16 is the probe lane's first question), E5M2 (hypotheses only), and the MXFP4
+  instruction ``sm120.mma.m16n8k64.e2m1.mxf4`` (pinned; the same adder with UE8M0 scales over blocks of 32, no target).
 
 Native peak: what a target's overhead is measured against
 =========================================================
@@ -151,7 +161,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from verity.ml.tc.models import ADA_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
+from verity.ml.tc.models import ADA_E4M3_M16N8K32, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, BlockScaledAlignAdd
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, Pipeline
 
 from .families import TC_AMPERE_BF16_NAME, TC_AMPERE_BF16_VERSION, TC_BF16_NAME_PREFIX, TC_BF16_VERSION
@@ -167,6 +177,7 @@ __all__ = [
     "HAWKEYE_PIN",
     "K16_VECTOR",
     "K1536_VECTOR",
+    "NVFP4_SM120",
     "NativePeak",
     "TARGETS",
     "TC_VECTORS",
@@ -196,6 +207,9 @@ FP8_ADA_FAMILY_DIGEST = "2bcdad67108dd15195372308784247d6792a3335f1dc19345d91d8a
 #: with the steps on the Hopper BF16 pipeline; the family of the Hopper BF16 draft target.
 BF16_HOPPER_FAMILY = f"{TC_BF16_NAME_PREFIX}{HOPPER_BF16_M16N8K16.name}@{TC_BF16_VERSION}"
 BF16_HOPPER_FAMILY_DIGEST = "1dba640b0e83ba6dc0d8f692ac0089032cc98bfd39b1a210dbaf14b76a4d5a46"
+#: The NVFP4 draft family: ``tc_dot64`` / ``tc_dot64_0`` over one operand = 64 E2M1 codes + 4 UE4M3 scale bytes.
+NVFP4_FAMILY = "veritor.tensor-core.blackwell_sm120_nvf4_m16n8k64@2"
+NVFP4_FAMILY_DIGEST = "3a928dc85d5c6515b49cf53472844e34412708ebc9404efe086de253e7cbc271"
 
 Status = Literal["frozen", "draft"]
 
@@ -234,7 +248,7 @@ class Target:
     name: str
     family: str
     family_digest: str
-    pipeline: Pipeline
+    pipeline: Pipeline | BlockScaledAlignAdd
     program: str
     transition_unit: str
     statement_format: int
@@ -379,5 +393,50 @@ FP8_ADA_MMA = Target(
     dossier="art:2acd0d37dc729e36570bffdee35e6445d4e095d9be9f39bcd11222c439e8197c",
 )
 
+RTX5090_FP4_PEAK = NativePeak(
+    device="NVIDIA GeForce RTX 5090",
+    rate="fp4 (e2m1, block-scaled) dense tensor-core peak, fp32 accumulate",
+    flop_per_second=1676e12,
+    accumulate="fp32",
+    source=(
+        "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, table 'GeForce RTX 5090 vs RTX 4090 vs RTX 3090', "
+        "row 'Peak FP4 Tensor TFLOPS with FP32 Accumulate (FP4 AI TOPS)': 1676 dense / 3352 with the 2:4 sparsity "
+        "feature (footnote 2); footnote 1: peak rates at the GPU boost clock (2407 MHz).  The card's headline "
+        "'3352 AI TOPS' is the sparse figure; dense is used here.  4x the FP8-with-FP32-accumulate rate (419 dense)"
+    ),
+)
+
+_NVFP4_DOMAIN = (
+    "every E2M1 nibble (all 16 codes are finite), UE4M3 scale bytes with the padding bit clear and other than the NaN "
+    "code 0x7F (PTX ISA: bit 7 set is invalid), and finite FP32 accumulators at every step; a chain from c_0 = 0 cannot "
+    "leave binary32 (D20: NaN / inf accumulators and overflowing sums are outside the model, recorded, never computed)"
+)
+_NVFP4_EPILOGUE = (
+    "none: the FP32 accumulator word is the public output (the bare block-scaled dot).  The production NVFP4 store -- "
+    "a per-tensor scale, then quantisation to E2M1 with per-block UE4M3 scales -- is a SEPARATE relation; it composes "
+    "with this target, it is not part of it"
+)
+
+NVFP4_SM120 = Target(
+    name="nvfp4-sm120-mma-draft/2026-09-22",
+    family=NVFP4_FAMILY,
+    family_digest=NVFP4_FAMILY_DIGEST,
+    pipeline=BLACKWELL_SM120_NVF4,
+    program="GemmAccumulator<K> (K a multiple of 64): tc_dot64_0, then (K/64 - 1) x tc_dot64 chained in ascending k; no cast",
+    transition_unit=(
+        "tc_dot64(c, a codes[0:64] + a scales[0:4], b codes[0:64] + b scales[0:4]) with any finite FP32 c: four exact "
+        "E2M1 x E2M1 group dots of 16, each scaled losslessly by its two UE4M3 block scales, then one five-way align-add "
+        "with the accumulator on the grid lsb = max(max participating scale exponent - 27, E_acc - 35, -174), truncation "
+        "toward zero, RZ normalisation to binary32, every zero result +0 (BlockScaledAlignAdd, D16-D20)"
+    ),
+    statement_format=2,
+    domain=_NVFP4_DOMAIN,
+    epilogue=_NVFP4_EPILOGUE,
+    reference_vectors=("nvfp4-sm120-mma-k64", "nvfp4-sm120-mma-k1536"),
+    native_peak=RTX5090_FP4_PEAK,
+    status="draft",
+    instruction="sm120.mma.m16n8k64.e2m1.nvf4",
+)
+
 #: Every target by name; ``fixtures/discrepancy_log.json`` entries name one of these (or an instruction id).
-TARGETS: dict[str, Target] = {t.name: t for t in (FIRST, BF16_HOPPER, FP8_HOPPER_WGMMA, FP8_ADA_MMA)}
+TARGETS: dict[str, Target] = {t.name: t for t in (FIRST, BF16_HOPPER, FP8_HOPPER_WGMMA, FP8_ADA_MMA, NVFP4_SM120)}

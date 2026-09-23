@@ -876,6 +876,7 @@ def d_class(entry: dict) -> str:
 CONTRACT_INSTANCE_SETS: dict[str, str] = {
     "fp8-ada-mma-draft/2026-09-22": "FP8_ADA",
     "fp8-hopper-wgmma-draft/2026-09-22": "FP8_HOPPER",
+    "nvfp4-sm120-mma-draft/2026-09-22": "NVFP4",
 }
 
 
@@ -895,8 +896,14 @@ def _contract_instance_sets(subject: Subject, contract: Any | None = None) -> li
         vals = {k: getattr(contract, f"{prefix}_INSTANCES_{k}", None) for k in ("DATASET", "TIER", "DIGEST")}
         if not all(isinstance(v, str) and v for v in vals.values()):
             continue
+        # an optional ``<PREFIX>_INSTANCES_FAMILIES`` (family -> VU count at the frozen tier size) is the recipe's corner-family
+        # composition -- what a fixture manifest's ``composition.corner_families`` carries for a materialised set (Tc's edge predicate)
+        fams = getattr(contract, f"{prefix}_INSTANCES_FAMILIES", None)
+        tier: dict = {}
+        if isinstance(fams, dict) and fams and all(isinstance(k, str) and isinstance(v, int) for k, v in fams.items()):
+            tier = {"composition": {"corner_families": {k: v for k, v in fams.items() if k != "random"}, "families": dict(fams)}}
         out.append(DatasetIdentity(name=vals["DATASET"], path=f"contract:{prefix}_INSTANCES_DIGEST", sha256=vals["DIGEST"],
-                                   tiers={vals["TIER"]: {}}, contract=True))
+                                   tiers={vals["TIER"]: tier}, contract=True))
     return out
 
 
