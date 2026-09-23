@@ -118,7 +118,7 @@ def test_census_at_most_half_of_v1(rel):
         s1 = compile_unit(rel.params, chain=True)
     c1, c2 = census(s1), census(s2)
     assert 2 * c2["rows_per_unit"] <= c1["rows_per_unit"], (c1, c2)
-    assert c2["rows_per_unit"] <= {"bf16-hopper-v2": 328, "bf16-ampere-v2": 505, "fp8-hopper-v2": 208, "fp8-ada-v2": 370}[rel.name]
+    assert c2["rows_per_unit"] <= {"bf16-hopper-v2": 312, "bf16-ampere-v2": 489, "fp8-hopper-v2": 208, "fp8-ada-v2": 370}[rel.name]
 
 
 @pytest.mark.parametrize("rel", V2, ids=lambda r: r.name)
@@ -209,3 +209,35 @@ def test_negative_battery_rejected(rel):
     accepted = [name for name, (ok, _) in negs if ok]
     assert accepted == [], f"{rel.name}: negatives accepted: {accepted}"
     assert len(negs) >= rel.y_bits + 2 + len(rel.off_domain) + 1 + 1 + 4 + 40
+
+
+@pytest.mark.parametrize("rel", [RELATIONS["bf16-hopper-v2"], RELATIONS["bf16-ampere-v2"]], ids=lambda r: r.name)
+def test_bf16_epilogue_rounds_to_nearest_even(rel):
+    """The chain-mode RN-even epilogue (half AND NOT sticky-zero, no remainder rows) on accumulators with every rounding
+    pattern in the dropped 16 bits -- ties both ways, just above / below the tie, all ones -- carried through by zero
+    operands (the unit's output is the accumulator itself), plus random units; y16 equals ``f32_to_bf16_word`` of the model's
+    FP32 word."""
+    from verity.ml.tc.cast import f32_to_bf16_word
+    p = rel.params
+    sys = rel.compile(p, True)
+    tb = tables(sys, "cpu")
+    cs = [(hi << 16) | lo for hi in (0x3F80, 0x3F81, 0x4000, 0xC001, 0x0001, 0x007F, 0x7F7F)
+          for lo in (0x8000, 0x8001, 0x7FFF, 0x0000, 0xFFFF)]
+    c = np.array(cs, dtype=np.int64)
+    a = np.zeros((len(c), rel.k), dtype=np.int64)
+    b = np.zeros_like(a)
+    rng = np.random.default_rng(7)
+    a2, b2 = rel.operands(rng, (200, rel.k)), rel.operands(rng, (200, rel.k))
+    c = np.concatenate([c, c[rng.integers(0, len(c), 200)]])
+    a, b = np.concatenate([a, a2]), np.concatenate([b, b2])
+    y = np.array([tc_dot(rel.model, int(c[i]), a[i].tolist(), b[i].tolist()) for i in range(len(c))], dtype=np.int64)
+    fin = ((y >> 23) & 0xFF) != 0xFF
+    c, a, b, y = c[fin], a[fin], b[fin], y[fin]
+    pub = rel.public_vectors(p, c, a, b, y, device="cpu")
+    W = build_witness(sys, pub, rel.hints(p, sys, c, a, b, y, "cpu"), "cpu")
+    assert bool(_accepts(sys, tb, W, pub).all())
+    e = sys.chain["y16"]
+    got = (sum(W[j].to(torch.int64) * v for j, v in e.lin.items()) + e.c) % P
+    exp = torch.as_tensor([f32_to_bf16_word(int(v)) for v in y], dtype=torch.int64)
+    assert torch.equal(got, exp)
+    assert int(((y & 0xFFFF) == 0x8000).sum()) >= 8, "ties present"

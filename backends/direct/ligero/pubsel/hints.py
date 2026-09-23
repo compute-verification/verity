@@ -73,9 +73,7 @@ def step_int(p: Params, pl: Plan, c: int, a: list[int], b: list[int], y: int | N
         Mt = Mn
     if chain and not pl.fp8:
         L = ACC_FRAC - p.frac
-        hi, lo = y >> L, y & (2**L - 1)
-        r = lo + (hi & 1) + (2 ** (L - 1) - 1)
-        H["epi.carry"], H["epi.rem"] = r >> L, r & (2**L - 1)
+        H["epi.zl"] = int((fo & (2 ** (L - 1) - 1)) + ((fo >> L) & 1) == 0)   # the last group's (unmasked) output fraction
     return H
 
 
@@ -237,8 +235,6 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device):
         Mt = Mn
     if chain and not pl.fp8:
         L = ACC_FRAC - p.frac
-        hi, lo = y >> L, y & (2**L - 1)
-        r = lo + (hi & 1) + (2 ** (L - 1) - 1)
-        H["epi.carry"], H["epi.rem"] = r >> L, r & (2**L - 1)
+        H["epi.zl"] = ((fo & (2 ** (L - 1) - 1)) + ((fo >> L) & 1) == 0).to(torch.int64)
     names = [n for _, n in sys.hints]
     return torch.stack([H[n] for n in names])

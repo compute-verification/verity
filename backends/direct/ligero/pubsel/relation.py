@@ -423,19 +423,22 @@ def compile_v2_unit(p: Params, chain: bool = False) -> System:
     if pl.fp8:
         y16 = ys * 2 ** (Y_PACK_BITS - 1) + yt * 2 ** (Y_PACK_BITS - 1 - p.acc_exp) + yf_hi
     else:
-        # --- epilogue: f32_to_bf16 (RN-even) on the components; the low / high split of the fraction and the lsb of the
-        # kept word are windows of the output fraction's own bit rows (fo's), masked by ``live`` like the fraction itself
+        # --- epilogue: f32_to_bf16 (RN-even) on the components.  The kept high part of the fraction is a window of the
+        # output fraction's own bit rows (fo's), masked by ``live`` like the fraction itself; the round-up bit is
+        # carry = [lo + lsb >= 2^(L-1) + 1] = half AND NOT [rest + lsb = 0] on the unmasked bits (half = bit L-1 of fo, rest
+        # = fo mod 2^(L-1), lsb = bit L), the zero flag by the usual zero-product + inverse pair, masked by ``live`` at the end
+        # (a zero or infinite output does not round).  No remainder, no second bit decomposition.
         ctx.scope = "epi"
         L = ACC_FRAC - p.frac
         fbits = _bit_exprs(ctx, fo_rows)
-        lo = live * _window(ctx, fbits, 0, 0, L)
         fhi = live * _window(ctx, fbits, 0, L, ACC_FRAC, L)
-        lsb = live * fbits[L]
         hi = ys * 2 ** (p.word_bits - 1) + yt * 2**p.frac + fhi
-        carry, rem = _hint(ctx, "epi.carry"), _hint(ctx, "epi.rem")
-        ctx.boolean("carry", carry)
-        ctx.rng("rem", rem, 0, 2**L)
-        ctx.eq("round", carry * 2**L + rem, lo + lsb + (2 ** (L - 1) - 1))
+        sticky = _window(ctx, fbits, 0, 0, L - 1) + fbits[L]  # rest + lsb in [0, 2^(L-1)]
+        zl = _hint(ctx, "epi.zl")
+        ctx.boolean("zl", zl)
+        _zero(ctx, "zl0", zl, sticky)
+        ctx.inverse_nonzero("zl1", sticky + zl)               # zl = [rest + lsb = 0]
+        carry = live * ctx.product(fbits[L - 1], 1 - zl)
         y16 = hi + carry
     ctx.sys.outputs["y16"] = y16
     names = {n: i for i, n in ctx.sys.hints}

@@ -416,8 +416,8 @@ pub static BF16_HOPPER_V2: Relation = Relation {
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_HOPPER),
     end_components: None,
-    sys_id: "22789471b778919855abb1ee011eae6f73078b268ee5e670f85caaeac607b472",
-    table_digest: "1eeb2341cd48d9bee6cbb8c32ac34bc3ad90ff9d14abc62f222be71c4bea8999",
+    sys_id: "d131c745215be997f731af388d27af374fa1f6f66e0889345d788c0888c33c0a",
+    table_digest: "1205a6a09d789b5242bec247e8ef03bc032f4fcbc502ab1a5bfc655667d889fc",
 };
 
 pub static BF16_AMPERE_V2: Relation = Relation {
@@ -429,8 +429,8 @@ pub static BF16_AMPERE_V2: Relation = Relation {
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_AMPERE),
     end_components: None,
-    sys_id: "2ce2766ced6c2dafaaf316310749b507dc45a71dabcf196c9aaf0baac0760def",
-    table_digest: "188aba837767fc96449a45f1d2efa51d659c59a95cd9773ff7bc2c3290fd9f26",
+    sys_id: "0862669fd08d3cd80a38183dd14b3955272d04c7e682fe325139fd3751122d65",
+    table_digest: "86a982fc1330725e329222fbed459b2c71b4b35336862d2293d0299e9e320617",
 };
 
 pub static FP8_HOPPER_V2: Relation = Relation {
