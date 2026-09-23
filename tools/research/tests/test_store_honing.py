@@ -375,6 +375,54 @@ def test_catalog_schema_version_forward_migration_and_refusal_of_newer(env, tmp_
     db.close()
 
 
+# ---- item 4: vocab-check --------------------------------------------------------------------------------------------------------------------------
+
+def test_vocab_check_reads_the_files_and_reports_every_category(store, tmp_path, capsys):
+    from research.store import vocab_check as VC
+
+    art, art2 = "art:" + "3" * 64, "art:" + "4" * 64
+    store.add_label(art, "zk", "true", "b-sweep", ts="2026-09-22T10:00:00Z")                  # the word, not the bool (an old writer)
+    store.add_label(art, "zk", True, "b-sweep", ts="2026-09-22T10:00:01Z")                    # fine
+    store.add_label(art, "model_agrees", "false", "tc-probe-fp8")
+    store.add_label(art2, "independently_verified", "true", "h100-bestvsbest")
+    store.add_label(art, "candidate", "A", "a-lane")                                          # old spelling
+    store.add_label(art, "candidate", "A-GKR", "a-lane")
+    store.add_label(art, "batch", 4096, "fill-a100")                                          # old key
+    store.add_label(art, "checker", "v1", "fill-a100")
+    store.add_label(art, "notes", "x", "red-team-zk")
+    store.add_label(art, "verify_note", "y", "verify")
+    store.add_label(art, "verified", "ligero-verify", "b-sweep")                              # off the enum
+    store.add_label(art, "path", "graphed", "h100-bestvsbest")                                # a ref as a label
+    store.add_label(art2, "result_artifact", art, "fill-a100")
+    store.add_label(art, "same_device", True, "fill-a100")                                    # unknown key
+    store.add_label(art, "same_device", False, "coordinator")
+    store.add_label(art, "K", 1536, "a-lane")
+    (store.labels_dir(art) / "zzz.json").write_text("{broken")
+    rep = VC.audit(store)
+    assert rep["labels"] == 17 and rep["findings"] == 14
+    cats = rep["by_category"]
+    assert list(cats["string_typed"]) == ["independently_verified (bool held as a string: 'true')", "model_agrees (bool held as a string: 'false')",
+                                          "zk (bool held as a string: 'true')"], "by count, then name"
+    assert cats["string_typed"]["zk (bool held as a string: 'true')"] == {"count": 1, "by": {"b-sweep": 1}, "examples": [art]}
+    assert cats["alias_values"] == {"candidate=A -> A-GKR": {"count": 1, "by": {"a-lane": 1}, "examples": [art]}}
+    assert set(cats["alias_keys"]) == {"batch -> B", "checker -> verifier", "notes -> note", "verify_note -> note"}
+    assert cats["off_enum"] == {"verified=ligero-verify": {"count": 1, "by": {"b-sweep": 1}, "examples": [art]}}
+    assert set(cats["ref_keys"]) == {"path", "result_artifact"} and cats["ref_keys"]["result_artifact"]["examples"] == [art2]
+    assert cats["unknown_keys"] == {"same_device": {"count": 2, "by": {"coordinator": 1, "fill-a100": 1}, "examples": [art]}}
+    assert list(cats["unreadable"]) == ["JSONDecodeError"]
+    assert main(["vocab-check"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("17 assertion file(s); 14 off the vocabulary") and "\nstring_typed (3):" in out and "zk (bool held as a string: 'true')" in out and "by b-sweep" in out
+    assert main(["vocab-check", "--strict"]) == 1
+    capsys.readouterr()
+    assert main(["vocab-check", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["by_category"]["alias_keys"]["batch -> B"]["count"] == 1
+    clean = LocalStore(tmp_path / "clean")
+    clean.add_label(art, "zk", True, "x")
+    assert main(["vocab-check", "--store", str(tmp_path / "clean"), "--strict"]) == 0
+    assert capsys.readouterr().out.strip() == "1 assertion file(s); 0 off the vocabulary"
+
+
 # ---- item 8: parallel HEADs in `where` -----------------------------------------------------------------------------------------------------------
 
 def test_where_heads_in_parallel(store, fs_remote, tmp_path, monkeypatch):

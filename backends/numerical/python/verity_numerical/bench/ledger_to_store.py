@@ -10,8 +10,9 @@ assertion with provenance (``research.store`` README §8) and never picks a winn
   row as written) and that artifact is the target.  Nothing about the row is lost either way.
 * every field of the row is one label by the lane (``by`` = lane): ``label`` (the headline), ``proof_class``, ``hardware``,
   ``soundness`` (the ledger's ``security_target``), ``authentication``, ``assumptions`` (JSON list), ``breakthrough``, ``B``,
-  ``K``, ``seconds_per_vu``, ``overhead``, ``scope``, ``track``, ``omitted``, ``note`` (+ ``verified_by`` / ``notes`` where the
-  row has them), plus ``candidate`` derived from the lane name (``CANDIDATES``).  ``ts`` is the row's own timestamp; ``ref``
+  ``K``, ``seconds_per_vu``, ``overhead``, ``scope``, ``track``, ``omitted``, ``note`` (+ ``verified_by`` where the row has it; a
+  row's ``notes`` is written as ``note``), plus ``candidate`` derived from the lane name (``CANDIDATES``, Table 1 spelling: ``A-GKR``,
+  ``B-Ligero``, ``SP1``...).  ``ts`` is the row's own timestamp; ``ref``
   is ``<ledger file>:<line>`` -- the frozen source, and the key that groups one row's labels when several rows share a run.
 * the red-team verdicts that the campaign carried as table overrides are separate assertions by the red-team, with the
   red-team's run as ``ref`` (``REDTEAM``): the downgrade of the pre-fix B-Ligero ZK rows and the EARNED re-audit of b-zk-fix.
@@ -33,16 +34,22 @@ from typing import Any
 
 from verity_numerical.bench import ledger
 
-__all__ = ["CANDIDATES", "REDTEAM", "ROW_STRUCTURAL", "candidate", "import_ledger", "ledger_ref", "main", "row_labels", "ts_z"]
+__all__ = ["CANDIDATES", "KEY_ALIASES", "REDTEAM", "ROW_STRUCTURAL", "VALUE_ALIASES", "candidate", "import_ledger", "ledger_ref", "main", "row_labels", "ts_z"]
 
 LEDGER_ROW_KIND = "ledger-row/v1"
 #: Ledger keys that are the row's identity or provenance, not claims: they become the target / ``by`` / ``ts`` / ``ref``.
 ROW_STRUCTURAL = frozenset({"schema", "ts", "lane", "run_id"})
-RENAMED = {"security_target": "soundness"}
+#: ledger field -> label key.  ``notes`` (a handful of red-team rows) is the same claim as ``note`` (store vocabulary, 2026-09-23 hygiene).
+RENAMED = {"security_target": "soundness", "notes": "note"}
+#: Old label spellings that mean the same claim, so that a re-import after the 2026-09-23 hygiene stays idempotent: an existing
+#: ``candidate=A`` IS the ``A-GKR`` claim, an existing ``notes`` IS the ``note`` claim.  Mirrors ``research.store.vocab`` (which this
+#: package does not import) and is cross-checked by the tests.
+KEY_ALIASES = {"notes": "note", "verify_note": "note", "batch": "B", "checker": "verifier"}
+VALUE_ALIASES = {("candidate", "A"): "A-GKR"}
 
-#: lane glob -> candidate, first match wins (``shared`` otherwise).
+#: lane glob -> candidate (the Table 1 spelling: ``bench.tables.CANDIDATES`` ids), first match wins (``shared`` otherwise).
 CANDIDATES: tuple[tuple[str, str], ...] = (
-    ("a-*", "A"),
+    ("a-*", "A-GKR"),
     ("b-air", "B-AIR"), ("b-air-v2", "B-AIR"), ("b-lookup", "B-AIR"), ("b-chain", "B-AIR"), ("b-bind", "B-AIR"), ("soundness-fixes", "B-AIR"),
     ("b-ligero*", "B-Ligero"), ("b-zk*", "B-Ligero"), ("b-e2e-v2", "B-Ligero"), ("b-v2", "B-Ligero"), ("b-lintest", "B-Ligero"),
     ("b-commit", "B-Ligero"), ("b-encode", "B-Ligero"),
@@ -130,10 +137,18 @@ class _Target:
 
     def __init__(self, store: Any, target: str):
         self.store, self.target = store, target
-        self.have: set[tuple[str, str, str, str | None]] = {(lab.key, _canon_text(lab.value), lab.by, lab.ref) for lab in store.labels(target)}
+        self.have: set[tuple[str, str, str, str | None]] = {self._sig(lab.key, lab.value, lab.by, lab.ref) for lab in store.labels(target)}
+
+    @staticmethod
+    def _sig(key: str, value: Any, by: str, ref: str | None) -> tuple[str, str, str, str | None]:
+        """The claim's identity, old spellings read as the canonical one (so the store is never asked to repeat a claim it holds)."""
+        key = KEY_ALIASES.get(key, key)
+        if isinstance(value, str):
+            value = VALUE_ALIASES.get((key, value), value)
+        return key, _canon_text(value), by, ref
 
     def add(self, key: str, value: Any, by: str, ref: str, ts: str, *, dry_run: bool) -> bool:
-        sig = (key, _canon_text(value), by, ref)
+        sig = self._sig(key, value, by, ref)
         if sig in self.have:
             return False
         if not dry_run:

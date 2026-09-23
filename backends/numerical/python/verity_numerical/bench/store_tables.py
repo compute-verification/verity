@@ -27,7 +27,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity_numerical.bench import contract, decision_tables as DT, ledger
+from verity_numerical.bench import contract, decision_tables as DT, ledger, tables
 from verity_numerical.bench.ledger_to_store import LEDGER_ROW_KIND
 
 __all__ = ["ATTEMPT_SQL", "LEDGER_ROW_SQL", "ROW_LABELS_SQL", "diff_tables", "main", "render_like_for_like", "row_values"]
@@ -100,7 +100,8 @@ def lane_row(assertions: Sequence[Assertion], lane: str, prefix: str) -> dict[st
     groups: dict[str | None, dict[str, Any]] = {}
     for a in assertions:
         if a.by == lane:
-            groups.setdefault(a.ref, {})[a.key] = a.value
+            key, value = tables.canonical_label(a.key, a.value)     # old spellings (`batch`, `notes`, `candidate=A`) read as the canonical
+            groups.setdefault(a.ref, {})[key] = value
     hits = [g for g in groups.values() if isinstance(g.get("label"), str) and g["label"].startswith(prefix)]
     if len(hits) != 1:
         raise LookupError(f"lane {lane!r} asserted {len(hits)} row(s) whose label starts with {prefix!r}; need exactly 1")

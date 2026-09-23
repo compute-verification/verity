@@ -41,7 +41,7 @@ def store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> LocalStore:
 
 def test_candidate_from_lane() -> None:
     assert [L2S.candidate(x) for x in ("a-gpu2", "b-air-v2", "soundness-fixes", "b-ligero2", "b-zk-fix", "b-encode", "c-vole", "sp1", "gate4-h100", "red-team-zk")] == \
-        ["A", "B-AIR", "B-AIR", "B-Ligero", "B-Ligero", "B-Ligero", "C", "SP1", "shared", "shared"]
+        ["A-GKR", "B-AIR", "B-AIR", "B-Ligero", "B-Ligero", "B-Ligero", "C", "SP1", "shared", "shared"]
 
 
 def test_import_targets_labels_and_idempotency(store: LocalStore, tmp_path: Path) -> None:

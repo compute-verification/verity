@@ -20,8 +20,11 @@
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--json]
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
-                                                   warns (stderr) on a key outside the vocabulary or a value outside its enum; writes anyway
+                                                   writes the canonical key/spelling in the vocabulary's form (zk true -> a real boolean, batch -> B,
+                                                   candidate A -> A-GKR); warns (stderr) on a key outside the vocabulary or a value outside its enum; writes anyway
   research data vocab [--json]                     the label vocabulary (vocab.py): key, asserter group, value form, enum values
+  research data vocab-check [--json] [--strict]    read-only audit of labels/: unknown keys, old spellings, strings in bool/int keys, off-enum values,
+                                                   refs written as labels; counts, asserters, example targets
   research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR]
                                                    re-register every fixtures/artifacts.json entry whose bytes changed; old id kept under `previous`
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
@@ -376,11 +379,32 @@ def cmd_label(argv: list[str]) -> int:
     ap.add_argument("--value-json", action="store_true", help="parse VALUE as JSON instead of a string")
     ns = ap.parse_args(argv)
     value = json.loads(ns.value) if ns.value_json else ns.value
-    why = vocab.check(ns.key, value)                       # warning only (README §8.1): the label is written whatever the vocabulary says
+    key = vocab.canonical_key(ns.key)                      # hygiene (§8.1): the canonical key and spelling go in the file, the form the vocabulary
+    value = vocab.coerce(key, vocab.canonical_value(key, value))   # declares (a real bool for zk / model_agrees, an int for B), never the word
+    for note in (f"key {ns.key!r} written as {key!r}" if key != ns.key else None,
+                 f"value {ns.value!r} written as {json.dumps(value)}" if value != (json.loads(ns.value) if ns.value_json else ns.value) else None):
+        if note:
+            print(f"research data label: {note}", file=sys.stderr)
+    why = vocab.check(key, value)                          # warning only: the label is written whatever the vocabulary says
     if why:
         print(f"research data label: warning: {why}; stored anyway", file=sys.stderr)
-    print(LocalStore(ns.store).add_label(ns.target, ns.key, value, ns.by, ref=ns.ref))
+    print(LocalStore(ns.store).add_label(ns.target, key, value, ns.by, ref=ns.ref))
     return 0
+
+
+def cmd_vocab_check(argv: list[str]) -> int:
+    """Read-only audit of labels/ against the vocabulary (`vocab_check.py`): unknown keys, old spellings of keys and values, bool / int /
+    number keys holding strings, enum values off the set, refs written as labels, unreadable files -- each with counts, asserters and
+    example targets.  Exit 0 always (it is a report); `--strict` exits 1 when anything is found."""
+    from . import vocab_check as VC  # noqa: PLC0415
+
+    ap = _ap("vocab-check")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--strict", action="store_true", help="exit 1 when there is any finding")
+    ns = ap.parse_args(argv)
+    rep = VC.audit(LocalStore(ns.store))
+    _dump(rep) if ns.json else print(VC.render(rep))
+    return 1 if ns.strict and rep["findings"] else 0
 
 
 def cmd_labels_sync(argv: list[str]) -> int:
@@ -705,7 +729,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "select": cmd_select, "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
-    "catalog": cmd_catalog,
+    "catalog": cmd_catalog, "vocab-check": cmd_vocab_check,
 }
 
 

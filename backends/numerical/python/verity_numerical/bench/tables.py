@@ -38,9 +38,26 @@ try:  # the label keys are pinned with the store (`research.store.vocab`, tools/
 
     _CANDIDATE, _LABEL, _PROOF_CLASS = _vocab.CANDIDATE, _vocab.LABEL, _vocab.PROOF_CLASS
     _INDEPENDENTLY_VERIFIED, _VERIFIED, _VERIFIED_ACCEPTED = _vocab.INDEPENDENTLY_VERIFIED, _vocab.VERIFIED, _vocab.VERIFIED_ACCEPTED
+    _KEY_ALIASES, _VALUE_ALIASES = dict(_vocab.KEY_ALIASES), dict(_vocab.VALUE_ALIASES)
 except ImportError:  # pragma: no cover  -- the same spellings, so the predicate still imports where the store package is absent (tested equal)
     _CANDIDATE, _LABEL, _PROOF_CLASS = "candidate", "label", "proof_class"
     _INDEPENDENTLY_VERIFIED, _VERIFIED, _VERIFIED_ACCEPTED = "independently_verified", "verified", "accepted"
+    _KEY_ALIASES, _VALUE_ALIASES = {"notes": "note", "verify_note": "note", "batch": "B", "checker": "verifier"}, {("candidate", "A"): "A-GKR"}
+
+
+def canonical_label(key: Any, value: Any) -> tuple[str, Any]:
+    """An assertion as read: old spellings of a key (``notes`` -> ``note``, ``batch`` -> ``B``, ``checker`` -> ``verifier``) and of a
+    value (``candidate=A`` -> ``A-GKR``) mean the canonical one; the words ``true`` / ``false`` under a bool key mean the bool.
+    Readers accept every spelling ever written; writers (``ledger_to_store``, ``research data label``) store only the canonical."""
+    k = _KEY_ALIASES.get(str(key), str(key))
+    if isinstance(value, str):
+        value = _VALUE_ALIASES.get((k, value), value)
+        if k in _BOOL_KEYS and value in ("true", "false"):
+            value = value == "true"
+    return k, value
+
+
+_BOOL_KEYS = frozenset({_INDEPENDENTLY_VERIFIED, "zk", "model_agrees", "breakthrough"})
 
 __all__ = [
     "AUTHENTICATION",
@@ -69,6 +86,7 @@ __all__ = [
     "ZK_VALUES",
     "build",
     "candidate_for",
+    "canonical_label",
     "cell_artifacts",
     "dtype_of",
     "fmt_overhead",
@@ -348,7 +366,8 @@ def _labels(labels: Iterable[Any]) -> list[_Label]:
     out = []
     for lab in labels:
         g = (lambda k: lab.get(k)) if isinstance(lab, Mapping) else (lambda k: getattr(lab, k, None))
-        out.append(_Label(str(g("key")), g("value"), str(g("by")), str(g("ts") or ""), g("ref")))
+        key, value = canonical_label(g("key"), g("value"))
+        out.append(_Label(key, value, str(g("by")), str(g("ts") or ""), g("ref")))
     return sorted(out, key=lambda l: l.ts)
 
 
