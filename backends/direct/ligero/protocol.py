@@ -1662,7 +1662,8 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
         if not torch.equal(_sum_over_H(q, l), cc.rhs):
             return False, "chain constraints failed (sum over H)"
         R = cc.coef.shape[1]
-        Rc = encode(cc.coef.reshape(D * R, l), n).reshape(D, R, n)[:, :, cols]          # (D, R, t)
+        Rc = torch.cat([encode(cc.coef[:, r0:r0 + CHAIN_ENC_CHUNK].reshape(-1, l), n).reshape(D, -1, n)[:, :, cols]
+                        for r0 in range(0, R, CHAIN_ENC_CHUNK)], 1)                     # (D, R, t), bounded memory
         expect = ((Rc * Uo.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P
         if cfg.zk:                                                            # + u_ca(eta_c) + eta_c^k u_cb(eta_c)
             xk = _xk_on_coset(n, k, device)[cols]
