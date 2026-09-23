@@ -83,6 +83,7 @@ def test_rate_and_queries():
     zp0 = TOY.zk_params(False)
     assert zk.queries_for(zp0, 10, 4096) == 192                       # (5/8)^192 = 2^-130.2 -- proto's value
     assert zk.queries_for(zk.ZkParams(29, 15, 14), 15, 4 * 32768) == 193   # rate (2^15+256)/2^17 = 0.252 -> +1 row
+    assert zk.queries_for(zp0, 10, 4096, levels=5) == 193                 # union at L = 5: -130.32 per level (F7)
 
 
 def test_sumcheck_mask_identities():
@@ -374,8 +375,76 @@ def test_row_mask_layout_index_map_and_masks():
     # PCS round-1 column 0 (2^{n_c - k'_1} = 2^10 relation columns per PCS column) -- one sparse round-1 term
     real = zk.default_row_mask_layout(n_i=12, n_c=18, k_L=10, m=3777, free_from=3977)
     assert real.cells == 12 << 18 and real.cells / 2 ** 30 < 0.003
-    assert real.g_cells == 918 < (1 << (18 - 8))
+    assert real.g_cells == 6 * (65 + 25 + 37) == 762 < (1 << (18 - 8))
     cells_real = zk.f_index(real.g_row, np.arange(real.g_cells), real)
     assert len(set((cells_real >> (30 - 8)).tolist())) == 1
     with pytest.raises(ValueError):
         zk.RowMaskLayout(4, 6, 5, uniform_rows=(8, 9, 10, 11, 12, 13, 14, 8), product_rows=(), g_row=6, b=3)
+
+
+def _eq(tau, x_bits):
+    acc = ext_one()
+    for t, b in zip(tau, x_bits):
+        acc = ext_mul(acc, t if b else (ext_one() - t) % P)
+    return acc
+
+
+def test_eq_sumcheck_mask_bivariate_opening_and_rounds():
+    """F3 (red team): the eq-weighted Libra mask with the cross block -- every identity the zero-check verifier uses,
+    checked against brute force over the cube; the 9 opening coefficients all move with the mask."""
+    rng = np.random.default_rng(3)
+    n, d = 4, 2
+    coeffs = rng.integers(0, P, size=(zk.EqSumcheckMask.n_coeffs(n, d, True), D), dtype=np.int64)
+    tau = rng.integers(0, P, size=(n, D), dtype=np.int64)
+    gm = zk.EqSumcheckMask(n, d, coeffs, tau, cross=True)
+    pts = [[(x >> (n - 1 - t)) & 1 for t in range(n)] for x in range(1 << n)]      # variable t = round t
+    # ZK sum
+    G = ext_zero()
+    for xb in pts:
+        G = (G + ext_mul(_eq(tau, xb), gm.eval_brute(xb))) % P
+    assert np.array_equal(G, gm.zk_sum())
+    # bivariate opening message on {0,1}^2 vs brute force; its eq-weighted sum over the grid is G
+    M = gm.message_pair()
+    for a in range(2):
+        for b in range(2):
+            want = ext_zero()
+            for xb in pts:
+                if xb[0] == a and xb[1] == b:
+                    want = (want + ext_mul(_eq(tau[2:], xb[2:]), gm.eval_brute(xb))) % P
+            assert np.array_equal(M[a, b], want)
+    s = ext_zero()
+    for a in range(2):
+        for b in range(2):
+            s = (s + ext_mul(_eq(tau[:2], [a, b]), M[a, b])) % P
+    assert np.array_equal(s, G)
+    # later rounds: q_t(0)(1 - tau_t) + q_t(1) tau_t == q_{t-1}(r_{t-1}) (the verifier's chain), t = 2, 3; final g(r)
+    r = rng.integers(0, P, size=(n, D), dtype=np.int64)
+    def eval_uni(vals, x):      # degree-2 through (0, 1, 2)
+        x = np.asarray(x)
+        l0 = ext_mul(ext_mul((x - ext_from_base(1)) % P, (x - ext_from_base(2)) % P), ext_from_base(pow(2, P - 2, P)))
+        l1 = ext_mul(ext_mul(x, (x - ext_from_base(2)) % P), ext_from_base(P - 1))
+        l2 = ext_mul(ext_mul(x, (x - ext_from_base(1)) % P), ext_from_base(pow(2, P - 2, P)))
+        return (ext_mul(l0, vals[0]) + ext_mul(l1, vals[1]) + ext_mul(l2, vals[2])) % P
+    # opening -> claim at (r0, r1): eval M as bivariate degree-2 in each
+    rows = [eval_uni(M[:, j], r[0]) for j in range(3)]
+    claim = eval_uni(np.stack(rows), r[1])
+    for t in range(2, n):
+        q = gm.message(t, r[:t])
+        chain = (ext_mul(q[0], (ext_one() - tau[t]) % P) + ext_mul(q[1], tau[t])) % P
+        assert np.array_equal(chain, claim)
+        claim = eval_uni(q, r[t])
+    assert np.array_equal(claim, gm.final_value(r))
+    # claim weights reproduce g(r) on the coefficient cells
+    w = gm.claim_weights(r).reshape(-1, D)
+    cells = coeffs.reshape(-1)
+    assert np.array_equal(ext_sum(ext_mul_base(w, cells), axis=0), gm.final_value(r))
+    # the 9 opening coefficients are all blinded: two masks with the same tau differ in every grid entry, and the
+    # mask polynomials span the 9-dim space of bivariate degree-(2,2) polys (rank over F_p of the coordinate-0 coefficients)
+    M2 = zk.EqSumcheckMask(n, d, rng.integers(0, P, size=coeffs.shape, dtype=np.int64), tau).message_pair()
+    assert all(not np.array_equal(M[i, j], M2[i, j]) for i in range(3) for j in range(3))
+    # the mask polynomial without the cross block has NO X1^a X2^b (a, b >= 1) terms: its 3x3 grid is additively separable
+    gm_nc = zk.EqSumcheckMask(n, d, coeffs[:1 + d * n], tau, cross=False)
+    Mn = gm_nc.message_pair()
+    sep = (Mn[1, 1] - Mn[1, 0] - Mn[0, 1] + Mn[0, 0]) % P
+    assert np.array_equal(sep, ext_zero())                    # separable -> the cross coefficient of the witness leaks
+    assert not np.array_equal((M[1, 1] - M[1, 0] - M[0, 1] + M[0, 0]) % P, ext_zero())
