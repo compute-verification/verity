@@ -87,3 +87,43 @@ fn sumcheck_fixture_verifies_lgsc0003_and_rejects_a_tampered_proof() {
     let s = stdout(&o);
     assert!(!o.status.success() && s.contains("\"accepted\":false") && s.contains("zero-check round 0"), "{s}");
 }
+
+/// An LGTO0001 dump in run.py's layout (key.bin, <stem>.stmt, <stem>.lgto / .lgto.neg, manifest.json with the Python
+/// verdicts): the pre-V1 fixture passes `batch` only under `--allow-legacy`; a proof listed as must-reject but accepted,
+/// or a Python verdict we disagree with, fails it.
+#[test]
+fn batch_over_an_lgto_dump() {
+    let src = fixtures().join("lgto/fp8ada_l256_legacy");
+    let d = scratch("lgto");
+    std::fs::copy(src.join("key.bin"), d.join("key.bin")).unwrap();
+    std::fs::copy(src.join("honest_fiat-shamir.stmt"), d.join("honest_fiat-shamir.stmt")).unwrap();
+    std::fs::copy(src.join("honest_fiat-shamir.lgto"), d.join("honest_fiat-shamir.lgto")).unwrap();
+    let mut neg = std::fs::read(src.join("honest_fiat-shamir.lgto")).unwrap();
+    let at = neg.len() - 100;
+    neg[at] ^= 1;
+    std::fs::write(d.join("neg_00.lgto.neg"), &neg).unwrap();
+    std::fs::copy(src.join("honest_fiat-shamir.stmt"), d.join("neg_00.stmt")).unwrap();
+    let manifest = |neg_py: bool| {
+        format!(
+            r#"{{"format": {{"proof": "LGTO0001"}}, "files": [{{"proof": "honest_fiat-shamir.lgto", "stmt": "honest_fiat-shamir.stmt", "expect": "accept", "coins": "fiat-shamir", "coins_seed": 1, "python_verdict": {{"accepted": true, "reason": "accept"}}}}, {{"proof": "neg_00.lgto.neg", "stmt": "neg_00.stmt", "expect": "reject", "coins": "fiat-shamir", "coins_seed": 1, "python_verdict": {{"accepted": {neg_py}, "reason": "x"}}}}]}}"#
+        )
+    };
+    std::fs::write(d.join("manifest.json"), manifest(false)).unwrap();
+    let ds = d.to_str().unwrap();
+    let o = run(&["batch", "--dir", ds, "--allow-legacy"]);
+    let s = stdout(&o);
+    assert!(o.status.success(), "{s}");
+    for want in ["\"n_accepted\":1", "\"manifest_checked\":2", "\"problems\":[]", "\"sumcheck\":\"LGSC0002\"", "\"key_pinned\":true"] {
+        assert!(s.contains(want), "{want} not in {s}");
+    }
+    let o = run(&["batch", "--dir", ds]);
+    assert!(!o.status.success() && stdout(&o).contains("pre-V1"), "{}", stdout(&o));
+    std::fs::write(d.join("manifest.json"), manifest(true)).unwrap();
+    let o = run(&["batch", "--dir", ds, "--allow-legacy"]);
+    assert!(!o.status.success() && stdout(&o).contains("python_verdict true"), "{}", stdout(&o));
+    // the honest proof presented as must-reject
+    std::fs::write(d.join("manifest.json"), manifest(false)).unwrap();
+    std::fs::rename(d.join("honest_fiat-shamir.lgto"), d.join("honest_fiat-shamir.lgto.neg")).unwrap();
+    assert!(!run(&["batch", "--dir", ds, "--allow-legacy"]).status.success());
+    let _ = std::fs::remove_dir_all(&d);
+}

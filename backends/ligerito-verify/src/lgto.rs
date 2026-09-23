@@ -1016,3 +1016,133 @@ pub fn zero_blocks(lay: &Layout) -> Vec<(usize, usize)> {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::claims::eq_vector;
+    use crate::refprover::random_point;
+    use crate::transcript::FiatShamir;
+
+    /// ligerito-relation 3592bd0's 18:55Z gate dump (fp8-ada, 12 VUs, l = 256, Fiat-Shamir): pre-V1, no zero claims.
+    const KEY: &[u8] = include_bytes!("../fixtures/lgto/fp8ada_l256_legacy/key.bin");
+    const STMT: &[u8] = include_bytes!("../fixtures/lgto/fp8ada_l256_legacy/honest_fiat-shamir.stmt");
+    const PROOF: &[u8] = include_bytes!("../fixtures/lgto/fp8ada_l256_legacy/honest_fiat-shamir.lgto");
+
+    fn fs(kind: &str) -> Result<Box<dyn Coins>, String> {
+        match kind {
+            "fiat-shamir" => Ok(Box::new(FiatShamir::new(FiatShamir::LABEL))),
+            _ => Err(format!("{kind}: test replays Fiat-Shamir only")),
+        }
+    }
+
+    fn legacy() -> Options {
+        Options { allow_legacy: true, target_log2: Some(-128.0), ..Default::default() }
+    }
+
+    #[test]
+    fn legacy_fixture_verifies_only_as_legacy() {
+        let rep = verify(STMT, KEY, PROOF, &mut fs, &legacy()).unwrap();
+        assert_eq!((rep.relation.as_str(), rep.sumcheck.as_str(), rep.vus, rep.zero_blocks), ("fp8-ada", "LGSC0002", 12, 0));
+        assert!(rep.legacy && rep.key_pinned && !rep.zk);
+        assert!(rep.soundness_log2 <= -128.0 && rep.soundness_log2 > -128.1, "{}", rep.soundness_log2);
+        let e = verify(STMT, KEY, PROOF, &mut fs, &Options { target_log2: Some(-128.0), ..Default::default() }).unwrap_err();
+        assert!(e.contains("pre-V1"), "{e}");
+        // F5: as one of two proofs of a job, 2^-128.02 misses 2^-129
+        assert!(verify(STMT, KEY, PROOF, &mut fs, &Options { target_log2: Some(-129.0), ..legacy() }).is_err());
+    }
+
+    #[test]
+    fn legacy_fixture_byte_flips_rejected() {
+        let mut positions: Vec<usize> = (0..64).collect();
+        positions.extend((64..PROOF.len()).step_by(4099));
+        positions.push(PROOF.len() - 1);
+        for pos in positions {
+            let mut b = PROOF.to_vec();
+            b[pos] ^= 0x10;
+            assert!(verify(STMT, KEY, &b, &mut fs, &legacy()).is_err(), "proof byte {pos} flipped: accepted");
+        }
+        assert!(verify(STMT, KEY, &PROOF[..PROOF.len() - 1], &mut fs, &legacy()).is_err());
+        assert!(verify(STMT, KEY, &[PROOF, &[0u8][..]].concat(), &mut fs, &legacy()).is_err());
+    }
+
+    #[test]
+    fn legacy_fixture_statement_and_key_tampers_rejected() {
+        let st = read_statement(STMT).unwrap();
+        let tail = STMT.len() - st.y.iter().map(|y| y.len()).sum::<usize>() * st.y_bytes as usize;
+        let mut positions = vec![12, 20, 60, tail - 1, tail, tail + 5, STMT.len() - 1];
+        positions.extend((100..tail).step_by(5003));
+        for pos in positions {
+            let mut s = STMT.to_vec();
+            s[pos] ^= 0x01;
+            assert!(verify(&s, KEY, PROOF, &mut fs, &legacy()).is_err(), "statement byte {pos} flipped: accepted");
+        }
+        // any key change moves its digest off the statement's and the pin
+        let mut k = KEY.to_vec();
+        *k.last_mut().unwrap() ^= 1;
+        assert!(verify(STMT, &k, PROOF, &mut fs, &legacy()).is_err());
+        let any = Options { allow_any_key: true, ..legacy() };
+        assert!(verify(STMT, &k, PROOF, &mut fs, &any).unwrap_err().contains("another verification key"));
+    }
+
+    #[test]
+    fn zero_blocks_cover_exactly_the_virtual_rows() {
+        let key = read_key(KEY).unwrap();
+        let st = read_statement(STMT).unwrap();
+        let lay = layout(&key, &st).unwrap();
+        let blocks = zero_blocks(&lay);
+        let mut covered: Vec<usize> = blocks.iter().flat_map(|&(b, pfx)| (pfx << b)..((pfx + 1) << b)).collect();
+        covered.sort_unstable();
+        let mut virt: Vec<usize> = lay.virt.iter().map(|(_, r)| *r).collect();
+        virt.sort_unstable();
+        assert_eq!(covered, virt);
+        assert_eq!(virt[0], lay.m, "virtual rows start at m");
+        assert!(blocks.windows(2).all(|w| (w[0].1 << w[0].0) < (w[1].1 << w[1].0)), "blocks in row order: {blocks:?}");
+    }
+
+    /// The histogram evaluation of the operand rows equals the direct `sum_c eq(r_c, c) decode(word_c)`.
+    #[test]
+    fn stmt_rows_match_direct_evaluation() {
+        let st = read_statement(STMT).unwrap();
+        let spec = relation_spec(&st.relation).unwrap();
+        let s = st.n_vus.len();
+        let n_c = (s * st.l).trailing_zeros() as usize;
+        let eq_c = eq_vector(&random_point(n_c, 7));
+        let rows = StmtRows::new(spec, &st, s);
+        rows.validate().unwrap();
+        let n_real = st.a.len();
+        for (side, words) in [("a", &st.a), ("b", &st.b)] {
+            for i in [0, 1, 17, st.k - 1] {
+                for (f, fname) in ["s", "m", "e"].iter().enumerate() {
+                    let mut want = Ext::ZERO;
+                    for c in 0..s * st.l {
+                        let (sb, j) = (c / st.l, c % st.l);
+                        let w = if sb < n_real { words[sb][j * st.k + i] } else { 0 };
+                        let (sg, m, e) = spec.op.decode(w).unwrap();
+                        let v = [sg, m, signed_mod_p(e)][f];
+                        want = want.add(&eq_c[c].mul_base(v));
+                    }
+                    let got = rows.mle(&format!("pub:{side}[{i}].{fname}"), &eq_c).unwrap();
+                    assert_eq!(got, want, "pub:{side}[{i}].{fname}");
+                }
+            }
+        }
+        assert!(rows.mle("pub:a[32].s", &eq_c).is_err());
+        assert!(rows.mle("pub:a[01].s", &eq_c).is_err());
+        assert!(rows.mle("pub:c[0].s", &eq_c).is_err());
+    }
+
+    #[test]
+    fn operand_decoders() {
+        // E4M3: 0x38 = +1.0 (t = 7: m = 8, e = 0), 0x01 = min subnormal (m = 1, e = -6), NaN codes rejected
+        assert_eq!(Operand::E4m3.decode(0x38).unwrap(), (0, 8, 0));
+        assert_eq!(Operand::E4m3.decode(0x81).unwrap(), (1, 1, -6));
+        assert!(Operand::E4m3.decode(0x7F).is_err() && Operand::E4m3.decode(0xFF).is_err() && Operand::E4m3.decode(0x100).is_err());
+        // BF16: 0x3F80 = +1.0 (t = 127: m = 128, e = 0), 0x8001 = -min subnormal; the t = 255 codes rejected
+        assert_eq!(Operand::Bf16.decode(0x3F80).unwrap(), (0, 128, 0));
+        assert_eq!(Operand::Bf16.decode(0x8001).unwrap(), (1, 1, -126));
+        for w in [0x7F80, 0xFF80, 0x7FC0, 0x10000] {
+            assert!(Operand::Bf16.decode(w).is_err(), "{w:#x}");
+        }
+    }
+}

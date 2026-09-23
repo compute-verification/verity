@@ -15,6 +15,13 @@
 //!     # ref.py's verdict; with DIR/manifest.json (a list, or {"proofs": [...]}, of {"proof": name, "accepted": bool,
 //!     # "reason": str}) every listed verdict must agree with ours; the union of the accepted proofs' own soundness
 //!     # bounds must be <= 2^-B (default 128; --target-bits 0 waives it).  Exit 0 iff accepted.
+//!     # LGTO0001 (ligerito-relation's end-to-end batch proofs, run.py's dump layout): DIR/*.lgto must verify and
+//!     # DIR/*.lgto.neg be rejected, each against <stem>.stmt (LGTS0001) and DIR/key.bin (LGVK0001), coins as the
+//!     # proof declares them (live: <stem>.coins; local: manifest "coins_seed"), manifest {"files": [{"proof",
+//!     # "python_verdict": {"accepted"}}]} verdicts must agree.  The key must be a pinned one (--allow-any-key: any key
+//!     # the statement names, flagged); proofs without the red-team-2 V1 zero claims are rejected (--allow-legacy reads
+//!     # them, UNSOUND); local-coin proofs are verdicts only (no soundness figure; --no-local rejects them); proofs of
+//!     # one statement count once in the union.  `verify --proof X.lgto [--stmt S] [--key K] [--coins C]` likewise.
 //! ligerito-verify ref-fixtures --file F.json [--neg N.json] [--json out.json] [--reps R]
 //!     # ligerito-design's ref.py fixtures (`python -m backends.direct.ligerito.ref`, format ligerito-ref/v2): every
 //!     # statement + proof must get ref.py's verdict; --neg = declarative tampers (fixtures/ref/negatives.json) replayed
