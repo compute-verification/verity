@@ -36,13 +36,15 @@ from . import canon, ids, kinds
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
 from .remote import ConfigError, Remote, load_remote
-from .remote_s3 import SINGLE_PUT_MAX, is_md5_etag
+from .remote_s3 import is_md5_etag
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
 REPLICA_MAP = Path("fixtures") / "artifacts.json"
 SNAPSHOT_KIND = "dataset-snapshot/v1"
 VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"     # what a replica record's `verified` says was checked
+VERIFY_MULTIPART = "etag-multipart"                              # ... a > 5 GiB blob: the service's multipart ETag == the one the local parts yield
 VERIFY_MODES = ("head", "readback")                             # `push(verify=...)`: HEAD size + MD5 ETag, or download + sha256
+WHERE_JOBS = 16                                                 # concurrent HEADs in `where`
 _UNSET = object()
 
 
@@ -352,9 +354,36 @@ class LocalStore:
         finally:
             tmp.unlink(missing_ok=True)
 
-    def fetch(self, art_id: str, to: Path | None = None) -> Path:
+    @staticmethod
+    def select_files(files: list[TreeFile], paths: list[str] | None) -> list[TreeFile]:
+        """The tree files matching any of `paths` (fnmatch globs on the relative path; a bare directory name selects its subtree:
+        `rep1` == `rep1/*`).  None / empty selects everything."""
+        if not paths:
+            return list(files)
+        pats = [p.rstrip("/") for p in paths if p]
+        out = []
+        for f in files:
+            if any(fnmatch.fnmatchcase(f.path, p) or f.path.startswith(p + "/") for p in pats):
+                out.append(f)
+        return out
+
+    def listing(self, art_id: str, paths: list[str] | None = None) -> list[dict]:
+        """One row per payload file: `path`, `bytes`, `sha256`, `local` (blob in objects/), `remote` (the artifact's catalog flag:
+        pushed or listed, no HEAD per file).  A file payload lists as one row."""
+        m = self.get_manifest(art_id)
+        if m.payload is None:
+            raise StoreError(f"{art_id} has no payload (kind {m.kind})")
+        row = self.index.artifact(art_id)
+        remote = bool(row and row.get("remote"))
+        files = m.payload.files if m.payload.type == "tree" else [TreeFile(m.payload.name, m.payload.sha256, m.payload.bytes)]
+        return [{"path": f.path, "bytes": f.bytes, "sha256": f.sha256, "local": self.object_path(f.sha256).exists(), "remote": remote}
+                for f in self.select_files(files or [], paths)]
+
+    def fetch(self, art_id: str, to: Path | None = None, *, paths: list[str] | None = None) -> Path:
         """Materialise the payload.  File: returns the immutable object path (or a copy at/under `to`).  Tree: `to` or
-        `<root>/trees/<hex>/`.  `to` is used as a directory when it is one (file lands as `to/<name>`)."""
+        `<root>/trees/<hex>/`.  `to` is used as a directory when it is one (file lands as `to/<name>`).  `paths` (tree only)
+        materialises just the matching subtree (`select_files`): the layout under `to` is the same, only the selected files
+        land; the trees/ cache is then complete only when every file has been fetched."""
         m = self.get_manifest(art_id)
         if m.payload is None:
             raise StoreError(f"{art_id} has no payload (kind {m.kind})")
@@ -369,11 +398,17 @@ class LocalStore:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(blob, dst)
             return dst
-        srcs = [(f, self._resolve_blob(f.sha256, art_id, f.path)) for f in m.payload.files or []]
-        self.index.set_presence(art_id, local=True)
+        wanted = self.select_files(m.payload.files or [], paths)
+        if paths and not wanted:
+            raise NotFound(f"{art_id}: no file matches {paths}")
+        srcs = [(f, self._resolve_blob(f.sha256, art_id, f.path)) for f in wanted]
+        self.index.set_presence(art_id, local=self._blobs_local(m))
         if to is None:
             final = self.root / "trees" / hex_
-            if final.is_dir():
+            if final.is_dir() and all((final / f.path).is_file() for f in wanted):
+                return final
+            if paths:                                                   # a partial fetch lands in place; the cache is complete when every file is there
+                self._materialise(srcs, final)
                 return final
             work = final.parent / f".tmp-{hex_}-{os.getpid()}"
             shutil.rmtree(work, ignore_errors=True)
@@ -381,7 +416,11 @@ class LocalStore:
             try:
                 os.rename(work, final)
             except OSError:
-                shutil.rmtree(work, ignore_errors=True)
+                shutil.rmtree(final, ignore_errors=True)                # an incomplete partial fetch is superseded by the full one
+                try:
+                    os.rename(work, final)
+                except OSError:
+                    shutil.rmtree(work, ignore_errors=True)
             return final
         self._materialise(srcs, Path(to))
         return Path(to)
@@ -396,8 +435,9 @@ class LocalStore:
             shutil.copyfile(blob, tmp)
             os.replace(tmp, p)
 
-    def where(self, art_id: str) -> list[dict]:
-        """Replicas: local (manifest + blobs present?), repo (mapped path, verified?), remote (present? verified_utc)."""
+    def where(self, art_id: str, *, jobs: int = WHERE_JOBS) -> list[dict]:
+        """Replicas: local (manifest + blobs present?), repo (mapped path, verified?), remote (present? verified_utc).  The remote
+        check HEADs the manifest and every blob through a pool of `jobs` threads (a run-files tree can hold 10^4 blobs)."""
         m = self.get_manifest(art_id)
         hex_ = ids.hex_of(art_id)
         blobs = m.blobs()
@@ -416,9 +456,21 @@ class LocalStore:
             out.append({"location": "remote", "configured": False, "present": False, "verified_utc": None})
         else:
             heads = [(manifest_key(hex_), len(m.canonical()))] + [(object_key(h), n) for h, n in blobs]
-            present = all((hd := r.head(k)) is not None and hd["bytes"] == n for k, n in heads)
-            out.append({"location": "remote", "remote": r.describe(), "present": present, "verified_utc": reps.get("remote", {}).get("verified_utc")})
+            missing = self._heads_missing(r, heads, jobs=jobs)
+            out.append({"location": "remote", "remote": r.describe(), "present": not missing, "verified_utc": reps.get("remote", {}).get("verified_utc"),
+                        "missing": missing})
         return out
+
+    @staticmethod
+    def _heads_missing(r: Remote, heads: list[tuple[str, int]], *, jobs: int = WHERE_JOBS) -> int:
+        """How many of `heads` (key, expected bytes) the remote lacks or holds at another size; HEADs run `jobs` at a time."""
+        def check(item: tuple[str, int]) -> bool:
+            hd = r.head(item[0])
+            return hd is not None and hd["bytes"] == item[1]
+        if len(heads) <= 1:
+            return sum(1 for it in heads if not check(it))
+        with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(heads)))) as ex:
+            return sum(1 for ok in ex.map(check, heads) if not ok)
 
     # ---- attempts -----------------------------------------------------------------------------------------------------------------------
 
@@ -546,10 +598,7 @@ class LocalStore:
             if head["bytes"] != size:
                 rep["errors"].append(f"{key}: remote size {head['bytes']} != {size}")
                 continue
-            if size > SINGLE_PUT_MAX:
-                rep["errors"].append(f"{key}: > 5 GiB; per-part check via {key}.parts.json is not implemented")
-                continue
-            err = self._readback(r, key, sha)
+            err = self._readback(r, key, sha)                            # streamed to a temp file: a > 5 GiB (multipart) object reads back the same way
             if err:
                 rep["errors"].append(err)
             else:
@@ -581,7 +630,9 @@ class LocalStore:
                         out["verified"] = VERIFY_HEAD
                     else:
                         out["error"] = f"{key}: remote ETag {head['etag']} != local MD5 {res['md5']}"
-                else:                                                   # a multipart ETag, or a remote without one: content must be read
+                elif res.get("multipart") and head.get("etag") == res["multipart"]["etag"]:   # the multipart ETag the local parts yield
+                    out["verified"] = VERIFY_MULTIPART
+                else:                                                   # a multipart ETag we cannot reproduce, or a remote without one: content must be read
                     out["error"], out["verified"] = self._readback(r, key, sha), VERIFY_READBACK
             else:
                 out["error"], out["verified"] = self._readback(r, key, sha), VERIFY_READBACK
@@ -607,11 +658,6 @@ class LocalStore:
         files = m.payload.files if m.payload and m.payload.type == "tree" else []
         rel = {f.sha256: f.path for f in files or []}
         blobs = [(object_key(h), self._resolve_blob(h, art_id, rel.get(h)), n, h) for h, n in m.blobs()]
-        limit = getattr(r, "single_put_max", None)
-        big = [(k, n) for k, _, n, _ in blobs if limit is not None and n > limit]
-        if big:
-            raise StoreError(f"{art_id}: {big[0][0]} is {big[0][1]} bytes > {limit} (one PutObject); multipart upload is not implemented"
-                             + (f" ({len(big)} such blobs)" if len(big) > 1 else ""))
         mode = verify if preserve else None
         results: list[dict | None] = [None] * len(blobs)
         done = 0

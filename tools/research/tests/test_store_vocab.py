@@ -39,9 +39,9 @@ def fs_remote(env):
 
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "breakthrough")
-VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by")
+VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
-                 "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs")
+                 "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor")
 
 
 def test_vocabulary_pins_every_key_by_asserter_and_form():
@@ -70,17 +70,37 @@ def test_vocabulary_pins_every_key_by_asserter_and_form():
 def test_check_is_enum_and_bool_only_and_reads_values_as_the_catalog_does():
     assert vocab.check("verified", "accepted") is None
     assert "not one of accepted, rejected, not-transferable, no-dumps" in vocab.check("verified", "yes")
-    assert vocab.check("model_agrees", True) is None and vocab.check("model_agrees", "true") is None       # bool and its scalar_text agree
-    assert vocab.check("model_agrees", False) is None and vocab.check("model_agrees", "false") is None
-    assert "'True' is not one of true, false" in vocab.check("model_agrees", "True")                       # a Python repr is a different word
+    assert vocab.check("model_agrees", True) is None and vocab.check("model_agrees", False) is None
+    assert "is a string; the key's form is bool" in vocab.check("model_agrees", "true")                    # the word is not the value (hygiene 2026-09-23)
+    assert "is a string; the key's form is bool" in vocab.check("model_agrees", "True")                    # a Python repr: the same complaint
     assert vocab.check("model_agrees", "yes") and vocab.check("zk", 1)
     assert vocab.check("proof_class", "non-zk") and vocab.check("proof_class", "NON_ZK_PROOF") is None
-    assert vocab.check("candidate", "A-GKR") and vocab.check("candidate", "A") is None
-    # free forms are documentation, never checked
-    for key, value in (("soundness", "2^-128 (heuristic)"), ("K", 1536), ("K", "1536"), ("overhead", 1.5), ("assumptions", ["ROM"]), ("note", "")):
+    assert vocab.check("candidate", "A-GKR") is None and "old spelling of 'A-GKR'" in vocab.check("candidate", "A")
+    # free forms are documentation, never checked; int / number forms only object to strings
+    for key, value in (("soundness", "2^-128 (heuristic)"), ("K", 1536), ("overhead", 1.5), ("assumptions", ["ROM"]), ("note", "")):
         assert vocab.check(key, value) is None, (key, value)
-    assert "not in the vocabulary" in vocab.check("checker", "x") and vocab.is_known("checker") is False and vocab.key("checker") is None
+    assert "is a string; the key's form is int" in vocab.check("K", "1536")
+    assert "old spelling of 'verifier'" in vocab.check("checker", "x") and vocab.is_known("checker") is False and vocab.key("checker") is None
+    assert "is a ref" in vocab.check("result_artifact", "art:" + "0" * 64) and "not in the vocabulary" in vocab.check("nonesuch", 1)
     assert vocab.is_known("verified")
+
+
+def test_canonical_spellings_and_coercion():
+    assert vocab.canonical_key("notes") == vocab.canonical_key("verify_note") == "note" and vocab.canonical_key("batch") == "B"
+    assert vocab.canonical_key("checker") == "verifier" and vocab.canonical_key("verifier") == "verifier"
+    assert vocab.canonical_value("candidate", "A") == "A-GKR" and vocab.canonical_value("candidate", "SP1") == "SP1" and vocab.canonical_value("note", "A") == "A"
+    assert vocab.coerce("zk", "true") is True and vocab.coerce("zk", "False") is False and vocce("model_agrees", " true ") is True
+    assert vocab.coerce("independently_verified", "true") is True and vocab.coerce("zk", "yes") == "yes" and vocab.coerce("zk", True) is True
+    assert vocab.coerce("B", "4096") == 4096 and vocab.coerce("batch", "64") == 64 and vocab.coerce("B", "4096.0") == "4096.0" and vocab.coerce("K", 1536) == 1536
+    assert vocab.coerce("overhead", "1.5") == 1.5 and vocab.coerce("overhead", "2") == 2 and vocab.coerce("overhead", "1e3") == 1000.0 and vocab.coerce("overhead", "n/a") == "n/a"
+    assert vocab.coerce("soundness", "128") == "128" and vocab.coerce("nonesuch", "true") == "true", "free-text and unknown keys are never coerced"
+    assert set(vocab.CANDIDATES) == {"A-GKR", "B-AIR", "B-Ligero", "C", "SP1", "shared"} and "A" not in vocab.CANDIDATES
+    assert set(vocab.REF_KEYS) == {"path", "result_artifact", "constructed_from_attempt"} and not (set(vocab.REF_KEYS) & set(vocab.KEYS))
+    assert vocab.is_known("finding") and vocab.is_known("level") and vocab.is_known("anchor")
+
+
+def vocce(*a):  # noqa: N802  (a typo-guard: the one call site above means vocab.coerce)
+    return vocab.coerce(*a)
 
 
 def test_render_and_cli_vocab(env, capsys):
@@ -101,13 +121,13 @@ def test_render_and_cli_vocab(env, capsys):
 
 def test_label_warns_on_stderr_and_writes_anyway(env, capsys):
     st = LocalStore()
-    assert main(["label", ART, "checker", "v1", "--by", "lane-x"]) == 0
+    assert main(["label", ART, "nonesuch", "v1", "--by", "lane-x"]) == 0
     out, err = capsys.readouterr()
     assert Path(out.strip()).is_file() and err.count("\n") == 1
-    assert "warning: label key 'checker' is not in the vocabulary" in err and "stored anyway" in err
-    assert main(["label", ART, "model_agrees", "True", "--by", "lane-x"]) == 0
+    assert "warning: label key 'nonesuch' is not in the vocabulary" in err and "stored anyway" in err
+    assert main(["label", ART, "model_agrees", "maybe", "--by", "lane-x"]) == 0
     out, err = capsys.readouterr()
-    assert Path(out.strip()).is_file() and "warning: model_agrees='True' is not one of true, false; stored anyway" in err
+    assert Path(out.strip()).is_file() and "warning: model_agrees='maybe' is not one of true, false; stored anyway" in err
     assert main(["label", ART, "model_agrees", "true", "--by", "lane-x", "--value-json"]) == 0
     out, err = capsys.readouterr()
     assert Path(out.strip()).is_file() and err == ""
@@ -116,7 +136,42 @@ def test_label_warns_on_stderr_and_writes_anyway(env, capsys):
     assert Path(out.strip()).is_file() and err == ""
     # every one of the four is in the store, the warned ones included, exactly as given
     labels = {(l.key, l.value) for l in st.labels(ART)}
-    assert labels == {("checker", "v1"), ("model_agrees", "True"), ("model_agrees", True), ("verified", "accepted")}
+    assert labels == {("nonesuch", "v1"), ("model_agrees", "maybe"), ("model_agrees", True), ("verified", "accepted")}
+
+
+def test_label_writes_the_canonical_key_and_form(env, capsys):
+    """Hygiene (2026-09-23): the file holds the vocabulary's spelling and form -- a real boolean for zk / model_agrees /
+    independently_verified, an int for B, `note` for `notes` / `verify_note`, `verifier` for `checker`, `A-GKR` for candidate `A` --
+    whatever the caller typed; stderr says what was rewritten.  Refs written as labels are stored with a warning."""
+    st = LocalStore()
+    assert main(["label", ART, "zk", "true", "--by", "lane-x"]) == 0
+    out, err = capsys.readouterr()
+    assert "value 'true' written as true" in err and "warning" not in err
+    assert main(["label", ART, "model_agrees", "False", "--by", "lane-x"]) == 0
+    assert "value 'False' written as false" in capsys.readouterr().err
+    assert main(["label", ART, "independently_verified", "true", "--by", "verifier-1"]) == 0
+    capsys.readouterr()
+    assert main(["label", ART, "batch", "4096", "--by", "lane-x"]) == 0
+    err = capsys.readouterr().err
+    assert "key 'batch' written as 'B'" in err and "value '4096' written as 4096" in err and "warning" not in err
+    assert main(["label", ART, "verify_note", "Rust 12T", "--by", "verify"]) == 0
+    assert "key 'verify_note' written as 'note'" in capsys.readouterr().err
+    assert main(["label", ART, "checker", "v2", "--by", "lane-x"]) == 0
+    assert "key 'checker' written as 'verifier'" in capsys.readouterr().err
+    assert main(["label", ART, "candidate", "A", "--by", "a-lane"]) == 0
+    err = capsys.readouterr().err
+    assert "value 'A' written as \"A-GKR\"" in err and "warning" not in err
+    assert main(["label", ART, "result_artifact", "art:" + "1" * 64, "--by", "lane-x"]) == 0
+    assert "warning: label key 'result_artifact' names another store object: that is a ref" in capsys.readouterr().err
+    assert main(["label", ART, "overhead", "12.5", "--by", "lane-x"]) == 0 and main(["label", ART, "soundness", "128", "--by", "lane-x"]) == 0
+    got = {(l.key, l.value) for l in st.labels(ART)}
+    assert got == {("zk", True), ("model_agrees", False), ("independently_verified", True), ("B", 4096), ("note", "Rust 12T"), ("verifier", "v2"),
+                   ("candidate", "A-GKR"), ("result_artifact", "art:" + "1" * 64), ("overhead", 12.5), ("soundness", "128")}
+    raw = [json.loads(p.read_bytes()) for p in sorted(st.labels_dir(ART).glob("*.json"))]
+    assert {r["key"]: r["value"] for r in raw}["zk"] is True and {r["key"]: r["value"] for r in raw}["B"] == 4096, "the FILE holds the bool / int"
+    for lab in st.labels(ART):
+        if lab.key not in ("result_artifact",):
+            assert vocab.check(lab.key, lab.value) is None, (lab.key, lab.value)
 
 
 # ---- refresh-fixtures -----------------------------------------------------------------------------------------------------------------

@@ -3,21 +3,34 @@
   research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
   research data show ART|ATTEMPT|DRV [--json]      manifest / attempt / attempts with that derivation
   research data where ART [--json]                 replicas: local / repo / remote (+ verified_utc)
-  research data push [ART|RUN ...] [--pending] [--jobs N] [--verify head|readback]
+  research data push [ART|RUN ...] [--pending [--no-labels]] [--jobs N] [--verify head|readback]
                                                    preserve on the remote: blobs uploaded concurrently and verified, then the manifest (PRESERVED);
-                                                   a run pushes its attempt + outputs
-  research data fetch ART [--to DIR]               materialise the payload (file or tree); prints the path
+                                                   a run pushes its attempt + outputs; --pending also pushes the local assertions the remote lacks
+  research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
+                                                   union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
+                                                   --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
+  research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
+                                                   materialise the payload (file or tree, or just the files matching --path); prints the path;
+                                                   --list prints the tree's files (path, bytes, local/remote) and fetches nothing
+  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D]] [--min-mb M] [--keep-trees] [--json]
+                                                   free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
+                                                   --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--json]
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
-                                                   warns (stderr) on a key outside the vocabulary or a value outside its enum; writes anyway
+                                                   writes the canonical key/spelling in the vocabulary's form (zk true -> a real boolean, batch -> B,
+                                                   candidate A -> A-GKR); warns (stderr) on a key outside the vocabulary or a value outside its enum; writes anyway
   research data vocab [--json]                     the label vocabulary (vocab.py): key, asserter group, value form, enum values
+  research data vocab-check [--json] [--strict]    read-only audit of labels/: unknown keys, old spellings, strings in bool/int keys, off-enum values,
+                                                   refs written as labels; counts, asserters, example targets
   research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR]
                                                    re-register every fixtures/artifacts.json entry whose bytes changed; old id kept under `previous`
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
-  research data reindex [--remote]
+  research data reindex [--remote]                 rebuild the catalog; --remote first pulls the manifests/attempts/labels the remote has and we lack
+  research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
+                                                   refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
   research data sql "SELECT ..." [--json]          read-only connection
   research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
                                                    a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
@@ -36,6 +49,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import ids, vocab
+from .index import IGNORE_VERSION_ENV, CatalogVersionError
 from .local import LocalStore, StoreError
 from .remote import ConfigError, RemoteConflict
 
@@ -211,16 +225,68 @@ def cmd_where(argv: list[str]) -> int:
 
 
 def cmd_fetch(argv: list[str]) -> int:
+    """Materialise a payload, or with `--path GLOB` (repeatable) just the matching subtree of a tree artifact (`rep1/*`, `*.proof`,
+    a bare directory name selects its subtree); the on-disk layout under `--to` is the artifact's own.  `--list` prints the files
+    instead (path, bytes, local | remote | absent) and fetches nothing: `local` = the blob is in objects/, `remote` = the catalog
+    flags the artifact as on the remote (no per-file HEAD)."""
     ap = _ap("fetch")
     ap.add_argument("art")
     ap.add_argument("--to", default=None, metavar="DIR", help="materialise under this directory (default: the store's own cache)")
+    ap.add_argument("--path", action="append", default=[], metavar="GLOB", help="only the files matching this glob (repeatable); tree artifacts")
+    ap.add_argument("--list", action="store_true", help="list the payload files (path, bytes, local/remote) and fetch nothing")
+    ap.add_argument("--json", action="store_true", help="with --list: the rows as JSON")
     ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    if ns.list:
+        rows = st.listing(ns.art, paths=ns.path or None)
+        if ns.json:
+            _dump(rows)
+            return 0
+        for r in rows:
+            print(f"{r['path']:<60} {r['bytes']:>12}  {'local' if r['local'] else ('remote' if r['remote'] else 'ABSENT')}")
+        n_local = sum(1 for r in rows if r["local"])
+        print(f"{len(rows)} file(s), {sum(r['bytes'] for r in rows)} bytes; {n_local} local, {len(rows) - n_local} not local"
+              + ("" if not rows or rows[0]["remote"] else " (artifact not flagged on the remote)"), file=sys.stderr)
+        return 0
     to = None
     if ns.to:
         to = Path(ns.to)
         to.mkdir(parents=True, exist_ok=True)
-    print(LocalStore(ns.store).fetch(ns.art, to))
+    print(st.fetch(ns.art, to, paths=ns.path or None))
     return 0
+
+
+def cmd_evict(argv: list[str]) -> int:
+    """Free local disk by evicting copies whose bytes are PRESERVED on the remote (`evict.py`): store blobs held only by artifacts with a
+    verified remote replica (largest first) and the `trees/` cache, and with `--runs` the big files of finished run directories whose
+    `run_files` artifact is verified (oldest first).  Stops when the free space reaches `--target-free-gb`.  Never touches pending
+    objects, manifests, attempts, labels or the catalog.  `--dry-run` reports without removing anything."""
+    from . import evict as EV  # noqa: PLC0415
+
+    ap = _ap("evict")
+    ap.add_argument("--target-free-gb", required=True, type=float, metavar="N", help="stop once this much is free on the store's filesystem")
+    ap.add_argument("--dry-run", action="store_true", help="report the plan; remove nothing")
+    ap.add_argument("--min-mb", type=float, default=EV.MIN_BYTES / 2**20, metavar="M", help="only blobs / files of at least this size (default 1)")
+    ap.add_argument("--keep-trees", action="store_true", help="leave the trees/ cache alone")
+    ap.add_argument("--runs", action="store_true", help="also evict preserved big files from finished run directories (writes run-files.evicted.json)")
+    ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
+    ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 30)")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    target = EV.parse_gb(str(ns.target_free_gb))
+    min_bytes = int(ns.min_mb * 2**20)
+    say = None if ns.json else (lambda s: print(s, flush=True))
+    rep: dict = {"store": EV.evict_store(st, target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes, keep_trees=ns.keep_trees, log=say)}
+    if ns.runs:
+        from ..runs import runs_root  # noqa: PLC0415
+
+        rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
+                                    quiet_s=ns.quiet_min * 60, log=say)
+    if ns.json:
+        _dump(rep)
+    last = rep.get("runs") or rep["store"]
+    return 0 if last["reached_target"] else 1
 
 
 def cmd_verify(argv: list[str]) -> int:
@@ -313,11 +379,63 @@ def cmd_label(argv: list[str]) -> int:
     ap.add_argument("--value-json", action="store_true", help="parse VALUE as JSON instead of a string")
     ns = ap.parse_args(argv)
     value = json.loads(ns.value) if ns.value_json else ns.value
-    why = vocab.check(ns.key, value)                       # warning only (README §8.1): the label is written whatever the vocabulary says
+    key = vocab.canonical_key(ns.key)                      # hygiene (§8.1): the canonical key and spelling go in the file, the form the vocabulary
+    value = vocab.coerce(key, vocab.canonical_value(key, value))   # declares (a real bool for zk / model_agrees, an int for B), never the word
+    for note in (f"key {ns.key!r} written as {key!r}" if key != ns.key else None,
+                 f"value {ns.value!r} written as {json.dumps(value)}" if value != (json.loads(ns.value) if ns.value_json else ns.value) else None):
+        if note:
+            print(f"research data label: {note}", file=sys.stderr)
+    why = vocab.check(key, value)                          # warning only: the label is written whatever the vocabulary says
     if why:
         print(f"research data label: warning: {why}; stored anyway", file=sys.stderr)
-    print(LocalStore(ns.store).add_label(ns.target, ns.key, value, ns.by, ref=ns.ref))
+    print(LocalStore(ns.store).add_label(ns.target, key, value, ns.by, ref=ns.ref))
     return 0
+
+
+def cmd_vocab_check(argv: list[str]) -> int:
+    """Read-only audit of labels/ against the vocabulary (`vocab_check.py`): unknown keys, old spellings of keys and values, bool / int /
+    number keys holding strings, enum values off the set, refs written as labels, unreadable files -- each with counts, asserters and
+    example targets.  Exit 0 always (it is a report); `--strict` exits 1 when anything is found."""
+    from . import vocab_check as VC  # noqa: PLC0415
+
+    ap = _ap("vocab-check")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--strict", action="store_true", help="exit 1 when there is any finding")
+    ns = ap.parse_args(argv)
+    rep = VC.audit(LocalStore(ns.store))
+    _dump(rep) if ns.json else print(VC.render(rep))
+    return 1 if ns.strict and rep["findings"] else 0
+
+
+def cmd_labels_sync(argv: list[str]) -> int:
+    """Union the local labels/ with the remote's `labels/` prefix (`labels_sync.py`): every assertion goes up under its content hash
+    (`labels/<target>/<sha256>.json`, immutable, so two machines never overwrite each other), and every remote assertion we lack comes
+    down into the store's own layout.  `--from-backup ART` unions a `labels-backup/v1` tarball instead; `--from-dir DIR` any directory of
+    assertion files (another store's labels/).  Read-only for the remote with `--pull-only`; nothing is ever deleted or rewritten."""
+    from . import labels_sync as LS  # noqa: PLC0415
+
+    ap = _ap("labels-sync")
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument("--push-only", action="store_true", help="only upload local assertions the remote lacks")
+    g.add_argument("--pull-only", action="store_true", help="only download remote assertions this store lacks")
+    g.add_argument("--from-backup", metavar="ART", help="union a labels-backup/v1 artifact's tarball into labels/ (no remote needed)")
+    g.add_argument("--from-dir", metavar="DIR", help="union a directory of assertion files into labels/ (no remote needed)")
+    ap.add_argument("--jobs", type=int, default=LS.SYNC_JOBS, metavar="N")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    warn = None if ns.json else (lambda s: print(s, file=sys.stderr))
+    if ns.from_backup or ns.from_dir:
+        rep = LS.import_backup(st, ns.from_backup, warn=warn) if ns.from_backup else LS.import_dir(st, Path(ns.from_dir), warn=warn)
+        _dump(rep) if ns.json else print(f"labels: {rep['seen']} in {ns.from_backup or ns.from_dir}: {rep['added']} added, {rep['already']} already here, {rep['bad']} unreadable")
+        return 0
+    rep = LS.sync(st, push=not ns.pull_only, pull=not ns.push_only, jobs=max(1, ns.jobs), log=warn)
+    if ns.json:
+        _dump(rep)
+    else:
+        print(f"labels: {rep['local']} local, {rep['remote_before']} on {rep['remote']}: {len(rep['pushed'])} pushed, {len(rep['pulled'])} pulled, "
+              f"{rep['already']} already on both" + (f", {len(rep['bad'])} bad remote key(s) skipped" if rep["bad"] else ""))
+    return 1 if rep["bad"] else 0
 
 
 def cmd_vocab(argv: list[str]) -> int:
@@ -333,12 +451,40 @@ def cmd_vocab(argv: list[str]) -> int:
 
 def cmd_reindex(argv: list[str]) -> int:
     ap = _ap("reindex")
-    ap.add_argument("--remote", action="store_true", help="also list the remote; fetch manifests/attempts it has and we lack")
+    ap.add_argument("--remote", action="store_true", help="also list the remote; fetch manifests/attempts/labels it has and we lack")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
+    pulled = None
+    if ns.remote and st.remote is not None:                         # labels first: the rebuild below then indexes them with everything else
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        pulled = len(LS.sync(st, push=False, pull=True, log=None if ns.json else (lambda s: print(s, file=sys.stderr)))["pulled"])
     n = st.reindex(remote=ns.remote)
-    _dump(n) if ns.json else print(f"reindexed {st.root}: {n['artifacts']} artifacts, {n['attempts']} attempts, {n['labels']} labels")
+    if pulled is not None:
+        n["labels_pulled"] = pulled
+    _dump(n) if ns.json else print(f"reindexed {st.root}: {n['artifacts']} artifacts, {n['attempts']} attempts, {n['labels']} labels"
+                                   + (f" ({pulled} pulled from the remote)" if pulled is not None else ""))
+    return 0
+
+
+def cmd_catalog(argv: list[str]) -> int:
+    """The catalog's schema version against this code's, what opening it just migrated (older catalogs are brought forward on every
+    open, in one transaction), and row counts per table.  Exit 0 when current, 3 (before printing) when the catalog is NEWER than
+    the code -- see `CatalogVersionError`."""
+    ap = _ap("catalog")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    info = LocalStore(ns.store).index.info()
+    if ns.json:
+        _dump(info)
+        return 0
+    mig = info["migration"]
+    did = (f"migrated {' , '.join(mig['steps'])} on this open" if mig["steps"] else
+           ("opened under " + IGNORE_VERSION_ENV if mig.get("ignored") else "current"))
+    print(f"{info['path']}: schema v{info['schema_version']} (code v{info['code_version']}); {did}; {info['bytes'] / 1e6:.1f} MB")
+    for t, n in info["tables"].items():
+        print(f"  {t:<20} {n:>8} rows")
     return 0
 
 
@@ -389,6 +535,7 @@ def cmd_push(argv: list[str]) -> int:
     ap.add_argument("--jobs", type=int, default=32, metavar="N", help="concurrent uploads per artifact (default 32)")
     ap.add_argument("--verify", choices=["head", "readback"], default="head",
                     help="per-object check: head = Content-Length + single-part ETag == MD5 (default); readback = download + sha256")
+    ap.add_argument("--no-labels", action="store_true", help="with --pending: do not push the local assertions the remote lacks")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if ns.jobs < 1:
@@ -438,15 +585,26 @@ def cmd_push(argv: list[str]) -> int:
                 if note not in notes_seen:                             # e.g. the remote switching conditional PUT off: said once
                     notes_seen.add(note)
                     print(f"research data push: note: {note}", file=sys.stderr)
+    labels_rep = None
+    if ns.pending and not ns.no_labels:                             # labels are assertions about what was just pushed: they travel with it
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        try:
+            labels_rep = LS.sync(st, push=True, pull=False, jobs=ns.jobs)
+        except Exception as e:  # noqa: BLE001
+            labels_rep = {"error": f"{type(e).__name__}: {e}", "pushed": [], "local": None, "already": None}
     bad = [x for x in reports if not x["preserved"]]
     if ns.json:
-        _dump({"remote": r.describe(), "pushed": reports, "not_preserved": len(bad)})
+        _dump({"remote": r.describe(), "pushed": reports, "not_preserved": len(bad), "labels": labels_rep})
     else:
         for x in reports:
             if x["kind"] == "attempt":
                 print(f"{x['id']}  attempt  {'PRESERVED' if x['preserved'] else 'NOT preserved: ' + '; '.join(x.get('errors') or ['absent'])}")
         print(f"{len(reports) - len(bad)}/{len(reports)} preserved on {r.describe()}")
-    return 1 if bad else 0
+        if labels_rep is not None:
+            print(f"labels: {len(labels_rep['pushed'])} pushed, {labels_rep['already']} already there" if "error" not in labels_rep
+                  else f"labels: NOT pushed: {labels_rep['error']}")
+    return 1 if bad or (labels_rep and "error" in labels_rep) else 0
 
 
 def cmd_mint_credential(argv: list[str]) -> int:
@@ -570,7 +728,8 @@ def cmd_doctor(argv: list[str]) -> int:
 COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "select": cmd_select, "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
-    "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor,
+    "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
+    "catalog": cmd_catalog, "vocab-check": cmd_vocab_check,
 }
 
 
@@ -586,6 +745,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         return fn(rest)
+    except CatalogVersionError as e:                                  # the worktree is behind the catalog: say so, exit 3, no traceback
+        print(f"research data {cmd}: {e}", file=sys.stderr)
+        return 3
     except (StoreError, ConfigError, RemoteConflict, ValueError, OSError, NotImplementedError, sqlite3.Error) as e:
         print(f"research data {cmd}: {e}", file=sys.stderr)
         return 1

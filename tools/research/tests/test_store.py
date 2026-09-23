@@ -670,18 +670,30 @@ class FakeS3:
     `If-None-Match: *` -> 412 when the key exists.  Knobs: `reject_conditional` = 400 | 501 models a service without conditional PUT
     (a `NotImplemented` error body); `corrupt` keys are stored with one byte flipped (so their ETag != the client's MD5 and their
     read-back sha256 != the manifest's); `head_404_once` keys answer 404 to their first HEAD although present (a writer that landed
-    between the client's HEAD and PUT, so the conditional PUT meets a 412).  `log` records (method, key, conditional?) in arrival order."""
+    between the client's HEAD and PUT, so the conditional PUT meets a 412).  `log` records (method, key, conditional?) in arrival order.
 
-    def __init__(self, reject_conditional: int | None = None, corrupt: set[str] = frozenset(), head_404_once: set[str] = frozenset()):
+    Multipart as S3 / R2 do it: `POST ?uploads` -> UploadId, `PUT ?partNumber=&uploadId=` stores a part (ETag = its MD5), `POST ?uploadId=`
+    assembles the parts in PartNumber order and gives the object the multipart ETag `md5(md5s)-n` (kept in `etags`, so HEAD / GET report
+    it), `DELETE ?uploadId=` aborts.  `fail_part` = a part number whose PUT answers 500 every time (the client must abort);
+    `uploads` holds the in-flight uploads, `aborted` the ids that were cleaned up."""
+
+    def __init__(self, reject_conditional: int | None = None, corrupt: set[str] = frozenset(), head_404_once: set[str] = frozenset(),
+                 fail_part: int | None = None):
         import http.server
         import threading
         import urllib.parse
 
         self.objects: dict[str, bytes] = {}
+        self.etags: dict[str, str] = {}
+        self.uploads: dict[str, tuple[str, dict[int, bytes]]] = {}
+        self.aborted: list[str] = []
         self.log: list[tuple[str, str, bool]] = []
         self.lock = threading.Lock()
-        self.reject_conditional, self.corrupt, self.head_404_once = reject_conditional, set(corrupt), set(head_404_once)
+        self.reject_conditional, self.corrupt, self.head_404_once, self.fail_part = reject_conditional, set(corrupt), set(head_404_once), fail_part
         state = self
+
+        def etag_of(key: str) -> str:
+            return state.etags.get(key) or hashlib.md5(state.objects[key]).hexdigest()
 
         class H(http.server.BaseHTTPRequestHandler):
             def log_message(self, *a):  # noqa: D102
@@ -702,10 +714,22 @@ class FakeS3:
                     self.wfile.write(body)
 
             def do_PUT(self):
-                key, _ = self._key()
+                key, q = self._key()
                 body = self.rfile.read(int(self.headers["Content-Length"]))
                 cond = self.headers.get("If-None-Match") == "*"
                 with state.lock:
+                    if "partNumber" in q:
+                        n = int(q["partNumber"])
+                        state.log.append(("PART", f"{key}#{n}", False))
+                        if self.headers["x-amz-content-sha256"] != hashlib.sha256(body).hexdigest():
+                            return self._reply(400, b"<Error><Code>XAmzContentSHA256Mismatch</Code></Error>")
+                        up = state.uploads.get(q.get("uploadId", ""))
+                        if up is None or up[0] != key:
+                            return self._reply(404, b"<Error><Code>NoSuchUpload</Code></Error>")
+                        if state.fail_part == n:
+                            return self._reply(500, b"<Error><Code>InternalError</Code></Error>")
+                        up[1][n] = body
+                        return self._reply(200, headers={"ETag": f'"{hashlib.md5(body).hexdigest()}"'})
                     state.log.append(("PUT", key, cond))
                     if self.headers["x-amz-content-sha256"] != hashlib.sha256(body).hexdigest():
                         return self._reply(400, b"<Error><Code>XAmzContentSHA256Mismatch</Code></Error>")
@@ -716,7 +740,49 @@ class FakeS3:
                     if key in state.corrupt:
                         body = bytes([body[0] ^ 0xFF]) + body[1:]
                     state.objects[key] = body
+                    state.etags.pop(key, None)
                 self._reply(200, headers={"ETag": f'"{hashlib.md5(body).hexdigest()}"'})
+
+            def do_POST(self):
+                key, q = self._key()
+                body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                with state.lock:
+                    if "uploads" in q:
+                        uid = f"up{len(state.uploads) + len(state.aborted) + 1:04d}"
+                        state.uploads[uid] = (key, {})
+                        state.log.append(("INITIATE", key, False))
+                        return self._reply(200, (f'<?xml version="1.0" encoding="UTF-8"?><InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                                                 f"<Bucket>bkt</Bucket><Key>{key}</Key><UploadId>{uid}</UploadId></InitiateMultipartUploadResult>").encode())
+                    up = state.uploads.get(q.get("uploadId", ""))
+                    if up is None or up[0] != key:
+                        return self._reply(404, b"<Error><Code>NoSuchUpload</Code></Error>")
+                    import xml.etree.ElementTree as ET
+
+                    want = [(int(p.findtext("PartNumber")), p.findtext("ETag").strip('"')) for p in ET.fromstring(body).iter("Part")]
+                    assert want == sorted(want) and [n for n, _ in want] == sorted(up[1]), "every uploaded part listed once, ascending"
+                    for n, et in want:
+                        if hashlib.md5(up[1][n]).hexdigest() != et:
+                            return self._reply(400, b"<Error><Code>InvalidPart</Code></Error>")
+                    sizes = {len(up[1][n]) for n, _ in want[:-1]}
+                    if len(sizes) > 1:                                  # R2: every part but the last must be the same size
+                        return self._reply(400, b"<Error><Code>InvalidPart</Code><Message>All non-trailing parts must have the same length.</Message></Error>")
+                    data = b"".join(up[1][n] for n, _ in want)
+                    etag = hashlib.md5(b"".join(hashlib.md5(up[1][n]).digest() for n, _ in want)).hexdigest() + f"-{len(want)}"
+                    state.objects[key], state.etags[key] = data, etag
+                    del state.uploads[q["uploadId"]]
+                    state.log.append(("COMPLETE", key, False))
+                    return self._reply(200, (f'<?xml version="1.0" encoding="UTF-8"?><CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                                             f'<Key>{key}</Key><ETag>"{etag}"</ETag></CompleteMultipartUploadResult>').encode())
+
+            def do_DELETE(self):
+                key, q = self._key()
+                with state.lock:
+                    up = state.uploads.pop(q.get("uploadId", ""), None)
+                    state.log.append(("ABORT", key, False))
+                    if up is None:
+                        return self._reply(404, b"<Error><Code>NoSuchUpload</Code></Error>")
+                    state.aborted.append(q["uploadId"])
+                self._reply(204)
 
             def do_HEAD(self):
                 key, _ = self._key()
@@ -726,9 +792,10 @@ class FakeS3:
                         state.head_404_once.discard(key)
                         return self._reply(404, head_only=True, headers={"Content-Length": "0"})
                     data = state.objects.get(key)
+                    etag = etag_of(key) if data is not None else None
                 if data is None:
                     return self._reply(404, head_only=True, headers={"Content-Length": "0"})
-                self._reply(200, head_only=True, headers={"Content-Length": str(len(data)), "ETag": f'"{hashlib.md5(data).hexdigest()}"'})
+                self._reply(200, head_only=True, headers={"Content-Length": str(len(data)), "ETag": f'"{etag}"'})
 
             def do_GET(self):
                 key, q = self._key()
@@ -740,9 +807,10 @@ class FakeS3:
                                + "".join(f"<Contents><Key>{k}</Key></Contents>" for k in keys) + "<IsTruncated>false</IsTruncated></ListBucketResult>").encode()
                         return self._reply(200, xml)
                     data = state.objects.get(key)
+                    etag = etag_of(key) if data is not None else None
                 if data is None:
                     return self._reply(404)
-                self._reply(200, data, headers={"ETag": f'"{hashlib.md5(data).hexdigest()}"'})
+                self._reply(200, data, headers={"ETag": f'"{etag}"'})
 
         self.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
         self.srv.daemon_threads = True
@@ -897,17 +965,62 @@ def test_push_surfaces_a_bad_etag_as_not_preserved_and_withholds_the_manifest(fa
     assert not st2.verify(art2)["preserved"] and "read-back sha256" in st2.verify(art2)["errors"][0]
 
 
-def test_push_refuses_a_blob_too_big_for_one_put(fake_s3, tmp_path, monkeypatch, capsys):
-    fake_s3()
+def test_push_uploads_a_blob_above_the_single_put_limit_in_parts(fake_s3, tmp_path, monkeypatch, capsys):
+    """A blob over `single_put_max` goes up as a multipart upload (initiate / N parts / complete), the service's multipart ETag must be
+    the one the local parts yield, the object is PRESERVED (`etag-multipart`), and a `<key>.parts.json` sidecar records the parts.  A
+    second push HEADs and skips.  A part that keeps failing aborts the upload (no orphan) and the artifact is NOT preserved."""
+    s = fake_s3()
+    monkeypatch.setattr(remote_s3.S3Remote, "single_put_max", 8000)     # limits scaled down: 8 kB "PutObject", 4 kB parts
+    monkeypatch.setattr(remote_s3.S3Remote, "part_size", 4096)
     st = LocalStore()
-    art = st.put_artifact("proof/v1", {}, file=_many_files(tmp_path / "t", 1) / "d0" / "f00000.bin")
-    st.remote.single_put_max = 0
-    with pytest.raises(StoreError, match="multipart upload is not implemented"):
-        st.push(art)
+    big = tmp_path / "big.bin"
+    big.write_bytes(os.urandom(4096 * 2 + 1000))                          # 3 parts: 4096, 4096, 1000
+    small = _many_files(tmp_path / "t", 1) / "d0" / "f00000.bin"
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    shutil.copyfile(big, tree / "big.bin")
+    shutil.copyfile(small, tree / "small.bin")
+    art = st.put_artifact("run-files/v1", {}, tree=tree)
+    m = st.get_manifest(art)
+    big_sha = hashlib.sha256(big.read_bytes()).hexdigest()
+    key = f"objects/sha256/{big_sha}"
+    rep = st.push(art, jobs=4)
+    assert rep["preserved"] and rep["errors"] == [] and rep["uploaded"] == 3 and rep["verified"] == "etag-md5,etag-multipart", rep
+    assert s.objects[key] == big.read_bytes() and s.etags[key].endswith("-3") and s.uploads == {} and s.aborted == []
+    parts = remote_s3.hash_parts(big, 4096)
+    assert s.etags[key] == remote_s3.multipart_etag([p["md5"] for p in parts])
+    seq = [(m_, k) for m_, k, _ in s.log if k.startswith(key)]
+    assert seq[0] == ("HEAD", key) and seq[1] == ("INITIATE", key) and sorted(seq[2:5]) == [("PART", f"{key}#1"), ("PART", f"{key}#2"), ("PART", f"{key}#3")]
+    assert seq[5] == ("COMPLETE", key) and ("HEAD", f"{key}.parts.json") in seq and ("PUT", f"{key}.parts.json") in seq
+    side = json.loads(s.objects[f"{key}.parts.json"])
+    assert side["schema"] == "research/parts/v1" and side["bytes"] == 9192 and side["part_bytes"] == 4096 and side["sha256"] == big_sha and side["etag"] == s.etags[key]
+    assert [p["bytes"] for p in side["parts"]] == [4096, 4096, 1000] and [p["n"] for p in side["parts"]] == [1, 2, 3]
+    assert st.index.replicas(art)["remote"]["verified"] == "etag-md5,etag-multipart"
+    assert st.verify(art)["preserved"], "read-back of a multipart object is the same streamed GET + sha256"
+
+    n = len(s.log)
+    again = st.push(art, jobs=4)
+    assert again["preserved"] and again["uploaded"] == 0 and again["skipped"] == 3 and again["verified"] == "etag-md5,etag-multipart"
+    assert [x[0] for x in s.log[n:] if x[1] == key] == ["HEAD"], "present: one HEAD, its multipart ETag matches the local parts, nothing uploaded"
+
+    # same size, different bytes under the immutable key: refused (the multipart ETag gives it away)
+    other = tmp_path / "other.bin"
+    other.write_bytes(os.urandom(9192))
+    with pytest.raises(RemoteConflict, match="multipart ETag"):
+        st.remote.put(key, other)
+
+    # a part that never lands: the upload is aborted (DELETE ?uploadId), nothing is left half-written, the artifact is NOT preserved
+    s2 = fake_s3(fail_part=2)
+    monkeypatch.setattr(remote_s3, "RETRY_BACKOFF_S", 0.0)
+    st2 = LocalStore(tmp_path / "s2")
+    art2 = st2.put_artifact("proof/v1", {}, file=big)
+    rep2 = st2.push(art2)
+    assert rep2["preserved"] is False and len(rep2["errors"]) == 1 and "HTTP Error 500" in rep2["errors"][0]
+    assert key not in s2.objects and s2.uploads == {} and s2.aborted == ["up0001"] and f"manifests/{ids.hex_of(art2)}.json" not in s2.objects
+    assert main(["push", art2]) == 1 and "NOT preserved" in capsys.readouterr().out
+
     with pytest.raises(ValueError, match="verify must be"):
         st.push(art, verify="etag")
-    monkeypatch.setattr(remote_s3.S3Remote, "single_put_max", 0)
-    assert main(["push", art]) == 1 and "multipart upload is not implemented" in capsys.readouterr().out
 
 
 def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, capsys):
@@ -1153,8 +1266,9 @@ def test_s3remote_refuses_oversize_and_conflicts(monkeypatch, tmp_path):
     assert r.put("k", p)["action"] == "skipped"  # a multipart ETag is not an MD5: size is all HEAD can check
     monkeypatch.setattr(r, "head", lambda key: None)
     r.single_put_max = 4
-    with pytest.raises(NotImplementedError, match="parts.json"):
-        r.put("k", p)
+    monkeypatch.setattr(r, "put_multipart", lambda key, path, **kw: {"action": "multipart", "key": key, **kw})
+    mp = r.put("k", p)                             # above the single-PUT limit: the multipart path, with the hashes already computed
+    assert mp["action"] == "multipart" and mp["size"] == 5 and mp["sha256"] == hashlib.sha256(b"12345").hexdigest() and mp["md5"] == hashlib.md5(b"12345").hexdigest()
     assert remote_s3.SINGLE_PUT_MAX == 5 << 30 and remote_s3.etag_value('"AbC"') == "abc" and remote_s3.etag_value('W/"x"') == "x"
     assert remote_s3.is_md5_etag("0" * 32) and not remote_s3.is_md5_etag("0" * 32 + "-3") and not remote_s3.is_md5_etag(None)
 

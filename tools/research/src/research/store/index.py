@@ -9,6 +9,7 @@ it is the only state here that a rebuild cannot recover (verification is a remot
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
@@ -47,19 +48,73 @@ CREATE TABLE IF NOT EXISTS replica_checks(id TEXT, location TEXT, verified TEXT,
 # Schema rule: the catalog is shared by every worktree on this machine, including ones running older `research` code, and older
 # code inserts into the original tables positionally (`INSERT ... VALUES (?,?,?,?)`).  Never add a column to a shipped table --
 # it breaks every older writer at once (2026-09-22: `replicas.verified` did exactly that to six running lanes).  Add a side
-# table keyed like the original instead; `replica_checks` is the first.  `_migrate` moves data out of the offending column.
+# table keyed like the original instead; `replica_checks` is the first.
+#
+# Versioning: `PRAGMA user_version` holds the catalog's schema version.  0 = written by code from before versioning (may still
+# carry the `replicas.verified` column).  On open, an older catalog is migrated forward step by step (`MIGRATIONS[v]` takes v to
+# v+1, inside one IMMEDIATE transaction, so two processes opening the same old catalog cannot both migrate); a NEWER catalog than
+# this code knows is refused with `CatalogVersionError` (the worktree is behind main -- update it, or set
+# `RESEARCH_CATALOG_IGNORE_VERSION=1` to open anyway: the file is disposable and `research data reindex` rebuilds it).
+SCHEMA_VERSION = 1
+IGNORE_VERSION_ENV = "RESEARCH_CATALOG_IGNORE_VERSION"
 
 
-def _migrate(db: sqlite3.Connection) -> None:
-    """Undo the one column-add that shipped: move `replicas.verified` into `replica_checks` and restore the 4-column table."""
+class CatalogVersionError(RuntimeError):
+    """The catalog was written by newer code than this (its schema version is above `SCHEMA_VERSION`)."""
+
+
+def _v0_to_v1(db: sqlite3.Connection) -> None:
+    """Undo the one column-add that shipped: move `replicas.verified` into `replica_checks` and restore the 4-column table.
+    A v0 catalog without the column needs nothing."""
     if "verified" in {r[1] for r in db.execute("PRAGMA table_info(replicas)")}:
-        db.execute("BEGIN")
         db.execute("INSERT OR REPLACE INTO replica_checks(id, location, verified) SELECT id, location, verified FROM replicas WHERE verified IS NOT NULL")
         db.execute("CREATE TABLE replicas_v4(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, PRIMARY KEY(id, location))")
         db.execute("INSERT INTO replicas_v4 SELECT id, location, verified_utc, detail FROM replicas")
         db.execute("DROP TABLE replicas")
         db.execute("ALTER TABLE replicas_v4 RENAME TO replicas")
+
+
+MIGRATIONS: dict[int, Any] = {0: _v0_to_v1}
+
+
+def catalog_version(db: sqlite3.Connection) -> int:
+    return int(db.execute("PRAGMA user_version").fetchone()[0])
+
+
+def _check_version(db: sqlite3.Connection, path: Path) -> int:
+    """The catalog's version, or CatalogVersionError when it is from the future (unless `RESEARCH_CATALOG_IGNORE_VERSION` is set).
+    Runs BEFORE anything is created in the file, so an older worktree never half-touches a newer catalog."""
+    v0 = catalog_version(db)
+    if v0 > SCHEMA_VERSION and not os.environ.get(IGNORE_VERSION_ENV):
+        raise CatalogVersionError(
+            f"{path} is catalog schema v{v0}; this `research` code knows v{SCHEMA_VERSION}, so the worktree is OLDER than the code that "
+            f"last wrote the catalog.  Update the worktree (merge/rebase onto main) and retry.  To open it anyway set {IGNORE_VERSION_ENV}=1 "
+            f"(the catalog is disposable: `research data reindex` rebuilds it from manifests/, attempts/, labels/).")
+    return v0
+
+
+def _migrate(db: sqlite3.Connection, path: Path) -> dict:
+    """Bring the catalog to `SCHEMA_VERSION`.  Returns {"from", "to", "steps"} (from == to when nothing was needed; `ignored` when
+    a newer catalog was opened under the escape hatch)."""
+    v0 = _check_version(db, path)
+    if v0 > SCHEMA_VERSION:
+        return {"from": v0, "to": v0, "steps": [], "ignored": True}
+    if v0 == SCHEMA_VERSION:
+        return {"from": v0, "to": v0, "steps": []}
+    db.execute("BEGIN IMMEDIATE")                                   # one writer migrates; the others wait on the lock and then see the new version
+    try:
+        v = catalog_version(db)
+        steps = []
+        while v < SCHEMA_VERSION:
+            MIGRATIONS[v](db)
+            steps.append(f"v{v}->v{v + 1}")
+            v += 1
+        db.execute(f"PRAGMA user_version = {int(SCHEMA_VERSION)}")
         db.execute("COMMIT")
+    except BaseException:
+        db.execute("ROLLBACK")
+        raise
+    return {"from": v0, "to": v, "steps": steps}
 
 
 def flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
@@ -94,11 +149,23 @@ class Index:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.path, timeout=30, isolation_level=None)   # autocommit; explicit BEGIN where several writes must land together
+        _check_version(self.db, self.path)                                     # a catalog from the future is refused before anything is created
         self.db.executescript(SCHEMA)
-        _migrate(self.db)
+        self.migration = _migrate(self.db, self.path)                          # what this open did to the schema version (see `info()`)
 
     def close(self) -> None:
         self.db.close()
+
+    @property
+    def version(self) -> int:
+        return catalog_version(self.db)
+
+    def info(self) -> dict:
+        """Schema version (file vs code), what this open migrated, and row counts per table."""
+        tables = [r[0] for r in self.db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
+        return {"path": str(self.path), "schema_version": self.version, "code_version": SCHEMA_VERSION, "migration": self.migration,
+                "tables": {t: self.db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables},
+                "bytes": self.path.stat().st_size if self.path.exists() else 0}
 
     # ---- writes -------------------------------------------------------------------------------------------------------------------------
 

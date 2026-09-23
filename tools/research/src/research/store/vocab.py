@@ -18,6 +18,7 @@ are the same word and `"True"` / `"yes"` are not.  Only enums and bools are chec
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -90,9 +91,57 @@ AUTHENTICATION_VALUES = ("included", "included-hash", "excluded")
 MODES = ("interactive", "fiat-shamir")
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
-#: As `ledger_to_store.candidate` derives them from the lane name.  (Table 1 of `bench.tables` spells its rows `A-GKR`, `B-Ligero`,
-#: `SP1`; a `candidate` label only ever marks its asserter as the producer, so the two spellings have not collided yet.)
-CANDIDATES = ("A", "B-AIR", "B-Ligero", "C", "SP1", "shared")
+#: One spelling per candidate, the one Table 1 of `bench.tables` uses for its rows (`A-GKR`, `B-Ligero`, `SP1`); `ledger_to_store.candidate`
+#: derives them from the lane name.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
+CANDIDATES = ("A-GKR", "B-AIR", "B-Ligero", "C", "SP1", "shared")
+
+# ---- old spellings (2026-09-23 hygiene): accepted on read, never written anew ----------------------------------------------------------------
+
+#: label key written -> the key it means.  Writers (`research data label`, `ledger_to_store`) store the canonical key only; readers
+#: (`bench.tables`, `bench.store_tables`, `vocab-check`) map an old key to its canonical one with `canonical_key`.
+KEY_ALIASES: dict[str, str] = {"notes": NOTE, "verify_note": NOTE, "batch": B, "checker": VERIFIER}
+#: (key, value written) -> the value it means.
+VALUE_ALIASES: dict[tuple[str, str], str] = {(CANDIDATE, "A"): "A-GKR"}
+#: Keys whose value names another store object: that is a `ref` (in the manifest at `put`, `--ref name=art:...`), not a label.  A writer
+#: that labels one of these is told so (`research data label` warns; `vocab-check` lists them); the store still records the assertion.
+REF_KEYS = ("path", "result_artifact", "constructed_from_attempt")
+#: Label keys that name evidence / findings written by code today (trust dossiers, the ledger's red-team assertions).
+FINDING = "finding"
+LEVEL = "level"
+ANCHOR = "anchor"
+
+
+def canonical_key(name: str) -> str:
+    return KEY_ALIASES.get(name, name)
+
+
+def canonical_value(name: str, value: Any) -> Any:
+    """The value an old spelling means (`candidate=A` -> `A-GKR`); anything else unchanged."""
+    if isinstance(value, str):
+        return VALUE_ALIASES.get((canonical_key(name), value), value)
+    return value
+
+
+def coerce(name: str, value: Any) -> Any:
+    """The value in the form the vocabulary declares for `name`, when a string can be read that way without ambiguity: `"true"` /
+    `"false"` -> bool for a `bool` key, `"4096"` -> int for an `int` key, `"1.5"` -> float for a `number` key.  Everything else is
+    returned as given (an unknown key, a free-text form, a string that does not parse).  Writers call this so that `zk`, `model_agrees`,
+    `independently_verified` are real booleans in the file, not the words."""
+    k = VOCAB.get(canonical_key(name))
+    if k is None or not isinstance(value, str):
+        return value
+    s = value.strip()
+    if k.form == BOOL and s.lower() in TRUE_FALSE:
+        return s.lower() == "true"
+    if k.form == INT and _INT_RE.match(s):
+        return int(s)
+    if k.form == NUMBER and _NUM_RE.match(s):
+        return int(s) if _INT_RE.match(s) else float(s)
+    return value
+
+
+_INT_RE = re.compile(r"^[+-]?\d+$")
+_NUM_RE = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
 
 
 @dataclass(frozen=True)
@@ -147,6 +196,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        status=DEPRECATED),
     _k(VERIFIED_BY, GROUP_VERIFICATION, TEXT, "a ledger row's free-text field: no verdict, ignored by every table (name the verifier under `verifier`)",
        status=IGNORED),
+    _k(FINDING, GROUP_VERIFICATION, TEXT, "a red-team or audit finding in prose (DOWNGRADE / EARNED / HOLDS ...), beside the proof_class verdict it explains"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
@@ -163,6 +213,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(INSTANCES_MANIFEST_SHA256, GROUP_EVIDENCE, TEXT, "sha256 of the instance set's manifest (or its contract-pinned recipe digest) a replay checked"),
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
+    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (verity.verification.trust)"),
+    _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
 )}
 
 KEYS = tuple(VOCAB)
@@ -177,10 +229,19 @@ def is_known(name: str) -> bool:
 
 
 def check(name: str, value: Any) -> str | None:
-    """Why (key, value) is outside the vocabulary -- an unknown key, or a value outside its enum -- as one line, or None."""
+    """Why (key, value) is outside the vocabulary -- an unknown key, an old spelling of a key or value, a value outside its enum, a
+    bool/int/number key holding the word instead of the value, a ref written as a label -- as one line, or None."""
+    if name in KEY_ALIASES:
+        return f"label key {name!r} is the old spelling of {KEY_ALIASES[name]!r} (read as such; write {KEY_ALIASES[name]!r})"
+    if name in REF_KEYS:
+        return f"label key {name!r} names another store object: that is a ref (`research data put --ref {name}=art:...`), not a label"
     k = VOCAB.get(name)
     if k is None:
         return f"label key {name!r} is not in the vocabulary (`research data vocab` lists it)"
+    if isinstance(value, str) and (name, value) in VALUE_ALIASES:
+        return f"{name}={value!r} is the old spelling of {VALUE_ALIASES[(name, value)]!r} (read as such; write {VALUE_ALIASES[(name, value)]!r})"
+    if k.form in (BOOL, INT, NUMBER) and isinstance(value, str) and coerce(name, value) is not value:
+        return f"{name}={value!r} is a string; the key's form is {k.form} (`research data label` converts it; other writers must store the {k.form})"
     return k.check(value)
 
 

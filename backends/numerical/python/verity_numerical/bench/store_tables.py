@@ -15,22 +15,26 @@ Labels are assertions, policy picks.  Without ``--proof-class-by`` a row shows t
 ``ref`` + ``ts``) caps it: the row shows ``min(lane's claim, the highest class that event granted)`` -- downgrades stand,
 nothing is upgraded, an EARNED re-audit leaves the lane's claim in place.  ``--diff-ledger`` compares cell by cell with the
 ledger-built table; in the ``label`` column only the class is compared (``decision_tables`` appends hand-written override prose).
+
+The label semantics are :mod:`tables`' -- one ``_Label`` shape, one :func:`tables.canonical_label` (old spellings read as the
+canonical), one :data:`tables.RANK` (the class order), one :func:`tables._redteam_ceiling` (the audit-event policy) -- so the
+canonical tables and this one can never disagree on what an assertion means.  What is this module's own: reading assertions out
+of the catalog (:func:`_assertions`, :func:`resolve_target`), the row lookup (:func:`lane_row`), and the ledger diff.
 """
 
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import json
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Any
 
-from verity_numerical.bench import contract, decision_tables as DT, ledger
+from verity_numerical.bench import decision_tables as DT, ledger, tables
 from verity_numerical.bench.ledger_to_store import LEDGER_ROW_KIND
+from verity_numerical.bench.tables import RANK, _Label as Assertion
 
-__all__ = ["ATTEMPT_SQL", "LEDGER_ROW_SQL", "ROW_LABELS_SQL", "diff_tables", "main", "render_like_for_like", "row_values"]
+__all__ = ["ATTEMPT_SQL", "Assertion", "LEDGER_ROW_SQL", "RANK", "ROW_LABELS_SQL", "diff_tables", "main", "render_like_for_like", "row_values"]
 
 #: Is the run id an attempt here?
 ATTEMPT_SQL = "SELECT id FROM attempts WHERE id = ?"
@@ -44,13 +48,6 @@ SELECT a.id FROM artifacts a
  ORDER BY a.id"""
 #: Every assertion on a target: the lane's rows (grouped by ref) and everyone else's verdicts.
 ROW_LABELS_SQL = "SELECT key, value, by, ts, ref, path FROM labels WHERE target = ? ORDER BY ts, path"
-
-RANK = {c: i for i, c in enumerate(("ARITHMETIC_DIAGNOSTIC", "COMPONENT", "NO_PROOF", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF",
-                                     "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND"))}
-
-
-def _rank(c: str | None) -> int:
-    return RANK.get(c or "", -1)
 
 
 def _value(text: str | None) -> Any:
@@ -70,19 +67,13 @@ def _label_order(path: str) -> tuple[str, int]:
     return (base, int(n)) if sep and n.isdigit() else (stem, 1)
 
 
-@dataclass(frozen=True)
-class Assertion:
-    key: str
-    value: Any
-    by: str
-    ts: str
-    ref: str | None
-    path: str
-
-
 def _assertions(index: Any, target: str) -> list[Assertion]:
-    rows = [Assertion(k, _value(v), by, ts, ref, path) for k, v, by, ts, ref, path in index.sql(ROW_LABELS_SQL, (target,))]
-    return sorted(rows, key=lambda a: (a.ts, _label_order(a.path)))
+    """Every assertion on ``target`` out of the catalog, canonical (:func:`tables.canonical_label`), in ts then file order."""
+    rows = []
+    for k, v, by, ts, ref, path in index.sql(ROW_LABELS_SQL, (target,)):
+        key, value = tables.canonical_label(k, _value(v))
+        rows.append(Assertion(key, value, by, ts, ref, path))
+    return sorted(rows, key=lambda a: (a.ts, _label_order(a.path or "")))
 
 
 def resolve_target(index: Any, lane: str, run_id: str | None, prefix: str) -> str:
@@ -108,16 +99,14 @@ def lane_row(assertions: Sequence[Assertion], lane: str, prefix: str) -> dict[st
 
 
 def policy_proof_class(assertions: Sequence[Assertion], lane: str, claim: str, by_glob: str | None) -> tuple[str, Assertion | None]:
-    """Downgrades stand, nothing is upgraded: cap the lane's claim by the latest matching audit event on the target."""
+    """Downgrades stand, nothing is upgraded: cap the lane's claim by the latest matching audit event on the target
+    (:func:`tables._redteam_ceiling` with ``by_glob`` in place of the red-team glob)."""
     if not by_glob:
         return claim, None
-    verdicts = [a for a in assertions if a.key == "proof_class" and a.by != lane and fnmatch.fnmatchcase(a.by, by_glob)]
-    if not verdicts:
+    ceiling, verdict = tables._redteam_ceiling(assertions, {lane}, by_glob)
+    if verdict is None:
         return claim, None
-    latest = verdicts[-1]
-    event = [a for a in verdicts if (a.by, a.ref, a.ts) == (latest.by, latest.ref, latest.ts)]
-    ceiling = max(event, key=lambda a: _rank(a.value))
-    return (ceiling.value, ceiling) if _rank(ceiling.value) < _rank(claim) else (claim, ceiling)
+    return (ceiling, verdict) if RANK.get(ceiling or "", -1) < RANK.get(claim or "", -1) else (claim, verdict)
 
 
 def row_values(index: Any, r: DT.Row, by_glob: str | None) -> dict[str, Any]:

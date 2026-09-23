@@ -21,7 +21,7 @@ import sys
 import tarfile
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .. import env as E
 from .. import remote
@@ -152,29 +152,69 @@ def _cat(ssh: list[str], path: str, *, timeout: float = 600) -> bytes:
     return r.stdout
 
 
-def _fetch_blobs(ssh: list[str], store_root: str, hexes: list[str], into: Path) -> None:
-    """One ssh+tar for all blobs; each verified by sha256 on arrival."""
-    if not hexes:
-        return
-    r = remote.ssh_run(ssh, ["tar", "-cf", "-", "-C", store_root, *[f"objects/sha256/{h}" for h in hexes]], timeout=3600)
-    if r.returncode != 0:
-        raise remote.Refused(f"fetching {len(hexes)} blob(s) failed: {r.stderr.decode(errors='replace').strip()[-300:]}")
-    wanted = set(hexes)
-    with tarfile.open(fileobj=io.BytesIO(r.stdout), mode="r:") as tf:
-        for m in tf.getmembers():
-            h = Path(m.name).name
-            if not m.isfile() or h not in wanted or not m.name.startswith("objects/sha256/"):
-                continue                                   # (bsdtar's ._* AppleDouble entries and anything else unrequested)
-            f = tf.extractfile(m)
-            if f is None:
-                continue
-            data = f.read()
-            if hashlib.sha256(data).hexdigest() != h:
-                raise remote.Refused(f"blob {h} arrived with a different sha256; refusing to store it")
-            (into / h).write_bytes(data)
+#: One tar stream carries at most this many blobs / this many bytes (by the manifest's sizes): a run-files tree of 10^4 per-proof
+#: files is a handful of round trips instead of one ssh argv of 10^4 paths (which exceeds the remote shell's argument limit).
+PULL_BATCH_FILES = 4000
+PULL_BATCH_BYTES = 512 * 2**20
+
+
+def _batches(hexes: list[str], sizes: dict[str, int] | None) -> list[list[str]]:
+    out: list[list[str]] = []
+    cur: list[str] = []
+    cur_bytes = 0
+    for h in hexes:
+        n = (sizes or {}).get(h, 0)
+        if cur and (len(cur) >= PULL_BATCH_FILES or cur_bytes + n > PULL_BATCH_BYTES):
+            out.append(cur)
+            cur, cur_bytes = [], 0
+        cur.append(h)
+        cur_bytes += n
+    if cur:
+        out.append(cur)
+    return out
+
+
+def _fetch_blobs(ssh: list[str], store_root: str, hexes: list[str], into: Path, *, sizes: dict[str, int] | None = None,
+                 have: Callable[[str], Path | None] | None = None) -> dict[str, int]:
+    """Blobs from the machine's store into `into/<hex>`, each verified by sha256 on arrival.  The paths travel on tar's stdin (`-T -`),
+    never in the ssh argv, and in batches of `PULL_BATCH_FILES` / `PULL_BATCH_BYTES` (`_batches`).  `have(hex)` -> a local path for a blob
+    this store already holds: those are linked/copied locally and not fetched.  Returns {"fetched", "reused", "batches"}."""
+    stats = {"fetched": 0, "reused": 0, "batches": 0}
+    todo = []
+    for h in hexes:
+        p = have(h) if have else None
+        if p is not None and p.is_file():
+            try:
+                os.link(p, into / h)
+            except OSError:
+                shutil.copyfile(p, into / h)
+            stats["reused"] += 1
+        else:
+            todo.append(h)
+    for batch in _batches(todo, sizes):
+        stats["batches"] += 1
+        listing = "".join(f"objects/sha256/{h}\n" for h in batch).encode()
+        r = remote.ssh_run(ssh, ["tar", "-cf", "-", "-C", store_root, "-T", "-"], stdin=listing, timeout=3600)
+        if r.returncode != 0:
+            raise remote.Refused(f"fetching {len(batch)} blob(s) failed: {r.stderr.decode(errors='replace').strip()[-300:]}")
+        wanted = set(batch)
+        with tarfile.open(fileobj=io.BytesIO(r.stdout), mode="r|") as tf:
+            for m in tf:
+                h = Path(m.name).name
+                if not m.isfile() or h not in wanted or not m.name.lstrip("./").startswith("objects/sha256/"):
+                    continue                               # (bsdtar's ._* AppleDouble entries and anything else unrequested)
+                f = tf.extractfile(m)
+                if f is None:
+                    continue
+                data = f.read()
+                if hashlib.sha256(data).hexdigest() != h:
+                    raise remote.Refused(f"blob {h} arrived with a different sha256; refusing to store it")
+                (into / h).write_bytes(data)
+                stats["fetched"] += 1
     missing = [h for h in hexes if not (into / h).exists()]
     if missing:
-        raise remote.Refused(f"blob(s) not on the machine: {', '.join(missing)}")
+        raise remote.Refused(f"blob(s) not on the machine: {', '.join(missing[:5])}" + (f" (+{len(missing) - 5} more)" if len(missing) > 5 else ""))
+    return stats
 
 
 def pull_artifact(ssh: list[str], store_root: str, art_id: str, st: Any) -> dict[str, Any]:
@@ -185,7 +225,11 @@ def pull_artifact(ssh: list[str], store_root: str, art_id: str, st: Any) -> dict
         raise remote.Refused(f"manifest {art_id} arrived with a different sha256")
     manifest = json.loads(mbytes)
     payload = manifest.get("payload")
-    with tempfile.TemporaryDirectory(prefix="research-pull-") as tmp:
+    obj = getattr(st, "object_path", None)                 # a blob this store already holds is not fetched again (FakeStore has no objects/)
+    have = (lambda h: obj(h)) if callable(obj) else None
+    stats = {"fetched": 0, "reused": 0, "batches": 0}
+    scratch = Path(st.root) / "scratch" if getattr(st, "root", None) and (Path(st.root) / "scratch").is_dir() else None
+    with tempfile.TemporaryDirectory(prefix="research-pull-", dir=scratch) as tmp:   # the store's scratch/: same filesystem as objects/, so links, not copies
         blobs = Path(tmp) / "blobs"
         blobs.mkdir()
         stage = Path(tmp) / "stage"
@@ -194,21 +238,24 @@ def pull_artifact(ssh: list[str], store_root: str, art_id: str, st: Any) -> dict
         if payload is None:
             n = 0
         elif payload.get("type") == "file":
-            _fetch_blobs(ssh, store_root, [payload["sha256"]], blobs)
+            stats = _fetch_blobs(ssh, store_root, [payload["sha256"]], blobs, sizes={payload["sha256"]: payload.get("bytes") or 0}, have=have)
             dst = stage / (payload.get("name") or payload["sha256"])
             shutil.move(str(blobs / payload["sha256"]), dst)
             kw["file"] = dst
             n = 1
         elif payload.get("type") == "tree":
             files = payload.get("files") or []
-            _fetch_blobs(ssh, store_root, sorted({f["sha256"] for f in files}), blobs)
+            stats = _fetch_blobs(ssh, store_root, sorted({f["sha256"] for f in files}), blobs, sizes={f["sha256"]: f.get("bytes") or 0 for f in files}, have=have)
             for f in files:
                 rel = Path(f["path"])
                 if rel.is_absolute() or ".." in rel.parts:
                     raise remote.Refused(f"tree path {f['path']!r} escapes the tree")
                 dst = stage / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(blobs / f["sha256"], dst)
+                try:
+                    os.link(blobs / f["sha256"], dst)      # the staged tree is the artifact's own layout; a link per file, a copy only across filesystems
+                except OSError:
+                    shutil.copyfile(blobs / f["sha256"], dst)
             kw["tree"] = stage
             n = len(files)
         else:
@@ -216,7 +263,7 @@ def pull_artifact(ssh: list[str], store_root: str, art_id: str, st: Any) -> dict
         new_id = st.put_artifact(manifest["kind"], manifest.get("meta") or {}, manifest.get("refs") or None, **kw)
     if new_id != art_id:
         raise remote.Refused(f"{art_id} re-derived here as {new_id}: the two stores disagree on the manifest; nothing was recorded under {art_id}")
-    return {"id": art_id, "kind": manifest["kind"], "blobs": n}
+    return {"id": art_id, "kind": manifest["kind"], "blobs": n, **stats}
 
 
 def cmd_pull(argv: list[str]) -> int:

@@ -89,12 +89,18 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
         raise Refused(f"provider {machine.get('provider')!r} not supported (runpod only for now)")
     from .pods import runpod
 
-    pod = runpod.get(machine["pod_id"])
+    who = f"pod {machine['pod_id']} (machine {machine.get('name') or '?'})"
+    try:
+        pod = runpod.get(machine["pod_id"])
+    except runpod.PodError as e:                # a dead / terminated pod, no API config, no network: a refusal with the pod's name, not a SystemExit
+        if e.code == 404:
+            raise Refused(f"{who} no longer exists on runpod (HTTP 404: terminated?); no implicit provisioning") from None
+        raise Refused(f"{who}: runpod API unavailable: {e}") from None
     if not pod or (pod.get("desiredStatus") or "").upper() != "RUNNING":
-        raise Refused(f"pod {machine['pod_id']} is {pod.get('desiredStatus') if pod else 'not found'}; no implicit provisioning")
+        raise Refused(f"{who} is {pod.get('desiredStatus') if pod else 'not found'}; no implicit provisioning")
     tgt = runpod.ssh_target(pod)
     if tgt is None:
-        raise Refused(f"pod {machine['pod_id']} has no ssh port mapped yet")
+        raise Refused(f"{who} has no ssh port mapped yet")
     return {"host": tgt[0], "port": tgt[1], "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
             "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
 

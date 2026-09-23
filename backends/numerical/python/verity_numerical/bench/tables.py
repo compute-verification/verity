@@ -38,9 +38,26 @@ try:  # the label keys are pinned with the store (`research.store.vocab`, tools/
 
     _CANDIDATE, _LABEL, _PROOF_CLASS = _vocab.CANDIDATE, _vocab.LABEL, _vocab.PROOF_CLASS
     _INDEPENDENTLY_VERIFIED, _VERIFIED, _VERIFIED_ACCEPTED = _vocab.INDEPENDENTLY_VERIFIED, _vocab.VERIFIED, _vocab.VERIFIED_ACCEPTED
+    _KEY_ALIASES, _VALUE_ALIASES = dict(_vocab.KEY_ALIASES), dict(_vocab.VALUE_ALIASES)
 except ImportError:  # pragma: no cover  -- the same spellings, so the predicate still imports where the store package is absent (tested equal)
     _CANDIDATE, _LABEL, _PROOF_CLASS = "candidate", "label", "proof_class"
     _INDEPENDENTLY_VERIFIED, _VERIFIED, _VERIFIED_ACCEPTED = "independently_verified", "verified", "accepted"
+    _KEY_ALIASES, _VALUE_ALIASES = {"notes": "note", "verify_note": "note", "batch": "B", "checker": "verifier"}, {("candidate", "A"): "A-GKR"}
+
+
+def canonical_label(key: Any, value: Any) -> tuple[str, Any]:
+    """An assertion as read: old spellings of a key (``notes`` -> ``note``, ``batch`` -> ``B``, ``checker`` -> ``verifier``) and of a
+    value (``candidate=A`` -> ``A-GKR``) mean the canonical one; the words ``true`` / ``false`` under a bool key mean the bool.
+    Readers accept every spelling ever written; writers (``ledger_to_store``, ``research data label``) store only the canonical."""
+    k = _KEY_ALIASES.get(str(key), str(key))
+    if isinstance(value, str):
+        value = _VALUE_ALIASES.get((k, value), value)
+        if k in _BOOL_KEYS and value in ("true", "false"):
+            value = value == "true"
+    return k, value
+
+
+_BOOL_KEYS = frozenset({_INDEPENDENTLY_VERIFIED, "zk", "model_agrees", "breakthrough"})
 
 __all__ = [
     "AUTHENTICATION",
@@ -70,6 +87,7 @@ __all__ = [
     "ZK_VALUES",
     "build",
     "candidate_for",
+    "canonical_label",
     "cell_artifacts",
     "dtype_of",
     "fmt_overhead",
@@ -148,8 +166,10 @@ PRODUCER_LABEL_KEYS = (_CANDIDATE, _LABEL)
 #: is the name the freeze spec gives it.  Either counts when the asserter is not a producer.
 VERIFIED_LABELS: tuple[tuple[str, tuple[Any, ...]], ...] = ((_INDEPENDENTLY_VERIFIED, (True, "true")), (_VERIFIED, (_VERIFIED_ACCEPTED,)))
 REDTEAM_GLOB = "red-team-*"
-#: Proof classes in order of strength; a red-team ``proof_class`` verdict below the fingerprint's class is a downgrade.
-RANK: dict[str, int] = {c: i for i, c in enumerate(("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF",
+#: Proof classes in order of strength; a red-team ``proof_class`` verdict below the fingerprint's class is a downgrade.  ``COMPONENT``
+#: is the ledger's class for a component benchmark (``bench.ledger.PROOF_CLASSES``), below every ``contract.PROOF_CLASSES`` entry; an
+#: unknown class ranks below all of them (``RANK.get(c, -1)``).  The one ordering for every table (``store_tables`` reads this one).
+RANK: dict[str, int] = {c: i for i, c in enumerate(("COMPONENT", "NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF",
                                                     "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND"))}
 SOUND_CLASSES = ("NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND")
 
@@ -342,11 +362,15 @@ def frozen_instances(target: Target) -> dict[str, Any] | None:
 
 @dataclass(frozen=True)
 class _Label:
+    """An assertion as the predicates read it (key and value canonical, see :func:`canonical_label`).  ``path`` is the assertion
+    file when the label came from the catalog (``store_tables``), None when it came as a ``Label`` object."""
+
     key: str
     value: Any
     by: str
     ts: str
     ref: str | None
+    path: str | None = None
 
 
 def _labels(labels: Iterable[Any]) -> list[_Label]:
@@ -355,7 +379,8 @@ def _labels(labels: Iterable[Any]) -> list[_Label]:
     out = []
     for lab in labels:
         g = (lambda k: lab.get(k)) if isinstance(lab, Mapping) else (lambda k: getattr(lab, k, None))
-        out.append(_Label(str(g("key")), g("value"), str(g("by")), str(g("ts") or ""), g("ref")))
+        key, value = canonical_label(g("key"), g("value"))
+        out.append(_Label(key, value, str(g("by")), str(g("ts") or ""), g("ref")))
     return sorted(out, key=lambda l: l.ts)
 
 
@@ -384,12 +409,13 @@ def _verified_by(labels: Sequence[_Label], self_: set[str]) -> _Label | None:
     return None
 
 
-def _redteam_ceiling(labels: Sequence[_Label], self_: set[str]) -> tuple[str | None, _Label | None]:
-    """The class the latest red-team ``proof_class`` event granted (one event = one by + ref + ts; several assertions in it
-    grant the highest), or ``(None, None)`` when no red team spoke.  Downgrades stand, nothing is upgraded, a later
-    re-audit supersedes an earlier verdict."""
+def _redteam_ceiling(labels: Sequence[_Label], self_: set[str], by_glob: str = REDTEAM_GLOB) -> tuple[str | None, _Label | None]:
+    """The class the latest ``proof_class`` event by an asserter matching ``by_glob`` (the red team by default) granted -- one event
+    = one by + ref + ts; several assertions in it grant the highest -- or ``(None, None)`` when no such asserter spoke.  Downgrades
+    stand, nothing is upgraded, a later re-audit supersedes an earlier verdict.  ``labels`` are in ts order; asserters in ``self_``
+    (the producers) do not count."""
 
-    verdicts = [l for l in labels if l.key == _PROOF_CLASS and l.by not in self_ and fnmatch.fnmatchcase(l.by, REDTEAM_GLOB)]
+    verdicts = [l for l in labels if l.key == _PROOF_CLASS and l.by not in self_ and fnmatch.fnmatchcase(l.by, by_glob)]
     if not verdicts:
         return None, None
     latest = verdicts[-1]
