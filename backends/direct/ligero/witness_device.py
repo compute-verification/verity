@@ -49,20 +49,57 @@ _TAIL = r"""
 }
 """
 
+# Dense programs (lane hash-relation: the Poseidon2 sponges' S-box operands are 24-term affine forms, ~74k terms per
+# unit against ~2k for the v1 units) are emitted TABLE-DRIVEN: an operand with >= TAB_MIN_TERMS terms becomes one
+# ``affine(J, C, off, n, c)`` loop over a (row, coefficient) table passed as two extra kernel arguments, instead of
+# unrolled straight-line code (2.7 MB of source that NVRTC needs > 10 min to optimise).  Same residue per term, same
+# summation order, so W is identical; the mode only switches on when the unrolled form would exceed TAB_THRESHOLD terms,
+# so every v1 system compiles to exactly the source it did before.
+TAB_THRESHOLD = 8000
+TAB_MIN_TERMS = 3
 
-def _eval(e: Expr) -> str:
+_AFFINE = r"""
+__device__ __forceinline__ u64 affine(const int* __restrict__ J, const unsigned* __restrict__ C, int off, int n, u64 c,
+                                      const unsigned* __restrict__ Wm, int l, int col) {
+    u64 acc = 0;
+    for (int t = off; t < off + n; ++t) acc += ((u64)Wm[(size_t)J[t] * l + col] * (u64)C[t]) % P;
+    return (acc + c) % P;
+}
+"""
+
+
+def _eval(e: Expr, tab: list | None = None) -> str:
     """The C expression of an affine ``Expr`` on the column: exact residue in [0, p)."""
     c = e.c % P
     if not e.lin:
         return f"{c}ULL"
+    if tab is not None and len(e.lin) >= TAB_MIN_TERMS:
+        off = len(tab)
+        tab.extend((j, v % P) for j, v in e.lin.items())
+        return f"affine(J, C, {off}, {len(e.lin)}, {c}ULL, Wm, l, col)"
     terms = " + ".join(f"((u64)W({j}) * {v % P}ULL) % P" for j, v in e.lin.items())
     return f"(({terms}) + {c}ULL) % P"
 
 
-def generate(sys: System) -> str:
+def _n_terms(sys: System) -> int:
+    n = 0
+    for op in sys.program:
+        for x in op[2:]:
+            if isinstance(x, Expr):
+                n += len(x.lin)
+    return n
+
+
+def generate(sys: System, tab: list | None = None) -> str:
+    """The kernel source; with ``tab`` (a list the caller keeps) dense operands are appended to it as (row, coef)."""
     hpos = {n: i for i, (_, n) in enumerate(sys.hints)}
     ppos = {n: i for i, (_, n) in enumerate(sys.pins)}
-    out = [_HEAD.replace("@THREADS@", str(THREADS))]
+    head = _HEAD.replace("@THREADS@", str(THREADS))
+    if tab is not None:
+        head = head.replace("extern \"C\" __global__", _AFFINE + "\nextern \"C\" __global__") \
+                   .replace("unsigned* __restrict__ Wm, int l)",
+                            "unsigned* __restrict__ Wm, int l, const int* __restrict__ J, const unsigned* __restrict__ C)")
+    out = [head]
     for op in sys.program:
         kind = op[0]
         if kind == "pin":
@@ -73,22 +110,22 @@ def generate(sys: System) -> str:
             out.append(f"    W({idx}) = (unsigned)modp_signed(HINT({hpos[name]}));")
         elif kind == "prod":
             _, idx, a, b = op
-            out.append(f"    x = {_eval(a)}; y = {_eval(b)}; W({idx}) = (unsigned)((x * y) % P);")
+            out.append(f"    x = {_eval(a, tab)}; y = {_eval(b, tab)}; W({idx}) = (unsigned)((x * y) % P);")
         elif kind == "bits":
             _, row0, nbits, e = op
-            out.append(f"    x = {_eval(e)};")
+            out.append(f"    x = {_eval(e, tab)};")
             for b in range(nbits):
                 out.append(f"    W({row0 + b}) = (unsigned)((x >> {b}) & 1ULL);")
         elif kind == "sels":
             _, row0, k0s, k1s, key = op
-            out.append(f"    x = {_eval(key)}; sx = (x > (u64)HALF_P) ? (i64)x - (i64)P : (i64)x;")
+            out.append(f"    x = {_eval(key, tab)}; sx = (x > (u64)HALF_P) ? (i64)x - (i64)P : (i64)x;")
             for i, (k0, k1) in enumerate(zip(k0s, k1s)):
                 if not (-(2**63) <= k0 < 2**63 and -(2**63) <= k1 < 2**63):
                     raise ValueError("selector bound outside int64")
                 out.append(f"    W({row0 + i}) = (unsigned)((sx >= {int(k0)}LL) && (sx <= {int(k1)}LL));")
         elif kind == "inv":
             _, idx, x = op
-            out.append(f"    x = {_eval(x)}; W({idx}) = (unsigned)modinv_p(x);")
+            out.append(f"    x = {_eval(x, tab)}; W({idx}) = (unsigned)modinv_p(x);")
         else:
             raise ValueError(kind)
     out.append(_TAIL)
@@ -109,10 +146,17 @@ class FusedWitness:
     def __init__(self, sys: System, device):
         import cupy as cp
         self.cp, self.sys, self.device = cp, sys, torch.device(device)
-        self.src = generate(sys)
+        tab: list | None = [] if _n_terms(sys) > TAB_THRESHOLD else None
+        self.src = generate(sys, tab)
         self.digest = hashlib.sha256(self.src.encode()).hexdigest()
         self.mod = cp.RawModule(code=self.src, options=("-std=c++17",))
         self.kernel = self.mod.get_function("witness_program")
+        self.tables = None
+        if tab is not None:
+            import numpy as np
+            with cp.cuda.Device(self.device.index or 0):
+                self.tables = (cp.asarray(np.array([j for j, _ in tab], dtype=np.int32)),
+                               cp.asarray(np.array([v for _, v in tab], dtype=np.uint32)))
 
     def run(self, pub_rows: torch.Tensor, hints: torch.Tensor) -> torch.Tensor:
         import numpy as np
@@ -127,9 +171,11 @@ class FusedWitness:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             stream = cp.cuda.ExternalStream(ts.cuda_stream)
+        args = (cp.asarray(pub_rows), cp.asarray(hints), cp.asarray(W).view(cp.uint32), np.int32(l))
+        if self.tables is not None:
+            args = args + self.tables
         with stream:
-            self.kernel((-(-l // THREADS),), (THREADS,),
-                        (cp.asarray(pub_rows), cp.asarray(hints), cp.asarray(W).view(cp.uint32), np.int32(l)))
+            self.kernel((-(-l // THREADS),), (THREADS,), args)
         return W
 
 
