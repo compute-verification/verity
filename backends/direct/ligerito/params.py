@@ -686,13 +686,15 @@ def recommend(rel: RelationShape, gpu: GPU, budget_bytes: int = 1 << 20, levels=
                          "seconds": prover_seconds(p, gpu)["total_s"]})
     smallest = min(grid, key=lambda g: g["bytes"])
     fastest = min((g for g in grid if g["bytes"] <= budget_bytes), key=lambda g: g["seconds"])
-    return {"smallest": smallest, "fastest": fastest, "pick": fastest if objective == "time" else smallest, "grid": grid}
+    balanced = min((g for g in grid if g["seconds"] <= 1.1 * fastest["seconds"]), key=lambda g: g["bytes"])
+    pick = {"time": fastest, "bytes": smallest, "balanced": balanced}[objective]
+    return {"smallest": smallest, "fastest": fastest, "balanced": balanced, "pick": pick, "grid": grid}
 
 
 TABLE2 = [("bf16-ampere", "A100"), ("bf16-hopper", "H100"), ("fp8-hopper", "H100"), ("fp8-ada", "RTX 4090"), ("fp4-nvf4", "RTX 5090")]
 
 
-def table2_cells(rtt_s: float = 0.030, objective: str = "time") -> list[dict]:
+def table2_cells(rtt_s: float = 0.030, objective: str = "balanced") -> list[dict]:
     """Predicted proof bytes per batch and bytes/s for the five Table 2 cells at TODAY's prover times (the brief's D1
     checkpoint number), plus the op-count comparison and the coin latency."""
     out = []
