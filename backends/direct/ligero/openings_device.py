@@ -15,10 +15,94 @@ from . import merkle
 __all__ = ["commit_device_async", "gather_paths_device", "paths_from_raw"]
 
 
-def _as_torch_i32(cupy_arr, device) -> torch.Tensor:
-    """Zero-copy view of a cupy uint32 array as a torch int32 tensor on ``device`` (CUDA array interface)."""
+def _as_torch_i32(arr, device) -> torch.Tensor:
+    """Zero-copy view of a cupy uint32 array as a torch int32 tensor on ``device`` (CUDA array interface); a torch
+    tensor (a ``StaticMerkle`` level) passes through."""
+    if isinstance(arr, torch.Tensor):
+        return arr
     import cupy as cp
-    return torch.as_tensor(cupy_arr.view(cp.int32), device=device)
+    return torch.as_tensor(arr.view(cp.int32), device=device)
+
+
+class StaticMerkle:
+    """Graph-capturable Blake3 Merkle commit of a fixed-shape ``(R, N)`` int32 matrix (lane hp2-host).  The same two
+    kernels and the same launch geometry as ``hash_gpu.merkle.commit(..., "blake3")`` (``blake3_chunks`` over the
+    columns in 256-word chunks, ``blake3_parents`` to fold the chunk digests, then ``blake3_chunks`` on 16-word
+    pairs per tree level), but every buffer is allocated once with torch, so ``run`` is ~21 launches on the current
+    stream with no allocation -- capturable into the caller's CUDA graph (``hash_gpu`` allocates with cupy per call).
+    ``levels`` (leaf level first, root level last) and ``root`` have the ``hash_gpu.merkle.Tree`` meaning; the levels
+    are views into ONE ``flat`` buffer, so ``gather_paths_device`` needs no concatenation.  Digests are identical."""
+
+    def __init__(self, R: int, N: int, device):
+        from . import merkle as _mk                                     # puts backends/shared on sys.path
+        assert _mk.gpu_available(), "StaticMerkle needs the GPU blake3"
+        from hash_gpu import blake3_cuda as b3
+        self.b3, self.R, self.N, self.device = b3, int(R), int(N), device
+        CW = b3.CHUNK_WORDS
+        nchunks = max(1, (self.R + CW - 1) // CW)
+        i32 = dict(dtype=torch.int32, device=device)
+        # leaves: chunk chaining values (nchunks, N, 8) folded pairwise to (1, N, 8)
+        self.cvs = torch.empty((nchunks, self.N, 8), **i32)
+        self.folds: list = []                                           # (src, count, dst) per parents launch
+        cur, count = self.cvs, nchunks
+        while count > 1:
+            nout = (count + 1) // 2
+            nxt = torch.empty((nout, self.N, 8), **i32)
+            self.folds.append((cur, count, nxt))
+            cur, count = nxt, nout
+        # tree levels in one flat buffer: N + N/2 + ... + 1 rows of 8 words
+        sizes, c = [], self.N
+        while True:
+            sizes.append(c)
+            if c == 1:
+                break
+            c = (c + 1) // 2
+        self.flat = torch.empty((sum(sizes), 8), **i32)
+        self.levels, at = [], 0
+        for sz in sizes:
+            self.levels.append(self.flat[at:at + sz])
+            at += sz
+        self.leaf_src = cur                                             # (1, N, 8): copied into levels[0]
+        self.root = self.levels[-1][0]                                  # (8,) int32, LE words
+        self._cp = None
+
+    def _views(self):
+        """cupy views of the torch buffers (once; zero-copy through the CUDA array interface)."""
+        if self._cp is None:
+            import cupy as cp
+            v = lambda t: cp.asarray(t).view(cp.uint32)  # noqa: E731
+            self._cp = dict(cvs=v(self.cvs), folds=[(v(a), c, v(b)) for a, c, b in self.folds],
+                            leaf_src=v(self.leaf_src), levels=[v(lv) for lv in self.levels])
+        return self._cp
+
+    def run(self, U_int32: torch.Tensor) -> None:
+        """Commit ``U_int32`` ((R, N) int32, contiguous) on the current stream (call inside the cupy stream context)."""
+        import cupy as cp
+        assert U_int32.shape == (self.R, self.N) and U_int32.dtype == torch.int32 and U_int32.is_contiguous()
+        b3, N, R = self.b3, self.N, self.R
+        cv = self._views()
+        mod = b3.module()
+        chunks, parents = mod.get_function("blake3_chunks"), mod.get_function("blake3_parents")
+        base = cp.asarray(U_int32).view(cp.uint32)
+        nchunks = self.cvs.shape[0]
+        block = 128
+        chunks(((N + block - 1) // block, nchunks), (block,),
+               (base, np.int64(1), np.int64(b3.CHUNK_WORDS * N), np.int64(N), np.int32(R), np.int32(N),
+                np.int32(nchunks), cv["cvs"]))
+        for src, count, dst in cv["folds"]:                            # hash_strided passes its block (128) on
+            total = dst.shape[0] * N
+            parents(((total + block - 1) // block,), (block,), (src, np.int32(N), np.int32(count), dst))
+        self.levels[0].copy_(self.leaf_src.view(N, 8))
+        for k in range(1, len(self.levels)):
+            prev, nxt = self.levels[k - 1], self.levels[k]
+            count = prev.shape[0]
+            npairs = count // 2
+            out = cv["levels"][k][:npairs]
+            chunks(((npairs + block - 1) // block, 1), (block,),
+                   (cv["levels"][k - 1].reshape(-1), np.int64(16), np.int64(0), np.int64(1), np.int32(16),
+                    np.int32(npairs), np.int32(1), out))
+            if count % 2:
+                nxt[npairs].copy_(prev[count - 1])
 
 
 def commit_device_async(U_int32: torch.Tensor):
@@ -56,7 +140,10 @@ def gather_paths_device(tree, cols_t: torch.Tensor) -> torch.Tensor:
     if not levels or t == 0:
         return torch.empty((t, 0, 8), dtype=torch.int32, device=cols_t.device)
     dev = cols_t.device
-    flat = torch.cat([_as_torch_i32(lvl, dev) for lvl in levels])                  # (sum_k N_k, 8)
+    if isinstance(tree, StaticMerkle):
+        flat = tree.flat                                                            # the levels are its prefix
+    else:
+        flat = torch.cat([_as_torch_i32(lvl, dev) for lvl in levels])              # (sum_k N_k, 8)
     offs, shifts = _level_offsets(tuple(int(lvl.shape[0]) for lvl in levels), dev)
     idx = offs[None, :] + ((cols_t[:, None] >> shifts[None, :]) ^ 1)              # (t, depth)
     return flat.index_select(0, idx.reshape(-1)).view(t, len(levels), 8)
