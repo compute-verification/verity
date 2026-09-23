@@ -91,6 +91,24 @@ def vu_units(A: np.ndarray, B: np.ndarray, accs: list[int]) -> list[tuple]:
     return units
 
 
+def _variant_base(data: list[tuple], variant: str) -> tuple[int, int] | None:
+    """(VU index, first step) of the first VU in ``data`` on which the wrong rule ``variant`` produces a word that differs
+    from the model's (honest accumulators in, the variant's word out), or None when it never does."""
+    for i, (A, B, accs, _y) in enumerate(data):
+        units = vu_units(A, B, accs)
+        c_in = np.asarray([u[0] for u in units], dtype=np.int64)
+        a = np.stack([np.asarray(u[1], dtype=np.int64) for u in units])
+        b = np.stack([np.asarray(u[2], dtype=np.int64) for u in units])
+        try:
+            _, yv = unit_hints(c_in, a, b, variant=variant)
+        except (AssertionError, ValueError):
+            return i, -1                                          # no witness at all in the relation's shape: still a negative
+        diff = np.nonzero(yv != np.asarray(accs, dtype=np.int64))[0]
+        if len(diff):
+            return i, int(diff[0])
+    return None
+
+
 def _pad_unit():
     return (0, np.zeros(WORDS, dtype=np.int64), np.zeros(WORDS, dtype=np.int64), 0)
 
@@ -276,13 +294,25 @@ def gate_vu_fp4(args) -> int:
         W[c_rows[2], 30] = (W[c_rows[2], 30] ^ (1 << 12)) % P
     proof2, pubs2, lay2 = R.prove_vus(base, check=False, mutate=acc_bit)
     negs.append(("accumulator fraction bit 12 flipped in a linked unit", R.verify_vus(proof2, pubs2, lay2)))
-    # (6) wrong-rule witnesses: the hints a prover following a WRONG model line would produce, honest claim and links
+    # (6) wrong-rule witnesses: the hints a prover following a WRONG model line would produce, honest claim and links.  Built
+    #     on a VU where the wrong rule changes at least one word (elsewhere its witness IS the honest one: no negative).
+    not_exercised = []
     for v in VARIANTS:
+        vb = _variant_base(data, v)
+        if vb is None:
+            not_exercised.append(v)
+            continue
+        vu_i, step = vb
         try:
-            proof2, pubs2, lay2 = R.prove_vus(base, check=False, variant=v)
-            negs.append((f"wrong-rule witness: {v}", R.verify_vus(proof2, pubs2, lay2)))
+            proof2, pubs2, lay2 = R.prove_vus([data[vu_i], data[(vu_i + 1) % len(data)]], check=False, variant=v)
+            negs.append((f"wrong-rule witness: {v} (VU {vu_i}, first differing step {step})", R.verify_vus(proof2, pubs2, lay2)))
         except (AssertionError, ValueError) as e:          # the wrong rule has no witness in the relation's shape
-            negs.append((f"wrong-rule witness: {v}", (False, f"prover cannot form a witness: {type(e).__name__}: {str(e)[:80]}")))
+            negs.append((f"wrong-rule witness: {v} (VU {vu_i}, first differing step {step})",
+                         (False, f"prover cannot form a witness: {type(e).__name__}: {str(e)[:80]}")))
+    if not_exercised:
+        log(f"wrong-rule variants that agree with the model on every synthetic VU (no chain-level negative; the unit tier "
+            f"exercises them): {not_exercised}")
+    report["variants_not_exercised_at_chain_level"] = not_exercised
     # (7) one witness row per (gadget scope, row class), as gate_vu does
     seen, picks = set(), []
     for r in R.sys.rows:
