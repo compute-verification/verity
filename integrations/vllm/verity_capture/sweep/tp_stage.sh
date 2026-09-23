@@ -126,6 +126,13 @@ compose() {  # <rank>: GP-01 workload Program of the rank over its request Progr
   for dd in "$B/rank$r"/build_request_LP*_T*; do [ -f "$dd/result.json" ] && DER+=(--derived "$dd"); done
   run_tl "build.global_program_r$r" "$TO_B" "$B/rank$r/build_workload.log" "$PY" -m verity_capture.experimental.cb_a.global_program --workload "$WL" "${DER[@]}" --out "$B/rank$r/build_workload" --checkpoint-dir "$CK"; }
 wd_of() { jq_ "$B/rank$1/build_workload/workload_program.json" "d.get('workload_digest') or ''"; }
+manifest_global() {  # <timeline stage> <timeout>: the required-value manifest build-global over the N rank Programs -> $D/manifest.json
+  local st=$1 to=$2 r wd MANR=() WDS=()
+  for r in $RANKS; do wd=$(wd_of "$r"); [ -n "$wd" ] || { log "manifest: GP-01 workload digest absent for rank $r"; return 4; }
+    MANR+=(--programs-root "$B/rank$r" --rank "$r"); WDS+=(--workload-digest "$wd"); done
+  run_tl "$st" "$to" "$D/manifest.log" "$PY" -m verity_capture.commit.required_manifest build-global --fixture "$WL" \
+         "${MANR[@]}" --ranks "$WORLD" "${WDS[@]}" --out "$D/manifest.json"; }
+man_line() { jq_ "$D/manifest.json" "' '.join(str(x) for x in ['complete',d.get('complete'),'identities',(d.get('populations') or {}).get('identities'),'tp_peer_binding_n_unbound',(d.get('tp_peer_binding') or {}).get('n_unbound'),'unmodelled',json.dumps(d.get('unmodelled'))[:300],'digest',(d.get('manifest_digest') or '')[:16]])"; }
 build_summary() {  # -> PASS|FAIL; writes $D/build_summary.json (per rank: step + request Programs + GP-01)
   "$PY" - "$B" "$WORLD" <<'EOF'
 import glob, json, os, sys
@@ -162,9 +169,11 @@ if [[ ",$STAGES," == *,build,* ]]; then
   for r in $(seq 0 $((WORLD - 1))); do for f in "$B/rank$r"/*.rc; do [ -f "$f" ] && log "derive $(basename "${f%.rc}") rank$r rc=$(cat "$f") $(tail -c 200 "${f%.rc}.log" | tr '\n' ' ')"; done; done
   for r in $(seq 0 $((WORLD - 1))); do derived_ok "$B/rank$r/build_step" && compose "$r" & done; wait
   ok=$(build_summary); wall=$(( $(date +%s) - t0 ))
-  verdict build "$ok" "rc=$( [ "$ok" = PASS ] && echo 0 || echo 1) wall=${wall}s digest=$(jq_ "$D/build_summary.json" "(d['step']['program_digest'] or '')[:16]") digests_r1..=$(jq_ "$D/build_summary.json" "'/'.join(((d['ranks'][f'rank{r}'].get('build_step') or {}).get('program_digest') or '')[:16] for r in range(1, d['tp']['world']))") workload_digest_r0=$(wd_of 0 | cut -c1-16) workload_digest_r1=$(wd_of 1 | cut -c1-16) shapes=$NSH"
+  verdict build "$ok" "rc=$( [ "$ok" = PASS ] && echo 0 || echo 1) wall=${wall}s digest=$(jq_ "$D/build_summary.json" "(d['step']['program_digest'] or '')[:16]") digests_r1..=$(jq_ "$D/build_summary.json" "'/'.join(((d['ranks'][f'rank{r}'].get('build_step') or {}).get('program_digest') or '')[:16] for r in range(1, d['tp']['world']))") workload_digests_r0..=$(for r in $RANKS; do printf '%s' "$(wd_of "$r" | cut -c1-16)"; [ "$r" = "$LAST" ] || printf /; done) shapes=$NSH"
   tl stage.build end ok="$ok" wall_s="$wall"
   [ "$ok" = PASS ] || { log "BUILD FAIL -> stop ($(grep -hE 'Error|refused|Unsupported' "$B"/rank*/*.log 2>/dev/null | sort | uniq -c | sort -rn | head -3 | cut -c1-300 | tr '\n' ' '))"; tl row end ok=false stopped_at=build; exit 10; }
+  # the Build's required-value manifest over the N ranks (run_row_v2.sh's Build artifact carries it, as at TP1); Commit rebuilds it after Match
+  manifest_global build.required_manifest "$TO_B"; log "build manifest rc=$?: $(man_line || echo 'no manifest.json')"
 fi
 
 # ---------------------------------------------------------------- Match: capture (observer + recorder) + control -> tp2_match check -> fold Match
@@ -228,11 +237,9 @@ if [[ ",$STAGES," == *,commit,* ]]; then
   TO_K=${COMMIT_TIMEOUT:-7200}
   t0=$(date +%s); tl stage.commit start
   [ -f "$HIDDEN_SO" ] || { verdict commit FAIL "hidden .so missing: $HIDDEN_SO"; exit 12; }
-  MANR=(); WDS=""; for r in $RANKS; do wd=$(wd_of "$r"); [ -n "$wd" ] || { verdict commit FAIL "GP-01 workload digest absent for rank $r: Build first"; exit 12; }
-    MANR+=(--programs-root "$B/rank$r" --rank "$r"); WDS="$WDS --workload-digest $wd"; done
-  run_tl commit.required_manifest "$TO_K" "$D/manifest.log" "$PY" -m verity_capture.commit.required_manifest build-global --fixture "$WL" \
-         "${MANR[@]}" --ranks "$WORLD" $WDS --out "$D/manifest.json"; rc_man=$?
-  MAN=$(jq_ "$D/manifest.json" "' '.join(str(x) for x in ['complete',d.get('complete'),'identities',(d.get('populations') or {}).get('identities'),'tp_peer_binding_n_unbound',(d.get('tp_peer_binding') or {}).get('n_unbound'),'unmodelled',json.dumps(d.get('unmodelled'))[:300],'digest',(d.get('manifest_digest') or '')[:16]])")
+  for r in $RANKS; do [ -n "$(wd_of "$r")" ] || { verdict commit FAIL "GP-01 workload digest absent for rank $r: Build first"; exit 12; }; done
+  manifest_global commit.required_manifest "$TO_K"; rc_man=$?
+  MAN=$(man_line)
   log "manifest rc=$rc_man: ${MAN:-no manifest.json}"
   if [ $rc_man -ne 0 ] || [ "$(jq_ "$D/manifest.json" "d.get('complete')")" != True ]; then
     verdict commit FAIL "required manifest not complete (rc=$rc_man): ${MAN:-no manifest.json} (manifest.log)"; tl stage.commit end ok=false; tl row end ok=false stopped_at=commit; exit 13
