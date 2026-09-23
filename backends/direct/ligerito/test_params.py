@@ -86,6 +86,27 @@ def test_zk_costs_salt_and_mask_rows():
     assert p.proof_bytes()["total_bytes"] > nz.proof_bytes()["total_bytes"]
 
 
+# --- validation against the GPU prototype's MEASURED proofs (ligerito-proto FINAL 20:35Z, 4090, Fiat-Shamir, no ZK) ---------
+
+PROTO_MEASURED_KB = [   # (tall1, wide_log2, rate_log2, queries, measured proof KB)
+    (1 << 19, (7, 4, 4), (2, 2, 2), (192,) * 3, 454),                          # Table A, 2^26
+    (1 << 22, (6, 4, 4, 4), (2, 2, 2, 2), (192,) * 4, 532),                    # Table A, 2^28
+    (1 << 22, (7, 4, 4, 4), (2, 2, 2, 2), (192,) * 4, 581),                    # Table A, 2^29
+    (1 << 22, (7, 5, 5), (1, 2, 2), (311, 191, 193), 790),                     # Table B, our F point at 2^29
+    (1 << 23, (7, 5, 5), (1, 2, 2), (311, 191, 193), 911),                     # Table B, our F point at 2^30
+    (1 << 23, (6, 4, 4, 3, 3), (2, 4, 4, 4, 4), (191, 143, 143, 143, 144), 508),   # Table B, our S point at 2^29
+    (1 << 20, (9, 6), (2, 2), (148, 148), 1030),                               # Table B, paper-style l = 3
+    (1 << 22, (7, 5, 5), (2, 2, 2), (148,) * 3, 558),                          # Table B, paper-style l = 4
+]
+
+
+@pytest.mark.parametrize("tall1,wide,rates,queries,kb", PROTO_MEASURED_KB)
+def test_byte_model_matches_measured_prototype(tall1, wide, rates, queries, kb):
+    p = P.LigeritoParams(tall1=tall1, wide_log2=wide, rate_log2=rates, queries=queries, fields=P.OUR_FIELDS, target_log2=-128.0,
+                         zk=False, relation=None)
+    assert p.proof_bytes()["total_bytes"] / 1e3 == pytest.approx(kb, rel=0.01)
+
+
 # --- our batches -------------------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("name,dev", P.TABLE2)

@@ -196,6 +196,8 @@ class LigeritoParams:
     target_log2: float = -128.0
     zk: bool = True                         # salted leaves (+hash_bytes per opened row) and the mask cells
     pcs_radix_log2: int = 1                 # sumcheck variables per interactive round in the PCS partial sumchecks
+    send_expected_symbols: bool = False     # paper (19) counts |S_i| "expected symbols" y_i; ref.py / pcs.py let the verifier
+                                            # compute them from the opened rows, so they are not sent (proto's measured proofs)
     relation: RelationShape | None = None
     zc_radix_log2: int = 1                  # variables per round in the zero-check sumcheck over the column variables
     ii_radix_log2: int = 4                  # variables per round in the sparse (i, i') quadratic-form sumcheck
@@ -276,7 +278,7 @@ class LigeritoParams:
             lv_rows = S * w * self.elem_bytes(i)
             sib = expected_merkle_siblings(n, S)
             lv_merkle = sib * f.hash_bytes + (S * f.hash_bytes if self.zk else 0)     # + salt per opened leaf under ZK
-            lv_y = (S + 1) * f.ext_bytes if i < self.L - 1 else 0                      # expected symbols y_i and the claim
+            lv_y = (S + 1) * f.ext_bytes if (self.send_expected_symbols and i < self.L - 1) else 0
             lv_sc = self.pcs_round_coeffs(i) * f.ext_bytes
             out["levels"].append({"tall": self.tall(i), "wide": w, "n": n, "rate": self.rate(i), "queries": S,
                                   "rows_bytes": lv_rows, "merkle_siblings": sib, "merkle_bytes": lv_merkle,
@@ -292,8 +294,8 @@ class LigeritoParams:
         out.update({"rows_bytes": rows, "merkle_bytes": merkle, "y_bytes": ysym, "pcs_sumcheck_bytes": sc, "final_bytes": final,
                     "roots_bytes": roots, "relation_bytes": rel["bytes"], "relation": rel, "total_bytes": total,
                     "total_kib": total / KiB,
-                    "formula": "sum_i (|S_i| wide_i elem_i + E[siblings](n_i, |S_i|) H [+ |S_i| H salt] + (|S_i|+1) ext"
-                               " + coeffs_i ext) + tall_L ext + L H + relation messages"})
+                    "formula": "sum_i (|S_i| wide_i elem_i + E[siblings](n_i, |S_i|) H [+ |S_i| H salt] [+ (|S_i|+1) ext if"
+                               " expected symbols are sent] + coeffs_i ext) + tall_L ext + L H + relation messages"})
         return out
 
     def relation_bytes(self) -> dict:
