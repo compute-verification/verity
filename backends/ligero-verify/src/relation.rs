@@ -459,7 +459,15 @@ pub static BF16_AMPERE: Relation = Relation {
     // RTX 4090; the 2048-VU hashed gate on the frozen vu-k1536 set passed with 86 negatives, 0 failures on that tree).
     hashed_sys_id: "673461ab446d96869a0ab32d1291667f4af4ba86cdf5fb6479fefaa50dbb8ed4",
     hashed_table_digest: "3ba12207d9f221dcb2a471044cabb314cc3e05e4512a27559080f431aa7210c9",
-    shared_systems: &[],
+    // lane share-logup-3 (2026-09-23): the row-sharing pairs (`hashchain.compose_shared` G, `row_hash_system` H; H is shared
+    // by every relation with the same steps / word width), `ligero-verify system-digest` on the pod's `bench-vu --auth
+    // included-hash-shared --tile 2x4 --dump-dir` systems, both modes (vy-share-logup, RTX 4090).
+    shared_systems: &[
+        (true, ["b6a145dcabdc96f9730f10d6fc67ba5e9b6a8f4ffaa8a1a927bb1012fcfd5f35", "e72aeb1d3a51a08ba9d007d6381ea39bf521878b0340999cc0924cd91eafb32f",
+               "95d32763d227baea625d62e7ae308f08a16577f44706afaeae7608049bb85a5d", "90dc00d5c56e978c554c51a48fc690a9427b4cee405c1330b3ae920e0d4150f9"]),
+        (false, ["0e20f8912027f3a93972e39c76178e988de5f902f8e7247ac3a09c862e6bd8a9", "a47c272ede439e25e4e9dbac74a00c4b041157d422886066fc8e02f5b1c4624b",
+                "610ba494e7456ce37803a87b98e462d32fd11288eace7025e22c89c4ffa1b1bc", "b1bbb3cfc50f065d96071b259ca3cc802bebbb5ee84eb42aff63f73fc175b678"]),
+    ],
 };
 
 pub static FP8_ADA: Relation = Relation {
@@ -501,7 +509,15 @@ pub static BF16_HOPPER: Relation = Relation {
     table_digest: "74ce68a2801e14fbeaab2b241886bbe3fa9146234289e52c774fd4160a6c469c",
     hashed_sys_id: "3c7570fa029de39af30363599480c7a7bdbb51ba8e5fbe552a852b2ffb0ba1e1",
     hashed_table_digest: "def0ccdae79f092f41bc35ecd054ad64e54e2cfe9769c8cec41737c1ebab6617",
-    shared_systems: &[],
+    // lane share-logup-3 (2026-09-23): the row-sharing pairs (`hashchain.compose_shared` G, `row_hash_system` H; H is shared
+    // by every relation with the same steps / word width), `ligero-verify system-digest` on the pod's `bench-vu --auth
+    // included-hash-shared --tile 2x4 --dump-dir` systems, both modes (vy-share-logup, RTX 4090).
+    shared_systems: &[
+        (true, ["fca47f3a0194672b5394d1686914ad7c4b73ded7724c159d30c58aba819c79d9", "0213dc390566a7e9a95cceb92e462abd89ab8effb449b1f3778c6de54e90c235",
+               "95d32763d227baea625d62e7ae308f08a16577f44706afaeae7608049bb85a5d", "90dc00d5c56e978c554c51a48fc690a9427b4cee405c1330b3ae920e0d4150f9"]),
+        (false, ["23394c0d68e9ae5ff33cc04831f493be1e19aac40181e3dbf5d3c0bb04ebff4e", "e507eaad4583688aede7473eee9207c6bedf807f12a41c6c040b4eb3c424588e",
+                "610ba494e7456ce37803a87b98e462d32fd11288eace7025e22c89c4ffa1b1bc", "b1bbb3cfc50f065d96071b259ca3cc802bebbb5ee84eb42aff63f73fc175b678"]),
+    ],
 };
 
 pub static FP8_HOPPER: Relation = Relation {
@@ -517,7 +533,15 @@ pub static FP8_HOPPER: Relation = Relation {
     table_digest: "d5b77463fee9b3d777174755144edaa84461b3eec6ac6a1750c887dc861d58e7",
     hashed_sys_id: "141a5fdd5ea2314ba7070f35d8eae1cb649c554589b1065033e5382580587c97",
     hashed_table_digest: "801ca79f0f8c5c77e6b90758614acadfc4e20688442e616e756dbd14a464144d",
-    shared_systems: &[],
+    // lane share-logup-3 (2026-09-23): the row-sharing pairs (`hashchain.compose_shared` G, `row_hash_system` H; H is shared
+    // by every relation with the same steps / word width), `ligero-verify system-digest` on the pod's `bench-vu --auth
+    // included-hash-shared --tile 2x4 --dump-dir` systems, both modes (vy-share-logup, RTX 4090).
+    shared_systems: &[
+        (true, ["22acdec1a85a29fd95f6737a68f3157947eb29b8c035b47a68c6cb830306997e", "f958bdde3b144eb400addac99e4feb45bd671c814ed7fc7469d0b3925519829b",
+               "e26aaca3d0527c36b76acfbbadf5071f009b96870e5ef64f26ecb8026179d446", "ba38b704d9aeeefc1c7de1f4ccabb579405994d0c57dca4bded2d8c269b252f9"]),
+        (false, ["e5e4eae5a99238009fec10d52954b32d927847f8620b717ae21d9582cd53df95", "7b475f320c49583d9c89567a5e7705c04516092835da3100c337c400dbdafcd5",
+                "e1e6fd8596ec0d1b447ca636f8508149414847ad986bc07a8f5ac3cbd8e18a9e", "9305a83f6219bdc1fdc98e1f112233d8303f1ab0437a61b03d95ff456d49ce12"]),
+    ],
 };
 
 /// `GemmAccumulator<1536>` over `sm120.mma.m16n8k64.e2m1.nvf4` (24 chained K = 64 steps; `fp4/chain.py FP4_HOOKS`:
