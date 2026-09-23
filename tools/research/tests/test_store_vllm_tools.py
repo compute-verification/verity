@@ -276,5 +276,25 @@ def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     assert ref["artifact"] == art and ref["sha256"] is None and "store id" in ref["sha256_reason"]
 
 
+def test_lookup_computes_the_derivation_the_runner_records(tmp_path, monkeypatch, capsys):
+    """`research data lookup --tool vllm.build -- ARGV` fills the Tool's own key conditions (`tool.vllm.build.torch|vllm`, its probe) the
+    way `research run --tool` records them, so the derivation it looks up is the one an attempt was published under."""
+    from research import cli as RC
+    import argparse
+
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
+    cmd = _argv("build", "--retain", "host")
+    ns = argparse.Namespace(tool="vllm.build", campaign="c", project="verity", exclusive_lock=False, source_identity=None, scratch=[])
+    sec = RC._prepare_store(ns, argparse.Namespace(cwd=str(REPO), input=[]), cmd, "r20260922-000000-0004", tmp_path / "run")["section"]
+    assert "error" not in sec, sec
+    assert set(sec["conditions"]) >= {"tool.vllm.build.torch", "tool.vllm.build.vllm", "hw.family"}
+    rc = data_main(["lookup", "--tool", "vllm.build", "--source-root", str(REPO), "--any-source", "--json", "--", *cmd])
+    assert rc == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["derivation"] == sec["derivation"], (doc["key_conditions"], {k: sec["conditions"].get(k) for k in doc["key_conditions"]})
+    assert doc["attempts"] == [] and doc["key_params"]["row"] == ROW
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
