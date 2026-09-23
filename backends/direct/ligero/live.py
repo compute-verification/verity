@@ -245,6 +245,53 @@ class LiveCoins:
         """The runner sets the statement bytes before ``prove``: they travel with the root (the claim is fixed before
         the verifier opens its first coin)."""
         self.stmt = stmt
+        if getattr(self.session, "pipelined", False):
+            self.session.provide_stmt(self.sub, stmt)          # the network thread sends STMT i in sub-batch order
+
+    # -- non-blocking variant (``--pipeline N --verifier``): the coin exchanges are futures the prover STAGE yields to
+    # ``pipeline.prove_many`` instead of blocking on the socket; a per-session network thread (``ProverSession``) sends
+    # the messages in sub-batch order and fulfils the futures when the verifier replies.  Each returns ``None`` when the
+    # session is NOT pipelined, so ``protocol._coin_future`` falls back to the blocking calls below (the sequential path).
+    def commitments_future(self):
+        if not getattr(self.session, "pipelined", False):
+            return None
+        fut = self.session.commit_future(self.sub)
+        fut.add_done_callback(self._set_cc)
+        return fut
+
+    def open1_future(self, root: bytes):
+        if not getattr(self.session, "pipelined", False):
+            return None
+        self.session.provide_root(self.sub, root)              # hand the root to the network thread (it sends ROOT i)
+        fut = self.session.open1_future(self.sub)
+        fut.add_done_callback(self._set_open1)
+        return fut
+
+    def open2_future(self, root: bytes, w, h, q, v):
+        if not getattr(self.session, "pipelined", False):
+            return None
+        self.session.provide_tests(self.sub, _pack_arrays([w, h, q, v]))
+        fut = self.session.open2_future(self.sub)
+        fut.add_done_callback(self._set_open2)
+        return fut
+
+    def _set_cc(self, f):
+        try:
+            self._cc = f.result()
+        except BaseException:  # noqa: BLE001 -- the driver re-raises the future's exception
+            pass
+
+    def _set_open1(self, f):
+        try:
+            self.r1, self.s1 = f.result()
+        except BaseException:  # noqa: BLE001
+            pass
+
+    def _set_open2(self, f):
+        try:
+            self.r2, self.s2 = f.result()
+        except BaseException:  # noqa: BLE001
+            pass
 
     def commitments(self) -> tuple[bytes, bytes]:
         """Step 0.  The statement (the public claim; known before proving starts) goes out first as STMT i -- no reply, so
@@ -320,6 +367,7 @@ class ProverSession:
         self._sender.start()
         self.proof_send_seconds = 0.0
         self.verdict: dict | None = None
+        self.pipelined = False               # set by start_pipeline (--pipeline N --verifier): a network thread owns ctrl
 
     # -- framing with byte accounting
     def _send(self, s: socket.socket, kind: bytes, payload: bytes) -> None:
@@ -382,6 +430,116 @@ class ProverSession:
     def coins(self, sub: int) -> LiveCoins:
         return LiveCoins(self, sub)
 
+    # -- pipelined coin exchange (``--pipeline N --verifier``): one network thread owns the control connection and runs
+    # the SAME wire sequence the verifier expects (STMT/ROOT/TESTS per sub-batch, in order; COMMIT i+1 pipelined behind
+    # OPEN2 i) while the prover proves several sub-batches at once.  The prover's stages never touch the socket -- they
+    # hand the root / test message over and wait on a Future the network thread fulfils, so the two openings of sub-batch
+    # i overlap the device work (and the other openings) of sub-batches i +- 1.
+    def start_pipeline(self, n: int) -> None:
+        self.pipelined = True
+        self.pn = n
+        self._cv = threading.Condition()
+        self._stmt_box: dict[int, bytes] = {}
+        self._root_box: dict[int, bytes] = {}
+        self._tests_box: dict[int, bytes] = {}
+        self._reply: dict[tuple[bytes, int], Future] = {}
+        self._net_err: BaseException | None = None
+        self._net_stop = threading.Event()
+        self._net = threading.Thread(target=self._pipeline_net_loop, name="live-coins-net", daemon=True)
+        self._net.start()
+
+    def _reply_future(self, kind: bytes, sub: int) -> Future:
+        with self._cv:
+            key = (kind, sub)
+            f = self._reply.get(key)
+            if f is None:
+                f = Future()
+                f.net = True                     # marks a "waiting on the live verifier" future for pipeline.prove_many
+                self._reply[key] = f
+            return f
+
+    def commit_future(self, sub: int) -> Future:
+        return self._reply_future(K_COMMIT, sub)
+
+    def open1_future(self, sub: int) -> Future:
+        return self._reply_future(K_OPEN1, sub)
+
+    def open2_future(self, sub: int) -> Future:
+        return self._reply_future(K_OPEN2, sub)
+
+    def provide_stmt(self, sub: int, stmt: bytes) -> None:
+        with self._cv:
+            self._stmt_box[sub] = stmt
+            self._cv.notify_all()
+
+    def provide_root(self, sub: int, root: bytes) -> None:
+        with self._cv:
+            self._root_box[sub] = root
+            self._cv.notify_all()
+
+    def provide_tests(self, sub: int, packed: bytes) -> None:
+        with self._cv:
+            self._tests_box[sub] = packed
+            self._cv.notify_all()
+
+    def _await_box(self, box: dict[int, bytes], sub: int) -> bytes:
+        with self._cv:
+            while sub not in box:
+                if self._net_stop.is_set():
+                    raise LiveError("pipeline aborted before the prover provided its message")
+                self._cv.wait(0.5)
+            return box[sub]
+
+    def _fulfil(self, kind: bytes, sub: int, val: tuple[bytes, bytes]) -> None:
+        f = self._reply_future(kind, sub)
+        if not f.done():
+            f.set_result(val)
+
+    def _recv_ctrl_expect(self, kind: bytes, sub: int) -> tuple[bytes, bytes]:
+        k, payload = self._recv(self.ctrl)
+        if k == K_ERROR:
+            raise LiveError(f"verifier: {_json(payload).get('error')}")
+        if k != kind:
+            raise LiveError(f"expected {_KIND_NAME[kind]} {sub}, got {_KIND_NAME.get(k, k)}")
+        (i,) = struct.unpack_from("<I", payload)
+        if i != sub:
+            raise LiveError(f"{_KIND_NAME[kind]} for sub-batch {i}, expected {sub}")
+        return payload[4:36], payload[36:68]
+
+    def _pipeline_net_loop(self) -> None:
+        """The wire sequence, sub-batch in order (identical bytes to the sequential prover): COMMIT 0 is already here;
+        per i, send STMT i then ROOT i, read OPEN1 i, send TESTS i, read OPEN2 i, then read COMMIT i+1 (pipelined)."""
+        try:
+            c1c2 = self._recv_ctrl_expect(K_COMMIT, 0)
+            self._fulfil(K_COMMIT, 0, c1c2)
+            for i in range(self.pn):
+                stmt = self._await_box(self._stmt_box, i)
+                self.send_stmt(i, stmt)                                  # STMT i (ahead of the root; off the critical path)
+                root = self._await_box(self._root_box, i)
+                t0 = time.perf_counter()
+                self._send(self.ctrl, K_ROOT, struct.pack("<I", i) + root)
+                r1s1 = self._recv_ctrl_expect(K_OPEN1, i)                # V opens slot 1
+                dt = time.perf_counter() - t0
+                self.rtts.append(dt)
+                self._fulfil(K_OPEN1, i, r1s1)
+                tests = self._await_box(self._tests_box, i)
+                t1 = time.perf_counter()
+                self._send(self.ctrl, K_TESTS, struct.pack("<I", i) + tests)
+                r2s2 = self._recv_ctrl_expect(K_OPEN2, i)               # V opens slot 2
+                dt = time.perf_counter() - t1
+                self.rtts.append(dt)
+                self._fulfil(K_OPEN2, i, r2s2)
+                if i + 1 < self.pn:
+                    c = self._recv_ctrl_expect(K_COMMIT, i + 1)         # step 0 of the next sub-batch, pipelined behind OPEN2 i
+                    self._fulfil(K_COMMIT, i + 1, c)
+        except BaseException as e:  # noqa: BLE001 -- reported to the driver via the futures and end()
+            self._net_err = e
+            self._net_stop.set()
+            with self._cv:
+                for f in self._reply.values():
+                    if not f.done():
+                        f.set_exception(e)
+
     def submit(self, sub: int, proof, meta: dict | None = None) -> int:
         """Queue PROOF sub (the ligero-proof/v1 bytes + a small JSON) on the data connection; returns the byte count."""
         mj = json.dumps(meta or {}).encode()
@@ -392,6 +550,10 @@ class ProverSession:
 
     def end(self, summary: dict | None = None) -> dict:
         """Drain the proofs, send END, wait for the verifier's VERDICT (which waits for its own verification)."""
+        if self.pipelined and getattr(self, "_net", None) is not None:
+            self._net.join(timeout=600.0)                    # the network thread owns ctrl until it has read the last OPEN2
+            if self._net_err is not None:
+                raise LiveError(f"pipeline network thread failed: {self._net_err!r}")
         self._q.put(None)
         self._sender.join()
         if self._sender_error is not None:
@@ -460,6 +622,15 @@ class BenchLive:
     def coins(self, si: int, local):
         """The coin source for sub-batch ``si``: live in a recorded rep, ``local`` (the runner's own sample) otherwise."""
         return self.sess.coins(si) if self.sess is not None else local
+
+    def pipeline_factory(self, local_factory):
+        """A ``coins_factory(i)`` for ``prove_vus_many`` under ``--pipeline N --verifier``: starts the session's network
+        thread and hands out the live coin source for sub-batch ``i`` (in order); falls back to ``local_factory(i)`` in a
+        non-recorded rep (no live session)."""
+        if self.sess is None:
+            return local_factory
+        self.sess.start_pipeline(self.n_proofs)
+        return lambda i: self.sess.coins(i)
 
     def proved(self, si: int, proof, coins):
         """After ``prove``: PROOF ``si`` goes out on the data channel (async), the waits leave the phase clocks; returns

@@ -204,7 +204,9 @@ class RelationChainRunner:
     def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256):
         """``len(batches)`` sub-batches proved with up to ``depth`` in flight on their own CUDA streams (``pipeline.prove_many``):
         the host work of one sub-batch (challenge expansion, transcript copies, launch overhead) hides under the device work
-        of the next.  ``coins_factory()`` is called per sub-batch when it starts, in order (the honest verifier's step 0).
+        of the next.  ``coins_factory(i)`` is called per sub-batch when it starts, in order (the honest verifier's step 0);
+        with a live verifier (``coins`` exposing ``set_statement``) the statement is fixed per sub-batch before proving, and
+        the coin exchange is non-blocking (the stage yields a Future the pipeline driver polls -- ``live.LiveCoins``).
         Returns ``[(coins, proof, pubs, lay)]`` in sub-batch order and the pass wall; each proof's ``timings`` is the
         sub-batch's share of the wall (see ``pipeline._rescale``)."""
         from .pipeline import prove_many
@@ -213,8 +215,14 @@ class RelationChainRunner:
 
         def starter(i):
             def start(slot):
-                coins_of[i] = coins_factory()
-                return self._prove_stages(bundles[i], coins_of[i], check=False, mutate=None, slot=slot)
+                c = coins_factory(i)
+                coins_of[i] = c
+                if hasattr(c, "set_statement"):
+                    # live verifier: the claim (a, b, ypub) is fixed before its first coin is opened; built outside prove's clock
+                    from .live import set_statement
+                    bd = bundles[i]
+                    set_statement(c, self, (bd["a"], bd["b"], bd["ypub"]), bd["lay"], self.cfg(bd["lay"].l), self.n_proofs)
+                return self._prove_stages(bundles[i], c, check=False, mutate=None, slot=slot)
             return start
 
         proofs, wall = prove_many([starter(i) for i in range(len(batches))], self.device, depth=depth)
@@ -439,13 +447,18 @@ def bench_vu_rel(args, rel: Relation) -> int:
         cfgs_seen: list[Config] = []
         if live is not None:
             live.begin_rep(rep)
-        if pipeline_depth > 1 and rep > 0 and args.device.startswith("cuda") and live is None:
-            # (with --verifier the sub-batches stay sequential: each one's coins come from the live verifier in order)
+        if pipeline_depth > 1 and rep > 0 and args.device.startswith("cuda"):
             # --pipeline N: the sub-batches interleaved N-deep on their own streams (lane hp2-host); the timings are each
             # sub-batch's share of the pass wall, so their sum is the wall.  Coins are sampled per sub-batch as it starts.
-            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], (lambda: protocol_mod.Coins.sample() if interactive else None),
-                                           depth=pipeline_depth, min_l=l)
+            # With --verifier the factory hands out the LIVE verifier's coins in sub-batch order and the coin exchange is
+            # non-blocking (lane live-pipeline): the network waits of sub-batch i overlap the device work of i +- 1, so
+            # net_wait falls from n_proofs x 2 x RTT to ~2 x RTT.  PROOF i is sent on the data channel after the pass.
+            local_factory = lambda i: (protocol_mod.Coins.sample() if interactive else None)  # noqa: E731
+            factory = live.pipeline_factory(local_factory) if live is not None else local_factory
+            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], factory, depth=pipeline_depth, min_l=l)
             for si, ((lo, hi), (V, proof, pubs, lay_i)) in enumerate(zip(subs, many)):
+                if live is not None:
+                    V = live.proved(si, proof, V)            # PROOF si on the data channel (async); coins -> plain Coins
                 for k_, v_ in proof.timings.items():
                     agg[k_] = agg.get(k_, 0.0) + v_
                 proved.append((si, lo, hi, V, proof, pubs, lay_i))
@@ -466,7 +479,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
                     # every pipeline slot once (its stream's hint graph capture, pinned buffers): untimed, like the warm-up
                     warm = subs[:pipeline_depth] + (subs[-1:] if len(subs) > pipeline_depth else [])   # + the ragged last layout
                     R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in warm],
-                                     (lambda: protocol_mod.Coins.sample() if interactive else None), depth=pipeline_depth, min_l=l)
+                                     (lambda i: protocol_mod.Coins.sample() if interactive else None), depth=pipeline_depth, min_l=l)
                 break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
         if live is not None:
             live.end_rep(rep, agg)                           # END; the verifier's session verdict (waits for its Rust verify)
