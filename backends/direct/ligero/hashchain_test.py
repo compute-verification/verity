@@ -163,3 +163,30 @@ def test_fused_witness_source_modes() -> None:
     src = wd.generate(hs, tab)
     assert len(tab) > 50_000 and "affine(J, C," in src and len(src) < 1_000_000
     assert all(0 <= j < hs.m and 0 <= v < P for j, v in tab)
+
+
+def test_precomputed_row_sponges_equal_the_per_proof_sponge(runner) -> None:
+    """``commit`` runs every committed row's sponge once; the gathered capacity rows / digests are what the per-proof
+    sponge computes on the same words, and a prover whose words differ from the claimed rows falls back to them."""
+    R, data = runner
+    assert R.sponges is not None and set(R.sponges) == {"a", "b"}
+    vus = [data[1], data[3]]
+    auth = R.auth_for([1, 3])
+    units = []
+    for a, b, accs, _ in vus:
+        from .relchain import vu_units
+        units += vu_units(R.rel, a, b, accs)
+    l = R.layout(2).l
+    while len(units) < l:
+        units.append(R._pad_unit())
+    a = np.asarray([u[1] for u in units], dtype=np.int64)
+    b = np.asarray([u[2] for u in units], dtype=np.int64)
+    sp = R._sponges_for(auth, a, b, 2)
+    assert sp is not None and set(sp) == {"a", "b"}
+    slow = hashchain.hash_hints(R.hr, a, b, 2, l, "cpu")
+    fast = hashchain.hash_hints(R.hr, a, b, 2, l, "cpu", sponges=sp)
+    assert torch.equal(slow[0], fast[0]) and torch.equal(slow[1], fast[1])
+    # claimed x rows are VU 0's and VU 2's: the words do not match -> no precomputed sponge for "a"
+    other = R.auth_for([0, 2])
+    sp2 = R._sponges_for(hashauth.HashAuth(auth.vu_index, other.x_index, auth.w_index, auth.trees), a, b, 2)
+    assert sp2 is not None and set(sp2) == {"b"}

@@ -278,9 +278,22 @@ def sponge_states(words, word_bits: int, role: int, n_words: int, n_vus: int, st
     return cap_in, st[:h2.OUT].T.contiguous()
 
 
-def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device) -> tuple:
+def row_sponges(hr: HashedRelation, rows, role: int, device) -> tuple:
+    """The sponge of every committed row at once: ``rows`` (N, K) words -> (cap (N, steps, 8): the linked capacity rows
+    of every step, digests (N, 8)).  The prover computes this once per committed set (``HashedRelationRunner.commit``)
+    and gathers per sub-batch instead of re-running 2 x steps permutations per proof."""
+    import torch
+    rows = torch.as_tensor(np.asarray(rows, dtype=np.int64), device=device)
+    n, steps, k = rows.shape[0], hr.steps, hr.k
+    words = rows.reshape(n * steps, k)
+    cap, dg = sponge_states(words, hr.word_bits, role, steps * k, n, steps, n * steps)
+    return cap.T.reshape(n, steps, h2.CAPACITY).contiguous(), dg
+
+
+def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: dict | None = None) -> tuple:
     """The appended hint rows (len(extra_hint_names), l) for operand words ``a``, ``b`` (l, k) int64 (pad columns 0), and
-    the digests (n_vus, 16) the statement publishes."""
+    the digests (n_vus, 16) the statement publishes.  ``sponges``: ``{"a": (cap (n_vus, steps, 8), digests (n_vus, 8)),
+    "b": ...}`` precomputed by :func:`row_sponges` for exactly these VUs' rows (the caller checked the words match)."""
     import torch
     a = torch.as_tensor(a, dtype=torch.int64, device=device)
     b = torch.as_tensor(b, dtype=torch.int64, device=device)
@@ -294,7 +307,13 @@ def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device) -> tuple:
         for i in range(k):
             for j in range(nb):
                 vals[f"{nm}[{i}].b{j}"] = bits[:, i, j]
-        cap, dg = sponge_states(w, nb, role, hr.steps * k, n_vus, hr.steps, l)
+        if sponges is not None and nm in sponges:
+            cap_v, dg = sponges[nm]
+            cap = torch.zeros((h2.CAPACITY, l), dtype=torch.int64, device=device)
+            cap[:, :n_vus * hr.steps] = cap_v.to(device).reshape(n_vus * hr.steps, h2.CAPACITY).T
+            dg = dg.to(device)
+        else:
+            cap, dg = sponge_states(w, nb, role, hr.steps * k, n_vus, hr.steps, l)
         for x in range(h2.CAPACITY):
             vals[f"{nm}.cap[{x}]"] = cap[x]
         digests.append(dg)

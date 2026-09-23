@@ -293,6 +293,7 @@ class HashedRelationRunner(RelationChainRunner):
                                    y16_bits=rel.y_bits, tag=self.base_tag)
         self.trees = None
         self.tile = None                    # (nx, nw) of the tile workload, None for the worst case
+        self.rows, self.sponges, self.sponge_seconds = None, None, 0.0
 
     @property
     def relation(self) -> str:
@@ -304,11 +305,19 @@ class HashedRelationRunner(RelationChainRunner):
 
     def commit(self, *, x_rows, w_cols, y_words, bindings, cache=None, tile=None):
         """Build (or load) the three trees of the committed set; ``tile = (nx, nw)`` records the sharing layout."""
-        from . import hashauth
+        from . import hashauth, hashchain
+        x_rows, w_cols = np.asarray(x_rows, dtype=np.int64), np.asarray(w_cols, dtype=np.int64)
         self.trees, self.digests, cached = hashauth.load_or_build_trees(
-            cache, x_rows=np.asarray(x_rows, dtype=np.int64), w_cols=np.asarray(w_cols, dtype=np.int64),
+            cache, x_rows=x_rows, w_cols=w_cols,
             y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings)
         self.tile = tile
+        # the sponges of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus)
+        t0 = time.perf_counter()
+        self.rows = {"a": x_rows, "b": w_cols}
+        self.sponges = {nm: hashchain.row_sponges(self.hr, self.rows[nm], role, self.device) for _, nm, role in hashchain.ROLES}
+        if str(self.device).startswith("cuda"):
+            torch.cuda.synchronize()
+        self.sponge_seconds = time.perf_counter() - t0
         return cached
 
     def commit_vus(self, data: list, dataset: str = "synthetic", tier: str = "dev", manifest_sha256: str = "", cache=None, tile=None,
@@ -339,6 +348,21 @@ class HashedRelationRunner(RelationChainRunner):
                 wi = [v % self.tile[1] for v in vu_ids]
         return hashauth.HashAuth.for_vus(self.trees, vu_ids, xi, wi)
 
+    def _sponges_for(self, auth, a, b, n_vus: int) -> dict | None:
+        """The committed rows' precomputed sponges for this sub-batch, per operand whose words ARE the committed rows
+        (else None for that operand: the sponge runs on the words the prover computes on -- negatives, overrides)."""
+        if self.sponges is None:
+            return None
+        out = {}
+        for nm, idx in (("a", auth.x_index), ("b", auth.w_index)):
+            idx = np.asarray(idx, dtype=np.int64)
+            words = (a if nm == "a" else b)[:n_vus * self.steps].reshape(n_vus, self.steps * self.hr.k)
+            if len(idx) == n_vus and (idx < len(self.rows[nm])).all() and np.array_equal(self.rows[nm][idx], words):
+                cap, dg = self.sponges[nm]
+                t = torch.as_tensor(idx, device=cap.device)
+                out[nm] = (cap[t], dg[t])
+        return out or None
+
     def prove_vus(self, vus, check=True, mutate=None, min_l: int = 256, coins=None, vu_ids=None, auth=None, words_override=None):
         """As the base runner; ``vu_ids`` (default ``range(len(vus))``) are the committed set's VU indices.  ``auth`` overrides
         the block (negatives); ``words_override(a, b)`` edits the operand words the prover computes on AFTER the units
@@ -363,7 +387,8 @@ class HashedRelationRunner(RelationChainRunner):
             a, b = words_override(a, b)
         t0 = time.perf_counter()
         base = self.rel.hints(self.p, self._base_sys, c_in, a, b, y_out, self.device)
-        extra, digests = hashchain.hash_hints(self.hr, a, b, len(vus), lay.l, self.device)
+        extra, digests = hashchain.hash_hints(self.hr, a, b, len(vus), lay.l, self.device,
+                                              sponges=self._sponges_for(auth, a, b, len(vus)))
         hints = torch.cat([base, extra], 0)
         table = hashchain.public_table(digests.cpu().numpy(), len(vus), self.steps, lay.l)
         idx = auth.indices()
@@ -733,7 +758,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
                      cache=getattr(args, "auth_cache", None), tile=tile, x_rows=x_rows, w_cols=w_cols)
         commit_seconds = time.perf_counter() - t0
         print(f"committed: x tree {R.trees['a'].count} rows, W tree {R.trees['b'].count} columns, y tree {R.trees['y'].count} words "
-              f"(leaf/v2h Poseidon2 + SHA-256) in {commit_seconds:.1f}s; roots a={R.trees['a'].root.hex()[:16]} b={R.trees['b'].root.hex()[:16]}")
+              f"(leaf/v2h Poseidon2 + SHA-256) in {commit_seconds:.1f}s (row sponges on {args.device}: {R.sponge_seconds:.2f}s); "
+              f"roots a={R.trees['a'].root.hex()[:16]} b={R.trees['b'].root.hex()[:16]}")
     lay = R.layout(per_proof)
     l = lay.l
     cfg = R.cfg(l)
@@ -930,6 +956,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
                  contract.measurement("relation.hash.permutations_per_unit", R.hr.census["permutations_per_unit"], "count"),
                  contract.measurement("relation.hash.linked_rows", R.hr.census["linked_rows"], "count"),
                  contract.measurement("relation.hash.commit_seconds", commit_seconds, "s"),
+                 contract.measurement("relation.hash.sponge_seconds", R.sponge_seconds, "s"),
                  contract.measurement("relation.hash.auth_openings_seconds", med.get("auth_openings", 0.0), "s"),
                  contract.measurement("relation.hash.committed_x_rows", R.trees["a"].count, "count"),
                  contract.measurement("relation.hash.committed_w_cols", R.trees["b"].count, "count")]
