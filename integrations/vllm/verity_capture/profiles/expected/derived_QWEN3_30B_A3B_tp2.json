@@ -1,0 +1,1156 @@
+{
+ "accepted": false,
+ "case": "QWEN3_30B_A3B",
+ "check_header": {
+  "perturb:attention_bias": [
+   "attention_bias=True != C[BIAS]=False"
+  ],
+  "perturb:head_dim": [
+   "head_dim=129 != C[D]=128"
+  ],
+  "perturb:hidden_act": [],
+  "perturb:hidden_size": [
+   "hidden_size=2049 != C[H]=2048"
+  ],
+  "perturb:intermediate_size": [],
+  "perturb:max_position_embeddings": [
+   "max_position_embeddings=40961 != C[MAX_POS]=40960"
+  ],
+  "perturb:moe_intermediate_size": [
+   "recorded config cannot be sharded by 2: moe_intermediate_size=769 is not divisible by the world 2"
+  ],
+  "perturb:norm_topk_prob": [
+   "norm_topk_prob=False != C[NORM_TOPK_PROB]=True",
+   "norm_topk_prob=False != C[RENORMALIZE]=True"
+  ],
+  "perturb:num_attention_heads": [
+   "recorded config cannot be sharded by 2: num_attention_heads=33 is not divisible by the world 2"
+  ],
+  "perturb:num_experts": [
+   "num_experts=129 != C[NUM_EXPERTS]=128"
+  ],
+  "perturb:num_experts_per_tok": [
+   "num_experts_per_tok=9 != C[TOPK]=8"
+  ],
+  "perturb:num_hidden_layers": [
+   "num_hidden_layers=49 != C[NL]=48"
+  ],
+  "perturb:num_key_value_heads": [
+   "recorded config cannot be sharded by 2: num_key_value_heads=5 is not divisible by the world 2"
+  ],
+  "perturb:rms_norm_eps": [
+   "rms_norm_eps=1.000001 != C[EPS]=1e-06"
+  ],
+  "perturb:rope_theta": [
+   "rope_theta=1000001.0 != C[ROPE_THETA]=1000000.0"
+  ],
+  "perturb:tie_word_embeddings": [
+   "tie_word_embeddings=True != C[tie_word_embeddings]=False"
+  ],
+  "perturb:vocab_size": [
+   "recorded config cannot be sharded by 2: vocab_size=151937 is not divisible by the world 2"
+  ],
+  "self": []
+ },
+ "config": {
+  "BIAS": false,
+  "BN": 64,
+  "D": 128,
+  "EPS": 1e-06,
+  "GU": 768,
+  "H": 2048,
+  "I": 384,
+  "KVH": 2,
+  "MAX_POS": 40960,
+  "MOE_I_FULL": 768,
+  "NH": 16,
+  "NL": 48,
+  "NORM_TOPK_PROB": true,
+  "NUM_EXPERTS": 128,
+  "QKV": 2560,
+  "QK_NORM": "head",
+  "RENORMALIZE": true,
+  "ROPE_THETA": 1000000.0,
+  "ROUTER_VPT": 8,
+  "SHARED_EXPERTS": 0,
+  "TOPK": 8,
+  "V": 75968,
+  "WORLD": 2,
+  "family": "qwen3_moe",
+  "model": "Qwen/Qwen3-30B-A3B",
+  "revision": "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39",
+  "rope_scaling": null,
+  "tie_word_embeddings": false
+ },
+ "id": "vllm-d9105ea80-sm89-eager-bf16-qwen3_30b_a3b-tp2-rank",
+ "kernel_allowlist": {
+  "n": 32,
+  "sha256": "65df505a21c05004"
+ },
+ "patterns": [
+  {
+   "__type__": "EmbeddingShardCuda",
+   "name": "tp.embedding_shard_cuda"
+  },
+  {
+   "__type__": "TpCollective",
+   "name": "tp.collective",
+   "world": 2
+  },
+  {
+   "__type__": "GemmLaunchTuned",
+   "kernel": "matmul_kernel_persistent",
+   "name": "gemm.matmul_kernel_persistent.tuned",
+   "num_sms": 128,
+   "table": null
+  },
+  {
+   "__type__": "MoEFusedExperts",
+   "config": {
+    "BIAS": false,
+    "BN": 64,
+    "D": 128,
+    "EPS": 1e-06,
+    "GU": 768,
+    "H": 2048,
+    "I": 384,
+    "KVH": 2,
+    "MAX_POS": 40960,
+    "MOE_I_FULL": 768,
+    "NH": 16,
+    "NL": 48,
+    "NORM_TOPK_PROB": true,
+    "NUM_EXPERTS": 128,
+    "QKV": 2560,
+    "QK_NORM": "head",
+    "RENORMALIZE": true,
+    "ROPE_THETA": 1000000.0,
+    "ROUTER_VPT": 8,
+    "SHARED_EXPERTS": 0,
+    "TOPK": 8,
+    "V": 75968,
+    "WORLD": 2,
+    "family": "qwen3_moe",
+    "model": "Qwen/Qwen3-30B-A3B",
+    "revision": "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39",
+    "rope_scaling": null,
+    "tie_word_embeddings": false
+   },
+   "fused_num_stages": 3,
+   "fused_num_warps": 4,
+   "fused_pins": {
+    "BLOCK_SIZE_K": 32,
+    "BLOCK_SIZE_M": 64,
+    "BLOCK_SIZE_N": 64,
+    "GROUP_SIZE_M": 8
+   },
+   "name": "moe.fused_experts.pairwise",
+   "renormalize": true,
+   "router_vpt": {
+    "128": 8,
+    "64": 8
+   },
+   "scope_patterns": [
+    {
+     "__type__": "TpCollective",
+     "name": "tp.collective",
+     "world": 2
+    }
+   ]
+  },
+  {
+   "__type__": "GemmLaunch",
+   "constexprs": {
+    "A_LARGE": false,
+    "BLOCK_SIZE_K": 64,
+    "BLOCK_SIZE_M": 128,
+    "BLOCK_SIZE_N": 128,
+    "B_LARGE": false,
+    "C_LARGE": false,
+    "GROUP_SIZE_M": 8,
+    "HAS_BIAS": false
+   },
+   "kernel": "matmul_kernel_persistent",
+   "name": "gemm.matmul_kernel_persistent",
+   "num_sms": 128,
+   "num_stages": 3,
+   "num_warps": 8,
+   "wrapper_ops": [
+    "aten.addmm",
+    "aten.bmm",
+    "aten.linear",
+    "aten.matmul",
+    "aten.mm"
+   ]
+  },
+  {
+   "__type__": "RMSNormTritonLaunch",
+   "constexprs": {
+    "BLOCK_SIZE": 1024,
+    "HAS_WEIGHT": true
+   },
+   "eps": 1e-06,
+   "kernel": "_rms_norm_kernel",
+   "name": "rmsnorm.triton_rms_norm_kernel",
+   "num_warps": 4
+  },
+  {
+   "__type__": "FusedAddRMSNorm",
+   "eps": 1e-06,
+   "name": "rmsnorm.fused_add_rms_norm"
+  },
+  {
+   "__type__": "RotaryEmbedding",
+   "name": "rope.rotary_embedding"
+  },
+  {
+   "__type__": "KVCacheUpdate",
+   "name": "kv.reshape_and_cache_flash"
+  },
+  {
+   "__type__": "AttentionScope",
+   "bn": 64,
+   "name": "attention.fa2_varlen_fwd",
+   "num_splits": 1
+  },
+  {
+   "__type__": "SiluAndMul",
+   "name": "act.silu_and_mul"
+  },
+  {
+   "__type__": "Embedding",
+   "name": "embedding.aten_embedding"
+  },
+  {
+   "__type__": "TokenSelectGumbelTopP",
+   "block_size": 1024,
+   "name": "sample.gumbel_topp_select",
+   "vocab": 151936
+  },
+  {
+   "__type__": "TokenSelectGumbelTwoStage",
+   "block_size": 1024,
+   "name": "sample.gumbel_two_stage",
+   "vocab": 151936
+  },
+  {
+   "__type__": "TokenSelectArgmax",
+   "name": "sample.argmax_token_select",
+   "vocab": 151936
+  },
+  {
+   "__type__": "LogitsGather",
+   "name": "sample.logits_gather"
+  },
+  {
+   "__type__": "BiasAdd",
+   "name": "bias_add.aten_add"
+  },
+  {
+   "__type__": "TransparentAten",
+   "name": "transparent.aten"
+  },
+  {
+   "__type__": "TransparentTritonMetadata",
+   "name": "transparent.triton_metadata"
+  }
+ ],
+ "pins": {
+  "attention": {
+   "kBlockM": 64,
+   "kBlockN": 64,
+   "kernel": "flash_fwd_splitkv_kernel",
+   "num_splits": 1
+  },
+  "gemm": {
+   "A_LARGE": false,
+   "BLOCK_SIZE_K": 64,
+   "BLOCK_SIZE_M": 128,
+   "BLOCK_SIZE_N": 128,
+   "B_LARGE": false,
+   "C_LARGE": false,
+   "GROUP_SIZE_M": 8,
+   "HAS_BIAS": false,
+   "NUM_SMS": 128,
+   "num_stages": 3,
+   "num_warps": 8
+  },
+  "gemm_tuned_ada": {
+   "N=12288,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       128,
+       8,
+       2
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       64,
+       8,
+       5
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       128,
+       8,
+       4
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       128,
+       4,
+       5
+      ]
+     ],
+     [
+      32,
+      [
+       32,
+       128,
+       4,
+       5
+      ]
+     ],
+     [
+      64,
+      [
+       32,
+       256,
+       4,
+       3
+      ]
+     ],
+     [
+      256,
+      [
+       128,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      512,
+      [
+       128,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      1024,
+      [
+       128,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      2048,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ]
+    ]
+   },
+   "N=151936,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       32,
+       8,
+       5
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       32,
+       8,
+       5
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       32,
+       8,
+       5
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       32,
+       4,
+       4
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      64,
+      [
+       32,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      256,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ],
+     [
+      512,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ],
+     [
+      1024,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ],
+     [
+      2048,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ]
+    ]
+   },
+   "N=2048,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       32,
+       128,
+       8,
+       5
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       256,
+       8,
+       3
+      ]
+     ],
+     [
+      8,
+      [
+       32,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      16,
+      [
+       32,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       128,
+       8,
+       5
+      ]
+     ],
+     [
+      64,
+      [
+       16,
+       256,
+       4,
+       3
+      ]
+     ],
+     [
+      256,
+      [
+       64,
+       128,
+       8,
+       4
+      ]
+     ],
+     [
+      512,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      1024,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      2048,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ]
+    ]
+   },
+   "N=2048,K=6144": {
+    "BLOCK_SIZE_K": 128,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       64,
+       8,
+       4
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       32,
+       8,
+       4
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       32,
+       8,
+       4
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       64,
+       8,
+       3
+      ]
+     ],
+     [
+      64,
+      [
+       32,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      256,
+      [
+       32,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      512,
+      [
+       64,
+       64,
+       4,
+       3
+      ]
+     ],
+     [
+      1024,
+      [
+       64,
+       64,
+       4,
+       3
+      ]
+     ],
+     [
+      2048,
+      [
+       64,
+       64,
+       4,
+       3
+      ]
+     ]
+    ]
+   },
+   "N=4096,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       256,
+       8,
+       3
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       64,
+       4,
+       3
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       128,
+       8,
+       2
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       32,
+       4,
+       5
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      64,
+      [
+       64,
+       64,
+       8,
+       3
+      ]
+     ],
+     [
+      256,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      512,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      1024,
+      [
+       128,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      2048,
+      [
+       128,
+       64,
+       8,
+       4
+      ]
+     ]
+    ]
+   }
+  },
+  "kv_cache": {
+   "block_size": 16,
+   "dtype": "auto"
+  },
+  "rms_norm": {
+   "BLOCK_SIZE": 1024,
+   "HAS_WEIGHT": true,
+   "num_warps": 4
+  }
+ },
+ "probe": {
+  "n": 262
+ },
+ "root_class": {
+  "lm_head.weight": "weight",
+  "model.embed_tokens.weight": "weight",
+  "model.layers.0.input_layernorm.weight": "weight",
+  "model.layers.0.mlp.experts.expert_map": "unmodelled-moe-variant",
+  "model.layers.0.mlp.experts.routed_experts.w13_weight": "weight",
+  "model.layers.0.mlp.experts.routed_experts.w2_weight": "weight",
+  "model.layers.0.mlp.gate.e_score_correction_bias": "unmodelled-moe-variant",
+  "model.layers.0.mlp.gate.weight": "weight",
+  "model.layers.0.mlp.shared_expert.gate_up_proj.weight": "unmodelled-moe-variant",
+  "model.layers.0.post_attention_layernorm.weight": "weight",
+  "model.layers.0.self_attn.attn._v_scale": "ignored",
+  "model.layers.0.self_attn.attn.k_scale": "ignored",
+  "model.layers.0.self_attn.attn.prob_scale": "ignored",
+  "model.layers.0.self_attn.attn.q_scale": "ignored",
+  "model.layers.0.self_attn.k_norm.weight": "weight",
+  "model.layers.0.self_attn.o_proj.weight": "weight",
+  "model.layers.0.self_attn.q_norm.weight": "weight",
+  "model.layers.0.self_attn.qkv_proj.weight": "weight",
+  "model.layers.0.self_attn.rotary_emb.cos_sin_cache": "weight",
+  "model.layers.1.input_layernorm.weight": "weight",
+  "model.layers.1.mlp.experts.expert_map": "unmodelled-moe-variant",
+  "model.layers.1.mlp.experts.routed_experts.w13_weight": "weight",
+  "model.layers.1.mlp.experts.routed_experts.w2_weight": "weight",
+  "model.layers.1.mlp.gate.e_score_correction_bias": "unmodelled-moe-variant",
+  "model.layers.1.mlp.gate.weight": "weight",
+  "model.layers.1.mlp.shared_expert.gate_up_proj.weight": "unmodelled-moe-variant",
+  "model.layers.1.post_attention_layernorm.weight": "weight",
+  "model.layers.1.self_attn.attn._v_scale": "ignored",
+  "model.layers.1.self_attn.attn.k_scale": "ignored",
+  "model.layers.1.self_attn.attn.prob_scale": "ignored",
+  "model.layers.1.self_attn.attn.q_scale": "ignored",
+  "model.layers.1.self_attn.k_norm.weight": "weight",
+  "model.layers.1.self_attn.o_proj.weight": "weight",
+  "model.layers.1.self_attn.q_norm.weight": "weight",
+  "model.layers.1.self_attn.qkv_proj.weight": "weight",
+  "model.layers.1.self_attn.rotary_emb.cos_sin_cache": "alias-of-cos_sin",
+  "model.layers.47.input_layernorm.weight": "weight",
+  "model.layers.47.mlp.experts.expert_map": "unmodelled-moe-variant",
+  "model.layers.47.mlp.experts.routed_experts.w13_weight": "weight",
+  "model.layers.47.mlp.experts.routed_experts.w2_weight": "weight",
+  "model.layers.47.mlp.gate.e_score_correction_bias": "unmodelled-moe-variant",
+  "model.layers.47.mlp.gate.weight": "weight",
+  "model.layers.47.mlp.shared_expert.gate_up_proj.weight": "unmodelled-moe-variant",
+  "model.layers.47.post_attention_layernorm.weight": "weight",
+  "model.layers.47.self_attn.attn._v_scale": "ignored",
+  "model.layers.47.self_attn.attn.k_scale": "ignored",
+  "model.layers.47.self_attn.attn.prob_scale": "ignored",
+  "model.layers.47.self_attn.attn.q_scale": "ignored",
+  "model.layers.47.self_attn.k_norm.weight": "weight",
+  "model.layers.47.self_attn.o_proj.weight": "weight",
+  "model.layers.47.self_attn.q_norm.weight": "weight",
+  "model.layers.47.self_attn.qkv_proj.weight": "weight",
+  "model.layers.47.self_attn.rotary_emb.cos_sin_cache": "alias-of-cos_sin",
+  "model.norm.weight": "weight"
+ },
+ "weight_field": {
+  "lm_head.weight": [
+   "lm_head"
+  ],
+  "model.embed_tokens.weight": [
+   "embed"
+  ],
+  "model.layers.0.input_layernorm.weight": [
+   "layers",
+   0,
+   "ln1"
+  ],
+  "model.layers.0.mlp.experts.routed_experts.w13_weight": [
+   "layers",
+   0,
+   "w13"
+  ],
+  "model.layers.0.mlp.experts.routed_experts.w2_weight": [
+   "layers",
+   0,
+   "w2"
+  ],
+  "model.layers.0.mlp.gate.weight": [
+   "layers",
+   0,
+   "gate_w"
+  ],
+  "model.layers.0.post_attention_layernorm.weight": [
+   "layers",
+   0,
+   "ln2"
+  ],
+  "model.layers.0.self_attn.k_norm.weight": [
+   "layers",
+   0,
+   "k_norm"
+  ],
+  "model.layers.0.self_attn.o_proj.weight": [
+   "layers",
+   0,
+   "o_w"
+  ],
+  "model.layers.0.self_attn.q_norm.weight": [
+   "layers",
+   0,
+   "q_norm"
+  ],
+  "model.layers.0.self_attn.qkv_proj.weight": [
+   "layers",
+   0,
+   "qkv_w"
+  ],
+  "model.layers.0.self_attn.rotary_emb.cos_sin_cache": [
+   "cos_sin"
+  ],
+  "model.layers.1.input_layernorm.weight": [
+   "layers",
+   1,
+   "ln1"
+  ],
+  "model.layers.1.mlp.experts.routed_experts.w13_weight": [
+   "layers",
+   1,
+   "w13"
+  ],
+  "model.layers.1.mlp.experts.routed_experts.w2_weight": [
+   "layers",
+   1,
+   "w2"
+  ],
+  "model.layers.1.mlp.gate.weight": [
+   "layers",
+   1,
+   "gate_w"
+  ],
+  "model.layers.1.post_attention_layernorm.weight": [
+   "layers",
+   1,
+   "ln2"
+  ],
+  "model.layers.1.self_attn.k_norm.weight": [
+   "layers",
+   1,
+   "k_norm"
+  ],
+  "model.layers.1.self_attn.o_proj.weight": [
+   "layers",
+   1,
+   "o_w"
+  ],
+  "model.layers.1.self_attn.q_norm.weight": [
+   "layers",
+   1,
+   "q_norm"
+  ],
+  "model.layers.1.self_attn.qkv_proj.weight": [
+   "layers",
+   1,
+   "qkv_w"
+  ],
+  "model.layers.47.input_layernorm.weight": [
+   "layers",
+   47,
+   "ln1"
+  ],
+  "model.layers.47.mlp.experts.routed_experts.w13_weight": [
+   "layers",
+   47,
+   "w13"
+  ],
+  "model.layers.47.mlp.experts.routed_experts.w2_weight": [
+   "layers",
+   47,
+   "w2"
+  ],
+  "model.layers.47.mlp.gate.weight": [
+   "layers",
+   47,
+   "gate_w"
+  ],
+  "model.layers.47.post_attention_layernorm.weight": [
+   "layers",
+   47,
+   "ln2"
+  ],
+  "model.layers.47.self_attn.k_norm.weight": [
+   "layers",
+   47,
+   "k_norm"
+  ],
+  "model.layers.47.self_attn.o_proj.weight": [
+   "layers",
+   47,
+   "o_w"
+  ],
+  "model.layers.47.self_attn.q_norm.weight": [
+   "layers",
+   47,
+   "q_norm"
+  ],
+  "model.layers.47.self_attn.qkv_proj.weight": [
+   "layers",
+   47,
+   "qkv_w"
+  ],
+  "model.norm.weight": [
+   "norm"
+  ]
+ },
+ "weights_type": {
+  "Record": [
+   [
+    "embed",
+    {
+     "Array": [
+      75968,
+      {
+       "Array": [
+        2048,
+        "Value<16>"
+       ]
+      }
+     ]
+    }
+   ],
+   [
+    "layers",
+    {
+     "Array": [
+      48,
+      {
+       "Record": [
+        [
+         "ln1",
+         {
+          "Array": [
+           2048,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "qkv_w",
+         {
+          "Array": [
+           2560,
+           {
+            "Array": [
+             2048,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "q_norm",
+         {
+          "Array": [
+           128,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "k_norm",
+         {
+          "Array": [
+           128,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "o_w",
+         {
+          "Array": [
+           2048,
+           {
+            "Array": [
+             2048,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "ln2",
+         {
+          "Array": [
+           2048,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "gate_w",
+         {
+          "Array": [
+           128,
+           {
+            "Array": [
+             2048,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "w13",
+         {
+          "Array": [
+           128,
+           {
+            "Array": [
+             768,
+             {
+              "Array": [
+               2048,
+               "Value<16>"
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "w2",
+         {
+          "Array": [
+           128,
+           {
+            "Array": [
+             2048,
+             {
+              "Array": [
+               384,
+               "Value<16>"
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       ]
+      }
+     ]
+    }
+   ],
+   [
+    "norm",
+    {
+     "Array": [
+      2048,
+      "Value<16>"
+     ]
+    }
+   ],
+   [
+    "cos_sin",
+    {
+     "Array": [
+      40960,
+      {
+       "Array": [
+        128,
+        "Value<16>"
+       ]
+      }
+     ]
+    }
+   ],
+   [
+    "lm_head",
+    {
+     "Array": [
+      75968,
+      {
+       "Array": [
+        2048,
+        "Value<16>"
+       ]
+      }
+     ]
+    }
+   ]
+  ]
+ }
+}
