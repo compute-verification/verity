@@ -129,6 +129,47 @@ def test_live_hook_does_not_change_the_transcript(server):
     assert live.adjust_timings(proof_local, replay) is proof_local.timings   # a local Coins: untouched
 
 
+def test_pipelined_live_matches_sequential_and_is_accepted(server):
+    """``--pipeline N --verifier`` (lane live-pipeline): several sub-batches proved at once, their coin exchanges
+    non-blocking (the stage yields a Future the pipeline driver polls; a session network thread runs the wire sequence
+    in sub-batch order).  The verifier accepts every sub-batch (a strict-order wire check), and each pipelined proof is
+    byte-identical to the sequential proof with the same (verifier-chosen) coins.  CPU, small l: runs in CI on the pod."""
+    srv, url, out = server
+    from .relations import RELATIONS
+    from .relchain import RelationChainRunner, instances
+    from .serialize import system_bytes
+
+    n_proofs = 3
+    rel = RELATIONS["fp8-ada"]
+    # target -100 sizes t; the union over 3 sub-batches then reaches ~2^-99.8, so the verifier's target_bits is 96 here
+    # (the real bench sizes t for target 128 over its 49 sub-batches -- baseline r...-073016-bf7d accepted 147/147)
+    R = RelationChainRunner(rel, "cpu", -100.0, 2, n_proofs=n_proofs, zk=False, mode=pm.MODE_INTERACTIVE)
+    data = instances(rel, 2 * n_proofs, procs=1)
+    subs = [(2 * i, 2 * i + 2) for i in range(n_proofs)]
+    batches = [data[lo:hi] for lo, hi in subs]
+    hello = {"relation": "fp8-ada", "mode": pm.MODE_INTERACTIVE, "zk": False, "batch": 2 * R.steps, "target": -100.0,
+             "target_bits": 96.0, "run_id": "pipelined", "device": "cpu", "n_proofs": n_proofs, "total_vus": 2 * n_proofs}
+    sess = live.Verifier(url, hello, system_bytes(R.sys)).session(n_proofs, 1)
+    sess.start_pipeline(n_proofs)
+    many, wall = R.prove_vus_many(batches, lambda i: sess.coins(i), depth=2, min_l=256)
+    assert len(many) == n_proofs
+    for si, (_coins, proof, _pubs, _lay) in enumerate(many):
+        sess.submit(si, proof)
+    verdict = sess.end()
+    assert verdict["accepted"], verdict["reason"]
+    assert verdict["accepted_subbatches"] == n_proofs
+    assert not verdict.get("live_rejections")
+    # byte-identity: re-prove each sub-batch sequentially with the verifier's coins (replayed as a local Coins)
+    for si, (coins, proof, _pubs, _lay) in enumerate(many):
+        replay = coins.opened()
+        proof_local, _, _ = R.prove_vus(batches[si], check=False, min_l=256, coins=replay)
+        assert proof_bytes(proof_local) == proof_bytes(proof), f"sub-batch {si} bytes differ"
+        assert proof_bytes(proof) == (out / verdict["session_id"] / f"sub_{si:02d}.proof").read_bytes()
+        # the timing model: t.total (prover) excludes the network wait, t.total_live = t.total + net_wait >= t.total
+        assert proof.timings.get("net_wait", 0.0) >= 0.0
+        assert proof.timings["total"] >= 0.0
+
+
 def test_four_concurrent_sessions(server):
     srv, url, out = server
     from .serialize import system_bytes

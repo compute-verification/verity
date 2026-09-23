@@ -258,6 +258,25 @@ def _is_ready(w) -> bool:
     return bool(w.query())          # torch.cuda.Event
 
 
+def _is_net(w) -> bool:
+    """A waitable that stands for a reply from a LIVE VERIFIER (``live.LiveCoins``: a Future with ``net = True``) --
+    time the driver spends idle with only such waitables pending is network wait, not prover time."""
+    return isinstance(w, Future) and bool(getattr(w, "net", False))
+
+
+WAIT_POLL = 0.0001   # seconds between polls while the driver waits on a mix of device events and network replies
+
+
+def _wait_any(active: list) -> list:
+    """Block until at least one active job's waitable is ready (polling: a CUDA event and a socket reply cannot be waited
+    on together any other way); returns the ready jobs."""
+    while True:
+        ready = [j for j in active if _is_ready(j.waitable)]
+        if ready:
+            return ready
+        time.sleep(WAIT_POLL)
+
+
 def _wait(w) -> None:
     if w is None:
         return
@@ -320,6 +339,7 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
     free_slots = [slot_for(device, i) for i in range(depth)]
     nxt = 0
     busy = waited = 0.0                                         # main-thread time launching vs blocked on a waitable
+    net_idle = 0.0                                              # ... of which: every job waiting on a live verifier
     stage_busy: dict = {}                                       # main-thread time per stage index (diagnostics)
     if str(device).startswith("cuda"):
         torch.cuda.synchronize(device)
@@ -348,11 +368,21 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
             continue
         ready = [j for j in active if _is_ready(j.waitable)]
         if not ready:
-            oldest = active[0]
             tw = time.perf_counter()
-            _wait(oldest.waitable)
-            waited += time.perf_counter() - tw
-            ready = [oldest]
+            if any(_is_net(j.waitable) for j in active):
+                # a live verifier's reply is among the pending waitables: wait for whichever comes first (device event
+                # or reply); when EVERY job waits on the verifier the interval is network wait (nothing to prove)
+                net_only = all(_is_net(j.waitable) for j in active)
+                ready = _wait_any(active)
+                dt = time.perf_counter() - tw
+                if net_only:
+                    net_idle += dt
+            else:
+                oldest = active[0]
+                _wait(oldest.waitable)
+                dt = time.perf_counter() - tw
+                ready = [oldest]
+            waited += dt
         for job in ready:
             tb = time.perf_counter()
             job.step()
@@ -369,8 +399,16 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
     wall = time.perf_counter() - t0
     sys.setswitchinterval(prev_switch)
     SQUEEZE.active(False)
-    _rescale(results, wall, timings_key)
-    LAST_STATS.update({"n": n, "depth": depth, "wall": wall, "host_busy": busy, "host_waited": waited,
+    # with a live verifier: the prover's own time is the wall minus the intervals where every sub-batch in flight was
+    # waiting for a reply (nothing to launch, nothing on the device); that idle time is each sub-batch's ``net_wait``
+    # share, so total + hints_host + net_wait over the sub-batches = the wall (the runners' t.total_live)
+    _rescale(results, wall - net_idle, timings_key)
+    if net_idle > 0.0:
+        for r in results:
+            tm = getattr(r, "timings", None)
+            if isinstance(tm, dict):
+                tm["net_wait"] = tm.get("net_wait", 0.0) + net_idle / max(1, n)
+    LAST_STATS.update({"n": n, "depth": depth, "wall": wall, "host_busy": busy, "host_waited": waited, "net_idle": net_idle,
                        "stage_busy_ms": {k: round(v * 1e3, 2) for k, v in sorted(stage_busy.items())}})
     return results, wall
 
@@ -396,7 +434,8 @@ def _rescale(results, wall: float, key: str) -> None:
         if not isinstance(tm, dict) or key not in tm:
             continue
         leaf = {k: v for k, v in tm.items()
-                if k != key and k not in _DERIVED and not k.startswith("measured_") and not k.startswith("host_")}
+                if k != key and k not in _DERIVED and not k.startswith("measured_") and not k.startswith("host_")
+                and not k.startswith("net_wait")}
         s = sum(leaf.values())
         scale = share / s if s > 0 else 0.0
         for k, v in leaf.items():

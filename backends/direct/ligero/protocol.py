@@ -1182,6 +1182,15 @@ def prove_stages(*args, slot=None, **kw):
     return _prove_stages(*args, **kw, slot=slot)
 
 
+def _coin_future(src, name: str, *args):
+    """A coin source's ``name`` (``commitments`` / ``open1`` / ``open2``) as a waitable, when it offers one: a source
+    that talks to a live verifier (``live.LiveCoins``) has ``<name>_future(*args)`` returning a ``Future`` the stage
+    YIELDS instead of blocking on the socket -- the pipeline driver runs the other sub-batches meanwhile and resumes this
+    one when the reply is in.  ``None`` for a local ``Coins`` (the blocking call is used)."""
+    fn = getattr(src, name + "_future", None)
+    return fn(*args) if fn is not None else None
+
+
 def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints, device,
                   check=False, mutate=None, chain=None, words=None, coins=None, rel: RelationHooks = BF16_HOOKS,
                   auth=None, auth_open=None, hints_fn=None, slot=None):
@@ -1200,7 +1209,10 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         if coins is None:
             raise ValueError("interactive mode: prove needs the verifier's step-0 coin source (coins=...)")
         src = coins
-        ccom = src.commitments()                                  # step 0: received before anything is computed
+        # step 0: V's coin commitments, received before any prover MESSAGE.  A non-blocking source hands them out as a
+        # Future (its ROOT is held back until they are in: ``live.LiveCoins``); resolved right after ``open1`` below.
+        ccom_fut = _coin_future(src, "commitments")
+        ccom = src.commitments() if ccom_fut is None else None
         sent = ["coin commitments (V)"]
     else:
         if coins is not None:
@@ -1353,7 +1365,13 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     stmt = stmt_fut.result()
     clk.host("wait_stmt")
     if cfg.interactive:
-        r1, s1 = src.open1(root)                                  # V opens coin slot 1 (after root)
+        fut = _coin_future(src, "open1", root)                   # V opens coin slot 1 (after root)
+        if fut is not None:
+            yield fut                                              # -- wait: the verifier's OPEN1 (network, off the driver)
+            r1, s1 = fut.result()
+            ccom = ccom_fut.result()                               # in before ROOT went out (the source gates it)
+        else:
+            r1, s1 = src.open1(root)
         if len(r1) != COIN_BYTES or len(s1) != COIN_BYTES or coin_commit(r1, s1) != ccom[0]:
             raise CoinOpeningError(1, sent)                       # public-data abort, before any coin-dependent message
     else:
@@ -1426,7 +1444,12 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
 
     sent.append("w, h" + (", q" if q_np is not None else "") + (", v" if v_np is not None else ""))
     if cfg.interactive:
-        r2, s2 = src.open2(root, w_np, h_np, q_np, v_np)          # V opens coin slot 2 (after the test messages)
+        fut = _coin_future(src, "open2", root, w_np, h_np, q_np, v_np)   # V opens coin slot 2 (after the test messages)
+        if fut is not None:
+            yield fut                                              # -- wait: the verifier's OPEN2 (network, off the driver)
+            r2, s2 = fut.result()
+        else:
+            r2, s2 = src.open2(root, w_np, h_np, q_np, v_np)
         if len(r2) != COIN_BYTES or len(s2) != COIN_BYTES or coin_commit(r2, s2) != ccom[1]:
             raise CoinOpeningError(2, sent)
     else:
