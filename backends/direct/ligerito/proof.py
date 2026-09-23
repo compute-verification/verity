@@ -18,8 +18,10 @@ LGTO0001  proof       magic | u32 len | params JSON (absorbed verbatim) | u32 le
                         plane-major for i >= 2) | sib_len[i] bytes BLAKE3 multi-path (proto merkle_multi.plan order)
                       | 2^{k_L} x 6 u32 final vector y_L
     str               u32 len | utf-8 bytes
-    params            {"coins","l","n","kprime","order","queries","rate_log2","relation","splits","zk","n_claims"}
-    framing           {"sib_len": [...], "final_len": int}
+    params            {"coins","l","n","kprime","order","queries","rate_log2","relation","splits","zk","n_claims"[,"t_pad"]}
+    framing           {"sib_len": [...], "final_len": int[, "t_pad": int]}
+    (zk only)         | L x (t_pad x 6 u32) ybar_i  (ligerito-pcs-fast's ZK column padding: absorbed as b"ybar" right after
+                        root_{i+1}, the last after y; row checks subtract sum_t eta_s^{2^{k_i} + t} ybar_i[t])
 ~~~
 
 The committed polynomial is ``w`` = the layout's ``z`` with the virtual rows ``[m, 2^n_i)`` zeroed, in ROW-MAJOR order
@@ -278,6 +280,7 @@ class PcsProof:
     rows: list[np.ndarray]              # per committed round: (|S_i|, W_i) int64
     siblings: list[bytes]
     final_y: np.ndarray                 # (2^{k_L}, 6)
+    ybar: list = field(default_factory=list)    # ZK column padding: per committed round (t_pad, 6); [] without
 
 
 def params_bytes(params: dict) -> bytes:
@@ -298,8 +301,10 @@ class Proof:
         w = _W()
         w.raw(PROOF_MAGIC)
         w.blob(self.absorbed_params())
-        w.blob(json.dumps({"sib_len": [len(s) for s in self.pcs.siblings], "final_len": int(self.pcs.final_y.shape[0])},
-                          separators=(",", ":")).encode())
+        fr = {"sib_len": [len(s) for s in self.pcs.siblings], "final_len": int(self.pcs.final_y.shape[0])}
+        if self.pcs.ybar:
+            fr["t_pad"] = int(self.pcs.ybar[0].shape[0])
+        w.blob(json.dumps(fr, separators=(",", ":")).encode())
         w.blob(self.sc_bytes)
         for r_ in self.pcs.roots:
             if len(r_) != 32:
@@ -312,6 +317,8 @@ class Proof:
             w.arr(rows, "<u4")
             w.raw(sib)
         w.arr(np.asarray(self.pcs.final_y, dtype=np.int64) % P, "<u4")
+        for yb in self.pcs.ybar:
+            w.arr(np.asarray(yb, dtype=np.int64) % P, "<u4")
         return w.bytes()
 
     def n_bytes(self) -> dict:
@@ -320,10 +327,11 @@ class Proof:
         sib = sum(len(s) for s in self.pcs.siblings)
         pcs_sc = sum(len(m) for m in self.pcs.sumcheck) * 3 * D * 4
         final = int(self.pcs.final_y.size) * 4
+        ybar = sum(int(np.asarray(yb).size) * 4 for yb in self.pcs.ybar)
         total = len(self.to_bytes())
         return {"total": total, "sumcheck": len(self.sc_bytes), "pcs_rows": rows, "pcs_merkle": sib, "pcs_sumcheck": pcs_sc,
-                "pcs_final": final, "roots": 32 * len(self.pcs.roots),
-                "header": total - rows - sib - pcs_sc - final - 32 * len(self.pcs.roots) - len(self.sc_bytes)}
+                "pcs_final": final, "pcs_ybar": ybar, "roots": 32 * len(self.pcs.roots),
+                "header": total - rows - sib - pcs_sc - final - ybar - 32 * len(self.pcs.roots) - len(self.sc_bytes)}
 
 
 def read_proof(buf: bytes) -> Proof:
@@ -349,5 +357,9 @@ def read_proof(buf: bytes) -> Proof:
     if final_len != 1 << (params["n"] - sum(kps)):
         raise ValueError("final vector length")
     fy = r.arr("<u4", (final_len, D))
+    t_pad = int(framing.get("t_pad", 0))
+    if t_pad != int(params.get("t_pad", 0)):
+        raise ValueError("framing t_pad differs from the parameters'")
+    ybar = [r.arr("<u4", (t_pad, D)) for _ in range(L)] if t_pad else []
     r.end()
-    return Proof(params, sc, PcsProof(roots, msgs, rows, sibs, fy), praw)
+    return Proof(params, sc, PcsProof(roots, msgs, rows, sibs, fy, ybar), praw)

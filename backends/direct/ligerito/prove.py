@@ -726,10 +726,20 @@ class Prover:
         stmt = Statement(self.rel.name, self.sys_id, self.key_sha256, l, steps, self.rel.k, n_vus + [0] * (lay.S - len(groups)),
                          self.word_bytes, self.y_bytes, a, b, y)
         dims, lp = dims_for(lay.n_vars, self.rel.name)
+        t_pad = zk_mod.T_PAD if zk else 0
+        if zk:
+            # ZK column padding lowers every level's rate to (2^{k_i} + t_pad) / n_i: |S_i| re-derived for the padded shape
+            from .proto import pcs as ppcs
+            target = -128.0
+            while True:
+                dims = ppcs.dims_for(lay.n_vars, list(dims.kprime), list(dims.rates), target_log2=target, t_pad=t_pad)
+                if self.soundness(dims, t_pad)["total_log2"] <= -128.0:
+                    break
+                target -= 0.25
         splits = [list(split((1 << k) << r)) for k, r in zip(dims.k, dims.rates)]
         params = {"relation": self.rel.name, "l": l, "n": dims.n, "kprime": dims.kprime, "queries": dims.queries,
                   "rate_log2": dims.rates, "splits": splits, "order": "zk-interleaved" if zk else "row-major", "coins": coins_kind, "zk": zk,
-                  "n_claims": 1 + lay.n_links}
+                  "n_claims": 1 + lay.n_links, **({"t_pad": t_pad} if zk else {})}
         return Batch(groups, lay, stmt, dims, lp, params, stmt.digest())
 
     # --- witness ----------------------------------------------------------------------------------------------------
@@ -803,9 +813,12 @@ class Prover:
         else:
             f = z.view(-1)
         owner = self.pcs_impl == "pcs-fast" and self.pcs_fast is not False and _fast(z)
+        t_pad = int(bt.params.get("t_pad", 0))
+        if t_pad and not owner:
+            raise ValueError("ZK column padding needs ligerito-pcs-fast's device PCS (pcs.commit / pcs.open)")
         if owner:
             from .proto import pcs as ppcs
-            com = ppcs.commit(f, bt.dims, tm)
+            com = ppcs.commit(f, bt.dims, tm, t_pad=t_pad)
             coins.absorb(b"root", com.root)
         else:
             com = pcs_commit(f, bt.dims, tm, fast=self.pcs_fast)
@@ -821,7 +834,7 @@ class Prover:
         if owner:
             pp = ppcs.open(com, points, None, coins, tm)
             pcs = PcsProof(list(pp.roots), [list(m_) for m_ in pp.sumcheck], [o.rows for o in pp.opens],
-                           [o.siblings for o in pp.opens], pp.final_y)
+                           [o.siblings for o in pp.opens], pp.final_y, list(pp.ybar))
         else:
             pcs = pcs_open(com, points, values, coins, tm, n_c=0 if zk_on else lay.C.bit_length() - 1)
         tm.start("serialize_proof")
@@ -865,7 +878,10 @@ class Prover:
                 raise Reject("proof parameters do not match the layout")
             if dims.k[-1] < 0 or min(dims.kprime) < 1:
                 raise Reject("bad round structure")
-            snd = self.soundness(dims)
+            t_pad = int(prm.get("t_pad", 0))
+            if zk_on != bool(t_pad) or (t_pad and t_pad != zk_mod.T_PAD):
+                raise Reject("ZK padding does not match the parameters")
+            snd = self.soundness(dims, t_pad)
             if snd["total_log2"] > -128.0 + 1e-9:
                 raise Reject(f"parameters give 2^{snd['total_log2']:.2f} > 2^-128")
             # public rows from the statement's words (the verifier's decode: rel.public_vectors raises off the domain)
@@ -902,7 +918,18 @@ class Prover:
                 raise Reject(why)
             points, values = pcs_points(lay, claims, zk_layout(lay, dims) if zk_on else None)
             t2 = time.perf_counter()
-            pcs_verify(proof.pcs, dims, prm["splits"], points, values, coins)
+            if t_pad:
+                from .proto import pcs as ppcs
+                pp = ppcs.Proof(dims.n, list(dims.kprime), list(dims.queries), list(dims.rates), [tuple(x) for x in prm["splits"]],
+                                values, list(proof.pcs.roots), [[np.asarray(g, dtype=np.int64) for g in m_] for m_ in proof.pcs.sumcheck],
+                                [ppcs.RoundOpen(np.asarray(r_, dtype=np.int64), s_) for r_, s_ in zip(proof.pcs.rows, proof.pcs.siblings)],
+                                np.asarray(proof.pcs.final_y, dtype=np.int64), order=ppcs.COMMIT_FIRST,
+                                ybar=[np.asarray(y_, dtype=np.int64) for y_ in proof.pcs.ybar])
+                ok_p, why_p = ppcs.verify_open(pp, points, values, coins, t_pad=t_pad)
+                if not ok_p:
+                    raise Reject(f"PCS: {why_p}")
+            else:
+                pcs_verify(proof.pcs, dims, prm["splits"], points, values, coins)
             info["t_pcs"] = time.perf_counter() - t2
             info["soundness_log2"] = snd["total_log2"]
         except Reject as e:
@@ -913,10 +940,10 @@ class Prover:
         return True, "accept", info
 
     # --- soundness --------------------------------------------------------------------------------------------------
-    def soundness(self, dims: Dims) -> dict:
+    def soundness(self, dims: Dims, t_pad: int = 0) -> dict:
         """The union bound over the PCS levels (paper (17) with ligerito-design's sampling base) and the three
         sumchecks + batching coins over F_{p^6} (``params.LigeritoParams.soundness`` with the relation shape)."""
         lp = params_mod.LigeritoParams(tall1=1 << dims.k[0], wide_log2=tuple(dims.kprime), rate_log2=tuple(dims.rates),
-                                       queries=tuple(dims.queries), zk=False,
+                                       queries=tuple(dims.queries), zk=False, t_pad=t_pad,
                                        relation=params_mod.RELATIONS.get(self.rel.name))
         return lp.soundness({"PCS.claim batching beta J/|F|": math.log2(1 + len(self.key.c_rows)) - lp.fields.ext_log2})
