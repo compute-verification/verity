@@ -12,6 +12,15 @@ exactly like one written here.
 one way and pulls it the other; it is idempotent and needs no state in the disposable catalog.  `import_dir()` unions any
 directory of assertion files (e.g. an unpacked `labels-backup/v1` tarball, or another store's `labels/`); `import_backup()` does
 that straight from a `labels-backup/v1` artifact, so the interim backups stay readable.
+
+Per target (the r20 lesson: labels asserted on pods lived only in the pod's store; `push` / `publish` moved manifests and blobs and
+nothing under `labels/`, and teardown had to tar `labels/` by hand): a preserved Attempt is not preserved until its assertions are
+durable too.  `attempt_targets(doc)` is the closure an attempt's durability covers -- the attempt itself, its Derivation and every
+artifact it names -- and `push_targets()` pushes exactly those targets' assertions (called by `research data push RUN|ART`,
+`attempt publish`, and `LocalStore.push_labels`); `verify_targets()` is the labels leg of the durability gate
+(`preserved.check`): every local assertion of every target must be listed on the remote with its canonical size; `compare()` is
+the local-vs-remote view behind `research data labels --remote`.  Conflicting assertions coexist on both sides (they are
+assertions, not fields); the catalog shows the latest per (key, by) and `--history` everything.
 """
 from __future__ import annotations
 
@@ -19,6 +28,7 @@ import json
 import os
 import re
 import tarfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, TYPE_CHECKING
@@ -50,11 +60,9 @@ def parse_label_bytes(data: bytes) -> Label:
     return Label.from_doc(json.loads(data)).validate()
 
 
-def local_labels(store: LocalStore, warn: Callable[[str], None] | None = None) -> dict[str, tuple[Path, Label]]:
-    """`{content hash: (path, label)}` for every readable file under labels/.  A duplicate (same assertion in two files, e.g. after an
-    old-style copy) is reported once and kept once."""
+def _read_label_files(paths: list[Path], warn: Callable[[str], None] | None) -> dict[str, tuple[Path, Label]]:
     out: dict[str, tuple[Path, Label]] = {}
-    for p in sorted((store.root / "labels").glob("*/*.json")):
+    for p in paths:
         try:
             lab = parse_label_bytes(p.read_bytes())
         except (KeyError, ValueError, json.JSONDecodeError) as e:
@@ -65,14 +73,168 @@ def local_labels(store: LocalStore, warn: Callable[[str], None] | None = None) -
     return out
 
 
-def remote_labels(r: Remote) -> dict[str, str]:
-    """`{content hash: key}` for every well-formed label key on the remote (one listing)."""
+def local_labels(store: LocalStore, warn: Callable[[str], None] | None = None) -> dict[str, tuple[Path, Label]]:
+    """`{content hash: (path, label)}` for every readable file under labels/.  A duplicate (same assertion in two files, e.g. after an
+    old-style copy) is reported once and kept once."""
+    return _read_label_files(sorted((store.root / "labels").glob("*/*.json")), warn)
+
+
+def local_labels_for(store: LocalStore, target: str, warn: Callable[[str], None] | None = None) -> dict[str, tuple[Path, Label]]:
+    """`{content hash: (path, label)}` for one target's local assertions."""
+    d = store.labels_dir(target)
+    return _read_label_files(sorted(d.glob("*.json")) if d.is_dir() else [], warn)
+
+
+def _remote_listing(r: Remote, prefix: str) -> dict[str, str]:
     out = {}
-    for k in r.list(PREFIX):
+    for k in r.list(prefix):
         m = KEY_RE.match(k)
         if m:
             out[m.group(2)] = k
     return out
+
+
+def remote_labels(r: Remote) -> dict[str, str]:
+    """`{content hash: key}` for every well-formed label key on the remote (one listing)."""
+    return _remote_listing(r, PREFIX)
+
+
+def remote_labels_for(r: Remote, target: str) -> dict[str, str]:
+    """`{content hash: key}` for one target's assertions on the remote (one listing of its prefix)."""
+    return _remote_listing(r, f"{PREFIX}{ids.target_dirname(target)}/")
+
+
+def attempt_targets(doc: dict) -> list[str]:
+    """The label targets an attempt's durability covers: the attempt, its derivation, every artifact it names (outputs + telemetry)."""
+    out: list[str] = [doc["id"]]
+    if ids.is_drv(doc.get("derivation")):
+        out.append(doc["derivation"])
+    for sec in ("outputs", "telemetry"):
+        for v in (doc.get(sec) or {}).values():
+            if ids.is_art(v) and v not in out:
+                out.append(v)
+    return out
+
+
+def push_targets(store: LocalStore, targets: list[str], *, jobs: int = SYNC_JOBS, log: Callable[[str], None] | None = None) -> dict:
+    """Push every local assertion of `targets` the remote lacks, under its content key.  Never raises for one assertion: the report
+    carries `failed` (`"<key>: <error>"`) per target and overall; `pushed` lists content hashes, `already` counts those the remote had.
+        {"targets": {t: {"local", "pushed", "already", "failed"}}, "pushed": [...], "already": n, "failed": [...], "local": n}"""
+    r = store._require_remote()  # noqa: SLF001
+    warn = log or (lambda s: None)
+    rep: dict = {"targets": {}, "pushed": [], "already": 0, "failed": [], "local": 0}
+    scratch = store.root / "scratch"
+    scratch.mkdir(parents=True, exist_ok=True)
+
+    def push_one(item: tuple[str, str, Label, Path]) -> tuple[str, str, str | None]:
+        t, h, lab, p = item
+        data = canon.dumps(lab.to_doc())
+        src, tmp = p, None
+        try:
+            if p.read_bytes() != data:                              # a hand-formatted file goes up as the canonical bytes its name hashes
+                tmp = scratch / f".label-{h}-{os.getpid()}-{threading.get_ident()}"
+                tmp.write_bytes(data)
+                src = tmp
+            r.put(label_key(lab, h), src)
+            return t, h, None
+        except Exception as e:  # noqa: BLE001  one assertion's failure is reported, never raised: the target ends up NOT durable
+            return t, h, f"{label_key(lab, h)}: {type(e).__name__}: {e}"
+        finally:
+            if tmp:
+                tmp.unlink(missing_ok=True)
+
+    todo: list[tuple[str, str, Label, Path]] = []
+    for t in dict.fromkeys(targets):
+        mine = local_labels_for(store, t, warn)
+        if not mine:                                                # nothing asserted here: no round trip
+            rep["targets"][t] = {"local": 0, "pushed": [], "already": 0, "failed": []}
+            continue
+        try:
+            theirs = remote_labels_for(r, t)
+        except Exception as e:  # noqa: BLE001
+            rep["targets"][t] = {"local": len(mine), "pushed": [], "already": 0, "failed": [f"{PREFIX}{ids.target_dirname(t)}/: list failed: {type(e).__name__}: {e}"]}
+            rep["failed"] += rep["targets"][t]["failed"]
+            rep["local"] += len(mine)
+            continue
+        have = set(mine) & set(theirs)
+        rep["targets"][t] = {"local": len(mine), "pushed": [], "already": len(have), "failed": []}
+        rep["already"] += len(have)
+        rep["local"] += len(mine)
+        todo += [(t, h, lab, p) for h, (p, lab) in sorted(mine.items()) if h not in theirs]
+    if todo:
+        with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(todo)))) as ex:
+            for t, h, err in ex.map(push_one, todo):
+                if err:
+                    rep["targets"][t]["failed"].append(err)
+                    rep["failed"].append(err)
+                    warn(f"labels: {err}")
+                else:
+                    rep["targets"][t]["pushed"].append(h)
+                    rep["pushed"].append(h)
+    return rep
+
+
+def verify_targets(store: LocalStore, targets: list[str]) -> dict:
+    """The labels leg of the durability gate: for each target, every local assertion must be listed on the remote and HEAD back with
+    its canonical size.  Nothing is uploaded.  Assertions that exist only on the remote count as `remote_only` (not a failure: another
+    machine asserted them).
+        {"durable": bool, "targets": {t: {"local", "remote", "missing": [key...], "remote_only": n, "errors": [...]}}, "missing": n}"""
+    r = store._require_remote()  # noqa: SLF001
+    rep: dict = {"durable": True, "targets": {}, "missing": 0}
+    for t in dict.fromkeys(targets):
+        mine = local_labels_for(store, t)
+        tr: dict = {"local": len(mine), "remote": 0, "missing": [], "remote_only": 0, "errors": []}
+        try:
+            theirs = remote_labels_for(r, t)
+        except Exception as e:  # noqa: BLE001
+            tr["errors"].append(f"{PREFIX}{ids.target_dirname(t)}/: list failed: {type(e).__name__}: {e}")
+            tr["missing"] = [label_key(lab, h) for h, (_, lab) in sorted(mine.items())]
+        else:
+            tr["remote"] = len(theirs)
+            tr["remote_only"] = len(set(theirs) - set(mine))
+            for h, (_, lab) in sorted(mine.items()):
+                key = label_key(lab, h)
+                if h not in theirs:
+                    tr["missing"].append(key)
+                    continue
+                head = r.head(key)
+                size = len(canon.dumps(lab.to_doc()))
+                if head is None:
+                    tr["missing"].append(key)
+                elif head["bytes"] != size:
+                    tr["errors"].append(f"{key}: remote size {head['bytes']} != {size}")
+        rep["targets"][t] = tr
+        rep["missing"] += len(tr["missing"])
+        if tr["missing"] or tr["errors"]:
+            rep["durable"] = False
+    return rep
+
+
+def compare(store: LocalStore, target: str) -> list[dict]:
+    """Every assertion about `target` on either side, oldest first: `{"where": "both"|"local"|"remote", "hash", "label": doc}`.  Remote-only
+    assertions are downloaded to be shown (and refused when their content does not hash to their name); nothing is written locally."""
+    r = store._require_remote()  # noqa: SLF001
+    mine = local_labels_for(store, target)
+    theirs = remote_labels_for(r, target)
+    rows: list[dict] = []
+    for h, (_, lab) in mine.items():
+        rows.append({"where": "both" if h in theirs else "local", "hash": h, "label": lab.to_doc()})
+    scratch = store.root / "scratch"
+    scratch.mkdir(parents=True, exist_ok=True)
+    for h in sorted(set(theirs) - set(mine)):
+        tmp = scratch / f".label-cmp-{h}-{os.getpid()}"
+        try:
+            r.get(theirs[h], tmp)
+            lab = parse_label_bytes(tmp.read_bytes())
+            row = {"where": "remote", "hash": h, "label": lab.to_doc()}
+            if label_hash(lab) != h:
+                row["error"] = f"content hashes to {label_hash(lab)}, not its name"
+        except (KeyError, ValueError, json.JSONDecodeError) as e:
+            row = {"where": "remote", "hash": h, "label": None, "error": f"{type(e).__name__}: {e}"}
+        finally:
+            tmp.unlink(missing_ok=True)
+        rows.append(row)
+    return sorted(rows, key=lambda x: ((x["label"] or {}).get("ts") or "", x["hash"]))
 
 
 def write_label_file(store: LocalStore, label: Label) -> Path:

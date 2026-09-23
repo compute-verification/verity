@@ -135,7 +135,10 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
                       "host": conds.get("hw.hostname") or (job.get("environment") or {}).get("hostname") or launch.get("hostname"),
                       "project": own.get("project") or conds.get("exec.project"), "campaign": conds.get("exec.campaign"),
                       "run_dir": executed_dir, "stage": (job.get("computation") or {}).get("stage"),
-                      "remote": {k: (run_sec.get("remote") or {}).get(k) for k in ("machine", "pod_id", "root", "source_sha")} if run_sec.get("remote") else None},
+                      # source_sha is the verified source identity the machine executed from; source_archive_sha256 the digest of the archive
+                      # that landed there (remote.py ship_source / READY.json); both None for a run that shipped no tree
+                      "remote": {k: (run_sec.get("remote") or {}).get(k) for k in ("machine", "pod_id", "root", "source_sha", "source_dir",
+                                                                                   "source_archive_sha256", "source_verified")} if run_sec.get("remote") else None},
         "cost": {"provider": cost_sec.get("provider"), "pod_id": cost_sec.get("pod_id"), "rate_usd_per_hour": cost_sec.get("rate_usd_per_hour"),
                  "usd": est.get("usd"), "shared": cost_sec.get("shared")},
         "status": {"state": status.get("state"), "rc": status.get("rc"), "class": failure.get("class"), "failure": failure.get("why"),
@@ -350,6 +353,14 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
                 st.push_attempt(run_id)
                 out["preserved"] = all(r.get("preserved") for r in reports)
                 out["preserved_artifacts"] = {r["id"]: bool(r.get("preserved")) for r in reports}
+                if hasattr(st, "push_labels"):                          # the third leg: assertions already made about this attempt, its
+                    from . import labels_sync as LS                     # derivation or its outputs (a re-publish after `label`) travel too
+
+                    lrep = st.push_labels(LS.attempt_targets(doc))
+                    out["labels"] = {"local": lrep["local"], "pushed": len(lrep["pushed"]), "already": lrep["already"], "failed": lrep["failed"]}
+                    if lrep["failed"]:
+                        out["preserved"] = False
+                        out["preserve_error"] = f"labels: {len(lrep['failed'])} assertion(s) not pushed ({lrep['failed'][0]})"
             except Exception as e:  # noqa: BLE001
                 out["preserved"] = False
                 out["preserve_error"] = f"{type(e).__name__}: {e}"

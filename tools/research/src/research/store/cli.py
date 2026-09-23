@@ -3,9 +3,10 @@
   research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
   research data show ART|ATTEMPT|DRV [--json]      manifest / attempt / attempts with that derivation
   research data where ART [--json]                 replicas: local / repo / remote (+ verified_utc)
-  research data push [ART|RUN ...] [--pending [--no-labels]] [--jobs N] [--verify head|readback]
+  research data push [ART|RUN ...] [--pending] [--no-labels] [--jobs N] [--verify head|readback]
                                                    preserve on the remote: blobs uploaded concurrently and verified, then the manifest (PRESERVED);
-                                                   a run pushes its attempt + outputs; --pending also pushes the local assertions the remote lacks
+                                                   a run pushes its attempt + outputs + the assertions about them (attempt, derivation, outputs);
+                                                   --pending pushes everything local the remote lacks, assertions included
   research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
                                                    union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
                                                    --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
@@ -17,11 +18,12 @@
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
-                                                   the durability gate: exit 0 iff every output artifact of each attempt (and the attempt
-                                                   manifest) is verifiably on the remote; otherwise lists what is not (preserved.py)
+                                                   the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
+                                                   assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py)
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
-  research data labels TARGET [--history] [--key K] [--by PAT] [--json]
+  research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
+                                                   --remote: each assertion marked both / LOCAL ONLY (not durable) / REMOTE ONLY; exit 1 if any local only
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]
                                                    writes the canonical key/spelling in the vocabulary's form (zk true -> a real boolean, batch -> B,
                                                    candidate A -> A-GKR); warns (stderr) on a key outside the vocabulary or a value outside its enum; writes anyway
@@ -45,6 +47,7 @@ Every command takes `--store ROOT` (default `$RESEARCH_STORE` or `~/.research/st
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import sqlite3
 import sys
@@ -308,9 +311,9 @@ def cmd_verify(argv: list[str]) -> int:
 
 
 def cmd_preserved(argv: list[str]) -> int:
-    """The durability gate (F7, `preserved.py`): every artifact an attempt names (outputs + telemetry) and its attempt manifest
-    must be verifiably on the remote.  Exit 0 iff so for every target; else 1 and the list of what is not.  Exit 2 on a usage
-    error (no targets)."""
+    """The durability gate (F7, `preserved.py`), three legs: the attempt manifest, every artifact it names (outputs + telemetry),
+    and every local assertion about the attempt / its derivation / those artifacts must be verifiably on the remote.  Exit 0 iff so
+    for every target; else 1, the list of what is not, and which legs fail.  Exit 2 on a usage error (no targets)."""
     from . import preserved as P
 
     ap = _ap("preserved")
@@ -373,14 +376,42 @@ def cmd_snapshot(argv: list[str]) -> int:
     return 0
 
 
+def _fmt_label_value(v) -> str:
+    return v if isinstance(v, str) else json.dumps(v)
+
+
 def cmd_labels(argv: list[str]) -> int:
+    """`--remote` is the durability view (`labels_sync.compare`): every assertion about TARGET on either side, marked `both`,
+    `LOCAL ONLY` (not durable: `research data push` repairs) or `REMOTE ONLY` (asserted elsewhere; `labels-sync` / `reindex --remote`
+    brings it here).  Exit 1 when any local assertion is not on the remote."""
     ap = _ap("labels")
     ap.add_argument("target")
     ap.add_argument("--history", action="store_true", help="every assertion in ts order (default: the latest per key and asserter)")
     ap.add_argument("--key")
     ap.add_argument("--by", default=None, metavar="PATTERN", help="fnmatch on the asserter, e.g. 'red-team-*'")
+    ap.add_argument("--remote", action="store_true", help="compare with the remote: both / LOCAL ONLY / REMOTE ONLY per assertion (exit 1 if any is local only)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
+    if ns.remote:
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        st = LocalStore(ns.store)
+        rows = [x for x in LS.compare(st, ns.target)
+                if (ns.key is None or (x["label"] or {}).get("key") == ns.key) and (ns.by is None or fnmatch.fnmatchcase(str((x["label"] or {}).get("by")), ns.by))]
+        n = {"both": 0, "local": 0, "remote": 0}
+        for x in rows:
+            n[x["where"]] += 1
+        if ns.json:
+            _dump({"target": ns.target, "remote": st.remote.describe(), "counts": n, "labels": rows})
+        else:
+            for x in rows:
+                lab = x["label"] or {}
+                where = {"both": "both       ", "local": "LOCAL ONLY ", "remote": "REMOTE ONLY"}[x["where"]]
+                desc = (f"{lab.get('ts')}  {lab.get('key')}={_fmt_label_value(lab.get('value'))}  by {lab.get('by')}" + (f"  ref {lab['ref']}" if lab.get("ref") else "")) if lab else "?"
+                print(f"{where} {desc}" + (f"  [{x['error']}]" if x.get("error") else ""))
+            print(f"{ns.target}: {n['both']} on both, {n['local']} local only, {n['remote']} remote only ({st.remote.describe()})"
+                  + ("  -- NOT durable: `research data push` repairs" if n["local"] else ""), file=sys.stderr)
+        return 1 if n["local"] else 0
     labs = LocalStore(ns.store).labels(ns.target, key=ns.key, by_glob=ns.by)
     if not ns.history:
         latest = {}
@@ -554,16 +585,18 @@ def _push_line(x: dict) -> str:
 
 def cmd_push(argv: list[str]) -> int:
     """Preserve on the remote (README §7): an artifact's blobs go up concurrently (`--jobs`), each verified (`--verify head`: size +
-    MD5 ETag, the default; `--verify readback`: download + sha256), then its manifest; a run id pushes the attempt manifest and every
-    artifact it references.  `--pending` pushes every local artifact without a verified remote replica and every attempt the remote
-    lacks.  One artifact's failure is reported, the batch continues; exit 1 if anything is not PRESERVED."""
+    MD5 ETag, the default; `--verify readback`: download + sha256), then its manifest; a run id pushes the attempt manifest, every
+    artifact it references, and the assertions about the attempt, its derivation and those artifacts (`labels_sync.push_targets`; an
+    explicit art: id pushes its own assertions) -- an attempt whose assertions did not all land is reported NOT preserved.  `--pending`
+    pushes every local artifact without a verified remote replica, every attempt the remote lacks, and every local assertion the remote
+    lacks.  One object's failure is reported, the batch continues; exit 1 if anything is not PRESERVED."""
     ap = _ap("push")
     ap.add_argument("targets", nargs="*", help="art:<hex> or run ids")
     ap.add_argument("--pending", action="store_true", help="everything local that the remote does not verifiably hold")
     ap.add_argument("--jobs", type=int, default=32, metavar="N", help="concurrent uploads per artifact (default 32)")
     ap.add_argument("--verify", choices=["head", "readback"], default="head",
                     help="per-object check: head = Content-Length + single-part ETag == MD5 (default); readback = download + sha256")
-    ap.add_argument("--no-labels", action="store_true", help="with --pending: do not push the local assertions the remote lacks")
+    ap.add_argument("--no-labels", action="store_true", help="do not push assertions (a run's: about it, its derivation and its outputs; --pending: all local ones)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if ns.jobs < 1:
@@ -581,6 +614,9 @@ def cmd_push(argv: list[str]) -> int:
         arts += [a for a in st.artifact_ids() if a not in verified]
         runs += [rid for rid in st.attempt_ids() if r.head(attempt_key(rid)) is None]
     reports: list[dict] = []
+    label_targets: dict[str, list[str]] = {}                       # report id -> the label targets its durability covers
+    from . import labels_sync as LS  # noqa: PLC0415
+
     for rid in dict.fromkeys(runs):
         if not ids.is_run_id(rid):
             raise ValueError(f"not an artifact or run id: {rid!r}")
@@ -588,11 +624,14 @@ def cmd_push(argv: list[str]) -> int:
         if doc is None:
             raise StoreError(f"attempt {rid} is not in the store")
         arts += _attempt_artifacts(doc)
+        label_targets[rid] = LS.attempt_targets(doc)
         try:                                                       # one bad upload must not abandon the batch: record, continue
             st.push_attempt(rid)
             reports.append({"id": rid, "kind": "attempt", "preserved": r.head(attempt_key(rid)) is not None})
         except Exception as e:  # noqa: BLE001
             reports.append({"id": rid, "kind": "attempt", "preserved": False, "errors": [f"{type(e).__name__}: {e}"]})
+    for a in arts:                                                 # an artifact's own assertions count against it as well (explicit or via a run)
+        label_targets.setdefault(a, [a])
     def heartbeat(p: dict) -> None:                                # long artifacts (10^5 objects): a running count on stderr, no --json noise
         if not ns.json and sys.stderr.isatty():
             print(f"\r  {p['id'][:16]}… {p['done']}/{p['objects'] - 1} blobs  {p['done'] / max(p['seconds'], 1e-9):.1f} obj/s", end="", file=sys.stderr, flush=True)
@@ -614,13 +653,20 @@ def cmd_push(argv: list[str]) -> int:
                     notes_seen.add(note)
                     print(f"research data push: note: {note}", file=sys.stderr)
     labels_rep = None
-    if ns.pending and not ns.no_labels:                             # labels are assertions about what was just pushed: they travel with it
-        from . import labels_sync as LS  # noqa: PLC0415
-
+    if not ns.no_labels:                                            # labels are assertions about what was just pushed: they travel with it
         try:
-            labels_rep = LS.sync(st, push=True, pull=False, jobs=ns.jobs)
+            if ns.pending:                                          # everything local the remote lacks (subsumes the targets' assertions)
+                labels_rep = LS.sync(st, push=True, pull=False, jobs=ns.jobs)
+            elif label_targets:                                     # the attempts' closures (attempt, derivation, outputs) and the named artifacts
+                labels_rep = LS.push_targets(st, [t for ts in label_targets.values() for t in ts], jobs=ns.jobs)
         except Exception as e:  # noqa: BLE001
-            labels_rep = {"error": f"{type(e).__name__}: {e}", "pushed": [], "local": None, "already": None}
+            labels_rep = {"error": f"{type(e).__name__}: {e}", "pushed": [], "local": None, "already": None, "failed": []}
+    if labels_rep and labels_rep.get("targets"):                    # an attempt / artifact whose assertions did not all land is NOT preserved
+        for x in reports:
+            failed = [e for t in label_targets.get(x["id"], []) for e in labels_rep["targets"].get(t, {}).get("failed", [])]
+            if failed:
+                x["preserved"] = False
+                x["errors"] = [*(x.get("errors") or []), f"labels: {len(failed)} assertion(s) not pushed ({failed[0]})"]
     bad = [x for x in reports if not x["preserved"]]
     if ns.json:
         _dump({"remote": r.describe(), "pushed": reports, "not_preserved": len(bad), "labels": labels_rep})
@@ -629,10 +675,13 @@ def cmd_push(argv: list[str]) -> int:
             if x["kind"] == "attempt":
                 print(f"{x['id']}  attempt  {'PRESERVED' if x['preserved'] else 'NOT preserved: ' + '; '.join(x.get('errors') or ['absent'])}")
         print(f"{len(reports) - len(bad)}/{len(reports)} preserved on {r.describe()}")
-        if labels_rep is not None:
-            print(f"labels: {len(labels_rep['pushed'])} pushed, {labels_rep['already']} already there" if "error" not in labels_rep
-                  else f"labels: NOT pushed: {labels_rep['error']}")
-    return 1 if bad or (labels_rep and "error" in labels_rep) else 0
+        if labels_rep is not None and (ns.pending or labels_rep.get("local") or labels_rep.get("failed") or "error" in labels_rep):
+            if "error" in labels_rep:
+                print(f"labels: NOT pushed: {labels_rep['error']}")
+            else:
+                print(f"labels: {len(labels_rep['pushed'])} pushed, {labels_rep['already']} already there"
+                      + (f", {len(labels_rep['failed'])} NOT pushed: {labels_rep['failed'][0]}" if labels_rep.get("failed") else ""))
+    return 1 if bad or (labels_rep and ("error" in labels_rep or labels_rep.get("failed"))) else 0
 
 
 def cmd_mint_credential(argv: list[str]) -> int:
