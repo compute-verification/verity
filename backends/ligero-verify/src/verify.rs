@@ -239,10 +239,18 @@ fn system_k(sys: &System) -> Result<usize, String> {
     Ok(k)
 }
 
-/// The pinned decodes of the public operands (`unit.public_vectors` / `public_vectors_fp8`, chain mode): per pin name
-/// `a[i].s|m|e` / `b[i].s|m|e` the (l,) vector mod p, decoded per the relation's operand format; rejects a word off
-/// the finite domain and a statement whose K is not the system's.
+/// The pinned decodes of the public operands, chain mode: per system pin the (l,) vector mod p, computed from the
+/// statement's words per the relation's `Decode`; rejects a word off the finite domain, a statement whose K is not
+/// the system's, and a pin name the relation does not define.
 fn public_pins(st: &Statement, sys: &System, rel: &Relation) -> Result<Vec<Vec<u32>>, String> {
+    match rel.decode {
+        relation::Decode::Word(op) => public_pins_words(st, sys, op),
+        relation::Decode::Nvf4 => public_pins_nvf4(st, sys),
+    }
+}
+
+/// `unit.public_vectors` / `public_vectors_fp8`: per pin name `a[i].s|m|e` / `b[i].s|m|e` the word's component.
+fn public_pins_words(st: &Statement, sys: &System, op: relation::Operand) -> Result<Vec<Vec<u32>>, String> {
     let l = st.l;
     let k_sys = system_k(sys)?;
     if st.k_ops != k_sys {
@@ -257,7 +265,7 @@ fn public_pins(st: &Statement, sys: &System, rel: &Relation) -> Result<Vec<Vec<u
         }
         let mut v = Vec::with_capacity(l);
         for j in 0..l {
-            let (s, m, e) = rel.operand.decode(src[j * st.k_ops + i])?;
+            let (s, m, e) = op.decode(src[j * st.k_ops + i])?;
             v.push(match comp {
                 ".s" => s,
                 ".m" => m,
@@ -268,6 +276,53 @@ fn public_pins(st: &Statement, sys: &System, rel: &Relation) -> Result<Vec<Vec<u
         out.push(v);
     }
     Ok(out)
+}
+
+/// `fp4.witness.public_vectors_fp4`: the unit's 141 pins from its 68 + 68 words (`relation::nvf4::unit_pins`), the
+/// (l,) vectors picked per system pin name.  Every word of every column is decoded, pad columns included (their
+/// all-zero operands are on the domain), so an off-domain byte anywhere in the statement is refused.
+fn public_pins_nvf4(st: &Statement, sys: &System) -> Result<Vec<Vec<u32>>, String> {
+    use relation::nvf4::{pin_index, unit_pins, WORDS};
+    let l = st.l;
+    if st.k_ops != WORDS {
+        return Err(format!(
+            "statement has K = {} words per operand per unit, the fp4-nvf4 unit takes {WORDS} (64 E2M1 codes + 4 UE4M3 scales)",
+            st.k_ops
+        ));
+    }
+    let idx: Vec<usize> = sys.pins.iter().map(|(name, _)| pin_index(name)).collect::<Result<_, _>>()?;
+    let mut out: Vec<Vec<u32>> = (0..sys.pins.len()).map(|_| Vec::with_capacity(l)).collect();
+    for j in 0..l {
+        let vals = unit_pins(&st.a[j * WORDS..(j + 1) * WORDS], &st.b[j * WORDS..(j + 1) * WORDS])
+            .map_err(|e| format!("{e} (unit {j})"))?;
+        for (p, &i) in idx.iter().enumerate() {
+            out[p].push(vals[i].rem_euclid(P as i64) as u32);
+        }
+    }
+    Ok(out)
+}
+
+/// The system file's chain end against the relation's: a v1 single word for a `None` relation, exactly the pinned
+/// `(lo, bits)` components for a `Some` relation.  Checked whatever the pin says (`--allow-any-system` too): the
+/// public values the chain test compares against are computed from these fields.
+fn check_end_components(chain: &crate::format::Chain, rel: &Relation) -> Result<(), String> {
+    let fmt = |c: &[(u32, u32)]| c.iter().map(|(lo, b)| format!("{lo}/{b}")).collect::<Vec<_>>().join(", ");
+    match (chain.components(), rel.end_components) {
+        (None, None) => Ok(()),
+        (Some(have), Some(want)) if have == want => Ok(()),
+        (None, Some(want)) => Err(format!(
+            "system chain ends on one public word (ligero-system/v1); the {} relation ends on {} components (lo/bits {})",
+            rel.name, want.len(), fmt(want)
+        )),
+        (Some(have), None) => Err(format!(
+            "system chain ends on {} components (lo/bits {}; ligero-system/v2); the {} relation ends on one {}-bit public word",
+            have.len(), fmt(&have), rel.name, rel.y_bits
+        )),
+        (Some(have), Some(want)) => Err(format!(
+            "system chain end components (lo/bits {}) are not the {} relation's ({})",
+            fmt(&have), rel.name, fmt(want)
+        )),
+    }
 }
 
 // ------------------------------------------------------------------------------------------------- challenges ----
@@ -591,6 +646,11 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
             return reject(&gate, tm, None, Some(info));
         }
     }
+    // the chain end the system file declares must be the relation's (a v2 file's components are read from the file,
+    // so they are checked against the pin even when the digest pin is lifted)
+    if let Err(e) = check_end_components(chain, rel) {
+        return reject(&format!("system file: {e}"), tm, None, Some(info));
+    }
     let m = sys.m;
     let pf = match Proof::parse(pf_bytes, &st, m) {
         Ok(p) => p,
@@ -646,8 +706,9 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         Ok(p) => p,
         Err(e) => return reject(&format!("public inputs: {e}"), tm, Some(snd), Some(info)),
     };
-    // the chain-end public words are in [0, 2^y_bits) (protocol.verify: `y16_pub >= 2 ** rel.y16_bits` rejects)
-    if let Some(j) = st.y16.iter().position(|&y| y >> rel.y_bits != 0) {
+    // the chain-end public words are in [0, 2^y_bits) (protocol.verify: `y16_pub >= 2 ** rel.y16_bits` rejects;
+    // vacuous for the 32-bit FP32 word of fp4-nvf4, whose components the chain test compares)
+    if let Some(j) = st.y16.iter().position(|&y| (y as u64) >> rel.y_bits != 0) {
         let r = format!("public inputs: chain-end word {j} = {} is not a {}-bit word", st.y16[j], rel.y_bits);
         return reject(&r, tm, Some(snd), Some(info));
     }
@@ -911,7 +972,7 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     for &cr in &chain.c_rows {
         pos(cr, &mut involved);
     }
-    for e in chain.y.iter().chain(std::iter::once(&chain.y16)) {
+    for e in chain.y.iter().chain(chain.ends.iter().map(|t| &t.y)) {
         for (row, _) in &e.lin {
             pos(*row, &mut involved);
         }
@@ -919,7 +980,6 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     let nr = involved.len();
     let mut coef = vec![0u32; d * nr * l]; // (D, R, l) evaluations on H
     let mut rhs = vec![0u32; d];
-    let y16_c = chain.y16.c;
     for dd in 0..d {
         let rc = |fam: usize, j: usize| x[dd * per_d + m_rows + nl + nq + fam * l + j];
         let cf = |r: usize| dd * nr * l + r * l;
@@ -950,17 +1010,21 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
             }
             rhs[dd] = add(rhs[dd], mul(sum_link, yx.c));
         }
+        // end_j, one constraint per end term (chain.py): Y_x(W)[j] = the public word (v1, family 6) or its bit field
+        // (v2 components: families 6, 0, 1 -- the link families are unused at an end column)
         for j in 0..l {
             if !is_end(j) {
                 continue;
             }
-            let re = rc(6, j);
-            for (row, kappa) in &chain.y16.lin {
-                let ri = involved.iter().position(|r| r == row).unwrap();
-                let a = &mut coef[cf(ri) + j];
-                *a = add(*a, mul(re, *kappa));
+            for term in &chain.ends {
+                let re = rc(term.family, j);
+                for (row, kappa) in &term.y.lin {
+                    let ri = involved.iter().position(|r| r == row).unwrap();
+                    let a = &mut coef[cf(ri) + j];
+                    *a = add(*a, mul(re, *kappa));
+                }
+                rhs[dd] = add(rhs[dd], mul(re, sub(term.value(st.y16[j]), term.y.c)));
             }
-            rhs[dd] = add(rhs[dd], mul(re, sub(st.y16[j] % P, y16_c)));
         }
     }
     // sum over H: l * sum_{l | j} q_j = r^T b
