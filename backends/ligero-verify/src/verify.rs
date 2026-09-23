@@ -5,6 +5,7 @@
 use crate::field::{self as f, add, mul, mul_acc, neg, sub, Ntt, P};
 use crate::format::{Expr, Proof, Statement, System};
 use crate::hash::{blake2b_256, blake3, shake256};
+use crate::leaf::LeafScheme;
 use crate::relation::{self, Relation};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -308,14 +309,15 @@ fn public_pins_pubsel(st: &Statement, sys: &System, ps: &relation::pubsel::PubSe
     Ok(out)
 }
 
-/// `hashchain.hash_public_vectors`: the hashed system's 17 pins `hash.is_end`, `hash.d[0..16]` are the columns of the
+/// `hashchain.hash_public_vectors`: the hashed system's pins `hash.is_end`, `hash.d[0..2 digest_elems]` are the columns of the
 /// statement's public table (`Statement::parse_v5` derived it from the digests).  A hashed system against a v4
 /// statement, or a v1 system against a v5 statement, fails here: the pin names are the other family's.
 fn public_pins_hashed(st: &Statement, sys: &System) -> Result<Vec<Vec<u32>>, String> {
-    use crate::format::HASH_TABLE_COLS;
+    let leaf = st.hash_auth.as_ref().ok_or("hashed statement without its block")?.leaf;
+    let cols = crate::format::hash_table_cols(leaf);
     let l = st.l;
-    if st.a.len() != l * HASH_TABLE_COLS {
-        return Err("hashed statement: public table is not (l, 17)".into());
+    if st.a.len() != l * cols {
+        return Err(format!("hashed statement: public table is not (l, {cols})"));
     }
     let mut out = Vec::with_capacity(sys.pins.len());
     let mut seen_end = false;
@@ -326,17 +328,17 @@ fn public_pins_hashed(st: &Statement, sys: &System) -> Result<Vec<Vec<u32>>, Str
         } else if let Some(rest) = name.strip_prefix("hash.d[") {
             let x: usize = rest.strip_suffix(']').ok_or_else(|| format!("pin {name}: bad name"))?
                 .parse().map_err(|_| format!("pin {name}: bad index"))?;
-            if x >= HASH_TABLE_COLS - 1 {
-                return Err(format!("pin {name}: digest lane >= 16"));
+            if x >= cols - 1 {
+                return Err(format!("pin {name}: digest lane >= {}", cols - 1));
             }
             1 + x
         } else {
             return Err(format!("pin {name}: not a pin of the hashed relation (the statement is authentication = included-hash)"));
         };
-        out.push((0..l).map(|j| st.a[j * HASH_TABLE_COLS + col]).collect());
+        out.push((0..l).map(|j| st.a[j * cols + col]).collect());
     }
-    if !seen_end || sys.pins.len() != HASH_TABLE_COLS {
-        return Err(format!("hashed system pins {} public rows, the hashed relation has 17", sys.pins.len()));
+    if !seen_end || sys.pins.len() != cols {
+        return Err(format!("hashed system pins {} public rows, the hashed relation ({} leaves) has {cols}", sys.pins.len(), leaf.name));
     }
     Ok(out)
 }
@@ -531,8 +533,8 @@ pub struct Shared {
     /// The system file's digests: the Python `sys_id` (trailing 32 bytes) and this verifier's table digest, hex.
     pub sys_id_hex: String,
     pub table_digest_hex: String,
-    /// The relation whose pinned pair the system file carries, if any, and whether it is the relation's HASHED system.
-    pub pinned_relation: Option<(&'static Relation, bool)>,
+    /// The relation whose pinned pair the system file carries, if any, and -- when it is a HASHED system -- its leaf scheme.
+    pub pinned_relation: Option<(&'static Relation, Option<&'static LeafScheme>)>,
     tables: Mutex<HashMap<(usize, usize), Arc<Tables>>>,
 }
 
@@ -549,23 +551,32 @@ impl Shared {
 
     /// The pinned-system gate for a statement of relation `rel`: `Err` unless the system file carries the relation's
     /// pinned digests (skipped under `--allow-any-system`, which the verdict then reports as `system_pinned = false`).
-    fn gate(&self, rel: &Relation, hashed: bool) -> Result<(), String> {
-        let (want_s, want_t) = if hashed { (rel.hashed_sys_id, rel.hashed_table_digest) } else { (rel.sys_id, rel.table_digest) };
-        if hashed && want_s.is_empty() {
-            return Err(format!("the {} relation has no pinned hashed system (authentication = included-hash is not composed for it)", rel.name));
-        }
+    fn gate(&self, rel: &Relation, leaf: Option<&LeafScheme>) -> Result<(), String> {
+        let (want_s, want_t) = match leaf {
+            None => (rel.sys_id, rel.table_digest),
+            Some(lf) => match crate::leaf::pins(rel, lf) {
+                Some(p) => p,
+                None => return Err(format!(
+                    "the {} relation has no pinned hashed system with {} leaves (authentication = included-hash is not composed for it)",
+                    rel.name, lf.name)),
+            },
+        };
         if self.sys_id_hex == want_s && self.table_digest_hex == want_t {
             return Ok(());
         }
-        let kind = |h: bool| if h { "hashed " } else { "" };
+        let kind = |h: Option<&LeafScheme>| match h {
+            Some(lf) if lf.name == crate::leaf::DEFAULT => "hashed ".to_string(),
+            Some(lf) => format!("hashed ({} leaves) ", lf.name),
+            None => String::new(),
+        };
         Err(match self.pinned_relation {
             Some((other, oh)) => format!(
                 "system file is the pinned {}{} system, the statement is a {}{} statement (sys_id {}..., table digest {}...)",
-                kind(oh), other.name, kind(hashed), rel.name, &self.sys_id_hex[..16], &self.table_digest_hex[..16]
+                kind(oh), other.name, kind(leaf), rel.name, &self.sys_id_hex[..16], &self.table_digest_hex[..16]
             ),
             None => format!(
                 "system file is not the pinned {}{} system (sys_id {}..., table digest {}...; pinned {}... / {}...); pass --allow-any-system to verify against it unpinned",
-                kind(hashed), rel.name, &self.sys_id_hex[..16], &self.table_digest_hex[..16], &want_s[..16.min(want_s.len())], &want_t[..16.min(want_t.len())]
+                kind(leaf), rel.name, &self.sys_id_hex[..16], &self.table_digest_hex[..16], &want_s[..16.min(want_s.len())], &want_t[..16.min(want_t.len())]
             ),
         })
     }
@@ -657,7 +668,7 @@ impl StatementInfo {
             steps: st.steps,
             k_ops: st.k_ops,
             format_version: st.version,
-            relation: rel.name.to_string(),
+            relation: crate::leaf::relation_name(rel.name, st.hash_auth.as_ref().map_or(&crate::leaf::POSEIDON2, |ha| ha.leaf)),
             digest: None,
         }
     }
@@ -726,12 +737,14 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         Err(e) => return reject(&format!("statement file: {e}"), tm, None, None),
     };
     // ---- the relation: named by the statement (v4) or the Ampere BF16 unit (v2 / v3); its pinned system ----
-    let rel = match relation::for_statement(st.relation.as_deref()) {
+    // (a v5 statement's "<rel>+<leaf>" names its leaf scheme too: `Statement::parse` resolved it into `hash_auth.leaf`)
+    let rel = match relation::for_statement(st.base_relation()) {
         Ok(r) => r,
         Err(e) => return reject(&format!("statement file: {e}"), tm, None, None),
     };
     let mut info = StatementInfo::of(&st, rel);
-    let hashed = st.hash_auth.is_some();
+    let leaf = st.hash_auth.as_ref().map(|ha| ha.leaf);
+    let hashed = leaf.is_some();
     // a hashed statement carries no operand words (its `a` slot is the u32 digest table); its y width is the relation's
     let widths_ok = if hashed { st.y_bytes == rel.y_bytes } else { (st.word_bytes, st.y_bytes) == (rel.word_bytes, rel.y_bytes) };
     if !widths_ok {
@@ -742,7 +755,7 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         return reject(&r, tm, None, Some(info));
     }
     if !opt.allow_any_system {
-        if let Err(gate) = shared.gate(rel, hashed) {
+        if let Err(gate) = shared.gate(rel, leaf) {
             return reject(&gate, tm, None, Some(info));
         }
     }

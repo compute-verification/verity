@@ -15,6 +15,7 @@ accumulators recorded by the model ``tc_dot``); ``--instances-cache DIR`` keeps 
 from __future__ import annotations
 
 import dataclasses
+import functools
 import hashlib
 import json
 import os
@@ -367,44 +368,52 @@ class RelationChainRunner:
 
 class HashedRelationRunner(RelationChainRunner):
     """``authentication = included-hash`` (``hashchain.py``, ``hashauth.py``): the relation's chain system composed with
-    private operands and the two Poseidon2 sponges; the statement is the digest table + leaf indices + roots, and the
-    verifier checks the published digests' Merkle multiproofs after the Ligero verdict.
+    private operands and the two operand-row gadgets of a pluggable leaf scheme (``leaf/``; Poseidon2 sponges by
+    default); the statement is the digest table + leaf indices + roots, and the verifier checks the published digests'
+    Merkle multiproofs after the Ligero verdict.
 
-    ``pubs`` of :meth:`prove_vus` / :meth:`verify_vus` is ``(table (l, 17), indices (n_vus, 3), ypub (l,), auth, siblings)``:
-    the public table (``hash.is_end | hash.d[0..15]`` per column), the ``(vu, x, W)`` leaf triples, the chain-end words,
+    ``pubs`` of :meth:`prove_vus` / :meth:`verify_vus` is ``(table (l, 1 + 2 digest_elems), indices (n_vus, 3), ypub (l,),
+    auth, siblings)``: the public table (``hash.is_end | hash.d[..]`` per column), the ``(vu, x, W)`` leaf triples, the chain-end words,
     the :class:`hashauth.HashAuth` block and the three multiproofs.  ``commit(...)`` sets the trees the prover opens."""
 
     AUTH = "included-hash"
 
     def __init__(self, rel: Relation, device: str, target: float, rate_log2: int = 2, n_proofs: int = 1, zk: bool = False,
-                 mode: str = protocol_mod.MODE_INTERACTIVE):
+                 mode: str = protocol_mod.MODE_INTERACTIVE, leaf=None):
+        """``leaf``: the leaf scheme (``leaf.registry`` name, default ``"poseidon2"`` -- the historical ``+hash``)."""
         from . import hashchain
+        from .leaf import registry as leaf_registry
         from .protocol import RelationHooks
         self.rel = rel
         self.p = rel.params
         self.zk, self.mode, self.device, self.target, self.rate_log2, self.n_proofs = zk, mode, device, target, rate_log2, n_proofs
         self.steps = rel.steps
         t0 = time.perf_counter()
-        self.hr = hashchain.compose(rel)
+        self.hr = hashchain.compose(rel, leaf)
+        self.leaf = self.hr.leaf
+        self.leaf_name = leaf_registry.suffix_of(self.leaf)     # the relation suffix ("poseidon2", "blake3", "ajtai-n64")
         self.sys = self.hr.sys
         self.tb = tables(self.sys, self.device)
         self.compile_seconds = time.perf_counter() - t0
         self._cfg = {}
         self._base_sys = dataclasses.replace(self.sys, hints=self.sys.hints[:self.hr.n_base_hints])
         self.base_tag = b"hash/v2h|" + rel.tag
-        self.hooks = RelationHooks(hashchain.hash_public_vectors, word_dtype="<u4", y16_dtype=rel.y_dtype,
-                                   y16_bits=rel.y_bits, tag=self.base_tag)
+        self.hooks = RelationHooks(functools.partial(hashchain.hash_public_vectors, n_digest=2 * self.leaf.digest_elems),
+                                   word_dtype="<u4", y16_dtype=rel.y_dtype, y16_bits=rel.y_bits, tag=self.base_tag)
         self.trees = None
         self.tile = None                    # (nx, nw) of the tile workload, None for the worst case
         self.rows, self.sponges, self.sponge_seconds = None, None, 0.0
 
     @property
     def relation(self) -> str:
-        return self.rel.name
+        """The v5 statement's relation string: ``<rel>`` for Poseidon2 (byte-identical to every ``+hash`` statement
+        before the leaf interface), ``<rel>+<leaf>`` for any other scheme (``leaf.registry.relation_name``)."""
+        from .leaf import registry as leaf_registry
+        return leaf_registry.relation_name(self.rel.name, self.leaf_name)
 
     def hooks_for(self, auth):
         from . import hashauth
-        return dataclasses.replace(self.hooks, tag=self.base_tag + hashauth.digest_bytes(auth))
+        return dataclasses.replace(self.hooks, tag=self.base_tag + hashauth.digest_bytes(auth, leaf=self.leaf))
 
     def commit(self, *, x_rows, w_cols, y_words, bindings, cache=None, tile=None):
         """Build (or load) the three trees of the committed set; ``tile = (nx, nw)`` records the sharing layout."""
@@ -412,12 +421,13 @@ class HashedRelationRunner(RelationChainRunner):
         x_rows, w_cols = np.asarray(x_rows, dtype=np.int64), np.asarray(w_cols, dtype=np.int64)
         self.trees, self.digests, cached = hashauth.load_or_build_trees(
             cache, x_rows=x_rows, w_cols=w_cols,
-            y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings)
+            y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings,
+            leaf=self.leaf)
         self.tile = tile
-        # the sponges of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus)
+        # the chain states of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus)
         t0 = time.perf_counter()
         self.rows = {"a": x_rows, "b": w_cols}
-        self.sponges = {nm: hashchain.row_sponges(self.hr, self.rows[nm], role, self.device) for _, nm, role in hashchain.ROLES}
+        self.sponges = {nm: hashchain.row_chain(self.hr, self.rows[nm], role, self.device) for _, nm, role in hashchain.ROLES}
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
         self.sponge_seconds = time.perf_counter() - t0
@@ -428,14 +438,13 @@ class HashedRelationRunner(RelationChainRunner):
         """Commit an instance list: the worst case (every VU its own x row and W column: ``x_rows = a``, ``w_cols = b``) or a
         tile (``x_rows`` / ``w_cols`` given, ``tile = (nx, nw)``)."""
         from . import hashauth
-        from verity.commitments.rowleaf import SCHEMA_ROW
         y = [self.rel.y_public(int(v[3])) for v in data]
         if tile is None:
             x_rows = [v[0] for v in data]
             w_cols = [v[1] for v in data]
         ysch, _ = hashauth.word_schema(self.rel.y_bits)
         bindings = {n: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=0, hi=len(data),
-                                               K=K_VU, tree=n, schema=(SCHEMA_ROW if n != "y" else ysch)) for n in ("a", "b", "y")}
+                                               K=K_VU, tree=n, schema=(self.leaf.schema if n != "y" else ysch)) for n in ("a", "b", "y")}
         return self.commit(x_rows=x_rows, w_cols=w_cols, y_words=y, bindings=bindings, cache=cache, tile=tile)
 
     def auth_for(self, vu_ids: list[int]):
@@ -461,9 +470,11 @@ class HashedRelationRunner(RelationChainRunner):
             idx = np.asarray(idx, dtype=np.int64)
             words = (a if nm == "a" else b)[:n_vus * self.steps].reshape(n_vus, self.steps * self.hr.k)
             if len(idx) == n_vus and (idx < len(self.rows[nm])).all() and np.array_equal(self.rows[nm][idx], words):
-                cap, dg = self.sponges[nm]
+                cap, dg = self.sponges[nm][0], self.sponges[nm][1]
                 t = torch.as_tensor(idx, device=cap.device)
                 out[nm] = (cap[t], dg[t])
+                if len(self.sponges[nm]) > 2:
+                    out[nm] += ({n_: v[t] for n_, v in self.sponges[nm][2].items()},)
         return out or None
 
     def prove_vus(self, vus, check=True, mutate=None, min_l: int = 256, coins=None, vu_ids=None, auth=None, words_override=None):
@@ -495,7 +506,7 @@ class HashedRelationRunner(RelationChainRunner):
         hints = torch.cat([base, extra], 0)
         table = hashchain.public_table(digests.cpu().numpy(), len(vus), self.steps, lay.l)
         idx = auth.indices()
-        pub = hashchain.hash_public_vectors(self.p, None, table, idx, None, device=self.device)
+        pub = self.hooks.public_vectors(self.p, None, table, idx, None, device=self.device)
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
         hints_seconds = time.perf_counter() - t0
@@ -536,8 +547,8 @@ class HashedRelationRunner(RelationChainRunner):
         if (tab[ends, 0] != 1).any() or tab[:, 0].sum() != lay.n_vus or tab[np.setdiff1d(np.arange(lay.l), ends)].any():
             return False, "public table: is_end / digests off the chain ends"
         y_words = np.asarray(ypub, dtype=np.int64)[ends]
-        ok, why = hashauth.verify_hash_auth(auth, sibs, digests=tab[ends, 1:1 + hashchain.N_DIGEST], y_words=y_words,
-                                            y_bits=self.rel.y_bits)
+        ok, why = hashauth.verify_hash_auth(auth, sibs, digests=tab[ends, 1:1 + 2 * self.leaf.digest_elems], y_words=y_words,
+                                            y_bits=self.rel.y_bits, leaf=self.leaf)
         if auth_timing is not None:
             auth_timing["seconds"] = auth_timing.get("seconds", 0.0) + (time.perf_counter() - t0)
         return ok, why
@@ -695,7 +706,8 @@ def hashed_negatives(R: HashedRelationRunner, data: list, row_negatives: int = 4
         negs.append((name, R.verify_vus(proof, pubs, lay)))
     t = table.copy(); t[ends[0], 1] ^= 1
     V((t, idx, ypub, auth, sibs), "x digest lane 0 of VU 0 flipped")
-    t = table.copy(); t[ends[1], 9] = (t[ends[1], 9] + 1) % P
+    de = R.leaf.digest_elems
+    t = table.copy(); t[ends[1], 1 + de] = (t[ends[1], 1 + de] + 1) % P
     V((t, idx, ypub, auth, sibs), "W digest lane 0 of VU 1 changed")
     t = table.copy(); t[ends[0], 1:], t[ends[1], 1:] = table[ends[1], 1:].copy(), table[ends[0], 1:].copy()
     V((t, idx, ypub, auth, sibs), "digests of VU 0 and VU 1 swapped")
@@ -743,15 +755,16 @@ def hashed_negatives(R: HashedRelationRunner, data: list, row_negatives: int = 4
         W[hb0, 3] = (W[hb0, 3] + 1) % P
     pf, pb, ly = R.prove_vus(base, check=False, mutate=flip_hashed_bit, vu_ids=ids)
     negs.append(("bit 0 of hashed word b[0] flipped in unit 3 (computation unchanged)", R.verify_vus(pf, pb, ly)))
-    cap_rows = R.sys.chain["c"]
+    cap_rows = R.sys.chain["c"][3:]                 # the leaf chains' carried rows (after the 3 accumulator links)
+    ce = R.leaf.carry_elems
     def break_cap(W):
-        W[cap_rows[5], 7] = (W[cap_rows[5], 7] + 1) % P
+        W[cap_rows[min(5, ce - 1)], 7] = (W[cap_rows[min(5, ce - 1)], 7] + 1) % P
     pf, pb, ly = R.prove_vus(base, check=False, mutate=break_cap, vu_ids=ids)
-    negs.append(("sponge capacity link broken at unit 7", R.verify_vus(pf, pb, ly)))
+    negs.append(("leaf carry link broken at unit 7", R.verify_vus(pf, pb, ly)))
     def cap_start(W):
-        W[cap_rows[12], steps] = 5
+        W[cap_rows[ce + min(4, ce - 1)], steps] = 5
     pf, pb, ly = R.prove_vus(base, check=False, mutate=cap_start, vu_ids=ids)
-    negs.append(("nonzero sponge capacity at a chain start", R.verify_vus(pf, pb, ly)))
+    negs.append(("nonzero leaf carry at a chain start", R.verify_vus(pf, pb, ly)))
     # one witness row per (scope, class) of the added rows
     seen, picks = set(), []
     for r in R.sys.rows[R.hr.census["rows_base"]:]:
@@ -778,10 +791,11 @@ def gate_hashed(args, rel: Relation) -> int:
     """``gate-vu --auth included-hash``: honest sub-batches of the hashed relation accepted (worst case, or the tile of
     ``--tile``), the relation's own negative families still rejected (claimed word, off-domain word now caught by the
     private decode, broken accumulator link, accumulator bits) and the committed-operand negatives of ``hashed_negatives``."""
-    R = HashedRelationRunner(rel, args.device, args.target, args.rate_log2, zk=args.zk, mode=args.mode)
+    R = HashedRelationRunner(rel, args.device, args.target, args.rate_log2, zk=args.zk, mode=args.mode, leaf=getattr(args, "leaf", None))
     log = print
-    log(f"{rel.name} hashed chain system: {R.sys.summary()} compiled in {R.compile_seconds:.2f}s; census {R.hr.census}; device {args.device}")
-    report = {"relation": rel.name, "model": rel.model_name, "authentication": R.AUTH, "system": R.sys.summary(),
+    log(f"{R.relation} hashed chain system ({R.leaf.name} leaves): {R.sys.summary()} compiled in {R.compile_seconds:.2f}s; "
+        f"census {R.hr.census}; device {args.device}")
+    report = {"relation": R.relation, "model": rel.model_name, "authentication": R.AUTH, "leaf": R.leaf.name, "system": R.sys.summary(),
               "census": census(R.sys), "hash_census": R.hr.census, "positives": [], "negatives": []}
     failures = 0
     per_proof = args.batch // R.steps
@@ -856,7 +870,11 @@ def make_runner(args, rel: Relation, **kw):
     if auth == "excluded":
         return RelationChainRunner(rel, args.device, args.target, args.rate_log2, zk=args.zk, mode=args.mode, **kw)
     if auth == HashedRelationRunner.AUTH:
-        return HashedRelationRunner(rel, args.device, args.target, args.rate_log2, zk=args.zk, mode=args.mode, **kw)
+        R = HashedRelationRunner(rel, args.device, args.target, args.rate_log2, zk=args.zk, mode=args.mode,
+                                 leaf=getattr(args, "leaf", None), **kw)
+        if getattr(R.leaf, "test_only", False):
+            raise SystemExit(f"leaf scheme {R.leaf.name!r} is test-only (insecure): it cannot be benched")
+        return R
     raise SystemExit(f"--auth {auth}: not a mode of the relation runner (excluded | included-hash)")
 
 
@@ -928,7 +946,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
     cen = census(R.sys)
     print(f"{rel.name} census:", json.dumps(cen))
     if hashed:
-        print(f"{rel.name} hashed ({R.AUTH}, sharing {'none' if tile is None else 'tile%dx%d' % tile}):", json.dumps(R.hr.census))
+        print(f"{R.relation} hashed ({R.AUTH}, {R.leaf.name} leaves, sharing {'none' if tile is None else 'tile%dx%d' % tile}):",
+              json.dumps(R.hr.census))
     subs = [(lo, min(lo + per_proof, total_vus)) for lo in range(0, total_vus, per_proof)]
     root = getattr(args, "root", None)
     t0 = time.perf_counter()
@@ -948,7 +967,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
                      cache=getattr(args, "auth_cache", None), tile=tile, x_rows=x_rows, w_cols=w_cols)
         commit_seconds = time.perf_counter() - t0
         print(f"committed: x tree {R.trees['a'].count} rows, W tree {R.trees['b'].count} columns, y tree {R.trees['y'].count} words "
-              f"(leaf/v2h Poseidon2 + SHA-256) in {commit_seconds:.1f}s (row sponges on {args.device}: {R.sponge_seconds:.2f}s); "
+              f"({R.leaf.schema} + SHA-256) in {commit_seconds:.1f}s (row digests on {args.device}: {R.sponge_seconds:.2f}s); "
               f"roots a={R.trees['a'].root.hex()[:16]} b={R.trees['b'].root.hex()[:16]}")
     lay = R.layout(per_proof)
     l = lay.l
@@ -968,6 +987,11 @@ def bench_vu_rel(args, rel: Relation) -> int:
         dump_manifest["relation"] = {"name": rel.name, "model": rel.model_name, "profile": rel.target.name,
                                      "word_dtype": rel.word_dtype, "y_dtype": rel.y_dtype, "y_bits": rel.y_bits,
                                      "rust_verifiable": rel.rust_verifiable}
+        if hashed:
+            # the statement's relation string ("<rel>" for Poseidon2, "<rel>+<leaf>" otherwise) and the leaf scheme
+            dump_manifest["relation"]["statement_relation"] = R.relation
+            dump_manifest["relation"]["leaf"] = {"scheme": R.leaf.name, "schema": R.leaf.schema,
+                                                 "params_sha256": R.leaf.params_sha256, "digest_elems": R.leaf.digest_elems}
         _write_system(dump_dir, R, dump_manifest)
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
                                 "zk": args.zk, "mode": args.mode, "reps": args.reps, "dump_reps": dump_reps,
@@ -1144,15 +1168,17 @@ def bench_vu_rel(args, rel: Relation) -> int:
         note=f"{total_vus} VUs as {n_proofs} independently committed proofs of <= {per_proof} VUs each (l = {l} columns, "
              f"{l - per_proof * steps} pad columns per proof); prover time = sum over the proofs; soundness = union bound; "
              f"{rel.claim_note}"
-             + (f"; authentication = {R.AUTH}: the operand words are private witness wires, each unit hashes its 16 lanes of "
-                f"x and of W with Poseidon2 (BabyBear, width 24, rate 16, x^7; Plonky3 constants {R.hr.census['sbox_rows_per_permutation']} "
-                f"product rows per permutation) along the chain, the digests are chain-end pins and leaf/v2h leaves under the "
-                f"x / W roots; sharing = {'none' if tile is None else 'tile%dx%d' % tile} ({R.trees['a'].count} x rows + "
+             + (f"; authentication = {R.AUTH}: the operand words are private witness wires, each unit hashes its {rel.k} words of "
+                f"x and of W with the {R.leaf.name} leaf scheme ({R.leaf.assumption}; {R.hr.census['rows_hash']} hash rows per unit) "
+                f"along the chain, the digests ({R.leaf.digest_elems} elements each) are chain-end pins and {R.leaf.schema} leaves "
+                f"under the x / W roots; sharing = {'none' if tile is None else 'tile%dx%d' % tile} ({R.trees['a'].count} x rows + "
                 f"{R.trees['b'].count} W columns committed for {total_vus} VUs); the statement carries digests, leaf indices, "
-                f"roots and SHA-256 multiproofs instead of the operand words; hash = poseidon2-babybear-w24" if hashed else ""),
+                f"roots and SHA-256 multiproofs instead of the operand words; hash = {R.leaf.hash_name}" if hashed else ""),
     )
     if hashed:
-        fp["hash"] = "poseidon2-babybear-w24"
+        fp["hash"] = R.leaf.hash_name
+        fp["leaf"] = {"scheme": R.leaf.name, "schema": R.leaf.schema, "params_sha256": R.leaf.params_sha256,
+                      "digest_elems": R.leaf.digest_elems, "assumption": R.leaf.assumption}
         fp["sharing"] = "none" if tile is None else f"tile{tile[0]}x{tile[1]}"
         fp["committed_rows"] = {"x": R.trees["a"].count, "w": R.trees["b"].count, "y": R.trees["y"].count}
     meas = [
@@ -1200,7 +1226,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         meas += live_fields[0]           # t.total_live / net.* / verify.* (lane live-verifier; additive)
     if hashed:
         meas += [contract.measurement("relation.hash.rows_added_per_unit", R.hr.census["rows_added"], "count"),
-                 contract.measurement("relation.hash.permutations_per_unit", R.hr.census["permutations_per_unit"], "count"),
+                 contract.measurement("relation.hash.permutations_per_unit", R.hr.census.get("permutations_per_unit", 0), "count"),
                  contract.measurement("relation.hash.linked_rows", R.hr.census["linked_rows"], "count"),
                  contract.measurement("relation.hash.commit_seconds", commit_seconds, "s"),
                  contract.measurement("relation.hash.sponge_seconds", R.sponge_seconds, "s"),
