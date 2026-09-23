@@ -816,7 +816,8 @@ def bench_vu(args) -> int:
         validation["evidence"]["live_verifier"] = lev
         if not lok:
             validation["status"] = "failed"
-    result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or f"b-ligero-vu-{int(time.time())}",
+    result = {"schema": contract.RESULT_SCHEMA,
+              "run_id": args.run_id or os.environ.get("RESEARCH_RUN_ID") or f"b-ligero-vu-{int(time.time())}",   # as relchain.py
               "workload_fingerprint": fp, "validation": validation,
               "measurements": meas, "measurement_files": [], "artifacts": dump_artifacts(dump_dir, args.out)}
     problems = contract.validate(result)
