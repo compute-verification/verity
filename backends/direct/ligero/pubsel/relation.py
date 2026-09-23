@@ -524,17 +524,21 @@ def group_pins_torch(p: Params, pl: Plan, a, b, bad: list | None = None) -> dict
         out[f"g{g}.G"] = G
         gi = G[:, None] - eg                                  # >= 0
         sign = 1 - 2 * sg
+        # every extra shift at once: (B, size, PB) -- d = G - e_i + j, the term shifted left by PS - d (d <= PS), right by
+        # d - PS (PS < d < PB), or gone (d >= PB); then the signed sums over the group
+        d = gi[:, :, None] + torch.arange(pl.PB, device=ug.device)[None, None, :]
+        ug3 = ug[:, :, None]
+        al = torch.where(d <= pl.PS, ug3 << torch.clamp(pl.PS - d, min=0),
+                         torch.where(d < pl.PB, ug3 >> torch.clamp(d - pl.PS, min=0), torch.zeros_like(d)))
+        Qs = (sign[:, :, None] * al).sum(dim=1)                # (B, PB)
+        if pl.wide:
+            lo = Qs & (2**LIMB - 1)
+            hi = (Qs - lo) >> LIMB
         for j in range(pl.PB):
-            d = gi + j
-            sh_l = torch.clamp(pl.PS - d, min=0)
-            sh_r = torch.clamp(d - pl.PS, min=0)
-            al = torch.where(d <= pl.PS, ug << sh_l, torch.where(d < pl.PB, ug >> sh_r, torch.zeros_like(ug)))
-            Q = (sign * al).sum(dim=1)
             if pl.wide:
-                lo = Q & (2**LIMB - 1)
-                out[f"g{g}.Q[{j}].lo"], out[f"g{g}.Q[{j}].hi"] = lo, (Q - lo) >> LIMB
+                out[f"g{g}.Q[{j}].lo"], out[f"g{g}.Q[{j}].hi"] = lo[:, j], hi[:, j]
             else:
-                out[f"g{g}.Q[{j}]"] = Q
+                out[f"g{g}.Q[{j}]"] = Qs[:, j]
     return out
 
 
