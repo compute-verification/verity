@@ -684,13 +684,17 @@ def adjust_timings(proof, coins) -> dict:
     if not isinstance(coins, LiveCoins):
         return proof.timings
     t = proof.timings
+    # under ``--pipeline N`` the stages never block: ``pipeline.prove_many`` already took the driver's idle-on-the-verifier
+    # time out of ``total`` and left this sub-batch's share in ``net_wait`` (0 on the sequential path, where the waits below
+    # are the blocking calls' own)
+    pipelined = t.get("net_wait", 0.0)
     for key, w in (("statement", coins.wait_commit), ("tests_w", coins.wait_open1), ("tests", coins.wait_open1),
                    ("openings", coins.wait_open2)):
         if key in t:
             t[key] = max(0.0, t[key] - w)
     t["total"] = max(0.0, t["total"] - coins.wait)
-    coins.session.wait += coins.wait
-    t["net_wait"] = t.get("net_wait", 0.0) + coins.wait
+    coins.session.wait += coins.wait + pipelined
+    t["net_wait"] = pipelined + coins.wait
     t["net_wait_commit"] = t.get("net_wait_commit", 0.0) + coins.wait_commit
     t["net_wait_open1"] = t.get("net_wait_open1", 0.0) + coins.wait_open1
     t["net_wait_open2"] = t.get("net_wait_open2", 0.0) + coins.wait_open2
