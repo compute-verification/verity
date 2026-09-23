@@ -21,7 +21,15 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-FAMILY = {"all_reduce": "AllReduce2_v1", "all_gather": "AllGather2_v1"}
+FAMILY = {"all_reduce": "AllReduce2_v1", "all_gather": "AllGather2_v1"}           # the two-rank identities (world 2)
+
+
+def collective_family(kind: str, world: int) -> str:
+    """[lane vllm-tp-n] the received-output Definition family of a `kind` collective in a `world`-rank communicator, from the registry's own
+    selector (`b1_tp2.all_reduce` / `all_gather`): `AllReduce2_v1` / `AllGather2_v1` at world 2, `AllReduce_v1` / `AllGather_v1` beyond."""
+    from verity_vllm.registry import b1_tp2 as TP2
+    sel = {"all_reduce": TP2.all_reduce, "all_gather": TP2.all_gather}.get(kind)
+    return sel(int(world), 1).id.split("{", 1)[0] if sel else kind
 EMBED_MARKERS = ("embed_tokens", "embedding", "wte")
 RECV_MEMBERS = ("out", "0", "")       # the received collective output as the committer names it: MoE block `<site>/out`, dense tuple output `<site>/0`,
                                       # a single-tensor module output (VocabParallelEmbedding, LogitsProcessor) = the BARE module name (binding.split_name -> member "out")
@@ -36,10 +44,10 @@ def strip_rank(name: str) -> str:
     return f"{head}/{mem}"
 
 
-def family_of(site: str, kind: str) -> str:
+def family_of(site: str, kind: str, world: int = 2) -> str:
     """The received-output family of a site (the all-reduce at the embedding site is an AllReduce2 output too; the EmbeddingShard_v1 leg --
     the rank's PARTIAL == masked gather from its pinned vocab shard -- is evaluated on the rank and carried in the pick as `emb`)."""
-    return FAMILY.get(kind, kind)
+    return collective_family(kind, world)
 
 
 def is_embedding_site(site: str) -> bool:
@@ -54,7 +62,8 @@ def _h(*parts: str | bytes) -> int:
     return int.from_bytes(h.digest()[:8], "big")
 
 
-def pick_strata(layouts: dict[int, list[tuple[str, tuple[int, ...]]]], rank: int, seed: bytes, per_stratum: int = 2, max_rows: int = MAX_ROWS) -> dict[str, Any]:
+def pick_strata(layouts: dict[int, list[tuple[str, tuple[int, ...]]]], rank: int, seed: bytes, per_stratum: int = 2, max_rows: int = MAX_ROWS,
+                world: int = 2) -> dict[str, Any]:
     """Deterministic, rank-agnostic picks.  `layouts`: step -> [(member name, sizes)] of THIS rank's committed layout (only the rank's own
     partial members matter here).  Returns {"strata": {key: {...}}, "picks": [{step, site, kind, member, recv_candidates, rows, family, stratum}]}."""
     suf = (f"/part_rank{rank}", f"/shard_rank{rank}")
@@ -81,7 +90,7 @@ def pick_strata(layouts: dict[int, list[tuple[str, tuple[int, ...]]]], rank: int
             # seeded choice without replacement: rank the steps by a hash of (seed, key, step)
             order = sorted(steps, key=lambda s: _h(seed, key, str(s)))
             chosen = sorted(order[:n])
-            strata[key] = {"site": site, "kind": kind, "phase": phase, "family": family_of(site, kind), "steps_n": len(steps), "picked": chosen}
+            strata[key] = {"site": site, "kind": kind, "phase": phase, "family": family_of(site, kind, world), "steps_n": len(steps), "picked": chosen}
             for s in chosen:
                 rows = rows_of[s]
                 if rows > max_rows:
@@ -90,7 +99,7 @@ def pick_strata(layouts: dict[int, list[tuple[str, tuple[int, ...]]]], rank: int
                 else:
                     ridx = list(range(rows))
                 picks.append({"step": s, "site": site, "kind": kind, "member": f"{site}/{'part' if kind == 'all_reduce' else 'shard'}_rank{rank}",
-                              "recv_candidates": [f"{site}/{m}" if m else site for m in RECV_MEMBERS], "rows": ridx, "rows_total": rows, "family": family_of(site, kind), "stratum": key})
+                              "recv_candidates": [f"{site}/{m}" if m else site for m in RECV_MEMBERS], "rows": ridx, "rows_total": rows, "family": family_of(site, kind, world), "stratum": key})
     return {"strata": strata, "picks": picks, "per_stratum": per_stratum, "max_rows": max_rows, "seed": seed.hex() if isinstance(seed, (bytes, bytearray)) else str(seed)}
 
 
@@ -152,10 +161,11 @@ def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, A
                                                     + (f" ({ps[j].get('why')})" if ps[j].get("why") else "") for j, r in enumerate(ranks) if parts[j] is None or recvs[j] is None)})
             continue
         if p0["kind"] == "all_reduce":
-            acc = parts[0].float()
+            # the Definition's chain: world 2 = one bf16(f32(a) + f32(b)); beyond, acc = part0; acc = bf16(f32(acc) + f32(part_r)) in rank order
+            # (AllReduce_v1{WORLD,N}, one rounding per hop -- NCCL reduces in the datatype)
+            exp = parts[0]
             for t in parts[1:]:
-                acc = acc + t.float()
-            exp = acc.to(parts[0].dtype)
+                exp = (exp.float() + t.float()).to(parts[0].dtype)
         elif p0["kind"] == "all_gather":
             exp = torch.cat(parts, dim=-1)
         else:

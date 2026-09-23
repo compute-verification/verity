@@ -382,3 +382,10 @@ def serve_tp2(LP: int, STEPS: int, C: dict[str, Any] | None = None):
 
 
 TP_N_COMPOSITES = [AllReduce, AllGather]
+
+
+def cross_rank_families(world: int) -> frozenset[str]:
+    """[lane vllm-tp-n] The Definition families of a `world`-rank Program whose output (or, for the embedding shard, whose partial) is a CROSS-RANK
+    fact -- evaluated by the Commit's cross-rank collective pass, never by the rank-local sampled replay: the received-output families the
+    registry's own selectors bind at this world (`all_reduce` / `all_gather`) and `EmbeddingShard_v1`.  Derived from the composites, not typed."""
+    return frozenset(f"{c.name}_v{c.version}" for c in (all_reduce(world, 1), all_gather(world, 1), EmbeddingShard))

@@ -622,7 +622,8 @@ def main() -> int:
     tokens_ref = None
     all_pass = True
     xrank_pairs: list[dict] = []     # [TP-12] one verdict per instrumented pair
-    XRANK_FAMILIES = ("AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1")
+    from verity_vllm.registry import b1_tp2 as _TP2
+    xrank_families = _TP2.cross_rank_families(world)      # [lane vllm-tp-n] the cross-rank families of THIS world, from the registry's composites
     for pair in range(args.pairs):
         order = ["control", "instrumented"] if pair % 2 == 0 else ["instrumented", "control"]
         for k, arm in enumerate(order):
@@ -851,7 +852,7 @@ def main() -> int:
                         for f_ in fin:
                             for u_ in ((f_.get("sampled_replay") or {}).get("sampled_replay") or {}).get("unreplayable") or []:
                                 fam_ = str(u_.get("family"))
-                                if fam_ in XRANK_FAMILIES:
+                                if fam_ in xrank_families:
                                     u_["evaluated_by"] = {"pass": "cross_rank_collectives (TP-12, rev F-r16-18 / COORD ruling 27)", "result": xr.get("result"),
                                                           "picks": (byf.get(fam_) or {}).get("picks"), "equal": (byf.get(fam_) or {}).get("equal"),
                                                           "artifact": f"xrank_pair{pair}.json", "rule": "sampled strata over the committed collective outputs (>= per_stratum per site x kind x phase), not every VU"}
@@ -1068,7 +1069,7 @@ def main() -> int:
         (out / "sampled_replay.json").write_text(json.dumps({"schema": "verity-sweep/tp-sampled-replay/v1", "tp": args.tp, "sampled_replay": sr_comp, "boundary_linkage": lk_comp,
                                                              "per_pair_artifacts": [str(out / f"finalize_pair{p}.json") for p in range(args.pairs)],
                                                              "note": "per-rank full records (strata, mismatches, programs) live in finalize_pair<k>.json[rank].sampled_replay",
-                                                             "unreplayable_collectives_evaluated_by": {"pass": "cross_rank_collectives (TP-12)", "families": list(XRANK_FAMILIES),
+                                                             "unreplayable_collectives_evaluated_by": {"pass": "cross_rank_collectives (TP-12)", "families": sorted(xrank_families),
                                                                                                         "result": xr_comp.get("result"), "by_family": xr_comp.get("by_family"), "artifact": "xrank_collectives.json"}},
                                                             indent=1, default=str) + "\n")
 

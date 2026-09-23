@@ -1118,6 +1118,7 @@ class TP2CaptureWorkerExtension:
             from verity_capture.commit import oracle_compare as OC
             from verity_capture.commit import required_manifest as RM
             from verity_capture.commit import sampled_replay as SR
+            from verity_vllm.registry import b1_tp2 as _TP2
 
             com = st["com"]
             reqs = list(cfg.get("requests") or [])
@@ -1157,9 +1158,10 @@ class TP2CaptureWorkerExtension:
             # EmbeddingShard rows with a committed member), from the Program itself -- the cross-rank pass records its strata against them
             try:
                 xs: dict[str, set] = {}
+                xr_fams = _TP2.cross_rank_families(int(st["world"]))     # [lane vllm-tp-n] from the registry's composites at this world, not typed
                 for r_ in pi0.rows:
                     fam_ = RM.spec_family(r_["spec"])
-                    if fam_ in ("AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"):
+                    if fam_ in xr_fams:
                         d_ = pi0.describe(r_)
                         if d_ and d_.get("members"):
                             xs.setdefault(fam_, set()).add(str(d_["op_path"]))
@@ -1238,7 +1240,7 @@ class TP2CaptureWorkerExtension:
         com, rank = st["com"], int(st["rank"])
         t0 = _t.perf_counter()
         layouts = {int(s): [(m.name, tuple(m.shape)) for m in ms] for s, ms in getattr(com, "_layouts", {}).items()}
-        plan = XC.pick_strata(layouts, rank, bytes.fromhex(seed_hex), per_stratum=int(per_stratum), max_rows=int(max_rows))
+        plan = XC.pick_strata(layouts, rank, bytes.fromhex(seed_hex), per_stratum=int(per_stratum), max_rows=int(max_rows), world=int(st["world"]))
         picks, missing, nbytes = [], 0, 0
 
         def tensor_of(step: int, meta) -> Any:
