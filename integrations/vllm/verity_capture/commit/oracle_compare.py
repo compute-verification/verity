@@ -145,6 +145,9 @@ class MatchOracle:
                         self.header = {"created_utc": r.get("created_utc"), "profile_id": r.get("profile_id"), "schema": r.get("schema"),
                                        "vllm": (r.get("profile") or {}).get("vllm", {}).get("version") if isinstance(r.get("profile"), dict) else None}
         self._files: dict[str, bytes] = {}
+        # [R19 int-20 / oracle-key] per step, every instance's OUTPUT views by storage (alloc -> [(byte lo, byte hi, instance)]), built on
+        # demand for the promoted members' dataflow resolution (`_promoted_instances`); a small cache, the compare walks the map by step
+        self._outs_by_step: dict[int, dict[int, list[tuple[int, int, dict]]]] = {}
         tok = os.path.join(cap, "tokens.json")
         self.tokens_sha256 = hashlib.sha256(open(tok, "rb").read()).hexdigest() if os.path.exists(tok) else None
         # the ids of every row of every step: prompt ids + generated ids per request (tokens.json) at the StepStart rows' (request, position)
@@ -234,6 +237,83 @@ class MatchOracle:
             raw = np.ascontiguousarray(a).tobytes()
         return raw, None
 
+    # ------------------------------------------------------------------ promoted members: the Value's producer, not the hint's prefix
+    @staticmethod
+    def _view_bytes_range(view: dict) -> tuple[int, int, int] | None:
+        """(alloc, byte lo, byte hi) the storage range a fold view spans (contiguous: offset..offset+numel; strided: the span), or None
+        when the view has no itemsize for its dtype."""
+        try:
+            alloc, off = int(view["alloc"]), int(view["offset"])
+            shape, strides = list(view.get("shape") or []), list(view.get("strides") or [])
+            isz = _ITEMSIZE.get(str(view.get("dtype")))
+        except (KeyError, TypeError, ValueError):
+            return None
+        if isz is None:
+            return None
+        numel = _prod(shape) if shape else 1
+        span = numel if (not strides or _contiguous(shape, strides)) else 1 + sum((int(d) - 1) * int(s) for d, s in zip(shape, strides))
+        return alloc, off * isz, (off + span) * isz
+
+    def _step_outputs(self, step: int) -> dict[int, list[tuple[int, int, dict]]]:
+        """alloc -> [(byte lo, byte hi, instance)] over the OUTPUT views of every fold instance at `step` (all op paths)."""
+        idx = self._outs_by_step.get(step)
+        if idx is None:
+            idx = defaultdict(list)
+            for (s, _op), insts in self._inst.items():
+                if s != step:
+                    continue
+                for m in insts:
+                    for ov in m.get("output_views") or []:
+                        r = self._view_bytes_range(ov)
+                        if r is not None:
+                            idx[r[0]].append((r[1], r[2], m))
+            if len(self._outs_by_step) >= 2:
+                self._outs_by_step.clear()
+            self._outs_by_step[step] = idx
+        return idx
+
+    def _promoted_instances(self, step: int, producer: dict[str, Any], request_uuid: str | None) -> tuple[list[dict] | None, str | None]:
+        """[R19 int-20, F-r19-int-20; oracle-key] The fold instances that PRODUCE a promoted member, resolved through the Program's own
+        dataflow rather than the hint's module prefix.
+
+        A promoted manifest row names an INTERIOR Program row whose output another module reads: identity (producer module, `out`), with
+        `spec` = the producing family and `consumers` = the reading modules in Program order.  The fold hints such an instance by the
+        vLLM module path the value was OBSERVED under (the producing Call's own path -- for the final norm's narrowing that is `<module>.norm`,
+        for the embedding scale it is the scale's site), which is not the Program row's module: `_inst[(step, op_path)]` finds nothing, and
+        row #57's 432 `model`/`out` identities were "no fold instance of this op at this step" over a Match that snapshotted every step
+        (leg 3, r20260923-091414-451a).  Same Value, two names -- an Occurrence-resolution question, answered here by the Value itself:
+        the instance whose OUTPUT storage range contains an OPERAND view of a consumer module's instance at this step, of the producer's
+        family.  The first consumer in Program order that resolves wins (the collector observes the promoted value at exactly that
+        consumer's input, PROMOTED_OBSERVATION_RULE); no consumer resolving = (None, why) -- not compared, named, never complete.
+        Non-promoted rows never enter here (their key is `_inst[(step, op_path)]`, unchanged)."""
+        spec = str(producer.get("spec") or "").split("{", 1)[0].strip()
+        consumers = [str(c) for c in (producer.get("consumers") or [])]
+        if not spec or not consumers:
+            return None, "promoted member without producer spec / consumers in the manifest row: not resolvable"
+        outs = self._step_outputs(step)
+        n_consumer_insts = 0
+        for cop in consumers:
+            cins = self._inst.get((step, cop)) or []
+            if request_uuid is not None:
+                cins = [c for c in cins if c.get("request") == request_uuid]
+            n_consumer_insts += len(cins)
+            found: dict[tuple, dict] = {}
+            for c in cins:
+                for opv in c.get("operand_views") or []:
+                    r = self._view_bytes_range(opv)
+                    if r is None:
+                        continue
+                    alloc, blo, bhi = r
+                    for plo, phi, p in outs.get(alloc, ()):
+                        if plo <= blo and bhi <= phi and str(p.get("spec") or "").split("{", 1)[0] == spec:
+                            ov0 = (p.get("output_views") or [{}])[0]
+                            found[(p.get("event"), p.get("request"), p.get("position"), p.get("row"), int(ov0.get("alloc", -1)), int(ov0.get("offset", -1)))] = p
+            if found:
+                return list(found.values()), None
+        if n_consumer_insts == 0:
+            return None, f"no fold instance of the promoted member's consumers {consumers[:3]} at this step"
+        return None, f"no fold instance of producer {spec} whose output the consumers {consumers[:3]} read at this step (promoted member)"
+
     def member_bytes(self, step: int, op_path: str, member: str, request_label: str | None,
                      producer: dict[str, Any] | None = None) -> tuple[bytes | None, str | None, int]:
         """Oracle bytes of (step, op_path, member) for request r<k> (None: all requests, row order): concatenation over the instances'
@@ -247,21 +327,33 @@ class MatchOracle:
         never guessed from which candidate happens to equal the committed bytes (that would make F-cb-03 invisible)."""
         if step not in self.snapshot_steps:
             return None, "step not snapshotted by the Match", 0
-        insts = self._inst.get((step, op_path)) or []
-        if not insts:
-            return None, "no fold instance of this op at this step", 0
-        want_hint = _ROPE_MEMBER.get(member) if op_path.endswith("rotary_emb") else None
-        if want_hint:
-            insts = [m for m in insts if m["hint"].endswith(want_hint)]
+        uuid: str | None = None
         if request_label is not None and request_label != "*":
             uuid = next((u for u, lab in self.requests.items() if lab == request_label), None)
             if uuid is None:
                 return None, f"request {request_label} not in the Match record's request table", 0
-            insts = [m for m in insts if m["request"] == uuid]
+        promoted = bool((producer or {}).get("promoted"))
+        if promoted:
+            # [R19 int-20 / oracle-key] a promoted member is the output of an interior Program row: its fold instance sits under the
+            # producing Call's path, not the identity's module -- resolved through the Value (consumer operand -> producer output), see
+            # `_promoted_instances`; the hint-prefix key below is never consulted for it
+            insts, why = self._promoted_instances(step, producer or {}, uuid)
+            if insts is None:
+                return None, why, 0
+            want_hint = None
+        else:
+            insts = self._inst.get((step, op_path)) or []
+            if not insts:
+                return None, "no fold instance of this op at this step", 0
+            want_hint = _ROPE_MEMBER.get(member) if op_path.endswith("rotary_emb") else None
+            if want_hint:
+                insts = [m for m in insts if m["hint"].endswith(want_hint)]
+            if uuid is not None:
+                insts = [m for m in insts if m["request"] == uuid]
         if not insts:
             return None, "no fold instance for this request/member at this step", 0
-        producer_view0 = False
-        spec = str((producer or {}).get("spec") or "").split("{", 1)[0].strip()
+        producer_view0 = promoted                     # the promoted member IS the producer row's single output (`PROMOTED_MEMBER`)
+        spec = "" if promoted else str((producer or {}).get("spec") or "").split("{", 1)[0].strip()
         if spec:
             by_spec = [m for m in insts if str(m.get("spec") or "").split("{", 1)[0] == spec]
             if not by_spec:
@@ -418,18 +510,36 @@ def query_families_of(manifest: dict[str, Any] | None) -> dict[str, int] | None:
 def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
     """(op_path, output_member) -> {"spec": producer family base, "ordinal": producer_ordinal | None, "operand": producer_operand | None}
     from the required manifest's rows (`spec` is the Program op family that produces the member; `producer_ordinal` the optional index
-    among same-family producers per row; `producer_operand` [M-0458] the family whose output the producer consumes -- the order-free selector)."""
+    among same-family producers per row; `producer_operand` [M-0458] the family whose output the producer consumes -- the order-free selector).
+    A PROMOTED row [R19 int-20] additionally carries `promoted: True` and `consumers` (the reading modules, Program order, unioned over the
+    member's rows): the oracle resolves it through the Value's dataflow, not the hint prefix (MatchOracle._promoted_instances)."""
     out: dict[tuple[str, str], dict[str, Any]] = {}
+    consumers: dict[tuple[str, str], list[str]] = {}
     for r in (manifest or {}).get("identities") or []:
         if r.get("family") != "instance_outputs" or not r.get("spec"):
             continue
         key = (str(r.get("op_path")), str(r.get("output_member")))
         cur = out.get(key)
+        # [R19 int-20 / oracle-key] a PROMOTED row (`promoted: true`, `consumers` = the reading modules, Program order) is resolved by the
+        # oracle through the Value's dataflow (MatchOracle._promoted_instances); `promoted` is part of the producer's identity here (a
+        # promoted and a vocabulary row on one member is a conflict), the consumer lists of the rows are unioned in first-seen order
         ent = {"spec": str(r["spec"]).split("{", 1)[0], "ordinal": r.get("producer_ordinal"), "operand": r.get("producer_operand")}
+        if r.get("promoted"):
+            ent["promoted"] = True                    # a vocabulary row's entry is byte-for-byte what it was (no key added)
         if cur is None:
             out[key] = ent
         elif cur != ent:
             out[key] = {"spec": None, "ordinal": None, "operand": None, "conflict": True}          # two producers claim one member: no filter, fail visibly
+            consumers.pop(key, None)
+            continue
+        if ent.get("promoted"):
+            cl = consumers.setdefault(key, [])
+            for c in r.get("consumers") or []:
+                if str(c) not in cl:
+                    cl.append(str(c))
+    for key, cl in consumers.items():
+        if out[key].get("promoted"):
+            out[key]["consumers"] = cl
     return out
 
 
