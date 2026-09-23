@@ -393,17 +393,10 @@ def padding_combination(mu: np.ndarray, rbar: np.ndarray) -> np.ndarray:
     (C, 6).  Sent in the clear with the next commitment."""
     rbar = np.asarray(rbar, dtype=np.int64) % P
     if mu.ndim == 2:                                                   # base padding x extension weights
-        tp, C = mu.shape
-        out = np.zeros((tp, D), dtype=np.int64)
-        for c in range(C):
-            out = (out + (mu[:, c, None] * rbar[c][None, :]) % P) % P
-        return out
-    _, tp, C = mu.shape
-    mu_ext = np.transpose(mu, (1, 2, 0))                               # (tp, C, 6)
-    acc = ext_zero((tp,))
-    for c in range(C):
-        acc = (acc + ext_mul(mu_ext[:, c], rbar[c])) % P
-    return acc
+        mu = np.asarray(mu, dtype=np.int64) % P
+        return ((mu[:, :, None] * rbar[None, :, :]) % P).sum(axis=1) % P   # (tp, C, 6) summed over C (< 2^40)
+    mu_ext = np.transpose(np.asarray(mu, dtype=np.int64) % P, (1, 2, 0))  # (tp, C, 6)
+    return ext_mul(mu_ext, rbar[None, :, :]).sum(axis=1) % P              # products < P, C <= 2^8 terms
 
 
 def row_check_rhs(zp: ZkParams, k: int, eta_s: int, ybar: np.ndarray) -> np.ndarray:
@@ -472,11 +465,26 @@ class SumcheckMask:
     # -- the polynomial -------------------------------------------------------------------------------------------
     def g_i(self, i: int, x) -> np.ndarray:
         """``g_i(x)`` for an extension point ``x`` (6,) or a base scalar."""
-        x = ext_from_base(x) if np.ndim(x) == 0 else np.asarray(x, dtype=np.int64) % P
-        acc, xp = ext_zero(), x.copy()
+        if np.ndim(x) == 0:
+            return self.g_base(int(x) % P)[i]
+        return self.g_all(np.asarray(x, dtype=np.int64)[None, :].repeat(self.n, 0))[i]
+
+    def g_all(self, r) -> np.ndarray:
+        """(n, 6): ``g_i(r_i)`` for extension points ``r`` (n, 6) -- ``d`` batched extension products."""
+        r = np.asarray(r, dtype=np.int64).reshape(self.n, D) % P
+        acc, rp = ext_zero((self.n,)), r.copy()
         for e in range(self.d):
-            acc = (acc + ext_mul(self.a[i, e], xp)) % P
-            xp = ext_mul(xp, x)
+            acc = (acc + ext_mul(self.a[:, e], rp)) % P
+            if e + 1 < self.d:
+                rp = ext_mul(rp, r)
+        return acc
+
+    def g_base(self, X: int) -> np.ndarray:
+        """(n, 6): ``g_i(X)`` at a base point -- base-scalar products only."""
+        acc, xp = ext_zero((self.n,)), X % P
+        for e in range(self.d):
+            acc = (acc + self.a[:, e] * xp) % P
+            xp = (xp * X) % P
         return acc
 
     def g_i_ones(self) -> np.ndarray:
@@ -498,25 +506,22 @@ class SumcheckMask:
             raise ValueError("r_prefix must hold the challenges of the rounds before j")
         n = self.n
         const = self.a0.copy()
-        for i in range(j):
-            const = (const + self.g_i(i, r_prefix[i])) % P
+        if j:
+            pre = np.concatenate([r_prefix, np.zeros((n - j, D), dtype=np.int64)], axis=0)
+            const = (const + ext_sum(self.g_all(pre)[:j], axis=0)) % P
         ones = self.g_i_ones()
         tail = ext_sum(ones[j + 1:], axis=0) if j + 1 < n else ext_zero()
         f1 = pow(2, n - 1 - j, P)
         f2 = pow(2, n - 2 - j, P) if n - 2 - j >= 0 else 0
         out = ext_zero((len(xs),))
         for t, X in enumerate(xs):
-            v = (const + self.g_i(j, int(X) % P)) % P
+            v = (const + self.g_base(int(X) % P)[j]) % P
             out[t] = (ext_mul_base(v, f1) + ext_mul_base(tail, f2)) % P
         return out
 
     def final_value(self, r) -> np.ndarray:
         """``g(r) = a_0 + sum_i g_i(r_i)`` (6,)."""
-        r = np.asarray(r, dtype=np.int64).reshape(self.n, D) % P
-        acc = self.a0.copy()
-        for i in range(self.n):
-            acc = (acc + self.g_i(i, r[i])) % P
-        return acc
+        return (self.a0 + ext_sum(self.g_all(r), axis=0)) % P
 
     # -- the commitment side ------------------------------------------------------------------------------------------
     def cells(self) -> np.ndarray:

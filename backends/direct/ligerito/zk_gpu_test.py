@@ -108,30 +108,37 @@ def test_cost_at_real_n(kp1):
     for kp in kprimes:
         cur -= kp
         ks.append(cur)
-    t_pad_total = 0.0
-    for i, kp in enumerate(kprimes):
-        C = 1 << kp
-        planes = 1 if i == 0 else zk.D
-        M = np.zeros(((zk.D, 4, C) if planes == zk.D else (4, C)), dtype=np.int64)
-        t = time.perf_counter()
-        msg, mu = zk.pad_columns(zp, M, DEV)
-        rbar = np.random.default_rng(0).integers(0, zk.P, size=(C, zk.D), dtype=np.int64)
-        zk.padding_combination(mu, rbar)
-        t_pad_total += time.perf_counter() - t
-    out["t_padding_all_rounds_s"] = t_pad_total
-    # Libra masks (host, per round O(n)) + coins
+    def padding_all_rounds():
+        for i, kp in enumerate(kprimes):
+            C = 1 << kp
+            planes = 1 if i == 0 else zk.D
+            M = np.zeros(((zk.D, 4, C) if planes == zk.D else (4, C)), dtype=np.int64)
+            msg, mu = zk.pad_columns(zp, M, DEV)
+            rbar = np.random.default_rng(0).integers(0, zk.P, size=(C, zk.D), dtype=np.int64)
+            zk.padding_combination(mu, rbar)
+
+    padding_all_rounds()                                                # warm-up (lazy imports, CUDA context)
     t = time.perf_counter()
-    masks = zk.sample_masks(zk.ZkParams(20, 13, 7), None)
-    zp20 = zk.ZkParams(20, 13, 7)
-    for idx in range(len(zp20.sumchecks)):
-        gm = zk.SumcheckMask(zp20, idx, masks.g_coeffs[idx])
-        nv = zp20.sumchecks[idx][1]
-        rs = np.random.default_rng(1).integers(0, zk.P, size=(nv, zk.D), dtype=np.int64)
-        gm.total_sum()
-        for j in range(nv):
-            gm.round_values(j, rs[:j])
-        gm.final_value(rs)
-        gm.claim(rs)
+    padding_all_rounds()
+    out["t_padding_all_rounds_s"] = time.perf_counter() - t
+    # Libra masks (host, per round O(n)) + coins.  The zero-check has n - n_c = 12 variables at n_c = 18, the rows
+    # sumcheck k_1 - n_c and the shift sumcheck n_c: use the real zp.
+    masks = zk.sample_masks(zp, None)
+
+    def libra_all():
+        for idx in range(len(zp.sumchecks)):
+            gm = zk.SumcheckMask(zp, idx, masks.g_coeffs[idx])
+            nv = zp.sumchecks[idx][1]
+            rs = np.random.default_rng(1).integers(0, zk.P, size=(nv, zk.D), dtype=np.int64)
+            gm.total_sum()
+            for j in range(nv):
+                gm.round_values(j, rs[:j])
+            gm.final_value(rs)
+            gm.claim(rs)
+
+    libra_all()                                                         # warm-up
+    t = time.perf_counter()
+    libra_all()
     out["t_libra_host_s"] = time.perf_counter() - t
     sched = zk.coin_schedule(zp, kprimes)
     t = time.perf_counter()
