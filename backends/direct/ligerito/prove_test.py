@@ -191,6 +191,54 @@ def test_proof_round_trip_and_framing():
     fr = b'{"sib_len":[64,96],"final_len":16}'
     at = b.index(len(fr).to_bytes(4, "little") + fr)
     for alt in (b'{"sib_len": [64, 96], "final_len": 16}', b'{"final_len":16,"sib_len":[64,96]}',
-                b'{"sib_len":[64,96],"final_len":16.0}', b'{"sib_len":[64,96],"final_len":16,"x":0}'):
+                b'{"sib_len":[64,96],"final_len":16.0}', b'{"sib_len":[64,96],"final_len":16,"x":0}',
+                b'{"sib_len":[64,96],"final_len":16,"t_pad":0}'):
         with pytest.raises(ValueError, match="framing"):
             read_proof(b[:at] + len(alt).to_bytes(4, "little") + alt + b[at + 4 + len(fr):])
+
+
+def _swap_params(b: bytes, old: bytes, new: bytes) -> bytes:
+    at = b.index(len(old).to_bytes(4, "little") + old)
+    return b[:at] + len(new).to_bytes(4, "little") + new + b[at + 4 + len(old):]
+
+
+def test_proof_params_canonical():
+    """The params are absorbed, but a second JSON encoding of the same values (spaces, key order, 16.0 for 16, true for 1,
+    an unknown key) is still a second valid proof under local / live coins: the reader takes only the writer's bytes and
+    types (as ligerito-verify's lgto.rs)."""
+    rng = np.random.default_rng(2)
+    kps, qs, n = [3, 2], [5, 4], 9
+    pcs = PcsProof([bytes([i]) * 32 for i in range(2)], [[rng.integers(0, P, (3, 6)) for _ in range(kp)] for kp in kps],
+                   [rng.integers(0, P, (5, 8)), rng.integers(0, P, (4, 24))], [b"\1" * 64, b"\2" * 96],
+                   rng.integers(0, P, (1 << (n - sum(kps)), 6)))
+    params = {"relation": "fp8-ada", "l": 16, "n": n, "kprime": kps, "queries": qs, "rate_log2": [1, 2],
+              "splits": [[64, 1], [16, 1]], "order": "row-major", "coins": "local", "zk": False, "n_claims": 4,
+              "zero_blocks": [[0, 3]]}
+    from .proof import params_bytes
+    b = Proof(params, b"LGSC0003" + bytes(10), pcs).to_bytes()
+    assert read_proof(b).params == params
+    raw = params_bytes(params)
+    for alt in (raw.replace(b'"l":16', b'"l":16.0'), raw.replace(b'"zk":false', b'"zk":0'),
+                raw.replace(b'"n_claims":4', b'"n_claims":true'), raw.replace(b'"relation"', b'"extra":1,"relation"'),
+                raw.replace(b",", b", "), raw.replace(b'"zero_blocks":[[0,3]]', b'"zero_blocks":[[0,3.0]]')):
+        assert alt != raw
+        with pytest.raises(ValueError, match="parameters"):
+            read_proof(_swap_params(b, raw, alt))
+    # a ZK proof must carry t_pad in its framing, a non-ZK one must not
+    zk = dict(params, zk=True)
+    bz = Proof(zk, b"LGSC0003" + bytes(10), pcs).to_bytes()
+    with pytest.raises(ValueError, match="framing"):
+        read_proof(bz)
+
+
+def test_statement_word_widths():
+    """Word widths outside {1, 2, 4} are a format error (ValueError), not a KeyError (red-team-ligerito-3 R3-8); the verifier
+    pins them to the relation's (``Prover.verify``: 'statement shape')."""
+    st = Statement("fp8-ada", bytes(32), bytes(32), 4, 2, 3, [2], 1, 2, [np.ones((4, 3), dtype=np.int64)],
+                   [np.ones((4, 3), dtype=np.int64)], [np.zeros(4, dtype=np.int64)])
+    b = bytearray(st.to_bytes())
+    at = b.index(bytes([1, 2]), 8 + 4 + 7 + 64 + 20)
+    for wb, yb in ((3, 2), (1, 8), (0, 2)):
+        bad = bytes(b[:at]) + bytes([wb, yb]) + bytes(b[at + 2:])
+        with pytest.raises(ValueError, match="width"):
+            read_statement(bad)

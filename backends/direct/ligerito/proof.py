@@ -207,6 +207,8 @@ class _R:
 
 
 def _udtype(nbytes: int) -> str:
+    if nbytes not in (1, 2, 4):
+        raise ValueError(f"word width {nbytes} bytes")
     return {1: "<u1", 2: "<u2", 4: "<u4"}[nbytes]
 
 
@@ -274,6 +276,7 @@ def read_statement(buf: bytes) -> Statement:
     l, steps, K, S = r.u32(), r.u32(), r.u32(), r.u32()
     n_vus = [r.u32() for _ in range(S)]
     wb, yb = r.u8(), r.u8()
+    _udtype(wb), _udtype(yb)
     st = Statement(rel, sys_id, vk, l, steps, K, n_vus, wb, yb)
     for nv in n_vus:
         if nv > 0:
@@ -364,6 +367,25 @@ def params_bytes(params: dict) -> bytes:
     return json.dumps(params, separators=(",", ":"), sort_keys=True).encode()
 
 
+#: the keys ``Prover.batch`` writes (``t_pad`` only under ZK); the reader refuses any other (as ligerito-verify's lgto.rs)
+PARAMS_KEYS = frozenset({"relation", "l", "n", "kprime", "queries", "rate_log2", "splits", "order", "coins", "zk", "n_claims",
+                         "zero_blocks", "t_pad"})
+
+
+def _params_typed(params: dict) -> bool:
+    """Every value has the writer's JSON type (``16.0`` / ``true`` for an integer would re-encode to the same number in
+    Python's comparisons: a second encoding)."""
+    def u(v):
+        return type(v) is int and v >= 0
+
+    def ulist(v, pair=False):
+        return type(v) is list and all((type(x) is list and len(x) == 2 and u(x[0]) and u(x[1])) if pair else u(x) for x in v)
+    kinds = {"relation": lambda v: type(v) is str, "order": lambda v: type(v) is str, "coins": lambda v: type(v) is str,
+             "zk": lambda v: type(v) is bool, "l": u, "n": u, "n_claims": u, "t_pad": u, "kprime": ulist, "queries": ulist,
+             "rate_log2": ulist, "splits": lambda v: ulist(v, True), "zero_blocks": lambda v: ulist(v, True)}
+    return all(kinds[k](v) for k, v in params.items())
+
+
 @dataclass
 class Proof:
     params: dict
@@ -417,13 +439,19 @@ def read_proof(buf: bytes) -> Proof:
         raise ValueError("not an LGTO0001 proof")
     praw = r.blob()
     params = json.loads(praw.decode())
+    if not isinstance(params, dict) or params_bytes(params) != praw or not set(params) <= PARAMS_KEYS \
+            or not _params_typed(params):
+        raise ValueError("non-canonical proof parameters")
     fraw = r.blob()
     framing = json.loads(fraw.decode())
-    # the framing is not absorbed: only the writer's exact bytes are accepted, or a re-encoding is another valid proof
+    # the framing is not absorbed: only the writer's exact bytes are accepted, or a re-encoding is another valid proof;
+    # the writer emits t_pad iff the proof has ZK padding (t_pad > 0), so an explicit "t_pad":0 is a re-encoding too
+    if not isinstance(framing, dict):
+        raise ValueError("non-canonical proof framing")
     canon = {"sib_len": [int(x) for x in framing.get("sib_len", [])], "final_len": int(framing.get("final_len", -1))}
-    if "t_pad" in framing:
+    if framing.get("t_pad"):
         canon["t_pad"] = int(framing["t_pad"])
-    if json.dumps(canon, separators=(",", ":")).encode() != fraw:
+    if json.dumps(canon, separators=(",", ":")).encode() != fraw or ("t_pad" in canon) != bool(params.get("zk")):
         raise ValueError("non-canonical proof framing")
     sc = r.blob()
     kps, qs = params["kprime"], params["queries"]

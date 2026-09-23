@@ -56,6 +56,8 @@ SET_B_RATES = (1, 2, 2, 2, 2)
 #: the zero-check's device working set per committed cell beyond z (ligerito-sumcheck-2: 14.6 GB peak at N = 2^30 with z's
 #: 4 B/cell)
 ZC_BYTES_PER_CELL = 10
+#: LGSC0004 final table: vf <= n_c - ZK_VF_MARGIN (2^4 = 16 >= 12 product-row cells per entry)
+ZK_VF_MARGIN = 4
 
 
 def _stream_for_zero_check(f: torch.Tensor, dims: Dims, dev) -> bool | None:
@@ -855,6 +857,8 @@ class Prover:
         self.key_bytes = self.key.to_bytes()
         self.key_sha256 = self.key.digest()
         self._zk_keys: dict = {}
+        #: LGSC0004's round schedule: a ``sumcheck._schedule_arg`` preset or string; None = ``zk_default_schedule`` (13 coins)
+        self.zk_schedule: str | None = None
         self.compile_seconds = time.perf_counter() - t0
         self.word_bytes = np.dtype(self.rel.word_dtype).itemsize
         self.y_bytes = np.dtype(self.rel.y_dtype).itemsize
@@ -872,6 +876,19 @@ class Prover:
                       {s: tuple(t.cpu().numpy() for t in cons.coo[s]) for s in "abc"})
             hit = self._zk_keys[lay.C] = (cons, key, key.to_bytes(), key.digest())
         return hit
+
+    def sumcheck_schedule(self, lay: Layout):
+        """The sumcheck's round schedule: None on LGSC0003 (its default); on LGSC0004 ``zk_schedule`` (default
+        ``zk_default_schedule``), refused unless ``vf <= n_c - ZK_VF_MARGIN``: the product triple blinds each of the 2^vf
+        final-table entries only with >= 12 base dimensions of i1 per entry (ligerito-sumcheck-3 §1 step 2;
+        red-team-ligerito-3 R3-6; ``sumcheck.prove`` itself accepts any ``vf <= n_c``)."""
+        if lay.zk is None:
+            return None
+        sch = sc_mod.zk_schedule(lay, sc_mod._schedule_arg(self.zk_schedule or "zk", lay))
+        if sch.vf > lay.n_c - ZK_VF_MARGIN:
+            raise ValueError(f"LGSC0004 schedule vf = {sch.vf} > n_c - {ZK_VF_MARGIN} = {lay.n_c - ZK_VF_MARGIN}: the final "
+                             f"tables would not be blinded")
+        return sch
 
     def stmt_layout(self, stmt: Statement, zk: bool) -> Layout:
         return layout_for(self.sys, self.l, [nv for nv in stmt.n_vus if nv > 0], self.steps, zk=zk)
@@ -996,7 +1013,8 @@ class Prover:
         """The honest zero-check on the true ``z`` with ``values[0]`` shifted to ``w'~(r_i, r_c)`` for the committed
         ``w' = w + forge`` (row -> (C,) int64), the shifted value absorbed in place of the honest one: the red-team V1
         forgery (a negative; the challenges before ``values`` do not depend on it, so a copied coin state finds the point)."""
-        s1 = sc_mod.prove(lay, cons, z, copy.deepcopy(coins), cheat=cheat, engine=self.engine)
+        s1 = sc_mod.prove(lay, cons, z, copy.deepcopy(coins), cheat=cheat, engine=self.engine,
+                          schedule=self.sumcheck_schedule(lay))
         pt = s1.claims[0].point
         rows = sorted(forge)
         fold = sc_mod.matvec_base_ext(torch.stack([forge[r] for r in rows]), sc_mod.eq_table(pt[lay.n_i:]))
@@ -1010,7 +1028,8 @@ class Prover:
 
             def absorb(self, label, data):
                 coins.absorb(label, sc_mod._ext_bytes(vals) if label == b"values" else data)
-        scp = sc_mod.prove(lay, cons, z, _Swap(), cheat=cheat, engine=self.engine)
+        scp = sc_mod.prove(lay, cons, z, _Swap(), cheat=cheat, engine=self.engine,
+                           schedule=self.sumcheck_schedule(lay))
         scp.values = vals
         scp.claims[0] = dataclasses.replace(scp.claims[0], value=vals[0])
         return scp
@@ -1093,7 +1112,8 @@ class Prover:
         if forge:
             scp = self._forged_sumcheck(lay, cons, z, coins, forge, cheat)
         else:
-            scp = sc_mod.prove(lay, cons, z, coins, cheat=cheat, engine=self.engine)
+            scp = sc_mod.prove(lay, cons, z, coins, cheat=cheat, engine=self.engine,
+                               schedule=self.sumcheck_schedule(lay))
         committed_rows()                    # the row-major commitment's M1 is a view of z: the openings read it
         del virt
         tm.stop()
@@ -1131,7 +1151,8 @@ class Prover:
                 raise Reject("relation mismatch")
             if stmt.sys_id != self.sys_id:
                 raise Reject("statement names another system")
-            if stmt.l != self.l or prm.get("l") != self.l or stmt.steps != self.steps or stmt.K != self.rel.k:
+            if stmt.l != self.l or prm.get("l") != self.l or stmt.steps != self.steps or stmt.K != self.rel.k \
+                    or stmt.word_bytes != self.word_bytes or stmt.y_bytes != self.y_bytes:
                 raise Reject("statement shape")
             real = [nv for nv in stmt.n_vus if nv > 0]
             if stmt.n_vus[:len(real)] != real or any(nv * self.steps > self.l for nv in real) or not real:
@@ -1172,6 +1193,9 @@ class Prover:
             info["t_sumcheck"] = time.perf_counter() - t1
             if not ok:
                 raise Reject(why)
+            # the verifier's reading of the prover's privacy (not soundness), as ligerito-verify's zk_mode
+            info["zk_mode"] = ("lgsc0004" if scp.schedule.vf <= lay.n_c - ZK_VF_MARGIN else "lgsc0004-underblinded") \
+                if zk_on else "none"
             zl = zk_layout(lay, dims) if zk_on else None
             evals, sparse = split_claims(claims)
             points, values = pcs_points(lay, evals, zl, blocks)
