@@ -53,7 +53,8 @@ def hints_torch(p: Params, sys: System, c, a, b, y=None, device="cpu") -> torch.
     b = torch.as_tensor(b, dtype=torch.int64).to(device, non_blocking=True)
     y = None if y is None else torch.as_tensor(y, dtype=torch.int64).to(device, non_blocking=True)
     if USE_CUDA_GRAPH and str(device).startswith("cuda"):
-        key = (id(sys), c.shape[0], a.shape[1], y is not None, str(device))
+        # one graph (with its static buffers) per stream: sub-batches pipelined on different streams must not share them
+        key = (id(sys), c.shape[0], a.shape[1], y is not None, str(device), torch.cuda.current_stream(device).cuda_stream)
         g = _GRAPHS.get(key)
         if g is None:
             try:

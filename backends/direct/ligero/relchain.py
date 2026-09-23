@@ -113,6 +113,7 @@ class RelationChainRunner:
         self.tb = tables(self.sys, self.device)
         self.compile_seconds = time.perf_counter() - t0
         self._cfg: dict[int, Config] = {}
+        self._marshal_cache: dict = {}
 
     def cfg(self, l: int) -> Config:
         if l not in self._cfg:
@@ -137,11 +138,16 @@ class RelationChainRunner:
     def _pad_unit(self):
         return (0, [0] * self.rel.k, [0] * self.rel.k, 0)
 
-    def prove_vus(self, vus: list[tuple[list, list, list, int]], check=True, mutate=None, min_l: int = 256, coins=None):
-        """``vus``: (a, b, accs, y_final) per VU.  The public claim per VU is ``rel.y_public(y_final)`` at its last column.
-        Interactive mode with ``coins=None``: the runner plays the honest verifier's step 0 (``Coins.sample()``)."""
-        if coins is None and self.interactive:
-            coins = protocol_mod.Coins.sample()
+    def marshal(self, vus: list[tuple[list, list, list, int]], min_l: int = 256) -> dict:
+        """The sub-batch's public words as arrays, once per sub-batch for the whole run (cached on the identity of the
+        VU tuples): host ``a, b, c_in, y_out`` (int64 numpy: the statement, the dumps, the reference hints) and their
+        device-resident copies + the verifier's public decode ``pub`` (``rel.public_vectors``, device) -- so a timed
+        sub-batch does no list -> numpy -> device marshalling and no host round trip (lane hp2-host, "instances
+        device-resident")."""
+        key = (len(vus), id(vus[0]), id(vus[-1]), id(vus[len(vus) // 2]), min_l)
+        hit = self._marshal_cache.get(key)
+        if hit is not None:
+            return hit
         lay = self.layout(len(vus), min_l)
         units, ypub = [], torch.zeros(lay.l, dtype=torch.int64)
         for v, (a, b, accs, y) in enumerate(vus):
@@ -153,24 +159,66 @@ class RelationChainRunner:
         b = np.asarray([u[2] for u in units], dtype=np.int64)
         c_in = np.asarray([u[0] for u in units], dtype=np.int64)
         y_out = np.asarray([u[3] for u in units], dtype=np.int64)
-        t0 = time.perf_counter()
-        pub = self.rel.public_vectors(self.p, None, a, b, None, device=self.device)
-        hints = self.rel.hints(self.p, self.sys, c_in, a, b, y_out, self.device)
-        if check and self.rel.reference_hints is not None:      # the gate: the torch generator must equal the checker's gen_step
-            ref = self.rel.reference_hints(self.p, self.sys, units, self.device)
-            assert torch.equal(ref, hints), f"{self.rel.name}: torch hints != gen_step"
-        if str(self.device).startswith("cuda"):
-            torch.cuda.synchronize()
-        hints_seconds = time.perf_counter() - t0
+        dev = self.device
+        to_dev = lambda x: torch.as_tensor(x).to(dev)  # noqa: E731
+        bundle = {"lay": lay, "units": units, "a": a, "b": b, "c_in": c_in, "y_out": y_out, "ypub": ypub,
+                  "a_d": to_dev(a), "b_d": to_dev(b), "c_d": to_dev(c_in), "y_d": to_dev(y_out), "ypub_d": to_dev(ypub)}
+        bundle["pub"] = self.rel.public_vectors(self.p, None, bundle["a_d"], bundle["b_d"], None, device=dev)
+        if str(dev).startswith("cuda"):
+            torch.cuda.synchronize(dev)
+        self._marshal_cache[key] = bundle
+        return bundle
+
+    def prove_vus(self, vus: list[tuple[list, list, list, int]], check=True, mutate=None, min_l: int = 256, coins=None):
+        """``vus``: (a, b, accs, y_final) per VU.  The public claim per VU is ``rel.y_public(y_final)`` at its last column.
+        Interactive mode with ``coins=None``: the runner plays the honest verifier's step 0 (``Coins.sample()``)."""
+        from .pipeline import run_to_completion
+        if coins is None and self.interactive:
+            coins = protocol_mod.Coins.sample()
+        bd = self.marshal(vus, min_l)
         if hasattr(coins, "set_statement"):
             # a live verifier's coin source (live.LiveCoins): the statement travels with the root, so the claim is fixed
             # before the verifier opens its first coin.  Built outside prove's clock; the protocol is unchanged.
             from .live import set_statement
-            set_statement(coins, self, (a, b, ypub), lay, self.cfg(lay.l), self.n_proofs)
-        proof = prove(self.p, self.sys, self.tb, self.cfg(lay.l), pub, hints, self.device, check=check, mutate=mutate,
-                      chain=(lay, ypub), words={"a": a, "b": b}, coins=coins, rel=self.hooks)
-        proof.timings["hints_host"] = hints_seconds
-        return proof, (a, b, ypub), lay
+            set_statement(coins, self, (bd["a"], bd["b"], bd["ypub"]), bd["lay"], self.cfg(bd["lay"].l), self.n_proofs)
+        gen = self._prove_stages(bd, coins, check=check, mutate=mutate, slot=None)
+        proof = run_to_completion(gen)
+        return proof, (bd["a"], bd["b"], bd["ypub"]), bd["lay"]
+
+    def _prove_stages(self, bd: dict, coins, check=False, mutate=None, slot=None):
+        """The prover generator for one marshalled sub-batch (``pipeline.prove_many`` drives several at once): the hints
+        (device, timed ``hints_host`` inside the prover's clock) then ``protocol.prove_stages``."""
+        lay = bd["lay"]
+
+        def hints_fn():
+            hints = self.rel.hints(self.p, self.sys, bd["c_d"], bd["a_d"], bd["b_d"], bd["y_d"], self.device)
+            if check and self.rel.reference_hints is not None:  # the gate: the torch generator must equal the checker's gen_step
+                ref = self.rel.reference_hints(self.p, self.sys, bd["units"], self.device)
+                assert torch.equal(ref, hints), f"{self.rel.name}: torch hints != gen_step"
+            return hints
+
+        return protocol_mod.prove_stages(self.p, self.sys, self.tb, self.cfg(lay.l), bd["pub"], None, self.device, check=check,
+                                         mutate=mutate, chain=(lay, bd["ypub_d"]), words={"a": bd["a"], "b": bd["b"], "y16": bd["ypub"]},
+                                         coins=coins, rel=self.hooks, hints_fn=hints_fn, slot=slot)
+
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256):
+        """``len(batches)`` sub-batches proved with up to ``depth`` in flight on their own CUDA streams (``pipeline.prove_many``):
+        the host work of one sub-batch (challenge expansion, transcript copies, launch overhead) hides under the device work
+        of the next.  ``coins_factory()`` is called per sub-batch when it starts, in order (the honest verifier's step 0).
+        Returns ``[(coins, proof, pubs, lay)]`` in sub-batch order and the pass wall; each proof's ``timings`` is the
+        sub-batch's share of the wall (see ``pipeline._rescale``)."""
+        from .pipeline import prove_many
+        bundles = [self.marshal(vus, min_l) for vus in batches]
+        coins_of: list = [None] * len(batches)
+
+        def starter(i):
+            def start(slot):
+                coins_of[i] = coins_factory()
+                return self._prove_stages(bundles[i], coins_of[i], check=False, mutate=None, slot=slot)
+            return start
+
+        proofs, wall = prove_many([starter(i) for i in range(len(batches))], self.device, depth=depth)
+        return [(coins_of[i], pf, (bd["a"], bd["b"], bd["ypub"]), bd["lay"]) for i, (pf, bd) in enumerate(zip(proofs, bundles))], wall
 
     def verify_vus(self, proof, pubs, lay: Layout, coins=None):
         a, b, ypub = pubs
@@ -338,6 +386,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
     n_proofs = -(-total_vus // per_proof)
     interactive = args.mode == protocol_mod.MODE_INTERACTIVE
     depth = 3 if interactive else 1
+    pipeline_depth = int(getattr(args, "pipeline", 0) or 0)
     R = RelationChainRunner(rel, args.device, args.target, args.rate_log2, n_proofs=n_proofs, zk=args.zk, mode=args.mode)
     cen = census(R.sys)
     print(f"{rel.name} census:", json.dumps(cen))
@@ -390,7 +439,18 @@ def bench_vu_rel(args, rel: Relation) -> int:
         cfgs_seen: list[Config] = []
         if live is not None:
             live.begin_rep(rep)
-        for si, (lo, hi) in enumerate(subs):
+        if pipeline_depth > 1 and rep > 0 and args.device.startswith("cuda") and live is None:
+            # (with --verifier the sub-batches stay sequential: each one's coins come from the live verifier in order)
+            # --pipeline N: the sub-batches interleaved N-deep on their own streams (lane hp2-host); the timings are each
+            # sub-batch's share of the pass wall, so their sum is the wall.  Coins are sampled per sub-batch as it starts.
+            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], (lambda: protocol_mod.Coins.sample() if interactive else None),
+                                           depth=pipeline_depth, min_l=l)
+            for si, ((lo, hi), (V, proof, pubs, lay_i)) in enumerate(zip(subs, many)):
+                for k_, v_ in proof.timings.items():
+                    agg[k_] = agg.get(k_, 0.0) + v_
+                proved.append((si, lo, hi, V, proof, pubs, lay_i))
+                cfgs_seen.append(R.cfg(lay_i.l))
+        for si, (lo, hi) in enumerate(subs if not proved else []):
             V = protocol_mod.Coins.sample() if interactive else None
             if live is not None:
                 V = live.coins(si, V)                        # a recorded rep: the live verifier's step 0 for sub-batch si
@@ -402,6 +462,10 @@ def bench_vu_rel(args, rel: Relation) -> int:
             proved.append((si, lo, hi, V, proof, pubs, lay_i))
             cfgs_seen.append(R.cfg(lay_i.l))
             if rep == 0:
+                if pipeline_depth > 1 and args.device.startswith("cuda"):
+                    # every pipeline slot once (its stream's hint graph capture, pinned buffers): untimed, like the warm-up
+                    R.prove_vus_many([data[lo_:hi_] for lo_, hi_ in subs[:pipeline_depth]],
+                                     (lambda: protocol_mod.Coins.sample() if interactive else None), depth=pipeline_depth, min_l=l)
                 break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
         if live is not None:
             live.end_rep(rep, agg)                           # END; the verifier's session verdict (waits for its Rust verify)
@@ -459,7 +523,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
     hw = contract.probe_hardware()
     from . import witness as witness_mod
     sw = {"backend": {"name": rel.backend_name, "commit": _git_commit(), "hash": proof.hash_name,
-                      "challenge_expander": "SHAKE-256 (placeholder)", "impl": witness_mod.IMPL},
+                      "challenge_expander": "SHAKE-256 (placeholder)", "impl": witness_mod.IMPL, "pipeline": pipeline_depth},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
     if cfg.zk and interactive:
         proof_class, zk_mode = "COMPLETE_ZK_BACKEND", ZK_MODE + ZK_MODE_HM96 + ZK_VACUOUS_NOTE

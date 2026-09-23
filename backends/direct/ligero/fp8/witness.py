@@ -40,9 +40,9 @@ def _decode_fp32(p: FP8Params, c: torch.Tensor):
 
 def hints_fp8(p: FP8Params, sys: System, c, a, b, device="cpu") -> torch.Tensor:
     """``c`` (l,) FP32 words, ``a``/``b`` (l, 32) E4M3 bytes -> (n_hints, l) int64 in the order of ``sys.hints``."""
-    c = torch.as_tensor(np.asarray(c), dtype=torch.int64).to(device)
-    a = torch.as_tensor(np.asarray(a), dtype=torch.int64).to(device)
-    b = torch.as_tensor(np.asarray(b), dtype=torch.int64).to(device)
+    # numpy / list / torch (host or already on ``device``: relchain.marshal keeps the instance arrays device-resident)
+    as_i64 = lambda x: (x if isinstance(x, torch.Tensor) else torch.as_tensor(np.asarray(x))).to(dtype=torch.int64, device=device)  # noqa: E731
+    c, a, b = as_i64(c), as_i64(a), as_i64(b)
     l, k = c.shape[0], a.shape[1]
     H: dict[str, torch.Tensor] = {}
     acc, state = _decode_fp32(p, c)
