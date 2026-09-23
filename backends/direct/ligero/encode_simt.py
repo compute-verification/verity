@@ -13,14 +13,23 @@ b-encode / b-v2 lanes, 32.2 ms per 310,602 x 4096 rows on the 4090), specialised
 * optionally the natural-order coefficients ``interp_H(W_j)`` (``l^-1`` x the DIF output, bit-reversal undone on the
   store), which the ZK prover needs for the coefficient-form messages ``w`` and ``v``.
 
-Montgomery arithmetic (``R = 2^32``) and the radix-4 stage fusion are the shared kernel's; ``K`` here is ``l`` (a power
-of two, ``>= 4 x threads``), ``n = 4 l``.  Lane enc-hopper (H100 tuning, bit-exact with the previous kernel):
-branch-free ``min``-trick reductions; the row's coefficients live in a second, padded shared-memory buffer (``cf``,
-``CFPAD``: the bit-reversed gathers are bank-conflict-free) instead of ``PER`` registers per thread -- the shared
-kernel's register file forced ptxas to spill at ``l = 16384``; the four coset outputs are paired in shared memory and
-stored as 8-byte words (half the L2 sector transactions of the strided 4-byte scatter); ``blocks = 4 x SMs`` grid-stride
-over the rows (at ``l = 16384`` the 192 KiB of shared memory admit ONE 1024-thread CTA per SM -- the occupancy lever
-still open).  Shared memory is dynamic (``3 l + 32`` words: ``x``, ``cf``, ``y``).
+Montgomery arithmetic (``R = 2^32``) is the shared kernel's; ``K`` here is ``l`` (a power of two, ``256 <= l <=
+16384``), ``n = 4 l``, ``THREADS = l / 16``.  Lane enc-hopper (H100 tuning, bit-exact with the previous kernel; v3):
+
+* every thread owns 16 elements in every phase, so each transform is 4 radix-16 register stages (``m = K/2 ..
+  THREADS``, elements ``t + THREADS s``) + three shared-memory passes of 4 stages each (stride 256, stride 16, 16
+  contiguous) -- 3 shared-memory round trips per transform instead of 5, and no separate scale / copy passes: the last
+  INTT pass writes the (bit-reversed, unscaled) coefficients ``cf``, each coset's first pass reads, scales and masks them;
+* the shared-memory layout is XOR-swizzled (``SWZ``) so that all three pass patterns and the bit-reversed coefficient
+  gather are bank-conflict-free, with 16-byte vector accesses in the contiguous pass;
+* branch-free ``min``-trick reductions; twiddles from the read-only tables via ``__ldg``; ``__launch_bounds__`` caps the
+  registers at 64 (one 1024-thread CTA per SM at ``l = 16384``, two 512-thread CTAs at ``l = 8192``);
+* the natural-order store (position ``4 j + c``) is 4 bytes per lane at a 16-byte stride, i.e. 16 sectors x 8 bytes
+  per warp store: the partial lines are kept in L2 (``evict_last``) until the other cosets complete them.  This store
+  pattern is the remaining gap to the coset-major layout (~0.45 ms of 1.95 ms per 3328 x 16384 rows on the H100).
+
+``blocks = 4 x SMs`` grid-stride over the rows.  Shared memory is dynamic (``2 l`` words: ``x``, ``cf``).  H100, 3328
+rows x l = 16384: 4.55 ms (shared kernel) -> 1.95 ms plain / 2.19 ms ZK + coefficients (0.44 TB/s of codeword).
 Tested bit-exact against ``field.encode`` and ``eval_on_coset`` (``encode_simt_test``); the verifier keeps the torch
 encoder on its ``D`` rows.  ``encode(..., stream=)`` launches on that torch stream (hp2-host's pipelining).
 """
@@ -42,12 +51,9 @@ _SRC = r"""
 #define K %(k)d
 #define LOGK %(logk)d
 #define THREADS %(threads)d
-#define LOGT %(logt)d
-#define PER (K / THREADS)
-#define TP %(tp)d             /* mask coefficients per row (0: no mask) */
+#define LOGT %(logt)d          /* K = 16 THREADS: 16 elements per thread in every phase */
+#define TP %(tp)d              /* mask coefficients per row (0: no mask) */
 #define KINV_MONT %(kinv_mont)du
-#define CFPAD(i) ((i) + ((i) >> (LOGK - 5)))     /* coefficient buffer layout: the bit-reversed gather is conflict-free */
-#define CF_WORDS (K + 32)
 
 /* [0, p) in, [0, p) out; the wrapped-difference min selects the reduced value (2 instructions, no predicate) */
 __device__ __forceinline__ unsigned add_p(unsigned a, unsigned b) { unsigned s = a + b; return min(s, s - P); }
@@ -63,9 +69,94 @@ __device__ __forceinline__ unsigned mont_mul(unsigned a, unsigned w) {
     return min(r, r + P);
 }
 
-/* dynamic shared memory: x[K] (the working row), cf[CF_WORDS] (INTT coefficients, bit-reversed, unscaled, padded),
-   y[K] (the previous coset's codeword, for the paired 8-byte stores) */
-extern "C" __global__ void __launch_bounds__(THREADS)
+/* Shared-memory bank swizzle: word a lives at SWZ(a).  Bits 0-1 are kept (16-byte vectors stay whole and aligned),
+   bits 2-4 (the bank group) are XORed with bits 5-7, 8 and 9-11, so that every access pattern of the kernel is
+   conflict-free: 16 contiguous words per thread as four uint4 (pass A: a quarter-warp's chunks land in 8 distinct
+   bank groups), stride-16 words across 256-blocks (pass B: the two half-warps flip bit 4), lane-consecutive words
+   (pass C, the register phases: a constant XOR inside a 32-word window), and the bit-reversed coefficient gather
+   (lanes differ in bits 0-1 and 9-11).  Both buffers (x and cf) use it. */
+__device__ __forceinline__ int SWZ(int a) {
+    return a ^ (((((a >> 5) ^ (a >> 9)) & 7) ^ (((a >> 8) & 1) << 2)) << 2);
+}
+/* SWZ is XOR-linear (a ^ L(a), L linear over GF(2)): SWZ(base | off) = SWZ(base) ^ SWZ(off) when base and off have
+   disjoint bits -- the per-thread SWZ(base) is computed once, the per-element SWZ(off) is a compile-time constant. */
+
+/* twiddle load ptxas cannot hoist out of the row loop (inlined, it kept ~70 row-invariant twiddles in registers and
+   spilled 250 B at the 64-register cap of a 1024-thread CTA; the tables are L1/L2-resident anyway) */
+__device__ __forceinline__ unsigned ldtw(const unsigned* p) {
+    unsigned v;
+    asm volatile("ld.global.nc.u32 %%0, [%%1];" : "=r"(v) : "l"(p));
+    return v;
+}
+
+/* One radix-2 stage m = 2^SM on the 2^R register elements e[k] of a group whose element k sits at index
+   base + (k << S0) (S0 <= SM < S0 + R); tt = index & (m - 1) is the twiddle position.  DIF (inverse, tw_inv):
+   (a, c) -> (a + c, (a - c) w); DIT (forward, tw_fwd): (a, c) -> (a + c w, a - c w).  Same butterflies and twiddles
+   as main's kernel, only regrouped -- the field values are canonical, so the output is bit-identical. */
+template <int R, int S0, int SM, bool DIF>
+__device__ __forceinline__ void stage(unsigned* e, int base, const unsigned* __restrict__ tw) {
+    constexpr int m = 1 << SM, step = 1 << (SM - S0);
+    #pragma unroll
+    for (int k = 0; k < (1 << R); ++k) {
+        if (!(k & step)) {
+            const int idx = base + (k << S0);
+            const unsigned w = ldtw(&tw[m + (idx & (m - 1))]);
+            if (DIF) { const unsigned a = e[k], c = e[k + step]; e[k] = add_p(a, c); e[k + step] = mont_mul(sub_p(a, c), w); }
+            else     { const unsigned a = e[k], c = mont_mul(e[k + step], w); e[k] = add_p(a, c); e[k + step] = sub_p(a, c); }
+        }
+    }
+}
+/* all R stages of a group: DIF from the top stage down, DIT from the bottom stage up */
+template <int R, int S0, int SM, bool DIF>
+__device__ __forceinline__ void stages_dif(unsigned* e, int base, const unsigned* __restrict__ tw) {
+    if constexpr (SM >= S0) { stage<R, S0, SM, true>(e, base, tw); stages_dif<R, S0, SM - 1, true>(e, base, tw); }
+}
+template <int R, int S0, int SM, bool DIF>
+__device__ __forceinline__ void stages_dit(unsigned* e, int base, const unsigned* __restrict__ tw) {
+    if constexpr (SM < S0 + R) { stage<R, S0, SM, false>(e, base, tw); stages_dit<R, S0, SM + 1, false>(e, base, tw); }
+}
+
+/* group base for the g-th group of this thread in a pass over stages [S0, S0 + R): the group index q enumerates the
+   K / 2^R groups; its bits [S0, S0 + R) are the in-group element index */
+template <int R, int S0>
+__device__ __forceinline__ int group_base(int q) { return ((q >> S0) << (S0 + R)) | (q & ((1 << S0) - 1)); }
+
+/* strided pass over stages [S0, S0 + R) of buffer buf (R <= 4, S0 >= 4: element k of a group at base + (k << S0)) */
+template <int R, int S0, bool DIF>
+__device__ __forceinline__ void pass_strided(unsigned* buf, const unsigned* __restrict__ tw, int t) {
+    #pragma unroll 1          /* unrolled, ptxas front-loads all groups' loads and spills 180 B at 64 registers */
+    for (int g = 0; g < (16 >> R); ++g) {
+        const int q = t + THREADS * g;
+        const int base = group_base<R, S0>(q);
+        unsigned e[1 << R];
+        const int sb = SWZ(base);
+        #pragma unroll
+        for (int k = 0; k < (1 << R); ++k) e[k] = buf[sb ^ SWZ(k << S0)];
+        if (DIF) stages_dif<R, S0, S0 + R - 1, true>(e, base, tw); else stages_dit<R, S0, S0, false>(e, base, tw);
+        #pragma unroll
+        for (int k = 0; k < (1 << R); ++k) buf[sb ^ SWZ(k << S0)] = e[k];
+    }
+}
+
+__device__ __forceinline__ void ld16(const unsigned* buf, int base, unsigned* e) {
+    const int sb = SWZ(base);
+    #pragma unroll
+    for (int j = 0; j < 4; ++j) {
+        const uint4 v = *reinterpret_cast<const uint4*>(buf + (sb ^ SWZ(4 * j)));
+        e[4 * j] = v.x; e[4 * j + 1] = v.y; e[4 * j + 2] = v.z; e[4 * j + 3] = v.w;
+    }
+}
+__device__ __forceinline__ void st16(unsigned* buf, int base, const unsigned* e) {
+    const int sb = SWZ(base);
+    #pragma unroll
+    for (int j = 0; j < 4; ++j)
+        *reinterpret_cast<uint4*>(buf + (sb ^ SWZ(4 * j))) = make_uint4(e[4 * j], e[4 * j + 1], e[4 * j + 2], e[4 * j + 3]);
+}
+
+/* dynamic shared memory: x[K] (the working row), cf[K] (the INTT coefficients, bit-reversed, unscaled), both swizzled.
+   THREADS <= 512 (l <= 8192): two CTAs per SM fit in shared memory; cap the registers at 64 so they also fit in the
+   register file (l = 8192 on the H100: 1.16 -> 0.99 ms for 3328 rows). */
+extern "C" __global__ void __launch_bounds__(THREADS, (THREADS <= 512 ? 2 : 1))
 rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, unsigned* __restrict__ coef_out,
                  const unsigned* __restrict__ mask,
                  const unsigned* __restrict__ tw_inv, const unsigned* __restrict__ tw_fwd,
@@ -75,157 +166,114 @@ rs_encode_ligero(const unsigned* __restrict__ in, unsigned* __restrict__ out, un
 {
     extern __shared__ unsigned x[];
     unsigned* cf = x + K;
-    unsigned* y = cf + CF_WORDS;
-    unsigned r[PER];
+    unsigned r[16];
     const int t = threadIdx.x;
     for (int row = blockIdx.x; row < rows; row += gridDim.x) {
         const unsigned* src = in + (size_t)row * K;
         unsigned* dst = out + (size_t)row * (4 * K);
+        /* ---- INTT (DIF): register stages m = K/2 .. THREADS on the 16 elements t + THREADS s ---- */
         #pragma unroll
-        for (int s = 0; s < PER; ++s) r[s] = __ldg(&src[t + THREADS * s]);
-        /* INTT, DIF: register stages m = K/2 .. THREADS */
+        for (int s = 0; s < 16; ++s) r[s] = __ldg(&src[t + THREADS * s]);
+        stages_dif<4, LOGT, LOGK - 1, true>(r, t, tw_inv);
+        const int st = SWZ(t);
         #pragma unroll
-        for (int lm = LOGK - 1; lm >= LOGT; --lm) {
-            const int m = 1 << lm, ms = m / THREADS;
-            #pragma unroll
-            for (int s = 0; s < PER; ++s) {
-                if (!(s & ms)) {
-                    const unsigned a = r[s], c = r[s + ms];
-                    r[s] = add_p(a, c);
-                    r[s + ms] = mont_mul(sub_p(a, c), __ldg(&tw_inv[m + t + THREADS * (s & (ms - 1))]));
-                }
-            }
-        }
-        #pragma unroll
-        for (int s = 0; s < PER; ++s) x[t + THREADS * s] = r[s];
+        for (int s = 0; s < 16; ++s) x[st ^ SWZ(THREADS * s)] = r[s];
         __syncthreads();
-        /* INTT, DIF: shared-memory stages, radix-4 fused (lm, lm - 1) */
-        #pragma unroll
-        for (int lm = LOGT - 1; lm >= 1; lm -= 2) {
-            const int m = 1 << lm, h = m >> 1;
-            #pragma unroll
-            for (int s = 0; s < PER / 4; ++s) {
-                const int q = t + s * THREADS;
-                const int tt = q & (h - 1);
-                const int i = ((q >> (lm - 1)) << (lm + 1)) | tt;
-                const unsigned a0 = x[i], a1 = x[i + h], a2 = x[i + m], a3 = x[i + m + h];
-                const unsigned b0 = add_p(a0, a2), b2 = mont_mul(sub_p(a0, a2), __ldg(&tw_inv[m + tt]));
-                const unsigned b1 = add_p(a1, a3), b3 = mont_mul(sub_p(a1, a3), __ldg(&tw_inv[m + tt + h]));
-                const unsigned wh = __ldg(&tw_inv[h + tt]);
-                x[i] = add_p(b0, b1);
-                x[i + h] = mont_mul(sub_p(b0, b1), wh);
-                x[i + m] = add_p(b2, b3);
-                x[i + m + h] = mont_mul(sub_p(b2, b3), wh);
-            }
-            __syncthreads();
+        /* pass C': stages LOGT-1 .. 8 (radix 2^(LOGT-8)), lane-consecutive groups at stride 256 */
+        if constexpr (LOGT > 8) { pass_strided<LOGT - 8, 8, true>(x, tw_inv, t); __syncthreads(); }
+        /* pass B': stages 7 .. 4, stride-16 groups inside 256-blocks */
+        if constexpr (LOGT > 4) { pass_strided<(LOGT < 8 ? LOGT - 4 : 4), 4, true>(x, tw_inv, t); __syncthreads(); }
+        /* pass A': stages 3 .. 0 on 16 contiguous elements; the result (bit-reversed, unscaled coefficients) -> cf */
+        {
+            const int base = t << 4;
+            unsigned e[16];
+            ld16(x, base, e);
+            stages_dif<4, 0, 3, true>(e, base, tw_inv);
+            st16(cf, base, e);
         }
-        if (LOGT & 1) {   /* one radix-2 stage left: m = 1 */
-            #pragma unroll
-            for (int s = 0; s < PER / 2; ++s) {
-                const int b = t + s * THREADS;
-                const int i = b << 1;
-                const unsigned a = x[i], c = x[i + 1];
-                x[i] = add_p(a, c);
-                x[i + 1] = mont_mul(sub_p(a, c), __ldg(&tw_inv[1]));
-            }
-            __syncthreads();
-        }
-        /* bit-reversed, unscaled (x l) coefficients -> cf (the registers stay free for the coset transforms) */
-        #pragma unroll
-        for (int s = 0; s < PER; ++s) { const int pos = t + THREADS * s; cf[CFPAD(pos)] = x[pos]; }
         __syncthreads();
-        if (coef_out != 0) {   /* natural-order l^-1 interp_H(W_j): a coalesced store, the gather through the padded cf */
+        if (coef_out != 0) {
+            /* natural-order l^-1 interp_H(W_j): each lane stores 4 consecutive coefficients as one uint4 (8 lanes = 128
+               contiguous bytes); the gather cf[brev(j)] is conflict-free under SWZ with lanes on bits 0-2 and
+               LOGK-4, LOGK-3 of the vector index (fixed lane -> J mapping for THREADS >= 32) */
             unsigned* cd = coef_out + (size_t)row * K;
             #pragma unroll
-            for (int s = 0; s < PER; ++s) {
-                const int j = t + THREADS * s;
-                cd[j] = mont_mul(cf[CFPAD(__brev((unsigned)j) >> (32 - LOGK))], KINV_MONT);
+            for (int s = 0; s < 4; ++s) {
+                int J;
+                if constexpr (LOGT >= 5) J = (t & 7) | ((t >> 5) << 3) | (s << (LOGT - 2)) | (((t >> 3) & 3) << LOGT);
+                else J = t + THREADS * s;
+                unsigned v[4];
+                const int sp = SWZ(__brev((unsigned)(4 * J)) >> (32 - LOGK));
+                #pragma unroll
+                for (int w = 0; w < 4; ++w) v[w] = mont_mul(cf[sp ^ SWZ((((w & 1) << 1) | (w >> 1)) << (LOGK - 2))], KINV_MONT);   /* brev(w) */
+                *reinterpret_cast<uint4*>(cd + 4 * J) = make_uint4(v[0], v[1], v[2], v[3]);
             }
         }
+        /* ---- the four coset NTTs (DIT) ---- */
         #pragma unroll 1
         for (int c = 0; c < 4; ++c) {
             const unsigned* ct = coset_tw + (size_t)c * K;
             if (c > 0) __syncthreads();          /* the previous coset's register stages have consumed x */
-            #pragma unroll
-            for (int s = 0; s < PER; ++s) { const int pos = t + THREADS * s; x[pos] = mont_mul(cf[CFPAD(pos)], __ldg(&ct[pos])); }
-            __syncthreads();
+            /* pass A: 16 contiguous coefficients, scaled by the coset table (+ the mask term z_c s_i (g w_n^c)^i at
+               coefficient i < TP, i.e. at bit-reversed position), stages 0 .. 3, -> x */
+            {
+                const int base = t << 4;
+                unsigned e[16];
+                ld16(cf, base, e);
+                #pragma unroll
+                for (int j = 0; j < 4; ++j) {
+                    const uint4 cw = __ldg(reinterpret_cast<const uint4*>(ct + base + 4 * j));
+                    e[4 * j] = mont_mul(e[4 * j], cw.x); e[4 * j + 1] = mont_mul(e[4 * j + 1], cw.y);
+                    e[4 * j + 2] = mont_mul(e[4 * j + 2], cw.z); e[4 * j + 3] = mont_mul(e[4 * j + 3], cw.w);
+                }
 #if TP > 0
-            {   /* + z_c s_i (g w_n^c)^i at coefficient i < TP (bit-reversed position) */
-                const unsigned* mk = mask + (size_t)row * TP;
-                const unsigned* mt = mask_tw + (size_t)c * TP;
-                for (int i = t; i < TP; i += THREADS) {
-                    const int pos = __brev((unsigned)i) >> (32 - LOGK);
-                    x[pos] = add_p(x[pos], mont_mul(__ldg(&mk[i]), __ldg(&mt[i])));
-                }
-                __syncthreads();
-            }
-#endif
-            /* NTT, DIT: shared-memory stages, radix-4 fused (lm, lm + 1) */
-            #pragma unroll
-            for (int lm = 0; lm + 1 < LOGT; lm += 2) {
-                const int m = 1 << lm, m2 = m << 1;
-                #pragma unroll
-                for (int s = 0; s < PER / 4; ++s) {
-                    const int q = t + s * THREADS;
-                    const int tt = q & (m - 1);
-                    const int i = ((q >> lm) << (lm + 2)) | tt;
-                    const unsigned a0 = x[i], a1 = x[i + m], a2 = x[i + m2], a3 = x[i + m2 + m];
-                    const unsigned wm = __ldg(&tw_fwd[m + tt]);
-                    const unsigned c1 = mont_mul(a1, wm), c3 = mont_mul(a3, wm);
-                    const unsigned b0 = add_p(a0, c1), b1 = sub_p(a0, c1), b2 = add_p(a2, c3), b3 = sub_p(a2, c3);
-                    const unsigned d2 = mont_mul(b2, __ldg(&tw_fwd[m2 + tt])), d3 = mont_mul(b3, __ldg(&tw_fwd[m2 + tt + m]));
-                    x[i] = add_p(b0, d2);
-                    x[i + m2] = sub_p(b0, d2);
-                    x[i + m] = add_p(b1, d3);
-                    x[i + m2 + m] = sub_p(b1, d3);
-                }
-                __syncthreads();
-            }
-            if (LOGT & 1) {   /* one radix-2 stage left: m = THREADS / 2 */
-                const int m = THREADS >> 1;
-                #pragma unroll
-                for (int s = 0; s < PER / 2; ++s) {
-                    const int b = t + s * THREADS;
-                    const int tt = b & (m - 1);
-                    const int i = ((b >> (LOGT - 1)) << LOGT) | tt;
-                    const unsigned a = x[i];
-                    const unsigned cc = mont_mul(x[i + m], __ldg(&tw_fwd[m + tt]));
-                    x[i] = add_p(a, cc);
-                    x[i + m] = sub_p(a, cc);
-                }
-                __syncthreads();
-            }
-            #pragma unroll
-            for (int s = 0; s < PER; ++s) r[s] = x[t + THREADS * s];
-            /* NTT, DIT: register stages m = THREADS .. K/2 */
-            #pragma unroll
-            for (int lm = LOGT; lm < LOGK; ++lm) {
-                const int m = 1 << lm, ms = m / THREADS;
-                #pragma unroll
-                for (int s = 0; s < PER; ++s) {
-                    if (!(s & ms)) {
-                        const unsigned a = r[s];
-                        const unsigned cc = mont_mul(r[s + ms], __ldg(&tw_fwd[m + t + THREADS * (s & (ms - 1))]));
-                        r[s] = add_p(a, cc);
-                        r[s + ms] = sub_p(a, cc);
+                {
+                    const unsigned* mk = mask + (size_t)row * TP;
+                    const unsigned* mt = mask_tw + (size_t)c * TP;
+#if (TP & (TP - 1)) == 0 && TP <= K / 16
+                    /* i = brev(pos) < TP  <=>  pos mod (K / TP) == 0: only element 0 of every (K / TP / 16)-th thread */
+                    if ((base & (K / TP - 1)) == 0) {
+                        const int i = __brev((unsigned)base) >> (32 - LOGK);
+                        e[0] = add_p(e[0], mont_mul(__ldg(&mk[i]), __ldg(&mt[i])));
                     }
+#else
+                    #pragma unroll
+                    for (int k = 0; k < 16; ++k) {
+                        const int i = __brev((unsigned)(base + k)) >> (32 - LOGK);
+                        if (i < TP) e[k] = add_p(e[k], mont_mul(__ldg(&mk[i]), __ldg(&mt[i])));
+                    }
+#endif
                 }
+#endif
+                stages_dit<4, 0, 0, false>(e, base, tw_fwd);
+                st16(x, base, e);
             }
-            /* natural protocol order: p(g w_n^{4 j + c}) at position 4 j + c.  Even cosets park in y; odd cosets store
-               the (c - 1, c) pair as one 8-byte word -- half the L2 sector transactions of 4-byte stores at stride 16. */
-            if ((c & 1) == 0) {
-                #pragma unroll
-                for (int s = 0; s < PER; ++s) y[t + THREADS * s] = r[s];
-            } else {
-                #pragma unroll
-                for (int s = 0; s < PER; ++s) {
-                    const int j = t + THREADS * s;
-                    const uint2 v = make_uint2(y[j], r[s]);
-                    *reinterpret_cast<uint2*>(dst + (((size_t)j) << 2) + (c - 1)) = v;
-                }
+            __syncthreads();
+            /* pass B: stages 4 .. 7 */
+            if constexpr (LOGT > 4) { pass_strided<(LOGT < 8 ? LOGT - 4 : 4), 4, false>(x, tw_fwd, t); __syncthreads(); }
+            /* pass C: stages 8 .. LOGT-1 */
+            if constexpr (LOGT > 8) { pass_strided<LOGT - 8, 8, false>(x, tw_fwd, t); __syncthreads(); }
+            /* register stages m = THREADS .. K/2 */
+            #pragma unroll
+            for (int s = 0; s < 16; ++s) r[s] = x[st ^ SWZ(THREADS * s)];
+            stages_dit<4, LOGT, LOGT, false>(r, t, tw_fwd);
+            /* natural protocol order: p(g w_n^{4 j + c}) at position 4 j + c.  Each warp store touches 16 sectors
+               with 8 B each; the sector is completed by the other three cosets ~100 us later, so keep the partial
+               lines in L2 (evict_last) instead of writing them back three times (-5%% on the H100). */
+#if __CUDA_ARCH__ >= 800
+            unsigned long long pol;
+            asm volatile("createpolicy.fractional.L2::evict_last.b64 %%0, 1.0;" : "=l"(pol));
+            #pragma unroll
+            for (int s = 0; s < 16; ++s) {
+                unsigned* a = dst + (((size_t)(t + THREADS * s)) << 2) + c;
+                asm volatile("st.global.L2::cache_hint.u32 [%%0], %%1, %%2;" :: "l"(a), "r"(r[s]), "l"(pol) : "memory");
             }
+#else
+            #pragma unroll
+            for (int s = 0; s < 16; ++s) dst[((size_t)(t + THREADS * s) << 2) | c] = r[s];
+#endif
         }
-        __syncthreads();      /* x, cf, y are reused by the next row */
+        __syncthreads();      /* x, cf are reused by the next row */
     }
 }
 """
@@ -301,18 +349,18 @@ class LigeroEncoderSIMT:
     def __init__(self, l: int, n: int, t_pad: int = 0, device="cuda", threads: int | None = None):
         import cupy as cp
 
-        if n != 4 * l or l & (l - 1) or l < 256:
-            raise ValueError("the kernel is specialised to n = 4 l, l a power of two >= 256")
+        if n != 4 * l or l & (l - 1) or l < 256 or l > 16384:
+            raise ValueError("the kernel is specialised to n = 4 l, l a power of two in [256, 16384]")
         self.cp, self.l, self.n, self.t_pad, self.device = cp, l, n, t_pad, torch.device(device)
-        threads = threads or min(1024, l // 4)
-        if l < 4 * threads or threads & (threads - 1) or threads > 1024:
-            raise ValueError("threads must be a power of two with l >= 4 threads")
+        threads = threads or l // 16
+        if threads != l // 16:
+            raise ValueError("the kernel holds 16 elements per thread: threads = l / 16")
         self.threads = threads
         tabs = tables(l, n, t_pad)
         params = {"pinv": _P_INV_MOD_R, "k": l, "logk": l.bit_length() - 1, "threads": threads,
                   "logt": threads.bit_length() - 1, "tp": t_pad, "kinv_mont": tabs["kinv_mont"]}
         self.kernel = cp.RawKernel(_SRC % params, "rs_encode_ligero", options=("-std=c++17",))
-        self.smem = 4 * (3 * l + 32)          # x + cf (padded) + y
+        self.smem = 4 * (2 * l)               # x + cf (both bank-swizzled)
         if self.smem > 48 * 1024:
             self.kernel.max_dynamic_shared_size_bytes = self.smem
         with cp.cuda.Device(self.device.index or 0):
